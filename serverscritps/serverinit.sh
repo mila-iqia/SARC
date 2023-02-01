@@ -14,7 +14,7 @@ ssh $1 'bash -s' << 'ENDSSH'
   sudo apt upgrade -y
   sudo apt install -y git podman
   sudo touch /etc/containers/registries.conf
-  if grep '[registries.search]' /etc/containers/registries.conf;
+  if grep '\[registries.search\]' /etc/containers/registries.conf;
   then
     echo 'Containers registries already configured'
   else
