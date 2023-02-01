@@ -14,13 +14,12 @@ with the other secrets in the "secrets/account_matching" directory.
 """
 
 
-
 import numpy as np
 import json
 import csv
 import os
 from collections import defaultdict
-from names_matching import find_exact_bag_of_words_matches
+from name_distances import find_exact_bag_of_words_matches
 
 # This config contains the following keys:
 #     'L_phantom_mila_emails_to_ignore'
@@ -30,10 +29,10 @@ from names_matching import find_exact_bag_of_words_matches
 config_path = "secrets/account_matching/make_matches_config.json"
 
 data_paths = {
-    "mila_ldap":  "secrets/account_matching/2022-11-26_mila_users.json",
+    "mila_ldap": "secrets/account_matching/2022-11-26_mila_users.json",
     "cc_members": "secrets/account_matching/members-rrg-bengioy-ad-2022-11-25.csv",
-    "cc_roles":   "secrets/account_matching/sponsored_roles_for_Yoshua Bengio (CCI_ jvb-000).csv",
-    }
+    "cc_roles": "secrets/account_matching/sponsored_roles_for_Yoshua Bengio (CCI_ jvb-000).csv",
+}
 
 # Please be careful here because we currently don't have proper
 # source-version control for the secrets, and we don't want to
@@ -44,7 +43,9 @@ output_file = "secrets/account_matching/matches_done.json"
 with open(config_path, "r") as f_in:
     config = json.load(f_in)
     S_phantom_mila_emails_to_ignore = set(config["L_phantom_mila_emails_to_ignore"])
-    D_override_matches_mila_to_cc_account_username = config["D_override_matches_mila_to_cc_account_username"]
+    D_override_matches_mila_to_cc_account_username = config[
+        "D_override_matches_mila_to_cc_account_username"
+    ]
     del config
 
 # The cc_account_username in `D_override_matches_mila_to_cc_account_username`
@@ -54,19 +55,20 @@ with open(config_path, "r") as f_in:
 def how_many_cc_accounts_with_mila_emails(data, key="cc_members"):
     assert key in data
     LD_members = [
-        D_member for D_member in data[key]
-        if D_member.get("email", "").endswith("@mila.quebec")]
+        D_member
+        for D_member in data[key]
+        if D_member.get("email", "").endswith("@mila.quebec")
+    ]
 
-    print(f"We have {len(LD_members)} {key} accounts with @mila.quebec, out of {len(data['cc_members'])}.")
+    print(
+        f"We have {len(LD_members)} {key} accounts with @mila.quebec, out of {len(data['cc_members'])}."
+    )
     return LD_members
 
 
-
-
 def run():
-
     def dict_to_lowercase(D):
-        return dict( (k.lower(), v) for (k, v) in D.items())
+        return dict((k.lower(), v) for (k, v) in D.items())
 
     data = {}
     for (k, v) in data_paths.items():
@@ -74,21 +76,26 @@ def run():
             if v.endswith("csv"):
                 data[k] = [dict_to_lowercase(D) for D in csv.DictReader(f_in)]
             elif v.endswith("json"):
-               data[k] = json.load(f_in)
-
+                data[k] = json.load(f_in)
 
     # Filter out the "cc_members" whose "Activation_Status" is "older_deactivated" or "expired".
     # These accounts might not have members present in the Mila LDAP.
     # ex: francis.gregoire@mila.quebec is "older_deactivated"
     #     luccionis@mila.quebec is "expired"
     if "cc_members" in data:
-        data["cc_members"] = [D for D in data["cc_members"] if D["activation_status"] not in ["older_deactivated", "expired"]]
+        data["cc_members"] = [
+            D
+            for D in data["cc_members"]
+            if D["activation_status"] not in ["older_deactivated", "expired"]
+        ]
         # because "Arian.Khorasani@mila.quebec" wrote their email with uppercases
         for e in data["cc_members"]:
             e["email"] = e["email"].lower()
 
     if "cc_roles" in data:
-        data["cc_roles"] = [D for D in data["cc_roles"] if D["status"].lower() in ["activated"]]
+        data["cc_roles"] = [
+            D for D in data["cc_roles"] if D["status"].lower() in ["activated"]
+        ]
         # because "Arian.Khorasani@mila.quebec" wrote their email with uppercases
         for e in data["cc_roles"]:
             e["email"] = e["email"].lower()
@@ -103,7 +110,6 @@ def run():
         # filling those more for documentation purposes than anything
         DD_persons[D["mila_email_username"]]["cc_roles"] = None
         DD_persons[D["mila_email_username"]]["cc_members"] = None
-
 
     ######################################
     ## and now we start matching things ##
@@ -122,7 +128,6 @@ def run():
             DD_persons[D_member["email"]][key] = D_member
     # We have 206 cc_members accounts with @mila.quebec, out of 610.
     # We have 42 cc_roles accounts with @mila.quebec, out of 610.
-
 
     for (name_or_nom, key) in [("name", "cc_members"), ("nom", "cc_roles")]:
         LP_name_matches = find_exact_bag_of_words_matches(
@@ -159,17 +164,16 @@ def run():
             else:
                 D_person_found[key] = match
 
-
     assert "cc_members" in data
     matching = dict((e["username"], e) for e in data["cc_members"])
     # The manual matching done previously by me.
-    for (mila_email_username, cc_account_username) in D_override_matches_mila_to_cc_account_username.items():
+    for (
+        mila_email_username,
+        cc_account_username,
+    ) in D_override_matches_mila_to_cc_account_username.items():
         # If a key is missing here, it's because we messed up by writing
         # by hand the values in `D_override_matches_mila_to_cc_account_username`.
         DD_persons[mila_email_username]["cc_members"] = matching[cc_account_username]
-
-        
-
 
     ###########################
     ###### status report ######
@@ -186,32 +190,52 @@ def run():
         else:
             disabled_count += 1
 
-    print(f"We have {enabled_count} enabled accounts and {disabled_count} disabled accounts.")
-    print(f"Out of those enabled accounts, there are {good_count} successful matches and {bad_count} failed matches.")
-
-
+    print(
+        f"We have {enabled_count} enabled accounts and {disabled_count} disabled accounts."
+    )
+    print(
+        f"Out of those enabled accounts, there are {good_count} successful matches and {bad_count} failed matches."
+    )
 
     # TODO : report on how many of the CC entries couldn't be matches to mila LDAP
 
     if "cc_members" in data:
-        count_cc_members_activated = len([D for D in data["cc_members"] if D["activation_status"] in ["activated"]])
+        count_cc_members_activated = len(
+            [D for D in data["cc_members"] if D["activation_status"] in ["activated"]]
+        )
         print(f"We have {count_cc_members_activated} activated cc_members.")
 
         # let's try to be more precise about things to find the missing accounts
-        set_A = set([D_member["email"] for D_member in data["cc_members"]
-                    if D_member["activation_status"] in ["activated"]])
-        set_B = set([D_person["cc_members"].get("email", None) for D_person in DD_persons.values() if D_person.get("cc_members", None) is not None])
-        print(f"We could not find matches in the Mila LDAP for the CC accounts associated with the following emails: {set_A.difference(set_B)}.")
+        set_A = set(
+            [
+                D_member["email"]
+                for D_member in data["cc_members"]
+                if D_member["activation_status"] in ["activated"]
+            ]
+        )
+        set_B = set(
+            [
+                D_person["cc_members"].get("email", None)
+                for D_person in DD_persons.values()
+                if D_person.get("cc_members", None) is not None
+            ]
+        )
+        print(
+            f"We could not find matches in the Mila LDAP for the CC accounts associated with the following emails: {set_A.difference(set_B)}."
+        )
 
     # see "account_matching.md" for some explanations on the edge cases handled
 
     if "cc_roles" in data:
-        count_cc_roles_activated = len([D for D in data["cc_roles"] if D["status"].lower() in ["activated"]])
+        count_cc_roles_activated = len(
+            [D for D in data["cc_roles"] if D["status"].lower() in ["activated"]]
+        )
         print(f"We have {count_cc_roles_activated} activated cc_roles.")
 
     with open(output_file, "w") as f_out:
         json.dump(DD_persons, f_out, indent=2)
         print(f"Wrote {output_file}.")
+
 
 if __name__ == "__main__":
     run()
