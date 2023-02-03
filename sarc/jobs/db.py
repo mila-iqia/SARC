@@ -37,7 +37,7 @@ def sacct_mongodb_import(cluster, day) -> None:
     scraper = SAcctScraper(cluster, day)
     print("Getting the sacct data...")
     scraper.get_raw()
-    print("Saving into mongodb...")
+    print(f"Saving into mongodb collection '{collection.Meta.collection_name}'...")
     for entry in tqdm(scraper):
         collection.save(entry)
     print(f"Saved {len(scraper)} entries.")
