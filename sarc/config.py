@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from functools import cached_property
 from pathlib import Path
+from typing import Union
 
 from pydantic import BaseModel as _BaseModel
 from pydantic import Extra, validator
@@ -105,7 +106,9 @@ def config():
 
 
 @contextmanager
-def using_config(cfg):
+def using_config(cfg: Union[str, Path, Config]):
+    if isinstance(cfg, (str, Path)):
+        cfg = parse_config(cfg)
     token = config_var.set(cfg)
     yield cfg
     config_var.reset(token)
