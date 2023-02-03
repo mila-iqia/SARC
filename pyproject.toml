@@ -8,6 +8,7 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.8"
 fabric = "^3.0.0"
+prometheus-api-client = "^0.5.2"
 pydantic = "^1.10.4"
 pymongo = "^4.3.3"
 

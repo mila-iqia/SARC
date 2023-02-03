@@ -1,0 +1,14 @@
+{
+    "mongo": {
+        "url": "localhost:27017",
+        "database": "sarc-dev"
+    },
+    "cache": "~/storage/sarc/cache",
+    "sshconfig": "~/.ssh/config",
+    "clusters": {
+        "mila": {
+            "host": "mila",
+            "prometheus_url": "http://monitoring.server.mila.quebec:9090/"
+        }
+    }
+}
