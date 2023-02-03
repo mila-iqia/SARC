@@ -4,7 +4,7 @@ What this script does
 
 This script runs locally every day on a machine at Mila.
 It queries our LDAP service for all users and it updates
-the MongoDB instance for Clockwork so that the "users"
+the MongoDB instance for SARC so that the "users"
 collection reflects those accounts.
 
 It's unclear whether we should automatically disable
@@ -22,14 +22,6 @@ Two ways to output the data, that can be used together:
    2) to a MongoDB instance
 
 
-Useful note for later about "clockwork_api_key"
-===============================================
-
-The two extra fields "clockwork_api_key" and "cc_account_username"
-are added when the entries are committed to the database,
-but not when they are read or written to a json file.
-
-
 Sample uses
 ===========
 
@@ -38,8 +30,8 @@ Two ways this can be used:
 ::
 
     python3 read_mila_ldap.py \\
-        --local_private_key_file mila_ldap_readonly_credentials/Google_2025_01_26_68154.key \\
-        --local_certificate_file mila_ldap_readonly_credentials/Google_2025_01_26_68154.crt \\
+        --local_private_key_file secrets/Google_2026_01_26_66827.key \\
+        --local_certificate_file secrets/Google_2026_01_26_66827.crt \\
         --ldap_service_uri ldaps://ldap.google.com \\
         --mongodb_connection_string ${MONGODB_CONNECTION_STRING} \\
         --output_json_file mila_users.json
@@ -166,7 +158,7 @@ parser.add_argument(
 )
 parser.add_argument(
     "--mongodb_database",
-    default="clockwork",
+    default="sarc",
     type=str,
     help="(optional) MongoDB database to modify. Better left at default.",
 )
@@ -289,37 +281,22 @@ def client_side_user_updates(LD_users_DB, LD_users_LDAP):
         # `meu` is short for the mila_email_username value
 
         if meu in DD_users_DB and not meu in DD_users_LDAP:
-            # User is in DB but not in the LDAP. Don't change it in DB.
-            # Don't even update it. This situation is an exception
-            # what might happen for special admin accounts or something,
-            # but never with regular student accounts.
-            continue
+            # User is in DB but not in the LDAP.
+            # Let's mark it as archived.
+            entry = DD_users_DB[meu]
+            entry["status"] = "archived"
         elif meu not in DD_users_DB and meu in DD_users_LDAP:
             # User is not in DB but is in the LDAP. That's a new entry!
-            # We want to dress it up and commit it to the DB.
-            entry = DD_users_LDAP[meu]
-            entry["cc_account_username"] = None
-            entry["clockwork_api_key"] = None
-            entry["cc_account_update_key"] = None
-            # Any web_settings not present will pull values
-            # from `get_default_web_settings_values()` later down
-            # the road. It would actually be better to leave them out
-            # at this point and not fill them with anything hardcoded.
-            # Just make sure you make this a dict, though.
-            entry["web_settings"] = {}
-            assert "status" in entry  # sanity check
+            # If you need to enter some fields for the first time
+            # when entering a new user, do it here.
+            # As of right now, we have no need to do that.
+            ## entry = DD_users_LDAP[meu]
+            ## entry["some_unique_id_or_whatever"] = None
+            pass
         else:
-            # User is in DB and in LDAP. Update it carefully and don't
-            # disturb the fields that shouldn't be touched.
             entry = DD_users_DB[meu]
-            if DD_users_LDAP[meu]["status"] == "disabled":
-                # No matter what we said in the database, if the LDAP
-                # says that it's disabled, then we propagate that change.
-                # We wouldn't do the same thing with "enabled" in the LDAP, though.
-                entry["status"] = "disabled"
-            assert "cc_account_username" in entry  # sanity check
-            assert "clockwork_api_key" in entry  # sanity check
 
+        assert "status" in entry  # sanity check
         LD_users_to_update_or_insert.append(entry)
     return LD_users_to_update_or_insert
 

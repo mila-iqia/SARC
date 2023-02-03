@@ -19,54 +19,73 @@ import json
 import csv
 import os
 from collections import defaultdict
-from name_distances import find_exact_bag_of_words_matches
+from . import name_distances
 
+from pymongo import MongoClient, UpdateOne
+
+
+parser = argparse.ArgumentParser(
+    description="Make matches with Mila LDAP accounts and CC accounts. Update the MongoDB database users based on values returned."
+)
 # This config contains the following keys:
 #     'L_phantom_mila_emails_to_ignore'
 #     'D_override_matches_mila_to_cc_account_username'
 # which were handcrafted based on weird edge cases
 # that we got when we first wrote this script.
-config_path = "secrets/account_matching/make_matches_config.json"
-
-data_paths = {
-    "mila_ldap": "secrets/account_matching/2022-11-26_mila_users.json",
-    "cc_members": "secrets/account_matching/members-rrg-bengioy-ad-2022-11-25.csv",
-    "cc_roles": "secrets/account_matching/sponsored_roles_for_Yoshua Bengio (CCI_ jvb-000).csv",
-}
-
+parser.add_argument(
+    "--config_path",
+    type=str,
+    default="secrets/account_matching/make_matches_config.json",
+    help="JSON file that contains the 'L_phantom_mila_emails_to_ignore' and 'D_override_matches_mila_to_cc_account_username' keys."
+)
+parser.add_argument(
+    "--mila_ldap_path",
+    type=str,
+    default="secrets/account_matching/2022-11-26_mila_users.json",
+    help="Output from read_mila_ldap.py run at previous step.",
+)
+parser.add_argument(
+    "--cc_members_path",
+    type=str,
+    default="secrets/account_matching/members-rrg-bengioy-ad-2022-11-25.csv",
+    help="Downloaded CSV file from CC/DRAC.",
+)
+parser.add_argument(
+    "--cc_roles_path",
+    type=str,
+    default="secrets/account_matching/sponsored_roles_for_Yoshua_Bengio_(CCI_jvb-000).csv",
+    help="Downloaded CSV file from CC/DRAC.",
+)
 # Please be careful here because we currently don't have proper
 # source-version control for the secrets, and we don't want to
 # overwrite the tried-and-true "matches_done.json" file
 # when running this code for fun.
-output_file = "secrets/account_matching/matches_done.json"
-
-with open(config_path, "r") as f_in:
-    config = json.load(f_in)
-    S_phantom_mila_emails_to_ignore = set(config["L_phantom_mila_emails_to_ignore"])
-    D_override_matches_mila_to_cc_account_username = config[
-        "D_override_matches_mila_to_cc_account_username"
-    ]
-    del config
-
-# The cc_account_username in `D_override_matches_mila_to_cc_account_username`
-# refers to values found in the "cc_members" data source.
+parser.add_argument(
+    "--output_file",
+    type=str,
+    default="secrets/account_matching/matches_done.json",
+    help="local_private_key_file for LDAP connection",
+)
 
 
-def how_many_cc_accounts_with_mila_emails(data, key="cc_members"):
-    assert key in data
-    LD_members = [
-        D_member
-        for D_member in data[key]
-        if D_member.get("email", "").endswith("@mila.quebec")
-    ]
-
-    print(
-        f"We have {len(LD_members)} {key} accounts with @mila.quebec, out of {len(data['cc_members'])}."
-    )
-    return LD_members
+def run(config_path,
+    mila_ldap_path, 
+    cc_members_path,
+    cc_roles_path,
+    output_path):
 
 
-def run():
+    with open(config_path, "r") as f_in:
+        config = json.load(f_in)
+        S_phantom_mila_emails_to_ignore = set(config["L_phantom_mila_emails_to_ignore"])
+        D_override_matches_mila_to_cc_account_username = config[
+            "D_override_matches_mila_to_cc_account_username"
+        ]
+        del config
+    # The cc_account_username in `D_override_matches_mila_to_cc_account_username`
+    # refers to values found in the "cc_members" data source.
+
+
     def dict_to_lowercase(D):
         return dict((k.lower(), v) for (k, v) in D.items())
 
@@ -130,7 +149,7 @@ def run():
     # We have 42 cc_roles accounts with @mila.quebec, out of 610.
 
     for (name_or_nom, key) in [("name", "cc_members"), ("nom", "cc_roles")]:
-        LP_name_matches = find_exact_bag_of_words_matches(
+        LP_name_matches = name_distances.find_exact_bag_of_words_matches(
             [e[name_or_nom] for e in data[key]],
             [e["display_name"] for e in data["mila_ldap"]],
         )
@@ -237,5 +256,20 @@ def run():
         print(f"Wrote {output_file}.")
 
 
+def how_many_cc_accounts_with_mila_emails(data, key="cc_members"):
+    assert key in data
+    LD_members = [
+        D_member
+        for D_member in data[key]
+        if D_member.get("email", "").endswith("@mila.quebec")
+    ]
+
+    print(
+        f"We have {len(LD_members)} {key} accounts with @mila.quebec, out of {len(data['cc_members'])}."
+    )
+    return LD_members
+
+
 if __name__ == "__main__":
+    args = parser.parse_args()
     run()
