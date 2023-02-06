@@ -66,6 +66,7 @@ class SlurmJob(BaseModel):
     task_id: Optional[int]
     name: str
     username: str
+    group: str
 
     # status
     job_state: SlurmState
@@ -76,6 +77,17 @@ class SlurmJob(BaseModel):
     partition: str
     nodes: list[str]
     work_dir: str
+
+    # Miscellaneous
+    constraints: str
+    priority: int
+    qos: str
+
+    # Flags
+    CLEAR_SCHEDULING: bool = False
+    STARTED_ON_SUBMIT: bool = False
+    STARTED_ON_SCHEDULE: bool = False
+    STARTED_ON_BACKFILL: bool = False
 
     # temporal fields
     time_limit: Optional[int]
@@ -165,6 +177,11 @@ class SAcctScraper:
         resources = {"requested": {}, "allocated": {}}
         tracked_resources = ["cpu", "mem", "gres", "node", "billing"]
 
+        if entry["group"] is None:
+            # These seem to correspond to very old jobs that shouldn't still exist,
+            # likely a configuration blunder.
+            return None
+
         for grp, vals in resources.items():
             for alloc in entry["tres"][grp]:
                 if (key := alloc["type"]) not in tracked_resources:
@@ -175,6 +192,8 @@ class SAcctScraper:
 
         nodes = entry["nodes"]
 
+        flags = {k: True for k in entry["flags"]}
+
         return SlurmJob(
             id=f'{self.cluster.name}:{entry["job_id"]}',
             cluster_name=self.cluster.name,
@@ -183,6 +202,7 @@ class SAcctScraper:
             task_id=entry["array"]["task_id"],
             name=entry["name"],
             username=entry["user"],
+            group=entry["group"],
             account=entry["account"],
             job_state=entry["state"]["current"],
             exit_code=entry["exit_code"]["return_code"],
@@ -194,6 +214,10 @@ class SAcctScraper:
             elapsed_time=entry["time"]["elapsed"],
             partition=entry["partition"],
             nodes=expand_hostlist(nodes) if nodes != "None assigned" else [],
+            constraints=entry["constraints"],
+            priority=entry["priority"],
+            qos=entry["qos"],
             work_dir=entry["working_directory"],
             **resources,
+            **flags,
         )
