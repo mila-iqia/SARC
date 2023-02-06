@@ -12,6 +12,7 @@ to pick something.
 
 """
 
+
 def get_config():
     return {
         "mongodb": {

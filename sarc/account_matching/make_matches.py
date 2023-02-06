@@ -37,7 +37,7 @@ parser.add_argument(
     "--config_path",
     type=str,
     default="secrets/account_matching/make_matches_config.json",
-    help="JSON file that contains the 'L_phantom_mila_emails_to_ignore' and 'D_override_matches_mila_to_cc_account_username' keys."
+    help="JSON file that contains the 'L_phantom_mila_emails_to_ignore' and 'D_override_matches_mila_to_cc_account_username' keys.",
 )
 parser.add_argument(
     "--mila_ldap_path",
@@ -69,11 +69,7 @@ parser.add_argument(
 )
 
 
-def run(config_path,
-    mila_ldap_path, 
-    cc_members_path,
-    cc_roles_path,
-    output_path):
+def run(config_path, mila_ldap_path, cc_members_path, cc_roles_path, output_path):
 
     data_paths = {
         "mila_ldap": mila_ldap_path,
@@ -90,7 +86,6 @@ def run(config_path,
         del config
     # The cc_account_username in `D_override_matches_mila_to_cc_account_username`
     # refers to values found in the "cc_members" data source.
-
 
     def dict_to_lowercase(D):
         return dict((k.lower(), v) for (k, v) in D.items())
@@ -280,7 +275,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
     run(
         config_path=args.config_path,
-        mila_ldap_path=args.mila_ldap_path, 
+        mila_ldap_path=args.mila_ldap_path,
         cc_members_path=args.cc_members_path,
         cc_roles_path=args.cc_roles_path,
-        output_path=args.output_path)
+        output_path=args.output_path,
+    )

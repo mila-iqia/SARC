@@ -374,7 +374,7 @@ def run(
                     # We set all the fields corresponding to the fields from `updated_user`,
                     # so that's a convenient way to do it. Note that this does not affect
                     # the fields in the database that are already present for that user.
-                    "$set": {"mila_ldap" : updated_user},
+                    "$set": {"mila_ldap": updated_user},
                 },
                 upsert=True,
             )

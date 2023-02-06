@@ -37,7 +37,10 @@ parser.add_argument(
     help="Output of the make_matches.py script to be used as input here.",
 )
 
-def run(mongodb_connection_string, mongodb_database, mongodb_collection, input_matches_path):
+
+def run(
+    mongodb_connection_string, mongodb_database, mongodb_collection, input_matches_path
+):
 
     users_collection = MongoClient(mongodb_connection_string)[mongodb_database][
         mongodb_collection
@@ -59,15 +62,19 @@ def run(mongodb_connection_string, mongodb_database, mongodb_collection, input_m
 
     L_updates_to_do = []
     for mila_email_username, D_match in DD_matches.items():
-        assert D_match['mila_ldap']['mila_email_username'] == mila_email_username  # sanity check
+        assert (
+            D_match["mila_ldap"]["mila_email_username"] == mila_email_username
+        )  # sanity check
 
         L_updates_to_do.append(
             UpdateOne(
                 {"mila_ldap.mila_email_username": mila_email_username},
                 {
                     # We don't modify the "mila_ldap" field, only add the "cc_roles" and "cc_members" fields.
-                    "$set": {"cc_roles" : D_match['cc_roles'],
-                             "cc_members" : D_match['cc_members']},
+                    "$set": {
+                        "cc_roles": D_match["cc_roles"],
+                        "cc_members": D_match["cc_members"],
+                    },
                 },
                 # Don't add that entry if it doesn't exist.
                 # That would create some dangling entry that doesn't have a "mila_ldap" field.
@@ -76,18 +83,18 @@ def run(mongodb_connection_string, mongodb_database, mongodb_collection, input_m
         )
 
     if L_updates_to_do:
-        result = users_collection.bulk_write(
-            L_updates_to_do
-        )  #  <- the actual commit
+        result = users_collection.bulk_write(L_updates_to_do)  #  <- the actual commit
         print(result.bulk_api_result)
     else:
         print("Nothing to do.")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
 
     args = parser.parse_args()
-    run(mongodb_connection_string=args.mongodb_connection_string,
+    run(
+        mongodb_connection_string=args.mongodb_connection_string,
         mongodb_database=args.mongodb_database,
         mongodb_collection=args.mongodb_collection,
-        input_matches_path=args.input_matches_path)
+        input_matches_path=args.input_matches_path,
+    )
