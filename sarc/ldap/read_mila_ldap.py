@@ -22,6 +22,24 @@ Two ways to output the data, that can be used together:
    2) to a MongoDB instance
 
 
+Note that the format used for the user entries in the collection
+is the following.
+See https://mila-iqia.atlassian.net/wiki/spaces/IDT/pages/2190737548/Planification.
+```
+    {"mila_ldap": {
+      "mila_email_username": "john.appleseed@mila.quebec",
+      "mila_cluster_username": "applej",
+      ...
+    },
+    "cc_roles": None,
+    "cc_members": {
+        "username": "johns",
+        ...}
+```
+This `read_mila_ldap.py` script will update only the "mila_ldap" part of the entry.
+
+
+
 Sample uses
 ===========
 
@@ -290,9 +308,8 @@ def client_side_user_updates(LD_users_DB, LD_users_LDAP):
             # If you need to enter some fields for the first time
             # when entering a new user, do it here.
             # As of right now, we have no need to do that.
-            ## entry = DD_users_LDAP[meu]
+            entry = DD_users_LDAP[meu]
             ## entry["some_unique_id_or_whatever"] = None
-            pass
         else:
             entry = DD_users_DB[meu]
 
@@ -342,15 +359,9 @@ def run(
             mongodb_collection
         ]
 
-        # The "enabled" component has to be dealt with differently.
-        #
-        # For a user that already exists in our database,
-        #   - if the LDAP says "disabled", then we propagate that to our database;
-        #   - if the LDAP says "enabled", then we ignore it.
-        # For a user that is not in our database,
-        #   - we go with whatever the LDAP says.
-
-        LD_users_DB = list(users_collection.find())
+        # read only the "mila_ldap" field from the entries, and ignore the
+        # "cc_roles" and "cc_members" components
+        LD_users_DB = [u["mila_ldap"] for u in list(users_collection.find())]
 
         L_updated_users = client_side_user_updates(
             LD_users_DB=LD_users_DB, LD_users_LDAP=LD_users
@@ -358,12 +369,12 @@ def run(
 
         L_updates_to_do = [
             UpdateOne(
-                {"mila_email_username": updated_user["mila_email_username"]},
+                {"mila_ldap.mila_email_username": updated_user["mila_email_username"]},
                 {
                     # We set all the fields corresponding to the fields from `updated_user`,
                     # so that's a convenient way to do it. Note that this does not affect
                     # the fields in the database that are already present for that user.
-                    "$set": updated_user,
+                    "$set": {"mila_ldap" : updated_user},
                 },
                 upsert=True,
             )
@@ -374,7 +385,7 @@ def run(
             result = users_collection.bulk_write(
                 L_updates_to_do
             )  #  <- the actual commit
-            # print(result.bulk_api_result)
+            print(result.bulk_api_result)
 
     if output_json_file:
         with open(output_json_file, "w") as f_out:
