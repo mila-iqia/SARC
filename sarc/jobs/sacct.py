@@ -124,7 +124,9 @@ class SAcctScraper:
         fmt = "%Y-%m-%dT%H:%M"
         start = self.start.strftime(fmt)
         end = self.end.strftime(fmt)
-        cmd = f"sacct -X -S '{start}' -E '{end}' --json"
+        accounts = self.cluster.accounts and ",".join(self.cluster.accounts)
+        accounts_option = f"-A {accounts}" if accounts else ""
+        cmd = f"{self.cluster.sacct_bin} {accounts_option} -X -S '{start}' -E '{end}' --json"
         print(f"{self.cluster.name} $ {cmd}")
         results = self.cluster.ssh.run(cmd, hide=True)
         return json.loads(results.stdout)
