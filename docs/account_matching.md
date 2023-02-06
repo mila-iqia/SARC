@@ -23,9 +23,11 @@ We will explain the pipeline from Mila LDAP and CC reports to populate those ent
 ## Getting the information from the Mila LDAP
 
 ```
-python3 read_mila_ldap.py \
-    --local_private_key_file secrets/Google_2026_01_26_66827.key \
-    --local_certificate_file secrets/Google_2026_01_26_66827.crt \
+export MONGODB_CONNECTION_STRING='mongodb://127.0.0.1:27017'
+
+python3 sarc/ldap/read_mila_ldap.py \
+    --local_private_key_file secrets/ldap/Google_2026_01_26_66827.key \
+    --local_certificate_file secrets/ldap/Google_2026_01_26_66827.crt \
     --ldap_service_uri ldaps://ldap.google.com \
     --mongodb_connection_string ${MONGODB_CONNECTION_STRING} \
     --output_json_file mila_users.json
@@ -59,20 +61,24 @@ and/or refer to files found in the `sarc/secrets` folder.
 This script could be rewritten to avoid such a situation.
 
 ```
+export PYTHONPATH=$PYTHONPATH:`pwd`
+
 python3 sarc/account_matching/make_matches.py \
     --config_path secrets/account_matching/make_matches_config.json \
     --mila_ldap_path secrets/account_matching/2022-11-26_mila_users.json \
     --cc_members_path secrets/account_matching/members-rrg-bengioy-ad-2022-11-25.csv \
-    --cc_roles_path secrets/account_matching/sponsored_roles_for_Yoshua_Bengio_(CCI_jvb-000).csv \
-    --output_path matches_done.json \
-    --mongodb_connection_string ${MONGODB_CONNECTION_STRING}
+    --cc_roles_path 'secrets/account_matching/sponsored_roles_for_Yoshua_Bengio_(CCI_jvb-000).csv' \
+    --output_path matches_done.json
 ```
 
-This script will update the entries in the database when the
-argument `--mongodb_connection_string` is specified.
-The output of that script is a file with a name like "matches_done.json".
+## Commit matches to the database
 
-YOU ARE HERE:
-  - Implement those arguments in make_matches.py
-  - Write to the database for make_matches.py
-  - Go back to read_mila_ldap.py and write to the database in that case also.
+```
+python3 sarc/account_matching/update_account_matches_in_database.py \
+    --mongodb_connection_string ${MONGODB_CONNECTION_STRING} \
+    --input_matches_path matches_done.json
+```
+
+The `--mongodb_connection_string` could have been added to the "make_matches.py"
+script instead of doing it in two steps, but that felt like we were squeezing
+a lot of code into a single script.

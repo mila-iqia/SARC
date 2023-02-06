@@ -19,7 +19,8 @@ import json
 import csv
 import os
 from collections import defaultdict
-from . import name_distances
+import argparse
+from sarc.account_matching import name_distances
 
 from pymongo import MongoClient, UpdateOne
 
@@ -61,7 +62,7 @@ parser.add_argument(
 # overwrite the tried-and-true "matches_done.json" file
 # when running this code for fun.
 parser.add_argument(
-    "--output_file",
+    "--output_path",
     type=str,
     default="secrets/account_matching/matches_done.json",
     help="local_private_key_file for LDAP connection",
@@ -74,6 +75,11 @@ def run(config_path,
     cc_roles_path,
     output_path):
 
+    data_paths = {
+        "mila_ldap": mila_ldap_path,
+        "cc_members": cc_members_path,
+        "cc_roles": cc_roles_path,
+    }
 
     with open(config_path, "r") as f_in:
         config = json.load(f_in)
@@ -251,9 +257,9 @@ def run(config_path,
         )
         print(f"We have {count_cc_roles_activated} activated cc_roles.")
 
-    with open(output_file, "w") as f_out:
+    with open(output_path, "w") as f_out:
         json.dump(DD_persons, f_out, indent=2)
-        print(f"Wrote {output_file}.")
+        print(f"Wrote {output_path}.")
 
 
 def how_many_cc_accounts_with_mila_emails(data, key="cc_members"):
@@ -272,4 +278,9 @@ def how_many_cc_accounts_with_mila_emails(data, key="cc_members"):
 
 if __name__ == "__main__":
     args = parser.parse_args()
-    run()
+    run(
+        config_path=args.config_path,
+        mila_ldap_path=args.mila_ldap_path, 
+        cc_members_path=args.cc_members_path,
+        cc_roles_path=args.cc_roles_path,
+        output_path=args.output_path)
