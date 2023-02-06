@@ -1,7 +1,10 @@
 import json
+import sys
+import traceback
 import warnings
 from datetime import datetime, time, timedelta
 from enum import Enum
+from pprint import pprint
 from typing import Iterator, Optional
 
 from hostlist import expand_hostlist
@@ -170,7 +173,16 @@ class SAcctScraper:
     def __iter__(self) -> Iterator[SlurmJob]:
         """Fetch and iterate on all jobs as SlurmJob objects."""
         for entry in self.get_raw()["jobs"]:
-            yield self.convert(entry)
+            try:
+                converted = self.convert(entry)
+                if converted is not None:
+                    yield converted
+            except Exception:
+                traceback.print_exc()
+                print("There was a problem with this entry:", file=sys.stderr)
+                print("====================================", file=sys.stderr)
+                pprint(entry)
+                print("====================================", file=sys.stderr)
 
     def convert(self, entry: dict) -> SlurmJob:
         """Convert a single job entry from sacct to a SlurmJob."""
