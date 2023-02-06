@@ -22,6 +22,8 @@ class ClusterConfig(BaseModel):
     host: str
     prometheus_url: str = None
     name: str = None
+    sacct_bin: str = "sacct"
+    accounts: list[str] = None
     sshconfig: Path = None
 
     @cached_property

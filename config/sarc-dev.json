@@ -3,11 +3,13 @@
         "url": "localhost:27017",
         "database": "sarc-dev"
     },
-    "cache": "~/storage/sarc/cache",
+    "cache": "./sarc-cache",
     "sshconfig": "~/.ssh/config",
     "clusters": {
         "mila": {
             "host": "mila",
+            "accounts": null,
+            "sacct-bin": "/opt/slurm/bin/sacct",
             "prometheus_url": "http://monitoring.server.mila.quebec:9090/"
         },
         "beluga": {
