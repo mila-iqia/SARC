@@ -28,6 +28,9 @@ class ClusterConfig(BaseModel):
     sacct_bin: str = "sacct"
     accounts: list[str] = None
     sshconfig: Path = None
+    duc_inodes_command: str = None
+    duc_storage_command: str = None
+    diskusage_report_command: str = None
 
     @cached_property
     def ssh(self):
