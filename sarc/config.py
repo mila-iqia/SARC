@@ -6,6 +6,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import Union
 
+from bson import ObjectId
 from pydantic import BaseModel as _BaseModel
 from pydantic import Extra, validator
 
@@ -16,6 +17,8 @@ class BaseModel(_BaseModel):
         extra = Extra.forbid
         # Ignore cached_property, this avoids errors with serialization
         keep_untouched = (cached_property,)
+        # Serializer for mongo's object ids
+        json_encoders = {ObjectId: str}
 
 
 class ClusterConfig(BaseModel):

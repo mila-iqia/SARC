@@ -8,6 +8,7 @@ from pprint import pprint
 from typing import Iterator, Optional
 
 from hostlist import expand_hostlist
+from pydantic_mongo import ObjectIdField
 
 from ..cluster import Cluster
 from ..config import BaseModel, config
@@ -58,8 +59,8 @@ class SlurmResources(BaseModel):
 class SlurmJob(BaseModel):
     """Holds data for a Slurm job."""
 
-    # Database ID (cluster_name:job_id)
-    id: str
+    # Database ID
+    id: ObjectIdField = None
 
     # job identification
     cluster_name: str
@@ -68,7 +69,7 @@ class SlurmJob(BaseModel):
     array_job_id: Optional[int]
     task_id: Optional[int]
     name: str
-    username: str
+    user: str
     group: str
 
     # status
@@ -207,13 +208,12 @@ class SAcctScraper:
         flags = {k: True for k in entry["flags"]}
 
         return SlurmJob(
-            id=f'{self.cluster.name}:{entry["job_id"]}',
             cluster_name=self.cluster.name,
             job_id=entry["job_id"],
             array_job_id=entry["array"]["job_id"] or None,
             task_id=entry["array"]["task_id"],
             name=entry["name"],
-            username=entry["user"],
+            user=entry["user"],
             group=entry["group"],
             account=entry["account"],
             job_state=entry["state"]["current"],

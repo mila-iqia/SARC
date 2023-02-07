@@ -9,21 +9,18 @@ class SlurmJobRepository(AbstractRepository[SlurmJob]):
     class Meta:
         collection_name = "jobs"
 
-    def save(self, model):
+    def save_job(self, model: SlurmJob):
         """Save a SlurmJob into the database.
 
         Note: This overrides AbstractRepository's save function to do an upsert when
         the id is provided.
         """
         document = self.to_document(model)
-        if model.id:
-            mongo_id = document.pop("_id")
-            return self.get_collection().update_one(
-                {"_id": mongo_id}, {"$set": document}, upsert=True
-            )
-        result = self.get_collection().insert_one(document)
-        model.id = result.inserted_id
-        return result
+        return self.get_collection().update_one(
+            {"job_id": model.job_id, "cluster_name": model.cluster_name},
+            {"$set": document},
+            upsert=True,
+        )
 
 
 def sacct_mongodb_import(cluster, day) -> None:
@@ -39,7 +36,7 @@ def sacct_mongodb_import(cluster, day) -> None:
     scraper.get_raw()
     print(f"Saving into mongodb collection '{collection.Meta.collection_name}'...")
     for entry in tqdm(scraper):
-        collection.save(entry)
+        collection.save_job(entry)
     print(f"Saved {len(scraper)} entries.")
 
 
