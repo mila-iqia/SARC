@@ -1,4 +1,5 @@
 secrets
+secrets.tar.gz.encrypted
 
 .DS_Store
 clockwork_ldap.crt
