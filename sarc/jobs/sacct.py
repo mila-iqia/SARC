@@ -83,9 +83,9 @@ class SlurmJob(BaseModel):
     work_dir: str
 
     # Miscellaneous
-    constraints: str
+    constraints: Optional[str]
     priority: int
-    qos: str
+    qos: Optional[str]
 
     # Flags
     CLEAR_SCHEDULING: bool = False
