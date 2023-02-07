@@ -3,3 +3,4 @@ secrets
 .DS_Store
 clockwork_ldap.crt
 clockwork_ldap.key
+.coverage
