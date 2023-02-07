@@ -10,25 +10,46 @@
             "host": "mila",
             "accounts": null,
             "sacct-bin": "/opt/slurm/bin/sacct",
+            "duc_inodes_command": null,
+            "duc_storage_command": null,
+            "diskusage_report_command": null,
             "prometheus_url": "http://monitoring.server.mila.quebec:9090/"
         },
-        "beluga": {
-            "duc_inodes_command": "duc ls -d /project/.duc_databases/rrg-bengioy-ad.sqlite --count /project/rrg-bengioy-ad",
-            "duc_storage_command": "duc ls -d /project/.duc_databases/rrg-bengioy-ad.sqlite /project/rrg-bengioy-ad",
-            "diskusage_report_command": "diskusage_report --project --all_users"
-        },
         "narval": {
+            "host": "narval.computecanada.ca",
+            "accounts": ["rrg-bengioy-ad_gpu"],
+            "sacct_bin": "/opt/software/slurm/bin/sacct",
             "duc_inodes_command": "duc ls -d /project/.duc_databases/rrg-bengioy-ad.sqlite --count /project/rrg-bengioy-ad",
             "duc_storage_command": "duc ls -d /project/.duc_databases/rrg-bengioy-ad.sqlite /project/rrg-bengioy-ad",
-            "diskusage_report_command": "diskusage_report --project --all_users"
+            "diskusage_report_command": "diskusage_report --project --all_users",
+            "prometheus_url": null
         },
-        "cedar": {
-            "duc_inodes_command": null,
-            "duc_storage_command": null
+        "beluga": {
+            "host": "beluga.computecanada.ca",
+            "accounts": ["rrg-bengioy-ad_gpu"],
+            "sacct_bin": "/opt/software/slurm/bin/sacct",
+            "duc_inodes_command": "duc ls -d /project/.duc_databases/rrg-bengioy-ad.sqlite --count /project/rrg-bengioy-ad",
+            "duc_storage_command": "duc ls -d /project/.duc_databases/rrg-bengioy-ad.sqlite /project/rrg-bengioy-ad",
+            "diskusage_report_command": "diskusage_report --project --all_users",
+            "prometheus_url": null
         },
         "graham": {
+            "host": "graham.computecanada.ca",
+            "accounts": ["rrg-bengioy-ad_gpu"],
+            "sacct_bin": "/opt/software/slurm/bin/sacct",
             "duc_inodes_command": null,
-            "duc_storage_command": null
+            "duc_storage_command": null,
+            "diskusage_report_command": null,
+            "prometheus_url": null
+        },
+        "cedar": {
+            "host": "cedar.computecanada.ca",
+            "accounts": ["rrg-bengioy-ad_gpu"],
+            "sacct_bin": "/opt/software/slurm/bin/sacct",
+            "duc_inodes_command": null,
+            "duc_storage_command": null,
+            "diskusage_report_command": null,
+            "prometheus_url": null
         }
     }
 }
