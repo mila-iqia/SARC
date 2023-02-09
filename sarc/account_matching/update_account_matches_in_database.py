@@ -4,10 +4,12 @@ Get the information from the "matches_done.json" file.
 Commit the new information to the database.
 
 """
-from pymongo import MongoClient, UpdateOne
 import argparse
-from sarc.common.config import get_config
 import json
+
+from pymongo import MongoClient, UpdateOne
+
+from sarc.common.config import get_config
 
 parser = argparse.ArgumentParser(
     description="Updates the account matches in the database."
@@ -41,7 +43,6 @@ parser.add_argument(
 def run(
     mongodb_connection_string, mongodb_database, mongodb_collection, input_matches_path
 ):
-
     users_collection = MongoClient(mongodb_connection_string)[mongodb_database][
         mongodb_collection
     ]
@@ -70,7 +71,8 @@ def run(
             UpdateOne(
                 {"mila_ldap.mila_email_username": mila_email_username},
                 {
-                    # We don't modify the "mila_ldap" field, only add the "cc_roles" and "cc_members" fields.
+                    # We don't modify the "mila_ldap" field,
+                    # only add the "cc_roles" and "cc_members" fields.
                     "$set": {
                         "cc_roles": D_match["cc_roles"],
                         "cc_members": D_match["cc_members"],
@@ -90,7 +92,6 @@ def run(
 
 
 if __name__ == "__main__":
-
     args = parser.parse_args()
     run(
         mongodb_connection_string=args.mongodb_connection_string,

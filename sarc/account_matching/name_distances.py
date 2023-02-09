@@ -31,7 +31,6 @@ def bow_distance(bow_A, bow_B):
 
 
 def find_exact_bag_of_words_matches(L_names_A, L_names_B):
-
     LP_names_A = [(a, bag_of_words_projection(a)) for a in L_names_A]
     LP_names_B = [(b, bag_of_words_projection(b)) for b in L_names_B]
 
@@ -61,7 +60,8 @@ def find_exact_bag_of_words_matches(L_names_A, L_names_B):
     #
     # assert len(set(list(zip(*LP_results))[0])) == len(set(list(zip(*LP_results))[1])), (
     #    "We have a big problem in the name matching because some name matched to more than one.\n"
-    #    "This should really be a one-to-one correspondance, or otherwise we shouldn't be doing this matching.\n"
+    #    "This should really be a one-to-one correspondance, or otherwise we shouldn't be doing "
+    #    "this matching.\n"
     #    "We should be more careful and omit those multiple matches by altering this function."
     # )
     return LP_results
