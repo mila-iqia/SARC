@@ -12,8 +12,6 @@ from sarc.config import config
 
 logger = logging.getLogger(__name__)
 
-prom = PrometheusConnect(url="http://localhost:9090", disable_ssl=True)
-
 
 def curate_label_argument(label_name: str, label_values: None | str | list[str]):
     """Return empty dict, otherwise a list of dicts"""
