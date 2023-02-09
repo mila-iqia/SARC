@@ -8,6 +8,8 @@ from datetime import datetime, timedelta
 import pandas as pd
 from prometheus_api_client import MetricRangeDataFrame, PrometheusConnect
 
+from sarc.config import config
+
 logger = logging.getLogger(__name__)
 
 prom = PrometheusConnect(url="http://localhost:9090", disable_ssl=True)
@@ -118,7 +120,7 @@ def query_prom(
 
     query = generate_custom_query(metric_name, label_config, start, end, running_window)
 
-    return prom.custom_query(query)
+    return config().clusters["mila"].prometheus.custom_query(query)
 
 
 def get_nodes_time_series(

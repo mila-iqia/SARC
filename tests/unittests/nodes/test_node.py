@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 
+import prometheus_api_client.prometheus_connect
 import pytest
 
 import sarc.nodes.node
@@ -7,7 +8,6 @@ from sarc.nodes.node import (
     generate_custom_query,
     generate_label_configs,
     get_nodes_time_series,
-    prom,
     query_prom,
 )
 
@@ -207,10 +207,14 @@ def test_generate_label_configs_unsupported_cluster_name():
 def test_query_prom(
     metric_name, label_config, start, end, running_window, ground_truth, monkeypatch
 ):
-    def assert_query(query):
+    def assert_query(self, query):
         assert query == ground_truth
 
-    monkeypatch.setattr(prom, "custom_query", assert_query)
+    monkeypatch.setattr(
+        prometheus_api_client.prometheus_connect.PrometheusConnect,
+        "custom_query",
+        assert_query,
+    )
     query_prom(
         metric_name=metric_name,
         label_config=label_config,
@@ -270,7 +274,7 @@ def test_get_nodes_time_series_queries(monkeypatch):
     ]
     found = []
 
-    def assert_expected_query(query):
+    def assert_expected_query(self, query):
         assert expected.pop(0) == query
         found.append(query)
 
@@ -290,7 +294,11 @@ def test_get_nodes_time_series_queries(monkeypatch):
             }
         ]
 
-    monkeypatch.setattr(prom, "custom_query", assert_expected_query)
+    monkeypatch.setattr(
+        prometheus_api_client.prometheus_connect.PrometheusConnect,
+        "custom_query",
+        assert_expected_query,
+    )
 
     df = get_nodes_time_series(
         ["metric1", "metric2"],
