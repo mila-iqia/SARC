@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Surveillance et analyse des ressources de calcul"
 authors = ["Mila-IDT"]
 readme = "README.md"
+packages = [{include = 'sarc'}]
 
 [tool.poetry.dependencies]
 python = "^3.8"
@@ -11,6 +12,7 @@ fabric = "^3.0.0"
 prometheus-api-client = "^0.5.2"
 pydantic = "^1.10.4"
 pymongo = "^4.3.3"
+numpy = ">= 1.24.0"
 
 
 [tool.poetry.group.dev.dependencies]
@@ -22,6 +24,7 @@ pytest = ">= 7.2.1"
 pytest-cov = ">= 4.0.0"
 pytest-regressions = ">= 2.4.2"
 tox = ">= 4.4.5"
+pytest-freezegun = ">= 0.4.2"
 
 [build-system]
 requires = ["poetry-core"]
