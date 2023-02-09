@@ -29,7 +29,8 @@ requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.pylint]
-disable = "R0903"
+# disable = "R0903,R0913,R0914,C0114,C0115,C0116,C0103"
+disable = "R0903,R0913,R0914,C0103,C0415,W1514"
 extension-pkg-whitelist = "pydantic"
 
 [tool.isort]

@@ -31,7 +31,6 @@ def bow_distance(bow_A, bow_B):
 
 
 def find_exact_bag_of_words_matches(L_names_A, L_names_B):
-
     LP_names_A = [(a, bag_of_words_projection(a)) for a in L_names_A]
     LP_names_B = [(b, bag_of_words_projection(b)) for b in L_names_B]
 

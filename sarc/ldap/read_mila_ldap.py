@@ -135,17 +135,15 @@ they are structured as follows:
 
 """
 
-import os
 import argparse
 import json
+import os
+import ssl
 
 # Requirements
 # - pip install ldap3
-from ldap3 import Server, Connection, Tls, ALL_ATTRIBUTES, SUBTREE
-import ssl
-
+from ldap3 import ALL_ATTRIBUTES, SUBTREE, Connection, Server, Tls
 from pymongo import MongoClient, UpdateOne
-
 
 parser = argparse.ArgumentParser(
     description="Query LDAP and update the MongoDB database users based on values returned."
@@ -330,7 +328,6 @@ def run(
     output_raw_LDAP_json_file=None,
     LD_users=None,  # for external testing purposes
 ):
-
     if LD_users is not None:
         # Used mostly for testing purposes.
         # Overrides the "input_json_file" argument.
@@ -354,7 +351,6 @@ def run(
         LD_users = [process_user(D_user_raw) for D_user_raw in LD_users_raw]
 
     if mongodb_connection_string and mongodb_database and mongodb_collection:
-
         users_collection = MongoClient(mongodb_connection_string)[mongodb_database][
             mongodb_collection
         ]
@@ -394,7 +390,6 @@ def run(
 
 
 if __name__ == "__main__":
-
     args = parser.parse_args()
     run(
         local_private_key_file=args.local_private_key_file,
