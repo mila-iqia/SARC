@@ -3,8 +3,7 @@ name: Python package
 on:
   push:
     branches: [ master ]
-  pull_request:
-    types: [ opened, reopened ]
+  pull_request_target:
     branches: [ master ]
 
 jobs:
