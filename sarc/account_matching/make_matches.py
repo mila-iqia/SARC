@@ -26,7 +26,8 @@ from pymongo import MongoClient, UpdateOne
 
 
 parser = argparse.ArgumentParser(
-    description="Make matches with Mila LDAP accounts and CC accounts. Update the MongoDB database users based on values returned."
+    description="Make matches with Mila LDAP accounts and CC accounts. "\
+                "Update the MongoDB database users based on values returned."
 )
 # This config contains the following keys:
 #     'L_phantom_mila_emails_to_ignore'
@@ -37,7 +38,8 @@ parser.add_argument(
     "--config_path",
     type=str,
     default="secrets/account_matching/make_matches_config.json",
-    help="JSON file that contains the 'L_phantom_mila_emails_to_ignore' and 'D_override_matches_mila_to_cc_account_username' keys.",
+    help="JSON file that contains the 'L_phantom_mila_emails_to_ignore' "\
+         "and 'D_override_matches_mila_to_cc_account_username' keys.",
 )
 parser.add_argument(
     "--mila_ldap_path",
@@ -214,7 +216,8 @@ def run(config_path, mila_ldap_path, cc_members_path, cc_roles_path, output_path
         f"We have {enabled_count} enabled accounts and {disabled_count} disabled accounts."
     )
     print(
-        f"Out of those enabled accounts, there are {good_count} successful matches and {bad_count} failed matches."
+        f"Out of those enabled accounts, there are {good_count} successful matches "\
+        "and {bad_count} failed matches."
     )
 
     # TODO : report on how many of the CC entries couldn't be matches to mila LDAP
@@ -241,7 +244,8 @@ def run(config_path, mila_ldap_path, cc_members_path, cc_roles_path, output_path
             ]
         )
         print(
-            f"We could not find matches in the Mila LDAP for the CC accounts associated with the following emails: {set_A.difference(set_B)}."
+            f"We could not find matches in the Mila LDAP for the CC accounts "\
+            "associated with the following emails: {set_A.difference(set_B)}."
         )
 
     # see "account_matching.md" for some explanations on the edge cases handled
@@ -266,7 +270,8 @@ def how_many_cc_accounts_with_mila_emails(data, key="cc_members"):
     ]
 
     print(
-        f"We have {len(LD_members)} {key} accounts with @mila.quebec, out of {len(data['cc_members'])}."
+        f"We have {len(LD_members)} {key} accounts with @mila.quebec, "\
+        "out of {len(data['cc_members'])}."
     )
     return LD_members
 

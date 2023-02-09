@@ -70,7 +70,8 @@ def run(
             UpdateOne(
                 {"mila_ldap.mila_email_username": mila_email_username},
                 {
-                    # We don't modify the "mila_ldap" field, only add the "cc_roles" and "cc_members" fields.
+                    # We don't modify the "mila_ldap" field, 
+                    # only add the "cc_roles" and "cc_members" fields.
                     "$set": {
                         "cc_roles": D_match["cc_roles"],
                         "cc_members": D_match["cc_members"],
