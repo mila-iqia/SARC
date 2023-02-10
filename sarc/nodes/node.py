@@ -145,7 +145,7 @@ def get_nodes_time_series(
         Name of the clusters for which to fetch the metrics. If None,
         fetch the metrics for all clusters.
     running_window: timedelta
-        The granulatiy at which we compute the mean value over time. Default is 1 day.
+        The granularity at which we compute the mean value over time. Default is 1 day.
     """
 
     if isinstance(metrics, str):
