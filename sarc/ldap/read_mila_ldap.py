@@ -328,7 +328,6 @@ def run(
     output_raw_LDAP_json_file=None,
     LD_users=None,  # for external testing purposes
 ):
-
     if LD_users is not None:
         # Used mostly for testing purposes.
         # Overrides the "input_json_file" argument.
@@ -352,7 +351,6 @@ def run(
         LD_users = [process_user(D_user_raw) for D_user_raw in LD_users_raw]
 
     if mongodb_connection_string and mongodb_database and mongodb_collection:
-
         users_collection = MongoClient(mongodb_connection_string)[mongodb_database][
             mongodb_collection
         ]
@@ -392,7 +390,6 @@ def run(
 
 
 if __name__ == "__main__":
-
     args = parser.parse_args()
     run(
         local_private_key_file=args.local_private_key_file,
