@@ -1,5 +1,6 @@
 import json
 import os
+import zoneinfo
 from contextlib import contextmanager
 from contextvars import ContextVar
 from functools import cached_property
@@ -23,6 +24,7 @@ class BaseModel(_BaseModel):
 
 class ClusterConfig(BaseModel):
     host: str
+    timezone: object
     prometheus_url: str = None
     name: str = None
     sacct_bin: str = "sacct"
@@ -31,6 +33,10 @@ class ClusterConfig(BaseModel):
     duc_inodes_command: str = None
     duc_storage_command: str = None
     diskusage_report_command: str = None
+
+    @validator("timezone")
+    def _timezone(cls, value):
+        return zoneinfo.ZoneInfo(value)
 
     @cached_property
     def ssh(self):

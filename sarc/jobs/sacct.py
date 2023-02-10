@@ -2,12 +2,14 @@ import json
 import sys
 import traceback
 import warnings
+import zoneinfo
 from datetime import datetime, time, timedelta
 from enum import Enum
 from pprint import pprint
 from typing import Iterator, Optional
 
 from hostlist import expand_hostlist
+from pydantic import validator
 from pydantic_mongo import ObjectIdField
 
 from ..cluster import Cluster
@@ -103,6 +105,23 @@ class SlurmJob(BaseModel):
     # tres
     requested: SlurmResources
     allocated: SlurmResources
+
+    @validator("submit_time", "start_time", "end_time")
+    def _ensure_timezone(cls, v):
+        # We'll store in MTL timezone because why not
+        return v and v.replace(tzinfo=UTC).astimezone(MTL)
+
+
+MTL = zoneinfo.ZoneInfo("America/Montreal")
+UTC = zoneinfo.ZoneInfo("UTC")
+
+
+def parse_in_timezone(cluster, timestamp):
+    if timestamp is None or timestamp == 0:
+        return None
+    date_naive = datetime.fromtimestamp(timestamp)
+    date_aware = date_naive.replace(tzinfo=cluster.timezone)
+    return date_aware.astimezone(UTC)
 
 
 class SAcctScraper:
@@ -220,9 +239,9 @@ class SAcctScraper:
             exit_code=entry["exit_code"]["return_code"],
             signal=entry["exit_code"].get("signal", {}).get("signal_id", None),
             time_limit=(tlimit := entry["time"]["limit"]) and tlimit * 60,
-            submit_time=(entry["time"]["submission"] or None),
-            start_time=(entry["time"]["start"] or None),
-            end_time=(entry["time"]["end"] or None),
+            submit_time=parse_in_timezone(self.cluster, entry["time"]["submission"]),
+            start_time=parse_in_timezone(self.cluster, entry["time"]["start"]),
+            end_time=parse_in_timezone(self.cluster, entry["time"]["end"]),
             elapsed_time=entry["time"]["elapsed"],
             partition=entry["partition"],
             nodes=expand_hostlist(nodes) if nodes != "None assigned" else [],
