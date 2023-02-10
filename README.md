@@ -11,7 +11,7 @@ sarc/account_matching/update_account_matches_in_database.py
 sarc/inode_storage_scanner/get_diskusage.py  (stub)
 ```
 
-## before commits
+## Before commits
 
 Those commands are for the proper formatting.
 ```
@@ -20,6 +20,11 @@ tox -e isort
 tox -e black
 tox -e lint
 ```
+
+## How to add dependencies
+
+TODO : How does poetry work? Needs a simple example here for the command to add a python module like `ldap3`. What are we supposed to type?
+
 
 ## How to run the tests suite
 
