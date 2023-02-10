@@ -1,11 +1,11 @@
-from datetime import datetime
+from datetime import datetime, time, timedelta
 from enum import Enum
-from typing import Optional
+from typing import Optional, Union
 
 from pydantic import validator
 from pydantic_mongo import AbstractRepository, ObjectIdField
 
-from ..config import MTL, UTC, BaseModel, config
+from ..config import MTL, UTC, BaseModel, ClusterConfig, config
 
 
 class SlurmState(str, Enum):
@@ -130,3 +130,71 @@ def jobs_collection():
     """Return the jobs collection in the current MongoDB."""
     db = config().mongo.instance
     return SlurmJobRepository(database=db)
+
+
+def get_jobs(
+    *,
+    cluster: Union[str, ClusterConfig] = None,
+    job_id: Union[int, list[int]] = None,
+    username: str = None,
+    start: Union[str, datetime] = None,
+    end: Union[str, datetime] = None,
+    query_options: dict = {},
+):
+    """Get jobs that match the query.
+
+    Arguments:
+        cluster: The cluster on which to search for jobs.
+        job_id: The id or a list of ids to select.
+        start: Get all jobs that have a status after that time.
+        end: Get all jobs that have a status before that time.
+        query_options: Additional options to pass to MongoDB (limit, etc.)
+    """
+    if isinstance(cluster, str):
+        cluster = config().clusters[cluster]
+
+    if isinstance(start, str):
+        start = datetime.combine(datetime.strptime(start, "%Y-%m-%d"), time.min)
+    if isinstance(end, str):
+        end = datetime.combine(
+            datetime.strptime(end, "%Y-%m-%d"), time.min
+        ) + timedelta(days=1)
+
+    query = {}
+    if isinstance(job_id, int):
+        query["job_id"] = job_id
+    elif isinstance(job_id, list):
+        query["job_id"] = {"$in": job_id}
+
+    if end:
+        # Select any job that had a status before the given end time.
+        query["submit_time"] = {"$lt": end}
+
+    if username:
+        query["username"] = username
+
+    if start:
+        # Select jobs that had a status after the given time. This is a bit special
+        # since we need to get both jobs that did not finish, and any job that ended after
+        # the given time. This appears to require an $or, so we handle it after the others.
+        query = {
+            "$or": [
+                {**query, "end_time": None},
+                {**query, "end_time": {"$gt": start}},
+            ]
+        }
+
+    coll = jobs_collection()
+    return coll.find_by(query, **query_options)
+
+
+def get_job(*, query_options={}, **kwargs):
+    """Get a single job that matches the query, or None if nothing is found.
+
+    Same signature as `get_jobs`.
+    """
+    jobs = get_jobs(**kwargs, query_options={**query_options, "limit": 1})
+    for job in jobs:
+        return job
+    else:
+        return None
