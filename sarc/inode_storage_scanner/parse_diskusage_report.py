@@ -61,7 +61,7 @@ def _parse_body(L_lines: list[str], DLD_results=None):
     project = None
     LD_results = []
     inside_segment = False
-    for (n, line) in enumerate(L_lines):
+    for n, line in enumerate(L_lines):
         if not inside_segment and re.match(
             r"^\s*$", line
         ):  # skip empty line when outside of segment

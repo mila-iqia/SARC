@@ -5,7 +5,6 @@ from sarc.inode_storage_scanner.parse_diskusage_report import (
 
 
 def test_header_00():
-
     L_lines = """
                                 Description                Space           # of files
                 /project (group kjsfsd78)              0/2048k               0/1025
@@ -31,7 +30,6 @@ def test_header_00():
 
 
 def test_parse_body_00():
-
     L_lines = """
     
     Breakdown for project def-bengioy (Last update: 2022-10-25 14:01:28)
