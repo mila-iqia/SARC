@@ -308,3 +308,49 @@ def test_get_nodes_time_series_queries(monkeypatch):
     assert df.shape == (8 * 4, 4)
     for query in found:
         assert df[df["query"] == query].shape == (8, 4)
+
+
+@pytest.mark.freeze_time("2023-01-01")
+def test_get_nodes_time_series_empty_result(monkeypatch):
+    def mixed_results(self, query):
+        if mixed_results.calls % 2:
+            rval = []
+        else:
+            rval = [
+                {
+                    "metric": {"query": query, "some": "other", "arguments": 0},
+                    "values": [
+                        [1675109742, "0.0330033"],
+                        [1675109772, "0.0333333"],
+                        [1675109802, "0.0333333"],
+                        [1675109832, "0.0660066"],
+                        [1675109862, "0.03367"],
+                        [1675109892, "0.0330033"],
+                        [1675109922, "0.0333333"],
+                        [1675109952, "0.0673676"],
+                    ],
+                }
+            ]
+
+        mixed_results.calls += 1
+
+        return rval
+
+    mixed_results.calls = 0
+
+    monkeypatch.setattr(
+        prometheus_api_client.prometheus_connect.PrometheusConnect,
+        "custom_query",
+        mixed_results,
+    )
+
+    df = get_nodes_time_series(
+        ["metric1", "metric2"],
+        start=datetime(2021, 1, 1),
+        end=datetime(2022, 1, 1),
+        node_id=["cn-d003", "cn-d004"],
+        cluster_name="mila-cluster",
+        running_window=timedelta(days=7 * 4),
+    )
+
+    assert df.shape == (8 * 2, 4)

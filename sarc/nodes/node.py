@@ -158,15 +158,17 @@ def get_nodes_time_series(
     for metric_name, label_config in itertools.product(
         metrics, generate_label_configs(node_id, cluster_name)
     ):
-        metric_df = MetricRangeDataFrame(
-            query_prom(
-                metric_name,
-                label_config=label_config,
-                start=start,
-                end=end,
-                running_window=running_window,
-            )
+        rval = query_prom(
+            metric_name,
+            label_config=label_config,
+            start=start,
+            end=end,
+            running_window=running_window,
         )
+        if rval:
+            metric_df = MetricRangeDataFrame(rval)
+        else:
+            metric_df = pd.DataFrame()
 
         if df is not None:
             df = pd.concat([df, metric_df])
