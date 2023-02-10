@@ -2,7 +2,7 @@ import sys
 from datetime import datetime
 
 from sarc.config import config
-from sarc.jobs.db import sacct_mongodb_import
+from sarc.jobs.sacct import sacct_mongodb_import
 
 
 def main():

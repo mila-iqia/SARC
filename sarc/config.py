@@ -11,6 +11,9 @@ from bson import ObjectId
 from pydantic import BaseModel as _BaseModel
 from pydantic import Extra, validator
 
+MTL = zoneinfo.ZoneInfo("America/Montreal")
+UTC = zoneinfo.ZoneInfo("UTC")
+
 
 class ConfigurationError(Exception):
     pass
