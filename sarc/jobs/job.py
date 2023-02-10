@@ -1,3 +1,5 @@
+# pylint: disable=dangerous-default-value
+
 from datetime import datetime, time, timedelta
 from enum import Enum
 from typing import Optional, Union
@@ -196,5 +198,4 @@ def get_job(*, query_options={}, **kwargs):
     jobs = get_jobs(**kwargs, query_options={**query_options, "limit": 1})
     for job in jobs:
         return job
-    else:
-        return None
+    return None
