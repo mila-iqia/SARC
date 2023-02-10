@@ -109,6 +109,11 @@ class SlurmJob(BaseModel):
     def cluster(self):
         return config().clusters[self.cluster_name]
 
+    def series(self, **kwargs):
+        from .series import get_job_time_series  # pylint: disable=cyclic-import
+
+        return get_job_time_series(job=self, **kwargs)
+
 
 class SlurmJobRepository(AbstractRepository[SlurmJob]):
     class Meta:
