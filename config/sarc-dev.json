@@ -24,7 +24,8 @@
             "duc_inodes_command": "duc ls -d /project/.duc_databases/rrg-bengioy-ad.sqlite --count /project/rrg-bengioy-ad",
             "duc_storage_command": "duc ls -d /project/.duc_databases/rrg-bengioy-ad.sqlite /project/rrg-bengioy-ad",
             "diskusage_report_command": "diskusage_report --project --all_users",
-            "prometheus_url": null
+            "prometheus_url": "https://mila-thanos.calculquebec.ca",
+            "prometheus_headers_file": "secrets/drac_prometheus/headers.json"
         },
         "beluga": {
             "host": "beluga.computecanada.ca",
@@ -34,7 +35,8 @@
             "duc_inodes_command": "duc ls -d /project/.duc_databases/rrg-bengioy-ad.sqlite --count /project/rrg-bengioy-ad",
             "duc_storage_command": "duc ls -d /project/.duc_databases/rrg-bengioy-ad.sqlite /project/rrg-bengioy-ad",
             "diskusage_report_command": "diskusage_report --project --all_users",
-            "prometheus_url": null
+            "prometheus_url": "https://mila-thanos.calculquebec.ca",
+            "prometheus_headers_file": "secrets/drac_prometheus/headers.json"
         },
         "graham": {
             "host": "graham.computecanada.ca",
@@ -44,7 +46,8 @@
             "duc_inodes_command": null,
             "duc_storage_command": null,
             "diskusage_report_command": null,
-            "prometheus_url": null
+            "prometheus_url": "https://mila-thanos.calculquebec.ca",
+            "prometheus_headers_file": "secrets/drac_prometheus/headers.json"
         },
         "cedar": {
             "host": "cedar.computecanada.ca",
@@ -54,7 +57,8 @@
             "duc_inodes_command": null,
             "duc_storage_command": null,
             "diskusage_report_command": null,
-            "prometheus_url": null
+            "prometheus_url": "https://mila-thanos.calculquebec.ca",
+            "prometheus_headers_file": "secrets/drac_prometheus/headers.json"
         }
     }
 }
