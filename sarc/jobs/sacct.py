@@ -184,7 +184,9 @@ class SAcctScraper:
 
         self.results = self.fetch_raw()
         if self.cachefile:
-            json.dump(fp=open(self.cachefile, "w", encoding="utf8"), obj=self.results)
+            json.dump(
+                fp=open(self.cachefile, "w", encoding="utf8"), obj=self.results
+            )  # pylint: disable=consider-using-with
         return self.results
 
     def __len__(self) -> int:
@@ -197,7 +199,7 @@ class SAcctScraper:
                 converted = self.convert(entry)
                 if converted is not None:
                     yield converted
-            except Exception:
+            except Exception:  # pylint: disable=broad-exception-caught
                 traceback.print_exc()
                 print("There was a problem with this entry:", file=sys.stderr)
                 print("====================================", file=sys.stderr)

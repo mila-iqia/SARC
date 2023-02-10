@@ -31,8 +31,18 @@ requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.pylint]
-# disable = "R0903,R0913,R0914,C0114,C0115,C0116,C0103"
-disable = "R0903,R0913,R0914,C0103,C0415,W1514"
+disable = [
+    "no-self-argument",  # Pydantic validators don't have one
+    "too-few-public-methods",  # Triggered on Pydantic models
+    "import-outside-toplevel",  # These imports are useful to reduce loading times
+    "too-many-arguments",
+    "too-many-locals",
+    "missing-module-docstring",
+    "missing-class-docstring",
+    "missing-function-docstring",
+    "invalid-name",
+    "no-else-return",  # Bad rule IMO (- OB)
+]
 extension-pkg-whitelist = "pydantic"
 
 [tool.isort]
