@@ -14,16 +14,16 @@ with the other secrets in the "secrets/account_matching" directory.
 """
 
 
-import numpy as np
-import json
+import argparse
 import csv
+import json
 import os
 from collections import defaultdict
-import argparse
-from sarc.account_matching import name_distances
 
+import numpy as np
 from pymongo import MongoClient, UpdateOne
 
+from sarc.account_matching import name_distances
 
 parser = argparse.ArgumentParser(
     description="Make matches with Mila LDAP accounts and CC accounts. Update the MongoDB database users based on values returned."

@@ -1,7 +1,7 @@
-from sarc.inode_storage_scanner.parse_diskusage_report import (
-    _parse_header_summary as parse_header_summary,
-)
-from sarc.inode_storage_scanner.parse_diskusage_report import _parse_body as parse_body
+from sarc.inode_storage_scanner.parse_diskusage_report import \
+    _parse_body as parse_body
+from sarc.inode_storage_scanner.parse_diskusage_report import \
+    _parse_header_summary as parse_header_summary
 
 
 def test_header_00():

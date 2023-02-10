@@ -135,17 +135,15 @@ they are structured as follows:
 
 """
 
-import os
 import argparse
 import json
+import os
+import ssl
 
 # Requirements
 # - pip install ldap3
-from ldap3 import Server, Connection, Tls, ALL_ATTRIBUTES, SUBTREE
-import ssl
-
+from ldap3 import ALL_ATTRIBUTES, SUBTREE, Connection, Server, Tls
 from pymongo import MongoClient, UpdateOne
-
 
 parser = argparse.ArgumentParser(
     description="Query LDAP and update the MongoDB database users based on values returned."

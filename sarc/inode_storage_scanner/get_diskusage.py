@@ -32,7 +32,6 @@ meant for testing.
 
 # from pymongo import MongoClient, UpdateOne
 import argparse
-
 # from sarc.common.config import get_config
 import json
 

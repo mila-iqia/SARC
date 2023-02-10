@@ -4,10 +4,12 @@ Get the information from the "matches_done.json" file.
 Commit the new information to the database.
 
 """
-from pymongo import MongoClient, UpdateOne
 import argparse
-from sarc.common.config import get_config
 import json
+
+from pymongo import MongoClient, UpdateOne
+
+from sarc.common.config import get_config
 
 parser = argparse.ArgumentParser(
     description="Updates the account matches in the database."
