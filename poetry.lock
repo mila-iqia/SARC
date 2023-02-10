@@ -930,6 +930,21 @@ files = [
 ]
 
 [[package]]
+name = "ldap3"
+version = "2.9.1"
+description = "A strictly RFC 4510 conforming LDAP V3 pure Python client library"
+category = "main"
+optional = false
+python-versions = "*"
+files = [
+    {file = "ldap3-2.9.1-py2.py3-none-any.whl", hash = "sha256:5869596fc4948797020d3f03b7939da938778a0f9e2009f7a072ccf92b8e8d70"},
+    {file = "ldap3-2.9.1.tar.gz", hash = "sha256:f3e7fc4718e3f09dda568b57100095e0ce58633bcabbed8667ce3f8fbaa4229f"},
+]
+
+[package.dependencies]
+pyasn1 = ">=0.4.6"
+
+[[package]]
 name = "matplotlib"
 version = "3.6.3"
 description = "Python plotting package"
@@ -1337,6 +1352,18 @@ matplotlib = "*"
 numpy = "*"
 pandas = ">=1.4.0"
 requests = "*"
+
+[[package]]
+name = "pyasn1"
+version = "0.4.8"
+description = "ASN.1 types and codecs"
+category = "main"
+optional = false
+python-versions = "*"
+files = [
+    {file = "pyasn1-0.4.8-py2.py3-none-any.whl", hash = "sha256:39c7e2ec30515947ff4e87fb6f456dfc6e84857d34be479c9d4a4ba4bf46aa5d"},
+    {file = "pyasn1-0.4.8.tar.gz", hash = "sha256:aef77c9fb94a3ac588e87841208bdec464471d9871bd5050a287cc9a475cd0ba"},
+]
 
 [[package]]
 name = "pycparser"
@@ -2108,4 +2135,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8"
-content-hash = "ae401625c0d5d0d3987c3083dd77e192f5b448b5be47b8918f71defa38e989fc"
+content-hash = "db1aee1502dd4c909e974a1de04588a0a270f8ed811a3597f1ac25c2c81b4af1"
