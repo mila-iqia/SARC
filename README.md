@@ -16,6 +16,7 @@ sarc/inode_storage_scanner/get_diskusage.py  (stub)
 Those commands are for the proper formatting.
 ```
 black .
+isort --profile black .
 tox -e isort
 tox -e black
 tox -e lint
