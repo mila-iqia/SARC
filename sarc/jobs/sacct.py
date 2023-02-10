@@ -2,118 +2,16 @@ import json
 import sys
 import traceback
 import warnings
-import zoneinfo
 from datetime import datetime, time, timedelta
-from enum import Enum
 from pprint import pprint
-from typing import Iterator, Optional
+from typing import Iterator
 
 from hostlist import expand_hostlist
-from pydantic import validator
-from pydantic_mongo import ObjectIdField
+from tqdm import tqdm
 
 from ..cluster import Cluster
-from ..config import BaseModel, config
-
-
-class SlurmState(str, Enum):
-    """Possible Slurm job states.
-
-    Reference: https://slurm.schedmd.com/squeue.html#SECTION_JOB-STATE-CODES
-    """
-
-    BOOT_FAIL = "BOOT_FAIL"
-    CANCELLED = "CANCELLED"
-    COMPLETED = "COMPLETED"
-    CONFIGURING = "CONFIGURING"
-    COMPLETING = "COMPLETING"
-    DEADLINE = "DEADLINE"
-    FAILED = "FAILED"
-    NODE_FAIL = "NODE_FAIL"
-    OUT_OF_MEMORY = "OUT_OF_MEMORY"
-    PENDING = "PENDING"
-    PREEMPTED = "PREEMPTED"
-    RUNNING = "RUNNING"
-    RESV_DEL_HOLD = "RESV_DEL_HOLD"
-    REQUEUE_FED = "REQUEUE_FED"
-    REQUEUE_HOLD = "REQUEUE_HOLD"
-    REQUEUED = "REQUEUED"
-    RESIZING = "RESIZING"
-    REVOKED = "REVOKED"
-    SIGNALING = "SIGNALING"
-    SPECIAL_EXIT = "SPECIAL_EXIT"
-    STAGE_OUT = "STAGE_OUT"
-    STOPPED = "STOPPED"
-    SUSPENDED = "SUSPENDED"
-    TIMEOUT = "TIMEOUT"
-
-
-class SlurmResources(BaseModel):
-    """Counts for various resources."""
-
-    cpu: Optional[int]
-    mem: Optional[int]
-    node: Optional[int]
-    billing: Optional[int]
-    gres_gpu: Optional[int]
-
-
-class SlurmJob(BaseModel):
-    """Holds data for a Slurm job."""
-
-    # Database ID
-    id: ObjectIdField = None
-
-    # job identification
-    cluster_name: str
-    account: str
-    job_id: int
-    array_job_id: Optional[int]
-    task_id: Optional[int]
-    name: str
-    user: str
-    group: str
-
-    # status
-    job_state: SlurmState
-    exit_code: Optional[int]
-    signal: Optional[int]
-
-    # allocation information
-    partition: str
-    nodes: list[str]
-    work_dir: str
-
-    # Miscellaneous
-    constraints: Optional[str]
-    priority: int
-    qos: Optional[str]
-
-    # Flags
-    CLEAR_SCHEDULING: bool = False
-    STARTED_ON_SUBMIT: bool = False
-    STARTED_ON_SCHEDULE: bool = False
-    STARTED_ON_BACKFILL: bool = False
-
-    # temporal fields
-    time_limit: Optional[int]
-    submit_time: datetime
-    start_time: datetime
-    end_time: Optional[datetime]
-    elapsed_time: int
-
-    # tres
-    requested: SlurmResources
-    allocated: SlurmResources
-
-    @validator("submit_time", "start_time", "end_time")
-    def _ensure_timezone(cls, v):
-        # We'll store in MTL timezone because why not
-        return v and v.replace(tzinfo=UTC).astimezone(MTL)
-
-
-MTL = zoneinfo.ZoneInfo("America/Montreal")
-UTC = zoneinfo.ZoneInfo("UTC")
+from ..config import UTC, config
+from .job import SlurmJob, jobs_collection
 
 
 def parse_in_timezone(cluster, timestamp):
@@ -185,8 +83,8 @@ class SAcctScraper:
         self.results = self.fetch_raw()
         if self.cachefile:
             json.dump(
-                fp=open(self.cachefile, "w", encoding="utf8"), obj=self.results
-            )  # pylint: disable=consider-using-with
+                fp=open(self.cachefile, "w", encoding="utf8"), obj=self.results  # pylint: disable=consider-using-with
+            )
         return self.results
 
     def __len__(self) -> int:
@@ -254,3 +152,20 @@ class SAcctScraper:
             **resources,
             **flags,
         )
+
+
+def sacct_mongodb_import(cluster, day) -> None:
+    """Fetch sacct data and store it in MongoDB.
+
+    Arguments:
+        cluster: The cluster on which to fetch the data.
+        day: The day for which to fetch the data. The time does not matter.
+    """
+    collection = jobs_collection()
+    scraper = SAcctScraper(cluster, day)
+    print("Getting the sacct data...")
+    scraper.get_raw()
+    print(f"Saving into mongodb collection '{collection.Meta.collection_name}'...")
+    for entry in tqdm(scraper):
+        collection.save_job(entry)
+    print(f"Saved {len(scraper)} entries.")
