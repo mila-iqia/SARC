@@ -36,3 +36,4 @@ disable = "R0903,R0913,R0914,C0103,C0415,W1514"
 extension-pkg-whitelist = "pydantic"
 
 [tool.isort]
+profile = "black"
