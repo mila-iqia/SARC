@@ -10,7 +10,7 @@
             "host": "mila",
             "timezone": "America/Montreal",
             "accounts": null,
-            "sacct-bin": "/opt/slurm/bin/sacct",
+            "sacct_bin": "/opt/slurm/bin/sacct",
             "duc_inodes_command": null,
             "duc_storage_command": null,
             "diskusage_report_command": null,
