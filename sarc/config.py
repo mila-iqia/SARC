@@ -12,6 +12,10 @@ from pydantic import BaseModel as _BaseModel
 from pydantic import Extra, validator
 
 
+class ConfigurationError(Exception):
+    pass
+
+
 class BaseModel(_BaseModel):
     class Config:
         # Forbid extra fields that are not explicitly defined
@@ -55,7 +59,9 @@ class ClusterConfig(BaseModel):
         from prometheus_api_client import PrometheusConnect
 
         if self.prometheus_url is None:
-            raise Exception(f"No prometheus URL provided for cluster '{self.name}'")
+            raise ConfigurationError(
+                f"No prometheus URL provided for cluster '{self.name}'"
+            )
         return PrometheusConnect(url=self.prometheus_url)
 
 
@@ -78,11 +84,11 @@ class Config(BaseModel):
     clusters: dict[str, ClusterConfig]
 
     @validator("cache", "sshconfig")
-    def __absolute_path(cls, value):
+    def _absolute_path(cls, value):
         return value and value.expanduser().absolute()
 
     @validator("clusters")
-    def __complete_cluster_fields(cls, value, values):
+    def _complete_cluster_fields(cls, value, values):
         for name, cluster in value.items():
             if not cluster.name:
                 cluster.name = name
@@ -98,7 +104,7 @@ def parse_config(config_path):
     config_path = Path(config_path)
 
     if not config_path.exists():
-        raise Exception(
+        raise ConfigurationError(
             f"Cannot read SARC configuration file: '{config_path}'"
             " Use the $SARC_CONFIG environment variable to choose the config file."
         )
@@ -106,7 +112,7 @@ def parse_config(config_path):
     try:
         cfg = Config.parse_file(config_path)
     except json.JSONDecodeError as exc:
-        raise Exception(f"'{config_path}' contains malformed JSON") from exc
+        raise ConfigurationError(f"'{config_path}' contains malformed JSON") from exc
 
     return cfg
 
