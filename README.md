@@ -31,7 +31,7 @@ TODO : How does poetry work? Needs a simple example here for the command to add 
 
 This runs the tests.
 ```
-tox
+tox -e test
 ```
 
 If you're running on Mac OS, you can install `podman` with `brew install podman`.
