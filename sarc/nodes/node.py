@@ -115,7 +115,6 @@ def query_prom(
     end: datetime,
     running_window: timedelta,
 ):
-
     query = generate_custom_query(metric_name, label_config, start, end, running_window)
 
     return config().clusters["mila"].prometheus.custom_query(query)

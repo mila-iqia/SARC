@@ -25,7 +25,6 @@ from sarc.nodes.node import (
     ],
 )
 def test_generate_custom_query_ends(enddelta, strdelta):
-
     start = datetime(2020, 1, 2)
 
     ground_truth = f'avg_over_time(some_metric{{node="cn-d003",dimension="user"}}[1s])[{strdelta}:1s] offset 1y'
@@ -52,7 +51,6 @@ def test_generate_custom_query_ends(enddelta, strdelta):
     ],
 )
 def test_generate_custom_query_starts(current_date, start_date, offset_str, freezer):
-
     freezer.move_to(current_date)
 
     ground_truth = f'avg_over_time(some_metric{{node="cn-d003",dimension="user"}}[1s])[1y:1s] offset {offset_str}'
@@ -71,7 +69,6 @@ def test_generate_custom_query_starts(current_date, start_date, offset_str, free
 
 @pytest.mark.freeze_time("2021-01-01")
 def test_generate_custom_query_start_in_future():
-
     with pytest.raises(ValueError, match="cannot be in the future"):
         generate_custom_query(
             "some_metric",
@@ -84,7 +81,6 @@ def test_generate_custom_query_start_in_future():
 
 @pytest.mark.freeze_time("2021-01-01")
 def test_generate_custom_query_too_large_running_window():
-
     with pytest.raises(ValueError, match="cannot be larger than"):
         generate_custom_query(
             "some_metric",
@@ -107,7 +103,6 @@ def test_generate_custom_query_too_large_running_window():
     ],
 )
 def test_generate_custom_query_labels(labels, labels_ground_truth):
-
     ground_truth = (
         f"avg_over_time(some_metric{{{labels_ground_truth}}}[1s])[1y:1s] offset 2y"
     )
@@ -134,7 +129,6 @@ def test_generate_custom_query_labels(labels, labels_ground_truth):
     ],
 )
 def test_generate_custom_query_running_window(running_window, rw_ground_thruth):
-
     ground_truth = f'avg_over_time(some_metric{{node="cn-d003",dimension="user"}}[{rw_ground_thruth}])[1y:{rw_ground_thruth}] offset 2y'
 
     assert (

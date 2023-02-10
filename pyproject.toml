@@ -13,6 +13,7 @@ prometheus-api-client = "^0.5.2"
 pydantic = "^1.10.4"
 pymongo = "^4.3.3"
 numpy = ">= 1.24.0"
+ldap3 = "^2.9.1"
 
 
 [tool.poetry.group.dev.dependencies]
@@ -31,7 +32,8 @@ requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.pylint]
-disable = "R0903"
+# disable = "R0903,R0913,R0914,C0114,C0115,C0116,C0103"
+disable = "R0903,R0913,R0914,C0103,C0415,W1514"
 extension-pkg-whitelist = "pydantic"
 
 [tool.isort]

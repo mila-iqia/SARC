@@ -9,6 +9,24 @@
         "mila": {
             "host": "mila",
             "prometheus_url": "http://monitoring.server.mila.quebec:9090/"
+        },
+        "beluga": {
+            "duc_inodes_command": "duc ls -d /project/.duc_databases/rrg-bengioy-ad.sqlite --count /project/rrg-bengioy-ad",
+            "duc_storage_command": "duc ls -d /project/.duc_databases/rrg-bengioy-ad.sqlite /project/rrg-bengioy-ad",
+            "diskusage_report_command": "diskusage_report --project --all_users"
+        },
+        "narval": {
+            "duc_inodes_command": "duc ls -d /project/.duc_databases/rrg-bengioy-ad.sqlite --count /project/rrg-bengioy-ad",
+            "duc_storage_command": "duc ls -d /project/.duc_databases/rrg-bengioy-ad.sqlite /project/rrg-bengioy-ad",
+            "diskusage_report_command": "diskusage_report --project --all_users"
+        },
+        "cedar": {
+            "duc_inodes_command": null,
+            "duc_storage_command": null
+        },
+        "graham": {
+            "duc_inodes_command": null,
+            "duc_storage_command": null
         }
     }
 }
