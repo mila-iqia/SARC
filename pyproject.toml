@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Surveillance et analyse des ressources de calcul"
 authors = ["Mila-IDT"]
 readme = "README.md"
+packages = [{include = 'sarc'}]
 
 [tool.poetry.dependencies]
 python = "^3.8"
@@ -12,6 +13,7 @@ prometheus-api-client = "^0.5.2"
 pydantic = "^1.10.4"
 pydantic-mongo = "^1.0.1"
 pymongo = "^4.3.3"
+numpy = ">= 1.24.0"
 ldap3 = "^2.9.1"
 python-hostlist = "^1.23.0"
 tqdm = "^4.64.1"
@@ -25,12 +27,14 @@ pytest = ">= 7.2.1"
 pytest-cov = ">= 4.0.0"
 pytest-regressions = ">= 2.4.2"
 tox = ">= 4.4.5"
+pytest-freezegun = ">= 0.4.2"
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.pylint]
+ignore-paths = ["sarc/account_matching", "sarc/ldap", 'sarc/inode_storage_scanner']
 disable = [
     "no-self-argument",  # Pydantic validators don't have one
     "too-few-public-methods",  # Triggered on Pydantic models
@@ -42,6 +46,7 @@ disable = [
     "missing-function-docstring",
     "invalid-name",
     "no-else-return",  # Bad rule IMO (- OB)
+    "line-too-long"  # Black takes care of line length.
 ]
 extension-pkg-whitelist = "pydantic"
 
