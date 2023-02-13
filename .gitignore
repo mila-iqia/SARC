@@ -1,8 +1,14 @@
 secrets
 secrets.tar.gz.encrypted
-
 .DS_Store
+__pycache__/
+.cache
+.coverage
+.coverage.*
+.pytest_cache
+.envrc
 clockwork_ldap.crt
 clockwork_ldap.key
 .coverage
 .tox/
+

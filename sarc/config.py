@@ -1,13 +1,18 @@
 import json
 import os
+import zoneinfo
 from contextlib import contextmanager
 from contextvars import ContextVar
 from functools import cached_property
 from pathlib import Path
 from typing import Union
 
+from bson import ObjectId
 from pydantic import BaseModel as _BaseModel
 from pydantic import Extra, validator
+
+MTL = zoneinfo.ZoneInfo("America/Montreal")
+UTC = zoneinfo.ZoneInfo("UTC")
 
 
 class ConfigurationError(Exception):
@@ -20,13 +25,25 @@ class BaseModel(_BaseModel):
         extra = Extra.forbid
         # Ignore cached_property, this avoids errors with serialization
         keep_untouched = (cached_property,)
+        # Serializer for mongo's object ids
+        json_encoders = {ObjectId: str}
 
 
 class ClusterConfig(BaseModel):
     host: str
+    timezone: object
     prometheus_url: str = None
     name: str = None
+    sacct_bin: str = "sacct"
+    accounts: list[str] = None
     sshconfig: Path = None
+    duc_inodes_command: str = None
+    duc_storage_command: str = None
+    diskusage_report_command: str = None
+
+    @validator("timezone")
+    def _timezone(cls, value):
+        return zoneinfo.ZoneInfo(value)
 
     @cached_property
     def ssh(self):
