@@ -6,7 +6,7 @@ import logging
 from datetime import datetime, timedelta
 
 import pandas as pd
-from prometheus_api_client import MetricRangeDataFrame, PrometheusConnect
+from prometheus_api_client import MetricRangeDataFrame
 
 from sarc.config import config
 
@@ -38,12 +38,12 @@ def generate_label_configs(
 
     # Create list of label_configs based on node_id and cluster_name
     for node_config, cluster_config in itertools.product(node_configs, cluster_configs):
-        config = copy.deepcopy(node_config)
+        query_config = copy.deepcopy(node_config)
         if cluster_config:
             logger.warning("Cluster name is not supported for now.")
-        config.update(cluster_config)
+        query_config.update(cluster_config)
         # yield node_config | cluster_config
-        yield config
+        yield query_config
 
 
 def timedelta_to_str(delta: timedelta) -> str:
