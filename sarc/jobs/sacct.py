@@ -83,9 +83,7 @@ class SAcctScraper:
         if self.cachefile:
             # pylint: disable=consider-using-with
             json.dump(
-                fp=open(
-                    self.cachefile, "w", encoding="utf8"
-                ),
+                fp=open(self.cachefile, "w", encoding="utf8"),
                 obj=self.results,
             )
         return self.results
