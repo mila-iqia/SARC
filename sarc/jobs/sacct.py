@@ -9,8 +9,7 @@ from typing import Iterator
 from hostlist import expand_hostlist
 from tqdm import tqdm
 
-from ..cluster import Cluster
-from ..config import UTC, config
+from ..config import UTC, config, ClusterConfig
 from .job import SlurmJob, jobs_collection
 
 
@@ -28,7 +27,7 @@ class SAcctScraper:
     The scraper is currently hard-coded to fetch data for a day.
     """
 
-    def __init__(self, cluster: Cluster, day: datetime):
+    def __init__(self, cluster: ClusterConfig, day: datetime):
         """Initialize a SAcctScraper.
 
         Arguments:
@@ -82,8 +81,11 @@ class SAcctScraper:
 
         self.results = self.fetch_raw()
         if self.cachefile:
+            # pylint: disable=consider-using-with
             json.dump(
-                fp=open(self.cachefile, "w", encoding="utf8"),  # pylint: disable=consider-using-with
+                fp=open(
+                    self.cachefile, "w", encoding="utf8"
+                ),
                 obj=self.results,
             )
         return self.results
