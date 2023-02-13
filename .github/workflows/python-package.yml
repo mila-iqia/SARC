@@ -14,6 +14,7 @@ jobs:
     strategy:
       matrix:
         python-version: ['3.9', '3.10', '3.11']
+        toxenv: [test]
 
     steps:
     - uses: actions/checkout@v3
@@ -30,12 +31,8 @@ jobs:
         poetry install
 
     - name: Test with tox
-      run: poetry run tox
+      run: poetry run tox -e ${{ matrix.toxenv }}
 
-#    - name: Verify coverage
-#      if: ${{ matrix.python-version >= '3.8' }}
-#      run: poetry run coverage report | tail -1 | egrep "TOTAL +[0-9]+ +0 +100%"
-     
   lint:
     runs-on: ubuntu-latest
     strategy:
