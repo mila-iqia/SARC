@@ -45,7 +45,9 @@ class ClusterConfig(BaseModel):
         from prometheus_api_client import PrometheusConnect
 
         if self.prometheus_url is None:
-            raise ConfigurationError(f"No prometheus URL provided for cluster '{self.name}'")
+            raise ConfigurationError(
+                f"No prometheus URL provided for cluster '{self.name}'"
+            )
         return PrometheusConnect(url=self.prometheus_url)
 
 
