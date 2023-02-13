@@ -9,7 +9,7 @@ from typing import Iterator
 from hostlist import expand_hostlist
 from tqdm import tqdm
 
-from ..config import UTC, config, ClusterConfig
+from ..config import UTC, ClusterConfig, config
 from .job import SlurmJob, jobs_collection
 
 
