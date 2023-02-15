@@ -21,7 +21,6 @@ class ConfigurationError(Exception):
 
 
 def validate_date(value: Union[str, date, datetime]) -> date:
-
     if isinstance(value, str):
         if "T" in value:
             return datetime.strptime(value, "%Y-%m-%dT%H:%M:%S").date()

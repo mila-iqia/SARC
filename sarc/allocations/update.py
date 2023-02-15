@@ -27,7 +27,6 @@ def convert_csv_row_to_allocation(
     project_inodes: None | str = None,
     nearline_size: None | str = None,
 ):
-
     return Allocation(
         cluster_name=cluster_name,
         resource_name=resource_name,
@@ -56,7 +55,6 @@ def convert_csv_row_to_allocation(
 
 
 def main(argv=None):
-
     parser = argparse.ArgumentParser()
     parser.add_argument("file")
 

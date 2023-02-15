@@ -36,7 +36,6 @@ def convert_date_to_iso(date_value: date) -> str:
 
 
 class Allocation(BaseModel):
-
     # Database ID
     id: ObjectIdField = None
 
