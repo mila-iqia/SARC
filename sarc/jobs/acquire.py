@@ -5,8 +5,7 @@ from sarc.config import config
 from sarc.jobs.sacct import sacct_mongodb_import
 
 
-def main():
-    cluster_name, *date_strings = sys.argv[1:]
+def main(cluster_name, *date_strings):
     cfg = config()
     mc = cfg.clusters[cluster_name]
     for date_string in date_strings:
@@ -16,4 +15,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1], *sys.argv[2:])
