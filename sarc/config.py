@@ -59,6 +59,7 @@ class ClusterConfig(BaseModel):
     host: str
     timezone: object
     prometheus_url: str = None
+    prometheus_headers_file: str = None
     name: str = None
     sacct_bin: str = "sacct"
     accounts: list[str] = None
@@ -87,11 +88,20 @@ class ClusterConfig(BaseModel):
     def prometheus(self):
         from prometheus_api_client import PrometheusConnect
 
+        if self.prometheus_headers_file is not None:
+            headers = json.load(
+                open(  # pylint: disable=consider-using-with
+                    self.prometheus_headers_file, "r", encoding="utf-8"
+                )
+            )
+        else:
+            headers = {}
+
         if self.prometheus_url is None:
             raise ConfigurationError(
                 f"No prometheus URL provided for cluster '{self.name}'"
             )
-        return PrometheusConnect(url=self.prometheus_url)
+        return PrometheusConnect(url=self.prometheus_url, headers=headers)
 
 
 class MongoConfig(BaseModel):
