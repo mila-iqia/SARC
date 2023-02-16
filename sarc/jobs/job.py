@@ -109,6 +109,13 @@ class SlurmJob(BaseModel):
     def cluster(self):
         return config().clusters[self.cluster_name]
 
+    @property
+    def duration(self):
+        if self.end_time:
+            return self.end_time - self.start_time
+
+        return timedelta(seconds=0)
+
     def series(self, **kwargs):
         from .series import get_job_time_series  # pylint: disable=cyclic-import
 
@@ -168,6 +175,9 @@ def get_jobs(
         ) + timedelta(days=1)
 
     query = {}
+    if isinstance(cluster, ClusterConfig):
+        query["cluster_name"] = cluster.name
+
     if isinstance(job_id, int):
         query["job_id"] = job_id
     elif isinstance(job_id, list):
@@ -192,6 +202,7 @@ def get_jobs(
         }
 
     coll = jobs_collection()
+
     return coll.find_by(query, **query_options)
 
 
