@@ -19,7 +19,7 @@
         "narval": {
             "host": "narval.computecanada.ca",
             "timezone": "America/Montreal",
-            "accounts": ["rrg-bengioy-ad_gpu"],
+            "accounts": ["rrg-bengioy-ad_gpu", "rrg-bengioy-ad_cpu", "def-bengioy_gpu", "def-bengioy_cpu"],
             "sacct_bin": "/opt/software/slurm/bin/sacct",
             "duc_inodes_command": "duc ls -d /project/.duc_databases/rrg-bengioy-ad.sqlite --count /project/rrg-bengioy-ad",
             "duc_storage_command": "duc ls -d /project/.duc_databases/rrg-bengioy-ad.sqlite /project/rrg-bengioy-ad",
@@ -30,7 +30,7 @@
         "beluga": {
             "host": "beluga.computecanada.ca",
             "timezone": "America/Montreal",
-            "accounts": ["rrg-bengioy-ad_gpu"],
+            "accounts": ["rrg-bengioy-ad_gpu", "rrg-bengioy-ad_cpu", "def-bengioy_gpu", "def-bengioy_cpu"],
             "sacct_bin": "/opt/software/slurm/bin/sacct",
             "duc_inodes_command": "duc ls -d /project/.duc_databases/rrg-bengioy-ad.sqlite --count /project/rrg-bengioy-ad",
             "duc_storage_command": "duc ls -d /project/.duc_databases/rrg-bengioy-ad.sqlite /project/rrg-bengioy-ad",
@@ -41,7 +41,7 @@
         "graham": {
             "host": "graham.computecanada.ca",
             "timezone": "America/Toronto",
-            "accounts": ["rrg-bengioy-ad_gpu"],
+            "accounts": ["rrg-bengioy-ad_gpu", "rrg-bengioy-ad_cpu", "def-bengioy_gpu", "def-bengioy_cpu"],
             "sacct_bin": "/opt/software/slurm/bin/sacct",
             "duc_inodes_command": null,
             "duc_storage_command": null,
@@ -52,7 +52,7 @@
         "cedar": {
             "host": "cedar.computecanada.ca",
             "timezone": "America/Vancouver",
-            "accounts": ["rrg-bengioy-ad_gpu"],
+            "accounts": ["rrg-bengioy-ad_gpu", "rrg-bengioy-ad_cpu", "def-bengioy_gpu", "def-bengioy_cpu"],
             "sacct_bin": "/opt/software/slurm/bin/sacct",
             "duc_inodes_command": null,
             "duc_storage_command": null,
