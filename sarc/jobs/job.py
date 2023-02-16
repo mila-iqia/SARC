@@ -154,7 +154,7 @@ def get_jobs(
     start: Union[str, datetime] = None,
     end: Union[str, datetime] = None,
     query_options: dict = {},
-):
+) -> list[SlurmJob]:
     """Get jobs that match the query.
 
     Arguments:
