@@ -33,9 +33,8 @@ class AllocationRessources(BaseModel):
     storage: AllocationStorage
 
 
-def convert_date_to_iso(date_value: date) -> str:
+def convert_date_to_iso(date_value: date) -> datetime:
     return datetime(date_value.year, date_value.month, date_value.day)
-    return datetime(date_value.year, date_value.month, date_value.day).isoformat()
 
 
 class Allocation(BaseModel):
@@ -98,7 +97,7 @@ def get_allocations(
     return list(collection.find_by(query, sort=[("start", 1)]))
 
 
-def increment(a, b, type_):
+def increment(a, b):
     if a is None:
         return b or 0
 
@@ -118,7 +117,7 @@ def get_allocation_summaries(
     def allocation_key(allocation: Allocation):
         return (allocation.cluster_name, allocation.start, allocation.end)
 
-    summaries = dict()
+    summaries = {}
     for allocation in allocations:
         key = allocation_key(allocation)
         if key in summaries:
@@ -129,7 +128,6 @@ def get_allocation_summaries(
                     increment(
                         getattr(summaries[key].resources.compute, field),
                         getattr(allocation.resources.compute, field),
-                        int,
                     ),
                 )
 
@@ -148,14 +146,10 @@ def get_allocation_summaries(
                     increment(
                         getattr(summaries[key].resources.storage, field),
                         getattr(allocation.resources.storage, field),
-                        ByteSize,
                     ),
                 )
         else:
             summaries[key] = allocation
-
-        # TODO: What if some allocation change during the year? It will have different start and end
-        #       time then the rest.
 
     summaries = list(summaries.values())
 
