@@ -9,7 +9,6 @@ from sarc.jobs import get_jobs
 
 
 def load_job_series(filename=None) -> pd.DataFrame:
-
     if filename and os.path.exists(filename):
         return pd.read_pickle(filename)
 

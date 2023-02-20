@@ -26,7 +26,6 @@ include_fields = {
 
 
 def get_jobs_dataframe(filename, start, end) -> pd.DataFrame:
-
     if filename and os.path.exists(filename):
         return pd.read_pickle(filename)
 
@@ -53,7 +52,6 @@ def get_jobs_dataframe(filename, start, end) -> pd.DataFrame:
             position=1,
             leave=False,
         ):
-
             if job.elapsed_time <= 0:
                 continue
 
@@ -119,7 +117,6 @@ print("DRAC clusters", df_drac["used"].sum() / (3600))
 
 
 def compute_gpu_hours_per_duration(df):
-
     categories = {
         "< 1hour": (0, 3600),
         "1-24 hours": (3600, 24 * 3600),
@@ -143,7 +140,6 @@ print(compute_gpu_hours_per_duration(df_drac))
 
 
 def compute_jobs_per_gpu_hours(df):
-
     categories = {
         "< 1 GPUhour": (0, 3600),
         "1-24 GPUhours": (3600, 24 * 3600),
@@ -167,7 +163,6 @@ print(compute_jobs_per_gpu_hours(df_drac))
 
 
 def compute_gpu_hours_per_gpu_count(df):
-
     categories = {
         "1 GPU": (1, 2),
         "2-4 GPUs": (2, 5),

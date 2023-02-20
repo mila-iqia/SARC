@@ -15,7 +15,6 @@ clusters = ["narval", "beluga", "cedar", "graham"]
 
 
 def get_jobs_dataframe(clusters, filename=None) -> pd.DataFrame:
-
     if filename and os.path.exists(filename):
         return pd.read_pickle(filename)
 
@@ -115,7 +114,6 @@ print(unstacked_gpu_allocations)
 
 
 def plot_allocations(jobs_analysis, allocations, filename, y_label):
-
     _, ax = plt.subplots()
 
     # Plot allocations as horizontal dashed lines.

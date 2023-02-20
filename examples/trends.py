@@ -21,7 +21,6 @@ include_fields = {
 
 
 def get_jobs_dataframe(filename=None) -> pd.DataFrame:
-
     if filename and os.path.exists(filename):
         return pd.read_pickle(filename)
 
