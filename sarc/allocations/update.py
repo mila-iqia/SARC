@@ -4,7 +4,7 @@ import argparse
 import csv
 from datetime import datetime
 
-from .allocations import (
+from sarc.allocations.allocations import (
     Allocation,
     AllocationCompute,
     AllocationRessources,

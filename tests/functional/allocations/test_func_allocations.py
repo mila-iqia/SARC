@@ -2,7 +2,7 @@ from datetime import date
 
 import pytest
 
-from sarc.allocations import get_allocations
+from sarc.allocations import get_allocation_summaries, get_allocations
 
 parameters = {
     "name_only": {"cluster_name": "fromage"},
@@ -30,3 +30,11 @@ def test_get_allocations(params, data_regression):
     data_regression.check(
         [allocation.json(exclude={"id": True}) for allocation in data]
     )
+
+
+@pytest.mark.usefixtures("init_db_with_allocations")
+@pytest.mark.parametrize("params,", parameters.values(), ids=parameters.keys())
+def test_get_allocations_summaries(params, dataframe_regression):
+    data = get_allocation_summaries(**params)
+
+    dataframe_regression.check(data)

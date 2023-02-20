@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Optional
 
+import pandas as pd
+from flatten_dict import flatten
 from pydantic import ByteSize, validator
 from pydantic_mongo import AbstractRepository, ObjectIdField
 
@@ -10,20 +12,20 @@ from sarc.config import BaseModel, config, validate_date
 
 
 class AllocationCompute(BaseModel):
-    gpu_year: Optional[int]
-    cpu_year: Optional[int]
-    vcpu_year: Optional[int]
-    vgpu_year: Optional[int]
+    gpu_year: Optional[int] = 0
+    cpu_year: Optional[int] = 0
+    vcpu_year: Optional[int] = 0
+    vgpu_year: Optional[int] = 0
 
 
 class AllocationStorage(BaseModel):
-    project_size: Optional[ByteSize]
-    project_inodes: Optional[float]
-    nearline: Optional[ByteSize]
-    dCache: Optional[ByteSize]
-    object: Optional[ByteSize]
-    cloud_volume: Optional[ByteSize]
-    cloud_shared: Optional[ByteSize]
+    project_size: Optional[ByteSize] = 0
+    project_inodes: Optional[float] = 0
+    nearline: Optional[ByteSize] = 0
+    dCache: Optional[ByteSize] = 0
+    object: Optional[ByteSize] = 0
+    cloud_volume: Optional[ByteSize] = 0
+    cloud_shared: Optional[ByteSize] = 0
 
 
 class AllocationRessources(BaseModel):
@@ -32,6 +34,7 @@ class AllocationRessources(BaseModel):
 
 
 def convert_date_to_iso(date_value: date) -> str:
+    return datetime(date_value.year, date_value.month, date_value.day)
     return datetime(date_value.year, date_value.month, date_value.day).isoformat()
 
 
@@ -93,3 +96,80 @@ def get_allocations(
         query["end"] = {"$lte": convert_date_to_iso(end)}
 
     return list(collection.find_by(query, sort=[("start", 1)]))
+
+
+def increment(a, b, type_):
+    if a is None:
+        return b or 0
+
+    if b is None:
+        return a
+
+    return a + b
+
+
+def get_allocation_summaries(
+    cluster_name: str | list[str],
+    start: None | date = None,
+    end: None | date = None,
+) -> pd.DataFrame:
+    allocations = get_allocations(cluster_name, start=start, end=end)
+
+    def allocation_key(allocation: Allocation):
+        return (allocation.cluster_name, allocation.start, allocation.end)
+
+    summaries = dict()
+    for allocation in allocations:
+        key = allocation_key(allocation)
+        if key in summaries:
+            for field in ["cpu_year", "gpu_year", "vcpu_year", "vgpu_year"]:
+                setattr(
+                    summaries[key].resources.compute,
+                    field,
+                    increment(
+                        getattr(summaries[key].resources.compute, field),
+                        getattr(allocation.resources.compute, field),
+                        int,
+                    ),
+                )
+
+            for field in [
+                "project_size",
+                "project_inodes",
+                "nearline",
+                "dCache",
+                "object",
+                "cloud_volume",
+                "cloud_shared",
+            ]:
+                setattr(
+                    summaries[key].resources.storage,
+                    field,
+                    increment(
+                        getattr(summaries[key].resources.storage, field),
+                        getattr(allocation.resources.storage, field),
+                        ByteSize,
+                    ),
+                )
+        else:
+            summaries[key] = allocation
+
+        # TODO: What if some allocation change during the year? It will have different start and end
+        #       time then the rest.
+
+    summaries = list(summaries.values())
+
+    return pd.DataFrame(
+        [
+            flatten(
+                summary.dict(
+                    exclude={
+                        "id",
+                        "resource_name",
+                    }
+                ),
+                reducer="dot",
+            )
+            for summary in summaries
+        ]
+    )

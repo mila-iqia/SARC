@@ -8,6 +8,7 @@ from sarc.allocations.update import main
 FOLDER = os.path.dirname(os.path.abspath(__file__))
 
 
+@pytest.mark.freeze_time("2023-02-15")
 @pytest.mark.usefixtures("init_empty_db")
 def test_update_allocations(data_regression):
     assert get_allocations(cluster_name=["fromage", "patate"]) == []
@@ -19,6 +20,7 @@ def test_update_allocations(data_regression):
     )
 
 
+@pytest.mark.freeze_time("2023-02-15")
 @pytest.mark.usefixtures("init_empty_db")
 def test_update_allocations_no_duplicates(data_regression):
     assert get_allocations(cluster_name=["fromage", "patate"]) == []
@@ -33,6 +35,7 @@ def test_update_allocations_no_duplicates(data_regression):
     )
 
 
+@pytest.mark.freeze_time("2023-02-15")
 @pytest.mark.usefixtures("init_empty_db")
 def test_update_allocations_invalid_with_some_valid(data_regression):
     assert get_allocations(cluster_name=["fromage", "patate"]) == []
