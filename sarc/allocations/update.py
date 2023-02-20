@@ -78,7 +78,6 @@ def main(argv=None):
                 print(e)
                 continue
 
-            print(allocation)
             collection.add(allocation)
 
 

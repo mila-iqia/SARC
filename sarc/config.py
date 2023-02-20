@@ -46,7 +46,7 @@ class BaseModel(_BaseModel):
         d = super().dict(*args, **kwargs)
 
         for k, v in d.items():
-            if isinstance(v, date):
+            if isinstance(v, date) and not isinstance(v, datetime):
                 d[k] = datetime(
                     year=v.year,
                     month=v.month,

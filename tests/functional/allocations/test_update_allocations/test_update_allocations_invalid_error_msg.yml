@@ -33,26 +33,4 @@
   \ '2021/04/01', 'cluster_name': 'fromage', 'resource_name': 'fromage-storage', 'group_name':\
   \ 'rrg-bonhomme-ad', 'project_size': '30TB', 'project_inodes': '2e6'}\n1 validation\
   \ error for Allocation\nend\n  time data '2021/04/01' does not match format '%Y-%m-%d'\
-  \ (type=value_error)\nid=None cluster_name='fromage' resource_name='devrait-gpu'\
-  \ group_name='rrg-bonhomme-ad' timestamp=FakeDatetime(2023, 2, 14, 0, 0) start=FakeDate(2017,\
-  \ 4, 1) end=FakeDate(2018, 4, 1) resources=AllocationRessources(compute=AllocationCompute(gpu_year=100,\
-  \ cpu_year=None, vcpu_year=None, vgpu_year=None), storage=AllocationStorage(project_size=None,\
-  \ project_inodes=None, nearline=None, dCache=None, object=None, cloud_volume=None,\
-  \ cloud_shared=None))\n<class 'freezegun.api.FakeDate'>\n<class 'freezegun.api.FakeDate'>\n\
-  {'cluster_name': 'fromage', 'resource_name': 'devrait-gpu', 'group_name': 'rrg-bonhomme-ad',\
-  \ 'timestamp': FakeDatetime(2023, 2, 14, 0, 0), 'start': FakeDatetime(2017, 4, 1,\
-  \ 0, 0), 'end': FakeDatetime(2018, 4, 1, 0, 0), 'resources': {'compute': {'gpu_year':\
-  \ 100, 'cpu_year': None, 'vcpu_year': None, 'vgpu_year': None}, 'storage': {'project_size':\
-  \ None, 'project_inodes': None, 'nearline': None, 'dCache': None, 'object': None,\
-  \ 'cloud_volume': None, 'cloud_shared': None}}}\nid=None cluster_name='patate' resource_name='passer-storage'\
-  \ group_name='rrg-bonhomme-ad' timestamp=FakeDatetime(2023, 2, 14, 0, 0) start=FakeDate(2017,\
-  \ 4, 1) end=FakeDate(2018, 4, 1) resources=AllocationRessources(compute=AllocationCompute(gpu_year=None,\
-  \ cpu_year=None, vcpu_year=None, vgpu_year=None), storage=AllocationStorage(project_size=50000000000000,\
-  \ project_inodes=5000000.0, nearline=15000000000000, dCache=None, object=None, cloud_volume=None,\
-  \ cloud_shared=None))\n<class 'freezegun.api.FakeDate'>\n<class 'freezegun.api.FakeDate'>\n\
-  {'cluster_name': 'patate', 'resource_name': 'passer-storage', 'group_name': 'rrg-bonhomme-ad',\
-  \ 'timestamp': FakeDatetime(2023, 2, 14, 0, 0), 'start': FakeDatetime(2017, 4, 1,\
-  \ 0, 0), 'end': FakeDatetime(2018, 4, 1, 0, 0), 'resources': {'compute': {'gpu_year':\
-  \ None, 'cpu_year': None, 'vcpu_year': None, 'vgpu_year': None}, 'storage': {'project_size':\
-  \ 50000000000000, 'project_inodes': 5000000.0, 'nearline': 15000000000000, 'dCache':\
-  \ None, 'object': None, 'cloud_volume': None, 'cloud_shared': None}}}\n"
+  \ (type=value_error)\n"

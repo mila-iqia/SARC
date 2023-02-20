@@ -63,7 +63,6 @@ class AllocationsRepository(AbstractRepository[Allocation]):
 
     def add(self, allocation: Allocation):
         document = self.to_document(allocation)
-        print(document)
         query_attrs = ["cluster_name", "resource_name", "group_name", "start", "end"]
         query = {key: document[key] for key in query_attrs}
         return self.get_collection().update_one(query, {"$set": document}, upsert=True)
