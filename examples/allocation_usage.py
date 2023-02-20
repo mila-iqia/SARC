@@ -6,7 +6,7 @@ import pandas as pd
 import seaborn as sns
 from tqdm import tqdm
 
-from sarc.allocations import get_allocation_summaries, get_allocations
+from sarc.allocations import get_allocation_summaries
 from sarc.config import config
 from sarc.jobs import get_jobs
 
@@ -83,7 +83,6 @@ cost_per_month = cost_per_day.resample(start_time="1M").sum()
 allocations = get_allocation_summaries(
     cluster_name=clusters,
     start=date(year=2022, month=4, day=1),
-    dtype=pd.DataFrame,
 )
 
 # Select subset of allocation fields.
