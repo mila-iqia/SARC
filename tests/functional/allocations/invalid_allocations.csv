@@ -1,0 +1,17 @@
+start,       end,         cluster_name, resource_name,  group_name,      cpu_year, gpu_year, vcpu_year, vgpu_year, project_size, project_inodes, nearline_size
+2017-04-01,  2018-04-01,  fromage,      fromage-gpu,    rrg-bonhomme-ad, allo,     100,
+2017-04-01,  2018-04-01,  fromage,      fromage-storage,rrg-bonhomme-ad, ,         coucou,   ,          ,          50TB,         5e6,             15TB,
+
+2018-04-01,  2019-04-01,  fromage,      fromage-gpu,    rrg-bonhomme-ad, ,         100,      oups,
+2018-04-01,  2019-04-01,  fromage,      fromage-storage,rrg-bonhomme-ad, ,         ,         ,          marche-pas, 70TB,         ,               ,
+
+2019-04-01,  2020-04-01,  patate,       patate-storage, rrg-bonhomme-ad, ,         ,         ,          ,          mille,         5e6,             90TB,
+
+2020-04-01,  2021-04-01,  fromage,      fromage-gpu,    rrg-bonhomme-ad, ,         130,      ,          ,          ,             cinq,
+2020-04-01,  2021-04-01,  fromage,      fromage-storage,rrg-bonhomme-ad, ,         ,         ,          ,          30TB,         2e6,             patate,
+
+2020/04/01,  2021-04-01,  fromage,      fromage-gpu,    rrg-bonhomme-ad, ,         130,
+2020-04-01,  2021/04/01,  fromage,      fromage-storage,rrg-bonhomme-ad, ,         ,         ,          ,          30TB,         2e6,             ,
+
+2017-04-01,  2018-04-01,  fromage,      devrait-gpu,    rrg-bonhomme-ad, ,         100,
+2017-04-01,  2018-04-01,  patate,       passer-storage, rrg-bonhomme-ad, ,         ,         ,          ,          50TB,         5e6,             15TB,

@@ -1,0 +1,36 @@
+"Skipping row: {'start': '2017-04-01', 'end': '2018-04-01', 'cluster_name': 'fromage',\
+  \ 'resource_name': 'fromage-gpu', 'group_name': 'rrg-bonhomme-ad', 'cpu_year': 'allo',\
+  \ 'gpu_year': '100'}\n1 validation error for AllocationCompute\ncpu_year\n  value\
+  \ is not a valid integer (type=type_error.integer)\nSkipping row: {'start': '2017-04-01',\
+  \ 'end': '2018-04-01', 'cluster_name': 'fromage', 'resource_name': 'fromage-storage',\
+  \ 'group_name': 'rrg-bonhomme-ad', 'gpu_year': 'coucou', 'project_size': '50TB',\
+  \ 'project_inodes': '5e6', 'nearline_size': '15TB'}\n1 validation error for AllocationCompute\n\
+  gpu_year\n  value is not a valid integer (type=type_error.integer)\nSkipping row:\
+  \ {'start': '2018-04-01', 'end': '2019-04-01', 'cluster_name': 'fromage', 'resource_name':\
+  \ 'fromage-gpu', 'group_name': 'rrg-bonhomme-ad', 'gpu_year': '100', 'vcpu_year':\
+  \ 'oups'}\n1 validation error for AllocationCompute\nvcpu_year\n  value is not a\
+  \ valid integer (type=type_error.integer)\nSkipping row: {'start': '2018-04-01',\
+  \ 'end': '2019-04-01', 'cluster_name': 'fromage', 'resource_name': 'fromage-storage',\
+  \ 'group_name': 'rrg-bonhomme-ad', 'vgpu_year': 'marche-pas', 'project_size': '70TB'}\n\
+  1 validation error for AllocationCompute\nvgpu_year\n  value is not a valid integer\
+  \ (type=type_error.integer)\nSkipping row: {'start': '2019-04-01', 'end': '2020-04-01',\
+  \ 'cluster_name': 'patate', 'resource_name': 'patate-storage', 'group_name': 'rrg-bonhomme-ad',\
+  \ 'project_size': 'mille', 'project_inodes': '5e6', 'nearline_size': '90TB'}\n1\
+  \ validation error for AllocationStorage\nproject_size\n  could not parse value\
+  \ and unit from byte string (type=value_error.invalidbytesize)\nSkipping row: {'start':\
+  \ '2020-04-01', 'end': '2021-04-01', 'cluster_name': 'fromage', 'resource_name':\
+  \ 'fromage-gpu', 'group_name': 'rrg-bonhomme-ad', 'gpu_year': '130', 'project_inodes':\
+  \ 'cinq'}\n1 validation error for AllocationStorage\nproject_inodes\n  value is\
+  \ not a valid float (type=type_error.float)\nSkipping row: {'start': '2020-04-01',\
+  \ 'end': '2021-04-01', 'cluster_name': 'fromage', 'resource_name': 'fromage-storage',\
+  \ 'group_name': 'rrg-bonhomme-ad', 'project_size': '30TB', 'project_inodes': '2e6',\
+  \ 'nearline_size': 'patate'}\n1 validation error for AllocationStorage\nnearline\n\
+  \  could not parse value and unit from byte string (type=value_error.invalidbytesize)\n\
+  Skipping row: {'start': '2020/04/01', 'end': '2021-04-01', 'cluster_name': 'fromage',\
+  \ 'resource_name': 'fromage-gpu', 'group_name': 'rrg-bonhomme-ad', 'gpu_year': '130'}\n\
+  1 validation error for Allocation\nstart\n  time data '2020/04/01' does not match\
+  \ format '%Y-%m-%d' (type=value_error)\nSkipping row: {'start': '2020-04-01', 'end':\
+  \ '2021/04/01', 'cluster_name': 'fromage', 'resource_name': 'fromage-storage', 'group_name':\
+  \ 'rrg-bonhomme-ad', 'project_size': '30TB', 'project_inodes': '2e6'}\n1 validation\
+  \ error for Allocation\nend\n  time data '2021/04/01' does not match format '%Y-%m-%d'\
+  \ (type=value_error)\n"

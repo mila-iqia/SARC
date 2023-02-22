@@ -3,9 +3,10 @@ import os
 import zoneinfo
 from contextlib import contextmanager
 from contextvars import ContextVar
+from datetime import date, datetime
 from functools import cached_property
 from pathlib import Path
-from typing import Union
+from typing import Any, Union
 
 from bson import ObjectId
 from pydantic import BaseModel as _BaseModel
@@ -19,6 +20,19 @@ class ConfigurationError(Exception):
     pass
 
 
+def validate_date(value: Union[str, date, datetime]) -> date:
+    if isinstance(value, str):
+        if "T" in value:
+            return datetime.strptime(value, "%Y-%m-%dT%H:%M:%S").date()
+
+        return datetime.strptime(value, "%Y-%m-%d").date()
+
+    if isinstance(value, datetime):
+        return value.date()
+
+    return value
+
+
 class BaseModel(_BaseModel):
     class Config:
         # Forbid extra fields that are not explicitly defined
@@ -27,6 +41,18 @@ class BaseModel(_BaseModel):
         keep_untouched = (cached_property,)
         # Serializer for mongo's object ids
         json_encoders = {ObjectId: str}
+
+    def dict(self, *args, **kwargs) -> dict[str, Any]:
+        d = super().dict(*args, **kwargs)
+
+        for k, v in d.items():
+            if isinstance(v, date) and not isinstance(v, datetime):
+                d[k] = datetime(
+                    year=v.year,
+                    month=v.month,
+                    day=v.day,
+                )
+        return d
 
 
 class ClusterConfig(BaseModel):
