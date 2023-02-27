@@ -1,3 +1,5 @@
+import os
+
 import matplotlib.pyplot as plt
 import pandas as pd
 from tqdm import tqdm
@@ -17,36 +19,51 @@ include_fields = {
     "elapsed_time",
 }
 
-df = None
-# Fetch all jobs from the clusters
-for cluster in tqdm(clusters, desc="clusters", position=0):
-    dicts = []
 
-    # Precompute the total number of jobs to display a progress bar
-    # get_jobs is a generator so we don't get the total unless we pre-fetch all jobs
-    # beforehand.
-    total = config().mongo.instance.jobs.count_documents({"cluster_name": cluster})
-    for job in tqdm(
-        get_jobs(cluster=cluster, start="2022-04-01"),
-        total=total,
-        desc="jobs",
-        position=1,
-        leave=False,
-    ):
-        # Create a small dict with the fields we need
-        job_dict = job.dict(include=include_fields)
-        # Add the allocation fields directry to dicts instead of nested as in the original job dict.
-        job_dict.update(job.allocated.dict())
-        # gres_gpu may be None or be a float.
-        job_dict["gres_gpu"] = int(job_dict["gres_gpu"]) if job_dict["gres_gpu"] else 0
+def get_jobs_dataframe(filename=None) -> pd.DataFrame:
+    if filename and os.path.exists(filename):
+        return pd.read_pickle(filename)
 
-        dicts.append(job_dict)
+    df = None
+    # Fetch all jobs from the clusters
+    for cluster in tqdm(clusters, desc="clusters", position=0):
+        dicts = []
 
-    # Replace all NaNs by 0.
-    cluster_df = pd.DataFrame(dicts).fillna(0)
-    df = pd.concat([df, cluster_df])
+        # Precompute the total number of jobs to display a progress bar
+        # get_jobs is a generator so we don't get the total unless we pre-fetch all jobs
+        # beforehand.
+        total = config().mongo.instance.jobs.count_documents({"cluster_name": cluster})
+        for job in tqdm(
+            get_jobs(cluster=cluster, start="2022-04-01"),
+            total=total,
+            desc="jobs",
+            position=1,
+            leave=False,
+        ):
+            # Create a small dict with the fields we need
+            job_dict = job.dict(include=include_fields)
+            # Add the allocation fields directry to dicts instead of nested as in the original job dict.
+            job_dict.update(job.allocated.dict())
+            # gres_gpu may be None or be a float.
+            job_dict["gres_gpu"] = (
+                int(job_dict["gres_gpu"]) if job_dict["gres_gpu"] else 0
+            )
 
-assert isinstance(df, pd.DataFrame)
+            dicts.append(job_dict)
+
+        # Replace all NaNs by 0.
+        cluster_df = pd.DataFrame(dicts).fillna(0)
+        df = pd.concat([df, cluster_df])
+
+        if filename:
+            df.to_pickle(filename)
+
+    assert isinstance(df, pd.DataFrame)
+
+    return df
+
+
+df = get_jobs_dataframe("trends_demo_jobs.pkl")
 
 # Compute the billed resource time in seconds
 df["billed"] = df["elapsed_time"] * df["billing"]
