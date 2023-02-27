@@ -45,7 +45,7 @@ def main(argv: list[Any] | None = None) -> int:
     """Main commandline for SARC"""
     parser = ArgumentParser()
     parser.add_arguments(CLI, dest="command")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     command: CLI = args.command
 
     return command.execute()

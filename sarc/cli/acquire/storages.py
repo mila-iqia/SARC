@@ -13,10 +13,9 @@ class AcquireStorages:
 
     def execute(self) -> int:
         cfg = config()
-        clusters_configs = cfg.clusters
+        clusters_configs = cfg.clusters  # pylint: disable=unused-variable
 
         for cluster_name in self.cluster_names:
-            clusters_configs[cluster_name]
             print(f"Acquire data on {cluster_name}.")
             # storage_mongodb_import(clusters_configs[cluster_name])
             raise NotImplementedError()
