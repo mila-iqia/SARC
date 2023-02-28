@@ -148,11 +148,11 @@ def jobs_collection():
 
 def get_jobs(
     *,
-    cluster: Union[str, ClusterConfig] = None,
-    job_id: Union[int, list[int]] = None,
-    username: str = None,
-    start: Union[str, datetime] = None,
-    end: Union[str, datetime] = None,
+    cluster: Union[str, ClusterConfig, None] = None,
+    job_id: Union[int, list[int], None] = None,
+    username: Union[str, None] = None,
+    start: Union[str, datetime, None] = None,
+    end: Union[str, datetime, None] = None,
     query_options: dict = {},
 ) -> list[SlurmJob]:
     """Get jobs that match the query.
@@ -182,13 +182,14 @@ def get_jobs(
         query["job_id"] = job_id
     elif isinstance(job_id, list):
         query["job_id"] = {"$in": job_id}
+    # TODO: It's weird that if we pass job_id that is not a list or int, we don't filter on job_id.
 
     if end:
         # Select any job that had a status before the given end time.
         query["submit_time"] = {"$lt": end}
 
     if username:
-        query["username"] = username
+        query["user"] = username
 
     if start:
         # Select jobs that had a status after the given time. This is a bit special

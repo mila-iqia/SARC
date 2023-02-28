@@ -1,0 +1,11 @@
+- '{"cluster_name": "fromage", "account": "mila", "job_id": 15, "array_job_id": null,
+  "task_id": null, "name": "main.sh", "user": "petitbonhomme", "group": "petitbonhomme",
+  "job_state": "CANCELLED", "exit_code": 0, "signal": null, "partition": "long", "nodes":
+  ["cn-c021"], "work_dir": "/network/scratch/p/petitbonhomme/experience-demente",
+  "constraints": "x86_64&(48gb|80gb)", "priority": 7152, "qos": "normal", "CLEAR_SCHEDULING":
+  true, "STARTED_ON_SUBMIT": false, "STARTED_ON_SCHEDULE": false, "STARTED_ON_BACKFILL":
+  true, "time_limit": 43200, "submit_time": "2023-02-14T14:00:00-05:00", "start_time":
+  "2023-02-14T14:01:00-05:00", "end_time": "2023-02-14T18:19:00-05:00", "elapsed_time":
+  15480, "requested": {"cpu": 4, "mem": 49152, "node": 1, "billing": 1, "gres_gpu":
+  1, "gpu_type": null}, "allocated": {"cpu": 4, "mem": 49152, "node": 1, "billing":
+  1, "gres_gpu": 1, "gpu_type": null}}'
