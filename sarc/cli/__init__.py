@@ -13,6 +13,8 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class Dummy:
+    """Dummy command until we have another command than Acquire that we can add to the CLI"""
+
     def execute(self):
         print("Dummy!")
 
