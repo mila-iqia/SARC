@@ -150,6 +150,7 @@ def get_jobs(
     *,
     cluster: Union[str, ClusterConfig, None] = None,
     job_id: Union[int, list[int], None] = None,
+    job_state: Union[str, SlurmState, None] = None,
     username: Union[str, None] = None,
     start: Union[str, datetime, None] = None,
     end: Union[str, datetime, None] = None,
@@ -190,6 +191,9 @@ def get_jobs(
 
     if username:
         query["user"] = username
+
+    if job_state:
+        query["job_state"] = job_state
 
     if start:
         # Select jobs that had a status after the given time. This is a bit special
