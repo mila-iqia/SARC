@@ -35,6 +35,7 @@ import argparse
 
 # from sarc.common.config import get_config
 import json
+from ..config import ClusterConfig
 
 parser = argparse.ArgumentParser(
     description="Fetch the diskusage from a compute cluster and commit the information to our database."
@@ -45,3 +46,45 @@ parser.add_argument(
     default="",
     help="",
 )
+
+
+def fetch_diskusage_report(cluster: ClusterConfig):
+    """
+    Get the output of the command diskusage_report --project --all_users on the wanted cluster
+
+    The output is something like this:
+
+                             Description                Space           # of files
+       /project (project rrg-bengioy-ad)              39T/75T          1226k/5000k
+          /project (project def-bengioy)           956G/1000G            226k/500k
+
+Breakdown for project rrg-bengioy-ad (Last update: 2023-02-27 23:04:29)
+           User      File count                 Size             Location
+-------------------------------------------------------------------------
+         user01               2             0.00 GiB              On disk
+         user02           14212           223.99 GiB              On disk
+(...)
+         user99               4           819.78 GiB              On disk
+          Total          381818         36804.29 GiB              On disk
+
+
+Breakdown for project def-bengioy (Last update: 2023-02-27 23:00:57)
+           User      File count                 Size             Location
+-------------------------------------------------------------------------
+         user01               2             0.00 GiB              On disk
+         user02           14212           223.99 GiB              On disk
+(...)
+         user99               4           819.78 GiB              On disk
+          Total          381818         36804.29 GiB              On disk
+
+
+Disk usage can be explored using the following commands:
+diskusage_explorer /project/rrg-bengioy-ad 	 (Last update: 2023-02-27 20:06:27)
+diskusage_explorer /project/def-bengioy 	 (Last update: 2023-02-27 19:59:41)
+    """
+    cmd = "diskusage_report --project --all_users"
+    print(f"{cluster.name} $ {cmd}")
+    results = cluster.ssh.run(cmd, hide=True)
+    return results.stdout.split('\n')
+    
+
