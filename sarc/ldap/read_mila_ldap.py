@@ -7,12 +7,6 @@ It queries our LDAP service for all users and it updates
 the MongoDB instance for SARC so that the "users"
 collection reflects those accounts.
 
-It's unclear whether we should automatically disable
-the existing accounts in CW for members that are not being
-mentioned in the LDAP results. We probably want to do
-such a thing periodically, with special care instead of
-doing it automatically.
-
 Two mutually-exclusive ways to input the data, by priority:
    1) use the --input_json_file argument
    2) use the LDAP
@@ -173,7 +167,7 @@ parser.add_argument(
     help="(optional) MongoDB connection string. Contains username and password.",
 )
 parser.add_argument(
-    "--mongodb_database",
+    "--mongodb_database_name",
     default="sarc",
     type=str,
     help="(optional) MongoDB database to modify. Better left at default.",
@@ -321,7 +315,7 @@ def run(
     local_certificate_file=None,
     ldap_service_uri=None,
     mongodb_connection_string=None,
-    mongodb_database=None,
+    mongodb_database_name=None,
     mongodb_collection=None,
     input_json_file=None,
     output_json_file=None,
@@ -350,8 +344,8 @@ def run(
 
         LD_users = [process_user(D_user_raw) for D_user_raw in LD_users_raw]
 
-    if mongodb_connection_string and mongodb_database and mongodb_collection:
-        users_collection = MongoClient(mongodb_connection_string)[mongodb_database][
+    if mongodb_connection_string and mongodb_database_name and mongodb_collection:
+        users_collection = MongoClient(mongodb_connection_string)[mongodb_database_name][
             mongodb_collection
         ]
 
@@ -396,7 +390,7 @@ if __name__ == "__main__":
         local_certificate_file=args.local_certificate_file,
         ldap_service_uri=args.ldap_service_uri,
         mongodb_connection_string=args.mongodb_connection_string,
-        mongodb_database=args.mongodb_database,
+        mongodb_database_name=args.mongodb_database_name,
         mongodb_collection=args.mongodb_collection,
         input_json_file=args.input_json_file,
         output_json_file=args.output_json_file,
