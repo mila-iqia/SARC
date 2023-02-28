@@ -11,6 +11,7 @@ parameters = {
     "no_cluster": ({}, 20),
     "cluster_str": ({"cluster": "patate"}, 1),
     "cluster_cfg": ({"cluster": config().clusters["fromage"]}, 1),
+    "job_state": ({"job_state": "COMPLETED"}, 1),
     "one_job": ({"job_id": 10}, 1),
     "one_job_wrong_cluster": ({"job_id": 10, "cluster": "patate"}, 0),
     "many_jobs": ({"job_id": [8, 9]}, 2),
