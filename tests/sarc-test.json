@@ -25,7 +25,7 @@
             "duc_storage_command": "duc ls -d /project/.duc_databases/rrg-bonhomme-ad.sqlite /project/rrg-bonhomme-ad",
             "diskusage_report_command": "diskusage_report --project --all_users",
             "prometheus_url": "https://fromage-thanos.calcul.ca",
-            "prometheus_headers_file": "secrets/fromage_prometheus/headers.json"
+            "prometheus_headers_file": "tests/not-so-secrets/fromage_prometheus/headers.json"
         },
         "patate": {
             "host": "patate",
@@ -36,7 +36,7 @@
             "duc_storage_command": "duc ls -d /project/.duc_databases/rrg-bonhomme-ad.sqlite /project/rrg-bonhomme-ad",
             "diskusage_report_command": "diskusage_report --project --all_users",
             "prometheus_url": "https://fromage-thanos.calcul.ca",
-            "prometheus_headers_file": "secrets/patate_prometheus/headers.json"
+            "prometheus_headers_file": "tests/not-so-secrets/patate_prometheus/headers.json"
         }
     }
 }
