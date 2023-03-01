@@ -30,7 +30,6 @@ def generate_label_configs(
     node_configs = curate_label_argument("instance", node_id)
     cluster_configs = curate_label_argument("cluster", cluster)
 
-
     # Create list of label_configs based on node_id and cluster_name
     for node_config, cluster_config in itertools.product(node_configs, cluster_configs):
         query_config = copy.deepcopy(node_config)
