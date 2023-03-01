@@ -147,6 +147,7 @@ def jobs_collection():
     return SlurmJobRepository(database=db)
 
 
+# pylint: disable=too-many-branches
 def get_jobs(
     *,
     cluster: Union[str, ClusterConfig, None] = None,
