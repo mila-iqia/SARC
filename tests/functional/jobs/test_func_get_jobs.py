@@ -41,3 +41,9 @@ def test_get_jobs(params, jobs_count, data_regression):
     jobs = list(get_jobs(**params))
     assert len(jobs) == jobs_count
     data_regression.check([job.json(exclude={"id": True}) for job in jobs])
+
+
+@pytest.mark.usefixtures("init_db_with_jobs", "tzlocal_is_mtl")
+def test_get_jobs_wrong_job_id():
+    with pytest.raises(TypeError, match="job_id must be an int or a list of ints"):
+        get_jobs(job_id="wrong id")
