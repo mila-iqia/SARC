@@ -1,5 +1,5 @@
-from sarc.inode_storage_scanner.parse_diskusage_report import _parse_body as parse_body
-from sarc.inode_storage_scanner.parse_diskusage_report import (
+from sarc.storage.drac import _parse_body as parse_body
+from sarc.storage.drac import (
     _parse_header_summary as parse_header_summary,
 )
 
