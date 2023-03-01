@@ -1,3 +1,10 @@
+"""
+Fetching and parsing code specific to DRAC clusters
+"""
+
+import logging
+
+from sarc.config import ClusterConfig
 import re
 
 
@@ -33,7 +40,9 @@ def _parse_header_summary(L_lines: list[str]):
         if re.match(r"\s+Description\s+Space.*", line):
             inside_segment = True
             continue
-        elif m := re.match(r"\s*/project \(project\s(.*?)\)\s+(.+?)\s+(.+)", line) or re.match(r".*/project \(group\s(.*?)\)\s+(.+?)\s+(.+)", line):
+        elif m := re.match(
+            r"\s*/project \(project\s(.*?)\)\s+(.+?)\s+(.+)", line
+        ) or re.match(r".*/project \(group\s(.*?)\)\s+(.+?)\s+(.+)", line):
             if inside_segment:
                 L_results.append(
                     {
@@ -49,7 +58,7 @@ def _parse_header_summary(L_lines: list[str]):
                 continue
         else:
             inside_segment = False
-            
+
     return L_results
 
 
@@ -111,8 +120,59 @@ def _parse_body(L_lines: list[str], DLD_results=None):
 
 
 def parse_diskusage_report(L_lines: list[str]):
-# Let's just test that part for now.
-#    return parse_diskusage_report(L_lines)
+    """
+    Parses the output of fetch_diskusage_report
+    """
     header = _parse_header_summary(L_lines)
     body = _parse_body(L_lines)
-    return header,body
+    return header, body
+
+def fetch_diskusage_report(cluster: ClusterConfig):
+    """
+        Get the output of the command diskusage_report --project --all_users on the wanted cluster
+
+        The output is something like this:
+
+                                 Description                Space           # of files
+           /project (project rrg-bengioy-ad)              39T/75T          1226k/5000k
+              /project (project def-bengioy)           956G/1000G            226k/500k
+
+    Breakdown for project rrg-bengioy-ad (Last update: 2023-02-27 23:04:29)
+               User      File count                 Size             Location
+    -------------------------------------------------------------------------
+             user01               2             0.00 GiB              On disk
+             user02           14212           223.99 GiB              On disk
+    (...)
+             user99               4           819.78 GiB              On disk
+              Total          381818         36804.29 GiB              On disk
+
+
+    Breakdown for project def-bengioy (Last update: 2023-02-27 23:00:57)
+               User      File count                 Size             Location
+    -------------------------------------------------------------------------
+             user01               2             0.00 GiB              On disk
+             user02           14212           223.99 GiB              On disk
+    (...)
+             user99               4           819.78 GiB              On disk
+              Total          381818         36804.29 GiB              On disk
+
+
+    Disk usage can be explored using the following commands:
+    diskusage_explorer /project/rrg-bengioy-ad 	 (Last update: 2023-02-27 20:06:27)
+    diskusage_explorer /project/def-bengioy 	 (Last update: 2023-02-27 19:59:41)
+    """
+    cmd = "diskusage_report --project --all_users"
+    # print(f"{cluster.name} $ {cmd}")
+    results = cluster.ssh.run(cmd, hide=True)
+    return results.stdout.split("\n")  # break this long string into a list of lines
+
+
+def drac_mongodb_import(cluster: ClusterConfig):
+    """
+    All-in-one function to :
+    - fetch the disk usage statistics on the specified cluster
+    - parse it
+    - import it in MongoDB
+    """
+    logging.error("Not yet implemented")
+    return
