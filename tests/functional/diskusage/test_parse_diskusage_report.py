@@ -4,6 +4,7 @@ from sarc.storage.drac import (
 )
 
 
+# cedar, beluga and graham style
 def test_header_00():
     L_lines = """
                                 Description                Space           # of files
@@ -21,6 +22,27 @@ def test_header_00():
         {"group": "def-bengioy", "space": "971G/1000G", "nbr_files": "791k/1005k"},
         {"group": "rpp-bengioy", "space": "31T/2048k", "nbr_files": "3626k/1025"},
         {"group": "rrg-bengioy-ad", "space": "54T/75T", "nbr_files": "1837k/5005k"},
+    ]
+
+    assert len(L_results) == len(L_results_expected)
+
+    for a, b in zip(L_results, L_results_expected):
+        assert a == b
+        
+# narval style
+def test_header_01():
+    L_lines = """
+                             Description                Space           # of files
+       /project (project rrg-bengioy-ad)              39T/75T          1316k/5000k
+          /project (project def-bengioy)           956G/1000G            226k/500k
+        """.split(
+        "\n"
+    )
+
+    L_results = parse_header_summary(L_lines)
+    L_results_expected = [
+        {"group": "rrg-bengioy-ad", "space": "39T/75T", "nbr_files": "1316k/5000k"},
+        {"group": "def-bengioy", "space": "956G/1000G", "nbr_files": "226k/500k"},
     ]
 
     assert len(L_results) == len(L_results_expected)
