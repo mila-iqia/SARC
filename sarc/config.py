@@ -119,8 +119,6 @@ class MongoConfig(BaseModel):
         return client.get_database(self.database_name)
 
 
-
-
 class LDAPConfig(BaseModel):
     local_private_key_file: str
     local_certificate_file: str

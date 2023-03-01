@@ -28,10 +28,10 @@ def run():
             local_private_key_file=cfg.ldap.local_private_key_file,
             local_certificate_file=cfg.ldap.local_certificate_file,
             ldap_service_uri=cfg.ldap.ldap_service_uri,
-
             # write results to here
-            output_json_file=tmp_file_path)
-        
+            output_json_file=tmp_file_path,
+        )
+
         sarc.ldap.read_mila_ldap.run(
             # read results from here
             input_json_file=tmp_file_path,
@@ -40,6 +40,7 @@ def run():
             mongodb_database=cfg.mongo.database_name,
             mongodb_collection=cfg.ldap.mongo_collection_name,
         )
+
 
 if __name__ == "__main__":
     run()

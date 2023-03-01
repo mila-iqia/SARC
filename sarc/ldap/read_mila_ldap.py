@@ -345,9 +345,9 @@ def run(
         LD_users = [process_user(D_user_raw) for D_user_raw in LD_users_raw]
 
     if mongodb_connection_string and mongodb_database_name and mongodb_collection:
-        users_collection = MongoClient(mongodb_connection_string)[mongodb_database_name][
-            mongodb_collection
-        ]
+        users_collection = MongoClient(mongodb_connection_string)[
+            mongodb_database_name
+        ][mongodb_collection]
 
         # read only the "mila_ldap" field from the entries, and ignore the
         # "cc_roles" and "cc_members" components
