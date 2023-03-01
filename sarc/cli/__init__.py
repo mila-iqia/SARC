@@ -4,7 +4,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Union
 
-from simple_parsing import ArgumentParser, field
+from simple_parsing import ArgumentParser, field, subparsers
 
 from sarc.cli.acquire import Acquire
 
@@ -12,16 +12,9 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class Dummy:
-    """Dummy command until we have another command than Acquire that we can add to the CLI"""
-
-    def execute(self):
-        print("Dummy!")
-
-
-@dataclass
 class CLI:
-    command: Union[Acquire, Dummy]
+    # NOTE: This should use Union[Acquire, OtherCommand] when we have more than one command.
+    command: Acquire = subparsers({"acquire": Acquire})
 
     verbose: int = field(
         alias=["-v"],
