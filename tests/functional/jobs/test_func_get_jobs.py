@@ -37,10 +37,12 @@ parameters = {
 @pytest.mark.parametrize(
     "params,jobs_count", parameters.values(), ids=parameters.keys()
 )
-def test_get_jobs(params, jobs_count, data_regression):
+def test_get_jobs(params, jobs_count, file_regression):
     jobs = list(get_jobs(**params))
     assert len(jobs) == jobs_count
-    data_regression.check([job.json(exclude={"id": True}) for job in jobs])
+    file_regression.check(
+        "\n".join([job.json(exclude={"id": True}, indent=4) for job in jobs])
+    )
 
 
 @pytest.mark.usefixtures("init_db_with_jobs", "tzlocal_is_mtl")
