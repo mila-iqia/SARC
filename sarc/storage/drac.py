@@ -51,7 +51,7 @@ def _parse_header_summary(L_lines: list[str]):
                         "nbr_files": _parse_fraction(m.group(3)),
                     }
                 )
-                print(f"Header: {L_results[-1]}")
+                # print(f"Header: {L_results[-1]}")
 
             else:
                 # we don't expect this branch to ever be taken
@@ -126,6 +126,7 @@ def parse_diskusage_report(L_lines: list[str]):
     header = _parse_header_summary(L_lines)
     body = _parse_body(L_lines)
     return header, body
+
 
 def fetch_diskusage_report(cluster: ClusterConfig):
     """
