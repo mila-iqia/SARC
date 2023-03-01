@@ -7,7 +7,7 @@ readme = "README.md"
 packages = [{include = 'sarc'}]
 
 [tool.poetry.dependencies]
-python = "^3.8"
+python = "^3.9"
 fabric = "^3.0.0"
 prometheus-api-client = "^0.5.2"
 pydantic = "^1.10.4"
@@ -18,6 +18,7 @@ ldap3 = "^2.9.1"
 python-hostlist = "^1.23.0"
 tqdm = "^4.64.1"
 flatten-dict = "^0.4.2"
+simple-parsing = "^0.1.0"
 
 [tool.poetry.group.dev.dependencies]
 black = ">= 22.12.0"
@@ -36,6 +37,9 @@ seaborn = "^0.12.2"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.scripts]
+sarc = 'sarc.cli:main'
 
 [tool.pylint]
 ignore-paths = ["sarc/account_matching", "sarc/ldap", 'sarc/inode_storage_scanner']

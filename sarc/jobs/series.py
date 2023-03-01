@@ -35,7 +35,7 @@ def get_job_time_series(
     assert aggregation in ("interval", "total", None)
 
     if not job.start_time:
-        return []
+        return None if dataframe else []
     if metric not in slurm_job_metric_names:
         raise ValueError(f"Unknown metric name: {metric}")
 
@@ -46,7 +46,13 @@ def get_job_time_series(
     duration = (job.end_time or now) - job.start_time
 
     offset = int((ago - duration).total_seconds())
+    offset_string = f" offset {offset}s" if offset > 0 else ""
+
     duration_seconds = int(duration.total_seconds())
+
+    if duration_seconds <= 0:
+        return None if dataframe else []
+
     interval = int(max((duration / max_points).total_seconds(), min_interval))
 
     query = selector
@@ -61,12 +67,12 @@ def get_job_time_series(
 
         query = f"{query}[{range_seconds}s]"
         if "(" in measure:
-            query = measure.format(f"{query} offset {offset}s")
+            query = measure.format(f"{query} {offset_string}")
         else:
-            query = f"{measure}({query} offset {offset}s)"
+            query = f"{measure}({query} {offset_string})"
         query = f"{query}[{duration_seconds}s:{range_seconds}s]"
     else:
-        query = f"{query}[{duration_seconds}s:{interval}s] offset {offset}s"
+        query = f"{query}[{duration_seconds}s:{interval}s] {offset_string}"
 
     results = job.cluster.prometheus.custom_query(query)
     if dataframe:

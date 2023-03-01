@@ -50,6 +50,7 @@ class SlurmResources(BaseModel):
     node: Optional[int]
     billing: Optional[int]
     gres_gpu: Optional[int]
+    gpu_type: Optional[str]
 
 
 class SlurmJob(BaseModel):
@@ -80,7 +81,7 @@ class SlurmJob(BaseModel):
 
     # Miscellaneous
     constraints: Optional[str]
-    priority: int
+    priority: Optional[int]
     qos: Optional[str]
 
     # Flags
@@ -150,6 +151,7 @@ def get_jobs(
     *,
     cluster: Union[str, ClusterConfig] = None,
     job_id: Union[int, list[int]] = None,
+    job_state: Union[str, SlurmState] = None,
     username: str = None,
     start: Union[str, datetime] = None,
     end: Union[str, datetime] = None,
@@ -189,6 +191,9 @@ def get_jobs(
 
     if username:
         query["username"] = username
+
+    if job_state:
+        query["job_state"] = job_state
 
     if start:
         # Select jobs that had a status after the given time. This is a bit special
