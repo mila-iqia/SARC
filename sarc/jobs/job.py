@@ -153,7 +153,7 @@ def get_jobs(
     cluster: Union[str, ClusterConfig, None] = None,
     job_id: Union[int, list[int], None] = None,
     job_state: Union[str, SlurmState, None] = None,
-    username: Union[str, None] = None,
+    user: Union[str, None] = None,
     start: Union[str, datetime, None] = None,
     end: Union[str, datetime, None] = None,
     query_options: dict = {},
@@ -199,8 +199,8 @@ def get_jobs(
         # Select any job that had a status before the given end time.
         query["submit_time"] = {"$lt": end}
 
-    if username:
-        query["user"] = username
+    if user:
+        query["user"] = user
 
     if job_state:
         query["job_state"] = job_state

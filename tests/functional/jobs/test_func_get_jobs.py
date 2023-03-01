@@ -24,9 +24,9 @@ parameters = {
         },
         14,
     ),
-    "username": (
+    "user": (
         {
-            "username": "beaubonhomme",
+            "user": "beaubonhomme",
         },
         1,
     ),
