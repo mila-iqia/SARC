@@ -89,10 +89,12 @@ class ClusterConfig(BaseModel):
         from paramiko import SSHConfig
 
         if self.sshconfig is None:
-            return Connection(self.host)
+            fconfig = FabricConfig()
         else:
-            fconfig = FabricConfig(ssh_config=SSHConfig.from_path(self.sshconfig))
-            return Connection(self.host, config=fconfig)
+            fconfig = fconfig.merge(ssh_config=SSHConfig.from_path(self.sshconfig))
+        fconfig["run"]["pty"] = True
+        fconfig["run"]["in_stream"] = False
+        return Connection(self.host, config=fconfig)
 
     @cached_property
     def prometheus(self):

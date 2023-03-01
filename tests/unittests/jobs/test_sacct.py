@@ -32,8 +32,7 @@ def test_SAcctScraper_fetch_raw2(test_config, remote):
                 out=b"{}",
             ),
             Command(
-                "sacct  -X -S '202\
-3-02-28T00:00' -E '2023-03-01T00:00' --json",
+                "sacct  -X -S '2023-02-28T00:00' -E '2023-03-01T00:00' --json",
                 out=b'{ "value": 2 }',
             ),
         ]
