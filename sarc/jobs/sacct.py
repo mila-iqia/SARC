@@ -121,7 +121,14 @@ class SAcctScraper:
                     continue
                 if aname := alloc["name"]:
                     key += f"_{aname}"
-                vals[key] = alloc["count"]
+
+                if key.startswith("gres_gpu:"):
+                    value = key.split(":")[1]
+                    key = "gpu_type"
+                else:
+                    value = alloc["count"]
+
+                vals[key] = value
 
         nodes = entry["nodes"]
 

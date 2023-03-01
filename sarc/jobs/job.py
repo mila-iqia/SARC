@@ -50,6 +50,7 @@ class SlurmResources(BaseModel):
     node: Optional[int]
     billing: Optional[int]
     gres_gpu: Optional[int]
+    gpu_type: Optional[str]
 
 
 class SlurmJob(BaseModel):
@@ -80,7 +81,7 @@ class SlurmJob(BaseModel):
 
     # Miscellaneous
     constraints: Optional[str]
-    priority: int
+    priority: Optional[int]
     qos: Optional[str]
 
     # Flags
