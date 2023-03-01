@@ -298,7 +298,9 @@ class JobFactory:
         self, first_submit_time: None | datetime = None, first_job_id: int = 1
     ):
         self.jobs = []
-        self._first_submit_time = first_submit_time or datetime(2023, 2, 14, tzinfo=MTL).astimezone(UTC)
+        self._first_submit_time = first_submit_time or datetime(
+            2023, 2, 14, tzinfo=MTL
+        ).astimezone(UTC)
         self._first_job_id = first_job_id
 
     @property
@@ -353,7 +355,6 @@ class JobFactory:
 
 @pytest.fixture
 def db_jobs():
-
     job_factory = JobFactory()
 
     for status in [
