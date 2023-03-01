@@ -1,8 +1,8 @@
-# pylint: disable=dangerous-default-value
+from __future__ import annotations
 
 from datetime import datetime, time, timedelta
 from enum import Enum
-from typing import Optional, Union
+from typing import Optional
 
 from pydantic import validator
 from pydantic_mongo import AbstractRepository, ObjectIdField
@@ -147,15 +147,15 @@ def jobs_collection():
     return SlurmJobRepository(database=db)
 
 
-# pylint: disable=too-many-branches
+# pylint: disable=too-many-branches,dangerous-default-value
 def get_jobs(
     *,
-    cluster: Union[str, ClusterConfig, None] = None,
-    job_id: Union[int, list[int], None] = None,
-    job_state: Union[str, SlurmState, None] = None,
-    user: Union[str, None] = None,
-    start: Union[str, datetime, None] = None,
-    end: Union[str, datetime, None] = None,
+    cluster: str | ClusterConfig | None = None,
+    job_id: int | list[int] | None = None,
+    job_state: str | SlurmState | None = None,
+    user: str | None = None,
+    start: str | datetime | None = None,
+    end: str | datetime | None = None,
     query_options: dict = {},
 ) -> list[SlurmJob]:
     """Get jobs that match the query.
@@ -221,6 +221,7 @@ def get_jobs(
     return coll.find_by(query, **query_options)
 
 
+# pylint: disable=dangerous-default-value
 def get_job(*, query_options={}, **kwargs):
     """Get a single job that matches the query, or None if nothing is found.
 
