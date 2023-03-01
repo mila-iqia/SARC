@@ -233,7 +233,12 @@ def get_job(*, query_options={}, **kwargs):
 
     Same signature as `get_jobs`.
     """
-    jobs = get_jobs(**kwargs, query_options={**query_options, "limit": 1})
+    # Sort by submit_time descending, which ensures we get the most recent version
+    # of the job.
+    jobs = get_jobs(
+        **kwargs,
+        query_options={**query_options, "sort": [("submit_time", -1)], "limit": 1},
+    )
     for job in jobs:
         return job
     return None
