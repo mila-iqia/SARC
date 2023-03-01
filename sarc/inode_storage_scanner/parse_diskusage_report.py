@@ -1,7 +1,7 @@
 import re
 
 
-def parse_fraction(s):
+def _parse_fraction(s):
     """
     Something like
     0/2048k    971G/1000G   3626k/1025   791k/1005k
@@ -13,11 +13,19 @@ def parse_fraction(s):
 
 def _parse_header_summary(L_lines: list[str]):
     """
+    beluga, cedar and graham format :
                         Description                Space           # of files
         /project (group kdf900)                  0/2048k               0/1025
         /project (group def-bengioy)           971G/1000G           791k/1005k
         /project (group rpp-bengioy)            31T/2048k           3626k/1025
-    /project (group rrg-bengioy-ad)              54T/75T          1837k/5005k
+        /project (group rrg-bengioy-ad)           54T/75T          1837k/5005k
+
+    narval format :
+                        Description                Space           # of files
+        /project (project kdf900)                  0/2048k               0/1025
+        /project (project def-bengioy)           971G/1000G           791k/1005k
+        /project (project rpp-bengioy)            31T/2048k           3626k/1025
+        /project (project rrg-bengioy-ad)           54T/75T          1837k/5005k
     """
     L_results = []
     inside_segment = False
@@ -25,20 +33,23 @@ def _parse_header_summary(L_lines: list[str]):
         if re.match(r"\s+Description\s+Space.*", line):
             inside_segment = True
             continue
-        elif m := re.match(r".*project \(group\s(.*?)\)\s+(.+?)\s+(.+)", line):
+        elif m := re.match(r"\s*/project \(project\s(.*?)\)\s+(.+?)\s+(.+)", line) or re.match(r".*/project \(group\s(.*?)\)\s+(.+?)\s+(.+)", line):
             if inside_segment:
                 L_results.append(
                     {
                         "group": m.group(1),
-                        "space": parse_fraction(m.group(2)),
-                        "nbr_files": parse_fraction(m.group(3)),
+                        "space": _parse_fraction(m.group(2)),
+                        "nbr_files": _parse_fraction(m.group(3)),
                     }
                 )
+                print(f"Header: {L_results[-1]}")
+
             else:
                 # we don't expect this branch to ever be taken
                 continue
         else:
             inside_segment = False
+            
     return L_results
 
 
@@ -99,6 +110,9 @@ def _parse_body(L_lines: list[str], DLD_results=None):
     return DLD_results
 
 
-# def parse_diskusage_report(L_lines: list[str]):
+def parse_diskusage_report(L_lines: list[str]):
 # Let's just test that part for now.
 #    return parse_diskusage_report(L_lines)
+    header = _parse_header_summary(L_lines)
+    body = _parse_body(L_lines)
+    return header,body

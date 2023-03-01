@@ -83,8 +83,8 @@ diskusage_explorer /project/rrg-bengioy-ad 	 (Last update: 2023-02-27 20:06:27)
 diskusage_explorer /project/def-bengioy 	 (Last update: 2023-02-27 19:59:41)
     """
     cmd = "diskusage_report --project --all_users"
-    print(f"{cluster.name} $ {cmd}")
+    # print(f"{cluster.name} $ {cmd}")
     results = cluster.ssh.run(cmd, hide=True)
-    return results.stdout.split('\n')
+    return results.stdout.split('\n')   # break this long string into a list of lines
     
 
