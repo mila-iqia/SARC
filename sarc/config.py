@@ -108,8 +108,11 @@ class MongoConfig(BaseModel):
     connection_string: str
     database_name: str
 
+    def get_database(self):
+        return self._database
+
     @cached_property
-    def database(self):
+    def _database(self):
         from pymongo import MongoClient
 
         client = MongoClient(self.connection_string)
@@ -117,11 +120,12 @@ class MongoConfig(BaseModel):
 
 
 
+
 class LDAPConfig(BaseModel):
     local_private_key_file: str
     local_certificate_file: str
     ldap_service_uri: str
-    mongodb_collection_name: str
+    mongo_collection_name: str
 
 
 class Config(BaseModel):

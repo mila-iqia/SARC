@@ -7,7 +7,7 @@ This is possible because the "read_mila_ldap.py" script has a `run` function
 that takes the arguments as parameters, so the argparse step comes earlier.
 
 As a result of running this script, the values in the collection 
-referenced by "cfg.ldap.mongodb_collection_name" will be updated.
+referenced by "cfg.ldap.mongo_collection_name" will be updated.
 """
 
 import tempfile
@@ -38,7 +38,7 @@ def run():
             # write results in database
             mongodb_connection_string=cfg.mongo.connection_string,
             mongodb_database=cfg.mongo.database_name,
-            mongodb_collection=cfg.ldap.mongodb_collection_name,
+            mongodb_collection=cfg.ldap.mongo_collection_name,
         )
 
 if __name__ == "__main__":
