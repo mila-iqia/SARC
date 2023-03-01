@@ -22,7 +22,7 @@ parameters = {
 }
 
 
-@pytest.mark.usefixtures("init_db_with_allocations")
+@pytest.mark.usefixtures("read_only_db")
 @pytest.mark.parametrize("params,", parameters.values(), ids=parameters.keys())
 def test_get_allocations(params, data_regression):
     data = get_allocations(**params)
@@ -32,7 +32,7 @@ def test_get_allocations(params, data_regression):
     )
 
 
-@pytest.mark.usefixtures("init_db_with_allocations")
+@pytest.mark.usefixtures("read_only_db")
 @pytest.mark.parametrize("params,", parameters.values(), ids=parameters.keys())
 def test_get_allocations_summaries(params, dataframe_regression):
     data = get_allocation_summaries(**params)

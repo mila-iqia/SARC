@@ -25,22 +25,14 @@ def curate_label_argument(label_name: str, label_values: None | str | list[str])
 
 def generate_label_configs(
     node_id: None | str | list[str],
-    cluster_name: None | str | list[str],
+    cluster: None | str | list[str],
 ):
     node_configs = curate_label_argument("instance", node_id)
-    cluster_configs = curate_label_argument("cluster", cluster_name)
-
-    if any(
-        config.get("cluster", "mila-cluster") != "mila-cluster"
-        for config in cluster_configs
-    ):
-        raise NotImplementedError("Only mila-cluster is supported for now.")
+    cluster_configs = curate_label_argument("cluster", cluster)
 
     # Create list of label_configs based on node_id and cluster_name
     for node_config, cluster_config in itertools.product(node_configs, cluster_configs):
         query_config = copy.deepcopy(node_config)
-        if cluster_config:
-            logger.warning("Cluster name is not supported for now.")
         query_config.update(cluster_config)
         # yield node_config | cluster_config
         yield query_config
@@ -109,6 +101,7 @@ def generate_custom_query(
 
 
 def query_prom(
+    cluster: str,
     metric_name: str,
     label_config: dict,
     start: datetime,
@@ -117,15 +110,15 @@ def query_prom(
 ):
     query = generate_custom_query(metric_name, label_config, start, end, running_window)
 
-    return config().clusters["mila"].prometheus.custom_query(query)
+    return config().clusters[cluster].prometheus.custom_query(query)
 
 
 def get_nodes_time_series(
     metrics: str | list[str],
+    cluster: str | list[str],
     start: datetime,
     end: None | datetime = None,
     node_id: None | str | list[str] = None,
-    cluster_name: None | str | list[str] = None,
     running_window: timedelta = timedelta(days=1),
 ) -> pd.DataFrame:
     """Fetch node metrics
@@ -156,9 +149,11 @@ def get_nodes_time_series(
 
     df = None
     for metric_name, label_config in itertools.product(
-        metrics, generate_label_configs(node_id, cluster_name)
+        metrics, generate_label_configs(node_id, cluster)
     ):
+        label_config = copy.deepcopy(label_config)
         rval = query_prom(
+            label_config.pop("cluster"),
             metric_name,
             label_config=label_config,
             start=start,

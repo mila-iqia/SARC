@@ -1,13 +1,13 @@
-# pylint: disable=dangerous-default-value
+from __future__ import annotations
 
 from datetime import datetime, time, timedelta
 from enum import Enum
-from typing import Optional, Union
+from typing import Optional
 
 from pydantic import validator
 from pydantic_mongo import AbstractRepository, ObjectIdField
 
-from ..config import MTL, UTC, BaseModel, ClusterConfig, config
+from ..config import MTL, TZLOCAL, UTC, BaseModel, ClusterConfig, config
 
 
 class SlurmState(str, Enum):
@@ -147,14 +147,15 @@ def jobs_collection():
     return SlurmJobRepository(database=db)
 
 
+# pylint: disable=too-many-branches,dangerous-default-value
 def get_jobs(
     *,
-    cluster: Union[str, ClusterConfig] = None,
-    job_id: Union[int, list[int]] = None,
-    job_state: Union[str, SlurmState] = None,
-    username: str = None,
-    start: Union[str, datetime] = None,
-    end: Union[str, datetime] = None,
+    cluster: str | ClusterConfig | None = None,
+    job_id: int | list[int] | None = None,
+    job_state: str | SlurmState | None = None,
+    user: str | None = None,
+    start: str | datetime | None = None,
+    end: str | datetime | None = None,
     query_options: dict = {},
 ) -> list[SlurmJob]:
     """Get jobs that match the query.
@@ -170,11 +171,18 @@ def get_jobs(
         cluster = config().clusters[cluster]
 
     if isinstance(start, str):
-        start = datetime.combine(datetime.strptime(start, "%Y-%m-%d"), time.min)
+        start = datetime.combine(
+            datetime.strptime(start, "%Y-%m-%d"), time.min
+        ).replace(tzinfo=TZLOCAL)
     if isinstance(end, str):
-        end = datetime.combine(
-            datetime.strptime(end, "%Y-%m-%d"), time.min
-        ) + timedelta(days=1)
+        end = (datetime.combine(datetime.strptime(end, "%Y-%m-%d"), time.min)).replace(
+            tzinfo=TZLOCAL
+        )
+
+    if start is not None:
+        start = start.astimezone(UTC)
+    if end is not None:
+        end = end.astimezone(UTC)
 
     query = {}
     if isinstance(cluster, ClusterConfig):
@@ -184,13 +192,15 @@ def get_jobs(
         query["job_id"] = job_id
     elif isinstance(job_id, list):
         query["job_id"] = {"$in": job_id}
+    elif job_id is not None:
+        raise TypeError(f"job_id must be an int or a list of ints: {job_id}")
 
     if end:
         # Select any job that had a status before the given end time.
         query["submit_time"] = {"$lt": end}
 
-    if username:
-        query["username"] = username
+    if user:
+        query["user"] = user
 
     if job_state:
         query["job_state"] = job_state
@@ -211,6 +221,7 @@ def get_jobs(
     return coll.find_by(query, **query_options)
 
 
+# pylint: disable=dangerous-default-value
 def get_job(*, query_options={}, **kwargs):
     """Get a single job that matches the query, or None if nothing is found.
 

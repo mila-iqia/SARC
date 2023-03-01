@@ -14,6 +14,7 @@ from pydantic import Extra, validator
 
 MTL = zoneinfo.ZoneInfo("America/Montreal")
 UTC = zoneinfo.ZoneInfo("UTC")
+TZLOCAL = zoneinfo.ZoneInfo(str(datetime.now().astimezone().tzinfo))
 
 
 class ConfigurationError(Exception):
