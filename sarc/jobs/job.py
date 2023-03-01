@@ -190,7 +190,7 @@ def get_jobs(
 
     if isinstance(job_id, int):
         query["job_id"] = job_id
-    elif isinstance(job_id, list) and job_id:
+    elif isinstance(job_id, list):
         query["job_id"] = {"$in": job_id}
     elif job_id is not None:
         raise TypeError(f"job_id must be an int or a list of ints: {job_id}")
