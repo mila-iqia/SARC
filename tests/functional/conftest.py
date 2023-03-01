@@ -1,25 +1,15 @@
 from __future__ import annotations
 
 import copy
+from contextlib import contextmanager
 from datetime import datetime, timedelta
 
 import pytest
 
-from sarc.config import MTL, UTC, config
+from sarc.config import MTL, UTC, config, using_config
 
 
-@pytest.fixture
-def init_empty_db():
-    db = config().mongo.instance
-    # Ensure we do not use and thus wipe the production database
-    assert db.name == "sarc-test"
-    db.allocations.drop()
-    db.jobs.drop()
-    yield db
-
-
-@pytest.fixture
-def db_allocations():
+def create_allocations():
     return [
         {
             "start": datetime(year=2017, month=4, day=1),
@@ -255,12 +245,6 @@ def db_allocations():
     ]
 
 
-@pytest.fixture
-def init_db_with_allocations(init_empty_db, db_allocations):
-    db = init_empty_db
-    db.allocations.insert_many(db_allocations)
-
-
 base_job = {
     "CLEAR_SCHEDULING": True,
     "STARTED_ON_BACKFILL": True,
@@ -353,8 +337,7 @@ class JobFactory:
             )
 
 
-@pytest.fixture
-def db_jobs():
+def create_jobs():
     job_factory = JobFactory()
 
     for status in [
@@ -384,6 +367,53 @@ def db_jobs():
 
 
 @pytest.fixture
-def init_db_with_jobs(init_empty_db, db_jobs):
-    db = init_empty_db
-    db.jobs.insert_many(db_jobs)
+def db_allocations():
+    return create_allocations()
+
+
+@pytest.fixture
+def db_jobs():
+    return create_jobs()
+
+
+@contextmanager
+def create_db(db_name):
+    cfg = config()
+    assert cfg.mongo.database != 'sarc-dev'
+    cfg.mongo.database = db_name
+    # Clear cache
+    if hasattr(cfg.mongo, "instance"):
+        del cfg.mongo.instance
+
+    with using_config(cfg) as ctx_cfg:
+        db = ctx_cfg.mongo.instance
+        # Ensure we do not use and thus wipe the production database
+        assert db.name == db_name
+        db.allocations.drop()
+        db.jobs.drop()
+        yield db
+
+
+def fill_db(db):
+    db.allocations.insert_many(create_allocations())
+    db.jobs.insert_many(create_jobs())
+
+
+@pytest.fixture
+def empty_read_write_db():
+    with create_db("sarc-read-write-test") as db:
+        yield db
+
+
+@pytest.fixture
+def read_write_db(empty_read_write_db):
+    fill_db(empty_read_write_db)
+
+    yield empty_read_write_db
+
+
+@pytest.fixture
+def read_only_db():
+    with create_db("sarc-read-only-test") as db:
+        fill_db(db)
+        yield db

@@ -33,7 +33,7 @@ parameters = {
 }
 
 
-@pytest.mark.usefixtures("init_db_with_jobs", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
 @pytest.mark.parametrize(
     "params,jobs_count", parameters.values(), ids=parameters.keys()
 )
@@ -45,7 +45,7 @@ def test_get_jobs(params, jobs_count, file_regression):
     )
 
 
-@pytest.mark.usefixtures("init_db_with_jobs", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
 def test_get_jobs_wrong_job_id():
     with pytest.raises(TypeError, match="job_id must be an int or a list of ints"):
         get_jobs(job_id="wrong id")
