@@ -363,6 +363,9 @@ def create_jobs():
     for user in ["bonhomme", "petitbonhomme", "grosbonhomme", "beaubonhomme"]:
         job_factory.add_job(user=user)
 
+    job_factory.add_job(job_id=1_000_000, nodes=["cn-c017"], job_state="PREEMPTED")
+    job_factory.add_job(job_id=1_000_000, nodes=["cn-b099"], job_state="OUT_OF_MEMORY")
+
     return job_factory.jobs
 
 
