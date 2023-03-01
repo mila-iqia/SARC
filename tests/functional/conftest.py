@@ -379,7 +379,7 @@ def db_jobs():
 @contextmanager
 def create_db(db_name):
     cfg = config()
-    assert cfg.mongo.database != 'sarc-dev'
+    assert cfg.mongo.database != "sarc-dev"
     cfg.mongo.database = db_name
     # Clear cache
     if hasattr(cfg.mongo, "instance"):
