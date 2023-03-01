@@ -5,12 +5,14 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from sarc.config import MTL, config
+from sarc.config import MTL, UTC, config
 
 
 @pytest.fixture
 def init_empty_db():
     db = config().mongo.instance
+    # Ensure we do not use and thus wipe the production database
+    assert db.name == "sarc-test"
     db.allocations.drop()
     db.jobs.drop()
     yield db
@@ -20,9 +22,9 @@ def init_empty_db():
 def db_allocations():
     return [
         {
-            "start": datetime(year=2017, month=4, day=1, tzinfo=MTL),
-            "end": datetime(year=2018, month=4, day=1, tzinfo=MTL),
-            "timestamp": datetime(year=2023, month=2, day=1, tzinfo=MTL),
+            "start": datetime(year=2017, month=4, day=1),
+            "end": datetime(year=2018, month=4, day=1),
+            "timestamp": datetime(year=2023, month=2, day=1),
             "cluster_name": "fromage",
             "resource_name": "fromage-gpu",
             "group_name": "rrg-bonhomme-ad",
@@ -41,9 +43,9 @@ def db_allocations():
             },
         },
         {
-            "start": datetime(year=2017, month=4, day=1, tzinfo=MTL),
-            "end": datetime(year=2018, month=4, day=1, tzinfo=MTL),
-            "timestamp": datetime(year=2023, month=2, day=1, tzinfo=MTL),
+            "start": datetime(year=2017, month=4, day=1),
+            "end": datetime(year=2018, month=4, day=1),
+            "timestamp": datetime(year=2023, month=2, day=1),
             "cluster_name": "fromage",
             "resource_name": "fromage-storage",
             "group_name": "rrg-bonhomme-ad",
@@ -62,9 +64,9 @@ def db_allocations():
             },
         },
         {
-            "start": datetime(year=2018, month=4, day=1, tzinfo=MTL),
-            "end": datetime(year=2019, month=4, day=1, tzinfo=MTL),
-            "timestamp": datetime(year=2023, month=2, day=1, tzinfo=MTL),
+            "start": datetime(year=2018, month=4, day=1),
+            "end": datetime(year=2019, month=4, day=1),
+            "timestamp": datetime(year=2023, month=2, day=1),
             "cluster_name": "fromage",
             "resource_name": "fromage-gpu",
             "group_name": "rrg-bonhomme-ad",
@@ -83,9 +85,9 @@ def db_allocations():
             },
         },
         {
-            "start": datetime(year=2018, month=4, day=1, tzinfo=MTL),
-            "end": datetime(year=2019, month=4, day=1, tzinfo=MTL),
-            "timestamp": datetime(year=2023, month=2, day=1, tzinfo=MTL),
+            "start": datetime(year=2018, month=4, day=1),
+            "end": datetime(year=2019, month=4, day=1),
+            "timestamp": datetime(year=2023, month=2, day=1),
             "cluster_name": "fromage",
             "resource_name": "fromage-storage",
             "group_name": "rrg-bonhomme-ad",
@@ -104,9 +106,9 @@ def db_allocations():
             },
         },
         {
-            "start": datetime(year=2019, month=4, day=1, tzinfo=MTL),
-            "end": datetime(year=2020, month=4, day=1, tzinfo=MTL),
-            "timestamp": datetime(year=2023, month=2, day=1, tzinfo=MTL),
+            "start": datetime(year=2019, month=4, day=1),
+            "end": datetime(year=2020, month=4, day=1),
+            "timestamp": datetime(year=2023, month=2, day=1),
             "cluster_name": "patate",
             "resource_name": "patate-gpu",
             "group_name": "rrg-bonhomme-ad",
@@ -125,9 +127,9 @@ def db_allocations():
             },
         },
         {
-            "start": datetime(year=2019, month=4, day=1, tzinfo=MTL),
-            "end": datetime(year=2020, month=4, day=1, tzinfo=MTL),
-            "timestamp": datetime(year=2023, month=2, day=1, tzinfo=MTL),
+            "start": datetime(year=2019, month=4, day=1),
+            "end": datetime(year=2020, month=4, day=1),
+            "timestamp": datetime(year=2023, month=2, day=1),
             "cluster_name": "patate",
             "resource_name": "patate-storage",
             "group_name": "rrg-bonhomme-ad",
@@ -146,9 +148,9 @@ def db_allocations():
             },
         },
         {
-            "start": datetime(year=2020, month=4, day=1, tzinfo=MTL),
-            "end": datetime(year=2021, month=4, day=1, tzinfo=MTL),
-            "timestamp": datetime(year=2023, month=2, day=1, tzinfo=MTL),
+            "start": datetime(year=2020, month=4, day=1),
+            "end": datetime(year=2021, month=4, day=1),
+            "timestamp": datetime(year=2023, month=2, day=1),
             "cluster_name": "fromage",
             "resource_name": "fromage-gpu",
             "group_name": "rrg-bonhomme-ad",
@@ -167,9 +169,9 @@ def db_allocations():
             },
         },
         {
-            "start": datetime(year=2020, month=4, day=1, tzinfo=MTL),
-            "end": datetime(year=2021, month=4, day=1, tzinfo=MTL),
-            "timestamp": datetime(year=2023, month=2, day=1, tzinfo=MTL),
+            "start": datetime(year=2020, month=4, day=1),
+            "end": datetime(year=2021, month=4, day=1),
+            "timestamp": datetime(year=2023, month=2, day=1),
             "cluster_name": "fromage",
             "resource_name": "fromage-storage",
             "group_name": "rrg-bonhomme-ad",
@@ -188,9 +190,9 @@ def db_allocations():
             },
         },
         {
-            "start": datetime(year=2020, month=4, day=1, tzinfo=MTL),
-            "end": datetime(year=2021, month=4, day=1, tzinfo=MTL),
-            "timestamp": datetime(year=2023, month=2, day=1, tzinfo=MTL),
+            "start": datetime(year=2020, month=4, day=1),
+            "end": datetime(year=2021, month=4, day=1),
+            "timestamp": datetime(year=2023, month=2, day=1),
             "cluster_name": "patate",
             "resource_name": "patate-compute",
             "group_name": "rrg-bonhomme-ad",
@@ -209,9 +211,9 @@ def db_allocations():
             },
         },
         {
-            "start": datetime(year=2020, month=4, day=1, tzinfo=MTL),
-            "end": datetime(year=2021, month=4, day=1, tzinfo=MTL),
-            "timestamp": datetime(year=2023, month=2, day=1, tzinfo=MTL),
+            "start": datetime(year=2020, month=4, day=1),
+            "end": datetime(year=2021, month=4, day=1),
+            "timestamp": datetime(year=2023, month=2, day=1),
             "cluster_name": "patate",
             "resource_name": "patate-gpu",
             "group_name": "rrg-bonhomme-ad",
@@ -230,9 +232,9 @@ def db_allocations():
             },
         },
         {
-            "start": datetime(year=2020, month=4, day=1, tzinfo=MTL),
-            "end": datetime(year=2021, month=4, day=1, tzinfo=MTL),
-            "timestamp": datetime(year=2023, month=2, day=1, tzinfo=MTL),
+            "start": datetime(year=2020, month=4, day=1),
+            "end": datetime(year=2021, month=4, day=1),
+            "timestamp": datetime(year=2023, month=2, day=1),
             "cluster_name": "patate",
             "resource_name": "patate-storage",
             "group_name": "rrg-bonhomme-ad",
@@ -270,7 +272,7 @@ base_job = {
     "cluster_name": "raisin",
     "constraints": "x86_64&(48gb|80gb)",
     "elapsed_time": 60 * 60 * 12,
-    "end_time": datetime(2023, 2, 14, 23, 48, 54, tzinfo=MTL),
+    "end_time": datetime(2023, 2, 14, 23, 48, 54, tzinfo=MTL).astimezone(UTC),
     "exit_code": 0,
     "group": "petitbonhomme",
     "job_id": 2831220,
@@ -282,8 +284,8 @@ base_job = {
     "qos": "normal",
     "requested": {"billing": 1, "cpu": 4, "gres_gpu": 1, "mem": 49152, "node": 1},
     "signal": None,
-    "start_time": datetime(2023, 2, 14, 19, 1, 19, tzinfo=MTL),
-    "submit_time": datetime(2023, 2, 14, 18, 59, 18, tzinfo=MTL),
+    "start_time": datetime(2023, 2, 14, 19, 1, 19, tzinfo=MTL).astimezone(UTC),
+    "submit_time": datetime(2023, 2, 14, 18, 59, 18, tzinfo=MTL).astimezone(UTC),
     "task_id": None,
     "time_limit": 43200,
     "user": "petitbonhomme",
@@ -291,13 +293,12 @@ base_job = {
 }
 
 
-
 class JobFactory:
     def __init__(
         self, first_submit_time: None | datetime = None, first_job_id: int = 1
     ):
         self.jobs = []
-        self._first_submit_time = first_submit_time or datetime(2023, 2, 14, tzinfo=MTL)
+        self._first_submit_time = first_submit_time or datetime(2023, 2, 14, tzinfo=MTL).astimezone(UTC)
         self._first_job_id = first_job_id
 
     @property

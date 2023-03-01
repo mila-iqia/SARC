@@ -5,8 +5,6 @@ import pytest
 from sarc.config import MTL, config
 from sarc.jobs import get_jobs
 
-print(config().clusters["fromage"])
-
 parameters = {
     "no_cluster": ({}, 20),
     "cluster_str": ({"cluster": "patate"}, 1),
@@ -35,7 +33,7 @@ parameters = {
 }
 
 
-@pytest.mark.usefixtures("init_db_with_jobs")
+@pytest.mark.usefixtures("init_db_with_jobs", "tzlocal_is_mtl")
 @pytest.mark.parametrize(
     "params,jobs_count", parameters.values(), ids=parameters.keys()
 )

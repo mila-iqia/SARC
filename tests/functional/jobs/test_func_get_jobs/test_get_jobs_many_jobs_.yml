@@ -4,8 +4,8 @@
   ["cn-c021"], "work_dir": "/network/scratch/p/petitbonhomme/experience-demente",
   "constraints": "x86_64&(48gb|80gb)", "priority": 7152, "qos": "normal", "CLEAR_SCHEDULING":
   true, "STARTED_ON_SUBMIT": false, "STARTED_ON_SCHEDULE": false, "STARTED_ON_BACKFILL":
-  true, "time_limit": 43200, "submit_time": "2023-02-14T07:00:00-05:00", "start_time":
-  "2023-02-14T07:01:00-05:00", "end_time": null, "elapsed_time": 0, "requested": {"cpu":
+  true, "time_limit": 43200, "submit_time": "2023-02-15T18:00:00-05:00", "start_time":
+  "2023-02-15T18:01:00-05:00", "end_time": null, "elapsed_time": 0, "requested": {"cpu":
   4, "mem": 49152, "node": 1, "billing": 1, "gres_gpu": 1, "gpu_type": null}, "allocated":
   {"cpu": 4, "mem": 49152, "node": 1, "billing": 1, "gres_gpu": 1, "gpu_type": null}}'
 - '{"cluster_name": "raisin", "account": "mila", "job_id": 9, "array_job_id": 9, "task_id":
@@ -14,8 +14,8 @@
   "work_dir": "/network/scratch/p/petitbonhomme/experience-demente", "constraints":
   "x86_64&(48gb|80gb)", "priority": 7152, "qos": "normal", "CLEAR_SCHEDULING": true,
   "STARTED_ON_SUBMIT": false, "STARTED_ON_SCHEDULE": false, "STARTED_ON_BACKFILL":
-  true, "time_limit": 43200, "submit_time": "2023-02-14T08:00:00-05:00", "start_time":
-  "2023-02-14T08:01:00-05:00", "end_time": "2023-02-14T12:19:00-05:00", "elapsed_time":
-  15480, "requested": {"cpu": 4, "mem": 49152, "node": 1, "billing": 1, "gres_gpu":
+  true, "time_limit": 43200, "submit_time": "2023-02-16T00:00:00-05:00", "start_time":
+  "2023-02-16T00:01:00-05:00", "end_time": "2023-02-16T12:01:00-05:00", "elapsed_time":
+  43200, "requested": {"cpu": 4, "mem": 49152, "node": 1, "billing": 1, "gres_gpu":
   1, "gpu_type": null}, "allocated": {"cpu": 4, "mem": 49152, "node": 1, "billing":
   1, "gres_gpu": 1, "gpu_type": null}}'

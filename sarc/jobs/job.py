@@ -7,7 +7,7 @@ from typing import Optional, Union
 from pydantic import validator
 from pydantic_mongo import AbstractRepository, ObjectIdField
 
-from ..config import MTL, UTC, BaseModel, ClusterConfig, config
+from ..config import MTL, TZLOCAL, UTC, BaseModel, ClusterConfig, config
 
 
 class SlurmState(str, Enum):
@@ -170,11 +170,18 @@ def get_jobs(
         cluster = config().clusters[cluster]
 
     if isinstance(start, str):
-        start = datetime.combine(datetime.strptime(start, "%Y-%m-%d"), time.min)
+        start = datetime.combine(
+            datetime.strptime(start, "%Y-%m-%d"), time.min
+        ).replace(tzinfo=TZLOCAL)
     if isinstance(end, str):
-        end = datetime.combine(
-            datetime.strptime(end, "%Y-%m-%d"), time.min
-        ) + timedelta(days=1)
+        end = (datetime.combine(datetime.strptime(end, "%Y-%m-%d"), time.min)).replace(
+            tzinfo=TZLOCAL
+        )
+
+    if start is not None:
+        start = start.astimezone(UTC)
+    if end is not None:
+        end = end.astimezone(UTC)
 
     query = {}
     if isinstance(cluster, ClusterConfig):
@@ -182,7 +189,7 @@ def get_jobs(
 
     if isinstance(job_id, int):
         query["job_id"] = job_id
-    elif isinstance(job_id, list):
+    elif isinstance(job_id, list) and job_id:
         query["job_id"] = {"$in": job_id}
     # TODO: It's weird that if we pass job_id that is not a list or int, we don't filter on job_id.
 
