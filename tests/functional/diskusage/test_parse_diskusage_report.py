@@ -4,19 +4,67 @@ from sarc.storage.drac import (
 )
 
 
-# cedar, beluga and graham style
-def test_header_00():
-    L_lines = """
+test_output_drac_00 = """
                                 Description                Space           # of files
                 /project (group kjsfsd78)              0/2048k               0/1025
                 /project (group def-bengioy)           971G/1000G           791k/1005k
                 /project (group rpp-bengioy)            31T/2048k           3626k/1025
             /project (group rrg-bengioy-ad)              54T/75T          1837k/5005k
-        """.split(
-        "\n"
-    )
+    
+    Breakdown for project def-bengioy (Last update: 2022-10-25 14:01:28)
+            User      File count                 Size             Location
+    -------------------------------------------------------------------------
+         revali               2             0.00 GiB              On disk
+         urbosa               2             0.00 GiB              On disk
+          daruk              50            13.49 GiB              On disk
+          mipha               2             0.00 GiB              On disk
+          Total          696928           877.51 GiB              On disk    
 
-    L_results = parse_header_summary(L_lines)
+Breakdown for project rpp-bengioy (Last update: 2022-10-25 13:09:53)
+           User      File count                 Size             Location
+-------------------------------------------------------------------------
+           riju           47085             4.20 GiB              On disk
+    grosaillieh               2             0.00 GiB              On disk
+      bourgette               2             0.00 GiB              On disk
+          kohga               2             0.00 GiB              On disk
+          rhoam               2             0.00 GiB              On disk    
+          Total         3626455         30009.08 GiB              On disk
+
+""".split(
+    "\n"
+)
+
+test_output_drac_01 = """
+                             Description                Space           # of files
+       /project (project rrg-bengioy-ad)              39T/75T          1316k/5000k
+          /project (project def-bengioy)           956G/1000G            226k/500k
+    
+    Breakdown for project def-bengioy (Last update: 2022-10-25 14:01:28)
+            User      File count                 Size             Location
+    -------------------------------------------------------------------------
+         revali               2             0.00 GiB              On disk
+         urbosa               2             0.00 GiB              On disk
+          daruk              50            13.49 GiB              On disk
+          mipha               2             0.00 GiB              On disk
+          Total          696928           877.51 GiB              On disk    
+
+Breakdown for project rpp-bengioy (Last update: 2022-10-25 13:09:53)
+           User      File count                 Size             Location
+-------------------------------------------------------------------------
+           riju           47085             4.20 GiB              On disk
+    grosaillieh               2             0.00 GiB              On disk
+      bourgette               2             0.00 GiB              On disk
+          kohga               2             0.00 GiB              On disk
+          rhoam               2             0.00 GiB              On disk    
+          Total         3626455         30009.08 GiB              On disk
+
+""".split(
+    "\n"
+)
+
+# cedar, beluga and graham style
+def test_header_00():
+    L_results = parse_header_summary(test_output_drac_00)
     L_results_expected = [
         {"group": "kjsfsd78", "space": "0/2048k", "nbr_files": "0/1025"},
         {"group": "def-bengioy", "space": "971G/1000G", "nbr_files": "791k/1005k"},
@@ -31,15 +79,7 @@ def test_header_00():
         
 # narval style
 def test_header_01():
-    L_lines = """
-                             Description                Space           # of files
-       /project (project rrg-bengioy-ad)              39T/75T          1316k/5000k
-          /project (project def-bengioy)           956G/1000G            226k/500k
-        """.split(
-        "\n"
-    )
-
-    L_results = parse_header_summary(L_lines)
+    L_results = parse_header_summary(test_output_drac_01)
     L_results_expected = [
         {"group": "rrg-bengioy-ad", "space": "39T/75T", "nbr_files": "1316k/5000k"},
         {"group": "def-bengioy", "space": "956G/1000G", "nbr_files": "226k/500k"},
@@ -51,48 +91,26 @@ def test_header_01():
         assert a == b
 
 
+
+
 def test_parse_body_00():
-    L_lines = """
-    
-    Breakdown for project def-bengioy (Last update: 2022-10-25 14:01:28)
-            User      File count                 Size             Location
-    -------------------------------------------------------------------------
-       k0000000               2             0.00 GiB              On disk
-       k1111111               2             0.00 GiB              On disk
-         k22222              50            13.49 GiB              On disk
-         k33333               2             0.00 GiB              On disk
-          Total          696928           877.51 GiB              On disk    
 
-Breakdown for project rpp-bengioy (Last update: 2022-10-25 13:09:53)
-           User      File count                 Size             Location
--------------------------------------------------------------------------
-         aa0000           47085             4.20 GiB              On disk
-       ab111111               2             0.00 GiB              On disk
-         ab2222               2             0.00 GiB              On disk
-       a4444444               2             0.00 GiB              On disk
-        a555555               2             0.00 GiB              On disk    
-          Total         3626455         30009.08 GiB              On disk
-
-    """.split(
-        "\n"
-    )
-
-    DLD_results = parse_body(L_lines)
+    DLD_results = parse_body(test_output_drac_00)
     assert set(list(DLD_results.keys())) == set(["def-bengioy", "rpp-bengioy"])
 
     assert DLD_results["def-bengioy"] == [
-        {"username": "k0000000", "nbr_files": 2, "size": (0.0, "GiB")},
-        {"username": "k1111111", "nbr_files": 2, "size": (0.0, "GiB")},
-        {"username": "k22222", "nbr_files": 50, "size": (13.49, "GiB")},
-        {"username": "k33333", "nbr_files": 2, "size": (0.0, "GiB")},
+        {"username": "revali", "nbr_files": 2, "size": (0.0, "GiB")},
+        {"username": "urbosa", "nbr_files": 2, "size": (0.0, "GiB")},
+        {"username": "daruk", "nbr_files": 50, "size": (13.49, "GiB")},
+        {"username": "mipha", "nbr_files": 2, "size": (0.0, "GiB")},
         {"username": "Total", "nbr_files": 696928, "size": (877.51, "GiB")},
     ]
 
     assert DLD_results["rpp-bengioy"] == [
-        {"username": "aa0000", "nbr_files": 47085, "size": (4.20, "GiB")},
-        {"username": "ab111111", "nbr_files": 2, "size": (0.0, "GiB")},
-        {"username": "ab2222", "nbr_files": 2, "size": (0.0, "GiB")},
-        {"username": "a4444444", "nbr_files": 2, "size": (0.0, "GiB")},
-        {"username": "a555555", "nbr_files": 2, "size": (0.0, "GiB")},
+        {"username": "riju", "nbr_files": 47085, "size": (4.20, "GiB")},
+        {"username": "grosaillieh", "nbr_files": 2, "size": (0.0, "GiB")},
+        {"username": "bourgette", "nbr_files": 2, "size": (0.0, "GiB")},
+        {"username": "kohga", "nbr_files": 2, "size": (0.0, "GiB")},
+        {"username": "rhoam", "nbr_files": 2, "size": (0.0, "GiB")},
         {"username": "Total", "nbr_files": 3626455, "size": (30009.08, "GiB")},
     ]
