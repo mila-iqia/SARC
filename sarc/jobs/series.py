@@ -39,7 +39,8 @@ def get_job_time_series(
     if metric not in slurm_job_metric_names:
         raise ValueError(f"Unknown metric name: {metric}")
 
-    selector = f'{metric}{{slurmjobid=~"{job.job_id}"}}'
+    nodes = "|".join(job.nodes)
+    selector = f'{metric}{{slurmjobid=~"{job.job_id}",instance=~"{nodes}"}}'
     now = datetime.now().astimezone(MTL)
 
     ago = now - job.start_time
