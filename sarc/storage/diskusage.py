@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from pydantic_mongo import AbstractRepository, ObjectIdField
 
 from sarc.config import BaseModel, config
