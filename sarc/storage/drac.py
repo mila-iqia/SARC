@@ -197,34 +197,24 @@ def convert_parsed_report_to_diskusage(cluster_name,parsed_report):
             
 
 
-def diskusage_drac_mongodb_import(cluster: ClusterConfig):
-    """
-    All-in-one function to :
-    - fetch the disk usage statistics on the specified cluster
-    - parse it
-    - import it in MongoDB
-    """
-    print("diskusage_drac_mongodb_import not yet implemented")
+# def diskusage_drac_mongodb_import(cluster: ClusterConfig):
+#     """
+#     All-in-one function to :
+#     - fetch the disk usage statistics on the specified cluster
+#     - parse it
+#     - import it in MongoDB
+#     """
+#     print("diskusage_drac_mongodb_import not yet implemented")
 
-    print(f"Fetching disk usage data from {cluster.host}...")
-    if report := fetch_diskusage_report(cluster):
-        header,body = parse_diskusage_report(report)
-        print(f"...fetched {len(body)} groups;")
-        for group in body:
-            print (f"Group '{group}' : {len(body[group])} entries.")
+#     print(f"Fetching disk usage data from {cluster.host}...")
+#     if report := fetch_diskusage_report(cluster):
+#         header,body = parse_diskusage_report(report)
+#         print(f"...fetched {len(body)} groups;")
+#         for group in body:
+#             print (f"Group '{group}' : {len(body[group])} entries.")
 
-        # connect to mongoDB and inject informations
-        # collection =     
-    else:
-        print("fetching failed")
-
-
-    # collection = jobs_collection()
-    # scraper = SAcctScraper(cluster, day)
-    # print("Getting the sacct data...")
-    # scraper.get_raw()
-    # print(f"Saving into mongodb collection '{collection.Meta.collection_name}'...")
-    # for entry in tqdm(scraper):
-    #     collection.save_job(entry)
-    # print(f"Saved {len(scraper)} entries.")
+#         # connect to mongoDB and inject informations
+#         # collection =     
+#     else:
+#         print("fetching failed")
 
