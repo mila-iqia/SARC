@@ -1,16 +1,17 @@
-
-
 from sarc.config import ClusterConfig, BaseModel, config
 from pydantic_mongo import AbstractRepository, ObjectIdField
+
 
 class DiskUsageSize(BaseModel):
     value: float
     unit: str
 
+
 class DiskUsageUser(BaseModel):
     username: str
     nbr_files: int
-    size:DiskUsageSize
+    size: DiskUsageSize
+
 
 class DiskUsageGroup(BaseModel):
     group_name: str
@@ -21,6 +22,7 @@ class DiskUsage(BaseModel):
     """
     Disk usage on a given cluster
     """
+
     # # Database ID
     id: ObjectIdField = None
 
@@ -38,9 +40,11 @@ class ClusterDiskUsageRepository(AbstractRepository[DiskUsage]):
         query = {key: document[key] for key in query_attrs}
         return self.get_collection().update_one(query, {"$set": document}, upsert=True)
 
+
 def get_diskusage_collection():
     db = config().mongo.instance
     return ClusterDiskUsageRepository(database=db)
+
 
 def get_diskusages(cluster_name: str | list[str]) -> list[DiskUsage]:
     collection = get_diskusage_collection()

@@ -6,10 +6,11 @@ from sarc.storage.drac import (
 
 FOLDER = os.path.dirname(os.path.abspath(__file__))
 
+
 # cedar, beluga and graham style
 def test_header_00():
-    f = open(os.path.join(FOLDER, "drac_reports/report_gerudo.txt"),"r")
-    report=f.readlines()
+    f = open(os.path.join(FOLDER, "drac_reports/report_gerudo.txt"), "r")
+    report = f.readlines()
     f.close()
     L_results = parse_header_summary(report)
     L_results_expected = [
@@ -21,11 +22,12 @@ def test_header_00():
 
     for a, b in zip(L_results, L_results_expected):
         assert a == b
-        
+
+
 # narval style
 def test_header_01():
-    f = open(os.path.join(FOLDER, "drac_reports/report_hyrule.txt"),"r")
-    report=f.readlines()
+    f = open(os.path.join(FOLDER, "drac_reports/report_hyrule.txt"), "r")
+    report = f.readlines()
     f.close()
     L_results = parse_header_summary(report)
     L_results_expected = [
@@ -39,11 +41,9 @@ def test_header_01():
         assert a == b
 
 
-
-
 def test_parse_body():
-    f = open(os.path.join(FOLDER, "drac_reports/report_gerudo.txt"),"r")
-    report=f.readlines()
+    f = open(os.path.join(FOLDER, "drac_reports/report_gerudo.txt"), "r")
+    report = f.readlines()
     f.close()
 
     DLD_results = parse_body(report)
