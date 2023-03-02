@@ -9,7 +9,6 @@ from sarc.jobs.job import get_job
 parameters = {
     "no_cluster": {},
     "cluster_str": {"cluster": "patate"},
-    "cluster_cfg": {"cluster": config().clusters["fromage"]},
     "job_state": {"job_state": "COMPLETED"},
     "one_job": {"job_id": 10},
     "one_job_wrong_cluster": {"job_id": 10, "cluster": "patate"},
@@ -31,6 +30,15 @@ parameters = {
 @pytest.mark.parametrize("params", parameters.values(), ids=parameters.keys())
 def test_get_jobs(params, file_regression):
     jobs = list(get_jobs(**params))
+    file_regression.check(
+        f"Found {len(jobs)} job(s):\n"
+        + "\n".join([job.json(exclude={"id": True}, indent=4) for job in jobs])
+    )
+
+
+@pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
+def test_get_jobs_cluster_cfg(file_regression):
+    jobs = list(get_jobs(cluster=config().clusters["fromage"]))
     file_regression.check(
         f"Found {len(jobs)} job(s):\n"
         + "\n".join([job.json(exclude={"id": True}, indent=4) for job in jobs])
