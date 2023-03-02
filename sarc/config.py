@@ -42,6 +42,8 @@ class BaseModel(_BaseModel):
         keep_untouched = (cached_property,)
         # Serializer for mongo's object ids
         json_encoders = {ObjectId: str}
+        # Allow types like ZoneInfo
+        arbitrary_types_allowed = True
 
     def dict(self, *args, **kwargs) -> dict[str, Any]:
         d = super().dict(*args, **kwargs)
@@ -55,10 +57,14 @@ class BaseModel(_BaseModel):
                 )
         return d
 
+    def replace(self, **replacements):
+        new_arguments = {**self.dict(), **replacements}
+        return type(self)(**new_arguments)
+
 
 class ClusterConfig(BaseModel):
     host: str
-    timezone: object
+    timezone: Union[str, zoneinfo.ZoneInfo]  # | does not work with Pydantic's eval
     prometheus_url: str = None
     prometheus_headers_file: str = None
     name: str = None
@@ -71,7 +77,10 @@ class ClusterConfig(BaseModel):
 
     @validator("timezone")
     def _timezone(cls, value):
-        return zoneinfo.ZoneInfo(value)
+        if isinstance(value, str):
+            return zoneinfo.ZoneInfo(value)
+        else:
+            return value
 
     @cached_property
     def ssh(self):

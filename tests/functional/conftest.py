@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import copy
-from contextlib import contextmanager
 from datetime import datetime, timedelta
 
 import pytest
 
-from sarc.config import MTL, UTC, config, using_config
+from sarc.config import MTL, UTC, using_config
 
 
 def create_allocations():
@@ -363,6 +362,9 @@ def create_jobs():
     for user in ["bonhomme", "petitbonhomme", "grosbonhomme", "beaubonhomme"]:
         job_factory.add_job(user=user)
 
+    job_factory.add_job(job_id=1_000_000, nodes=["cn-c017"], job_state="PREEMPTED")
+    job_factory.add_job(job_id=1_000_000, nodes=["cn-b099"], job_state="OUT_OF_MEMORY")
+
     return job_factory.jobs
 
 
@@ -376,22 +378,15 @@ def db_jobs():
     return create_jobs()
 
 
-@contextmanager
-def create_db(db_name):
-    cfg = config()
-    assert cfg.mongo.database != "sarc-dev"
-    cfg.mongo.database = db_name
-    # Clear cache
-    if hasattr(cfg.mongo, "instance"):
-        del cfg.mongo.instance
-
-    with using_config(cfg) as ctx_cfg:
-        db = ctx_cfg.mongo.instance
-        # Ensure we do not use and thus wipe the production database
-        assert db.name == db_name
-        db.allocations.drop()
-        db.jobs.drop()
-        yield db
+def custom_db_config(cfg, db_name):
+    assert "test" in db_name
+    new_cfg = cfg.replace(mongo=cfg.mongo.replace(database=db_name))
+    db = new_cfg.mongo.instance
+    # Ensure we do not use and thus wipe the production database
+    assert db.name == db_name
+    db.allocations.drop()
+    db.jobs.drop()
+    return new_cfg
 
 
 def fill_db(db):
@@ -399,21 +394,54 @@ def fill_db(db):
     db.jobs.insert_many(create_jobs())
 
 
-@pytest.fixture
-def empty_read_write_db():
-    with create_db("sarc-read-write-test") as db:
-        yield db
+def create_db_configuration_fixture(db_name, empty=False, scope="function"):
+    @pytest.fixture(scope=scope)
+    def fixture(standard_config_object):
+        cfg = custom_db_config(standard_config_object, db_name)
+        if not empty:
+            db = cfg.mongo.instance
+            fill_db(db)
+        yield cfg
+
+    return fixture
+
+
+empty_read_write_db_config_object = create_db_configuration_fixture(
+    db_name="sarc-read-write-test",
+    empty=True,
+    scope="function",
+)
+
+
+read_write_db_config_object = create_db_configuration_fixture(
+    db_name="sarc-read-write-test",
+    scope="function",
+)
+
+
+read_only_db_config_object = create_db_configuration_fixture(
+    db_name="sarc-read-only-test",
+    scope="session",
+)
 
 
 @pytest.fixture
-def read_write_db(empty_read_write_db):
-    fill_db(empty_read_write_db)
-
-    yield empty_read_write_db
+def empty_read_write_db(empty_read_write_db_config_object):
+    with using_config(empty_read_write_db_config_object) as cfg:
+        yield cfg.mongo.instance
 
 
 @pytest.fixture
-def read_only_db():
-    with create_db("sarc-read-only-test") as db:
-        fill_db(db)
-        yield db
+def read_write_db(read_write_db_config_object):
+    with using_config(read_write_db_config_object) as cfg:
+        yield cfg.mongo.instance
+
+
+@pytest.fixture
+def read_only_db(read_only_db_config_object):
+    # Note: read_only_db_config_object is a session fixture, but the context manager
+    # using_config has to be applied on a per-function basis, otherwise it would also
+    # remain activated for functions that do not use the fixture.
+
+    with using_config(read_only_db_config_object) as cfg:
+        yield cfg.mongo.instance

@@ -134,8 +134,14 @@ class SlurmJobRepository(AbstractRepository[SlurmJob]):
         the id is provided.
         """
         document = self.to_document(model)
+        # Resubmitted jobs have the same job ID can be distinguished by their submit time,
+        # as per sacct's documentation.
         return self.get_collection().update_one(
-            {"job_id": model.job_id, "cluster_name": model.cluster_name},
+            {
+                "job_id": model.job_id,
+                "cluster_name": model.cluster_name,
+                "submit_time": model.submit_time,
+            },
             {"$set": document},
             upsert=True,
         )
@@ -227,7 +233,12 @@ def get_job(*, query_options={}, **kwargs):
 
     Same signature as `get_jobs`.
     """
-    jobs = get_jobs(**kwargs, query_options={**query_options, "limit": 1})
+    # Sort by submit_time descending, which ensures we get the most recent version
+    # of the job.
+    jobs = get_jobs(
+        **kwargs,
+        query_options={**query_options, "sort": [("submit_time", -1)], "limit": 1},
+    )
     for job in jobs:
         return job
     return None
