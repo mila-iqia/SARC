@@ -9,6 +9,7 @@ from sarc.config import config
 def init_empty_db():
     db = config().mongo.instance
     db.allocations.drop()
+    db.diskusage.drop()
     yield db
 
 

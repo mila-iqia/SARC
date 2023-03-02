@@ -42,3 +42,13 @@ def get_diskusage_collection():
     db = config().mongo.instance
     return ClusterDiskUsageRepository(database=db)
 
+def get_diskusages(cluster_name: str | list[str]) -> list[DiskUsage]:
+    collection = get_diskusage_collection()
+
+    query = {}
+    if isinstance(cluster_name, str):
+        query["cluster_name"] = cluster_name
+    else:
+        query["cluster_name"] = {"$in": cluster_name}
+
+    return list(collection.find_by(query))

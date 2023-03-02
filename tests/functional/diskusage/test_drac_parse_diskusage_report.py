@@ -8,7 +8,7 @@ FOLDER = os.path.dirname(os.path.abspath(__file__))
 
 # cedar, beluga and graham style
 def test_header_00():
-    f = open(os.path.join(FOLDER, "drac_reports/report_cedar.txt"),"r")
+    f = open(os.path.join(FOLDER, "drac_reports/report_gerudo.txt"),"r")
     report=f.readlines()
     f.close()
     L_results = parse_header_summary(report)
@@ -24,7 +24,7 @@ def test_header_00():
         
 # narval style
 def test_header_01():
-    f = open(os.path.join(FOLDER, "drac_reports/report_narval.txt"),"r")
+    f = open(os.path.join(FOLDER, "drac_reports/report_hyrule.txt"),"r")
     report=f.readlines()
     f.close()
     L_results = parse_header_summary(report)
@@ -42,7 +42,7 @@ def test_header_01():
 
 
 def test_parse_body():
-    f = open(os.path.join(FOLDER, "drac_reports/report_cedar.txt"),"r")
+    f = open(os.path.join(FOLDER, "drac_reports/report_gerudo.txt"),"r")
     report=f.readlines()
     f.close()
 
