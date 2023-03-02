@@ -70,4 +70,5 @@ def test_get_job_resubmitted():
     jb = get_job(job_id=1_000_000)
 
     assert jb is not None
+    assert jb1.submit_time != jb2.submit_time
     assert jb.submit_time == max(jb1.submit_time, jb2.submit_time)
