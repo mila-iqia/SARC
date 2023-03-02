@@ -63,7 +63,6 @@ def get_job_time_series(
             range_seconds = interval
         elif aggregation == "total":
             offset += duration_seconds
-            duration_seconds = duration_seconds * 3
             range_seconds = duration_seconds
 
         query = f"{query}[{range_seconds}s]"
