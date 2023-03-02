@@ -2,16 +2,15 @@
 Fetching and parsing code specific to DRAC clusters
 """
 
-import logging
+import re
+
+from sarc.config import ClusterConfig
 from sarc.storage.diskusage import (
     DiskUsage,
     DiskUsageGroup,
     DiskUsageSize,
     DiskUsageUser,
 )
-
-from sarc.config import ClusterConfig
-import re
 
 
 def _parse_fraction(s):
@@ -46,7 +45,7 @@ def _parse_header_summary(L_lines: list[str]):
         if re.match(r"\s+Description\s+Space.*", line):
             inside_segment = True
             continue
-        elif m := re.match(
+        if m := re.match(
             r"\s*/project \(project\s(.*?)\)\s+(.+?)\s+(.+)", line
         ) or re.match(r".*/project \(group\s(.*?)\)\s+(.+?)\s+(.+)", line):
             if inside_segment:
@@ -92,24 +91,24 @@ def _parse_body(L_lines: list[str], DLD_results=None):
             r"^\s*$", line
         ):  # skip empty line when outside of segment
             continue
-        elif m := re.match(r"^\s*Breakdown\sfor\sproject\s(.+?)\s.*$", line):
+        if m := re.match(r"^\s*Breakdown\sfor\sproject\s(.+?)\s.*$", line):
             inside_segment = True
             project = m.group(1)
             continue
-        elif re.match(r"^\s*\-+\s*$", line):  # line with only -----
+        if re.match(r"^\s*\-+\s*$", line):  # line with only -----
             continue
-        elif re.match(
+        if re.match(
             r"^\s*User\s*File\scount\s*Size\s*Location\s*$", line
         ):  # line with column names
             continue
-        elif inside_segment and re.match(r"^\s*$", line):  # empty line marks the end
+        if inside_segment and re.match(r"^\s*$", line):  # empty line marks the end
             # accumulate into the dict to return before recursive call
             assert project
             assert LD_results
             DLD_results[project] = LD_results
             # print(f"Going into recursive call from n {n}.")
             return _parse_body(L_lines[n:], DLD_results)
-        elif inside_segment:
+        if inside_segment:
             # omitting the "On Disk" part of the line
             m = re.match(r"^\s*([\w\.]+)\s+(\d+)\s+([\d\.]+)\s(\w+)\s*", line)
             assert m, f"If this line doesn't match, we've got a problem.\n{line}"

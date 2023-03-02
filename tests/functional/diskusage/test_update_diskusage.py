@@ -1,9 +1,9 @@
 import os
 
 import pytest
-from sarc.storage.diskusage import get_diskusages, get_diskusage_collection
 
-from sarc.storage.drac import parse_diskusage_report, convert_parsed_report_to_diskusage
+from sarc.storage.diskusage import get_diskusage_collection, get_diskusages
+from sarc.storage.drac import convert_parsed_report_to_diskusage, parse_diskusage_report
 
 FOLDER = os.path.dirname(os.path.abspath(__file__))
 

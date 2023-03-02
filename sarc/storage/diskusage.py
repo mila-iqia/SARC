@@ -1,5 +1,6 @@
-from sarc.config import ClusterConfig, BaseModel, config
 from pydantic_mongo import AbstractRepository, ObjectIdField
+
+from sarc.config import BaseModel, config
 
 
 class DiskUsageSize(BaseModel):
@@ -46,6 +47,7 @@ def get_diskusage_collection():
     return ClusterDiskUsageRepository(database=db)
 
 
+# pylint: disable=R0801
 def get_diskusages(cluster_name: str | list[str]) -> list[DiskUsage]:
     collection = get_diskusage_collection()
 

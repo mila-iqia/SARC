@@ -1,8 +1,7 @@
 import os
+
 from sarc.storage.drac import _parse_body as parse_body
-from sarc.storage.drac import (
-    _parse_header_summary as parse_header_summary,
-)
+from sarc.storage.drac import _parse_header_summary as parse_header_summary
 
 FOLDER = os.path.dirname(os.path.abspath(__file__))
 

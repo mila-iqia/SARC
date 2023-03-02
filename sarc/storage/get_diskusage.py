@@ -30,11 +30,14 @@ debugging, and also to generate properly anonymized equivalents
 meant for testing.
 """
 
+# pylint: skip-file
+
 # from pymongo import MongoClient, UpdateOne
 import argparse
 
 # from sarc.common.config import get_config
 import json
+
 from ..config import ClusterConfig
 
 parser = argparse.ArgumentParser(
