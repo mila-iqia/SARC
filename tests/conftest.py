@@ -3,9 +3,16 @@ from pathlib import Path
 
 import pytest
 
-pytest_plugins = "fabric.testing.fixtures"
+from sarc.config import (
+    ClusterConfig,
+    Config,
+    MongoConfig,
+    config,
+    parse_config,
+    using_config,
+)
 
-from sarc.config import ClusterConfig, Config, MongoConfig, parse_config, using_config
+pytest_plugins = "fabric.testing.fixtures"
 
 
 @pytest.fixture(scope="session")
@@ -30,15 +37,26 @@ def test_config(
     tmp_path,
     request,
 ):
+    current = config()
+
     vals = getattr(request, "param", dict())
 
-    mongo_url = vals.get("mongo_url", "localhost:27017")
-    mongo_database = vals.get("mongo_database", "sarc-test")
+    mongo_url = vals.get("mongo_url", current.mongo.url)
+    mongo_database = vals.get("mongo_database", current.mongo.database)
     cluster_name = vals.get("cluster_name", "test")
-    cluster_host = vals.get("cluster_host", "test")
-    cluster_timezone = vals.get("cluster_timezone", "America/Montreal")
-    cluster_sacct_bin = vals.get("cluster_sacct_bin", "sacct")
-    cluster_accounts = vals.get("cluster_accounts", None)
+
+    def get_cluster_conf(attr, default):
+        cluster = getattr(current.clusters, cluster_name, None)
+        return getattr(cluster, attr, default)
+
+    cluster_host = vals.get("cluster_host", get_cluster_conf("host", "test"))
+    cluster_timezone = vals.get(
+        "cluster_timezone", get_cluster_conf("timezone", "America/Montreal")
+    )
+    cluster_sacct_bin = vals.get(
+        "cluster_sacct_bin", get_cluster_conf("sacct_bin", "sacct")
+    )
+    cluster_accounts = vals.get("cluster_accounts", get_cluster_conf("accounts", None))
 
     mongo_conf = MongoConfig(url=mongo_url, database=mongo_database)
     cluster_conf = ClusterConfig(
