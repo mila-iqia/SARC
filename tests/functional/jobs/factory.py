@@ -99,8 +99,9 @@ class JobFactory:
             )
 
 
-def create_jobs():
-    job_factory = JobFactory()
+def create_jobs(job_factory: JobFactory | None = None):
+    if job_factory is None:
+        job_factory = JobFactory()
 
     for status in [
         "CANCELLED",
@@ -116,7 +117,7 @@ def create_jobs():
 
     job_factory.add_job_array(task_ids=[1, 10, 13])
 
-    for nodes in [["bart"], ["cn-c021", "cn-c022"]]:
+    for nodes in [["bart"], sorted(["cn-d001", "cn-c021", "cn-c022"])]:
         job_factory.add_job(nodes=nodes)
 
     for cluster_name in ["raisin", "fromage", "patate"]:
@@ -127,5 +128,23 @@ def create_jobs():
 
     job_factory.add_job(job_id=1_000_000, nodes=["cn-c017"], job_state="PREEMPTED")
     job_factory.add_job(job_id=1_000_000, nodes=["cn-b099"], job_state="OUT_OF_MEMORY")
+
+    job_factory.add_job(
+        allocated={
+            "billing": 2,
+            "cpu": 12,
+            "gres_gpu": 1,
+            "gpu_type": "A100",
+            "mem": 39152,
+            "node": 1,
+        },
+        requested={
+            "billing": 2,
+            "cpu": 12,
+            "gres_gpu": 1,
+            "mem": 59152,
+            "node": 1,
+        },
+    )
 
     return job_factory.jobs
