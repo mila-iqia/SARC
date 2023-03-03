@@ -1,16 +1,19 @@
 import json
+import logging
 import sys
 import traceback
 import warnings
 from datetime import datetime, time, timedelta
-from pprint import pprint
-from typing import Iterator
+from pprint import pformat
+from typing import Iterator, Optional
 
 from hostlist import expand_hostlist
 from tqdm import tqdm
 
 from ..config import UTC, ClusterConfig, config
 from .job import SlurmJob, jobs_collection
+
+logger = logging.getLogger(__name__)
 
 
 def parse_in_timezone(cluster, timestamp):
@@ -77,7 +80,7 @@ class SAcctScraper:
             try:
                 return json.load(open(self.cachefile, "r", encoding="utf8"))
             except json.JSONDecodeError:
-                warnings.warn("Need to re-fetch because cache has malformed JSON.")
+                logger.warning("Need to re-fetch because cache has malformed JSON.")
 
         self.results = self.fetch_raw()
         if self.cachefile:
@@ -102,10 +105,10 @@ class SAcctScraper:
                 traceback.print_exc()
                 print("There was a problem with this entry:", file=sys.stderr)
                 print("====================================", file=sys.stderr)
-                pprint(entry)
+                print(pformat(entry), file=sys.stderr)
                 print("====================================", file=sys.stderr)
 
-    def convert(self, entry: dict) -> SlurmJob:
+    def convert(self, entry: dict) -> Optional[SlurmJob]:
         """Convert a single job entry from sacct to a SlurmJob."""
         resources = {"requested": {}, "allocated": {}}
         tracked_resources = ["cpu", "mem", "gres", "node", "billing"]
@@ -113,6 +116,7 @@ class SAcctScraper:
         if entry["group"] is None:
             # These seem to correspond to very old jobs that shouldn't still exist,
             # likely a configuration blunder.
+            logger.debug('Skipping job with group "None": %s', entry["job_id"])
             return None
 
         for grp, vals in resources.items():
@@ -145,7 +149,16 @@ class SAcctScraper:
             # inaccurate value in for RUNNING jobs.
             start_time = end_time - timedelta(seconds=elapsed_time)
 
-        return SlurmJob(
+        if self.cluster.name != entry["cluster"]:
+            logger.warning(
+                'Job %s from cluster "%s" has a different cluster name: "%s". Using "%s".',
+                entry["job_id"],
+                self.cluster.name,
+                entry["cluster"],
+                self.cluster.name,
+            )
+
+        job = SlurmJob(
             cluster_name=self.cluster.name,
             job_id=entry["job_id"],
             array_job_id=entry["array"]["job_id"] or None,
@@ -163,7 +176,7 @@ class SAcctScraper:
             end_time=end_time,
             elapsed_time=elapsed_time,
             partition=entry["partition"],
-            nodes=expand_hostlist(nodes) if nodes != "None assigned" else [],
+            nodes=sorted(expand_hostlist(nodes)) if nodes != "None assigned" else [],
             constraints=entry["constraints"],
             priority=entry["priority"],
             qos=entry["qos"],
@@ -171,6 +184,8 @@ class SAcctScraper:
             **resources,
             **flags,
         )
+
+        return job
 
 
 def sacct_mongodb_import(cluster, day) -> None:
