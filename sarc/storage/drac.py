@@ -55,8 +55,6 @@ def _parse_header_summary(L_lines: list[str]):
                         "nbr_files": _parse_fraction(m.group(3)),
                     }
                 )
-                # print(f"Header: {L_results[-1]}")
-
             else:
                 # we don't expect this branch to ever be taken
                 continue
@@ -105,7 +103,6 @@ def _parse_body(L_lines: list[str], DLD_results=None):
             assert project
             assert LD_results
             DLD_results[project] = LD_results
-            # print(f"Going into recursive call from n {n}.")
             return _parse_body(L_lines[n:], DLD_results)
         if inside_segment:
             # omitting the "On Disk" part of the line
@@ -119,7 +116,6 @@ def _parse_body(L_lines: list[str], DLD_results=None):
             )
 
     # this gets returned like that only on the last recursive call
-    # print(DLD_results)
     return DLD_results
 
 
@@ -167,7 +163,6 @@ def fetch_diskusage_report(cluster: ClusterConfig):
     diskusage_explorer /project/def-bengioy 	 (Last update: 2023-02-27 19:59:41)
     """
     cmd = "diskusage_report --project --all_users"
-    # print(f"{cluster.name} $ {cmd}")
     results = cluster.ssh.run(cmd, hide=True)
     return results.stdout.split("\n")  # break this long string into a list of lines
 
@@ -191,24 +186,3 @@ def convert_parsed_report_to_diskusage(cluster_name, parsed_report):
 
     return DiskUsage(cluster_name=cluster_name, groups=groups)
 
-
-# def diskusage_drac_mongodb_import(cluster: ClusterConfig):
-#     """
-#     All-in-one function to :
-#     - fetch the disk usage statistics on the specified cluster
-#     - parse it
-#     - import it in MongoDB
-#     """
-#     print("diskusage_drac_mongodb_import not yet implemented")
-
-#     print(f"Fetching disk usage data from {cluster.host}...")
-#     if report := fetch_diskusage_report(cluster):
-#         header,body = parse_diskusage_report(report)
-#         print(f"...fetched {len(body)} groups;")
-#         for group in body:
-#             print (f"Group '{group}' : {len(body[group])} entries.")
-
-#         # connect to mongoDB and inject informations
-#         # collection =
-#     else:
-#         print("fetching failed")
