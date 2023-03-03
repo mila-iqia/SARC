@@ -1,25 +1,19 @@
 from __future__ import annotations
 
+from pydantic import ByteSize
 from pydantic_mongo import AbstractRepository, ObjectIdField
 
 from sarc.config import BaseModel, config
 
 
-class DiskUsageSize(BaseModel):
-    value: float
-    unit: str
-
-
 class DiskUsageUser(BaseModel):
     username: str
     nbr_files: int
-    size: DiskUsageSize
-
+    size: ByteSize
 
 class DiskUsageGroup(BaseModel):
     group_name: str
     users: list[DiskUsageUser]
-
 
 class DiskUsage(BaseModel):
     """

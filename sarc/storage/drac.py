@@ -8,7 +8,6 @@ from sarc.config import ClusterConfig
 from sarc.storage.diskusage import (
     DiskUsage,
     DiskUsageGroup,
-    DiskUsageSize,
     DiskUsageUser,
 )
 
@@ -114,7 +113,7 @@ def _parse_body(L_lines: list[str], DLD_results=None):
             assert m, f"If this line doesn't match, we've got a problem.\n{line}"
             username = m.group(1)
             nbr_files = int(m.group(2))
-            size = (float(m.group(3)), m.group(4))
+            size = f"{m.group(3)} {m.group(4)}"
             LD_results.append(
                 {"username": username, "nbr_files": nbr_files, "size": size}
             )
@@ -185,9 +184,7 @@ def convert_parsed_report_to_diskusage(cluster_name, parsed_report):
                 DiskUsageUser(
                     username=user["username"],
                     nbr_files=user["nbr_files"],
-                    size=DiskUsageSize(
-                        value=float(user["size"][0]), unit=user["size"][1]
-                    ),
+                    size=user["size"],
                 )
             )
         groups.append(DiskUsageGroup(group_name=group_name, users=users))
