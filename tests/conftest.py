@@ -20,9 +20,14 @@ def standard_config_object():
     yield parse_config(Path(__file__).parent / "sarc-test.json")
 
 
-@pytest.fixture(scope="session", autouse=True)
-def use_standard_config(standard_config_object):  # pylint: disable=redefined-outer-name
-    with using_config(standard_config_object):
+@pytest.fixture(scope="function")
+def standard_config_object_with_tmp_cache(standard_config_object, tmp_path):
+    yield standard_config_object.replace(cache=tmp_path / "sarc-tmp-test-cache")
+
+
+@pytest.fixture(scope="function", autouse=True)
+def use_standard_config_with_tmp_cache(standard_config_object_with_tmp_cache, tmp_path):
+    with using_config(standard_config_object_with_tmp_cache):
         yield
 
 
