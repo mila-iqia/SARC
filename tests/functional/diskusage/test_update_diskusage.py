@@ -20,7 +20,7 @@ def import_file_to_db(clustername, filename):
     collection.add(convert_parsed_report_to_diskusage(clustername, body))
 
 
-@pytest.mark.usefixtures("init_empty_db")
+@pytest.mark.usefixtures("empty_read_write_db")
 def test_update_drac_diskusage_one():
     assert get_diskusages(cluster_name=["gerudo", "hyrule"]) == []
 
@@ -30,7 +30,7 @@ def test_update_drac_diskusage_one():
     assert len(data) == 1
 
 
-@pytest.mark.usefixtures("init_empty_db")
+@pytest.mark.usefixtures("empty_read_write_db")
 def test_update_drac_diskusage_two():
     assert get_diskusages(cluster_name=["gerudo", "hyrule"]) == []
 
@@ -41,7 +41,7 @@ def test_update_drac_diskusage_two():
     assert len(data) == 2
 
 
-@pytest.mark.usefixtures("init_empty_db")
+@pytest.mark.usefixtures("empty_read_write_db")
 def test_update_drac_diskusage_no_duplicate():
     assert get_diskusages(cluster_name=["gerudo", "hyrule"]) == []
 

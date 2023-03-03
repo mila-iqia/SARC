@@ -386,6 +386,7 @@ def custom_db_config(cfg, db_name):
     assert db.name == db_name
     db.allocations.drop()
     db.jobs.drop()
+    db.diskusage.drop()
     return new_cfg
 
 
