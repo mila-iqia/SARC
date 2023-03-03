@@ -330,7 +330,7 @@ def run(
         if LD_users:
             assert isinstance(LD_users[0], dict)
     elif input_json_file:
-        with open(input_json_file, "r") as f_in:
+        with open(input_json_file, "r", encoding='utf-8') as f_in:
             LD_users = json.load(f_in)
     else:
         # this is the usual branch taken in practice
@@ -338,7 +338,7 @@ def run(
             local_private_key_file, local_certificate_file, ldap_service_uri
         )
         if output_raw_LDAP_json_file:
-            with open(output_raw_LDAP_json_file, "w") as f_out:
+            with open(output_raw_LDAP_json_file, "w", encoding='utf-8') as f_out:
                 json.dump(LD_users_raw, f_out, indent=4)
                 print(f"Wrote {output_raw_LDAP_json_file}.")
 
@@ -378,7 +378,7 @@ def run(
             print(result.bulk_api_result)
 
     if output_json_file:
-        with open(output_json_file, "w") as f_out:
+        with open(output_json_file, "w", encoding='utf-8') as f_out:
             json.dump(LD_users, f_out, indent=4)
             print(f"Wrote {output_json_file}.")
 

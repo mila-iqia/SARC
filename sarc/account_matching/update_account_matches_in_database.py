@@ -47,7 +47,7 @@ def run(
         mongodb_collection
     ]
 
-    with open(input_matches_path, "r") as f:
+    with open(input_matches_path, "r", encoding='utf-8') as f:
         DD_matches = json.load(f)
 
     # DD_matches indexed by mila_email_username values,

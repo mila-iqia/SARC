@@ -126,9 +126,15 @@ class LDAPConfig(BaseModel):
     mongo_collection_name: str
 
 
+class AccountMatchingConfig(BaseModel):
+    mila_emails_to_ignore: list[str]
+    override_matches_mila_to_cc: dict[str, str]
+
+
 class Config(BaseModel):
     mongo: MongoConfig
     ldap: LDAPConfig
+    account_matching: AccountMatchingConfig
     sshconfig: Path = None
     cache: Path = None
     clusters: dict[str, ClusterConfig]

@@ -9,6 +9,10 @@
         "ldap_service_uri": "ldaps://ldap.google.com",
         "mongo_collection_name": "users"
     },
+    "account_matching": {
+        "mila_emails_to_ignore" : [],
+        "override_matches_mila_to_cc" : {}
+    },
     "cache": "./sarc-cache",
     "sshconfig": "~/.ssh/config",
     "clusters": {
