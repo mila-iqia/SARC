@@ -91,7 +91,7 @@ class ClusterConfig(BaseModel):
         if self.sshconfig is None:
             fconfig = FabricConfig()
         else:
-            fconfig = fconfig.merge(ssh_config=SSHConfig.from_path(self.sshconfig))
+            fconfig = FabricConfig(ssh_config=SSHConfig.from_path(self.sshconfig))
         fconfig["run"]["pty"] = True
         fconfig["run"]["in_stream"] = False
         return Connection(self.host, config=fconfig)
