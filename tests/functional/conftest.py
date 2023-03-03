@@ -42,8 +42,8 @@ def fill_db(db):
 
 def create_db_configuration_fixture(db_name, empty=False, scope="function"):
     @pytest.fixture(scope=scope)
-    def fixture(standard_config_object):
-        cfg = custom_db_config(standard_config_object, db_name)
+    def fixture(standard_config_object_with_tmp_cache):
+        cfg = custom_db_config(standard_config_object_with_tmp_cache, db_name)
         if not empty:
             db = cfg.mongo.instance
             fill_db(db)
