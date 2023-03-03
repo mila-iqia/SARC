@@ -11,9 +11,11 @@ class DiskUsageUser(BaseModel):
     nbr_files: int
     size: ByteSize
 
+
 class DiskUsageGroup(BaseModel):
     group_name: str
     users: list[DiskUsageUser]
+
 
 class DiskUsage(BaseModel):
     """
@@ -41,6 +43,7 @@ class ClusterDiskUsageRepository(AbstractRepository[DiskUsage]):
 def get_diskusage_collection():
     db = config().mongo.instance
     return ClusterDiskUsageRepository(database=db)
+
 
 # pylint: disable=duplicate-code
 def get_diskusages(cluster_name: str | list[str]) -> list[DiskUsage]:

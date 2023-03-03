@@ -5,11 +5,7 @@ Fetching and parsing code specific to DRAC clusters
 import re
 
 from sarc.config import ClusterConfig
-from sarc.storage.diskusage import (
-    DiskUsage,
-    DiskUsageGroup,
-    DiskUsageUser,
-)
+from sarc.storage.diskusage import DiskUsage, DiskUsageGroup, DiskUsageUser
 
 
 def _parse_fraction(s):
@@ -185,4 +181,3 @@ def convert_parsed_report_to_diskusage(cluster_name, parsed_report):
         groups.append(DiskUsageGroup(group_name=group_name, users=users))
 
     return DiskUsage(cluster_name=cluster_name, groups=groups)
-
