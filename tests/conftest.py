@@ -41,35 +41,29 @@ def test_config(
 
     vals = getattr(request, "param", dict())
 
-    mongo_url = vals.get("mongo_url", current.mongo.url)
-    mongo_database = vals.get("mongo_database", current.mongo.database)
-    cluster_name = vals.get("cluster_name", "test")
+    mongo_repl = vals.pop("mongo", {})
+    clusters_repl = vals.pop("clusters", {})
+    clusters_orig = current.clusters
 
-    def get_cluster_conf(attr, default):
-        cluster = getattr(current.clusters, cluster_name, None)
-        return getattr(cluster, attr, default)
+    new_clusters = {}
+    for name in clusters_orig:
+        if name in clusters_repl:
+            new_clusters[name] = clusters_orig[name].replace(**clusters_repl[name])
+        else:
+            # This is to make a clone
+            new_clusters[name] = clusters_orig[name].replace()
 
-    cluster_host = vals.get("cluster_host", get_cluster_conf("host", "test"))
-    cluster_timezone = vals.get(
-        "cluster_timezone", get_cluster_conf("timezone", "America/Montreal")
-    )
-    cluster_sacct_bin = vals.get(
-        "cluster_sacct_bin", get_cluster_conf("sacct_bin", "sacct")
-    )
-    cluster_accounts = vals.get("cluster_accounts", get_cluster_conf("accounts", None))
+    # Look at all the new names in repl
+    for name in set(clusters_repl.keys()) - set(clusters_orig.keys()):
+        new_clusters[name] = ClusterConfig(
+            **(dict(host="test", timezone="America/Montreal") | clusters_repl[name])
+        )
 
-    mongo_conf = MongoConfig(url=mongo_url, database=mongo_database)
-    cluster_conf = ClusterConfig(
-        host=cluster_host,
-        timezone=cluster_timezone,
-        sacct_bin=cluster_sacct_bin,
-        accounts=cluster_accounts,
-    )
-    conf = Config(
-        mongo=mongo_conf,
+    conf = current.replace(
+        mongo=current.mongo.replace(**mongo_repl),
         sshconfig=None,
         cache=tmp_path,
-        clusters={cluster_name: cluster_conf},
+        clusters=new_clusters,
     )
     with using_config(conf):
         yield conf

@@ -6,7 +6,9 @@ from fabric.testing.base import Command, MockRemote, Session
 from sarc.jobs.sacct import SAcctScraper
 
 
-@pytest.mark.parametrize("test_config", [dict(cluster_host="patate")], indirect=True)
+@pytest.mark.parametrize(
+    "test_config", [{"clusters": {"test": {"host": "patate"}}}], indirect=True
+)
 def test_SAcctScraper_fetch_raw(test_config, remote):
     scraper = SAcctScraper(
         cluster=test_config.clusters["test"],
@@ -20,6 +22,7 @@ def test_SAcctScraper_fetch_raw(test_config, remote):
     assert scraper.fetch_raw() == {}
 
 
+@pytest.mark.parametrize("test_config", [{"clusters": {"test": {}}}], indirect=True)
 def test_SAcctScraper_fetch_raw2(test_config, remote):
     scraper = SAcctScraper(
         cluster=test_config.clusters["test"],
