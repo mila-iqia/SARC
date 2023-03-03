@@ -3,6 +3,7 @@ Fetching and parsing code specific to DRAC clusters
 """
 
 import re
+from datetime import datetime
 
 from sarc.config import ClusterConfig
 from sarc.storage.diskusage import DiskUsage, DiskUsageGroup, DiskUsageUser
@@ -180,4 +181,7 @@ def convert_parsed_report_to_diskusage(cluster_name, parsed_report):
             )
         groups.append(DiskUsageGroup(group_name=group_name, users=users))
 
-    return DiskUsage(cluster_name=cluster_name, groups=groups)
+    # timestamp will be set to 00:00 UTC automatically in ClusterDiskUsageRepository.add
+    return DiskUsage(
+        cluster_name=cluster_name, groups=groups, timestamp=datetime.utcnow()
+    )
