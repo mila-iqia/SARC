@@ -49,18 +49,18 @@ def test_parse_body():
     assert set(list(DLD_results.keys())) == set(["def-bengioy", "rpp-bengioy"])
 
     assert DLD_results["def-bengioy"] == [
-        {"username": "revali", "nbr_files": 2, "size": (0.0, "GiB")},
-        {"username": "urbosa", "nbr_files": 2, "size": (0.0, "GiB")},
-        {"username": "daruk", "nbr_files": 50, "size": (13.49, "GiB")},
-        {"username": "mipha", "nbr_files": 2, "size": (0.0, "GiB")},
-        {"username": "Total", "nbr_files": 696928, "size": (877.51, "GiB")},
+        {"username": "revali", "nbr_files": 2, "size": "0.00 GiB"},
+        {"username": "urbosa", "nbr_files": 2, "size": "0.00 GiB"},
+        {"username": "daruk", "nbr_files": 50, "size": "13.49 GiB"},
+        {"username": "mipha", "nbr_files": 2, "size": "0.00 GiB"},
+        {"username": "Total", "nbr_files": 696928, "size": "877.51 GiB"},
     ]
 
     assert DLD_results["rpp-bengioy"] == [
-        {"username": "riju", "nbr_files": 47085, "size": (4.20, "GiB")},
-        {"username": "grosaillieh", "nbr_files": 2, "size": (0.0, "GiB")},
-        {"username": "bourgette", "nbr_files": 2, "size": (0.0, "GiB")},
-        {"username": "kohga", "nbr_files": 2, "size": (0.0, "GiB")},
-        {"username": "rhoam", "nbr_files": 2, "size": (0.0, "GiB")},
-        {"username": "Total", "nbr_files": 3626455, "size": (30009.08, "GiB")},
+        {"username": "riju", "nbr_files": 47085, "size": "4.20 GiB"},
+        {"username": "grosaillieh", "nbr_files": 2, "size": "0.00 GiB"},
+        {"username": "bourgette", "nbr_files": 2, "size": "0.00 GiB"},
+        {"username": "kohga", "nbr_files": 2, "size": "0.00 GiB"},
+        {"username": "rhoam", "nbr_files": 2, "size": "0.00 GiB"},
+        {"username": "Total", "nbr_files": 3626455, "size": "30009.08 GiB"},
     ]
