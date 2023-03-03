@@ -384,9 +384,12 @@ def custom_db_config(cfg, db_name):
     db = new_cfg.mongo.instance
     # Ensure we do not use and thus wipe the production database
     assert db.name == db_name
+    return new_cfg
+
+
+def clear_db(db):
     db.allocations.drop()
     db.jobs.drop()
-    return new_cfg
 
 
 def fill_db(db):
@@ -396,12 +399,13 @@ def fill_db(db):
 
 def create_db_configuration_fixture(db_name, empty=False, scope="function"):
     @pytest.fixture(scope=scope)
-    def fixture(standard_config_object_with_tmp_cache):
-        cfg = custom_db_config(standard_config_object_with_tmp_cache, db_name)
+    def fixture(standard_config_object):
+        cfg = custom_db_config(standard_config_object, db_name)
+        db = cfg.mongo.instance
+        clear_db(db)
         if not empty:
-            db = cfg.mongo.instance
             fill_db(db)
-        yield cfg
+        yield
 
     return fixture
 
@@ -426,22 +430,21 @@ read_only_db_config_object = create_db_configuration_fixture(
 
 
 @pytest.fixture
-def empty_read_write_db(empty_read_write_db_config_object):
-    with using_config(empty_read_write_db_config_object) as cfg:
+def empty_read_write_db(standard_config, empty_read_write_db_config_object):
+    cfg = custom_db_config(standard_config, "sarc-read-write-test")
+    with using_config(cfg) as cfg:
         yield cfg.mongo.instance
 
 
 @pytest.fixture
-def read_write_db(read_write_db_config_object):
-    with using_config(read_write_db_config_object) as cfg:
+def read_write_db(standard_config, read_write_db_config_object):
+    cfg = custom_db_config(standard_config, "sarc-read-write-test")
+    with using_config(cfg) as cfg:
         yield cfg.mongo.instance
 
 
 @pytest.fixture
-def read_only_db(read_only_db_config_object):
-    # Note: read_only_db_config_object is a session fixture, but the context manager
-    # using_config has to be applied on a per-function basis, otherwise it would also
-    # remain activated for functions that do not use the fixture.
-
-    with using_config(read_only_db_config_object) as cfg:
+def read_only_db(standard_config, read_only_db_config_object):
+    cfg = custom_db_config(standard_config, "sarc-read-only-test")
+    with using_config(cfg) as cfg:
         yield cfg.mongo.instance
