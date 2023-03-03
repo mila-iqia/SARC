@@ -174,7 +174,7 @@ def convert_parsed_report_to_diskusage(cluster_name, parsed_report):
         for user in parsed_report[group_name]:
             users.append(
                 DiskUsageUser(
-                    username=user["username"],
+                    user=user["username"],
                     nbr_files=user["nbr_files"],
                     size=user["size"],
                 )

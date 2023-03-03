@@ -9,7 +9,7 @@ from sarc.config import BaseModel, config
 
 
 class DiskUsageUser(BaseModel):
-    username: str
+    user: str
     nbr_files: int
     size: ByteSize
 
