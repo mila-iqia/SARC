@@ -48,8 +48,7 @@ def get_diskusage_collection():
     db = config().mongo.instance
     return ClusterDiskUsageRepository(database=db)
 
-
-# pylint: disable=R0801
+# pylint: disable=duplicate-code
 def get_diskusages(cluster_name: str | list[str]) -> list[DiskUsage]:
     collection = get_diskusage_collection()
 
