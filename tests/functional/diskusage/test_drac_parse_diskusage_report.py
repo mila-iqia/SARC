@@ -1,14 +1,13 @@
 import os
+from pathlib import Path
 
 from sarc.storage.drac import _parse_body as parse_body
 from sarc.storage.drac import _parse_header_summary as parse_header_summary
 
-FOLDER = os.path.dirname(os.path.abspath(__file__))
-
 
 # cedar, beluga and graham style
 def test_header_00():
-    f = open(os.path.join(FOLDER, "drac_reports/report_gerudo.txt"), "r")
+    f = open(Path(__file__).parent / "drac_reports/report_gerudo.txt", "r")
     report = f.readlines()
     f.close()
     L_results = parse_header_summary(report)
@@ -25,7 +24,7 @@ def test_header_00():
 
 # narval style
 def test_header_01():
-    f = open(os.path.join(FOLDER, "drac_reports/report_hyrule.txt"), "r")
+    f = open(Path(__file__).parent / "drac_reports/report_hyrule.txt", "r")
     report = f.readlines()
     f.close()
     L_results = parse_header_summary(report)
@@ -41,7 +40,7 @@ def test_header_01():
 
 
 def test_parse_body():
-    f = open(os.path.join(FOLDER, "drac_reports/report_gerudo.txt"), "r")
+    f = open(Path(__file__).parent / "drac_reports/report_gerudo.txt", "r")
     report = f.readlines()
     f.close()
 
