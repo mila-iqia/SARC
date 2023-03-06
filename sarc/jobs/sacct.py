@@ -121,11 +121,29 @@ class SAcctScraper:
                     continue
                 if aname := alloc["name"]:
                     key += f"_{aname}"
-                vals[key] = alloc["count"]
+
+                if key.startswith("gres_gpu:"):
+                    value = key.split(":")[1]
+                    key = "gpu_type"
+                else:
+                    value = alloc["count"]
+
+                vals[key] = value
 
         nodes = entry["nodes"]
 
         flags = {k: True for k in entry["flags"]}
+
+        submit_time = parse_in_timezone(self.cluster, entry["time"]["submission"])
+        start_time = parse_in_timezone(self.cluster, entry["time"]["start"])
+        end_time = parse_in_timezone(self.cluster, entry["time"]["end"])
+        elapsed_time = entry["time"]["elapsed"]
+
+        if end_time:
+            # The start_time is not set properly in the json output of sacct, but
+            # it can be calculated from end_time and elapsed_time. We leave the
+            # inaccurate value in for RUNNING jobs.
+            start_time = end_time - timedelta(seconds=elapsed_time)
 
         return SlurmJob(
             cluster_name=self.cluster.name,
@@ -140,10 +158,10 @@ class SAcctScraper:
             exit_code=entry["exit_code"]["return_code"],
             signal=entry["exit_code"].get("signal", {}).get("signal_id", None),
             time_limit=(tlimit := entry["time"]["limit"]) and tlimit * 60,
-            submit_time=parse_in_timezone(self.cluster, entry["time"]["submission"]),
-            start_time=parse_in_timezone(self.cluster, entry["time"]["start"]),
-            end_time=parse_in_timezone(self.cluster, entry["time"]["end"]),
-            elapsed_time=entry["time"]["elapsed"],
+            submit_time=submit_time,
+            start_time=start_time,
+            end_time=end_time,
+            elapsed_time=elapsed_time,
             partition=entry["partition"],
             nodes=expand_hostlist(nodes) if nodes != "None assigned" else [],
             constraints=entry["constraints"],

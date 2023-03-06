@@ -14,6 +14,7 @@ from pydantic import Extra, validator
 
 MTL = zoneinfo.ZoneInfo("America/Montreal")
 UTC = zoneinfo.ZoneInfo("UTC")
+TZLOCAL = zoneinfo.ZoneInfo(str(datetime.now().astimezone().tzinfo))
 
 
 class ConfigurationError(Exception):
@@ -41,6 +42,8 @@ class BaseModel(_BaseModel):
         keep_untouched = (cached_property,)
         # Serializer for mongo's object ids
         json_encoders = {ObjectId: str}
+        # Allow types like ZoneInfo
+        arbitrary_types_allowed = True
 
     def dict(self, *args, **kwargs) -> dict[str, Any]:
         d = super().dict(*args, **kwargs)
@@ -54,10 +57,14 @@ class BaseModel(_BaseModel):
                 )
         return d
 
+    def replace(self, **replacements):
+        new_arguments = {**self.dict(), **replacements}
+        return type(self)(**new_arguments)
+
 
 class ClusterConfig(BaseModel):
     host: str
-    timezone: object
+    timezone: Union[str, zoneinfo.ZoneInfo]  # | does not work with Pydantic's eval
     prometheus_url: str = None
     prometheus_headers_file: str = None
     name: str = None
@@ -70,7 +77,10 @@ class ClusterConfig(BaseModel):
 
     @validator("timezone")
     def _timezone(cls, value):
-        return zoneinfo.ZoneInfo(value)
+        if isinstance(value, str):
+            return zoneinfo.ZoneInfo(value)
+        else:
+            return value
 
     @cached_property
     def ssh(self):
@@ -79,10 +89,12 @@ class ClusterConfig(BaseModel):
         from paramiko import SSHConfig
 
         if self.sshconfig is None:
-            return Connection(self.host)
+            fconfig = FabricConfig()
         else:
             fconfig = FabricConfig(ssh_config=SSHConfig.from_path(self.sshconfig))
-            return Connection(self.host, config=fconfig)
+        fconfig["run"]["pty"] = True
+        fconfig["run"]["in_stream"] = False
+        return Connection(self.host, config=fconfig)
 
     @cached_property
     def prometheus(self):
@@ -108,11 +120,9 @@ class MongoConfig(BaseModel):
     connection_string: str
     database_name: str
 
-    def get_database(self):
-        return self._database
-
     @cached_property
-    def _database(self):
+    # def database_instance(self):
+    def database_instance(self):
         from pymongo import MongoClient
 
         client = MongoClient(self.connection_string)

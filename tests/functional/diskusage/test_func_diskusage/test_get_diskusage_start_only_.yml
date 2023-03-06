@@ -1,0 +1,5 @@
+- '{"cluster_name": "totk", "groups": [{"group_name": "gerudo", "users": [{"user":
+  "urbosa", "nbr_files": 2, "size": 0}, {"user": "riju", "nbr_files": 50, "size":
+  14484777205}, {"user": "mipha", "nbr_files": 2, "size": 0}]}, {"group_name": "piaf",
+  "users": [{"user": "revali", "nbr_files": 47085, "size": 4509715660}]}], "timestamp":
+  "2023-02-14T00:00:00"}'

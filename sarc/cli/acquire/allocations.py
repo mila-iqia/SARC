@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-import argparse
 import csv
+from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 
 from sarc.allocations.allocations import (
     Allocation,
@@ -54,32 +55,31 @@ def convert_csv_row_to_allocation(
     )
 
 
-def main(argv=None):
-    parser = argparse.ArgumentParser()
-    parser.add_argument("file")
+@dataclass
+class AcquireAllocations:
+    file: Path
 
-    options = parser.parse_args(argv)
+    def execute(self) -> int:
+        collection = get_allocations_collection()
 
-    collection = get_allocations_collection()
+        with open(self.file, "r", encoding="utf-8") as f:
+            reader = csv.DictReader(
+                f, skipinitialspace=True, restkey="garbage", restval=""
+            )
+            for row in reader:
+                row.pop("garbage", None)
 
-    with open(options.file, "r", encoding="utf-8") as f:
-        reader = csv.DictReader(f, skipinitialspace=True, restkey="garbage", restval="")
-        for row in reader:
-            row.pop("garbage", None)
+                for key in list(row.keys()):
+                    if row[key].strip(" ") == "":
+                        row.pop(key)
 
-            for key in list(row.keys()):
-                if row[key].strip(" ") == "":
-                    row.pop(key)
+                try:
+                    allocation = convert_csv_row_to_allocation(**row)
+                except Exception as e:  # pylint: disable=broad-exception-caught
+                    print(f"Skipping row: {row}")
+                    print(e)
+                    continue
 
-            try:
-                allocation = convert_csv_row_to_allocation(**row)
-            except Exception as e:  # pylint: disable=broad-exception-caught
-                print(f"Skipping row: {row}")
-                print(e)
-                continue
+                collection.add(allocation)
 
-            collection.add(allocation)
-
-
-if __name__ == "__main__":
-    main()
+        return 0

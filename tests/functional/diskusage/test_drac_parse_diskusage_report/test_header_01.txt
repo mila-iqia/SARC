@@ -1,0 +1,2 @@
+{'group': 'rrg-bengioy-ad', 'space': '39T/75T', 'nbr_files': '1316k/5000k'}
+{'group': 'def-bengioy', 'space': '956G/1000G', 'nbr_files': '226k/500k'}

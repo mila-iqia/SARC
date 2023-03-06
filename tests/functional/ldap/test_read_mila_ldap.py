@@ -60,8 +60,6 @@ def test_query_to_ldap_server_and_writing_to_output_json(monkeypatch):
     def mock_query_ldap(
         local_private_key_file, local_certificate_file, ldap_service_uri
     ):
-        assert os.path.exists(local_private_key_file)
-        assert os.path.exists(local_certificate_file)
         assert ldap_service_uri.startswith("ldaps://")
         return fake_raw_ldap_data(nbr_users)
 
@@ -110,7 +108,7 @@ def test_query_to_ldap_server_and_commit_to_db(monkeypatch):
     """
 
     cfg = config()
-    db = cfg.mongo.get_database()
+    db = cfg.mongo.database_instance
     # cleanup before running test in case another test failed to clean
     db[cfg.ldap.mongo_collection_name].delete_many({})
 
@@ -126,8 +124,8 @@ def test_query_to_ldap_server_and_commit_to_db(monkeypatch):
         def mock_query_ldap(
             local_private_key_file, local_certificate_file, ldap_service_uri
         ):
-            assert os.path.exists(local_private_key_file)
-            assert os.path.exists(local_certificate_file)
+            # Since we're not using the real LDAP server, we don't need to
+            # actually have valid paths in `local_private_key_file` and `local_certificate_file`.
             assert ldap_service_uri.startswith("ldaps://")
             return L_first_batch_users  # <-- first batch of users
 

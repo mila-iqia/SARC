@@ -157,23 +157,12 @@ def test_generate_label_configs_node_id_no_cluster_name():
 
 
 def test_generate_label_configs_no_node_id_cluster_name():
-    assert list(generate_label_configs(None, "mila-cluster")) == [
-        {"cluster": "mila-cluster"}
+    assert list(generate_label_configs(None, "mila")) == [{"cluster": "mila"}]
+    assert list(generate_label_configs(None, ["mila"])) == [{"cluster": "mila"}]
+    assert list(generate_label_configs(None, ["mila", "mila"])) == [
+        {"cluster": "mila"},
+        {"cluster": "mila"},
     ]
-    assert list(generate_label_configs(None, ["mila-cluster"])) == [
-        {"cluster": "mila-cluster"}
-    ]
-    assert list(generate_label_configs(None, ["mila-cluster", "mila-cluster"])) == [
-        {"cluster": "mila-cluster"},
-        {"cluster": "mila-cluster"},
-    ]
-
-
-def test_generate_label_configs_unsupported_cluster_name():
-    with pytest.raises(
-        NotImplementedError, match="Only mila-cluster is supported for now"
-    ):
-        list(generate_label_configs(None, "unsupported-cluster"))
 
 
 @pytest.mark.freeze_time("2023-01-01")
@@ -190,11 +179,11 @@ def test_generate_label_configs_unsupported_cluster_name():
         ),
         (
             "another_metric",
-            {"cluster": "mila-cluster"},
+            {"cluster": "mila"},
             datetime(year=2022, month=1, day=1),
             datetime(year=2022, month=2, day=1),
             timedelta(days=1),
-            'avg_over_time(another_metric{cluster="mila-cluster"}[1d])[4w3d:1d] offset 1y',
+            'avg_over_time(another_metric{cluster="mila"}[1d])[4w3d:1d] offset 1y',
         ),
     ],
 )
@@ -210,6 +199,7 @@ def test_query_prom(
         assert_query,
     )
     query_prom(
+        "fromage",
         metric_name=metric_name,
         label_config=label_config,
         start=start,
@@ -227,7 +217,7 @@ def test_query_prom(
 def test_get_nodes_time_series_default_end(freezer, monkeypatch):
     freezer.move_to("2023-01-01")
 
-    def fake_sleep(metric_name, label_config, start, end, running_window):
+    def fake_sleep(cluster, metric_name, label_config, start, end, running_window):
         freezer.move_to(f"2023-01-01 00:{fake_sleep.i}:00")
         fake_sleep.i += 1
         assert end == datetime(year=2023, month=1, day=1)
@@ -255,16 +245,18 @@ def test_get_nodes_time_series_default_end(freezer, monkeypatch):
 
     monkeypatch.setattr(sarc.nodes.node, "query_prom", fake_sleep)
 
-    get_nodes_time_series(["metric1", "metric2"], start=datetime(2021, 1, 1))
+    get_nodes_time_series(
+        ["metric1", "metric2"], cluster="mila", start=datetime(2021, 1, 1)
+    )
 
 
 @pytest.mark.freeze_time("2023-01-01")
 def test_get_nodes_time_series_queries(monkeypatch):
     expected = [
-        'avg_over_time(metric1{instance="cn-d003",cluster="mila-cluster"}[4w])[1y:4w] offset 2y',
-        'avg_over_time(metric1{instance="cn-d004",cluster="mila-cluster"}[4w])[1y:4w] offset 2y',
-        'avg_over_time(metric2{instance="cn-d003",cluster="mila-cluster"}[4w])[1y:4w] offset 2y',
-        'avg_over_time(metric2{instance="cn-d004",cluster="mila-cluster"}[4w])[1y:4w] offset 2y',
+        'avg_over_time(metric1{instance="cn-d003"}[4w])[1y:4w] offset 2y',
+        'avg_over_time(metric1{instance="cn-d004"}[4w])[1y:4w] offset 2y',
+        'avg_over_time(metric2{instance="cn-d003"}[4w])[1y:4w] offset 2y',
+        'avg_over_time(metric2{instance="cn-d004"}[4w])[1y:4w] offset 2y',
     ]
     found = []
 
@@ -299,7 +291,7 @@ def test_get_nodes_time_series_queries(monkeypatch):
         start=datetime(2021, 1, 1),
         end=datetime(2022, 1, 1),
         node_id=["cn-d003", "cn-d004"],
-        cluster_name="mila-cluster",
+        cluster="raisin",
         running_window=timedelta(days=7 * 4),
     )
 
@@ -349,7 +341,7 @@ def test_get_nodes_time_series_empty_result(monkeypatch):
         start=datetime(2021, 1, 1),
         end=datetime(2022, 1, 1),
         node_id=["cn-d003", "cn-d004"],
-        cluster_name="mila-cluster",
+        cluster="raisin",
         running_window=timedelta(days=7 * 4),
     )
 

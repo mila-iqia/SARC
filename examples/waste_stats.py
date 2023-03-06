@@ -13,7 +13,7 @@ def load_job_series(filename=None) -> pd.DataFrame:
         return pd.read_pickle(filename)
 
     cluster = "mila"
-    total = config().mongo.get_database().jobs.count_documents(
+    total = config().mongo.database_instance.jobs.count_documents(
         {
             "cluster_name": cluster,
             "end_time": {"$gte": datetime(year=2023, month=2, day=10)},
