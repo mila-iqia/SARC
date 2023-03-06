@@ -1,5 +1,5 @@
 {
-    "cluster_name": "gerudo",
+    "cluster_name": "narval",
     "groups": [
         {
             "group_name": "def-bengioy",

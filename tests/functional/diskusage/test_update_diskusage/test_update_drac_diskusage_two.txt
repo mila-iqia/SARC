@@ -1,5 +1,5 @@
 {
-    "cluster_name": "gerudo",
+    "cluster_name": "narval",
     "groups": [
         {
             "group_name": "def-bengioy",
@@ -70,7 +70,7 @@
     "timestamp": "2023-05-12T00:00:00"
 }
 {
-    "cluster_name": "hyrule",
+    "cluster_name": "beluga",
     "groups": [
         {
             "group_name": "rrg-bengioy-ad",

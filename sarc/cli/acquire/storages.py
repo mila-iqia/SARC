@@ -20,7 +20,6 @@ class AcquireStorages:
         clusters_configs = cfg.clusters  # pylint: disable=unused-variable
 
         for cluster_name in self.cluster_names:
-
             print(f"Acquiring {cluster_name} storages report...")
 
             f = open(self.file, "r")
@@ -31,10 +30,10 @@ class AcquireStorages:
             print(body)
 
             du = convert_parsed_report_to_diskusage(cluster_name, body)
-            
+
             collection = get_diskusage_collection()
             collection.add(du)
 
-            # raise NotImplementedError() 
+            # raise NotImplementedError()
 
         return 0
