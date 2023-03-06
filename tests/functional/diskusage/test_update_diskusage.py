@@ -29,8 +29,7 @@ def test_update_drac_diskusage_one(file_regression):
 
     data = get_diskusages(cluster_name=["gerudo", "hyrule"])
     assert len(data) == 1
-    data[0].id = 1234
-    file_regression.check(str(data))
+    file_regression.check(data[0].json(exclude={'id': True},indent=4))
 
 
 @pytest.mark.usefixtures("empty_read_write_db")
@@ -41,9 +40,8 @@ def test_update_drac_diskusage_two(file_regression):
     import_file_to_db("hyrule", "drac_reports/report_hyrule.txt")
     data = get_diskusages(cluster_name=["gerudo", "hyrule"])
     assert len(data) == 2
-    data[0].id = 1234
-    data[1].id = 5678
-    file_regression.check("\n".join(map(str, data)))
+    data_json = '\n'.join([data[0].json(exclude={'id': True},indent=4),data[1].json(exclude={'id': True},indent=4)])
+    file_regression.check(data_json)
 
 
 @pytest.mark.usefixtures("empty_read_write_db")

@@ -1,2 +1,142 @@
-id=1234 cluster_name='gerudo' groups=[DiskUsageGroup(group_name='def-bengioy', users=[DiskUsageUser(user='revali', nbr_files=2, size=0), DiskUsageUser(user='urbosa', nbr_files=2, size=0), DiskUsageUser(user='daruk', nbr_files=50, size=14484777205), DiskUsageUser(user='mipha', nbr_files=2, size=0), DiskUsageUser(user='Total', nbr_files=696928, size=942219187978)]), DiskUsageGroup(group_name='rpp-bengioy', users=[DiskUsageUser(user='riju', nbr_files=47085, size=4509715660), DiskUsageUser(user='grosaillieh', nbr_files=2, size=0), DiskUsageUser(user='bourgette', nbr_files=2, size=0), DiskUsageUser(user='kohga', nbr_files=2, size=0), DiskUsageUser(user='rhoam', nbr_files=2, size=0), DiskUsageUser(user='Total', nbr_files=3626455, size=32222004295761)])] timestamp=datetime.datetime(2023, 5, 12, 0, 0)
-id=5678 cluster_name='hyrule' groups=[DiskUsageGroup(group_name='rrg-bengioy-ad', users=[DiskUsageUser(user='revali', nbr_files=2, size=0), DiskUsageUser(user='urbosa', nbr_files=2, size=0), DiskUsageUser(user='daruk', nbr_files=50, size=14484777205), DiskUsageUser(user='mipha', nbr_files=2, size=0), DiskUsageUser(user='Total', nbr_files=696928, size=942219187978)]), DiskUsageGroup(group_name='def-bengioy', users=[DiskUsageUser(user='riju', nbr_files=47085, size=4509715660), DiskUsageUser(user='grosaillieh', nbr_files=2, size=0), DiskUsageUser(user='bourgette', nbr_files=2, size=0), DiskUsageUser(user='kohga', nbr_files=2, size=0), DiskUsageUser(user='rhoam', nbr_files=2, size=0), DiskUsageUser(user='Total', nbr_files=3626455, size=32222004295761)])] timestamp=datetime.datetime(2023, 5, 12, 0, 0)
+{
+    "cluster_name": "gerudo",
+    "groups": [
+        {
+            "group_name": "def-bengioy",
+            "users": [
+                {
+                    "user": "revali",
+                    "nbr_files": 2,
+                    "size": 0
+                },
+                {
+                    "user": "urbosa",
+                    "nbr_files": 2,
+                    "size": 0
+                },
+                {
+                    "user": "daruk",
+                    "nbr_files": 50,
+                    "size": 14484777205
+                },
+                {
+                    "user": "mipha",
+                    "nbr_files": 2,
+                    "size": 0
+                },
+                {
+                    "user": "Total",
+                    "nbr_files": 696928,
+                    "size": 942219187978
+                }
+            ]
+        },
+        {
+            "group_name": "rpp-bengioy",
+            "users": [
+                {
+                    "user": "riju",
+                    "nbr_files": 47085,
+                    "size": 4509715660
+                },
+                {
+                    "user": "grosaillieh",
+                    "nbr_files": 2,
+                    "size": 0
+                },
+                {
+                    "user": "bourgette",
+                    "nbr_files": 2,
+                    "size": 0
+                },
+                {
+                    "user": "kohga",
+                    "nbr_files": 2,
+                    "size": 0
+                },
+                {
+                    "user": "rhoam",
+                    "nbr_files": 2,
+                    "size": 0
+                },
+                {
+                    "user": "Total",
+                    "nbr_files": 3626455,
+                    "size": 32222004295761
+                }
+            ]
+        }
+    ],
+    "timestamp": "2023-05-12T00:00:00"
+}
+{
+    "cluster_name": "hyrule",
+    "groups": [
+        {
+            "group_name": "rrg-bengioy-ad",
+            "users": [
+                {
+                    "user": "revali",
+                    "nbr_files": 2,
+                    "size": 0
+                },
+                {
+                    "user": "urbosa",
+                    "nbr_files": 2,
+                    "size": 0
+                },
+                {
+                    "user": "daruk",
+                    "nbr_files": 50,
+                    "size": 14484777205
+                },
+                {
+                    "user": "mipha",
+                    "nbr_files": 2,
+                    "size": 0
+                },
+                {
+                    "user": "Total",
+                    "nbr_files": 696928,
+                    "size": 942219187978
+                }
+            ]
+        },
+        {
+            "group_name": "def-bengioy",
+            "users": [
+                {
+                    "user": "riju",
+                    "nbr_files": 47085,
+                    "size": 4509715660
+                },
+                {
+                    "user": "grosaillieh",
+                    "nbr_files": 2,
+                    "size": 0
+                },
+                {
+                    "user": "bourgette",
+                    "nbr_files": 2,
+                    "size": 0
+                },
+                {
+                    "user": "kohga",
+                    "nbr_files": 2,
+                    "size": 0
+                },
+                {
+                    "user": "rhoam",
+                    "nbr_files": 2,
+                    "size": 0
+                },
+                {
+                    "user": "Total",
+                    "nbr_files": 3626455,
+                    "size": 32222004295761
+                }
+            ]
+        }
+    ],
+    "timestamp": "2023-05-12T00:00:00"
+}
