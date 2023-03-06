@@ -47,8 +47,10 @@ class BaseModel(_BaseModel):
 
     def dict(self, *args, **kwargs) -> dict[str, Any]:
         d = super().dict(*args, **kwargs)
-
-        for k, v in d.items():
+        for k, v in list(d.items()):
+            if isinstance(getattr(type(self), k, None), cached_property):
+                del d[k]
+                continue
             if isinstance(v, date) and not isinstance(v, datetime):
                 d[k] = datetime(
                     year=v.year,
@@ -121,7 +123,6 @@ class MongoConfig(BaseModel):
     database_name: str
 
     @cached_property
-    # def database_instance(self):
     def database_instance(self):
         from pymongo import MongoClient
 
