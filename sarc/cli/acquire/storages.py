@@ -27,8 +27,6 @@ class AcquireStorages:
             f.close()
             header, body = parse_diskusage_report(report)
 
-            print(body)
-
             du = convert_parsed_report_to_diskusage(cluster_name, body)
 
             collection = get_diskusage_collection()
