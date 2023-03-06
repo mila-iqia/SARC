@@ -139,6 +139,8 @@ def compute_job_statistics_one_metric(
     is_time_counter=False,
 ):
     df = job.series(metric=metric_name, max_points=10_000)
+    if df is None:
+        return None
     return compute_job_statistics_from_dataframe(
         df=df,
         statistics=statistics,
