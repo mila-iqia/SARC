@@ -281,6 +281,42 @@ base_job = {
 }
 
 
+def create_diskusages():
+    diskusages = []
+    for cluster_name in ["botw", "totk"]:
+        for timestamp in [
+            datetime(2023, 2, 14, 0, 0, 0, tzinfo=UTC),
+            datetime(2021, 12, 1, 0, 0, 0, tzinfo=UTC),
+        ]:
+            diskusages.append(
+                {
+                    "cluster_name": cluster_name,
+                    "timestamp": timestamp,
+                    "groups": [
+                        {
+                            "group_name": "gerudo",
+                            "users": [
+                                {"user": "urbosa", "nbr_files": 2, "size": 0},
+                                {"user": "riju", "nbr_files": 50, "size": 14484777205},
+                                {"user": "mipha", "nbr_files": 2, "size": 0},
+                            ],
+                        },
+                        {
+                            "group_name": "piaf",
+                            "users": [
+                                {
+                                    "user": "revali",
+                                    "nbr_files": 47085,
+                                    "size": 4509715660,
+                                },
+                            ],
+                        },
+                    ],
+                }
+            )
+    return diskusages
+
+
 class JobFactory:
     def __init__(
         self, first_submit_time: None | datetime = None, first_job_id: int = 1
@@ -513,9 +549,7 @@ class JsonJobFactory(JobFactory):
 
     def format_dt_tz(self, cluster_name: str, dt: datetime) -> int:
         cluster_tz = config().clusters[cluster_name].timezone
-        print(dt.tzinfo)
         date_in_cluster_tz = dt.astimezone(cluster_tz)
-        print(date_in_cluster_tz)
         return int(date_in_cluster_tz.timestamp())
 
     def format_kwargs(self, kwargs):
@@ -573,10 +607,6 @@ class JsonJobFactory(JobFactory):
             )
 
         json_kwargs.update(formated_kwargs)
-
-        import pprint
-
-        pprint.pprint(json_kwargs)
 
         return json_kwargs
 
@@ -683,11 +713,14 @@ def custom_db_config(cfg, db_name):
 def clear_db(db):
     db.allocations.drop()
     db.jobs.drop()
+    db.diskusage.drop()
+    return new_cfg
 
 
 def fill_db(db):
     db.allocations.insert_many(create_allocations())
     db.jobs.insert_many(create_jobs())
+    db.diskusage.insert_many(create_diskusages())
 
 
 def create_db_configuration_fixture(db_name, empty=False, scope="function"):
