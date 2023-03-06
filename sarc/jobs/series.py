@@ -158,7 +158,7 @@ def compute_job_statistics(job: SlurmJob):
         "q25": lambda self: self.quantile(0.25),
         "median": DataFrame.median,
         "q75": lambda self: self.quantile(0.75),
-        "q05": lambda self: self.quantile(0.01),
+        "q05": lambda self: self.quantile(0.05),
     }
 
     gpu_utilization = compute_job_statistics_one_metric(
