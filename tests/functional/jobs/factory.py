@@ -5,8 +5,8 @@ from datetime import datetime, timedelta
 
 from sarc.config import MTL, UTC
 
-# elapsed_time = 60 * 60 * 12
-# end_time = datetime(2023, 2, 14, 23, 48, 54, tzinfo=MTL).astimezone(UTC)
+elapsed_time = 60 * 60 * 12
+end_time = datetime(2023, 2, 14, 23, 48, 54, tzinfo=MTL).astimezone(UTC)
 base_job = {
     "CLEAR_SCHEDULING": True,
     "STARTED_ON_BACKFILL": True,
@@ -17,8 +17,8 @@ base_job = {
     "array_job_id": None,
     "cluster_name": "raisin",
     "constraints": "x86_64&(48gb|80gb)",
-    "elapsed_time": 60 * 60 * 12,
-    "end_time": datetime(2023, 2, 14, 23, 48, 54, tzinfo=MTL).astimezone(UTC),
+    "elapsed_time": elapsed_time,
+    "end_time": end_time,
     "exit_code": 0,
     "group": "petitbonhomme",
     "job_id": 2831220,
@@ -30,8 +30,8 @@ base_job = {
     "qos": "normal",
     "requested": {"billing": 1, "cpu": 4, "gres_gpu": 1, "mem": 49152, "node": 1},
     "signal": None,
-    "start_time": datetime(2023, 2, 14, 19, 1, 19, tzinfo=MTL).astimezone(UTC),
-    "submit_time": datetime(2023, 2, 14, 18, 59, 18, tzinfo=MTL).astimezone(UTC),
+    "start_time": end_time - timedelta(seconds=elapsed_time),
+    "submit_time": end_time - timedelta(seconds=elapsed_time + 60),
     "task_id": None,
     "time_limit": 43200,
     "user": "petitbonhomme",
