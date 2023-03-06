@@ -56,5 +56,4 @@ def test_update_drac_diskusage_no_duplicate(file_regression):
 
     data = get_diskusages(cluster_name=["gerudo", "hyrule"])
     assert len(data) == 1
-    data[0].id = 1234
-    file_regression.check(str(data))
+    file_regression.check(data[0].json(exclude={'id': True},indent=4))
