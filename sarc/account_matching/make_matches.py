@@ -63,7 +63,7 @@ def run(config_path, mila_ldap_path, cc_members_path, cc_roles_path, output_path
     }
 
     DD_persons = perform_matching(config_path, _load_data_from_files(data_paths))
-    
+
     with open(output_path, "w", encoding='utf-8') as f_out:
         json.dump(DD_persons, f_out, indent=2)
         print(f"Wrote {output_path}.")
@@ -136,68 +136,102 @@ def perform_matching(DLD_data: dict[str, list[dict]],
     ## and now we start matching things ##
     ######################################
 
-    for key in ["cc_members", "cc_roles"]:
-        if key not in DLD_data:
+    for cc_source in ["cc_members", "cc_roles"]:
+        if cc_source not in DLD_data:
             # we might not have all three source files
             continue
-        LD_members = _how_many_cc_accounts_with_mila_emails(DLD_data, key)
+        LD_members = _how_many_cc_accounts_with_mila_emails(DLD_data, cc_source, verbose=verbose)
         for D_member in LD_members:
             assert D_member["email"].endswith("@mila.quebec")
             if D_member["email"] in S_mila_emails_to_ignore:
-                print(f'Ignoring phantom {D_member["email"]}.')
+                if verbose:
+                    print(f'Ignoring phantom {D_member["email"]}.')
                 continue
-            DD_persons[D_member["email"]][key] = D_member
+            DD_persons[D_member["email"]][cc_source] = D_member
     # We have 206 cc_members accounts with @mila.quebec, out of 610.
     # We have 42 cc_roles accounts with @mila.quebec, out of 610.
 
-    for name_or_nom, key in [("name", "cc_members"), ("nom", "cc_roles")]:
+    for name_or_nom, cc_source in [("name", "cc_members"), ("nom", "cc_roles")]:
         LP_name_matches = name_distances.find_exact_bag_of_words_matches(
-            [e[name_or_nom] for e in DLD_data[key]],
+            [e[name_or_nom] for e in DLD_data[cc_source]],
             [e["display_name"] for e in DLD_data["mila_ldap"]],
+            delta_threshold=2
         )
-        for a, b, delta in LP_name_matches:
-            if delta > 2:
-                # let's skip those
-                print(f"Skipped ({a}, {b}) because the delta is too large.")
-                continue
+        for a, b, _ in LP_name_matches:
             # Again with the O(N^2) matching.
+            # Let's find which entry of `DD_persons` corresponds to `b`
+            # and put that entry in `D_person_found` for the next step.
             for D_person in DD_persons.values():
+                # `D_person` is a dict with 3 subdicts, one for each source.
+                # `b` is the name of a person in the Mila LDAP.
                 if D_person["mila_ldap"]["display_name"] == b:
                     D_person_found = D_person
                     break
             # We know for FACT that this person is in there,
-            # so when we `break`, then `D_person_found` is assigned.
+            # by virtue of the fact that we matched their name
+            # to get the `LP_name_matches` in the first place.
+            # Therefore, when we break, `D_person_found` is assigned.
             # It becomes the insertion point.
 
             # Again a strange construct that works because we know that
             # there is a match in there with `e[name_or_nom] == a` because
             # that's actually how we got it.
-            match = [e for e in DLD_data[key] if e[name_or_nom] == a][0]
+            # This list comprehension is basically just FOR loop that
+            # retrieves the dict for the DLD_data["cc_members"] or DLD_data["cc_roles"]
+            # that has `a` as identifier.
+            # That is, it's the one that got successfully matched to `b`.
+            match = [e for e in DLD_data[cc_source] if e[name_or_nom] == a][0]
 
             # Matching names is less of a strong association than
             # matching emails, so let's not mess things up by overwriting
             # one by the other. It would still be interesting to report
             # divergences here, where emails suggest a match that names don't.
-            if D_person_found.get(key, None) is None:
-                # Note that this is different from `if key not in D_person_found:`.
-                D_person_found[key] = match
+            if D_person_found.get(cc_source, None) is None:
+                # Note that this is different from `if cc_source not in D_person_found:`.
+                # Note also that `D_person_found` is a dict, a mutatable object
+                # in which we will be inserting the `match` dict,
+                # therefore mutating the original `DD_persons` dict
+                # which constitutes the answer.
+                # That is, this is where we're "writing the output"
+                # of this function. Don't expect `D_person_found`
+                # to be used later in this function.
+                D_person_found[cc_source] = match
+                del D_person_found  # to make it clear
             #else:
                 # You can uncomment this to see the divergences,
                 # but usually you don't want to see them.
                 # This can be uncommented when we're doing the manual matching.
-                # assert D_person_found[key] == match  # optional
+                # assert D_person_found[cc_source] == match  # optional
 
+    # Finally, the manual matching that overrides everything.
+    # If we ever supplied values in `override_matches_mila_to_cc`,
+    # those are of the form
+    #     {"overrido.dudette@mila.quebec": "duddirov"}
+    # where "overrido.dudette@mila.quebec" is the Mila LDAP email address
+    # and "duddirov" is the CC account username.
+    #
+    # We do this thing both for the "cc_members" and "cc_roles" sources.
 
-    assert "cc_members" in DLD_data
-    matching = dict((e["username"], e) for e in DLD_data["cc_members"])
-    # The manual matching done previously by me.
-    for (
-        mila_email_username,
-        cc_account_username,
-    ) in override_matches_mila_to_cc.items():
-        # If a key is missing here, it's because we messed up by writing
-        # by hand the values in `override_matches_mila_to_cc`.
-        DD_persons[mila_email_username]["cc_members"] = matching[cc_account_username]
+    for cc_source in ["cc_members", "cc_roles"]:
+        assert cc_source in DLD_data
+        matching = dict((e["username"], e) for e in DLD_data[cc_source])
+        for (
+            mila_email_username,
+            cc_account_username,
+        ) in override_matches_mila_to_cc.items():
+            # If a key is missing here, it's because we messed up by writing
+            # by hand the values in `override_matches_mila_to_cc`.
+            if cc_account_username not in matching:
+                raise ValueError(
+                    f'"{cc_account_username}" is not found in the actual sources.'
+                    'This was supplied to `override_matches_mila_to_cc` in the `make_matches.py` file, '
+                    f'but there are not such entries in {cc_source}.'
+                    'Someone messed up the manual matching by specifying a CC username that does not exist.'
+                )
+            # Note that `matching[cc_account_username]` is itself a dict
+            # with user information from CC. It's not just a username string.
+            assert isinstance(matching[cc_account_username], dict)
+            DD_persons[mila_email_username][cc_source] = matching[cc_account_username]
 
     ###########################
     ###### status report ######
@@ -262,16 +296,17 @@ def perform_matching(DLD_data: dict[str, list[dict]],
 
 
 
-def _how_many_cc_accounts_with_mila_emails(data, key="cc_members"):
-    assert key in data
+def _how_many_cc_accounts_with_mila_emails(data, cc_source="cc_members", verbose=False):
+    assert cc_source in data
     LD_members = [
         D_member
-        for D_member in data[key]
+        for D_member in data[cc_source]
         if D_member.get("email", "").endswith("@mila.quebec")
     ]
 
-    print(
-        f"We have {len(LD_members)} {key} accounts with @mila.quebec, "
-        "out of {len(data['cc_members'])}."
-    )
+    if verbose:
+        print(
+            f"We have {len(LD_members)} {cc_source} accounts with @mila.quebec, "
+            f"out of {len(data['cc_members'])}."
+        )
     return LD_members

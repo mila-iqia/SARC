@@ -255,7 +255,7 @@ def init_db_with_allocations(init_empty_db, db_allocations):
     db.allocations.insert_many(db_allocations)
 
 
-@pytext.fixture
+@pytest.fixture
 def account_matches():
     """
     Returns a structure of accounts with their corresponding values
@@ -351,7 +351,7 @@ def account_matches():
                 "display_name": "pikachu pigeon",
                 "status": "enabled"},
             "cc_members": None, "cc_roles": None},
-        "ignoramus.mikey":
+        "ignoramus.mikey@mila.quebec":
             {"mila_ldap": {
                 "mila_email_username": "ignoramus.mikey@mila.quebec",
                 "mila_cluster_username": "mikeignor",

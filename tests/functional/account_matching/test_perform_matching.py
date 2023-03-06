@@ -28,10 +28,12 @@ def helper_extract_three_account_sources_from_ground_truth(account_matches):
     # Add an entry for "ignoramus.mikey@mila.quebec" in "cc_members"
     # which is expected to be ignored by the matching algorithm
     # because we'll tell it to ignore it.
+    # Note that we would still match against the "name" field
+    # even if we ignored the email.
     DLD_data["cc_members"].append({
         "rapi": "jvb-000-ag",
         "groupname": "rrg-bengioy-ad",
-        "name": "Michelangelo the Ignoramus",
+        "name": "Mikey the Man",
         "position": "Étudiant au doctorat",
         "institution": "Un. de Montréal",
         "department": "Informatique Et Recherche Opérationnelle",
@@ -40,7 +42,7 @@ def helper_extract_three_account_sources_from_ground_truth(account_matches):
         "activation_status": "activated",
         "username": "appjohn",
         "ccri": "abc-002-10",
-        "email": "__@umontreal.ca",
+        "email": "ignoramus.mikey@mila.quebec",  # <-- this is the email we'll ignore
         "member_since": "2018-10-10 10:10:10 -0400"})
 
     return DLD_data, mila_emails_to_ignore, override_matches_mila_to_cc
