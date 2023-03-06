@@ -112,9 +112,16 @@ def compute_job_statistics_from_dataframe(
 
     if unused_threshold is not None:
         means = gdf()["value"].mean()
-        unused = means.loc[(means < 0.01)].index
+        unused = means.loc[(means < unused_threshold)].index
         n_unused = len(unused)
-        to_drop = df.apply(lambda row: tuple(row[groupby]) in list(unused), axis=1)
+
+        def drop_fn(row):
+            idx = tuple(row[groupby])
+            if len(groupby) == 1:
+                idx = idx[0]
+            return idx in tuple(unused)
+
+        to_drop = df.apply(drop_fn, axis=1)
         df = df.drop(df[to_drop].index)
     else:
         n_unused = 0
