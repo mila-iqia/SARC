@@ -2,7 +2,6 @@ import json
 import logging
 import sys
 import traceback
-import warnings
 from datetime import datetime, time, timedelta
 from pprint import pformat
 from typing import Iterator, Optional

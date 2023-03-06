@@ -714,7 +714,6 @@ def clear_db(db):
     db.allocations.drop()
     db.jobs.drop()
     db.diskusage.drop()
-    return new_cfg
 
 
 def fill_db(db):
