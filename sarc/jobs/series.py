@@ -100,18 +100,17 @@ def compute_job_statistics_from_dataframe(
     groupby = ["instance", "core", "gpu"]
     groupby = [col for col in groupby if col in df]
 
-    def gdf():
-        return df.groupby(groupby)
+    gdf = df.groupby(groupby)
 
     if is_time_counter:
         # This is a time-based counter like the cpu counters in /proc/stat, with
         # a resolution of 1 nanosecond.
-        df["timediffs"] = gdf()["timestamp"].diff().map(lambda x: x.total_seconds())
-        df["value"] = gdf()["value"].diff() / df["timediffs"] / 1e9
+        df["timediffs"] = gdf["timestamp"].diff().map(lambda x: x.total_seconds())
+        df["value"] = gdf["value"].diff() / df["timediffs"] / 1e9
         df = df.drop(index=0)
 
     if unused_threshold is not None:
-        means = gdf()["value"].mean()
+        means = gdf["value"].mean()
         unused = means.loc[(means < unused_threshold)].index
         n_unused = len(unused)
 
