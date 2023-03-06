@@ -300,25 +300,24 @@ class JobFactory:
         return timedelta(hours=len(self.jobs) * 6) + self._first_submit_time
 
     def format_kwargs(self, kwargs):
-
-        elapsed_time = kwargs.get("elapsed_time", base_job["elapsed_time"])
+        kwargs.setdefault("elapsed_time", base_job["elapsed_time"])
         kwargs.setdefault("submit_time", self.next_submit_time)
-        kwargs.setdefault("start_time", base_job["submit_time"] + timedelta(seconds=60))
+        kwargs.setdefault("start_time", kwargs["submit_time"] + timedelta(seconds=60))
+        kwargs.setdefault("job_state", base_job["job_state"])
 
-        if base_job["job_state"] in ["RUNNING", "PENDING"]:
+        if kwargs["job_state"] in ["RUNNING", "PENDING"]:
             kwargs.setdefault("end_time", None)
         else:
             kwargs.setdefault(
-                "end_time", base_job["start_time"] + timedelta(seconds=elapsed_time)
+                "end_time",
+                kwargs["start_time"] + timedelta(seconds=kwargs["elapsed_time"]),
             )
 
-        if base_job["end_time"] is not None:
-            default_elapsed_time = (
-                base_job["end_time"] - base_job["start_time"]
+        # Override elapsed_time to be coherent.
+        if kwargs["end_time"] is not None:
+            kwargs["elapsed_time"] = (
+                kwargs["end_time"] - kwargs["start_time"]
             ).total_seconds()
-        else:
-            default_elapsed_time = 0
-        kwargs.setdefault("elapsed_time", default_elapsed_time)
 
         kwargs.setdefault("job_id", self.next_job_id)
 
