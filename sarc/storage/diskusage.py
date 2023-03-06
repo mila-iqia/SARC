@@ -81,4 +81,4 @@ def get_diskusages(
     if end is not None:
         query["timestamp"] = {"$lte": _convert_date_to_iso(end)}
 
-    return list(collection.find_by(query))
+    return list(collection.find_by(query, sort=[("timestamp", 1)]))
