@@ -33,7 +33,7 @@ class AllocationRessources(BaseModel):
     storage: AllocationStorage
 
 
-def convert_date_to_iso(date_value: date) -> datetime:
+def _convert_date_to_iso(date_value: date) -> datetime:
     return datetime(date_value.year, date_value.month, date_value.day)
 
 
@@ -88,10 +88,10 @@ def get_allocations(
         query["cluster_name"] = {"$in": cluster_name}
 
     if start is not None:
-        query["start"] = {"$gte": convert_date_to_iso(start)}
+        query["start"] = {"$gte": _convert_date_to_iso(start)}
 
     if end is not None:
-        query["end"] = {"$lte": convert_date_to_iso(end)}
+        query["end"] = {"$lte": _convert_date_to_iso(end)}
 
     return list(collection.find_by(query, sort=[("start", 1)]))
 
