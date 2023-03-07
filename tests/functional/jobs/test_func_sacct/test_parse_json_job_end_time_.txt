@@ -9,8 +9,8 @@
     "user": "petitbonhomme",
     "group": "petitbonhomme",
     "job_state": "CANCELLED",
-    "exit_code": null,
-    "signal": 9,
+    "exit_code": 0,
+    "signal": null,
     "partition": "long",
     "nodes": [
         "cn-c021"
@@ -25,8 +25,8 @@
     "STARTED_ON_BACKFILL": true,
     "time_limit": 43200,
     "submit_time": "2023-02-14T00:00:00-05:00",
-    "start_time": "2023-02-14T00:01:00-05:00",
-    "end_time": "2023-02-14T12:01:00-05:00",
+    "start_time": "2023-02-14T12:00:00-05:00",
+    "end_time": "2023-02-15T00:00:00-05:00",
     "elapsed_time": 43200,
     "requested": {
         "cpu": 4,

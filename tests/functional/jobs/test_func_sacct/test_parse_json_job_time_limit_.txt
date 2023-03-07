@@ -23,7 +23,7 @@
     "STARTED_ON_SUBMIT": false,
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_BACKFILL": true,
-    "time_limit": 12345,
+    "time_limit": 740700,
     "submit_time": "2023-02-14T00:00:00-05:00",
     "start_time": "2023-02-14T00:01:00-05:00",
     "end_time": "2023-02-14T12:01:00-05:00",

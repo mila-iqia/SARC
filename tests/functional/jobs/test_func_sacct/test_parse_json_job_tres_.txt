@@ -9,8 +9,8 @@
     "user": "petitbonhomme",
     "group": "petitbonhomme",
     "job_state": "CANCELLED",
-    "exit_code": null,
-    "signal": 9,
+    "exit_code": 0,
+    "signal": null,
     "partition": "long",
     "nodes": [
         "cn-c021"
@@ -30,18 +30,18 @@
     "elapsed_time": 43200,
     "requested": {
         "cpu": 4,
-        "mem": 49152,
-        "node": 1,
-        "billing": 1,
-        "gres_gpu": 1,
-        "gpu_type": null
+        "mem": 16384,
+        "node": 2,
+        "billing": 3,
+        "gres_gpu": 4,
+        "gpu_type": "p100"
     },
     "allocated": {
-        "cpu": 4,
-        "mem": 49152,
+        "cpu": 2,
+        "mem": 10000,
         "node": 1,
         "billing": 1,
         "gres_gpu": 1,
-        "gpu_type": null
+        "gpu_type": "p100"
     }
 }

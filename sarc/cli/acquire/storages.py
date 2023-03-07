@@ -2,13 +2,14 @@ from dataclasses import dataclass
 
 from simple_parsing import field
 
+from sarc.cli.utils import clusters
 from sarc.config import config
 
 
 @dataclass
 class AcquireStorages:
     cluster_names: list[str] = field(
-        alias=["-c"], default_factory=list, choices=list(config().clusters.keys())
+        alias=["-c"], default_factory=list, choices=clusters
     )
 
     def execute(self) -> int:

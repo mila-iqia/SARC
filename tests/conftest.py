@@ -63,8 +63,18 @@ def test_config(
     conf = current.replace(
         mongo=current.mongo.replace(**mongo_repl),
         sshconfig=None,
-        cache=tmp_path,
         clusters=new_clusters,
     )
     with using_config(conf):
         yield conf
+
+
+@pytest.fixture
+def cli_main():
+    from sarc.cli import main
+    from sarc.cli.utils import clusters
+
+    # Update possible choices based on the current test config
+    clusters.choices = list(config().clusters.keys())
+
+    yield main
