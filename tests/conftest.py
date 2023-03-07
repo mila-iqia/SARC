@@ -42,8 +42,6 @@ def test_config(
     vals = getattr(request, "param", dict())
 
     mongo_repl = vals.pop("mongo", {})
-    #ldap_repl = vals.pop("ldap", {})
-    #account_matching_repl = vals.pop("account_matching", {})
     clusters_repl = vals.pop("clusters", {})
     clusters_orig = current.clusters
 
@@ -63,8 +61,6 @@ def test_config(
 
     conf = current.replace(
         mongo=current.mongo.replace(**mongo_repl),
-        #ldap=current.ldap.replace(**ldap_repl),
-        #account_matching=current.account_matching.replace(**account_matching_repl),
         sshconfig=None,
         cache=tmp_path,
         clusters=new_clusters,
