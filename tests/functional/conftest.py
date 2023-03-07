@@ -11,15 +11,11 @@ from .jobs.factory import create_jobs
 
 @pytest.fixture
 def db_allocations():
-    from allocations.factory import create_allocations
-
     return create_allocations()
 
 
 @pytest.fixture
 def db_jobs():
-    from jobs.factory import create_jobs
-
     return create_jobs()
 
 

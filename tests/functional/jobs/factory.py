@@ -5,9 +5,9 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 from flatten_dict import flatten, unflatten
-from hostlist import collect_hostlist
 
 from sarc.config import MTL, UTC, config
+from sarc.jobs.sacct import parse_in_timezone
 
 elapsed_time = 60 * 60 * 12
 end_time = datetime(2023, 2, 14, 23, 48, 54, tzinfo=MTL).astimezone(UTC)
@@ -72,14 +72,19 @@ class JobFactory:
         else:
             kwargs.setdefault(
                 "end_time",
-                kwargs["start_time"] + timedelta(seconds=kwargs["elapsed_time"]),
+                kwargs["start_time"]
+                + timedelta(
+                    seconds=kwargs.get("elapsed_time", base_job["elapsed_time"])
+                ),
             )
 
         # Override elapsed_time to be coherent.
-        if kwargs["end_time"] is not None:
-            kwargs["elapsed_time"] = (
-                kwargs["end_time"] - kwargs["start_time"]
-            ).total_seconds()
+        if "elapsed_time" not in kwargs and kwargs["end_time"] is not None:
+            kwargs["elapsed_time"] = int(
+                (kwargs["end_time"] - kwargs["start_time"]).total_seconds()
+            )
+
+        kwargs.setdefault("elapsed_time", base_job["elapsed_time"])
 
         kwargs.setdefault("job_id", self.next_job_id)
 
@@ -301,120 +306,72 @@ base_sacct_job = {
 
 
 class JsonJobFactory(JobFactory):
-    def format_requested(self, requested: dict) -> list[dict]:
-        json_requested = []
-        for info_id, (key, value) in enumerate(requested.items()):
-            if key == "gpu_type":
-                continue
-
-            name = ""
-            if key == "gres_gpu":
-                key = "gres"
-                name = "gpu"
-
-                if requested.get("gpu_type", None):
-                    name += f':{requested["gpu_type"]}'
-
-            # NOTE: If the key is `gres`, then the id may be different than info_id
-            # For instance A100's have id 1001. But we don't use this information in
-            # `SlurmJob`.
-            json_requested.append(
-                {"type": key, "id": info_id, "count": value, "name": name}
+    def add_job_array(
+        self,
+        task_ids,
+        job_id: None | int = None,
+        submit_time: None | datetime = None,
+        cluster_name: str = "raisin",
+    ):
+        job_id = self.next_job_id
+        submit_time = self.format_dt_tz(cluster_name, self.next_submit_time)
+        for job_array_id_offset, task_id in enumerate(task_ids):
+            self.add_job(
+                submit_time=submit_time,
+                job_id=job_array_id_offset + job_id,
+                array={
+                    "job_id": job_id,
+                    "limits": {"max": {"running": {"tasks": 0}}},
+                    "task": None,
+                    "task_id": task_id,
+                },
             )
 
-        return json_requested
-
-    def format_dt_tz(self, cluster_name: str, dt: datetime | None) -> Optional[int]:
-        if dt is None:
-            return None
+    def format_dt_tz(
+        self, cluster_name: str, dt: datetime | int | None
+    ) -> Optional[int]:
+        if dt is None or isinstance(dt, int):
+            return dt
         cluster_tz = config().clusters[cluster_name].timezone
-        print(dt.tzinfo)
         date_in_cluster_tz = dt.astimezone(cluster_tz)
-        print(date_in_cluster_tz)
         return int(date_in_cluster_tz.timestamp())
 
     def format_kwargs(self, kwargs):
-        formated_kwargs = super().format_kwargs(kwargs)
+        cluster_name = kwargs.get("cluster_name", base_sacct_job["cluster"])
 
-        cluster_name = formated_kwargs.pop("cluster_name", base_sacct_job["cluster"])
-        user = formated_kwargs.pop("user", base_job["user"])
-
-        json_kwargs = {
-            "cluster": cluster_name,
-            "user": user,
-            "association": {
-                "account": formated_kwargs.pop("account", base_job["account"]),
-                "cluster": cluster_name,
-                "partition": None,
-                "user": user,
-            },
-            "array": {
-                "task_id": formated_kwargs.pop("task_id", None),
-                "job_id": formated_kwargs.pop("array_job_id", 0),
-            },
-            "time": {
-                key: self.format_dt_tz(cluster_name, formated_kwargs.pop(formated_key))
-                for key, formated_key in [
-                    ("start", "start_time"),
-                    ("end", "end_time"),
-                    ("submission", "submit_time"),
-                ]
-            }
-            | {"elapsed": formated_kwargs.pop("elapsed_time")},
+        # Convert time and job it to flat format
+        flat_kwargs = {}
+        time = kwargs.get("time", {})
+        json_to_flat_keys = {
+            "submission": "submit_time",
+            "start": "start_time",
+            "end": "end_time",
+            "elapsed": "elapsed_time",
         }
+        if time:
+            for json_key, flat_key in json_to_flat_keys.items():
+                if json_key in time:
+                    if json_key == "elapsed":
+                        flat_kwargs[flat_key] = time[json_key]
+                    else:
+                        flat_kwargs[flat_key] = parse_in_timezone(time[json_key])
 
-        if "job_state" in formated_kwargs:
-            json_kwargs["state"] = {
-                "current": formated_kwargs.pop("job_state"),
-                "reason": "Because!",
-            }
+        if "job_id" in kwargs:
+            flat_kwargs["job_id"] = kwargs["job_id"]
 
-        if "time_limit" in formated_kwargs:
-            json_kwargs["time"]["limit"] = formated_kwargs.pop("time_limit") / 60
+        if "current" in kwargs.get("state", {}):
+            flat_kwargs["job_state"] = kwargs["state"]["current"]
 
-        if "nodes" in formated_kwargs:
-            json_kwargs["nodes"] = collect_hostlist(formated_kwargs.pop("nodes"))
+        formated_kwargs = super().format_kwargs(flat_kwargs)
 
-        if "requested" in formated_kwargs:
-            json_kwargs["tres"] = {
-                "requested": self.format_requested(formated_kwargs.pop("requested"))
-            }
-        if "allocated" in formated_kwargs:
-            json_kwargs.setdefault("tres", {})
-            json_kwargs["tres"]["allocated"] = self.format_requested(
-                formated_kwargs.pop("allocated")
-            )
-        if "signal" in formated_kwargs:
-            json_kwargs.setdefault(
-                "exit_code", copy.deepcopy(base_sacct_job["exit_code"])
-            )
-            json_kwargs["exit_code"]["signal"] = {
-                "signal_id": formated_kwargs.pop("signal")
-            }
-        if "exit_code" in formated_kwargs:
-            json_kwargs.setdefault(
-                "exit_code", copy.deepcopy(base_sacct_job["exit_code"])
-            )
-            json_kwargs["exit_code"]["return_code"] = formated_kwargs.pop("exit_code")
+        # Convert time and job id back to json format
+        kwargs["time"] = kwargs.get("time", {}) | {
+            json_key: self.format_dt_tz(cluster_name, formated_kwargs[flat_key])
+            for json_key, flat_key in json_to_flat_keys.items()
+        }
+        kwargs["job_id"] = formated_kwargs["job_id"]
 
-        supported_flags = [
-            "CLEAR_SCHEDULING",
-            "STARTED_ON_BACKFILL",
-            "STARTED_ON_SCHEDULE",
-            "STARTED_ON_SUBMIT",
-        ]
-        if any(arg in supported_flags for arg in formated_kwargs):
-            json_kwargs["flags"] = [
-                flag for flag in supported_flags if formated_kwargs.pop(flag, False)
-            ]
-
-        json_kwargs.update(formated_kwargs)
-
-        import pprint
-
-        pprint.pprint(json_kwargs)
-
-        return json_kwargs
+        return kwargs
 
     def create_job(self, **kwargs):
         sacct_job = copy.deepcopy(base_sacct_job)

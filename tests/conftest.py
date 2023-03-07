@@ -28,6 +28,13 @@ def standard_config(standard_config_object, tmp_path):
 
 
 @pytest.fixture
+def disabled_cache():
+    cfg = config().replace(cache=None)
+    with using_config(cfg) as cfg:
+        yield
+
+
+@pytest.fixture
 def tzlocal_is_mtl(monkeypatch):
     monkeypatch.setattr("sarc.config.TZLOCAL", zoneinfo.ZoneInfo("America/Montreal"))
     monkeypatch.setattr("sarc.jobs.job.TZLOCAL", zoneinfo.ZoneInfo("America/Montreal"))
@@ -35,7 +42,6 @@ def tzlocal_is_mtl(monkeypatch):
 
 @pytest.fixture
 def test_config(
-    tmp_path,
     request,
 ):
     current = config()
