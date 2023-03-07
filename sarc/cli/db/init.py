@@ -10,13 +10,13 @@ class DbInit:
     database: Optional[str]
 
     def execute(self) -> int:
-        from pymongo import MongoClient
+        import pymongo
 
         cfg = config()
         url = cfg.mongo.url if self.url is None else self.url
         database = cfg.mongo.database if self.database is None else self.database
 
-        client = MongoClient(url)
+        client = pymongo.MongoClient(url)
         db = client.get_database(database)
 
         # There is no need to create the collections first, they will be
