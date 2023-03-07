@@ -15,12 +15,12 @@ from .job import SlurmJob, jobs_collection
 logger = logging.getLogger(__name__)
 
 
-def parse_in_timezone(cluster, timestamp):
+def parse_in_timezone(timestamp):
     if timestamp is None or timestamp == 0:
         return None
-    date_naive = datetime.fromtimestamp(timestamp)
-    date_aware = date_naive.replace(tzinfo=cluster.timezone)
-    return date_aware.astimezone(UTC)
+    # Slurm returns timestamps in UTC
+    date_naive = datetime.utcfromtimestamp(timestamp)
+    return date_naive.replace(tzinfo=UTC)
 
 
 class SAcctScraper:
@@ -137,9 +137,9 @@ class SAcctScraper:
 
         flags = {k: True for k in entry["flags"]}
 
-        submit_time = parse_in_timezone(self.cluster, entry["time"]["submission"])
-        start_time = parse_in_timezone(self.cluster, entry["time"]["start"])
-        end_time = parse_in_timezone(self.cluster, entry["time"]["end"])
+        submit_time = parse_in_timezone(entry["time"]["submission"])
+        start_time = parse_in_timezone(entry["time"]["start"])
+        end_time = parse_in_timezone(entry["time"]["end"])
         elapsed_time = entry["time"]["elapsed"]
 
         if end_time:
