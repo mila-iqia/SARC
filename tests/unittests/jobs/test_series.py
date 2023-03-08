@@ -40,8 +40,8 @@ def test_compute_job_statistics_from_dataframe_normalization():
 
 @pytest.mark.parametrize(["delta"], [[30], [60]])
 def test_compute_job_statistics_from_dataframe_time_counter(delta):
-    rows1 = [{"instance": "cn-c002", "value": 60e9 * i} for i in range(100)]
-    rows2 = [{"instance": "cn-c007", "value": 30e9 * i} for i in range(100)]
+    rows1 = [{"instance": "cn-c002", "value": 75e9 * i} for i in range(100)]
+    rows2 = [{"instance": "cn-c007", "value": 15e9 * i} for i in range(100)]
     df1 = _generate_df(rows1, delta=delta)
     df2 = _generate_df(rows2, delta=delta)
 
@@ -55,7 +55,7 @@ def test_compute_job_statistics_from_dataframe_time_counter(delta):
         {"mean": DataFrame.mean},
         is_time_counter=True,
     )
-    assert stats == {"mean": (60 / delta + 30 / delta) / 2, "unused": 0}
+    assert stats == {"mean": (75 / delta + 15 / delta) / 2, "unused": 0}
 
 
 @pytest.mark.parametrize(
