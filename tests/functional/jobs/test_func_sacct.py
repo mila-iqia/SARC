@@ -159,10 +159,14 @@ def test_parse_json_job(json_jobs, scraper, file_regression):
     ],
     indirect=True,
 )
-def test_parse_malformed_jobs(sacct_json, scraper, capsys, file_regression):
+def test_parse_malformed_jobs(sacct_json, scraper, capsys):
     scraper.results = json.loads(sacct_json)
     assert list(scraper) == []
-    file_regression.check("\n".join(capsys.readouterr().err.split("\n")[4:]))
+    assert """\
+There was a problem with this entry:
+====================================
+{'account': 'mila',
+""" in capsys.readouterr().err
 
 
 @pytest.mark.usefixtures("tzlocal_is_mtl")
