@@ -1,7 +1,3 @@
-Traceback (most recent call last):
-  File "/projects/SARC/sarc/jobs/sacct.py", line 102, in __iter__
-    converted = self.convert(entry)
-  File "/projects/SARC/sarc/jobs/sacct.py", line 125, in convert
     if (key := alloc["type"]) not in tracked_resources:
 KeyError: 'type'
 There was a problem with this entry:

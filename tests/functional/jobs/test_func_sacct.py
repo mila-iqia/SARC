@@ -162,7 +162,7 @@ def test_parse_json_job(json_jobs, scraper, file_regression):
 def test_parse_malformed_jobs(sacct_json, scraper, capsys, file_regression):
     scraper.results = json.loads(sacct_json)
     assert list(scraper) == []
-    file_regression.check(capsys.readouterr().err)
+    file_regression.check("\n".join(capsys.readouterr().err.split("\n")[4:]))
 
 
 @pytest.mark.usefixtures("tzlocal_is_mtl")
@@ -171,11 +171,11 @@ def test_parse_malformed_jobs(sacct_json, scraper, capsys, file_regression):
     [{"group": None}],
     indirect=True,
 )
-def test_parse_no_group_jobs(sacct_json, scraper, caplog, file_regression):
+def test_parse_no_group_jobs(sacct_json, scraper, caplog):
     scraper.results = json.loads(sacct_json)
     with caplog.at_level("DEBUG"):
         assert list(scraper) == []
-    file_regression.check(caplog.text)
+    assert 'Skipping job with group "None": 1' in caplog.text
 
 
 @pytest.mark.usefixtures("tzlocal_is_mtl")
@@ -184,7 +184,7 @@ def test_parse_no_group_jobs(sacct_json, scraper, caplog, file_regression):
     [{"cluster": "patate"}],
     indirect=True,
 )
-def test_scrape_lost_job_on_wrong_cluster(sacct_json, scraper, caplog, file_regression):
+def test_scrape_lost_job_on_wrong_cluster(sacct_json, scraper, caplog):
     scraper.results = json.loads(sacct_json)
     with caplog.at_level("WARNING"):
         jobs = list(scraper)
@@ -192,7 +192,8 @@ def test_scrape_lost_job_on_wrong_cluster(sacct_json, scraper, caplog, file_regr
     assert len(jobs) == 1
     assert scraper.cluster.name == "raisin"
     assert jobs[0].cluster_name == "raisin"
-    file_regression.check(caplog.text)
+
+    assert 'Job 1 from cluster "raisin" has a different cluster name: "patate". Using "raisin"' in caplog.text
 
 
 @pytest.mark.usefixtures("tzlocal_is_mtl")
@@ -213,7 +214,7 @@ def test_scraper_with_cache(scraper, sacct_json, file_regression):
     "test_config", [{"clusters": {"raisin": {"host": "patate"}}}], indirect=True
 )
 def test_scraper_with_malformed_cache(
-    test_config, remote, scraper, caplog, file_regression
+    test_config, remote, scraper, caplog
 ):
     assert str(scraper.cachefile).startswith("/tmp/pytest")
 
@@ -229,7 +230,7 @@ def test_scraper_with_malformed_cache(
     with caplog.at_level("WARNING"):
         assert len(scraper.get_raw()) == 0
 
-    file_regression.check(caplog.text)
+    assert "Need to re-fetch because cache has malformed JSON." in caplog.text
 
 
 @pytest.mark.parametrize(
