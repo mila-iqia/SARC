@@ -193,7 +193,10 @@ def test_scrape_lost_job_on_wrong_cluster(sacct_json, scraper, caplog):
     assert scraper.cluster.name == "raisin"
     assert jobs[0].cluster_name == "raisin"
 
-    assert 'Job 1 from cluster "raisin" has a different cluster name: "patate". Using "raisin"' in caplog.text
+    assert (
+        'Job 1 from cluster "raisin" has a different cluster name: "patate". Using "raisin"'
+        in caplog.text
+    )
 
 
 @pytest.mark.usefixtures("tzlocal_is_mtl")
@@ -213,9 +216,7 @@ def test_scraper_with_cache(scraper, sacct_json, file_regression):
 @pytest.mark.parametrize(
     "test_config", [{"clusters": {"raisin": {"host": "patate"}}}], indirect=True
 )
-def test_scraper_with_malformed_cache(
-    test_config, remote, scraper, caplog
-):
+def test_scraper_with_malformed_cache(test_config, remote, scraper, caplog):
     assert str(scraper.cachefile).startswith("/tmp/pytest")
 
     with open(scraper.cachefile, "w") as f:
@@ -372,7 +373,9 @@ def test_save_preempted_job(test_config, sacct_json, remote, file_regression, cl
 
 @pytest.mark.usefixtures("empty_read_write_db", "disabled_cache")
 def test_multiple_dates(test_config, remote, file_regression, cli_main):
-    datetimes = [datetime(2023, 2, 15) + timedelta(days=i) for i in range(5)]
+    datetimes = [
+        datetime(2023, 2, 15, tzinfo=MTL) + timedelta(days=i) for i in range(5)
+    ]
     channel = remote.expect(
         host="raisin",
         commands=[
@@ -429,7 +432,7 @@ def test_multiple_dates(test_config, remote, file_regression, cli_main):
 @pytest.mark.usefixtures("empty_read_write_db", "disabled_cache")
 def test_multiple_clusters_and_dates(test_config, remote, file_regression, cli_main):
     cluster_names = ["raisin", "patate"]
-    datetimes = [datetime(2023, 2, 15) + timedelta(days=i) for i in range(2)]
+    datetimes = [datetime(2023, 2, 15, tzinfo=MTL) + timedelta(days=i) for i in range(2)]
 
     def _create_session(cluster_name, cmd_template, job_id_offset, datetimes):
 
