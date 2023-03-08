@@ -10,6 +10,8 @@
         "mongo_collection_name": "users"
     },
     "account_matching": {
+        "cc_members_csv_path": "secrets/account_matching/members-rrg-bengioy-ad-2022-11-25.csv",
+        "cc_roles_csv_path": "secrets/account_matching/sponsored_roles_for_Yoshua_Bengio_(CCI_jvb-000).csv",
         "mila_emails_to_ignore" : [],
         "override_matches_mila_to_cc" : {}
     },

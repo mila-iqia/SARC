@@ -10,6 +10,8 @@
         "mongo_collection_name": "users"
     },
     "account_matching": {
+        "cc_members_csv_path": "cc_members_not_valid_path.csv",
+        "cc_roles_csv_path": "cc_roles_not_valid_path.csv",
         "mila_emails_to_ignore" : [],
         "override_matches_mila_to_cc" : {}
     },

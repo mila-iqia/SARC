@@ -20,7 +20,7 @@ import json
 from sarc.account_matching import name_distances
 
 
-def _load_data_from_files(data_paths):
+def load_data_from_files(data_paths):
     """
     Takes in a dict of paths to data files, and returns a dict of the data.
         data_paths = {
@@ -49,19 +49,19 @@ def _load_data_from_files(data_paths):
     return data
 
 
-def run(config_path, mila_ldap_path, cc_members_path, cc_roles_path, output_path):
+# def run(config_path, mila_ldap_path, cc_members_path, cc_roles_path, output_path):
 
-    data_paths = {
-        "mila_ldap": mila_ldap_path,
-        "cc_members": cc_members_path,
-        "cc_roles": cc_roles_path,
-    }
+#     data_paths = {
+#         "mila_ldap": mila_ldap_path,
+#         "cc_members": cc_members_path,
+#         "cc_roles": cc_roles_path,
+#     }
 
-    DD_persons = perform_matching(config_path, _load_data_from_files(data_paths))
+#     DD_persons = perform_matching(config_path, load_data_from_files(data_paths))
 
-    with open(output_path, "w", encoding="utf-8") as f_out:
-        json.dump(DD_persons, f_out, indent=2)
-        print(f"Wrote {output_path}.")
+#     with open(output_path, "w", encoding="utf-8") as f_out:
+#         json.dump(DD_persons, f_out, indent=2)
+#         print(f"Wrote {output_path}.")
 
     # maybe add something to commit the database here?
 
