@@ -59,9 +59,6 @@ def test_config(
             **(dict(host="test", timezone="America/Montreal") | clusters_repl[name])
         )
 
-    print(f"current mongo={current.mongo}")
-    print(f"mongorepl={mongo_repl}")
-
     conf = current.replace(
         mongo=current.mongo.replace(**mongo_repl),
         sshconfig=None,
