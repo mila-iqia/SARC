@@ -12,33 +12,33 @@ from sarc.storage.drac import fetch_diskusage_report
 
 
 @pytest.mark.parametrize(
-    "test_config", [{"clusters": {"test": {"host": "hyrule.castle"}}}], indirect=True
+    "test_config", [{"clusters": {"hyrule": {"host": "hyrule"}}}], indirect=True
 )
 def test_drac_fetch_diskusage_report(test_config, remote, file_regression):
-    cluster = test_config.clusters["test"]
+    cluster = test_config.clusters["hyrule"]
     raw_report = None
     with open(
-        Path(__file__).parent / "drac_reports/report_narval.txt", "r", encoding="utf-8"
+        Path(__file__).parent / "drac_reports/report_hyrule.txt", "r", encoding="utf-8"
     ) as f:
         raw_report = f.read()
     assert raw_report
     channel = remote.expect(
         host=cluster.host,
-        cmd="diskusage_report --project --all_users",
+        cmd=cluster.diskusage_report_command,
         out=str.encode(raw_report),
     )
 
-    report = fetch_diskusage_report(cluster=test_config.clusters["test"])
+    report = fetch_diskusage_report(cluster=test_config.clusters["hyrule"])
     file_regression.check("\n".join(report))
 
 
 # @pytest.mark.parametrize(
-#     "test_config", [{"clusters": {"test": {"host": "hyrule.castle"}}}], indirect=True
+#     "test_config", [{"clusters": {"narval": {"host": "narval.computecanada.ca"}}}], indirect=True
 # )
 # @pytest.mark.usefixtures("empty_read_write_db")
 # @pytest.mark.freeze_time("2023-05-12")
-# def test_drac_acquire_storages(test_config, remote, file_regression):
-#     cluster = test_config.clusters["test"]
+# def test_drac_acquire_storages(test_config, remote, cli_main, file_regression):
+#     cluster = test_config.clusters["narval"]
 #     raw_report = None
 #     with open(
 #         Path(__file__).parent / "drac_reports/report_narval.txt", "r", encoding="utf-8"
@@ -51,12 +51,12 @@ def test_drac_fetch_diskusage_report(test_config, remote, file_regression):
 #         out=str.encode(raw_report),
 #     )
 
-#     main(
+#     cli_main(
 #         [
 #             "acquire",
 #             "storages",
 #             "-c",
-#             "test",
+#             "narval",
 #         ]
 #     )
 #     data = get_diskusages(cluster_name=["test"])

@@ -1,8 +1,8 @@
 {
-    "cluster_name": "narval",
+    "cluster_name": "gerudo",
     "groups": [
         {
-            "group_name": "def-bengioy",
+            "group_name": "rrg-bengioy-ad",
             "users": [
                 {
                     "user": "revali",
@@ -32,7 +32,7 @@
             ]
         },
         {
-            "group_name": "rpp-bengioy",
+            "group_name": "def-bengioy",
             "users": [
                 {
                     "user": "riju",
