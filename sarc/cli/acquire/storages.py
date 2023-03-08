@@ -35,8 +35,7 @@ class AcquireStorages:
             else:
                 cluster = config().clusters[cluster_name]
                 report = fetch_diskusage_report(cluster)
-            # pylint: disable=unused-variable
-            header, body = parse_diskusage_report(report)
+            _, body = parse_diskusage_report(report)
 
             du = convert_parsed_report_to_diskusage(cluster_name, body)
 
