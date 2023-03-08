@@ -432,10 +432,11 @@ def test_multiple_dates(test_config, remote, file_regression, cli_main):
 @pytest.mark.usefixtures("empty_read_write_db", "disabled_cache")
 def test_multiple_clusters_and_dates(test_config, remote, file_regression, cli_main):
     cluster_names = ["raisin", "patate"]
-    datetimes = [datetime(2023, 2, 15, tzinfo=MTL) + timedelta(days=i) for i in range(2)]
+    datetimes = [
+        datetime(2023, 2, 15, tzinfo=MTL) + timedelta(days=i) for i in range(2)
+    ]
 
     def _create_session(cluster_name, cmd_template, job_id_offset, datetimes):
-
         return Session(
             host=cluster_name,
             commands=[
