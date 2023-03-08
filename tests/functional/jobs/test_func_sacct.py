@@ -443,7 +443,7 @@ def test_multiple_clusters_and_dates(test_config, remote, file_regression, cli_m
         datetime(2023, 2, 15, tzinfo=MTL) + timedelta(days=i) for i in range(2)
     ]
 
-    def _create_session(cluster_name, cmd_template, job_id_offset, datetimes):
+    def _create_session(cluster_name, cmd_template, datetimes):
         return Session(
             host=cluster_name,
             commands=[
@@ -459,7 +459,7 @@ def test_multiple_clusters_and_dates(test_config, remote, file_regression, cli_m
                     out=create_sacct_json(
                         [
                             {
-                                "job_id": job_id + job_id_offset,
+                                "job_id": job_id,
                                 "cluster": cluster_name,
                                 "time": {
                                     "submission": int(job_submit_datetime.timestamp())
@@ -476,7 +476,6 @@ def test_multiple_clusters_and_dates(test_config, remote, file_regression, cli_m
         _create_session(
             "raisin",
             "/opt/slurm/bin/sacct  -X -S '{start}' -E '{end}' --json",
-            job_id_offset=0,
             datetimes=datetimes,
         ),
         _create_session(
@@ -486,7 +485,6 @@ def test_multiple_clusters_and_dates(test_config, remote, file_regression, cli_m
                 "-A rrg-bonhomme-ad_gpu,rrg-bonhomme-ad_cpu,def-bonhomme_gpu,def-bonhomme_cpu "
                 "-X -S '{start}' -E '{end}' --json"
             ),
-            job_id_offset=len(datetimes),
             datetimes=datetimes,
         ),
     )

@@ -94,7 +94,7 @@ Found 4 job(s):
 {
     "cluster_name": "patate",
     "account": "mila",
-    "job_id": 2,
+    "job_id": 0,
     "array_job_id": null,
     "task_id": null,
     "name": "main.sh",
@@ -140,7 +140,7 @@ Found 4 job(s):
 {
     "cluster_name": "patate",
     "account": "mila",
-    "job_id": 3,
+    "job_id": 1,
     "array_job_id": null,
     "task_id": null,
     "name": "main.sh",
