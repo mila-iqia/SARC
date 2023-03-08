@@ -14,16 +14,11 @@ with the other secrets in the "secrets/account_matching" directory.
 """
 
 import copy
-import argparse
 import csv
 import json
-import os
-from collections import defaultdict
-
-import numpy as np
-# from pymongo import MongoClient, UpdateOne
 
 from sarc.account_matching import name_distances
+
 
 def _load_data_from_files(data_paths):
     """
@@ -46,7 +41,7 @@ def _load_data_from_files(data_paths):
 
     data = {}
     for k, v in data_paths.items():
-        with open(v, "r", encoding='utf-8') as f_in:
+        with open(v, "r", encoding="utf-8") as f_in:
             if v.endswith("csv"):
                 data[k] = [dict_to_lowercase(D) for D in csv.DictReader(f_in)]
             elif v.endswith("json"):
@@ -64,18 +59,19 @@ def run(config_path, mila_ldap_path, cc_members_path, cc_roles_path, output_path
 
     DD_persons = perform_matching(config_path, _load_data_from_files(data_paths))
 
-    with open(output_path, "w", encoding='utf-8') as f_out:
+    with open(output_path, "w", encoding="utf-8") as f_out:
         json.dump(DD_persons, f_out, indent=2)
         print(f"Wrote {output_path}.")
 
     # maybe add something to commit the database here?
 
 
-
-def perform_matching(DLD_data: dict[str, list[dict]],
-                     mila_emails_to_ignore: list[str],
-                     override_matches_mila_to_cc: dict[str, str],
-                     verbose=False):
+def perform_matching(
+    DLD_data: dict[str, list[dict]],
+    mila_emails_to_ignore: list[str] = [],
+    override_matches_mila_to_cc: dict[str, str] = {},
+    verbose=False,
+):
     """
     This is the function with the core functionality.
     The rest is just a wrapper. At this point, this function
@@ -95,11 +91,9 @@ def perform_matching(DLD_data: dict[str, list[dict]],
     for k in DLD_data:
         assert k in {"mila_ldap", "cc_members", "cc_roles"}
 
-
     S_mila_emails_to_ignore = set(mila_emails_to_ignore)
     # The cc_account_username in `override_matches_mila_to_cc`
     # refers to values found in the "cc_members" data source.
-
 
     # Filter out the "cc_members" whose "Activation_Status" is "older_deactivated" or "expired".
     # These accounts might not have members present in the Mila LDAP.
@@ -140,7 +134,9 @@ def perform_matching(DLD_data: dict[str, list[dict]],
         if cc_source not in DLD_data:
             # we might not have all three source files
             continue
-        LD_members = _how_many_cc_accounts_with_mila_emails(DLD_data, cc_source, verbose=verbose)
+        LD_members = _how_many_cc_accounts_with_mila_emails(
+            DLD_data, cc_source, verbose=verbose
+        )
         for D_member in LD_members:
             assert D_member["email"].endswith("@mila.quebec")
             if D_member["email"] in S_mila_emails_to_ignore:
@@ -155,7 +151,7 @@ def perform_matching(DLD_data: dict[str, list[dict]],
         LP_name_matches = name_distances.find_exact_bag_of_words_matches(
             [e[name_or_nom] for e in DLD_data[cc_source]],
             [e["display_name"] for e in DLD_data["mila_ldap"]],
-            delta_threshold=2
+            delta_threshold=2,
         )
         for a, b, _ in LP_name_matches:
             # Again with the O(N^2) matching.
@@ -197,11 +193,11 @@ def perform_matching(DLD_data: dict[str, list[dict]],
                 # to be used later in this function.
                 D_person_found[cc_source] = match
                 del D_person_found  # to make it clear
-            #else:
-                # You can uncomment this to see the divergences,
-                # but usually you don't want to see them.
-                # This can be uncommented when we're doing the manual matching.
-                # assert D_person_found[cc_source] == match  # optional
+            # else:
+            # You can uncomment this to see the divergences,
+            # but usually you don't want to see them.
+            # This can be uncommented when we're doing the manual matching.
+            # assert D_person_found[cc_source] == match  # optional
 
     # Finally, the manual matching that overrides everything.
     # If we ever supplied values in `override_matches_mila_to_cc`,
@@ -224,9 +220,9 @@ def perform_matching(DLD_data: dict[str, list[dict]],
             if cc_account_username not in matching:
                 raise ValueError(
                     f'"{cc_account_username}" is not found in the actual sources.'
-                    'This was supplied to `override_matches_mila_to_cc` in the `make_matches.py` file, '
-                    f'but there are not such entries in {cc_source}.'
-                    'Someone messed up the manual matching by specifying a CC username that does not exist.'
+                    "This was supplied to `override_matches_mila_to_cc` in the `make_matches.py` file, "
+                    f"but there are not such entries in {cc_source}."
+                    "Someone messed up the manual matching by specifying a CC username that does not exist."
                 )
             # Note that `matching[cc_account_username]` is itself a dict
             # with user information from CC. It's not just a username string.
@@ -242,7 +238,10 @@ def perform_matching(DLD_data: dict[str, list[dict]],
         (good_count, bad_count, enabled_count, disabled_count) = (0, 0, 0, 0)
         for D_person in DD_persons.values():
             if D_person["mila_ldap"]["status"] == "enabled":
-                if D_person["cc_members"] is not None or D_person["cc_roles"] is not None:
+                if (
+                    D_person["cc_members"] is not None
+                    or D_person["cc_roles"] is not None
+                ):
                     good_count += 1
                 else:
                     bad_count += 1
@@ -262,20 +261,24 @@ def perform_matching(DLD_data: dict[str, list[dict]],
 
         if "cc_members" in DLD_data:
             count_cc_members_activated = len(
-                [D for D in DLD_data["cc_members"] if D["activation_status"] in ["activated"]]
+                [
+                    D
+                    for D in DLD_data["cc_members"]
+                    if D["activation_status"] in ["activated"]
+                ]
             )
             print(f"We have {count_cc_members_activated} activated cc_members.")
 
             # let's try to be more precise about things to find the missing accounts
             set_A = {
-                    D_member["email"]
-                    for D_member in DLD_data["cc_members"]
-                    if D_member["activation_status"] in ["activated"]
+                D_member["email"]
+                for D_member in DLD_data["cc_members"]
+                if D_member["activation_status"] in ["activated"]
             }
             set_B = {
-                    D_person["cc_members"].get("email", None)
-                    for D_person in DD_persons.values()
-                    if D_person.get("cc_members", None) is not None
+                D_person["cc_members"].get("email", None)
+                for D_person in DD_persons.values()
+                if D_person.get("cc_members", None) is not None
             }
             print(
                 "We could not find matches in the Mila LDAP for the CC accounts "
@@ -286,14 +289,17 @@ def perform_matching(DLD_data: dict[str, list[dict]],
 
         if "cc_roles" in DLD_data:
             count_cc_roles_activated = len(
-                [D for D in DLD_data["cc_roles"] if D["status"].lower() in ["activated"]]
+                [
+                    D
+                    for D in DLD_data["cc_roles"]
+                    if D["status"].lower() in ["activated"]
+                ]
             )
             print(f"We have {count_cc_roles_activated} activated cc_roles.")
 
     # end of status report
 
     return DD_persons
-
 
 
 def _how_many_cc_accounts_with_mila_emails(data, cc_source="cc_members", verbose=False):

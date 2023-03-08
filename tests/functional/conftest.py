@@ -93,8 +93,6 @@ def read_only_db(read_only_db_config_object):
         yield cfg.mongo.database_instance
 
 
-
-
 @pytest.fixture
 def account_matches():
     """
@@ -110,7 +108,7 @@ def account_matches():
     the real data sources.
     """
 
-    #    "john.appleseed@mila.quebec"     is a straighforward match with 3 fields 
+    #    "john.appleseed@mila.quebec"     is a straighforward match with 3 fields
     #    "nur.ali@mila.quebec"            is a match with 2 fields,
     #                                     but the name is in a different order,
     #                                     and with one letter difference
@@ -123,14 +121,15 @@ def account_matches():
     #     override_matches_mila_to_cc = {"overrido.dudette@mila.quebec": "duddirov"}
 
     DLD_account_matches = {
-        "john.appleseed@mila.quebec":
-            {"mila_ldap": {
+        "john.appleseed@mila.quebec": {
+            "mila_ldap": {
                 "mila_email_username": "john.appleseed@mila.quebec",
                 "mila_cluster_username": "appleseedj",
                 "mila_cluster_uid": "1000",
                 "mila_cluster_gid": "1000",
                 "display_name": "John Appleseed",
-                "status": "enabled"},
+                "status": "enabled",
+            },
             "cc_members": {
                 "rapi": "jvb-000-ag",
                 "groupname": "rrg-bengioy-ad",
@@ -144,8 +143,8 @@ def account_matches():
                 "username": "appjohn",
                 "ccri": "abc-002-01",
                 "email": "johnnyapple@umontreal.ca",
-                "member_since": "2018-10-10 10:10:10 -0400"
-                },
+                "member_since": "2018-10-10 10:10:10 -0400",
+            },
             "cc_roles": {
                 "status": "Activated",
                 "lastname": "Appleseed",
@@ -156,16 +155,18 @@ def account_matches():
                 "statut": "étudiant au doctorat",
                 "institution": "Un. de Montréal",
                 "département": "Informatique Et Recherche Opérationnelle",
-                "État du compte": "activé dernier renouvellement le 2021-05-05 10:00:00 EDT -0400"
-                }},
-        "nur.ali@mila.quebec":
-            {"mila_ldap": {
+                "État du compte": "activé dernier renouvellement le 2021-05-05 10:00:00 EDT -0400",
+            },
+        },
+        "nur.ali@mila.quebec": {
+            "mila_ldap": {
                 "mila_email_username": "nur.ali@mila.quebec",
                 "mila_cluster_username": "nurali",
                 "mila_cluster_uid": "1001",
                 "mila_cluster_gid": "1001",
                 "display_name": "Nur al-Din Ali",
-                "status": "enabled"},
+                "status": "enabled",
+            },
             "cc_members": {
                 "rapi": "jvb-000-ag",
                 "groupname": "rrg-bengioy-ad",
@@ -179,35 +180,43 @@ def account_matches():
                 "username": "aldinur",
                 "ccri": "abc-002-04",
                 "email": "master_of_chaos@astalavista.box.sk",
-                "member_since": "2018-10-10 10:10:10 -0400"
-                },
-            "cc_roles": None},
-        "pikachu.pigeon@mila.quebec":
-            {"mila_ldap": {
+                "member_since": "2018-10-10 10:10:10 -0400",
+            },
+            "cc_roles": None,
+        },
+        "pikachu.pigeon@mila.quebec": {
+            "mila_ldap": {
                 "mila_email_username": "pikachu.pigeon@mila.quebec",
                 "mila_cluster_username": "pigeopika",
                 "mila_cluster_uid": "1002",
                 "mila_cluster_gid": "1002",
                 "display_name": "pikachu pigeon",
-                "status": "enabled"},
-            "cc_members": None, "cc_roles": None},
-        "ignoramus.mikey@mila.quebec":
-            {"mila_ldap": {
+                "status": "enabled",
+            },
+            "cc_members": None,
+            "cc_roles": None,
+        },
+        "ignoramus.mikey@mila.quebec": {
+            "mila_ldap": {
                 "mila_email_username": "ignoramus.mikey@mila.quebec",
                 "mila_cluster_username": "mikeignor",
                 "mila_cluster_uid": "1003",
                 "mila_cluster_gid": "1003",
                 "display_name": "Michelangelo the Ignoramus",
-                "status": "enabled"},
-            "cc_members": None, "cc_roles": None},
-        "overrido.dudette@mila.quebec":
-            {"mila_ldap": {
+                "status": "enabled",
+            },
+            "cc_members": None,
+            "cc_roles": None,
+        },
+        "overrido.dudette@mila.quebec": {
+            "mila_ldap": {
                 "mila_email_username": "overrido.dudette@mila.quebec",
                 "mila_cluster_username": "vopeach",
                 "mila_cluster_uid": "1003",
                 "mila_cluster_gid": "1003",
                 "display_name": "Peach von Overrido",
-                "status": "enabled"},
+                "status": "enabled",
+            },
             "cc_members": {
                 "rapi": "jvb-000-ag",
                 "groupname": "rrg-bengioy-ad",
@@ -222,8 +231,8 @@ def account_matches():
                 "username": "duddirov",
                 "ccri": "abc-002-06",
                 "email": "peachpalace@yahoo.fr",
-                "member_since": "2018-10-10 10:10:10 -0400"
-                },
+                "member_since": "2018-10-10 10:10:10 -0400",
+            },
             "cc_roles": {
                 "status": "Activated",
                 "lastname": "Ethelberg von Overrido",
@@ -234,9 +243,9 @@ def account_matches():
                 "statut": "étudiant au doctorat",
                 "institution": "Un. de Montréal",
                 "département": "Informatique Et Recherche Opérationnelle",
-                "État du compte": "activé dernier renouvellement le 2021-05-05 10:00:00 EDT -0400"
-                }
+                "État du compte": "activé dernier renouvellement le 2021-05-05 10:00:00 EDT -0400",
             },
+        },
     }
 
     return DLD_account_matches

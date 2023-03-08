@@ -32,7 +32,9 @@ def get_jobs_dataframe(filename=None) -> pd.DataFrame:
         # Precompute the total number of jobs to display a progress bar
         # get_jobs is a generator so we don't get the total unless we pre-fetch all jobs
         # beforehand.
-        total = config().mongo.database_instance.jobs.count_documents({"cluster_name": cluster})
+        total = config().mongo.database_instance.jobs.count_documents(
+            {"cluster_name": cluster}
+        )
         for job in tqdm(
             get_jobs(cluster=cluster, start="2022-04-01"),
             total=total,

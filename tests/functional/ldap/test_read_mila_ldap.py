@@ -1,7 +1,6 @@
+import json
 import os
 import tempfile
-import json
-
 from unittest.mock import patch
 
 import sarc.ldap.read_mila_ldap  # will monkeypatch "query_ldap"
