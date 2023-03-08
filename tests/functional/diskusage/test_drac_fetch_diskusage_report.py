@@ -39,7 +39,6 @@ def test_drac_fetch_diskusage_report(test_config, remote, file_regression):
 @pytest.mark.freeze_time("2023-05-12")
 def test_drac_acquire_storages(test_config, remote, cli_main, file_regression):
     cluster = test_config.clusters["hyrule"]
-    assert True
     raw_report = None
     with open(
         Path(__file__).parent / "drac_reports/report_hyrule.txt", "r", encoding="utf-8"
