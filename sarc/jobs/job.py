@@ -58,11 +58,11 @@ class Statistics(BaseModel):
 class JobStatistics(BaseModel):
     """Statistics for a job."""
 
-    gpu_utilization: Statistics
-    gpu_memory: Statistics
+    gpu_utilization: Optional[Statistics]
+    gpu_memory: Optional[Statistics]
 
-    cpu_utilization: Statistics
-    system_memory: Statistics
+    cpu_utilization: Optional[Statistics]
+    system_memory: Optional[Statistics]
 
 
 class SlurmResources(BaseModel):
@@ -148,14 +148,14 @@ class SlurmJob(BaseModel):
 
         return get_job_time_series(job=self, **kwargs)
 
-    def statistics(self, recompute=False):
+    def statistics(self, recompute=False, save=True):
         from .series import compute_job_statistics  # pylint: disable=cyclic-import
 
         if self.stored_statistics and not recompute:
             return self.stored_statistics
         else:
             statistics = compute_job_statistics(self)
-            if statistics and self.end_time:
+            if save and statistics and self.end_time:
                 self.stored_statistics = statistics
                 self.save()
             return statistics

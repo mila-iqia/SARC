@@ -91,7 +91,7 @@ def get_job_time_series_metric_names():
 def compute_job_statistics_from_dataframe(
     df: DataFrame,
     statistics,
-    normalization=lambda x: x,
+    normalization=float,
     unused_threshold=0.01,
     is_time_counter=False,
 ):
@@ -125,7 +125,7 @@ def compute_job_statistics_from_dataframe(
     else:
         n_unused = 0
 
-    rval = {name: fn(normalization(df["value"])) for name, fn in statistics.items()}
+    rval = {name: normalization(fn(df["value"])) for name, fn in statistics.items()}
     return {**rval, "unused": n_unused}
 
 
@@ -133,7 +133,7 @@ def compute_job_statistics_one_metric(
     job: SlurmJob,
     metric_name,
     statistics,
-    normalization=lambda x: x,
+    normalization=float,
     unused_threshold=0.01,
     is_time_counter=False,
 ):
@@ -165,14 +165,14 @@ def compute_job_statistics(job: SlurmJob):
         "slurm_job_utilization_gpu",
         statistics=statistics_dict,
         unused_threshold=0.01,
-        normalization=lambda x: x / 100,
+        normalization=lambda x: float(x / 100),
     )
 
     gpu_memory = compute_job_statistics_one_metric(
         job,
         "slurm_job_utilization_gpu_memory",
         statistics=statistics_dict,
-        normalization=lambda x: x / 100,
+        normalization=lambda x: float(x / 100),
         unused_threshold=None,
     )
 
@@ -188,15 +188,15 @@ def compute_job_statistics(job: SlurmJob):
         job,
         "slurm_job_memory_usage",
         statistics=statistics_dict,
-        normalization=lambda x: x / 1e6 / job.allocated.mem,
+        normalization=lambda x: float(x / 1e6 / job.allocated.mem),
         unused_threshold=None,
     )
 
     return JobStatistics(
-        gpu_utilization=Statistics(**gpu_utilization),
-        gpu_memory=Statistics(**gpu_memory),
-        cpu_utilization=Statistics(**cpu_utilization),
-        system_memory=Statistics(**system_memory),
+        gpu_utilization=gpu_utilization and Statistics(**gpu_utilization),
+        gpu_memory=gpu_memory and Statistics(**gpu_memory),
+        cpu_utilization=cpu_utilization and Statistics(**cpu_utilization),
+        system_memory=system_memory and Statistics(**system_memory),
     )
 
 
