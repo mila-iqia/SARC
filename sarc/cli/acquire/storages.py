@@ -43,6 +43,4 @@ class AcquireStorages:
             collection = get_diskusage_collection()
             collection.add(du)
 
-            # raise NotImplementedError()
-
         return 0
