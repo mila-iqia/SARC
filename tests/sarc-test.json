@@ -4,7 +4,6 @@
         "database": "sarc-test"
     },
     "cache": "./sarc-cache",
-    "sshconfig": "~/.ssh/config",
     "clusters": {
         "raisin": {
             "host": "raisin",
