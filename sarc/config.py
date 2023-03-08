@@ -48,6 +48,11 @@ class BaseModel(_BaseModel):
     def dict(self, *args, **kwargs) -> dict[str, Any]:
         d = super().dict(*args, **kwargs)
 
+        for k, v in list(d.items()):
+            if isinstance(getattr(type(self), k, None), cached_property):
+                del d[k]
+                continue
+
         for k, v in d.items():
             if isinstance(v, date) and not isinstance(v, datetime):
                 d[k] = datetime(
