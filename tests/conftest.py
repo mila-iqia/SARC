@@ -67,3 +67,14 @@ def test_config(
     )
     with using_config(conf):
         yield conf
+
+
+@pytest.fixture
+def cli_main():
+    from sarc.cli import main
+    from sarc.cli.utils import clusters
+
+    # Update possible choices based on the current test config
+    clusters.choices = list(config().clusters.keys())
+
+    yield main

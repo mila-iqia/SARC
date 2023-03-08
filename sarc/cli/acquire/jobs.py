@@ -4,6 +4,7 @@ from datetime import datetime
 
 from simple_parsing import field
 
+from sarc.cli.utils import clusters
 from sarc.config import config
 from sarc.jobs.sacct import sacct_mongodb_import
 
@@ -11,7 +12,7 @@ from sarc.jobs.sacct import sacct_mongodb_import
 @dataclass
 class AcquireJobs:
     cluster_names: list[str] = field(
-        alias=["-c"], default_factory=list, choices=list(config().clusters.keys())
+        alias=["-c"], default_factory=list, choices=clusters
     )
 
     dates: list[str] = field(alias=["-d"], default_factory=list)
