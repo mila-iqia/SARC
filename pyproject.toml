@@ -43,7 +43,7 @@ build-backend = "poetry.core.masonry.api"
 sarc = 'sarc.cli:main'
 
 [tool.pylint]
-ignore-paths = ['sarc/inode_storage_scanner']
+ignore-paths = []
 disable = [
     "no-self-argument",  # Pydantic validators don't have one
     "too-few-public-methods",  # Triggered on Pydantic models
