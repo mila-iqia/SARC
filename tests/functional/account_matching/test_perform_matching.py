@@ -3,7 +3,6 @@ from sarc.config import config
 
 
 def helper_extract_three_account_sources_from_ground_truth(account_matches):
-
     # Not accessing the database here. Just testing the matching algorithm.
     # Start with the ground truth, and then we'll split it into 3 parts
     # to see if it can be recovered.
@@ -49,7 +48,6 @@ def helper_extract_three_account_sources_from_ground_truth(account_matches):
 
 
 def test_perform_matching(account_matches):
-
     (
         DLD_data,
         mila_emails_to_ignore,

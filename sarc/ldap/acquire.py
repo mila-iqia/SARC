@@ -80,7 +80,6 @@ def run():
 
 
 def commit_matches_to_database(users_collection, DD_persons_matched, verbose=False):
-
     L_updates_to_do = []
     for mila_email_username, D_match in DD_persons_matched.items():
         assert (

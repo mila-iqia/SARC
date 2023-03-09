@@ -6,7 +6,6 @@ from sarc.account_matching.name_distances import (
 
 
 def test_bag_of_words_nrur_al_din_ali():
-
     bow_distance(
         bag_of_words_projection("Nur al-Din Ali"),
         bag_of_words_projection("Nur Alialdin"),

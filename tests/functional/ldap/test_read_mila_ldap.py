@@ -51,7 +51,6 @@ def fake_raw_ldap_data(nbr_users=10):
 
 
 def test_query_to_ldap_server_and_writing_to_output_json(monkeypatch):
-
     cfg = config()
     nbr_users = 10
 
@@ -80,7 +79,7 @@ def test_query_to_ldap_server_and_writing_to_output_json(monkeypatch):
         # sarc.ldap.read_mila_ldap.process_user() is correct.
         # This means that we are not testing much.
         assert len(E) == nbr_users
-        for (e, raw_user) in zip(E, fake_raw_ldap_data(nbr_users)):
+        for e, raw_user in zip(E, fake_raw_ldap_data(nbr_users)):
             assert e == sarc.ldap.read_mila_ldap.process_user(raw_user)
 
         # note that the elements being compared are of the form
