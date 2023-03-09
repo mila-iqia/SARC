@@ -16,7 +16,7 @@ with the other secrets in the "secrets/account_matching" directory.
 import copy
 import csv
 import json
-
+from pathlib import PosixPath
 from sarc.account_matching import name_distances
 
 
@@ -34,6 +34,9 @@ def load_data_from_files(data_paths):
             "cc_members": [...], # list of dicts
             "cc_roles": [...],   # list of dicts
         }
+    
+    In cases where the data is already a list and not a path,
+    we can just return it directly.
     """
 
     def dict_to_lowercase(D):
@@ -41,35 +44,25 @@ def load_data_from_files(data_paths):
 
     data = {}
     for k, v in data_paths.items():
-        with open(v, "r", encoding="utf-8") as f_in:
-            if v.endswith("csv"):
-                data[k] = [dict_to_lowercase(D) for D in csv.DictReader(f_in)]
-            elif v.endswith("json"):
-                data[k] = json.load(f_in)
+        if isinstance(v, list):
+            # pass through
+            data[k] = [dict_to_lowercase(D) for D in v]
+        else:
+            with open(v, "r", encoding="utf-8") as f_in:
+                if (isinstance(v, str) and v.endswith("csv")) or (isinstance(v, PosixPath) and v.suffix == ".csv"):
+                    data[k] = [dict_to_lowercase(D) for D in csv.DictReader(f_in)]
+                elif (isinstance(v, str) and v.endswith("json")) or (isinstance(v, PosixPath) and v.suffix == ".json"):
+                    data[k] = json.load(f_in)
+                else:
+                    raise ValueError(f"Unknown file type for {v}")
     return data
-
-
-# def run(config_path, mila_ldap_path, cc_members_path, cc_roles_path, output_path):
-
-#     data_paths = {
-#         "mila_ldap": mila_ldap_path,
-#         "cc_members": cc_members_path,
-#         "cc_roles": cc_roles_path,
-#     }
-
-#     DD_persons = perform_matching(config_path, load_data_from_files(data_paths))
-
-#     with open(output_path, "w", encoding="utf-8") as f_out:
-#         json.dump(DD_persons, f_out, indent=2)
-#         print(f"Wrote {output_path}.")
-
-    # maybe add something to commit the database here?
 
 
 def perform_matching(
     DLD_data: dict[str, list[dict]],
-    mila_emails_to_ignore: list[str] = [],
-    override_matches_mila_to_cc: dict[str, str] = {},
+    mila_emails_to_ignore: list[str],
+    override_matches_mila_to_cc: dict[str, str],
+    name_distance_delta_threshold=2,  # mostly for testing
     verbose=False,
 ):
     """
@@ -151,7 +144,7 @@ def perform_matching(
         LP_name_matches = name_distances.find_exact_bag_of_words_matches(
             [e[name_or_nom] for e in DLD_data[cc_source]],
             [e["display_name"] for e in DLD_data["mila_ldap"]],
-            delta_threshold=2,
+            delta_threshold=name_distance_delta_threshold,
         )
         for a, b, _ in LP_name_matches:
             # Again with the O(N^2) matching.

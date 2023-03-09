@@ -18,64 +18,75 @@ import sarc.ldap.read_mila_ldap  # for the `run` function
 from sarc.config import config
 import sarc.account_matching.make_matches
 
+
 def run():
     cfg = config()
 
-    with tempfile.NamedTemporaryFile() as tmp_file_mila_users:
-        tmp_file_mila_users_path = tmp_file_mila_users.name
+    #with tempfile.NamedTemporaryFile(suffix=".json") as tmp_file_mila_users:
+        # tmp_file_mila_users_path = tmp_file_mila_users.name
 
         # TODO : The method `sarc.ldap.read_mila_ldap.run`
         #        could be modified to make use of `cfg.mongo.database_instance`
         #        instead of doing its own thing with `cfg.mongo.connection_string`.
 
-        sarc.ldap.read_mila_ldap.run(
-            local_private_key_file=cfg.ldap.local_private_key_file,
-            local_certificate_file=cfg.ldap.local_certificate_file,
-            ldap_service_uri=cfg.ldap.ldap_service_uri,
-            # write results in database
-            mongodb_connection_string=cfg.mongo.connection_string,
-            mongodb_database_name=cfg.mongo.database_name,
-            mongodb_collection=cfg.ldap.mongo_collection_name,
-            # write results to here (for account matching script)
-            output_json_file=tmp_file_mila_users_path,            
-        )
+    sarc.ldap.read_mila_ldap.run(
+        local_private_key_file=cfg.ldap.local_private_key_file,
+        local_certificate_file=cfg.ldap.local_certificate_file,
+        ldap_service_uri=cfg.ldap.ldap_service_uri,
+        # write results in database
+        mongodb_connection_string=cfg.mongo.connection_string,
+        mongodb_database_name=cfg.mongo.database_name,
+        mongodb_collection=cfg.ldap.mongo_collection_name,
+        # write results to here (for account matching script)
+        # output_json_file=tmp_file_mila_users_path,
+    )
 
-        # Yes, it would be possible to forgo the temporary file and
-        # just read the data from the database.
+    # It becomes really hard to test this with script when
+    # we mock the `open` calls, so we'll instead rely on
+    # what has already been populated in the database.
+    LD_users = list(cfg.mongo.database_instance[cfg.ldap.mongo_collection_name].find({}))
+    LD_users = [D_user["mila_ldap"] for D_user in LD_users]
 
-        DLD_data = sarc.account_matching.make_matches.load_data_from_files({
-            "mila_ldap": tmp_file_mila_users_path,
+    DLD_data = sarc.account_matching.make_matches.load_data_from_files(
+        {
+            "mila_ldap": LD_users,  # pass through
             "cc_roles": cfg.account_matching.cc_roles_csv_path,
-            "cc_members": cfg.account_matching.cc_members_csv_path})
+            "cc_members": cfg.account_matching.cc_members_csv_path,
+        }
+    )
 
-        # hint : To debug or manually adjust `perform_matching` to handle new edge cases
-        #        that arrive each semester, you can inspect the contents of the temporary file
-        #        to see what you're working with, or you can just inspect `DLD_data`
-        #        by saving it somewhere.
+    # hint : To debug or manually adjust `perform_matching` to handle new edge cases
+    #        that arrive each semester, you can inspect the contents of the temporary file
+    #        to see what you're working with, or you can just inspect `DLD_data`
+    #        by saving it somewhere.
 
-        DD_persons_matched = sarc.account_matching.make_matches.perform_matching(
-            DLD_data=DLD_data,
-            mila_emails_to_ignore=cfg.account_matching.mila_emails_to_ignore,
-            override_matches_mila_to_cc=cfg.account_matching.override_matches_mila_to_cc,
-            verbose=False)    
+    DD_persons_matched = sarc.account_matching.make_matches.perform_matching(
+        DLD_data=DLD_data,
+        mila_emails_to_ignore=cfg.account_matching.mila_emails_to_ignore,
+        override_matches_mila_to_cc=cfg.account_matching.override_matches_mila_to_cc,
+        name_distance_delta_threshold=0,
+        verbose=False,
+    )
 
-        # `DD_persons_matched` is indexed by mila_email_username values,
-        # and each entry is a dict with 3 keys:
-        #     {
-        #       "mila_ldap": {
-        #           "mila_email_username": "john.appleseed@mila.quebec",
-        #           ...
-        #       },
-        #       "cc_roles": {...} or None,
-        #       "cc_members": {...} or None
-        #     }
+    # from pprint import pprint
+    # pprint(DD_persons_matched)
 
+    # `DD_persons_matched` is indexed by mila_email_username values,
+    # and each entry is a dict with 3 keys:
+    #     {
+    #       "mila_ldap": {
+    #           "mila_email_username": "john.appleseed@mila.quebec",
+    #           ...
+    #       },
+    #       "cc_roles": {...} or None,
+    #       "cc_members": {...} or None
+    #     }
 
-        # These associations can now be propagated to the database.
-        commit_matches_to_database(
-            cfg.mongo.database_instance[cfg.ldap.mongo_collection_name],
-            DD_persons_matched)
-
+    # These associations can now be propagated to the database.
+    commit_matches_to_database(
+        cfg.mongo.database_instance[cfg.ldap.mongo_collection_name],
+        DD_persons_matched,
+    )
 
 
 def commit_matches_to_database(users_collection, DD_persons_matched, verbose=False):
@@ -113,6 +124,7 @@ def commit_matches_to_database(users_collection, DD_persons_matched, verbose=Fal
 
     # might as well return this result in case we'd like to write tests for it
     return result
+
 
 if __name__ == "__main__":
     run()
