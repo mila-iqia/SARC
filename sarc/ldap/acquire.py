@@ -10,8 +10,6 @@ As a result of running this script, the values in the collection
 referenced by "cfg.ldap.mongo_collection_name" will be updated.
 """
 
-import tempfile
-
 from pymongo import UpdateOne
 
 import sarc.ldap.read_mila_ldap  # for the `run` function
@@ -22,29 +20,21 @@ import sarc.account_matching.make_matches
 def run():
     cfg = config()
 
-    #with tempfile.NamedTemporaryFile(suffix=".json") as tmp_file_mila_users:
-        # tmp_file_mila_users_path = tmp_file_mila_users.name
-
-        # TODO : The method `sarc.ldap.read_mila_ldap.run`
-        #        could be modified to make use of `cfg.mongo.database_instance`
-        #        instead of doing its own thing with `cfg.mongo.connection_string`.
-
     sarc.ldap.read_mila_ldap.run(
         local_private_key_file=cfg.ldap.local_private_key_file,
         local_certificate_file=cfg.ldap.local_certificate_file,
         ldap_service_uri=cfg.ldap.ldap_service_uri,
         # write results in database
-        mongodb_connection_string=cfg.mongo.connection_string,
-        mongodb_database_name=cfg.mongo.database_name,
+        mongodb_database_instance=cfg.mongo.database_instance,
         mongodb_collection=cfg.ldap.mongo_collection_name,
-        # write results to here (for account matching script)
-        # output_json_file=tmp_file_mila_users_path,
     )
 
     # It becomes really hard to test this with script when
     # we mock the `open` calls, so we'll instead rely on
     # what has already been populated in the database.
-    LD_users = list(cfg.mongo.database_instance[cfg.ldap.mongo_collection_name].find({}))
+    LD_users = list(
+        cfg.mongo.database_instance[cfg.ldap.mongo_collection_name].find({})
+    )
     LD_users = [D_user["mila_ldap"] for D_user in LD_users]
 
     DLD_data = sarc.account_matching.make_matches.load_data_from_files(

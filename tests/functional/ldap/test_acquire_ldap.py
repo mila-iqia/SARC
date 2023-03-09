@@ -1,4 +1,3 @@
-
 from unittest.mock import patch, mock_open, MagicMock
 
 import sarc.ldap.read_mila_ldap  # will monkeypatch "query_ldap"
@@ -6,6 +5,7 @@ import sarc.ldap.acquire
 from sarc.config import config
 from .test_read_mila_ldap import fake_raw_ldap_data
 import sarc.account_matching.make_matches
+
 
 def test_acquire_ldap(monkeypatch):
     """
@@ -46,7 +46,7 @@ def test_acquire_ldap(monkeypatch):
 "Activated","john.smith002","John Smith the 002rd","js002@yahoo.ca","activé"
 "Activated","stranger.person","Mysterious Stranger","ms@hotmail.com","activé"
 """
-    # inspired by members-rrg-bengioy-ad-2022-11-25.csv 
+    # inspired by members-rrg-bengioy-ad-2022-11-25.csv
     file2_content = """Name,Sponsor,Permission,Activation_Status,username,Email
 John Smith the 000rd,BigProf,Manager,activated,john.smith000,js000@yahoo.ca
 John Smith the 001rd,BigProf,Manager,activated,john.smith001,js001@yahoo.ca
@@ -62,13 +62,13 @@ Mysterious Stranger,BigProf,Manager,activated,stranger.person,ms@hotmail.com
 
     # Define a function that returns a new mock file object with the content
     def mock_file(filename, *vargs, **kwargs):
-       if filename in file_contents:
-           return mock_open(read_data=file_contents[filename]).return_value
-       else:
-           # we haven't found a way to pass through the other calls
-           # to `open` other files, so let's just raise an error
-           # because those aren't going to work anyways
-           raise FileNotFoundError(filename)
+        if filename in file_contents:
+            return mock_open(read_data=file_contents[filename]).return_value
+        else:
+            # we haven't found a way to pass through the other calls
+            # to `open` other files, so let's just raise an error
+            # because those aren't going to work anyways
+            raise FileNotFoundError(filename)
 
     # Patch the built-in `open()` function for each file path
     with patch("builtins.open", side_effect=mock_file):
@@ -79,8 +79,11 @@ Mysterious Stranger,BigProf,Manager,activated,stranger.person,ms@hotmail.com
 
     # Validate the results of all of this by inspecting the database.
     for i in range(3):
-        L = list(cfg.mongo.database_instance[cfg.ldap.mongo_collection_name].find(
-            {"mila_ldap.mila_email_username": f"john.smith{i:03d}@mila.quebec"}))
+        L = list(
+            cfg.mongo.database_instance[cfg.ldap.mongo_collection_name].find(
+                {"mila_ldap.mila_email_username": f"john.smith{i:03d}@mila.quebec"}
+            )
+        )
         assert len(L) == 1
         js_user = L[0]
         # test some cc_roles and cc_members fields
@@ -92,7 +95,23 @@ Mysterious Stranger,BigProf,Manager,activated,stranger.person,ms@hotmail.com
             assert js_user[segment]["username"] == f"john.smith{i:03d}"
 
     # test the absence of the mysterious stranger
-    assert len(list(cfg.mongo.database_instance[cfg.ldap.mongo_collection_name].find(
-        {"cc_roles.email": "ms@hotmail.com"}))) == 0
-    assert len(list(cfg.mongo.database_instance[cfg.ldap.mongo_collection_name].find(
-        {"cc_members.email": "ms@hotmail.com"}))) == 0
+    assert (
+        len(
+            list(
+                cfg.mongo.database_instance[cfg.ldap.mongo_collection_name].find(
+                    {"cc_roles.email": "ms@hotmail.com"}
+                )
+            )
+        )
+        == 0
+    )
+    assert (
+        len(
+            list(
+                cfg.mongo.database_instance[cfg.ldap.mongo_collection_name].find(
+                    {"cc_members.email": "ms@hotmail.com"}
+                )
+            )
+        )
+        == 0
+    )

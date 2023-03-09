@@ -314,14 +314,25 @@ def run(
     local_private_key_file=None,
     local_certificate_file=None,
     ldap_service_uri=None,
+    # DB option 1
+    mongodb_database_instance=None,
+    # DB option 2
     mongodb_connection_string=None,
     mongodb_database_name=None,
+    #
     mongodb_collection=None,
     input_json_file=None,
     output_json_file=None,
     output_raw_LDAP_json_file=None,
     LD_users=None,  # for external testing purposes
 ):
+    """
+    If `mongodb_database_instance` is not `None`, it overrides the two arguments
+    `mongodb_connection_string`, `mongodb_database_name`.
+    This is done because the SARC config gets us a client connected to a database already,
+    so it's better to use that functionality.
+    """
+
     if LD_users is not None:
         # Used mostly for testing purposes.
         # Overrides the "input_json_file" argument.
@@ -344,11 +355,22 @@ def run(
 
         LD_users = [process_user(D_user_raw) for D_user_raw in LD_users_raw]
 
-    if mongodb_connection_string and mongodb_database_name and mongodb_collection:
+    # Two ways to get the MongoDB collection, and then it's possible that we don't care
+    # about getting one, in which case we'll skip that step of the output.
+    if mongodb_database_instance is not None and mongodb_collection is not None:
+        users_collection = mongodb_database_instance[mongodb_collection]
+    elif (
+        mongodb_connection_string is not None
+        and mongodb_database_name is not None
+        and mongodb_collection is not None
+    ):
         users_collection = MongoClient(mongodb_connection_string)[
             mongodb_database_name
         ][mongodb_collection]
+    else:
+        users_collection = None
 
+    if users_collection is not None:
         # read only the "mila_ldap" field from the entries, and ignore the
         # "cc_roles" and "cc_members" components
         LD_users_DB = [u["mila_ldap"] for u in list(users_collection.find())]
