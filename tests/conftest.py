@@ -20,9 +20,17 @@ def standard_config_object():
     yield parse_config(Path(__file__).parent / "sarc-test.json")
 
 
-@pytest.fixture(scope="session", autouse=True)
-def use_standard_config(standard_config_object):  # pylint: disable=redefined-outer-name
-    with using_config(standard_config_object):
+@pytest.fixture(autouse=True)
+def standard_config(standard_config_object, tmp_path):
+    cfg = standard_config_object.replace(cache=tmp_path / "sarc-tmp-test-cache")
+    with using_config(cfg) as cfg:
+        yield cfg
+
+
+@pytest.fixture
+def disabled_cache():
+    cfg = config().replace(cache=None)
+    with using_config(cfg) as cfg:
         yield
 
 
@@ -34,7 +42,6 @@ def tzlocal_is_mtl(monkeypatch):
 
 @pytest.fixture
 def test_config(
-    tmp_path,
     request,
 ):
     current = config()
@@ -62,7 +69,6 @@ def test_config(
     conf = current.replace(
         mongo=current.mongo.replace(**mongo_repl),
         sshconfig=None,
-        cache=tmp_path,
         clusters=new_clusters,
     )
     with using_config(conf):

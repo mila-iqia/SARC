@@ -13,6 +13,7 @@ parameters = {
     "one_job": {"job_id": 10},
     "one_job_wrong_cluster": {"job_id": 10, "cluster": "patate"},
     "many_jobs": {"job_id": [8, 9]},
+    "no_jobs": {"job_id": []},
     "start_only": {"start": datetime(2023, 2, 19, tzinfo=MTL)},
     "end_only": {"end": datetime(2023, 2, 16, tzinfo=MTL)},
     "start_str_only": {"start": "2023-02-19"},

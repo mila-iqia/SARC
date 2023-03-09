@@ -13,6 +13,7 @@ from pydantic import BaseModel as _BaseModel
 from pydantic import Extra, validator
 
 MTL = zoneinfo.ZoneInfo("America/Montreal")
+PST = zoneinfo.ZoneInfo("America/Vancouver")
 UTC = zoneinfo.ZoneInfo("UTC")
 TZLOCAL = zoneinfo.ZoneInfo(str(datetime.now().astimezone().tzinfo))
 
