@@ -3,8 +3,7 @@
         "url": "localhost:27017",
         "database": "sarc-test"
     },
-    "cache": "./sarc-cache",
-    "sshconfig": "~/.ssh/config",
+    "cache": "./sarc-test-cache",
     "clusters": {
         "raisin": {
             "host": "raisin",
