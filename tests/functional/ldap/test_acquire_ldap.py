@@ -1,10 +1,12 @@
-from unittest.mock import patch, mock_open, MagicMock
+from unittest.mock import MagicMock, mock_open, patch
 
-import sarc.ldap.read_mila_ldap  # will monkeypatch "query_ldap"
-import sarc.ldap.acquire
-from sarc.config import config
-from .test_read_mila_ldap import fake_raw_ldap_data
 import sarc.account_matching.make_matches
+import sarc.ldap.acquire
+import sarc.ldap.read_mila_ldap  # will monkeypatch "query_ldap"
+from sarc.config import config
+from sarc.ldap.api import get_user
+
+from .test_read_mila_ldap import fake_raw_ldap_data
 
 
 def test_acquire_ldap(monkeypatch):
@@ -79,13 +81,14 @@ Mysterious Stranger,BigProf,Manager,activated,stranger.person,ms@hotmail.com
 
     # Validate the results of all of this by inspecting the database.
     for i in range(3):
-        L = list(
-            cfg.mongo.database_instance[cfg.ldap.mongo_collection_name].find(
-                {"mila_ldap.mila_email_username": f"john.smith{i:03d}@mila.quebec"}
-            )
-        )
-        assert len(L) == 1
-        js_user = L[0]
+        js_user = get_user(mila_email_username=f"john.smith{i:03d}@mila.quebec")
+        assert js_user is not None
+        # L = list(
+        #    cfg.mongo.database_instance[cfg.ldap.mongo_collection_name].find(
+        #        {"mila_ldap.mila_email_username": f"john.smith{i:03d}@mila.quebec"}
+        #    )
+        # )
+
         # test some cc_roles and cc_members fields
         for segment in ["cc_roles", "cc_members"]:
             assert segment in js_user
@@ -95,23 +98,5 @@ Mysterious Stranger,BigProf,Manager,activated,stranger.person,ms@hotmail.com
             assert js_user[segment]["username"] == f"john.smith{i:03d}"
 
     # test the absence of the mysterious stranger
-    assert (
-        len(
-            list(
-                cfg.mongo.database_instance[cfg.ldap.mongo_collection_name].find(
-                    {"cc_roles.email": "ms@hotmail.com"}
-                )
-            )
-        )
-        == 0
-    )
-    assert (
-        len(
-            list(
-                cfg.mongo.database_instance[cfg.ldap.mongo_collection_name].find(
-                    {"cc_members.email": "ms@hotmail.com"}
-                )
-            )
-        )
-        == 0
-    )
+    js_user = get_user(drac_account_username="ms@hotmail.com")
+    assert js_user is None

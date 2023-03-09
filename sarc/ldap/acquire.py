@@ -12,9 +12,9 @@ referenced by "cfg.ldap.mongo_collection_name" will be updated.
 
 from pymongo import UpdateOne
 
+import sarc.account_matching.make_matches
 import sarc.ldap.read_mila_ldap  # for the `run` function
 from sarc.config import config
-import sarc.account_matching.make_matches
 
 
 def run():
