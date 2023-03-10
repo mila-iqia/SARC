@@ -2,10 +2,16 @@
 What this script does
 =====================
 
-This script runs locally every day on a machine at Mila.
-It queries our LDAP service for all users and it updates
-the MongoDB instance for SARC so that the "users"
-collection reflects those accounts.
+This script can be called directly from the command line (legacy),
+or it can be called from the `sarc.ldap.acquire` script (recommended)
+using the `sarc ...` command.
+
+The legacy usage is not covered by unit tests, but the sarc command is covered.
+It is part of a pipeline that will fetch the user data from the LDAP service,
+do some processing on it, and then write it to a MongoDB instance.
+
+
+The legacy usage is as follows:
 
 Two mutually-exclusive ways to input the data, by priority:
    1) use the --input_json_file argument
@@ -34,8 +40,8 @@ This `read_mila_ldap.py` script will update only the "mila_ldap" part of the ent
 
 
 
-Sample uses
-===========
+Sample uses (legacy)
+====================
 
 Two ways this can be used:
 
