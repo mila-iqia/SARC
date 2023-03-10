@@ -13,6 +13,7 @@ from pydantic import BaseModel as _BaseModel
 from pydantic import Extra, validator
 
 MTL = zoneinfo.ZoneInfo("America/Montreal")
+PST = zoneinfo.ZoneInfo("America/Vancouver")
 UTC = zoneinfo.ZoneInfo("UTC")
 TZLOCAL = zoneinfo.ZoneInfo(str(datetime.now().astimezone().tzinfo))
 
@@ -51,6 +52,8 @@ class BaseModel(_BaseModel):
             if isinstance(getattr(type(self), k, None), cached_property):
                 del d[k]
                 continue
+
+        for k, v in d.items():
             if isinstance(v, date) and not isinstance(v, datetime):
                 d[k] = datetime(
                     year=v.year,

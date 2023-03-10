@@ -1,10 +1,10 @@
-Found 1 job(s):
 {
+    "id": null,
     "cluster_name": "raisin",
     "account": "mila",
-    "job_id": 10,
-    "array_job_id": 9,
-    "task_id": 10,
+    "job_id": 1,
+    "array_job_id": null,
+    "task_id": null,
     "name": "main.sh",
     "user": "petitbonhomme",
     "group": "petitbonhomme",
@@ -24,24 +24,24 @@ Found 1 job(s):
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_BACKFILL": true,
     "time_limit": 43200,
-    "submit_time": "2023-02-16T00:00:00-05:00",
-    "start_time": "2023-02-16T00:01:00-05:00",
-    "end_time": "2023-02-16T12:01:00-05:00",
+    "submit_time": "2023-02-14T00:00:00-05:00",
+    "start_time": "2023-02-14T00:01:00-05:00",
+    "end_time": "2023-02-14T12:01:00-05:00",
     "elapsed_time": 43200,
     "requested": {
         "cpu": 4,
-        "mem": 49152,
-        "node": 1,
-        "billing": 1,
-        "gres_gpu": 1,
-        "gpu_type": null
+        "mem": 16384,
+        "node": 2,
+        "billing": 3,
+        "gres_gpu": 4,
+        "gpu_type": "p100"
     },
     "allocated": {
-        "cpu": 4,
-        "mem": 49152,
+        "cpu": 2,
+        "mem": 10000,
         "node": 1,
         "billing": 1,
         "gres_gpu": 1,
-        "gpu_type": null
+        "gpu_type": "p100"
     }
 }
