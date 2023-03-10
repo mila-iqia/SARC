@@ -1,7 +1,7 @@
 {
     "mongo": {
         "url": "localhost:27017",
-        "database": "sarc-dev"
+        "database": "sarc-prod"
     },
     "cache": "./sarc-cache",
     "sshconfig": "~/.ssh/config",
