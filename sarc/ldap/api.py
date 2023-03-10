@@ -28,7 +28,11 @@ def get_user(
     else:
         raise ValueError("At least one of the arguments must be provided.")
 
-    L = list(cfg.mongo.database_instance[cfg.ldap.mongo_collection_name].find(query))
+    L = list(
+        cfg.mongo.database_instance[cfg.ldap.mongo_collection_name].find(
+            query, {"_id": False}
+        )
+    )
     assert len(L) <= 1
     if len(L) == 1:
         return L[0]
