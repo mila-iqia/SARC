@@ -12,7 +12,7 @@ from .factory import JobFactory
 mtl_test_time = datetime(2023, 3, 5, 6, 0, tzinfo=MTL)
 utc_test_time = mtl_test_time.astimezone(UTC)
 
-test_time_str = mtl_test_time.strftime("%Y-%m-%dT%H:%M %Z")
+test_time_str = utc_test_time.strftime("%Y-%m-%dT%H:%M %Z")
 
 
 @pytest.mark.usefixtures("empty_read_write_db", "empty_read_write_prometheus")
