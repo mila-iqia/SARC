@@ -1,17 +1,7 @@
 # Setup Scripts
 
-## serverinit.sh
-Installs base packages on a bare new OS.
-SSH access and sudo rights on the target server needed.
+## remote
 
-```
-$ chmod +x serverinit.sh
-$ ./serverinit.sh <server>
-```
+These scripts must be run from a computer from which yu have ssh access to the sarc server.
 
-## mongo.sh
-Install, start and stop mongo package on the server
 
-```
-$ ./mongo.sh <server> [install|start|stop|status]
-```

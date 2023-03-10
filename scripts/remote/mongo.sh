@@ -28,15 +28,6 @@ case $2 in
     stop)
         echo "MongoDB stop..."
         ssh $1 'sudo -H -u sarc podman stop sarc_mongo --log-level error'
-        # status=$(ssh $1 'sudo -H -u sarc podman ps --log-level error | grep sarc_mongo') 
-        # if [[ -z $status ]];
-        # then
-        #     echo 'MongoDB not started !'
-        # else
-        #     id=(${status//" "/ })
-        #     echo "Stopping MongoDB image:"
-        #     ssh $1 "sudo -H -u sarc podman stop $id --log-level error"
-        # fi
         ;;
     status)
         echo "Checking MongoDB status..."

@@ -1,0 +1,64 @@
+{
+    "mongo": {
+        "url": "localhost:27017",
+        "database": "sarc-dev"
+    },
+    "cache": "./sarc-cache",
+    "sshconfig": "~/.ssh/config",
+    "clusters": {
+        "mila": {
+            "host": "mila",
+            "timezone": "America/Montreal",
+            "accounts": null,
+            "sacct_bin": "/opt/slurm/bin/sacct",
+            "duc_inodes_command": null,
+            "duc_storage_command": null,
+            "diskusage_report_command": null,
+            "prometheus_url": "http://monitoring.server.mila.quebec:9090/"
+        },
+        "narval": {
+            "host": "narval.computecanada.ca",
+            "timezone": "America/Montreal",
+            "accounts": ["rrg-bengioy-ad_gpu", "rrg-bengioy-ad_cpu", "def-bengioy_gpu", "def-bengioy_cpu"],
+            "sacct_bin": "/opt/software/slurm/bin/sacct",
+            "duc_inodes_command": "duc ls -d /project/.duc_databases/rrg-bengioy-ad.sqlite --count /project/rrg-bengioy-ad",
+            "duc_storage_command": "duc ls -d /project/.duc_databases/rrg-bengioy-ad.sqlite /project/rrg-bengioy-ad",
+            "diskusage_report_command": "diskusage_report --project --all_users",
+            "prometheus_url": "https://mila-thanos.calculquebec.ca",
+            "prometheus_headers_file": "secrets/drac_prometheus/headers.json"
+        },
+        "beluga": {
+            "host": "beluga.computecanada.ca",
+            "timezone": "America/Montreal",
+            "accounts": ["rrg-bengioy-ad_gpu", "rrg-bengioy-ad_cpu", "def-bengioy_gpu", "def-bengioy_cpu"],
+            "sacct_bin": "/opt/software/slurm/bin/sacct",
+            "duc_inodes_command": "duc ls -d /project/.duc_databases/rrg-bengioy-ad.sqlite --count /project/rrg-bengioy-ad",
+            "duc_storage_command": "duc ls -d /project/.duc_databases/rrg-bengioy-ad.sqlite /project/rrg-bengioy-ad",
+            "diskusage_report_command": "diskusage_report --project --all_users",
+            "prometheus_url": "https://mila-thanos.calculquebec.ca",
+            "prometheus_headers_file": "secrets/drac_prometheus/headers.json"
+        },
+        "graham": {
+            "host": "graham.computecanada.ca",
+            "timezone": "America/Toronto",
+            "accounts": ["rrg-bengioy-ad_gpu", "rrg-bengioy-ad_cpu", "def-bengioy_gpu", "def-bengioy_cpu"],
+            "sacct_bin": "/opt/software/slurm/bin/sacct",
+            "duc_inodes_command": null,
+            "duc_storage_command": null,
+            "diskusage_report_command": "diskusage_report --project --all_users",
+            "prometheus_url": "https://mila-thanos.calculquebec.ca",
+            "prometheus_headers_file": "secrets/drac_prometheus/headers.json"
+        },
+        "cedar": {
+            "host": "cedar.computecanada.ca",
+            "timezone": "America/Vancouver",
+            "accounts": ["rrg-bengioy-ad_gpu", "rrg-bengioy-ad_cpu", "def-bengioy_gpu", "def-bengioy_cpu"],
+            "sacct_bin": "/opt/software/slurm/bin/sacct",
+            "duc_inodes_command": null,
+            "duc_storage_command": null,
+            "diskusage_report_command": "diskusage_report --project --all_users",
+            "prometheus_url": "https://mila-thanos.calculquebec.ca",
+            "prometheus_headers_file": "secrets/drac_prometheus/headers.json"
+        }
+    }
+}

@@ -19,20 +19,18 @@ cd ~
 ### ssh folder
 
 Before going anywhere, we need to copy the ssh keys and `config` files in our `~/.ssh` folder.
-Get the ssh folder provided through "some secure external channel" as stated in [the ***"Secrets"*** document](secrets.md), and copy its content to th `~/.ssh/` folder of the `sarc` user.
+Get the ssh folder provided through "some secure external channel" as stated in [the ***"Secrets"*** document](secrets.md), and copy its content to the `~/.ssh/` folder of the `sarc` user.
 
 ### GitHub access
 
-We need to add a "deploy key" to the gh repo. To do that, copy the `SARC/scripts/setup_github_keys.sh` script to the server, in the `sarc` user home folder, then:
+We need to add a "deploy key" to the GitHub repo. To do that, from your workstation, run the `SARC/scripts/remote/setup_github_keys.sh <server>` script.
 
+Then, on the server:
 ```
-sudo su sarc
-cd
-chmod +x setup_github_keys.sh
-./setup_github_keys.sh
+sudo cat /home/sarc/.ssh/github_keys/mila-sarc-id_rsa.pub
 ```
 
-It will display the content of `/home/sarc/.ssh/github_keys/mila-sarc-id_rsa.pub` ; copy/paste this key in [the Deploy keys settings of the github project](https://github.com/mila-iqia/SARC/settings/keys).
+It will display the content of the previously generated public key ; copy/paste this key in [the Deploy keys settings of the github project](https://github.com/mila-iqia/SARC/settings/keys).
 (You don't need write access)
 
 ## Get SARC
