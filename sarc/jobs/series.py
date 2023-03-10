@@ -47,13 +47,8 @@ def get_job_time_series(
 
     selector = f'{metric}{{slurmjobid=~"{job.job_id}"}}'
 
-    # import pytest
-
-    # pytest.set_trace()
     now = datetime.now(tz=UTC).astimezone(MTL)
-    print(datetime.now())
-    print(datetime.now(tz=UTC))
-    print(now)
+
     ago = now - job.start_time
     duration = (job.end_time or now) - job.start_time
 

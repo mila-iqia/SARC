@@ -20,8 +20,6 @@ test_time_str = utc_test_time.strftime("%Y-%m-%dT%H:%M %Z")
 def job(request):
     params = getattr(request, "param", {})
 
-    print(utc_test_time)
-    print(test_time_str)
     params.setdefault("submit_time", utc_test_time - timedelta(hours=3, minutes=30))
     params.setdefault("start_time", params["submit_time"] + timedelta(minutes=30))
     # TODO: Add a JobTimeSeriesFactory when we have a prometheus setup where we can send fake data.
