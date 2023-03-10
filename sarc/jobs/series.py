@@ -39,7 +39,7 @@ def get_job_time_series(
             f"Aggregation must be one of ['total', 'interval', None]: {aggregation}"
         )
 
-    if not job.start_time:
+    if job.job_state != "RUNNING" and not job.elapsed_time:
         return None if dataframe else []
     if metric not in slurm_job_metric_names:
         raise ValueError(f"Unknown metric name: {metric}")
