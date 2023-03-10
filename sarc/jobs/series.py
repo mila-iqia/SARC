@@ -55,10 +55,14 @@ def get_job_time_series(
 
     duration_seconds = int(duration.total_seconds())
 
+    # Duration should not be looking in the future
+    if offset < 0:
+        duration_seconds += offset
+
     if duration_seconds <= 0:
         return None if dataframe else []
 
-    interval = int(max((duration / max_points).total_seconds(), min_interval))
+    interval = int(max(duration_seconds / max_points, min_interval))
 
     query = selector
 
