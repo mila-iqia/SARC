@@ -4,7 +4,7 @@ from datetime import datetime
 
 from prometheus_api_client import MetricRangeDataFrame
 
-from sarc.config import MTL, UTC
+from sarc.config import MTL, TZLOCAL
 from sarc.jobs.sacct import SlurmJob
 
 
@@ -50,7 +50,7 @@ def get_job_time_series(
     # import pytest
 
     # pytest.set_trace()
-    now = datetime.now(tz=UTC).astimezone(MTL)
+    now = datetime.now(tz=TZLOCAL).astimezone(MTL)
     print(now)
     ago = now - job.start_time
     duration = (job.end_time or now) - job.start_time
