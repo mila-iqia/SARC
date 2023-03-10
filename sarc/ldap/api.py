@@ -9,7 +9,9 @@ from sarc.config import config
 def get_user(
     mila_email_username=None, mila_cluster_username=None, drac_account_username=None
 ):
-    # do we really want to build the config each time this is called?
+    # note that this `cfg = config()` is cached inside the `config` call
+    # so we don't need to caching it here to avoid
+    # paying a price each time we call `get_user`
     cfg = config()
 
     if mila_email_username is not None:
