@@ -38,3 +38,13 @@ def get_user(
         return L[0]
     else:
         return None
+
+
+def get_users():
+    cfg = config()
+    query = {}
+    return list(
+        cfg.mongo.database_instance[cfg.ldap.mongo_collection_name].find(
+        query, {"_id": False}
+        )
+    )

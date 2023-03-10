@@ -2,6 +2,8 @@ import json
 import tempfile
 from unittest.mock import patch
 
+import pytest
+
 import sarc.ldap.read_mila_ldap  # will monkeypatch "query_ldap"
 from sarc.config import config
 
@@ -94,7 +96,7 @@ def test_query_to_ldap_server_and_writing_to_output_json(monkeypatch):
         }
         """
 
-
+@pytest.mark.usefixtures("empty_read_write_db")
 def test_query_to_ldap_server_and_commit_to_db(monkeypatch):
     """
     This test is going to use the database and it will make
@@ -106,8 +108,8 @@ def test_query_to_ldap_server_and_commit_to_db(monkeypatch):
 
     cfg = config()
     db = cfg.mongo.database_instance
-    # cleanup before running test in case another test failed to clean
-    db[cfg.ldap.mongo_collection_name].delete_many({})
+    # No need to clean up because of the `empty_read_write_db` fixture.
+    # db[cfg.ldap.mongo_collection_name].delete_many({})
 
     nbr_users = 10
 
@@ -183,5 +185,5 @@ def test_query_to_ldap_server_and_commit_to_db(monkeypatch):
     ):
         assert u1 == u2
 
-    # cleanup
-    db[cfg.ldap.mongo_collection_name].delete_many({})
+    # No need to clean up because of the `empty_read_write_db` fixture.
+    # db[cfg.ldap.mongo_collection_name].delete_many({})

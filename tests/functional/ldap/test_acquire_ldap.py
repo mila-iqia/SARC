@@ -1,5 +1,7 @@
 from unittest.mock import MagicMock, mock_open, patch
 
+import pytest
+
 import sarc.account_matching.make_matches
 import sarc.ldap.acquire
 import sarc.ldap.read_mila_ldap  # will monkeypatch "query_ldap"
@@ -9,6 +11,8 @@ from sarc.ldap.api import get_user
 from .test_read_mila_ldap import fake_raw_ldap_data
 
 
+# @pytest.mark.usefixtures("read_write_db")
+@pytest.mark.usefixtures("empty_read_write_db")
 def test_acquire_ldap(monkeypatch):
     """
     Override the LDAP queries.
