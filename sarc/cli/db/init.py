@@ -15,7 +15,6 @@ class DbInit:
     database: Optional[str]
 
     def execute(self) -> int:
-
         cfg = config()
         url = cfg.mongo.url if self.url is None else self.url
         database = cfg.mongo.database if self.database is None else self.database
@@ -42,7 +41,6 @@ class DbInit:
 
 
 def create_users_indices(db):
-
     # db_collection = UserRepository(database=db).get_collection()
     db_collection = db.users
 
@@ -57,7 +55,6 @@ def create_users_indices(db):
 
 
 def create_allocations_indices(db):
-
     db_collection = AllocationsRepository(database=db).get_collection()
 
     # Index most useful for querying allocations for a given cluster
@@ -80,7 +77,6 @@ def create_allocations_indices(db):
 
 
 def create_storages_indices(db):
-
     db_collection = ClusterDiskUsageRepository(database=db).get_collection()
 
     # Index most useful for querying diskusages for a given cluster and a given group
@@ -109,7 +105,6 @@ def create_storages_indices(db):
 
 
 def create_jobs_indices(db):
-
     db_collection = SlurmJobRepository(database=db).get_collection()
 
     # Index most useful for querying single jobs.
