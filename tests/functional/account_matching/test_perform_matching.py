@@ -13,8 +13,6 @@ def helper_extract_three_account_sources_from_ground_truth(account_matches):
             if data[k] is not None:
                 DLD_data[k].append(data[k])
 
-    # TODO : mess up the capitalization of some email to see if it still matches
-
     # as described in test fixture
     mila_emails_to_ignore = ["ignoramus.mikey@mila.quebec"]
     # note that the point here is that this entry would never
@@ -71,5 +69,41 @@ def test_perform_matching(account_matches):
     #        assert DD_persons[mila_email_username] == account_matches[mila_email_username][source_name]
 
 
-# TODO : Add test that doesn't make good use of `mila_emails_to_ignore` and `override_matches_mila_to_cc`
-#        and ends up with a false positive and a false negative.
+# For later work:
+# If you want to add a test, you can add one that makes good use
+# of `mila_emails_to_ignore` and `override_matches_mila_to_cc`
+# and ends up with a false positive and a false negative.
+
+
+def test_perform_matching_with_bad_email_capitalization(account_matches):
+    (
+        DLD_data,
+        mila_emails_to_ignore,
+        override_matches_mila_to_cc,
+    ) = helper_extract_three_account_sources_from_ground_truth(account_matches)
+
+    assert isinstance(DLD_data["cc_members"], list)
+    assert isinstance(DLD_data["cc_members"][0], dict)
+
+    # mess up the capitalization of some email to see if it still matches
+    DLD_data["cc_members"][0]["email"] = DLD_data["cc_members"][0]["email"].upper()
+    DLD_data["cc_roles"][1]["email"] = DLD_data["cc_roles"][1]["email"].upper()
+
+    DD_persons = perform_matching(
+        DLD_data,
+        mila_emails_to_ignore=mila_emails_to_ignore,
+        override_matches_mila_to_cc=override_matches_mila_to_cc,
+        verbose=False,
+    )
+
+    # Since the matching tests will also make the email lowercase,
+    # then we need to compare with the lowercase version of the email.
+    # We'll do that transformation manually here.
+    for source_name in ["cc_members", "cc_roles"]:
+        LD_data = DLD_data[source_name]
+        for D_data in LD_data:
+            if D_data is not None:
+                D_data["email"] = D_data["email"].lower()
+
+    # recursive matching of dicts
+    assert account_matches == DD_persons
