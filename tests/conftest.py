@@ -1,5 +1,6 @@
 import zoneinfo
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -67,3 +68,17 @@ def test_config(
     )
     with using_config(conf):
         yield conf
+
+
+@pytest.fixture
+def custom_query_mock(monkeypatch):
+
+    from prometheus_api_client import PrometheusConnect
+
+    monkeypatch.setattr(
+        PrometheusConnect,
+        "custom_query",
+        MagicMock(return_value=[]),
+    )
+
+    yield PrometheusConnect.custom_query
