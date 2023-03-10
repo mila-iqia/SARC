@@ -65,6 +65,33 @@ In the future, if necessary, use the $SARC_CONFIG environment variable to choose
 
 ## MongoDB
 
+### Create the sarc_mongo container
+
+***TODO***
+
+### Systemd file
+
+***notes: https://www.howtogeek.com/687970/how-to-run-a-linux-program-at-startup-with-systemd/***
+
+
+Copy the `sarc_mongo.service` file to systemd :
+
+```
+sudo cp serverscripts/systemd/sarc_mongo.service /etc/systemd/system
+sudo chmod 640 /etc/systemd/system/sarc_mongo.service
+sudo systemctl daemon-reload
+```
+### Service setup to start on system startup
+```
+sudo systemctl enable sarc_mongo
+```
+
+### Service start
+The service will satrt at system startup, but you must start it manually if you don't want to reboot the server:
+```
+sudo systemctl start sarc_mongo
+```
+
 ## Cron jobs
 
 ### jobs
