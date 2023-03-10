@@ -7,14 +7,14 @@ from typing import Any, Union
 from simple_parsing import ArgumentParser, field, subparsers
 
 from sarc.cli.acquire import Acquire
+from sarc.cli.db import Db
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
 class CLI:
-    # NOTE: This should use Union[Acquire, OtherCommand] when we have more than one command.
-    command: Acquire = subparsers({"acquire": Acquire})
+    command: Union[Acquire, Db] = subparsers({"acquire": Acquire, "db": Db})
 
     verbose: int = field(
         alias=["-v"],
