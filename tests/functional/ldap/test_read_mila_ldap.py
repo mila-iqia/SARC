@@ -1,3 +1,4 @@
+import copy
 import json
 import tempfile
 from unittest.mock import patch
@@ -119,14 +120,15 @@ def test_query_to_ldap_server_and_commit_to_db(monkeypatch):
     del L
 
     # avoid copy/paste of the same code
-    def helper_function(L_users):
+    def helper_function(L_users_to_add):
         def mock_query_ldap(
             local_private_key_file, local_certificate_file, ldap_service_uri
         ):
             # Since we're not using the real LDAP server, we don't need to
             # actually have valid paths in `local_private_key_file` and `local_certificate_file`.
             assert ldap_service_uri.startswith("ldaps://")
-            return L_first_batch_users  # <-- first batch of users
+            return L_users_to_add
+            #return L_first_batch_users  # <-- first batch of users
 
         monkeypatch.setattr(sarc.ldap.read_mila_ldap, "query_ldap", mock_query_ldap)
 
@@ -165,8 +167,6 @@ def test_query_to_ldap_server_and_commit_to_db(monkeypatch):
 
     # Make query 1. Find users. Add them to database. Then check that database contents is correct.
     L_users = helper_function(L_first_batch_users)
-    # print(L_users[0])
-    # print(transform_user_list(L_first_batch_users)[0])
     for u1, u2 in zip(
         sorted(L_users, key=sorted_order_func),
         sorted(transform_user_list(L_first_batch_users), key=sorted_order_func),
@@ -174,16 +174,39 @@ def test_query_to_ldap_server_and_commit_to_db(monkeypatch):
         assert u1 == u2
 
     # Make query 2. Find users. Add them to database. Then check that database contents is correct.
-    # Keep in my that the first batch of users are still there.
+    # Keep in mind that the first batch of users are still there.
+    # There is something that changes, though, which is that the first batch of users
+    # should now have the status "archived" because they are not in the second batch.
+    # That's the LDAP parser's way of saying that when a user is in the database
+    # but it's not reported in the most current LDAP query, then it means that
+    # it's been "archived". We do that instead of deleting the users.
+
+    # Does the LDAP query and adds the results to the database.
+    # Note that L_uA containts users from `L_first_batch_users`
+    # with a status of "archived", and users from `L_second_batch_users`
+    # with their normal status.
     L_users = helper_function(L_second_batch_users)
-    for u1, u2 in zip(
-        sorted(L_users, key=sorted_order_func),
-        sorted(
-            transform_user_list(L_first_batch_users + L_second_batch_users),
+    L_uA = sorted(L_users, key=sorted_order_func)
+
+    L1 = transform_user_list(L_first_batch_users)
+    L2 = transform_user_list(L_second_batch_users)
+    for u in L1:
+        u["mila_ldap"]["status"] = "archived"
+    L_uB = sorted(
+            L1+L2,
             key=sorted_order_func,
-        ),
+        )
+
+    assert len(L_uA) == len(L_uB)
+    for uA, uB in zip(
+        L_uA, # sorted(L_users, key=sorted_order_func),
+        L_uB
+        #sorted(
+        #    transform_user_list(L_first_batch_users + L_second_batch_users),
+        #    key=sorted_order_func,
+        #),
     ):
-        assert u1 == u2
+        assert uA == uB
 
     # No need to clean up because of the `empty_read_write_db` fixture.
     # db[cfg.ldap.mongo_collection_name].delete_many({})
