@@ -16,8 +16,8 @@ cd ~
 
 ## Access rights
 
-Before going anywhere, we need to copy the ssh keys in our `~/.ssh` folder.
-Get the ssh folder provided through "some secure external channel" as stated in [the ***"Secrets"*** document](secrets.md)
+Before going anywhere, we need to copy the ssh keys and `config` files in our `~/.ssh` folder.
+Get the ssh folder provided through "some secure external channel" as stated in [the ***"Secrets"*** document](secrets.md), and copy its content to th `~/.ssh/` folder of the `sarc` user.
 
 ## Get SARC
 
@@ -41,11 +41,14 @@ sudo chown sarc:sarc /home/sarc/SARC -R
 
 
 As `sarc` user, install poetry:
+
+(follow [this method](https://www.digitalocean.com/community/tutorials/how-to-install-poetry-to-manage-python-dependencies-on-ubuntu-22-04#step-1-installing-poetry), since the apt method seems broken someway)
+
 ```
 curl -sSL https://install.python-poetry.org | python3 -
 ```
 
-As told by the script itself: Add `export PATH="/home/sarc/.local/bin:$PATH"` to your shell configuration file.
+As told by the script itself: Add `export PATH="/home/sarc/.local/bin:$PATH"` to `.bashrc`.
 
 ### Setup code
 
