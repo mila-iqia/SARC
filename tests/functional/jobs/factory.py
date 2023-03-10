@@ -61,7 +61,7 @@ class JobFactory:
         job = copy.deepcopy(base_job)
         elapsed_time = kwargs.get("elapsed_time", job["elapsed_time"])
         job.update(kwargs)
-        job["submit_time"] = kwargs.get("elapsed_time", self.next_submit_time)
+        job["submit_time"] = kwargs.get("submit_time", self.next_submit_time)
         job["start_time"] = kwargs.get(
             "start_time", job["submit_time"] + timedelta(seconds=60)
         )
@@ -74,6 +74,10 @@ class JobFactory:
 
         if job["end_time"] is not None:
             default_elapsed_time = (job["end_time"] - job["start_time"]).total_seconds()
+        elif job["job_state"] == "RUNNING":
+            default_elapsed_time = (
+                datetime.now().astimezone(UTC) - job["start_time"]
+            ).total_seconds()
         else:
             default_elapsed_time = 0
         job["elapsed_time"] = kwargs.get("elapsed_time", default_elapsed_time)
