@@ -50,7 +50,9 @@ def get_job_time_series(
     # import pytest
 
     # pytest.set_trace()
-    now = datetime.utcnow().replace(tzinfo=UTC).astimezone(MTL)
+    now = datetime.now(tz=UTC).astimezone(MTL)
+    print(datetime.now())
+    print(datetime.now(tz=UTC))
     print(now)
     ago = now - job.start_time
     duration = (job.end_time or now) - job.start_time
