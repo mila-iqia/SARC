@@ -43,7 +43,8 @@ Found 7 job(s):
         "billing": 1,
         "gres_gpu": 1,
         "gpu_type": null
-    }
+    },
+    "stored_statistics": null
 }
 {
     "cluster_name": "raisin",
@@ -89,7 +90,8 @@ Found 7 job(s):
         "billing": 1,
         "gres_gpu": 1,
         "gpu_type": null
-    }
+    },
+    "stored_statistics": null
 }
 {
     "cluster_name": "raisin",
@@ -135,7 +137,8 @@ Found 7 job(s):
         "billing": 1,
         "gres_gpu": 1,
         "gpu_type": null
-    }
+    },
+    "stored_statistics": null
 }
 {
     "cluster_name": "raisin",
@@ -181,7 +184,8 @@ Found 7 job(s):
         "billing": 1,
         "gres_gpu": 1,
         "gpu_type": null
-    }
+    },
+    "stored_statistics": null
 }
 {
     "cluster_name": "raisin",
@@ -227,7 +231,8 @@ Found 7 job(s):
         "billing": 1,
         "gres_gpu": 1,
         "gpu_type": null
-    }
+    },
+    "stored_statistics": null
 }
 {
     "cluster_name": "raisin",
@@ -273,7 +278,8 @@ Found 7 job(s):
         "billing": 1,
         "gres_gpu": 1,
         "gpu_type": null
-    }
+    },
+    "stored_statistics": null
 }
 {
     "cluster_name": "raisin",
@@ -319,5 +325,6 @@ Found 7 job(s):
         "billing": 2,
         "gres_gpu": 1,
         "gpu_type": "A100"
-    }
+    },
+    "stored_statistics": null
 }

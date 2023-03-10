@@ -46,5 +46,6 @@
         "billing": 1,
         "gres_gpu": 1,
         "gpu_type": null
-    }
+    },
+    "stored_statistics": null
 }
