@@ -128,7 +128,6 @@ def test_query_to_ldap_server_and_commit_to_db(monkeypatch):
             # actually have valid paths in `local_private_key_file` and `local_certificate_file`.
             assert ldap_service_uri.startswith("ldaps://")
             return L_users_to_add
-            #return L_first_batch_users  # <-- first batch of users
 
         monkeypatch.setattr(sarc.ldap.read_mila_ldap, "query_ldap", mock_query_ldap)
 

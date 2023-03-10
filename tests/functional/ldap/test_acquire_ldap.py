@@ -80,9 +80,6 @@ Mysterious Stranger,BigProf,Manager,activated,stranger.person,ms@hotmail.com
     with patch("builtins.open", side_effect=mock_file):
         sarc.ldap.acquire.run()
 
-    # from pprint import pprint
-    # pprint(list(cfg.mongo.database_instance[cfg.ldap.mongo_collection_name].find({})))
-
     # Validate the results of all of this by inspecting the database.
     for i in range(3):
         js_user = get_user(mila_email_username=f"john.smith{i:03d}@mila.quebec")
