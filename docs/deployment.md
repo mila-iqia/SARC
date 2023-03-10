@@ -16,26 +16,37 @@ cd ~
 
 ## Access rights
 
+### ssh folder
+
 Before going anywhere, we need to copy the ssh keys and `config` files in our `~/.ssh` folder.
 Get the ssh folder provided through "some secure external channel" as stated in [the ***"Secrets"*** document](secrets.md), and copy its content to th `~/.ssh/` folder of the `sarc` user.
 
-## Get SARC
+### GitHub access
 
+We need to add a "deploy key" to the gh repo. To do that, copy the `SARC/scripts/setup_github_keys.sh` script to the server, in the `sarc` user home folder, then:
+
+```
+sudo su sarc
+cd
+chmod +x setup_github_keys.sh
+./setup_github_keys.sh
+```
+
+It will display the content of `/home/sarc/.ssh/github_keys/mila-sarc-id_rsa.pub` ; copy/paste this key in [the Deploy keys settings of the github project](https://github.com/mila-iqia/SARC/settings/keys).
+(You don't need write access)
+
+## Get SARC
 
 ### Get code
 
-First things first, let's checkout the sarc code **in your own home folder**:
+Once the deploy keys are set up, you can clone the repo:
 
 ```
-git clone git@github.com:mila-iqia/SARC.git -key <your-private-ssh-key-that-has-access-rights-to-the-repo>
+# as sarc user
+cd
+git clone git@github-sarc:mila-iqia/SARC.git
 ```
 
-...then copy it to the `sarc` user folder.
-
-```
-sudo cp SARC /home/sarc -r
-sudo chown sarc:sarc /home/sarc/SARC -R
-```
 ### Dependencies
 #### Poetry
 
@@ -75,19 +86,22 @@ In the future, if necessary, use the $SARC_CONFIG environment variable to choose
 
 
 Copy the `sarc_mongo.service` file to systemd :
+***TODO sarc_mongo.service***
 
 ```
 sudo cp serverscripts/systemd/sarc_mongo.service /etc/systemd/system
 sudo chmod 640 /etc/systemd/system/sarc_mongo.service
 sudo systemctl daemon-reload
 ```
+***TODO le service doit appeler un script, on le met où? on code en dur le chemin /home/sarc/SARC ?***
+
 ### Service setup to start on system startup
 ```
 sudo systemctl enable sarc_mongo
 ```
 
 ### Service start
-The service will satrt at system startup, but you must start it manually if you don't want to reboot the server:
+The service will start at system startup, but you must start it manually if you don't want to reboot the server:
 ```
 sudo systemctl start sarc_mongo
 ```
@@ -95,8 +109,11 @@ sudo systemctl start sarc_mongo
 ## Cron jobs
 
 ### jobs
+1x par jour
 ### allocations
-### storage
+### storages
+1x par jour
 ### account matching
 (Ceci doit plutôt être fait manuellement)
+EDIT: une fos par jour c'est ok ?
 
