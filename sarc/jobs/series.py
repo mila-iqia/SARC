@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import datetime
 
 from prometheus_api_client import MetricRangeDataFrame
@@ -11,7 +13,7 @@ def get_job_time_series(
     metric: str,
     min_interval: int = 30,
     max_points: int = 100,
-    measure: str = None,
+    measure: str | None = None,
     aggregation: str = "total",
     dataframe: bool = True,
 ):
@@ -32,7 +34,10 @@ def get_job_time_series(
             dicts returned by Prometheus's API.
     """
 
-    assert aggregation in ("interval", "total", None)
+    if aggregation not in ("interval", "total", None):
+        raise ValueError(
+            f"Aggregation must be one of ['total', 'interval', None]: {aggregation}"
+        )
 
     if not job.start_time:
         return None if dataframe else []
