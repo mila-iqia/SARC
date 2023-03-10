@@ -32,6 +32,7 @@ def clear_db(db):
     db.allocations.drop()
     db.jobs.drop()
     db.diskusage.drop()
+    db.users.drop()
 
 
 def fill_db(db):
