@@ -72,7 +72,6 @@ def test_config(
 
 @pytest.fixture
 def custom_query_mock(monkeypatch):
-
     from prometheus_api_client import PrometheusConnect
 
     monkeypatch.setattr(

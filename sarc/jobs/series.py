@@ -8,6 +8,7 @@ from sarc.config import MTL
 from sarc.jobs.sacct import SlurmJob
 
 
+# pylint: disable=too-many-branches
 def get_job_time_series(
     job: SlurmJob,
     metric: str,
