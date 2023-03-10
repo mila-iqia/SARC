@@ -45,8 +45,8 @@ def get_job_time_series(
         raise ValueError(f"Unknown metric name: {metric}")
 
     selector = f'{metric}{{slurmjobid=~"{job.job_id}"}}'
-    now = datetime.now().astimezone(MTL)
 
+    now = datetime.now(tz=MTL)
     ago = now - job.start_time
     duration = (job.end_time or now) - job.start_time
 
