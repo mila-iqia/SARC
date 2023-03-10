@@ -211,7 +211,7 @@ Found 14 job(s):
     "submit_time": "2023-02-15T12:00:00-05:00",
     "start_time": "2023-02-15T12:01:00-05:00",
     "end_time": null,
-    "elapsed_time": 0,
+    "elapsed_time": 43200,
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -257,7 +257,7 @@ Found 14 job(s):
     "submit_time": "2023-02-15T18:00:00-05:00",
     "start_time": "2023-02-15T18:01:00-05:00",
     "end_time": null,
-    "elapsed_time": 0,
+    "elapsed_time": 43200,
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -346,9 +346,9 @@ Found 14 job(s):
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_BACKFILL": true,
     "time_limit": 43200,
-    "submit_time": "2023-02-16T06:00:00-05:00",
-    "start_time": "2023-02-16T06:01:00-05:00",
-    "end_time": "2023-02-16T18:01:00-05:00",
+    "submit_time": "2023-02-16T00:00:00-05:00",
+    "start_time": "2023-02-16T00:01:00-05:00",
+    "end_time": "2023-02-16T12:01:00-05:00",
     "elapsed_time": 43200,
     "requested": {
         "cpu": 4,
@@ -392,9 +392,9 @@ Found 14 job(s):
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_BACKFILL": true,
     "time_limit": 43200,
-    "submit_time": "2023-02-16T12:00:00-05:00",
-    "start_time": "2023-02-16T12:01:00-05:00",
-    "end_time": "2023-02-17T00:01:00-05:00",
+    "submit_time": "2023-02-16T00:00:00-05:00",
+    "start_time": "2023-02-16T00:01:00-05:00",
+    "end_time": "2023-02-16T12:01:00-05:00",
     "elapsed_time": 43200,
     "requested": {
         "cpu": 4,
@@ -474,7 +474,8 @@ Found 14 job(s):
     "partition": "long",
     "nodes": [
         "cn-c021",
-        "cn-c022"
+        "cn-c022",
+        "cn-d001"
     ],
     "work_dir": "/network/scratch/p/petitbonhomme/experience-demente",
     "constraints": "x86_64&(48gb|80gb)",

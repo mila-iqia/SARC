@@ -2,11 +2,15 @@ from __future__ import annotations
 
 import copy
 from datetime import datetime, timedelta
+from typing import Optional
 
-from sarc.config import MTL, UTC
+from flatten_dict import flatten, unflatten
 
-# elapsed_time = 60 * 60 * 12
-# end_time = datetime(2023, 2, 14, 23, 48, 54, tzinfo=MTL).astimezone(UTC)
+from sarc.config import MTL, UTC, config
+from sarc.jobs.sacct import parse_in_timezone
+
+elapsed_time = 60 * 60 * 12
+end_time = datetime(2023, 2, 14, 23, 48, 54, tzinfo=MTL).astimezone(UTC)
 base_job = {
     "CLEAR_SCHEDULING": True,
     "STARTED_ON_BACKFILL": True,
@@ -17,8 +21,8 @@ base_job = {
     "array_job_id": None,
     "cluster_name": "raisin",
     "constraints": "x86_64&(48gb|80gb)",
-    "elapsed_time": 60 * 60 * 12,
-    "end_time": datetime(2023, 2, 14, 23, 48, 54, tzinfo=MTL).astimezone(UTC),
+    "elapsed_time": elapsed_time,
+    "end_time": end_time,
     "exit_code": 0,
     "group": "petitbonhomme",
     "job_id": 2831220,
@@ -30,8 +34,8 @@ base_job = {
     "qos": "normal",
     "requested": {"billing": 1, "cpu": 4, "gres_gpu": 1, "mem": 49152, "node": 1},
     "signal": None,
-    "start_time": datetime(2023, 2, 14, 19, 1, 19, tzinfo=MTL).astimezone(UTC),
-    "submit_time": datetime(2023, 2, 14, 18, 59, 18, tzinfo=MTL).astimezone(UTC),
+    "start_time": end_time - timedelta(seconds=elapsed_time),
+    "submit_time": end_time - timedelta(seconds=elapsed_time + 60),
     "task_id": None,
     "time_limit": 43200,
     "user": "petitbonhomme",
@@ -57,32 +61,42 @@ class JobFactory:
     def next_submit_time(self):
         return timedelta(hours=len(self.jobs) * 6) + self._first_submit_time
 
+    def format_kwargs(self, kwargs):
+        kwargs.setdefault("elapsed_time", base_job["elapsed_time"])
+        kwargs.setdefault("submit_time", self.next_submit_time)
+        kwargs.setdefault("start_time", kwargs["submit_time"] + timedelta(seconds=60))
+        kwargs.setdefault("job_state", base_job["job_state"])
+
+        if kwargs["job_state"] in ["RUNNING", "PENDING"]:
+            kwargs.setdefault("end_time", None)
+        else:
+            kwargs.setdefault(
+                "end_time",
+                kwargs["start_time"]
+                + timedelta(
+                    seconds=kwargs.get("elapsed_time", base_job["elapsed_time"])
+                ),
+            )
+
+        # Override elapsed_time to be coherent.
+        if "elapsed_time" not in kwargs and kwargs["end_time"] is not None:
+            kwargs["elapsed_time"] = int(
+                (kwargs["end_time"] - kwargs["start_time"]).total_seconds()
+            )
+        elif "elapsed_time" not in kwargs and kwargs["job_state"] == "RUNNING":
+            kwargs["elapsed_time"] = (
+                datetime.now().astimezone(UTC) - kwargs["start_time"]
+            ).total_seconds()
+
+        kwargs.setdefault("elapsed_time", base_job["elapsed_time"])
+
+        kwargs.setdefault("job_id", self.next_job_id)
+
+        return kwargs
+
     def create_job(self, **kwargs):
         job = copy.deepcopy(base_job)
-        elapsed_time = kwargs.get("elapsed_time", job["elapsed_time"])
-        job.update(kwargs)
-        job["submit_time"] = kwargs.get("submit_time", self.next_submit_time)
-        job["start_time"] = kwargs.get(
-            "start_time", job["submit_time"] + timedelta(seconds=60)
-        )
-
-        if job["job_state"] in ["RUNNING", "PENDING"]:
-            default_end_time = None
-        else:
-            default_end_time = job["start_time"] + timedelta(seconds=elapsed_time)
-        job["end_time"] = kwargs.get("end_time", default_end_time)
-
-        if job["end_time"] is not None:
-            default_elapsed_time = (job["end_time"] - job["start_time"]).total_seconds()
-        elif job["job_state"] == "RUNNING":
-            default_elapsed_time = (
-                datetime.now().astimezone(UTC) - job["start_time"]
-            ).total_seconds()
-        else:
-            default_elapsed_time = 0
-        job["elapsed_time"] = kwargs.get("elapsed_time", default_elapsed_time)
-
-        job["job_id"] = kwargs.get("job_id", self.next_job_id)
+        job.update(self.format_kwargs(kwargs))
 
         return job
 
@@ -103,8 +117,9 @@ class JobFactory:
             )
 
 
-def create_jobs():
-    job_factory = JobFactory()
+def create_jobs(job_factory: JobFactory | None = None):
+    if job_factory is None:
+        job_factory = JobFactory()
 
     for status in [
         "CANCELLED",
@@ -120,7 +135,7 @@ def create_jobs():
 
     job_factory.add_job_array(task_ids=[1, 10, 13])
 
-    for nodes in [["bart"], ["cn-c021", "cn-c022"]]:
+    for nodes in [["bart"], sorted(["cn-d001", "cn-c021", "cn-c022"])]:
         job_factory.add_job(nodes=nodes)
 
     for cluster_name in ["raisin", "fromage", "patate"]:
@@ -132,4 +147,241 @@ def create_jobs():
     job_factory.add_job(job_id=1_000_000, nodes=["cn-c017"], job_state="PREEMPTED")
     job_factory.add_job(job_id=1_000_000, nodes=["cn-b099"], job_state="OUT_OF_MEMORY")
 
+    job_factory.add_job(
+        allocated={
+            "billing": 2,
+            "cpu": 12,
+            "gres_gpu": 1,
+            "gpu_type": "A100",
+            "mem": 39152,
+            "node": 1,
+        },
+        requested={
+            "billing": 2,
+            "cpu": 12,
+            "gres_gpu": 1,
+            "mem": 59152,
+            "node": 1,
+        },
+    )
+
     return job_factory.jobs
+
+
+json_raw = {
+    "metadata": {
+        "plugin": {"type": "openapi/dbv0.0.37", "name": "Slurm OpenAPI DB v0.0.37"},
+        "Slurm": {
+            "version": {"major": 21, "micro": 8, "minor": 8},
+            "release": "21.08.8-2",
+        },
+    },
+    "errors": [],
+    "jobs": [],
+}
+
+base_sacct_job = {
+    "account": base_job["account"],
+    "comment": {"administrator": None, "job": None, "system": None},
+    "allocation_nodes": len(base_job["account"]),
+    "array": {
+        "job_id": base_job["array_job_id"] or None,
+        "limits": {"max": {"running": {"tasks": 0}}},
+        "task": None,
+        "task_id": base_job["task_id"],
+    },
+    "association": {
+        "account": base_job["account"],
+        "cluster": base_job["cluster_name"],
+        "partition": None,
+        "user": base_job["user"],
+    },
+    "cluster": base_job["cluster_name"],
+    "constraints": base_job["constraints"],
+    "derived_exit_code": {"status": "SUCCESS", "return_code": 0},
+    "time": {
+        "elapsed": base_job["elapsed_time"],
+        "eligible": 1641003593,
+        "end": int(base_job["end_time"].timestamp()),
+        "start": int(base_job["start_time"].timestamp()),
+        "submission": int(base_job["submit_time"].timestamp()),
+        "suspended": 0,
+        "system": {"seconds": 0, "microseconds": 0},
+        "limit": base_job["time_limit"] / 60,
+        "total": {"seconds": 0, "microseconds": 0},
+        "user": {"seconds": 0, "microseconds": 0},
+    },
+    "exit_code": {"status": "SUCCESS", "return_code": base_job["exit_code"]},
+    "flags": [
+        flag
+        for flag in [
+            "CLEAR_SCHEDULING",
+            "STARTED_ON_BACKFILL",
+            "STARTED_ON_SCHEDULE",
+            "STARTED_ON_SUBMIT",
+        ]
+        if base_job[flag]
+    ],
+    "group": base_job["group"],
+    "het": {"job_id": 0, "job_offset": None},
+    "job_id": base_job["job_id"],
+    "name": base_job["name"],
+    "mcs": {"label": ""},
+    "nodes": base_job["nodes"][0],
+    "partition": base_job["partition"],
+    "priority": base_job["priority"],
+    "qos": base_job["qos"],
+    "required": {"CPUs": 16, "memory": 8192},
+    "kill_request_user": None,
+    "reservation": {"id": 0, "name": 0},
+    "state": {"current": base_job["job_state"], "reason": "Dependency"},
+    "steps": [],
+    "tres": {
+        "allocated": [
+            {
+                "type": "cpu",
+                "name": None,
+                "id": 1,
+                "count": base_job["allocated"]["cpu"],
+            },
+            {
+                "type": "mem",
+                "name": None,
+                "id": 2,
+                "count": base_job["allocated"]["mem"],
+            },
+            {"type": "energy", "name": None, "id": 3, "count": None},
+            {
+                "type": "node",
+                "name": None,
+                "id": 4,
+                "count": base_job["allocated"]["node"],
+            },
+            {
+                "type": "billing",
+                "name": None,
+                "id": 5,
+                "count": base_job["allocated"]["billing"],
+            },
+            {
+                "type": "gres",
+                "name": "gpu",
+                "id": 1001,
+                "count": base_job["allocated"]["gres_gpu"],
+            },
+        ],
+        "requested": [
+            {
+                "type": "cpu",
+                "name": None,
+                "id": 1,
+                "count": base_job["requested"]["cpu"],
+            },
+            {
+                "type": "mem",
+                "name": None,
+                "id": 2,
+                "count": base_job["requested"]["mem"],
+            },
+            {
+                "type": "node",
+                "name": None,
+                "id": 4,
+                "count": base_job["requested"]["node"],
+            },
+            {
+                "type": "billing",
+                "name": None,
+                "id": 5,
+                "count": base_job["requested"]["billing"],
+            },
+            {
+                "type": "gres",
+                "name": "gpu",
+                "id": 1001,
+                "count": base_job["requested"]["gres_gpu"],
+            },
+        ],
+    },
+    "user": base_job["user"],
+    "wckey": {"wckey": "", "flags": []},
+    "working_directory": base_job["work_dir"],
+}
+
+
+class JsonJobFactory(JobFactory):
+    def add_job_array(
+        self,
+        task_ids,
+        job_id: None | int = None,
+        submit_time: None | datetime = None,
+        cluster_name: str = "raisin",
+    ):
+        job_id = self.next_job_id
+        submit_time = self.format_dt_tz(cluster_name, self.next_submit_time)
+        for job_array_id_offset, task_id in enumerate(task_ids):
+            self.add_job(
+                submit_time=submit_time,
+                job_id=job_array_id_offset + job_id,
+                array={
+                    "job_id": job_id,
+                    "limits": {"max": {"running": {"tasks": 0}}},
+                    "task": None,
+                    "task_id": task_id,
+                },
+            )
+
+    def format_dt_tz(
+        self, cluster_name: str, dt: datetime | int | None
+    ) -> Optional[int]:
+        if dt is None or isinstance(dt, int):
+            return dt
+        cluster_tz = config().clusters[cluster_name].timezone
+        date_in_cluster_tz = dt.astimezone(cluster_tz)
+        return int(date_in_cluster_tz.timestamp())
+
+    def format_kwargs(self, kwargs):
+        cluster_name = kwargs.get("cluster_name", base_sacct_job["cluster"])
+
+        # Convert time and job it to flat format
+        flat_kwargs = {}
+        time = kwargs.get("time", {})
+        json_to_flat_keys = {
+            "submission": "submit_time",
+            "start": "start_time",
+            "end": "end_time",
+            "elapsed": "elapsed_time",
+        }
+        if time:
+            for json_key, flat_key in json_to_flat_keys.items():
+                if json_key in time:
+                    if json_key == "elapsed":
+                        flat_kwargs[flat_key] = time[json_key]
+                    else:
+                        flat_kwargs[flat_key] = parse_in_timezone(time[json_key])
+
+        if "job_id" in kwargs:
+            flat_kwargs["job_id"] = kwargs["job_id"]
+
+        if "current" in kwargs.get("state", {}):
+            flat_kwargs["job_state"] = kwargs["state"]["current"]
+
+        formated_kwargs = super().format_kwargs(flat_kwargs)
+
+        # Convert time and job id back to json format
+        kwargs["time"] = kwargs.get("time", {}) | {
+            json_key: self.format_dt_tz(cluster_name, formated_kwargs[flat_key])
+            for json_key, flat_key in json_to_flat_keys.items()
+        }
+        kwargs["job_id"] = formated_kwargs["job_id"]
+
+        return kwargs
+
+    def create_job(self, **kwargs):
+        sacct_job = copy.deepcopy(base_sacct_job)
+
+        flattened_sacct_job = flatten(sacct_job)
+        kwargs = self.format_kwargs(kwargs)
+        flattened_sacct_job.update(flatten(kwargs))
+
+        return unflatten(flattened_sacct_job)
