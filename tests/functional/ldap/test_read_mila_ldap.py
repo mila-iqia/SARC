@@ -110,8 +110,6 @@ def test_query_to_ldap_server_and_commit_to_db(monkeypatch):
 
     cfg = config()
     db = cfg.mongo.database_instance
-    # No need to clean up because of the `empty_read_write_db` fixture.
-    # db[cfg.ldap.mongo_collection_name].delete_many({})
 
     nbr_users = 10
 
@@ -198,15 +196,5 @@ def test_query_to_ldap_server_and_commit_to_db(monkeypatch):
     )
 
     assert len(L_uA) == len(L_uB)
-    for uA, uB in zip(
-        L_uA,  # sorted(L_users, key=sorted_order_func),
-        L_uB
-        # sorted(
-        #    transform_user_list(L_first_batch_users + L_second_batch_users),
-        #    key=sorted_order_func,
-        # ),
-    ):
+    for uA, uB in zip(L_uA, L_uB):
         assert uA == uB
-
-    # No need to clean up because of the `empty_read_write_db` fixture.
-    # db[cfg.ldap.mongo_collection_name].delete_many({})
