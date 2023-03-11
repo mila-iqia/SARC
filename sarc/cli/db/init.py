@@ -69,7 +69,6 @@ def create_allocations_indices(db):
     # Index most useful for querying allocations for any cluster
     db_collection.create_index(
         [
-            ("cluster_name", pymongo.ASCENDING),
             ("start", pymongo.ASCENDING),
             ("end", pymongo.ASCENDING),
         ],
