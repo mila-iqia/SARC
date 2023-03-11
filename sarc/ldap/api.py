@@ -45,6 +45,6 @@ def get_users():
     query = {}
     return list(
         cfg.mongo.database_instance[cfg.ldap.mongo_collection_name].find(
-        query, {"_id": False}
+            query, {"_id": False}
         )
     )
