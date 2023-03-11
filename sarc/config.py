@@ -48,7 +48,6 @@ class BaseModel(_BaseModel):
 
     def dict(self, *args, **kwargs) -> dict[str, Any]:
         d = super().dict(*args, **kwargs)
-
         for k, v in list(d.items()):
             if isinstance(getattr(type(self), k, None), cached_property):
                 del d[k]
@@ -123,19 +122,35 @@ class ClusterConfig(BaseModel):
 
 
 class MongoConfig(BaseModel):
-    url: str
-    database: str
+    connection_string: str
+    database_name: str
 
     @cached_property
-    def instance(self):
+    def database_instance(self):
         from pymongo import MongoClient
 
-        client = MongoClient(self.url)
-        return client.get_database(self.database)
+        client = MongoClient(self.connection_string)
+        return client.get_database(self.database_name)
+
+
+class LDAPConfig(BaseModel):
+    local_private_key_file: str
+    local_certificate_file: str
+    ldap_service_uri: str
+    mongo_collection_name: str
+
+
+class AccountMatchingConfig(BaseModel):
+    cc_members_csv_path: Path
+    cc_roles_csv_path: Path
+    mila_emails_to_ignore: list[str]
+    override_matches_mila_to_cc: dict[str, str]
 
 
 class Config(BaseModel):
     mongo: MongoConfig
+    ldap: LDAPConfig
+    account_matching: AccountMatchingConfig
     sshconfig: Path = None
     cache: Path = None
     clusters: dict[str, ClusterConfig]

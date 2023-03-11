@@ -30,7 +30,14 @@ def bow_distance(bow_A, bow_B):
     return distance
 
 
-def find_exact_bag_of_words_matches(L_names_A, L_names_B):
+def find_exact_bag_of_words_matches(L_names_A, L_names_B, delta_threshold=1):
+    """
+    Find pairs of names that are close enough to be considered the same person.
+    Comparisons are done by counting the occurrences of letters in each name,
+    ignoring spaces, hyphens, accents and capitalization.
+    Some `delta_threshold` value is used to determine the cutoff.
+    """
+
     LP_names_A = [(a, bag_of_words_projection(a)) for a in L_names_A]
     LP_names_B = [(b, bag_of_words_projection(b)) for b in L_names_B]
 
@@ -41,7 +48,7 @@ def find_exact_bag_of_words_matches(L_names_A, L_names_B):
     for a, bow_A in LP_names_A:
         for b, bow_B in LP_names_B:
             delta = bow_distance(bow_A, bow_B)
-            if delta <= 1:
+            if delta <= delta_threshold:
                 # print(f"{a}, {b}")
                 LP_results.append((a, b, delta))
 

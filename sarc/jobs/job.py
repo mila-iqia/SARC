@@ -190,7 +190,7 @@ class SlurmJobRepository(AbstractRepository[SlurmJob]):
 
 def jobs_collection():
     """Return the jobs collection in the current MongoDB."""
-    db = config().mongo.instance
+    db = config().mongo.database_instance
     return SlurmJobRepository(database=db)
 
 

@@ -209,7 +209,10 @@ def test_scrape_lost_job_on_wrong_cluster(sacct_json, scraper, caplog):
 @pytest.mark.usefixtures("tzlocal_is_mtl")
 @pytest.mark.parametrize("json_jobs", [{}], indirect=True)
 def test_scraper_with_cache(scraper, sacct_json, file_regression):
-    assert str(scraper.cachefile).startswith("/tmp/pytest")
+    # We'd like to test that this starts with "/tmp/pytest",
+    # but this isn't the case when we run the tests on Mac OS,
+    # ending up in '/private/var/folders/*/pytest-of-gyomalin/pytest-63'.
+    assert "pytest" in str(scraper.cachefile)
 
     with open(scraper.cachefile, "w") as f:
         f.write(sacct_json)
@@ -224,7 +227,8 @@ def test_scraper_with_cache(scraper, sacct_json, file_regression):
     "test_config", [{"clusters": {"raisin": {"host": "patate"}}}], indirect=True
 )
 def test_scraper_with_malformed_cache(test_config, remote, scraper, caplog):
-    assert str(scraper.cachefile).startswith("/tmp/pytest")
+    # see remark in `test_scraper_with_cache` for that "pytest" substring check
+    assert "pytest" in str(scraper.cachefile)
 
     with open(scraper.cachefile, "w") as f:
         f.write("I am malformed!! :'(")
