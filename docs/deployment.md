@@ -83,6 +83,12 @@ Remotely (from your computer) you can use the script
 
 ***notes: https://www.howtogeek.com/687970/how-to-run-a-linux-program-at-startup-with-systemd/***
 
+You need to link the service files to systemd; 
+
+```
+sudo sarc/scripts/deploy/install_service.sh
+```
+
 
 Copy the `sarc_mongo.service` file to systemd :
 ***TODO sarc_mongo.service***
