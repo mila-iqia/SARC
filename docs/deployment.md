@@ -76,6 +76,7 @@ In the future, if necessary, use the $SARC_CONFIG environment variable to choose
 
 ### Create the sarc_mongo container
 
+Remotely (from your computer) you can use the script 
 ***TODO***
 
 ### Systemd file
@@ -105,6 +106,12 @@ sudo systemctl start sarc_mongo
 ```
 
 ## Cron jobs
+
+This is indeed a bad name; in systemd, we use timer services.
+
+
+`myService.service` goes to /etc/systemd/system
+`myService.timer` goes to 
 
 ### jobs
 1x par jour
