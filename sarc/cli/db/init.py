@@ -16,8 +16,8 @@ class DbInit:
 
     def execute(self) -> int:
         cfg = config()
-        url = cfg.mongo.url if self.url is None else self.url
-        database = cfg.mongo.database if self.database is None else self.database
+        url = cfg.mongo.connection_string if self.url is None else self.url
+        database = cfg.mongo.database_name if self.database is None else self.database
 
         client = pymongo.MongoClient(url)
         db = client.get_database(database)

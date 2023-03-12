@@ -5,7 +5,7 @@ from sarc.config import config
 
 @pytest.mark.usefixtures("empty_read_write_db")
 def test_db_init(cli_main):
-    db = config().mongo.instance
+    db = config().mongo.database_instance
 
     # NOTE: Use instead these clases to get the collections once `users` is harmonized with the others.
     # from sarc.allocations.allocations import AllocationsRepository
