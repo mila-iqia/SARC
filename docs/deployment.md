@@ -11,7 +11,6 @@ Let's assume you have access to the sarc VM, and are a `sudoers` group member.
 The user running everything is `sarc`
 
 ```
-cd /home
 sudo su sarc
 cd ~
 ```
