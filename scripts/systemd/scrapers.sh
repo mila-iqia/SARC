@@ -2,5 +2,4 @@
 SCRIPT=$(readlink -f "$0")
 SCRIPTPATH=$(dirname "$SCRIPT")
 cd $SCRIPTPATH/../../
-# these hard-coded paths are so disgusting...
-sudo -u sarc ../.local/bin/poetry run sarc acquire jobs -c narval cedar beluga graham mila -d `date +%Y-%m-%d`
+sudo -u sarc SARC_CONFIG=$SCRIPTPATH/../../config/sarc-prod.json ../.local/bin/poetry run sarc acquire jobs -c narval cedar beluga graham mila -d `date +%Y-%m-%d`
