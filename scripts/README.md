@@ -2,7 +2,7 @@
 
 ## remote
 
-These scripts must be run from a computer from which yu have ssh access to the sarc server.
+These scripts must be run from a computer from which you have ssh access to the sarc server.
 
 ## systemd
 
