@@ -1,5 +1,7 @@
 # Deployment
 
+***NOTE: this file is still in a work-in-progress status***
+
 ## Server
 
 Let's assume you have access to the sarc VM, and are a `sudoers` group member.
@@ -98,7 +100,6 @@ sudo cp serverscripts/systemd/sarc_mongo.service /etc/systemd/system
 sudo chmod 640 /etc/systemd/system/sarc_mongo.service
 sudo systemctl daemon-reload
 ```
-***TODO le service doit appeler un script, on le met où? on code en dur le chemin /home/sarc/SARC ?***
 
 ### Service setup to start on system startup
 ```
@@ -107,6 +108,7 @@ sudo systemctl enable sarc_mongo
 
 ### Service start
 The service will start at system startup, but you must start it manually if you don't want to reboot the server:
+
 ```
 sudo systemctl start sarc_mongo
 ```
@@ -115,9 +117,10 @@ sudo systemctl start sarc_mongo
 
 This is indeed a bad name; in systemd, we use timer services.
 
+They are installed by the `install_services.sh` script mentionned earlier.
 
-`myService.service` goes to /etc/systemd/system
-`myService.timer` goes to 
+
+
 
 ### jobs
 1x par jour
