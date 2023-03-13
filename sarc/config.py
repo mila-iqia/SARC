@@ -8,6 +8,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any, Union
 
+import tzlocal
 from bson import ObjectId
 from pydantic import BaseModel as _BaseModel
 from pydantic import Extra, validator
@@ -15,7 +16,7 @@ from pydantic import Extra, validator
 MTL = zoneinfo.ZoneInfo("America/Montreal")
 PST = zoneinfo.ZoneInfo("America/Vancouver")
 UTC = zoneinfo.ZoneInfo("UTC")
-TZLOCAL = zoneinfo.ZoneInfo(str(datetime.now().astimezone().tzinfo))
+TZLOCAL = zoneinfo.ZoneInfo(tzlocal.get_localzone_name())
 
 
 class ConfigurationError(Exception):
