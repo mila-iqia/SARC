@@ -2,16 +2,16 @@
 What this script does
 =====================
 
-This script runs locally every day on a machine at Mila.
-It queries our LDAP service for all users and it updates
-the MongoDB instance for SARC so that the "users"
-collection reflects those accounts.
+This script can be called directly from the command line (legacy),
+or it can be called from the `sarc.ldap.acquire` script (recommended)
+using the `sarc ...` command.
 
-It's unclear whether we should automatically disable
-the existing accounts in CW for members that are not being
-mentioned in the LDAP results. We probably want to do
-such a thing periodically, with special care instead of
-doing it automatically.
+The legacy usage is not covered by unit tests, but the sarc command is covered.
+It is part of a pipeline that will fetch the user data from the LDAP service,
+do some processing on it, and then write it to a MongoDB instance.
+
+
+The legacy usage is as follows:
 
 Two mutually-exclusive ways to input the data, by priority:
    1) use the --input_json_file argument
@@ -40,8 +40,8 @@ This `read_mila_ldap.py` script will update only the "mila_ldap" part of the ent
 
 
 
-Sample uses
-===========
+Sample uses (legacy)
+====================
 
 Two ways this can be used:
 
@@ -173,7 +173,7 @@ parser.add_argument(
     help="(optional) MongoDB connection string. Contains username and password.",
 )
 parser.add_argument(
-    "--mongodb_database",
+    "--mongodb_database_name",
     default="sarc",
     type=str,
     help="(optional) MongoDB database to modify. Better left at default.",
@@ -320,14 +320,25 @@ def run(
     local_private_key_file=None,
     local_certificate_file=None,
     ldap_service_uri=None,
+    # DB option 1
+    mongodb_database_instance=None,
+    # DB option 2
     mongodb_connection_string=None,
-    mongodb_database=None,
+    mongodb_database_name=None,
+    #
     mongodb_collection=None,
     input_json_file=None,
     output_json_file=None,
     output_raw_LDAP_json_file=None,
     LD_users=None,  # for external testing purposes
 ):
+    """
+    If `mongodb_database_instance` is not `None`, it overrides the two arguments
+    `mongodb_connection_string`, `mongodb_database_name`.
+    This is done because the SARC config gets us a client connected to a database already,
+    so it's better to use that functionality.
+    """
+
     if LD_users is not None:
         # Used mostly for testing purposes.
         # Overrides the "input_json_file" argument.
@@ -336,7 +347,7 @@ def run(
         if LD_users:
             assert isinstance(LD_users[0], dict)
     elif input_json_file:
-        with open(input_json_file, "r") as f_in:
+        with open(input_json_file, "r", encoding="utf-8") as f_in:
             LD_users = json.load(f_in)
     else:
         # this is the usual branch taken in practice
@@ -344,17 +355,28 @@ def run(
             local_private_key_file, local_certificate_file, ldap_service_uri
         )
         if output_raw_LDAP_json_file:
-            with open(output_raw_LDAP_json_file, "w") as f_out:
+            with open(output_raw_LDAP_json_file, "w", encoding="utf-8") as f_out:
                 json.dump(LD_users_raw, f_out, indent=4)
                 print(f"Wrote {output_raw_LDAP_json_file}.")
 
         LD_users = [process_user(D_user_raw) for D_user_raw in LD_users_raw]
 
-    if mongodb_connection_string and mongodb_database and mongodb_collection:
-        users_collection = MongoClient(mongodb_connection_string)[mongodb_database][
-            mongodb_collection
-        ]
+    # Two ways to get the MongoDB collection, and then it's possible that we don't care
+    # about getting one, in which case we'll skip that step of the output.
+    if mongodb_database_instance is not None and mongodb_collection is not None:
+        users_collection = mongodb_database_instance[mongodb_collection]
+    elif (
+        mongodb_connection_string is not None
+        and mongodb_database_name is not None
+        and mongodb_collection is not None
+    ):
+        users_collection = MongoClient(mongodb_connection_string)[
+            mongodb_database_name
+        ][mongodb_collection]
+    else:
+        users_collection = None
 
+    if users_collection is not None:
         # read only the "mila_ldap" field from the entries, and ignore the
         # "cc_roles" and "cc_members" components
         LD_users_DB = [u["mila_ldap"] for u in list(users_collection.find())]
@@ -384,7 +406,7 @@ def run(
             print(result.bulk_api_result)
 
     if output_json_file:
-        with open(output_json_file, "w") as f_out:
+        with open(output_json_file, "w", encoding="utf-8") as f_out:
             json.dump(LD_users, f_out, indent=4)
             print(f"Wrote {output_json_file}.")
 
@@ -396,7 +418,7 @@ if __name__ == "__main__":
         local_certificate_file=args.local_certificate_file,
         ldap_service_uri=args.ldap_service_uri,
         mongodb_connection_string=args.mongodb_connection_string,
-        mongodb_database=args.mongodb_database,
+        mongodb_database_name=args.mongodb_database_name,
         mongodb_collection=args.mongodb_collection,
         input_json_file=args.input_json_file,
         output_json_file=args.output_json_file,

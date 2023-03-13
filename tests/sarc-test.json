@@ -1,7 +1,19 @@
 {
     "mongo": {
-        "url": "localhost:27017",
-        "database": "sarc-test"
+        "connection_string": "localhost:27017",
+        "database_name": "sarc-test"
+    },
+    "ldap": {
+        "local_private_key_file": "not_a_valid_path.key",
+        "local_certificate_file": "not_a_valid_path.crt",
+        "ldap_service_uri": "ldaps://ldap.google.com",
+        "mongo_collection_name": "users"
+    },
+    "account_matching": {
+        "cc_members_csv_path": "cc_members_not_valid_path.csv",
+        "cc_roles_csv_path": "cc_roles_not_valid_path.csv",
+        "mila_emails_to_ignore" : [],
+        "override_matches_mila_to_cc" : {}
     },
     "cache": "./sarc-test-cache",
     "clusters": {
