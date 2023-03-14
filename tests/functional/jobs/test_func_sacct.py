@@ -260,16 +260,21 @@ def test_sacct_bin_and_accounts(test_config, remote):
 
     assert len(list(scraper)) == 0
 
+
 @pytest.mark.parametrize(
     "test_config", [{"clusters": {"raisin": {"host": "raisin"}}}], indirect=True
 )
 @pytest.mark.parametrize("json_jobs", [{}], indirect=True)
 @pytest.mark.usefixtures("empty_read_write_db")
-def test_stdout_message_before_json(test_config, sacct_json, remote, file_regression, cli_main):
+def test_stdout_message_before_json(
+    test_config, sacct_json, remote, file_regression, cli_main
+):
     channel = remote.expect(
         host="raisin",
         cmd="/opt/slurm/bin/sacct  -X -S '2023-02-15T00:00' -E '2023-02-16T00:00' --json",
-        out=f'Welcome on raisin,\nThe sweetest supercomputer in the world!\n{sacct_json}'.encode("utf-8"),
+        out=f"Welcome on raisin,\nThe sweetest supercomputer in the world!\n{sacct_json}".encode(
+            "utf-8"
+        ),
     )
 
     # Import here so that config() is setup correctly when CLI is created.
@@ -287,8 +292,6 @@ def test_stdout_message_before_json(test_config, sacct_json, remote, file_regres
         f"Found {len(jobs)} job(s):\n"
         + "\n".join([job.json(exclude={"id": True}, indent=4) for job in jobs])
     )
-
-
 
 
 @pytest.mark.parametrize(
