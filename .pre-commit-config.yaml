@@ -4,8 +4,8 @@ repos:
 -   repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v3.2.0
     hooks:
-    # -   id: trailing-whitespace
-    # -   id: end-of-file-fixer
+    -   id: trailing-whitespace
+    -   id: end-of-file-fixer
     -   id: check-yaml
     -   id: check-added-large-files
 -   repo: https://github.com/psf/black
@@ -18,12 +18,28 @@ repos:
       - id: isort
         name: isort (python)
         args: ["--profile", "black", "--filter-files"]
+
 # IDEA: Might want to look into poetry-specific hooks as well:
 # https://python-poetry.org/docs/master/pre-commit-hooks/
 
-# NOTE: Works, but takes like 15 seconds, which is too long IMO.
+# NOTE: Does the same thing, but doesn't require hard-coding a version (uses poetry to run the
+# hook). This takes much longer (like 7 secs without pylint, and 25 seconds with pylint) vs <1 sec.
 # - repo: local
 #   hooks:
+#     - id: black
+#       name: black
+#       entry: poetry
+#       language: system
+#       types: [python]
+#       pass_filenames: false
+#       args: ["run", "tox", "-e", "black_fix"]
+#     - id: isort
+#       name: isort
+#       entry: poetry
+#       language: system
+#       types: [python]
+#       pass_filenames: false
+#       args: ["run", "tox", "-e", "isort_fix"]
 #     - id: pylint
 #       name: pylint
 #       entry: poetry
