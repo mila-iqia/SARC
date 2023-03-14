@@ -1,0 +1,33 @@
+# See https://pre-commit.com for more information
+# See https://pre-commit.com/hooks.html for more hooks
+repos:
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v3.2.0
+    hooks:
+    # -   id: trailing-whitespace
+    # -   id: end-of-file-fixer
+    -   id: check-yaml
+    -   id: check-added-large-files
+-   repo: https://github.com/psf/black
+    rev: 23.1.0
+    hooks:
+    -   id: black
+-   repo: https://github.com/pycqa/isort
+    rev: 5.12.0
+    hooks:
+      - id: isort
+        name: isort (python)
+        args: ["--profile", "black", "--filter-files"]
+# IDEA: Might want to look into poetry-specific hooks as well:
+# https://python-poetry.org/docs/master/pre-commit-hooks/
+
+# NOTE: Works, but takes like 15 seconds, which is too long IMO.
+# - repo: local
+#   hooks:
+#     - id: pylint
+#       name: pylint
+#       entry: poetry
+#       language: system
+#       types: [python]
+#       pass_filenames: false
+#       args: ["run", "tox", "-e", "lint"]
