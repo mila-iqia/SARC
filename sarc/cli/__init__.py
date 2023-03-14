@@ -1,49 +1,65 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
-from typing import Any, Union
+from typing import Protocol
 
-from simple_parsing import ArgumentParser, field, subparsers
+from simple_parsing import ArgumentParser
 
-from sarc.cli.acquire import Acquire
-from sarc.cli.db import Db
+from sarc.cli.acquire import add_acquire_commands
+from sarc.cli.db import add_db_commands
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class CLI:
-    command: Union[Acquire, Db] = subparsers({"acquire": Acquire, "db": Db})
+class Command(Protocol):
+    def execute(self) -> int:
+        ...
 
-    verbose: int = field(
-        alias=["-v"],
+
+def main(argv: list[str] | None = None) -> int:
+    parser = ArgumentParser()
+    # parser.add_arguments(GlobalArgs, dest="global_args")
+
+    parser.add_argument(
+        "-v",
+        "--verbose",
         default=0,
-        help="logging levels of information about the process (-v: INFO. -vv: DEBUG)",
         action="count",
+        help="logging levels of information about the process (-v: INFO. -vv: DEBUG)",
     )
 
-    def execute(self) -> int:
-        levels = {0: logging.WARNING, 1: logging.INFO, 2: logging.DEBUG}
+    command_subparsers = parser.add_subparsers(
+        dest="command_name",
+        title="Command title",
+        description="Description",
+        required=True,
+    )
 
-        logging.basicConfig(
-            format="%(asctime)-15s::%(levelname)s::%(name)s::%(message)s",
-            level=levels.get(self.verbose, logging.DEBUG),
-        )
+    db_parser = command_subparsers.add_parser("db", help="database-related commands")
 
-        # logger.debug("SARC version : %s", sarc.__version__)
+    add_db_commands(db_parser)
 
-        return self.command.execute()
+    acquire_parser = command_subparsers.add_parser(
+        "acquire", help="commands used acquire different kinds of data"
+    )
 
+    add_acquire_commands(acquire_parser)
 
-def main(argv: list[Any] | None = None) -> int:
-    """Main commandline for SARC"""
-    parser = ArgumentParser()
-    parser.add_arguments(CLI, dest="command")
     args = parser.parse_args(argv)
-    command: CLI = args.command
 
-    return command.execute()
+    verbose: int = args.verbose
+    # NOTE: unused, but available in case it's needed:
+    # command_name: str = args.command_name
+    # subcommand_name: str = args.subcommand_name
+    subcommand: Command = args.subcommand
+
+    levels = {0: logging.WARNING, 1: logging.INFO, 2: logging.DEBUG}
+    logging.basicConfig(
+        format="%(asctime)-15s::%(levelname)s::%(name)s::%(message)s",
+        level=levels.get(verbose, logging.DEBUG),
+    )
+
+    return subcommand.execute()
 
 
 if __name__ == "__main__":

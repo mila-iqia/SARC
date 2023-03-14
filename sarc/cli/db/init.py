@@ -11,6 +11,8 @@ from sarc.storage.diskusage import ClusterDiskUsageRepository
 
 @dataclass
 class DbInit:
+    """Initializes the database."""
+
     url: Optional[str]
     database: Optional[str]
 

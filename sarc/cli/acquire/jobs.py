@@ -38,9 +38,12 @@ def _daterange(
 
 @dataclass
 class AcquireJobs:
+    """Command used to acquire job data."""
+
     cluster_names: list[str] = field(
         alias=["-c"], default_factory=list, choices=clusters
     )
+    """List of cluster names to acquire job data for."""
 
     dates: list[str] = field(alias=["-d"], default_factory=list)
 

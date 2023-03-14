@@ -57,6 +57,8 @@ def convert_csv_row_to_allocation(
 
 @dataclass
 class AcquireAllocations:
+    """Command to acquire data about the allocations."""
+
     file: Path
 
     def execute(self) -> int:
