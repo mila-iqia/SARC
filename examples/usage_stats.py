@@ -37,7 +37,7 @@ def get_jobs_dataframe(filename, start, end) -> pd.DataFrame:
         # Precompute the total number of jobs to display a progress bar
         # get_jobs is a generator so we don't get the total unless we pre-fetch all jobs
         # beforehand.
-        total = config().mongo.instance.jobs.count_documents(
+        total = config().mongo.database_instance.jobs.count_documents(
             {
                 "cluster_name": cluster,
                 "end_time": {"$gte": start},

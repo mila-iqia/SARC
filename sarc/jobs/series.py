@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from pandas import DataFrame
 from prometheus_api_client import MetricRangeDataFrame
 
 from sarc.config import MTL, UTC
+from sarc.jobs.job import JobStatistics, Statistics
 from sarc.jobs.sacct import SlurmJob
 
 
@@ -45,7 +47,8 @@ def get_job_time_series(
     if metric not in slurm_job_metric_names:
         raise ValueError(f"Unknown metric name: {metric}")
 
-    selector = f'{metric}{{slurmjobid=~"{job.job_id}"}}'
+    nodes = "|".join(job.nodes)
+    selector = f'{metric}{{slurmjobid=~"{job.job_id}",instance=~"{nodes}"}}'
 
     now = datetime.now(tz=UTC).astimezone(MTL)
 
@@ -73,7 +76,6 @@ def get_job_time_series(
             range_seconds = interval
         elif aggregation == "total":
             offset += duration_seconds
-            duration_seconds = duration_seconds * 3
             range_seconds = duration_seconds
 
         query = f"{query}[{range_seconds}s]"
@@ -95,6 +97,118 @@ def get_job_time_series(
 def get_job_time_series_metric_names():
     """Return all the metric names that relate to slurm jobs."""
     return slurm_job_metric_names
+
+
+def compute_job_statistics_from_dataframe(
+    df: DataFrame,
+    statistics,
+    normalization=float,
+    unused_threshold=0.01,
+    is_time_counter=False,
+):
+    df = df.reset_index()
+
+    groupby = ["instance", "core", "gpu"]
+    groupby = [col for col in groupby if col in df]
+
+    gdf = df.groupby(groupby)
+
+    if is_time_counter:
+        # This is a time-based counter like the cpu counters in /proc/stat, with
+        # a resolution of 1 nanosecond.
+        df["timediffs"] = gdf["timestamp"].diff().map(lambda x: x.total_seconds())
+        df["value"] = gdf["value"].diff() / df["timediffs"] / 1e9
+        df = df.drop(index=0)
+
+    if unused_threshold is not None:
+        means = gdf["value"].mean()
+        unused = means.loc[(means < unused_threshold)].index
+        n_unused = len(unused)
+
+        def drop_fn(row):
+            idx = tuple(row[groupby])
+            if len(groupby) == 1:
+                idx = idx[0]
+            return idx in tuple(unused)
+
+        to_drop = df.apply(drop_fn, axis=1)
+        df = df.drop(df[to_drop].index)
+    else:
+        n_unused = 0
+
+    rval = {name: normalization(fn(df["value"])) for name, fn in statistics.items()}
+    return {**rval, "unused": n_unused}
+
+
+def compute_job_statistics_one_metric(
+    job: SlurmJob,
+    metric_name,
+    statistics,
+    normalization=float,
+    unused_threshold=0.01,
+    is_time_counter=False,
+):
+    df = job.series(metric=metric_name, max_points=10_000)
+    if df is None:
+        return None
+    return compute_job_statistics_from_dataframe(
+        df=df,
+        statistics=statistics,
+        normalization=normalization,
+        unused_threshold=unused_threshold,
+        is_time_counter=is_time_counter,
+    )
+
+
+def compute_job_statistics(job: SlurmJob):
+    statistics_dict = {
+        "mean": DataFrame.mean,
+        "std": DataFrame.std,
+        "max": DataFrame.max,
+        "q25": lambda self: self.quantile(0.25),
+        "median": DataFrame.median,
+        "q75": lambda self: self.quantile(0.75),
+        "q05": lambda self: self.quantile(0.05),
+    }
+
+    gpu_utilization = compute_job_statistics_one_metric(
+        job,
+        "slurm_job_utilization_gpu",
+        statistics=statistics_dict,
+        unused_threshold=0.01,
+        normalization=lambda x: float(x / 100),
+    )
+
+    gpu_memory = compute_job_statistics_one_metric(
+        job,
+        "slurm_job_utilization_gpu_memory",
+        statistics=statistics_dict,
+        normalization=lambda x: float(x / 100),
+        unused_threshold=None,
+    )
+
+    cpu_utilization = compute_job_statistics_one_metric(
+        job,
+        "slurm_job_core_usage",
+        statistics=statistics_dict,
+        unused_threshold=0.01,
+        is_time_counter=True,
+    )
+
+    system_memory = compute_job_statistics_one_metric(
+        job,
+        "slurm_job_memory_usage",
+        statistics=statistics_dict,
+        normalization=lambda x: float(x / 1e6 / job.allocated.mem),
+        unused_threshold=None,
+    )
+
+    return JobStatistics(
+        gpu_utilization=gpu_utilization and Statistics(**gpu_utilization),
+        gpu_memory=gpu_memory and Statistics(**gpu_memory),
+        cpu_utilization=cpu_utilization and Statistics(**cpu_utilization),
+        system_memory=system_memory and Statistics(**system_memory),
+    )
 
 
 slurm_job_metric_names = [

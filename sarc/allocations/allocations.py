@@ -69,7 +69,7 @@ class AllocationsRepository(AbstractRepository[Allocation]):
 
 
 def get_allocations_collection():
-    db = config().mongo.instance
+    db = config().mongo.database_instance
 
     return AllocationsRepository(database=db)
 

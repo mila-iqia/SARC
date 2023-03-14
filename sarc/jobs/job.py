@@ -42,6 +42,29 @@ class SlurmState(str, Enum):
     TIMEOUT = "TIMEOUT"
 
 
+class Statistics(BaseModel):
+    """Statistics for a timeseries."""
+
+    mean: float
+    std: float
+    q05: float
+    q25: float
+    median: float
+    q75: float
+    max: float
+    unused: int
+
+
+class JobStatistics(BaseModel):
+    """Statistics for a job."""
+
+    gpu_utilization: Optional[Statistics]
+    gpu_memory: Optional[Statistics]
+
+    cpu_utilization: Optional[Statistics]
+    system_memory: Optional[Statistics]
+
+
 class SlurmResources(BaseModel):
     """Counts for various resources."""
 
@@ -101,6 +124,9 @@ class SlurmJob(BaseModel):
     requested: SlurmResources
     allocated: SlurmResources
 
+    # statistics
+    stored_statistics: Optional[JobStatistics] = None
+
     @validator("submit_time", "start_time", "end_time")
     def _ensure_timezone(cls, v):
         # We'll store in MTL timezone because why not
@@ -121,6 +147,21 @@ class SlurmJob(BaseModel):
         from .series import get_job_time_series  # pylint: disable=cyclic-import
 
         return get_job_time_series(job=self, **kwargs)
+
+    def statistics(self, recompute=False, save=True):
+        from .series import compute_job_statistics  # pylint: disable=cyclic-import
+
+        if self.stored_statistics and not recompute:
+            return self.stored_statistics
+        else:
+            statistics = compute_job_statistics(self)
+            if save and statistics and self.end_time:
+                self.stored_statistics = statistics
+                self.save()
+            return statistics
+
+    def save(self):
+        jobs_collection().save_job(self)
 
 
 class SlurmJobRepository(AbstractRepository[SlurmJob]):
@@ -149,7 +190,7 @@ class SlurmJobRepository(AbstractRepository[SlurmJob]):
 
 def jobs_collection():
     """Return the jobs collection in the current MongoDB."""
-    db = config().mongo.instance
+    db = config().mongo.database_instance
     return SlurmJobRepository(database=db)
 
 

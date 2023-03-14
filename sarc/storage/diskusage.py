@@ -53,7 +53,7 @@ class ClusterDiskUsageRepository(AbstractRepository[DiskUsage]):
 
 
 def get_diskusage_collection():
-    db = config().mongo.instance
+    db = config().mongo.database_instance
     return ClusterDiskUsageRepository(database=db)
 
 

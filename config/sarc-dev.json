@@ -1,7 +1,19 @@
 {
     "mongo": {
-        "url": "localhost:27017",
-        "database": "sarc-dev"
+        "connection_string": "localhost:27017",
+        "database_name": "sarc-dev"
+    },
+    "ldap": {
+        "local_private_key_file": "secrets/ldap/Google_2026_01_26_66827.key",
+        "local_certificate_file": "secrets/ldap/Google_2026_01_26_66827.crt",
+        "ldap_service_uri": "ldaps://ldap.google.com",
+        "mongo_collection_name": "users"
+    },
+    "account_matching": {
+        "cc_members_csv_path": "secrets/account_matching/members-rrg-bengioy-ad-2022-11-25.csv",
+        "cc_roles_csv_path": "secrets/account_matching/sponsored_roles_for_Yoshua_Bengio_(CCI_jvb-000).csv",
+        "mila_emails_to_ignore" : [],
+        "override_matches_mila_to_cc" : {}
     },
     "cache": "./sarc-cache",
     "sshconfig": "~/.ssh/config",
