@@ -63,7 +63,7 @@ class SAcctScraper:
         cmd = f"{self.cluster.sacct_bin} {accounts_option} -X -S '{start}' -E '{end}' --json"
         print(f"{self.cluster.name} $ {cmd}")
         results = self.cluster.ssh.run(cmd, hide=True)
-        return json.loads(results.stdout)
+        return json.loads(results.stdout[results.stdout.find("{") :])
 
     def get_raw(self) -> dict:
         """Return the raw sacct data as a dict.
