@@ -41,7 +41,7 @@ def test_no_job_with_this_id(job):
 
 
 def test_non_existing_metric(job):
-    with pytest.raises(ValueError, message="Unknown metric name: non_existing_metric"):
+    with pytest.raises(ValueError, match="^Unknown metric name: non_existing_metric"):
         get_job_time_series(job, "non_existing_metric", dataframe=True)
 
 
@@ -125,7 +125,7 @@ def test_measure_and_aggregation(
 def test_invalid_aggregation(job):
     with pytest.raises(
         ValueError,
-        message="Aggregation must be one of ",
+        match="^Aggregation must be one of ",
     ):
         get_job_time_series(
             job, metric="slurm_job_fp16_gpu", aggregation="invalid", dataframe=True
