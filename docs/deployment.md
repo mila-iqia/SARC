@@ -42,7 +42,7 @@ Once the deploy keys are set up, you can clone the repo:
 
 ```
 # as sarc user
-cd
+cd ~
 git clone git@github-sarc:mila-iqia/SARC.git
 ```
 
@@ -60,6 +60,8 @@ curl -sSL https://install.python-poetry.org | python3 -
 
 As told by the script itself: Add `export PATH="/home/sarc/.local/bin:$PATH"` to `.bashrc`.
 
+(Note: Later, when executed by `systemd` for example, the PATH won't be present so the scripts will use the complete path to `/home/sarc/.local/bin/poetry` )
+
 ### Setup code
 
 As `sarc` user :
@@ -73,65 +75,26 @@ Test the sarc command: `poetry run sarc`
 
 In the future, if necessary, use the $SARC_CONFIG environment variable to choose the config file.
 
+
 ## MongoDB
+
+*** This whole MongoDB section is still in progress ***
 
 ### Create the sarc_mongo container
 
-Remotely (from your computer) you can use the script 
 ***TODO***
+(note wip: `scripts/remote/mongo.sh`)
 
 ### Systemd file
 
+MongoDB container must be automatically started on boot.
+See following "systemd services" section;
+
 ***notes: https://www.howtogeek.com/687970/how-to-run-a-linux-program-at-startup-with-systemd/***
 
-You need to link the service files to systemd; 
+## systemd services
 
-```
-sudo sarc/scripts/deploy/install_service.sh
-```
-
-
-Copy the `sarc_mongo.service` file to systemd :
-***TODO sarc_mongo.service***
-
-```
-sudo cp serverscripts/systemd/sarc_mongo.service /etc/systemd/system
-sudo chmod 640 /etc/systemd/system/sarc_mongo.service
-sudo systemctl daemon-reload
-```
-
-### Service setup to start on system startup
-```
-sudo systemctl enable sarc_mongo
-```
-
-### Service start
-The service will start at system startup, but you must start it manually if you don't want to reboot the server:
-
-```
-sudo systemctl start sarc_mongo
-```
-
-## Cron jobs
-
-This is indeed a bad name; in systemd, we use timer services.
+The service scripts located in `scripts/systemd/` are in charge of starting the scheduled scraping tasks, start containers on system boot, etc.
 
 They are installed by the `install_services.sh` script mentionned earlier.
 
-
-
-
-### jobs
-1x par jour
-### allocations
-### storages
-1x par jour
-### account matching
-(Ceci doit plutôt être fait manuellement)
-EDIT: une fos par jour c'est ok ?
-
-## TODO
-
-```
-sarc db init
-```
