@@ -85,7 +85,7 @@ class JobFactory:
             )
         elif "elapsed_time" not in kwargs and kwargs["job_state"] == "RUNNING":
             kwargs["elapsed_time"] = (
-                datetime.now().astimezone(UTC) - kwargs["start_time"]
+                datetime.now(tz=UTC) - kwargs["start_time"]
             ).total_seconds()
 
         kwargs.setdefault("elapsed_time", base_job["elapsed_time"])
