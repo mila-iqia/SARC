@@ -66,12 +66,12 @@ parameters = {
 @pytest.mark.parametrize(
     "job", parameters.values(), ids=parameters.keys(), indirect=True
 )
-def test_get_job_time_series(job, custom_query_mock, file_regression):
+def test_get_job_time_series(job, prom_custom_query_mock, file_regression):
     assert (
         get_job_time_series(job, "slurm_job_core_usage", dataframe=False) == []
     ), "custom_query was not mocked properly"
 
-    file_regression.check(custom_query_mock.call_args[0][0])
+    file_regression.check(prom_custom_query_mock.call_args[0][0])
 
 
 no_duration_parameters = {
@@ -109,7 +109,7 @@ def test_jobs_with_no_duration(job):
     ),
 )
 def test_measure_and_aggregation(
-    job, measure, aggregation, custom_query_mock, file_regression
+    job, measure, aggregation, prom_custom_query_mock, file_regression
 ):
     assert not get_job_time_series(
         job,
@@ -119,7 +119,7 @@ def test_measure_and_aggregation(
         dataframe=True,
     ), "custom_query was not mocked properly"
 
-    file_regression.check(custom_query_mock.call_args[0][0])
+    file_regression.check(prom_custom_query_mock.call_args[0][0])
 
 
 def test_invalid_aggregation(job):
@@ -141,7 +141,9 @@ def test_invalid_aggregation(job):
         (10, 20),  # Should give 20 points
     ],
 )
-def test_intervals(job, min_interval, max_points, custom_query_mock, file_regression):
+def test_intervals(
+    job, min_interval, max_points, prom_custom_query_mock, file_regression
+):
     assert not get_job_time_series(
         job,
         "slurm_job_fp16_gpu",
@@ -152,7 +154,7 @@ def test_intervals(job, min_interval, max_points, custom_query_mock, file_regres
         max_points=max_points,
     ), "custom_query was not mocked properly"
 
-    file_regression.check(custom_query_mock.call_args[0][0])
+    file_regression.check(prom_custom_query_mock.call_args[0][0])
 
     # TODO: Test when prometheus is mocked
     # assert isinstance(df, pd.DataFrame)
@@ -167,7 +169,7 @@ def test_intervals(job, min_interval, max_points, custom_query_mock, file_regres
     indirect=True,
 )
 @pytest.mark.parametrize("dataframe", [True, False])
-def test_to_be_or_not_to_be_a_dataframe(job, custom_query_mock, dataframe):
+def test_to_be_or_not_to_be_a_dataframe(job, prom_custom_query_mock, dataframe):
     rval = get_job_time_series(
         job,
         metric="slurm_job_fp16_gpu",
