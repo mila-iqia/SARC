@@ -130,3 +130,8 @@ They are installed by the `install_services.sh` script mentionned earlier.
 (Ceci doit plutôt être fait manuellement)
 EDIT: une fos par jour c'est ok ?
 
+## TODO
+
+```
+sarc db init
+```
