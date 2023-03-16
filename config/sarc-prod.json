@@ -1,7 +1,7 @@
 {
     "mongo": {
         "connection_string": "localhost:27017",
-        "database_name": "sarc-dev"
+        "database_name": "sarc"
     },
     "ldap": {
         "local_private_key_file": "secrets/ldap/Google_2026_01_26_66827.key",
