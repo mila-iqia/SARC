@@ -1,19 +1,22 @@
+from __future__ import annotations
+
 from datetime import datetime
 
 from pandas import DataFrame
 from prometheus_api_client import MetricRangeDataFrame
 
-from sarc.config import MTL
+from sarc.config import MTL, UTC
 from sarc.jobs.job import JobStatistics, Statistics
 from sarc.jobs.sacct import SlurmJob
 
 
+# pylint: disable=too-many-branches
 def get_job_time_series(
     job: SlurmJob,
     metric: str,
     min_interval: int = 30,
     max_points: int = 100,
-    measure: str = None,
+    measure: str | None = None,
     aggregation: str = "total",
     dataframe: bool = True,
 ):
@@ -34,16 +37,20 @@ def get_job_time_series(
             dicts returned by Prometheus's API.
     """
 
-    assert aggregation in ("interval", "total", None)
+    if aggregation not in ("interval", "total", None):
+        raise ValueError(
+            f"Aggregation must be one of ['total', 'interval', None]: {aggregation}"
+        )
 
-    if not job.start_time:
+    if job.job_state != "RUNNING" and not job.elapsed_time:
         return None if dataframe else []
     if metric not in slurm_job_metric_names:
         raise ValueError(f"Unknown metric name: {metric}")
 
     nodes = "|".join(job.nodes)
     selector = f'{metric}{{slurmjobid=~"{job.job_id}",instance=~"{nodes}"}}'
-    now = datetime.now().astimezone(MTL)
+
+    now = datetime.now(tz=UTC).astimezone(MTL)
 
     ago = now - job.start_time
     duration = (job.end_time or now) - job.start_time
@@ -53,10 +60,14 @@ def get_job_time_series(
 
     duration_seconds = int(duration.total_seconds())
 
+    # Duration should not be looking in the future
+    if offset < 0:
+        duration_seconds += offset
+
     if duration_seconds <= 0:
         return None if dataframe else []
 
-    interval = int(max((duration / max_points).total_seconds(), min_interval))
+    interval = int(max(duration_seconds / max_points, min_interval))
 
     query = selector
 

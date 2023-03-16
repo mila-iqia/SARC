@@ -1,5 +1,6 @@
 import zoneinfo
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -84,3 +85,19 @@ def cli_main():
     clusters.choices = list(config().clusters.keys())
 
     yield main
+
+
+@pytest.fixture
+def prom_custom_query_mock(monkeypatch):
+    """Mock the custom_query method of PrometheusConnect to avoid any real query.
+    The object `prom_custom_query_mock` may then be used to check the query strings passed
+    to `custom_query` using `prom_custom_query_mock.call_args[0][0]`."""
+    from prometheus_api_client import PrometheusConnect
+
+    monkeypatch.setattr(
+        PrometheusConnect,
+        "custom_query",
+        MagicMock(return_value=[]),
+    )
+
+    yield PrometheusConnect.custom_query
