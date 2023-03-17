@@ -1,0 +1,10 @@
+[Unit]
+Description=SARC scrapers every day
+Requires=sarc_scrapers.service
+
+[Timer]
+Unit=sarc_scrapers.service
+OnCalendar=*-*-* 00:00:00
+
+[Install]
+WantedBy=timers.target
