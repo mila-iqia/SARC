@@ -45,7 +45,7 @@ class SAcctScraper:
         self.results = None
 
         cachedir = config().cache
-        if cachedir:
+        if cachedir and day < datetime.today():
             cachedir = cachedir / "sacct"
             cachedir.mkdir(parents=True, exist_ok=True)
             daystr = day.strftime("%Y-%m-%d")
