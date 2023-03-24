@@ -1,7 +1,9 @@
 # systemd services
 
-These service scripts go to `/etc/systemd/system/`
+These service scripts must be linked from `/etc/systemd/system/`
 
-- Execute jobs scraper with `systemctl start sarc_scrap_jobs.service` (one-shot)
-- Activate the timer with `systemctl start sarc_scrap_jobs.timer`
-- Enable at boot with `systemctl enable sarc_scrap_jobs.timer`
+See [The deploy README](../deploy/README.md) for more info.
+
+- Execute jobs scraper with `systemctl start sarc_scrapers.service` (one-shot)
+- Activate the timer with `systemctl start sarc_scrapers.timer`
+- Enable at boot with `systemctl enable sarc_scrapers.timer`
