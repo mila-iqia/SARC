@@ -34,3 +34,5 @@ FILENAME="$DEST_PATH$CONTAINER.$DB.$(date +"%Y-%m-%d")"
 echo "retrieve the db dump files to $FILENAME..."
 podman cp $CONTAINER:temp_dump $FILENAME
 podman exec $CONTAINER rm -rf temp_dump
+cd $FILENAME
+find -mtime +28 -exec rm {} \;
