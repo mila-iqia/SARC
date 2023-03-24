@@ -1,0 +1,10 @@
+[Unit]
+Description=SARC backup every day
+Requires=sarc_backup.service
+
+[Timer]
+Unit=sarc_backup.service
+OnCalendar=*-*-* 00:00:00
+
+[Install]
+WantedBy=timers.target
