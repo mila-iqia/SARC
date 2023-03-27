@@ -2,7 +2,7 @@ import json
 import logging
 import sys
 import traceback
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 from pprint import pformat
 from typing import Iterator, Optional
 
@@ -45,7 +45,8 @@ class SAcctScraper:
         self.results = None
 
         cachedir = config().cache
-        if cachedir and day < datetime.today():
+        today = datetime.combine(date.today(), datetime.min.time())
+        if cachedir and day < today:
             cachedir = cachedir / "sacct"
             cachedir.mkdir(parents=True, exist_ok=True)
             daystr = day.strftime("%Y-%m-%d")
