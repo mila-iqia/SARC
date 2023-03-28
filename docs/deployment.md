@@ -34,6 +34,12 @@ sudo cat /home/sarc/.ssh/github_keys/mila-sarc-id_rsa.pub
 It will display the content of the previously generated public key ; copy/paste this key in [the Deploy keys settings of the github project](https://github.com/mila-iqia/SARC/settings/keys).
 (You don't need write access)
 
+### Lingering
+
+For `podman` to avoid throwing warnings under a `su sarc` session, you should enable login lingering:
+
+`sudo loginctl enable-linger sarc`
+
 ## Get SARC
 
 ### Get code
