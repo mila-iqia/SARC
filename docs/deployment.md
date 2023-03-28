@@ -78,12 +78,29 @@ In the future, if necessary, use the $SARC_CONFIG environment variable to choose
 
 ## MongoDB
 
-*** This whole MongoDB section is still in progress ***
-
 ### Create the sarc_mongo container
 
-***TODO***
-(note wip: `scripts/remote/mongo.sh`)
+A mongoDB container must be created on the VM prior systemd services deployment.
+
+From your workstation, you can use the `mongo.sh` script to create it:
+
+```
+scripts/remote/mongo.sh <sarc-server> install 
+```
+
+(see the [remote scripts README for more info](../scripts/remote/README.md))
+
+### MongoDB manual start
+
+Once systemd scripts deployed (see following section), the database will be started automatically at boot time; but you can already start / stop it manually :
+
+```
+scripts/remote/mongo.sh <sarc-server> start 
+```
+
+```
+scripts/remote/mongo.sh <sarc-server> stop 
+```
 
 ### Systemd file
 
@@ -97,4 +114,22 @@ See following "systemd services" section;
 The service scripts located in `scripts/systemd/` are in charge of starting the scheduled scraping tasks, start containers on system boot, etc.
 
 They are installed by the `install_services.sh` script mentionned earlier.
+
+from the server, in a `sarc` user script session :
+
+```
+cd ~/SARC
+sudo scripts/deploy/install_services.sh
+```
+
+At any time, from a `sarc` session on the server, you can start or stop the containers (including mongoDB):
+
+```
+sudo systemctl start sarc_containers.service
+```
+
+```
+sudo systemctl stop sarc_containers.service
+```
+(The `install_services.sh` should have configured it to automatically launch MongoDB at boot time, though.)
 
