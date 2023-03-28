@@ -1,0 +1,10 @@
+[Unit]
+Description=SARC podman containers
+
+[Service]
+Type=forking
+ExecStart=sudo -u sarc podman restart sarc_mongo
+ExecStop=sudo -u sarc podman stop sarc_mongo
+
+[Install]
+WantedBy=multi-user.agent
