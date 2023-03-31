@@ -33,3 +33,13 @@ start,       end,         cluster_name, resource_name,  group_name,     cpu_year
 2022-04-01,  2023-04-01,  narval,       narval-compute, rrg-bengioy-ad, 34,
 2022-04-01,  2023-04-01,  narval,       narval-gpu,     rrg-bengioy-ad, ,         185,
 2022-04-01,  2023-04-01,  narval,       narval-storage, rrg-bengioy-ad, ,         ,         ,          ,          75TB,         5e6,             25TB,
+
+2023-04-01,  2024-04-01,  cedar,        cedar-compute,  rrg-bengioy-ad, 197,
+2023-04-01,  2024-04-01,  cedar,        cedar-gpu,      rrg-bengioy-ad, ,         127,
+2023-04-01,  2024-04-01,  cedar,        cedar-storage,  rrg-bengioy-ad, ,         ,         ,          ,          100TB,        5e6,             25TB,
+2023-04-01,  2024-04-01,  beluga,       beluga-compute, rrg-bengioy-ad, 197,
+2023-04-01,  2024-04-01,  beluga,       beluga-gpu,     rrg-bengioy-ad, ,         127,
+2023-04-01,  2024-04-01,  beluga,       beluga-storage, rrg-bengioy-ad, ,         ,         ,          ,          100TB,         5e6,            125TB,
+2023-04-01,  2024-04-01,  narval,       narval-compute, rrg-bengioy-ad, 197,
+2023-04-01,  2024-04-01,  narval,       narval-gpu,     rrg-bengioy-ad, ,         154,
+2023-04-01,  2024-04-01,  narval,       narval-storage, rrg-bengioy-ad, ,         ,         ,          ,          100TB,         5e6,             75TB,
