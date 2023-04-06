@@ -91,12 +91,23 @@ Mysterious Stranger,BigProf,Manager,activated,stranger.person,ms@hotmail.com
         # )
 
         # test some cc_roles and cc_members fields
+        js_user_d = js_user.dict()
         for segment in ["cc_roles", "cc_members"]:
-            assert segment in js_user
-            assert "email" in js_user[segment]
-            assert js_user[segment]["email"] == f"js{i:03d}@yahoo.ca"
-            assert "username" in js_user[segment]
-            assert js_user[segment]["username"] == f"john.smith{i:03d}"
+            assert segment in js_user_d
+            assert "email" in js_user_d[segment]
+            assert js_user_d[segment]["email"] == f"js{i:03d}@yahoo.ca"
+            assert "username" in js_user_d[segment]
+            assert js_user_d[segment]["username"] == f"john.smith{i:03d}"
+
+        assert js_user.name == js_user.mila_ldap["display_name"]
+
+        assert js_user.mila.email == js_user.mila_ldap["mila_email_username"]
+        assert js_user.mila.username == js_user.mila_ldap["mila_cluster_username"]
+        assert js_user.mila.active
+
+        assert js_user.drac.email == js_user.cc_members["email"]
+        assert js_user.drac.username == js_user.cc_members["username"]
+        assert js_user.drac.active
 
     # test the absence of the mysterious stranger
     js_user = get_user(drac_account_username="ms@hotmail.com")

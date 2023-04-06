@@ -79,6 +79,40 @@ def run():
     )
 
 
+def fill_computed_fields(data: dict):
+    mila_ldap = data.get("mila_ldap", {}) or {}
+    cc_members = data.get("cc_members", {}) or {}
+    cc_roles = data.get("cc_roles", {}) or {}
+
+    if "name" not in data:
+        data["name"] = mila_ldap.get("display_name", "???")
+
+    if "mila" not in data:
+        data["mila"] = {
+            "username": mila_ldap.get("mila_cluster_username", "???"),
+            "email": mila_ldap.get("mila_email_username", "???"),
+            "active": mila_ldap.get("status", None) == "enabled",
+        }
+
+    if "drac" not in data:
+        if cc_members:
+            data["drac"] = {
+                "username": cc_members.get("username", "???"),
+                "email": cc_members.get("email", "???"),
+                "active": cc_members.get("activation_status", None) == "activated",
+            }
+        elif cc_roles:
+            data["drac"] = {
+                "username": cc_roles.get("username", "???"),
+                "email": cc_roles.get("email", "???"),
+                "active": cc_roles.get("status", None) == "Activated",
+            }
+        else:
+            data["drac"] = None
+
+    return data
+
+
 def commit_matches_to_database(users_collection, DD_persons_matched, verbose=False):
     L_updates_to_do = []
     for mila_email_username, D_match in DD_persons_matched.items():
@@ -86,13 +120,20 @@ def commit_matches_to_database(users_collection, DD_persons_matched, verbose=Fal
             D_match["mila_ldap"]["mila_email_username"] == mila_email_username
         )  # sanity check
 
+        D_match = fill_computed_fields(D_match)
+
         L_updates_to_do.append(
             UpdateOne(
                 {"mila_ldap.mila_email_username": mila_email_username},
                 {
                     # We don't modify the "mila_ldap" field,
-                    # only add the "cc_roles" and "cc_members" fields.
+                    # only add the "cc_roles" and "cc_members" fields
+                    # and update name/mila/drac with values computed from
+                    # the raw data.
                     "$set": {
+                        "name": D_match["name"],
+                        "mila": D_match["mila"],
+                        "drac": D_match["drac"],
                         "cc_roles": D_match["cc_roles"],
                         "cc_members": D_match["cc_members"],
                     },

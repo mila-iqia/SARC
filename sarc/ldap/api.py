@@ -3,7 +3,26 @@ Implements the API as it was defined in
 https://mila-iqia.atlassian.net/wiki/spaces/IDT/pages/2190737548/Planification
 
 """
-from sarc.config import config
+from typing import Optional
+
+from sarc.config import BaseModel, config
+
+
+class Credentials(BaseModel):
+    username: str
+    email: str
+    active: bool
+
+
+class User(BaseModel):
+    name: str
+
+    mila: Credentials
+    drac: Optional[Credentials]
+
+    mila_ldap: dict
+    cc_members: Optional[dict]
+    cc_roles: Optional[dict]
 
 
 def get_user(
@@ -35,7 +54,7 @@ def get_user(
     )
     assert len(L) <= 1
     if len(L) == 1:
-        return L[0]
+        return User(**L[0])
     else:
         return None
 
@@ -43,8 +62,9 @@ def get_user(
 def get_users():
     cfg = config()
     query = {}
-    return list(
-        cfg.mongo.database_instance[cfg.ldap.mongo_collection_name].find(
+    return [
+        User(**u)
+        for u in cfg.mongo.database_instance[cfg.ldap.mongo_collection_name].find(
             query, {"_id": False}
         )
-    )
+    ]
