@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 
 from simple_parsing import field
 
@@ -15,7 +16,9 @@ from sarc.storage.drac import (
 
 @dataclass
 class AcquireStorages:
-    file: Path = field(default=None)
+    """Acquire information about the storage."""
+
+    file: Optional[Path] = None
     cluster_names: list[str] = field(
         alias=["-c"], default_factory=list, choices=clusters
     )
