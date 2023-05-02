@@ -23,4 +23,5 @@ echo 'Copying remotely to user home folder...'
 ssh $1 "sudo rsync -av $SOURCE_PATH ."
 
 # step two: rsync ˜/mongo_backups on remote with %2/mongo_backups
+echo Copying locally to folder $2
 rsync -av sarc:mongo_backups $2
