@@ -17,10 +17,18 @@ cd ~
 
 ## Access rights
 
+### `secrets` folder
+
+To have all the accesses to the different services 
+Get the `secrets` folder provided through "some secure external channel" as stated in [the ***"Secrets"*** document](secrets.md), and copy its to the root of the git checkout folder
+
 ### ssh folder
 
-Before going anywhere, we need to copy the ssh keys and `config` files in our `~/.ssh` folder.
-Get the ssh folder provided through "some secure external channel" as stated in [the ***"Secrets"*** document](secrets.md), and copy its content to the `~/.ssh/` folder of the `sarc` user.
+We also need to copy the ssh keys and `config` files in our `~/.ssh` folder. they should be provided in the `secrets` folder.
+```
+cd ~/SARC
+cp -r secrets/ssh ~/.ssh
+```
 
 ### GitHub access
 
