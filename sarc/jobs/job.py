@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, time, timedelta
 from enum import Enum
-from typing import Optional
+from typing import Iterable, Optional
 
 from pydantic import validator
 from pydantic_mongo import AbstractRepository, ObjectIdField
@@ -205,7 +205,7 @@ def get_jobs(
     start: str | datetime | None = None,
     end: str | datetime | None = None,
     query_options: dict = {},
-) -> list[SlurmJob]:
+) -> Iterable[SlurmJob]:
     """Get jobs that match the query.
 
     Arguments:
