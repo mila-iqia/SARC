@@ -60,6 +60,7 @@ class JobStatistics(BaseModel):
 
     gpu_utilization: Optional[Statistics]
     gpu_memory: Optional[Statistics]
+    gpu_power: Optional[Statistics]
 
     cpu_utilization: Optional[Statistics]
     system_memory: Optional[Statistics]

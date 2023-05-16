@@ -187,6 +187,13 @@ def compute_job_statistics(job: SlurmJob):
         unused_threshold=None,
     )
 
+    gpu_power = compute_job_statistics_one_metric(
+        job,
+        "slurm_job_power_gpu",
+        statistics=statistics_dict,
+        unused_threshold=None,
+    )
+
     cpu_utilization = compute_job_statistics_one_metric(
         job,
         "slurm_job_core_usage",
@@ -206,6 +213,7 @@ def compute_job_statistics(job: SlurmJob):
     return JobStatistics(
         gpu_utilization=gpu_utilization and Statistics(**gpu_utilization),
         gpu_memory=gpu_memory and Statistics(**gpu_memory),
+        gpu_power=gpu_power and Statistics(**gpu_power),
         cpu_utilization=cpu_utilization and Statistics(**cpu_utilization),
         system_memory=system_memory and Statistics(**system_memory),
     )
