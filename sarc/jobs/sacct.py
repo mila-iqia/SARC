@@ -202,8 +202,10 @@ def sacct_mongodb_import(cluster, day, ignore_statistics) -> None:
     scraper.get_raw()
     print(f"Saving into mongodb collection '{collection.Meta.collection_name}'...")
     for entry in tqdm(scraper):
+        saved = False
         if not ignore_statistics:
-            entry.statistics(recompute=True, save=False)
+            saved = entry.statistics(recompute=True, save=True) is not None
 
-        collection.save_job(entry)
+        if not saved:
+            collection.save_job(entry)
     print(f"Saved {len(scraper)} entries.")

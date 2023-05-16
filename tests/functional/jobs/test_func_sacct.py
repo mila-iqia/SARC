@@ -282,7 +282,15 @@ def test_stdout_message_before_json(
 
     assert (
         cli_main(
-            ["acquire", "jobs", "--cluster_name", "raisin", "--dates", "2023-02-15"]
+            [
+                "acquire",
+                "jobs",
+                "--cluster_name",
+                "raisin",
+                "--dates",
+                "2023-02-15",
+                "--ignore_statistics",
+            ]
         )
         == 0
     )
@@ -311,7 +319,15 @@ def test_save_job(test_config, sacct_json, remote, file_regression, cli_main):
 
     assert (
         cli_main(
-            ["acquire", "jobs", "--cluster_name", "raisin", "--dates", "2023-02-15"]
+            [
+                "acquire",
+                "jobs",
+                "--cluster_name",
+                "raisin",
+                "--dates",
+                "2023-02-15",
+                "--ignore_statistics",
+            ]
         )
         == 0
     )
@@ -345,7 +361,15 @@ def test_update_job(test_config, sacct_json, remote, file_regression, cli_main):
 
     assert (
         cli_main(
-            ["acquire", "jobs", "--cluster_name", "raisin", "--dates", "2023-02-15"]
+            [
+                "acquire",
+                "jobs",
+                "--cluster_name",
+                "raisin",
+                "--dates",
+                "2023-02-15",
+                "--ignore_statistics",
+            ]
         )
         == 0
     )
@@ -354,7 +378,15 @@ def test_update_job(test_config, sacct_json, remote, file_regression, cli_main):
 
     assert (
         cli_main(
-            ["acquire", "jobs", "--cluster_name", "raisin", "--dates", "2023-02-15"]
+            [
+                "acquire",
+                "jobs",
+                "--cluster_name",
+                "raisin",
+                "--dates",
+                "2023-02-15",
+                "--ignore_statistics",
+            ]
         )
         == 0
     )
@@ -400,7 +432,15 @@ def test_save_preempted_job(test_config, sacct_json, remote, file_regression, cl
 
     assert (
         cli_main(
-            ["acquire", "jobs", "--cluster_name", "raisin", "--dates", "2023-02-15"]
+            [
+                "acquire",
+                "jobs",
+                "--cluster_name",
+                "raisin",
+                "--dates",
+                "2023-02-15",
+                "--ignore_statistics",
+            ]
         )
         == 0
     )
@@ -458,6 +498,7 @@ def test_multiple_dates(test_config, remote, file_regression, cli_main):
                 "--dates",
                 "2023-02-15",
                 "2023-02-16-2023-02-20",
+                "--ignore_statistics",
             ]
         )
         == 0
@@ -540,6 +581,7 @@ def test_multiple_clusters_and_dates(test_config, remote, file_regression, cli_m
                 "--dates",
                 "2023-02-15",
                 "2023-02-16",
+                "--ignore_statistics",
             ]
         )
         == 0
@@ -584,7 +626,7 @@ def test_job_tz(test_config, sacct_json, remote, cli_main):
 
     assert (
         cli_main(
-            ["acquire", "jobs", "--cluster_name", "patate", "--dates", "2023-02-15"]
+            ["acquire", "jobs", "--cluster_name", "patate", "--dates", "2023-02-15", "--ignore_statistics"]
         )
         == 0
     )
