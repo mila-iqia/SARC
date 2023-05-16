@@ -626,7 +626,15 @@ def test_job_tz(test_config, sacct_json, remote, cli_main):
 
     assert (
         cli_main(
-            ["acquire", "jobs", "--cluster_name", "patate", "--dates", "2023-02-15", "--ignore_statistics"]
+            [
+                "acquire",
+                "jobs",
+                "--cluster_name",
+                "patate",
+                "--dates",
+                "2023-02-15",
+                "--ignore_statistics",
+            ]
         )
         == 0
     )
