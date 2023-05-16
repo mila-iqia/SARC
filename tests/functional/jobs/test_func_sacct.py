@@ -592,3 +592,45 @@ def test_job_tz(test_config, sacct_json, remote, cli_main):
     jobs = list(get_jobs())
     assert len(jobs) == 1
     assert jobs[0].submit_time == datetime(2023, 2, 15, 12 + 3, 0, 0, tzinfo=MTL)
+
+
+@pytest.mark.usefixtures("tzlocal_is_mtl")
+@pytest.mark.parametrize("json_jobs", [{}], indirect=True)
+@pytest.mark.usefixtures("empty_read_write_db")
+def test_cli_ignore_stats(sacct_json, cli_main, scraper, monkeypatch):
+    # We'd like to test that this starts with "/tmp/pytest",
+    # but this isn't the case when we run the tests on Mac OS,
+    # ending up in '/private/var/folders/*/pytest-of-gyomalin/pytest-63'.
+    assert "pytest" in str(scraper.cachefile)
+
+    print(scraper.cachefile)
+
+    with open(scraper.cachefile, "w") as f:
+        f.write(sacct_json)
+
+    def mock_compute_job_statistics(job):
+        mock_compute_job_statistics.called += 1
+        return "mocked"
+
+    mock_compute_job_statistics.called = 0
+
+    monkeypatch.setattr(
+        "sarc.jobs.series.compute_job_statistics", mock_compute_job_statistics
+    )
+
+    args = [
+        "acquire",
+        "jobs",
+        "--cluster_name",
+        "raisin",
+        "--dates",
+        "2023-02-14",
+    ]
+
+    assert cli_main(args + ["--ignore_statistics"]) == 0
+
+    assert mock_compute_job_statistics.called == 0
+
+    assert cli_main(args) == 0
+
+    assert mock_compute_job_statistics.called >= 1

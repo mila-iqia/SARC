@@ -154,12 +154,14 @@ class SlurmJob(BaseModel):
 
         if self.stored_statistics and not recompute:
             return self.stored_statistics
-        else:
+        elif self.end_time:
             statistics = compute_job_statistics(self)
-            if save and statistics and self.end_time:
-                self.stored_statistics = statistics
+            self.stored_statistics = statistics
+            if save and statistics:
                 self.save()
             return statistics
+
+        return None
 
     def save(self):
         jobs_collection().save_job(self)

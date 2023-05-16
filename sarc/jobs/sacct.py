@@ -188,12 +188,13 @@ class SAcctScraper:
         return job
 
 
-def sacct_mongodb_import(cluster, day) -> None:
+def sacct_mongodb_import(cluster, day, ignore_statistics) -> None:
     """Fetch sacct data and store it in MongoDB.
 
     Arguments:
         cluster: The cluster on which to fetch the data.
         day: The day for which to fetch the data. The time does not matter.
+        ignore_statistics: If True, do not compute statistics for the jobs.
     """
     collection = jobs_collection()
     scraper = SAcctScraper(cluster, day)
@@ -201,5 +202,8 @@ def sacct_mongodb_import(cluster, day) -> None:
     scraper.get_raw()
     print(f"Saving into mongodb collection '{collection.Meta.collection_name}'...")
     for entry in tqdm(scraper):
+        if not ignore_statistics:
+            entry.statistics(recompute=True, save=False)
+
         collection.save_job(entry)
     print(f"Saved {len(scraper)} entries.")

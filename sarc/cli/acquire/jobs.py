@@ -44,6 +44,12 @@ class AcquireJobs:
 
     dates: list[str] = field(alias=["-d"], default_factory=list)
 
+    ignore_statistics: bool = field(
+        alias=["-s"],
+        action="store_true",
+        help="Ignore statistics, avoiding connection to prometheus (default: False)",
+    )
+
     def execute(self) -> int:
         cfg = config()
         clusters_configs = cfg.clusters
@@ -52,6 +58,8 @@ class AcquireJobs:
             self.cluster_names, parse_dates(self.dates)
         ):
             print(f"Acquire data on {cluster_name} for date: {date}")
-            sacct_mongodb_import(clusters_configs[cluster_name], date)
+            sacct_mongodb_import(
+                clusters_configs[cluster_name], date, self.ignore_statistics
+            )
 
         return 0
