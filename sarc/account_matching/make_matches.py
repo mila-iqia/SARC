@@ -139,7 +139,11 @@ def perform_matching(
             assert D_member["email"].endswith("@mila.quebec")
             if D_member["email"] in S_mila_emails_to_ignore:
                 if verbose:
-                    print(f'Ignoring phantom {D_member["email"]}.')
+                    print(f'Ignoring phantom {D_member["email"]} (ignore list).')
+                continue
+            if D_member["email"] not in DD_persons:
+                if verbose:
+                    print(f'Ignoring phantom {D_member["email"]} (automatic).')
                 continue
             DD_persons[D_member["email"]][cc_source] = D_member
     # We have 206 cc_members accounts with @mila.quebec, out of 610.
@@ -244,8 +248,15 @@ def _manual_matching(DLD_data, DD_persons, override_matches_mila_to_cc):
                 raise ValueError(
                     f'"{cc_account_username}" is not found in the actual sources.'
                     "This was supplied to `override_matches_mila_to_cc` in the `make_matches.py` file, "
-                    f"but there are not such entries in {cc_source}."
+                    f"but there are not such entries in {cc_source}.\n"
                     "Someone messed up the manual matching by specifying a CC username that does not exist."
+                )
+            if mila_email_username not in DD_persons:
+                raise ValueError(
+                    f'"{mila_email_username}" is not found in the actual sources.'
+                    "This was supplied to `override_matches_mila_to_cc` in the `make_matches.py` file, "
+                    f"but there are not such entries in LDAP.\n"
+                    "Someone messed up the manual matching by specifying a Mila email username that does not exist."
                 )
             # Note that `matching[cc_account_username]` is itself a dict
             # with user information from CC. It's not just a username string.

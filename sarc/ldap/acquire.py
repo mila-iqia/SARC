@@ -15,6 +15,7 @@ from pymongo import UpdateOne
 import sarc.account_matching.make_matches
 import sarc.ldap.read_mila_ldap  # for the `run` function
 from sarc.config import config
+import json
 
 
 def run():
@@ -27,6 +28,7 @@ def run():
         # write results in database
         mongodb_database_instance=cfg.mongo.database_instance,
         mongodb_collection=cfg.ldap.mongo_collection_name,
+#        output_json_file="secrets/account_matching/mila_users.json"
     )
 
     # It becomes really hard to test this with script when
@@ -50,13 +52,15 @@ def run():
     #        to see what you're working with, or you can just inspect `DLD_data`
     #        by saving it somewhere.
 
-    DD_persons_matched = sarc.account_matching.make_matches.perform_matching(
-        DLD_data=DLD_data,
-        mila_emails_to_ignore=cfg.account_matching.mila_emails_to_ignore,
-        override_matches_mila_to_cc=cfg.account_matching.override_matches_mila_to_cc,
-        name_distance_delta_threshold=0,
-        verbose=False,
-    )
+    with open(cfg.account_matching.make_matches_config) as json_file:
+        make_matches_config = json.load(json_file)
+        DD_persons_matched = sarc.account_matching.make_matches.perform_matching(
+            DLD_data=DLD_data,
+            mila_emails_to_ignore=make_matches_config['L_phantom_mila_emails_to_ignore'],  
+            override_matches_mila_to_cc=make_matches_config['D_override_matches_mila_to_cc_account_username'],
+            name_distance_delta_threshold=0,
+            verbose=True,
+        )
 
     # from pprint import pprint
     # pprint(DD_persons_matched)
