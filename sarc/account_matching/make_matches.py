@@ -20,6 +20,7 @@ from pathlib import PosixPath
 
 from sarc.account_matching import name_distances
 
+
 def load_data_from_files(data_paths):
     """
     Takes in a dict of paths to data files, and returns a dict of the data.
@@ -63,6 +64,7 @@ def load_data_from_files(data_paths):
 
 
 def perform_matching(
+    # pylint: disable=too-many-branches
     DLD_data: dict[str, list[dict]],
     mila_emails_to_ignore: list[str],
     override_matches_mila_to_cc: dict[str, str],
@@ -131,7 +133,7 @@ def perform_matching(
         if cc_source not in DLD_data:
             # we might not have all three source files
             if verbose:
-                print(f'{cc_source} file missing !')
+                print(f"{cc_source} file missing !")
             continue
         LD_members = _how_many_cc_accounts_with_mila_emails(
             DLD_data, cc_source, verbose=verbose
@@ -150,9 +152,9 @@ def perform_matching(
     # We have 206 cc_members accounts with @mila.quebec, out of 610.
     # We have 42 cc_roles accounts with @mila.quebec, out of 610.
 
-    _matching_names(DLD_data, DD_persons, name_distance_delta_threshold,verbose=verbose)
+    _matching_names(DLD_data, DD_persons, name_distance_delta_threshold)
 
-    _manual_matching(DLD_data, DD_persons, override_matches_mila_to_cc,verbose=verbose)
+    _manual_matching(DLD_data, DD_persons, override_matches_mila_to_cc)
 
     if verbose:
         _make_matches_status_report(DLD_data, DD_persons)
@@ -160,7 +162,7 @@ def perform_matching(
     return DD_persons
 
 
-def _matching_names(DLD_data, DD_persons, name_distance_delta_threshold,verbose=False):
+def _matching_names(DLD_data, DD_persons, name_distance_delta_threshold):
     """
     Substep of the `perform_matching` function.
     Mutates the entries of `DD_persons` in-place.
@@ -220,7 +222,7 @@ def _matching_names(DLD_data, DD_persons, name_distance_delta_threshold,verbose=
             # assert D_person_found[cc_source] == match  # optional
 
 
-def _manual_matching(DLD_data, DD_persons, override_matches_mila_to_cc,verbose=False):
+def _manual_matching(DLD_data, DD_persons, override_matches_mila_to_cc):
     """
     Substep of the `perform_matching` function.
     Mutates the entries of `DD_persons` in-place.
@@ -246,7 +248,7 @@ def _manual_matching(DLD_data, DD_persons, override_matches_mila_to_cc,verbose=F
             # If a key is missing here, it's because we messed up by writing
             # by hand the values in `override_matches_mila_to_cc`.
             # REMOVED 2023-05-16: in fact if we check it like that, we will reject every account not present in the first of the two lists, even if it is in the second one
-            #   and we want the union, not the intersection 
+            #   and we want the union, not the intersection
             # if cc_account_username not in matching:
             #     raise ValueError(
             #         f'"{cc_account_username}" is not found in the actual sources.'
@@ -265,7 +267,10 @@ def _manual_matching(DLD_data, DD_persons, override_matches_mila_to_cc,verbose=F
             # with user information from CC. It's not just a username string.
             if cc_account_username in matching:
                 assert isinstance(matching[cc_account_username], dict)
-                DD_persons[mila_email_username][cc_source] = matching[cc_account_username]
+                DD_persons[mila_email_username][cc_source] = matching[
+                    cc_account_username
+                ]
+
 
 def _make_matches_status_report(DLD_data, DD_persons):
     """
