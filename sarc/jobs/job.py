@@ -156,7 +156,7 @@ class SlurmJob(BaseModel):
             return self.stored_statistics
         elif self.end_time:
             statistics = compute_job_statistics(self)
-            if save and statistics:
+            if save:
                 self.stored_statistics = statistics
                 self.save()
             return statistics
