@@ -59,7 +59,7 @@ def run():
             mila_emails_to_ignore=make_matches_config['L_phantom_mila_emails_to_ignore'],  
             override_matches_mila_to_cc=make_matches_config['D_override_matches_mila_to_cc_account_username'],
             name_distance_delta_threshold=0,
-            verbose=True,
+            verbose=False,
         )
 
     # from pprint import pprint
