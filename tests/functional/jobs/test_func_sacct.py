@@ -282,7 +282,15 @@ def test_stdout_message_before_json(
 
     assert (
         cli_main(
-            ["acquire", "jobs", "--cluster_name", "raisin", "--dates", "2023-02-15"]
+            [
+                "acquire",
+                "jobs",
+                "--cluster_name",
+                "raisin",
+                "--dates",
+                "2023-02-15",
+                "--ignore_statistics",
+            ]
         )
         == 0
     )
@@ -311,7 +319,15 @@ def test_save_job(test_config, sacct_json, remote, file_regression, cli_main):
 
     assert (
         cli_main(
-            ["acquire", "jobs", "--cluster_name", "raisin", "--dates", "2023-02-15"]
+            [
+                "acquire",
+                "jobs",
+                "--cluster_name",
+                "raisin",
+                "--dates",
+                "2023-02-15",
+                "--ignore_statistics",
+            ]
         )
         == 0
     )
@@ -345,7 +361,15 @@ def test_update_job(test_config, sacct_json, remote, file_regression, cli_main):
 
     assert (
         cli_main(
-            ["acquire", "jobs", "--cluster_name", "raisin", "--dates", "2023-02-15"]
+            [
+                "acquire",
+                "jobs",
+                "--cluster_name",
+                "raisin",
+                "--dates",
+                "2023-02-15",
+                "--ignore_statistics",
+            ]
         )
         == 0
     )
@@ -354,7 +378,15 @@ def test_update_job(test_config, sacct_json, remote, file_regression, cli_main):
 
     assert (
         cli_main(
-            ["acquire", "jobs", "--cluster_name", "raisin", "--dates", "2023-02-15"]
+            [
+                "acquire",
+                "jobs",
+                "--cluster_name",
+                "raisin",
+                "--dates",
+                "2023-02-15",
+                "--ignore_statistics",
+            ]
         )
         == 0
     )
@@ -400,7 +432,15 @@ def test_save_preempted_job(test_config, sacct_json, remote, file_regression, cl
 
     assert (
         cli_main(
-            ["acquire", "jobs", "--cluster_name", "raisin", "--dates", "2023-02-15"]
+            [
+                "acquire",
+                "jobs",
+                "--cluster_name",
+                "raisin",
+                "--dates",
+                "2023-02-15",
+                "--ignore_statistics",
+            ]
         )
         == 0
     )
@@ -458,6 +498,7 @@ def test_multiple_dates(test_config, remote, file_regression, cli_main):
                 "--dates",
                 "2023-02-15",
                 "2023-02-16-2023-02-20",
+                "--ignore_statistics",
             ]
         )
         == 0
@@ -540,6 +581,7 @@ def test_multiple_clusters_and_dates(test_config, remote, file_regression, cli_m
                 "--dates",
                 "2023-02-15",
                 "2023-02-16",
+                "--ignore_statistics",
             ]
         )
         == 0
@@ -584,7 +626,15 @@ def test_job_tz(test_config, sacct_json, remote, cli_main):
 
     assert (
         cli_main(
-            ["acquire", "jobs", "--cluster_name", "patate", "--dates", "2023-02-15"]
+            [
+                "acquire",
+                "jobs",
+                "--cluster_name",
+                "patate",
+                "--dates",
+                "2023-02-15",
+                "--ignore_statistics",
+            ]
         )
         == 0
     )
@@ -592,3 +642,54 @@ def test_job_tz(test_config, sacct_json, remote, cli_main):
     jobs = list(get_jobs())
     assert len(jobs) == 1
     assert jobs[0].submit_time == datetime(2023, 2, 15, 12 + 3, 0, 0, tzinfo=MTL)
+
+
+@pytest.mark.usefixtures("tzlocal_is_mtl")
+@pytest.mark.parametrize("json_jobs", [{}], indirect=True)
+@pytest.mark.usefixtures("empty_read_write_db")
+@pytest.mark.parametrize("ignore_statistics", [True, False])
+def test_cli_ignore_stats(
+    sacct_json, cli_main, scraper, ignore_statistics, monkeypatch
+):
+    # We'd like to test that this starts with "/tmp/pytest",
+    # but this isn't the case when we run the tests on Mac OS,
+    # ending up in '/private/var/folders/*/pytest-of-gyomalin/pytest-63'.
+    assert "pytest" in str(scraper.cachefile)
+
+    print(scraper.cachefile)
+
+    with open(scraper.cachefile, "w") as f:
+        f.write(sacct_json)
+
+    def mock_compute_job_statistics(job):
+        mock_compute_job_statistics.called += 1
+        return dict()
+
+    mock_compute_job_statistics.called = 0
+
+    monkeypatch.setattr(
+        "sarc.jobs.series.compute_job_statistics", mock_compute_job_statistics
+    )
+
+    args = [
+        "acquire",
+        "jobs",
+        "--cluster_name",
+        "raisin",
+        "--dates",
+        "2023-02-14",
+    ]
+
+    if ignore_statistics:
+        args += ["--ignore_statistics"]
+
+    assert len(list(get_jobs())) == 0
+
+    assert cli_main(args) == 0
+
+    assert len(list(get_jobs())) > 0
+
+    if ignore_statistics:
+        assert mock_compute_job_statistics.called == 0
+    else:
+        assert mock_compute_job_statistics.called >= 1
