@@ -97,11 +97,12 @@ def perform_matching(
     # Filter out the "cc_members" whose "Activation_Status" is "older_deactivated" or "expired".
     # These accounts might not have members present in the Mila LDAP.
     if "cc_members" in DLD_data:
-        DLD_data["cc_members"] = [
-            D
-            for D in DLD_data["cc_members"]
-            if D["activation_status"] not in ["older_deactivated", "expired"]
-        ]
+        # finally don't filter them out...
+        # DLD_data["cc_members"] = [
+        #     D
+        #     for D in DLD_data["cc_members"]
+        #     if D["activation_status"] not in ["older_deactivated", "expired"]
+        # ]
         # because "John.Appleseed@mila.quebec" wrote their email with uppercases
         for e in DLD_data["cc_members"]:
             e["email"] = e["email"].lower()
@@ -316,7 +317,7 @@ def _make_matches_status_report(DLD_data, DD_persons):
     )
     print(
         f"Out of those enabled accounts, there are {good_count} successful matches "
-        "and {bad_count} failed matches."
+        f"and {bad_count} failed matches."
     )
 
     # Report on how many of the CC entries couldn't be matches to mila LDAP.
