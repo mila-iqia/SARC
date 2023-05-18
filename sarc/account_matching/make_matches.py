@@ -145,10 +145,28 @@ def perform_matching(
                     print(f'Ignoring phantom {D_member["email"]} (ignore list).')
                 continue
             if D_member["email"] not in DD_persons:
+                # New behavior here:
+                # we WANT to create an entry in DD_persons with the mila username, and the name from the cc_source !
                 if verbose:
-                    print(f'Ignoring phantom {D_member["email"]} (automatic).')
-                continue
+                    print(
+                        f'Creating phantom profile for {D_member["email"]} (automatic).'
+                    )
+                DD_persons[D_member["email"]] = {}
+                mila_ldap = {}
+                mila_ldap["mila_email_username"] = D_member["email"]
+                mila_ldap["mila_cluster_username"] = D_member["email"].split("@")[0]
+                mila_ldap["mila_cluster_uid"] = "0"
+                mila_ldap["mila_cluster_gid"] = "0"
+                for name_field in ["name", "nom"]:
+                    if name_field in D_member:
+                        mila_ldap["display_name"] = D_member[name_field]
+                        continue
+                mila_ldap["status"] = "unknown"
+                DD_persons[D_member["email"]]["mila_ldap"] = mila_ldap
+                DD_persons[D_member["email"]]["cc_members"] = None
+                DD_persons[D_member["email"]]["cc_roles"] = None
             DD_persons[D_member["email"]][cc_source] = D_member
+
     # We have 206 cc_members accounts with @mila.quebec, out of 610.
     # We have 42 cc_roles accounts with @mila.quebec, out of 610.
 
