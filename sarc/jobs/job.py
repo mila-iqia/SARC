@@ -117,7 +117,7 @@ class SlurmJob(BaseModel):
     # temporal fields
     time_limit: Optional[int]
     submit_time: datetime
-    start_time: datetime
+    start_time: Optional[datetime]
     end_time: Optional[datetime]
     elapsed_time: int
 
