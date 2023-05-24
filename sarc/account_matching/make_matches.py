@@ -264,17 +264,6 @@ def _manual_matching(DLD_data, DD_persons, override_matches_mila_to_cc):
             mila_email_username,
             cc_account_username,
         ) in override_matches_mila_to_cc.items():
-            # If a key is missing here, it's because we messed up by writing
-            # by hand the values in `override_matches_mila_to_cc`.
-            # REMOVED 2023-05-16: in fact if we check it like that, we will reject every account not present in the first of the two lists, even if it is in the second one
-            #   and we want the union, not the intersection
-            # if cc_account_username not in matching:
-            #     raise ValueError(
-            #         f'"{cc_account_username}" is not found in the actual sources.'
-            #         "This was supplied to `override_matches_mila_to_cc` in the `make_matches.py` file, "
-            #         f"but there are not such entries in {cc_source}.\n"
-            #         "Someone messed up the manual matching by specifying a CC username that does not exist."
-            #     )
             if mila_email_username not in DD_persons:
                 raise ValueError(
                     f'"{mila_email_username}" is not found in the actual sources.'
