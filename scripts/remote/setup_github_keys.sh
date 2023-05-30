@@ -18,7 +18,8 @@ ssh $1 'bash -s' << 'ENDSSH'
     mkdir -p -m 700 ~/.ssh/github_keys
 
     # add entry to config
-    echo 'Host github-sarc
+    echo '
+Host github-sarc
   Hostname github.com
   IdentityFile ~/.ssh/github_keys/mila-sarc-id_rsa' >> ~/.ssh/config
 
