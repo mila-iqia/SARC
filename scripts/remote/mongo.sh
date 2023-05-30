@@ -16,7 +16,7 @@ case $2 in
         if [[ -z $status ]];
         then
             echo 'Container sarc_mongo not found, creating it.'
-            ssh $1 'sudo -H -u sarc podman run -dt --name sarc_mongo -p 27017:27017/tcp docker.io/library/mongo:4.4.7'
+            ssh $1 'sudo -H -u sarc podman run -dt --name sarc_mongo -p 27017:27017/tcp docker.io/library/mongo:4.4.22'
         else
             echo 'Container sarc_mongo already exists ! Skipping.'
         fi
