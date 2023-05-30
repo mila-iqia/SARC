@@ -1,7 +1,6 @@
 #!/bin/sh
 
 # GitHub Deploy Keys creation script
-# run this script as the 'sarc' user on the server
 
 if [ -z "$1" ]
   then
@@ -15,6 +14,7 @@ ssh $1 'bash -s' << 'ENDSSH'
     cd
 
     #create github keys dir
+    rm -rf ~/.ssh/github_keys
     mkdir -p -m 700 ~/.ssh/github_keys
 
     # add entry to config
@@ -28,4 +28,7 @@ ssh $1 'bash -s' << 'ENDSSH'
     ssh-keygen -f ~/.ssh/github_keys/mila-sarc-id_rsa -t ecdsa -b 521
     chmod -R 644 ~/.ssh/github_keys/*id_rsa.pub
     chmod -R 600 ~/.ssh/github_keys/*id_rsa
+
+    echo "Copy this public key in the github project as a deploy key:"
+    cat ~/.ssh/github_keys/*id_rsa.pub
 ENDSSH
