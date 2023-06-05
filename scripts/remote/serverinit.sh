@@ -12,7 +12,7 @@ fi
 ssh $1 'bash -s' << 'ENDSSH'
   sudo apt update
   sudo apt upgrade -y
-  sudo apt install -y git podman
+  sudo apt install -y git podman python3-distutils
   sudo touch /etc/containers/registries.conf
   if grep '\[registries.search\]' /etc/containers/registries.conf;
   then
