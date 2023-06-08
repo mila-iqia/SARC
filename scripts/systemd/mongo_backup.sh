@@ -27,12 +27,16 @@ if [ -z "$3" ]
     DEST_PATH=$3
 fi
 echo "dump database $CONTAINER:$DB ..."
-podman exec $CONTAINER rm -rf temp_dump
-podman exec $CONTAINER mongodump -d $DB -o temp_dump --gzip
+podman exec $CONTAINER rm -rf /temp_dump/
+podman exec $CONTAINER mongodump -d $DB -o /temp_dump --gzip
 
 FILENAME="$DEST_PATH$CONTAINER.$DB.$(date +"%Y-%m-%d")"
-echo "retrieve the db dump files to $FILENAME..."
-podman cp $CONTAINER:temp_dump $FILENAME
-podman exec $CONTAINER rm -rf temp_dump
-cd $FILENAME
-find -mtime +28 -exec rm {} \;
+echo "retrieve the db dump files to $DEST_PATH ..."
+podman cp $CONTAINER:temp_dump $DEST_PATH
+echo "cleaning $CONTAINER:/temp_dump/ ..."
+podman exec $CONTAINER rm -rf /temp_dump/
+cd $DEST_PATH
+echo "renaming $DEST_PATHtemp_dump to $FILENAME ..."
+mv temp_dump $FILENAME
+echo "cleaning old backups ..."
+find -mtime +28 -exec rm -rf {} \;
