@@ -11,6 +11,9 @@ from sarc.config import MTL, PST, UTC, config
 from sarc.jobs.job import get_jobs
 from sarc.jobs.sacct import SAcctScraper
 
+from unittest.mock import patch
+import subprocess
+
 from .factory import JsonJobFactory, json_raw
 
 
@@ -259,6 +262,41 @@ def test_sacct_bin_and_accounts(test_config, remote):
     )
 
     assert len(list(scraper)) == 0
+
+@pytest.mark.parametrize(
+    "cluster_name", ["local1", "local2", "local3"]
+    # "cluster_name", ["local1"]
+)
+@patch('os.system')
+def test_localhost(os_system, cluster_name, monkeypatch):
+
+    def mock_subprocess_run(*args, **kwargs):
+        mock_subprocess_run.called +=1
+        return subprocess.CompletedProcess(
+            args=args, 
+            returncode=0, 
+            stdout='{"jobs": []}',
+            stderr=''
+        )
+    mock_subprocess_run.called = 0
+
+    monkeypatch.setattr(subprocess, "run", mock_subprocess_run)
+
+    scraper = SAcctScraper(
+        cluster=config().clusters[cluster_name], day=datetime(2023, 2, 14)
+    )
+
+    # print (config().clusters)
+    # print (config().clusters[cluster_name])
+    # channel = remote.expect(
+    #     host="localhost",
+    #     cmd="/opt/software/slurm/bin/sacct -A rrg-bonhomme-ad_gpu,rrg-bonhomme-ad_cpu,def-bonhomme_gpu,def-bonhomme_cpu -X -S '2023-02-14T00:00' -E '2023-02-15T00:00' --json",
+    #     out=b'{"jobs": []}',
+    # )
+
+    assert len(list(scraper)) == 0    
+    assert mock_subprocess_run.called >= 1
+   
 
 
 @pytest.mark.parametrize(
