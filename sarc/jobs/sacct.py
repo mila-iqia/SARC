@@ -63,9 +63,11 @@ class SAcctScraper:
         accounts = self.cluster.accounts and ",".join(self.cluster.accounts)
         accounts_option = f"-A {accounts}" if accounts else ""
         cmd = f"{self.cluster.sacct_bin} {accounts_option} -X -S '{start}' -E '{end}' --json"
-        if (self.cluster.host == "localhost") or (self.cluster.host == "") or (self.cluster.host == None):
+        if self.cluster.host in ("localhost", "", None):
             cmd_splitted = cmd.split()
-            results = subprocess.run(cmd_splitted, shell=True, text=True, capture_output=True)
+            results = subprocess.run(
+                cmd_splitted, shell=True, text=True, capture_output=True, check=False
+            )
         else:
             results = self.cluster.ssh.run(cmd, hide=True)
         return json.loads(results.stdout[results.stdout.find("{") :])
