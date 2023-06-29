@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, time, timedelta
 from enum import Enum
-from typing import Optional
+from typing import Iterable, Optional
 
 from pydantic import validator
 from pydantic_mongo import AbstractRepository, ObjectIdField
@@ -60,6 +60,7 @@ class JobStatistics(BaseModel):
 
     gpu_utilization: Optional[Statistics]
     gpu_memory: Optional[Statistics]
+    gpu_power: Optional[Statistics]
 
     cpu_utilization: Optional[Statistics]
     system_memory: Optional[Statistics]
@@ -153,12 +154,14 @@ class SlurmJob(BaseModel):
 
         if self.stored_statistics and not recompute:
             return self.stored_statistics
-        else:
+        elif self.end_time:
             statistics = compute_job_statistics(self)
-            if save and statistics and self.end_time:
+            if save:
                 self.stored_statistics = statistics
                 self.save()
             return statistics
+
+        return None
 
     def save(self):
         jobs_collection().save_job(self)
@@ -204,7 +207,7 @@ def get_jobs(
     start: str | datetime | None = None,
     end: str | datetime | None = None,
     query_options: dict = {},
-) -> list[SlurmJob]:
+) -> Iterable[SlurmJob]:
     """Get jobs that match the query.
 
     Arguments:

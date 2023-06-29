@@ -28,6 +28,7 @@ def generate_fake_timeseries(job: SlurmJob, metric, max_points=100, dataframe=Tr
         "slurm_job_utilization_gpu_memory": (0, 100, {"gpu": 3}),
         "slurm_job_core_usage": (1e9, 1e9 * job.elapsed_time, {"core": 7}),
         "slurm_job_memory_usage": (0, job.allocated.mem * 1e6, {}),
+        "slurm_job_power_gpu": (50_000, 150_000, {}),
     }
 
     (mn, mx, extra) = metric_ranges[metric]
@@ -103,6 +104,7 @@ def test_job_statistics_nothing(monkeypatch):
     assert not statistics.cpu_utilization
     assert not statistics.gpu_utilization
     assert not statistics.gpu_memory
+    assert not statistics.gpu_power
     assert not statistics.system_memory
 
 
