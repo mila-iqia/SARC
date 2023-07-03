@@ -19,7 +19,6 @@ python-hostlist = "^1.23.0"
 tqdm = "^4.64.1"
 flatten-dict = "^0.4.2"
 simple-parsing = "^0.1.0"
-pytest-freezer = "^0.4.8"
 
 [tool.poetry.group.dev.dependencies]
 black = ">= 22.12.0"
