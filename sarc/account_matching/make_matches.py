@@ -250,7 +250,9 @@ def _manual_matching(DLD_data, DD_persons, override_matches_mila_to_cc):
             # Note that `matching[drac_account_username]` is itself a dict
             # with user information from CC. It's not just a username string.
             assert isinstance(matching[drac_account_username], dict)
-            DD_persons[mila_email_username][drac_source] = matching[drac_account_username]
+            DD_persons[mila_email_username][drac_source] = matching[
+                drac_account_username
+            ]
 
 
 def _make_matches_status_report(DLD_data, DD_persons):
@@ -266,7 +268,10 @@ def _make_matches_status_report(DLD_data, DD_persons):
     (good_count, bad_count, enabled_count, disabled_count) = (0, 0, 0, 0)
     for D_person in DD_persons.values():
         if D_person["mila_ldap"]["status"] == "enabled":
-            if D_person["drac_members"] is not None or D_person["drac_roles"] is not None:
+            if (
+                D_person["drac_members"] is not None
+                or D_person["drac_roles"] is not None
+            ):
                 good_count += 1
             else:
                 bad_count += 1
@@ -319,7 +324,9 @@ def _make_matches_status_report(DLD_data, DD_persons):
         print(f"We have {count_drac_roles_activated} activated drac_roles.")
 
 
-def _how_many_drac_accounts_with_mila_emails(data, drac_source="drac_members", verbose=False):
+def _how_many_drac_accounts_with_mila_emails(
+    data, drac_source="drac_members", verbose=False
+):
     assert drac_source in data
     LD_members = [
         D_member
