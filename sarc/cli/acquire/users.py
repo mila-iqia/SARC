@@ -6,7 +6,7 @@ import sarc.ldap.acquire
 
 
 @dataclass
-class AcquireLDAP:
+class AcquireUsers:
     def execute(self) -> int:
         sarc.ldap.acquire.run()
         return 0
