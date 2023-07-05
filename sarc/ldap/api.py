@@ -21,8 +21,8 @@ class User(BaseModel):
     drac: Optional[Credentials]
 
     mila_ldap: dict
-    cc_members: Optional[dict]
-    cc_roles: Optional[dict]
+    drac_members: Optional[dict]
+    drac_roles: Optional[dict]
 
 
 def get_user(
@@ -40,8 +40,8 @@ def get_user(
     elif drac_account_username is not None:
         query = {
             "$or": [
-                {"cc_roles.username": drac_account_username},
-                {"cc_members.username": drac_account_username},
+                {"drac_roles.username": drac_account_username},
+                {"drac_members.username": drac_account_username},
             ]
         }
     else:

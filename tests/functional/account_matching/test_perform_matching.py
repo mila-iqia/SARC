@@ -7,9 +7,9 @@ def helper_extract_three_account_sources_from_ground_truth(account_matches):
     # Start with the ground truth, and then we'll split it into 3 parts
     # to see if it can be recovered.
 
-    DLD_data = {"mila_ldap": [], "cc_members": [], "cc_roles": []}
+    DLD_data = {"mila_ldap": [], "drac_members": [], "drac_roles": []}
     for _, data in account_matches.items():
-        for k in DLD_data:  # "mila_ldap", "cc_members", "cc_roles"
+        for k in DLD_data:  # "mila_ldap", "drac_members", "drac_roles"
             if data[k] is not None:
                 DLD_data[k].append(data[k])
 
@@ -17,14 +17,14 @@ def helper_extract_three_account_sources_from_ground_truth(account_matches):
     mila_emails_to_ignore = ["ignoramus.mikey@mila.quebec"]
     # note that the point here is that this entry would never
     # get matched other if it wasn't for the override
-    override_matches_mila_to_cc = {"overrido.dudette@mila.quebec": "duddirov"}
+    override_matches_mila_to_drac = {"overrido.dudette@mila.quebec": "duddirov"}
 
-    # Add an entry for "ignoramus.mikey@mila.quebec" in "cc_members"
+    # Add an entry for "ignoramus.mikey@mila.quebec" in "drac_members"
     # which is expected to be ignored by the matching algorithm
     # because we'll tell it to ignore it.
     # Note that we would still match against the "name" field
     # even if we ignored the email.
-    DLD_data["cc_members"].append(
+    DLD_data["drac_members"].append(
         {
             "rapi": "jvb-000-ag",
             "groupname": "rrg-bengioy-ad",
@@ -42,7 +42,7 @@ def helper_extract_three_account_sources_from_ground_truth(account_matches):
         }
     )
 
-    return DLD_data, mila_emails_to_ignore, override_matches_mila_to_cc
+    return DLD_data, mila_emails_to_ignore, override_matches_mila_to_drac
 
 
 def test_perform_matching(account_matches):
@@ -63,7 +63,7 @@ def test_perform_matching(account_matches):
     assert account_matches == DD_persons
 
     # for mila_email_username in DD_persons:
-    #    # source_name in "mila_ldap", "cc_members", "cc_roles
+    #    # source_name in "mila_ldap", "drac_members", "drac_roles
     #    for source_name in DD_persons[mila_email_username]:
     #        # even when one entry is `None`, the other should also be `None` instead of being absent
     #        assert DD_persons[mila_email_username] == account_matches[mila_email_username][source_name]
@@ -82,12 +82,12 @@ def test_perform_matching_with_bad_email_capitalization(account_matches):
         override_matches_mila_to_cc,
     ) = helper_extract_three_account_sources_from_ground_truth(account_matches)
 
-    assert isinstance(DLD_data["cc_members"], list)
-    assert isinstance(DLD_data["cc_members"][0], dict)
+    assert isinstance(DLD_data["drac_members"], list)
+    assert isinstance(DLD_data["drac_members"][0], dict)
 
     # mess up the capitalization of some email to see if it still matches
-    DLD_data["cc_members"][0]["email"] = DLD_data["cc_members"][0]["email"].upper()
-    DLD_data["cc_roles"][1]["email"] = DLD_data["cc_roles"][1]["email"].upper()
+    DLD_data["drac_members"][0]["email"] = DLD_data["drac_members"][0]["email"].upper()
+    DLD_data["drac_roles"][1]["email"] = DLD_data["drac_roles"][1]["email"].upper()
 
     DD_persons = perform_matching(
         DLD_data,
@@ -99,7 +99,7 @@ def test_perform_matching_with_bad_email_capitalization(account_matches):
     # Since the matching tests will also make the email lowercase,
     # then we need to compare with the lowercase version of the email.
     # We'll do that transformation manually here.
-    for source_name in ["cc_members", "cc_roles"]:
+    for source_name in ["drac_members", "drac_roles"]:
         LD_data = DLD_data[source_name]
         for D_data in LD_data:
             if D_data is not None:

@@ -40,8 +40,8 @@ def run():
     DLD_data = sarc.account_matching.make_matches.load_data_from_files(
         {
             "mila_ldap": LD_users,  # pass through
-            "cc_roles": cfg.account_matching.cc_roles_csv_path,
-            "cc_members": cfg.account_matching.cc_members_csv_path,
+            "drac_roles": cfg.account_matching.drac_roles_csv_path,
+            "drac_members": cfg.account_matching.drac_members_csv_path,
         }
     )
 
@@ -68,8 +68,8 @@ def run():
     #           "mila_email_username": "john.appleseed@mila.quebec",
     #           ...
     #       },
-    #       "cc_roles": {...} or None,
-    #       "cc_members": {...} or None
+    #       "drac_roles": {...} or None,
+    #       "drac_members": {...} or None
     #     }
 
     # These associations can now be propagated to the database.
@@ -81,8 +81,8 @@ def run():
 
 def fill_computed_fields(data: dict):
     mila_ldap = data.get("mila_ldap", {}) or {}
-    cc_members = data.get("cc_members", {}) or {}
-    cc_roles = data.get("cc_roles", {}) or {}
+    drac_members = data.get("drac_members", {}) or {}
+    drac_roles = data.get("drac_roles", {}) or {}
 
     if "name" not in data:
         data["name"] = mila_ldap.get("display_name", "???")
@@ -95,17 +95,17 @@ def fill_computed_fields(data: dict):
         }
 
     if "drac" not in data:
-        if cc_members:
+        if drac_members:
             data["drac"] = {
-                "username": cc_members.get("username", "???"),
-                "email": cc_members.get("email", "???"),
-                "active": cc_members.get("activation_status", None) == "activated",
+                "username": drac_members.get("username", "???"),
+                "email": drac_members.get("email", "???"),
+                "active": drac_members.get("activation_status", None) == "activated",
             }
-        elif cc_roles:
+        elif drac_roles:
             data["drac"] = {
-                "username": cc_roles.get("username", "???"),
-                "email": cc_roles.get("email", "???"),
-                "active": cc_roles.get("status", None) == "Activated",
+                "username": drac_roles.get("username", "???"),
+                "email": drac_roles.get("email", "???"),
+                "active": drac_roles.get("status", None) == "Activated",
             }
         else:
             data["drac"] = None
@@ -127,15 +127,15 @@ def commit_matches_to_database(users_collection, DD_persons_matched, verbose=Fal
                 {"mila_ldap.mila_email_username": mila_email_username},
                 {
                     # We don't modify the "mila_ldap" field,
-                    # only add the "cc_roles" and "cc_members" fields
+                    # only add the "drac_roles" and "drac_members" fields
                     # and update name/mila/drac with values computed from
                     # the raw data.
                     "$set": {
                         "name": D_match["name"],
                         "mila": D_match["mila"],
                         "drac": D_match["drac"],
-                        "cc_roles": D_match["cc_roles"],
-                        "cc_members": D_match["cc_members"],
+                        "drac_roles": D_match["drac_roles"],
+                        "drac_members": D_match["drac_members"],
                     },
                 },
                 # Don't add that entry if it doesn't exist.
