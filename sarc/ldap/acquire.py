@@ -57,17 +57,18 @@ def run():
         cfg.account_matching.make_matches_config, "r", encoding="utf-8"
     ) as json_file:
         make_matches_config = json.load(json_file)
-        DD_persons_matched = sarc.account_matching.make_matches.perform_matching(
-            DLD_data=DLD_data,
-            mila_emails_to_ignore=make_matches_config[
-                "L_phantom_mila_emails_to_ignore"
-            ],
-            override_matches_mila_to_cc=make_matches_config[
-                "D_override_matches_mila_to_cc_account_username"
-            ],
-            name_distance_delta_threshold=0,
-            verbose=False,
-        )
+        
+    DD_persons_matched = sarc.account_matching.make_matches.perform_matching(
+        DLD_data=DLD_data,
+        mila_emails_to_ignore=make_matches_config[
+            "L_phantom_mila_emails_to_ignore"
+        ],
+        override_matches_mila_to_cc=make_matches_config[
+            "D_override_matches_mila_to_cc_account_username"
+        ],
+        name_distance_delta_threshold=0,
+        verbose=False,
+    )
 
     # from pprint import pprint
     # pprint(DD_persons_matched)
