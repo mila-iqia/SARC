@@ -7,7 +7,7 @@ Type=oneshot
 # this hard-coded path is UGLY as hell.
 # replace it asap as soone as we know a way to
 # dynamically determine the dirpath of this script
-ExecStart=/home/sarc/SARC/scripts/systemd/scrapers.sh
+ExecStart=/bin/bash /home/sarc/SARC/scripts/systemd/scrapers.sh
 
 [Install]
 WantedBy=multi-user.agent
