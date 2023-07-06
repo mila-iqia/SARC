@@ -144,8 +144,7 @@ class LDAPConfig(BaseModel):
 class AccountMatchingConfig(BaseModel):
     cc_members_csv_path: Path
     cc_roles_csv_path: Path
-    mila_emails_to_ignore: list[str]
-    override_matches_mila_to_cc: dict[str, str]
+    make_matches_config: Path
 
 
 class Config(BaseModel):
