@@ -140,7 +140,6 @@ def perform_matching(
                     print(f'Ignoring phantom {D_member["email"]} (ignore list).')
                 continue
             if D_member["email"] not in DD_persons:
-                # New behavior here:
                 # we WANT to create an entry in DD_persons with the mila username, and the name from the cc_source !
                 if verbose:
                     print(
