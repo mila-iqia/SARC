@@ -85,10 +85,23 @@ John Smith the 001rd,BigProf,Manager,activated,john.smith001,js001@yahoo.ca
 John Smith the 002rd,BigProf,Manager,activated,john.smith002,js002@yahoo.ca
 Mysterious Stranger,BigProf,Manager,activated,stranger.person,ms@hotmail.com
 """
+    # inspired by make_matches_comfig.json
+    file3_content = """{
+    "L_phantom_mila_emails_to_ignore":
+        [
+            "iamnobody@mila.quebec"
+        ],
+    "D_override_matches_mila_to_cc_account_username":
+        {
+            "john.smith001@mila.quebec": "js_the_first"
+        }
+}
+"""
 
     file_contents = {
         cfg.account_matching.cc_roles_csv_path: file1_content,
         cfg.account_matching.cc_members_csv_path: file2_content,
+        cfg.account_matching.make_matches_config: file3_content,
     }
 
     def mock_file(filename, *vargs, **kwargs):
