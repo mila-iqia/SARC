@@ -7,11 +7,11 @@ when profs are not affiliated with Mila.
 """
 
 import csv
-from names_matching import find_exact_bag_of_words_matches
 import json
 import re
 from datetime import datetime
 
+from names_matching import find_exact_bag_of_words_matches
 
 # hugo.Larochelle avec une majuscule?
 # guillaume.dumas@mila.quebec avec aucun étudiant? je ne vois pas de g.dumas
@@ -262,16 +262,21 @@ def read_mila_raw_ldap_json(input_path):
                     cn_groups.append(m.group(1))
                     continue
 
-            if person["mail"][0] in [
-                "christopher.pal@mila.quebec",
-                "liyue@mila.quebec",
-                "ravanelm@mila.quebec",
-            ]:
+            with open(get_filename("not_students.csv"), "r") as f:
+                not_sudents = set(f.read().split('\n'))
+            
+            with open(get_filename("not_prof.csv"), "r") as f:
+                not_prof = set(f.read().split('\n'))
+                
+            with open(get_filename("rename.json"), "r") as f:
+                rename = json.load(f)
+                
+            if person["mail"][0] in not_sudents:
                 # For some reason, Christopher Pal and Yue Li are on their own students lists.
                 # Mirco Ravanelli is an ex postdoc of Yoshua but appears to be an associate member now.
                 # Let's make exceptions.
                 is_student = False
-            elif person["mail"][0] == "gassemax@mila.quebec":
+            elif person["mail"][0] in not_prof:
                 # Maxime Gasse is a postdoc with Andrea Lodi but also appears to co-supervise someone.
                 is_prof = False
 
@@ -281,8 +286,9 @@ def read_mila_raw_ldap_json(input_path):
             ), f"Person {person['givenName'][0]} {person['sn'][0]} is both a student and a prof."
 
             # because it's stupid to wait for the LDAP to be updated for that one
-            if person["mail"][0] == "xhonneul@mila.quebec":
-                person["givenName"][0] = "Sophie"
+            prefered_name = rename.get(person["mail"][0])
+            if prefered_name is not None:
+                person["givenName"][0] = prefered_name
 
             if is_prof:
                 L_profs.append(
@@ -436,8 +442,7 @@ def run(population_mila_csv_input_path, mila_raw_ldap_json_input_path, verbose=T
 
 
 if __name__ == "__main__":
-    # "Copy Population Mila_2023-03-21_for Guillaume Alain - Students.csv"
-    # 
+    
     run(
         population_mila_csv_input_path=get_filename("population_mila.csv"),
         mila_raw_ldap_json_input_path=get_filename("mila_raw_users.json"),
