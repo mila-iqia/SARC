@@ -37,243 +37,40 @@ from datetime import datetime
 #     mais le site du Mila suggère quasiment que c'est son prénom et son nom de famille
 # EbrahimiKahou devrait être Ebrahimi-Kahou
 
-mapping_group_to_prof = {
-    "y.bengio": "yoshua.bengio@mila.quebec",
-    "c.gagne": "christian.gagne@mila.quebec",
-    "s.ebrahimi.kahou": "ebrahims@mila.quebec",
-    "i.rish": "irina.rish@mila.quebec",
-    "l.paull": "paulll@mila.quebec",
-    "l.perreault-levasseur": "levassel@mila.quebec",
-    "m.ravanelli": "ravanelm@mila.quebec",
-    "g.berseth": "glen.berseth@mila.quebec",
-    "a.courville": "courvila@mila.quebec",
-    "m.bellemare": "bellemam@mila.quebec",
-    "g.farnadi": "farnadig@mila.quebec",
-    "d.rolnick": "drolnick@mila.quebec",
-    "g.wolf": "wolfguy@mila.quebec",
-    "a.mahajan": "mahajana@mila.quebec",
-    "f.khomh": "foutse.khomh@mila.quebec",
-    "n.leroux": "lerouxni@mila.quebec",
-    "j.cheung": "cheungja@mila.quebec",
-    "x.liu": "liuxue@mila.quebec",
-    "b.liu": "bang.liu@mila.quebec",
-    "b.richards": "blake.richards@mila.quebec",
-    "g.gidel": "gidelgau@mila.quebec",
-    "j.guo": "guojin@mila.quebec",
-    "g.lajoie": "guillaume.lajoie@mila.quebec",
-    "d.nowrouzezahrai": "derek@mila.quebec",
-    "g.rabusseau": "rabussgu@mila.quebec",
-    "s.chandar": "sarath.chandar@mila.quebec",
-    "n.armanfard": "narges.armanfard@mila.quebec",
-    "a.emad": "emadamin@mila.quebec",
-    "l.charlin": "lcharlin@mila.quebec",
-    "d.precup": "precupdo@mila.quebec",
-    "t.odonnell": "odonnelt@mila.quebec",
-    "s.reddy": "siva.reddy@mila.quebec",
-    "s.rahimi": "samira.rahimi@mila.quebec",
-    "j.cohen-adad": "julien.cohen-adad@mila.quebec",
-    "f.diaz": "fernando.diaz@mila.quebec",
-    "pl.bacon": "pierre-luc.bacon@mila.quebec",
-    "p.bashivan": "bashivap@mila.quebec",
-    "k.jerbi": "karim.jerbi@mila.quebec",
-    "r.rabbany": "reihaneh.rabbany@mila.quebec",
-    "s.lacoste": "slacoste@mila.quebec",
-    "d.bzdok": "bzdokdan@mila.quebec",
-    "t.arbel": "arbeltal@mila.quebec",
-    "j.tang": "tangjian@mila.quebec",
-    "d.bahdanau": "bahdanau@mila.quebec",
-    "s.ravanbakhsh": "siamak.ravanbakhsh@mila.quebec",
-    "c.pal": "christopher.pal@mila.quebec",
-    "j.pineau": "jpineau@mila.quebec",
-    "p.vincent": "vincentp@mila.quebec",
-    "p.panangaden": "prakash.panangaden@mila.quebec",
-    "h.larochelle": "hugo.Larochelle@mila.quebec",
-    "m.gasse": "gassemax@mila.quebec",
-    "e.muller": "eilif.muller@mila.quebec",
-    "g.dudek": "gregory.dudek@mila.quebec",
-    "m.a.dilhac": "dilhacma@mila.quebec",
-    "x.si": "xujie.si@mila.quebec",
-    "d.buckeridge": "david.buckeridge@mila.quebec",
-    "i.mitliagkas": "ioannis@mila.quebec",
-    "y.li": "liyue@mila.quebec",
-    "a.romero-soriano": "adriana.romero-soriano@mila.quebec",
-    "m.blanchette": "mathieu.blanchette@mila.quebec",
-    "s.enger": "shirin.enger@mila.quebec",
-    "a.lodi": "lodiandr@mila.quebec",
-    "a.moon": "moonajung@mila.quebec",
-    "a.oberman": "adam.oberman@mila.quebec",
-    "d.hjelm": "hjelmdev@mila.quebec",
-    "a.agrawal": "aishwarya.agrawal@mila.quebec",
-    "c.dubach": "christophe.dubach@mila.quebec",
-    "c.regis": "catherine.regis@mila.quebec",
-    "a.durand": "duranda@mila.quebec",
-    "d.meger": "david.meger@mila.quebec",
-    "a.huang": "anna.huang@mila.quebec",
-    "d.beaini": "dominique.beaini@mila.quebec",
-    "e.frejinger": "frejinge@mila.quebec",
-    "d.sridhar": "dhanya.sridhar@mila.quebec",
-    "k.siddiqi": "kaleem.siddiqi@mila.quebec",
-    "e.belilovsky": "belilove@mila.quebec",
-    # profs no longer at Mila
-    "a.tapp": None,
-    "w.hamilton": None,
-    "g.rioult": None,
-    "rioult": None,
-}
+
+
+def get_filename(filename):
+    # FIXME resolve to the expected path
+    import os 
+    return os.path.join("/home/newton/work/SARC/secrets", filename)
+
+
+def load_python_dict(file):
+    # Maybe convert to json
+    # note that this is a safe eval
+    #
+    # > The string or node provided may only consist of the following
+    # > Python literal structures: strings, numbers, tuples, lists, dicts, booleans,
+    # > and None.
+    #
+    import ast
+    
+    with open(file, 'r') as f:
+        return ast.literal_eval(f.read())
+
+
+mapping_group_to_prof = load_python_dict(get_filename("group_to_prof.py"))
 
 S_profs = {v for v in mapping_group_to_prof.values() if v is not None}
 
-
-mapping_prof_mila_email_to_academic_email = {
-    "adam.oberman@mila.quebec": "adam.oberman@mcgill.ca",
-    "adriana.romero-soriano@mila.quebec": None,
-    "aishwarya.agrawal@mila.quebec": "aishwarya.agrawal@mila.quebec",
-    "anna.huang@mila.quebec": None,
-    "arbeltal@mila.quebec": "tal.arbel@mcgill.ca",
-    "bang.liu@mila.quebec": "bang.liu@umontreal.ca",
-    "bahdanau@mila.quebec": None,
-    "bashivap@mila.quebec": "pouya.bashivan@mcgill.ca",
-    "belilove@mila.quebec": "eugene.belilovsky@umontreal.ca",
-    "bellemam@mila.quebec": None,
-    "blake.richards@mila.quebec": "blake.richards@mcgill.ca",
-    "bzdokdan@mila.quebec": "danilo.bzdok@mcgill.ca",
-    "catherine.regis@mila.quebec": "catherine.regis@umontreal.ca",
-    "cheungja@mila.quebec": "jcheung@cs.mcgill.ca",
-    "christian.gagne@mila.quebec": "christian.gagne@gel.ulaval.ca",
-    "christophe.dubach@mila.quebec": "christophe.dubach@mcgill.ca",
-    "christopher.pal@mila.quebec": "christopher.pal@polymtl.ca",
-    "courvila@mila.quebec": "aaron.courville@umontreal.ca",
-    "david.buckeridge@mila.quebec": "david.buckeridge@mcgill.ca",
-    "david.meger@mila.quebec": "dmeger@cim.mcgill.ca",
-    "derek@mila.quebec": "derek@cim.mcgill.ca",
-    "dhanya.sridhar@mila.quebec": "dhanya.sridhar@umontreal.ca",
-    "dilhacma@mila.quebec": "marc-antoine.dilhac@umontreal.ca",
-    "dominique.beaini@mila.quebec": "dominique.beaini@umontreal.ca",
-    "drolnick@mila.quebec": "drolnick@cs.mcgill.ca",
-    "duranda@mila.quebec": "audrey.durand@ift.ulaval.ca",
-    "ebrahims@mila.quebec": "samira.ebrahimi-kahou@etsmtl.ca",
-    "eilif.muller@mila.quebec": "eilif.muller@umontreal.ca",
-    "emadamin@mila.quebec": "amin.emad@mcgill.ca",
-    "farnadig@mila.quebec": "golnoosh.farnadi@hec.ca",
-    "fernando.diaz@mila.quebec": None,
-    "frejinge@mila.quebec": "frejinger.umontreal@gmail.com",
-    "foutse.khomh@mila.quebec": "foutse.khomh@polymtl.ca",
-    "glen.berseth@mila.quebec": "glen.berseth@umontreal.ca",
-    "gidelgau@mila.quebec": "gauthier.gidel@umontreal.ca",
-    "gregory.dudek@mila.quebec": "dudek@cs.mcgill.ca",
-    "guillaume.lajoie@mila.quebec": "g.lajoie@umontreal.ca",
-    "guojin@mila.quebec": "jin.guo@mcgill.ca",
-    "hjelmdev@mila.quebec": "rex.devon.hjelm@umontreal.ca",
-    "hugo.larochelle@mila.quebec": "hugo.larochelle@umontreal.ca",
-    "ioannis@mila.quebec": "ioannis.mitliagkas@umontreal.ca",
-    "irina.rish@mila.quebec": "irina.rish@umontreal.ca",
-    "jpineau@mila.quebec": "jpineau@cs.mcgill.ca",
-    "julien.cohen-adad@mila.quebec": "julien.cohen-adad@polymtl.ca",
-    "kaleem.siddiqi@mila.quebec": "siddiqi@cim.mcgill.ca",
-    "karim.jerbi@mila.quebec": "karim.jerbi@umontreal.ca",
-    "lcharlin@mila.quebec": "laurent.charlin@hec.ca",
-    "levassel@mila.quebec": "laurence.perreault.levasseur@umontreal.ca",
-    "lerouxni@mila.quebec": None,
-    "liuxue@mila.quebec": "xueliu@cs.mcgill.ca",
-    "liyue@mila.quebec": "yueli@cs.mcgill.ca",
-    "lodiandr@mila.quebec": "andrea.lodi@umontreal.ca",
-    "mahajana@mila.quebec": "aditya.mahajan@mcgill.ca",
-    "mathieu.blanchette@mila.quebec": "blanchem@cs.mcgill.ca",
-    "moonajung@mila.quebec": "ajung.moon@mcgill.ca",
-    "narges.armanfard@mila.quebec": "narges.armanfard@mcgill.ca",
-    "odonnelt@mila.quebec": "timothy.odonnell@mcgill.ca",
-    "paulll@mila.quebec": "paulll@iro.umontreal.ca",
-    "pierre-luc.bacon@mila.quebec": "pierre-luc.bacon@umontreal.ca",
-    "prakash.panangaden@mila.quebec": "prakash@cs.mcgill.ca",
-    "precupdo@mila.quebec": "dprecup@cs.mcgill.ca",
-    "rabussgu@mila.quebec": "guillaume.rabusseau@umontreal.ca",
-    "ravanelm@mila.quebec": "mirco.ravanelli@concordia.ca",
-    "reihaneh.rabbany@mila.quebec": "rrabba@cs.mcgill.ca",
-    "samira.rahimi@mila.quebec": "samira.rahimi@mcgill.ca",
-    "sarath.chandar@mila.quebec": "sarath-chandar.anbil-parthipan@polymtl.ca",
-    "shirin.enger@mila.quebec": "shirin.enger@mcgill.ca",
-    "siamak.ravanbakhsh@mila.quebec": "siamak@cs.mcgill.ca",
-    "slacoste@mila.quebec": "slacoste@iro.umontreal.ca",
-    "siva.reddy@mila.quebec": "siva.reddy@mila.quebec",
-    "tangjian@mila.quebec": "jian.tang@umontreal.ca",
-    "vincentp@mila.quebec": "vincentp@iro.umontreal.ca",
-    "wolfguy@mila.quebec": "guy.wolf@umontreal.ca",
-    "xujie.si@mila.quebec": "xsi@cs.mcgill.ca",
-    "yoshua.bengio@mila.quebec": "yoshua.bengio@umontreal.ca",
-}
+mapping_prof_mila_email_to_academic_email = load_python_dict(get_filename("mapping_prof_mila_email_to_academic_email.py"))
 
 mapping_academic_email_to_drac_info = {}
-big_csv_str = """
-    adam.oberman@mcgill.ca,gmu-382-01,def-oberman
-    aishwarya.agrawal@mila.quebec,vrr-364-01,def-agrawal
-    tal.arbel@mcgill.ca,pgf-735-01,def-arbeltal
-    bang.liu@umontreal.ca,rmf-384-02,def-bangliu
-    pouya.bashivan@mcgill.ca,qxe-560-02,def-bashivan
-    eugene.belilovsky@umontreal.ca,cab-641-02,def-eugenium
-    blake.richards@mcgill.ca,pxp-350-02,def-tyrell
-    danilo.bzdok@mcgill.ca,eea-520-01,def-danilobz
-    catherine.regis@umontreal.ca,None,None
-    jcheung@cs.mcgill.ca,fgv-541-01,def-jcheung
-    christian.gagne@gel.ulaval.ca,suj-571-01,def-chgag196
-    christophe.dubach@mcgill.ca,xjt-741-01,def-cdubach
-    christopher.pal@polymtl.ca,mmt-425-01,def-pal
-    aaron.courville@umontreal.ca,dnb-265-02,def-courvill
-    david.buckeridge@mcgill.ca,fxu-971-01,def-dbuckeri
-    dmeger@cim.mcgill.ca,ipq-582-03,def-dpmeger
-    derek@cim.mcgill.ca,hbm-700-02,def-dnowrouz
-    dhanya.sridhar@umontreal.ca,xwa-094-01,def-dsridhar
-    marc-antoine.dilhac@umontreal.ca,None,None
-    dominique.beaini@umontreal.ca,hwe-254-01,def-pr61079
-    drolnick@cs.mcgill.ca,bvv-703-01,def-drolnick
-    audrey.durand@ift.ulaval.ca,sks-000-03,def-adurand
-    samira.ebrahimi-kahou@etsmtl.ca,bzg-655-05,def-ebrahimi
-    eilif.muller@umontreal.ca,wgc-040-01,def-emuller
-    amin.emad@mcgill.ca,tjs-131-01,def-aminemad
-    golnoosh.farnadi@hec.ca,cbh-860-04,def-gfarnadi
-    frejinger.umontreal@gmail.com,axr-482-01,def-frejinge
-    foutse.khomh@polymtl.ca,vva-480-01,def-foutsekh
-    glen.berseth@umontreal.ca,fju-421-02,def-gberseth
-    gauthier.gidel@umontreal.ca,vsd-820-02,def-gidelgau
-    dudek@cs.mcgill.ca,aya-314-01(deactivated),def-dudek
-    g.lajoie@umontreal.ca,uwq-771-01,def-glaj
-    jin.guo@mcgill.ca,pxs-500-01,def-jinguo
-    rex.devon.hjelm@umontreal.ca,None,None
-    hugo.larochelle@umontreal.ca,ycy-622-03(deactivated),def-laroche1
-    ioannis.mitliagkas@umontreal.ca,kad-164-01,def-ioannism
-    irina.rish@umontreal.ca,mnj-282-01,def-irina
-    jpineau@cs.mcgill.ca,jim-594-01,def-jpineau
-    julien.cohen-adad@polymtl.ca,rrp-355-01,def-jcohen
-    siddiqi@cim.mcgill.ca,jqt-923-01,def-siddiqi
-    karim.jerbi@umontreal.ca,kif-392-01,def-kjerbi
-    laurent.charlin@hec.ca,kfr-353-03,def-lcharlin
-    laurence.perreault.levasseur@umontreal.ca,jyf-835-01,def-lplevass
-    xueliu@cs.mcgill.ca,tuc-100-01,def-cpsmcgil
-    yueli@cs.mcgill.ca,yfh-205-01,def-liyue
-    andrea.lodi@umontreal.ca,cnn-781-01,def-alodi
-    aditya.mahajan@mcgill.ca,ffv-054-01,def-adityam
-    blanchem@cs.mcgill.ca,yxw-673-01,def-mblanche
-    ajung.moon@mcgill.ca,inq-723-01,def-amoon
-    narges.armanfard@mcgill.ca,szi-293-01,def-armanfn
-    timothy.odonnell@mcgill.ca,gmg-385-01,def-timod
-    paulll@iro.umontreal.ca,rjx-155-01,def-lpaull
-    pierre-luc.bacon@umontreal.ca,fsp-674-01,def-plbacon
-    prakash@cs.mcgill.ca,byv-354-01,def-prakash9
-    dprecup@cs.mcgill.ca,xzv-031-01,def-dprecup
-    guillaume.rabusseau@umontreal.ca,bzd-345-03,def-grabus
-    mirco.ravanelli@concordia.ca,xzx-842-03,def-ravanelm
-    rrabba@cs.mcgill.ca,gtk-970-01,def-rrabba
-    samira.rahimi@mcgill.ca,jjh-932-01,def-srad
-    sarath-chandar.anbil-parthipan@polymtl.ca,bbj-240-04,apsarath
-    shirin.enger@mcgill.ca,bgc-914-02,def-senger
-    siamak@cs.mcgill.ca,vjz-631-02,def-siamakx
-    slacoste@iro.umontreal.ca,bhn-306-01,def-lacosts
-    siva.reddy@mila.quebec,hsf-443-01,def-sreddy
-    jian.tang@umontreal.ca,xmk-590-01,def-tjhec
-    vincentp@iro.umontreal.ca,jme-614-01,def-pascal
-    guy.wolf@umontreal.ca,cii-306-01,def-wolfg
-    xsi@cs.mcgill.ca,nza-075-01,def-six
-    yoshua.bengio@umontreal.ca,jvb-000-01,def-bengioy
-"""
+
+with open(get_filename("big_csv_str.csv"), "r") as file:
+    big_csv_str = file.read()
+
+
 for e in big_csv_str.split("\n"):
     if len(e) > 10:
         academic_email, ccri, def_account = e.split(",")
@@ -639,7 +436,9 @@ def run(population_mila_csv_input_path, mila_raw_ldap_json_input_path, verbose=T
 
 
 if __name__ == "__main__":
+    # "Copy Population Mila_2023-03-21_for Guillaume Alain - Students.csv"
+    # 
     run(
-        population_mila_csv_input_path="Copy Population Mila_2023-03-21_for Guillaume Alain - Students.csv",
-        mila_raw_ldap_json_input_path="mila_raw_users.json",
+        population_mila_csv_input_path=get_filename("population_mila.csv"),
+        mila_raw_ldap_json_input_path=get_filename("mila_raw_users.json"),
     )
