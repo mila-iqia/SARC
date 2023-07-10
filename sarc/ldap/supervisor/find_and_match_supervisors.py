@@ -59,17 +59,34 @@ def load_python_dict(file):
         return ast.literal_eval(f.read())
 
 
+#
+#   Load Files
+#
+
 mapping_group_to_prof = load_python_dict(get_filename("group_to_prof.py"))
 
-S_profs = {v for v in mapping_group_to_prof.values() if v is not None}
-
-mapping_prof_mila_email_to_academic_email = load_python_dict(get_filename("mapping_prof_mila_email_to_academic_email.py"))
+mapping_prof_mila_email_to_academic_email = \
+    load_python_dict(get_filename("mapping_prof_mila_email_to_academic_email.py"))
 
 mapping_academic_email_to_drac_info = {}
 
 with open(get_filename("big_csv_str.csv"), "r") as file:
     big_csv_str = file.read()
 
+with open(get_filename("not_students.csv"), "r") as f:
+    not_sudents = set(f.read().split('\n'))
+
+with open(get_filename("not_prof.csv"), "r") as f:
+    not_prof = set(f.read().split('\n'))
+    
+with open(get_filename("rename.json"), "r") as f:
+    rename = json.load(f)
+    
+#
+#   ===
+#
+    
+S_profs = {v for v in mapping_group_to_prof.values() if v is not None}
 
 for e in big_csv_str.split("\n"):
     if len(e) > 10:
@@ -262,15 +279,6 @@ def read_mila_raw_ldap_json(input_path):
                     cn_groups.append(m.group(1))
                     continue
 
-            with open(get_filename("not_students.csv"), "r") as f:
-                not_sudents = set(f.read().split('\n'))
-            
-            with open(get_filename("not_prof.csv"), "r") as f:
-                not_prof = set(f.read().split('\n'))
-                
-            with open(get_filename("rename.json"), "r") as f:
-                rename = json.load(f)
-                
             if person["mail"][0] in not_sudents:
                 # For some reason, Christopher Pal and Yue Li are on their own students lists.
                 # Mirco Ravanelli is an ex postdoc of Yoshua but appears to be an associate member now.
