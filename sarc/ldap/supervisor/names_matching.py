@@ -29,8 +29,8 @@ def bow_distance(bow_A, bow_B):
         distance += abs(bow_A[k] - bow_B[k])
     return distance
 
-def find_exact_bag_of_words_matches(L_names_A, L_names_B, delta_threshold=1):
 
+def find_exact_bag_of_words_matches(L_names_A, L_names_B, delta_threshold=1):
     LP_names_A = [(a, bag_of_words_projection(a)) for a in L_names_A]
     LP_names_B = [(b, bag_of_words_projection(b)) for b in L_names_B]
 
@@ -42,7 +42,7 @@ def find_exact_bag_of_words_matches(L_names_A, L_names_B, delta_threshold=1):
         for b, bow_B in LP_names_B:
             delta = bow_distance(bow_A, bow_B)
             if delta <= delta_threshold:
-                #print(f"{a}, {b}")
+                # print(f"{a}, {b}")
                 LP_results.append((a, b, delta))
 
     # We can't do that like this because we're invaliding
@@ -55,12 +55,12 @@ def find_exact_bag_of_words_matches(L_names_A, L_names_B, delta_threshold=1):
     # S_names_B = set(list(zip(*LP_results))[1])
     # for missing_name in S_names_A.difference(S_names_B):
     #    print(f"We have name {missing_name} missing from one.")
-    #for missing_name in S_names_B.difference(S_names_A):
+    # for missing_name in S_names_B.difference(S_names_A):
     #    print(f"We have name {missing_name} missing from one.")
     #
-    #assert len(set(list(zip(*LP_results))[0])) == len(set(list(zip(*LP_results))[1])), (
+    # assert len(set(list(zip(*LP_results))[0])) == len(set(list(zip(*LP_results))[1])), (
     #    "We have a big problem in the name matching because some name matched to more than one.\n"
     #    "This should really be a one-to-one correspondance, or otherwise we shouldn't be doing this matching.\n"
     #    "We should be more careful and omit those multiple matches by altering this function."
-    #)
+    # )
     return LP_results
