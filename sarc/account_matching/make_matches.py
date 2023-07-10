@@ -70,6 +70,7 @@ def perform_matching(
     override_matches_mila_to_cc: dict[str, str],
     name_distance_delta_threshold=2,  # mostly for testing
     verbose=False,
+    prompt=False,
 ):
     """
     This is the function with the core functionality.
@@ -81,6 +82,9 @@ def perform_matching(
     Returns a dict of dicts, indexed by @mila.quebec email addresses,
     and containing entries of the form
         {"mila_ldap": {...}, "drac_roles": {...}, "drac_members": {...}}
+
+    If `prompt` is True, a command-line prompt will be provided
+    everywhere manual matching is required.
     """
 
     # because this function feels entitled to modify the input data
@@ -164,8 +168,18 @@ def perform_matching(
     # We have 206 drac_members accounts with @mila.quebec, out of 610.
     # We have 42 drac_roles accounts with @mila.quebec, out of 610.
 
-    _matching_names(DLD_data, DD_persons, name_distance_delta_threshold)
+    if prompt:
+        # Matching, with a prompt to resolve ambiguous cases.
+        _matching_names_with_prompt(DLD_data, DD_persons, name_distance_delta_threshold)
 
+    else:
+        # Default matching pipeline.
+        _matching_names(DLD_data, DD_persons, name_distance_delta_threshold)
+
+    # NB: In any case (even with prompt), match overriding is applied.
+    # This means that even a manually-prompted matching may be overriden
+    # if related mila username is present in override_matches_mila_to_cc.
+    # Is it what we want ?
     _manual_matching(DLD_data, DD_persons, override_matches_mila_to_cc)
 
     if verbose:
@@ -232,6 +246,84 @@ def _matching_names(DLD_data, DD_persons, name_distance_delta_threshold):
             # but usually you don't want to see them.
             # This can be uncommented when we're doing the manual matching.
             # assert D_person_found[drac_source] == match  # optional
+
+
+# pylint: disable=too-many-nested-blocks
+def _matching_names_with_prompt(DLD_data, DD_persons, name_distance_delta_threshold):
+    """
+    Substep of the `perform_matching` function.
+    Mutates the entries of `DD_persons` in-place.
+    All argument names are the same as in the body of `perform_matching`.
+    A prompt is provided to solve ambiguous cases.
+    """
+    for name_or_nom, cc_source in [("name", "cc_members"), ("nom", "cc_roles")]:
+        # Get 10 best matches for each mila display name.
+        LP_best_name_matches = name_distances.find_best_word_matches(
+            [e["display_name"] for e in DLD_data["mila_ldap"]],
+            [e[name_or_nom] for e in DLD_data[cc_source]],
+            nb_best_matches=10,
+        )
+        # Get best match for each mila display name.
+        for mila_display_name, best_matches in LP_best_name_matches:
+            cc_match = None
+
+            # Try to make match if we find only 1 match <= threshold.
+            matches_under_threshold = [
+                match
+                for match in best_matches
+                if match[0] <= name_distance_delta_threshold
+            ]
+            if len(matches_under_threshold) == 1:
+                cc_match = matches_under_threshold[0][1]
+
+            # Otherwise, prompt.
+            else:
+                choice = "\n".join(
+                    f"[{i}] {match[1]}" for i, match in enumerate(best_matches)
+                )
+                # Loop as long as we don't get a valid prompt.
+                while True:
+                    prompted_answer = input(
+                        f"""
+Ambiguous {cc_source[:-1]}. Type a number to choose match for: {mila_display_name} (default: matching ignored):
+{choice}
+"""
+                    ).strip()
+                    # Parse input if available.
+                    if prompted_answer:
+                        try:
+                            index_match = int(prompted_answer)
+                            cc_match = best_matches[index_match][1]
+                        except (ValueError, IndexError) as exc:
+                            # We may get a value error from parsing,
+                            # or an index error when selecting a match.
+                            print("Invalid index:", exc)
+                            # Re-prompt.
+                            continue
+                    if cc_match:
+                        print(mila_display_name, "(matched with)", cc_match)
+                    else:
+                        print("(ignored)")
+                    break
+
+            if cc_match is not None:
+                # A match was selected.
+                D_person_found = [
+                    D_person
+                    for D_person in DD_persons.values()
+                    if D_person["mila_ldap"]["display_name"] == mila_display_name
+                ][0]
+                match = [e for e in DLD_data[cc_source] if e[name_or_nom] == cc_match][
+                    0
+                ]
+                prev_match_data = D_person_found.get(cc_source, None)
+                # If user already had a match,
+                # make sure previous and new match do have same name.
+                if prev_match_data is not None:
+                    assert prev_match_data[name_or_nom] == cc_match
+                # Update new match anyway.
+                D_person_found[cc_source] = match
+                del D_person_found
 
 
 def _manual_matching(DLD_data, DD_persons, override_matches_mila_to_cc):
