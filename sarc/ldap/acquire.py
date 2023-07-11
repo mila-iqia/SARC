@@ -19,24 +19,22 @@ from sarc.config import config
 
 def run():
     cfg = config()
+    
+    user_collection = cfg.mongo.database_instance[cfg.ldap.mongo_collection_name]
 
+    # Sync LDAP and mongodb
     sarc.ldap.read_mila_ldap.run(
-        local_private_key_file=cfg.ldap.local_private_key_file,
-        local_certificate_file=cfg.ldap.local_certificate_file,
-        ldap_service_uri=cfg.ldap.ldap_service_uri,
-        # write results in database
-        mongodb_database_instance=cfg.mongo.database_instance,
-        mongodb_collection=cfg.ldap.mongo_collection_name,
+        ldap=cfg.ldap,
+        mongodb_collection=user_collection,
     )
 
     # It becomes really hard to test this with script when
     # we mock the `open` calls, so we'll instead rely on
     # what has already been populated in the database.
-    LD_users = list(
-        cfg.mongo.database_instance[cfg.ldap.mongo_collection_name].find({})
-    )
+    LD_users = list(user_collection.find({}))
     LD_users = [D_user["mila_ldap"] for D_user in LD_users]
 
+    # Match DIRAC/CC to mila accounts
     DLD_data = sarc.account_matching.make_matches.load_data_from_files(
         {
             "mila_ldap": LD_users,  # pass through
