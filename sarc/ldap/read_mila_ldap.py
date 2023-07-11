@@ -185,7 +185,7 @@ def query_ldap(local_private_key_file, local_certificate_file, ldap_service_uri)
     return [json.loads(entry.entry_to_json())["attributes"] for entry in conn.entries]
 
 
-def process_user(user_raw: dict, exceptions=None) -> dict:
+def process_user(user_raw: dict) -> dict:
     """
     This takes a dict with a LOT of fields, as described by GEN-1744,
     and it uses only the following ones, which are renamed.
@@ -334,7 +334,7 @@ def run(
     errors = resolve_supervisors(LD_users_raw, group_to_prof, exceptions)
     
     LD_users = [
-        process_user(D_user_raw, exceptions) for D_user_raw in LD_users_raw
+        process_user(D_user_raw) for D_user_raw in LD_users_raw
     ]
 
     _save_to_mongo(mongodb_collection, LD_users)
