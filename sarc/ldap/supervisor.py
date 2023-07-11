@@ -36,6 +36,7 @@ def extract_supervisors(member_of):
         if m := re.match(r"^cn=(.+?)-students.*", e):
             if m.group(1) in universities:
                 university = m.group(1)
+                is_student = True
                 continue
 
             supervisors.append(m.group(1))
@@ -46,6 +47,7 @@ def extract_supervisors(member_of):
             if m.group(1) in ["mila-core-profs", "mila-profs", "core-academic-member"]:
                  is_core = True
             
+            is_student = False
             groups.append(m.group(1))
             continue
         
@@ -63,16 +65,13 @@ class Result:
     university: str
 
 
-def _student_or_prof(person, group_to_prof, exceptions):
+def _student_or_prof(person, S_profs, exceptions):
     if exceptions is None:
         exceptions = dict()
         
     # the most straightforward way to determine if a person is a prof,
     # because you can't trust the cn_groups "core-profs" where
     # the mila directors are also listed
-
-    S_profs = set(group_to_prof.values())
-
     university = None
     is_prof = person["mail"][0] in S_profs
     
@@ -116,17 +115,12 @@ def _student_or_prof(person, group_to_prof, exceptions):
         )
 
     if is_student:
-        supervisors = [
-            group_to_prof[prof_short_name]
-            for prof_short_name in cn_groups_of_supervisors
-        ]
-        
         return Result(
             person,
             is_prof,
             is_core,
             is_student,
-            supervisors,
+            cn_groups_of_supervisors,
             cn_groups,
             university,
         )
@@ -137,35 +131,46 @@ class SupervisorMatchingErrors:
     no_supervisors: list = field(default_factory=list)
     too_many_supervisors: list = field(default_factory=list)
     no_core_supervisors: list = field(default_factory=list)
+    unknown_supervisors: list = field(default_factory=list)
+    unknown_group: list = field(default_factory=list)
     
     def has_errors(self):
         return len(self.no_supervisors) > 0 or \
             len(self.no_core_supervisors) > 0 or \
-            len(self.too_many_supervisors) > 0
+            len(self.too_many_supervisors) > 0 or \
+            len(self.unknown_supervisors) > 0 or \
+            len(self.unknown_group) > 0
     
     def show(self):
         def make_list(errors):
             return [person.ldap["mail"][0] for person in errors]
         
         def show_error(msg, array):
-            if array:
+            if len(array) >  0:
                 print(f"{msg} {make_list(array)}")
                 
         show_error("     Missing supervisors:", self.no_supervisors)
         show_error("Missing core supervisors:", self.no_core_supervisors)
         show_error("    Too many supervisors:", self.too_many_supervisors)
-
+        
+        if self.unknown_supervisors:
+            print(f"     Unknown supervisors: {self.unknown_supervisors}")
+            
+        if self.unknown_group:
+            print(f"           Unknown group: {self.unknown_group}")
 
 
 def resolve_supervisors(ldap_people, group_to_prof, exceptions):
     index = dict()
     people = []
+    S_profs = set(group_to_prof.values())
+    errors = SupervisorMatchingErrors()
     
     # Build the index for supervisor resolution
     for person in ldap_people:
         result = _student_or_prof(
             person,
-            group_to_prof,
+            S_profs,
             exceptions,
         )
         
@@ -175,8 +180,6 @@ def resolve_supervisors(ldap_people, group_to_prof, exceptions):
         index[result.ldap["mail"][0]] = result
         people.append(result)
 
-    errors = SupervisorMatchingErrors()
-    
     for person in people:
         if person.is_student:
             person.ldap["is_student"] = True
@@ -190,17 +193,35 @@ def resolve_supervisors(ldap_people, group_to_prof, exceptions):
             
             elif len(person.supervisors) == 2:
                 has_core_supervisor = False
-                for s in person.supervisors:
-                    has_core_supervisor = has_core_supervisor or index[s].is_core
+                supervisors = []
                 
+                for group in person.supervisors:
+                    prof = group_to_prof.get(group)
+                    
+                    if prof is None:
+                        errors.unknown_group.append(group)
+                    else:
+                        p = index.get(prof)
+                        if p is None:
+                            errors.unknown_supervisors.append(prof)
+                        else:
+                            has_core_supervisor = has_core_supervisor or p.is_core
+                            
+                        supervisors.append(prof)
+                    
                 if not has_core_supervisor:
                     errors.no_core_supervisors.append(person)
- 
-                supervisors = list(
-                    sorted(person.supervisors, key=lambda x: int(index[x].is_core), reverse=True)
-                )
-                person.ldap["supervisor"] = supervisors[0]
-                person.ldap["co_supervisor"] = supervisors[1]
+                    
+                def sortkey(x):
+                    person = index.get(x)
+                    if person:
+                        return int(person.is_core)
+                    return 0
+                
+                supervisors = list(sorted(supervisors, key=sortkey, reverse=True))
+
+                person.ldap["supervisor"] = supervisors[0] if len(supervisors) >= 1 else None
+                person.ldap["co_supervisor"] = supervisors[1] if len(supervisors) > 1 else None
             
             else:
                 errors.too_many_supervisors.append(person)

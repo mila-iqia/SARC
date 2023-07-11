@@ -16,58 +16,104 @@ class CollectionMock:
         self.documents = write_ops
         return namedtuple("Result", ["bulk_api_result"])(len(write_ops))
 
+    
+def make_person(name, suspended=False):
+    return {
+        "mail": [f"{name}@email.com"],
+        "memberOf": [],
+        "suspended": ["true" if suspended else 'false'],
+        "posixUid": [f"{name}"],
+        "uidNumber": [f"{name}"],
+        "gidNumber": [f"{name}"],
+        "displayName": ["{name}"],
+        "googleUid": [f"{name}"],
+        "uid": [f"{name}"]
+    }
+
+def make_core(name):
+    person = make_person(name, False)
+    person["memberOf"] = ["cn=mila-core-profs,ou=Groups,dc=mila,dc=quebec"]
+    return person
+
+def make_student(name, supervisors, suspended=False):
+    person = make_person(name, suspended)
+    members = []
+    if supervisors:
+        for s in supervisors:
+            members.append(f"cn={s}-students,ou=Groups,dc=mila,dc=quebec")
+            
+    person['memberOf'] = members
+    return person
 
 def ldap_mock(*args, **kwargs):
     return [
-        {
-            "mail": ["student@email.com"],
-            "memberOf": [
-                "cn=mcgill-students,ou=Groups,dc=mila,dc=quebec",
-                "cn=co.supervisor-students,ou=Groups,dc=mila,dc=quebec",
-                "cn=supervisor-students,ou=Groups,dc=mila,dc=quebec",
-            ],
-            "suspended": ["false"],
-            "posixUid": ["student"],
-            "uidNumber": ["student"],
-            "gidNumber": ["student"],
-            "displayName": ["student"],
-            "googleUid": ["student"],
-            "uid": ["student"]
-        },
-        {
-            "mail": ["supervisor@email.com"],
-            "memberOf": [
-                "cn=mila-core-profs,ou=Groups,dc=mila,dc=quebec",
-            ],
-            "suspended": ["false"],
-            "posixUid": ["supervisor"],
-            "uidNumber": ["supervisor"],
-            "gidNumber": ["supervisor"],
-            "displayName": ["supervisor"],
-            "googleUid": ["supervisor"],
-            "uid": ["supervisor"],
-        },
-        {
-            "mail": ["co.supervisor@email.com"],
-            "memberOf": [
-            ],
-            "suspended": ["false"],
-            "posixUid": ["cosupervisor"],
-            "uidNumber": ["cosupervisor"],
-            "gidNumber": ["cosupervisor"],
-            "displayName": ["cosupervisor"],
-            "googleUid": ["co.supervisor"],
-            "uid": ["co.supervisor"],
-        }
+        make_student("good", ["mcgill", "co.supervisor", "supervisor"]),
+        make_person("co.supervisor"),
+        make_core("supervisor")
     ]
     
+def ldap_mock_no_supervisor(*args, **kwargs):
+    return [
+        make_student("good", ["mcgill"]),
+        make_person("co.supervisor"),
+        make_core("supervisor")
+    ]
 
-def group_to_prof():
+def ldap_mock_too_many_supervisor(*args, **kwargs):
+    return [
+        make_student("good", ["mcgill", "co.supervisor", "supervisor", "metoo"]),
+        make_person("co.supervisor"),
+        make_core("supervisor"),
+        make_core("metoo")
+    ]
+    
+def ldap_mock_nocore_supervisor(*args, **kwargs):
+    return [
+        make_student("good", ["mcgill", "co.supervisor", "supervisor"]),
+        make_person("co.supervisor"),
+        make_person("supervisor"),
+    ]
+    
+def ldap_mock_missing_supervisor(*args, **kwargs):
+    """Supervisor is not in LDAP"""
+    return [
+        make_student("good", ["mcgill", "co.supervisor", "supervisor"]),
+        make_person("co.supervisor"),
+    ]
+
+
+def ldap_mock_missing_supervisor_mapping(*args, **kwargs):
+    """Cannot find supervisor from group; missing mapping"""
+    return [
+        make_student("good", ["mcgill", "co.supervisor", "supervisoR"]),
+        make_person("co.supervisor"),
+        make_core("supervisor")
+    ]
+
+
+def group_to_prof(*args):
     return  {
         "supervisor": "supervisor@email.com",
         "co.supervisor": "co.supervisor@email.com",
     }
+    
 
+def ldap_exception(*args):
+    return {}
+
+
+def test_extract_supervisors_student_no_supervisor():
+    supervisors, groups, university, is_student, is_core = extract_supervisors(
+        make_student("ok", ["mcgill"])["memberOf"]
+    )
+    
+    assert university == "mcgill"
+    assert is_student is True
+    assert is_core is False
+    
+    # The supervisors are extracted as is and not yet sorted
+    assert supervisors == []
+    assert groups == []
 
 def test_extract_supervisors_student():
     ldap_people = ldap_mock()
@@ -85,7 +131,7 @@ def test_extract_supervisors_student():
     assert groups == []
 
 
-def test_extract_supervisors_core():
+def test_extract_supervisors_not_core():
     ldap_people = ldap_mock()
     
     supervisors, groups, university, is_student, is_core = extract_supervisors(
@@ -94,14 +140,14 @@ def test_extract_supervisors_core():
     
     assert university is None
     assert is_student is False
-    assert is_core is True
+    assert is_core is False
     
     # The supervisors are extracted as is and not yet sorted
     assert supervisors == []
-    assert groups == ['mila-core-profs']
+    assert groups == []
 
 
-def test_extract_supervisors_notcode():
+def test_extract_supervisors():
     ldap_people = ldap_mock()
     
     supervisors, groups, university, is_student, is_core = extract_supervisors(
@@ -110,9 +156,9 @@ def test_extract_supervisors_notcode():
     
     assert university is None
     assert is_student is False
-    assert is_core is False
+    assert is_core is True
     assert supervisors == []
-    assert groups == []
+    assert groups == ['mila-core-profs']
 
 
 def test_resolve_supervisors():
@@ -132,20 +178,117 @@ def test_resolve_supervisors():
     assert ldap_people[0]['co_supervisor'] == "co.supervisor@email.com"
 
 
-def test_sync(monkeypatch):
+def test_resolve_no_supervisors():
+    
+    ldap_people = ldap_mock_no_supervisor()
+    
+    errors = resolve_supervisors(
+        ldap_people,
+        group_to_prof(),
+        exceptions=None
+    )
+    
+    errors.show()
+    
+    assert errors.has_errors() is True
+    assert len(errors.no_supervisors) == 1
+    
+def test_resolve_too_many_supervisors():
+    
+    ldap_people = ldap_mock_too_many_supervisor()
+    
+    errors = resolve_supervisors(
+        ldap_people,
+        group_to_prof(),
+        exceptions=None
+    )
+    
+    errors.show()
+    assert errors.has_errors() is True
+    assert len(errors.too_many_supervisors) == 1
+    
+def test_resolve_nocore_supervisors():
+    
+    ldap_people = ldap_mock_nocore_supervisor()
+    
+    errors = resolve_supervisors(
+        ldap_people,
+        group_to_prof(),
+        exceptions=None
+    )
+    
+    errors.show()
+    assert errors.has_errors() is True
+    assert len(errors.no_core_supervisors) == 1
+    
+    
+def test_resolve_missing_supervisors():
+    
+    ldap_people = ldap_mock_missing_supervisor()
+    
+    errors = resolve_supervisors(
+        ldap_people,
+        group_to_prof(),
+        exceptions=None
+    )
+    
+    errors.show()
+    assert errors.has_errors() is True
+    assert len(errors.unknown_supervisors) == 1
+    
+    
+def test_resolve_missing_supervisors_mapping():
+    
+    ldap_people = ldap_mock_missing_supervisor_mapping()
+    
+    errors = resolve_supervisors(
+        ldap_people,
+        group_to_prof(),
+        exceptions=None
+    )
+    
+    errors.show()
+    assert errors.has_errors() is True
+    assert len(errors.unknown_group) == 1
+    
+    
+def test_resolve_supervisors():
+    
+    ldap_people = ldap_mock()
+    
+    errors = resolve_supervisors(
+        ldap_people,
+        group_to_prof(),
+        exceptions=None
+    )
+    
+    assert errors.has_errors() is False
+    
+    # The supervisors got sorted 
+    assert ldap_people[0]['supervisor'] == "supervisor@email.com"
+    assert ldap_people[0]['co_supervisor'] == "co.supervisor@email.com"
+
+
+
+def test_ldap_simple_sync(monkeypatch):
     monkeypatch.setattr(sarc.ldap.read_mila_ldap, "_query_and_dump", ldap_mock)
+    monkeypatch.setattr(sarc.ldap.read_mila_ldap, "load_ldap_exceptions", ldap_exception)
+    monkeypatch.setattr(sarc.ldap.read_mila_ldap, "load_group_to_prof_mapping", group_to_prof)
+    
     collection = CollectionMock()
     
     run(
         ldap=None, 
         mongodb_collection=collection,
-        group_to_prof=group_to_prof(),
-        exceptions=None
     )
     
     docs = collection.documents
     
-    student = docs[0]._doc['$set']['mila_ldap']
+    for d in docs:
+        if d._doc['$set']['mila_ldap']['mila_email_username'].startswith('good'):
+            break
+        
+    student = d._doc['$set']['mila_ldap']
     assert student['supervisor'] == "supervisor@email.com"
     assert student['co_supervisor'] == "co.supervisor@email.com"
-    
+

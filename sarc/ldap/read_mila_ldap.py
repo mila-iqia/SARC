@@ -313,24 +313,37 @@ def _save_to_mongo(collection, LD_users):
         print(result.bulk_api_result)
 
 
+
+def load_ldap_exceptions(path):
+    if path.exceptions_json_path is None:
+        return {}
+    
+    with open(path.exceptions_json_path, "r") as file:
+        return json.load(file)
+
+
+def load_group_to_prof_mapping(path):
+    if path.group_to_prof_json_path is None:
+        return {}
+
+    with open(path.group_to_prof_json_path, "r") as file:
+        return json.load(file)
+
+
 def run(
     ldap,
     mongodb_collection=None,
     output_json_file=None,
     output_raw_LDAP_json_file=None,
-    group_to_prof=None,
-    exceptions=None,
 ):
     """Runs periodically to synchronize mongodb with LDAP"""
 
     # retrive users from LDAP
     LD_users_raw = _query_and_dump(ldap, output_raw_LDAP_json_file)
 
-    # FIXME
-    if False:
-        group_to_prof, exceptions = load_stuff()
-
     # Transform users into the json we will save
+    group_to_prof = load_group_to_prof_mapping(ldap)
+    exceptions = load_ldap_exceptions(ldap)
     errors = resolve_supervisors(LD_users_raw, group_to_prof, exceptions)
     
     LD_users = [
@@ -369,60 +382,6 @@ def _fetch_collection(cfg):
         users_collection = None
 
     return users_collection
-
-
-
-def load_stuff():
-    #
-    # where do I put those
-    #
-    
-    def get_filename(filename):
-        # FIXME resolve to the expected path
-        import os
-
-        return os.path.join("/home/newton/work/SARC/secrets", filename)
-
-
-    def load_python_dict(file):
-        # Maybe convert to json
-        # note that this is a safe eval
-        #
-        # > The string or node provided may only consist of the following
-        # > Python literal structures: strings, numbers, tuples, lists, dicts, booleans,
-        # > and None.
-        #
-        import ast
-
-        with open(file, "r") as f:
-            return ast.literal_eval(f.read())
-
-    #
-    #   Load Files
-    #
-
-    mapping_group_to_prof = load_python_dict(get_filename("group_to_prof.py"))
-
-    # Those 3 go to exception
-    with open(get_filename("not_students.csv"), "r") as f:
-        not_student = set(f.read().split("\n"))
-
-    with open(get_filename("not_prof.csv"), "r") as f:
-        not_teacher = set(f.read().split("\n"))
-
-    with open(get_filename("rename.json"), "r") as f:
-        rename = json.load(f)
-
-    #
-    #   ===
-    #
-    exceptions = dict(
-        not_student=not_student,
-        not_teacher=not_teacher,
-        rename=rename
-    )
-
-    return mapping_group_to_prof, exceptions
 
 
 if __name__ == "__main__":
