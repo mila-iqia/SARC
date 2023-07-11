@@ -248,7 +248,6 @@ def _matching_names(DLD_data, DD_persons, name_distance_delta_threshold):
             # assert D_person_found[drac_source] == match  # optional
 
 
-# pylint: disable=too-many-nested-blocks
 def _matching_names_with_prompt(DLD_data, DD_persons, name_distance_delta_threshold):
     """
     Substep of the `perform_matching` function.
@@ -265,8 +264,6 @@ def _matching_names_with_prompt(DLD_data, DD_persons, name_distance_delta_thresh
         )
         # Get best match for each mila display name.
         for mila_display_name, best_matches in LP_best_name_matches:
-            cc_match = None
-
             # Try to make match if we find only 1 match <= threshold.
             matches_under_threshold = [
                 match
@@ -278,33 +275,9 @@ def _matching_names_with_prompt(DLD_data, DD_persons, name_distance_delta_thresh
 
             # Otherwise, prompt.
             else:
-                choice = "\n".join(
-                    f"[{i}] {match[1]}" for i, match in enumerate(best_matches)
+                cc_match = _prompt_manual_match(
+                    mila_display_name, cc_source, best_matches
                 )
-                # Loop as long as we don't get a valid prompt.
-                while True:
-                    prompted_answer = input(
-                        f"""
-Ambiguous {cc_source[:-1]}. Type a number to choose match for: {mila_display_name} (default: matching ignored):
-{choice}
-"""
-                    ).strip()
-                    # Parse input if available.
-                    if prompted_answer:
-                        try:
-                            index_match = int(prompted_answer)
-                            cc_match = best_matches[index_match][1]
-                        except (ValueError, IndexError) as exc:
-                            # We may get a value error from parsing,
-                            # or an index error when selecting a match.
-                            print("Invalid index:", exc)
-                            # Re-prompt.
-                            continue
-                    if cc_match:
-                        print(mila_display_name, "(matched with)", cc_match)
-                    else:
-                        print("(ignored)")
-                    break
 
             if cc_match is not None:
                 # A match was selected.
@@ -324,6 +297,50 @@ Ambiguous {cc_source[:-1]}. Type a number to choose match for: {mila_display_nam
                 # Update new match anyway.
                 D_person_found[cc_source] = match
                 del D_person_found
+
+
+def _prompt_manual_match(mila_display_name, cc_source, best_matches):
+    """
+    Sub-step of `_matching_names_with_prompt`
+
+    Prompt script user to select a `cc_source` match for `mila_display_name`
+    in `best_matches` choices.
+
+    Return selected match, or None if script user did not make a choice.
+    """
+    prompt_message = (
+        f"\n"
+        f"Ambiguous {cc_source[:-1]}. "
+        f"Type a number to choose match for: {mila_display_name} "
+        f"(default: matching ignored):\n"
+        + "\n".join(f"[{i}] {match[1]}" for i, match in enumerate(best_matches))
+        + "\n"
+    )
+
+    # Loop as long as we don't get a valid prompt.
+    while True:
+        prompted_answer = input(prompt_message).strip()
+        try:
+            if prompted_answer:
+                # Parse input if available.
+                index_match = int(prompted_answer)
+                cc_match = best_matches[index_match][1]
+            else:
+                # Otherwise, match is ignored.
+                cc_match = None
+            break
+        except (ValueError, IndexError) as exc:
+            # We may get a value error from parsing,
+            # or an index error when selecting a match.
+            print("Invalid index:", exc)
+            # Re-prompt.
+
+    if cc_match:
+        print(mila_display_name, "(matched with)", cc_match)
+    else:
+        print("(ignored)")
+
+    return cc_match
 
 
 def _manual_matching(DLD_data, DD_persons, override_matches_mila_to_cc):
