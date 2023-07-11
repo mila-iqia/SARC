@@ -327,7 +327,8 @@ def run(
     LD_users_raw = _query_and_dump(ldap, output_raw_LDAP_json_file)
 
     # FIXME
-    group_to_prof, exceptions = load_stuff()
+    if False:
+        group_to_prof, exceptions = load_stuff()
 
     # Transform users into the json we will save
     errors = resolve_supervisors(LD_users_raw, group_to_prof, exceptions)

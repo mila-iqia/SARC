@@ -138,6 +138,11 @@ class SupervisorMatchingErrors:
     too_many_supervisors: list = field(default_factory=list)
     no_core_supervisors: list = field(default_factory=list)
     
+    def has_errors(self):
+        return len(self.no_supervisors) > 0 or \
+            len(self.no_core_supervisors) > 0 or \
+            len(self.too_many_supervisors) > 0
+    
     def show(self):
         def make_list(errors):
             return [person.ldap["mail"][0] for person in errors]
@@ -194,7 +199,8 @@ def resolve_supervisors(ldap_people, group_to_prof, exceptions):
                 supervisors = list(
                     sorted(person.supervisors, key=lambda x: int(index[x].is_core), reverse=True)
                 )
-                person.ldap["supervisors"] = supervisors
+                person.ldap["supervisor"] = supervisors[0]
+                person.ldap["co_supervisor"] = supervisors[1]
             
             else:
                 errors.too_many_supervisors.append(person)

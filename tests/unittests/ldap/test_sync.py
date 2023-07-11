@@ -119,13 +119,13 @@ def test_resolve_supervisors():
     
     ldap_people = ldap_mock()
     
-    no_supervisors = resolve_supervisors(
+    errors = resolve_supervisors(
         ldap_people,
         group_to_prof(),
         exceptions=None
     )
     
-    assert no_supervisors == []
+    assert errors.has_errors() is False
     
     # The supervisors got sorted 
     assert ldap_people[0]['supervisor'] == "supervisor@email.com"
@@ -139,7 +139,8 @@ def test_sync(monkeypatch):
     run(
         ldap=None, 
         mongodb_collection=collection,
-        group_to_prof=group_to_prof()
+        group_to_prof=group_to_prof(),
+        exceptions=None
     )
     
     docs = collection.documents
