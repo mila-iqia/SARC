@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import re
 
 universities = {
@@ -132,6 +132,26 @@ def _student_or_prof(person, group_to_prof, exceptions):
         )
         
 
+@dataclass
+class SupervisorMatchingErrors:
+    no_supervisors: list = field(default_factory=list)
+    too_many_supervisors: list = field(default_factory=list)
+    no_core_supervisors: list = field(default_factory=list)
+    
+    def show(self):
+        def make_list(errors):
+            return [person.ldap["mail"][0] for person in errors]
+        
+        def show_error(msg, array):
+            if array:
+                print(f"{msg} {make_list(array)}")
+                
+        show_error("     Missing supervisors:", self.no_supervisors)
+        show_error("Missing core supervisors:", self.no_core_supervisors)
+        show_error("    Too many supervisors:", self.too_many_supervisors)
+
+
+
 def resolve_supervisors(ldap_people, group_to_prof, exceptions):
     index = dict()
     people = []
@@ -150,27 +170,33 @@ def resolve_supervisors(ldap_people, group_to_prof, exceptions):
         index[result.ldap["mail"][0]] = result
         people.append(result)
 
-
-    no_supervisors = []
+    errors = SupervisorMatchingErrors()
     
     for person in people:
         if person.is_student:
+            person.ldap["is_student"] = True
+            # We need to sort them, make the core prof index 0
             if len(person.supervisors) == 0:
-                no_supervisors.append(person)
+                person.ldap["supervisor"] = []
+                errors.no_supervisors.append(person)
                 
             elif len(person.supervisors) == 1:
-                person.ldap["supervisor"] = person.supervisors[0]
-                
-            # We need to sort them, make the core prof index 0
+                person.ldap["supervisor"] = person.supervisors
+            
             elif len(person.supervisors) == 2:
+                has_core_supervisor = False
+                for s in person.supervisors:
+                    has_core_supervisor = has_core_supervisor or index[s].is_core
+                
+                if not has_core_supervisor:
+                    errors.no_core_supervisors.append(person)
+ 
                 supervisors = list(
                     sorted(person.supervisors, key=lambda x: int(index[x].is_core), reverse=True)
                 )
-                person.ldap["supervisor"] = supervisors[0]
-                person.ldap["co_supervisor"] = supervisors[1]
-                
+                person.ldap["supervisors"] = supervisors
+            
             else:
-                raise MultipleSupervisor(person)
+                errors.too_many_supervisors.append(person)
                 
-    return no_supervisors
-
+    return errors

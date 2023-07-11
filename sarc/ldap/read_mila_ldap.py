@@ -330,7 +330,7 @@ def run(
     group_to_prof, exceptions = load_stuff()
 
     # Transform users into the json we will save
-    no_supervisors = resolve_supervisors(LD_users_raw, group_to_prof, exceptions)
+    errors = resolve_supervisors(LD_users_raw, group_to_prof, exceptions)
     
     LD_users = [
         process_user(D_user_raw, exceptions) for D_user_raw in LD_users_raw
@@ -338,11 +338,8 @@ def run(
 
     _save_to_mongo(mongodb_collection, LD_users)
     
-    if no_supervisors:
-        print('Missing supervisor: ')
-        for person in no_supervisors:
-            print(f"  {person.ldap['mail'][0]}")
-
+    errors.show()
+    
     if output_json_file:
         with open(output_json_file, "w", encoding="utf-8") as f_out:
             json.dump(LD_users, f_out, indent=4)
