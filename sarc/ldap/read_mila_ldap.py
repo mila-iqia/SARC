@@ -146,66 +146,7 @@ from ldap3 import ALL_ATTRIBUTES, SUBTREE, Connection, Server, Tls
 from pymongo import MongoClient, UpdateOne
 
 
-from .supervisor import find_and_match_supervisors
-
-
-parser = argparse.ArgumentParser(
-    description="Query LDAP and update the MongoDB database users based on values returned."
-)
-parser.add_argument(
-    "--local_private_key_file",
-    type=str,
-    help="local_private_key_file for LDAP connection",
-)
-parser.add_argument(
-    "--local_certificate_file",
-    type=str,
-    help="local_certificate_file for LDAP connection",
-)
-parser.add_argument(
-    "--ldap_service_uri",
-    type=str,
-    default="ldaps://ldap.google.com",
-    help="ldap service uri",
-)
-# We have two possible things that we can do with the data fetched.
-# Dumping to a json file is possible.
-parser.add_argument(
-    "--mongodb_connection_string",
-    default=None,
-    type=str,
-    help="(optional) MongoDB connection string. Contains username and password.",
-)
-parser.add_argument(
-    "--mongodb_database_name",
-    default="sarc",
-    type=str,
-    help="(optional) MongoDB database to modify. Better left at default.",
-)
-parser.add_argument(
-    "--mongodb_collection",
-    default="users",
-    type=str,
-    help="(optional) MongoDB collection to modify. Better left at default.",
-)
-parser.add_argument(
-    "--input_json_file",
-    default=None,
-    type=str,
-    help="(optional) Ignore the LDAP and load from this json file instead.",
-)
-parser.add_argument(
-    "--output_json_file",
-    default=None,
-    type=str,
-    help="(optional) Write results to json file.",
-)
-parser.add_argument(
-    "--output_raw_LDAP_json_file",
-    default=None,
-    type=str,
-    help="(optional) Write results of the raw LDAP query to json file.",
-)
+from .supervisor import resolve_supervisors
 
 
 def query_ldap(local_private_key_file, local_certificate_file, ldap_service_uri):
@@ -244,7 +185,7 @@ def query_ldap(local_private_key_file, local_certificate_file, ldap_service_uri)
     return [json.loads(entry.entry_to_json())["attributes"] for entry in conn.entries]
 
 
-def process_user(user_raw: dict) -> dict:
+def process_user(user_raw: dict, exceptions=None) -> dict:
     """
     This takes a dict with a LOT of fields, as described by GEN-1744,
     and it uses only the following ones, which are renamed.
@@ -262,6 +203,7 @@ def process_user(user_raw: dict) -> dict:
     "googleUid" and "uid" match that of "mail" (except for
     the "@mila.quebec" suffix).
     """
+    
     user = {
         # include the suffix "@mila.quebec"
         "mila_email_username": user_raw["mail"][0],
@@ -269,6 +211,8 @@ def process_user(user_raw: dict) -> dict:
         "mila_cluster_uid": user_raw["uidNumber"][0],
         "mila_cluster_gid": user_raw["gidNumber"][0],
         "display_name": user_raw["displayName"][0],
+        "supervisor": user_raw.get("supervisor"),
+        "co_supervisor": user_raw.get("co_supervisor"),
         "status": "disabled"
         if (user_raw["suspended"][0] in ["True", "true", True])
         else "enabled",
@@ -373,24 +317,31 @@ def run(
     ldap,
     mongodb_collection=None,
     output_json_file=None,
-    academic_affair_student_file=None,
     output_raw_LDAP_json_file=None,
+    group_to_prof=None,
+    exceptions=None,
 ):
     """Runs periodically to synchronize mongodb with LDAP"""
 
     # retrive users from LDAP
     LD_users_raw = _query_and_dump(ldap, output_raw_LDAP_json_file)
 
-    # Match students to their supervisors
-    _ = find_and_match_supervisors(
-        population_mila_csv_input_path=academic_affair_student_file,
-        mila_raw_ldap_json_input_path=LD_users_raw,
-    )
+    # FIXME
+    group_to_prof, exceptions = load_stuff()
 
     # Transform users into the json we will save
-    LD_users = [process_user(D_user_raw) for D_user_raw in LD_users_raw]
+    no_supervisors = resolve_supervisors(LD_users_raw, group_to_prof, exceptions)
+    
+    LD_users = [
+        process_user(D_user_raw, exceptions) for D_user_raw in LD_users_raw
+    ]
 
     _save_to_mongo(mongodb_collection, LD_users)
+    
+    if no_supervisors:
+        print('Missing supervisor: ')
+        for person in no_supervisors:
+            print(f"  {person.ldap['mail'][0]}")
 
     if output_json_file:
         with open(output_json_file, "w", encoding="utf-8") as f_out:
@@ -420,6 +371,60 @@ def _fetch_collection(cfg):
         users_collection = None
 
     return users_collection
+
+
+
+def load_stuff():
+    #
+    # where do I put those
+    #
+    
+    def get_filename(filename):
+        # FIXME resolve to the expected path
+        import os
+
+        return os.path.join("/home/newton/work/SARC/secrets", filename)
+
+
+    def load_python_dict(file):
+        # Maybe convert to json
+        # note that this is a safe eval
+        #
+        # > The string or node provided may only consist of the following
+        # > Python literal structures: strings, numbers, tuples, lists, dicts, booleans,
+        # > and None.
+        #
+        import ast
+
+        with open(file, "r") as f:
+            return ast.literal_eval(f.read())
+
+    #
+    #   Load Files
+    #
+
+    mapping_group_to_prof = load_python_dict(get_filename("group_to_prof.py"))
+
+    # Those 3 go to exception
+    with open(get_filename("not_students.csv"), "r") as f:
+        not_student = set(f.read().split("\n"))
+
+    with open(get_filename("not_prof.csv"), "r") as f:
+        not_teacher = set(f.read().split("\n"))
+
+    with open(get_filename("rename.json"), "r") as f:
+        rename = json.load(f)
+
+    #
+    #   ===
+    #
+    exceptions = dict(
+        not_student=not_student,
+        not_teacher=not_teacher,
+        rename=rename
+    )
+
+    return mapping_group_to_prof, exceptions
 
 
 if __name__ == "__main__":
