@@ -8,6 +8,8 @@ Type=oneshot
 # replace it asap as soone as we know a way to
 # dynamically determine the dirpath of this script
 ExecStart=sudo -u sarc /bin/bash /home/sarc/SARC/scripts/systemd/mongo_backup.sh sarc_mongo sarc /home/sarc/mongo_backups/
+ExecStart=mkdir /backup
+ExecStart=cp /home/sarc/mongo_backups/daily_backup.tar.gz /backup/
 
 [Install]
 WantedBy=multi-user.agent
