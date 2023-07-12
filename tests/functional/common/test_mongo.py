@@ -1,6 +1,5 @@
 import pymongo
 
-
 from sarc.config import config
 
 

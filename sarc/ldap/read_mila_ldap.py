@@ -145,7 +145,6 @@ import ssl
 from ldap3 import ALL_ATTRIBUTES, SUBTREE, Connection, Server, Tls
 from pymongo import MongoClient, UpdateOne
 
-
 from .supervisor import resolve_supervisors
 
 
@@ -203,7 +202,7 @@ def process_user(user_raw: dict) -> dict:
     "googleUid" and "uid" match that of "mail" (except for
     the "@mila.quebec" suffix).
     """
-    
+
     user = {
         # include the suffix "@mila.quebec"
         "mila_email_username": user_raw["mail"][0],
@@ -290,7 +289,7 @@ def _save_to_mongo(collection, LD_users):
     LD_users_DB = [u["mila_ldap"] for u in list(collection.find())]
 
     L_updated_users = client_side_user_updates(
-        LD_users_DB=LD_users_DB, 
+        LD_users_DB=LD_users_DB,
         LD_users_LDAP=LD_users,
     )
 
@@ -313,11 +312,10 @@ def _save_to_mongo(collection, LD_users):
         print(result.bulk_api_result)
 
 
-
 def load_ldap_exceptions(path):
     if path.exceptions_json_path is None:
         return {}
-    
+
     with open(path.exceptions_json_path, "r") as file:
         return json.load(file)
 
@@ -345,15 +343,13 @@ def run(
     group_to_prof = load_group_to_prof_mapping(ldap)
     exceptions = load_ldap_exceptions(ldap)
     errors = resolve_supervisors(LD_users_raw, group_to_prof, exceptions)
-    
-    LD_users = [
-        process_user(D_user_raw) for D_user_raw in LD_users_raw
-    ]
+
+    LD_users = [process_user(D_user_raw) for D_user_raw in LD_users_raw]
 
     _save_to_mongo(mongodb_collection, LD_users)
-    
+
     errors.show()
-    
+
     if output_json_file:
         with open(output_json_file, "w", encoding="utf-8") as f_out:
             json.dump(LD_users, f_out, indent=4)

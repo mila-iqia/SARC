@@ -19,7 +19,7 @@ from sarc.config import config
 
 def run():
     cfg = config()
-    
+
     user_collection = cfg.mongo.database_instance[cfg.ldap.mongo_collection_name]
 
     # Sync LDAP and mongodb
