@@ -48,8 +48,8 @@ def create_users_indices(db):
     db_collection.create_index([("mila_ldap.mila_cluster_username", pymongo.ASCENDING)])
     db_collection.create_index(
         [
-            ("cc_roles.username", pymongo.ASCENDING),
-            ("cc_members.username", pymongo.ASCENDING),
+            ("drac_roles.username", pymongo.ASCENDING),
+            ("drac_members.username", pymongo.ASCENDING),
         ]
     )
 

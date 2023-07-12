@@ -31,8 +31,8 @@ See https://mila-iqia.atlassian.net/wiki/spaces/IDT/pages/2190737548/Planificati
       "mila_cluster_username": "applej",
       ...
     },
-    "cc_roles": None,
-    "cc_members": {
+    "drac_roles": None,
+    "drac_members": {
         "username": "johns",
         ...}
 ```
@@ -378,7 +378,7 @@ def run(
 
     if users_collection is not None:
         # read only the "mila_ldap" field from the entries, and ignore the
-        # "cc_roles" and "cc_members" components
+        # "drac_roles" and "drac_members" components
         LD_users_DB = [u["mila_ldap"] for u in list(users_collection.find())]
 
         L_updated_users = client_side_user_updates(
