@@ -276,7 +276,7 @@ def _matching_names_with_prompt(DLD_data, DD_persons, name_distance_delta_thresh
             # Otherwise, prompt.
             else:
                 cc_match = _prompt_manual_match(
-                    mila_display_name, cc_source, best_matches
+                    mila_display_name, cc_source, [match[1] for match in best_matches]
                 )
 
             if cc_match is not None:
@@ -310,10 +310,10 @@ def _prompt_manual_match(mila_display_name, cc_source, best_matches):
     """
     prompt_message = (
         f"\n"
-        f"Ambiguous {cc_source[:-1]}. "
+        f"Ambiguous {cc_source}. "
         f"Type a number to choose match for: {mila_display_name} "
         f"(default: matching ignored):\n"
-        + "\n".join(f"[{i}] {match[1]}" for i, match in enumerate(best_matches))
+        + "\n".join(f"[{i}] {match}" for i, match in enumerate(best_matches))
         + "\n"
     )
 
@@ -324,7 +324,7 @@ def _prompt_manual_match(mila_display_name, cc_source, best_matches):
             if prompted_answer:
                 # Parse input if available.
                 index_match = int(prompted_answer)
-                cc_match = best_matches[index_match][1]
+                cc_match = best_matches[index_match]
             else:
                 # Otherwise, match is ignored.
                 cc_match = None
