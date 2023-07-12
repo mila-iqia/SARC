@@ -16,7 +16,7 @@ class MultipleSupervisor(Exception):
     pass
 
 
-def extract_supervisors(member_of):
+def extract_groups(member_of):
     supervisors = []
     groups = []
     is_student = False
@@ -80,7 +80,7 @@ def _student_or_prof(person, S_profs, exceptions):
         university,
         is_student,
         is_core,
-    ) = extract_supervisors(person["memberOf"])
+    ) = extract_groups(person["memberOf"])
 
     if person["suspended"][0] == "true":
         return None
@@ -226,8 +226,6 @@ def resolve_supervisors(ldap_people, group_to_prof, exceptions):
             supervisors = _extract_supervisors_from_groups(
                 person, group_to_prof, errors, index
             )
-
-            print(supervisors)
 
             if len(supervisors) == 0:
                 person.ldap["supervisor"] = []

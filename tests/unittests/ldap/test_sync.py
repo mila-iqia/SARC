@@ -2,7 +2,7 @@ from collections import namedtuple
 
 import sarc.ldap.read_mila_ldap
 from sarc.ldap.read_mila_ldap import resolve_supervisors, run
-from sarc.ldap.supervisor import _student_or_prof, extract_supervisors
+from sarc.ldap.supervisor import _student_or_prof, extract_groups
 
 
 class CollectionMock:
@@ -112,8 +112,8 @@ def ldap_exception(*args):
     return {}
 
 
-def test_extract_supervisors_student_no_supervisor():
-    supervisors, groups, university, is_student, is_core = extract_supervisors(
+def test_extract_groups_student_no_supervisor():
+    supervisors, groups, university, is_student, is_core = extract_groups(
         make_student("ok", ["mcgill"])["memberOf"]
     )
 
@@ -126,10 +126,10 @@ def test_extract_supervisors_student_no_supervisor():
     assert groups == []
 
 
-def test_extract_supervisors_student():
+def test_extract_groups_student():
     ldap_people = ldap_mock()
 
-    supervisors, groups, university, is_student, is_core = extract_supervisors(
+    supervisors, groups, university, is_student, is_core = extract_groups(
         ldap_people[0]["memberOf"]
     )
 
@@ -142,10 +142,10 @@ def test_extract_supervisors_student():
     assert groups == []
 
 
-def test_extract_supervisors_not_core():
+def test_extract_groups_not_core():
     ldap_people = ldap_mock()
 
-    supervisors, groups, university, is_student, is_core = extract_supervisors(
+    supervisors, groups, university, is_student, is_core = extract_groups(
         ldap_people[1]["memberOf"]
     )
 
@@ -158,10 +158,10 @@ def test_extract_supervisors_not_core():
     assert groups == []
 
 
-def test_extract_supervisors():
+def test_extract_groups():
     ldap_people = ldap_mock()
 
-    supervisors, groups, university, is_student, is_core = extract_supervisors(
+    supervisors, groups, university, is_student, is_core = extract_groups(
         ldap_people[2]["memberOf"]
     )
 
