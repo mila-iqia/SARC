@@ -64,6 +64,7 @@ def load_data_from_files(data_paths):
 
 
 def perform_matching(
+    # pylint: disable=too-many-branches
     DLD_data: dict[str, list[dict]],
     mila_emails_to_ignore: list[str],
     override_matches_mila_to_cc: dict[str, str],
@@ -96,11 +97,6 @@ def perform_matching(
     # Filter out the "cc_members" whose "Activation_Status" is "older_deactivated" or "expired".
     # These accounts might not have members present in the Mila LDAP.
     if "cc_members" in DLD_data:
-        DLD_data["cc_members"] = [
-            D
-            for D in DLD_data["cc_members"]
-            if D["activation_status"] not in ["older_deactivated", "expired"]
-        ]
         # because "John.Appleseed@mila.quebec" wrote their email with uppercases
         for e in DLD_data["cc_members"]:
             e["email"] = e["email"].lower()
@@ -131,6 +127,8 @@ def perform_matching(
     for cc_source in ["cc_members", "cc_roles"]:
         if cc_source not in DLD_data:
             # we might not have all three source files
+            if verbose:
+                print(f"{cc_source} file missing !")
             continue
         LD_members = _how_many_cc_accounts_with_mila_emails(
             DLD_data, cc_source, verbose=verbose
@@ -139,9 +137,30 @@ def perform_matching(
             assert D_member["email"].endswith("@mila.quebec")
             if D_member["email"] in S_mila_emails_to_ignore:
                 if verbose:
-                    print(f'Ignoring phantom {D_member["email"]}.')
+                    print(f'Ignoring phantom {D_member["email"]} (ignore list).')
                 continue
+            if D_member["email"] not in DD_persons:
+                # we WANT to create an entry in DD_persons with the mila username, and the name from the cc_source !
+                if verbose:
+                    print(
+                        f'Creating phantom profile for {D_member["email"]} (automatic).'
+                    )
+                DD_persons[D_member["email"]] = {}
+                mila_ldap = {}
+                mila_ldap["mila_email_username"] = D_member["email"]
+                mila_ldap["mila_cluster_username"] = D_member["email"].split("@")[0]
+                mila_ldap["mila_cluster_uid"] = "0"
+                mila_ldap["mila_cluster_gid"] = "0"
+                for name_field in ["name", "nom"]:
+                    if name_field in D_member:
+                        mila_ldap["display_name"] = D_member[name_field]
+                        continue
+                mila_ldap["status"] = "unknown"
+                DD_persons[D_member["email"]]["mila_ldap"] = mila_ldap
+                DD_persons[D_member["email"]]["cc_members"] = None
+                DD_persons[D_member["email"]]["cc_roles"] = None
             DD_persons[D_member["email"]][cc_source] = D_member
+
     # We have 206 cc_members accounts with @mila.quebec, out of 610.
     # We have 42 cc_roles accounts with @mila.quebec, out of 610.
 
@@ -238,19 +257,20 @@ def _manual_matching(DLD_data, DD_persons, override_matches_mila_to_cc):
             mila_email_username,
             cc_account_username,
         ) in override_matches_mila_to_cc.items():
-            # If a key is missing here, it's because we messed up by writing
-            # by hand the values in `override_matches_mila_to_cc`.
-            if cc_account_username not in matching:
+            if mila_email_username not in DD_persons:
                 raise ValueError(
-                    f'"{cc_account_username}" is not found in the actual sources.'
+                    f'"{mila_email_username}" is not found in the actual sources.'
                     "This was supplied to `override_matches_mila_to_cc` in the `make_matches.py` file, "
-                    f"but there are not such entries in {cc_source}."
-                    "Someone messed up the manual matching by specifying a CC username that does not exist."
+                    f"but there are not such entries in LDAP.\n"
+                    "Someone messed up the manual matching by specifying a Mila email username that does not exist."
                 )
             # Note that `matching[cc_account_username]` is itself a dict
             # with user information from CC. It's not just a username string.
-            assert isinstance(matching[cc_account_username], dict)
-            DD_persons[mila_email_username][cc_source] = matching[cc_account_username]
+            if cc_account_username in matching:
+                assert isinstance(matching[cc_account_username], dict)
+                DD_persons[mila_email_username][cc_source] = matching[
+                    cc_account_username
+                ]
 
 
 def _make_matches_status_report(DLD_data, DD_persons):
@@ -279,7 +299,7 @@ def _make_matches_status_report(DLD_data, DD_persons):
     )
     print(
         f"Out of those enabled accounts, there are {good_count} successful matches "
-        "and {bad_count} failed matches."
+        f"and {bad_count} failed matches."
     )
 
     # Report on how many of the CC entries couldn't be matches to mila LDAP.

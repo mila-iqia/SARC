@@ -10,6 +10,8 @@ As a result of running this script, the values in the collection
 referenced by "cfg.ldap.mongo_collection_name" will be updated.
 """
 
+import json
+
 from pymongo import UpdateOne
 
 import sarc.account_matching.make_matches
@@ -48,10 +50,17 @@ def run():
     #        to see what you're working with, or you can just inspect `DLD_data`
     #        by saving it somewhere.
 
+    with open(
+        cfg.account_matching.make_matches_config, "r", encoding="utf-8"
+    ) as json_file:
+        make_matches_config = json.load(json_file)
+
     DD_persons_matched = sarc.account_matching.make_matches.perform_matching(
         DLD_data=DLD_data,
-        mila_emails_to_ignore=cfg.account_matching.mila_emails_to_ignore,
-        override_matches_mila_to_cc=cfg.account_matching.override_matches_mila_to_cc,
+        mila_emails_to_ignore=make_matches_config["L_phantom_mila_emails_to_ignore"],
+        override_matches_mila_to_cc=make_matches_config[
+            "D_override_matches_mila_to_cc_account_username"
+        ],
         name_distance_delta_threshold=0,
         verbose=False,
     )
@@ -84,22 +93,43 @@ def commit_matches_to_database(users_collection, DD_persons_matched, verbose=Fal
             D_match["mila_ldap"]["mila_email_username"] == mila_email_username
         )  # sanity check
 
-        L_updates_to_do.append(
-            UpdateOne(
-                {"mila_ldap.mila_email_username": mila_email_username},
-                {
-                    # We don't modify the "mila_ldap" field,
-                    # only add the "cc_roles" and "cc_members" fields.
-                    "$set": {
-                        "cc_roles": D_match["cc_roles"],
-                        "cc_members": D_match["cc_members"],
+        # if mila ldap user status = "unknown", which means the user does NOT exist in the Mila LDAP but was created as a dummy placeholder,
+        # then UPSERT the document in the database if necessary
+        # otherwise, juste update it
+        if D_match["mila_ldap"]["status"] == "unknown":
+            L_updates_to_do.append(
+                UpdateOne(
+                    {"mila_ldap.mila_email_username": mila_email_username},
+                    {
+                        # We set all the fields corresponding to the fields from `updated_user`,
+                        # so that's a convenient way to do it. Note that this does not affect
+                        # the fields in the database that are already present for that user.
+                        "$set": {
+                            "mila_ldap": D_match["mila_ldap"],
+                            "cc_roles": D_match["cc_roles"],
+                            "cc_members": D_match["cc_members"],
+                        },
                     },
-                },
-                # Don't add that entry if it doesn't exist.
-                # That would create some dangling entry that doesn't have a "mila_ldap" field.
-                upsert=False,
+                    upsert=True,
+                )
             )
-        )
+        else:
+            L_updates_to_do.append(
+                UpdateOne(
+                    {"mila_ldap.mila_email_username": mila_email_username},
+                    {
+                        # We don't modify the "mila_ldap" field,
+                        # only add the "cc_roles" and "cc_members" fields.
+                        "$set": {
+                            "cc_roles": D_match["cc_roles"],
+                            "cc_members": D_match["cc_members"],
+                        },
+                    },
+                    # Don't add that entry if it doesn't exist.
+                    # That would create some dangling entry that doesn't have a "mila_ldap" field.
+                    upsert=False,
+                )
+            )
 
     if L_updates_to_do:
         result = users_collection.bulk_write(L_updates_to_do)  #  <- the actual commit
