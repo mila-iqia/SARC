@@ -57,15 +57,17 @@ def test_query_to_ldap_server_and_writing_to_output_json(monkeypatch):
     cfg = config()
     nbr_users = 10
 
-    def mock_query_ldap(ldap, *args):
-        assert ldap.ldap_service_uri.startswith("ldaps://")
+    def mock_query_ldap(
+        local_private_key_file, local_certificate_file, ldap_service_uri
+    ):
+        assert ldap_service_uri.startswith("ldaps://")
         return fake_raw_ldap_data(nbr_users)
 
     monkeypatch.setattr(sarc.ldap.read_mila_ldap, "query_ldap", mock_query_ldap)
 
     with tempfile.NamedTemporaryFile() as tmp_file:
         tmp_file_path = tmp_file.name
-        
+
         sarc.ldap.read_mila_ldap.run(
             cfg.ldap,
             # write results to here
@@ -116,10 +118,12 @@ def test_query_to_ldap_server_and_commit_to_db(monkeypatch):
 
     # avoid copy/paste of the same code
     def helper_function(L_users_to_add):
-        def mock_query_ldap(ldap, *args):
+        def mock_query_ldap(
+            local_private_key_file, local_certificate_file, ldap_service_uri
+        ):
             # Since we're not using the real LDAP server, we don't need to
             # actually have valid paths in `local_private_key_file` and `local_certificate_file`.
-            assert ldap.ldap_service_uri.startswith("ldaps://")
+            assert ldap_service_uri.startswith("ldaps://")
             return L_users_to_add
 
         monkeypatch.setattr(sarc.ldap.read_mila_ldap, "query_ldap", mock_query_ldap)
@@ -127,7 +131,7 @@ def test_query_to_ldap_server_and_commit_to_db(monkeypatch):
         sarc.ldap.read_mila_ldap.run(
             cfg.ldap,
             # write results to here
-            mongodb_collection=sarc.ldap.read_mila_ldap.get_ldap_collection(cfg)
+            mongodb_collection=sarc.ldap.read_mila_ldap.get_ldap_collection(cfg),
         )
         L_users = list(db[cfg.ldap.mongo_collection_name].find({}, {"_id": False}))
         return L_users
