@@ -169,7 +169,6 @@ def commit_matches_to_database(users_collection, DD_persons_matched, verbose=Fal
                             "drac_roles": D_match["drac_roles"],
                             "drac_members": D_match["drac_members"],
                         },
-
                     },
                     # Don't add that entry if it doesn't exist.
                     # That would create some dangling entry that doesn't have a "mila_ldap" field.

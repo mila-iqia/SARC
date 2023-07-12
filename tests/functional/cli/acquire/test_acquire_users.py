@@ -127,12 +127,11 @@ Mysterious Stranger,BigProf,Manager,activated,stranger.person,ms@hotmail.com
         assert js_user is not None
 
         # test some drac_roles and drac_members fields
-        for segment in ["drac_roles", "drac_members"]:
-            assert segment in js_user
-            assert "email" in js_user[segment]
-            assert js_user[segment]["email"] == f"js{i:03d}@yahoo.ca"
-            assert "username" in js_user[segment]
-            assert js_user[segment]["username"] == f"john.smith{i:03d}"
+        for segment in [js_user.drac_roles, js_user.drac_members]:
+            assert "email" in segment
+            assert segment["email"] == f"js{i:03d}@yahoo.ca"
+            assert "username" in segment
+            assert segment["username"] == f"john.smith{i:03d}"
 
     # test the absence of the mysterious stranger
     js_user = get_user(drac_account_username="ms@hotmail.com")
