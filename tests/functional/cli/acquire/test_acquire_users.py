@@ -140,8 +140,8 @@ Mysterious Stranger,BigProf,Manager,activated,stranger.person,ms@hotmail.com
 """
 
     file_contents = {
-        cfg.account_matching.cc_roles_csv_path: file1_content,
-        cfg.account_matching.cc_members_csv_path: file2_content,
+        cfg.account_matching.drac_roles_csv_path: file1_content,
+        cfg.account_matching.drac_members_csv_path: file2_content,
         cfg.account_matching.make_matches_config: file3_content,
     }
 
@@ -156,7 +156,7 @@ Mysterious Stranger,BigProf,Manager,activated,stranger.person,ms@hotmail.com
     # then <enter> (valid, ignore).
     # Fourth input should receive `3`,
     # which should make mysterious stranger
-    # be matched with john smith the 6rd as cc_member.
+    # be matched with john smith the 6rd as drac_member.
     monkeypatch.setattr("sys.stdin", io.StringIO("a\n\n\n\n3\n\n\n\n\n\n\n\n\n\n\n"))
 
     with patch("builtins.open", side_effect=mock_file):
@@ -176,18 +176,19 @@ Mysterious Stranger,BigProf,Manager,activated,stranger.person,ms@hotmail.com
         js_user = get_user(mila_email_username=f"john.smith{i:03d}@mila.quebec")
         assert js_user is not None
 
-        # test some cc_roles and cc_members fields
-        for segment in ["cc_roles", "cc_members"]:
-            assert segment in js_user
-            assert "email" in js_user[segment]
-            assert js_user[segment]["email"] == f"js{i:03d}@yahoo.ca"
-            assert "username" in js_user[segment]
-            assert js_user[segment]["username"] == f"john.smith{i:03d}"
+        # test some drac_roles and drac_members fields
+        for segment in ["drac_roles", "drac_members"]:
+            assert hasattr(js_user, segment)
+            field = getattr(js_user, segment)
+            assert "email" in field
+            assert field["email"] == f"js{i:03d}@yahoo.ca"
+            assert "username" in field
+            assert field["username"] == f"john.smith{i:03d}"
 
-    # test mysterious stranger was indeed matched as cc_members with john smith the 6rd
+    # test mysterious stranger was indeed matched as drac_members with john smith the 6rd
     js_user = get_user(drac_account_username="stranger.person")
     assert js_user is not None
-    assert js_user["mila_ldap"]["mila_email_username"] == "john.smith006@mila.quebec"
-    assert js_user["cc_members"] is not None
-    assert js_user["cc_members"]["username"] == "stranger.person"
-    assert js_user["cc_roles"] is None
+    assert js_user.mila_ldap["mila_email_username"] == "john.smith006@mila.quebec"
+    assert js_user.drac_members is not None
+    assert js_user.drac_members["username"] == "stranger.person"
+    assert js_user.drac_roles is None

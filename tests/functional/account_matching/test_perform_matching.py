@@ -113,7 +113,7 @@ def test_perform_matching_with_bad_email_capitalization(account_matches):
 
 def test_prompt_manual_match(monkeypatch):
     mila_display_name = "a_name"
-    cc_source = "cc_members"
+    cc_source = "drac_members"
     matches = [f"name_{i}" for i in range(5)]
 
     # Choose index 0

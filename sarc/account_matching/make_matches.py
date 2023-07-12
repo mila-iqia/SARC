@@ -191,7 +191,7 @@ def _matching_names(DLD_data, DD_persons, name_distance_delta_threshold, prompt=
     If `prompt` is True, a prompt is provided to solve ambiguous cases.
     """
 
-    for name_or_nom, cc_source in [("name", "cc_members"), ("nom", "cc_roles")]:
+    for name_or_nom, cc_source in [("name", "drac_members"), ("nom", "drac_roles")]:
         # Get 10 best matches for each mila display name.
         LP_best_name_matches = name_distances.find_best_word_matches(
             [e["display_name"] for e in DLD_data["mila_ldap"]],
