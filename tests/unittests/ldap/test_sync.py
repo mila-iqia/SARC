@@ -104,6 +104,7 @@ def group_to_prof(*args):
     return {
         "supervisor": "supervisor@email.com",
         "co.supervisor": "co.supervisor@email.com",
+        "metoo": "metoo@email.com",
     }
 
 

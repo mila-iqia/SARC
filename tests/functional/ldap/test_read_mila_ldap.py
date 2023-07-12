@@ -57,10 +57,8 @@ def test_query_to_ldap_server_and_writing_to_output_json(monkeypatch):
     cfg = config()
     nbr_users = 10
 
-    def mock_query_ldap(
-        local_private_key_file, local_certificate_file, ldap_service_uri
-    ):
-        assert ldap_service_uri.startswith("ldaps://")
+    def mock_query_ldap(ldap, *args):
+        assert ldap.ldap_service_uri.startswith("ldaps://")
         return fake_raw_ldap_data(nbr_users)
 
     monkeypatch.setattr(sarc.ldap.read_mila_ldap, "query_ldap", mock_query_ldap)

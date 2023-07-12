@@ -67,7 +67,7 @@ class Result:
 
 def _student_or_prof(person, S_profs, exceptions):
     if exceptions is None:
-        exceptions = dict()
+        exceptions = {}
 
     # the most straightforward way to determine if a person is a prof,
     # because you can't trust the cn_groups "core-profs" where
@@ -129,6 +129,8 @@ def _student_or_prof(person, S_profs, exceptions):
             university,
         )
 
+    return None
+
 
 @dataclass
 class SupervisorMatchingErrors:
@@ -166,8 +168,39 @@ class SupervisorMatchingErrors:
             print(f"           Unknown group: {self.unknown_group}")
 
 
+def _extract_supervisors_from_groups(person, group_to_prof, errors, index):
+    has_core_supervisor = False
+    supervisors = []
+
+    for group in person.supervisors:
+        prof = group_to_prof.get(group)
+
+        if prof is None:
+            errors.unknown_group.append(group)
+        else:
+            p = index.get(prof)
+            if p is None:
+                errors.unknown_supervisors.append(prof)
+            else:
+                has_core_supervisor = has_core_supervisor or p.is_core
+
+            supervisors.append(prof)
+
+    if not has_core_supervisor:
+        errors.no_core_supervisors.append(person)
+
+    # We need to sort them, make the core prof index 0
+    def sortkey(x):
+        person = index.get(x)
+        if person:
+            return int(person.is_core)
+        return 0
+
+    return sorted(supervisors, key=sortkey, reverse=True)
+
+
 def resolve_supervisors(ldap_people, group_to_prof, exceptions):
-    index = dict()
+    index = {}
     people = []
     S_profs = set(group_to_prof.values())
     errors = SupervisorMatchingErrors()
@@ -190,43 +223,20 @@ def resolve_supervisors(ldap_people, group_to_prof, exceptions):
         if person.is_student:
             person.ldap["is_student"] = True
 
-            if len(person.supervisors) == 0:
+            supervisors = _extract_supervisors_from_groups(
+                person, group_to_prof, errors, index
+            )
+
+            print(supervisors)
+
+            if len(supervisors) == 0:
                 person.ldap["supervisor"] = []
                 errors.no_supervisors.append(person)
 
-            elif len(person.supervisors) == 1:
-                person.ldap["supervisor"] = person.supervisors
+            elif len(supervisors) == 1:
+                person.ldap["supervisor"] = supervisors[0]
 
-            elif len(person.supervisors) == 2:
-                # We need to sort them, make the core prof index 0
-                has_core_supervisor = False
-                supervisors = []
-
-                for group in person.supervisors:
-                    prof = group_to_prof.get(group)
-
-                    if prof is None:
-                        errors.unknown_group.append(group)
-                    else:
-                        p = index.get(prof)
-                        if p is None:
-                            errors.unknown_supervisors.append(prof)
-                        else:
-                            has_core_supervisor = has_core_supervisor or p.is_core
-
-                        supervisors.append(prof)
-
-                if not has_core_supervisor:
-                    errors.no_core_supervisors.append(person)
-
-                def sortkey(x):
-                    person = index.get(x)
-                    if person:
-                        return int(person.is_core)
-                    return 0
-
-                supervisors = list(sorted(supervisors, key=sortkey, reverse=True))
-
+            elif len(supervisors) == 2:
                 person.ldap["supervisor"] = (
                     supervisors[0] if len(supervisors) >= 1 else None
                 )

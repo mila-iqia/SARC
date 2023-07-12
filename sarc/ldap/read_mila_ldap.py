@@ -135,7 +135,6 @@ they are structured as follows:
 
 """
 
-import argparse
 import json
 import os
 import ssl
@@ -316,7 +315,7 @@ def load_ldap_exceptions(path):
     if path.exceptions_json_path is None:
         return {}
 
-    with open(path.exceptions_json_path, "r") as file:
+    with open(path.exceptions_json_path, "r", encoding="utf-8") as file:
         return json.load(file)
 
 
@@ -324,7 +323,7 @@ def load_group_to_prof_mapping(path):
     if path.group_to_prof_json_path is None:
         return {}
 
-    with open(path.group_to_prof_json_path, "r") as file:
+    with open(path.group_to_prof_json_path, "r", encoding="utf-8") as file:
         return json.load(file)
 
 
@@ -383,14 +382,12 @@ def _fetch_collection(cfg):
 if __name__ == "__main__":
     from sarc.config import config
 
-    cfg = config()
-
-    collection = _fetch_collection(config)
+    conf = config()
 
     run(
-        ldap=cfg.ldap,
+        ldap=conf.ldap,
         # write results in database
-        mongodb_collection=collection,
+        mongodb_collection=_fetch_collection(conf),
         # input_json_file=args.input_json_file,
         output_json_file="output.json",
         output_raw_LDAP_json_file="output_raw.json",
