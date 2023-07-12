@@ -168,13 +168,8 @@ def perform_matching(
     # We have 206 drac_members accounts with @mila.quebec, out of 610.
     # We have 42 drac_roles accounts with @mila.quebec, out of 610.
 
-    if prompt:
-        # Matching, with a prompt to resolve ambiguous cases.
-        _matching_names_with_prompt(DLD_data, DD_persons, name_distance_delta_threshold)
-
-    else:
-        # Default matching pipeline.
-        _matching_names(DLD_data, DD_persons, name_distance_delta_threshold)
+    # Matching.
+    _matching_names(DLD_data, DD_persons, name_distance_delta_threshold, prompt)
 
     # NB: In any case (even with prompt), match overriding is applied.
     # This means that even a manually-prompted matching may be overriden
@@ -188,73 +183,14 @@ def perform_matching(
     return DD_persons
 
 
-def _matching_names(DLD_data, DD_persons, name_distance_delta_threshold):
+def _matching_names(DLD_data, DD_persons, name_distance_delta_threshold, prompt=False):
     """
     Substep of the `perform_matching` function.
     Mutates the entries of `DD_persons` in-place.
-    All argument names are the same as in the body of `perform_matching`.
+    First argument names are the same as in the body of `perform_matching`.
+    If `prompt` is True, a prompt is provided to solve ambiguous cases.
     """
 
-    for name_or_nom, drac_source in [("name", "drac_members"), ("nom", "drac_roles")]:
-        LP_name_matches = name_distances.find_exact_bag_of_words_matches(
-            [e[name_or_nom] for e in DLD_data[drac_source]],
-            [e["display_name"] for e in DLD_data["mila_ldap"]],
-            delta_threshold=name_distance_delta_threshold,
-        )
-        for a, b, _ in LP_name_matches:
-            # Again with the O(N^2) matching.
-            # Let's find which entry of `DD_persons` corresponds to `b`
-            # and put that entry in `D_person_found` for the next step.
-            for D_person in DD_persons.values():
-                # `D_person` is a dict with 3 subdicts, one for each source.
-                # `b` is the name of a person in the Mila LDAP.
-                if D_person["mila_ldap"]["display_name"] == b:
-                    D_person_found = D_person
-                    break
-            # We know for FACT that this person is in there,
-            # by virtue of the fact that we matched their name
-            # to get the `LP_name_matches` in the first place.
-            # Therefore, when we break, `D_person_found` is assigned.
-            # It becomes the insertion point.
-
-            # Again a strange construct that works because we know that
-            # there is a match in there with `e[name_or_nom] == a` because
-            # that's actually how we got it.
-            # This list comprehension is basically just FOR loop that
-            # retrieves the dict for the DLD_data["drac_members"] or DLD_data["drac_roles"]
-            # that has `a` as identifier.
-            # That is, it's the one that got successfully matched to `b`.
-            match = [e for e in DLD_data[drac_source] if e[name_or_nom] == a][0]
-
-            # Matching names is less of a strong association than
-            # matching emails, so let's not mess things up by overwriting
-            # one by the other. It would still be interesting to report
-            # divergences here, where emails suggest a match that names don't.
-            if D_person_found.get(drac_source, None) is None:
-                # Note that this is different from `if drac_source not in D_person_found:`.
-                # Note also that `D_person_found` is a dict, a mutatable object
-                # in which we will be inserting the `match` dict,
-                # therefore mutating the original `DD_persons` dict
-                # which constitutes the answer.
-                # That is, this is where we're "writing the output"
-                # of this function. Don't expect `D_person_found`
-                # to be used later in this function.
-                D_person_found[drac_source] = match
-                del D_person_found  # to make it clear
-            # else:
-            # You can uncomment this to see the divergences,
-            # but usually you don't want to see them.
-            # This can be uncommented when we're doing the manual matching.
-            # assert D_person_found[drac_source] == match  # optional
-
-
-def _matching_names_with_prompt(DLD_data, DD_persons, name_distance_delta_threshold):
-    """
-    Substep of the `perform_matching` function.
-    Mutates the entries of `DD_persons` in-place.
-    All argument names are the same as in the body of `perform_matching`.
-    A prompt is provided to solve ambiguous cases.
-    """
     for name_or_nom, cc_source in [("name", "cc_members"), ("nom", "cc_roles")]:
         # Get 10 best matches for each mila display name.
         LP_best_name_matches = name_distances.find_best_word_matches(
@@ -262,6 +198,7 @@ def _matching_names_with_prompt(DLD_data, DD_persons, name_distance_delta_thresh
             [e[name_or_nom] for e in DLD_data[cc_source]],
             nb_best_matches=10,
         )
+
         # Get best match for each mila display name.
         for mila_display_name, best_matches in LP_best_name_matches:
             # Try to make match if we find only 1 match <= threshold.
@@ -273,19 +210,26 @@ def _matching_names_with_prompt(DLD_data, DD_persons, name_distance_delta_thresh
             if len(matches_under_threshold) == 1:
                 cc_match = matches_under_threshold[0][1]
 
-            # Otherwise, prompt.
-            else:
+            # Otherwise, prompt if allowed.
+            elif prompt:
                 cc_match = _prompt_manual_match(
                     mila_display_name, cc_source, [match[1] for match in best_matches]
                 )
 
+            # Else, do not match.
+            else:
+                cc_match = None
+
             if cc_match is not None:
                 # A match was selected.
+
+                # Find which entry of `DD_persons` corresponds to `mila_display_name`
                 D_person_found = [
                     D_person
                     for D_person in DD_persons.values()
                     if D_person["mila_ldap"]["display_name"] == mila_display_name
                 ][0]
+                # Find match that corresponds to `cc_match`.
                 match = [e for e in DLD_data[cc_source] if e[name_or_nom] == cc_match][
                     0
                 ]
