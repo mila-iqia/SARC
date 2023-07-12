@@ -65,11 +65,9 @@ def test_query_to_ldap_server_and_writing_to_output_json(monkeypatch):
 
     with tempfile.NamedTemporaryFile() as tmp_file:
         tmp_file_path = tmp_file.name
-
+        
         sarc.ldap.read_mila_ldap.run(
-            local_private_key_file=cfg.ldap.local_private_key_file,
-            local_certificate_file=cfg.ldap.local_certificate_file,
-            ldap_service_uri=cfg.ldap.ldap_service_uri,
+            cfg.ldap,
             # write results to here
             output_json_file=tmp_file_path,
         )
@@ -118,24 +116,18 @@ def test_query_to_ldap_server_and_commit_to_db(monkeypatch):
 
     # avoid copy/paste of the same code
     def helper_function(L_users_to_add):
-        def mock_query_ldap(
-            local_private_key_file, local_certificate_file, ldap_service_uri
-        ):
+        def mock_query_ldap(ldap, *args):
             # Since we're not using the real LDAP server, we don't need to
             # actually have valid paths in `local_private_key_file` and `local_certificate_file`.
-            assert ldap_service_uri.startswith("ldaps://")
+            assert ldap.ldap_service_uri.startswith("ldaps://")
             return L_users_to_add
 
         monkeypatch.setattr(sarc.ldap.read_mila_ldap, "query_ldap", mock_query_ldap)
 
         sarc.ldap.read_mila_ldap.run(
-            local_private_key_file=cfg.ldap.local_private_key_file,
-            local_certificate_file=cfg.ldap.local_certificate_file,
-            ldap_service_uri=cfg.ldap.ldap_service_uri,
+            cfg.ldap,
             # write results to here
-            mongodb_connection_string=cfg.mongo.connection_string,
-            mongodb_database_name=cfg.mongo.database_name,
-            mongodb_collection=cfg.ldap.mongo_collection_name,
+            mongodb_collection=sarc.ldap.read_mila_ldap.get_ldap_collection(cfg)
         )
         L_users = list(db[cfg.ldap.mongo_collection_name].find({}, {"_id": False}))
         return L_users

@@ -355,11 +355,11 @@ def run(
             print(f"Wrote {output_json_file}.")
 
 
-def _fetch_collection(cfg):
+def get_ldap_collection(cfg):
     mongodb_database_instance = cfg.mongo.database_instance
     mongodb_collection = cfg.ldap.mongo_collection_name
-    mongodb_connection_string = None
-    mongodb_database_name = None
+    mongodb_connection_string = cfg.mongo.connection_string
+    mongodb_database_name = cfg.mongo.database_name
 
     # Two ways to get the MongoDB collection, and then it's possible that we don't care
     # about getting one, in which case we'll skip that step of the output.
@@ -387,7 +387,7 @@ if __name__ == "__main__":
     run(
         ldap=conf.ldap,
         # write results in database
-        mongodb_collection=_fetch_collection(conf),
+        mongodb_collection=get_ldap_collection(conf),
         # input_json_file=args.input_json_file,
         output_json_file="output.json",
         output_raw_LDAP_json_file="output_raw.json",
