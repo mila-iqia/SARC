@@ -12,3 +12,4 @@ clockwork_ldap.key
 .coverage
 .tox/
 sarc-cache/
+.idea

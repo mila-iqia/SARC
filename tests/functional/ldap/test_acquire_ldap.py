@@ -59,11 +59,26 @@ John Smith the 001rd,BigProf,Manager,activated,john.smith001,js001@yahoo.ca
 John Smith the 002rd,BigProf,Manager,activated,john.smith002,js002@yahoo.ca
 Mysterious Stranger,BigProf,Manager,activated,stranger.person,ms@hotmail.com
 """
+    # inspired by make_matches_config.json
+    file3_content = """
+{
+    "L_phantom_mila_emails_to_ignore":
+        [
+            "john.smith005@mila.quebec",
+            "john.smith006@mila.quebec"
+        ],
+    "D_override_matches_mila_to_cc_account_username":
+        {
+            "john.smith008@mila.quebec": "smith000"
+        }
+}
+"""
 
     # Create a dictionary of file paths and their corresponding content
     file_contents = {
         cfg.account_matching.drac_roles_csv_path: file1_content,
         cfg.account_matching.drac_members_csv_path: file2_content,
+        cfg.account_matching.make_matches_config: file3_content,
     }
 
     # Define a function that returns a new mock file object with the content

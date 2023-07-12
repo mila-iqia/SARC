@@ -12,8 +12,7 @@
     "account_matching": {
         "drac_members_csv_path": "drac_members_not_valid_path.csv",
         "drac_roles_csv_path": "drac_roles_not_valid_path.csv",
-        "mila_emails_to_ignore" : [],
-        "override_matches_mila_to_cc" : {}
+        "make_matches_config": "make_matches_config_not_valid_path.json"
     },
     "cache": "./sarc-test-cache",
     "clusters": {
