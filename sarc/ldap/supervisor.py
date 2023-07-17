@@ -77,9 +77,6 @@ def _student_or_prof(person, S_profs, exceptions):
         return None
 
     if person["mail"][0] in exceptions.get("not_student", []):
-        # For some reason, Christopher Pal and Yue Li are on their own students lists.
-        # Mirco Ravanelli is an ex postdoc of Yoshua but appears to be an associate member now.
-        # Let's make exceptions.
         is_student = False
         is_prof = True
 
