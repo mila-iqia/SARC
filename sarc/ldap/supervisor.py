@@ -24,15 +24,6 @@ def extract_groups(member_of):
     university = None
 
     for e in member_of:
-        # "memberOf": [
-        #     "cn=c.pal-students,ou=Groups,dc=mila,dc=quebec",
-        #     "cn=clusterusers,ou=Groups,dc=mila,dc=quebec",
-        #     "cn=d.nowrouzezahrai-students,ou=Groups,dc=mila,dc=quebec",
-        #     "cn=edi.survey.students,ou=Groups,dc=mila,dc=quebec",
-        #     "cn=mcgill-students,ou=Groups,dc=mila,dc=quebec",
-        #     "cn=mila_acces_special,ou=Groups,dc=mila,dc=quebec",
-        #     "cn=phd,ou=Groups,dc=mila,dc=quebec"
-        # ],
         if m := re.match(r"^cn=(.+?)-students.*", e):
             if m.group(1) in universities:
                 university = m.group(1)
