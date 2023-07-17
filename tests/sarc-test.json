@@ -10,8 +10,8 @@
         "mongo_collection_name": "users"
     },
     "account_matching": {
-        "cc_members_csv_path": "cc_members_not_valid_path.csv",
-        "cc_roles_csv_path": "cc_roles_not_valid_path.csv",
+        "drac_members_csv_path": "drac_members_not_valid_path.csv",
+        "drac_roles_csv_path": "drac_roles_not_valid_path.csv",
         "make_matches_config": "make_matches_config_not_valid_path.json"
     },
     "cache": "./sarc-test-cache",

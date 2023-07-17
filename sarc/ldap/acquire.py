@@ -40,8 +40,8 @@ def run():
     DLD_data = sarc.account_matching.make_matches.load_data_from_files(
         {
             "mila_ldap": LD_users,  # pass through
-            "cc_roles": cfg.account_matching.cc_roles_csv_path,
-            "cc_members": cfg.account_matching.cc_members_csv_path,
+            "drac_roles": cfg.account_matching.drac_roles_csv_path,
+            "drac_members": cfg.account_matching.drac_members_csv_path,
         }
     )
 
@@ -75,8 +75,8 @@ def run():
     #           "mila_email_username": "john.appleseed@mila.quebec",
     #           ...
     #       },
-    #       "cc_roles": {...} or None,
-    #       "cc_members": {...} or None
+    #       "drac_roles": {...} or None,
+    #       "drac_members": {...} or None
     #     }
 
     # These associations can now be propagated to the database.
@@ -86,12 +86,48 @@ def run():
     )
 
 
+def fill_computed_fields(data: dict):
+    mila_ldap = data.get("mila_ldap", {}) or {}
+    drac_members = data.get("drac_members", {}) or {}
+    drac_roles = data.get("drac_roles", {}) or {}
+
+    if "name" not in data:
+        data["name"] = mila_ldap.get("display_name", "???")
+
+    if "mila" not in data:
+        data["mila"] = {
+            "username": mila_ldap.get("mila_cluster_username", "???"),
+            "email": mila_ldap.get("mila_email_username", "???"),
+            "active": mila_ldap.get("status", None) == "enabled",
+        }
+
+    if "drac" not in data:
+        if drac_members:
+            data["drac"] = {
+                "username": drac_members.get("username", "???"),
+                "email": drac_members.get("email", "???"),
+                "active": drac_members.get("activation_status", None) == "activated",
+            }
+        elif drac_roles:
+            data["drac"] = {
+                "username": drac_roles.get("username", "???"),
+                "email": drac_roles.get("email", "???"),
+                "active": drac_roles.get("status", None) == "Activated",
+            }
+        else:
+            data["drac"] = None
+
+    return data
+
+
 def commit_matches_to_database(users_collection, DD_persons_matched, verbose=False):
     L_updates_to_do = []
     for mila_email_username, D_match in DD_persons_matched.items():
         assert (
             D_match["mila_ldap"]["mila_email_username"] == mila_email_username
         )  # sanity check
+
+        D_match = fill_computed_fields(D_match)
 
         # if mila ldap user status = "unknown", which means the user does NOT exist in the Mila LDAP but was created as a dummy placeholder,
         # then UPSERT the document in the database if necessary
@@ -106,8 +142,11 @@ def commit_matches_to_database(users_collection, DD_persons_matched, verbose=Fal
                         # the fields in the database that are already present for that user.
                         "$set": {
                             "mila_ldap": D_match["mila_ldap"],
-                            "cc_roles": D_match["cc_roles"],
-                            "cc_members": D_match["cc_members"],
+                            "name": D_match["name"],
+                            "mila": D_match["mila"],
+                            "drac": D_match["drac"],
+                            "drac_roles": D_match["drac_roles"],
+                            "drac_members": D_match["drac_members"],
                         },
                     },
                     upsert=True,
@@ -119,10 +158,13 @@ def commit_matches_to_database(users_collection, DD_persons_matched, verbose=Fal
                     {"mila_ldap.mila_email_username": mila_email_username},
                     {
                         # We don't modify the "mila_ldap" field,
-                        # only add the "cc_roles" and "cc_members" fields.
+                        # only add the "drac_roles" and "drac_members" fields.
                         "$set": {
-                            "cc_roles": D_match["cc_roles"],
-                            "cc_members": D_match["cc_members"],
+                            "name": D_match["name"],
+                            "mila": D_match["mila"],
+                            "drac": D_match["drac"],
+                            "drac_roles": D_match["drac_roles"],
+                            "drac_members": D_match["drac_members"],
                         },
                     },
                     # Don't add that entry if it doesn't exist.

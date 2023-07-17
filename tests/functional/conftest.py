@@ -98,7 +98,7 @@ def read_only_db(standard_config, read_only_db_config_object):
 def account_matches():
     """
     Returns a structure of accounts with their corresponding values
-    in "mila_ldap", "cc_members" and "cc_roles".
+    in "mila_ldap", "drac_members" and "drac_roles".
 
     This can be used for testing the matching of accounts,
     but it can also be used to populate the "users" collection
@@ -131,7 +131,7 @@ def account_matches():
                 "display_name": "John Appleseed",
                 "status": "enabled",
             },
-            "cc_members": {
+            "drac_members": {
                 "rapi": "jvb-000-ag",
                 "groupname": "rrg-bengioy-ad",
                 "name": "John Appleseed",
@@ -146,7 +146,7 @@ def account_matches():
                 "email": "johnnyapple@umontreal.ca",
                 "member_since": "2018-10-10 10:10:10 -0400",
             },
-            "cc_roles": {
+            "drac_roles": {
                 "status": "Activated",
                 "lastname": "Appleseed",
                 "username": "appjohn",
@@ -168,7 +168,7 @@ def account_matches():
                 "display_name": "Nur al-Din Ali",
                 "status": "enabled",
             },
-            "cc_members": {
+            "drac_members": {
                 "rapi": "jvb-000-ag",
                 "groupname": "rrg-bengioy-ad",
                 "name": "Nur Alialdin",  # name spelling is different
@@ -183,7 +183,7 @@ def account_matches():
                 "email": "master_of_chaos@astalavista.box.sk",
                 "member_since": "2018-10-10 10:10:10 -0400",
             },
-            "cc_roles": None,
+            "drac_roles": None,
         },
         "pikachu.pigeon@mila.quebec": {
             "mila_ldap": {
@@ -194,8 +194,8 @@ def account_matches():
                 "display_name": "pikachu pigeon",
                 "status": "enabled",
             },
-            "cc_members": None,
-            "cc_roles": None,
+            "drac_members": None,
+            "drac_roles": None,
         },
         "ignoramus.mikey@mila.quebec": {
             "mila_ldap": {
@@ -206,8 +206,8 @@ def account_matches():
                 "display_name": "Michelangelo the Ignoramus",
                 "status": "enabled",
             },
-            "cc_members": None,
-            "cc_roles": None,
+            "drac_members": None,
+            "drac_roles": None,
         },
         "overrido.dudette@mila.quebec": {
             "mila_ldap": {
@@ -218,7 +218,7 @@ def account_matches():
                 "display_name": "Peach von Overrido",
                 "status": "enabled",
             },
-            "cc_members": {
+            "drac_members": {
                 "rapi": "jvb-000-ag",
                 "groupname": "rrg-bengioy-ad",
                 # name is impossible to match automatically
@@ -234,7 +234,7 @@ def account_matches():
                 "email": "peachpalace@yahoo.fr",
                 "member_since": "2018-10-10 10:10:10 -0400",
             },
-            "cc_roles": {
+            "drac_roles": {
                 "status": "Activated",
                 "lastname": "Ethelberg von Overrido",
                 "username": "duddirov",

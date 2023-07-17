@@ -150,8 +150,8 @@ class LDAPConfig(BaseModel):
 
 
 class AccountMatchingConfig(BaseModel):
-    cc_members_csv_path: Path
-    cc_roles_csv_path: Path
+    drac_members_csv_path: Path
+    drac_roles_csv_path: Path
     make_matches_config: Path
 
 
