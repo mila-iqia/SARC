@@ -158,7 +158,7 @@ def test_extract_groups_not_core():
     assert groups == []
 
 
-def test_extract_groups():
+def test_extract_groups_is_core():
     ldap_people = ldap_mock()
 
     supervisors, groups, university, is_student, is_core = extract_groups(
