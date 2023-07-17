@@ -26,6 +26,7 @@ if [ -z "$3" ]
   else
     DEST_PATH=$3
 fi
+
 echo "dump database $CONTAINER:$DB ..."
 podman exec $CONTAINER rm -rf /temp_dump/
 podman exec $CONTAINER mongodump -d $DB -o /temp_dump --gzip
@@ -40,3 +41,6 @@ echo "renaming $DEST_PATHtemp_dump to $FILENAME ..."
 mv temp_dump $FILENAME
 echo "cleaning old backups ..."
 find -mtime +28 -exec rm -rf {} \;
+TGZ_FILE="$DEST_PATH./daily_backup.tar.gz"
+echo "Creating daily backup file $TGZ_FILE ..."
+tar czf $TGZ_FILE $FILENAME
