@@ -319,7 +319,7 @@ def load_ldap_exceptions(ldap_config: LDAPConfig):
         return json.load(file)
 
 
-def load_group_to_prof_mapping(path):
+def load_group_to_prof_mapping(ldap_config: LDAPConfig):
     if path.group_to_prof_json_path is None:
         return {}
 
