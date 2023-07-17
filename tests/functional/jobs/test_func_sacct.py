@@ -273,7 +273,7 @@ def test_sacct_bin_and_accounts(test_config, remote):
 @pytest.mark.parametrize("json_jobs", [{}], indirect=True)
 @pytest.mark.usefixtures("empty_read_write_db")
 def test_stdout_message_before_json(
-    test_config, sacct_json, remote, file_regression, cli_main
+    test_config, sacct_json, remote, file_regression, cli_main, prom_custom_query_mock
 ):
     channel = remote.expect(
         host="raisin",
@@ -313,7 +313,70 @@ def test_stdout_message_before_json(
 )
 @pytest.mark.parametrize("json_jobs", [{}], indirect=True)
 @pytest.mark.usefixtures("empty_read_write_db")
-def test_save_job(test_config, sacct_json, remote, file_regression, cli_main):
+def test_get_gpu_type_from_prometheus(
+    test_config, sacct_json, remote, file_regression, cli_main, monkeypatch
+):
+    channel = remote.expect(
+        host="raisin",
+        cmd="/opt/slurm/bin/sacct  -X -S '2023-02-15T00:00' -E '2023-02-16T00:00' --json",
+        out=f"Welcome on raisin,\nThe sweetest supercomputer in the world!\n{sacct_json}".encode(
+            "utf-8"
+        ),
+    )
+
+    # Import here so that config() is setup correctly when CLI is created.
+    from prometheus_api_client import PrometheusConnect
+
+    import sarc.cli
+
+    def assert_query(self, query):
+        assert query == 'slurm_job_utilization_gpu_memory{slurmjobid=~"1"}'
+        return [{"metric": {"gpu_type": "phantom_gpu"}}]
+
+    monkeypatch.setattr(
+        PrometheusConnect,
+        "custom_query",
+        assert_query,
+    )
+
+    assert (
+        cli_main(
+            [
+                "acquire",
+                "jobs",
+                "--cluster_name",
+                "raisin",
+                "--dates",
+                "2023-02-15",
+                "--ignore_statistics",
+            ]
+        )
+        == 0
+    )
+
+    jobs = list(get_jobs())
+
+    assert len(jobs) == 1
+    job = jobs[0]
+    assert job.allocated.gpu_type == "phantom_gpu"
+
+    file_regression.check(
+        f"Found {len(jobs)} job(s):\n"
+        + "\n".join([job.json(exclude={"id": True}, indent=4) for job in jobs])
+    )
+
+
+# TODO How to test getting GPU type if prometheus is not available ?
+
+
+@pytest.mark.parametrize(
+    "test_config", [{"clusters": {"raisin": {"host": "raisin"}}}], indirect=True
+)
+@pytest.mark.parametrize("json_jobs", [{}], indirect=True)
+@pytest.mark.usefixtures("empty_read_write_db")
+def test_save_job(
+    test_config, sacct_json, remote, file_regression, cli_main, prom_custom_query_mock
+):
     channel = remote.expect(
         host="raisin",
         cmd="/opt/slurm/bin/sacct  -X -S '2023-02-15T00:00' -E '2023-02-16T00:00' --json",
@@ -350,7 +413,9 @@ def test_save_job(test_config, sacct_json, remote, file_regression, cli_main):
 )
 @pytest.mark.parametrize("json_jobs", [{}], indirect=True)
 @pytest.mark.usefixtures("empty_read_write_db", "disabled_cache")
-def test_update_job(test_config, sacct_json, remote, file_regression, cli_main):
+def test_update_job(
+    test_config, sacct_json, remote, file_regression, cli_main, prom_custom_query_mock
+):
     channel = remote.expect(
         host="raisin",
         commands=[
@@ -426,7 +491,9 @@ def test_update_job(test_config, sacct_json, remote, file_regression, cli_main):
     indirect=True,
 )
 @pytest.mark.usefixtures("empty_read_write_db", "disabled_cache")
-def test_save_preempted_job(test_config, sacct_json, remote, file_regression, cli_main):
+def test_save_preempted_job(
+    test_config, sacct_json, remote, file_regression, cli_main, prom_custom_query_mock
+):
     channel = remote.expect(
         cmd="/opt/slurm/bin/sacct  -X -S '2023-02-15T00:00' -E '2023-02-16T00:00' --json",
         host="raisin",
@@ -462,7 +529,9 @@ def test_save_preempted_job(test_config, sacct_json, remote, file_regression, cl
 
 
 @pytest.mark.usefixtures("empty_read_write_db", "disabled_cache")
-def test_multiple_dates(test_config, remote, file_regression, cli_main):
+def test_multiple_dates(
+    test_config, remote, file_regression, cli_main, prom_custom_query_mock
+):
     datetimes = [
         datetime(2023, 2, 15, tzinfo=MTL) + timedelta(days=i) for i in range(5)
     ]
@@ -521,7 +590,9 @@ def test_multiple_dates(test_config, remote, file_regression, cli_main):
 
 
 @pytest.mark.usefixtures("empty_read_write_db", "disabled_cache")
-def test_multiple_clusters_and_dates(test_config, remote, file_regression, cli_main):
+def test_multiple_clusters_and_dates(
+    test_config, remote, file_regression, cli_main, prom_custom_query_mock
+):
     cluster_names = ["raisin", "patate"]
     datetimes = [
         datetime(2023, 2, 15, tzinfo=MTL) + timedelta(days=i) for i in range(2)
@@ -623,7 +694,7 @@ def test_multiple_clusters_and_dates(test_config, remote, file_regression, cli_m
     "test_config", [{"clusters": {"patate": {"host": "patate"}}}], indirect=True
 )
 @pytest.mark.usefixtures("empty_read_write_db")
-def test_job_tz(test_config, sacct_json, remote, cli_main):
+def test_job_tz(test_config, sacct_json, remote, cli_main, prom_custom_query_mock):
     channel = remote.expect(
         host="patate",
         cmd="/opt/software/slurm/bin/sacct -A rrg-bonhomme-ad_gpu,rrg-bonhomme-ad_cpu,def-bonhomme_gpu,def-bonhomme_cpu -X -S '2023-02-15T00:00' -E '2023-02-16T00:00' --json",
@@ -655,7 +726,12 @@ def test_job_tz(test_config, sacct_json, remote, cli_main):
 @pytest.mark.usefixtures("empty_read_write_db")
 @pytest.mark.parametrize("ignore_statistics", [True, False])
 def test_cli_ignore_stats(
-    sacct_json, cli_main, scraper, ignore_statistics, monkeypatch
+    sacct_json,
+    cli_main,
+    scraper,
+    ignore_statistics,
+    monkeypatch,
+    prom_custom_query_mock,
 ):
     # We'd like to test that this starts with "/tmp/pytest",
     # but this isn't the case when we run the tests on Mac OS,

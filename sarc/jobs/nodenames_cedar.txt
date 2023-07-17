@@ -1,0 +1,33 @@
+# basegpu
+# islands f1-[1,3,5,7]-2, 18 nodes in f1-7-2
+NodeName=cdr[250,255,257,294,301-302,305,338,340-351,385-386,906,912] Sockets=2 CoresPerSocket=12 ThreadsPerCore=1 RealMemory=128000 Weight=612 Gres=gpu:p100:4 TmpDisk=711548 Feature=p100
+NodeName=cdr[245-249,251-254,256,258-259,292-293,295-300,303-304,306,917] Sockets=2 CoresPerSocket=12 ThreadsPerCore=1 RealMemory=128000 Weight=613 Gres=gpu:p100:4 TmpDisk=711548 Feature=p100
+NodeName=cdr[26-40,197-212,922] Sockets=2 CoresPerSocket=12 ThreadsPerCore=1 RealMemory=128000 Weight=614 Gres=gpu:p100:4 TmpDisk=711548 Feature=p100
+NodeName=cdr[104-108,116,150-151,153-155,157,159-161,164] Sockets=2 CoresPerSocket=12 ThreadsPerCore=1 RealMemory=128000 Weight=615 Gres=gpu:p100:4 TmpDisk=711548 Feature=p100
+NodeName=cdr[109-115,117-118,149,152,156,158,162-163,905] Sockets=2 CoresPerSocket=12 ThreadsPerCore=1 RealMemory=128000 Weight=616 Gres=gpu:p100:4 TmpDisk=711548 Feature=p100
+NodeName=cdr[352-353] Sockets=2 CoresPerSocket=12 ThreadsPerCore=1 RealMemory=128000 Weight=620 Gres=gpu:p100:4 TmpDisk=711548 Feature=p100
+
+# largegpu
+# islands g1-2-2
+NodeName=cdr[900,902-904] Sockets=2 CoresPerSocket=12 ThreadsPerCore=1 RealMemory=257000 Weight=702 Gres=gpu:p100l:4 TmpDisk=711548 Feature=p100l
+NodeName=cdr[896-899] Sockets=2 CoresPerSocket=12 ThreadsPerCore=1 RealMemory=257000 Weight=703 Gres=gpu:p100l:4 TmpDisk=711548 Feature=p100l
+NodeName=cdr[884-895] Sockets=2 CoresPerSocket=12 ThreadsPerCore=1 RealMemory=257000 Weight=704 Gres=gpu:p100l:4 TmpDisk=711548 Feature=p100l
+NodeName=cdr[879-883,908] Sockets=2 CoresPerSocket=12 ThreadsPerCore=1 RealMemory=257000 Weight=705 Gres=gpu:p100l:4 TmpDisk=711548 Feature=p100l
+NodeName=cdr[876-878,901,910-911] Sockets=2 CoresPerSocket=12 ThreadsPerCore=1 RealMemory=257000 Weight=706 Gres=gpu:p100l:4 TmpDisk=711548 Feature=p100l
+
+# largegpuv2
+# islands  g2-[5,7]-1,h2-[1,3,6-7]-1
+NodeName=cdr[2636-2637,2639-2641,2643] Sockets=2 CoresPerSocket=16 ThreadsPerCore=1 RealMemory=192000 Weight=702 Gres=gpu:v100l:4 TmpDisk=406000 Feature=v100l
+NodeName=cdr[2628-2630,2635,2638,2642] Sockets=2 CoresPerSocket=16 ThreadsPerCore=1 RealMemory=192000 Weight=703 Gres=gpu:v100l:4 TmpDisk=406000 Feature=v100l
+NodeName=cdr[2631-2634,2644-2647] Sockets=2 CoresPerSocket=16 ThreadsPerCore=1 RealMemory=192000 Weight=704 Gres=gpu:v100l:4 TmpDisk=406000 Feature=v100l
+NodeName=cdr[2652-2657] Sockets=2 CoresPerSocket=16 ThreadsPerCore=1 RealMemory=192000 Weight=705 Gres=gpu:v100l:4 TmpDisk=406000 Feature=v100l
+NodeName=cdr[2648-2651,2658-2659] Sockets=2 CoresPerSocket=16 ThreadsPerCore=1 RealMemory=192000 Weight=706 Gres=gpu:v100l:4 TmpDisk=406000 Feature=v100l
+NodeName=cdr[2596-2627] Sockets=2 CoresPerSocket=16 ThreadsPerCore=1 RealMemory=192000 Weight=712 Gres=gpu:v100l:4 TmpDisk=406000 Feature=v100l
+NodeName=cdr[2564-2595] Sockets=2 CoresPerSocket=16 ThreadsPerCore=1 RealMemory=192000 Weight=713 Gres=gpu:v100l:4 TmpDisk=406000 Feature=v100l
+NodeName=cdr[2532-2563] Sockets=2 CoresPerSocket=16 ThreadsPerCore=1 RealMemory=192000 Weight=714 Gres=gpu:v100l:4 TmpDisk=406000 Feature=v100l
+NodeName=cdr[2500-2531] Sockets=2 CoresPerSocket=16 ThreadsPerCore=1 RealMemory=192000 Weight=715 Gres=gpu:v100l:4 TmpDisk=406000 Feature=v100l
+NodeName=cdr[2468-2499] Sockets=2 CoresPerSocket=16 ThreadsPerCore=1 RealMemory=192000 Weight=716 Gres=gpu:v100l:4 TmpDisk=406000 Feature=v100l
+
+# c-whkchungpu
+# nodes cdr2678
+NodeName=cdr2678 Sockets=2 CoresPerSocket=16 ThreadsPerCore=1 RealMemory=192000 Weight=702 Gres=gpu:v100l:4 TmpDisk=406000 Feature=v100l

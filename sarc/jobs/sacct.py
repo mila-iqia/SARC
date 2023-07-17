@@ -11,6 +11,7 @@ from tqdm import tqdm
 
 from ..config import UTC, ClusterConfig, config
 from .job import SlurmJob, jobs_collection
+from .node_gpu_mapping import NODENAME_TO_GPU
 
 logger = logging.getLogger(__name__)
 
@@ -206,6 +207,25 @@ def sacct_mongodb_import(cluster, day, ignore_statistics) -> None:
         if not ignore_statistics:
             saved = entry.statistics(recompute=True, save=True) is not None
 
+        # Get GPU info for this job.
+        update_allocated_gpu_type(cluster, entry)
+
         if not saved:
             collection.save_job(entry)
     print(f"Saved {len(scraper)} entries.")
+
+
+def update_allocated_gpu_type(cluster: ClusterConfig, entry: SlurmJob):
+    """Try to infer job GPU type."""
+    if cluster.prometheus_url:
+        # Cluster does have prometheus config.
+        output = cluster.prometheus.custom_query(
+            f'slurm_job_utilization_gpu_memory{{slurmjobid=~"{entry.job_id}"}}'
+        )
+        if output:
+            entry.allocated.gpu_type = output[0]["metric"]["gpu_type"]
+    else:
+        # No prometheus config. Try to get GPU type from local JSON file.
+        gpu_types = [NODENAME_TO_GPU[nodename] for nodename in entry.nodes]
+        if len(gpu_types) == 1:
+            entry.allocated.gpu_type = gpu_types[0]

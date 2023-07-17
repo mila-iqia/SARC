@@ -1,0 +1,51 @@
+NodeName=gra[828-987] Sockets=2 CoresPerSocket=16 ThreadsPerCore=1 RealMemory=127518 Weight=4 Gres=gpu:p100:2 TmpDisk=561145 Feature=broadwell,p100
+# gra[828-987]
+# - GPU Compute Nodes
+# - 2 * E5-2683 v4(2.1GHz, 16 Cores each) - 32 cores total - 8 * 16GB 2400MHz ECC DDR4 memory - 128 GB total
+# - 2 * Nvidia PCIe Tesla P100 (12GB Memory)
+# - each socket has one GPU
+
+NodeName=gra[1147] Sockets=2 CoresPerSocket=14 ThreadsPerCore=1 RealMemory=183105 Weight=6 Gres=gpu:v100:6 TmpDisk=3433000 Feature=skylake,v100
+# gra[1147]
+# - 2 Sockets
+# - 14 CoresPerSocket
+# - 1 ThreadsPerCore
+# - 192 GB
+# - 3.6 TB TmpDisk
+# - 6 x V100 (16 GB) GPUs (3 per socket)
+
+NodeName=gra[1148-1153] Sockets=2 CoresPerSocket=14 ThreadsPerCore=1 RealMemory=183105 Weight=6 Gres=gpu:v100:8 TmpDisk=3433000 Feature=skylake,v100
+# gra[1148-1153]
+# - 2 Sockets
+# - 14 CoresPerSocket
+# - 1 ThreadsPerCore
+# - 192 GB
+# - 3.6 TB TmpDisk
+# - 8 x V100 (16 GB) GPUs (4 per socket)
+
+NodeName=gra[1337-1338] CPUs=40 Sockets=2 CoresPerSocket=20 ThreadsPerCore=1 RealMemory=386660 Weight=4 Gres=gpu:v100:8 TmpDisk=6050533 Feature=cascade,v100
+# gra[1337-1338]
+# - 2 Sockets
+# - 20 CoresPerSocket
+# - 1 ThreadsPerCore
+# - 384 GB
+# - 5 TB TmpDisk
+# - 8 x V100-SXM2 (32 GB) GPUs
+
+NodeName=gra[1154-1159] Sockets=2 CoresPerSocket=8 ThreadsPerCore=1 RealMemory=191840 Weight=6 Gres=gpu:t4:4 TmpDisk=10896600 Feature=skylake,t4
+# gra[1154-1159]
+# - 2 Sockets
+# - 8 CoresPerSocket
+# - 1 ThreadsPerCore
+# - 192 GB
+# - 11 TB TmpDisk
+# - 4 x T4 (16 GB) GPUs
+
+NodeName=gra[1160-1189] Sockets=2 CoresPerSocket=22 ThreadsPerCore=1 RealMemory=191840 Weight=4 Gres=gpu:t4:4 TmpDisk=6050533 Feature=cascade,t4
+# gra[1160-1189]
+# - 2 Sockets
+# - 22 CoresPerSocket
+# - 1 ThreadsPerCore
+# - 192 GB
+# - 5.8 TB TmpDisk
+# - 4 x T4 (16 GB) GPUs
