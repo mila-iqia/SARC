@@ -311,7 +311,7 @@ def _save_to_mongo(collection, LD_users):
         print(result.bulk_api_result)
 
 
-def load_ldap_exceptions(path):
+def load_ldap_exceptions(ldap_config: LDAPConfig):
     if path.exceptions_json_path is None:
         return {}
 
@@ -319,7 +319,7 @@ def load_ldap_exceptions(path):
         return json.load(file)
 
 
-def load_group_to_prof_mapping(path):
+def load_group_to_prof_mapping(ldap_config: LDAPConfig):
     if path.group_to_prof_json_path is None:
         return {}
 

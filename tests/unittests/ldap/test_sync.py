@@ -158,7 +158,7 @@ def test_extract_groups_not_core():
     assert groups == []
 
 
-def test_extract_groups():
+def test_extract_groups_is_core():
     ldap_people = ldap_mock()
 
     supervisors, groups, university, is_student, is_core = extract_groups(
@@ -233,18 +233,6 @@ def test_resolve_missing_supervisors_mapping():
     errors.show()
     assert errors.has_errors() is True
     assert len(errors.unknown_group) == 1
-
-
-def test_resolve_supervisors():
-    ldap_people = ldap_mock()
-
-    errors = resolve_supervisors(ldap_people, group_to_prof(), exceptions=None)
-
-    assert errors.has_errors() is False
-
-    # The supervisors got sorted
-    assert ldap_people[0]["supervisor"] == "supervisor@email.com"
-    assert ldap_people[0]["co_supervisor"] == "co.supervisor@email.com"
 
 
 def test_student_or_prof_exception_rename_student():

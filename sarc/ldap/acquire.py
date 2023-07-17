@@ -36,7 +36,7 @@ def run():
     LD_users = list(user_collection.find({}))
     LD_users = [D_user["mila_ldap"] for D_user in LD_users]
 
-    # Match DIRAC/CC to mila accounts
+    # Match DRAC/CC to mila accounts
     DLD_data = sarc.account_matching.make_matches.load_data_from_files(
         {
             "mila_ldap": LD_users,  # pass through

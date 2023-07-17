@@ -24,15 +24,6 @@ def extract_groups(member_of):
     university = None
 
     for e in member_of:
-        # "memberOf": [
-        #     "cn=c.pal-students,ou=Groups,dc=mila,dc=quebec",
-        #     "cn=clusterusers,ou=Groups,dc=mila,dc=quebec",
-        #     "cn=d.nowrouzezahrai-students,ou=Groups,dc=mila,dc=quebec",
-        #     "cn=edi.survey.students,ou=Groups,dc=mila,dc=quebec",
-        #     "cn=mcgill-students,ou=Groups,dc=mila,dc=quebec",
-        #     "cn=mila_acces_special,ou=Groups,dc=mila,dc=quebec",
-        #     "cn=phd,ou=Groups,dc=mila,dc=quebec"
-        # ],
         if m := re.match(r"^cn=(.+?)-students.*", e):
             if m.group(1) in universities:
                 university = m.group(1)
@@ -86,14 +77,10 @@ def _student_or_prof(person, S_profs, exceptions):
         return None
 
     if person["mail"][0] in exceptions.get("not_student", []):
-        # For some reason, Christopher Pal and Yue Li are on their own students lists.
-        # Mirco Ravanelli is an ex postdoc of Yoshua but appears to be an associate member now.
-        # Let's make exceptions.
         is_student = False
         is_prof = True
 
     elif person["mail"][0] in exceptions.get("not_teacher", []):
-        # Maxime Gasse is a postdoc with Andrea Lodi but also appears to co-supervise someone.
         is_prof = False
         is_student = True
 
