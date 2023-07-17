@@ -134,12 +134,6 @@ class MongoConfig(BaseModel):
         return client.get_database(self.database_name)
 
 
-class SupervisorMatchingException(BaseModel):
-    not_student: list[str]
-    not_prof: list[str]
-    rename: dict[str, str]
-
-
 class LDAPConfig(BaseModel):
     local_private_key_file: str
     local_certificate_file: str

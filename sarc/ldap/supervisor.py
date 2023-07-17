@@ -1,5 +1,6 @@
 import re
 from dataclasses import dataclass, field
+from itertools import chain
 
 universities = {
     "mcgill",
@@ -56,7 +57,7 @@ class Result:
     university: str
 
 
-def _student_or_prof(person, S_profs, exceptions):
+def _student_or_prof(person: dict, S_profs: set[str], exceptions: dict):
     if exceptions is None:
         exceptions = {}
 
@@ -84,11 +85,6 @@ def _student_or_prof(person, S_profs, exceptions):
         is_prof = False
         is_student = True
 
-    # Someone can't be prof AND student, apart with the two above exceptions.
-    assert not (
-        is_prof and is_student
-    ), f"Person {person['givenName'][0]} {person['sn'][0]} is both a student and a prof."
-
     # because it's stupid to wait for the LDAP to be updated for that one
     prefered_name = exceptions.get("rename", {}).get(person["mail"][0])
     if prefered_name is not None:
@@ -105,18 +101,15 @@ def _student_or_prof(person, S_profs, exceptions):
             cn_groups=set(cn_groups),
         )
 
-    if is_student:
-        return Result(
-            person,
-            is_prof,
-            is_core,
-            is_student,
-            cn_groups_of_supervisors,
-            cn_groups,
-            university,
-        )
-
-    return None
+    return Result(
+        person,
+        is_prof,
+        is_core,
+        is_student,
+        cn_groups_of_supervisors,
+        cn_groups,
+        university,
+    )
 
 
 @dataclass
@@ -126,15 +119,23 @@ class SupervisorMatchingErrors:
     no_core_supervisors: list = field(default_factory=list)
     unknown_supervisors: list = field(default_factory=list)
     unknown_group: list = field(default_factory=list)
+    prof_and_student: list = field(default_factory=list)
+
+    def errors(self):
+        return chain(
+            self.no_supervisors,
+            self.too_many_supervisors,
+            self.no_core_supervisors,
+            self.unknown_supervisors,
+            self.unknown_group,
+            self.prof_and_student,
+        )
+
+    def error_count(self):
+        return len(list(self.errors()))
 
     def has_errors(self):
-        return (
-            len(self.no_supervisors) > 0
-            or len(self.no_core_supervisors) > 0
-            or len(self.too_many_supervisors) > 0
-            or len(self.unknown_supervisors) > 0
-            or len(self.unknown_group) > 0
-        )
+        return self.error_count() > 0
 
     def show(self):
         def make_list(errors):
@@ -147,6 +148,7 @@ class SupervisorMatchingErrors:
         show_error("     Missing supervisors:", self.no_supervisors)
         show_error("Missing core supervisors:", self.no_core_supervisors)
         show_error("    Too many supervisors:", self.too_many_supervisors)
+        show_error("        Prof and Student:", self.prof_and_student)
 
         if self.unknown_supervisors:
             print(f"     Unknown supervisors: {self.unknown_supervisors}")
@@ -200,6 +202,10 @@ def resolve_supervisors(ldap_people, group_to_prof, exceptions):
             exceptions,
         )
 
+        if result.is_prof and result.is_student:
+            errors.prof_and_student.append(result)
+            continue
+
         if result is None:
             continue
 
@@ -222,12 +228,8 @@ def resolve_supervisors(ldap_people, group_to_prof, exceptions):
                 person.ldap["supervisor"] = supervisors[0]
 
             elif len(supervisors) == 2:
-                person.ldap["supervisor"] = (
-                    supervisors[0] if len(supervisors) >= 1 else None
-                )
-                person.ldap["co_supervisor"] = (
-                    supervisors[1] if len(supervisors) > 1 else None
-                )
+                person.ldap["supervisor"] = supervisors[0]
+                person.ldap["co_supervisor"] = supervisors[1]
 
             else:
                 errors.too_many_supervisors.append(person)

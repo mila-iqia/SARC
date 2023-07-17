@@ -192,7 +192,9 @@ def test_resolve_no_supervisors():
     errors.show()
 
     assert errors.has_errors() is True
+    assert errors.error_count() == 2
     assert len(errors.no_supervisors) == 1
+    assert len(errors.no_core_supervisors) == 1
 
 
 def test_resolve_too_many_supervisors():
@@ -202,6 +204,7 @@ def test_resolve_too_many_supervisors():
 
     errors.show()
     assert errors.has_errors() is True
+    assert errors.error_count() == 1
     assert len(errors.too_many_supervisors) == 1
 
 
@@ -212,6 +215,7 @@ def test_resolve_nocore_supervisors():
 
     errors.show()
     assert errors.has_errors() is True
+    assert errors.error_count() == 1
     assert len(errors.no_core_supervisors) == 1
 
 
@@ -222,17 +226,63 @@ def test_resolve_missing_supervisors():
 
     errors.show()
     assert errors.has_errors() is True
+    assert errors.error_count() == 2
     assert len(errors.unknown_supervisors) == 1
+    assert len(errors.no_core_supervisors) == 1
 
 
 def test_resolve_missing_supervisors_mapping():
+    ldap_people = [
+        make_student("supervisor", ["mcgill", "supervisor"]),
+    ]
+
+    errors = resolve_supervisors(ldap_people, group_to_prof(), exceptions=None)
+
+    errors.show()
+    assert errors.has_errors() is True
+    assert errors.error_count() == 1
+    assert len(errors.prof_and_student) == 1
+
+
+def test_student_and_prof():
     ldap_people = ldap_mock_missing_supervisor_mapping()
 
     errors = resolve_supervisors(ldap_people, group_to_prof(), exceptions=None)
 
     errors.show()
     assert errors.has_errors() is True
+    assert errors.error_count() == 2
     assert len(errors.unknown_group) == 1
+    assert len(errors.no_core_supervisors) == 1
+
+
+def test_person_is_suspended():
+    result = _student_or_prof(
+        make_person("hello", True),
+        dict(),
+        dict(),
+    )
+    assert result is None
+
+
+def test_not_student_and_not_prof():
+    result = _student_or_prof(
+        make_person("hello", []),
+        dict(),
+        dict(),
+    )
+    assert result is not None
+    assert (not result.is_student) and (not result.is_prof)
+
+
+def test_student_and_prof():
+    result = _student_or_prof(
+        make_student("supervisor", ["mcgill", "supervisor"]),
+        {"supervisor@email.com"},
+        dict(),
+    )
+    assert result is not None
+    assert result.is_student and result.is_prof
 
 
 def test_student_or_prof_exception_rename_student():

@@ -134,16 +134,17 @@ they are structured as follows:
     }
 
 """
-
 import json
 import os
 import ssl
+from datetime import datetime
 
 # Requirements
 # - pip install ldap3
 from ldap3 import ALL_ATTRIBUTES, SUBTREE, Connection, Server, Tls
 from pymongo import MongoClient, UpdateOne
 
+from ..config import LDAPConfig
 from .supervisor import resolve_supervisors
 
 
@@ -264,7 +265,7 @@ def client_side_user_updates(LD_users_DB, LD_users_LDAP):
 
 def _query_and_dump(
     ldap,
-    output_raw_LDAP_json_file=None,
+    save_ldap=False,
 ):
     LD_users_raw = query_ldap(
         ldap.local_private_key_file,
@@ -272,8 +273,11 @@ def _query_and_dump(
         ldap.ldap_service_uri,
     )
 
-    if output_raw_LDAP_json_file:
-        with open(output_raw_LDAP_json_file, "w", encoding="utf-8") as f_out:
+    if save_ldap:
+        today = datetime.utcnow()
+        cache_path = config().cache / "ldap" / f"raw.{today.strftime('%Y-%m-%d')}.json"
+
+        with open(cache_path, "w", encoding="utf-8") as f_out:
             json.dump(LD_users_raw, f_out, indent=4)
 
     return LD_users_raw
@@ -312,18 +316,18 @@ def _save_to_mongo(collection, LD_users):
 
 
 def load_ldap_exceptions(ldap_config: LDAPConfig):
-    if path.exceptions_json_path is None:
+    if ldap_config.exceptions_json_path is None:
         return {}
 
-    with open(path.exceptions_json_path, "r", encoding="utf-8") as file:
+    with open(ldap_config.exceptions_json_path, "r", encoding="utf-8") as file:
         return json.load(file)
 
 
 def load_group_to_prof_mapping(ldap_config: LDAPConfig):
-    if path.group_to_prof_json_path is None:
+    if ldap_config.group_to_prof_json_path is None:
         return {}
 
-    with open(path.group_to_prof_json_path, "r", encoding="utf-8") as file:
+    with open(ldap_config.group_to_prof_json_path, "r", encoding="utf-8") as file:
         return json.load(file)
 
 
@@ -331,12 +335,12 @@ def run(
     ldap,
     mongodb_collection=None,
     output_json_file=None,
-    output_raw_LDAP_json_file=None,
+    save_ldap=False,
 ):
     """Runs periodically to synchronize mongodb with LDAP"""
 
     # retrive users from LDAP
-    LD_users_raw = _query_and_dump(ldap, output_raw_LDAP_json_file)
+    LD_users_raw = _query_and_dump(ldap, save_ldap)
 
     # Transform users into the json we will save
     group_to_prof = load_group_to_prof_mapping(ldap)
@@ -390,5 +394,5 @@ if __name__ == "__main__":
         mongodb_collection=get_ldap_collection(conf),
         # input_json_file=args.input_json_file,
         output_json_file="output.json",
-        output_raw_LDAP_json_file="output_raw.json",
+        save_ldap=False,
     )
