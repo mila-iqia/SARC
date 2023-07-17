@@ -381,18 +381,3 @@ def get_ldap_collection(cfg):
         users_collection = None
 
     return users_collection
-
-
-if __name__ == "__main__":
-    from sarc.config import config
-
-    conf = config()
-
-    run(
-        ldap=conf.ldap,
-        # write results in database
-        mongodb_collection=get_ldap_collection(conf),
-        # input_json_file=args.input_json_file,
-        output_json_file="output.json",
-        save_ldap=False,
-    )
