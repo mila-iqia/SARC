@@ -94,7 +94,7 @@ def ldap_mock_missing_supervisor(*args, **kwargs):
 def ldap_mock_missing_supervisor_mapping(*args, **kwargs):
     """Cannot find supervisor from group; missing mapping"""
     return [
-        make_student("good", ["mcgill", "co.supervisor", "supervisoR"]),
+        make_student("good", ["mcgill", "co.supervisor", "idontexist"]),
         make_person("co.supervisor"),
         make_core("supervisor"),
     ]
