@@ -17,7 +17,7 @@ class MultipleSupervisor(Exception):
     pass
 
 
-def extract_groups(member_of):
+def extract_groups(member_of: list[str]):
     supervisors = []
     groups = []
     is_student = False
@@ -57,7 +57,7 @@ class Result:
     university: str
 
 
-def _student_or_prof(person: dict, S_profs: set[str], exceptions: dict):
+def _student_or_prof(person: dict, S_profs: set[str], exceptions: dict) -> Result:
     if exceptions is None:
         exceptions = {}
 
@@ -157,7 +157,9 @@ class SupervisorMatchingErrors:
             print(f"           Unknown group: {self.unknown_group}")
 
 
-def _extract_supervisors_from_groups(person, group_to_prof, errors, index):
+def _extract_supervisors_from_groups(
+    person: Result, group_to_prof: dict, errors: SupervisorMatchingErrors, index: dict
+) -> list:
     has_core_supervisor = False
     supervisors = []
 
@@ -188,7 +190,9 @@ def _extract_supervisors_from_groups(person, group_to_prof, errors, index):
     return sorted(supervisors, key=sortkey, reverse=True)
 
 
-def resolve_supervisors(ldap_people, group_to_prof, exceptions):
+def resolve_supervisors(
+    ldap_people: list[dict], group_to_prof: dict, exceptions: dict
+) -> SupervisorMatchingErrors:
     index = {}
     people = []
     S_profs = set(group_to_prof.values())
