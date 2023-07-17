@@ -144,7 +144,7 @@ from datetime import datetime
 from ldap3 import ALL_ATTRIBUTES, SUBTREE, Connection, Server, Tls
 from pymongo import MongoClient, UpdateOne
 
-from ..config import LDAPConfig
+from ..config import LDAPConfig, config
 from .supervisor import resolve_supervisors
 
 
