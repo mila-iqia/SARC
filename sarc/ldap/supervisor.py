@@ -81,7 +81,6 @@ def _student_or_prof(person, S_profs, exceptions):
         is_prof = True
 
     elif person["mail"][0] in exceptions.get("not_teacher", []):
-        # Maxime Gasse is a postdoc with Andrea Lodi but also appears to co-supervise someone.
         is_prof = False
         is_student = True
 
