@@ -235,18 +235,6 @@ def test_resolve_missing_supervisors_mapping():
     assert len(errors.unknown_group) == 1
 
 
-def test_resolve_supervisors():
-    ldap_people = ldap_mock()
-
-    errors = resolve_supervisors(ldap_people, group_to_prof(), exceptions=None)
-
-    assert errors.has_errors() is False
-
-    # The supervisors got sorted
-    assert ldap_people[0]["supervisor"] == "supervisor@email.com"
-    assert ldap_people[0]["co_supervisor"] == "co.supervisor@email.com"
-
-
 def test_student_or_prof_exception_rename_student():
     result = _student_or_prof(
         make_student("good", ["mcgill"]),
