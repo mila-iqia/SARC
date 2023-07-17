@@ -34,7 +34,7 @@ Two possible scenarios :
 ### Remote access to MongoDB (via SSH tunneling) 
 
 #### SSH config
-Refer to `remote_ssh_access.md` for ssh connection with port redirection, to connect to mongoDB form the local machine.
+Refer to `remote_mongo_access.md` for ssh connection with port redirection, to connect to mongoDB form the local machine.
 
 #### SARC config file
 To use the remote mongoDB connection, tunneled from localhost:27018, the `mongo` section in the config file like this:
