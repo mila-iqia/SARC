@@ -54,7 +54,7 @@ def fake_raw_ldap_data(nbr_users=10):
 
 
 @pytest.mark.usefixtures("empty_read_write_db")
-def test_acquire_users(cli_main, monkeypatch):
+def test_acquire_users(cli_main, monkeypatch, file_contents):
     """Test command line `sarc acquire users`.
 
     Copied from tests.functional.ldap.test_acquire_ldap.test_acquire_ldap
@@ -72,37 +72,6 @@ def test_acquire_users(cli_main, monkeypatch):
 
     monkeypatch.setattr(sarc.ldap.read_mila_ldap, "query_ldap", mock_query_ldap)
 
-    file1_content = """"Status","Username","Nom","Email","État du compte"
-"Activated","john.smith000","John Smith the 000rd","js000@yahoo.ca","activé"
-"Activated","john.smith001","John Smith the 001rd","js001@yahoo.ca","activé"
-"Activated","john.smith002","John Smith the 002rd","js002@yahoo.ca","activé"
-"Activated","stranger.person","Mysterious Stranger","ms@hotmail.com","activé"
-"""
-    # inspired by members-rrg-bengioy-ad-2022-11-25.csv
-    file2_content = """Name,Sponsor,Permission,Activation_Status,username,Email
-John Smith the 000rd,BigProf,Manager,activated,john.smith000,js000@yahoo.ca
-John Smith the 001rd,BigProf,Manager,activated,john.smith001,js001@yahoo.ca
-John Smith the 002rd,BigProf,Manager,activated,john.smith002,js002@yahoo.ca
-Mysterious Stranger,BigProf,Manager,activated,stranger.person,ms@hotmail.com
-"""
-    # inspired by make_matches_comfig.json
-    file3_content = """{
-    "L_phantom_mila_emails_to_ignore":
-        [
-            "iamnobody@mila.quebec"
-        ],
-    "D_override_matches_mila_to_cc_account_username":
-        {
-            "john.smith001@mila.quebec": "js_the_first"
-        }
-}
-"""
-
-    file_contents = {
-        cfg.account_matching.drac_roles_csv_path: file1_content,
-        cfg.account_matching.drac_members_csv_path: file2_content,
-        cfg.account_matching.make_matches_config: file3_content,
-    }
 
     def mock_file(filename, *vargs, **kwargs):
         if filename in file_contents:
@@ -128,6 +97,7 @@ Mysterious Stranger,BigProf,Manager,activated,stranger.person,ms@hotmail.com
 
         # test some drac_roles and drac_members fields
         for segment in [js_user.drac_roles, js_user.drac_members]:
+            assert segment is not None
             assert "email" in segment
             assert segment["email"] == f"js{i:03d}@yahoo.ca"
             assert "username" in segment
