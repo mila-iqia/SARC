@@ -28,7 +28,6 @@ def make_person(name, suspended=False):
         "displayName": [f"{name}"],
         "googleUid": [f"{name}"],
         "uid": [f"{name}"],
-        "givenName": [f"{name}"],
         "sn": [f"{name}"],
     }
 
@@ -106,10 +105,6 @@ def group_to_prof(*args):
         "co.supervisor": "co.supervisor@email.com",
         "metoo": "metoo@email.com",
     }
-
-
-def ldap_exception(*args):
-    return {}
 
 
 def test_extract_groups_student_no_supervisor():
@@ -192,9 +187,8 @@ def test_resolve_no_supervisors():
     errors.show()
 
     assert errors.has_errors() is True
-    assert errors.error_count() == 2
+    assert errors.error_count() == 1
     assert len(errors.no_supervisors) == 1
-    assert len(errors.no_core_supervisors) == 1
 
 
 def test_resolve_too_many_supervisors():
@@ -208,17 +202,6 @@ def test_resolve_too_many_supervisors():
     assert len(errors.too_many_supervisors) == 1
 
 
-def test_resolve_nocore_supervisors():
-    ldap_people = ldap_mock_nocore_supervisor()
-
-    errors = resolve_supervisors(ldap_people, group_to_prof(), exceptions=None)
-
-    errors.show()
-    assert errors.has_errors() is True
-    assert errors.error_count() == 1
-    assert len(errors.no_core_supervisors) == 1
-
-
 def test_resolve_missing_supervisors():
     ldap_people = ldap_mock_missing_supervisor()
 
@@ -226,9 +209,8 @@ def test_resolve_missing_supervisors():
 
     errors.show()
     assert errors.has_errors() is True
-    assert errors.error_count() == 2
+    assert errors.error_count() == 1
     assert len(errors.unknown_supervisors) == 1
-    assert len(errors.no_core_supervisors) == 1
 
 
 def test_resolve_missing_supervisors_mapping():
@@ -293,7 +275,7 @@ def test_student_or_prof_exception_rename_student():
             not_student=[], not_teacher=[], rename={"good@email.com": "newName"}
         ),
     )
-    assert result.ldap["givenName"][0] == "newName"
+    assert result.ldap["displayName"][0] == "newName"
 
 
 def test_student_or_prof_exception_student_is_prof():
@@ -315,6 +297,14 @@ def test_student_or_prof_exception_prof_is_student():
     assert result.is_prof is False
 
 
+def ldap_exception(*args):
+    return {
+        "not_student": [],
+        "not_teacher": [],
+        "rename": {"good@email.com": "newname"},
+    }
+
+
 def test_ldap_simple_sync(monkeypatch):
     monkeypatch.setattr(sarc.ldap.read_mila_ldap, "_query_and_dump", ldap_mock)
     monkeypatch.setattr(
@@ -333,10 +323,16 @@ def test_ldap_simple_sync(monkeypatch):
 
     docs = collection.documents
 
+    # find Student
     for d in docs:
         if d._doc["$set"]["mila_ldap"]["mila_email_username"].startswith("good"):
             break
+    else:
+        assert False, "Did not find username"
 
     student = d._doc["$set"]["mila_ldap"]
-    assert student["supervisor"] == "supervisor@email.com"
-    assert student["co_supervisor"] == "co.supervisor@email.com"
+    assert student["supervisor"] == "supervisor@email.com", "Supervisor was found"
+    assert (
+        student["co_supervisor"] == "co.supervisor@email.com"
+    ), "2nd supervisor was found"
+    assert student["display_name"] == "newname", "User was saved with his prefered name"

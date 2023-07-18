@@ -87,8 +87,9 @@ def _student_or_prof(person: dict, S_profs: set[str], exceptions: dict) -> Resul
 
     # because it's stupid to wait for the LDAP to be updated for that one
     prefered_name = exceptions.get("rename", {}).get(person["mail"][0])
+
     if prefered_name is not None:
-        person["givenName"][0] = prefered_name
+        person["displayName"][0] = prefered_name
 
     if is_prof:
         return Result(
@@ -116,7 +117,6 @@ def _student_or_prof(person: dict, S_profs: set[str], exceptions: dict) -> Resul
 class SupervisorMatchingErrors:
     no_supervisors: list = field(default_factory=list)
     too_many_supervisors: list = field(default_factory=list)
-    no_core_supervisors: list = field(default_factory=list)
     unknown_supervisors: list = field(default_factory=list)
     unknown_group: list = field(default_factory=list)
     prof_and_student: list = field(default_factory=list)
@@ -125,7 +125,6 @@ class SupervisorMatchingErrors:
         return chain(
             self.no_supervisors,
             self.too_many_supervisors,
-            self.no_core_supervisors,
             self.unknown_supervisors,
             self.unknown_group,
             self.prof_and_student,
@@ -146,7 +145,6 @@ class SupervisorMatchingErrors:
                 print(f"{msg} {make_list(array)}")
 
         show_error("     Missing supervisors:", self.no_supervisors)
-        show_error("Missing core supervisors:", self.no_core_supervisors)
         show_error("    Too many supervisors:", self.too_many_supervisors)
         show_error("        Prof and Student:", self.prof_and_student)
 
@@ -160,7 +158,6 @@ class SupervisorMatchingErrors:
 def _extract_supervisors_from_groups(
     person: Result, group_to_prof: dict, errors: SupervisorMatchingErrors, index: dict
 ) -> list:
-    has_core_supervisor = False
     supervisors = []
 
     for group in person.supervisors:
@@ -170,15 +167,11 @@ def _extract_supervisors_from_groups(
             errors.unknown_group.append(group)
         else:
             p = index.get(prof)
+
             if p is None:
                 errors.unknown_supervisors.append(prof)
-            else:
-                has_core_supervisor = has_core_supervisor or p.is_core
 
             supervisors.append(prof)
-
-    if not has_core_supervisor:
-        errors.no_core_supervisors.append(person)
 
     # We need to sort them, make the core prof index 0
     def sortkey(x):

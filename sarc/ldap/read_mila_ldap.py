@@ -203,6 +203,9 @@ def process_user(user_raw: dict) -> dict:
     the "@mila.quebec" suffix).
     """
 
+    supervisor = user_raw.get("supervisor")
+    cosupervisor = user_raw.get("co_supervisor")
+
     user = {
         # include the suffix "@mila.quebec"
         "mila_email_username": user_raw["mail"][0],
@@ -210,8 +213,8 @@ def process_user(user_raw: dict) -> dict:
         "mila_cluster_uid": user_raw["uidNumber"][0],
         "mila_cluster_gid": user_raw["gidNumber"][0],
         "display_name": user_raw["displayName"][0],
-        "supervisor": user_raw.get("supervisor"),
-        "co_supervisor": user_raw.get("co_supervisor"),
+        "supervisor": supervisor if supervisor else None,
+        "co_supervisor": cosupervisor if cosupervisor else None,
         "status": "disabled"
         if (user_raw["suspended"][0] in ["True", "true", True])
         else "enabled",
