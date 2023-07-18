@@ -157,10 +157,7 @@ Mysterious Stranger,BigProf,Manager,activated,stranger.person,ms@hotmail.com
     exceptions_json_path = """
     {
         "not_prof": [],
-        "not_student": [],
-        "rename": {
-            "john.smith000@mila.quebec": "New Name"
-        }
+        "not_student": []
     }
     """
 
