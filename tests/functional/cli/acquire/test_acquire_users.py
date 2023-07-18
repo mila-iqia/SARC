@@ -60,8 +60,6 @@ def test_acquire_users(cli_main, monkeypatch, file_contents):
     Copied from tests.functional.ldap.test_acquire_ldap.test_acquire_ldap
     and replaced direct call with CLI call.
     """
-
-    cfg = config()
     nbr_users = 10
 
     def mock_query_ldap(
@@ -71,7 +69,6 @@ def test_acquire_users(cli_main, monkeypatch, file_contents):
         return fake_raw_ldap_data(nbr_users)
 
     monkeypatch.setattr(sarc.ldap.read_mila_ldap, "query_ldap", mock_query_ldap)
-
 
     def mock_file(filename, *vargs, **kwargs):
         if filename in file_contents:

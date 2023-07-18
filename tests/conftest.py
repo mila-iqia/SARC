@@ -102,7 +102,7 @@ def prom_custom_query_mock(monkeypatch):
 
     yield PrometheusConnect.custom_query
 
-    
+
 @pytest.fixture
 def file_contents():
     # We also need to generate the data for the two files being read:
@@ -119,10 +119,9 @@ def file_contents():
     # We'll add an extra use that won't match, called "Mysterious Stranger".
 
     cfg = config()
-    
+
     # inspired by sponsored_roles_for_Yoshua_Bengio_(CCI_jvb-000).csv
-    account_matching_drac_roles_csv_path = \
-    """"Status","Username","Nom","Email","État du compte"
+    account_matching_drac_roles_csv_path = """"Status","Username","Nom","Email","État du compte"
 "Activated","john.smith000","John Smith the 000rd","js000@yahoo.ca","activé"
 "Activated","john.smith001","John Smith the 001rd","js001@yahoo.ca","activé"
 "Activated","john.smith002","John Smith the 002rd","js002@yahoo.ca","activé"
@@ -130,14 +129,13 @@ def file_contents():
 """
 
     # inspired by members-rrg-bengioy-ad-2022-11-25.csv
-    account_matching_drac_members_csv_path = \
-    """Name,Sponsor,Permission,Activation_Status,username,Email
+    account_matching_drac_members_csv_path = """Name,Sponsor,Permission,Activation_Status,username,Email
 John Smith the 000rd,BigProf,Manager,activated,john.smith000,js000@yahoo.ca
 John Smith the 001rd,BigProf,Manager,activated,john.smith001,js001@yahoo.ca
 John Smith the 002rd,BigProf,Manager,activated,john.smith002,js002@yahoo.ca
 Mysterious Stranger,BigProf,Manager,activated,stranger.person,ms@hotmail.com
 """
-    
+
     # inspired by make_matches_config.json
     account_matching_make_matches_config = """{
         "L_phantom_mila_emails_to_ignore":
@@ -150,7 +148,7 @@ Mysterious Stranger,BigProf,Manager,activated,stranger.person,ms@hotmail.com
             }
     }
     """
-     
+
     group_to_prof = """
     {
         "supervisor000": "john.smith000@mila.quebec"
@@ -165,7 +163,7 @@ Mysterious Stranger,BigProf,Manager,activated,stranger.person,ms@hotmail.com
         }
     }
     """
-     
+
     return {
         cfg.account_matching.drac_roles_csv_path: account_matching_drac_roles_csv_path,
         cfg.account_matching.drac_members_csv_path: account_matching_drac_members_csv_path,
