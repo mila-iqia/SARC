@@ -61,24 +61,41 @@ Mysterious Stranger,BigProf,Manager,activated,stranger.person,ms@hotmail.com
 """
     # inspired by make_matches_config.json
     file3_content = """
-{
-    "L_phantom_mila_emails_to_ignore":
-        [
-            "john.smith005@mila.quebec",
-            "john.smith006@mila.quebec"
-        ],
-    "D_override_matches_mila_to_cc_account_username":
-        {
-            "john.smith008@mila.quebec": "smith000"
+    {
+        "L_phantom_mila_emails_to_ignore":
+            [
+                "john.smith005@mila.quebec",
+                "john.smith006@mila.quebec"
+            ],
+        "D_override_matches_mila_to_cc_account_username":
+            {
+                "john.smith008@mila.quebec": "smith000"
+            }
+    }
+    """
+
+    group_to_prof = """
+    {
+        "supervisor000": "john.smith000@mila.quebec"
+    }
+    """
+    exceptions_json_path = """
+    {
+        "not_prof": [],
+        "not_student": [],
+        "rename": {
+            "john.smith000@mila.quebec": "New Name"
         }
-}
-"""
+    }
+    """
 
     # Create a dictionary of file paths and their corresponding content
     file_contents = {
         cfg.account_matching.drac_roles_csv_path: file1_content,
         cfg.account_matching.drac_members_csv_path: file2_content,
         cfg.account_matching.make_matches_config: file3_content,
+        cfg.ldap.group_to_prof_json_path: group_to_prof,
+        cfg.ldap.exceptions_json_path: exceptions_json_path,
     }
 
     # Define a function that returns a new mock file object with the content
@@ -107,6 +124,7 @@ Mysterious Stranger,BigProf,Manager,activated,stranger.person,ms@hotmail.com
 
         # test some drac_roles and drac_members fields
         js_user_d = js_user.dict()
+        print(i, js_user_d)
         for segment in ["drac_roles", "drac_members"]:
             assert segment in js_user_d
             assert "email" in js_user_d[segment]
@@ -123,6 +141,16 @@ Mysterious Stranger,BigProf,Manager,activated,stranger.person,ms@hotmail.com
         assert js_user.drac.email == js_user.drac_members["email"]
         assert js_user.drac.username == js_user.drac_members["username"]
         assert js_user.drac.active
+
+        # User is a supervisor, its prever
+        if i == 0:
+            print(js_user_d)
+            assert (
+                js_user_d["mila_ldap"]["display_name"] == "New Name"
+            ), "its prefered name was used"
+
+        if i == 1:
+            assert js_user_d["mila_ldap"]["supervisor"] is not None
 
     # test the absence of the mysterious stranger
     js_user = get_user(drac_account_username="ms@hotmail.com")
