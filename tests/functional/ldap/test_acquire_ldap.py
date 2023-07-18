@@ -127,6 +127,7 @@ Mysterious Stranger,BigProf,Manager,activated,stranger.person,ms@hotmail.com
         print(i, js_user_d)
         for segment in ["drac_roles", "drac_members"]:
             assert segment in js_user_d
+            assert js_user_d[segment] is not None
             assert "email" in js_user_d[segment]
             assert js_user_d[segment]["email"] == f"js{i:03d}@yahoo.ca"
             assert "username" in js_user_d[segment]

@@ -7,7 +7,9 @@
         "local_private_key_file": "not_a_valid_path.key",
         "local_certificate_file": "not_a_valid_path.crt",
         "ldap_service_uri": "ldaps://ldap.google.com",
-        "mongo_collection_name": "users"
+        "mongo_collection_name": "users",
+        "group_to_prof_json_path": "$SELF/group_to_prof.json",
+        "exceptions_json_path": "$SELF/exceptions.json"
     },
     "account_matching": {
         "drac_members_csv_path": "drac_members_not_valid_path.csv",
