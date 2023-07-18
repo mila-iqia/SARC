@@ -267,22 +267,11 @@ def test_student_and_prof():
     assert result.is_student and result.is_prof
 
 
-def test_student_or_prof_exception_rename_student():
-    result = _student_or_prof(
-        make_student("good", ["mcgill"]),
-        dict(),
-        exceptions=dict(
-            not_student=[], not_teacher=[], rename={"good@email.com": "newName"}
-        ),
-    )
-    assert result.ldap["displayName"][0] == "newName"
-
-
 def test_student_or_prof_exception_student_is_prof():
     result = _student_or_prof(
         make_student("good", ["mcgill"]),
         dict(),
-        exceptions=dict(not_student=["good@email.com"], not_teacher=[], rename=dict()),
+        exceptions=dict(not_student=["good@email.com"], not_teacher=[]),
     )
     assert result.is_prof is True
 
@@ -291,7 +280,7 @@ def test_student_or_prof_exception_prof_is_student():
     result = _student_or_prof(
         make_person("good", False),
         dict(),
-        exceptions=dict(not_student=[], not_teacher=["good@email.com"], rename=dict()),
+        exceptions=dict(not_student=[], not_teacher=["good@email.com"]),
     )
     assert result is not None
     assert result.is_prof is False
@@ -301,7 +290,6 @@ def ldap_exception(*args):
     return {
         "not_student": [],
         "not_teacher": [],
-        "rename": {"good@email.com": "newname"},
     }
 
 
@@ -335,4 +323,3 @@ def test_ldap_simple_sync(monkeypatch):
     assert (
         student["co_supervisor"] == "co.supervisor@email.com"
     ), "2nd supervisor was found"
-    assert student["display_name"] == "newname", "User was saved with his prefered name"

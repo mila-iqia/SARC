@@ -5,7 +5,6 @@ import pytest
 import sarc.account_matching.make_matches
 import sarc.ldap.acquire
 import sarc.ldap.read_mila_ldap  # will monkeypatch "query_ldap"
-from sarc.config import config
 from sarc.ldap.api import get_user
 
 from .test_read_mila_ldap import fake_raw_ldap_data
@@ -74,13 +73,6 @@ def test_acquire_ldap(monkeypatch, file_contents):
         assert js_user.drac.email == js_user.drac_members["email"]
         assert js_user.drac.username == js_user.drac_members["username"]
         assert js_user.drac.active
-
-        # User is a supervisor, its prever
-        if i == 0:
-            print(js_user_d)
-            assert (
-                js_user_d["mila_ldap"]["display_name"] == "New Name"
-            ), "its prefered name was used"
 
         if i == 1:
             assert js_user_d["mila_ldap"]["supervisor"] is not None

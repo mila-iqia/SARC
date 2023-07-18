@@ -85,12 +85,6 @@ def _student_or_prof(person: dict, S_profs: set[str], exceptions: dict) -> Resul
         is_prof = False
         is_student = True
 
-    # because it's stupid to wait for the LDAP to be updated for that one
-    prefered_name = exceptions.get("rename", {}).get(person["mail"][0])
-
-    if prefered_name is not None:
-        person["displayName"][0] = prefered_name
-
     if is_prof:
         return Result(
             person,

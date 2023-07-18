@@ -15,8 +15,8 @@ def fake_member_of(index, count):
         0: ["cn=mila-core-profs,ou=Groups,dc=mila,dc=quebec"],
         # Student
         1: [
-            "cn=mcgill-students,ou=Groups,dc=mila,dc=quebec"
-            f"cn=supervisor{0:03d}-students,ou=Groups,dc=mila,dc=quebec"
+            "cn=mcgill-students,ou=Groups,dc=mila,dc=quebec",
+            "cn=supervisor000-students,ou=Groups,dc=mila,dc=quebec",
         ],
         # Not core prof, not student
         2: [],
