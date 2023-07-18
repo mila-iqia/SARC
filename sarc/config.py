@@ -187,8 +187,6 @@ _config_folder = None
 
 def relative_filepath(path):
     """Allows files to be relative to the config"""
-    global _config_folder
-
     if "$SELF" in path:
         return path.replace("$SELF", str(_config_folder))
 
@@ -196,8 +194,10 @@ def relative_filepath(path):
 
 
 def parse_config(config_path):
+    # pylint: disable=global-statement
     global _config_folder
     config_path = Path(config_path)
+
     _config_folder = str(config_path.parent)
 
     if not config_path.exists():
