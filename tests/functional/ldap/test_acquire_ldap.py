@@ -12,7 +12,7 @@ from .test_read_mila_ldap import fake_raw_ldap_data
 
 # @pytest.mark.usefixtures("read_write_db")
 @pytest.mark.usefixtures("empty_read_write_db")
-def test_acquire_ldap(monkeypatch, file_contents):
+def test_acquire_ldap(monkeypatch, mock_file):
     """
     Override the LDAP queries.
     Have users with matches to do.
@@ -28,16 +28,6 @@ def test_acquire_ldap(monkeypatch, file_contents):
         return fake_raw_ldap_data(nbr_users)
 
     monkeypatch.setattr(sarc.ldap.read_mila_ldap, "query_ldap", mock_query_ldap)
-
-    # Define a function that returns a new mock file object with the content
-    def mock_file(filename, *vargs, **kwargs):
-        if filename in file_contents:
-            return mock_open(read_data=file_contents[filename]).return_value
-        else:
-            # we haven't found a way to pass through the other calls
-            # to `open` other files, so let's just raise an error
-            # because those aren't going to work anyways
-            raise FileNotFoundError(filename)
 
     # Patch the built-in `open()` function for each file path
     with patch("builtins.open", side_effect=mock_file):

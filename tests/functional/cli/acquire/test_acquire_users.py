@@ -54,7 +54,7 @@ def fake_raw_ldap_data(nbr_users=10):
 
 
 @pytest.mark.usefixtures("empty_read_write_db")
-def test_acquire_users(cli_main, monkeypatch, file_contents):
+def test_acquire_users(cli_main, monkeypatch, mock_file):
     """Test command line `sarc acquire users`.
 
     Copied from tests.functional.ldap.test_acquire_ldap.test_acquire_ldap
@@ -69,12 +69,6 @@ def test_acquire_users(cli_main, monkeypatch, file_contents):
         return fake_raw_ldap_data(nbr_users)
 
     monkeypatch.setattr(sarc.ldap.read_mila_ldap, "query_ldap", mock_query_ldap)
-
-    def mock_file(filename, *vargs, **kwargs):
-        if filename in file_contents:
-            return mock_open(read_data=file_contents[filename]).return_value
-        else:
-            raise FileNotFoundError(filename)
 
     with patch("builtins.open", side_effect=mock_file):
         assert (

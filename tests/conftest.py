@@ -1,6 +1,6 @@
 import zoneinfo
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
 
@@ -168,3 +168,25 @@ Mysterious Stranger,BigProf,Manager,activated,stranger.person,ms@hotmail.com
         cfg.ldap.group_to_prof_json_path: group_to_prof,
         cfg.ldap.exceptions_json_path: exceptions_json_path,
     }
+
+
+@pytest.fixture
+def mock_file(file_contents):
+    # Get the original open function before it gets patched
+    original = __builtins__["open"]
+
+    # Define a function that returns a new mock file object with the content
+    def _mock_file(filename, *vargs, **kwargs):
+        nonlocal original
+
+        if filename in file_contents:
+            return mock_open(read_data=file_contents[filename]).return_value
+        if filename.startswith("/tmp"):
+            return original(filename, *vargs, **kwargs)
+        else:
+            # we haven't found a way to pass through the other calls
+            # to `open` other files, so let's just raise an error
+            # because those aren't going to work anyways
+            raise FileNotFoundError(filename)
+
+    return _mock_file

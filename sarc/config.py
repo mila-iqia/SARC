@@ -187,6 +187,9 @@ _config_folder = None
 
 def relative_filepath(path):
     """Allows files to be relative to the config"""
+    if path is None:
+        return path
+
     if "$SELF" in path:
         return path.replace("$SELF", str(_config_folder))
 
