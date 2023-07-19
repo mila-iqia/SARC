@@ -197,6 +197,10 @@ def jobs_collection():
     return SlurmJobRepository(database=db)
 
 
+def get_clusters():
+    pass
+
+
 # pylint: disable=too-many-branches,dangerous-default-value
 def get_jobs(
     *,
@@ -217,8 +221,9 @@ def get_jobs(
         end: Get all jobs that have a status before that time.
         query_options: Additional options to pass to MongoDB (limit, etc.)
     """
-    if isinstance(cluster, str):
-        cluster = config().clusters[cluster]
+    cluster_name = cluster
+    if isinstance(cluster, ClusterConfig):
+        cluster_name = cluster.name
 
     if isinstance(start, str):
         start = datetime.combine(
@@ -235,8 +240,8 @@ def get_jobs(
         end = end.astimezone(UTC)
 
     query = {}
-    if isinstance(cluster, ClusterConfig):
-        query["cluster_name"] = cluster.name
+    if cluster_name:
+        query["cluster_name"] = cluster_name
 
     if isinstance(job_id, int):
         query["job_id"] = job_id
