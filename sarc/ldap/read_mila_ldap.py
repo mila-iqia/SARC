@@ -134,74 +134,18 @@ they are structured as follows:
     }
 
 """
-
-import argparse
 import json
 import os
 import ssl
+from datetime import datetime
 
 # Requirements
 # - pip install ldap3
 from ldap3 import ALL_ATTRIBUTES, SUBTREE, Connection, Server, Tls
 from pymongo import MongoClient, UpdateOne
 
-parser = argparse.ArgumentParser(
-    description="Query LDAP and update the MongoDB database users based on values returned."
-)
-parser.add_argument(
-    "--local_private_key_file",
-    type=str,
-    help="local_private_key_file for LDAP connection",
-)
-parser.add_argument(
-    "--local_certificate_file",
-    type=str,
-    help="local_certificate_file for LDAP connection",
-)
-parser.add_argument(
-    "--ldap_service_uri",
-    type=str,
-    default="ldaps://ldap.google.com",
-    help="ldap service uri",
-)
-# We have two possible things that we can do with the data fetched.
-# Dumping to a json file is possible.
-parser.add_argument(
-    "--mongodb_connection_string",
-    default=None,
-    type=str,
-    help="(optional) MongoDB connection string. Contains username and password.",
-)
-parser.add_argument(
-    "--mongodb_database_name",
-    default="sarc",
-    type=str,
-    help="(optional) MongoDB database to modify. Better left at default.",
-)
-parser.add_argument(
-    "--mongodb_collection",
-    default="users",
-    type=str,
-    help="(optional) MongoDB collection to modify. Better left at default.",
-)
-parser.add_argument(
-    "--input_json_file",
-    default=None,
-    type=str,
-    help="(optional) Ignore the LDAP and load from this json file instead.",
-)
-parser.add_argument(
-    "--output_json_file",
-    default=None,
-    type=str,
-    help="(optional) Write results to json file.",
-)
-parser.add_argument(
-    "--output_raw_LDAP_json_file",
-    default=None,
-    type=str,
-    help="(optional) Write results of the raw LDAP query to json file.",
-)
+from ..config import LDAPConfig, config
+from .supervisor import resolve_supervisors
 
 
 def query_ldap(local_private_key_file, local_certificate_file, ldap_service_uri):
@@ -258,6 +202,10 @@ def process_user(user_raw: dict) -> dict:
     "googleUid" and "uid" match that of "mail" (except for
     the "@mila.quebec" suffix).
     """
+
+    supervisor = user_raw.get("supervisor")
+    cosupervisor = user_raw.get("co_supervisor")
+
     user = {
         # include the suffix "@mila.quebec"
         "mila_email_username": user_raw["mail"][0],
@@ -265,6 +213,8 @@ def process_user(user_raw: dict) -> dict:
         "mila_cluster_uid": user_raw["uidNumber"][0],
         "mila_cluster_gid": user_raw["gidNumber"][0],
         "display_name": user_raw["displayName"][0],
+        "supervisor": supervisor if supervisor else None,
+        "co_supervisor": cosupervisor if cosupervisor else None,
         "status": "disabled"
         if (user_raw["suspended"][0] in ["True", "true", True])
         else "enabled",
@@ -316,50 +266,107 @@ def client_side_user_updates(LD_users_DB, LD_users_LDAP):
     return LD_users_to_update_or_insert
 
 
-def run(
-    local_private_key_file=None,
-    local_certificate_file=None,
-    ldap_service_uri=None,
-    # DB option 1
-    mongodb_database_instance=None,
-    # DB option 2
-    mongodb_connection_string=None,
-    mongodb_database_name=None,
-    #
-    mongodb_collection=None,
-    input_json_file=None,
-    output_json_file=None,
-    output_raw_LDAP_json_file=None,
-    LD_users=None,  # for external testing purposes
+def _query_and_dump(
+    ldap,
+    save_ldap=False,
 ):
-    """
-    If `mongodb_database_instance` is not `None`, it overrides the two arguments
-    `mongodb_connection_string`, `mongodb_database_name`.
-    This is done because the SARC config gets us a client connected to a database already,
-    so it's better to use that functionality.
-    """
+    LD_users_raw = query_ldap(
+        ldap.local_private_key_file,
+        ldap.local_certificate_file,
+        ldap.ldap_service_uri,
+    )
 
-    if LD_users is not None:
-        # Used mostly for testing purposes.
-        # Overrides the "input_json_file" argument.
-        # Just make sure it's a list of dict, at least.
-        assert isinstance(LD_users, list)
-        if LD_users:
-            assert isinstance(LD_users[0], dict)
-    elif input_json_file:
-        with open(input_json_file, "r", encoding="utf-8") as f_in:
-            LD_users = json.load(f_in)
-    else:
-        # this is the usual branch taken in practice
-        LD_users_raw = query_ldap(
-            local_private_key_file, local_certificate_file, ldap_service_uri
+    if save_ldap:
+        today = datetime.utcnow()
+        cache_path = config().cache / "ldap" / f"raw.{today.strftime('%Y-%m-%d')}.json"
+
+        with open(cache_path, "w", encoding="utf-8") as f_out:
+            json.dump(LD_users_raw, f_out, indent=4)
+
+    return LD_users_raw
+
+
+def _save_to_mongo(collection, LD_users):
+    if collection is None:
+        return
+
+    # read only the "mila_ldap" field from the entries, and ignore the
+    # "drac_roles" and "drac_members" components
+    LD_users_DB = [u["mila_ldap"] for u in list(collection.find())]
+
+    L_updated_users = client_side_user_updates(
+        LD_users_DB=LD_users_DB,
+        LD_users_LDAP=LD_users,
+    )
+
+    L_updates_to_do = [
+        UpdateOne(
+            {"mila_ldap.mila_email_username": updated_user["mila_email_username"]},
+            {
+                # We set all the fields corresponding to the fields from `updated_user`,
+                # so that's a convenient way to do it. Note that this does not affect
+                # the fields in the database that are already present for that user.
+                "$set": {"mila_ldap": updated_user},
+            },
+            upsert=True,
         )
-        if output_raw_LDAP_json_file:
-            with open(output_raw_LDAP_json_file, "w", encoding="utf-8") as f_out:
-                json.dump(LD_users_raw, f_out, indent=4)
-                print(f"Wrote {output_raw_LDAP_json_file}.")
+        for updated_user in L_updated_users
+    ]
 
-        LD_users = [process_user(D_user_raw) for D_user_raw in LD_users_raw]
+    if L_updates_to_do:
+        result = collection.bulk_write(L_updates_to_do)  #  <- the actual commit
+        print(result.bulk_api_result)
+
+
+def load_ldap_exceptions(ldap_config: LDAPConfig):
+    if ldap_config.exceptions_json_path is None:
+        return {}
+
+    with open(ldap_config.exceptions_json_path, "r", encoding="utf-8") as file:
+        return json.load(file)
+
+
+def load_group_to_prof_mapping(ldap_config: LDAPConfig):
+    if ldap_config.group_to_prof_json_path is None:
+        return {}
+
+    with open(ldap_config.group_to_prof_json_path, "r", encoding="utf-8") as file:
+        return json.load(file)
+
+
+def run(
+    ldap,
+    mongodb_collection=None,
+    output_json_file=None,
+    save_ldap=False,
+):
+    """Runs periodically to synchronize mongodb with LDAP"""
+
+    # retrive users from LDAP
+    LD_users_raw = _query_and_dump(ldap, save_ldap)
+
+    # Transform users into the json we will save
+    group_to_prof = load_group_to_prof_mapping(ldap)
+    exceptions = load_ldap_exceptions(ldap)
+    errors = resolve_supervisors(LD_users_raw, group_to_prof, exceptions)
+
+    LD_users = [process_user(D_user_raw) for D_user_raw in LD_users_raw]
+
+    _save_to_mongo(mongodb_collection, LD_users)
+
+    errors.show()
+
+    if output_json_file:
+        with open(output_json_file, "w", encoding="utf-8") as f_out:
+            json.dump(LD_users, f_out, indent=4)
+            print(f"Wrote {output_json_file}.")
+
+
+def get_ldap_collection(cfg):
+    mongodb_database_instance = cfg.mongo.database_instance
+    mongodb_collection = cfg.ldap.mongo_collection_name
+    mongodb_connection_string = cfg.mongo.connection_string
+    mongodb_database_name = cfg.mongo.database_name
 
     # Two ways to get the MongoDB collection, and then it's possible that we don't care
     # about getting one, in which case we'll skip that step of the output.
@@ -376,51 +383,4 @@ def run(
     else:
         users_collection = None
 
-    if users_collection is not None:
-        # read only the "mila_ldap" field from the entries, and ignore the
-        # "drac_roles" and "drac_members" components
-        LD_users_DB = [u["mila_ldap"] for u in list(users_collection.find())]
-
-        L_updated_users = client_side_user_updates(
-            LD_users_DB=LD_users_DB, LD_users_LDAP=LD_users
-        )
-
-        L_updates_to_do = [
-            UpdateOne(
-                {"mila_ldap.mila_email_username": updated_user["mila_email_username"]},
-                {
-                    # We set all the fields corresponding to the fields from `updated_user`,
-                    # so that's a convenient way to do it. Note that this does not affect
-                    # the fields in the database that are already present for that user.
-                    "$set": {"mila_ldap": updated_user},
-                },
-                upsert=True,
-            )
-            for updated_user in L_updated_users
-        ]
-
-        if L_updates_to_do:
-            result = users_collection.bulk_write(
-                L_updates_to_do
-            )  #  <- the actual commit
-            print(result.bulk_api_result)
-
-    if output_json_file:
-        with open(output_json_file, "w", encoding="utf-8") as f_out:
-            json.dump(LD_users, f_out, indent=4)
-            print(f"Wrote {output_json_file}.")
-
-
-if __name__ == "__main__":
-    args = parser.parse_args()
-    run(
-        local_private_key_file=args.local_private_key_file,
-        local_certificate_file=args.local_certificate_file,
-        ldap_service_uri=args.ldap_service_uri,
-        mongodb_connection_string=args.mongodb_connection_string,
-        mongodb_database_name=args.mongodb_database_name,
-        mongodb_collection=args.mongodb_collection,
-        input_json_file=args.input_json_file,
-        output_json_file=args.output_json_file,
-        output_raw_LDAP_json_file=args.output_raw_LDAP_json_file,
-    )
+    return users_collection

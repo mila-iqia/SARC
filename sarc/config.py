@@ -139,6 +139,16 @@ class LDAPConfig(BaseModel):
     local_certificate_file: str
     ldap_service_uri: str
     mongo_collection_name: str
+    group_to_prof_json_path: str = None
+    exceptions_json_path: str = None
+
+    @validator("group_to_prof_json_path")
+    def _relative_group_to_prof(cls, value):
+        return relative_filepath(value)
+
+    @validator("exceptions_json_path")
+    def _relative_exception(cls, value):
+        return relative_filepath(value)
 
 
 class AccountMatchingConfig(BaseModel):
@@ -172,8 +182,26 @@ class Config(BaseModel):
 config_var = ContextVar("config", default=None)
 
 
+_config_folder = None
+
+
+def relative_filepath(path):
+    """Allows files to be relative to the config"""
+    if path is None:
+        return path
+
+    if "$SELF" in path:
+        return path.replace("$SELF", str(_config_folder))
+
+    return path
+
+
 def parse_config(config_path):
+    # pylint: disable=global-statement
+    global _config_folder
     config_path = Path(config_path)
+
+    _config_folder = str(config_path.parent)
 
     if not config_path.exists():
         raise ConfigurationError(

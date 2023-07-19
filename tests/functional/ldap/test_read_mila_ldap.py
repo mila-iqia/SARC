@@ -9,6 +9,21 @@ import sarc.ldap.read_mila_ldap  # will monkeypatch "query_ldap"
 from sarc.config import config
 
 
+def fake_member_of(index, count):
+    member_of_config = {
+        # Core prof
+        0: ["cn=mila-core-profs,ou=Groups,dc=mila,dc=quebec"],
+        # Student
+        1: [
+            "cn=mcgill-students,ou=Groups,dc=mila,dc=quebec",
+            "cn=supervisor000-students,ou=Groups,dc=mila,dc=quebec",
+        ],
+        # Not core prof, not student
+        2: [],
+    }
+    return member_of_config.get(index, [])
+
+
 def fake_raw_ldap_data(nbr_users=10):
     """
     Return a deterministically-generated list of fake LDAP users just as
@@ -31,7 +46,7 @@ def fake_raw_ldap_data(nbr_users=10):
                 "homeDirectory": [f"/home/john.smith{i:03d}"],
                 "loginShell": ["/bin/bash"],
                 "mail": [f"john.smith{i:03d}@mila.quebec"],
-                "memberOf": [],
+                "memberOf": fake_member_of(i, nbr_users),
                 "objectClass": [
                     "top",
                     "person",
@@ -53,7 +68,7 @@ def fake_raw_ldap_data(nbr_users=10):
     )
 
 
-def test_query_to_ldap_server_and_writing_to_output_json(monkeypatch):
+def test_query_to_ldap_server_and_writing_to_output_json(monkeypatch, mock_file):
     cfg = config()
     nbr_users = 10
 
@@ -68,13 +83,12 @@ def test_query_to_ldap_server_and_writing_to_output_json(monkeypatch):
     with tempfile.NamedTemporaryFile() as tmp_file:
         tmp_file_path = tmp_file.name
 
-        sarc.ldap.read_mila_ldap.run(
-            local_private_key_file=cfg.ldap.local_private_key_file,
-            local_certificate_file=cfg.ldap.local_certificate_file,
-            ldap_service_uri=cfg.ldap.ldap_service_uri,
-            # write results to here
-            output_json_file=tmp_file_path,
-        )
+        with patch("builtins.open", side_effect=mock_file):
+            sarc.ldap.read_mila_ldap.run(
+                cfg.ldap,
+                # write results to here
+                output_json_file=tmp_file_path,
+            )
 
         E = json.load(tmp_file)
 
@@ -83,7 +97,12 @@ def test_query_to_ldap_server_and_writing_to_output_json(monkeypatch):
         # This means that we are not testing much.
         assert len(E) == nbr_users
         for e, raw_user in zip(E, fake_raw_ldap_data(nbr_users)):
-            assert e == sarc.ldap.read_mila_ldap.process_user(raw_user)
+            processed_user = sarc.ldap.read_mila_ldap.process_user(raw_user)
+
+            # resolve_supervisors is not called here
+            e["supervisor"] = None
+
+            assert e == processed_user
 
         # note that the elements being compared are of the form
         """
@@ -99,7 +118,7 @@ def test_query_to_ldap_server_and_writing_to_output_json(monkeypatch):
 
 
 @pytest.mark.usefixtures("empty_read_write_db")
-def test_query_to_ldap_server_and_commit_to_db(monkeypatch):
+def test_query_to_ldap_server_and_commit_to_db(monkeypatch, mock_file):
     """
     This test is going to use the database and it will make
     two queries to the LDAP server. The second query will have
@@ -130,15 +149,12 @@ def test_query_to_ldap_server_and_commit_to_db(monkeypatch):
 
         monkeypatch.setattr(sarc.ldap.read_mila_ldap, "query_ldap", mock_query_ldap)
 
-        sarc.ldap.read_mila_ldap.run(
-            local_private_key_file=cfg.ldap.local_private_key_file,
-            local_certificate_file=cfg.ldap.local_certificate_file,
-            ldap_service_uri=cfg.ldap.ldap_service_uri,
-            # write results to here
-            mongodb_connection_string=cfg.mongo.connection_string,
-            mongodb_database_name=cfg.mongo.database_name,
-            mongodb_collection=cfg.ldap.mongo_collection_name,
-        )
+        with patch("builtins.open", side_effect=mock_file):
+            sarc.ldap.read_mila_ldap.run(
+                cfg.ldap,
+                # write results to here
+                mongodb_collection=sarc.ldap.read_mila_ldap.get_ldap_collection(cfg),
+            )
         L_users = list(db[cfg.ldap.mongo_collection_name].find({}, {"_id": False}))
         return L_users
 
