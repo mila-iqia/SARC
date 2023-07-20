@@ -3,6 +3,8 @@ Fetching and parsing code specific to the mila cluster
 """
 from datetime import datetime
 
+from tqdm import tqdm
+
 from sarc.config import ClusterConfig
 from sarc.ldap.api import get_users
 from sarc.storage.diskusage import DiskUsage, DiskUsageGroup, DiskUsageUser
@@ -35,7 +37,7 @@ def _fetch_diskusage_report(connection, command, retries):
 
     for _ in range(retries):
         try:
-            result = _fetch_diskusage_report(connection, command)
+            result = connection.run(command, hide=True)
             return result.stdout, errors
 
         # pylint: disable=broad-exception-caught
@@ -77,7 +79,10 @@ def fetch_diskusage_report(cluster: ClusterConfig, retries: int = 3):
 
     # Note: --all in beegfs does not work so we have to do it one by one
     connection = cluster.ssh
-    for user in users:
+    for user in tqdm(users):
+        if not user.mila.active:
+            continue
+
         cmd_exec = cmd.replace("$USER", user.mila.username)
         result, err = _fetch_diskusage_report(connection, cmd_exec, retries)
 
