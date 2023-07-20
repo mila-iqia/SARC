@@ -159,11 +159,11 @@ class AccountMatchingConfig(BaseModel):
 
 class Config(BaseModel):
     mongo: MongoConfig
-    ldap: LDAPConfig
-    account_matching: AccountMatchingConfig
+    ldap: LDAPConfig = None
+    account_matching: AccountMatchingConfig = None
     sshconfig: Path = None
     cache: Path = None
-    clusters: dict[str, ClusterConfig]
+    clusters: dict[str, ClusterConfig] = None
 
     @validator("cache", "sshconfig")
     def _absolute_path(cls, value):

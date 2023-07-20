@@ -35,7 +35,7 @@ def get_jobs_dataframe(clusters, filename=None) -> pd.DataFrame:
 
     df = None
     clusters_df = []
-    
+
     # Fetch all jobs from the clusters
     for cluster in maybe_tqdm(clusters, desc="clusters", position=0):
         dicts = []
@@ -46,7 +46,7 @@ def get_jobs_dataframe(clusters, filename=None) -> pd.DataFrame:
         total = config().mongo.database_instance.jobs.count_documents(
             {"cluster_name": cluster}
         )
-        
+
         for job in maybe_tqdm(
             get_jobs(cluster=cluster, start="2022-04-01"),
             total=total,
@@ -62,14 +62,18 @@ def get_jobs_dataframe(clusters, filename=None) -> pd.DataFrame:
             job_dict["gres_gpu"] = (
                 int(job_dict["gres_gpu"]) if job_dict["gres_gpu"] else 0
             )
-            
+
             # Fix a pandas issue with timezone
             # fillna() raise an exception when the original timezone is left
             if job_dict["start_time"]:
-                job_dict["start_time"] = job_dict["start_time"].replace(tzinfo=timezone.utc)
-                
+                job_dict["start_time"] = job_dict["start_time"].replace(
+                    tzinfo=timezone.utc
+                )
+
             if job_dict["end_time"]:
-                job_dict["end_time"] = job_dict["start_time"].replace(tzinfo=timezone.utc)
+                job_dict["end_time"] = job_dict["start_time"].replace(
+                    tzinfo=timezone.utc
+                )
 
             dicts.append(job_dict)
 
@@ -77,15 +81,15 @@ def get_jobs_dataframe(clusters, filename=None) -> pd.DataFrame:
         if len(dicts) > 0:
             cluster_df = pd.DataFrame(dicts)
             clusters_df.append(cluster_df)
-        
+
     df = pd.concat(clusters_df)
     df = df.fillna(0)
-    
+
     assert not df.empty, "Dataframe is empty"
-        
+
     if filename:
         df.to_pickle(filename)
-        
+
     assert isinstance(df, pd.DataFrame)
 
     return df
