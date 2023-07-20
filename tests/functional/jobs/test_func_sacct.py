@@ -367,7 +367,9 @@ def test_get_gpu_type_from_prometheus(
 
 
 @pytest.mark.parametrize(
-    "test_config", [{"clusters": {"raisin_no_prometheus": {"host": "raisin_no_prometheus"}}}], indirect=True
+    "test_config",
+    [{"clusters": {"raisin_no_prometheus": {"host": "raisin_no_prometheus"}}}],
+    indirect=True,
 )
 @pytest.mark.parametrize("json_jobs", [{}], indirect=True)
 @pytest.mark.usefixtures("empty_read_write_db")

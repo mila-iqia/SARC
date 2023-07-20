@@ -133,6 +133,7 @@ class ClusterConfig(BaseModel):
         Dict-like object will return None if queried node name is not found.
         """
         from .jobs.node_gpu_mapping import NodeToGPUMapping
+
         return NodeToGPUMapping(self.name, self.nodes_info_file)
 
 

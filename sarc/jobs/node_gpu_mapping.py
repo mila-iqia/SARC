@@ -6,6 +6,7 @@ by parsing TXT files containing node descriptions like:
 """
 import json
 import os
+
 from hostlist import expand_hostlist
 
 
@@ -23,12 +24,17 @@ class NodeToGPUMapping:
         if nodes_info_file and os.path.exists(nodes_info_file):
             nodes_info_file = os.path.abspath(nodes_info_file)
             # JSON file is expected to be located in same folder as TXT file.
-            self.json_path = os.path.join(os.path.dirname(nodes_info_file), f"node_to_gpu_{cluster_name}.json")
+            self.json_path = os.path.join(
+                os.path.dirname(nodes_info_file), f"node_to_gpu_{cluster_name}.json"
+            )
 
             info_file_stat = os.stat(nodes_info_file)
             # JSON file is (re)generated if it does not yet exist
             # or if it's older than TXT file.
-            if not os.path.exists(self.json_path) or os.stat(self.json_path).st_mtime < info_file_stat.st_mtime:
+            if (
+                not os.path.exists(self.json_path)
+                or os.stat(self.json_path).st_mtime < info_file_stat.st_mtime
+            ):
                 # Pase TXT file into self.mapping.
                 self._parse_nodenames(nodes_info_file, self.mapping)
                 # Save self.mapping into JSON file.
@@ -62,10 +68,9 @@ class NodeToGPUMapping:
                 if not line.startswith("NodeName"):
                     continue
 
-                def parse_nodes_config(nodes_config_str):
-                    return dict(option.split("=", maxsplit=1) for option in line.split())
-
-                nodes_config = parse_nodes_config(line)
+                nodes_config = dict(
+                    option.split("=", maxsplit=1) for option in line.split()
+                )
                 all_nodenames = expand_hostlist(nodes_config["NodeName"])
                 gres = nodes_config["Gres"]
                 output.update({node_name: gres for node_name in all_nodenames})
