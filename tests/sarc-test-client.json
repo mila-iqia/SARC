@@ -1,0 +1,6 @@
+{
+    "mongo": {
+        "connection_string": "localhost:8123",
+        "database_name": "sarc-test"
+    }
+}
