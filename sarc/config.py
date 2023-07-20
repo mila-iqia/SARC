@@ -241,8 +241,7 @@ def config():
 
     config_path = os.getenv("SARC_CONFIG", "config/sarc-dev.json")
     config_class = _config_class(os.getenv("SARC_MODE", "none"))
-
-    print(config_class)
+    
     cfg = parse_config(config_path, config_class)
 
     config_var.set(cfg)
