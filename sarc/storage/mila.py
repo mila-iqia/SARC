@@ -4,9 +4,8 @@ Fetching and parsing code specific to the mila cluster
 from datetime import datetime
 
 from sarc.config import ClusterConfig
-from sarc.storage.diskusage import DiskUsage, DiskUsageGroup, DiskUsageUser
 from sarc.ldap.api import get_users
-
+from sarc.storage.diskusage import DiskUsage, DiskUsageGroup, DiskUsageUser
 
 beegfs_header = "name,id,size,hard,files,hard"
 
@@ -22,9 +21,11 @@ def parse_beegfs_csv(output):
             continue
 
         if started:
-            name, id, size, hard, files, limit = line.split(",")
+            name, _, size, _, files, _ = line.split(",")
+            documents.append(DiskUsageUser(user=name, nbr_files=files, size=size))
 
-            documents.append(DiskUsageUser(name, files, size))
+    if len(documents) < 1:
+        print("Beegfs output was empty")
 
     return DiskUsageGroup(group_name="mila", users=documents)
 
@@ -56,12 +57,35 @@ def fetch_diskusage_report(cluster: ClusterConfig):
 
     usage = []
     main_group = DiskUsageGroup(group_name="default", users=usage)
+    print(users)
+
+    retries = 3
+    errors = []
+    failures = []
+
+    assert len(users) > 0
 
     # Note: --all in beegfs does not work so we have to do it one by one
+    connection = cluster.ssh
     for user in users:
-        results = cluster.ssh.run(cmd.replace("$USER", user.mila.username), hide=True)
+        cmd_exec = cmd.replace("$USER", user.mila.username)
+        print(cmd_exec)
+
+        for _ in range(retries):
+            try:
+                results = connection.run(cmd_exec, hide=True)
+                break
+            except Exception as err:
+                errors.append(err)
+        else:
+            failures.append(user)
+
         group = parse_beegfs_csv(results.stdout)
         usage.extend(group.users)
+
+    print(f"Error Count: {len(errors)}")
+    print(f"Failures: {len(failures)}")
+    print(f"    Details: {failures}")
 
     return DiskUsage(
         cluster_name=cluster.name, groups=[main_group], timestamp=datetime.utcnow()

@@ -62,9 +62,19 @@ def get_user(
 def get_users():
     cfg = config()
     query = {}
-    return [
-        User(**u)
-        for u in cfg.mongo.database_instance[cfg.ldap.mongo_collection_name].find(
-            query, {"_id": False}
-        )
-    ]
+
+    userlist = cfg.mongo.database_instance[cfg.ldap.mongo_collection_name].find(
+        query, {"_id": False}
+    )
+
+    showed = False
+    results = []
+    for user in userlist:
+        try:
+            results.append(User(**user))
+        except:
+            if not showed:
+                print(user)
+                showed = True
+
+    return results
