@@ -189,9 +189,9 @@ def convert_parsed_report_to_diskusage(cluster_name, parsed_report):
 
 def fetch_diskusage_report(cluster: ClusterConfig):
     report = _fetch_diskusage_report(cluster)
-    
+
     _, body = parse_diskusage_report(report)
-    
+
     du = convert_parsed_report_to_diskusage(cluster.name, body)
-    
+
     return du

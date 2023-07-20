@@ -48,18 +48,18 @@ def fetch_diskusage_report(cluster: ClusterConfig):
 
         name,id,size,hard,files,hard
         delaunap,1500000082,51046633472,107374182400,201276,1000000
-    
+
     """
     cmd = cluster.diskusage_report_command
 
     users = get_users()
-    
+
     usage = []
-    main_group=DiskUsageGroup(group_name="default", users=usage)
-    
+    main_group = DiskUsageGroup(group_name="default", users=usage)
+
     # Note: --all in beegfs does not work so we have to do it one by one
     for user in users:
-        results = cluster.ssh.run(cmd.replace('$USER', user.mila.username), hide=True)
+        results = cluster.ssh.run(cmd.replace("$USER", user.mila.username), hide=True)
         group = parse_beegfs_csv(results.stdout)
         usage.extend(group.users)
 
