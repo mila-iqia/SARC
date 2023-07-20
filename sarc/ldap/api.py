@@ -37,8 +37,6 @@ class UserRepository(AbstractRepository[User]):
 
     def save_user(self, model: User):
         document = self.to_document(model)
-        # Resubmitted jobs have the same job ID can be distinguished by their submit time,
-        # as per sacct's documentation.
         return self.get_collection().update_one(
             {
                 "_id": model.id,
