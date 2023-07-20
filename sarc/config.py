@@ -157,17 +157,27 @@ class AccountMatchingConfig(BaseModel):
     make_matches_config: Path
 
 
+def _absolute_path(cls, value):
+    return value and value.expanduser().absolute()
+
+
 class Config(BaseModel):
     mongo: MongoConfig
+    cache: Path = None
+
+    _abs_path = validator("cache", allow_reuse=True)(_absolute_path)
+
+
+class ScrapperConfig(BaseModel):
+    mongo: MongoConfig
+    cache: Path = None
+
     ldap: LDAPConfig = None
     account_matching: AccountMatchingConfig = None
     sshconfig: Path = None
-    cache: Path = None
     clusters: dict[str, ClusterConfig] = None
 
-    @validator("cache", "sshconfig")
-    def _absolute_path(cls, value):
-        return value and value.expanduser().absolute()
+    _abs_path = validator("cache", "sshconfig", allow_reuse=True)(_absolute_path)
 
     @validator("clusters")
     def _complete_cluster_fields(cls, value, values):
@@ -196,7 +206,7 @@ def relative_filepath(path):
     return path
 
 
-def parse_config(config_path):
+def parse_config(config_path, config_cls=Config):
     # pylint: disable=global-statement
     global _config_folder
     config_path = Path(config_path)
@@ -210,25 +220,40 @@ def parse_config(config_path):
         )
 
     try:
-        cfg = Config.parse_file(config_path)
+        cfg = config_cls.parse_file(config_path)
     except json.JSONDecodeError as exc:
         raise ConfigurationError(f"'{config_path}' contains malformed JSON") from exc
 
     return cfg
 
 
+def _config_class(mode):
+    modes = {
+        "scrapping": ScrapperConfig,
+        "client": Config,
+    }
+    return modes.get(mode, Config)
+
+
 def config():
     if (current := config_var.get()) is not None:
         return current
-    cfg = parse_config(os.environ.get("SARC_CONFIG", "config/sarc-dev.json"))
+
+    config_path = os.getenv("SARC_CONFIG", "config/sarc-dev.json")
+    config_class = _config_class(os.getenv("SARC_MODE", "none"))
+
+    print(config_class)
+    cfg = parse_config(config_path, config_class)
+
     config_var.set(cfg)
     return cfg
 
 
 @contextmanager
-def using_config(cfg: Union[str, Path, Config]):
+def using_config(cfg: Union[str, Path, Config], cls=Config):
     if isinstance(cfg, (str, Path)):
-        cfg = parse_config(cfg)
+        cfg = parse_config(cfg, cls)
+
     token = config_var.set(cfg)
     yield cfg
     config_var.reset(token)
