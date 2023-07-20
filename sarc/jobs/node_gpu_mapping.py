@@ -1,11 +1,8 @@
 """
-This module is used to generate a JSON file mapping node name to GPU type,
+This module provides a dict-like class NodeToGPUMapping
+to map a cluster's node name to GPU type
 by parsing TXT files containing node descriptions like:
     NodeName=<nodes_description> Gres=<gpu-type> ...
-
-It also provides a utility dictionary-like object NODENAME_TO_GPU
-to get GPU type associated to a node name by typing NODENAME_TO_GPU[nodename].
-This object will do all the necessary work in background (generate and load JSON file).
 """
 import json
 import os
@@ -13,29 +10,34 @@ from hostlist import expand_hostlist
 
 
 class NodeToGPUMapping:
-    """Helper class to generate JSON file, load it in memeory, and query GPU type for a nodename."""
+    """Helper class to generate JSON file, load it in memory, and query GPU type for a nodename."""
 
-    _JSON_PATH_ = os.path.join(os.path.dirname(__file__), "nodename_to_gpu.json")
+    def __init__(self, cluster_name, nodes_info_file):
+        """Initialize with cluster name and TXT file path to parse."""
 
-    def __init__(self):
-        """Initialize."""
-
+        # Mapping is empty by default.
         self.mapping = {}
+        self.json_path = None
 
-        # If necessary, generate JSON file mapping node names to GPU types.
-        if not os.path.exists(self._JSON_PATH_):
-            output = {}
-            for path in [
-                os.path.join(os.path.dirname(__file__), "nodenames_cedar.txt"),
-                os.path.join(os.path.dirname(__file__), "nodenames_graham.txt"),
-            ]:
-                self._parse_nodenames(path, output)
-            with open(self._JSON_PATH_, "w", encoding="utf-8") as file:
-                json.dump(output, file, indent=1)
+        # Mapping is filled only if TXT file is available.
+        if nodes_info_file and os.path.exists(nodes_info_file):
+            nodes_info_file = os.path.abspath(nodes_info_file)
+            # JSON file is expected to be located in same folder as TXT file.
+            self.json_path = os.path.join(os.path.dirname(nodes_info_file), f"node_to_gpu_{cluster_name}.json")
 
-        # Load JSON file in memory.
-        with open(self._JSON_PATH_, encoding="utf-8") as file:
-            self.mapping = json.load(file)
+            info_file_stat = os.stat(nodes_info_file)
+            # JSON file is (re)generated if it does not yet exist
+            # or if it's older than TXT file.
+            if not os.path.exists(self.json_path) or os.stat(self.json_path).st_mtime < info_file_stat.st_mtime:
+                # Pase TXT file into self.mapping.
+                self._parse_nodenames(nodes_info_file, self.mapping)
+                # Save self.mapping into JSON file.
+                with open(self.json_path, "w", encoding="utf-8") as file:
+                    json.dump(self.mapping, file, indent=1)
+            else:
+                # Otherwise, just load existing JSON file.
+                with open(self.json_path, encoding="utf-8") as file:
+                    self.mapping = json.load(file)
 
     def __getitem__(self, nodename):
         """Return GPU type for nodename, or None if not found."""
@@ -67,6 +69,3 @@ class NodeToGPUMapping:
                 all_nodenames = expand_hostlist(nodes_config["NodeName"])
                 gres = nodes_config["Gres"]
                 output.update({node_name: gres for node_name in all_nodenames})
-
-
-NODENAME_TO_GPU = NodeToGPUMapping()

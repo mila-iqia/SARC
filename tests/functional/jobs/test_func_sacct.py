@@ -366,7 +366,52 @@ def test_get_gpu_type_from_prometheus(
     )
 
 
-# TODO How to test getting GPU type if prometheus is not available ?
+@pytest.mark.parametrize(
+    "test_config", [{"clusters": {"raisin_no_prometheus": {"host": "raisin_no_prometheus"}}}], indirect=True
+)
+@pytest.mark.parametrize("json_jobs", [{}], indirect=True)
+@pytest.mark.usefixtures("empty_read_write_db")
+def test_get_gpu_type_without_prometheus(
+    test_config, sacct_json, remote, file_regression, cli_main, monkeypatch
+):
+    channel = remote.expect(
+        host="raisin_no_prometheus",
+        cmd="/opt/slurm/bin/sacct  -X -S '2023-02-15T00:00' -E '2023-02-16T00:00' --json",
+        out=f"Welcome on raisin_no_prometheus,\nThe sweetest supercomputer in the world!\n{sacct_json}".encode(
+            "utf-8"
+        ),
+    )
+
+    # Import here so that config() is setup correctly when CLI is created.
+    import sarc.cli
+
+    assert (
+        cli_main(
+            [
+                "acquire",
+                "jobs",
+                "--cluster_name",
+                "raisin_no_prometheus",
+                "--dates",
+                "2023-02-15",
+                "--ignore_statistics",
+            ]
+        )
+        == 0
+    )
+
+    jobs = list(get_jobs())
+
+    assert len(jobs) == 1
+    job = jobs[0]
+    print(job)
+    print(job.nodes)
+    assert job.allocated.gpu_type == "gpu:asupergpu:4"
+
+    file_regression.check(
+        f"Found {len(jobs)} job(s):\n"
+        + "\n".join([job.json(exclude={"id": True}, indent=4) for job in jobs])
+    )
 
 
 @pytest.mark.parametrize(

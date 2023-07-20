@@ -11,7 +11,6 @@ from tqdm import tqdm
 
 from ..config import UTC, ClusterConfig, config
 from .job import SlurmJob, jobs_collection
-from .node_gpu_mapping import NODENAME_TO_GPU
 
 logger = logging.getLogger(__name__)
 
@@ -226,7 +225,7 @@ def update_allocated_gpu_type(cluster: ClusterConfig, entry: SlurmJob):
             entry.allocated.gpu_type = output[0]["metric"]["gpu_type"]
     else:
         # No prometheus config. Try to get GPU type from local JSON file.
-        gpu_types = [NODENAME_TO_GPU[nodename] for nodename in entry.nodes]
+        gpu_types = [cluster.node_to_gpu[nodename] for nodename in entry.nodes]
         # We should not have more than 1 GPU type per job.
         assert len(gpu_types) <= 1
         if gpu_types:
