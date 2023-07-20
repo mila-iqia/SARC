@@ -6,38 +6,33 @@ from simple_parsing import field
 from sarc.cli.utils import clusters
 from sarc.config import config
 from sarc.storage.diskusage import get_diskusage_collection
-from sarc.storage.drac import (
-    convert_parsed_report_to_diskusage,
-    fetch_diskusage_report,
-    parse_diskusage_report,
-)
+from sarc.storage.drac import fetch_diskusage_report as fetch_dirac_diskusage
+from sarc.storage.mila import fetch_diskusage_report as fetch_mila_diskusage
+
+
+
+methods = {
+    "default": fetch_dirac_diskusage,
+    "mila": fetch_mila_diskusage,
+}
 
 
 @dataclass
 class AcquireStorages:
-    file: Path = field(default=None)
     cluster_names: list[str] = field(
         alias=["-c"], default_factory=list, choices=clusters
     )
 
     def execute(self) -> int:
         cfg = config()
-        clusters_configs = cfg.clusters  # pylint: disable=unused-variable
-
+        
         for cluster_name in self.cluster_names:
             print(f"Acquiring {cluster_name} storages report...")
 
-            report = None
-
-            if self.file:
-                with open(self.file, "r", encoding="utf-8") as f:
-                    report = f.readlines()
-            else:
-                cluster = config().clusters[cluster_name]
-                report = fetch_diskusage_report(cluster)
-            _, body = parse_diskusage_report(report)
-
-            du = convert_parsed_report_to_diskusage(cluster_name, body)
+            cluster = cfg.clusters[cluster_name]
+            
+            fetch_diskusage = methods.get(cluster_name, methods['default'])
+            du = fetch_diskusage(cluster)
 
             collection = get_diskusage_collection()
             collection.add(du)
