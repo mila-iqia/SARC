@@ -68,7 +68,7 @@ def fetch_diskusage_report(cluster: ClusterConfig, retries: int = 3):
     """
     cmd = cluster.diskusage_report_command
 
-    users = get_users()[:10]
+    users = get_users()
     assert len(users) > 0
 
     usage = []
