@@ -9,6 +9,7 @@ This object will do all the necessary work in background (generate and load JSON
 """
 import json
 import os
+from hostlist import expand_hostlist
 
 
 class NodeToGPUMapping:
@@ -55,47 +56,17 @@ class NodeToGPUMapping:
             for line in file:
                 # Parse only lines starting with "NodeName"
                 line = line.strip()
-                if line.startswith("NodeName"):
-                    nodes_desc = None
-                    gres = None
-                    # Split on spaces to get each definition <key>=<value>
-                    for definition in line.split():
-                        # Split key and value and look for keys "NodeName" and "Gres"
-                        key, value = definition.split("=")
-                        if key == "NodeName":
-                            nodes_desc = value
-                        elif key == "Gres":
-                            gres = value
-                    # We must have saved "NodeName" to node_desc and "Gres" to gres
-                    assert nodes_desc
-                    assert gres
-                    # Parse "NodeName" to get all node names
-                    all_nodenames = []
-                    if "[" in nodes_desc:
-                        # "NodeName" has format <base_name>[<intervals>]
-                        base_name, intervals = nodes_desc.split("[")
-                        assert base_name
-                        assert intervals.endswith("]")
-                        intervals = intervals[:-1]
-                        # Intervals are separated with commas
-                        for interval in intervals.split(","):
-                            # Each piece is either a <number>, or a range <a>-<b>
-                            if "-" in interval:
-                                a, b = interval.split("-")
-                                all_nodenames.extend(
-                                    f"{base_name}{number}"
-                                    for number in range(int(a), int(b) + 1)
-                                )
-                            else:
-                                number = int(interval)
-                                all_nodenames.append(f"{base_name}{number}")
-                    else:
-                        # "NodeName" is a single node name
-                        all_nodenames.append(nodes_desc)
-                    # We must have parsed some node names
-                    assert all_nodenames
-                    # We can then map these nodes to gres in output
-                    output.update({node_name: gres for node_name in all_nodenames})
+
+                if not line.startswith("NodeName"):
+                    continue
+
+                def parse_nodes_config(nodes_config_str):
+                    return dict(option.split("=", maxsplit=1) for option in line.split())
+
+                nodes_config = parse_nodes_config(line)
+                all_nodenames = expand_hostlist(nodes_config["NodeName"])
+                gres = nodes_config["Gres"]
+                output.update({node_name: gres for node_name in all_nodenames})
 
 
 NODENAME_TO_GPU = NodeToGPUMapping()
