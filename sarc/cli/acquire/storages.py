@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from pathlib import Path
 
 from simple_parsing import field
 
@@ -37,6 +36,7 @@ class AcquireStorages:
                 collection = get_diskusage_collection()
                 collection.add(du)
             else:
-                print(du)
+                print("Document:")
+                print(du.json(indent=2))
 
         return 0

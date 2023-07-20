@@ -30,7 +30,7 @@ def parse_beegfs_csv(output):
     return DiskUsageGroup(group_name="mila", users=documents)
 
 
-def fetch_diskusage_report(cluster: ClusterConfig):
+def fetch_diskusage_report(cluster: ClusterConfig, retries: int = 3):
     """Get the output of the command beegfs-ctl on the wanted cluster
 
     Notes
@@ -54,27 +54,22 @@ def fetch_diskusage_report(cluster: ClusterConfig):
     cmd = cluster.diskusage_report_command
 
     users = get_users()
+    assert len(users) > 0
 
     usage = []
-    main_group = DiskUsageGroup(group_name="default", users=usage)
-    print(users)
-
-    retries = 3
     errors = []
     failures = []
-
-    assert len(users) > 0
 
     # Note: --all in beegfs does not work so we have to do it one by one
     connection = cluster.ssh
     for user in users:
         cmd_exec = cmd.replace("$USER", user.mila.username)
-        print(cmd_exec)
 
         for _ in range(retries):
             try:
                 results = connection.run(cmd_exec, hide=True)
                 break
+            # pylint: disable=broad-exception-caught
             except Exception as err:
                 errors.append(err)
         else:
@@ -88,5 +83,7 @@ def fetch_diskusage_report(cluster: ClusterConfig):
     print(f"    Details: {failures}")
 
     return DiskUsage(
-        cluster_name=cluster.name, groups=[main_group], timestamp=datetime.utcnow()
+        cluster_name=cluster.name,
+        groups=[DiskUsageGroup(group_name="default", users=usage)],
+        timestamp=datetime.utcnow(),
     )
