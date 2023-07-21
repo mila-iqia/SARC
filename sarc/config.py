@@ -157,7 +157,7 @@ class AccountMatchingConfig(BaseModel):
     make_matches_config: Path
 
 
-def _absolute_path(cls, value):
+def _absolute_path(_, value):
     return value and value.expanduser().absolute()
 
 
@@ -241,7 +241,7 @@ def config():
 
     config_path = os.getenv("SARC_CONFIG", "config/sarc-dev.json")
     config_class = _config_class(os.getenv("SARC_MODE", "none"))
-    
+
     cfg = parse_config(config_path, config_class)
 
     config_var.set(cfg)

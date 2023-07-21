@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime, time, timedelta
 from enum import Enum
-from typing import Iterable, Optional
 from functools import cache
+from typing import Iterable, Optional
 
 from pydantic import validator
 from pydantic_mongo import AbstractRepository, ObjectIdField

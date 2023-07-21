@@ -7,8 +7,8 @@ import pytest
 from sarc.config import (
     ClusterConfig,
     Config,
-    ScrapperConfig,
     MongoConfig,
+    ScrapperConfig,
     config,
     parse_config,
     using_config,
