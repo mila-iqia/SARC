@@ -47,24 +47,19 @@ class DbInit:
 def create_clusters(db):
     db_cluster = db.clusters
     # populate the db with default starting dates for each cluster
-    print (config().clusters)
     for cluster_name in config().clusters:
         cluster = config().clusters[cluster_name]
-        print (cluster)
         db_cluster.update_one(
             {"cluster_name": cluster_name},
-            {
-                "$setOnInsert": {
-                    "start_date": cluster.start_date,
-                    "end_date": None
-                }
-            },
-            upsert=True
+            {"$setOnInsert": {"start_date": cluster.start_date, "end_date": None}},
+            upsert=True,
         )
+
 
 def create_clusters_indices(db):
     db_collection = db.clusters
     db_collection.create_index([("cluster_name", pymongo.ASCENDING)], unique=True)
+
 
 def create_users_indices(db):
     # db_collection = UserRepository(database=db).get_collection()
