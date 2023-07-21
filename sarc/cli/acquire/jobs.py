@@ -52,7 +52,9 @@ def _dates_auto_first_date(cluster_name: str) -> datetime:
     # TEMPORARY !!!!!!
     return _str_to_dt("2023-07-01")
 
-
+def _dates_set_last_date(cluster_name: str, date: datetime) -> None:
+    # set the last valid date in the database for the cluster
+    pass
 
 @dataclass
 class AcquireJobs:

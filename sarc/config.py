@@ -80,6 +80,7 @@ class ClusterConfig(BaseModel):
     duc_inodes_command: str = None
     duc_storage_command: str = None
     diskusage_report_command: str = None
+    start_date: str = "2022-04-01"
 
     @validator("timezone")
     def _timezone(cls, value):
