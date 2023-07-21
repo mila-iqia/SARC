@@ -13,12 +13,12 @@ def test_db_init(cli_main):
     # from sarc.jobs.job import SlurmJobRepository
     # from sarc.storage.diskusage import ClusterDiskUsageRepository
 
-    for collection_name in ["jobs", "allocations", "diskusage", "users", "cluster"]:
+    for collection_name in ["jobs", "allocations", "diskusage", "users", "clusters"]:
         collection = db[collection_name]
         assert not collection.index_information()
 
     cli_main(["db", "init"])
 
-    for collection_name in ["jobs", "allocations", "diskusage", "users", "cluster"]:
+    for collection_name in ["jobs", "allocations", "diskusage", "users", "clusters"]:
         collection = db[collection_name]
         assert collection.index_information()
