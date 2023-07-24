@@ -157,7 +157,8 @@ class AccountMatchingConfig(BaseModel):
     make_matches_config: Path
 
 
-def _absolute_path(value, *_):
+# pylint: disable=unused-argument,redefined-outer-name
+def _absolute_path(value, values, config, field):
     return value and value.expanduser().absolute()
 
 
