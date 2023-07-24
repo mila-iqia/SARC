@@ -10,6 +10,11 @@ Welcome to SARC's documentation!
    :maxdepth: 2
    :caption: Contents:
 
+   account_matching
+   account_matching_manual_procedure
+   deployment
+   remote_mongo_access
+   secrets
 
 
 Indices and tables
