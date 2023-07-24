@@ -71,7 +71,7 @@ def get_jobs_dataframe(clusters, filename=None) -> pd.DataFrame:
                 )
 
             if job_dict["end_time"]:
-                job_dict["end_time"] = job_dict["start_time"].replace(
+                job_dict["end_time"] = job_dict["end_time"].replace(
                     tzinfo=timezone.utc
                 )
 
