@@ -1,3 +1,5 @@
+# Remote scripts
+
 ## serverinit.sh
 Installs base packages on a bare new OS.
 SSH access and sudo rights on the target server needed.

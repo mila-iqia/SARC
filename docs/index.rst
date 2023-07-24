@@ -16,9 +16,9 @@ Welcome to SARC's documentation!
    remote_mongo_access
    secrets
    scripts/README
-   scripts/deploy/README
    scripts/remote/README
    scripts/systemd/README
+   scripts/deploy/README
 
 
 Indices and tables

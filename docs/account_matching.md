@@ -1,4 +1,3 @@
-
 # Quick guide on LDAP retrieval and account matching
 
 ## Structure in MongoDB
