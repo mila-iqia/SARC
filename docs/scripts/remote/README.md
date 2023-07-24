@@ -11,7 +11,7 @@ $ ./serverinit.sh <server>
 Install, start and stop mongo package on the server
 
 ```
-$ ./mongo.sh <server> [start|stop|status]
+$ ./mongo.sh <server> [install|start|stop|status]
 ```
 
 You **MUST** run `./mongo.sh <server> install` once before deploying systemd scripts.
@@ -22,4 +22,4 @@ Generate the ssh "deploy keys" needed to deploy the code to the server
 $ ./setup_github_keys.sh <server> 
 ```
 
-See [The deployment doc](../../docs/deployment.md) for more info.
+See [The deployment doc](../../deployment.md) for more info.
