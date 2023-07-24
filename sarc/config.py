@@ -157,7 +157,7 @@ class AccountMatchingConfig(BaseModel):
     make_matches_config: Path
 
 
-def _absolute_path(_, value):
+def _absolute_path(value, *_):
     return value and value.expanduser().absolute()
 
 
