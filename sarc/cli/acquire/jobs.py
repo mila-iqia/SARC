@@ -50,6 +50,7 @@ def _dates_auto(cluster_name: str) -> list[datetime]:
 
 def _dates_auto_first_date(cluster_name: str) -> datetime:
     # get the last valid date in the database for the cluster
+    # pylint: disable=broad-exception-raised
     db = config().mongo.database_instance
     db_collection = db.clusters
     cluster = db_collection.find_one({"cluster_name": cluster_name})
@@ -106,7 +107,6 @@ class AcquireJobs:
                     )
                     if is_auto:
                         _dates_set_last_date(cluster_name, date)
-
                 # pylint: disable=broad-exception-caught
                 except Exception as e:
                     print(f"Failed to acquire data for {cluster_name} on {date}: {e}")
