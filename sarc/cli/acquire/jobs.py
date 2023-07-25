@@ -8,8 +8,8 @@ from simple_parsing import field
 
 from sarc.cli.utils import clusters
 from sarc.config import config
-from sarc.jobs.sacct import sacct_mongodb_import
 from sarc.errors import ClusterNotFound
+from sarc.jobs.sacct import sacct_mongodb_import
 
 
 def _str_to_dt(dt_str: str) -> datetime:
