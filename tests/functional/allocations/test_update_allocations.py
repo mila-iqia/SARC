@@ -13,8 +13,6 @@ FOLDER = os.path.dirname(os.path.abspath(__file__))
 @pytest.mark.usefixtures("standard_config")
 @pytest.mark.usefixtures("empty_read_write_db")
 def test_update_allocations(data_regression):
-    print("HERE")
-    print(config())
     assert get_allocations(cluster_name=["fromage", "patate"]) == []
     main(["acquire", "allocations", "--file", os.path.join(FOLDER, "allocations.csv")])
     data = get_allocations(cluster_name=["fromage", "patate"])
