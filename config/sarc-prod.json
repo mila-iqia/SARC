@@ -27,7 +27,8 @@
             "duc_inodes_command": null,
             "duc_storage_command": null,
             "diskusage_report_command": "beegfs-ctl --cfgFile=/etc/beegfs/home.d/beegfs-client.conf --getquota --uid $USER --csv",
-            "prometheus_url": "http://monitoring.server.mila.quebec:9090/"
+            "prometheus_url": "http://monitoring.server.mila.quebec:9090/",
+            "start_date": "2022-04-01"
         },
         "narval": {
             "host": "narval.computecanada.ca",
@@ -38,7 +39,8 @@
             "duc_storage_command": "duc ls -d /project/.duc_databases/rrg-bengioy-ad.sqlite /project/rrg-bengioy-ad",
             "diskusage_report_command": "diskusage_report --project --all_users",
             "prometheus_url": "https://mila-thanos.calculquebec.ca",
-            "prometheus_headers_file": "secrets/drac_prometheus/headers.json"
+            "prometheus_headers_file": "secrets/drac_prometheus/headers.json",
+            "start_date": "2022-04-01"
         },
         "beluga": {
             "host": "beluga.computecanada.ca",
@@ -49,7 +51,8 @@
             "duc_storage_command": "duc ls -d /project/.duc_databases/rrg-bengioy-ad.sqlite /project/rrg-bengioy-ad",
             "diskusage_report_command": "diskusage_report --project --all_users",
             "prometheus_url": "https://mila-thanos.calculquebec.ca",
-            "prometheus_headers_file": "secrets/drac_prometheus/headers.json"
+            "prometheus_headers_file": "secrets/drac_prometheus/headers.json",
+            "start_date": "2022-04-01"
         },
         "graham": {
             "host": "graham.computecanada.ca",
@@ -60,7 +63,8 @@
             "duc_storage_command": null,
             "diskusage_report_command": "diskusage_report --project --all_users",
             "prometheus_url": "https://mila-thanos.calculquebec.ca",
-            "prometheus_headers_file": "secrets/drac_prometheus/headers.json"
+            "prometheus_headers_file": "secrets/drac_prometheus/headers.json",
+            "start_date": "2022-04-01"
         },
         "cedar": {
             "host": "cedar.computecanada.ca",
@@ -71,7 +75,8 @@
             "duc_storage_command": null,
             "diskusage_report_command": "diskusage_report --project --all_users",
             "prometheus_url": "https://mila-thanos.calculquebec.ca",
-            "prometheus_headers_file": "secrets/drac_prometheus/headers.json"
+            "prometheus_headers_file": "secrets/drac_prometheus/headers.json",
+            "start_date": "2022-04-01"
         }
     }
 }

@@ -22,12 +22,16 @@ class DbInit:
         client = pymongo.MongoClient(url)
         db = client.get_database(database)
 
-        # There is no need to create the collections first, they will be
+        create_clusters(db)
+
+        # There is no need to create the other collections first, they will be
         # created when the index is created.
 
         # NOTE: Compound indices with mongodb provide subsets of compound index using prefix.
         #       Ex: For the compound index (a, b, c), we also get compound indices (a, b) and (a)
         #       But we don't get (b, c) or (c), which we must create explicitly if needed.
+
+        create_clusters_indices(db)
 
         create_jobs_indices(db)
 
@@ -38,6 +42,23 @@ class DbInit:
         create_users_indices(db)
 
         return 0
+
+
+def create_clusters(db):
+    db_cluster = db.clusters
+    # populate the db with default starting dates for each cluster
+    for cluster_name in config().clusters:
+        cluster = config().clusters[cluster_name]
+        db_cluster.update_one(
+            {"cluster_name": cluster_name},
+            {"$setOnInsert": {"start_date": cluster.start_date, "end_date": None}},
+            upsert=True,
+        )
+
+
+def create_clusters_indices(db):
+    db_collection = db.clusters
+    db_collection.create_index([("cluster_name", pymongo.ASCENDING)], unique=True)
 
 
 def create_users_indices(db):
