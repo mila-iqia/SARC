@@ -1,3 +1,4 @@
+import tempfile
 import zoneinfo
 from pathlib import Path
 from unittest.mock import MagicMock, mock_open, patch
@@ -202,7 +203,7 @@ def mock_file(file_contents):
 
         if filename in file_contents:
             return mock_open(read_data=file_contents[filename]).return_value
-        if filename.startswith("/tmp"):
+        if filename.startswith(tempfile.gettempdir()):
             return original(filename, *vargs, **kwargs)
         else:
             # we haven't found a way to pass through the other calls
