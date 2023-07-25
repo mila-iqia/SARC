@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import itertools
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-import time
 from typing import Generator
 
 from simple_parsing import field
@@ -11,6 +9,7 @@ from simple_parsing import field
 from sarc.cli.utils import clusters
 from sarc.config import config
 from sarc.jobs.sacct import sacct_mongodb_import
+from sarc.errors import ClusterNotFound
 
 
 def _str_to_dt(dt_str: str) -> datetime:
@@ -44,7 +43,6 @@ def _daterange(
 
 def _dates_auto(cluster_name: str) -> list[datetime]:
     # we want to get the list of dates from the last valid date+1 in the database, until yesterday
-    dates = []
     start = _dates_auto_first_date(cluster_name)
     end = datetime.today()
     return _daterange(start, end)
@@ -56,18 +54,19 @@ def _dates_auto_first_date(cluster_name: str) -> datetime:
     db_collection = db.clusters
     cluster = db_collection.find_one({"cluster_name": cluster_name})
     if cluster is None:
-        raise Exception(f"Cluster {cluster_name} not found in database")
-    start_date=cluster["start_date"]
-    print (f"start_date={start_date}")
-    end_date=cluster["end_date"]
-    print (f"end_date={end_date}")
+        raise ClusterNotFound(f"Cluster {cluster_name} not found in database")
+    start_date = cluster["start_date"]
+    print(f"start_date={start_date}")
+    end_date = cluster["end_date"]
+    print(f"end_date={end_date}")
     if end_date is None:
         return _str_to_dt(start_date)
     return _str_to_dt(end_date) + timedelta(days=1)
 
+
 def _dates_set_last_date(cluster_name: str, date: datetime) -> None:
     # set the last valid date in the database for the cluster
-    print (f"set last successful date for cluster {cluster_name} to {date}")
+    print(f"set last successful date for cluster {cluster_name} to {date}")
     db = config().mongo.database_instance
     db_collection = db.clusters
     db_collection.update_one(
@@ -75,7 +74,7 @@ def _dates_set_last_date(cluster_name: str, date: datetime) -> None:
         {"$set": {"end_date": date.strftime("%Y-%m-%d")}},
         upsert=True,
     )
-    
+
 
 @dataclass
 class AcquireJobs:
@@ -105,8 +104,10 @@ class AcquireJobs:
                     sacct_mongodb_import(
                         clusters_configs[cluster_name], date, self.ignore_statistics
                     )
-                    if (is_auto):
+                    if is_auto:
                         _dates_set_last_date(cluster_name, date)
+
+                # pylint: disable=broad-exception-caught
                 except Exception as e:
                     print(f"Failed to acquire data for {cluster_name} on {date}: {e}")
                     return 1
