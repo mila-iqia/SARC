@@ -79,12 +79,16 @@ def perform_matching(
     fetch things from the `config` or to the `database`.
     All the SARC-related tasks are done outside of this function.
 
-    Returns a dict of dicts, indexed by @mila.quebec email addresses,
-    and containing entries of the form
-        {"mila_ldap": {...}, "drac_roles": {...}, "drac_members": {...}}
-
     If `prompt` is True, a command-line prompt will be provided
     everywhere manual matching is required.
+
+    Returns a couple containing:
+    - a dict of dicts, indexed by @mila.quebec email addresses,
+      and containing entries of the form
+        {"mila_ldap": {...}, "drac_roles": {...}, "drac_members": {...}}
+    - a dict of new manual matches occurred during matching,
+      mapping a mila email to a DRAC username. As manual
+      matches rely on prompt, dict will be empty if prompt is False.
     """
 
     # because this function feels entitled to modify the input data
@@ -169,7 +173,9 @@ def perform_matching(
     # We have 42 drac_roles accounts with @mila.quebec, out of 610.
 
     # Matching.
-    _matching_names(DLD_data, DD_persons, name_distance_delta_threshold, prompt)
+    new_manual_matches = _matching_names(
+        DLD_data, DD_persons, name_distance_delta_threshold, prompt
+    )
 
     # NB: In any case (even with prompt), match overriding is applied.
     # This means that even a manually-prompted matching may be overriden
@@ -180,7 +186,7 @@ def perform_matching(
     if verbose:
         _make_matches_status_report(DLD_data, DD_persons)
 
-    return DD_persons
+    return DD_persons, new_manual_matches
 
 
 def _matching_names(DLD_data, DD_persons, name_distance_delta_threshold, prompt=False):
@@ -189,7 +195,12 @@ def _matching_names(DLD_data, DD_persons, name_distance_delta_threshold, prompt=
     Mutates the entries of `DD_persons` in-place.
     First argument names are the same as in the body of `perform_matching`.
     If `prompt` is True, a prompt is provided to solve ambiguous cases.
+
+    Return a dictionary of manual matches,
+    mapping a mila email to manually-associated DRAC username.
     """
+
+    mila_email_to_cc_username = {}
 
     for name_or_nom, cc_source in [("name", "drac_members"), ("nom", "drac_roles")]:
         # Get 10 best matches for each mila display name.
@@ -201,6 +212,8 @@ def _matching_names(DLD_data, DD_persons, name_distance_delta_threshold, prompt=
 
         # Get best match for each mila display name.
         for mila_display_name, best_matches in LP_best_name_matches:
+            match_is_manual = False
+
             # Try to make match if we find only 1 match <= threshold.
             matches_under_threshold = [
                 match
@@ -210,11 +223,12 @@ def _matching_names(DLD_data, DD_persons, name_distance_delta_threshold, prompt=
             if len(matches_under_threshold) == 1:
                 cc_match = matches_under_threshold[0][1]
 
-            # Otherwise, prompt if allowed.
+            # Otherwise, prompt if allowed (manual match).
             elif prompt:
                 cc_match = _prompt_manual_match(
                     mila_display_name, cc_source, [match[1] for match in best_matches]
                 )
+                match_is_manual = True
 
             # Else, do not match.
             else:
@@ -240,7 +254,16 @@ def _matching_names(DLD_data, DD_persons, name_distance_delta_threshold, prompt=
                     assert prev_match_data[name_or_nom] == cc_match
                 # Update new match anyway.
                 D_person_found[cc_source] = match
+
+                # If match is manual, save it in output dictionary.
+                if match_is_manual:
+                    mila_email = D_person_found["mila_ldap"]["mila_email_username"]
+                    cc_username = match["username"]
+                    mila_email_to_cc_username[mila_email] = cc_username
+
                 del D_person_found
+
+    return mila_email_to_cc_username
 
 
 def _prompt_manual_match(mila_display_name, cc_source, best_matches):

@@ -57,7 +57,10 @@ def run(prompt=False):
     ) as json_file:
         make_matches_config = json.load(json_file)
 
-    DD_persons_matched = sarc.account_matching.make_matches.perform_matching(
+    (
+        DD_persons_matched,
+        new_manual_matches,
+    ) = sarc.account_matching.make_matches.perform_matching(
         DLD_data=DLD_data,
         mila_emails_to_ignore=make_matches_config["L_phantom_mila_emails_to_ignore"],
         override_matches_mila_to_cc=make_matches_config[
@@ -87,6 +90,16 @@ def run(prompt=False):
         cfg.mongo.database_instance[cfg.ldap.mongo_collection_name],
         DD_persons_matched,
     )
+
+    # If new manual matches are available, save them.
+    if new_manual_matches:
+        make_matches_config["D_override_matches_mila_to_cc_account_username"].update(
+            new_manual_matches
+        )
+        with open(
+            cfg.account_matching.make_matches_config, "w", encoding="utf-8"
+        ) as json_file:
+            json.dump(make_matches_config, json_file, indent=4)
 
 
 def fill_computed_fields(data: dict):
