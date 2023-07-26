@@ -32,7 +32,6 @@ def bow_distance(bow_A, bow_B):
 
 def find_best_word_matches(L_names_A, L_names_B, nb_best_matches=10):
     """Get the `nb_best_matches` values from L_names_B closest to values in `L_names_A`.
-    Use same comparison function as in `find_exact_bag_of_words_matches`.
 
     Return a list of couples, each with format:
         (value_from_A, best_comparisons)
