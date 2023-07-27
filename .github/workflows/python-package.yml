@@ -89,4 +89,4 @@ jobs:
         poetry install
 
     - name: Tests doc generation
-      run: sphinx-build -b html docs/ docs/_build
+      run: poetry run sphinx-build -b html docs/ docs/_build
