@@ -233,8 +233,8 @@ def get_jobs(
     if isinstance(cluster, ClusterConfig):
         cluster_name = cluster.name
 
-    if pedantic:
-        assert cluster_name in get_clusters()
+    if cluster_name and cluster_name not in get_clusters():
+        raise KeyError(f"{cluster_name} is not available in the DB")
 
     if isinstance(start, str):
         start = datetime.combine(
