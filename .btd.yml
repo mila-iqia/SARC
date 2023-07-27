@@ -11,8 +11,7 @@ output: _build
 requirements: requirements.txt
 
 # Domain/repo/branch|tag where sources are located:
-# source: master
-
+source: master
 
 # Domain/repo/branch and path where products are to be deployed:
 target: gh-pages
