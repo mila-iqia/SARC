@@ -6,6 +6,10 @@ input: docs
 # Absolute or relative to 'input'
 output: _build
 
+# Path to an optional requirements file
+# Absolute or relative to 'input'
+requirements: requirements.txt
+
 # Domain/repo/branch|tag where sources are located:
 # source: master
 
