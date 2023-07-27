@@ -1,8 +1,4 @@
-from sarc.account_matching.name_distances import (
-    bag_of_words_projection,
-    bow_distance,
-    find_exact_bag_of_words_matches,
-)
+from sarc.account_matching.name_distances import bag_of_words_projection, bow_distance
 
 
 def test_bag_of_words_nrur_al_din_ali():
