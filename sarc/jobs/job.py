@@ -233,7 +233,6 @@ def get_jobs(
     if isinstance(cluster, ClusterConfig):
         cluster_name = cluster.name
 
-
     if isinstance(start, str):
         start = datetime.combine(
             datetime.strptime(start, "%Y-%m-%d"), time.min
