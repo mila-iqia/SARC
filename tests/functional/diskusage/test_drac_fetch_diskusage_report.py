@@ -11,6 +11,7 @@ from sarc.storage.diskusage import get_diskusage_collection, get_diskusages
 from sarc.storage.drac import fetch_diskusage_report
 
 
+@pytest.mark.usefixtures("client_config")
 @pytest.mark.parametrize(
     "test_config", [{"clusters": {"hyrule": {"host": "hyrule"}}}], indirect=True
 )

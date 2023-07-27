@@ -3,7 +3,6 @@ from pathlib import Path
 
 from simple_parsing import field
 
-from sarc.cli.utils import clusters
 from sarc.config import config
 from sarc.storage.diskusage import get_diskusage_collection
 from sarc.storage.drac import (
@@ -16,9 +15,7 @@ from sarc.storage.drac import (
 @dataclass
 class AcquireStorages:
     file: Path = field(default=None)
-    cluster_names: list[str] = field(
-        alias=["-c"], default_factory=list, choices=clusters
-    )
+    cluster_names: list[str] = field(alias=["-c"], default_factory=list)
 
     def execute(self) -> int:
         cfg = config()

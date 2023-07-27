@@ -1,5 +1,5 @@
 import os
-from datetime import date
+from datetime import date, timezone
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -12,6 +12,11 @@ from sarc.jobs import get_jobs
 
 # Clusters we want to compare
 clusters = ["narval", "beluga", "cedar", "graham"]
+
+
+def maybe_tqdm(iter, *args, **kwargs):
+    # return iter
+    return tqdm(iter, *args, **kwargs)
 
 
 def get_jobs_dataframe(clusters, filename=None) -> pd.DataFrame:
@@ -29,8 +34,10 @@ def get_jobs_dataframe(clusters, filename=None) -> pd.DataFrame:
     }
 
     df = None
+    clusters_df = []
+
     # Fetch all jobs from the clusters
-    for cluster in tqdm(clusters, desc="clusters", position=0):
+    for cluster in maybe_tqdm(clusters, desc="clusters", position=0):
         dicts = []
 
         # Precompute the total number of jobs to display a progress bar
@@ -39,7 +46,8 @@ def get_jobs_dataframe(clusters, filename=None) -> pd.DataFrame:
         total = config().mongo.database_instance.jobs.count_documents(
             {"cluster_name": cluster}
         )
-        for job in tqdm(
+
+        for job in maybe_tqdm(
             get_jobs(cluster=cluster, start="2022-04-01"),
             total=total,
             desc="jobs",
@@ -55,14 +63,30 @@ def get_jobs_dataframe(clusters, filename=None) -> pd.DataFrame:
                 int(job_dict["gres_gpu"]) if job_dict["gres_gpu"] else 0
             )
 
+            # Fix a pandas issue with timezone
+            # fillna() raise an exception when the original timezone is left
+            if job_dict["start_time"]:
+                job_dict["start_time"] = job_dict["start_time"].replace(
+                    tzinfo=timezone.utc
+                )
+
+            if job_dict["end_time"]:
+                job_dict["end_time"] = job_dict["end_time"].replace(tzinfo=timezone.utc)
+
             dicts.append(job_dict)
 
         # Replace all NaNs by 0.
-        cluster_df = pd.DataFrame(dicts).fillna(0)
-        df = pd.concat([df, cluster_df])
+        if len(dicts) > 0:
+            cluster_df = pd.DataFrame(dicts)
+            clusters_df.append(cluster_df)
 
-        if filename:
-            df.to_pickle(filename)
+    df = pd.concat(clusters_df)
+    df = df.fillna(0)
+
+    assert not df.empty, "Dataframe is empty"
+
+    if filename:
+        df.to_pickle(filename)
 
     assert isinstance(df, pd.DataFrame)
 
@@ -70,6 +94,7 @@ def get_jobs_dataframe(clusters, filename=None) -> pd.DataFrame:
 
 
 df = get_jobs_dataframe(clusters, "allocations_demo_jobs.pkl")
+
 
 # Compute the billed resource time in seconds
 df["billed"] = df["elapsed_time"] * df["billing"]

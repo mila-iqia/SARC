@@ -43,7 +43,10 @@ function restore {
 
     collections=("allocations" "diskusage" "jobs" "users")
 
-    for collection in collections; do
-        mongorestore --gzip --port=$PORT -d $db $path/$db/$collection.bson.gz --gzip
+    for collection in "${collections[@]}"; do
+        cmd="mongorestore --gzip --port=$PORT -d $db $path/$db/$collection.bson.gz"
+
+        echo "$cmd"
+        $cmd
     done
 }
