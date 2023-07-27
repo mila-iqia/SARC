@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, time, timedelta
 from enum import Enum
+from functools import cache
 from typing import Iterable, Optional
 
 from pydantic import validator
@@ -134,10 +135,6 @@ class SlurmJob(BaseModel):
         return v and v.replace(tzinfo=UTC).astimezone(MTL)
 
     @property
-    def cluster(self):
-        return config().clusters[self.cluster_name]
-
-    @property
     def duration(self):
         if self.end_time:
             return self.end_time - self.start_time
@@ -165,6 +162,10 @@ class SlurmJob(BaseModel):
 
     def save(self):
         jobs_collection().save_job(self)
+
+    def fetch_cluster_config(self):
+        """This function is only available on the admin side"""
+        return config().clusters[self.cluster_name]
 
 
 class SlurmJobRepository(AbstractRepository[SlurmJob]):
@@ -197,6 +198,13 @@ def jobs_collection():
     return SlurmJobRepository(database=db)
 
 
+@cache
+def get_clusters():
+    """Fetch all possible clusters"""
+    jobs = jobs_collection().get_collection()
+    return jobs.distinct("cluster_name", {})
+
+
 # pylint: disable=too-many-branches,dangerous-default-value
 def get_jobs(
     *,
@@ -206,7 +214,7 @@ def get_jobs(
     user: str | None = None,
     start: str | datetime | None = None,
     end: str | datetime | None = None,
-    query_options: dict = {},
+    query_options: dict | None = None,
 ) -> Iterable[SlurmJob]:
     """Get jobs that match the query.
 
@@ -217,8 +225,12 @@ def get_jobs(
         end: Get all jobs that have a status before that time.
         query_options: Additional options to pass to MongoDB (limit, etc.)
     """
-    if isinstance(cluster, str):
-        cluster = config().clusters[cluster]
+    if query_options is None:
+        query_options = {}
+
+    cluster_name = cluster
+    if isinstance(cluster, ClusterConfig):
+        cluster_name = cluster.name
 
     if isinstance(start, str):
         start = datetime.combine(
@@ -235,8 +247,8 @@ def get_jobs(
         end = end.astimezone(UTC)
 
     query = {}
-    if isinstance(cluster, ClusterConfig):
-        query["cluster_name"] = cluster.name
+    if cluster_name:
+        query["cluster_name"] = cluster_name
 
     if isinstance(job_id, int):
         query["job_id"] = job_id

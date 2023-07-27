@@ -4,11 +4,13 @@ import pytest
 
 from sarc.allocations import get_allocations
 from sarc.cli import main
+from sarc.config import config
 
 FOLDER = os.path.dirname(os.path.abspath(__file__))
 
 
 @pytest.mark.freeze_time("2023-02-15")
+@pytest.mark.usefixtures("standard_config")
 @pytest.mark.usefixtures("empty_read_write_db")
 def test_update_allocations(data_regression):
     assert get_allocations(cluster_name=["fromage", "patate"]) == []
@@ -21,6 +23,7 @@ def test_update_allocations(data_regression):
 
 
 @pytest.mark.freeze_time("2023-02-15")
+@pytest.mark.usefixtures("standard_config")
 @pytest.mark.usefixtures("empty_read_write_db")
 def test_update_allocations_no_duplicates(data_regression):
     assert get_allocations(cluster_name=["fromage", "patate"]) == []
