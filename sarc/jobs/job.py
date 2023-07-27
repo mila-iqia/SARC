@@ -215,7 +215,6 @@ def get_jobs(
     start: str | datetime | None = None,
     end: str | datetime | None = None,
     query_options: dict | None = None,
-    pedantic: bool = False,
 ) -> Iterable[SlurmJob]:
     """Get jobs that match the query.
 
