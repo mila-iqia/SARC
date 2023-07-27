@@ -19,11 +19,3 @@ Welcome to SARC's documentation!
    scripts/remote/README
    scripts/systemd/README
    scripts/deploy/README
-
-
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
