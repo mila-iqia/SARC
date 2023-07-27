@@ -16,7 +16,7 @@ methods = {
 @dataclass
 class AcquireStorages:
     cluster_names: list[str] = field(alias=["-c"], default_factory=list)
-      dry: bool = False
+    dry: bool = False
 
     def execute(self) -> int:
         cfg = config()
