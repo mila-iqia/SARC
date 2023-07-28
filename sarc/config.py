@@ -8,6 +8,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any, Union
 
+import pydantic
 import tzlocal
 from bson import ObjectId
 from pydantic import BaseModel as _BaseModel
@@ -229,10 +230,6 @@ def parse_config(config_path, config_cls=Config):
     return cfg
 
 
-class ConfigurationError(Exception):
-    pass
-
-
 def _config_class(mode):
     modes = {
         "scrapping": ScrapperConfig,
@@ -252,9 +249,10 @@ def config():
         cfg = parse_config(config_path, config_class)
     except pydantic.error_wrappers.ValidationError as err:
         if config_class is Config:
-            raise ConfigurationError("Try `SARC_MODE=scrapping sarc acquire...` if you want admin rights") from err
-        else:
-            raise
+            raise ConfigurationError(
+                "Try `SARC_MODE=scrapping sarc acquire...` if you want admin rights"
+            ) from err
+        raise
 
     config_var.set(cfg)
     return cfg
