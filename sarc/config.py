@@ -8,6 +8,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any, Union
 
+import pydantic
 import tzlocal
 from bson import ObjectId
 from pydantic import BaseModel as _BaseModel
@@ -258,7 +259,14 @@ def config():
     config_path = os.getenv("SARC_CONFIG", "config/sarc-dev.json")
     config_class = _config_class(os.getenv("SARC_MODE", "none"))
 
-    cfg = parse_config(config_path, config_class)
+    try:
+        cfg = parse_config(config_path, config_class)
+    except pydantic.error_wrappers.ValidationError as err:
+        if config_class is Config:
+            raise ConfigurationError(
+                "Try `SARC_MODE=scrapping sarc acquire...` if you want admin rights"
+            ) from err
+        raise
 
     config_var.set(cfg)
     return cfg
