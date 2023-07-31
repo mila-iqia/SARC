@@ -8,6 +8,12 @@ ADMIN=${MONGO_ADMIN:-"god"}
 PASSWORD=${MONGO_PASS:-"god123"}
 DBNAME=${MONGO_DB:-"sarc"}
 
+READUSER_NAME=${READUSER_NAME:-"readuser"}
+READUSER_PWD=${READUSER_PWD:-"pass1"}
+
+WRITEUSER_NAME=${WRITEUSER_NAME:-"writeuser"}
+WRITEUSER_PWD=${WRITEUSER_PWD:-"pass2"}
+
 ASCENDING=1
 DESCENDING=-1
 
@@ -205,8 +211,11 @@ function mongo_start {
     sleep 1
 
     add_read_write_user $ADMIN $PASSWORD
-    add_read_write_user "user-readwrite" "password1"
-    add_readonly_user "user-readonly" "password2"
+
+    # Use the admin account to add users
+    add_read_write_user $WRITEUSER_NAME $WRITEUSER_PWD
+
+    add_readonly_user $READUSER_NAME $READUSER_PWD
 
     echo "Setup Done"
     fg
