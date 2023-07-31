@@ -3,22 +3,43 @@
 PORT=${MONGO_PORT:-"8123"}
 ADDRESS=${MONGO_ADDRESS:-"localhost"}
 DB_PATH=${MONGO_PATH:-"/tmp/db"}
-
-ADMIN=${MONGO_ADMIN:-"god"}
-PASSWORD=${MONGO_PASS:-"god123"}
 DBNAME=${MONGO_DB:-"sarc"}
 
-READUSER_NAME=${READUSER_NAME:-"readuser"}
-READUSER_PWD=${READUSER_PWD:-"pass1"}
+# Users
+# =====
+ADMIN=${MONGO_ADMIN:-"admin"}
+PASSWORD=${MONGO_PASS:-"pass0"}
 
-WRITEUSER_NAME=${WRITEUSER_NAME:-"writeuser"}
-WRITEUSER_PWD=${WRITEUSER_PWD:-"pass2"}
+WRITEUSER_NAME=${WRITEUSER_NAME:-"sarc"}
+WRITEUSER_PWD=${WRITEUSER_PWD:-"pass1"}
+
+READUSER_NAME=${READUSER_NAME:-"readuser"}
+READUSER_PWD=${READUSER_PWD:-"pass2"}
+
+
+echo "====================================="
+echo "PORT: $PORT" > dbconfig.txt
+echo "ADDRESS: $ADDRESS" >> dbconfig.txt
+echo "DB_PATH: $DB_PATH" >> dbconfig.txt
+echo "DBNAME: $DBNAME" >> dbconfig.txt
+
+echo "ADMIN: $ADMIN" >> dbconfig.txt
+echo "PASSWORD: $PASSWORD"  >> dbconfig.txt
+
+echo "WRITEUSER_NAME: $WRITEUSER_NAME"  >> dbconfig.txt
+echo "WRITEUSER_PWD: $WRITEUSER_PWD"  >> dbconfig.txt
+
+echo "READUSER_NAME: $READUSER_NAME"  >> dbconfig.txt
+echo "READUSER_PWD: $READUSER_PWD"  >> dbconfig.txt
+echo "====================================="
+
+# Constants
+# =========
 
 ASCENDING=1
 DESCENDING=-1
 
-
-set -v
+set -vm
 
 function _mongo_no_auth {
     #
@@ -31,6 +52,32 @@ function _mongo_no_auth {
 
     mongod --dbpath $DB_PATH/ --wiredTigerCacheSizeGB 1 --port $PORT --bind_ip localhost --pidfilepath $DB_PATH/pid 2>&1 > $DB_PATH/mongo_1.log
     sleep 1
+}
+
+
+function _fetch_mongo_version_auth {
+    mongosh --norc "mongodb://$ADDRESS:$PORT" --authenticationDatabase "admin" -u $ADMIN -p $PASSWORD --eval "db.version()"
+}
+
+
+function wait_mongo_auth {
+
+    until _fetch_mongo_version_auth 
+    do
+        echo "Failed"
+    done
+}
+
+function _fetch_mongo_version {
+    mongosh --norc "mongodb://$ADDRESS:$PORT" --eval "db.version()"
+}
+
+function wait_mongo {
+
+    until _fetch_mongo_version 
+    do
+        echo "Failed"
+    done
 }
 
 function mongo_launch {
@@ -84,7 +131,7 @@ function _add_admin_user {
         ]
     })"
     
-    echo "$CMD" | mongosh --norc --port $PORT
+    echo "$CMD" | mongosh --norc "mongodb://$ADDRESS:$PORT"
 
     CMD="
     use admin;
@@ -97,7 +144,7 @@ function _add_admin_user {
         ]
     })"
 
-    echo "$CMD" | mongosh --norc --port $PORT
+    echo "$CMD" | mongosh --norc "mongodb://$ADDRESS:$PORT"
 }
 
 
@@ -180,7 +227,7 @@ function _ensure_indexes {
 EOM
     )
 
-    echo "$CMD" | mongosh  --norc --port $PORT
+    echo "$CMD" | mongosh  --norc "mongodb://$ADDRESS:$PORT"
 }
 
 
@@ -190,11 +237,13 @@ function mongo_init {
     #   Initialize the indexes and stop the db
     #
     _mongo_no_auth &
+    wait_mongo
 
     _ensure_indexes
     _add_admin_user $ADMIN $PASSWORD
    
     mongo_stop
+    fg
 }
 
 
@@ -208,7 +257,7 @@ function mongo_start {
 
     # Starts mongodb with auth mode
     mongo_launch &
-    sleep 1
+    wait_mongo_auth
 
     add_read_write_user $ADMIN $PASSWORD
 
@@ -249,3 +298,7 @@ function get_backups {
     scp -R sarc:/home/sarc/mongo_backups/sarc_mongo.sarc.2023-07-19 
 
 }
+
+
+
+mongo_start
