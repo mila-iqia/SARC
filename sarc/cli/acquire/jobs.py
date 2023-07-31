@@ -6,7 +6,6 @@ from typing import Generator
 
 from simple_parsing import field
 
-from sarc.cli.utils import clusters
 from sarc.config import config
 from sarc.jobs.sacct import sacct_mongodb_import
 
@@ -78,9 +77,7 @@ def _dates_set_last_date(cluster_name: str, date: datetime) -> None:
 
 @dataclass
 class AcquireJobs:
-    cluster_names: list[str] = field(
-        alias=["-c"], default_factory=list, choices=clusters
-    )
+    cluster_names: list[str] = field(alias=["-c"], default_factory=list)
 
     dates: list[str] = field(alias=["-d"], default_factory=list)
 
