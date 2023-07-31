@@ -11,6 +11,9 @@ DBNAME=${MONGO_DB:-"sarc"}
 ASCENDING=1
 DESCENDING=-1
 
+
+set -v
+
 function _mongo_no_auth {
     #
     #   Starts mongodb without Access Control, this is used to insert the admin user
@@ -20,7 +23,7 @@ function _mongo_no_auth {
     rm -rf $DB_PATH
     mkdir -p $DB_PATH
 
-    mongod --dbpath $DB_PATH/ --wiredTigerCacheSizeGB 1 --port $PORT --bind_ip localhost --pidfilepath $DB_PATH/pid
+    mongod --dbpath $DB_PATH/ --wiredTigerCacheSizeGB 1 --port $PORT --bind_ip localhost --pidfilepath $DB_PATH/pid 2>&1 > $DB_PATH/mongo_1.log
     sleep 1
 }
 
@@ -33,7 +36,7 @@ function mongo_launch {
     #       mongo_launch
     #
     mkdir -p $DB_PATH
-    mongod --auth --dbpath $DB_PATH/ --wiredTigerCacheSizeGB 1 --port $PORT --bind_ip localhost --pidfilepath $DB_PATH/pid 
+    mongod --auth --dbpath $DB_PATH/ --wiredTigerCacheSizeGB 1 --port $PORT --bind_ip localhost --pidfilepath $DB_PATH/pid 2>&1 > $DB_PATH/mongo_2.log
 }
 
 
@@ -61,22 +64,34 @@ function _add_admin_user {
     username=$1
     password=$2
 
-    CMD=$(cat <<EOM
-    use admin
-    db.createUser({
-        user: "$username",
-        pwd: "$password",
-        roles: [
-            { role: "userAdminAnyDatabase", db: "admin" },
-            { role: "readWriteAnyDatabase", db: "admin" },
+    # Create Read Only role
+    CMD="
+    use $DBNAME;
+    db.createRole({
+        role: \"sarcReadOnly\",
+        roles: [],
+        privileges: [
+            {resource: {db: \"$DBNAME\", collection: \"allocations\"}, actions: [\"find\"]},
+            {resource: {db: \"$DBNAME\", collection: \"diskusage\"}, actions: [\"find\"]},
+            {resource: {db: \"$DBNAME\", collection: \"users\"}, actions: [\"find\"]},
+            {resource: {db: \"$DBNAME\", collection: \"jobs\"}, actions: [\"find\"]},
         ]
-    })
-EOM
-    )
+    })"
+    
+    echo "$CMD" | mongosh --norc --port $PORT
 
-    echo "$CMD" | mongosh --port $PORT
+    CMD="
+    use admin;
+    db.createUser({
+        user: \"$username\",
+        pwd: \"$password\",
+        roles: [
+            { role: \"userAdminAnyDatabase\", db: \"admin\" },
+            { role: \"readWriteAnyDatabase\", db: \"admin\" },
+        ]
+    })"
 
-    add_user $username $password
+    echo "$CMD" | mongosh --norc --port $PORT
 }
 
 
@@ -104,7 +119,7 @@ function add_read_write_user {
 EOM
     )
 
-    echo "$CMD" | mongosh "mongodb://$ADDRESS:$PORT" --authenticationDatabase "admin" -u $ADMIN -p $PASSWORD
+    echo "$CMD" | mongosh --norc "mongodb://$ADDRESS:$PORT" --authenticationDatabase "admin" -u $ADMIN -p $PASSWORD
 }
 
 function add_readonly_user {
@@ -124,21 +139,18 @@ function add_readonly_user {
     db.createUser({
         user: "$username",
         pwd: "$password",
-        privileges: {
-            {resource: {"db": "$DBNAME, collection: "allocations"}, actions: ["find"]},
-            {resource: {"db": "$DBNAME, collection: "diskusage"}, actions: ["find"]},
-            {resource: {"db": "$DBNAME, collection: "users"}, actions: ["find"]},
-            {resource: {"db": "$DBNAME, collection: "jobs"}, actions: ["find"]},
-        }
+        roles: [
+            { role: "sarcReadOnly", db: "$DBNAME" }
+        ]
     })
 EOM
     )
 
-    echo "$CMD" | mongosh "mongodb://$ADDRESS:$PORT" --authenticationDatabase "admin" -u $ADMIN -p $PASSWORD
+    echo "$CMD" | mongosh --norc "mongodb://$ADDRESS:$PORT" --authenticationDatabase "admin" -u $ADMIN -p $PASSWORD
 }
 
 function _ensure_indexes {
-    CMD=$(cat <<EOM
+    CMD=$(cat << EOM
     use $DBNAME
 
     db.clusters.createIndex({"cluster_name": $ASCENDING}, { unique: true})
@@ -162,7 +174,7 @@ function _ensure_indexes {
 EOM
     )
 
-    echo "$CMD" | mongosh --port $PORT
+    echo "$CMD" | mongosh  --norc --port $PORT
 }
 
 
@@ -172,9 +184,11 @@ function mongo_init {
     #   Initialize the indexes and stop the db
     #
     _mongo_no_auth &
-    _add_admin_user $ADMIN $PASSWORD
+
     _ensure_indexes
-    stop_mongo
+    _add_admin_user $ADMIN $PASSWORD
+   
+    mongo_stop
 }
 
 
@@ -188,10 +202,13 @@ function mongo_start {
 
     # Starts mongodb with auth mode
     mongo_launch &
+    sleep 1
 
+    add_read_write_user $ADMIN $PASSWORD
     add_read_write_user "user-readwrite" "password1"
     add_readonly_user "user-readonly" "password2"
 
+    echo "Setup Done"
     fg
 }
 
