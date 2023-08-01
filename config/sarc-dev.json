@@ -64,7 +64,8 @@
             "diskusage_report_command": "diskusage_report --project --all_users",
             "prometheus_url": "https://mila-thanos.calculquebec.ca",
             "prometheus_headers_file": "secrets/drac_prometheus/headers.json",
-            "start_date": "2022-04-01"
+            "start_date": "2022-04-01",
+            "nodes_info_file": "secrets/nodes_graham.txt"
         },
         "cedar": {
             "host": "cedar.computecanada.ca",
@@ -76,7 +77,8 @@
             "diskusage_report_command": "diskusage_report --project --all_users",
             "prometheus_url": "https://mila-thanos.calculquebec.ca",
             "prometheus_headers_file": "secrets/drac_prometheus/headers.json",
-            "start_date": "2022-04-01"
+            "start_date": "2022-04-01",
+            "nodes_info_file": "secrets/nodes_cedar.txt"
         }
     }
 }
