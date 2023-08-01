@@ -9,6 +9,7 @@ from sarc.config import (
     ClusterConfig,
     Config,
     MongoConfig,
+    ScrapperConfig,
     config,
     parse_config,
     using_config,
@@ -19,20 +20,42 @@ pytest_plugins = "fabric.testing.fixtures"
 
 @pytest.fixture(scope="session")
 def standard_config_object():
-    yield parse_config(Path(__file__).parent / "sarc-test.json")
+    from _pytest.monkeypatch import MonkeyPatch
+
+    mpatch = MonkeyPatch()
+    mpatch.setenv("SARC_MODE", "scrapping")
+    yield parse_config(Path(__file__).parent / "sarc-test.json", ScrapperConfig)
+    mpatch.undo()
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture(scope="session")
+def client_config_object():
+    from _pytest.monkeypatch import MonkeyPatch
+
+    mpatch = MonkeyPatch()
+    mpatch.setenv("SARC_MODE", "client")
+    yield parse_config(Path(__file__).parent / "sarc-test-client.json", Config)
+    mpatch.undo()
+
+
+@pytest.fixture()
+def client_config(client_config_object, tmp_path):
+    cfg = client_config_object.replace(cache=tmp_path / "sarc-tmp-test-cache")
+    with using_config(cfg, Config) as cfg:
+        yield cfg
+
+
+@pytest.fixture()
 def standard_config(standard_config_object, tmp_path):
     cfg = standard_config_object.replace(cache=tmp_path / "sarc-tmp-test-cache")
-    with using_config(cfg) as cfg:
+    with using_config(cfg, ScrapperConfig) as cfg:
         yield cfg
 
 
 @pytest.fixture
 def disabled_cache():
     cfg = config().replace(cache=None)
-    with using_config(cfg) as cfg:
+    with using_config(cfg, ScrapperConfig) as cfg:
         yield
 
 
@@ -43,9 +66,7 @@ def tzlocal_is_mtl(monkeypatch):
 
 
 @pytest.fixture
-def test_config(
-    request,
-):
+def test_config(request, standard_config):
     current = config()
 
     vals = getattr(request, "param", dict())

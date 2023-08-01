@@ -87,7 +87,7 @@ def get_job_time_series(
     else:
         query = f"{query}[{duration_seconds}s:{interval}s] {offset_string}"
 
-    results = job.cluster.prometheus.custom_query(query)
+    results = job.fetch_cluster_config().prometheus.custom_query(query)
     if dataframe:
         return MetricRangeDataFrame(results) if results else None
     else:

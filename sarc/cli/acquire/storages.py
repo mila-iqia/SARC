@@ -2,7 +2,6 @@ from dataclasses import dataclass
 
 from simple_parsing import field
 
-from sarc.cli.utils import clusters
 from sarc.config import config
 from sarc.storage.diskusage import get_diskusage_collection
 from sarc.storage.drac import fetch_diskusage_report as fetch_dirac_diskusage
@@ -16,9 +15,7 @@ methods = {
 
 @dataclass
 class AcquireStorages:
-    cluster_names: list[str] = field(
-        alias=["-c"], default_factory=list, choices=clusters
-    )
+    cluster_names: list[str] = field(alias=["-c"], default_factory=list)
     dry: bool = False
 
     def execute(self) -> int:

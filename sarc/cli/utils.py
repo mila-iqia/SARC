@@ -1,4 +1,4 @@
-from sarc.config import config
+from sarc.jobs.job import get_clusters
 
 
 class ChoicesContainer:
@@ -12,4 +12,4 @@ class ChoicesContainer:
         return iter(self.choices)
 
 
-clusters = ChoicesContainer(list(config().clusters.keys()))
+clusters = ChoicesContainer(list(get_clusters()))

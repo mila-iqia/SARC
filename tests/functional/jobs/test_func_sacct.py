@@ -22,6 +22,7 @@ def create_json_jobs(json_jobs: list[dict]) -> list[dict]:
     return json_job_factory.jobs
 
 
+@pytest.mark.usefixtures("standard_config")
 @pytest.fixture
 def json_jobs(request):
     if isinstance(request.param, dict):
@@ -123,6 +124,7 @@ def scraper():
     return SAcctScraper(cluster=config().clusters["raisin"], day=datetime(2023, 2, 14))
 
 
+@pytest.mark.usefixtures("standard_config")
 @pytest.mark.usefixtures("tzlocal_is_mtl")
 @pytest.mark.parametrize(
     "json_jobs", parameters.values(), ids=parameters.keys(), indirect=True
@@ -159,6 +161,7 @@ def test_parse_json_job(json_jobs, scraper, file_regression):
     ],
     indirect=True,
 )
+@pytest.mark.usefixtures("standard_config")
 def test_parse_malformed_jobs(sacct_json, scraper, capsys):
     scraper.results = json.loads(sacct_json)
     assert list(scraper) == []
@@ -172,6 +175,7 @@ There was a problem with this entry:
     )
 
 
+@pytest.mark.usefixtures("standard_config")
 @pytest.mark.usefixtures("tzlocal_is_mtl")
 @pytest.mark.parametrize(
     "json_jobs",
@@ -185,6 +189,7 @@ def test_parse_no_group_jobs(sacct_json, scraper, caplog):
     assert 'Skipping job with group "None": 1' in caplog.text
 
 
+@pytest.mark.usefixtures("standard_config")
 @pytest.mark.usefixtures("tzlocal_is_mtl")
 @pytest.mark.parametrize(
     "json_jobs",
@@ -206,6 +211,7 @@ def test_scrape_lost_job_on_wrong_cluster(sacct_json, scraper, caplog):
     )
 
 
+@pytest.mark.usefixtures("standard_config")
 @pytest.mark.usefixtures("tzlocal_is_mtl")
 @pytest.mark.parametrize("json_jobs", [{}], indirect=True)
 def test_scraper_with_cache(scraper, sacct_json, file_regression):
