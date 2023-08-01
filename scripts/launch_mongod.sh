@@ -115,131 +115,6 @@ function mongo_stop {
 }
 
 
-function add_admin_user {
-    #
-    #   create an admin user
-    #
-    #   Usage:
-    #
-    #       add_admin_user username password
-    #
-
-    username=$1
-    password=$2
-
-    # Create Read Only role
-    CMD="
-    use $DBNAME;
-    db.createRole({
-        role: \"sarcReadOnly\",
-        roles: [],
-        privileges: [
-            {resource: {db: \"$DBNAME\", collection: \"allocations\"}, actions: [\"find\"]},
-            {resource: {db: \"$DBNAME\", collection: \"diskusage\"}, actions: [\"find\"]},
-            {resource: {db: \"$DBNAME\", collection: \"users\"}, actions: [\"find\"]},
-            {resource: {db: \"$DBNAME\", collection: \"jobs\"}, actions: [\"find\"]},
-        ]
-    })"
-    
-    echo "$CMD" | mongosh --norc "mongodb://$ADDRESS:$PORT"
-
-    CMD="
-    use admin;
-    db.createUser({
-        user: \"$username\",
-        pwd: \"$password\",
-        roles: [
-            { role: \"userAdminAnyDatabase\", db: \"admin\" },
-            { role: \"readWriteAnyDatabase\", db: \"admin\" },
-        ]
-    })"
-
-    echo "$CMD" | mongosh --norc "mongodb://$ADDRESS:$PORT"
-}
-
-
-function add_read_write_user {
-    #
-    #   Create a user for the sarc database
-    #
-    #   Usage:
-    #
-    #       add_user username password
-    #
-
-    username=$1
-    password=$2
-
-    CMD=$(cat << EOM
-    use $DBNAME
-    db.createUser({
-        user: "$username",
-        pwd: "$password",
-        roles: [
-            { role: "readWrite", db: "$DBNAME" }
-        ]
-    })
-EOM
-    )
-
-    echo "$CMD" | mongosh --norc "mongodb://$ADDRESS:$PORT" --authenticationDatabase "admin" -u $ADMIN -p $PASSWORD
-}
-
-function add_readonly_user {
-    #
-    #   Create a user for the sarc database
-    #
-    #   Usage:
-    #
-    #       add_readonly_user username password
-    #
-
-    username=$1
-    password=$2
-
-    CMD=$(cat << EOM
-    use $DBNAME
-    db.createUser({
-        user: "$username",
-        pwd: "$password",
-        roles: [
-            { role: "sarcReadOnly", db: "$DBNAME" }
-        ]
-    })
-EOM
-    )
-
-    echo "$CMD" | mongosh --norc "mongodb://$ADDRESS:$PORT" --authenticationDatabase "admin" -u $ADMIN -p $PASSWORD
-}
-
-function _ensure_indexes {
-    CMD=$(cat << EOM
-    use $DBNAME
-
-    db.clusters.createIndex({"cluster_name": $ASCENDING}, { unique: true})
-
-    db.users.createIndex({"mila_ldap.mila_email_username": $ASCENDING})
-    db.users.createIndex({"mila_ldap.mila_cluster_username": $ASCENDING})
-    db.users.createIndex({"drac_roles.username": $ASCENDING, "drac_members.username": $ASCENDING})
-    
-    db.allocations.createIndex({"cluster_name": $ASCENDING, "start": $ASCENDING, "end": $ASCENDING})
-    db.allocations.createIndex({"start": $ASCENDING, "end": $ASCENDING})
-    
-    db.diskusage.createIndex({"cluster_name": $ASCENDING, "groups.group_name": $ASCENDING, "timestamp": $ASCENDING})
-    db.diskusage.createIndex({"cluster_name": $ASCENDING, "timestamp": $ASCENDING})
-    db.diskusage.createIndex({"timestamp": $ASCENDING})
-
-    db.jobs.createIndex({"job_id": $ASCENDING, "cluster_name": $ASCENDING, "submit_time": $ASCENDING}, { unique: true})
-    db.jobs.createIndex({"cluster_name": $ASCENDING, "job_state": $ASCENDING, "submit_time": $ASCENDING, "end_time": $ASCENDING})
-    db.jobs.createIndex({"cluster_name": $ASCENDING, "submit_time": $ASCENDING, "end_time": $ASCENDING})
-    db.jobs.createIndex({"job_state": $ASCENDING, "submit_time": $ASCENDING, "end_time": $ASCENDING})
-    db.jobs.createIndex({"submit_time": $ASCENDING, "end_time": $ASCENDING})
-EOM
-    )
-
-    echo "$CMD" | mongosh  --norc "mongodb://$ADDRESS:$PORT"
-}
-
 function mongo_start {
     #
     #   Starts a clean mongodb instance
@@ -249,22 +124,16 @@ function mongo_start {
     _mongo_no_auth &
     wait_mongo
 
-    _ensure_indexes
-    add_admin_user $ADMIN $PASSWORD
-   
+    SARC_MODE=scrapping sarc db init --database $DBNAME --url "mongodb://$ADDRESS:$PORT" --username $ADMIN --password $PASSWORD --account admin
+    SARC_MODE=scrapping sarc db init --database $DBNAME --url "mongodb://$ADDRESS:$PORT" --username $WRITEUSER_NAME --password $WRITEUSER_PWD --account write
+    SARC_MODE=scrapping sarc db init --database $DBNAME --url "mongodb://$ADDRESS:$PORT" --username $READUSER_NAME --password $READUSER_PWD --account read
+
     mongo_stop
     fg
 
     # Starts mongodb with auth mode
     mongo_launch &
     wait_mongo_auth
-
-    add_read_write_user $ADMIN $PASSWORD
-
-    # Use the admin account to add users
-    add_read_write_user $WRITEUSER_NAME $WRITEUSER_PWD
-
-    add_readonly_user $READUSER_NAME $READUSER_PWD
 
     echo "Setup Done"
     fg

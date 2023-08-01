@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 import pymongo
+from simple_parsing import choice
 
 from sarc.allocations.allocations import AllocationsRepository
 from sarc.config import config
@@ -14,13 +15,23 @@ class DbInit:
     url: Optional[str]
     database: Optional[str]
 
+    username: Optional[str]
+    password: Optional[str]
+    account: Optional[str] = choice("admin", "write", "read")
+
     def execute(self) -> int:
         cfg = config()
         url = cfg.mongo.connection_string if self.url is None else self.url
-        database = cfg.mongo.database_name if self.database is None else self.database
+        self.database = (
+            cfg.mongo.database_name if self.database is None else self.database
+        )
 
         client = pymongo.MongoClient(url)
-        db = client.get_database(database)
+        db = client.get_database(self.database)
+
+        self.create_readonly_role(db)
+
+        self.create_acount(client, db)
 
         create_clusters(db)
 
@@ -42,6 +53,66 @@ class DbInit:
         create_users_indices(db)
 
         return 0
+
+    def create_acount(self, client, db):
+        if self.username is None or self.password is None:
+            return
+
+        if self.account == "admin":
+            client.admin.command(
+                "createUser",
+                self.username,
+                pwd=self.password,
+                roles=[
+                    {"role": "userAdminAnyDatabase", "db": "admin"},
+                    {"role": "readWriteAnyDatabase", "db": "admin"},
+                ],
+            )
+
+        if self.account == "read":
+            db.command(
+                "createUser",
+                self.username,
+                pwd=self.password,
+                roles=[{"role": f"{self.database}ReadOnly", "db": self.database}],
+            )
+
+        if self.account == "write":
+            db.command(
+                "createUser",
+                self.username,
+                pwd=self.password,
+                roles=[{"role": "readWrite", "db": self.database}],
+            )
+
+    def create_readonly_role(self, db):
+        try:
+            db.command(
+                "createRole",
+                f"{self.database}ReadOnly",
+                privileges=[
+                    {
+                        "actions": ["find"],
+                        "resource": {"db": self.database, "collection": "allocations"},
+                    },
+                    {
+                        "actions": ["find"],
+                        "resource": {"db": self.database, "collection": "diskusage"},
+                    },
+                    {
+                        "actions": ["find"],
+                        "resource": {"db": self.database, "collection": "users"},
+                    },
+                    {
+                        "actions": ["find"],
+                        "resource": {"db": self.database, "collection": "jobs"},
+                    },
+                ],
+                roles=[],
+            )
+        except pymongo.errors.OperationFailure as err:
+            if "already exists" not in str(err):
+                raise
 
 
 def create_clusters(db):
