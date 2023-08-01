@@ -240,12 +240,12 @@ EOM
     echo "$CMD" | mongosh  --norc "mongodb://$ADDRESS:$PORT"
 }
 
+function mongo_start {
+    #
+    #   Starts a clean mongodb instance
+    #
 
-function mongo_init {
-    #
-    #   Starts mongo without auth to create an admin user
-    #   Initialize the indexes and stop the db
-    #
+    # Initialize mongodb
     _mongo_no_auth &
     wait_mongo
 
@@ -254,16 +254,6 @@ function mongo_init {
    
     mongo_stop
     fg
-}
-
-
-function mongo_start {
-    #
-    #   Starts a clean mongodb instance
-    #
-
-    # Initialize mongodb
-    mongo_init
 
     # Starts mongodb with auth mode
     mongo_launch &
