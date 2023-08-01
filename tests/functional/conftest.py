@@ -299,14 +299,12 @@ def mongodb(tmp_path, freeport):
 
     with MongoInstance(str(tmp_path / "db"), freeport) as dbproc:
         # Populate the database with data
-        
+
         db = admin_client(freeport).sarc
-        
+
         fill_db(db)
-        
-        db.sercrest.insert_one({
-            "mypassword": 123
-        })        
+
+        db.sercrest.insert_one({"mypassword": 123})
 
         # return the process
         yield dbproc
