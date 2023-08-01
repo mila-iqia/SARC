@@ -28,6 +28,17 @@
             "diskusage_report_command": null,
             "prometheus_url": "http://monitoring.server.raisin.quebec:9090/"
         },
+        "raisin_no_prometheus": {
+            "host": "raisin_no_prometheus",
+            "timezone": "America/Montreal",
+            "accounts": null,
+            "sacct_bin": "/opt/slurm/bin/sacct",
+            "duc_inodes_command": null,
+            "duc_storage_command": null,
+            "diskusage_report_command": null,
+            "prometheus_url": null,
+            "nodes_info_file": "tests/not-so-secrets/raisin_no_prometheus/nodes_raisin_no_prometheus.txt"
+        },
         "fromage": {
             "host": "fromage",
             "timezone": "Europe/Paris",

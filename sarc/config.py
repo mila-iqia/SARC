@@ -8,6 +8,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any, Union
 
+import pydantic
 import tzlocal
 from bson import ObjectId
 from pydantic import BaseModel as _BaseModel
@@ -73,6 +74,7 @@ class ClusterConfig(BaseModel):
     timezone: Union[str, zoneinfo.ZoneInfo]  # | does not work with Pydantic's eval
     prometheus_url: str = None
     prometheus_headers_file: str = None
+    nodes_info_file: str = None
     name: str = None
     sacct_bin: str = "sacct"
     accounts: list[str] = None
@@ -121,6 +123,19 @@ class ClusterConfig(BaseModel):
                 f"No prometheus URL provided for cluster '{self.name}'"
             )
         return PrometheusConnect(url=self.prometheus_url, headers=headers)
+
+    @cached_property
+    def node_to_gpu(self):
+        """
+        Return a dictionary-like mapping a cluster's node name to a GPU type.
+
+        Parsed from self.nodes_info_file if available.
+
+        Dict-like object will return None if queried node name is not found.
+        """
+        from .jobs.node_gpu_mapping import NodeToGPUMapping
+
+        return NodeToGPUMapping(self.name, self.nodes_info_file)
 
 
 class MongoConfig(BaseModel):
@@ -244,7 +259,14 @@ def config():
     config_path = os.getenv("SARC_CONFIG", "config/sarc-dev.json")
     config_class = _config_class(os.getenv("SARC_MODE", "none"))
 
-    cfg = parse_config(config_path, config_class)
+    try:
+        cfg = parse_config(config_path, config_class)
+    except pydantic.error_wrappers.ValidationError as err:
+        if config_class is Config:
+            raise ConfigurationError(
+                "Try `SARC_MODE=scrapping sarc acquire...` if you want admin rights"
+            ) from err
+        raise
 
     config_var.set(cfg)
     return cfg
