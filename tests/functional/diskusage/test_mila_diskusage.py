@@ -56,7 +56,7 @@ def mock_get_users():
         ),
     ]
 
-
+@pytest.mark.freeze_time("2023-07-25")
 @pytest.mark.parametrize(
     "test_config", [{"clusters": {"mila": {"host": "mila"}}}], indirect=True
 )
@@ -93,6 +93,7 @@ def test_mila_fetch_diskusage_single(
     file_regression.check(data[0].json(exclude={"id": True}, indent=4))
 
 
+@pytest.mark.freeze_time("2023-07-25")
 @pytest.mark.parametrize(
     "test_config", [{"clusters": {"mila": {"host": "mila"}}}], indirect=True
 )
@@ -127,3 +128,19 @@ def test_mila_fetch_diskusage_multi(
     assert len(data) == 1
     # report = sarc.storage.mila.fetch_diskusage_report(cluster=test_config.clusters["mila"])
     file_regression.check(data[0].json(exclude={"id": True}, indent=4))
+
+
+def test_fetch_diskusage_report():
+    
+    class MockConnection:
+        def run(command, hide=False):
+            pass
+        
+    con = MockConnection()
+    result, err = sarc.storage.mila._fetch_diskusage_report(
+        con, 
+        "whatever",
+        3
+    )
+    
+    
