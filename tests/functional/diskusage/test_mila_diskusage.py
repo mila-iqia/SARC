@@ -56,6 +56,7 @@ def mock_get_users():
         ),
     ]
 
+
 @pytest.mark.freeze_time("2023-07-25")
 @pytest.mark.parametrize(
     "test_config", [{"clusters": {"mila": {"host": "mila"}}}], indirect=True
@@ -131,16 +132,9 @@ def test_mila_fetch_diskusage_multi(
 
 
 def test_fetch_diskusage_report():
-    
     class MockConnection:
         def run(command, hide=False):
             pass
-        
+
     con = MockConnection()
-    result, err = sarc.storage.mila._fetch_diskusage_report(
-        con, 
-        "whatever",
-        3
-    )
-    
-    
+    result, err = sarc.storage.mila._fetch_diskusage_report(con, "whatever", 3)
