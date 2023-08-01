@@ -59,6 +59,7 @@ class MongoInstance:
             "WRITEUSER_PWD": write_pass,
             "READUSER_NAME": user_name,
             "READUSER_PWD": user_pass,
+            "LAUNCH_MONGO": "1"
         }
         self.path = path
         self.manager = multiprocessing.Manager()

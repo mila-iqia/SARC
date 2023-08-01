@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# Database config
+# ===============
 PORT=${MONGO_PORT:-"8123"}
 ADDRESS=${MONGO_ADDRESS:-"localhost"}
 DB_PATH=${MONGO_PATH:-"/tmp/db"}
@@ -16,6 +18,11 @@ WRITEUSER_PWD=${WRITEUSER_PWD:-"pass1"}
 READUSER_NAME=${READUSER_NAME:-"readuser"}
 READUSER_PWD=${READUSER_PWD:-"pass2"}
 
+# Options
+# =======
+MONGOD_CMD=${MONGOD_CMD:-"mongod"}
+USE_PODMAN=${USE_PODMAN:-"0"}
+LAUNCH_MONGO=${LAUNCH_MONGO:-"0"}
 
 echo "====================================="
 echo "PORT: $PORT" > dbconfig.txt
@@ -50,15 +57,13 @@ function _mongo_no_auth {
     rm -rf $DB_PATH
     mkdir -p $DB_PATH
 
-    mongod --dbpath $DB_PATH/ --wiredTigerCacheSizeGB 1 --port $PORT --bind_ip localhost --pidfilepath $DB_PATH/pid 2>&1 > $DB_PATH/mongo_1.log
-    sleep 1
+    $MONGOD_CMD --dbpath $DB_PATH/ --wiredTigerCacheSizeGB 1 --port $PORT --bind_ip localhost --pidfilepath $DB_PATH/pid 2>&1 > $DB_PATH/mongo_1.log
 }
 
 
 function _fetch_mongo_version_auth {
     mongosh --norc "mongodb://$ADDRESS:$PORT" --authenticationDatabase "admin" -u $ADMIN -p $PASSWORD --eval "db.version()"
 }
-
 
 function wait_mongo_auth {
 
@@ -89,7 +94,7 @@ function mongo_launch {
     #       mongo_launch
     #
     mkdir -p $DB_PATH
-    mongod --auth --dbpath $DB_PATH/ --wiredTigerCacheSizeGB 1 --port $PORT --bind_ip localhost --pidfilepath $DB_PATH/pid 2>&1 > $DB_PATH/mongo_2.log
+    $MONGOD_CMD --auth --dbpath $DB_PATH/ --wiredTigerCacheSizeGB 1 --port $PORT --bind_ip localhost --pidfilepath $DB_PATH/pid 2>&1 > $DB_PATH/mongo_2.log
 }
 
 
@@ -101,17 +106,22 @@ function mongo_stop {
     #   
     #       mongo_stop
     #
-    mongod --dbpath $DB_PATH/ --shutdown
+
+    if [ "$USE_PODMAN" = "1" ]; then
+        sudo -H -u sarc podman stop sarc_mongo --log-level error
+    else
+        $MONGOD_CMD --dbpath $DB_PATH/ --shutdown
+    fi
 }
 
 
-function _add_admin_user {
+function add_admin_user {
     #
     #   create an admin user
     #
     #   Usage:
     #
-    #       _add_admin_user username password
+    #       add_admin_user username password
     #
 
     username=$1
@@ -240,7 +250,7 @@ function mongo_init {
     wait_mongo
 
     _ensure_indexes
-    _add_admin_user $ADMIN $PASSWORD
+    add_admin_user $ADMIN $PASSWORD
    
     mongo_stop
     fg
@@ -299,6 +309,6 @@ function get_backups {
 
 }
 
-
-
-mongo_start
+if [ "$LAUNCH_MONGO" = "1" ]; then
+    mongo_start
+fi
