@@ -74,6 +74,7 @@ class ClusterConfig(BaseModel):
     timezone: Union[str, zoneinfo.ZoneInfo]  # | does not work with Pydantic's eval
     prometheus_url: str = None
     prometheus_headers_file: str = None
+    nodes_info_file: str = None
     name: str = None
     sacct_bin: str = "sacct"
     accounts: list[str] = None
@@ -122,6 +123,19 @@ class ClusterConfig(BaseModel):
                 f"No prometheus URL provided for cluster '{self.name}'"
             )
         return PrometheusConnect(url=self.prometheus_url, headers=headers)
+
+    @cached_property
+    def node_to_gpu(self):
+        """
+        Return a dictionary-like mapping a cluster's node name to a GPU type.
+
+        Parsed from self.nodes_info_file if available.
+
+        Dict-like object will return None if queried node name is not found.
+        """
+        from .jobs.node_gpu_mapping import NodeToGPUMapping
+
+        return NodeToGPUMapping(self.name, self.nodes_info_file)
 
 
 class MongoConfig(BaseModel):
