@@ -1,8 +1,7 @@
+import multiprocessing
 import os
 import subprocess
 import time
-
-import multiprocessing
 
 
 def popen_reader(state, function, args, shell=False):
