@@ -318,6 +318,7 @@ def make_config(newpath, uri):
         config = json.load(file)
 
     config["mongo"]["connection_string"] = uri
+    config["mongo"]["database_name"] = "sarc"
 
     with open(newpath, "w") as file:
         json.dump(config, file)

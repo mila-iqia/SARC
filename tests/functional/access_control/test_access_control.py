@@ -91,7 +91,7 @@ def test_write_user_can_write(freeport):
 
 
 @pytest.mark.usefixtures("write_setup")
-def test_write_user_cannot_delete(freeport):
+def test_write_user_can_delete(freeport):
     assert (
         config().mongo.connection_string
         == f"mongodb://write_name:write_pass@localhost:{freeport}/sarc"
