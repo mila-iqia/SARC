@@ -86,6 +86,14 @@ class DbInit:
             )
 
     def create_readonly_role(self, db):
+        collections = [
+            "allocations",
+            "diskusage",
+            "users",
+            "jobs",
+            "clusters",
+        ]
+
         try:
             db.command(
                 "createRole",
@@ -93,20 +101,9 @@ class DbInit:
                 privileges=[
                     {
                         "actions": ["find"],
-                        "resource": {"db": self.database, "collection": "allocations"},
-                    },
-                    {
-                        "actions": ["find"],
-                        "resource": {"db": self.database, "collection": "diskusage"},
-                    },
-                    {
-                        "actions": ["find"],
-                        "resource": {"db": self.database, "collection": "users"},
-                    },
-                    {
-                        "actions": ["find"],
-                        "resource": {"db": self.database, "collection": "jobs"},
-                    },
+                        "resource": {"db": self.database, "collection": coll},
+                    }
+                    for coll in collections
                 ],
                 roles=[],
             )
