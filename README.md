@@ -1,7 +1,8 @@
 
 # SARC
 
-In-house tool to monitor the usage of various computational resources at Mila.
+SARC stands for "Supervision et Analyde des Resources de Calcul". It's a Mila in-house tool to monitor the usage of computational resources by Mila users. It is not meant to be deployed on the users workstations.
+
 
 ## Installation and setup
 
