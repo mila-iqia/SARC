@@ -110,7 +110,9 @@ function mongo_stop {
     if [ "$USE_PODMAN" = "1" ]; then
         sudo -H -u sarc podman stop sarc_mongo --log-level error
     else
-        $MONGOD_CMD --dbpath $DB_PATH/ --shutdown
+        PID="$(cat $DB_PATH/pid)"
+        echo "PID: $PID"
+        kill -s SIGTERM $PID
     fi
 }
 
