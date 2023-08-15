@@ -1,6 +1,6 @@
 {
     "mongo": {
-        "connection_string": "writeuser:REPLACEME@localhost:27017/sarc",
+        "connection_string": "mongodb://writeuser:REPLACEME@localhost:27017/sarc",
         "database_name": "sarc"
     },
     "ldap": {
