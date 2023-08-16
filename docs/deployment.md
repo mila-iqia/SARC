@@ -89,7 +89,7 @@ In the future, if necessary, use the `SARC_CONFIG` environment variable to choos
 You have 3 mongo users account; 
 
 - `mongoadmin` (password: see `secrets/mongo_admin_password.txt`) is the global mongodb administrator account.
-- `readuser`(password: `readpwd`, see `config/sarc-*.json`) is the user for general use (only reads data from the database)
+- `readuser`(password: `readpwd`, see `config/sarc-client.json`) is the user for general use (only reads data from the database)
 - `writeuser` (password: see `secrets/mongo_writeuser_password.txt`) is used by the server during scrapping
 
 Therefore, if you want to admin the database with compass, the connection string will be (see `config/sarc-*.json`) :
