@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import pytest
+from _pytest.monkeypatch import MonkeyPatch
 
 from sarc.config import using_config
+from sarc.testing import MongoInstance
 
 from .allocations.factory import create_allocations
 from .diskusage.factory import create_diskusages
@@ -251,3 +256,105 @@ def account_matches():
     }
 
     return DLD_account_matches
+
+
+@pytest.fixture
+def freeport():
+    import socket
+
+    sock = socket.socket()
+    sock.bind(("", 0))
+    port = sock.getsockname()[1]
+    sock.close()
+    return port
+
+
+@pytest.fixture
+def scrapping_mode():
+    mpatch = MonkeyPatch()
+    mpatch.setenv("SARC_MODE", "scrapping")
+    yield
+    mpatch.undo()
+
+
+@pytest.fixture
+def client_mode():
+    mpatch = MonkeyPatch()
+    mpatch.setenv("SARC_MODE", "client")
+    yield
+    mpatch.undo()
+
+
+def admin_client(freeport):
+    from pymongo import MongoClient
+
+    return MongoClient(f"mongodb://admin:admin_pass@localhost:{freeport}")
+
+
+@pytest.fixture
+def mongodb(tmp_path, freeport):
+    """Initialize a running mongodb instance.
+    Can run in parallel
+    """
+
+    with MongoInstance(str(tmp_path / "db"), freeport) as dbproc:
+        # Populate the database with data
+
+        db = admin_client(freeport).sarc
+
+        fill_db(db)
+
+        db.sercrest.insert_one({"mypassword": 123})
+
+        # return the process
+        yield dbproc
+
+
+def make_config(newpath, uri):
+    """Takes a base config and tweak it"""
+    with open(Path(__file__).parent / ".." / "sarc-test.json", "r") as file:
+        config = json.load(file)
+
+    config["mongo"]["connection_string"] = uri
+    config["mongo"]["database_name"] = "sarc"
+
+    with open(newpath, "w") as file:
+        json.dump(config, file)
+
+
+@pytest.fixture
+def admin_setup(mongodb, scrapping_mode, tmp_path, freeport, monkeypatch):
+    """MongoDB admin user, can do anything."""
+
+    config_path = tmp_path / "config.json"
+
+    make_config(config_path, f"mongodb://admin:admin_pass@localhost:{freeport}")
+    with using_config(config_path):
+        yield
+
+
+@pytest.fixture
+def write_setup(mongodb, scrapping_mode, tmp_path, freeport, monkeypatch):
+    """SARC write user, can only write to sarc database.
+    Have access to secrets
+    """
+    config_path = tmp_path / "config.json"
+
+    make_config(
+        config_path, f"mongodb://write_name:write_pass@localhost:{freeport}/sarc"
+    )
+    with using_config(config_path):
+        yield
+
+
+@pytest.fixture
+def read_setup(mongodb, scrapping_mode, tmp_path, freeport, monkeypatch):
+    """SARC read user, can onlly read to sarc database.
+    Does not have access to secrets
+    """
+    config_path = tmp_path / "config.json"
+
+    make_config(config_path, f"mongodb://user_name:user_pass@localhost:{freeport}/sarc")
+
+    with using_config(config_path):
+        yield

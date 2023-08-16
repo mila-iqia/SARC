@@ -26,10 +26,23 @@ if [ -z "$3" ]
   else
     DEST_PATH=$3
 fi
+if [ -z "$4" ]
+  then
+    SCRIPT=$(readlink -f "$0")
+    SCRIPTPATH=$(dirname "$SCRIPT")
+    SECRET_PATH=$SCRIPTPATH/../../secrets/mongo_writeuser_password.txt
+    echo "No secret file path supplied, using default path $SECRET_PATH"
+  else
+    SECRET_PATH=$4
+fi
+
+# retrieve the password from the secret file
+PASSWORD=$(cat $SECRET_PATH)
+echo "password is $PASSWORD"
 
 echo "dump database $CONTAINER:$DB ..."
 podman exec $CONTAINER rm -rf /temp_dump/
-podman exec $CONTAINER mongodump -d $DB -o /temp_dump --gzip
+podman exec $CONTAINER mongodump -d $DB --username=writeuser --password=$PASSWORD -o /temp_dump --gzip
 
 FILENAME="$DEST_PATH$CONTAINER.$DB.$(date +"%Y-%m-%d")"
 echo "retrieve the db dump files to $DEST_PATH ..."

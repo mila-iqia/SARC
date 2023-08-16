@@ -1,9 +1,11 @@
+import json
 import tempfile
 import zoneinfo
 from pathlib import Path
 from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
+from _pytest.monkeypatch import MonkeyPatch
 
 from sarc.config import (
     ClusterConfig,
@@ -20,8 +22,6 @@ pytest_plugins = "fabric.testing.fixtures"
 
 @pytest.fixture(scope="session")
 def standard_config_object():
-    from _pytest.monkeypatch import MonkeyPatch
-
     mpatch = MonkeyPatch()
     mpatch.setenv("SARC_MODE", "scrapping")
     yield parse_config(Path(__file__).parent / "sarc-test.json", ScrapperConfig)
@@ -30,8 +30,6 @@ def standard_config_object():
 
 @pytest.fixture(scope="session")
 def client_config_object():
-    from _pytest.monkeypatch import MonkeyPatch
-
     mpatch = MonkeyPatch()
     mpatch.setenv("SARC_MODE", "client")
     yield parse_config(Path(__file__).parent / "sarc-test-client.json", Config)
