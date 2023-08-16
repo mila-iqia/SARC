@@ -273,7 +273,9 @@ def config():
 
 
 @contextmanager
-def using_config(cfg: Union[str, Path, Config], cls=Config):
+def using_config(cfg: Union[str, Path, Config], cls=None):
+    cls = cls or _config_class(os.getenv("SARC_MODE", "none"))
+
     if isinstance(cfg, (str, Path)):
         cfg = parse_config(cfg, cls)
 
