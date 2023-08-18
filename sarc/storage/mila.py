@@ -92,8 +92,9 @@ def fetch_diskusage_report(cluster: ClusterConfig, retries: int = 3):
         if err:
             errors.extend(err)
 
-        group = parse_beegfs_csv(result)
-        usage.extend(group.users)
+        if resulst is not None:
+            group = parse_beegfs_csv(result)
+            usage.extend(group.users)
 
     print(f"Error Count: {len(errors)}")
     print(f"Failures: {len(failures)}")
