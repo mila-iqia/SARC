@@ -32,6 +32,7 @@ tox = ">= 4.4.5"
 pytest-freezegun = ">= 0.4.2"
 fabric = {extras = ["testing"], version = "^3.0.0"}
 pytest-timeout = "^2.1.0"
+pytest-custom-exit-code = ">= 0.3.0"
 coverage = "^7.2.7"
 pytest-xdist = "^3.3.1"
 
