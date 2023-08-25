@@ -13,7 +13,7 @@ $ ./serverinit.sh <server>
 Install, start and stop mongo package on the server
 
 ```
-$ ./mongo.sh <server> [install|start|stop|status]
+$ ./mongo.sh <server> [start|stop|status]
 ```
 
 You **MUST** run `./mongo.sh <server> install` once before deploying systemd scripts.
