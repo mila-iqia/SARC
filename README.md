@@ -79,3 +79,12 @@ sarc/account_matching/update_account_matches_in_database.py
 sarc/inode_storage_scanner/get_diskusage.py  (stub)
 ```
 
+### How to generate doc
+
+To generate documentation in HTML format in folder `docs\_build`:
+
+```
+sphinx-build -b html docs/ docs/_build
+```
+
+You can then open `docs\_build\index.html` on a web browser.
