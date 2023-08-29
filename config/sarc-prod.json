@@ -26,7 +26,7 @@
             "sacct_bin": "/opt/slurm/bin/sacct",
             "duc_inodes_command": null,
             "duc_storage_command": null,
-            "diskusage_report_command": null,
+            "diskusage_report_command": "beegfs-ctl --cfgFile=/etc/beegfs/home.d/beegfs-client.conf --getquota --uid $USER --csv",
             "prometheus_url": "http://monitoring.server.mila.quebec:9090/",
             "start_date": "2022-04-01"
         },

@@ -125,7 +125,7 @@ def parse_diskusage_report(L_lines: list[str]):
     return header, body
 
 
-def fetch_diskusage_report(cluster: ClusterConfig):
+def _fetch_diskusage_report(cluster: ClusterConfig):
     """
         Get the output of the command diskusage_report --project --all_users on the wanted cluster
 
@@ -185,3 +185,13 @@ def convert_parsed_report_to_diskusage(cluster_name, parsed_report):
     return DiskUsage(
         cluster_name=cluster_name, groups=groups, timestamp=datetime.utcnow()
     )
+
+
+def fetch_diskusage_report(cluster: ClusterConfig):
+    report = _fetch_diskusage_report(cluster)
+
+    _, body = parse_diskusage_report(report)
+
+    du = convert_parsed_report_to_diskusage(cluster.name, body)
+
+    return du

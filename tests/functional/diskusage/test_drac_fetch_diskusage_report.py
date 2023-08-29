@@ -4,11 +4,9 @@ tests the scrapping of disk usage report on DRAC clusters
 from pathlib import Path
 
 import pytest
-from fabric.testing.base import Command, MockRemote, Session
 
-from sarc.cli import main
-from sarc.storage.diskusage import get_diskusage_collection, get_diskusages
-from sarc.storage.drac import fetch_diskusage_report
+from sarc.storage.diskusage import get_diskusages
+from sarc.storage.drac import _fetch_diskusage_report
 
 
 @pytest.mark.usefixtures("client_config")
@@ -29,7 +27,7 @@ def test_drac_fetch_diskusage_report(test_config, remote, file_regression):
         out=str.encode(raw_report),
     )
 
-    report = fetch_diskusage_report(cluster=test_config.clusters["hyrule"])
+    report = _fetch_diskusage_report(cluster=test_config.clusters["hyrule"])
     file_regression.check("\n".join(report))
 
 

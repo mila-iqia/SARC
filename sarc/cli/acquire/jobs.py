@@ -7,6 +7,7 @@ from typing import Generator
 from simple_parsing import field
 
 from sarc.config import config
+from sarc.errors import ClusterNotFound
 from sarc.jobs.sacct import sacct_mongodb_import
 
 
@@ -53,7 +54,7 @@ def _dates_auto_first_date(cluster_name: str) -> datetime:
     db_collection = db.clusters
     cluster = db_collection.find_one({"cluster_name": cluster_name})
     if cluster is None:
-        raise Exception(f"Cluster {cluster_name} not found in database")
+        raise ClusterNotFound(f"Cluster {cluster_name} not found in database")
     start_date = cluster["start_date"]
     print(f"start_date={start_date}")
     end_date = cluster["end_date"]
