@@ -94,6 +94,36 @@
             "diskusage_report_command": "diskusage_report --project --all_users",
             "prometheus_url": "https://hyrule-thanos.calcul.ca",
             "prometheus_headers_file": "tests/not-so-secrets/patate_prometheus/headers.json"
+        },
+        "local1": {
+            "host": null,
+            "timezone": "America/Montreal",
+            "accounts": null,
+            "sacct_bin": "/opt/slurm/bin/sacct",
+            "duc_inodes_command": null,
+            "duc_storage_command": null,
+            "diskusage_report_command": null,
+            "prometheus_url": null
+        },
+        "local2": {
+            "host": "",
+            "timezone": "America/Montreal",
+            "accounts": null,
+            "sacct_bin": "/opt/slurm/bin/sacct",
+            "duc_inodes_command": null,
+            "duc_storage_command": null,
+            "diskusage_report_command": null,
+            "prometheus_url": null
+        },
+        "local3": {
+            "host": "localhost",
+            "timezone": "America/Montreal",
+            "accounts": null,
+            "sacct_bin": "/opt/slurm/bin/sacct",
+            "duc_inodes_command": null,
+            "duc_storage_command": null,
+            "diskusage_report_command": null,
+            "prometheus_url": null
         }
     }
 }

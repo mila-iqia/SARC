@@ -1,5 +1,6 @@
 import json
 import logging
+import subprocess
 import sys
 import traceback
 from datetime import date, datetime, time, timedelta
@@ -55,15 +56,20 @@ class SAcctScraper:
             self.cachefile = None
 
     def fetch_raw(self) -> dict:
-        """Fetch the raw sacct data as a dict via SSH."""
+        """Fetch the raw sacct data as a dict via SSH, or run sacct locally."""
         fmt = "%Y-%m-%dT%H:%M"
         start = self.start.strftime(fmt)
         end = self.end.strftime(fmt)
         accounts = self.cluster.accounts and ",".join(self.cluster.accounts)
         accounts_option = f"-A {accounts}" if accounts else ""
         cmd = f"{self.cluster.sacct_bin} {accounts_option} -X -S '{start}' -E '{end}' --json"
-        print(f"{self.cluster.name} $ {cmd}")
-        results = self.cluster.ssh.run(cmd, hide=True)
+        if self.cluster.host in ("localhost", "", None):
+            cmd_splitted = cmd.split()
+            results = subprocess.run(
+                cmd_splitted, shell=True, text=True, capture_output=True, check=False
+            )
+        else:
+            results = self.cluster.ssh.run(cmd, hide=True)
         return json.loads(results.stdout[results.stdout.find("{") :])
 
     def get_raw(self) -> dict:
