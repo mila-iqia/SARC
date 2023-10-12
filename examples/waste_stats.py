@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 import pandas as pd
 from tqdm import tqdm
 
-from sarc.config import config,_config_class,ScraperConfig
+from sarc.config import ScraperConfig, _config_class, config
 from sarc.jobs import get_jobs
 
 
@@ -46,6 +46,7 @@ def load_job_series(filename=None) -> pd.DataFrame:
     assert isinstance(df, pd.DataFrame)
 
     return df
+
 
 # to access series, you need prometheus access rights. This is doable only with `SARC_MODE=scraping` for the moment
 # check SARC_MODE env variable
