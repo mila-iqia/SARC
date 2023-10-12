@@ -185,7 +185,7 @@ class Config(BaseModel):
     _abs_path = validator("cache", allow_reuse=True)(_absolute_path)
 
 
-class ScrapperConfig(BaseModel):
+class ScraperConfig(BaseModel):
     mongo: MongoConfig
     cache: Path = None
 
@@ -246,7 +246,7 @@ def parse_config(config_path, config_cls=Config):
 
 def _config_class(mode):
     modes = {
-        "scrapping": ScrapperConfig,
+        "scraping": ScraperConfig,
         "client": Config,
     }
     return modes.get(mode, Config)
@@ -264,7 +264,7 @@ def config():
     except pydantic.error_wrappers.ValidationError as err:
         if config_class is Config:
             raise ConfigurationError(
-                "Try `SARC_MODE=scrapping sarc acquire...` if you want admin rights"
+                "Try `SARC_MODE=scraping sarc ...` if you want admin rights"
             ) from err
         raise
 

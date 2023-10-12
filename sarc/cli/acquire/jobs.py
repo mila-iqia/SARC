@@ -20,7 +20,7 @@ def parse_dates(dates: list[str], cluster_name: str) -> list[(datetime, bool)]:
     for date in dates:
         if date == "auto":
             # is_auto is set to True to indicate that the database collection `clusters`
-            # should be updated if scrapping successful
+            # should be updated if scraping successful
             dates_auto = _dates_auto(cluster_name)
             parsed_dates.extend([(date, True) for date in dates_auto])
         elif date.count("-") == 5:
