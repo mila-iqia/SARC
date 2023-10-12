@@ -20,7 +20,7 @@
     "sshconfig": "~/.ssh/config",
     "clusters": {
         "mila": {
-            "host": "mila",
+            "host": "localhost",
             "timezone": "America/Montreal",
             "accounts": null,
             "sacct_bin": "/opt/slurm/bin/sacct",
