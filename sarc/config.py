@@ -8,6 +8,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any, Union
 
+import pydantic
 import tzlocal
 from bson import ObjectId
 from pydantic import BaseModel as _BaseModel
@@ -73,6 +74,7 @@ class ClusterConfig(BaseModel):
     timezone: Union[str, zoneinfo.ZoneInfo]  # | does not work with Pydantic's eval
     prometheus_url: str = None
     prometheus_headers_file: str = None
+    nodes_info_file: str = None
     name: str = None
     sacct_bin: str = "sacct"
     accounts: list[str] = None
@@ -80,6 +82,7 @@ class ClusterConfig(BaseModel):
     duc_inodes_command: str = None
     duc_storage_command: str = None
     diskusage_report_command: str = None
+    start_date: str = "2022-04-01"
 
     @validator("timezone")
     def _timezone(cls, value):
@@ -121,6 +124,19 @@ class ClusterConfig(BaseModel):
             )
         return PrometheusConnect(url=self.prometheus_url, headers=headers)
 
+    @cached_property
+    def node_to_gpu(self):
+        """
+        Return a dictionary-like mapping a cluster's node name to a GPU type.
+
+        Parsed from self.nodes_info_file if available.
+
+        Dict-like object will return None if queried node name is not found.
+        """
+        from .jobs.node_gpu_mapping import NodeToGPUMapping
+
+        return NodeToGPUMapping(self.name, self.nodes_info_file)
+
 
 class MongoConfig(BaseModel):
     connection_string: str
@@ -139,26 +155,46 @@ class LDAPConfig(BaseModel):
     local_certificate_file: str
     ldap_service_uri: str
     mongo_collection_name: str
+    group_to_prof_json_path: str = None
+    exceptions_json_path: str = None
+
+    @validator("group_to_prof_json_path")
+    def _relative_group_to_prof(cls, value):
+        return relative_filepath(value)
+
+    @validator("exceptions_json_path")
+    def _relative_exception(cls, value):
+        return relative_filepath(value)
 
 
 class AccountMatchingConfig(BaseModel):
-    cc_members_csv_path: Path
-    cc_roles_csv_path: Path
-    mila_emails_to_ignore: list[str]
-    override_matches_mila_to_cc: dict[str, str]
+    drac_members_csv_path: Path
+    drac_roles_csv_path: Path
+    make_matches_config: Path
+
+
+# pylint: disable=unused-argument,redefined-outer-name
+def _absolute_path(value, values, config, field):
+    return value and value.expanduser().absolute()
 
 
 class Config(BaseModel):
     mongo: MongoConfig
-    ldap: LDAPConfig
-    account_matching: AccountMatchingConfig
-    sshconfig: Path = None
     cache: Path = None
-    clusters: dict[str, ClusterConfig]
 
-    @validator("cache", "sshconfig")
-    def _absolute_path(cls, value):
-        return value and value.expanduser().absolute()
+    _abs_path = validator("cache", allow_reuse=True)(_absolute_path)
+
+
+class ScrapperConfig(BaseModel):
+    mongo: MongoConfig
+    cache: Path = None
+
+    ldap: LDAPConfig = None
+    account_matching: AccountMatchingConfig = None
+    sshconfig: Path = None
+    clusters: dict[str, ClusterConfig] = None
+
+    _abs_path = validator("cache", "sshconfig", allow_reuse=True)(_absolute_path)
 
     @validator("clusters")
     def _complete_cluster_fields(cls, value, values):
@@ -173,8 +209,26 @@ class Config(BaseModel):
 config_var = ContextVar("config", default=None)
 
 
-def parse_config(config_path):
+_config_folder = None
+
+
+def relative_filepath(path):
+    """Allows files to be relative to the config"""
+    if path is None:
+        return path
+
+    if "$SELF" in path:
+        return path.replace("$SELF", str(_config_folder))
+
+    return path
+
+
+def parse_config(config_path, config_cls=Config):
+    # pylint: disable=global-statement
+    global _config_folder
     config_path = Path(config_path)
+
+    _config_folder = str(config_path.parent)
 
     if not config_path.exists():
         raise ConfigurationError(
@@ -183,25 +237,48 @@ def parse_config(config_path):
         )
 
     try:
-        cfg = Config.parse_file(config_path)
+        cfg = config_cls.parse_file(config_path)
     except json.JSONDecodeError as exc:
         raise ConfigurationError(f"'{config_path}' contains malformed JSON") from exc
 
     return cfg
 
 
+def _config_class(mode):
+    modes = {
+        "scrapping": ScrapperConfig,
+        "client": Config,
+    }
+    return modes.get(mode, Config)
+
+
 def config():
     if (current := config_var.get()) is not None:
         return current
-    cfg = parse_config(os.environ.get("SARC_CONFIG", "config/sarc-dev.json"))
+
+    config_path = os.getenv("SARC_CONFIG", "config/sarc-dev.json")
+    config_class = _config_class(os.getenv("SARC_MODE", "none"))
+
+    try:
+        cfg = parse_config(config_path, config_class)
+    except pydantic.error_wrappers.ValidationError as err:
+        if config_class is Config:
+            raise ConfigurationError(
+                "Try `SARC_MODE=scrapping sarc acquire...` if you want admin rights"
+            ) from err
+        raise
+
     config_var.set(cfg)
     return cfg
 
 
 @contextmanager
-def using_config(cfg: Union[str, Path, Config]):
+def using_config(cfg: Union[str, Path, Config], cls=None):
+    cls = cls or _config_class(os.getenv("SARC_MODE", "none"))
+
     if isinstance(cfg, (str, Path)):
-        cfg = parse_config(cfg)
+        cfg = parse_config(cfg, cls)
+
     token = config_var.set(cfg)
     yield cfg
     config_var.reset(token)

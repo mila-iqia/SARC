@@ -1,4 +1,3 @@
-
 # Quick guide on LDAP retrieval and account matching
 
 ## Structure in MongoDB
@@ -12,8 +11,8 @@ Entries in that collection have the following form.
       "mila_cluster_username": "applej",
       ...
     },
-    "cc_roles": None,
-    "cc_members": {
+    "drac_roles": None,
+    "drac_members": {
         "username": "johns",
         ...}
 ```
@@ -66,8 +65,8 @@ export PYTHONPATH=$PYTHONPATH:`pwd`
 python3 sarc/account_matching/make_matches.py \
     --config_path secrets/account_matching/make_matches_config.json \
     --mila_ldap_path secrets/account_matching/2022-11-26_mila_users.json \
-    --cc_members_path secrets/account_matching/members-rrg-bengioy-ad-2022-11-25.csv \
-    --cc_roles_path 'secrets/account_matching/sponsored_roles_for_Yoshua_Bengio_(CCI_jvb-000).csv' \
+    --drac_members_path secrets/account_matching/members-rrg-bengioy-ad-2022-11-25.csv \
+    --drac_roles_path 'secrets/account_matching/sponsored_roles_for_Yoshua_Bengio_(CCI_jvb-000).csv' \
     --output_path matches_done.json
 ```
 

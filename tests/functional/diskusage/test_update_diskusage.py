@@ -2,13 +2,23 @@ import os
 
 import pytest
 
-from sarc.config import config
-from sarc.storage.diskusage import get_diskusage_collection, get_diskusages
-from sarc.storage.drac import convert_parsed_report_to_diskusage, parse_diskusage_report
+import sarc.storage.drac
+from sarc.storage.diskusage import get_diskusages
 
 FOLDER = os.path.dirname(os.path.abspath(__file__))
 
 
+@pytest.fixture
+def mock_drac_fetch(monkeypatch):
+    def mock_fetch(cluster, *args):
+        path = os.path.join(FOLDER, f"drac_reports/report_{cluster.name}.txt")
+        with open(path, "r") as f:
+            return f.readlines()
+
+    monkeypatch.setattr(sarc.storage.drac, "_fetch_diskusage_report", mock_fetch)
+
+
+@pytest.mark.usefixtures("mock_drac_fetch")
 @pytest.mark.usefixtures("empty_read_write_db")
 @pytest.mark.freeze_time("2023-05-12")
 def test_update_drac_diskusage_one(file_regression, cli_main):
@@ -18,8 +28,6 @@ def test_update_drac_diskusage_one(file_regression, cli_main):
         [
             "acquire",
             "storages",
-            "--file",
-            os.path.join(FOLDER, "drac_reports/report_gerudo.txt"),
             "-c",
             "gerudo",
         ]
@@ -30,6 +38,7 @@ def test_update_drac_diskusage_one(file_regression, cli_main):
     file_regression.check(data[0].json(exclude={"id": True}, indent=4))
 
 
+@pytest.mark.usefixtures("mock_drac_fetch")
 @pytest.mark.usefixtures("empty_read_write_db")
 @pytest.mark.freeze_time("2023-05-12")
 def test_update_drac_diskusage_two(file_regression, cli_main):
@@ -38,8 +47,6 @@ def test_update_drac_diskusage_two(file_regression, cli_main):
         [
             "acquire",
             "storages",
-            "--file",
-            os.path.join(FOLDER, "drac_reports/report_gerudo.txt"),
             "-c",
             "gerudo",
         ]
@@ -48,8 +55,6 @@ def test_update_drac_diskusage_two(file_regression, cli_main):
         [
             "acquire",
             "storages",
-            "--file",
-            os.path.join(FOLDER, "drac_reports/report_hyrule.txt"),
             "-c",
             "hyrule",
         ]
@@ -65,6 +70,7 @@ def test_update_drac_diskusage_two(file_regression, cli_main):
     file_regression.check(data_json)
 
 
+@pytest.mark.usefixtures("mock_drac_fetch")
 @pytest.mark.usefixtures("empty_read_write_db")
 @pytest.mark.freeze_time("2023-05-12")
 def test_update_drac_diskusage_no_duplicate(file_regression, cli_main):
@@ -74,8 +80,6 @@ def test_update_drac_diskusage_no_duplicate(file_regression, cli_main):
         [
             "acquire",
             "storages",
-            "--file",
-            os.path.join(FOLDER, "drac_reports/report_gerudo.txt"),
             "-c",
             "gerudo",
         ]
@@ -84,8 +88,6 @@ def test_update_drac_diskusage_no_duplicate(file_regression, cli_main):
         [
             "acquire",
             "storages",
-            "--file",
-            os.path.join(FOLDER, "drac_reports/report_gerudo.txt"),
             "-c",
             "gerudo",
         ]

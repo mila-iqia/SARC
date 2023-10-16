@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 import pymongo
+from simple_parsing import choice
 
 from sarc.allocations.allocations import AllocationsRepository
 from sarc.config import config
@@ -14,20 +15,34 @@ class DbInit:
     url: Optional[str]
     database: Optional[str]
 
+    username: Optional[str]
+    password: Optional[str]
+    account: Optional[str] = choice("admin", "write", "read")
+
     def execute(self) -> int:
         cfg = config()
         url = cfg.mongo.connection_string if self.url is None else self.url
-        database = cfg.mongo.database_name if self.database is None else self.database
+        self.database = (
+            cfg.mongo.database_name if self.database is None else self.database
+        )
 
         client = pymongo.MongoClient(url)
-        db = client.get_database(database)
+        db = client.get_database(self.database)
 
-        # There is no need to create the collections first, they will be
+        self.create_readonly_role(db)
+
+        self.create_acount(client, db)
+
+        create_clusters(db)
+
+        # There is no need to create the other collections first, they will be
         # created when the index is created.
 
         # NOTE: Compound indices with mongodb provide subsets of compound index using prefix.
         #       Ex: For the compound index (a, b, c), we also get compound indices (a, b) and (a)
         #       But we don't get (b, c) or (c), which we must create explicitly if needed.
+
+        create_clusters_indices(db)
 
         create_jobs_indices(db)
 
@@ -39,6 +54,80 @@ class DbInit:
 
         return 0
 
+    def create_acount(self, client, db):
+        if self.username is None or self.password is None:
+            return
+
+        if self.account == "admin":
+            client.admin.command(
+                "createUser",
+                self.username,
+                pwd=self.password,
+                roles=[
+                    {"role": "userAdminAnyDatabase", "db": "admin"},
+                    {"role": "readWriteAnyDatabase", "db": "admin"},
+                ],
+            )
+
+        if self.account == "read":
+            db.command(
+                "createUser",
+                self.username,
+                pwd=self.password,
+                roles=[{"role": f"{self.database}ReadOnly", "db": self.database}],
+            )
+
+        if self.account == "write":
+            db.command(
+                "createUser",
+                self.username,
+                pwd=self.password,
+                roles=[{"role": "readWrite", "db": self.database}],
+            )
+
+    def create_readonly_role(self, db):
+        collections = [
+            "allocations",
+            "diskusage",
+            "users",
+            "jobs",
+            "clusters",
+        ]
+
+        try:
+            db.command(
+                "createRole",
+                f"{self.database}ReadOnly",
+                privileges=[
+                    {
+                        "actions": ["find"],
+                        "resource": {"db": self.database, "collection": coll},
+                    }
+                    for coll in collections
+                ],
+                roles=[],
+            )
+        except pymongo.errors.OperationFailure as err:
+            if "already exists" not in str(err):
+                raise
+
+
+def create_clusters(db):
+    db_cluster = db.clusters
+    # populate the db with default starting dates for each cluster
+    for cluster_name in config().clusters:
+        cluster = config().clusters[cluster_name]
+        db_cluster.update_one(
+            {"cluster_name": cluster_name},
+            {"$setOnInsert": {"start_date": cluster.start_date, "end_date": None}},
+            upsert=True,
+        )
+
+
+def create_clusters_indices(db):
+    db_collection = db.clusters
+    db_collection.create_index([("cluster_name", pymongo.ASCENDING)], unique=True)
+
 
 def create_users_indices(db):
     # db_collection = UserRepository(database=db).get_collection()
@@ -48,8 +137,8 @@ def create_users_indices(db):
     db_collection.create_index([("mila_ldap.mila_cluster_username", pymongo.ASCENDING)])
     db_collection.create_index(
         [
-            ("cc_roles.username", pymongo.ASCENDING),
-            ("cc_members.username", pymongo.ASCENDING),
+            ("drac_roles.username", pymongo.ASCENDING),
+            ("drac_members.username", pymongo.ASCENDING),
         ]
     )
 

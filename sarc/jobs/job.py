@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime, time, timedelta
 from enum import Enum
-from typing import Optional
+from functools import cache
+from typing import Iterable, Optional
 
 from pydantic import validator
 from pydantic_mongo import AbstractRepository, ObjectIdField
@@ -60,6 +61,7 @@ class JobStatistics(BaseModel):
 
     gpu_utilization: Optional[Statistics]
     gpu_memory: Optional[Statistics]
+    gpu_power: Optional[Statistics]
 
     cpu_utilization: Optional[Statistics]
     system_memory: Optional[Statistics]
@@ -116,7 +118,7 @@ class SlurmJob(BaseModel):
     # temporal fields
     time_limit: Optional[int]
     submit_time: datetime
-    start_time: datetime
+    start_time: Optional[datetime]
     end_time: Optional[datetime]
     elapsed_time: int
 
@@ -131,10 +133,6 @@ class SlurmJob(BaseModel):
     def _ensure_timezone(cls, v):
         # We'll store in MTL timezone because why not
         return v and v.replace(tzinfo=UTC).astimezone(MTL)
-
-    @property
-    def cluster(self):
-        return config().clusters[self.cluster_name]
 
     @property
     def duration(self):
@@ -153,15 +151,21 @@ class SlurmJob(BaseModel):
 
         if self.stored_statistics and not recompute:
             return self.stored_statistics
-        else:
+        elif self.end_time and self.fetch_cluster_config().prometheus_url:
             statistics = compute_job_statistics(self)
-            if save and statistics and self.end_time:
+            if save:
                 self.stored_statistics = statistics
                 self.save()
             return statistics
 
+        return None
+
     def save(self):
         jobs_collection().save_job(self)
+
+    def fetch_cluster_config(self):
+        """This function is only available on the admin side"""
+        return config().clusters[self.cluster_name]
 
 
 class SlurmJobRepository(AbstractRepository[SlurmJob]):
@@ -194,6 +198,13 @@ def jobs_collection():
     return SlurmJobRepository(database=db)
 
 
+@cache
+def get_clusters():
+    """Fetch all possible clusters"""
+    jobs = jobs_collection().get_collection()
+    return jobs.distinct("cluster_name", {})
+
+
 # pylint: disable=too-many-branches,dangerous-default-value
 def get_jobs(
     *,
@@ -203,8 +214,8 @@ def get_jobs(
     user: str | None = None,
     start: str | datetime | None = None,
     end: str | datetime | None = None,
-    query_options: dict = {},
-) -> list[SlurmJob]:
+    query_options: dict | None = None,
+) -> Iterable[SlurmJob]:
     """Get jobs that match the query.
 
     Arguments:
@@ -214,8 +225,12 @@ def get_jobs(
         end: Get all jobs that have a status before that time.
         query_options: Additional options to pass to MongoDB (limit, etc.)
     """
-    if isinstance(cluster, str):
-        cluster = config().clusters[cluster]
+    if query_options is None:
+        query_options = {}
+
+    cluster_name = cluster
+    if isinstance(cluster, ClusterConfig):
+        cluster_name = cluster.name
 
     if isinstance(start, str):
         start = datetime.combine(
@@ -232,8 +247,8 @@ def get_jobs(
         end = end.astimezone(UTC)
 
     query = {}
-    if isinstance(cluster, ClusterConfig):
-        query["cluster_name"] = cluster.name
+    if cluster_name:
+        query["cluster_name"] = cluster_name
 
     if isinstance(job_id, int):
         query["job_id"] = job_id

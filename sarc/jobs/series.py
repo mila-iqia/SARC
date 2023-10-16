@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from pandas import DataFrame
 from prometheus_api_client import MetricRangeDataFrame
 
 from sarc.config import MTL, UTC
 from sarc.jobs.job import JobStatistics, Statistics
-from sarc.jobs.sacct import SlurmJob
+
+if TYPE_CHECKING:
+    from sarc.jobs.sacct import SlurmJob
 
 
 # pylint: disable=too-many-branches
@@ -47,8 +50,7 @@ def get_job_time_series(
     if metric not in slurm_job_metric_names:
         raise ValueError(f"Unknown metric name: {metric}")
 
-    nodes = "|".join(job.nodes)
-    selector = f'{metric}{{slurmjobid=~"{job.job_id}",instance=~"{nodes}"}}'
+    selector = f'{metric}{{slurmjobid=~"{job.job_id}"}}'
 
     now = datetime.now(tz=UTC).astimezone(MTL)
 
@@ -87,7 +89,7 @@ def get_job_time_series(
     else:
         query = f"{query}[{duration_seconds}s:{interval}s] {offset_string}"
 
-    results = job.cluster.prometheus.custom_query(query)
+    results = job.fetch_cluster_config().prometheus.custom_query(query)
     if dataframe:
         return MetricRangeDataFrame(results) if results else None
     else:
@@ -187,6 +189,13 @@ def compute_job_statistics(job: SlurmJob):
         unused_threshold=None,
     )
 
+    gpu_power = compute_job_statistics_one_metric(
+        job,
+        "slurm_job_power_gpu",
+        statistics=statistics_dict,
+        unused_threshold=None,
+    )
+
     cpu_utilization = compute_job_statistics_one_metric(
         job,
         "slurm_job_core_usage",
@@ -206,6 +215,7 @@ def compute_job_statistics(job: SlurmJob):
     return JobStatistics(
         gpu_utilization=gpu_utilization and Statistics(**gpu_utilization),
         gpu_memory=gpu_memory and Statistics(**gpu_memory),
+        gpu_power=gpu_power and Statistics(**gpu_power),
         cpu_utilization=cpu_utilization and Statistics(**cpu_utilization),
         system_memory=system_memory and Statistics(**system_memory),
     )

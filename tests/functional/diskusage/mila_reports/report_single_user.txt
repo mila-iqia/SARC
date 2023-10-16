@@ -1,0 +1,5 @@
+
+Quota information for storage pool Default (ID: 1):
+
+name,id,size,hard,files,hard
+user1,1500000082,51046633472,107374182400,201276,1000000

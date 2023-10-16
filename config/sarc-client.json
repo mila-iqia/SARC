@@ -1,0 +1,7 @@
+{
+    "mongo": {
+        "connection_string": "mongodb://readuser:readpwd@localhost:8123/sarc",
+        "database_name": "sarc"
+    },
+    "cache": "./sarc-cache"
+}

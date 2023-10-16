@@ -1,19 +1,20 @@
 {
     "mongo": {
-        "connection_string": "localhost:27017",
+        "connection_string": "mongodb://localhost:27017/sarc-dev",
         "database_name": "sarc-dev"
     },
     "ldap": {
         "local_private_key_file": "secrets/ldap/Google_2026_01_26_66827.key",
         "local_certificate_file": "secrets/ldap/Google_2026_01_26_66827.crt",
         "ldap_service_uri": "ldaps://ldap.google.com",
-        "mongo_collection_name": "users"
+        "mongo_collection_name": "users",
+        "group_to_prof_json_path": "secrets/group_to_prof.json",
+        "exceptions_json_path": "secrets/exceptions.json"
     },
     "account_matching": {
-        "cc_members_csv_path": "secrets/account_matching/members-rrg-bengioy-ad-2022-11-25.csv",
-        "cc_roles_csv_path": "secrets/account_matching/sponsored_roles_for_Yoshua_Bengio_(CCI_jvb-000).csv",
-        "mila_emails_to_ignore" : [],
-        "override_matches_mila_to_cc" : {}
+        "drac_members_csv_path": "secrets/account_matching/members-rrg-bengioy-ad-2022-11-25.csv",
+        "drac_roles_csv_path": "secrets/account_matching/sponsored_roles_for_Yoshua_Bengio_(CCI_jvb-000).csv",
+        "make_matches_config": "secrets/account_matching/make_matches_config.json"
     },
     "cache": "./sarc-cache",
     "sshconfig": "~/.ssh/config",
@@ -25,8 +26,9 @@
             "sacct_bin": "/opt/slurm/bin/sacct",
             "duc_inodes_command": null,
             "duc_storage_command": null,
-            "diskusage_report_command": null,
-            "prometheus_url": "http://monitoring.server.mila.quebec:9090/"
+            "diskusage_report_command": "beegfs-ctl --cfgFile=/etc/beegfs/home.d/beegfs-client.conf --getquota --uid $USER --csv",
+            "prometheus_url": "http://monitoring.server.mila.quebec:9090/",
+            "start_date": "2022-04-01"
         },
         "narval": {
             "host": "narval.computecanada.ca",
@@ -37,7 +39,8 @@
             "duc_storage_command": "duc ls -d /project/.duc_databases/rrg-bengioy-ad.sqlite /project/rrg-bengioy-ad",
             "diskusage_report_command": "diskusage_report --project --all_users",
             "prometheus_url": "https://mila-thanos.calculquebec.ca",
-            "prometheus_headers_file": "secrets/drac_prometheus/headers.json"
+            "prometheus_headers_file": "secrets/drac_prometheus/headers.json",
+            "start_date": "2022-04-01"
         },
         "beluga": {
             "host": "beluga.computecanada.ca",
@@ -48,7 +51,8 @@
             "duc_storage_command": "duc ls -d /project/.duc_databases/rrg-bengioy-ad.sqlite /project/rrg-bengioy-ad",
             "diskusage_report_command": "diskusage_report --project --all_users",
             "prometheus_url": "https://mila-thanos.calculquebec.ca",
-            "prometheus_headers_file": "secrets/drac_prometheus/headers.json"
+            "prometheus_headers_file": "secrets/drac_prometheus/headers.json",
+            "start_date": "2022-04-01"
         },
         "graham": {
             "host": "graham.computecanada.ca",
@@ -59,7 +63,9 @@
             "duc_storage_command": null,
             "diskusage_report_command": "diskusage_report --project --all_users",
             "prometheus_url": "https://mila-thanos.calculquebec.ca",
-            "prometheus_headers_file": "secrets/drac_prometheus/headers.json"
+            "prometheus_headers_file": "secrets/drac_prometheus/headers.json",
+            "start_date": "2022-04-01",
+            "nodes_info_file": "secrets/nodes_graham.txt"
         },
         "cedar": {
             "host": "cedar.computecanada.ca",
@@ -70,7 +76,9 @@
             "duc_storage_command": null,
             "diskusage_report_command": "diskusage_report --project --all_users",
             "prometheus_url": "https://mila-thanos.calculquebec.ca",
-            "prometheus_headers_file": "secrets/drac_prometheus/headers.json"
+            "prometheus_headers_file": "secrets/drac_prometheus/headers.json",
+            "start_date": "2022-04-01",
+            "nodes_info_file": "secrets/nodes_cedar.txt"
         }
     }
 }

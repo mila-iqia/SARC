@@ -1,14 +1,16 @@
 """
 This script is basically a wrapper around the "read_mila_ldap.py" script.
-Instead of taking arguments from the command line, it takes them from 
+Instead of taking arguments from the command line, it takes them from
 the SARC configuration file.
 
 This is possible because the "read_mila_ldap.py" script has a `run` function
 that takes the arguments as parameters, so the argparse step comes earlier.
 
-As a result of running this script, the values in the collection 
+As a result of running this script, the values in the collection
 referenced by "cfg.ldap.mongo_collection_name" will be updated.
 """
+
+import json
 
 from pymongo import UpdateOne
 
@@ -17,31 +19,31 @@ import sarc.ldap.read_mila_ldap  # for the `run` function
 from sarc.config import config
 
 
-def run():
+def run(prompt=False):
+    """If prompt is True, script will prompt for manual matching."""
+
     cfg = config()
 
+    user_collection = cfg.mongo.database_instance[cfg.ldap.mongo_collection_name]
+
+    # Sync LDAP and mongodb
     sarc.ldap.read_mila_ldap.run(
-        local_private_key_file=cfg.ldap.local_private_key_file,
-        local_certificate_file=cfg.ldap.local_certificate_file,
-        ldap_service_uri=cfg.ldap.ldap_service_uri,
-        # write results in database
-        mongodb_database_instance=cfg.mongo.database_instance,
-        mongodb_collection=cfg.ldap.mongo_collection_name,
+        ldap=cfg.ldap,
+        mongodb_collection=user_collection,
     )
 
     # It becomes really hard to test this with script when
     # we mock the `open` calls, so we'll instead rely on
     # what has already been populated in the database.
-    LD_users = list(
-        cfg.mongo.database_instance[cfg.ldap.mongo_collection_name].find({})
-    )
+    LD_users = list(user_collection.find({}))
     LD_users = [D_user["mila_ldap"] for D_user in LD_users]
 
+    # Match DRAC/CC to mila accounts
     DLD_data = sarc.account_matching.make_matches.load_data_from_files(
         {
             "mila_ldap": LD_users,  # pass through
-            "cc_roles": cfg.account_matching.cc_roles_csv_path,
-            "cc_members": cfg.account_matching.cc_members_csv_path,
+            "drac_roles": cfg.account_matching.drac_roles_csv_path,
+            "drac_members": cfg.account_matching.drac_members_csv_path,
         }
     )
 
@@ -50,12 +52,23 @@ def run():
     #        to see what you're working with, or you can just inspect `DLD_data`
     #        by saving it somewhere.
 
-    DD_persons_matched = sarc.account_matching.make_matches.perform_matching(
+    with open(
+        cfg.account_matching.make_matches_config, "r", encoding="utf-8"
+    ) as json_file:
+        make_matches_config = json.load(json_file)
+
+    (
+        DD_persons_matched,
+        new_manual_matches,
+    ) = sarc.account_matching.make_matches.perform_matching(
         DLD_data=DLD_data,
-        mila_emails_to_ignore=cfg.account_matching.mila_emails_to_ignore,
-        override_matches_mila_to_cc=cfg.account_matching.override_matches_mila_to_cc,
+        mila_emails_to_ignore=make_matches_config["L_phantom_mila_emails_to_ignore"],
+        override_matches_mila_to_cc=make_matches_config[
+            "D_override_matches_mila_to_cc_account_username"
+        ],
         name_distance_delta_threshold=0,
         verbose=False,
+        prompt=prompt,
     )
 
     # from pprint import pprint
@@ -68,8 +81,8 @@ def run():
     #           "mila_email_username": "john.appleseed@mila.quebec",
     #           ...
     #       },
-    #       "cc_roles": {...} or None,
-    #       "cc_members": {...} or None
+    #       "drac_roles": {...} or None,
+    #       "drac_members": {...} or None
     #     }
 
     # These associations can now be propagated to the database.
@@ -77,6 +90,50 @@ def run():
         cfg.mongo.database_instance[cfg.ldap.mongo_collection_name],
         DD_persons_matched,
     )
+
+    # If new manual matches are available, save them.
+    if new_manual_matches:
+        make_matches_config["D_override_matches_mila_to_cc_account_username"].update(
+            new_manual_matches
+        )
+        with open(
+            cfg.account_matching.make_matches_config, "w", encoding="utf-8"
+        ) as json_file:
+            json.dump(make_matches_config, json_file, indent=4)
+
+
+def fill_computed_fields(data: dict):
+    mila_ldap = data.get("mila_ldap", {}) or {}
+    drac_members = data.get("drac_members", {}) or {}
+    drac_roles = data.get("drac_roles", {}) or {}
+
+    if "name" not in data:
+        data["name"] = mila_ldap.get("display_name", "???")
+
+    if "mila" not in data:
+        data["mila"] = {
+            "username": mila_ldap.get("mila_cluster_username", "???"),
+            "email": mila_ldap.get("mila_email_username", "???"),
+            "active": mila_ldap.get("status", None) == "enabled",
+        }
+
+    if "drac" not in data:
+        if drac_members:
+            data["drac"] = {
+                "username": drac_members.get("username", "???"),
+                "email": drac_members.get("email", "???"),
+                "active": drac_members.get("activation_status", None) == "activated",
+            }
+        elif drac_roles:
+            data["drac"] = {
+                "username": drac_roles.get("username", "???"),
+                "email": drac_roles.get("email", "???"),
+                "active": drac_roles.get("status", None) == "Activated",
+            }
+        else:
+            data["drac"] = None
+
+    return data
 
 
 def commit_matches_to_database(users_collection, DD_persons_matched, verbose=False):
@@ -86,22 +143,51 @@ def commit_matches_to_database(users_collection, DD_persons_matched, verbose=Fal
             D_match["mila_ldap"]["mila_email_username"] == mila_email_username
         )  # sanity check
 
-        L_updates_to_do.append(
-            UpdateOne(
-                {"mila_ldap.mila_email_username": mila_email_username},
-                {
-                    # We don't modify the "mila_ldap" field,
-                    # only add the "cc_roles" and "cc_members" fields.
-                    "$set": {
-                        "cc_roles": D_match["cc_roles"],
-                        "cc_members": D_match["cc_members"],
+        D_match = fill_computed_fields(D_match)
+
+        # if mila ldap user status = "unknown", which means the user does NOT exist in the Mila LDAP but was created as a dummy placeholder,
+        # then UPSERT the document in the database if necessary
+        # otherwise, juste update it
+        if D_match["mila_ldap"]["status"] == "unknown":
+            L_updates_to_do.append(
+                UpdateOne(
+                    {"mila_ldap.mila_email_username": mila_email_username},
+                    {
+                        # We set all the fields corresponding to the fields from `updated_user`,
+                        # so that's a convenient way to do it. Note that this does not affect
+                        # the fields in the database that are already present for that user.
+                        "$set": {
+                            "mila_ldap": D_match["mila_ldap"],
+                            "name": D_match["name"],
+                            "mila": D_match["mila"],
+                            "drac": D_match["drac"],
+                            "drac_roles": D_match["drac_roles"],
+                            "drac_members": D_match["drac_members"],
+                        },
                     },
-                },
-                # Don't add that entry if it doesn't exist.
-                # That would create some dangling entry that doesn't have a "mila_ldap" field.
-                upsert=False,
+                    upsert=True,
+                )
             )
-        )
+        else:
+            L_updates_to_do.append(
+                UpdateOne(
+                    {"mila_ldap.mila_email_username": mila_email_username},
+                    {
+                        # We don't modify the "mila_ldap" field,
+                        # only add the "drac_roles" and "drac_members" fields.
+                        "$set": {
+                            "name": D_match["name"],
+                            "mila": D_match["mila"],
+                            "drac": D_match["drac"],
+                            "drac_roles": D_match["drac_roles"],
+                            "drac_members": D_match["drac_members"],
+                        },
+                    },
+                    # Don't add that entry if it doesn't exist.
+                    # That would create some dangling entry that doesn't have a "mila_ldap" field.
+                    upsert=False,
+                )
+            )
 
     if L_updates_to_do:
         result = users_collection.bulk_write(L_updates_to_do)  #  <- the actual commit

@@ -9,8 +9,9 @@ from typing import Iterator, Optional
 from hostlist import expand_hostlist
 from tqdm import tqdm
 
-from ..config import UTC, ClusterConfig, config
-from .job import SlurmJob, jobs_collection
+from sarc.config import UTC, ClusterConfig, config
+from sarc.jobs.job import SlurmJob, jobs_collection
+from sarc.jobs.series import get_job_time_series
 
 logger = logging.getLogger(__name__)
 
@@ -188,12 +189,20 @@ class SAcctScraper:
         return job
 
 
-def sacct_mongodb_import(cluster, day) -> None:
+def sacct_mongodb_import(
+    cluster: ClusterConfig, day: datetime, no_prometheus: bool
+) -> None:
     """Fetch sacct data and store it in MongoDB.
 
     Arguments:
-        cluster: The cluster on which to fetch the data.
-        day: The day for which to fetch the data. The time does not matter.
+    Parameters
+    ----------
+    cluster: ClusterConfig
+        The configuration of the cluster on which to fetch the data.
+    day: datetime
+        The day for which to fetch the data. The time does not matter.
+    no_prometheus: bool
+        If True, avoid any scraping requiring prometheus connection.
     """
     collection = jobs_collection()
     scraper = SAcctScraper(cluster, day)
@@ -201,5 +210,49 @@ def sacct_mongodb_import(cluster, day) -> None:
     scraper.get_raw()
     print(f"Saving into mongodb collection '{collection.Meta.collection_name}'...")
     for entry in tqdm(scraper):
-        collection.save_job(entry)
+        saved = False
+        if not no_prometheus:
+            update_allocated_gpu_type(cluster, entry)
+            saved = entry.statistics(recompute=True, save=True) is not None
+
+        if not saved:
+            collection.save_job(entry)
     print(f"Saved {len(scraper)} entries.")
+
+
+def update_allocated_gpu_type(cluster: ClusterConfig, entry: SlurmJob) -> Optional[str]:
+    """Try to infer job GPU type.
+
+    Parameters
+    ----------
+    cluster: ClusterConfig
+        Cluster configuration for the current job.
+    entry: SlurmJob
+        Slurm job for which to infer the gpu type.
+
+    Returns
+    -------
+    str
+        String representing the gpu type.
+    None
+        Unable to infer gpu type.
+    """
+    if cluster.prometheus_url:
+        # Cluster does have prometheus config.
+        output = get_job_time_series(
+            job=entry,
+            metric="slurm_job_utilization_gpu_memory",
+            max_points=1,
+            dataframe=False,
+        )
+        if output:
+            entry.allocated.gpu_type = output[0]["metric"]["gpu_type"]
+    else:
+        # No prometheus config. Try to get GPU type from local JSON file.
+        gpu_types = [cluster.node_to_gpu[nodename] for nodename in entry.nodes]
+        # We should not have more than 1 GPU type per job.
+        assert len(gpu_types) <= 1
+        if gpu_types:
+            entry.allocated.gpu_type = gpu_types[0]
+
+    return entry.allocated.gpu_type

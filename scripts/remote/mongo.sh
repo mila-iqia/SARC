@@ -5,22 +5,11 @@
 
 if [ "$#" -lt 2 ]
 then
-    echo 'Usage : mongo.sh <server> [install|start|stop|status]'
+    echo 'Usage : mongo.sh <server> [start|stop|status]'
     exit 1
 fi
 
 case $2 in
-    install)
-        echo "MongoDB installation on $1..."
-        status=$(ssh $1 'sudo -H -u sarc podman container list -a --log-level error | grep sarc_mongo') 
-        if [[ -z $status ]];
-        then
-            echo 'Container sarc_mongo not found, creating it.'
-            ssh $1 'sudo -H -u sarc podman run -dt --name sarc_mongo -p 27017:27017/tcp --log-level error docker.io/library/mongo:latest'
-        else
-            echo 'Container sarc_mongo already exists ! Skipping.'
-        fi
-        ;;
     start)
         echo "MongoDB start..."
         ssh $1 'sudo -H -u sarc podman restart sarc_mongo --log-level error'
