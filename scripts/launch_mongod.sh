@@ -48,6 +48,12 @@ DESCENDING=-1
 
 set -vm
 
+
+if ! which sarc >/dev/null 2>&1; then
+    echo "sarc commandline is not installed. Please install it before running this script."
+    exit 1 
+fi
+
 function _mongo_no_auth {
     #
     #   Starts mongodb without Access Control, this is used to insert the admin user
