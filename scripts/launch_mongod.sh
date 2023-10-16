@@ -63,7 +63,7 @@ function _mongo_no_auth {
     rm -rf $DB_PATH
     mkdir -p $DB_PATH
 
-    $MONGOD_CMD --dbpath $DB_PATH/ --wiredTigerCacheSizeGB 1 --port $PORT --bind_ip localhost --pidfilepath $DB_PATH/pid 2>&1 > $DB_PATH/mongo_1.log
+    $MONGOD_CMD --dbpath $DB_PATH/ --wiredTigerCacheSizeGB 1 --port $PORT --bind_ip $ADDRESS --pidfilepath $DB_PATH/pid 2>&1 > $DB_PATH/mongo_1.log
 }
 
 
@@ -100,7 +100,7 @@ function mongo_launch {
     #       mongo_launch
     #
     mkdir -p $DB_PATH
-    $MONGOD_CMD --auth --dbpath $DB_PATH/ --wiredTigerCacheSizeGB 1 --port $PORT --bind_ip localhost --pidfilepath $DB_PATH/pid 2>&1 > $DB_PATH/mongo_2.log
+    $MONGOD_CMD --auth --dbpath $DB_PATH/ --wiredTigerCacheSizeGB 1 --port $PORT --bind_ip $ADDRESS --pidfilepath $DB_PATH/pid 2>&1 > $DB_PATH/mongo_2.log
 }
 
 
