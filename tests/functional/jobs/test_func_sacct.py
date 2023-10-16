@@ -8,6 +8,7 @@ import pytest
 from fabric.testing.base import Command, Session
 
 from sarc.config import MTL, PST, UTC, config
+from sarc.jobs import sacct
 from sarc.jobs.job import get_jobs
 from sarc.jobs.sacct import SAcctScraper
 
@@ -295,7 +296,7 @@ def test_stdout_message_before_json(
                 "raisin",
                 "--dates",
                 "2023-02-15",
-                "--ignore_statistics",
+                "--no_prometheus",
             ]
         )
         == 0
@@ -329,15 +330,22 @@ def test_get_gpu_type_from_prometheus(
 
     import sarc.cli
 
-    def assert_query(self, query):
-        assert query == 'slurm_job_utilization_gpu_memory{slurmjobid=~"1"}'
-        return [{"metric": {"gpu_type": "phantom_gpu"}}]
+    def mock_compute_job_statistics(job):
+        mock_compute_job_statistics.called += 1
+        return dict()
+
+    mock_compute_job_statistics.called = 0
 
     monkeypatch.setattr(
-        PrometheusConnect,
-        "custom_query",
-        assert_query,
+        "sarc.jobs.series.compute_job_statistics", mock_compute_job_statistics
     )
+
+    def mock_get_job_time_series(job, metric, **kwargs):
+        assert metric == "slurm_job_utilization_gpu_memory"
+        assert job.job_id == 1
+        return [{"metric": {"gpu_type": "phantom_gpu"}}]
+
+    monkeypatch.setattr(sacct, "get_job_time_series", mock_get_job_time_series)
 
     assert (
         cli_main(
@@ -348,7 +356,6 @@ def test_get_gpu_type_from_prometheus(
                 "raisin",
                 "--dates",
                 "2023-02-15",
-                "--ignore_statistics",
             ]
         )
         == 0
@@ -396,7 +403,6 @@ def test_get_gpu_type_without_prometheus(
                 "raisin_no_prometheus",
                 "--dates",
                 "2023-02-15",
-                "--ignore_statistics",
             ]
         )
         == 0
@@ -442,7 +448,7 @@ def test_save_job(
                 "raisin",
                 "--dates",
                 "2023-02-15",
-                "--ignore_statistics",
+                "--no_prometheus",
             ]
         )
         == 0
@@ -486,7 +492,7 @@ def test_update_job(
                 "raisin",
                 "--dates",
                 "2023-02-15",
-                "--ignore_statistics",
+                "--no_prometheus",
             ]
         )
         == 0
@@ -503,7 +509,7 @@ def test_update_job(
                 "raisin",
                 "--dates",
                 "2023-02-15",
-                "--ignore_statistics",
+                "--no_prometheus",
             ]
         )
         == 0
@@ -559,7 +565,7 @@ def test_save_preempted_job(
                 "raisin",
                 "--dates",
                 "2023-02-15",
-                "--ignore_statistics",
+                "--no_prometheus",
             ]
         )
         == 0
@@ -620,7 +626,7 @@ def test_multiple_dates(
                 "--dates",
                 "2023-02-15",
                 "2023-02-16-2023-02-20",
-                "--ignore_statistics",
+                "--no_prometheus",
             ]
         )
         == 0
@@ -705,7 +711,7 @@ def test_multiple_clusters_and_dates(
                 "--dates",
                 "2023-02-15",
                 "2023-02-16",
-                "--ignore_statistics",
+                "--no_prometheus",
             ]
         )
         == 0
@@ -757,7 +763,7 @@ def test_job_tz(test_config, sacct_json, remote, cli_main, prom_custom_query_moc
                 "patate",
                 "--dates",
                 "2023-02-15",
-                "--ignore_statistics",
+                "--no_prometheus",
             ]
         )
         == 0
@@ -771,12 +777,12 @@ def test_job_tz(test_config, sacct_json, remote, cli_main, prom_custom_query_moc
 @pytest.mark.usefixtures("tzlocal_is_mtl")
 @pytest.mark.parametrize("json_jobs", [{}], indirect=True)
 @pytest.mark.usefixtures("empty_read_write_db")
-@pytest.mark.parametrize("ignore_statistics", [True, False])
+@pytest.mark.parametrize("no_prometheus", [True, False])
 def test_cli_ignore_stats(
     sacct_json,
     cli_main,
     scraper,
-    ignore_statistics,
+    no_prometheus,
     monkeypatch,
     prom_custom_query_mock,
 ):
@@ -809,8 +815,8 @@ def test_cli_ignore_stats(
         "2023-02-14",
     ]
 
-    if ignore_statistics:
-        args += ["--ignore_statistics"]
+    if no_prometheus:
+        args += ["--no_prometheus"]
 
     assert len(list(get_jobs())) == 0
 
@@ -818,7 +824,7 @@ def test_cli_ignore_stats(
 
     assert len(list(get_jobs())) > 0
 
-    if ignore_statistics:
+    if no_prometheus:
         assert mock_compute_job_statistics.called == 0
     else:
         assert mock_compute_job_statistics.called >= 1

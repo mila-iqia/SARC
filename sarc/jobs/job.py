@@ -151,7 +151,7 @@ class SlurmJob(BaseModel):
 
         if self.stored_statistics and not recompute:
             return self.stored_statistics
-        elif self.end_time:
+        elif self.end_time and self.fetch_cluster_config().prometheus_url:
             statistics = compute_job_statistics(self)
             if save:
                 self.stored_statistics = statistics
