@@ -82,10 +82,10 @@ class AcquireJobs:
 
     dates: list[str] = field(alias=["-d"], default_factory=list)
 
-    ignore_statistics: bool = field(
+    no_prometheus: bool = field(
         alias=["-s"],
         action="store_true",
-        help="Ignore statistics, avoiding connection to prometheus (default: False)",
+        help="Avoid any scraping requiring connection to prometheus (default: False)",
     )
 
     def execute(self) -> int:
@@ -100,7 +100,7 @@ class AcquireJobs:
                     )
 
                     sacct_mongodb_import(
-                        clusters_configs[cluster_name], date, self.ignore_statistics
+                        clusters_configs[cluster_name], date, self.no_prometheus
                     )
                     if is_auto:
                         _dates_set_last_date(cluster_name, date)
