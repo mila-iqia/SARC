@@ -63,7 +63,8 @@ class SAcctScraper:
         end = self.end.strftime(fmt)
         accounts = self.cluster.accounts and ",".join(self.cluster.accounts)
         accounts_option = f"-A {accounts}" if accounts else ""
-        cmd = f"{self.cluster.sacct_bin} {accounts_option} -X -S '{start}' -E '{end}' --json"
+        cmd = f"{self.cluster.sacct_bin} {accounts_option} -X -S '{start}' -E '{end}' --allusers --json"
+        print(f"{self.cluster.name} $ {cmd}")
         if self.cluster.host in ("localhost", "", None):
             cmd_splitted = cmd.split()
             results = subprocess.run(
