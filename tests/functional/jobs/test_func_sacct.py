@@ -270,10 +270,7 @@ def test_sacct_bin_and_accounts(test_config, remote):
     assert len(list(scraper)) == 0
 
 
-@pytest.mark.parametrize(
-    "cluster_name",
-    ["local1", "local2", "local3"]
-)
+@pytest.mark.parametrize("cluster_name", ["local1", "local2", "local3"])
 @patch("os.system")
 @pytest.mark.usefixtures("write_setup")
 def test_localhost(os_system, cluster_name, monkeypatch):
@@ -301,7 +298,8 @@ def test_localhost(os_system, cluster_name, monkeypatch):
 
     assert len(list(scraper)) == 0
     assert mock_subprocess_run.called >= 1
-  
+
+
 @pytest.mark.parametrize(
     "test_config", [{"clusters": {"raisin": {"host": "raisin"}}}], indirect=True
 )
