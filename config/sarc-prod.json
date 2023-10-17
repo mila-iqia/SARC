@@ -20,7 +20,7 @@
     "sshconfig": "~/.ssh/config",
     "clusters": {
         "mila": {
-            "host": "localhost",
+            "host": "mila",
             "timezone": "America/Montreal",
             "accounts": null,
             "sacct_bin": "/opt/slurm/bin/sacct",
@@ -62,8 +62,8 @@
             "duc_inodes_command": null,
             "duc_storage_command": null,
             "diskusage_report_command": "diskusage_report --project --all_users",
-            "prometheus_url": "https://mila-thanos.calculquebec.ca",
-            "prometheus_headers_file": "secrets/drac_prometheus/headers.json",
+            "prometheus_url": null,
+            "prometheus_headers_file": null,
             "start_date": "2022-04-01",
             "nodes_info_file": "secrets/nodes_graham.txt"
         },
@@ -75,8 +75,8 @@
             "duc_inodes_command": null,
             "duc_storage_command": null,
             "diskusage_report_command": "diskusage_report --project --all_users",
-            "prometheus_url": "https://mila-thanos.calculquebec.ca",
-            "prometheus_headers_file": "secrets/drac_prometheus/headers.json",
+            "prometheus_url": null,
+            "prometheus_headers_file": null,
             "start_date": "2022-04-01",
             "nodes_info_file": "secrets/nodes_cedar.txt"
         }
