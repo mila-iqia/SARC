@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from pandas import DataFrame
 from prometheus_api_client import MetricRangeDataFrame
 
 from sarc.config import MTL, UTC
 from sarc.jobs.job import JobStatistics, Statistics
-from sarc.jobs.sacct import SlurmJob
+
+if TYPE_CHECKING:
+    from sarc.jobs.sacct import SlurmJob
 
 
 # pylint: disable=too-many-branches
@@ -47,8 +50,7 @@ def get_job_time_series(
     if metric not in slurm_job_metric_names:
         raise ValueError(f"Unknown metric name: {metric}")
 
-    nodes = "|".join(job.nodes)
-    selector = f'{metric}{{slurmjobid=~"{job.job_id}",instance=~"{nodes}"}}'
+    selector = f'{metric}{{slurmjobid=~"{job.job_id}"}}'
 
     now = datetime.now(tz=UTC).astimezone(MTL)
 

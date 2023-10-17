@@ -44,5 +44,11 @@ Found 1 job(s):
         "gres_gpu": 1,
         "gpu_type": "phantom_gpu"
     },
-    "stored_statistics": null
+    "stored_statistics": {
+        "gpu_utilization": null,
+        "gpu_memory": null,
+        "gpu_power": null,
+        "cpu_utilization": null,
+        "system_memory": null
+    }
 }

@@ -1,1 +1,1 @@
-slurm_job_core_usage{slurmjobid=~"1",instance=~"cn-c021"}[10800s:108s] 
+slurm_job_core_usage{slurmjobid=~"1"}[10800s:108s] 

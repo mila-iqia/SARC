@@ -1,1 +1,1 @@
-quantile_over_time(slurm_job_fp16_gpu{slurmjobid=~"1",instance=~"cn-c021"}[10800s] )[10800s:10800s]
+quantile_over_time(slurm_job_fp16_gpu{slurmjobid=~"1"}[10800s] )[10800s:10800s]
