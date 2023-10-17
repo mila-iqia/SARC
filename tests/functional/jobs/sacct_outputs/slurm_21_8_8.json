@@ -1,0 +1,181 @@
+{
+    "meta": {
+        "plugin": {
+            "type": "openapi/dbv0.0.37",
+            "name": "Slurm OpenAPI DB v0.0.37"
+        },
+        "Slurm": {
+            "version": {
+                "major": 21,
+                "micro": 8,
+                "minor": 8
+            },
+            "release": "21.08.8-2"
+        }
+    },
+    "errors": [],
+    "jobs": [
+        {
+            "account": "rrg-bengioy-ad_gpu",
+            "comment": {
+                "administrator": null,
+                "job": null,
+                "system": null
+            },
+            "allocation_nodes": 1,
+            "array": {
+                "job_id": 0,
+                "limits": {
+                    "max": {
+                        "running": {
+                            "tasks": 0
+                        }
+                    }
+                },
+                "task": null,
+                "task_id": null
+            },
+            "association": {
+                "account": "rrg-bengioy-ad_gpu",
+                "cluster": "cedar",
+                "partition": null,
+                "user": "purah"
+            },
+            "cluster": "cedar",
+            "constraints": "[p100|p100l|v100l]",
+            "derived_exit_code": {
+                "status": "SUCCESS",
+                "return_code": 0
+            },
+            "time": {
+                "elapsed": 86301,
+                "eligible": 1673275023,
+                "end": 1673369386,
+                "start": 1673275023,
+                "submission": 1673275023,
+                "suspended": 0,
+                "system": {
+                    "seconds": 0,
+                    "microseconds": 0
+                },
+                "limit": 1440,
+                "total": {
+                    "seconds": 0,
+                    "microseconds": 0
+                },
+                "user": {
+                    "seconds": 0,
+                    "microseconds": 0
+                }
+            },
+            "exit_code": {
+                "status": "SUCCESS",
+                "return_code": 0
+            },
+            "flags": [
+                "CLEAR_SCHEDULING",
+                "STARTED_ON_BACKFILL"
+            ],
+            "group": "purah",
+            "het": {
+                "job_id": 0,
+                "job_offset": null
+            },
+            "job_id": 55978384,
+            "name": "submitit",
+            "mcs": {
+                "label": ""
+            },
+            "nodes": "cdr896",
+            "partition": "gpubackfill",
+            "priority": 1314155,
+            "qos": "normal",
+            "required": {
+                "CPUs": 4,
+                "memory": 40960
+            },
+            "kill_request_user": null,
+            "reservation": {
+                "id": 0,
+                "name": 0
+            },
+            "state": {
+                "current": "REQUEUED",
+                "reason": "None"
+            },
+            "steps": [],
+            "tres": {
+                "allocated": [
+                    {
+                        "type": "cpu",
+                        "name": null,
+                        "id": 1,
+                        "count": 4
+                    },
+                    {
+                        "type": "mem",
+                        "name": null,
+                        "id": 2,
+                        "count": 40960
+                    },
+                    {
+                        "type": "node",
+                        "name": null,
+                        "id": 4,
+                        "count": 1
+                    },
+                    {
+                        "type": "billing",
+                        "name": null,
+                        "id": 5,
+                        "count": 1
+                    },
+                    {
+                        "type": "gres",
+                        "name": "gpu",
+                        "id": 1001,
+                        "count": 1
+                    }
+                ],
+                "requested": [
+                    {
+                        "type": "cpu",
+                        "name": null,
+                        "id": 1,
+                        "count": 4
+                    },
+                    {
+                        "type": "mem",
+                        "name": null,
+                        "id": 2,
+                        "count": 40960
+                    },
+                    {
+                        "type": "node",
+                        "name": null,
+                        "id": 4,
+                        "count": 1
+                    },
+                    {
+                        "type": "billing",
+                        "name": null,
+                        "id": 5,
+                        "count": 1
+                    },
+                    {
+                        "type": "gres",
+                        "name": "gpu",
+                        "id": 1001,
+                        "count": 1
+                    }
+                ]
+            },
+            "user": "purah",
+            "wckey": {
+                "wckey": "submitit",
+                "flags": []
+            },
+            "working_directory": "/scratch/purah/meta_internship"
+        }
+    ]
+}
