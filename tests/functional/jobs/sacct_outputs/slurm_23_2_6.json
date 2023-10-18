@@ -96,7 +96,7 @@
             "flags": [
                 "STARTED_ON_SUBMIT"
             ],
-            "group": null,
+            "group": "masterkohga",
             "het": {
                 "job_id": 0,
                 "job_offset": {
