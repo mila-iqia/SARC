@@ -4,8 +4,8 @@ import copy
 import json
 import subprocess
 from datetime import datetime, timedelta
-from unittest.mock import patch
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from fabric.testing.base import Command, Session
