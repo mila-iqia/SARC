@@ -287,10 +287,10 @@ def update_allocated_gpu_type(cluster: ClusterConfig, entry: SlurmJob) -> Option
             entry.allocated.gpu_type = output[0]["metric"]["gpu_type"]
     else:
         # No prometheus config. Try to get GPU type from local JSON file.
-        gpu_types = [cluster.node_to_gpu[nodename] for nodename in entry.nodes]
+        gpu_types = {cluster.node_to_gpu[nodename] for nodename in entry.nodes}
         # We should not have more than 1 GPU type per job.
         assert len(gpu_types) <= 1
         if gpu_types:
-            entry.allocated.gpu_type = gpu_types[0]
+            entry.allocated.gpu_type = gpu_types.pop()
 
     return entry.allocated.gpu_type
