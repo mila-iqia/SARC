@@ -1,0 +1,182 @@
+{
+    "meta": {
+        "plugin": {
+            "type": "openapi/dbv0.0.38",
+            "name": "Slurm OpenAPI DB v0.0.38"
+        },
+        "Slurm": {
+            "version": {
+                "major": 22,
+                "micro": 9,
+                "minor": 5
+            },
+            "release": "22.05.9"
+        }
+    },
+    "errors": [],
+    "jobs": [
+        {
+            "account": "rrg-bengioy-ad_gpu",
+            "comment": {
+                "administrator": null,
+                "job": null,
+                "system": null
+            },
+            "allocation_nodes": 4,
+            "array": {
+                "job_id": 20247445,
+                "limits": {
+                    "max": {
+                        "running": {
+                            "tasks": 0
+                        }
+                    }
+                },
+                "task": null,
+                "task_id": 100
+            },
+            "association": {
+                "account": "rrg-bengioy-ad_gpu",
+                "cluster": "narval",
+                "partition": null,
+                "user": "hudson"
+            },
+            "cluster": "narval",
+            "constraints": "[a100]",
+            "container": null,
+            "derived_exit_code": {
+                "status": "SUCCESS",
+                "return_code": 0
+            },
+            "time": {
+                "elapsed": 124403,
+                "eligible": 1692160814,
+                "end": 1693865044,
+                "start": 1693740641,
+                "submission": 1692160813,
+                "suspended": 0,
+                "system": {
+                    "seconds": 0,
+                    "microseconds": 0
+                },
+                "limit": 2880,
+                "total": {
+                    "seconds": 0,
+                    "microseconds": 0
+                },
+                "user": {
+                    "seconds": 0,
+                    "microseconds": 0
+                }
+            },
+            "exit_code": {
+                "status": "SUCCESS",
+                "return_code": 0
+            },
+            "flags": [
+                "CLEAR_SCHEDULING",
+                "STARTED_ON_SCHEDULE"
+            ],
+            "group": "hudson",
+            "het": {
+                "job_id": 0,
+                "job_offset": null
+            },
+            "job_id": 20247445,
+            "name": "roberta-encoder-with_scheduler",
+            "mcs": {
+                "label": ""
+            },
+            "nodes": "ng[30103,30203,30706-30707]",
+            "partition": "gpubase_bynode_b4",
+            "priority": 1550993,
+            "qos": "normal",
+            "required": {
+                "CPUs": 96,
+                "memory": 65536
+            },
+            "kill_request_user": null,
+            "reservation": {
+                "id": 0,
+                "name": 0
+            },
+            "state": {
+                "current": "FAILED",
+                "reason": "None"
+            },
+            "steps": [],
+            "tres": {
+                "allocated": [
+                    {
+                        "type": "cpu",
+                        "name": null,
+                        "id": 1,
+                        "count": 96
+                    },
+                    {
+                        "type": "mem",
+                        "name": null,
+                        "id": 2,
+                        "count": 262144
+                    },
+                    {
+                        "type": "node",
+                        "name": null,
+                        "id": 4,
+                        "count": 4
+                    },
+                    {
+                        "type": "billing",
+                        "name": null,
+                        "id": 5,
+                        "count": 16
+                    },
+                    {
+                        "type": "gres",
+                        "name": "gpu",
+                        "id": 1001,
+                        "count": 16
+                    }
+                ],
+                "requested": [
+                    {
+                        "type": "cpu",
+                        "name": null,
+                        "id": 1,
+                        "count": 96
+                    },
+                    {
+                        "type": "mem",
+                        "name": null,
+                        "id": 2,
+                        "count": 262144
+                    },
+                    {
+                        "type": "node",
+                        "name": null,
+                        "id": 4,
+                        "count": 4
+                    },
+                    {
+                        "type": "billing",
+                        "name": null,
+                        "id": 5,
+                        "count": 16
+                    },
+                    {
+                        "type": "gres",
+                        "name": "gpu",
+                        "id": 1001,
+                        "count": 16
+                    }
+                ]
+            },
+            "user": "hudson",
+            "wckey": {
+                "wckey": "",
+                "flags": []
+            },
+            "working_directory": "/lustre07/scratch/hudson/LLL"
+        }
+    ]
+}

@@ -104,9 +104,10 @@ class SAcctScraper:
 
     def __iter__(self) -> Iterator[SlurmJob]:
         """Fetch and iterate on all jobs as SlurmJob objects."""
+        version = self.get_raw().get("meta", {}).get("Slurm", {}).get("version", None)
         for entry in self.get_raw()["jobs"]:
             try:
-                converted = self.convert(entry)
+                converted = self.convert(entry, version)
                 if converted is not None:
                     yield converted
             except Exception:  # pylint: disable=broad-exception-caught
@@ -116,7 +117,7 @@ class SAcctScraper:
                 print(pformat(entry), file=sys.stderr)
                 print("====================================", file=sys.stderr)
 
-    def convert(self, entry: dict) -> Optional[SlurmJob]:
+    def convert(self, entry: dict, version: dict = None) -> Optional[SlurmJob]:
         """Convert a single job entry from sacct to a SlurmJob."""
         resources = {"requested": {}, "allocated": {}}
         tracked_resources = ["cpu", "mem", "gres", "node", "billing"]
@@ -144,7 +145,13 @@ class SAcctScraper:
 
         nodes = entry["nodes"]
 
-        flags = {k: True for k in entry["flags"]}
+        tracked_flags = [
+            "CLEAR_SCHEDULING",
+            "STARTED_ON_SUBMIT",
+            "STARTED_ON_SCHEDULE",
+            "STARTED_ON_BACKFILL",
+        ]
+        flags = {k: True for k in entry["flags"] if k in tracked_flags}
 
         submit_time = parse_in_timezone(entry["time"]["submission"])
         start_time = parse_in_timezone(entry["time"]["start"])
@@ -165,35 +172,66 @@ class SAcctScraper:
                 entry["cluster"],
                 self.cluster.name,
             )
+        if version is None or version["major"] < 23:
+            return SlurmJob(
+                cluster_name=self.cluster.name,
+                job_id=entry["job_id"],
+                array_job_id=entry["array"]["job_id"] or None,
+                task_id=entry["array"]["task_id"],
+                name=entry["name"],
+                user=entry["user"],
+                group=entry["group"],
+                account=entry["account"],
+                job_state=entry["state"]["current"],
+                exit_code=entry["exit_code"]["return_code"],
+                signal=entry["exit_code"].get("signal", {}).get("signal_id", None),
+                time_limit=(tlimit := entry["time"]["limit"]) and tlimit * 60,
+                submit_time=submit_time,
+                start_time=start_time,
+                end_time=end_time,
+                elapsed_time=elapsed_time,
+                partition=entry["partition"],
+                nodes=sorted(expand_hostlist(nodes))
+                if nodes != "None assigned"
+                else [],
+                constraints=entry["constraints"],
+                priority=entry["priority"],
+                qos=entry["qos"],
+                work_dir=entry["working_directory"],
+                **resources,
+                **flags,
+            )
+        if version["major"] == 23:
+            return SlurmJob(
+                cluster_name=self.cluster.name,
+                job_id=entry["job_id"],
+                array_job_id=entry["array"]["job_id"] or None,
+                task_id=entry["array"]["task_id"]["number"],
+                name=entry["name"],
+                user=entry["user"],
+                group=entry["group"],
+                account=entry["account"],
+                job_state=entry["state"]["current"],
+                exit_code=entry["exit_code"]["return_code"],
+                signal=entry["exit_code"].get("signal", {}).get("signal_id", None),
+                time_limit=(tlimit := entry["time"]["limit"]["number"]) and tlimit * 60,
+                submit_time=submit_time,
+                start_time=start_time,
+                end_time=end_time,
+                elapsed_time=elapsed_time,
+                partition=entry["partition"],
+                nodes=sorted(expand_hostlist(nodes))
+                if nodes != "None assigned"
+                else [],
+                constraints=entry["constraints"],
+                priority=entry["priority"]["number"],
+                qos=entry["qos"],
+                work_dir=entry["working_directory"],
+                **resources,
+                **flags,
+            )
 
-        job = SlurmJob(
-            cluster_name=self.cluster.name,
-            job_id=entry["job_id"],
-            array_job_id=entry["array"]["job_id"] or None,
-            task_id=entry["array"]["task_id"],
-            name=entry["name"],
-            user=entry["user"],
-            group=entry["group"],
-            account=entry["account"],
-            job_state=entry["state"]["current"],
-            exit_code=entry["exit_code"]["return_code"],
-            signal=entry["exit_code"].get("signal", {}).get("signal_id", None),
-            time_limit=(tlimit := entry["time"]["limit"]) and tlimit * 60,
-            submit_time=submit_time,
-            start_time=start_time,
-            end_time=end_time,
-            elapsed_time=elapsed_time,
-            partition=entry["partition"],
-            nodes=sorted(expand_hostlist(nodes)) if nodes != "None assigned" else [],
-            constraints=entry["constraints"],
-            priority=entry["priority"],
-            qos=entry["qos"],
-            work_dir=entry["working_directory"],
-            **resources,
-            **flags,
-        )
-
-        return job
+        raise ValueError(f"Unsupported slurm version: {version}")
 
 
 def sacct_mongodb_import(
@@ -256,10 +294,10 @@ def update_allocated_gpu_type(cluster: ClusterConfig, entry: SlurmJob) -> Option
             entry.allocated.gpu_type = output[0]["metric"]["gpu_type"]
     else:
         # No prometheus config. Try to get GPU type from local JSON file.
-        gpu_types = [cluster.node_to_gpu[nodename] for nodename in entry.nodes]
+        gpu_types = {cluster.node_to_gpu[nodename] for nodename in entry.nodes}
         # We should not have more than 1 GPU type per job.
         assert len(gpu_types) <= 1
         if gpu_types:
-            entry.allocated.gpu_type = gpu_types[0]
+            entry.allocated.gpu_type = gpu_types.pop()
 
     return entry.allocated.gpu_type
