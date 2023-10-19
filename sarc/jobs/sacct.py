@@ -66,9 +66,8 @@ class SAcctScraper:
         cmd = f"{self.cluster.sacct_bin} {accounts_option} -X -S '{start}' -E '{end}' --allusers --json"
         print(f"{self.cluster.name} $ {cmd}")
         if self.cluster.host in ("localhost", "", None):
-            cmd_splitted = cmd.split()
             results = subprocess.run(
-                cmd_splitted, shell=True, text=True, capture_output=True, check=False
+                cmd, shell=True, text=True, capture_output=True, check=False
             )
         else:
             results = self.cluster.ssh.run(cmd, hide=True)

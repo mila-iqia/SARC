@@ -289,14 +289,6 @@ def test_localhost(os_system, cluster_name, monkeypatch):
         cluster=config().clusters[cluster_name], day=datetime(2023, 2, 14)
     )
 
-    # print (config().clusters)
-    # print (config().clusters[cluster_name])
-    # channel = remote.expect(
-    #     host="localhost",
-    #     cmd="/opt/software/slurm/bin/sacct -A rrg-bonhomme-ad_gpu,rrg-bonhomme-ad_cpu,def-bonhomme_gpu,def-bonhomme_cpu -X -S '2023-02-14T00:00' -E '2023-02-15T00:00' --json",
-    #     out=b'{"jobs": []}',
-    # )
-
     assert len(list(scraper)) == 0
     assert mock_subprocess_run.called >= 1
 
