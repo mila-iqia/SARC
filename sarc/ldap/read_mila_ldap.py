@@ -259,7 +259,9 @@ def client_side_user_updates(LD_users_DB, LD_users_LDAP):
             entry = DD_users_LDAP[meu]
             ## entry["some_unique_id_or_whatever"] = None
         else:
-            entry = DD_users_DB[meu]
+            # User is in both DB and LDAP. We'll consider the LDAP more up-to-date.
+            entry = DD_users_LDAP[meu]
+            
 
         assert "status" in entry  # sanity check
         LD_users_to_update_or_insert.append(entry)
