@@ -266,6 +266,18 @@ def test_student_and_prof():
     assert result is not None
     assert result.is_student and result.is_prof
 
+def test_student_and_groups():
+    person = make_student("supervisor", ["mcgill", "supervisor"])
+    person["memberOf"].append("cn=group,ou=Groups,dc=mila,dc=quebec")
+    result = _student_or_prof(
+        person,
+        dict(),
+        dict(),
+    )
+    assert result is not None
+    assert "group" in result.cn_groups
+    assert result.is_student
+    assert not result.is_prof
 
 def test_student_or_prof_exception_student_is_prof():
     result = _student_or_prof(
