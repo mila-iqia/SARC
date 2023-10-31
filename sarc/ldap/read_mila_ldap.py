@@ -251,15 +251,13 @@ def client_side_user_updates(LD_users_DB, LD_users_LDAP):
             # Let's mark it as archived.
             entry = DD_users_DB[meu]
             entry["status"] = "archived"
-        elif meu not in DD_users_DB and meu in DD_users_LDAP:
-            # User is not in DB but is in the LDAP. That's a new entry!
+        else:
+            # either User is not in DB but is in the LDAP (new entry)
+            # or User is in both DB and LDAP. We'll consider the LDAP more up-to-date.
             # If you need to enter some fields for the first time
             # when entering a new user, do it here.
             # As of right now, we have no need to do that.
             entry = DD_users_LDAP[meu]
-            ## entry["some_unique_id_or_whatever"] = None
-        else:
-            entry = DD_users_DB[meu]
 
         assert "status" in entry  # sanity check
         LD_users_to_update_or_insert.append(entry)
