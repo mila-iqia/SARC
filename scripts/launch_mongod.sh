@@ -49,6 +49,16 @@ DESCENDING=-1
 set -vm
 
 
+if ! which mongosh >/dev/null 2>&1; then
+    echo "mongosh is not installed. Please install it before running this script."
+    exit 1
+fi
+
+if ! which $MONGOD_CMD >/dev/null 2>&1; then
+    echo "$MONGOD_CMD is not installed. Please install it before running this script."
+    exit 1
+fi
+
 if ! which sarc >/dev/null 2>&1; then
     echo "sarc commandline is not installed. Please install it before running this script."
     exit 1 
