@@ -38,8 +38,8 @@ def extract_groups(member_of: list[str]):
         if m := re.match(r"^cn=(.+?),.*", e):
             if m.group(1) in ["mila-core-profs", "mila-profs", "core-academic-member"]:
                 is_core = True
+                is_student = False
 
-            is_student = False
             groups.append(m.group(1))
             continue
 
