@@ -193,11 +193,11 @@ def resolve_supervisors(
             exceptions,
         )
 
-        if result.is_prof and result.is_student:
-            errors.prof_and_student.append(result)
+        if result is None:
             continue
 
-        if result is None:
+        if result.is_prof and result.is_student:
+            errors.prof_and_student.append(result)
             continue
 
         index[result.ldap["mail"][0]] = result
