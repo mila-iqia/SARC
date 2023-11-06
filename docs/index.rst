@@ -10,6 +10,7 @@ Welcome to SARC's documentation!
    :maxdepth: 2
    :caption: Contents:
 
+   README
    account_matching
    account_matching_manual_procedure
    deployment
