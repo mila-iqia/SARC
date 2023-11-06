@@ -51,7 +51,7 @@ nb_supervised_students = 0
 
 for user in users:
     user_email = user.mila.email
-    user_supervisors = [user.mila_ldap["supervisor"], user.mila_ldap["co_supervisor"]]
+    user_supervisors = [user.mila_ldap.get("supervisor"), user.mila_ldap.get("co_supervisor")]
     if user_supervisors[0]:
         nb_supervised_students += 1
     if user_supervisors[0] in supervisors or user_supervisors[1] in supervisors:
