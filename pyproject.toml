@@ -38,6 +38,7 @@ pytest-timeout = "^2.1.0"
 pytest-custom-exit-code = ">= 0.3.0"
 coverage = "^7.2.7"
 pytest-xdist = "^3.3.1"
+jupyter = "^1.0.0"
 
 [tool.poetry.group.examples.dependencies]
 seaborn = "^0.12.2"
