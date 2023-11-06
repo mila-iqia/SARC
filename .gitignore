@@ -15,3 +15,4 @@ sarc-cache/
 .idea
 _build
 sarc_mongo
+*-checkpoint.ipynb
