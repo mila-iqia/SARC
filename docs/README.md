@@ -24,7 +24,7 @@ $ export SARC_CONFIG=/path/to/SARC/config/sarc-prod.json
 ```
 
 To access the database, you need to setup the mila idt vpn and create an ssh
-tunnel. If you never accessed the VM, see documention here first https://mila-iqia.atlassian.net/wiki/spaces/IDT/pages/2216329289/VM+SARC.
+tunnel. If you never accessed the VM, [see documention here first](https://mila-iqia.atlassian.net/wiki/spaces/IDT/pages/2325840018/VM+sarc01-dev).
 
 To create the ssh tunnel:
 
