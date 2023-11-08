@@ -103,6 +103,7 @@ def test_compute_job_statistics_from_dataframe_unused_count(nprops, threshold):
     else:
         assert math.isnan(stats["mean"]) and stats["unused"] == nunused
 
+
 @pytest.mark.parametrize(["nprops", "threshold"], [[1, 0.0], [2, 0.2], [2, 2.0]])
 @pytest.mark.timeout(2)
 def test_compute_job_statistics_from_dataframe_unused_count_timing(nprops, threshold):
