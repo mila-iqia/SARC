@@ -1,7 +1,7 @@
-import math
-from datetime import datetime, timedelta
-import time
 import itertools
+import math
+import time
+from datetime import datetime, timedelta
 
 import pandas
 import pytest
