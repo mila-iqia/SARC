@@ -70,7 +70,7 @@ class BaseModel(_BaseModel):
 
 
 class ClusterConfig(BaseModel):
-    host: str = None
+    host: str = "localhost"
     timezone: Union[str, zoneinfo.ZoneInfo]  # | does not work with Pydantic's eval
     prometheus_url: str = None
     prometheus_headers_file: str = None
