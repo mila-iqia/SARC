@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
+import pandas
 from pandas import DataFrame
 from prometheus_api_client import MetricRangeDataFrame
 
@@ -124,17 +125,13 @@ def compute_job_statistics_from_dataframe(
 
     if unused_threshold is not None:
         means = gdf["value"].mean()
-        unused = means.loc[(means < unused_threshold)].index
-        n_unused = len(unused)
+        n_unused = (means < unused_threshold).astype(bool).sum()
 
-        def drop_fn(row):
-            idx = tuple(row[groupby])
-            if len(groupby) == 1:
-                idx = idx[0]
-            return idx in tuple(unused)
+        df_with_means = pandas.merge(
+            df, means.reset_index().rename(columns={"value": "mean"}), on=groupby
+        )
 
-        to_drop = df.apply(drop_fn, axis=1)
-        df = df.drop(df[to_drop].index)
+        df = df_with_means[df_with_means["mean"] >= unused_threshold]
     else:
         n_unused = 0
 
