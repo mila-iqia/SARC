@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import copy
 import json
+import subprocess
 from datetime import datetime, timedelta
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from fabric.testing.base import Command, Session
@@ -267,6 +269,27 @@ def test_sacct_bin_and_accounts(test_config, remote):
     )
 
     assert len(list(scraper)) == 0
+
+
+@patch("os.system")
+@pytest.mark.usefixtures("write_setup")
+def test_localhost(os_system, monkeypatch):
+    def mock_subprocess_run(*args, **kwargs):
+        mock_subprocess_run.called += 1
+        return subprocess.CompletedProcess(
+            args=args, returncode=0, stdout='{"jobs": []}', stderr=""
+        )
+
+    mock_subprocess_run.called = 0
+
+    monkeypatch.setattr(subprocess, "run", mock_subprocess_run)
+
+    scraper = SAcctScraper(
+        cluster=config().clusters["local"], day=datetime(2023, 2, 14)
+    )
+
+    assert len(list(scraper)) == 0
+    assert mock_subprocess_run.called >= 1
 
 
 @pytest.mark.parametrize(

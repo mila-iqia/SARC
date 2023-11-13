@@ -1,5 +1,5 @@
 """
-tests the scrapping of disk usage report on DRAC clusters
+tests the scraping of disk usage report on DRAC clusters
 """
 from pathlib import Path
 

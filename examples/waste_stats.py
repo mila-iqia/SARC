@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 import pandas as pd
 from tqdm import tqdm
 
-from sarc.config import config
+from sarc.config import ScraperConfig, _config_class, config
 from sarc.jobs import get_jobs
 
 
@@ -21,6 +21,7 @@ def load_job_series(filename=None) -> pd.DataFrame:
     )
 
     df = None
+
     # Fetch all jobs from the clusters
     for job in tqdm(get_jobs(cluster=cluster, start="2023-02-10"), total=total):
         if job.duration < timedelta(seconds=60):
@@ -46,6 +47,13 @@ def load_job_series(filename=None) -> pd.DataFrame:
 
     return df
 
+
+# to access series, you need prometheus access rights. This is doable only with `SARC_MODE=scraping` for the moment
+# check SARC_MODE env variable
+config_class = _config_class(os.getenv("SARC_MODE", "none"))
+if config_class is not ScraperConfig:
+    print("SARC_MODE=scraping is required to access job series (prometheus))")
+    exit(0)
 
 filename = "mila_job_series4.pkl"
 df = load_job_series(filename)

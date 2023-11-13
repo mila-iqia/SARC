@@ -270,9 +270,9 @@ def freeport():
 
 
 @pytest.fixture
-def scrapping_mode():
+def scraping_mode():
     mpatch = MonkeyPatch()
-    mpatch.setenv("SARC_MODE", "scrapping")
+    mpatch.setenv("SARC_MODE", "scraping")
     yield
     mpatch.undo()
 
@@ -323,7 +323,7 @@ def make_config(newpath, uri):
 
 
 @pytest.fixture
-def admin_setup(mongodb, scrapping_mode, tmp_path, freeport, monkeypatch):
+def admin_setup(mongodb, scraping_mode, tmp_path, freeport, monkeypatch):
     """MongoDB admin user, can do anything."""
 
     config_path = tmp_path / "config.json"
@@ -334,7 +334,7 @@ def admin_setup(mongodb, scrapping_mode, tmp_path, freeport, monkeypatch):
 
 
 @pytest.fixture
-def write_setup(mongodb, scrapping_mode, tmp_path, freeport, monkeypatch):
+def write_setup(mongodb, scraping_mode, tmp_path, freeport, monkeypatch):
     """SARC write user, can only write to sarc database.
     Have access to secrets
     """
@@ -348,7 +348,7 @@ def write_setup(mongodb, scrapping_mode, tmp_path, freeport, monkeypatch):
 
 
 @pytest.fixture
-def read_setup(mongodb, scrapping_mode, tmp_path, freeport, monkeypatch):
+def read_setup(mongodb, scraping_mode, tmp_path, freeport, monkeypatch):
     """SARC read user, can onlly read to sarc database.
     Does not have access to secrets
     """
