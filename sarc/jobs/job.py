@@ -285,6 +285,8 @@ def count_jobs(
         start=start,
         end=end,
     )
+    if query_options is None:
+        query_options = {}
     return config().mongo.database_instance.jobs.count_documents(query, **query_options)
 
 
