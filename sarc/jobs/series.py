@@ -1,19 +1,20 @@
 from __future__ import annotations
 
-from datetime import timedelta
-from sarc.jobs import get_jobs
 import os
-import pandas as pd
+import time
 from datetime import datetime
+from datetime import timedelta
 from typing import TYPE_CHECKING, Callable
 
+import numpy as np
 import pandas
+import pandas as pd
 from pandas import DataFrame
 from prometheus_api_client import MetricRangeDataFrame
-import time
 from tqdm import tqdm
 
 from sarc.config import MTL, UTC, config
+from sarc.jobs import get_jobs
 from sarc.jobs.job import JobStatistics, Statistics
 
 if TYPE_CHECKING:
@@ -223,6 +224,17 @@ def compute_job_statistics(job: SlurmJob):
         system_memory=system_memory and Statistics(**system_memory),
     )
 
+
+DUMMY_STATS = {
+    label: np.nan
+    for label in [
+        "gpu_utilization",
+        "cpu_utilization",
+        "gpu_memory",
+        "gpu_power",
+        "system_memory",
+    ]
+}
 
 def load_job_series(
         *,  # All arguments from `get_jobs`
