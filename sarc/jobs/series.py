@@ -14,7 +14,7 @@ from prometheus_api_client import MetricRangeDataFrame
 from tqdm import tqdm
 
 from sarc.config import MTL, UTC, config
-from sarc.jobs import get_jobs
+from sarc.jobs import get_jobs, count_jobs
 from sarc.jobs.job import JobStatistics, Statistics
 
 if TYPE_CHECKING:
@@ -238,10 +238,12 @@ DUMMY_STATS = {
 
 
 def load_job_series(
-        *,  # All arguments from `get_jobs`
-        fields: None | list[str] | dict[str, str] = None,
-        clip_time: bool = False,
-        callback: None | Callable = None, **jobs_args):
+    *,
+    fields: None | list[str] | dict[str, str] = None,
+    clip_time: bool = False,
+    callback: None | Callable = None,
+    **jobs_args,
+) -> pd.DataFrame:
     """
     Query jobs from the database and return them in a DataFrame, including full user info
     for each job.
@@ -257,41 +259,18 @@ def load_job_series(
         Whether the duration time of the jobs should be clipped within `start` and `end`.
         Defaults to False.
     callback: Callable
-        Callable taking the current job dictionary in the format it would be included in the DataFrame.
+        Callable taking the list of job dictionaries in the format it would be included in the DataFrame.
     jobs_args
         Arguments to be passed to `get_jobs` to query jobs from the database.
     """
+    start = jobs_args.get("start", None)
+    end = jobs_args.get("end", None)
 
-
-def select_stat(name, dist):
-    if not dist:
-        return np.nan
-
-    if name in ["system_memory", "gpu_memory"]:
-        return dist["max"]
-
-    return dist["median"]
-
-
-def load_job_series_old(start, end, filename=None, checkpoint_interval=60) -> pd.DataFrame:
-    if filename and os.path.exists(filename):
-        return pd.read_pickle(filename)
-
-    total = config().mongo.database_instance.jobs.count_documents(
-        {
-            "$or": [
-                {"submit_time": {"$lt": end}, "end_time": None},
-                {"submit_time": {"$lt": end}, "end_time": {"$gt": start}},
-            ]
-        }
-    )
-
-    checkpoint = time.time()
+    total = count_jobs(**jobs_args)
 
     rows = []
     # Fetch all jobs from the clusters
-    for job in tqdm(get_jobs(start=start, end=end), total=total):
-
+    for job in tqdm(get_jobs(**jobs_args), total=total):
         if job.end_time is None:
             job.end_time = datetime.now(tz=MTL)
 
@@ -299,24 +278,25 @@ def load_job_series_old(start, end, filename=None, checkpoint_interval=60) -> pd
         # so we infer it based on end_time and elapsed_time.
         job.start_time = job.end_time - timedelta(seconds=job.elapsed_time)
 
-        # Clip the job to the time range we are interested in.
-        # NOTE: This should perhaps be helper function for dataframes so that we don't force clipping raw data
-        #       during loading.
-        unclipped_start = job.start_time
-        if job.start_time < start:
-            job.start_time = start
-        unclipped_end = job.end_time
-        if job.end_time > end:
-            job.end_time = end
-        # Could be negative if job started after end. We don't want to filter
-        # them out because they have been submitted before end and we want to
-        # compute their wait time.
-        job.elapsed_time = max((job.end_time - job.start_time).total_seconds(), 0)
+        unclipped_start = None
+        unclipped_end = None
+        if clip_time:
+            # Clip the job to the time range we are interested in.
+            # NOTE: This should perhaps be helper function for dataframes so that we don't force clipping raw data
+            #       during loading.
+            unclipped_start = job.start_time
+            if job.start_time < start:
+                job.start_time = start
+            unclipped_end = job.end_time
+            if job.end_time > end:
+                job.end_time = end
+            # Could be negative if job started after end. We don't want to filter
+            # them out because they have been submitted before end, and we want to
+            # compute their wait time.
+            job.elapsed_time = max((job.end_time - job.start_time).total_seconds(), 0)
 
         job_series = job.stored_statistics.dict()
-        job_series = {
-            k: select_stat(k, v) for k, v in job_series.items()
-        }
+        job_series = {k: select_stat(k, v) for k, v in job_series.items()}
 
         # TODO: Why is it possible to have billing smaller than gres_gpu???
         billing = job.allocated.billing or 0
@@ -335,8 +315,9 @@ def load_job_series_old(start, end, filename=None, checkpoint_interval=60) -> pd
         job_series["submit"] = job.submit_time
         job_series["start"] = job.start_time
         job_series["end"] = job.end_time
-        job_series["unclipped_start"] = unclipped_start
-        job_series["unclipped_end"] = unclipped_end
+        if clip_time:
+            job_series["unclipped_start"] = unclipped_start
+            job_series["unclipped_end"] = unclipped_end
         job_series["constraints"] = job.constraints
 
         info = job.dict()
@@ -345,19 +326,32 @@ def load_job_series_old(start, end, filename=None, checkpoint_interval=60) -> pd
 
         rows.append(job_series)
 
-        if filename and (time.time() - checkpoint) > checkpoint_interval:
-            df = pd.DataFrame(rows)
-            df.to_pickle(filename)
-            checkpoint = time.time()
+    if fields is not None:
+        if isinstance(fields, list):
+            rows = [{key: job_dict[key] for key in fields} for job_dict in rows]
+        else:
+            assert isinstance(fields, dict)
+            rows = [
+                {new_name: job_dict[old_name] for old_name, new_name in fields.items()}
+                for job_dict in rows
+            ]
+
+    if callback:
+        callback(rows)
 
     df = pd.DataFrame(rows)
-
-    if filename:
-        df.to_pickle(filename)
-
     assert isinstance(df, pd.DataFrame)
-
     return df
+
+
+def select_stat(name, dist):
+    if not dist:
+        return np.nan
+
+    if name in ["system_memory", "gpu_memory"]:
+        return dist["max"]
+
+    return dist["median"]
 
 
 slurm_job_metric_names = [
