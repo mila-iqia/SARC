@@ -16,3 +16,5 @@ sarc-cache/
 _build
 sarc_mongo
 *-checkpoint.ipynb
+sarc-test-cache
+dbconfig.txt
