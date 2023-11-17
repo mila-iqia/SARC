@@ -218,6 +218,30 @@ def compute_job_statistics(job: SlurmJob):
     )
 
 
+def load_job_series(
+        *,  # All arguments from `get_jobs`
+        fields: None | list[str] | dict[str, str] = None,
+        clip_time: bool = False,
+        callback: None | Callable = None):
+    """
+    Query jobs from the database and return them in a DataFrame, including full user info
+    for each jobs.
+
+    Parameters
+    ----------
+    fields: list or dict
+        Job fields to include in the DataFrame. By default include all fields.
+        A dictionary may be passed to select fields and rename them in the DataFrame.
+        In such case, the keys are the fields' names and the values are the names
+        they will have in the DataFrame.
+    clip_time: bool
+        Whether the duration time of the jobs should be clipped within `start` and `end`.
+        Defaults to False.
+    callback: Callable
+        Callable taking the current job dictionary in the format it would be included in the DataFrame.
+    """
+
+
 slurm_job_metric_names = [
     "slurm_job_core_usage",
     "slurm_job_core_usage_total",
