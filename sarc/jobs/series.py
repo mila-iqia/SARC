@@ -236,6 +236,7 @@ DUMMY_STATS = {
     ]
 }
 
+
 def load_job_series(
         *,  # All arguments from `get_jobs`
         fields: None | list[str] | dict[str, str] = None,
@@ -262,6 +263,16 @@ def load_job_series(
     """
 
 
+def select_stat(name, dist):
+    if not dist:
+        return np.nan
+
+    if name in ["system_memory", "gpu_memory"]:
+        return dist["max"]
+
+    return dist["median"]
+
+
 def load_job_series_old(start, end, filename=None, checkpoint_interval=60) -> pd.DataFrame:
     if filename and os.path.exists(filename):
         return pd.read_pickle(filename)
@@ -280,8 +291,6 @@ def load_job_series_old(start, end, filename=None, checkpoint_interval=60) -> pd
     rows = []
     # Fetch all jobs from the clusters
     for job in tqdm(get_jobs(start=start, end=end), total=total):
-        # if job.elapsed_time <= 0:
-        #     continue
 
         if job.end_time is None:
             job.end_time = datetime.now(tz=MTL)
@@ -304,26 +313,10 @@ def load_job_series_old(start, end, filename=None, checkpoint_interval=60) -> pd
         # compute their wait time.
         job.elapsed_time = max((job.end_time - job.start_time).total_seconds(), 0)
 
-        # We only care about jobs that actually ran.
-        # if job.elapsed_time <= 0:
-        #     continue
-
-        is_on_mig = job.cluster_name == "mila" and bool(NODE_WITH_MIG & set(job.nodes))
-
-        no_stats = False
-        # If Job is on a node with MIG GPUs, ignore.
-        if is_on_mig or job.stored_statistics is None:
-            no_stats = True
-
-        if no_stats:
-            job_series = copy.deepcopy(DUMMY_STATS)
-        else:
-            job_series = job.stored_statistics.dict(include=SERIES_INCLUDE)
-            job_series = {
-                k: v["median"] if v else np.nan for k, v in job_series.items()
-            }
-
-        # TODO: Verify that all stats are set to -1 when GPU was MIG.
+        job_series = job.stored_statistics.dict()
+        job_series = {
+            k: select_stat(k, v) for k, v in job_series.items()
+        }
 
         # TODO: Why is it possible to have billing smaller than gres_gpu???
         billing = job.allocated.billing or 0
@@ -339,7 +332,6 @@ def load_job_series_old(start, end, filename=None, checkpoint_interval=60) -> pd
         job_series["gpu_requested"] = gres_gpu
         job_series["duration"] = job.elapsed_time
         job_series["mem"] = job.allocated.mem
-        job_series["mig"] = bool(is_on_mig)
         job_series["submit"] = job.submit_time
         job_series["start"] = job.start_time
         job_series["end"] = job.end_time
@@ -347,7 +339,7 @@ def load_job_series_old(start, end, filename=None, checkpoint_interval=60) -> pd
         job_series["unclipped_end"] = unclipped_end
         job_series["constraints"] = job.constraints
 
-        info = job.dict(include=JOB_INCLUDE)
+        info = job.dict()
         for key in info:
             job_series[key] = info[key]
 
