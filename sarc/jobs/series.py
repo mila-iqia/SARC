@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import os
-import time
 from datetime import datetime
 from datetime import timedelta
 from typing import TYPE_CHECKING, Callable
@@ -223,18 +221,6 @@ def compute_job_statistics(job: SlurmJob):
         cpu_utilization=cpu_utilization and Statistics(**cpu_utilization),
         system_memory=system_memory and Statistics(**system_memory),
     )
-
-
-DUMMY_STATS = {
-    label: np.nan
-    for label in [
-        "gpu_utilization",
-        "cpu_utilization",
-        "gpu_memory",
-        "gpu_power",
-        "system_memory",
-    ]
-}
 
 
 def load_job_series(

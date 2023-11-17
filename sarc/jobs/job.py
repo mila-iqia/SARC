@@ -205,6 +205,7 @@ def get_clusters():
     return jobs.distinct("cluster_name", {})
 
 
+# pylint: disable=too-many-branches,dangerous-default-value
 def _compute_jobs_query(
     *,
     cluster: str | ClusterConfig | None = None,
@@ -214,6 +215,15 @@ def _compute_jobs_query(
     start: str | datetime | None = None,
     end: str | datetime | None = None,
 ) -> dict:
+    """Compute the MongoDB query dict to be used to match given arguments.
+
+    Arguments:
+        cluster: The cluster on which to search for jobs.
+        job_id: The id or a list of ids to select.
+        start: Get all jobs that have a status after that time.
+        end: Get all jobs that have a status before that time.
+        query_options: Additional options to pass to MongoDB (limit, etc.)
+    """
     cluster_name = cluster
     if isinstance(cluster, ClusterConfig):
         cluster_name = cluster.name
@@ -277,6 +287,15 @@ def count_jobs(
     end: str | datetime | None = None,
     query_options: dict | None = None,
 ) -> int:
+    """Count jobs that match the query.
+
+    Arguments:
+        cluster: The cluster on which to search for jobs.
+        job_id: The id or a list of ids to select.
+        start: Get all jobs that have a status after that time.
+        end: Get all jobs that have a status before that time.
+        query_options: Additional options to pass to MongoDB (limit, etc.)
+    """
     query = _compute_jobs_query(
         cluster=cluster,
         job_id=job_id,
@@ -290,7 +309,6 @@ def count_jobs(
     return config().mongo.database_instance.jobs.count_documents(query, **query_options)
 
 
-# pylint: disable=too-many-branches,dangerous-default-value
 def get_jobs(
     *,
     cluster: str | ClusterConfig | None = None,
