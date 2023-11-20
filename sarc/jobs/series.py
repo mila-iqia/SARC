@@ -277,8 +277,10 @@ def load_job_series(
         unclipped_start = None
         unclipped_end = None
         if clip_time:
-            assert start is not None
-            assert end is not None
+            if start is None:
+                raise ValueError("Clip time: missing start")
+            if end is None:
+                raise ValueError("Clip time: missing end")
             # Clip the job to the time range we are interested in.
             # NOTE: This should perhaps be helper function for dataframes so that we don't force clipping raw data
             #       during loading.

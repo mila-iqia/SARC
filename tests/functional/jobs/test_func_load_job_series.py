@@ -30,6 +30,9 @@ parameters = {
 
 few_parameters = {key: parameters[key] for key in ("no_cluster", "start_and_end")}
 param_start_end = {"start_and_end": parameters["start_and_end"]}
+params_no_start_or_end = {
+    key: parameters[key] for key in ("no_cluster", "start_only", "end_only")
+}
 
 ALL_COLUMNS = [
     "CLEAR_SCHEDULING",
@@ -140,7 +143,9 @@ def test_get_jobs_fields_dict(params, file_regression):
 
 @pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
 @pytest.mark.parametrize("params", param_start_end.values(), ids=param_start_end.keys())
-def test_get_jobs_clip_time(params, file_regression):
+def test_get_jobs_clip_time_true(params, file_regression):
+    assert "start" in params
+    assert "end" in params
     data_frame = load_job_series(clip_time=True, **params)
     assert isinstance(data_frame, pandas.DataFrame)
     assert sorted(data_frame.keys().tolist()) == sorted(
@@ -149,6 +154,28 @@ def test_get_jobs_clip_time(params, file_regression):
     file_regression.check(
         f"Found {data_frame.shape[0]} job(s):\n\n{data_frame.to_csv(columns=CSV_COLUMNS)}"
     )
+
+
+@pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
+@pytest.mark.parametrize("params", param_start_end.values(), ids=param_start_end.keys())
+def test_get_jobs_clip_time_false(params, file_regression):
+    assert "start" in params
+    assert "end" in params
+    data_frame = load_job_series(clip_time=False, **params)
+    assert isinstance(data_frame, pandas.DataFrame)
+    assert sorted(data_frame.keys().tolist()) == sorted(ALL_COLUMNS)
+    file_regression.check(
+        f"Found {data_frame.shape[0]} job(s):\n\n{data_frame.to_csv(columns=CSV_COLUMNS)}"
+    )
+
+
+@pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
+@pytest.mark.parametrize(
+    "params", params_no_start_or_end.values(), ids=params_no_start_or_end.keys()
+)
+def test_get_jobs_clip_time_true_no_start_or_end(params, file_regression):
+    with pytest.raises(ValueError, match="Clip time\: missing (start|end)"):
+        load_job_series(clip_time=True, **params)
 
 
 @pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
