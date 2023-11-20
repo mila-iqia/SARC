@@ -1,19 +1,16 @@
 from __future__ import annotations
 
-from datetime import datetime
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Callable
 
 import numpy as np
 import pandas
-import pandas as pd
 from pandas import DataFrame
 from prometheus_api_client import MetricRangeDataFrame
 from tqdm import tqdm
 
-from sarc.config import MTL, UTC, config
-from sarc.jobs import get_jobs, count_jobs
-from sarc.jobs.job import JobStatistics, Statistics
+from sarc.config import MTL, UTC
+from sarc.jobs.job import JobStatistics, Statistics, count_jobs, get_jobs
 
 if TYPE_CHECKING:
     from sarc.jobs.sacct import SlurmJob
@@ -235,13 +232,14 @@ DUMMY_STATS = {
 }
 
 
+# pylint: disable=too-many-statements,fixme
 def load_job_series(
     *,
     fields: None | list[str] | dict[str, str] = None,
     clip_time: bool = False,
     callback: None | Callable = None,
     **jobs_args,
-) -> pd.DataFrame:
+) -> pandas.DataFrame:
     """
     Query jobs from the database and return them in a DataFrame, including full user info
     for each job.
@@ -285,11 +283,9 @@ def load_job_series(
             # NOTE: This should perhaps be helper function for dataframes so that we don't force clipping raw data
             #       during loading.
             unclipped_start = job.start_time
-            if job.start_time < start:
-                job.start_time = start
+            job.start_time = max(job.start_time, start)
             unclipped_end = job.end_time
-            if job.end_time > end:
-                job.end_time = end
+            job.end_time = min(job.end_time, end)
             # Could be negative if job started after end. We don't want to filter
             # them out because they have been submitted before end, and we want to
             # compute their wait time.
@@ -338,9 +334,7 @@ def load_job_series(
     if callback:
         callback(rows)
 
-    df = pd.DataFrame(rows)
-    assert isinstance(df, pd.DataFrame)
-    return df
+    return pandas.DataFrame(rows)
 
 
 def select_stat(name, dist):

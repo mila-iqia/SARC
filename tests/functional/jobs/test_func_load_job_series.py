@@ -1,11 +1,11 @@
 from datetime import datetime
+
+import pandas
 import pytest
 
+from sarc.config import MTL, config
 from sarc.jobs import SlurmJob
 from sarc.jobs.series import load_job_series
-from sarc.config import MTL, config
-import pandas
-
 
 parameters = {
     "no_cluster": {},

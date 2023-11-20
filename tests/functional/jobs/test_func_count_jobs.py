@@ -3,7 +3,7 @@ from datetime import datetime
 import pytest
 
 from sarc.config import MTL, config
-from sarc.jobs import get_jobs, count_jobs
+from sarc.jobs import count_jobs, get_jobs
 from sarc.jobs.job import get_job
 
 parameters = {
