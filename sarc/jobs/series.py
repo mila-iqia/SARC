@@ -268,7 +268,7 @@ def load_job_series(
 
     rows = []
     # Fetch all jobs from the clusters
-    for job in tqdm(get_jobs(**jobs_args), total=total):
+    for job in tqdm(get_jobs(**jobs_args), total=total, desc="load job series"):
         if job.end_time is None:
             job.end_time = datetime.now(tz=MTL)
 
