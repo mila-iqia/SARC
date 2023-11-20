@@ -223,6 +223,18 @@ def compute_job_statistics(job: SlurmJob):
     )
 
 
+DUMMY_STATS = {
+    label: np.nan
+    for label in [
+        "gpu_utilization",
+        "cpu_utilization",
+        "gpu_memory",
+        "gpu_power",
+        "system_memory",
+    ]
+}
+
+
 def load_job_series(
     *,
     fields: None | list[str] | dict[str, str] = None,
@@ -267,6 +279,8 @@ def load_job_series(
         unclipped_start = None
         unclipped_end = None
         if clip_time:
+            assert start is not None
+            assert end is not None
             # Clip the job to the time range we are interested in.
             # NOTE: This should perhaps be helper function for dataframes so that we don't force clipping raw data
             #       during loading.
@@ -281,8 +295,11 @@ def load_job_series(
             # compute their wait time.
             job.elapsed_time = max((job.end_time - job.start_time).total_seconds(), 0)
 
-        job_series = job.stored_statistics.dict()
-        job_series = {k: select_stat(k, v) for k, v in job_series.items()}
+        if job.stored_statistics is None:
+            job_series = DUMMY_STATS.copy()
+        else:
+            job_series = job.stored_statistics.dict()
+            job_series = {k: select_stat(k, v) for k, v in job_series.items()}
 
         # TODO: Why is it possible to have billing smaller than gres_gpu???
         billing = job.allocated.billing or 0
@@ -304,12 +321,8 @@ def load_job_series(
         if clip_time:
             job_series["unclipped_start"] = unclipped_start
             job_series["unclipped_end"] = unclipped_end
-        job_series["constraints"] = job.constraints
 
-        info = job.dict()
-        for key in info:
-            job_series[key] = info[key]
-
+        job_series.update(job.dict())
         rows.append(job_series)
 
     if fields is not None:
