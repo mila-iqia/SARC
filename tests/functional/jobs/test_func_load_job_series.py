@@ -1,11 +1,15 @@
+import math
 from datetime import datetime
 
+import numpy as np
 import pandas
 import pytest
 
 from sarc.config import MTL
 from sarc.jobs.job import get_jobs
 from sarc.jobs.series import load_job_series
+
+from .test_func_job_statistics import generate_fake_timeseries
 
 parameters = {
     "no_cluster": {},
@@ -138,6 +142,79 @@ def test_get_jobs_check_end_times(params):
             assert job.end_time == frame_2["end_time"][i]
     # Check we really got raw jobs with no end time.
     assert nb_no_end_times
+
+
+@pytest.mark.usefixtures("read_write_db", "tzlocal_is_mtl")
+def test_get_jobs_with_stored_statistics(monkeypatch):
+    # List of job indices with no stored statistics initially,
+    # then with stored statistic after call to job.statistics().
+    job_indices = [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        23,
+        1000000,
+    ]
+    params = {"job_id": job_indices}
+
+    jobs = list(get_jobs(**params))
+    frame = load_job_series(**params)
+    assert jobs
+    for job in jobs:
+        assert not job.stored_statistics
+    for label in [
+        "gpu_utilization",
+        "cpu_utilization",
+        "gpu_memory",
+        "gpu_power",
+        "system_memory",
+    ]:
+        assert all(math.isnan(value) for value in frame[label])
+
+    monkeypatch.setattr(
+        "sarc.jobs.series.get_job_time_series", generate_fake_timeseries
+    )
+
+    # Save job statistics.
+    for job in jobs:
+        job.statistics(save=True)
+        assert job.stored_statistics
+
+    # Generate new data frame. Relevant fields must not contain nan anymore.
+    re_jobs = list(get_jobs(**params))
+    re_frame = load_job_series(**params)
+    assert re_jobs
+    for i, re_job in enumerate(re_jobs):
+        stats = re_job.stored_statistics.dict()
+        assert re_frame["system_memory"][i] == stats["system_memory"]["max"]
+        assert re_frame["gpu_memory"][i] == stats["gpu_memory"]["max"]
+        assert re_frame["gpu_utilization"][i] == stats["gpu_utilization"]["median"]
+        assert re_frame["cpu_utilization"][i] == stats["cpu_utilization"]["median"]
+        assert re_frame["gpu_power"][i] == stats["gpu_power"]["median"]
+
+    for label in [
+        "gpu_utilization",
+        "cpu_utilization",
+        "gpu_memory",
+        "gpu_power",
+        "system_memory",
+    ]:
+        assert all(not math.isnan(value) for value in re_frame[label])
 
 
 @pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
