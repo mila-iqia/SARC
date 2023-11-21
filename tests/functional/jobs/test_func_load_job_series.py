@@ -3,8 +3,8 @@ from datetime import datetime
 import pandas
 import pytest
 
-from sarc.config import MTL, config
-from sarc.jobs import SlurmJob
+from sarc.config import MTL
+from sarc.jobs.job import get_jobs
 from sarc.jobs.series import load_job_series
 
 parameters = {
@@ -109,6 +109,35 @@ def test_get_jobs(params, file_regression):
         file_regression.check(
             f"Found {data_frame.shape[0]} job(s):\n\n{data_frame.to_csv()}"
         )
+
+
+@pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
+@pytest.mark.parametrize("params", [parameters["no_cluster"]], ids=["no_cluster"])
+def test_get_jobs_check_end_times(params):
+    # Get jobs
+    jobs = list(get_jobs(**params))
+    # Get a data frame
+    frame_1 = load_job_series(**params)
+    # Get a data frame again
+    frame_2 = load_job_series(**params)
+    nb_no_end_times = 0
+    for i, job in enumerate(jobs):
+        if job.end_time is None:
+            nb_no_end_times += 1
+            # End time won't be None in data frames, because
+            # load_job_series() will have set it to current time.
+            assert frame_1["end_time"][i]
+            assert frame_2["end_time"][i]
+            # As frame_2 is generated after frame_1,
+            # end times in frame 2 will be set to a current time more recent
+            # than in frame 1.
+            assert frame_2["end_time"][i] > frame_1["end_time"][i]
+        else:
+            # End time won't be changed.
+            assert job.end_time == frame_1["end_time"][i]
+            assert job.end_time == frame_2["end_time"][i]
+    # Check we really got raw jobs with no end time.
+    assert nb_no_end_times
 
 
 @pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
