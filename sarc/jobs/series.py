@@ -259,6 +259,11 @@ def load_job_series(
     jobs_args
         Arguments to be passed to `get_jobs` to query jobs from the database.
     """
+
+    # If fields is a list, convert it to a renaming dict with same old and new names.
+    if isinstance(fields, list):
+        fields = {key: key for key in fields}
+
     start = jobs_args.get("start", None)
     end = jobs_args.get("end", None)
 
@@ -321,20 +326,14 @@ def load_job_series(
             job_series["unclipped_end"] = unclipped_end
 
         job_series.update(job.dict())
+
+        if fields is not None:
+            job_series = {
+                new_name: job_series[old_name] for old_name, new_name in fields.items()
+            }
         rows.append(job_series)
-
-    if fields is not None:
-        if isinstance(fields, list):
-            rows = [{key: job_dict[key] for key in fields} for job_dict in rows]
-        else:
-            assert isinstance(fields, dict)
-            rows = [
-                {new_name: job_dict[old_name] for old_name, new_name in fields.items()}
-                for job_dict in rows
-            ]
-
-    if callback:
-        callback(rows)
+        if callback:
+            callback(rows)
 
     return pandas.DataFrame(rows)
 

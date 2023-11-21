@@ -182,14 +182,14 @@ def test_get_jobs_clip_time_true_no_start_or_end(params, file_regression):
 @pytest.mark.parametrize("params", few_parameters.values(), ids=few_parameters.keys())
 def test_get_jobs_callback(params, file_regression):
     def callback(rows):
-        for row in rows:
-            row["another_column"] = 1234
+        rows[-1]["another_column"] = 1234
 
     data_frame = load_job_series(callback=callback, **params)
     assert isinstance(data_frame, pandas.DataFrame)
     assert sorted(data_frame.keys().tolist()) == sorted(
         ALL_COLUMNS + ["another_column"]
     )
+    assert data_frame["another_column"].sum() == 1234 * data_frame.shape[0]
     file_regression.check(
         f"Found {data_frame.shape[0]} job(s):\n"
         f"\n{data_frame.to_csv(columns=CSV_COLUMNS + ['another_column'])}"
@@ -200,8 +200,7 @@ def test_get_jobs_callback(params, file_regression):
 @pytest.mark.parametrize("params", param_start_end.values(), ids=param_start_end.keys())
 def test_get_jobs_all_args(params, file_regression):
     def callback(rows):
-        for row in rows:
-            row["another_column"] = 1234
+        rows[-1]["another_column"] = 1234
 
     fields = {
         "gpu_memory": "gpu_footprint",
@@ -221,6 +220,7 @@ def test_get_jobs_all_args(params, file_regression):
     )
     assert isinstance(data_frame, pandas.DataFrame)
     assert sorted(data_frame.keys().tolist()) == sorted(expected_fields)
+    assert data_frame["another_column"].sum() == 1234 * data_frame.shape[0]
     file_regression.check(
         f"Found {data_frame.shape[0]} job(s):\n\n{data_frame.to_csv(columns=expected_fields)}"
     )
