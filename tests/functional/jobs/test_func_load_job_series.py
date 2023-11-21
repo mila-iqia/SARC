@@ -99,7 +99,7 @@ CSV_COLUMNS = [
 
 @pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
 @pytest.mark.parametrize("params", parameters.values(), ids=parameters.keys())
-def test_get_jobs(params, file_regression):
+def test_load_job_series(params, file_regression):
     data_frame = load_job_series(**params)
     assert isinstance(data_frame, pandas.DataFrame)
     # Check columns
@@ -117,7 +117,7 @@ def test_get_jobs(params, file_regression):
 
 @pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
 @pytest.mark.parametrize("params", [parameters["no_cluster"]], ids=["no_cluster"])
-def test_get_jobs_check_end_times(params):
+def test_load_job_series_check_end_times(params):
     # Get jobs
     jobs = list(get_jobs(**params))
     # Get a data frame
@@ -145,7 +145,7 @@ def test_get_jobs_check_end_times(params):
 
 
 @pytest.mark.usefixtures("read_write_db", "tzlocal_is_mtl")
-def test_get_jobs_with_stored_statistics(monkeypatch):
+def test_load_job_series_with_stored_statistics(monkeypatch):
     # List of job indices with no stored statistics initially,
     # then with stored statistic after call to job.statistics().
     job_indices = [
@@ -219,7 +219,7 @@ def test_get_jobs_with_stored_statistics(monkeypatch):
 
 @pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
 @pytest.mark.parametrize("params", few_parameters.values(), ids=few_parameters.keys())
-def test_get_jobs_fields_list(params, file_regression):
+def test_load_job_series_fields_list(params, file_regression):
     fields = ["gpu_memory", "mem", "user", "work_dir"]
     data_frame = load_job_series(fields=fields, **params)
     assert isinstance(data_frame, pandas.DataFrame)
@@ -231,7 +231,7 @@ def test_get_jobs_fields_list(params, file_regression):
 
 @pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
 @pytest.mark.parametrize("params", few_parameters.values(), ids=few_parameters.keys())
-def test_get_jobs_fields_dict(params, file_regression):
+def test_load_job_series_fields_dict(params, file_regression):
     fields = {
         "gpu_memory": "gpu_footprint",
         "mem": "memory",
@@ -249,7 +249,7 @@ def test_get_jobs_fields_dict(params, file_regression):
 
 @pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
 @pytest.mark.parametrize("params", param_start_end.values(), ids=param_start_end.keys())
-def test_get_jobs_clip_time_true(params, file_regression):
+def test_load_job_series_clip_time_true(params, file_regression):
     assert "start" in params
     assert "end" in params
     data_frame = load_job_series(clip_time=True, **params)
@@ -264,7 +264,7 @@ def test_get_jobs_clip_time_true(params, file_regression):
 
 @pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
 @pytest.mark.parametrize("params", param_start_end.values(), ids=param_start_end.keys())
-def test_get_jobs_clip_time_false(params, file_regression):
+def test_load_job_series_clip_time_false(params, file_regression):
     assert "start" in params
     assert "end" in params
     data_frame = load_job_series(clip_time=False, **params)
@@ -279,14 +279,14 @@ def test_get_jobs_clip_time_false(params, file_regression):
 @pytest.mark.parametrize(
     "params", params_no_start_or_end.values(), ids=params_no_start_or_end.keys()
 )
-def test_get_jobs_clip_time_true_no_start_or_end(params, file_regression):
+def test_load_job_series_clip_time_true_no_start_or_end(params, file_regression):
     with pytest.raises(ValueError, match="Clip time\: missing (start|end)"):
         load_job_series(clip_time=True, **params)
 
 
 @pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
 @pytest.mark.parametrize("params", few_parameters.values(), ids=few_parameters.keys())
-def test_get_jobs_callback(params, file_regression):
+def test_load_job_series_callback(params, file_regression):
     def callback(rows):
         rows[-1]["another_column"] = 1234
 
@@ -304,7 +304,7 @@ def test_get_jobs_callback(params, file_regression):
 
 @pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
 @pytest.mark.parametrize("params", param_start_end.values(), ids=param_start_end.keys())
-def test_get_jobs_all_args(params, file_regression):
+def test_load_job_series_all_args(params, file_regression):
     def callback(rows):
         rows[-1]["another_column"] = 1234
 
