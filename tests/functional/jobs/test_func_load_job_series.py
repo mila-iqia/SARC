@@ -1,7 +1,6 @@
 import math
 from datetime import datetime
 
-import numpy as np
 import pandas
 import pytest
 
@@ -86,17 +85,12 @@ ALL_COLUMNS = [
 
 
 # For file regression tests, we will save data frame into a CSV.
-# We won't include job id because it changes from a call to another.
-# We won't include time-related fields because they can depend on start_time.
-# which may be set by load_job_series() to current time (datetime.now()) if initially None.
-CSV_COLUMNS = [
-    col
-    for col in ALL_COLUMNS
-    if col
-    not in ("id", "start_time", "end_time", "elapsed_time", "start", "end", "duration")
-]
+# We won't include job `id` because it changes from a call to another
+# (note that `job_id`, on the contrary, does not change).
+CSV_COLUMNS = [col for col in ALL_COLUMNS if col not in ["id"]]
 
 
+@pytest.mark.freeze_time("2017-05-21")
 @pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
 @pytest.mark.parametrize("params", parameters.values(), ids=parameters.keys())
 def test_load_job_series(params, file_regression):
@@ -124,10 +118,12 @@ def test_load_job_series_check_end_times(params):
     frame_1 = load_job_series(**params)
     # Get a data frame again
     frame_2 = load_job_series(**params)
-    nb_no_end_times = 0
+    frame_1_end_times = []
+    frame_2_end_times = []
     for i, job in enumerate(jobs):
         if job.end_time is None:
-            nb_no_end_times += 1
+            frame_1_end_times.append(frame_1["end_time"][i])
+            frame_2_end_times.append(frame_2["end_time"][i])
             # End time won't be None in data frames, because
             # load_job_series() will have set it to current time.
             assert frame_1["end_time"][i]
@@ -140,8 +136,12 @@ def test_load_job_series_check_end_times(params):
             # End time won't be changed.
             assert job.end_time == frame_1["end_time"][i]
             assert job.end_time == frame_2["end_time"][i]
-    # Check we really got raw jobs with no end time.
-    assert nb_no_end_times
+    # Check we really got many raw jobs with no end time.
+    assert len(frame_1_end_times) > 1
+    assert len(frame_2_end_times) > 1
+    # All missing end times set by a call to load_job_series() must have same value.
+    assert len(set(frame_1_end_times)) == 1
+    assert len(set(frame_2_end_times)) == 1
 
 
 @pytest.mark.usefixtures("read_write_db", "tzlocal_is_mtl")
@@ -247,6 +247,7 @@ def test_load_job_series_fields_dict(params, file_regression):
     )
 
 
+@pytest.mark.freeze_time("2017-05-21")
 @pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
 @pytest.mark.parametrize("params", param_start_end.values(), ids=param_start_end.keys())
 def test_load_job_series_clip_time_true(params, file_regression):
@@ -262,6 +263,7 @@ def test_load_job_series_clip_time_true(params, file_regression):
     )
 
 
+@pytest.mark.freeze_time("2017-05-21")
 @pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
 @pytest.mark.parametrize("params", param_start_end.values(), ids=param_start_end.keys())
 def test_load_job_series_clip_time_false(params, file_regression):
@@ -284,6 +286,7 @@ def test_load_job_series_clip_time_true_no_start_or_end(params, file_regression)
         load_job_series(clip_time=True, **params)
 
 
+@pytest.mark.freeze_time("2017-05-21")
 @pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
 @pytest.mark.parametrize("params", few_parameters.values(), ids=few_parameters.keys())
 def test_load_job_series_callback(params, file_regression):

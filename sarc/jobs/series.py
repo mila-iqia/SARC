@@ -270,10 +270,11 @@ def load_job_series(
     total = count_jobs(**jobs_args)
 
     rows = []
+    now = datetime.now(tz=MTL)
     # Fetch all jobs from the clusters
     for job in tqdm(get_jobs(**jobs_args), total=total, desc="load job series"):
         if job.end_time is None:
-            job.end_time = datetime.now(tz=MTL)
+            job.end_time = now
 
         # For some reason start time is not reliable, often equal to submit time,
         # so we infer it based on end_time and elapsed_time.
