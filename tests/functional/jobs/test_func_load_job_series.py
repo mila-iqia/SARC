@@ -90,7 +90,10 @@ ALL_COLUMNS = [
 CSV_COLUMNS = [col for col in ALL_COLUMNS if col not in ["id"]]
 
 
-@pytest.mark.freeze_time("2017-05-21")
+MOCK_TIME = "2023-11-22"
+
+
+@pytest.mark.freeze_time(MOCK_TIME)
 @pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
 @pytest.mark.parametrize("params", parameters.values(), ids=parameters.keys())
 def test_load_job_series(params, file_regression):
@@ -247,7 +250,7 @@ def test_load_job_series_fields_dict(params, file_regression):
     )
 
 
-@pytest.mark.freeze_time("2017-05-21")
+@pytest.mark.freeze_time(MOCK_TIME)
 @pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
 @pytest.mark.parametrize("params", param_start_end.values(), ids=param_start_end.keys())
 def test_load_job_series_clip_time_true(params, file_regression):
@@ -263,7 +266,7 @@ def test_load_job_series_clip_time_true(params, file_regression):
     )
 
 
-@pytest.mark.freeze_time("2017-05-21")
+@pytest.mark.freeze_time(MOCK_TIME)
 @pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
 @pytest.mark.parametrize("params", param_start_end.values(), ids=param_start_end.keys())
 def test_load_job_series_clip_time_false(params, file_regression):
@@ -286,7 +289,7 @@ def test_load_job_series_clip_time_true_no_start_or_end(params, file_regression)
         load_job_series(clip_time=True, **params)
 
 
-@pytest.mark.freeze_time("2017-05-21")
+@pytest.mark.freeze_time(MOCK_TIME)
 @pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
 @pytest.mark.parametrize("params", few_parameters.values(), ids=few_parameters.keys())
 def test_load_job_series_callback(params, file_regression):
