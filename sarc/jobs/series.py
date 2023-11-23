@@ -257,7 +257,7 @@ def load_job_series(
         Defaults to False.
     callback: Callable
         Callable taking the list of job dictionaries in the format it would be included in the DataFrame.
-    jobs_args
+    **jobs_args
         Arguments to be passed to `get_jobs` to query jobs from the database.
     """
 
