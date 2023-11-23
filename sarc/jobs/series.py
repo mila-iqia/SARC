@@ -253,6 +253,7 @@ def load_job_series(
         they will have in the DataFrame.
     clip_time: bool
         Whether the duration time of the jobs should be clipped within `start` and `end`.
+        ValueError will be raised if `clip_time` is True and either of `start` or `end` is None. 
         Defaults to False.
     callback: Callable
         Callable taking the list of job dictionaries in the format it would be included in the DataFrame.
