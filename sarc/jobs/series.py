@@ -253,7 +253,7 @@ def load_job_series(
         they will have in the DataFrame.
     clip_time: bool
         Whether the duration time of the jobs should be clipped within `start` and `end`.
-        ValueError will be raised if `clip_time` is True and either of `start` or `end` is None. 
+        ValueError will be raised if `clip_time` is True and either of `start` or `end` is None.
         Defaults to False.
     callback: Callable
         Callable taking the list of job dictionaries in the format it would be included in the DataFrame.
@@ -327,7 +327,11 @@ def load_job_series(
             job_series["unclipped_start"] = unclipped_start
             job_series["unclipped_end"] = unclipped_end
 
-        job_series.update(job.dict())
+        # Merge job series and job,
+        # with job series overriding job fields if necessary.
+        final_job_dict = job.dict()
+        final_job_dict.update(job_series)
+        job_series = final_job_dict
 
         if fields is not None:
             job_series = {
