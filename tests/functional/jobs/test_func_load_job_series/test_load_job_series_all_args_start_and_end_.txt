@@ -1,17 +1,17 @@
 Found 14 job(s):
 
-,gpu_footprint,memory,username,the_user_folder,another_column
-0,,49152,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente,1234
-1,,49152,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente,1234
-2,,49152,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente,1234
-3,,49152,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente,1234
-4,,49152,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente,1234
-5,,49152,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente,1234
-6,,49152,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente,1234
-7,,49152,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente,1234
-8,,49152,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente,1234
-9,,49152,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente,1234
-10,,49152,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente,1234
-11,,49152,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente,1234
-12,,49152,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente,1234
-13,,49152,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente,1234
+,gpu_footprint,username,the_user_folder,another_column
+0,,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente,1234
+1,,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente,1234
+2,,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente,1234
+3,,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente,1234
+4,,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente,1234
+5,,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente,1234
+6,,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente,1234
+7,,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente,1234
+8,,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente,1234
+9,,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente,1234
+10,,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente,1234
+11,,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente,1234
+12,,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente,1234
+13,,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente,1234

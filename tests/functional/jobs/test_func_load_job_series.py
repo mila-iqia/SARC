@@ -49,9 +49,7 @@ ALL_COLUMNS = [
     "constraints",
     "cpu",
     "cpu_utilization",
-    "duration",
     "elapsed_time",
-    "end",
     "end_time",
     "exit_code",
     "gpu_allocated",
@@ -63,7 +61,6 @@ ALL_COLUMNS = [
     "id",
     "job_id",
     "job_state",
-    "mem",
     "name",
     "nodes",
     "partition",
@@ -71,10 +68,8 @@ ALL_COLUMNS = [
     "qos",
     "requested",
     "signal",
-    "start",
     "start_time",
     "stored_statistics",
-    "submit",
     "submit_time",
     "system_memory",
     "task_id",
@@ -223,7 +218,7 @@ def test_load_job_series_with_stored_statistics(monkeypatch):
 @pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
 @pytest.mark.parametrize("params", few_parameters.values(), ids=few_parameters.keys())
 def test_load_job_series_fields_list(params, file_regression):
-    fields = ["gpu_memory", "mem", "user", "work_dir"]
+    fields = ["gpu_memory", "user", "work_dir"]
     data_frame = load_job_series(fields=fields, **params)
     assert isinstance(data_frame, pandas.DataFrame)
     assert sorted(data_frame.keys().tolist()) == sorted(fields)
@@ -237,11 +232,10 @@ def test_load_job_series_fields_list(params, file_regression):
 def test_load_job_series_fields_dict(params, file_regression):
     fields = {
         "gpu_memory": "gpu_footprint",
-        "mem": "memory",
         "user": "username",
         "work_dir": "the_user_folder",
     }
-    expected_fields = ["gpu_footprint", "memory", "username", "the_user_folder"]
+    expected_fields = ["gpu_footprint", "username", "the_user_folder"]
     data_frame = load_job_series(fields=fields, **params)
     assert isinstance(data_frame, pandas.DataFrame)
     assert sorted(data_frame.keys().tolist()) == sorted(expected_fields)
@@ -316,13 +310,11 @@ def test_load_job_series_all_args(params, file_regression):
 
     fields = {
         "gpu_memory": "gpu_footprint",
-        "mem": "memory",
         "user": "username",
         "work_dir": "the_user_folder",
     }
     expected_fields = [
         "gpu_footprint",
-        "memory",
         "username",
         "the_user_folder",
         "another_column",

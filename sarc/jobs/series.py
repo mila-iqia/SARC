@@ -318,11 +318,6 @@ def load_job_series(
                 max(billing, job.allocated.cpu) if job.allocated.cpu else 0
             )
         job_series["gpu_requested"] = gres_gpu
-        job_series["duration"] = job.elapsed_time
-        job_series["mem"] = job.allocated.mem
-        job_series["submit"] = job.submit_time
-        job_series["start"] = job.start_time
-        job_series["end"] = job.end_time
         if clip_time:
             job_series["unclipped_start"] = unclipped_start
             job_series["unclipped_end"] = unclipped_end
