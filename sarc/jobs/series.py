@@ -308,7 +308,7 @@ def load_job_series(
 
         # TODO: Why is it possible to have billing smaller than gres_gpu???
         billing = job.allocated.billing or 0
-        gres_gpu = job.allocated.gres_gpu or 0
+        gres_gpu = job.requested.gres_gpu or 0
         if gres_gpu:
             job_series["gpu_allocated"] = max(billing, gres_gpu)
             job_series["cpu"] = job.allocated.cpu
