@@ -259,6 +259,17 @@ def load_job_series(
         Callable taking the list of job dictionaries in the format it would be included in the DataFrame.
     **jobs_args
         Arguments to be passed to `get_jobs` to query jobs from the database.
+
+    Returns
+    -------
+    DataFrame
+        Panda's data frame containing jobs, with following columns:
+        - All fields returned by method SlurmJob.dict()
+        - Mandatory job series fields:
+          "gpu_utilization", "cpu_utilization", "gpu_memory", "gpu_power", "system_memory",
+          "gpu_allocated", "cpu_allocated", "gpu_requested", "cpu_requested"
+        - Optional job series fields, added if clip_time is True:
+          "unclipped_start" and "unclipped_end"
     """
 
     # If fields is a list, convert it to a renaming dict with same old and new names.
@@ -289,8 +300,6 @@ def load_job_series(
             if end is None:
                 raise ValueError("Clip time: missing end")
             # Clip the job to the time range we are interested in.
-            # NOTE: This should perhaps be helper function for dataframes so that we don't force clipping raw data
-            #       during loading.
             unclipped_start = job.start_time
             job.start_time = max(job.start_time, start)
             unclipped_end = job.end_time
@@ -311,13 +320,14 @@ def load_job_series(
         gres_gpu = job.requested.gres_gpu or 0
         if gres_gpu:
             job_series["gpu_allocated"] = max(billing, gres_gpu)
-            job_series["cpu"] = job.allocated.cpu
+            job_series["cpu_allocated"] = job.allocated.cpu
         else:
             job_series["gpu_allocated"] = 0
-            job_series["cpu"] = (
+            job_series["cpu_allocated"] = (
                 max(billing, job.allocated.cpu) if job.allocated.cpu else 0
             )
         job_series["gpu_requested"] = gres_gpu
+        job_series["cpu_requested"] = job.requested.cpu or 0
         if clip_time:
             job_series["unclipped_start"] = unclipped_start
             job_series["unclipped_end"] = unclipped_end
