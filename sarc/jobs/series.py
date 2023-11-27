@@ -265,7 +265,7 @@ def load_job_series(
     DataFrame
         Panda's data frame containing jobs, with following columns:
         - All fields returned by method SlurmJob.dict()
-        - Mandatory job series fields:
+        - Job series fields:
           "gpu_utilization", "cpu_utilization", "gpu_memory", "gpu_power", "system_memory",
           "gpu_allocated", "cpu_allocated", "gpu_requested", "cpu_requested"
         - Optional job series fields, added if clip_time is True:
