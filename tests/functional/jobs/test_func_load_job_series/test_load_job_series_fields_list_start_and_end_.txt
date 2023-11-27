@@ -1,17 +1,17 @@
 Found 14 job(s):
 
-,gpu_memory,user,work_dir
-0,,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente
-1,,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente
-2,,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente
-3,,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente
-4,,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente
-5,,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente
-6,,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente
-7,,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente
-8,,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente
-9,,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente
-10,,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente
-11,,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente
-12,,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente
-13,,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente
+,gpu_memory,allocated.mem,requested.mem,user,work_dir
+0,,49152,49152,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente
+1,,49152,49152,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente
+2,,49152,49152,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente
+3,,49152,49152,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente
+4,,49152,49152,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente
+5,,49152,49152,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente
+6,,49152,49152,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente
+7,,49152,49152,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente
+8,,49152,49152,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente
+9,,49152,49152,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente
+10,,49152,49152,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente
+11,,49152,49152,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente
+12,,49152,49152,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente
+13,,49152,49152,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente

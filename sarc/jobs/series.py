@@ -315,26 +315,35 @@ def load_job_series(
             job_series = job.stored_statistics.dict()
             job_series = {k: select_stat(k, v) for k, v in job_series.items()}
 
+        # Flatten job.requested into job_series
+        job_series.update(
+            {f"requested.{key}": value for key, value in job.requested.dict().items()}
+        )
+        # Flattedn job.allocated into job_series, with additional computations
         # TODO: Why is it possible to have billing smaller than gres_gpu???
         billing = job.allocated.billing or 0
         gres_gpu = job.requested.gres_gpu or 0
         if gres_gpu:
-            job_series["gpu_allocated"] = max(billing, gres_gpu)
-            job_series["cpu_allocated"] = job.allocated.cpu
+            job_series["allocated.gres_gpu"] = max(billing, gres_gpu)
+            job_series["allocated.cpu"] = job.allocated.cpu
         else:
-            job_series["gpu_allocated"] = 0
-            job_series["cpu_allocated"] = (
+            job_series["allocated.gres_gpu"] = 0
+            job_series["allocated.cpu"] = (
                 max(billing, job.allocated.cpu) if job.allocated.cpu else 0
             )
-        job_series["gpu_requested"] = gres_gpu
-        job_series["cpu_requested"] = job.requested.cpu or 0
+        job_series["allocated.mem"] = job.allocated.mem or 0
+        job_series["allocated.node"] = job.allocated.node or 0
+        job_series["allocated.billing"] = billing
+        job_series["allocated.gpu_type"] = job.allocated.gpu_type
+
         if clip_time:
             job_series["unclipped_start"] = unclipped_start
             job_series["unclipped_end"] = unclipped_end
 
         # Merge job series and job,
         # with job series overriding job fields if necessary.
-        final_job_dict = job.dict()
+        # Do not include raw requested and allocated anymore.
+        final_job_dict = job.dict(exclude={"requested", "allocated"})
         final_job_dict.update(job_series)
         job_series = final_job_dict
 
