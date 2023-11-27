@@ -315,11 +315,14 @@ def load_job_series(
             job_series = job.stored_statistics.dict()
             job_series = {k: select_stat(k, v) for k, v in job_series.items()}
 
-        # Flatten job.requested into job_series
+        # Flatten job.requested and job.allocated into job_series
         job_series.update(
             {f"requested.{key}": value for key, value in job.requested.dict().items()}
         )
-        # Flattedn job.allocated into job_series, with additional computations
+        job_series.update(
+            {f"allocated.{key}": value for key, value in job.allocated.dict().items()}
+        )
+        # Additional computations for job.allocated flattened fields.
         # TODO: Why is it possible to have billing smaller than gres_gpu???
         billing = job.allocated.billing or 0
         gres_gpu = job.requested.gres_gpu or 0
