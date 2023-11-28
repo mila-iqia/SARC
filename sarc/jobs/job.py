@@ -70,6 +70,19 @@ class JobStatistics(BaseModel):
     cpu_utilization: Optional[Statistics]
     system_memory: Optional[Statistics]
 
+    def empty(self):
+        return (
+            self.gpu_utilization is None
+            and self.gpu_utilization_fp16 is None
+            and self.gpu_utilization_fp32 is None
+            and self.gpu_utilization_fp64 is None
+            and self.gpu_sm_occupancy is None
+            and self.gpu_memory is None
+            and self.gpu_power is None
+            and self.cpu_utilization is None
+            and self.system_memory is None
+        )
+
 
 class SlurmResources(BaseModel):
     """Counts for various resources."""
@@ -150,14 +163,14 @@ class SlurmJob(BaseModel):
 
         return get_job_time_series(job=self, **kwargs)
 
-    def statistics(self, recompute=False, save=True):
+    def statistics(self, recompute=False, save=True, overwrite_when_empty=False):
         from .series import compute_job_statistics  # pylint: disable=cyclic-import
 
         if self.stored_statistics and not recompute:
             return self.stored_statistics
         elif self.end_time and self.fetch_cluster_config().prometheus_url:
             statistics = compute_job_statistics(self)
-            if save:
+            if save and (overwrite_when_empty or not statistics.empty()):
                 self.stored_statistics = statistics
                 self.save()
             return statistics
