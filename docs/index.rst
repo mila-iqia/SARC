@@ -10,6 +10,8 @@ Welcome to SARC's documentation!
    :maxdepth: 2
    :caption: Contents:
 
+   README
+   notebooks/index
    account_matching
    account_matching_manual_procedure
    deployment
@@ -19,3 +21,4 @@ Welcome to SARC's documentation!
    scripts/remote/README
    scripts/systemd/README
    scripts/deploy/README
+

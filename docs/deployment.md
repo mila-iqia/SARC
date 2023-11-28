@@ -90,7 +90,7 @@ You have 3 mongo users account;
 
 - `mongoadmin` (password: see `secrets/mongo_admin_password.txt`) is the global mongodb administrator account.
 - `readuser`(password: `readpwd`, see `config/sarc-client.json`) is the user for general use (only reads data from the database)
-- `writeuser` (password: see `secrets/mongo_writeuser_password.txt`) is used by the server during scrapping
+- `writeuser` (password: see `secrets/mongo_writeuser_password.txt`) is used by the server during scraping
 
 Therefore, if you want to admin the database with compass, the connection string will be (see `config/sarc-*.json`) :
 ```
@@ -121,9 +121,9 @@ See https://www.mongodb.com/docs/manual/administration/production-notes/#x86_64 
 Users creation:
 
 ```
-SARC_MODE=scrapping poetry run sarc db init --database sarc --url "mongodb://mongoadmin:<admin password>@localhost:27017" --username admin --password <admin password> --account admin
-SARC_MODE=scrapping poetry run sarc db init --database sarc --url "mongodb://mongoadmin:<admin password>@localhost:27017" --username readuser --password readpwd --account read 
-SARC_MODE=scrapping poetry run sarc db init --database sarc --url "mongodb://mongoadmin:<admin password>@localhost:27017" --username writeuser --password <writeuser password> --account write
+SARC_MODE=scraping poetry run sarc db init --database sarc --url "mongodb://mongoadmin:<admin password>@localhost:27017" --username admin --password <admin password> --account admin
+SARC_MODE=scraping poetry run sarc db init --database sarc --url "mongodb://mongoadmin:<admin password>@localhost:27017" --username readuser --password readpwd --account read 
+SARC_MODE=scraping poetry run sarc db init --database sarc --url "mongodb://mongoadmin:<admin password>@localhost:27017" --username writeuser --password <writeuser password> --account write
 ```
 
 ### (optionnal) database restoration

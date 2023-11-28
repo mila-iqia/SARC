@@ -142,9 +142,9 @@ function mongo_start {
     _mongo_no_auth &
     wait_mongo
 
-    SARC_MODE=scrapping sarc db init --database $DBNAME --url "mongodb://$ADDRESS:$PORT" --username $ADMIN --password $PASSWORD --account admin
-    SARC_MODE=scrapping sarc db init --database $DBNAME --url "mongodb://$ADDRESS:$PORT" --username $WRITEUSER_NAME --password $WRITEUSER_PWD --account write
-    SARC_MODE=scrapping sarc db init --database $DBNAME --url "mongodb://$ADDRESS:$PORT" --username $READUSER_NAME --password $READUSER_PWD --account read
+    SARC_MODE=scraping sarc db init --database $DBNAME --url "mongodb://$ADDRESS:$PORT" --username $ADMIN --password $PASSWORD --account admin
+    SARC_MODE=scraping sarc db init --database $DBNAME --url "mongodb://$ADDRESS:$PORT" --username $WRITEUSER_NAME --password $WRITEUSER_PWD --account write
+    SARC_MODE=scraping sarc db init --database $DBNAME --url "mongodb://$ADDRESS:$PORT" --username $READUSER_NAME --password $READUSER_PWD --account read
 
     mongo_stop
     fg
