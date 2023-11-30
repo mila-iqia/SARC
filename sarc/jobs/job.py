@@ -206,7 +206,7 @@ def get_clusters():
 
 
 # pylint: disable=too-many-branches,dangerous-default-value
-def get_jobs(
+def _compute_jobs_query(
     *,
     cluster: str | ClusterConfig | None = None,
     job_id: int | list[int] | None = None,
@@ -214,9 +214,8 @@ def get_jobs(
     user: str | None = None,
     start: str | datetime | None = None,
     end: str | datetime | None = None,
-    query_options: dict | None = None,
-) -> Iterable[SlurmJob]:
-    """Get jobs that match the query.
+) -> dict:
+    """Compute the MongoDB query dict to be used to match given arguments.
 
     Arguments:
         cluster: The cluster on which to search for jobs.
@@ -225,9 +224,6 @@ def get_jobs(
         end: Get all jobs that have a status before that time.
         query_options: Additional options to pass to MongoDB (limit, etc.)
     """
-    if query_options is None:
-        query_options = {}
-
     cluster_name = cluster
     if isinstance(cluster, ClusterConfig):
         cluster_name = cluster.name
@@ -277,6 +273,72 @@ def get_jobs(
                 {**query, "end_time": {"$gt": start}},
             ]
         }
+
+    return query
+
+
+def count_jobs(
+    *,
+    cluster: str | ClusterConfig | None = None,
+    job_id: int | list[int] | None = None,
+    job_state: str | SlurmState | None = None,
+    user: str | None = None,
+    start: str | datetime | None = None,
+    end: str | datetime | None = None,
+    query_options: dict | None = None,
+) -> int:
+    """Count jobs that match the query.
+
+    Arguments:
+        cluster: The cluster on which to search for jobs.
+        job_id: The id or a list of ids to select.
+        start: Get all jobs that have a status after that time.
+        end: Get all jobs that have a status before that time.
+        query_options: Additional options to pass to MongoDB (limit, etc.)
+    """
+    query = _compute_jobs_query(
+        cluster=cluster,
+        job_id=job_id,
+        job_state=job_state,
+        user=user,
+        start=start,
+        end=end,
+    )
+    if query_options is None:
+        query_options = {}
+    return config().mongo.database_instance.jobs.count_documents(query, **query_options)
+
+
+def get_jobs(
+    *,
+    cluster: str | ClusterConfig | None = None,
+    job_id: int | list[int] | None = None,
+    job_state: str | SlurmState | None = None,
+    user: str | None = None,
+    start: str | datetime | None = None,
+    end: str | datetime | None = None,
+    query_options: dict | None = None,
+) -> Iterable[SlurmJob]:
+    """Get jobs that match the query.
+
+    Arguments:
+        cluster: The cluster on which to search for jobs.
+        job_id: The id or a list of ids to select.
+        start: Get all jobs that have a status after that time.
+        end: Get all jobs that have a status before that time.
+        query_options: Additional options to pass to MongoDB (limit, etc.)
+    """
+    if query_options is None:
+        query_options = {}
+
+    query = _compute_jobs_query(
+        cluster=cluster,
+        job_id=job_id,
+        job_state=job_state,
+        user=user,
+        start=start,
+        end=end,
+    )
 
     coll = jobs_collection()
 

@@ -1,14 +1,16 @@
 from __future__ import annotations
 
-from datetime import datetime
-from typing import TYPE_CHECKING
+from datetime import datetime, timedelta
+from typing import TYPE_CHECKING, Callable
 
+import numpy as np
 import pandas
 from pandas import DataFrame
 from prometheus_api_client import MetricRangeDataFrame
+from tqdm import tqdm
 
 from sarc.config import MTL, UTC
-from sarc.jobs.job import JobStatistics, Statistics
+from sarc.jobs.job import JobStatistics, Statistics, count_jobs, get_jobs
 
 if TYPE_CHECKING:
     from sarc.jobs.sacct import SlurmJob
@@ -216,6 +218,153 @@ def compute_job_statistics(job: SlurmJob):
         cpu_utilization=cpu_utilization and Statistics(**cpu_utilization),
         system_memory=system_memory and Statistics(**system_memory),
     )
+
+
+DUMMY_STATS = {
+    label: np.nan
+    for label in [
+        "gpu_utilization",
+        "cpu_utilization",
+        "gpu_memory",
+        "gpu_power",
+        "system_memory",
+    ]
+}
+
+
+# pylint: disable=too-many-statements,fixme
+def load_job_series(
+    *,
+    fields: None | list[str] | dict[str, str] = None,
+    clip_time: bool = False,
+    callback: None | Callable = None,
+    **jobs_args,
+) -> pandas.DataFrame:
+    """
+    Query jobs from the database and return them in a DataFrame, including full user info
+    for each job.
+
+    Parameters
+    ----------
+    fields: list or dict
+        Job fields to include in the DataFrame. By default, include all fields.
+        A dictionary may be passed to select fields and rename them in the DataFrame.
+        In such case, the keys are the fields' names and the values are the names
+        they will have in the DataFrame.
+    clip_time: bool
+        Whether the duration time of the jobs should be clipped within `start` and `end`.
+        ValueError will be raised if `clip_time` is True and either of `start` or `end` is None.
+        Defaults to False.
+    callback: Callable
+        Callable taking the list of job dictionaries in the format it would be included in the DataFrame.
+    **jobs_args
+        Arguments to be passed to `get_jobs` to query jobs from the database.
+
+    Returns
+    -------
+    DataFrame
+        Panda's data frame containing jobs, with following columns:
+        - All fields returned by method SlurmJob.dict()
+        - Job series fields:
+          "gpu_utilization", "cpu_utilization", "gpu_memory", "gpu_power", "system_memory",
+          "gpu_allocated", "cpu_allocated", "gpu_requested", "cpu_requested"
+        - Optional job series fields, added if clip_time is True:
+          "unclipped_start" and "unclipped_end"
+    """
+
+    # If fields is a list, convert it to a renaming dict with same old and new names.
+    if isinstance(fields, list):
+        fields = {key: key for key in fields}
+
+    start = jobs_args.get("start", None)
+    end = jobs_args.get("end", None)
+
+    total = count_jobs(**jobs_args)
+
+    rows = []
+    now = datetime.now(tz=MTL)
+    # Fetch all jobs from the clusters
+    for job in tqdm(get_jobs(**jobs_args), total=total, desc="load job series"):
+        if job.end_time is None:
+            job.end_time = now
+
+        # For some reason start time is not reliable, often equal to submit time,
+        # so we infer it based on end_time and elapsed_time.
+        job.start_time = job.end_time - timedelta(seconds=job.elapsed_time)
+
+        unclipped_start = None
+        unclipped_end = None
+        if clip_time:
+            if start is None:
+                raise ValueError("Clip time: missing start")
+            if end is None:
+                raise ValueError("Clip time: missing end")
+            # Clip the job to the time range we are interested in.
+            unclipped_start = job.start_time
+            job.start_time = max(job.start_time, start)
+            unclipped_end = job.end_time
+            job.end_time = min(job.end_time, end)
+            # Could be negative if job started after end. We don't want to filter
+            # them out because they have been submitted before end, and we want to
+            # compute their wait time.
+            job.elapsed_time = max((job.end_time - job.start_time).total_seconds(), 0)
+
+        if job.stored_statistics is None:
+            job_series = DUMMY_STATS.copy()
+        else:
+            job_series = job.stored_statistics.dict()
+            job_series = {k: select_stat(k, v) for k, v in job_series.items()}
+
+        # Flatten job.requested and job.allocated into job_series
+        job_series.update(
+            {f"requested.{key}": value for key, value in job.requested.dict().items()}
+        )
+        job_series.update(
+            {f"allocated.{key}": value for key, value in job.allocated.dict().items()}
+        )
+        # Additional computations for job.allocated flattened fields.
+        # TODO: Why is it possible to have billing smaller than gres_gpu???
+        billing = job.allocated.billing or 0
+        gres_gpu = job.requested.gres_gpu or 0
+        if gres_gpu:
+            job_series["allocated.gres_gpu"] = max(billing, gres_gpu)
+            job_series["allocated.cpu"] = job.allocated.cpu
+        else:
+            job_series["allocated.gres_gpu"] = 0
+            job_series["allocated.cpu"] = (
+                max(billing, job.allocated.cpu) if job.allocated.cpu else 0
+            )
+
+        if clip_time:
+            job_series["unclipped_start"] = unclipped_start
+            job_series["unclipped_end"] = unclipped_end
+
+        # Merge job series and job,
+        # with job series overriding job fields if necessary.
+        # Do not include raw requested and allocated anymore.
+        final_job_dict = job.dict(exclude={"requested", "allocated"})
+        final_job_dict.update(job_series)
+        job_series = final_job_dict
+
+        if fields is not None:
+            job_series = {
+                new_name: job_series[old_name] for old_name, new_name in fields.items()
+            }
+        rows.append(job_series)
+        if callback:
+            callback(rows)
+
+    return pandas.DataFrame(rows)
+
+
+def select_stat(name, dist):
+    if not dist:
+        return np.nan
+
+    if name in ["system_memory", "gpu_memory"]:
+        return dist["max"]
+
+    return dist["median"]
 
 
 slurm_job_metric_names = [
