@@ -334,10 +334,6 @@ def load_job_series(
             job_series["allocated.cpu"] = (
                 max(billing, job.allocated.cpu) if job.allocated.cpu else 0
             )
-        job_series["allocated.mem"] = job.allocated.mem or 0
-        job_series["allocated.node"] = job.allocated.node or 0
-        job_series["allocated.billing"] = billing
-        job_series["allocated.gpu_type"] = job.allocated.gpu_type
 
         if clip_time:
             job_series["unclipped_start"] = unclipped_start
