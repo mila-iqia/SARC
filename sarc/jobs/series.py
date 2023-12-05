@@ -303,10 +303,10 @@ def load_job_series(
     -------
     DataFrame
         Panda's data frame containing jobs, with following columns:
-        - All fields returned by method SlurmJob.dict()
+        - All fields returned by method SlurmJob.dict(), except "requested" and "allocated"
+          which are flattened into `requested.<attribute>` and `allocated.<attribute>` fields.
         - Job series fields:
-          "gpu_utilization", "cpu_utilization", "gpu_memory", "gpu_power", "system_memory",
-          "gpu_allocated", "cpu_allocated", "gpu_requested", "cpu_requested"
+          "gpu_utilization", "cpu_utilization", "gpu_memory", "gpu_power", "system_memory"
         - Optional job series fields, added if clip_time is True:
           "unclipped_start" and "unclipped_end"
     """
@@ -352,7 +352,7 @@ def load_job_series(
             job_series = DUMMY_STATS.copy()
         else:
             job_series = job.stored_statistics.dict()
-            job_series = {k: select_stat(k, v) for k, v in job_series.items()}
+            job_series = {k: _select_stat(k, v) for k, v in job_series.items()}
 
         # Flatten job.requested and job.allocated into job_series
         job_series.update(
@@ -396,7 +396,7 @@ def load_job_series(
     return pandas.DataFrame(rows)
 
 
-def select_stat(name, dist):
+def _select_stat(name, dist):
     if not dist:
         return np.nan
 
