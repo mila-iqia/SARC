@@ -170,8 +170,8 @@ def create_jobs(job_factory: JobFactory | None = None):
     job_factory.add_job(
         job_id=999_999_999,
         elapsed_time=local_elapsed_time,
-        start_time= end_time - timedelta(seconds=elapsed_time),
-        submit_time= end_time - timedelta(seconds=elapsed_time + 60),
+        start_time=end_time - timedelta(seconds=elapsed_time),
+        submit_time=end_time - timedelta(seconds=elapsed_time + 60),
         allocated={
             "billing": 2,
             "cpu": 12,
