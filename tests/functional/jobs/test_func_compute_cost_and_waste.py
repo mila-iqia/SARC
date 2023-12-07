@@ -1,11 +1,23 @@
+import pandas
 import pytest
 
 from sarc.jobs.job import get_jobs
 from sarc.jobs.series import compute_cost_and_waste, load_job_series
 
 from .test_func_job_statistics import generate_fake_timeseries
-from .test_func_load_job_series import CSV_COLUMNS, MOCK_TIME
+from .test_func_load_job_series import MOCK_TIME
 
+# columns used to compute cost and waste
+USED_FIELDS = [
+    "elapsed_time",
+    "requested.cpu",
+    "requested.gres_gpu",
+    "allocated.cpu",
+    "allocated.gres_gpu",
+    "cpu_utilization",
+    "gpu_utilization",
+]
+# computed columns
 COST_WASTE_FIELDS = [
     "cpu_cost",
     "cpu_waste",
@@ -18,6 +30,10 @@ COST_WASTE_FIELDS = [
     "gpu_equivalent_waste",
     "gpu_overbilling_cost",
 ]
+
+
+def _df_to_pretty_str(df: pandas.DataFrame) -> str:
+    return df[USED_FIELDS + COST_WASTE_FIELDS].to_markdown()
 
 
 @pytest.mark.freeze_time(MOCK_TIME)
@@ -37,7 +53,7 @@ def test_compute_cost_and_waste(file_regression):
     assert frame["gpu_equivalent_waste"].isnull().all()
 
     file_regression.check(
-        f"Compute cost and waste for {frame.shape[0]} job(s):\n\n{frame.to_csv(columns=CSV_COLUMNS + COST_WASTE_FIELDS)}"
+        f"Compute cost and waste for {frame.shape[0]} job(s):\n\n{_df_to_pretty_str(frame)}"
     )
 
 
@@ -101,5 +117,5 @@ def test_compute_cost_and_waste_with_stored_statistics(file_regression, monkeypa
     assert frame["gpu_equivalent_waste"].notnull().all()
 
     file_regression.check(
-        f"Compute cost and waste for {frame.shape[0]} job(s):\n\n{frame.to_csv(columns=CSV_COLUMNS + COST_WASTE_FIELDS)}"
+        f"Compute cost and waste for {frame.shape[0]} job(s):\n\n{_df_to_pretty_str(frame)}"
     )
