@@ -1,4 +1,4 @@
-Found 8 job(s):
+Found 9 job(s):
 {
     "cluster_name": "raisin",
     "account": "mila",
@@ -372,6 +372,53 @@ Found 8 job(s):
         "billing": 1,
         "gres_gpu": 1,
         "gpu_type": null
+    },
+    "stored_statistics": null
+}
+{
+    "cluster_name": "raisin",
+    "account": "mila",
+    "job_id": 999999999,
+    "array_job_id": null,
+    "task_id": null,
+    "name": "main.sh",
+    "user": "petitbonhomme",
+    "group": "petitbonhomme",
+    "job_state": "CANCELLED",
+    "exit_code": 0,
+    "signal": null,
+    "partition": "long",
+    "nodes": [
+        "cn-c021"
+    ],
+    "work_dir": "/network/scratch/p/petitbonhomme/experience-demente",
+    "constraints": "x86_64&(48gb|80gb)",
+    "priority": 7152,
+    "qos": "normal",
+    "CLEAR_SCHEDULING": true,
+    "STARTED_ON_SUBMIT": false,
+    "STARTED_ON_SCHEDULE": false,
+    "STARTED_ON_BACKFILL": true,
+    "time_limit": 43200,
+    "submit_time": "2023-02-14T11:47:54-05:00",
+    "start_time": "2023-02-14T11:48:54-05:00",
+    "end_time": "2023-02-15T05:48:54-05:00",
+    "elapsed_time": 64800,
+    "requested": {
+        "cpu": 12,
+        "mem": 59152,
+        "node": 1,
+        "billing": 2,
+        "gres_gpu": 0,
+        "gpu_type": null
+    },
+    "allocated": {
+        "cpu": 12,
+        "mem": 39152,
+        "node": 1,
+        "billing": 2,
+        "gres_gpu": 0,
+        "gpu_type": "A100"
     },
     "stored_statistics": null
 }
