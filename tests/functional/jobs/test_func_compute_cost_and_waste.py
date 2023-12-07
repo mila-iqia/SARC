@@ -82,6 +82,7 @@ def test_compute_cost_and_waste_with_stored_statistics(file_regression, monkeypa
         20,
         23,
         1000000,
+        999_999_999,
     ]
     params = {"job_id": job_indices}
 

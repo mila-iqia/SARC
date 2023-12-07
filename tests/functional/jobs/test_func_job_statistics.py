@@ -2,6 +2,7 @@ import pytest
 from prometheus_api_client import MetricRangeDataFrame
 
 from sarc.jobs.job import SlurmJob, get_job
+from tests.functional.jobs.factory import elapsed_time as BASE_ELAPSED_TIME
 
 
 def generate_point_range(n, min, max):
@@ -52,7 +53,8 @@ def generate_fake_timeseries(job: SlurmJob, metric, max_points=100, dataframe=Tr
             metric=metric_dict,
             values=generate_point_range(n, mn, mx),
             t0=int(job.start_time.timestamp()),
-            delta=30,
+            # Change delta depending on job's elapsed time wrt/ base test elapsed time
+            delta=30 * job.elapsed_time / BASE_ELAPSED_TIME,
         )
     ]
 
