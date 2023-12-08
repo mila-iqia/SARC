@@ -180,6 +180,38 @@ def compute_job_statistics(job: SlurmJob):
         normalization=lambda x: float(x / 100),
     )
 
+    gpu_utilization_fp16 = compute_job_statistics_one_metric(
+        job,
+        "slurm_job_fp16_gpu",
+        statistics=statistics_dict,
+        unused_threshold=0.01,
+        normalization=lambda x: float(x / 100),
+    )
+
+    gpu_utilization_fp32 = compute_job_statistics_one_metric(
+        job,
+        "slurm_job_fp32_gpu",
+        statistics=statistics_dict,
+        unused_threshold=0.01,
+        normalization=lambda x: float(x / 100),
+    )
+
+    gpu_utilization_fp64 = compute_job_statistics_one_metric(
+        job,
+        "slurm_job_fp64_gpu",
+        statistics=statistics_dict,
+        unused_threshold=0.01,
+        normalization=lambda x: float(x / 100),
+    )
+
+    gpu_sm_occupancy = compute_job_statistics_one_metric(
+        job,
+        "slurm_job_sm_occupancy_gpu",
+        statistics=statistics_dict,
+        unused_threshold=0.01,
+        normalization=lambda x: float(x / 100),
+    )
+
     gpu_memory = compute_job_statistics_one_metric(
         job,
         "slurm_job_utilization_gpu_memory",
@@ -213,6 +245,13 @@ def compute_job_statistics(job: SlurmJob):
 
     return JobStatistics(
         gpu_utilization=gpu_utilization and Statistics(**gpu_utilization),
+        gpu_utilization_fp16=gpu_utilization_fp16
+        and Statistics(**gpu_utilization_fp16),
+        gpu_utilization_fp32=gpu_utilization_fp32
+        and Statistics(**gpu_utilization_fp32),
+        gpu_utilization_fp64=gpu_utilization_fp64
+        and Statistics(**gpu_utilization_fp64),
+        gpu_sm_occupancy=gpu_sm_occupancy and Statistics(**gpu_sm_occupancy),
         gpu_memory=gpu_memory and Statistics(**gpu_memory),
         gpu_power=gpu_power and Statistics(**gpu_power),
         cpu_utilization=cpu_utilization and Statistics(**cpu_utilization),

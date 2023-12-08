@@ -46,6 +46,10 @@ Found 1 job(s):
     },
     "stored_statistics": {
         "gpu_utilization": null,
+        "gpu_utilization_fp16": null,
+        "gpu_utilization_fp32": null,
+        "gpu_utilization_fp64": null,
+        "gpu_sm_occupancy": null,
         "gpu_memory": null,
         "gpu_power": null,
         "cpu_utilization": null,

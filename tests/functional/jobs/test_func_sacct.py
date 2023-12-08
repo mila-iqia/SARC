@@ -12,7 +12,7 @@ from fabric.testing.base import Command, Session
 
 from sarc.config import MTL, PST, UTC, config
 from sarc.jobs import sacct
-from sarc.jobs.job import get_jobs
+from sarc.jobs.job import JobStatistics, get_jobs
 from sarc.jobs.sacct import SAcctScraper
 
 from .factory import JsonJobFactory, json_raw
@@ -356,7 +356,7 @@ def test_get_gpu_type_from_prometheus(
 
     def mock_compute_job_statistics(job):
         mock_compute_job_statistics.called += 1
-        return dict()
+        return JobStatistics()
 
     mock_compute_job_statistics.called = 0
 
@@ -822,7 +822,7 @@ def test_cli_ignore_stats(
 
     def mock_compute_job_statistics(job):
         mock_compute_job_statistics.called += 1
-        return dict()
+        return JobStatistics()
 
     mock_compute_job_statistics.called = 0
 
