@@ -286,7 +286,6 @@ def update_allocated_gpu_type(cluster: ClusterConfig, entry: SlurmJob) -> Option
         output = get_job_time_series(
             job=entry,
             metric="slurm_job_utilization_gpu_memory",
-            max_points=1,
             dataframe=False,
         )
         if output:
