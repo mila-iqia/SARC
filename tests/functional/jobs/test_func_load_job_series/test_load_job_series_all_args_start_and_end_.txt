@@ -1,4 +1,4 @@
-Found 15 job(s):
+Found 14 job(s):
 
 ,gpu_footprint,memory,username,the_user_folder,another_column
 0,,49152,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente,1234
@@ -15,4 +15,3 @@ Found 15 job(s):
 11,,49152,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente,1234
 12,,49152,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente,1234
 13,,49152,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente,1234
-14,,39152,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente,1234

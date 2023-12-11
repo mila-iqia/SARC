@@ -1,4 +1,4 @@
-Found 15 job(s):
+Found 14 job(s):
 
 ,gpu_memory,allocated.mem,requested.mem,user,work_dir
 0,,49152,49152,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente
@@ -15,4 +15,3 @@ Found 15 job(s):
 11,,49152,49152,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente
 12,,49152,49152,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente
 13,,49152,49152,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente
-14,,39152,59152,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente
