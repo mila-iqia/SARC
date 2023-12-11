@@ -303,10 +303,10 @@ def load_job_series(
     -------
     DataFrame
         Panda's data frame containing jobs, with following columns:
-        - All fields returned by method SlurmJob.dict()
+        - All fields returned by method SlurmJob.dict(), except "requested" and "allocated"
+          which are flattened into `requested.<attribute>` and `allocated.<attribute>` fields.
         - Job series fields:
-          "gpu_utilization", "cpu_utilization", "gpu_memory", "gpu_power", "system_memory",
-          "gpu_allocated", "cpu_allocated", "gpu_requested", "cpu_requested"
+          "gpu_utilization", "cpu_utilization", "gpu_memory", "gpu_power", "system_memory"
         - Optional job series fields, added if clip_time is True:
           "unclipped_start" and "unclipped_end"
     """
@@ -352,7 +352,7 @@ def load_job_series(
             job_series = DUMMY_STATS.copy()
         else:
             job_series = job.stored_statistics.dict()
-            job_series = {k: select_stat(k, v) for k, v in job_series.items()}
+            job_series = {k: _select_stat(k, v) for k, v in job_series.items()}
 
         # Flatten job.requested and job.allocated into job_series
         job_series.update(
@@ -396,7 +396,7 @@ def load_job_series(
     return pandas.DataFrame(rows)
 
 
-def select_stat(name, dist):
+def _select_stat(name, dist):
     if not dist:
         return np.nan
 
@@ -436,3 +436,46 @@ slurm_job_metric_names = [
     "slurm_job_utilization_gpu",
     "slurm_job_utilization_gpu_memory",
 ]
+
+
+def compute_cost_and_waste(full_df: pandas.DataFrame) -> pandas.DataFrame:
+    """
+    Compute cost and waste for given pandas DataFrame.
+
+    Parameters
+    ----------
+    full_df: DataFrame
+        A pandas DataFrame returned by function load_job_series().
+
+    Returns
+    -------
+    DataFrame
+        Input data frame with additional columns:
+        "cpu_cost", "cpu_waste", "cpu_equivalent_cost", "cpu_equivalent_waste", "cpu_overbilling_cost",
+        "gpu_cost", "gpu_waste", "gpu_equivalent_cost", "gpu_equivalent_waste", "gpu_overbilling_cost".
+    """
+    full_df = _compute_cost_and_wastes(full_df, "cpu")
+    full_df = _compute_cost_and_wastes(full_df, "gpu")
+    return full_df
+
+
+def _compute_cost_and_wastes(data, device):
+    device_col = {"cpu": "cpu", "gpu": "gres_gpu"}[device]
+
+    data[f"{device}_cost"] = data["elapsed_time"] * data[f"requested.{device_col}"]
+    data[f"{device}_waste"] = (1 - data[f"{device}_utilization"]) * data[
+        f"{device}_cost"
+    ]
+
+    data[f"{device}_equivalent_cost"] = (
+        data["elapsed_time"] * data[f"allocated.{device_col}"]
+    )
+    data[f"{device}_equivalent_waste"] = (1 - data[f"{device}_utilization"]) * data[
+        f"{device}_equivalent_cost"
+    ]
+
+    data[f"{device}_overbilling_cost"] = data["elapsed_time"] * (
+        data[f"allocated.{device_col}"] - data[f"requested.{device_col}"]
+    )
+
+    return data

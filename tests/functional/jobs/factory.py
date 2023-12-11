@@ -165,6 +165,28 @@ def create_jobs(job_factory: JobFactory | None = None):
         },
     )
 
+    # Add a job with requested and allocated GPU to 0.
+    job_factory.add_job(
+        job_id=999_999_999,
+        elapsed_time=elapsed_time * 1.5,
+        allocated={
+            "billing": 14,
+            "cpu": 12,
+            "gres_gpu": 0,
+            "gpu_type": None,
+            "mem": 39152,
+            "node": 1,
+        },
+        requested={
+            "billing": 14,
+            "cpu": 12,
+            "gres_gpu": 0,
+            "gpu_type": None,
+            "mem": 59152,
+            "node": 1,
+        },
+    )
+
     return job_factory.jobs
 
 
