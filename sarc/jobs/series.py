@@ -677,9 +677,9 @@ def compute_time_frames(
 
     Parameters
     ----------
-    jobs: pandas.DataFrame
-        DataFrame containing jobs data. Typically generated with `load_job_series`.
-        Must contain columns `start` and `end`.
+    jobs: DataFrame
+        Pandas DataFrame containing jobs data. Typically generated with `load_job_series`.
+        Must contain columns `start_time` and `end_time`.
     columns: list of str
         Columns to adjust based on time frames.
     start: datetime, optional
@@ -709,28 +709,30 @@ def compute_time_frames(
     1 2023-03-06 2023-03-09    a       B   6.666667  172800.0 2023-03-07
     3 2023-03-06 2023-03-08    b       B  10.000000   86400.0 2023-03-07
     """
+    col_start = "start_time"
+    col_end = "end_time"
+
     if columns is None:
         columns = []
 
     if start is None:
-        start = jobs['start'].min()
+        start = jobs[col_start].min()
 
     if end is None:
-        end = jobs['end'].max()
-
+        end = jobs[col_end].max()
 
     data_frames = []
 
-    total_durations = (jobs["end"] - jobs["start"]).dt.total_seconds()
-    for frame_start in pd.date_range(start, end, freq=f"{frame_size.days}D"):
+    total_durations = (jobs[col_end] - jobs[col_start]).dt.total_seconds()
+    for frame_start in pandas.date_range(start, end, freq=f"{frame_size.days}D"):
         frame_end = frame_start + frame_size
 
-        mask = (jobs["start"] < frame_end) * (jobs["end"] > frame_start)
+        mask = (jobs[col_start] < frame_end) * (jobs[col_end] > frame_start)
         frame = jobs[mask].copy()
         total_durations_in_frame = total_durations[mask]
-        frame['start'] = frame["start"].clip(frame_start, frame_end)
-        frame['end'] = frame["end"].clip(frame_start, frame_end)
-        frame["duration"] = (frame['end'] - frame['start']).dt.total_seconds()
+        frame[col_start] = frame[col_start].clip(frame_start, frame_end)
+        frame[col_end] = frame[col_end].clip(frame_start, frame_end)
+        frame["duration"] = (frame[col_end] - frame[col_start]).dt.total_seconds()
 
         # Adjust columns to fit the time frame.
         for column in columns:
@@ -740,4 +742,4 @@ def compute_time_frames(
 
         data_frames.append(frame)
 
-    return pd.concat(data_frames, axis=0)
+    return pandas.concat(data_frames, axis=0)
