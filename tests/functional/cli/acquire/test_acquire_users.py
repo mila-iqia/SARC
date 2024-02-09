@@ -55,12 +55,15 @@ def fake_raw_ldap_data(nbr_users=10):
         ]
     )
 
+
 import random
-def fake_mymila_data(nbr_users=10,nbr_profs=5):
+
+
+def fake_mymila_data(nbr_users=10, nbr_profs=5):
     """
     Return a deterministically-generated list of fake MyMila users just as
     they would be returned by the function `load_mymila` (yet to be developped).
-    This is used for mocking the reading of a CSV file, since we don't expect 
+    This is used for mocking the reading of a CSV file, since we don't expect
     being able to read directly from the database itself in the short term.
 
     Records must have some matching points with the fake LDAP data, to allow
@@ -101,9 +104,9 @@ def fake_mymila_data(nbr_users=10,nbr_profs=5):
         is_prof = i < nbr_profs
         if is_prof:
             membership_types = [
-                'Permanent HQP',
-                'Visiting Researcher',
-                'Collaborating Researcher',
+                "Permanent HQP",
+                "Visiting Researcher",
+                "Collaborating Researcher",
             ]
             affiliation_types = [
                 "Collaborating Alumni",
@@ -111,7 +114,7 @@ def fake_mymila_data(nbr_users=10,nbr_profs=5):
                 "HQP - Postdoctorate",
                 "visiting researcher",
                 "",
-            ]   
+            ]
             supervisors = [""]
             current_university_title = [
                 "Canada Research Chair (Tier 2) and Assistant Professor",
@@ -122,8 +125,8 @@ def fake_mymila_data(nbr_users=10,nbr_profs=5):
 
         else:
             membership_types = [
-                'Research intern',
-                '',
+                "Research intern",
+                "",
             ]
             affiliation_types = [
                 "HQP - DESS",
@@ -133,8 +136,10 @@ def fake_mymila_data(nbr_users=10,nbr_profs=5):
                 "HQP - Undergraduate",
                 "Research Intern",
                 "",
-            ]   
-            supervisors = [f"John Smith{i:03d}" for i in range(nbr_profs)]  # 'nbr_profs' first names for profs
+            ]
+            supervisors = [
+                f"John Smith{i:03d}" for i in range(nbr_profs)
+            ]  # 'nbr_profs' first names for profs
             current_university_title = [
                 "",
             ]
@@ -142,57 +147,59 @@ def fake_mymila_data(nbr_users=10,nbr_profs=5):
         first_name = "John"
         last_name = f"Smith{i:03d}"
         email = f"john.smith{i:03d}@mila.quebec"
-        
+
         return {
-            'Profile Type' : '',
-            'Applicant Type' : '',
-            'internal id' : '',
-            'Mila Number' : '',
-            'Membership Type' : membership_types[i % len(membership_types)],
-            'Affiliation type' : affiliation_types[i % len(affiliation_types)],
-            'Assistant email' : '',
-            'Preferred email' : '',
-            'Faculty affiliated' : faculty_affiliated[i % len(faculty_affiliated)],
-            'Department affiliated' : '',
-            'ID affiliated' : '',
-            'Affiliated university 2' : '',
-            'Second affiliated university' : '',
-            'Affiliated university 3' : '',
-            'Third affiliated university' : '',
-            'Program of study' : program_of_study[i % len(program_of_study)],
-            'GitHub username' : '',
-            'Google Scholar profile' : '',
-            'Cluster access' : '',
-            'Access privileges' : '',
-            'Status' : status[i % len(status)],
-            'Membership Type.1' : '',
-            'Affiliation type.1' : '',
-            'Last Name' : first_name,
-            'First Name' : last_name,
-            'Preferred First Name' : first_name,
-            'Email' : email,
-            'Supervisor Principal' : supervisors[i % len(supervisors)],
-            'Co-Supervisor' : supervisors[(i+1) % len(supervisors)],
-            'Start date of studies' : '01/01/2022',
-            'End date of studies' : '31/12/2027',
-            'Start date of visit-internship' : '',
-            'End date of visit-internship' : '',
-            'Affiliated university' : affiliated_university[i % len(affiliated_university)],
-            'Current university title' : current_university_title[i % len(current_university_title)],
-            'Start date of academic nomination' : '01/01/2022',
-            'End date of academic nomination' : '31/12/2027' if random.choice([True, False]) else '',
-            'Alliance-DRAC account' : '',
-            'MILA Email' : email,
-            'Start Date with MILA' : '01/01/2022',
-            'End Date with MILA' : '31/12/2027' if random.choice([True, False]) else '',
-            'Type of membership' : '',
+            "Profile Type": "",
+            "Applicant Type": "",
+            "internal id": "",
+            "Mila Number": "",
+            "Membership Type": membership_types[i % len(membership_types)],
+            "Affiliation type": affiliation_types[i % len(affiliation_types)],
+            "Assistant email": "",
+            "Preferred email": "",
+            "Faculty affiliated": faculty_affiliated[i % len(faculty_affiliated)],
+            "Department affiliated": "",
+            "ID affiliated": "",
+            "Affiliated university 2": "",
+            "Second affiliated university": "",
+            "Affiliated university 3": "",
+            "Third affiliated university": "",
+            "Program of study": program_of_study[i % len(program_of_study)],
+            "GitHub username": "",
+            "Google Scholar profile": "",
+            "Cluster access": "",
+            "Access privileges": "",
+            "Status": status[i % len(status)],
+            "Membership Type.1": "",
+            "Affiliation type.1": "",
+            "Last Name": first_name,
+            "First Name": last_name,
+            "Preferred First Name": first_name,
+            "Email": email,
+            "Supervisor Principal": supervisors[i % len(supervisors)],
+            "Co-Supervisor": supervisors[(i + 1) % len(supervisors)],
+            "Start date of studies": "01/01/2022",
+            "End date of studies": "31/12/2027",
+            "Start date of visit-internship": "",
+            "End date of visit-internship": "",
+            "Affiliated university": affiliated_university[
+                i % len(affiliated_university)
+            ],
+            "Current university title": current_university_title[
+                i % len(current_university_title)
+            ],
+            "Start date of academic nomination": "01/01/2022",
+            "End date of academic nomination": "31/12/2027"
+            if random.choice([True, False])
+            else "",
+            "Alliance-DRAC account": "",
+            "MILA Email": email,
+            "Start Date with MILA": "01/01/2022",
+            "End Date with MILA": "31/12/2027" if random.choice([True, False]) else "",
+            "Type of membership": "",
         }
-        
-    return list(
-        [
-            mymila_entry(i) for i in range(nbr_users)
-        ]
-    )
+
+    return list([mymila_entry(i) for i in range(nbr_users)])
 
 
 class MyStringIO(StringIO):
