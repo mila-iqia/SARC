@@ -43,7 +43,6 @@ def run(prompt=False):
     mymila_data = sarc.ldap.mymila.query_mymila(cfg.mymila)
 
     if not mymila_data.empty:
-
         df_users = pd.DataFrame(LD_users)
         mymila_data = mymila_data.rename(columns={"MILA Email": "mila_email_username"})
 

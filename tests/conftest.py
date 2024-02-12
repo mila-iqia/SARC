@@ -190,7 +190,7 @@ Mysterious Stranger,BigProf,Manager,activated,stranger.person,ms@hotmail.com
     }
 
     if cfg.mymila is not None:
-        files[cfg.mymila.tmp_json_path] = '[]'
+        files[cfg.mymila.tmp_json_path] = "[]"
 
     return files
 
