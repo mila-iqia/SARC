@@ -16,7 +16,9 @@ from pymongo import UpdateOne
 
 import sarc.account_matching.make_matches
 import sarc.ldap.read_mila_ldap  # for the `run` function
+import sarc.ldap.mymila
 from sarc.config import config
+import pandas as pd
 
 
 def run(prompt=False):
@@ -37,6 +39,33 @@ def run(prompt=False):
     # what has already been populated in the database.
     LD_users = list(user_collection.find({}))
     LD_users = [D_user["mila_ldap"] for D_user in LD_users]
+
+    mymila_data = sarc.ldap.mymila.query_mymila(cfg.mymila)
+
+    if not mymila_data.empty:
+
+        df_users = pd.DataFrame(LD_users)
+        mymila_data = mymila_data.rename(columns={"MILA Email": "mila_email_username"})
+
+        df = pd.merge(df_users, mymila_data, on="mila_email_username", how="outer")
+
+        # TODO: Select columns that should be used from MyMila.
+        LD_users = df[
+            [
+                "mila_email_username",
+                "mila_cluster_username",
+                "mila_cluster_uid",
+                "mila_cluster_gid",
+                "display_name",
+                "supervisor",
+                "co_supervisor",
+                "status",
+            ]
+        ].to_dict("records")
+
+    # TODO: Refactor read_mila_ldap to decouple it from the database.
+    # TODO: Refactor read_mila_ldap, drac stuff and mymila to turn them into generic modules
+    #       that could be easily replaced by other sources of data for other institutions.
 
     # Match DRAC/CC to mila accounts
     DLD_data = sarc.account_matching.make_matches.load_data_from_files(

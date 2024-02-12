@@ -167,6 +167,14 @@ class LDAPConfig(BaseModel):
         return relative_filepath(value)
 
 
+class MyMilaConfig(BaseModel):
+    tmp_json_path: str
+
+    @validator("tmp_json_path")
+    def _relative_tmp(cls, value):
+        return relative_filepath(value)
+
+
 class AccountMatchingConfig(BaseModel):
     drac_members_csv_path: Path
     drac_roles_csv_path: Path
@@ -190,6 +198,7 @@ class ScraperConfig(BaseModel):
     cache: Path = None
 
     ldap: LDAPConfig = None
+    mymila: MyMilaConfig = None
     account_matching: AccountMatchingConfig = None
     sshconfig: Path = None
     clusters: dict[str, ClusterConfig] = None

@@ -11,6 +11,9 @@
         "group_to_prof_json_path": "secrets/group_to_prof.json",
         "exceptions_json_path": "secrets/exceptions.json"
     },
+    "mymila": {
+        "tmp_json_path": "secrets/tmp_mymila.json"
+    },
     "account_matching": {
         "drac_members_csv_path": "drac_members_not_valid_path.csv",
         "drac_roles_csv_path": "drac_roles_not_valid_path.csv",
