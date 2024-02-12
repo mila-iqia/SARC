@@ -12,9 +12,11 @@ referenced by "cfg.ldap.mongo_collection_name" will be updated.
 
 import json
 
+import pandas as pd
 from pymongo import UpdateOne
 
 import sarc.account_matching.make_matches
+import sarc.ldap.mymila
 import sarc.ldap.read_mila_ldap  # for the `run` function
 from sarc.config import config
 
@@ -37,6 +39,28 @@ def run(prompt=False):
     # what has already been populated in the database.
     LD_users = list(user_collection.find({}))
     LD_users = [D_user["mila_ldap"] for D_user in LD_users]
+
+    mymila_data = sarc.ldap.mymila.query_mymila(cfg.mymila)
+
+    if not mymila_data.empty:
+        df_users = pd.DataFrame(LD_users)
+        mymila_data = mymila_data.rename(columns={"MILA Email": "mila_email_username"})
+
+        df = pd.merge(df_users, mymila_data, on="mila_email_username", how="outer")
+
+        # NOTE: Select columns that should be used from MyMila.
+        LD_users = df[
+            [
+                "mila_email_username",
+                "mila_cluster_username",
+                "mila_cluster_uid",
+                "mila_cluster_gid",
+                "display_name",
+                "supervisor",
+                "co_supervisor",
+                "status",
+            ]
+        ].to_dict("records")
 
     # Match DRAC/CC to mila accounts
     DLD_data = sarc.account_matching.make_matches.load_data_from_files(

@@ -181,13 +181,18 @@ Mysterious Stranger,BigProf,Manager,activated,stranger.person,ms@hotmail.com
     }
     """
 
-    return {
+    files = {
         cfg.account_matching.drac_roles_csv_path: account_matching_drac_roles_csv_path,
         cfg.account_matching.drac_members_csv_path: account_matching_drac_members_csv_path,
         cfg.account_matching.make_matches_config: account_matching_make_matches_config,
         cfg.ldap.group_to_prof_json_path: group_to_prof,
         cfg.ldap.exceptions_json_path: exceptions_json_path,
     }
+
+    if cfg.mymila is not None:
+        files[cfg.mymila.tmp_json_path] = "[]"
+
+    return files
 
 
 @pytest.fixture
