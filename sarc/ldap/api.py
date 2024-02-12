@@ -6,6 +6,7 @@ https://mila-iqia.atlassian.net/wiki/spaces/IDT/pages/2190737548/Planification
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Optional
 
 from pydantic_mongo import AbstractRepository, ObjectIdField
@@ -30,20 +31,39 @@ class User(BaseModel):
     mila_ldap: dict
     drac_members: Optional[dict]
     drac_roles: Optional[dict]
+    
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
 
 
 class UserRepository(AbstractRepository[User]):
     class Meta:
         collection_name = "users"
-
-    def save_user(self, model: User):
-        document = self.to_document(model)
+        
+    def close_current_record(self, model: User):
+        today = date.today()
         return self.get_collection().update_one(
             {
                 "_id": model.id,
             },
-            {"$set": document},
+            {
+                "$set": {
+                    "end": today
+                }
+            },
             upsert=True,
+        )
+
+    def save_user(self, model: User):
+        if model.id is not None:
+            self.close_current_record(model)
+        
+        today = date.today()
+        document = self.to_document(model)
+        document['start'] = today
+        
+        return self.get_collection().insert(
+            document,
         )
 
 
@@ -59,7 +79,38 @@ def get_users(query=None, query_options: dict | None = None):
 
     if query is None:
         query = {}
-    return list(users_collection().find_by(query, query_options))
+         
+    pipeline = [
+        query,
+        {"$sort": {"start_date": 1}},
+        #
+        #   Group by email, those should be unique
+        #   because the group operation replace the _id
+        #   we save the original document as well
+        {
+            "$group": {
+                "_id": "mila_ldap.mila_email_username",
+                "document": { "$last": "$$ROOT" },
+                "start_date": {
+                    "$last": "$start_date"
+                }
+            }
+        },
+        #
+        #  Group is done but the _id was changed
+        #  now we replace the new _id (email) by the old _id (Object Id)
+        #  that we need to to udpates
+        #
+        {
+            "$replaceRoot": {
+                "newRoot": {
+                    "$mergeObjects": [ "$document", { "_id": "$_id" } ] 
+                }
+            }
+        }
+    ]
+    
+    return list(users_collection().aggregate(pipeline))
 
 
 def get_user(
@@ -79,10 +130,10 @@ def get_user(
     else:
         raise ValueError("At least one of the arguments must be provided.")
 
-    L = get_users(query)
-
-    assert len(L) <= 1
-    if len(L) == 1:
-        return L[0]
+    users = get_users(query)
+    
+    assert len(users) <= 1
+    if len(users) == 1:
+        return users[0]
     else:
         return None
