@@ -1,10 +1,10 @@
 import copy
 import json
 import tempfile
-from unittest.mock import patch
-import pandas as pd
 from datetime import date
+from unittest.mock import patch
 
+import pandas as pd
 import pytest
 
 import sarc.ldap.read_mila_ldap  # will monkeypatch "query_ldap"

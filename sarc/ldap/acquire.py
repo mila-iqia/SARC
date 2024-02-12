@@ -12,13 +12,13 @@ referenced by "cfg.ldap.mongo_collection_name" will be updated.
 
 import json
 
+import pandas as pd
 from pymongo import UpdateOne
 
 import sarc.account_matching.make_matches
-import sarc.ldap.read_mila_ldap  # for the `run` function
 import sarc.ldap.mymila
+import sarc.ldap.read_mila_ldap  # for the `run` function
 from sarc.config import config
-import pandas as pd
 
 
 def run(prompt=False):

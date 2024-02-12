@@ -1,7 +1,8 @@
+import json
+
 import pandas as pd
 
 from sarc.config import MyMilaConfig
-import json
 
 
 def query_mymila(cfg: MyMilaConfig):
