@@ -134,6 +134,7 @@ they are structured as follows:
     }
 
 """
+
 import json
 import os
 import ssl
@@ -215,9 +216,11 @@ def process_user(user_raw: dict) -> dict:
         "display_name": user_raw["displayName"][0],
         "supervisor": supervisor if supervisor else None,
         "co_supervisor": cosupervisor if cosupervisor else None,
-        "status": "disabled"
-        if (user_raw["suspended"][0] in ["True", "true", True])
-        else "enabled",
+        "status": (
+            "disabled"
+            if (user_raw["suspended"][0] in ["True", "true", True])
+            else "enabled"
+        ),
     }
     assert user_raw["mail"][0].startswith(user_raw["googleUid"][0])
     assert user_raw["mail"][0].startswith(user_raw["uid"][0])

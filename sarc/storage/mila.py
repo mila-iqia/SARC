@@ -1,6 +1,7 @@
 """
 Fetching and parsing code specific to the mila cluster
 """
+
 from datetime import datetime
 
 from tqdm import tqdm
