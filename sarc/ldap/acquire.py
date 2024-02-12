@@ -48,7 +48,7 @@ def run(prompt=False):
 
         df = pd.merge(df_users, mymila_data, on="mila_email_username", how="outer")
 
-        # TODO: Select columns that should be used from MyMila.
+        # NOTE: Select columns that should be used from MyMila.
         LD_users = df[
             [
                 "mila_email_username",
@@ -61,10 +61,6 @@ def run(prompt=False):
                 "status",
             ]
         ].to_dict("records")
-
-    # TODO: Refactor read_mila_ldap to decouple it from the database.
-    # TODO: Refactor read_mila_ldap, drac stuff and mymila to turn them into generic modules
-    #       that could be easily replaced by other sources of data for other institutions.
 
     # Match DRAC/CC to mila accounts
     DLD_data = sarc.account_matching.make_matches.load_data_from_files(
