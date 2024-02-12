@@ -58,6 +58,7 @@ def fake_raw_ldap_data(nbr_users=10):
 
 import random
 
+
 def fake_mymila_data(nbr_users=10, nbr_profs=5):
     """
     Return a deterministically-generated list of fake MyMila users just as
