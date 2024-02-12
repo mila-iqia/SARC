@@ -4,6 +4,7 @@ to map a cluster's node name to GPU type
 by parsing TXT files containing node descriptions like:
     NodeName=<nodes_description> Gres=<gpu-type> ...
 """
+
 import json
 import os
 

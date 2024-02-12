@@ -190,9 +190,9 @@ class SAcctScraper:
                 end_time=end_time,
                 elapsed_time=elapsed_time,
                 partition=entry["partition"],
-                nodes=sorted(expand_hostlist(nodes))
-                if nodes != "None assigned"
-                else [],
+                nodes=(
+                    sorted(expand_hostlist(nodes)) if nodes != "None assigned" else []
+                ),
                 constraints=entry["constraints"],
                 priority=entry["priority"],
                 qos=entry["qos"],
@@ -219,9 +219,9 @@ class SAcctScraper:
                 end_time=end_time,
                 elapsed_time=elapsed_time,
                 partition=entry["partition"],
-                nodes=sorted(expand_hostlist(nodes))
-                if nodes != "None assigned"
-                else [],
+                nodes=(
+                    sorted(expand_hostlist(nodes)) if nodes != "None assigned" else []
+                ),
                 constraints=entry["constraints"],
                 priority=entry["priority"]["number"],
                 qos=entry["qos"],
