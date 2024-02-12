@@ -58,17 +58,14 @@ def fake_raw_ldap_data(nbr_users=10):
 
 import random
 
-
 def fake_mymila_data(nbr_users=10, nbr_profs=5):
     """
     Return a deterministically-generated list of fake MyMila users just as
     they would be returned by the function `load_mymila` (yet to be developped).
     This is used for mocking the reading of a CSV file, since we don't expect
     being able to read directly from the database itself in the short term.
-
     Records must have some matching points with the fake LDAP data, to allow
     for matching to be tested.
-
     Returns a list of dictionaries, easy to convert to a dataframe.
     """
 
@@ -178,8 +175,8 @@ def fake_mymila_data(nbr_users=10, nbr_profs=5):
             "Email": email,
             "Supervisor Principal": supervisors[i % len(supervisors)],
             "Co-Supervisor": supervisors[(i + 1) % len(supervisors)],
-            "Start date of studies": "01/01/2022",
-            "End date of studies": "31/12/2027",
+            "Start date of studies": date(year=2022, month=1, day=1),
+            "End date of studies": date(year=2027, month=12, day=31),
             "Start date of visit-internship": "",
             "End date of visit-internship": "",
             "Affiliated university": affiliated_university[
@@ -188,18 +185,16 @@ def fake_mymila_data(nbr_users=10, nbr_profs=5):
             "Current university title": current_university_title[
                 i % len(current_university_title)
             ],
-            "Start date of academic nomination": "01/01/2022",
-            "End date of academic nomination": "31/12/2027"
-            if random.choice([True, False])
-            else "",
+            "Start date of academic nomination": date(2022, 1, 1),
+            "End date of academic nomination": [date(2027, 12, 31), None][i % 2],
             "Alliance-DRAC account": "",
             "MILA Email": email,
-            "Start Date with MILA": "01/01/2022",
-            "End Date with MILA": "31/12/2027" if random.choice([True, False]) else "",
+            "Start Date with MILA": date(2022, 1, 1),
+            "End Date with MILA": [date(2027, 12, 31), None][i % 2],
             "Type of membership": "",
         }
 
-    return list([mymila_entry(i) for i in range(nbr_users)])
+    return pd.DataFrame(list([mymila_entry(i) for i in range(nbr_users)]))
 
 
 class MyStringIO(StringIO):
