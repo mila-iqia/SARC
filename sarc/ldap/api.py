@@ -3,6 +3,7 @@ Implements the API as it was defined in
 https://mila-iqia.atlassian.net/wiki/spaces/IDT/pages/2190737548/Planification
 
 """
+
 from __future__ import annotations
 
 from typing import Optional
