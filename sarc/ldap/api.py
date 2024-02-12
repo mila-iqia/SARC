@@ -31,7 +31,7 @@ class User(BaseModel):
     mila_ldap: dict
     drac_members: Optional[dict]
     drac_roles: Optional[dict]
-    
+
     start_date: Optional[date] = None
     end_date: Optional[date] = None
 
@@ -39,29 +39,25 @@ class User(BaseModel):
 class UserRepository(AbstractRepository[User]):
     class Meta:
         collection_name = "users"
-        
+
     def close_current_record(self, model: User):
         today = date.today()
         return self.get_collection().update_one(
             {
                 "_id": model.id,
             },
-            {
-                "$set": {
-                    "end": today
-                }
-            },
+            {"$set": {"end": today}},
             upsert=True,
         )
 
     def save_user(self, model: User):
         if model.id is not None:
             self.close_current_record(model)
-        
+
         today = date.today()
         document = self.to_document(model)
-        document['start'] = today
-        
+        document["start"] = today
+
         return self.get_collection().insert(
             document,
         )
@@ -79,9 +75,9 @@ def get_users(query=None, query_options: dict | None = None):
 
     if query is None:
         query = {}
-         
+
     pipeline = [
-        query,
+        {"$match": query},
         {"$sort": {"start_date": 1}},
         #
         #   Group by email, those should be unique
@@ -90,10 +86,8 @@ def get_users(query=None, query_options: dict | None = None):
         {
             "$group": {
                 "_id": "mila_ldap.mila_email_username",
-                "document": { "$last": "$$ROOT" },
-                "start_date": {
-                    "$last": "$start_date"
-                }
+                "document": {"$last": "$$ROOT"},
+                "start_date": {"$last": "$start_date"},
             }
         },
         #
@@ -103,14 +97,22 @@ def get_users(query=None, query_options: dict | None = None):
         #
         {
             "$replaceRoot": {
-                "newRoot": {
-                    "$mergeObjects": [ "$document", { "_id": "$_id" } ] 
-                }
+                "newRoot": {"$mergeObjects": ["$document", {"_id": "$_id"}]}
             }
-        }
+        },
     ]
-    
-    return list(users_collection().aggregate(pipeline))
+
+    collection = users_collection().get_collection()
+    results = collection.aggregate(pipeline)
+
+    def to_user(data):
+        _id = data.pop("_id")
+        user = User(**data)
+        user.id = _id
+        return user
+
+    users = [to_user(result) for result in results]
+    return users
 
 
 def get_user(
@@ -131,7 +133,7 @@ def get_user(
         raise ValueError("At least one of the arguments must be provided.")
 
     users = get_users(query)
-    
+
     assert len(users) <= 1
     if len(users) == 1:
         return users[0]
