@@ -138,12 +138,14 @@ they are structured as follows:
 import json
 import os
 import ssl
-from datetime import datetime
+from copy import deepcopy
+from datetime import date, datetime
 
 # Requirements
 # - pip install ldap3
 from ldap3 import ALL_ATTRIBUTES, SUBTREE, Connection, Server, Tls
-from pymongo import MongoClient, UpdateOne
+from pymongo import InsertOne, MongoClient, UpdateOne
+from pymongo.collection import Collection
 
 from ..config import LDAPConfig, config
 from .supervisor import resolve_supervisors
@@ -227,7 +229,7 @@ def process_user(user_raw: dict) -> dict:
     return user
 
 
-def client_side_user_updates(LD_users_DB, LD_users_LDAP):
+def client_side_user_updates(LD_users_DB, LD_users_LDAP) -> tuple[list, list]:
     """
     Instead of having complicated updates that depend on multiple MongoDB
     updates to cover all cases involving the "status" field, we'll do all
@@ -245,26 +247,40 @@ def client_side_user_updates(LD_users_DB, LD_users_LDAP):
     DD_users_DB = dict((e["mila_email_username"], e) for e in LD_users_DB)
     DD_users_LDAP = dict((e["mila_email_username"], e) for e in LD_users_LDAP)
 
-    LD_users_to_update_or_insert = []
+    inserts = []
+    updates = []
     for meu in set(list(DD_users_DB.keys()) + list(DD_users_LDAP.keys())):
         # `meu` is short for the mila_email_username value
 
-        if meu in DD_users_DB and not meu in DD_users_LDAP:
+        user_is_in_ldap = meu in DD_users_LDAP
+        user_is_in_db = meu in DD_users_DB
+
+        if user_is_in_db and not user_is_in_ldap:
             # User is in DB but not in the LDAP.
             # Let's mark it as archived.
             entry = DD_users_DB[meu]
             entry["status"] = "archived"
+            entry.setdefault("end_date", date.today())
+
+            updates.append(entry)
+
+        elif user_is_in_ldap and not user_is_in_db:
+            # User is in LDAP but not DB; new user
+            entry = DD_users_LDAP[meu]
+            entry.setdefault("start_date", date.today())
+
+            inserts.append(entry)
         else:
-            # either User is not in DB but is in the LDAP (new entry)
-            # or User is in both DB and LDAP. We'll consider the LDAP more up-to-date.
+            # User is in both DB and LDAP. We'll consider the LDAP more up-to-date.
             # If you need to enter some fields for the first time
             # when entering a new user, do it here.
             # As of right now, we have no need to do that.
             entry = DD_users_LDAP[meu]
+            updates.append(entry)
 
         assert "status" in entry  # sanity check
-        LD_users_to_update_or_insert.append(entry)
-    return LD_users_to_update_or_insert
+
+    return inserts, updates
 
 
 def _query_and_dump(
@@ -287,7 +303,62 @@ def _query_and_dump(
     return LD_users_raw
 
 
-def _save_to_mongo(collection, LD_users):
+def make_user_update(collection: Collection, update: dict) -> list:
+    dbentry = collection.find(
+        {"mila_ldap.mila_email_username": update["mila_email_username"]}
+    )
+
+    def has_changed():
+        ldap_entry = dbentry["mila_ldap"]
+        for k, v in update.items():
+            if k not in ldap_entry:
+                return True
+
+            if ldap_entry[k] != v:
+                return True
+
+        return False
+
+    if not has_changed():
+        # No change detected
+        return []
+
+    today = date.today()
+
+    # insert new records with updated value
+    new_record = deepcopy(dbentry)
+    _ = new_record.pop("_id")
+    new_record["mila_ldap"] = update
+    new_record["start_date"] = update.pop("start_date", today)
+    new_record["end_date"] = update.pop("end_date", None)
+
+    return [
+        # Close current record
+        UpdateOne({"_id": dbentry["_id"]}, {"$set": {"end_date": today}}),
+        # insert newest record
+        InsertOne(new_record),
+    ]
+
+
+def make_user_updates(collection: Collection, updates: list[dict]) -> list:
+    queries = []
+    for update in updates:
+        queries.extend(make_user_update(collection, update))
+    return queries
+
+
+def make_user_insert(_: Collection, newuser: dict) -> list:
+    return [InsertOne({"mila_ldap": newuser})]
+
+
+def make_user_inserts(collection: Collection, newusers: list[dict]) -> list:
+    queries = []
+    for newuser in newusers:
+        queries.extend(make_user_insert(collection, newuser))
+    return queries
+
+
+def _save_to_mongo(collection: Collection, LD_users: list):
     if collection is None:
         return
 
@@ -295,24 +366,14 @@ def _save_to_mongo(collection, LD_users):
     # "drac_roles" and "drac_members" components
     LD_users_DB = [u["mila_ldap"] for u in list(collection.find())]
 
-    L_updated_users = client_side_user_updates(
+    inserts, updates = client_side_user_updates(
         LD_users_DB=LD_users_DB,
         LD_users_LDAP=LD_users,
     )
 
-    L_updates_to_do = [
-        UpdateOne(
-            {"mila_ldap.mila_email_username": updated_user["mila_email_username"]},
-            {
-                # We set all the fields corresponding to the fields from `updated_user`,
-                # so that's a convenient way to do it. Note that this does not affect
-                # the fields in the database that are already present for that user.
-                "$set": {"mila_ldap": updated_user},
-            },
-            upsert=True,
-        )
-        for updated_user in L_updated_users
-    ]
+    L_updates_to_do = make_user_inserts(collection, inserts) + make_user_updates(
+        collection, updates
+    )
 
     if L_updates_to_do:
         result = collection.bulk_write(L_updates_to_do)  #  <- the actual commit

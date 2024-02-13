@@ -40,27 +40,9 @@ class UserRepository(AbstractRepository[User]):
     class Meta:
         collection_name = "users"
 
-    def close_current_record(self, model: User):
-        today = date.today()
-        return self.get_collection().update_one(
-            {
-                "_id": model.id,
-            },
-            {"$set": {"end": today}},
-            upsert=True,
-        )
-
-    def save_user(self, model: User):
-        if model.id is not None:
-            self.close_current_record(model)
-
-        today = date.today()
-        document = self.to_document(model)
-        document["start"] = today
-
-        return self.get_collection().insert(
-            document,
-        )
+    # The API created by pydantic is simplistic
+    # inserting into the users collection need to 
+    # take into account revisions
 
 
 def users_collection():
