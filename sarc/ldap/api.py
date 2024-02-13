@@ -41,7 +41,7 @@ class UserRepository(AbstractRepository[User]):
         collection_name = "users"
 
     # The API created by pydantic is simplistic
-    # inserting into the users collection need to 
+    # inserting into the users collection need to
     # take into account revisions
 
 

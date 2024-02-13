@@ -325,19 +325,21 @@ def make_user_update(collection: Collection, update: dict) -> list:
 
     today = date.today()
 
-    # insert new records with updated value
-    new_record = deepcopy(dbentry)
-    _ = new_record.pop("_id")
-    new_record["mila_ldap"] = update
-    new_record["start_date"] = update.pop("start_date", today)
-    new_record["end_date"] = update.pop("end_date", None)
+    queries = []
+    # Close current record
+    queries.append(UpdateOne({"_id": dbentry["_id"]}, {"$set": {"end_date": today}}))
 
-    return [
-        # Close current record
-        UpdateOne({"_id": dbentry["_id"]}, {"$set": {"end_date": today}}),
-        # insert newest record
-        InsertOne(new_record),
-    ]
+    # if user not archived
+    # insert new records with updated value
+    if update["status"] != "archived":
+        new_record = deepcopy(dbentry)
+        _ = new_record.pop("_id")
+        new_record["mila_ldap"] = update
+        new_record["start_date"] = update.pop("start_date", today)
+
+        queries.append(InsertOne(new_record))
+
+    return queries
 
 
 def make_user_updates(collection: Collection, updates: list[dict]) -> list:
