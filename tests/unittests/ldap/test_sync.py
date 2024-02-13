@@ -1,4 +1,5 @@
 from collections import namedtuple
+
 from pymongo import InsertOne
 
 import sarc.ldap.read_mila_ldap
