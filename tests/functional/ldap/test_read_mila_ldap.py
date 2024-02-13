@@ -321,7 +321,7 @@ def test_query_to_ldap_server_and_commit_to_db(monkeypatch, mock_file):
         return [{"mila_ldap": sarc.ldap.read_mila_ldap.process_user(u)} for u in L_u]
 
     sorted_order_func = lambda u: u["mila_ldap"]["mila_email_username"]
-    
+
     def remove_newkeys(obj):
         obj.pop("start_date", None)
         obj.pop("end_date", None)
@@ -352,10 +352,10 @@ def test_query_to_ldap_server_and_commit_to_db(monkeypatch, mock_file):
 
     L1 = transform_user_list(L_first_batch_users)
     L2 = transform_user_list(L_second_batch_users)
-    
+
     for u in L1:
         u["mila_ldap"]["status"] = "archived"
-        
+
     L_uB = sorted(
         L1 + L2,
         key=sorted_order_func,

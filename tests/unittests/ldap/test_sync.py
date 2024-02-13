@@ -333,7 +333,7 @@ def test_ldap_simple_sync(monkeypatch):
             if d._doc["mila_ldap"]["mila_email_username"].startswith("good"):
                 break
     else:
-       assert False, "Did not find username"
+        assert False, "Did not find username"
 
     student = d._doc["mila_ldap"]
     assert student["supervisor"] == "supervisor@email.com", "Supervisor was found"
