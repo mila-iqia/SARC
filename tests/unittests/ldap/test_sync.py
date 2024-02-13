@@ -1,4 +1,5 @@
 from collections import namedtuple
+from pymongo import InsertOne
 
 import sarc.ldap.read_mila_ldap
 from sarc.ldap.read_mila_ldap import resolve_supervisors, run
@@ -327,12 +328,13 @@ def test_ldap_simple_sync(monkeypatch):
 
     # find Student
     for d in docs:
-        if d._doc["$set"]["mila_ldap"]["mila_email_username"].startswith("good"):
-            break
+        if isinstance(d, InsertOne):
+            if d._doc["mila_ldap"]["mila_email_username"].startswith("good"):
+                break
     else:
-        assert False, "Did not find username"
+       assert False, "Did not find username"
 
-    student = d._doc["$set"]["mila_ldap"]
+    student = d._doc["mila_ldap"]
     assert student["supervisor"] == "supervisor@email.com", "Supervisor was found"
     assert (
         student["co_supervisor"] == "co.supervisor@email.com"

@@ -304,7 +304,7 @@ def _query_and_dump(
 
 
 def make_user_update(collection: Collection, update: dict) -> list:
-    dbentry = collection.find(
+    dbentry = collection.find_one(
         {"mila_ldap.mila_email_username": update["mila_email_username"]}
     )
 
@@ -327,7 +327,17 @@ def make_user_update(collection: Collection, update: dict) -> list:
 
     queries = []
     # Close current record
-    queries.append(UpdateOne({"_id": dbentry["_id"]}, {"$set": {"end_date": today}}))
+    queries.append(
+        UpdateOne(
+            {"_id": dbentry["_id"]},
+            {
+                "$set": {
+                    "end_date": today,  # date it was archived
+                    "mila_ldap.status": "archived",  # Update status to archive
+                }
+            },
+        )
+    )
 
     # if user not archived
     # insert new records with updated value
@@ -350,7 +360,8 @@ def make_user_updates(collection: Collection, updates: list[dict]) -> list:
 
 
 def make_user_insert(_: Collection, newuser: dict) -> list:
-    return [InsertOne({"mila_ldap": newuser})]
+    start_date = newuser.pop("start_date", datetime.today())
+    return [InsertOne({"mila_ldap": newuser, "start_date": start_date})]
 
 
 def make_user_inserts(collection: Collection, newusers: list[dict]) -> list:
