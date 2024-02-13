@@ -139,7 +139,7 @@ import json
 import os
 import ssl
 from copy import deepcopy
-from datetime import date, datetime
+from datetime import datetime
 
 # Requirements
 # - pip install ldap3
@@ -260,14 +260,14 @@ def client_side_user_updates(LD_users_DB, LD_users_LDAP) -> tuple[list, list]:
             # Let's mark it as archived.
             entry = DD_users_DB[meu]
             entry["status"] = "archived"
-            entry.setdefault("end_date", date.today())
+            entry.setdefault("end_date", datetime.today())
 
             updates.append(entry)
 
         elif user_is_in_ldap and not user_is_in_db:
             # User is in LDAP but not DB; new user
             entry = DD_users_LDAP[meu]
-            entry.setdefault("start_date", date.today())
+            entry.setdefault("start_date", datetime.today())
 
             inserts.append(entry)
         else:
@@ -323,7 +323,7 @@ def make_user_update(collection: Collection, update: dict) -> list:
         # No change detected
         return []
 
-    today = date.today()
+    today = datetime.today()
 
     queries = []
     # Close current record
