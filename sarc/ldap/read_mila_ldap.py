@@ -335,7 +335,7 @@ def load_group_to_prof_mapping(ldap_config: LDAPConfig):
         return json.load(file)
 
 
-def fetch_ldap(ldap):
+def fetch_ldap(ldap, save_ldap=False):
     # retrive users from LDAP
     LD_users_raw = _query_and_dump(ldap, save_ldap)
 
@@ -358,7 +358,7 @@ def run(
 ):
     """Runs periodically to synchronize mongodb with LDAP"""
 
-    LD_users = fetch_ldap(ldap)
+    LD_users = fetch_ldap(ldap, save_ldap)
 
     _save_to_mongo(mongodb_collection, LD_users)
 
