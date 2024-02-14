@@ -17,8 +17,8 @@ from pymongo import UpdateOne
 
 import sarc.account_matching.make_matches
 import sarc.ldap.mymila
-import sarc.ldap.read_mila_ldap  # for the `run` function
 from sarc.config import config
+from sarc.ldap.read_mila_ldap import fetch_ldap
 
 
 def run(prompt=False):
@@ -26,19 +26,7 @@ def run(prompt=False):
 
     cfg = config()
 
-    user_collection = cfg.mongo.database_instance[cfg.ldap.mongo_collection_name]
-
-    # Sync LDAP and mongodb
-    sarc.ldap.read_mila_ldap.run(
-        ldap=cfg.ldap,
-        mongodb_collection=user_collection,
-    )
-
-    # It becomes really hard to test this with script when
-    # we mock the `open` calls, so we'll instead rely on
-    # what has already been populated in the database.
-    LD_users = list(user_collection.find({}))
-    LD_users = [D_user["mila_ldap"] for D_user in LD_users]
+    LD_users = fetch_ldap(ldap=cfg.ldap)
 
     mymila_data = sarc.ldap.mymila.query_mymila(cfg.mymila)
 
