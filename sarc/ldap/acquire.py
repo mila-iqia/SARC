@@ -17,8 +17,9 @@ from pymongo import UpdateOne
 
 import sarc.account_matching.make_matches
 import sarc.ldap.mymila
-import sarc.ldap.read_mila_ldap  # for the `run` function
 from sarc.config import config
+from sarc.ldap.read_mila_ldap import fetch_ldap
+from sarc.ldap.user import commit_matches_to_database
 
 
 def run(prompt=False):
@@ -26,19 +27,10 @@ def run(prompt=False):
 
     cfg = config()
 
-    user_collection = cfg.mongo.database_instance[cfg.ldap.mongo_collection_name]
-
     # Sync LDAP and mongodb
-    sarc.ldap.read_mila_ldap.run(
-        ldap=cfg.ldap,
-        mongodb_collection=user_collection,
-    )
+    ldap_users = fetch_ldap(ldap=cfg.ldap)
 
-    # It becomes really hard to test this with script when
-    # we mock the `open` calls, so we'll instead rely on
-    # what has already been populated in the database.
-    LD_users = list(user_collection.find({}))
-    LD_users = [D_user["mila_ldap"] for D_user in LD_users]
+    LD_users = ldap_users
 
     mymila_data = sarc.ldap.mymila.query_mymila(cfg.mymila)
 
@@ -124,105 +116,6 @@ def run(prompt=False):
             cfg.account_matching.make_matches_config, "w", encoding="utf-8"
         ) as json_file:
             json.dump(make_matches_config, json_file, indent=4)
-
-
-def fill_computed_fields(data: dict):
-    mila_ldap = data.get("mila_ldap", {}) or {}
-    drac_members = data.get("drac_members", {}) or {}
-    drac_roles = data.get("drac_roles", {}) or {}
-
-    if "name" not in data:
-        data["name"] = mila_ldap.get("display_name", "???")
-
-    if "mila" not in data:
-        data["mila"] = {
-            "username": mila_ldap.get("mila_cluster_username", "???"),
-            "email": mila_ldap.get("mila_email_username", "???"),
-            "active": mila_ldap.get("status", None) == "enabled",
-        }
-
-    if "drac" not in data:
-        if drac_members:
-            data["drac"] = {
-                "username": drac_members.get("username", "???"),
-                "email": drac_members.get("email", "???"),
-                "active": drac_members.get("activation_status", None) == "activated",
-            }
-        elif drac_roles:
-            data["drac"] = {
-                "username": drac_roles.get("username", "???"),
-                "email": drac_roles.get("email", "???"),
-                "active": drac_roles.get("status", None) == "Activated",
-            }
-        else:
-            data["drac"] = None
-
-    return data
-
-
-def commit_matches_to_database(users_collection, DD_persons_matched, verbose=False):
-    L_updates_to_do = []
-    for mila_email_username, D_match in DD_persons_matched.items():
-        assert (
-            D_match["mila_ldap"]["mila_email_username"] == mila_email_username
-        )  # sanity check
-
-        D_match = fill_computed_fields(D_match)
-
-        # if mila ldap user status = "unknown", which means the user does NOT exist in the Mila LDAP but was created as a dummy placeholder,
-        # then UPSERT the document in the database if necessary
-        # otherwise, juste update it
-        if D_match["mila_ldap"]["status"] == "unknown":
-            L_updates_to_do.append(
-                UpdateOne(
-                    {"mila_ldap.mila_email_username": mila_email_username},
-                    {
-                        # We set all the fields corresponding to the fields from `updated_user`,
-                        # so that's a convenient way to do it. Note that this does not affect
-                        # the fields in the database that are already present for that user.
-                        "$set": {
-                            "mila_ldap": D_match["mila_ldap"],
-                            "name": D_match["name"],
-                            "mila": D_match["mila"],
-                            "drac": D_match["drac"],
-                            "drac_roles": D_match["drac_roles"],
-                            "drac_members": D_match["drac_members"],
-                        },
-                    },
-                    upsert=True,
-                )
-            )
-        else:
-            L_updates_to_do.append(
-                UpdateOne(
-                    {"mila_ldap.mila_email_username": mila_email_username},
-                    {
-                        # We don't modify the "mila_ldap" field,
-                        # only add the "drac_roles" and "drac_members" fields.
-                        "$set": {
-                            "name": D_match["name"],
-                            "mila": D_match["mila"],
-                            "drac": D_match["drac"],
-                            "drac_roles": D_match["drac_roles"],
-                            "drac_members": D_match["drac_members"],
-                        },
-                    },
-                    # Don't add that entry if it doesn't exist.
-                    # That would create some dangling entry that doesn't have a "mila_ldap" field.
-                    upsert=False,
-                )
-            )
-
-    if L_updates_to_do:
-        result = users_collection.bulk_write(L_updates_to_do)  #  <- the actual commit
-        if verbose:
-            print(result.bulk_api_result)
-    else:
-        if verbose:
-            print("Nothing to do.")
-
-    # might as well return this result in case we'd like to write tests for it
-    return result
 
 
 if __name__ == "__main__":

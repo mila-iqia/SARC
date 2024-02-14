@@ -138,7 +138,7 @@ they are structured as follows:
 import json
 import os
 import ssl
-from copy import deepcopy
+import warnings
 from datetime import datetime
 
 # Requirements
@@ -149,6 +149,7 @@ from pymongo.collection import Collection
 
 from ..config import LDAPConfig, config
 from .supervisor import resolve_supervisors
+from .user import make_user_inserts, make_user_updates
 
 
 def query_ldap(local_private_key_file, local_certificate_file, ldap_service_uri):
@@ -258,17 +259,21 @@ def client_side_user_updates(LD_users_DB, LD_users_LDAP) -> tuple[list, list]:
         if user_is_in_db and not user_is_in_ldap:
             # User is in DB but not in the LDAP.
             # Let's mark it as archived.
+
             entry = DD_users_DB[meu]
+            dbstatus = entry.get("status", None)
             entry["status"] = "archived"
             entry.setdefault("end_date", datetime.today())
 
-            updates.append(entry)
+            # if the db already has the user as archived
+            # we do not need to update it
+            if dbstatus != entry["status"]:
+                updates.append(entry)
 
         elif user_is_in_ldap and not user_is_in_db:
             # User is in LDAP but not DB; new user
             entry = DD_users_LDAP[meu]
             entry.setdefault("start_date", datetime.today())
-
             inserts.append(entry)
         else:
             # User is in both DB and LDAP. We'll consider the LDAP more up-to-date.
@@ -301,74 +306,6 @@ def _query_and_dump(
             json.dump(LD_users_raw, f_out, indent=4)
 
     return LD_users_raw
-
-
-def make_user_update(collection: Collection, update: dict) -> list:
-    dbentry = collection.find_one(
-        {"mila_ldap.mila_email_username": update["mila_email_username"]}
-    )
-
-    def has_changed():
-        ldap_entry = dbentry["mila_ldap"]
-        for k, v in update.items():
-            if k not in ldap_entry:
-                return True
-
-            if ldap_entry[k] != v:
-                return True
-
-        return False
-
-    if not has_changed():
-        # No change detected
-        return []
-
-    today = datetime.today()
-
-    queries = []
-    # Close current record
-    queries.append(
-        UpdateOne(
-            {"_id": dbentry["_id"]},
-            {
-                "$set": {
-                    "end_date": today,  # date it was archived
-                    "mila_ldap.status": "archived",  # Update status to archive
-                }
-            },
-        )
-    )
-
-    # if user not archived
-    # insert new records with updated value
-    if update["status"] != "archived":
-        new_record = deepcopy(dbentry)
-        _ = new_record.pop("_id")
-        new_record["mila_ldap"] = update
-        new_record["start_date"] = update.pop("start_date", today)
-
-        queries.append(InsertOne(new_record))
-
-    return queries
-
-
-def make_user_updates(collection: Collection, updates: list[dict]) -> list:
-    queries = []
-    for update in updates:
-        queries.extend(make_user_update(collection, update))
-    return queries
-
-
-def make_user_insert(_: Collection, newuser: dict) -> list:
-    start_date = newuser.pop("start_date", datetime.today())
-    return [InsertOne({"mila_ldap": newuser, "start_date": start_date})]
-
-
-def make_user_inserts(collection: Collection, newusers: list[dict]) -> list:
-    queries = []
-    for newuser in newusers:
-        queries.extend(make_user_insert(collection, newuser))
-    return queries
 
 
 def _save_to_mongo(collection: Collection, LD_users: list):
@@ -409,6 +346,22 @@ def load_group_to_prof_mapping(ldap_config: LDAPConfig):
         return json.load(file)
 
 
+def fetch_ldap(ldap):
+    # retrive users from LDAP
+    LD_users_raw = _query_and_dump(ldap, False)
+
+    # Transform users into the json we will save
+    group_to_prof = load_group_to_prof_mapping(ldap)
+    exceptions = load_ldap_exceptions(ldap)
+
+    errors = resolve_supervisors(LD_users_raw, group_to_prof, exceptions)
+
+    LD_users = [process_user(D_user_raw) for D_user_raw in LD_users_raw]
+
+    errors.show()
+    return LD_users
+
+
 def run(
     ldap,
     mongodb_collection=None,
@@ -416,6 +369,7 @@ def run(
     save_ldap=False,
 ):
     """Runs periodically to synchronize mongodb with LDAP"""
+    warnings.warn("this is deprecated", category=DeprecationWarning, stacklevel=2)
 
     # retrive users from LDAP
     LD_users_raw = _query_and_dump(ldap, save_ldap)
