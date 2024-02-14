@@ -40,7 +40,7 @@ class UserRepository(AbstractRepository[User]):
     class Meta:
         collection_name = "users"
 
-    # The API created by pydantic is simplistic
+    # The API created by pydantic is too simplistic
     # inserting into the users collection need to
     # take into account revisions
 
