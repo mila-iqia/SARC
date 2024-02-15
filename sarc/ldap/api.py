@@ -51,64 +51,66 @@ def users_collection():
     return UserRepository(database=db)
 
 
-def get_users(query=None, query_options: dict | None = None):
+def query_latest_records():
+    return {"$or": [{"end_date": {"$exists": False}}, {"end_date": None}]}
+
+
+def get_all_users():
+    """returns all the users latest record"""
+    query = query_latest_records()
+
+    results = users_collection().find_by(query)
+
+    return list(results)
+
+
+def get_users(query=None, query_options: dict | None = None, latest=True):
     if query_options is None:
         query_options = {}
 
     if query is None:
-        query = {}
+        return get_all_users()
 
-    pipeline = [
-        {"$match": query},
-        {"$sort": {"start_date": 1}},
-        #
-        #   Group by email, those should be unique
-        #   because the group operation replace the _id
-        #   we save the original document as well
-        {
-            "$group": {
-                "_id": "mila_ldap.mila_email_username",
-                "document": {"$last": "$$ROOT"},
-                "start_date": {"$last": "$start_date"},
-            }
-        },
-        #
-        #  Group is done but the _id was changed
-        #  now we replace the new _id (email) by the old _id (Object Id)
-        #  that we need to to udpates
-        #
-        {
-            "$replaceRoot": {
-                "newRoot": {"$mergeObjects": ["$document", {"_id": "$_id"}]}
-            }
-        },
-    ]
+    if latest:
+        query = {
+            "$and": [
+                query_latest_records(),
+                query,
+            ]
+        }
 
-    collection = users_collection().get_collection()
-    results = collection.aggregate(pipeline)
+    results = users_collection().find_by(query, query_options)
 
-    def to_user(data):
-        _id = data.pop("_id")
-        user = User(**data)
-        user.id = _id
-        return user
-
-    users = [to_user(result) for result in results]
-    return users
+    return list(results)
 
 
 def get_user(
     mila_email_username=None, mila_cluster_username=None, drac_account_username=None
 ):
     if mila_email_username is not None:
-        query = {"mila_ldap.mila_email_username": mila_email_username}
+        query = {
+            "$and": [
+                query_latest_records(),
+                {"mila_ldap.mila_email_username": mila_email_username},
+            ]
+        }
     elif mila_cluster_username is not None:
-        query = {"mila_ldap.mila_cluster_username": mila_cluster_username}
+        query = {
+            "$and": [
+                query_latest_records(),
+                {"mila_ldap.mila_cluster_username": mila_cluster_username},
+            ]
+        }
     elif drac_account_username is not None:
         query = {
-            "$or": [
-                {"drac_roles.username": drac_account_username},
-                {"drac_members.username": drac_account_username},
+            "$and": [
+                query_latest_records(),
+                {
+                    "$or": [
+                        {"drac_roles.username": drac_account_username},
+                        {"drac_members.username": drac_account_username},
+                    ]
+                },
             ]
         }
     else:
