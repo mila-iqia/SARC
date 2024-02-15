@@ -13,7 +13,6 @@ referenced by "cfg.ldap.mongo_collection_name" will be updated.
 import json
 
 import pandas as pd
-from pymongo import UpdateOne
 
 import sarc.account_matching.make_matches
 import sarc.ldap.mymila

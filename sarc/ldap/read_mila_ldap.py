@@ -138,17 +138,14 @@ they are structured as follows:
 import json
 import os
 import ssl
-import warnings
 from datetime import datetime
 
 # Requirements
 # - pip install ldap3
 from ldap3 import ALL_ATTRIBUTES, SUBTREE, Connection, Server, Tls
-from pymongo import InsertOne, MongoClient, UpdateOne
-from pymongo.collection import Collection
+from pymongo import MongoClient, UpdateOne
 
 from ..config import LDAPConfig, config
-from .revision import make_user_inserts, make_user_updates
 from .supervisor import resolve_supervisors
 
 
@@ -252,7 +249,7 @@ def client_side_user_updates(LD_users_DB, LD_users_LDAP):
     for meu in set(list(DD_users_DB.keys()) + list(DD_users_LDAP.keys())):
         # `meu` is short for the mila_email_username value
 
-        if meu in DD_users_DB and not meu in DD_users_LDAP:
+        if meu in DD_users_DB and meu not in DD_users_LDAP:
             # User is in DB but not in the LDAP.
             # Let's mark it as archived.
             entry = DD_users_DB[meu]
