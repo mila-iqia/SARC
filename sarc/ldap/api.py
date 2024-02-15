@@ -53,7 +53,7 @@ def users_collection():
     return UserRepository(database=db)
 
 
-def get_users(query=None, query_options: dict | None = None, latest=True):
+def get_users(query=None, query_options: dict | None = None, latest=True) -> list[User]:
     if query_options is None:
         query_options = {}
 
@@ -75,7 +75,7 @@ def get_users(query=None, query_options: dict | None = None, latest=True):
 
 def get_user(
     mila_email_username=None, mila_cluster_username=None, drac_account_username=None
-):
+) -> Optional[User]:
     if mila_email_username is not None:
         query = {
             "$and": [
