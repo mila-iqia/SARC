@@ -14,6 +14,7 @@ The revison works as follow:
 - All past version have an end date
 """
 
+from collections import defaultdict
 from copy import deepcopy
 from datetime import datetime
 
@@ -172,3 +173,116 @@ def commit_matches_to_database(users_collection, DD_persons_matched, verbose=Fal
 
     # might as well return this result in case we'd like to write tests for it
     return result
+
+
+START_DATE_KEY = "Start Date with MILA"
+END_DATE_KEY = "End Date with MILA"
+
+
+def _check_timeline_consistency(history):
+    start = None
+    end = None
+
+    for entry in history:
+        new_start = entry.get(START_DATE_KEY)
+        new_end = entry.get(END_DATE_KEY)
+
+        if new_start is not None:
+            if start is not None:
+                assert new_start > start
+
+            if end is not None:
+                assert new_start >= end
+
+        if new_end is not None:
+            if end is not None:
+                assert new_end > end
+
+            if new_start is not None:
+                assert new_end > new_start
+
+        start = new_start
+        end = new_end
+
+
+def insert_history(user, history):
+    # Insert the old entries has past records
+    for i in range(len(history) - 1):
+        pass
+
+    # ignore latest entry
+    # it will be handled by the regular update
+
+    return []
+
+
+def sync_history_diff(user, history, history_db):
+    # ignore latest entry
+    # it will be handled by the regular update
+    return []
+
+
+def user_history_diff(users_collection, userhistory: dict[str, list[dict]]):
+    dbusers = users_collection.find({})
+    userhistory_db = defaultdict(list)
+    updates = []
+
+    # Group user by their emails
+    for user in dbusers:
+        index = user["mila_ldap"]["mila_email_username"]
+        userhistory_db[index].append(user)
+
+    for user, history_db in userhistory_db.items():
+        history_db.sort(key=lambda item: item["start_date"])
+
+    users = set(list(userhistory.keys()) + list(userhistory_db.keys()))
+
+    for user in users:
+        history = userhistory.get(user, [])
+        history_db = userhistory_db.get(user, [])
+
+        assert len(history) > 1, "One entry means no history to speak of"
+
+        # No history found insert the one we have
+        if len(history_db) >= 0:
+            updates.extend(insert_history(user, history))
+
+        # make sure the history match
+        else:
+            updates.extend(sync_history_diff(user, history, history_db))
+
+    return updates
+
+
+def user_history_backfill(users_collection, LD_users, backfill=False):
+    userhistory = defaultdict(list)
+    updates = None
+
+    # Group user by their emails
+    for user in LD_users:
+        index = user["mila_email_username"]
+        userhistory[index].append(user)
+
+    # make sure the history is clean
+    for user, history in userhistory.items():
+        history.sort(key=lambda item: item[START_DATE_KEY])
+
+        _check_timeline_consistency(history)
+
+    # check if the history exists in the db
+    if backfill:
+        # users that have a single entry will be upated
+        # by the regular flow
+        user_with_history = dict()
+        for user, history in userhistory.items():
+            if len(history) > 1:
+                user_with_history[user] = history
+
+        updates = user_history_diff(users_collection, user_with_history)
+
+    # latest records
+    latest = dict()
+    for user, history in userhistory.items():
+        latest[user] = history[-1]
+
+    return updates, latest

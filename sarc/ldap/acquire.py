@@ -18,13 +18,19 @@ import sarc.account_matching.make_matches
 import sarc.ldap.mymila
 from sarc.config import config
 from sarc.ldap.read_mila_ldap import fetch_ldap
-from sarc.ldap.revision import commit_matches_to_database
+from sarc.ldap.revision import (
+    END_DATE_KEY,
+    START_DATE_KEY,
+    commit_matches_to_database,
+    user_history_backfill,
+)
 
 
 def run(prompt=False):
     """If prompt is True, script will prompt for manual matching."""
 
     cfg = config()
+    user_collection = cfg.mongo.database_instance[cfg.ldap.mongo_collection_name]
 
     LD_users = fetch_ldap(ldap=cfg.ldap)
 
@@ -47,8 +53,13 @@ def run(prompt=False):
                 "supervisor",
                 "co_supervisor",
                 "status",
+                START_DATE_KEY,
+                END_DATE_KEY,
             ]
         ].to_dict("records")
+
+    #
+    LD_users, history_ops = user_history_backfill(LD_users, backfill=False)
 
     # Match DRAC/CC to mila accounts
     DLD_data = sarc.account_matching.make_matches.load_data_from_files(
@@ -100,9 +111,12 @@ def run(prompt=False):
     for _, user in DD_persons_matched.items():
         fill_computed_fields(user)
 
+    if history_ops:
+        user_collection.bulk_write(history_ops)
+
     # These associations can now be propagated to the database.
     commit_matches_to_database(
-        cfg.mongo.database_instance[cfg.ldap.mongo_collection_name],
+        user_collection,
         DD_persons_matched,
     )
 
