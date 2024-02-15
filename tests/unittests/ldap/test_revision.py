@@ -5,7 +5,8 @@ from datetime import datetime
 import pytest
 from pymongo import InsertOne, UpdateOne
 
-from sarc.ldap.user import commit_matches_to_database as _save_to_mongo
+from sarc.ldap.revision import commit_matches_to_database as _save_to_mongo
+from sarc.ldap.revision import query_latest_records
 
 
 class MockCollection:
@@ -23,7 +24,7 @@ class MockCollection:
         self.writes = []
 
     def find(self, query=None):
-        assert query is None
+        assert query == query_latest_records()
         return deepcopy(self.data)
 
     def find_one(self, query):
@@ -43,16 +44,19 @@ class MockCollection:
 statuses = ("disabled", "archived", "enabled")
 
 
-def make_user(status):
+def make_user(status, **kwargs):
     return {
-        "mila_email_username": "mail",
-        "mila_cluster_username": "posixUid",
-        "mila_cluster_uid": "uidNumber",
-        "mila_cluster_gid": "gidNumber",
-        "display_name": "displayName",
-        "supervisor": None,
-        "co_supervisor": None,
-        "status": status,
+        "mila_ldap": {
+            "mila_email_username": "mail",
+            "mila_cluster_username": "posixUid",
+            "mila_cluster_uid": "uidNumber",
+            "mila_cluster_gid": "gidNumber",
+            "display_name": "displayName",
+            "supervisor": None,
+            "co_supervisor": None,
+            "status": status,
+        },
+        **kwargs,
     }
 
 
@@ -65,37 +69,30 @@ def transitions():
     return all_transitions
 
 
-def ldap_has_not_changed(ldap):
-    assert "start_date" not in ldap["mila_ldap"], "ldap dict was not modified"
-    assert "end_date" not in ldap["mila_ldap"], "ldap dict was not modified"
+def user_dict(users):
+    return {u["mila_ldap"]["mila_email_username"]: u for u in users}
 
 
 @pytest.mark.parametrize("status", statuses)
 def test_ldap_update_status_nodb_ldap(status):
     collection = MockCollection()
-    ldap_users = [make_user(status)]
+    newusers = user_dict([make_user(status)])
 
     # initial insert
-    _save_to_mongo(collection, ldap_users)
+    _save_to_mongo(collection, newusers)
 
     assert len(collection.writes) == 1, "User does not exist in DB, simple insert"
 
     written_user = collection.writes[0]._doc
     assert written_user["start_date"] is not None, "start_date was set"
     assert written_user["mila_ldap"]["status"] == status, "status match ldap"
-
-    if status == "archived":
-        assert written_user.get("end_date", None) is not None, "end_date was set"
-    else:
-        assert written_user.get("end_date", None) is None, "end_date was not set"
-
-    ldap_has_not_changed(written_user)
+    assert written_user.get("end_date", None) is None, "end_date was not set"
 
 
 @pytest.mark.parametrize("status", statuses)
 def test_ldap_update_status_db_noldap(status):
-    collection = MockCollection([{"mila_ldap": make_user(status)}])
-    ldap_users = []
+    collection = MockCollection([make_user(status)])
+    ldap_users = user_dict([])
 
     # initial insert
     _save_to_mongo(collection, ldap_users)
@@ -114,12 +111,10 @@ def test_ldap_update_status_db_noldap(status):
 
 
 @pytest.mark.parametrize("start,end", transitions())
-def test_ldap_update_status_db_ldap(start, end):
+def test_ldap_update_status_users_exists_on_both(start, end):
 
-    collection = MockCollection(
-        [{"mila_ldap": make_user(start), "start_date": datetime(2000, 1, 1)}]
-    )
-    ldap_users = [make_user(end)]
+    collection = MockCollection([make_user(start, start_date=datetime(2000, 1, 1))])
+    ldap_users = user_dict([make_user(end, start_date=datetime(2000, 1, 1))])
 
     # initial insert
     _save_to_mongo(collection, ldap_users)
@@ -127,17 +122,6 @@ def test_ldap_update_status_db_ldap(start, end):
     # nothing
     if start == end:
         assert len(collection.writes) == 0, "DB and LDAP match"
-
-    elif end == "archived":
-        assert len(collection.writes) == 1, "DB update user to archived"
-
-        assert isinstance(collection.writes[0], UpdateOne)
-        written_user = collection.writes[0]._doc["$set"]
-
-        assert written_user.get("start_date") is None, "start_date was NOT UPDATED"
-        assert written_user["end_date"] is not None, "end_date was set"
-        assert written_user["mila_ldap.status"] == "archived", "entry was archived"
-
     else:
         assert len(collection.writes) == 2, "DB close record and insert update"
 
@@ -146,11 +130,10 @@ def test_ldap_update_status_db_ldap(start, end):
 
         assert entry_update.get("start_date") is None, "start_date was NOT UPDATED"
         assert entry_update["end_date"] is not None, "end_date was set"
-        assert entry_update["mila_ldap.status"] == "archived", "entry was archived"
+        assert len(entry_update) == 1, "record was left as is"
 
         assert isinstance(collection.writes[1], InsertOne)
         entry_insert = collection.writes[1]._doc
         assert entry_insert["start_date"] is not None, "start_date was set"
         assert entry_insert.get("end_date") is None, "end_date was NOT set"
         assert entry_insert["mila_ldap"]["status"] == end, "Status match ldap"
-        ldap_has_not_changed(entry_insert)

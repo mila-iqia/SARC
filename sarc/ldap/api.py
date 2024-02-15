@@ -13,6 +13,8 @@ from pydantic_mongo import AbstractRepository, ObjectIdField
 
 from sarc.config import BaseModel, config
 
+from .revision import query_latest_records
+
 
 class Credentials(BaseModel):
     username: str
@@ -51,25 +53,12 @@ def users_collection():
     return UserRepository(database=db)
 
 
-def query_latest_records():
-    return {"$or": [{"end_date": {"$exists": False}}, {"end_date": None}]}
-
-
-def get_all_users():
-    """returns all the users latest record"""
-    query = query_latest_records()
-
-    results = users_collection().find_by(query)
-
-    return list(results)
-
-
 def get_users(query=None, query_options: dict | None = None, latest=True):
     if query_options is None:
         query_options = {}
 
     if query is None:
-        return get_all_users()
+        return {}
 
     if latest:
         query = {

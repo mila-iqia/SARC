@@ -18,17 +18,25 @@ from datetime import datetime
 
 from pymongo import InsertOne, UpdateOne
 
-from .api import get_users
-
-DEFAULT_DATE = datetime.datetime.utcfromtimestamp(0)
+DEFAULT_DATE = datetime.utcfromtimestamp(0)
 
 
 def is_date_missing(date):
     return date is None or date == DEFAULT_DATE
 
 
-def has_changed(user_db, user_latest):
-    return user_db != user_latest
+def has_changed(user_db, user_latest, excluded=("_id")):
+    keys = set(list(user_db.keys()) + list(user_latest.keys()))
+
+    for k in keys:
+        if k not in excluded:
+            v1 = user_db.get(k)
+            v2 = user_latest.get(k)
+
+            if v1 != v2:
+                return True
+
+    return False
 
 
 def guess_date(date):
@@ -56,31 +64,39 @@ def close_record(user_db: dict, end_date=None):
 
 
 def user_insert(newuser: dict) -> list:
-    return InsertOne(
-        {
-            "mila_ldap": newuser["mila_ldap"],
-            "name": newuser["name"],
-            "mila": newuser["mila"],
-            "drac": newuser["drac"],
-            "drac_roles": newuser["drac_roles"],
-            "drac_members": newuser["drac_members"],
-            # enforce that a start_date is always there
-            "start_date": guess_date(newuser.get("start_date")),
-            # latest record NEVER have an end date
-            # this so we can query latest record easily
-            "end_date": None,
-        }
+    expected_keys = (
+        "mila_ldap",
+        "name",
+        "drac",
+        "mila",
+        "drac_roles",
+        "drac_members",
     )
+
+    update = {
+        # enforce that a start_date is always there
+        "start_date": guess_date(newuser.get("start_date")),
+        # latest record NEVER have an end date
+        # this so we can query latest record easily
+        "end_date": None,
+    }
+
+    for key in expected_keys:
+        if key in newuser:
+            update[key] = newuser[key]
+
+    return InsertOne(update)
 
 
 def compute_update(username: str, user_db: dict, user_latest: dict) -> list:
+    if user_latest is None:
+        return []
 
-    user_latest = fill_computed_fields(user_latest)
     assert user_latest["mila_ldap"]["mila_email_username"] == username
 
     # new user
     if user_db is None:
-        return user_insert(user_latest)
+        return [user_insert(user_latest)]
 
     # no change
     if not has_changed(user_db, user_latest):
@@ -92,8 +108,22 @@ def compute_update(username: str, user_db: dict, user_latest: dict) -> list:
     ]
 
 
+def query_latest_records() -> dict:
+    """Condition latest records need to follow"""
+    return {"$or": [{"end_date": {"$exists": False}}, {"end_date": None}]}
+
+
+def get_all_users(users_collection):
+    """returns all the users latest record"""
+    query = query_latest_records()
+
+    results = users_collection.find(query)
+
+    return list(results)
+
+
 def commit_matches_to_database(users_collection, DD_persons_matched, verbose=False):
-    users_db = get_users()
+    users_db = get_all_users(users_collection)
     user_to_update = []
 
     # Match db user to their user updates
@@ -114,6 +144,7 @@ def commit_matches_to_database(users_collection, DD_persons_matched, verbose=Fal
         L_updates_to_do.extend(compute_update(username, user_db, user_latest))
 
     # Final write
+    result = 0
     if L_updates_to_do:
         result = users_collection.bulk_write(L_updates_to_do)  #  <- the actual commit
         if verbose:
@@ -124,37 +155,3 @@ def commit_matches_to_database(users_collection, DD_persons_matched, verbose=Fal
 
     # might as well return this result in case we'd like to write tests for it
     return result
-
-
-def fill_computed_fields(data: dict):
-    mila_ldap = data.get("mila_ldap", {}) or {}
-    drac_members = data.get("drac_members", {}) or {}
-    drac_roles = data.get("drac_roles", {}) or {}
-
-    if "name" not in data:
-        data["name"] = mila_ldap.get("display_name", "???")
-
-    if "mila" not in data:
-        data["mila"] = {
-            "username": mila_ldap.get("mila_cluster_username", "???"),
-            "email": mila_ldap.get("mila_email_username", "???"),
-            "active": mila_ldap.get("status", None) == "enabled",
-        }
-
-    if "drac" not in data:
-        if drac_members:
-            data["drac"] = {
-                "username": drac_members.get("username", "???"),
-                "email": drac_members.get("email", "???"),
-                "active": drac_members.get("activation_status", None) == "activated",
-            }
-        elif drac_roles:
-            data["drac"] = {
-                "username": drac_roles.get("username", "???"),
-                "email": drac_roles.get("email", "???"),
-                "active": drac_roles.get("status", None) == "Activated",
-            }
-        else:
-            data["drac"] = None
-
-    return data

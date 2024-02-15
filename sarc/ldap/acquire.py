@@ -97,6 +97,9 @@ def run(prompt=False):
     #       "drac_members": {...} or None
     #     }
 
+    for _, user in DD_persons_matched.items():
+        fill_computed_fields(user)
+
     # These associations can now be propagated to the database.
     commit_matches_to_database(
         cfg.mongo.database_instance[cfg.ldap.mongo_collection_name],
@@ -112,6 +115,40 @@ def run(prompt=False):
             cfg.account_matching.make_matches_config, "w", encoding="utf-8"
         ) as json_file:
             json.dump(make_matches_config, json_file, indent=4)
+
+
+def fill_computed_fields(data: dict):
+    mila_ldap = data.get("mila_ldap", {}) or {}
+    drac_members = data.get("drac_members", {}) or {}
+    drac_roles = data.get("drac_roles", {}) or {}
+
+    if "name" not in data:
+        data["name"] = mila_ldap.get("display_name", "???")
+
+    if "mila" not in data:
+        data["mila"] = {
+            "username": mila_ldap.get("mila_cluster_username", "???"),
+            "email": mila_ldap.get("mila_email_username", "???"),
+            "active": mila_ldap.get("status", None) == "enabled",
+        }
+
+    if "drac" not in data:
+        if drac_members:
+            data["drac"] = {
+                "username": drac_members.get("username", "???"),
+                "email": drac_members.get("email", "???"),
+                "active": drac_members.get("activation_status", None) == "activated",
+            }
+        elif drac_roles:
+            data["drac"] = {
+                "username": drac_roles.get("username", "???"),
+                "email": drac_roles.get("email", "???"),
+                "active": drac_roles.get("status", None) == "Activated",
+            }
+        else:
+            data["drac"] = None
+
+    return data
 
 
 if __name__ == "__main__":
