@@ -148,8 +148,8 @@ from pymongo import InsertOne, MongoClient, UpdateOne
 from pymongo.collection import Collection
 
 from ..config import LDAPConfig, config
+from .revision import make_user_inserts, make_user_updates
 from .supervisor import resolve_supervisors
-from .user import make_user_inserts, make_user_updates
 
 
 def query_ldap(local_private_key_file, local_certificate_file, ldap_service_uri):
@@ -308,7 +308,7 @@ def _query_and_dump(
     return LD_users_raw
 
 
-def _save_to_mongo(collection: Collection, LD_users: list):
+def _save_to_mongo(collection, LD_users):
     if collection is None:
         return
 
@@ -316,14 +316,24 @@ def _save_to_mongo(collection: Collection, LD_users: list):
     # "drac_roles" and "drac_members" components
     LD_users_DB = [u["mila_ldap"] for u in list(collection.find())]
 
-    inserts, updates = client_side_user_updates(
+    L_updated_users = client_side_user_updates(
         LD_users_DB=LD_users_DB,
         LD_users_LDAP=LD_users,
     )
 
-    L_updates_to_do = make_user_inserts(collection, inserts) + make_user_updates(
-        collection, updates
-    )
+    L_updates_to_do = [
+        UpdateOne(
+            {"mila_ldap.mila_email_username": updated_user["mila_email_username"]},
+            {
+                # We set all the fields corresponding to the fields from `updated_user`,
+                # so that's a convenient way to do it. Note that this does not affect
+                # the fields in the database that are already present for that user.
+                "$set": {"mila_ldap": updated_user},
+            },
+            upsert=True,
+        )
+        for updated_user in L_updated_users
+    ]
 
     if L_updates_to_do:
         result = collection.bulk_write(L_updates_to_do)  #  <- the actual commit

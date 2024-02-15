@@ -19,7 +19,7 @@ import sarc.account_matching.make_matches
 import sarc.ldap.mymila
 from sarc.config import config
 from sarc.ldap.read_mila_ldap import fetch_ldap
-from sarc.ldap.user import commit_matches_to_database
+from sarc.ldap.revision import commit_matches_to_database
 
 
 def run(prompt=False):
@@ -99,7 +99,7 @@ def run(prompt=False):
     #     }
 
     # These associations can now be propagated to the database.
-    save(
+    commit_matches_to_database(
         cfg.mongo.database_instance[cfg.ldap.mongo_collection_name],
         DD_persons_matched,
     )
