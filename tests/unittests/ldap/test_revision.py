@@ -100,14 +100,22 @@ def test_ldap_update_status_db_noldap(status):
     if status in ("archived",):
         assert len(collection.writes) == 0, "User is already archived, no updates"
     else:
-        assert len(collection.writes) == 1, "User is in db, but does not exist in ldap"
+        assert len(collection.writes) == 2, "User is in db, but does not exist in ldap"
 
         assert isinstance(collection.writes[0], UpdateOne)
         written_user = collection.writes[0]._doc["$set"]
 
         assert written_user.get("start_date") is None, "start_date was NOT UPDATED"
         assert written_user["end_date"] is not None, "end_date was set"
-        assert written_user["mila_ldap.status"] == "archived", "entry was archived"
+        assert len(written_user) == 1, "record was left as is"
+
+        assert isinstance(collection.writes[1], InsertOne)
+        entry_insert = collection.writes[1]._doc
+        assert entry_insert["start_date"] is not None, "start_date was set"
+        assert entry_insert.get("end_date") is None, "end_date was NOT set"
+        assert (
+            entry_insert["mila_ldap"]["status"] == "archived"
+        ), "Status was moved to archived"
 
 
 @pytest.mark.parametrize("start,end", transitions())

@@ -14,6 +14,7 @@ The revison works as follow:
 - All past version have an end date
 """
 
+from copy import deepcopy
 from datetime import datetime
 
 from pymongo import InsertOne, UpdateOne
@@ -88,9 +89,25 @@ def user_insert(newuser: dict) -> list:
     return InsertOne(update)
 
 
+def user_disapeared(user_db):
+    # this is an archived user
+    if user_db["mila_ldap"]["status"] == "archived":
+        return []
+
+    # status is not archived but the user does not exist
+    newuser = deepcopy(user_db)
+    newuser.pop("_id")
+    newuser["mila_ldap"]["status"] = "archived"
+
+    return [
+        close_record(user_db, end_date=None),
+        user_insert(newuser),
+    ]
+
+
 def compute_update(username: str, user_db: dict, user_latest: dict) -> list:
     if user_latest is None:
-        return []
+        return user_disapeared(user_db)
 
     assert user_latest["mila_ldap"]["mila_email_username"] == username
 
