@@ -346,14 +346,13 @@ def load_group_to_prof_mapping(ldap_config: LDAPConfig):
         return json.load(file)
 
 
-def fetch_ldap(ldap):
+def fetch_ldap(ldap, save_ldap=False):
     # retrive users from LDAP
-    LD_users_raw = _query_and_dump(ldap, False)
+    LD_users_raw = _query_and_dump(ldap, save_ldap)
 
     # Transform users into the json we will save
     group_to_prof = load_group_to_prof_mapping(ldap)
     exceptions = load_ldap_exceptions(ldap)
-
     errors = resolve_supervisors(LD_users_raw, group_to_prof, exceptions)
 
     LD_users = [process_user(D_user_raw) for D_user_raw in LD_users_raw]
@@ -369,21 +368,10 @@ def run(
     save_ldap=False,
 ):
     """Runs periodically to synchronize mongodb with LDAP"""
-    warnings.warn("this is deprecated", category=DeprecationWarning, stacklevel=2)
 
-    # retrive users from LDAP
-    LD_users_raw = _query_and_dump(ldap, save_ldap)
-
-    # Transform users into the json we will save
-    group_to_prof = load_group_to_prof_mapping(ldap)
-    exceptions = load_ldap_exceptions(ldap)
-    errors = resolve_supervisors(LD_users_raw, group_to_prof, exceptions)
-
-    LD_users = [process_user(D_user_raw) for D_user_raw in LD_users_raw]
+    LD_users = fetch_ldap(ldap, save_ldap)
 
     _save_to_mongo(mongodb_collection, LD_users)
-
-    errors.show()
 
     if output_json_file:
         with open(output_json_file, "w", encoding="utf-8") as f_out:
