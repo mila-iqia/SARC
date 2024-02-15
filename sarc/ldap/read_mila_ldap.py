@@ -230,7 +230,7 @@ def process_user(user_raw: dict) -> dict:
     return user
 
 
-def client_side_user_updates(LD_users_DB, LD_users_LDAP) -> tuple[list, list]:
+def client_side_user_updates(LD_users_DB, LD_users_LDAP):
     """
     Instead of having complicated updates that depend on multiple MongoDB
     updates to cover all cases involving the "status" field, we'll do all
@@ -248,44 +248,26 @@ def client_side_user_updates(LD_users_DB, LD_users_LDAP) -> tuple[list, list]:
     DD_users_DB = dict((e["mila_email_username"], e) for e in LD_users_DB)
     DD_users_LDAP = dict((e["mila_email_username"], e) for e in LD_users_LDAP)
 
-    inserts = []
-    updates = []
+    LD_users_to_update_or_insert = []
     for meu in set(list(DD_users_DB.keys()) + list(DD_users_LDAP.keys())):
         # `meu` is short for the mila_email_username value
 
-        user_is_in_ldap = meu in DD_users_LDAP
-        user_is_in_db = meu in DD_users_DB
-
-        if user_is_in_db and not user_is_in_ldap:
+        if meu in DD_users_DB and not meu in DD_users_LDAP:
             # User is in DB but not in the LDAP.
             # Let's mark it as archived.
-
             entry = DD_users_DB[meu]
-            dbstatus = entry.get("status", None)
             entry["status"] = "archived"
-            entry.setdefault("end_date", datetime.today())
-
-            # if the db already has the user as archived
-            # we do not need to update it
-            if dbstatus != entry["status"]:
-                updates.append(entry)
-
-        elif user_is_in_ldap and not user_is_in_db:
-            # User is in LDAP but not DB; new user
-            entry = DD_users_LDAP[meu]
-            entry.setdefault("start_date", datetime.today())
-            inserts.append(entry)
         else:
-            # User is in both DB and LDAP. We'll consider the LDAP more up-to-date.
+            # either User is not in DB but is in the LDAP (new entry)
+            # or User is in both DB and LDAP. We'll consider the LDAP more up-to-date.
             # If you need to enter some fields for the first time
             # when entering a new user, do it here.
             # As of right now, we have no need to do that.
             entry = DD_users_LDAP[meu]
-            updates.append(entry)
 
         assert "status" in entry  # sanity check
-
-    return inserts, updates
+        LD_users_to_update_or_insert.append(entry)
+    return LD_users_to_update_or_insert
 
 
 def _query_and_dump(
