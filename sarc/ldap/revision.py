@@ -205,21 +205,77 @@ def _check_timeline_consistency(history):
         end = new_end
 
 
-def insert_history(user, history):
+def insert_history(user, original_history):
+    updates = []
+    
+    # ignore latest entry
+    # it will be handled by the regular update
+    history = original_history[:-1]
+
     # Insert the old entries has past records
-    for i in range(len(history) - 1):
-        pass
+    for entry in history:
+        updates.insert(
+            InsertOne({
+                "mila_ldap": {
+                    "mila_email_username": user,
+                },
+                "start_date": entry[START_DATE_KEY],
+                "end_date": entry[END_DATE_KEY]
+            })
+        )
 
+    return updates
+
+
+def sync_history_diff(user, original_history, original_history_db):
     # ignore latest entry
     # it will be handled by the regular update
-
-    return []
-
-
-def sync_history_diff(user, history, history_db):
-    # ignore latest entry
-    # it will be handled by the regular update
-    return []
+    history_db = original_history_db[:-1]
+    history = original_history[:-1]
+    
+    def entry_match(entry, entry_db):
+        # criterion for the entries to match
+        start = entry_db["start_date"]
+        end = entry_db["end_date"]
+        
+        # We are working on past entries, we should know all of those
+        assert start is not None
+        assert end is not None
+        assert entry[END_DATE_KEY] is not None
+        assert entry[START_DATE_KEY] is not None
+        
+        start_match = entry[START_DATE_KEY] == start 
+        end_match = entry[END_DATE_KEY] == end
+        
+        assert start_match == end_match, "Either both match or None, else that would be a headache"
+        return start_match and end_match
+    
+    missing_entries = []
+    matched_entries = defaultdict(int)
+    
+    for entry in history:
+        for entry_db in history_db:
+            if entry_match(entry, entry_db):
+                matched_entries[id(entry_db)] += 1
+                break
+        else:
+            missing_entries.append(entry)
+    
+    for values in matched_entries.values():
+        if values > 1:
+            raise RuntimeError("Multiple records matched the same period")
+        
+    updates = []
+    for missing in missing_entries:
+        updates.append(InsertOne({
+            "mila_ldap": {
+                "mila_email_username": user,
+            },
+            "start_date": missing[START_DATE_KEY],
+            "end_date": missing[END_DATE_KEY]
+        }))
+        
+    return updates
 
 
 def user_history_diff(users_collection, userhistory: dict[str, list[dict]]):
@@ -244,7 +300,7 @@ def user_history_diff(users_collection, userhistory: dict[str, list[dict]]):
         assert len(history) > 1, "One entry means no history to speak of"
 
         # No history found insert the one we have
-        if len(history_db) >= 0:
+        if len(history_db) <= 1:
             updates.extend(insert_history(user, history))
 
         # make sure the history match
