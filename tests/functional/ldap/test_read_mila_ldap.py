@@ -323,8 +323,8 @@ def test_query_to_ldap_server_and_commit_to_db(monkeypatch, mock_file):
     sorted_order_func = lambda u: u["mila_ldap"]["mila_email_username"]
 
     def remove_newkeys(obj):
-        obj.pop("start_date", None)
-        obj.pop("end_date", None)
+        obj.pop("record_start", None)
+        obj.pop("record_end", None)
         return obj
 
     # Make query 1. Find users. Add them to database. Then check that database contents is correct.
