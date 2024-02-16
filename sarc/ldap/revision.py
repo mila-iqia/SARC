@@ -18,6 +18,7 @@ from copy import deepcopy
 from datetime import datetime
 
 from pymongo import InsertOne, UpdateOne
+from pymongo.collection import Collection
 
 DEFAULT_DATE = datetime.utcfromtimestamp(0)
 
@@ -43,7 +44,7 @@ def has_changed(user_db, user_latest, excluded=("_id",)):
 def guess_date(date):
     # If the end_date is unknown (default or None) we put it at today
     if is_date_missing(date):
-        return datetime.today()
+        return datetime.utcnow()
     return date
 
 
@@ -62,6 +63,37 @@ def close_record(user_db: dict, end_date=None):
             }
         },
     )
+
+
+def update_user(collection: Collection, user: dict):
+    username = user.get("mila_ldap", {}).get("mila_email_username")
+
+    if username is None:
+        raise RuntimeError("mila_ldap.mila_email_username is none")
+
+    userdb = list(
+        collection.find(
+            {
+                "$and": [
+                    query_latest_records(),
+                    {"mila_ldap.mila_email_username": username},
+                ]
+            }
+        )
+    )
+
+    if len(userdb) == 0:
+        return collection.bulk_write([user_insert(user)])
+    else:
+        userdb = list(userdb)[0]
+
+        if has_changed(userdb, user):
+            return collection.bulk_write(
+                [
+                    close_record(userdb, end_date=user.get("record_start")),
+                    user_insert(user),
+                ]
+            )
 
 
 def user_insert(newuser: dict) -> list:

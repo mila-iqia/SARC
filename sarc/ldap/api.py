@@ -45,6 +45,7 @@ class UserRepository(AbstractRepository[User]):
     # The API created by pydantic is too simplistic
     # inserting into the users collection need to
     # take into account revisions
+    # use: revision.update_user
 
 
 def users_collection():
