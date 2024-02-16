@@ -84,9 +84,9 @@ def test_ldap_update_status_nodb_ldap(status):
     assert len(collection.writes) == 1, "User does not exist in DB, simple insert"
 
     written_user = collection.writes[0]._doc
-    assert written_user["start_date"] is not None, "start_date was set"
+    assert written_user["record_start"] is not None, "record_start was set"
     assert written_user["mila_ldap"]["status"] == status, "status match ldap"
-    assert written_user.get("end_date", None) is None, "end_date was not set"
+    assert written_user.get("record_end", None) is None, "record_end was not set"
 
 
 @pytest.mark.parametrize("status", statuses)
@@ -105,14 +105,14 @@ def test_ldap_update_status_db_noldap(status):
         assert isinstance(collection.writes[0], UpdateOne)
         written_user = collection.writes[0]._doc["$set"]
 
-        assert written_user.get("start_date") is None, "start_date was NOT UPDATED"
-        assert written_user["end_date"] is not None, "end_date was set"
+        assert written_user.get("record_start") is None, "record_start was NOT UPDATED"
+        assert written_user["record_end"] is not None, "record_end was set"
         assert len(written_user) == 1, "record was left as is"
 
         assert isinstance(collection.writes[1], InsertOne)
         entry_insert = collection.writes[1]._doc
-        assert entry_insert["start_date"] is not None, "start_date was set"
-        assert entry_insert.get("end_date") is None, "end_date was NOT set"
+        assert entry_insert["record_start"] is not None, "record_start was set"
+        assert entry_insert.get("record_end") is None, "record_end was NOT set"
         assert (
             entry_insert["mila_ldap"]["status"] == "archived"
         ), "Status was moved to archived"
@@ -121,8 +121,8 @@ def test_ldap_update_status_db_noldap(status):
 @pytest.mark.parametrize("start,end", transitions())
 def test_ldap_update_status_users_exists_on_both(start, end):
 
-    collection = MockCollection([make_user(start, start_date=datetime(2000, 1, 1))])
-    ldap_users = user_dict([make_user(end, start_date=datetime(2000, 1, 1))])
+    collection = MockCollection([make_user(start, record_start=datetime(2000, 1, 1))])
+    ldap_users = user_dict([make_user(end, record_start=datetime(2000, 1, 1))])
 
     # initial insert
     _save_to_mongo(collection, ldap_users)
@@ -136,12 +136,12 @@ def test_ldap_update_status_users_exists_on_both(start, end):
         assert isinstance(collection.writes[0], UpdateOne)
         entry_update = collection.writes[0]._doc["$set"]
 
-        assert entry_update.get("start_date") is None, "start_date was NOT UPDATED"
-        assert entry_update["end_date"] is not None, "end_date was set"
+        assert entry_update.get("record_start") is None, "record_start was NOT UPDATED"
+        assert entry_update["record_end"] is not None, "record_end was set"
         assert len(entry_update) == 1, "record was left as is"
 
         assert isinstance(collection.writes[1], InsertOne)
         entry_insert = collection.writes[1]._doc
-        assert entry_insert["start_date"] is not None, "start_date was set"
-        assert entry_insert.get("end_date") is None, "end_date was NOT set"
+        assert entry_insert["record_start"] is not None, "record_start was set"
+        assert entry_insert.get("record_end") is None, "record_end was NOT set"
         assert entry_insert["mila_ldap"]["status"] == end, "Status match ldap"
