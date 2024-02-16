@@ -59,7 +59,7 @@ def close_record(user_db: dict, end_date=None):
         {"_id": user_db["_id"]},
         {
             "$set": {
-                "end_date": end_date,
+                "record_end": end_date,
             }
         },
     )
@@ -76,11 +76,11 @@ def user_insert(newuser: dict) -> list:
     )
 
     update = {
-        # enforce that a start_date is always there
-        "start_date": guess_date(newuser.get("start_date")),
+        # enforce that a record_start is always there
+        "record_start": guess_date(newuser.get("record_start")),
         # latest record NEVER have an end date
         # this so we can query latest record easily
-        "end_date": None,
+        "record_end": None,
     }
 
     for key in expected_keys:
@@ -121,7 +121,7 @@ def compute_update(username: str, user_db: dict, user_latest: dict) -> list:
         return []
 
     return [
-        close_record(user_db, end_date=user_latest.get("start_date")),
+        close_record(user_db, end_date=user_latest.get("record_start")),
         user_insert(user_latest),
     ]
 
@@ -219,8 +219,8 @@ def insert_history(user, original_history):
                 "mila_ldap": {
                     "mila_email_username": user,
                 },
-                "start_date": entry[START_DATE_KEY],
-                "end_date": entry[END_DATE_KEY]
+                "record_start": entry[START_DATE_KEY],
+                "record_end": entry[END_DATE_KEY]
             })
         )
 
@@ -235,8 +235,8 @@ def sync_history_diff(user, original_history, original_history_db):
     
     def entry_match(entry, entry_db):
         # criterion for the entries to match
-        start = entry_db["start_date"]
-        end = entry_db["end_date"]
+        start = entry_db["record_start"]
+        end = entry_db["record_end"]
         
         # We are working on past entries, we should know all of those
         assert start is not None
@@ -252,7 +252,7 @@ def sync_history_diff(user, original_history, original_history_db):
     
     missing_entries = []
     matched_entries = defaultdict(int)
-    
+
     for entry in history:
         for entry_db in history_db:
             if entry_match(entry, entry_db):
@@ -260,19 +260,19 @@ def sync_history_diff(user, original_history, original_history_db):
                 break
         else:
             missing_entries.append(entry)
-    
+
     for values in matched_entries.values():
         if values > 1:
             raise RuntimeError("Multiple records matched the same period")
-        
+
     updates = []
     for missing in missing_entries:
         updates.append(InsertOne({
             "mila_ldap": {
                 "mila_email_username": user,
             },
-            "start_date": missing[START_DATE_KEY],
-            "end_date": missing[END_DATE_KEY]
+            "record_start": missing[START_DATE_KEY],
+            "record_end": missing[END_DATE_KEY]
         }))
         
     return updates
@@ -289,7 +289,7 @@ def user_history_diff(users_collection, userhistory: dict[str, list[dict]]):
         userhistory_db[index].append(user)
 
     for user, history_db in userhistory_db.items():
-        history_db.sort(key=lambda item: item["start_date"])
+        history_db.sort(key=lambda item: item["record_start"])
 
     users = set(list(userhistory.keys()) + list(userhistory_db.keys()))
 
