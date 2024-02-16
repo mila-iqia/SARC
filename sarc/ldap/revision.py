@@ -95,6 +95,8 @@ def update_user(collection: Collection, user: dict):
                 ]
             )
 
+    return 0
+
 
 def user_insert(newuser: dict) -> list:
     expected_keys = (
