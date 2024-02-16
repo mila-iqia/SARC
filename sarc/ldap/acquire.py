@@ -48,8 +48,6 @@ def run(prompt=False):
                 "supervisor",
                 "co_supervisor",
                 "status",
-                "Start Date with MILA",
-                "End Date with MILA",
             ]
         ].to_dict("records")
 
