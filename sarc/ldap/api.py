@@ -34,8 +34,8 @@ class User(BaseModel):
     drac_members: Optional[dict]
     drac_roles: Optional[dict]
 
-    start_date: Optional[date] = None
-    end_date: Optional[date] = None
+    record_start: Optional[date] = None
+    record_end: Optional[date] = None
 
 
 class UserRepository(AbstractRepository[User]):
