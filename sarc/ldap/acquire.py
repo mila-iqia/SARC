@@ -18,12 +18,7 @@ import sarc.account_matching.make_matches
 import sarc.ldap.mymila
 from sarc.config import config
 from sarc.ldap.read_mila_ldap import fetch_ldap
-from sarc.ldap.revision import (
-    END_DATE_KEY,
-    START_DATE_KEY,
-    commit_matches_to_database,
-    user_history_backfill,
-)
+from sarc.ldap.revision import commit_matches_to_database
 
 
 def run(prompt=False):
@@ -53,13 +48,10 @@ def run(prompt=False):
                 "supervisor",
                 "co_supervisor",
                 "status",
-                START_DATE_KEY,
-                END_DATE_KEY,
+                "Start Date with MILA",
+                "End Date with MILA",
             ]
         ].to_dict("records")
-
-    #
-    LD_users, history_ops = user_history_backfill(LD_users, backfill=False)
 
     # Match DRAC/CC to mila accounts
     DLD_data = sarc.account_matching.make_matches.load_data_from_files(
@@ -110,9 +102,6 @@ def run(prompt=False):
 
     for _, user in DD_persons_matched.items():
         fill_computed_fields(user)
-
-    if history_ops:
-        user_collection.bulk_write(history_ops)
 
     # These associations can now be propagated to the database.
     commit_matches_to_database(
