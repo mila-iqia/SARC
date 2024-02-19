@@ -107,6 +107,8 @@ def test_get_user_fetch_latest():
     records = list(users.find({}))
     assert len(records) == 4, "History was registered"
 
+    # MongoDB should return it sorted implicitly but to be safe
+    records.sort(key=lambda item: item["record_start"])
     start = None
     end = None
 
