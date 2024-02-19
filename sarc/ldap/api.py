@@ -31,6 +31,9 @@ class User(BaseModel):
     drac_members: Optional[dict]
     drac_roles: Optional[dict]
 
+    supervisor: str = None # Refers to the email of the supervisor
+    co_supervisor: str = None # Refers to the email of the cosupervisor
+
 
 class UserRepository(AbstractRepository[User]):
     class Meta:
@@ -48,7 +51,7 @@ class UserRepository(AbstractRepository[User]):
 
 
 def users_collection():
-    """Return the jobs collection in the current MongoDB."""
+    """Return the users collection in the current MongoDB."""
     db = config().mongo.database_instance
     return UserRepository(database=db)
 
