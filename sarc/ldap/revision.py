@@ -7,7 +7,7 @@ The revison works as follow:
     - the start date defaults to today if not set (usually by mymila)
 
 - All current documents have NO end date
-    - this makes query simple as we kind just look for missing end date,
+    - this makes query simple as we can just look for missing end date,
       because previous db had no revision system none of the documents have
       end dates, so all their documents are the current ones 
 
