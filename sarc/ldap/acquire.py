@@ -25,7 +25,6 @@ from sarc.ldap.revision import (
     user_history_backfill,
 )
 
-
 def run(prompt=False):
     """If prompt is True, script will prompt for manual matching."""
 

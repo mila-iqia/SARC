@@ -19,6 +19,7 @@ from copy import deepcopy
 from datetime import datetime
 
 from pymongo import InsertOne, UpdateOne
+from pymongo.collection import Collection
 
 DEFAULT_DATE = datetime.utcfromtimestamp(0)
 
@@ -44,13 +45,13 @@ def has_changed(user_db, user_latest, excluded=("_id",)):
 def guess_date(date):
     # If the end_date is unknown (default or None) we put it at today
     if is_date_missing(date):
-        return datetime.today()
+        return datetime.utcnow()
     return date
 
 
 def close_record(user_db: dict, end_date=None):
-    # usually, end_date will be the start_date of the new record
-    # because start_date is a new field its date might not always be accurate
+    # usually, end_date will be the record_start of the new record
+    # because record_end is a new field its date might not always be accurate
     #
     # enforce that end_date is always present on a closed record
     end_date = guess_date(end_date)
@@ -63,6 +64,39 @@ def close_record(user_db: dict, end_date=None):
             }
         },
     )
+
+
+def update_user(collection: Collection, user: dict):
+    username = user.get("mila_ldap", {}).get("mila_email_username")
+
+    if username is None:
+        raise RuntimeError("mila_ldap.mila_email_username is none")
+
+    userdb = list(
+        collection.find(
+            {
+                "$and": [
+                    query_latest_records(),
+                    {"mila_ldap.mila_email_username": username},
+                ]
+            }
+        )
+    )
+
+    if len(userdb) == 0:
+        return collection.bulk_write([user_insert(user)])
+    else:
+        userdb = list(userdb)[0]
+
+        if has_changed(userdb, user):
+            return collection.bulk_write(
+                [
+                    close_record(userdb, end_date=user.get("record_start")),
+                    user_insert(user),
+                ]
+            )
+
+    return 0
 
 
 def user_insert(newuser: dict) -> list:
@@ -128,7 +162,7 @@ def compute_update(username: str, user_db: dict, user_latest: dict) -> list:
 
 def query_latest_records() -> dict:
     """Condition latest records need to follow"""
-    return {"$or": [{"end_date": {"$exists": False}}, {"end_date": None}]}
+    return {"$or": [{"record_end": {"$exists": False}}, {"record_end": None}]}
 
 
 def get_all_users(users_collection):
