@@ -124,7 +124,7 @@ def user_insert(newuser: dict) -> list:
 
 
 def user_disapeared(user_db):
-    # this is an archived user
+    # this is an archived user and is already saved as such in the DB
     if user_db["mila_ldap"]["status"] == "archived":
         return []
 
