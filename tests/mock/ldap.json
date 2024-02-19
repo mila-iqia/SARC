@@ -1,0 +1,70 @@
+[
+    {
+        "apple-generateduid": [
+            "apple-generateduid"
+        ],
+        "cn": [
+            "cn.cn",
+            "cn cn"
+        ],
+        "departmentNumber": [],
+        "displayName": [
+            "displayName displayName"
+        ],
+        "employeeNumber": [],
+        "employeeType": [],
+        "gecos": [
+            ""
+        ],
+        "gidNumber": [
+            "gidNumber"
+        ],
+        "givenName": [
+            "givenName"
+        ],
+        "googleUid": [
+            "googleUid.googleUid"
+        ],
+        "homeDirectory": [
+            "/home/homeDirectory.homeDirectory"
+        ],
+        "loginShell": [
+            "/bin/bash"
+        ],
+        "mail": [
+            "mail.mail@mail.mail"
+        ],
+        "memberOf": [
+            "cn=clusterusers,ou=Groups,dc=mila,dc=quebec",
+            "cn=concordia-students,ou=Groups,dc=mila,dc=quebec",
+            "cn=memberOf.memberOf-students,ou=Groups,dc=mila,dc=quebec",
+            "cn=mila_acces_special,ou=Groups,dc=mila,dc=quebec",
+            "cn=phd,ou=Groups,dc=mila,dc=quebec"
+        ],
+        "objectClass": [
+            "top",
+            "person",
+            "organizationalPerson",
+            "inetOrgPerson",
+            "posixAccount"
+        ],
+        "physicalDeliveryOfficeName": [],
+        "posixUid": [
+            "posixUid.posixUid"
+        ],
+        "sn": [
+            "sn"
+        ],
+        "suspended": [
+            "false"
+        ],
+        "telephoneNumber": [],
+        "title": [],
+        "uid": [
+            "uid.uid"
+        ],
+        "uidNumber": [
+            "uidNumber"
+        ]
+    }
+]

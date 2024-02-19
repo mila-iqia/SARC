@@ -18,12 +18,17 @@ import sarc.account_matching.make_matches
 import sarc.ldap.mymila
 from sarc.config import config
 from sarc.ldap.read_mila_ldap import fetch_ldap
+from sarc.ldap.mymila import fetch_mymila
 from sarc.ldap.revision import (
     END_DATE_KEY,
     START_DATE_KEY,
     commit_matches_to_database,
-    user_history_backfill,
 )
+from sarc.ldap.revision import commit_matches_to_database
+
+
+
+
 
 def run(prompt=False):
     """If prompt is True, script will prompt for manual matching."""
@@ -33,32 +38,7 @@ def run(prompt=False):
 
     LD_users = fetch_ldap(ldap=cfg.ldap)
 
-    mymila_data = sarc.ldap.mymila.query_mymila(cfg.mymila)
-
-    if not mymila_data.empty:
-        df_users = pd.DataFrame(LD_users)
-        mymila_data = mymila_data.rename(columns={"MILA Email": "mila_email_username"})
-
-        df = pd.merge(df_users, mymila_data, on="mila_email_username", how="outer")
-
-        # NOTE: Select columns that should be used from MyMila.
-        LD_users = df[
-            [
-                "mila_email_username",
-                "mila_cluster_username",
-                "mila_cluster_uid",
-                "mila_cluster_gid",
-                "display_name",
-                "supervisor",
-                "co_supervisor",
-                "status",
-                START_DATE_KEY,
-                END_DATE_KEY,
-            ]
-        ].to_dict("records")
-
-    #
-    LD_users, history_ops = user_history_backfill(LD_users, backfill=False)
+    LD_users = fetch_mymila(cfg, LD_users)
 
     # Match DRAC/CC to mila accounts
     DLD_data = sarc.account_matching.make_matches.load_data_from_files(
@@ -109,9 +89,6 @@ def run(prompt=False):
 
     for _, user in DD_persons_matched.items():
         fill_computed_fields(user)
-
-    if history_ops:
-        user_collection.bulk_write(history_ops)
 
     # These associations can now be propagated to the database.
     commit_matches_to_database(
