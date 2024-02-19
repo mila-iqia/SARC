@@ -44,10 +44,10 @@ class MockCollection:
 statuses = ("disabled", "archived", "enabled")
 
 
-def make_user(status, **kwargs):
+def make_user(status, user="user1", **kwargs):
     return {
         "mila_ldap": {
-            "mila_email_username": "mail",
+            "mila_email_username": user,
             "mila_cluster_username": "posixUid",
             "mila_cluster_uid": "uidNumber",
             "mila_cluster_gid": "gidNumber",
@@ -58,6 +58,9 @@ def make_user(status, **kwargs):
         },
         **kwargs,
     }
+
+
+STANDARD_USER = make_user("active", user="standard")
 
 
 def transitions():
@@ -75,8 +78,8 @@ def user_dict(users):
 
 @pytest.mark.parametrize("status", statuses)
 def test_ldap_update_status_nodb_ldap(status):
-    collection = MockCollection()
-    newusers = user_dict([make_user(status)])
+    collection = MockCollection([STANDARD_USER])
+    newusers = user_dict([STANDARD_USER, make_user(status)])
 
     # initial insert
     _save_to_mongo(collection, newusers)
@@ -86,6 +89,9 @@ def test_ldap_update_status_nodb_ldap(status):
     ), "User does not exist in DB, it should do a simple insert"
 
     written_user = collection.writes[0]._doc
+    assert (
+        written_user["mila_ldap"]["mila_email_username"] == "user1"
+    ), "The right user should be inserted"
     assert written_user["record_start"] is not None, "record_start should have been set"
     assert written_user["mila_ldap"]["status"] == status, "status should match ldap"
     assert written_user.get("record_end", None) is None, "record_end should not be set"
@@ -93,8 +99,8 @@ def test_ldap_update_status_nodb_ldap(status):
 
 @pytest.mark.parametrize("status", statuses)
 def test_ldap_update_status_db_noldap(status):
-    collection = MockCollection([make_user(status)])
-    ldap_users = user_dict([])
+    collection = MockCollection([STANDARD_USER, make_user(status)])
+    ldap_users = user_dict([STANDARD_USER])
 
     # initial insert
     _save_to_mongo(collection, ldap_users)
@@ -120,6 +126,9 @@ def test_ldap_update_status_db_noldap(status):
         assert isinstance(collection.writes[1], InsertOne)
         entry_insert = collection.writes[1]._doc
         assert (
+            entry_insert["mila_ldap"]["mila_email_username"] == "user1"
+        ), "The right user should be inserted"
+        assert (
             entry_insert["record_start"] is not None
         ), "record_start should be set set"
         assert entry_insert.get("record_end") is None, "record_end should NOT be set"
@@ -131,8 +140,12 @@ def test_ldap_update_status_db_noldap(status):
 @pytest.mark.parametrize("start,end", transitions())
 def test_ldap_update_status_users_exists_on_both(start, end):
 
-    collection = MockCollection([make_user(start, record_start=datetime(2000, 1, 1))])
-    ldap_users = user_dict([make_user(end, record_start=datetime(2000, 1, 1))])
+    collection = MockCollection(
+        [STANDARD_USER, make_user(start, record_start=datetime(2000, 1, 1))]
+    )
+    ldap_users = user_dict(
+        [STANDARD_USER, make_user(end, record_start=datetime(2000, 1, 1))]
+    )
 
     # initial insert
     _save_to_mongo(collection, ldap_users)
@@ -145,7 +158,6 @@ def test_ldap_update_status_users_exists_on_both(start, end):
 
         assert isinstance(collection.writes[0], UpdateOne)
         entry_update = collection.writes[0]._doc["$set"]
-
         assert (
             entry_update.get("record_start") is None
         ), "record_start should have NOT been UPDATED"
@@ -154,6 +166,9 @@ def test_ldap_update_status_users_exists_on_both(start, end):
 
         assert isinstance(collection.writes[1], InsertOne)
         entry_insert = collection.writes[1]._doc
+        assert (
+            entry_insert["mila_ldap"]["mila_email_username"] == "user1"
+        ), "The right user should be inserted"
         assert entry_insert["record_start"] is not None, "record_start should be set"
         assert entry_insert.get("record_end") is None, "record_end should NOT be set"
         assert entry_insert["mila_ldap"]["status"] == end, "Status should match ldap"

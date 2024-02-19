@@ -169,7 +169,7 @@ def test_update_status_db_nosnapshots(status):
     if status in ("archived",):
         assert n_new == 0, "User is already archived, should not no updates"
     else:
-        assert len(documents_after) == 2, "New document should have been insrted"
+        assert len(documents_after) == 2, "New document should have been inserted"
         assert n_new == 1, "User is in db, but does not exist in snapshots"
 
         closed = documents_after[0]
