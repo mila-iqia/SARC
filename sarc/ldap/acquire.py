@@ -40,13 +40,31 @@ def run(prompt=False):
     LD_users = list(user_collection.find({}))
     LD_users = [D_user["mila_ldap"] for D_user in LD_users]
 
+    # Retrieve users data from MyMila
     mymila_data = sarc.ldap.mymila.query_mymila(cfg.mymila)
 
+    # If data have been retrieved from MyMila
     if not mymila_data.empty:
-        df_users = pd.DataFrame(LD_users)
-        mymila_data = mymila_data.rename(columns={"MILA Email": "mila_email_username"})
 
-        df = pd.merge(df_users, mymila_data, on="mila_email_username", how="outer")
+        # Handle database users LDAP data as pandas dataframe
+        df_users = pd.DataFrame(LD_users)
+        # Define types of data and indexes of database users LDAP data
+        # and set the empty values to NA
+        df_users = homogeneize_users_data(df_users)
+
+        # Rename some fields from MyMila data
+        mymila_data = mymila_data.rename(columns={
+            "MILA Email": "mila_email_username",
+            "Supervisor Principal": "supervisor",
+            "Co-Supervisor": "co_supervisor"
+        })
+        # Define types of data and indexes of the MyMila data
+        # and set the empty values to NA
+        mymila_data = homogeneize_users_data(mymila_data)
+
+        # Merge LDAP data retrieved from the database and MyMila data
+        # prioritizing the MyMila data
+        df = mymila_data.combine_first(df_users)
 
         # NOTE: Select columns that should be used from MyMila.
         LD_users = df[
@@ -124,6 +142,41 @@ def run(prompt=False):
             cfg.account_matching.make_matches_config, "w", encoding="utf-8"
         ) as json_file:
             json.dump(make_matches_config, json_file, indent=4)
+
+
+def set_types(df_data):
+    """
+    Set the types of some fields of the data.
+
+    Parameters:
+        df_data     The data in which the columns types are set
+    """
+    # Determine for each type the corresponding columns
+    types_for_columns = {
+        "string": ["mila_email_username", "supervisor", "co_supervisor"] # The values of the fields "supervisor" and "co_supervisor" are strings
+    }
+
+    for k_type, v_columns in types_for_columns.items():
+        df_data[v_columns] = df_data[v_columns].astype(k_type)
+
+
+def homogeneize_users_data(df_users_data):
+    """
+    Set the types of some columns, set mila_email_username
+    as index and set the empty values to NA
+
+    Parameters:
+        df_users_data   Dataframe containing our data
+
+    Return:
+        The data after the modifications done
+    """
+    # Define the types of some fields in the dataframe
+    set_types(df_users_data)
+    # Set the empty values to NA
+    df_users_data = df_users_data.where((pd.notnull(df_users_data)) & (df_users_data != ""), pd.NA)
+    # Define mila_email_username as the key
+    return df_users_data.set_index("mila_email_username")
 
 
 def fill_computed_fields(data: dict):
