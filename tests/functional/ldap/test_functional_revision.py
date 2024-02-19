@@ -95,7 +95,7 @@ def test_get_user_fetch_latest():
     # Check latest
     #
     latest_user = get_user(mila_email_username="user1")
-    assert latest_user is not None, "Latest user was found"
+    assert latest_user is not None, "Latest user should be found"
     assert latest_user.record_start.year == 2004
     assert latest_user.record_end is None
     assert latest_user.mila_ldap["supervisor"] == "4"
@@ -105,7 +105,7 @@ def test_get_user_fetch_latest():
     #
     users = users_collection().get_collection()
     records = list(users.find({}))
-    assert len(records) == 4, "History was registered"
+    assert len(records) == 4, "History should have been saved"
 
     # MongoDB should return it sorted implicitly but to be safe
     records.sort(key=lambda item: item["record_start"])
@@ -121,11 +121,11 @@ def test_get_user_fetch_latest():
             end = current_end
             continue
 
-        assert end == current_start, "Record was closed"
+        assert end == current_start, "Record shoulve have been closed"
         start = current_start
         end = current_end
 
-    assert end is None, "Latest record is open"
+    assert end is None, "Latest record should be open"
 
 
 @pytest.mark.usefixtures("write_setup")
@@ -141,14 +141,14 @@ def test_update_status_nodb_snapshots(status):
     documents_after = list(collection.find({}))
     n_new = len(documents_after) - len(documents_before)
 
-    assert len(documents_after) == 1, "new record"
-    assert n_new == 1, "User does not exist in DB, simple insert"
+    assert len(documents_after) == 1, "new record should have been created"
+    assert n_new == 1, "User does not exist in DB, record should have been inserted"
 
     latest = documents_after[0]
 
-    assert latest["record_start"] is not None, "record_start was set"
-    assert latest["mila_ldap"]["status"] == status, "status match ldap"
-    assert latest.get("record_end", None) is None, "record_end was not set"
+    assert latest["record_start"] is not None, "record_start should be set"
+    assert latest["mila_ldap"]["status"] == status, "status should match ldap"
+    assert latest.get("record_end", None) is None, "record_end should not be set"
 
 
 @pytest.mark.usefixtures("write_setup")
@@ -167,9 +167,9 @@ def test_update_status_db_nosnapshots(status):
     n_new = len(documents_after) - len(documents_before)
 
     if status in ("archived",):
-        assert n_new == 0, "User is already archived, no updates"
+        assert n_new == 0, "User is already archived, should not no updates"
     else:
-        assert len(documents_after) == 2, "Old and new record"
+        assert len(documents_after) == 2, "New document should have been insrted"
         assert n_new == 1, "User is in db, but does not exist in snapshots"
 
         closed = documents_after[0]
@@ -200,10 +200,10 @@ def test_update_status_users_exists_on_both(start, end):
 
     # nothing
     if start == end:
-        assert n_new == 0, "DB and snapshots match"
+        assert n_new == 0, "DB and snapshots should match"
     else:
         assert len(documents_after) == 2, "Old and new record"
-        assert n_new == 1, "DB close record and insert update"
+        assert n_new == 1, "should have inserted a new record"
 
         closed = documents_after[0]
         assert closed["record_start"] is not None
