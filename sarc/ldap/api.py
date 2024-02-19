@@ -6,11 +6,14 @@ https://mila-iqia.atlassian.net/wiki/spaces/IDT/pages/2190737548/Planification
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Optional
 
 from pydantic_mongo import AbstractRepository, ObjectIdField
 
 from sarc.config import BaseModel, config
+
+from .revision import query_latest_records
 
 
 class Credentials(BaseModel):
@@ -31,20 +34,18 @@ class User(BaseModel):
     drac_members: Optional[dict]
     drac_roles: Optional[dict]
 
+    record_start: Optional[date] = None
+    record_end: Optional[date] = None
+
 
 class UserRepository(AbstractRepository[User]):
     class Meta:
         collection_name = "users"
 
-    def save_user(self, model: User):
-        document = self.to_document(model)
-        return self.get_collection().update_one(
-            {
-                "_id": model.id,
-            },
-            {"$set": document},
-            upsert=True,
-        )
+    # The API created by pydantic is too simplistic
+    # inserting into the users collection need to
+    # take into account revisions
+    # use: revision.update_user
 
 
 def users_collection():
@@ -53,36 +54,62 @@ def users_collection():
     return UserRepository(database=db)
 
 
-def get_users(query=None, query_options: dict | None = None):
+def get_users(query=None, query_options: dict | None = None, latest=True) -> list[User]:
     if query_options is None:
         query_options = {}
 
     if query is None:
-        query = {}
-    return list(users_collection().find_by(query, query_options))
+        return {}
+
+    if latest:
+        query = {
+            "$and": [
+                query_latest_records(),
+                query,
+            ]
+        }
+
+    results = users_collection().find_by(query, query_options)
+
+    return list(results)
 
 
 def get_user(
     mila_email_username=None, mila_cluster_username=None, drac_account_username=None
-):
+) -> Optional[User]:
     if mila_email_username is not None:
-        query = {"mila_ldap.mila_email_username": mila_email_username}
+        query = {
+            "$and": [
+                query_latest_records(),
+                {"mila_ldap.mila_email_username": mila_email_username},
+            ]
+        }
     elif mila_cluster_username is not None:
-        query = {"mila_ldap.mila_cluster_username": mila_cluster_username}
+        query = {
+            "$and": [
+                query_latest_records(),
+                {"mila_ldap.mila_cluster_username": mila_cluster_username},
+            ]
+        }
     elif drac_account_username is not None:
         query = {
-            "$or": [
-                {"drac_roles.username": drac_account_username},
-                {"drac_members.username": drac_account_username},
+            "$and": [
+                query_latest_records(),
+                {
+                    "$or": [
+                        {"drac_roles.username": drac_account_username},
+                        {"drac_members.username": drac_account_username},
+                    ]
+                },
             ]
         }
     else:
         raise ValueError("At least one of the arguments must be provided.")
 
-    L = get_users(query)
+    users = get_users(query)
 
-    assert len(L) <= 1
-    if len(L) == 1:
-        return L[0]
+    assert len(users) <= 1
+    if len(users) == 1:
+        return users[0]
     else:
         return None
