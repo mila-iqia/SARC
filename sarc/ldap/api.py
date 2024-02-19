@@ -31,8 +31,8 @@ class User(BaseModel):
     drac_members: Optional[dict]
     drac_roles: Optional[dict]
 
-    supervisor: str = None # Refers to the email of the supervisor
-    co_supervisor: str = None # Refers to the email of the cosupervisor
+    supervisor: str = None  # Refers to the email of the supervisor
+    co_supervisor: str = None  # Refers to the email of the cosupervisor
 
 
 class UserRepository(AbstractRepository[User]):

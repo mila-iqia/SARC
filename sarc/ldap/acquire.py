@@ -53,11 +53,13 @@ def run(prompt=False):
         df_users = homogeneize_users_data(df_users)
 
         # Rename some fields from MyMila data
-        mymila_data = mymila_data.rename(columns={
-            "MILA Email": "mila_email_username",
-            "Supervisor Principal": "supervisor",
-            "Co-Supervisor": "co_supervisor"
-        })
+        mymila_data = mymila_data.rename(
+            columns={
+                "MILA Email": "mila_email_username",
+                "Supervisor Principal": "supervisor",
+                "Co-Supervisor": "co_supervisor",
+            }
+        )
         # Define types of data and indexes of the MyMila data
         # and set the empty values to NA
         mymila_data = homogeneize_users_data(mymila_data)
@@ -153,7 +155,11 @@ def set_types(df_data):
     """
     # Determine for each type the corresponding columns
     types_for_columns = {
-        "string": ["mila_email_username", "supervisor", "co_supervisor"] # The values of the fields "supervisor" and "co_supervisor" are strings
+        "string": [
+            "mila_email_username",
+            "supervisor",
+            "co_supervisor",
+        ]  # The values of the fields "supervisor" and "co_supervisor" are strings
     }
 
     for k_type, v_columns in types_for_columns.items():
@@ -174,9 +180,11 @@ def homogeneize_users_data(df_users_data):
     # Define the types of some fields in the dataframe
     set_types(df_users_data)
     # Set the empty values to NA
-    df_users_data = df_users_data.where((pd.notnull(df_users_data)) & (df_users_data != ""), pd.NA)
+    df_users_data = df_users_data.where(
+        (pd.notnull(df_users_data)) & (df_users_data != ""), pd.NA
+    )
     # Define mila_email_username as the key
-    return df_users_data.set_index("mila_email_username")
+    return df_users_data.set_index("mila_email_username", drop=False)
 
 
 def fill_computed_fields(data: dict):
