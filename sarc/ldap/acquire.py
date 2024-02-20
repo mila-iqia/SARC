@@ -19,7 +19,7 @@ import sarc.ldap.mymila
 from sarc.config import config
 from sarc.ldap.mymila import fetch_mymila
 from sarc.ldap.read_mila_ldap import fetch_ldap
-from sarc.ldap.revision import END_DATE_KEY, START_DATE_KEY, commit_matches_to_database
+from sarc.ldap.revision import commit_matches_to_database
 
 
 def run(prompt=False):

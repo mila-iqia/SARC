@@ -7,14 +7,13 @@ The revison works as follow:
     - the start date defaults to today if not set (usually by mymila)
 
 - All current documents have NO end date
-    - this makes query simple as we kind just look for missing end date,
+    - this makes query simple as we can just look for missing end date,
       because previous db had no revision system none of the documents have
       end dates, so all their documents are the current ones 
 
 - All past version have an end date
 """
 
-from collections import defaultdict
 from copy import deepcopy
 from datetime import datetime
 
@@ -110,7 +109,7 @@ def user_insert(newuser: dict) -> list:
     )
 
     update = {
-        # enforce that a record_start is always there
+        # enforce that a start_date is always there
         "record_start": guess_date(newuser.get("record_start")),
         # latest record NEVER have an end date
         # this so we can query latest record easily
@@ -125,7 +124,7 @@ def user_insert(newuser: dict) -> list:
 
 
 def user_disapeared(user_db):
-    # this is an archived user
+    # this is an archived user and is already saved as such in the DB
     if user_db["mila_ldap"]["status"] == "archived":
         return []
 
@@ -207,7 +206,3 @@ def commit_matches_to_database(users_collection, DD_persons_matched, verbose=Fal
 
     # might as well return this result in case we'd like to write tests for it
     return result
-
-
-START_DATE_KEY = "Start Date with MILA"
-END_DATE_KEY = "End Date with MILA"
