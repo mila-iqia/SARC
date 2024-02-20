@@ -3,7 +3,9 @@ import json
 import pandas as pd
 
 from sarc.config import MyMilaConfig
-from sarc.ldap.revision import END_DATE_KEY, START_DATE_KEY
+
+START_DATE_KEY = ""
+END_DATE_KEY = ""
 
 
 def query_mymila(cfg: MyMilaConfig):

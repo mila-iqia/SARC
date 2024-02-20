@@ -1,13 +1,9 @@
 from collections import defaultdict
-from copy import deepcopy
-from datetime import datetime
 
 from pymongo import InsertOne, UpdateOne
-from pymongo.collection import Collection
 
 from sarc.config import config
-from sarc.ldap.mymila import fetch_mymila
-from sarc.ldap.revision import END_DATE_KEY, START_DATE_KEY
+from sarc.ldap.mymila import END_DATE_KEY, START_DATE_KEY, fetch_mymila
 
 
 def _check_timeline_consistency(history):
@@ -115,10 +111,10 @@ def sync_history_diff(user, original_history, original_history_db):
         if values > 1:
             raise RuntimeError("Multiple records matched the same period")
 
+    updates = []
     for match in matched:
         updates.extend(sync_entries(*match))
 
-    updates = []
     for missing in missing_entries:
         updates.append(
             InsertOne(
@@ -186,7 +182,7 @@ def user_history_backfill(users_collection, LD_users, backfill=False):
     if backfill:
         # users that have a single entry will be upated
         # by the regular flow
-        user_with_history = dict()
+        user_with_history = {}
         for user, history in userhistory.items():
             if len(history) > 1:
                 user_with_history[user] = history
@@ -194,7 +190,7 @@ def user_history_backfill(users_collection, LD_users, backfill=False):
         updates = user_history_diff(users_collection, user_with_history)
 
     # latest records
-    latest = dict()
+    latest = {}
     for user, history in userhistory.items():
         latest[user] = history[-1]
 
@@ -203,8 +199,6 @@ def user_history_backfill(users_collection, LD_users, backfill=False):
 
 def _user_record_backfill(cfg, user_collection):
     """No global version for simpler testing"""
-    from sarc.ldap.read_mila_ldap import fetch_ldap
-
     mymila_data = fetch_mymila(cfg, [])
 
     return user_history_backfill(user_collection, mymila_data)
