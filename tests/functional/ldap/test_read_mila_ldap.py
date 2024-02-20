@@ -6,11 +6,10 @@ from unittest.mock import patch
 
 import pandas as pd
 import pytest
+from sarc_mocks import fake_raw_ldap_data
 
 import sarc.ldap.read_mila_ldap  # will monkeypatch "query_ldap"
 from sarc.config import config
-
-from sarc_mocks import fake_raw_ldap_data
 
 
 def test_query_to_ldap_server_and_writing_to_output_json(monkeypatch, mock_file):

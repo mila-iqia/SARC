@@ -3,10 +3,8 @@ import json
 import pandas as pd
 
 from sarc.config import MyMilaConfig
-from sarc.ldap.revision import (
-    END_DATE_KEY,
-    START_DATE_KEY,
-)
+from sarc.ldap.revision import END_DATE_KEY, START_DATE_KEY
+
 
 def query_mymila(cfg: MyMilaConfig):
     if cfg is None:
@@ -23,36 +21,65 @@ def query_mymila(cfg: MyMilaConfig):
 
 def to_records(df):
     # NOTE: Select columns that should be used from MyMila.
-    return df[
-        [
-            "mila_email_username",
-            "mila_cluster_username",
-            "mila_cluster_uid",
-            "mila_cluster_gid",
-            "display_name",
-            "supervisor",
-            "co_supervisor",
-            "status",
-            START_DATE_KEY,
-            END_DATE_KEY,
-        ]
-    ].to_dict("records")
+    wanted_cols = [
+        "mila_email_username",
+        "mila_cluster_username",
+        "mila_cluster_uid",
+        "mila_cluster_gid",
+        "display_name",
+        "supervisor",
+        "co_supervisor",
+        "status",
+        START_DATE_KEY,
+        END_DATE_KEY,
+    ]
+
+    selected = []
+    for col in wanted_cols:
+        if col in df.columns:
+            selected.append(col)
+
+    return df[selected].to_dict("records")
 
 
 def combine(LD_users, mymila_data):
     if not mymila_data.empty:
         df_users = pd.DataFrame(LD_users)
+
+        # Preprocess
         mymila_data = mymila_data.rename(columns={"MILA Email": "mila_email_username"})
 
         if LD_users:
             df = pd.merge(df_users, mymila_data, on="mila_email_username", how="outer")
+
+            # mymila value should take precedence here
+            #   Take the mymila columns and fill it with ldap if missing
+            def mergecol(mymila_col, ldap_col):
+                df[mymila_col] = df[mymila_col].fillna(df[ldap_col])
+
+            mergecol("Status", "status")
+            mergecol("Supervisor Principal", "supervisor")
+            mergecol("Co-Supervisor", "co_supervisor")
+
         else:
-            df = df_users
-        
+            df = mymila_data
+
+        # Use mymila field
+        df = df.rename(
+            columns={
+                "Status": "status",
+                "Supervisor Principal": "supervisor",
+                "Co-Supervisor": "co_supervisor",
+            }
+        )
+
+        # Create the new display name
+        df["display_name"] = df["Preferred First Name"] + df["Last Name"]
+
         LD_users = to_records(df)
     return LD_users
-    
-    
+
+
 def fetch_mymila(cfg, LD_users):
     mymila_data = query_mymila(cfg.mymila)
     return combine(LD_users, mymila_data)

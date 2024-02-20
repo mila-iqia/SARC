@@ -14,7 +14,7 @@ class AcquireUsers:
         action="store_true",
         help="Provide a prompt for manual matching if automatic matching fails (default: False)",
     )
-    
+
     backfill: bool = field(
         action="store_true",
         help="Backfill record history from mymila",
@@ -23,6 +23,6 @@ class AcquireUsers:
     def execute(self) -> int:
         if self.backfill:
             user_record_backfill()
-                
+
         update_user_records(prompt=self.prompt)
         return 0

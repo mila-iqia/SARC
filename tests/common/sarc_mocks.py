@@ -144,7 +144,6 @@ def fake_mymila_data(nbr_users=10, nbr_profs=5):
     return pd.DataFrame(list([mymila_entry(i) for i in range(nbr_users)]))
 
 
-
 def fake_member_of(index, count):
     member_of_config = {
         # Core prof
@@ -202,4 +201,3 @@ def fake_raw_ldap_data(nbr_users=10):
             for i in range(nbr_users)
         ]
     )
-

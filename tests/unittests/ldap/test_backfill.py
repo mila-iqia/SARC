@@ -1,14 +1,13 @@
-from copy import deepcopy
 from collections import namedtuple
+from copy import deepcopy
 from dataclasses import dataclass
 
 import pandas as pd
-
-from sarc.config import config
-import sarc.ldap.mymila
-from sarc.ldap.backfill import _user_record_backfill
-
 from sarc_mocks import fake_mymila_data
+
+import sarc.ldap.mymila
+from sarc.config import config
+from sarc.ldap.backfill import _user_record_backfill
 
 
 class MockCollection:
@@ -58,5 +57,8 @@ class FakeConfig:
 def test_(monkeypatch):
     collection = MockCollection()
     mymiladata(monkeypatch, fake_mymila_data())
-    
-    _user_record_backfill(FakeConfig(), collection)
+
+    updates, latest = _user_record_backfill(FakeConfig(), collection)
+
+    print(len(latest))
+    print(updates)

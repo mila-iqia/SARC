@@ -7,7 +7,7 @@ from pymongo.collection import Collection
 
 from sarc.config import config
 from sarc.ldap.mymila import fetch_mymila
-from sarc.ldap.revision import START_DATE_KEY, END_DATE_KEY
+from sarc.ldap.revision import END_DATE_KEY, START_DATE_KEY
 
 
 def _check_timeline_consistency(history):
@@ -38,7 +38,7 @@ def _check_timeline_consistency(history):
 
 def insert_history(user, original_history):
     updates = []
-    
+
     # ignore latest entry
     # it will be handled by the regular update
     history = original_history[:-1]
@@ -46,13 +46,15 @@ def insert_history(user, original_history):
     # Insert the old entries has past records
     for entry in history:
         updates.insert(
-            InsertOne({
-                "mila_ldap": {
-                    "mila_email_username": user,
-                },
-                "record_start": entry[START_DATE_KEY],
-                "record_end": entry[END_DATE_KEY]
-            })
+            InsertOne(
+                {
+                    "mila_ldap": {
+                        "mila_email_username": user,
+                    },
+                    "record_start": entry[START_DATE_KEY],
+                    "record_end": entry[END_DATE_KEY],
+                }
+            )
         )
 
     return updates
@@ -60,12 +62,14 @@ def insert_history(user, original_history):
 
 def sync_entries(entry, entry_db) -> list:
     if entry != entry_db:
-        return [UpdateOne(
-            {"_id": entry_db["_id"]},
-            {
-                # ...
-            }
-        )]
+        return [
+            UpdateOne(
+                {"_id": entry_db["_id"]},
+                {
+                    # ...
+                },
+            )
+        ]
     return []
 
 
@@ -74,24 +78,26 @@ def sync_history_diff(user, original_history, original_history_db):
     # it will be handled by the regular update
     history_db = original_history_db[:-1]
     history = original_history[:-1]
-    
+
     def entry_match(entry, entry_db):
         # criterion for the entries to match
         start = entry_db["record_start"]
         end = entry_db["record_end"]
-        
+
         # We are working on past entries, we should know all of those
         assert start is not None
         assert end is not None
         assert entry[END_DATE_KEY] is not None
         assert entry[START_DATE_KEY] is not None
-        
-        start_match = entry[START_DATE_KEY] == start 
+
+        start_match = entry[START_DATE_KEY] == start
         end_match = entry[END_DATE_KEY] == end
-        
-        assert start_match == end_match, "Either both match or None, else that would be a headache"
+
+        assert (
+            start_match == end_match
+        ), "Either both match or None, else that would be a headache"
         return start_match and end_match
-    
+
     missing_entries = []
     matched_entries = defaultdict(int)
     matched = []
@@ -114,14 +120,18 @@ def sync_history_diff(user, original_history, original_history_db):
 
     updates = []
     for missing in missing_entries:
-        updates.append(InsertOne({
-            "mila_ldap": {
-                "mila_email_username": user,
-            },
-            "record_start": missing[START_DATE_KEY],
-            "record_end": missing[END_DATE_KEY]
-        }))
-        
+        updates.append(
+            InsertOne(
+                {
+                    "mila_ldap": {
+                        "mila_email_username": user,
+                    },
+                    "record_start": missing[START_DATE_KEY],
+                    "record_end": missing[END_DATE_KEY],
+                }
+            )
+        )
+
     return updates
 
 
@@ -193,14 +203,16 @@ def user_history_backfill(users_collection, LD_users, backfill=False):
 
 def _user_record_backfill(cfg, user_collection):
     """No global version for simpler testing"""
+    from sarc.ldap.read_mila_ldap import fetch_ldap
+
     mymila_data = fetch_mymila(cfg, [])
-    
-    user_history_backfill(user_collection, mymila_data)
-    
-    
+
+    return user_history_backfill(user_collection, mymila_data)
+
+
 def user_record_backfill():
     cfg = config()
-    
+
     user_collection = cfg.mongo.database_instance[cfg.ldap.mongo_collection_name]
 
     _user_record_backfill(cfg, user_collection)
