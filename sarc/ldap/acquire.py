@@ -13,18 +13,19 @@ referenced by "cfg.ldap.mongo_collection_name" will be updated.
 import json
 
 import pandas as pd
-from pymongo import UpdateOne
 
 import sarc.account_matching.make_matches
 import sarc.ldap.mymila
 from sarc.config import config
 from sarc.ldap.read_mila_ldap import fetch_ldap
+from sarc.ldap.revision import commit_matches_to_database
 
 
 def run(prompt=False):
     """If prompt is True, script will prompt for manual matching."""
 
     cfg = config()
+    user_collection = cfg.mongo.database_instance[cfg.ldap.mongo_collection_name]
 
     LD_users = fetch_ldap(ldap=cfg.ldap)
 
@@ -97,9 +98,12 @@ def run(prompt=False):
     #       "drac_members": {...} or None
     #     }
 
+    for _, user in DD_persons_matched.items():
+        fill_computed_fields(user)
+
     # These associations can now be propagated to the database.
-    save(
-        cfg.mongo.database_instance[cfg.ldap.mongo_collection_name],
+    commit_matches_to_database(
+        user_collection,
         DD_persons_matched,
     )
 
@@ -146,46 +150,6 @@ def fill_computed_fields(data: dict):
             data["drac"] = None
 
     return data
-
-
-def save(collection, users, verbose=False):
-    updates = []
-
-    for username, user in users.items():
-
-        user = fill_computed_fields(user)
-
-        updates.append(
-            UpdateOne(
-                {"mila_ldap.mila_email_username": username},
-                {
-                    # We set all the fields corresponding to the fields from `updated_user`,
-                    # so that's a convenient way to do it. Note that this does not affect
-                    # the fields in the database that are already present for that user.
-                    "$set": {
-                        "mila_ldap": user["mila_ldap"],
-                        "name": user["name"],
-                        "mila": user["mila"],
-                        "drac": user["drac"],
-                        "drac_roles": user["drac_roles"],
-                        "drac_members": user["drac_members"],
-                    },
-                },
-                upsert=True,
-            )
-        )
-
-    result = 0
-    if updates:
-        result = collection.bulk_write(updates)  #  <- the actual commit
-        if verbose:
-            print(result.bulk_api_result)
-    else:
-        if verbose:
-            print("Nothing to do.")
-
-    # might as well return this result in case we'd like to write tests for it
-    return result
 
 
 if __name__ == "__main__":

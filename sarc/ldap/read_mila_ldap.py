@@ -249,7 +249,7 @@ def client_side_user_updates(LD_users_DB, LD_users_LDAP):
     for meu in set(list(DD_users_DB.keys()) + list(DD_users_LDAP.keys())):
         # `meu` is short for the mila_email_username value
 
-        if meu in DD_users_DB and not meu in DD_users_LDAP:
+        if meu in DD_users_DB and meu not in DD_users_LDAP:
             # User is in DB but not in the LDAP.
             # Let's mark it as archived.
             entry = DD_users_DB[meu]
