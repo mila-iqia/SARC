@@ -5,9 +5,9 @@ from pymongo import InsertOne, UpdateOne
 from sarc.config import config
 from sarc.ldap.mymila import fetch_mymila
 
-
 START = "mymila_start"
 END = "mymila_end"
+
 
 def _check_timeline_consistency(history):
     start = None
