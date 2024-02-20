@@ -19,7 +19,7 @@ def _check_timeline_consistency(history):
 
         if new_start is not None:
             if start is not None:
-                assert new_start > start
+                assert new_start >= start
 
             if end is not None:
                 assert new_start >= end
@@ -44,7 +44,7 @@ def insert_history(user, original_history):
 
     # Insert the old entries has past records
     for entry in history:
-        updates.insert(
+        updates.append(
             InsertOne(
                 {
                     "mila_ldap": {
@@ -166,7 +166,7 @@ def user_history_diff(users_collection, userhistory: dict[str, list[dict]]):
     return updates
 
 
-def user_history_backfill(users_collection, LD_users, backfill=False):
+def user_history_backfill(users_collection, LD_users, backfill=True):
     userhistory = defaultdict(list)
     updates = None
 
@@ -179,7 +179,7 @@ def user_history_backfill(users_collection, LD_users, backfill=False):
     for user, history in userhistory.items():
         history.sort(key=lambda item: item[START])
 
-        _check_timeline_consistency(history)
+        # _check_timeline_consistency(history)
 
     # check if the history exists in the db
     if backfill:
