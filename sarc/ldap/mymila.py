@@ -4,8 +4,8 @@ import pandas as pd
 
 from sarc.config import MyMilaConfig
 
-START_DATE_KEY = ""
-END_DATE_KEY = ""
+START_DATE_KEY = "Start Date with MILA"
+END_DATE_KEY = "End Date with MILA"
 
 
 def query_mymila(cfg: MyMilaConfig):
