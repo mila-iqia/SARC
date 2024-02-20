@@ -32,8 +32,8 @@ def to_records(df):
         "supervisor",
         "co_supervisor",
         "status",
-        START_DATE_KEY,
-        END_DATE_KEY,
+        "mymila_start",
+        "mymila_end",
     ]
 
     selected = []
@@ -77,6 +77,10 @@ def combine(LD_users, mymila_data):
 
         # Create the new display name
         df["display_name"] = df["Preferred First Name"] + df["Last Name"]
+
+        # Coerce datetime.date into datetime because bson does not understand date
+        df["mymila_start"] = pd.to_datetime(df[START_DATE_KEY], errors="coerce")
+        df["mymila_end"] = pd.to_datetime(df[END_DATE_KEY], errors="coerce")
 
         LD_users = to_records(df)
     return LD_users
