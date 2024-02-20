@@ -3,16 +3,19 @@ from collections import defaultdict
 from pymongo import InsertOne, UpdateOne
 
 from sarc.config import config
-from sarc.ldap.mymila import END_DATE_KEY, START_DATE_KEY, fetch_mymila
+from sarc.ldap.mymila import fetch_mymila
 
+
+START = "mymila_start"
+END = "mymila_end"
 
 def _check_timeline_consistency(history):
     start = None
     end = None
 
     for entry in history:
-        new_start = entry.get(START_DATE_KEY)
-        new_end = entry.get(END_DATE_KEY)
+        new_start = entry.get(START)
+        new_end = entry.get(END)
 
         if new_start is not None:
             if start is not None:
@@ -47,8 +50,8 @@ def insert_history(user, original_history):
                     "mila_ldap": {
                         "mila_email_username": user,
                     },
-                    "record_start": entry[START_DATE_KEY],
-                    "record_end": entry[END_DATE_KEY],
+                    "record_start": entry[START],
+                    "record_end": entry[END],
                 }
             )
         )
@@ -83,11 +86,11 @@ def sync_history_diff(user, original_history, original_history_db):
         # We are working on past entries, we should know all of those
         assert start is not None
         assert end is not None
-        assert entry[END_DATE_KEY] is not None
-        assert entry[START_DATE_KEY] is not None
+        assert entry[END] is not None
+        assert entry[START] is not None
 
-        start_match = entry[START_DATE_KEY] == start
-        end_match = entry[END_DATE_KEY] == end
+        start_match = entry[START] == start
+        end_match = entry[END] == end
 
         assert (
             start_match == end_match
@@ -122,8 +125,8 @@ def sync_history_diff(user, original_history, original_history_db):
                     "mila_ldap": {
                         "mila_email_username": user,
                     },
-                    "record_start": missing[START_DATE_KEY],
-                    "record_end": missing[END_DATE_KEY],
+                    "record_start": missing[START],
+                    "record_end": missing[END],
                 }
             )
         )
@@ -174,7 +177,7 @@ def user_history_backfill(users_collection, LD_users, backfill=False):
 
     # make sure the history is clean
     for user, history in userhistory.items():
-        history.sort(key=lambda item: item[START_DATE_KEY])
+        history.sort(key=lambda item: item[START])
 
         _check_timeline_consistency(history)
 
