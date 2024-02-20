@@ -41,7 +41,17 @@ def to_records(df):
         if col in df.columns:
             selected.append(col)
 
-    return df[selected].to_dict("records")
+    records = df[selected].to_dict("records")
+
+    # Pandas really likes NaT (Not a Time)
+    # but mongo does not
+    for record in records:
+        end_date = record.get("mymila_end", None)
+        if pd.isna(end_date):
+            end_date = None
+        record["mymila_end"] = end_date
+
+    return records
 
 
 def combine(LD_users, mymila_data):
@@ -79,8 +89,11 @@ def combine(LD_users, mymila_data):
         df["display_name"] = df["Preferred First Name"] + df["Last Name"]
 
         # Coerce datetime.date into datetime because bson does not understand date
-        df["mymila_start"] = pd.to_datetime(df[START_DATE_KEY], errors="coerce")
-        df["mymila_end"] = pd.to_datetime(df[END_DATE_KEY], errors="coerce")
+        def convert_datetime(col, origin):
+            df[col] = pd.to_datetime(df[origin], errors="ignore")
+
+        convert_datetime("mymila_start", START_DATE_KEY)
+        convert_datetime("mymila_end", END_DATE_KEY)
 
         LD_users = to_records(df)
     return LD_users
