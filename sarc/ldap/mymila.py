@@ -86,7 +86,7 @@ def combine(LD_users, mymila_data):
         )
 
         # Create the new display name
-        df["display_name"] = df["Preferred First Name"] + df["Last Name"]
+        df["display_name"] = df["Preferred First Name"] + " " + df["Last Name"]
 
         # Coerce datetime.date into datetime because bson does not understand date
         def convert_datetime(col, origin):
