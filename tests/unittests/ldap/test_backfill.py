@@ -243,5 +243,5 @@ def test_backfill_sync_history_diff(monkeypatch):
     assert len(latest) == 1, "Should have a single user"
     assert len(updates) == 1, "Should have one update"
     assert (
-        updates[0]._doc["mila_ldap"]["display_name"] == "first_namelast_name"
+        updates[0]._doc["mila_ldap"]["display_name"] == "first_name last_name"
     ), "Should have the right display name"
