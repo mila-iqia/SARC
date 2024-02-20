@@ -74,7 +74,7 @@ def compute_entry_diff(entry, entry_db, diff=None, excluded=("_id",)):
         if k in excluded:
             continue
 
-        elif k not in entry_db:
+        if k not in entry_db:
             diff[k] = entry[k]
 
         elif entry_db[k] != entry[k]:
@@ -198,7 +198,7 @@ def user_history_backfill(users_collection, LD_users, backfill=True):
     for user, history in userhistory.items():
         history.sort(key=lambda item: item[START])
 
-        # _check_timeline_consistency(history)
+        _check_timeline_consistency(history)
 
     # check if the history exists in the db
     if backfill:
