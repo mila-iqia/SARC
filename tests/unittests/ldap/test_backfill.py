@@ -1,9 +1,10 @@
 from collections import namedtuple
 from copy import deepcopy
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 
 import pandas as pd
+from pymongo import InsertOne, UpdateOne
 from sarc_mocks import dictset, fake_mymila_data, mymila_template
 
 import sarc.ldap.mymila
@@ -30,17 +31,17 @@ def userhistory(email, history):
     latest_record = base_user
 
     for start, fields in history:
-        print(start, fields)
 
         if prev_fields is not None:
-            prev_fields["End date of studies"] = start
+            prev_fields["End Date with MILA"] = start
             latest_record = dictset(latest_record, prev_fields)
             records.append(latest_record)
 
-        fields["Start date of studies"] = start
+        fields["Start Date with MILA"] = start
         prev_fields = fields
 
     if prev_fields is not None:
+        prev_fields["End Date with MILA"] = None
         records.append(dictset(latest_record, prev_fields))
 
     return records
@@ -54,7 +55,7 @@ def user_with_history():
                 (date(year=2000, month=1, day=1), {"Program of study": "Bac"}),
                 (date(year=2003, month=1, day=1), {"Program of study": "Msc"}),
                 (date(year=2005, month=1, day=1), {"Program of study": "Phd"}),
-                (date(year=2008, month=1, day=1), {"Status": "Inactive"}),
+                (date(year=2008, month=1, day=1), {"Status": "Inactive"}),  # <= latests
             ],
         )
     )
@@ -113,7 +114,7 @@ def test_no_backfill(monkeypatch):
     assert updates == []
 
 
-def test_backfill_history(monkeypatch):
+def test_backfill_simple_insert_history(monkeypatch):
     collection = MockCollection()
     mymiladata(monkeypatch, user_with_history())
 
@@ -123,3 +124,124 @@ def test_backfill_history(monkeypatch):
     assert (
         len(updates) == 3
     ), "Single user should have 3 previous records to be inserted"
+
+    assert updates[0]._doc["record_start"] == datetime(2000, 1, 1)
+    assert updates[0]._doc["record_end"] == updates[1]._doc["record_start"]
+    assert updates[1]._doc["record_end"] == updates[2]._doc["record_start"]
+    assert updates[2]._doc["record_end"] == datetime(2008, 1, 1)
+
+
+Timestamp = lambda x: datetime.strptime(x, "%Y-%m-%d %H:%M:%S")
+
+
+def mongo_db_expected_history():
+    return [
+        {
+            "name": "first_namelast_name",
+            "mila_ldap": {
+                "mila_email_username": "user123",
+                "display_name": "first_namelast_name",
+                "supervisor": "whatever",
+                "co_supervisor": "co_whatever",
+                "status": "Active",
+            },
+            "record_start": Timestamp("2000-01-01 00:00:00"),
+            "record_end": Timestamp("2003-01-01 00:00:00"),
+        },
+        {
+            "name": "first_namelast_name",
+            "mila_ldap": {
+                "mila_email_username": "user123",
+                "display_name": "first_namelast_name",
+                "supervisor": "whatever",
+                "co_supervisor": "co_whatever",
+                "status": "Active",
+            },
+            "record_start": Timestamp("2003-01-01 00:00:00"),
+            "record_end": Timestamp("2005-01-01 00:00:00"),
+        },
+        {
+            "name": "first_namelast_name",
+            "mila_ldap": {
+                "mila_email_username": "user123",
+                "display_name": "first_namelast_name",
+                "supervisor": "whatever",
+                "co_supervisor": "co_whatever",
+                "status": "Active",
+            },
+            "record_start": Timestamp("2005-01-01 00:00:00"),
+            "record_end": Timestamp("2008-01-01 00:00:00"),
+        },
+        {
+            "name": "first_namelast_name",
+            "mila_ldap": {
+                "mila_email_username": "user123",
+                "display_name": "first_namelast_name",
+                "supervisor": "whatever",
+                "co_supervisor": "co_whatever",
+                "status": "Inactive",
+            },
+            "record_start": Timestamp("2008-01-01 00:00:00"),
+            "record_end": None,
+        },
+    ]
+
+
+def test_backfill_history_match(monkeypatch):
+    collection = MockCollection(mongo_db_expected_history())
+    mymiladata(monkeypatch, user_with_history())
+
+    updates, latest = _user_record_backfill(FakeConfig(), collection)
+
+    assert len(latest) == 1, "Should have a single user"
+    assert updates == [], "Should not update anything"
+
+
+def test_backfill_insert_missing_entries(monkeypatch):
+    dbstate = mongo_db_expected_history()
+
+    partial_history = dbstate[1:]
+
+    collection = MockCollection(partial_history)
+    mymiladata(monkeypatch, user_with_history())
+
+    updates, latest = _user_record_backfill(FakeConfig(), collection)
+
+    assert len(latest) == 1, "Should have a single user"
+    assert len(updates) == 1, "Should have one inserrt"
+
+    missing_entry = dbstate[0]
+    assert isinstance(updates[0], InsertOne)
+
+    doc = updates[0]._doc
+
+    record_end = doc.pop("record_end")
+    record_start = doc.pop("record_start")
+
+    def todate(x):
+        return x.to_pydatetime()
+
+    assert todate(record_end) == missing_entry.pop("record_end")
+    assert todate(record_start) == missing_entry.pop("record_start")
+
+    assert doc == missing_entry
+
+
+def test_backfill_sync_history_diff(monkeypatch):
+    """History match but the entries are different"""
+
+    bad_mongo_history = mongo_db_expected_history()
+
+    bad_entry = bad_mongo_history[1]
+    bad_entry["mila_ldap"]["display_name"] = "Not my favorite name"
+
+    collection = MockCollection(bad_mongo_history)
+    mymiladata(monkeypatch, user_with_history())
+
+    updates, latest = _user_record_backfill(FakeConfig(), collection)
+
+    assert len(latest) == 1, "Should have a single user"
+    assert len(updates) == 1, "Should have one update"
+    assert (
+        updates[0]._doc["mila_ldap"]["display_name"] == "first_namelast_name"
+    ), "Should have the right display name"

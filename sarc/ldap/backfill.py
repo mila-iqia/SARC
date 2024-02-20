@@ -35,6 +35,21 @@ def _check_timeline_consistency(history):
         end = new_end
 
 
+def user_from_entry(username, entry):
+    return {
+        "name": entry["display_name"],
+        "mila_ldap": {
+            "mila_email_username": username,
+            "display_name": entry["display_name"],
+            "supervisor": entry["supervisor"],
+            "co_supervisor": entry["co_supervisor"],
+            "status": entry["status"],
+        },
+        "record_start": entry[START],
+        "record_end": entry[END],
+    }
+
+
 def insert_history(user, original_history):
     updates = []
 
@@ -44,29 +59,38 @@ def insert_history(user, original_history):
 
     # Insert the old entries has past records
     for entry in history:
-        updates.append(
-            InsertOne(
-                {
-                    "mila_ldap": {
-                        "mila_email_username": user,
-                    },
-                    "record_start": entry[START],
-                    "record_end": entry[END],
-                }
-            )
-        )
+        updates.append(InsertOne(user_from_entry(user, entry)))
 
     return updates
 
 
-def sync_entries(entry, entry_db) -> list:
-    if entry != entry_db:
+def compute_entry_diff(entry, entry_db, diff=None, excluded=("_id",)):
+    keys = set(entry.keys())
+
+    if diff is None:
+        diff = {}
+
+    for k in keys:
+        if k in excluded:
+            continue
+
+        elif k not in entry_db:
+            diff[k] = entry[k]
+
+        elif entry_db[k] != entry[k]:
+            diff[k] = entry[k]
+
+    return diff
+
+
+def sync_entries(user, entry, entry_db) -> list:
+    diff = compute_entry_diff(user_from_entry(user, entry), entry_db)
+
+    if len(diff) > 0:
         return [
             UpdateOne(
                 {"_id": entry_db["_id"]},
-                {
-                    # ...
-                },
+                diff,
             )
         ]
     return []
@@ -75,8 +99,13 @@ def sync_entries(entry, entry_db) -> list:
 def sync_history_diff(user, original_history, original_history_db):
     # ignore latest entry
     # it will be handled by the regular update
-    history_db = original_history_db[:-1]
-    history = original_history[:-1]
+    history_db = original_history_db
+    if original_history_db[-1]["record_end"] is None:
+        history_db = original_history_db[:-1]
+
+    history = original_history
+    if original_history[-1]["mymila_end"] is None:
+        history = original_history[:-1]
 
     def entry_match(entry, entry_db):
         # criterion for the entries to match
@@ -105,7 +134,7 @@ def sync_history_diff(user, original_history, original_history_db):
         for entry_db in history_db:
             if entry_match(entry, entry_db):
                 matched_entries[id(entry_db)] += 1
-                matched.append((entry, entry_db))
+                matched.append((user, entry, entry_db))
                 break
         else:
             missing_entries.append(entry)
@@ -119,17 +148,7 @@ def sync_history_diff(user, original_history, original_history_db):
         updates.extend(sync_entries(*match))
 
     for missing in missing_entries:
-        updates.append(
-            InsertOne(
-                {
-                    "mila_ldap": {
-                        "mila_email_username": user,
-                    },
-                    "record_start": missing[START],
-                    "record_end": missing[END],
-                }
-            )
-        )
+        updates.append(InsertOne(user_from_entry(user, missing)))
 
     return updates
 
