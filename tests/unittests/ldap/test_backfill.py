@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 
 import pandas as pd
+import pytest
 from pymongo import InsertOne, UpdateOne
 from sarc_mocks import dictset, fake_mymila_data, mymila_template
 
@@ -197,10 +198,10 @@ def test_backfill_history_match(monkeypatch):
     assert updates == [], "Should not update anything"
 
 
-def test_backfill_insert_missing_entries(monkeypatch):
+def test_backfill_insert_missing_entries(monkeypatch, missing_idx=1):
     dbstate = mongo_db_expected_history()
 
-    partial_history = dbstate[1:]
+    partial_history = dbstate[:missing_idx] + dbstate[missing_idx + 1 :]
 
     collection = MockCollection(partial_history)
     mymiladata(monkeypatch, user_with_history())
@@ -210,7 +211,7 @@ def test_backfill_insert_missing_entries(monkeypatch):
     assert len(latest) == 1, "Should have a single user"
     assert len(updates) == 1, "Should have one inserrt"
 
-    missing_entry = dbstate[0]
+    missing_entry = dbstate[2]
     assert isinstance(updates[0], InsertOne)
 
     doc = updates[0]._doc
@@ -245,3 +246,17 @@ def test_backfill_sync_history_diff(monkeypatch):
     assert (
         updates[0]._doc["mila_ldap"]["display_name"] == "first_namelast_name"
     ), "Should have the right display name"
+
+
+def test_backfill_fail(monkeypatch):
+    dbstate = mongo_db_expected_history()
+
+    # remove one entry, and close the gap between the records
+    partial_history = dbstate[:1] + dbstate[2:]
+    partial_history[0]["record_end"] = partial_history[1]["record_start"]
+
+    collection = MockCollection(partial_history)
+    mymiladata(monkeypatch, user_with_history())
+
+    with pytest.raises(AssertionError):
+        _user_record_backfill(FakeConfig(), collection)
