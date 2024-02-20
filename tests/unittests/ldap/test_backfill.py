@@ -138,10 +138,10 @@ Timestamp = lambda x: datetime.strptime(x, "%Y-%m-%d %H:%M:%S")
 def mongo_db_expected_history():
     return [
         {
-            "name": "first_namelast_name",
+            "name": "first_name last_name",
             "mila_ldap": {
                 "mila_email_username": "user123",
-                "display_name": "first_namelast_name",
+                "display_name": "first_name last_name",
                 "supervisor": "whatever",
                 "co_supervisor": "co_whatever",
                 "status": "Active",
@@ -150,10 +150,10 @@ def mongo_db_expected_history():
             "record_end": Timestamp("2003-01-01 00:00:00"),
         },
         {
-            "name": "first_namelast_name",
+            "name": "first_name last_name",
             "mila_ldap": {
                 "mila_email_username": "user123",
-                "display_name": "first_namelast_name",
+                "display_name": "first_name last_name",
                 "supervisor": "whatever",
                 "co_supervisor": "co_whatever",
                 "status": "Active",
@@ -162,10 +162,10 @@ def mongo_db_expected_history():
             "record_end": Timestamp("2005-01-01 00:00:00"),
         },
         {
-            "name": "first_namelast_name",
+            "name": "first_name last_name",
             "mila_ldap": {
                 "mila_email_username": "user123",
-                "display_name": "first_namelast_name",
+                "display_name": "first_name last_name",
                 "supervisor": "whatever",
                 "co_supervisor": "co_whatever",
                 "status": "Active",
@@ -174,10 +174,10 @@ def mongo_db_expected_history():
             "record_end": Timestamp("2008-01-01 00:00:00"),
         },
         {
-            "name": "first_namelast_name",
+            "name": "first_name last_name",
             "mila_ldap": {
                 "mila_email_username": "user123",
-                "display_name": "first_namelast_name",
+                "display_name": "first_name last_name",
                 "supervisor": "whatever",
                 "co_supervisor": "co_whatever",
                 "status": "Inactive",
@@ -198,7 +198,8 @@ def test_backfill_history_match(monkeypatch):
     assert updates == [], "Should not update anything"
 
 
-def test_backfill_insert_missing_entries(monkeypatch, missing_idx=1):
+@pytest.mark.parametrize("missing_idx", [0, 1, 2])
+def test_backfill_insert_missing_entries(monkeypatch, missing_idx):
     dbstate = mongo_db_expected_history()
 
     partial_history = dbstate[:missing_idx] + dbstate[missing_idx + 1 :]
@@ -211,7 +212,7 @@ def test_backfill_insert_missing_entries(monkeypatch, missing_idx=1):
     assert len(latest) == 1, "Should have a single user"
     assert len(updates) == 1, "Should have one inserrt"
 
-    missing_entry = dbstate[2]
+    missing_entry = dbstate[missing_idx]
     assert isinstance(updates[0], InsertOne)
 
     doc = updates[0]._doc
