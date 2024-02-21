@@ -12,11 +12,10 @@ referenced by "cfg.ldap.mongo_collection_name" will be updated.
 
 import json
 
-import pandas as pd
-
 import sarc.account_matching.make_matches
 import sarc.ldap.mymila
 from sarc.config import config
+from sarc.ldap.mymila import fetch_mymila
 from sarc.ldap.read_mila_ldap import fetch_ldap
 from sarc.ldap.revision import commit_matches_to_database
 
@@ -29,27 +28,7 @@ def run(prompt=False):
 
     LD_users = fetch_ldap(ldap=cfg.ldap)
 
-    mymila_data = sarc.ldap.mymila.query_mymila(cfg.mymila)
-
-    if not mymila_data.empty:
-        df_users = pd.DataFrame(LD_users)
-        mymila_data = mymila_data.rename(columns={"MILA Email": "mila_email_username"})
-
-        df = pd.merge(df_users, mymila_data, on="mila_email_username", how="outer")
-
-        # NOTE: Select columns that should be used from MyMila.
-        LD_users = df[
-            [
-                "mila_email_username",
-                "mila_cluster_username",
-                "mila_cluster_uid",
-                "mila_cluster_gid",
-                "display_name",
-                "supervisor",
-                "co_supervisor",
-                "status",
-            ]
-        ].to_dict("records")
+    LD_users = fetch_mymila(cfg, LD_users)
 
     # Match DRAC/CC to mila accounts
     DLD_data = sarc.account_matching.make_matches.load_data_from_files(

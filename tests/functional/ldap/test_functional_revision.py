@@ -3,6 +3,7 @@ from datetime import datetime
 
 import pymongo
 import pytest
+from sarc_mocks import dictset
 
 from sarc.ldap.api import get_user, users_collection
 from sarc.ldap.revision import commit_matches_to_database, update_user
@@ -37,21 +38,6 @@ def transitions():
         for end_status in statuses:
             all_transitions.append((start_status, end_status))
     return all_transitions
-
-
-def dictset(dictionnary: dict, operation: dict):
-    result = deepcopy(dictionnary)
-
-    for path, value in operation.items():
-        current = result
-        frags = path.split(".")
-
-        for frag in frags[:-1]:
-            current = current.setdefault(frag, dict())
-
-        current[frags[-1]] = value
-
-    return result
 
 
 def insert_user_history(username, history):

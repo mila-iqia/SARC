@@ -1,4 +1,6 @@
 import json
+import os
+import sys
 import tempfile
 import zoneinfo
 from pathlib import Path
@@ -16,6 +18,8 @@ from sarc.config import (
     parse_config,
     using_config,
 )
+
+sys.path.append(os.path.join(os.path.dirname(__file__), "common"))
 
 pytest_plugins = "fabric.testing.fixtures"
 
