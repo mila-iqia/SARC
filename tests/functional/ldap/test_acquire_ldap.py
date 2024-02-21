@@ -78,6 +78,7 @@ def test_acquire_ldap(monkeypatch, mock_file):
 def test_merge_ldap_and_mymila(monkeypatch, mock_file):
     # Set the number of users we want to mock
     nbr_users = 10
+    nbr_profs = 5 # Used only when generating MyMila data
 
     # Define how to mock queries to LDAP
     def mock_query_ldap(
@@ -90,7 +91,7 @@ def test_merge_ldap_and_mymila(monkeypatch, mock_file):
 
     # Define how to mock queries to MyMila
     def mock_query_mymila(tmp_json_path):
-        return fake_mymila_data(nbr_users)
+        return fake_mymila_data(nbr_users, nbr_profs)
 
     monkeypatch.setattr(sarc.ldap.mymila, "query_mymila", mock_query_mymila)
 
@@ -100,13 +101,31 @@ def test_merge_ldap_and_mymila(monkeypatch, mock_file):
 
     # TODO: Add checks for fields coming from mymila now saved in DB
 
+    # -- Supervisor --
+    # According to how MyMila data is emulated, the nbr_profs first users are profs
+    # and the other are students. The first user (John Smith000) is the supervisor or
+    # the nbr_profs+1 user (John Smith<nbr_profs>). Thus, the value in the supervisor field
+    # for the user nbr_profs+1 should be john.smith000@mila.quebec, and its co-supervisor
+    # should be john.smith001@mila.quebec.
+        
+    # Retrieve the user John Smith <nbr_profs+1>
+    student_user = get_user(mila_email_username=f"john.smith{nbr_profs:03d}@mila.quebec").dict()
+
+    assert student_user["supervisor"] == "john.smith000@mila.quebec"
+    assert student_user["co_supervisor"] == "john.smith001@mila.quebec"
+    # ----
+
+
+
+
+
 
 @pytest.mark.parametrize(
         "ldap_supervisor,mymila_supervisor",
         [
             (None, None), # No supervisor in LDAP nor in MyMila
             ("super.visor@mila.quebec", None), # Supervisor only in LDAP
-            (None, "super.visor@mila.quebec"), # Supervisor only in MyMila
+            #(None, "super.visor@mila.quebec"), # Supervisor only in MyMila: this case has already been checked in the previous test
             ("super.visor.ldap@mila.quebec", "super.visor.mymila@mila.quebec") # Supervisor in LDAP and in MyMila
         ]
 )
@@ -226,7 +245,7 @@ def test_supervisor_retrieving(monkeypatch, mock_file, ldap_supervisor, mymila_s
         }
 
         # - Add it to the list
-        
+
 
         # Return the users list
         return users
