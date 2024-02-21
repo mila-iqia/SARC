@@ -322,13 +322,18 @@ def test_query_to_ldap_server_and_commit_to_db(monkeypatch, mock_file):
 
     sorted_order_func = lambda u: u["mila_ldap"]["mila_email_username"]
 
+    def remove_newkeys(obj):
+        obj.pop("record_start", None)
+        obj.pop("record_end", None)
+        return obj
+
     # Make query 1. Find users. Add them to database. Then check that database contents is correct.
     L_users = helper_function(L_first_batch_users)
     for u1, u2 in zip(
         sorted(L_users, key=sorted_order_func),
         sorted(transform_user_list(L_first_batch_users), key=sorted_order_func),
     ):
-        assert u1 == u2
+        assert remove_newkeys(u1) == u2
 
     # Make query 2. Find users. Add them to database. Then check that database contents is correct.
     # Keep in mind that the first batch of users are still there.
@@ -347,8 +352,10 @@ def test_query_to_ldap_server_and_commit_to_db(monkeypatch, mock_file):
 
     L1 = transform_user_list(L_first_batch_users)
     L2 = transform_user_list(L_second_batch_users)
+
     for u in L1:
         u["mila_ldap"]["status"] = "archived"
+
     L_uB = sorted(
         L1 + L2,
         key=sorted_order_func,
@@ -356,4 +363,4 @@ def test_query_to_ldap_server_and_commit_to_db(monkeypatch, mock_file):
 
     assert len(L_uA) == len(L_uB)
     for uA, uB in zip(L_uA, L_uB):
-        assert uA == uB
+        assert remove_newkeys(uA) == uB
