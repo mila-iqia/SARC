@@ -11,7 +11,7 @@ import sarc.ldap.read_mila_ldap  # will monkeypatch "query_ldap"
 from sarc.config import config
 
 
-def fake_member_of(index, count):
+def fake_member_of(index):
     member_of_config = {
         # Core prof
         0: ["cn=mila-core-profs,ou=Groups,dc=mila,dc=quebec"],
@@ -48,7 +48,7 @@ def fake_raw_ldap_data(nbr_users=10):
                 "homeDirectory": [f"/home/john.smith{i:03d}"],
                 "loginShell": ["/bin/bash"],
                 "mail": [f"john.smith{i:03d}@mila.quebec"],
-                "memberOf": fake_member_of(i, nbr_users),
+                "memberOf": fake_member_of(i),
                 "objectClass": [
                     "top",
                     "person",
