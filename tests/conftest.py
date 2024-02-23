@@ -180,7 +180,7 @@ Mysterious Stranger,BigProf,Manager,activated,stranger.person,ms@hotmail.com
     """
     exceptions_json_path = """
     {
-        "not_prof": [],
+        "not_teacher": [],
         "not_student": []
     }
     """
