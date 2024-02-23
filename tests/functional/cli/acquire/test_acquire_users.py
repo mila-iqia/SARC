@@ -165,6 +165,19 @@ def test_acquire_users(cli_main, monkeypatch, mock_file):
     js_user = get_user(drac_account_username="stranger.person")
     assert js_user is None
 
+    # test supervisor overrides
+    js_user = get_user(mila_email_username="john.smith001@mila.quebec")
+    assert js_user is not None
+    assert js_user.mila_ldap["supervisor"] == "john.smith003@mila.quebec"
+    assert js_user.mila_ldap["co-supervisor"] == None
+
+    js_user = get_user(mila_email_username="john.smith002@mila.quebec")
+    assert js_user is not None
+    assert js_user.mila_ldap["supervisor"] == "john.smith003@mila.quebec"
+    assert js_user.mila_ldap["co-supervisor"] == "john.smith004@mila.quebec"
+
+
+
 
 @pytest.mark.usefixtures("empty_read_write_db")
 def test_acquire_users_prompt(cli_main, monkeypatch, file_contents):
@@ -240,3 +253,5 @@ def test_acquire_users_prompt(cli_main, monkeypatch, file_contents):
     assert js_user.drac_members is not None
     assert js_user.drac_members["username"] == "stranger.person"
     assert js_user.drac_roles is None
+
+
