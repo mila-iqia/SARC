@@ -30,6 +30,8 @@ class User(BaseModel):
     mila: Credentials
     drac: Optional[Credentials]
 
+    teacher_delegations: Optional[list[str]] = None
+
     mila_ldap: dict
     drac_members: Optional[dict]
     drac_roles: Optional[dict]
