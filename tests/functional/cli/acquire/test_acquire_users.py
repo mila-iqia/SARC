@@ -169,12 +169,12 @@ def test_acquire_users(cli_main, monkeypatch, mock_file):
     js_user = get_user(mila_email_username="john.smith001@mila.quebec")
     assert js_user is not None
     assert js_user.mila_ldap["supervisor"] == "john.smith003@mila.quebec"
-    assert js_user.mila_ldap["co-supervisor"] == None
+    assert js_user.mila_ldap["co_supervisor"] == None
 
     js_user = get_user(mila_email_username="john.smith002@mila.quebec")
     assert js_user is not None
     assert js_user.mila_ldap["supervisor"] == "john.smith003@mila.quebec"
-    assert js_user.mila_ldap["co-supervisor"] == "john.smith004@mila.quebec"
+    assert js_user.mila_ldap["co_supervisor"] == "john.smith004@mila.quebec"
 
 
 
