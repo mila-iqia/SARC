@@ -176,7 +176,25 @@ def test_acquire_users(cli_main, monkeypatch, mock_file):
     assert js_user.mila_ldap["supervisor"] == "john.smith003@mila.quebec"
     assert js_user.mila_ldap["co_supervisor"] == "john.smith004@mila.quebec"
 
+    # test delegations
+    # john.smith003 should have delegations for john.smith004 and john.smith005
+    # john.smith004 should have no delegations
+    # john.smith005 should have no delegations
 
+    js_user = get_user(mila_email_username="john.smith003@mila.quebec")
+    assert js_user is not None
+    assert js_user.teacher_delegations is not None
+    assert "john.smith004@mila.quebec" in js_user.teacher_delegations
+    assert "john.smith005@mila.quebec" in js_user.teacher_delegations
+    assert "john.smith006@mila.quebec" not in js_user.teacher_delegations
+
+    js_user = get_user(mila_email_username="john.smith004@mila.quebec")
+    assert js_user is not None
+    assert js_user.teacher_delegations == None
+
+    js_user = get_user(mila_email_username="john.smith005@mila.quebec")
+    assert js_user is not None
+    assert js_user.teacher_delegations == None
 
 
 @pytest.mark.usefixtures("empty_read_write_db")
@@ -253,5 +271,3 @@ def test_acquire_users_prompt(cli_main, monkeypatch, file_contents):
     assert js_user.drac_members is not None
     assert js_user.drac_members["username"] == "stranger.person"
     assert js_user.drac_roles is None
-
-

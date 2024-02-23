@@ -207,11 +207,9 @@ def resolve_supervisors(
         # if there is a supervisors override, use it whatever the student status may be
         print(f"person.ldap = {person.ldap}")
         if person.ldap["mail"][0] in exceptions.get("supervisors_overrides", []):
-            supervisors = exceptions["supervisors_overrides"][
-                person.ldap["mail"][0]
-            ]  
+            supervisors = exceptions["supervisors_overrides"][person.ldap["mail"][0]]
             person.ldap["supervisor"] = None
-            person.ldap["co_supervisor"] = None 
+            person.ldap["co_supervisor"] = None
             if len(supervisors) >= 1:
                 person.ldap["supervisor"] = supervisors[0]
             else:
@@ -219,7 +217,7 @@ def resolve_supervisors(
             if len(supervisors) >= 2:
                 person.ldap["co_supervisor"] = supervisors[1]
             else:
-                person.ldap["co_supervisor"] = None    
+                person.ldap["co_supervisor"] = None
 
         elif person.is_student:
             person.ldap["is_student"] = True
