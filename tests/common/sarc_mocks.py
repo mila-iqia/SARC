@@ -310,7 +310,7 @@ def fake_raw_ldap_data(nbr_users=10, hardcoded_values_by_user = {}):
                 "uid": _define_value(i, "uid", [f"john.smith{i:03d}"]),
                 "uidNumber": _define_value(i, "uidNumber", [str(1500000001 + i)]),
                 "supervisor": _define_value(i, "supervisor", None),
-                "co_supervisor": _define_value(i, "supervisor", None)
+                "co_supervisor": _define_value(i, "co_supervisor", None)
             }
             for i in range(nbr_users)
         ]

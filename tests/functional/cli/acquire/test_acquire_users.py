@@ -214,6 +214,98 @@ def test_acquire_users_supervisors(
     assert js_user.mila_ldap["supervisor"] == expected_supervisor
 
 
+@pytest.mark.parametrize(
+    "ldap_co_supervisor,mymila_co_supervisor,expected_co_supervisor",
+    [
+        (None, None, None),  # No co-supervisor in LDAP nor in MyMila
+        (
+            "co.super.visor@mila.quebec",
+            None,
+            "co.super.visor@mila.quebec",
+        ),  # Cosupervisor only in LDAP
+        (
+            None,
+            "co.super.visor@mila.quebec",
+            "co.super.visor@mila.quebec",
+        ),  # Cosupervisor only in MyMila: this case has already been checked in the previous test
+        (
+            "co.super.visor.ldap@mila.quebec",
+            "co.super.visor.mymila@mila.quebec",
+            "co.super.visor.mymila@mila.quebec",
+        ),  # Cosupervisor in LDAP and in MyMila
+    ],
+)
+@pytest.mark.usefixtures("empty_read_write_db")
+def test_acquire_users_co_supervisors(
+    cli_main,
+    monkeypatch,
+    mock_file,
+    ldap_co_supervisor,
+    mymila_co_supervisor,
+    expected_co_supervisor,
+):
+    """
+    This function tests the co-supervisor retrieving from LDAP and MyMila data.
+
+    Parameters:
+        ldap_co_supervisor     The co-supervisor we want in the fake LDAP data used for this test
+        mymila_co_supervisor   The co-supervisor we want in the fake MyMila data used for this test
+        expected_co_supervisor The co-supervisor we expect as the one to be stored in the database
+    """
+    # Define the number of users and professors
+    nbr_users = 4
+    nbr_profs = 2
+
+    # Mock the fake LDAP data used for the tests
+    def mock_query_ldap(
+        local_private_key_file, local_certificate_file, ldap_service_uri
+    ):
+        assert ldap_service_uri.startswith("ldaps://")
+        return fake_raw_ldap_data(
+            nbr_users,
+            hardcoded_values_by_user={
+                2: {  # The first user who is not a prof is the one with index 2
+                    "co_supervisor": ldap_co_supervisor
+                }
+            },
+        )
+
+    monkeypatch.setattr(sarc.ldap.read_mila_ldap, "query_ldap", mock_query_ldap)
+
+    # Mock the fake MyMila data used for the tests
+    def mock_query_mymila(tmp_json_path):
+        return fake_mymila_data(
+            nbr_users=nbr_users,
+            nbr_profs=nbr_profs,
+            hardcoded_values_by_user={
+                2: {  # The first user who is not a prof is the one with index 2
+                    "Co-Supervisor": mymila_co_supervisor
+                }
+            },
+        )
+
+    monkeypatch.setattr(sarc.ldap.mymila, "query_mymila", mock_query_mymila)
+
+    # Patch the built-in `open()` function for each file path
+    with patch("builtins.open", side_effect=mock_file):
+        # sarc.ldap.acquire.run()
+        assert (
+            cli_main(
+                [
+                    "acquire",
+                    "users",
+                ]
+            )
+            == 0
+        )
+
+    # Validate the results of all of this by inspecting the database.
+    js_user = get_user(
+        mila_email_username=f"john.smith002@mila.quebec"
+    )  # We modified the user with index 2; thus this is the one we retrieve
+    assert js_user.mila_ldap["co_supervisor"] == expected_co_supervisor
+
+
 @pytest.mark.usefixtures("empty_read_write_db")
 def test_acquire_users_prompt(cli_main, monkeypatch, file_contents):
     """Test command line `sarc acquire users --prompt`."""
