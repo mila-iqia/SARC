@@ -9,52 +9,8 @@ import sarc.account_matching.make_matches
 import sarc.ldap.acquire
 import sarc.ldap.read_mila_ldap  # will monkeypatch "query_ldap"
 from sarc.config import config
+from tests.common.sarc_mocks import fake_raw_ldap_data, fake_mymila_data
 from sarc.ldap.api import get_user
-
-
-def fake_raw_ldap_data(nbr_users=10):
-    """
-    Return a deterministically-generated list of fake LDAP users just as
-    they would be returned by the function `query_ldap`.
-    This is used for mocking the LDAP server.
-    """
-    return list(
-        [
-            {
-                "apple-generateduid": ["AF54098F-29AE-990A-B1AC-F63F5A89B89"],
-                "cn": [f"john.smith{i:03d}", f"John Smith{i:03d}"],
-                "departmentNumber": [],
-                "displayName": [f"John Smith the {i:03d}rd"],
-                "employeeNumber": [],
-                "employeeType": [],
-                "gecos": [""],
-                "gidNumber": [str(1500000001 + i)],
-                "givenName": ["John"],
-                "googleUid": [f"john.smith{i:03d}"],
-                "homeDirectory": [f"/home/john.smith{i:03d}"],
-                "loginShell": ["/bin/bash"],
-                "mail": [f"john.smith{i:03d}@mila.quebec"],
-                "memberOf": [],
-                "objectClass": [
-                    "top",
-                    "person",
-                    "organizationalPerson",
-                    "inetOrgPerson",
-                    "posixAccount",
-                ],
-                "physicalDeliveryOfficeName": [],
-                "posixUid": [f"smithj{i:03d}"],
-                "sn": [f"Smith {i:03d}"],
-                "suspended": ["false"],
-                "telephoneNumber": [],
-                "title": [],
-                "uid": [f"john.smith{i:03d}"],
-                "uidNumber": [str(1500000001 + i)],
-            }
-            for i in range(nbr_users)
-        ]
-    )
-
 
 import random
 
@@ -164,6 +120,98 @@ def test_acquire_users(cli_main, monkeypatch, mock_file):
     # test the absence of the mysterious stranger
     js_user = get_user(drac_account_username="stranger.person")
     assert js_user is None
+
+
+@pytest.mark.parametrize(
+    "ldap_supervisor,mymila_supervisor,expected_supervisor",
+    [
+        (None, None, None),  # No supervisor in LDAP nor in MyMila
+        (
+            "super.visor@mila.quebec",
+            None,
+            "super.visor@mila.quebec",
+        ),  # Supervisor only in LDAP
+        (
+            None,
+            "super.visor@mila.quebec",
+            "super.visor@mila.quebec",
+        ),  # Supervisor only in MyMila: this case has already been checked in the previous test
+        (
+            "super.visor.ldap@mila.quebec",
+            "super.visor.mymila@mila.quebec",
+            "super.visor.mymila@mila.quebec",
+        ),  # Supervisor in LDAP and in MyMila
+    ],
+)
+@pytest.mark.usefixtures("empty_read_write_db")
+def test_acquire_users_supervisors(
+    cli_main,
+    monkeypatch,
+    mock_file,
+    ldap_supervisor,
+    mymila_supervisor,
+    expected_supervisor,
+):
+    """
+    This function tests the supervisor retrieving from LDAP and MyMila data.
+
+    Parameters:
+        ldap_supervisor     The supervisor we want in the fake LDAP data used for this test
+        mymila_supervisor   The supervisor we want in the fake MyMila data used for this test
+        expected_supervisor The supervisor we expect as the one to be stored in the database
+    """
+    # Define the number of users and professors
+    nbr_users = 4
+    nbr_profs = 2
+
+    # Mock the fake LDAP data used for the tests
+    def mock_query_ldap(
+        local_private_key_file, local_certificate_file, ldap_service_uri
+    ):
+        assert ldap_service_uri.startswith("ldaps://")
+        return fake_raw_ldap_data(
+            nbr_users,
+            hardcoded_values_by_user={
+                2: {  # The first user who is not a prof is the one with index 2
+                    "supervisor": ldap_supervisor
+                }
+            },
+        )
+
+    monkeypatch.setattr(sarc.ldap.read_mila_ldap, "query_ldap", mock_query_ldap)
+
+    # Mock the fake MyMila data used for the tests
+    def mock_query_mymila(tmp_json_path):
+        return fake_mymila_data(
+            nbr_users=nbr_users,
+            nbr_profs=nbr_profs,
+            hardcoded_values_by_user={
+                2: {  # The first user who is not a prof is the one with index 2
+                    "Supervisor Principal": mymila_supervisor
+                }
+            },
+        )
+
+    monkeypatch.setattr(sarc.ldap.mymila, "query_mymila", mock_query_mymila)
+
+    # Patch the built-in `open()` function for each file path
+    with patch("builtins.open", side_effect=mock_file):
+        # sarc.ldap.acquire.run()
+        assert (
+            cli_main(
+                [
+                    "acquire",
+                    "users",
+                ]
+            )
+            == 0
+        )
+
+    # Validate the results of all of this by inspecting the database.
+    js_user = get_user(
+        mila_email_username=f"john.smith002@mila.quebec"
+    )  # We modified the user with index 2; thus this is the one we retrieve
+    assert js_user.mila_ldap["supervisor"] == expected_supervisor
 
 
 @pytest.mark.usefixtures("empty_read_write_db")
