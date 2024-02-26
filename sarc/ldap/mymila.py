@@ -63,7 +63,9 @@ def combine(LD_users, mymila_data):
         # Preprocess
         mymila_data = mymila_data.rename(columns={"MILA Email": "mila_email_username"})
         # Set the empty values to NA
-        mymila_data = mymila_data.where((pd.notnull(mymila_data)) & (mymila_data != ""), pd.NA)
+        mymila_data = mymila_data.where(
+            (pd.notnull(mymila_data)) & (mymila_data != ""), pd.NA
+        )
 
         if LD_users:
             df = pd.merge(df_users, mymila_data, on="mila_email_username", how="outer")
