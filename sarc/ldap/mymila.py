@@ -57,9 +57,13 @@ def to_records(df):
 def combine(LD_users, mymila_data):
     if not mymila_data.empty:
         df_users = pd.DataFrame(LD_users)
+        # Set the empty values to NA
+        df_users = df_users.where((pd.notnull(df_users)) & (df_users != ""), pd.NA)
 
         # Preprocess
         mymila_data = mymila_data.rename(columns={"MILA Email": "mila_email_username"})
+        # Set the empty values to NA
+        mymila_data = mymila_data.where((pd.notnull(mymila_data)) & (mymila_data != ""), pd.NA)
 
         if LD_users:
             df = pd.merge(df_users, mymila_data, on="mila_email_username", how="outer")
