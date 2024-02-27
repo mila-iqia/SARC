@@ -201,8 +201,8 @@ def mymila_entry_builder(nbr_profs=5, hardcoded_values_by_user={}):
             mymila_template,
             {
                 "Status": _define_value(i, "Status", status[i % len(status)]),
-                "Last Name": _define_value(i, "Last Name", first_name),
-                "First Name": _define_value(i, "First Name", last_name),
+                "Last Name": _define_value(i, "Last Name", last_name),
+                "First Name": _define_value(i, "First Name", first_name),
                 "Preferred First Name": _define_value(
                     i, "Preferred First Name", first_name
                 ),

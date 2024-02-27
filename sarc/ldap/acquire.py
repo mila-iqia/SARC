@@ -30,6 +30,21 @@ def run(prompt=False):
 
     LD_users = fetch_mymila(cfg, LD_users)
 
+    # For each supervisor or co-supervisor, look for a mila_email_username
+    # matching the display name. If None has been found, the previous value remains
+    for supervisor_key in ["supervisor", "co_supervisor"]:
+        for user in LD_users:
+            if (
+                supervisor_key in user
+                and user[supervisor_key] is not None
+                and not "@mila.quebec" in user[supervisor_key].lower()
+            ):
+                for potential_supervisor in LD_users:
+                    if potential_supervisor["display_name"] == user[supervisor_key]:
+                        user[supervisor_key] = potential_supervisor[
+                            "mila_email_username"
+                        ]
+
     # Match DRAC/CC to mila accounts
     DLD_data = sarc.account_matching.make_matches.load_data_from_files(
         {

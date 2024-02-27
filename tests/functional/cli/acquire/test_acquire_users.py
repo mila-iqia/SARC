@@ -225,13 +225,13 @@ def test_acquire_users_supervisors(
         ),  # Cosupervisor only in LDAP
         (
             None,
-            "co.super.visor@mila.quebec",
-            "co.super.visor@mila.quebec",
+            "John Smith001",
+            "john.smith001@mila.quebec",
         ),  # Cosupervisor only in MyMila: this case has already been checked in the previous test
         (
             "co.super.visor.ldap@mila.quebec",
-            "co.super.visor.mymila@mila.quebec",
-            "co.super.visor.mymila@mila.quebec",
+            "John Smith001",
+            "john.smith001@mila.quebec",
         ),  # Cosupervisor in LDAP and in MyMila
     ],
 )
