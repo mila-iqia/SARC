@@ -1,5 +1,6 @@
 import io
 import json
+import random
 from io import StringIO
 from unittest.mock import MagicMock, mock_open, patch
 
@@ -9,10 +10,8 @@ import sarc.account_matching.make_matches
 import sarc.ldap.acquire
 import sarc.ldap.read_mila_ldap  # will monkeypatch "query_ldap"
 from sarc.config import config
-from tests.common.sarc_mocks import fake_raw_ldap_data, fake_mymila_data
 from sarc.ldap.api import get_user
-
-import random
+from tests.common.sarc_mocks import fake_mymila_data, fake_raw_ldap_data
 
 
 class MyStringIO(StringIO):
