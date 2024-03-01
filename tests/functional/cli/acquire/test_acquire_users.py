@@ -194,6 +194,10 @@ def test_acquire_users_supervisors(
     nbr_users = 4
     nbr_profs = 2
 
+    # for the test we will use the user with index 3,
+    # which is the first user who has no supervisor override in the mock data
+    # so that this test won't be affected by the previous test
+
     # Mock the fake LDAP data used for the tests
     def mock_query_ldap(
         local_private_key_file, local_certificate_file, ldap_service_uri
@@ -202,7 +206,7 @@ def test_acquire_users_supervisors(
         return fake_raw_ldap_data(
             nbr_users,
             hardcoded_values_by_user={
-                2: {  # The first user who is not a prof is the one with index 2
+                3: {  # The first user who is not a prof is the one with index 3
                     "supervisor": ldap_supervisor
                 }
             },
@@ -216,7 +220,7 @@ def test_acquire_users_supervisors(
             nbr_users=nbr_users,
             nbr_profs=nbr_profs,
             hardcoded_values_by_user={
-                2: {  # The first user who is not a prof is the one with index 2
+                3: {  # The first user who is not a prof is the one with index 3
                     "Supervisor Principal": mymila_supervisor
                 }
             },
@@ -239,8 +243,8 @@ def test_acquire_users_supervisors(
 
     # Validate the results of all of this by inspecting the database.
     js_user = get_user(
-        mila_email_username=f"john.smith002@mila.quebec"
-    )  # We modified the user with index 2; thus this is the one we retrieve
+        mila_email_username=f"john.smith003@mila.quebec"    
+    )  # We modified the user with index 3; thus this is the one we retrieve
     assert js_user.mila_ldap["supervisor"] == expected_supervisor
 
 
@@ -286,6 +290,10 @@ def test_acquire_users_co_supervisors(
     nbr_users = 4
     nbr_profs = 2
 
+    # for the test we will use the user with index 3,
+    # which is the first user who has no supervisor override in the mock data
+    # so that this test won't be affected by the previous test
+
     # Mock the fake LDAP data used for the tests
     def mock_query_ldap(
         local_private_key_file, local_certificate_file, ldap_service_uri
@@ -294,7 +302,7 @@ def test_acquire_users_co_supervisors(
         return fake_raw_ldap_data(
             nbr_users,
             hardcoded_values_by_user={
-                2: {  # The first user who is not a prof is the one with index 2
+                3: {  # The first user who is not a prof is the one with index 3
                     "co_supervisor": ldap_co_supervisor
                 }
             },
@@ -308,7 +316,7 @@ def test_acquire_users_co_supervisors(
             nbr_users=nbr_users,
             nbr_profs=nbr_profs,
             hardcoded_values_by_user={
-                2: {  # The first user who is not a prof is the one with index 2
+                3: {  # The first user who is not a prof is the one with index 3
                     "Co-Supervisor": mymila_co_supervisor
                 }
             },
@@ -331,8 +339,8 @@ def test_acquire_users_co_supervisors(
 
     # Validate the results of all of this by inspecting the database.
     js_user = get_user(
-        mila_email_username=f"john.smith002@mila.quebec"
-    )  # We modified the user with index 2; thus this is the one we retrieve
+        mila_email_username=f"john.smith003@mila.quebec"
+    )  # We modified the user with index 3; thus this is the one we retrieve
     assert js_user.mila_ldap["co_supervisor"] == expected_co_supervisor
 
 
