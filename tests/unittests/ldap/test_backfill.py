@@ -32,7 +32,6 @@ def userhistory(email, history):
     latest_record = base_user
 
     for start, fields in history:
-
         if prev_fields is not None:
             prev_fields["End Date with MILA"] = start
             latest_record = dictset(latest_record, prev_fields)

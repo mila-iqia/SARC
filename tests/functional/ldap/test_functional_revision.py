@@ -74,7 +74,6 @@ def user_with_history(username):
 
 @pytest.mark.usefixtures("write_setup")
 def test_get_user_fetch_latest():
-
     user_with_history("user1")
 
     #
@@ -140,7 +139,6 @@ def test_update_status_nodb_snapshots(status):
 @pytest.mark.usefixtures("write_setup")
 @pytest.mark.parametrize("status", statuses)
 def test_update_status_db_nosnapshots(status):
-
     collection = users_collection().get_collection()
     update_user(collection, make_user(status))
     users = user_dict([])
@@ -171,7 +169,6 @@ def test_update_status_db_nosnapshots(status):
 @pytest.mark.usefixtures("write_setup")
 @pytest.mark.parametrize("start,end", transitions())
 def test_update_status_users_exists_on_both(start, end):
-
     collection = users_collection().get_collection()
     update_user(collection, make_user(start, record_start=datetime(2000, 1, 1)))
     documents_before = list(collection.find({}))
