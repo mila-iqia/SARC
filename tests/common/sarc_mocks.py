@@ -17,14 +17,6 @@ _membership_types = [
     ],
 ]
 _affiliation_types = [
-    # Prof
-    [
-        "Collaborating Alumni",
-        "Collaborating researcher",
-        "HQP - Postdoctorate",
-        "visiting researcher",
-        "",
-    ],
     # Student
     [
         "HQP - DESS",
@@ -33,6 +25,14 @@ _affiliation_types = [
         "HQP - Professional Master's",
         "HQP - Undergraduate",
         "Research Intern",
+        "",
+    ],
+    # Prof
+    [
+        "Collaborating Alumni",
+        "Collaborating researcher",
+        "HQP - Postdoctorate",
+        "visiting researcher",
         "",
     ],
 ]
