@@ -1,6 +1,7 @@
 from opentelemetry.trace import get_tracer
 from opentelemetry.trace import Status, StatusCode
 
+
 def test_trace1(captrace):
     tracer = get_tracer('test_trace1')
 

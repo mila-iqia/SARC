@@ -114,6 +114,12 @@ def test_config(request, standard_config):
 
 @pytest.fixture
 def captrace():
+    """
+    To get the captured traces, use the `.get_finished_traces()`
+    method on the captrace object in your test method. This will
+    return a list of ReadableSpan objects documented here:
+    https://opentelemetry-python.readthedocs.io/en/latest/sdk/trace.html#opentelemetry.sdk.trace.ReadableSpan
+    """
     _exporter.clear()
     yield _exporter
     _exporter.clear()
