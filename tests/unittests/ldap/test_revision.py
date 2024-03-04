@@ -139,7 +139,6 @@ def test_ldap_update_status_db_noldap(status):
 
 @pytest.mark.parametrize("start,end", transitions())
 def test_ldap_update_status_users_exists_on_both(start, end):
-
     collection = MockCollection(
         [STANDARD_USER, make_user(start, record_start=datetime(2000, 1, 1))]
     )

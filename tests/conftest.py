@@ -6,6 +6,18 @@ import zoneinfo
 from pathlib import Path
 from unittest.mock import MagicMock, mock_open, patch
 
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+from opentelemetry.trace import get_tracer_provider, set_tracer_provider
+
+_tracer_provider = TracerProvider()
+_exporter = InMemorySpanExporter()
+_tracer_provider.add_span_processor(SimpleSpanProcessor(_exporter))
+set_tracer_provider(_tracer_provider)
+del _tracer_provider
+
+
 import pytest
 from _pytest.monkeypatch import MonkeyPatch
 
@@ -98,6 +110,19 @@ def test_config(request, standard_config):
     )
     with using_config(conf):
         yield conf
+
+
+@pytest.fixture
+def captrace():
+    """
+    To get the captured traces, use the `.get_finished_traces()`
+    method on the captrace object in your test method. This will
+    return a list of ReadableSpan objects documented here:
+    https://opentelemetry-python.readthedocs.io/en/latest/sdk/trace.html#opentelemetry.sdk.trace.ReadableSpan
+    """
+    _exporter.clear()
+    yield _exporter
+    _exporter.clear()
 
 
 @pytest.fixture
