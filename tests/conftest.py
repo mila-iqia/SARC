@@ -6,10 +6,10 @@ import zoneinfo
 from pathlib import Path
 from unittest.mock import MagicMock, mock_open, patch
 
-from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
-from opentelemetry.trace import set_tracer_provider, get_tracer_provider
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+from opentelemetry.trace import get_tracer_provider, set_tracer_provider
 
 _tracer_provider = TracerProvider()
 _exporter = InMemorySpanExporter()
