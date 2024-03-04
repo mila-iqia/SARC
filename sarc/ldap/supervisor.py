@@ -177,6 +177,7 @@ def _extract_supervisors_from_groups(
     return sorted(supervisors, key=sortkey, reverse=True)
 
 
+# pylint: disable=too-many-branches
 def resolve_supervisors(
     ldap_people: list[dict], group_to_prof: dict, exceptions: dict
 ) -> SupervisorMatchingErrors:
@@ -204,7 +205,22 @@ def resolve_supervisors(
         people.append(result)
 
     for person in people:
-        if person.is_student:
+        # if there is a supervisors override, use it whatever the student status may be
+        if exceptions and person.ldap["mail"][0] in exceptions.get(
+            "supervisors_overrides", []
+        ):
+            supervisors = exceptions["supervisors_overrides"][person.ldap["mail"][0]]
+            person.ldap["supervisor"] = None
+            person.ldap["co_supervisor"] = None
+            if len(supervisors) >= 1:
+                person.ldap["supervisor"] = supervisors[0]
+            else:
+                person.ldap["supervisor"] = None
+            if len(supervisors) >= 2:
+                person.ldap["co_supervisor"] = supervisors[1]
+            else:
+                person.ldap["co_supervisor"] = None
+        elif person.is_student:
             person.ldap["is_student"] = True
 
             supervisors = _extract_supervisors_from_groups(
