@@ -6,6 +6,18 @@ import zoneinfo
 from pathlib import Path
 from unittest.mock import MagicMock, mock_open, patch
 
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.trace import set_tracer_provider, get_tracer_provider
+
+_tracer_provider = TracerProvider()
+_exporter = InMemorySpanExporter()
+_tracer_provider.add_span_processor(SimpleSpanProcessor(_exporter))
+set_tracer_provider(_tracer_provider)
+del _tracer_provider
+
+
 import pytest
 from _pytest.monkeypatch import MonkeyPatch
 
@@ -98,6 +110,13 @@ def test_config(request, standard_config):
     )
     with using_config(conf):
         yield conf
+
+
+@pytest.fixture
+def captrace():
+    _exporter.clear()
+    yield _exporter
+    _exporter.clear()
 
 
 @pytest.fixture
