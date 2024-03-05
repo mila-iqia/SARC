@@ -1,6 +1,8 @@
+import logging
 from pathlib import Path
 
 import pytest
+from opentelemetry.trace import Status, StatusCode, get_tracer
 
 import sarc.storage.mila
 from sarc.ldap.api import Credentials, User
@@ -62,9 +64,10 @@ def mock_get_users():
     "test_config", [{"clusters": {"mila": {"host": "mila"}}}], indirect=True
 )
 def test_mila_fetch_diskusage_single(
-    test_config, monkeypatch, cli_main, file_regression
+    test_config, monkeypatch, cli_main, file_regression, caplog, captrace
 ):
     count = 0
+    caplog.set_level(logging.INFO)
 
     def mock_get_report(*args):
         nonlocal count
@@ -92,6 +95,16 @@ def test_mila_fetch_diskusage_single(
     assert len(data) == 1
     # report = sarc.storage.mila.fetch_diskusage_report(cluster=test_config.clusters["mila"])
     file_regression.check(data[0].json(exclude={"id": True}, indent=4))
+
+    # check logging
+    assert caplog.text.__contains__("Acquiring mila storages report...")
+
+    # check traces
+    traces = captrace.get_finished_spans()
+    assert len(traces) == 1  # only one cluster was acquired
+    assert traces[0].name == "cluster"
+    assert traces[0].attributes["cluster_name"] == "mila"
+    assert traces[0].status.status_code == StatusCode.OK
 
 
 @pytest.mark.freeze_time("2023-07-25")
