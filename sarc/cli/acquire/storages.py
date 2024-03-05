@@ -27,6 +27,7 @@ class AcquireStorages:
             with using_trace("AcquireStorages", "cluster") as span:
                 span.set_attribute("cluster_name", cluster_name)
 
+                # pylint: disable=logging-fstring-interpolation
                 logging.info(f"Acquiring {cluster_name} storages report...")
                 span.add_event(f"Acquiring {cluster_name} storages report...")
 

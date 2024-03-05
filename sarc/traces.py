@@ -12,7 +12,7 @@ def using_trace(tracer_name: str, span_name: str):
         try:
             yield span
             span.set_status(Status(StatusCode.OK))
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             span.set_status(Status(StatusCode.ERROR))
             span.record_exception(exc)
         finally:
