@@ -2,7 +2,7 @@ import logging
 from pathlib import Path
 
 import pytest
-from opentelemetry.trace import Status, StatusCode, get_tracer
+from opentelemetry.trace import StatusCode
 
 import sarc.storage.mila
 from sarc.ldap.api import Credentials, User
@@ -104,6 +104,7 @@ def test_mila_fetch_diskusage_single(
     assert len(traces) == 1  # only one cluster was acquired
     assert traces[0].name == "cluster"
     assert traces[0].attributes["cluster_name"] == "mila"
+    assert "Acquiring mila storages report..." in [e.name for e in traces[0].events]
     assert traces[0].status.status_code == StatusCode.OK
 
 
