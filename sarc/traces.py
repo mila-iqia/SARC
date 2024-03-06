@@ -11,6 +11,7 @@ def using_trace(
 ):  # pylint: disable=dangerous-default-value
     """
     Context manager to manage traces & span, and catch exceptions (in span) without breaking the whole program execution.
+
     Parameters
     ----------
     tracer_name : str
