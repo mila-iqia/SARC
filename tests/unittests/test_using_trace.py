@@ -46,7 +46,7 @@ def test_using_trace_expected_exception(captrace):
     with using_trace(
         "test_using_trace_default_exception",
         "span2",
-        exception_types=[ZeroDivisionError],
+        exception_types=(ZeroDivisionError,),
     ) as span:
         span.add_event("event1")
         a = 1 / 0
