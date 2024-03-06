@@ -20,6 +20,7 @@ def using_trace(
     exception_types : list
         Types of exceptions to catch, other types will be raised.
         By default, `Exception` is caught so that nothing would be raised.
+
     Yields
     ------
     span : opentelemetry.trace.Span
