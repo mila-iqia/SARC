@@ -1,4 +1,4 @@
-# test the traces helper context manager
+# test the spans helper context manager
 
 import pytest
 from opentelemetry.trace import Status, StatusCode, get_tracer
@@ -13,18 +13,18 @@ def test_using_trace_noerror(captrace):
         span.add_event("event2.1")
         span.add_event("event2.2")
 
-    # check traces
-    traces = captrace.get_finished_spans()
-    assert len(traces) == 2
-    assert traces[0].name == "span1"
-    assert len(traces[0].events) == 1
-    assert "event1" in [e.name for e in traces[0].events]
-    assert traces[0].status.status_code == StatusCode.OK
-    assert traces[1].name == "span2"
-    assert len(traces[1].events) == 2
-    assert "event2.1" in [e.name for e in traces[1].events]
-    assert "event2.2" in [e.name for e in traces[1].events]
-    assert traces[1].status.status_code == StatusCode.OK
+    # check spans
+    spans = captrace.get_finished_spans()
+    assert len(spans) == 2
+    assert spans[0].name == "span1"
+    assert len(spans[0].events) == 1
+    assert "event1" in [e.name for e in spans[0].events]
+    assert spans[0].status.status_code == StatusCode.OK
+    assert spans[1].name == "span2"
+    assert len(spans[1].events) == 2
+    assert "event2.1" in [e.name for e in spans[1].events]
+    assert "event2.2" in [e.name for e in spans[1].events]
+    assert spans[1].status.status_code == StatusCode.OK
 
 
 def test_using_trace_default_exception(captrace):
@@ -33,10 +33,10 @@ def test_using_trace_default_exception(captrace):
     with using_trace("test_using_trace_default_exception", "span2") as span:
         span.add_event("event1")
         raise Exception("test exception")
-    traces = captrace.get_finished_spans()
-    assert len(traces) == 2
-    assert traces[0].status.status_code == StatusCode.OK
-    assert traces[1].status.status_code == StatusCode.ERROR
+    spans = captrace.get_finished_spans()
+    assert len(spans) == 2
+    assert spans[0].status.status_code == StatusCode.OK
+    assert spans[1].status.status_code == StatusCode.ERROR
 
 
 def test_using_trace_expected_exception(captrace):
@@ -51,10 +51,10 @@ def test_using_trace_expected_exception(captrace):
         span.add_event("event1")
         a = 1 / 0
 
-    traces = captrace.get_finished_spans()
-    assert len(traces) == 2
-    assert traces[0].status.status_code == StatusCode.OK
-    assert traces[1].status.status_code == StatusCode.ERROR
+    spans = captrace.get_finished_spans()
+    assert len(spans) == 2
+    assert spans[0].status.status_code == StatusCode.OK
+    assert spans[1].status.status_code == StatusCode.ERROR
 
 
 def test_using_trace_unexpected_exception(captrace):
@@ -70,10 +70,10 @@ def test_using_trace_unexpected_exception(captrace):
             span.add_event("event1")
             assert False
 
-    traces = captrace.get_finished_spans()
-    assert len(traces) == 2
-    assert traces[0].status.status_code == StatusCode.OK
-    assert traces[1].status.status_code == StatusCode.ERROR
+    spans = captrace.get_finished_spans()
+    assert len(spans) == 2
+    assert spans[0].status.status_code == StatusCode.OK
+    assert spans[1].status.status_code == StatusCode.ERROR
 
 
 def test_using_trace_noerror_nested_1_tracer(captrace):
@@ -84,21 +84,21 @@ def test_using_trace_noerror_nested_1_tracer(captrace):
             span2.add_event("event2")
         span.add_event("event1.2")
 
-    # check traces
-    traces = captrace.get_finished_spans()
-    print(f"traces: {traces}")
-    assert len(traces) == 2
+    # check spans
+    spans = captrace.get_finished_spans()
+    print(f"spans: {spans}")
+    assert len(spans) == 2
 
     assert (
-        traces[0].name == "span2"
+        spans[0].name == "span2"
     )  # spans are in their order of ending, so span2 is first
-    assert len(traces[0].events) == 1
-    assert traces[0].events[0].name == "event2"
+    assert len(spans[0].events) == 1
+    assert spans[0].events[0].name == "event2"
 
-    assert traces[1].name == "span1"
-    assert len(traces[1].events) == 2
-    assert "event1.1" in [e.name for e in traces[1].events]
-    assert "event1.2" in [e.name for e in traces[1].events]
+    assert spans[1].name == "span1"
+    assert len(spans[1].events) == 2
+    assert "event1.1" in [e.name for e in spans[1].events]
+    assert "event1.2" in [e.name for e in spans[1].events]
 
 
 def test_using_trace_noerror_nested_2_tracers(captrace):
@@ -109,21 +109,21 @@ def test_using_trace_noerror_nested_2_tracers(captrace):
             span2.add_event("event2")
         span.add_event("event1.2")
 
-    # check traces
-    traces = captrace.get_finished_spans()
-    print(f"traces: {traces}")
-    assert len(traces) == 2
+    # check spans
+    spans = captrace.get_finished_spans()
+    print(f"spans: {spans}")
+    assert len(spans) == 2
 
     assert (
-        traces[0].name == "span2"
+        spans[0].name == "span2"
     )  # spans are in their order of ending, so span2 is first
-    assert len(traces[0].events) == 1
-    assert traces[0].events[0].name == "event2"
+    assert len(spans[0].events) == 1
+    assert spans[0].events[0].name == "event2"
 
-    assert traces[1].name == "span1"
-    assert len(traces[1].events) == 2
-    assert "event1.1" in [e.name for e in traces[1].events]
-    assert "event1.2" in [e.name for e in traces[1].events]
+    assert spans[1].name == "span1"
+    assert len(spans[1].events) == 2
+    assert "event1.1" in [e.name for e in spans[1].events]
+    assert "event1.2" in [e.name for e in spans[1].events]
 
 
 def test_using_trace_error_nested(captrace):
@@ -139,21 +139,21 @@ def test_using_trace_error_nested(captrace):
             a = 1 / 0
         span.add_event("event1.2")
 
-    # check traces
-    traces = captrace.get_finished_spans()
-    print(f"traces: {traces}")
-    assert len(traces) == 2
+    # check spans
+    spans = captrace.get_finished_spans()
+    print(f"spans: {spans}")
+    assert len(spans) == 2
 
     assert (
-        traces[0].name == "span2"
+        spans[0].name == "span2"
     )  # spans are in their order of ending, so span2 is first
-    assert len(traces[0].events) == 2
-    assert traces[0].events[0].name == "event2"
-    assert traces[0].events[1].name == "exception"
-    assert traces[0].status.status_code == StatusCode.ERROR
+    assert len(spans[0].events) == 2
+    assert spans[0].events[0].name == "event2"
+    assert spans[0].events[1].name == "exception"
+    assert spans[0].status.status_code == StatusCode.ERROR
 
-    assert traces[1].name == "span1"
-    assert len(traces[1].events) == 2
-    assert "event1.1" in [e.name for e in traces[1].events]
-    assert "event1.2" in [e.name for e in traces[1].events]
-    assert traces[1].status.status_code == StatusCode.OK
+    assert spans[1].name == "span1"
+    assert len(spans[1].events) == 2
+    assert "event1.1" in [e.name for e in spans[1].events]
+    assert "event1.2" in [e.name for e in spans[1].events]
+    assert spans[1].status.status_code == StatusCode.OK
