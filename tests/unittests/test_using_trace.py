@@ -74,6 +74,7 @@ def test_using_trace_unexpected_exception(captrace):
     assert len(spans) == 2
     assert spans[0].status.status_code == StatusCode.OK
     assert spans[1].status.status_code == StatusCode.ERROR
+    assert any(e.name == "exception" for e in spans[1].events)
 
 
 def test_using_trace_noerror_nested_1_tracer(captrace):
