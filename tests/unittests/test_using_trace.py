@@ -1,5 +1,6 @@
 # test the traces helper context manager
 
+import pytest
 from opentelemetry.trace import Status, StatusCode, get_tracer
 
 from sarc.traces import using_trace
@@ -64,7 +65,7 @@ def test_using_trace_expected_exception(captrace):
 
 def test_using_trace_unexpected_exception(captrace):
     exception_caught = False
-    try:
+    with pytest.raises(AssertionError):
         with using_trace("test_using_trace_noerror", "span1") as span:
             pass
         with using_trace(
@@ -74,12 +75,7 @@ def test_using_trace_unexpected_exception(captrace):
         ) as span:
             span.add_event("event1")
             assert False
-    except Exception:
-        exception_caught = True
 
-    assert (
-        exception_caught == True
-    )  # the ExceptionError is not handled by the context manager
     traces = captrace.get_finished_spans()
     assert len(traces) == 2
     assert traces[0].status.status_code == StatusCode.OK
