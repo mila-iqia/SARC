@@ -11,6 +11,7 @@ referenced by "cfg.ldap.mongo_collection_name" will be updated.
 """
 
 import json
+import logging
 
 import sarc.account_matching.make_matches
 import sarc.ldap.mymila
@@ -18,6 +19,7 @@ from sarc.config import config
 from sarc.ldap.mymila import fetch_mymila
 from sarc.ldap.read_mila_ldap import fetch_ldap
 from sarc.ldap.revision import commit_matches_to_database
+from sarc.traces import using_trace
 
 
 def run(prompt=False):
@@ -44,72 +46,95 @@ def run(prompt=False):
                         user[supervisor_key] = potential_supervisor[
                             "mila_email_username"
                         ]
+                        # Found a mila_email_username matching the display name.
+                        # Then we should break here, assuming display name should not match any other supervisor.
+                        # If a display name could match many different "potential_supervisor"s, then
+                        # we need a strategy to choose the right supervisor in such case, didn't we?
+                        break
+                else:
+                    # No match, logging.
+                    logging.warning(
+                        f"No mila_email_username found for {supervisor_key} {user[supervisor_key]}."
+                    )
 
     # Match DRAC/CC to mila accounts
-    DLD_data = sarc.account_matching.make_matches.load_data_from_files(
-        {
-            "mila_ldap": LD_users,  # pass through
-            "drac_roles": cfg.account_matching.drac_roles_csv_path,
-            "drac_members": cfg.account_matching.drac_members_csv_path,
-        }
-    )
-
-    # hint : To debug or manually adjust `perform_matching` to handle new edge cases
-    #        that arrive each semester, you can inspect the contents of the temporary file
-    #        to see what you're working with, or you can just inspect `DLD_data`
-    #        by saving it somewhere.
-
-    with open(
-        cfg.account_matching.make_matches_config, "r", encoding="utf-8"
-    ) as json_file:
-        make_matches_config = json.load(json_file)
-
-    (
-        DD_persons_matched,
-        new_manual_matches,
-    ) = sarc.account_matching.make_matches.perform_matching(
-        DLD_data=DLD_data,
-        mila_emails_to_ignore=make_matches_config["L_phantom_mila_emails_to_ignore"],
-        override_matches_mila_to_cc=make_matches_config[
-            "D_override_matches_mila_to_cc_account_username"
-        ],
-        name_distance_delta_threshold=0,
-        verbose=False,
-        prompt=prompt,
-    )
-
-    # from pprint import pprint
-    # pprint(DD_persons_matched)
-
-    # `DD_persons_matched` is indexed by mila_email_username values,
-    # and each entry is a dict with 3 keys:
-    #     {
-    #       "mila_ldap": {
-    #           "mila_email_username": "john.appleseed@mila.quebec",
-    #           ...
-    #       },
-    #       "drac_roles": {...} or None,
-    #       "drac_members": {...} or None
-    #     }
-
-    for _, user in DD_persons_matched.items():
-        fill_computed_fields(user)
-
-    # These associations can now be propagated to the database.
-    commit_matches_to_database(
-        user_collection,
-        DD_persons_matched,
-    )
-
-    # If new manual matches are available, save them.
-    if new_manual_matches:
-        make_matches_config["D_override_matches_mila_to_cc_account_username"].update(
-            new_manual_matches
+    # Trace matching.
+    # Do not set expected exceptions, so that any exception will be re-raised by tracing.
+    with using_trace(
+        "sarc_ldap_acquire", "match_drac_to_mila_accounts", exception_types=()
+    ) as span:
+        span.add_event("Loading mila_ldap, drac_roles and drac_members from files ...")
+        DLD_data = sarc.account_matching.make_matches.load_data_from_files(
+            {
+                "mila_ldap": LD_users,  # pass through
+                "drac_roles": cfg.account_matching.drac_roles_csv_path,
+                "drac_members": cfg.account_matching.drac_members_csv_path,
+            }
         )
+
+        # hint : To debug or manually adjust `perform_matching` to handle new edge cases
+        #        that arrive each semester, you can inspect the contents of the temporary file
+        #        to see what you're working with, or you can just inspect `DLD_data`
+        #        by saving it somewhere.
+
+        span.add_event("Loading matching config from file ...")
         with open(
-            cfg.account_matching.make_matches_config, "w", encoding="utf-8"
+            cfg.account_matching.make_matches_config, "r", encoding="utf-8"
         ) as json_file:
-            json.dump(make_matches_config, json_file, indent=4)
+            make_matches_config = json.load(json_file)
+
+        span.add_event("Matching DRAC/CC to mila accounts ...")
+        (
+            DD_persons_matched,
+            new_manual_matches,
+        ) = sarc.account_matching.make_matches.perform_matching(
+            DLD_data=DLD_data,
+            mila_emails_to_ignore=make_matches_config[
+                "L_phantom_mila_emails_to_ignore"
+            ],
+            override_matches_mila_to_cc=make_matches_config[
+                "D_override_matches_mila_to_cc_account_username"
+            ],
+            name_distance_delta_threshold=0,
+            verbose=False,
+            prompt=prompt,
+        )
+
+        # from pprint import pprint
+        # pprint(DD_persons_matched)
+
+        # `DD_persons_matched` is indexed by mila_email_username values,
+        # and each entry is a dict with 3 keys:
+        #     {
+        #       "mila_ldap": {
+        #           "mila_email_username": "john.appleseed@mila.quebec",
+        #           ...
+        #       },
+        #       "drac_roles": {...} or None,
+        #       "drac_members": {...} or None
+        #     }
+
+        for _, user in DD_persons_matched.items():
+            fill_computed_fields(user)
+
+        # These associations can now be propagated to the database.
+        span.add_event("Committing matches to database ...")
+        commit_matches_to_database(
+            user_collection,
+            DD_persons_matched,
+        )
+
+        # If new manual matches are available, save them.
+        if new_manual_matches:
+            span.add_event(f"Saving {len(new_manual_matches)} manual matches ...")
+            logging.info(f"Saving {len(new_manual_matches)} manual matches ...")
+            make_matches_config[
+                "D_override_matches_mila_to_cc_account_username"
+            ].update(new_manual_matches)
+            with open(
+                cfg.account_matching.make_matches_config, "w", encoding="utf-8"
+            ) as json_file:
+                json.dump(make_matches_config, json_file, indent=4)
 
 
 def fill_computed_fields(data: dict):

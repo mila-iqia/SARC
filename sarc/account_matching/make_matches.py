@@ -16,6 +16,7 @@ with the other secrets in the "secrets/account_matching" directory.
 import copy
 import csv
 import json
+import logging
 from pathlib import PosixPath
 
 from sarc.account_matching import name_distances
@@ -136,7 +137,7 @@ def perform_matching(
         if drac_source not in DLD_data:
             # we might not have all three source files
             if verbose:
-                print(f"{drac_source} file missing !")
+                logging.warning(f"{drac_source} file missing !")
             continue
         LD_members = _how_many_drac_accounts_with_mila_emails(
             DLD_data, drac_source, verbose=verbose
@@ -145,12 +146,12 @@ def perform_matching(
             assert D_member["email"].endswith("@mila.quebec")
             if D_member["email"] in S_mila_emails_to_ignore:
                 if verbose:
-                    print(f'Ignoring phantom {D_member["email"]} (ignore list).')
+                    logging.info(f'Ignoring phantom {D_member["email"]} (ignore list).')
                 continue
             if D_member["email"] not in DD_persons:
                 # we WANT to create an entry in DD_persons with the mila username, and the name from the cc_source !
                 if verbose:
-                    print(
+                    logging.info(
                         f'Creating phantom profile for {D_member["email"]} (automatic).'
                     )
                 DD_persons[D_member["email"]] = {}
@@ -303,9 +304,9 @@ def _prompt_manual_match(mila_display_name, cc_source, best_matches):
             # Re-prompt.
 
     if cc_match:
-        print(mila_display_name, "(matched with)", cc_match)
+        logging.info(f"[prompt] {mila_display_name} (matched with) {cc_match}")
     else:
-        print("(ignored)")
+        logging.info(f"[promot] {mila_display_name} (ignored)")
 
     return cc_match
 
@@ -373,10 +374,10 @@ def _make_matches_status_report(DLD_data, DD_persons):
         else:
             disabled_count += 1
 
-    print(
+    logging.info(
         f"We have {enabled_count} enabled accounts and {disabled_count} disabled accounts."
     )
-    print(
+    logging.info(
         f"Out of those enabled accounts, there are {good_count} successful matches "
         f"and {bad_count} failed matches."
     )
@@ -391,7 +392,7 @@ def _make_matches_status_report(DLD_data, DD_persons):
                 if D["activation_status"] in ["activated"]
             ]
         )
-        print(f"We have {count_drac_members_activated} activated drac_members.")
+        logging.info(f"We have {count_drac_members_activated} activated drac_members.")
 
         # let's try to be more precise about things to find the missing accounts
         set_A = {
@@ -404,7 +405,7 @@ def _make_matches_status_report(DLD_data, DD_persons):
             for D_person in DD_persons.values()
             if D_person.get("drac_members", None) is not None
         }
-        print(
+        logging.info(
             "We could not find matches in the Mila LDAP for the CC accounts "
             f"associated with the following emails: {set_A.difference(set_B)}."
         )
@@ -415,7 +416,7 @@ def _make_matches_status_report(DLD_data, DD_persons):
         count_drac_roles_activated = len(
             [D for D in DLD_data["drac_roles"] if D["status"].lower() in ["activated"]]
         )
-        print(f"We have {count_drac_roles_activated} activated drac_roles.")
+        logging.info(f"We have {count_drac_roles_activated} activated drac_roles.")
 
 
 def _how_many_drac_accounts_with_mila_emails(
@@ -429,7 +430,7 @@ def _how_many_drac_accounts_with_mila_emails(
     ]
 
     if verbose:
-        print(
+        logging.info(
             f"We have {len(LD_members)} {drac_source} accounts with @mila.quebec, "
             f"out of {len(data['drac_members'])}."
         )
