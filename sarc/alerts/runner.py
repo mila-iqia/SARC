@@ -26,7 +26,7 @@ class CheckRunner:
                 case CheckStatus.ERROR:
                     logger.error(f"Check '{check.name}' errored.")
         next_schedule = check.next_schedule(result)
-        self.state[check.name] = (check, next_schedule)
+        self.state[check.name] = (check, result, next_schedule)
         return next_schedule
 
     def start(self):
@@ -43,9 +43,16 @@ class CheckRunner:
         while True:
             delta = timedelta(days=1000)
             up_next = "?"
-            for check, next_schedule in self.state.values():
+            for check, _, next_schedule in self.state.values():
+                if any(
+                    self.state[dep][1].status != CheckStatus.OK for dep in check.depends
+                ):
+                    logger.warning(
+                        f"Skip check: '{check.name}' because dependency failed"
+                    )
+                    continue
                 if gtime.now() >= next_schedule:
-                    logger.info(f"Perform check: {check.name}")
+                    logger.info(f"Perform check: '{check.name}'")
                     try:
                         next_schedule = self.process(check, check())
                     except Exception as exc:

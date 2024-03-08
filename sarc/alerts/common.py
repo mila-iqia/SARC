@@ -5,6 +5,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
+from graphlib import TopologicalSorter
 from pathlib import Path
 from typing import Optional
 
@@ -89,6 +90,14 @@ class HealthCheck:
     # Directory in which to serialize results
     # Note: this is typically set by the parent to be root_check_dir/check.name
     directory: Path = None
+
+    # Other checks on which this check depends. If these checks fail, this
+    # check will not be run.
+    depends: str | list[str] = field(default_factory=list)
+
+    def __post_init__(self):
+        if isinstance(self.depends, str):
+            self.depends = [self.depends]
 
     def result(self, status: CheckStatus, **kwargs) -> CheckResult:
         """Generate a result with the given status."""
@@ -222,6 +231,12 @@ class HealthMonitorConfig:
     # time: TaggedSubclass[NormalTime] = field(default_factory=NormalTime)
 
     def __post_init__(self):
+        # Topological sort of the checks
+        self.checks_dict = {check.name: check for check in self.checks}
+        graph = {check.name: check.depends for check in self.checks}
+        order = TopologicalSorter(graph).static_order()
+        self.checks = [self.checks_dict[name] for name in order]
+
         # Set each check's directory based on the root directory and the check's name.
         for check in self.checks:
             check.directory = self.directory / check.name
