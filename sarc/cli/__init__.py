@@ -8,8 +8,9 @@ from typing import Any, Union
 
 from simple_parsing import ArgumentParser, field, subparsers
 
-from sarc.cli.acquire import Acquire
-from sarc.cli.db import Db
+from .acquire import Acquire
+from .db import Db
+from .health import Health
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +51,9 @@ class NiceHandler(logging.StreamHandler):
 
 @dataclass
 class CLI:
-    command: Union[Acquire, Db] = subparsers({"acquire": Acquire, "db": Db})
+    command: Union[Acquire, Db, Health] = subparsers(
+        {"acquire": Acquire, "db": Db, "health": Health}
+    )
 
     color: bool = False
     verbose: int = field(
