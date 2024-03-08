@@ -3,16 +3,16 @@ from typing import Union
 
 from simple_parsing import subparsers
 
-from .check import HealthCheck
-from .monitor import HealthMonitor
+from .check import HealthCheckCommand
+from .monitor import HealthMonitorCommand
 
 
 @dataclass
 class Health:
-    command: Union[HealthMonitor, HealthCheck] = subparsers(
+    command: Union[HealthMonitorCommand, HealthCheckCommand] = subparsers(
         {
-            "monitor": HealthMonitor,
-            "check": HealthCheck,
+            "monitor": HealthMonitorCommand,
+            "check": HealthCheckCommand,
         }
     )
 
