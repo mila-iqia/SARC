@@ -23,8 +23,8 @@ class MonitorHandler(FileSystemEventHandler):
 
 
 class HealthMonitor:
-    def __init__(self, logdir, checks, poll=False):
-        self.logdir = logdir
+    def __init__(self, directory, checks, poll=False):
+        self.directory = directory
         self.checks: list[HealthCheck] = checks
         self.poll = poll
         self.observer = None
@@ -54,7 +54,7 @@ class HealthMonitor:
     def start(self):
         self.recover_state()
         self.observer = (PollingObserver if self.poll else Observer)()
-        self.observer.schedule(MonitorHandler(self), self.logdir, recursive=True)
+        self.observer.schedule(MonitorHandler(self), self.directory, recursive=True)
         self.observer.start()
 
     def join(self):
