@@ -1,8 +1,9 @@
+import itertools
 import json
 import logging
 import os
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from enum import Enum
 from graphlib import TopologicalSorter
@@ -78,14 +79,17 @@ class CheckResult:
 class HealthCheck:
     """Base class for health checks."""
 
-    # Name of the check
-    name: str
-
     # Whether the check is active or not
     active: bool
 
     # Interval at which to activate the check
     interval: timedelta
+
+    # Name of the check
+    name: str = None
+
+    # Parameters of the check
+    parameters: dict[str, str] = field(default_factory=dict)
 
     # Directory in which to serialize results
     # Note: this is typically set by the parent to be root_check_dir/check.name
@@ -98,6 +102,14 @@ class HealthCheck:
     def __post_init__(self):
         if isinstance(self.depends, str):
             self.depends = [self.depends]
+
+    def parameterize(self, **parameters):
+        """Parameterize this check."""
+        return replace(
+            self,
+            parameters=parameters,
+            depends=[dep.format(**parameters) for dep in self.depends],
+        )
 
     def result(self, status: CheckStatus, **kwargs) -> CheckResult:
         """Generate a result with the given status."""
@@ -222,27 +234,45 @@ class HealthMonitorConfig:
     # Root directory for check results
     directory: Path
 
+    # Parameterizations for the checks
+    parameterizations: dict[str, list[str]] = field(default_factory=dict)
+
     # List of checks to execute. TaggedSubclass[T] makes it so that we can serialize
     # and deserialize subclasses of HealthCheck (the class reference is in the "class"
     # field of each check).
-    checks: list[TaggedSubclass[HealthCheck]]
-
-    # # How to handle time. Use 'class: FrozenTime' to pretend time is frozen.
-    # time: TaggedSubclass[NormalTime] = field(default_factory=NormalTime)
+    checks: dict[str, TaggedSubclass[HealthCheck]] = field(default_factory=dict)
 
     def __post_init__(self):
-        # Topological sort of the checks
-        self.checks_dict = {check.name: check for check in self.checks}
-        graph = {check.name: check.depends for check in self.checks}
-        order = TopologicalSorter(graph).static_order()
-        self.checks = [self.checks_dict[name] for name in order]
+
+        all_checks = {}
+
+        # Parameterize the checks
+        for name, check in self.checks.items():
+            params = re.findall(pattern=r"\{([a-z_]+)\}", string=name)
+            if params:
+                for comb in itertools.product(
+                    *[self.parameterizations[p] for p in params]
+                ):
+                    zipped = dict(zip(params, comb))
+                    concrete_name = name.format(**zipped)
+                    all_checks[concrete_name] = check.parameterize(**zipped)
+            else:
+                all_checks[name] = check
+
+        self.checks = all_checks
 
         # Set each check's directory based on the root directory and the check's name.
-        for check in self.checks:
+        for name, check in self.checks.items():
+            check.name = name
             check.directory = self.directory / check.name
+
+        # Topological sort of the checks
+        graph = {name: check.depends for name, check in self.checks.items()}
+        order = TopologicalSorter(graph).static_order()
+        self.checks = {name: self.checks[name] for name in order}
 
 
 config = gifnoc.define(
-    field="sarc_health_monitor",
+    field="sarc.health_monitor",
     model=HealthMonitorConfig,
 )

@@ -25,14 +25,14 @@ class MonitorHandler(FileSystemEventHandler):
 class HealthMonitor:
     def __init__(self, directory, checks, poll=False):
         self.directory = directory
-        self.checks: list[HealthCheck] = checks
+        self.checks: dict[str, HealthCheck] = checks
         self.poll = poll
         self.observer = None
         self.state = {}
 
     def recover_state(self):
-        for check in self.checks:
-            self.state[check.name] = check.latest_result()
+        for name, check in self.checks.items():
+            self.state[name] = check.latest_result()
 
     def process(self, file):
         data = deserialize(

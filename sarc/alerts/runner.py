@@ -11,7 +11,9 @@ logger = logging.getLogger(__name__)
 class CheckRunner:
     def __init__(self, directory, checks):
         self.directory = directory
-        self.checks: list[HealthCheck] = [check for check in checks if check.active]
+        self.checks: dict[str, HealthCheck] = {
+            name: check for name, check in checks.items() if check.active
+        }
         self.state = {}
 
     def process(self, check, result=None):
@@ -30,14 +32,14 @@ class CheckRunner:
         return next_schedule
 
     def start(self):
-        for check in self.checks:
+        for check in self.checks.values():
             self.process(check)
 
         if not self.checks:
             logger.warning("There are no active checks to run!")
             return
 
-        check_names = ", ".join(check.name for check in self.checks)
+        check_names = ", ".join(self.checks.keys())
         logger.info(f"Managing {len(self.checks)} active checks: {check_names}")
 
         while True:
