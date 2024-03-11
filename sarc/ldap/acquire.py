@@ -61,7 +61,7 @@ def run(prompt=False):
     # Trace matching.
     # Do not set expected exceptions, so that any exception will be re-raised by tracing.
     with using_trace(
-        "sarc_ldap_acquire", "match_drac_to_mila_accounts", exception_types=()
+        "sarc.ldap.acquire", "match_drac_to_mila_accounts", exception_types=()
     ) as span:
         span.add_event("Loading mila_ldap, drac_roles and drac_members from files ...")
         DLD_data = sarc.account_matching.make_matches.load_data_from_files(
