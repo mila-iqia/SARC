@@ -20,7 +20,7 @@ class HealthCheckCommand:
     def execute(self) -> int:
         with gifnoc.use(self.config):
             if self.name:
-                (check,) = [check for check in config.checks if check.name == self.name]
+                check = config.checks[self.name]
                 results = check.check()
                 pprint(results)
                 print(f"{results.status.name}")

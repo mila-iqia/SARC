@@ -14,7 +14,7 @@ class HealthMonitorCommand:
 
     def execute(self) -> int:
         with gifnoc.use(self.config):
-            monitor = HealthMonitor(logdir=config.directory, checks=config.checks)
+            monitor = HealthMonitor(directory=config.directory, checks=config.checks)
             try:
                 while True:
                     print(monitor.status)
