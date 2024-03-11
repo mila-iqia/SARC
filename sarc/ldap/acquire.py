@@ -100,9 +100,6 @@ def run(prompt=False):
             prompt=prompt,
         )
 
-        # from pprint import pprint
-        # pprint(DD_persons_matched)
-
         # `DD_persons_matched` is indexed by mila_email_username values,
         # and each entry is a dict with 3 keys:
         #     {
