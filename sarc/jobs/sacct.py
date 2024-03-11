@@ -13,6 +13,7 @@ from tqdm import tqdm
 from sarc.config import UTC, ClusterConfig, config
 from sarc.jobs.job import SlurmJob, jobs_collection
 from sarc.jobs.series import get_job_time_series
+from sarc.traces import using_trace
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +65,7 @@ class SAcctScraper:
         accounts = self.cluster.accounts and ",".join(self.cluster.accounts)
         accounts_option = f"-A {accounts}" if accounts else ""
         cmd = f"{self.cluster.sacct_bin} {accounts_option} -X -S '{start}' -E '{end}' --allusers --json"
-        print(f"{self.cluster.name} $ {cmd}")
+        logger.info(f"{self.cluster.name} $ {cmd}")
         if self.cluster.host == "localhost":
             results = subprocess.run(
                 cmd, shell=True, text=True, capture_output=True, check=False
@@ -115,6 +116,7 @@ class SAcctScraper:
                 print("====================================", file=sys.stderr)
                 print(pformat(entry), file=sys.stderr)
                 print("====================================", file=sys.stderr)
+                logger.error(f"Problem with this entry: {pformat(entry)}")
 
     def convert(self, entry: dict, version: dict = None) -> Optional[SlurmJob]:
         """Convert a single job entry from sacct to a SlurmJob."""
@@ -248,20 +250,27 @@ def sacct_mongodb_import(
     no_prometheus: bool
         If True, avoid any scraping requiring prometheus connection.
     """
-    collection = jobs_collection()
-    scraper = SAcctScraper(cluster, day)
-    print("Getting the sacct data...")
-    scraper.get_raw()
-    print(f"Saving into mongodb collection '{collection.Meta.collection_name}'...")
-    for entry in tqdm(scraper):
-        saved = False
-        if not no_prometheus:
-            update_allocated_gpu_type(cluster, entry)
-            saved = entry.statistics(recompute=True, save=True) is not None
+    with using_trace("sacct_mongodb_import", "sacct_mongodb_import") as span:
+        collection = jobs_collection()
+        scraper = SAcctScraper(cluster, day)
+        span.add_event("Getting the sacct data...")
+        logger.info("Getting the sacct data...")
+        scraper.get_raw()
+        span.add_event(
+            f"Saving into mongodb collection '{collection.Meta.collection_name}'..."
+        )
+        logger.info(
+            f"Saving into mongodb collection '{collection.Meta.collection_name}'..."
+        )
+        for entry in tqdm(scraper):
+            saved = False
+            if not no_prometheus:
+                update_allocated_gpu_type(cluster, entry)
+                saved = entry.statistics(recompute=True, save=True) is not None
 
-        if not saved:
-            collection.save_job(entry)
-    print(f"Saved {len(scraper)} entries.")
+            if not saved:
+                collection.save_job(entry)
+        logger.info(f"Saved {len(scraper)} entries.")
 
 
 def update_allocated_gpu_type(cluster: ClusterConfig, entry: SlurmJob) -> Optional[str]:

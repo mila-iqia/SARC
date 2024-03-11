@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
+import logging
 import subprocess
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -668,8 +669,15 @@ def test_multiple_dates(
 
 @pytest.mark.usefixtures("empty_read_write_db", "disabled_cache")
 def test_multiple_clusters_and_dates(
-    test_config, remote, file_regression, cli_main, prom_custom_query_mock
+    test_config,
+    remote,
+    file_regression,
+    cli_main,
+    prom_custom_query_mock,
+    caplog,
+    captrace,
 ):
+    caplog.set_level(logging.INFO)
     cluster_names = ["raisin", "patate"]
     datetimes = [
         datetime(2023, 2, 15, tzinfo=MTL) + timedelta(days=i) for i in range(2)
@@ -749,6 +757,52 @@ def test_multiple_clusters_and_dates(
         f"Found {len(jobs)} job(s):\n"
         + "\n".join([job.json(exclude={"id": True}, indent=4) for job in jobs])
     )
+
+    # Check logging
+    # print(caplog.text)
+    assert caplog.text.__contains__(
+        "root:jobs.py:107 Acquire data on raisin for date: 2023-02-15 00:00:00 (is_auto=False)"
+    )
+    assert caplog.text.__contains__(
+        "root:jobs.py:107 Acquire data on patate for date: 2023-02-15 00:00:00 (is_auto=False)"
+    )
+
+    # Check trace
+    spans = captrace.get_finished_spans()
+    assert len(spans) == 8
+
+    assert spans[0].name == "sacct_mongodb_import"
+    assert len(spans[0].events) == 2
+    assert spans[0].events[0].name == "Getting the sacct data..."
+    assert spans[0].events[1].name == "Saving into mongodb collection 'jobs'..."
+    assert spans[1].name == "cluster-data-is_auto"
+    assert spans[1].attributes["cluster_name"] == "raisin"
+    assert spans[1].attributes["date"] == "2023-02-15 00:00:00"
+    assert spans[1].attributes["is_auto"] is False
+    assert len(spans[1].events) == 1
+    assert (
+        spans[1].events[0].name
+        == "Acquire data on raisin for date: 2023-02-15 00:00:00 (is_auto=False)"
+    )
+    assert spans[0].parent == spans[1].get_span_context()
+
+    assert spans[2].name == "sacct_mongodb_import"
+    assert spans[3].name == "cluster-data-is_auto"
+    assert spans[3].attributes["cluster_name"] == "raisin"
+    assert spans[3].attributes["date"] == "2023-02-16 00:00:00"
+    assert spans[2].parent == spans[3].get_span_context()
+
+    assert spans[4].name == "sacct_mongodb_import"
+    assert spans[5].name == "cluster-data-is_auto"
+    assert spans[5].attributes["cluster_name"] == "patate"
+    assert spans[5].attributes["date"] == "2023-02-15 00:00:00"
+    assert spans[4].parent == spans[5].get_span_context()
+
+    assert spans[6].name == "sacct_mongodb_import"
+    assert spans[7].name == "cluster-data-is_auto"
+    assert spans[7].attributes["cluster_name"] == "patate"
+    assert spans[7].attributes["date"] == "2023-02-16 00:00:00"
+    assert spans[6].parent == spans[7].get_span_context()
 
 
 @pytest.mark.usefixtures("tzlocal_is_mtl")

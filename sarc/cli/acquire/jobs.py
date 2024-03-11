@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Generator
@@ -9,6 +10,7 @@ from simple_parsing import field
 from sarc.config import config
 from sarc.errors import ClusterNotFound
 from sarc.jobs.sacct import sacct_mongodb_import
+from sarc.traces import using_trace
 
 
 def _str_to_dt(dt_str: str) -> datetime:
@@ -56,9 +58,9 @@ def _dates_auto_first_date(cluster_name: str) -> datetime:
     if cluster is None:
         raise ClusterNotFound(f"Cluster {cluster_name} not found in database")
     start_date = cluster["start_date"]
-    print(f"start_date={start_date}")
+    logging.info(f"start_date={start_date}")
     end_date = cluster["end_date"]
-    print(f"end_date={end_date}")
+    logging.info(f"end_date={end_date}")
     if end_date is None:
         return _str_to_dt(start_date)
     return _str_to_dt(end_date) + timedelta(days=1)
@@ -66,7 +68,7 @@ def _dates_auto_first_date(cluster_name: str) -> datetime:
 
 def _dates_set_last_date(cluster_name: str, date: datetime) -> None:
     # set the last valid date in the database for the cluster
-    print(f"set last successful date for cluster {cluster_name} to {date}")
+    logging.info(f"set last successful date for cluster {cluster_name} to {date}")
     db = config().mongo.database_instance
     db_collection = db.clusters
     db_collection.update_one(
@@ -94,18 +96,30 @@ class AcquireJobs:
 
         for cluster_name in self.cluster_names:
             for date, is_auto in parse_dates(self.dates, cluster_name):
-                try:
-                    print(
-                        f"Acquire data on {cluster_name} for date: {date} (is_auto={is_auto})"
-                    )
+                with using_trace("AcquireJobs", "cluster-data-is_auto") as span:
+                    span.set_attribute("cluster_name", cluster_name)
+                    span.set_attribute("date", str(date))
+                    span.set_attribute("is_auto", is_auto)
+                    try:
+                        span.add_event(
+                            f"Acquire data on {cluster_name} for date: {date} (is_auto={is_auto})"
+                        )
+                        logging.info(
+                            f"Acquire data on {cluster_name} for date: {date} (is_auto={is_auto})"
+                        )
 
-                    sacct_mongodb_import(
-                        clusters_configs[cluster_name], date, self.no_prometheus
-                    )
-                    if is_auto:
-                        _dates_set_last_date(cluster_name, date)
-                # pylint: disable=broad-exception-caught
-                except Exception as e:
-                    print(f"Failed to acquire data for {cluster_name} on {date}: {e}")
-                    return 1
+                        sacct_mongodb_import(
+                            clusters_configs[cluster_name], date, self.no_prometheus
+                        )
+                        if is_auto:
+                            _dates_set_last_date(cluster_name, date)
+                    # pylint: disable=broad-exception-caught
+                    except Exception as e:
+                        span.add_event(
+                            f"Failed to acquire data for {cluster_name} on {date}: {e}"
+                        )
+                        logging.error(
+                            f"Failed to acquire data for {cluster_name} on {date}: {e}"
+                        )
+                        return 1
         return 0
