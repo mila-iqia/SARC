@@ -124,7 +124,6 @@ def run(prompt=False):
         # If new manual matches are available, save them.
         if new_manual_matches:
             span.add_event(f"Saving {len(new_manual_matches)} manual matches ...")
-            logging.info(f"Saving {len(new_manual_matches)} manual matches ...")
             make_matches_config[
                 "D_override_matches_mila_to_cc_account_username"
             ].update(new_manual_matches)

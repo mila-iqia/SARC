@@ -407,7 +407,6 @@ def test_acquire_users_prompt(cli_main, monkeypatch, file_contents, caplog, capt
     assert caplog.text.__contains__(
         "root:make_matches.py:309 [promot] John Smith the 003rd (ignored)"
     )
-    assert caplog.text.__contains__("root:acquire.py:130 Saving 1 manual matches ...")
 
     # Check traces
     spans = captrace.get_finished_spans()
