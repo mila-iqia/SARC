@@ -222,7 +222,10 @@ def user_history_backfill(users_collection, LD_users, backfill=True):
 
 def _user_record_backfill(cfg, user_collection):
     """No global version for simpler testing"""
-    with using_trace("sarc.ldap.backfill", "_user_record_backfill") as span:
+    # We do not set expected exceptions, so that any exception will be re-raised by tracing.
+    with using_trace(
+        "sarc.ldap.backfill", "_user_record_backfill", exception_types=()
+    ) as span:
         span.add_event("Backfilling record history from mymila ...")
 
         mymila_data = fetch_mymila(cfg, [])
