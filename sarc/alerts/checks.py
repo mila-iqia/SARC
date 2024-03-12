@@ -7,8 +7,10 @@ from types import SimpleNamespace
 
 from gifnoc.std import time
 
+from sarc.alerts.cache import Timespan
+
 from .common import CheckException, HealthCheck
-from .fixtures import jobs_last_hour
+from .fixtures import latest_jobs
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +34,7 @@ def ran_for(job, **timeparts):
 @dataclass
 class FilterCheck(HealthCheck):
     # How far back to fetch data
-    period: timedelta = None  # timedelta(hours=1)
+    period: Timespan = Timespan("1h")
 
     # Python expressions to test
     filters: list[str] = field(default_factory=list)
@@ -58,7 +60,7 @@ class FilterCheck(HealthCheck):
 
     def check(self):
         params = SimpleNamespace(**self.parameters)
-        jobs = jobs_last_hour()
+        jobs = latest_jobs(self.period)
         count = 0
         counts = {expr: 0 for expr in self.filters}
         total_count = len(jobs)
