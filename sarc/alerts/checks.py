@@ -4,10 +4,12 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from functools import partial
 from types import SimpleNamespace
+from typing import Optional
 
 from gifnoc.std import time
 
 from sarc.alerts.cache import Timespan
+from sarc.jobs.job import SlurmJob
 
 from .common import CheckException, HealthCheck
 from .fixtures import latest_jobs
@@ -26,24 +28,42 @@ def build_environment(job, methods, extra):
     }
 
 
-def ran_for(job, **timeparts):
+utilities = []
+
+
+def register_utility(fn):
+    utilities.append(fn)
+    return fn
+
+
+@register_utility
+def ran_for(job: SlurmJob, **timeparts):
     delta = timedelta(**timeparts)
     return job.start_time and ((job.end_time or time.now()) - job.start_time) >= delta
 
 
-@dataclass
-class FilterCheck(HealthCheck):
-    # How far back to fetch data
-    period: Timespan = Timespan("1h")
+@register_utility
+def allocated_gpu(job: SlurmJob):
+    return bool(job.allocated.gres_gpu)
 
+
+@dataclass
+class FilterResults:
+    results: list[SlurmJob] = field(default_factory=list)
+    total_count: int = 0
+    count: int = 0
+    exception_count: int = 0
+    exc: Optional[CheckException] = None
+    counts: dict[str, int] = field(default_factory=dict)
+
+
+@dataclass
+class FilterCheckBase(HealthCheck):
     # Python expressions to test
     filters: list[str] = field(default_factory=list)
 
     # Exception messages to ignore when evaluating a filter
     ignore: list[str] = field(default_factory=list)
-
-    # Minimum number of results expected
-    min_count: int | None = None
 
     def __post_init__(self):
         super().__post_init__()
@@ -58,18 +78,18 @@ class FilterCheck(HealthCheck):
             for expr in self.filters
         ]
 
-    def check(self):
+    def filter_jobs(self, jobs):
         params = SimpleNamespace(**self.parameters)
-        jobs = latest_jobs(self.period)
-        count = 0
-        counts = {expr: 0 for expr in self.filters}
-        total_count = len(jobs)
-        exception_count = 0
-        exc = None
+        f = FilterResults(
+            results=[],
+            total_count=len(jobs),
+            counts={expr: 0 for expr in self.filters},
+        )
+
         for job in jobs:
             for expr in self.filters:
                 try:
-                    env = build_environment(job, [ran_for], {"params": params})
+                    env = build_environment(job, utilities, {"params": params})
                     if not eval(expr, {}, env):
                         break
                 except Exception as _exc:
@@ -77,20 +97,40 @@ class FilterCheck(HealthCheck):
                         logger.warning(
                             f"Error with filter '{expr}': {_exc}", exc_info=_exc
                         )
-                        exc = _exc
-                        exception_count += 1
+                        f.exc = _exc
+                        f.exception_count += 1
                     break
-                counts[expr] += 1
+                f.counts[expr] += 1
             else:
-                count += 1
+                f.results.append(job)
+                f.count += 1
+
+        return f
+
+    def fetch_jobs(self, period):
+        jobs = latest_jobs(period)
+        return self.filter_jobs(jobs)
+
+
+@dataclass
+class FilterCheck(FilterCheckBase):
+    # How far back to fetch data
+    period: Timespan = Timespan("1h")
+
+    # Minimum number of results expected
+    min_count: int | None = None
+
+    def check(self):
+        f = self.fetch_jobs(self.period)
+
         data = {
-            "count": count,
-            "total_count": total_count,
-            "exception_count": exception_count,
-            "exception_sample": exc and CheckException.from_exception(exc),
-            "counts_after_filters": counts,
+            "count": f.count,
+            "total_count": f.total_count,
+            "exception_count": f.exception_count,
+            "exception_sample": f.exc and CheckException.from_exception(f.exc),
+            "counts_after_filters": f.counts,
         }
-        if count >= self.min_count:
+        if f.count >= self.min_count:
             return self.ok(data=data)
         else:
             return self.fail(data=data)
