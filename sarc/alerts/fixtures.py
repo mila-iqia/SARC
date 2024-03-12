@@ -1,30 +1,15 @@
 import logging
-from datetime import timedelta
-
-from gifnoc.std import time
 
 from sarc.jobs.job import get_jobs
 
-from .cache import cache
+from .cache import Timespan, spancache
 
 logger = logging.getLogger(__name__)
 
 
-@cache(hours=1)
-def jobs_last_hour():
-    logger.info("Querying jobs from the last hour...")
-    jobs = get_jobs(
-        start=time.now() - timedelta(hours=1),
-        end=time.now(),
-    )
-    return list(jobs)
-
-
-@cache(days=1)
-def jobs_last_week():
-    logger.info("Querying jobs from the last week...")
-    jobs = get_jobs(
-        start=time.now() - timedelta(days=7),
-        end=time.now(),
-    )
+@spancache
+def latest_jobs(timespan: Timespan):
+    logger.info(f"Querying jobs from the last {timespan}...")
+    start, end = timespan.calculate_bounds()
+    jobs = get_jobs(start=start, end=end)
     return list(jobs)
