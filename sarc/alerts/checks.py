@@ -39,7 +39,7 @@ def register_utility(fn):
 @register_utility
 def ran_for(job: SlurmJob, **timeparts):
     delta = timedelta(**timeparts)
-    return job.start_time and ((job.end_time or time.now()) - job.start_time) >= delta
+    return job.elapsed_time >= delta.total_seconds()
 
 
 @register_utility
