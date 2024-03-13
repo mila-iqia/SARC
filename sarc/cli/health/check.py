@@ -21,8 +21,10 @@ class HealthCheckCommand:
         with gifnoc.use(self.config):
             if self.name:
                 check = config.checks[self.name]
-                results = check.check()
+                results = check(write=False)
                 pprint(results)
+                for k, status in results.statuses.items():
+                    print(f"{status.name} -- {k}")
                 print(f"{results.status.name}")
             else:
                 try:
