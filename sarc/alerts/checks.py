@@ -11,7 +11,7 @@ from sarc.alerts.cache import Timespan
 from sarc.jobs.job import SlurmJob
 
 from .common import CheckException, HealthCheck
-from .fixtures import latest_jobs
+from .fetch import latest_jobs
 
 logger = logging.getLogger(__name__)
 
