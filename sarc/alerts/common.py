@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from enum import Enum
 from graphlib import TopologicalSorter
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 import gifnoc
 from apischema import ValidationError, deserialize, deserializer, serialize, serializer
@@ -52,15 +52,21 @@ class CheckException:
         )
 
 
+StatusDict = dict[str, Union[CheckStatus, "StatusDict"]]
+
+
 @dataclass
 class CheckResult:
-    """Result of a check."""
+    """Results of a check."""
 
     # Name of the health check that has this result
     name: str = None
 
-    # Status of the check
+    # Global status of the check
     status: CheckStatus = CheckStatus.ABSENT
+
+    # Statuses of individual checks
+    statuses: StatusDict = field(default_factory=dict)
 
     # Information about the exception, if the check has ERROR status
     exception: Optional[CheckException] = None
@@ -167,27 +173,36 @@ class HealthCheck:
         else:
             return latest.issue_date + self.interval
 
-    def __call__(self):
-        os.makedirs(self.directory, exist_ok=True)
+    def wrapped_check(self):
         try:
             results = self.check()
             if not isinstance(results, CheckResult):
-                if results in (self.ok, self.fail):
+                if isinstance(results, dict):
+                    statuses = {
+                        k: CheckStatus.OK if success else CheckStatus.FAILURE
+                        for k, success in results.items()
+                    }
+                    results = self.result(CheckStatus.OK, statuses=statuses)
+                elif results in (self.ok, self.fail):
                     results = results()
                 else:
                     results = self.result(status=results)
-            serialized = serialize(results)
-        except BaseException as exc:
+        except Exception as exc:
             results = self.result(
                 CheckStatus.ERROR, exception=CheckException.from_exception(exc)
             )
+        return results
+
+    def __call__(self, write=True):
+        os.makedirs(self.directory, exist_ok=True)
+        results = self.wrapped_check()
+        if write:
             serialized = serialize(results)
-        finally:
             timestring = results.issue_date.strftime("%Y-%m-%d-%H-%M-%S")
             dest = self.directory / f"{timestring}.json"
             dest.write_text(json.dumps(serialized, indent=4))
             logger.debug(f"Wrote {dest}")
-            return results
+        return results
 
 
 @serializer

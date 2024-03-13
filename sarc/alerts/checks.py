@@ -1,12 +1,11 @@
 import logging
 import re
+from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import timedelta
 from functools import partial
 from types import SimpleNamespace
 from typing import Optional
-
-from gifnoc.std import time
 
 from sarc.alerts.cache import Timespan
 from sarc.jobs.job import SlurmJob
