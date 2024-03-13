@@ -2,6 +2,7 @@ import io
 import json
 import logging
 import random
+import re
 from io import StringIO
 from unittest.mock import MagicMock, mock_open, patch
 
@@ -403,11 +404,17 @@ def test_acquire_users_prompt(cli_main, monkeypatch, file_contents, caplog, capt
 
     # Check logging. There are logs from "acquire users" execution,
     # since we go through manual prompts, where some logs are printed.
-    print(caplog.text)
-    assert caplog.text.__contains__(
-        "root:make_matches.py:309 [promot] John Smith the 003rd (ignored)"
+    assert bool(
+        re.search(
+            r"root:make_matches\.py:[0-9]+ \[prompt] John Smith the 003rd \(ignored\)",
+            caplog.text,
+        )
     )
-    assert caplog.text.__contains__("root:acquire.py:130 Saving 1 manual matches ...")
+    assert bool(
+        re.search(
+            r"root:acquire\.py:[0-9]+ Saving 1 manual matches \.\.\.", caplog.text
+        )
+    )
 
     # Check traces
     spans = captrace.get_finished_spans()

@@ -306,7 +306,7 @@ def _prompt_manual_match(mila_display_name, cc_source, best_matches):
     if cc_match:
         logging.info(f"[prompt] {mila_display_name} (matched with) {cc_match}")
     else:
-        logging.info(f"[promot] {mila_display_name} (ignored)")
+        logging.info(f"[prompt] {mila_display_name} (ignored)")
 
     return cc_match
 
