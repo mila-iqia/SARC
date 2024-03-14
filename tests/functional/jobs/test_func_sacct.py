@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import json
 import logging
+import re
 import subprocess
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -759,12 +760,17 @@ def test_multiple_clusters_and_dates(
     )
 
     # Check logging
-    # print(caplog.text)
-    assert caplog.text.__contains__(
-        "root:jobs.py:107 Acquire data on raisin for date: 2023-02-15 00:00:00 (is_auto=False)"
+    assert bool(
+        re.search(
+            r"root:jobs\.py:[0-9]+ Acquire data on raisin for date: 2023-02-15 00:00:00 \(is_auto=False\)",
+            caplog.text,
+        )
     )
-    assert caplog.text.__contains__(
-        "root:jobs.py:107 Acquire data on patate for date: 2023-02-15 00:00:00 (is_auto=False)"
+    assert bool(
+        re.search(
+            r"root:jobs\.py:[0-9]+ Acquire data on patate for date: 2023-02-15 00:00:00 \(is_auto=False\)",
+            caplog.text,
+        )
     )
 
     # Check trace
