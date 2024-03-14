@@ -250,7 +250,7 @@ def sacct_mongodb_import(
     no_prometheus: bool
         If True, avoid any scraping requiring prometheus connection.
     """
-    with using_trace("sacct_mongodb_import", "sacct_mongodb_import") as span:
+    with using_trace("sarc.jobs.sacct", "sacct_mongodb_import") as span:
         collection = jobs_collection()
         scraper = SAcctScraper(cluster, day)
         span.add_event("Getting the sacct data...")
