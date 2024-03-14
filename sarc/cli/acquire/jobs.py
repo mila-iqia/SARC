@@ -96,7 +96,7 @@ class AcquireJobs:
 
         for cluster_name in self.cluster_names:
             for date, is_auto in parse_dates(self.dates, cluster_name):
-                with using_trace("AcquireJobs", "cluster-data-is_auto") as span:
+                with using_trace("AcquireJobs", "acquire_cluster_data") as span:
                     span.set_attribute("cluster_name", cluster_name)
                     span.set_attribute("date", str(date))
                     span.set_attribute("is_auto", is_auto)

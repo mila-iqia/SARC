@@ -775,40 +775,104 @@ def test_multiple_clusters_and_dates(
 
     # Check trace
     spans = captrace.get_finished_spans()
-    assert len(spans) == 8
 
-    assert spans[0].name == "sacct_mongodb_import"
-    assert len(spans[0].events) == 2
-    assert spans[0].events[0].name == "Getting the sacct data..."
-    assert spans[0].events[1].name == "Saving into mongodb collection 'jobs'..."
-    assert spans[1].name == "cluster-data-is_auto"
-    assert spans[1].attributes["cluster_name"] == "raisin"
-    assert spans[1].attributes["date"] == "2023-02-15 00:00:00"
-    assert spans[1].attributes["is_auto"] is False
-    assert len(spans[1].events) == 1
-    assert (
-        spans[1].events[0].name
-        == "Acquire data on raisin for date: 2023-02-15 00:00:00 (is_auto=False)"
-    )
-    assert spans[0].parent == spans[1].get_span_context()
+    # Expected spans. Each list has format
+    # [span name, [event names], {key-value attributes}]
+    expected_spans = [
+        # patate, 2023-02-16
+        [
+            "acquire_cluster_data",
+            ["Acquire data on patate for date: 2023-02-16 00:00:00 (is_auto=False)"],
+            {
+                "cluster_name": "patate",
+                "date": "2023-02-16 00:00:00",
+                "is_auto": False,
+            },
+        ],
+        [
+            "sacct_mongodb_import",
+            ["Getting the sacct data...", "Saving into mongodb collection 'jobs'..."],
+            {},
+        ],
+        ["get_raw", ["Getting results ..."], {}],
+        ["get_raw", ["Getting results ..."], {}],
+        ["get_raw", ["Getting results ..."], {}],
+        ["get_raw", ["Getting results ..."], {}],
+        ["get_raw", ["Fetching raw ..."], {}],
+        # patate, 2023-02-15
+        [
+            "acquire_cluster_data",
+            ["Acquire data on patate for date: 2023-02-15 00:00:00 (is_auto=False)"],
+            {
+                "cluster_name": "patate",
+                "date": "2023-02-15 00:00:00",
+                "is_auto": False,
+            },
+        ],
+        [
+            "sacct_mongodb_import",
+            ["Getting the sacct data...", "Saving into mongodb collection 'jobs'..."],
+            {},
+        ],
+        ["get_raw", ["Getting results ..."], {}],
+        ["get_raw", ["Getting results ..."], {}],
+        ["get_raw", ["Getting results ..."], {}],
+        ["get_raw", ["Getting results ..."], {}],
+        ["get_raw", ["Fetching raw ..."], {}],
+        # raisin, 2023-02-16
+        [
+            "acquire_cluster_data",
+            ["Acquire data on raisin for date: 2023-02-16 00:00:00 (is_auto=False)"],
+            {
+                "cluster_name": "raisin",
+                "date": "2023-02-16 00:00:00",
+                "is_auto": False,
+            },
+        ],
+        [
+            "sacct_mongodb_import",
+            ["Getting the sacct data...", "Saving into mongodb collection 'jobs'..."],
+            {},
+        ],
+        ["get_raw", ["Getting results ..."], {}],
+        ["get_raw", ["Getting results ..."], {}],
+        ["get_raw", ["Getting results ..."], {}],
+        ["get_raw", ["Getting results ..."], {}],
+        ["get_raw", ["Fetching raw ..."], {}],
+        # raisin, 2023-02-15
+        [
+            "acquire_cluster_data",
+            ["Acquire data on raisin for date: 2023-02-15 00:00:00 (is_auto=False)"],
+            {
+                "cluster_name": "raisin",
+                "date": "2023-02-15 00:00:00",
+                "is_auto": False,
+            },
+        ],
+        [
+            "sacct_mongodb_import",
+            ["Getting the sacct data...", "Saving into mongodb collection 'jobs'..."],
+            {},
+        ],
+        ["get_raw", ["Getting results ..."], {}],
+        ["get_raw", ["Getting results ..."], {}],
+        ["get_raw", ["Getting results ..."], {}],
+        ["get_raw", ["Getting results ..."], {}],
+        ["get_raw", ["Fetching raw ..."], {}],
+    ]
 
-    assert spans[2].name == "sacct_mongodb_import"
-    assert spans[3].name == "cluster-data-is_auto"
-    assert spans[3].attributes["cluster_name"] == "raisin"
-    assert spans[3].attributes["date"] == "2023-02-16 00:00:00"
-    assert spans[2].parent == spans[3].get_span_context()
-
-    assert spans[4].name == "sacct_mongodb_import"
-    assert spans[5].name == "cluster-data-is_auto"
-    assert spans[5].attributes["cluster_name"] == "patate"
-    assert spans[5].attributes["date"] == "2023-02-15 00:00:00"
-    assert spans[4].parent == spans[5].get_span_context()
-
-    assert spans[6].name == "sacct_mongodb_import"
-    assert spans[7].name == "cluster-data-is_auto"
-    assert spans[7].attributes["cluster_name"] == "patate"
-    assert spans[7].attributes["date"] == "2023-02-16 00:00:00"
-    assert spans[6].parent == spans[7].get_span_context()
+    assert len(spans) == len(expected_spans)
+    for i, (span_name, event_names, attributes) in enumerate(reversed(expected_spans)):
+        # Check span name
+        assert spans[i].name == span_name
+        # Check span event count
+        assert len(spans[i].events) == len(event_names)
+        # Check span event names
+        for j, event_name in enumerate(event_names):
+            assert spans[i].events[j].name == event_name
+        # Check span attributes
+        for key, value in attributes.items():
+            assert spans[i].attributes[key] == value
 
 
 @pytest.mark.usefixtures("tzlocal_is_mtl")
