@@ -861,6 +861,246 @@ def test_multiple_clusters_and_dates(
             assert spans[i].attributes[key] == value
 
 
+@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache")
+def test_multiple_clusters_and_dates_with_prometheus(
+    test_config,
+    remote,
+    file_regression,
+    cli_main,
+    prom_custom_query_mock,
+    caplog,
+    captrace,
+):
+    caplog.set_level(logging.INFO)
+    cluster_names = ["raisin", "patate"]
+    datetimes = [
+        datetime(2023, 2, 15, tzinfo=MTL) + timedelta(days=i) for i in range(2)
+    ]
+
+    def _create_session(cluster_name, cmd_template, datetimes):
+        return Session(
+            host=cluster_name,
+            commands=[
+                Command(
+                    cmd=(
+                        cmd_template.format(
+                            start=job_submit_datetime.strftime("%Y-%m-%dT%H:%M"),
+                            end=(job_submit_datetime + timedelta(days=1)).strftime(
+                                "%Y-%m-%dT%H:%M"
+                            ),
+                        )
+                    ),
+                    out=create_sacct_json(
+                        [
+                            {
+                                "job_id": job_id,
+                                "cluster": cluster_name,
+                                "time": {
+                                    "submission": int(job_submit_datetime.timestamp())
+                                },
+                            }
+                        ]
+                    ).encode("utf-8"),
+                )
+                for job_id, job_submit_datetime in enumerate(datetimes)
+            ],
+        )
+
+    channel = remote.expect_sessions(
+        _create_session(
+            "raisin",
+            "/opt/slurm/bin/sacct  -X -S '{start}' -E '{end}' --allusers --json",
+            datetimes=datetimes,
+        ),
+        _create_session(
+            "patate",
+            (
+                "/opt/software/slurm/bin/sacct "
+                "-A rrg-bonhomme-ad_gpu,rrg-bonhomme-ad_cpu,def-bonhomme_gpu,def-bonhomme_cpu "
+                "-X -S '{start}' -E '{end}' --allusers --json"
+            ),
+            datetimes=datetimes,
+        ),
+    )
+
+    # Import here so that config() is setup correctly when CLI is created.
+    import sarc.cli
+
+    assert (
+        cli_main(
+            [
+                "acquire",
+                "jobs",
+                "--cluster_name",
+                "raisin",
+                "patate",
+                "--dates",
+                "2023-02-15",
+                "2023-02-16",
+            ]
+        )
+        == 0
+    )
+
+    jobs = list(get_jobs())
+
+    assert len(list(get_jobs())) == len(datetimes) * len(cluster_names)
+
+    file_regression.check(
+        f"Found {len(jobs)} job(s):\n"
+        + "\n".join([job.json(exclude={"id": True}, indent=4) for job in jobs])
+    )
+
+    # Check logging
+    assert bool(
+        re.search(
+            r"root:jobs\.py:[0-9]+ Acquire data on raisin for date: 2023-02-15 00:00:00 \(is_auto=False\)",
+            caplog.text,
+        )
+    )
+    assert bool(
+        re.search(
+            r"root:jobs\.py:[0-9]+ Acquire data on patate for date: 2023-02-15 00:00:00 \(is_auto=False\)",
+            caplog.text,
+        )
+    )
+
+    # Check trace
+    spans = captrace.get_finished_spans()
+    for span in reversed(spans):
+        print(span.name)
+
+    # Expected spans. Each list has format
+    # [span name, [event names], {key-value attributes}]
+    expected_spans = [
+        # patate, 2023-02-16
+        [
+            "acquire_cluster_data",
+            [],
+            {
+                "cluster_name": "patate",
+                "date": "2023-02-16 00:00:00",
+                "is_auto": False,
+            },
+        ],
+        [
+            "sacct_mongodb_import",
+            ["Getting the sacct data...", "Saving into mongodb collection 'jobs'..."],
+            {},
+        ],
+        ["SAcctScraper.get_raw", [], {}],
+        [
+            "SAcctScraper.__iter__",
+            [],
+            {
+                "entry": '{"account": "mila", "comment": {"administrator": null, "job": null, "system": null}, "allocation_nodes": 4, "array": {"job_id": null, "limits": {"max": {"running": {"tasks": 0}}}, "task": null, "task_id": null}, "association": {"account": "mila", "cluster": "raisin", "partition": null, "user": "petitbonhomme"}, "cluster": "patate", "constraints": "x86_64&(48gb|80gb)", "derived_exit_code": {"status": "SUCCESS", "return_code": 0}, "time": {"elapsed": 43200, "eligible": 1641003593, "end": 1676566860, "start": 1676523660, "submission": 1676523600, "suspended": 0, "system": {"seconds": 0, "microseconds": 0}, "limit": 720.0, "total": {"seconds": 0, "microseconds": 0}, "user": {"seconds": 0, "microseconds": 0}}, "exit_code": {"status": "SUCCESS", "return_code": 0}, "flags": ["CLEAR_SCHEDULING", "STARTED_ON_BACKFILL"], "group": "petitbonhomme", "het": {"job_id": 0, "job_offset": null}, "job_id": 1, "name": "main.sh", "mcs": {"label": ""}, "nodes": "cn-c021", "partition": "long", "priority": 7152, "qos": "normal", "required": {"CPUs": 16, "memory": 8192}, "kill_request_user": null, "reservation": {"id": 0, "name": 0}, "state": {"current": "CANCELLED", "reason": "Dependency"}, "steps": [], "tres": {"allocated": [{"type": "cpu", "name": null, "id": 1, "count": 4}, {"type": "mem", "name": null, "id": 2, "count": 49152}, {"type": "energy", "name": null, "id": 3, "count": null}, {"type": "node", "name": null, "id": 4, "count": 1}, {"type": "billing", "name": null, "id": 5, "count": 1}, {"type": "gres", "name": "gpu", "id": 1001, "count": 1}], "requested": [{"type": "cpu", "name": null, "id": 1, "count": 4}, {"type": "mem", "name": null, "id": 2, "count": 49152}, {"type": "node", "name": null, "id": 4, "count": 1}, {"type": "billing", "name": null, "id": 5, "count": 1}, {"type": "gres", "name": "gpu", "id": 1001, "count": 1}]}, "user": "petitbonhomme", "wckey": {"wckey": "", "flags": []}, "working_directory": "/network/scratch/p/petitbonhomme/experience-demente"}'
+            },
+        ],
+        ["update_allocated_gpu_type", [], {}],
+        ["SAcctScraper.get_raw", [], {}],
+        ["SAcctScraper.get_raw", [], {}],
+        ["SAcctScraper.get_raw", [], {}],
+        ["SAcctScraper.get_raw", [], {}],
+        # patate, 2023-02-15
+        [
+            "acquire_cluster_data",
+            [],
+            {
+                "cluster_name": "patate",
+                "date": "2023-02-15 00:00:00",
+                "is_auto": False,
+            },
+        ],
+        [
+            "sacct_mongodb_import",
+            ["Getting the sacct data...", "Saving into mongodb collection 'jobs'..."],
+            {},
+        ],
+        ["SAcctScraper.get_raw", [], {}],
+        [
+            "SAcctScraper.__iter__",
+            [],
+            {
+                "entry": '{"account": "mila", "comment": {"administrator": null, "job": null, "system": null}, "allocation_nodes": 4, "array": {"job_id": null, "limits": {"max": {"running": {"tasks": 0}}}, "task": null, "task_id": null}, "association": {"account": "mila", "cluster": "raisin", "partition": null, "user": "petitbonhomme"}, "cluster": "patate", "constraints": "x86_64&(48gb|80gb)", "derived_exit_code": {"status": "SUCCESS", "return_code": 0}, "time": {"elapsed": 43200, "eligible": 1641003593, "end": 1676480460, "start": 1676437260, "submission": 1676437200, "suspended": 0, "system": {"seconds": 0, "microseconds": 0}, "limit": 720.0, "total": {"seconds": 0, "microseconds": 0}, "user": {"seconds": 0, "microseconds": 0}}, "exit_code": {"status": "SUCCESS", "return_code": 0}, "flags": ["CLEAR_SCHEDULING", "STARTED_ON_BACKFILL"], "group": "petitbonhomme", "het": {"job_id": 0, "job_offset": null}, "job_id": 0, "name": "main.sh", "mcs": {"label": ""}, "nodes": "cn-c021", "partition": "long", "priority": 7152, "qos": "normal", "required": {"CPUs": 16, "memory": 8192}, "kill_request_user": null, "reservation": {"id": 0, "name": 0}, "state": {"current": "CANCELLED", "reason": "Dependency"}, "steps": [], "tres": {"allocated": [{"type": "cpu", "name": null, "id": 1, "count": 4}, {"type": "mem", "name": null, "id": 2, "count": 49152}, {"type": "energy", "name": null, "id": 3, "count": null}, {"type": "node", "name": null, "id": 4, "count": 1}, {"type": "billing", "name": null, "id": 5, "count": 1}, {"type": "gres", "name": "gpu", "id": 1001, "count": 1}], "requested": [{"type": "cpu", "name": null, "id": 1, "count": 4}, {"type": "mem", "name": null, "id": 2, "count": 49152}, {"type": "node", "name": null, "id": 4, "count": 1}, {"type": "billing", "name": null, "id": 5, "count": 1}, {"type": "gres", "name": "gpu", "id": 1001, "count": 1}]}, "user": "petitbonhomme", "wckey": {"wckey": "", "flags": []}, "working_directory": "/network/scratch/p/petitbonhomme/experience-demente"}'
+            },
+        ],
+        ["update_allocated_gpu_type", [], {}],
+        ["SAcctScraper.get_raw", [], {}],
+        ["SAcctScraper.get_raw", [], {}],
+        ["SAcctScraper.get_raw", [], {}],
+        ["SAcctScraper.get_raw", [], {}],
+        # raisin, 2023-02-16
+        [
+            "acquire_cluster_data",
+            [],
+            {
+                "cluster_name": "raisin",
+                "date": "2023-02-16 00:00:00",
+                "is_auto": False,
+            },
+        ],
+        [
+            "sacct_mongodb_import",
+            ["Getting the sacct data...", "Saving into mongodb collection 'jobs'..."],
+            {},
+        ],
+        ["SAcctScraper.get_raw", [], {}],
+        [
+            "SAcctScraper.__iter__",
+            [],
+            {
+                "entry": '{"account": "mila", "comment": {"administrator": null, "job": null, "system": null}, "allocation_nodes": 4, "array": {"job_id": null, "limits": {"max": {"running": {"tasks": 0}}}, "task": null, "task_id": null}, "association": {"account": "mila", "cluster": "raisin", "partition": null, "user": "petitbonhomme"}, "cluster": "raisin", "constraints": "x86_64&(48gb|80gb)", "derived_exit_code": {"status": "SUCCESS", "return_code": 0}, "time": {"elapsed": 43200, "eligible": 1641003593, "end": 1676566860, "start": 1676523660, "submission": 1676523600, "suspended": 0, "system": {"seconds": 0, "microseconds": 0}, "limit": 720.0, "total": {"seconds": 0, "microseconds": 0}, "user": {"seconds": 0, "microseconds": 0}}, "exit_code": {"status": "SUCCESS", "return_code": 0}, "flags": ["CLEAR_SCHEDULING", "STARTED_ON_BACKFILL"], "group": "petitbonhomme", "het": {"job_id": 0, "job_offset": null}, "job_id": 1, "name": "main.sh", "mcs": {"label": ""}, "nodes": "cn-c021", "partition": "long", "priority": 7152, "qos": "normal", "required": {"CPUs": 16, "memory": 8192}, "kill_request_user": null, "reservation": {"id": 0, "name": 0}, "state": {"current": "CANCELLED", "reason": "Dependency"}, "steps": [], "tres": {"allocated": [{"type": "cpu", "name": null, "id": 1, "count": 4}, {"type": "mem", "name": null, "id": 2, "count": 49152}, {"type": "energy", "name": null, "id": 3, "count": null}, {"type": "node", "name": null, "id": 4, "count": 1}, {"type": "billing", "name": null, "id": 5, "count": 1}, {"type": "gres", "name": "gpu", "id": 1001, "count": 1}], "requested": [{"type": "cpu", "name": null, "id": 1, "count": 4}, {"type": "mem", "name": null, "id": 2, "count": 49152}, {"type": "node", "name": null, "id": 4, "count": 1}, {"type": "billing", "name": null, "id": 5, "count": 1}, {"type": "gres", "name": "gpu", "id": 1001, "count": 1}]}, "user": "petitbonhomme", "wckey": {"wckey": "", "flags": []}, "working_directory": "/network/scratch/p/petitbonhomme/experience-demente"}'
+            },
+        ],
+        ["update_allocated_gpu_type", [], {}],
+        ["SAcctScraper.get_raw", [], {}],
+        ["SAcctScraper.get_raw", [], {}],
+        ["SAcctScraper.get_raw", [], {}],
+        ["SAcctScraper.get_raw", [], {}],
+        # raisin, 2023-02-15
+        [
+            "acquire_cluster_data",
+            [],
+            {
+                "cluster_name": "raisin",
+                "date": "2023-02-15 00:00:00",
+                "is_auto": False,
+            },
+        ],
+        [
+            "sacct_mongodb_import",
+            ["Getting the sacct data...", "Saving into mongodb collection 'jobs'..."],
+            {},
+        ],
+        ["SAcctScraper.get_raw", [], {}],
+        [
+            "SAcctScraper.__iter__",
+            [],
+            {
+                "entry": '{"account": "mila", "comment": {"administrator": null, "job": null, "system": null}, "allocation_nodes": 4, "array": {"job_id": null, "limits": {"max": {"running": {"tasks": 0}}}, "task": null, "task_id": null}, "association": {"account": "mila", "cluster": "raisin", "partition": null, "user": "petitbonhomme"}, "cluster": "raisin", "constraints": "x86_64&(48gb|80gb)", "derived_exit_code": {"status": "SUCCESS", "return_code": 0}, "time": {"elapsed": 43200, "eligible": 1641003593, "end": 1676480460, "start": 1676437260, "submission": 1676437200, "suspended": 0, "system": {"seconds": 0, "microseconds": 0}, "limit": 720.0, "total": {"seconds": 0, "microseconds": 0}, "user": {"seconds": 0, "microseconds": 0}}, "exit_code": {"status": "SUCCESS", "return_code": 0}, "flags": ["CLEAR_SCHEDULING", "STARTED_ON_BACKFILL"], "group": "petitbonhomme", "het": {"job_id": 0, "job_offset": null}, "job_id": 0, "name": "main.sh", "mcs": {"label": ""}, "nodes": "cn-c021", "partition": "long", "priority": 7152, "qos": "normal", "required": {"CPUs": 16, "memory": 8192}, "kill_request_user": null, "reservation": {"id": 0, "name": 0}, "state": {"current": "CANCELLED", "reason": "Dependency"}, "steps": [], "tres": {"allocated": [{"type": "cpu", "name": null, "id": 1, "count": 4}, {"type": "mem", "name": null, "id": 2, "count": 49152}, {"type": "energy", "name": null, "id": 3, "count": null}, {"type": "node", "name": null, "id": 4, "count": 1}, {"type": "billing", "name": null, "id": 5, "count": 1}, {"type": "gres", "name": "gpu", "id": 1001, "count": 1}], "requested": [{"type": "cpu", "name": null, "id": 1, "count": 4}, {"type": "mem", "name": null, "id": 2, "count": 49152}, {"type": "node", "name": null, "id": 4, "count": 1}, {"type": "billing", "name": null, "id": 5, "count": 1}, {"type": "gres", "name": "gpu", "id": 1001, "count": 1}]}, "user": "petitbonhomme", "wckey": {"wckey": "", "flags": []}, "working_directory": "/network/scratch/p/petitbonhomme/experience-demente"}'
+            },
+        ],
+        ["update_allocated_gpu_type", [], {}],
+        ["SAcctScraper.get_raw", [], {}],
+        ["SAcctScraper.get_raw", [], {}],
+        ["SAcctScraper.get_raw", [], {}],
+        ["SAcctScraper.get_raw", [], {}],
+    ]
+
+    assert len(spans) == len(expected_spans)
+    for i, (span_name, event_names, attributes) in enumerate(reversed(expected_spans)):
+        # Check span name
+        assert spans[i].name == span_name
+        # Check span event count
+        assert len(spans[i].events) == len(event_names)
+        # Check span event names
+        for j, event_name in enumerate(event_names):
+            assert spans[i].events[j].name == event_name
+        # Check span attributes
+        for key, value in attributes.items():
+            assert spans[i].attributes[key] == value
+
+
 @pytest.mark.usefixtures("tzlocal_is_mtl")
 @pytest.mark.parametrize(
     "json_jobs",

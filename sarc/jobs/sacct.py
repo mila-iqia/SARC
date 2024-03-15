@@ -268,6 +268,7 @@ def sacct_mongodb_import(
         logger.info(f"Saved {len(scraper)} entries.")
 
 
+@trace_decorator()
 def update_allocated_gpu_type(cluster: ClusterConfig, entry: SlurmJob) -> Optional[str]:
     """Try to infer job GPU type.
 
