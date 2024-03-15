@@ -230,6 +230,7 @@ class SAcctScraper:
         raise ValueError(f"Unsupported slurm version: {version}")
 
 
+@trace_decorator()
 def sacct_mongodb_import(
     cluster: ClusterConfig, day: datetime, no_prometheus: bool
 ) -> None:
@@ -245,27 +246,22 @@ def sacct_mongodb_import(
     no_prometheus: bool
         If True, avoid any scraping requiring prometheus connection.
     """
-    with using_trace("sarc.jobs.sacct", "sacct_mongodb_import") as span:
-        collection = jobs_collection()
-        scraper = SAcctScraper(cluster, day)
-        span.add_event("Getting the sacct data...")
-        logger.info("Getting the sacct data...")
-        scraper.get_raw()
-        span.add_event(
-            f"Saving into mongodb collection '{collection.Meta.collection_name}'..."
-        )
-        logger.info(
-            f"Saving into mongodb collection '{collection.Meta.collection_name}'..."
-        )
-        for entry in tqdm(scraper):
-            saved = False
-            if not no_prometheus:
-                update_allocated_gpu_type(cluster, entry)
-                saved = entry.statistics(recompute=True, save=True) is not None
+    collection = jobs_collection()
+    scraper = SAcctScraper(cluster, day)
+    logger.info("Getting the sacct data...")
+    scraper.get_raw()
+    logger.info(
+        f"Saving into mongodb collection '{collection.Meta.collection_name}'..."
+    )
+    for entry in tqdm(scraper):
+        saved = False
+        if not no_prometheus:
+            update_allocated_gpu_type(cluster, entry)
+            saved = entry.statistics(recompute=True, save=True) is not None
 
-            if not saved:
-                collection.save_job(entry)
-        logger.info(f"Saved {len(scraper)} entries.")
+        if not saved:
+            collection.save_job(entry)
+    logger.info(f"Saved {len(scraper)} entries.")
 
 
 @trace_decorator()
