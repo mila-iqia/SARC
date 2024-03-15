@@ -779,6 +779,19 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
         datetime(2023, 2, 15, tzinfo=MTL) + timedelta(days=i) for i in range(2)
     ]
 
+    def _gen_error_command(cmd_template, job_submit_datetime):
+        return Command(
+            cmd=(
+                cmd_template.format(
+                    start=job_submit_datetime.strftime("%Y-%m-%dT%H:%M"),
+                    end=(job_submit_datetime + timedelta(days=1)).strftime(
+                        "%Y-%m-%dT%H:%M"
+                    ),
+                )
+            ),
+            exit=1,
+        )
+
     def _create_session(cluster_name, cmd_template, datetimes):
         return Session(
             host=cluster_name,
@@ -805,7 +818,8 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
                     ).encode("utf-8"),
                 )
                 for job_id, job_submit_datetime in enumerate(datetimes)
-            ],
+            ]
+            + [_gen_error_command(cmd_template, datetime(2023, 3, 16, tzinfo=MTL))],
         )
 
     channel = remote.expect_sessions(
