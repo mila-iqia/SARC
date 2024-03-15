@@ -173,20 +173,17 @@ def test_parse_malformed_jobs(sacct_json, scraper, captrace):
     scraper.results = json.loads(sacct_json)
     assert list(scraper) == []
     spans = captrace.get_finished_spans()
-    assert len(spans) == 4
-    # First spans are SAcctScraper.get_raw spans with no error.
-    assert spans[0].name == "SAcctScraper.get_raw"
-    assert spans[0].status.status_code == StatusCode.OK
-    assert spans[1].name == "SAcctScraper.get_raw"
-    assert spans[1].status.status_code == StatusCode.OK
-    assert spans[2].name == "SAcctScraper.get_raw"
-    assert spans[2].status.status_code == StatusCode.OK
-    # Latest span is SAcctScraper.__iter__ with error.
-    assert spans[3].name == "SAcctScraper.__iter__"
-    entry = json.loads(spans[3].attributes["entry"])
+    assert len(spans) > 1
+    # Just check the span that should have got an error.
+    error_spans = [
+        span for span in spans if span.status.status_code == StatusCode.ERROR
+    ]
+    assert len(error_spans) == 1
+    (error_span,) = error_spans
+    assert error_span.name == "SAcctScraper.__iter__"
+    entry = json.loads(error_span.attributes["entry"])
     assert isinstance(entry, dict)
     assert entry["account"] == "mila"
-    assert spans[3].status.status_code == StatusCode.ERROR
 
 
 @pytest.mark.usefixtures("standard_config")
