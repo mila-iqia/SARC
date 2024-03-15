@@ -139,48 +139,6 @@ def test_parse_json_job(json_jobs, scraper, file_regression):
     file_regression.check(scraper.convert(json_jobs[0]).json(indent=4))
 
 
-@pytest.mark.usefixtures("tzlocal_is_mtl")
-@pytest.mark.parametrize(
-    "json_jobs",
-    [
-        {
-            "tres": {
-                "allocated": [
-                    {"requested": {"quossé ça fait icitte ça?": "ché pas"}},
-                    {"count": 2, "id": 1, "name": None, "type": "cpu"},
-                    {"count": 10000, "id": 2, "name": None, "type": "mem"},
-                    {"count": 1, "id": 4, "name": None, "type": "node"},
-                    {"count": 1, "id": 5, "name": None, "type": "billing"},
-                    {"count": 1, "id": 1001, "name": "gpu", "type": "gres"},
-                    {"count": 1, "id": 1002, "name": "gpu:p100", "type": "gres"},
-                ],
-                "requested": [
-                    {"count": 4, "id": 1, "name": None, "type": "cpu"},
-                    {"count": 16384, "id": 2, "name": None, "type": "mem"},
-                    {"count": 2, "id": 4, "name": None, "type": "node"},
-                    {"count": 3, "id": 5, "name": None, "type": "billing"},
-                    {"count": 4, "id": 1001, "name": "gpu", "type": "gres"},
-                    {"count": 4, "id": 1002, "name": "gpu:p100", "type": "gres"},
-                ],
-            }
-        }
-    ],
-    indirect=True,
-)
-@pytest.mark.usefixtures("standard_config")
-def test_parse_malformed_jobs(sacct_json, scraper, capsys):
-    scraper.results = json.loads(sacct_json)
-    assert list(scraper) == []
-    assert (
-        """\
-There was a problem with this entry:
-====================================
-{'account': 'mila',
-"""
-        in capsys.readouterr().err
-    )
-
-
 @pytest.mark.usefixtures("standard_config")
 @pytest.mark.usefixtures("tzlocal_is_mtl")
 @pytest.mark.parametrize(
@@ -795,6 +753,13 @@ def test_multiple_clusters_and_dates(
             {},
         ],
         ["SAcctScraper.get_raw", [], {}],
+        [
+            "SAcctScraper.__iter__",
+            [],
+            {
+                "entry": '{"account": "mila", "comment": {"administrator": null, "job": null, "system": null}, "allocation_nodes": 4, "array": {"job_id": null, "limits": {"max": {"running": {"tasks": 0}}}, "task": null, "task_id": null}, "association": {"account": "mila", "cluster": "raisin", "partition": null, "user": "petitbonhomme"}, "cluster": "patate", "constraints": "x86_64&(48gb|80gb)", "derived_exit_code": {"status": "SUCCESS", "return_code": 0}, "time": {"elapsed": 43200, "eligible": 1641003593, "end": 1676566860, "start": 1676523660, "submission": 1676523600, "suspended": 0, "system": {"seconds": 0, "microseconds": 0}, "limit": 720.0, "total": {"seconds": 0, "microseconds": 0}, "user": {"seconds": 0, "microseconds": 0}}, "exit_code": {"status": "SUCCESS", "return_code": 0}, "flags": ["CLEAR_SCHEDULING", "STARTED_ON_BACKFILL"], "group": "petitbonhomme", "het": {"job_id": 0, "job_offset": null}, "job_id": 1, "name": "main.sh", "mcs": {"label": ""}, "nodes": "cn-c021", "partition": "long", "priority": 7152, "qos": "normal", "required": {"CPUs": 16, "memory": 8192}, "kill_request_user": null, "reservation": {"id": 0, "name": 0}, "state": {"current": "CANCELLED", "reason": "Dependency"}, "steps": [], "tres": {"allocated": [{"type": "cpu", "name": null, "id": 1, "count": 4}, {"type": "mem", "name": null, "id": 2, "count": 49152}, {"type": "energy", "name": null, "id": 3, "count": null}, {"type": "node", "name": null, "id": 4, "count": 1}, {"type": "billing", "name": null, "id": 5, "count": 1}, {"type": "gres", "name": "gpu", "id": 1001, "count": 1}], "requested": [{"type": "cpu", "name": null, "id": 1, "count": 4}, {"type": "mem", "name": null, "id": 2, "count": 49152}, {"type": "node", "name": null, "id": 4, "count": 1}, {"type": "billing", "name": null, "id": 5, "count": 1}, {"type": "gres", "name": "gpu", "id": 1001, "count": 1}]}, "user": "petitbonhomme", "wckey": {"wckey": "", "flags": []}, "working_directory": "/network/scratch/p/petitbonhomme/experience-demente"}'
+            },
+        ],
         ["SAcctScraper.get_raw", [], {}],
         ["SAcctScraper.get_raw", [], {}],
         ["SAcctScraper.get_raw", [], {}],
@@ -815,6 +780,13 @@ def test_multiple_clusters_and_dates(
             {},
         ],
         ["SAcctScraper.get_raw", [], {}],
+        [
+            "SAcctScraper.__iter__",
+            [],
+            {
+                "entry": '{"account": "mila", "comment": {"administrator": null, "job": null, "system": null}, "allocation_nodes": 4, "array": {"job_id": null, "limits": {"max": {"running": {"tasks": 0}}}, "task": null, "task_id": null}, "association": {"account": "mila", "cluster": "raisin", "partition": null, "user": "petitbonhomme"}, "cluster": "patate", "constraints": "x86_64&(48gb|80gb)", "derived_exit_code": {"status": "SUCCESS", "return_code": 0}, "time": {"elapsed": 43200, "eligible": 1641003593, "end": 1676480460, "start": 1676437260, "submission": 1676437200, "suspended": 0, "system": {"seconds": 0, "microseconds": 0}, "limit": 720.0, "total": {"seconds": 0, "microseconds": 0}, "user": {"seconds": 0, "microseconds": 0}}, "exit_code": {"status": "SUCCESS", "return_code": 0}, "flags": ["CLEAR_SCHEDULING", "STARTED_ON_BACKFILL"], "group": "petitbonhomme", "het": {"job_id": 0, "job_offset": null}, "job_id": 0, "name": "main.sh", "mcs": {"label": ""}, "nodes": "cn-c021", "partition": "long", "priority": 7152, "qos": "normal", "required": {"CPUs": 16, "memory": 8192}, "kill_request_user": null, "reservation": {"id": 0, "name": 0}, "state": {"current": "CANCELLED", "reason": "Dependency"}, "steps": [], "tres": {"allocated": [{"type": "cpu", "name": null, "id": 1, "count": 4}, {"type": "mem", "name": null, "id": 2, "count": 49152}, {"type": "energy", "name": null, "id": 3, "count": null}, {"type": "node", "name": null, "id": 4, "count": 1}, {"type": "billing", "name": null, "id": 5, "count": 1}, {"type": "gres", "name": "gpu", "id": 1001, "count": 1}], "requested": [{"type": "cpu", "name": null, "id": 1, "count": 4}, {"type": "mem", "name": null, "id": 2, "count": 49152}, {"type": "node", "name": null, "id": 4, "count": 1}, {"type": "billing", "name": null, "id": 5, "count": 1}, {"type": "gres", "name": "gpu", "id": 1001, "count": 1}]}, "user": "petitbonhomme", "wckey": {"wckey": "", "flags": []}, "working_directory": "/network/scratch/p/petitbonhomme/experience-demente"}'
+            },
+        ],
         ["SAcctScraper.get_raw", [], {}],
         ["SAcctScraper.get_raw", [], {}],
         ["SAcctScraper.get_raw", [], {}],
@@ -835,6 +807,13 @@ def test_multiple_clusters_and_dates(
             {},
         ],
         ["SAcctScraper.get_raw", [], {}],
+        [
+            "SAcctScraper.__iter__",
+            [],
+            {
+                "entry": '{"account": "mila", "comment": {"administrator": null, "job": null, "system": null}, "allocation_nodes": 4, "array": {"job_id": null, "limits": {"max": {"running": {"tasks": 0}}}, "task": null, "task_id": null}, "association": {"account": "mila", "cluster": "raisin", "partition": null, "user": "petitbonhomme"}, "cluster": "raisin", "constraints": "x86_64&(48gb|80gb)", "derived_exit_code": {"status": "SUCCESS", "return_code": 0}, "time": {"elapsed": 43200, "eligible": 1641003593, "end": 1676566860, "start": 1676523660, "submission": 1676523600, "suspended": 0, "system": {"seconds": 0, "microseconds": 0}, "limit": 720.0, "total": {"seconds": 0, "microseconds": 0}, "user": {"seconds": 0, "microseconds": 0}}, "exit_code": {"status": "SUCCESS", "return_code": 0}, "flags": ["CLEAR_SCHEDULING", "STARTED_ON_BACKFILL"], "group": "petitbonhomme", "het": {"job_id": 0, "job_offset": null}, "job_id": 1, "name": "main.sh", "mcs": {"label": ""}, "nodes": "cn-c021", "partition": "long", "priority": 7152, "qos": "normal", "required": {"CPUs": 16, "memory": 8192}, "kill_request_user": null, "reservation": {"id": 0, "name": 0}, "state": {"current": "CANCELLED", "reason": "Dependency"}, "steps": [], "tres": {"allocated": [{"type": "cpu", "name": null, "id": 1, "count": 4}, {"type": "mem", "name": null, "id": 2, "count": 49152}, {"type": "energy", "name": null, "id": 3, "count": null}, {"type": "node", "name": null, "id": 4, "count": 1}, {"type": "billing", "name": null, "id": 5, "count": 1}, {"type": "gres", "name": "gpu", "id": 1001, "count": 1}], "requested": [{"type": "cpu", "name": null, "id": 1, "count": 4}, {"type": "mem", "name": null, "id": 2, "count": 49152}, {"type": "node", "name": null, "id": 4, "count": 1}, {"type": "billing", "name": null, "id": 5, "count": 1}, {"type": "gres", "name": "gpu", "id": 1001, "count": 1}]}, "user": "petitbonhomme", "wckey": {"wckey": "", "flags": []}, "working_directory": "/network/scratch/p/petitbonhomme/experience-demente"}'
+            },
+        ],
         ["SAcctScraper.get_raw", [], {}],
         ["SAcctScraper.get_raw", [], {}],
         ["SAcctScraper.get_raw", [], {}],
@@ -855,6 +834,13 @@ def test_multiple_clusters_and_dates(
             {},
         ],
         ["SAcctScraper.get_raw", [], {}],
+        [
+            "SAcctScraper.__iter__",
+            [],
+            {
+                "entry": '{"account": "mila", "comment": {"administrator": null, "job": null, "system": null}, "allocation_nodes": 4, "array": {"job_id": null, "limits": {"max": {"running": {"tasks": 0}}}, "task": null, "task_id": null}, "association": {"account": "mila", "cluster": "raisin", "partition": null, "user": "petitbonhomme"}, "cluster": "raisin", "constraints": "x86_64&(48gb|80gb)", "derived_exit_code": {"status": "SUCCESS", "return_code": 0}, "time": {"elapsed": 43200, "eligible": 1641003593, "end": 1676480460, "start": 1676437260, "submission": 1676437200, "suspended": 0, "system": {"seconds": 0, "microseconds": 0}, "limit": 720.0, "total": {"seconds": 0, "microseconds": 0}, "user": {"seconds": 0, "microseconds": 0}}, "exit_code": {"status": "SUCCESS", "return_code": 0}, "flags": ["CLEAR_SCHEDULING", "STARTED_ON_BACKFILL"], "group": "petitbonhomme", "het": {"job_id": 0, "job_offset": null}, "job_id": 0, "name": "main.sh", "mcs": {"label": ""}, "nodes": "cn-c021", "partition": "long", "priority": 7152, "qos": "normal", "required": {"CPUs": 16, "memory": 8192}, "kill_request_user": null, "reservation": {"id": 0, "name": 0}, "state": {"current": "CANCELLED", "reason": "Dependency"}, "steps": [], "tres": {"allocated": [{"type": "cpu", "name": null, "id": 1, "count": 4}, {"type": "mem", "name": null, "id": 2, "count": 49152}, {"type": "energy", "name": null, "id": 3, "count": null}, {"type": "node", "name": null, "id": 4, "count": 1}, {"type": "billing", "name": null, "id": 5, "count": 1}, {"type": "gres", "name": "gpu", "id": 1001, "count": 1}], "requested": [{"type": "cpu", "name": null, "id": 1, "count": 4}, {"type": "mem", "name": null, "id": 2, "count": 49152}, {"type": "node", "name": null, "id": 4, "count": 1}, {"type": "billing", "name": null, "id": 5, "count": 1}, {"type": "gres", "name": "gpu", "id": 1001, "count": 1}]}, "user": "petitbonhomme", "wckey": {"wckey": "", "flags": []}, "working_directory": "/network/scratch/p/petitbonhomme/experience-demente"}'
+            },
+        ],
         ["SAcctScraper.get_raw", [], {}],
         ["SAcctScraper.get_raw", [], {}],
         ["SAcctScraper.get_raw", [], {}],

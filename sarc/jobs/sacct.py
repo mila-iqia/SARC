@@ -1,10 +1,7 @@
 import json
 import logging
 import subprocess
-import sys
-import traceback
 from datetime import date, datetime, time, timedelta
-from pprint import pformat
 from typing import Iterator, Optional
 
 from hostlist import expand_hostlist
@@ -110,17 +107,11 @@ class SAcctScraper:
         """Fetch and iterate on all jobs as SlurmJob objects."""
         version = self.get_raw().get("meta", {}).get("Slurm", {}).get("version", None)
         for entry in self.get_raw()["jobs"]:
-            try:
+            with using_trace("sarc.jobs.sacct", "SAcctScraper.__iter__") as span:
+                span.set_attribute("entry", json.dumps(entry))
                 converted = self.convert(entry, version)
                 if converted is not None:
                     yield converted
-            except Exception:  # pylint: disable=broad-exception-caught
-                traceback.print_exc()
-                print("There was a problem with this entry:", file=sys.stderr)
-                print("====================================", file=sys.stderr)
-                print(pformat(entry), file=sys.stderr)
-                print("====================================", file=sys.stderr)
-                logger.error(f"Problem with this entry: {pformat(entry)}")
 
     def convert(self, entry: dict, version: dict = None) -> Optional[SlurmJob]:
         """Convert a single job entry from sacct to a SlurmJob."""
