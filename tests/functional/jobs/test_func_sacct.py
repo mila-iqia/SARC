@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 import pytest
 from fabric.testing.base import Command, Session
+from opentelemetry.trace import Status, StatusCode, get_tracer
 
 from sarc.config import MTL, PST, UTC, config
 from sarc.jobs import sacct
@@ -137,6 +138,55 @@ def scraper():
 )
 def test_parse_json_job(json_jobs, scraper, file_regression):
     file_regression.check(scraper.convert(json_jobs[0]).json(indent=4))
+
+
+@pytest.mark.usefixtures("tzlocal_is_mtl")
+@pytest.mark.parametrize(
+    "json_jobs",
+    [
+        {
+            "tres": {
+                "allocated": [
+                    {"requested": {"quossé ça fait icitte ça?": "ché pas"}},
+                    {"count": 2, "id": 1, "name": None, "type": "cpu"},
+                    {"count": 10000, "id": 2, "name": None, "type": "mem"},
+                    {"count": 1, "id": 4, "name": None, "type": "node"},
+                    {"count": 1, "id": 5, "name": None, "type": "billing"},
+                    {"count": 1, "id": 1001, "name": "gpu", "type": "gres"},
+                    {"count": 1, "id": 1002, "name": "gpu:p100", "type": "gres"},
+                ],
+                "requested": [
+                    {"count": 4, "id": 1, "name": None, "type": "cpu"},
+                    {"count": 16384, "id": 2, "name": None, "type": "mem"},
+                    {"count": 2, "id": 4, "name": None, "type": "node"},
+                    {"count": 3, "id": 5, "name": None, "type": "billing"},
+                    {"count": 4, "id": 1001, "name": "gpu", "type": "gres"},
+                    {"count": 4, "id": 1002, "name": "gpu:p100", "type": "gres"},
+                ],
+            }
+        }
+    ],
+    indirect=True,
+)
+@pytest.mark.usefixtures("standard_config")
+def test_parse_malformed_jobs(sacct_json, scraper, captrace):
+    scraper.results = json.loads(sacct_json)
+    assert list(scraper) == []
+    spans = captrace.get_finished_spans()
+    assert len(spans) == 4
+    # First spans are SAcctScraper.get_raw spans with no error.
+    assert spans[0].name == "SAcctScraper.get_raw"
+    assert spans[0].status.status_code == StatusCode.OK
+    assert spans[1].name == "SAcctScraper.get_raw"
+    assert spans[1].status.status_code == StatusCode.OK
+    assert spans[2].name == "SAcctScraper.get_raw"
+    assert spans[2].status.status_code == StatusCode.OK
+    # Latest span is SAcctScraper.__iter__ with error.
+    assert spans[3].name == "SAcctScraper.__iter__"
+    entry = json.loads(spans[3].attributes["entry"])
+    assert isinstance(entry, dict)
+    assert entry["account"] == "mila"
+    assert spans[3].status.status_code == StatusCode.ERROR
 
 
 @pytest.mark.usefixtures("standard_config")
