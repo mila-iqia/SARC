@@ -443,7 +443,6 @@ slurm_job_metric_names = [
 ]
 
 
-@trace_decorator()
 def compute_cost_and_waste(full_df: pandas.DataFrame) -> pandas.DataFrame:
     """
     Compute cost and waste for given pandas DataFrame.
