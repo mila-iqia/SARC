@@ -782,7 +782,7 @@ def test_multiple_clusters_and_dates(
         # patate, 2023-02-16
         [
             "acquire_cluster_data",
-            ["Acquire data on patate for date: 2023-02-16 00:00:00 (is_auto=False)"],
+            [],
             {
                 "cluster_name": "patate",
                 "date": "2023-02-16 00:00:00",
@@ -802,7 +802,7 @@ def test_multiple_clusters_and_dates(
         # patate, 2023-02-15
         [
             "acquire_cluster_data",
-            ["Acquire data on patate for date: 2023-02-15 00:00:00 (is_auto=False)"],
+            [],
             {
                 "cluster_name": "patate",
                 "date": "2023-02-15 00:00:00",
@@ -822,7 +822,7 @@ def test_multiple_clusters_and_dates(
         # raisin, 2023-02-16
         [
             "acquire_cluster_data",
-            ["Acquire data on raisin for date: 2023-02-16 00:00:00 (is_auto=False)"],
+            [],
             {
                 "cluster_name": "raisin",
                 "date": "2023-02-16 00:00:00",
@@ -842,7 +842,7 @@ def test_multiple_clusters_and_dates(
         # raisin, 2023-02-15
         [
             "acquire_cluster_data",
-            ["Acquire data on raisin for date: 2023-02-15 00:00:00 (is_auto=False)"],
+            [],
             {
                 "cluster_name": "raisin",
                 "date": "2023-02-15 00:00:00",

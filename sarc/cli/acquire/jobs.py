@@ -101,9 +101,6 @@ class AcquireJobs:
                     span.set_attribute("date", str(date))
                     span.set_attribute("is_auto", is_auto)
                     try:
-                        span.add_event(
-                            f"Acquire data on {cluster_name} for date: {date} (is_auto={is_auto})"
-                        )
                         logging.info(
                             f"Acquire data on {cluster_name} for date: {date} (is_auto={is_auto})"
                         )
@@ -115,9 +112,6 @@ class AcquireJobs:
                             _dates_set_last_date(cluster_name, date)
                     # pylint: disable=broad-exception-caught
                     except Exception as e:
-                        span.add_event(
-                            f"Failed to acquire data for {cluster_name} on {date}: {e}"
-                        )
                         logging.error(
                             f"Failed to acquire data for {cluster_name} on {date}: {e}"
                         )
