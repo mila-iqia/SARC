@@ -870,6 +870,7 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     )
 
     # Check logging
+    print(caplog.text)
     assert bool(
         re.search(
             r"root:jobs\.py:[0-9]+ Acquire data on raisin for date: 2023-02-15 00:00:00 \(is_auto=False\)",
@@ -879,6 +880,14 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     assert bool(
         re.search(
             r"root:jobs\.py:[0-9]+ Acquire data on patate for date: 2023-02-15 00:00:00 \(is_auto=False\)",
+            caplog.text,
+        )
+    )
+    assert "Getting the sacct data..." in caplog.text
+    assert "Saving into mongodb collection '" in caplog.text
+    assert bool(
+        re.search(
+            r"sarc\.jobs\.sacct:sacct\.py:[0-9]+ Saved [0-9]+ entries\.",
             caplog.text,
         )
     )

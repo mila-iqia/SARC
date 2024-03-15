@@ -80,17 +80,14 @@ class SAcctScraper:
         cached if Config.cache is set.
         """
         if self.results is not None:
-            logger.info("Getting results ...")
             return self.results
 
         if self.cachefile and self.cachefile.exists():
-            logger.info("Getting cachefile ...")
             try:
                 return json.load(open(self.cachefile, "r", encoding="utf8"))
             except json.JSONDecodeError:
                 logger.warning("Need to re-fetch because cache has malformed JSON.")
 
-        logger.info("Fetching raw ...")
         self.results = self.fetch_raw()
         if self.cachefile:
             # pylint: disable=consider-using-with
