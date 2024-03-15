@@ -95,25 +95,33 @@ class AcquireJobs:
         clusters_configs = cfg.clusters
 
         for cluster_name in self.cluster_names:
-            for date, is_auto in parse_dates(self.dates, cluster_name):
-                with using_trace("AcquireJobs", "acquire_cluster_data") as span:
-                    span.set_attribute("cluster_name", cluster_name)
-                    span.set_attribute("date", str(date))
-                    span.set_attribute("is_auto", is_auto)
-                    try:
-                        logging.info(
-                            f"Acquire data on {cluster_name} for date: {date} (is_auto={is_auto})"
-                        )
+            try:
+                for date, is_auto in parse_dates(self.dates, cluster_name):
+                    with using_trace(
+                        "AcquireJobs", "acquire_cluster_data", exception_types=()
+                    ) as span:
+                        span.set_attribute("cluster_name", cluster_name)
+                        span.set_attribute("date", str(date))
+                        span.set_attribute("is_auto", is_auto)
+                        try:
+                            logging.info(
+                                f"Acquire data on {cluster_name} for date: {date} (is_auto={is_auto})"
+                            )
 
-                        sacct_mongodb_import(
-                            clusters_configs[cluster_name], date, self.no_prometheus
-                        )
-                        if is_auto:
-                            _dates_set_last_date(cluster_name, date)
-                    # pylint: disable=broad-exception-caught
-                    except Exception as e:
-                        logging.error(
-                            f"Failed to acquire data for {cluster_name} on {date}: {e}"
-                        )
-                        return 1
+                            sacct_mongodb_import(
+                                clusters_configs[cluster_name], date, self.no_prometheus
+                            )
+                            if is_auto:
+                                _dates_set_last_date(cluster_name, date)
+                        # pylint: disable=broad-exception-caught
+                        except Exception as e:
+                            logging.error(
+                                f"Failed to acquire data for {cluster_name} on {date}: {e}"
+                            )
+                            raise e
+            # pylint: disable=broad-exception-caught
+            except Exception:
+                # Error while acquiring data on a cluster from given dates.
+                # Continue to next cluster.
+                continue
         return 0

@@ -839,6 +839,7 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
                 "--dates",
                 "2023-02-15",
                 "2023-02-16",
+                "2023-03-16",
             ]
         )
         == 0
@@ -855,6 +856,7 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
             "span_name": span.name,
             "span_events": [event.name for event in span.events],
             "span_attributes": dict(span.attributes),
+            "span_has_error": span.status.status_code == StatusCode.ERROR,
         }
         for span in reversed(spans)
     ]
@@ -885,6 +887,20 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     assert bool(
         re.search(
             r"sarc\.jobs\.sacct:sacct\.py:[0-9]+ Saved [0-9]+ entries\.",
+            caplog.text,
+        )
+    )
+
+    # There should be 2 acquisition errors for unexpected data 2023-03-16, one per cluster.
+    assert bool(
+        re.search(
+            r"root:jobs\.py:[0-9]+ Failed to acquire data for raisin on 2023-03-16 00:00:00:",
+            caplog.text,
+        )
+    )
+    assert bool(
+        re.search(
+            r"root:jobs\.py:[0-9]+ Failed to acquire data for patate on 2023-03-16 00:00:00:",
             caplog.text,
         )
     )
