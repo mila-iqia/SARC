@@ -794,11 +794,11 @@ def test_multiple_clusters_and_dates(
             ["Getting the sacct data...", "Saving into mongodb collection 'jobs'..."],
             {},
         ],
-        ["get_raw", ["Getting results ..."], {}],
-        ["get_raw", ["Getting results ..."], {}],
-        ["get_raw", ["Getting results ..."], {}],
-        ["get_raw", ["Getting results ..."], {}],
-        ["get_raw", ["Fetching raw ..."], {}],
+        ["SAcctScraper.get_raw", [], {}],
+        ["SAcctScraper.get_raw", [], {}],
+        ["SAcctScraper.get_raw", [], {}],
+        ["SAcctScraper.get_raw", [], {}],
+        ["SAcctScraper.get_raw", [], {}],
         # patate, 2023-02-15
         [
             "acquire_cluster_data",
@@ -814,11 +814,11 @@ def test_multiple_clusters_and_dates(
             ["Getting the sacct data...", "Saving into mongodb collection 'jobs'..."],
             {},
         ],
-        ["get_raw", ["Getting results ..."], {}],
-        ["get_raw", ["Getting results ..."], {}],
-        ["get_raw", ["Getting results ..."], {}],
-        ["get_raw", ["Getting results ..."], {}],
-        ["get_raw", ["Fetching raw ..."], {}],
+        ["SAcctScraper.get_raw", [], {}],
+        ["SAcctScraper.get_raw", [], {}],
+        ["SAcctScraper.get_raw", [], {}],
+        ["SAcctScraper.get_raw", [], {}],
+        ["SAcctScraper.get_raw", [], {}],
         # raisin, 2023-02-16
         [
             "acquire_cluster_data",
@@ -834,11 +834,11 @@ def test_multiple_clusters_and_dates(
             ["Getting the sacct data...", "Saving into mongodb collection 'jobs'..."],
             {},
         ],
-        ["get_raw", ["Getting results ..."], {}],
-        ["get_raw", ["Getting results ..."], {}],
-        ["get_raw", ["Getting results ..."], {}],
-        ["get_raw", ["Getting results ..."], {}],
-        ["get_raw", ["Fetching raw ..."], {}],
+        ["SAcctScraper.get_raw", [], {}],
+        ["SAcctScraper.get_raw", [], {}],
+        ["SAcctScraper.get_raw", [], {}],
+        ["SAcctScraper.get_raw", [], {}],
+        ["SAcctScraper.get_raw", [], {}],
         # raisin, 2023-02-15
         [
             "acquire_cluster_data",
@@ -854,11 +854,11 @@ def test_multiple_clusters_and_dates(
             ["Getting the sacct data...", "Saving into mongodb collection 'jobs'..."],
             {},
         ],
-        ["get_raw", ["Getting results ..."], {}],
-        ["get_raw", ["Getting results ..."], {}],
-        ["get_raw", ["Getting results ..."], {}],
-        ["get_raw", ["Getting results ..."], {}],
-        ["get_raw", ["Fetching raw ..."], {}],
+        ["SAcctScraper.get_raw", [], {}],
+        ["SAcctScraper.get_raw", [], {}],
+        ["SAcctScraper.get_raw", [], {}],
+        ["SAcctScraper.get_raw", [], {}],
+        ["SAcctScraper.get_raw", [], {}],
     ]
 
     assert len(spans) == len(expected_spans)

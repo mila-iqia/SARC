@@ -13,7 +13,7 @@ from tqdm import tqdm
 from sarc.config import UTC, ClusterConfig, config
 from sarc.jobs.job import SlurmJob, jobs_collection
 from sarc.jobs.series import get_job_time_series
-from sarc.traces import using_trace
+from sarc.traces import trace_decorator, using_trace
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +74,7 @@ class SAcctScraper:
             results = self.cluster.ssh.run(cmd, hide=True)
         return json.loads(results.stdout[results.stdout.find("{") :])
 
+    @trace_decorator()
     def get_raw(self) -> dict:
         """Return the raw sacct data as a dict.
 
@@ -81,29 +82,26 @@ class SAcctScraper:
         of the cache file are returned. Otherwise, the data is fetched via SSH and
         cached if Config.cache is set.
         """
-        with using_trace(
-            "sarc.jobs.sacct.SAcctScraper", "get_raw", exception_types=()
-        ) as span:
-            if self.results is not None:
-                span.add_event("Getting results ...")
-                return self.results
-
-            if self.cachefile and self.cachefile.exists():
-                span.add_event("Getting cachefile ...")
-                try:
-                    return json.load(open(self.cachefile, "r", encoding="utf8"))
-                except json.JSONDecodeError:
-                    logger.warning("Need to re-fetch because cache has malformed JSON.")
-
-            span.add_event("Fetching raw ...")
-            self.results = self.fetch_raw()
-            if self.cachefile:
-                # pylint: disable=consider-using-with
-                json.dump(
-                    fp=open(self.cachefile, "w", encoding="utf8"),
-                    obj=self.results,
-                )
+        if self.results is not None:
+            logger.info("Getting results ...")
             return self.results
+
+        if self.cachefile and self.cachefile.exists():
+            logger.info("Getting cachefile ...")
+            try:
+                return json.load(open(self.cachefile, "r", encoding="utf8"))
+            except json.JSONDecodeError:
+                logger.warning("Need to re-fetch because cache has malformed JSON.")
+
+        logger.info("Fetching raw ...")
+        self.results = self.fetch_raw()
+        if self.cachefile:
+            # pylint: disable=consider-using-with
+            json.dump(
+                fp=open(self.cachefile, "w", encoding="utf8"),
+                obj=self.results,
+            )
+        return self.results
 
     def __len__(self) -> int:
         return len(self.get_raw()["jobs"])
