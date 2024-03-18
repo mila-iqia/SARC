@@ -1,3 +1,5 @@
+import functools
+import inspect
 from contextlib import contextmanager
 
 from opentelemetry.trace import Status, StatusCode, get_tracer
@@ -42,3 +44,33 @@ def using_trace(
         finally:
             # nothing to do, end or close...
             pass
+
+
+def trace_decorator(tracer_name=None, span_name=None, exception_types=()):
+    """
+    Decorator to wrap a function into `using_trace` context manager.
+
+    Parameters
+    ----------
+    tracer_name: str, optional
+        Name of the tracer. If not specified, will try to use function module name.
+    span_name: str, optional
+        Name of the span. If not specified, will try to use function name.
+    exception_types: tuple, optional
+        Types of exceptions to catch, other types will be raised.
+        Default is empty tuple, meaning that all exceptions will be raised.
+    """
+
+    def decorator(fn):
+        @functools.wraps(fn)
+        def wrapper(*args, **kwargs):
+            with using_trace(
+                tracer_name or inspect.getmodule(fn).__name__,
+                span_name or fn.__qualname__,
+                exception_types,
+            ):
+                return fn(*args, **kwargs)
+
+        return wrapper
+
+    return decorator

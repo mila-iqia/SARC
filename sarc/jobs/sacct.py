@@ -1,10 +1,7 @@
 import json
 import logging
 import subprocess
-import sys
-import traceback
 from datetime import date, datetime, time, timedelta
-from pprint import pformat
 from typing import Iterator, Optional
 
 from hostlist import expand_hostlist
@@ -13,6 +10,7 @@ from tqdm import tqdm
 from sarc.config import UTC, ClusterConfig, config
 from sarc.jobs.job import SlurmJob, jobs_collection
 from sarc.jobs.series import get_job_time_series
+from sarc.traces import trace_decorator, using_trace
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +62,7 @@ class SAcctScraper:
         accounts = self.cluster.accounts and ",".join(self.cluster.accounts)
         accounts_option = f"-A {accounts}" if accounts else ""
         cmd = f"{self.cluster.sacct_bin} {accounts_option} -X -S '{start}' -E '{end}' --allusers --json"
-        print(f"{self.cluster.name} $ {cmd}")
+        logger.info(f"{self.cluster.name} $ {cmd}")
         if self.cluster.host == "localhost":
             results = subprocess.run(
                 cmd, shell=True, text=True, capture_output=True, check=False
@@ -73,6 +71,7 @@ class SAcctScraper:
             results = self.cluster.ssh.run(cmd, hide=True)
         return json.loads(results.stdout[results.stdout.find("{") :])
 
+    @trace_decorator()
     def get_raw(self) -> dict:
         """Return the raw sacct data as a dict.
 
@@ -105,16 +104,11 @@ class SAcctScraper:
         """Fetch and iterate on all jobs as SlurmJob objects."""
         version = self.get_raw().get("meta", {}).get("Slurm", {}).get("version", None)
         for entry in self.get_raw()["jobs"]:
-            try:
+            with using_trace("sarc.jobs.sacct", "SAcctScraper.__iter__") as span:
+                span.set_attribute("entry", json.dumps(entry))
                 converted = self.convert(entry, version)
                 if converted is not None:
                     yield converted
-            except Exception:  # pylint: disable=broad-exception-caught
-                traceback.print_exc()
-                print("There was a problem with this entry:", file=sys.stderr)
-                print("====================================", file=sys.stderr)
-                print(pformat(entry), file=sys.stderr)
-                print("====================================", file=sys.stderr)
 
     def convert(self, entry: dict, version: dict = None) -> Optional[SlurmJob]:
         """Convert a single job entry from sacct to a SlurmJob."""
@@ -233,6 +227,7 @@ class SAcctScraper:
         raise ValueError(f"Unsupported slurm version: {version}")
 
 
+@trace_decorator()
 def sacct_mongodb_import(
     cluster: ClusterConfig, day: datetime, no_prometheus: bool
 ) -> None:
@@ -250,9 +245,11 @@ def sacct_mongodb_import(
     """
     collection = jobs_collection()
     scraper = SAcctScraper(cluster, day)
-    print("Getting the sacct data...")
+    logger.info("Getting the sacct data...")
     scraper.get_raw()
-    print(f"Saving into mongodb collection '{collection.Meta.collection_name}'...")
+    logger.info(
+        f"Saving into mongodb collection '{collection.Meta.collection_name}'..."
+    )
     for entry in tqdm(scraper):
         saved = False
         if not no_prometheus:
@@ -261,9 +258,10 @@ def sacct_mongodb_import(
 
         if not saved:
             collection.save_job(entry)
-    print(f"Saved {len(scraper)} entries.")
+    logger.info(f"Saved {len(scraper)} entries.")
 
 
+@trace_decorator()
 def update_allocated_gpu_type(cluster: ClusterConfig, entry: SlurmJob) -> Optional[str]:
     """Try to infer job GPU type.
 
