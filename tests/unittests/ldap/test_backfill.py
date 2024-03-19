@@ -5,6 +5,7 @@ from datetime import date, datetime
 
 import pandas as pd
 import pytest
+from opentelemetry.trace import StatusCode
 from pymongo import InsertOne, UpdateOne
 from sarc_mocks import dictset, fake_mymila_data, mymila_template
 
@@ -114,7 +115,7 @@ def test_no_backfill(monkeypatch):
     assert updates == []
 
 
-def test_backfill_simple_insert_history(monkeypatch):
+def test_backfill_simple_insert_history(monkeypatch, captrace):
     collection = MockCollection()
     mymiladata(monkeypatch, user_with_history())
 
@@ -129,6 +130,14 @@ def test_backfill_simple_insert_history(monkeypatch):
     assert updates[0]._doc["record_end"] == updates[1]._doc["record_start"]
     assert updates[1]._doc["record_end"] == updates[2]._doc["record_start"]
     assert updates[2]._doc["record_end"] == datetime(2008, 1, 1)
+
+    # Check trace
+    spans = captrace.get_finished_spans()
+    assert len(spans) == 1
+    assert spans[0].name == "_user_record_backfill"
+    assert spans[0].status.status_code == StatusCode.OK
+    assert len(spans[0].events) == 1
+    assert spans[0].events[0].name == "Backfilling record history from mymila ..."
 
 
 Timestamp = lambda x: datetime.strptime(x, "%Y-%m-%d %H:%M:%S")

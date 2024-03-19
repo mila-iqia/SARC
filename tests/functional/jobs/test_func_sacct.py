@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import copy
 import json
+import logging
+import re
 import subprocess
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -9,6 +11,7 @@ from unittest.mock import patch
 
 import pytest
 from fabric.testing.base import Command, Session
+from opentelemetry.trace import Status, StatusCode, get_tracer
 
 from sarc.config import MTL, PST, UTC, config
 from sarc.jobs import sacct
@@ -166,17 +169,21 @@ def test_parse_json_job(json_jobs, scraper, file_regression):
     indirect=True,
 )
 @pytest.mark.usefixtures("standard_config")
-def test_parse_malformed_jobs(sacct_json, scraper, capsys):
+def test_parse_malformed_jobs(sacct_json, scraper, captrace):
     scraper.results = json.loads(sacct_json)
     assert list(scraper) == []
-    assert (
-        """\
-There was a problem with this entry:
-====================================
-{'account': 'mila',
-"""
-        in capsys.readouterr().err
-    )
+    spans = captrace.get_finished_spans()
+    assert len(spans) > 1
+    # Just check the span that should have got an error.
+    error_spans = [
+        span for span in spans if span.status.status_code == StatusCode.ERROR
+    ]
+    assert len(error_spans) == 1
+    (error_span,) = error_spans
+    assert error_span.name == "SAcctScraper.__iter__"
+    entry = json.loads(error_span.attributes["entry"])
+    assert isinstance(entry, dict)
+    assert entry["account"] == "mila"
 
 
 @pytest.mark.usefixtures("standard_config")
@@ -748,6 +755,168 @@ def test_multiple_clusters_and_dates(
     file_regression.check(
         f"Found {len(jobs)} job(s):\n"
         + "\n".join([job.json(exclude={"id": True}, indent=4) for job in jobs])
+    )
+
+
+@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache")
+def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
+    test_config,
+    remote,
+    file_regression,
+    cli_main,
+    prom_custom_query_mock,
+    caplog,
+    captrace,
+):
+    """
+    Copied from test_multiple_clusters_and_dates above, with changes:
+    - Added captrace to test tracing
+    - Removed `--no_prometheus` to test prometheus-related tracing
+    """
+    caplog.set_level(logging.INFO)
+    cluster_names = ["raisin", "patate"]
+    datetimes = [
+        datetime(2023, 2, 15, tzinfo=MTL) + timedelta(days=i) for i in range(2)
+    ]
+
+    def _gen_error_command(cmd_template, job_submit_datetime):
+        return Command(
+            cmd=(
+                cmd_template.format(
+                    start=job_submit_datetime.strftime("%Y-%m-%dT%H:%M"),
+                    end=(job_submit_datetime + timedelta(days=1)).strftime(
+                        "%Y-%m-%dT%H:%M"
+                    ),
+                )
+            ),
+            exit=1,
+        )
+
+    def _create_session(cluster_name, cmd_template, datetimes):
+        return Session(
+            host=cluster_name,
+            commands=[
+                Command(
+                    cmd=(
+                        cmd_template.format(
+                            start=job_submit_datetime.strftime("%Y-%m-%dT%H:%M"),
+                            end=(job_submit_datetime + timedelta(days=1)).strftime(
+                                "%Y-%m-%dT%H:%M"
+                            ),
+                        )
+                    ),
+                    out=create_sacct_json(
+                        [
+                            {
+                                "job_id": job_id,
+                                "cluster": cluster_name,
+                                "time": {
+                                    "submission": int(job_submit_datetime.timestamp())
+                                },
+                            }
+                        ]
+                    ).encode("utf-8"),
+                )
+                for job_id, job_submit_datetime in enumerate(datetimes)
+            ]
+            + [_gen_error_command(cmd_template, datetime(2023, 3, 16, tzinfo=MTL))],
+        )
+
+    channel = remote.expect_sessions(
+        _create_session(
+            "raisin",
+            "/opt/slurm/bin/sacct  -X -S '{start}' -E '{end}' --allusers --json",
+            datetimes=datetimes,
+        ),
+        _create_session(
+            "patate",
+            (
+                "/opt/software/slurm/bin/sacct "
+                "-A rrg-bonhomme-ad_gpu,rrg-bonhomme-ad_cpu,def-bonhomme_gpu,def-bonhomme_cpu "
+                "-X -S '{start}' -E '{end}' --allusers --json"
+            ),
+            datetimes=datetimes,
+        ),
+    )
+
+    # Import here so that config() is setup correctly when CLI is created.
+    import sarc.cli
+
+    assert (
+        cli_main(
+            [
+                "acquire",
+                "jobs",
+                "--cluster_name",
+                "raisin",
+                "patate",
+                "--dates",
+                "2023-02-15",
+                "2023-02-16",
+                "2023-03-16",
+            ]
+        )
+        == 0
+    )
+
+    jobs = list(get_jobs())
+
+    assert len(list(get_jobs())) == len(datetimes) * len(cluster_names)
+
+    # Check both jobs and trace in file regression
+    spans = captrace.get_finished_spans()
+    spans_data = [
+        {
+            "span_name": span.name,
+            "span_events": [event.name for event in span.events],
+            "span_attributes": dict(span.attributes),
+            "span_has_error": span.status.status_code == StatusCode.ERROR,
+        }
+        for span in reversed(spans)
+    ]
+
+    file_regression.check(
+        f"Found {len(jobs)} job(s):\n"
+        + "\n".join([job.json(exclude={"id": True}, indent=4) for job in jobs])
+        + f"\n\nFound {len(spans)} span(s):\n"
+        + json.dumps(spans_data, indent=1)
+    )
+
+    # Check logging
+    print(caplog.text)
+    assert bool(
+        re.search(
+            r"root:jobs\.py:[0-9]+ Acquire data on raisin for date: 2023-02-15 00:00:00 \(is_auto=False\)",
+            caplog.text,
+        )
+    )
+    assert bool(
+        re.search(
+            r"root:jobs\.py:[0-9]+ Acquire data on patate for date: 2023-02-15 00:00:00 \(is_auto=False\)",
+            caplog.text,
+        )
+    )
+    assert "Getting the sacct data..." in caplog.text
+    assert "Saving into mongodb collection '" in caplog.text
+    assert bool(
+        re.search(
+            r"sarc\.jobs\.sacct:sacct\.py:[0-9]+ Saved [0-9]+ entries\.",
+            caplog.text,
+        )
+    )
+
+    # There should be 2 acquisition errors for unexpected data 2023-03-16, one per cluster.
+    assert bool(
+        re.search(
+            r"root:jobs\.py:[0-9]+ Failed to acquire data for raisin on 2023-03-16 00:00:00:",
+            caplog.text,
+        )
+    )
+    assert bool(
+        re.search(
+            r"root:jobs\.py:[0-9]+ Failed to acquire data for patate on 2023-03-16 00:00:00:",
+            caplog.text,
+        )
     )
 
 

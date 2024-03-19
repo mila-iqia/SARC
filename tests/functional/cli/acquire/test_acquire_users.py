@@ -1,10 +1,13 @@
 import io
 import json
+import logging
 import random
+import re
 from io import StringIO
 from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
+from opentelemetry.trace import StatusCode
 
 import sarc.account_matching.make_matches
 import sarc.ldap.acquire
@@ -76,7 +79,7 @@ class FileSimulator:
 
 
 @pytest.mark.usefixtures("empty_read_write_db")
-def test_acquire_users(cli_main, monkeypatch, mock_file):
+def test_acquire_users(cli_main, monkeypatch, mock_file, captrace):
     """Test command line `sarc acquire users`.
 
     Copied from tests.functional.ldap.test_acquire_ldap.test_acquire_ldap
@@ -119,6 +122,24 @@ def test_acquire_users(cli_main, monkeypatch, mock_file):
     # test the absence of the mysterious stranger
     js_user = get_user(drac_account_username="stranger.person")
     assert js_user is None
+
+    # Check traces
+    # NB: We don't check logging here, because
+    # this execution won't display "acquire users" logs,
+    # as everything goes well without corner cases.
+    # We will test logging in test_acquire_users_prompt below.
+    spans = captrace.get_finished_spans()
+    assert len(spans) == 1
+    assert spans[0].name == "match_drac_to_mila_accounts"
+    assert spans[0].status.status_code == StatusCode.OK
+    assert len(spans[0].events) == 4
+    assert (
+        spans[0].events[0].name
+        == "Loading mila_ldap, drac_roles and drac_members from files ..."
+    )
+    assert spans[0].events[1].name == "Loading matching config from file ..."
+    assert spans[0].events[2].name == "Matching DRAC/CC to mila accounts ..."
+    assert spans[0].events[3].name == "Committing matches to database ..."
 
 
 @pytest.mark.parametrize(
@@ -306,8 +327,9 @@ def test_acquire_users_co_supervisors(
 
 
 @pytest.mark.usefixtures("empty_read_write_db")
-def test_acquire_users_prompt(cli_main, monkeypatch, file_contents):
+def test_acquire_users_prompt(cli_main, monkeypatch, file_contents, caplog, captrace):
     """Test command line `sarc acquire users --prompt`."""
+    caplog.set_level(logging.INFO)
     nbr_users = 10
 
     def mock_query_ldap(
@@ -379,3 +401,32 @@ def test_acquire_users_prompt(cli_main, monkeypatch, file_contents):
     assert js_user.drac_members is not None
     assert js_user.drac_members["username"] == "stranger.person"
     assert js_user.drac_roles is None
+
+    # Check logging. There are logs from "acquire users" execution,
+    # since we go through manual prompts, where some logs are printed.
+    assert bool(
+        re.search(
+            r"root:make_matches\.py:[0-9]+ \[prompt] John Smith the 003rd \(ignored\)",
+            caplog.text,
+        )
+    )
+    assert bool(
+        re.search(
+            r"root:acquire\.py:[0-9]+ Saving 1 manual matches \.\.\.", caplog.text
+        )
+    )
+
+    # Check traces
+    spans = captrace.get_finished_spans()
+    assert len(spans) == 1
+    assert spans[0].name == "match_drac_to_mila_accounts"
+    assert spans[0].status.status_code == StatusCode.OK
+    assert len(spans[0].events) == 5
+    assert (
+        spans[0].events[0].name
+        == "Loading mila_ldap, drac_roles and drac_members from files ..."
+    )
+    assert spans[0].events[1].name == "Loading matching config from file ..."
+    assert spans[0].events[2].name == "Matching DRAC/CC to mila accounts ..."
+    assert spans[0].events[3].name == "Committing matches to database ..."
+    assert spans[0].events[4].name == "Saving 1 manual matches ..."
