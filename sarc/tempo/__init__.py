@@ -22,7 +22,7 @@ def query(traceid: str, start: str = None, end: str = None):
              parameters are provided, it will only check in the blocks within
              the specified time range, this can result in trace not being found
              or partial results if it does not fall in the specified time
-             range..
+             range.
     """
     url = f"{_URI}/api/traces/{traceid}"
     params = {}
@@ -35,35 +35,30 @@ def query(traceid: str, start: str = None, end: str = None):
         m.get(
             url,
             json={
-                "traces": [
+                "traceID": "2f3e0cee77ae5dc9c17ade3689eb2e54",
+                "rootServiceName": "shop-backend",
+                "rootTraceName": "update-billing",
+                "startTimeUnixNano": "1684778327699392724",
+                "durationMs": 557,
+                "spanSets": [
                     {
-                        "traceID": "2f3e0cee77ae5dc9c17ade3689eb2e54",
-                        "rootServiceName": "shop-backend",
-                        "rootTraceName": "update-billing",
-                        "startTimeUnixNano": "1684778327699392724",
-                        "durationMs": 557,
-                        "spanSets": [
+                        "spans": [
                             {
-                                "spans": [
+                                "spanID": "563d623c76514f8e",
+                                "startTimeUnixNano": "1684778327735077898",
+                                "durationNanos": "446979497",
+                                "attributes": [
                                     {
-                                        "spanID": "563d623c76514f8e",
-                                        "startTimeUnixNano": "1684778327735077898",
-                                        "durationNanos": "446979497",
-                                        "attributes": [
-                                            {
-                                                "key": "status",
-                                                "value": {"stringValue": "error"},
-                                            }
-                                        ],
+                                        "key": "status",
+                                        "value": {"stringValue": "error"},
                                     }
                                 ],
-                                "matched": 1,
                             }
                         ],
+                        "matched": 1,
                     }
                 ],
-                "metrics": {"totalBlocks": 13},
-            },
+            }
         )
         r = requests.get(url, params=params, timeout=60)
 
