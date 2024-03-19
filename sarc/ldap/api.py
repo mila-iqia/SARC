@@ -59,7 +59,7 @@ def get_users(query=None, query_options: dict | None = None, latest=True) -> lis
         query_options = {}
 
     if query is None:
-        return {}
+        query = {}
 
     if latest:
         query = {

@@ -25,6 +25,8 @@ sphinx-rtd-theme = "^1.2.2"
 nbsphinx = "^0.9.3"
 opentelemetry-api = "^1.23.0"
 opentelemetry-sdk = "^1.23.0"
+gifnoc = "^0.1.5"
+watchdog = "^4.0.0"
 
 [tool.poetry.group.dev.dependencies]
 black = ">= 22.12.0"
