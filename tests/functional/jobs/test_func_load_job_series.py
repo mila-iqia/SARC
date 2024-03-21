@@ -98,7 +98,7 @@ MOCK_TIME = "2023-11-22"
 @pytest.mark.freeze_time(MOCK_TIME)
 @pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
 @pytest.mark.parametrize("params", parameters.values(), ids=parameters.keys())
-def test_load_job_series(params, file_regression):
+def test_load_job_series(params, file_regression, captrace):
     data_frame = load_job_series(**params)
     assert isinstance(data_frame, pandas.DataFrame)
     # Check columns
@@ -112,6 +112,11 @@ def test_load_job_series(params, file_regression):
         file_regression.check(
             f"Found {data_frame.shape[0]} job(s):\n\n{data_frame.to_csv()}"
         )
+
+    # Check trace
+    spans = captrace.get_finished_spans()
+    assert len(spans) == 1
+    assert spans[0].name == "load_job_series"
 
 
 @pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")

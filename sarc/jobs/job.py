@@ -8,6 +8,8 @@ from typing import Iterable, Optional
 from pydantic import validator
 from pydantic_mongo import AbstractRepository, ObjectIdField
 
+from sarc.traces import trace_decorator
+
 from ..config import MTL, TZLOCAL, UTC, BaseModel, ClusterConfig, config
 
 
@@ -163,6 +165,7 @@ class SlurmJob(BaseModel):
 
         return get_job_time_series(job=self, **kwargs)
 
+    @trace_decorator()
     def statistics(self, recompute=False, save=True, overwrite_when_empty=False):
         from .series import compute_job_statistics  # pylint: disable=cyclic-import
 

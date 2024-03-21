@@ -167,6 +167,14 @@ class LDAPConfig(BaseModel):
         return relative_filepath(value)
 
 
+class LokiConfig(BaseModel):
+    uri: str
+
+
+class TempoConfig(BaseModel):
+    uri: str
+
+
 class MyMilaConfig(BaseModel):
     tmp_json_path: str
 
@@ -189,6 +197,8 @@ def _absolute_path(value, values, config, field):
 class Config(BaseModel):
     mongo: MongoConfig
     cache: Path = None
+    loki: LokiConfig = None
+    tempo: TempoConfig = None
 
     _abs_path = validator("cache", allow_reuse=True)(_absolute_path)
 

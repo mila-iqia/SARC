@@ -11,12 +11,14 @@ from tqdm import tqdm
 
 from sarc.config import MTL, UTC
 from sarc.jobs.job import JobStatistics, Statistics, count_jobs, get_jobs
+from sarc.traces import trace_decorator
 
 if TYPE_CHECKING:
     from sarc.jobs.sacct import SlurmJob
 
 
 # pylint: disable=too-many-branches
+@trace_decorator()
 def get_job_time_series(
     job: SlurmJob,
     metric: str,
@@ -104,6 +106,7 @@ def get_job_time_series_metric_names():
     return slurm_job_metric_names
 
 
+@trace_decorator()
 def compute_job_statistics_from_dataframe(
     df: DataFrame,
     statistics,
@@ -161,6 +164,7 @@ def compute_job_statistics_one_metric(
     )
 
 
+@trace_decorator()
 def compute_job_statistics(job: SlurmJob):
     statistics_dict = {
         "mean": DataFrame.mean,
@@ -272,6 +276,7 @@ DUMMY_STATS = {
 
 
 # pylint: disable=too-many-statements,fixme
+@trace_decorator()
 def load_job_series(
     *,
     fields: None | list[str] | dict[str, str] = None,

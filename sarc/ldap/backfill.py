@@ -4,6 +4,7 @@ from pymongo import InsertOne, UpdateOne
 
 from sarc.config import config
 from sarc.ldap.mymila import fetch_mymila
+from sarc.traces import using_trace
 
 START = "mymila_start"
 END = "mymila_end"
@@ -221,9 +222,15 @@ def user_history_backfill(users_collection, LD_users, backfill=True):
 
 def _user_record_backfill(cfg, user_collection):
     """No global version for simpler testing"""
-    mymila_data = fetch_mymila(cfg, [])
+    # We do not set expected exceptions, so that any exception will be re-raised by tracing.
+    with using_trace(
+        "sarc.ldap.backfill", "_user_record_backfill", exception_types=()
+    ) as span:
+        span.add_event("Backfilling record history from mymila ...")
 
-    return user_history_backfill(user_collection, mymila_data)
+        mymila_data = fetch_mymila(cfg, [])
+
+        return user_history_backfill(user_collection, mymila_data)
 
 
 def user_record_backfill():

@@ -25,6 +25,7 @@ sphinx-rtd-theme = "^1.2.2"
 nbsphinx = "^0.9.3"
 opentelemetry-api = "^1.23.0"
 opentelemetry-sdk = "^1.23.0"
+requests-mock = "^1.11.0"
 
 [tool.poetry.group.dev.dependencies]
 black = ">= 22.12.0"
@@ -70,7 +71,8 @@ disable = [
     "missing-function-docstring",
     "invalid-name",
     "no-else-return",  # Bad rule IMO (- OB)
-    "line-too-long"  # Black takes care of line length.
+    "line-too-long",  # Black takes care of line length.
+    "logging-fstring-interpolation"
 ]
 extension-pkg-whitelist = "pydantic"
 

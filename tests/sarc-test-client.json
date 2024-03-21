@@ -2,5 +2,11 @@
     "mongo": {
         "connection_string": "localhost:27017",
         "database_name": "sarc-test"
+    },
+    "loki": {
+        "uri": "https://localhost/loki"
+    },
+    "tempo": {
+        "uri": "https://localhost/tempo"
     }
 }
