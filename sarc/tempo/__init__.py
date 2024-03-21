@@ -58,7 +58,7 @@ def query(traceid: str, start: str = None, end: str = None):
                         "matched": 1,
                     }
                 ],
-            }
+            },
         )
         r = requests.get(url, params=params, timeout=60)
 
