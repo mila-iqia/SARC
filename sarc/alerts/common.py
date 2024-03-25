@@ -77,6 +77,9 @@ class CheckResult:
     # Date at which the check will be considered STALE
     expiry: Optional[datetime] = None
 
+    # Check object
+    check: Optional["TaggedSubclass[HealthCheck]"] = None
+
     def get_failures(self):
         failure_statuses = (CheckStatus.FAILURE, CheckStatus.ERROR)
         results = {}
@@ -103,6 +106,8 @@ class CheckResult:
 @dataclass
 class HealthCheck:
     """Base class for health checks."""
+
+    __result_class__ = CheckResult
 
     # Whether the check is active or not
     active: bool
@@ -143,11 +148,12 @@ class HealthCheck:
         if status not in iter(CheckStatus):
             opts = ", ".join(item.value for item in CheckStatus)
             raise ValueError(f"Invalid status: {status}. Valid statuses are: {opts}")
-        return CheckResult(
+        return self.__result_class__(
             name=self.name,
             status=status,
             issue_date=now,
             expiry=expiry,
+            check=self,
             **kwargs,
         )
 
