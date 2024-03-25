@@ -1,3 +1,4 @@
+import inspect
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from functools import cached_property, wraps
@@ -38,6 +39,12 @@ class Timespan:
     def bounds(self):
         return self.calculate_bounds()
 
+    @cached_property
+    def key(self):
+        # Validity does not need to be part of the key because the cached
+        # information does not depend on the validity period.
+        return (self.duration, self.offset)
+
     def __str__(self):
         s = f"{self.duration}"
         if self.offset:
@@ -51,21 +58,21 @@ def spancache(fn):
     The function's first argument should be a Timespan object which contains
     a duration, optional offset, and a validity period.
     """
+    if "self" in inspect.signature(fn).parameters:
+        raise TypeError("@spancache does not work on methods")
+
     cache = {}
 
     @wraps(fn)
-    def wrapped(timespan, **kwargs):
-        # Validity does not need to be part of the key because the cached
-        # information does not depend on the validity period.
-        key = (timespan.duration, timespan.offset)
-        if current := cache.get(key, None):
+    def wrapped(timespan, *args, **kwargs):
+        if current := cache.get(timespan.key, None):
             if time.now() < current.issued + timespan.validity:
                 return current.value
 
-        value = fn(timespan, **kwargs)
+        value = fn(timespan, *args, **kwargs)
         entry = CachedResult(value=value, issued=time.now())
 
-        cache[key] = entry
+        cache[timespan.key] = entry
         return value
 
     return wrapped
