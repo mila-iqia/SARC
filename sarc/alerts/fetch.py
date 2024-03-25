@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 @spancache
 def latest_jobs(timespan: Timespan):
     logger.info(f"Querying jobs from the last {timespan}...")
-    start, end = timespan.calculate_bounds()
+    start, end = timespan.bounds
     jobs = get_jobs(start=start, end=end)
     return list(jobs)
 
@@ -19,5 +19,5 @@ def latest_jobs(timespan: Timespan):
 @spancache
 def latest_job_series(timespan: Timespan):
     logger.info(f"Querying job series from the last {timespan}...")
-    start, end = timespan.calculate_bounds()
+    start, end = timespan.bounds
     return load_job_series(start=start, end=end)
