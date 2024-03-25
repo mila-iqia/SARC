@@ -72,13 +72,32 @@ class CheckResult:
     exception: Optional[CheckException] = None
 
     # Date at which the check finished
-    issue_date: datetime = field(default_factory=lambda: time.now())
+    issue_date: datetime = field(default_factory=lambda: time.now().astimezone())
 
     # Date at which the check will be considered STALE
     expiry: Optional[datetime] = None
 
-    # Complementary data
-    data: Optional[dict] = field(default_factory=dict)
+    def get_failures(self):
+        failure_statuses = (CheckStatus.FAILURE, CheckStatus.ERROR)
+        results = {}
+        if self.status in failure_statuses:
+            results[self.name] = self.status
+        results.update(
+            {
+                f"{self.name}/{k}": status
+                for k, status in self.statuses.items()
+                if status in failure_statuses
+            }
+        )
+        return results
+
+    def save(self, directory):
+        os.makedirs(directory, exist_ok=True)
+        serialized = serialize(TaggedSubclass[CheckResult], self)
+        timestring = self.issue_date.strftime("%Y-%m-%d-%H-%M-%S")
+        dest = directory / f"{timestring}.json"
+        dest.write_text(json.dumps(serialized, indent=4))
+        logger.debug(f"Wrote {dest}")
 
 
 @dataclass
@@ -134,11 +153,11 @@ class HealthCheck:
 
     def ok(self, **data) -> CheckResult:
         """Shortcut to generate OK status."""
-        return self.result(CheckStatus.OK, data=data)
+        return self.result(CheckStatus.OK)
 
     def fail(self, **data) -> CheckResult:
         """Shortcut to generate FAIL status."""
-        return self.result(CheckStatus.FAILURE, data=data)
+        return self.result(CheckStatus.FAILURE)
 
     def check(self) -> CheckResult | CheckStatus:
         """Perform the check and return a result or status."""
@@ -147,7 +166,7 @@ class HealthCheck:
     def read_result(self, path) -> CheckResult:
         """Read results from the file at the given path."""
         data = json.loads(path.read_text())
-        return deserialize(CheckResult, data)
+        return deserialize(TaggedSubclass[CheckResult], data)
 
     def latest_result(self) -> CheckResult:
         """Return the latest result for this check."""
@@ -194,14 +213,9 @@ class HealthCheck:
         return results
 
     def __call__(self, write=True):
-        os.makedirs(self.directory, exist_ok=True)
         results = self.wrapped_check()
         if write:
-            serialized = serialize(results)
-            timestring = results.issue_date.strftime("%Y-%m-%d-%H-%M-%S")
-            dest = self.directory / f"{timestring}.json"
-            dest.write_text(json.dumps(serialized, indent=4))
-            logger.debug(f"Wrote {dest}")
+            results.save(self.directory)
         return results
 
 
