@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from functools import wraps
+from functools import cached_property, wraps
 from typing import Optional
 
 from apischema import deserialize
@@ -33,6 +33,10 @@ class Timespan:
         end = (anchor or time.now()) - self.offset
         start = end - self.duration
         return (start, end)
+
+    @cached_property
+    def bounds(self):
+        return self.calculate_bounds()
 
     def __str__(self):
         s = f"{self.duration}"
