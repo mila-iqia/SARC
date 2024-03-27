@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os.path
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Callable
@@ -457,9 +458,18 @@ def update_job_series_rgu(
                 # we cannot get RGU/GPU ratio, so we set it to nan
                 allocated.gpu_type_rgu = nan
     """
-    # If cluster does not have RGU start date, we cannot determine how to update columns.
-    # Let's just return frame without any changes.
     if cluster_config.rgu_start_date is None:
+        logging.warning(
+            f"RGU update: no RGU start date for cluster {cluster_config.name}"
+        )
+        return df
+
+    if cluster_config.gpu_to_rgu_billing is None or not os.path.isfile(
+        cluster_config.gpu_to_rgu_billing
+    ):
+        logging.warning(
+            f"RGU update: no RGU/GPU JSON file for cluster {cluster_config.name}"
+        )
         return df
 
     # Otherwise, parse RGU start date.
@@ -468,15 +478,13 @@ def update_job_series_rgu(
     )
 
     # Get RGU/GPU ratios.
-    gpu_to_rgu_billing = {}
-    gpu_to_rgu_billing_path = cluster_config.gpu_to_rgu_billing
-    if gpu_to_rgu_billing_path is not None and os.path.isfile(gpu_to_rgu_billing_path):
-        with open(gpu_to_rgu_billing_path, "r", encoding="utf-8") as file:
-            gpu_to_rgu_billing = json.load(file)
-            assert isinstance(gpu_to_rgu_billing, dict)
-    # If RGU/GPU ratios are not available, we cannot update any column.
-    # Let's just return frame without any changes.
+    with open(cluster_config.gpu_to_rgu_billing, "r", encoding="utf-8") as file:
+        gpu_to_rgu_billing = json.load(file)
+        assert isinstance(gpu_to_rgu_billing, dict)
     if not gpu_to_rgu_billing:
+        logging.warning(
+            f"RGU update: no RGU/GPU available for cluster {cluster_config.name}"
+        )
         return df
 
     # We have now both RGU stare date and RGU/GPU ratios. We can update columns.
