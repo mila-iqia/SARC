@@ -83,8 +83,6 @@ class ClusterConfig(BaseModel):
     duc_storage_command: str = None
     diskusage_report_command: str = None
     start_date: str = "2022-04-01"
-    gpus: list = []
-    harmonize_gpu_map: dict = {}
 
     @validator("timezone")
     def _timezone(cls, value):
@@ -137,9 +135,7 @@ class ClusterConfig(BaseModel):
         """
         from .jobs.node_gpu_mapping import NodeToGPUMapping
 
-        return NodeToGPUMapping(
-            self.name, self.nodes_info_file, self.harmonize_gpu_map, self.gpus
-        )
+        return NodeToGPUMapping(self.name, self.nodes_info_file)
 
 
 class MongoConfig(BaseModel):
