@@ -8,18 +8,26 @@ by parsing TXT files containing node descriptions like:
 import json
 import os
 
+import regex as re
 from hostlist import expand_hostlist
 
 
 class NodeToGPUMapping:
     """Helper class to generate JSON file, load it in memory, and query GPU type for a nodename."""
 
-    def __init__(self, cluster_name, nodes_info_file):
+    def __init__(self, cluster_name, nodes_info_file, harmonize_gpu_map, gpus):
         """Initialize with cluster name and TXT file path to parse."""
 
         # Mapping is empty by default.
         self.mapping = {}
         self.json_path = None
+        self.harmonize_gpu_map = {
+            **{
+                re.compile(regex): gpu_type
+                for regex, gpu_type in harmonize_gpu_map.items()
+            },
+            **{re.compile(f".*{gpu}.*"): gpu for gpu in gpus},
+        }
 
         # Mapping is filled only if TXT file is available.
         if nodes_info_file and os.path.exists(nodes_info_file):
@@ -36,7 +44,7 @@ class NodeToGPUMapping:
                 not os.path.exists(self.json_path)
                 or os.stat(self.json_path).st_mtime < info_file_stat.st_mtime
             ):
-                # Pase TXT file into self.mapping.
+                # Parse TXT file into self.mapping.
                 self._parse_nodenames(nodes_info_file, self.mapping)
                 # Save self.mapping into JSON file.
                 with open(self.json_path, "w", encoding="utf-8") as file:
@@ -46,9 +54,22 @@ class NodeToGPUMapping:
                 with open(self.json_path, encoding="utf-8") as file:
                     self.mapping = json.load(file)
 
+    def _harmonize_gpu(self, gpu_type: str):
+        gpu_type = gpu_type.lower().replace(" ", "-").split(":")
+        if gpu_type[0] == "gpu":
+            gpu_type.pop(0)
+        gpu_type = gpu_type[0]
+        for regex, harmonized_gpu in self.harmonize_gpu_map.items():
+            if regex.match(gpu_type):
+                break
+        else:
+            harmonized_gpu = None
+        return harmonized_gpu
+
     def __getitem__(self, nodename):
         """Return GPU type for nodename, or None if not found."""
-        return self.mapping.get(nodename, None)
+        gpu_type = self.mapping.get(nodename, None)
+        return self._harmonize_gpu(gpu_type)
 
     @staticmethod
     def _parse_nodenames(path: str, output: dict):
