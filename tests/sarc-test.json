@@ -54,7 +54,8 @@
             "diskusage_report_command": "diskusage_report --project --all_users",
             "prometheus_url": "https://fromage-thanos.calcul.ca",
             "prometheus_headers_file": "tests/not-so-secrets/fromage_prometheus/headers.json",
-            "rgu_start_date": "2023-02-16"
+            "rgu_start_date": "2023-02-22",
+            "gpu_to_rgu_billing": "tests/not-so-secrets/fromage_prometheus/gpu_to_rgu_billing.json"
         },
         "patate": {
             "host": "patate",
@@ -112,7 +113,8 @@
             "duc_inodes_command": null,
             "duc_storage_command": null,
             "diskusage_report_command": null,
-            "prometheus_url": null
+            "prometheus_url": null,
+            "rgu_start_date": "2023-02-16"
         }
     }
 }

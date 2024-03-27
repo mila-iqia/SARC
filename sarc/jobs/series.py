@@ -12,7 +12,7 @@ from pandas import DataFrame
 from prometheus_api_client import MetricRangeDataFrame
 from tqdm import tqdm
 
-from sarc.config import MTL, UTC, ClusterConfig
+from sarc.config import MTL, UTC, ClusterConfig, config
 from sarc.jobs.job import JobStatistics, Statistics, count_jobs, get_jobs
 from sarc.traces import trace_decorator
 
@@ -404,19 +404,20 @@ def load_job_series(
     return pandas.DataFrame(rows)
 
 
-def update_job_series_rgu(
+def update_cluster_job_series_rgu(
     df: pandas.DataFrame, cluster_config: ClusterConfig
 ) -> pandas.DataFrame:
     """
-    Compute RGU information for a data frame using given cluster configuration.
+    Compute RGU information for jobs related to given cluster config in a data frame.
 
     Parameters
     ----------
     df: DataFrame
         Data frame to update, typically returned by `load_job_series`.
-        Should contain fields "start_time", "allocated.gpu_type" and "allocated.gres_gpu".
+        Should contain fields:
+        "cluster_name", "start_time", "allocated.gpu_type", "allocated.gres_gpu".
     cluster_config: ClusterConfig
-        Configuration of cluster to which data frame jobs belong.
+        Configuration of cluster to which jobs to update belong.
         Should define following config:
         "rgu_start_date": date since when billing is given as RGU.
         "gpu_to_rgu_billing": path to a JSON file containing a dict which maps
@@ -427,11 +428,13 @@ def update_job_series_rgu(
     DataFrame
         Input data frame with:
         - column `allocated.gres_gpu` updated if necessary.
-        - column `allocated.gres_rgu` added to contain RGU billing.
-        - column `gpu_type_rgu` added to contain RGU cost per GPU (RGU/GPU ratio).
+        - column `allocated.gres_rgu` added or updated to contain RGU billing.
+          Set to NaN (or unchanged if already present) for jobs from other clusters.
+        - column `gpu_type_rgu` added or updated to contain RGU cost per GPU (RGU/GPU ratio).
+          Set to NaN (or unchanged if already present) for jobs from other clusters.
 
     Pseudocode describing how we update data frame:
-    for each job:
+    for each job: if job.cluster_name == cluster_config.name:
         if start_time < cluster_config.rgu_start_date:
             # We are BEFORE transition to RGU
             if allocated.gpu_type in gpu_to_rgu_billing:
@@ -458,6 +461,13 @@ def update_job_series_rgu(
                 # we cannot get RGU/GPU ratio, so we set it to nan
                 allocated.gpu_type_rgu = nan
     """
+
+    # Make sure frame will have new RGU columns anyway, with NaN as default value.
+    if "allocated.gres_rgu" not in df.columns:
+        df["allocated.gres_rgu"] = np.nan
+    if "allocated.gpu_type_rgu" not in df.columns:
+        df["allocated.gpu_type_rgu"] = np.nan
+
     if cluster_config.rgu_start_date is None:
         logging.warning(
             f"RGU update: no RGU start date for cluster {cluster_config.name}"
@@ -495,13 +505,20 @@ def update_job_series_rgu(
     col_ratio_rgu_by_gpu = df["allocated.gpu_type"].map(gpu_to_rgu_billing)
 
     # Compute slices for both before and since RGU start date.
-    slice_before_rgu_time = df["start_time"] < rgu_start_date
-    slice_after_rgu_time = ~slice_before_rgu_time
+    slice_before_rgu_time = (df["cluster_name"] == cluster_config.name) & (
+        df["start_time"] < rgu_start_date
+    )
+    slice_after_rgu_time = (df["cluster_name"] == cluster_config.name) & (
+        df["start_time"] >= rgu_start_date
+    )
 
-    # Pre-allocate column allocated.gres_rgu
-    df["allocated.gres_rgu"] = np.nan
     # We can already set column allocated.gpu_type_rgu anyway.
-    df["allocated.gpu_type_rgu"] = col_ratio_rgu_by_gpu
+    df.loc[slice_before_rgu_time, "allocated.gpu_type_rgu"] = col_ratio_rgu_by_gpu[
+        slice_before_rgu_time
+    ]
+    df.loc[slice_after_rgu_time, "allocated.gpu_type_rgu"] = col_ratio_rgu_by_gpu[
+        slice_after_rgu_time
+    ]
 
     # Compute allocated.gres_rgu where job started before RGU time.
     df.loc[slice_before_rgu_time, "allocated.gres_rgu"] = (
@@ -519,6 +536,34 @@ def update_job_series_rgu(
         / col_ratio_rgu_by_gpu[slice_after_rgu_time]
     )
 
+    return df
+
+
+def update_job_series_rgu(df: DataFrame):
+    """
+    Compute RGU information for jobs in given data frame.
+
+    Parameters
+    ----------
+    df: DataFrame
+        Data frame to update, typically returned by `load_job_series`.
+        Should contain fields:
+         "cluster_name", "start_time", "allocated.gpu_type", "allocated.gres_gpu".
+
+    Returns
+    -------
+    DataFrame
+        Input data frame with:
+        - column `allocated.gres_gpu` updated if necessary.
+        - column `allocated.gres_rgu` added or updated to contain RGU billing.
+          Set to NaN (or unchanged if already present) for jobs from clusters without RGU.
+        - column `gpu_type_rgu` added or updated to contain RGU cost per GPU (RGU/GPU ratio).
+          Set to NaN (or unchanged if already present) for jobs from clusters without RGU.
+
+    For more details about implementation, see function `update_cluster_job_series_rgu`
+    """
+    for cluster_config in config().clusters.values():
+        update_cluster_job_series_rgu(df, cluster_config)
     return df
 
 
