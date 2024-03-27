@@ -59,7 +59,7 @@ def get_users(query=None, query_options: dict | None = None, latest=True) -> lis
         query_options = {}
 
     if query is None:
-        return {}
+        query = {}
 
     if latest:
         query = {
@@ -69,7 +69,7 @@ def get_users(query=None, query_options: dict | None = None, latest=True) -> lis
             ]
         }
 
-    results = users_collection().find_by(query, query_options)
+    results = users_collection().find_by(query, **query_options)
 
     return list(results)
 
