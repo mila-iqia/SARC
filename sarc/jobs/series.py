@@ -474,11 +474,16 @@ def update_cluster_job_series_rgu(
         )
         return df
 
-    if cluster_config.gpu_to_rgu_billing is None or not os.path.isfile(
-        cluster_config.gpu_to_rgu_billing
-    ):
+    if cluster_config.gpu_to_rgu_billing is None:
         logging.warning(
-            f"RGU update: no RGU/GPU JSON file for cluster {cluster_config.name}"
+            f"RGU update: no RGU/GPU JSON path for cluster {cluster_config.name}"
+        )
+        return df
+
+    if not os.path.isfile(cluster_config.gpu_to_rgu_billing):
+        logging.warning(
+            f"RGU update: RGU/GPU JSON file not found for cluster {cluster_config.name} "
+            f"at: {cluster_config.gpu_to_rgu_billing}"
         )
         return df
 
