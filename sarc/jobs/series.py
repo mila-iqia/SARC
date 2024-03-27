@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import os.path
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Callable
 
@@ -9,7 +11,7 @@ from pandas import DataFrame
 from prometheus_api_client import MetricRangeDataFrame
 from tqdm import tqdm
 
-from sarc.config import MTL, UTC
+from sarc.config import MTL, UTC, ClusterConfig
 from sarc.jobs.job import JobStatistics, Statistics, count_jobs, get_jobs
 from sarc.traces import trace_decorator
 
@@ -399,6 +401,117 @@ def load_job_series(
             callback(rows)
 
     return pandas.DataFrame(rows)
+
+
+def update_job_series_rgu(
+    df: pandas.DataFrame, cluster_config: ClusterConfig
+) -> pandas.DataFrame:
+    """
+    Compute RGU information for a data frame using given cluster configuration.
+
+    Parameters
+    ----------
+    df: DataFrame
+        Data frame to update, typically returned by `load_job_series`.
+        Should contain fields "start_time", "allocated.gpu_type" and "allocated.gres_gpu".
+    cluster_config: ClusterConfig
+        Configuration of cluster to which data frame jobs belong.
+        Should define following config:
+        "rgu_start_date": date since when billing is given as RGU.
+        "gpu_to_rgu_billing": path to a JSON file containing a dict which maps
+        GPU type to RGU cost per GPU.
+
+    Returns
+    -------
+    DataFrame
+        Input data frame with:
+        - column `allocated.gres_gpu` updated if necessary.
+        - column `allocated.gres_rgu` added to contain RGU billing.
+        - column `gpu_type_rgu` added to contain RGU cost per GPU (RGU/GPU ratio).
+
+    Pseudocode describing how we update data frame:
+    for each job:
+        if start_time < cluster_config.rgu_start_date:
+            # We are BEFORE transition to RGU
+            if allocated.gpu_type in gpu_to_rgu_billing:
+                # compute rgu columns
+                allocated.gres_rgu = allocated.gres_gpu * gpu_to_rgu_billing[allocated.gpu_type]
+                allocated.gpu_type_rgu = gpu_to_rgu_billing[allocated.gpu_type]
+            else:
+                # set rgu columns to nan
+                allocated.gres_rgu = nan
+                allocated.gpu_type_rgu = nan
+        else:
+            # We are AFTER transition to RGU
+            # Anyway, we assume gres_rgu is current gres_gpu
+            allocated.gres_rgu = allocated.gres_gpu
+
+            if allocated.gpu_type in gpu_to_rgu_billing:
+                # we fix gres_gpu by dividing it with RGU/GPU ratio
+                allocated.gres_gpu = allocated.gres_gpu / gpu_to_rgu_billing[allocated.gpu_type]
+                # we save RGU/GPU ratio
+                allocated.gpu_type_rgu = gpu_to_rgu_billing[allocated.gpu_type]
+            else:
+                # we cannot fix gres_gpu, so we set it to nan
+                allocated.gres_gpu = nan
+                # we cannot get RGU/GPU ratio, so we set it to nan
+                allocated.gpu_type_rgu = nan
+    """
+    # If cluster does not have RGU start date, we cannot determine how to update columns.
+    # Let's just return frame without any changes.
+    if cluster_config.rgu_start_date is None:
+        return df
+
+    # Otherwise, parse RGU start date.
+    rgu_start_date = datetime.fromisoformat(cluster_config.rgu_start_date).astimezone(
+        MTL
+    )
+
+    # Get RGU/GPU ratios.
+    gpu_to_rgu_billing = {}
+    gpu_to_rgu_billing_path = cluster_config.gpu_to_rgu_billing
+    if gpu_to_rgu_billing_path is not None and os.path.isfile(gpu_to_rgu_billing_path):
+        with open(gpu_to_rgu_billing_path, "r", encoding="utf-8") as file:
+            gpu_to_rgu_billing = json.load(file)
+            assert isinstance(gpu_to_rgu_billing, dict)
+    # If RGU/GPU ratios are not available, we cannot update any column.
+    # Let's just return frame without any changes.
+    if not gpu_to_rgu_billing:
+        return df
+
+    # We have now both RGU stare date and RGU/GPU ratios. We can update columns.
+
+    # Compute column allocated.gpu_type_rgu
+    # If a GPU type is not found in RGU/GPU ratios,
+    # then ratio will be set to NaN in output column.
+    col_ratio_rgu_by_gpu = df["allocated.gpu_type"].map(gpu_to_rgu_billing)
+
+    # Compute slices for both before and since RGU start date.
+    slice_before_rgu_time = df["start_time"] < rgu_start_date
+    slice_after_rgu_time = ~slice_before_rgu_time
+
+    # Pre-allocate column allocated.gres_rgu
+    df["allocated.gres_rgu"] = np.nan
+    # We can already set column allocated.gpu_type_rgu anyway.
+    df["allocated.gpu_type_rgu"] = col_ratio_rgu_by_gpu
+
+    # Compute allocated.gres_rgu where job started before RGU time.
+    df.loc[slice_before_rgu_time, "allocated.gres_rgu"] = (
+        df["allocated.gres_gpu"][slice_before_rgu_time]
+        * col_ratio_rgu_by_gpu[slice_before_rgu_time]
+    )
+
+    # Set allocated.gres_rgu with previous allocated.gres_gpu where job started after RGU time.
+    df.loc[slice_after_rgu_time, "allocated.gres_rgu"] = df["allocated.gres_gpu"][
+        slice_after_rgu_time
+    ]
+    # Then update allocated.gres_gpu where job started after RGU time.
+    df.loc[slice_after_rgu_time, "allocated.gres_gpu"] = (
+        df["allocated.gres_gpu"][slice_after_rgu_time]
+        / col_ratio_rgu_by_gpu[slice_after_rgu_time]
+    )
+
+    return df
 
 
 def _select_stat(name, dist):
