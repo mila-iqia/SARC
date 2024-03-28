@@ -31,7 +31,7 @@ class CheckRunner:
         self.state[check.name] = (check, result, next_schedule)
         return next_schedule
 
-    def start(self):
+    def iterate(self):
         for check in self.checks.values():
             self.process(check)
 
@@ -43,6 +43,7 @@ class CheckRunner:
         logger.info(f"Managing {len(self.checks)} active checks: {check_names}")
 
         while True:
+            yield
             delta = timedelta(days=1000)
             up_next = "?"
             for check, _, next_schedule in self.state.values():
@@ -71,3 +72,8 @@ class CheckRunner:
             formatted = f"{_wait // 3600}:{(_wait % 3600) // 60:02}:{_wait % 60:02}"
             logger.info(f"Wait for {formatted}. Next check: '{up_next}'")
             gtime.sleep(max(0.1, wait))
+
+    def start(self, end_time=None):
+        for _ in self.iterate():
+            if end_time is not None and gtime.now() >= end_time:
+                break

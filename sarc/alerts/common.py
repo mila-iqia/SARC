@@ -94,12 +94,15 @@ class CheckResult:
         )
         return results
 
+    def get_save_path(self, directory):
+        timestring = self.issue_date.strftime("%Y-%m-%d-%H-%M-%S")
+        return directory / f"{timestring}.json"
+
     def save(self, directory):
         os.makedirs(directory, exist_ok=True)
         serialized = serialize(TaggedSubclass[CheckResult], self)
-        timestring = self.issue_date.strftime("%Y-%m-%d-%H-%M-%S")
-        dest = directory / f"{timestring}.json"
-        dest.write_text(json.dumps(serialized, indent=4))
+        dest = self.get_save_path(directory)
+        dest.write_text(json.dumps(serialized, indent=4), encoding="utf8")
         logger.debug(f"Wrote {dest}")
 
 
@@ -157,17 +160,34 @@ class HealthCheck:
             **kwargs,
         )
 
-    def ok(self, **data) -> CheckResult:
+    def ok(self, **kwargs) -> CheckResult:
         """Shortcut to generate OK status."""
-        return self.result(CheckStatus.OK)
+        return self.result(CheckStatus.OK, **kwargs)
 
-    def fail(self, **data) -> CheckResult:
+    def fail(self, **kwargs) -> CheckResult:
         """Shortcut to generate FAIL status."""
-        return self.result(CheckStatus.FAILURE)
+        return self.result(CheckStatus.FAILURE, **kwargs)
 
-    def check(self) -> CheckResult | CheckStatus:
+    def check(self) -> CheckResult | CheckStatus:  # pragma: no cover
         """Perform the check and return a result or status."""
         raise NotImplementedError("Please override in subclass.")
+
+    def all_results(self, ascending=False):
+        """Yield all results, starting from the most recent.
+
+        Arguments:
+            ascending: If True, sort the results in chronological order instead.
+        """
+        assert self.directory, "The check is not associated to a directory."
+        if not self.directory.exists():
+            os.makedirs(self.directory, exist_ok=True)
+        config_files = sorted(
+            self.directory.glob("????-??-??-??-??-??.json"),
+            key=lambda x: x.name,
+            reverse=not ascending,
+        )
+        for file in config_files:
+            yield self.read_result(file)
 
     def read_result(self, path) -> CheckResult:
         """Read results from the file at the given path."""
@@ -176,20 +196,10 @@ class HealthCheck:
 
     def latest_result(self) -> CheckResult:
         """Return the latest result for this check."""
-        assert self.directory, "The check is not associated to a directory."
-        if not self.directory.exists():
-            os.makedirs(self.directory, exist_ok=True)
-
-        files = [
-            (file.stat().st_ctime_ns, file)
-            for file in self.directory.iterdir()
-            if file.suffix == ".json"
-        ]
-        if not files:
-            return self.result(CheckStatus.ABSENT)
+        for result in self.all_results():
+            return result
         else:
-            files.sort(reverse=True)
-            return self.read_result(files[0][1])
+            return self.result(CheckStatus.ABSENT)
 
     def next_schedule(self, latest: CheckResult) -> datetime:
         """Return the latest result for this check."""

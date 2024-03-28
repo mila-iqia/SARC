@@ -1,20 +1,11 @@
 from collections import Counter
 from datetime import timedelta
 
-import gifnoc
 import pytest
 from gifnoc.std import time
 from pytest import fixture
 
 from sarc.alerts.cache import Timespan, spancache
-
-
-@fixture
-def frozen_gifnoc_time():
-    with gifnoc.use(
-        {"time": {"class": "FrozenTime", "time": "2024-01-01T00:00", "sleep_beat": 0}}
-    ):
-        yield
 
 
 @fixture
@@ -53,6 +44,13 @@ def test_timespan_bounds(frozen_gifnoc_time):
     start = time.now() - timedelta(hours=3)
     end = time.now() - timedelta(hours=2)
     assert t1.bounds == (start, end)
+
+
+def test_timespan_to_str():
+    t1 = Timespan(duration="1h", offset="2h", validity="3h")
+    assert str(t1) == "1:00:00 2:00:00 ago"
+    t2 = Timespan(duration="1h", validity="3h")
+    assert str(t2) == "1:00:00"
 
 
 def test_spancache(spancached):
