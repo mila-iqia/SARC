@@ -3,6 +3,7 @@ import logging
 from pathlib import Path
 
 from apischema import deserialize
+from gifnoc import TaggedSubclass
 from gifnoc.std import time
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
@@ -19,7 +20,9 @@ class MonitorHandler(FileSystemEventHandler):
 
     def on_created(self, event):
         logger.debug(f"Filesystem event: {event.event_type} @ {event.src_path}")
-        self.monitor.process(Path(event.src_path))
+        pth = Path(event.src_path)
+        if pth.is_file() and pth.suffix == ".json":
+            self.monitor.process(pth)
 
 
 class HealthMonitor:
@@ -32,14 +35,21 @@ class HealthMonitor:
 
     def recover_state(self):
         for name, check in self.checks.items():
-            self.state[name] = check.latest_result()
+            if check.active:
+                self.state[name] = check.latest_result()
 
     def process(self, file):
-        data = deserialize(
-            type=CheckResult,
-            data=json.loads(file.read_text()),
-        )
-        self.state[data.name] = data
+        try:
+            data = deserialize(
+                type=TaggedSubclass[CheckResult],
+                data=json.loads(file.read_text()),
+            )
+            if data.name in self.checks:
+                check = self.checks[data.name]
+                if check.active:
+                    self.state[data.name] = data
+        except Exception as exc:
+            logger.error(f"Unexpected {type(exc).__name__}: {exc}", exc_info=exc)
 
     @property
     def status(self):
@@ -56,6 +66,9 @@ class HealthMonitor:
         self.observer = (PollingObserver if self.poll else Observer)()
         self.observer.schedule(MonitorHandler(self), self.directory, recursive=True)
         self.observer.start()
+
+    def stop(self):
+        self.observer.stop()
 
     def join(self):
         self.observer.join()

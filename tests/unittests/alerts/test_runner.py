@@ -1,6 +1,5 @@
 from datetime import timedelta
 
-import pytest
 from gifnoc.std import time
 
 from sarc.alerts.common import CheckStatus, config
@@ -8,20 +7,16 @@ from sarc.alerts.runner import CheckRunner
 
 
 def day_runner():
-    nhours = 24
-    checks = config.checks
-    start = time.now()
-    runner = CheckRunner(
+    return CheckRunner(
         directory=config.directory,
-        checks=checks,
+        checks=config.checks,
     )
-    runner.start(end_time=start + timedelta(hours=nhours))
 
 
 def test_runner(beans_config, caplog):
     caplog.set_level(1000)
     start = time.now()
-    day_runner()
+    day_runner().start(end_time=start + timedelta(hours=24))
 
     expected_status = {
         "many_beans": CheckStatus.OK,
@@ -47,7 +42,7 @@ def test_runner(beans_config, caplog):
 
 def test_runner_deps(deps_config, caplog):
     caplog.set_level(1000)
-    day_runner()
+    day_runner().start(end_time=time.now() + timedelta(hours=24))
 
     assert len(list(config.checks["evil_beans"].all_results())) == 24
     assert len(list(config.checks["many_beans"].all_results())) == 0
@@ -55,7 +50,7 @@ def test_runner_deps(deps_config, caplog):
 
 def test_runner_parameters(params_config, caplog):
     caplog.set_level(1000)
-    day_runner()
+    day_runner().start(end_time=time.now() + timedelta(hours=24))
 
     assert len(list(config.checks["isbeta_alpha"].all_results())) == 24
     assert len(list(config.checks["isbeta_beta"].all_results())) == 24
