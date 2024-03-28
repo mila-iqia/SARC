@@ -1,10 +1,12 @@
 import os
+import shutil
 import sys
 import tempfile
 import zoneinfo
 from pathlib import Path
 from unittest.mock import MagicMock, mock_open
 
+from filelock import FileLock
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
@@ -23,7 +25,6 @@ from _pytest.monkeypatch import MonkeyPatch
 from sarc.config import (
     ClusterConfig,
     Config,
-    MongoConfig,
     ScraperConfig,
     config,
     parse_config,
@@ -70,6 +71,25 @@ def disabled_cache():
     cfg = config().replace(cache=None)
     with using_config(cfg, ScraperConfig) as cfg:
         yield
+
+
+# https://pytest-xdist.readthedocs.io/en/stable/how-to.html#making-session-scoped-fixtures-execute-only-once
+@pytest.fixture(scope="session", autouse=True)
+def clean_up_test_cache_before_run(standard_config_object, tmp_path_factory, worker_id):
+    if not standard_config_object.cache.exists():
+        return
+
+    if worker_id == "master":
+        shutil.rmtree(str(standard_config_object.cache))
+
+    # get the temp directory shared by all workers
+    root_tmp_dir = tmp_path_factory.getbasetemp().parent
+
+    fn = root_tmp_dir / "pre_tests_cleanup"
+    with FileLock(str(fn) + ".lock"):
+        if not fn.is_file():
+            shutil.rmtree(str(standard_config_object.cache))
+        open(str(fn), "w").close()
 
 
 @pytest.fixture
