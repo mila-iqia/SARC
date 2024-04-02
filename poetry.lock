@@ -1175,13 +1175,13 @@ python-dateutil = ">=2.7"
 
 [[package]]
 name = "gifnoc"
-version = "0.2.2"
+version = "0.2.3"
 description = "Handle configuration for multiple libraries"
 optional = false
 python-versions = "<4.0,>=3.9"
 files = [
-    {file = "gifnoc-0.2.2-py3-none-any.whl", hash = "sha256:1b6a7f893bed8f89bbc0cc9c4875b4e74f648ee15509db56134d72b763391511"},
-    {file = "gifnoc-0.2.2.tar.gz", hash = "sha256:331a41d00be76670fc24084a2675116b673cf4e6b0c8d17cd1339418d785863d"},
+    {file = "gifnoc-0.2.3-py3-none-any.whl", hash = "sha256:428940ee0664a04115114fa2b28072f9b20921408cd12e50164e5ac4c049cf82"},
+    {file = "gifnoc-0.2.3.tar.gz", hash = "sha256:34ace9ede0c6fb818ca236e3ca12f3dcd26d796dc047264a816066cb928658b5"},
 ]
 
 [package.dependencies]
@@ -4613,4 +4613,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.9"
-content-hash = "68ad29df8b2ac8024242c0ee39732a7aec34ce56bf831fb42b639c34bbb7a51a"
+content-hash = "02a699bbaed66a2a6a09751671f90dc03b43817c74241df18de4a2057467acd5"
