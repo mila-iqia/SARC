@@ -137,7 +137,7 @@ class HealthCheck:
 
     # Other checks on which this check depends. If these checks fail, this
     # check will not be run.
-    depends: str | list[str] = field(default_factory=list)
+    depends: Union[str, list[str]] = field(default_factory=list)
 
     def __post_init__(self):
         if isinstance(self.depends, str):
