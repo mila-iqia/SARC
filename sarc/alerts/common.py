@@ -180,7 +180,7 @@ class HealthCheck:
         """Shortcut to generate FAIL status."""
         return self.result(CheckStatus.FAILURE, **kwargs)
 
-    def check(self) -> CheckResult | CheckStatus:  # pragma: no cover
+    def check(self) -> Union[CheckResult, CheckStatus]:  # pragma: no cover
         """Perform the check and return a result or status."""
         raise NotImplementedError("Please override in subclass.")
 
