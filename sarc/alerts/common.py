@@ -1,3 +1,5 @@
+"""Core classes for the health monitor."""
+
 import itertools
 import json
 import logging
@@ -81,6 +83,7 @@ class CheckResult:
     check: Optional["TaggedSubclass[HealthCheck]"] = None
 
     def get_failures(self):
+        """Return a dictionary of status/substatus: CheckStatus for failures."""
         failure_statuses = (CheckStatus.FAILURE, CheckStatus.ERROR)
         results = {}
         if self.status in failure_statuses:
@@ -95,11 +98,15 @@ class CheckResult:
         return results
 
     def get_save_path(self, directory):
+        """Generate save path given the parent directory."""
         timestring = self.issue_date.strftime("%Y-%m-%d-%H-%M-%S")
         return directory / f"{timestring}.json"
 
     def save(self, directory):
+        """Save this result in a directory."""
         os.makedirs(directory, exist_ok=True)
+        # TaggedSubclass[CheckResult] allows serializing a subclass of CheckResult
+        # by putting the class name in the 'class' property.
         serialized = serialize(TaggedSubclass[CheckResult], self)
         dest = self.get_save_path(directory)
         dest.write_text(json.dumps(serialized, indent=4), encoding="utf8")
@@ -137,7 +144,11 @@ class HealthCheck:
             self.depends = [self.depends]
 
     def parameterize(self, **parameters):
-        """Parameterize this check."""
+        """Parameterize this check.
+
+        * Set the `parameters` field
+        * Fill in the parameters in the name of each dependency in `depends`
+        """
         return replace(
             self,
             parameters=parameters,
@@ -208,7 +219,12 @@ class HealthCheck:
         else:
             return latest.issue_date + self.interval
 
-    def wrapped_check(self):
+    def wrapped_check(self) -> CheckResult:
+        """Wrap the check function.
+
+        * If returns self.ok or self.fail, generate a CheckResult from that.
+        * If there is an exception, generate ERROR result.
+        """
         try:
             results = self.check()
             if not isinstance(results, CheckResult):
@@ -229,6 +245,7 @@ class HealthCheck:
         return results
 
     def __call__(self, write=True):
+        """Perform the check and save it (unless save=False)."""
         results = self.wrapped_check()
         if write:
             results.save(self.directory)
@@ -237,6 +254,7 @@ class HealthCheck:
 
 @serializer
 def _serialize_timedelta(td: timedelta) -> str:
+    """Serialize timedelta as Xs (seconds) or Xus (microseconds)."""
     seconds = int(td.total_seconds())
     if td.microseconds:
         return f"{seconds}{td.microseconds:06}us"
@@ -246,6 +264,7 @@ def _serialize_timedelta(td: timedelta) -> str:
 
 @deserializer
 def _deserialize_timedelta(s: str) -> timedelta:
+    """Deserialize a combination of days, hours, etc. as a timedelta."""
     units = {
         "d": "days",
         "h": "hours",

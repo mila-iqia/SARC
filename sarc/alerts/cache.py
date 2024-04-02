@@ -1,3 +1,5 @@
+"""Timespan-dependent cache."""
+
 import inspect
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -10,14 +12,24 @@ from gifnoc.std import time
 
 @dataclass
 class CachedResult:
+    """Represents a result computed at some time."""
+
+    # Cached value
     value: object = None
+    # Date at which the value was produced
     issued: datetime = None
 
 
 @dataclass(unsafe_hash=True)
 class Timespan:
+
+    # Time duration
     duration: timedelta
+
+    # Time offset between the end of the duration and time.now()
     offset: Optional[timedelta] = timedelta(seconds=0)
+
+    # How long a cached result for this timespan is valid (defaults to same as duration)
     validity: Optional[timedelta] = None
 
     def __post_init__(self):
@@ -31,16 +43,24 @@ class Timespan:
             self.validity = self.duration
 
     def calculate_bounds(self, anchor=None):
+        """Calculate time bounds (start, end).
+
+        The anchor is the end of the time period (default: time.now()). The offset
+        is subtracted from it to give `end`, and duration is subtracted from `end`
+        to give `start`.
+        """
         end = (anchor or time.now()) - self.offset
         start = end - self.duration
         return (start, end)
 
     @cached_property
     def bounds(self):
+        """Return the time bounds (start, end) anchored at time.now()."""
         return self.calculate_bounds()
 
     @cached_property
     def key(self):
+        """Key for caching."""
         # Validity does not need to be part of the key because the cached
         # information does not depend on the validity period.
         return (self.duration, self.offset)
@@ -53,12 +73,14 @@ class Timespan:
 
 
 def spancache(fn):
-    """Cache a function's result for a certain duration.
+    """Decorator to cache a function's result for a certain duration.
 
     The function's first argument should be a Timespan object which contains
     a duration, optional offset, and a validity period.
     """
     if "self" in inspect.signature(fn).parameters:
+        # It's just kind of a pain in the ass, we can try to make it work if
+        # necessary.
         raise TypeError("@spancache does not work on methods")
 
     cache = {}
