@@ -1,3 +1,5 @@
+"""Daemon to run the checks continuously."""
+
 import logging
 from datetime import timedelta
 
@@ -17,6 +19,10 @@ class CheckRunner:
         self.state = {}
 
     def process(self, check, result=None):
+        """Process a new result for the check, into the state.
+
+        If result is None we fetch the latest result for the check.
+        """
         if result is None:
             result = check.latest_result()
         else:
@@ -32,6 +38,11 @@ class CheckRunner:
         return next_schedule
 
     def iterate(self):
+        """Iterate over checks.
+
+        This is implemented as a generator that continually generates how long to
+        wait, in seconds, until the next check.
+        """
         for check in self.checks.values():
             self.process(check)
 
@@ -42,8 +53,9 @@ class CheckRunner:
         check_names = ", ".join(self.checks.keys())
         logger.info(f"Managing {len(self.checks)} active checks: {check_names}")
 
+        wait = 0
         while True:
-            yield
+            yield wait
             delta = timedelta(days=1000)
             up_next = "?"
             for check, _, next_schedule in self.state.values():
@@ -71,9 +83,9 @@ class CheckRunner:
             _wait = int(wait)
             formatted = f"{_wait // 3600}:{(_wait % 3600) // 60:02}:{_wait % 60:02}"
             logger.info(f"Wait for {formatted}. Next check: '{up_next}'")
-            gtime.sleep(max(0.1, wait))
 
     def start(self, end_time=None):
-        for _ in self.iterate():
+        for wait in self.iterate():
+            gtime.sleep(wait)
             if end_time is not None and gtime.now() >= end_time:
                 break

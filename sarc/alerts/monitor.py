@@ -34,11 +34,13 @@ class HealthMonitor:
         self.state = {}
 
     def recover_state(self):
+        """Recover the current state from the latest result for each check."""
         for name, check in self.checks.items():
             if check.active:
                 self.state[name] = check.latest_result()
 
     def process(self, file):
+        """Process the contents of a new file."""
         try:
             data = deserialize(
                 type=TaggedSubclass[CheckResult],
@@ -52,7 +54,8 @@ class HealthMonitor:
             logger.error(f"Unexpected {type(exc).__name__}: {exc}", exc_info=exc)
 
     @property
-    def status(self):
+    def status(self) -> dict[str, str]:
+        """Current status as a {status_name: status} dict."""
         now = time.now()
         return {
             name: (
@@ -62,13 +65,16 @@ class HealthMonitor:
         }
 
     def start(self):
+        """Start the monitor."""
         self.recover_state()
         self.observer = (PollingObserver if self.poll else Observer)()
         self.observer.schedule(MonitorHandler(self), self.directory, recursive=True)
         self.observer.start()
 
     def stop(self):
+        """Stop the monitor."""
         self.observer.stop()
 
     def join(self):
+        """Wait for the monitor to finish."""
         self.observer.join()
