@@ -252,7 +252,7 @@ def test_scraper_with_malformed_cache(test_config, remote, scraper, caplog):
 
     channel = remote.expect(
         host="patate",
-        cmd="/opt/slurm/bin/sacct  -X -S '2023-02-14T00:00' -E '2023-02-15T00:00' --allusers --json",
+        cmd="/opt/slurm/bin/sacct  -X -S 2023-02-14T00:00 -E 2023-02-15T00:00 --allusers --json",
         out=b"{}",
     )
 
@@ -271,7 +271,7 @@ def test_sacct_bin_and_accounts(test_config, remote):
     )
     channel = remote.expect(
         host="patate",
-        cmd="/opt/software/slurm/bin/sacct -A rrg-bonhomme-ad_gpu,rrg-bonhomme-ad_cpu,def-bonhomme_gpu,def-bonhomme_cpu -X -S '2023-02-14T00:00' -E '2023-02-15T00:00' --allusers --json",
+        cmd="/opt/software/slurm/bin/sacct -A rrg-bonhomme-ad_gpu,rrg-bonhomme-ad_cpu,def-bonhomme_gpu,def-bonhomme_cpu -X -S 2023-02-14T00:00 -E 2023-02-15T00:00 --allusers --json",
         out=b'{"jobs": []}',
     )
 
@@ -309,7 +309,7 @@ def test_stdout_message_before_json(
 ):
     channel = remote.expect(
         host="raisin",
-        cmd="/opt/slurm/bin/sacct  -X -S '2023-02-15T00:00' -E '2023-02-16T00:00' --allusers --json",
+        cmd="/opt/slurm/bin/sacct  -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
         out=f"Welcome on raisin,\nThe sweetest supercomputer in the world!\n{sacct_json}".encode(
             "utf-8"
         ),
@@ -350,7 +350,7 @@ def test_get_gpu_type_from_prometheus(
 ):
     channel = remote.expect(
         host="raisin",
-        cmd="/opt/slurm/bin/sacct  -X -S '2023-02-15T00:00' -E '2023-02-16T00:00' --allusers --json",
+        cmd="/opt/slurm/bin/sacct  -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
         out=f"Welcome on raisin,\nThe sweetest supercomputer in the world!\n{sacct_json}".encode(
             "utf-8"
         ),
@@ -416,7 +416,7 @@ def test_get_gpu_type_without_prometheus(
 ):
     channel = remote.expect(
         host="raisin_no_prometheus",
-        cmd="/opt/slurm/bin/sacct  -X -S '2023-02-15T00:00' -E '2023-02-16T00:00' --allusers --json",
+        cmd="/opt/slurm/bin/sacct  -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
         out=f"Welcome on raisin_no_prometheus,\nThe sweetest supercomputer in the world!\n{sacct_json}".encode(
             "utf-8"
         ),
@@ -463,7 +463,7 @@ def test_save_job(
 ):
     channel = remote.expect(
         host="raisin",
-        cmd="/opt/slurm/bin/sacct  -X -S '2023-02-15T00:00' -E '2023-02-16T00:00' --allusers --json",
+        cmd="/opt/slurm/bin/sacct  -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
         out=sacct_json.encode("utf-8"),
     )
 
@@ -504,7 +504,7 @@ def test_update_job(
         host="raisin",
         commands=[
             Command(
-                cmd="/opt/slurm/bin/sacct  -X -S '2023-02-15T00:00' -E '2023-02-16T00:00' --allusers --json",
+                cmd="/opt/slurm/bin/sacct  -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
                 out=sacct_json.encode("utf-8"),
             )
             for _ in range(2)
@@ -579,7 +579,7 @@ def test_save_preempted_job(
     test_config, sacct_json, remote, file_regression, cli_main, prom_custom_query_mock
 ):
     channel = remote.expect(
-        cmd="/opt/slurm/bin/sacct  -X -S '2023-02-15T00:00' -E '2023-02-16T00:00' --allusers --json",
+        cmd="/opt/slurm/bin/sacct  -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
         host="raisin",
         out=sacct_json.encode("utf-8"),
     )
@@ -625,8 +625,8 @@ def test_multiple_dates(
             Command(
                 cmd=(
                     "/opt/slurm/bin/sacct  -X "
-                    f"-S '{job_submit_datetime.strftime('%Y-%m-%dT%H:%M')}' "
-                    f"-E '{(job_submit_datetime + timedelta(days=1)).strftime('%Y-%m-%dT%H:%M')}' "
+                    f"-S {job_submit_datetime.strftime('%Y-%m-%dT%H:%M')} "
+                    f"-E {(job_submit_datetime + timedelta(days=1)).strftime('%Y-%m-%dT%H:%M')} "
                     "--allusers --json"
                 ),
                 out=create_sacct_json(
@@ -714,7 +714,7 @@ def test_multiple_clusters_and_dates(
     channel = remote.expect_sessions(
         _create_session(
             "raisin",
-            "/opt/slurm/bin/sacct  -X -S '{start}' -E '{end}' --allusers --json",
+            "/opt/slurm/bin/sacct  -X -S {start} -E {end} --allusers --json",
             datetimes=datetimes,
         ),
         _create_session(
@@ -722,7 +722,7 @@ def test_multiple_clusters_and_dates(
             (
                 "/opt/software/slurm/bin/sacct "
                 "-A rrg-bonhomme-ad_gpu,rrg-bonhomme-ad_cpu,def-bonhomme_gpu,def-bonhomme_cpu "
-                "-X -S '{start}' -E '{end}' --allusers --json"
+                "-X -S {start} -E {end} --allusers --json"
             ),
             datetimes=datetimes,
         ),
@@ -825,7 +825,7 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     channel = remote.expect_sessions(
         _create_session(
             "raisin",
-            "/opt/slurm/bin/sacct  -X -S '{start}' -E '{end}' --allusers --json",
+            "/opt/slurm/bin/sacct  -X -S {start} -E {end} --allusers --json",
             datetimes=datetimes,
         ),
         _create_session(
@@ -833,7 +833,7 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
             (
                 "/opt/software/slurm/bin/sacct "
                 "-A rrg-bonhomme-ad_gpu,rrg-bonhomme-ad_cpu,def-bonhomme_gpu,def-bonhomme_cpu "
-                "-X -S '{start}' -E '{end}' --allusers --json"
+                "-X -S {start} -E {end} --allusers --json"
             ),
             datetimes=datetimes,
         ),
@@ -943,7 +943,7 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
 def test_job_tz(test_config, sacct_json, remote, cli_main, prom_custom_query_mock):
     channel = remote.expect(
         host="patate",
-        cmd="/opt/software/slurm/bin/sacct -A rrg-bonhomme-ad_gpu,rrg-bonhomme-ad_cpu,def-bonhomme_gpu,def-bonhomme_cpu -X -S '2023-02-15T00:00' -E '2023-02-16T00:00' --allusers --json",
+        cmd="/opt/software/slurm/bin/sacct -A rrg-bonhomme-ad_gpu,rrg-bonhomme-ad_cpu,def-bonhomme_gpu,def-bonhomme_cpu -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
         out=sacct_json.encode("utf-8"),
     )
 
