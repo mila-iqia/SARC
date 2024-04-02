@@ -32,12 +32,12 @@ class BeanCheck(HealthCheck):
 @dataclass
 class LetterCheck(HealthCheck):
     def check(self):
-        match self.parameters["letter"]:
-            case "alpha":
-                return self.fail
-            case "beta":
-                return self.ok
-            case "gamma":
-                return self.fail
-            case _:
-                raise ValueError("I DO NOT KNOW THIS LETTER")
+        letter = self.parameters["letter"]
+        if letter == "alpha":
+            return self.fail
+        elif letter == "beta":
+            return self.ok
+        elif letter == "gamma":
+            return self.fail
+        else:
+            raise ValueError("I DO NOT KNOW THIS LETTER")
