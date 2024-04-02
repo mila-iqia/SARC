@@ -1,5 +1,5 @@
 import json
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -53,6 +53,12 @@ def test_timedelta_deserializer():
     )
     assert deserialize(timedelta, "-5h3m") == timedelta(hours=-5, minutes=-3)
     assert deserialize(timedelta, "2.5h") == timedelta(hours=2, minutes=30)
+
+
+def test_date_deserializer():
+    assert deserialize(datetime, "2024-02-01T15:00:00Z") == datetime(
+        year=2024, month=2, day=1, hour=15, tzinfo=timezone.utc
+    )
 
 
 @pytest.mark.parametrize("inv", ["1h14", "3", "quack", "h", "1H13M"])

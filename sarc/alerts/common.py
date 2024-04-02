@@ -14,6 +14,7 @@ from typing import Optional, Union
 
 import gifnoc
 from apischema import ValidationError, deserialize, deserializer, serialize, serializer
+from dateutil import parser as dateparser
 from gifnoc import TaggedSubclass
 from gifnoc.std import time
 
@@ -292,6 +293,12 @@ def _deserialize_timedelta(s: str) -> timedelta:
                 f"Could not convert '{n}' ({units[unit]}) to float"
             ) from err
     return sign * timedelta(**kw)
+
+
+@deserializer
+def _deserialize_date(s: str) -> datetime:
+    """This is mostly so that things work with Python <3.11."""
+    return dateparser.parse(s)
 
 
 @dataclass

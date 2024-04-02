@@ -28,6 +28,7 @@ opentelemetry-sdk = "^1.23.0"
 requests-mock = "^1.11.0"
 gifnoc = "^0.2.2"
 watchdog = "^4.0.0"
+python-dateutil = "^2.9.0.post0"
 
 [tool.poetry.group.dev.dependencies]
 black = ">= 22.12.0"
