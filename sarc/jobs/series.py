@@ -282,8 +282,6 @@ def load_job_series(
     fields: None | list[str] | dict[str, str] = None,
     clip_time: bool = False,
     callback: None | Callable = None,
-    progress_bar: bool = True,
-    jobs: None | list[SlurmJob] = None,
     **jobs_args,
 ) -> pandas.DataFrame:
     """
@@ -303,13 +301,8 @@ def load_job_series(
         Defaults to False.
     callback: Callable
         Callable taking the list of job dictionaries in the format it would be included in the DataFrame.
-    progress_bar: bool
-        Whether to show a progress bar.
-    jobs:
-        The jobs to include in the dataframe.
     **jobs_args
-        If the jobs argument is not provided, these are the
-        arguments to be passed to `get_jobs` to query jobs from the database.
+        Arguments to be passed to `get_jobs` to query jobs from the database.
 
     Returns
     -------
@@ -330,17 +323,12 @@ def load_job_series(
     start = jobs_args.get("start", None)
     end = jobs_args.get("end", None)
 
-    total = count_jobs(**jobs_args) if jobs is None else len(jobs)
+    total = count_jobs(**jobs_args)
 
     rows = []
     now = datetime.now(tz=MTL)
-
-    jobs_iterable = get_jobs(**jobs_args) if jobs is None else jobs
-
     # Fetch all jobs from the clusters
-    for job in tqdm(
-        jobs_iterable, total=total, desc="load job series", disable=not progress_bar
-    ):
+    for job in tqdm(get_jobs(**jobs_args), total=total, desc="load job series"):
         if job.end_time is None:
             job.end_time = now
 
