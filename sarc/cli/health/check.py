@@ -34,4 +34,4 @@ class HealthCheckCommand:
                     runner.start()
                 except KeyboardInterrupt:
                     logger.info("Execution ended due to KeyboardInterrupt")
-                    return 0
+        return 0
