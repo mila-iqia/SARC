@@ -50,7 +50,7 @@ class HealthMonitor:
                 check = self.checks[data.name]
                 if check.active:
                     self.state[data.name] = data
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=W0718
             logger.error(f"Unexpected {type(exc).__name__}: {exc}", exc_info=exc)
 
     @property

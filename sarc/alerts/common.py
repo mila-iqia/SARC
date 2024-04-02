@@ -209,8 +209,7 @@ class HealthCheck:
         """Return the latest result for this check."""
         for result in self.all_results():
             return result
-        else:
-            return self.result(CheckStatus.ABSENT)
+        return self.result(CheckStatus.ABSENT)
 
     def next_schedule(self, latest: CheckResult) -> datetime:
         """Return the latest result for this check."""
@@ -238,7 +237,7 @@ class HealthCheck:
                     results = results()
                 else:
                     results = self.result(status=results)
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=W0718
             results = self.result(
                 CheckStatus.ERROR, exception=CheckException.from_exception(exc)
             )
@@ -289,7 +288,9 @@ def _deserialize_timedelta(s: str) -> timedelta:
         try:
             kw[units[unit]] = float(n)
         except ValueError as err:
-            raise ValidationError(f"Could not convert '{n}' ({units[unit]}) to float")
+            raise ValidationError(
+                f"Could not convert '{n}' ({units[unit]}) to float"
+            ) from err
     return sign * timedelta(**kw)
 
 

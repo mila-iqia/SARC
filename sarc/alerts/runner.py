@@ -70,7 +70,7 @@ class CheckRunner:
                     logger.info(f"Perform check: '{check.name}'")
                     try:
                         next_schedule = self.process(check, check())
-                    except Exception as exc:
+                    except Exception as exc:  # pylint: disable=W0718
                         logger.error(
                             f"Unexpected {type(exc).__name__}: {exc}", exc_info=exc
                         )
