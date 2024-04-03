@@ -1,15 +1,15 @@
+import json
 import os
-import shutil
 import sys
 import tempfile
 import zoneinfo
 from pathlib import Path
-from unittest.mock import MagicMock, mock_open
+from unittest.mock import MagicMock, mock_open, patch
 
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
-from opentelemetry.trace import set_tracer_provider
+from opentelemetry.trace import get_tracer_provider, set_tracer_provider
 
 _tracer_provider = TracerProvider()
 _exporter = InMemorySpanExporter()
@@ -24,6 +24,7 @@ from _pytest.monkeypatch import MonkeyPatch
 from sarc.config import (
     ClusterConfig,
     Config,
+    MongoConfig,
     ScraperConfig,
     config,
     parse_config,
@@ -70,14 +71,6 @@ def disabled_cache():
     cfg = config().replace(cache=None)
     with using_config(cfg, ScraperConfig) as cfg:
         yield
-
-
-# Make sure the cache dir is empty before running the tests
-@pytest.fixture(scope="session", autouse=True)
-def clean_up_test_cache_before_run(standard_config_object):
-    if standard_config_object.cache.exists():
-        shutil.rmtree(str(standard_config_object.cache))
-    yield
 
 
 @pytest.fixture

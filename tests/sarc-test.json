@@ -41,9 +41,13 @@
             "diskusage_report_command": null,
             "prometheus_url": null,
             "nodes_info_file": "tests/not-so-secrets/raisin_no_prometheus/nodes_raisin_no_prometheus.txt",
-            "gpus": ["asupergpu"],
-            "harmonize_gpu_map": {
-                ".*asupergpu_suffix.*": "asupergpu"
+            "gpus_per_nodes": {
+                "cn-c018": {
+                    "asupergpu": "Nec Plus Plus ULTRA GPU 2000"
+                },
+                "cn-c{{[019-030]}}": {
+                    "asupergpu": "Nec Plus ULTRA GPU 2000"
+                }
             }
         },
         "fromage": {
