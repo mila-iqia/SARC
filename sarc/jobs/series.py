@@ -724,7 +724,7 @@ def compute_time_frames(
     data_frames = []
 
     total_durations = (jobs[col_end] - jobs[col_start]).dt.total_seconds()
-    for frame_start in pandas.date_range(start, end, freq=f"{frame_size.days}D"):
+    for frame_start in pandas.date_range(start, end, freq=frame_size):
         frame_end = frame_start + frame_size
 
         mask = (jobs[col_start] < frame_end) * (jobs[col_end] > frame_start)
