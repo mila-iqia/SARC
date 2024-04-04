@@ -102,7 +102,7 @@ class ClusterConfig(BaseModel):
             fconfig = FabricConfig()
         else:
             fconfig = FabricConfig(ssh_config=SSHConfig.from_path(self.sshconfig))
-        fconfig["run"]["pty"] = True
+        fconfig["run"]["pty"] = False
         fconfig["run"]["in_stream"] = False
         return Connection(self.host, config=fconfig)
 
