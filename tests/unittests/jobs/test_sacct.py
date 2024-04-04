@@ -18,7 +18,7 @@ def test_SAcctScraper_fetch_raw(test_config, remote):
     )
     channel = remote.expect(
         host="patate",
-        cmd="sacct  -X -S '2023-02-28T00:00' -E '2023-03-01T00:00' --allusers --json",
+        cmd="sacct  -X -S 2023-02-28T00:00 -E 2023-03-01T00:00 --allusers --json",
         out=b"{}",
     )
     assert scraper.fetch_raw() == {}
@@ -33,11 +33,11 @@ def test_SAcctScraper_fetch_raw2(test_config, remote):
     channel = remote.expect(
         commands=[
             Command(
-                "sacct  -X -S '2023-02-28T00:00' -E '2023-03-01T00:00' --allusers --json",
+                "sacct  -X -S 2023-02-28T00:00 -E 2023-03-01T00:00 --allusers --json",
                 out=b"{}",
             ),
             Command(
-                "sacct  -X -S '2023-02-28T00:00' -E '2023-03-01T00:00' --allusers --json",
+                "sacct  -X -S 2023-02-28T00:00 -E 2023-03-01T00:00 --allusers --json",
                 out=b'{ "value": 2 }',
             ),
         ]
@@ -69,11 +69,11 @@ def test_SAcctScraper_get_cache(test_config, remote):
     channel = remote.expect(
         commands=[
             Command(
-                f"sacct  -X -S '{yesterday.strftime(fmt)}' -E '{today.strftime(fmt)}' --allusers --json",
+                f"sacct  -X -S {yesterday.strftime(fmt)} -E {today.strftime(fmt)} --allusers --json",
                 out=b'{"value": 2}',
             ),
             Command(
-                f"sacct  -X -S '{today.strftime(fmt)}' -E '{tomorrow.strftime(fmt)}' --allusers --json",
+                f"sacct  -X -S {today.strftime(fmt)} -E {tomorrow.strftime(fmt)} --allusers --json",
                 out=b'{"value": 2}',
             ),
         ]
