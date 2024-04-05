@@ -8,12 +8,14 @@ from flatten_dict import flatten
 from pydantic import ByteSize, validator
 from pydantic_mongo import AbstractRepository, ObjectIdField
 
+from sarc.traces import trace_decorator
 from sarc.config import BaseModel, config, validate_date
 
 
 class AllocationCompute(BaseModel):
     gpu_year: Optional[int] = 0
     cpu_year: Optional[int] = 0
+    rgu_year: Optional[int] = 0
     vcpu_year: Optional[int] = 0
     vgpu_year: Optional[int] = 0
 
@@ -61,6 +63,7 @@ class AllocationsRepository(AbstractRepository[Allocation]):
     class Meta:
         collection_name = "allocations"
 
+    @trace_decorator()
     def add(self, allocation: Allocation):
         document = self.to_document(allocation)
         query_attrs = ["cluster_name", "resource_name", "group_name", "start", "end"]
@@ -120,7 +123,7 @@ def get_allocation_summaries(
     for allocation in allocations:
         key = allocation_key(allocation)
         if key in summaries:
-            for field in ["cpu_year", "gpu_year", "vcpu_year", "vgpu_year"]:
+            for field in ["cpu_year", "gpu_year", "rgu_year", "vcpu_year", "vgpu_year"]:
                 setattr(
                     summaries[key].resources.compute,
                     field,
