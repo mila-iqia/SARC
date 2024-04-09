@@ -61,6 +61,8 @@ def with_cache(
         * use_cache (default: True): If ``use_cache`` is False, we will not read
           the output from cache on the disk even if the file exists.
         * save_cache (default: True): Whether to cache the result on disk or not.
+        * require_cache (default: False): If True, only return a result from cache,
+          and if there is no cached result, raise an exception.
         * at_time (default: now): The time at which to evaluate the request.
     """
     time_format = "%Y-%m-%d-%H-%M-%S"
@@ -79,14 +81,22 @@ def with_cache(
 
         @wraps(fn)
         def wrapped_function(
-            *args, use_cache=True, save_cache=True, at_time=None, **kwargs
+            *args,
+            use_cache=True,
+            save_cache=True,
+            require_cache=False,
+            at_time=None,
+            **kwargs,
         ):
             at_time = at_time or datetime.now()
             timestring = at_time.strftime(time_format)
             key_value = (key or default_key)(*args, **kwargs)
 
+            if require_cache and not use_cache:
+                raise ValueError("use_cache cannot be False if require_cache is True")
+
             if use_cache:
-                if validity is True:
+                if require_cache or validity is True:
                     valid = True
                 else:
                     assert "{time}" in key_value
@@ -128,6 +138,9 @@ def with_cache(
                                     value=value,
                                 )
                             return value
+
+            if require_cache:
+                raise Exception(f"There is no cached result for key `{key_value}`")
 
             value = fn(*args, **kwargs)
 

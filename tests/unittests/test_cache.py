@@ -2,6 +2,8 @@ import json
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import pytest
+
 from sarc.cache import with_cache
 
 
@@ -82,6 +84,30 @@ def test_use_cache(tmpdir):
     assert fn(1, 2, version=4, use_cache=False, save_cache=False) == "1 * 2 = 2 [v4]"
     # Use cache (older)
     assert fn(1, 2, version=5) == "1 * 2 = 2 [v2]"
+
+
+def test_require_cache(tmpdir):
+    reference = datetime(year=2024, month=1, day=1)
+
+    tmpdir = Path(tmpdir)
+    decorator = with_cache(
+        subdirectory="xy",
+        validity=timedelta(days=1),
+        cachedir=tmpdir,
+    )
+    fn = decorator(la_fonction)
+    with pytest.raises(Exception, match="There is no cached result"):
+        fn(2, 3, version=0, at_time=reference, require_cache=True)
+
+    assert fn(2, 3, version=1, at_time=reference) == "2 * 3 = 6 [v1]"
+    assert (
+        fn(2, 3, version=2, require_cache=True, at_time=reference + timedelta(days=10))
+        == "2 * 3 = 6 [v1]"
+    )
+    assert (
+        fn(2, 3, version=4, require_cache=True, at_time=reference + timedelta(days=10))
+        == "2 * 3 = 6 [v1]"
+    )
 
 
 def test_cache_validity(tmpdir):
