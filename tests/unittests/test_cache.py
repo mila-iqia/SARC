@@ -1,4 +1,5 @@
 import json
+import pickle
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -241,3 +242,81 @@ def test_live_cache_nodisk(tmpdir):
     assert not file2.exists()
 
     assert fn(2, 3, version=3, at_time=reference) == result2
+
+
+def test_format_txt(tmpdir):
+    def cle(x, y, version):
+        return f"{x}.{y}.txt"
+
+    tmpdir = Path(tmpdir)
+    fn = with_cache(
+        la_fonction,
+        key=cle,
+        subdirectory="xy",
+        cachedir=tmpdir,
+    )
+
+    assert (result := fn(7, 8, version=0)) == "7 * 8 = 56 [v0]"
+    file = tmpdir / "xy" / "7.8.txt"
+    assert file.exists()
+    assert file.read_text() == result
+
+
+def test_format_pkl(tmpdir):
+    def cle(x, y, version):
+        return f"{x}.{y}.pkl"
+
+    tmpdir = Path(tmpdir)
+    fn = with_cache(
+        la_fonction,
+        key=cle,
+        subdirectory="xy",
+        cachedir=tmpdir,
+    )
+
+    assert (result := fn(7, 8, version=0)) == "7 * 8 = 56 [v0]"
+    file = tmpdir / "xy" / "7.8.pkl"
+    assert file.exists()
+    assert pickle.load(open(file, "rb")) == result
+
+
+def test_custom_format(tmpdir):
+    class duck:
+        @staticmethod
+        def load(fp):
+            return "QUACK"
+
+        @staticmethod
+        def dump(obj, fp):
+            fp.write(obj)
+
+    def cle(x, y, version):
+        return f"{x}.{y}.quack"
+
+    tmpdir = Path(tmpdir)
+    fn = with_cache(
+        la_fonction,
+        format=duck,
+        key=cle,
+        subdirectory="xy",
+        cachedir=tmpdir,
+    )
+
+    assert fn(7, 8, version=0) == "7 * 8 = 56 [v0]"
+    assert fn(7, 8, version=0) == "QUACK"
+
+
+def test_unknown_format(tmpdir):
+    def cle(x, y, version):
+        return f"{x}.{y}.quack"
+
+    tmpdir = Path(tmpdir)
+    fn = with_cache(
+        la_fonction,
+        key=cle,
+        subdirectory="xy",
+        cachedir=tmpdir,
+    )
+
+    with pytest.raises(Exception, match="Cannot load/dump file format"):
+        assert (result := fn(7, 8, version=0)) == "7 * 8 = 56 [v0]"

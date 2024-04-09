@@ -1,12 +1,31 @@
 import json
+import pickle
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from functools import wraps
+from pathlib import Path
 
 from .config import config
 
 cache = {}
+
+
+pickle.read_flags = "rb"
+pickle.write_flags = "wb"
+
+
+class plaintext:
+    read_flags = "r"
+    write_flags = "w"
+
+    @staticmethod
+    def load(fp):
+        return fp.read()
+
+    @staticmethod
+    def dump(obj, fp):
+        fp.write(obj)
 
 
 @dataclass
@@ -69,9 +88,6 @@ def with_cache(
     time_glob_pattern = "????-??-??-??-??-??"
     time_regexp = time_glob_pattern.replace("?", r"\d")
 
-    if format is None:
-        format = json
-
     if cachedir is None:
         cachedir = config().cache
 
@@ -91,6 +107,19 @@ def with_cache(
             at_time = at_time or datetime.now()
             timestring = at_time.strftime(time_format)
             key_value = (key or default_key)(*args, **kwargs)
+
+            if format is None:
+                sfx = Path(key_value).suffix
+                if sfx == ".json":
+                    formatter = json
+                elif sfx == ".txt":
+                    formatter = plaintext
+                elif sfx == ".pkl":
+                    formatter = pickle
+                else:
+                    raise Exception(f"Cannot load/dump file format: {sfx}")
+            else:
+                formatter = format
 
             if require_cache and not use_cache:
                 raise ValueError("use_cache cannot be False if require_cache is True")
@@ -130,8 +159,10 @@ def with_cache(
                             else datetime.strptime(m.group(1), time_format)
                         )
                         if valid is True or at_time <= candidate_time + valid:
-                            with open(candidate) as candidate_fp:
-                                value = format.load(candidate_fp)
+                            with open(
+                                candidate, getattr(formatter, "read_flags", "r")
+                            ) as candidate_fp:
+                                value = formatter.load(candidate_fp)
                             if live:
                                 cache[(subdir, key_value)] = CachedResult(
                                     issued=candidate_time,
@@ -152,8 +183,10 @@ def with_cache(
                     )
                 if on_disk:
                     output_file = cachedir / subdir / key_value.format(time=timestring)
-                    with open(output_file, "w") as output_fp:
-                        format.dump(value, output_fp)
+                    with open(
+                        output_file, getattr(formatter, "write_flags", "w")
+                    ) as output_fp:
+                        formatter.dump(value, output_fp)
 
             return value
 
