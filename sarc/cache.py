@@ -1,4 +1,5 @@
 import json
+import logging
 import pickle
 import re
 from dataclasses import dataclass
@@ -92,6 +93,8 @@ def with_cache(
         cachedir = config().cache
 
     def deco(fn):
+        name = fn.__qualname__
+        logger = logging.getLogger(fn.__module__)
         subdir = subdirectory or fn.__qualname__
         (cachedir / subdir).mkdir(parents=True, exist_ok=True)
 
@@ -136,6 +139,9 @@ def with_cache(
 
                 if live and (previous_result := cache.get((subdir, key_value), None)):
                     if valid is True or at_time <= previous_result.issued + valid:
+                        logger.debug(
+                            f"{name}(...) read from live cache for key '{key_value}'"
+                        )
                         return previous_result.value
 
                 if on_disk:
@@ -168,11 +174,15 @@ def with_cache(
                                     issued=candidate_time,
                                     value=value,
                                 )
+                            logger.debug(
+                                f"{name}(...) read from cache file '{candidate}'"
+                            )
                             return value
 
             if require_cache:
                 raise Exception(f"There is no cached result for key `{key_value}`")
 
+            logger.debug(f"Computing {name}(...) for key '{key_value}'")
             value = fn(*args, **kwargs)
 
             if save_cache:
@@ -187,6 +197,7 @@ def with_cache(
                         output_file, getattr(formatter, "write_flags", "w")
                     ) as output_fp:
                         formatter.dump(value, output_fp)
+                    logger.debug(f"{name}(...) saved to cache file '{output_file}'")
 
             return value
 
