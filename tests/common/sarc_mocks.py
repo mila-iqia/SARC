@@ -38,7 +38,7 @@ _affiliation_types = [
 ]
 _supervisors = [
     # Student
-    [f"John Smith{i:03d}" for i in range(5)],
+    [100 + i for i in range(5)],
     # Prof
     [""],
 ]
@@ -257,6 +257,7 @@ def mymila_entry_builder(nbr_profs=5, hardcoded_values_by_user={}):
                     [date(2027, 12, 31), None][i % 2],
                 ),
                 "Email": _define_value(i, "Email", email),
+                "in1touch_id": _define_value(i, "in1touch_id", i + 100),
             },
         )
 

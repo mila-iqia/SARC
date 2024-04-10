@@ -54,18 +54,25 @@ def to_records(df):
     return records
 
 
-def combine(LD_users, mymila_data):
+def combine(LD_users, mymila_data: pd.DataFrame):
     if not mymila_data.empty:
         df_users = pd.DataFrame(LD_users)
         # Set the empty values to NA
         df_users = df_users.where((pd.notnull(df_users)) & (df_users != ""), pd.NA)
 
         # Preprocess
-        mymila_data = mymila_data.rename(columns={"MILA Email": "mila_email_username"})
+        mymila_data.set_index(mymila_data["in1touch_id"], inplace=True)
+        mymila_data.rename(columns={"MILA Email": "mila_email_username"}, inplace=True)
         # Set the empty values to NA
         mymila_data = mymila_data.where(
             (pd.notnull(mymila_data)) & (mymila_data != ""), pd.NA
         )
+        for _id in mymila_data["in1touch_id"]:
+            supervisor_filter = mymila_data["Supervisor Principal"] == _id
+            cosupervisor_filter = mymila_data["Co-Supervisor"] == _id
+            email = mymila_data.loc[_id]["mila_email_username"]
+            mymila_data["Supervisor Principal"][supervisor_filter] = email
+            mymila_data["Co-Supervisor"][cosupervisor_filter] = email
 
         if LD_users:
             df = pd.merge(df_users, mymila_data, on="mila_email_username", how="outer")
