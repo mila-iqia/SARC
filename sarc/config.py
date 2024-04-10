@@ -83,6 +83,8 @@ class ClusterConfig(BaseModel):
     duc_storage_command: str = None
     diskusage_report_command: str = None
     start_date: str = "2022-04-01"
+    rgu_start_date: str = None
+    gpu_to_rgu_billing: Path = None
     gpus_per_nodes: dict = {}
 
     @validator("timezone")
