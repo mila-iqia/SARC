@@ -7,7 +7,7 @@ import sarc.account_matching.make_matches
 import sarc.ldap.acquire
 import sarc.ldap.mymila  # will monkeypatch "read_my_mila"
 import sarc.ldap.read_mila_ldap  # will monkeypatch "query_ldap"
-from sarc.ldap.api import get_user
+from sarc.ldap.api import get_user, get_users
 
 
 @pytest.mark.usefixtures("empty_read_write_db")
@@ -74,6 +74,7 @@ def test_acquire_ldap(monkeypatch, mock_file):
 @pytest.mark.usefixtures("empty_read_write_db")
 def test_merge_ldap_and_mymila(monkeypatch, mock_file):
     nbr_users = 10
+    nbr_profs = 5
 
     def mock_query_ldap(
         local_private_key_file, local_certificate_file, ldap_service_uri
@@ -84,12 +85,26 @@ def test_merge_ldap_and_mymila(monkeypatch, mock_file):
     monkeypatch.setattr(sarc.ldap.read_mila_ldap, "query_ldap", mock_query_ldap)
 
     def mock_query_mymila(tmp_json_path):
-        return fake_mymila_data(nbr_users)
+        return fake_mymila_data(nbr_users, nbr_profs)
 
     monkeypatch.setattr(sarc.ldap.mymila, "query_mymila", mock_query_mymila)
 
     # Patch the built-in `open()` function for each file path
     with patch("builtins.open", side_effect=mock_file):
         sarc.ldap.acquire.run()
+
+    users = get_users()
+    assert len(users) == nbr_users
+
+    for i in range(nbr_profs):
+        user = users[i]
+        # A prof should not have a supervisor or co-supervisor
+        assert user.mila_ldap["supervisor"] is None
+        assert user.mila_ldap["co_supervisor"] is None
+
+    for i in range(nbr_profs, nbr_users):
+        user = users[i]
+        assert user.mila_ldap["supervisor"] == f"john.smith{i%nbr_profs:03d}@mila.quebec"
+        assert user.mila_ldap["co_supervisor"] == f"john.smith{(i+1)%nbr_profs:03d}@mila.quebec"
 
     # TODO: Add checks for fields coming from mymila now saved in DB
