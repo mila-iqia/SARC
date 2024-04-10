@@ -31,23 +31,26 @@
             "start_date": "2022-04-01",
             "gpus_per_nodes": {
                 "cn-a{{[001-011]}}": {
-                    "rtx8000": "Quadro RTX 8000"
+                    ".*": "Quadro RTX 8000"
                 },
                 "cn-b{{[001-005]}}": {
                     "v100": "Tesla V100-32GB"
                 },
                 "cn-c{{[001-040]}}": {
-                    "rtx8000": "Quadro RTX 8000"
+                    ".*": "Quadro RTX 8000"
                 },
                 "cn-g{{[001-029]}}": {
-                    "a100": "NVIDIA A100 80GB",
+                    "a100": "NVIDIA A100 80GB PCIe",
                     "[0-9]+g\\.[0-9]+gb": "__MIG_FLAG__a100"
                 },
                 "cn-i001": {
-                    "a100": "NVIDIA A100 80GB"
+                    "a100": "NVIDIA A100 80GB PCIe"
                 },
                 "cn-j001": {
                     "a6000": "NVIDIA RTX A6000"
+                },
+                "_cn-k{{[001-004]}}": {
+                    "a100": "NVIDIA A100-SXM4-40GB"
                 },
                 "cn-d{{[001-002]}}": {
                     "a100": "NVIDIA A100-SXM4-40GB"
