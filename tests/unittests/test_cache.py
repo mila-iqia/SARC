@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from sarc.cache import with_cache
+from sarc.cache import plaintext, with_cache
 
 
 def la_fonction(x, y, version=0):
@@ -31,7 +31,7 @@ def test_simple_cache(tmpdir):
     tmpdir = Path(tmpdir)
     decorator = with_cache(
         subdirectory="xy",
-        cachedir=tmpdir,
+        cache_root=tmpdir,
     )
     fn = decorator(la_fonction)
     assert (result1 := fn(1, 2, version=0, at_time=reference)) == "1 * 2 = 2 [v0]"
@@ -49,7 +49,7 @@ def test_cache_key(tmpdir):
     decorator = with_cache(
         key=la_cle,
         subdirectory="xy",
-        cachedir=tmpdir,
+        cache_root=tmpdir,
     )
     fn = decorator(la_fonction)
     assert (result1 := fn(1, 2, version=0)) == "1 * 2 = 2 [v0]"
@@ -71,7 +71,7 @@ def test_use_cache(tmpdir):
     decorator = with_cache(
         key=la_cle,
         subdirectory="xy",
-        cachedir=tmpdir,
+        cache_root=tmpdir,
     )
     fn = decorator(la_fonction)
     # Compute and save
@@ -95,7 +95,7 @@ def test_require_cache(tmpdir):
     decorator = with_cache(
         subdirectory="xy",
         validity=timedelta(days=1),
-        cachedir=tmpdir,
+        cache_root=tmpdir,
     )
     fn = decorator(la_fonction)
     with pytest.raises(Exception, match="There is no cached result"):
@@ -118,7 +118,7 @@ def test_cache_validity(tmpdir):
         la_fonction,
         key=la_cle_temporelle,
         subdirectory="xy",
-        cachedir=tmpdir,
+        cache_root=tmpdir,
         validity=timedelta(days=1),
     )
     reference = datetime(year=2024, month=1, day=1)
@@ -150,7 +150,7 @@ def test_cache_dynamic_validity(tmpdir):
         la_fonction,
         key=la_cle_temporelle,
         subdirectory="xy",
-        cachedir=tmpdir,
+        cache_root=tmpdir,
         validity=la_validite,
     )
     reference = datetime(year=2024, month=1, day=1)
@@ -179,7 +179,7 @@ def test_live_cache(tmpdir):
         la_fonction,
         key=la_cle_temporelle,
         subdirectory="xy",
-        cachedir=tmpdir,
+        cache_root=tmpdir,
         validity=timedelta(days=1),
         live=True,
     )
@@ -200,7 +200,7 @@ def test_live_cache_from_disk(tmpdir):
     decorator = with_cache(
         key=la_cle,
         subdirectory="xy",
-        cachedir=tmpdir,
+        cache_root=tmpdir,
         live=True,
     )
     fn = decorator(la_fonction)
@@ -224,7 +224,7 @@ def test_live_cache_nodisk(tmpdir):
         la_fonction,
         key=la_cle_temporelle,
         subdirectory="xy",
-        cachedir=tmpdir,
+        cache_root=tmpdir,
         validity=timedelta(days=1),
         live=True,
         on_disk=False,
@@ -254,8 +254,9 @@ def test_format_txt(tmpdir):
     fn = with_cache(
         la_fonction,
         key=cle,
+        formatter=plaintext,
         subdirectory="xy",
-        cachedir=tmpdir,
+        cache_root=tmpdir,
     )
 
     assert (result := fn(7, 8, version=0)) == "7 * 8 = 56 [v0]"
@@ -272,8 +273,9 @@ def test_format_pkl(tmpdir):
     fn = with_cache(
         la_fonction,
         key=cle,
+        formatter=pickle,
         subdirectory="xy",
-        cachedir=tmpdir,
+        cache_root=tmpdir,
     )
 
     assert (result := fn(7, 8, version=0)) == "7 * 8 = 56 [v0]"
@@ -298,27 +300,11 @@ def test_custom_format(tmpdir):
     tmpdir = Path(tmpdir)
     fn = with_cache(
         la_fonction,
-        format=duck,
+        formatter=duck,
         key=cle,
         subdirectory="xy",
-        cachedir=tmpdir,
+        cache_root=tmpdir,
     )
 
     assert fn(7, 8, version=0) == "7 * 8 = 56 [v0]"
     assert fn(7, 8, version=0) == "QUACK"
-
-
-def test_unknown_format(tmpdir):
-    def cle(x, y, version):
-        return f"{x}.{y}.quack"
-
-    tmpdir = Path(tmpdir)
-    fn = with_cache(
-        la_fonction,
-        key=cle,
-        subdirectory="xy",
-        cachedir=tmpdir,
-    )
-
-    with pytest.raises(Exception, match="Cannot load/dump file format"):
-        assert (result := fn(7, 8, version=0)) == "7 * 8 = 56 [v0]"

@@ -37,10 +37,6 @@ class CachedResult:
     issued: datetime = None
 
 
-def default_key(*args, **kwargs):
-    return "{time}.json"
-
-
 _time_format = "%Y-%m-%d-%H-%M-%S"
 _time_glob_pattern = "????-??-??-??-??-??"
 _time_regexp = _time_glob_pattern.replace("?", r"\d")
@@ -49,14 +45,14 @@ _time_regexp = _time_glob_pattern.replace("?", r"\d")
 @dataclass
 class CachedFunction:
     fn: Callable
-    format: object = None
+    formatter: object = json
     key: Optional[Callable] = None
     subdirectory: Optional[str] = None
     validity: timedelta | Callable[..., timedelta] | bool = True
     on_disk: bool = True
     live: bool = False
-    cachedir: Optional[Path] = None
-    live_cache: dict[str, object] = field(default_factory=dict)
+    cache_root: Optional[Path] = None
+    live_cache: dict = field(default_factory=dict)
 
     def __post_init__(self):
         self.subdirectory = self.subdirectory or self.fn.__qualname__
@@ -65,6 +61,34 @@ class CachedFunction:
 
     def default_key(self, *args, **kwargs):
         return "{time}.json"
+
+    @property
+    def cache_path(self):
+        return (self.cache_root or config().cache) / self.subdirectory
+
+    def save(self, *args, value_to_save, at_time=None, **kwargs):
+        key = self.key(*args, **kwargs)
+        return self.save_for_key(key, value_to_save, at_time=at_time)
+
+    def save_for_key(self, key, value, at_time=None):
+        at_time = at_time or datetime.now()
+        cdir = self.cache_path
+        cdir.mkdir(parents=True, exist_ok=True)
+
+        if self.live:
+            self.live_cache[(cdir, key)] = CachedResult(
+                issued=at_time,
+                value=value,
+            )
+        if self.on_disk:
+            output_file = cdir / key.format(time=at_time.strftime(_time_format))
+            with open(
+                output_file, getattr(self.formatter, "write_flags", "w")
+            ) as output_fp:
+                self.formatter.dump(value, output_fp)
+            self.logger.debug(
+                f"{self.fn.__qualname__}(...) saved to cache file '{output_file}'"
+            )
 
     def __call__(
         self,
@@ -79,24 +103,11 @@ class CachedFunction:
         at_time = at_time or datetime.now()
         timestring = at_time.strftime(_time_format)
         key_value = self.key(*args, **kwargs)
-
-        if self.format is None:
-            sfx = Path(key_value).suffix
-            if sfx == ".json":
-                formatter = json
-            elif sfx == ".txt":
-                formatter = plaintext
-            elif sfx == ".pkl":
-                formatter = pickle
-            else:
-                raise Exception(f"Cannot load/dump file format: {sfx}")
-        else:
-            formatter = self.format
+        cdir = self.cache_path
+        live_key = (cdir, key_value)
 
         if require_cache and not use_cache:
             raise ValueError("use_cache cannot be False if require_cache is True")
-
-        cdir = self.cachedir or config().cache
 
         if use_cache:
             if require_cache or self.validity is True:
@@ -108,7 +119,7 @@ class CachedFunction:
                 else:
                     valid = self.validity(*args, **kwargs)
 
-            if self.live and (previous_result := self.live_cache.get(key_value, None)):
+            if self.live and (previous_result := self.live_cache.get(live_key, None)):
                 if valid is True or at_time <= previous_result.issued + valid:
                     self.logger.debug(
                         f"{name}(...) read from live cache for key '{key_value}'"
@@ -117,9 +128,7 @@ class CachedFunction:
 
             if self.on_disk:
                 candidates = sorted(
-                    (cdir / self.subdirectory).glob(
-                        key_value.format(time=_time_glob_pattern)
-                    ),
+                    cdir.glob(key_value.format(time=_time_glob_pattern)),
                     reverse=True,
                 )
                 maximum = key_value.format(time=timestring)
@@ -137,11 +146,11 @@ class CachedFunction:
                     )
                     if valid is True or at_time <= candidate_time + valid:
                         with open(
-                            candidate, getattr(formatter, "read_flags", "r")
+                            candidate, getattr(self.formatter, "read_flags", "r")
                         ) as candidate_fp:
-                            value = formatter.load(candidate_fp)
+                            value = self.formatter.load(candidate_fp)
                         if self.live:
-                            self.live_cache[key_value] = CachedResult(
+                            self.live_cache[live_key] = CachedResult(
                                 issued=candidate_time,
                                 value=value,
                             )
@@ -157,35 +166,36 @@ class CachedFunction:
         value = self.fn(*args, **kwargs)
 
         if save_cache:
-            (cdir / self.subdirectory).mkdir(parents=True, exist_ok=True)
+            self.save_for_key(key_value, value, at_time=at_time)
+            # (cdir / self.subdirectory).mkdir(parents=True, exist_ok=True)
 
-            if self.live:
-                self.live_cache[key_value] = CachedResult(
-                    issued=at_time,
-                    value=value,
-                )
-            if self.on_disk:
-                output_file = (
-                    cdir / self.subdirectory / key_value.format(time=timestring)
-                )
-                with open(
-                    output_file, getattr(formatter, "write_flags", "w")
-                ) as output_fp:
-                    formatter.dump(value, output_fp)
-                self.logger.debug(f"{name}(...) saved to cache file '{output_file}'")
+            # if self.live:
+            #     self.live_cache[key_value] = CachedResult(
+            #         issued=at_time,
+            #         value=value,
+            #     )
+            # if self.on_disk:
+            #     output_file = (
+            #         cdir / self.subdirectory / key_value.format(time=timestring)
+            #     )
+            #     with open(
+            #         output_file, getattr(formatter, "write_flags", "w")
+            #     ) as output_fp:
+            #         formatter.dump(value, output_fp)
+            #     self.logger.debug(f"{name}(...) saved to cache file '{output_file}'")
 
         return value
 
 
 def with_cache(
     fn=None,
-    format=None,
+    formatter=json,
     key=None,
     subdirectory=None,
     validity=True,
     on_disk=True,
     live=False,
-    cachedir=None,
+    cache_root=None,
 ):
     """Cache the output value of the function in a file.
 
@@ -205,10 +215,9 @@ def with_cache(
               inputs.
         on_disk: If True, the values will be saved to disk.
         live: If True, the values will be kept in memory.
-        format: A module or object with load and dump properties, used to load or
-            save the data from disk. If None, will be inferred from the file suffix
-            returned by key.
-        cachedir: The cache directory, defaults to config().cache
+        formatter: A module or object with load and dump properties, used to load or
+            save the data from disk. Defaults to the ``json`` module.
+        cache_root: The root cache directory, defaults to config().cache
 
     Returns:
         A function with the same signature, except for a few extra arguments:
@@ -221,13 +230,13 @@ def with_cache(
     """
     deco = partial(
         CachedFunction,
-        format=format,
+        formatter=formatter,
         key=key,
         subdirectory=subdirectory,
         validity=validity,
         on_disk=on_disk,
         live=live,
-        cachedir=cachedir,
+        cache_root=cache_root,
     )
     if fn is None:
         return deco
