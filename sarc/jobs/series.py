@@ -331,7 +331,7 @@ def load_job_series(
     total = count_jobs(**jobs_args)
 
     # Get users mapping, with format:
-    # {"mila": {user mila email to user dict}, "drac": {drac username to user dict}}
+    # {"mila": {mila username to user dict}, "drac": {drac username to user dict}}
     users_mapping = _get_users_mapping()
 
     rows = []
@@ -420,21 +420,21 @@ def load_job_series(
 
 def _get_users_mapping() -> dict:
     """
-    Get users and map them using mila email and drac username.
+    Get users and map them using mila and drac usernames.
 
     Returns
     -------
     dict
         A dictionary with two sub-dictionaries:
-        - "mila", mapping user mila email to user dict
-        - "drac", mapping user drac username to user dict
+        - "mila", mapping mila username to user dict
+        - "drac", mapping drac username to user dict
         Or empty dictionary if no user is available.
     """
     mila_mapping = {}
     drac_mapping = {}
     for user in get_users():
         user_dict = _user_to_series(user)
-        mila_mapping[user.mila.email] = user_dict
+        mila_mapping[user.mila.username] = user_dict
         if user.drac:
             drac_mapping[user.drac.username] = user_dict
     return (
@@ -460,6 +460,7 @@ def _user_to_series(user: User) -> dict:
         with format "user.<attribute>.<sub-attribute or key>".
 
         Current expected columns:
+        - "user.primary_email": copy of user.mila.email
         - "user.name", "user.record_start", "user.record_end"
         - "user.mila.username", "user.mila.email", "user.mila.active"
         - "user.drac.username", "user.drac.email", "user.drac.active"
@@ -471,6 +472,9 @@ def _user_to_series(user: User) -> dict:
     user_dict = user.dict(
         exclude={"id", "mila", "mila_ldap", "drac", "drac_members", "drac_roles"}
     )
+
+    # Make a specific copy of user.mila.email into "primary_email"
+    user_dict["primary_email"] = user.mila.email
 
     # Flatten user.mila object
     user_dict.update({f"mila.{key}": value for key, value in user.mila.dict().items()})

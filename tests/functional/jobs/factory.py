@@ -162,7 +162,8 @@ def _create_user(username: str, with_drac=True):
         "mila": {
             "active": True,
             "email": mila_email_username,
-            "username": username,
+            # Set a different username for mila
+            "username": f"{username}_mila",
         },
         "mila_ldap": {
             "co_supervisor": None,
@@ -233,7 +234,7 @@ def create_jobs(job_factory: JobFactory | None = None):
         job_id=999_999_999,
         elapsed_time=elapsed_time * 1.5,
         cluster_name="mila",
-        user="petitbonhomme@mila.quebec",
+        user="petitbonhomme_mila",
         allocated={
             "billing": 14,
             "cpu": 12,

@@ -335,7 +335,7 @@ Found 8 job(s):
     "array_job_id": null,
     "task_id": null,
     "name": "main.sh",
-    "user": "petitbonhomme@mila.quebec",
+    "user": "petitbonhomme_mila",
     "group": "petitbonhomme",
     "job_state": "CANCELLED",
     "exit_code": 0,

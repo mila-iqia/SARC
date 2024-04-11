@@ -86,6 +86,7 @@ ALL_COLUMNS = [
     "work_dir",
 ]
 USER_COLUMNS = [
+    "user.primary_email",
     "user.name",
     "user.record_start",
     "user.record_end",
