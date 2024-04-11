@@ -83,6 +83,8 @@ class ClusterConfig(BaseModel):
     duc_storage_command: str = None
     diskusage_report_command: str = None
     start_date: str = "2022-04-01"
+    rgu_start_date: str = None
+    gpu_to_rgu_billing: Path = None
 
     @validator("timezone")
     def _timezone(cls, value):
@@ -101,7 +103,7 @@ class ClusterConfig(BaseModel):
             fconfig = FabricConfig()
         else:
             fconfig = FabricConfig(ssh_config=SSHConfig.from_path(self.sshconfig))
-        fconfig["run"]["pty"] = True
+        fconfig["run"]["pty"] = False
         fconfig["run"]["in_stream"] = False
         return Connection(self.host, config=fconfig)
 
@@ -167,6 +169,14 @@ class LDAPConfig(BaseModel):
         return relative_filepath(value)
 
 
+class LokiConfig(BaseModel):
+    uri: str
+
+
+class TempoConfig(BaseModel):
+    uri: str
+
+
 class MyMilaConfig(BaseModel):
     tmp_json_path: str
 
@@ -189,6 +199,8 @@ def _absolute_path(value, values, config, field):
 class Config(BaseModel):
     mongo: MongoConfig
     cache: Path = None
+    loki: LokiConfig = None
+    tempo: TempoConfig = None
 
     _abs_path = validator("cache", allow_reuse=True)(_absolute_path)
 

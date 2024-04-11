@@ -19,7 +19,7 @@ def _generate_df(rows, delta=30):
     return df.set_index("timestamp")
 
 
-def test_compute_job_statistics_from_dataframe():
+def test_compute_job_statistics_from_dataframe(captrace):
     rows = [{"instance": "cn-c002", "value": i} for i in range(100)]
     df = _generate_df(rows)
     stats = compute_job_statistics_from_dataframe(
@@ -27,6 +27,11 @@ def test_compute_job_statistics_from_dataframe():
         {"mean": DataFrame.mean},
     )
     assert stats == {"mean": 99 / 2, "unused": 0}
+
+    # Check trace
+    spans = captrace.get_finished_spans()
+    assert len(spans) == 1
+    assert spans[0].name == "compute_job_statistics_from_dataframe"
 
 
 def test_compute_job_statistics_from_dataframe_normalization():
