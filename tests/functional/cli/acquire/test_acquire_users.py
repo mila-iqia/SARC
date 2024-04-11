@@ -1,17 +1,13 @@
 import io
 import json
 import logging
-import random
 import re
 from io import StringIO
-from unittest.mock import MagicMock, mock_open, patch
+from unittest.mock import patch
 
 import pytest
 from opentelemetry.trace import StatusCode
 
-import sarc.account_matching.make_matches
-import sarc.ldap.acquire
-import sarc.ldap.read_mila_ldap  # will monkeypatch "query_ldap"
 from sarc.config import config
 from sarc.ldap.api import get_user
 from tests.common.sarc_mocks import fake_mymila_data, fake_raw_ldap_data
@@ -79,7 +75,7 @@ class FileSimulator:
 
 
 @pytest.mark.usefixtures("empty_read_write_db")
-def test_acquire_users(cli_main, monkeypatch, mock_file, captrace):
+def test_acquire_users(cli_main, patch_return_values, mock_file, captrace):
     """Test command line `sarc acquire users`.
 
     Copied from tests.functional.ldap.test_acquire_ldap.test_acquire_ldap
@@ -87,13 +83,12 @@ def test_acquire_users(cli_main, monkeypatch, mock_file, captrace):
     """
     nbr_users = 10
 
-    def mock_query_ldap(
-        local_private_key_file, local_certificate_file, ldap_service_uri
-    ):
-        assert ldap_service_uri.startswith("ldaps://")
-        return fake_raw_ldap_data(nbr_users)
-
-    monkeypatch.setattr(sarc.ldap.read_mila_ldap, "query_ldap", mock_query_ldap)
+    patch_return_values(
+        {
+            "sarc.ldap.read_mila_ldap.query_ldap": fake_raw_ldap_data(nbr_users),
+            "sarc.ldap.mymila.query_mymila_json": [],
+        }
+    )
 
     with patch("builtins.open", side_effect=mock_file):
         assert (
@@ -166,7 +161,7 @@ def test_acquire_users(cli_main, monkeypatch, mock_file, captrace):
 @pytest.mark.usefixtures("empty_read_write_db")
 def test_acquire_users_supervisors(
     cli_main,
-    monkeypatch,
+    patch_return_values,
     mock_file,
     ldap_supervisor,
     mymila_supervisor,
@@ -184,35 +179,27 @@ def test_acquire_users_supervisors(
     nbr_users = 4
     nbr_profs = 2
 
-    # Mock the fake LDAP data used for the tests
-    def mock_query_ldap(
-        local_private_key_file, local_certificate_file, ldap_service_uri
-    ):
-        assert ldap_service_uri.startswith("ldaps://")
-        return fake_raw_ldap_data(
-            nbr_users,
-            hardcoded_values_by_user={
-                2: {  # The first user who is not a prof is the one with index 2
-                    "supervisor": ldap_supervisor
-                }
-            },
-        )
-
-    monkeypatch.setattr(sarc.ldap.read_mila_ldap, "query_ldap", mock_query_ldap)
-
-    # Mock the fake MyMila data used for the tests
-    def mock_query_mymila(tmp_json_path):
-        return fake_mymila_data(
-            nbr_users=nbr_users,
-            nbr_profs=nbr_profs,
-            hardcoded_values_by_user={
-                2: {  # The first user who is not a prof is the one with index 2
-                    "Supervisor Principal": mymila_supervisor
-                }
-            },
-        )
-
-    monkeypatch.setattr(sarc.ldap.mymila, "query_mymila", mock_query_mymila)
+    patch_return_values(
+        {
+            "sarc.ldap.read_mila_ldap.query_ldap": fake_raw_ldap_data(
+                nbr_users,
+                hardcoded_values_by_user={
+                    2: {  # The first user who is not a prof is the one with index 2
+                        "supervisor": ldap_supervisor
+                    }
+                },
+            ),
+            "sarc.ldap.mymila.query_mymila_json": fake_mymila_data(
+                nbr_users=nbr_users,
+                nbr_profs=nbr_profs,
+                hardcoded_values_by_user={
+                    2: {  # The first user who is not a prof is the one with index 2
+                        "Supervisor Principal": mymila_supervisor
+                    }
+                },
+            ),
+        }
+    )
 
     # Patch the built-in `open()` function for each file path
     with patch("builtins.open", side_effect=mock_file):
@@ -258,7 +245,7 @@ def test_acquire_users_supervisors(
 @pytest.mark.usefixtures("empty_read_write_db")
 def test_acquire_users_co_supervisors(
     cli_main,
-    monkeypatch,
+    patch_return_values,
     mock_file,
     ldap_co_supervisor,
     mymila_co_supervisor,
@@ -276,35 +263,27 @@ def test_acquire_users_co_supervisors(
     nbr_users = 4
     nbr_profs = 2
 
-    # Mock the fake LDAP data used for the tests
-    def mock_query_ldap(
-        local_private_key_file, local_certificate_file, ldap_service_uri
-    ):
-        assert ldap_service_uri.startswith("ldaps://")
-        return fake_raw_ldap_data(
-            nbr_users,
-            hardcoded_values_by_user={
-                2: {  # The first user who is not a prof is the one with index 2
-                    "co_supervisor": ldap_co_supervisor
-                }
-            },
-        )
-
-    monkeypatch.setattr(sarc.ldap.read_mila_ldap, "query_ldap", mock_query_ldap)
-
-    # Mock the fake MyMila data used for the tests
-    def mock_query_mymila(tmp_json_path):
-        return fake_mymila_data(
-            nbr_users=nbr_users,
-            nbr_profs=nbr_profs,
-            hardcoded_values_by_user={
-                2: {  # The first user who is not a prof is the one with index 2
-                    "Co-Supervisor": mymila_co_supervisor
-                }
-            },
-        )
-
-    monkeypatch.setattr(sarc.ldap.mymila, "query_mymila", mock_query_mymila)
+    patch_return_values(
+        {
+            "sarc.ldap.read_mila_ldap.query_ldap": fake_raw_ldap_data(
+                nbr_users,
+                hardcoded_values_by_user={
+                    2: {  # The first user who is not a prof is the one with index 2
+                        "co_supervisor": ldap_co_supervisor
+                    }
+                },
+            ),
+            "sarc.ldap.mymila.query_mymila_json": fake_mymila_data(
+                nbr_users=nbr_users,
+                nbr_profs=nbr_profs,
+                hardcoded_values_by_user={
+                    2: {  # The first user who is not a prof is the one with index 2
+                        "Co-Supervisor": mymila_co_supervisor
+                    }
+                },
+            ),
+        }
+    )
 
     # Patch the built-in `open()` function for each file path
     with patch("builtins.open", side_effect=mock_file):
@@ -327,18 +306,19 @@ def test_acquire_users_co_supervisors(
 
 
 @pytest.mark.usefixtures("empty_read_write_db")
-def test_acquire_users_prompt(cli_main, monkeypatch, file_contents, caplog, captrace):
+def test_acquire_users_prompt(
+    cli_main, monkeypatch, patch_return_values, file_contents, caplog, captrace
+):
     """Test command line `sarc acquire users --prompt`."""
     caplog.set_level(logging.INFO)
     nbr_users = 10
 
-    def mock_query_ldap(
-        local_private_key_file, local_certificate_file, ldap_service_uri
-    ):
-        assert ldap_service_uri.startswith("ldaps://")
-        return fake_raw_ldap_data(nbr_users)
-
-    monkeypatch.setattr(sarc.ldap.read_mila_ldap, "query_ldap", mock_query_ldap)
+    patch_return_values(
+        {
+            "sarc.ldap.read_mila_ldap.query_ldap": fake_raw_ldap_data(nbr_users),
+            "sarc.ldap.mymila.query_mymila_json": [],
+        }
+    )
 
     # Load config
     cfg = config()
