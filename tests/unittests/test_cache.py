@@ -1,4 +1,5 @@
 import json
+import os
 import pickle
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -204,6 +205,7 @@ def test_live_cache_from_disk(tmpdir):
     )
     fn = decorator(la_fonction)
 
+    os.makedirs(tmpdir / "xy", exist_ok=True)
     file1 = tmpdir / "xy" / "1.2.json"
     file1.write_text('"hello!"')
 

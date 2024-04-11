@@ -2,15 +2,13 @@ import json
 import logging
 import pickle
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from functools import wraps
+from functools import partial, wraps
 from pathlib import Path
+from typing import Callable, Optional
 
 from .config import config
-
-cache = {}
-
 
 pickle.read_flags = "rb"
 pickle.write_flags = "wb"
@@ -41,6 +39,142 @@ class CachedResult:
 
 def default_key(*args, **kwargs):
     return "{time}.json"
+
+
+_time_format = "%Y-%m-%d-%H-%M-%S"
+_time_glob_pattern = "????-??-??-??-??-??"
+_time_regexp = _time_glob_pattern.replace("?", r"\d")
+
+
+@dataclass
+class CachedFunction:
+    fn: Callable
+    format: object = None
+    key: Optional[Callable] = None
+    subdirectory: Optional[str] = None
+    validity: timedelta | Callable[..., timedelta] | bool = True
+    on_disk: bool = True
+    live: bool = False
+    cachedir: Optional[Path] = None
+    live_cache: dict[str, object] = field(default_factory=dict)
+
+    def __post_init__(self):
+        self.subdirectory = self.subdirectory or self.fn.__qualname__
+        self.logger = logging.getLogger(self.fn.__module__)
+        self.key = self.key or self.default_key
+
+    def default_key(self, *args, **kwargs):
+        return "{time}.json"
+
+    def __call__(
+        self,
+        *args,
+        use_cache=True,
+        save_cache=True,
+        require_cache=False,
+        at_time=None,
+        **kwargs,
+    ):
+        name = self.fn.__qualname__
+        at_time = at_time or datetime.now()
+        timestring = at_time.strftime(_time_format)
+        key_value = self.key(*args, **kwargs)
+
+        if self.format is None:
+            sfx = Path(key_value).suffix
+            if sfx == ".json":
+                formatter = json
+            elif sfx == ".txt":
+                formatter = plaintext
+            elif sfx == ".pkl":
+                formatter = pickle
+            else:
+                raise Exception(f"Cannot load/dump file format: {sfx}")
+        else:
+            formatter = self.format
+
+        if require_cache and not use_cache:
+            raise ValueError("use_cache cannot be False if require_cache is True")
+
+        cdir = self.cachedir or config().cache
+
+        if use_cache:
+            if require_cache or self.validity is True:
+                valid = True
+            else:
+                assert "{time}" in key_value
+                if isinstance(self.validity, timedelta):
+                    valid = self.validity
+                else:
+                    valid = self.validity(*args, **kwargs)
+
+            if self.live and (previous_result := self.live_cache.get(key_value, None)):
+                if valid is True or at_time <= previous_result.issued + valid:
+                    self.logger.debug(
+                        f"{name}(...) read from live cache for key '{key_value}'"
+                    )
+                    return previous_result.value
+
+            if self.on_disk:
+                candidates = sorted(
+                    (cdir / self.subdirectory).glob(
+                        key_value.format(time=_time_glob_pattern)
+                    ),
+                    reverse=True,
+                )
+                maximum = key_value.format(time=timestring)
+                possible = [c for c in candidates if c.name <= maximum]
+                if possible:
+                    candidate = possible[0]
+                    m = re.match(
+                        string=candidate.name,
+                        pattern=key_value.format(time=f"({_time_regexp})"),
+                    )
+                    candidate_time = (
+                        None
+                        if valid is True
+                        else datetime.strptime(m.group(1), _time_format)
+                    )
+                    if valid is True or at_time <= candidate_time + valid:
+                        with open(
+                            candidate, getattr(formatter, "read_flags", "r")
+                        ) as candidate_fp:
+                            value = formatter.load(candidate_fp)
+                        if self.live:
+                            self.live_cache[key_value] = CachedResult(
+                                issued=candidate_time,
+                                value=value,
+                            )
+                        self.logger.debug(
+                            f"{name}(...) read from cache file '{candidate}'"
+                        )
+                        return value
+
+        if require_cache:
+            raise Exception(f"There is no cached result for key `{key_value}`")
+
+        self.logger.debug(f"Computing {name}(...) for key '{key_value}'")
+        value = self.fn(*args, **kwargs)
+
+        if save_cache:
+            (cdir / self.subdirectory).mkdir(parents=True, exist_ok=True)
+
+            if self.live:
+                self.live_cache[key_value] = CachedResult(
+                    issued=at_time,
+                    value=value,
+                )
+            if self.on_disk:
+                output_file = (
+                    cdir / self.subdirectory / key_value.format(time=timestring)
+                )
+                with open(
+                    output_file, getattr(formatter, "write_flags", "w")
+                ) as output_fp:
+                    formatter.dump(value, output_fp)
+                self.logger.debug(f"{name}(...) saved to cache file '{output_file}'")
+
+        return value
 
 
 def with_cache(
@@ -85,122 +219,17 @@ def with_cache(
           and if there is no cached result, raise an exception.
         * at_time (default: now): The time at which to evaluate the request.
     """
-    time_format = "%Y-%m-%d-%H-%M-%S"
-    time_glob_pattern = "????-??-??-??-??-??"
-    time_regexp = time_glob_pattern.replace("?", r"\d")
-
-    def deco(fn):
-        name = fn.__qualname__
-        logger = logging.getLogger(fn.__module__)
-        subdir = subdirectory or fn.__qualname__
-
-        @wraps(fn)
-        def wrapped_function(
-            *args,
-            use_cache=True,
-            save_cache=True,
-            require_cache=False,
-            at_time=None,
-            **kwargs,
-        ):
-            at_time = at_time or datetime.now()
-            timestring = at_time.strftime(time_format)
-            key_value = (key or default_key)(*args, **kwargs)
-
-            if format is None:
-                sfx = Path(key_value).suffix
-                if sfx == ".json":
-                    formatter = json
-                elif sfx == ".txt":
-                    formatter = plaintext
-                elif sfx == ".pkl":
-                    formatter = pickle
-                else:
-                    raise Exception(f"Cannot load/dump file format: {sfx}")
-            else:
-                formatter = format
-
-            if require_cache and not use_cache:
-                raise ValueError("use_cache cannot be False if require_cache is True")
-
-            if use_cache:
-                if require_cache or validity is True:
-                    valid = True
-                else:
-                    assert "{time}" in key_value
-                    if isinstance(validity, timedelta):
-                        valid = validity
-                    else:
-                        valid = validity(*args, **kwargs)
-
-                if live and (previous_result := cache.get((subdir, key_value), None)):
-                    if valid is True or at_time <= previous_result.issued + valid:
-                        logger.debug(
-                            f"{name}(...) read from live cache for key '{key_value}'"
-                        )
-                        return previous_result.value
-
-                cdir = cachedir or config().cache
-                if on_disk:
-                    (cdir / subdir).mkdir(parents=True, exist_ok=True)
-
-                    candidates = sorted(
-                        (cdir / subdir).glob(key_value.format(time=time_glob_pattern)),
-                        reverse=True,
-                    )
-                    maximum = key_value.format(time=timestring)
-                    possible = [c for c in candidates if c.name <= maximum]
-                    if possible:
-                        candidate = possible[0]
-                        m = re.match(
-                            string=candidate.name,
-                            pattern=key_value.format(time=f"({time_regexp})"),
-                        )
-                        candidate_time = (
-                            None
-                            if valid is True
-                            else datetime.strptime(m.group(1), time_format)
-                        )
-                        if valid is True or at_time <= candidate_time + valid:
-                            with open(
-                                candidate, getattr(formatter, "read_flags", "r")
-                            ) as candidate_fp:
-                                value = formatter.load(candidate_fp)
-                            if live:
-                                cache[(subdir, key_value)] = CachedResult(
-                                    issued=candidate_time,
-                                    value=value,
-                                )
-                            logger.debug(
-                                f"{name}(...) read from cache file '{candidate}'"
-                            )
-                            return value
-
-            if require_cache:
-                raise Exception(f"There is no cached result for key `{key_value}`")
-
-            logger.debug(f"Computing {name}(...) for key '{key_value}'")
-            value = fn(*args, **kwargs)
-
-            if save_cache:
-                if live:
-                    cache[(subdir, key_value)] = CachedResult(
-                        issued=at_time,
-                        value=value,
-                    )
-                if on_disk:
-                    output_file = cdir / subdir / key_value.format(time=timestring)
-                    with open(
-                        output_file, getattr(formatter, "write_flags", "w")
-                    ) as output_fp:
-                        formatter.dump(value, output_fp)
-                    logger.debug(f"{name}(...) saved to cache file '{output_file}'")
-
-            return value
-
-        return wrapped_function
-
+    deco = partial(
+        CachedFunction,
+        format=format,
+        key=key,
+        subdirectory=subdirectory,
+        validity=validity,
+        on_disk=on_disk,
+        live=live,
+        cachedir=cachedir,
+    )
     if fn is None:
         return deco
     else:
-        return deco(fn)
+        return wraps(fn)(deco(fn))
