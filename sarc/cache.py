@@ -89,14 +89,10 @@ def with_cache(
     time_glob_pattern = "????-??-??-??-??-??"
     time_regexp = time_glob_pattern.replace("?", r"\d")
 
-    if cachedir is None:
-        cachedir = config().cache
-
     def deco(fn):
         name = fn.__qualname__
         logger = logging.getLogger(fn.__module__)
         subdir = subdirectory or fn.__qualname__
-        (cachedir / subdir).mkdir(parents=True, exist_ok=True)
 
         @wraps(fn)
         def wrapped_function(
@@ -144,11 +140,12 @@ def with_cache(
                         )
                         return previous_result.value
 
+                cdir = cachedir or config().cache
                 if on_disk:
+                    (cdir / subdir).mkdir(parents=True, exist_ok=True)
+
                     candidates = sorted(
-                        (cachedir / subdir).glob(
-                            key_value.format(time=time_glob_pattern)
-                        ),
+                        (cdir / subdir).glob(key_value.format(time=time_glob_pattern)),
                         reverse=True,
                     )
                     maximum = key_value.format(time=timestring)
@@ -192,7 +189,7 @@ def with_cache(
                         value=value,
                     )
                 if on_disk:
-                    output_file = cachedir / subdir / key_value.format(time=timestring)
+                    output_file = cdir / subdir / key_value.format(time=timestring)
                     with open(
                         output_file, getattr(formatter, "write_flags", "w")
                     ) as output_fp:
