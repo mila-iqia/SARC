@@ -111,7 +111,6 @@ def run(prompt=False):
         #       "drac_members": {...} or None
         #     }
 
-
         # Load exceptions
         exceptions = load_ldap_exceptions(cfg.ldap)
 
@@ -119,7 +118,7 @@ def run(prompt=False):
             if user["mila_ldap"]["mila_email_username"] in exceptions["delegations"]:
                 user["teacher_delegations"] = exceptions["delegations"][
                     user["mila_ldap"]["mila_email_username"]
-                ]    
+                ]
             fill_computed_fields(user)
 
         # These associations can now be propagated to the database.
