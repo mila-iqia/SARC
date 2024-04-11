@@ -1,24 +1,21 @@
-import json
+from datetime import timedelta
 
 import pandas as pd
 
+from sarc.cache import with_cache
 from sarc.config import MyMilaConfig
 
 START_DATE_KEY = "Start Date with MILA"
 END_DATE_KEY = "End Date with MILA"
 
 
-def query_mymila(cfg: MyMilaConfig):
-    if cfg is None:
-        return pd.DataFrame()
+@with_cache(subdirectory="mymila", validity=timedelta(days=1))
+def query_mymila_json(cfg: MyMilaConfig):
+    raise NotImplementedError("Cannot read from mymila yet.")
 
-    # NOTE: Using json loads on open instead of pd.read_json
-    #       because the mocked config is on `open`. It stinks, but we
-    #       will replace this part of the code in favor of direct calls to
-    #       MyMila API anyway.
-    return pd.DataFrame(
-        json.loads(open(cfg.tmp_json_path, "r", encoding="uft-8").read())
-    )
+
+def query_mymila(cfg: MyMilaConfig, cache_policy=True):
+    return pd.DataFrame(query_mymila_json(cfg, cache_policy=cache_policy))
 
 
 def to_records(df):
@@ -105,6 +102,6 @@ def combine(LD_users, mymila_data):
     return LD_users
 
 
-def fetch_mymila(cfg, LD_users):
-    mymila_data = query_mymila(cfg.mymila)
+def fetch_mymila(cfg, LD_users, cache_policy=True):
+    mymila_data = query_mymila(cfg.mymila, cache_policy=cache_policy)
     return combine(LD_users, mymila_data)
