@@ -117,6 +117,69 @@ class JobFactory:
             )
 
 
+def create_users():
+    users = []
+    for username in ["bonhomme", "petitbonhomme", "grosbonhomme", "beaubonhomme"]:
+        users.append(_create_user(username=username))
+    return users
+
+
+def _create_user(username: str, with_drac=True):
+    name = f"M/Ms {username[0].upper()}{username[1:]}"
+    mila_email_username = f"{username}@mila.quebec"
+
+    drac = None
+    drac_members = None
+    drac_roles = None
+    if with_drac:
+        drac_email = f"{username}@example.com"
+        drac_username = username
+        drac = {
+            "active": True,
+            "email": drac_email,
+            "username": drac_username,
+        }
+        drac_members = {
+            "activation_status": "activated",
+            "email": drac_email,
+            "name": name,
+            "permission": "Manager",
+            "sponsor": "BigProf",
+            "username": drac_username,
+        }
+        drac_roles = {
+            "email": drac_email,
+            "nom": name,
+            "status": "Activated",
+            "username": drac_username,
+            "état du compte": "activé",
+        }
+
+    return {
+        "drac": drac,
+        "drac_members": drac_members,
+        "drac_roles": drac_roles,
+        "mila": {
+            "active": True,
+            "email": mila_email_username,
+            "username": username,
+        },
+        "mila_ldap": {
+            "co_supervisor": None,
+            "display_name": name,
+            "mila_cluster_gid": "1500000003",
+            "mila_cluster_uid": "1500000003",
+            "mila_cluster_username": username,
+            "mila_email_username": mila_email_username,
+            "status": "enabled",
+            "supervisor": None,
+        },
+        "name": name,
+        "record_end": None,
+        "record_start": datetime(2024, 4, 11, 0, 0),
+    }
+
+
 def create_jobs(job_factory: JobFactory | None = None):
     if job_factory is None:
         job_factory = JobFactory()
@@ -169,6 +232,8 @@ def create_jobs(job_factory: JobFactory | None = None):
     job_factory.add_job(
         job_id=999_999_999,
         elapsed_time=elapsed_time * 1.5,
+        cluster_name="mila",
+        user="petitbonhomme@mila.quebec",
         allocated={
             "billing": 14,
             "cpu": 12,

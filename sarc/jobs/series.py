@@ -14,6 +14,7 @@ from tqdm import tqdm
 
 from sarc.config import MTL, UTC, ClusterConfig, config
 from sarc.jobs.job import JobStatistics, Statistics, count_jobs, get_jobs
+from sarc.ldap.api import Credentials, User, get_users
 from sarc.traces import trace_decorator
 
 if TYPE_CHECKING:
@@ -317,6 +318,7 @@ def load_job_series(
           "gpu_utilization", "cpu_utilization", "gpu_memory", "gpu_power", "system_memory"
         - Optional job series fields, added if clip_time is True:
           "unclipped_start" and "unclipped_end"
+        - Optional user info fields if job users found. See `_user_to_series` for user fields.
     """
 
     # If fields is a list, convert it to a renaming dict with same old and new names.
@@ -327,6 +329,10 @@ def load_job_series(
     end = jobs_args.get("end", None)
 
     total = count_jobs(**jobs_args)
+
+    # Get users mapping, with format:
+    # {"mila": {user mila email to user dict}, "drac": {drac username to user dict}}
+    users_mapping = _get_users_mapping()
 
     rows = []
     now = datetime.now(tz=MTL)
@@ -393,6 +399,14 @@ def load_job_series(
         final_job_dict.update(job_series)
         job_series = final_job_dict
 
+        # Add user info
+        if users_mapping:
+            if job.cluster_name == "mila":
+                user_info = users_mapping["mila"][job.user]
+            else:
+                user_info = users_mapping["drac"][job.user]
+            job_series.update(user_info)
+
         if fields is not None:
             job_series = {
                 new_name: job_series[old_name] for old_name, new_name in fields.items()
@@ -402,6 +416,90 @@ def load_job_series(
             callback(rows)
 
     return pandas.DataFrame(rows)
+
+
+def _get_users_mapping() -> dict:
+    """
+    Get users and map them using mila email and drac username.
+
+    Returns
+    -------
+    dict
+        A dictionary with two sub-dictionaries:
+        - "mila", mapping user mila email to user dict
+        - "drac", mapping user drac username to user dict
+        Or empty dictionary if no user is available.
+    """
+    mila_mapping = {}
+    drac_mapping = {}
+    for user in get_users():
+        user_dict = _user_to_series(user)
+        mila_mapping[user.mila.email] = user_dict
+        if user.drac:
+            drac_mapping[user.drac.username] = user_dict
+    return (
+        {"mila": mila_mapping, "drac": drac_mapping}
+        if (mila_mapping or drac_mapping)
+        else {}
+    )
+
+
+DUMMY_CREDENTIALS = Credentials(username="", email="", active=False)
+
+
+def _user_to_series(user: User) -> dict:
+    """
+    Convert user to a dictionary easy to insert into a data frame.
+
+    Returns
+    -------
+    dict
+        A dictionary containing user info.
+        Each key has format "user.<sttribute>".
+        User credentials and dict attributes are flattened
+        with format "user.<attribute>.<sub-attribute or key>".
+
+        Current expected columns:
+        - "user.name", "user.record_start", "user.record_end"
+        - "user.mila.username", "user.mila.email", "user.mila.active"
+        - "user.drac.username", "user.drac.email", "user.drac.active"
+        - "user.mila_ldap.<key>" for each key in user.mila_ldap dictionary
+        - "user.drac_members.<key>" for each key in user.drac_members dictionary
+        - "user.drac_roles.<key>" for each key in user.drac_roles dictionary
+    """
+    # Get user as a dict, excluding "id" and complex fields.
+    user_dict = user.dict(
+        exclude={"id", "mila", "mila_ldap", "drac", "drac_members", "drac_roles"}
+    )
+
+    # Flatten user.mila object
+    user_dict.update({f"mila.{key}": value for key, value in user.mila.dict().items()})
+
+    # Flatten user.mila_ldap dict
+    user_dict.update(
+        {f"mila_ldap.{key}": value for key, value in user.mila_ldap.items()}
+    )
+
+    # Flatten user.drac object. Use dummy credentials if None.
+    drac = user.drac or DUMMY_CREDENTIALS
+    user_dict.update({f"drac.{key}": value for key, value in drac.dict().items()})
+
+    # Flatten user.drac_members dict if available.
+    if user.drac_members:
+        user_dict.update(
+            {f"drac_members.{key}": value for key, value in user.drac_members.items()}
+        )
+
+    # Flatten user.drac_roles if available.
+    if user.drac_roles:
+        user_dict.update(
+            {f"drac_roles.{key}": value for key, value in user.drac_roles.items()}
+        )
+
+    # Add "user." prefix to all keys.
+    user_dict = {f"user.{key}": value for key, value in user_dict.items()}
+
+    return user_dict
 
 
 def update_cluster_job_series_rgu(

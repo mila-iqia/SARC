@@ -7,6 +7,7 @@ import pytest
 from sarc.config import MTL
 from sarc.jobs.job import get_jobs
 from sarc.jobs.series import load_job_series
+from sarc.ldap.api import get_users
 
 from .test_func_job_statistics import generate_fake_timeseries
 
@@ -84,7 +85,36 @@ ALL_COLUMNS = [
     "user",
     "work_dir",
 ]
-
+USER_COLUMNS = [
+    "user.name",
+    "user.record_start",
+    "user.record_end",
+    "user.mila.username",
+    "user.mila.email",
+    "user.mila.active",
+    "user.drac.username",
+    "user.drac.email",
+    "user.drac.active",
+    "user.mila_ldap.co_supervisor",
+    "user.mila_ldap.display_name",
+    "user.mila_ldap.mila_cluster_gid",
+    "user.mila_ldap.mila_cluster_uid",
+    "user.mila_ldap.mila_cluster_username",
+    "user.mila_ldap.mila_email_username",
+    "user.mila_ldap.status",
+    "user.mila_ldap.supervisor",
+    "user.drac_members.activation_status",
+    "user.drac_members.email",
+    "user.drac_members.name",
+    "user.drac_members.permission",
+    "user.drac_members.sponsor",
+    "user.drac_members.username",
+    "user.drac_roles.email",
+    "user.drac_roles.nom",
+    "user.drac_roles.status",
+    "user.drac_roles.username",
+    "user.drac_roles.état du compte",
+]
 
 # For file regression tests, we will save data frame into a CSV.
 # We won't include job `id` because it changes from a call to another
@@ -93,6 +123,22 @@ CSV_COLUMNS = [col for col in ALL_COLUMNS if col not in ["id"]]
 
 
 MOCK_TIME = "2023-11-22"
+
+
+@pytest.mark.freeze_time(MOCK_TIME)
+@pytest.mark.usefixtures("read_only_db_with_users", "tzlocal_is_mtl")
+def test_load_job_series_with_users(file_regression):
+    assert len(get_users()) == 4
+    data_frame = load_job_series()
+    expected_columns = sorted(ALL_COLUMNS + USER_COLUMNS)
+    assert sorted(data_frame.keys().tolist()) == expected_columns
+
+    str_view = data_frame[
+        ["job_id", "cluster_name", "user"] + USER_COLUMNS
+    ].to_markdown()
+    file_regression.check(
+        f"Found 4 users and {data_frame.shape[0]} job(s):\n\n{str_view}"
+    )
 
 
 @pytest.mark.freeze_time(MOCK_TIME)
