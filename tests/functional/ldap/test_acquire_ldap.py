@@ -75,12 +75,14 @@ def test_acquire_ldap(monkeypatch, mock_file):
 def test_merge_ldap_and_mymila(monkeypatch, mock_file):
     nbr_users = 10
     nbr_profs = 5
+    ld_users = None
 
     def mock_query_ldap(
         local_private_key_file, local_certificate_file, ldap_service_uri
     ):
         assert ldap_service_uri.startswith("ldaps://")
-        return fake_raw_ldap_data(nbr_users)
+        ld_users = fake_raw_ldap_data(nbr_users)
+        return ld_users
 
     monkeypatch.setattr(sarc.ldap.read_mila_ldap, "query_ldap", mock_query_ldap)
 
@@ -95,6 +97,9 @@ def test_merge_ldap_and_mymila(monkeypatch, mock_file):
 
     users = get_users()
     assert len(users) == nbr_users
+
+    for user, ld_user in zip(users, ld_users):
+        assert user.mila_ldap["display_name"] != ld_user
 
     for i in range(nbr_profs):
         user = users[i]

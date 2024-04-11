@@ -14,6 +14,7 @@ _membership_types = [
         "Permanent HQP",
         "Visiting Researcher",
         "Collaborating Researcher",
+        "",
     ],
 ]
 _affiliation_types = [
@@ -178,7 +179,7 @@ def mymila_entry_builder(nbr_profs=5, hardcoded_values_by_user={}):
         current_university_title = _current_university_title[int(is_prof)]
         uni_title = current_university_title[i % len(current_university_title)]
         first_name = "John"
-        last_name = f"Smith{i:03d}"
+        last_name = f"MM Smith{i:03d}"
         email = f"john.smith{i:03d}@mila.quebec"
 
         def _define_value(i, key, default_value):

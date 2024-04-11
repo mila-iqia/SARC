@@ -1,4 +1,5 @@
 import json
+import logging
 
 import pandas as pd
 
@@ -32,6 +33,9 @@ def to_records(df):
         "supervisor",
         "co_supervisor",
         "status",
+        "membership_type",
+        "collaboration_type",
+        "affiliation",
         "mymila_start",
         "mymila_end",
     ]
@@ -89,13 +93,66 @@ def combine(LD_users, mymila_data: pd.DataFrame):
         else:
             df = mymila_data
 
-        # Use mymila field
-        df = df.rename(
+        # Professors membership
+        professors = (df["Profile Type"] == "Professor") & (df["Status"] == "Active")
+
+        for professor in df[(professors) & (df["Membership Type"] == pd.NA)]:
+            logging.warning(
+                f"No membership found for professor {professor['mila_email_username']}."
+            )
+
+        # Collaborators affiliation
+        # TODO: This should probably be put in config
+        affiliation_map = {
+            "Collaborating Alumni": "alumni",
+            "Collaborating researcher": "external",
+            "Research Intern": "intern",
+            "visiting researcher": "visitor",
+        }
+        collaborators = (
+            (df["Profile Type"] == "Student")
+            & (df["Status"] == "Active")
+            & (
+                df["Membership Type"]
+                in [
+                    # TODO: This should probably be put in config
+                    "Collaborating Researcher",
+                    "Visiting Researcher",
+                    "Research intern",
+                ]
+            )
+        )
+        for affiliation_type, simple_at in affiliation_map.items():
+            df[
+                (collaborators) & (df["Affiliation type"] == affiliation_type)
+            ] = simple_at
+
+        for collaborator in df[
+            (collaborators) & (df["Affiliation type"] not in affiliation_map)
+        ]:
+            logging.warning(
+                f"Unknown affiliation type [{collaborator['Affiliation type']}]"
+                f" found for collaborator {collaborator['mila_email_username']}."
+            )
+
+        for collaborator in df[
+            (collaborators) & (df["Affiliated university"] == pd.NA)
+        ]:
+            logging.warning(
+                f"No affiliated university found for collaborator {collaborator['mila_email_username']}."
+            )
+
+        # Use mymila fields
+        df.rename(
             columns={
                 "Status": "status",
                 "Supervisor Principal": "supervisor",
                 "Co-Supervisor": "co_supervisor",
-            }
+                "Membership Type": "membership_type",
+                "Affiliation type": "collaboration_type",
+                "Affiliated university": "affiliation",
+            },
+            inplace=True,
         )
 
         # Create the new display name
