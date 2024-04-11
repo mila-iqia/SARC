@@ -281,6 +281,8 @@ def test_sacct_bin_and_accounts(test_config, remote):
 @patch("os.system")
 @pytest.mark.usefixtures("write_setup")
 def test_localhost(os_system, monkeypatch):
+    # This test requires write_setup.cache to be empty else it will never call
+    # mock_subprocess_run
     def mock_subprocess_run(*args, **kwargs):
         mock_subprocess_run.called += 1
         return subprocess.CompletedProcess(
