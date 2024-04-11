@@ -79,11 +79,11 @@ def test_use_cache(tmpdir):
     # Use cache
     assert fn(1, 2, version=1) == "1 * 2 = 2 [v0]"
     # Recompute and save
-    assert fn(1, 2, version=2, use_cache=False) == "1 * 2 = 2 [v2]"
+    assert fn(1, 2, version=2, cache_policy=False) == "1 * 2 = 2 [v2]"
     # Use cache
     assert fn(1, 2, version=3) == "1 * 2 = 2 [v2]"
     # Recompute but do not save
-    assert fn(1, 2, version=4, use_cache=False, save_cache=False) == "1 * 2 = 2 [v4]"
+    assert fn(1, 2, version=4, cache_policy=False, save_cache=False) == "1 * 2 = 2 [v4]"
     # Use cache (older)
     assert fn(1, 2, version=5) == "1 * 2 = 2 [v2]"
 
@@ -99,15 +99,27 @@ def test_require_cache(tmpdir):
     )
     fn = decorator(la_fonction)
     with pytest.raises(Exception, match="There is no cached result"):
-        fn(2, 3, version=0, at_time=reference, require_cache=True)
+        fn(2, 3, version=0, at_time=reference, cache_policy="always")
 
     assert fn(2, 3, version=1, at_time=reference) == "2 * 3 = 6 [v1]"
     assert (
-        fn(2, 3, version=2, require_cache=True, at_time=reference + timedelta(days=10))
+        fn(
+            2,
+            3,
+            version=2,
+            cache_policy="always",
+            at_time=reference + timedelta(days=10),
+        )
         == "2 * 3 = 6 [v1]"
     )
     assert (
-        fn(2, 3, version=4, require_cache=True, at_time=reference + timedelta(days=10))
+        fn(
+            2,
+            3,
+            version=4,
+            cache_policy="always",
+            at_time=reference + timedelta(days=10),
+        )
         == "2 * 3 = 6 [v1]"
     )
 

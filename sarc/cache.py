@@ -4,6 +4,7 @@ import pickle
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from enum import Enum
 from functools import partial, wraps
 from pathlib import Path
 from typing import Callable, Optional
@@ -40,6 +41,13 @@ class CachedResult:
 _time_format = "%Y-%m-%d-%H-%M-%S"
 _time_glob_pattern = "????-??-??-??-??-??"
 _time_regexp = _time_glob_pattern.replace("?", r"\d")
+
+
+class CachePolicy(Enum):
+    use = True
+    refresh = False
+    ignore = "ignore"
+    always = "always"
 
 
 @dataclass
@@ -93,12 +101,12 @@ class CachedFunction:
     def __call__(
         self,
         *args,
-        use_cache=True,
-        save_cache=True,
-        require_cache=False,
+        cache_policy=CachePolicy.use,
+        save_cache=None,
         at_time=None,
         **kwargs,
     ):
+        cache_policy = CachePolicy(cache_policy)
         name = self.fn.__qualname__
         at_time = at_time or datetime.now()
         timestring = at_time.strftime(_time_format)
@@ -106,8 +114,10 @@ class CachedFunction:
         cdir = self.cache_path
         live_key = (cdir, key_value)
 
-        if require_cache and not use_cache:
-            raise ValueError("use_cache cannot be False if require_cache is True")
+        require_cache = cache_policy is CachePolicy.always
+        use_cache = require_cache or (cache_policy is CachePolicy.use)
+        if save_cache is None:
+            save_cache = cache_policy is not CachePolicy.ignore
 
         if use_cache:
             if require_cache or self.validity is True:
@@ -221,11 +231,14 @@ def with_cache(
 
     Returns:
         A function with the same signature, except for a few extra arguments:
-        * use_cache (default: True): If ``use_cache`` is False, we will not read
-          the output from cache on the disk even if the file exists.
+        * cache_policy (default: CachePolicy.use (== True)):
+          * CachePolicy.use (True): Use the cache, refresh it if past validity period.
+          * CachePolicy.refresh (False): Recompute the value no matter what.
+          * CachePolicy.always ("always"): Never recompute; if there is no cached result,
+            raise an exception.
+          * CachePolicy.ignore ("ignore"): Ignore the cache altogether: recompute, and
+            do not save the result to cache.
         * save_cache (default: True): Whether to cache the result on disk or not.
-        * require_cache (default: False): If True, only return a result from cache,
-          and if there is no cached result, raise an exception.
         * at_time (default: now): The time at which to evaluate the request.
     """
     deco = partial(
