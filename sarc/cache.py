@@ -72,7 +72,7 @@ class CachedFunction:  # pylint: disable=too-many-instance-attributes
         self.subdirectory = self.subdirectory or self.fn.__qualname__
         self.logger = logging.getLogger(self.fn.__module__)
         self.key = self.key or self.default_key
-        self.name = getattr(self.fn, "__qualname__", str(self.fn))
+        self.name = self.fn.__qualname__
 
     def default_key(self, *_, **__):
         return "{time}.json"
@@ -188,12 +188,12 @@ class CachedFunction:  # pylint: disable=too-many-instance-attributes
         cf = getattr(parent, symbol, None)
         if not cf:
             cf = CachedFunction(
-                fn=partial(self.fn, parent),
+                fn=self.fn.__get__(parent),
                 formatter=self.formatter,
-                key=partial(self.key, parent),
+                key=self.key.__get__(parent),
                 subdirectory=self.subdirectory,
                 validity=(
-                    partial(self.validity, parent)
+                    self.validity.__get__(parent)
                     if callable(self.validity)
                     else self.validity
                 ),

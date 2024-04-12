@@ -331,3 +331,35 @@ def test_no_cachedir(disabled_cache):
     assert fn(2, 3, version=1) == "2 * 3 = 6 [v1]"
     with pytest.raises(Exception, match="There is no cached result"):
         fn(2, 3, version=2, cache_policy="always")
+
+
+def test_cache_method(tmpdir):
+    tmpdir = Path(tmpdir)
+
+    class Booger:
+        def __init__(self, value):
+            self.value = value
+
+        def key(self, version):
+            return f"value-{self.value}.json"
+
+        @with_cache(cache_root=tmpdir, key=key)
+        def f1(self, version):
+            return f"{self.value} * 2 = {self.value * 2} [v{version}]"
+
+        @with_cache(cache_root=tmpdir, key=key)
+        def f2(self, version):
+            return f"{self.value} * 3 = {self.value * 3} [v{version}]"
+
+    b1 = Booger(10)
+    b2 = Booger(100)
+
+    assert b1.f1(version=0) == "10 * 2 = 20 [v0]"
+    assert b2.f1(version=1) == "100 * 2 = 200 [v1]"
+    assert b1.f2(version=2) == "10 * 3 = 30 [v2]"
+    assert b1.f2(version=3) == "10 * 3 = 30 [v2]"
+    assert b1.f1(version=4) == "10 * 2 = 20 [v0]"
+    assert b2.f2(version=5) == "100 * 3 = 300 [v5]"
+
+    assert b1.f1.name.endswith("f1")
+    assert b1.f2.name.endswith("f2")
