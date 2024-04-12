@@ -3,29 +3,46 @@ from datetime import date
 
 import pandas as pd
 
+_profile_type = [
+    # Student
+    "Student",
+    # Prof
+    "Professor",
+]
 _membership_types = [
     # Student
     [
+        "Collaborating Researcher",
+        "Permanent HQP",
         "Research intern",
+        "Visiting Researcher",
         "",
     ],
     # Prof
     [
+        "Associate academic member",
+        "Associate industry member",
+        "Collaborating Researcher",
+        "Core Academic Member",
+        "Core industry member",
+        "External affiliate member",
         "Permanent HQP",
         "Visiting Researcher",
-        "Collaborating Researcher",
         "",
     ],
 ]
 _affiliation_types = [
     # Student
     [
+        "Collaborating Alumni",
+        "Collaborating researcher",
         "HQP - DESS",
         "HQP - Master's Research",
         "HQP - PhD",
         "HQP - Professional Master's",
         "HQP - Undergraduate",
         "Research Intern",
+        "visiting researcher",
         "",
     ],
     # Prof
@@ -160,6 +177,8 @@ def mymila_entry_builder(nbr_profs=5, hardcoded_values_by_user={}):
         "Active",
         "Inactive",
         "",
+        # Reduce de proportion of deactivated accounts (2/3)
+        *(["Active"] * (nbr_profs - 3)),
     ]
     affiliated_university = [
         "McGill",
@@ -173,6 +192,7 @@ def mymila_entry_builder(nbr_profs=5, hardcoded_values_by_user={}):
         # 2 different types of entries: prof and student
         is_prof = i < nbr_profs
 
+        profile_type = _profile_type[int(is_prof)]
         membership_types = _membership_types[int(is_prof)]
         affiliation_types = _affiliation_types[int(is_prof)]
         supervisors = _supervisors[int(is_prof)]
@@ -201,6 +221,7 @@ def mymila_entry_builder(nbr_profs=5, hardcoded_values_by_user={}):
         return dictset(
             mymila_template,
             {
+                "Profile Type": _define_value(i, "Profile Type", profile_type),
                 "Status": _define_value(i, "Status", status[i % len(status)]),
                 "Last Name": _define_value(i, "Last Name", last_name),
                 "First Name": _define_value(i, "First Name", first_name),

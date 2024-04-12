@@ -34,6 +34,9 @@ class User(BaseModel):
     drac_members: Optional[dict]
     drac_roles: Optional[dict]
 
+    prof: dict
+    collaborator: dict
+
     record_start: Optional[date] = None
     record_end: Optional[date] = None
 

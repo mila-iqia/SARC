@@ -58,6 +58,50 @@ def to_records(df):
     return records
 
 
+def _get_professors(df: pd.DataFrame):
+    return (df["Profile Type"] == "Professor") & (df["Status"] == "Active")
+
+
+def _get_collaborators(df: pd.DataFrame):
+    return (
+        (df["Profile Type"] == "Student")
+        & (df["Status"] == "Active")
+        & (
+            df["Membership Type"].isin(
+                [
+                    # TODO: This should probably be put in config
+                    "Collaborating Researcher",
+                    "Visiting Researcher",
+                    "Research intern",
+                ]
+            )
+        )
+    )
+
+
+def _map_affiliations(df: pd.DataFrame):
+    # TODO: This should probably be put in config
+    affiliation_map = {
+        "Collaborating Alumni": "alumni",
+        "Collaborating researcher": "external",
+        "Research Intern": "intern",
+        "visiting researcher": "visitor",
+    }
+    collaborators = _get_collaborators(df)
+    for affiliation_type, simple_at in affiliation_map.items():
+        df["Affiliation type"][
+            (collaborators) & (df["Affiliation type"] == affiliation_type)
+        ] = simple_at
+
+    for _, collaborator in df[
+        (collaborators) & ~(df["Affiliation type"].isin(affiliation_map.values()))
+    ].iterrows():
+        logging.warning(
+            f"Unknown affiliation type [{collaborator['Affiliation type']}]"
+            f" found for collaborator {collaborator['mila_email_username']}."
+        )
+
+
 def combine(LD_users, mymila_data: pd.DataFrame):
     if not mymila_data.empty:
         df_users = pd.DataFrame(LD_users)
@@ -94,60 +138,38 @@ def combine(LD_users, mymila_data: pd.DataFrame):
             df = mymila_data
 
         # Professors membership
-        professors = (df["Profile Type"] == "Professor") & (df["Status"] == "Active")
+        professors = _get_professors(df)
 
-        for professor in df[(professors) & (df["Membership Type"] == pd.NA)]:
+        for _, professor in df[
+            (professors) & (df["Membership Type"].isna())
+        ].iterrows():
             logging.warning(
-                f"No membership found for professor {professor['mila_email_username']}."
+                f"No membership found for professor"
+                f" {professor['mila_email_username']}."
             )
 
         # Collaborators affiliation
-        # TODO: This should probably be put in config
-        affiliation_map = {
-            "Collaborating Alumni": "alumni",
-            "Collaborating researcher": "external",
-            "Research Intern": "intern",
-            "visiting researcher": "visitor",
-        }
-        collaborators = (
-            (df["Profile Type"] == "Student")
-            & (df["Status"] == "Active")
-            & (
-                df["Membership Type"]
-                in [
-                    # TODO: This should probably be put in config
-                    "Collaborating Researcher",
-                    "Visiting Researcher",
-                    "Research intern",
-                ]
-            )
-        )
-        for affiliation_type, simple_at in affiliation_map.items():
-            df[
-                (collaborators) & (df["Affiliation type"] == affiliation_type)
-            ] = simple_at
+        _map_affiliations(df)
 
-        for collaborator in df[
-            (collaborators) & (df["Affiliation type"] not in affiliation_map)
-        ]:
+        collaborators = _get_collaborators(df)
+        for _, collaborator in df[
+            (collaborators) & (df["Affiliated university"].isna())
+        ].iterrows():
             logging.warning(
-                f"Unknown affiliation type [{collaborator['Affiliation type']}]"
-                f" found for collaborator {collaborator['mila_email_username']}."
+                f"No affiliated university found for collaborator"
+                f" {collaborator['mila_email_username']}."
             )
 
-        for collaborator in df[
-            (collaborators) & (df["Affiliated university"] == pd.NA)
-        ]:
-            logging.warning(
-                f"No affiliated university found for collaborator {collaborator['mila_email_username']}."
-            )
+        # We don't need Membership Type anymore for non professors
+        df["Membership Type"][(df["Profile Type"] != "Professor")] = pd.NA
 
-        # Use mymila fields
         df.rename(
             columns={
+                # Use mymila fields
                 "Status": "status",
                 "Supervisor Principal": "supervisor",
                 "Co-Supervisor": "co_supervisor",
+                # Mymila specific fields
                 "Membership Type": "membership_type",
                 "Affiliation type": "collaboration_type",
                 "Affiliated university": "affiliation",

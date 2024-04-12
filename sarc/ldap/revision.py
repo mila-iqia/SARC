@@ -102,10 +102,12 @@ def user_insert(newuser: dict) -> list:
     expected_keys = (
         "mila_ldap",
         "name",
-        "drac",
         "mila",
-        "drac_roles",
+        "prof",
+        "collaborator",
+        "drac",
         "drac_members",
+        "drac_roles",
     )
 
     update = {
