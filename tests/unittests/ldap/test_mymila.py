@@ -1,6 +1,7 @@
 import pandas as pd
 import pytest
 
+from sarc.config import MyMilaConfig, config
 from sarc.ldap.mymila import _get_collaborators, _map_affiliations
 
 _collaborators = [
@@ -33,6 +34,8 @@ def _get_invalid_collaborators():
             yield a
 
 
+@pytest.mark.usefixtures("standard_config")
+@pytest.mark.usefixtures("standard_config")
 @pytest.mark.parametrize(
     "df_list,expected",
     [
@@ -44,20 +47,23 @@ def _get_invalid_collaborators():
     ],
 )
 def test__get_collaborators(df_list, expected):
+    cfg: MyMilaConfig = config().mymila
     for df in df_list:
         df = pd.DataFrame(
             [df],
             columns=["Profile Type", "Status", "Membership Type"],
         )
-        collaborators = _get_collaborators(df)
+        collaborators = _get_collaborators(cfg, df)
         assert len(df[collaborators]) == expected
 
 
+@pytest.mark.usefixtures("standard_config")
 def test__map_affiliations(caplog):
+    cfg: MyMilaConfig = config().mymila
     valid_collaborators = [list(_get_valid_collaborators())[0][:]] * len(
-        affiliation_types
+        cfg.collaborators_affiliations
     )
-    for i, affiliation_type in enumerate(affiliation_types):
+    for i, affiliation_type in enumerate(cfg.collaborators_affiliations):
         valid_collaborators[i] = [*valid_collaborators[i], affiliation_type, f"{i}@e.c"]
 
     df = pd.DataFrame(
@@ -72,8 +78,8 @@ def test__map_affiliations(caplog):
     )
     # Test that every matching entries of affiliations are translated to their
     # own mapped value
-    _map_affiliations(df)
-    assert len(set(df["Affiliation type"])) == len(affiliation_types)
+    _map_affiliations(cfg, df)
+    assert set(df["Affiliation type"]) == set(cfg.collaborators_affiliations.values())
 
     for valid_collaborator in valid_collaborators:
         valid_collaborator[-2] = f"Not {valid_collaborator[-2]}"
@@ -83,9 +89,9 @@ def test__map_affiliations(caplog):
         valid_collaborators,
         columns=df.columns,
     )
-    _map_affiliations(df)
-    assert len(caplog.messages) == len(affiliation_types)
-    assert len(set(caplog.messages)) == len(affiliation_types)
+    _map_affiliations(cfg, df)
+    assert len(caplog.messages) == len(cfg.collaborators_affiliations)
+    assert len(set(caplog.messages)) == len(cfg.collaborators_affiliations)
     assert len([rec for rec in caplog.records if rec.levelname == "WARNING"]) == len(
-        affiliation_types
+        cfg.collaborators_affiliations
     )

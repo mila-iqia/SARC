@@ -11,6 +11,19 @@
         "group_to_prof_json_path": "secrets/group_to_prof.json",
         "exceptions_json_path": "secrets/exceptions.json"
     },
+    "mymila": {
+        "collaborators_affiliations": {
+            "Collaborating Alumni": "alumni",
+            "Collaborating researcher": "external",
+            "Research Intern": "intern",
+            "visiting researcher": "visitor"
+        },
+        "collaborators_membership": [
+            "Collaborating Researcher",
+            "Visiting Researcher",
+            "Research intern"
+        ]
+    },
     "account_matching": {
         "drac_members_csv_path": "secrets/account_matching/members-rrg-bengioy-ad-2022-11-25.csv",
         "drac_roles_csv_path": "secrets/account_matching/sponsored_roles_for_Yoshua_Bengio_(CCI_jvb-000).csv",

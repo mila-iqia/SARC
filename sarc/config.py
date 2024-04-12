@@ -179,6 +179,8 @@ class TempoConfig(BaseModel):
 
 class MyMilaConfig(BaseModel):
     tmp_json_path: str
+    collaborators_affiliations: dict
+    collaborators_membership: list
 
     @validator("tmp_json_path")
     def _relative_tmp(cls, value):

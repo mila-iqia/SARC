@@ -62,32 +62,17 @@ def _get_professors(df: pd.DataFrame):
     return (df["Profile Type"] == "Professor") & (df["Status"] == "Active")
 
 
-def _get_collaborators(df: pd.DataFrame):
+def _get_collaborators(cfg: MyMilaConfig, df: pd.DataFrame):
     return (
         (df["Profile Type"] == "Student")
         & (df["Status"] == "Active")
-        & (
-            df["Membership Type"].isin(
-                [
-                    # TODO: This should probably be put in config
-                    "Collaborating Researcher",
-                    "Visiting Researcher",
-                    "Research intern",
-                ]
-            )
-        )
+        & (df["Membership Type"].isin(cfg.collaborators_membership))
     )
 
 
-def _map_affiliations(df: pd.DataFrame):
-    # TODO: This should probably be put in config
-    affiliation_map = {
-        "Collaborating Alumni": "alumni",
-        "Collaborating researcher": "external",
-        "Research Intern": "intern",
-        "visiting researcher": "visitor",
-    }
-    collaborators = _get_collaborators(df)
+def _map_affiliations(cfg: MyMilaConfig, df: pd.DataFrame):
+    affiliation_map = cfg.collaborators_affiliations
+    collaborators = _get_collaborators(cfg, df)
     for affiliation_type, simple_at in affiliation_map.items():
         df["Affiliation type"][
             (collaborators) & (df["Affiliation type"] == affiliation_type)
@@ -102,7 +87,7 @@ def _map_affiliations(df: pd.DataFrame):
         )
 
 
-def combine(LD_users, mymila_data: pd.DataFrame):
+def combine(cfg: MyMilaConfig, LD_users, mymila_data: pd.DataFrame):
     if not mymila_data.empty:
         df_users = pd.DataFrame(LD_users)
         # Set the empty values to NA
@@ -118,9 +103,9 @@ def combine(LD_users, mymila_data: pd.DataFrame):
         for _id in mymila_data["in1touch_id"]:
             supervisor_filter = mymila_data["Supervisor Principal"] == _id
             cosupervisor_filter = mymila_data["Co-Supervisor"] == _id
-            email = mymila_data.loc[_id]["mila_email_username"]
-            mymila_data["Supervisor Principal"][supervisor_filter] = email
-            mymila_data["Co-Supervisor"][cosupervisor_filter] = email
+            email = mymila_data.loc[_id, "mila_email_username"]
+            mymila_data.loc[supervisor_filter, ("Supervisor Principal",)] = email
+            mymila_data.loc[cosupervisor_filter, ("Co-Supervisor",)] = email
 
         if LD_users:
             df = pd.merge(df_users, mymila_data, on="mila_email_username", how="outer")
@@ -149,9 +134,9 @@ def combine(LD_users, mymila_data: pd.DataFrame):
             )
 
         # Collaborators affiliation
-        _map_affiliations(df)
+        _map_affiliations(cfg, df)
 
-        collaborators = _get_collaborators(df)
+        collaborators = _get_collaborators(cfg, df)
         for _, collaborator in df[
             (collaborators) & (df["Affiliated university"].isna())
         ].iterrows():
@@ -193,4 +178,4 @@ def combine(LD_users, mymila_data: pd.DataFrame):
 
 def fetch_mymila(cfg, LD_users):
     mymila_data = query_mymila(cfg.mymila)
-    return combine(LD_users, mymila_data)
+    return combine(cfg.mymila, LD_users, mymila_data)

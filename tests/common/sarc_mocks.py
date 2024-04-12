@@ -54,12 +54,6 @@ _affiliation_types = [
         "",
     ],
 ]
-_supervisors = [
-    # Student
-    [100 + i for i in range(5)],
-    # Prof
-    [""],
-]
 _current_university_title = [
     # Student
     [
@@ -185,6 +179,12 @@ def mymila_entry_builder(nbr_profs=5, hardcoded_values_by_user={}):
         "UdeM",
         "Samsung SAIT",
         "",
+    ]
+    _supervisors = [
+        # Student
+        [100 + i for i in range(nbr_profs)],
+        # Prof
+        [""],
     ]
 
     # by convention, first 'nbr_profs' names will be professors and the rest students
