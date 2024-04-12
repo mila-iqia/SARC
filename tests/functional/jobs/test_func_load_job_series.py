@@ -85,6 +85,9 @@ ALL_COLUMNS = [
     "user",
     "work_dir",
 ]
+
+# For testing, we still check expected columns.
+# If attributes in User class change, we may need to update this list.
 USER_COLUMNS = [
     "user.primary_email",
     "user.name",

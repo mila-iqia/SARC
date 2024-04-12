@@ -119,8 +119,16 @@ class JobFactory:
 
 def create_users():
     users = []
-    for username in ["bonhomme", "petitbonhomme", "grosbonhomme", "beaubonhomme"]:
-        users.append(_create_user(username=username))
+    for username, has_drac_account in [
+        # Do not set a DRAC account for "bonhomme".
+        # Thus, job from user `bonhomme` on a non-mila cluster
+        # won't find associated user info.
+        ("bonhomme", False),
+        ("petitbonhomme", True),
+        ("grosbonhomme", True),
+        ("beaubonhomme", True),
+    ]:
+        users.append(_create_user(username=username, with_drac=has_drac_account))
     return users
 
 

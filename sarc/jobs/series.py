@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Callable
 
 import numpy as np
 import pandas
+from flatten_dict import flatten
 from pandas import DataFrame
 from prometheus_api_client import MetricRangeDataFrame
 from tqdm import tqdm
@@ -324,15 +325,16 @@ def load_job_series(
     # If fields is a list, convert it to a renaming dict with same old and new names.
     if isinstance(fields, list):
         fields = {key: key for key in fields}
+    elif fields is None:
+        fields = {}
 
     start = jobs_args.get("start", None)
     end = jobs_args.get("end", None)
 
     total = count_jobs(**jobs_args)
 
-    # Get users mapping, with format:
-    # {"mila": {mila username to user dict}, "drac": {drac username to user dict}}
-    users_mapping = _get_users_mapping()
+    # Get users data frame.
+    users_frame = _get_user_data_frame()
 
     rows = []
     now = datetime.now(tz=MTL)
@@ -399,15 +401,7 @@ def load_job_series(
         final_job_dict.update(job_series)
         job_series = final_job_dict
 
-        # Add user info
-        if users_mapping:
-            if job.cluster_name == "mila":
-                user_info = users_mapping["mila"][job.user]
-            else:
-                user_info = users_mapping["drac"][job.user]
-            job_series.update(user_info)
-
-        if fields is not None:
+        if fields:
             job_series = {
                 new_name: job_series[old_name] for old_name, new_name in fields.items()
             }
@@ -415,95 +409,101 @@ def load_job_series(
         if callback:
             callback(rows)
 
-    return pandas.DataFrame(rows)
+    jobs_frame = pandas.DataFrame(rows)
+
+    # Merge jobs with users info, only if users available.
+    if users_frame.shape[0]:
+        # Get name pf fields used to merge frames.
+        # We must use `fields`, as fields may have been renamed.
+        field_cluster_name = fields.get("cluster_name", "cluster_name")
+        field_job_user = fields.get("user", "user")
+
+        df_mila_mask = jobs_frame[field_cluster_name] == "mila"
+        df_drac_mask = jobs_frame[field_cluster_name] != "mila"
+
+        merged_mila = jobs_frame[df_mila_mask].merge(
+            users_frame,
+            left_on=field_job_user,
+            right_on="user.mila.username",
+            how="left",
+        )
+        merged_drac = jobs_frame[df_drac_mask].merge(
+            users_frame,
+            left_on=field_job_user,
+            right_on="user.drac.username",
+            how="left",
+        )
+
+        # Concat merged frames.
+        output = pandas.concat([merged_mila, merged_drac])
+        # Try to sort output to keep initial jobs order, by using first column from jobs frame.
+        # Sort inplace to avoid producing a supplementary frame.
+        output.sort_values(by=jobs_frame.columns[0], inplace=True, ignore_index=True)
+
+        return output
+    else:
+        return jobs_frame
 
 
-def _get_users_mapping() -> dict:
+def _get_user_data_frame() -> pandas.DataFrame:
     """
-    Get users and map them using mila and drac usernames.
+    Get all available users in a pandas DataFrame.
 
     Returns
     -------
-    dict
-        A dictionary with two sub-dictionaries:
-        - "mila", mapping mila username to user dict
-        - "drac", mapping drac username to user dict
-        Or empty dictionary if no user is available.
+    DataFrame
+        A data frame containing all users
+        with flattened dot-separated columns from User class.
     """
-    mila_mapping = {}
-    drac_mapping = {}
-    for user in get_users():
-        user_dict = _user_to_series(user)
-        mila_mapping[user.mila.username] = user_dict
-        if user.drac:
-            drac_mapping[user.drac.username] = user_dict
-    return (
-        {"mila": mila_mapping, "drac": drac_mapping}
-        if (mila_mapping or drac_mapping)
-        else {}
-    )
+    uf = UserFlattener()
+    return pandas.DataFrame([uf.flatten(user) for user in get_users()])
 
 
-DUMMY_CREDENTIALS = Credentials(username="", email="", active=False)
-
-
-def _user_to_series(user: User) -> dict:
+class UserFlattener:
     """
-    Convert user to a dictionary easy to insert into a data frame.
+    Helper class to flatten a user.
 
-    Returns
-    -------
-    dict
-        A dictionary containing user info.
-        Each key has format "user.<sttribute>".
-        User credentials and dict attributes are flattened
-        with format "user.<attribute>.<sub-attribute or key>".
+    The goal of this class is to make sure that
+    User's complex attributes are not flattened if set to None,
+    to prevent having both attribute columns and attribute nested columns
+    in final data frame.
 
-        Current expected columns:
-        - "user.primary_email": copy of user.mila.email
-        - "user.name", "user.record_start", "user.record_end"
-        - "user.mila.username", "user.mila.email", "user.mila.active"
-        - "user.drac.username", "user.drac.email", "user.drac.active"
-        - "user.mila_ldap.<key>" for each key in user.mila_ldap dictionary
-        - "user.drac_members.<key>" for each key in user.drac_members dictionary
-        - "user.drac_roles.<key>" for each key in user.drac_roles dictionary
+    For example, current User class has optional attribute `drac` to be flattened as
+    `user.drac.username`, `user.drac.email` and `user.drac.active`.
+    If a user does not have a DRAC account, default behaviour will produce a key
+    `user.drac` with value None.
+    Instead, we want to avoid having `user.drac` key, to make sure
+    output data frame only contains the 3 `user.drac.*` expanded columns
+    and simply set them to NaN for users who don't have a drac account.
     """
-    # Get user as a dict, excluding "id" and complex fields.
-    user_dict = user.dict(
-        exclude={"id", "mila", "mila_ldap", "drac", "drac_members", "drac_roles"}
-    )
 
-    # Make a specific copy of user.mila.email into "primary_email"
-    user_dict["primary_email"] = user.mila.email
+    def __init__(self):
+        # List "plain" attributes, i.e. attributes that are not objects.
+        # This will exclude both nested Model objects as well a nested dicts.
+        # Note that a `date` is described as a 'string' in schemas.
+        schema = User.schema()
+        schema_props = schema["properties"]
+        self.plain_attributes = {
+            key
+            for key, prop_desc in schema_props.items()
+            if "type" in prop_desc and prop_desc["type"] != "object"
+        }
 
-    # Flatten user.mila object
-    user_dict.update({f"mila.{key}": value for key, value in user.mila.dict().items()})
-
-    # Flatten user.mila_ldap dict
-    user_dict.update(
-        {f"mila_ldap.{key}": value for key, value in user.mila_ldap.items()}
-    )
-
-    # Flatten user.drac object. Use dummy credentials if None.
-    drac = user.drac or DUMMY_CREDENTIALS
-    user_dict.update({f"drac.{key}": value for key, value in drac.dict().items()})
-
-    # Flatten user.drac_members dict if available.
-    if user.drac_members:
-        user_dict.update(
-            {f"drac_members.{key}": value for key, value in user.drac_members.items()}
-        )
-
-    # Flatten user.drac_roles if available.
-    if user.drac_roles:
-        user_dict.update(
-            {f"drac_roles.{key}": value for key, value in user.drac_roles.items()}
-        )
-
-    # Add "user." prefix to all keys.
-    user_dict = {f"user.{key}": value for key, value in user_dict.items()}
-
-    return user_dict
+    def flatten(self, user: User) -> dict:
+        """Flatten given user."""
+        # Get user dict.
+        base_user_dict = user.dict(exclude={"id"})
+        # Keep only plain attributes, or complex attributes that are not None.
+        base_user_dict = {
+            key: value
+            for key, value in base_user_dict.items()
+            if key in self.plain_attributes or value is not None
+        }
+        # Now flatten user dict.
+        user_dict = flatten({"user": base_user_dict}, reducer="dot")
+        # And add special key `user.primary_email`.
+        user_dict["user.primary_email"] = user.mila.email
+        return user_dict
 
 
 def update_cluster_job_series_rgu(
