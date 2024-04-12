@@ -15,7 +15,7 @@ from tqdm import tqdm
 
 from sarc.config import MTL, UTC, ClusterConfig, config
 from sarc.jobs.job import JobStatistics, Statistics, count_jobs, get_jobs
-from sarc.ldap.api import Credentials, User, get_users
+from sarc.ldap.api import User, get_users
 from sarc.traces import trace_decorator
 
 if TYPE_CHECKING:
