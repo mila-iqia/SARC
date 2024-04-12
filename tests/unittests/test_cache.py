@@ -320,3 +320,14 @@ def test_custom_format(tmpdir):
 
     assert fn(7, 8, version=0) == "7 * 8 = 56 [v0]"
     assert fn(7, 8, version=0) == "QUACK"
+
+
+def test_no_cachedir(disabled_cache):
+    decorator = with_cache(
+        subdirectory="xy",
+    )
+    fn = decorator(la_fonction)
+    assert fn(2, 3, version=0) == "2 * 3 = 6 [v0]"
+    assert fn(2, 3, version=1) == "2 * 3 = 6 [v1]"
+    with pytest.raises(Exception, match="There is no cached result"):
+        fn(2, 3, version=2, cache_policy="always")

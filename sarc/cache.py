@@ -66,37 +66,74 @@ class CachedFunction:
         self.subdirectory = self.subdirectory or self.fn.__qualname__
         self.logger = logging.getLogger(self.fn.__module__)
         self.key = self.key or self.default_key
+        self.name = getattr(self.fn, "__qualname__", str(self.fn))
 
     def default_key(self, *args, **kwargs):
         return "{time}.json"
 
     @property
-    def cache_path(self):
-        return (self.cache_root or config().cache) / self.subdirectory
+    def cache_dir(self):
+        """Return the cache directory."""
+        root = self.cache_root or config().cache
+        return root and (root / self.subdirectory)
+
+    def cache_path(self, *args, at_time=None, **kwargs):
+        """Cache path for the result of the call for given args and kwargs."""
+        key = self.key(*args, **kwargs)
+        return self.cache_path_for_key(key, at_time)
+
+    def cache_path_for_key(self, key, at_time=None):
+        """Cache path for the given key."""
+        at_time = at_time or datetime.now()
+        return self.cache_dir / key.format(time=at_time.strftime(_time_format))
 
     def save(self, *args, value_to_save, at_time=None, **kwargs):
+        """Save a value in cache for the given args and kwargs.
+
+        This does not execute the function.
+        """
         key = self.key(*args, **kwargs)
         return self.save_for_key(key, value_to_save, at_time=at_time)
 
     def save_for_key(self, key, value, at_time=None):
+        """Save a value in cache for the given key."""
         at_time = at_time or datetime.now()
-        cdir = self.cache_path
-        cdir.mkdir(parents=True, exist_ok=True)
-
+        cdir = self.cache_dir
         if self.live:
             self.live_cache[(cdir, key)] = CachedResult(
                 issued=at_time,
                 value=value,
             )
-        if self.on_disk:
+        if cdir and self.on_disk:
+            cdir.mkdir(parents=True, exist_ok=True)
             output_file = cdir / key.format(time=at_time.strftime(_time_format))
             with open(
                 output_file, getattr(self.formatter, "write_flags", "w")
             ) as output_fp:
                 self.formatter.dump(value, output_fp)
-            self.logger.debug(
-                f"{self.fn.__qualname__}(...) saved to cache file '{output_file}'"
+            self.logger.debug(f"{self.name}(...) saved to cache file '{output_file}'")
+
+    def __get__(self, parent, _):
+        """Called when a cached function is a method."""
+        symbol = f"_cached_{self.name}"
+        cf = getattr(parent, symbol, None)
+        if not cf:
+            cf = CachedFunction(
+                fn=partial(self.fn, parent),
+                formatter=self.formatter,
+                key=partial(self.key, parent),
+                subdirectory=self.subdirectory,
+                validity=(
+                    partial(self.validity, parent)
+                    if callable(self.validity)
+                    else self.validity
+                ),
+                on_disk=self.on_disk,
+                live=self.live,
+                cache_root=self.cache_root,
             )
+            setattr(parent, symbol, cf)
+        return cf
 
     def __call__(
         self,
@@ -107,17 +144,19 @@ class CachedFunction:
         **kwargs,
     ):
         cache_policy = CachePolicy(cache_policy)
-        name = self.fn.__qualname__
         at_time = at_time or datetime.now()
         timestring = at_time.strftime(_time_format)
         key_value = self.key(*args, **kwargs)
-        cdir = self.cache_path
+        cdir = self.cache_dir
         live_key = (cdir, key_value)
 
+        # Whether to **require** the cache
         require_cache = cache_policy is CachePolicy.always
-        use_cache = require_cache or (cache_policy is CachePolicy.use)
-        if save_cache is None:
-            save_cache = cache_policy is not CachePolicy.ignore
+
+        # Whether to use the cache
+        use_cache = key_value is not None and (
+            require_cache or (cache_policy is CachePolicy.use)
+        )
 
         if use_cache:
             if require_cache or self.validity is True:
@@ -132,11 +171,11 @@ class CachedFunction:
             if self.live and (previous_result := self.live_cache.get(live_key, None)):
                 if valid is True or at_time <= previous_result.issued + valid:
                     self.logger.debug(
-                        f"{name}(...) read from live cache for key '{key_value}'"
+                        f"{self.name}(...) read from live cache for key '{key_value}'"
                     )
                     return previous_result.value
 
-            if self.on_disk:
+            if cdir and self.on_disk:
                 candidates = sorted(
                     cdir.glob(key_value.format(time=_time_glob_pattern)),
                     reverse=True,
@@ -158,41 +197,39 @@ class CachedFunction:
                         with open(
                             candidate, getattr(self.formatter, "read_flags", "r")
                         ) as candidate_fp:
-                            value = self.formatter.load(candidate_fp)
-                        if self.live:
-                            self.live_cache[live_key] = CachedResult(
-                                issued=candidate_time,
-                                value=value,
+                            try:
+                                value = self.formatter.load(candidate_fp)
+                                success = True
+                            except Exception as exc:
+                                self.logger.warning(
+                                    f"Could not load malformed cache file: {candidate}"
+                                )
+                                success = False
+                        if success:
+                            if self.live:
+                                self.live_cache[live_key] = CachedResult(
+                                    issued=candidate_time,
+                                    value=value,
+                                )
+                            self.logger.debug(
+                                f"{self.name}(...) read from cache file '{candidate}'"
                             )
-                        self.logger.debug(
-                            f"{name}(...) read from cache file '{candidate}'"
-                        )
-                        return value
+                            return value
 
         if require_cache:
             raise Exception(f"There is no cached result for key `{key_value}`")
 
-        self.logger.debug(f"Computing {name}(...) for key '{key_value}'")
+        self.logger.debug(f"Computing {self.name}(...) for key '{key_value}'")
         value = self.fn(*args, **kwargs)
+
+        # Whether to save the cache
+        if key_value is None:
+            save_cache = False
+        elif save_cache is None:
+            save_cache = cache_policy is not CachePolicy.ignore
 
         if save_cache:
             self.save_for_key(key_value, value, at_time=at_time)
-            # (cdir / self.subdirectory).mkdir(parents=True, exist_ok=True)
-
-            # if self.live:
-            #     self.live_cache[key_value] = CachedResult(
-            #         issued=at_time,
-            #         value=value,
-            #     )
-            # if self.on_disk:
-            #     output_file = (
-            #         cdir / self.subdirectory / key_value.format(time=timestring)
-            #     )
-            #     with open(
-            #         output_file, getattr(formatter, "write_flags", "w")
-            #     ) as output_fp:
-            #         formatter.dump(value, output_fp)
-            #     self.logger.debug(f"{name}(...) saved to cache file '{output_file}'")
 
         return value
 
