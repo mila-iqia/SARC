@@ -17,8 +17,12 @@ import sarc.account_matching.make_matches
 import sarc.ldap.mymila
 from sarc.config import config
 from sarc.ldap.mymila import fetch_mymila
-from sarc.ldap.read_mila_ldap import fetch_ldap, load_ldap_exceptions
+from sarc.ldap.read_mila_ldap import fetch_ldap
 from sarc.ldap.revision import commit_matches_to_database
+from sarc.ldap.users_exceptions import (
+    apply_users_delegation_exceptions,
+    apply_users_supervisor_exceptions,
+)
 from sarc.traces import using_trace
 
 
@@ -111,15 +115,14 @@ def run(prompt=False):
         #       "drac_members": {...} or None
         #     }
 
-        # Load exceptions
-        exceptions = load_ldap_exceptions(cfg.ldap)
-
         for _, user in DD_persons_matched.items():
-            if user["mila_ldap"]["mila_email_username"] in exceptions["delegations"]:
-                user["teacher_delegations"] = exceptions["delegations"][
-                    user["mila_ldap"]["mila_email_username"]
-                ]
             fill_computed_fields(user)
+
+        # apply delegation exceptions
+        apply_users_delegation_exceptions(DD_persons_matched, cfg.ldap, span)
+
+        # apply supervisor exceptions
+        apply_users_supervisor_exceptions(DD_persons_matched, cfg.ldap, span)
 
         # These associations can now be propagated to the database.
         span.add_event("Committing matches to database ...")

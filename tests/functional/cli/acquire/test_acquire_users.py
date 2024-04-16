@@ -163,14 +163,28 @@ def test_acquire_users(cli_main, monkeypatch, mock_file, captrace):
     assert len(spans) == 1
     assert spans[0].name == "match_drac_to_mila_accounts"
     assert spans[0].status.status_code == StatusCode.OK
-    assert len(spans[0].events) == 4
+    assert len(spans[0].events) == 9
     assert (
         spans[0].events[0].name
         == "Loading mila_ldap, drac_roles and drac_members from files ..."
     )
     assert spans[0].events[1].name == "Loading matching config from file ..."
     assert spans[0].events[2].name == "Matching DRAC/CC to mila accounts ..."
-    assert spans[0].events[3].name == "Committing matches to database ..."
+    assert spans[0].events[3].name == "Applying users delegation exceptions ..."
+    assert (
+        spans[0].events[4].name
+        == "Applying delegation exception for john.smith003@mila.quebec ..."
+    )
+    assert spans[0].events[5].name == "Applying users supervisor exceptions ..."
+    assert (
+        spans[0].events[6].name
+        == "Applying supervisor exception for john.smith001@mila.quebec ..."
+    )
+    assert (
+        spans[0].events[7].name
+        == "Applying supervisor exception for john.smith002@mila.quebec ..."
+    )
+    assert spans[0].events[8].name == "Committing matches to database ..."
 
 
 @pytest.mark.parametrize(
@@ -460,12 +474,26 @@ def test_acquire_users_prompt(cli_main, monkeypatch, file_contents, caplog, capt
     assert len(spans) == 1
     assert spans[0].name == "match_drac_to_mila_accounts"
     assert spans[0].status.status_code == StatusCode.OK
-    assert len(spans[0].events) == 5
+    assert len(spans[0].events) == 10
     assert (
         spans[0].events[0].name
         == "Loading mila_ldap, drac_roles and drac_members from files ..."
     )
     assert spans[0].events[1].name == "Loading matching config from file ..."
     assert spans[0].events[2].name == "Matching DRAC/CC to mila accounts ..."
-    assert spans[0].events[3].name == "Committing matches to database ..."
-    assert spans[0].events[4].name == "Saving 1 manual matches ..."
+    assert spans[0].events[3].name == "Applying users delegation exceptions ..."
+    assert (
+        spans[0].events[4].name
+        == "Applying delegation exception for john.smith003@mila.quebec ..."
+    )
+    assert spans[0].events[5].name == "Applying users supervisor exceptions ..."
+    assert (
+        spans[0].events[6].name
+        == "Applying supervisor exception for john.smith001@mila.quebec ..."
+    )
+    assert (
+        spans[0].events[7].name
+        == "Applying supervisor exception for john.smith002@mila.quebec ..."
+    )
+    assert spans[0].events[8].name == "Committing matches to database ..."
+    assert spans[0].events[9].name == "Saving 1 manual matches ..."
