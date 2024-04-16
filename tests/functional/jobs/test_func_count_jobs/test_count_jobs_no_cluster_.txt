@@ -848,7 +848,7 @@ Found 24 job(s):
     "stored_statistics": null
 }
 {
-    "cluster_name": "raisin",
+    "cluster_name": "mila",
     "account": "mila",
     "job_id": 19,
     "array_job_id": null,

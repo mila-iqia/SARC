@@ -125,7 +125,7 @@ def create_users():
         # won't find associated user info.
         ("bonhomme", False),
         ("petitbonhomme", True),
-        ("grosbonhomme", True),
+        # ("grosbonhomme", True),  # not added, so related jobs cannot find him.
         ("beaubonhomme", True),
     ]:
         users.append(_create_user(username=username, with_drac=has_drac_account))
@@ -213,7 +213,16 @@ def create_jobs(job_factory: JobFactory | None = None):
     for cluster_name in ["raisin", "fromage", "patate"]:
         job_factory.add_job(cluster_name=cluster_name)
 
-    for user in ["bonhomme", "petitbonhomme", "grosbonhomme", "beaubonhomme"]:
+    for user in ["bonhomme", "petitbonhomme"]:
+        job_factory.add_job(user=user)
+
+    # Add this job separately to set a specific cluster name.
+    # Note that user `grosbonhomme` won't be added to testing database.
+    # Thus, this job belongs to a non-existent user.
+    for user in ["grosbonhomme"]:
+        job_factory.add_job(user=user, cluster_name="mila")
+
+    for user in ["beaubonhomme"]:
         job_factory.add_job(user=user)
 
     job_factory.add_job(job_id=1_000_000, nodes=["cn-c017"], job_state="PREEMPTED")

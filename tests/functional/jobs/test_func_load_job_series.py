@@ -132,7 +132,19 @@ MOCK_TIME = "2023-11-22"
 @pytest.mark.freeze_time(MOCK_TIME)
 @pytest.mark.usefixtures("read_only_db_with_users", "tzlocal_is_mtl")
 def test_load_job_series_with_users(file_regression):
-    assert len(get_users()) == 4
+    """Test job to user mapping.
+
+    NB: With current testing:
+    - jobs from users `petitbonhomme` will always find him in both DRAC and mila clusters
+      (note that his username on mila cluster is `petitbonhome_mila`).
+    - jobs from user `bonhomme` won't find him on a DRAC cluster because he does not have a DRAC account.
+    - jobs from user `grosbonhomme` won't find him anywhere, because he's not registered as a user.
+    - jobs from user `beaubonhomme` will always find him as for `petitbonhomme`,
+      but he has only 1 job, on a DRAC cluster.
+
+    Matching can be checked in ./test_func_load_job_series/test_load_job_series_with_users.txt
+    """
+    assert len(get_users()) == 3
     data_frame = load_job_series()
     expected_columns = sorted(ALL_COLUMNS + USER_COLUMNS)
     assert sorted(data_frame.keys().tolist()) == expected_columns
