@@ -698,16 +698,16 @@ def compute_time_frames(
             [datetime(2023, 3, 6), datetime(2023, 3, 7), "b", "B", 20],
             [datetime(2023, 3, 6), datetime(2023, 3, 8), "b", "B", 20],
         ],
-        columns=["start", "end", "user", "cluster", 'cost'],
+        columns=["start_time", "end_time", "user", "cluster", 'cost'],
     )
     >>> compute_time_frames(data, columns=['cost'], frame_size=timedelta(days=2))
-           start        end user cluster       cost  duration  timestamp
+      start_time   end_time user cluster       cost  duration  timestamp
     0 2023-03-05 2023-03-06    a       A  10.000000   86400.0 2023-03-05
-    1 2023-03-06 2023-03-09    a       B   3.333333   86400.0 2023-03-05
+    1 2023-03-06 2023-03-07    a       B   3.333333   86400.0 2023-03-05
     2 2023-03-06 2023-03-07    b       B  20.000000   86400.0 2023-03-05
-    3 2023-03-06 2023-03-08    b       B  10.000000   86400.0 2023-03-05
-    1 2023-03-06 2023-03-09    a       B   6.666667  172800.0 2023-03-07
-    3 2023-03-06 2023-03-08    b       B  10.000000   86400.0 2023-03-07
+    3 2023-03-06 2023-03-07    b       B  10.000000   86400.0 2023-03-05
+    1 2023-03-07 2023-03-09    a       B   6.666667  172800.0 2023-03-07
+    3 2023-03-07 2023-03-08    b       B  10.000000   86400.0 2023-03-07
     """
     col_start = "start_time"
     col_end = "end_time"
