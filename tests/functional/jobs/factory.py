@@ -173,6 +173,8 @@ def _create_user(username: str, with_drac=True):
             # Set a different username for mila
             "username": f"{username}_mila",
         },
+        "prof": {},
+        "collaborator": {},
         "mila_ldap": {
             "co_supervisor": None,
             "display_name": name,
