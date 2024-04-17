@@ -440,6 +440,12 @@ def load_job_series(
         # Sort inplace to avoid producing a supplementary frame.
         output.sort_values(by=jobs_frame.columns[0], inplace=True, ignore_index=True)
 
+        # Replace NaN in column `user.primary_email` with corresponding value in `job.user`
+        df_primary_email_nan_mask = output["user.primary_email"].isnull()
+        output.loc[df_primary_email_nan_mask, "user.primary_email"] = output[
+            field_job_user
+        ][df_primary_email_nan_mask]
+
         return output
     else:
         return jobs_frame
