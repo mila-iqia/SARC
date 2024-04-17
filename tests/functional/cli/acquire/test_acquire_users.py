@@ -245,12 +245,12 @@ def test_acquire_users_supervisors(
         ),  # Cosupervisor only in LDAP
         (
             None,
-            "John Smith001",
+            101,
             "john.smith001@mila.quebec",
         ),  # Cosupervisor only in MyMila: this case has already been checked in the previous test
         (
             "co.super.visor.ldap@mila.quebec",
-            "John Smith001",
+            101,
             "john.smith001@mila.quebec",
         ),  # Cosupervisor in LDAP and in MyMila
     ],

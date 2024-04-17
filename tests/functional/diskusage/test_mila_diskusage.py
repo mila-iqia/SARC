@@ -16,6 +16,8 @@ def mock_get_user():
             mila_ldap=dict(),
             drac_members=None,
             drac_roles=None,
+            prof=dict(),
+            collaborator=dict(),
         ),
         User(
             name="user3",
@@ -24,6 +26,8 @@ def mock_get_user():
             mila_ldap=dict(),
             drac_members=None,
             drac_roles=None,
+            prof=dict(),
+            collaborator=dict(),
         ),
     ]
 
@@ -37,6 +41,8 @@ def mock_get_users():
             mila_ldap=dict(),
             drac_members=None,
             drac_roles=None,
+            prof=dict(),
+            collaborator=dict(),
         ),
         User(
             name="user2",
@@ -45,6 +51,8 @@ def mock_get_users():
             mila_ldap=dict(),
             drac_members=None,
             drac_roles=None,
+            prof=dict(),
+            collaborator=dict(),
         ),
         User(
             name="user3",
@@ -53,6 +61,8 @@ def mock_get_users():
             mila_ldap=dict(),
             drac_members=None,
             drac_roles=None,
+            prof=dict(),
+            collaborator=dict(),
         ),
     ]
 

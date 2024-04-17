@@ -32,13 +32,14 @@ def userhistory(email, history):
     prev_fields = None
     latest_record = base_user
 
-    for start, fields in history:
+    for in1touch_id, (start, fields) in enumerate(history):
         if prev_fields is not None:
             prev_fields["End Date with MILA"] = start
             latest_record = dictset(latest_record, prev_fields)
             records.append(latest_record)
 
         fields["Start Date with MILA"] = start
+        fields["in1touch_id"] = f"{100+in1touch_id:003}"
         prev_fields = fields
 
     if prev_fields is not None:
@@ -101,8 +102,14 @@ def mymiladata(monkeypatch, data):
 
 
 @dataclass
+class FakeMyMila:
+    collaborators_affiliations = {}
+    collaborators_membership = []
+
+
+@dataclass
 class FakeConfig:
-    mymila = None
+    mymila = FakeMyMila()
 
 
 def test_no_backfill(monkeypatch):

@@ -74,8 +74,9 @@ def _map_affiliations(cfg: MyMilaConfig, df: pd.DataFrame):
     affiliation_map = cfg.collaborators_affiliations
     collaborators = _get_collaborators(cfg, df)
     for affiliation_type, simple_at in affiliation_map.items():
-        df["Affiliation type"][
-            (collaborators) & (df["Affiliation type"] == affiliation_type)
+        df.loc[
+            (collaborators) & (df["Affiliation type"] == affiliation_type),
+            ("Affiliation type",),
         ] = simple_at
 
     for _, collaborator in df[
@@ -146,7 +147,7 @@ def combine(cfg: MyMilaConfig, LD_users, mymila_data: pd.DataFrame):
             )
 
         # We don't need Membership Type anymore for non professors
-        df["Membership Type"][(df["Profile Type"] != "Professor")] = pd.NA
+        df.loc[(df["Profile Type"] != "Professor"), ("Membership Type",)] = pd.NA
 
         df.rename(
             columns={

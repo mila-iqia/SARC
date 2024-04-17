@@ -54,6 +54,8 @@ def insert_user_history(username, history):
             "mila_email_username": username,
             "supervisor": None,
         },
+        "prof": {},
+        "collaborator": {},
     }
 
     for entry in history:

@@ -139,10 +139,10 @@ def fill_computed_fields(data: dict):
     drac_members = data.get("drac_members", {}) or {}
     drac_roles = data.get("drac_roles", {}) or {}
 
-    data["prof"] = {"membership_type": mila_ldap.pop("membership_type")}
+    data["prof"] = {"membership_type": mila_ldap.pop("membership_type", None)}
     data["collaborator"] = {
-        "collaboration_type": mila_ldap.pop("collaboration_type"),
-        "affiliation": mila_ldap.pop("affiliation"),
+        "collaboration_type": mila_ldap.pop("collaboration_type", None),
+        "affiliation": mila_ldap.pop("affiliation", None),
     }
 
     if "name" not in data:

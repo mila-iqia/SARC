@@ -112,6 +112,7 @@ mymila_template = {
     "Start Date with MILA": "",
     "End Date with MILA": "",
     "Type of membership": "",
+    "in1touch_id": "100",
 }
 
 
