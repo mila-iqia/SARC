@@ -117,6 +117,78 @@ class JobFactory:
             )
 
 
+def create_users():
+    users = []
+    for username, has_drac_account in [
+        # Do not set a DRAC account for "bonhomme".
+        # Thus, job from user `bonhomme` on a non-mila cluster
+        # won't find associated user info.
+        ("bonhomme", False),
+        ("petitbonhomme", True),
+        # ("grosbonhomme", True),  # not added, so related jobs cannot find him.
+        ("beaubonhomme", True),
+    ]:
+        users.append(_create_user(username=username, with_drac=has_drac_account))
+    return users
+
+
+def _create_user(username: str, with_drac=True):
+    name = f"M/Ms {username[0].upper()}{username[1:]}"
+    mila_email_username = f"{username}@mila.quebec"
+
+    drac = None
+    drac_members = None
+    drac_roles = None
+    if with_drac:
+        drac_email = f"{username}@example.com"
+        drac_username = username
+        drac = {
+            "active": True,
+            "email": drac_email,
+            "username": drac_username,
+        }
+        drac_members = {
+            "activation_status": "activated",
+            "email": drac_email,
+            "name": name,
+            "permission": "Manager",
+            "sponsor": "BigProf",
+            "username": drac_username,
+        }
+        drac_roles = {
+            "email": drac_email,
+            "nom": name,
+            "status": "Activated",
+            "username": drac_username,
+            "état du compte": "activé",
+        }
+
+    return {
+        "drac": drac,
+        "drac_members": drac_members,
+        "drac_roles": drac_roles,
+        "mila": {
+            "active": True,
+            "email": mila_email_username,
+            # Set a different username for mila
+            "username": f"{username}_mila",
+        },
+        "mila_ldap": {
+            "co_supervisor": None,
+            "display_name": name,
+            "mila_cluster_gid": "1500000003",
+            "mila_cluster_uid": "1500000003",
+            "mila_cluster_username": username,
+            "mila_email_username": mila_email_username,
+            "status": "enabled",
+            "supervisor": None,
+        },
+        "name": name,
+        "record_end": None,
+        "record_start": datetime(2024, 4, 11, 0, 0),
+    }
+
+
 def create_jobs(job_factory: JobFactory | None = None):
     if job_factory is None:
         job_factory = JobFactory()
@@ -141,7 +213,16 @@ def create_jobs(job_factory: JobFactory | None = None):
     for cluster_name in ["raisin", "fromage", "patate"]:
         job_factory.add_job(cluster_name=cluster_name)
 
-    for user in ["bonhomme", "petitbonhomme", "grosbonhomme", "beaubonhomme"]:
+    for user in ["bonhomme", "petitbonhomme"]:
+        job_factory.add_job(user=user)
+
+    # Add this job separately to set a specific cluster name.
+    # Note that user `grosbonhomme` won't be added to testing database.
+    # Thus, this job belongs to a non-existent user.
+    for user in ["grosbonhomme"]:
+        job_factory.add_job(user=user, cluster_name="mila")
+
+    for user in ["beaubonhomme"]:
         job_factory.add_job(user=user)
 
     job_factory.add_job(job_id=1_000_000, nodes=["cn-c017"], job_state="PREEMPTED")
@@ -169,6 +250,8 @@ def create_jobs(job_factory: JobFactory | None = None):
     job_factory.add_job(
         job_id=999_999_999,
         elapsed_time=elapsed_time * 1.5,
+        cluster_name="mila",
+        user="petitbonhomme_mila",
         allocated={
             "billing": 14,
             "cpu": 12,
