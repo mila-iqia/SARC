@@ -94,7 +94,7 @@ Found 8 job(s):
     "stored_statistics": null
 }
 {
-    "cluster_name": "raisin",
+    "cluster_name": "mila",
     "account": "mila",
     "job_id": 19,
     "array_job_id": null,
@@ -329,13 +329,13 @@ Found 8 job(s):
     "stored_statistics": null
 }
 {
-    "cluster_name": "raisin",
+    "cluster_name": "mila",
     "account": "mila",
     "job_id": 999999999,
     "array_job_id": null,
     "task_id": null,
     "name": "main.sh",
-    "user": "petitbonhomme",
+    "user": "petitbonhomme_mila",
     "group": "petitbonhomme",
     "job_state": "CANCELLED",
     "exit_code": 0,

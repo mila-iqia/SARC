@@ -7,6 +7,7 @@ import pytest
 from sarc.config import MTL
 from sarc.jobs.job import get_jobs
 from sarc.jobs.series import load_job_series
+from sarc.ldap.api import get_users
 
 from .test_func_job_statistics import generate_fake_timeseries
 
@@ -85,6 +86,39 @@ ALL_COLUMNS = [
     "work_dir",
 ]
 
+# For testing, we still check expected columns.
+# If attributes in User class change, we may need to update this list.
+USER_COLUMNS = [
+    "user.primary_email",
+    "user.name",
+    "user.record_start",
+    "user.record_end",
+    "user.mila.username",
+    "user.mila.email",
+    "user.mila.active",
+    "user.drac.username",
+    "user.drac.email",
+    "user.drac.active",
+    "user.mila_ldap.co_supervisor",
+    "user.mila_ldap.display_name",
+    "user.mila_ldap.mila_cluster_gid",
+    "user.mila_ldap.mila_cluster_uid",
+    "user.mila_ldap.mila_cluster_username",
+    "user.mila_ldap.mila_email_username",
+    "user.mila_ldap.status",
+    "user.mila_ldap.supervisor",
+    "user.drac_members.activation_status",
+    "user.drac_members.email",
+    "user.drac_members.name",
+    "user.drac_members.permission",
+    "user.drac_members.sponsor",
+    "user.drac_members.username",
+    "user.drac_roles.email",
+    "user.drac_roles.nom",
+    "user.drac_roles.status",
+    "user.drac_roles.username",
+    "user.drac_roles.état du compte",
+]
 
 # For file regression tests, we will save data frame into a CSV.
 # We won't include job `id` because it changes from a call to another
@@ -93,6 +127,34 @@ CSV_COLUMNS = [col for col in ALL_COLUMNS if col not in ["id"]]
 
 
 MOCK_TIME = "2023-11-22"
+
+
+@pytest.mark.freeze_time(MOCK_TIME)
+@pytest.mark.usefixtures("read_only_db_with_users", "tzlocal_is_mtl")
+def test_load_job_series_with_users(file_regression):
+    """Test job to user mapping.
+
+    NB: With current testing:
+    - jobs from users `petitbonhomme` will always find him in both DRAC and mila clusters
+      (note that his username on mila cluster is `petitbonhome_mila`).
+    - jobs from user `bonhomme` won't find him on a DRAC cluster because he does not have a DRAC account.
+    - jobs from user `grosbonhomme` won't find him anywhere, because he's not registered as a user.
+    - jobs from user `beaubonhomme` will always find him as for `petitbonhomme`,
+      but he has only 1 job, on a DRAC cluster.
+
+    Matching can be checked in ./test_func_load_job_series/test_load_job_series_with_users.txt
+    """
+    assert len(get_users()) == 3
+    data_frame = load_job_series()
+    expected_columns = sorted(ALL_COLUMNS + USER_COLUMNS)
+    assert sorted(data_frame.keys().tolist()) == expected_columns
+
+    str_view = data_frame[
+        ["job_id", "cluster_name", "user"] + USER_COLUMNS
+    ].to_markdown()
+    file_regression.check(
+        f"Found 4 users and {data_frame.shape[0]} job(s):\n\n{str_view}"
+    )
 
 
 @pytest.mark.freeze_time(MOCK_TIME)
