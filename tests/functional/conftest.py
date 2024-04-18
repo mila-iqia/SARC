@@ -11,7 +11,7 @@ from sarc.testing import MongoInstance
 
 from .allocations.factory import create_allocations
 from .diskusage.factory import create_diskusages
-from .jobs.factory import create_jobs
+from .jobs.factory import create_jobs, create_users
 
 
 @pytest.fixture
@@ -41,20 +41,24 @@ def clear_db(db):
     db.clusters.drop()
 
 
-def fill_db(db):
+def fill_db(db, with_users=False):
     db.allocations.insert_many(create_allocations())
     db.jobs.insert_many(create_jobs())
     db.diskusage.insert_many(create_diskusages())
+    if with_users:
+        db.users.insert_many(create_users())
 
 
-def create_db_configuration_fixture(db_name, empty=False, scope="function"):
+def create_db_configuration_fixture(
+    db_name, empty=False, with_users=False, scope="function"
+):
     @pytest.fixture(scope=scope)
     def fixture(standard_config_object):
         cfg = custom_db_config(standard_config_object, db_name)
         db = cfg.mongo.database_instance
         clear_db(db)
         if not empty:
-            fill_db(db)
+            fill_db(db, with_users=with_users)
         yield
 
     return fixture
@@ -79,6 +83,13 @@ read_only_db_config_object = create_db_configuration_fixture(
 )
 
 
+read_only_db_with_users_config_object = create_db_configuration_fixture(
+    db_name="sarc-read-only-with-users-test",
+    with_users=True,
+    scope="session",
+)
+
+
 @pytest.fixture
 def empty_read_write_db(standard_config, empty_read_write_db_config_object):
     cfg = custom_db_config(standard_config, "sarc-read-write-test")
@@ -96,6 +107,13 @@ def read_write_db(standard_config, read_write_db_config_object):
 @pytest.fixture
 def read_only_db(standard_config, read_only_db_config_object):
     cfg = custom_db_config(standard_config, "sarc-read-only-test")
+    with using_config(cfg) as cfg:
+        yield cfg.mongo.database_instance
+
+
+@pytest.fixture
+def read_only_db_with_users(standard_config, read_only_db_with_users_config_object):
+    cfg = custom_db_config(standard_config, "sarc-read-only-with-users-test")
     with using_config(cfg) as cfg:
         yield cfg.mongo.database_instance
 
