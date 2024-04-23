@@ -106,6 +106,7 @@ def user_insert(newuser: dict) -> list:
         "mila",
         "drac_roles",
         "drac_members",
+        "teacher_delegations",
     )
 
     update = {
