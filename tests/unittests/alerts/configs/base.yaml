@@ -1,0 +1,15 @@
+sarc:
+  health_monitor:
+    # Override with a tmpdir
+    directory: null
+
+    parameterizations:
+      letter:
+        - alpha
+        - beta
+        - gamma
+
+time:
+  class: FrozenTime
+  time: "2024-01-01T15:00:00Z"
+  sleep_beat: 0
