@@ -1,4 +1,5 @@
 from collections import namedtuple
+from types import SimpleNamespace
 
 import sarc.ldap.read_mila_ldap
 from sarc.ldap.read_mila_ldap import resolve_supervisors, run
@@ -308,7 +309,7 @@ def ldap_exception(*args):
 
 
 def test_ldap_simple_sync(monkeypatch):
-    monkeypatch.setattr(sarc.ldap.read_mila_ldap, "_query_and_dump", ldap_mock)
+    monkeypatch.setattr(sarc.ldap.read_mila_ldap, "query_ldap", ldap_mock)
     monkeypatch.setattr(
         sarc.ldap.read_mila_ldap, "load_ldap_exceptions", ldap_exception
     )
@@ -319,7 +320,11 @@ def test_ldap_simple_sync(monkeypatch):
     collection = CollectionMock()
 
     run(
-        ldap=None,
+        ldap=SimpleNamespace(
+            local_private_key_file=None,
+            local_certificate_file=None,
+            ldap_service_uri=None,
+        ),
         mongodb_collection=collection,
     )
 

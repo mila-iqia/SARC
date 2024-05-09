@@ -170,10 +170,10 @@ def test_parse_json_job(json_jobs, scraper, file_regression):
 )
 @pytest.mark.usefixtures("standard_config")
 def test_parse_malformed_jobs(sacct_json, scraper, captrace):
-    scraper.results = json.loads(sacct_json)
+    scraper.get_raw.save(value_to_save=json.loads(sacct_json))
     assert list(scraper) == []
     spans = captrace.get_finished_spans()
-    assert len(spans) > 1
+    assert len(spans) > 0
     # Just check the span that should have got an error.
     error_spans = [
         span for span in spans if span.status.status_code == StatusCode.ERROR
@@ -194,7 +194,7 @@ def test_parse_malformed_jobs(sacct_json, scraper, captrace):
     indirect=True,
 )
 def test_parse_no_group_jobs(sacct_json, scraper, caplog):
-    scraper.results = json.loads(sacct_json)
+    scraper.get_raw.save(value_to_save=json.loads(sacct_json))
     with caplog.at_level("DEBUG"):
         assert list(scraper) == []
     assert 'Skipping job with group "None": 1' in caplog.text
@@ -208,7 +208,7 @@ def test_parse_no_group_jobs(sacct_json, scraper, caplog):
     indirect=True,
 )
 def test_scrape_lost_job_on_wrong_cluster(sacct_json, scraper, caplog):
-    scraper.results = json.loads(sacct_json)
+    scraper.get_raw.save(value_to_save=json.loads(sacct_json))
     with caplog.at_level("WARNING"):
         jobs = list(scraper)
 
@@ -229,9 +229,11 @@ def test_scraper_with_cache(scraper, sacct_json, file_regression):
     # We'd like to test that this starts with "/tmp/pytest",
     # but this isn't the case when we run the tests on Mac OS,
     # ending up in '/private/var/folders/*/pytest-of-gyomalin/pytest-63'.
-    assert "pytest" in str(scraper.cachefile)
+    assert "pytest" in str(scraper.get_raw.cache_dir)
 
-    with open(scraper.cachefile, "w") as f:
+    scraper.get_raw.cache_dir.mkdir(parents=True, exist_ok=True)
+
+    with open(scraper.get_raw.cache_path(), "w") as f:
         f.write(sacct_json)
 
     jobs = list(scraper)
@@ -245,9 +247,11 @@ def test_scraper_with_cache(scraper, sacct_json, file_regression):
 )
 def test_scraper_with_malformed_cache(test_config, remote, scraper, caplog):
     # see remark in `test_scraper_with_cache` for that "pytest" substring check
-    assert "pytest" in str(scraper.cachefile)
+    assert "pytest" in str(scraper.get_raw.cache_dir)
 
-    with open(scraper.cachefile, "w") as f:
+    scraper.get_raw.cache_dir.mkdir(parents=True, exist_ok=True)
+
+    with open(scraper.get_raw.cache_path(), "w") as f:
         f.write("I am malformed!! :'(")
 
     channel = remote.expect(
@@ -259,7 +263,7 @@ def test_scraper_with_malformed_cache(test_config, remote, scraper, caplog):
     with caplog.at_level("WARNING"):
         assert len(scraper.get_raw()) == 0
 
-    assert "Need to re-fetch because cache has malformed JSON." in caplog.text
+    assert "Could not load malformed cache file" in caplog.text
 
 
 @pytest.mark.parametrize(
@@ -984,11 +988,12 @@ def test_cli_ignore_stats(
     # We'd like to test that this starts with "/tmp/pytest",
     # but this isn't the case when we run the tests on Mac OS,
     # ending up in '/private/var/folders/*/pytest-of-gyomalin/pytest-63'.
-    assert "pytest" in str(scraper.cachefile)
+    assert "pytest" in str(scraper.get_raw.cache_dir)
 
-    print(scraper.cachefile)
+    print(scraper.get_raw.cache_dir)
+    scraper.get_raw.cache_dir.mkdir(parents=True, exist_ok=True)
 
-    with open(scraper.cachefile, "w") as f:
+    with open(scraper.get_raw.cache_path(), "w") as f:
         f.write(sacct_json)
 
     def mock_compute_job_statistics(job):
@@ -1032,6 +1037,6 @@ def test_cli_ignore_stats(
 )
 def test_parse_sacct_slurm_versions(sacct_outputs, scraper):
     file = Path(__file__).parent / "sacct_outputs" / sacct_outputs
-    scraper.results = json.load(open(file, "r", encoding="utf8"))
+    scraper.get_raw.save(value_to_save=json.load(open(file, "r", encoding="utf8")))
     jobs = list(scraper)
     assert len(jobs) == 1
