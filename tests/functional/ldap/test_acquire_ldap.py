@@ -21,7 +21,7 @@ def test_acquire_ldap(patch_return_values, mock_file):
     patch_return_values(
         {
             "sarc.ldap.read_mila_ldap.query_ldap": fake_raw_ldap_data(nbr_users),
-            "sarc.ldap.mymila.query_mymila_json": [],
+            "sarc.ldap.mymila.query_mymila_csv": [],
         }
     )
 
@@ -75,7 +75,7 @@ def test_merge_ldap_and_mymila(patch_return_values, mock_file):
     patch_return_values(
         {
             "sarc.ldap.read_mila_ldap.query_ldap": fake_raw_ldap_data(nbr_users),
-            "sarc.ldap.mymila.query_mymila_json": fake_mymila_data(nbr_users),
+            "sarc.ldap.mymila.query_mymila_csv": fake_mymila_data(nbr_users),
         }
     )
 

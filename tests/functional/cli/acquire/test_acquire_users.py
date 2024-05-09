@@ -86,7 +86,7 @@ def test_acquire_users(cli_main, patch_return_values, mock_file, captrace):
     patch_return_values(
         {
             "sarc.ldap.read_mila_ldap.query_ldap": fake_raw_ldap_data(nbr_users),
-            "sarc.ldap.mymila.query_mymila_json": [],
+            "sarc.ldap.mymila.query_mymila_csv": [],
         }
     )
 
@@ -189,7 +189,7 @@ def test_acquire_users_supervisors(
                     }
                 },
             ),
-            "sarc.ldap.mymila.query_mymila_json": fake_mymila_data(
+            "sarc.ldap.mymila.query_mymila_csv": fake_mymila_data(
                 nbr_users=nbr_users,
                 nbr_profs=nbr_profs,
                 hardcoded_values_by_user={
@@ -273,7 +273,7 @@ def test_acquire_users_co_supervisors(
                     }
                 },
             ),
-            "sarc.ldap.mymila.query_mymila_json": fake_mymila_data(
+            "sarc.ldap.mymila.query_mymila_csv": fake_mymila_data(
                 nbr_users=nbr_users,
                 nbr_profs=nbr_profs,
                 hardcoded_values_by_user={
@@ -316,7 +316,7 @@ def test_acquire_users_prompt(
     patch_return_values(
         {
             "sarc.ldap.read_mila_ldap.query_ldap": fake_raw_ldap_data(nbr_users),
-            "sarc.ldap.mymila.query_mymila_json": [],
+            "sarc.ldap.mymila.query_mymila_csv": [],
         }
     )
 

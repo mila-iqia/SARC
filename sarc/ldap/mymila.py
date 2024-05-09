@@ -1,6 +1,8 @@
 from datetime import timedelta
+from typing import IO
 
 import pandas as pd
+from pathlib import Path
 
 from sarc.cache import with_cache
 from sarc.config import MyMilaConfig
@@ -8,14 +10,22 @@ from sarc.config import MyMilaConfig
 START_DATE_KEY = "Start Date with MILA"
 END_DATE_KEY = "End Date with MILA"
 
+class CSV_formatter:
+    def load(fp: IO[any]):
+        return pd.read_csv(fp.name)
+    
+    def dump(obj: pd.DataFrame, fp: IO[any]):
+        raise NotImplementedError("Cannot dump mymila CSV cache yet.")
+        # obj.to_csv(fp.name)
+        
 
-@with_cache(subdirectory="mymila", validity=timedelta(days=1))
-def query_mymila_json(cfg: MyMilaConfig):
+@with_cache(subdirectory="mymila", formatter=CSV_formatter, key=lambda  *_, **__: "mymila_export_{time}.csv", validity=timedelta(days=120))
+def query_mymila_csv(cfg: MyMilaConfig):
     raise NotImplementedError("Cannot read from mymila yet.")
 
 
 def query_mymila(cfg: MyMilaConfig, cache_policy=True):
-    return pd.DataFrame(query_mymila_json(cfg, cache_policy=cache_policy))
+    return pd.DataFrame(query_mymila_csv(cfg, cache_policy=cache_policy))
 
 
 def to_records(df):

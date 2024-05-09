@@ -96,7 +96,7 @@ def mymiladata(patch_return_values):
     def patch(data):
         patch_return_values(
             {
-                "sarc.ldap.mymila.query_mymila_json": data,
+                "sarc.ldap.mymila.query_mymila_csv": data,
             }
         )
 
