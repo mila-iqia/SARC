@@ -12,7 +12,7 @@ from sarc.ldap.api import get_user, get_users
 
 
 @pytest.mark.usefixtures("empty_read_write_db")
-def test_acquire_ldap(monkeypatch, mock_file):
+def test_acquire_ldap(patch_return_values, mock_file):
     """
     Override the LDAP queries.
     Have users with matches to do.
@@ -21,13 +21,12 @@ def test_acquire_ldap(monkeypatch, mock_file):
     """
     nbr_users = 10
 
-    def mock_query_ldap(
-        local_private_key_file, local_certificate_file, ldap_service_uri
-    ):
-        assert ldap_service_uri.startswith("ldaps://")
-        return fake_raw_ldap_data(nbr_users)
-
-    monkeypatch.setattr(sarc.ldap.read_mila_ldap, "query_ldap", mock_query_ldap)
+    patch_return_values(
+        {
+            "sarc.ldap.read_mila_ldap.query_ldap": fake_raw_ldap_data(nbr_users),
+            "sarc.ldap.mymila.query_mymila_csv": [],
+        }
+    )
 
     # Patch the built-in `open()` function for each file path
     with patch("builtins.open", side_effect=mock_file):
@@ -73,26 +72,18 @@ def test_acquire_ldap(monkeypatch, mock_file):
 
 
 @pytest.mark.usefixtures("empty_read_write_db")
-def test_merge_ldap_and_mymila(monkeypatch, mock_file):
+def test_merge_ldap_and_mymila(patch_return_values, mock_file):
     cfg: MyMilaConfig = config().mymila
     nbr_users = 20
     nbr_profs = 10
-    ld_users = None
+    ld_users = fake_raw_ldap_data(nbr_users)
 
-    def mock_query_ldap(
-        local_private_key_file, local_certificate_file, ldap_service_uri
-    ):
-        assert ldap_service_uri.startswith("ldaps://")
-        nonlocal ld_users
-        ld_users = fake_raw_ldap_data(nbr_users)
-        return ld_users
-
-    monkeypatch.setattr(sarc.ldap.read_mila_ldap, "query_ldap", mock_query_ldap)
-
-    def mock_query_mymila(cfg):
-        return fake_mymila_data(nbr_users, nbr_profs)
-
-    monkeypatch.setattr(sarc.ldap.mymila, "query_mymila", mock_query_mymila)
+    patch_return_values(
+        {
+            "sarc.ldap.read_mila_ldap.query_ldap": fake_raw_ldap_data(nbr_users),
+            "sarc.ldap.mymila.query_mymila_csv": fake_mymila_data(nbr_users, nbr_profs),
+        }
+    )
 
     # Patch the built-in `open()` function for each file path
     with patch("builtins.open", side_effect=mock_file):

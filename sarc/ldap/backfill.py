@@ -220,7 +220,7 @@ def user_history_backfill(users_collection, LD_users, backfill=True):
     return updates, latest
 
 
-def _user_record_backfill(cfg, user_collection):
+def _user_record_backfill(cfg, user_collection, cache_policy=True):
     """No global version for simpler testing"""
     # We do not set expected exceptions, so that any exception will be re-raised by tracing.
     with using_trace(
@@ -228,14 +228,14 @@ def _user_record_backfill(cfg, user_collection):
     ) as span:
         span.add_event("Backfilling record history from mymila ...")
 
-        mymila_data = fetch_mymila(cfg, [])
+        mymila_data = fetch_mymila(cfg, [], cache_policy=cache_policy)
 
         return user_history_backfill(user_collection, mymila_data)
 
 
-def user_record_backfill():
+def user_record_backfill(cache_policy=True):
     cfg = config()
 
     user_collection = cfg.mongo.database_instance[cfg.ldap.mongo_collection_name]
 
-    _user_record_backfill(cfg, user_collection)
+    _user_record_backfill(cfg, user_collection, cache_policy=cache_policy)
