@@ -80,7 +80,10 @@ class SAcctScraper:
 
     def __iter__(self) -> Iterator[SlurmJob]:
         """Fetch and iterate on all jobs as SlurmJob objects."""
-        version = self.get_raw().get("meta", {}).get("Slurm", {}).get("version", None)
+        version = (
+            self.get_raw().get("meta", {}).get("Slurm", None)
+            or self.get_raw().get("meta", {}).get("slurm", {})
+        ).get("version", None)
         for entry in self.get_raw()["jobs"]:
             with using_trace("sarc.jobs.sacct", "SAcctScraper.__iter__") as span:
                 span.set_attribute("entry", json.dumps(entry))
@@ -143,7 +146,7 @@ class SAcctScraper:
                 entry["cluster"],
                 self.cluster.name,
             )
-        if version is None or version["major"] < 23:
+        if version is None or int(version["major"]) < 23:
             return SlurmJob(
                 cluster_name=self.cluster.name,
                 job_id=entry["job_id"],
@@ -172,7 +175,43 @@ class SAcctScraper:
                 **resources,
                 **flags,
             )
-        if version["major"] == 23:
+        if int(version["major"]) == 23:
+            if int(version["minor"]) == 11:
+                return SlurmJob(
+                    cluster_name=self.cluster.name,
+                    job_id=entry["job_id"],
+                    array_job_id=entry["array"]["job_id"] or None,
+                    task_id=entry["array"]["task_id"]["number"],
+                    name=entry["name"],
+                    user=entry["user"],
+                    group=entry["group"],
+                    account=entry["account"],
+                    job_state=entry["state"]["current"][0],
+                    exit_code=entry["exit_code"]["return_code"]["number"],
+                    signal=entry["exit_code"]
+                    .get("signal", {})
+                    .get("id", {})
+                    .get("number", None),
+                    time_limit=(tlimit := entry["time"]["limit"]["number"])
+                    and tlimit * 60,
+                    submit_time=submit_time,
+                    start_time=start_time,
+                    end_time=end_time,
+                    elapsed_time=elapsed_time,
+                    partition=entry["partition"],
+                    nodes=(
+                        sorted(expand_hostlist(nodes))
+                        if nodes != "None assigned"
+                        else []
+                    ),
+                    constraints=entry["constraints"],
+                    priority=entry["priority"]["number"],
+                    qos=entry["qos"],
+                    work_dir=entry["working_directory"],
+                    **resources,
+                    **flags,
+                )
+
             return SlurmJob(
                 cluster_name=self.cluster.name,
                 job_id=entry["job_id"],
