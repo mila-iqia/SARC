@@ -1033,7 +1033,12 @@ def test_cli_ignore_stats(
 @pytest.mark.usefixtures("standard_config")
 @pytest.mark.parametrize(
     "sacct_outputs",
-    ["slurm_21_8_8.json", "slurm_22_5_9.json", "slurm_23_2_6.json"],
+    [
+        "slurm_21_8_8.json",
+        "slurm_22_5_9.json",
+        "slurm_23_2_6.json",
+        "slurm_23_11_5.json",
+    ],
 )
 def test_parse_sacct_slurm_versions(sacct_outputs, scraper):
     file = Path(__file__).parent / "sacct_outputs" / sacct_outputs

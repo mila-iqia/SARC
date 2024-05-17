@@ -89,6 +89,8 @@ def get_job_time_series(
         elif aggregation == "total":
             offset += duration_seconds
             range_seconds = duration_seconds
+        else:
+            raise ValueError(f"Unknown aggregation: {aggregation}")
 
         query = f"{query}[{range_seconds}s]"
         if "(" in measure:
