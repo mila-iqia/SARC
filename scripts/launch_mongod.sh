@@ -1,4 +1,5 @@
 #!/bin/bash
+set -o xtrace
 
 # Database config
 # ===============
@@ -31,13 +32,13 @@ echo "DB_PATH: $DB_PATH" >> dbconfig.txt
 echo "DBNAME: $DBNAME" >> dbconfig.txt
 
 echo "ADMIN: $ADMIN" >> dbconfig.txt
-echo "PASSWORD: $PASSWORD"  >> dbconfig.txt
+echo "PASSWORD: $PASSWORD" >> dbconfig.txt
 
-echo "WRITEUSER_NAME: $WRITEUSER_NAME"  >> dbconfig.txt
-echo "WRITEUSER_PWD: $WRITEUSER_PWD"  >> dbconfig.txt
+echo "WRITEUSER_NAME: $WRITEUSER_NAME" >> dbconfig.txt
+echo "WRITEUSER_PWD: $WRITEUSER_PWD" >> dbconfig.txt
 
-echo "READUSER_NAME: $READUSER_NAME"  >> dbconfig.txt
-echo "READUSER_PWD: $READUSER_PWD"  >> dbconfig.txt
+echo "READUSER_NAME: $READUSER_NAME" >> dbconfig.txt
+echo "READUSER_PWD: $READUSER_PWD" >> dbconfig.txt
 echo "====================================="
 
 # Constants
@@ -46,7 +47,7 @@ echo "====================================="
 ASCENDING=1
 DESCENDING=-1
 
-set -vm -o errexit
+set -m -o errexit
 
 
 if ! which mongosh >/dev/null 2>&1; then

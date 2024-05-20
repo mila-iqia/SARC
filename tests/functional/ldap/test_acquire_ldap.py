@@ -5,7 +5,10 @@ from sarc_mocks import fake_mymila_data, fake_raw_ldap_data
 
 import sarc.account_matching.make_matches
 import sarc.ldap.acquire
-from sarc.ldap.api import get_user
+import sarc.ldap.mymila  # will monkeypatch "read_my_mila"
+import sarc.ldap.read_mila_ldap  # will monkeypatch "query_ldap"
+from sarc.config import MyMilaConfig, config
+from sarc.ldap.api import get_user, get_users
 
 
 @pytest.mark.usefixtures("empty_read_write_db")
@@ -70,17 +73,49 @@ def test_acquire_ldap(patch_return_values, mock_file):
 
 @pytest.mark.usefixtures("empty_read_write_db")
 def test_merge_ldap_and_mymila(patch_return_values, mock_file):
-    nbr_users = 10
+    cfg: MyMilaConfig = config().mymila
+    nbr_users = 20
+    nbr_profs = 10
+    ld_users = fake_raw_ldap_data(nbr_users)
 
     patch_return_values(
         {
             "sarc.ldap.read_mila_ldap.query_ldap": fake_raw_ldap_data(nbr_users),
-            "sarc.ldap.mymila.query_mymila_csv": fake_mymila_data(nbr_users),
+            "sarc.ldap.mymila.query_mymila_csv": fake_mymila_data(nbr_users, nbr_profs),
         }
     )
 
     # Patch the built-in `open()` function for each file path
     with patch("builtins.open", side_effect=mock_file):
         sarc.ldap.acquire.run()
+
+    users = get_users()
+    assert len(users) == nbr_users
+
+    for user, ld_user in zip(users, ld_users):
+        assert user.mila_ldap["display_name"] != ld_user["displayName"]
+
+        if user.prof["membership_type"]:
+            assert (
+                user.collaborator["collaboration_type"]
+                not in cfg.collaborators_affiliations.values()
+            )
+    for i in range(nbr_profs):
+        user = users[i]
+        # A prof should not have a supervisor or co-supervisor but there's a
+        # mismatch between the number of profs in ldap (1) and the generated
+        # mymila data (5)
+        # assert user.mila_ldap["supervisor"] is None
+        # assert user.mila_ldap["co_supervisor"] is None
+
+    for i in range(nbr_profs, nbr_users):
+        user = users[i]
+        assert (
+            user.mila_ldap["supervisor"] == f"john.smith{i%nbr_profs:03d}@mila.quebec"
+        )
+        assert (
+            user.mila_ldap["co_supervisor"]
+            == f"john.smith{(i+1)%nbr_profs:03d}@mila.quebec"
+        )
 
     # TODO: Add checks for fields coming from mymila now saved in DB

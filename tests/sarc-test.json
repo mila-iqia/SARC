@@ -12,7 +12,18 @@
         "exceptions_json_path": "secrets/exceptions.json"
     },
     "mymila": {
-        "tmp_json_path": "secrets/tmp_mymila.json"
+        "tmp_json_path": "secrets/tmp_mymila.json",
+        "collaborators_affiliations": {
+            "Collaborating Alumni": "alumni",
+            "Collaborating researcher": "external",
+            "Research Intern": "intern",
+            "visiting researcher": "visitor"
+        },
+        "collaborators_membership": [
+            "Collaborating Researcher",
+            "Visiting Researcher",
+            "Research intern"
+        ]
     },
     "account_matching": {
         "drac_members_csv_path": "drac_members_not_valid_path.csv",
