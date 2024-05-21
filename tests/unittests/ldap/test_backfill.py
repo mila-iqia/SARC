@@ -6,11 +6,9 @@ from datetime import date, datetime
 import pandas as pd
 import pytest
 from opentelemetry.trace import StatusCode
-from pymongo import InsertOne, UpdateOne
+from pymongo import InsertOne
 from sarc_mocks import dictset, fake_mymila_data, mymila_template
 
-import sarc.ldap.mymila
-from sarc.config import config
 from sarc.ldap.backfill import _user_record_backfill
 
 
@@ -93,11 +91,16 @@ class MockCollection:
         return namedtuple("Result", ["bulk_api_result"])(len(operations))
 
 
-def mymiladata(monkeypatch, data):
-    def wrapper(*args):
-        return data
+@pytest.fixture
+def mymiladata(patch_return_values):
+    def patch(data):
+        patch_return_values(
+            {
+                "sarc.ldap.mymila.query_mymila_csv": data,
+            }
+        )
 
-    monkeypatch.setattr(sarc.ldap.mymila, "query_mymila", wrapper)
+    return patch
 
 
 @dataclass
@@ -105,9 +108,9 @@ class FakeConfig:
     mymila = None
 
 
-def test_no_backfill(monkeypatch):
+def test_no_backfill(mymiladata):
     collection = MockCollection()
-    mymiladata(monkeypatch, fake_mymila_data())
+    mymiladata(fake_mymila_data())
 
     updates, latest = _user_record_backfill(FakeConfig(), collection)
 
@@ -115,9 +118,9 @@ def test_no_backfill(monkeypatch):
     assert updates == []
 
 
-def test_backfill_simple_insert_history(monkeypatch, captrace):
+def test_backfill_simple_insert_history(mymiladata, captrace):
     collection = MockCollection()
-    mymiladata(monkeypatch, user_with_history())
+    mymiladata(user_with_history())
 
     updates, latest = _user_record_backfill(FakeConfig(), collection)
 
@@ -196,9 +199,9 @@ def mongo_db_expected_history():
     ]
 
 
-def test_backfill_history_match(monkeypatch):
+def test_backfill_history_match(mymiladata):
     collection = MockCollection(mongo_db_expected_history())
-    mymiladata(monkeypatch, user_with_history())
+    mymiladata(user_with_history())
 
     updates, latest = _user_record_backfill(FakeConfig(), collection)
 
@@ -207,13 +210,13 @@ def test_backfill_history_match(monkeypatch):
 
 
 @pytest.mark.parametrize("missing_idx", [0, 1, 2])
-def test_backfill_insert_missing_entries(monkeypatch, missing_idx):
+def test_backfill_insert_missing_entries(mymiladata, missing_idx):
     dbstate = mongo_db_expected_history()
 
     partial_history = dbstate[:missing_idx] + dbstate[missing_idx + 1 :]
 
     collection = MockCollection(partial_history)
-    mymiladata(monkeypatch, user_with_history())
+    mymiladata(user_with_history())
 
     updates, latest = _user_record_backfill(FakeConfig(), collection)
 
@@ -237,7 +240,7 @@ def test_backfill_insert_missing_entries(monkeypatch, missing_idx):
     assert doc == missing_entry
 
 
-def test_backfill_sync_history_diff(monkeypatch):
+def test_backfill_sync_history_diff(mymiladata):
     """History match but the entries are different"""
 
     bad_mongo_history = mongo_db_expected_history()
@@ -246,7 +249,7 @@ def test_backfill_sync_history_diff(monkeypatch):
     bad_entry["mila_ldap"]["display_name"] = "Not my favorite name"
 
     collection = MockCollection(bad_mongo_history)
-    mymiladata(monkeypatch, user_with_history())
+    mymiladata(user_with_history())
 
     updates, latest = _user_record_backfill(FakeConfig(), collection)
 
@@ -257,7 +260,7 @@ def test_backfill_sync_history_diff(monkeypatch):
     ), "Should have the right display name"
 
 
-def test_backfill_fail(monkeypatch):
+def test_backfill_fail(mymiladata):
     dbstate = mongo_db_expected_history()
 
     # remove one entry, and close the gap between the records
@@ -265,7 +268,7 @@ def test_backfill_fail(monkeypatch):
     partial_history[0]["record_end"] = partial_history[1]["record_start"]
 
     collection = MockCollection(partial_history)
-    mymiladata(monkeypatch, user_with_history())
+    mymiladata(user_with_history())
 
     with pytest.raises(AssertionError):
         _user_record_backfill(FakeConfig(), collection)

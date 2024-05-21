@@ -255,3 +255,15 @@ def mock_file(file_contents):
             raise FileNotFoundError(filename)
 
     return _mock_file
+
+
+@pytest.fixture
+def patch_return_values(monkeypatch):
+    def returner(v):
+        return lambda *_, **__: v
+
+    def patch(values):
+        for k, v in values.items():
+            monkeypatch.setattr(k, returner(v))
+
+    yield patch

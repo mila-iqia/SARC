@@ -22,15 +22,31 @@ from sarc.ldap.revision import commit_matches_to_database
 from sarc.traces import using_trace
 
 
-def run(prompt=False):
-    """If prompt is True, script will prompt for manual matching."""
+def run(
+    prompt=False,
+    cache_policy=True,
+):
+    """If prompt is True, script will prompt for manual matching.
+
+    Arguments:
+        prompt: If prompt is True, script will prompt for manual matching.
+        force: If True, re-fetch ldap data regardless of if it is cached.
+        no_fetch: If True, always fetch from cache if it exists.
+    """
 
     cfg = config()
     user_collection = cfg.mongo.database_instance[cfg.ldap.mongo_collection_name]
 
-    LD_users = fetch_ldap(ldap=cfg.ldap)
+    LD_users = fetch_ldap(
+        ldap=cfg.ldap,
+        cache_policy=cache_policy,
+    )
 
-    LD_users = fetch_mymila(cfg, LD_users)
+    LD_users = fetch_mymila(
+        cfg,
+        LD_users,
+        cache_policy=cache_policy,
+    )
 
     # For each supervisor or co-supervisor, look for a mila_email_username
     # matching the display name. If None has been found, the previous value remains
