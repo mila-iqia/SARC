@@ -85,6 +85,7 @@ class ClusterConfig(BaseModel):
     start_date: str = "2022-04-01"
     rgu_start_date: str = None
     gpu_to_rgu_billing: Path = None
+    gpus_per_nodes: dict = {}
 
     @validator("timezone")
     def _timezone(cls, value):
@@ -137,7 +138,7 @@ class ClusterConfig(BaseModel):
         """
         from .jobs.node_gpu_mapping import NodeToGPUMapping
 
-        return NodeToGPUMapping(self.name, self.nodes_info_file)
+        return NodeToGPUMapping(self.name, self.nodes_info_file, self.gpus_per_nodes)
 
 
 class MongoConfig(BaseModel):

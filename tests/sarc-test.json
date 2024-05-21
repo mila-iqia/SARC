@@ -42,7 +42,15 @@
             "duc_storage_command": null,
             "diskusage_report_command": null,
             "prometheus_url": null,
-            "nodes_info_file": "tests/not-so-secrets/raisin_no_prometheus/nodes_raisin_no_prometheus.txt"
+            "nodes_info_file": "tests/not-so-secrets/raisin_no_prometheus/nodes_raisin_no_prometheus.txt",
+            "gpus_per_nodes": {
+                "cn-c018": {
+                    "asupergpu": "Nec Plus Plus ULTRA GPU 2000"
+                },
+                "cn-c{{[019-030]}}": {
+                    "asupergpu": "Nec Plus ULTRA GPU 2000"
+                }
+            }
         },
         "fromage": {
             "host": "fromage",
