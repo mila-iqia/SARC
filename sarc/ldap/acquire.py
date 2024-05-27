@@ -42,11 +42,12 @@ def run(
         cache_policy=cache_policy,
     )
 
-    LD_users = fetch_mymila(
-        cfg,
-        LD_users,
-        cache_policy=cache_policy,
-    )
+    # MyMila scraping is temporary disabled until we have a proper solution. 
+    # LD_users = fetch_mymila(
+    #     cfg,
+    #     LD_users,
+    #     cache_policy=cache_policy,
+    # )
 
     # For each supervisor or co-supervisor, look for a mila_email_username
     # matching the display name. If None has been found, the previous value remains
