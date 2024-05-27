@@ -42,12 +42,16 @@ def run(
         cache_policy=cache_policy,
     )
 
-    # MyMila scraping is temporary disabled until we have a proper solution. 
-    # LD_users = fetch_mymila(
-    #     cfg,
-    #     LD_users,
-    #     cache_policy=cache_policy,
-    # )
+    # MyMila scraping "NotImplementedError" is temporary ignored until we have a working fetching implementation,
+    # or a working workaround using CSV cache.
+    with using_trace(
+        "sarc.ldap.acquire", "fetch_mymila", exception_types=(NotImplementedError,)
+    ) as span:
+        LD_users = fetch_mymila(
+            cfg,
+            LD_users,
+            cache_policy=cache_policy,
+        )
 
     # For each supervisor or co-supervisor, look for a mila_email_username
     # matching the display name. If None has been found, the previous value remains
