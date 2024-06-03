@@ -27,7 +27,15 @@ def is_date_missing(date):
     return date is None or date == DEFAULT_DATE
 
 
-def has_changed(user_db, user_latest, excluded=("_id",)):
+def has_changed(
+    user_db,
+    user_latest,
+    excluded=(
+        "_id",
+        "record_start",
+        "record_end",
+    ),
+):
     keys = set(list(user_db.keys()) + list(user_latest.keys()))
 
     for k in keys:
