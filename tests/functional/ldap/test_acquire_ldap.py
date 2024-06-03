@@ -90,6 +90,7 @@ def test_acquire_ldap_revision_change(patch_return_values, mock_file):
         sarc.ldap.acquire.run()
 
     # inspect database to check the number of records
+    # should be nbr_users
     users = get_users(latest=False)
     nb_users_1 = len(users)
     nb_users_1 == nbr_users
@@ -99,6 +100,7 @@ def test_acquire_ldap_revision_change(patch_return_values, mock_file):
         sarc.ldap.acquire.run()
 
     # inspect database to check the number of records
+    # should be the same
     users = get_users(latest=False)
     assert len(users) == nb_users_1
 
@@ -121,6 +123,7 @@ def test_acquire_ldap_revision_change(patch_return_values, mock_file):
         sarc.ldap.acquire.run()
 
     # inspect database to check the number of records
+    # should be incremented by 1
     users = get_users(latest=False)
     assert len(users) == nb_users_1 + 1
 
@@ -129,6 +132,7 @@ def test_acquire_ldap_revision_change(patch_return_values, mock_file):
         sarc.ldap.acquire.run()
 
     # inspect database to check the number of records
+    # should be the same
     users = get_users(latest=False)
     assert len(users) == nb_users_1 + 1
 
