@@ -5,7 +5,7 @@ from sarc_mocks import fake_mymila_data, fake_raw_ldap_data
 
 import sarc.account_matching.make_matches
 import sarc.ldap.acquire
-from sarc.ldap.api import get_user,get_users
+from sarc.ldap.api import get_user, get_users
 
 
 @pytest.mark.usefixtures("empty_read_write_db")
@@ -67,6 +67,7 @@ def test_acquire_ldap(patch_return_values, mock_file):
     js_user = get_user(drac_account_username="ms@hotmail.com")
     assert js_user is None
 
+
 @pytest.mark.usefixtures("empty_read_write_db")
 def test_acquire_ldap_revision_change(patch_return_values, mock_file):
     """
@@ -91,7 +92,7 @@ def test_acquire_ldap_revision_change(patch_return_values, mock_file):
     # inspect database to check the number of records
     users = get_users()
     nb_users_1 = len(users)
-    nb_users_1 == nbr_users    
+    nb_users_1 == nbr_users
 
     # re-acquire the same data
     with patch("builtins.open", side_effect=mock_file):
@@ -105,12 +106,13 @@ def test_acquire_ldap_revision_change(patch_return_values, mock_file):
     patch_return_values(
         {
             "sarc.ldap.read_mila_ldap.query_ldap": fake_raw_ldap_data(
-                    nbr_users,
-                    hardcoded_values_by_user={
+                nbr_users,
+                hardcoded_values_by_user={
                     2: {  # The first user who is not a prof is the one with index 2
                         "supervisor": "new_supervisor@mila.quebec"
                     }
-                }
+                },
+            )
         }
     )
 
@@ -120,7 +122,7 @@ def test_acquire_ldap_revision_change(patch_return_values, mock_file):
 
     # inspect database to check the number of records
     users = get_users()
-    assert len(users) == nb_users_1+1
+    assert len(users) == nb_users_1 + 1
 
     # re-acquire the same data
     with patch("builtins.open", side_effect=mock_file):
@@ -128,7 +130,7 @@ def test_acquire_ldap_revision_change(patch_return_values, mock_file):
 
     # inspect database to check the number of records
     users = get_users()
-    assert len(users) == nb_users_1+1
+    assert len(users) == nb_users_1 + 1
 
 
 @pytest.mark.usefixtures("empty_read_write_db")
