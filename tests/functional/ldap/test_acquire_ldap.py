@@ -93,7 +93,7 @@ def test_acquire_ldap_revision_change(patch_return_values, mock_file):
     # should be nbr_users
     users = get_users(latest=False)
     nb_users_1 = len(users)
-    nb_users_1 == nbr_users
+    assert nb_users_1 == nbr_users
 
     # re-acquire the same data
     with patch("builtins.open", side_effect=mock_file):
