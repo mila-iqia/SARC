@@ -3,7 +3,7 @@ import pytest
 
 @pytest.mark.usefixtures("client_config")
 def test_query_range():
-    from sarc.loki import query_range
+    from sarc.client.loki import query_range
 
     response = query_range(
         'query=sum(rate({job="varlogs"}[10m])) by (level)', end="now", since="1h"
