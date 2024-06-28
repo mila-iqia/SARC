@@ -1,6 +1,6 @@
 import pytest
 
-from sarc.ldap.api import get_user, get_users
+from sarc.client.ldap.api import get_user, get_users
 
 
 @pytest.mark.usefixtures("read_only_db_with_users_client", "tzlocal_is_mtl")

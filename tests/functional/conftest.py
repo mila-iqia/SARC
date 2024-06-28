@@ -64,6 +64,21 @@ def create_db_configuration_fixture(
     return fixture
 
 
+def create_client_db_configuration_fixture(
+    db_name, empty=False, with_users=False, scope="function"
+):
+    @pytest.fixture(scope=scope)
+    def fixture(client_config_object):
+        cfg = custom_db_config(client_config_object, db_name)
+        db = cfg.mongo.database_instance
+        clear_db(db)
+        if not empty:
+            fill_db(db, with_users=with_users)
+        yield
+
+    return fixture
+
+
 empty_read_write_db_config_object = create_db_configuration_fixture(
     db_name="sarc-read-write-test",
     empty=True,
@@ -85,6 +100,12 @@ read_only_db_config_object = create_db_configuration_fixture(
 
 read_only_db_with_users_config_object = create_db_configuration_fixture(
     db_name="sarc-read-only-with-users-test",
+    with_users=True,
+    scope="session",
+)
+
+read_only_client_db_with_users_config_object = create_client_db_configuration_fixture(
+    db_name="sarc-read-only-with-users-test-client",
     with_users=True,
     scope="session",
 )
@@ -120,9 +141,9 @@ def read_only_db_with_users(standard_config, read_only_db_with_users_config_obje
 
 @pytest.fixture
 def read_only_db_with_users_client(
-    client_config, read_only_db_with_users_config_object
+    client_config, read_only_client_db_with_users_config_object
 ):
-    cfg = custom_db_config(client_config, "sarc-read-only-with-users-test")
+    cfg = custom_db_config(client_config, "sarc-read-only-with-users-test-client")
     with using_config(cfg) as cfg:
         yield cfg.mongo.database_instance
 

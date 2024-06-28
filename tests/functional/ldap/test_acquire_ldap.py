@@ -5,7 +5,7 @@ from sarc_mocks import fake_mymila_data, fake_raw_ldap_data
 
 import sarc.account_matching.make_matches
 import sarc.ldap.acquire
-from sarc.ldap.api import get_user
+from sarc.client.ldap.api import get_user
 
 
 @pytest.mark.usefixtures("empty_read_write_db")

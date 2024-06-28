@@ -1,12 +1,10 @@
-from copy import deepcopy
 from datetime import datetime
 
-import pymongo
 import pytest
 from sarc_mocks import dictset
 
-from sarc.ldap.api import _users_collection as users_collection
-from sarc.ldap.api import get_user
+from sarc.client.ldap.api import _users_collection as users_collection
+from sarc.client.ldap.api import get_user
 from sarc.ldap.revision import commit_matches_to_database, update_user
 
 statuses = ("disabled", "archived", "enabled")

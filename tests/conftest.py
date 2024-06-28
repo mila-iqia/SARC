@@ -38,18 +38,16 @@ pytest_plugins = "fabric.testing.fixtures"
 
 @pytest.fixture(scope="session")
 def standard_config_object():
-    mpatch = MonkeyPatch()
-    mpatch.setenv("SARC_MODE", "scraping")
+    # As we use parse_config() instead of config(), we should not need
+    # to patch env var SARC_MODE.
+    # Patching env var with monkeypatch may result in unexpected results
+    # for next tests in tests session, as env var might be still patched.
     yield parse_config(Path(__file__).parent / "sarc-test.json", ScraperConfig)
-    mpatch.undo()
 
 
 @pytest.fixture(scope="session")
 def client_config_object():
-    mpatch = MonkeyPatch()
-    mpatch.setenv("SARC_MODE", "client")
     yield parse_config(Path(__file__).parent / "sarc-test-client.json", Config)
-    mpatch.undo()
 
 
 @pytest.fixture()
@@ -67,7 +65,7 @@ def standard_config(standard_config_object, tmp_path):
 
 
 @pytest.fixture
-def disabled_cache():
+def disabled_cache(standard_config):
     cfg = config().replace(cache=None)
     with using_config(cfg, ScraperConfig) as cfg:
         yield

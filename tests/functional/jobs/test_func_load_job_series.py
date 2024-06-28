@@ -4,10 +4,10 @@ from datetime import datetime
 import pandas
 import pytest
 
+from sarc.client.ldap.api import get_users
 from sarc.config import MTL
 from sarc.jobs.job import get_jobs
 from sarc.jobs.series import load_job_series
-from sarc.ldap.api import get_users
 
 from .test_func_job_statistics import generate_fake_timeseries
 

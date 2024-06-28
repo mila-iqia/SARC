@@ -6,8 +6,8 @@ from datetime import datetime
 
 from tqdm import tqdm
 
+from sarc.client.ldap.api import get_users
 from sarc.config import ClusterConfig
-from sarc.ldap.api import get_users
 from sarc.storage.diskusage import DiskUsage, DiskUsageGroup, DiskUsageUser
 
 beegfs_header = "name,id,size,hard,files,hard"
