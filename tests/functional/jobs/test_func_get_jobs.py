@@ -2,7 +2,7 @@ from datetime import datetime
 
 import pytest
 
-from sarc.config import MTL, config
+from sarc.config import MTL, config, ScrapingModeRequired
 from sarc.jobs import get_jobs
 from sarc.jobs.job import get_job
 
@@ -73,3 +73,16 @@ def test_get_job_resubmitted():
     assert jb is not None
     assert jb1.submit_time != jb2.submit_time
     assert jb.submit_time == max(jb1.submit_time, jb2.submit_time)
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_save_job_in_scraping_mode():
+    job, *_ = get_jobs()
+    job.save()
+
+
+@pytest.mark.usefixtures("read_only_db_with_users_client")
+def test_save_job_in_client_mode():
+    job, *_ = get_jobs()
+    with pytest.raises(ScrapingModeRequired):
+        job.save()

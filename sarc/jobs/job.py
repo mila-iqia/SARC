@@ -10,7 +10,7 @@ from pydantic_mongo import AbstractRepository, ObjectIdField
 
 from sarc.traces import trace_decorator
 
-from ..config import MTL, TZLOCAL, UTC, BaseModel, ClusterConfig, config
+from ..config import MTL, TZLOCAL, UTC, BaseModel, ClusterConfig, config, scraping_mode_required
 
 
 class SlurmState(str, Enum):
@@ -184,6 +184,7 @@ class SlurmJob(BaseModel):
 
         return None
 
+    @scraping_mode_required
     def save(self):
         jobs_collection().save_job(self)
 
@@ -196,6 +197,7 @@ class SlurmJobRepository(AbstractRepository[SlurmJob]):
     class Meta:
         collection_name = "jobs"
 
+    @scraping_mode_required
     def save_job(self, model: SlurmJob):
         """Save a SlurmJob into the database.
 
