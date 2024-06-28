@@ -119,6 +119,15 @@ def read_only_db_with_users(standard_config, read_only_db_with_users_config_obje
 
 
 @pytest.fixture
+def read_only_db_with_users_client(
+    client_config, read_only_db_with_users_config_object
+):
+    cfg = custom_db_config(client_config, "sarc-read-only-with-users-test")
+    with using_config(cfg) as cfg:
+        yield cfg.mongo.database_instance
+
+
+@pytest.fixture
 def account_matches():
     """
     Returns a structure of accounts with their corresponding values
@@ -367,7 +376,7 @@ def write_setup(mongodb, scraping_mode, tmp_path, freeport, monkeypatch):
 
 @pytest.fixture
 def read_setup(mongodb, scraping_mode, tmp_path, freeport, monkeypatch):
-    """SARC read user, can onlly read to sarc database.
+    """SARC read user, can only read to sarc database.
     Does not have access to secrets
     """
     config_path = tmp_path / "config.json"
