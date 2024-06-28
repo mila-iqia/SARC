@@ -85,7 +85,9 @@ def clean_up_test_cache_before_run(standard_config_object, worker_id):
 @pytest.fixture
 def tzlocal_is_mtl(monkeypatch):
     monkeypatch.setattr("sarc.config.TZLOCAL", zoneinfo.ZoneInfo("America/Montreal"))
-    monkeypatch.setattr("sarc.jobs.job.TZLOCAL", zoneinfo.ZoneInfo("America/Montreal"))
+    monkeypatch.setattr(
+        "sarc.client.job.TZLOCAL", zoneinfo.ZoneInfo("America/Montreal")
+    )
 
 
 @pytest.fixture
