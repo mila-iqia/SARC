@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from datetime import datetime, time
-from typing import Iterable
+from typing import Iterable, Optional
 
-from sarc.config import TZLOCAL, UTC, ClusterConfig, config
+from pydantic_mongo import AbstractRepository, ObjectIdField
+
+from sarc.config import TZLOCAL, UTC, BaseModel, ClusterConfig, config
 from sarc.jobs.job import SlurmJob, SlurmState, jobs_collection
 
 
@@ -162,3 +164,25 @@ def get_job(*, query_options={}, **kwargs):
     for job in jobs:
         return job
     return None
+
+
+class SlurmCLuster(BaseModel):
+    """Hold data for a Slurm cluster."""
+
+    # Database ID
+    id: ObjectIdField = None
+
+    cluster_name: str
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+
+
+class SlurmClusterRepository(AbstractRepository[SlurmCLuster]):
+    class Meta:
+        collection_name = "clusters"
+
+
+def get_available_clusters() -> Iterable[SlurmCLuster]:
+    """Get clusters available in database."""
+    db = config().mongo.database_instance
+    return SlurmClusterRepository(database=db).find_by({})

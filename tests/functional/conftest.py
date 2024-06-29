@@ -41,12 +41,20 @@ def clear_db(db):
     db.clusters.drop()
 
 
-def fill_db(db, with_users=False):
+def fill_db(db, with_users=False, with_clusters=False):
     db.allocations.insert_many(create_allocations())
     db.jobs.insert_many(create_jobs())
     db.diskusage.insert_many(create_diskusages())
     if with_users:
         db.users.insert_many(create_users())
+
+    if with_clusters:
+        # Fill collection `clusters`.
+        cluster_names = {job["cluster_name"] for job in db.jobs.find({})}
+        db.clusters.insert_many(
+            {"cluster_name": cluster_name, "start_date": None, "end_date": None}
+            for cluster_name in cluster_names
+        )
 
 
 def create_db_configuration_fixture(
@@ -65,7 +73,7 @@ def create_db_configuration_fixture(
 
 
 def create_client_db_configuration_fixture(
-    db_name, empty=False, with_users=False, scope="function"
+    db_name, empty=False, with_users=False, with_clusters=False, scope="function"
 ):
     @pytest.fixture(scope=scope)
     def fixture(client_config_object):
@@ -73,7 +81,7 @@ def create_client_db_configuration_fixture(
         db = cfg.mongo.database_instance
         clear_db(db)
         if not empty:
-            fill_db(db, with_users=with_users)
+            fill_db(db, with_users=with_users, with_clusters=with_clusters)
         yield
 
     return fixture
@@ -107,6 +115,7 @@ read_only_db_with_users_config_object = create_db_configuration_fixture(
 read_only_client_db_with_users_config_object = create_client_db_configuration_fixture(
     db_name="sarc-read-only-with-users-test-client",
     with_users=True,
+    with_clusters=True,
     scope="session",
 )
 
