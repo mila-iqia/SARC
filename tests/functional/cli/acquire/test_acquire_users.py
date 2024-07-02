@@ -8,8 +8,8 @@ from unittest.mock import patch
 import pytest
 from opentelemetry.trace import StatusCode
 
+from sarc.client.ldap.api import get_user
 from sarc.config import config
-from sarc.ldap.api import get_user
 from tests.common.sarc_mocks import fake_mymila_data, fake_raw_ldap_data
 
 

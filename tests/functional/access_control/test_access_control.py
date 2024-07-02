@@ -3,8 +3,8 @@ from datetime import datetime
 import pymongo
 import pytest
 
+from sarc.client.job import get_jobs
 from sarc.config import config
-from sarc.jobs import get_jobs
 from sarc.jobs.job import jobs_collection
 
 
