@@ -13,10 +13,9 @@ import pytest
 from fabric.testing.base import Command, Session
 from opentelemetry.trace import Status, StatusCode, get_tracer
 
-from sarc.client.job import get_jobs
+from sarc.client.job import JobStatistics, get_jobs
 from sarc.config import MTL, PST, UTC, config
 from sarc.jobs import sacct
-from sarc.jobs.job import JobStatistics
 from sarc.jobs.sacct import SAcctScraper
 
 from .factory import JsonJobFactory, json_raw

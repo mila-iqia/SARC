@@ -3,18 +3,17 @@ from datetime import datetime
 import pymongo
 import pytest
 
-from sarc.client.job import get_jobs
+from sarc.client.job import _jobs_collection, get_jobs
 from sarc.config import config
-from sarc.jobs.job import jobs_collection
 
 
 def drop_job():
-    coll = jobs_collection().get_collection()
+    coll = _jobs_collection().get_collection()
     coll.drop()
 
 
 def write_to_job():
-    coll = jobs_collection().get_collection()
+    coll = _jobs_collection().get_collection()
     coll.update_one(
         {"job_id": "123", "cluster_name": "mila", "submit_time": datetime.utcnow()},
         {

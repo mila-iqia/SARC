@@ -13,14 +13,13 @@ from pandas import DataFrame
 from prometheus_api_client import MetricRangeDataFrame
 from tqdm import tqdm
 
-from sarc.client.job import count_jobs, get_jobs
+from sarc.client.job import JobStatistics, SlurmJob, Statistics, count_jobs, get_jobs
 from sarc.client.ldap.api import User, get_users
 from sarc.config import MTL, UTC, ClusterConfig, config
-from sarc.jobs.job import JobStatistics, Statistics
 from sarc.traces import trace_decorator
 
 if TYPE_CHECKING:
-    from sarc.jobs.sacct import SlurmJob
+    pass
 
 
 # pylint: disable=too-many-branches

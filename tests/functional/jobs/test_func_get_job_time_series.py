@@ -3,8 +3,8 @@ from datetime import datetime, timedelta
 
 import pytest
 
+from sarc.client.job import SlurmJob
 from sarc.config import MTL, UTC
-from sarc.jobs import SlurmJob
 from sarc.jobs.series import get_job_time_series
 
 from .factory import JobFactory

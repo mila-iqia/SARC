@@ -5,8 +5,8 @@ import pymongo
 from simple_parsing import choice
 
 from sarc.allocations.allocations import AllocationsRepository
+from sarc.client.job import SlurmJobRepository
 from sarc.config import config
-from sarc.jobs.job import SlurmJobRepository
 from sarc.storage.diskusage import ClusterDiskUsageRepository
 
 
