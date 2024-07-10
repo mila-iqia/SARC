@@ -124,17 +124,22 @@ def test_acquire_users(cli_main, patch_return_values, mock_file, captrace):
     # as everything goes well without corner cases.
     # We will test logging in test_acquire_users_prompt below.
     spans = captrace.get_finished_spans()
-    assert len(spans) == 1
-    assert spans[0].name == "match_drac_to_mila_accounts"
+    assert len(spans) == 2
+
+    assert spans[0].name == "fetch_mymila"
     assert spans[0].status.status_code == StatusCode.OK
-    assert len(spans[0].events) == 4
+    assert len(spans[0].events) == 0
+
+    assert spans[1].name == "match_drac_to_mila_accounts"
+    assert spans[1].status.status_code == StatusCode.OK
+    assert len(spans[1].events) == 4
     assert (
-        spans[0].events[0].name
+        spans[1].events[0].name
         == "Loading mila_ldap, drac_roles and drac_members from files ..."
     )
-    assert spans[0].events[1].name == "Loading matching config from file ..."
-    assert spans[0].events[2].name == "Matching DRAC/CC to mila accounts ..."
-    assert spans[0].events[3].name == "Committing matches to database ..."
+    assert spans[1].events[1].name == "Loading matching config from file ..."
+    assert spans[1].events[2].name == "Matching DRAC/CC to mila accounts ..."
+    assert spans[1].events[3].name == "Committing matches to database ..."
 
 
 @pytest.mark.parametrize(
@@ -398,15 +403,20 @@ def test_acquire_users_prompt(
 
     # Check traces
     spans = captrace.get_finished_spans()
-    assert len(spans) == 1
-    assert spans[0].name == "match_drac_to_mila_accounts"
+    assert len(spans) == 2
+
+    assert spans[0].name == "fetch_mymila"
     assert spans[0].status.status_code == StatusCode.OK
-    assert len(spans[0].events) == 5
+    assert len(spans[0].events) == 0
+
+    assert spans[1].name == "match_drac_to_mila_accounts"
+    assert spans[1].status.status_code == StatusCode.OK
+    assert len(spans[1].events) == 5
     assert (
-        spans[0].events[0].name
+        spans[1].events[0].name
         == "Loading mila_ldap, drac_roles and drac_members from files ..."
     )
-    assert spans[0].events[1].name == "Loading matching config from file ..."
-    assert spans[0].events[2].name == "Matching DRAC/CC to mila accounts ..."
-    assert spans[0].events[3].name == "Committing matches to database ..."
-    assert spans[0].events[4].name == "Saving 1 manual matches ..."
+    assert spans[1].events[1].name == "Loading matching config from file ..."
+    assert spans[1].events[2].name == "Matching DRAC/CC to mila accounts ..."
+    assert spans[1].events[3].name == "Committing matches to database ..."
+    assert spans[1].events[4].name == "Saving 1 manual matches ..."
