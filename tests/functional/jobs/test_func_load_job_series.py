@@ -5,7 +5,7 @@ import pandas
 import pytest
 
 from sarc.client.job import get_jobs
-from sarc.client.ldap.api import get_users
+from sarc.client.users.api import get_users
 from sarc.config import MTL
 from sarc.jobs.series import load_job_series
 

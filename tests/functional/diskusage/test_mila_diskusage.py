@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 import sarc.storage.mila
-from sarc.client.ldap.api import Credentials, User
+from sarc.client.users.api import Credentials, User
 from sarc.storage.diskusage import get_diskusages
 
 

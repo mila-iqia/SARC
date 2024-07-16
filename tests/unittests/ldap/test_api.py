@@ -2,7 +2,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from sarc.client.ldap.api import get_users, query_latest_records
+from sarc.client.users.api import get_users, query_latest_records
 
 
 @pytest.mark.parametrize(
@@ -40,11 +40,11 @@ def test_get_users(query, query_options, latest, expected, monkeypatch):
     if expected is None:
         expected = (query, query_options)
 
-    monkeypatch.setattr("sarc.client.ldap.api.config", lambda: MagicMock())
+    monkeypatch.setattr("sarc.client.users.api.config", lambda: MagicMock())
     user_repository_mock = MagicMock()
     user_repository_mock.find_by.return_value = tuple()
     monkeypatch.setattr(
-        "sarc.client.ldap.api._UserRepository",
+        "sarc.client.users.api._UserRepository",
         lambda *_args, **_kwargs: user_repository_mock,
     )
     result = get_users(query, query_options, latest)

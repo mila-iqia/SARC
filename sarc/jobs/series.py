@@ -14,7 +14,7 @@ from prometheus_api_client import MetricRangeDataFrame
 from tqdm import tqdm
 
 from sarc.client.job import JobStatistics, SlurmJob, Statistics, count_jobs, get_jobs
-from sarc.client.ldap.api import User, get_users
+from sarc.client.users.api import User, get_users
 from sarc.config import MTL, UTC, ClusterConfig, config
 from sarc.traces import trace_decorator
 

@@ -3,8 +3,8 @@ from datetime import datetime
 import pytest
 from sarc_mocks import dictset
 
-from sarc.client.ldap.api import _users_collection as users_collection
-from sarc.client.ldap.api import get_user
+from sarc.client.users.api import _users_collection as users_collection
+from sarc.client.users.api import get_user
 from sarc.ldap.revision import commit_matches_to_database, update_user
 
 statuses = ("disabled", "archived", "enabled")
