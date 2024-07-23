@@ -85,8 +85,8 @@ def test_acquire_users(cli_main, patch_return_values, mock_file, captrace):
 
     patch_return_values(
         {
-            "sarc.ldap.read_mila_ldap.query_ldap": fake_raw_ldap_data(nbr_users),
-            "sarc.ldap.mymila.query_mymila_csv": [],
+            "sarc.users.read_mila_ldap.query_ldap": fake_raw_ldap_data(nbr_users),
+            "sarc.users.mymila.query_mymila_csv": [],
         }
     )
 
@@ -186,7 +186,7 @@ def test_acquire_users_supervisors(
 
     patch_return_values(
         {
-            "sarc.ldap.read_mila_ldap.query_ldap": fake_raw_ldap_data(
+            "sarc.users.read_mila_ldap.query_ldap": fake_raw_ldap_data(
                 nbr_users,
                 hardcoded_values_by_user={
                     2: {  # The first user who is not a prof is the one with index 2
@@ -194,7 +194,7 @@ def test_acquire_users_supervisors(
                     }
                 },
             ),
-            "sarc.ldap.mymila.query_mymila_csv": fake_mymila_data(
+            "sarc.users.mymila.query_mymila_csv": fake_mymila_data(
                 nbr_users=nbr_users,
                 nbr_profs=nbr_profs,
                 hardcoded_values_by_user={
@@ -208,7 +208,7 @@ def test_acquire_users_supervisors(
 
     # Patch the built-in `open()` function for each file path
     with patch("builtins.open", side_effect=mock_file):
-        # sarc.ldap.acquire.run()
+        # sarc.users.acquire.run()
         assert (
             cli_main(
                 [
@@ -270,7 +270,7 @@ def test_acquire_users_co_supervisors(
 
     patch_return_values(
         {
-            "sarc.ldap.read_mila_ldap.query_ldap": fake_raw_ldap_data(
+            "sarc.users.read_mila_ldap.query_ldap": fake_raw_ldap_data(
                 nbr_users,
                 hardcoded_values_by_user={
                     2: {  # The first user who is not a prof is the one with index 2
@@ -278,7 +278,7 @@ def test_acquire_users_co_supervisors(
                     }
                 },
             ),
-            "sarc.ldap.mymila.query_mymila_csv": fake_mymila_data(
+            "sarc.users.mymila.query_mymila_csv": fake_mymila_data(
                 nbr_users=nbr_users,
                 nbr_profs=nbr_profs,
                 hardcoded_values_by_user={
@@ -292,7 +292,7 @@ def test_acquire_users_co_supervisors(
 
     # Patch the built-in `open()` function for each file path
     with patch("builtins.open", side_effect=mock_file):
-        # sarc.ldap.acquire.run()
+        # sarc.users.acquire.run()
         assert (
             cli_main(
                 [
@@ -320,8 +320,8 @@ def test_acquire_users_prompt(
 
     patch_return_values(
         {
-            "sarc.ldap.read_mila_ldap.query_ldap": fake_raw_ldap_data(nbr_users),
-            "sarc.ldap.mymila.query_mymila_csv": [],
+            "sarc.users.read_mila_ldap.query_ldap": fake_raw_ldap_data(nbr_users),
+            "sarc.users.mymila.query_mymila_csv": [],
         }
     )
 

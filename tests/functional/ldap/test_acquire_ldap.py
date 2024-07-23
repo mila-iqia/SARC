@@ -4,7 +4,7 @@ import pytest
 from sarc_mocks import fake_mymila_data, fake_raw_ldap_data
 
 import sarc.account_matching.make_matches
-import sarc.ldap.acquire
+import sarc.users.acquire
 from sarc.client.users.api import get_user, get_users
 
 
@@ -20,14 +20,14 @@ def test_acquire_ldap(patch_return_values, mock_file):
 
     patch_return_values(
         {
-            "sarc.ldap.read_mila_ldap.query_ldap": fake_raw_ldap_data(nbr_users),
-            "sarc.ldap.mymila.query_mymila_csv": [],
+            "sarc.users.read_mila_ldap.query_ldap": fake_raw_ldap_data(nbr_users),
+            "sarc.users.mymila.query_mymila_csv": [],
         }
     )
 
     # Patch the built-in `open()` function for each file path
     with patch("builtins.open", side_effect=mock_file):
-        sarc.ldap.acquire.run()
+        sarc.users.acquire.run()
 
     # Validate the results of all of this by inspecting the database.
     for i in range(3):
@@ -80,14 +80,14 @@ def test_acquire_ldap_revision_change(patch_return_values, mock_file):
 
     patch_return_values(
         {
-            "sarc.ldap.read_mila_ldap.query_ldap": fake_raw_ldap_data(nbr_users),
-            "sarc.ldap.mymila.query_mymila_csv": [],
+            "sarc.users.read_mila_ldap.query_ldap": fake_raw_ldap_data(nbr_users),
+            "sarc.users.mymila.query_mymila_csv": [],
         }
     )
 
     # Patch the built-in `open()` function for each file path
     with patch("builtins.open", side_effect=mock_file):
-        sarc.ldap.acquire.run()
+        sarc.users.acquire.run()
 
     # inspect database to check the number of records
     # should be nbr_users
@@ -97,7 +97,7 @@ def test_acquire_ldap_revision_change(patch_return_values, mock_file):
 
     # re-acquire the same data
     with patch("builtins.open", side_effect=mock_file):
-        sarc.ldap.acquire.run()
+        sarc.users.acquire.run()
 
     # inspect database to check the number of records
     # should be the same
@@ -107,7 +107,7 @@ def test_acquire_ldap_revision_change(patch_return_values, mock_file):
     # change fake data
     patch_return_values(
         {
-            "sarc.ldap.read_mila_ldap.query_ldap": fake_raw_ldap_data(
+            "sarc.users.read_mila_ldap.query_ldap": fake_raw_ldap_data(
                 nbr_users,
                 hardcoded_values_by_user={
                     2: {  # The first user who is not a prof is the one with index 2
@@ -120,7 +120,7 @@ def test_acquire_ldap_revision_change(patch_return_values, mock_file):
 
     # re-acquire the new data
     with patch("builtins.open", side_effect=mock_file):
-        sarc.ldap.acquire.run()
+        sarc.users.acquire.run()
 
     # inspect database to check the number of records
     # should be incremented by 1
@@ -129,7 +129,7 @@ def test_acquire_ldap_revision_change(patch_return_values, mock_file):
 
     # re-acquire the same data
     with patch("builtins.open", side_effect=mock_file):
-        sarc.ldap.acquire.run()
+        sarc.users.acquire.run()
 
     # inspect database to check the number of records
     # should be the same
@@ -143,13 +143,13 @@ def test_merge_ldap_and_mymila(patch_return_values, mock_file):
 
     patch_return_values(
         {
-            "sarc.ldap.read_mila_ldap.query_ldap": fake_raw_ldap_data(nbr_users),
-            "sarc.ldap.mymila.query_mymila_csv": fake_mymila_data(nbr_users),
+            "sarc.users.read_mila_ldap.query_ldap": fake_raw_ldap_data(nbr_users),
+            "sarc.users.mymila.query_mymila_csv": fake_mymila_data(nbr_users),
         }
     )
 
     # Patch the built-in `open()` function for each file path
     with patch("builtins.open", side_effect=mock_file):
-        sarc.ldap.acquire.run()
+        sarc.users.acquire.run()
 
     # TODO: Add checks for fields coming from mymila now saved in DB

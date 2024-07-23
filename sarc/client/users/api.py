@@ -12,7 +12,7 @@ from typing import Optional
 from pydantic_mongo import AbstractRepository, ObjectIdField
 
 from sarc.config import BaseModel, config
-from sarc.ldap.revision import query_latest_records
+from sarc.users.revision import query_latest_records
 
 
 class Credentials(BaseModel):

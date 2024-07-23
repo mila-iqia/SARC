@@ -5,8 +5,8 @@ from datetime import datetime
 import pytest
 from pymongo import InsertOne, UpdateOne
 
-from sarc.ldap.revision import commit_matches_to_database as _save_to_mongo
-from sarc.ldap.revision import query_latest_records
+from sarc.users.revision import commit_matches_to_database as _save_to_mongo
+from sarc.users.revision import query_latest_records
 
 
 class MockCollection:
