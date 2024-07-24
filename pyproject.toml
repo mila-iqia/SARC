@@ -76,7 +76,8 @@ disable = [
     "invalid-name",
     "no-else-return",  # Bad rule IMO (- OB)
     "line-too-long",  # Black takes care of line length.
-    "logging-fstring-interpolation"
+    "logging-fstring-interpolation",
+    "duplicate-code",
 ]
 extension-pkg-whitelist = "pydantic"
 
