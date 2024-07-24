@@ -29,26 +29,19 @@ Initial jobs in read_only_db (for reference):
 | 23 | 999999999 | mila           | ['cn-c021']                       |                    0 |                      | 2023-02-19 18:01:00-05:00 | 2023-02-20 12:01:00-05:00 |          64800 |
 """
 
+import functools
 from datetime import timedelta
 
 import pytest
 
-from sarc.jobs.alerts import check_gpu_type_usage_per_node
+from sarc.alerts.usage_alerts.gpu_usage import check_gpu_type_usage_per_node
+from tests.functional.jobs.test_func_load_job_series import MOCK_TIME
 
-from .test_func_load_job_series import MOCK_TIME
+from .common import _get_warnings
 
-
-def _get_warnings(text: str) -> list:
-    """Parse warning messages from given text (typically caplog.text)"""
-    warnings = []
-    for line in text.split("\n"):
-        line = line.strip()
-        if line.startswith("WARNING "):
-            line_content = line[len("WARNING") :].lstrip()
-            line_ref, warning_msg = line_content.split(" ", maxsplit=1)
-            assert line_ref.startswith("sarc.jobs.alerts:alerts.py:")
-            warnings.append(warning_msg.strip())
-    return warnings
+get_warnings = functools.partial(
+    _get_warnings, module="sarc.alerts.usage_alerts.gpu_usage:gpu_usage.py"
+)
 
 
 @pytest.mark.freeze_time(MOCK_TIME)
@@ -174,4 +167,4 @@ def _get_warnings(text: str) -> list:
 )
 def test_check_gpu_type_usage_per_node(params, expected, caplog):
     check_gpu_type_usage_per_node(**params)
-    assert _get_warnings(caplog.text) == expected
+    assert get_warnings(caplog.text) == expected
