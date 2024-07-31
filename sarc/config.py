@@ -278,7 +278,7 @@ def config():
     if (current := config_var.get()) is not None:
         return current
 
-    config_path = os.getenv("SARC_CONFIG", "config/sarc-dev.json")
+    config_path = os.getenv("SARC_CONFIG", "config/sarc-client.json")
     config_class = _config_class(os.getenv("SARC_MODE", "none"))
 
     try:
