@@ -3,7 +3,7 @@ What this script does
 =====================
 
 This script can be called directly from the command line (legacy),
-or it can be called from the `sarc.ldap.acquire` script (recommended)
+or it can be called from the `sarc.users.acquire` script (recommended)
 using the `sarc ...` command.
 
 The legacy usage is not covered by unit tests, but the sarc command is covered.
@@ -151,7 +151,7 @@ from ..config import LDAPConfig
 from .supervisor import resolve_supervisors
 
 
-@with_cache(subdirectory="ldap", validity=timedelta(days=1))
+@with_cache(subdirectory="users", validity=timedelta(days=1))
 def query_ldap(local_private_key_file, local_certificate_file, ldap_service_uri):
     """
     Since we don't always query the LDAP (i.e. omitted when --input_json_file is given),

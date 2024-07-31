@@ -24,7 +24,7 @@ We will explain the pipeline from Mila LDAP and CC reports to populate those ent
 ```
 export MONGODB_CONNECTION_STRING='mongodb://127.0.0.1:27017'
 
-python3 sarc/ldap/read_mila_ldap.py \
+python3 sarc/users/read_mila_ldap.py \
     --local_private_key_file secrets/ldap/Google_2026_01_26_66827.key \
     --local_certificate_file secrets/ldap/Google_2026_01_26_66827.crt \
     --ldap_service_uri ldaps://ldap.google.com \

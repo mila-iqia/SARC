@@ -1,7 +1,7 @@
 import pandas
 import pytest
 
-from sarc.jobs.job import get_jobs
+from sarc.client.job import get_jobs
 from sarc.jobs.series import compute_cost_and_waste, load_job_series
 
 from .test_func_job_statistics import generate_fake_timeseries

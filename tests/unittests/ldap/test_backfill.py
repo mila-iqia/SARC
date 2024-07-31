@@ -9,7 +9,7 @@ from opentelemetry.trace import StatusCode
 from pymongo import InsertOne
 from sarc_mocks import dictset, fake_mymila_data, mymila_template
 
-from sarc.ldap.backfill import _user_record_backfill
+from sarc.users.backfill import _user_record_backfill
 
 
 def userhistory(email, history):
@@ -96,7 +96,7 @@ def mymiladata(patch_return_values):
     def patch(data):
         patch_return_values(
             {
-                "sarc.ldap.mymila.query_mymila_csv": data,
+                "sarc.users.mymila.query_mymila_csv": data,
             }
         )
 

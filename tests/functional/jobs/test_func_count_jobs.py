@@ -2,9 +2,8 @@ from datetime import datetime
 
 import pytest
 
+from sarc.client.job import count_jobs, get_job, get_jobs
 from sarc.config import MTL, config
-from sarc.jobs import count_jobs, get_jobs
-from sarc.jobs.job import get_job
 
 parameters = {
     "no_cluster": {},

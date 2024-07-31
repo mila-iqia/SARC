@@ -5,8 +5,8 @@ from dataclasses import dataclass
 from simple_parsing import field
 
 from sarc.cache import CachePolicy
-from sarc.ldap.acquire import run as update_user_records
-from sarc.ldap.backfill import user_record_backfill
+from sarc.users.acquire import run as update_user_records
+from sarc.users.backfill import user_record_backfill
 
 
 @dataclass

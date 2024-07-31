@@ -1,7 +1,7 @@
 import pytest
 from prometheus_api_client import MetricRangeDataFrame
 
-from sarc.jobs.job import SlurmJob, get_job
+from sarc.client.job import SlurmJob, get_job
 from tests.functional.jobs.factory import elapsed_time as BASE_ELAPSED_TIME
 
 
