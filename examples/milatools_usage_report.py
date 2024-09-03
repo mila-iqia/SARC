@@ -15,6 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import dataclasses
 import hashlib
+import logging
 import os
 import pickle
 import pprint
@@ -34,70 +35,111 @@ from sarc.jobs.job import SlurmJob, get_jobs
 import simple_parsing
 from typing_extensions import TypeGuard
 
-SARC_DIR = Path.home() / "repos" / "SARC"
+logger = get_logger(__name__)
+
 # Remember to set up the port forwarding if you want
 # to access data from SARC.
 #    ssh -L 27017:localhost:27017 sarc
+# (or using the LocalForward option in your ~/.ssh/config file)
+
 # Change this to the path to your config file.
-sarc_config_file = Path("sarc-client.json")
+
+sarc_config_file = Path(__file__).parent / "milatools-sarc-client.json"
 assert sarc_config_file.exists()
 os.environ["SARC_CONFIG"] = str(sarc_config_file)
 
-logger = get_logger(__name__)
 
 @dataclass
 class Args:
-    start_date: datetime = datetime.now(tz=MTL) - timedelta(days=30)
-    end_date: datetime = datetime.now(tz=MTL)
+    start_date: datetime = datetime.today().replace(
+        hour=0, minute=0, second=0, microsecond=0
+    ).astimezone(tz=MTL) - timedelta(days=120)
+    end_date: datetime = (
+        datetime.today()
+        .replace(hour=0, minute=0, second=0, microsecond=0)
+        .astimezone(tz=MTL)
+    )
+
+    verbose: int = simple_parsing.field(alias="-v", action="count", default=0)
+
 
 def main():
-    
     parser = simple_parsing.ArgumentParser(description="Analyze the milatools usage.")
     parser.add_arguments(Args, dest="args")
     args: Args = parser.parse_args().args
 
     print("Args:")
-    print(pprint.pprint(dataclasses.asdict(args)))
-    date_start = args.start_date #datetime(year=2024, month=1, day=1, tzinfo=MTL)
-    date_end = args.end_date  #datetime(year=2025, month=1, day=1, tzinfo=MTL)
+    pprint.pprint(dataclasses.asdict(args))
 
-    # Don't forget to `ssh -L 27017:localhost:27017 sarc` before running this
-    # or else you won't be able to connect to the SARC database.
+    _setup_logging(args.verbose)
+
+    figures = make_usage_plots(args, job_name="mila-code")
+    figures += make_usage_plots(args, job_name="mila-cpu")
+
+    upload_figures_to_google_drive(figures)
+
+
+def _setup_logging(verbose: int):
+    import rich.logging
+
+    logging.basicConfig(
+        handlers=[rich.logging.RichHandler()],
+        format="%(message)s",
+        level=logging.ERROR,
+    )
+
+    match verbose:
+        case 0:
+            logger.setLevel("WARNING")
+        case 1:
+            logger.setLevel("INFO")
+        case _:
+            logger.setLevel("DEBUG")
+
+
+def make_usage_plots(args: Args, job_name: str = "mila-code") -> list[Path]:
+    date_start = args.start_date  # datetime(year=2024, month=1, day=1, tzinfo=MTL)
+    date_end = args.end_date  # datetime(year=2025, month=1, day=1, tzinfo=MTL)
+
     unfiltered_jobs = retrieve_data(
         date_start,
         date_end,
-        job_name="mila-code",
+        job_name=job_name,
         cache_dir=Path(os.environ.get("SCRATCH", tempfile.gettempdir())),
     )
     filtered_jobs = preprocess_and_filter_jobs(unfiltered_jobs, date_start, date_end)
     jobs = filtered_jobs
 
-    milacode_jobs = [job for job in jobs if job.name == "mila-code"]
-    print(f"We have {len(milacode_jobs)} mila-code jobs.")
+    # Not really necessary.
+    milacode_jobs = [job for job in jobs if job.name == job_name]
+    logger.info(f"We have {len(milacode_jobs)} {job_name} jobs.")
 
     n_jobs_over_30_minutes = len(
         list(job for job in milacode_jobs if job.duration.total_seconds() > 30 * 60)
     )
     print(n_jobs_over_30_minutes)
-    print(f"We have {n_jobs_over_30_minutes} mila-code jobs over 30 minutes.")
+    print(f"We have {n_jobs_over_30_minutes} {job_name} jobs over 30 minutes.")
 
     milacode_jobs_over_10_minutes = [
         job for job in jobs if job.duration.total_seconds() >= 10 * 60
     ]
     print(
-        f"We have {len(milacode_jobs_over_10_minutes)} mila-code jobs over 10 minutes."
+        f"We have {len(milacode_jobs_over_10_minutes)} {job_name} jobs over 10 minutes."
     )
-    fig = plot_total_jobs_per_week(milacode_jobs_over_10_minutes)
-    name = "mila-code-jobs-over-10-minutes.png"
-    fig.savefig(name)
-    print(f"Saved figure at {Path.cwd() / 'mila-code-jobs-over-10-minutes.png'}.")
-    
-    fig = plot_unique_users_each_week(jobs)
-    name2 = "unique-users-mila-code.png"
-    fig.savefig(name2)
-    print(f"Saved figure at {Path.cwd() / name2}.")
+    fig = plot_total_jobs_per_week(milacode_jobs_over_10_minutes, job_name=job_name)
+    name = f"{job_name}-jobs-over-10-minutes.png"
+    fig_path = Path.cwd() / name
+    fig.savefig(fig_path)
+    print(f"Saved figure at {fig_path}.")
+
+    fig = plot_unique_users_each_week(jobs, job_name=job_name)
+    name2 = f"unique-users-{job_name}.png"
+    fig2_path = Path.cwd() / name2
+    fig.savefig(fig2_path)
+    print(f"Saved figure at {fig2_path}.")
     # print(list(job.duration.total_seconds() for job in L_milacode_jobs))
     # print(list(job.user for job in L_milacode_jobs))
+    return [fig_path, fig2_path]
 
 
 T = TypeVar("T")
@@ -239,7 +281,9 @@ def preprocess_and_filter_jobs(
     return filtered_jobs
 
 
-def plot_total_jobs_per_week(jobs: list[SlurmJob]) -> matplotlib.figure.Figure:
+def plot_total_jobs_per_week(
+    jobs: list[SlurmJob], job_name: str
+) -> matplotlib.figure.Figure:
     df = pd.DataFrame(
         [job.start_time for job in jobs],
         columns=["Timestamp"],
@@ -253,8 +297,8 @@ def plot_total_jobs_per_week(jobs: list[SlurmJob]) -> matplotlib.figure.Figure:
     fig, ax = plt.subplots()
     daily_counts.plot(kind="bar", ax=ax)
     # ax.set_xlabel('Date')
-    ax.set_ylabel("Number of jobs")
-    ax.set_title('Number of "mila-code" jobs over 10 minutes in duration each week')
+    ax.set_ylabel("jobs")
+    ax.set_title(f'"{job_name}" jobs over 10 minutes in duration each week')
 
     # ticks_to_show = daily_counts.index[::5]  # Show every 5th label
     ticks_to_show = daily_counts.index  # Show every 5th label
@@ -281,7 +325,9 @@ def plot_total_jobs_per_week(jobs: list[SlurmJob]) -> matplotlib.figure.Figure:
     # That would be perfectionism at this early exploratory moment.
 
 
-def plot_unique_users_each_week(jobs: list[SlurmJob]) -> matplotlib.figure.Figure:
+def plot_unique_users_each_week(
+    jobs: list[SlurmJob], job_name: str
+) -> matplotlib.figure.Figure:
     # unique_users_each_day: dict[str, set[str]] = defaultdict(set)
     # for job in jobs:
     #     assert job.start_time
@@ -306,8 +352,8 @@ def plot_unique_users_each_week(jobs: list[SlurmJob]) -> matplotlib.figure.Figur
     fig, ax = plt.subplots()
     daily_counts.plot(kind="bar", ax=ax)
     # ax.set_xlabel('Date')
-    ax.set_ylabel("Number of unique users with jobs")
-    ax.set_title('Number of unique users of "mila-code" each week')
+    ax.set_ylabel("Users")
+    ax.set_title(f'Unique users of "{job_name}" each week')
 
     ax.set_xticks(range(len(daily_counts.index)))  # Set all possible x-tick positions
     ax.set_xticklabels(
@@ -316,6 +362,57 @@ def plot_unique_users_each_week(jobs: list[SlurmJob]) -> matplotlib.figure.Figur
 
     fig.tight_layout()
     return fig
+
+
+def upload_figures_to_google_drive(figures: list[Path]):
+    import google.auth
+
+    # gauth = GoogleAuth()
+    # drive = GoogleDrive(gauth)
+
+    from googleapiclient.discovery import build
+    from googleapiclient.errors import HttpError
+    from googleapiclient.http import MediaFileUpload
+
+    from google.auth.transport.requests import Request
+    from google.oauth2.credentials import Credentials
+    from google_auth_oauthlib.flow import InstalledAppFlow
+    from googleapiclient.discovery import build
+    from googleapiclient.errors import HttpError
+
+    # SCOPES = ["https://www.googleapis.com/auth/drive.metadata.write"]
+
+    # creds = os.environ.get("GOOGLE_DRIVE_API_KEY")
+    try:
+        creds = Credentials.from_authorized_user_file("token.json")
+    except Exception as exception:
+        print(
+            "Unable to authenticate with google drive API, skipping uploading figures."
+        )
+        print(f"exc: {exception}")
+        return
+
+    try:
+        # create drive api client
+        service = build("drive", "v3", credentials=creds)
+
+        for figure in figures:
+            file_metadata = {"name": figure.name}
+            media = MediaFileUpload(
+                filename=figure.name,
+                mimetype=f"image/{figure.suffix.removeprefix('.')}",
+            )
+            # pylint: disable=maybe-no-member
+            file = (
+                service.files()
+                .create(body=file_metadata, media_body=media, fields="id")
+                .execute()
+            )
+            print(f'File ID: {file.get("id")}')
+
+    except HttpError as error:
+        print(f"An error occurred: {error}")
+        file = None
 
 
 if __name__ == "__main__":

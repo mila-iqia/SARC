@@ -1,0 +1,13 @@
+{
+    "mongo": {
+        "connection_string": "mongodb://readuser:readpwd@localhost:27018/sarc",
+        "database_name": "sarc"
+    },
+    "cache": "./sarc-cache",
+    "loki": {
+        "uri": "https://localhost/loki"
+    },
+    "tempo": {
+        "uri": "https://localhost/tempo"
+    }
+}
