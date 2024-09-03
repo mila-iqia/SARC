@@ -365,20 +365,13 @@ def plot_unique_users_each_week(
 
 
 def upload_figures_to_google_drive(figures: list[Path]):
-    import google.auth
-
     # gauth = GoogleAuth()
     # drive = GoogleDrive(gauth)
 
     from googleapiclient.discovery import build
     from googleapiclient.errors import HttpError
     from googleapiclient.http import MediaFileUpload
-
-    from google.auth.transport.requests import Request
     from google.oauth2.credentials import Credentials
-    from google_auth_oauthlib.flow import InstalledAppFlow
-    from googleapiclient.discovery import build
-    from googleapiclient.errors import HttpError
 
     # SCOPES = ["https://www.googleapis.com/auth/drive.metadata.write"]
 
