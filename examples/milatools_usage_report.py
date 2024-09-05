@@ -56,9 +56,10 @@ os.environ["SARC_CONFIG"] = str(sarc_config_file)
 
 @dataclass(frozen=True, unsafe_hash=True)
 class Args:
-    start_date: datetime = datetime.today().replace(
+    start_date: datetime | str = datetime.today().replace(
         hour=0, minute=0, second=0, microsecond=0
     ).astimezone(tz=MTL) - timedelta(days=30)
+
     end_date: datetime = (
         datetime.today()
         .replace(hour=0, minute=0, second=0, microsecond=0)
@@ -75,6 +76,14 @@ def main():
     parser = simple_parsing.ArgumentParser(description="Analyze the milatools usage.")
     parser.add_arguments(Args, dest="args")
     args: Args = parser.parse_args().args
+    if isinstance(args.start_date, str):
+        args = dataclasses.replace(
+            args, start_date=datetime.fromisoformat(args.start_date).astimezone(tz=MTL)
+        )
+    if isinstance(args.end_date, str):
+        args = dataclasses.replace(
+            args, end_date=datetime.fromisoformat(args.end_date).astimezone(tz=MTL)
+        )
 
     print("Args:")
     pprint.pprint(dataclasses.asdict(args))
@@ -91,31 +100,36 @@ def make_adoption_plots(args: Args):
     df = get_adoption_data(args)
     print(df)
     # daily_counts = df.resample(rule="D").size()
+    axes: list[matplotlib.axes.Axes]
+    fig, axes = plt.subplots(sharex=True, ncols=2, nrows=1)
+    (ax1, ax2) = axes
 
-    fig, (ax1, ax2) = plt.subplots(sharex=True, ncols=2, nrows=2)
-    ax1.set_title("Usage of milatools")
-    ax2.set_title("Percentage of users using milatools")
+    cluster_suffix = " on the {args.cluster} cluster" if args.cluster else ""
 
+    ax2.set_title(f"Cluster users using milatools{cluster_suffix}")
+    df[["milatools_users", "cluster_users"]].plot(kind="area", ax=ax2, legend=True)
+
+    ax1.set_title(f"Percentage of users using milatools{cluster_suffix}")
+    ax1.set_ylim(0, 1)
     df["percentage"] = df["milatools_users"] / df["cluster_users"]
     df["percentage_so_far"] = df["milatools_users_so_far"] / df["cluster_users_so_far"]
-
     df[["percentage", "percentage_so_far"]].plot(kind="line", ax=ax1, legend=True)
+
     # df[["percentage_so_far"]].plot(kind="line", ax=ax, legend=True)
     # daily_counts = df.resample(rule="W-MON")
 
     # Calculate the percentage of milatools_users relative to cluster_users
-    df[["milatools_users", "cluster_users"]].plot(kind="area", ax=ax2, legend=True)
     # df[["milatools_users_so_far", "cluster_users_so_far"]].plot(kind="area", ax=ax2, legend=True)
     # Set x-ticks and labels
     # ax.set_xticks(range(len(df.index)))  # Set all possible x-tick positions
-    ax1.set_xticklabels(
-        df.index.strftime("%Y-%m-%d"), rotation=90
-    )  # Apply all labels with rotation
+    # Apply all labels with rotation
+    ax1.set_xticklabels(df.index.strftime("%Y-%m-%d"), rotation=90)
+    ax2.set_xticklabels(df.index.strftime("%Y-%m-%d"), rotation=90)
 
     fig.tight_layout()
     fig_path = Path("adoption.png")
-    fig.savefig(fig_path)
     plt.show()
+    fig.savefig(fig_path)
     return fig_path
 
 
