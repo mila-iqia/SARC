@@ -12,7 +12,6 @@
 # ///
 from __future__ import annotations
 
-from dataclasses import dataclass
 import dataclasses
 import hashlib
 import logging
@@ -20,10 +19,11 @@ import os
 import pickle
 import pprint
 import tempfile
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from logging import getLogger as get_logger
 from pathlib import Path
-from typing import Any, Iterable, Sequence, TypeVar
+from typing import Any, Iterable, TypeVar
 
 import matplotlib
 import matplotlib.axes
@@ -32,13 +32,17 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import pymongo
 import pymongo.collection
-from sarc.config import MTL
-from sarc.jobs.job import Query, SlurmJob, get_jobs, jobs_collection
 import simple_parsing
 from typing_extensions import TypeGuard
-from typing import Literal
 
-from sarc.storage import mila
+from sarc.config import MTL
+from sarc.jobs.job import (
+    Query,
+    SlurmJob,
+    _compute_jobs_query,
+    get_jobs,
+    jobs_collection,
+)
 
 logger = get_logger(__name__)
 
@@ -65,10 +69,21 @@ class Args:
         .replace(hour=0, minute=0, second=0, microsecond=0)
         .astimezone(tz=MTL)
     )
-    cluster: Literal["mila", "narval", "cedar", "beluga", "graham"] | None = None
 
     verbose: int = simple_parsing.field(
         alias="-v", action="count", default=0, hash=False
+    )
+
+
+@dataclass(frozen=True, unsafe_hash=True)
+class Period:
+    start_date: datetime = datetime.today().replace(
+        hour=0, minute=0, second=0, microsecond=0
+    ).astimezone(tz=MTL) - timedelta(days=30)
+    end_date: datetime = (
+        datetime.today()
+        .replace(hour=0, minute=0, second=0, microsecond=0)
+        .astimezone(tz=MTL)
     )
 
 
@@ -84,36 +99,104 @@ def main():
         args = dataclasses.replace(
             args, end_date=datetime.fromisoformat(args.end_date).astimezone(tz=MTL)
         )
-
     print("Args:")
     pprint.pprint(dataclasses.asdict(args))
 
     _setup_logging(args.verbose)
-    make_adoption_plots(args)
+
+    assert isinstance(args.start_date, datetime)
+    assert isinstance(args.end_date, datetime)
+    period = Period(args.start_date, args.end_date)
+
+    all_clusters = _get_all_clusters(args.start_date, args.end_date)
+    logger.info(f"All clusters: {all_clusters}")
+
+    figures = make_milatools_usage_plots(args, cluster="mila", fig_suffix="mila")
+    figures = make_milatools_usage_plots(
+        args, cluster=list(set(all_clusters) - {"mila"}), fig_suffix="drac"
+    )
+    figures = make_milatools_usage_plots(args, cluster=None, fig_suffix="all")
     # figures = make_usage_plots(args, job_name="mila-code")
     # figures += make_usage_plots(args, job_name="mila-cpu")
 
     # upload_figures_to_google_drive(figures)
 
 
-def make_adoption_plots(args: Args):
-    df = get_adoption_data(args)
-    print(df)
+def _get_cache_dir():
+    return Path(os.environ.get("SCRATCH", tempfile.gettempdir()))
+
+
+def _get_all_clusters(start_date: datetime, end_date: datetime):
+    cache_dir = _get_cache_dir()
+    job_db: pymongo.collection.Collection = jobs_collection().get_collection()
+
+    if (
+        all_clusters_file := cache_dir / f"all_clusters_{start_date}_{end_date}.pkl"
+    ).exists():
+        with all_clusters_file.open("rb") as f:
+            all_clusters = pickle.load(f)
+        assert is_iterable_of(all_clusters, str) and isinstance(all_clusters, list)
+    else:
+        _period_filter = _compute_jobs_query(start=start_date, end=end_date)
+        all_clusters: list[str] = list(
+            job_db.distinct("cluster_name", filter=_period_filter)
+        )
+        with all_clusters_file.open("wb") as f:
+            pickle.dump(all_clusters, f)
+    return all_clusters
+
+
+def make_milatools_usage_plots(
+    period: Period, cluster: str | list[str] | None, fig_suffix: str
+) -> list[Path]:
+    df = get_milatools_usage_data(period, cluster=cluster)
+    df["using_milatools"] = (
+        df["milatools_users_this_period"] / df["cluster_users_this_period"]
+    )
+    # df["percentage_used_before"] = (
+    #     df["milatools_users_so_far"] / df["cluster_users_so_far"]
+    # )
+    df["used_milatools_before"] = (
+        df["users_this_period_that_used_milatools_before"]
+        / df["cluster_users_this_period"]
+    )
+    # print(df)
+
     # daily_counts = df.resample(rule="D").size()
     axes: list[matplotlib.axes.Axes]
     fig, axes = plt.subplots(sharex=True, ncols=2, nrows=1)
     (ax1, ax2) = axes
 
-    cluster_suffix = " on the {args.cluster} cluster" if args.cluster else ""
+    cluster_suffix = f" on the {cluster} cluster" if cluster else ""
 
     ax2.set_title(f"Cluster users using milatools{cluster_suffix}")
-    df[["milatools_users", "cluster_users"]].plot(kind="area", ax=ax2, legend=True)
+    df[["milatools_users_this_period", "cluster_users_this_period"]].plot(
+        kind="area",
+        ax=ax2,
+        legend=True,
+    )
+    # NOTE: Keys:
+    # "milatools_users_this_period"
+    # "cluster_users_this_period"
+    # "milatools_users_so_far"
+    # "cluster_users_so_far"
+    # "users_this_period_that_used_milatools_before"
 
     ax1.set_title(f"Percentage of users using milatools{cluster_suffix}")
     ax1.set_ylim(0, 1)
-    df["percentage"] = df["milatools_users"] / df["cluster_users"]
-    df["percentage_so_far"] = df["milatools_users_so_far"] / df["cluster_users_so_far"]
-    df[["percentage", "percentage_so_far"]].plot(kind="line", ax=ax1, legend=True)
+
+    df[
+        [
+            "using_milatools",
+            # "percentage_used_before",
+            "used_milatools_before",
+        ]
+    ].plot(
+        kind="line",
+        ax=ax1,
+        legend=True,
+        sharex=True,
+    )
 
     # df[["percentage_so_far"]].plot(kind="line", ax=ax, legend=True)
     # daily_counts = df.resample(rule="W-MON")
@@ -126,26 +209,23 @@ def make_adoption_plots(args: Args):
     ax1.set_xticklabels(df.index.strftime("%Y-%m-%d"), rotation=90)
     ax2.set_xticklabels(df.index.strftime("%Y-%m-%d"), rotation=90)
 
-    fig.tight_layout()
-    fig_path = Path("adoption.png")
+    # fig.tight_layout()
+    # fig.layout
+    fig_path = Path(
+        f"milatools_usage_{period.start_date.date()}_{period.end_date.date()}_{fig_suffix}.png"
+    )
     plt.show()
     fig.savefig(fig_path)
-    return fig_path
+    fig.set_size_inches(12, 6)
+    print(f"Figure saved at {fig_path}")
+    return [fig_path]
 
 
-def get_adoption_data(args: Args):
+def get_milatools_usage_data(args: Period, cluster: str | list[str] | None):
     logger.info(
         f"Getting milatools adoption data from {args.start_date} to {args.end_date}"
     )
-
-    cache_dir = Path(os.environ.get("SCRATCH", tempfile.gettempdir()))
-    # hash = hashlib.md5(f"{args.start_date}-{args.end_date}".encode()).hexdigest()
-    logger.debug(f"Args {args} has hash {hash(args)}")
-    cached_results_path = Path(cache_dir) / f"milatools-adoption-{hash(args)}.pkl"
-
-    if cached_results_path.exists():
-        logger.info(f"Reading data {cached_results_path}")
-        return pd.read_pickle(cached_results_path)
+    cluster_suffix = f" on the {cluster} cluster" if cluster else ""
 
     milatools_users_so_far: set[str] = set()
     cluster_users_so_far: set[str] = set()
@@ -156,6 +236,8 @@ def get_adoption_data(args: Args):
     num_milatools_users_so_far: list[int] = []
     num_cluster_users_so_far: list[int] = []
 
+    num_users_this_period_that_have_used_milatools_before: list[int] = []
+
     interval = timedelta(days=7)
 
     date_range = pd.date_range(
@@ -165,28 +247,30 @@ def get_adoption_data(args: Args):
         date_range.to_list()[:-1], date_range.to_list()[1:]
     ):
         milatools_users_that_period, cluster_users_that_period = get_unique_users(
-            interval_start, interval_end
+            interval_start, interval_end, cluster=cluster
         )
         if not cluster_users_that_period:
-            logger.warning(
-                f"No users of the cluster in the period from {interval_start} to {interval_end}?"
+            raise RuntimeError(
+                f"No users of the {cluster + ' ' if cluster else ''}cluster in the period from {interval_start} to {interval_end}??"
             )
-            continue
 
         cluster_users_so_far.update(cluster_users_that_period)
         milatools_users_so_far.update(milatools_users_that_period)
 
-        adoption_pct_that_week = len(milatools_users_that_period) / len(
-            cluster_users_that_period
+        users_this_period_that_have_used_milatools_before: set[str] = set(
+            user for user in cluster_users_that_period if user in milatools_users_so_far
         )
-        logger.info(f"Adoption percentage that period: {adoption_pct_that_week:.2%}")
-        adoption_pct_overall = len(milatools_users_so_far) / len(cluster_users_so_far)
-        logger.info(f"Adoption percentage so far: {adoption_pct_overall:.2%}")
+
+        # adoption_pct_overall = len(milatools_users_so_far) / len(cluster_users_so_far)
+        # logger.info(f"Adoption percentage so far: {adoption_pct_overall:.2%}")
 
         num_milatools_users_each_period.append(len(milatools_users_that_period))
         num_cluster_users_each_period.append(len(cluster_users_that_period))
         num_milatools_users_so_far.append(len(milatools_users_so_far))
         num_cluster_users_so_far.append(len(cluster_users_so_far))
+        num_users_this_period_that_have_used_milatools_before.append(
+            len(users_this_period_that_have_used_milatools_before)
+        )
 
     assert (
         len(date_range) - 1
@@ -194,20 +278,19 @@ def get_adoption_data(args: Args):
         == len(num_cluster_users_each_period)
         == len(num_milatools_users_so_far)
         == len(num_cluster_users_so_far)
+        == len(num_users_this_period_that_have_used_milatools_before)
     ), (len(date_range), len(num_milatools_users_each_period))
 
-    df = pd.DataFrame(
+    return pd.DataFrame(
         {
-            "milatools_users": num_milatools_users_each_period,
-            "cluster_users": num_cluster_users_each_period,
+            "milatools_users_this_period": num_milatools_users_each_period,
+            "cluster_users_this_period": num_cluster_users_each_period,
             "milatools_users_so_far": num_milatools_users_so_far,
             "cluster_users_so_far": num_cluster_users_so_far,
+            "users_this_period_that_used_milatools_before": num_users_this_period_that_have_used_milatools_before,
         },
         index=date_range[:-1],
     )
-    logger.info(f"Saving data to {cached_results_path}")
-    df.to_pickle(cached_results_path)
-    return df
 
 
 def _setup_logging(verbose: int):
@@ -229,32 +312,57 @@ def _setup_logging(verbose: int):
 
 
 def get_unique_users(
-    start_date: datetime, end_date: datetime, cluster: str | Query | None = None
+    start_date: datetime,
+    end_date: datetime,
+    cluster: str | list[str] | Query | None = None,
 ) -> tuple[set[str], set[str]]:
-    job_structured_db = jobs_collection()
-    job_db: pymongo.collection.Collection = job_structured_db.get_collection()
-    from sarc.jobs.job import _compute_jobs_query
+    milatools_job_names: Query = {"$in": ["mila-code", "mila-cpu"]}
+    if isinstance(cluster, list):
+        cluster = {"$in": cluster}
 
-    _filter = _compute_jobs_query(start=start_date, end=end_date)
-    all_users: set[str] = set(job_db.distinct("user", filter=_filter))
-
-    cluster_suffix = f"in cluster {cluster}" if cluster else ""
-
-    logger.info(
-        f"We have {len(all_users)} unique cluster users from {start_date.date()} to {end_date.date()}{cluster_suffix}."
+    cache_dir = Path(os.environ.get("SCRATCH", tempfile.gettempdir()))
+    # _hash = hashlib.md5(f"{start_date}-{end_date}-{cluster}".encode()).hexdigest()
+    cached_results_path = (
+        Path(cache_dir)
+        / f"milatools-unique_users-{cluster}-{start_date}-{end_date}.pkl"
     )
 
+    if cached_results_path.exists():
+        logger.debug(f"Reading data from {cached_results_path}")
+        with cached_results_path.open("rb") as f:
+            milatools_users, all_users = pickle.load(f)
+        assert is_iterable_of(milatools_users, str) and isinstance(milatools_users, set)
+        assert is_iterable_of(all_users, str) and isinstance(all_users, set)
+        return milatools_users, all_users
+
+    job_structured_db = jobs_collection()
+    job_db: pymongo.collection.Collection = job_structured_db.get_collection()
+
+    _filter = _compute_jobs_query(start=start_date, end=end_date, cluster=cluster)
+    all_users: set[str] = set(job_db.distinct("user", filter=_filter))
+
+    cluster_suffix = f" on the {cluster} cluster" if cluster else ""
     _filter = _compute_jobs_query(
         start=start_date,
         end=end_date,
-        name={"$in": ["mila-code", "mila-cpu"]},
+        name=milatools_job_names,
         cluster=cluster,
     )
     milatools_users: set[str] = set(job_db.distinct("user", filter=_filter))
+    n_milatools = len(milatools_users)
+    n_total = len(all_users)
     logger.info(
-        f"We have {len(milatools_users)} unique users of milatools from {start_date.date()} to {end_date.date()}{cluster_suffix}."
+        f"{n_milatools} out of {n_total} ({n_milatools / n_total:.2%}) of users used milatools between "
+        f"{start_date.date()} and {end_date.date()}{cluster_suffix}."
     )
+
     assert milatools_users <= all_users
+
+    cached_results_path.parent.mkdir(exist_ok=True)
+    with cached_results_path.open("wb") as f:
+        logger.debug(f"Saving data at {cached_results_path}")
+        pickle.dump((milatools_users, all_users), f)
+
     return milatools_users, all_users
 
 
@@ -306,7 +414,7 @@ def make_usage_plots(args: Args, job_name: str = "mila-code") -> list[Path]:
 T = TypeVar("T")
 
 
-def is_sequence_of(v: Any, t: type[T]) -> TypeGuard[Sequence[T]]:
+def is_iterable_of(v: Any, t: type[T]) -> TypeGuard[Iterable[T]]:
     try:
         return all(isinstance(v_i, t) for v_i in v)
     except TypeError:
@@ -326,7 +434,7 @@ def retrieve_data(
         print(f"Reading from {cached_results_path}.")
         with cached_results_path.open("rb") as f_input:
             unfiltered_jobs = pickle.load(f_input)
-        assert is_sequence_of(unfiltered_jobs, SlurmJob)
+        assert is_iterable_of(unfiltered_jobs, SlurmJob)
         assert isinstance(unfiltered_jobs, list)
     else:
         print(f"Retrieving jobs from {start} to {end} with name {job_name!r}.")
@@ -529,10 +637,10 @@ def upload_figures_to_google_drive(figures: list[Path]):
     # gauth = GoogleAuth()
     # drive = GoogleDrive(gauth)
 
+    from google.oauth2.credentials import Credentials
     from googleapiclient.discovery import build
     from googleapiclient.errors import HttpError
     from googleapiclient.http import MediaFileUpload
-    from google.oauth2.credentials import Credentials
 
     # SCOPES = ["https://www.googleapis.com/auth/drive.metadata.write"]
 
