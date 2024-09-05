@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, time, timedelta
 from enum import Enum
 from functools import cache
-from typing import Iterable, Optional
+from typing import Any, Iterable, Optional, TypedDict
 
 from pydantic import validator
 from pydantic_mongo import AbstractRepository, ObjectIdField
@@ -229,14 +229,20 @@ def get_clusters():
     return jobs.distinct("cluster_name", {})
 
 
+InQuery = TypedDict("InQuery", {"$in": list[Any]})
+OrQuery = TypedDict("OrQuery", {"$or": list[Any]})
+RegexQuery = TypedDict("RegexQuery", {"$regex": list[str]})
+Query = InQuery | OrQuery | RegexQuery
+
+
 # pylint: disable=too-many-branches,dangerous-default-value
 def _compute_jobs_query(
     *,
-    cluster: str | ClusterConfig | None = None,
+    cluster: str | Query | ClusterConfig | None = None,
     job_id: int | list[int] | None = None,
     job_state: str | SlurmState | None = None,
     user: str | None = None,
-    name: str | None = None,
+    name: str | Query | None = None,
     start: str | datetime | None = None,
     end: str | datetime | None = None,
 ) -> dict:

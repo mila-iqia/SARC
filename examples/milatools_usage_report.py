@@ -30,10 +30,15 @@ import matplotlib.axes
 import matplotlib.figure
 import matplotlib.pyplot as plt
 import pandas as pd
+import pymongo
+import pymongo.collection
 from sarc.config import MTL
-from sarc.jobs.job import SlurmJob, get_jobs
+from sarc.jobs.job import Query, SlurmJob, get_jobs, jobs_collection
 import simple_parsing
 from typing_extensions import TypeGuard
+from typing import Literal
+
+from sarc.storage import mila
 
 logger = get_logger(__name__)
 
@@ -49,18 +54,21 @@ assert sarc_config_file.exists()
 os.environ["SARC_CONFIG"] = str(sarc_config_file)
 
 
-@dataclass
+@dataclass(frozen=True, unsafe_hash=True)
 class Args:
     start_date: datetime = datetime.today().replace(
         hour=0, minute=0, second=0, microsecond=0
-    ).astimezone(tz=MTL) - timedelta(days=120)
+    ).astimezone(tz=MTL) - timedelta(days=30)
     end_date: datetime = (
         datetime.today()
         .replace(hour=0, minute=0, second=0, microsecond=0)
         .astimezone(tz=MTL)
     )
+    cluster: Literal["mila", "narval", "cedar", "beluga", "graham"] | None = None
 
-    verbose: int = simple_parsing.field(alias="-v", action="count", default=0)
+    verbose: int = simple_parsing.field(
+        alias="-v", action="count", default=0, hash=False
+    )
 
 
 def main():
@@ -72,11 +80,112 @@ def main():
     pprint.pprint(dataclasses.asdict(args))
 
     _setup_logging(args.verbose)
+    make_adoption_plots(args)
+    # figures = make_usage_plots(args, job_name="mila-code")
+    # figures += make_usage_plots(args, job_name="mila-cpu")
 
-    figures = make_usage_plots(args, job_name="mila-code")
-    figures += make_usage_plots(args, job_name="mila-cpu")
+    # upload_figures_to_google_drive(figures)
 
-    upload_figures_to_google_drive(figures)
+
+def make_adoption_plots(args: Args):
+    df = get_adoption_data(args)
+    print(df)
+    # daily_counts = df.resample(rule="D").size()
+    daily_counts = df.resample(rule="W-MON").size()
+    daily_counts.index = daily_counts.index.strftime("%Y-%m-%d")
+
+    fig, ax = plt.subplots()
+    daily_counts.plot(kind="bar", ax=ax, legend=True)
+
+    # ax.set_xlabel('Date')
+    ax.set_ylabel("jobs")
+    ax.set_title(f"% of cluster users that use milatools each week")
+
+    # ticks_to_show = daily_counts.index[::5]  # Show every 5th label
+    ticks_to_show = daily_counts.index  # Show every 5th label
+    ax.set_xticks(range(len(daily_counts.index)))  # Set all possible x-tick positions
+    ax.set_xticklabels(
+        daily_counts.index, rotation=90
+    )  # Apply all labels with rotation
+    ax.set_xticklabels(
+        [label if label in ticks_to_show else "" for label in daily_counts.index]
+    )  # Hide non-selected labels
+    # plt.tight_layout()
+    fig.tight_layout()
+    fig.savefig("adoption.png")
+
+
+def get_adoption_data(args: Args):
+    logger.info(
+        f"Getting milatools adoption data from {args.start_date} to {args.end_date}"
+    )
+
+    cache_dir = Path(os.environ.get("SCRATCH", tempfile.gettempdir()))
+    # hash = hashlib.md5(f"{args.start_date}-{args.end_date}".encode()).hexdigest()
+    logger.info(f"Args {args} has hash {hash(args)}")
+    cached_results_path = Path(cache_dir) / f"milatools-adoption-{hash(args)}.pkl"
+
+    if cached_results_path.exists():
+        logger.info(f"Reading data {cached_results_path}")
+        return pd.read_pickle(cached_results_path)
+
+    milatools_users_so_far: set[str] = set()
+    cluster_users_so_far: set[str] = set()
+
+    num_milatools_users_each_week: list[int] = []
+    num_cluster_users_each_week: list[int] = []
+
+    num_milatools_users_so_far: list[int] = []
+    num_cluster_users_so_far: list[int] = []
+
+    date_range = pd.date_range(args.start_date, args.end_date, freq=timedelta(days=7))
+    for interval_start in date_range.to_list():
+        interval_end = interval_start + timedelta(days=7)
+
+        milatools_users_that_week, cluster_users_that_week = get_unique_users(
+            interval_start, interval_end
+        )
+        if not cluster_users_that_week:
+            logger.warning(
+                f"No users of the cluster in the period from {interval_start} to {interval_end}?"
+            )
+            continue
+
+        cluster_users_so_far.update(cluster_users_that_week)
+        milatools_users_so_far.update(milatools_users_that_week)
+
+        adoption_pct_that_week = len(milatools_users_that_week) / len(
+            cluster_users_that_week
+        )
+        logger.info(f"Adoption percentage that week: {adoption_pct_that_week:.2%}")
+        adoption_pct_overall = len(milatools_users_so_far) / len(cluster_users_so_far)
+        logger.info(f"Adoption percentage so far: {adoption_pct_overall:.2%}")
+
+        num_milatools_users_each_week.append(len(milatools_users_that_week))
+        num_cluster_users_each_week.append(len(cluster_users_that_week))
+        num_milatools_users_so_far.append(len(milatools_users_so_far))
+        num_cluster_users_so_far.append(len(cluster_users_so_far))
+
+    assert (
+        len(date_range)
+        == len(num_milatools_users_each_week)
+        == len(num_cluster_users_each_week)
+        == len(num_milatools_users_so_far)
+        == len(num_cluster_users_so_far)
+    )
+
+    df = pd.DataFrame(
+        {
+            "milatools_users": num_milatools_users_each_week,
+            "cluster_users": num_cluster_users_each_week,
+            "milatools_users_so_far": num_milatools_users_so_far,
+            "cluster_users_so_far": num_cluster_users_so_far,
+        },
+        index=date_range,
+    )
+    logger.info(f"Saving data to {cached_results_path}")
+    df.to_pickle(cached_results_path)
+    return df
 
 
 def _setup_logging(verbose: int):
@@ -95,6 +204,36 @@ def _setup_logging(verbose: int):
             logger.setLevel("INFO")
         case _:
             logger.setLevel("DEBUG")
+
+
+def get_unique_users(
+    start_date: datetime, end_date: datetime, cluster: str | Query | None = None
+) -> tuple[set[str], set[str]]:
+    job_structured_db = jobs_collection()
+    job_db: pymongo.collection.Collection = job_structured_db.get_collection()
+    from sarc.jobs.job import _compute_jobs_query
+
+    _filter = _compute_jobs_query(start=start_date, end=end_date)
+    all_users: set[str] = set(job_db.distinct("user", filter=_filter))
+
+    cluster_suffix = f"in cluster {cluster}" if cluster else ""
+
+    logger.info(
+        f"We have {len(all_users)} unique cluster users from {start_date.date()} to {end_date.date()}{cluster_suffix}."
+    )
+
+    _filter = _compute_jobs_query(
+        start=start_date,
+        end=end_date,
+        name={"$in": ["mila-code", "mila-cpu"]},
+        cluster=cluster,
+    )
+    milatools_users: set[str] = set(job_db.distinct("user", filter=_filter))
+    logger.info(
+        f"We have {len(milatools_users)} unique users of milatools from {start_date.date()} to {end_date.date()}{cluster_suffix}."
+    )
+    assert milatools_users <= all_users
+    return milatools_users, all_users
 
 
 def make_usage_plots(args: Args, job_name: str = "mila-code") -> list[Path]:
