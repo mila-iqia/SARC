@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, time, timedelta
 from enum import Enum
 from functools import cache
-from typing import Any, Iterable, Optional, TypedDict
+from typing import Any, Iterable, Optional, TypedDict, Union
 
 from pydantic import validator
 from pydantic_mongo import AbstractRepository, ObjectIdField
@@ -232,7 +232,7 @@ def get_clusters():
 InQuery = TypedDict("InQuery", {"$in": list[Any]})
 OrQuery = TypedDict("OrQuery", {"$or": list[Any]})
 RegexQuery = TypedDict("RegexQuery", {"$regex": list[str]})
-Query = InQuery | OrQuery | RegexQuery
+Query = Union[InQuery, OrQuery, RegexQuery]
 
 
 # pylint: disable=too-many-branches,dangerous-default-value
