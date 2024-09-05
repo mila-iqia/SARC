@@ -51,9 +51,11 @@ logger = get_logger(__name__)
 
 # Change this to the path to your config file.
 
-sarc_config_file = Path(__file__).parent / "milatools-sarc-client.json"
-assert sarc_config_file.exists()
-os.environ["SARC_CONFIG"] = str(sarc_config_file)
+if "SARC_CONFIG" not in os.environ:
+    # TODO: Probably need to remove this, but idk how to make it work without it..
+    sarc_config_file = Path(__file__).parent / "milatools-sarc-client.json"
+    if sarc_config_file.exists():
+        os.environ["SARC_CONFIG"] = str(sarc_config_file)
 
 
 @dataclass(frozen=True, unsafe_hash=True)
