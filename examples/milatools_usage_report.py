@@ -91,28 +91,32 @@ def make_adoption_plots(args: Args):
     df = get_adoption_data(args)
     print(df)
     # daily_counts = df.resample(rule="D").size()
-    daily_counts = df.resample(rule="W-MON").size()
-    daily_counts.index = daily_counts.index.strftime("%Y-%m-%d")
 
-    fig, ax = plt.subplots()
-    daily_counts.plot(kind="bar", ax=ax, legend=True)
+    fig, (ax1, ax2) = plt.subplots(sharex=True, ncols=2, nrows=2)
+    ax1.set_title("Usage of milatools")
+    ax2.set_title("Percentage of users using milatools")
 
-    # ax.set_xlabel('Date')
-    ax.set_ylabel("jobs")
-    ax.set_title(f"% of cluster users that use milatools each week")
+    df["percentage"] = df["milatools_users"] / df["cluster_users"]
+    df["percentage_so_far"] = df["milatools_users_so_far"] / df["cluster_users_so_far"]
 
-    # ticks_to_show = daily_counts.index[::5]  # Show every 5th label
-    ticks_to_show = daily_counts.index  # Show every 5th label
-    ax.set_xticks(range(len(daily_counts.index)))  # Set all possible x-tick positions
-    ax.set_xticklabels(
-        daily_counts.index, rotation=90
+    df[["percentage", "percentage_so_far"]].plot(kind="line", ax=ax1, legend=True)
+    # df[["percentage_so_far"]].plot(kind="line", ax=ax, legend=True)
+    # daily_counts = df.resample(rule="W-MON")
+
+    # Calculate the percentage of milatools_users relative to cluster_users
+    df[["milatools_users", "cluster_users"]].plot(kind="area", ax=ax2, legend=True)
+    # df[["milatools_users_so_far", "cluster_users_so_far"]].plot(kind="area", ax=ax2, legend=True)
+    # Set x-ticks and labels
+    # ax.set_xticks(range(len(df.index)))  # Set all possible x-tick positions
+    ax1.set_xticklabels(
+        df.index.strftime("%Y-%m-%d"), rotation=90
     )  # Apply all labels with rotation
-    ax.set_xticklabels(
-        [label if label in ticks_to_show else "" for label in daily_counts.index]
-    )  # Hide non-selected labels
-    # plt.tight_layout()
+
     fig.tight_layout()
-    fig.savefig("adoption.png")
+    fig_path = Path("adoption.png")
+    fig.savefig(fig_path)
+    plt.show()
+    return fig_path
 
 
 def get_adoption_data(args: Args):
@@ -122,7 +126,7 @@ def get_adoption_data(args: Args):
 
     cache_dir = Path(os.environ.get("SCRATCH", tempfile.gettempdir()))
     # hash = hashlib.md5(f"{args.start_date}-{args.end_date}".encode()).hexdigest()
-    logger.info(f"Args {args} has hash {hash(args)}")
+    logger.debug(f"Args {args} has hash {hash(args)}")
     cached_results_path = Path(cache_dir) / f"milatools-adoption-{hash(args)}.pkl"
 
     if cached_results_path.exists():
@@ -132,56 +136,60 @@ def get_adoption_data(args: Args):
     milatools_users_so_far: set[str] = set()
     cluster_users_so_far: set[str] = set()
 
-    num_milatools_users_each_week: list[int] = []
-    num_cluster_users_each_week: list[int] = []
+    num_milatools_users_each_period: list[int] = []
+    num_cluster_users_each_period: list[int] = []
 
     num_milatools_users_so_far: list[int] = []
     num_cluster_users_so_far: list[int] = []
 
-    date_range = pd.date_range(args.start_date, args.end_date, freq=timedelta(days=7))
-    for interval_start in date_range.to_list():
-        interval_end = interval_start + timedelta(days=7)
+    interval = timedelta(days=7)
 
-        milatools_users_that_week, cluster_users_that_week = get_unique_users(
+    date_range = pd.date_range(
+        args.start_date, args.end_date, freq=interval, inclusive="both"
+    )
+    for interval_start, interval_end in zip(
+        date_range.to_list()[:-1], date_range.to_list()[1:]
+    ):
+        milatools_users_that_period, cluster_users_that_period = get_unique_users(
             interval_start, interval_end
         )
-        if not cluster_users_that_week:
+        if not cluster_users_that_period:
             logger.warning(
                 f"No users of the cluster in the period from {interval_start} to {interval_end}?"
             )
             continue
 
-        cluster_users_so_far.update(cluster_users_that_week)
-        milatools_users_so_far.update(milatools_users_that_week)
+        cluster_users_so_far.update(cluster_users_that_period)
+        milatools_users_so_far.update(milatools_users_that_period)
 
-        adoption_pct_that_week = len(milatools_users_that_week) / len(
-            cluster_users_that_week
+        adoption_pct_that_week = len(milatools_users_that_period) / len(
+            cluster_users_that_period
         )
-        logger.info(f"Adoption percentage that week: {adoption_pct_that_week:.2%}")
+        logger.info(f"Adoption percentage that period: {adoption_pct_that_week:.2%}")
         adoption_pct_overall = len(milatools_users_so_far) / len(cluster_users_so_far)
         logger.info(f"Adoption percentage so far: {adoption_pct_overall:.2%}")
 
-        num_milatools_users_each_week.append(len(milatools_users_that_week))
-        num_cluster_users_each_week.append(len(cluster_users_that_week))
+        num_milatools_users_each_period.append(len(milatools_users_that_period))
+        num_cluster_users_each_period.append(len(cluster_users_that_period))
         num_milatools_users_so_far.append(len(milatools_users_so_far))
         num_cluster_users_so_far.append(len(cluster_users_so_far))
 
     assert (
-        len(date_range)
-        == len(num_milatools_users_each_week)
-        == len(num_cluster_users_each_week)
+        len(date_range) - 1
+        == len(num_milatools_users_each_period)
+        == len(num_cluster_users_each_period)
         == len(num_milatools_users_so_far)
         == len(num_cluster_users_so_far)
-    )
+    ), (len(date_range), len(num_milatools_users_each_period))
 
     df = pd.DataFrame(
         {
-            "milatools_users": num_milatools_users_each_week,
-            "cluster_users": num_cluster_users_each_week,
+            "milatools_users": num_milatools_users_each_period,
+            "cluster_users": num_cluster_users_each_period,
             "milatools_users_so_far": num_milatools_users_so_far,
             "cluster_users_so_far": num_cluster_users_so_far,
         },
-        index=date_range,
+        index=date_range[:-1],
     )
     logger.info(f"Saving data to {cached_results_path}")
     df.to_pickle(cached_results_path)
