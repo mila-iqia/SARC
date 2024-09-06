@@ -126,7 +126,7 @@ get_warnings = functools.partial(
                 time_interval=None,
                 minimum_runtime=None,
                 threshold=10 / 100,
-                min_drac_tasks=2,
+                min_tasks=2,
             ),
             [
                 # "[fromage][cn-c021] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 10.0 %",

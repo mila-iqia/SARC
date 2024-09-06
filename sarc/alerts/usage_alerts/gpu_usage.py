@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, Sequence
 
 from sarc.config import MTL
 from sarc.jobs.series import load_job_series
@@ -13,7 +13,8 @@ def check_gpu_type_usage_per_node(
     time_interval: Optional[timedelta] = timedelta(hours=24),
     minimum_runtime: Optional[timedelta] = timedelta(minutes=5),
     threshold=1.0,
-    min_drac_tasks=0,
+    min_tasks=0,
+    ignore_min_tasks_for_clusters: Optional[Sequence[str]] = ("mila",),
 ):
     """
     Check if a GPU type is sufficiently used on each node.
@@ -34,9 +35,12 @@ def check_gpu_type_usage_per_node(
     threshold: float
         A value between 0 and 1 to represent the minimum expected ratio of jobs that use given GPU type
         wr/t running jobs on each node. Log a warning if computed ratio is lesser than this threshold.
-    min_drac_tasks: int
-        Minimum number of jobs required on a node from a DRAC cluster to make checking.
-        Checking won't be performed on DRAC nodes where available jobs are lesser than this number.
+    min_tasks: int
+        Minimum number of jobs required on a cluster node to make checking.
+        Checking is performed on a node only if, either it contains at least `min_tasks` jobs,
+        or node cluster is in `ignore_min_tasks_for_clusters`.
+    ignore_min_tasks_for_clusters: Sequence
+        Clusters to check even if nodes from those clusters don't have `min_tasks` jobs.
     """
     # Parse time_interval
     start, end, clip_time = None, None, False
@@ -76,17 +80,18 @@ def check_gpu_type_usage_per_node(
     ff["gpu_usage_"] = ff["gpu_task_"] / ff["task_"]
 
     # We can now check GPU usage.
+    ignore_min_tasks_for_clusters = set(ignore_min_tasks_for_clusters or ())
     for row in ff.itertuples():
         cluster_name, node = row.Index
         nb_gpu_tasks = row.gpu_task_
         nb_tasks = row.task_
         gpu_usage = row.gpu_usage_
         if gpu_usage < threshold and (
-            cluster_name == "mila" or nb_tasks >= min_drac_tasks
+            cluster_name in ignore_min_tasks_for_clusters or nb_tasks >= min_tasks
         ):
             # We warn if gpu usage < threshold and if
-            # either we are on MILA cluster,
-            # or we are on a DRAC cluster with enough jobs.
+            # either we are on a cluster listed in `ignore_min_tasks_for_clusters`,
+            # or there are enough jobs in node.
             logger.warning(
                 f"[{cluster_name}][{node}] insufficient usage for GPU {gpu_type}: "
                 f"{round(gpu_usage * 100, 2)} % ({nb_gpu_tasks}/{nb_tasks}), "
