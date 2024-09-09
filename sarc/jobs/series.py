@@ -321,7 +321,9 @@ def load_job_series(
           "gpu_utilization", "cpu_utilization", "gpu_memory", "gpu_power", "system_memory"
         - Optional job series fields, added if clip_time is True:
           "unclipped_start" and "unclipped_end"
-        - Optional user info fields if job users found. See `_user_to_series` for user fields.
+        - Optional user info fields if job users found.
+          Fields from `User.dict()` in format `user.<flattened dot-separated field>`,
+          + special field `user.primary_email` containing either `user.mila.email` or fallback `job.user`.
     """
 
     # If fields is a list, convert it to a renaming dict with same old and new names.
