@@ -1,4 +1,5 @@
 """Analyze the milatools usage based on the number of jobs called 'mila-{command}'."""
+
 # /// script
 # requires-python = ">=3.9"
 # dependencies = [
@@ -75,38 +76,29 @@ class Args:
 
 @dataclass(frozen=True, unsafe_hash=True)
 class Period:
-    start_date: datetime = datetime.today().replace(
-        hour=0, minute=0, second=0, microsecond=0
-    ).astimezone(tz=MTL) - timedelta(days=30)
-    end_date: datetime = (
-        datetime.today()
-        .replace(hour=0, minute=0, second=0, microsecond=0)
-        .astimezone(tz=MTL)
-    )
+    start_date: datetime
+    end_date: datetime
 
 
 def main():
     parser = simple_parsing.ArgumentParser(description="Analyze the milatools usage.")
     parser.add_arguments(Args, dest="args")
     args: Args = parser.parse_args().args
-    if isinstance(args.start_date, str):
-        args = dataclasses.replace(
-            args, start_date=datetime.fromisoformat(args.start_date).astimezone(tz=MTL)
-        )
-    if isinstance(args.end_date, str):
-        args = dataclasses.replace(
-            args, end_date=datetime.fromisoformat(args.end_date).astimezone(tz=MTL)
-        )
+    start_date = args.start_date
+    if isinstance(start_date, str):
+        start_date = start_date = datetime.fromisoformat(start_date).astimezone(tz=MTL)
+    end_date = args.end_date
+    if isinstance(end_date, str):
+        end_date = datetime.fromisoformat(end_date).astimezone(tz=MTL)
+
     print("Args:")
     pprint.pprint(dataclasses.asdict(args))
 
     _setup_logging(args.verbose)
 
-    assert isinstance(args.start_date, datetime)
-    assert isinstance(args.end_date, datetime)
-    period = Period(args.start_date, args.end_date)
+    period = Period(start_date, end_date)
 
-    all_clusters = _get_all_clusters(args.start_date, args.end_date)
+    all_clusters = _get_all_clusters(period.start_date, period.end_date)
     logger.info(f"All clusters: {all_clusters}")
 
     figures: list[Path] = []
