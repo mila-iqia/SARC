@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, time, timedelta
 from enum import Enum
 from functools import cache
-from typing import Any, Iterable, Optional, TypedDict, Union
+from typing import Iterable, Optional
 
 from pydantic import validator
 from pydantic_mongo import AbstractRepository, ObjectIdField
@@ -229,20 +229,13 @@ def get_clusters():
     return jobs.distinct("cluster_name", {})
 
 
-InQuery = TypedDict("InQuery", {"$in": list[Any]})
-OrQuery = TypedDict("OrQuery", {"$or": list[Any]})
-RegexQuery = TypedDict("RegexQuery", {"$regex": list[str]})
-Query = Union[InQuery, OrQuery, RegexQuery]
-
-
 # pylint: disable=too-many-branches,dangerous-default-value
 def _compute_jobs_query(
     *,
-    cluster: str | Query | ClusterConfig | None = None,
+    cluster: str | ClusterConfig | None = None,
     job_id: int | list[int] | None = None,
     job_state: str | SlurmState | None = None,
     user: str | None = None,
-    name: str | Query | None = None,
     start: str | datetime | None = None,
     end: str | datetime | None = None,
 ) -> dict:
@@ -276,9 +269,6 @@ def _compute_jobs_query(
     query = {}
     if cluster_name:
         query["cluster_name"] = cluster_name
-
-    if name:
-        query["name"] = name
 
     if isinstance(job_id, int):
         query["job_id"] = job_id
@@ -349,7 +339,6 @@ def get_jobs(
     job_id: int | list[int] | None = None,
     job_state: str | SlurmState | None = None,
     user: str | None = None,
-    name: str | None = None,
     start: str | datetime | None = None,
     end: str | datetime | None = None,
     query_options: dict | None = None,
@@ -370,7 +359,6 @@ def get_jobs(
         cluster=cluster,
         job_id=job_id,
         job_state=job_state,
-        name=name,
         user=user,
         start=start,
         end=end,

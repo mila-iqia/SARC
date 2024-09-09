@@ -310,12 +310,38 @@ def _setup_logging(verbose: int):
             logger.setLevel("DEBUG")
 
 
+def _get_filter(
+    start_date: datetime,
+    end_date: datetime,
+    cluster_name: str | Query | None,
+    name: str | Query | None,
+):
+    query: dict = {
+        "submit_time": {"$gte": start_date, "$lt": end_date},
+    }
+    if cluster_name is not None:
+        query["cluster_name"] = cluster_name
+
+    if name is not None:
+        query["name"] = name
+
+    # _filtre = {
+    #     "$and": [
+    #         {**_filtre, "submit_time": {"$gte": start}},
+    #         {**_filtre, "submit_time": {"$lt": end}},
+    #     ]
+    # }
+    return query
+
+
 def _get_unique_users(
     start_date: datetime,
     end_date: datetime,
     cluster: str | list[str] | Query | None = None,
 ) -> tuple[set[str], set[str]]:
-    milatools_job_names: Query = {"$in": ["mila-code", "mila-cpu"]}
+    milatools_job_names: list[str] = ["mila-code", "mila-cpu"]
+    cluster_suffix = f" on the {cluster} cluster" if cluster else ""
+
     if isinstance(cluster, list):
         cluster = {"$in": cluster}
 
@@ -339,17 +365,16 @@ def _get_unique_users(
     job_structured_db = jobs_collection()
     job_db: pymongo.collection.Collection = job_structured_db.get_collection()
 
-    _filter = _compute_jobs_query(start=start_date, end=end_date, cluster=cluster)
-    all_users: set[str] = set(job_db.distinct("user", filter=_filter))
-
-    cluster_suffix = f" on the {cluster} cluster" if cluster else ""
-    _filter = _compute_jobs_query(
-        start=start_date,
-        end=end_date,
-        name=milatools_job_names,
-        cluster=cluster,
+    _period_filter = _get_filter(start_date, end_date, cluster, name=None)
+    _milatools_filter = _get_filter(
+        start_date, end_date, cluster, name={"$in": milatools_job_names}
     )
-    milatools_users: set[str] = set(job_db.distinct("user", filter=_filter))
+
+    all_users: set[str] = set(job_db.distinct("user", filter=_period_filter))
+    milatools_users: set[str] = set(job_db.distinct("user", filter=_milatools_filter))
+    logger.debug(f"All users:\n{all_users}")
+    logger.debug(f"Milatools users:\n{milatools_users}")
+
     n_milatools = len(milatools_users)
     n_total = len(all_users)
     logger.info(
