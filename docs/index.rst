@@ -21,4 +21,3 @@ Welcome to SARC's documentation!
    scripts/remote/README
    scripts/systemd/README
    scripts/deploy/README
-

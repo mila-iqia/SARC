@@ -61,14 +61,14 @@ fi
 
 if ! which sarc >/dev/null 2>&1; then
     echo "sarc commandline is not installed. Please install it before running this script."
-    exit 1 
+    exit 1
 fi
 
 function _mongo_no_auth {
     #
     #   Starts mongodb without Access Control, this is used to insert the admin user
     #
-    # 
+    #
 
     rm -rf $DB_PATH
     mkdir -p $DB_PATH
@@ -83,7 +83,7 @@ function _fetch_mongo_version_auth {
 
 function wait_mongo_auth {
 
-    until _fetch_mongo_version_auth 
+    until _fetch_mongo_version_auth
     do
         echo "Failed"
     done
@@ -95,7 +95,7 @@ function _fetch_mongo_version {
 
 function wait_mongo {
 
-    until _fetch_mongo_version 
+    until _fetch_mongo_version
     do
         echo "Failed"
     done
@@ -106,7 +106,7 @@ function mongo_launch {
     #   starts a new mongodb instance running locally at a specified location
     #
     #   Usage:
-    #       
+    #
     #       mongo_launch
     #
     mkdir -p $DB_PATH
@@ -119,7 +119,7 @@ function mongo_stop {
     #   stop the mongodb instance running at the current DB path
     #
     #   Usage:
-    #   
+    #
     #       mongo_stop
     #
 
@@ -182,7 +182,7 @@ function mongo_restore {
 
 function get_backups {
 
-    scp -R sarc:/home/sarc/mongo_backups/sarc_mongo.sarc.2023-07-19 
+    scp -R sarc:/home/sarc/mongo_backups/sarc_mongo.sarc.2023-07-19
 
 }
 

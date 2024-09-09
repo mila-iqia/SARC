@@ -60,7 +60,7 @@ def run(
             if (
                 supervisor_key in user
                 and user[supervisor_key] is not None
-                and not "@mila.quebec" in user[supervisor_key].lower()
+                and "@mila.quebec" not in user[supervisor_key].lower()
             ):
                 for potential_supervisor in LD_users:
                     if potential_supervisor["display_name"] == user[supervisor_key]:

@@ -143,7 +143,8 @@ def test_backfill_simple_insert_history(mymiladata, captrace):
     assert spans[0].events[0].name == "Backfilling record history from mymila ..."
 
 
-Timestamp = lambda x: datetime.strptime(x, "%Y-%m-%d %H:%M:%S")
+def Timestamp(x: str) -> datetime:
+    return datetime.strptime(x, "%Y-%m-%d %H:%M:%S")
 
 
 def mongo_db_expected_history():

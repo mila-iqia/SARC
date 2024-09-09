@@ -20,7 +20,7 @@ case $2 in
         ;;
     status)
         echo "Checking MongoDB status..."
-        status=$(ssh $1 'sudo -H -u sarc podman ps --log-level error | grep sarc_mongo') 
+        status=$(ssh $1 'sudo -H -u sarc podman ps --log-level error | grep sarc_mongo')
         if [[ -z $status ]];
         then
             echo 'MongoDB not started.'

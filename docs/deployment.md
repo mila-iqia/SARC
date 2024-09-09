@@ -86,7 +86,7 @@ In the future, if necessary, use the `SARC_CONFIG` environment variable to choos
 
 ### Mongodb users credentials
 
-You have 3 mongo users account; 
+You have 3 mongo users account;
 
 - `mongoadmin` (password: see `secrets/mongo_admin_password.txt`) is the global mongodb administrator account.
 - `readuser`(password: `readpwd`, see `config/sarc-client.json`) is the user for general use (only reads data from the database)
@@ -122,7 +122,7 @@ Users creation:
 
 ```
 SARC_MODE=scraping poetry run sarc db init --database sarc --url "mongodb://mongoadmin:<admin password>@localhost:27017" --username admin --password <admin password> --account admin
-SARC_MODE=scraping poetry run sarc db init --database sarc --url "mongodb://mongoadmin:<admin password>@localhost:27017" --username readuser --password readpwd --account read 
+SARC_MODE=scraping poetry run sarc db init --database sarc --url "mongodb://mongoadmin:<admin password>@localhost:27017" --username readuser --password readpwd --account read
 SARC_MODE=scraping poetry run sarc db init --database sarc --url "mongodb://mongoadmin:<admin password>@localhost:27017" --username writeuser --password <writeuser password> --account write
 ```
 
@@ -162,18 +162,18 @@ podman exec sarc_mongo mongorestore --username=writeuser --password=$PASSWORD -d
 podman exec sarc_mongo mongorestore --username=writeuser --password=$PASSWORD -d sarc /sarc/diskusage.bson.gz --gzip
 ```
 
-... and that should do. 
+... and that should do.
 
 ### MongoDB manual start
 
 Once systemd scripts deployed (see following section), the database will be started automatically at boot time; but you can already start / stop it manually :
 
 ```
-scripts/remote/mongo.sh <sarc-server> start 
+scripts/remote/mongo.sh <sarc-server> start
 ```
 
 ```
-scripts/remote/mongo.sh <sarc-server> stop 
+scripts/remote/mongo.sh <sarc-server> stop
 ```
 
 ### Systemd file
@@ -206,4 +206,3 @@ sudo systemctl start sarc_containers.service
 sudo systemctl stop sarc_containers.service
 ```
 (The `install_services.sh` should have configured it to automatically launch MongoDB at boot time, though.)
-

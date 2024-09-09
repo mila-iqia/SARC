@@ -7,7 +7,7 @@ The manual procedure steps are:
 **Once a month** (or each time we have new users files from DRAC):
 
 - Copy the two DRAC files (`users` and `roles`) in the `secrets/account_matching` folder
-- Adjust the `account_matching` section of the config file to point to these two files 
+- Adjust the `account_matching` section of the config file to point to these two files
 - run the `acquire users` command
 - if any errors, adjust the exceptions in the `secrets/make_matches_config.json` file, and re-run the account matching script.
 
@@ -15,7 +15,7 @@ The manual procedure steps are:
 
 This procedure consists in making matches between the DRAC user account and the Mila acocunts.
 
-- Mila accounts are gathered directly by connecting to Mila LDAP. 
+- Mila accounts are gathered directly by connecting to Mila LDAP.
 - On the other hand, DRAC accounts must be provided manually.
 
 After that, the `users` collection of mongoDB contains the aggregated users database.
@@ -24,12 +24,12 @@ After that, the `users` collection of mongoDB contains the aggregated users data
 
 The operator executing the account matching procedure must have wite access to the DRAC folder.
 
-Two possible scenarios : 
+Two possible scenarios :
 
 - have write access to the running SARC server (production server)
 - use SARC from a local machine, with a SSH connection to the production server (see below). **This is the prefered method.**
 
-#### Remote access to MongoDB (via SSH tunneling) 
+#### Remote access to MongoDB (via SSH tunneling)
 
 ##### SSH config
 Refer to `remote_mongo_access.md` for ssh connection with port redirection, to connect to mongoDB form the local machine.
@@ -63,11 +63,11 @@ They are refered to in the ldap section of the sarc config file :
 
 Compute Canada must provide 2 CSV files:
 - One "members" file
-- One "roles" file 
+- One "roles" file
 
 #### copy the files in the right directory
 
-The two file must be copied to the `secrets/account_matching/` folder of SARC, on the server or the local machine, depending on the scenario. 
+The two file must be copied to the `secrets/account_matching/` folder of SARC, on the server or the local machine, depending on the scenario.
 
 #### Configuration file
 

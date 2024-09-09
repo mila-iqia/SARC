@@ -95,7 +95,7 @@ def get_jobs_dataframe(filename, start, end) -> pd.DataFrame:
 start = datetime(year=2022, month=1, day=1, tzinfo=MTL)
 end = datetime(year=2023, month=1, day=1, tzinfo=MTL)
 df = get_jobs_dataframe(
-    f"total_usage_demo_jobs.pkl",
+    "total_usage_demo_jobs.pkl",
     start=start,
     end=end,
 )
