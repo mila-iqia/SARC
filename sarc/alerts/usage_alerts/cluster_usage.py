@@ -60,7 +60,7 @@ def check_nb_jobs_per_cluster_per_time(
     f_nb_clusters_per_timestamp = pandas.DataFrame(
         {
             "timestamp": timestamps,
-            "cluster_name": [len(cluster_names)] * len(timestamps),
+            "nb_all_clusters": [len(cluster_names)] * len(timestamps),
         }
     )
     # Generate a dataframe associating each timestamp to number of jobs which run at this timestamp.
@@ -74,7 +74,7 @@ def check_nb_jobs_per_cluster_per_time(
         f_nb_jobs_per_timestamp, on="timestamp", how="left"
     )
     # Compute cluster usage: number of jobs per cluster per timestamp
-    f_stats["jobs_per_cluster"] = f_stats["job_id"] / f_stats["cluster_name"]
+    f_stats["jobs_per_cluster"] = f_stats["job_id"] / f_stats["nb_all_clusters"]
     # Compute average cluster usage
     avg = f_stats["jobs_per_cluster"].mean()
     # Compute standard deviation for cluster usage
