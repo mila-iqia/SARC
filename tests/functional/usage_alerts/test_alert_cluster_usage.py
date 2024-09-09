@@ -18,7 +18,7 @@ get_warnings = functools.partial(
     "params,expected",
     [
         # Check with default params. In last 7 days from now (mock time: 2023-11-22),
-        # there is only 2 jobs from 1 cluster in 1 timestamp, So, threshold will be 0
+        # there is only 2 jobs from 1 cluster in 1 timestamp. So, threshold will be 0
         # and no warning will be printed.
         (dict(), []),
         # Check with no time interval (i.e. all jobs).

@@ -18,8 +18,8 @@ def check_nb_jobs_per_cluster_per_time(
 ):
     """
     Check if a cluster has run enough jobs per time unit on given time interval.
-    Log a warning for each cluster where number of jobs is behind a required minimum computed
-    using mean and standard deviation statistics from clusters usage.
+    Log a warning for each cluster where number of jobs is lower than a required limit
+    computed using mean and standard deviation statistics from clusters usage.
 
     Parameters
     ----------
@@ -56,20 +56,20 @@ def check_nb_jobs_per_cluster_per_time(
     # List timestamps
     timestamps = sorted(tf["timestamp"].unique())
 
-    # Generate a dataframe associating each timestamp to number of clusters.
+    # Generate a dataframe associating each timestamp to number of all clusters.
     f_nb_clusters_per_timestamp = pandas.DataFrame(
         {
             "timestamp": timestamps,
             "cluster_name": [len(cluster_names)] * len(timestamps),
         }
     )
-    # Generate a dataframe associating each timestamp to number of jobs.
+    # Generate a dataframe associating each timestamp to number of jobs which run at this timestamp.
     f_nb_jobs_per_timestamp = (
         tf[tf["cluster_name"].isin(cluster_names)]
         .groupby(["timestamp"])[["job_id"]]
         .count()
     )
-    # Generate a dataframe associating each timesteamp to number of clusters and number of jobs
+    # Generate a dataframe associating each timestamp to number of clusters and number of jobs
     f_stats = f_nb_clusters_per_timestamp.merge(
         f_nb_jobs_per_timestamp, on="timestamp", how="left"
     )
@@ -82,11 +82,12 @@ def check_nb_jobs_per_cluster_per_time(
     # Compute threshold to use for warnings: <average> - 2 * <standard deviation>
     threshold = max(0, avg - 2 * stddev)
 
-    reports = []  # list to collect warnings
-    founds = (
-        set()
-    )  # set of cluster-timestamp associations found while checking warnings
-    exclude = set(exclude or ())  # set of clusters to ignore
+    # List to collect warnings:
+    reports = []
+    # Set of cluster-timestamp associations found while checking warnings:
+    founds = set()
+    # Set of clusters to ignore:
+    exclude = set(exclude or ())
 
     # Check cluster usage from data frame
     ff = tf.groupby(["cluster_name", "timestamp"])[["job_id"]].count()
