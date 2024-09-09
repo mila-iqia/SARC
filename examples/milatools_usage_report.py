@@ -159,12 +159,9 @@ def make_milatools_usage_plots(
         cluster_suffix = f" on the {cluster} clusters"
 
     df = _get_milatools_usage_data(period, cluster=cluster)
-    df["using_milatools"] = (
-        df["milatools_users_this_period"] / df["cluster_users_this_period"]
-    )
+    df["using_milatools"] = df["milatools_users"] / df["cluster_users"]
     df["used_milatools_before"] = (
-        df["users_this_period_that_used_milatools_before"]
-        / df["cluster_users_this_period"]
+        df["users_this_period_that_used_milatools_before"] / df["cluster_users"]
     )
     # print(df)
 
@@ -175,28 +172,42 @@ def make_milatools_usage_plots(
     (ax1, ax2) = axes
     ax1.set_title("Percentage of users using milatools")
     ax1.set_ylim(0, 1)
-    ax1.annotate(
-        f'{df["using_milatools"].iloc[-1]:.2%}',
-        (df.index[-1], df["using_milatools"].iloc[-1]),
-    )
-    ax1.annotate(
-        f'{df["used_milatools_before"].iloc[-1]:.2%}',
-        (df.index[-1], df["used_milatools_before"].iloc[-1]),
-    )
+
+    # Annotate the start and end values for the plots
+    def annotate_start_and_end(ax: matplotlib.axes.Axes, row: str, percentage: bool):
+        def _format(v):
+            return f"{v:.2%}" if percentage else f"{v}"
+
+        ax.annotate(
+            _format(df[row].iloc[0]),
+            (df.index[0], df[row].iloc[0]),
+        )
+        ax.annotate(
+            _format(df[row].iloc[-1]),
+            (df.index[-1], df[row].iloc[-1]),
+        )
+
+    annotate_start_and_end(ax1, "using_milatools", percentage=True)
+    annotate_start_and_end(ax1, "used_milatools_before", percentage=True)
+
+    annotate_start_and_end(ax2, "milatools_users", percentage=False)
+    annotate_start_and_end(ax2, "cluster_users", percentage=False)
 
     ax2.set_title("Number of users using milatools")
 
     df[["using_milatools", "used_milatools_before"]].plot(
         kind="line", ax=ax1, legend=True, ylabel="Percentage of users using milatools"
     )
-    df[["milatools_users_this_period", "cluster_users_this_period"]].plot(
+    # In a stacked area plot, the second column is stacked on top of the first
+    df["cluster_users"] = df["cluster_users"] - df["milatools_users"]
+    df[["milatools_users", "cluster_users"]].plot(
         kind="area",
         ax=ax2,
+        stacked=True,
         legend=True,
-        # label=["Using milatools", "Not using milatools"],
     )
-    # Set x-ticks and labels
 
+    # Set x-ticks and labels
     assert isinstance(df.index, DatetimeIndex)
     ax1.set_xticks(df.index)  # Set all possible x-tick positions
     ax2.set_xticks(df.index)  # Set all possible x-tick positions
@@ -282,8 +293,8 @@ def _get_milatools_usage_data(args: Period, cluster: str | list[str] | None):
 
     return pd.DataFrame(
         {
-            "milatools_users_this_period": num_milatools_users_each_period,
-            "cluster_users_this_period": num_cluster_users_each_period,
+            "milatools_users": num_milatools_users_each_period,
+            "cluster_users": num_cluster_users_each_period,
             "milatools_users_so_far": num_milatools_users_so_far,
             "cluster_users_so_far": num_cluster_users_so_far,
             "users_this_period_that_used_milatools_before": num_users_this_period_that_have_used_milatools_before,
