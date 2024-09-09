@@ -21,7 +21,7 @@ You **MUST** run `./mongo.sh <server> install` once before deploying systemd scr
 ## setup_github_keys.sh
 Generate the ssh "deploy keys" needed to deploy the code to the server
 ```
-$ ./setup_github_keys.sh <server> 
+$ ./setup_github_keys.sh <server>
 ```
 
 See [The deployment doc](../../deployment.md) for more info.

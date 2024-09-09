@@ -4,7 +4,6 @@ import pytest
 
 from sarc.allocations import get_allocations
 from sarc.cli import main
-from sarc.config import config
 
 FOLDER = os.path.dirname(os.path.abspath(__file__))
 

@@ -2,7 +2,7 @@ from datetime import date, datetime, timedelta
 from os.path import isfile
 
 import pytest
-from fabric.testing.base import Command, MockRemote, Session
+from fabric.testing.base import Command
 
 from sarc.config import config
 from sarc.jobs.sacct import SAcctScraper
@@ -16,7 +16,7 @@ def test_SAcctScraper_fetch_raw(test_config, remote):
         cluster=test_config.clusters["test"],
         day=datetime(2023, 2, 28),
     )
-    channel = remote.expect(
+    _channel = remote.expect(
         host="patate",
         cmd="sacct  -X -S 2023-02-28T00:00 -E 2023-03-01T00:00 --allusers --json",
         out=b"{}",
@@ -30,7 +30,7 @@ def test_SAcctScraper_fetch_raw2(test_config, remote):
         cluster=test_config.clusters["test"],
         day=datetime(2023, 2, 28),
     )
-    channel = remote.expect(
+    _channel = remote.expect(
         commands=[
             Command(
                 "sacct  -X -S 2023-02-28T00:00 -E 2023-03-01T00:00 --allusers --json",
@@ -66,7 +66,7 @@ def test_SAcctScraper_get_cache(test_config, remote):
 
     # we ask for yesterday, today and tomorrow
     fmt = "%Y-%m-%dT%H:%M"
-    channel = remote.expect(
+    _channel = remote.expect(
         commands=[
             Command(
                 f"sacct  -X -S {yesterday.strftime(fmt)} -E {today.strftime(fmt)} --allusers --json",

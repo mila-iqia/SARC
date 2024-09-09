@@ -16,7 +16,7 @@ $ cd SARC
 $ poetry install
 ```
 
-`sarc` will be looking into the current working directory to find the dev config file. To work with prod config or 
+`sarc` will be looking into the current working directory to find the dev config file. To work with prod config or
 from any directory set the environment variable as follow.
 
 ```bash
@@ -35,7 +35,7 @@ $ ssh -L 27017:localhost:27017 sarc
 
 You can now test on your machine a simple example to see if `sarc` is able to access the database:
 
-```bash 
+```bash
 $ poetry run python example/waste_stats.py
 ```
 

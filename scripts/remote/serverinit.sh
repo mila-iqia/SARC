@@ -22,4 +22,3 @@ ssh $1 'bash -s' << 'ENDSSH'
     sudo printf "[registries.search]\nregistries=['quai.io','docker.io']\n" | sudo tee -a /etc/containers/registries.conf
   fi
 ENDSSH
-

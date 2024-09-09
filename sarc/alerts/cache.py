@@ -22,7 +22,6 @@ class CachedResult:
 
 @dataclass(unsafe_hash=True)
 class Timespan:
-
     # Time duration
     duration: timedelta
 

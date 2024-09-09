@@ -3,24 +3,16 @@ import shutil
 import sys
 import tempfile
 import time
-import zoneinfo
 from pathlib import Path
 from unittest.mock import MagicMock, mock_open
 
+import pytest
+import zoneinfo
+from _pytest.monkeypatch import MonkeyPatch
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from opentelemetry.trace import set_tracer_provider
-
-_tracer_provider = TracerProvider()
-_exporter = InMemorySpanExporter()
-_tracer_provider.add_span_processor(SimpleSpanProcessor(_exporter))
-set_tracer_provider(_tracer_provider)
-del _tracer_provider
-
-
-import pytest
-from _pytest.monkeypatch import MonkeyPatch
 
 from sarc.config import (
     ClusterConfig,
@@ -30,6 +22,12 @@ from sarc.config import (
     parse_config,
     using_config,
 )
+
+_tracer_provider = TracerProvider()
+_exporter = InMemorySpanExporter()
+_tracer_provider.add_span_processor(SimpleSpanProcessor(_exporter))
+set_tracer_provider(_tracer_provider)
+del _tracer_provider
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "common"))
 

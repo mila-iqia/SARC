@@ -258,7 +258,7 @@ def test_not_student_and_not_prof():
     assert (not result.is_student) and (not result.is_prof)
 
 
-def test_student_and_prof():
+def test_student_and_prof_2():
     result = _student_or_prof(
         make_student("supervisor", ["mcgill", "supervisor"]),
         {"supervisor@email.com"},

@@ -41,7 +41,7 @@ def test_timedelta_serializer(td):
 
 def test_timedelta_serializer_microseconds():
     td = timedelta(seconds=3, microseconds=651)
-    assert (ser := serialize(timedelta, td)) == f"3000651us"
+    assert (ser := serialize(timedelta, td)) == "3000651us"
     assert deserialize(timedelta, ser) == td
 
 
