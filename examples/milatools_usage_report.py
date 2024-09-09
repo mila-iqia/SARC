@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from logging import getLogger as get_logger
 from pathlib import Path
-from typing import Any, Iterable, TypeVar
+from typing import Any, Iterable, TypedDict, TypeVar, Union
 
 import matplotlib
 import matplotlib.axes
@@ -37,8 +37,6 @@ from typing_extensions import TypeGuard
 
 from sarc.config import MTL
 from sarc.jobs.job import (
-    Query,
-    _compute_jobs_query,
     jobs_collection,
 )
 
@@ -139,7 +137,9 @@ def _get_all_clusters(start_date: datetime, end_date: datetime):
             all_clusters = pickle.load(f)
         assert _is_iterable_of(all_clusters, str) and isinstance(all_clusters, list)
     else:
-        _period_filter = _compute_jobs_query(start=start_date, end=end_date)
+        _period_filter = _get_filter(
+            start_date=start_date, end_date=end_date, cluster_name=None, name=None
+        )
         all_clusters: list[str] = list(
             job_db.distinct("cluster_name", filter=_period_filter)
         )
@@ -250,7 +250,7 @@ def _get_milatools_usage_data(args: Period, cluster: str | list[str] | None):
         )
         if not cluster_users_that_period:
             raise RuntimeError(
-                f"No users of the {cluster + ' ' if cluster else ''}cluster in the period from {interval_start} to {interval_end}??"
+                f"No users of the {cluster=} cluster in the period from {interval_start} to {interval_end}??"
             )
 
         cluster_users_so_far.update(cluster_users_that_period)
@@ -308,6 +308,12 @@ def _setup_logging(verbose: int):
             logger.setLevel("INFO")
         case _:
             logger.setLevel("DEBUG")
+
+
+InQuery = TypedDict("InQuery", {"$in": list[Any]})
+OrQuery = TypedDict("OrQuery", {"$or": list[Any]})
+RegexQuery = TypedDict("RegexQuery", {"$regex": list[str]})
+Query = Union[InQuery, OrQuery, RegexQuery]
 
 
 def _get_filter(
