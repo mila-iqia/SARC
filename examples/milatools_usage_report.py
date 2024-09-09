@@ -111,11 +111,19 @@ def main():
 
     figures: list[Path] = []
 
-    figures += make_milatools_usage_plots(period, cluster="mila", fig_suffix="mila")
+    sampling_interval = timedelta(weeks=1)
     figures += make_milatools_usage_plots(
-        period, cluster=sorted(set(all_clusters) - {"mila"}), fig_suffix="drac"
+        period, cluster="mila", fig_suffix="mila", sampling_interval=sampling_interval
     )
-    figures += make_milatools_usage_plots(period, cluster=None, fig_suffix="all")
+    figures += make_milatools_usage_plots(
+        period,
+        cluster=sorted(set(all_clusters) - {"mila"}),
+        fig_suffix="drac",
+        sampling_interval=sampling_interval,
+    )
+    figures += make_milatools_usage_plots(
+        period, cluster=None, fig_suffix="all", sampling_interval=sampling_interval
+    )
     # figures = make_usage_plots(args, job_name="mila-code")
     # figures += make_usage_plots(args, job_name="mila-cpu")
 
@@ -149,7 +157,10 @@ def _get_all_clusters(start_date: datetime, end_date: datetime):
 
 
 def make_milatools_usage_plots(
-    period: Period, cluster: str | list[str] | None, fig_suffix: str
+    period: Period,
+    cluster: str | list[str] | None,
+    fig_suffix: str,
+    sampling_interval: timedelta = timedelta(days=7),
 ) -> list[Path]:
     if cluster is None:
         cluster_suffix = " on all slurm clusters"
@@ -158,7 +169,9 @@ def make_milatools_usage_plots(
     else:
         cluster_suffix = f" on the {cluster} clusters"
 
-    df = _get_milatools_usage_data(period, cluster=cluster)
+    df = _get_milatools_usage_data(
+        period, cluster=cluster, sampling_interval=sampling_interval
+    )
     df["using_milatools"] = df["milatools_users"] / df["cluster_users"]
     df["used_milatools_before"] = (
         df["users_this_period_that_used_milatools_before"] / df["cluster_users"]
@@ -213,11 +226,17 @@ def make_milatools_usage_plots(
     ax2.set_xticks(df.index)  # Set all possible x-tick positions
     # Apply all labels with rotation
     label_every_week = df.index.strftime("%Y-%m-%d")
-    label_every_month = [
-        label_every_week[i] if i % 4 == 0 else "" for i in range(len(label_every_week))
-    ]
-    ax1.set_xticklabels(label_every_month, rotation=45)
-    ax2.set_xticklabels(label_every_month, rotation=45)
+    if sampling_interval == timedelta(days=7):
+        # one label every month
+        ticks = [
+            label_every_week[i] if i % 4 == 0 else ""
+            for i in range(len(label_every_week))
+        ]
+    else:
+        # one label every month
+        ticks = label_every_week
+    ax1.set_xticklabels(ticks, rotation=45)
+    ax2.set_xticklabels(ticks, rotation=45)
 
     fig.tight_layout()
     # fig.layout
@@ -231,7 +250,9 @@ def make_milatools_usage_plots(
     return [fig_path]
 
 
-def _get_milatools_usage_data(args: Period, cluster: str | list[str] | None):
+def _get_milatools_usage_data(
+    args: Period, cluster: str | list[str] | None, sampling_interval: timedelta
+):
     cluster_suffix = f" on the {cluster} cluster" if cluster else ""
     logger.info(
         f"Getting milatools usage data from {args.start_date} to {args.end_date}{cluster_suffix}"
@@ -248,10 +269,8 @@ def _get_milatools_usage_data(args: Period, cluster: str | list[str] | None):
 
     num_users_this_period_that_have_used_milatools_before: list[int] = []
 
-    interval = timedelta(days=7)
-
     date_range = pd.date_range(
-        args.start_date, args.end_date, freq=interval, inclusive="both"
+        args.start_date, args.end_date, freq=sampling_interval, inclusive="both"
     )
     for interval_start, interval_end in zip(
         date_range.to_list()[:-1], date_range.to_list()[1:]
