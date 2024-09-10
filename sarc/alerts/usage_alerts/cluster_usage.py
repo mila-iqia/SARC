@@ -2,8 +2,6 @@ import logging
 from datetime import datetime, timedelta
 from typing import List, Optional
 
-import pandas
-
 from sarc.config import MTL
 from sarc.jobs.series import compute_time_frames, load_job_series
 
@@ -46,35 +44,24 @@ def check_nb_jobs_per_cluster_per_time(
     # Get data frame
     df = load_job_series(start=start, end=end, clip_time=clip_time)
 
+    # Split data frame into time frames using `time_unit`
+    tf = compute_time_frames(df, frame_size=time_unit)
+
     # List clusters
     if not cluster_names:
         cluster_names = sorted(df["cluster_name"].unique())
 
-    # Split data frame into time frames using `time_unit`
-    tf = compute_time_frames(df, frame_size=time_unit)
-
-    # List timestamps
-    timestamps = sorted(tf["timestamp"].unique())
-
-    # Generate a dataframe associating each timestamp to number of all clusters.
-    f_nb_clusters_per_timestamp = pandas.DataFrame(
-        {
-            "timestamp": timestamps,
-            "nb_all_clusters": [len(cluster_names)] * len(timestamps),
-        }
-    )
-    # Generate a dataframe associating each timestamp to number of jobs which run at this timestamp.
-    f_nb_jobs_per_timestamp = (
+    # Generate a dataframe for stats.
+    f_stats = (
+        # Use only lines associated with given clusters
         tf[tf["cluster_name"].isin(cluster_names)]
+        # Group by timestamp
         .groupby(["timestamp"])[["job_id"]]
+        # And count jobs by counting column `job_id`
         .count()
     )
-    # Generate a dataframe associating each timestamp to number of clusters and number of jobs
-    f_stats = f_nb_clusters_per_timestamp.merge(
-        f_nb_jobs_per_timestamp, on="timestamp", how="left"
-    )
     # Compute cluster usage: number of jobs per cluster per timestamp
-    f_stats["jobs_per_cluster"] = f_stats["job_id"] / f_stats["nb_all_clusters"]
+    f_stats["jobs_per_cluster"] = f_stats["job_id"] / len(cluster_names)
     # Compute average cluster usage
     avg = f_stats["jobs_per_cluster"].mean()
     # Compute standard deviation for cluster usage
@@ -103,7 +90,8 @@ def check_nb_jobs_per_cluster_per_time(
     # NB: For these cases, number of jobs is always 0
     for cluster_name in cluster_names:
         if cluster_name not in exclude:
-            for timestamp in timestamps:
+            # Iter for each timestamp available in data frame
+            for timestamp in sorted(tf["timestamp"].unique()):
                 key = (cluster_name, timestamp)
                 nb_jobs = 0
                 if key not in founds and nb_jobs < threshold:

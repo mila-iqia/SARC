@@ -136,6 +136,32 @@ get_warnings = functools.partial(
                 "[another_cluster][2023-11-21 00:01:00-05:00] insufficient cluster usage: 0 jobs / cluster / time unit; minimum required: 0.12262375307691387 (0.7250000000000001 - 2 * 0.3011881234615431); time unit: 1 day, 0:00:00",
             ],
         ),
+        # Check and use only "raisin" cluster to compute stats
+        (
+            dict(time_interval=None, cluster_names=["raisin"]),
+            [
+                "[fromage][2023-02-17 00:01:00-05:00] insufficient cluster usage: 1 jobs / cluster / time unit; minimum required: 1.7738563936773766 (3.2857142857142856 - 2 * 0.7559289460184545); time unit: 1 day, 0:00:00",
+                "[mila][2023-02-18 00:01:00-05:00] insufficient cluster usage: 1 jobs / cluster / time unit; minimum required: 1.7738563936773766 (3.2857142857142856 - 2 * 0.7559289460184545); time unit: 1 day, 0:00:00",
+                "[mila][2023-02-19 00:01:00-05:00] insufficient cluster usage: 1 jobs / cluster / time unit; minimum required: 1.7738563936773766 (3.2857142857142856 - 2 * 0.7559289460184545); time unit: 1 day, 0:00:00",
+                "[mila][2023-02-20 00:01:00-05:00] insufficient cluster usage: 1 jobs / cluster / time unit; minimum required: 1.7738563936773766 (3.2857142857142856 - 2 * 0.7559289460184545); time unit: 1 day, 0:00:00",
+                "[patate][2023-02-17 00:01:00-05:00] insufficient cluster usage: 1 jobs / cluster / time unit; minimum required: 1.7738563936773766 (3.2857142857142856 - 2 * 0.7559289460184545); time unit: 1 day, 0:00:00",
+                "[patate][2023-02-18 00:01:00-05:00] insufficient cluster usage: 1 jobs / cluster / time unit; minimum required: 1.7738563936773766 (3.2857142857142856 - 2 * 0.7559289460184545); time unit: 1 day, 0:00:00",
+                "[raisin][2023-02-20 00:01:00-05:00] insufficient cluster usage: 0 jobs / cluster / time unit; minimum required: 1.7738563936773766 (3.2857142857142856 - 2 * 0.7559289460184545); time unit: 1 day, 0:00:00",
+            ],
+        ),
+        # Check above case with 1 ignored cluster
+        (
+            dict(time_interval=None, cluster_names=["raisin"], exclude=["patate"]),
+            [
+                "[fromage][2023-02-17 00:01:00-05:00] insufficient cluster usage: 1 jobs / cluster / time unit; minimum required: 1.7738563936773766 (3.2857142857142856 - 2 * 0.7559289460184545); time unit: 1 day, 0:00:00",
+                "[mila][2023-02-18 00:01:00-05:00] insufficient cluster usage: 1 jobs / cluster / time unit; minimum required: 1.7738563936773766 (3.2857142857142856 - 2 * 0.7559289460184545); time unit: 1 day, 0:00:00",
+                "[mila][2023-02-19 00:01:00-05:00] insufficient cluster usage: 1 jobs / cluster / time unit; minimum required: 1.7738563936773766 (3.2857142857142856 - 2 * 0.7559289460184545); time unit: 1 day, 0:00:00",
+                "[mila][2023-02-20 00:01:00-05:00] insufficient cluster usage: 1 jobs / cluster / time unit; minimum required: 1.7738563936773766 (3.2857142857142856 - 2 * 0.7559289460184545); time unit: 1 day, 0:00:00",
+                # "[patate][2023-02-17 00:01:00-05:00] insufficient cluster usage: 1 jobs / cluster / time unit; minimum required: 1.7738563936773766 (3.2857142857142856 - 2 * 0.7559289460184545); time unit: 1 day, 0:00:00",
+                # "[patate][2023-02-18 00:01:00-05:00] insufficient cluster usage: 1 jobs / cluster / time unit; minimum required: 1.7738563936773766 (3.2857142857142856 - 2 * 0.7559289460184545); time unit: 1 day, 0:00:00",
+                "[raisin][2023-02-20 00:01:00-05:00] insufficient cluster usage: 0 jobs / cluster / time unit; minimum required: 1.7738563936773766 (3.2857142857142856 - 2 * 0.7559289460184545); time unit: 1 day, 0:00:00",
+            ],
+        ),
     ],
 )
 def test_check_nb_jobs_per_cluster_per_time(params, expected, caplog):
