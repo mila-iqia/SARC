@@ -45,13 +45,17 @@ base_job = {
 
 class JobFactory:
     def __init__(
-        self, first_submit_time: None | datetime = None, first_job_id: int = 1
+        self,
+        first_submit_time: None | datetime = None,
+        first_job_id: int = 1,
+        job_patch: dict | None = None,
     ):
         self.jobs = []
         self._first_submit_time = first_submit_time or datetime(
             2023, 2, 14, tzinfo=MTL
         ).astimezone(UTC)
         self._first_job_id = first_job_id
+        self.job_patch = job_patch or {}
 
     @property
     def next_job_id(self):
@@ -96,6 +100,8 @@ class JobFactory:
 
     def create_job(self, **kwargs):
         job = copy.deepcopy(base_job)
+        if self.job_patch:
+            job.update(self.job_patch)
         job.update(self.format_kwargs(kwargs))
 
         return job
@@ -189,9 +195,9 @@ def _create_user(username: str, with_drac=True):
     }
 
 
-def create_jobs(job_factory: JobFactory | None = None):
+def create_jobs(job_factory: JobFactory | None = None, job_patch: dict | None = None):
     if job_factory is None:
-        job_factory = JobFactory()
+        job_factory = JobFactory(job_patch=job_patch)
 
     for status in [
         "CANCELLED",
