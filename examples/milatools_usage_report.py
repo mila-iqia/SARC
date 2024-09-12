@@ -170,50 +170,63 @@ def make_milatools_usage_plots(
 
     # daily_counts = df.resample(rule="D").size()
     axes: list[matplotlib.axes.Axes]
-    fig, axes = plt.subplots(sharex=True, ncols=2, nrows=1)
+    fig, axes = plt.subplots(sharex=True, sharey=False, ncols=2, nrows=1)
     fig.suptitle(f"Statistics on the use of Milatools{cluster_suffix}")
     (ax1, ax2) = axes
-    ax1.set_title("Percentage of users using milatools")
+    ax1.set_title("Adoption")
     ax1.set_ylim(0, 1)
-
-    # Annotate the start and end values for the plots
-    def annotate_start_and_end(ax: matplotlib.axes.Axes, row: str, percentage: bool):
-        def _format(v):
-            return f"{v:.2%}" if percentage else f"{v}"
-
-        ax.annotate(
-            _format(df[row].iloc[0]),
-            (df.index[0], df[row].iloc[0]),
-        )
-        ax.annotate(
-            _format(df[row].iloc[-1]),
-            (df.index[-1], df[row].iloc[-1]),
-        )
-
-    annotate_start_and_end(ax1, "using_milatools", percentage=True)
-    annotate_start_and_end(ax1, "used_milatools_before", percentage=True)
-
-    annotate_start_and_end(ax2, "milatools_users", percentage=False)
-    annotate_start_and_end(ax2, "cluster_users", percentage=False)
-
-    ax2.set_title("Number of users using milatools")
-
-    df[["using_milatools", "used_milatools_before"]].plot(
-        kind="line", ax=ax1, legend=True, ylabel="Percentage of users using milatools"
+    ax2.set_title(f"Users {cluster_suffix}")
+    df["not using milatools"] = 1 - df["using_milatools"]
+    df["never used milatools"] = 1 - df["used_milatools_before"]
+    df[
+        [
+            "using_milatools",
+            "used_milatools_before",
+            # "not using milatools",
+            # "never used milatools",
+        ]
+    ].plot(
+        kind="line",
+        ax=ax1,
+        legend=True,
+        xlabel="Date",
+        ylabel="Percentage of users using milatools",
+        linewidth=2.5,
+        color=["green", "blue"],  # "lightgray", "gray"],
     )
+    _annotate_start_and_end(df, ax1, "using_milatools", percentage=True)
+    _annotate_start_and_end(df, ax1, "used_milatools_before", percentage=True)
+
     # In a stacked area plot, the second column is stacked on top of the first
-    df["cluster_users"] = df["cluster_users"] - df["milatools_users"]
-    df[["milatools_users", "cluster_users"]].plot(
+    df["cluster users"] = df["cluster_users"] - df["milatools_users"]
+    df[["milatools_users", "cluster users"]].plot(
         kind="area",
         ax=ax2,
         stacked=True,
         legend=True,
+        linewidth=2.5,
+        color=["green", "silver"],
     )
+    _annotate_start_and_end(df, ax2, "milatools_users", percentage=False)
+    # need to annotate using 'cluster_users' (before the subtraction)
+    _annotate_start_and_end(df, ax2, "cluster_users", percentage=False)
+
+    ax1.set_yticklabels([f"{x:.0%}" for x in ax1.get_yticks()])
+
+    # Make all labels gray, then select the added ones and make them darker.
+    ax1.set_yticklabels(ax1.get_yticklabels(), color="dimgray")
+    ax1.get_yticklabels()[-2].set_color("black")
+    ax1.get_yticklabels()[-1].set_color("black")
+
+    ax2.set_yticklabels(ax2.get_yticklabels(), color="dimgray")
+    ax2.get_yticklabels()[-2].set_color("black")
+    ax2.get_yticklabels()[-1].set_color("black")
 
     # Set x-ticks and labels
     assert isinstance(df.index, DatetimeIndex)
     ax1.set_xticks(df.index)  # Set all possible x-tick positions
     ax2.set_xticks(df.index)  # Set all possible x-tick positions
+
     # Apply all labels with rotation
     label_every_week = df.index.strftime("%Y-%m-%d")
     if sampling_interval == timedelta(days=7):
@@ -238,6 +251,33 @@ def make_milatools_usage_plots(
     fig.savefig(fig_path)
     print(f"Figure saved at {fig_path}")
     return [fig_path]
+
+
+# Annotate the start and end values for the plots
+def _annotate_start_and_end(
+    df: pd.DataFrame, ax: matplotlib.axes.Axes, row: str, percentage: bool
+):
+    def _format(v):
+        return f"{v:.0%}" if percentage else f"{v}"
+
+    ax.set_yticks(list(ax.get_yticks()) + [df[row].iloc[0]])
+
+    # ax.annotate(
+    #     text=_format(df[row].iloc[0]),
+    #     xy=(df.index[0], df[row].iloc[0]),
+    #     xycoords="data",
+    #     xytext=(-45, -15),
+    #     textcoords="offset points",
+    #     # add color maybe?
+    #     # color="blue",
+    #     # arrowprops=dict(arrowstyle="->", color="black"),
+    #     fontsize="12",
+    # )
+    ax.annotate(
+        _format(df[row].iloc[-1]),
+        (df.index[-1], df[row].iloc[-1]),
+        fontsize="12",
+    )
 
 
 def _get_milatools_usage_data(
