@@ -8,8 +8,8 @@ from hostlist import expand_hostlist
 from tqdm import tqdm
 
 from sarc.cache import with_cache
+from sarc.client.job import SlurmJob, _jobs_collection
 from sarc.config import UTC, ClusterConfig
-from sarc.jobs.job import SlurmJob, jobs_collection
 from sarc.jobs.series import get_job_time_series
 from sarc.traces import trace_decorator, using_trace
 
@@ -260,7 +260,7 @@ def sacct_mongodb_import(
     no_prometheus: bool
         If True, avoid any scraping requiring prometheus connection.
     """
-    collection = jobs_collection()
+    collection = _jobs_collection()
     scraper = SAcctScraper(cluster, day)
     logger.info("Getting the sacct data...")
     scraper.get_raw()

@@ -12,8 +12,7 @@ from typing import Optional
 from pydantic_mongo import AbstractRepository, ObjectIdField
 
 from sarc.config import BaseModel, config
-
-from .revision import query_latest_records
+from sarc.users.revision import query_latest_records
 
 
 class Credentials(BaseModel):
@@ -38,7 +37,7 @@ class User(BaseModel):
     record_end: Optional[date] = None
 
 
-class UserRepository(AbstractRepository[User]):
+class _UserRepository(AbstractRepository[User]):
     class Meta:
         collection_name = "users"
 
@@ -48,10 +47,10 @@ class UserRepository(AbstractRepository[User]):
     # use: revision.update_user
 
 
-def users_collection():
+def _users_collection():
     """Return the jobs collection in the current MongoDB."""
     db = config().mongo.database_instance
-    return UserRepository(database=db)
+    return _UserRepository(database=db)
 
 
 def get_users(query=None, query_options: dict | None = None, latest=True) -> list[User]:
@@ -69,7 +68,7 @@ def get_users(query=None, query_options: dict | None = None, latest=True) -> lis
             ]
         }
 
-    results = users_collection().find_by(query, **query_options)
+    results = _users_collection().find_by(query, **query_options)
 
     return list(results)
 
