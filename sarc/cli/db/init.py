@@ -5,8 +5,8 @@ import pymongo
 from simple_parsing import choice
 
 from sarc.allocations.allocations import AllocationsRepository
+from sarc.client.job import SlurmJobRepository
 from sarc.config import config
-from sarc.jobs.job import SlurmJobRepository
 from sarc.storage.diskusage import ClusterDiskUsageRepository
 
 
@@ -130,7 +130,7 @@ def create_clusters_indices(db):
 
 
 def create_users_indices(db):
-    # db_collection = UserRepository(database=db).get_collection()
+    # db_collection = _UserRepository(database=db).get_collection()
     db_collection = db.users
 
     db_collection.create_index([("mila_ldap.mila_email_username", pymongo.ASCENDING)])
