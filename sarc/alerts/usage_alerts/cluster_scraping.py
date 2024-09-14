@@ -12,10 +12,9 @@ def check_nb_jobs_per_cluster_per_time(
     time_interval: Optional[timedelta] = timedelta(days=7),
     time_unit=timedelta(days=1),
     cluster_names: Optional[List[str]] = None,
-    exclude: Optional[List[str]] = None,
 ):
     """
-    Check if a cluster has run enough jobs per time unit on given time interval.
+    Check if we have scraped enough jobs per cluster per time unit on given time interval.
     Log a warning for each cluster where number of jobs is lower than a required limit
     computed using mean and standard deviation statistics from clusters usage.
 
@@ -28,10 +27,8 @@ def check_nb_jobs_per_cluster_per_time(
     time_unit: timedelta
         Time unit in which we must check cluster usage through time_interval. Default is 1 day.
     cluster_names: list
-        Optional list of clusters to use to compute cluster usage.
+        Optional list of clusters to check.
         If empty (or not specified), use all clusters available among jobs retrieved with time_interval.
-    exclude: list
-        Optional list of clusters to not check for warnings.
     """
 
     # Parse time_interval
@@ -73,35 +70,35 @@ def check_nb_jobs_per_cluster_per_time(
     reports = []
     # Set of cluster-timestamp associations found while checking warnings:
     founds = set()
-    # Set of clusters to ignore:
-    exclude = set(exclude or ())
 
     # Check cluster usage from data frame
-    ff = tf.groupby(["cluster_name", "timestamp"])[["job_id"]].count()
+    ff = (
+        tf[tf["cluster_name"].isin(cluster_names)]
+        .groupby(["cluster_name", "timestamp"])[["job_id"]]
+        .count()
+    )
     for row in ff.itertuples():
         cluster_name, timestamp = row.Index
         founds.add((cluster_name, timestamp))
-        if cluster_name not in exclude:
-            nb_jobs = row.job_id
-            if nb_jobs < threshold:
-                reports.append((cluster_name, timestamp, nb_jobs))
+        nb_jobs = row.job_id
+        if nb_jobs < threshold:
+            reports.append((cluster_name, timestamp, nb_jobs))
 
     # Check cluster usage for cluster-timestamp associations not yet found in dataframe
     # NB: For these cases, number of jobs is always 0
     for cluster_name in cluster_names:
-        if cluster_name not in exclude:
-            # Iter for each timestamp available in data frame
-            for timestamp in sorted(tf["timestamp"].unique()):
-                key = (cluster_name, timestamp)
-                nb_jobs = 0
-                if key not in founds and nb_jobs < threshold:
-                    reports.append((cluster_name, timestamp, nb_jobs))
+        # Iter for each timestamp available in data frame
+        for timestamp in sorted(tf["timestamp"].unique()):
+            key = (cluster_name, timestamp)
+            nb_jobs = 0
+            if key not in founds and nb_jobs < threshold:
+                reports.append((cluster_name, timestamp, nb_jobs))
 
     # Finally log warnings
     if reports:
         for cluster_name, timestamp, nb_jobs in reports:
             logger.warning(
                 f"[{cluster_name}][{timestamp}] "
-                f"insufficient cluster usage: {nb_jobs} jobs / cluster / time unit; "
+                f"insufficient cluster scraping: {nb_jobs} jobs / cluster / time unit; "
                 f"minimum required: {threshold} ({avg} - 2 * {stddev}); time unit: {time_unit}"
             )
