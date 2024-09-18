@@ -98,7 +98,7 @@ def check_nb_jobs_per_cluster_per_time(
         if verbose:
             print(f"[{cluster_name}]", file=sys.stderr)
             print(c, file=sys.stderr)
-            print("avg", avg, "stddev", stddev, "threshold", threshold, file=sys.stderr)
+            print(f"avg {avg}, stddev {stddev}, threshold {threshold}", file=sys.stderr)
             print(file=sys.stderr)
 
         if threshold == 0:
