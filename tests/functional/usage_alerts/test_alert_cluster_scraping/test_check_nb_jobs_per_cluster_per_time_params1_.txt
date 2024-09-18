@@ -1,0 +1,58 @@
+load job series:   0%|          | 0/24 [00:00<?, ?it/s]load job series: 100%|██████████| 24/24 [00:00<?, ?it/s]
+[fromage]
+                           count
+timestamp                       
+2023-02-14 00:01:00-05:00      0
+2023-02-15 00:01:00-05:00      0
+2023-02-16 00:01:00-05:00      0
+2023-02-17 00:01:00-05:00      1
+2023-02-18 00:01:00-05:00      0
+2023-02-19 00:01:00-05:00      0
+2023-02-20 00:01:00-05:00      0
+2023-11-21 00:01:00-05:00      0
+avg 0.125, stddev 0.3535533905932738, threshold 0
+
+[mila]
+                           count
+timestamp                       
+2023-02-14 00:01:00-05:00      0
+2023-02-15 00:01:00-05:00      0
+2023-02-16 00:01:00-05:00      0
+2023-02-17 00:01:00-05:00      0
+2023-02-18 00:01:00-05:00      1
+2023-02-19 00:01:00-05:00      1
+2023-02-20 00:01:00-05:00      1
+2023-11-21 00:01:00-05:00      0
+avg 0.375, stddev 0.5175491695067657, threshold 0
+
+[patate]
+                           count
+timestamp                       
+2023-02-14 00:01:00-05:00      0
+2023-02-15 00:01:00-05:00      0
+2023-02-16 00:01:00-05:00      0
+2023-02-17 00:01:00-05:00      1
+2023-02-18 00:01:00-05:00      1
+2023-02-19 00:01:00-05:00      0
+2023-02-20 00:01:00-05:00      0
+2023-11-21 00:01:00-05:00      0
+avg 0.25, stddev 0.4629100498862757, threshold 0
+
+[raisin]
+                           count
+timestamp                       
+2023-02-14 00:01:00-05:00      4
+2023-02-15 00:01:00-05:00      3
+2023-02-16 00:01:00-05:00      4
+2023-02-17 00:01:00-05:00      3
+2023-02-18 00:01:00-05:00      3
+2023-02-19 00:01:00-05:00      4
+2023-02-20 00:01:00-05:00      0
+2023-11-21 00:01:00-05:00      2
+avg 2.875, stddev 1.3562026818605375, threshold 0.162594636278925
+
+
+[fromage] threshold 0 (0.125 - 2 * 0.3535533905932738). Either nb_stddev is too high, time_interval (None) is too short, or this cluster should not be currently checked
+[mila] threshold 0 (0.375 - 2 * 0.5175491695067657). Either nb_stddev is too high, time_interval (None) is too short, or this cluster should not be currently checked
+[patate] threshold 0 (0.25 - 2 * 0.4629100498862757). Either nb_stddev is too high, time_interval (None) is too short, or this cluster should not be currently checked
+[raisin][2023-02-20 00:01:00-05:00] insufficient cluster scraping: 0 jobs / cluster / time unit; minimum required for this cluster: 0.162594636278925 (2.875 - 2 * 1.3562026818605375); time unit: 1 day, 0:00:00
