@@ -6,12 +6,6 @@ import pytest
 from sarc.alerts.usage_alerts.cluster_scraping import check_nb_jobs_per_cluster_per_time
 
 from ..jobs.test_func_load_job_series import MOCK_TIME
-from .common import _get_warnings
-
-get_warnings = functools.partial(
-    _get_warnings,
-    module="sarc.alerts.usage_alerts.cluster_scraping:cluster_scraping.py",
-)
 
 
 @pytest.mark.freeze_time(MOCK_TIME)

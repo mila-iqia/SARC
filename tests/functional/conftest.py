@@ -41,9 +41,9 @@ def clear_db(db):
     db.clusters.drop()
 
 
-def fill_db(db, with_users=False, with_clusters=False):
+def fill_db(db, with_users=False, with_clusters=False, job_patch=None):
     db.allocations.insert_many(create_allocations())
-    db.jobs.insert_many(create_jobs())
+    db.jobs.insert_many(create_jobs(job_patch=job_patch))
     db.diskusage.insert_many(create_diskusages())
     if with_users:
         db.users.insert_many(create_users())
@@ -58,7 +58,7 @@ def fill_db(db, with_users=False, with_clusters=False):
 
 
 def create_db_configuration_fixture(
-    db_name, empty=False, with_users=False, scope="function"
+    db_name, empty=False, with_users=False, job_patch=None, scope="function"
 ):
     @pytest.fixture(scope=scope)
     def fixture(standard_config_object):
@@ -66,7 +66,7 @@ def create_db_configuration_fixture(
         db = cfg.mongo.database_instance
         clear_db(db)
         if not empty:
-            fill_db(db, with_users=with_users)
+            fill_db(db, with_users=with_users, job_patch=job_patch)
         yield
 
     return fixture
@@ -106,6 +106,16 @@ read_only_db_config_object = create_db_configuration_fixture(
 )
 
 
+read_only_db_with_many_cpu_jobs_config_object = create_db_configuration_fixture(
+    db_name="sarc-read-only-with-many-cpu-jobs-test",
+    scope="session",
+    job_patch={
+        "allocated": {"billing": 0, "cpu": 0, "gres_gpu": 0, "mem": 0, "node": 0},
+        "requested": {"billing": 0, "cpu": 0, "gres_gpu": 0, "mem": 0, "node": 0},
+    },
+)
+
+
 read_only_db_with_users_config_object = create_db_configuration_fixture(
     db_name="sarc-read-only-with-users-test",
     with_users=True,
@@ -137,6 +147,15 @@ def read_write_db(standard_config, read_write_db_config_object):
 @pytest.fixture
 def read_only_db(standard_config, read_only_db_config_object):
     cfg = custom_db_config(standard_config, "sarc-read-only-test")
+    with using_config(cfg) as cfg:
+        yield cfg.mongo.database_instance
+
+
+@pytest.fixture
+def read_only_db_with_many_cpu_jobs(
+    standard_config, read_only_db_with_many_cpu_jobs_config_object
+):
+    cfg = custom_db_config(standard_config, "sarc-read-only-with-many-cpu-jobs-test")
     with using_config(cfg) as cfg:
         yield cfg.mongo.database_instance
 
