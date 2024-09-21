@@ -3,7 +3,7 @@ What this script does
 =====================
 
 This script can be called directly from the command line (legacy),
-or it can be called from the `sarc.ldap.acquire` script (recommended)
+or it can be called from the `sarc.users.acquire` script (recommended)
 using the `sarc ...` command.
 
 The legacy usage is not covered by unit tests, but the sarc command is covered.
@@ -138,17 +138,20 @@ they are structured as follows:
 import json
 import os
 import ssl
-from datetime import datetime
+from datetime import timedelta
 
 # Requirements
 # - pip install ldap3
 from ldap3 import ALL_ATTRIBUTES, SUBTREE, Connection, Server, Tls
 from pymongo import MongoClient, UpdateOne
 
-from ..config import LDAPConfig, config
+from sarc.cache import CachePolicy, with_cache
+
+from ..config import LDAPConfig
 from .supervisor import resolve_supervisors
 
 
+@with_cache(subdirectory="users", validity=timedelta(days=1))
 def query_ldap(local_private_key_file, local_certificate_file, ldap_service_uri):
     """
     Since we don't always query the LDAP (i.e. omitted when --input_json_file is given),
@@ -267,26 +270,6 @@ def client_side_user_updates(LD_users_DB, LD_users_LDAP):
     return LD_users_to_update_or_insert
 
 
-def _query_and_dump(
-    ldap,
-    save_ldap=False,
-):
-    LD_users_raw = query_ldap(
-        ldap.local_private_key_file,
-        ldap.local_certificate_file,
-        ldap.ldap_service_uri,
-    )
-
-    if save_ldap:
-        today = datetime.utcnow()
-        cache_path = config().cache / "ldap" / f"raw.{today.strftime('%Y-%m-%d')}.json"
-
-        with open(cache_path, "w", encoding="utf-8") as f_out:
-            json.dump(LD_users_raw, f_out, indent=4)
-
-    return LD_users_raw
-
-
 def _save_to_mongo(collection, LD_users):
     if collection is None:
         return
@@ -335,9 +318,14 @@ def load_group_to_prof_mapping(ldap_config: LDAPConfig):
         return json.load(file)
 
 
-def fetch_ldap(ldap, save_ldap=False):
-    # retrive users from LDAP
-    LD_users_raw = _query_and_dump(ldap, save_ldap)
+def fetch_ldap(ldap, cache_policy=CachePolicy.use):
+    # Retrieve users from LDAP
+    LD_users_raw = query_ldap(
+        ldap.local_private_key_file,
+        ldap.local_certificate_file,
+        ldap.ldap_service_uri,
+        cache_policy=cache_policy,
+    )
 
     # Transform users into the json we will save
     group_to_prof = load_group_to_prof_mapping(ldap)
@@ -354,11 +342,11 @@ def run(
     ldap,
     mongodb_collection=None,
     output_json_file=None,
-    save_ldap=False,
+    cache_policy=CachePolicy.use,
 ):
     """Runs periodically to synchronize mongodb with LDAP"""
 
-    LD_users = fetch_ldap(ldap, save_ldap)
+    LD_users = fetch_ldap(ldap, cache_policy=cache_policy)
 
     _save_to_mongo(mongodb_collection, LD_users)
 

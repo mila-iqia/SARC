@@ -13,13 +13,13 @@ from pandas import DataFrame
 from prometheus_api_client import MetricRangeDataFrame
 from tqdm import tqdm
 
+from sarc.client.job import JobStatistics, SlurmJob, Statistics, count_jobs, get_jobs
+from sarc.client.users.api import User, get_users
 from sarc.config import MTL, UTC, ClusterConfig, config
-from sarc.jobs.job import JobStatistics, Statistics, count_jobs, get_jobs
-from sarc.ldap.api import User, get_users
 from sarc.traces import trace_decorator
 
 if TYPE_CHECKING:
-    from sarc.jobs.sacct import SlurmJob
+    pass
 
 
 # pylint: disable=too-many-branches
@@ -89,6 +89,8 @@ def get_job_time_series(
         elif aggregation == "total":
             offset += duration_seconds
             range_seconds = duration_seconds
+        else:
+            raise ValueError(f"Unknown aggregation: {aggregation}")
 
         query = f"{query}[{range_seconds}s]"
         if "(" in measure:
@@ -319,7 +321,9 @@ def load_job_series(
           "gpu_utilization", "cpu_utilization", "gpu_memory", "gpu_power", "system_memory"
         - Optional job series fields, added if clip_time is True:
           "unclipped_start" and "unclipped_end"
-        - Optional user info fields if job users found. See `_user_to_series` for user fields.
+        - Optional user info fields if job users found.
+          Fields from `User.dict()` in format `user.<flattened dot-separated field>`,
+          + special field `user.primary_email` containing either `user.mila.email` or fallback `job.user`.
     """
 
     # If fields is a list, convert it to a renaming dict with same old and new names.

@@ -14,27 +14,48 @@ import json
 import logging
 
 import sarc.account_matching.make_matches
-import sarc.ldap.mymila
+import sarc.users.mymila
 from sarc.config import config
-from sarc.ldap.mymila import fetch_mymila
-from sarc.ldap.read_mila_ldap import fetch_ldap
-from sarc.ldap.revision import commit_matches_to_database
-from sarc.ldap.users_exceptions import (
+from sarc.traces import using_trace
+from sarc.users.mymila import fetch_mymila
+from sarc.users.read_mila_ldap import fetch_ldap
+from sarc.users.revision import commit_matches_to_database
+from sarc.users.users_exceptions import (
     apply_users_delegation_exceptions,
     apply_users_supervisor_exceptions,
 )
-from sarc.traces import using_trace
 
 
-def run(prompt=False):
-    """If prompt is True, script will prompt for manual matching."""
+def run(
+    prompt=False,
+    cache_policy=True,
+):
+    """If prompt is True, script will prompt for manual matching.
+
+    Arguments:
+        prompt: If prompt is True, script will prompt for manual matching.
+        force: If True, re-fetch users data regardless of if it is cached.
+        no_fetch: If True, always fetch from cache if it exists.
+    """
 
     cfg = config()
     user_collection = cfg.mongo.database_instance[cfg.ldap.mongo_collection_name]
 
-    LD_users = fetch_ldap(ldap=cfg.ldap)
+    LD_users = fetch_ldap(
+        ldap=cfg.ldap,
+        cache_policy=cache_policy,
+    )
 
-    LD_users = fetch_mymila(cfg, LD_users)
+    # MyMila scraping "NotImplementedError" is temporary ignored until we have a working fetching implementation,
+    # or a working workaround using CSV cache.
+    with using_trace(
+        "sarc.users.acquire", "fetch_mymila", exception_types=(NotImplementedError,)
+    ) as span:
+        LD_users = fetch_mymila(
+            cfg,
+            LD_users,
+            cache_policy=cache_policy,
+        )
 
     # For each supervisor or co-supervisor, look for a mila_email_username
     # matching the display name. If None has been found, the previous value remains
@@ -65,7 +86,7 @@ def run(prompt=False):
     # Trace matching.
     # Do not set expected exceptions, so that any exception will be re-raised by tracing.
     with using_trace(
-        "sarc.ldap.acquire", "match_drac_to_mila_accounts", exception_types=()
+        "sarc.users.acquire", "match_drac_to_mila_accounts", exception_types=()
     ) as span:
         span.add_event("Loading mila_ldap, drac_roles and drac_members from files ...")
         DLD_data = sarc.account_matching.make_matches.load_data_from_files(

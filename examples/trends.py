@@ -4,8 +4,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from tqdm import tqdm
 
+from sarc.client.job import get_jobs
 from sarc.config import config
-from sarc.jobs import get_jobs
 
 # Clusters we want to compare
 clusters = ["mila", "narval", "beluga", "cedar", "graham"]

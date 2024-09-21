@@ -1,0 +1,273 @@
+{
+  "jobs": [
+    {
+      "account": "mila",
+      "comment": {
+        "administrator": "",
+        "job": "",
+        "system": ""
+      },
+      "allocation_nodes": 1,
+      "array": {
+        "job_id": 0,
+        "limits": {
+          "max": {
+            "running": {
+              "tasks": 0
+            }
+          }
+        },
+        "task_id": {
+          "set": false,
+          "infinite": false,
+          "number": 0
+        },
+        "task": ""
+      },
+      "association": {
+        "account": "mila",
+        "cluster": "mila",
+        "partition": "",
+        "user": "masterkohga",
+        "id": 751
+      },
+      "block": "",
+      "cluster": "mila",
+      "constraints": "x86_64&(32gb|48gb)",
+      "container": "",
+      "derived_exit_code": {
+        "status": [
+          "SUCCESS"
+        ],
+        "return_code": {
+          "set": true,
+          "infinite": false,
+          "number": 0
+        },
+        "signal": {
+          "id": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          },
+          "name": ""
+        }
+      },
+      "time": {
+        "elapsed": 102228976,
+        "eligible": 1613725209,
+        "end": 0,
+        "start": 1613725209,
+        "submission": 1613725209,
+        "suspended": 0,
+        "system": {
+          "seconds": 0,
+          "microseconds": 0
+        },
+        "limit": {
+          "set": true,
+          "infinite": false,
+          "number": 7200
+        },
+        "total": {
+          "seconds": 0,
+          "microseconds": 0
+        },
+        "user": {
+          "seconds": 0,
+          "microseconds": 0
+        }
+      },
+      "exit_code": {
+        "status": [
+          "SUCCESS"
+        ],
+        "return_code": {
+          "set": true,
+          "infinite": false,
+          "number": 0
+        },
+        "signal": {
+          "id": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          },
+          "name": ""
+        }
+      },
+      "extra": "",
+      "failed_node": "",
+      "flags": [
+        "STARTED_ON_SUBMIT"
+      ],
+      "group": "",
+      "het": {
+        "job_id": 0,
+        "job_offset": {
+          "set": false,
+          "infinite": false,
+          "number": 0
+        }
+      },
+      "job_id": 4,
+      "name": "sh",
+      "licenses": "",
+      "mcs": {
+        "label": ""
+      },
+      "nodes": "mila02",
+      "partition": "main",
+      "hold": false,
+      "priority": {
+        "set": true,
+        "infinite": false,
+        "number": 499522
+      },
+      "qos": "normal",
+      "required": {
+        "CPUs": 4,
+        "memory_per_cpu": {
+          "set": false,
+          "infinite": false,
+          "number": 0
+        },
+        "memory_per_node": {
+          "set": true,
+          "infinite": false,
+          "number": 32768
+        }
+      },
+      "kill_request_user": "",
+      "reservation": {
+        "id": 0,
+        "name": ""
+      },
+      "script": "",
+      "state": {
+        "current": [
+          "RUNNING"
+        ],
+        "reason": "None"
+      },
+      "steps": [
+      ],
+      "submit_line": "",
+      "tres": {
+        "allocated": [
+          {
+            "type": "cpu",
+            "name": "",
+            "id": 1,
+            "count": 4
+          },
+          {
+            "type": "mem",
+            "name": "",
+            "id": 2,
+            "count": 32768
+          },
+          {
+            "type": "energy",
+            "name": "",
+            "id": 3,
+            "count": -2
+          },
+          {
+            "type": "node",
+            "name": "",
+            "id": 4,
+            "count": 1
+          },
+          {
+            "type": "billing",
+            "name": "",
+            "id": 5,
+            "count": 3
+          },
+          {
+            "type": "gres",
+            "name": "gpu",
+            "id": 1001,
+            "count": 2
+          }
+        ],
+        "requested": [
+          {
+            "type": "cpu",
+            "name": "",
+            "id": 1,
+            "count": 4
+          },
+          {
+            "type": "mem",
+            "name": "",
+            "id": 2,
+            "count": 32768
+          },
+          {
+            "type": "node",
+            "name": "",
+            "id": 4,
+            "count": 1
+          },
+          {
+            "type": "billing",
+            "name": "",
+            "id": 5,
+            "count": 3
+          },
+          {
+            "type": "gres",
+            "name": "gpu",
+            "id": 1001,
+            "count": 2
+          }
+        ]
+      },
+      "used_gres": "",
+      "user": "masterkohga",
+      "wckey": {
+        "wckey": "",
+        "flags": [
+        ]
+      },
+      "working_directory": "\/home\/mila\/m\/masterkohga"
+    }
+  ],
+  "meta": {
+    "plugin": {
+      "type": "",
+      "name": "",
+      "data_parser": "data_parser\/v0.0.40",
+      "accounting_storage": "accounting_storage\/slurmdbd"
+    },
+    "client": {
+      "source": "\/dev\/pts\/53",
+      "user": "john.doe",
+      "group": "john.doe"
+    },
+    "command": [
+      "sacct",
+      "-X",
+      "-S",
+      "2024-05-16T00:00",
+      "-E",
+      "2024-05-17T00:00",
+      "--allusers"
+    ],
+    "slurm": {
+      "version": {
+        "major": "23",
+        "micro": "5",
+        "minor": "11"
+      },
+      "release": "23.11.5",
+      "cluster": "mila"
+    }
+  },
+  "errors": [
+  ],
+  "warnings": [
+  ]
+}

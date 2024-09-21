@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from datetime import datetime, time, timedelta
 from enum import Enum
-from functools import cache
 from typing import Iterable, Optional
 
 from pydantic import validator
@@ -10,7 +9,15 @@ from pydantic_mongo import AbstractRepository, ObjectIdField
 
 from sarc.traces import trace_decorator
 
-from ..config import MTL, TZLOCAL, UTC, BaseModel, ClusterConfig, config
+from ..config import (
+    MTL,
+    TZLOCAL,
+    UTC,
+    BaseModel,
+    ClusterConfig,
+    config,
+    scraping_mode_required,
+)
 
 
 class SlurmState(str, Enum):
@@ -160,14 +167,20 @@ class SlurmJob(BaseModel):
 
         return timedelta(seconds=0)
 
+    @scraping_mode_required
     def series(self, **kwargs):
-        from .series import get_job_time_series  # pylint: disable=cyclic-import
+        from sarc.jobs.series import (  # pylint: disable=cyclic-import
+            get_job_time_series,
+        )
 
         return get_job_time_series(job=self, **kwargs)
 
     @trace_decorator()
+    @scraping_mode_required
     def statistics(self, recompute=False, save=True, overwrite_when_empty=False):
-        from .series import compute_job_statistics  # pylint: disable=cyclic-import
+        from sarc.jobs.series import (  # pylint: disable=cyclic-import
+            compute_job_statistics,
+        )
 
         if self.stored_statistics and not recompute:
             return self.stored_statistics
@@ -184,9 +197,11 @@ class SlurmJob(BaseModel):
 
         return None
 
+    @scraping_mode_required
     def save(self):
-        jobs_collection().save_job(self)
+        _jobs_collection().save_job(self)
 
+    @scraping_mode_required
     def fetch_cluster_config(self):
         """This function is only available on the admin side"""
         return config().clusters[self.cluster_name]
@@ -196,6 +211,7 @@ class SlurmJobRepository(AbstractRepository[SlurmJob]):
     class Meta:
         collection_name = "jobs"
 
+    @scraping_mode_required
     def save_job(self, model: SlurmJob):
         """Save a SlurmJob into the database.
 
@@ -216,17 +232,10 @@ class SlurmJobRepository(AbstractRepository[SlurmJob]):
         )
 
 
-def jobs_collection():
+def _jobs_collection():
     """Return the jobs collection in the current MongoDB."""
     db = config().mongo.database_instance
     return SlurmJobRepository(database=db)
-
-
-@cache
-def get_clusters():
-    """Fetch all possible clusters"""
-    jobs = jobs_collection().get_collection()
-    return jobs.distinct("cluster_name", {})
 
 
 # pylint: disable=too-many-branches,dangerous-default-value
@@ -364,7 +373,7 @@ def get_jobs(
         end=end,
     )
 
-    coll = jobs_collection()
+    coll = _jobs_collection()
 
     return coll.find_by(query, **query_options)
 
@@ -384,3 +393,25 @@ def get_job(*, query_options={}, **kwargs):
     for job in jobs:
         return job
     return None
+
+
+class SlurmCLuster(BaseModel):
+    """Hold data for a Slurm cluster."""
+
+    # Database ID
+    id: ObjectIdField = None
+
+    cluster_name: str
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+
+
+class SlurmClusterRepository(AbstractRepository[SlurmCLuster]):
+    class Meta:
+        collection_name = "clusters"
+
+
+def get_available_clusters() -> Iterable[SlurmCLuster]:
+    """Get clusters available in database."""
+    db = config().mongo.database_instance
+    return SlurmClusterRepository(database=db).find_by({})

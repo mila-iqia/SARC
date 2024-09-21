@@ -1,5 +1,5 @@
 from sarc.config import LDAPConfig
-from sarc.ldap.read_mila_ldap import load_ldap_exceptions
+from sarc.users.read_mila_ldap import load_ldap_exceptions
 
 
 def apply_users_delegation_exceptions(DD_persons, ldap_config: LDAPConfig, span):
