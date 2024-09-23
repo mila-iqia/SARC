@@ -1,8 +1,8 @@
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 
 from sarc.client.job import get_available_clusters
-from sarc.config import MTL
+from sarc.config import MTL, TZLOCAL
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,10 @@ def check_cluster_response(time_interval: timedelta = timedelta(days=7)):
             # Cluster's latest scraping date should be in `cluster.end_date`.
             # NB: We assume cluster's `end_date` is stored as a date string,
             # so we must first convert it to a datetime object.
-            cluster_end_date = datetime.fromisoformat(cluster.end_date).astimezone(MTL)
+            # `en_date` is parsed the same way as start/end parameters in `get_jobs()`.
+            cluster_end_date = datetime.combine(
+                datetime.strptime(cluster.end_date, "%Y-%m-%d"), time.min
+            ).replace(tzinfo=TZLOCAL)
             # Now we can check.
             if cluster_end_date < oldest_allowed_date:
                 logger.warning(
