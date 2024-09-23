@@ -34,9 +34,13 @@ def check_cluster_response(time_interval: timedelta = timedelta(days=7)):
             # NB: We assume cluster's `end_date` is stored as a date string,
             # so we must first convert it to a datetime object.
             # `en_date` is parsed the same way as start/end parameters in `get_jobs()`.
-            cluster_end_date = datetime.combine(
-                datetime.strptime(cluster.end_date, "%Y-%m-%d"), time.min
-            ).replace(tzinfo=TZLOCAL)
+            cluster_end_date = (
+                datetime.combine(
+                    datetime.strptime(cluster.end_date, "%Y-%m-%d"), time.min
+                )
+                .replace(tzinfo=TZLOCAL)
+                .astimezone(MTL)
+            )
             # Now we can check.
             if cluster_end_date < oldest_allowed_date:
                 logger.warning(
