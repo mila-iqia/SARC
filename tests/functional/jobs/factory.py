@@ -279,6 +279,26 @@ def create_jobs(job_factory: JobFactory | None = None, job_patch: dict | None = 
     return job_factory.jobs
 
 
+def create_cluster_entries(db):
+    """Generate cluster entries to fill collection `clusters`."""
+    cluster_names = sorted({job["cluster_name"] for job in db.jobs.find({})})
+    cluster_entries = []
+
+    date_format = "%Y-%m-%d"
+
+    for i, cluster_name in enumerate(cluster_names):
+        cluster_end_time = end_time - timedelta(days=i)
+        cluster_start_time = cluster_end_time - timedelta(days=1)
+        cluster_entries.append(
+            {
+                "cluster_name": cluster_name,
+                "start_date": cluster_start_time.strftime(date_format),
+                "end_date": cluster_end_time.strftime(date_format),
+            }
+        )
+    return cluster_entries
+
+
 json_raw = {
     "metadata": {
         "plugin": {"type": "openapi/dbv0.0.37", "name": "Slurm OpenAPI DB v0.0.37"},

@@ -11,7 +11,7 @@ from sarc.testing import MongoInstance
 
 from .allocations.factory import create_allocations
 from .diskusage.factory import create_diskusages
-from .jobs.factory import create_jobs, create_users
+from .jobs.factory import create_cluster_entries, create_jobs, create_users
 
 
 @pytest.fixture
@@ -51,14 +51,16 @@ def fill_db(db, with_users=False, with_clusters=False, job_patch=None):
     if with_clusters:
         # Fill collection `clusters`.
         cluster_names = {job["cluster_name"] for job in db.jobs.find({})}
-        db.clusters.insert_many(
-            {"cluster_name": cluster_name, "start_date": None, "end_date": None}
-            for cluster_name in cluster_names
-        )
+        db.clusters.insert_many(create_cluster_entries(db))
 
 
 def create_db_configuration_fixture(
-    db_name, empty=False, with_users=False, job_patch=None, scope="function"
+    db_name,
+    empty=False,
+    with_users=False,
+    with_clusters=False,
+    job_patch=None,
+    scope="function",
 ):
     @pytest.fixture(scope=scope)
     def fixture(standard_config_object):
@@ -66,7 +68,12 @@ def create_db_configuration_fixture(
         db = cfg.mongo.database_instance
         clear_db(db)
         if not empty:
-            fill_db(db, with_users=with_users, job_patch=job_patch)
+            fill_db(
+                db,
+                with_users=with_users,
+                with_clusters=with_clusters,
+                job_patch=job_patch,
+            )
         yield
 
     return fixture
@@ -119,6 +126,7 @@ read_only_db_with_many_cpu_jobs_config_object = create_db_configuration_fixture(
 read_only_db_with_users_config_object = create_db_configuration_fixture(
     db_name="sarc-read-only-with-users-test",
     with_users=True,
+    with_clusters=True,
     scope="session",
 )
 
