@@ -10,14 +10,14 @@ from .monitor import HealthMonitorCommand
 
 @dataclass
 class Health:
-    command: Union[HealthMonitorCommand, HealthCheckCommand, HealthHistoryCommand] = (
-        subparsers(
-            {
-                "monitor": HealthMonitorCommand,
-                "check": HealthCheckCommand,
-                "history": HealthHistoryCommand,
-            }
-        )
+    command: Union[
+        HealthMonitorCommand, HealthCheckCommand, HealthHistoryCommand
+    ] = subparsers(
+        {
+            "monitor": HealthMonitorCommand,
+            "check": HealthCheckCommand,
+            "history": HealthHistoryCommand,
+        }
     )
 
     def execute(self) -> int:
