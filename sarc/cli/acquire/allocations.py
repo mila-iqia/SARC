@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import logging
 import csv
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+
+from sarc.traces import trace_decorator
 
 from sarc.allocations.allocations import (
     Allocation,
@@ -13,7 +16,10 @@ from sarc.allocations.allocations import (
     get_allocations_collection,
 )
 
+logger = logging.getLogger(__name__)
 
+
+@trace_decorator()
 def convert_csv_row_to_allocation(
     cluster_name: str,
     resource_name: str,
@@ -22,6 +28,7 @@ def convert_csv_row_to_allocation(
     end: datetime,
     cpu_year: None | int = None,
     gpu_year: None | int = None,
+    rgu_year: None | int = None,
     vcpu_year: None | int = None,
     vgpu_year: None | int = None,
     project_size: None | str = None,
@@ -38,6 +45,7 @@ def convert_csv_row_to_allocation(
         resources=AllocationRessources(
             compute=AllocationCompute(
                 gpu_year=gpu_year,
+                rgu_year=rgu_year,
                 cpu_year=cpu_year,
                 vcpu_year=vcpu_year,
                 vgpu_year=vgpu_year,
@@ -58,6 +66,8 @@ def convert_csv_row_to_allocation(
 @dataclass
 class AcquireAllocations:
     file: Path
+    # Do not actually insert the data into the database
+    dry: bool
 
     def execute(self) -> int:
         collection = get_allocations_collection()
@@ -76,10 +86,11 @@ class AcquireAllocations:
                 try:
                     allocation = convert_csv_row_to_allocation(**row)
                 except Exception as e:  # pylint: disable=broad-exception-caught
-                    print(f"Skipping row: {row}")
-                    print(e)
+                    logger.warning(f"Skipping row: {row}")
                     continue
 
-                collection.add(allocation)
+                logger.info(f"Adding allocation: {allocation}")
+                if not self.dry:
+                    collection.add(allocation)
 
         return 0
