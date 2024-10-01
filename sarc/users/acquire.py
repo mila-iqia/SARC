@@ -20,6 +20,10 @@ from sarc.traces import using_trace
 from sarc.users.mymila import fetch_mymila
 from sarc.users.read_mila_ldap import fetch_ldap
 from sarc.users.revision import commit_matches_to_database
+from sarc.users.users_exceptions import (
+    apply_users_delegation_exceptions,
+    apply_users_supervisor_exceptions,
+)
 
 
 def run(
@@ -134,6 +138,12 @@ def run(
 
         for _, user in DD_persons_matched.items():
             fill_computed_fields(user)
+
+        # apply delegation exceptions
+        apply_users_delegation_exceptions(DD_persons_matched, cfg.ldap, span)
+
+        # apply supervisor exceptions
+        apply_users_supervisor_exceptions(DD_persons_matched, cfg.ldap, span)
 
         # These associations can now be propagated to the database.
         span.add_event("Committing matches to database ...")
