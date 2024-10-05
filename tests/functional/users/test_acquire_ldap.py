@@ -76,7 +76,7 @@ def test_acquire_ldap_revision_change(patch_return_values, mock_file):
     Then, one third acquisition, with no change in the LDAP data.
     This should result in no change in the database.
     """
-    nbr_users = 3
+    nbr_users = 4
 
     patch_return_values(
         {
@@ -110,7 +110,7 @@ def test_acquire_ldap_revision_change(patch_return_values, mock_file):
             "sarc.users.read_mila_ldap.query_ldap": fake_raw_ldap_data(
                 nbr_users,
                 hardcoded_values_by_user={
-                    2: {  # The first user who is not a prof is the one with index 2
+                    3: {  # The first user who is not a prof and not overrided is the one with index 3
                         "supervisor": "new_supervisor@mila.quebec"
                     }
                 },
