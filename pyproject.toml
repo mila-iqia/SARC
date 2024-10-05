@@ -70,6 +70,7 @@ disable = [
     "import-outside-toplevel",  # These imports are useful to reduce loading times
     "too-many-arguments",
     "too-many-locals",
+    "too-many-positional-arguments",
     "missing-module-docstring",
     "missing-class-docstring",
     "missing-function-docstring",

@@ -177,6 +177,7 @@ def _extract_supervisors_from_groups(
     return sorted(supervisors, key=sortkey, reverse=True)
 
 
+# pylint: disable=too-many-branches
 def resolve_supervisors(
     ldap_people: list[dict], group_to_prof: dict, exceptions: dict
 ) -> SupervisorMatchingErrors:

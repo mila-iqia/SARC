@@ -46,6 +46,7 @@ def test_query_to_ldap_server_and_writing_to_output_json(
 
             # resolve_supervisors is not called here
             e["supervisor"] = None
+            e["co_supervisor"] = None
 
             assert e == processed_user
 
