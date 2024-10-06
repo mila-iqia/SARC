@@ -228,7 +228,7 @@ Found 4 job(s):
     }
 }
 
-Found 90 span(s):
+Found 74 span(s):
 [
  {
   "span_name": "acquire_cluster_data",
@@ -253,7 +253,7 @@ Found 90 span(s):
   "span_has_error": true
  },
  {
-  "span_name": "SAcctScraper.get_raw",
+  "span_name": "SAcctScraper.fetch_raw",
   "span_events": [
    "exception",
    "exception"
@@ -273,12 +273,6 @@ Found 90 span(s):
  },
  {
   "span_name": "sacct_mongodb_import",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "SAcctScraper.get_raw",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
@@ -370,25 +364,7 @@ Found 90 span(s):
   "span_has_error": false
  },
  {
-  "span_name": "SAcctScraper.get_raw",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "SAcctScraper.get_raw",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "SAcctScraper.get_raw",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "SAcctScraper.get_raw",
+  "span_name": "SAcctScraper.fetch_raw",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
@@ -405,12 +381,6 @@ Found 90 span(s):
  },
  {
   "span_name": "sacct_mongodb_import",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "SAcctScraper.get_raw",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
@@ -502,25 +472,7 @@ Found 90 span(s):
   "span_has_error": false
  },
  {
-  "span_name": "SAcctScraper.get_raw",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "SAcctScraper.get_raw",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "SAcctScraper.get_raw",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "SAcctScraper.get_raw",
+  "span_name": "SAcctScraper.fetch_raw",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
@@ -548,7 +500,7 @@ Found 90 span(s):
   "span_has_error": true
  },
  {
-  "span_name": "SAcctScraper.get_raw",
+  "span_name": "SAcctScraper.fetch_raw",
   "span_events": [
    "exception",
    "exception"
@@ -568,12 +520,6 @@ Found 90 span(s):
  },
  {
   "span_name": "sacct_mongodb_import",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "SAcctScraper.get_raw",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
@@ -665,25 +611,7 @@ Found 90 span(s):
   "span_has_error": false
  },
  {
-  "span_name": "SAcctScraper.get_raw",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "SAcctScraper.get_raw",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "SAcctScraper.get_raw",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "SAcctScraper.get_raw",
+  "span_name": "SAcctScraper.fetch_raw",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
@@ -700,12 +628,6 @@ Found 90 span(s):
  },
  {
   "span_name": "sacct_mongodb_import",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "SAcctScraper.get_raw",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
@@ -797,25 +719,7 @@ Found 90 span(s):
   "span_has_error": false
  },
  {
-  "span_name": "SAcctScraper.get_raw",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "SAcctScraper.get_raw",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "SAcctScraper.get_raw",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "SAcctScraper.get_raw",
+  "span_name": "SAcctScraper.fetch_raw",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false

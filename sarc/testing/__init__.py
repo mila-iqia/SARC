@@ -1,16 +1,18 @@
 import multiprocessing
 import os
 import subprocess
+import sys
 import time
 
 
-def popen_reader(state, function, args, shell=False):
+def popen_reader(state, function, args, env, shell=False):
     """Execute a command with the given formatter."""
     with subprocess.Popen(
         args,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
+        env={**os.environ, **env},
         shell=shell,
     ) as process:
         try:
@@ -18,19 +20,23 @@ def popen_reader(state, function, args, shell=False):
                 line = process.stdout.readline()
 
                 if len(line) > 0:
-                    function(line, state)
+                    function(line.strip(), state)
 
-            return process.poll()
+            return sys.exit(process.poll())
         except KeyboardInterrupt:
             print("Stopping due to user interrupt")
             process.kill()
 
-        return -1
+        return sys.exit(1)
 
 
 def is_ready(line, state):
-    state["ready"] = int("mongo_launch" in line)
-    state["last_line"] = line.strip()
+    # Warning: The script contains `set -v` which outputs the commands as they
+    # are executed (e.g. `function mongo_launch` or `mongo_launch &`). A more
+    # robust solution should probably be looked for rather than lokking into the
+    # stdout for the executed command
+    state["ready"] = int(state.get("ready", 0) or "mongo_launch" == line)
+    state["last_line"] = line
     state["error"] += int("MongoNetworkError" in line)
 
 
@@ -45,8 +51,8 @@ class MongoInstance:
         admin_pass="admin_pass",
         write_name="write_name",
         write_pass="write_pass",
-        user_pass="user_pass",
         user_name="user_name",
+        user_pass="user_pass",
     ) -> None:
         self.env = {
             "MONGO_PORT": f"{port}",
@@ -73,25 +79,36 @@ class MongoInstance:
         )
 
     def shutdown(self):
-        subprocess.call(["mongod", "--dbpath", self.path, "--shutdown"])
+        subprocess.call(
+            ["bash", "-c", f". {self.script} && mongo_stop"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            env={**os.environ, **self.env, **{"LAUNCH_MONGO": "0"}},
+        )
 
     def __enter__(self):
         self.shutdown()
 
-        for k, v in self.env.items():
-            os.environ[k] = str(v)
-
         try:
             self.proc = multiprocessing.Process(
-                target=popen_reader, args=(self.state, is_ready, ["bash", self.script])
+                target=popen_reader,
+                args=(self.state, is_ready, ["bash", self.script], self.env),
             )
             self.proc.start()
             while self.proc.is_alive() and self.state.get("ready", 0) != 1:
                 time.sleep(0.01)
 
                 if line := self.state.get("last_line"):
+                    # There is no real garanty that we will get last_line here,
+                    # it could already have been overriden by the process's call
+                    # to is_ready
                     print(line)
                     self.state["last_line"] = None
+
+            if self.proc.exitcode:
+                raise multiprocessing.ProcessError(
+                    f"Failed to start mongodb with env {self.env}"
+                )
 
         except:
             self.shutdown()

@@ -11,7 +11,7 @@ from sarc.testing import MongoInstance
 
 from .allocations.factory import create_allocations
 from .diskusage.factory import create_diskusages
-from .jobs.factory import create_jobs
+from .jobs.factory import create_cluster_entries, create_jobs, create_users
 
 
 @pytest.fixture
@@ -41,20 +41,54 @@ def clear_db(db):
     db.clusters.drop()
 
 
-def fill_db(db):
+def fill_db(db, with_users=False, with_clusters=False, job_patch=None):
     db.allocations.insert_many(create_allocations())
-    db.jobs.insert_many(create_jobs())
+    db.jobs.insert_many(create_jobs(job_patch=job_patch))
     db.diskusage.insert_many(create_diskusages())
+    if with_users:
+        db.users.insert_many(create_users())
+
+    if with_clusters:
+        # Fill collection `clusters`.
+        cluster_names = {job["cluster_name"] for job in db.jobs.find({})}
+        db.clusters.insert_many(create_cluster_entries(db))
 
 
-def create_db_configuration_fixture(db_name, empty=False, scope="function"):
+def create_db_configuration_fixture(
+    db_name,
+    empty=False,
+    with_users=False,
+    with_clusters=False,
+    job_patch=None,
+    scope="function",
+):
     @pytest.fixture(scope=scope)
     def fixture(standard_config_object):
         cfg = custom_db_config(standard_config_object, db_name)
         db = cfg.mongo.database_instance
         clear_db(db)
         if not empty:
-            fill_db(db)
+            fill_db(
+                db,
+                with_users=with_users,
+                with_clusters=with_clusters,
+                job_patch=job_patch,
+            )
+        yield
+
+    return fixture
+
+
+def create_client_db_configuration_fixture(
+    db_name, empty=False, with_users=False, with_clusters=False, scope="function"
+):
+    @pytest.fixture(scope=scope)
+    def fixture(client_config_object):
+        cfg = custom_db_config(client_config_object, db_name)
+        db = cfg.mongo.database_instance
+        clear_db(db)
+        if not empty:
+            fill_db(db, with_users=with_users, with_clusters=with_clusters)
         yield
 
     return fixture
@@ -79,6 +113,31 @@ read_only_db_config_object = create_db_configuration_fixture(
 )
 
 
+read_only_db_with_many_cpu_jobs_config_object = create_db_configuration_fixture(
+    db_name="sarc-read-only-with-many-cpu-jobs-test",
+    scope="session",
+    job_patch={
+        "allocated": {"billing": 0, "cpu": 0, "gres_gpu": 0, "mem": 0, "node": 0},
+        "requested": {"billing": 0, "cpu": 0, "gres_gpu": 0, "mem": 0, "node": 0},
+    },
+)
+
+
+read_only_db_with_users_config_object = create_db_configuration_fixture(
+    db_name="sarc-read-only-with-users-test",
+    with_users=True,
+    with_clusters=True,
+    scope="session",
+)
+
+read_only_client_db_with_users_config_object = create_client_db_configuration_fixture(
+    db_name="sarc-read-only-with-users-test-client",
+    with_users=True,
+    with_clusters=True,
+    scope="session",
+)
+
+
 @pytest.fixture
 def empty_read_write_db(standard_config, empty_read_write_db_config_object):
     cfg = custom_db_config(standard_config, "sarc-read-write-test")
@@ -96,6 +155,31 @@ def read_write_db(standard_config, read_write_db_config_object):
 @pytest.fixture
 def read_only_db(standard_config, read_only_db_config_object):
     cfg = custom_db_config(standard_config, "sarc-read-only-test")
+    with using_config(cfg) as cfg:
+        yield cfg.mongo.database_instance
+
+
+@pytest.fixture
+def read_only_db_with_many_cpu_jobs(
+    standard_config, read_only_db_with_many_cpu_jobs_config_object
+):
+    cfg = custom_db_config(standard_config, "sarc-read-only-with-many-cpu-jobs-test")
+    with using_config(cfg) as cfg:
+        yield cfg.mongo.database_instance
+
+
+@pytest.fixture
+def read_only_db_with_users(standard_config, read_only_db_with_users_config_object):
+    cfg = custom_db_config(standard_config, "sarc-read-only-with-users-test")
+    with using_config(cfg) as cfg:
+        yield cfg.mongo.database_instance
+
+
+@pytest.fixture
+def read_only_db_with_users_client(
+    client_config, read_only_client_db_with_users_config_object
+):
+    cfg = custom_db_config(client_config, "sarc-read-only-with-users-test-client")
     with using_config(cfg) as cfg:
         yield cfg.mongo.database_instance
 
@@ -349,7 +433,7 @@ def write_setup(mongodb, scraping_mode, tmp_path, freeport, monkeypatch):
 
 @pytest.fixture
 def read_setup(mongodb, scraping_mode, tmp_path, freeport, monkeypatch):
-    """SARC read user, can onlly read to sarc database.
+    """SARC read user, can only read to sarc database.
     Does not have access to secrets
     """
     config_path = tmp_path / "config.json"

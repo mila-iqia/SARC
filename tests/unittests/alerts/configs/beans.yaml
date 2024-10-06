@@ -1,0 +1,23 @@
+sarc:
+  health_monitor:
+    checks:
+      many_beans:
+        class: "tests.unittests.alerts.definitions:BeanCheck"
+        active: true
+        interval: 1h
+        beans: 31
+      little_beans:
+        class: "tests.unittests.alerts.definitions:BeanCheck"
+        active: true
+        interval: 1h30m
+        beans: 7
+      evil_beans:
+        class: "tests.unittests.alerts.definitions:BeanCheck"
+        active: true
+        interval: 2h
+        beans: 666
+      sleepy_beans:
+        class: "tests.unittests.alerts.definitions:BeanCheck"
+        active: false
+        interval: 1h30m
+        beans: 50

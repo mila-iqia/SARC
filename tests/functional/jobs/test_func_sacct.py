@@ -13,9 +13,9 @@ import pytest
 from fabric.testing.base import Command, Session
 from opentelemetry.trace import Status, StatusCode, get_tracer
 
+from sarc.client.job import JobStatistics, get_jobs
 from sarc.config import MTL, PST, UTC, config
 from sarc.jobs import sacct
-from sarc.jobs.job import JobStatistics, get_jobs
 from sarc.jobs.sacct import SAcctScraper
 
 from .factory import JsonJobFactory, json_raw
@@ -170,10 +170,10 @@ def test_parse_json_job(json_jobs, scraper, file_regression):
 )
 @pytest.mark.usefixtures("standard_config")
 def test_parse_malformed_jobs(sacct_json, scraper, captrace):
-    scraper.results = json.loads(sacct_json)
+    scraper.get_raw.save(value_to_save=json.loads(sacct_json))
     assert list(scraper) == []
     spans = captrace.get_finished_spans()
-    assert len(spans) > 1
+    assert len(spans) > 0
     # Just check the span that should have got an error.
     error_spans = [
         span for span in spans if span.status.status_code == StatusCode.ERROR
@@ -194,7 +194,7 @@ def test_parse_malformed_jobs(sacct_json, scraper, captrace):
     indirect=True,
 )
 def test_parse_no_group_jobs(sacct_json, scraper, caplog):
-    scraper.results = json.loads(sacct_json)
+    scraper.get_raw.save(value_to_save=json.loads(sacct_json))
     with caplog.at_level("DEBUG"):
         assert list(scraper) == []
     assert 'Skipping job with group "None": 1' in caplog.text
@@ -208,7 +208,7 @@ def test_parse_no_group_jobs(sacct_json, scraper, caplog):
     indirect=True,
 )
 def test_scrape_lost_job_on_wrong_cluster(sacct_json, scraper, caplog):
-    scraper.results = json.loads(sacct_json)
+    scraper.get_raw.save(value_to_save=json.loads(sacct_json))
     with caplog.at_level("WARNING"):
         jobs = list(scraper)
 
@@ -229,9 +229,11 @@ def test_scraper_with_cache(scraper, sacct_json, file_regression):
     # We'd like to test that this starts with "/tmp/pytest",
     # but this isn't the case when we run the tests on Mac OS,
     # ending up in '/private/var/folders/*/pytest-of-gyomalin/pytest-63'.
-    assert "pytest" in str(scraper.cachefile)
+    assert "pytest" in str(scraper.get_raw.cache_dir)
 
-    with open(scraper.cachefile, "w") as f:
+    scraper.get_raw.cache_dir.mkdir(parents=True, exist_ok=True)
+
+    with open(scraper.get_raw.cache_path(), "w") as f:
         f.write(sacct_json)
 
     jobs = list(scraper)
@@ -245,21 +247,23 @@ def test_scraper_with_cache(scraper, sacct_json, file_regression):
 )
 def test_scraper_with_malformed_cache(test_config, remote, scraper, caplog):
     # see remark in `test_scraper_with_cache` for that "pytest" substring check
-    assert "pytest" in str(scraper.cachefile)
+    assert "pytest" in str(scraper.get_raw.cache_dir)
 
-    with open(scraper.cachefile, "w") as f:
+    scraper.get_raw.cache_dir.mkdir(parents=True, exist_ok=True)
+
+    with open(scraper.get_raw.cache_path(), "w") as f:
         f.write("I am malformed!! :'(")
 
     channel = remote.expect(
         host="patate",
-        cmd="/opt/slurm/bin/sacct  -X -S '2023-02-14T00:00' -E '2023-02-15T00:00' --allusers --json",
+        cmd="/opt/slurm/bin/sacct  -X -S 2023-02-14T00:00 -E 2023-02-15T00:00 --allusers --json",
         out=b"{}",
     )
 
     with caplog.at_level("WARNING"):
         assert len(scraper.get_raw()) == 0
 
-    assert "Need to re-fetch because cache has malformed JSON." in caplog.text
+    assert "Could not load malformed cache file" in caplog.text
 
 
 @pytest.mark.parametrize(
@@ -271,7 +275,7 @@ def test_sacct_bin_and_accounts(test_config, remote):
     )
     channel = remote.expect(
         host="patate",
-        cmd="/opt/software/slurm/bin/sacct -A rrg-bonhomme-ad_gpu,rrg-bonhomme-ad_cpu,def-bonhomme_gpu,def-bonhomme_cpu -X -S '2023-02-14T00:00' -E '2023-02-15T00:00' --allusers --json",
+        cmd="/opt/software/slurm/bin/sacct -A rrg-bonhomme-ad_gpu,rrg-bonhomme-ad_cpu,def-bonhomme_gpu,def-bonhomme_cpu -X -S 2023-02-14T00:00 -E 2023-02-15T00:00 --allusers --json",
         out=b'{"jobs": []}',
     )
 
@@ -281,6 +285,8 @@ def test_sacct_bin_and_accounts(test_config, remote):
 @patch("os.system")
 @pytest.mark.usefixtures("write_setup")
 def test_localhost(os_system, monkeypatch):
+    # This test requires write_setup.cache to be empty else it will never call
+    # mock_subprocess_run
     def mock_subprocess_run(*args, **kwargs):
         mock_subprocess_run.called += 1
         return subprocess.CompletedProcess(
@@ -309,7 +315,7 @@ def test_stdout_message_before_json(
 ):
     channel = remote.expect(
         host="raisin",
-        cmd="/opt/slurm/bin/sacct  -X -S '2023-02-15T00:00' -E '2023-02-16T00:00' --allusers --json",
+        cmd="/opt/slurm/bin/sacct  -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
         out=f"Welcome on raisin,\nThe sweetest supercomputer in the world!\n{sacct_json}".encode(
             "utf-8"
         ),
@@ -350,7 +356,7 @@ def test_get_gpu_type_from_prometheus(
 ):
     channel = remote.expect(
         host="raisin",
-        cmd="/opt/slurm/bin/sacct  -X -S '2023-02-15T00:00' -E '2023-02-16T00:00' --allusers --json",
+        cmd="/opt/slurm/bin/sacct  -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
         out=f"Welcome on raisin,\nThe sweetest supercomputer in the world!\n{sacct_json}".encode(
             "utf-8"
         ),
@@ -416,7 +422,7 @@ def test_get_gpu_type_without_prometheus(
 ):
     channel = remote.expect(
         host="raisin_no_prometheus",
-        cmd="/opt/slurm/bin/sacct  -X -S '2023-02-15T00:00' -E '2023-02-16T00:00' --allusers --json",
+        cmd="/opt/slurm/bin/sacct  -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
         out=f"Welcome on raisin_no_prometheus,\nThe sweetest supercomputer in the world!\n{sacct_json}".encode(
             "utf-8"
         ),
@@ -463,7 +469,7 @@ def test_save_job(
 ):
     channel = remote.expect(
         host="raisin",
-        cmd="/opt/slurm/bin/sacct  -X -S '2023-02-15T00:00' -E '2023-02-16T00:00' --allusers --json",
+        cmd="/opt/slurm/bin/sacct  -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
         out=sacct_json.encode("utf-8"),
     )
 
@@ -504,7 +510,7 @@ def test_update_job(
         host="raisin",
         commands=[
             Command(
-                cmd="/opt/slurm/bin/sacct  -X -S '2023-02-15T00:00' -E '2023-02-16T00:00' --allusers --json",
+                cmd="/opt/slurm/bin/sacct  -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
                 out=sacct_json.encode("utf-8"),
             )
             for _ in range(2)
@@ -579,7 +585,7 @@ def test_save_preempted_job(
     test_config, sacct_json, remote, file_regression, cli_main, prom_custom_query_mock
 ):
     channel = remote.expect(
-        cmd="/opt/slurm/bin/sacct  -X -S '2023-02-15T00:00' -E '2023-02-16T00:00' --allusers --json",
+        cmd="/opt/slurm/bin/sacct  -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
         host="raisin",
         out=sacct_json.encode("utf-8"),
     )
@@ -625,8 +631,8 @@ def test_multiple_dates(
             Command(
                 cmd=(
                     "/opt/slurm/bin/sacct  -X "
-                    f"-S '{job_submit_datetime.strftime('%Y-%m-%dT%H:%M')}' "
-                    f"-E '{(job_submit_datetime + timedelta(days=1)).strftime('%Y-%m-%dT%H:%M')}' "
+                    f"-S {job_submit_datetime.strftime('%Y-%m-%dT%H:%M')} "
+                    f"-E {(job_submit_datetime + timedelta(days=1)).strftime('%Y-%m-%dT%H:%M')} "
                     "--allusers --json"
                 ),
                 out=create_sacct_json(
@@ -714,7 +720,7 @@ def test_multiple_clusters_and_dates(
     channel = remote.expect_sessions(
         _create_session(
             "raisin",
-            "/opt/slurm/bin/sacct  -X -S '{start}' -E '{end}' --allusers --json",
+            "/opt/slurm/bin/sacct  -X -S {start} -E {end} --allusers --json",
             datetimes=datetimes,
         ),
         _create_session(
@@ -722,7 +728,7 @@ def test_multiple_clusters_and_dates(
             (
                 "/opt/software/slurm/bin/sacct "
                 "-A rrg-bonhomme-ad_gpu,rrg-bonhomme-ad_cpu,def-bonhomme_gpu,def-bonhomme_cpu "
-                "-X -S '{start}' -E '{end}' --allusers --json"
+                "-X -S {start} -E {end} --allusers --json"
             ),
             datetimes=datetimes,
         ),
@@ -825,7 +831,7 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     channel = remote.expect_sessions(
         _create_session(
             "raisin",
-            "/opt/slurm/bin/sacct  -X -S '{start}' -E '{end}' --allusers --json",
+            "/opt/slurm/bin/sacct  -X -S {start} -E {end} --allusers --json",
             datetimes=datetimes,
         ),
         _create_session(
@@ -833,7 +839,7 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
             (
                 "/opt/software/slurm/bin/sacct "
                 "-A rrg-bonhomme-ad_gpu,rrg-bonhomme-ad_cpu,def-bonhomme_gpu,def-bonhomme_cpu "
-                "-X -S '{start}' -E '{end}' --allusers --json"
+                "-X -S {start} -E {end} --allusers --json"
             ),
             datetimes=datetimes,
         ),
@@ -943,7 +949,7 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
 def test_job_tz(test_config, sacct_json, remote, cli_main, prom_custom_query_mock):
     channel = remote.expect(
         host="patate",
-        cmd="/opt/software/slurm/bin/sacct -A rrg-bonhomme-ad_gpu,rrg-bonhomme-ad_cpu,def-bonhomme_gpu,def-bonhomme_cpu -X -S '2023-02-15T00:00' -E '2023-02-16T00:00' --allusers --json",
+        cmd="/opt/software/slurm/bin/sacct -A rrg-bonhomme-ad_gpu,rrg-bonhomme-ad_cpu,def-bonhomme_gpu,def-bonhomme_cpu -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
         out=sacct_json.encode("utf-8"),
     )
 
@@ -982,11 +988,12 @@ def test_cli_ignore_stats(
     # We'd like to test that this starts with "/tmp/pytest",
     # but this isn't the case when we run the tests on Mac OS,
     # ending up in '/private/var/folders/*/pytest-of-gyomalin/pytest-63'.
-    assert "pytest" in str(scraper.cachefile)
+    assert "pytest" in str(scraper.get_raw.cache_dir)
 
-    print(scraper.cachefile)
+    print(scraper.get_raw.cache_dir)
+    scraper.get_raw.cache_dir.mkdir(parents=True, exist_ok=True)
 
-    with open(scraper.cachefile, "w") as f:
+    with open(scraper.get_raw.cache_path(), "w") as f:
         f.write(sacct_json)
 
     def mock_compute_job_statistics(job):
@@ -1026,10 +1033,15 @@ def test_cli_ignore_stats(
 @pytest.mark.usefixtures("standard_config")
 @pytest.mark.parametrize(
     "sacct_outputs",
-    ["slurm_21_8_8.json", "slurm_22_5_9.json", "slurm_23_2_6.json"],
+    [
+        "slurm_21_8_8.json",
+        "slurm_22_5_9.json",
+        "slurm_23_2_6.json",
+        "slurm_23_11_5.json",
+    ],
 )
 def test_parse_sacct_slurm_versions(sacct_outputs, scraper):
     file = Path(__file__).parent / "sacct_outputs" / sacct_outputs
-    scraper.results = json.load(open(file, "r", encoding="utf8"))
+    scraper.get_raw.save(value_to_save=json.load(open(file, "r", encoding="utf8")))
     jobs = list(scraper)
     assert len(jobs) == 1

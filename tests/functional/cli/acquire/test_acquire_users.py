@@ -1,19 +1,15 @@
 import io
 import json
 import logging
-import random
 import re
 from io import StringIO
-from unittest.mock import MagicMock, mock_open, patch
+from unittest.mock import patch
 
 import pytest
 from opentelemetry.trace import StatusCode
 
-import sarc.account_matching.make_matches
-import sarc.ldap.acquire
-import sarc.ldap.read_mila_ldap  # will monkeypatch "query_ldap"
+from sarc.client.users.api import get_user
 from sarc.config import config
-from sarc.ldap.api import get_user
 from tests.common.sarc_mocks import fake_mymila_data, fake_raw_ldap_data
 
 
@@ -79,7 +75,7 @@ class FileSimulator:
 
 
 @pytest.mark.usefixtures("empty_read_write_db")
-def test_acquire_users(cli_main, monkeypatch, mock_file, captrace):
+def test_acquire_users(cli_main, patch_return_values, mock_file, captrace):
     """Test command line `sarc acquire users`.
 
     Copied from tests.functional.ldap.test_acquire_ldap.test_acquire_ldap
@@ -87,13 +83,12 @@ def test_acquire_users(cli_main, monkeypatch, mock_file, captrace):
     """
     nbr_users = 10
 
-    def mock_query_ldap(
-        local_private_key_file, local_certificate_file, ldap_service_uri
-    ):
-        assert ldap_service_uri.startswith("ldaps://")
-        return fake_raw_ldap_data(nbr_users)
-
-    monkeypatch.setattr(sarc.ldap.read_mila_ldap, "query_ldap", mock_query_ldap)
+    patch_return_values(
+        {
+            "sarc.users.read_mila_ldap.query_ldap": fake_raw_ldap_data(nbr_users),
+            "sarc.users.mymila.query_mymila_csv": [],
+        }
+    )
 
     with patch("builtins.open", side_effect=mock_file):
         assert (
@@ -123,23 +118,73 @@ def test_acquire_users(cli_main, monkeypatch, mock_file, captrace):
     js_user = get_user(drac_account_username="stranger.person")
     assert js_user is None
 
+    # test supervisor overrides
+    js_user = get_user(mila_email_username="john.smith001@mila.quebec")
+    assert js_user is not None
+    assert js_user.mila_ldap["supervisor"] == "john.smith003@mila.quebec"
+    assert js_user.mila_ldap["co_supervisor"] == None
+
+    js_user = get_user(mila_email_username="john.smith002@mila.quebec")
+    assert js_user is not None
+    assert js_user.mila_ldap["supervisor"] == "john.smith003@mila.quebec"
+    assert js_user.mila_ldap["co_supervisor"] == "john.smith004@mila.quebec"
+
+    # test delegations
+    # john.smith003 should have delegations for john.smith004 and john.smith005
+    # john.smith004 should have no delegations
+    # john.smith005 should have no delegations
+
+    js_user = get_user(mila_email_username="john.smith003@mila.quebec")
+    assert js_user is not None
+    assert js_user.teacher_delegations is not None
+    assert "john.smith004@mila.quebec" in js_user.teacher_delegations
+    assert "john.smith005@mila.quebec" in js_user.teacher_delegations
+    assert "john.smith006@mila.quebec" not in js_user.teacher_delegations
+
+    js_user = get_user(mila_email_username="john.smith004@mila.quebec")
+    assert js_user is not None
+    assert js_user.teacher_delegations == None
+
+    js_user = get_user(mila_email_username="john.smith005@mila.quebec")
+    assert js_user is not None
+    assert js_user.teacher_delegations == None
+
     # Check traces
     # NB: We don't check logging here, because
     # this execution won't display "acquire users" logs,
     # as everything goes well without corner cases.
     # We will test logging in test_acquire_users_prompt below.
     spans = captrace.get_finished_spans()
-    assert len(spans) == 1
-    assert spans[0].name == "match_drac_to_mila_accounts"
+    assert len(spans) == 2
+
+    assert spans[0].name == "fetch_mymila"
     assert spans[0].status.status_code == StatusCode.OK
-    assert len(spans[0].events) == 4
+    assert len(spans[0].events) == 0
+
+    assert spans[1].name == "match_drac_to_mila_accounts"
+    assert spans[1].status.status_code == StatusCode.OK
+    assert len(spans[1].events) == 9
     assert (
-        spans[0].events[0].name
+        spans[1].events[0].name
         == "Loading mila_ldap, drac_roles and drac_members from files ..."
     )
-    assert spans[0].events[1].name == "Loading matching config from file ..."
-    assert spans[0].events[2].name == "Matching DRAC/CC to mila accounts ..."
-    assert spans[0].events[3].name == "Committing matches to database ..."
+    assert spans[1].events[1].name == "Loading matching config from file ..."
+    assert spans[1].events[2].name == "Matching DRAC/CC to mila accounts ..."
+    assert spans[1].events[3].name == "Applying users delegation exceptions ..."
+    assert (
+        spans[1].events[4].name
+        == "Applying delegation exception for john.smith003@mila.quebec ..."
+    )
+    assert spans[1].events[5].name == "Applying users supervisor exceptions ..."
+    assert (
+        spans[1].events[6].name
+        == "Applying supervisor exception for john.smith001@mila.quebec ..."
+    )
+    assert (
+        spans[1].events[7].name
+        == "Applying supervisor exception for john.smith002@mila.quebec ..."
+    )
+    assert spans[1].events[8].name == "Committing matches to database ..."
 
 
 @pytest.mark.parametrize(
@@ -166,7 +211,7 @@ def test_acquire_users(cli_main, monkeypatch, mock_file, captrace):
 @pytest.mark.usefixtures("empty_read_write_db")
 def test_acquire_users_supervisors(
     cli_main,
-    monkeypatch,
+    patch_return_values,
     mock_file,
     ldap_supervisor,
     mymila_supervisor,
@@ -184,39 +229,35 @@ def test_acquire_users_supervisors(
     nbr_users = 4
     nbr_profs = 2
 
-    # Mock the fake LDAP data used for the tests
-    def mock_query_ldap(
-        local_private_key_file, local_certificate_file, ldap_service_uri
-    ):
-        assert ldap_service_uri.startswith("ldaps://")
-        return fake_raw_ldap_data(
-            nbr_users,
-            hardcoded_values_by_user={
-                2: {  # The first user who is not a prof is the one with index 2
-                    "supervisor": ldap_supervisor
-                }
-            },
-        )
+    # for the test we will use the user with index 3,
+    # which is the first user who has no supervisor override in the mock data
+    # so that this test won't be affected by the previous test
 
-    monkeypatch.setattr(sarc.ldap.read_mila_ldap, "query_ldap", mock_query_ldap)
-
-    # Mock the fake MyMila data used for the tests
-    def mock_query_mymila(tmp_json_path):
-        return fake_mymila_data(
-            nbr_users=nbr_users,
-            nbr_profs=nbr_profs,
-            hardcoded_values_by_user={
-                2: {  # The first user who is not a prof is the one with index 2
-                    "Supervisor Principal": mymila_supervisor
-                }
-            },
-        )
-
-    monkeypatch.setattr(sarc.ldap.mymila, "query_mymila", mock_query_mymila)
+    patch_return_values(
+        {
+            "sarc.users.read_mila_ldap.query_ldap": fake_raw_ldap_data(
+                nbr_users,
+                hardcoded_values_by_user={
+                    3: {  # The first user who is not a prof is the one with index 3
+                        "supervisor": ldap_supervisor
+                    }
+                },
+            ),
+            "sarc.users.mymila.query_mymila_csv": fake_mymila_data(
+                nbr_users=nbr_users,
+                nbr_profs=nbr_profs,
+                hardcoded_values_by_user={
+                    3: {  # The first user who is not a prof is the one with index 3
+                        "Supervisor Principal": mymila_supervisor
+                    }
+                },
+            ),
+        }
+    )
 
     # Patch the built-in `open()` function for each file path
     with patch("builtins.open", side_effect=mock_file):
-        # sarc.ldap.acquire.run()
+        # sarc.users.acquire.run()
         assert (
             cli_main(
                 [
@@ -229,8 +270,8 @@ def test_acquire_users_supervisors(
 
     # Validate the results of all of this by inspecting the database.
     js_user = get_user(
-        mila_email_username=f"john.smith002@mila.quebec"
-    )  # We modified the user with index 2; thus this is the one we retrieve
+        mila_email_username=f"john.smith003@mila.quebec"
+    )  # We modified the user with index 3; thus this is the one we retrieve
     assert js_user.mila_ldap["supervisor"] == expected_supervisor
 
 
@@ -258,7 +299,7 @@ def test_acquire_users_supervisors(
 @pytest.mark.usefixtures("empty_read_write_db")
 def test_acquire_users_co_supervisors(
     cli_main,
-    monkeypatch,
+    patch_return_values,
     mock_file,
     ldap_co_supervisor,
     mymila_co_supervisor,
@@ -276,39 +317,35 @@ def test_acquire_users_co_supervisors(
     nbr_users = 4
     nbr_profs = 2
 
-    # Mock the fake LDAP data used for the tests
-    def mock_query_ldap(
-        local_private_key_file, local_certificate_file, ldap_service_uri
-    ):
-        assert ldap_service_uri.startswith("ldaps://")
-        return fake_raw_ldap_data(
-            nbr_users,
-            hardcoded_values_by_user={
-                2: {  # The first user who is not a prof is the one with index 2
-                    "co_supervisor": ldap_co_supervisor
-                }
-            },
-        )
+    # for the test we will use the user with index 3,
+    # which is the first user who has no supervisor override in the mock data
+    # so that this test won't be affected by the previous test
 
-    monkeypatch.setattr(sarc.ldap.read_mila_ldap, "query_ldap", mock_query_ldap)
-
-    # Mock the fake MyMila data used for the tests
-    def mock_query_mymila(tmp_json_path):
-        return fake_mymila_data(
-            nbr_users=nbr_users,
-            nbr_profs=nbr_profs,
-            hardcoded_values_by_user={
-                2: {  # The first user who is not a prof is the one with index 2
-                    "Co-Supervisor": mymila_co_supervisor
-                }
-            },
-        )
-
-    monkeypatch.setattr(sarc.ldap.mymila, "query_mymila", mock_query_mymila)
+    patch_return_values(
+        {
+            "sarc.users.read_mila_ldap.query_ldap": fake_raw_ldap_data(
+                nbr_users,
+                hardcoded_values_by_user={
+                    3: {  # The first user who is not a prof is the one with index 3
+                        "co_supervisor": ldap_co_supervisor
+                    }
+                },
+            ),
+            "sarc.users.mymila.query_mymila_csv": fake_mymila_data(
+                nbr_users=nbr_users,
+                nbr_profs=nbr_profs,
+                hardcoded_values_by_user={
+                    3: {  # The first user who is not a prof is the one with index 3
+                        "Co-Supervisor": mymila_co_supervisor
+                    }
+                },
+            ),
+        }
+    )
 
     # Patch the built-in `open()` function for each file path
     with patch("builtins.open", side_effect=mock_file):
-        # sarc.ldap.acquire.run()
+        # sarc.users.acquire.run()
         assert (
             cli_main(
                 [
@@ -321,24 +358,25 @@ def test_acquire_users_co_supervisors(
 
     # Validate the results of all of this by inspecting the database.
     js_user = get_user(
-        mila_email_username=f"john.smith002@mila.quebec"
-    )  # We modified the user with index 2; thus this is the one we retrieve
+        mila_email_username=f"john.smith003@mila.quebec"
+    )  # We modified the user with index 3; thus this is the one we retrieve
     assert js_user.mila_ldap["co_supervisor"] == expected_co_supervisor
 
 
 @pytest.mark.usefixtures("empty_read_write_db")
-def test_acquire_users_prompt(cli_main, monkeypatch, file_contents, caplog, captrace):
+def test_acquire_users_prompt(
+    cli_main, monkeypatch, patch_return_values, file_contents, caplog, captrace
+):
     """Test command line `sarc acquire users --prompt`."""
     caplog.set_level(logging.INFO)
     nbr_users = 10
 
-    def mock_query_ldap(
-        local_private_key_file, local_certificate_file, ldap_service_uri
-    ):
-        assert ldap_service_uri.startswith("ldaps://")
-        return fake_raw_ldap_data(nbr_users)
-
-    monkeypatch.setattr(sarc.ldap.read_mila_ldap, "query_ldap", mock_query_ldap)
+    patch_return_values(
+        {
+            "sarc.users.read_mila_ldap.query_ldap": fake_raw_ldap_data(nbr_users),
+            "sarc.users.mymila.query_mymila_csv": [],
+        }
+    )
 
     # Load config
     cfg = config()
@@ -418,15 +456,34 @@ def test_acquire_users_prompt(cli_main, monkeypatch, file_contents, caplog, capt
 
     # Check traces
     spans = captrace.get_finished_spans()
-    assert len(spans) == 1
-    assert spans[0].name == "match_drac_to_mila_accounts"
+    assert len(spans) == 2
+
+    assert spans[0].name == "fetch_mymila"
     assert spans[0].status.status_code == StatusCode.OK
-    assert len(spans[0].events) == 5
+    assert len(spans[0].events) == 0
+
+    assert spans[1].name == "match_drac_to_mila_accounts"
+    assert spans[1].status.status_code == StatusCode.OK
+    assert len(spans[1].events) == 10
     assert (
-        spans[0].events[0].name
+        spans[1].events[0].name
         == "Loading mila_ldap, drac_roles and drac_members from files ..."
     )
-    assert spans[0].events[1].name == "Loading matching config from file ..."
-    assert spans[0].events[2].name == "Matching DRAC/CC to mila accounts ..."
-    assert spans[0].events[3].name == "Committing matches to database ..."
-    assert spans[0].events[4].name == "Saving 1 manual matches ..."
+    assert spans[1].events[1].name == "Loading matching config from file ..."
+    assert spans[1].events[2].name == "Matching DRAC/CC to mila accounts ..."
+    assert spans[1].events[3].name == "Applying users delegation exceptions ..."
+    assert (
+        spans[1].events[4].name
+        == "Applying delegation exception for john.smith003@mila.quebec ..."
+    )
+    assert spans[1].events[5].name == "Applying users supervisor exceptions ..."
+    assert (
+        spans[1].events[6].name
+        == "Applying supervisor exception for john.smith001@mila.quebec ..."
+    )
+    assert (
+        spans[1].events[7].name
+        == "Applying supervisor exception for john.smith002@mila.quebec ..."
+    )
+    assert spans[1].events[8].name == "Committing matches to database ..."
+    assert spans[1].events[9].name == "Saving 1 manual matches ..."

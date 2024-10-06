@@ -46,7 +46,7 @@ echo "====================================="
 ASCENDING=1
 DESCENDING=-1
 
-set -vm
+set -vm -o errexit
 
 
 if ! which mongosh >/dev/null 2>&1; then

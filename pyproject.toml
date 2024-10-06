@@ -26,6 +26,10 @@ nbsphinx = "^0.9.3"
 opentelemetry-api = "^1.23.0"
 opentelemetry-sdk = "^1.23.0"
 requests-mock = "^1.11.0"
+pandas = "< 2.1.0"
+gifnoc = "^0.2.3"
+watchdog = "^4.0.0"
+python-dateutil = "^2.9.0.post0"
 
 [tool.poetry.group.dev.dependencies]
 black = ">= 22.12.0"
@@ -66,13 +70,16 @@ disable = [
     "import-outside-toplevel",  # These imports are useful to reduce loading times
     "too-many-arguments",
     "too-many-locals",
+    "too-many-positional-arguments",
     "missing-module-docstring",
     "missing-class-docstring",
     "missing-function-docstring",
     "invalid-name",
     "no-else-return",  # Bad rule IMO (- OB)
     "line-too-long",  # Black takes care of line length.
-    "logging-fstring-interpolation"
+    "logging-fstring-interpolation",
+    "duplicate-code",
+    "too-many-positional-arguments",
 ]
 extension-pkg-whitelist = "pydantic"
 

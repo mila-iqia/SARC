@@ -1,3 +1,4 @@
+import functools
 import json
 import os
 import zoneinfo
@@ -83,6 +84,8 @@ class ClusterConfig(BaseModel):
     duc_storage_command: str = None
     diskusage_report_command: str = None
     start_date: str = "2022-04-01"
+    rgu_start_date: str = None
+    gpu_to_rgu_billing: Path = None
 
     @validator("timezone")
     def _timezone(cls, value):
@@ -101,7 +104,7 @@ class ClusterConfig(BaseModel):
             fconfig = FabricConfig()
         else:
             fconfig = FabricConfig(ssh_config=SSHConfig.from_path(self.sshconfig))
-        fconfig["run"]["pty"] = True
+        fconfig["run"]["pty"] = False
         fconfig["run"]["in_stream"] = False
         return Connection(self.host, config=fconfig)
 
@@ -301,3 +304,24 @@ def using_config(cfg: Union[str, Path, Config], cls=None):
     token = config_var.set(cfg)
     yield cfg
     config_var.reset(token)
+
+
+class ScrapingModeRequired(Exception):
+    """Exception raised if a code requiring scraping mode is executed in client mode."""
+
+
+def scraping_mode_required(fn):
+    """
+    Decorator to wrap a function that requires scraping mode to be executed.
+
+    Returns a wrapped function which raises a ScrapingModeRequired exception
+    if config is not a ScrapingConfig instance.
+    """
+
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        if not isinstance(config(), ScraperConfig):
+            raise ScrapingModeRequired()
+        return fn(*args, **kwargs)
+
+    return wrapper

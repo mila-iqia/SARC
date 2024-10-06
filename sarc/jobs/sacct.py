@@ -7,8 +7,9 @@ from typing import Iterator, Optional
 from hostlist import expand_hostlist
 from tqdm import tqdm
 
-from sarc.config import UTC, ClusterConfig, config
-from sarc.jobs.job import SlurmJob, jobs_collection
+from sarc.cache import with_cache
+from sarc.client.job import SlurmJob, _jobs_collection
+from sarc.config import UTC, ClusterConfig
 from sarc.jobs.series import get_job_time_series
 from sarc.traces import trace_decorator, using_trace
 
@@ -42,18 +43,8 @@ class SAcctScraper:
         self.day = day
         self.start = datetime.combine(day, time.min)
         self.end = self.start + timedelta(days=1)
-        self.results = None
 
-        cachedir = config().cache
-        today = datetime.combine(date.today(), datetime.min.time())
-        if cachedir and day < today:
-            cachedir = cachedir / "sacct"
-            cachedir.mkdir(parents=True, exist_ok=True)
-            daystr = day.strftime("%Y-%m-%d")
-            self.cachefile = cachedir / f"{cluster.name}.{daystr}.json"
-        else:
-            self.cachefile = None
-
+    @trace_decorator()
     def fetch_raw(self) -> dict:
         """Fetch the raw sacct data as a dict via SSH, or run sacct locally."""
         fmt = "%Y-%m-%dT%H:%M"
@@ -61,7 +52,7 @@ class SAcctScraper:
         end = self.end.strftime(fmt)
         accounts = self.cluster.accounts and ",".join(self.cluster.accounts)
         accounts_option = f"-A {accounts}" if accounts else ""
-        cmd = f"{self.cluster.sacct_bin} {accounts_option} -X -S '{start}' -E '{end}' --allusers --json"
+        cmd = f"{self.cluster.sacct_bin} {accounts_option} -X -S {start} -E {end} --allusers --json"
         logger.info(f"{self.cluster.name} $ {cmd}")
         if self.cluster.host == "localhost":
             results = subprocess.run(
@@ -71,38 +62,28 @@ class SAcctScraper:
             results = self.cluster.ssh.run(cmd, hide=True)
         return json.loads(results.stdout[results.stdout.find("{") :])
 
-    @trace_decorator()
+    def _cache_key(self):
+        today = datetime.combine(date.today(), datetime.min.time())
+        if self.day < today:
+            daystr = self.day.strftime("%Y-%m-%d")
+            return f"{self.cluster.name}.{daystr}.json"
+        else:
+            # Not cachable
+            return None
+
+    @with_cache(subdirectory="sacct", key=_cache_key, live=True)
     def get_raw(self) -> dict:
-        """Return the raw sacct data as a dict.
-
-        If the data had been fetched before and cached in Config.cache, the contents
-        of the cache file are returned. Otherwise, the data is fetched via SSH and
-        cached if Config.cache is set.
-        """
-        if self.results is not None:
-            return self.results
-
-        if self.cachefile and self.cachefile.exists():
-            try:
-                return json.load(open(self.cachefile, "r", encoding="utf8"))
-            except json.JSONDecodeError:
-                logger.warning("Need to re-fetch because cache has malformed JSON.")
-
-        self.results = self.fetch_raw()
-        if self.cachefile:
-            # pylint: disable=consider-using-with
-            json.dump(
-                fp=open(self.cachefile, "w", encoding="utf8"),
-                obj=self.results,
-            )
-        return self.results
+        return self.fetch_raw()
 
     def __len__(self) -> int:
         return len(self.get_raw()["jobs"])
 
     def __iter__(self) -> Iterator[SlurmJob]:
         """Fetch and iterate on all jobs as SlurmJob objects."""
-        version = self.get_raw().get("meta", {}).get("Slurm", {}).get("version", None)
+        version = (
+            self.get_raw().get("meta", {}).get("Slurm", None)
+            or self.get_raw().get("meta", {}).get("slurm", {})
+        ).get("version", None)
         for entry in self.get_raw()["jobs"]:
             with using_trace("sarc.jobs.sacct", "SAcctScraper.__iter__") as span:
                 span.set_attribute("entry", json.dumps(entry))
@@ -165,7 +146,7 @@ class SAcctScraper:
                 entry["cluster"],
                 self.cluster.name,
             )
-        if version is None or version["major"] < 23:
+        if version is None or int(version["major"]) < 23:
             return SlurmJob(
                 cluster_name=self.cluster.name,
                 job_id=entry["job_id"],
@@ -194,7 +175,43 @@ class SAcctScraper:
                 **resources,
                 **flags,
             )
-        if version["major"] == 23:
+        if int(version["major"]) == 23:
+            if int(version["minor"]) == 11:
+                return SlurmJob(
+                    cluster_name=self.cluster.name,
+                    job_id=entry["job_id"],
+                    array_job_id=entry["array"]["job_id"] or None,
+                    task_id=entry["array"]["task_id"]["number"],
+                    name=entry["name"],
+                    user=entry["user"],
+                    group=entry["group"],
+                    account=entry["account"],
+                    job_state=entry["state"]["current"][0],
+                    exit_code=entry["exit_code"]["return_code"]["number"],
+                    signal=entry["exit_code"]
+                    .get("signal", {})
+                    .get("id", {})
+                    .get("number", None),
+                    time_limit=(tlimit := entry["time"]["limit"]["number"])
+                    and tlimit * 60,
+                    submit_time=submit_time,
+                    start_time=start_time,
+                    end_time=end_time,
+                    elapsed_time=elapsed_time,
+                    partition=entry["partition"],
+                    nodes=(
+                        sorted(expand_hostlist(nodes))
+                        if nodes != "None assigned"
+                        else []
+                    ),
+                    constraints=entry["constraints"],
+                    priority=entry["priority"]["number"],
+                    qos=entry["qos"],
+                    work_dir=entry["working_directory"],
+                    **resources,
+                    **flags,
+                )
+
             return SlurmJob(
                 cluster_name=self.cluster.name,
                 job_id=entry["job_id"],
@@ -243,7 +260,7 @@ def sacct_mongodb_import(
     no_prometheus: bool
         If True, avoid any scraping requiring prometheus connection.
     """
-    collection = jobs_collection()
+    collection = _jobs_collection()
     scraper = SAcctScraper(cluster, day)
     logger.info("Getting the sacct data...")
     scraper.get_raw()

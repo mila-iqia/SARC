@@ -1,20 +1,25 @@
 from __future__ import annotations
 
+import json
+import logging
+import os.path
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Callable
 
 import numpy as np
 import pandas
+from flatten_dict import flatten
 from pandas import DataFrame
 from prometheus_api_client import MetricRangeDataFrame
 from tqdm import tqdm
 
-from sarc.config import MTL, UTC
-from sarc.jobs.job import JobStatistics, Statistics, count_jobs, get_jobs
+from sarc.client.job import JobStatistics, SlurmJob, Statistics, count_jobs, get_jobs
+from sarc.client.users.api import User, get_users
+from sarc.config import MTL, UTC, ClusterConfig, config
 from sarc.traces import trace_decorator
 
 if TYPE_CHECKING:
-    from sarc.jobs.sacct import SlurmJob
+    pass
 
 
 # pylint: disable=too-many-branches
@@ -84,6 +89,8 @@ def get_job_time_series(
         elif aggregation == "total":
             offset += duration_seconds
             range_seconds = duration_seconds
+        else:
+            raise ValueError(f"Unknown aggregation: {aggregation}")
 
         query = f"{query}[{range_seconds}s]"
         if "(" in measure:
@@ -314,16 +321,24 @@ def load_job_series(
           "gpu_utilization", "cpu_utilization", "gpu_memory", "gpu_power", "system_memory"
         - Optional job series fields, added if clip_time is True:
           "unclipped_start" and "unclipped_end"
+        - Optional user info fields if job users found.
+          Fields from `User.dict()` in format `user.<flattened dot-separated field>`,
+          + special field `user.primary_email` containing either `user.mila.email` or fallback `job.user`.
     """
 
     # If fields is a list, convert it to a renaming dict with same old and new names.
     if isinstance(fields, list):
         fields = {key: key for key in fields}
+    elif fields is None:
+        fields = {}
 
     start = jobs_args.get("start", None)
     end = jobs_args.get("end", None)
 
     total = count_jobs(**jobs_args)
+
+    # Get users data frame.
+    users_frame = _get_user_data_frame()
 
     rows = []
     now = datetime.now(tz=MTL)
@@ -390,7 +405,7 @@ def load_job_series(
         final_job_dict.update(job_series)
         job_series = final_job_dict
 
-        if fields is not None:
+        if fields:
             job_series = {
                 new_name: job_series[old_name] for old_name, new_name in fields.items()
             }
@@ -398,7 +413,275 @@ def load_job_series(
         if callback:
             callback(rows)
 
-    return pandas.DataFrame(rows)
+    jobs_frame = pandas.DataFrame(rows)
+
+    # Merge jobs with users info, only if users available.
+    if users_frame.shape[0]:
+        # Get name pf fields used to merge frames.
+        # We must use `fields`, as fields may have been renamed.
+        field_cluster_name = fields.get("cluster_name", "cluster_name")
+        field_job_user = fields.get("user", "user")
+
+        df_mila_mask = jobs_frame[field_cluster_name] == "mila"
+        df_drac_mask = jobs_frame[field_cluster_name] != "mila"
+
+        merged_mila = jobs_frame[df_mila_mask].merge(
+            users_frame,
+            left_on=field_job_user,
+            right_on="user.mila.username",
+            how="left",
+        )
+        merged_drac = jobs_frame[df_drac_mask].merge(
+            users_frame,
+            left_on=field_job_user,
+            right_on="user.drac.username",
+            how="left",
+        )
+
+        # Concat merged frames.
+        output = pandas.concat([merged_mila, merged_drac])
+        # Try to sort output to keep initial jobs order, by using first column from jobs frame.
+        # Sort inplace to avoid producing a supplementary frame.
+        output.sort_values(by=jobs_frame.columns[0], inplace=True, ignore_index=True)
+
+        # Replace NaN in column `user.primary_email` with corresponding value in `job.user`
+        df_primary_email_nan_mask = output["user.primary_email"].isnull()
+        output.loc[df_primary_email_nan_mask, "user.primary_email"] = output[
+            field_job_user
+        ][df_primary_email_nan_mask]
+
+        return output
+    else:
+        return jobs_frame
+
+
+def _get_user_data_frame() -> pandas.DataFrame:
+    """
+    Get all available users in a pandas DataFrame.
+
+    Returns
+    -------
+    DataFrame
+        A data frame containing all users
+        with flattened dot-separated columns from User class.
+    """
+    uf = UserFlattener()
+    return pandas.DataFrame([uf.flatten(user) for user in get_users()])
+
+
+class UserFlattener:
+    """
+    Helper class to flatten a user.
+
+    The goal of this class is to make sure that
+    User's complex attributes are not flattened if set to None,
+    to prevent having both attribute columns and attribute nested columns
+    in final data frame.
+
+    For example, current User class has optional attribute `drac` to be flattened as
+    `user.drac.username`, `user.drac.email` and `user.drac.active`.
+    If a user does not have a DRAC account, default behaviour will produce a key
+    `user.drac` with value None.
+    Instead, we want to avoid having `user.drac` key, to make sure
+    output data frame only contains the 3 `user.drac.*` expanded columns
+    and simply set them to NaN for users who don't have a drac account.
+    """
+
+    def __init__(self):
+        # List "plain" attributes, i.e. attributes that are not objects.
+        # This will exclude both nested Model objects as well a nested dicts.
+        # Note that a `date` is described as a 'string' in schemas.
+        schema = User.schema()
+        schema_props = schema["properties"]
+        self.plain_attributes = {
+            key
+            for key, prop_desc in schema_props.items()
+            if "type" in prop_desc and prop_desc["type"] != "object"
+        }
+
+    def flatten(self, user: User) -> dict:
+        """Flatten given user."""
+        # Get user dict.
+        base_user_dict = user.dict(exclude={"id"})
+        # Keep only plain attributes, or complex attributes that are not None.
+        base_user_dict = {
+            key: value
+            for key, value in base_user_dict.items()
+            if key in self.plain_attributes or value is not None
+        }
+        # Now flatten user dict.
+        user_dict = flatten({"user": base_user_dict}, reducer="dot")
+        # And add special key `user.primary_email`.
+        user_dict["user.primary_email"] = user.mila.email
+        return user_dict
+
+
+def update_cluster_job_series_rgu(
+    df: pandas.DataFrame, cluster_config: ClusterConfig
+) -> pandas.DataFrame:
+    """
+    Compute RGU information for jobs related to given cluster config in a data frame.
+
+    Parameters
+    ----------
+    df: DataFrame
+        Data frame to update, typically returned by `load_job_series`.
+        Should contain fields:
+        "cluster_name", "start_time", "allocated.gpu_type", "allocated.gres_gpu".
+    cluster_config: ClusterConfig
+        Configuration of cluster to which jobs to update belong.
+        Should define following config:
+        "rgu_start_date": date since when billing is given as RGU.
+        "gpu_to_rgu_billing": path to a JSON file containing a dict which maps
+        GPU type to RGU cost per GPU.
+
+    Returns
+    -------
+    DataFrame
+        Input data frame with:
+        - column `allocated.gres_gpu` updated if necessary.
+        - column `allocated.gres_rgu` added or updated to contain RGU billing.
+          Set to NaN (or unchanged if already present) for jobs from other clusters.
+        - column `gpu_type_rgu` added or updated to contain RGU cost per GPU (RGU/GPU ratio).
+          Set to NaN (or unchanged if already present) for jobs from other clusters.
+
+    Pseudocode describing how we update data frame:
+    for each job: if job.cluster_name == cluster_config.name:
+        if start_time < cluster_config.rgu_start_date:
+            # We are BEFORE transition to RGU
+            if allocated.gpu_type in gpu_to_rgu_billing:
+                # compute rgu columns
+                allocated.gres_rgu = allocated.gres_gpu * gpu_to_rgu_billing[allocated.gpu_type]
+                allocated.gpu_type_rgu = gpu_to_rgu_billing[allocated.gpu_type]
+            else:
+                # set rgu columns to nan
+                allocated.gres_rgu = nan
+                allocated.gpu_type_rgu = nan
+        else:
+            # We are AFTER transition to RGU
+            # Anyway, we assume gres_rgu is current gres_gpu
+            allocated.gres_rgu = allocated.gres_gpu
+
+            if allocated.gpu_type in gpu_to_rgu_billing:
+                # we fix gres_gpu by dividing it with RGU/GPU ratio
+                allocated.gres_gpu = allocated.gres_gpu / gpu_to_rgu_billing[allocated.gpu_type]
+                # we save RGU/GPU ratio
+                allocated.gpu_type_rgu = gpu_to_rgu_billing[allocated.gpu_type]
+            else:
+                # we cannot fix gres_gpu, so we set it to nan
+                allocated.gres_gpu = nan
+                # we cannot get RGU/GPU ratio, so we set it to nan
+                allocated.gpu_type_rgu = nan
+    """
+
+    # Make sure frame will have new RGU columns anyway, with NaN as default value.
+    if "allocated.gres_rgu" not in df.columns:
+        df["allocated.gres_rgu"] = np.nan
+    if "allocated.gpu_type_rgu" not in df.columns:
+        df["allocated.gpu_type_rgu"] = np.nan
+
+    if cluster_config.rgu_start_date is None:
+        logging.warning(
+            f"RGU update: no RGU start date for cluster {cluster_config.name}"
+        )
+        return df
+
+    if cluster_config.gpu_to_rgu_billing is None:
+        logging.warning(
+            f"RGU update: no RGU/GPU JSON path for cluster {cluster_config.name}"
+        )
+        return df
+
+    if not os.path.isfile(cluster_config.gpu_to_rgu_billing):
+        logging.warning(
+            f"RGU update: RGU/GPU JSON file not found for cluster {cluster_config.name} "
+            f"at: {cluster_config.gpu_to_rgu_billing}"
+        )
+        return df
+
+    # Otherwise, parse RGU start date.
+    rgu_start_date = datetime.fromisoformat(cluster_config.rgu_start_date).astimezone(
+        MTL
+    )
+
+    # Get RGU/GPU ratios.
+    with open(cluster_config.gpu_to_rgu_billing, "r", encoding="utf-8") as file:
+        gpu_to_rgu_billing = json.load(file)
+        assert isinstance(gpu_to_rgu_billing, dict)
+    if not gpu_to_rgu_billing:
+        logging.warning(
+            f"RGU update: no RGU/GPU available for cluster {cluster_config.name}"
+        )
+        return df
+
+    # We have now both RGU stare date and RGU/GPU ratios. We can update columns.
+
+    # Compute column allocated.gpu_type_rgu
+    # If a GPU type is not found in RGU/GPU ratios,
+    # then ratio will be set to NaN in output column.
+    col_ratio_rgu_by_gpu = df["allocated.gpu_type"].map(gpu_to_rgu_billing)
+
+    # Compute slices for both before and since RGU start date.
+    slice_before_rgu_time = (df["cluster_name"] == cluster_config.name) & (
+        df["start_time"] < rgu_start_date
+    )
+    slice_after_rgu_time = (df["cluster_name"] == cluster_config.name) & (
+        df["start_time"] >= rgu_start_date
+    )
+
+    # We can already set column allocated.gpu_type_rgu anyway.
+    df.loc[slice_before_rgu_time, "allocated.gpu_type_rgu"] = col_ratio_rgu_by_gpu[
+        slice_before_rgu_time
+    ]
+    df.loc[slice_after_rgu_time, "allocated.gpu_type_rgu"] = col_ratio_rgu_by_gpu[
+        slice_after_rgu_time
+    ]
+
+    # Compute allocated.gres_rgu where job started before RGU time.
+    df.loc[slice_before_rgu_time, "allocated.gres_rgu"] = (
+        df["allocated.gres_gpu"][slice_before_rgu_time]
+        * col_ratio_rgu_by_gpu[slice_before_rgu_time]
+    )
+
+    # Set allocated.gres_rgu with previous allocated.gres_gpu where job started after RGU time.
+    df.loc[slice_after_rgu_time, "allocated.gres_rgu"] = df["allocated.gres_gpu"][
+        slice_after_rgu_time
+    ]
+    # Then update allocated.gres_gpu where job started after RGU time.
+    df.loc[slice_after_rgu_time, "allocated.gres_gpu"] = (
+        df["allocated.gres_gpu"][slice_after_rgu_time]
+        / col_ratio_rgu_by_gpu[slice_after_rgu_time]
+    )
+
+    return df
+
+
+def update_job_series_rgu(df: DataFrame):
+    """
+    Compute RGU information for jobs in given data frame.
+
+    Parameters
+    ----------
+    df: DataFrame
+        Data frame to update, typically returned by `load_job_series`.
+        Should contain fields:
+         "cluster_name", "start_time", "allocated.gpu_type", "allocated.gres_gpu".
+
+    Returns
+    -------
+    DataFrame
+        Input data frame with:
+        - column `allocated.gres_gpu` updated if necessary.
+        - column `allocated.gres_rgu` added or updated to contain RGU billing.
+          Set to NaN (or unchanged if already present) for jobs from clusters without RGU.
+        - column `gpu_type_rgu` added or updated to contain RGU cost per GPU (RGU/GPU ratio).
+          Set to NaN (or unchanged if already present) for jobs from clusters without RGU.
+
+    For more details about implementation, see function `update_cluster_job_series_rgu`
+    """
+    for cluster_config in config().clusters.values():
+        update_cluster_job_series_rgu(df, cluster_config)
+    return df
 
 
 def _select_stat(name, dist):
@@ -484,3 +767,91 @@ def _compute_cost_and_wastes(data, device):
     )
 
     return data
+
+
+def compute_time_frames(
+    jobs,
+    columns: list[str] | None = None,
+    start: datetime | None = None,
+    end: datetime | None = None,
+    frame_size: timedelta = timedelta(days=7),
+):
+    """Slice jobs into time frames and adjust columns to fit the time frames.
+
+    Jobs that start before `start` or ends after `end` will have their running
+    time clipped to fitting within the interval (`start`, `end`).
+
+    Jobs spanning multiple time frames will have their running time sliced
+    according to the time frames.
+
+    The resulting DataFrame will have the additional columns 'duration' and 'timestamp'
+    which represent the duration of a job within a time frame and the start of the time frame.
+
+    Parameters
+    ----------
+    jobs: DataFrame
+        Pandas DataFrame containing jobs data. Typically generated with `load_job_series`.
+        Must contain columns `start_time` and `end_time`.
+    columns: list of str
+        Columns to adjust based on time frames.
+    start: datetime, optional
+        Start of the time frame. If None, use the first job start time.
+    end: datetime, optional
+        End of the time frame. If None, use the last job end time.
+    frame_size: timedelta, optional
+        Size of the time frames used to compute histograms. Default to 7 days.
+
+    Examples
+    --------
+    >>> data = pd.DataFrame(
+        [
+            [datetime(2023, 3, 5), datetime(2023, 3, 6), "a", "A", 10],
+            [datetime(2023, 3, 6), datetime(2023, 3, 9), "a", "B", 10],
+            [datetime(2023, 3, 6), datetime(2023, 3, 7), "b", "B", 20],
+            [datetime(2023, 3, 6), datetime(2023, 3, 8), "b", "B", 20],
+        ],
+        columns=["start_time", "end_time", "user", "cluster", 'cost'],
+    )
+    >>> compute_time_frames(data, columns=['cost'], frame_size=timedelta(days=2))
+      start_time   end_time user cluster       cost  duration  timestamp
+    0 2023-03-05 2023-03-06    a       A  10.000000   86400.0 2023-03-05
+    1 2023-03-06 2023-03-07    a       B   3.333333   86400.0 2023-03-05
+    2 2023-03-06 2023-03-07    b       B  20.000000   86400.0 2023-03-05
+    3 2023-03-06 2023-03-07    b       B  10.000000   86400.0 2023-03-05
+    1 2023-03-07 2023-03-09    a       B   6.666667  172800.0 2023-03-07
+    3 2023-03-07 2023-03-08    b       B  10.000000   86400.0 2023-03-07
+    """
+    col_start = "start_time"
+    col_end = "end_time"
+
+    if columns is None:
+        columns = []
+
+    if start is None:
+        start = jobs[col_start].min()
+
+    if end is None:
+        end = jobs[col_end].max()
+
+    data_frames = []
+
+    total_durations = (jobs[col_end] - jobs[col_start]).dt.total_seconds()
+    for frame_start in pandas.date_range(start, end, freq=frame_size):
+        frame_end = frame_start + frame_size
+
+        mask = (jobs[col_start] < frame_end) * (jobs[col_end] > frame_start)
+        frame = jobs[mask].copy()
+        total_durations_in_frame = total_durations[mask]
+        frame[col_start] = frame[col_start].clip(frame_start, frame_end)
+        frame[col_end] = frame[col_end].clip(frame_start, frame_end)
+        frame["duration"] = (frame[col_end] - frame[col_start]).dt.total_seconds()
+
+        # Adjust columns to fit the time frame.
+        for column in columns:
+            frame[column] *= frame["duration"] / total_durations_in_frame
+
+        frame["timestamp"] = frame_start
+
+        data_frames.append(frame)
+
+    return pandas.concat(data_frames, axis=0)

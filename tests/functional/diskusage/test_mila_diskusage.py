@@ -5,7 +5,7 @@ import pytest
 from opentelemetry.trace import StatusCode
 
 import sarc.storage.mila
-from sarc.ldap.api import Credentials, User
+from sarc.client.users.api import Credentials, User
 from sarc.storage.diskusage import get_diskusages
 
 

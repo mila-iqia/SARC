@@ -1,15 +1,16 @@
-import json
 import os
+import shutil
 import sys
 import tempfile
+import time
 import zoneinfo
 from pathlib import Path
-from unittest.mock import MagicMock, mock_open, patch
+from unittest.mock import MagicMock, mock_open
 
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
-from opentelemetry.trace import get_tracer_provider, set_tracer_provider
+from opentelemetry.trace import set_tracer_provider
 
 _tracer_provider = TracerProvider()
 _exporter = InMemorySpanExporter()
@@ -24,7 +25,6 @@ from _pytest.monkeypatch import MonkeyPatch
 from sarc.config import (
     ClusterConfig,
     Config,
-    MongoConfig,
     ScraperConfig,
     config,
     parse_config,
@@ -38,18 +38,16 @@ pytest_plugins = "fabric.testing.fixtures"
 
 @pytest.fixture(scope="session")
 def standard_config_object():
-    mpatch = MonkeyPatch()
-    mpatch.setenv("SARC_MODE", "scraping")
+    # As we use parse_config() instead of config(), we should not need
+    # to patch env var SARC_MODE.
+    # Patching env var with monkeypatch may result in unexpected results
+    # for next tests in tests session, as env var might be still patched.
     yield parse_config(Path(__file__).parent / "sarc-test.json", ScraperConfig)
-    mpatch.undo()
 
 
 @pytest.fixture(scope="session")
 def client_config_object():
-    mpatch = MonkeyPatch()
-    mpatch.setenv("SARC_MODE", "client")
     yield parse_config(Path(__file__).parent / "sarc-test-client.json", Config)
-    mpatch.undo()
 
 
 @pytest.fixture()
@@ -67,16 +65,29 @@ def standard_config(standard_config_object, tmp_path):
 
 
 @pytest.fixture
-def disabled_cache():
+def disabled_cache(standard_config):
     cfg = config().replace(cache=None)
     with using_config(cfg, ScraperConfig) as cfg:
         yield
 
 
+@pytest.fixture(scope="session", autouse=True)
+def clean_up_test_cache_before_run(standard_config_object, worker_id):
+    if worker_id in ("master", 0):
+        if standard_config_object.cache.exists():
+            shutil.rmtree(str(standard_config_object.cache))
+    else:
+        while standard_config_object.cache.exists():
+            time.sleep(1)
+    yield
+
+
 @pytest.fixture
 def tzlocal_is_mtl(monkeypatch):
     monkeypatch.setattr("sarc.config.TZLOCAL", zoneinfo.ZoneInfo("America/Montreal"))
-    monkeypatch.setattr("sarc.jobs.job.TZLOCAL", zoneinfo.ZoneInfo("America/Montreal"))
+    monkeypatch.setattr(
+        "sarc.client.job.TZLOCAL", zoneinfo.ZoneInfo("America/Montreal")
+    )
 
 
 @pytest.fixture
@@ -205,8 +216,24 @@ Mysterious Stranger,BigProf,Manager,activated,stranger.person,ms@hotmail.com
     """
     exceptions_json_path = """
     {
-        "not_prof": [],
-        "not_student": []
+        "not_teacher": [],
+        "not_student": [],
+        "delegations": {
+            "john.smith003@mila.quebec": [
+                "john.smith004@mila.quebec",            
+                "john.smith005@mila.quebec"            
+            ]
+        },
+        "supervisors_overrides": {
+            "john.smith001@mila.quebec": [
+                "john.smith003@mila.quebec"        
+            ],
+            "john.smith002@mila.quebec": [
+                "john.smith003@mila.quebec",            
+                "john.smith004@mila.quebec"            
+            ]
+        }
+        
     }
     """
 
@@ -244,3 +271,15 @@ def mock_file(file_contents):
             raise FileNotFoundError(filename)
 
     return _mock_file
+
+
+@pytest.fixture
+def patch_return_values(monkeypatch):
+    def returner(v):
+        return lambda *_, **__: v
+
+    def patch(values):
+        for k, v in values.items():
+            monkeypatch.setattr(k, returner(v))
+
+    yield patch
