@@ -70,13 +70,16 @@ disable = [
     "import-outside-toplevel",  # These imports are useful to reduce loading times
     "too-many-arguments",
     "too-many-locals",
+    "too-many-positional-arguments",
     "missing-module-docstring",
     "missing-class-docstring",
     "missing-function-docstring",
     "invalid-name",
     "no-else-return",  # Bad rule IMO (- OB)
     "line-too-long",  # Black takes care of line length.
-    "logging-fstring-interpolation"
+    "logging-fstring-interpolation",
+    "duplicate-code",
+    "too-many-positional-arguments",
 ]
 extension-pkg-whitelist = "pydantic"
 

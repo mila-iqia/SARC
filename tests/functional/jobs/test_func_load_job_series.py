@@ -93,6 +93,7 @@ USER_COLUMNS = [
     "user.name",
     "user.record_start",
     "user.record_end",
+    "user.teacher_delegations",
     "user.mila.username",
     "user.mila.email",
     "user.mila.active",

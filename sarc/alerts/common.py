@@ -315,7 +315,6 @@ class HealthMonitorConfig:
     checks: dict[str, TaggedSubclass[HealthCheck]] = field(default_factory=dict)
 
     def __post_init__(self):
-
         all_checks = {}
 
         # Parameterize the checks
