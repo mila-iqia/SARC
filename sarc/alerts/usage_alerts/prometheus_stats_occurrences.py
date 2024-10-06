@@ -20,14 +20,17 @@ class PrometheusStatInfo:
         self.threshold = None
 
 
+# pylint: disable=too-many-branches
 def check_prometheus_stats_occurrences(
     time_interval: Optional[timedelta] = timedelta(days=7),
     time_unit=timedelta(days=1),
     minimum_runtime: Optional[timedelta] = timedelta(minutes=5),
     cluster_names: Optional[List[str]] = None,
-    group_by_node: Optional[Sequence[str]] = ("mila",),
+    group_by_node: Union[bool, Sequence[str]] = ("mila",),
     min_jobs_per_group: Optional[Union[int, Dict[str, int]]] = None,
     nb_stddev=2,
+    with_gres_gpu=False,
+    prometheus_stats=("cpu_utilization", "system_memory"),
 ):
     """
     Check if we have scrapped Prometheus stats for enough jobs per node per cluster per time unit.
@@ -56,8 +59,10 @@ def check_prometheus_stats_occurrences(
         If a cluster in this list does not appear in jobs, a warning will be logged.
 
         If empty (or not specified), use all clusters available among jobs retrieved with time_interval.
-    group_by_node: Sequence
-        Optional sequence of clusters to group by node.
+    group_by_node: Sequence | bool
+        Either a sequence of clusters to group by node,
+        or False to indicate no cluster to group by node (equivalent to empty sequence),
+        or True to indicate that all clusters must be grouped by node.
         For clusters in this list, we will check each node separately (ie. a "group" is a cluster node).
         By default, we check the entire cluster (i.e. the "group" is the cluster itself).
     min_jobs_per_group: int | dict
@@ -71,6 +76,11 @@ def check_prometheus_stats_occurrences(
         Amount of standard deviation to remove from average statistics to compute checking threshold.
         Threshold is computed as:
         max(0, average - nb_stddev * stddev)
+    with_gres_gpu: bool
+        If True, check only jobs which have allocated.gres_gpu > 0  (GPU jobs)
+        If False (default), check only jobs which have allocated.gres_gpu == 0 (CPU jobs).
+    prometheus_stats: Sequence[str]
+        Prometheus stats to check. Default: "cpu_utilization", "system_memory"
     """
 
     # Parse time_interval and get data frame
@@ -81,23 +91,40 @@ def check_prometheus_stats_occurrences(
         clip_time = True
     df = load_job_series(start=start, end=end, clip_time=clip_time)
 
-    # Parse minimum_runtime, and select only jobs where
-    # elapsed time >= minimum runtime and allocated.gres_gpu == 0
+    # Parse minimum_runtime
     if minimum_runtime is None:
         minimum_runtime = timedelta(seconds=0)
-    df = df[
-        (df["elapsed_time"] >= minimum_runtime.total_seconds())
-        & (df["allocated.gres_gpu"] == 0)
-    ]
+    # Select only jobs where elapsed time >= minimum runtime and
+    # jobs are GPU or CPU jobs, depending on `with_gres_gpu`
+    selection_elapsed_time = df["elapsed_time"] >= minimum_runtime.total_seconds()
+    selection_gres_gpu = (
+        (df["allocated.gres_gpu"] > 0)
+        if with_gres_gpu
+        else (df["allocated.gres_gpu"] == 0)
+    )
+    df = df[selection_elapsed_time & selection_gres_gpu]
 
     # List clusters
     cluster_names = cluster_names or sorted(df["cluster_name"].unique())
+
+    # If df is empty, warn for each cluster that we can't check Prometheus stats.
+    if df.empty:
+        for cluster_name in cluster_names:
+            logger.warning(
+                f"[{cluster_name}] no Prometheus data available: no job found"
+            )
+        # As there's nothing to check, we return immediately.
+        return
 
     # Split data frame into time frames using `time_unit`
     df = compute_time_frames(df, frame_size=time_unit)
 
     # Duplicates lines per node to count each job for each node where it runs
     df = df.explode("nodes")
+
+    # parse group_by_node
+    if isinstance(group_by_node, bool):
+        group_by_node = list(df["cluster_name"].unique()) if group_by_node else ()
 
     # If cluster not in group_by_node,
     # then we must count jobs for the entire cluster, not per node.
@@ -109,14 +136,13 @@ def check_prometheus_stats_occurrences(
     df.loc[:, "task_"] = 1
 
     # Generate Prometheus context for each Prometheus stat we want to check.
-    prom_contexts = [
-        PrometheusStatInfo(name=prom_col)
-        for prom_col in ["cpu_utilization", "system_memory"]
-    ]
+    prom_contexts = [PrometheusStatInfo(name=prom_col) for prom_col in prometheus_stats]
 
     # Add columns to check if job has prometheus stats
     for prom in prom_contexts:
-        df.loc[:, prom.col_has] = ~df[prom.name].isnull()
+        # NB: Use DataFrame.reindex() to add column with NaN values if missing:
+        # (2024/09/26) https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.reindex.html
+        df.loc[:, prom.col_has] = ~(df.reindex(columns=[prom.name])[prom.name].isnull())
 
     # Group per timestamp per cluster per node, and count jobs and prometheus stats.
     # If "cluster_names" are given, use only jobs in these clusters.
@@ -175,3 +201,43 @@ def check_prometheus_stats_occurrences(
             logger.warning(
                 f"[{cluster_name}] no Prometheus data available: no job found"
             )
+
+
+def check_prometheus_stats_for_gpu_jobs(
+    time_interval: Optional[timedelta] = timedelta(days=7),
+    time_unit=timedelta(days=1),
+    minimum_runtime: Optional[timedelta] = timedelta(minutes=5),
+    cluster_names: Optional[List[str]] = None,
+    # For GPU jobs, default behaviour is to group each cluster by nodes for checking.
+    group_by_node: Union[bool, Sequence[str]] = True,
+    min_jobs_per_group: Optional[Union[int, Dict[str, int]]] = None,
+    nb_stddev=2,
+):
+    """
+    Check if we have scrapped Prometheus stats for enough GPU jobs per node per cluster per time unit.
+    Log a warning for each node / cluster where ratio of GPU jobs with Prometheus stats is lower than
+    a threshold computed using mean and standard deviation statistics from all clusters.
+
+    To get more info about parameters, see documentation for `check_prometheus_stats_occurrences`.
+    """
+    return check_prometheus_stats_occurrences(
+        time_interval=time_interval,
+        time_unit=time_unit,
+        minimum_runtime=minimum_runtime,
+        cluster_names=cluster_names,
+        group_by_node=group_by_node,
+        min_jobs_per_group=min_jobs_per_group,
+        nb_stddev=nb_stddev,
+        # We are looking for GPU jobs
+        with_gres_gpu=True,
+        # We are looking for GPU-related Prometheus stats
+        prometheus_stats=(
+            "gpu_utilization",
+            "gpu_utilization_fp16",
+            "gpu_utilization_fp32",
+            "gpu_utilization_fp64",
+            "gpu_sm_occupancy",
+            "gpu_memory",
+            "gpu_power",
+        ),
+    )
