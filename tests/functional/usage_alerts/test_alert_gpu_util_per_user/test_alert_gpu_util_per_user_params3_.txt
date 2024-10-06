@@ -1,0 +1,3 @@
+[beaubonhomme] insufficient average gpu_util: 19816.229166666668 GPU-seconds; minimum required: 8:00:00 (28800.0 GPU-seconds)
+[grosbonhomme] insufficient average gpu_util: 9023.729166666666 GPU-seconds; minimum required: 8:00:00 (28800.0 GPU-seconds)
+[petitbonhomme] insufficient average gpu_util: 28780.0 GPU-seconds; minimum required: 8:00:00 (28800.0 GPU-seconds)

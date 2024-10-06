@@ -79,6 +79,7 @@ disable = [
     "line-too-long",  # Black takes care of line length.
     "logging-fstring-interpolation",
     "duplicate-code",
+    "too-many-positional-arguments",
 ]
 extension-pkg-whitelist = "pydantic"
 
