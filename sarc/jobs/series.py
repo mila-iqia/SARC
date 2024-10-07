@@ -570,7 +570,9 @@ def update_cluster_job_series_rgu(
                 allocated.gres_rgu = nan
                 allocated.gpu_type_rgu = nan
         else:
-            # We are AFTER transition to RGU
+            # We update job using the `gpu_to_rgu_billing` matching job start date
+            # from cluster config
+
             # Anyway, we assume gres_rgu is current gres_gpu
             allocated.gres_rgu = allocated.gres_gpu
 
@@ -626,7 +628,7 @@ def update_cluster_job_series_rgu(
         )
         return df
 
-    # Noe we have RGU/GPU ratios. We can update columns.
+    # Now we have RGU/GPU ratios. We can update columns.
 
     # First, we update columns for jobs that started before the oldest available RGU mapping.
     oldest_rgu_mapping = dated_rgu_mappings[0]
