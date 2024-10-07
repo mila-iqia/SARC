@@ -88,8 +88,6 @@ class ClusterConfig(BaseModel):
     duc_storage_command: str = None
     diskusage_report_command: str = None
     start_date: str = "2022-04-01"
-    rgu_start_date: str = None
-    gpu_to_rgu_billing: Path = None
     slurm_conf_host_path: str = "/etc/slurm/slurm.conf"
 
     # Tell if billing (in job's requested|allocated field) is number of GPUs (True) or RGU (False)
