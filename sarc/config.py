@@ -86,7 +86,8 @@ class ClusterConfig(BaseModel):
     start_date: str = "2022-04-01"
 
     # Optional path to a JSON file containing list of GPU-type-to-RGU mappings (RGU/GPU ratios).
-    # Each mapping represents a new update of RGU values for a given date. Mapping should have following format:
+    # Each mapping represents a new update of RGU values for a given date.
+    # Mapping should have the following format:
     # {"rgu_start_date": str, "gpu_to_rgu_billing": {<gpu_type (str)> : <RGU (int or float)> }}
     gpu_to_rgu_billing: Path = None
 

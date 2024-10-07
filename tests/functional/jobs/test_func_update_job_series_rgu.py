@@ -352,7 +352,7 @@ def _get_expected_columns_with_cluster_patate_and_many_dates():
         2.0,  # before 2023-02-15, no RGU, should not change
         3.0,  # before 2023-02-15, no RGU, should not change
         4 / 400,  # In [2023-12-15, 2023-12-18), should be divided by RGU/GPU ratio
-        np.nan,  # from 2023-12-16, unknown GPU type, should be nan
+        np.nan,  # from 2023-12-15, unknown GPU type, should be nan
         6000 / 700,  # In [2023-12-15, 2023-12-18), should be divided by RGU/GPU ratio
         np.nan,  # from 2023-12-18, unknown GPU type, shoud be nan
         np.nan,  # from 2023-12-18, unknown GPU type, should be nan
