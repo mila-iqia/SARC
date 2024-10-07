@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, time
+from types import SimpleNamespace
 from typing import Dict, List
 
+from iguane.fom import RAWDATA, fom_ugr
 from pydantic import field_validator
 from pydantic_mongo import AbstractRepository, PydanticObjectId
 
@@ -98,3 +100,14 @@ def get_cluster_gpu_billings(cluster_name: str) -> List[GPUBilling]:
         _gpu_billing_collection().find_by({"cluster_name": cluster_name}),
         key=lambda b: b.since,
     )
+
+
+def get_rgus(rgu_version="1.0") -> Dict[str, float]:
+    """
+    Return GPU->RGU mapping for given RGU version.
+
+    Get mapping from package IGUANE.
+    """
+    args = SimpleNamespace(fom_version=rgu_version, custom_weights=None, norm=False)
+    gpus = sorted(RAWDATA.keys())
+    return {gpu: fom_ugr(gpu, args=args) for gpu in gpus}

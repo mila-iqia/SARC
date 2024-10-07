@@ -30,6 +30,7 @@ dependencies = [
     "watchdog>=6,<7",
     "python-dateutil>=2.9.0.post0,<3",
     "opentelemetry-exporter-otlp>=1.23.0,<2",
+    "iguane",
 ]
 
 [project.scripts]
@@ -65,10 +66,10 @@ dev = [
 examples = ["seaborn>=0.13.2,<0.14"]
 
 [tool.uv]
-default-groups = [
-    "dev",
-    "examples",
-]
+default-groups = ["dev", "examples"]
+
+[tool.uv.sources]
+iguane = { git = "https://github.com/mila-iqia/IGUANE.git", rev = "cd533d9b04434df5ff0497aa4880cdd4bc26cdf7" }
 
 [tool.pytest_env]
 TQDM_DISABLE = "1"
@@ -89,9 +90,9 @@ norecursedirs = "tests/common"
 [tool.pylint]
 ignore-paths = []
 disable = [
-    "no-self-argument",  # Pydantic validators don't have one
-    "too-few-public-methods",  # Triggered on Pydantic models
-    "import-outside-toplevel",  # These imports are useful to reduce loading times
+    "no-self-argument",              # Pydantic validators don't have one
+    "too-few-public-methods",        # Triggered on Pydantic models
+    "import-outside-toplevel",       # These imports are useful to reduce loading times
     "too-many-arguments",
     "too-many-locals",
     "too-many-positional-arguments",
@@ -99,8 +100,8 @@ disable = [
     "missing-class-docstring",
     "missing-function-docstring",
     "invalid-name",
-    "no-else-return",  # Bad rule IMO (- OB)
-    "line-too-long",  # Black takes care of line length.
+    "no-else-return",                # Bad rule IMO (- OB)
+    "line-too-long",                 # Black takes care of line length.
     "logging-fstring-interpolation",
     "duplicate-code",
     "too-many-positional-arguments",

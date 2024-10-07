@@ -1,14 +1,17 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timedelta
-from typing import Callable
+from typing import Callable, Dict, Optional
 
 import numpy as np
 import pandas
 from flatten_dict import flatten
+from pandas import DataFrame
 from tqdm import tqdm
 
-from sarc.client.job import count_jobs, get_jobs
+from sarc.client.gpumetrics import GPUBilling, get_cluster_gpu_billings, get_rgus
+from sarc.client.job import SlurmCLuster, count_jobs, get_available_clusters, get_jobs
 from sarc.client.users.api import User, get_users
 from sarc.config import MTL
 from sarc.traces import trace_decorator
@@ -171,13 +174,12 @@ def load_job_series(
 
     jobs_frame = pandas.DataFrame(rows)
 
-    # Merge jobs with users info, only if users available.
-    if users_frame.shape[0]:
-        # Get name pf fields used to merge frames.
-        # We must use `fields`, as fields may have been renamed.
-        field_cluster_name = fields.get("cluster_name", "cluster_name")
-        field_job_user = fields.get("user", "user")
-
+    # Get name of fields used to merge frames.
+    # We must use `fields`, as fields may have been renamed.
+    field_cluster_name = fields.get("cluster_name", "cluster_name")
+    field_job_user = fields.get("user", "user")
+    # Merge jobs with users info, only if both users and user column available.
+    if users_frame.shape[0] and field_job_user in jobs_frame.columns:
         df_mila_mask = jobs_frame[field_cluster_name] == "mila"
         df_drac_mask = jobs_frame[field_cluster_name] != "mila"
 
@@ -295,6 +297,235 @@ def _select_stat(name, dist):
         return dist["max"]
 
     return dist["median"]
+
+
+def update_job_series_rgu(df: DataFrame):
+    """
+    Compute RGU information for jobs in given data frame.
+
+    Parameters
+    ----------
+    df: DataFrame
+        Data frame to update, typically returned by `load_job_series`.
+        Should contain fields:
+        "cluster_name", "start_time", "allocated.gpu_type", "allocated.gres_gpu".
+
+    Returns
+    -------
+    DataFrame
+        Input data frame with:
+        - column `allocated.gres_gpu` updated if necessary.
+        - column `allocated.gres_rgu` added or updated to contain RGU billing.
+          Set to NaN (or unchanged if already present) for jobs from clusters without RGU.
+        - column `gpu_type_rgu` added or updated to contain RGU cost per GPU (RGU/GPU ratio).
+          Set to NaN (or unchanged if already present) for jobs from clusters without RGU.
+    """
+    for cluster in get_available_clusters():
+        update_cluster_job_series_rgu(df, cluster.cluster_name)
+    return df
+
+
+def update_cluster_job_series_rgu(
+    df: pandas.DataFrame, cluster_name: str
+) -> pandas.DataFrame:
+    """
+    Compute RGU information for jobs related to given cluster in a data frame.
+
+    Parameters
+    ----------
+    df: DataFrame
+        Data frame to update, typically returned by `load_job_series`.
+        Should contain fields:
+        "cluster_name", "start_time", "allocated.gpu_type", "allocated.gres_gpu".
+    cluster_name: ClusterConfig
+        Name of cluster to which jobs to update belong.
+
+    Returns
+    -------
+    DataFrame
+        Input data frame with:
+        - column `allocated.gres_gpu` updated if necessary.
+        - column `allocated.gres_rgu` added or updated to contain RGU billing.
+          Set to NaN (or unchanged if already present) for jobs from other clusters.
+        - column `gpu_type_rgu` added or updated to contain RGU cost per GPU (RGU/GPU ratio).
+          Set to NaN (or unchanged if already present) for jobs from other clusters.
+    """
+    # Make sure frame will have new RGU columns anyway, with NaN as default value.
+    if "allocated.gres_rgu" not in df.columns:
+        df["allocated.gres_rgu"] = np.nan
+    if "allocated.gpu_type_rgu" not in df.columns:
+        df["allocated.gpu_type_rgu"] = np.nan
+
+    # Get cluster info
+    clusters = {cluster.cluster_name: cluster for cluster in get_available_clusters()}
+    cluster = clusters[cluster_name]
+
+    # Get GPU->RGU mapping
+    gpu_to_rgu = get_rgus()
+
+    if cluster.billing_is_gpu:
+        # If billing is GPU count on this cluster, then we just need
+        # gpu_to_rgu to compute jobs RGU billing.
+        slice_rows = df["cluster_name"] == cluster_name
+        _compute_rgu_stats_from_gpu_count(df, slice_rows, gpu_to_rgu)
+        return df
+
+    # Otherwise, we need cluster's GPU->billing
+    # to infer GPU count then RGU billing for each job.
+
+    # Get GPU->billing mappings, sorted by billing start date in ascending order.
+    dated_gpu_billings = get_cluster_gpu_billings(cluster_name=cluster_name)
+    if not dated_gpu_billings:
+        logging.warning(
+            f"RGU update: no GPU billing available for cluster {cluster_name}"
+        )
+        return df
+
+    # Now we have RGU and billing values. We can compute RGU information.
+
+    # First, we update columns for jobs that started before the oldest available RGU mapping.
+    _compute_rgu_stats_before_date(df, cluster_name, gpu_to_rgu, dated_gpu_billings[0])
+
+    # Then, we update columns for each RGU mapping except the latest one.
+    for i in range(1, len(dated_gpu_billings)):
+        curr_mapping = dated_gpu_billings[i - 1]
+        next_mapping = dated_gpu_billings[i]
+        _compute_rgu_stats_after_date(
+            cluster, df, cluster_name, gpu_to_rgu, curr_mapping, next_mapping.since
+        )
+
+    # Finally, we update columns for latest RGU mapping.
+    _compute_rgu_stats_after_date(
+        cluster, df, cluster_name, gpu_to_rgu, dated_gpu_billings[-1]
+    )
+
+    return df
+
+
+def _compute_rgu_stats_before_date(
+    df: pandas.DataFrame,
+    cluster_name: str,
+    gpu_to_rgu: Dict[str, float],
+    gpu_billing: GPUBilling,
+):
+    """
+    Compute RGU information for jobs which ran before
+    the start of given GPU billing.
+
+    NB: on any cluster, before the start of RGU billing era, we assume the billing
+    is for GPU (i.e. GPU count). So, we don't care about `cluster.billing_is_gpu` here.
+    """
+
+    # Compute slice for jobs before billing start date.
+    slice_rows = (df["cluster_name"] == cluster_name) & (
+        df["start_time"] < gpu_billing.since
+    )
+    # Then compute RGU stats.
+    _compute_rgu_stats_from_gpu_count(df, slice_rows, gpu_to_rgu)
+
+
+def _compute_rgu_stats_after_date(
+    cluster: SlurmCLuster,
+    df: pandas.DataFrame,
+    cluster_name: str,
+    gpu_to_rgu: Dict[str, float],
+    curr_gpu_billing: GPUBilling,
+    next_billing_date: Optional[datetime] = None,
+):
+    """
+    Compute RGU information for jobs which run
+    from given current GPU billing,
+    and before next GPU billing date (if given).
+    """
+
+    # We work on curr_mapping
+    # Compute slice: curr mapping date <= start time < next mapping date (if next is available)
+    if next_billing_date is None:
+        slice_rows = (df["cluster_name"] == cluster_name) & (
+            df["start_time"] >= curr_gpu_billing.since
+        )
+    else:
+        slice_rows = (
+            (df["cluster_name"] == cluster_name)
+            & (df["start_time"] >= curr_gpu_billing.since)
+            & (df["start_time"] < next_billing_date)
+        )
+
+    # Then compute RGU stats based on type of billing.
+    if cluster.billing_is_gpu:
+        _compute_rgu_stats_from_gpu_count(df, slice_rows, gpu_to_rgu)
+    else:
+        _compute_rgu_stats_from_scaled_rgu(df, slice_rows, gpu_to_rgu, curr_gpu_billing)
+
+
+def _compute_rgu_stats_from_gpu_count(
+    df: pandas.DataFrame, slice_rows, gpu_to_rgu: Dict[str, float]
+):
+    """
+    Compute RGU stats on slice where billing is GPU
+    (i.e. allocated.gres_gpu is GPU count).
+
+    Considering a job with following values:
+        rgu := gpu_to_rgu[job.allocated.gpu_type]
+        job_billing := previous job.allocated.gres_gpu
+
+    and assuming job_billing here represents the count of GPU allocated for this job,
+    we update following job columns:
+        allocated.gres_gpu: job_billing (unchanged, we want to store GPU count here)
+        allocated.gres_rgu: job_billing * rgu
+        allocated.gpu_type_rgu: rgu
+    """
+    # Map GPU type to RGU for related jobs.
+    # If a GPU type is not found in any of dicts,
+    # mapping will be set to NaN.
+    col_gpu_to_rgu = df["allocated.gpu_type"][slice_rows].map(gpu_to_rgu)
+    # Get previous job billing, interpreted as GPU count.
+    col_gpu_count = df["allocated.gres_gpu"][slice_rows]
+    # Then update columns
+    # allocated.gres_gpu is unchanged, as we want to store GPU count here.
+    df.loc[slice_rows, "allocated.gres_rgu"] = col_gpu_count * col_gpu_to_rgu
+    df.loc[slice_rows, "allocated.gpu_type_rgu"] = col_gpu_to_rgu
+
+
+def _compute_rgu_stats_from_scaled_rgu(
+    df: pandas.DataFrame,
+    slice_rows,
+    gpu_to_rgu: Dict[str, float],
+    curr_gpu_billing: GPUBilling,
+):
+    """
+    Compute RGU stats on slice where billing is scaled RGU
+    (i.e. allocated.gres_gpu is a "billing" in its own unit,
+    to be interpreted with given `curr_gpu_billing`).
+
+    Considering a job with following values:
+        rgu := gpu_to_rgu[job.allocated.gpu_type]
+        billing_ref := gpu_billing[job.allocated.gpu_type]
+        job_billing := previous job.allocated.gres_gpu
+
+    and assuming job_billing here already represents the product
+    GPU count * GPU billing,
+    we update following job columns:
+        allocated.gres_gpu: job_billing / billing_ref (to store GPU count here)
+        allocated.gres_rgu: (job_billing / billing_ref) * rgu
+        allocated.gpu_type_rgu: rgu
+    """
+
+    # Map GPU type to RGU and billing for related jobs.
+    # If a GPU type is not found in any of dicts,
+    # mapping will be set to NaN.
+    col_gpu_to_rgu = df["allocated.gpu_type"][slice_rows].map(gpu_to_rgu)
+    col_gpu_to_billing = df["allocated.gpu_type"][slice_rows].map(
+        curr_gpu_billing.gpu_to_billing
+    )
+    # Get previous job billing, interpreted as GPU count * GPU billing
+    col_job_billing = df["allocated.gres_gpu"][slice_rows].copy()
+    # Then update columns
+    df.loc[slice_rows, "allocated.gres_gpu"] = col_job_billing / col_gpu_to_billing
+    df.loc[slice_rows, "allocated.gres_rgu"] = (
+        col_job_billing / col_gpu_to_billing
+    ) * col_gpu_to_rgu
+    df.loc[slice_rows, "allocated.gpu_type_rgu"] = col_gpu_to_rgu
 
 
 def compute_cost_and_waste(full_df: pandas.DataFrame) -> pandas.DataFrame:
