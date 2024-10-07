@@ -1,0 +1,18 @@
+[
+  {
+    "rgu_start_date": "2023-02-15",
+    "gpu_to_rgu_billing": {
+      "patate_gpu_1": 400,
+      "patate_gpu_2": 700,
+      "patate_gpu_3": 300
+    }
+  },
+  {
+    "rgu_start_date": "2023-02-18",
+    "gpu_to_rgu_billing": {
+      "patate_gpu_1": 440,
+      "patate_gpu_2": 750,
+      "patate_gpu_3": 350
+    }
+  }
+]
