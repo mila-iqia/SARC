@@ -68,16 +68,6 @@ def cluster_no_rgu(clusters_config):
 
 
 @pytest.fixture
-def cluster_only_rgu_start_date(clusters_config):
-    return clusters_config["local"]
-
-
-@pytest.fixture
-def cluster_only_rgu_billing(clusters_config):
-    return clusters_config["patate"]
-
-
-@pytest.fixture
 def cluster_full_rgu_empty_billing(clusters_config):
     return clusters_config["gerudo"]
 
@@ -90,37 +80,25 @@ def cluster_full_rgu(clusters_config):
 @pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
 def test_clusters_rgu_config(
     cluster_no_rgu,
-    cluster_only_rgu_start_date,
-    cluster_only_rgu_billing,
     cluster_full_rgu_empty_billing,
     cluster_full_rgu,
 ):
     """Just check clusters config."""
-    assert cluster_no_rgu.rgu_start_date is None
     assert cluster_no_rgu.gpu_to_rgu_billing is None
 
-    assert cluster_only_rgu_start_date.rgu_start_date is not None
-    assert cluster_only_rgu_start_date.gpu_to_rgu_billing is None
-
-    assert cluster_only_rgu_billing.rgu_start_date is None
-    assert cluster_only_rgu_billing.gpu_to_rgu_billing is not None
-
-    assert cluster_full_rgu_empty_billing.rgu_start_date is not None
     assert cluster_full_rgu_empty_billing.gpu_to_rgu_billing is not None
-    assert _read_json(cluster_full_rgu_empty_billing.gpu_to_rgu_billing) == {}
+    assert _read_json(cluster_full_rgu_empty_billing.gpu_to_rgu_billing) == []
 
-    assert cluster_full_rgu.rgu_start_date is not None
     assert cluster_full_rgu.gpu_to_rgu_billing is not None
     gpu_to_rgu_billing = _read_json(cluster_full_rgu.gpu_to_rgu_billing)
-    assert isinstance(gpu_to_rgu_billing, dict)
-    assert len(gpu_to_rgu_billing)
+    assert isinstance(gpu_to_rgu_billing, list)
+    assert len(gpu_to_rgu_billing) == 1
+    assert gpu_to_rgu_billing[0]["rgu_start_date"] == "2023-02-16"
 
 
 @pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
 def test_data_frame_output_size(
     cluster_no_rgu,
-    cluster_only_rgu_start_date,
-    cluster_only_rgu_billing,
     cluster_full_rgu_empty_billing,
     cluster_full_rgu,
 ):
@@ -156,16 +134,6 @@ def test_data_frame_output_size(
     assert "allocated.gpu_type_rgu" not in frame.columns
 
     update_cluster_job_series_rgu(frame, cluster_no_rgu)
-    assert frame.shape == (5, 6)
-    assert frame["allocated.gres_rgu"].equals(nans)
-    assert frame["allocated.gpu_type_rgu"].equals(nans)
-
-    update_cluster_job_series_rgu(frame, cluster_only_rgu_start_date)
-    assert frame.shape == (5, 6)
-    assert frame["allocated.gres_rgu"].equals(nans)
-    assert frame["allocated.gpu_type_rgu"].equals(nans)
-
-    update_cluster_job_series_rgu(frame, cluster_only_rgu_billing)
     assert frame.shape == (5, 6)
     assert frame["allocated.gres_rgu"].equals(nans)
     assert frame["allocated.gpu_type_rgu"].equals(nans)
@@ -272,7 +240,6 @@ def _get_expected_columns_with_cluster_raisin():
 @pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
 def test_update_cluster_job_series_rgu(cluster_full_rgu):
     """Concrete test for 1 cluster with a generated frame."""
-    assert cluster_full_rgu.rgu_start_date == "2023-02-16"
     frame = _gen_complex_data_frame()
     assert frame.shape == (12, 4)
     assert "allocated.gres_rgu" not in frame.columns
@@ -319,7 +286,8 @@ def test_update_job_series_rgu():
         91011 / 200,  # job belongs to cluster fromage after RGU, divided by RGU/GPU
     ]
     expected_gres_rgu[-3:] = [
-        123 * 100.0,  # job from to cluster fromage before RGU: gres_gpu * RGU/GPU ratio
+        123
+        * 100.0,  # job belongs to cluster fromage before RGU: gres_gpu * RGU/GPU ratio
         np.nan,  # job belongs to cluster patate, no RGU, then should have nan here
         91011.0,  # job belongs to cluster fromage after RGU, should be gres_gpu
     ]
@@ -354,7 +322,6 @@ def test_update_job_series_rgu_with_real_test_data(cluster_full_rgu, file_regres
 
     file_regression.check(
         f"Update job series RGU for {frame.shape[0]} job(s):\n\n"
-        f"RGU start date: {cluster_full_rgu.rgu_start_date}\n\n"
         f"gpu_to_rgu_billing:\n{pformat(_read_json(cluster_full_rgu.gpu_to_rgu_billing))}\n\n"
         f"{_df_to_pretty_str(frame)}"
     )
