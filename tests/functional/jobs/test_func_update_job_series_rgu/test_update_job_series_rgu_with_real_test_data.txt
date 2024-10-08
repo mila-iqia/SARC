@@ -1,17 +1,16 @@
 Update job series RGU for 24 job(s):
 
-RGU start date: 2023-02-16
-
 gpu_to_rgu_billing:
-{'A100': 700,
- 'raisin_gpu_1': 100,
- 'raisin_gpu_2': 200,
- 'raisin_gpu_3': 300,
- 'raisin_gpu_4': 400,
- 'raisin_gpu_5': 500,
- 'raisin_gpu_6': 600,
- 'raisin_gpu_8': 800,
- 'raisin_gpu_9': 900}
+[{'gpu_to_rgu_billing': {'A100': 700,
+                         'raisin_gpu_1': 100,
+                         'raisin_gpu_2': 200,
+                         'raisin_gpu_3': 300,
+                         'raisin_gpu_4': 400,
+                         'raisin_gpu_5': 500,
+                         'raisin_gpu_6': 600,
+                         'raisin_gpu_8': 800,
+                         'raisin_gpu_9': 900},
+  'rgu_start_date': '2023-02-16'}]
 
 |    |    job_id | cluster_name   | start_time                | allocated.gpu_type   |   allocated.gres_gpu |   allocated.gres_rgu |   allocated.gpu_type_rgu |
 |---:|----------:|:---------------|:--------------------------|:---------------------|---------------------:|---------------------:|-------------------------:|
