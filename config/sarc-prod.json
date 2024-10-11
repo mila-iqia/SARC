@@ -1,4 +1,11 @@
 {
+    "logging": {
+        "log_level": "INFO"
+    },
+    "loki": {
+        "endpoint": "http://loki01.server.mila.quebec:3100/otlp/v1/logs",
+        "service_name": "sarc"
+        },
     "mongo": {
         "connection_string": "mongodb://writeuser:REPLACEME@localhost:27017/sarc",
         "database_name": "sarc"
