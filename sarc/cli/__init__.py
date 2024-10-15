@@ -8,12 +8,13 @@ from typing import Any, Union
 
 from simple_parsing import ArgumentParser, field, subparsers
 
+from sarc.logging import getSarcLogger
+
 from .acquire import Acquire
 from .db import Db
 from .health import Health
 
-logger = logging.getLogger(__name__)
-
+logger = getSarcLogger(__name__)
 
 colors = SimpleNamespace(
     grey="\033[38;21m",
@@ -78,7 +79,8 @@ class CLI:
                 level=levels.get(self.verbose, logging.DEBUG),
             )
 
-        # logger.debug("SARC version : %s", sarc.__version__)
+        logger.debug("SARC version : %s", sarc.__version__)
+        print(f"Running command: {self.command}")
 
         return self.command.execute()
 
@@ -89,6 +91,11 @@ def main(argv: list[Any] | None = None) -> int:
     parser.add_arguments(CLI, dest="command")
     args = parser.parse_args(argv)
     command: CLI = args.command
+
+    # logger.debug(f"Test debug log {__file__}")
+    # logger.info(f"Test info log {__file__}")
+    # logger.warning(f"Test warning log {__file__}")
+    # logger.error(f"Test error log {__file__}")
 
     return command.execute()
 

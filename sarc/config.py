@@ -174,6 +174,7 @@ class LokiConfig(BaseModel):
     endpoint: str
     service_name: str
 
+
 class TempoConfig(BaseModel):
     uri: str
 
@@ -191,8 +192,10 @@ class AccountMatchingConfig(BaseModel):
     drac_roles_csv_path: Path
     make_matches_config: Path
 
+
 class LoggingConfig(BaseModel):
     log_level: str
+
 
 # pylint: disable=unused-argument,redefined-outer-name
 def _absolute_path(value, values, config, field):
@@ -204,7 +207,6 @@ class Config(BaseModel):
     cache: Path = None
     loki: LokiConfig = None
     tempo: TempoConfig = None
-
 
     _abs_path = validator("cache", allow_reuse=True)(_absolute_path)
 
