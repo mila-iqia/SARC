@@ -1,13 +1,12 @@
 import json
 from datetime import datetime
-from pprint import pformat
-from typing import Dict
 
 import numpy as np
 import pandas
 import pytest
 
-from sarc.config import MTL, ClusterConfig, config
+from sarc.client.rgu import get_cluster_rgus
+from sarc.config import MTL
 from sarc.jobs.series import (
     load_job_series,
     update_cluster_job_series_rgu,
@@ -43,68 +42,44 @@ def _read_json(filename):
         return json.load(file)
 
 
-# Below, we generate fixtures for cluster configs used in these tests.
-# There are 5 clusters:
-# - no rgu date, no RGU mapping
-# - no rgu date, only RGU mapping
-# - only rgu date, no RGU mapping
-# - rgu date, empty RGU mapping
-# - rgu date, RGU mapping
-# With 4 first configs, frame should not be updated,
-# as either rgu date is missing or RGU mapping is missing or empty.
-# With 5th config, frame should be updated, as all required data are available.
-
-
-@pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
 @pytest.fixture
-def clusters_config():
-    clusters: Dict[str, ClusterConfig] = config().clusters
-    return clusters
+def cluster_no_rgu():
+    return "hyrule"
 
 
 @pytest.fixture
-def cluster_no_rgu(clusters_config):
-    return clusters_config["hyrule"]
+def cluster_no_rgu_2():
+    return "gerudo"
 
 
 @pytest.fixture
-def cluster_full_rgu_empty_billing(clusters_config):
-    return clusters_config["gerudo"]
+def cluster_full_rgu_one_date():
+    return "raisin"
 
 
 @pytest.fixture
-def cluster_full_rgu_one_date(clusters_config):
-    return clusters_config["raisin"]
-
-
-@pytest.fixture
-def cluster_full_rgu_many_dates(clusters_config):
-    return clusters_config["patate"]
+def cluster_full_rgu_many_dates():
+    return "patate"
 
 
 @pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
 def test_clusters_rgu_config(
     cluster_no_rgu,
-    cluster_full_rgu_empty_billing,
+    cluster_no_rgu_2,
     cluster_full_rgu_one_date,
+    cluster_full_rgu_many_dates,
 ):
     """Just check clusters config."""
-    assert cluster_no_rgu.gpu_to_rgu_billing is None
-
-    assert cluster_full_rgu_empty_billing.gpu_to_rgu_billing is not None
-    assert _read_json(cluster_full_rgu_empty_billing.gpu_to_rgu_billing) == []
-
-    assert cluster_full_rgu_one_date.gpu_to_rgu_billing is not None
-    gpu_to_rgu_billing = _read_json(cluster_full_rgu_one_date.gpu_to_rgu_billing)
-    assert isinstance(gpu_to_rgu_billing, list)
-    assert len(gpu_to_rgu_billing) == 1
-    assert gpu_to_rgu_billing[0]["rgu_start_date"] == "2023-02-16"
+    assert get_cluster_rgus(cluster_no_rgu) == []
+    assert get_cluster_rgus(cluster_no_rgu_2) == []
+    assert len(get_cluster_rgus(cluster_full_rgu_one_date)) == 1
+    assert len(get_cluster_rgus(cluster_full_rgu_many_dates)) > 1
 
 
 @pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
 def test_data_frame_output_size(
     cluster_no_rgu,
-    cluster_full_rgu_empty_billing,
+    cluster_no_rgu_2,
     cluster_full_rgu_one_date,
 ):
     """
@@ -143,7 +118,7 @@ def test_data_frame_output_size(
     assert frame["allocated.gres_rgu"].equals(nans)
     assert frame["allocated.gpu_type_rgu"].equals(nans)
 
-    update_cluster_job_series_rgu(frame, cluster_full_rgu_empty_billing)
+    update_cluster_job_series_rgu(frame, cluster_no_rgu_2)
     assert frame.shape == (5, 6)
     assert frame["allocated.gres_rgu"].equals(nans)
     assert frame["allocated.gpu_type_rgu"].equals(nans)
@@ -482,6 +457,5 @@ def test_update_job_series_rgu_with_real_test_data(
 
     file_regression.check(
         f"Update job series RGU for {frame.shape[0]} job(s):\n\n"
-        f"gpu_to_rgu_billing:\n{pformat(_read_json(cluster_full_rgu_one_date.gpu_to_rgu_billing))}\n\n"
         f"{_df_to_pretty_str(frame)}"
     )

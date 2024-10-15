@@ -11,7 +11,12 @@ from sarc.testing import MongoInstance
 
 from .allocations.factory import create_allocations
 from .diskusage.factory import create_diskusages
-from .jobs.factory import create_cluster_entries, create_jobs, create_users
+from .jobs.factory import (
+    create_cluster_entries,
+    create_jobs,
+    create_rgu_billings,
+    create_users,
+)
 
 
 @pytest.fixture
@@ -39,18 +44,19 @@ def clear_db(db):
     db.diskusage.drop()
     db.users.drop()
     db.clusters.drop()
+    db.rgu_billing.drop()
 
 
 def fill_db(db, with_users=False, with_clusters=False, job_patch=None):
     db.allocations.insert_many(create_allocations())
     db.jobs.insert_many(create_jobs(job_patch=job_patch))
     db.diskusage.insert_many(create_diskusages())
+    db.rgu_billing.insert_many(create_rgu_billings())
     if with_users:
         db.users.insert_many(create_users())
 
     if with_clusters:
         # Fill collection `clusters`.
-        cluster_names = {job["cluster_name"] for job in db.jobs.find({})}
         db.clusters.insert_many(create_cluster_entries(db))
 
 

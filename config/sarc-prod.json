@@ -40,8 +40,7 @@
             "diskusage_report_command": "diskusage_report --project --all_users",
             "prometheus_url": "https://mila-thanos.calculquebec.ca",
             "prometheus_headers_file": "secrets/drac_prometheus/headers.json",
-            "start_date": "2022-04-01",
-            "gpu_to_rgu_billing": "secrets/gpu_to_rgu_billing_narval.json"
+            "start_date": "2022-04-01"
         },
         "beluga": {
             "host": "beluga.computecanada.ca",
@@ -53,8 +52,7 @@
             "diskusage_report_command": "diskusage_report --project --all_users",
             "prometheus_url": "https://mila-thanos.calculquebec.ca",
             "prometheus_headers_file": "secrets/drac_prometheus/headers.json",
-            "start_date": "2022-04-01",
-            "gpu_to_rgu_billing": "secrets/gpu_to_rgu_billing_beluga.json"
+            "start_date": "2022-04-01"
         },
         "graham": {
             "host": "graham.computecanada.ca",
@@ -67,8 +65,7 @@
             "prometheus_url": null,
             "prometheus_headers_file": null,
             "start_date": "2022-04-01",
-            "nodes_info_file": "secrets/nodes_graham.txt",
-            "gpu_to_rgu_billing": "secrets/gpu_to_rgu_billing_graham.json"
+            "nodes_info_file": "secrets/nodes_graham.txt"
         },
         "cedar": {
             "host": "cedar.computecanada.ca",
@@ -81,8 +78,7 @@
             "prometheus_url": null,
             "prometheus_headers_file": null,
             "start_date": "2022-04-01",
-            "nodes_info_file": "secrets/nodes_cedar.txt",
-            "gpu_to_rgu_billing": "secrets/gpu_to_rgu_billing_cedar.json"
+            "nodes_info_file": "secrets/nodes_cedar.txt"
         }
     }
 }

@@ -1,9 +1,0 @@
-[
-  {
-    "rgu_start_date": "2023-02-22",
-    "gpu_to_rgu_billing": {
-      "fromage_gpu_1": 100,
-      "fromage_gpu_2": 200
-    }
-  }
-]
