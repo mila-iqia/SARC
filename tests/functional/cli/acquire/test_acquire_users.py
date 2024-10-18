@@ -382,7 +382,7 @@ def test_acquire_users_prompt(
     cfg = config()
     # Load mock for `open` builtin function
     file_simulator = FileSimulator(file_contents)
-    # Preload manual matching file for to check initial content
+    # Preload manual matching file to check initial content
     file_simulator(cfg.account_matching.make_matches_config)
     # Check initial content. Should contain only 1 default manual match.
     before = json.loads(file_simulator.get(cfg.account_matching.make_matches_config))

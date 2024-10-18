@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import json
 import logging
-import os.path
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Callable
 
@@ -14,8 +12,9 @@ from prometheus_api_client import MetricRangeDataFrame
 from tqdm import tqdm
 
 from sarc.client.job import JobStatistics, SlurmJob, Statistics, count_jobs, get_jobs
+from sarc.client.rgu import get_cluster_rgus
 from sarc.client.users.api import User, get_users
-from sarc.config import MTL, UTC, ClusterConfig, config
+from sarc.config import MTL, UTC, config
 from sarc.traces import trace_decorator
 
 if TYPE_CHECKING:
@@ -517,7 +516,7 @@ class UserFlattener:
 
 
 def update_cluster_job_series_rgu(
-    df: pandas.DataFrame, cluster_config: ClusterConfig
+    df: pandas.DataFrame, cluster_name: str
 ) -> pandas.DataFrame:
     """
     Compute RGU information for jobs related to given cluster config in a data frame.
@@ -528,12 +527,8 @@ def update_cluster_job_series_rgu(
         Data frame to update, typically returned by `load_job_series`.
         Should contain fields:
         "cluster_name", "start_time", "allocated.gpu_type", "allocated.gres_gpu".
-    cluster_config: ClusterConfig
-        Configuration of cluster to which jobs to update belong.
-        Should define following config:
-        "rgu_start_date": date since when billing is given as RGU.
-        "gpu_to_rgu_billing": path to a JSON file containing a dict which maps
-        GPU type to RGU cost per GPU.
+    cluster_name: ClusterConfig
+        Name of cluster to which jobs to update belong.
 
     Returns
     -------
@@ -547,7 +542,7 @@ def update_cluster_job_series_rgu(
 
     Pseudocode describing how we update data frame:
     for each job: if job.cluster_name == cluster_config.name:
-        if start_time < cluster_config.rgu_start_date:
+        if start_time < oldest rgu_start_date:
             # We are BEFORE transition to RGU
             if allocated.gpu_type in gpu_to_rgu_billing:
                 # compute rgu columns
@@ -558,7 +553,9 @@ def update_cluster_job_series_rgu(
                 allocated.gres_rgu = nan
                 allocated.gpu_type_rgu = nan
         else:
-            # We are AFTER transition to RGU
+            # We update job using the `gpu_to_rgu_billing`
+            # which matches job start date from cluster config
+
             # Anyway, we assume gres_rgu is current gres_gpu
             allocated.gres_rgu = allocated.gres_gpu
 
@@ -580,77 +577,80 @@ def update_cluster_job_series_rgu(
     if "allocated.gpu_type_rgu" not in df.columns:
         df["allocated.gpu_type_rgu"] = np.nan
 
-    if cluster_config.rgu_start_date is None:
-        logging.warning(
-            f"RGU update: no RGU start date for cluster {cluster_config.name}"
-        )
+    # Get RGU/GPU ratios, sorted by RGU start date in ascending order.
+    dated_rgu_mappings = get_cluster_rgus(cluster_name=cluster_name)
+
+    if not dated_rgu_mappings:
+        logging.warning(f"RGU update: no RGU/GPU available for cluster {cluster_name}")
         return df
 
-    if cluster_config.gpu_to_rgu_billing is None:
-        logging.warning(
-            f"RGU update: no RGU/GPU JSON path for cluster {cluster_config.name}"
-        )
-        return df
+    # Now we have RGU/GPU ratios. We can update columns.
 
-    if not os.path.isfile(cluster_config.gpu_to_rgu_billing):
-        logging.warning(
-            f"RGU update: RGU/GPU JSON file not found for cluster {cluster_config.name} "
-            f"at: {cluster_config.gpu_to_rgu_billing}"
-        )
-        return df
-
-    # Otherwise, parse RGU start date.
-    rgu_start_date = datetime.fromisoformat(cluster_config.rgu_start_date).astimezone(
-        MTL
+    # First, we update columns for jobs that started before the oldest available RGU mapping.
+    oldest_rgu_mapping = dated_rgu_mappings[0]
+    # Compute slice for jobs before oldest RGU start date.
+    slice_before_rgu_time = (df["cluster_name"] == cluster_name) & (
+        df["start_time"] < oldest_rgu_mapping.rgu_start_date
     )
-
-    # Get RGU/GPU ratios.
-    with open(cluster_config.gpu_to_rgu_billing, "r", encoding="utf-8") as file:
-        gpu_to_rgu_billing = json.load(file)
-        assert isinstance(gpu_to_rgu_billing, dict)
-    if not gpu_to_rgu_billing:
-        logging.warning(
-            f"RGU update: no RGU/GPU available for cluster {cluster_config.name}"
-        )
-        return df
-
-    # We have now both RGU stare date and RGU/GPU ratios. We can update columns.
-
-    # Compute column allocated.gpu_type_rgu
+    # Compute column allocated.gpu_type_rgu for jobs before oldest RGU start date.
     # If a GPU type is not found in RGU/GPU ratios,
     # then ratio will be set to NaN in output column.
-    col_ratio_rgu_by_gpu = df["allocated.gpu_type"].map(gpu_to_rgu_billing)
-
-    # Compute slices for both before and since RGU start date.
-    slice_before_rgu_time = (df["cluster_name"] == cluster_config.name) & (
-        df["start_time"] < rgu_start_date
+    col_ratio_rgu_before = df["allocated.gpu_type"][slice_before_rgu_time].map(
+        oldest_rgu_mapping.gpu_to_rgu
     )
-    slice_after_rgu_time = (df["cluster_name"] == cluster_config.name) & (
-        df["start_time"] >= rgu_start_date
-    )
-
-    # We can already set column allocated.gpu_type_rgu anyway.
-    df.loc[slice_before_rgu_time, "allocated.gpu_type_rgu"] = col_ratio_rgu_by_gpu[
-        slice_before_rgu_time
-    ]
-    df.loc[slice_after_rgu_time, "allocated.gpu_type_rgu"] = col_ratio_rgu_by_gpu[
-        slice_after_rgu_time
-    ]
-
-    # Compute allocated.gres_rgu where job started before RGU time.
+    # Set column allocated.gpu_type_rgu
+    df.loc[slice_before_rgu_time, "allocated.gpu_type_rgu"] = col_ratio_rgu_before
+    # Compute allocated.gres_rgu where job started before oldest RGU start date.
+    # For these jobs, we use oldest RGU mapping to infer gres RGU.
     df.loc[slice_before_rgu_time, "allocated.gres_rgu"] = (
-        df["allocated.gres_gpu"][slice_before_rgu_time]
-        * col_ratio_rgu_by_gpu[slice_before_rgu_time]
+        df["allocated.gres_gpu"][slice_before_rgu_time] * col_ratio_rgu_before
     )
 
-    # Set allocated.gres_rgu with previous allocated.gres_gpu where job started after RGU time.
-    df.loc[slice_after_rgu_time, "allocated.gres_rgu"] = df["allocated.gres_gpu"][
-        slice_after_rgu_time
+    # Now, we update columns for each RGU mapping except the latest one.
+    for i in range(1, len(dated_rgu_mappings)):
+        curr_mapping = dated_rgu_mappings[i - 1]
+        next_mapping = dated_rgu_mappings[i]
+        # We work on curr_mapping
+        # Compute slice: curr mapping date <= start time < next mapping date
+        slice_rgu_time = (
+            (df["cluster_name"] == cluster_name)
+            & (df["start_time"] >= curr_mapping.rgu_start_date)
+            & (df["start_time"] < next_mapping.rgu_start_date)
+        )
+        # Compute column allocated.gpu_type_rgu
+        col_ratio_rgu_by_gpu = df["allocated.gpu_type"][slice_rgu_time].map(
+            curr_mapping.gpu_to_rgu
+        )
+        # Set column allocated.gpu_type_rgu
+        df.loc[slice_rgu_time, "allocated.gpu_type_rgu"] = col_ratio_rgu_by_gpu
+        # Set allocated.gres_rgu with previous allocated.gres_gpu where job started after RGU time.
+        df.loc[slice_rgu_time, "allocated.gres_rgu"] = df["allocated.gres_gpu"][
+            slice_rgu_time
+        ]
+        # Then update allocated.gres_gpu where job started after RGU time.
+        df.loc[slice_rgu_time, "allocated.gres_gpu"] = (
+            df["allocated.gres_gpu"][slice_rgu_time] / col_ratio_rgu_by_gpu
+        )
+
+    # Then, we update column for latest RGU mapping.
+    latest_rgu_mapping = dated_rgu_mappings[-1]
+    # Slice covers all jobs that start at least after this date.
+    slice_rgu_time_latest = (df["cluster_name"] == cluster_name) & (
+        df["start_time"] >= latest_rgu_mapping.rgu_start_date
+    )
+    # Compute column allocated.gpu_type_rgu
+    col_ratio_rgu_latest = df["allocated.gpu_type"][slice_rgu_time_latest].map(
+        latest_rgu_mapping.gpu_to_rgu
+    )
+    # Set column allocated.gpu_type_rgu
+    df.loc[slice_rgu_time_latest, "allocated.gpu_type_rgu"] = col_ratio_rgu_latest
+    # Set allocated.gres_rgu with previous allocated.gres_gpu where job started after latest RGU time.
+    df.loc[slice_rgu_time_latest, "allocated.gres_rgu"] = df["allocated.gres_gpu"][
+        slice_rgu_time_latest
     ]
     # Then update allocated.gres_gpu where job started after RGU time.
-    df.loc[slice_after_rgu_time, "allocated.gres_gpu"] = (
-        df["allocated.gres_gpu"][slice_after_rgu_time]
-        / col_ratio_rgu_by_gpu[slice_after_rgu_time]
+    df.loc[slice_rgu_time_latest, "allocated.gres_gpu"] = (
+        df["allocated.gres_gpu"][slice_rgu_time_latest] / col_ratio_rgu_latest
     )
 
     return df
@@ -680,7 +680,7 @@ def update_job_series_rgu(df: DataFrame):
     For more details about implementation, see function `update_cluster_job_series_rgu`
     """
     for cluster_config in config().clusters.values():
-        update_cluster_job_series_rgu(df, cluster_config)
+        update_cluster_job_series_rgu(df, cluster_config.name)
     return df
 
 
