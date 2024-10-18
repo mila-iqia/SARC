@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from typing import List
 
 from sarc.cache import CacheException, CachePolicy, with_cache
 from sarc.client.rgu import _rgu_billing_collection
@@ -23,11 +24,11 @@ class AcquireRGUs:
         collection = _rgu_billing_collection()
         for cluster_config in config().clusters.values():
             try:
-                cluster_rgu_billing = fetch_gpu_type_to_rgu(
+                cluster_rgu_billings = fetch_gpu_type_to_rgu(
                     cluster_config.name, cache_policy=CachePolicy.always
                 )
-                assert isinstance(cluster_rgu_billing, dict)
-                if cluster_rgu_billing:
+                assert isinstance(cluster_rgu_billings, list)
+                for cluster_rgu_billing in cluster_rgu_billings:
                     collection.save_rgu_billing(
                         cluster_config.name, **cluster_rgu_billing
                     )
@@ -46,11 +47,11 @@ def _gpu_type_to_rgu_cache_key(cluster_name: str):
 
 
 @with_cache(subdirectory="rgu", key=_gpu_type_to_rgu_cache_key)
-def fetch_gpu_type_to_rgu(cluster_name: str) -> dict:
+def fetch_gpu_type_to_rgu(cluster_name: str) -> List[dict]:
     """
-    Return a GPU->RGU mapping JSON dict for given cluster.
+    Return a list of GPU->RGU mapping dicts for given cluster.
 
-    Dictionary must have the following format:
+    Each dictionary must have the following format:
     {
       "rgu_start_date" : <date: str, example format: "YYYY-MM-DD">
       "gpu_to_rgu" : {
@@ -58,19 +59,10 @@ def fetch_gpu_type_to_rgu(cluster_name: str) -> dict:
       }
     }
 
-    Dictionary is expected to be read from a cache file located at:
+    Dictionaries list is expected to be read from a cache file located at:
     {config().cache}/rgu/gpu_type_to_rgu.{cluster_name}.json
-
-    To add a new RGU mapping for given cluster,
-    update cache file by changing `rgu_start_date` and `gpu_to_rgu`,
-    then run `sarc acquire rgus` again.
-
-    To fix a previous RGU mapping already registered in database,
-    set cache file with registered mapping date in `rgu_start_date`
-    and new mapping values in `gpu_to_rgu`,
-    then run `sarc acquire rgus` again.
     """
     raise RuntimeError(
-        f"Please add GPU-type-to-RGU JSON mapping file into cache, at location: "
+        f"Please add GPU-type-to-RGU JSON mappings file into cache, at location: "
         f"{config().cache}/rgu/{_gpu_type_to_rgu_cache_key(cluster_name)}"
     )

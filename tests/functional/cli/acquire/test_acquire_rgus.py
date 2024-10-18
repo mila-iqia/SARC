@@ -1,6 +1,6 @@
 import json
 import pathlib
-from typing import Dict, List
+from typing import List
 
 import pytest
 
@@ -17,11 +17,15 @@ def test_acquire_rgus(cli_main):
     cache_path.mkdir(parents=True)
 
     # Test fetch_gpu_type_to_rgu
-    _save_rgu(cache_path, "raisin", "2024-01-01", {"a": 1})
-    assert fetch_gpu_type_to_rgu("raisin") == {
-        "rgu_start_date": "2024-01-01",
-        "gpu_to_rgu": {"a": 1},
-    }
+    _save_rgus(
+        cache_path, "raisin", [{"rgu_start_date": "2024-01-01", "gpu_to_rgu": {"a": 1}}]
+    )
+    assert fetch_gpu_type_to_rgu("raisin") == [
+        {
+            "rgu_start_date": "2024-01-01",
+            "gpu_to_rgu": {"a": 1},
+        }
+    ]
 
     # Test `sarc acquire rgus`
     assert get_cluster_rgus("raisin") == []
@@ -52,7 +56,9 @@ def test_acquire_rgus(cli_main):
     assert_same_billings(get_cluster_rgus("raisin"), [expected_billing])
 
     # Update existing billing and test
-    _save_rgu(cache_path, "raisin", "2024-01-01", {"a": 2})
+    _save_rgus(
+        cache_path, "raisin", [{"rgu_start_date": "2024-01-01", "gpu_to_rgu": {"a": 2}}]
+    )
     assert (
         cli_main(
             [
@@ -66,7 +72,14 @@ def test_acquire_rgus(cli_main):
     assert_same_billings(get_cluster_rgus("raisin"), [expected_billing])
 
     # Add new billing and test
-    _save_rgu(cache_path, "raisin", "2024-01-02", {"b": 1})
+    _save_rgus(
+        cache_path,
+        "raisin",
+        [
+            {"rgu_start_date": "2024-01-01", "gpu_to_rgu": {"a": 2}},
+            {"rgu_start_date": "2024-01-02", "gpu_to_rgu": {"b": 1}},
+        ],
+    )
     assert (
         cli_main(
             [
@@ -85,7 +98,13 @@ def test_acquire_rgus(cli_main):
     assert_same_billings(get_cluster_rgus("raisin"), expected_billings)
 
     # Add new billing for another cluster and test
-    _save_rgu(cache_path, "patate", "2024-01-03", {"c": 1})
+    _save_rgus(
+        cache_path,
+        "patate",
+        [
+            {"rgu_start_date": "2024-01-03", "gpu_to_rgu": {"c": 1}},
+        ],
+    )
     assert get_cluster_rgus("patate") == []
     assert (
         cli_main(
@@ -116,15 +135,9 @@ def assert_same_billings(given: List[RGUBilling], expected: List[RGUBilling]):
         assert given_billing.gpu_to_rgu == expected_billing.gpu_to_rgu
 
 
-def _save_rgu(
-    cache_path: pathlib.Path,
-    cluster_name: str,
-    rgu_start_date: str,
-    gpu_to_rgu: Dict[str, float],
-):
-    """Generate RGU cache file"""
+def _save_rgus(cache_path: pathlib.Path, cluster_name: str, mappings: list):
     parent_path = cache_path / "rgu"
     file_path = parent_path / _gpu_type_to_rgu_cache_key(cluster_name)
     parent_path.mkdir(exist_ok=True)
     with file_path.open("w") as file:
-        json.dump({"rgu_start_date": rgu_start_date, "gpu_to_rgu": gpu_to_rgu}, file)
+        json.dump(mappings, file)
