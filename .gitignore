@@ -18,3 +18,5 @@ sarc_mongo
 *-checkpoint.ipynb
 sarc-test-cache
 dbconfig.txt
+token.json
+.vscode
