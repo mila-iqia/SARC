@@ -5,9 +5,9 @@ import pandas
 import pytest
 
 from sarc.client.job import get_jobs
+from sarc.client.series import load_job_series
 from sarc.client.users.api import get_users
 from sarc.config import MTL
-from sarc.jobs.series import load_job_series
 
 from .test_func_job_statistics import generate_fake_timeseries
 
@@ -131,7 +131,7 @@ MOCK_TIME = "2023-11-22"
 
 
 @pytest.mark.freeze_time(MOCK_TIME)
-@pytest.mark.usefixtures("read_only_db_with_users", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db_with_users_client", "tzlocal_is_mtl")
 def test_load_job_series_with_users(file_regression):
     """Test job to user mapping.
 
@@ -159,7 +159,7 @@ def test_load_job_series_with_users(file_regression):
 
 
 @pytest.mark.freeze_time(MOCK_TIME)
-@pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db_no_users_client", "tzlocal_is_mtl")
 @pytest.mark.parametrize("params", parameters.values(), ids=parameters.keys())
 def test_load_job_series(params, file_regression, captrace):
     data_frame = load_job_series(**params)
@@ -182,7 +182,7 @@ def test_load_job_series(params, file_regression, captrace):
     assert spans[0].name == "load_job_series"
 
 
-@pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db_no_users_client", "tzlocal_is_mtl")
 @pytest.mark.parametrize("params", [parameters["no_cluster"]], ids=["no_cluster"])
 def test_load_job_series_check_end_times(params):
     # Get jobs
@@ -290,7 +290,7 @@ def test_load_job_series_with_stored_statistics(monkeypatch):
         assert all(not math.isnan(value) for value in re_frame[label])
 
 
-@pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db_no_users_client", "tzlocal_is_mtl")
 @pytest.mark.parametrize("params", few_parameters.values(), ids=few_parameters.keys())
 def test_load_job_series_fields_list(params, file_regression):
     fields = ["gpu_memory", "allocated.mem", "requested.mem", "user", "work_dir"]
@@ -302,7 +302,7 @@ def test_load_job_series_fields_list(params, file_regression):
     )
 
 
-@pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db_no_users_client", "tzlocal_is_mtl")
 @pytest.mark.parametrize("params", few_parameters.values(), ids=few_parameters.keys())
 def test_load_job_series_fields_dict(params, file_regression):
     fields = {
@@ -321,7 +321,7 @@ def test_load_job_series_fields_dict(params, file_regression):
 
 
 @pytest.mark.freeze_time(MOCK_TIME)
-@pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db_no_users_client", "tzlocal_is_mtl")
 @pytest.mark.parametrize("params", param_start_end.values(), ids=param_start_end.keys())
 def test_load_job_series_clip_time_true(params, file_regression):
     assert "start" in params
@@ -337,7 +337,7 @@ def test_load_job_series_clip_time_true(params, file_regression):
 
 
 @pytest.mark.freeze_time(MOCK_TIME)
-@pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db_no_users_client", "tzlocal_is_mtl")
 @pytest.mark.parametrize("params", param_start_end.values(), ids=param_start_end.keys())
 def test_load_job_series_clip_time_false(params, file_regression):
     assert "start" in params
@@ -350,7 +350,7 @@ def test_load_job_series_clip_time_false(params, file_regression):
     )
 
 
-@pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db_no_users_client", "tzlocal_is_mtl")
 @pytest.mark.parametrize(
     "params", params_no_start_or_end.values(), ids=params_no_start_or_end.keys()
 )
@@ -360,7 +360,7 @@ def test_load_job_series_clip_time_true_no_start_or_end(params, file_regression)
 
 
 @pytest.mark.freeze_time(MOCK_TIME)
-@pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db_no_users_client", "tzlocal_is_mtl")
 @pytest.mark.parametrize("params", few_parameters.values(), ids=few_parameters.keys())
 def test_load_job_series_callback(params, file_regression):
     def callback(rows):
@@ -378,7 +378,7 @@ def test_load_job_series_callback(params, file_regression):
     )
 
 
-@pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db_no_users_client", "tzlocal_is_mtl")
 @pytest.mark.parametrize("params", param_start_end.values(), ids=param_start_end.keys())
 def test_load_job_series_all_args(params, file_regression):
     def callback(rows):

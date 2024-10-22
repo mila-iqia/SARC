@@ -143,6 +143,13 @@ read_only_client_db_with_users_config_object = create_client_db_configuration_fi
     scope="session",
 )
 
+read_only_client_db_no_users_config_object = create_client_db_configuration_fixture(
+    db_name="sarc-read-only-no-users-test-client",
+    with_users=False,
+    with_clusters=True,
+    scope="session",
+)
+
 
 @pytest.fixture
 def empty_read_write_db(standard_config, empty_read_write_db_config_object):
@@ -186,6 +193,15 @@ def read_only_db_with_users_client(
     client_config, read_only_client_db_with_users_config_object
 ):
     cfg = custom_db_config(client_config, "sarc-read-only-with-users-test-client")
+    with using_config(cfg) as cfg:
+        yield cfg.mongo.database_instance
+
+
+@pytest.fixture
+def read_only_db_no_users_client(
+    client_config, read_only_client_db_no_users_config_object
+):
+    cfg = custom_db_config(client_config, "sarc-read-only-no-users-test-client")
     with using_config(cfg) as cfg:
         yield cfg.mongo.database_instance
 
