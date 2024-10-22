@@ -2,7 +2,7 @@ import pandas
 import pytest
 
 from sarc.client.job import get_jobs
-from sarc.jobs.series import compute_cost_and_waste, load_job_series
+from sarc.client.series import compute_cost_and_waste, load_job_series
 
 from .test_func_job_statistics import generate_fake_timeseries
 from .test_func_load_job_series import MOCK_TIME
@@ -37,7 +37,7 @@ def _df_to_pretty_str(df: pandas.DataFrame) -> str:
 
 
 @pytest.mark.freeze_time(MOCK_TIME)
-@pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db_with_users_client", "tzlocal_is_mtl")
 def test_compute_cost_and_waste(file_regression):
     frame = load_job_series()
     assert all(column not in frame.columns for column in COST_WASTE_FIELDS)

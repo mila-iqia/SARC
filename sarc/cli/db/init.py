@@ -52,6 +52,8 @@ class DbInit:
 
         create_users_indices(db)
 
+        create_rgu_billing_indices(db)
+
         return 0
 
     def create_acount(self, client, db):
@@ -92,6 +94,7 @@ class DbInit:
             "users",
             "jobs",
             "clusters",
+            "rgu_billing",
         ]
 
         try:
@@ -140,6 +143,17 @@ def create_users_indices(db):
             ("drac_roles.username", pymongo.ASCENDING),
             ("drac_members.username", pymongo.ASCENDING),
         ]
+    )
+
+
+def create_rgu_billing_indices(db):
+    db_collection = db.rgu_billing
+    db_collection.create_index(
+        [
+            ("cluster_name", pymongo.ASCENDING),
+            ("rgu_start_date", pymongo.ASCENDING),
+        ],
+        unique=True,
     )
 
 

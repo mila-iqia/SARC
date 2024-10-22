@@ -2,8 +2,8 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional, Sequence
 
+from sarc.client.series import load_job_series
 from sarc.config import MTL
-from sarc.jobs.series import load_job_series
 
 logger = logging.getLogger(__name__)
 

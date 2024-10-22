@@ -299,6 +299,49 @@ def create_cluster_entries(db):
     return cluster_entries
 
 
+def create_rgu_billings():
+    return [
+        {
+            "cluster_name": "fromage",
+            "rgu_start_date": "2023-02-22",
+            "gpu_to_rgu": {"fromage_gpu_1": 100, "fromage_gpu_2": 200},
+        },
+        {
+            "cluster_name": "patate",
+            "rgu_start_date": "2023-02-15",
+            "gpu_to_rgu": {
+                "patate_gpu_1": 400,
+                "patate_gpu_2": 700,
+                "patate_gpu_3": 300,
+            },
+        },
+        {
+            "cluster_name": "patate",
+            "rgu_start_date": "2023-02-18",
+            "gpu_to_rgu": {
+                "patate_gpu_1": 440,
+                "patate_gpu_2": 750,
+                "patate_gpu_3": 350,
+            },
+        },
+        {
+            "cluster_name": "raisin",
+            "rgu_start_date": "2023-02-16",
+            "gpu_to_rgu": {
+                "raisin_gpu_1": 100,
+                "raisin_gpu_2": 200,
+                "raisin_gpu_3": 300,
+                "raisin_gpu_4": 400,
+                "raisin_gpu_5": 500,
+                "raisin_gpu_6": 600,
+                "A100": 700,
+                "raisin_gpu_8": 800,
+                "raisin_gpu_9": 900,
+            },
+        },
+    ]
+
+
 json_raw = {
     "metadata": {
         "plugin": {"type": "openapi/dbv0.0.37", "name": "Slurm OpenAPI DB v0.0.37"},
