@@ -11,10 +11,17 @@ from pandas import DataFrame
 from prometheus_api_client import MetricRangeDataFrame
 from tqdm import tqdm
 
-from sarc.client.job import JobStatistics, SlurmJob, Statistics, count_jobs, get_jobs
+from sarc.client.job import (
+    JobStatistics,
+    SlurmJob,
+    Statistics,
+    count_jobs,
+    get_available_clusters,
+    get_jobs,
+)
 from sarc.client.rgu import get_cluster_rgus
 from sarc.client.users.api import User, get_users
-from sarc.config import MTL, UTC, config
+from sarc.config import MTL, UTC
 from sarc.traces import trace_decorator
 
 if TYPE_CHECKING:
@@ -679,8 +686,8 @@ def update_job_series_rgu(df: DataFrame):
 
     For more details about implementation, see function `update_cluster_job_series_rgu`
     """
-    for cluster_config in config().clusters.values():
-        update_cluster_job_series_rgu(df, cluster_config.name)
+    for cluster in get_available_clusters():
+        update_cluster_job_series_rgu(df, cluster.cluster_name)
     return df
 
 

@@ -62,7 +62,7 @@ def cluster_full_rgu_many_dates():
     return "patate"
 
 
-@pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db_with_users", "tzlocal_is_mtl")
 def test_clusters_rgu_config(
     cluster_no_rgu,
     cluster_no_rgu_2,
@@ -76,7 +76,7 @@ def test_clusters_rgu_config(
     assert len(get_cluster_rgus(cluster_full_rgu_many_dates)) > 1
 
 
-@pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db_with_users", "tzlocal_is_mtl")
 def test_data_frame_output_size(
     cluster_no_rgu,
     cluster_no_rgu_2,
@@ -217,7 +217,7 @@ def _get_expected_columns_with_cluster_raisin():
     return expected_gres_gpu, expected_gres_rgu, expected_gpu_type_rgu
 
 
-@pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db_with_users", "tzlocal_is_mtl")
 def test_update_cluster_job_series_rgu(cluster_full_rgu_one_date):
     """Concrete test for 1 cluster with a generated frame."""
     frame = _gen_complex_data_frame()
@@ -241,7 +241,7 @@ def test_update_cluster_job_series_rgu(cluster_full_rgu_one_date):
     assert frame["allocated.gpu_type_rgu"].equals(pandas.Series(expected_gpu_type_rgu))
 
 
-@pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db_with_users", "tzlocal_is_mtl")
 def test_update_job_series_rgu():
     """Concrete test for all clusters with a generated frame."""
     frame = _gen_complex_data_frame()
@@ -370,7 +370,7 @@ def _get_expected_columns_with_cluster_patate_and_many_dates():
     return expected_gres_gpu, expected_gres_rgu, expected_gpu_type_rgu
 
 
-@pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db_with_users", "tzlocal_is_mtl")
 def test_update_cluster_job_series_rgu_with_many_dates(cluster_full_rgu_many_dates):
     """Concrete test for 1 cluster with a generated frame and many RGU dates."""
     frame = _gen_complex_data_frame_with_many_dates()
@@ -394,7 +394,7 @@ def test_update_cluster_job_series_rgu_with_many_dates(cluster_full_rgu_many_dat
     assert frame["allocated.gpu_type_rgu"].equals(pandas.Series(expected_gpu_type_rgu))
 
 
-@pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db_with_users", "tzlocal_is_mtl")
 def test_update_job_series_rgu_with_many_dates():
     """Concrete test for all clusters with a generated frame and many RGU dates."""
     frame = _gen_complex_data_frame_with_many_dates()
@@ -435,7 +435,7 @@ def test_update_job_series_rgu_with_many_dates():
 
 
 @pytest.mark.freeze_time(MOCK_TIME)
-@pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db_with_users", "tzlocal_is_mtl")
 def test_update_job_series_rgu_with_real_test_data(
     cluster_full_rgu_one_date, file_regression
 ):
