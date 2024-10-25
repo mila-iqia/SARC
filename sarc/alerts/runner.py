@@ -1,6 +1,6 @@
 """Daemon to run the checks continuously."""
 
-import logging
+import logging 
 from datetime import timedelta
 
 from gifnoc.std import time as gtime

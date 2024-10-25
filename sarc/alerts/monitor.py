@@ -1,5 +1,5 @@
 import json
-import logging
+import logging 
 from pathlib import Path
 
 from apischema import deserialize

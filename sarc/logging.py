@@ -5,54 +5,111 @@ import opentelemetry
 
 from sarc.config import config
 
-logging_handler = None
+# logging_handler = None
+
+# def getHandler():
+#     global logging_handler
+
+#     if config().loki:
+#         from opentelemetry._logs import set_logger_provider
+#         from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
+#         from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+#         from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+#         from opentelemetry.sdk.resources import Resource
+
+#         if not logging_handler:
+#             print(f"Loki logging enabled for {config().loki.endpoint}, service name: {config().loki.service_name}")
+
+#             logger_provider = LoggerProvider(
+#                 resource=Resource.create(
+#                     {
+#                         "service.name": config().loki.service_name,
+#                         "service.instance.id": os.uname().nodename,
+#                     }
+#                 ),
+#             )
+#             set_logger_provider(logger_provider)
+
+#             endpoint = config().loki.endpoint
+
+#             otlp_exporter = OTLPLogExporter(endpoint)
+#             logger_provider.add_log_record_processor(
+#                 BatchLogRecordProcessor(otlp_exporter)
+#             )
+#             logging_handler = LoggingHandler(
+#                 level=logging.NOTSET, logger_provider=logger_provider
+#             )
+#             print(f"logging_handler: {logging_handler}")
+#         print(f"logging_handler: {logging_handler}")
+#         return logging_handler
+    
+#     return logging.defaultHandler()
+
+# def getLogger(name):
+#     logger = logging.getLogger(name)
+
+#     handler = getHandler()
+
+#     if handler:
+
+#         logger.addHandler(handler)
+
+#         debug_levels = {
+#             "DEBUG": logging.DEBUG,
+#             "INFO": logging.INFO,
+#             "WARNING": logging.WARNING,
+#             "ERROR": logging.ERROR,
+#             "CRITICAL": logging.CRITICAL,
+#         }
+#         if config().logging and config().logging.log_level in debug_levels:
+#             logger.setLevel(debug_levels[config().logging.log_level])
+#         else:
+#             logger.setLevel(logging.WARNING)
+
+#         logging.info(f"added Loki logging handler to {name}")
+
+#     return logger
 
 
-def getSarcLogger(name):
-    logger = logging.getLogger(name)
 
-    if config().loki:
-        from opentelemetry._logs import set_logger_provider
-        from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
-        from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
-        from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
-        from opentelemetry.sdk.resources import Resource
 
-        global logging_handler
+def setupLogging():
+    from opentelemetry._logs import set_logger_provider
+    from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
+    from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+    from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+    from opentelemetry.sdk.resources import Resource
 
-        if not logging_handler:
-            logger_provider = LoggerProvider(
-                resource=Resource.create(
-                    {
-                        "service.name": config().loki.service_name,
-                        "service.instance.id": os.uname().nodename,
-                    }
-                ),
+    logger_provider = LoggerProvider(
+        resource=Resource.create(
+            {
+             "service.name": "testing",
+             "service.instance.id": os.uname().nodename,
+            }
+         ),
+    )
+    set_logger_provider(logger_provider)
+
+    endpoint = "http://loki01.server.mila.quebec:3100/otlp/v1/logs"
+
+    otlp_exporter = OTLPLogExporter(endpoint) 
+    logger_provider.add_log_record_processor(BatchLogRecordProcessor(otlp_exporter))
+    handler = LoggingHandler(level=logging.NOTSET, logger_provider=logger_provider)
+
+    logging.basicConfig(
+                handlers=[handler,logging.StreamHandler()],
+                format="%(asctime)-15s::%(levelname)s::%(name)s::%(message)s",
+                level=logging.DEBUG,
             )
-            set_logger_provider(logger_provider)
 
-            endpoint = config().loki.endpoint
+    logger = logging.getLogger(__name__)
+    logger.addHandler(handler)
+    logger.setLevel(logging.DEBUG)
 
-            otlp_exporter = OTLPLogExporter(endpoint)
-            logger_provider.add_log_record_processor(
-                BatchLogRecordProcessor(otlp_exporter)
-            )
-            logging_handler = LoggingHandler(
-                level=logging.NOTSET, logger_provider=logger_provider
-            )
+    logger.info("SARC Test info log")
+    logger.debug("SARC Test debug log")
+    logger.warning("SARC Test warning log")
+    logger.error("SARC Test error log")
 
-        logger.addHandler(logging_handler)
+    print ("os.uname().nodename: ", os.uname().nodename)
 
-        debug_levels = {
-            "DEBUG": logging.DEBUG,
-            "INFO": logging.INFO,
-            "WARNING": logging.WARNING,
-            "ERROR": logging.ERROR,
-            "CRITICAL": logging.CRITICAL,
-        }
-        if config().logging.log_level in debug_levels:
-            logger.setLevel(debug_levels[config().logging.log_level])
-        else:
-            logger.setLevel(logging.WARNING)
-
-    return logger

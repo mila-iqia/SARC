@@ -1,5 +1,5 @@
 import json
-import logging
+import logging 
 import subprocess
 from datetime import date, datetime, time, timedelta
 from typing import Iterator, Optional
@@ -261,8 +261,8 @@ def sacct_mongodb_import(
         If True, avoid any scraping requiring prometheus connection.
     """
     collection = _jobs_collection()
-    scraper = SAcctScraper(cluster, day)
-    logger.info("Getting the sacct data...")
+    scraper = SAcctScraper(cluster['name'], day)
+    logger.info(f"Getting the sacct data for cluster {cluster}, date {day}...")
     scraper.get_raw()
     logger.info(
         f"Saving into mongodb collection '{collection.Meta.collection_name}'..."
