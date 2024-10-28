@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, time
 from types import SimpleNamespace
 from typing import Dict, List
 
@@ -29,7 +29,9 @@ class GPUBilling(BaseModel):
     def _ensure_billing_start_date(cls, value):
         """Parse billing_start_date from stored string to Python datetime."""
         if isinstance(value, str):
-            return datetime.fromisoformat(value).astimezone(MTL)
+            return datetime.combine(datetime.fromisoformat(value), time.min).replace(
+                tzinfo=MTL
+            )
         else:
             assert isinstance(value, datetime)
             return value.replace(tzinfo=UTC).astimezone(MTL)
