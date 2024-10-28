@@ -1,6 +1,6 @@
 import json
 import math
-from datetime import datetime
+from datetime import datetime, time
 
 import numpy as np
 import pandas
@@ -47,7 +47,9 @@ class Row:
         self, cluster_name: str, start_time: str, gres_gpu: float, gpu_type: str
     ):
         self.cluster_name = cluster_name
-        self.start_time = datetime.strptime(start_time, "%Y-%m-%d").astimezone(MTL)
+        self.start_time = datetime.combine(
+            datetime.strptime(start_time, "%Y-%m-%d"), time.min
+        ).replace(tzinfo=MTL)
         self.gres_gpu = gres_gpu
         self.gpu_type = gpu_type
         self.expected = None
