@@ -1,0 +1,192 @@
+===================================================================================
+Example data with expected RGU information [main cluster: patate (2 billing dates)]:
+===================================================================================
+
+----------
+RGU values
+----------
+{
+ "raisin_gpu_3": 2.5,
+ "raisin_gpu_4": 5,
+ "raisin_gpu_5": 11.5,
+ "A100": 3.21,
+ "fromage_gpu_2": 24,
+ "patate_gpu_3": 3.4,
+ "patate_gpu_4": 6,
+ "patate_gpu_5": 1.5
+}
+
+------------------
+GPU billing values
+------------------
+{
+ "patate": [
+  {
+   "billing_start_date": "2023-02-15",
+   "gpu_to_billing": {
+    "patate_gpu_1": 400.0,
+    "patate_gpu_2": 700.0,
+    "patate_gpu_3": 300.0,
+    "patate_gpu_4": 400.0,
+    "patate_gpu_5": 450.0,
+    "A100": 1000.0
+   }
+  },
+  {
+   "billing_start_date": "2023-02-18",
+   "gpu_to_billing": {
+    "patate_gpu_1": 440.0,
+    "patate_gpu_2": 750.0,
+    "patate_gpu_3": 350.0,
+    "A100": 2000.0
+   }
+  }
+ ],
+ "fromage": [
+  {
+   "billing_start_date": "2023-02-22",
+   "gpu_to_billing": {
+    "fromage_gpu_1": 100.0,
+    "fromage_gpu_2": 200.0
+   }
+  }
+ ]
+}
+
+----
+Data
+----
+[
+ {
+  "cluster_name": "patate",
+  "start_time": "2023-02-12",
+  "gres_gpu": 1,
+  "gpu_type": "patate_gpu_unknown_1",
+  "expected": {
+   "gres_gpu": 1,
+   "gres_rgu": NaN,
+   "gpu_type_rgu": NaN
+  }
+ },
+ {
+  "cluster_name": "patate",
+  "start_time": "2023-02-13",
+  "gres_gpu": 2,
+  "gpu_type": "patate_gpu_unknown_2",
+  "expected": {
+   "gres_gpu": 2,
+   "gres_rgu": NaN,
+   "gpu_type_rgu": NaN
+  }
+ },
+ {
+  "cluster_name": "patate",
+  "start_time": "2023-02-14",
+  "gres_gpu": 3,
+  "gpu_type": "patate_gpu_3",
+  "expected": {
+   "gres_gpu": 3,
+   "gres_rgu": 10.2,
+   "gpu_type_rgu": 3.4
+  }
+ },
+ {
+  "cluster_name": "patate",
+  "start_time": "2023-02-15",
+  "gres_gpu": 4,
+  "gpu_type": "patate_gpu_4",
+  "expected": {
+   "gres_gpu": 0.01,
+   "gres_rgu": 0.06,
+   "gpu_type_rgu": 6
+  }
+ },
+ {
+  "cluster_name": "patate",
+  "start_time": "2023-02-16",
+  "gres_gpu": 5000,
+  "gpu_type": "patate_gpu_5",
+  "expected": {
+   "gres_gpu": 11.11111111111111,
+   "gres_rgu": 16.666666666666664,
+   "gpu_type_rgu": 1.5
+  }
+ },
+ {
+  "cluster_name": "patate",
+  "start_time": "2023-02-17",
+  "gres_gpu": 6000,
+  "gpu_type": "patate_gpu_unknown_6",
+  "expected": {
+   "gres_gpu": NaN,
+   "gres_rgu": NaN,
+   "gpu_type_rgu": NaN
+  }
+ },
+ {
+  "cluster_name": "patate",
+  "start_time": "2023-02-18",
+  "gres_gpu": 7000,
+  "gpu_type": "A100",
+  "expected": {
+   "gres_gpu": 3.5,
+   "gres_rgu": 11.235,
+   "gpu_type_rgu": 3.21
+  }
+ },
+ {
+  "cluster_name": "patate",
+  "start_time": "2023-02-19",
+  "gres_gpu": 8000,
+  "gpu_type": "patate_gpu_unknown_8",
+  "expected": {
+   "gres_gpu": NaN,
+   "gres_rgu": NaN,
+   "gpu_type_rgu": NaN
+  }
+ },
+ {
+  "cluster_name": "patate",
+  "start_time": "2023-02-20",
+  "gres_gpu": 9000,
+  "gpu_type": "patate_gpu_unknown_9",
+  "expected": {
+   "gres_gpu": NaN,
+   "gres_rgu": NaN,
+   "gpu_type_rgu": NaN
+  }
+ },
+ {
+  "cluster_name": "fromage",
+  "start_time": "2023-02-21",
+  "gres_gpu": 123,
+  "gpu_type": "fromage_gpu_1",
+  "expected": {
+   "gres_gpu": 123,
+   "gres_rgu": NaN,
+   "gpu_type_rgu": NaN
+  }
+ },
+ {
+  "cluster_name": "hyrule",
+  "start_time": "2023-02-21",
+  "gres_gpu": 5678,
+  "gpu_type": "hyrule_gpu_9",
+  "expected": {
+   "gres_gpu": 5678,
+   "gres_rgu": NaN,
+   "gpu_type_rgu": NaN
+  }
+ },
+ {
+  "cluster_name": "fromage",
+  "start_time": "2023-02-22",
+  "gres_gpu": 91011,
+  "gpu_type": "fromage_gpu_2",
+  "expected": {
+   "gres_gpu": 455.055,
+   "gres_rgu": 10921.32,
+   "gpu_type_rgu": 24
+  }
+ }
+]

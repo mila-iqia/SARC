@@ -52,7 +52,7 @@ class DbInit:
 
         create_users_indices(db)
 
-        create_rgu_billing_indices(db)
+        create_gpu_billing_indices(db)
 
         return 0
 
@@ -94,7 +94,7 @@ class DbInit:
             "users",
             "jobs",
             "clusters",
-            "rgu_billing",
+            "gpu_billing",
         ]
 
         try:
@@ -146,12 +146,12 @@ def create_users_indices(db):
     )
 
 
-def create_rgu_billing_indices(db):
-    db_collection = db.rgu_billing
+def create_gpu_billing_indices(db):
+    db_collection = db.gpu_billing
     db_collection.create_index(
         [
             ("cluster_name", pymongo.ASCENDING),
-            ("rgu_start_date", pymongo.ASCENDING),
+            ("billing_start_date", pymongo.ASCENDING),
         ],
         unique=True,
     )

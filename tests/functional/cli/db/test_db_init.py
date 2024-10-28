@@ -19,7 +19,7 @@ def test_db_init(cli_main):
         "diskusage",
         "users",
         "clusters",
-        "rgu_billing",
+        "gpu_billing",
     ]:
         collection = db[collection_name]
         assert not collection.index_information()
@@ -32,7 +32,7 @@ def test_db_init(cli_main):
         "diskusage",
         "users",
         "clusters",
-        "rgu_billing",
+        "gpu_billing",
     ]:
         collection = db[collection_name]
         assert collection.index_information()

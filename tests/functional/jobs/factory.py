@@ -299,35 +299,39 @@ def create_cluster_entries(db):
     return cluster_entries
 
 
-def create_rgu_billings():
+def create_gpu_billings():
     return [
         {
             "cluster_name": "fromage",
-            "rgu_start_date": "2023-02-22",
-            "gpu_to_rgu": {"fromage_gpu_1": 100, "fromage_gpu_2": 200},
+            "billing_start_date": "2023-02-22",
+            "gpu_to_billing": {"fromage_gpu_1": 100, "fromage_gpu_2": 200},
         },
         {
             "cluster_name": "patate",
-            "rgu_start_date": "2023-02-15",
-            "gpu_to_rgu": {
+            "billing_start_date": "2023-02-15",
+            "gpu_to_billing": {
                 "patate_gpu_1": 400,
                 "patate_gpu_2": 700,
                 "patate_gpu_3": 300,
+                "patate_gpu_4": 400,
+                "patate_gpu_5": 450,
+                "A100": 1000,
             },
         },
         {
             "cluster_name": "patate",
-            "rgu_start_date": "2023-02-18",
-            "gpu_to_rgu": {
+            "billing_start_date": "2023-02-18",
+            "gpu_to_billing": {
                 "patate_gpu_1": 440,
                 "patate_gpu_2": 750,
                 "patate_gpu_3": 350,
+                "A100": 2000,
             },
         },
         {
             "cluster_name": "raisin",
-            "rgu_start_date": "2023-02-16",
-            "gpu_to_rgu": {
+            "billing_start_date": "2023-02-16",
+            "gpu_to_billing": {
                 "raisin_gpu_1": 100,
                 "raisin_gpu_2": 200,
                 "raisin_gpu_3": 300,

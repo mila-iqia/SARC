@@ -1,0 +1,186 @@
+===================================================================================
+Example data with expected RGU information [main cluster: raisin (1 billing date)]:
+===================================================================================
+
+----------
+RGU values
+----------
+{
+ "raisin_gpu_3": 2.5,
+ "raisin_gpu_4": 5,
+ "raisin_gpu_5": 11.5,
+ "A100": 3.21,
+ "fromage_gpu_2": 24,
+ "patate_gpu_3": 3.4,
+ "patate_gpu_4": 6,
+ "patate_gpu_5": 1.5
+}
+
+------------------
+GPU billing values
+------------------
+{
+ "raisin": [
+  {
+   "billing_start_date": "2023-02-16",
+   "gpu_to_billing": {
+    "raisin_gpu_1": 100.0,
+    "raisin_gpu_2": 200.0,
+    "raisin_gpu_3": 300.0,
+    "raisin_gpu_4": 400.0,
+    "raisin_gpu_5": 500.0,
+    "raisin_gpu_6": 600.0,
+    "A100": 700.0,
+    "raisin_gpu_8": 800.0,
+    "raisin_gpu_9": 900.0
+   }
+  }
+ ],
+ "fromage": [
+  {
+   "billing_start_date": "2023-02-22",
+   "gpu_to_billing": {
+    "fromage_gpu_1": 100.0,
+    "fromage_gpu_2": 200.0
+   }
+  }
+ ]
+}
+
+----
+Data
+----
+[
+ {
+  "cluster_name": "raisin",
+  "start_time": "2023-02-12",
+  "gres_gpu": 1,
+  "gpu_type": "raisin_gpu_unknown_1",
+  "expected": {
+   "gres_gpu": 1,
+   "gres_rgu": NaN,
+   "gpu_type_rgu": NaN
+  }
+ },
+ {
+  "cluster_name": "raisin",
+  "start_time": "2023-02-13",
+  "gres_gpu": 2,
+  "gpu_type": "raisin_gpu_unknown_2",
+  "expected": {
+   "gres_gpu": 2,
+   "gres_rgu": NaN,
+   "gpu_type_rgu": NaN
+  }
+ },
+ {
+  "cluster_name": "raisin",
+  "start_time": "2023-02-14",
+  "gres_gpu": 3,
+  "gpu_type": "raisin_gpu_3",
+  "expected": {
+   "gres_gpu": 3,
+   "gres_rgu": 7.5,
+   "gpu_type_rgu": 2.5
+  }
+ },
+ {
+  "cluster_name": "raisin",
+  "start_time": "2023-02-15",
+  "gres_gpu": 4,
+  "gpu_type": "raisin_gpu_4",
+  "expected": {
+   "gres_gpu": 4,
+   "gres_rgu": 20,
+   "gpu_type_rgu": 5
+  }
+ },
+ {
+  "cluster_name": "raisin",
+  "start_time": "2023-02-16",
+  "gres_gpu": 5000,
+  "gpu_type": "raisin_gpu_5",
+  "expected": {
+   "gres_gpu": 10.0,
+   "gres_rgu": 115.0,
+   "gpu_type_rgu": 11.5
+  }
+ },
+ {
+  "cluster_name": "raisin",
+  "start_time": "2023-02-17",
+  "gres_gpu": 6000,
+  "gpu_type": "raisin_gpu_unknown_6",
+  "expected": {
+   "gres_gpu": NaN,
+   "gres_rgu": NaN,
+   "gpu_type_rgu": NaN
+  }
+ },
+ {
+  "cluster_name": "raisin",
+  "start_time": "2023-02-18",
+  "gres_gpu": 7000,
+  "gpu_type": "A100",
+  "expected": {
+   "gres_gpu": 10.0,
+   "gres_rgu": 32.1,
+   "gpu_type_rgu": 3.21
+  }
+ },
+ {
+  "cluster_name": "raisin",
+  "start_time": "2023-02-19",
+  "gres_gpu": 8000,
+  "gpu_type": "raisin_gpu_unknown_8",
+  "expected": {
+   "gres_gpu": NaN,
+   "gres_rgu": NaN,
+   "gpu_type_rgu": NaN
+  }
+ },
+ {
+  "cluster_name": "raisin",
+  "start_time": "2023-02-20",
+  "gres_gpu": 9000,
+  "gpu_type": "raisin_gpu_unknown_9",
+  "expected": {
+   "gres_gpu": NaN,
+   "gres_rgu": NaN,
+   "gpu_type_rgu": NaN
+  }
+ },
+ {
+  "cluster_name": "fromage",
+  "start_time": "2023-02-21",
+  "gres_gpu": 123,
+  "gpu_type": "fromage_gpu_1",
+  "expected": {
+   "gres_gpu": 123,
+   "gres_rgu": NaN,
+   "gpu_type_rgu": NaN
+  }
+ },
+ {
+  "cluster_name": "hyrule",
+  "start_time": "2023-02-21",
+  "gres_gpu": 5678,
+  "gpu_type": "hyrule_gpu_9",
+  "expected": {
+   "gres_gpu": 5678,
+   "gres_rgu": NaN,
+   "gpu_type_rgu": NaN
+  }
+ },
+ {
+  "cluster_name": "fromage",
+  "start_time": "2023-02-22",
+  "gres_gpu": 91011,
+  "gpu_type": "fromage_gpu_2",
+  "expected": {
+   "gres_gpu": 455.055,
+   "gres_rgu": 10921.32,
+   "gpu_type_rgu": 24
+  }
+ }
+]

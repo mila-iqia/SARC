@@ -30,6 +30,7 @@ pandas = "< 2.1.0"
 gifnoc = "^0.2.3"
 watchdog = "^4.0.0"
 python-dateutil = "^2.9.0.post0"
+iguane = {git = "https://github.com/notoraptor/IGUANE.git", rev = "v0.1.0"}
 
 [tool.poetry.group.dev.dependencies]
 black = ">= 22.12.0"
