@@ -83,33 +83,37 @@ def setupLogging():
     logger_provider = LoggerProvider(
         resource=Resource.create(
             {
-             "service.name": "testing",
+             "service.name": config().loki.service_name,
              "service.instance.id": os.uname().nodename,
             }
          ),
     )
     set_logger_provider(logger_provider)
 
-    endpoint = "http://loki01.server.mila.quebec:3100/otlp/v1/logs"
+    endpoint = config().loki.endpoint
 
     otlp_exporter = OTLPLogExporter(endpoint) 
     logger_provider.add_log_record_processor(BatchLogRecordProcessor(otlp_exporter))
     handler = LoggingHandler(level=logging.NOTSET, logger_provider=logger_provider)
 
+    print (f"config.logging = {config().logging}")
+
+    logging_levels = {
+        "DEBUG": logging.DEBUG,
+        "INFO": logging.INFO,
+        "WARNING": logging.WARNING,
+        "ERROR": logging.ERROR,
+        "CRITICAL": logging.CRITICAL,
+    }
+    log_level = logging_levels.get(config().logging.log_level, logging.INFO)
     logging.basicConfig(
                 handlers=[handler,logging.StreamHandler()],
                 format="%(asctime)-15s::%(levelname)s::%(name)s::%(message)s",
-                level=logging.DEBUG,
+                level=log_level,
             )
 
-    logger = logging.getLogger(__name__)
-    logger.addHandler(handler)
-    logger.setLevel(logging.DEBUG)
-
-    logger.info("SARC Test info log")
-    logger.debug("SARC Test debug log")
-    logger.warning("SARC Test warning log")
-    logger.error("SARC Test error log")
-
-    print ("os.uname().nodename: ", os.uname().nodename)
+    # logging.info("SARC Test info log")
+    # logging.debug("SARC Test debug log")
+    # logging.warning("SARC Test warning log")
+    # logging.error("SARC Test error log")
 
