@@ -39,6 +39,8 @@ def clear_db(db):
     db.diskusage.drop()
     db.users.drop()
     db.clusters.drop()
+    db.gpu_billing.drop()
+    db.node_gpu_mapping.drop()
 
 
 def fill_db(db, with_users=False, with_clusters=False, job_patch=None):

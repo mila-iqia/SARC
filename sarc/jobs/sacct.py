@@ -10,6 +10,7 @@ from tqdm import tqdm
 from sarc.cache import with_cache
 from sarc.client.job import SlurmJob, _jobs_collection
 from sarc.config import UTC, ClusterConfig
+from sarc.jobs.node_gpu_mapping import get_node_to_gpu
 from sarc.jobs.series import get_job_time_series
 from sarc.traces import trace_decorator, using_trace
 
@@ -308,10 +309,17 @@ def update_allocated_gpu_type(cluster: ClusterConfig, entry: SlurmJob) -> Option
             entry.allocated.gpu_type = output[0]["metric"]["gpu_type"]
     else:
         # No prometheus config. Try to get GPU type from local JSON file.
-        gpu_types = {cluster.node_to_gpu[nodename] for nodename in entry.nodes}
-        # We should not have more than 1 GPU type per job.
-        assert len(gpu_types) <= 1
-        if gpu_types:
-            entry.allocated.gpu_type = gpu_types.pop()
+        node_gpu_mapping = get_node_to_gpu(cluster.name, entry.start_time)
+        if node_gpu_mapping:
+            node_to_gpu = node_gpu_mapping.node_to_gpu
+            gpu_types = {
+                node_to_gpu[nodename]
+                for nodename in entry.nodes
+                if nodename in node_to_gpu
+            }
+            # We should not have more than 1 GPU type per job.
+            assert len(gpu_types) <= 1
+            if gpu_types:
+                entry.allocated.gpu_type = gpu_types.pop()
 
     return entry.allocated.gpu_type
