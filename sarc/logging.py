@@ -96,8 +96,6 @@ def setupLogging():
     logger_provider.add_log_record_processor(BatchLogRecordProcessor(otlp_exporter))
     handler = LoggingHandler(level=logging.NOTSET, logger_provider=logger_provider)
 
-    print (f"config.logging = {config().logging}")
-
     logging_levels = {
         "DEBUG": logging.DEBUG,
         "INFO": logging.INFO,
