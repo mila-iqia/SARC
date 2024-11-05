@@ -86,11 +86,11 @@ def setupLogging():
         "ERROR": logging.ERROR,
         "CRITICAL": logging.CRITICAL,
     }
-    log_level = logging.WARNING # default log level
+    log_level = logging.WARNING  # default log level
     if config().logging:
         log_level = logging_levels.get(config().logging.log_level, logging.WARNING)
 
-    if (config().loki):
+    if config().loki:
         logger_provider = LoggerProvider(
             resource=Resource.create(
                 {
