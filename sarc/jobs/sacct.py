@@ -1,5 +1,5 @@
 import json
-import logging 
+import logging
 import subprocess
 from datetime import date, datetime, time, timedelta
 from typing import Iterator, Optional

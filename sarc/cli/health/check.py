@@ -1,4 +1,4 @@
-import logging 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from pprint import pprint

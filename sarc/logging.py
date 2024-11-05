@@ -1,9 +1,10 @@
 import logging
 import os
 
-import opentelemetry
-
 from sarc.config import config
+
+# import opentelemetry
+
 
 # logging_handler = None
 
@@ -42,7 +43,7 @@ from sarc.config import config
 #             print(f"logging_handler: {logging_handler}")
 #         print(f"logging_handler: {logging_handler}")
 #         return logging_handler
-    
+
 #     return logging.defaultHandler()
 
 # def getLogger(name):
@@ -71,8 +72,6 @@ from sarc.config import config
 #     return logger
 
 
-
-
 def setupLogging():
     from opentelemetry._logs import set_logger_provider
     from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
@@ -83,16 +82,16 @@ def setupLogging():
     logger_provider = LoggerProvider(
         resource=Resource.create(
             {
-             "service.name": config().loki.service_name,
-             "service.instance.id": os.uname().nodename,
+                "service.name": config().loki.service_name,
+                "service.instance.id": os.uname().nodename,
             }
-         ),
+        ),
     )
     set_logger_provider(logger_provider)
 
     endpoint = config().loki.endpoint
 
-    otlp_exporter = OTLPLogExporter(endpoint) 
+    otlp_exporter = OTLPLogExporter(endpoint)
     logger_provider.add_log_record_processor(BatchLogRecordProcessor(otlp_exporter))
     handler = LoggingHandler(level=logging.NOTSET, logger_provider=logger_provider)
 
@@ -105,13 +104,12 @@ def setupLogging():
     }
     log_level = logging_levels.get(config().logging.log_level, logging.INFO)
     logging.basicConfig(
-                handlers=[handler,logging.StreamHandler()],
-                format="%(asctime)-15s::%(levelname)s::%(name)s::%(message)s",
-                level=log_level,
-            )
+        handlers=[handler, logging.StreamHandler()],
+        format="%(asctime)-15s::%(levelname)s::%(name)s::%(message)s",
+        level=log_level,
+    )
 
     # logging.info("SARC Test info log")
     # logging.debug("SARC Test debug log")
     # logging.warning("SARC Test warning log")
     # logging.error("SARC Test error log")
-

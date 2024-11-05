@@ -14,7 +14,6 @@ from .acquire import Acquire
 from .db import Db
 from .health import Health
 
-
 colors = SimpleNamespace(
     grey="\033[38;21m",
     blue="\033[38;5;39m",
