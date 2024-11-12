@@ -4,8 +4,7 @@
         "database_name": "sarc-test"
     },
     "loki": {
-        "endpoint": "https://localhost/loki",
-        "service_name": "sarc-test"
+        "uri": "https://localhost/loki"
     },
     "tempo": {
         "uri": "https://localhost/tempo"

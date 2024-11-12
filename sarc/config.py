@@ -171,8 +171,7 @@ class LDAPConfig(BaseModel):
 
 
 class LokiConfig(BaseModel):
-    endpoint: str
-    service_name: str
+    uri: str
 
 
 class TempoConfig(BaseModel):
@@ -195,6 +194,8 @@ class AccountMatchingConfig(BaseModel):
 
 class LoggingConfig(BaseModel):
     log_level: str
+    OTLP_endpoint: str
+    service_name: str
 
 
 # pylint: disable=unused-argument,redefined-outer-name
