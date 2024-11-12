@@ -902,7 +902,7 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
             caplog.text,
         )
     )
-    assert "Getting the sacct data..." in caplog.text
+    assert "Getting the sacct data for cluster raisin, date 2023-02-15 00:00:00..." in caplog.text
     assert "Saving into mongodb collection '" in caplog.text
     assert bool(
         re.search(
