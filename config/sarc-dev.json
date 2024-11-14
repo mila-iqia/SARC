@@ -1,7 +1,7 @@
 {
     "logging": {
-        "log_level": "DEBUG",
-        "otpl_endpoint": "http://loki01.server.mila.quebec:3100/otlp/v1/logs",
+        "log_level": "WARNING",
+        "OTLP_endpoint": "http://loki01.server.mila.quebec:3100/otlp/v1/logs",
         "service_name": "sarc-dev"
     },
     "mongo": {
