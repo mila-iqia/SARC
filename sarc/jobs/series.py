@@ -374,6 +374,13 @@ def load_job_series(
             job_series = job.stored_statistics.dict()
             job_series = {k: _select_stat(k, v) for k, v in job_series.items()}
 
+            # Replace `gpu_utilization > 1` with nan.
+            if (
+                job.stored_statistics.gpu_utilization
+                and job_series["gpu_utilization"] > 1
+            ):
+                job_series["gpu_utilization"] = np.nan
+
         # Flatten job.requested and job.allocated into job_series
         job_series.update(
             {f"requested.{key}": value for key, value in job.requested.dict().items()}
