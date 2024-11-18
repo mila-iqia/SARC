@@ -33,7 +33,7 @@ def setupLogging():
 
         otlp_exporter = OTLPLogExporter(config().logging.OTLP_endpoint)
         logger_provider.add_log_record_processor(BatchLogRecordProcessor(otlp_exporter))
-        handler = LoggingHandler(level=logging.NOTSET, logger_provider=logger_provider)
+        handler = LoggingHandler(level=log_level, logger_provider=logger_provider)
 
         logging.basicConfig(
             handlers=[handler, logging.StreamHandler()],
