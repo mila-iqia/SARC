@@ -4,7 +4,7 @@ from datetime import datetime
 import pandas
 import pytest
 
-from sarc.client.job import get_jobs
+from sarc.client.job import JobStatistics, Statistics, get_jobs
 from sarc.client.users.api import get_users
 from sarc.config import MTL
 from sarc.jobs.series import load_job_series
@@ -288,6 +288,67 @@ def test_load_job_series_with_stored_statistics(monkeypatch):
         "system_memory",
     ]:
         assert all(not math.isnan(value) for value in re_frame[label])
+
+
+@pytest.mark.usefixtures("read_write_db", "tzlocal_is_mtl")
+def test_load_job_series_with_bad_gpu_utilization(file_regression):
+    """Check that gpu_utilization > 1 is replaced with nan in job series."""
+
+    # Check default situation: gpu_utilization is None
+    jobs = list(get_jobs())
+    frame = load_job_series()
+    assert jobs
+    for job in jobs:
+        assert not job.stored_statistics
+    assert all(math.isnan(value) for value in frame["gpu_utilization"])
+
+    # Save job statistics with gpu_utilization manually set.
+    for i, job in enumerate(jobs):
+        # Half of jobs will have gpu_utilization > 1, and should be set to nan in job series
+        job.stored_statistics = JobStatistics(
+            gpu_utilization=Statistics(
+                median=2 * (i + 1) / len(jobs),
+                mean=0,
+                std=0,
+                q05=0,
+                q25=0,
+                q75=0,
+                max=0,
+                unused=0,
+            )
+        )
+        job.save()
+
+    # Generate new data frame.
+    re_jobs = list(get_jobs())
+    re_frame = load_job_series()
+
+    # String representation for jobs
+    jobs_markdown = pandas.DataFrame(
+        {
+            "cluster_name": [job.cluster_name for job in re_jobs],
+            "job_id": [job.job_id for job in re_jobs],
+            "gpu_utilization": [
+                job.stored_statistics.gpu_utilization.median for job in re_jobs
+            ],
+        }
+    ).to_markdown()
+
+    # String representation for job series.
+    series_markdown = re_frame[
+        ["cluster_name", "job_id", "gpu_utilization"]
+    ].to_markdown()
+
+    # For jobs, we expect values in gpu_utilization column.
+    # For job series, we expect nan for any gpu_utilization > 1.
+    file_regression.check(
+        f"gpu_utilization:\n"
+        f"================\n\n"
+        f"Jobs:\n"
+        f"{jobs_markdown}\n\n"
+        f"Job series:\n"
+        f"{series_markdown}\n"
+    )
 
 
 @pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
