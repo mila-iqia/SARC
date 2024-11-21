@@ -36,8 +36,8 @@ import simple_parsing
 from pandas.core.indexes.datetimes import DatetimeIndex
 from typing_extensions import TypeGuard
 
-from sarc.config import MTL
 from sarc.client.job import _jobs_collection
+from sarc.config import MTL
 
 logger = get_logger(__name__)
 
