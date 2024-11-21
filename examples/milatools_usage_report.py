@@ -37,7 +37,7 @@ from pandas.core.indexes.datetimes import DatetimeIndex
 from typing_extensions import TypeGuard
 
 from sarc.config import MTL
-from sarc.jobs.job import jobs_collection
+from sarc.client.job import _jobs_collection
 
 logger = get_logger(__name__)
 
@@ -126,7 +126,7 @@ def _get_cache_dir():
 
 def _get_all_clusters(start_date: datetime, end_date: datetime):
     cache_dir = _get_cache_dir()
-    job_db: pymongo.collection.Collection = jobs_collection().get_collection()
+    job_db: pymongo.collection.Collection = _jobs_collection().get_collection()
 
     if (
         all_clusters_file := cache_dir / f"all_clusters_{start_date}_{end_date}.pkl"
@@ -428,7 +428,7 @@ def _get_unique_users(
         assert _is_iterable_of(all_users, str) and isinstance(all_users, set)
         return milatools_users, all_users
 
-    job_structured_db = jobs_collection()
+    job_structured_db = _jobs_collection()
     job_db: pymongo.collection.Collection = job_structured_db.get_collection()
 
     _period_filter = _get_filter(start_date, end_date, cluster, name=None)
