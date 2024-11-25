@@ -21,6 +21,10 @@ class AcquireSlurmConfig:
     day: str = field(alias=["-d"])
 
     def execute(self) -> int:
+        if self.cluster_name == "mila":
+            logger.error("Cluster `mila` not yet supported.")
+            return -1
+
         parser = SlurmConfigParser(self.cluster_name, self.day)
         slurm_conf = parser.get_slurm_config()
         _gpu_billing_collection().save_gpu_billing(
