@@ -431,6 +431,27 @@ def test_get_gpu_type_without_prometheus(
     # Import here so that config() is setup correctly when CLI is created.
     import sarc.cli
 
+    # Save slurm config in cache.
+    _save_slurm_conf(
+        "raisin_no_prometheus",
+        "2023-02-15",
+        "NodeName=cn-c0[18-30] Param1=Anything1 Param2=Anything2 Gres=gpu:asupergpu:4 Param3=Anything3",
+    )
+    # Acquire slurm config.
+    assert (
+        cli_main(
+            [
+                "acquire",
+                "slurmconfig",
+                "--cluster_name",
+                "raisin_no_prometheus",
+                "--day",
+                "2023-02-15",
+            ]
+        )
+        == 0
+    )
+
     assert (
         cli_main(
             [
@@ -457,6 +478,21 @@ def test_get_gpu_type_without_prometheus(
         f"Found {len(jobs)} job(s):\n"
         + "\n".join([job.json(exclude={"id": True}, indent=4) for job in jobs])
     )
+
+
+def _save_slurm_conf(cluster_name: str, day: str, content: str):
+    from sarc.cli.acquire.slurmconfig import SlurmConfigParser
+
+    scp = SlurmConfigParser(cluster_name, day)
+    folder = "slurm_conf"
+    filename = scp._cache_key()
+    cache_dir = config().cache
+    file_dir = cache_dir / folder
+    file_dir.mkdir(parents=True, exist_ok=True)
+    file_path = file_dir / filename
+    print(file_path)
+    with file_path.open("w") as file:
+        file.write(content)
 
 
 @pytest.mark.parametrize(

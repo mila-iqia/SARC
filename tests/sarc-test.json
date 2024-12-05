@@ -41,8 +41,7 @@
             "duc_inodes_command": null,
             "duc_storage_command": null,
             "diskusage_report_command": null,
-            "prometheus_url": null,
-            "nodes_info_file": "tests/not-so-secrets/raisin_no_prometheus/nodes_raisin_no_prometheus.txt"
+            "prometheus_url": null
         },
         "fromage": {
             "host": "fromage",
