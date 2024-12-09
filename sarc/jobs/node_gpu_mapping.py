@@ -1,77 +1,108 @@
-"""
-This module provides a dict-like class NodeToGPUMapping
-to map a cluster's node name to GPU type
-by parsing TXT files containing node descriptions like:
-    NodeName=<nodes_description> Gres=<gpu-type> ...
-"""
+from __future__ import annotations
 
-import json
-import os
+import bisect
+import logging
+from datetime import datetime, time
+from typing import Dict, Optional
 
-from hostlist import expand_hostlist
+from pydantic import validator
+from pydantic_mongo import AbstractRepository, ObjectIdField
+
+from sarc.config import MTL, UTC, BaseModel, config, scraping_mode_required
+
+logger = logging.getLogger(__name__)
 
 
-class NodeToGPUMapping:
-    """Helper class to generate JSON file, load it in memory, and query GPU type for a nodename."""
+class NodeGPUMapping(BaseModel):
+    """Holds data for a mapping <node name> -> <GPU type>."""
 
-    def __init__(self, cluster_name, nodes_info_file):
-        """Initialize with cluster name and TXT file path to parse."""
+    # # Database ID
+    id: ObjectIdField = None
 
-        # Mapping is empty by default.
-        self.mapping = {}
-        self.json_path = None
+    cluster_name: str
+    since: datetime
+    node_to_gpu: Dict[str, str]
 
-        # Mapping is filled only if TXT file is available.
-        if nodes_info_file and os.path.exists(nodes_info_file):
-            nodes_info_file = os.path.abspath(nodes_info_file)
-            # JSON file is expected to be located in same folder as TXT file.
-            self.json_path = os.path.join(
-                os.path.dirname(nodes_info_file), f"node_to_gpu_{cluster_name}.json"
+    @validator("since", pre=True)
+    @classmethod
+    def _ensure_since(cls, value):
+        """Parse `since` from stored string to Python datetime."""
+        if isinstance(value, str):
+            return datetime.combine(datetime.fromisoformat(value), time.min).replace(
+                tzinfo=MTL
+            )
+        else:
+            assert isinstance(value, datetime)
+            return value.replace(tzinfo=UTC).astimezone(MTL)
+
+    def __lt__(self, other):
+        return self.since < other.since
+
+
+class NodeGPUMappingRepository(AbstractRepository[NodeGPUMapping]):
+    class Meta:
+        collection_name = "node_gpu_mapping"
+
+    @scraping_mode_required
+    def save_node_gpu_mapping(
+        self, cluster_name: str, since: str, node_to_gpu: Dict[str, str]
+    ):
+        mapping = NodeGPUMapping(
+            cluster_name=cluster_name, since=since, node_to_gpu=node_to_gpu
+        )
+        # Check if a node->GPU mapping was already registered
+        # for given cluster and date.
+        exists = list(
+            self.find_by(
+                {
+                    "cluster_name": mapping.cluster_name,
+                    "since": mapping.since,
+                }
+            )
+        )
+        if exists:
+            # If a record was found, update it if changed.
+            (prev_mapping,) = exists
+            if prev_mapping.node_to_gpu != mapping.node_to_gpu:
+                self.get_collection().update_one(
+                    {
+                        "cluster_name": mapping.cluster_name,
+                        "since": mapping.since,
+                    },
+                    {"$set": self.to_document(mapping)},
+                )
+                logger.info(
+                    f"[{mapping.cluster_name}] node<->GPU updated for: {mapping.since}"
+                )
+        else:
+            # If no record found, create a new one.
+            self.save(mapping)
+            logger.info(
+                f"[{mapping.cluster_name}] node<->GPU saved for: {mapping.since}"
             )
 
-            info_file_stat = os.stat(nodes_info_file)
-            # JSON file is (re)generated if it does not yet exist
-            # or if it's older than TXT file.
-            if (
-                not os.path.exists(self.json_path)
-                or os.stat(self.json_path).st_mtime < info_file_stat.st_mtime
-            ):
-                # Pase TXT file into self.mapping.
-                self._parse_nodenames(nodes_info_file, self.mapping)
-                # Save self.mapping into JSON file.
-                with open(self.json_path, "w", encoding="utf-8") as file:
-                    json.dump(self.mapping, file, indent=1)
-            else:
-                # Otherwise, just load existing JSON file.
-                with open(self.json_path, encoding="utf-8") as file:
-                    self.mapping = json.load(file)
 
-    def __getitem__(self, nodename):
-        """Return GPU type for nodename, or None if not found."""
-        return self.mapping.get(nodename, None)
+def _node_gpu_mapping_collection():
+    """Return the node_gpu_mapping collection in the current MongoDB."""
+    db = config().mongo.database_instance
+    return NodeGPUMappingRepository(database=db)
 
-    @staticmethod
-    def _parse_nodenames(path: str, output: dict):
-        """
-        Parse node-to-GPU mapping from a path and save parsed nodes into output dict.
 
-        Path should be a txt file containing lines like:
+def get_node_to_gpu(
+    cluster_name: str, required_date: Optional[datetime] = None
+) -> Optional[NodeGPUMapping]:
+    mappings = sorted(
+        _node_gpu_mapping_collection().find_by({"cluster_name": cluster_name}),
+        key=lambda b: b.since,
+    )
+    if not mappings:
+        return None
 
-        NodeName=<nodes_description> Gres=<gpu-type> <...other key=value will be ignored>
+    if required_date is None:
+        return mappings[-1]
 
-        Other lines (e.g. blank lines or commented lines) will be ignored.
-        """
-        with open(path, encoding="utf-8") as file:
-            for line in file:
-                # Parse only lines starting with "NodeName"
-                line = line.strip()
-
-                if not line.startswith("NodeName"):
-                    continue
-
-                nodes_config = dict(
-                    option.split("=", maxsplit=1) for option in line.split()
-                )
-                all_nodenames = expand_hostlist(nodes_config["NodeName"])
-                gres = nodes_config["Gres"]
-                output.update({node_name: gres for node_name in all_nodenames})
+    index_mapping = max(
+        0,
+        bisect.bisect_right([mapping.since for mapping in mappings], required_date) - 1,
+    )
+    return mappings[index_mapping]
