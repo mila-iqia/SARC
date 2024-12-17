@@ -5,7 +5,7 @@ from pprint import pprint
 
 import gifnoc
 
-from sarc.alerts.common import CheckStatus
+from sarc.alerts.common import CheckStatus, config
 from sarc.alerts.runner import CheckRunner
 from sarc.config import config
 
@@ -31,8 +31,7 @@ class HealthCheckCommand:
                     print(f"{status.name} -- {k}")
                 print(f"{results.status.name}")
             elif self.once:
-                # run all checks, once (no CheckRunner)
-                for check in [c for c in hcfg.checks.values() if c.active]:
+                for check in [c for c in config.checks.values() if c.active]:
                     results = check(write=False)
                     if results.status == CheckStatus.OK:
                         print(f"Check '{check.name}' succeeded.")
