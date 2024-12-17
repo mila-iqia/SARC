@@ -5,7 +5,7 @@ from pprint import pprint
 
 import gifnoc
 
-from sarc.alerts.common import config
+from sarc.alerts.common import CheckStatus, config
 from sarc.alerts.runner import CheckRunner
 
 logger = logging.getLogger(__name__)
@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class HealthCheckCommand:
     config: Path = None
+    once: bool = False
 
     name: str = None
 
@@ -26,6 +27,17 @@ class HealthCheckCommand:
                 for k, status in results.statuses.items():
                     print(f"{status.name} -- {k}")
                 print(f"{results.status.name}")
+            elif self.once:
+                for check in [c for c in config.checks.values() if c.active]:
+                    results = check(write=False)
+                    if results.status == CheckStatus.OK:
+                        print(f"Check '{check.name}' succeeded.")
+                    else:
+                        print(f"Check '{check.name}' failed.")
+                        pprint(results)
+                        for k, status in results.statuses.items():
+                            print(f"{status.name} -- {k}")
+                        print(f"{results.status.name}")
             else:
                 try:
                     runner = CheckRunner(
