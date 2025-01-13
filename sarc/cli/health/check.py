@@ -25,8 +25,8 @@ class HealthCheckCommand:
                 check = config.checks[self.name]
                 results = check(write=False)
                 pprint(results)
-                # for k, status in results.statuses.items():
-                #     print(f"{status.name} -- {k}")
+                for k, status in results.statuses.items():
+                    print(f"{status.name} -- {k}")
                 print(f"{results.status.name}")
             elif self.once:
                 # run all checks, once (no CheckRunner)
