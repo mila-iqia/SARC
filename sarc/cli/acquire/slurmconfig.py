@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import io
 import logging
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Dict, List
 
 from hostlist import expand_hostlist
@@ -9,7 +11,7 @@ from simple_parsing import field
 
 from sarc.cache import CachePolicy, with_cache
 from sarc.client.gpumetrics import _gpu_billing_collection
-from sarc.config import config
+from sarc.config import ClusterConfig, config
 from sarc.jobs.node_gpu_mapping import _node_gpu_mapping_collection
 
 logger = logging.getLogger(__name__)
@@ -18,52 +20,86 @@ logger = logging.getLogger(__name__)
 @dataclass
 class AcquireSlurmConfig:
     cluster_name: str = field(alias=["-c"])
-    day: str = field(alias=["-d"])
+    day: str = field(
+        alias=["-d"],
+        required=False,
+        help=(
+            "Cluster config file date (format YYYY-MM-DD). "
+            "Used for file versioning. Should represents a day when config file has been updated "
+            "(e.g. for new GPU billings, node GPUs, etc.). "
+            "If not specified, uses current day and downloads config file from cluster."
+        ),
+    )
 
     def execute(self) -> int:
         if self.cluster_name == "mila":
             logger.error("Cluster `mila` not yet supported.")
             return -1
 
-        parser = SlurmConfigParser(self.cluster_name, self.day)
+        cluster_config = config().clusters[self.cluster_name]
+        parser = SlurmConfigParser(cluster_config, self.day)
         slurm_conf = parser.get_slurm_config()
         _gpu_billing_collection().save_gpu_billing(
-            self.cluster_name, self.day, slurm_conf.gpu_to_billing
+            self.cluster_name, parser.day, slurm_conf.gpu_to_billing
         )
         _node_gpu_mapping_collection().save_node_gpu_mapping(
-            self.cluster_name, self.day, slurm_conf.node_to_gpu
+            self.cluster_name, parser.day, slurm_conf.node_to_gpu
         )
         return 0
 
 
+class FileContent:
+    """
+    Formatter for slurm conf file cache.
+    Just read and write entire text content from file.
+    """
+
+    @classmethod
+    def load(cls, file) -> str:
+        return file.read()
+
+    @classmethod
+    def dump(cls, value: str, output_file):
+        output_file.write(value)
+
+
 class SlurmConfigParser:
-    def __init__(self, cluster_name: str, day: str):
-        self.cluster_name = cluster_name
+    def __init__(self, cluster: ClusterConfig, day: str | None = None):
+        if day is None:
+            # No day given, get current day
+            day = datetime.now().strftime("%Y-%m-%d")
+            # Cache must download slurm conf file and save it locally.
+            cache_policy = CachePolicy.use
+            logger.info(f"Looking for config file at current date: {day}")
+        else:
+            # Day given. Slurm conf file must be retrieved from cache only.
+            cache_policy = CachePolicy.always
+        self.cluster = cluster
         self.day = day
+        self.cache_policy = cache_policy
 
     def get_slurm_config(self) -> SlurmConfig:
-        return with_cache(
+        content = with_cache(
             self._get_slurm_conf,
             subdirectory="slurm_conf",
             key=self._cache_key,
-            formatter=self,
-        )(cache_policy=CachePolicy.always)
+            formatter=FileContent,
+        )(cache_policy=self.cache_policy)
+        return self.load(io.StringIO(content))
 
-    def _get_slurm_conf(self):
-        raise RuntimeError(
-            f"Please add cluster slurm.conf file into cache, at location: "
-            f"{config().cache}/slurm_conf/{self._cache_key()}"
-        )
+    def _get_slurm_conf(self) -> str:
+        cmd = f"cat {self.cluster.slurm_conf_host_path}"
+        result = self.cluster.ssh.run(cmd, hide=True)
+        return result.stdout
 
     def _cache_key(self):
-        return f"slurm.{self.cluster_name}.{self.day}.conf"
+        return f"slurm.{self.cluster.name}.{self.day}.conf"
 
     def load(self, file) -> SlurmConfig:
         """
         Parse cached slurm conf file and return a SlurmConfig object
         containing node_to_gpu and gpu_to_billing.
         """
-
         partitions: List[Partition] = []
         node_to_gpu = {}
 

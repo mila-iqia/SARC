@@ -66,7 +66,8 @@
             "diskusage_report_command": "diskusage_report --project --all_users",
             "prometheus_url": "https://fromage-thanos.calcul.ca",
             "prometheus_headers_file": "tests/not-so-secrets/patate_prometheus/headers.json",
-            "gpu_to_rgu_billing": "tests/not-so-secrets/patate_prometheus/gpu_to_rgu_billing.json"
+            "gpu_to_rgu_billing": "tests/not-so-secrets/patate_prometheus/gpu_to_rgu_billing.json",
+            "slurm_conf_host_path": "/the/path/to/slurm.conf"
         },
         "gerudo": {
             "host": "gerudo",

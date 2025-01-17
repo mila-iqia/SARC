@@ -85,6 +85,7 @@ class ClusterConfig(BaseModel):
     start_date: str = "2022-04-01"
     rgu_start_date: str = None
     gpu_to_rgu_billing: Path = None
+    slurm_conf_host_path: str = "/etc/slurm/slurm.conf"
 
     @validator("timezone")
     def _timezone(cls, value):
