@@ -6,10 +6,11 @@ import pytest
 from hostlist import expand_hostlist
 
 from sarc.cache import CacheException
-from sarc.cli.acquire.slurmconfig import SlurmConfigParser
+from sarc.cli.acquire.slurmconfig import InconsistentGPUBillingError, SlurmConfigParser
 from sarc.client.gpumetrics import GPUBilling, get_cluster_gpu_billings
 from sarc.config import MTL, config
 from sarc.jobs.node_gpu_mapping import NodeGPUMapping, get_node_to_gpu
+from tests.functional.jobs.test_func_load_job_series import MOCK_TIME
 
 SLURM_CONF_RAISIN_2020_01_01 = """
 NodeName=mynode[1,2,5-20,30,40-43] UselessParam=UselessValue Gres=gpu1
@@ -79,8 +80,9 @@ def test_acquire_slurmconfig(cli_main, caplog):
 
     _save_slurm_conf("raisin", "2020-01-01", SLURM_CONF_RAISIN_2020_01_01)
 
-    with pytest.raises(CacheException):
+    with pytest.raises(KeyError) as exc_info:
         cli_main(["acquire", "slurmconfig", "-c", "unknown_raisin", "-d", "2020-01-01"])
+        assert str(exc_info.value) == "unknown_raisin"
 
     with pytest.raises(CacheException):
         cli_main(["acquire", "slurmconfig", "-c", "raisin", "-d", "1999-01-01"])
@@ -205,11 +207,10 @@ def test_acuire_slurmconfig_inconsistent_billing(cli_main, caplog):
     """,
     )
 
-    with pytest.raises(CacheException):
+    with pytest.raises(InconsistentGPUBillingError) as exc_info:
         cli_main(["acquire", "slurmconfig", "-c", "raisin", "-d", "2020-01-01"])
 
-    assert (
-        """InconsistentGPUBillingError: 
+    assert """
 GPU billing differs.
 GPU name: gpu1
 Previous value: 5000.0
@@ -219,8 +220,8 @@ PartitionName=partition1 Nodes=mynode[1,5,6,29-41] TRESBillingWeights=x=1,GRES/g
 New value: 6000.0
 From line: 5
 PartitionName=partition2 Nodes=mynode[2,8-11,42] TRESBillingWeights=x=1,GRES/gpu:gpu1=6000,y=2
-"""
-        in caplog.text
+""" == str(
+        exc_info.value
     )
 
 
@@ -239,7 +240,7 @@ def assert_same_node_gpu_mapping(
 
 
 def _save_slurm_conf(cluster_name: str, day: str, content: str):
-    scp = SlurmConfigParser(cluster_name, day)
+    scp = SlurmConfigParser(config().clusters[cluster_name], day)
     folder = "slurm_conf"
     filename = scp._cache_key()
     cache_dir = config().cache
@@ -248,3 +249,39 @@ def _save_slurm_conf(cluster_name: str, day: str, content: str):
     file_path = file_dir / filename
     with file_path.open("w") as file:
         file.write(content)
+
+
+@pytest.mark.freeze_time(MOCK_TIME)
+def test_download_cluster_config(test_config, remote):
+    """Test slurm conf file downloading."""
+
+    clusters = test_config.clusters
+    # Check default value for "slurm_conf_host_path" (with cluster raisina)
+    assert clusters["raisin"].slurm_conf_host_path == "/etc/slurm/slurm.conf"
+    # Check custom value for "slurm_conf_host_path" (with cluster patate)
+    assert clusters["patate"].slurm_conf_host_path == "/the/path/to/slurm.conf"
+
+    # Use cluster patate for download test
+    cluster = clusters["patate"]
+    scp = SlurmConfigParser(cluster)
+
+    file_dir = test_config.cache / "slurm_conf"
+    file_dir.mkdir(parents=True, exist_ok=True)
+    file_path = file_dir / scp._cache_key()
+
+    # Slurm conf file should not yet exist
+    assert not file_path.exists()
+
+    # Get conf file
+    expected_content = SLURM_CONF_RAISIN_2020_01_01
+    channel = remote.expect(
+        host=cluster.host,
+        cmd=f"cat {cluster.slurm_conf_host_path}",
+        out=expected_content.encode(),
+    )
+    scp.get_slurm_config()
+
+    # Now, slurm file should exist
+    assert file_path.is_file()
+    with file_path.open() as file:
+        assert file.read() == expected_content

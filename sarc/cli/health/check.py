@@ -21,6 +21,7 @@ class HealthCheckCommand:
     def execute(self) -> int:
         with gifnoc.use(self.config):
             if self.name:
+                # only run one check, once (no CheckRunner)
                 check = config.checks[self.name]
                 results = check(write=False)
                 pprint(results)
@@ -28,6 +29,7 @@ class HealthCheckCommand:
                     print(f"{status.name} -- {k}")
                 print(f"{results.status.name}")
             elif self.once:
+                # run all checks, once (no CheckRunner)
                 for check in [c for c in config.checks.values() if c.active]:
                     results = check(write=False)
                     if results.status == CheckStatus.OK:
