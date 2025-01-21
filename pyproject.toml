@@ -1,63 +1,42 @@
-[tool.poetry]
+
+[project]
+authors = [{ name = "Mila-IDT" }]
+requires-python = "<4.0,>=3.9"
+dependencies = [
+    "fabric<4.0.0,>=3.0.0",
+    "prometheus-api-client<1.0.0,>=0.5.2",
+    "pydantic<2.0.0,>=1.10.4",
+    "pydantic-mongo<2.0.0,>=1.0.1",
+    "pymongo<5.0.0,>=4.3.3",
+    "numpy<2.0.0,>=1.24.0",
+    "ldap3<3.0.0,>=2.9.1",
+    "python-hostlist<2.0.0,>=1.23.0",
+    "tqdm<5.0.0,>=4.64.1",
+    "flatten-dict<1.0.0,>=0.4.2",
+    "simple-parsing<1.0.0,>=0.1.0",
+    "sphinx<7.0.0,>=6.2.1",
+    "myst-parser<3.0.0,>=2.0.0",
+    "sphinx-rtd-theme<2.0.0,>=1.2.2",
+    "nbsphinx<1.0.0,>=0.9.3",
+    "opentelemetry-api<2.0.0,>=1.23.0",
+    "opentelemetry-sdk<2.0.0,>=1.23.0",
+    "requests-mock<2.0.0,>=1.11.0",
+    "gifnoc<1.0.0,>=0.2.3",
+    "watchdog<5.0.0,>=4.0.0",
+    "python-dateutil<3.0.0.0,>=2.9.0.post0",
+    "pandas>=2.2.3",
+]
 name = "sarc"
 version = "0.1.0"
 description = "Surveillance et analyse des ressources de calcul"
-authors = ["Mila-IDT"]
 readme = "README.md"
-packages = [{include = 'sarc'}]
-
-[tool.poetry.dependencies]
-python = "^3.9"
-fabric = "^3.0.0"
-prometheus-api-client = "^0.5.2"
-pydantic = "^1.10.4"
-pydantic-mongo = "^1.0.1"
-pymongo = "^4.3.3"
-numpy = "^1.24.0"
-ldap3 = "^2.9.1"
-python-hostlist = "^1.23.0"
-tqdm = "^4.64.1"
-flatten-dict = "^0.4.2"
-simple-parsing = "^0.1.0"
-sphinx = "^6.2.1"
-myst-parser = "^2.0.0"
-sphinx-rtd-theme = "^1.2.2"
-nbsphinx = "^0.9.3"
-opentelemetry-api = "^1.23.0"
-opentelemetry-sdk = "^1.23.0"
-requests-mock = "^1.11.0"
-pandas = "< 2.1.0"
-gifnoc = "^0.2.3"
-watchdog = "^4.0.0"
-python-dateutil = "^2.9.0.post0"
-
-[tool.poetry.group.dev.dependencies]
-black = ">= 22.12.0"
-pylint = ">= 2.15.10"
-isort = ">= 5.11.4"
-mypy = ">= 0.991"
-pytest = ">= 7.2.1"
-pytest-cov = ">= 4.0.0"
-pytest-regressions = ">= 2.4.2"
-tox = ">= 4.4.5"
-pytest-freezegun = ">= 0.4.2"
-fabric = {extras = ["testing"], version = "^3.0.0"}
-pytest-timeout = "^2.1.0"
-pytest-custom-exit-code = ">= 0.3.0"
-coverage = "^7.2.7"
-pytest-xdist = "^3.3.1"
-jupyter = "^1.0.0"
-tabulate = "^0.9.0"
-
-[tool.poetry.group.examples.dependencies]
-seaborn = "^0.12.2"
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-[tool.poetry.scripts]
-sarc = 'sarc.cli:main'
+[tool.hatch.build.targets.wheel]
+packages = ["sarc"]
 
 [tool.pytest]
 norecursedirs = "tests/common"
@@ -65,9 +44,9 @@ norecursedirs = "tests/common"
 [tool.pylint]
 ignore-paths = []
 disable = [
-    "no-self-argument",  # Pydantic validators don't have one
-    "too-few-public-methods",  # Triggered on Pydantic models
-    "import-outside-toplevel",  # These imports are useful to reduce loading times
+    "no-self-argument",              # Pydantic validators don't have one
+    "too-few-public-methods",        # Triggered on Pydantic models
+    "import-outside-toplevel",       # These imports are useful to reduce loading times
     "too-many-arguments",
     "too-many-locals",
     "too-many-positional-arguments",
@@ -75,8 +54,8 @@ disable = [
     "missing-class-docstring",
     "missing-function-docstring",
     "invalid-name",
-    "no-else-return",  # Bad rule IMO (- OB)
-    "line-too-long",  # Black takes care of line length.
+    "no-else-return",                # Bad rule IMO (- OB)
+    "line-too-long",                 # Black takes care of line length.
     "logging-fstring-interpolation",
     "duplicate-code",
     "too-many-positional-arguments",
@@ -85,3 +64,27 @@ extension-pkg-whitelist = "pydantic"
 
 [tool.isort]
 profile = "black"
+
+[project.scripts]
+sarc = "sarc.cli:main"
+
+[dependency-groups]
+dev = [
+    "black>=22.12.0",
+    "pylint>=2.15.10",
+    "isort>=5.11.4",
+    "mypy>=0.991",
+    "pytest>=7.2.1",
+    "pytest-cov>=4.0.0",
+    "pytest-regressions>=2.4.2",
+    "tox>=4.4.5",
+    "pytest-freezegun>=0.4.2",
+    "fabric[testing]<4.0.0,>=3.0.0",
+    "pytest-timeout<3.0.0,>=2.1.0",
+    "pytest-custom-exit-code>=0.3.0",
+    "coverage<8.0.0,>=7.2.7",
+    "pytest-xdist<4.0.0,>=3.3.1",
+    "jupyter<2.0.0,>=1.0.0",
+    "tabulate<1.0.0,>=0.9.0",
+]
+examples = ["seaborn<1.0.0,>=0.12.2"]
