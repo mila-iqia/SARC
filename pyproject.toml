@@ -68,6 +68,12 @@ profile = "black"
 [project.scripts]
 sarc = "sarc.cli:main"
 
+[project.optional-dependencies]
+examples = [
+    "rich>=13.9.4",
+    "seaborn>=0.13.2",
+]
+
 [dependency-groups]
 dev = [
     "black>=22.12.0",
