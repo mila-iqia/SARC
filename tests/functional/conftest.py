@@ -114,6 +114,10 @@ read_only_db_config_object = create_db_configuration_fixture(
     scope="session",
 )
 
+read_only_client_db_config_object = create_client_db_configuration_fixture(
+    db_name="sarc-read-only-test-client",
+    scope="session",
+)
 
 read_only_db_with_many_cpu_jobs_config_object = create_db_configuration_fixture(
     db_name="sarc-read-only-with-many-cpu-jobs-test",
@@ -157,6 +161,13 @@ def read_write_db(standard_config, read_write_db_config_object):
 @pytest.fixture
 def read_only_db(standard_config, read_only_db_config_object):
     cfg = custom_db_config(standard_config, "sarc-read-only-test")
+    with using_config(cfg) as cfg:
+        yield cfg.mongo.database_instance
+
+
+@pytest.fixture
+def read_only_db_client(client_config, read_only_client_db_config_object):
+    cfg = custom_db_config(client_config, "sarc-read-only-test-client")
     with using_config(cfg) as cfg:
         yield cfg.mongo.database_instance
 
