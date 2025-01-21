@@ -61,7 +61,7 @@ class Args:
         hour=0, minute=0, second=0, microsecond=0
     ).astimezone(tz=MTL) - timedelta(days=30)
 
-    end_date: datetime = (
+    end_date: datetime | str = (
         datetime.today()
         .replace(hour=0, minute=0, second=0, microsecond=0)
         .astimezone(tz=MTL)
