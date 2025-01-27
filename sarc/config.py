@@ -7,13 +7,14 @@ from contextvars import ContextVar
 from datetime import date, datetime
 from functools import cached_property
 from pathlib import Path
-from typing import Any, Union
+from typing import Any, Dict, Union
 
 import pydantic
 import tzlocal
 from bson import ObjectId
+from hostlist import expand_hostlist
 from pydantic import BaseModel as _BaseModel
-from pydantic import Extra, validator
+from pydantic import Extra, Field, validator
 
 MTL = zoneinfo.ZoneInfo("America/Montreal")
 PST = zoneinfo.ZoneInfo("America/Vancouver")
@@ -70,6 +71,10 @@ class BaseModel(_BaseModel):
         return type(self)(**new_arguments)
 
 
+MIG_FLAG = "__MIG__"
+DEFAULTS_FLAG = "__DEFAULTS__"
+
+
 class ClusterConfig(BaseModel):
     host: str = "localhost"
     timezone: Union[str, zoneinfo.ZoneInfo]  # | does not work with Pydantic's eval
@@ -87,12 +92,47 @@ class ClusterConfig(BaseModel):
     gpu_to_rgu_billing: Path = None
     slurm_conf_host_path: str = "/etc/slurm/slurm.conf"
 
+    # Dictionary mapping a node name -> gpu type -> IGUANE gpu name
+    gpus_per_nodes: Dict[str, Dict[str, str]] = Field(default_factory=dict)
+
     @validator("timezone")
     def _timezone(cls, value):
         if isinstance(value, str):
             return zoneinfo.ZoneInfo(value)
         else:
             return value
+
+    @validator("gpus_per_nodes")
+    def _expand_gpus_per_nodes(cls, value: dict):
+        # Convert node list to node names with `expand_hostlist`
+        return {
+            node: gpu_to_desc
+            for node_list, gpu_to_desc in value.items()
+            for node in expand_hostlist(node_list)
+        }
+
+    def harmonize_gpu(self, nodename: str, gpu_type: str) -> str:
+        """Actual utility method to get a GPU name from given node and gpu type."""
+
+        gpu_type = gpu_type.lower().replace(" ", "-").split(":")
+        if gpu_type[0] == "gpu":
+            gpu_type.pop(0)
+        gpu_type = gpu_type[0]
+
+        if nodename in self.gpus_per_nodes:
+            gpu_map = self.gpus_per_nodes[nodename]
+        else:
+            gpu_map = self.gpus_per_nodes.get(DEFAULTS_FLAG, {})
+
+        harmonized_gpu = gpu_map.get(gpu_type, None)
+
+        if harmonized_gpu and harmonized_gpu.startswith(MIG_FLAG):
+            harmonized_gpu = self.harmonize_gpu(
+                nodename, harmonized_gpu[len(MIG_FLAG) :]
+            )
+            harmonized_gpu = f"{harmonized_gpu} : {gpu_type}"
+
+        return harmonized_gpu
 
     @cached_property
     def ssh(self):
