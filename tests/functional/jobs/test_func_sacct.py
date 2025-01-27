@@ -483,7 +483,7 @@ def test_get_gpu_type_without_prometheus(
 def _save_slurm_conf(cluster_name: str, day: str, content: str):
     from sarc.cli.acquire.slurmconfig import SlurmConfigParser
 
-    scp = SlurmConfigParser(cluster_name, day)
+    scp = SlurmConfigParser(config().clusters[cluster_name], day)
     folder = "slurm_conf"
     filename = scp._cache_key()
     cache_dir = config().cache

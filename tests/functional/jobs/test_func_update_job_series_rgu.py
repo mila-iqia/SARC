@@ -7,12 +7,9 @@ import numpy as np
 import pandas
 import pytest
 
+from sarc.client.series import load_job_series
 from sarc.config import MTL, ClusterConfig, config
-from sarc.jobs.series import (
-    load_job_series,
-    update_cluster_job_series_rgu,
-    update_job_series_rgu,
-)
+from sarc.jobs.series import update_cluster_job_series_rgu, update_job_series_rgu
 
 from .test_func_load_job_series import MOCK_TIME
 
