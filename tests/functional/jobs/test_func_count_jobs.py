@@ -26,7 +26,7 @@ parameters = {
 }
 
 
-@pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db_client", "tzlocal_is_mtl")
 @pytest.mark.parametrize("params", parameters.values(), ids=parameters.keys())
 def test_count_jobs(params, file_regression):
     jobs = list(get_jobs(**params))
@@ -47,13 +47,13 @@ def test_count_jobs_cluster_cfg(file_regression):
     )
 
 
-@pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db_client", "tzlocal_is_mtl")
 def test_count_jobs_wrong_job_id():
     with pytest.raises(TypeError, match="job_id must be an int or a list of ints"):
         count_jobs(job_id="wrong id")
 
 
-@pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db_client", "tzlocal_is_mtl")
 def test_count_job():
     jbs = list(get_jobs(cluster="patate"))
     assert len(jbs) == count_jobs(cluster="patate")
@@ -61,7 +61,7 @@ def test_count_job():
     assert jb in jbs
 
 
-@pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db_client", "tzlocal_is_mtl")
 def test_get_job_resubmitted():
     assert count_jobs(job_id=1_000_000) == 2
     jb1, jb2 = get_jobs(job_id=1_000_000)
