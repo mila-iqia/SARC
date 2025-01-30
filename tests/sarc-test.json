@@ -41,7 +41,15 @@
             "duc_inodes_command": null,
             "duc_storage_command": null,
             "diskusage_report_command": null,
-            "prometheus_url": null
+            "prometheus_url": null,
+            "gpus_per_nodes" : {
+                "cn-c018": {
+                    "asupergpu": "Nec Plus Plus ULTRA GPU 2000"
+                },
+                "cn-c[019-030]": {
+                    "asupergpu": "Nec Plus ULTRA GPU 2000"
+                }
+            }
         },
         "fromage": {
             "host": "fromage",
