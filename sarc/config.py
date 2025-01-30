@@ -7,7 +7,7 @@ from contextvars import ContextVar
 from datetime import date, datetime
 from functools import cached_property
 from pathlib import Path
-from typing import Any, Dict, Union
+from typing import Any, Dict, Optional, Union
 
 import pydantic
 import tzlocal
@@ -111,8 +111,12 @@ class ClusterConfig(BaseModel):
             for node in expand_hostlist(node_list)
         }
 
-    def harmonize_gpu(self, nodename: str, gpu_type: str) -> str:
-        """Actual utility method to get a GPU name from given node and gpu type."""
+    def harmonize_gpu(self, nodename: str, gpu_type: str) -> Optional[str]:
+        """
+        Actual utility method to get a GPU name from given node and gpu type.
+
+        Return None if GPU name cannot be inferred.
+        """
 
         gpu_type = gpu_type.lower().replace(" ", "-").split(":")
         if gpu_type[0] == "gpu":
