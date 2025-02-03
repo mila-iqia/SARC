@@ -25,9 +25,6 @@ class HealthCheckCommand:
                 check = config.checks[self.name]
                 results = check(write=False)
                 pprint(results)
-                for k, status in results.statuses.items():
-                    print(f"{status.name} -- {k}")
-                print(f"{results.status.name}")
             elif self.once:
                 # run all checks, once (no CheckRunner)
                 for check in [c for c in config.checks.values() if c.active]:
@@ -37,9 +34,6 @@ class HealthCheckCommand:
                     else:
                         print(f"Check '{check.name}' failed.")
                         pprint(results)
-                        for k, status in results.statuses.items():
-                            print(f"{status.name} -- {k}")
-                        print(f"{results.status.name}")
             else:
                 try:
                     runner = CheckRunner(
