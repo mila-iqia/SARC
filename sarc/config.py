@@ -106,7 +106,10 @@ class ClusterConfig(BaseModel):
     def _expand_gpus_per_nodes(cls, value: dict):
         # Convert node list to node names with `expand_hostlist`
         return {
-            node: gpu_to_desc
+            node: {
+                gpu_type.lower().replace(" ", "-"): gpu_desc
+                for gpu_type, gpu_desc in gpu_to_desc.items()
+            }
             for node_list, gpu_to_desc in value.items()
             for node in expand_hostlist(node_list)
         }
@@ -123,13 +126,14 @@ class ClusterConfig(BaseModel):
             gpu_type.pop(0)
         gpu_type = gpu_type[0]
 
-        if nodename in self.gpus_per_nodes:
-            gpu_map = self.gpus_per_nodes[nodename]
-        else:
-            gpu_map = self.gpus_per_nodes.get(DEFAULTS_FLAG, {})
+        # Try to get harmonized GPU from nodename mapping
+        harmonized_gpu = self.gpus_per_nodes.get(nodename, {}).get(gpu_type)
 
-        harmonized_gpu = gpu_map.get(gpu_type, None)
+        # Otherwise, try to get harmonized GPU from default mapping
+        if harmonized_gpu is None:
+            harmonized_gpu = self.gpus_per_nodes.get(DEFAULTS_FLAG, {}).get(gpu_type)
 
+        # For MIG GPUs, use this method recursively
         if harmonized_gpu and harmonized_gpu.startswith(MIG_FLAG):
             harmonized_gpu = self.harmonize_gpu(
                 nodename, harmonized_gpu[len(MIG_FLAG) :]

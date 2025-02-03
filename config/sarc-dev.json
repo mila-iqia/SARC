@@ -31,7 +31,16 @@
             "start_date": "2022-04-01",
             "gpus_per_nodes": {
                 "__DEFAULTS__": {
-                    "rtx8000": "RTX8000"
+                    "rtx8000": "RTX8000",
+                    "NVIDIA A100 80GB PCIe": "A100-PCIe-80GB",
+                    "NVIDIA A100-SXM4-40GB": "A100-SXM4-40GB",
+                    "NVIDIA A100-SXM4-80GB": "A100-SXM4-80GB",
+                    "NVIDIA H100 80GB HBM3": "H100-SXM5-80GB",
+                    "NVIDIA L40S": "L40S",
+                    "NVIDIA RTX A6000": "A6000",
+                    "Quadro RTX 8000": "RTX8000",
+                    "Tesla V100-SXM2-32GB": "V100-SXM2-32GB",
+                    "Tesla V100-SXM2-32GB-LS": "V100-SXM2-32GB"
                 },
                 "cn-b[001-005]": {
                     "v100": "V100-SXM2-32GB"
@@ -46,7 +55,10 @@
                     "v100": "V100-SXM2-32GB"
                 },
                 "cn-g[001-029]": {
-                    "a100l": "A100-SXM4-80GB"
+                    "a100l": "A100-SXM4-80GB",
+                    "2g.20gb": "__MIG_FLAG__a100l",
+                    "3g.40gb": "__MIG_FLAG__a100l",
+                    "4g.40gb": "__MIG_FLAG__a100l"
                 },
                 "cn-i001": {
                     "a100l": "A100-PCIe-80GB"
@@ -83,8 +95,12 @@
                     "a100": "A100-SXM4-40GB",
                     "a100_1g.5gb": "__MIG_FLAG__a100",
                     "a100_2g.10gb": "__MIG_FLAG__a100",
+                    "2g.10gb": "__MIG_FLAG__a100",
                     "a100_3g.20gb": "__MIG_FLAG__a100",
-                    "a100_4g.20gb": "__MIG_FLAG__a100"
+                    "3g.20gb": "__MIG_FLAG__a100",
+                    "a100_4g.20gb": "__MIG_FLAG__a100",
+                    "4g.20gb": "__MIG_FLAG__a100",
+                    "NVIDIA A100-SXM4-40GB": "A100-SXM4-40GB"
                 }
             }
         },
@@ -103,7 +119,8 @@
             "gpu_to_rgu_billing": "secrets/gpu_to_rgu_billing_beluga.json",
             "gpus_per_nodes": {
                 "__DEFAULTS__": {
-                    "tesla_v100-sxm2-16gb": "V100-SXM2-16GB"
+                    "tesla_v100-sxm2-16gb": "V100-SXM2-16GB",
+                    "Tesla V100-SXM2-16GB": "V100-SXM2-16GB"
                 }
             }
         },
