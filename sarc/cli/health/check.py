@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 class HealthCheckCommand:
     config: Path = None
     once: bool = False
+    write: bool = False
 
     name: str = None
 
@@ -23,12 +24,16 @@ class HealthCheckCommand:
             if self.name:
                 # only run one check, once (no CheckRunner)
                 check = config.checks[self.name]
-                results = check(write=False)
-                pprint(results)
+                results = check(write=self.write)
+                if results.status == CheckStatus.OK:
+                    print(f"Check '{check.name}' succeeded.")
+                else:
+                    print(f"Check '{check.name}' failed.")
+                    pprint(results)
             elif self.once:
                 # run all checks, once (no CheckRunner)
                 for check in [c for c in config.checks.values() if c.active]:
-                    results = check(write=False)
+                    results = check(write=self.write)
                     if results.status == CheckStatus.OK:
                         print(f"Check '{check.name}' succeeded.")
                     else:
