@@ -27,9 +27,6 @@ class HealthCheckCommand:
                 check = hcfg.checks[self.name]
                 results = check(write=False)
                 pprint(results)
-                for k, status in results.statuses.items():
-                    print(f"{status.name} -- {k}")
-                print(f"{results.status.name}")
             elif self.once:
                 for check in [c for c in config.checks.values() if c.active]:
                     results = check(write=False)
@@ -38,9 +35,6 @@ class HealthCheckCommand:
                     else:
                         print(f"Check '{check.name}' failed.")
                         pprint(results)
-                        for k, status in results.statuses.items():
-                            print(f"{status.name} -- {k}")
-                        print(f"{results.status.name}")
             else:
                 try:
                     runner = CheckRunner(directory=hcfg.directory, checks=hcfg.checks)
