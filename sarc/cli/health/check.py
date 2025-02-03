@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 class HealthCheckCommand:
     config: Path = None
     once: bool = False
+    write: bool = False
 
     name: str = None
 
@@ -24,12 +25,16 @@ class HealthCheckCommand:
         with gifnoc.use(self.config):
             if self.name:
                 # only run one check, once (no CheckRunner)
-                check = hcfg.checks[self.name]
-                results = check(write=False)
-                pprint(results)
+                check = config.checks[self.name]
+                results = check(write=self.write)
+                if results.status == CheckStatus.OK:
+                    print(f"Check '{check.name}' succeeded.")
+                else:
+                    print(f"Check '{check.name}' failed.")
+                    pprint(results)
             elif self.once:
                 for check in [c for c in config.checks.values() if c.active]:
-                    results = check(write=False)
+                    results = check(write=self.write)
                     if results.status == CheckStatus.OK:
                         print(f"Check '{check.name}' succeeded.")
                     else:
