@@ -65,6 +65,8 @@ def check_nb_jobs_per_cluster_per_time(
     else:
         cluster_names = sorted(df["cluster_name"].unique())
 
+    result = True   # by default, everything's ok
+
     # Iter for each cluster.
     for cluster_name in cluster_names:
         # Select only jobs for current cluster,
@@ -127,3 +129,7 @@ def check_nb_jobs_per_cluster_per_time(
                         f"minimum required for this cluster: {threshold} ({avg} - {nb_stddev} * {stddev}); "
                         f"time unit: {time_unit}"
                     )
+                    result = False
+
+    return result
+
