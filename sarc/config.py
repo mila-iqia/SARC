@@ -87,6 +87,9 @@ class ClusterConfig(BaseModel):
     gpu_to_rgu_billing: Path = None
     slurm_conf_host_path: str = "/etc/slurm/slurm.conf"
 
+    # Tell if billing (in job's requested|allocated field) is number of GPUs (True) or RGU (False)
+    billing_is_gpu = False
+
     @validator("timezone")
     def _timezone(cls, value):
         if isinstance(value, str):
