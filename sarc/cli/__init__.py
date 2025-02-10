@@ -63,34 +63,14 @@ class CLI:
     )
 
     def execute(self) -> int:
-        # levels = {0: logging.WARNING, 1: logging.INFO, 2: logging.DEBUG}
 
-        # if self.color:
-        #     logging.basicConfig(
-        #         handlers=[NiceHandler(), getHandler()],
-        #         level=levels.get(self.verbose, logging.DEBUG),
-        #     )
-
-        # else:
-        #     logging.basicConfig(
-        #         handlers=[getHandler()],
-        #         format="%(asctime)-15s::%(levelname)s::%(name)s::%(message)s",
-        #         level=levels.get(self.verbose, logging.DEBUG),
-        #     )
-
-        # logger = logging.getLogger(__name__)
-
-        # # logger.debug("SARC version : %s", sarc.__version__)
-        # logger.debug(f"Running command: {self.command}")
-        # logger.warning(f"Test warning log")
+        setupLogging(verbose_level=self.verbose)
 
         return self.command.execute()
 
 
 def main(argv: list[Any] | None = None) -> int:
     """Main commandline for SARC"""
-
-    setupLogging()
 
     parser = ArgumentParser()
     parser.add_arguments(CLI, dest="command")

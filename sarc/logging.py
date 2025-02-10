@@ -27,7 +27,8 @@ def getOpenTelemetryLoggingHandler(log_level=logging.WARNING):
     return LoggingHandler(level=log_level, logger_provider=logger_provider)
 
 
-def setupLogging():
+def setupLogging(verbose_level: int = 0):
+    verbose_levels = {0: logging.WARNING, 1: logging.INFO, 2: logging.DEBUG}
 
     logging_levels = {
         "DEBUG": logging.DEBUG,
@@ -38,7 +39,12 @@ def setupLogging():
     }
 
     if config().logging:
-        log_level = logging_levels.get(config().logging.log_level, logging.WARNING)
+        # take the lowest log level between the config and the verbose level
+        config_log_level = logging_levels.get(
+            config().logging.log_level, logging.WARNING
+        )
+        verbose_log_level = verbose_levels.get(verbose_level, config_log_level)
+        log_level = min(config_log_level, verbose_log_level)
 
         handler = getOpenTelemetryLoggingHandler(log_level)
 
@@ -60,5 +66,5 @@ def setupLogging():
         logging.basicConfig(
             handlers=[logging.StreamHandler()],
             format="%(asctime)-15s::%(levelname)s::%(name)s::%(message)s",
-            level=logging.WARNING,  # Default log level
+            level=verbose_levels.get(verbose_level, logging.DEBUG),  # Default log level
         )
