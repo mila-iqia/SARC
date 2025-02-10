@@ -9,7 +9,7 @@ The revison works as follow:
 - All current documents have NO end date
     - this makes query simple as we can just look for missing end date,
       because previous db had no revision system none of the documents have
-      end dates, so all their documents are the current ones 
+      end dates, so all their documents are the current ones
 
 - All past version have an end date
 """
