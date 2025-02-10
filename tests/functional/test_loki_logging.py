@@ -1,14 +1,12 @@
 # test logging to loki service
 
 import logging
-import time
 
 import pytest
-import requests_mock
 from pytest_httpserver import HTTPServer
 
 from sarc.config import config
-from sarc.logging import getOpenTelemetryLoggingHandler, setupLogging
+from sarc.logging import getOpenTelemetryLoggingHandler
 
 
 @pytest.fixture
@@ -21,11 +19,12 @@ def httpserver(httpserver: HTTPServer):
     return httpserver
 
 
-import requests
-
-from sarc.logging import setupLogging
-
-
+# I gave up on testing the whole chain (sending a logger message all the way to loki),
+# because pytest intercepts logging, and I tried everything to disable that without success.
+# Instead, a more restricted test of the opentelemetry logging handler
+# to loki is set up, with an httpserver to mock the endpoint.
+# The only thing that is not tested in the message pipeline is the logging library itself,
+# which can be considered reliable ?
 def test_loki_logging_handler(standard_config, httpserver):
     # Configurer l'URL de l'endpoint Loki
     # print(f"http://{httpserver.host}:{httpserver.port}/otlp/v1/logs")
