@@ -404,6 +404,7 @@ class SlurmCLuster(BaseModel):
     cluster_name: str
     start_date: Optional[str] = None
     end_date: Optional[str] = None
+    billing_is_gpu: bool = False
 
 
 class SlurmClusterRepository(AbstractRepository[SlurmCLuster]):
