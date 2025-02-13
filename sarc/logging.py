@@ -26,9 +26,8 @@ def getOpenTelemetryLoggingHandler(log_level=logging.WARNING):
     logger_provider.add_log_record_processor(BatchLogRecordProcessor(otlp_exporter))
     return LoggingHandler(level=log_level, logger_provider=logger_provider)
 
-
 def setupLogging(verbose_level: int = 0):
-    verbose_levels = {0: logging.WARNING, 1: logging.INFO, 2: logging.DEBUG}
+    verbose_levels = {1: logging.INFO, 2: logging.DEBUG}
 
     logging_levels = {
         "DEBUG": logging.DEBUG,
@@ -39,12 +38,14 @@ def setupLogging(verbose_level: int = 0):
     }
 
     if config().logging:
-        # take the lowest log level between the config and the verbose level
+        
         config_log_level = logging_levels.get(
             config().logging.log_level, logging.WARNING
         )
-        verbose_log_level = verbose_levels.get(verbose_level, config_log_level)
-        log_level = min(config_log_level, verbose_log_level)
+        # verbose priority:
+        # in 0 (not specified in command line) then config log level is used
+        # otherwise, command-line verbose level is used
+        log_level = verbose_levels.get(verbose_level, config_log_level)
 
         handler = getOpenTelemetryLoggingHandler(log_level)
 
@@ -60,11 +61,10 @@ def setupLogging(verbose_level: int = 0):
             level=log_level,
         )
 
-        logging.error("ERROR test log")
-
     else:
+        # no logging level in config file
         logging.basicConfig(
             handlers=[logging.StreamHandler()],
             format="%(asctime)-15s::%(levelname)s::%(name)s::%(message)s",
-            level=verbose_levels.get(verbose_level, logging.DEBUG),  # Default log level
+            level=verbose_levels.get(verbose_level, logging.DEBUG),  # Default log level, if not specidied in config
         )
