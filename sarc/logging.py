@@ -26,6 +26,7 @@ def getOpenTelemetryLoggingHandler(log_level=logging.WARNING):
     logger_provider.add_log_record_processor(BatchLogRecordProcessor(otlp_exporter))
     return LoggingHandler(level=log_level, logger_provider=logger_provider)
 
+
 def setupLogging(verbose_level: int = 0):
     verbose_levels = {1: logging.INFO, 2: logging.DEBUG}
 
@@ -38,7 +39,7 @@ def setupLogging(verbose_level: int = 0):
     }
 
     if config().logging:
-        
+
         config_log_level = logging_levels.get(
             config().logging.log_level, logging.WARNING
         )
@@ -66,5 +67,7 @@ def setupLogging(verbose_level: int = 0):
         logging.basicConfig(
             handlers=[logging.StreamHandler()],
             format="%(asctime)-15s::%(levelname)s::%(name)s::%(message)s",
-            level=verbose_levels.get(verbose_level, logging.DEBUG),  # Default log level, if not specidied in config
+            level=verbose_levels.get(
+                verbose_level, logging.DEBUG
+            ),  # Default log level, if not specidied in config
         )
