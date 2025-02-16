@@ -99,8 +99,10 @@ def run(
 
         # We have to filter out the duplicate users that in the drac_members file
         span.add_event("Filtering duplicate entries in drac_members ...")
-        DLD_data["drac_members"] = filter_duplicate_drac_members(DLD_data["drac_members"])
-             
+        DLD_data["drac_members"] = filter_duplicate_drac_members(
+            DLD_data["drac_members"]
+        )
+
         # hint : To debug or manually adjust `perform_matching` to handle new edge cases
         #        that arrive each semester, you can inspect the contents of the temporary file
         #        to see what you're working with, or you can just inspect `DLD_data`
@@ -170,7 +172,7 @@ def run(
 
 
 def filter_duplicate_drac_members(LD_drac_members):
-    DL_users = {} # dict of list of drac members, key=username
+    DL_users = {}  # dict of list of drac members, key=username
     for user in LD_drac_members:
         if user["username"] not in DL_users:
             DL_users[user["username"]] = []
@@ -178,8 +180,10 @@ def filter_duplicate_drac_members(LD_drac_members):
 
     LD_filtered_drac_members = []
     for username, users in DL_users.items():
-        # keep the active entry, or the  the last entry if no active one        
-        active_users = [user for user in users if user["activation_status"] == "activated"]
+        # keep the active entry, or the  the last entry if no active one
+        active_users = [
+            user for user in users if user["activation_status"] == "activated"
+        ]
         user_to_keep = None
         if active_users:
             user_to_keep = active_users[-1]
