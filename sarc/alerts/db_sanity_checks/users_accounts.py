@@ -5,7 +5,6 @@ from typing import Optional
 import pandas as pd
 
 from sarc.client.series import load_job_series
-from sarc.client.users.api import User
 from sarc.config import MTL
 
 
