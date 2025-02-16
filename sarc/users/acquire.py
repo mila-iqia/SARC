@@ -179,7 +179,7 @@ def filter_duplicate_drac_members(LD_drac_members):
         DL_users[user["username"]].append(user)
 
     LD_filtered_drac_members = []
-    for username, users in DL_users.items():
+    for _, users in DL_users.items():
         # keep the active entry, or the  the last entry if no active one
         active_users = [
             user for user in users if user["activation_status"] == "activated"
