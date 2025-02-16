@@ -11,7 +11,7 @@ from sarc.config import MTL
 
 def find_missing_user_to_mila_emails(
     df: pd.DataFrame,
-) -> tuple[pd.DataFrame, list[str]]:
+) -> list[str]:
     missing_mila_email = df["user.mila.email"].isna()
 
     n_missing = missing_mila_email.sum()
@@ -31,7 +31,7 @@ def find_missing_user_to_mila_emails(
 # return value: list of users IDs that are not in the database
 def check_users_in_jobs(
     time_interval: Optional[timedelta] = timedelta(hours=24),
-) -> list[User]:
+) -> list[str]:
 
     logging.info("Checking users in jobs; timedelta: %s", time_interval)
 
