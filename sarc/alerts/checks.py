@@ -1,9 +1,9 @@
-import logging
 import random
 from dataclasses import dataclass
 from datetime import timedelta
 
 from sarc.alerts.common import CheckResult, HealthCheck
+from sarc.alerts.db_sanity_checks.users_accounts import check_users_in_jobs
 from sarc.alerts.usage_alerts.cluster_response import check_cluster_response
 from sarc.alerts.usage_alerts.cluster_scraping import check_nb_jobs_per_cluster_per_time
 
@@ -32,6 +32,7 @@ class HelloWorldCheck(HealthCheck):
 @dataclass
 class HelloWorld2Check(HealthCheck):
     example_additionnal_param: str = "default_value"
+
     def check(self):
         random_number = random.random()
         if random_number < 0.5:
@@ -39,14 +40,14 @@ class HelloWorld2Check(HealthCheck):
                 statuses={
                     "comment": "Hello, HealthMonitor World! You were chosen randomly to fail...",
                     "random_number": random_number,
-                    "example_additionnal_param": self.example_additionnal_param
+                    "example_additionnal_param": self.example_additionnal_param,
                 }
             )
         return self.ok(
             statuses={
                 "comment": "Hello, HealthMonitor World!",
                 "random_number": random_number,
-                "example_additionnal_param": self.example_additionnal_param
+                "example_additionnal_param": self.example_additionnal_param,
             }
         )
 
@@ -55,6 +56,7 @@ class HelloWorld2Check(HealthCheck):
 @dataclass
 class ClusterResponseCheck(HealthCheck):
     days: int = 7
+
     def check(self):
         cluster_name = self.parameters["cluster_name"]
         days = self.days
@@ -68,13 +70,15 @@ class ClusterResponseCheck(HealthCheck):
                 "comment": f"  Cluster {cluster_name} has not been scraped in the last {days} days."
             }
         )
-    
+
+
 @dataclass
 class ClusterJobScrapingCheck(HealthCheck):
     time_interval: int = 7
     time_unit: int = 1
     stddev: int = 2
     verbose: bool = False
+
     def check(self):
         time_interval = timedelta(days=self.time_interval)
         time_unit = timedelta(days=self.time_unit)
@@ -95,5 +99,22 @@ class ClusterJobScrapingCheck(HealthCheck):
                 "time_interval": time_interval,
                 "time_unit": time_unit,
                 "stddev": nb_stddev,
+            }
+        )
+
+
+@dataclass
+class UsersInJobsCheck(HealthCheck):
+    time_interval: int = 7  # days
+
+    def check(self):
+        time_interval = timedelta(days=self.time_interval)
+        missing_users = check_users_in_jobs(time_interval=time_interval)
+        if not missing_users:
+            return self.ok
+        return self.fail(
+            statuses={
+                "comment": f"Missing users in jobs: {missing_users}",
+                "time_interval": time_interval,
             }
         )
