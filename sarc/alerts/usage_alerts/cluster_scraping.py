@@ -65,7 +65,7 @@ def check_nb_jobs_per_cluster_per_time(
     else:
         cluster_names = sorted(df["cluster_name"].unique())
 
-    result = True   # by default, everything's ok
+    result = True  # by default, everything's ok
 
     # Iter for each cluster.
     for cluster_name in cluster_names:
@@ -132,4 +132,3 @@ def check_nb_jobs_per_cluster_per_time(
                     result = False
 
     return result
-
