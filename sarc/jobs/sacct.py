@@ -263,7 +263,7 @@ def sacct_mongodb_import(
     """
     collection = _jobs_collection()
     scraper = SAcctScraper(cluster, day)
-    logger.info("Getting the sacct data...")
+    logger.info(f"Getting the sacct data for cluster {cluster.name}, date {day}...")
     scraper.get_raw()
     logger.info(
         f"Saving into mongodb collection '{collection.Meta.collection_name}'..."
