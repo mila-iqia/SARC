@@ -59,7 +59,7 @@ def check_same_job_id(
     duplicates = {
         job_id: cluster_to_count
         for job_id, cluster_to_count in job_id_to_cluster_to_count.items()
-        if cluster_to_count.total() > 1
+        if sum(cluster_to_count.values()) > 1
     }
     if duplicates:
         # Log warnings
