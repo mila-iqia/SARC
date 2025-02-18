@@ -26,7 +26,7 @@ def check_nb_jobs_per_cluster_per_time(
     Parameters
     ----------
     time_interval: timedelta
-        If given, only jobs which ran in [now - time_interval, time_interval] will be used for checking.
+        If given, only jobs which ran in [now - time_interval, now] will be used for checking.
         Default is last 7 days.
         If None, all jobs are used.
     time_unit: timedelta
