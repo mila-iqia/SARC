@@ -30,6 +30,53 @@
             "prometheus_url": "http://prometheus01.server.mila.quebec:9090/",
             "start_date": "2022-04-01",
             "billing_is_gpu": true
+            "gpus_per_nodes": {
+                "__DEFAULTS__": {
+                    "rtx8000": "RTX8000",
+                    "NVIDIA A100 80GB PCIe": "A100-PCIe-80GB",
+                    "NVIDIA A100-SXM4-40GB": "A100-SXM4-40GB",
+                    "NVIDIA A100-SXM4-80GB": "A100-SXM4-80GB",
+                    "NVIDIA H100 80GB HBM3": "H100-SXM5-80GB",
+                    "NVIDIA L40S": "L40S",
+                    "NVIDIA RTX A6000": "A6000",
+                    "Quadro RTX 8000": "RTX8000",
+                    "Tesla V100-SXM2-32GB": "V100-SXM2-32GB",
+                    "Tesla V100-SXM2-32GB-LS": "V100-SXM2-32GB"
+                },
+                "cn-b[001-005]": {
+                    "v100": "V100-SXM2-32GB"
+                },
+                "cn-d[001-002]": {
+                    "a100": "A100-SXM4-40GB"
+                },
+                "cn-d[003-004]": {
+                    "a100l": "A100-SXM4-80GB"
+                },
+                "cn-e[002-003]": {
+                    "v100": "V100-SXM2-32GB"
+                },
+                "cn-g[001-029]": {
+                    "a100l": "A100-SXM4-80GB",
+                    "2g.20gb": "__MIG_FLAG__a100l",
+                    "3g.40gb": "__MIG_FLAG__a100l",
+                    "4g.40gb": "__MIG_FLAG__a100l"
+                },
+                "cn-i001": {
+                    "a100l": "A100-PCIe-80GB"
+                },
+                "cn-j001": {
+                    "a6000": "A6000"
+                },
+                "cn-k[001-004]": {
+                    "a100": "A100-SXM4-40GB"
+                },
+                "cn-l[001-091]": {
+                    "l40s": "L40S"
+                },
+                "cn-n[001-002]": {
+                    "h100": "H100-SXM5-80GB"
+                }
+            }
         },
         "narval": {
             "host": "narval.computecanada.ca",
@@ -43,7 +90,20 @@
             "prometheus_headers_file": "secrets/drac_prometheus/headers.json",
             "start_date": "2022-04-01",
             "rgu_start_date": "2023-11-28",
-            "gpu_to_rgu_billing": "secrets/gpu_to_rgu_billing_narval.json"
+            "gpu_to_rgu_billing": "secrets/gpu_to_rgu_billing_narval.json",
+            "gpus_per_nodes": {
+                "__DEFAULTS__": {
+                    "a100": "A100-SXM4-40GB",
+                    "a100_1g.5gb": "__MIG_FLAG__a100",
+                    "a100_2g.10gb": "__MIG_FLAG__a100",
+                    "2g.10gb": "__MIG_FLAG__a100",
+                    "a100_3g.20gb": "__MIG_FLAG__a100",
+                    "3g.20gb": "__MIG_FLAG__a100",
+                    "a100_4g.20gb": "__MIG_FLAG__a100",
+                    "4g.20gb": "__MIG_FLAG__a100",
+                    "NVIDIA A100-SXM4-40GB": "A100-SXM4-40GB"
+                }
+            }
         },
         "beluga": {
             "host": "beluga.computecanada.ca",
@@ -57,7 +117,13 @@
             "prometheus_headers_file": "secrets/drac_prometheus/headers.json",
             "start_date": "2022-04-01",
             "rgu_start_date": "2024-04-03",
-            "gpu_to_rgu_billing": "secrets/gpu_to_rgu_billing_beluga.json"
+            "gpu_to_rgu_billing": "secrets/gpu_to_rgu_billing_beluga.json",
+            "gpus_per_nodes": {
+                "__DEFAULTS__": {
+                    "tesla_v100-sxm2-16gb": "V100-SXM2-16GB",
+                    "Tesla V100-SXM2-16GB": "V100-SXM2-16GB"
+                }
+            }
         },
         "graham": {
             "host": "graham.computecanada.ca",
@@ -71,7 +137,30 @@
             "prometheus_headers_file": null,
             "start_date": "2022-04-01",
             "rgu_start_date": "2024-04-03",
-            "gpu_to_rgu_billing": "secrets/gpu_to_rgu_billing_graham.json"
+            "gpu_to_rgu_billing": "secrets/gpu_to_rgu_billing_graham.json",
+            "gpus_per_nodes": {
+                "gra[828-987]": {
+                    "p100": "P100-PCIe-12GB"
+                },
+                "gra[1147-1153]": {
+                    "v100": "V100-PCIe-16GB"
+                },
+                "gra[1154-1189]": {
+                    "t4": "T4"
+                },
+                "gra[1337-1338]": {
+                    "v100": "V100-SXM2-32GB"
+                },
+                "gra1342": {
+                    "a100": "A100-SXM4-80GB"
+                },
+                "gra[1361-1362]": {
+                    "a100": "A100-PCIe-80GB"
+                },
+                "gra[1363-1373]": {
+                    "a5000": "A5000"
+                }
+            }
         },
         "cedar": {
             "host": "cedar.computecanada.ca",
@@ -85,7 +174,14 @@
             "prometheus_headers_file": null,
             "start_date": "2022-04-01",
             "rgu_start_date": "2024-04-03",
-            "gpu_to_rgu_billing": "secrets/gpu_to_rgu_billing_cedar.json"
+            "gpu_to_rgu_billing": "secrets/gpu_to_rgu_billing_cedar.json",
+            "gpus_per_nodes": {
+                "__DEFAULTS__": {
+                    "p100": "P100-PCIe-12GB",
+                    "p100l": "P100-PCIe-16GB",
+                    "v100l": "V100-PCIe-32GB"
+                }
+            }
         }
     }
 }
