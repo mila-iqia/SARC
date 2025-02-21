@@ -29,7 +29,7 @@ def check_gpu_util_per_user(
         We assume GPU-util is expressed in GPU-seconds,
         thus threshold can be expressed with a timedelta.
     time_interval
-        If given, only jobs which ran in [now - time_interval, time_interval] will be used for checking.
+        If given, only jobs which ran in [now - time_interval, now] will be used for checking.
         Default is last 7 days.
         If None, all jobs are used.
     minimum_runtime
