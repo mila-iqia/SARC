@@ -68,6 +68,6 @@ def setupLogging(verbose_level: int = 0):
             handlers=[logging.StreamHandler()],
             format="%(asctime)-15s::%(levelname)s::%(name)s::%(message)s",
             level=verbose_levels.get(
-                verbose_level, logging.DEBUG
+                verbose_level, logging.WARNING
             ),  # Default log level, if not specidied in config
         )
