@@ -111,7 +111,8 @@
             "duc_storage_command": "duc ls -d /project/.duc_databases/rrg-bonhomme-ad.sqlite /project/rrg-bonhomme-ad",
             "diskusage_report_command": "diskusage_report --project --all_users",
             "prometheus_url": "https://hyrule-thanos.calcul.ca",
-            "prometheus_headers_file": "tests/not-so-secrets/patate_prometheus/headers.json"
+            "prometheus_headers_file": "tests/not-so-secrets/patate_prometheus/headers.json",
+            "billing_is_gpu": true
         },
         "local": {
             "host": "localhost",

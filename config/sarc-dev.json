@@ -29,6 +29,7 @@
             "diskusage_report_command": "beegfs-ctl --cfgFile=/etc/beegfs/home.d/beegfs-client.conf --getquota --uid $USER --csv",
             "prometheus_url": "http://prometheus01.server.mila.quebec:9090/",
             "start_date": "2022-04-01",
+            "billing_is_gpu": true,
             "gpus_per_nodes": {
                 "__DEFAULTS__": {
                     "rtx8000": "RTX8000",

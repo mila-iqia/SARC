@@ -92,6 +92,8 @@ class ClusterConfig(BaseModel):
     gpu_to_rgu_billing: Path = None
     slurm_conf_host_path: str = "/etc/slurm/slurm.conf"
 
+    # Tell if billing (in job's requested|allocated field) is number of GPUs (True) or RGU (False)
+    billing_is_gpu = False
     # Dictionary mapping a node name -> gpu type -> IGUANE gpu name
     gpus_per_nodes: Dict[str, Dict[str, str]] = Field(default_factory=dict)
 
