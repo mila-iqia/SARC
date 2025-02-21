@@ -125,7 +125,13 @@ def create_clusters(db):
         cluster = config().clusters[cluster_name]
         db_cluster.update_one(
             {"cluster_name": cluster_name},
-            {"$setOnInsert": {"start_date": cluster.start_date, "end_date": None}},
+            {
+                "$setOnInsert": {
+                    "start_date": cluster.start_date,
+                    "end_date": None,
+                    "billing_is_gpu": cluster.billing_is_gpu,
+                }
+            },
             upsert=True,
         )
 
