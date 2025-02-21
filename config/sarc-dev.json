@@ -12,7 +12,7 @@
         "exceptions_json_path": "secrets/exceptions.json"
     },
     "account_matching": {
-        "drac_members_csv_path": "secrets/account_matching/members-rrg-bengioy-ad-2022-11-25.csv",
+        "drac_members_csv_path": "secrets/account_matching/members-rrg-bengioy-ad-2025-02-06.csv",
         "drac_roles_csv_path": "secrets/account_matching/sponsored_roles_for_Yoshua_Bengio_(CCI_jvb-000).csv",
         "make_matches_config": "secrets/account_matching/make_matches_config.json"
     },
