@@ -294,6 +294,7 @@ def create_cluster_entries(db):
                 "cluster_name": cluster_name,
                 "start_date": cluster_start_time.strftime(date_format),
                 "end_date": cluster_end_time.strftime(date_format),
+                "billing_is_gpu": True if cluster_name == "mila" else False,
             }
         )
     return cluster_entries
