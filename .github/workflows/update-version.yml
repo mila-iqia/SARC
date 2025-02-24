@@ -1,0 +1,38 @@
+# Inspired from:
+# https://gist.github.com/Broxzier/1ed980b8b3822d213e98042fc6a92040
+
+name: Update package version number "z" in "x.y.z" on PR merge
+on:
+  pull_request:
+    branches:
+      - master
+    types:
+      - closed
+
+jobs:
+  update_package_version:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+        with:
+          # Fetch full depth, otherwise the last step overwrites the last commit parent, essentially removing the graph.
+          fetch-depth: 0
+
+      - name: Update pyproject version
+        run: |
+          echo prev_package_version=$(grep -E "version = \"[0-9+]\.[0-9+]\.[0-9]+\"" pyproject.toml | sed 's/version = //g') >> $GITHUB_ENV
+
+          sed -ri 's/(version = )\"([0-9]+)\.([0-9]+)\.([0-9]+)\"/echo "\1\\\"\2.\3.$((\4+1))\\\""/ge' pyproject.toml
+
+          echo next_package_version=$(grep -E "version = \"[0-9+]\.[0-9+]\.[0-9]+\"" pyproject.toml | sed 's/version = //g') >> $GITHUB_ENV
+
+      - name: Commit changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          branch: master
+          commit_message: "Update package version: ${{ env.prev_package_version }} -> ${{ env.next_package_version }}"
+          file_pattern: 'pyproject.toml'
