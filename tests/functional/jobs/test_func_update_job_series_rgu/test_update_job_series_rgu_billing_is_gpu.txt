@@ -1,0 +1,200 @@
+==================================================================================
+Example data with expected RGU information [main cluster: mila (no billing date)]:
+==================================================================================
+
+----------
+RGU values
+----------
+{
+ "A100": 3.21,
+ "raisin_gpu_with_rgu_no_billing": 1.5,
+ "raisin_gpu_with_rgu_with_billing": 2.5,
+ "patate_gpu_with_rgu_no_billing": 3.5,
+ "patate_gpu_with_rgu_with_billing": 4.5,
+ "mila_gpu_no_rgu_no_billing": 7,
+ "mila_gpu_no_rgu_with_billing": 14,
+ "mila_gpu_with_rgu_no_billing": 21,
+ "mila_gpu_with_rgu_with_billing": 28
+}
+
+----
+Data
+----
+[
+ {
+  "cluster_name": "mila",
+  "start_time": "2023-02-12",
+  "gres_gpu": 1,
+  "gpu_type": "mila_gpu_no_rgu_no_billing",
+  "expected": {
+   "gres_gpu": 1,
+   "gres_rgu": 7,
+   "gpu_type_rgu": 7
+  }
+ },
+ {
+  "cluster_name": "mila",
+  "start_time": "2023-02-12",
+  "gres_gpu": 2,
+  "gpu_type": "mila_gpu_no_rgu_with_billing",
+  "expected": {
+   "gres_gpu": 2,
+   "gres_rgu": 28,
+   "gpu_type_rgu": 14
+  }
+ },
+ {
+  "cluster_name": "mila",
+  "start_time": "2023-02-13",
+  "gres_gpu": 3,
+  "gpu_type": "mila_gpu_with_rgu_no_billing",
+  "expected": {
+   "gres_gpu": 3,
+   "gres_rgu": 63,
+   "gpu_type_rgu": 21
+  }
+ },
+ {
+  "cluster_name": "mila",
+  "start_time": "2023-02-14",
+  "gres_gpu": 4,
+  "gpu_type": "mila_gpu_with_rgu_with_billing",
+  "expected": {
+   "gres_gpu": 4,
+   "gres_rgu": 112,
+   "gpu_type_rgu": 28
+  }
+ },
+ {
+  "cluster_name": "mila",
+  "start_time": "2023-02-14",
+  "gres_gpu": 5,
+  "gpu_type": "A100",
+  "expected": {
+   "gres_gpu": 5,
+   "gres_rgu": 16.05,
+   "gpu_type_rgu": 3.21
+  }
+ },
+ {
+  "cluster_name": "mila",
+  "start_time": "2023-02-15",
+  "gres_gpu": 1000,
+  "gpu_type": "mila_gpu_no_rgu_no_billing",
+  "expected": {
+   "gres_gpu": 1000,
+   "gres_rgu": 7000,
+   "gpu_type_rgu": 7
+  }
+ },
+ {
+  "cluster_name": "mila",
+  "start_time": "2023-02-15",
+  "gres_gpu": 18000,
+  "gpu_type": "mila_gpu_no_rgu_with_billing",
+  "expected": {
+   "gres_gpu": 18000,
+   "gres_rgu": 252000,
+   "gpu_type_rgu": 14
+  }
+ },
+ {
+  "cluster_name": "mila",
+  "start_time": "2023-02-16",
+  "gres_gpu": 1000,
+  "gpu_type": "mila_gpu_with_rgu_no_billing",
+  "expected": {
+   "gres_gpu": 1000,
+   "gres_rgu": 21000,
+   "gpu_type_rgu": 21
+  }
+ },
+ {
+  "cluster_name": "mila",
+  "start_time": "2023-02-17",
+  "gres_gpu": 4500,
+  "gpu_type": "mila_gpu_with_rgu_with_billing",
+  "expected": {
+   "gres_gpu": 4500,
+   "gres_rgu": 126000,
+   "gpu_type_rgu": 28
+  }
+ },
+ {
+  "cluster_name": "mila",
+  "start_time": "2023-02-17",
+  "gres_gpu": 400,
+  "gpu_type": "A100",
+  "expected": {
+   "gres_gpu": 400,
+   "gres_rgu": 1284.0,
+   "gpu_type_rgu": 3.21
+  }
+ },
+ {
+  "cluster_name": "mila",
+  "start_time": "2023-02-18",
+  "gres_gpu": 1000,
+  "gpu_type": "mila_gpu_no_rgu_no_billing",
+  "expected": {
+   "gres_gpu": 1000,
+   "gres_rgu": 7000,
+   "gpu_type_rgu": 7
+  }
+ },
+ {
+  "cluster_name": "mila",
+  "start_time": "2023-02-19",
+  "gres_gpu": 18000,
+  "gpu_type": "mila_gpu_no_rgu_with_billing",
+  "expected": {
+   "gres_gpu": 18000,
+   "gres_rgu": 252000,
+   "gpu_type_rgu": 14
+  }
+ },
+ {
+  "cluster_name": "mila",
+  "start_time": "2023-02-20",
+  "gres_gpu": 1000,
+  "gpu_type": "mila_gpu_with_rgu_no_billing",
+  "expected": {
+   "gres_gpu": 1000,
+   "gres_rgu": 21000,
+   "gpu_type_rgu": 21
+  }
+ },
+ {
+  "cluster_name": "mila",
+  "start_time": "2023-02-21",
+  "gres_gpu": 4500,
+  "gpu_type": "mila_gpu_with_rgu_with_billing",
+  "expected": {
+   "gres_gpu": 4500,
+   "gres_rgu": 126000,
+   "gpu_type_rgu": 28
+  }
+ },
+ {
+  "cluster_name": "mila",
+  "start_time": "2023-02-22",
+  "gres_gpu": 400,
+  "gpu_type": "A100",
+  "expected": {
+   "gres_gpu": 400,
+   "gres_rgu": 1284.0,
+   "gpu_type_rgu": 3.21
+  }
+ },
+ {
+  "cluster_name": "hyrule",
+  "start_time": "2023-02-21",
+  "gres_gpu": 5678,
+  "gpu_type": "hyrule_gpu_9",
+  "expected": {
+   "gres_gpu": 5678,
+   "gres_rgu": NaN,
+   "gpu_type_rgu": NaN
+  }
+ }
+]
