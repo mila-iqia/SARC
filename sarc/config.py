@@ -71,7 +71,7 @@ class BaseModel(_BaseModel):
         return type(self)(**new_arguments)
 
 
-MIG_FLAG = "__MIG__"
+MIG_FLAG = "__MIG_FLAG__"
 DEFAULTS_FLAG = "__DEFAULTS__"
 
 

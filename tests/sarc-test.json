@@ -34,7 +34,12 @@
             "duc_inodes_command": null,
             "duc_storage_command": null,
             "diskusage_report_command": null,
-            "prometheus_url": "http://monitoring.server.raisin.quebec:9090/"
+            "prometheus_url": "http://monitoring.server.raisin.quebec:9090/",
+            "gpus_per_nodes": {
+                "__DEFAULTS__": {
+                    "gpu2": "THE GPU II"
+                }
+            }
         },
         "raisin_no_prometheus": {
             "host": "raisin_no_prometheus",
