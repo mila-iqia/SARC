@@ -478,7 +478,11 @@ def _compute_rgu_stats_from_gpu_count(
     # Map GPU type to RGU for related jobs.
     # If a GPU type is not found in any of dicts,
     # mapping will be set to NaN.
-    col_gpu_to_rgu = df["allocated.gpu_type"][slice_rows].map(gpu_to_rgu)
+    col_gpu_to_rgu = (
+        df["allocated.gpu_type"][slice_rows]
+        .map(_gpu_type_to_rgu_mapper(gpu_to_rgu))
+        .astype("float")
+    )
     # Get previous job billing, interpreted as GPU count.
     col_gpu_count = df["allocated.gres_gpu"][slice_rows]
     # Then update columns
@@ -514,7 +518,11 @@ def _compute_rgu_stats_from_scaled_rgu(
     # Map GPU type to RGU and billing for related jobs.
     # If a GPU type is not found in any of dicts,
     # mapping will be set to NaN.
-    col_gpu_to_rgu = df["allocated.gpu_type"][slice_rows].map(gpu_to_rgu)
+    col_gpu_to_rgu = (
+        df["allocated.gpu_type"][slice_rows]
+        .map(_gpu_type_to_rgu_mapper(gpu_to_rgu))
+        .astype("float")
+    )
     col_gpu_to_billing = df["allocated.gpu_type"][slice_rows].map(
         curr_gpu_billing.gpu_to_billing
     )
@@ -526,6 +534,22 @@ def _compute_rgu_stats_from_scaled_rgu(
         col_job_billing / col_gpu_to_billing
     ) * col_gpu_to_rgu
     df.loc[slice_rows, "allocated.gpu_type_rgu"] = col_gpu_to_rgu
+
+
+def _gpu_type_to_rgu_mapper(gpu_to_rgu: Dict[str, float]):
+    """
+    Return a function to map job's allocated.gpu_type to RGU value.
+
+    We need to use a function, instead of a simple dictionary,
+    to handle harmonized MIG names, which don't exactly match GPU names.
+
+    Example: `a100_2g.10gb` may be harmonized as: `A100-SXM4-40GB : a100_2g.10gb`
+    (i.e. harmonized GPU name + " : " + MIG name).
+    """
+    # NB: we assume RGU value for a MIG == RGU value from whole GPU.
+    return lambda gpu_type: gpu_to_rgu.get(
+        gpu_type.split(":")[0].rstrip() if gpu_type else None
+    )
 
 
 def compute_cost_and_waste(full_df: pandas.DataFrame) -> pandas.DataFrame:

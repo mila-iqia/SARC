@@ -3,7 +3,7 @@ from __future__ import annotations
 import bisect
 import logging
 from datetime import datetime, time
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 from pydantic import field_validator
 from pydantic_mongo import AbstractRepository, PydanticObjectId
@@ -22,7 +22,7 @@ class NodeGPUMapping(BaseModel):
 
     cluster_name: str
     since: datetime
-    node_to_gpu: Dict[str, str]
+    node_to_gpu: Dict[str, List[str]]
 
     @field_validator("since", mode="before")
     @classmethod
@@ -46,7 +46,7 @@ class NodeGPUMappingRepository(AbstractRepository[NodeGPUMapping]):
 
     @scraping_mode_required
     def save_node_gpu_mapping(
-        self, cluster_name: str, since: str, node_to_gpu: Dict[str, str]
+        self, cluster_name: str, since: str, node_to_gpu: Dict[str, List[str]]
     ):
         mapping = NodeGPUMapping(
             cluster_name=cluster_name, since=since, node_to_gpu=node_to_gpu
