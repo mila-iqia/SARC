@@ -1,12 +1,11 @@
 import logging
 
-from sarc.config import config, scraping_mode_required
+from sarc.config import config
 from sarc.jobs.node_gpu_mapping import get_node_to_gpu
 
 logger = logging.getLogger(__name__)
 
 
-@scraping_mode_required
 def check_prometheus_vs_slurmconfig(cluster_name=None):
     """
     Check if GPU types from Prometheus are the same as the ones in slurm config files.
@@ -35,10 +34,6 @@ def check_prometheus_vs_slurmconfig(cluster_name=None):
         if not cluster.prometheus_url:
             continue
 
-        query = f'slurm_job_utilization_gpu_memory{{cluster="{cluster.name}"}}'
-        results = cluster.prometheus.custom_query(query)
-        prometheus_gpu_types = {result["metric"]["gpu_type"] for result in results}
-
         # Get slurm config GPU types from latest
         # node => GPU mappings stored in database
         slurmconfig_gpu_types = set()
@@ -60,6 +55,11 @@ def check_prometheus_vs_slurmconfig(cluster_name=None):
                 f"You may need to call `sarc acquire slurmconfig -c {cluster.name}`"
             )
         else:
+            # Get Prometheus GPU types
+            query = f'slurm_job_utilization_gpu_memory{{cluster="{cluster.name}"}}'
+            results = cluster.prometheus.custom_query(query)
+            prometheus_gpu_types = {result["metric"]["gpu_type"] for result in results}
+
             # Warn for each prometheus GPU not found in slurm config GPUs.
             only_in_prometheus = prometheus_gpu_types - slurmconfig_gpu_types
             for gpu_type in only_in_prometheus:
