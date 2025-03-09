@@ -64,5 +64,6 @@ def check_prometheus_vs_slurmconfig(cluster_name=None):
             only_in_prometheus = prometheus_gpu_types - slurmconfig_gpu_types
             for gpu_type in only_in_prometheus:
                 logger.warning(
-                    f"[prometheus][{cluster.name}] gpu_type not found in slurm config file: {gpu_type}"
+                    f"[prometheus][{cluster.name}] gpu_type not found in slurm config file: {gpu_type}. "
+                    f"Expected: {', '.join(sorted(slurmconfig_gpu_types))}"
                 )
