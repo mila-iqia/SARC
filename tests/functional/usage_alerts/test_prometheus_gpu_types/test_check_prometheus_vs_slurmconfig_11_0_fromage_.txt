@@ -1,3 +1,3 @@
 Both slurm config data and prometheus data available, but prometheus GPU not in slurm config: warning.
 
-[prometheus][fromage] gpu_type not found in slurm config file: phantom_gpu
+[prometheus][fromage] gpu_type not found in slurm config file: phantom_gpu. Expected: gpu0
