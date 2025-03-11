@@ -1,4 +1,9 @@
 {
+    "logging": {
+        "log_level": "WARNING",
+        "OTLP_endpoint": "http://loki01.server.mila.quebec:3100/otlp/v1/logs",
+        "service_name": "sarc-dev"
+    },
     "mongo": {
         "connection_string": "mongodb://writeuser:REPLACEME@localhost:27017/sarc",
         "database_name": "sarc"
@@ -12,7 +17,7 @@
         "exceptions_json_path": "secrets/exceptions.json"
     },
     "account_matching": {
-        "drac_members_csv_path": "secrets/account_matching/members-rrg-bengioy-ad-2022-11-25.csv",
+        "drac_members_csv_path": "secrets/account_matching/members-rrg-bengioy-ad-2025-02-06.csv",
         "drac_roles_csv_path": "secrets/account_matching/sponsored_roles_for_Yoshua_Bengio_(CCI_jvb-000).csv",
         "make_matches_config": "secrets/account_matching/make_matches_config.json"
     },
