@@ -31,7 +31,13 @@ class SAcctScraper:
     The scraper is currently hard-coded to fetch data for a day.
     """
 
-    def __init__(self, cluster: ClusterConfig, day: datetime):
+    def __init__(
+        self,
+        cluster: ClusterConfig,
+        start: datetime,
+        end: datetime = None,
+        user: str = None,
+    ):
         """Initialize a SAcctScraper.
 
         Arguments:
@@ -41,9 +47,23 @@ class SAcctScraper:
                 00:00 on the next day.
         """
         self.cluster = cluster
-        self.day = day
-        self.start = datetime.combine(day, time.min)
-        self.end = self.start + timedelta(days=1)
+        if end is None:
+            day = start
+            self.day = day
+            self.start = datetime.combine(day, time.min)
+            self.end = self.start + timedelta(days=1)
+        else:
+            self.day = None
+            self.start = start
+            self.end = end
+        self.user = user
+        self.get_raw = with_cache(
+            self.fetch_raw,
+            subdirectory="sacct",
+            key=self._cache_key,
+            live=True,
+            on_disk=(self.user is None),
+        )
 
     @trace_decorator()
     def fetch_raw(self) -> dict:
@@ -53,7 +73,8 @@ class SAcctScraper:
         end = self.end.strftime(fmt)
         accounts = self.cluster.accounts and ",".join(self.cluster.accounts)
         accounts_option = f"-A {accounts}" if accounts else ""
-        cmd = f"{self.cluster.sacct_bin} {accounts_option} -X -S {start} -E {end} --allusers --json"
+        user_option = "--allusers" if self.user is None else f"--user {self.user}"
+        cmd = f"{self.cluster.sacct_bin} {accounts_option} -X -S {start} -E {end} {user_option} --json"
         logger.info(f"{self.cluster.name} $ {cmd}")
         if self.cluster.host == "localhost":
             results = subprocess.run(
@@ -65,16 +86,17 @@ class SAcctScraper:
 
     def _cache_key(self):
         today = datetime.combine(date.today(), datetime.min.time())
-        if self.day < today:
+        if self.day is None:
+            fmt = "%Y-%m-%dT%H:%M"
+            startstr = self.start.strftime(fmt)
+            endstr = self.end.strftime(fmt)
+            return f"{self.cluster.name}.{startstr}.{endstr}.user_{self.user}.json"
+        elif self.day < today:
             daystr = self.day.strftime("%Y-%m-%d")
             return f"{self.cluster.name}.{daystr}.json"
         else:
             # Not cachable
             return None
-
-    @with_cache(subdirectory="sacct", key=_cache_key, live=True)
-    def get_raw(self) -> dict:
-        return self.fetch_raw()
 
     def __len__(self) -> int:
         return len(self.get_raw()["jobs"])
@@ -247,7 +269,11 @@ class SAcctScraper:
 
 @trace_decorator()
 def sacct_mongodb_import(
-    cluster: ClusterConfig, day: datetime, no_prometheus: bool
+    cluster: ClusterConfig,
+    start: datetime,
+    no_prometheus: bool,
+    end: datetime = None,
+    user: str = None,
 ) -> None:
     """Fetch sacct data and store it in MongoDB.
 
@@ -262,7 +288,7 @@ def sacct_mongodb_import(
         If True, avoid any scraping requiring prometheus connection.
     """
     collection = _jobs_collection()
-    scraper = SAcctScraper(cluster, day)
+    scraper = SAcctScraper(cluster, start, end, user)
     logger.info("Getting the sacct data...")
     scraper.get_raw()
     logger.info(
