@@ -19,6 +19,11 @@ def _str_to_dt(dt_str: str) -> datetime:
     return datetime.strptime(dt_str, "%Y-%m-%d")
 
 
+def _str_to_extended_dt(dt_str: str) -> datetime:
+    """Parse date up to minute, with format %Y-%m-%dT%H:%M"""
+    return datetime.strptime(dt_str, "%Y-%m-%dT%H:%M")
+
+
 def parse_dates(dates: list[str], cluster_name: str) -> list[tuple[datetime, bool]]:
     parsed_dates = []  # return values are tuples (date, is_auto)
     for date in dates:
@@ -78,11 +83,16 @@ def _dates_set_last_date(cluster_name: str, date: datetime) -> None:
     )
 
 
+# pylint: disable=logging-not-lazy,too-many-branches
 @dataclass
 class AcquireJobs:
     cluster_names: list[str] = field(alias=["-c"], default_factory=list)
 
     dates: list[str] = field(alias=["-d"], default_factory=list)
+
+    time_from: str = field(alias=["-a"], default=None)
+    time_to: str = field(alias=["-b"], default=None)
+    user: str = field(alias=["-u"], default=None)
 
     no_prometheus: bool = field(
         alias=["-s"],
@@ -91,34 +101,87 @@ class AcquireJobs:
     )
 
     def execute(self) -> int:
+        time_from = None
+        time_to = None
+        if self.dates:
+            if self.time_from or self.time_to or self.user:
+                logging.error(
+                    "Parameters mutually exclusive: either --date "
+                    "or (--time_from ... --time_to ... [--user ...]), not both."
+                )
+                return -1
+        elif self.time_from or self.time_to:
+            if not self.time_from or not self.time_to:
+                logging.error("Both parameters needed: --time_from, --time_to")
+                return -1
+            time_from = _str_to_extended_dt(self.time_from)
+            time_to = _str_to_extended_dt(self.time_to)
+            if time_from >= time_to:
+                logging.error(
+                    f"Expected time_from < time_to, instead got time_from: {time_from}, time_to: {time_to}"
+                )
+                return -1
+
         cfg = config("scraping")
         clusters_configs = cfg.clusters
 
         for cluster_name in self.cluster_names:
             try:
-                for date, is_auto in parse_dates(self.dates, cluster_name):
+                if time_from is not None:
                     with using_trace(
-                        "AcquireJobs", "acquire_cluster_data", exception_types=()
+                        "AcquireJobs",
+                        "acquire_cluster_data_from_interval",
+                        exception_types=(),
                     ) as span:
                         span.set_attribute("cluster_name", cluster_name)
-                        span.set_attribute("date", str(date))
-                        span.set_attribute("is_auto", is_auto)
+                        span.set_attribute("time_from", str(time_from))
+                        span.set_attribute("time_to", str(time_to))
+                        span.set_attribute("user", self.user)
                         try:
                             logger.info(
-                                f"Acquire data on {cluster_name} for date: {date} (is_auto={is_auto})"
+                                f"Acquire data on {cluster_name} for interval: {time_from} to {time_to}"
+                                + (f" for user {self.user}" if self.user else "")
                             )
 
                             sacct_mongodb_import(
-                                clusters_configs[cluster_name], date, self.no_prometheus
+                                clusters_configs[cluster_name],
+                                time_from,
+                                self.no_prometheus,
+                                time_to,
+                                self.user,
                             )
-                            if is_auto:
-                                _dates_set_last_date(cluster_name, date)
                         # pylint: disable=broad-exception-caught
                         except Exception as e:
                             logger.error(
-                                f"Failed to acquire data for {cluster_name} on {date}: {type(e).__name__}: {e}"
+                                f"Failed to acquire data on {cluster_name} for interval: {time_from} to {time_to}" + (f" for user {self.user}" if self.user else "") +  f": {type(e).__name__}: {e}"
                             )
                             raise e
+                else:
+                    for date, is_auto in parse_dates(self.dates, cluster_name):
+                        with using_trace(
+                            "AcquireJobs", "acquire_cluster_data", exception_types=()
+                        ) as span:
+                            span.set_attribute("cluster_name", cluster_name)
+                            span.set_attribute("date", str(date))
+                            span.set_attribute("is_auto", is_auto)
+                            try:
+                                logging.info(
+                                    f"Acquire data on {cluster_name} for date: {date} (is_auto={is_auto})"
+                                )
+
+                                sacct_mongodb_import(
+                                    clusters_configs[cluster_name],
+                                    date,
+                                    self.no_prometheus,
+                                )
+                                if is_auto:
+                                    _dates_set_last_date(cluster_name, date)
+                            # pylint: disable=broad-exception-caught
+                            except Exception as e:
+                                logging.error(
+                                    f"Failed to acquire data for {cluster_name} on {date}: {e}"
+                                )
+                                raise e
             # pylint: disable=broad-exception-caught
             except Exception as e:
                 logger.error(
