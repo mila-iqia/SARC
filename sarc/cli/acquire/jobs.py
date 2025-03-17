@@ -18,6 +18,7 @@ def _str_to_dt(dt_str: str) -> datetime:
 
 
 def _str_to_extended_dt(dt_str: str) -> datetime:
+    """Parse date up to minute, with format %Y-%m-%dT%H:%M"""
     return datetime.strptime(dt_str, "%Y-%m-%dT%H:%M")
 
 
@@ -80,6 +81,7 @@ def _dates_set_last_date(cluster_name: str, date: datetime) -> None:
     )
 
 
+# pylint: disable=logging-not-lazy,too-many-branches
 @dataclass
 class AcquireJobs:
     cluster_names: list[str] = field(alias=["-c"], default_factory=list)
@@ -100,9 +102,10 @@ class AcquireJobs:
         time_from = None
         time_to = None
         if self.dates:
-            if self.time_from or self.time_to:
+            if self.time_from or self.time_to or self.user:
                 logging.error(
-                    "Parameters mutually exclusive: --date | (--time_from, --time_to)"
+                    "Parameters mutually exclusive: either --date "
+                    "or (--time_from ... --time_to ... [--user ...]), not both."
                 )
                 return -1
         elif self.time_from or self.time_to:
@@ -114,12 +117,6 @@ class AcquireJobs:
             if time_from >= time_to:
                 logging.error(
                     f"Expected time_from < time_to, instead got time_from: {time_from}, time_to: {time_to}"
-                )
-                return -1
-            interval = time_to - time_from
-            if interval > timedelta(hours=1):
-                logging.error(
-                    f"You try to scrap from more than 1 hour ({interval}). Instead consider scraping entire days using argument --date."
                 )
                 return -1
 
@@ -137,9 +134,11 @@ class AcquireJobs:
                         span.set_attribute("cluster_name", cluster_name)
                         span.set_attribute("time_from", str(time_from))
                         span.set_attribute("time_to", str(time_to))
+                        span.set_attribute("user", self.user)
                         try:
                             logging.info(
                                 f"Acquire data on {cluster_name} for interval: {time_from} to {time_to}"
+                                + (f" for user {self.user}" if self.user else "")
                             )
 
                             sacct_mongodb_import(
@@ -152,7 +151,8 @@ class AcquireJobs:
                         # pylint: disable=broad-exception-caught
                         except Exception as e:
                             logging.error(
-                                f"Failed to acquire data for {cluster_name} in interval {time_from} to {time_to}: {e}"
+                                f"Failed to acquire data on {cluster_name} for interval: {time_from} to {time_to}: {e}"
+                                + (f" for user {self.user}" if self.user else "")
                             )
                             raise e
                 else:
