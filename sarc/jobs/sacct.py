@@ -38,7 +38,8 @@ class SAcctScraper:
     def __init__(
         self,
         cluster: ClusterConfig,
-        start: datetime,
+        day: datetime = None,
+        start: datetime = None,
         end: datetime = None,
         user: str = None,
     ):
@@ -51,12 +52,15 @@ class SAcctScraper:
                 00:00 on the next day.
         """
         self.cluster = cluster
-        if end is None:
-            day = start
+        if day is not None:
+            assert start is None
+            assert end is None
             self.day = day
             self.start = datetime.combine(day, time.min)
             self.end = self.start + timedelta(days=1)
         else:
+            assert start is not None
+            assert end is not None
             self.day = None
             self.start = start
             self.end = end
@@ -316,8 +320,9 @@ class SAcctScraper:
 @trace_decorator()
 def sacct_mongodb_import(
     cluster: ClusterConfig,
-    start: datetime,
+    day: Optional[datetime],
     no_prometheus: bool,
+    start: datetime = None,
     end: datetime = None,
     user: str = None,
 ) -> None:
@@ -334,7 +339,7 @@ def sacct_mongodb_import(
         If True, avoid any scraping requiring prometheus connection.
     """
     collection = _jobs_collection()
-    scraper = SAcctScraper(cluster, start, end, user)
+    scraper = SAcctScraper(cluster, day, start, end, user)
     logger.info("Getting the sacct data...")
     scraper.get_raw()
     logger.info(
