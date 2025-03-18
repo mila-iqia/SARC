@@ -143,8 +143,9 @@ class AcquireJobs:
 
                             sacct_mongodb_import(
                                 clusters_configs[cluster_name],
-                                time_from,
+                                None,
                                 self.no_prometheus,
+                                time_from,
                                 time_to,
                                 self.user,
                             )
