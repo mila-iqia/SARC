@@ -1,0 +1,33 @@
+query:
+  start: "2024-11-01"
+  end: "2024-11-30"
+
+layout:
+  table: true
+  plot: false
+  editor: true
+
+table:
+  sort: -gpu_utilization
+  filters:
+    - jobs.gpu_utilization > 0
+    - (jobs.end_time - jobs.start_time).dt.days <= 10
+  columns:
+    - user
+    - cluster_name
+    - gpu_utilization
+    - hours
+    - job_state
+    - name
+  new_columns:
+    hours: ((jobs.end_time - jobs.start_time).dt.total_seconds() // 3600).astype(int)
+  highlight:
+    green: jobs.gpu_utilization > 0.8
+    bold: jobs.cluster_name == "mila"
+  limit: 100
+
+plot:
+  geom_histogram:
+    ~x: hours
+    ~fill: cluster_name
+    bins: 30

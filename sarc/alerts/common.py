@@ -13,10 +13,13 @@ from pathlib import Path
 from typing import Optional, Union
 
 import gifnoc
-from apischema import ValidationError, deserialize, deserializer, serialize, serializer
-from dateutil import parser as dateparser
+from apischema import deserialize, serialize
 from gifnoc import TaggedSubclass
 from gifnoc.std import time
+
+# load custom serializing logic
+from ..common import utils  # noqa: F401
+
 
 logger = logging.getLogger(__name__)
 
@@ -250,55 +253,6 @@ class HealthCheck:
         if write:
             results.save(self.directory)
         return results
-
-
-@serializer
-def _serialize_timedelta(td: timedelta) -> str:
-    """Serialize timedelta as Xs (seconds) or Xus (microseconds)."""
-    seconds = int(td.total_seconds())
-    if td.microseconds:
-        return f"{seconds}{td.microseconds:06}us"
-    else:
-        return f"{seconds}s"
-
-
-@deserializer
-def _deserialize_timedelta(s: str) -> timedelta:
-    """Deserialize a combination of days, hours, etc. as a timedelta."""
-    units = {
-        "d": "days",
-        "h": "hours",
-        "m": "minutes",
-        "s": "seconds",
-        "ms": "milliseconds",
-        "us": "microseconds",
-    }
-    sign = 1
-    if s.startswith("-"):
-        s = s[1:]
-        sign = -1
-    kw = {}
-    parts = re.split(string=s, pattern="([a-z ]+)")
-    if parts[-1] != "":
-        raise ValidationError("timedelta representation must end with a unit")
-    for i in range(len(parts) // 2):
-        n = parts[i * 2]
-        unit = parts[i * 2 + 1].strip()
-        if unit not in units:
-            raise ValidationError(f"'{unit}' is not a valid timedelta unit")
-        try:
-            kw[units[unit]] = float(n)
-        except ValueError as err:
-            raise ValidationError(
-                f"Could not convert '{n}' ({units[unit]}) to float"
-            ) from err
-    return sign * timedelta(**kw)
-
-
-@deserializer
-def _deserialize_date(s: str) -> datetime:
-    """This is mostly so that things work with Python <3.11."""
-    return dateparser.parse(s)
 
 
 @dataclass

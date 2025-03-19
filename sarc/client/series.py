@@ -6,10 +6,10 @@ from typing import Callable
 import numpy as np
 import pandas
 from flatten_dict import flatten
-from tqdm import tqdm
 
 from sarc.client.job import count_jobs, get_jobs
 from sarc.client.users.api import User, get_users
+from sarc.common.utils import tqdm
 from sarc.config import MTL
 from sarc.traces import trace_decorator
 

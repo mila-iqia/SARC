@@ -1,0 +1,54 @@
+Please edit the included YAML configuration to implement whatever instructions
+are included in ## comments, which you should edit out. Only return the modified
+configuration, without any ``` delimiters.
+
+The configuration matches to the following dataclasses:
+
+@dataclass
+class Query:
+    cluster: str | None = None
+    start: datetime | None = None
+    end: datetime | None = None
+
+@dataclass
+class Table:
+    # The strings are eval() expressions that have access to jobs (a DataFrame)
+    # and pandas via the variable pd
+    filters: list[str] = field(default_factory=list)
+    highlight: dict[str, str] = field(default_factory=dict)
+    columns: list[str] = field(default_factory=list)
+    new_columns: dict[str, str] = field(default_factory=dict)
+    sort: str | None = None
+    limit: int = 100
+
+@dataclass(frozen=True)
+class Layout:
+    editor: str | bool = True
+    table: str | bool = False
+    plot: str | bool = True
+
+@dataclass
+class PlottingConfig:
+    query: Query
+    layout: Layout = Layout()
+    plot: Plot | None = None
+    table: Table | None = None
+
+Plot is formatted specially:
+
+* It builds a plotnine ggplot
+* Any keys starting with a tilde such as ~x are arguments to aes(...)
+* Top-level keys should match a function in plotnine
+* Arguments to top-level keys are given to these functions
+* All the top-level keys are added together to the resulting plot
+
+Columns in the jobs dataframe:
+* cluster_name: str
+* user: str
+* gpu_utilization: float  # between 0 and 1
+* start_time: datetime
+* end_time: datetime
+
+```
+{{ args[0] }}
+```

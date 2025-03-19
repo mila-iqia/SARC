@@ -1,0 +1,199 @@
+
+body {
+    margin: 0;
+}
+
+.double-pane {
+    padding: 10px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: row;
+    width: 100vw;
+    height: 100vh;
+}
+
+.editor-pane {
+    display: flex;
+    flex-direction: column;
+    margin: 10px;
+    /* background: lightgreen; */
+    flex: 1;
+    /* max-width: 500px; */
+}
+/* 
+live-element {
+    height: 100%;
+} */
+
+.config-editor {
+    display: flex;
+    flex-direction: column;
+    /* height: 80vh; */
+    height: 100%;
+    border: 2px solid black;
+    color: white;
+    background: black;
+    box-sizing: border-box;
+}
+
+.config-editor[status="saved"] {
+    border: 2px solid green;
+    background: green;
+}
+
+.config-editor[status="dirty"] {
+    border: 2px solid #9a5;
+    background: #9a5;
+}
+
+.config-editor[status="error"] {
+    border: 2px solid red;
+    background: red;
+}
+
+.config-editor[status="saving"],
+.config-editor[status="thinking"]
+{
+    border: 2px solid grey;
+    background: grey;
+}
+
+
+.config-editor .editor-header .editor-buttons span {
+    cursor: pointer;
+}
+
+.config-editor .editor-header {
+    height: 1.5em;
+}
+
+.config-editor .editor-header,
+.config-editor .editor-footer
+{
+    display: flex;
+    flex-direction: row;
+    font-size: 12px;
+}
+
+.editor-title {
+    flex: 1;
+}
+
+.config-editor .editor {
+    flex-grow: 1;
+}
+
+.config-editor .outcome {
+    color: white;
+    background: black;
+}
+
+.editor-filter {
+    display: flex;
+    border: 1px solid black;
+    border-bottom: none;
+}
+.editor-filter input {
+    flex: 1;
+    font-size: 16px;
+    margin-left: 10px;
+    outline: none;
+    border: none;
+}
+
+
+.editor-pane .editor-box {
+    flex: 1;
+    /* border: 1px solid black; */
+}
+
+.plot-pane {
+    margin: 10px;
+    /* background: cyan; */
+    flex: 1;
+    overflow: scroll;
+}
+
+.plot-pane img {
+    width: 100%;
+}
+
+.progress {
+    display: flex;
+    flex-direction: row;
+}
+
+.progress_desc {
+    margin-right: 10px;
+}
+
+.progress_bar_holder {
+    flex: 1;
+    background: #eee;
+}
+    
+.progress_bar {
+    height: 100%;
+    background: #88f;
+}
+
+.progress_n {
+    width: 5em;
+    text-align: right;
+}
+
+
+
+
+.allo {
+    font-style: italic;
+}
+
+.red {
+    background: pink;
+}
+
+.green {
+    background: lightgreen;
+}
+
+.blue {
+    background: lightblue;
+}
+
+.yellow {
+    background: lightyellow;
+}
+
+.orange {
+    background: orange;
+}
+
+.bold {
+    font-weight: bold;
+}
+
+textarea {
+    width: 100%;
+    height: 200px;
+}
+
+table {
+    border-collapse: collapse;
+}
+
+th {
+    color: white;
+    background: black;
+    text-align: left;
+}
+
+td, th {
+    padding-left: 5px;
+    padding-right: 5px;
+}
+
+/* tr:nth-child(odd) {
+    background: #eee;
+} */
+
