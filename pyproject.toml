@@ -1,7 +1,7 @@
 
 [project]
 authors = [{ name = "Mila-IDT" }]
-requires-python = "<4.0,>=3.9"
+requires-python = "<4.0,>=3.10"
 dependencies = [
     "fabric<4.0.0,>=3.0.0",
     "prometheus-api-client<1.0.0,>=0.5.2",
@@ -21,10 +21,13 @@ dependencies = [
     "opentelemetry-api<2.0.0,>=1.23.0",
     "opentelemetry-sdk<2.0.0,>=1.23.0",
     "requests-mock<2.0.0,>=1.11.0",
-    "gifnoc==0.2.3",
+    "gifnoc==0.4.1",
     "watchdog<5.0.0,>=4.0.0",
     "python-dateutil<3.0.0.0,>=2.9.0.post0",
     "pandas>=2.2.3",
+    "starbear[server]>=0.2.8",
+    "plotnine>=0.14.5",
+    "griptape[all]>=0.20.0",
 ]
 name = "sarc"
 version = "0.1.0"
@@ -62,8 +65,11 @@ disable = [
 ]
 extension-pkg-whitelist = "pydantic"
 
-[tool.isort]
-profile = "black"
+[tool.ruff.lint]
+extend-select = ["I"]
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
 
 [project.scripts]
 sarc = "sarc.cli:main"
