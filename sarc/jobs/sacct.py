@@ -46,6 +46,13 @@ class SAcctScraper:
             day: The day we wish to scrape, as a datetime object. The time
                 does not matter: we will fetch from 00:00 on that day to
                 00:00 on the next day.
+            start: the datetime from which we wish to scrape.
+                Used only if `day` is None. May be precise
+                up to time. To be used with `end`.
+            end: the datetime until which we wish to scrape.
+                Used only if `day` is None. May be precise
+                up to time. To be used with `start`.
+            user: user for which we wish to scrape.
         """
         self.cluster = cluster
         if day is not None:
@@ -61,13 +68,6 @@ class SAcctScraper:
             self.start = start
             self.end = end
         self.user = user
-        self.get_raw = with_cache(
-            self.fetch_raw,
-            subdirectory="sacct",
-            key=self._cache_key,
-            live=True,
-            on_disk=(self.user is None),
-        )
 
     @trace_decorator()
     def fetch_raw(self) -> dict:
@@ -90,17 +90,22 @@ class SAcctScraper:
 
     def _cache_key(self):
         today = datetime.combine(date.today(), datetime.min.time())
+        userstr = "" if self.user is None else f".user_{self.user}"
         if self.day is None:
             fmt = "%Y-%m-%dT%H:%M"
             startstr = self.start.strftime(fmt)
             endstr = self.end.strftime(fmt)
-            return f"{self.cluster.name}.{startstr}.{endstr}.user_{self.user}.json"
+            return f"{self.cluster.name}.{startstr}.{endstr}{userstr}.json"
         elif self.day < today:
             daystr = self.day.strftime("%Y-%m-%d")
-            return f"{self.cluster.name}.{daystr}.json"
+            return f"{self.cluster.name}.{daystr}{userstr}.json"
         else:
             # Not cachable
             return None
+
+    @with_cache(subdirectory="sacct", key=_cache_key, live=True)
+    def get_raw(self) -> dict:
+        return self.fetch_raw()
 
     def __len__(self) -> int:
         return len(self.get_raw()["jobs"])
@@ -291,6 +296,14 @@ def sacct_mongodb_import(
         The day for which to fetch the data. The time does not matter.
     no_prometheus: bool
         If True, avoid any scraping requiring prometheus connection.
+    start: datetime
+        The datetime from which to fetch the data. Time matters.
+        Used with `end`, and only if `day` is None.
+    end: date
+        The datetime up to which we fetch the data. Time matters.
+        Use with `start`, and only if `day` is None.
+    user: str
+        Optional user for which to fetch the data.
     """
     collection = _jobs_collection()
     scraper = SAcctScraper(cluster, day, start, end, user)
