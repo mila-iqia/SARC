@@ -90,9 +90,31 @@ class AcquireJobs:
 
     dates: list[str] = field(alias=["-d"], default_factory=list)
 
-    time_from: str = field(alias=["-a"], default=None)
-    time_to: str = field(alias=["-b"], default=None)
-    user: str = field(alias=["-u"], default=None)
+    time_from: str = field(
+        alias=["-a"],
+        default=None,
+        help=(
+            "Acquire jobs from this datetime. "
+            "Expected format: %Y-%m-%dT%H:%M. "
+            "Should be used along with --time_to. "
+            "Mutually exclusive with --dates."
+        ),
+    )
+    time_to: str = field(
+        alias=["-b"],
+        default=None,
+        help=(
+            "Acquire jobs until this datetime. "
+            "Expected format: %Y-%m-%dT%H:%M. "
+            "Should be used along with --time_from. "
+            "Mutually exclusive with --dates."
+        ),
+    )
+    user: str = field(
+        alias=["-u"],
+        default=None,
+        help="Acquire jobs only for this user. Used only with --time_from --time_to.",
+    )
 
     no_prometheus: bool = field(
         alias=["-s"],
@@ -138,8 +160,11 @@ class AcquireJobs:
                         span.set_attribute("time_to", str(time_to))
                         span.set_attribute("user", self.user)
                         try:
+                            interval_minutes = (
+                                time_to - time_from
+                            ).total_seconds() / 60
                             logging.info(
-                                f"Acquire data on {cluster_name} for interval: {time_from} to {time_to}"
+                                f"Acquire data on {cluster_name} for interval: {time_from} to {time_to} ({interval_minutes} min)"
                                 + (f" for user {self.user}" if self.user else "")
                             )
 
