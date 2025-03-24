@@ -1,17 +1,15 @@
 import json
 import logging
-import math
 import subprocess
-import time as profiling
 from datetime import date, datetime, time, timedelta
-from typing import Iterator, List, Optional
+from typing import Iterator, Optional
 
 from hostlist import expand_hostlist
 from tqdm import tqdm
 
 from sarc.cache import with_cache
 from sarc.client.job import SlurmJob, _jobs_collection
-from sarc.config import MTL, UTC, ClusterConfig
+from sarc.config import UTC, ClusterConfig
 from sarc.jobs.node_gpu_mapping import get_node_to_gpu
 from sarc.jobs.series import get_job_time_series
 from sarc.traces import trace_decorator, using_trace
@@ -314,12 +312,10 @@ def sacct_mongodb_import(
     logger.info(
         f"Saving into mongodb collection '{collection.Meta.collection_name}'..."
     )
-    entries = list(tqdm(scraper, desc="scrap entries"))
-    job_id_to_gpu_type = _check_prometheus(cluster, entries)
-    for entry in tqdm(entries, desc="save entries"):
+    for entry in tqdm(scraper):
         saved = False
         if not no_prometheus:
-            update_allocated_gpu_type(cluster, entry, job_id_to_gpu_type)
+            update_allocated_gpu_type(cluster, entry)
             saved = entry.statistics(recompute=True, save=True) is not None
 
         if not saved:
@@ -327,67 +323,8 @@ def sacct_mongodb_import(
     logger.info(f"Saved {len(scraper)} entries.")
 
 
-def _check_prometheus(cluster: ClusterConfig, entries: List[SlurmJob]):
-    job_id_to_gpu_type = {}
-    a = profiling.perf_counter()
-    if cluster.prometheus_url:
-        now = datetime.now(tz=UTC).astimezone(MTL)
-        oldest_start = min(
-            (entry.start_time for entry in entries if entry.start_time is not None),
-            default=now,
-        )
-        oldest_debut = min(
-            (
-                entry.end_time - timedelta(seconds=entry.elapsed_time)
-                for entry in entries
-                if entry.end_time is not None and entry.elapsed_time >= 0
-            ),
-            default=now,
-        )
-        newest_end_time = max(
-            (entry.end_time for entry in entries if entry.end_time is not None),
-            default=now,
-        )
-        times = [oldest_start, oldest_debut]
-        greatest_duration = now - min(times)
-        duration_seconds = math.ceil(greatest_duration.total_seconds())
-        selector = f'slurm_job_utilization_gpu_memory{{cluster="{cluster.name}"}}'
-        if newest_end_time < now:
-            offset = now - newest_end_time
-            offset_seconds = math.ceil(offset.total_seconds())
-            offset_string = f"offset {offset_seconds}s"
-            query = (
-                f"present_over_time({selector}[{duration_seconds}s] {offset_string})"
-            )
-        else:
-            query = f"present_over_time({selector}[{duration_seconds}s])"
-        print(
-            cluster.name,
-            *times,
-            oldest_start == oldest_debut,
-            query,
-        )
-        results = cluster.prometheus.custom_query(query)
-        for result in results:
-            job_id = int(result["metric"]["slurmjobid"])
-            gpu_type = result["metric"]["gpu_type"]
-            if job_id in job_id_to_gpu_type:
-                assert job_id_to_gpu_type[job_id] == gpu_type, (
-                    job_id,
-                    job_id_to_gpu_type[job_id],
-                    gpu_type,
-                )
-            else:
-                job_id_to_gpu_type[job_id] = gpu_type
-    b = profiling.perf_counter()
-    print("_check_prometheus", repr(timedelta(seconds=b - a)), len(job_id_to_gpu_type))
-    return job_id_to_gpu_type
-
-
 @trace_decorator()
-def update_allocated_gpu_type(
-    cluster: ClusterConfig, entry: SlurmJob, jtg: dict, use_job_time_series=False
-) -> Optional[str]:
+def update_allocated_gpu_type(cluster: ClusterConfig, entry: SlurmJob) -> Optional[str]:
     """Try to infer job GPU type.
 
     Parameters
@@ -408,36 +345,14 @@ def update_allocated_gpu_type(
 
     if cluster.prometheus_url:
         # Cluster does have prometheus config.
-        if use_job_time_series:
-            output = get_job_time_series(
-                job=entry,
-                metric="slurm_job_utilization_gpu_memory",
-                max_points=1,
-                dataframe=False,
-            )
-            if output:
-                gpu_type = output[0]["metric"]["gpu_type"]
-                assert entry.job_id in jtg, (
-                    "should be found",
-                    entry.job_id,
-                    gpu_type,
-                    list(jtg.keys()),
-                )
-                assert jtg[entry.job_id] == gpu_type, (
-                    "should be same gpu",
-                    jtg[entry.job_id],
-                    gpu_type,
-                )
-            else:
-                if jtg.get(entry.job_id):
-                    print(
-                        "should NOT be found",
-                        entry.job_id,
-                        jtg.get(entry.job_id),
-                        entry.allocated.gpu_type,
-                    )
-        else:
-            gpu_type = jtg.get(entry.job_id)
+        output = get_job_time_series(
+            job=entry,
+            metric="slurm_job_utilization_gpu_memory",
+            max_points=1,
+            dataframe=False,
+        )
+        if output:
+            gpu_type = output[0]["metric"]["gpu_type"]
     else:
         # No prometheus config. Try to get GPU type from entry nodes.
         node_gpu_mapping = get_node_to_gpu(cluster.name, entry.start_time)
