@@ -95,7 +95,7 @@ class AcquireJobs:
         default=None,
         help=(
             "Acquire jobs from this datetime. "
-            "Expected format: %Y-%m-%dT%H:%M. "
+            "Expected format: %%Y-%%m-%%dT%%H:%%M (e.g.: 2020-01-01T17:00). "
             "Should be used along with --time_to. "
             "Mutually exclusive with --dates."
         ),
@@ -105,7 +105,7 @@ class AcquireJobs:
         default=None,
         help=(
             "Acquire jobs until this datetime. "
-            "Expected format: %Y-%m-%dT%H:%M. "
+            "Expected format: %%Y-%%m-%%dT%%H:%%M  (e.g.: 2020-01-01T17:05). "
             "Should be used along with --time_from. "
             "Mutually exclusive with --dates."
         ),
