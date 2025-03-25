@@ -1,4 +1,4 @@
 sphinx<7
 myst-parser<3
 sphinx-rtd-theme<2
-nbsphinx==0.9.3
+nbsphinx==0.9.7
