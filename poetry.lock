@@ -2895,13 +2895,13 @@ testing = ["pytest", "pytest-benchmark"]
 
 [[package]]
 name = "prometheus-api-client"
-version = "0.5.5"
+version = "0.5.7"
 description = "A small python api to collect data from prometheus"
 optional = false
 python-versions = "*"
 files = [
-    {file = "prometheus-api-client-0.5.5.tar.gz", hash = "sha256:59449c4be0485ea5a2dfbbed2482eb0a3eeac8c131b3efc866df4c9a0c403bb7"},
-    {file = "prometheus_api_client-0.5.5-py3-none-any.whl", hash = "sha256:e65ad16c262da15ed2d2288b521a80278feed2d31e7f0e732a935b67af8e24b4"},
+    {file = "prometheus_api_client-0.5.7-py3-none-any.whl", hash = "sha256:c8b3c3ef91f97f2e52d25b1d47ba1878a03a724ccf2e9cd5b09c96ca0dad17c4"},
+    {file = "prometheus_api_client-0.5.7.tar.gz", hash = "sha256:a48545b0fba8d47b8a84ff7b6024ad1cb44096340867002f163cc93174b32105"},
 ]
 
 [package.dependencies]
