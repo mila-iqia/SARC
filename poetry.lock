@@ -3367,13 +3367,13 @@ pytest = ">=3.0.0"
 
 [[package]]
 name = "pytest-regressions"
-version = "2.5.0"
+version = "2.7.0"
 description = "Easy to use fixtures to write regression tests."
 optional = false
-python-versions = ">=3.8"
+python-versions = ">=3.9"
 files = [
-    {file = "pytest-regressions-2.5.0.tar.gz", hash = "sha256:818c7884c1cff3babf89eebb02cbc27b307856b1985427c24d52cb812a106fd9"},
-    {file = "pytest_regressions-2.5.0-py3-none-any.whl", hash = "sha256:8c4e5c4037325fdb0825bc1fdcb75e17e03adf3407049f0cb704bb996d496255"},
+    {file = "pytest_regressions-2.7.0-py3-none-any.whl", hash = "sha256:69f5e3f03493cf0ef84d96d23e50a546617c198b1d7746f2e2b9e441cbab4847"},
+    {file = "pytest_regressions-2.7.0.tar.gz", hash = "sha256:4c30064e0923929012c94f5d6f35205be06fd8709c7f0dba0228e05c460af05e"},
 ]
 
 [package.dependencies]
@@ -3383,7 +3383,7 @@ pyyaml = "*"
 
 [package.extras]
 dataframe = ["numpy", "pandas"]
-dev = ["matplotlib", "mypy", "numpy", "pandas", "pillow", "pre-commit", "restructuredtext-lint", "tox"]
+dev = ["matplotlib", "mypy", "numpy", "pandas", "pillow", "pre-commit", "pyarrow", "restructuredtext-lint", "tox"]
 image = ["numpy", "pillow"]
 num = ["numpy", "pandas"]
 
