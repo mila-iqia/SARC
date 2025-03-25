@@ -31,7 +31,14 @@ class SAcctScraper:
     The scraper is currently hard-coded to fetch data for a day.
     """
 
-    def __init__(self, cluster: ClusterConfig, day: datetime):
+    def __init__(
+        self,
+        cluster: ClusterConfig,
+        day: datetime = None,
+        start: datetime = None,
+        end: datetime = None,
+        user: str = None,
+    ):
         """Initialize a SAcctScraper.
 
         Arguments:
@@ -39,11 +46,28 @@ class SAcctScraper:
             day: The day we wish to scrape, as a datetime object. The time
                 does not matter: we will fetch from 00:00 on that day to
                 00:00 on the next day.
+            start: the datetime from which we wish to scrape.
+                Used only if `day` is None. May be precise
+                up to time. To be used with `end`.
+            end: the datetime until which we wish to scrape.
+                Used only if `day` is None. May be precise
+                up to time. To be used with `start`.
+            user: user for which we wish to scrape.
         """
         self.cluster = cluster
-        self.day = day
-        self.start = datetime.combine(day, time.min)
-        self.end = self.start + timedelta(days=1)
+        if day is not None:
+            assert start is None
+            assert end is None
+            self.day = day
+            self.start = datetime.combine(day, time.min)
+            self.end = self.start + timedelta(days=1)
+        else:
+            assert start is not None
+            assert end is not None
+            self.day = None
+            self.start = start
+            self.end = end
+        self.user = user
 
     @trace_decorator()
     def fetch_raw(self) -> dict:
@@ -53,7 +77,8 @@ class SAcctScraper:
         end = self.end.strftime(fmt)
         accounts = self.cluster.accounts and ",".join(self.cluster.accounts)
         accounts_option = f"-A {accounts}" if accounts else ""
-        cmd = f"{self.cluster.sacct_bin} {accounts_option} -X -S {start} -E {end} --allusers --json"
+        user_option = "--allusers" if self.user is None else f"--user {self.user}"
+        cmd = f"{self.cluster.sacct_bin} {accounts_option} -X -S {start} -E {end} {user_option} --json"
         logger.info(f"{self.cluster.name} $ {cmd}")
         if self.cluster.host == "localhost":
             results = subprocess.run(
@@ -65,9 +90,15 @@ class SAcctScraper:
 
     def _cache_key(self):
         today = datetime.combine(date.today(), datetime.min.time())
-        if self.day < today:
+        userstr = "" if self.user is None else f".user_{self.user}"
+        if self.day is None:
+            fmt = "%Y-%m-%dT%H:%M"
+            startstr = self.start.strftime(fmt)
+            endstr = self.end.strftime(fmt)
+            return f"{self.cluster.name}.{startstr}.{endstr}{userstr}.json"
+        elif self.day < today:
             daystr = self.day.strftime("%Y-%m-%d")
-            return f"{self.cluster.name}.{daystr}.json"
+            return f"{self.cluster.name}.{daystr}{userstr}.json"
         else:
             # Not cachable
             return None
@@ -247,7 +278,12 @@ class SAcctScraper:
 
 @trace_decorator()
 def sacct_mongodb_import(
-    cluster: ClusterConfig, day: datetime, no_prometheus: bool
+    cluster: ClusterConfig,
+    day: Optional[datetime],
+    no_prometheus: bool,
+    start: datetime = None,
+    end: datetime = None,
+    user: str = None,
 ) -> None:
     """Fetch sacct data and store it in MongoDB.
 
@@ -260,9 +296,17 @@ def sacct_mongodb_import(
         The day for which to fetch the data. The time does not matter.
     no_prometheus: bool
         If True, avoid any scraping requiring prometheus connection.
+    start: datetime
+        The datetime from which to fetch the data. Time matters.
+        Used with `end`, and only if `day` is None.
+    end: date
+        The datetime up to which we fetch the data. Time matters.
+        Use with `start`, and only if `day` is None.
+    user: str
+        Optional user for which to fetch the data.
     """
     collection = _jobs_collection()
-    scraper = SAcctScraper(cluster, day)
+    scraper = SAcctScraper(cluster, day, start, end, user)
     logger.info("Getting the sacct data...")
     scraper.get_raw()
     logger.info(
