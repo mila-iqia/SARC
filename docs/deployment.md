@@ -53,34 +53,13 @@ git clone git@github-sarc:mila-iqia/SARC.git
 ```
 
 ### Dependencies
-#### Poetry
+#### uv
 
+install uv:
 
-As `sarc` user, install poetry:
+See here for documentation: https://docs.astral.sh/uv/getting-started/installation/
 
-(follow [this method](https://www.digitalocean.com/community/tutorials/how-to-install-poetry-to-manage-python-dependencies-on-ubuntu-22-04#step-1-installing-poetry), since the apt method seems broken someway)
-
-```
-curl -sSL https://install.python-poetry.org | python3 -
-```
-
-As told by the script itself: Add `export PATH="/home/sarc/.local/bin:$PATH"` to `.bashrc`.
-
-(Note: Later, when executed by `systemd` for example, the PATH won't be present so the scripts will use the complete path to `/home/sarc/.local/bin/poetry` )
-
-### Setup code
-
-As `sarc` user :
-
-```
-cd ~/SARC
-poetry install
-```
-
-Test the sarc command: `poetry run sarc`
-
-In the future, if necessary, use the `SARC_CONFIG` environment variable to choose the config file.
-
+Ensure that uv is either available on $PATH or is at a known location
 
 ## MongoDB
 
@@ -121,9 +100,9 @@ See https://www.mongodb.com/docs/manual/administration/production-notes/#x86_64 
 Users creation:
 
 ```
-SARC_MODE=scraping poetry run sarc db init --database sarc --url "mongodb://mongoadmin:<admin password>@localhost:27017" --username admin --password <admin password> --account admin
-SARC_MODE=scraping poetry run sarc db init --database sarc --url "mongodb://mongoadmin:<admin password>@localhost:27017" --username readuser --password readpwd --account read 
-SARC_MODE=scraping poetry run sarc db init --database sarc --url "mongodb://mongoadmin:<admin password>@localhost:27017" --username writeuser --password <writeuser password> --account write
+SARC_MODE=scraping uv run sarc db init --database sarc --url "mongodb://mongoadmin:<admin password>@localhost:27017" --username admin --password <admin password> --account admin
+SARC_MODE=scraping uv run sarc db init --database sarc --url "mongodb://mongoadmin:<admin password>@localhost:27017" --username readuser --password readpwd --account read
+SARC_MODE=scraping uv run sarc db init --database sarc --url "mongodb://mongoadmin:<admin password>@localhost:27017" --username writeuser --password <writeuser password> --account write
 ```
 
 ### (optionnal) database restoration
