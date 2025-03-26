@@ -8,12 +8,11 @@ SARC stands for "Supervision et Analyde des Resources de Calcul". It's a Mila in
 
 This is the guide to use the client. For deployment, see `docs/deployment.md`.
 
-To install sarc, git clone the repo and install `sarc` using `poetry`.
+To install sarc, git clone the repo and install `sarc` using `uv`.
 
 ```bash
 $ git clone git@github.com:mila-iqia/SARC.git
 $ cd SARC
-$ poetry install
 ```
 
 `sarc` will be looking into the current working directory to find the dev config file. To work with prod config or 
@@ -36,7 +35,7 @@ $ ssh -L 27017:localhost:27017 sarc
 You can now test on your machine a simple example to see if `sarc` is able to access the database:
 
 ```bash 
-$ poetry run python example/waste_stats.py
+$ uv run python example/waste_stats.py
 ```
 
 ## Contributing
@@ -45,23 +44,30 @@ $ poetry run python example/waste_stats.py
 
 Those commands are for the proper formatting.
 ```
-black .
-isort --profile black .
-tox -e isort
-tox -e black
-tox -e lint
+uv run black .
+uv run isort --profile black .
+uv run tox -e isort
+uv run tox -e black
+uv run tox -e lint
 ```
 
 ### How to add dependencies
 
-TODO : How does poetry work? Needs a simple example here for the command to add a python module like `ldap3`. What are we supposed to type?
+For dependecies that are core to the package:
+```
+uv add <package-name>
+```
 
+For dependencies that are only useful for developping:
+```
+uv add --dev <package-name>
+```
 
 ### How to run the tests suite
 
 This runs the tests.
 ```
-tox -e test
+uv run tox -e test
 ```
 
 If you're running on Mac OS, you can install `podman` with `brew install podman`.
@@ -84,7 +90,7 @@ sarc/inode_storage_scanner/get_diskusage.py  (stub)
 To generate documentation in HTML format in folder `docs\_build`:
 
 ```
-sphinx-build -b html docs/ docs/_build
+uv run sphinx-build -b html docs/ docs/_build
 ```
 
 You can then open `docs\_build\index.html` on a web browser.
