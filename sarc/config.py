@@ -229,6 +229,12 @@ class AccountMatchingConfig(BaseModel):
     make_matches_config: Path
 
 
+class LoggingConfig(BaseModel):
+    log_level: str
+    OTLP_endpoint: str
+    service_name: str
+
+
 # pylint: disable=unused-argument,redefined-outer-name
 def _absolute_path(value, values, config, field):
     return value and value.expanduser().absolute()
@@ -252,6 +258,9 @@ class ScraperConfig(BaseModel):
     account_matching: AccountMatchingConfig = None
     sshconfig: Path = None
     clusters: dict[str, ClusterConfig] = None
+    logging: LoggingConfig = None
+    loki: LokiConfig = None
+    tempo: TempoConfig = None
 
     _abs_path = validator("cache", "sshconfig", allow_reuse=True)(_absolute_path)
 
