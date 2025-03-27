@@ -87,7 +87,7 @@ sarc/inode_storage_scanner/get_diskusage.py  (stub)
 
 ### How to generate doc
 
-To generate documentation in HTML format in folder `docs\_build`:
+To generate documentation in HTML format in folder `docs\_build` install `pandoc` on your machine (`apt install pandoc` for debian-like linux), then:
 
 ```
 uv run sphinx-build -b html docs/ docs/_build
