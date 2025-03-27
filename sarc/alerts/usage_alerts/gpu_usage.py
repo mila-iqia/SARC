@@ -25,7 +25,7 @@ def check_gpu_type_usage_per_node(
     gpu_type: str
         GPU type to check.
     time_interval: timedelta
-        If given, only jobs which ran in [now - time_interval, time_interval] will be used for checking.
+        If given, only jobs which ran in [now - time_interval, now] will be used for checking.
         Default is last 24 hours.
         If None, all jobs are used.
     minimum_runtime: timedelta

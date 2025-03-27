@@ -297,6 +297,8 @@ def update_allocated_gpu_type(cluster: ClusterConfig, entry: SlurmJob) -> Option
     None
         Unable to infer gpu type.
     """
+    gpu_type = None
+
     if cluster.prometheus_url:
         # Cluster does have prometheus config.
         output = get_job_time_series(
@@ -306,9 +308,9 @@ def update_allocated_gpu_type(cluster: ClusterConfig, entry: SlurmJob) -> Option
             dataframe=False,
         )
         if output:
-            entry.allocated.gpu_type = output[0]["metric"]["gpu_type"]
+            gpu_type = output[0]["metric"]["gpu_type"]
     else:
-        # No prometheus config. Try to get GPU type from local JSON file.
+        # No prometheus config. Try to get GPU type from entry nodes.
         node_gpu_mapping = get_node_to_gpu(cluster.name, entry.start_time)
         if node_gpu_mapping:
             node_to_gpu = node_gpu_mapping.node_to_gpu
@@ -320,6 +322,20 @@ def update_allocated_gpu_type(cluster: ClusterConfig, entry: SlurmJob) -> Option
             # We should not have more than 1 GPU type per job.
             assert len(gpu_types) <= 1
             if gpu_types:
-                entry.allocated.gpu_type = gpu_types.pop()
+                gpu_type = gpu_types.pop()
+
+    # If we found a GPU type, try to infer descriptive GPU name
+    if gpu_type is not None:
+        harmonized_gpu_names = {
+            cluster.harmonize_gpu(nodename, gpu_type) for nodename in entry.nodes
+        }
+        # If present, remove None from GPU names
+        harmonized_gpu_names.discard(None)
+        # If we got 1 GPU name, use it.
+        # Otherwise, keep default found gpu_type.
+        if len(harmonized_gpu_names) == 1:
+            gpu_type = harmonized_gpu_names.pop()
+        # Finally, save gpu_type into job object.
+        entry.allocated.gpu_type = gpu_type
 
     return entry.allocated.gpu_type
