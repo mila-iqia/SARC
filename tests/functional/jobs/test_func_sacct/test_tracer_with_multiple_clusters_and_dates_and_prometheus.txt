@@ -42,7 +42,7 @@ Found 4 job(s):
         "node": 1,
         "billing": 1,
         "gres_gpu": 1,
-        "gpu_type": null
+        "gpu_type": "phantom_gpu_raisin_0"
     },
     "stored_statistics": {
         "gpu_utilization": null,
@@ -99,7 +99,7 @@ Found 4 job(s):
         "node": 1,
         "billing": 1,
         "gres_gpu": 1,
-        "gpu_type": null
+        "gpu_type": "phantom_gpu_raisin_1"
     },
     "stored_statistics": {
         "gpu_utilization": null,
@@ -156,7 +156,7 @@ Found 4 job(s):
         "node": 1,
         "billing": 1,
         "gres_gpu": 1,
-        "gpu_type": null
+        "gpu_type": "phantom_gpu_patate_0"
     },
     "stored_statistics": {
         "gpu_utilization": null,
@@ -213,7 +213,7 @@ Found 4 job(s):
         "node": 1,
         "billing": 1,
         "gres_gpu": 1,
-        "gpu_type": null
+        "gpu_type": "phantom_gpu_patate_1"
     },
     "stored_statistics": {
         "gpu_utilization": null,
@@ -228,8 +228,152 @@ Found 4 job(s):
     }
 }
 
-Found 86 span(s):
+Found 46 span(s):
 [
+ {
+  "span_name": "acquire_prometheus_metrics_from_time_interval",
+  "span_events": [],
+  "span_attributes": {
+   "cluster_name": "patate",
+   "start": "2023-03-16 00:00:00",
+   "end": "2023-03-17 00:00:00"
+  },
+  "span_has_error": false
+ },
+ {
+  "span_name": "scrap_prometheus",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "acquire_prometheus_metrics_from_time_interval",
+  "span_events": [],
+  "span_attributes": {
+   "cluster_name": "patate",
+   "start": "2023-02-16 00:00:00",
+   "end": "2023-02-17 00:00:00"
+  },
+  "span_has_error": false
+ },
+ {
+  "span_name": "scrap_prometheus",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "SlurmJob.statistics",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "update_allocated_gpu_type_from_prometheus",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "acquire_prometheus_metrics_from_time_interval",
+  "span_events": [],
+  "span_attributes": {
+   "cluster_name": "patate",
+   "start": "2023-02-15 00:00:00",
+   "end": "2023-02-16 00:00:00"
+  },
+  "span_has_error": false
+ },
+ {
+  "span_name": "scrap_prometheus",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "SlurmJob.statistics",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "update_allocated_gpu_type_from_prometheus",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "acquire_prometheus_metrics_from_time_interval",
+  "span_events": [],
+  "span_attributes": {
+   "cluster_name": "raisin",
+   "start": "2023-03-16 00:00:00",
+   "end": "2023-03-17 00:00:00"
+  },
+  "span_has_error": false
+ },
+ {
+  "span_name": "scrap_prometheus",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "acquire_prometheus_metrics_from_time_interval",
+  "span_events": [],
+  "span_attributes": {
+   "cluster_name": "raisin",
+   "start": "2023-02-16 00:00:00",
+   "end": "2023-02-17 00:00:00"
+  },
+  "span_has_error": false
+ },
+ {
+  "span_name": "scrap_prometheus",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "SlurmJob.statistics",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "update_allocated_gpu_type_from_prometheus",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "acquire_prometheus_metrics_from_time_interval",
+  "span_events": [],
+  "span_attributes": {
+   "cluster_name": "raisin",
+   "start": "2023-02-15 00:00:00",
+   "end": "2023-02-16 00:00:00"
+  },
+  "span_has_error": false
+ },
+ {
+  "span_name": "scrap_prometheus",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "SlurmJob.statistics",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "update_allocated_gpu_type_from_prometheus",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
  {
   "span_name": "acquire_cluster_data",
   "span_events": [
@@ -286,97 +430,7 @@ Found 86 span(s):
   "span_has_error": false
  },
  {
-  "span_name": "SlurmJob.statistics",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "compute_job_statistics",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "compute_job_statistics_from_dataframe",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "compute_job_statistics_from_dataframe",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "compute_job_statistics_from_dataframe",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "compute_job_statistics_from_dataframe",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "compute_job_statistics_from_dataframe",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "compute_job_statistics_from_dataframe",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "compute_job_statistics_from_dataframe",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "compute_job_statistics_from_dataframe",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "compute_job_statistics_from_dataframe",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "get_job_time_series",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "_get_job_time_series_data",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "update_allocated_gpu_type",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "get_job_time_series",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "_get_job_time_series_data",
+  "span_name": "update_allocated_gpu_type_from_nodes",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
@@ -412,97 +466,7 @@ Found 86 span(s):
   "span_has_error": false
  },
  {
-  "span_name": "SlurmJob.statistics",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "compute_job_statistics",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "compute_job_statistics_from_dataframe",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "compute_job_statistics_from_dataframe",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "compute_job_statistics_from_dataframe",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "compute_job_statistics_from_dataframe",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "compute_job_statistics_from_dataframe",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "compute_job_statistics_from_dataframe",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "compute_job_statistics_from_dataframe",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "compute_job_statistics_from_dataframe",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "compute_job_statistics_from_dataframe",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "get_job_time_series",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "_get_job_time_series_data",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "update_allocated_gpu_type",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "get_job_time_series",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "_get_job_time_series_data",
+  "span_name": "update_allocated_gpu_type_from_nodes",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
@@ -569,97 +533,7 @@ Found 86 span(s):
   "span_has_error": false
  },
  {
-  "span_name": "SlurmJob.statistics",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "compute_job_statistics",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "compute_job_statistics_from_dataframe",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "compute_job_statistics_from_dataframe",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "compute_job_statistics_from_dataframe",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "compute_job_statistics_from_dataframe",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "compute_job_statistics_from_dataframe",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "compute_job_statistics_from_dataframe",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "compute_job_statistics_from_dataframe",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "compute_job_statistics_from_dataframe",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "compute_job_statistics_from_dataframe",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "get_job_time_series",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "_get_job_time_series_data",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "update_allocated_gpu_type",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "get_job_time_series",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "_get_job_time_series_data",
+  "span_name": "update_allocated_gpu_type_from_nodes",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
@@ -695,97 +569,7 @@ Found 86 span(s):
   "span_has_error": false
  },
  {
-  "span_name": "SlurmJob.statistics",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "compute_job_statistics",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "compute_job_statistics_from_dataframe",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "compute_job_statistics_from_dataframe",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "compute_job_statistics_from_dataframe",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "compute_job_statistics_from_dataframe",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "compute_job_statistics_from_dataframe",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "compute_job_statistics_from_dataframe",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "compute_job_statistics_from_dataframe",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "compute_job_statistics_from_dataframe",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "compute_job_statistics_from_dataframe",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "get_job_time_series",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "_get_job_time_series_data",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "update_allocated_gpu_type",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "get_job_time_series",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "_get_job_time_series_data",
+  "span_name": "update_allocated_gpu_type_from_nodes",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
