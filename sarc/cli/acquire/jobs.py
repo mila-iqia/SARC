@@ -100,6 +100,7 @@ class AcquireJobs:
             "Mutually exclusive with --dates."
         ),
     )
+
     time_to: str = field(
         alias=["-b"],
         default=None,
@@ -110,26 +111,15 @@ class AcquireJobs:
             "Mutually exclusive with --dates."
         ),
     )
-    user: str = field(
-        alias=["-u"],
-        default=None,
-        help="Acquire jobs only for this user. Used only with --time_from --time_to.",
-    )
-
-    no_prometheus: bool = field(
-        alias=["-s"],
-        action="store_true",
-        help="Avoid any scraping requiring connection to prometheus (default: False)",
-    )
 
     def execute(self) -> int:
         time_from = None
         time_to = None
         if self.dates:
-            if self.time_from or self.time_to or self.user:
+            if self.time_from or self.time_to:
                 logging.error(
                     "Parameters mutually exclusive: either --date "
-                    "or (--time_from ... --time_to ... [--user ...]), not both."
+                    "or (--time_from ... --time_to ...), not both."
                 )
                 return -1
         elif self.time_from or self.time_to:
@@ -152,34 +142,27 @@ class AcquireJobs:
                 if time_from is not None:
                     with using_trace(
                         "AcquireJobs",
-                        "acquire_cluster_data_from_interval",
+                        "acquire_cluster_data_from_time_interval",
                         exception_types=(),
                     ) as span:
                         span.set_attribute("cluster_name", cluster_name)
                         span.set_attribute("time_from", str(time_from))
                         span.set_attribute("time_to", str(time_to))
-                        span.set_attribute("user", self.user)
                         try:
                             interval_minutes = (
                                 time_to - time_from
                             ).total_seconds() / 60
                             logger.info(
                                 f"Acquire data on {cluster_name} for interval: {time_from} to {time_to} ({interval_minutes} min)"
-                                + (f" for user {self.user}" if self.user else "")
                             )
 
                             sacct_mongodb_import(
-                                clusters_configs[cluster_name],
-                                None,
-                                self.no_prometheus,
-                                time_from,
-                                time_to,
-                                self.user,
+                                clusters_configs[cluster_name], None, time_from, time_to
                             )
                         # pylint: disable=broad-exception-caught
                         except Exception as e:
                             logger.error(
-                                f"Failed to acquire data on {cluster_name} for interval: {time_from} to {time_to}" + (f" for user {self.user}" if self.user else "") +  f": {type(e).__name__}: {e}"
+                                f"Failed to acquire data on {cluster_name} for interval: {time_from} to {time_to}: {e}"
                             )
                             raise e
                 else:
@@ -196,9 +179,7 @@ class AcquireJobs:
                                 )
 
                                 sacct_mongodb_import(
-                                    clusters_configs[cluster_name],
-                                    date,
-                                    self.no_prometheus,
+                                    clusters_configs[cluster_name], date
                                 )
                                 if is_auto:
                                     _dates_set_last_date(cluster_name, date)

@@ -12,7 +12,6 @@ from sarc.cache import with_cache
 from sarc.client.job import SlurmJob, _jobs_collection
 from sarc.config import UTC, ClusterConfig
 from sarc.jobs.node_gpu_mapping import get_node_to_gpu
-from sarc.jobs.series import get_job_time_series
 from sarc.traces import trace_decorator, using_trace
 
 logger = logging.getLogger(__name__)
@@ -41,7 +40,6 @@ class SAcctScraper:
         day: datetime = None,
         start: datetime = None,
         end: datetime = None,
-        user: str = None,
     ):
         """Initialize a SAcctScraper.
 
@@ -56,7 +54,6 @@ class SAcctScraper:
             end: the datetime until which we wish to scrape.
                 Used only if `day` is None. May be precise
                 up to time. To be used with `start`.
-            user: user for which we wish to scrape.
         """
         self.cluster = cluster
         if day is not None:
@@ -71,7 +68,6 @@ class SAcctScraper:
             self.day = None
             self.start = start
             self.end = end
-        self.user = user
 
     @trace_decorator()
     def fetch_raw(self) -> dict:
@@ -81,9 +77,8 @@ class SAcctScraper:
         end = self.end.strftime(fmt)
         accounts = ",".join(self.cluster.accounts) if self.cluster.accounts else None
         accounts_option = f"-A {accounts}" if accounts else ""
-        user_option = "--allusers" if self.user is None else f"--user {self.user}"
-        cmd = f"{self.cluster.sacct_bin} {accounts_option} -X -S {start} -E {end} {user_option} --json"
-        logger.debug(f"{self.cluster.name} $ {cmd}")
+        cmd = f"{self.cluster.sacct_bin} {accounts_option} -X -S {start} -E {end} --allusers --json"
+        logger.info(f"{self.cluster.name} $ {cmd}")
         if self.cluster.host == "localhost":
             results: subprocess.CompletedProcess[str] | Result = subprocess.run(
                 cmd, shell=True, text=True, capture_output=True, check=False
@@ -94,15 +89,14 @@ class SAcctScraper:
 
     def _cache_key(self) -> str | None:
         today = datetime.combine(date.today(), datetime.min.time())
-        userstr = "" if self.user is None else f".user_{self.user}"
         if self.day is None:
             fmt = "%Y-%m-%dT%H:%M"
             startstr = self.start.strftime(fmt)
             endstr = self.end.strftime(fmt)
-            return f"{self.cluster.name}.{startstr}.{endstr}{userstr}.json"
+            return f"{self.cluster.name}.{startstr}.{endstr}.json"
         elif self.day < today:
             daystr = self.day.strftime("%Y-%m-%d")
-            return f"{self.cluster.name}.{daystr}{userstr}.json"
+            return f"{self.cluster.name}.{daystr}.json"
         else:
             # Not cachable
             return None
@@ -322,34 +316,30 @@ class SAcctScraper:
 def sacct_mongodb_import(
     cluster: ClusterConfig,
     day: Optional[datetime],
-    no_prometheus: bool,
     start: datetime = None,
     end: datetime = None,
-    user: str = None,
 ) -> None:
     """Fetch sacct data and store it in MongoDB.
 
-    Arguments:
     Parameters
     ----------
     cluster: ClusterConfig
         The configuration of the cluster on which to fetch the data.
     day: datetime
         The day for which to fetch the data. The time does not matter.
-    no_prometheus: bool
-        If True, avoid any scraping requiring prometheus connection.
     start: datetime
         The datetime from which to fetch the data. Time matters.
         Used with `end`, and only if `day` is None.
-    end: date
+    end: datetime
         The datetime up to which we fetch the data. Time matters.
         Use with `start`, and only if `day` is None.
-    user: str
-        Optional user for which to fetch the data.
     """
     collection = _jobs_collection()
-    scraper = SAcctScraper(cluster, day, start, end, user)
-    logger.info("Getting the sacct data...")
+    scraper = SAcctScraper(cluster, day, start, end)
+
+    timestr = f"date {day}" if day is not None else f"time {start} to {end}"
+    logger.info(f"Getting the sacct data for cluster {cluster.name}, {timestr}...")
+
     scraper.get_raw()
     logger.info(
         f"Saving into mongodb collection '{collection.Meta.collection_name}'..."
@@ -358,18 +348,18 @@ def sacct_mongodb_import(
     for entry in tqdm(scraper):
         if entry is not None:
             nb_entries += 1
-            saved = False
-            if not no_prometheus:
-                update_allocated_gpu_type(cluster, entry)
-                saved = entry.statistics(recompute=True, save=True) is not None
-            if not saved:
-                collection.save_job(entry)
+            update_allocated_gpu_type_from_nodes(cluster, entry)
+            collection.save_job(entry)
     logger.info(f"Saved {nb_entries}/{len(scraper)} entries.")
 
 
 @trace_decorator()
-def update_allocated_gpu_type(cluster: ClusterConfig, entry: SlurmJob) -> Optional[str]:
-    """Try to infer job GPU type.
+def update_allocated_gpu_type_from_nodes(
+    cluster: ClusterConfig, entry: SlurmJob
+) -> Optional[str]:
+    """
+    Try to infer job GPU type from entry nodes
+    if cluster has not configured a Prometheusn connection.
 
     Parameters
     ----------
@@ -387,19 +377,8 @@ def update_allocated_gpu_type(cluster: ClusterConfig, entry: SlurmJob) -> Option
     """
     gpu_type = None
 
-    if cluster.prometheus_url:
-        # Cluster does have prometheus config.
-        output = get_job_time_series(
-            job=entry,
-            metric="slurm_job_utilization_gpu_memory",
-            max_points=1,
-            dataframe=False,
-        )
-        if output:
-            gpu_type = output[0]["metric"]["gpu_type"]
-
-    if gpu_type is None:
-        # No prometheus config or no prometheus result. Try to get GPU type from entry nodes.
+    if not cluster.prometheus_url:
+        # No prometheus config. Try to get GPU type from entry nodes.
         assert cluster.name is not None
         node_gpu_mapping = get_node_to_gpu(cluster.name, entry.start_time)
         if node_gpu_mapping:
@@ -419,22 +398,8 @@ def update_allocated_gpu_type(cluster: ClusterConfig, entry: SlurmJob) -> Option
 
     # If we found a GPU type, try to infer descriptive GPU name
     if gpu_type is not None:
-        # NB: If job doesn't have nodes, we harmonize using `None`,
-        # so that harmonization function will check __DEFAULT__
-        # harmonized names if available.
-        if entry.nodes:
-            harmonized_gpu_names = {
-                cluster.harmonize_gpu(nodename, gpu_type) for nodename in entry.nodes
-            }
-        else:
-            harmonized_gpu_names = {cluster.harmonize_gpu(None, gpu_type)}
-        # If present, remove None from GPU names
-        harmonized_gpu_names.discard(None)
-        # If we got 1 GPU name, use it.
-        # Otherwise, keep default found gpu_type.
-        if len(harmonized_gpu_names) == 1:
-            gpu_type = harmonized_gpu_names.pop()
-        # Finally, save gpu_type into job object.
-        entry.allocated.gpu_type = gpu_type
+        entry.allocated.gpu_type = (
+            cluster.harmonize_gpu_from_nodes(entry.nodes, gpu_type) or gpu_type
+        )
 
     return entry.allocated.gpu_type

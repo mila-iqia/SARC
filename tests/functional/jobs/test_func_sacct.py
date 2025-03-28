@@ -15,7 +15,7 @@ from opentelemetry.trace import StatusCode
 
 from sarc.client.job import JobStatistics, get_jobs
 from sarc.config import MTL, PST, UTC, config
-from sarc.jobs import sacct
+from sarc.jobs import prometheus_scraping, sacct
 from sarc.jobs.sacct import SAcctScraper
 
 from .factory import JsonJobFactory, json_raw
@@ -346,7 +346,6 @@ def test_stdout_message_before_json(
                 "raisin",
                 "--dates",
                 "2023-02-15",
-                "--no_prometheus",
             ]
         )
         == 0
@@ -371,7 +370,7 @@ def test_get_gpu_type_from_prometheus(
 ):
     remote.expect(
         host="raisin",
-        cmd="/opt/slurm/bin/sacct  -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
+        cmd="/opt/slurm/bin/sacct  -X -S 2023-02-14T00:00 -E 2023-02-15T00:00 --allusers --json",
         out=f"Welcome on raisin,\nThe sweetest supercomputer in the world!\n{sacct_json}".encode(
             "utf-8"
         ),
@@ -395,7 +394,13 @@ def test_get_gpu_type_from_prometheus(
         assert job.job_id == 1
         return [{"metric": {"gpu_type": "phantom_gpu"}}]
 
-    monkeypatch.setattr(sacct, "get_job_time_series", mock_get_job_time_series)
+    monkeypatch.setattr(
+        prometheus_scraping, "get_job_time_series", mock_get_job_time_series
+    )
+
+    # First, scrap jobs
+    jobs = list(get_jobs())
+    assert len(jobs) == 0
 
     assert (
         cli_main(
@@ -405,7 +410,27 @@ def test_get_gpu_type_from_prometheus(
                 "--cluster_name",
                 "raisin",
                 "--dates",
-                "2023-02-15",
+                "2023-02-14",
+            ]
+        )
+        == 0
+    )
+
+    jobs = list(get_jobs())
+    assert len(jobs) == 1
+    job = jobs[0]
+    assert job.allocated.gpu_type is None
+
+    # Then, scrap prometheus info
+    assert (
+        cli_main(
+            [
+                "acquire",
+                "prometheus",
+                "--cluster_name",
+                "raisin",
+                "--dates",
+                "2023-02-14",
             ]
         )
         == 0
@@ -538,7 +563,6 @@ def test_save_job(
                 "raisin",
                 "--dates",
                 "2023-02-15",
-                "--no_prometheus",
             ]
         )
         == 0
@@ -584,7 +608,6 @@ def test_update_job(
                 "raisin",
                 "--dates",
                 "2023-02-15",
-                "--no_prometheus",
             ]
         )
         == 0
@@ -601,7 +624,6 @@ def test_update_job(
                 "raisin",
                 "--dates",
                 "2023-02-15",
-                "--no_prometheus",
             ]
         )
         == 0
@@ -659,7 +681,6 @@ def test_save_preempted_job(
                 "raisin",
                 "--dates",
                 "2023-02-15",
-                "--no_prometheus",
             ]
         )
         == 0
@@ -722,7 +743,6 @@ def test_multiple_dates(
                 "--dates",
                 "2023-02-15",
                 "2023-02-16-2023-02-20",
-                "--no_prometheus",
             ]
         )
         == 0
@@ -809,7 +829,6 @@ def test_multiple_clusters_and_dates(
                 "--dates",
                 "2023-02-15",
                 "2023-02-16",
-                "--no_prometheus",
             ]
         )
         == 0
@@ -841,7 +860,7 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     """
     Copied from test_multiple_clusters_and_dates above, with changes:
     - Added captrace to test tracing
-    - Removed `--no_prometheus` to test prometheus-related tracing
+    - Added a call to `acquire prometheus` to test prometheus-related tracing
     """
 
     def _setup_logging_do_nothing(*args, **kwargs):
@@ -917,6 +936,23 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     # Import here so that config() is setup correctly when CLI is created.
     import sarc.cli  # noqa: F401
 
+    def mock_compute_job_statistics(job):
+        return JobStatistics()
+
+    monkeypatch.setattr(
+        "sarc.jobs.series.compute_job_statistics", mock_compute_job_statistics
+    )
+
+    def mock_get_job_time_series(job, metric, **kwargs):
+        assert metric == "slurm_job_utilization_gpu_memory"
+        return [
+            {"metric": {"gpu_type": f"phantom_gpu_{job.cluster_name}_{job.job_id}"}}
+        ]
+
+    monkeypatch.setattr(
+        prometheus_scraping, "get_job_time_series", mock_get_job_time_series
+    )
+
     assert (
         cli_main(
             [
@@ -934,9 +970,26 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
         == 0
     )
 
+    assert (
+        cli_main(
+            [
+                "acquire",
+                "prometheus",
+                "--cluster_name",
+                "raisin",
+                "patate",
+                "--dates",
+                "2023-02-15",
+                "2023-02-16",
+                "2023-03-16",
+            ]
+        )
+        == 0
+    )
+
     jobs = list(get_jobs())
 
-    assert len(list(get_jobs())) == len(datetimes) * len(cluster_names)
+    assert len(jobs) == len(datetimes) * len(cluster_names)
 
     # Check both jobs and trace in file regression
     spans = captrace.get_finished_spans()
@@ -999,6 +1052,315 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
         )
     )
 
+    # For Prometheus metrics, there should be 1 entry saved per cluster on 2023-02-15 and 2023-02-16,
+    # and 0 entries saved per cluster on 2023-03-16 (as there's no job scraped for this date).
+    for cluster_name in cluster_names:
+        assert bool(
+            re.search(
+                rf"sarc\.jobs\.prometheus_scraping:prometheus_scraping\.py:[0-9]+ Saved Prometheus metrics for 1 jobs on {cluster_name} from 2023-02-15 00:00:00 to 2023-02-16 00:00:00\.",
+                caplog.text,
+            )
+        )
+        assert bool(
+            re.search(
+                rf"sarc\.jobs\.prometheus_scraping:prometheus_scraping\.py:[0-9]+ Saved Prometheus metrics for 1 jobs on {cluster_name} from 2023-02-16 00:00:00 to 2023-02-17 00:00:00\.",
+                caplog.text,
+            )
+        )
+        assert bool(
+            re.search(
+                rf"sarc\.jobs\.prometheus_scraping:prometheus_scraping\.py:[0-9]+ Saved Prometheus metrics for 0 jobs on {cluster_name} from 2023-03-16 00:00:00 to 2023-03-17 00:00:00\.",
+                caplog.text,
+            )
+        )
+
+
+@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache")
+def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
+    test_config,
+    remote,
+    file_regression,
+    cli_main,
+    prom_custom_query_mock,
+    caplog,
+    captrace,
+    monkeypatch,
+):
+    """
+    Copied from test_tracer_with_multiple_clusters_and_dates_and_prometheus above,
+    with changes:
+    - test --time_from and --time_to
+    """
+    caplog.set_level(logging.INFO)
+    cluster_names = ["raisin", "patate"]
+    datetimes = [datetime(2023, 2, 15, hour=1, tzinfo=MTL)]
+    delta = timedelta(minutes=5)
+
+    def _gen_error_command(cmd_template, job_submit_datetime):
+        return Command(
+            cmd=(
+                cmd_template.format(
+                    start=job_submit_datetime.strftime("%Y-%m-%dT%H:%M"),
+                    end=(job_submit_datetime + delta).strftime("%Y-%m-%dT%H:%M"),
+                )
+            ),
+            exit=1,
+        )
+
+    def _create_session(cluster_name, cmd_template, datetimes):
+        return Session(
+            host=cluster_name,
+            commands=[
+                Command(
+                    cmd=(
+                        cmd_template.format(
+                            start=job_submit_datetime.strftime("%Y-%m-%dT%H:%M"),
+                            end=(job_submit_datetime + delta).strftime(
+                                "%Y-%m-%dT%H:%M"
+                            ),
+                        )
+                    ),
+                    out=create_sacct_json(
+                        [
+                            {
+                                "job_id": job_id,
+                                "cluster": cluster_name,
+                                "time": {
+                                    "submission": int(job_submit_datetime.timestamp())
+                                },
+                            }
+                        ]
+                    ).encode("utf-8"),
+                )
+                for job_id, job_submit_datetime in enumerate(datetimes)
+            ]
+            + [
+                _gen_error_command(
+                    cmd_template, datetime(2023, 3, 16, hour=1, tzinfo=MTL)
+                )
+            ],
+        )
+
+    channel = remote.expect_sessions(
+        _create_session(
+            "raisin",
+            "/opt/slurm/bin/sacct  -X -S {start} -E {end} --allusers --json",
+            datetimes=datetimes,
+        ),
+        _create_session(
+            "patate",
+            (
+                "/opt/software/slurm/bin/sacct "
+                "-A rrg-bonhomme-ad_gpu,rrg-bonhomme-ad_cpu,def-bonhomme_gpu,def-bonhomme_cpu "
+                "-X -S {start} -E {end} --allusers --json"
+            ),
+            datetimes=datetimes,
+        ),
+    )
+
+    # Import here so that config() is setup correctly when CLI is created.
+    import sarc.cli
+
+    def mock_compute_job_statistics(job):
+        return JobStatistics()
+
+    monkeypatch.setattr(
+        "sarc.jobs.series.compute_job_statistics", mock_compute_job_statistics
+    )
+
+    def mock_get_job_time_series(job, metric, **kwargs):
+        assert metric == "slurm_job_utilization_gpu_memory"
+        return [
+            {"metric": {"gpu_type": f"phantom_gpu_{job.cluster_name}_{job.job_id}"}}
+        ]
+
+    monkeypatch.setattr(
+        prometheus_scraping, "get_job_time_series", mock_get_job_time_series
+    )
+
+    assert (
+        cli_main(
+            [
+                "acquire",
+                "jobs",
+                "--cluster_name",
+                "raisin",
+                "patate",
+                "--time_from",
+                "2023-02-15T01:00",
+                "--time_to",
+                "2023-02-15T01:05",
+            ]
+        )
+        == 0
+    )
+
+    assert (
+        cli_main(
+            [
+                "acquire",
+                "jobs",
+                "--cluster_name",
+                "raisin",
+                "patate",
+                "--time_from",
+                "2023-03-16T01:00",
+                "--time_to",
+                "2023-03-16T01:05",
+            ]
+        )
+        == 0
+    )
+
+    assert (
+        cli_main(
+            [
+                "acquire",
+                "prometheus",
+                "--cluster_name",
+                "raisin",
+                "patate",
+                "--time_from",
+                "2023-02-15T01:00",
+                "--time_to",
+                "2023-02-15T01:05",
+            ]
+        )
+        == 0
+    )
+
+    assert (
+        cli_main(
+            [
+                "acquire",
+                "prometheus",
+                "--cluster_name",
+                "raisin",
+                "patate",
+                "--time_from",
+                "2023-03-16T01:00",
+                "--time_to",
+                "2023-03-16T01:05",
+            ]
+        )
+        == 0
+    )
+
+    jobs = list(get_jobs())
+
+    assert len(jobs) == len(datetimes) * len(cluster_names)
+
+    # Check both jobs and trace in file regression
+    spans = captrace.get_finished_spans()
+    spans_data = [
+        {
+            "span_name": span.name,
+            "span_events": [event.name for event in span.events],
+            "span_attributes": dict(span.attributes),
+            "span_has_error": span.status.status_code == StatusCode.ERROR,
+        }
+        for span in reversed(spans)
+    ]
+
+    file_regression.check(
+        f"Found {len(jobs)} job(s):\n"
+        + "\n".join([job.json(exclude={"id": True}, indent=4) for job in jobs])
+        + f"\n\nFound {len(spans)} span(s):\n"
+        + json.dumps(spans_data, indent=1)
+    )
+
+    # Check logging
+    print(caplog.text)
+    for cluster_name in cluster_names:
+        assert bool(
+            re.search(
+                rf"root:jobs\.py:[0-9]+ Acquire data on {cluster_name} for interval: 2023-02-15 01:00:00 to 2023-02-15 01:05:00 \(5.0 min\)",
+                caplog.text,
+            )
+        )
+        assert (
+            f"Getting the sacct data for cluster {cluster_name}, time 2023-02-15 01:00:00 to 2023-02-15 01:05:00..."
+            in caplog.text
+        )
+
+    assert "Saving into mongodb collection '" in caplog.text
+    assert bool(
+        re.search(
+            r"sarc\.jobs\.sacct:sacct\.py:[0-9]+ Saved [0-9]+ entries\.",
+            caplog.text,
+        )
+    )
+
+    # There should be 2 acquisition errors for unexpected data 2023-03-16, one per cluster.
+    for cluster_name in cluster_names:
+        assert bool(
+            re.search(
+                rf"root:jobs\.py:[0-9]+ Failed to acquire data on {cluster_name} for interval: 2023-03-16 01:00:00 to 2023-03-16 01:05:00:",
+                caplog.text,
+            )
+        )
+
+    # For Prometheus metrics, there should be 1 entry saved per cluster on 2023-02-15 and 2023-02-16,
+    # and 0 entries saved per cluster on 2023-03-16 (as there's no job scraped for this date).
+    for cluster_name in cluster_names:
+        assert bool(
+            re.search(
+                rf"sarc\.jobs\.prometheus_scraping:prometheus_scraping\.py:[0-9]+ Saved Prometheus metrics for 1 jobs on {cluster_name} from 2023-02-15 01:00:00 to 2023-02-15 01:05:00\.",
+                caplog.text,
+            )
+        )
+        assert bool(
+            re.search(
+                rf"sarc\.jobs\.prometheus_scraping:prometheus_scraping\.py:[0-9]+ Saved Prometheus metrics for 0 jobs on {cluster_name} from 2023-03-16 01:00:00 to 2023-03-16 01:05:00\.",
+                caplog.text,
+            )
+        )
+
+
+@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache")
+def test_acquire_prometheus_for_cluster_without_prometheus(
+    test_config,
+    remote,
+    file_regression,
+    cli_main,
+    prom_custom_query_mock,
+    caplog,
+    captrace,
+    monkeypatch,
+):
+    """
+    Test that we can't scrape Prometheus metrics for a cluster
+    which does not have prometheus_url
+    """
+    caplog.set_level(logging.INFO)
+
+    assert (
+        cli_main(
+            [
+                "acquire",
+                "prometheus",
+                "--cluster_name",
+                "raisin_no_prometheus",
+                "--time_from",
+                "2023-02-15T01:00",
+                "--time_to",
+                "2023-02-15T01:05",
+            ]
+        )
+        == 0
+    )
+
+    assert len(list(get_jobs())) == 0
+
+    # Check logging
+    print(caplog.text)
+    assert bool(
+        re.search(
+            rf"root:prometheus\.py:[0-9]+ No prometheus URL for cluster: raisin_no_prometheus, cannot get Prometheus metrics\.",
+            caplog.text,
+        )
+    )
+
 
 @pytest.mark.usefixtures("tzlocal_is_mtl")
 @pytest.mark.parametrize(
@@ -1036,7 +1398,6 @@ def test_job_tz(test_config, sacct_json, remote, cli_main, prom_custom_query_moc
                 "patate",
                 "--dates",
                 "2023-02-15",
-                "--no_prometheus",
             ]
         )
         == 0
@@ -1045,67 +1406,6 @@ def test_job_tz(test_config, sacct_json, remote, cli_main, prom_custom_query_moc
     jobs = list(get_jobs())
     assert len(jobs) == 1
     assert jobs[0].submit_time == datetime(2023, 2, 15, 12 + 3, 0, 0, tzinfo=MTL)
-
-
-@pytest.mark.usefixtures("tzlocal_is_mtl", "enabled_cache")
-@pytest.mark.parametrize("json_jobs", [{}], indirect=True)
-@pytest.mark.usefixtures("empty_read_write_db")
-@pytest.mark.parametrize("no_prometheus", [True, False])
-def test_cli_ignore_stats(
-    sacct_json,
-    cli_main,
-    scraper,
-    no_prometheus,
-    monkeypatch,
-    prom_custom_query_mock,
-):
-    # We'd like to test that this starts with "/tmp/pytest",
-    # but this isn't the case when we run the tests on Mac OS,
-    # ending up in '/private/var/folders/*/pytest-of-gyomalin/pytest-63'.
-    assert "pytest" in str(scraper.get_raw.cache_dir)
-
-    print(scraper.get_raw.cache_dir)
-    scraper.get_raw.cache_dir.mkdir(parents=True, exist_ok=True)
-
-    cache_path = scraper.get_raw.cache_dir / scraper.get_raw.key().format(
-        time=datetime.now()
-    )
-
-    with open(cache_path, "w") as f:
-        f.write(sacct_json)
-
-    def mock_compute_job_statistics(job):
-        mock_compute_job_statistics.called += 1
-        return JobStatistics()
-
-    mock_compute_job_statistics.called = 0
-
-    monkeypatch.setattr(
-        "sarc.jobs.series.compute_job_statistics", mock_compute_job_statistics
-    )
-
-    args = [
-        "acquire",
-        "jobs",
-        "--cluster_name",
-        "raisin",
-        "--dates",
-        "2023-02-14",
-    ]
-
-    if no_prometheus:
-        args += ["--no_prometheus"]
-
-    assert len(list(get_jobs())) == 0
-
-    assert cli_main(args) == 0
-
-    assert len(list(get_jobs())) > 0
-
-    if no_prometheus:
-        assert mock_compute_job_statistics.called == 0
-    else:
-        assert mock_compute_job_statistics.called >= 1
 
 
 @pytest.mark.parametrize(
