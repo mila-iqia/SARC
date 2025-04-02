@@ -15,11 +15,11 @@ For more precise details, always refer to the code;
 
 ----
 
+- [Slurm info for DRAC clusters](cli_slurmconfig.md)
 - [Jobs](cli_jobs.md)
 - [Users](users.md)
 - [Clusters](clusters.md)
-- RGUs
-	- TODO
+- [RGUs](rgu.md)
 - [Storage](storage.md)
 - [Scheduling](scheduling.md)
 - Monitoring
