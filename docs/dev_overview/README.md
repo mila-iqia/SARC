@@ -4,7 +4,7 @@ This documentation is a global overview of the SARC codebase, how SARC works glo
 For more precise details, always refer to the code; 
 
 - architecture
-	- [Diagramme](diagramme.md)
+	- [Connections diagram](connections_diagram.md)
 - [Connection à mongoDB](mongodb_connection.md)
 
 - [Modes client et scraping](client_scraping_modes.md)
@@ -12,9 +12,6 @@ For more precise details, always refer to the code;
 
 - [secrets](secrets.md)
 - [Initialisation DB](cli_db.md)
-
-----
-
 - [Slurm info for DRAC clusters](cli_slurmconfig.md)
 - [Jobs](cli_jobs.md)
 - [Users](users.md)

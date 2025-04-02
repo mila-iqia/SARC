@@ -2,9 +2,9 @@
 
 ```mermaid
 ---
-title: scraping
+title: Connections diagram
 ---
-flowchart LR
+flowchart TB
 	subgraph Mila
 		%% direction BT
 		subgraph sarc01_dev
@@ -13,6 +13,9 @@ flowchart LR
 			sarc["SARC"]
 		end
 		cluster_mila@{shape: procs, label: "Mila cluster"}
+    client1["SARC (client)"]
+	ldap[LDAP]
+
 	end
 
 	subgraph DRAC
@@ -23,13 +26,17 @@ flowchart LR
 	end
 
 	mongodb <==> sarc  
+	ldap -..- sarc
     sarc-.sacct.->cluster_mila
 
     sarc-.ssh / sacct.-cluster_cedar
-    sarc-.ssh / sacct.->cluster_beluga
-    sarc-.ssh / sacct.->cluster_narval
-    sarc-.ssh / sacct.->cluster_graham
+    %% sarc-.ssh / sacct.->cluster_beluga
+    %% sarc-.ssh / sacct.->cluster_narval
+    %% sarc-.ssh / sacct.->cluster_graham
 
+    client2["SARC (client)"]
 
+	client1-..-mongodb
+	client2-.VPN.-mongodb
 	%% Mila ~~~ DRAC
 ```
