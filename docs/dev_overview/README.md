@@ -1,4 +1,4 @@
-# SARC dev documentation
+# SARC dev overview documentation
 
 - architecture
 	- [Diagramme](diagramme.md)
