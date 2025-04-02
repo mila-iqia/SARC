@@ -1,5 +1,8 @@
 # SARC dev overview documentation
 
+This documentation is a global overview of the SARC codebase, how SARC works globally. 
+For more precise details, always refer to the code; 
+
 - architecture
 	- [Diagramme](diagramme.md)
 - [Connection à mongoDB](mongodb_connection.md)
@@ -25,6 +28,7 @@
 		- connection au serveur
 	- [Health Monitor](health_monitor.md)
 		- sanity checks
+- [Backups](backups.md)
 
 - [Feuille de route](roadmap.md)
 
