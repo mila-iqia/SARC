@@ -29,10 +29,10 @@ flowchart TB
 	ldap -..- sarc
     sarc-.sacct.->cluster_mila
 
-    sarc-.ssh / sacct.-cluster_cedar
-    %% sarc-.ssh / sacct.->cluster_beluga
-    %% sarc-.ssh / sacct.->cluster_narval
-    %% sarc-.ssh / sacct.->cluster_graham
+    sarc-.ssh / sacct.->cluster_cedar
+    sarc-.ssh / sacct.->cluster_beluga
+    sarc-.ssh / sacct.->cluster_narval
+    sarc-.ssh / sacct.->cluster_graham
 
     client2["SARC (client)"]
 
