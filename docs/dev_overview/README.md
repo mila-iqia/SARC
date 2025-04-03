@@ -12,11 +12,9 @@ Some specific topics are more detailed in the `docs/` folder, this section is on
 - [Secrets files](secrets.md)
 - [Database initialisation](cli_db.md)
 - [Slurm info for DRAC clusters](cli_slurmconfig.md)
-- [Jobs](cli_jobs.md)
-- [Users](users.md)
-- [Clusters](clusters.md)
+- [Jobs scraping](cli_jobs.md)
+- [Users acquisition](users.md)
 - [RGUs](rgu.md)
-- [Storage](storage.md)
 - [Scheduling](scheduling.md)
 - Monitoring
 	- [Loki](loki.md)

@@ -1,5 +1,3 @@
 # Health Monitor
 
-## CLI
-
-## Sanity checks
+-- work in progress :-) --
