@@ -50,6 +50,11 @@ flowchart LR
 
 You can achieve that by setting a ssh tunnel and modify your `config/sarc-xxxx.json` file accordingly. Refer to the [documentation](../remote_mongo_access.md) page to do it.
 
+## Connect with MongoDB Compass
+
+Exactly like `SARC`, `Compass` can be used to connect to the database through an ssh tunnel. You can just copy the `connection_string` parameter from the SARC config file and use it in `Compass`
+
+
 ## Future database migration
 
 SARC will probably migrate its database to a mongoDB instance managed by IT, so that we won't have to manage the backups and security updates ourselves.

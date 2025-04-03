@@ -3,6 +3,8 @@
 This documentation is a global overview of the SARC codebase, how SARC works globally. 
 For more precise details, always refer to the code; 
 
+Some specific topics are more detailed in the `docs/` folder, this section is only meant to have an overview of the project.
+
 - [Connections diagram](connections_diagram.md)
 - [Connection to mongoDB](mongodb_connection.md)
 - [client mode vs scraping mode](client_scraping_modes.md)
