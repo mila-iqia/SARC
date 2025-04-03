@@ -20,6 +20,3 @@ Some specific topics are more detailed in the `docs/` folder, this section is on
 	- [Loki](loki.md)
 	- [Health Monitor](health_monitor.md)
 - [Backups](backups.md)
----
-- [Roadmap](roadmap.md)
-
