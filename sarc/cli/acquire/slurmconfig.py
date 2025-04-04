@@ -4,7 +4,7 @@ import io
 import logging
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from hostlist import expand_hostlist
 from simple_parsing import field
@@ -25,7 +25,7 @@ class AcquireSlurmConfig:
         required=False,
         help=(
             "Cluster config file date (format YYYY-MM-DD). "
-            "Used for file versioning. Should represents a day when config file has been updated "
+            "Used for file versioning. Should represent a day when config file has been updated "
             "(e.g. for new GPU billings, node GPUs, etc.). "
             "If not specified, uses current day and downloads config file from cluster."
         ),
@@ -43,7 +43,7 @@ class AcquireSlurmConfig:
             self.cluster_name, parser.day, slurm_conf.gpu_to_billing
         )
         _node_gpu_mapping_collection().save_node_gpu_mapping(
-            self.cluster_name, parser.day, slurm_conf.node_to_gpu
+            self.cluster_name, parser.day, slurm_conf.node_to_gpus
         )
         return 0
 
@@ -98,17 +98,18 @@ class SlurmConfigParser:
     def load(self, file) -> SlurmConfig:
         """
         Parse cached slurm conf file and return a SlurmConfig object
-        containing node_to_gpu and gpu_to_billing.
+        containing node_to_gpus and gpu_to_billing.
         """
         partitions: List[Partition] = []
-        node_to_gpu = {}
+        node_to_gpus: Dict[str, List[str]] = {}
 
-        # Parse lines: extract partitions and node_to_gpu
+        # Parse lines: extract partitions and node_to_gpus
         for line_number, line in enumerate(file):
             line = line.strip()
             if line.startswith("PartitionName="):
                 partitions.append(
                     Partition(
+                        cluster_name=self.cluster.name,
                         line_number=line_number + 1,
                         line=line,
                         info=dict(
@@ -120,42 +121,39 @@ class SlurmConfigParser:
                 nodes_config = dict(
                     option.split("=", maxsplit=1) for option in line.split()
                 )
-                gpu_type = nodes_config.get("Gres")
-                if gpu_type:
-                    node_to_gpu.update(
+                gres = nodes_config.get("Gres")
+                if gres:
+                    # A node may have many GPUs, e.g. MIG GPUs
+                    # Example on narval (2023-11-28):
+                    # NodeName=ng20304 ... Gres=gpu:a100_1g.5gb:8,gpu:a100_2g.10gb:4,gpu:a100_3g.20gb:4
+                    gpu_types = gres.split(",")
+                    node_to_gpus.update(
                         {
-                            node_name: gpu_type
+                            node_name: gpu_types
                             for node_name in expand_hostlist(nodes_config["NodeName"])
                         }
                     )
 
         # Parse partitions: extract gpu_to_billing
-        gpu_to_billing = self._parse_gpu_to_billing(partitions, node_to_gpu)
+        gpu_to_billing = self._parse_gpu_to_billing(partitions, node_to_gpus)
 
         # Return parsed data
-        return SlurmConfig(node_to_gpu=node_to_gpu, gpu_to_billing=gpu_to_billing)
+        return SlurmConfig(node_to_gpus=node_to_gpus, gpu_to_billing=gpu_to_billing)
 
     def _parse_gpu_to_billing(
-        self, partitions: List[Partition], node_to_gpu: Dict[str, str]
+        self, partitions: List[Partition], node_to_gpus: Dict[str, List[str]]
     ) -> Dict[str, float]:
-
         # Mapping of GPU to partition billing.
-        # ALlow to check that inferred billing for a GPU is the same across partitions.
+        # Allow to check that inferred billing for a GPU is the same across partitions.
         # If not, an error will be raised with additional info about involved partitions.
         gpu_to_partition_billing: Dict[str, PartitionGPUBilling] = {}
 
-        # Collection for all GPUs found in partition nodes.
-        # We will later iterate on this collection to resolve any GPU without billing.
-        all_partition_node_gpus = set()
-
         for partition in partitions:
-            # Get all GPUs in partition nodes and all partition GPU billings.
-            local_gres, local_gpu_to_billing = (
-                partition.get_gpus_and_partition_billings(node_to_gpu)
+            # Get billing from this partition
+            parsed_partition = partition.parse(node_to_gpus)
+            local_gpu_to_billing = parsed_partition.get_harmonized_gpu_to_billing(
+                self.cluster
             )
-
-            # Merge local GPUs into global partition node GPUs.
-            all_partition_node_gpus.update(local_gres)
 
             # Merge local GPU billings into global GPU billings
             for gpu_type, value in local_gpu_to_billing.items():
@@ -170,39 +168,14 @@ class SlurmConfigParser:
                     raise InconsistentGPUBillingError(
                         gpu_type, gpu_to_partition_billing[gpu_type], new_billing
                     )
-
-        # Generate GPU->billing mapping
-        gpu_to_billing = {
-            gpu_type: billing.value
-            for gpu_type, billing in gpu_to_partition_billing.items()
-        }
-
-        # Resolve GPUs without billing
-        for gpu_desc in all_partition_node_gpus:
-            if gpu_desc not in gpu_to_billing:
-                if gpu_desc.startswith("gpu:") and gpu_desc.count(":") == 2:
-                    # GPU resource with format `gpu:<real-gpu-type>:<gpu-count>`
-                    _, gpu_type, gpu_count = gpu_desc.split(":")
-                    if gpu_type in gpu_to_billing:
-                        billing = gpu_to_billing[gpu_type] * int(gpu_count)
-                        gpu_to_billing[gpu_desc] = billing
-                        logger.info(f"Inferred billing for {gpu_desc} := {billing}")
-                    else:
-                        logger.warning(
-                            f"Cannot find GPU billing for GPU type {gpu_type} in GPU resource {gpu_desc}"
-                        )
-                else:
-                    logger.warning(f"Cannot infer billing for GPU: {gpu_desc}")
-
-        # We can finally return GPU->billing mapping.
-        return gpu_to_billing
+        return {gpu: billing.value for gpu, billing in gpu_to_partition_billing.items()}
 
 
 @dataclass
 class SlurmConfig:
     """Parsed data from slurm config file"""
 
-    node_to_gpu: Dict[str, str]
+    node_to_gpus: Dict[str, List[str]]
     gpu_to_billing: Dict[str, float]
 
 
@@ -210,19 +183,32 @@ class SlurmConfig:
 class Partition:
     """Partition entry in slurm config file"""
 
+    cluster_name: str
     line_number: int
     line: str
     info: Dict[str, str]
 
-    def get_gpus_and_partition_billings(self, node_to_gpu: Dict[str, str]):
-        """
-        Parse and return:
-        - partition node GPUs
-        - partition GPU billings inferred from field `TRESBillingWeights`
-        """
+    @property
+    def nodes(self) -> str:
+        """Return hostlist of partition nodes"""
+        return self.info["Nodes"]
 
-        # Get partition node GPUs
-        local_gres = self._get_node_gpus(node_to_gpu)
+    def message(self, msg: str) -> str:
+        """For logging: prepend given message with cluster name and partition name"""
+        return f"[{self.cluster_name}][{self.info['PartitionName']}] {msg}"
+
+    def parse(self, node_to_gpus: Dict[str, List[str]]) -> ParsedPartition:
+        """Parse partition's gpu => nodes, gpu => billing, and default billing"""
+
+        # Map each partition GPU to belonging nodes
+        gpu_to_nodes = {}
+        for node_name in expand_hostlist(self.nodes):
+            for gpu_type in node_to_gpus.get(node_name, ()):
+                # Parse `gpu:<real gpu name>:<count>` if necessary
+                if gpu_type.startswith("gpu:") and gpu_type.count(":") == 2:
+                    _, real_gpu_type, _ = gpu_type.split(":")
+                    gpu_type = real_gpu_type
+                gpu_to_nodes.setdefault(gpu_type, []).append(node_name)
 
         # Get GPU weights from TRESBillingWeights
         tres_billing_weights = dict(
@@ -236,46 +222,105 @@ class Partition:
             if key.startswith("GRES/gpu")
         }
 
-        # Parse local GPU billings
-        local_gpu_to_billing = {}
+        # Parse partition GPU billings
+        default_billing = None
+        gpu_to_billing = {}
         for key, value in gpu_weights.items():
             value = float(value)
             if key == "GRES/gpu":
                 if len(gpu_weights) == 1:
                     # We only have `GRES/gpu=<value>`
-                    # Let's map value to each GPU found in partition nodes
-                    local_gpu_to_billing.update(
-                        {gpu_name: value for gpu_name in local_gres}
-                    )
+                    # Save it as default billing for all partition GPUs
+                    default_billing = value
                 else:
                     # We have both `GRES/gpu=<value>` and at least one `GRES/gpu:a_gpu=a_value`.
                     # Ambiguous case, cannot map `GRES/gpu=<value>` to a specific GPU.
                     logger.debug(
-                        f"[line {self.line_number}] "
-                        f"Ignored ambiguous GPU billing (cannot match to a specific GPU): `{key}={value}` "
-                        f"| partition: {self.info['PartitionName']} "
-                        # f"| nodes: {partition.info['Nodes']}, "
-                        f"| nodes GPUs: {', '.join(local_gres)} "
-                        f"| TRESBillingWeights: {self.info['TRESBillingWeights']}"
+                        self.message(
+                            f"Ignored ambiguous GPU billing (cannot match to a specific GPU): `{key}={value}` "
+                            f"| nodes GPUs: {', '.join(sorted(gpu_to_nodes.keys()))} "
+                            f"| TRESBillingWeights: {self.info['TRESBillingWeights']}"
+                        )
                     )
             else:
                 # We have `GRES/gpu:a_gpu=a_value`.
                 # We can parse.
-                _, gpu_name = key.split(":", maxsplit=1)
-                local_gpu_to_billing[gpu_name] = value
+                _, gpu_type = key.split(":", maxsplit=1)
+                gpu_to_billing[gpu_type] = value
 
-        return local_gres, local_gpu_to_billing
-
-    def _get_node_gpus(self, node_to_gpu: Dict[str, str]) -> List[str]:
-        """Return all GPUs found in partition nodes"""
-        return sorted(
-            {
-                gres
-                for node_name in expand_hostlist(self.info["Nodes"])
-                for gres in node_to_gpu.get(node_name, "").split(",")
-                if gres
-            }
+        return ParsedPartition(
+            partition=self,
+            gpu_to_nodes=gpu_to_nodes,
+            gpu_to_billing=gpu_to_billing,
+            default_billing=default_billing,
         )
+
+
+@dataclass
+class ParsedPartition:
+    partition: Partition
+    gpu_to_nodes: Dict[str, List[str]]
+    gpu_to_billing: Dict[str, float]
+    default_billing: Optional[float]
+
+    def get_harmonized_gpu_to_billing(self, cluster: ClusterConfig) -> Dict[str, float]:
+        """
+        Convert GPU names read from slurm conf file into harmonized GPU names.
+
+        Return harmonized GPU => billing mapping.
+        """
+
+        gpu_to_billing = self.gpu_to_billing.copy()
+        gpus_not_billed = [
+            gpu for gpu in self.gpu_to_nodes if gpu not in gpu_to_billing
+        ]
+        # If default billing is available,
+        # set it as billing for all GPUs not yet billed in this partition.
+        if self.default_billing is not None:
+            for gpu_type in gpus_not_billed:
+                gpu_to_billing[gpu_type] = self.default_billing
+
+        # Build harmonized GPU => billing mapping.
+        harmonized_gpu_to_billing = {}
+        for gpu, billing in gpu_to_billing.items():
+            if gpu in self.gpu_to_nodes:
+                harmonized_gpu_names = {
+                    cluster.harmonize_gpu(node_name, gpu)
+                    for node_name in self.gpu_to_nodes[gpu]
+                }
+                harmonized_gpu_names.discard(None)
+                if not harmonized_gpu_names:
+                    logger.warning(
+                        self.partition.message(
+                            f"Cannot harmonize: {gpu} (keep this name as-is) : {self.partition.nodes}"
+                        )
+                    )
+                    harmonized_gpu_to_billing[gpu] = billing
+                else:
+                    if len(harmonized_gpu_names) != 1:
+                        # We may find many harmonized names for a same GPU name.
+                        # Example on graham (2024-04-03), partition gpubase_bynode_b1:
+                        # v100 => {'V100-SXM2-32GB', 'V100-PCIe-16GB'}
+                        # Let's just associate billing to all harmonized names
+                        logger.debug(
+                            self.partition.message(
+                                f"harmonize to multiple names: {gpu} => {harmonized_gpu_names} : {self.partition.nodes}"
+                            )
+                        )
+                    for name in sorted(harmonized_gpu_names):
+                        assert name not in harmonized_gpu_to_billing, (
+                            name,
+                            billing,
+                            harmonized_gpu_to_billing,
+                        )
+                        harmonized_gpu_to_billing[name] = billing
+            else:
+                logger.warning(
+                    self.partition.message(
+                        f"GPU not in partition nodes: {gpu} (billing: {billing})"
+                    )
+                )
+        return harmonized_gpu_to_billing
 
 
 @dataclass
