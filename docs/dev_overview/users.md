@@ -3,7 +3,7 @@
 ## CLI
 
 ```
-SARC_MODE=scraping poetry run sarc acquire users
+SARC_MODE=scraping uv run sarc acquire users
 ```
 
 source code: [sarc/cli/acquire/users.py](../../sarc/cli/acquire/users.py)

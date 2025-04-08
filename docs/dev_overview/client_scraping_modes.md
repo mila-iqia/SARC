@@ -5,7 +5,7 @@ SARC has two modes: `client` (read-only) and `scraping` (r/w)
 By default, the CLI uses the `client` mode. To enable the `scraping mode` you have to set the envvar `SARC_MODE=scraping` :
 
 ```
-# SARC_MODE=scraping poetry run sarc acquire users
+# SARC_MODE=scraping uv run sarc acquire users
 ```
 
 The two modes use different config files.  cf [Configuration file](config_file.md)
