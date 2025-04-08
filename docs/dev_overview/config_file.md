@@ -5,8 +5,8 @@ The env var `SARC_MODE` specifies the mode (see [Client mode vs scraping mode](c
 
 The env var `SARC_CONFIG` can be used to specify wich config file to use; example:
 ```
-% SARC_CONFIG=config/sarc-client.json poetry run sarc health history
-% SARC_MODE=scraping SARC_CONFIG=config/sarc-dev.json.json poetry run sarc acquire jobs -d auto -c mila
+% SARC_CONFIG=config/sarc-client.json uv run sarc health history
+% SARC_MODE=scraping SARC_CONFIG=config/sarc-dev.json.json uv run sarc acquire jobs -d auto -c mila
 ```
 The config file must match the wanted mode (client/scraping) otherwise `pydantic` will prevent the program to run (too many fields or missing fields, depending on the case). 
 
@@ -40,7 +40,7 @@ For example, there is usually a copy of the production database named "sarc-back
 
 An unversionned modified copy of `config/sarc-prod.json` with the corresponding mongodb connection string can be used to test wacky things:
 ```
-% SARC_CONFIG=config/sarc-backup-rw.json SARC_MODE=scraping poetry run sarc acquire jobs -c mila -d auto
+% SARC_CONFIG=config/sarc-backup-rw.json SARC_MODE=scraping uv run sarc acquire jobs -c mila -d auto
 ```
 
 Another good practice is to NEVER set the db write password in the `config/sarc-prod.json` on dev machines, to avoid any accident on the production database. The corresponding section of `sarc-prod.json` is set like so in the repository:
