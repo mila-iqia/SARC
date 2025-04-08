@@ -765,15 +765,15 @@ wheels = [
 
 [[package]]
 name = "gifnoc"
-version = "0.2.3"
+version = "0.4.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "apischema" },
     { name = "ovld" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c9/75/78ee3a1e2880b00eb2b3b5852425f9065754ac842f392f0be6201ebf0e13/gifnoc-0.2.3.tar.gz", hash = "sha256:34ace9ede0c6fb818ca236e3ca12f3dcd26d796dc047264a816066cb928658b5", size = 16138 }
+sdist = { url = "https://files.pythonhosted.org/packages/26/e0/7912acddbc26678a7eb76e9bde98bb34bd23a7215e8f7c510e53964c8bb9/gifnoc-0.4.2.tar.gz", hash = "sha256:4626dd34fdf81957acf05949b02b7138dbc82bb0e3b02d177666a368cd7fcd4f", size = 37452 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/00/1a/4336ae226f96f9f249eaead2762695525c63db2467624ad28dda32d7c01c/gifnoc-0.2.3-py3-none-any.whl", hash = "sha256:428940ee0664a04115114fa2b28072f9b20921408cd12e50164e5ac4c049cf82", size = 20074 },
+    { url = "https://files.pythonhosted.org/packages/a2/ee/8e0cd154230c6ec74864ed013b677b23ee1a7e299b18d6a8a034d1099c7e/gifnoc-0.4.2-py3-none-any.whl", hash = "sha256:3fe1cac3a954b2cab4f78a4dfd203c55cdcc8e480d0fd745a5b65527d5ece194", size = 20628 },
 ]
 
 [[package]]
@@ -1814,11 +1814,11 @@ wheels = [
 
 [[package]]
 name = "ovld"
-version = "0.3.9"
+version = "0.4.6"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/b6/0a/42033f83efdd405f32b8322609ccff4d509cd7c87360dab02299a398cb10/ovld-0.3.9.tar.gz", hash = "sha256:ef7eda584f62266fb3260345a91f0d888b938652fc790f3a95b349237e262f0b", size = 57532 }
+sdist = { url = "https://files.pythonhosted.org/packages/52/84/3e01357e154af0fbae0d8b1e1b15c2020895640e863e1d4fdccc6573ee32/ovld-0.4.6.tar.gz", hash = "sha256:7891086d04e34641a11d8088f28426b4a55971f54f55b7f5278739e3a8927168", size = 1166577 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a0/02/b03645e5cf857be63e949410d5bb58da0e998d84135837fc8580c26fa0d2/ovld-0.3.9-py3-none-any.whl", hash = "sha256:41c9c6555dc7749f71a020dcbc335dd834585876bfbb09d27fd9a5be40bb6e57", size = 18234 },
+    { url = "https://files.pythonhosted.org/packages/d2/ea/ca0dbbd39b35611076c1e353b3dd0f57b32f74d961d6c4e360db78155535/ovld-0.4.6-py3-none-any.whl", hash = "sha256:097764be018fae98a6baf15e209bd1df5da1643ece40ef7fc59a0313d2a96e88", size = 30912 },
 ]
 
 [[package]]
@@ -2708,7 +2708,7 @@ examples = [
 requires-dist = [
     { name = "fabric", specifier = ">=3.0.0,<4" },
     { name = "flatten-dict", specifier = ">=0.4.2,<0.5" },
-    { name = "gifnoc", specifier = ">=0.2.3,<0.3" },
+    { name = "gifnoc", specifier = ">=0.4.2,<0.5" },
     { name = "ldap3", specifier = ">=2.9.1,<3" },
     { name = "myst-parser", specifier = ">=2.0.0,<3" },
     { name = "nbsphinx", specifier = ">=0.9.3,<0.10" },
