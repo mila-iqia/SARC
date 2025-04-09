@@ -24,7 +24,7 @@ dependencies = [
     "opentelemetry-api>=1.23.0,<2",
     "opentelemetry-sdk>=1.23.0,<2",
     "requests-mock>=1.11.0,<2",
-    "pandas< 2.1.0",
+    "pandas<2.2.4",
     "gifnoc>=0.4.2,<0.5",
     "watchdog>=6,<7",
     "python-dateutil>=2.9.0.post0,<3",
