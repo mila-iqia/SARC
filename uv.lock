@@ -2022,9 +2022,9 @@ wheels = [
 
 [[package]]
 name = "python-hostlist"
-version = "1.23.0"
+version = "2.2.1"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/94/c4/9d20bc8da281d901a0e53e1edbaca3defc53920b3a2fd3f45f76a5dd2b3d/python-hostlist-1.23.0.tar.gz", hash = "sha256:56e0156b501f792c078114f07324f34f37827041581ee5d1ffdce89cca533219", size = 36884 }
+sdist = { url = "https://files.pythonhosted.org/packages/2e/dd/c9ef1591ca0d0b4f2197751ecfbdf5c718cf4381bc4d7199eeba2dc90c42/python-hostlist-2.2.1.tar.gz", hash = "sha256:bbf7ca58835f84c6991084a661b409bc9cb3359c9f71be9b752442ba9225a0a5", size = 37216 }
 
 [[package]]
 name = "python-json-logger"
@@ -2290,7 +2290,7 @@ requires-dist = [
     { name = "pydantic-mongo", specifier = ">=1.0.1,<2" },
     { name = "pymongo", specifier = ">=4.3.3,<5" },
     { name = "python-dateutil", specifier = ">=2.9.0.post0,<3" },
-    { name = "python-hostlist", specifier = ">=1.23.0,<2" },
+    { name = "python-hostlist", specifier = ">=2.2.1,<3" },
     { name = "requests-mock", specifier = ">=1.11.0,<2" },
     { name = "simple-parsing", specifier = ">=0.1.0,<0.2" },
     { name = "sphinx", specifier = ">=8.2.3,<9" },
