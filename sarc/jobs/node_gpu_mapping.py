@@ -5,7 +5,7 @@ import logging
 from datetime import datetime, time
 from typing import Dict, Optional
 
-from pydantic import validator
+from pydantic import field_validator
 from pydantic_mongo import AbstractRepository, ObjectIdField
 
 from sarc.config import MTL, UTC, config, scraping_mode_required
@@ -24,7 +24,7 @@ class NodeGPUMapping(BaseModel):
     since: datetime
     node_to_gpu: Dict[str, str]
 
-    @validator("since", pre=True)
+    @field_validator("since", mode="before")
     @classmethod
     def _ensure_since(cls, value):
         """Parse `since` from stored string to Python datetime."""

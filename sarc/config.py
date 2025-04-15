@@ -39,11 +39,11 @@ class ClusterConfig:
     prometheus_headers_file: str = None
     name: str = None
     sacct_bin: str = "sacct"
-    accounts: list[str] = None
+    accounts: list[str] | None = None
     sshconfig: Path = None
-    duc_inodes_command: str = None
-    duc_storage_command: str = None
-    diskusage_report_command: str = None
+    duc_inodes_command: str | None = None
+    duc_storage_command: str | None = None
+    diskusage_report_command: str | None = None
     start_date: str = "2022-04-01"
     rgu_start_date: str = None
     gpu_to_rgu_billing: Path = None
@@ -182,7 +182,7 @@ class LoggingConfig:
 @dataclass
 class ClientConfig:
     mongo: MongoConfig
-    cache: Path = None
+    cache: Annotated[Path, AfterValidator(_absolute_path)] = None
     loki: LokiConfig = None
     tempo: TempoConfig = None
     health_monitor: HealthMonitorConfig = None
@@ -193,7 +193,7 @@ class Config(ClientConfig):
     ldap: LDAPConfig = None
     mymila: MyMilaConfig = None
     account_matching: AccountMatchingConfig = None
-    sshconfig: Path = None
+    sshconfig: Annotated[Path, AfterValidator(_absolute_path)] = None
     clusters: dict[str, ClusterConfig] = None
     logging: LoggingConfig = None
 

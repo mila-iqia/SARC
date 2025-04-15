@@ -28,13 +28,13 @@ class User(BaseModel):
     name: str
 
     mila: Credentials
-    drac: Optional[Credentials]
+    drac: Optional[Credentials] = None
 
     teacher_delegations: Optional[list[str]] = None
 
     mila_ldap: dict
-    drac_members: Optional[dict]
-    drac_roles: Optional[dict]
+    drac_members: Optional[dict] = None
+    drac_roles: Optional[dict] = None
 
     record_start: Optional[date] = None
     record_end: Optional[date] = None

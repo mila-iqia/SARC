@@ -4,7 +4,7 @@ import logging
 from datetime import datetime, time
 from typing import Dict, List
 
-from pydantic import validator
+from pydantic import field_validator
 from pydantic_mongo import AbstractRepository, ObjectIdField
 
 from sarc.config import MTL, UTC, config, scraping_mode_required
@@ -23,7 +23,7 @@ class GPUBilling(BaseModel):
     since: datetime
     gpu_to_billing: Dict[str, float]
 
-    @validator("since", pre=True)
+    @field_validator("since", mode="before")
     @classmethod
     def _ensure_since(cls, value):
         """Parse `since` from stored string to Python datetime."""

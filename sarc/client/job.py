@@ -4,7 +4,7 @@ from datetime import datetime, time, timedelta
 from enum import Enum
 from typing import Iterable, Optional
 
-from pydantic import validator
+from pydantic import field_validator
 from pydantic_mongo import AbstractRepository, ObjectIdField
 
 from sarc.traces import trace_decorator
@@ -68,16 +68,16 @@ class Statistics(BaseModel):
 class JobStatistics(BaseModel):
     """Statistics for a job."""
 
-    gpu_utilization: Optional[Statistics]
-    gpu_utilization_fp16: Optional[Statistics]
-    gpu_utilization_fp32: Optional[Statistics]
-    gpu_utilization_fp64: Optional[Statistics]
-    gpu_sm_occupancy: Optional[Statistics]
-    gpu_memory: Optional[Statistics]
-    gpu_power: Optional[Statistics]
+    gpu_utilization: Optional[Statistics] = None
+    gpu_utilization_fp16: Optional[Statistics] = None
+    gpu_utilization_fp32: Optional[Statistics] = None
+    gpu_utilization_fp64: Optional[Statistics] = None
+    gpu_sm_occupancy: Optional[Statistics] = None
+    gpu_memory: Optional[Statistics] = None
+    gpu_power: Optional[Statistics] = None
 
-    cpu_utilization: Optional[Statistics]
-    system_memory: Optional[Statistics]
+    cpu_utilization: Optional[Statistics] = None
+    system_memory: Optional[Statistics] = None
 
     def empty(self):
         return (
@@ -96,12 +96,12 @@ class JobStatistics(BaseModel):
 class SlurmResources(BaseModel):
     """Counts for various resources."""
 
-    cpu: Optional[int]
-    mem: Optional[int]
-    node: Optional[int]
-    billing: Optional[int]
-    gres_gpu: Optional[int]
-    gpu_type: Optional[str]
+    cpu: Optional[int] = None
+    mem: Optional[int] = None
+    node: Optional[int] = None
+    billing: Optional[int] = None
+    gres_gpu: Optional[int] = None
+    gpu_type: Optional[str] = None
 
 
 class SlurmJob(BaseModel):
@@ -114,16 +114,16 @@ class SlurmJob(BaseModel):
     cluster_name: str
     account: str
     job_id: int
-    array_job_id: Optional[int]
-    task_id: Optional[int]
+    array_job_id: Optional[int] = None
+    task_id: Optional[int] = None
     name: str
     user: str
     group: str
 
     # status
     job_state: SlurmState
-    exit_code: Optional[int]
-    signal: Optional[int]
+    exit_code: Optional[int] = None
+    signal: Optional[int] = None
 
     # allocation information
     partition: str
@@ -131,9 +131,9 @@ class SlurmJob(BaseModel):
     work_dir: str
 
     # Miscellaneous
-    constraints: Optional[str]
-    priority: Optional[int]
-    qos: Optional[str]
+    constraints: Optional[str] = None
+    priority: Optional[int] = None
+    qos: Optional[str] = None
 
     # Flags
     CLEAR_SCHEDULING: bool = False
@@ -142,10 +142,10 @@ class SlurmJob(BaseModel):
     STARTED_ON_BACKFILL: bool = False
 
     # temporal fields
-    time_limit: Optional[int]
+    time_limit: Optional[int] = None
     submit_time: datetime
-    start_time: Optional[datetime]
-    end_time: Optional[datetime]
+    start_time: Optional[datetime] = None
+    end_time: Optional[datetime] = None
     elapsed_time: int
 
     # tres
@@ -155,7 +155,8 @@ class SlurmJob(BaseModel):
     # statistics
     stored_statistics: Optional[JobStatistics] = None
 
-    @validator("submit_time", "start_time", "end_time")
+    @field_validator("submit_time", "start_time", "end_time")
+    @classmethod
     def _ensure_timezone(cls, v):
         # We'll store in MTL timezone because why not
         return v and v.replace(tzinfo=UTC).astimezone(MTL)
