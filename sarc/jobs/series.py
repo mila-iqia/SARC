@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas
-from pandas import DataFrame
+from pandas import DataFrame, Series
 from prometheus_api_client import MetricRangeDataFrame
 
 from sarc.client.job import JobStatistics, SlurmJob, Statistics
@@ -171,11 +171,11 @@ def compute_job_statistics_one_metric(
 @trace_decorator()
 def compute_job_statistics(job: SlurmJob):
     statistics_dict = {
-        "mean": DataFrame.mean,
-        "std": DataFrame.std,
-        "max": DataFrame.max,
+        "mean": Series.mean,
+        "std": Series.std,
+        "max": Series.max,
         "q25": lambda self: self.quantile(0.25),
-        "median": DataFrame.median,
+        "median": Series.median,
         "q75": lambda self: self.quantile(0.75),
         "q05": lambda self: self.quantile(0.05),
     }
