@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Optional, Union
+from typing import Annotated, Optional, Union
 
 import pandas as pd
 from flatten_dict import flatten
-from pydantic import ByteSize, validator
+from pydantic import BeforeValidator, ByteSize
 from pydantic_mongo import AbstractRepository, ObjectIdField
 
 from sarc.config import config
@@ -59,16 +59,9 @@ class Allocation(BaseModel):
     resource_name: str
     group_name: str
     timestamp: datetime
-    start: date
-    end: date
+    start: Annotated[date, BeforeValidator(validate_date)]
+    end: Annotated[date, BeforeValidator(validate_date)]
     resources: AllocationRessources
-
-    _validate_start = validator("start", pre=True, always=True, allow_reuse=True)(
-        validate_date
-    )
-    _validate_end = validator("end", pre=True, always=True, allow_reuse=True)(
-        validate_date
-    )
 
 
 class AllocationsRepository(AbstractRepository[Allocation]):
