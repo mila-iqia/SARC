@@ -40,7 +40,7 @@ class ClusterConfig:
     name: str = None
     sacct_bin: str = "sacct"
     accounts: list[str] | None = None
-    sshconfig: Path = None
+    sshconfig: Path | None = None
     duc_inodes_command: str | None = None
     duc_storage_command: str | None = None
     diskusage_report_command: str | None = None
@@ -193,7 +193,7 @@ class Config(ClientConfig):
     ldap: LDAPConfig = None
     mymila: MyMilaConfig = None
     account_matching: AccountMatchingConfig = None
-    sshconfig: Annotated[Path, AfterValidator(_absolute_path)] = None
+    sshconfig: Annotated[Path | None, AfterValidator(_absolute_path)] = None
     clusters: dict[str, ClusterConfig] = None
     logging: LoggingConfig = None
 

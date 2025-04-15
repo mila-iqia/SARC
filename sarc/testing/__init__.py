@@ -21,6 +21,7 @@ def popen_reader(state, function, args, env, shell=False):
 
                 if len(line) > 0:
                     function(line.strip(), state)
+                print(line, end='')
 
             return sys.exit(process.poll())
         except KeyboardInterrupt:
