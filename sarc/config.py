@@ -72,11 +72,11 @@ class ClusterConfig(BaseModel):
     host: str = "localhost"
     timezone: Union[str, zoneinfo.ZoneInfo]  # | does not work with Pydantic's eval
     prometheus_url: str | None = None
-    prometheus_headers_file: str = None
+    prometheus_headers_file: str | None = None
     name: str = None
     sacct_bin: str = "sacct"
     accounts: list[str] | None = None
-    sshconfig: Path = None
+    sshconfig: Path | None = None
     duc_inodes_command: str | None = None
     duc_storage_command: str | None = None
     diskusage_report_command: str | None = None
@@ -88,7 +88,7 @@ class ClusterConfig(BaseModel):
     # Tell if billing (in job's requested|allocated field) is number of GPUs (True) or RGU (False)
     billing_is_gpu: bool = False
     # Dictionary mapping a node name -> gpu type -> IGUANE gpu name
-    gpus_per_nodes: Dict[str, Dict[str, str]] = Field(default_factory=dict)
+    gpus_per_nodes: Annotated[Dict[str, Dict[str, str]], Field(default_factory=dict)]
 
     @field_validator("timezone")
     @classmethod
@@ -251,7 +251,7 @@ class ScraperConfig(BaseModel):
     ldap: LDAPConfig = None
     mymila: MyMilaConfig = None
     account_matching: AccountMatchingConfig = None
-    sshconfig: Annotated[Path, AfterValidator(_absolute_path)] = None
+    sshconfig: Annotated[Path | None, AfterValidator(_absolute_path)] = None
     clusters: dict[str, ClusterConfig] = None
     logging: LoggingConfig = None
     loki: LokiConfig = None
@@ -300,7 +300,8 @@ def parse_config(config_path, config_cls=Config):
         )
 
     try:
-        cfg = config_cls.parse_file(config_path)
+        with open(config_path) as f:
+            cfg = config_cls.model_validate_json(f.read())
     except json.JSONDecodeError as exc:
         raise ConfigurationError(f"'{config_path}' contains malformed JSON") from exc
 
