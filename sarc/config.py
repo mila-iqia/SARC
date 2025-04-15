@@ -7,14 +7,13 @@ from contextvars import ContextVar
 from datetime import date, datetime
 from functools import cached_property
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional, Union, Annotated
 
 import pydantic
 import tzlocal
 from bson import ObjectId
 from hostlist import expand_hostlist
-from pydantic import BaseModel as _BaseModel
-from pydantic import Extra, Field, validator
+from pydantic import field_validator, Field, ConfigDict, BaseModel as _BaseModel, AfterValidator
 
 MTL = zoneinfo.ZoneInfo("America/Montreal")
 PST = zoneinfo.ZoneInfo("America/Vancouver")
@@ -40,15 +39,9 @@ def validate_date(value: Union[str, date, datetime]) -> date:
 
 
 class BaseModel(_BaseModel):
-    class Config:
-        # Forbid extra fields that are not explicitly defined
-        extra = Extra.forbid
-        # Ignore cached_property, this avoids errors with serialization
-        keep_untouched = (cached_property,)
-        # Serializer for mongo's object ids
-        json_encoders = {ObjectId: str}
-        # Allow types like ZoneInfo
-        arbitrary_types_allowed = True
+    # TODO[pydantic]: The following keys were removed: `json_encoders`.
+    # Check https://docs.pydantic.dev/dev-v2/migration/#changes-to-config for more information.
+    model_config = ConfigDict(extra="forbid", ignored_types=(cached_property,), json_encoders={ObjectId: str}, arbitrary_types_allowed=True)
 
     def dict(self, *args, **kwargs) -> dict[str, Any]:
         d = super().dict(*args, **kwargs)
@@ -78,33 +71,35 @@ DEFAULTS_FLAG = "__DEFAULTS__"
 class ClusterConfig(BaseModel):
     host: str = "localhost"
     timezone: Union[str, zoneinfo.ZoneInfo]  # | does not work with Pydantic's eval
-    prometheus_url: str = None
+    prometheus_url: str | None = None
     prometheus_headers_file: str = None
     name: str = None
     sacct_bin: str = "sacct"
-    accounts: list[str] = None
+    accounts: list[str] | None = None
     sshconfig: Path = None
-    duc_inodes_command: str = None
-    duc_storage_command: str = None
-    diskusage_report_command: str = None
+    duc_inodes_command: str | None = None
+    duc_storage_command: str | None = None
+    diskusage_report_command: str | None = None
     start_date: str = "2022-04-01"
     rgu_start_date: str = None
     gpu_to_rgu_billing: Path = None
     slurm_conf_host_path: str = "/etc/slurm/slurm.conf"
 
     # Tell if billing (in job's requested|allocated field) is number of GPUs (True) or RGU (False)
-    billing_is_gpu = False
+    billing_is_gpu: bool = False
     # Dictionary mapping a node name -> gpu type -> IGUANE gpu name
     gpus_per_nodes: Dict[str, Dict[str, str]] = Field(default_factory=dict)
 
-    @validator("timezone")
+    @field_validator("timezone")
+    @classmethod
     def _timezone(cls, value):
         if isinstance(value, str):
             return zoneinfo.ZoneInfo(value)
         else:
             return value
 
-    @validator("gpus_per_nodes")
+    @field_validator("gpus_per_nodes")
+    @classmethod
     def _expand_gpus_per_nodes(cls, value: dict):
         # Convert node list to node names with `expand_hostlist`
         return {
@@ -198,11 +193,13 @@ class LDAPConfig(BaseModel):
     group_to_prof_json_path: str = None
     exceptions_json_path: str = None
 
-    @validator("group_to_prof_json_path")
+    @field_validator("group_to_prof_json_path")
+    @classmethod
     def _relative_group_to_prof(cls, value):
         return relative_filepath(value)
 
-    @validator("exceptions_json_path")
+    @field_validator("exceptions_json_path")
+    @classmethod
     def _relative_exception(cls, value):
         return relative_filepath(value)
 
@@ -218,7 +215,8 @@ class TempoConfig(BaseModel):
 class MyMilaConfig(BaseModel):
     tmp_json_path: str
 
-    @validator("tmp_json_path")
+    @field_validator("tmp_json_path")
+    @classmethod
     def _relative_tmp(cls, value):
         return relative_filepath(value)
 
@@ -235,42 +233,39 @@ class LoggingConfig(BaseModel):
     service_name: str
 
 
-# pylint: disable=unused-argument,redefined-outer-name
-def _absolute_path(value, values, config, field):
+def _absolute_path(value):
     return value and value.expanduser().absolute()
 
 
 class Config(BaseModel):
     mongo: MongoConfig
-    cache: Path = None
+    cache: Annotated[Path, AfterValidator(_absolute_path)] = None
     loki: LokiConfig = None
     tempo: TempoConfig = None
-
-    _abs_path = validator("cache", allow_reuse=True)(_absolute_path)
 
 
 class ScraperConfig(BaseModel):
     mongo: MongoConfig
-    cache: Path = None
+    cache: Annotated[Path, AfterValidator(_absolute_path)] = None
 
     ldap: LDAPConfig = None
     mymila: MyMilaConfig = None
     account_matching: AccountMatchingConfig = None
-    sshconfig: Path = None
+    sshconfig: Annotated[Path, AfterValidator(_absolute_path)] = None
     clusters: dict[str, ClusterConfig] = None
     logging: LoggingConfig = None
     loki: LokiConfig = None
     tempo: TempoConfig = None
 
-    _abs_path = validator("cache", "sshconfig", allow_reuse=True)(_absolute_path)
 
-    @validator("clusters")
-    def _complete_cluster_fields(cls, value, values):
+    @field_validator("clusters", mode="after")
+    @classmethod
+    def _complete_cluster_fields(cls, value, info):
         for name, cluster in value.items():
             if not cluster.name:
                 cluster.name = name
-            if not cluster.sshconfig and "sshconfig" in values:
-                cluster.sshconfig = values["sshconfig"]
+            if not cluster.sshconfig and "sshconfig" in info.data:
+                cluster.sshconfig = info.data["sshconfig"]
         return value
 
 
