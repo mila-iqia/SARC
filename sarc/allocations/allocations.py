@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Optional, Annotated
+from typing import Annotated, Optional
 
 import pandas as pd
 from flatten_dict import flatten
-from pydantic import ByteSize, BeforeValidator
+from pydantic import BeforeValidator, ByteSize
 from pydantic_mongo import AbstractRepository, ObjectIdField
 
 from sarc.config import BaseModel, config, validate_date

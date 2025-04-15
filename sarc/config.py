@@ -7,13 +7,15 @@ from contextvars import ContextVar
 from datetime import date, datetime
 from functools import cached_property
 from pathlib import Path
-from typing import Any, Dict, Optional, Union, Annotated
+from typing import Annotated, Any, Dict, Optional, Union
 
 import pydantic
 import tzlocal
 from bson import ObjectId
 from hostlist import expand_hostlist
-from pydantic import field_validator, Field, ConfigDict, BaseModel as _BaseModel, AfterValidator
+from pydantic import AfterValidator
+from pydantic import BaseModel as _BaseModel
+from pydantic import ConfigDict, Field, field_validator
 
 MTL = zoneinfo.ZoneInfo("America/Montreal")
 PST = zoneinfo.ZoneInfo("America/Vancouver")
@@ -41,7 +43,12 @@ def validate_date(value: Union[str, date, datetime]) -> date:
 class BaseModel(_BaseModel):
     # TODO[pydantic]: The following keys were removed: `json_encoders`.
     # Check https://docs.pydantic.dev/dev-v2/migration/#changes-to-config for more information.
-    model_config = ConfigDict(extra="forbid", ignored_types=(cached_property,), json_encoders={ObjectId: str}, arbitrary_types_allowed=True)
+    model_config = ConfigDict(
+        extra="forbid",
+        ignored_types=(cached_property,),
+        json_encoders={ObjectId: str},
+        arbitrary_types_allowed=True,
+    )
 
     def dict(self, *args, **kwargs) -> dict[str, Any]:
         d = super().dict(*args, **kwargs)
@@ -257,7 +264,6 @@ class ScraperConfig(BaseModel):
     loki: LokiConfig = None
     tempo: TempoConfig = None
 
-
     @field_validator("clusters", mode="after")
     @classmethod
     def _complete_cluster_fields(cls, value, info):
@@ -300,7 +306,7 @@ def parse_config(config_path, config_cls=Config):
         )
 
     try:
-        with open(config_path) as f:
+        with open(config_path, encoding="utf-8") as f:
             cfg = config_cls.model_validate_json(f.read())
     except json.JSONDecodeError as exc:
         raise ConfigurationError(f"'{config_path}' contains malformed JSON") from exc
