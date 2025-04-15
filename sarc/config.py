@@ -324,7 +324,7 @@ def config():
 
     try:
         cfg = parse_config(config_path, config_class)
-    except pydantic.error_wrappers.ValidationError as err:
+    except pydantic.ValidationError as err:
         if config_class is Config:
             raise ConfigurationError(
                 "Try `SARC_MODE=scraping sarc ...` if you want admin rights"
