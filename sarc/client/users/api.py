@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Optional
 
-from pydantic_mongo import AbstractRepository, ObjectIdField
+from pydantic_mongo import AbstractRepository, PydanticObjectId
 
 from sarc.config import config
 from sarc.model import BaseModel
@@ -23,7 +23,7 @@ class Credentials(BaseModel):
 
 
 class User(BaseModel):
-    id: ObjectIdField = None
+    id: PydanticObjectId = None
 
     name: str
 
