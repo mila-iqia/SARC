@@ -3,10 +3,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import freezegun
 import pytest
 from _pytest.monkeypatch import MonkeyPatch
-
-import freezegun
 from pytest_regressions.data_regression import RegressionYamlDumper
 
 from sarc.config import using_config
@@ -16,15 +15,19 @@ from .allocations.factory import create_allocations
 from .diskusage.factory import create_diskusages
 from .jobs.factory import create_cluster_entries, create_jobs, create_users
 
-
 # this is to make the pytest-freezegun types serializable by pyyaml
 # (for use in pytest-regression)
 
-def repr_fakedatetime(dumper, data):
-    value = data.isoformat(' ')
-    return dumper.represent_scalar('tag:yaml.org,2002:timestamp', value)
 
-RegressionYamlDumper.add_custom_yaml_representer(freezegun.api.FakeDatetime, repr_fakedatetime)
+def repr_fakedatetime(dumper, data):
+    value = data.isoformat(" ")
+    return dumper.represent_scalar("tag:yaml.org,2002:timestamp", value)
+
+
+RegressionYamlDumper.add_custom_yaml_representer(
+    freezegun.api.FakeDatetime, repr_fakedatetime
+)
+
 
 @pytest.fixture
 def db_allocations():

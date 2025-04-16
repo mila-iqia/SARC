@@ -7,7 +7,7 @@ from contextvars import ContextVar
 from datetime import date, datetime
 from functools import cached_property
 from pathlib import Path
-from typing import Annotated, Any, Dict, Optional, Union
+from typing import Annotated, Dict, Optional, Union
 
 import pydantic
 import tzlocal
