@@ -63,7 +63,8 @@ class Allocation(BaseModel):
     end: Annotated[date, BeforeValidator(validate_date)]
     resources: AllocationRessources
 
-    @field_serializer('start', 'end')
+    # pylint: disable=unused-argument
+    @field_serializer("start", "end")
     def save_as_datetime(self, value, info):
         return datetime(year=value.year, month=value.month, day=value.day)
 
