@@ -28,7 +28,7 @@ def test_get_allocations(params, data_regression):
     data = get_allocations(**params)
 
     data_regression.check(
-        [allocation.json(exclude={"id": True}) for allocation in data]
+        [allocation.model_dump(exclude={"id": True}) for allocation in data]
     )
 
 

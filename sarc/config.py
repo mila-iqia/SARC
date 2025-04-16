@@ -50,22 +50,6 @@ class BaseModel(_BaseModel):
         arbitrary_types_allowed=True,
     )
 
-    def dict(self, *args, **kwargs) -> dict[str, Any]:
-        d = super().dict(*args, **kwargs)
-        for k, v in list(d.items()):
-            if isinstance(getattr(type(self), k, None), cached_property):
-                del d[k]
-                continue
-
-        for k, v in d.items():
-            if isinstance(v, date) and not isinstance(v, datetime):
-                d[k] = datetime(
-                    year=v.year,
-                    month=v.month,
-                    day=v.day,
-                )
-        return d
-
     def replace(self, **replacements):
         new_arguments = {**self.dict(), **replacements}
         return type(self)(**new_arguments)
@@ -88,8 +72,8 @@ class ClusterConfig(BaseModel):
     duc_storage_command: str | None = None
     diskusage_report_command: str | None = None
     start_date: str = "2022-04-01"
-    rgu_start_date: str = None
-    gpu_to_rgu_billing: Path = None
+    rgu_start_date: str | None = None
+    gpu_to_rgu_billing: Path | None = None
     slurm_conf_host_path: str = "/etc/slurm/slurm.conf"
 
     # Tell if billing (in job's requested|allocated field) is number of GPUs (True) or RGU (False)
@@ -247,8 +231,8 @@ def _absolute_path(value):
 class Config(BaseModel):
     mongo: MongoConfig
     cache: Annotated[Path, AfterValidator(_absolute_path)] = None
-    loki: LokiConfig = None
-    tempo: TempoConfig = None
+    loki: LokiConfig | None = None
+    tempo: TempoConfig | None = None
 
 
 class ScraperConfig(BaseModel):
@@ -261,8 +245,8 @@ class ScraperConfig(BaseModel):
     sshconfig: Annotated[Path | None, AfterValidator(_absolute_path)] = None
     clusters: dict[str, ClusterConfig] = None
     logging: LoggingConfig = None
-    loki: LokiConfig = None
-    tempo: TempoConfig = None
+    loki: LokiConfig | None = None
+    tempo: TempoConfig | None = None
 
     @field_validator("clusters", mode="after")
     @classmethod

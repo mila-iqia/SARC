@@ -6,7 +6,7 @@ from datetime import datetime, time
 from typing import Dict, Optional
 
 from pydantic import field_validator
-from pydantic_mongo import AbstractRepository, ObjectIdField
+from pydantic_mongo import AbstractRepository, PydanticObjectId
 
 from sarc.config import MTL, UTC, BaseModel, config, scraping_mode_required
 
@@ -17,7 +17,7 @@ class NodeGPUMapping(BaseModel):
     """Holds data for a mapping <node name> -> <GPU type>."""
 
     # # Database ID
-    id: ObjectIdField = None
+    id: PydanticObjectId = None
 
     cluster_name: str
     since: datetime

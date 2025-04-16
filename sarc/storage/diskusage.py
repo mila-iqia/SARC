@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime
 
 from pydantic import ByteSize
-from pydantic_mongo import AbstractRepository, ObjectIdField
+from pydantic_mongo import AbstractRepository, PydanticObjectId
 
 from sarc.config import BaseModel, config
 
@@ -25,7 +25,7 @@ class DiskUsage(BaseModel):
     """
 
     # # Database ID
-    id: ObjectIdField = None
+    id: PydanticObjectId = None
 
     cluster_name: str
     groups: list[DiskUsageGroup]

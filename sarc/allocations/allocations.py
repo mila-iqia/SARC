@@ -5,8 +5,8 @@ from typing import Annotated, Optional
 
 import pandas as pd
 from flatten_dict import flatten
-from pydantic import BeforeValidator, ByteSize
-from pydantic_mongo import AbstractRepository, ObjectIdField
+from pydantic import BeforeValidator, ByteSize, field_serializer
+from pydantic_mongo import AbstractRepository, PydanticObjectId
 
 from sarc.config import BaseModel, config, validate_date
 
@@ -39,7 +39,7 @@ def _convert_date_to_iso(date_value: date) -> datetime:
 
 class Allocation(BaseModel):
     # Database ID
-    id: ObjectIdField = None
+    id: PydanticObjectId = None
 
     cluster_name: str
     resource_name: str
@@ -48,6 +48,10 @@ class Allocation(BaseModel):
     start: Annotated[date, BeforeValidator(validate_date)]
     end: Annotated[date, BeforeValidator(validate_date)]
     resources: AllocationRessources
+
+    @field_serializer('start', 'end')
+    def save_as_datetime(self, value, info):
+        return datetime(year=value.year, month=value.month, day=value.day)
 
 
 class AllocationsRepository(AbstractRepository[Allocation]):

@@ -5,7 +5,7 @@ from enum import Enum
 from typing import Iterable, Optional
 
 from pydantic import field_validator
-from pydantic_mongo import AbstractRepository, ObjectIdField
+from pydantic_mongo import AbstractRepository, PydanticObjectId
 
 from sarc.traces import trace_decorator
 
@@ -108,7 +108,7 @@ class SlurmJob(BaseModel):
     """Holds data for a Slurm job."""
 
     # Database ID
-    id: ObjectIdField = None
+    id: PydanticObjectId = None
 
     # job identification
     cluster_name: str
@@ -400,7 +400,7 @@ class SlurmCLuster(BaseModel):
     """Hold data for a Slurm cluster."""
 
     # Database ID
-    id: ObjectIdField = None
+    id: PydanticObjectId = None
 
     cluster_name: str
     start_date: Optional[str] = None
