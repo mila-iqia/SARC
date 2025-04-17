@@ -65,7 +65,7 @@ def load_job_series(
         - Optional job series fields, added if clip_time is True:
           "unclipped_start" and "unclipped_end"
         - Optional user info fields if job users found.
-          Fields from `User.dict()` in format `user.<flattened dot-separated field>`,
+          Fields from `User.model_dump()` in format `user.<flattened dot-separated field>`,
           + special field `user.primary_email` containing either `user.mila.email` or fallback `job.user`.
     """
 
@@ -114,7 +114,7 @@ def load_job_series(
         if job.stored_statistics is None:
             job_series = DUMMY_STATS.copy()
         else:
-            job_series = job.stored_statistics.dict()
+            job_series = job.stored_statistics.model_dump()
             job_series = {k: _select_stat(k, v) for k, v in job_series.items()}
 
             # Replace `gpu_utilization > 1` with nan.
@@ -126,10 +126,16 @@ def load_job_series(
 
         # Flatten job.requested and job.allocated into job_series
         job_series.update(
-            {f"requested.{key}": value for key, value in job.requested.dict().items()}
+            {
+                f"requested.{key}": value
+                for key, value in job.requested.model_dump().items()
+            }
         )
         job_series.update(
-            {f"allocated.{key}": value for key, value in job.allocated.dict().items()}
+            {
+                f"allocated.{key}": value
+                for key, value in job.allocated.model_dump().items()
+            }
         )
         # Additional computations for job.allocated flattened fields.
         # TODO: Why is it possible to have billing smaller than gres_gpu???
@@ -151,7 +157,7 @@ def load_job_series(
         # Merge job series and job,
         # with job series overriding job fields if necessary.
         # Do not include raw requested and allocated anymore.
-        final_job_dict = job.dict(exclude={"requested", "allocated"})
+        final_job_dict = job.model_dump(exclude={"requested", "allocated"})
         final_job_dict.update(job_series)
         job_series = final_job_dict
 
@@ -241,18 +247,33 @@ class UserFlattener:
         # List "plain" attributes, i.e. attributes that are not objects.
         # This will exclude both nested Model objects as well a nested dicts.
         # Note that a `date` is described as a 'string' in schemas.
-        schema = User.schema()
+        schema = User.model_json_schema()
         schema_props = schema["properties"]
+
+        def filt(prop_desc):
+            """
+            In the schema type can be a simple 'type' marker if
+            the field has a single type or "'anyOf': [{'type': '...'},
+            {'type': '...'}, ...}]" for types like Optional[str] or
+            Union[str, int] which have more than one possible type.
+
+            This attempts to match the simple case and the Optional[...] case.
+            """
+            if prop_desc.get("type", "object") != "object":
+                return True
+            any_d = prop_desc.get("anyOf", None)
+            if any_d:
+                return not any(item.get("type", "object") == "object" for item in any_d)
+            return False
+
         self.plain_attributes = {
-            key
-            for key, prop_desc in schema_props.items()
-            if "type" in prop_desc and prop_desc["type"] != "object"
+            key for key, prop_desc in schema_props.items() if filt(prop_desc)
         }
 
     def flatten(self, user: User) -> dict:
         """Flatten given user."""
         # Get user dict.
-        base_user_dict = user.dict(exclude={"id"})
+        base_user_dict = user.model_dump(exclude={"id"})
         # Keep only plain attributes, or complex attributes that are not None.
         base_user_dict = {
             key: value

@@ -20,6 +20,6 @@ Found user:
     },
     "drac_members": null,
     "drac_roles": null,
-    "record_start": "2024-04-11",
+    "record_start": "2024-04-11T00:00:00",
     "record_end": null
 }

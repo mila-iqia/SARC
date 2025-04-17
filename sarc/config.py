@@ -7,14 +7,15 @@ from contextvars import ContextVar
 from datetime import date, datetime
 from functools import cached_property
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Annotated, Dict, Optional, Union
 
 import pydantic
 import tzlocal
 from bson import ObjectId
 from hostlist import expand_hostlist
+from pydantic import AfterValidator
 from pydantic import BaseModel as _BaseModel
-from pydantic import Extra, Field, validator
+from pydantic import ConfigDict, Field, field_validator
 
 MTL = zoneinfo.ZoneInfo("America/Montreal")
 PST = zoneinfo.ZoneInfo("America/Vancouver")
@@ -40,34 +41,17 @@ def validate_date(value: Union[str, date, datetime]) -> date:
 
 
 class BaseModel(_BaseModel):
-    class Config:
-        # Forbid extra fields that are not explicitly defined
-        extra = Extra.forbid
-        # Ignore cached_property, this avoids errors with serialization
-        keep_untouched = (cached_property,)
-        # Serializer for mongo's object ids
-        json_encoders = {ObjectId: str}
-        # Allow types like ZoneInfo
-        arbitrary_types_allowed = True
-
-    def dict(self, *args, **kwargs) -> dict[str, Any]:
-        d = super().dict(*args, **kwargs)
-        for k, v in list(d.items()):
-            if isinstance(getattr(type(self), k, None), cached_property):
-                del d[k]
-                continue
-
-        for k, v in d.items():
-            if isinstance(v, date) and not isinstance(v, datetime):
-                d[k] = datetime(
-                    year=v.year,
-                    month=v.month,
-                    day=v.day,
-                )
-        return d
+    # TODO[pydantic]: The following keys were removed: `json_encoders`.
+    # Check https://docs.pydantic.dev/dev-v2/migration/#changes-to-config for more information.
+    model_config = ConfigDict(
+        extra="forbid",
+        ignored_types=(cached_property,),
+        json_encoders={ObjectId: str},
+        arbitrary_types_allowed=True,
+    )
 
     def replace(self, **replacements):
-        new_arguments = {**self.dict(), **replacements}
+        new_arguments = {**self.model_dump(), **replacements}
         return type(self)(**new_arguments)
 
 
@@ -78,33 +62,35 @@ DEFAULTS_FLAG = "__DEFAULTS__"
 class ClusterConfig(BaseModel):
     host: str = "localhost"
     timezone: Union[str, zoneinfo.ZoneInfo]  # | does not work with Pydantic's eval
-    prometheus_url: str = None
-    prometheus_headers_file: str = None
+    prometheus_url: str | None = None
+    prometheus_headers_file: str | None = None
     name: str = None
     sacct_bin: str = "sacct"
-    accounts: list[str] = None
-    sshconfig: Path = None
-    duc_inodes_command: str = None
-    duc_storage_command: str = None
-    diskusage_report_command: str = None
+    accounts: list[str] | None = None
+    sshconfig: Path | None = None
+    duc_inodes_command: str | None = None
+    duc_storage_command: str | None = None
+    diskusage_report_command: str | None = None
     start_date: str = "2022-04-01"
-    rgu_start_date: str = None
-    gpu_to_rgu_billing: Path = None
+    rgu_start_date: str | None = None
+    gpu_to_rgu_billing: Path | None = None
     slurm_conf_host_path: str = "/etc/slurm/slurm.conf"
 
     # Tell if billing (in job's requested|allocated field) is number of GPUs (True) or RGU (False)
-    billing_is_gpu = False
+    billing_is_gpu: bool = False
     # Dictionary mapping a node name -> gpu type -> IGUANE gpu name
-    gpus_per_nodes: Dict[str, Dict[str, str]] = Field(default_factory=dict)
+    gpus_per_nodes: Annotated[Dict[str, Dict[str, str]], Field(default_factory=dict)]
 
-    @validator("timezone")
+    @field_validator("timezone")
+    @classmethod
     def _timezone(cls, value):
         if isinstance(value, str):
             return zoneinfo.ZoneInfo(value)
         else:
             return value
 
-    @validator("gpus_per_nodes")
+    @field_validator("gpus_per_nodes")
+    @classmethod
     def _expand_gpus_per_nodes(cls, value: dict):
         # Convert node list to node names with `expand_hostlist`
         return {
@@ -198,11 +184,13 @@ class LDAPConfig(BaseModel):
     group_to_prof_json_path: str = None
     exceptions_json_path: str = None
 
-    @validator("group_to_prof_json_path")
+    @field_validator("group_to_prof_json_path")
+    @classmethod
     def _relative_group_to_prof(cls, value):
         return relative_filepath(value)
 
-    @validator("exceptions_json_path")
+    @field_validator("exceptions_json_path")
+    @classmethod
     def _relative_exception(cls, value):
         return relative_filepath(value)
 
@@ -218,7 +206,8 @@ class TempoConfig(BaseModel):
 class MyMilaConfig(BaseModel):
     tmp_json_path: str
 
-    @validator("tmp_json_path")
+    @field_validator("tmp_json_path")
+    @classmethod
     def _relative_tmp(cls, value):
         return relative_filepath(value)
 
@@ -235,42 +224,38 @@ class LoggingConfig(BaseModel):
     service_name: str
 
 
-# pylint: disable=unused-argument,redefined-outer-name
-def _absolute_path(value, values, config, field):
+def _absolute_path(value):
     return value and value.expanduser().absolute()
 
 
 class Config(BaseModel):
     mongo: MongoConfig
-    cache: Path = None
-    loki: LokiConfig = None
-    tempo: TempoConfig = None
-
-    _abs_path = validator("cache", allow_reuse=True)(_absolute_path)
+    cache: Annotated[Path | None, AfterValidator(_absolute_path)] = None
+    loki: LokiConfig | None = None
+    tempo: TempoConfig | None = None
 
 
 class ScraperConfig(BaseModel):
     mongo: MongoConfig
-    cache: Path = None
+    cache: Annotated[Path | None, AfterValidator(_absolute_path)] = None
 
     ldap: LDAPConfig = None
     mymila: MyMilaConfig = None
     account_matching: AccountMatchingConfig = None
-    sshconfig: Path = None
+    sshconfig: Annotated[Path | None, AfterValidator(_absolute_path)] = None
     clusters: dict[str, ClusterConfig] = None
     logging: LoggingConfig = None
-    loki: LokiConfig = None
-    tempo: TempoConfig = None
+    loki: LokiConfig | None = None
+    tempo: TempoConfig | None = None
 
-    _abs_path = validator("cache", "sshconfig", allow_reuse=True)(_absolute_path)
-
-    @validator("clusters")
-    def _complete_cluster_fields(cls, value, values):
+    @field_validator("clusters", mode="after")
+    @classmethod
+    def _complete_cluster_fields(cls, value, info):
         for name, cluster in value.items():
             if not cluster.name:
                 cluster.name = name
-            if not cluster.sshconfig and "sshconfig" in values:
-                cluster.sshconfig = values["sshconfig"]
+            if not cluster.sshconfig and "sshconfig" in info.data:
+                cluster.sshconfig = info.data["sshconfig"]
         return value
 
 
@@ -305,7 +290,8 @@ def parse_config(config_path, config_cls=Config):
         )
 
     try:
-        cfg = config_cls.parse_file(config_path)
+        with open(config_path, encoding="utf-8") as f:
+            cfg = config_cls.model_validate_json(f.read())
     except json.JSONDecodeError as exc:
         raise ConfigurationError(f"'{config_path}' contains malformed JSON") from exc
 
@@ -329,7 +315,7 @@ def config():
 
     try:
         cfg = parse_config(config_path, config_class)
-    except pydantic.error_wrappers.ValidationError as err:
+    except pydantic.ValidationError as err:
         if config_class is Config:
             raise ConfigurationError(
                 "Try `SARC_MODE=scraping sarc ...` if you want admin rights"
