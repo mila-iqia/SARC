@@ -273,7 +273,7 @@ def test_load_job_series_with_stored_statistics(monkeypatch):
     re_frame = load_job_series(**params)
     assert re_jobs
     for i, re_job in enumerate(re_jobs):
-        stats = re_job.stored_statistics.dict()
+        stats = re_job.stored_statistics.model_dump()
         assert re_frame["system_memory"][i] == stats["system_memory"]["max"]
         assert re_frame["gpu_memory"][i] == stats["gpu_memory"]["max"]
         assert re_frame["gpu_utilization"][i] == stats["gpu_utilization"]["median"]

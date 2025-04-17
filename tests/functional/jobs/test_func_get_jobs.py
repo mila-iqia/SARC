@@ -32,7 +32,9 @@ def test_get_jobs(params, file_regression):
     jobs = list(get_jobs(**params))
     file_regression.check(
         f"Found {len(jobs)} job(s):\n"
-        + "\n".join([job.json(exclude={"id": True}, indent=4) for job in jobs])
+        + "\n".join(
+            [job.model_dump_json(exclude={"id": True}, indent=4) for job in jobs]
+        )
     )
 
 
@@ -41,7 +43,9 @@ def test_get_jobs_cluster_cfg(file_regression):
     jobs = list(get_jobs(cluster=config().clusters["fromage"]))
     file_regression.check(
         f"Found {len(jobs)} job(s):\n"
-        + "\n".join([job.json(exclude={"id": True}, indent=4) for job in jobs])
+        + "\n".join(
+            [job.model_dump_json(exclude={"id": True}, indent=4) for job in jobs]
+        )
     )
 
 

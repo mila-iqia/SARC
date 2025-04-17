@@ -51,7 +51,7 @@ class BaseModel(_BaseModel):
     )
 
     def replace(self, **replacements):
-        new_arguments = {**self.dict(), **replacements}
+        new_arguments = {**self.model_dump(), **replacements}
         return type(self)(**new_arguments)
 
 
@@ -230,14 +230,14 @@ def _absolute_path(value):
 
 class Config(BaseModel):
     mongo: MongoConfig
-    cache: Annotated[Path, AfterValidator(_absolute_path)] = None
+    cache: Annotated[Path | None, AfterValidator(_absolute_path)] = None
     loki: LokiConfig | None = None
     tempo: TempoConfig | None = None
 
 
 class ScraperConfig(BaseModel):
     mongo: MongoConfig
-    cache: Annotated[Path, AfterValidator(_absolute_path)] = None
+    cache: Annotated[Path | None, AfterValidator(_absolute_path)] = None
 
     ldap: LDAPConfig = None
     mymila: MyMilaConfig = None

@@ -1,5 +1,5 @@
 - cluster_name: fromage
-  end: 2019-04-01
+  end: 2019-04-01 00:00:00
   group_name: rrg-bonhomme-ad
   resource_name: fromage-gpu
   resources:
@@ -16,10 +16,10 @@
       object: 0
       project_inodes: null
       project_size: null
-  start: 2018-04-01
+  start: 2018-04-01 00:00:00
   timestamp: 2023-02-01 00:00:00
 - cluster_name: fromage
-  end: 2019-04-01
+  end: 2019-04-01 00:00:00
   group_name: rrg-bonhomme-ad
   resource_name: fromage-storage
   resources:
@@ -36,10 +36,10 @@
       object: 0
       project_inodes: null
       project_size: 70000000000000
-  start: 2018-04-01
+  start: 2018-04-01 00:00:00
   timestamp: 2023-02-01 00:00:00
 - cluster_name: fromage
-  end: 2021-04-01
+  end: 2021-04-01 00:00:00
   group_name: rrg-bonhomme-ad
   resource_name: fromage-gpu
   resources:
@@ -56,10 +56,10 @@
       object: 0
       project_inodes: null
       project_size: null
-  start: 2020-04-01
+  start: 2020-04-01 00:00:00
   timestamp: 2023-02-01 00:00:00
 - cluster_name: fromage
-  end: 2021-04-01
+  end: 2021-04-01 00:00:00
   group_name: rrg-bonhomme-ad
   resource_name: fromage-storage
   resources:
@@ -76,5 +76,5 @@
       object: 0
       project_inodes: 5000000.0
       project_size: 30000000000000
-  start: 2020-04-01
+  start: 2020-04-01 00:00:00
   timestamp: 2023-02-01 00:00:00
