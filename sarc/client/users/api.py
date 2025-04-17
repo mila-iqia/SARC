@@ -6,7 +6,7 @@ https://mila-iqia.atlassian.net/wiki/spaces/IDT/pages/2190737548/Planification
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import datetime
 from typing import Optional
 
 from pydantic_mongo import AbstractRepository, PydanticObjectId
@@ -36,8 +36,8 @@ class User(BaseModel):
     drac_members: Optional[dict] = None
     drac_roles: Optional[dict] = None
 
-    record_start: Optional[date] = None
-    record_end: Optional[date] = None
+    record_start: Optional[datetime] = None
+    record_end: Optional[datetime] = None
 
 
 class _UserRepository(AbstractRepository[User]):

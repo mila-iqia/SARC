@@ -167,7 +167,7 @@ def get_allocation_summaries(
     return pd.DataFrame(
         [
             flatten(
-                summary.dict(
+                summary.model_dump(
                     exclude={
                         "id",
                         "resource_name",
