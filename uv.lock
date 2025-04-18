@@ -1674,7 +1674,7 @@ wheels = [
 
 [[package]]
 name = "prometheus-api-client"
-version = "0.5.5"
+version = "0.6.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "dateparser" },
@@ -1684,9 +1684,9 @@ dependencies = [
     { name = "pandas" },
     { name = "requests" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/af/f1/e105375fbba5740be39f66c280657045340cbfb963a5e9d3e8210d74c3c2/prometheus-api-client-0.5.5.tar.gz", hash = "sha256:59449c4be0485ea5a2dfbbed2482eb0a3eeac8c131b3efc866df4c9a0c403bb7", size = 24208 }
+sdist = { url = "https://files.pythonhosted.org/packages/78/18/893d14d805164b6bd479aff7659a9cbf249628006dc4369058609029b9e1/prometheus_api_client-0.6.0.tar.gz", hash = "sha256:80822f1bb599febcab27c5ba2924b1c236d01f9b0df0308f91b5087937a6ad3e", size = 26004 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/98/82/f5b40951f29322c5e1ad8765987dba8be873ebb86522f686a2fb42726ca3/prometheus_api_client-0.5.5-py3-none-any.whl", hash = "sha256:e65ad16c262da15ed2d2288b521a80278feed2d31e7f0e732a935b67af8e24b4", size = 28431 },
+    { url = "https://files.pythonhosted.org/packages/fb/24/0c06c1d10aada3f9b44174c743e48d25e19f953ee9de5caf2c30099c342d/prometheus_api_client-0.6.0-py3-none-any.whl", hash = "sha256:137fa4576a76177547c4d7bb43e2a457df95f5bd81afe782896ba77ab87ebaf6", size = 30170 },
 ]
 
 [[package]]
@@ -2288,7 +2288,7 @@ requires-dist = [
     { name = "opentelemetry-exporter-otlp", specifier = ">=1.23.0,<2" },
     { name = "opentelemetry-sdk", specifier = ">=1.23.0,<2" },
     { name = "pandas", specifier = ">=2.2.0,<2.3.0" },
-    { name = "prometheus-api-client", specifier = ">=0.5.2,<0.6" },
+    { name = "prometheus-api-client", specifier = ">=0.6,<0.7" },
     { name = "pydantic", specifier = ">=1.10.4,<2" },
     { name = "pydantic-mongo", specifier = ">=1.0.1,<2" },
     { name = "pymongo", specifier = ">=4.3.3,<5" },
