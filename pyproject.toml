@@ -7,7 +7,7 @@ requires-python = "==3.11.*"
 readme = "README.md"
 dependencies = [
     "fabric>=3.0.0,<4",
-    "prometheus-api-client>=0.5.2,<0.6",
+    "prometheus-api-client>=0.6,<0.7",
     "pydantic>=1.10.4,<2",
     "pydantic-mongo>=1.0.1,<2",
     "pymongo>=4.3.3,<5",
