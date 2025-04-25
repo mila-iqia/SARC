@@ -138,6 +138,7 @@ class SlurmConfigParser:
     def _parse_gpu_to_billing(
         self, partitions: List[Partition], node_to_gpu: Dict[str, str]
     ) -> Dict[str, float]:
+
         # Mapping of GPU to partition billing.
         # ALlow to check that inferred billing for a GPU is the same across partitions.
         # If not, an error will be raised with additional info about involved partitions.
@@ -149,10 +150,9 @@ class SlurmConfigParser:
 
         for partition in partitions:
             # Get all GPUs in partition nodes and all partition GPU billings.
-            (
-                local_gres,
-                local_gpu_to_billing,
-            ) = partition.get_gpus_and_partition_billings(node_to_gpu)
+            local_gres, local_gpu_to_billing = (
+                partition.get_gpus_and_partition_billings(node_to_gpu)
+            )
 
             # Merge local GPUs into global partition node GPUs.
             all_partition_node_gpus.update(local_gres)

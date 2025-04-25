@@ -63,6 +63,7 @@ class CLI:
     )
 
     def execute(self) -> int:
+
         setupLogging(verbose_level=self.verbose)
 
         return self.command.execute()
