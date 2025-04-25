@@ -11,7 +11,6 @@ from sarc.config import config
 
 
 def getOpenTelemetryLoggingHandler(log_level=logging.WARNING):
-
     logger_provider = LoggerProvider(
         resource=Resource.create(
             {
@@ -39,7 +38,6 @@ def setupLogging(verbose_level: int = 0):
     }
 
     if config().logging:
-
         config_log_level = logging_levels.get(
             config().logging.log_level, logging.WARNING
         )
