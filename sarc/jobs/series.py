@@ -171,11 +171,11 @@ def compute_job_statistics_one_metric(
 @trace_decorator()
 def compute_job_statistics(job: SlurmJob):
     statistics_dict = {
-        "mean": DataFrame.mean,
-        "std": DataFrame.std,
-        "max": DataFrame.max,
+        "mean": lambda self: self.mean(),
+        "std": lambda self: self.std(),
+        "max": lambda self: self.max(),
         "q25": lambda self: self.quantile(0.25),
-        "median": DataFrame.median,
+        "median": lambda self: self.median(),
         "q75": lambda self: self.quantile(0.75),
         "q05": lambda self: self.quantile(0.05),
     }

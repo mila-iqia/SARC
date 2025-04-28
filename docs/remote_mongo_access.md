@@ -1,4 +1,4 @@
-# Remove Mongo access
+# Remote Mongo access
 
 ## MongoDB port tunneling
 
@@ -16,8 +16,8 @@ Simply modify the config JSON file you use:
 
 ```
     "mongo": {
-        "connection_string": "localhost:27018",
+        "connection_string": "mongodb://readuser:readpwd@localhost:27018/sarc",
         "database_name": "sarc"
     },
-
 ```
+

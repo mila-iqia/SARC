@@ -103,5 +103,5 @@ The procedure is:
 
 From the SARC folder:
 ```
-$ SARC_CONFIG=<path_to_config_file> poetry run sarc acquire users
+$ SARC_CONFIG=<path_to_config_file> uv run sarc acquire users
 ```
