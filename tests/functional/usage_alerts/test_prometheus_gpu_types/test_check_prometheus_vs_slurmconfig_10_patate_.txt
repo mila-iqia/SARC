@@ -1,0 +1,2 @@
+No prometheus data to check: no warning.
+
