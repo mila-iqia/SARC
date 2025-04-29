@@ -1,0 +1,2 @@
+Both slurm config data and prometheus data available, and prometheus GPU in slurm config: no warning.
+
