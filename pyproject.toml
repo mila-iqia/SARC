@@ -106,7 +106,7 @@ extension-pkg-whitelist = "pydantic"
 profile = "black"
 
 [[tool.mypy.overrides]]
-module = "sarc.config.*,sarc.alerts.*,sarc.account_matching.*,sarc.cache.*,sarc.users.*,sarc.storage.*,sarc.client.*,sarc.jobs.*,sarc.allocations.*,sarc.cli.*"
+module = "sarc.config.*,sarc.alerts.*,sarc.account_matching.*,sarc.cache.*,sarc.users.*,sarc.storage.*,sarc.client.*,sarc.jobs.*,sarc.allocations.*,sarc.cli.*,sarc.nodes.*"
 ignore_errors = true
 
 [[tool.mypy.overrides]]
