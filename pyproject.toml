@@ -54,6 +54,11 @@ dev = [
     "tabulate>=0.9.0,<0.10",
     "tox-uv>=1.25.0",
     "pytest-httpserver>=1.1.0",
+    "types-paramiko>=3.5.0.20240928",
+    "pandas-stubs>=2.2.3.250308",
+    "types-requests>=2.32.0.20250328",
+    "types-ldap3>=2.9.13.20240205",
+    "types-tqdm>=4.67.0.20250417",
 ]
 examples = ["seaborn>=0.13.2,<0.14"]
 
@@ -99,3 +104,23 @@ extension-pkg-whitelist = "pydantic"
 
 [tool.isort]
 profile = "black"
+
+[[tool.mypy.overrides]]
+module = "sarc.config.*,sarc.alerts.*,sarc.account_matching.*,sarc.cache.*,sarc.users.*,sarc.storage.*,sarc.client.*,sarc.jobs.*,sarc.allocations.*,sarc.cli.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "gifnoc.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "hostlist.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "fabric.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "prometheus_api_client.*"
+ignore_missing_imports = true
