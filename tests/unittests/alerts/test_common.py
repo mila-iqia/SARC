@@ -1,11 +1,10 @@
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
-from apischema import ValidationError, deserialize, serialize
-from gifnoc import TaggedSubclass
 from gifnoc.std import time
+from serieux import TaggedSubclass, deserialize
 
 from sarc.alerts.common import CheckException, CheckResult, CheckStatus
 
@@ -24,47 +23,6 @@ def beancheck(tmpdir):
         )
 
     yield fn
-
-
-@pytest.mark.parametrize(
-    "td",
-    [
-        timedelta(hours=1, seconds=14),
-        timedelta(days=1, hours=18),
-        timedelta(minutes=-5),
-    ],
-)
-def test_timedelta_serializer(td):
-    assert (ser := serialize(timedelta, td)) == f"{int(td.total_seconds())}s"
-    assert deserialize(timedelta, ser) == td
-
-
-def test_timedelta_serializer_microseconds():
-    td = timedelta(seconds=3, microseconds=651)
-    assert (ser := serialize(timedelta, td)) == f"3000651us"
-    assert deserialize(timedelta, ser) == td
-
-
-def test_timedelta_deserializer():
-    assert deserialize(timedelta, "1h14s") == timedelta(hours=1, seconds=14)
-    assert deserialize(timedelta, "1d18h") == timedelta(days=1, hours=18)
-    assert deserialize(timedelta, "1d2h3m4s") == timedelta(
-        days=1, hours=2, minutes=3, seconds=4
-    )
-    assert deserialize(timedelta, "-5h3m") == timedelta(hours=-5, minutes=-3)
-    assert deserialize(timedelta, "2.5h") == timedelta(hours=2, minutes=30)
-
-
-def test_date_deserializer():
-    assert deserialize(datetime, "2024-02-01T15:00:00Z") == datetime(
-        year=2024, month=2, day=1, hour=15, tzinfo=timezone.utc
-    )
-
-
-@pytest.mark.parametrize("inv", ["1h14", "3", "quack", "h", "1H13M"])
-def test_timedelta_invalid(inv):
-    with pytest.raises(ValidationError):
-        deserialize(timedelta, inv)
 
 
 def test_CheckResult_get_failures():

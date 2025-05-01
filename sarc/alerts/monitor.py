@@ -2,9 +2,8 @@ import json
 import logging
 from pathlib import Path
 
-from apischema import deserialize
-from gifnoc import TaggedSubclass
 from gifnoc.std import time
+from serieux import TaggedSubclass, deserialize
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 from watchdog.observers.polling import PollingObserver
@@ -43,8 +42,8 @@ class HealthMonitor:
         """Process the contents of a new file."""
         try:
             data = deserialize(
-                type=TaggedSubclass[CheckResult],
-                data=json.loads(file.read_text()),
+                TaggedSubclass[CheckResult],
+                json.loads(file.read_text()),
             )
             if data.name in self.checks:
                 check = self.checks[data.name]

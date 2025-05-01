@@ -18,7 +18,7 @@ def frozen_gifnoc_time():
 
 @pytest.fixture
 def beans_config(tmpdir):
-    setdir = {"sarc": {"health_monitor": {"directory": Path(tmpdir)}}}
+    setdir = {"sarc": {"health_monitor": {"directory": str(tmpdir)}}}
     cfgdir = here / "configs"
     with gifnoc.use(cfgdir / "base.yaml", cfgdir / "beans.yaml", setdir):
         yield config
@@ -26,7 +26,7 @@ def beans_config(tmpdir):
 
 @pytest.fixture
 def deps_config(tmpdir):
-    setdir = {"sarc": {"health_monitor": {"directory": Path(tmpdir)}}}
+    setdir = {"sarc": {"health_monitor": {"directory": str(tmpdir)}}}
     cfgdir = here / "configs"
     with gifnoc.use(cfgdir / "base.yaml", cfgdir / "deps.yaml", setdir):
         yield config
@@ -34,7 +34,7 @@ def deps_config(tmpdir):
 
 @pytest.fixture
 def params_config(tmpdir):
-    setdir = {"sarc": {"health_monitor": {"directory": Path(tmpdir)}}}
+    setdir = {"sarc": {"health_monitor": {"directory": str(tmpdir)}}}
     cfgdir = here / "configs"
     with gifnoc.use(cfgdir / "base.yaml", cfgdir / "params.yaml", setdir):
         yield config

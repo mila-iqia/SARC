@@ -25,21 +25,6 @@ wheels = [
 ]
 
 [[package]]
-name = "apischema"
-version = "0.18.1"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/c8/81/196380f22dd63d46ff0b4c1ceb7836ade5762248388194d8c0f8380a5841/apischema-0.18.1.tar.gz", hash = "sha256:355dc4dea7389f5b25f5326c26f06eebee8107efda7e82db8f09ee122cdf0c98", size = 746793 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/ab/f9/998c850d6a480140c5845b5d0402f6a6b1c17e05914758d6507adb4972f1/apischema-0.18.1-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:9533867f4385e2656158a9e76fdc877bd0cf86fd7bb595d7ca0ff8bb7bf3611d", size = 697427 },
-    { url = "https://files.pythonhosted.org/packages/00/b7/89a8c082f826d41a54d47df0bed1b1f5cec920ae4ecd9f8a51c1e65fe620/apischema-0.18.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:0d4afb686f94ed13a84ae6507eaf4b55958433fff9f96e511dbae8ac8a39c47b", size = 4533805 },
-    { url = "https://files.pythonhosted.org/packages/bd/4b/d99ef96fd36a885e4a3b731dc914026950fd886acd66990a126d0c9c8ae4/apischema-0.18.1-cp311-cp311-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:a9da90ce1e9e1b0970f62e6dac57a72667745d5f8a159a2c91e6f9905d286581", size = 4124884 },
-    { url = "https://files.pythonhosted.org/packages/3c/c9/cf8cb52ecac407d60b5e39a07c4f7d4b7f80739c00a562d60f1fd5601dd8/apischema-0.18.1-cp311-cp311-musllinux_1_1_i686.whl", hash = "sha256:e0adb93fb0de2266e95cf4f4eab772a0cef1b1bec7b8e626eb2c63456920e6af", size = 4212441 },
-    { url = "https://files.pythonhosted.org/packages/6f/0e/06b067f7b294749876267f100998f3ce353d053d8810a9f7fc39183f32a3/apischema-0.18.1-cp311-cp311-musllinux_1_1_x86_64.whl", hash = "sha256:0ed5569080a6028470232d9d86c05b3d963532c5e585cb0e31715d5f38738a16", size = 4521311 },
-    { url = "https://files.pythonhosted.org/packages/03/e8/bb3e3ee478e48eca3a7d16b1dd73b2d0282a3f6472b26004ae86ff98511a/apischema-0.18.1-cp311-cp311-win32.whl", hash = "sha256:d2a5e965d427b8b42960dbf14c3820f88efe83634d5027d0e749c029f6e65117", size = 105608 },
-    { url = "https://files.pythonhosted.org/packages/38/2a/3966ab4d8b5285dd18b1e742a12f0c4294659afa0e39514807ee02fa2369/apischema-0.18.1-cp311-cp311-win_amd64.whl", hash = "sha256:f1bbb9cc3c74151de2e9314cfe6192f218ed9a7f95e324a2e034d70512268b22", size = 105612 },
-]
-
-[[package]]
 name = "appnope"
 version = "0.1.4"
 source = { registry = "https://pypi.org/simple" }
@@ -611,15 +596,15 @@ wheels = [
 
 [[package]]
 name = "gifnoc"
-version = "0.4.2"
+version = "0.5.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "apischema" },
     { name = "ovld" },
+    { name = "serieux" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/26/e0/7912acddbc26678a7eb76e9bde98bb34bd23a7215e8f7c510e53964c8bb9/gifnoc-0.4.2.tar.gz", hash = "sha256:4626dd34fdf81957acf05949b02b7138dbc82bb0e3b02d177666a368cd7fcd4f", size = 37452 }
+sdist = { url = "https://files.pythonhosted.org/packages/be/af/208ae008f521fb2bbd673f440c4c2fe8b1fc88a7bbcbe07b51967d66059a/gifnoc-0.5.0.tar.gz", hash = "sha256:f3a1557eafb55e60841d43301d04a14bfa42a1f1e88aebeeb072a517ebc244b9", size = 25208 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a2/ee/8e0cd154230c6ec74864ed013b677b23ee1a7e299b18d6a8a034d1099c7e/gifnoc-0.4.2-py3-none-any.whl", hash = "sha256:3fe1cac3a954b2cab4f78a4dfd203c55cdcc8e480d0fd745a5b65527d5ece194", size = 20628 },
+    { url = "https://files.pythonhosted.org/packages/2a/bb/2e10a192a7152b3d29e16d9940f9b373c416042d9d33baec013ae3093a14/gifnoc-0.5.0-py3-none-any.whl", hash = "sha256:0f3ab237d8b842ae9c7c2de5aa870a07f38223c73d54aeaaf81e795801d87966", size = 8235 },
 ]
 
 [[package]]
@@ -1545,11 +1530,11 @@ wheels = [
 
 [[package]]
 name = "ovld"
-version = "0.4.6"
+version = "0.5.3"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/52/84/3e01357e154af0fbae0d8b1e1b15c2020895640e863e1d4fdccc6573ee32/ovld-0.4.6.tar.gz", hash = "sha256:7891086d04e34641a11d8088f28426b4a55971f54f55b7f5278739e3a8927168", size = 1166577 }
+sdist = { url = "https://files.pythonhosted.org/packages/4c/df/dc23bd153887e026348345cc2610aec4fd69c5a554e3e5a8c3afed286365/ovld-0.5.3.tar.gz", hash = "sha256:53666c0ec3ad666ae269eadcfde41ee5b321eff05f2efeee1c5ba19652e933b6", size = 96814 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d2/ea/ca0dbbd39b35611076c1e353b3dd0f57b32f74d961d6c4e360db78155535/ovld-0.4.6-py3-none-any.whl", hash = "sha256:097764be018fae98a6baf15e209bd1df5da1643ece40ef7fc59a0313d2a96e88", size = 30912 },
+    { url = "https://files.pythonhosted.org/packages/4c/7d/50e78aa548b0cc7ecca94eb2f1d2587f7d4948155ad8398c033bf2ecf92b/ovld-0.5.3-py3-none-any.whl", hash = "sha256:2344b0961895fea20b48d863ade2777d57dcd972d67360dd31c19f44640d5238", size = 38515 },
 ]
 
 [[package]]
@@ -2297,7 +2282,7 @@ examples = [
 requires-dist = [
     { name = "fabric", specifier = ">=3.0.0,<4" },
     { name = "flatten-dict", specifier = ">=0.4.2,<0.5" },
-    { name = "gifnoc", specifier = ">=0.4.2,<0.5" },
+    { name = "gifnoc", specifier = ">=0.5.0,<0.6" },
     { name = "ldap3", specifier = ">=2.9.1,<3" },
     { name = "myst-parser", specifier = ">=4.0.1,<5" },
     { name = "nbsphinx", specifier = ">=0.9.3,<0.10" },
@@ -2369,6 +2354,19 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/fd/3a/aec9b02217bb79b87bbc1a21bc6abc51e3d5dcf65c30487ac96c0908c722/Send2Trash-1.8.3.tar.gz", hash = "sha256:b18e7a3966d99871aefeb00cfbcfdced55ce4871194810fc71f4aa484b953abf", size = 17394 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/40/b0/4562db6223154aa4e22f939003cb92514c79f3d4dccca3444253fd17f902/Send2Trash-1.8.3-py3-none-any.whl", hash = "sha256:0c31227e0bd08961c7665474a3d1ef7193929fedda4233843689baa056be46c9", size = 18072 },
+]
+
+[[package]]
+name = "serieux"
+version = "0.0.6"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "ovld" },
+    { name = "pyyaml" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/c4/ce/568328b2d9b8075eee627a5d1e018cab2ae96aeecce42a298b786113aa7b/serieux-0.0.6.tar.gz", hash = "sha256:dbb80022421d986aaeae4ed952877ba5e100f7516cc5b0e705b9d3b8e64ca9f5", size = 88182 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6e/b2/23aeced10c1f8887851e5928e703a60f0c8a6c199dd1f2439aa6532aa2e6/serieux-0.0.6-py3-none-any.whl", hash = "sha256:3f86796582db0e4db979fc8eb7added516b7e99fcb61dd46f6d9451ed6433566", size = 34038 },
 ]
 
 [[package]]

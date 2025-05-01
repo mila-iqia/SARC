@@ -5,8 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import gifnoc
-from apischema import deserialize
-from gifnoc import TaggedSubclass
+from serieux import TaggedSubclass, deserialize
 
 from sarc.alerts.common import CheckResult, config
 
@@ -33,7 +32,6 @@ class HealthHistoryCommand:
                 results = deserialize(
                     TaggedSubclass[CheckResult],
                     content,
-                    pass_through=lambda x: x is not Any,
                 )
                 if self.start and results.issue_date < self.start:
                     continue
