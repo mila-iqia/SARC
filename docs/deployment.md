@@ -61,14 +61,6 @@ See here for documentation: https://docs.astral.sh/uv/getting-started/installati
 
 Ensure that uv is either available on $PATH or is at a known location
 
-### Python Version
-
-`uv` has binary wheels available for python 3.11, so let's set this version:
-
-```
-uv sync --python 3.11
-```
-
 
 ## MongoDB
 
