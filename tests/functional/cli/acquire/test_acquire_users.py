@@ -5,6 +5,7 @@ import re
 from io import StringIO
 from unittest.mock import patch
 
+import pandas as pd
 import pytest
 from opentelemetry.trace import StatusCode
 
@@ -86,7 +87,7 @@ def test_acquire_users(cli_main, patch_return_values, mock_file, captrace):
     patch_return_values(
         {
             "sarc.users.read_mila_ldap.query_ldap": fake_raw_ldap_data(nbr_users),
-            "sarc.users.mymila.query_mymila_csv": [],
+            "sarc.users.mymila.query_mymila": pd.DataFrame([]),
         }
     )
 
@@ -244,7 +245,7 @@ def test_acquire_users_supervisors(
                     }
                 },
             ),
-            "sarc.users.mymila.query_mymila_csv": fake_mymila_data(
+            "sarc.users.mymila.query_mymila": fake_mymila_data(
                 nbr_users=nbr_users,
                 nbr_profs=nbr_profs,
                 hardcoded_values_by_user={
@@ -332,7 +333,7 @@ def test_acquire_users_co_supervisors(
                     }
                 },
             ),
-            "sarc.users.mymila.query_mymila_csv": fake_mymila_data(
+            "sarc.users.mymila.query_mymila": fake_mymila_data(
                 nbr_users=nbr_users,
                 nbr_profs=nbr_profs,
                 hardcoded_values_by_user={
@@ -375,7 +376,7 @@ def test_acquire_users_prompt(
     patch_return_values(
         {
             "sarc.users.read_mila_ldap.query_ldap": fake_raw_ldap_data(nbr_users),
-            "sarc.users.mymila.query_mymila_csv": [],
+            "sarc.users.mymila.query_mymila": pd.DataFrame([]),
         }
     )
 
