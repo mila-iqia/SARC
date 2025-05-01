@@ -1,7 +1,11 @@
+import struct
 from datetime import timedelta
+from itertools import chain, repeat
 from typing import IO, Any
 
 import pandas as pd
+import pyodbc
+from azure.identity import ClientSecretCredential
 
 from sarc.cache import FormatterProto, with_cache
 from sarc.config import MyMilaConfig
@@ -10,32 +14,31 @@ START_DATE_KEY = "Start Date with MILA"
 END_DATE_KEY = "End Date with MILA"
 
 
-class CSV_formatter(FormatterProto):
-    read_flags = "r"
-    write_flags = "w"
-
-    @staticmethod
-    def load(fp: IO[Any]):
-        return pd.read_csv(fp.name)
-
-    @staticmethod
-    def dump(obj: pd.DataFrame, fp: IO[Any]):
-        raise NotImplementedError("Cannot dump mymila CSV cache yet.")
-        # obj.to_csv(fp.name)
-
-
 @with_cache(
     subdirectory="mymila",
-    formatter=CSV_formatter,
-    key=lambda *_, **__: "mymila_export_{time}.csv",
+    key=lambda *_, **__: "mymila_export_{time}.json",
     validity=timedelta(days=120),
 )
-def query_mymila_csv(cfg: MyMilaConfig):
-    raise NotImplementedError("Cannot read from mymila yet.")
+def query_mymila(cfg: MyMilaConfig):
+    credential = ClientSecretCredential(
+        client_id=cfg.client_id,
+        tenant_id=cfg.tenant_id,
+        client_secret=cfg.client_secret,
+    )
+    connection_string = f"Driver={{ODBC Driver 18 for SQL Server}};Server={cfg.sql_endpoint},1433;Database={cfg.database};Encrypt=Yes;TrustServerCertificate=No"
+    token_object = credential.get_token("https://database.windows.net/.default")
+    token_as_bytes = token_object.token.encode("UTF-8")
+    encoded_bytes = bytes(chain.from_iterable(zip(token_as_bytes, repeat(0))))
+    token_bytes = struct.pack("<i", len(encoded_bytes)) + encoded_bytes
+    attrs_before = {1256: token_bytes}
 
-
-def query_mymila(cfg: MyMilaConfig, cache_policy=True):
-    return pd.DataFrame(query_mymila_csv(cfg, cache_policy=cache_policy))
+    connection = pyodbc.connect(connection_string, attrs_before=attrs_before)  # type: ignore
+    cursor = connection.cursor()
+    cursor.execute("SELECT * FROM MyMila_Extract_Etudiants")
+    records = cursor.fetchall()
+    headers = [i[0] for i in cursor.description]
+    df = pd.DataFrame(records, columns=headers)
+    return df
 
 
 def to_records(df):
@@ -78,7 +81,7 @@ def combine(LD_users, mymila_data):
         df_users = df_users.where((pd.notnull(df_users)) & (df_users != ""), pd.NA)
 
         # Preprocess
-        mymila_data = mymila_data.rename(columns={"MILA Email": "mila_email_username"})
+        mymila_data = mymila_data.rename(columns={"MILA_Email": "mila_email_username"})
         # Set the empty values to NA
         mymila_data = mymila_data.where(
             (pd.notnull(mymila_data)) & (mymila_data != ""), pd.NA
@@ -92,7 +95,7 @@ def combine(LD_users, mymila_data):
             def mergecol(mymila_col, ldap_col):
                 df[mymila_col] = df[mymila_col].fillna(df[ldap_col])
 
-            mergecol("Status", "status")
+            mergecol("Status_VALUE", "status")
             mergecol("Supervisor Principal", "supervisor")
             mergecol("Co-Supervisor", "co_supervisor")
 
