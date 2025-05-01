@@ -40,7 +40,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        toxenv: [black, isort, lint]
+        toxenv: [black, isort, lint, mypy]
 
     steps:
     - uses: actions/checkout@v4
