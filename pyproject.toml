@@ -30,6 +30,8 @@ dependencies = [
     "watchdog>=6,<7",
     "python-dateutil>=2.9.0.post0,<3",
     "opentelemetry-exporter-otlp>=1.23.0,<2",
+    "pyodbc>=5.2.0",
+    "azure-identity>=1.21.0",
 ]
 
 [project.scripts]

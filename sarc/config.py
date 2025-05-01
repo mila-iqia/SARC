@@ -162,7 +162,11 @@ class TempoConfig:
 
 @dataclass
 class MyMilaConfig:
-    tmp_json_path: Path = None
+    tenant_id: str
+    client_id: str
+    client_secret: str
+    sql_endpoint: str
+    database: str = "wh_sarc"
 
 
 @dataclass
