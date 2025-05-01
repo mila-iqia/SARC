@@ -8,7 +8,8 @@ from flatten_dict import flatten
 from pydantic import ByteSize, validator
 from pydantic_mongo import AbstractRepository, ObjectIdField
 
-from sarc.config import BaseModel, config, validate_date
+from sarc.config import config, validate_date
+from sarc.model import BaseModel
 
 
 class AllocationCompute(BaseModel):

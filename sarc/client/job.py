@@ -13,11 +13,11 @@ from ..config import (
     MTL,
     TZLOCAL,
     UTC,
-    BaseModel,
     ClusterConfig,
     config,
     scraping_mode_required,
 )
+from ..model import BaseModel
 
 
 class SlurmState(str, Enum):
