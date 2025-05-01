@@ -1,12 +1,11 @@
 import os
-import shutil
 import sys
 import tempfile
-import time
 import zoneinfo
 from pathlib import Path
 from unittest.mock import MagicMock, mock_open
 
+import gifnoc
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
@@ -18,68 +17,49 @@ _tracer_provider.add_span_processor(SimpleSpanProcessor(_exporter))
 set_tracer_provider(_tracer_provider)
 del _tracer_provider
 
-
 import pytest
-from _pytest.monkeypatch import MonkeyPatch
 
-from sarc.config import (
-    ClusterConfig,
-    Config,
-    ScraperConfig,
-    config,
-    parse_config,
-    using_config,
-)
+from sarc.config import config, using_sarc_mode
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "common"))
 
 pytest_plugins = "fabric.testing.fixtures"
 
 
-@pytest.fixture(scope="session")
-def standard_config_object():
-    # As we use parse_config() instead of config(), we should not need
-    # to patch env var SARC_MODE.
-    # Patching env var with monkeypatch may result in unexpected results
-    # for next tests in tests session, as env var might be still patched.
-    yield parse_config(Path(__file__).parent / "sarc-test.json", ScraperConfig)
-
-
-@pytest.fixture(scope="session")
-def client_config_object():
-    yield parse_config(Path(__file__).parent / "sarc-test-client.json", Config)
-
-
-@pytest.fixture()
-def client_config(client_config_object, tmp_path):
-    cfg = client_config_object.replace(cache=tmp_path / "sarc-tmp-test-cache")
-    with using_config(cfg, Config) as cfg:
-        yield cfg
-
-
-@pytest.fixture()
-def standard_config(standard_config_object, tmp_path):
-    cfg = standard_config_object.replace(cache=tmp_path / "sarc-tmp-test-cache")
-    with using_config(cfg, ScraperConfig) as cfg:
-        yield cfg
-
-
 @pytest.fixture
-def disabled_cache(standard_config):
-    cfg = config().replace(cache=None)
-    with using_config(cfg, ScraperConfig) as cfg:
+def client_mode():
+    with using_sarc_mode("client"):
         yield
 
 
+@pytest.fixture
+def scraping_mode():
+    with using_sarc_mode("scraping"):
+        yield
+
+
+@pytest.fixture(scope="session")
+def test_config_path():
+    yield Path(__file__).parent / "sarc-test.yaml"
+
+
 @pytest.fixture(scope="session", autouse=True)
-def clean_up_test_cache_before_run(standard_config_object, worker_id):
-    if worker_id in ("master", 0):
-        if standard_config_object.cache.exists():
-            shutil.rmtree(str(standard_config_object.cache))
-    else:
-        while standard_config_object.cache.exists():
-            time.sleep(1)
-    yield
+def base_config(test_config_path):
+    with gifnoc.use(test_config_path):
+        with using_sarc_mode("scraping"):
+            yield
+
+
+@pytest.fixture
+def enabled_cache(tmp_path):
+    with gifnoc.overlay({"sarc.cache": str(tmp_path / "sarc-tmp-test-cache")}):
+        yield
+
+
+@pytest.fixture
+def disabled_cache():
+    with gifnoc.overlay({"sarc.cache": None}):
+        yield
 
 
 @pytest.fixture
@@ -91,36 +71,9 @@ def tzlocal_is_mtl(monkeypatch):
 
 
 @pytest.fixture
-def test_config(request, standard_config):
-    current = config()
-
-    vals = getattr(request, "param", dict())
-
-    mongo_repl = vals.pop("mongo", {})
-    clusters_repl = vals.pop("clusters", {})
-    clusters_orig = current.clusters
-
-    new_clusters = {}
-    for name in clusters_orig:
-        if name in clusters_repl:
-            new_clusters[name] = clusters_orig[name].replace(**clusters_repl[name])
-        else:
-            # This is to make a clone
-            new_clusters[name] = clusters_orig[name].replace()
-
-    # Look at all the new names in repl
-    for name in set(clusters_repl.keys()) - set(clusters_orig.keys()):
-        new_clusters[name] = ClusterConfig(
-            **(dict(host="test", timezone="America/Montreal") | clusters_repl[name])
-        )
-
-    conf = current.replace(
-        mongo=current.mongo.replace(**mongo_repl),
-        sshconfig=None,
-        clusters=new_clusters,
-    )
-    with using_config(conf):
-        yield conf
+def test_config(request):
+    with gifnoc.overlay({"sarc": getattr(request, "param", dict())}):
+        yield config()
 
 
 @pytest.fixture

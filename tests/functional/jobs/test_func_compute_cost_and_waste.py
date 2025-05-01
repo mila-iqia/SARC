@@ -37,7 +37,7 @@ def _df_to_pretty_str(df: pandas.DataFrame) -> str:
 
 
 @pytest.mark.freeze_time(MOCK_TIME)
-@pytest.mark.usefixtures("read_only_db_client", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
 def test_compute_cost_and_waste(file_regression):
     frame = load_job_series()
     assert all(column not in frame.columns for column in COST_WASTE_FIELDS)

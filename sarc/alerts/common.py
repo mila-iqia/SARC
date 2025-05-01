@@ -290,9 +290,3 @@ class HealthMonitorConfig:
         graph = {name: check.depends for name, check in self.checks.items()}
         order = TopologicalSorter(graph).static_order()
         self.checks = {name: self.checks[name] for name in order}
-
-
-config = gifnoc.define(
-    field="sarc.health_monitor",
-    model=HealthMonitorConfig,
-)

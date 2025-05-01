@@ -7,7 +7,8 @@ from typing import Any
 import gifnoc
 from serieux import TaggedSubclass, deserialize
 
-from sarc.alerts.common import CheckResult, config
+from sarc.alerts.common import CheckResult
+from sarc.config import config
 
 
 def parse_date(s):
@@ -22,9 +23,10 @@ class HealthHistoryCommand:
     name: str = None
 
     def execute(self) -> int:
+        hcfg = config().health_monitor
         with gifnoc.use(self.config):
             config_files = sorted(
-                config.directory.glob("**/*.json"),
+                hcfg.directory.glob("**/*.json"),
                 key=lambda x: x.name,
             )
             for file in config_files:

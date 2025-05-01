@@ -4,17 +4,16 @@ import os
 import zoneinfo
 from contextlib import contextmanager
 from contextvars import ContextVar
-from datetime import date, datetime
+from dataclasses import dataclass, field, fields
 from functools import cached_property
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Optional
 
-import pydantic
+import gifnoc
 import tzlocal
 from hostlist import expand_hostlist
-from pydantic import Field, validator
 
-from .model import BaseModel
+from .alerts.common import HealthMonitorConfig
 
 MTL = zoneinfo.ZoneInfo("America/Montreal")
 PST = zoneinfo.ZoneInfo("America/Vancouver")
@@ -22,30 +21,18 @@ UTC = zoneinfo.ZoneInfo("UTC")
 TZLOCAL = zoneinfo.ZoneInfo(tzlocal.get_localzone_name())
 
 
-class ConfigurationError(Exception):
-    pass
-
-
-def validate_date(value: Union[str, date, datetime]) -> date:
-    if isinstance(value, str):
-        if "T" in value:
-            return datetime.strptime(value, "%Y-%m-%dT%H:%M:%S").date()
-
-        return datetime.strptime(value, "%Y-%m-%d").date()
-
-    if isinstance(value, datetime):
-        return value.date()
-
-    return value
-
-
 MIG_FLAG = "__MIG__"
 DEFAULTS_FLAG = "__DEFAULTS__"
 
 
-class ClusterConfig(BaseModel):
+class ConfigurationError(Exception):
+    pass
+
+
+@dataclass
+class ClusterConfig:
     host: str = "localhost"
-    timezone: Union[str, zoneinfo.ZoneInfo]  # | does not work with Pydantic's eval
+    timezone: zoneinfo.ZoneInfo = None
     prometheus_url: str = None
     prometheus_headers_file: str = None
     name: str = None
@@ -58,29 +45,21 @@ class ClusterConfig(BaseModel):
     start_date: str = "2022-04-01"
     rgu_start_date: str = None
     gpu_to_rgu_billing: Path = None
-    slurm_conf_host_path: str = "/etc/slurm/slurm.conf"
+    slurm_conf_host_path: Path = Path("/etc/slurm/slurm.conf")
 
     # Tell if billing (in job's requested|allocated field) is number of GPUs (True) or RGU (False)
-    billing_is_gpu = False
+    billing_is_gpu: bool = False
     # Dictionary mapping a node name -> gpu type -> IGUANE gpu name
-    gpus_per_nodes: Dict[str, Dict[str, str]] = Field(default_factory=dict)
+    gpus_per_nodes: dict[str, dict[str, str]] = field(default_factory=dict)
 
-    @validator("timezone")
-    def _timezone(cls, value):
-        if isinstance(value, str):
-            return zoneinfo.ZoneInfo(value)
-        else:
-            return value
-
-    @validator("gpus_per_nodes")
-    def _expand_gpus_per_nodes(cls, value: dict):
+    def __post_init__(self):
         # Convert node list to node names with `expand_hostlist`
-        return {
+        self.gpus_per_nodes = {
             node: {
                 gpu_type.lower().replace(" ", "-"): gpu_desc
                 for gpu_type, gpu_desc in gpu_to_desc.items()
             }
-            for node_list, gpu_to_desc in value.items()
+            for node_list, gpu_to_desc in self.gpus_per_nodes.items()
             for node in expand_hostlist(node_list)
         }
 
@@ -146,7 +125,8 @@ class ClusterConfig(BaseModel):
         return PrometheusConnect(url=self.prometheus_url, headers=headers)
 
 
-class MongoConfig(BaseModel):
+@dataclass
+class MongoConfig:
     connection_string: str
     database_name: str
 
@@ -158,166 +138,111 @@ class MongoConfig(BaseModel):
         return client.get_database(self.database_name)
 
 
-class LDAPConfig(BaseModel):
+@dataclass
+class LDAPConfig:
     local_private_key_file: str
     local_certificate_file: str
     ldap_service_uri: str
     mongo_collection_name: str
-    group_to_prof_json_path: str = None
-    exceptions_json_path: str = None
-
-    @validator("group_to_prof_json_path")
-    def _relative_group_to_prof(cls, value):
-        return relative_filepath(value)
-
-    @validator("exceptions_json_path")
-    def _relative_exception(cls, value):
-        return relative_filepath(value)
+    group_to_prof_json_path: Path = None
+    exceptions_json_path: Path = None
 
 
-class LokiConfig(BaseModel):
+@dataclass
+class LokiConfig:
     uri: str
 
 
-class TempoConfig(BaseModel):
+@dataclass
+class TempoConfig:
     uri: str
 
 
-class MyMilaConfig(BaseModel):
-    tmp_json_path: str
-
-    @validator("tmp_json_path")
-    def _relative_tmp(cls, value):
-        return relative_filepath(value)
+@dataclass
+class MyMilaConfig:
+    tmp_json_path: Path = None
 
 
-class AccountMatchingConfig(BaseModel):
+@dataclass
+class AccountMatchingConfig:
     drac_members_csv_path: Path
     drac_roles_csv_path: Path
     make_matches_config: Path
 
 
-class LoggingConfig(BaseModel):
+@dataclass
+class LoggingConfig:
     log_level: str
     OTLP_endpoint: str
     service_name: str
 
 
-# pylint: disable=unused-argument,redefined-outer-name
-def _absolute_path(value, values, config, field):
-    return value and value.expanduser().absolute()
-
-
-class Config(BaseModel):
+@dataclass
+class ClientConfig:
     mongo: MongoConfig
     cache: Path = None
     loki: LokiConfig = None
     tempo: TempoConfig = None
+    health_monitor: HealthMonitorConfig = None
 
-    _abs_path = validator("cache", allow_reuse=True)(_absolute_path)
 
-
-class ScraperConfig(BaseModel):
-    mongo: MongoConfig
-    cache: Path = None
-
+@dataclass
+class Config(ClientConfig):
     ldap: LDAPConfig = None
     mymila: MyMilaConfig = None
     account_matching: AccountMatchingConfig = None
     sshconfig: Path = None
     clusters: dict[str, ClusterConfig] = None
     logging: LoggingConfig = None
-    loki: LokiConfig = None
-    tempo: TempoConfig = None
 
-    _abs_path = validator("cache", "sshconfig", allow_reuse=True)(_absolute_path)
-
-    @validator("clusters")
-    def _complete_cluster_fields(cls, value, values):
-        for name, cluster in value.items():
+    def __post_init__(self):
+        for name, cluster in self.clusters.items():
             if not cluster.name:
                 cluster.name = name
-            if not cluster.sshconfig and "sshconfig" in values:
-                cluster.sshconfig = values["sshconfig"]
-        return value
+            if not cluster.sshconfig:
+                cluster.sshconfig = self.sshconfig
 
 
-config_var = ContextVar("config", default=None)
+class WhitelistProxy:
+    def __init__(self, obj, *whitelist):
+        self._obj = obj
+        self._whitelist = whitelist
+
+    def __getattr__(self, attr):
+        if attr in self._whitelist:
+            return getattr(self._obj, attr)
+        elif hasattr(self._obj, attr):
+            raise Exception(
+                f"Attribute '{attr}' is only accessible with SARC_MODE=scraping"
+            )
+        else:
+            raise AttributeError(attr)
 
 
-_config_folder = None
+full_config = gifnoc.define("sarc", Config)
 
 
-def relative_filepath(path):
-    """Allows files to be relative to the config"""
-    if path is None:
-        return path
-
-    if "$SELF" in path:
-        return path.replace("$SELF", str(_config_folder))
-
-    return path
+gifnoc.set_sources("${envfile:SARC_CONFIG}")
 
 
-def parse_config(config_path, config_cls=Config):
-    # pylint: disable=global-statement
-    global _config_folder
-    config_path = Path(config_path)
-
-    _config_folder = str(config_path.parent)
-
-    if not config_path.exists():
-        raise ConfigurationError(
-            f"Cannot read SARC configuration file: '{config_path}'"
-            " Use the $SARC_CONFIG environment variable to choose the config file."
-        )
-
-    try:
-        cfg = config_cls.parse_file(config_path)
-    except json.JSONDecodeError as exc:
-        raise ConfigurationError(f"'{config_path}' contains malformed JSON") from exc
-
-    return cfg
-
-
-def _config_class(mode):
-    modes = {
-        "scraping": ScraperConfig,
-        "client": Config,
-    }
-    return modes.get(mode, Config)
-
-
-def config():
-    if (current := config_var.get()) is not None:
-        return current
-
-    config_path = os.getenv("SARC_CONFIG", "config/sarc-dev.json")
-    config_class = _config_class(os.getenv("SARC_MODE", "none"))
-
-    try:
-        cfg = parse_config(config_path, config_class)
-    except pydantic.error_wrappers.ValidationError as err:
-        if config_class is Config:
-            raise ConfigurationError(
-                "Try `SARC_MODE=scraping sarc ...` if you want admin rights"
-            ) from err
-        raise
-
-    config_var.set(cfg)
-    return cfg
+sarc_mode = ContextVar("sarc_mode", default=os.getenv("SARC_MODE", "client"))
 
 
 @contextmanager
-def using_config(cfg: Union[str, Path, Config], cls=None):
-    cls = cls or _config_class(os.getenv("SARC_MODE", "none"))
+def using_sarc_mode(mode):
+    token = sarc_mode.set(mode)
+    try:
+        yield
+    finally:
+        sarc_mode.reset(token)
 
-    if isinstance(cfg, (str, Path)):
-        cfg = parse_config(cfg, cls)
 
-    token = config_var.set(cfg)
-    yield cfg
-    config_var.reset(token)
+def config():
+    if sarc_mode.get() == "scraping":
+        return full_config
+    else:
+        accept = [f.name for f in fields(ClientConfig)]
+        return WhitelistProxy(full_config, *accept)
 
 
 class ScrapingModeRequired(Exception):
@@ -334,7 +259,7 @@ def scraping_mode_required(fn):
 
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
-        if not isinstance(config(), ScraperConfig):
+        if sarc_mode.get() != "scraping":
             raise ScrapingModeRequired()
         return fn(*args, **kwargs)
 

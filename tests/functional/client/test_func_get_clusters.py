@@ -3,7 +3,7 @@ import pytest
 from sarc.client.job import get_available_clusters
 
 
-@pytest.mark.usefixtures("read_only_db_with_users_client")
+@pytest.mark.usefixtures("read_only_db_with_users", "client_mode")
 def test_get_clusters():
     clusters = list(get_available_clusters())
     assert len(clusters) >= 3

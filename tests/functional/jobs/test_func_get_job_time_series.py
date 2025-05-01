@@ -62,7 +62,6 @@ parameters = {
 }
 
 
-@pytest.mark.usefixtures("standard_config")
 @pytest.mark.freeze_time(test_time_str)
 @pytest.mark.parametrize(
     "job", parameters.values(), ids=parameters.keys(), indirect=True
@@ -103,7 +102,6 @@ def test_jobs_with_no_duration(job):
 
 
 @pytest.mark.freeze_time(test_time_str)
-@pytest.mark.usefixtures("standard_config")
 @pytest.mark.parametrize(
     "measure,aggregation",
     itertools.product(
@@ -135,7 +133,6 @@ def test_invalid_aggregation(job):
 
 
 @pytest.mark.freeze_time(test_time_str)
-@pytest.mark.usefixtures("standard_config")
 @pytest.mark.parametrize(
     "min_interval,max_points",
     [
@@ -165,7 +162,6 @@ def test_intervals(
     # assert df.shape[0] <= max_points
 
 
-@pytest.mark.usefixtures("standard_config")
 @pytest.mark.parametrize(
     "job",
     [{"job_id": -1}, {}],

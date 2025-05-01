@@ -53,6 +53,7 @@ class MongoInstance:
         write_pass="write_pass",
         user_name="user_name",
         user_pass="user_pass",
+        sarc_config=None,
     ) -> None:
         self.env = {
             "MONGO_PORT": f"{port}",
@@ -66,6 +67,7 @@ class MongoInstance:
             "READUSER_NAME": user_name,
             "READUSER_PWD": user_pass,
             "LAUNCH_MONGO": "1",
+            "SARC_CONFIG": sarc_config or os.getenv("SARC_CONFIG", ""),
         }
         self.path = path
         self.manager = multiprocessing.Manager()
