@@ -120,7 +120,7 @@ def dictset(dictionnary: dict, operation: dict):
 
 def fake_mymila_data(nbr_users=10, nbr_profs=5, hardcoded_values_by_user={}):
     entry_ctor = mymila_entry_builder(nbr_profs, hardcoded_values_by_user)
-    return list([entry_ctor(i) for i in range(nbr_users)])
+    return pd.DataFrame([entry_ctor(i) for i in range(nbr_users)])
 
 
 def fake_mymila_data_with_history(nbr_users=10, nbr_profs=5):

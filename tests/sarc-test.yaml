@@ -137,8 +137,11 @@ sarc:
   mongo:
     connection_string: localhost:27017
     database_name: sarc-test
-  mymila:
-    tmp_json_path: secrets/tmp_mymila.json
+  mymila: 
+    tenant_id: ""
+    client_id: ""
+    client_secret: ""
+    sql_endpoint: ""
   loki:
       uri: "https://localhost/loki"
   tempo:

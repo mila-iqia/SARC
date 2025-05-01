@@ -198,9 +198,6 @@ Mysterious Stranger,BigProf,Manager,activated,stranger.person,ms@hotmail.com
         cfg.ldap.exceptions_json_path: exceptions_json_path,
     }
 
-    if cfg.mymila is not None:
-        files[cfg.mymila.tmp_json_path] = "[]"
-
     return files
 
 
