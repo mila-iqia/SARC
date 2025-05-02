@@ -1,16 +1,18 @@
 import time as real_time
 
-from sarc.alerts.common import config
+# from sarc.alerts.common import config
 from sarc.alerts.monitor import HealthMonitor
+from sarc.config import config
 
 from .test_runner import day_runner
 
 
 def test_monitor(beans_config, caplog):
     # caplog.set_level(1000)
+    hc = config().health_monitor
     monitor = HealthMonitor(
-        directory=config.directory,
-        checks=config.checks,
+        directory=hc.directory,
+        checks=hc.checks,
     )
     monitor.start()
     assert monitor.status == {

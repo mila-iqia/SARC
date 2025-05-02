@@ -1,5 +1,6 @@
 import re
 from datetime import datetime, time
+from pathlib import Path
 from typing import List
 
 import pytest
@@ -73,7 +74,7 @@ PartitionName=partition4 Nodes=alone_node
 """
 
 
-@pytest.mark.usefixtures("empty_read_write_db")
+@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
 def test_acquire_slurmconfig(cli_main, caplog):
     assert get_cluster_gpu_billings("raisin") == []
     assert get_node_to_gpu("raisin") == None
@@ -194,7 +195,7 @@ def test_acquire_slurmconfig(cli_main, caplog):
     )
 
 
-@pytest.mark.usefixtures("empty_read_write_db")
+@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
 def test_acuire_slurmconfig_inconsistent_billing(cli_main, caplog):
     _save_slurm_conf(
         "raisin",
@@ -251,15 +252,16 @@ def _save_slurm_conf(cluster_name: str, day: str, content: str):
         file.write(content)
 
 
+@pytest.mark.usefixtures("enabled_cache")
 @pytest.mark.freeze_time(MOCK_TIME)
 def test_download_cluster_config(test_config, remote):
     """Test slurm conf file downloading."""
 
     clusters = test_config.clusters
     # Check default value for "slurm_conf_host_path" (with cluster raisina)
-    assert clusters["raisin"].slurm_conf_host_path == "/etc/slurm/slurm.conf"
+    assert clusters["raisin"].slurm_conf_host_path == Path("/etc/slurm/slurm.conf")
     # Check custom value for "slurm_conf_host_path" (with cluster patate)
-    assert clusters["patate"].slurm_conf_host_path == "/the/path/to/slurm.conf"
+    assert clusters["patate"].slurm_conf_host_path == Path("/the/path/to/slurm.conf")
 
     # Use cluster patate for download test
     cluster = clusters["patate"]

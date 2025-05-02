@@ -11,7 +11,8 @@ from typing import Optional
 
 from pydantic_mongo import AbstractRepository, ObjectIdField
 
-from sarc.config import BaseModel, config
+from sarc.config import config
+from sarc.model import BaseModel
 from sarc.users.revision import query_latest_records
 
 

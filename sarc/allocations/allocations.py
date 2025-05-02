@@ -1,14 +1,28 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Optional
+from typing import Optional, Union
 
 import pandas as pd
 from flatten_dict import flatten
 from pydantic import ByteSize, validator
 from pydantic_mongo import AbstractRepository, ObjectIdField
 
-from sarc.config import BaseModel, config, validate_date
+from sarc.config import config
+from sarc.model import BaseModel
+
+
+def validate_date(value: Union[str, date, datetime]) -> date:
+    if isinstance(value, str):
+        if "T" in value:
+            return datetime.strptime(value, "%Y-%m-%dT%H:%M:%S").date()
+
+        return datetime.strptime(value, "%Y-%m-%d").date()
+
+    if isinstance(value, datetime):
+        return value.date()
+
+    return value
 
 
 class AllocationCompute(BaseModel):

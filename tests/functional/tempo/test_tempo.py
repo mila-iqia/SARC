@@ -3,7 +3,7 @@ import datetime
 import pytest
 
 
-@pytest.mark.usefixtures("client_config")
+@pytest.mark.usefixtures("client_mode")
 def test_query():
     from sarc.client.tempo import query
 

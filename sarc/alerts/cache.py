@@ -6,8 +6,8 @@ from datetime import datetime, timedelta
 from functools import cached_property, wraps
 from typing import Optional
 
-from apischema import deserialize
 from gifnoc.std import time
+from serieux import deserialize
 
 
 @dataclass

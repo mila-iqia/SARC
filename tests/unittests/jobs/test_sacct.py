@@ -24,7 +24,9 @@ def test_SAcctScraper_fetch_raw(test_config, remote):
     assert scraper.fetch_raw() == {}
 
 
-@pytest.mark.parametrize("test_config", [{"clusters": {"test": {}}}], indirect=True)
+@pytest.mark.parametrize(
+    "test_config", [{"clusters": {"test": {"host": "test"}}}], indirect=True
+)
 def test_SAcctScraper_fetch_raw2(test_config, remote):
     scraper = SAcctScraper(
         cluster=test_config.clusters["test"],
@@ -50,7 +52,7 @@ def test_SAcctScraper_fetch_raw2(test_config, remote):
     "test_config", [{"clusters": {"test": {"host": "patate"}}}], indirect=True
 )
 @pytest.mark.freeze_time("2023-02-28")
-def test_SAcctScraper_get_cache(test_config, remote):
+def test_SAcctScraper_get_cache(test_config, enabled_cache, remote):
     today = datetime.combine(date.today(), datetime.min.time())
     yesterday = today - timedelta(days=1)
     tomorrow = today + timedelta(days=1)

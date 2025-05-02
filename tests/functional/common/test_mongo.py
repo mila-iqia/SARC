@@ -5,7 +5,6 @@ from sarc.config import config
 
 
 # test connection to test mongo database
-@pytest.mark.usefixtures("standard_config")
 def test_mongo_connection():
     uri = config().mongo.connection_string
 
@@ -14,7 +13,6 @@ def test_mongo_connection():
     assert myclient.list_database_names() != None
 
 
-@pytest.mark.usefixtures("standard_config")
 def test_mongo_version():
     uri = config().mongo.connection_string
 

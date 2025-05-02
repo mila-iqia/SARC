@@ -56,7 +56,6 @@ def test_harmonize_gpu(node, gpu_type, expected, gpus_per_nodes):
     assert cluster.harmonize_gpu(node, gpu_type) == expected
 
 
-@pytest.mark.usefixtures("standard_config")
 @pytest.mark.parametrize(
     "node,gpu_type,expected",
     [

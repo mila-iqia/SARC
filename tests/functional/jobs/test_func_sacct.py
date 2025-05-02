@@ -29,7 +29,6 @@ def create_json_jobs(json_jobs: list[dict]) -> list[dict]:
     return json_job_factory.jobs
 
 
-@pytest.mark.usefixtures("standard_config")
 @pytest.fixture
 def json_jobs(request):
     if isinstance(request.param, dict):
@@ -131,7 +130,6 @@ def scraper():
     return SAcctScraper(cluster=config().clusters["raisin"], day=datetime(2023, 2, 14))
 
 
-@pytest.mark.usefixtures("standard_config")
 @pytest.mark.usefixtures("tzlocal_is_mtl")
 @pytest.mark.parametrize(
     "json_jobs", parameters.values(), ids=parameters.keys(), indirect=True
@@ -168,7 +166,6 @@ def test_parse_json_job(json_jobs, scraper, file_regression):
     ],
     indirect=True,
 )
-@pytest.mark.usefixtures("standard_config")
 def test_parse_malformed_jobs(sacct_json, scraper, captrace):
     scraper.get_raw.save(value_to_save=json.loads(sacct_json))
     assert list(scraper) == []
@@ -186,7 +183,6 @@ def test_parse_malformed_jobs(sacct_json, scraper, captrace):
     assert entry["account"] == "mila"
 
 
-@pytest.mark.usefixtures("standard_config")
 @pytest.mark.usefixtures("tzlocal_is_mtl")
 @pytest.mark.parametrize(
     "json_jobs",
@@ -200,7 +196,6 @@ def test_parse_no_group_jobs(sacct_json, scraper, caplog):
     assert 'Skipping job with group "None": 1' in caplog.text
 
 
-@pytest.mark.usefixtures("standard_config")
 @pytest.mark.usefixtures("tzlocal_is_mtl")
 @pytest.mark.parametrize(
     "json_jobs",
@@ -222,8 +217,7 @@ def test_scrape_lost_job_on_wrong_cluster(sacct_json, scraper, caplog):
     )
 
 
-@pytest.mark.usefixtures("standard_config")
-@pytest.mark.usefixtures("tzlocal_is_mtl")
+@pytest.mark.usefixtures("tzlocal_is_mtl", "enabled_cache")
 @pytest.mark.parametrize("json_jobs", [{}], indirect=True)
 def test_scraper_with_cache(scraper, sacct_json, file_regression):
     # We'd like to test that this starts with "/tmp/pytest",
@@ -241,7 +235,7 @@ def test_scraper_with_cache(scraper, sacct_json, file_regression):
     file_regression.check("\n".join([job.json(indent=1) for job in jobs]))
 
 
-@pytest.mark.usefixtures("tzlocal_is_mtl")
+@pytest.mark.usefixtures("tzlocal_is_mtl", "enabled_cache")
 @pytest.mark.parametrize(
     "test_config", [{"clusters": {"raisin": {"host": "patate"}}}], indirect=True
 )
@@ -416,7 +410,7 @@ def test_get_gpu_type_from_prometheus(
     indirect=True,
 )
 @pytest.mark.parametrize("json_jobs", [{}], indirect=True)
-@pytest.mark.usefixtures("empty_read_write_db")
+@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
 def test_get_gpu_type_without_prometheus(
     test_config, sacct_json, remote, file_regression, cli_main, monkeypatch
 ):
@@ -1012,7 +1006,7 @@ def test_job_tz(test_config, sacct_json, remote, cli_main, prom_custom_query_moc
     assert jobs[0].submit_time == datetime(2023, 2, 15, 12 + 3, 0, 0, tzinfo=MTL)
 
 
-@pytest.mark.usefixtures("tzlocal_is_mtl")
+@pytest.mark.usefixtures("tzlocal_is_mtl", "enabled_cache")
 @pytest.mark.parametrize("json_jobs", [{}], indirect=True)
 @pytest.mark.usefixtures("empty_read_write_db")
 @pytest.mark.parametrize("no_prometheus", [True, False])
@@ -1069,7 +1063,6 @@ def test_cli_ignore_stats(
         assert mock_compute_job_statistics.called >= 1
 
 
-@pytest.mark.usefixtures("standard_config")
 @pytest.mark.parametrize(
     "sacct_outputs",
     [

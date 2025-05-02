@@ -1,7 +1,7 @@
 import pytest
 
 
-@pytest.mark.usefixtures("client_config")
+@pytest.mark.usefixtures("client_mode")
 def test_query_range():
     from sarc.client.loki import query_range
 
