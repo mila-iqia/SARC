@@ -12,7 +12,6 @@ from graphlib import TopologicalSorter
 from pathlib import Path
 from typing import Optional, Union
 
-import gifnoc
 from gifnoc.std import time
 from serieux import TaggedSubclass, deserialize, serialize
 

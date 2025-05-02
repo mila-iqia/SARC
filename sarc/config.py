@@ -31,6 +31,8 @@ class ConfigurationError(Exception):
 
 @dataclass
 class ClusterConfig:
+    # pylint: disable=too-many-instance-attributes
+
     host: str = "localhost"
     timezone: zoneinfo.ZoneInfo = None
     prometheus_url: str = None
@@ -212,7 +214,7 @@ class WhitelistProxy:
         if attr in self._whitelist:
             return getattr(self._obj, attr)
         elif hasattr(self._obj, attr):
-            raise Exception(
+            raise AttributeError(
                 f"Attribute '{attr}' is only accessible with SARC_MODE=scraping"
             )
         else:

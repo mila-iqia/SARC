@@ -44,7 +44,7 @@ class HealthCheckCommand:
                         print(f"{results.status.name}")
             else:
                 try:
-                    runner = CheckRunner(directory=cfg.directory, checks=cfg.checks)
+                    runner = CheckRunner(directory=hcfg.directory, checks=hcfg.checks)
                     runner.start()
                 except KeyboardInterrupt:
                     logger.info("Execution ended due to KeyboardInterrupt")
