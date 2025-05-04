@@ -11,6 +11,7 @@ import pandas
 from pandas import DataFrame
 from prometheus_api_client import MetricRangeDataFrame
 
+from sarc.cache import CachePolicy, with_cache
 from sarc.client.job import JobStatistics, SlurmJob, Statistics
 from sarc.config import MTL, UTC, ClusterConfig, config
 from sarc.traces import trace_decorator
@@ -33,7 +34,6 @@ def get_job_time_series(
     """Fetch job metrics.
 
     Arguments:
-        cluster: The cluster on which to fetch metrics.
         job: The job for which to fetch metrics.
         metric: The metric, which must be in ``slurm_job_metric_names``.
         min_interval: The minimal reporting interval, in seconds.
@@ -46,6 +46,51 @@ def get_job_time_series(
         dataframe: If True, return a DataFrame. Otherwise, return the list of
             dicts returned by Prometheus's API.
     """
+    results = with_cache(
+        _get_job_time_series_data,
+        key=_get_job_time_series_data_cache_key,
+        subdirectory="prometheus",
+    )(
+        job=job,
+        metric=metric,
+        min_interval=min_interval,
+        max_points=max_points,
+        measure=measure,
+        aggregation=aggregation,
+        # Use CachePolicy.check
+        # to check if cached values are
+        # identical to live results
+        cache_policy=CachePolicy.use,
+    )
+    if dataframe:
+        return MetricRangeDataFrame(results) if results else None
+    else:
+        return results
+
+
+# pylint: disable=too-many-branches
+@trace_decorator()
+def _get_job_time_series_data(
+    job: SlurmJob,
+    metric: str,
+    min_interval: int = 30,
+    max_points: int = 100,
+    measure: str | None = None,
+    aggregation: str = "total",
+) -> list:
+    """Fetch job metrics.
+
+    Arguments:
+        job: The job for which to fetch metrics.
+        metric: The metric, which must be in ``slurm_job_metric_names``.
+        min_interval: The minimal reporting interval, in seconds.
+        max_points: The maximal number of data points to return.
+        measure: The aggregation measure to use ("avg_over_time", etc.)
+            A format string can be passed, e.g. ("quantile_over_time(0.5, {})")
+            to get the median.
+        aggregation: Either "total", to aggregate over the whole range, or
+            "interval", to aggregate over each interval.
+    """
 
     if aggregation not in ("interval", "total", None):
         raise ValueError(
@@ -53,7 +98,7 @@ def get_job_time_series(
         )
 
     if job.job_state != "RUNNING" and not job.elapsed_time:
-        return None if dataframe else []
+        return []
     if metric not in slurm_job_metric_names:
         raise ValueError(f"Unknown metric name: {metric}")
 
@@ -74,7 +119,7 @@ def get_job_time_series(
         duration_seconds += offset
 
     if duration_seconds <= 0:
-        return None if dataframe else []
+        return []
 
     interval = int(max(duration_seconds / max_points, min_interval))
 
@@ -84,6 +129,9 @@ def get_job_time_series(
         if aggregation == "interval":
             range_seconds = interval
         elif aggregation == "total":
+            # NB: `offset` has already been used above to generate `offset_string`
+            # and is not used anymore later in this function. So, following line
+            # does not have any effect.
             offset += duration_seconds
             range_seconds = duration_seconds
         else:
@@ -98,11 +146,36 @@ def get_job_time_series(
     else:
         query = f"{query}[{duration_seconds}s:{interval}s] {offset_string}"
 
-    results = job.fetch_cluster_config().prometheus.custom_query(query)
-    if dataframe:
-        return MetricRangeDataFrame(results) if results else None
-    else:
-        return results
+    logging.info(f"prometheus query with offset: {query}")
+    return job.fetch_cluster_config().prometheus.custom_query(query)
+
+
+def _get_job_time_series_data_cache_key(
+    job: SlurmJob,
+    metric: str,
+    min_interval: int = 30,
+    max_points: int = 100,
+    measure: str | None = None,
+    aggregation: str = "total",
+):
+    if job.end_time is None:
+        # If job.end_time is None, then Prometheus queries
+        # are based on current time (now).
+        # We should not cache such results.
+        return None
+
+    fmt = "%Y-%m-%dT%Hh%Mm%Ss"
+    return (
+        f"{job.cluster_name}"
+        f".{job.job_id}"
+        f".from-{job.start_time.strftime(fmt)}"
+        f".to-{job.end_time.strftime(fmt)}"
+        f".{metric}"
+        f".min-interval-{min_interval}s"
+        f".max-points-{max_points}"
+        f".{f'measure-{measure}-{aggregation}' if measure and aggregation else 'no_measure'}"
+        f".json"
+    )
 
 
 def get_job_time_series_metric_names():
