@@ -40,6 +40,7 @@ def test_no_job_with_this_id(job):
     assert get_job_time_series(job, "slurm_job_core_usage", dataframe=True) is None
 
 
+@pytest.mark.usefixtures("standard_config")
 def test_non_existing_metric(job):
     with pytest.raises(ValueError, match="^Unknown metric name: non_existing_metric"):
         get_job_time_series(job, "non_existing_metric", dataframe=True)
@@ -91,6 +92,7 @@ no_duration_parameters = {
 
 
 @pytest.mark.freeze_time(test_time_str)
+@pytest.mark.usefixtures("standard_config")
 @pytest.mark.parametrize(
     "job",
     no_duration_parameters.values(),
@@ -122,6 +124,7 @@ def test_measure_and_aggregation(
     file_regression.check(prom_custom_query_mock.call_args[0][0])
 
 
+@pytest.mark.usefixtures("standard_config")
 def test_invalid_aggregation(job):
     with pytest.raises(
         ValueError,

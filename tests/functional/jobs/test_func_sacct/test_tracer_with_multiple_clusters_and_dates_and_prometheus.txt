@@ -228,7 +228,7 @@ Found 4 job(s):
     }
 }
 
-Found 74 span(s):
+Found 114 span(s):
 [
  {
   "span_name": "acquire_cluster_data",
@@ -304,7 +304,7 @@ Found 74 span(s):
   "span_has_error": false
  },
  {
-  "span_name": "get_job_time_series",
+  "span_name": "_get_job_time_series_data",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
@@ -316,7 +316,7 @@ Found 74 span(s):
   "span_has_error": false
  },
  {
-  "span_name": "get_job_time_series",
+  "span_name": "_get_job_time_series_data",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
@@ -328,7 +328,7 @@ Found 74 span(s):
   "span_has_error": false
  },
  {
-  "span_name": "get_job_time_series",
+  "span_name": "_get_job_time_series_data",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
@@ -340,13 +340,67 @@ Found 74 span(s):
   "span_has_error": false
  },
  {
-  "span_name": "get_job_time_series",
+  "span_name": "_get_job_time_series_data",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
  },
  {
   "span_name": "get_job_time_series",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "_get_job_time_series_data",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "get_job_time_series",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "_get_job_time_series_data",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "get_job_time_series",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "_get_job_time_series_data",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "get_job_time_series",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "_get_job_time_series_data",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "get_job_time_series",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "_get_job_time_series_data",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
@@ -359,6 +413,12 @@ Found 74 span(s):
  },
  {
   "span_name": "get_job_time_series",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "_get_job_time_series_data",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
@@ -412,7 +472,7 @@ Found 74 span(s):
   "span_has_error": false
  },
  {
-  "span_name": "get_job_time_series",
+  "span_name": "_get_job_time_series_data",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
@@ -424,7 +484,7 @@ Found 74 span(s):
   "span_has_error": false
  },
  {
-  "span_name": "get_job_time_series",
+  "span_name": "_get_job_time_series_data",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
@@ -436,7 +496,7 @@ Found 74 span(s):
   "span_has_error": false
  },
  {
-  "span_name": "get_job_time_series",
+  "span_name": "_get_job_time_series_data",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
@@ -448,13 +508,67 @@ Found 74 span(s):
   "span_has_error": false
  },
  {
-  "span_name": "get_job_time_series",
+  "span_name": "_get_job_time_series_data",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
  },
  {
   "span_name": "get_job_time_series",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "_get_job_time_series_data",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "get_job_time_series",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "_get_job_time_series_data",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "get_job_time_series",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "_get_job_time_series_data",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "get_job_time_series",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "_get_job_time_series_data",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "get_job_time_series",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "_get_job_time_series_data",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
@@ -467,6 +581,12 @@ Found 74 span(s):
  },
  {
   "span_name": "get_job_time_series",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "_get_job_time_series_data",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
@@ -551,7 +671,7 @@ Found 74 span(s):
   "span_has_error": false
  },
  {
-  "span_name": "get_job_time_series",
+  "span_name": "_get_job_time_series_data",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
@@ -563,7 +683,7 @@ Found 74 span(s):
   "span_has_error": false
  },
  {
-  "span_name": "get_job_time_series",
+  "span_name": "_get_job_time_series_data",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
@@ -575,7 +695,7 @@ Found 74 span(s):
   "span_has_error": false
  },
  {
-  "span_name": "get_job_time_series",
+  "span_name": "_get_job_time_series_data",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
@@ -587,13 +707,67 @@ Found 74 span(s):
   "span_has_error": false
  },
  {
-  "span_name": "get_job_time_series",
+  "span_name": "_get_job_time_series_data",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
  },
  {
   "span_name": "get_job_time_series",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "_get_job_time_series_data",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "get_job_time_series",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "_get_job_time_series_data",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "get_job_time_series",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "_get_job_time_series_data",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "get_job_time_series",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "_get_job_time_series_data",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "get_job_time_series",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "_get_job_time_series_data",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
@@ -606,6 +780,12 @@ Found 74 span(s):
  },
  {
   "span_name": "get_job_time_series",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "_get_job_time_series_data",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
@@ -659,7 +839,7 @@ Found 74 span(s):
   "span_has_error": false
  },
  {
-  "span_name": "get_job_time_series",
+  "span_name": "_get_job_time_series_data",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
@@ -671,7 +851,7 @@ Found 74 span(s):
   "span_has_error": false
  },
  {
-  "span_name": "get_job_time_series",
+  "span_name": "_get_job_time_series_data",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
@@ -683,7 +863,7 @@ Found 74 span(s):
   "span_has_error": false
  },
  {
-  "span_name": "get_job_time_series",
+  "span_name": "_get_job_time_series_data",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
@@ -695,13 +875,67 @@ Found 74 span(s):
   "span_has_error": false
  },
  {
-  "span_name": "get_job_time_series",
+  "span_name": "_get_job_time_series_data",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
  },
  {
   "span_name": "get_job_time_series",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "_get_job_time_series_data",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "get_job_time_series",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "_get_job_time_series_data",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "get_job_time_series",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "_get_job_time_series_data",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "get_job_time_series",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "_get_job_time_series_data",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "get_job_time_series",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "_get_job_time_series_data",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
@@ -714,6 +948,12 @@ Found 74 span(s):
  },
  {
   "span_name": "get_job_time_series",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "_get_job_time_series_data",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
