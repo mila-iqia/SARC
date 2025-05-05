@@ -3,25 +3,6 @@ name = "sarc"
 version = "0.1.0"
 description = "Surveillance et analyse des ressources de calcul"
 authors = [{ name = "Mila-IDT" }]
-<<<<<<< HEAD
-requires-python = "~=3.11"
-readme = "README.md"
-dependencies = [
-    "fabric>=3.0.0,<4",
-    "prometheus-api-client>=0.5.2,<0.6",
-    "pydantic>=1.10.4,<2",
-    "pydantic-mongo>=1.0.1,<2",
-    "pymongo>=4.3.3,<5",
-    "numpy>=1.24.0,<2",
-    "ldap3>=2.9.1,<3",
-    "python-hostlist>=1.23.0,<2",
-    "tqdm>=4.64.1,<5",
-    "flatten-dict>=0.4.2,<0.5",
-    "simple-parsing>=0.1.0,<0.2",
-    "sphinx>=6.2.1,<7",
-    "myst-parser>=2.0.0,<3",
-    "sphinx-rtd-theme>=1.2.2,<2",
-=======
 requires-python = "==3.11.*"
 readme = "README.md"
 dependencies = [
@@ -39,20 +20,13 @@ dependencies = [
     "sphinx>=8.2.3,<9",
     "myst-parser>=4.0.1,<5",
     "sphinx-rtd-theme>=3.0.2,<4",
->>>>>>> master
     "nbsphinx>=0.9.3,<0.10",
     "opentelemetry-api>=1.23.0,<2",
     "opentelemetry-sdk>=1.23.0,<2",
     "requests-mock>=1.11.0,<2",
-<<<<<<< HEAD
-    "pandas< 2.1.0",
-    "gifnoc>=0.2.3,<0.3",
-    "watchdog>=4.0.0,<5",
-=======
     "pandas>=2.2.0,<2.3.0",
     "gifnoc>=0.4.2,<0.5",
     "watchdog>=6,<7",
->>>>>>> master
     "python-dateutil>=2.9.0.post0,<3",
     "opentelemetry-exporter-otlp>=1.23.0,<2",
 ]
@@ -80,10 +54,6 @@ dev = [
     "tabulate>=0.9.0,<0.10",
     "tox-uv>=1.25.0",
     "pytest-httpserver>=1.1.0",
-<<<<<<< HEAD
-]
-examples = ["seaborn>=0.12.2,<0.13"]
-=======
     "types-paramiko>=3.5.0.20240928",
     "pandas-stubs>=2.2.3.250308",
     "types-requests>=2.32.0.20250328",
@@ -91,7 +61,6 @@ examples = ["seaborn>=0.12.2,<0.13"]
     "types-tqdm>=4.67.0.20250417",
 ]
 examples = ["seaborn>=0.13.2,<0.14"]
->>>>>>> master
 
 [tool.uv]
 default-groups = [
