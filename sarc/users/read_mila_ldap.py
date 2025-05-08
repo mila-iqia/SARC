@@ -48,8 +48,8 @@ Two ways this can be used:
 ::
 
     python3 read_mila_ldap.py \\
-        --local_private_key_file secrets/Google_2026_01_26_66827.key \\
-        --local_certificate_file secrets/Google_2026_01_26_66827.crt \\
+        --local_private_key_file ../SARC_secrets/secrets/Google_2026_01_26_66827.key \\
+        --local_certificate_file ../SARC_secrets/secrets/Google_2026_01_26_66827.crt \\
         --ldap_service_uri ldaps://ldap.google.com \\
         --mongodb_connection_string ${MONGODB_CONNECTION_STRING} \\
         --output_json_file mila_users.json

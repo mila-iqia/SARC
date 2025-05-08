@@ -6,10 +6,10 @@ The manual procedure steps are:
 
 **Once a month** (or each time we have new users files from DRAC):
 
-- Copy the two DRAC files (`users` and `roles`) in the `secrets/account_matching` folder
+- Copy the two DRAC files (`users` and `roles`) in the `../SARC_secrets/secrets/account_matching` folder
 - Adjust the `account_matching` section of the config file to point to these two files 
 - run the `acquire users` command
-- if any errors, adjust the exceptions in the `secrets/make_matches_config.json` file, and re-run the account matching script.
+- if any errors, adjust the exceptions in the `../SARC_secrets/secrets/make_matches_config.json` file, and re-run the account matching script.
 
 ## In details
 
@@ -46,13 +46,13 @@ To use the remote mongoDB connection, tunneled from localhost:27018, the `mongo`
 
 ### data source 1: Mila LDAP credentials
 
-The credentials for the Mila LDAP are in the `secrets/ldap` folder.
+The credentials for the Mila LDAP are in the `../SARC_secrets/secrets/ldap` folder.
 
 They are refered to in the ldap section of the sarc config file :
 ```
     "ldap": {
-        "local_private_key_file": "secrets/ldap/Google_2026_01_26_66827.key",
-        "local_certificate_file": "secrets/ldap/Google_2026_01_26_66827.crt",
+        "local_private_key_file": "../SARC_secrets/secrets/ldap/Google_2026_01_26_66827.key",
+        "local_certificate_file": "../SARC_secrets/secrets/ldap/Google_2026_01_26_66827.crt",
         "ldap_service_uri": "ldaps://ldap.google.com",
         "mongo_collection_name": "users"
     },
@@ -67,7 +67,7 @@ Compute Canada must provide 2 CSV files:
 
 #### copy the files in the right directory
 
-The two file must be copied to the `secrets/account_matching/` folder of SARC, on the server or the local machine, depending on the scenario. 
+The two file must be copied to the `../SARC_secrets/secrets/account_matching/` folder of SARC, on the server or the local machine, depending on the scenario. 
 
 #### Configuration file
 
@@ -75,7 +75,7 @@ The two file must be copied to the `secrets/account_matching/` folder of SARC, o
 
 ### Exceptions handling
 
-The exception are manually handled in the `secrets/make_matches_config.json` file.
+The exception are manually handled in the `../SARC_secrets/secrets/make_matches_config.json` file.
 
 ```
 {

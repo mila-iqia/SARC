@@ -10,9 +10,9 @@ source code: [sarc/cli/acquire/users.py](../../sarc/cli/acquire/users.py)
 
 The acocunt atching code meerges different sources of informations to match the mila credentials with the DRAC credentials:
 - LDAP
-- DRAC CSVs, manually downloaded and placed in the `secrets/` folder
+- DRAC CSVs, manually downloaded and placed in the `../SARC_secrets/secrets/` folder
 - mymila (deactivated until further notice)
-- exception files (in the `secrets/` folder, see [secrets](secrets.md) for more informations)
+- exception files (in the `../SARC_secrets/secrets/` folder, see [secrets](secrets.md) for more informations)
 
 ## Users revisions
 
