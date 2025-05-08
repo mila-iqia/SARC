@@ -10,7 +10,7 @@ we have to keep this private, despite how convenient it would be at times to
 have some statements like `if name == "johnappleseed@mila.quebec"`.
 
 These all need to come from a specific configuration file, and that file is include
-with the other secrets in the "secrets/account_matching" directory.
+with the other secrets in the "../SARC_secrets/secrets/account_matching" directory.
 """
 
 import copy

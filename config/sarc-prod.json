@@ -9,17 +9,17 @@
         "database_name": "sarc"
     },
     "ldap": {
-        "local_private_key_file": "secrets/ldap/Google_2026_01_26_66827.key",
-        "local_certificate_file": "secrets/ldap/Google_2026_01_26_66827.crt",
+        "local_private_key_file": "../SARC_secrets/secrets/ldap/Google_2026_01_26_66827.key",
+        "local_certificate_file": "../SARC_secrets/secrets/ldap/Google_2026_01_26_66827.crt",
         "ldap_service_uri": "ldaps://ldap.google.com",
         "mongo_collection_name": "users",
-        "group_to_prof_json_path": "secrets/group_to_prof.json",
-        "exceptions_json_path": "secrets/exceptions.json"
+        "group_to_prof_json_path": "../SARC_secrets/secrets/group_to_prof.json",
+        "exceptions_json_path": "../SARC_secrets/secrets/exceptions.json"
     },
     "account_matching": {
-        "drac_members_csv_path": "secrets/account_matching/members-rrg-bengioy-ad-2025-02-06.csv",
-        "drac_roles_csv_path": "secrets/account_matching/sponsored_roles_for_Yoshua_Bengio_(CCI_jvb-000).csv",
-        "make_matches_config": "secrets/account_matching/make_matches_config.json"
+        "drac_members_csv_path": "../SARC_secrets/secrets/account_matching/members-rrg-bengioy-ad-2025-02-06.csv",
+        "drac_roles_csv_path": "../SARC_secrets/secrets/account_matching/sponsored_roles_for_Yoshua_Bengio_(CCI_jvb-000).csv",
+        "make_matches_config": "../SARC_secrets/secrets/account_matching/make_matches_config.json"
     },
     "cache": "./sarc-cache",
     "sshconfig": "~/.ssh/config",
@@ -45,10 +45,10 @@
             "duc_storage_command": "duc ls -d /project/.duc_databases/rrg-bengioy-ad.sqlite /project/rrg-bengioy-ad",
             "diskusage_report_command": "diskusage_report --project --all_users",
             "prometheus_url": "https://mila-thanos.calculquebec.ca",
-            "prometheus_headers_file": "secrets/drac_prometheus/headers.json",
+            "prometheus_headers_file": "../SARC_secrets/secrets/drac_prometheus/headers.json",
             "start_date": "2022-04-01",
             "rgu_start_date": "2023-11-28",
-            "gpu_to_rgu_billing": "secrets/gpu_to_rgu_billing_narval.json"
+            "gpu_to_rgu_billing": "../SARC_secrets/secrets/gpu_to_rgu_billing_narval.json"
         },
         "beluga": {
             "host": "beluga.computecanada.ca",
@@ -59,10 +59,10 @@
             "duc_storage_command": "duc ls -d /project/.duc_databases/rrg-bengioy-ad.sqlite /project/rrg-bengioy-ad",
             "diskusage_report_command": "diskusage_report --project --all_users",
             "prometheus_url": "https://mila-thanos.calculquebec.ca",
-            "prometheus_headers_file": "secrets/drac_prometheus/headers.json",
+            "prometheus_headers_file": "../SARC_secrets/secrets/drac_prometheus/headers.json",
             "start_date": "2022-04-01",
             "rgu_start_date": "2024-04-03",
-            "gpu_to_rgu_billing": "secrets/gpu_to_rgu_billing_beluga.json"
+            "gpu_to_rgu_billing": "../SARC_secrets/secrets/gpu_to_rgu_billing_beluga.json"
         },
         "graham": {
             "host": "graham.computecanada.ca",
@@ -76,7 +76,7 @@
             "prometheus_headers_file": null,
             "start_date": "2022-04-01",
             "rgu_start_date": "2024-04-03",
-            "gpu_to_rgu_billing": "secrets/gpu_to_rgu_billing_graham.json"
+            "gpu_to_rgu_billing": "../SARC_secrets/secrets/gpu_to_rgu_billing_graham.json"
         },
         "cedar": {
             "host": "cedar.computecanada.ca",
@@ -90,7 +90,7 @@
             "prometheus_headers_file": null,
             "start_date": "2022-04-01",
             "rgu_start_date": "2024-04-03",
-            "gpu_to_rgu_billing": "secrets/gpu_to_rgu_billing_cedar.json"
+            "gpu_to_rgu_billing": "../SARC_secrets/secrets/gpu_to_rgu_billing_cedar.json"
         }
     }
 }
