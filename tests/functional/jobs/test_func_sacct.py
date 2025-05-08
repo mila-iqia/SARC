@@ -472,7 +472,7 @@ def test_get_gpu_type_without_prometheus(
     job = jobs[0]
     print(job)
     print(job.nodes)
-    assert job.allocated.gpu_type == "gpu:asupergpu:4"
+    assert job.allocated.gpu_type == "Nec Plus ULTRA GPU 2000"
 
     file_regression.check(
         f"Found {len(jobs)} job(s):\n"

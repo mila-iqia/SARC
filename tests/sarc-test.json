@@ -13,11 +13,11 @@
         "local_certificate_file": "not_a_valid_path.crt",
         "ldap_service_uri": "ldaps://ldap.google.com",
         "mongo_collection_name": "users",
-        "group_to_prof_json_path": "secrets/group_to_prof.json",
-        "exceptions_json_path": "secrets/exceptions.json"
+        "group_to_prof_json_path": "../SARC_secrets/secrets/group_to_prof.json",
+        "exceptions_json_path": "../SARC_secrets/secrets/exceptions.json"
     },
     "mymila": {
-        "tmp_json_path": "secrets/tmp_mymila.json"
+        "tmp_json_path": "../SARC_secrets/secrets/tmp_mymila.json"
     },
     "account_matching": {
         "drac_members_csv_path": "drac_members_not_valid_path.csv",
@@ -46,7 +46,15 @@
             "duc_inodes_command": null,
             "duc_storage_command": null,
             "diskusage_report_command": null,
-            "prometheus_url": null
+            "prometheus_url": null,
+            "gpus_per_nodes" : {
+                "cn-c018": {
+                    "asupergpu": "Nec Plus Plus ULTRA GPU 2000"
+                },
+                "cn-c[019-030]": {
+                    "asupergpu": "Nec Plus ULTRA GPU 2000"
+                }
+            }
         },
         "fromage": {
             "host": "fromage",
@@ -108,7 +116,8 @@
             "duc_storage_command": "duc ls -d /project/.duc_databases/rrg-bonhomme-ad.sqlite /project/rrg-bonhomme-ad",
             "diskusage_report_command": "diskusage_report --project --all_users",
             "prometheus_url": "https://hyrule-thanos.calcul.ca",
-            "prometheus_headers_file": "tests/not-so-secrets/patate_prometheus/headers.json"
+            "prometheus_headers_file": "tests/not-so-secrets/patate_prometheus/headers.json",
+            "billing_is_gpu": true
         },
         "local": {
             "host": "localhost",

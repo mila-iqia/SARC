@@ -30,7 +30,7 @@ if [ -z "$4" ]
   then
     SCRIPT=$(readlink -f "$0")
     SCRIPTPATH=$(dirname "$SCRIPT")
-    SECRET_PATH=$SCRIPTPATH/../../secrets/mongo_writeuser_password.txt
+    SECRET_PATH=$SCRIPTPATH/../../../SARC_secrets/secrets/mongo_writeuser_password.txt
     echo "No secret file path supplied, using default path $SECRET_PATH"
   else
     SECRET_PATH=$4
