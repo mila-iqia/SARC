@@ -54,6 +54,7 @@ class CachePolicy(Enum):
     refresh = False
     ignore = "ignore"
     always = "always"
+    check = "check"
 
 
 @dataclass
@@ -204,6 +205,7 @@ class CachedFunction:  # pylint: disable=too-many-instance-attributes
             setattr(parent, symbol, cf)
         return cf
 
+    # pylint: disable=too-many-branches
     def __call__(
         self,
         *args,
@@ -221,9 +223,13 @@ class CachedFunction:  # pylint: disable=too-many-instance-attributes
 
         # Whether to use the cache
         use_cache = key_value is not None and (
-            require_cache or (cache_policy is CachePolicy.use)
+            require_cache
+            or (cache_policy is CachePolicy.use)
+            or (cache_policy is CachePolicy.check)
         )
 
+        cached_value = None
+        has_cache = False
         if use_cache:
             try:
                 if cache_policy is CachePolicy.always or self.validity is True:
@@ -234,7 +240,12 @@ class CachedFunction:  # pylint: disable=too-many-instance-attributes
                         valid = self.validity
                     else:
                         valid = self.validity(*args, **kwargs)
-                return self.read_for_key(key_value, valid=valid, at_time=at_time)
+                cached_value = self.read_for_key(
+                    key_value, valid=valid, at_time=at_time
+                )
+                has_cache = True
+                if cache_policy is not CachePolicy.check:
+                    return cached_value
             except CacheException:
                 pass
 
@@ -243,6 +254,34 @@ class CachedFunction:  # pylint: disable=too-many-instance-attributes
 
         self.logger.debug(f"Computing {self.name}(...) for key '{key_value}'")
         value = self.fn(*args, **kwargs)
+
+        if cache_policy is CachePolicy.check and has_cache and cached_value != value:
+            if self.formatter is json:
+                import difflib
+
+                d1_str = json.dumps(cached_value, indent=1, sort_keys=True)
+                d2_str = json.dumps(value, indent=1, sort_keys=True)
+
+                diff = difflib.unified_diff(
+                    d1_str.splitlines(),
+                    d2_str.splitlines(),
+                    fromfile="cached",
+                    tofile="value",
+                    lineterm="",
+                )
+                difference = "\n".join(diff)
+            else:
+                difference = (
+                    f"Cached:\n"
+                    f"{repr(cached_value)}\n\n"
+                    f"Value:\n"
+                    f"{repr(value)}\n"
+                )
+            raise CacheException(
+                f"\nCached result != live result:\n"
+                f"Key: {key_value}\n\n"
+                f"{difference}\n"
+            )
 
         # Whether to save the cache
         if key_value is None:
@@ -297,6 +336,8 @@ def with_cache(
             raise an exception.
           * CachePolicy.ignore ("ignore"): Ignore the cache altogether: recompute, and
             do not save the result to cache.
+          * CachePolicy.check ("check"): Recompute the value and compare it
+            to cache if available. Raise an exception if cache != value.
         * save_cache (default: True): Whether to cache the result on disk or not.
         * at_time (default: now): The time at which to evaluate the request.
     """
