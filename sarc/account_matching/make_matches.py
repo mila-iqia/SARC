@@ -223,7 +223,6 @@ def _matching_names(DLD_data, DD_persons, name_distance_delta_threshold, prompt=
             ]
             if len(matches_under_threshold) == 1:
                 cc_match = matches_under_threshold[0][1]
-
             # Otherwise, prompt if allowed (manual match).
             elif prompt:
                 cc_match = _prompt_manual_match(
