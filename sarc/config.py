@@ -198,11 +198,12 @@ class Config(ClientConfig):
     logging: LoggingConfig = None
 
     def __post_init__(self):
-        for name, cluster in self.clusters.items():
-            if not cluster.name:
-                cluster.name = name
-            if not cluster.sshconfig:
-                cluster.sshconfig = self.sshconfig
+        if self.clusters:
+            for name, cluster in self.clusters.items():
+                if not cluster.name:
+                    cluster.name = name
+                if not cluster.sshconfig:
+                    cluster.sshconfig = self.sshconfig
 
 
 class WhitelistProxy:
