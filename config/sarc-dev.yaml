@@ -69,7 +69,7 @@ sarc:
           h100: H100-SXM5-80GB
     narval:
       host: narval.computecanada.ca
-      timezone: America/Mondtreal
+      timezone: America/Montreal
       accounts:
       - rrg-bengioy-ad_gpu
       - rrg-bengioy-ad_cpu
