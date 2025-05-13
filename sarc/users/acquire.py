@@ -97,6 +97,12 @@ def run(
             }
         )
 
+        # We have to filter out the duplicate users that in the drac_members file
+        span.add_event("Filtering duplicate entries in drac_members ...")
+        DLD_data["drac_members"] = filter_duplicate_drac_members(
+            DLD_data["drac_members"]
+        )
+
         # hint : To debug or manually adjust `perform_matching` to handle new edge cases
         #        that arrive each semester, you can inspect the contents of the temporary file
         #        to see what you're working with, or you can just inspect `DLD_data`
@@ -163,6 +169,29 @@ def run(
                 cfg.account_matching.make_matches_config, "w", encoding="utf-8"
             ) as json_file:
                 json.dump(make_matches_config, json_file, indent=4)
+
+
+def filter_duplicate_drac_members(LD_drac_members):
+    DL_users = {}  # dict of list of drac members, key=username
+    for user in LD_drac_members:
+        if user["username"] not in DL_users:
+            DL_users[user["username"]] = []
+        DL_users[user["username"]].append(user)
+
+    LD_filtered_drac_members = []
+    for _, users in DL_users.items():
+        # keep the active entry, or the  the last entry if no active one
+        active_users = [
+            user for user in users if user["activation_status"] == "activated"
+        ]
+        user_to_keep = None
+        if active_users:
+            user_to_keep = active_users[-1]
+        else:
+            user_to_keep = users[-1]
+        LD_filtered_drac_members.append(user_to_keep)
+
+    return LD_filtered_drac_members
 
 
 def fill_computed_fields(data: dict):

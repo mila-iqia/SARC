@@ -68,9 +68,9 @@ Ensure that uv is either available on $PATH or is at a known location
 
 You have 3 mongo users account; 
 
-- `mongoadmin` (password: see `secrets/mongo_admin_password.txt`) is the global mongodb administrator account.
+- `mongoadmin` (password: see `../SARC_secrets/secrets/mongo_admin_password.txt`) is the global mongodb administrator account.
 - `readuser`(password: `readpwd`, see `config/sarc-client.json`) is the user for general use (only reads data from the database)
-- `writeuser` (password: see `secrets/mongo_writeuser_password.txt`) is used by the server during scraping
+- `writeuser` (password: see `../SARC_secrets/secrets/mongo_writeuser_password.txt`) is used by the server during scraping
 
 Therefore, if you want to admin the database with compass, the connection string will be (see `config/sarc-*.json`) :
 ```

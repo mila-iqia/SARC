@@ -10,7 +10,7 @@ we have to keep this private, despite how convenient it would be at times to
 have some statements like `if name == "johnappleseed@mila.quebec"`.
 
 These all need to come from a specific configuration file, and that file is include
-with the other secrets in the "secrets/account_matching" directory.
+with the other secrets in the "../SARC_secrets/secrets/account_matching" directory.
 """
 
 import copy
@@ -223,7 +223,6 @@ def _matching_names(DLD_data, DD_persons, name_distance_delta_threshold, prompt=
             ]
             if len(matches_under_threshold) == 1:
                 cc_match = matches_under_threshold[0][1]
-
             # Otherwise, prompt if allowed (manual match).
             elif prompt:
                 cc_match = _prompt_manual_match(
