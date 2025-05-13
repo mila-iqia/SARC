@@ -142,8 +142,8 @@ class MongoConfig:
 
 @dataclass
 class LDAPConfig:
-    local_private_key_file: str
-    local_certificate_file: str
+    local_private_key_file: Path
+    local_certificate_file: Path
     ldap_service_uri: str
     mongo_collection_name: str
     group_to_prof_json_path: Path = None
