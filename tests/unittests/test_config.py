@@ -1,4 +1,5 @@
 from pathlib import Path
+from unittest.mock import mock_open, patch
 
 import gifnoc
 import pytest
@@ -36,5 +37,33 @@ def test_client_config():
 
 
 def test_prod_config():
-    with gifnoc.use(Path(sarc_configs / "sarc-prod.yaml")):
-        assert config().mongo.database_name == "sarc"
+    mock_mongo_content = """
+    connection_string: mongodb://localhost:27017/sarc-test
+    database_name: sarc-test
+    """
+
+    # Create a selective mock for read_text that returns our content
+    original_read_text = Path.read_text
+
+    def mock_read_text_selective(path_obj, *args, **kwargs):
+        if "mongo-prod.yaml" in str(path_obj):
+            return mock_mongo_content
+        return original_read_text(path_obj, *args, **kwargs)
+
+    # Create a selective mock for exists that returns True for our file
+    original_exists = Path.exists
+
+    def mock_exists_selective(path_obj):
+        if "mongo-prod.yaml" in str(path_obj):
+            return True
+        return original_exists(path_obj)
+
+    print("test_prod_config")
+
+    # Apply both patches
+    with (
+        patch.object(Path, "read_text", mock_read_text_selective),
+        patch.object(Path, "exists", mock_exists_selective),
+    ):
+        with gifnoc.use(Path(sarc_configs / "sarc-prod.yaml")):
+            assert config().mongo.database_name == "sarc-test"
