@@ -36,16 +36,5 @@ def test_client_config():
 
 
 def test_prod_config():
-    # Create a test configuration that includes the MongoDB settings
-    test_mongo_config = {
-        "sarc": {
-            "mongo": {
-                "connection_string": "mongodb://localhost:27017/sarc-test",
-                "database_name": "sarc-test"
-            }
-        }
-    }
-    
-    # Use gifnoc.overlay to provide the test configuration
-    with gifnoc.overlay(Path(sarc_configs / "sarc-prod.yaml"), test_mongo_config):
-        assert config().mongo.database_name == "sarc-test"
+    with gifnoc.use(Path(sarc_configs / "sarc-prod.yaml")):
+        assert config().mongo.database_name == "sarc"
