@@ -12,7 +12,6 @@ import sarc.users.read_mila_ldap  # will monkeypatch "query_ldap"
 from sarc.config import config
 
 
-@pytest.mark.usefixtures("standard_config")
 def test_query_to_ldap_server_and_writing_to_output_json(
     patch_return_values, mock_file
 ):

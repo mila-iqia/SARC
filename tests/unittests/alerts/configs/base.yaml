@@ -1,8 +1,5 @@
 sarc:
   health_monitor:
-    # Override with a tmpdir
-    directory: null
-
     parameterizations:
       letter:
         - alpha

@@ -187,7 +187,6 @@ def test_generate_label_configs_no_node_id_cluster_name():
         ),
     ],
 )
-@pytest.mark.usefixtures("standard_config")
 def test_query_prom(
     metric_name, label_config, start, end, running_window, ground_truth, monkeypatch
 ):
@@ -251,7 +250,6 @@ def test_get_nodes_time_series_default_end(freezer, monkeypatch):
     )
 
 
-@pytest.mark.usefixtures("standard_config")
 @pytest.mark.freeze_time("2023-01-01")
 def test_get_nodes_time_series_queries(monkeypatch):
     expected = [
@@ -304,7 +302,6 @@ def test_get_nodes_time_series_queries(monkeypatch):
         assert df[df["query"] == query].shape == (8, 4)
 
 
-@pytest.mark.usefixtures("standard_config")
 @pytest.mark.freeze_time("2023-01-01")
 def test_get_nodes_time_series_empty_result(monkeypatch):
     def mixed_results(self, query):

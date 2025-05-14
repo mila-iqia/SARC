@@ -131,7 +131,7 @@ MOCK_TIME = "2023-11-22"
 
 
 @pytest.mark.freeze_time(MOCK_TIME)
-@pytest.mark.usefixtures("read_only_db_with_users_client", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db_with_users", "client_mode", "tzlocal_is_mtl")
 def test_load_job_series_with_users(file_regression):
     """Test job to user mapping.
 
@@ -159,7 +159,7 @@ def test_load_job_series_with_users(file_regression):
 
 
 @pytest.mark.freeze_time(MOCK_TIME)
-@pytest.mark.usefixtures("read_only_db_client", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
 @pytest.mark.parametrize("params", parameters.values(), ids=parameters.keys())
 def test_load_job_series(params, file_regression, captrace):
     data_frame = load_job_series(**params)
@@ -182,7 +182,7 @@ def test_load_job_series(params, file_regression, captrace):
     assert spans[0].name == "load_job_series"
 
 
-@pytest.mark.usefixtures("read_only_db_client", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
 @pytest.mark.parametrize("params", [parameters["no_cluster"]], ids=["no_cluster"])
 def test_load_job_series_check_end_times(params):
     # Get jobs
@@ -351,7 +351,7 @@ def test_load_job_series_with_bad_gpu_utilization(file_regression):
     )
 
 
-@pytest.mark.usefixtures("read_only_db_client", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
 @pytest.mark.parametrize("params", few_parameters.values(), ids=few_parameters.keys())
 def test_load_job_series_fields_list(params, file_regression):
     fields = ["gpu_memory", "allocated.mem", "requested.mem", "user", "work_dir"]
@@ -363,7 +363,7 @@ def test_load_job_series_fields_list(params, file_regression):
     )
 
 
-@pytest.mark.usefixtures("read_only_db_client", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
 @pytest.mark.parametrize("params", few_parameters.values(), ids=few_parameters.keys())
 def test_load_job_series_fields_dict(params, file_regression):
     fields = {
@@ -382,7 +382,7 @@ def test_load_job_series_fields_dict(params, file_regression):
 
 
 @pytest.mark.freeze_time(MOCK_TIME)
-@pytest.mark.usefixtures("read_only_db_client", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
 @pytest.mark.parametrize("params", param_start_end.values(), ids=param_start_end.keys())
 def test_load_job_series_clip_time_true(params, file_regression):
     assert "start" in params
@@ -398,7 +398,7 @@ def test_load_job_series_clip_time_true(params, file_regression):
 
 
 @pytest.mark.freeze_time(MOCK_TIME)
-@pytest.mark.usefixtures("read_only_db_client", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
 @pytest.mark.parametrize("params", param_start_end.values(), ids=param_start_end.keys())
 def test_load_job_series_clip_time_false(params, file_regression):
     assert "start" in params
@@ -411,7 +411,7 @@ def test_load_job_series_clip_time_false(params, file_regression):
     )
 
 
-@pytest.mark.usefixtures("read_only_db_client", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
 @pytest.mark.parametrize(
     "params", params_no_start_or_end.values(), ids=params_no_start_or_end.keys()
 )
@@ -421,7 +421,7 @@ def test_load_job_series_clip_time_true_no_start_or_end(params, file_regression)
 
 
 @pytest.mark.freeze_time(MOCK_TIME)
-@pytest.mark.usefixtures("read_only_db_client", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
 @pytest.mark.parametrize("params", few_parameters.values(), ids=few_parameters.keys())
 def test_load_job_series_callback(params, file_regression):
     def callback(rows):
@@ -439,7 +439,7 @@ def test_load_job_series_callback(params, file_regression):
     )
 
 
-@pytest.mark.usefixtures("read_only_db_client", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
 @pytest.mark.parametrize("params", param_start_end.values(), ids=param_start_end.keys())
 def test_load_job_series_all_args(params, file_regression):
     def callback(rows):

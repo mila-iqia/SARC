@@ -2,14 +2,16 @@ from datetime import timedelta
 
 from gifnoc.std import time
 
-from sarc.alerts.common import CheckStatus, config
+from sarc.alerts.common import CheckStatus
 from sarc.alerts.runner import CheckRunner
+from sarc.config import config
 
 
 def day_runner():
+    hc = config().health_monitor
     return CheckRunner(
-        directory=config.directory,
-        checks=config.checks,
+        directory=hc.directory,
+        checks=hc.checks,
     )
 
 
@@ -25,7 +27,7 @@ def test_runner(beans_config, caplog):
         "sleepy_beans": CheckStatus.OK,
     }
 
-    for check in config.checks.values():
+    for check in beans_config.checks.values():
         print(f"Checking: {check.name}")
         results = list(check.all_results(ascending=True))
         if check.active:
@@ -44,18 +46,18 @@ def test_runner_deps(deps_config, caplog):
     caplog.set_level(1000)
     day_runner().start(end_time=time.now() + timedelta(hours=24))
 
-    assert len(list(config.checks["evil_beans"].all_results())) == 24
-    assert len(list(config.checks["many_beans"].all_results())) == 0
+    assert len(list(deps_config.checks["evil_beans"].all_results())) == 24
+    assert len(list(deps_config.checks["many_beans"].all_results())) == 0
 
 
 def test_runner_parameters(params_config, caplog):
     caplog.set_level(1000)
     day_runner().start(end_time=time.now() + timedelta(hours=24))
 
-    assert len(list(config.checks["isbeta_alpha"].all_results())) == 24
-    assert len(list(config.checks["isbeta_beta"].all_results())) == 24
-    assert len(list(config.checks["isbeta_gamma"].all_results())) == 24
+    assert len(list(params_config.checks["isbeta_alpha"].all_results())) == 24
+    assert len(list(params_config.checks["isbeta_beta"].all_results())) == 24
+    assert len(list(params_config.checks["isbeta_gamma"].all_results())) == 24
 
-    assert len(list(config.checks["beanz_alpha"].all_results())) == 0
-    assert len(list(config.checks["beanz_beta"].all_results())) == 16
-    assert len(list(config.checks["beanz_gamma"].all_results())) == 0
+    assert len(list(params_config.checks["beanz_alpha"].all_results())) == 0
+    assert len(list(params_config.checks["beanz_beta"].all_results())) == 16
+    assert len(list(params_config.checks["beanz_gamma"].all_results())) == 0

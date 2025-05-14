@@ -5,7 +5,8 @@ from datetime import date, datetime
 from pydantic import ByteSize
 from pydantic_mongo import AbstractRepository, ObjectIdField
 
-from sarc.config import BaseModel, config
+from sarc.config import config
+from sarc.model import BaseModel
 
 
 class DiskUsageUser(BaseModel):

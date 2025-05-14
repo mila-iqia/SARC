@@ -26,7 +26,7 @@ parameters = {
 }
 
 
-@pytest.mark.usefixtures("read_only_db_client", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
 @pytest.mark.parametrize("params", parameters.values(), ids=parameters.keys())
 def test_get_jobs(params, file_regression):
     jobs = list(get_jobs(**params))
@@ -45,26 +45,26 @@ def test_get_jobs_cluster_cfg(file_regression):
     )
 
 
-@pytest.mark.usefixtures("read_only_db_client", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
 def test_get_jobs_wrong_job_id():
     with pytest.raises(TypeError, match="job_id must be an int or a list of ints"):
         get_jobs(job_id="wrong id")
 
 
-@pytest.mark.usefixtures("read_only_db_client", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
 def test_get_job():
     jbs = list(get_jobs(cluster="patate"))
     jb = get_job(cluster="patate")
     assert jb in jbs
 
 
-@pytest.mark.usefixtures("read_only_db_client", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
 def test_get_job_no_results():
     jb = get_job(job_id=-1234)
     assert jb is None
 
 
-@pytest.mark.usefixtures("read_only_db_client", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
 def test_get_job_resubmitted():
     jb1, jb2 = get_jobs(job_id=1_000_000)
     jb = get_job(job_id=1_000_000)
@@ -80,7 +80,7 @@ def test_save_job_in_scraping_mode():
     job.save()
 
 
-@pytest.mark.usefixtures("read_only_db_with_users_client")
+@pytest.mark.usefixtures("read_only_db_with_users", "client_mode")
 def test_save_job_in_client_mode():
     job, *_ = get_jobs()
     with pytest.raises(ScrapingModeRequired):

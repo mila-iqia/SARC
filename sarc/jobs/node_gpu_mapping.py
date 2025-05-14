@@ -8,7 +8,8 @@ from typing import Dict, Optional
 from pydantic import validator
 from pydantic_mongo import AbstractRepository, ObjectIdField
 
-from sarc.config import MTL, UTC, BaseModel, config, scraping_mode_required
+from sarc.config import MTL, UTC, config, scraping_mode_required
+from sarc.model import BaseModel
 
 logger = logging.getLogger(__name__)
 
