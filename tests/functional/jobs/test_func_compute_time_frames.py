@@ -30,7 +30,7 @@ def _df_to_pretty_str(df: pandas.DataFrame, fields: list) -> str:
 
 
 @pytest.mark.freeze_time(MOCK_TIME)
-@pytest.mark.usefixtures("read_only_db_client", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
 def test_compute_time_frames(file_regression):
     jobs = load_job_series()
     compute_cost_and_waste(jobs)
@@ -47,7 +47,7 @@ def test_compute_time_frames(file_regression):
 
 
 @pytest.mark.freeze_time(MOCK_TIME)
-@pytest.mark.usefixtures("read_only_db_client", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
 def test_compute_time_frames_default_frame_size(file_regression):
     # Default frame size is 7 days and should cover all tested jobs,
     # so, there should be only one time frame in output, with same line number as initial jobs.
@@ -64,7 +64,7 @@ def test_compute_time_frames_default_frame_size(file_regression):
 
 
 @pytest.mark.freeze_time(MOCK_TIME)
-@pytest.mark.usefixtures("read_only_db_client", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
 def test_compute_time_frames_explicit_start(file_regression):
     jobs = load_job_series()
     compute_cost_and_waste(jobs)
@@ -84,7 +84,7 @@ def test_compute_time_frames_explicit_start(file_regression):
 
 
 @pytest.mark.freeze_time(MOCK_TIME)
-@pytest.mark.usefixtures("read_only_db_client", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
 def test_compute_time_frames_explicit_end(file_regression):
     jobs = load_job_series()
     compute_cost_and_waste(jobs)
@@ -104,7 +104,7 @@ def test_compute_time_frames_explicit_end(file_regression):
 
 
 @pytest.mark.freeze_time(MOCK_TIME)
-@pytest.mark.usefixtures("read_only_db_client", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
 def test_compute_time_frames_explicit_start_and_end(file_regression):
     jobs = load_job_series()
     compute_cost_and_waste(jobs)
