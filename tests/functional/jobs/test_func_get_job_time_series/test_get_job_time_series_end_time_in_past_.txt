@@ -1,1 +1,1 @@
-slurm_job_core_usage{slurmjobid=~"1"}[7200s:72s]  offset 3600s
+slurm_job_core_usage{slurmjobid="1"}[7200s:72s]  offset 3600s

@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import pickle
 import re
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
@@ -54,7 +56,26 @@ class CachePolicy(Enum):
     refresh = False
     ignore = "ignore"
     always = "always"
+    # Cache policy to check live data aginast cached values
     check = "check"
+
+
+# Context var to store cache policy got from env var SARC_CACHE
+cache_policy_var = ContextVar("cache_policy_var", default=None)
+
+
+def _cache_policy_from_env() -> CachePolicy:
+    """Infer cache policy from env var SARC_CACHE"""
+
+    if (current := cache_policy_var.get()) is not None:
+        return current
+
+    policy_name = os.getenv("SARC_CACHE", "use")
+    policy = getattr(CachePolicy, policy_name, CachePolicy.use)
+    logging.info(f"inferred cache policy: {policy}")
+
+    cache_policy_var.set(policy)
+    return policy
 
 
 @dataclass
@@ -214,7 +235,14 @@ class CachedFunction:  # pylint: disable=too-many-instance-attributes
         at_time=None,
         **kwargs,
     ):
-        cache_policy = CachePolicy(cache_policy)
+        # If cache_policy is None,
+        # we infer if from environment variable
+        # SARC_CACHE.
+        cache_policy = (
+            _cache_policy_from_env()
+            if cache_policy is None
+            else CachePolicy(cache_policy)
+        )
         at_time = at_time or datetime.now()
         key_value = self.key(*args, **kwargs)
 
@@ -255,33 +283,39 @@ class CachedFunction:  # pylint: disable=too-many-instance-attributes
         self.logger.debug(f"Computing {self.name}(...) for key '{key_value}'")
         value = self.fn(*args, **kwargs)
 
-        if cache_policy is CachePolicy.check and has_cache and cached_value != value:
-            if self.formatter is json:
-                import difflib
-
-                d1_str = json.dumps(cached_value, indent=1, sort_keys=True)
-                d2_str = json.dumps(value, indent=1, sort_keys=True)
-
-                diff = difflib.unified_diff(
-                    d1_str.splitlines(),
-                    d2_str.splitlines(),
-                    fromfile="cached",
-                    tofile="value",
-                    lineterm="",
-                )
-                difference = "\n".join(diff)
+        if cache_policy is CachePolicy.check and has_cache:
+            if cached_value == value:
+                logging.info(f"cache checked: {key_value}")
             else:
-                difference = (
-                    f"Cached:\n"
-                    f"{repr(cached_value)}\n\n"
-                    f"Value:\n"
-                    f"{repr(value)}\n"
+                # Live result != cached result. Raise an exception.
+                # Try to pretty print diff if we have JSON data.
+                if self.formatter is json:
+                    import difflib
+
+                    d1_str = json.dumps(cached_value, indent=1, sort_keys=True)
+                    d2_str = json.dumps(value, indent=1, sort_keys=True)
+
+                    difference = "\n".join(
+                        difflib.unified_diff(
+                            d1_str.splitlines(),
+                            d2_str.splitlines(),
+                            fromfile="cached",
+                            tofile="value",
+                            lineterm="",
+                        )
+                    )
+                else:
+                    difference = (
+                        f"Cached:\n"
+                        f"{repr(cached_value)}\n\n"
+                        f"Value:\n"
+                        f"{repr(value)}\n"
+                    )
+                raise CacheException(
+                    f"\nCached result != live result:\n"
+                    f"Key: {key_value}\n\n"
+                    f"{difference}\n"
                 )
-            raise CacheException(
-                f"\nCached result != live result:\n"
-                f"Key: {key_value}\n\n"
-                f"{difference}\n"
-            )
 
         # Whether to save the cache
         if key_value is None:
@@ -338,6 +372,8 @@ def with_cache(
             do not save the result to cache.
           * CachePolicy.check ("check"): Recompute the value and compare it
             to cache if available. Raise an exception if cache != value.
+          * None: Get cache policy from environment variable SARC_CACHE
+            (default: CachePolicy.use)
         * save_cache (default: True): Whether to cache the result on disk or not.
         * at_time (default: now): The time at which to evaluate the request.
     """
