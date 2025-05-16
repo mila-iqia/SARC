@@ -19,7 +19,7 @@ sarc:
   sshconfig: "~/.ssh/config"
   clusters:
     mila:
-      host: mila
+      host: localhost
       timezone: America/Montreal
       accounts: 
       sacct_bin: "/opt/slurm/bin/sacct"
@@ -31,7 +31,7 @@ sarc:
       start_date: '2022-04-01'
       billing_is_gpu: true
     narval:
-      host: narval.computecanada.ca
+      host: robot.narval.alliancecan.ca
       timezone: America/Montreal
       accounts:
       - rrg-bengioy-ad_gpu
@@ -44,12 +44,12 @@ sarc:
       duc_storage_command: duc ls -d /project/.duc_databases/rrg-bengioy-ad.sqlite /project/rrg-bengioy-ad
       diskusage_report_command: diskusage_report --project --all_users
       prometheus_url: https://mila-thanos.calculquebec.ca
-      prometheus_headers_file: ../../SARC_secrets/secrets/drac_prometheus/headers.json
+      prometheus_headers_file: ../SARC_secrets/secrets/drac_prometheus/headers.json
       start_date: '2022-04-01'
       rgu_start_date: '2023-11-28'
       gpu_to_rgu_billing: ../../SARC_secrets/secrets/gpu_to_rgu_billing_narval.json
     beluga:
-      host: beluga.computecanada.ca
+      host: robot.beluga.alliancecan.ca
       timezone: America/Montreal
       accounts:
       - rrg-bengioy-ad_gpu
@@ -62,12 +62,12 @@ sarc:
       duc_storage_command: duc ls -d /project/.duc_databases/rrg-bengioy-ad.sqlite /project/rrg-bengioy-ad
       diskusage_report_command: diskusage_report --project --all_users
       prometheus_url: https://mila-thanos.calculquebec.ca
-      prometheus_headers_file: ../../SARC_secrets/secrets/drac_prometheus/headers.json
+      prometheus_headers_file: ../SARC_secrets/secrets/drac_prometheus/headers.json
       start_date: '2022-04-01'
       rgu_start_date: '2024-04-03'
       gpu_to_rgu_billing: ../../SARC_secrets/secrets/gpu_to_rgu_billing_beluga.json
     graham:
-      host: graham.computecanada.ca
+      host: robot.graham.alliancecan.ca
       timezone: America/Toronto
       accounts:
       - rrg-bengioy-ad_gpu
@@ -84,7 +84,7 @@ sarc:
       rgu_start_date: '2024-04-03'
       gpu_to_rgu_billing: ../../SARC_secrets/secrets/gpu_to_rgu_billing_graham.json
     cedar:
-      host: cedar.computecanada.ca
+      host: robot.cedar.alliancecan.ca
       timezone: America/Vancouver
       accounts:
       - rrg-bengioy-ad_gpu
