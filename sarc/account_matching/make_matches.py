@@ -334,19 +334,24 @@ def _manual_matching(DLD_data, DD_persons, override_matches_mila_to_cc):
             drac_account_username,
         ) in override_matches_mila_to_cc.items():
             if mila_email_username not in DD_persons:
-                raise ValueError(
-                    f'"{mila_email_username}" is not found in the actual sources.'
-                    "This was supplied to `override_matches_mila_to_cc` in the `make_matches.py` file, "
+                msg = (
+                    f'"{mila_email_username}" is not found in the actual sources.\n'
+                    f"This was supplied to `override_matches_mila_to_cc` in the `make_matches.py` file, "
                     f"but there are not such entries in LDAP.\n"
-                    "Someone messed up the manual matching by specifying a Mila email username that does not exist."
+                    f"Someone messed up the manual matching by specifying a Mila email username that does not exist, or not ANYMORE."
                 )
-            # Note that `matching[drac_account_username]` is itself a dict
-            # with user information from CC. It's not just a username string.
-            if drac_account_username in matching:
-                assert isinstance(matching[drac_account_username], dict)
-                DD_persons[mila_email_username][drac_source] = matching[
-                    drac_account_username
-                ]
+                # we don't want to raise an error here because it will break the pipeline
+                # we will just log the error and move on
+                logging.error(msg)
+                # raise ValueError(msg)
+            else:
+                # Note that `matching[drac_account_username]` is itself a dict
+                # with user information from CC. It's not just a username string.
+                if drac_account_username in matching:
+                    assert isinstance(matching[drac_account_username], dict)
+                    DD_persons[mila_email_username][drac_source] = matching[
+                        drac_account_username
+                    ]
 
 
 def _make_matches_status_report(DLD_data, DD_persons):
