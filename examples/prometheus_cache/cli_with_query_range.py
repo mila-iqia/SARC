@@ -12,9 +12,11 @@ We want to compare both implementations to check if they return (almost) same va
 QUERY WITH OFFSET VS QUERY RANGE
 --------------------------------
 
-1) Call sarc cli normally, to generate cache:
+1) clear cache:
+    rm -rf <sarc-cache-dir>/prometheus
+2) Call sarc cli normally, to generate cache:
     uv run sarc -v acquire jobs ...
-2) Call this script with same parameters and SARC_CACHE=check:
+3) Call this script with same parameters and SARC_CACHE=check:
     SARC_CACHE=check uv run python cli_with_query_range.py -v acquire jobs ...
 
 First call with generate cache with default get_job_time_series() based on query offset.
