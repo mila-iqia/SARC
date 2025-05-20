@@ -5,7 +5,7 @@ from pprint import pprint
 
 import gifnoc
 
-from sarc.alerts.common import CheckStatus
+from sarc.alerts.common import CheckStatus, config
 from sarc.alerts.runner import CheckRunner
 from sarc.config import config
 
@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 class HealthCheckCommand:
     config: Path = None
     once: bool = False
+    write: bool = False
 
     name: str = None
 
@@ -24,24 +25,21 @@ class HealthCheckCommand:
         with gifnoc.use(self.config):
             if self.name:
                 # only run one check, once (no CheckRunner)
-                check = hcfg.checks[self.name]
-                results = check(write=False)
-                pprint(results)
-                for k, status in results.statuses.items():
-                    print(f"{status.name} -- {k}")
-                print(f"{results.status.name}")
+                check = config.checks[self.name]
+                results = check(write=self.write)
+                if results.status == CheckStatus.OK:
+                    print(f"Check '{check.name}' succeeded.")
+                else:
+                    print(f"Check '{check.name}' failed.")
+                    pprint(results)
             elif self.once:
-                # run all checks, once (no CheckRunner)
-                for check in [c for c in hcfg.checks.values() if c.active]:
-                    results = check(write=False)
+                for check in [c for c in config.checks.values() if c.active]:
+                    results = check(write=self.write)
                     if results.status == CheckStatus.OK:
                         print(f"Check '{check.name}' succeeded.")
                     else:
                         print(f"Check '{check.name}' failed.")
                         pprint(results)
-                        for k, status in results.statuses.items():
-                            print(f"{status.name} -- {k}")
-                        print(f"{results.status.name}")
             else:
                 try:
                     runner = CheckRunner(directory=hcfg.directory, checks=hcfg.checks)
