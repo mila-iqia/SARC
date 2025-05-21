@@ -1,3 +1,4 @@
+import logging
 import re
 from dataclasses import dataclass, field
 from itertools import chain
@@ -136,17 +137,17 @@ class SupervisorMatchingErrors:
 
         def show_error(msg, array):
             if len(array) > 0:
-                print(f"{msg} {make_list(array)}")
+                logging.error(f"{msg} {make_list(array)}")
 
         show_error("     Missing supervisors:", self.no_supervisors)
         show_error("    Too many supervisors:", self.too_many_supervisors)
         show_error("        Prof and Student:", self.prof_and_student)
 
         if self.unknown_supervisors:
-            print(f"     Unknown supervisors: {self.unknown_supervisors}")
+            logging.warning(f"     Unknown supervisors: {self.unknown_supervisors}")
 
         if self.unknown_group:
-            print(f"           Unknown group: {self.unknown_group}")
+            logging.warning(f"           Unknown group: {self.unknown_group}")
 
 
 def _extract_supervisors_from_groups(
