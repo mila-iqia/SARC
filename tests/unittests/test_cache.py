@@ -1,12 +1,24 @@
 import json
 import os
-import pickle
 from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
 
-from sarc.cache import plaintext, with_cache
+from sarc.cache import FormatterProto, with_cache
+
+
+class plaintext(FormatterProto):
+    read_flags = "r"
+    write_flags = "w"
+
+    @staticmethod
+    def load(fp):
+        return fp.read()
+
+    @staticmethod
+    def dump(obj, fp):
+        fp.write(obj)
 
 
 def la_fonction(x, y, version=0):
@@ -277,27 +289,11 @@ def test_format_txt(tmpdir):
     assert file.read_text() == result
 
 
-def test_format_pkl(tmpdir):
-    def cle(x, y, version):
-        return f"{x}.{y}.pkl"
-
-    tmpdir = Path(tmpdir)
-    fn = with_cache(
-        la_fonction,
-        key=cle,
-        formatter=pickle,
-        subdirectory="xy",
-        cache_root=tmpdir,
-    )
-
-    assert (result := fn(7, 8, version=0)) == "7 * 8 = 56 [v0]"
-    file = tmpdir / "xy" / "7.8.pkl"
-    assert file.exists()
-    assert pickle.load(open(file, "rb")) == result
-
-
 def test_custom_format(tmpdir):
-    class duck:
+    class duck(FormatterProto):
+        read_flags = "r"
+        write_flags = "w"
+
         @staticmethod
         def load(fp):
             return "QUACK"
