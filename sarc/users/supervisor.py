@@ -136,18 +136,19 @@ class SupervisorMatchingErrors:
             return [person.ldap["mail"][0] for person in errors]
 
         def show_error(msg, array):
-            if len(array) > 0:
-                logging.error(f"{msg} {make_list(array)}")
+            unique_values = sorted(set(make_list(array)))
+            if len(unique_values) > 0:
+                logging.error(f"{msg} {unique_values}")
 
         show_error("     Missing supervisors:", self.no_supervisors)
         show_error("    Too many supervisors:", self.too_many_supervisors)
         show_error("        Prof and Student:", self.prof_and_student)
 
         if self.unknown_supervisors:
-            logging.warning(f"     Unknown supervisors: {self.unknown_supervisors}")
+            logging.warning(f"     Unknown supervisors: {sorted(set(self.unknown_supervisors))}")
 
         if self.unknown_group:
-            logging.warning(f"           Unknown group: {self.unknown_group}")
+            logging.warning(f"           Unknown group: {sorted(set(self.unknown_group))}")
 
 
 def _extract_supervisors_from_groups(
