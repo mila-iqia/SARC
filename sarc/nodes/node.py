@@ -3,17 +3,20 @@ from __future__ import annotations
 import copy
 import itertools
 import logging
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
+from typing import Generator
 
 import pandas as pd
-from prometheus_api_client import MetricRangeDataFrame
+from prometheus_api_client.metric_range_df import MetricRangeDataFrame
 
 from sarc.config import config
 
 logger = logging.getLogger(__name__)
 
 
-def curate_label_argument(label_name: str, label_values: None | str | list[str]):
+def curate_label_argument(
+    label_name: str, label_values: None | str | list[str]
+) -> list[dict[str, str]]:
     """Return empty dict, otherwise a list of dicts"""
     if label_values is None:
         return [{}]
@@ -26,7 +29,7 @@ def curate_label_argument(label_name: str, label_values: None | str | list[str])
 def generate_label_configs(
     node_id: None | str | list[str],
     cluster: None | str | list[str],
-):
+) -> Generator[dict[str, str], None, None]:
     node_configs = curate_label_argument("instance", node_id)
     cluster_configs = curate_label_argument("cluster", cluster)
 
@@ -107,7 +110,7 @@ def query_prom(
     start: datetime,
     end: datetime,
     running_window: timedelta,
-):
+) -> list | None:
     query = generate_custom_query(metric_name, label_config, start, end, running_window)
 
     return config().clusters[cluster].prometheus.custom_query(query)
@@ -145,7 +148,7 @@ def get_nodes_time_series(
         metrics = [metrics]
 
     if end is None:
-        end = datetime.utcnow()
+        end = datetime.now(UTC)
 
     df = None
     for metric_name, label_config in itertools.product(
@@ -161,7 +164,7 @@ def get_nodes_time_series(
             running_window=running_window,
         )
         if rval:
-            metric_df = MetricRangeDataFrame(rval)
+            metric_df: pd.DataFrame = MetricRangeDataFrame(rval)
         else:
             metric_df = pd.DataFrame()
 
@@ -385,5 +388,5 @@ sources = [
 ]
 
 
-def get_nodes_metric_names():
+def get_nodes_metric_names() -> list[str]:
     return sources

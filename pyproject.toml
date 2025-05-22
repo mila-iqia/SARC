@@ -111,7 +111,7 @@ extension-pkg-whitelist = "pydantic"
 profile = "black"
 
 [[tool.mypy.overrides]]
-module = "sarc.config.*,sarc.alerts.*,sarc.account_matching.*,sarc.cache.*,sarc.users.*,sarc.storage.*,sarc.client.*,sarc.jobs.*,sarc.allocations.*,sarc.cli.*,sarc.nodes.*"
+module = "sarc.config.*,sarc.alerts.*,sarc.account_matching.*,sarc.cache.*,sarc.users.*,sarc.storage.*,sarc.client.*,sarc.jobs.*,sarc.allocations.*,sarc.cli.*"
 ignore_errors = true
 
 [[tool.mypy.overrides]]
@@ -126,6 +126,3 @@ ignore_missing_imports = true
 module = "fabric.*"
 ignore_missing_imports = true
 
-[[tool.mypy.overrides]]
-module = "prometheus_api_client.*"
-ignore_missing_imports = true
