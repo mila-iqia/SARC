@@ -48,7 +48,7 @@ class AcquireSlurmConfig:
         return 0
 
 
-class FileContent(FormatterProto):
+class FileContent(FormatterProto[str]):
     """
     Formatter for slurm conf file cache.
     Just read and write entire text content from file.
@@ -57,13 +57,13 @@ class FileContent(FormatterProto):
     read_flags = "r"
     write_flags = "w"
 
-    @classmethod
-    def load(cls, file) -> str:
-        return file.read()
+    @staticmethod
+    def load(fp: io.TextIOBase) -> str:
+        return fp.read()
 
-    @classmethod
-    def dump(cls, value: str, output_file):
-        output_file.write(value)
+    @staticmethod
+    def dump(obj: str, fp: io.TextIOBase):
+        fp.write(obj)
 
 
 class SlurmConfigParser:

@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-import pickle
 import re
 from contextvars import ContextVar
 from dataclasses import dataclass, field
@@ -16,12 +15,9 @@ from typing import (
     Any,
     Callable,
     ClassVar,
-    Concatenate,
     Literal,
     Optional,
-    ParamSpec,
     Protocol,
-    TypeVar,
     overload,
 )
 
@@ -222,7 +218,7 @@ class CachedFunction[**P, R]:  # pylint: disable=too-many-instance-attributes
                             )
                             raise CacheException(
                                 f"Could not load malformed cache file: {candidate}"
-                            )
+                            ) from exc
                     if self.live:
                         self.live_cache[live_key] = CachedResult(
                             issued=candidate_time,
@@ -387,32 +383,32 @@ def make_cached_function[**P, R](
 
 
 @overload
-def with_cache[**P, R](
-    fn: Callable[P, R],
-    formatter: type[FormatterProto[R]] = JSONFormatter,
-    key: Callable[P, str] | None = None,
+def with_cache[**P1, R1](
+    fn: Callable[P1, R1],
+    formatter: type[FormatterProto[R1]] = JSONFormatter,
+    key: Callable[P1, str] | None = None,
     subdirectory: str | None = None,
-    validity: timedelta | Callable[P, timedelta] | Literal[True] = True,
+    validity: timedelta | Callable[P1, timedelta] | Literal[True] = True,
     on_disk: bool = True,
     live: bool = False,
     cache_root: Path | None = None,
-) -> CachedFunction[P, R]: ...
+) -> CachedFunction[P1, R1]: ...
 
 
 @overload
-def with_cache[**P, R](
+def with_cache[**P2, R2](
     fn: None = None,
-    formatter: type[FormatterProto[R]] = JSONFormatter,
-    key: Callable[P, str] | None = None,
+    formatter: type[FormatterProto[R2]] = JSONFormatter,
+    key: Callable[P2, str] | None = None,
     subdirectory: str | None = None,
-    validity: timedelta | Callable[P, timedelta] | Literal[True] = True,
+    validity: timedelta | Callable[P2, timedelta] | Literal[True] = True,
     on_disk: bool = True,
     live: bool = False,
     cache_root: Path | None = None,
-) -> Callable[[Callable[P, R]], CachedFunction[P, R]]: ...
+) -> Callable[[Callable[P2, R2]], CachedFunction[P2, R2]]: ...
 
 
-def with_cache[**P, R](  # pyright: ignore # mypy is ok with this, but not pyright
+def with_cache[**P, R](
     fn: Callable[P, R] | None = None,
     formatter: type[FormatterProto[R]] = JSONFormatter,
     key: Callable[P, str] | None = None,
