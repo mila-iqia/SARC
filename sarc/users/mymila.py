@@ -1,7 +1,7 @@
 import struct
 from datetime import timedelta
 from itertools import chain, repeat
-from typing import IO, Any
+from typing import Sequence
 
 import pandas as pd
 import pyodbc
@@ -30,9 +30,11 @@ def query_mymila(cfg: MyMilaConfig):
     token_as_bytes = token_object.token.encode("UTF-8")
     encoded_bytes = bytes(chain.from_iterable(zip(token_as_bytes, repeat(0))))
     token_bytes = struct.pack("<i", len(encoded_bytes)) + encoded_bytes
-    attrs_before = {1256: token_bytes}
+    attrs_before: dict[int, int | bytes | bytearray | str | Sequence[str]] = {
+        1256: token_bytes
+    }
 
-    connection = pyodbc.connect(connection_string, attrs_before=attrs_before)  # type: ignore
+    connection = pyodbc.connect(connection_string, attrs_before=attrs_before)
     cursor = connection.cursor()
     cursor.execute("SELECT * FROM MyMila_Extract_Etudiants")
     records = cursor.fetchall()
