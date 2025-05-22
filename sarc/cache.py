@@ -198,8 +198,8 @@ class CachedFunction[**P, R]:  # pylint: disable=too-many-instance-attributes
                             )
                     if self.live:
                         self.live_cache[live_key] = CachedResult(
-                                issued=candidate_time,
-                                value=value,
+                            issued=candidate_time,
+                            value=value,
                         )
                     self.logger.debug(
                         f"{self.name}(...) read from cache file '{candidate}'"
@@ -289,7 +289,7 @@ def default_key(*_, **__) -> str:
 def make_cached_function[**P, R](
     fn: Callable[P, R],
     formatter: type[FormatterProto[R]],
-    key: Callable[P, str]| None,
+    key: Callable[P, str] | None,
     subdirectory: str | None,
     validity: timedelta | Callable[P, timedelta] | Literal[True],
     on_disk: bool,
@@ -334,7 +334,7 @@ def with_cache[**P, R](
 ) -> Callable[[Callable[P, R]], CachedFunction[P, R]]: ...
 
 
-def with_cache[**P, R]( # pyright: ignore # mypy is ok with this, but not pyright
+def with_cache[**P, R](  # pyright: ignore # mypy is ok with this, but not pyright
     fn: Callable[P, R] | None = None,
     formatter: type[FormatterProto[R]] = JSONFormatter,
     key: Callable[P, str] | None = None,
@@ -391,4 +391,4 @@ def with_cache[**P, R]( # pyright: ignore # mypy is ok with this, but not pyrigh
     if fn is None:
         return deco
     else:
-        return wraps(fn)(deco(fn=fn)) # type: ignore
+        return wraps(fn)(deco(fn=fn))  # type: ignore
