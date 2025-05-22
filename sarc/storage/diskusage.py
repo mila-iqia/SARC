@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from typing import Any
 
 from pydantic import ByteSize
 from pydantic_mongo import AbstractRepository, PydanticObjectId
@@ -26,7 +27,7 @@ class DiskUsage(BaseModel):
     """
 
     # # Database ID
-    id: PydanticObjectId = None
+    id: PydanticObjectId | None = None
 
     cluster_name: str
     groups: list[DiskUsageGroup]
@@ -50,10 +51,10 @@ class ClusterDiskUsageRepository(AbstractRepository[DiskUsage]):
         document = self.to_document(disk_usage)
         query_attrs = ["cluster_name", "timestamp"]
         query = {key: document[key] for key in query_attrs}
-        return self.get_collection().update_one(query, {"$set": document}, upsert=True)
+        self.get_collection().update_one(query, {"$set": document}, upsert=True)
 
 
-def get_diskusage_collection():
+def get_diskusage_collection() -> ClusterDiskUsageRepository:
     db = config().mongo.database_instance
     return ClusterDiskUsageRepository(database=db)
 
@@ -70,7 +71,7 @@ def get_diskusages(
 ) -> list[DiskUsage]:
     collection = get_diskusage_collection()
 
-    query = {}
+    query: dict[str, Any] = {}
     if isinstance(cluster_name, str):
         query["cluster_name"] = cluster_name
     else:
