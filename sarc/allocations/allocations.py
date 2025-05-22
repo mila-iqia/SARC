@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Optional, Union
+from typing import Annotated, Optional, Union
 
 import pandas as pd
 from flatten_dict import flatten
-from pydantic import ByteSize, validator
-from pydantic_mongo import AbstractRepository, ObjectIdField
+from pydantic import BeforeValidator, ByteSize, field_serializer
+from pydantic_mongo import AbstractRepository, PydanticObjectId
 
 from sarc.config import config
 from sarc.model import BaseModel
@@ -53,22 +53,20 @@ def _convert_date_to_iso(date_value: date) -> datetime:
 
 class Allocation(BaseModel):
     # Database ID
-    id: ObjectIdField = None
+    id: PydanticObjectId = None
 
     cluster_name: str
     resource_name: str
     group_name: str
     timestamp: datetime
-    start: date
-    end: date
+    start: Annotated[date, BeforeValidator(validate_date)]
+    end: Annotated[date, BeforeValidator(validate_date)]
     resources: AllocationRessources
 
-    _validate_start = validator("start", pre=True, always=True, allow_reuse=True)(
-        validate_date
-    )
-    _validate_end = validator("end", pre=True, always=True, allow_reuse=True)(
-        validate_date
-    )
+    # pylint: disable=unused-argument
+    @field_serializer("start", "end")
+    def save_as_datetime(self, value, info):
+        return datetime(year=value.year, month=value.month, day=value.day)
 
 
 class AllocationsRepository(AbstractRepository[Allocation]):
@@ -169,7 +167,7 @@ def get_allocation_summaries(
     return pd.DataFrame(
         [
             flatten(
-                summary.dict(
+                summary.model_dump(
                     exclude={
                         "id",
                         "resource_name",

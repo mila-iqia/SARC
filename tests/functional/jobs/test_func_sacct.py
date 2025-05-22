@@ -135,7 +135,9 @@ def scraper():
     "json_jobs", parameters.values(), ids=parameters.keys(), indirect=True
 )
 def test_parse_json_job(json_jobs, scraper, file_regression):
-    file_regression.check(scraper.convert(json_jobs[0]).json(indent=4))
+    file_regression.check(
+        scraper.convert(json_jobs[0]).model_dump_json(exclude={"id": True}, indent=4)
+    )
 
 
 @pytest.mark.usefixtures("tzlocal_is_mtl")
@@ -232,7 +234,9 @@ def test_scraper_with_cache(scraper, sacct_json, file_regression):
 
     jobs = list(scraper)
 
-    file_regression.check("\n".join([job.json(indent=1) for job in jobs]))
+    file_regression.check(
+        "\n".join([job.model_dump_json(exclude={"id": True}, indent=1) for job in jobs])
+    )
 
 
 @pytest.mark.usefixtures("tzlocal_is_mtl", "enabled_cache")
@@ -336,7 +340,9 @@ def test_stdout_message_before_json(
     jobs = list(get_jobs())
     file_regression.check(
         f"Found {len(jobs)} job(s):\n"
-        + "\n".join([job.json(exclude={"id": True}, indent=4) for job in jobs])
+        + "\n".join(
+            [job.model_dump_json(exclude={"id": True}, indent=4) for job in jobs]
+        )
     )
 
 
@@ -400,7 +406,9 @@ def test_get_gpu_type_from_prometheus(
 
     file_regression.check(
         f"Found {len(jobs)} job(s):\n"
-        + "\n".join([job.json(exclude={"id": True}, indent=4) for job in jobs])
+        + "\n".join(
+            [job.model_dump_json(exclude={"id": True}, indent=4) for job in jobs]
+        )
     )
 
 
@@ -470,7 +478,9 @@ def test_get_gpu_type_without_prometheus(
 
     file_regression.check(
         f"Found {len(jobs)} job(s):\n"
-        + "\n".join([job.json(exclude={"id": True}, indent=4) for job in jobs])
+        + "\n".join(
+            [job.model_dump_json(exclude={"id": True}, indent=4) for job in jobs]
+        )
     )
 
 
@@ -524,7 +534,9 @@ def test_save_job(
     jobs = list(get_jobs())
     file_regression.check(
         f"Found {len(jobs)} job(s):\n"
-        + "\n".join([job.json(exclude={"id": True}, indent=4) for job in jobs])
+        + "\n".join(
+            [job.model_dump_json(exclude={"id": True}, indent=4) for job in jobs]
+        )
     )
 
 
@@ -588,7 +600,9 @@ def test_update_job(
 
     file_regression.check(
         f"Found {len(jobs)} job(s):\n"
-        + "\n".join([job.json(exclude={"id": True}, indent=4) for job in jobs])
+        + "\n".join(
+            [job.model_dump_json(exclude={"id": True}, indent=4) for job in jobs]
+        )
     )
 
 
@@ -644,7 +658,9 @@ def test_save_preempted_job(
 
     file_regression.check(
         f"Found {len(jobs)} job(s):\n"
-        + "\n".join([job.json(exclude={"id": True}, indent=4) for job in jobs])
+        + "\n".join(
+            [job.model_dump_json(exclude={"id": True}, indent=4) for job in jobs]
+        )
     )
 
 
@@ -705,7 +721,9 @@ def test_multiple_dates(
 
     file_regression.check(
         f"Found {len(jobs)} job(s):\n"
-        + "\n".join([job.json(exclude={"id": True}, indent=4) for job in jobs])
+        + "\n".join(
+            [job.model_dump_json(exclude={"id": True}, indent=4) for job in jobs]
+        )
     )
 
 
@@ -790,7 +808,9 @@ def test_multiple_clusters_and_dates(
 
     file_regression.check(
         f"Found {len(jobs)} job(s):\n"
-        + "\n".join([job.json(exclude={"id": True}, indent=4) for job in jobs])
+        + "\n".join(
+            [job.model_dump_json(exclude={"id": True}, indent=4) for job in jobs]
+        )
     )
 
 
@@ -913,7 +933,9 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
 
     file_regression.check(
         f"Found {len(jobs)} job(s):\n"
-        + "\n".join([job.json(exclude={"id": True}, indent=4) for job in jobs])
+        + "\n".join(
+            [job.model_dump_json(exclude={"id": True}, indent=4) for job in jobs]
+        )
         + f"\n\nFound {len(spans)} span(s):\n"
         + json.dumps(spans_data, indent=1)
     )
