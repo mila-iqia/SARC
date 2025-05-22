@@ -34,19 +34,19 @@ class ClusterConfig:
     # pylint: disable=too-many-instance-attributes
 
     host: str = "localhost"
-    timezone: zoneinfo.ZoneInfo = None
-    prometheus_url: str = None
-    prometheus_headers_file: str = None
-    name: str = None
+    timezone: zoneinfo.ZoneInfo | None = None
+    prometheus_url: str | None = None
+    prometheus_headers_file: str | None = None
+    name: str | None = None
     sacct_bin: str = "sacct"
-    accounts: list[str] = None
-    sshconfig: Path = None
-    duc_inodes_command: str = None
-    duc_storage_command: str = None
-    diskusage_report_command: str = None
+    accounts: list[str] | None = None
+    sshconfig: Path | None = None
+    duc_inodes_command: str | None = None
+    duc_storage_command: str | None = None
+    diskusage_report_command: str | None = None
     start_date: str = "2022-04-01"
-    rgu_start_date: str = None
-    gpu_to_rgu_billing: Path = None
+    rgu_start_date: str | None = None
+    gpu_to_rgu_billing: Path | None = None
     slurm_conf_host_path: Path = Path("/etc/slurm/slurm.conf")
 
     # Tell if billing (in job's requested|allocated field) is number of GPUs (True) or RGU (False)
@@ -72,10 +72,10 @@ class ClusterConfig:
         Return None if GPU name cannot be inferred.
         """
 
-        gpu_type = gpu_type.lower().replace(" ", "-").split(":")
-        if gpu_type[0] == "gpu":
-            gpu_type.pop(0)
-        gpu_type = gpu_type[0]
+        gpu_type_parts = gpu_type.lower().replace(" ", "-").split(":")
+        if gpu_type_parts[0] == "gpu":
+            gpu_type_parts.pop(0)
+        gpu_type = gpu_type_parts[0]
 
         # Try to get harmonized GPU from nodename mapping
         harmonized_gpu = self.gpus_per_nodes.get(nodename, {}).get(gpu_type)
@@ -146,8 +146,8 @@ class LDAPConfig:
     local_certificate_file: Path
     ldap_service_uri: str
     mongo_collection_name: str
-    group_to_prof_json_path: Path = None
-    exceptions_json_path: Path = None
+    group_to_prof_json_path: Path | None = None
+    exceptions_json_path: Path | None = None
 
 
 @dataclass
@@ -162,7 +162,7 @@ class TempoConfig:
 
 @dataclass
 class MyMilaConfig:
-    tmp_json_path: Path = None
+    tmp_json_path: Path | None = None
 
 
 @dataclass
@@ -182,20 +182,20 @@ class LoggingConfig:
 @dataclass
 class ClientConfig:
     mongo: MongoConfig
-    cache: Path = None
-    loki: LokiConfig = None
-    tempo: TempoConfig = None
-    health_monitor: HealthMonitorConfig = None
+    cache: Path | None = None
+    loki: LokiConfig | None = None
+    tempo: TempoConfig | None = None
+    health_monitor: HealthMonitorConfig | None = None
 
 
 @dataclass
 class Config(ClientConfig):
-    ldap: LDAPConfig = None
-    mymila: MyMilaConfig = None
-    account_matching: AccountMatchingConfig = None
-    sshconfig: Path = None
-    clusters: dict[str, ClusterConfig] = None
-    logging: LoggingConfig = None
+    ldap: LDAPConfig | None = None
+    mymila: MyMilaConfig | None = None
+    account_matching: AccountMatchingConfig | None = None
+    sshconfig: Path | None = None
+    clusters: dict[str, ClusterConfig] | None = None
+    logging: LoggingConfig | None = None
 
     def __post_init__(self):
         if self.clusters:
