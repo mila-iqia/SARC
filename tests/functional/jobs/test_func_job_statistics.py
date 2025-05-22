@@ -36,27 +36,30 @@ def generate_fake_timeseries(job: SlurmJob, metric, max_points=100, dataframe=Tr
         "slurm_job_power_gpu": (50_000, 150_000, {}),
     }
 
-    (mn, mx, extra) = metric_ranges[metric]
+    metrics = [metric] if isinstance(metric, str) else metric
+    results = []
+    for this_metric in metrics:
+        (mn, mx, extra) = metric_ranges[this_metric]
 
-    metric_dict = {
-        "__name__": metric,
-        "account": job.account,
-        "instance": job.nodes[0],
-        "job": "slurm_jobs",
-        "slurmjobid": str(job.job_id),
-        "user": job.user,
-        **extra,
-    }
+        metric_dict = {
+            "__name__": this_metric,
+            "account": job.account,
+            "instance": job.nodes[0],
+            "job": "slurm_jobs",
+            "slurmjobid": str(job.job_id),
+            "user": job.user,
+            **extra,
+        }
 
-    results = [
-        format_fake_timeseries(
-            metric=metric_dict,
-            values=generate_point_range(n, mn, mx),
-            t0=int(job.start_time.timestamp()),
-            # Change delta depending on job's elapsed time wrt/ base test elapsed time
-            delta=30 * job.elapsed_time / BASE_ELAPSED_TIME,
+        results.append(
+            format_fake_timeseries(
+                metric=metric_dict,
+                values=generate_point_range(n, mn, mx),
+                t0=int(job.start_time.timestamp()),
+                # Change delta depending on job's elapsed time wrt/ base test elapsed time
+                delta=30 * job.elapsed_time / BASE_ELAPSED_TIME,
+            )
         )
-    ]
 
     if dataframe:
         return MetricRangeDataFrame(results) if results else None
@@ -101,9 +104,10 @@ def test_job_statistics_no_save_without_end_time(monkeypatch, data_regression):
 def test_job_statistics_nothing(monkeypatch):
     job = get_job(job_id=1)
 
-    monkeypatch.setattr(
-        "sarc.jobs.series.get_job_time_series", lambda *args, **kwargs: None
-    )
+    def _fake_job_time_series(*args, **kwargs):
+        return None if kwargs.get("dataframe", True) else []
+
+    monkeypatch.setattr("sarc.jobs.series.get_job_time_series", _fake_job_time_series)
 
     assert not job.stored_statistics
     statistics = job.statistics(save=False)
