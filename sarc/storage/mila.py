@@ -2,7 +2,7 @@
 Fetching and parsing code specific to the mila cluster
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from tqdm import tqdm
 
@@ -104,5 +104,5 @@ def fetch_diskusage_report(cluster: ClusterConfig, retries: int = 3):
     return DiskUsage(
         cluster_name=cluster.name,
         groups=[DiskUsageGroup(group_name="default", users=usage)],
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(UTC),
     )
