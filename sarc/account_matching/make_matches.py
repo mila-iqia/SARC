@@ -179,7 +179,7 @@ def perform_matching(
     )
 
     # NB: In any case (even with prompt), match overriding is applied.
-    # This means that even a manually-prompted matching may be overriden
+    # This means that even a manually-prompted matching may be overridden
     # if related mila username is present in override_matches_mila_to_cc.
     # Is it what we want ?
     _manual_matching(DLD_data, DD_persons, override_matches_mila_to_cc)
@@ -409,10 +409,12 @@ def _make_matches_status_report(DLD_data, DD_persons):
             for D_person in DD_persons.values()
             if D_person.get("drac_members", None) is not None
         }
-        logging.info(
-            "We could not find matches in the Mila LDAP for the CC accounts "
-            f"associated with the following emails: {set_A.difference(set_B)}."
-        )
+        diff = sorted(set_A.difference(set_B))
+        if diff:
+            logging.warning(
+                "We could not find matches in the Mila LDAP for the CC accounts "
+                f"associated with the following {len(diff)} emails: {diff}."
+            )
 
     # see "account_matching.md" for some explanations on the edge cases handled
 
@@ -436,6 +438,10 @@ def _how_many_drac_accounts_with_mila_emails(
     if verbose:
         logging.info(
             f"We have {len(LD_members)} {drac_source} accounts with @mila.quebec, "
-            f"out of {len(data['drac_members'])}."
+            f"out of {len(data[drac_source])}."
         )
+
+    # Sort by email, to make logging easier to understand
+    LD_members.sort(key=lambda D_member: D_member["email"])
+
     return LD_members
