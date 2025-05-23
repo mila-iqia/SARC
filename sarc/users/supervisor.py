@@ -145,10 +145,14 @@ class SupervisorMatchingErrors:
         show_error("        Prof and Student:", self.prof_and_student)
 
         if self.unknown_supervisors:
-            logging.warning(f"     Unknown supervisors: {sorted(set(self.unknown_supervisors))}")
+            logging.warning(
+                f"     Unknown supervisors: {sorted(set(self.unknown_supervisors))}"
+            )
 
         if self.unknown_group:
-            logging.warning(f"           Unknown group: {sorted(set(self.unknown_group))}")
+            logging.warning(
+                f"           Unknown group: {sorted(set(self.unknown_group))}"
+            )
 
 
 def _extract_supervisors_from_groups(
