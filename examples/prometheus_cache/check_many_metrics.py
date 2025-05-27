@@ -59,7 +59,7 @@ def main():
         ["narval", 43541060],
     ]
 
-    # Metrics to check (same as the one compuated in job.statistics()).
+    # Metrics to check (same as the one computed in job.statistics()).
     metrics = (
         "slurm_job_utilization_gpu",
         "slurm_job_fp16_gpu",
