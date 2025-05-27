@@ -1,5 +1,4 @@
 {
-    "id": null,
     "cluster_name": "raisin",
     "account": "mila",
     "job_id": 1,

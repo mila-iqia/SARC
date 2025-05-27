@@ -79,7 +79,7 @@ def test_job_statistics(monkeypatch, data_regression):
     statistics = job.statistics(save=False)
     assert not job.stored_statistics
 
-    data_regression.check(statistics.dict())
+    data_regression.check(statistics.model_dump())
 
 
 @pytest.mark.usefixtures("read_only_db")

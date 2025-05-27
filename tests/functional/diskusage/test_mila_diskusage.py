@@ -91,7 +91,7 @@ def test_mila_fetch_diskusage_single(
     data = get_diskusages(cluster_name=["mila"])
     assert len(data) == 1
     # report = sarc.storage.mila.fetch_diskusage_report(cluster=test_config.clusters["mila"])
-    file_regression.check(data[0].json(exclude={"id": True}, indent=4))
+    file_regression.check(data[0].model_dump_json(exclude={"id": True}, indent=4))
 
 
 @pytest.mark.freeze_time("2023-07-25")
@@ -128,7 +128,7 @@ def test_mila_fetch_diskusage_multi(
     data = get_diskusages(cluster_name=["mila"])
     assert len(data) == 1
     # report = sarc.storage.mila.fetch_diskusage_report(cluster=test_config.clusters["mila"])
-    file_regression.check(data[0].json(exclude={"id": True}, indent=4))
+    file_regression.check(data[0].model_dump_json(exclude={"id": True}, indent=4))
 
 
 def test_fetch_diskusage_report():

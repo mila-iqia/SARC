@@ -33,7 +33,9 @@ def test_count_jobs(params, file_regression):
     assert len(jobs) == count_jobs(**params)
     file_regression.check(
         f"Found {len(jobs)} job(s):\n"
-        + "\n".join([job.json(exclude={"id": True}, indent=4) for job in jobs])
+        + "\n".join(
+            [job.model_dump_json(exclude={"id": True}, indent=4) for job in jobs]
+        )
     )
 
 
@@ -43,7 +45,9 @@ def test_count_jobs_cluster_cfg(file_regression):
     assert len(jobs) == count_jobs(cluster=config().clusters["fromage"])
     file_regression.check(
         f"Found {len(jobs)} job(s):\n"
-        + "\n".join([job.json(exclude={"id": True}, indent=4) for job in jobs])
+        + "\n".join(
+            [job.model_dump_json(exclude={"id": True}, indent=4) for job in jobs]
+        )
     )
 
 

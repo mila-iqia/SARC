@@ -35,7 +35,7 @@ def test_update_drac_diskusage_one(file_regression, cli_main):
 
     data = get_diskusages(cluster_name=["gerudo", "hyrule"])
     assert len(data) == 1
-    file_regression.check(data[0].json(exclude={"id": True}, indent=4))
+    file_regression.check(data[0].model_dump_json(exclude={"id": True}, indent=4))
 
 
 @pytest.mark.usefixtures("mock_drac_fetch")
@@ -63,8 +63,8 @@ def test_update_drac_diskusage_two(file_regression, cli_main):
     assert len(data) == 2
     data_json = "\n".join(
         [
-            data[0].json(exclude={"id": True}, indent=4),
-            data[1].json(exclude={"id": True}, indent=4),
+            data[0].model_dump_json(exclude={"id": True}, indent=4),
+            data[1].model_dump_json(exclude={"id": True}, indent=4),
         ]
     )
     file_regression.check(data_json)
@@ -95,4 +95,4 @@ def test_update_drac_diskusage_no_duplicate(file_regression, cli_main):
 
     data = get_diskusages(cluster_name=["gerudo", "hyrule"])
     assert len(data) == 1
-    file_regression.check(data[0].json(exclude={"id": True}, indent=4))
+    file_regression.check(data[0].model_dump_json(exclude={"id": True}, indent=4))
