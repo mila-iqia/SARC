@@ -6,7 +6,6 @@ from typing import Callable, Dict, Optional
 
 import numpy as np
 import pandas
-from flatten_dict import flatten
 from pandas import DataFrame
 from tqdm import tqdm
 
@@ -15,6 +14,7 @@ from sarc.client.job import SlurmCLuster, count_jobs, get_available_clusters, ge
 from sarc.client.users.api import User, get_users
 from sarc.config import MTL
 from sarc.traces import trace_decorator
+from sarc.utils import flatten
 
 DUMMY_STATS = {
     label: np.nan
@@ -283,7 +283,7 @@ class UserFlattener:
             if key in self.plain_attributes or value is not None
         }
         # Now flatten user dict.
-        user_dict = flatten({"user": base_user_dict}, reducer="dot")
+        user_dict = flatten({"user": base_user_dict})
         # And add special key `user.primary_email`.
         user_dict["user.primary_email"] = user.mila.email
         return user_dict
