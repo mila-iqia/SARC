@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Annotated, Optional, Union
+from typing import Annotated, Any, Optional, Union, cast
 
 import pandas as pd
 from flatten_dict import flatten
@@ -33,13 +33,13 @@ class AllocationCompute(BaseModel):
 
 
 class AllocationStorage(BaseModel):
-    project_size: Optional[ByteSize] = 0
+    project_size: Optional[ByteSize] = cast(ByteSize, 0)
     project_inodes: Optional[float] = 0
-    nearline: Optional[ByteSize] = 0
-    dCache: Optional[ByteSize] = 0
-    object: Optional[ByteSize] = 0
-    cloud_volume: Optional[ByteSize] = 0
-    cloud_shared: Optional[ByteSize] = 0
+    nearline: Optional[ByteSize] = cast(ByteSize, 0)
+    dCache: Optional[ByteSize] = cast(ByteSize, 0)
+    object: Optional[ByteSize] = cast(ByteSize, 0)
+    cloud_volume: Optional[ByteSize] = cast(ByteSize, 0)
+    cloud_shared: Optional[ByteSize] = cast(ByteSize, 0)
 
 
 class AllocationRessources(BaseModel):
@@ -53,7 +53,7 @@ def _convert_date_to_iso(date_value: date) -> datetime:
 
 class Allocation(BaseModel):
     # Database ID
-    id: PydanticObjectId = None
+    id: PydanticObjectId | None = None
 
     cluster_name: str
     resource_name: str
@@ -65,7 +65,7 @@ class Allocation(BaseModel):
 
     # pylint: disable=unused-argument
     @field_serializer("start", "end")
-    def save_as_datetime(self, value, info):
+    def save_as_datetime(self, value: date) -> datetime:
         return datetime(year=value.year, month=value.month, day=value.day)
 
 
@@ -77,7 +77,7 @@ class AllocationsRepository(AbstractRepository[Allocation]):
         document = self.to_document(allocation)
         query_attrs = ["cluster_name", "resource_name", "group_name", "start", "end"]
         query = {key: document[key] for key in query_attrs}
-        return self.get_collection().update_one(query, {"$set": document}, upsert=True)
+        self.get_collection().update_one(query, {"$set": document}, upsert=True)
 
 
 def get_allocations_collection():
@@ -93,7 +93,7 @@ def get_allocations(
 ) -> list[Allocation]:
     collection = get_allocations_collection()
 
-    query = {}
+    query: dict[str, Any] = {}
     if isinstance(cluster_name, str):
         query["cluster_name"] = cluster_name
     else:
@@ -108,7 +108,7 @@ def get_allocations(
     return list(collection.find_by(query, sort=[("start", 1)]))
 
 
-def increment(a, b):
+def increment(a: int | None, b: int | None) -> int:
     if a is None:
         return b or 0
 
@@ -125,10 +125,10 @@ def get_allocation_summaries(
 ) -> pd.DataFrame:
     allocations = get_allocations(cluster_name, start=start, end=end)
 
-    def allocation_key(allocation: Allocation):
+    def allocation_key(allocation: Allocation) -> tuple[str, date, date]:
         return (allocation.cluster_name, allocation.start, allocation.end)
 
-    summaries = {}
+    summaries: dict[tuple[str, date, date], Allocation] = {}
     for allocation in allocations:
         key = allocation_key(allocation)
         if key in summaries:
@@ -162,7 +162,7 @@ def get_allocation_summaries(
         else:
             summaries[key] = allocation
 
-    summaries = list(summaries.values())
+    summaries_l = list(summaries.values())
 
     return pd.DataFrame(
         [
@@ -175,6 +175,6 @@ def get_allocation_summaries(
                 ),
                 reducer="dot",
             )
-            for summary in summaries
+            for summary in summaries_l
         ]
     )
