@@ -1,1 +1,1 @@
-avg_over_time(slurm_job_fp16_gpu{slurmjobid=~"1"}[108s] )[10800s:108s]
+avg_over_time(slurm_job_fp16_gpu{slurmjobid="1"}[108s] )[10800s:108s]
