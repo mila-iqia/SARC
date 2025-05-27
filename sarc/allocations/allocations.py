@@ -4,12 +4,12 @@ from datetime import date, datetime
 from typing import Annotated, Any, Optional, Union, cast
 
 import pandas as pd
-from flatten_dict import flatten
 from pydantic import BeforeValidator, ByteSize, field_serializer
 from pydantic_mongo import AbstractRepository, PydanticObjectId
 
 from sarc.config import config
 from sarc.model import BaseModel
+from sarc.utils import flatten
 
 
 def validate_date(value: Union[str, date, datetime]) -> date:
@@ -172,8 +172,7 @@ def get_allocation_summaries(
                         "id",
                         "resource_name",
                     }
-                ),
-                reducer="dot",
+                )
             )
             for summary in summaries_l
         ]
