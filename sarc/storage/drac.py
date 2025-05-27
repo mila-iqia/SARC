@@ -195,9 +195,7 @@ def convert_parsed_report_to_diskusage(
         groups.append(DiskUsageGroup(group_name=group_name, users=users))
 
     # timestamp will be set to 00:00 UTC automatically in ClusterDiskUsageRepository.add
-    return DiskUsage(
-        cluster_name=cluster_name, groups=groups, timestamp=datetime.utcnow()
-    )
+    return DiskUsage(cluster_name=cluster_name, groups=groups, timestamp=datetime.now())
 
 
 def fetch_diskusage_report(cluster: ClusterConfig) -> DiskUsage:
@@ -205,6 +203,7 @@ def fetch_diskusage_report(cluster: ClusterConfig) -> DiskUsage:
 
     _, body = parse_diskusage_report(report)
 
+    assert cluster.name is not None
     du = convert_parsed_report_to_diskusage(cluster.name, body)
 
     return du

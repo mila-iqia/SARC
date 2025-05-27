@@ -2,7 +2,7 @@
 Fetching and parsing code specific to the mila cluster
 """
 
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import cast
 
 from fabric import Connection
@@ -79,6 +79,7 @@ def fetch_diskusage_report(cluster: ClusterConfig, retries: int = 3) -> DiskUsag
 
     """
     cmd = cluster.diskusage_report_command
+    assert cmd is not None  # the code would crash if cmd is None
 
     users = get_users()
     assert len(users) > 0
@@ -110,8 +111,10 @@ def fetch_diskusage_report(cluster: ClusterConfig, retries: int = 3) -> DiskUsag
     print(f"Failures: {len(failures)}")
     print(f"    Details: {failures}")
 
+    assert cluster.name is not None
+
     return DiskUsage(
         cluster_name=cluster.name,
         groups=[DiskUsageGroup(group_name="default", users=usage)],
-        timestamp=datetime.now(UTC),
+        timestamp=datetime.now(),
     )
