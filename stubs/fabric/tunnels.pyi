@@ -6,7 +6,9 @@ class TunnelManager(ExceptionHandlingThread):
     remote_address: Incomplete
     transport: Incomplete
     finished: Incomplete
-    def __init__(self, local_host, local_port, remote_host, remote_port, transport, finished) -> None: ...
+    def __init__(
+        self, local_host, local_port, remote_host, remote_port, transport, finished
+    ) -> None: ...
 
 class Tunnel(ExceptionHandlingThread):
     channel: Incomplete
