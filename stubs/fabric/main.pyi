@@ -1,6 +1,8 @@
-from . import Config as Config, Executor as Executor
 from _typeshed import Incomplete
 from invoke import Program
+
+from . import Config as Config
+from . import Executor as Executor
 
 class Fab(Program):
     def print_version(self) -> None: ...

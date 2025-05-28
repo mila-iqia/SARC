@@ -1,7 +1,9 @@
-from .util import win32 as win32
-from _typeshed import Incomplete
 from collections.abc import Generator
+
+from _typeshed import Incomplete
 from paramiko.auth_strategy import AuthStrategy
+
+from .util import win32 as win32
 
 class OpenSSHAuthStrategy(AuthStrategy):
     username: Incomplete
