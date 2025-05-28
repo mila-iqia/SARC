@@ -334,7 +334,7 @@ def default_key(*_, **__) -> str:
 def make_cached_function[**P, R](
     fn: Callable[P, R],
     formatter: type[FormatterProto[R]],
-    key: Callable[P, str] | None,
+    key: Callable[P, str | None] | None,
     subdirectory: str | None,
     validity: timedelta | Callable[P, timedelta] | Literal[True],
     on_disk: bool,
@@ -357,7 +357,7 @@ def make_cached_function[**P, R](
 def with_cache[**P, R](
     fn: Callable[P, R],
     formatter: type[FormatterProto[R]] = JSONFormatter,
-    key: Callable[P, str] | None = None,
+    key: Callable[P, str | None] | None = None,
     subdirectory: str | None = None,
     validity: timedelta | Callable[P, timedelta] | Literal[True] = True,
     on_disk: bool = True,
@@ -370,7 +370,7 @@ def with_cache[**P, R](
 def with_cache[**P, R](
     fn: None = None,
     formatter: type[FormatterProto[R]] = JSONFormatter,
-    key: Callable[P, str] | None = None,
+    key: Callable[P, str | None] | None = None,
     subdirectory: str | None = None,
     validity: timedelta | Callable[P, timedelta] | Literal[True] = True,
     on_disk: bool = True,
@@ -382,7 +382,7 @@ def with_cache[**P, R](
 def with_cache[**P, R](
     fn: Callable[P, R] | None = None,
     formatter: type[FormatterProto[R]] = JSONFormatter,
-    key: Callable[P, str] | None = None,
+    key: Callable[P, str | None] | None = None,
     subdirectory: str | None = None,
     validity: timedelta | Callable[P, timedelta] | Literal[True] = True,
     on_disk: bool = True,

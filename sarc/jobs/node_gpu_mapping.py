@@ -3,7 +3,7 @@ from __future__ import annotations
 import bisect
 import logging
 from datetime import datetime, time
-from typing import Dict, List, Optional
+from typing import Optional
 
 from pydantic import field_validator
 from pydantic_mongo import AbstractRepository, PydanticObjectId
@@ -18,26 +18,32 @@ class NodeGPUMapping(BaseModel):
     """Holds data for a mapping <node name> -> <GPU type>."""
 
     # # Database ID
-    id: PydanticObjectId = None
+    id: PydanticObjectId | None = None
 
     cluster_name: str
     since: datetime
-    node_to_gpu: Dict[str, List[str]]
+    node_to_gpu: dict[str, list[str]]
 
     @field_validator("since", mode="before")
     @classmethod
-    def _ensure_since(cls, value):
+    def _ensure_since(cls, value: str | datetime) -> datetime:
         """Parse `since` from stored string to Python datetime."""
-        if isinstance(value, str):
-            return datetime.combine(datetime.fromisoformat(value), time.min).replace(
-                tzinfo=MTL
-            )
-        else:
-            assert isinstance(value, datetime)
-            return value.replace(tzinfo=UTC).astimezone(MTL)
+        return parse_since(value)
 
     def __lt__(self, other):
         return self.since < other.since
+
+
+def parse_since(since: str | datetime) -> datetime:
+    if isinstance(since, str):
+        return datetime.combine(datetime.fromisoformat(since), time.min).replace(
+            tzinfo=MTL
+        )
+    else:
+        assert isinstance(since, datetime)
+        if since.tzinfo is None:
+            since = since.replace(tzinfo=UTC)
+        return since.astimezone(MTL)
 
 
 class NodeGPUMappingRepository(AbstractRepository[NodeGPUMapping]):
@@ -46,10 +52,13 @@ class NodeGPUMappingRepository(AbstractRepository[NodeGPUMapping]):
 
     @scraping_mode_required
     def save_node_gpu_mapping(
-        self, cluster_name: str, since: str, node_to_gpu: Dict[str, List[str]]
+        self,
+        cluster_name: str,
+        since: str | datetime,
+        node_to_gpu: dict[str, list[str]],
     ):
         mapping = NodeGPUMapping(
-            cluster_name=cluster_name, since=since, node_to_gpu=node_to_gpu
+            cluster_name=cluster_name, since=parse_since(since), node_to_gpu=node_to_gpu
         )
         # Check if a node->GPU mapping was already registered
         # for given cluster and date.

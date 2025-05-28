@@ -17,12 +17,11 @@ from sarc.traces import trace_decorator, using_trace
 logger = logging.getLogger(__name__)
 
 
-def parse_in_timezone(timestamp):
+def parse_in_timezone(timestamp: int | None) -> datetime | None:
     if timestamp is None or timestamp == 0:
         return None
     # Slurm returns timestamps in UTC
-    date_naive = datetime.utcfromtimestamp(timestamp)
-    return date_naive.replace(tzinfo=UTC)
+    return datetime.fromtimestamp(timestamp, UTC)
 
 
 class SAcctScraper:
@@ -51,7 +50,7 @@ class SAcctScraper:
         fmt = "%Y-%m-%dT%H:%M"
         start = self.start.strftime(fmt)
         end = self.end.strftime(fmt)
-        accounts = self.cluster.accounts and ",".join(self.cluster.accounts)
+        accounts = ",".join(self.cluster.accounts) if self.cluster.accounts else None
         accounts_option = f"-A {accounts}" if accounts else ""
         cmd = f"{self.cluster.sacct_bin} {accounts_option} -X -S {start} -E {end} --allusers --json"
         logger.info(f"{self.cluster.name} $ {cmd}")
@@ -63,7 +62,7 @@ class SAcctScraper:
             results = self.cluster.ssh.run(cmd, hide=True)
         return json.loads(results.stdout[results.stdout.find("{") :])
 
-    def _cache_key(self):
+    def _cache_key(self) -> str | None:
         today = datetime.combine(date.today(), datetime.min.time())
         if self.day < today:
             daystr = self.day.strftime("%Y-%m-%d")
@@ -81,7 +80,7 @@ class SAcctScraper:
 
     def __iter__(self) -> Iterator[SlurmJob]:
         """Fetch and iterate on all jobs as SlurmJob objects."""
-        version = (
+        version: dict = (
             self.get_raw().get("meta", {}).get("Slurm", None)
             or self.get_raw().get("meta", {}).get("slurm", {})
         ).get("version", None)
@@ -92,9 +91,9 @@ class SAcctScraper:
                 if converted is not None:
                     yield converted
 
-    def convert(self, entry: dict, version: dict = None) -> Optional[SlurmJob]:
+    def convert(self, entry: dict, version: dict) -> SlurmJob | None:
         """Convert a single job entry from sacct to a SlurmJob."""
-        resources = {"requested": {}, "allocated": {}}
+        resources: dict[str, dict] = {"requested": {}, "allocated": {}}
         tracked_resources = ["cpu", "mem", "gres", "node", "billing"]
 
         if entry["group"] is None:
@@ -129,15 +128,18 @@ class SAcctScraper:
         flags = {k: True for k in entry["flags"] if k in tracked_flags}
 
         submit_time = parse_in_timezone(entry["time"]["submission"])
+        assert submit_time is not None
         start_time = parse_in_timezone(entry["time"]["start"])
         end_time = parse_in_timezone(entry["time"]["end"])
-        elapsed_time = entry["time"]["elapsed"]
+        elapsed_time: int = entry["time"]["elapsed"]
 
         if end_time:
             # The start_time is not set properly in the json output of sacct, but
             # it can be calculated from end_time and elapsed_time. We leave the
             # inaccurate value in for RUNNING jobs.
             start_time = end_time - timedelta(seconds=elapsed_time)
+
+        assert self.cluster.name is not None
 
         if self.cluster.name != entry["cluster"]:
             logger.warning(
@@ -173,8 +175,8 @@ class SAcctScraper:
                 priority=entry["priority"],
                 qos=entry["qos"],
                 work_dir=entry["working_directory"],
-                **resources,
-                **flags,
+                **resources,  # type: ignore[arg-type]
+                **flags,  # type: ignore[arg-type]
             )
         if int(version["major"]) == 23:
             if int(version["minor"]) == 11:
@@ -209,8 +211,8 @@ class SAcctScraper:
                     priority=entry["priority"]["number"],
                     qos=entry["qos"],
                     work_dir=entry["working_directory"],
-                    **resources,
-                    **flags,
+                    **resources,  # type: ignore[arg-type]
+                    **flags,  # type: ignore[arg-type]
                 )
 
             return SlurmJob(
@@ -238,8 +240,8 @@ class SAcctScraper:
                 priority=entry["priority"]["number"],
                 qos=entry["qos"],
                 work_dir=entry["working_directory"],
-                **resources,
-                **flags,
+                **resources,  # type: ignore[arg-type]
+                **flags,  # type: ignore[arg-type]
             )
 
         raise ValueError(f"Unsupported slurm version: {version}")
@@ -311,6 +313,7 @@ def update_allocated_gpu_type(cluster: ClusterConfig, entry: SlurmJob) -> Option
             gpu_type = output[0]["metric"]["gpu_type"]
     else:
         # No prometheus config. Try to get GPU type from entry nodes.
+        assert cluster.name is not None
         node_gpu_mapping = get_node_to_gpu(cluster.name, entry.start_time)
         if node_gpu_mapping:
             node_to_gpu = node_gpu_mapping.node_to_gpu
