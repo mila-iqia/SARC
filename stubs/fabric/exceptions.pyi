@@ -1,0 +1,9 @@
+from _typeshed import Incomplete
+
+class NothingToDo(Exception): ...
+
+class GroupException(Exception):
+    result: Incomplete
+    def __init__(self, result) -> None: ...
+
+class InvalidV1Env(Exception): ...
