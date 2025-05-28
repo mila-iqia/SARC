@@ -1,5 +1,6 @@
 from _typeshed import Incomplete
-from invoke import Result as InvokeResult, Runner
+from invoke import Result as InvokeResult
+from invoke import Runner
 
 def cares_about_SIGWINCH(): ...
 
