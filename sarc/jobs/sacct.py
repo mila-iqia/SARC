@@ -91,7 +91,7 @@ class SAcctScraper:
                 if converted is not None:
                     yield converted
 
-    def convert(self, entry: dict, version: dict) -> SlurmJob | None:
+    def convert(self, entry: dict, version: dict | None = None) -> SlurmJob | None:
         """Convert a single job entry from sacct to a SlurmJob."""
         resources: dict[str, dict] = {"requested": {}, "allocated": {}}
         tracked_resources = ["cpu", "mem", "gres", "node", "billing"]
