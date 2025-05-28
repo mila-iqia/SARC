@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import functools
 import json
 import os
@@ -7,13 +9,19 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field, fields
 from functools import cached_property
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, cast
 
 import gifnoc
 import tzlocal
 from hostlist import expand_hostlist
 
 from .alerts.common import HealthMonitorConfig
+
+if TYPE_CHECKING:
+    from fabric import Connection
+    from prometheus_api_client import PrometheusConnect
+    from pymongo.database import Database
+
 
 MTL = zoneinfo.ZoneInfo("America/Montreal")
 PST = zoneinfo.ZoneInfo("America/Vancouver")
@@ -92,7 +100,7 @@ class ClusterConfig:
         return harmonized_gpu
 
     @cached_property
-    def ssh(self):
+    def ssh(self) -> Connection:
         from fabric import Config as FabricConfig
         from fabric import Connection
         from paramiko import SSHConfig
@@ -106,7 +114,7 @@ class ClusterConfig:
         return Connection(self.host, config=fconfig)
 
     @cached_property
-    def prometheus(self):
+    def prometheus(self) -> PrometheusConnect:
         from prometheus_api_client import PrometheusConnect
 
         if self.prometheus_headers_file is not None:
@@ -131,10 +139,10 @@ class MongoConfig:
     database_name: str
 
     @cached_property
-    def database_instance(self):
+    def database_instance(self) -> Database:
         from pymongo import MongoClient
 
-        client = MongoClient(self.connection_string)
+        client: MongoClient = MongoClient(self.connection_string)
         return client.get_database(self.database_name)
 
 
@@ -192,24 +200,23 @@ class Config(ClientConfig):
     mymila: MyMilaConfig | None = None
     account_matching: AccountMatchingConfig | None = None
     sshconfig: Path | None = None
-    clusters: dict[str, ClusterConfig] | None = None
+    clusters: dict[str, ClusterConfig] = field(default_factory=dict)
     logging: LoggingConfig | None = None
 
     def __post_init__(self):
-        if self.clusters:
-            for name, cluster in self.clusters.items():
-                if not cluster.name:
-                    cluster.name = name
-                if not cluster.sshconfig:
-                    cluster.sshconfig = self.sshconfig
+        for name, cluster in self.clusters.items():
+            if not cluster.name:
+                cluster.name = name
+            if not cluster.sshconfig:
+                cluster.sshconfig = self.sshconfig
 
 
 class WhitelistProxy:
-    def __init__(self, obj, *whitelist):
+    def __init__(self, obj: Any, *whitelist: str):
         self._obj = obj
         self._whitelist = whitelist
 
-    def __getattr__(self, attr):
+    def __getattr__(self, attr: str) -> Any:
         if attr in self._whitelist:
             return getattr(self._obj, attr)
         elif hasattr(self._obj, attr):
@@ -230,7 +237,7 @@ sarc_mode = ContextVar("sarc_mode", default=os.getenv("SARC_MODE", "client"))
 
 
 @contextmanager
-def using_sarc_mode(mode):
+def using_sarc_mode(mode: Literal["scraping", "client"]):
     token = sarc_mode.set(mode)
     try:
         yield
@@ -238,19 +245,19 @@ def using_sarc_mode(mode):
         sarc_mode.reset(token)
 
 
-def config():
+def config() -> Config | ClientConfig:
     if sarc_mode.get() == "scraping":
         return full_config
     else:
         accept = [f.name for f in fields(ClientConfig)]
-        return WhitelistProxy(full_config, *accept)
+        return cast(ClientConfig, WhitelistProxy(full_config, *accept))
 
 
 class ScrapingModeRequired(Exception):
     """Exception raised if a code requiring scraping mode is executed in client mode."""
 
 
-def scraping_mode_required(fn):
+def scraping_mode_required[**P, R](fn: Callable[P, R]) -> Callable[P, R]:
     """
     Decorator to wrap a function that requires scraping mode to be executed.
 
@@ -259,7 +266,7 @@ def scraping_mode_required(fn):
     """
 
     @functools.wraps(fn)
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
         if sarc_mode.get() != "scraping":
             raise ScrapingModeRequired()
         return fn(*args, **kwargs)

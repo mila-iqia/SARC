@@ -7,22 +7,24 @@ from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
 from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.sdk.resources import Resource
 
-from sarc.config import config
+from sarc.config import Config, LoggingConfig, config
 
 
-def getOpenTelemetryLoggingHandler(log_level=logging.WARNING):
+def getOpenTelemetryLoggingHandler(
+    log_conf: LoggingConfig, log_level: int = logging.WARNING
+):
 
     logger_provider = LoggerProvider(
         resource=Resource.create(
             {
-                "service.name": config().logging.service_name,
+                "service.name": log_conf.service_name,
                 "service.instance.id": os.uname().nodename,
             }
         ),
     )
     set_logger_provider(logger_provider)
 
-    otlp_exporter = OTLPLogExporter(config().logging.OTLP_endpoint)
+    otlp_exporter = OTLPLogExporter(log_conf.OTLP_endpoint)
     logger_provider.add_log_record_processor(BatchLogRecordProcessor(otlp_exporter))
     return LoggingHandler(level=log_level, logger_provider=logger_provider)
 
@@ -37,18 +39,17 @@ def setupLogging(verbose_level: int = 0):
         "ERROR": logging.ERROR,
         "CRITICAL": logging.CRITICAL,
     }
+    conf = config()
+    assert isinstance(conf, Config)
+    if conf.logging:
 
-    if config().logging:
-
-        config_log_level = logging_levels.get(
-            config().logging.log_level, logging.WARNING
-        )
+        config_log_level = logging_levels.get(conf.logging.log_level, logging.WARNING)
         # verbose priority:
         # in 0 (not specified in command line) then config log level is used
         # otherwise, command-line verbose level is used
         log_level = verbose_levels.get(verbose_level, config_log_level)
 
-        handler = getOpenTelemetryLoggingHandler(log_level)
+        handler = getOpenTelemetryLoggingHandler(conf.logging, log_level)
 
         formatter = logging.Formatter(
             "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
