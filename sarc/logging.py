@@ -39,9 +39,10 @@ def setupLogging(verbose_level: int = 0):
         "ERROR": logging.ERROR,
         "CRITICAL": logging.CRITICAL,
     }
+
     conf = config()
-    assert isinstance(conf, Config)
-    if conf.logging:
+    # Apparently this can be called in client mode which doesn't have logging
+    if isinstance(conf, Config) and conf.logging:
 
         config_log_level = logging_levels.get(conf.logging.log_level, logging.WARNING)
         # verbose priority:

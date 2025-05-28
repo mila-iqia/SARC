@@ -29,9 +29,10 @@ def test_loki_logging_handler(httpserver):
     # Configurer l'URL de l'endpoint Loki
     # print(f"http://{httpserver.host}:{httpserver.port}/otlp/v1/logs")
     loki_url = httpserver.url_for("/otlp/v1/logs")
-    config().logging.OTLP_endpoint = loki_url
+    log_conf = config().logging
+    log_conf.OTLP_endpoint = loki_url
 
-    ot_handler = getOpenTelemetryLoggingHandler()
+    ot_handler = getOpenTelemetryLoggingHandler(log_conf)
 
     ot_handler.flush()
     assert len(httpserver.log) == 0
