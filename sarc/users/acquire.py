@@ -155,6 +155,7 @@ def run(
         commit_matches_to_database(
             user_collection,
             DD_persons_matched,
+            verbose=True
         )
 
         # If new manual matches are available, save them.
