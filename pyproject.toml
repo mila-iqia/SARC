@@ -114,8 +114,11 @@ extension-pkg-whitelist = "pydantic"
 [tool.isort]
 profile = "black"
 
+[tool.mypy]
+mypy_path = "stubs"
+
 [[tool.mypy.overrides]]
-module = "sarc.alerts.*,sarc.account_matching.*,sarc.users.*,sarc.client.*,sarc.jobs.*,sarc.cli.*"
+module = "sarc.alerts.*,sarc.account_matching.*,sarc.users.*,sarc.client.*,sarc.cli.*"
 ignore_errors = true
 
 [[tool.mypy.overrides]]
@@ -126,7 +129,4 @@ ignore_missing_imports = true
 module = "hostlist.*"
 ignore_missing_imports = true
 
-[[tool.mypy.overrides]]
-module = "fabric.*"
-ignore_missing_imports = true
 
