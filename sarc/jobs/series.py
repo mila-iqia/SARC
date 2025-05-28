@@ -4,19 +4,40 @@ import json
 import logging
 import os
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import Callable, Literal, TypedDict, overload
 
 import numpy as np
 import pandas
-from pandas import DataFrame
-from prometheus_api_client import MetricRangeDataFrame
+from pandas import DataFrame, Series
+from prometheus_api_client.metric_range_df import MetricRangeDataFrame
 
 from sarc.client.job import JobStatistics, SlurmJob, Statistics
 from sarc.config import MTL, UTC, ClusterConfig, config
 from sarc.traces import trace_decorator
 
-if TYPE_CHECKING:
-    pass
+
+@overload
+def get_job_time_series(
+    job: SlurmJob,
+    metric: str,
+    min_interval: int = 30,
+    max_points: int = 100,
+    measure: str | None = None,
+    aggregation: Literal["total", "interval"] | None = "total",
+    dataframe: Literal[True] = True,
+) -> DataFrame | None: ...
+
+
+@overload
+def get_job_time_series(
+    job: SlurmJob,
+    metric: str,
+    min_interval: int = 30,
+    max_points: int = 100,
+    measure: str | None = None,
+    aggregation: Literal["total", "interval"] | None = "total",
+    dataframe: Literal[False] = False,
+) -> list[dict]: ...
 
 
 # pylint: disable=too-many-branches
@@ -27,9 +48,9 @@ def get_job_time_series(
     min_interval: int = 30,
     max_points: int = 100,
     measure: str | None = None,
-    aggregation: str = "total",
+    aggregation: Literal["total", "interval"] | None = "total",
     dataframe: bool = True,
-):
+) -> DataFrame | list[dict] | None:
     """Fetch job metrics.
 
     Arguments:
@@ -60,6 +81,9 @@ def get_job_time_series(
     selector = f'{metric}{{slurmjobid=~"{job.job_id}"}}'
 
     now = datetime.now(tz=UTC).astimezone(MTL)
+
+    if job.start_time is None:
+        raise ValueError("Job hasn't started yet")
 
     ago = now - job.start_time
     duration = (job.end_time or now) - job.start_time
@@ -98,26 +122,41 @@ def get_job_time_series(
     else:
         query = f"{query}[{duration_seconds}s:{interval}s] {offset_string}"
 
-    results = job.fetch_cluster_config().prometheus.custom_query(query)
+    results: list[dict] = job.fetch_cluster_config().prometheus.custom_query(query)
     if dataframe:
         return MetricRangeDataFrame(results) if results else None
     else:
         return results
 
 
-def get_job_time_series_metric_names():
+def get_job_time_series_metric_names() -> list[str]:
     """Return all the metric names that relate to slurm jobs."""
     return slurm_job_metric_names
+
+
+STATS = TypedDict(
+    "STATS",
+    {
+        "mean": float,
+        "std": float,
+        "max": float,
+        "q25": float,
+        "median": float,
+        "q75": float,
+        "q05": float,
+        "unused": int,
+    },
+)
 
 
 @trace_decorator()
 def compute_job_statistics_from_dataframe(
     df: DataFrame,
-    statistics,
-    normalization=float,
-    unused_threshold=0.01,
-    is_time_counter=False,
-):
+    statistics: dict[str, Callable[[Series], float]],
+    normalization: Callable[[float], float] = float,
+    unused_threshold: float | None = 0.01,
+    is_time_counter: bool = False,
+) -> STATS:
     df = df.reset_index()
 
     groupby = ["instance", "core", "gpu"]
@@ -145,17 +184,17 @@ def compute_job_statistics_from_dataframe(
         n_unused = 0
 
     rval = {name: normalization(fn(df["value"])) for name, fn in statistics.items()}
-    return {**rval, "unused": n_unused}
+    return {**rval, "unused": n_unused}  # type: ignore[typeddict-item]
 
 
 def compute_job_statistics_one_metric(
     job: SlurmJob,
-    metric_name,
-    statistics,
-    normalization=float,
-    unused_threshold=0.01,
-    is_time_counter=False,
-):
+    metric_name: str,
+    statistics: dict[str, Callable[[Series], float]],
+    normalization: Callable[[float], float] = float,
+    unused_threshold: float | None = 0.01,
+    is_time_counter: bool = False,
+) -> STATS | None:
     df = job.series(metric=metric_name, max_points=10_000)
     if df is None:
         return None
@@ -169,7 +208,7 @@ def compute_job_statistics_one_metric(
 
 
 @trace_decorator()
-def compute_job_statistics(job: SlurmJob):
+def compute_job_statistics(job: SlurmJob) -> JobStatistics:
     statistics_dict = {
         "mean": lambda self: self.mean(),
         "std": lambda self: self.std(),
@@ -243,27 +282,32 @@ def compute_job_statistics(job: SlurmJob):
         is_time_counter=True,
     )
 
+    job_mem = job.allocated.mem
+    assert job_mem is not None
     system_memory = compute_job_statistics_one_metric(
         job,
         "slurm_job_memory_usage",
         statistics=statistics_dict,
-        normalization=lambda x: float(x / 1e6 / job.allocated.mem),
+        normalization=lambda x: float(x / 1e6 / job_mem),
         unused_threshold=None,
     )
 
     return JobStatistics(
-        gpu_utilization=gpu_utilization and Statistics(**gpu_utilization),
-        gpu_utilization_fp16=gpu_utilization_fp16
-        and Statistics(**gpu_utilization_fp16),
-        gpu_utilization_fp32=gpu_utilization_fp32
-        and Statistics(**gpu_utilization_fp32),
-        gpu_utilization_fp64=gpu_utilization_fp64
-        and Statistics(**gpu_utilization_fp64),
-        gpu_sm_occupancy=gpu_sm_occupancy and Statistics(**gpu_sm_occupancy),
-        gpu_memory=gpu_memory and Statistics(**gpu_memory),
-        gpu_power=gpu_power and Statistics(**gpu_power),
-        cpu_utilization=cpu_utilization and Statistics(**cpu_utilization),
-        system_memory=system_memory and Statistics(**system_memory),
+        gpu_utilization=Statistics(**gpu_utilization) if gpu_utilization else None,
+        gpu_utilization_fp16=(
+            Statistics(**gpu_utilization_fp16) if gpu_utilization_fp16 else None
+        ),
+        gpu_utilization_fp32=(
+            Statistics(**gpu_utilization_fp32) if gpu_utilization_fp32 else None
+        ),
+        gpu_utilization_fp64=(
+            Statistics(**gpu_utilization_fp64) if gpu_utilization_fp64 else None
+        ),
+        gpu_sm_occupancy=Statistics(**gpu_sm_occupancy) if gpu_sm_occupancy else None,
+        gpu_memory=Statistics(**gpu_memory) if gpu_memory else None,
+        gpu_power=Statistics(**gpu_power) if gpu_power else None,
+        cpu_utilization=Statistics(**cpu_utilization) if cpu_utilization else None,
+        system_memory=Statistics(**system_memory) if system_memory else None,
     )
 
 
@@ -407,7 +451,7 @@ def update_cluster_job_series_rgu(
     return df
 
 
-def update_job_series_rgu(df: DataFrame):
+def update_job_series_rgu(df: DataFrame) -> DataFrame:
     """
     Compute RGU information for jobs in given data frame.
 
