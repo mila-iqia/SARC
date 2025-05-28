@@ -1,5 +1,6 @@
-from .util import debug as debug
 from _typeshed import Incomplete
+
+from .util import debug as debug
 
 class Transfer:
     connection: Incomplete

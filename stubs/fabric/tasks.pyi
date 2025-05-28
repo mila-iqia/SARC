@@ -1,6 +1,7 @@
 import invoke
-from .connection import Connection as Connection
 from _typeshed import Incomplete
+
+from .connection import Connection as Connection
 
 class Task(invoke.Task):
     hosts: Incomplete
