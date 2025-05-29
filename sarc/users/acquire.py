@@ -152,11 +152,7 @@ def run(
 
         # These associations can now be propagated to the database.
         span.add_event("Committing matches to database ...")
-        commit_matches_to_database(
-            user_collection,
-            DD_persons_matched,
-            verbose=True
-        )
+        commit_matches_to_database(user_collection, DD_persons_matched, verbose=True)
 
         # If new manual matches are available, save them.
         if new_manual_matches:
