@@ -1,4 +1,3 @@
-load job series:   0%|          | 0/24 [00:00<?, ?it/s]load job series: 100%|██████████| 24/24 [00:00<?, ?it/s]
 [fromage]
                            count
 timestamp                       

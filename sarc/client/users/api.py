@@ -6,10 +6,10 @@ https://mila-iqia.atlassian.net/wiki/spaces/IDT/pages/2190737548/Planification
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import datetime
 from typing import Optional
 
-from pydantic_mongo import AbstractRepository, ObjectIdField
+from pydantic_mongo import AbstractRepository, PydanticObjectId
 
 from sarc.config import config
 from sarc.model import BaseModel
@@ -23,21 +23,21 @@ class Credentials(BaseModel):
 
 
 class User(BaseModel):
-    id: ObjectIdField = None
+    id: PydanticObjectId = None
 
     name: str
 
     mila: Credentials
-    drac: Optional[Credentials]
+    drac: Optional[Credentials] = None
 
     teacher_delegations: Optional[list[str]] = None
 
     mila_ldap: dict
-    drac_members: Optional[dict]
-    drac_roles: Optional[dict]
+    drac_members: Optional[dict] = None
+    drac_roles: Optional[dict] = None
 
-    record_start: Optional[date] = None
-    record_end: Optional[date] = None
+    record_start: Optional[datetime] = None
+    record_end: Optional[datetime] = None
 
 
 class _UserRepository(AbstractRepository[User]):

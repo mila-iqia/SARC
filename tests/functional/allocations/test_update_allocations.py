@@ -17,7 +17,7 @@ def test_update_allocations(data_regression):
     data = get_allocations(cluster_name=["fromage", "patate"])
     assert len(data) == 11
     data_regression.check(
-        [allocation.json(exclude={"id": True}) for allocation in data]
+        [allocation.model_dump(exclude={"id": True}) for allocation in data]
     )
 
 
@@ -32,7 +32,7 @@ def test_update_allocations_no_duplicates(data_regression):
     data = get_allocations(cluster_name=["fromage", "patate"])
     assert len(data) == 11
     data_regression.check(
-        [allocation.json(exclude={"id": True}) for allocation in data]
+        [allocation.model_dump(exclude={"id": True}) for allocation in data]
     )
 
 
@@ -51,7 +51,7 @@ def test_update_allocations_invalid_with_some_valid(data_regression):
     data = get_allocations(cluster_name=["fromage", "patate"])
     assert len(data) == 2
     data_regression.check(
-        [allocation.json(exclude={"id": True}) for allocation in data]
+        [allocation.model_dump(exclude={"id": True}) for allocation in data]
     )
 
 

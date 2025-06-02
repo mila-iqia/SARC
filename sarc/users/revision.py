@@ -14,6 +14,7 @@ The revison works as follow:
 - All past version have an end date
 """
 
+import logging
 from copy import deepcopy
 from datetime import datetime
 
@@ -186,17 +187,29 @@ def commit_matches_to_database(users_collection, DD_persons_matched, verbose=Fal
     users_db = get_all_users(users_collection)
     user_to_update = []
 
+    nb_users_updated = 0
+
     # Match db user to their user updates
     for user_db in users_db:
         mila_email_username = user_db["mila_ldap"]["mila_email_username"]
 
         matched_user = DD_persons_matched.pop(mila_email_username, None)
+        nb_users_updated += matched_user is not None
 
         user_to_update.append((mila_email_username, user_db, matched_user))
 
     # Those are new users that were not found in the DB
     for mila_email_username, D_match in DD_persons_matched.items():
         user_to_update.append((mila_email_username, None, D_match))
+
+    nb_users_in_db = len(users_db)
+    nb_new_users = len(DD_persons_matched)
+    logging.info(
+        f"Users to update: "
+        f"in DB {nb_users_in_db}, "
+        f"updates {nb_users_updated}, "
+        f"new {nb_new_users}"
+    )
 
     # Compute the updates to make
     L_updates_to_do = []
@@ -208,10 +221,11 @@ def commit_matches_to_database(users_collection, DD_persons_matched, verbose=Fal
     if L_updates_to_do:
         result = users_collection.bulk_write(L_updates_to_do)  #  <- the actual commit
         if verbose:
-            print(result.bulk_api_result)
+            logging.info(f"User updates: bulk write results: {result.bulk_api_result}")
     else:
         if verbose:
-            print("Nothing to do.")
+            logging.info("User updates: nothing to do.")
 
     # might as well return this result in case we'd like to write tests for it
+
     return result

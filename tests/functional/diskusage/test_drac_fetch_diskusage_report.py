@@ -60,4 +60,4 @@ def test_drac_acquire_storages(test_config, remote, cli_main, file_regression):
     )
     data = get_diskusages(cluster_name=["hyrule"])
     assert len(data) == 1
-    file_regression.check(data[0].json(exclude={"id": True}, indent=4))
+    file_regression.check(data[0].model_dump_json(exclude={"id": True}, indent=4))
