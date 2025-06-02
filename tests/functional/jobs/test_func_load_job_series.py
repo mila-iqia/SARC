@@ -159,7 +159,7 @@ def test_load_job_series_with_users(file_regression):
 
 
 @pytest.mark.freeze_time(MOCK_TIME)
-@pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db_with_users", "client_mode", "tzlocal_is_mtl")
 def test_load_job_series_without_user_column(file_regression):
     """Test job to user mapping when data frame does not contain `user` column.
 

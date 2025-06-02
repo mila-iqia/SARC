@@ -84,8 +84,6 @@ sarc:
       prometheus_url: https://mila-thanos.calculquebec.ca
       prometheus_headers_file: ../../SARC_secrets/secrets/drac_prometheus/headers.json
       start_date: '2022-04-01'
-      rgu_start_date: '2023-11-28'
-      gpu_to_rgu_billing: ../../SARC_secrets/secrets/gpu_to_rgu_billing_narval.json
       gpus_per_nodes:
         __DEFAULTS__:
           a100: A100-SXM4-40GB
@@ -114,8 +112,6 @@ sarc:
       prometheus_url: https://mila-thanos.calculquebec.ca
       prometheus_headers_file: ../../SARC_secrets/secrets/drac_prometheus/headers.json
       start_date: '2022-04-01'
-      rgu_start_date: '2024-04-03'
-      gpu_to_rgu_billing: ../../SARC_secrets/secrets/gpu_to_rgu_billing_beluga.json
       gpus_per_nodes:
         __DEFAULTS__:
           tesla_v100-sxm2-16gb: V100-SXM2-16GB
@@ -135,8 +131,6 @@ sarc:
       prometheus_url:
       prometheus_headers_file:
       start_date: '2022-04-01'
-      rgu_start_date: '2024-04-03'
-      gpu_to_rgu_billing: ../../SARC_secrets/secrets/gpu_to_rgu_billing_graham.json
       gpus_per_nodes:
         gra[828-987]:
           p100: P100-PCIe-12GB
@@ -167,8 +161,6 @@ sarc:
       prometheus_url:
       prometheus_headers_file:
       start_date: '2022-04-01'
-      rgu_start_date: '2024-04-03'
-      gpu_to_rgu_billing: ../../SARC_secrets/secrets/gpu_to_rgu_billing_cedar.json
       gpus_per_nodes:
         __DEFAULTS__:
           p100: P100-PCIe-12GB

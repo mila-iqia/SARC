@@ -16,11 +16,9 @@ sarc:
         /project/rrg-bonhomme-ad
       duc_storage_command: duc ls -d /project/.duc_databases/rrg-bonhomme-ad.sqlite
         /project/rrg-bonhomme-ad
-      gpu_to_rgu_billing: ./not-so-secrets/fromage_prometheus/gpu_to_rgu_billing.json
       host: fromage
       prometheus_headers_file: tests/not-so-secrets/fromage_prometheus/headers.json
       prometheus_url: https://fromage-thanos.calcul.ca
-      rgu_start_date: '2023-02-22'
       sacct_bin: /opt/software/slurm/bin/sacct
       timezone: Europe/Paris
     gerudo:
@@ -34,11 +32,9 @@ sarc:
         /project/rrg-bonhomme-ad
       duc_storage_command: duc ls -d /project/.duc_databases/rrg-bonhomme-ad.sqlite
         /project/rrg-bonhomme-ad
-      gpu_to_rgu_billing: ./not-so-secrets/gerudo_prometheus/gpu_to_rgu_billing_empty.json
       host: gerudo
       prometheus_headers_file: tests/not-so-secrets/patate_prometheus/headers.json
       prometheus_url: https://gerudo-thanos.calcul.ca
-      rgu_start_date: '2023-02-16'
       sacct_bin: /opt/software/slurm/bin/sacct
       timezone: America/Vancouver
     hyrule:
@@ -64,7 +60,6 @@ sarc:
       duc_storage_command: null
       host: localhost
       prometheus_url: null
-      rgu_start_date: '2023-02-16'
       sacct_bin: /opt/slurm/bin/sacct
       timezone: America/Montreal
     mila:
@@ -96,7 +91,6 @@ sarc:
         /project/rrg-bonhomme-ad
       duc_storage_command: duc ls -d /project/.duc_databases/rrg-bonhomme-ad.sqlite
         /project/rrg-bonhomme-ad
-      gpu_to_rgu_billing: ./not-so-secrets/patate_prometheus/gpu_to_rgu_billing.json
       host: patate
       prometheus_headers_file: tests/not-so-secrets/patate_prometheus/headers.json
       prometheus_url: https://fromage-thanos.calcul.ca
@@ -108,12 +102,13 @@ sarc:
       diskusage_report_command: null
       duc_inodes_command: null
       duc_storage_command: null
-      gpu_to_rgu_billing: ./not-so-secrets/raisin_prometheus/gpu_to_rgu_billing.json
       host: raisin
       prometheus_url: http://monitoring.server.raisin.quebec:9090/
-      rgu_start_date: '2023-02-16'
       sacct_bin: /opt/slurm/bin/sacct
       timezone: America/Montreal
+      gpus_per_nodes:
+        __DEFAULTS__:
+          gpu2: THE GPU II
     raisin_no_prometheus:
       accounts: null
       diskusage_report_command: null

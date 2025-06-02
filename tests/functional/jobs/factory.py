@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import copy
-import json
 from datetime import datetime, timedelta
-from pathlib import Path
 from typing import Optional
 
 from flatten_dict import flatten, unflatten
@@ -285,10 +283,7 @@ def create_cluster_entries():
     """Generate cluster entries to fill collection `clusters`."""
 
     # Get all cluster names from scraping config test file
-    scraping_cfg_path = Path(__file__).parent.parent.parent / "sarc-test.json"
-    with open(scraping_cfg_path) as file:
-        cfg_dict = json.load(file)
-        cluster_names = sorted(cfg_dict["clusters"].keys())
+    cluster_names = sorted(config().clusters.keys())
 
     cluster_entries = []
 

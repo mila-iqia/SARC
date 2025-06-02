@@ -21,7 +21,7 @@ UTC = zoneinfo.ZoneInfo("UTC")
 TZLOCAL = zoneinfo.ZoneInfo(tzlocal.get_localzone_name())
 
 
-MIG_FLAG = "__MIG__"
+MIG_FLAG = "__MIG_FLAG__"
 DEFAULTS_FLAG = "__DEFAULTS__"
 
 

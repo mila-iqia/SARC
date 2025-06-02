@@ -25,19 +25,19 @@ TESTING_DATA = {
     "10_patate": {
         "cluster": "patate",
         "message": "No prometheus data to check: no warning.",
-        "node_to_gpu": {"node0": "gpu0"},
+        "node_to_gpu": {"node0": ["gpu0"]},
         "prometheus": [],
     },
     "11_0_fromage": {
         "cluster": "fromage",
         "message": "Both slurm config data and prometheus data available, but prometheus GPU not in slurm config: warning.",
-        "node_to_gpu": {"node0": "gpu0"},
+        "node_to_gpu": {"node0": ["gpu0"]},
         "prometheus": [{"metric": {"gpu_type": "phantom_gpu"}}],
     },
     "11_1_raisin": {
         "cluster": "raisin",
         "message": "Both slurm config data and prometheus data available, and prometheus GPU in slurm config: no warning.",
-        "node_to_gpu": {"node0": "phantom_gpu"},
+        "node_to_gpu": {"node0": ["phantom_gpu"]},
         "prometheus": [{"metric": {"gpu_type": "phantom_gpu"}}],
     },
 }

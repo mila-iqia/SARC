@@ -307,7 +307,7 @@ def cluster_gpu_billing_is_gpu():
     return "mila"
 
 
-@pytest.mark.usefixtures("read_only_db_with_users_client", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db_with_users", "client_mode", "tzlocal_is_mtl")
 def test_clusters_gpu_billings(
     cluster_no_gpu_billing,
     cluster_no_gpu_billing_2,
@@ -330,7 +330,7 @@ def test_get_rgus_mocked(monkeypatch):
     assert get_rgus() == _gen_fake_rgus()
 
 
-@pytest.mark.usefixtures("read_only_db_with_users_client", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db_with_users", "client_mode", "tzlocal_is_mtl")
 def test_data_frame_output_size(
     cluster_no_gpu_billing,
     cluster_no_gpu_billing_2,
@@ -366,7 +366,7 @@ def test_data_frame_output_size(
     assert not frame["allocated.gpu_type_rgu"].equals(nans)
 
 
-@pytest.mark.usefixtures("read_only_db_with_users_client", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db_with_users", "client_mode", "tzlocal_is_mtl")
 def test_update_job_series_rgu_one_date(
     cluster_gpu_billing_one_date, monkeypatch, file_regression
 ):
@@ -426,7 +426,7 @@ def test_update_job_series_rgu_one_date(
     )
 
 
-@pytest.mark.usefixtures("read_only_db_with_users_client", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db_with_users", "client_mode", "tzlocal_is_mtl")
 def test_update_job_series_rgu_with_many_dates(
     cluster_gpu_billing_many_dates, file_regression, monkeypatch
 ):
@@ -487,7 +487,7 @@ def test_update_job_series_rgu_with_many_dates(
     )
 
 
-@pytest.mark.usefixtures("read_only_db_with_users_client", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db_with_users", "client_mode", "tzlocal_is_mtl")
 def test_update_job_series_rgu_billing_is_gpu(
     cluster_gpu_billing_is_gpu, monkeypatch, file_regression
 ):
@@ -534,7 +534,7 @@ def test_update_job_series_rgu_billing_is_gpu(
 
 
 @pytest.mark.freeze_time(MOCK_TIME)
-@pytest.mark.usefixtures("read_only_db_with_users_client", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db_with_users", "client_mode", "tzlocal_is_mtl")
 def test_update_job_series_rgu_with_read_only_db(
     cluster_gpu_billing_one_date, file_regression, monkeypatch
 ):
