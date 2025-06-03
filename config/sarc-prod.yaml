@@ -12,19 +12,19 @@ sarc:
     group_to_prof_json_path: ../../SARC_secrets/secrets/group_to_prof.json
     exceptions_json_path: ../../SARC_secrets/secrets/exceptions.json
   account_matching:
-    drac_members_csv_path: ../../SARC_secrets/secrets/account_matching/members-rrg-bengioy-ad-2025-02-06.csv
+    drac_members_csv_path: ../../SARC_secrets/secrets/account_matching/members-rrg-bengioy-ad-2025-05-29.csv
     drac_roles_csv_path: ../../SARC_secrets/secrets/account_matching/sponsored_roles_for_Yoshua_Bengio_(CCI_jvb-000).csv
     make_matches_config: ../../SARC_secrets/secrets/account_matching/make_matches_config.json
-  cache: "./sarc-cache"
+  cache: "../sarc-cache"
   sshconfig: "~/.ssh/config"
   clusters:
     mila:
       host: mila
       timezone: America/Montreal
-      accounts: 
+      accounts:
       sacct_bin: "/opt/slurm/bin/sacct"
-      duc_inodes_command: 
-      duc_storage_command: 
+      duc_inodes_command:
+      duc_storage_command:
       diskusage_report_command: beegfs-ctl --cfgFile=/etc/beegfs/home.d/beegfs-client.conf
         --getquota --uid $USER --csv
       prometheus_url: http://prometheus01.server.mila.quebec:9090/
@@ -75,11 +75,11 @@ sarc:
       - def-bengioy_gpu
       - def-bengioy_cpu
       sacct_bin: "/opt/software/slurm/bin/sacct"
-      duc_inodes_command: 
-      duc_storage_command: 
+      duc_inodes_command:
+      duc_storage_command:
       diskusage_report_command: diskusage_report --project --all_users
-      prometheus_url: 
-      prometheus_headers_file: 
+      prometheus_url:
+      prometheus_headers_file:
       start_date: '2022-04-01'
       rgu_start_date: '2024-04-03'
       gpu_to_rgu_billing: ../../SARC_secrets/secrets/gpu_to_rgu_billing_graham.json
@@ -92,11 +92,11 @@ sarc:
       - def-bengioy_gpu
       - def-bengioy_cpu
       sacct_bin: "/opt/software/slurm/bin/sacct"
-      duc_inodes_command: 
-      duc_storage_command: 
+      duc_inodes_command:
+      duc_storage_command:
       diskusage_report_command: diskusage_report --project --all_users
-      prometheus_url: 
-      prometheus_headers_file: 
+      prometheus_url:
+      prometheus_headers_file:
       start_date: '2022-04-01'
       rgu_start_date: '2024-04-03'
       gpu_to_rgu_billing: ../../SARC_secrets/secrets/gpu_to_rgu_billing_cedar.json

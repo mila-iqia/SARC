@@ -34,8 +34,7 @@ def run(
 
     Arguments:
         prompt: If prompt is True, script will prompt for manual matching.
-        force: If True, re-fetch users data regardless of if it is cached.
-        no_fetch: If True, always fetch from cache if it exists.
+        cache_policy: Cache policy to use to fetch users.
     """
 
     cfg = config()
@@ -46,7 +45,7 @@ def run(
         cache_policy=cache_policy,
     )
 
-    # MyMila scraping "NotImplementedError" is temporary ignored until we have a working fetching implementation,
+    # MyMila scraping "NotImplementedError" is temporarily ignored until we have a working fetching implementation,
     # or a working workaround using CSV cache.
     with using_trace(
         "sarc.users.acquire", "fetch_mymila", exception_types=(NotImplementedError,)
@@ -97,7 +96,7 @@ def run(
             }
         )
 
-        # We have to filter out the duplicate users that in the drac_members file
+        # We have to filter out the duplicate users in the drac_members file
         span.add_event("Filtering duplicate entries in drac_members ...")
         DLD_data["drac_members"] = filter_duplicate_drac_members(
             DLD_data["drac_members"]
@@ -127,7 +126,7 @@ def run(
                 "D_override_matches_mila_to_cc_account_username"
             ],
             name_distance_delta_threshold=0,
-            verbose=False,
+            verbose=True,
             prompt=prompt,
         )
 
@@ -153,10 +152,7 @@ def run(
 
         # These associations can now be propagated to the database.
         span.add_event("Committing matches to database ...")
-        commit_matches_to_database(
-            user_collection,
-            DD_persons_matched,
-        )
+        commit_matches_to_database(user_collection, DD_persons_matched, verbose=True)
 
         # If new manual matches are available, save them.
         if new_manual_matches:
