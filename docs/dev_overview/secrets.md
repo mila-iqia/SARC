@@ -27,7 +27,6 @@ Many of these files are referenced from the sarc-xxxx.json config file; example:
             (...)
             "prometheus_headers_file": "../SARC_secrets/secrets/drac_prometheus/headers.json",
             (...)
-            "gpu_to_rgu_billing": "../SARC_secrets/secrets/gpu_to_rgu_billing_narval.json"
         }
 ```
 

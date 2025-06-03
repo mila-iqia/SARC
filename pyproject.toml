@@ -30,6 +30,7 @@ dependencies = [
     "watchdog>=6,<7",
     "python-dateutil>=2.9.0.post0,<3",
     "opentelemetry-exporter-otlp>=1.23.0,<2",
+    "iguane",
 ]
 
 [project.scripts]
@@ -69,6 +70,9 @@ default-groups = [
     "dev",
     "examples",
 ]
+
+[tool.uv.sources]
+iguane = { git = "https://github.com/mila-iqia/IGUANE.git", rev = "cd533d9b04434df5ff0497aa4880cdd4bc26cdf7" }
 
 [tool.pytest_env]
 TQDM_DISABLE = "1"

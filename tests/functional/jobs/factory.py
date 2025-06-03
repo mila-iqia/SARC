@@ -279,9 +279,12 @@ def create_jobs(job_factory: JobFactory | None = None, job_patch: dict | None = 
     return job_factory.jobs
 
 
-def create_cluster_entries(db):
+def create_cluster_entries():
     """Generate cluster entries to fill collection `clusters`."""
-    cluster_names = sorted({job["cluster_name"] for job in db.jobs.find({})})
+
+    # Get all cluster names from scraping config test file
+    cluster_names = sorted(config().clusters.keys())
+
     cluster_entries = []
 
     date_format = "%Y-%m-%d"
@@ -298,6 +301,38 @@ def create_cluster_entries(db):
             }
         )
     return cluster_entries
+
+
+def create_gpu_billings():
+    return [
+        {
+            "cluster_name": "patate",
+            "since": "2023-02-15",
+            "gpu_to_billing": {
+                "patate_gpu_no_rgu_with_billing": 120,
+                "patate_gpu_with_rgu_with_billing": 90,
+                "A100": 200,
+            },
+        },
+        {
+            "cluster_name": "patate",
+            "since": "2023-02-18",
+            "gpu_to_billing": {
+                "patate_gpu_no_rgu_with_billing": 240,  # / 2
+                "patate_gpu_with_rgu_with_billing": 180,  # x 2
+                # no billing for A100 since 2023-02-18
+            },
+        },
+        {
+            "cluster_name": "raisin",
+            "since": "2023-02-15",
+            "gpu_to_billing": {
+                "raisin_gpu_no_rgu_with_billing": 150,
+                "raisin_gpu_with_rgu_with_billing": 50,
+                "A100": 100,
+            },
+        },
+    ]
 
 
 json_raw = {

@@ -22,9 +22,9 @@ NodeName=cpu_node[1-100] UselessParam=UselessValue
 NodeName=myothernode[1,2,5-20,30,40-43] UselessParam=UselessValue Gres=gpu2
 NodeName=myothernode2[1,2,5-20,30,50] UselessParam=UselessValue Gres=gpu2,gpu:gpu1:5
 
-# Node present in a GPU partition below, but:
-# - GPU `bad_named_gpu` not billed. Should generate a GPU billing warning.
-# - GPU `gpu:what:2` based on GPU `what` which is not billed. Should generate a GPU billing warning.
+# Node present in a GPU partition below, but
+# GPUs `bad_named_gpu` and `gpu:what;2` are not billed in partitions.
+# thus should be ignored.
 NodeName=myothernode20 Gres=bad_named_gpu,gpu:what:2
 
 # Node with a GPU, but not present in GPU partitions below. GPU should be ignored.
@@ -52,9 +52,9 @@ NodeName=cpu_node[1-100] UselessParam=UselessValue
 NodeName=myothernode[1,2,5-20,30,40-43] UselessParam=UselessValue Gres=gpu2
 NodeName=myothernode2[1,2,5-20,30,50] UselessParam=UselessValue Gres=gpu2,gpu:gpu1:5
 
-# Node present in a GPU partition below, but:
-# - GPU `bad_named_gpu` not billed. Should generate a GPU billing warning.
-# - GPU `gpu:what:2` based on GPU `what` which is not billed. Should generate a GPU billing warning.
+# Node present in a GPU partition below, but
+# GPUs `bad_named_gpu` and `gpu:what;2` are not billed in partitions.
+# thus should be ignored.
 NodeName=myothernode20 Gres=bad_named_gpu,gpu:what:2
 
 # Node with a GPU, but not present in GPU partitions below. GPU should be ignored.
@@ -93,14 +93,10 @@ def test_acquire_slurmconfig(cli_main, caplog):
         == 0
     )
 
+    # No harmonization available for gpu1
     assert re.search(
-        r"WARNING +sarc\.cli\.acquire\.slurmconfig:slurmconfig\.py:[0-9]+ +"
-        r"Cannot infer billing for GPU: bad_named_gpu",
-        caplog.text,
-    )
-    assert re.search(
-        r"WARNING +sarc\.cli\.acquire\.slurmconfig:slurmconfig\.py:[0-9]+ +"
-        r"Cannot find GPU billing for GPU type what in GPU resource gpu:what:2",
+        r"WARNING +sarc\.cli\.acquire\.slurmconfig:slurmconfig\.py:[0-9]+ \[raisin]\[partition2] +"
+        r"Cannot harmonize: gpu1 \(keep this name as-is\) : mynode\[2,8-11,42]",
         caplog.text,
     )
 
@@ -109,9 +105,7 @@ def test_acquire_slurmconfig(cli_main, caplog):
         since="2020-01-01",
         gpu_to_billing={
             "gpu1": 5000,
-            "gpu:gpu1:9": 9 * 5000,
-            "gpu2": 7500,
-            "gpu:gpu2:1": 1 * 7500,
+            "THE GPU II": 7500,
         },
     )
     assert_same_billings(get_cluster_gpu_billings("raisin"), [expected_gpu_billing_1])
@@ -121,23 +115,23 @@ def test_acquire_slurmconfig(cli_main, caplog):
         since="2020-01-01",
         node_to_gpu={
             **{
-                node_name: "gpu1"
+                node_name: ["gpu1"]
                 for node_name in expand_hostlist("mynode[1,2,5-20,30,40-43]")
             },
             **{
-                node_name: "gpu2"
+                node_name: ["gpu2"]
                 for node_name in expand_hostlist("myothernode[1,2,5-20,30,40-43]")
             },
             **{
-                node_name: "gpu2,gpu:gpu1:5"
+                node_name: ["gpu2", "gpu:gpu1:5"]
                 for node_name in expand_hostlist("myothernode2[1,2,5-20,30,50]")
             },
-            "myothernode20": "bad_named_gpu,gpu:what:2",
+            "myothernode20": ["bad_named_gpu", "gpu:what:2"],
             **{
-                node_name: "gpu3"
+                node_name: ["gpu3"]
                 for node_name in expand_hostlist("myothernode[100-102]")
             },
-            "alone_node": "gpu:gpu2:1,gpu:gpu1:9",
+            "alone_node": ["gpu:gpu2:1", "gpu:gpu1:9"],
         },
     )
     assert_same_node_gpu_mapping(get_node_to_gpu("raisin"), expected_node_to_gpu_1)
@@ -153,7 +147,7 @@ def test_acquire_slurmconfig(cli_main, caplog):
         since="2020-05-01",
         gpu_to_billing={
             "gpu1": 4000,
-            "gpu2": 9000,
+            "THE GPU II": 9000,
         },
     )
     assert_same_billings(
