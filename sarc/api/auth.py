@@ -1,4 +1,5 @@
 import logging
+from dataclasses import field
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
@@ -8,6 +9,8 @@ from google.oauth2 import id_token
 
 from sarc.client.users.api import User
 from sarc.client.users.api import get_user as _get_user
+from sarc.config import config
+from sarc.model import BaseModel
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +46,7 @@ def get_email(token: Annotated[str, Depends(auth_scheme)]) -> str:
         )
 
 
-async def get_user(mila_email: Annotated[str, Depends(get_email)]) -> User:
+def get_user(mila_email: Annotated[str, Depends(get_email)]) -> User:
     user = _get_user(mila_cluster_username=mila_email)
     if user is not None:
         if user.mila.active:
@@ -55,6 +58,17 @@ async def get_user(mila_email: Annotated[str, Depends(get_email)]) -> User:
     )
 
 
-async def get_permissions(user: Annotated[User, Depends(get_user)]):
-    # TODO
-    pass
+class Permissions(BaseModel):
+    # cluster_name -> list[usernames]
+    detail: dict[str, list[str]] = field(default_factory=dict)
+    aggregate: dict[str, list[str]] = field(default_factory=dict)
+
+
+async def get_permissions(user: Annotated[User, Depends(get_user)]) -> Permissions:
+    detailed = {}
+    if user.mila.active:
+        detailed["mila"] = [user.mila.username]
+    if user.drac and user.drac.active:
+        for cluster_name in config().clusters.keys():
+            detailed[cluster_name] = [user.drac.username]
+    return Permissions(detail=detailed)
