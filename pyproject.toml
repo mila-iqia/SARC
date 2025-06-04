@@ -72,7 +72,7 @@ default-groups = [
 ]
 
 [tool.uv.sources]
-iguane = { git = "https://github.com/mila-iqia/IGUANE.git", rev = "cd533d9b04434df5ff0497aa4880cdd4bc26cdf7" }
+iguane = { git = "https://github.com/mila-iqia/IGUANE.git", rev = "25621850233a6ceec06232204414436d35133635" }
 
 [tool.pytest_env]
 TQDM_DISABLE = "1"
