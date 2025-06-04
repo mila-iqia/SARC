@@ -27,7 +27,7 @@ Found 2 job(s):
     "submit_time": "2023-02-15T01:00:00-05:00",
     "start_time": "2023-02-15T01:01:00-05:00",
     "end_time": "2023-02-15T13:01:00-05:00",
-    "elapsed_time": 43200,
+    "elapsed_time": 43200.0,
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -84,7 +84,7 @@ Found 2 job(s):
     "submit_time": "2023-02-15T01:00:00-05:00",
     "start_time": "2023-02-15T01:01:00-05:00",
     "end_time": "2023-02-15T13:01:00-05:00",
-    "elapsed_time": 43200,
+    "elapsed_time": 43200.0,
     "requested": {
         "cpu": 4,
         "mem": 49152,

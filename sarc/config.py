@@ -101,20 +101,18 @@ class ClusterConfig:
 
         return harmonized_gpu
 
-    def harmonize_gpu_from_nodes(
-        self, nodes: list[str], gpu_type: str
-    ) -> Optional[str]:
+    def harmonize_gpu_from_nodes(self, nodes: list[str], gpu_type: str) -> str | None:
         """
         Get a GPU name from given multiple nodes and GPU type.
 
         Return None if GPU name cannot be inferred.
         """
         # Collect harmonized names for given nodes
-        # NB: If `nodes` is empty, we harmonize using `None`,
+        # NB: If `nodes` is empty, we harmonize using "",
         # so that harmonization function will check __DEFAULT__
         # harmonized names if available.
         harmonized_gpu_names = {
-            self.harmonize_gpu(nodename, gpu_type) for nodename in (nodes or [None])
+            self.harmonize_gpu(nodename, gpu_type) for nodename in (nodes or [""])
         }
         # If present, remove None from GPU names
         harmonized_gpu_names.discard(None)

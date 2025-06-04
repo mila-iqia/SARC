@@ -37,9 +37,9 @@ class SAcctScraper:
     def __init__(
         self,
         cluster: ClusterConfig,
-        day: datetime = None,
-        start: datetime = None,
-        end: datetime = None,
+        day: datetime | None = None,
+        start: datetime | None = None,
+        end: datetime | None = None,
     ):
         """Initialize a SAcctScraper.
 
@@ -56,16 +56,15 @@ class SAcctScraper:
                 up to time. To be used with `start`.
         """
         self.cluster = cluster
+        self.day = day
         if day is not None:
             assert start is None
             assert end is None
-            self.day = day
             self.start = datetime.combine(day, time.min)
             self.end = self.start + timedelta(days=1)
         else:
             assert start is not None
             assert end is not None
-            self.day = None
             self.start = start
             self.end = end
 
@@ -315,9 +314,9 @@ class SAcctScraper:
 @trace_decorator()
 def sacct_mongodb_import(
     cluster: ClusterConfig,
-    day: Optional[datetime],
-    start: datetime = None,
-    end: datetime = None,
+    day: datetime | None,
+    start: datetime | None = None,
+    end: datetime | None = None,
 ) -> None:
     """Fetch sacct data and store it in MongoDB.
 

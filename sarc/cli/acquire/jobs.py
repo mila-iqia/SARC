@@ -90,7 +90,7 @@ class AcquireJobs:
 
     dates: list[str] = field(alias=["-d"], default_factory=list)
 
-    time_from: str = field(
+    time_from: str | None = field(
         alias=["-a"],
         default=None,
         help=(
@@ -101,7 +101,7 @@ class AcquireJobs:
         ),
     )
 
-    time_to: str = field(
+    time_to: str | None = field(
         alias=["-b"],
         default=None,
         help=(
@@ -113,8 +113,8 @@ class AcquireJobs:
     )
 
     def execute(self) -> int:
-        time_from = None
-        time_to = None
+        time_from: datetime | None = None
+        time_to: datetime | None = None
         if self.dates:
             if self.time_from or self.time_to:
                 logging.error(
@@ -140,6 +140,7 @@ class AcquireJobs:
         for cluster_name in self.cluster_names:
             try:
                 if time_from is not None:
+                    assert time_to is not None
                     with using_trace(
                         "AcquireJobs",
                         "acquire_cluster_data_from_time_interval",

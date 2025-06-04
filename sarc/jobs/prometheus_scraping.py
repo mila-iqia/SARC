@@ -34,9 +34,11 @@ def scrap_prometheus(
         f"Saving into mongodb collection '{collection.Meta.collection_name}'..."
     )
     job_args = {"cluster": cluster.name, "start": start, "end": end}
-    nb_jobs = count_jobs(**job_args)
+    nb_jobs = count_jobs(cluster=cluster.name, start=start, end=end)
     for entry in tqdm(
-        get_jobs(**job_args), total=nb_jobs, desc="get Prometheus metrics"
+        get_jobs(cluster=cluster.name, start=start, end=end),
+        total=nb_jobs,
+        desc="get Prometheus metrics",
     ):
         update_allocated_gpu_type_from_prometheus(cluster, entry)
         saved = entry.statistics(recompute=True, save=True) is not None
