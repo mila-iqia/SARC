@@ -4,12 +4,13 @@ Fetching and parsing code specific to DRAC clusters
 
 import re
 from datetime import datetime
+from typing import TypedDict
 
 from sarc.config import ClusterConfig
 from sarc.storage.diskusage import DiskUsage, DiskUsageGroup, DiskUsageUser
 
 
-def _parse_fraction(s):
+def _parse_fraction(s: str) -> str:
     """
     Something like
     0/2048k    971G/1000G   3626k/1025   791k/1005k
@@ -19,7 +20,7 @@ def _parse_fraction(s):
     return s
 
 
-def _parse_header_summary(L_lines: list[str]):
+def _parse_header_summary(L_lines: list[str]) -> list[dict[str, str]]:
     """
     beluga, cedar and graham format :
                         Description                Space           # of files
@@ -61,7 +62,15 @@ def _parse_header_summary(L_lines: list[str]):
     return L_results
 
 
-def _parse_body(L_lines: list[str], DLD_results=None):
+D_results_type = TypedDict(
+    "D_results_type", {"username": str, "nbr_files": int, "size": str}
+)
+type ParseResult = dict[str, list[D_results_type]]
+
+
+def _parse_body(
+    L_lines: list[str], DLD_results: ParseResult | None = None
+) -> ParseResult:
     """
     Breakdown for project def-bengioy (Last update: 2022-10-25 14:01:28)
             User      File count                 Size             Location
@@ -77,8 +86,8 @@ def _parse_body(L_lines: list[str], DLD_results=None):
         DLD_results = {}
     # DLD_results indexed by project name, contains a list of dict entries per user
 
-    project = None
-    LD_results = []
+    project: str | None = None
+    LD_results: list[D_results_type] = []
     inside_segment = False
     for n, line in enumerate(L_lines):
         if not inside_segment and re.match(
@@ -116,7 +125,9 @@ def _parse_body(L_lines: list[str], DLD_results=None):
     return DLD_results
 
 
-def parse_diskusage_report(L_lines: list[str]):
+def parse_diskusage_report(
+    L_lines: list[str],
+) -> tuple[list[dict[str, str]], ParseResult]:
     """
     Parses the output of fetch_diskusage_report
     """
@@ -125,7 +136,7 @@ def parse_diskusage_report(L_lines: list[str]):
     return header, body
 
 
-def _fetch_diskusage_report(cluster: ClusterConfig):
+def _fetch_diskusage_report(cluster: ClusterConfig) -> list[str]:
     """
         Get the output of the command diskusage_report --project --all_users on the wanted cluster
 
@@ -164,7 +175,9 @@ def _fetch_diskusage_report(cluster: ClusterConfig):
     return results.stdout.split("\n")  # break this long string into a list of lines
 
 
-def convert_parsed_report_to_diskusage(cluster_name, parsed_report):
+def convert_parsed_report_to_diskusage(
+    cluster_name: str, parsed_report: ParseResult
+) -> DiskUsage:
     """
     Converts a parsed report to the proper DiskUsage object
     """
@@ -176,22 +189,21 @@ def convert_parsed_report_to_diskusage(cluster_name, parsed_report):
                 DiskUsageUser(
                     user=user["username"],
                     nbr_files=user["nbr_files"],
-                    size=user["size"],
+                    size=user["size"],  # type: ignore
                 )
             )
         groups.append(DiskUsageGroup(group_name=group_name, users=users))
 
     # timestamp will be set to 00:00 UTC automatically in ClusterDiskUsageRepository.add
-    return DiskUsage(
-        cluster_name=cluster_name, groups=groups, timestamp=datetime.utcnow()
-    )
+    return DiskUsage(cluster_name=cluster_name, groups=groups, timestamp=datetime.now())
 
 
-def fetch_diskusage_report(cluster: ClusterConfig):
+def fetch_diskusage_report(cluster: ClusterConfig) -> DiskUsage:
     report = _fetch_diskusage_report(cluster)
 
     _, body = parse_diskusage_report(report)
 
+    assert cluster.name is not None
     du = convert_parsed_report_to_diskusage(cluster.name, body)
 
     return du

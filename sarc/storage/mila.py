@@ -3,7 +3,10 @@ Fetching and parsing code specific to the mila cluster
 """
 
 from datetime import datetime
+from typing import cast
 
+from fabric import Connection
+from pydantic import ByteSize
 from tqdm import tqdm
 
 from sarc.client.users.api import get_users
@@ -13,8 +16,8 @@ from sarc.storage.diskusage import DiskUsage, DiskUsageGroup, DiskUsageUser
 beegfs_header = "name,id,size,hard,files,hard"
 
 
-def parse_beegfs_csv(output):
-    documents = []
+def parse_beegfs_csv(output: str) -> DiskUsageGroup:
+    documents: list[DiskUsageUser] = []
 
     started = False
     # find header
@@ -25,7 +28,11 @@ def parse_beegfs_csv(output):
 
         if started:
             name, _, size, _, files, _ = line.split(",")
-            documents.append(DiskUsageUser(user=name, nbr_files=files, size=size))
+            documents.append(
+                DiskUsageUser(
+                    user=name, nbr_files=int(files), size=cast(ByteSize, size)
+                )
+            )
 
     if len(documents) < 1:
         print("Beegfs output was empty")
@@ -33,8 +40,10 @@ def parse_beegfs_csv(output):
     return DiskUsageGroup(group_name="mila", users=documents)
 
 
-def _fetch_diskusage_report(connection, command, retries):
-    errors = []
+def _fetch_diskusage_report(
+    connection: Connection, command: str, retries: int
+) -> tuple[str | None, list[Exception]]:
+    errors: list[Exception] = []
 
     for _ in range(retries):
         try:
@@ -48,7 +57,7 @@ def _fetch_diskusage_report(connection, command, retries):
     return None, errors
 
 
-def fetch_diskusage_report(cluster: ClusterConfig, retries: int = 3):
+def fetch_diskusage_report(cluster: ClusterConfig, retries: int = 3) -> DiskUsage:
     """Get the output of the command beegfs-ctl on the wanted cluster
 
     Notes
@@ -70,6 +79,7 @@ def fetch_diskusage_report(cluster: ClusterConfig, retries: int = 3):
 
     """
     cmd = cluster.diskusage_report_command
+    assert cmd is not None  # the code would crash if cmd is None
 
     users = get_users()
     assert len(users) > 0
@@ -101,8 +111,10 @@ def fetch_diskusage_report(cluster: ClusterConfig, retries: int = 3):
     print(f"Failures: {len(failures)}")
     print(f"    Details: {failures}")
 
+    assert cluster.name is not None
+
     return DiskUsage(
         cluster_name=cluster.name,
         groups=[DiskUsageGroup(group_name="default", users=usage)],
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(),
     )

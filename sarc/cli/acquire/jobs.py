@@ -17,7 +17,7 @@ def _str_to_dt(dt_str: str) -> datetime:
     return datetime.strptime(dt_str, "%Y-%m-%d")
 
 
-def parse_dates(dates: list[str], cluster_name: str) -> list[(datetime, bool)]:
+def parse_dates(dates: list[str], cluster_name: str) -> list[tuple[datetime, bool]]:
     parsed_dates = []  # return values are tuples (date, is_auto)
     for date in dates:
         if date == "auto":
