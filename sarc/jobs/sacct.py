@@ -315,19 +315,24 @@ def update_allocated_gpu_type(cluster: ClusterConfig, entry: SlurmJob) -> Option
         if node_gpu_mapping:
             node_to_gpu = node_gpu_mapping.node_to_gpu
             gpu_types = {
-                node_to_gpu[nodename]
-                for nodename in entry.nodes
-                if nodename in node_to_gpu
+                gpu for nodename in entry.nodes for gpu in node_to_gpu.get(nodename, ())
             }
-            # We should not have more than 1 GPU type per job.
-            assert len(gpu_types) <= 1
-            if gpu_types:
+            # We infer gpu_type only if we found 1 GPU for this job.
+            if len(gpu_types) == 1:
                 gpu_type = gpu_types.pop()
+            else:
+                # Otherwise, we take current value in entry.allocated.gpu_type.
+                # If value is not None, it could be harmonized below.
+                gpu_type = entry.allocated.gpu_type
 
     # If we found a GPU type, try to infer descriptive GPU name
     if gpu_type is not None:
+        # NB: If job doesn't have nodes, we harmonize using `None`,
+        # so that harmonization function will check __DEFAULT__
+        # harmonized names if available.
         harmonized_gpu_names = {
-            cluster.harmonize_gpu(nodename, gpu_type) for nodename in entry.nodes
+            cluster.harmonize_gpu(nodename, gpu_type)
+            for nodename in (entry.nodes or [None])
         }
         # If present, remove None from GPU names
         harmonized_gpu_names.discard(None)

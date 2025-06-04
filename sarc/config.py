@@ -21,7 +21,7 @@ UTC = zoneinfo.ZoneInfo("UTC")
 TZLOCAL = zoneinfo.ZoneInfo(tzlocal.get_localzone_name())
 
 
-MIG_FLAG = "__MIG__"
+MIG_FLAG = "__MIG_FLAG__"
 DEFAULTS_FLAG = "__DEFAULTS__"
 
 
@@ -45,8 +45,6 @@ class ClusterConfig:
     duc_storage_command: str | None = None
     diskusage_report_command: str | None = None
     start_date: str = "2022-04-01"
-    rgu_start_date: str | None = None
-    gpu_to_rgu_billing: Path | None = None
     slurm_conf_host_path: Path = Path("/etc/slurm/slurm.conf")
 
     # Tell if billing (in job's requested|allocated field) is number of GPUs (True) or RGU (False)

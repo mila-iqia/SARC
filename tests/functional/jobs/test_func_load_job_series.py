@@ -159,6 +159,28 @@ def test_load_job_series_with_users(file_regression):
 
 
 @pytest.mark.freeze_time(MOCK_TIME)
+@pytest.mark.usefixtures("read_only_db_with_users", "client_mode", "tzlocal_is_mtl")
+def test_load_job_series_without_user_column(file_regression):
+    """Test job to user mapping when data frame does not contain `user` column.
+
+    If `user` column is not available, one can't map job to user,
+    then users column should not be added to frame.
+    """
+    # Check we have users in database
+    assert len(get_users()) == 3
+    # But load job series only with columns `job_id` and `cluster_name`, ie. without column `user`
+    data_frame = load_job_series(fields=["job_id", "cluster_name"])
+    # So, we won't have users columns in data frame
+    expected_columns = sorted(["job_id", "cluster_name"])
+    assert sorted(data_frame.keys().tolist()) == expected_columns
+
+    str_view = data_frame[["job_id", "cluster_name"]].to_markdown()
+    file_regression.check(
+        f"Found 4 users and {data_frame.shape[0]} job(s):\n\n{str_view}"
+    )
+
+
+@pytest.mark.freeze_time(MOCK_TIME)
 @pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
 @pytest.mark.parametrize("params", parameters.values(), ids=parameters.keys())
 def test_load_job_series(params, file_regression, captrace):
