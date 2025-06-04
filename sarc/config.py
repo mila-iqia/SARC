@@ -108,11 +108,11 @@ class ClusterConfig:
         Return None if GPU name cannot be inferred.
         """
         # Collect harmonized names for given nodes
-        # NB: If `nodes` is empty, we harmonize using `None`,
+        # NB: If `nodes` is empty, we harmonize using "",
         # so that harmonization function will check __DEFAULT__
         # harmonized names if available.
         harmonized_gpu_names = {
-            self.harmonize_gpu(nodename, gpu_type) for nodename in (nodes or [None])
+            self.harmonize_gpu(nodename, gpu_type) for nodename in (nodes or [""])
         }
         # If present, remove None from GPU names
         harmonized_gpu_names.discard(None)
