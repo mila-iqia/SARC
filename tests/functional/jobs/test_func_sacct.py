@@ -169,7 +169,9 @@ def test_parse_json_job(json_jobs, scraper, file_regression):
     indirect=True,
 )
 def test_parse_malformed_jobs(sacct_json, scraper, captrace):
-    scraper.get_raw.save(value_to_save=json.loads(sacct_json))
+    scraper.get_raw._save_for_key(
+        key=scraper.get_raw.key(), value=json.loads(sacct_json)
+    )
     assert list(scraper) == []
     spans = captrace.get_finished_spans()
     assert len(spans) > 0
@@ -192,7 +194,9 @@ def test_parse_malformed_jobs(sacct_json, scraper, captrace):
     indirect=True,
 )
 def test_parse_no_group_jobs(sacct_json, scraper, caplog):
-    scraper.get_raw.save(value_to_save=json.loads(sacct_json))
+    scraper.get_raw._save_for_key(
+        key=scraper.get_raw.key(), value=json.loads(sacct_json)
+    )
     with caplog.at_level("DEBUG"):
         assert list(scraper) == []
     assert 'Skipping job with group "None": 1' in caplog.text
@@ -205,7 +209,9 @@ def test_parse_no_group_jobs(sacct_json, scraper, caplog):
     indirect=True,
 )
 def test_scrape_lost_job_on_wrong_cluster(sacct_json, scraper, caplog):
-    scraper.get_raw.save(value_to_save=json.loads(sacct_json))
+    scraper.get_raw._save_for_key(
+        key=scraper.get_raw.key(), value=json.loads(sacct_json)
+    )
     with caplog.at_level("WARNING"):
         jobs = list(scraper)
 
@@ -229,7 +235,11 @@ def test_scraper_with_cache(scraper, sacct_json, file_regression):
 
     scraper.get_raw.cache_dir.mkdir(parents=True, exist_ok=True)
 
-    with open(scraper.get_raw.cache_path(), "w") as f:
+    cache_path = scraper.get_raw.cache_dir / scraper.get_raw.key().format(
+        time=datetime.now()
+    )
+
+    with open(cache_path, "w") as f:
         f.write(sacct_json)
 
     jobs = list(scraper)
@@ -249,7 +259,11 @@ def test_scraper_with_malformed_cache(test_config, remote, scraper, caplog):
 
     scraper.get_raw.cache_dir.mkdir(parents=True, exist_ok=True)
 
-    with open(scraper.get_raw.cache_path(), "w") as f:
+    cache_path = scraper.get_raw.cache_dir / scraper.get_raw.key().format(
+        time=datetime.now()
+    )
+
+    with open(cache_path, "w") as f:
         f.write("I am malformed!! :'(")
 
     channel = remote.expect(
@@ -1048,7 +1062,11 @@ def test_cli_ignore_stats(
     print(scraper.get_raw.cache_dir)
     scraper.get_raw.cache_dir.mkdir(parents=True, exist_ok=True)
 
-    with open(scraper.get_raw.cache_path(), "w") as f:
+    cache_path = scraper.get_raw.cache_dir / scraper.get_raw.key().format(
+        time=datetime.now()
+    )
+
+    with open(cache_path, "w") as f:
         f.write(sacct_json)
 
     def mock_compute_job_statistics(job):
@@ -1096,6 +1114,8 @@ def test_cli_ignore_stats(
 )
 def test_parse_sacct_slurm_versions(sacct_outputs, scraper):
     file = Path(__file__).parent / "sacct_outputs" / sacct_outputs
-    scraper.get_raw.save(value_to_save=json.load(open(file, "r", encoding="utf8")))
+    scraper.get_raw._save_for_key(
+        key=scraper.get_raw.key(), value=json.load(open(file, "r", encoding="utf8"))
+    )
     jobs = list(scraper)
     assert len(jobs) == 1

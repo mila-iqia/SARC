@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-import pickle
 import re
 from contextvars import ContextVar
 from dataclasses import dataclass, field
@@ -11,25 +10,42 @@ from datetime import datetime, timedelta
 from enum import Enum
 from functools import partial, wraps
 from pathlib import Path
-from typing import Callable, Optional
+from typing import (
+    IO,
+    Any,
+    Callable,
+    ClassVar,
+    Literal,
+    Optional,
+    Protocol,
+    overload,
+)
 
 from .config import config
 
-pickle.read_flags = "rb"
-pickle.write_flags = "wb"
+
+class FormatterProto[T](Protocol):
+    read_flags: ClassVar[str]
+    write_flags: ClassVar[str]
+
+    @staticmethod
+    def load(fp: IO[Any]) -> T: ...
+
+    @staticmethod
+    def dump(obj: T, fp: IO[Any]) -> None: ...
 
 
-class plaintext:
+class JSONFormatter[T](FormatterProto[T]):
     read_flags = "r"
     write_flags = "w"
 
     @staticmethod
-    def load(fp):
-        return fp.read()
+    def load(fp: IO[Any]) -> T:
+        return json.load(fp)
 
     @staticmethod
-    def dump(obj, fp):
-        fp.write(obj)
+    def dump(obj: T, fp: IO[Any]) -> None:
+        json.dump(obj, fp)
 
 
 class CacheException(Exception):
@@ -37,13 +53,13 @@ class CacheException(Exception):
 
 
 @dataclass
-class CachedResult:
+class CachedResult[T]:
     """Represents a result computed at some time."""
 
     # Cached value
-    value: object = None
+    value: T
     # Date at which the value was produced
-    issued: datetime = None
+    issued: datetime
 
 
 _time_format = "%Y-%m-%d-%H-%M-%S"
@@ -61,7 +77,9 @@ class CachePolicy(Enum):
 
 
 # Context var to store cache policy got from env var SARC_CACHE
-cache_policy_var = ContextVar("cache_policy_var", default=None)
+cache_policy_var: ContextVar[CachePolicy | None] = ContextVar(
+    "cache_policy_var", default=None
+)
 
 
 def _cache_policy_from_env() -> CachePolicy:
@@ -78,52 +96,33 @@ def _cache_policy_from_env() -> CachePolicy:
     return policy
 
 
-@dataclass
-class CachedFunction:  # pylint: disable=too-many-instance-attributes
-    fn: Callable
-    formatter: object = json
-    key: Optional[Callable] = None
-    subdirectory: Optional[str] = None
-    validity: timedelta | Callable[..., timedelta] | bool = True
+@dataclass(kw_only=True)
+class CachedFunction[**P, R]:  # pylint: disable=too-many-instance-attributes
+    fn: Callable[P, R]
+    formatter: type[FormatterProto[R]] = JSONFormatter[R]
+    key: Callable[P, str | None]
+    subdirectory: str
+    validity: timedelta | Callable[P, timedelta] | Literal[True] = True
     on_disk: bool = True
     live: bool = False
     cache_root: Optional[Path] = None
-    live_cache: dict = field(default_factory=dict)
+    live_cache: dict[tuple[Path | None, str], CachedResult[R]] = field(
+        default_factory=dict
+    )
 
     def __post_init__(self):
-        self.subdirectory = self.subdirectory or self.fn.__qualname__
         self.logger = logging.getLogger(self.fn.__module__)
-        self.key = self.key or self.default_key
         self.name = self.fn.__qualname__
 
-    def default_key(self, *_, **__):
-        return "{time}.json"
-
     @property
-    def cache_dir(self):
+    def cache_dir(self) -> Path | None:
         """Return the cache directory."""
         root = self.cache_root or config().cache
         return root and (root / self.subdirectory)
 
-    def cache_path(self, *args, at_time=None, **kwargs):
-        """Cache path for the result of the call for given args and kwargs."""
-        key = self.key(*args, **kwargs)
-        return self.cache_path_for_key(key, at_time)
-
-    def cache_path_for_key(self, key, at_time=None):
-        """Cache path for the given key."""
-        at_time = at_time or datetime.now()
-        return self.cache_dir / key.format(time=at_time.strftime(_time_format))
-
-    def save(self, *args, value_to_save, at_time=None, **kwargs):
-        """Save a value in cache for the given args and kwargs.
-
-        This does not execute the function.
-        """
-        key = self.key(*args, **kwargs)
-        return self.save_for_key(key, value_to_save, at_time=at_time)
-
-    def save_for_key(self, key, value, at_time=None):
+    def _save_for_key(
+        self, key: str, value: R, at_time: datetime | None = None
+    ) -> None:
         """Save a value in cache for the given key."""
         at_time = at_time or datetime.now()
         cdir = self.cache_dir
@@ -135,17 +134,19 @@ class CachedFunction:  # pylint: disable=too-many-instance-attributes
         if cdir and self.on_disk:
             cdir.mkdir(parents=True, exist_ok=True)
             output_file = cdir / key.format(time=at_time.strftime(_time_format))
-            flags = getattr(self.formatter, "write_flags", "w")
-            encoding = None if "b" in flags else "utf-8"
-            with open(output_file, flags, encoding=encoding) as output_fp:
+            encoding = None if "b" in self.formatter.write_flags else "utf-8"
+            with open(
+                output_file, self.formatter.write_flags, encoding=encoding
+            ) as output_fp:
                 self.formatter.dump(value, output_fp)
             self.logger.debug(f"{self.name}(...) saved to cache file '{output_file}'")
 
-    def read(self, *args, at_time=None, **kwargs):
-        key = self.key(*args, **kwargs)
-        return self.read_for_key(key, at_time=at_time)
-
-    def read_for_key(self, key_value, valid=True, at_time=None):
+    def _read_for_key(
+        self,
+        key_value: str,
+        valid: timedelta | Literal[True] = True,
+        at_time: datetime | None = None,
+    ) -> R:
         at_time = at_time or datetime.now()
         timestring = at_time.strftime(_time_format)
         cdir = self.cache_dir
@@ -171,18 +172,22 @@ class CachedFunction:  # pylint: disable=too-many-instance-attributes
                     string=candidate.name,
                     pattern=key_value.format(time=f"({_time_regexp})"),
                 )
+                if m is None:
+                    raise CacheException(
+                        f"Could not parse cache file name '{candidate}'"
+                    )
                 candidate_time = (
-                    None
+                    datetime.now()
                     if valid is True
                     else datetime.strptime(m.group(1), _time_format)
                 )
                 if valid is True or at_time <= candidate_time + valid:
-                    flags = getattr(self.formatter, "read_flags", "r")
-                    encoding = None if "b" in flags else "utf-8"
-                    with open(candidate, flags, encoding=encoding) as candidate_fp:
+                    encoding = None if "b" in self.formatter.read_flags else "utf-8"
+                    with open(
+                        candidate, self.formatter.read_flags, encoding=encoding
+                    ) as candidate_fp:
                         try:
                             value = self.formatter.load(candidate_fp)
-                            success = True
                         except (  # pylint: disable=broad-exception-caught
                             Exception
                         ) as exc:
@@ -190,17 +195,18 @@ class CachedFunction:  # pylint: disable=too-many-instance-attributes
                                 f"Could not load malformed cache file: {candidate}",
                                 exc_info=exc,
                             )
-                            success = False
-                    if success:
-                        if self.live:
-                            self.live_cache[live_key] = CachedResult(
-                                issued=candidate_time,
-                                value=value,
-                            )
-                        self.logger.debug(
-                            f"{self.name}(...) read from cache file '{candidate}'"
+                            raise CacheException(
+                                f"Could not load malformed cache file: {candidate}"
+                            ) from exc
+                    if self.live:
+                        self.live_cache[live_key] = CachedResult(
+                            issued=candidate_time,
+                            value=value,
                         )
-                        return value
+                    self.logger.debug(
+                        f"{self.name}(...) read from cache file '{candidate}'"
+                    )
+                    return value
 
         raise CacheException(f"There is no cached result for key `{key_value}`")
 
@@ -230,11 +236,11 @@ class CachedFunction:  # pylint: disable=too-many-instance-attributes
     def __call__(
         self,
         *args,
-        cache_policy=CachePolicy.use,
-        save_cache=None,
-        at_time=None,
+        cache_policy: CachePolicy | None = CachePolicy.use,
+        save_cache: bool | None = None,
+        at_time: datetime | None = None,
         **kwargs,
-    ):
+    ) -> R:
         # If cache_policy is None,
         # we infer if from environment variable
         # SARC_CACHE.
@@ -259,16 +265,18 @@ class CachedFunction:  # pylint: disable=too-many-instance-attributes
         cached_value = None
         has_cache = False
         if use_cache:
+            # We know this is true, but this is just to reassure the type system
+            assert key_value is not None
             try:
                 if cache_policy is CachePolicy.always or self.validity is True:
-                    valid = True
+                    valid: timedelta | Literal[True] = True
                 else:
                     assert "{time}" in key_value
                     if isinstance(self.validity, timedelta):
                         valid = self.validity
                     else:
                         valid = self.validity(*args, **kwargs)
-                cached_value = self.read_for_key(
+                cached_value = self._read_for_key(
                     key_value, valid=valid, at_time=at_time
                 )
                 has_cache = True
@@ -289,7 +297,7 @@ class CachedFunction:  # pylint: disable=too-many-instance-attributes
             else:
                 # Live result != cached result. Raise an exception.
                 # Try to pretty print diff if we have JSON data.
-                if self.formatter is json:
+                if self.formatter is JSONFormatter:
                     import difflib
 
                     d1_str = json.dumps(cached_value, indent=1, sort_keys=True)
@@ -324,21 +332,75 @@ class CachedFunction:  # pylint: disable=too-many-instance-attributes
             save_cache = cache_policy is not CachePolicy.ignore
 
         if save_cache:
-            self.save_for_key(key_value, value, at_time=at_time)
+            # Once again, we know this is true, but this reassures the type system.
+            assert key_value is not None
+            self._save_for_key(key_value, value, at_time=at_time)
 
         return value
 
 
-def with_cache(
-    fn=None,
-    formatter=json,
-    key=None,
-    subdirectory=None,
-    validity=True,
-    on_disk=True,
-    live=False,
-    cache_root=None,
-):
+def default_key(*_, **__) -> str:
+    return "{time}.json"
+
+
+def make_cached_function[**P, R](
+    fn: Callable[P, R],
+    formatter: type[FormatterProto[R]],
+    key: Callable[P, str] | None,
+    subdirectory: str | None,
+    validity: timedelta | Callable[P, timedelta] | Literal[True],
+    on_disk: bool,
+    live: bool,
+    cache_root: Path | None,
+) -> CachedFunction[P, R]:
+    return CachedFunction(
+        fn=fn,
+        formatter=formatter,
+        key=key or default_key,
+        subdirectory=subdirectory or fn.__qualname__,
+        validity=validity,
+        on_disk=on_disk,
+        live=live,
+        cache_root=cache_root,
+    )
+
+
+@overload
+def with_cache[**P1, R1](
+    fn: Callable[P1, R1],
+    formatter: type[FormatterProto[R1]] = JSONFormatter,
+    key: Callable[P1, str] | None = None,
+    subdirectory: str | None = None,
+    validity: timedelta | Callable[P1, timedelta] | Literal[True] = True,
+    on_disk: bool = True,
+    live: bool = False,
+    cache_root: Path | None = None,
+) -> CachedFunction[P1, R1]: ...
+
+
+@overload
+def with_cache[**P2, R2](
+    fn: None = None,
+    formatter: type[FormatterProto[R2]] = JSONFormatter,
+    key: Callable[P2, str] | None = None,
+    subdirectory: str | None = None,
+    validity: timedelta | Callable[P2, timedelta] | Literal[True] = True,
+    on_disk: bool = True,
+    live: bool = False,
+    cache_root: Path | None = None,
+) -> Callable[[Callable[P2, R2]], CachedFunction[P2, R2]]: ...
+
+
+def with_cache[**P, R](
+    fn: Callable[P, R] | None = None,
+    formatter: type[FormatterProto[R]] = JSONFormatter,
+    key: Callable[P, str] | None = None,
+    subdirectory: str | None = None,
+    validity: timedelta | Callable[P, timedelta] | Literal[True] = True,
+    on_disk: bool = True,
+    live: bool = False,
+    cache_root: Path | None = None,
+) -> CachedFunction[P, R] | Callable[[Callable[P, R]], CachedFunction[P, R]]:
     """Cache the output value of the function in a file.
 
     Arguments:
@@ -378,7 +440,7 @@ def with_cache(
         * at_time (default: now): The time at which to evaluate the request.
     """
     deco = partial(
-        CachedFunction,
+        make_cached_function,
         formatter=formatter,
         key=key,
         subdirectory=subdirectory,
@@ -390,4 +452,4 @@ def with_cache(
     if fn is None:
         return deco
     else:
-        return wraps(fn)(deco(fn))
+        return wraps(fn)(deco(fn=fn))  # type: ignore

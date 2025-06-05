@@ -9,7 +9,7 @@ from typing import Dict, List, Optional
 from hostlist import expand_hostlist
 from simple_parsing import field
 
-from sarc.cache import CachePolicy, with_cache
+from sarc.cache import CachePolicy, FormatterProto, with_cache
 from sarc.client.gpumetrics import _gpu_billing_collection
 from sarc.config import ClusterConfig, config
 from sarc.jobs.node_gpu_mapping import _node_gpu_mapping_collection
@@ -48,19 +48,22 @@ class AcquireSlurmConfig:
         return 0
 
 
-class FileContent:
+class FileContent(FormatterProto[str]):
     """
     Formatter for slurm conf file cache.
     Just read and write entire text content from file.
     """
 
-    @classmethod
-    def load(cls, file) -> str:
-        return file.read()
+    read_flags = "r"
+    write_flags = "w"
 
-    @classmethod
-    def dump(cls, value: str, output_file):
-        output_file.write(value)
+    @staticmethod
+    def load(fp: io.TextIOBase) -> str:
+        return fp.read()
+
+    @staticmethod
+    def dump(obj: str, fp: io.TextIOBase):
+        fp.write(obj)
 
 
 class SlurmConfigParser:
