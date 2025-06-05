@@ -72,3 +72,6 @@ async def get_permissions(user: Annotated[User, Depends(get_user)]) -> Permissio
         for cluster_name in config().clusters.keys():
             detailed[cluster_name] = [user.drac.username]
     return Permissions(detail=detailed)
+
+
+PermsType = Annotated[Permissions, Depends(get_permissions)]
