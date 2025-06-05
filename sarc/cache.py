@@ -100,46 +100,29 @@ def _cache_policy_from_env() -> CachePolicy:
 class CachedFunction[**P, R]:  # pylint: disable=too-many-instance-attributes
     fn: Callable[P, R]
     formatter: type[FormatterProto[R]] = JSONFormatter[R]
-    key: Callable[P, str]
+    key: Callable[P, str | None]
     subdirectory: str
     validity: timedelta | Callable[P, timedelta] | Literal[True] = True
     on_disk: bool = True
     live: bool = False
     cache_root: Optional[Path] = None
-    live_cache: dict[tuple[Path, str], CachedResult[R]] = field(default_factory=dict)
+    live_cache: dict[tuple[Path | None, str], CachedResult[R]] = field(
+        default_factory=dict
+    )
 
     def __post_init__(self):
         self.logger = logging.getLogger(self.fn.__module__)
         self.name = self.fn.__qualname__
 
     @property
-    def cache_dir(self) -> Path:
+    def cache_dir(self) -> Path | None:
         """Return the cache directory."""
         root = self.cache_root or config().cache
-        assert root is not None
         return root and (root / self.subdirectory)
 
-    def cache_path(self, *args, at_time: datetime | None = None, **kwargs) -> Path:
-        """Cache path for the result of the call for given args and kwargs."""
-        key = self.key(*args, **kwargs)
-        return self.cache_path_for_key(key, at_time)
-
-    def cache_path_for_key(self, key: str, at_time: datetime | None = None) -> Path:
-        """Cache path for the given key."""
-        at_time = at_time or datetime.now()
-        return self.cache_dir / key.format(time=at_time.strftime(_time_format))
-
-    def save(
-        self, *args, value_to_save: R, at_time: datetime | None = None, **kwargs
+    def _save_for_key(
+        self, key: str, value: R, at_time: datetime | None = None
     ) -> None:
-        """Save a value in cache for the given args and kwargs.
-
-        This does not execute the function.
-        """
-        key = self.key(*args, **kwargs)
-        self.save_for_key(key, value_to_save, at_time=at_time)
-
-    def save_for_key(self, key: str, value: R, at_time: datetime | None = None) -> None:
         """Save a value in cache for the given key."""
         at_time = at_time or datetime.now()
         cdir = self.cache_dir
@@ -158,11 +141,7 @@ class CachedFunction[**P, R]:  # pylint: disable=too-many-instance-attributes
                 self.formatter.dump(value, output_fp)
             self.logger.debug(f"{self.name}(...) saved to cache file '{output_file}'")
 
-    def read(self, *args, at_time: datetime | None = None, **kwargs) -> R:
-        key = self.key(*args, **kwargs)
-        return self.read_for_key(key, at_time=at_time)
-
-    def read_for_key(
+    def _read_for_key(
         self,
         key_value: str,
         valid: timedelta | Literal[True] = True,
@@ -257,7 +236,7 @@ class CachedFunction[**P, R]:  # pylint: disable=too-many-instance-attributes
     def __call__(
         self,
         *args,
-        cache_policy: CachePolicy = CachePolicy.use,
+        cache_policy: CachePolicy | None = CachePolicy.use,
         save_cache: bool | None = None,
         at_time: datetime | None = None,
         **kwargs,
@@ -286,6 +265,8 @@ class CachedFunction[**P, R]:  # pylint: disable=too-many-instance-attributes
         cached_value = None
         has_cache = False
         if use_cache:
+            # We know this is true, but this is just to reassure the type system
+            assert key_value is not None
             try:
                 if cache_policy is CachePolicy.always or self.validity is True:
                     valid: timedelta | Literal[True] = True
@@ -295,7 +276,7 @@ class CachedFunction[**P, R]:  # pylint: disable=too-many-instance-attributes
                         valid = self.validity
                     else:
                         valid = self.validity(*args, **kwargs)
-                cached_value = self.read_for_key(
+                cached_value = self._read_for_key(
                     key_value, valid=valid, at_time=at_time
                 )
                 has_cache = True
@@ -316,7 +297,7 @@ class CachedFunction[**P, R]:  # pylint: disable=too-many-instance-attributes
             else:
                 # Live result != cached result. Raise an exception.
                 # Try to pretty print diff if we have JSON data.
-                if self.formatter is json:
+                if self.formatter is JSONFormatter:
                     import difflib
 
                     d1_str = json.dumps(cached_value, indent=1, sort_keys=True)
@@ -351,7 +332,9 @@ class CachedFunction[**P, R]:  # pylint: disable=too-many-instance-attributes
             save_cache = cache_policy is not CachePolicy.ignore
 
         if save_cache:
-            self.save_for_key(key_value, value, at_time=at_time)
+            # Once again, we know this is true, but this reassures the type system.
+            assert key_value is not None
+            self._save_for_key(key_value, value, at_time=at_time)
 
         return value
 

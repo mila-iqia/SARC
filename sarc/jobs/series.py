@@ -158,7 +158,7 @@ def _get_job_time_series_data_cache_key(
     max_points: int = 100,
     measure: str | None = None,
     aggregation: str = "total",
-):
+) -> str | None:
     metrics = [metric] if isinstance(metric, str) else sorted(metric)
     if (
         not metrics
