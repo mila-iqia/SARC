@@ -3,8 +3,8 @@ from __future__ import annotations
 import copy
 import itertools
 import logging
+from collections.abc import Generator
 from datetime import UTC, datetime, timedelta
-from typing import Generator
 
 import pandas as pd
 from prometheus_api_client.metric_range_df import MetricRangeDataFrame
@@ -29,7 +29,7 @@ def curate_label_argument(
 def generate_label_configs(
     node_id: None | str | list[str],
     cluster: None | str | list[str],
-) -> Generator[dict[str, str], None, None]:
+) -> Generator[dict[str, str]]:
     node_configs = curate_label_argument("instance", node_id)
     cluster_configs = curate_label_argument("cluster", cluster)
 
