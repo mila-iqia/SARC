@@ -77,22 +77,17 @@ def fill_db(db, with_users=False, with_clusters=False, job_patch=None):
 
 
 def create_db_configuration_fixture(
-    db_name=None,
     empty=False,
     with_users=False,
     with_clusters=False,
     job_patch=None,
-    scope="function",
 ):
-    @pytest.fixture(scope=scope)
+    @pytest.fixture(scope="function")
     def fixture(request):
-        if db_name is None:
-            m = hashlib.md5()
-            m.update(request.node.nodeid.encode())
-            dname = f"test-db-{m.hexdigest()}"
-        else:
-            dname = db_name
-        with custom_db_config(dname):
+        m = hashlib.md5()
+        m.update(request.node.nodeid.encode())
+        db_name = f"test-db-{m.hexdigest()}"
+        with custom_db_config(db_name):
             db = config().mongo.database_instance
             clear_db(db)
             if not empty:
@@ -102,41 +97,27 @@ def create_db_configuration_fixture(
                     with_clusters=with_clusters,
                     job_patch=job_patch,
                 )
-            yield dname
+            yield db_name
 
     return fixture
 
 
-empty_read_write_db_config_object = create_db_configuration_fixture(
-    empty=True,
-    scope="function",
-)
+empty_read_write_db_config_object = create_db_configuration_fixture(empty=True)
 
+read_write_db_config_object = create_db_configuration_fixture()
 
-read_write_db_config_object = create_db_configuration_fixture(
-    scope="function",
-)
-
-
-read_only_db_config_object = create_db_configuration_fixture(
-    scope="function",
-)
+read_only_db_config_object = create_db_configuration_fixture()
 
 read_only_db_with_many_cpu_jobs_config_object = create_db_configuration_fixture(
-    db_name="sarc-read-only-with-many-cpu-jobs-test",
-    scope="session",
     job_patch={
         "allocated": {"billing": 0, "cpu": 0, "gres_gpu": 0, "mem": 0, "node": 0},
         "requested": {"billing": 0, "cpu": 0, "gres_gpu": 0, "mem": 0, "node": 0},
-    },
+    }
 )
 
-
 read_only_db_with_users_config_object = create_db_configuration_fixture(
-    db_name="sarc-read-only-with-users-test",
     with_users=True,
     with_clusters=True,
-    scope="session",
 )
 
 
