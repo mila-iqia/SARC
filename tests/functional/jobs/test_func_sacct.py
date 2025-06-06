@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 import pytest
 from fabric.testing.base import Command, Session
-from opentelemetry.trace import Status, StatusCode, get_tracer
+from opentelemetry.trace import StatusCode
 
 from sarc.client.job import JobStatistics, get_jobs
 from sarc.config import MTL, PST, UTC, config
@@ -333,9 +333,6 @@ def test_stdout_message_before_json(
         ),
     )
 
-    # Import here so that config() is setup correctly when CLI is created.
-    import sarc.cli
-
     assert (
         cli_main(
             [
@@ -375,11 +372,6 @@ def test_get_gpu_type_from_prometheus(
             "utf-8"
         ),
     )
-
-    # Import here so that config() is setup correctly when CLI is created.
-    from prometheus_api_client import PrometheusConnect
-
-    import sarc.cli
 
     def mock_compute_job_statistics(job):
         mock_compute_job_statistics.called += 1
@@ -443,9 +435,6 @@ def test_get_gpu_type_without_prometheus(
             "utf-8"
         ),
     )
-
-    # Import here so that config() is setup correctly when CLI is created.
-    import sarc.cli
 
     # Save slurm config in cache.
     _save_slurm_conf(
@@ -527,9 +516,6 @@ def test_save_job(
         out=sacct_json.encode("utf-8"),
     )
 
-    # Import here so that config() is setup correctly when CLI is created.
-    import sarc.cli
-
     assert (
         cli_main(
             [
@@ -572,9 +558,6 @@ def test_update_job(
             for _ in range(2)
         ],
     )
-
-    # Import here so that config() is setup correctly when CLI is created.
-    import sarc.cli
 
     assert (
         cli_main(
@@ -648,9 +631,6 @@ def test_save_preempted_job(
         out=sacct_json.encode("utf-8"),
     )
 
-    # Import here so that config() is setup correctly when CLI is created.
-    import sarc.cli
-
     assert (
         cli_main(
             [
@@ -709,9 +689,6 @@ def test_multiple_dates(
             for job_id, job_submit_datetime in enumerate(datetimes)
         ],
     )
-
-    # Import here so that config() is setup correctly when CLI is created.
-    import sarc.cli
 
     assert (
         cli_main(
@@ -795,9 +772,6 @@ def test_multiple_clusters_and_dates(
             datetimes=datetimes,
         ),
     )
-
-    # Import here so that config() is setup correctly when CLI is created.
-    import sarc.cli
 
     assert (
         cli_main(
@@ -908,9 +882,6 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
             datetimes=datetimes,
         ),
     )
-
-    # Import here so that config() is setup correctly when CLI is created.
-    import sarc.cli
 
     assert (
         cli_main(

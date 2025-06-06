@@ -1,10 +1,7 @@
-import copy
 import json
 import tempfile
-from datetime import date
 from unittest.mock import patch
 
-import pandas as pd
 import pytest
 from sarc_mocks import fake_raw_ldap_data
 

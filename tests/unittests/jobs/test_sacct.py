@@ -2,7 +2,7 @@ from datetime import date, datetime, timedelta
 from os.path import isfile
 
 import pytest
-from fabric.testing.base import Command, MockRemote, Session
+from fabric.testing.base import Command
 
 from sarc.config import config
 from sarc.jobs.sacct import SAcctScraper
