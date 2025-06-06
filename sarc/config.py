@@ -9,7 +9,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field, fields
 from functools import cached_property
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, cast
+from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, cast, overload
 
 import gifnoc
 import tzlocal
@@ -235,9 +235,11 @@ gifnoc.set_sources("${envfile:SARC_CONFIG}")
 
 sarc_mode = ContextVar("sarc_mode", default=os.getenv("SARC_MODE", "client"))
 
+Modes = Literal["scraping", "client"]
+
 
 @contextmanager
-def using_sarc_mode(mode: Literal["scraping", "client"]):
+def using_sarc_mode(mode: Modes):
     token = sarc_mode.set(mode)
     try:
         yield
@@ -245,8 +247,24 @@ def using_sarc_mode(mode: Literal["scraping", "client"]):
         sarc_mode.reset(token)
 
 
-def config() -> Config | ClientConfig:
-    if sarc_mode.get() == "scraping":
+@overload
+def config(mode: Literal["scraping"]) -> Config: ...
+
+
+@overload
+def config(mode: Literal["client"]) -> ClientConfig: ...
+
+
+@overload
+def config(mode: None = None) -> Config | ClientConfig: ...
+
+
+def config(mode: Modes | None = None) -> Config | ClientConfig:
+    cur_mode = sarc_mode.get()
+    # If we request client mode and we are in scraping mode, that is fine.
+    if mode is "scraping" and cur_mode != "scraping":
+        raise ScrapingModeRequired()
+    if cur_mode == "scraping":
         return full_config
     else:
         accept = [f.name for f in fields(ClientConfig)]

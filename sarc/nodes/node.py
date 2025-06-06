@@ -9,7 +9,7 @@ from typing import Generator
 import pandas as pd
 from prometheus_api_client.metric_range_df import MetricRangeDataFrame
 
-from sarc.config import config
+from sarc.config import Config, config
 
 logger = logging.getLogger(__name__)
 
@@ -113,7 +113,7 @@ def query_prom(
 ) -> list | None:
     query = generate_custom_query(metric_name, label_config, start, end, running_window)
 
-    return config().clusters[cluster].prometheus.custom_query(query)
+    return config("scraping").clusters[cluster].prometheus.custom_query(query)
 
 
 def get_nodes_time_series(
