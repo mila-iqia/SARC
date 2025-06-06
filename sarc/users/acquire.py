@@ -109,7 +109,7 @@ def run(
 
         span.add_event("Loading matching config from file ...")
         with open(
-            cfg.account_matching.make_matches_config, "r", encoding="utf-8"
+            cfg.account_matching.make_matches_config, encoding="utf-8"
         ) as json_file:
             make_matches_config = json.load(json_file)
 

@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import Optional
 
 import pymongo
 from simple_parsing import choice
@@ -12,12 +11,12 @@ from sarc.storage.diskusage import ClusterDiskUsageRepository
 
 @dataclass
 class DbInit:
-    url: Optional[str]
-    database: Optional[str]
+    url: str | None
+    database: str | None
 
-    username: Optional[str]
-    password: Optional[str]
-    account: Optional[str] = choice("admin", "write", "read")
+    username: str | None
+    password: str | None
+    account: str | None = choice("admin", "write", "read")
 
     def execute(self) -> int:
         cfg = config()

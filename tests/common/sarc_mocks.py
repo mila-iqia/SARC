@@ -1,7 +1,6 @@
 from copy import deepcopy
 from datetime import date
 
-
 _membership_types = [
     # Student
     [

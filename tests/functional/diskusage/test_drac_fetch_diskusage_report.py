@@ -17,7 +17,7 @@ def test_drac_fetch_diskusage_report(test_config, remote, file_regression):
     cluster = test_config.clusters["hyrule"]
     raw_report = None
     with open(
-        Path(__file__).parent / "drac_reports/report_hyrule.txt", "r", encoding="utf-8"
+        Path(__file__).parent / "drac_reports/report_hyrule.txt", encoding="utf-8"
     ) as f:
         raw_report = f.read()
     assert raw_report
@@ -40,7 +40,7 @@ def test_drac_acquire_storages(test_config, remote, cli_main, file_regression):
     cluster = test_config.clusters["hyrule"]
     raw_report = None
     with open(
-        Path(__file__).parent / "drac_reports/report_hyrule.txt", "r", encoding="utf-8"
+        Path(__file__).parent / "drac_reports/report_hyrule.txt", encoding="utf-8"
     ) as f:
         raw_report = f.read()
     assert raw_report

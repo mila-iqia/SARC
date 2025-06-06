@@ -63,10 +63,8 @@ def get_jobs_dataframe(filename, start, end) -> pd.DataFrame:
             job.start_time = job.end_time - timedelta(seconds=job.elapsed_time)
 
             # Clip the job to the time range we are interested in.
-            if job.start_time < start:
-                job.start_time = start
-            if job.end_time > end:
-                job.end_time = end
+            job.start_time = max(job.start_time, start)
+            job.end_time = min(job.end_time, end)
             job.elapsed_time = (job.end_time - job.start_time).total_seconds()
 
             # We only care about jobs that actually ran.

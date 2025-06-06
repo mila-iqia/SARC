@@ -1,6 +1,6 @@
 import logging
+from collections.abc import Sequence
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Sequence, Union
 
 from sarc.client.series import compute_time_frames, load_job_series
 from sarc.config import MTL
@@ -22,12 +22,12 @@ class PrometheusStatInfo:
 
 # pylint: disable=too-many-branches
 def check_prometheus_stats_occurrences(
-    time_interval: Optional[timedelta] = timedelta(days=7),
+    time_interval: timedelta | None = timedelta(days=7),
     time_unit=timedelta(days=1),
-    minimum_runtime: Optional[timedelta] = timedelta(minutes=5),
-    cluster_names: Optional[List[str]] = None,
-    group_by_node: Union[bool, Sequence[str]] = ("mila",),
-    min_jobs_per_group: Optional[Union[int, Dict[str, int]]] = None,
+    minimum_runtime: timedelta | None = timedelta(minutes=5),
+    cluster_names: list[str] | None = None,
+    group_by_node: bool | Sequence[str] = ("mila",),
+    min_jobs_per_group: int | dict[str, int] | None = None,
     nb_stddev=2,
     with_gres_gpu=False,
     prometheus_stats=("cpu_utilization", "system_memory"),
@@ -204,13 +204,13 @@ def check_prometheus_stats_occurrences(
 
 
 def check_prometheus_stats_for_gpu_jobs(
-    time_interval: Optional[timedelta] = timedelta(days=7),
+    time_interval: timedelta | None = timedelta(days=7),
     time_unit=timedelta(days=1),
-    minimum_runtime: Optional[timedelta] = timedelta(minutes=5),
-    cluster_names: Optional[List[str]] = None,
+    minimum_runtime: timedelta | None = timedelta(minutes=5),
+    cluster_names: list[str] | None = None,
     # For GPU jobs, default behaviour is to group each cluster by nodes for checking.
-    group_by_node: Union[bool, Sequence[str]] = True,
-    min_jobs_per_group: Optional[Union[int, Dict[str, int]]] = None,
+    group_by_node: bool | Sequence[str] = True,
+    min_jobs_per_group: int | dict[str, int] | None = None,
     nb_stddev=2,
 ):
     """

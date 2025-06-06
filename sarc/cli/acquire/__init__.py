@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import Union
 
 from simple_parsing import subparsers
 
@@ -12,7 +11,7 @@ from sarc.cli.acquire.users import AcquireUsers
 
 @dataclass
 class Acquire:
-    command: Union[AcquireAllocations, AcquireJobs, AcquireStorages] = subparsers(
+    command: AcquireAllocations | AcquireJobs | AcquireStorages = subparsers(
         {
             "allocations": AcquireAllocations,
             "jobs": AcquireJobs,

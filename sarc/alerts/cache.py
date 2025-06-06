@@ -4,7 +4,6 @@ import inspect
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from functools import cached_property, wraps
-from typing import Optional
 
 from gifnoc.std import time
 from serieux import deserialize
@@ -26,10 +25,10 @@ class Timespan:
     duration: timedelta
 
     # Time offset between the end of the duration and time.now()
-    offset: Optional[timedelta] = timedelta(seconds=0)
+    offset: timedelta | None = timedelta(seconds=0)
 
     # How long a cached result for this timespan is valid (defaults to same as duration)
-    validity: Optional[timedelta] = None
+    validity: timedelta | None = None
 
     def __post_init__(self):
         if isinstance(self.duration, str):

@@ -88,26 +88,20 @@ build-backend = "hatchling.build"
 [tool.pytest]
 norecursedirs = "tests/common"
 
-[tool.pylint]
-ignore-paths = []
-disable = [
-    "no-self-argument",  # Pydantic validators don't have one
-    "too-few-public-methods",  # Triggered on Pydantic models
-    "import-outside-toplevel",  # These imports are useful to reduce loading times
-    "too-many-arguments",
-    "too-many-locals",
-    "too-many-positional-arguments",
-    "missing-module-docstring",
-    "missing-class-docstring",
-    "missing-function-docstring",
-    "invalid-name",
-    "no-else-return",  # Bad rule IMO (- OB)
-    "line-too-long",  # Black takes care of line length.
-    "logging-fstring-interpolation",
-    "duplicate-code",
-    "too-many-positional-arguments",
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "UP", "PL"]
+ignore = [
+  "E501", # line too long: we have ruff format
+  "W505", # doc line too long: we have ruff format
+  "PLW2901", # loop variable overwritten by assignment: why is this a problem?
+  "PLR0912", # too many branches: why not
+  "PLR0913", # too many function arguments: we need them
+  "PLR0915", # too many statements: no
+  "PLR2004", # magic value: why does assignment to a variable would make the code better?
 ]
-extension-pkg-whitelist = "pydantic"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["PL"]
 
 [[tool.mypy.overrides]]
 module = "sarc.alerts.*,sarc.account_matching.*,sarc.users.*,sarc.client.*,sarc.jobs.*,sarc.cli.*"

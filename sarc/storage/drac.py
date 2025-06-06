@@ -62,9 +62,12 @@ def _parse_header_summary(L_lines: list[str]) -> list[dict[str, str]]:
     return L_results
 
 
-D_results_type = TypedDict(
-    "D_results_type", {"username": str, "nbr_files": int, "size": str}
-)
+class D_results_type(TypedDict):
+    username: str
+    nbr_files: int
+    size: str
+
+
 type ParseResult = dict[str, list[D_results_type]]
 
 

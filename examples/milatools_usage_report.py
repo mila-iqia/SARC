@@ -19,11 +19,12 @@ import os
 import pickle
 import pprint
 import tempfile
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from logging import getLogger as get_logger
 from pathlib import Path
-from typing import Any, Iterable, TypedDict, TypeVar, Union
+from typing import Any, TypedDict, TypeGuard, TypeVar
 
 import matplotlib
 import matplotlib.axes
@@ -34,7 +35,6 @@ import pymongo
 import pymongo.collection
 import simple_parsing
 from pandas.core.indexes.datetimes import DatetimeIndex
-from typing_extensions import TypeGuard
 
 from sarc.client.job import _jobs_collection
 from sarc.config import MTL
@@ -84,7 +84,7 @@ def main():
     args: Args = parser.parse_args().args
     start_date = args.start_date
     if isinstance(start_date, str):
-        start_date = start_date = datetime.fromisoformat(start_date).astimezone(tz=MTL)
+        start_date = datetime.fromisoformat(start_date).astimezone(tz=MTL)
     end_date = args.end_date
     if isinstance(end_date, str):
         end_date = datetime.fromisoformat(end_date).astimezone(tz=MTL)
@@ -373,7 +373,7 @@ def _setup_logging(verbose: int):
 InQuery = TypedDict("InQuery", {"$in": list[Any]})
 OrQuery = TypedDict("OrQuery", {"$or": list[Any]})
 RegexQuery = TypedDict("RegexQuery", {"$regex": list[str]})
-Query = Union[InQuery, OrQuery, RegexQuery]
+Query = InQuery | OrQuery | RegexQuery
 
 
 def _get_filter(

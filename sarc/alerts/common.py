@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from enum import Enum
 from graphlib import TopologicalSorter
 from pathlib import Path
-from typing import Optional, Union
+from typing import Optional
 
 from gifnoc.std import time
 from serieux import TaggedSubclass, deserialize, serialize
@@ -69,13 +69,13 @@ class CheckResult:
     statuses: StatusDict = field(default_factory=dict)
 
     # Information about the exception, if the check has ERROR status
-    exception: Optional[CheckException] = None
+    exception: CheckException | None = None
 
     # Date at which the check finished
     issue_date: datetime = field(default_factory=lambda: time.now().astimezone())
 
     # Date at which the check will be considered STALE
-    expiry: Optional[datetime] = None
+    expiry: datetime | None = None
 
     # Check object
     check: Optional["TaggedSubclass[HealthCheck]"] = None
@@ -135,7 +135,7 @@ class HealthCheck:
 
     # Other checks on which this check depends. If these checks fail, this
     # check will not be run.
-    depends: Union[str, list[str]] = field(default_factory=list)
+    depends: str | list[str] = field(default_factory=list)
 
     def __post_init__(self):
         if isinstance(self.depends, str):
@@ -177,7 +177,7 @@ class HealthCheck:
         """Shortcut to generate FAIL status."""
         return self.result(CheckStatus.FAILURE, **kwargs)
 
-    def check(self) -> Union[CheckResult, CheckStatus]:  # pragma: no cover
+    def check(self) -> CheckResult | CheckStatus:  # pragma: no cover
         """Perform the check and return a result or status."""
         raise NotImplementedError("Please override in subclass.")
 

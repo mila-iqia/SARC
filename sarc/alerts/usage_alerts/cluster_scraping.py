@@ -1,7 +1,6 @@
 import logging
 import sys
 from datetime import datetime, timedelta
-from typing import List, Optional
 
 import pandas
 
@@ -12,9 +11,9 @@ logger = logging.getLogger(__name__)
 
 
 def check_nb_jobs_per_cluster_per_time(
-    time_interval: Optional[timedelta] = timedelta(days=7),
+    time_interval: timedelta | None = timedelta(days=7),
     time_unit=timedelta(days=1),
-    cluster_names: Optional[List[str]] = None,
+    cluster_names: list[str] | None = None,
     nb_stddev=2,
     verbose=False,
 ):

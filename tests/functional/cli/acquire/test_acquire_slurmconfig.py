@@ -1,7 +1,6 @@
 import re
 from datetime import datetime, time
 from pathlib import Path
-from typing import List
 
 import pytest
 from hostlist import expand_hostlist
@@ -218,7 +217,7 @@ PartitionName=partition2 Nodes=mynode[2,8-11,42] TRESBillingWeights=x=1,GRES/gpu
 """ == str(exc_info.value)
 
 
-def assert_same_billings(given: List[GPUBilling], expected: List[GPUBilling]):
+def assert_same_billings(given: list[GPUBilling], expected: list[GPUBilling]):
     assert len(given) == len(expected)
     for given_billing, expected_billing in zip(given, expected):
         assert given_billing.since == expected_billing.since

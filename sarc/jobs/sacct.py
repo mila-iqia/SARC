@@ -1,8 +1,8 @@
 import json
 import logging
 import subprocess
+from collections.abc import Iterator
 from datetime import date, datetime, time, timedelta
-from typing import Iterator, Optional
 
 from hostlist import expand_hostlist
 from tqdm import tqdm
@@ -92,7 +92,7 @@ class SAcctScraper:
                 if converted is not None:
                     yield converted
 
-    def convert(self, entry: dict, version: dict = None) -> Optional[SlurmJob]:
+    def convert(self, entry: dict, version: dict = None) -> SlurmJob | None:
         """Convert a single job entry from sacct to a SlurmJob."""
         resources = {"requested": {}, "allocated": {}}
         tracked_resources = ["cpu", "mem", "gres", "node", "billing"]
@@ -280,7 +280,7 @@ def sacct_mongodb_import(
 
 
 @trace_decorator()
-def update_allocated_gpu_type(cluster: ClusterConfig, entry: SlurmJob) -> Optional[str]:
+def update_allocated_gpu_type(cluster: ClusterConfig, entry: SlurmJob) -> str | None:
     """Try to infer job GPU type.
 
     Parameters

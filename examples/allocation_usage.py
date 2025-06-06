@@ -1,5 +1,5 @@
 import os
-from datetime import date, timezone
+from datetime import UTC, date
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -65,12 +65,10 @@ def get_jobs_dataframe(clusters, filename=None) -> pd.DataFrame:
             # Fix a pandas issue with timezone
             # fillna() raise an exception when the original timezone is left
             if job_dict["start_time"]:
-                job_dict["start_time"] = job_dict["start_time"].replace(
-                    tzinfo=timezone.utc
-                )
+                job_dict["start_time"] = job_dict["start_time"].replace(tzinfo=UTC)
 
             if job_dict["end_time"]:
-                job_dict["end_time"] = job_dict["end_time"].replace(tzinfo=timezone.utc)
+                job_dict["end_time"] = job_dict["end_time"].replace(tzinfo=UTC)
 
             dicts.append(job_dict)
 

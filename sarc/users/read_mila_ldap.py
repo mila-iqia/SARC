@@ -306,7 +306,7 @@ def load_ldap_exceptions(ldap_config: LDAPConfig):
     if ldap_config.exceptions_json_path is None:
         return {}
 
-    with open(ldap_config.exceptions_json_path, "r", encoding="utf-8") as file:
+    with open(ldap_config.exceptions_json_path, encoding="utf-8") as file:
         return json.load(file)
 
 
@@ -314,7 +314,7 @@ def load_group_to_prof_mapping(ldap_config: LDAPConfig):
     if ldap_config.group_to_prof_json_path is None:
         return {}
 
-    with open(ldap_config.group_to_prof_json_path, "r", encoding="utf-8") as file:
+    with open(ldap_config.group_to_prof_json_path, encoding="utf-8") as file:
         return json.load(file)
 
 

@@ -62,7 +62,7 @@ class AcquireAllocations:
     def execute(self) -> int:
         collection = get_allocations_collection()
 
-        with open(self.file, "r", encoding="utf-8") as f:
+        with open(self.file, encoding="utf-8") as f:
             reader = csv.DictReader(
                 f, skipinitialspace=True, restkey="garbage", restval=""
             )

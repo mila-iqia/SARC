@@ -328,9 +328,7 @@ def test_stdout_message_before_json(
     remote.expect(
         host="raisin",
         cmd="/opt/slurm/bin/sacct  -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
-        out=f"Welcome on raisin,\nThe sweetest supercomputer in the world!\n{sacct_json}".encode(
-            "utf-8"
-        ),
+        out=f"Welcome on raisin,\nThe sweetest supercomputer in the world!\n{sacct_json}".encode(),
     )
 
     assert (
@@ -368,9 +366,7 @@ def test_get_gpu_type_from_prometheus(
     remote.expect(
         host="raisin",
         cmd="/opt/slurm/bin/sacct  -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
-        out=f"Welcome on raisin,\nThe sweetest supercomputer in the world!\n{sacct_json}".encode(
-            "utf-8"
-        ),
+        out=f"Welcome on raisin,\nThe sweetest supercomputer in the world!\n{sacct_json}".encode(),
     )
 
     def mock_compute_job_statistics(job):
@@ -431,9 +427,7 @@ def test_get_gpu_type_without_prometheus(
     remote.expect(
         host="raisin_no_prometheus",
         cmd="/opt/slurm/bin/sacct  -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
-        out=f"Welcome on raisin_no_prometheus,\nThe sweetest supercomputer in the world!\n{sacct_json}".encode(
-            "utf-8"
-        ),
+        out=f"Welcome on raisin_no_prometheus,\nThe sweetest supercomputer in the world!\n{sacct_json}".encode(),
     )
 
     # Save slurm config in cache.
@@ -1086,7 +1080,7 @@ def test_cli_ignore_stats(
 def test_parse_sacct_slurm_versions(sacct_outputs, scraper):
     file = Path(__file__).parent / "sacct_outputs" / sacct_outputs
     scraper.get_raw._save_for_key(
-        key=scraper.get_raw.key(), value=json.load(open(file, "r", encoding="utf8"))
+        key=scraper.get_raw.key(), value=json.load(open(file, encoding="utf8"))
     )
     jobs = list(scraper)
     assert len(jobs) == 1

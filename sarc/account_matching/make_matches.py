@@ -50,7 +50,7 @@ def load_data_from_files(data_paths):
             # pass through
             data[k] = [dict_to_lowercase(D) for D in v]
         else:
-            with open(v, "r", encoding="utf-8") as f_in:
+            with open(v, encoding="utf-8") as f_in:
                 if (isinstance(v, str) and v.endswith("csv")) or (
                     isinstance(v, PosixPath) and v.suffix == ".csv"
                 ):
@@ -344,14 +344,13 @@ def _manual_matching(DLD_data, DD_persons, override_matches_mila_to_cc):
                 # we will just log the error and move on
                 logging.error(msg)
                 # raise ValueError(msg)
-            else:
+            elif drac_account_username in matching:
                 # Note that `matching[drac_account_username]` is itself a dict
                 # with user information from CC. It's not just a username string.
-                if drac_account_username in matching:
-                    assert isinstance(matching[drac_account_username], dict)
-                    DD_persons[mila_email_username][drac_source] = matching[
-                        drac_account_username
-                    ]
+                assert isinstance(matching[drac_account_username], dict)
+                DD_persons[mila_email_username][drac_source] = matching[
+                    drac_account_username
+                ]
 
 
 def _make_matches_status_report(DLD_data, DD_persons):

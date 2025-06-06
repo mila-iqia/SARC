@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from datetime import datetime, timedelta
-from typing import Callable, Dict, Optional
 
 import numpy as np
 import pandas
@@ -405,7 +405,7 @@ def update_cluster_job_series_rgu(
 def _compute_rgu_stats_before_date(
     df: pandas.DataFrame,
     cluster_name: str,
-    gpu_to_rgu: Dict[str, float],
+    gpu_to_rgu: dict[str, float],
     gpu_billing: GPUBilling,
 ):
     """
@@ -428,9 +428,9 @@ def _compute_rgu_stats_after_date(
     cluster: SlurmCLuster,
     df: pandas.DataFrame,
     cluster_name: str,
-    gpu_to_rgu: Dict[str, float],
+    gpu_to_rgu: dict[str, float],
     curr_gpu_billing: GPUBilling,
-    next_billing_date: Optional[datetime] = None,
+    next_billing_date: datetime | None = None,
 ):
     """
     Compute RGU information for jobs which run
@@ -459,7 +459,7 @@ def _compute_rgu_stats_after_date(
 
 
 def _compute_rgu_stats_from_gpu_count(
-    df: pandas.DataFrame, slice_rows, gpu_to_rgu: Dict[str, float]
+    df: pandas.DataFrame, slice_rows, gpu_to_rgu: dict[str, float]
 ):
     """
     Compute RGU stats on slice where billing is GPU
@@ -494,7 +494,7 @@ def _compute_rgu_stats_from_gpu_count(
 def _compute_rgu_stats_from_scaled_rgu(
     df: pandas.DataFrame,
     slice_rows,
-    gpu_to_rgu: Dict[str, float],
+    gpu_to_rgu: dict[str, float],
     curr_gpu_billing: GPUBilling,
 ):
     """
@@ -536,7 +536,7 @@ def _compute_rgu_stats_from_scaled_rgu(
     df.loc[slice_rows, "allocated.gpu_type_rgu"] = col_gpu_to_rgu
 
 
-def _gpu_type_to_rgu_mapper(gpu_to_rgu: Dict[str, float]):
+def _gpu_type_to_rgu_mapper(gpu_to_rgu: dict[str, float]):
     """
     Return a function to map job's allocated.gpu_type to RGU value.
 
