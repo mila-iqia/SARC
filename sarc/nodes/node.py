@@ -9,7 +9,7 @@ from typing import Generator
 import pandas as pd
 from prometheus_api_client.metric_range_df import MetricRangeDataFrame
 
-from sarc.config import Config, config
+from sarc.config import config
 
 logger = logging.getLogger(__name__)
 

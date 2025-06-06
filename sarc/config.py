@@ -262,7 +262,7 @@ def config(mode: None = None) -> Config | ClientConfig: ...
 def config(mode: Modes | None = None) -> Config | ClientConfig:
     cur_mode = sarc_mode.get()
     # If we request client mode and we are in scraping mode, that is fine.
-    if mode is "scraping" and cur_mode != "scraping":
+    if mode == "scraping" and cur_mode != "scraping":
         raise ScrapingModeRequired()
     if cur_mode == "scraping":
         return full_config
