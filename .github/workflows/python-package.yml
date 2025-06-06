@@ -40,7 +40,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        toxenv: [lint, mypy]
+        toxenv: [ruff, mypy]
 
     steps:
     - uses: actions/checkout@v4
