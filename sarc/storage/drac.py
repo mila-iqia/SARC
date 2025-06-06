@@ -171,6 +171,7 @@ def _fetch_diskusage_report(cluster: ClusterConfig) -> list[str]:
     diskusage_explorer /project/def-bengioy 	 (Last update: 2023-02-27 19:59:41)
     """
     cmd = cluster.diskusage_report_command
+    assert cmd is not None
     results = cluster.ssh.run(cmd, hide=True)
     return results.stdout.split("\n")  # break this long string into a list of lines
 

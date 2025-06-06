@@ -278,7 +278,7 @@ def compute_job_statistics_from_dataframe(
         n_unused = 0
 
     rval = {name: normalization(fn(df["value"])) for name, fn in statistics.items()}
-    return {**rval, "unused": n_unused}  # type: ignore[typeddict-item]
+    return {**rval, "unused": n_unused}  # type: ignore[return-value, typeddict-item]
 
 
 def compute_job_statistics_one_metric(
@@ -326,7 +326,7 @@ def compute_job_statistics(job: SlurmJob) -> JobStatistics:
         "slurm_job_core_usage",
         "slurm_job_memory_usage",
     )
-    metric_to_data = {metric: [] for metric in metric_names}
+    metric_to_data: dict[str, list[dict]] = {metric: [] for metric in metric_names}
     for result in get_job_time_series(
         job, metric_names, max_points=10_000, dataframe=False
     ):
