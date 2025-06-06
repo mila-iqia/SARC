@@ -5,6 +5,7 @@ from datetime import date, datetime, time, timedelta
 from typing import Iterator, Optional
 
 from hostlist import expand_hostlist
+from invoke.runners import Result
 from tqdm import tqdm
 
 from sarc.cache import with_cache
@@ -55,7 +56,7 @@ class SAcctScraper:
         cmd = f"{self.cluster.sacct_bin} {accounts_option} -X -S {start} -E {end} --allusers --json"
         logger.info(f"{self.cluster.name} $ {cmd}")
         if self.cluster.host == "localhost":
-            results = subprocess.run(
+            results: subprocess.CompletedProcess[str] | Result = subprocess.run(
                 cmd, shell=True, text=True, capture_output=True, check=False
             )
         else:
@@ -71,7 +72,7 @@ class SAcctScraper:
             # Not cachable
             return None
 
-    @with_cache(subdirectory="sacct", key=_cache_key, live=True)
+    @with_cache(subdirectory="sacct", key=_cache_key, live=True)  # type: ignore[arg-type] # mypy has some trouble with methods
     def get_raw(self) -> dict:
         return self.fetch_raw()
 
@@ -333,10 +334,12 @@ def update_allocated_gpu_type(cluster: ClusterConfig, entry: SlurmJob) -> Option
         # NB: If job doesn't have nodes, we harmonize using `None`,
         # so that harmonization function will check __DEFAULT__
         # harmonized names if available.
-        harmonized_gpu_names = {
-            cluster.harmonize_gpu(nodename, gpu_type)
-            for nodename in (entry.nodes or [None])
-        }
+        if entry.nodes:
+            harmonized_gpu_names = {
+                cluster.harmonize_gpu(nodename, gpu_type) for nodename in entry.nodes
+            }
+        else:
+            harmonized_gpu_names = {cluster.harmonize_gpu(None, gpu_type)}
         # If present, remove None from GPU names
         harmonized_gpu_names.discard(None)
         # If we got 1 GPU name, use it.
