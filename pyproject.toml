@@ -38,10 +38,7 @@ sarc = "sarc.cli:main"
 
 [dependency-groups]
 dev = [
-    "black>= 22.12.0",
-    "pylint>= 2.15.10",
-    "isort>= 5.11.4",
-    "mypy>= 0.991",
+    "mypy==1.15.0",
     "pytest>= 7.2.1",
     "pytest-cov>= 4.0.0",
     "pytest-regressions>= 2.4.2",
@@ -62,6 +59,7 @@ dev = [
     "types-ldap3>=2.9.13.20240205",
     "types-tqdm>=4.67.0.20250417",
     "pytest-env>=1.1.5",
+    "ruff>= 0.11.13,<0.12",
 ]
 examples = ["seaborn>=0.13.2,<0.14"]
 
@@ -110,9 +108,6 @@ disable = [
     "too-many-positional-arguments",
 ]
 extension-pkg-whitelist = "pydantic"
-
-[tool.isort]
-profile = "black"
 
 [[tool.mypy.overrides]]
 module = "sarc.alerts.*,sarc.account_matching.*,sarc.users.*,sarc.client.*,sarc.jobs.*,sarc.cli.*"
