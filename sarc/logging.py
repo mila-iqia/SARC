@@ -7,7 +7,7 @@ from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
 from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.sdk.resources import Resource
 
-from sarc.config import Config, LoggingConfig, config
+from sarc.config import LoggingConfig, config
 
 
 def getOpenTelemetryLoggingHandler(
@@ -42,7 +42,7 @@ def setupLogging(verbose_level: int = 0):
 
     conf = config()
     # Apparently this can be called in client mode which doesn't have logging
-    if isinstance(conf, Config) and conf.logging:
+    if hasattr(conf, "logging") and conf.logging:
 
         config_log_level = logging_levels.get(conf.logging.log_level, logging.WARNING)
         # verbose priority:
