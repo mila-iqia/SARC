@@ -1,7 +1,7 @@
 from collections import namedtuple
 from types import SimpleNamespace
 
-from pytest import skip
+import pytest
 
 import sarc.users.read_mila_ldap
 from sarc.users.read_mila_ldap import resolve_supervisors, run
@@ -229,7 +229,7 @@ def test_resolve_missing_supervisors_mapping():
     assert len(errors.prof_and_student) == 1
 
 
-@skip("This test never ran because of a name conflict and seems broken")
+@pytest.mark.skip("This test never ran because of a name conflict and seems broken")
 def test_resolve_missing_supervisor2():
     ldap_people = ldap_mock_missing_supervisor_mapping()
 
