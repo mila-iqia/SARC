@@ -1,7 +1,7 @@
 import functools
 import inspect
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from typing import Callable, Iterator
 
 from opentelemetry.trace import Span, Status, StatusCode, get_tracer
 

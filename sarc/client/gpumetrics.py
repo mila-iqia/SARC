@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 from datetime import datetime, time
 from types import SimpleNamespace
-from typing import Dict, List
 
 from iguane.fom import RAWDATA, fom_ugr
 from pydantic import field_validator
@@ -23,7 +22,7 @@ class GPUBilling(BaseModel):
 
     cluster_name: str
     since: datetime
-    gpu_to_billing: Dict[str, float]
+    gpu_to_billing: dict[str, float]
 
     @field_validator("since", mode="before")
     @classmethod
@@ -47,7 +46,7 @@ class GPUBillingRepository(AbstractRepository[GPUBilling]):
         self,
         cluster_name: str,
         since: str,
-        gpu_to_billing: Dict[str, float],
+        gpu_to_billing: dict[str, float],
     ):
         """Save GPU->billing mapping into database."""
 
@@ -94,7 +93,7 @@ def _gpu_billing_collection():
     return GPUBillingRepository(database=db)
 
 
-def get_cluster_gpu_billings(cluster_name: str) -> List[GPUBilling]:
+def get_cluster_gpu_billings(cluster_name: str) -> list[GPUBilling]:
     """Return GPU->billing mapping records for a cluster, sorted by ascending `since`."""
     return sorted(
         _gpu_billing_collection().find_by({"cluster_name": cluster_name}),
@@ -102,7 +101,7 @@ def get_cluster_gpu_billings(cluster_name: str) -> List[GPUBilling]:
     )
 
 
-def get_rgus(rgu_version="1.0") -> Dict[str, float]:
+def get_rgus(rgu_version="1.0") -> dict[str, float]:
     """
     Return GPU->RGU mapping for given RGU version.
 

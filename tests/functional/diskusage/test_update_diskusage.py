@@ -12,7 +12,7 @@ FOLDER = os.path.dirname(os.path.abspath(__file__))
 def mock_drac_fetch(monkeypatch):
     def mock_fetch(cluster, *args):
         path = os.path.join(FOLDER, f"drac_reports/report_{cluster.name}.txt")
-        with open(path, "r") as f:
+        with open(path) as f:
             return f.readlines()
 
     monkeypatch.setattr(sarc.storage.drac, "_fetch_diskusage_report", mock_fetch)

@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import Union
 
 from simple_parsing import subparsers
 
@@ -10,7 +9,7 @@ from .monitor import HealthMonitorCommand
 
 @dataclass
 class Health:
-    command: Union[HealthMonitorCommand, HealthCheckCommand, HealthHistoryCommand] = (
+    command: HealthMonitorCommand | HealthCheckCommand | HealthHistoryCommand = (
         subparsers(
             {
                 "monitor": HealthMonitorCommand,

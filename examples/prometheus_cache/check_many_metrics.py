@@ -14,7 +14,6 @@ import json
 import logging
 import os
 import time
-from typing import List
 
 from sarc.client.job import get_job
 from sarc.config import scraping_mode_required
@@ -119,7 +118,7 @@ def main():
                 print()
 
 
-def _nb_values(results: List[dict]) -> List[int]:
+def _nb_values(results: list[dict]) -> list[int]:
     """
     Helper function for debug printing.
     Count values for each series in results and return list of counts.

@@ -4,7 +4,6 @@ import io
 import logging
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict, List, Optional
 
 from hostlist import expand_hostlist
 from simple_parsing import field
@@ -103,8 +102,8 @@ class SlurmConfigParser:
         Parse cached slurm conf file and return a SlurmConfig object
         containing node_to_gpus and gpu_to_billing.
         """
-        partitions: List[Partition] = []
-        node_to_gpus: Dict[str, List[str]] = {}
+        partitions: list[Partition] = []
+        node_to_gpus: dict[str, list[str]] = {}
 
         # Parse lines: extract partitions and node_to_gpus
         for line_number, line in enumerate(file):
@@ -144,12 +143,12 @@ class SlurmConfigParser:
         return SlurmConfig(node_to_gpus=node_to_gpus, gpu_to_billing=gpu_to_billing)
 
     def _parse_gpu_to_billing(
-        self, partitions: List[Partition], node_to_gpus: Dict[str, List[str]]
-    ) -> Dict[str, float]:
+        self, partitions: list[Partition], node_to_gpus: dict[str, list[str]]
+    ) -> dict[str, float]:
         # Mapping of GPU to partition billing.
         # Allow to check that inferred billing for a GPU is the same across partitions.
         # If not, an error will be raised with additional info about involved partitions.
-        gpu_to_partition_billing: Dict[str, PartitionGPUBilling] = {}
+        gpu_to_partition_billing: dict[str, PartitionGPUBilling] = {}
 
         for partition in partitions:
             # Get billing from this partition
@@ -178,8 +177,8 @@ class SlurmConfigParser:
 class SlurmConfig:
     """Parsed data from slurm config file"""
 
-    node_to_gpus: Dict[str, List[str]]
-    gpu_to_billing: Dict[str, float]
+    node_to_gpus: dict[str, list[str]]
+    gpu_to_billing: dict[str, float]
 
 
 @dataclass
@@ -189,7 +188,7 @@ class Partition:
     cluster_name: str
     line_number: int
     line: str
-    info: Dict[str, str]
+    info: dict[str, str]
 
     @property
     def nodes(self) -> str:
@@ -200,7 +199,7 @@ class Partition:
         """For logging: prepend given message with cluster name and partition name"""
         return f"[{self.cluster_name}][{self.info['PartitionName']}] {msg}"
 
-    def parse(self, node_to_gpus: Dict[str, List[str]]) -> ParsedPartition:
+    def parse(self, node_to_gpus: dict[str, list[str]]) -> ParsedPartition:
         """Parse partition's gpu => nodes, gpu => billing, and default billing"""
 
         # Map each partition GPU to belonging nodes
@@ -262,11 +261,11 @@ class Partition:
 @dataclass
 class ParsedPartition:
     partition: Partition
-    gpu_to_nodes: Dict[str, List[str]]
-    gpu_to_billing: Dict[str, float]
-    default_billing: Optional[float]
+    gpu_to_nodes: dict[str, list[str]]
+    gpu_to_billing: dict[str, float]
+    default_billing: float | None
 
-    def get_harmonized_gpu_to_billing(self, cluster: ClusterConfig) -> Dict[str, float]:
+    def get_harmonized_gpu_to_billing(self, cluster: ClusterConfig) -> dict[str, float]:
         """
         Convert GPU names read from slurm conf file into harmonized GPU names.
 

@@ -1,7 +1,6 @@
 import re
 from datetime import datetime, time
 from pathlib import Path
-from typing import List
 
 import pytest
 from hostlist import expand_hostlist
@@ -77,7 +76,7 @@ PartitionName=partition4 Nodes=alone_node
 @pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
 def test_acquire_slurmconfig(cli_main, caplog):
     assert get_cluster_gpu_billings("raisin") == []
-    assert get_node_to_gpu("raisin") == None
+    assert get_node_to_gpu("raisin") is None
 
     _save_slurm_conf("raisin", "2020-01-01", SLURM_CONF_RAISIN_2020_01_01)
 
@@ -215,12 +214,10 @@ PartitionName=partition1 Nodes=mynode[1,5,6,29-41] TRESBillingWeights=x=1,GRES/g
 New value: 6000.0
 From line: 5
 PartitionName=partition2 Nodes=mynode[2,8-11,42] TRESBillingWeights=x=1,GRES/gpu:gpu1=6000,y=2
-""" == str(
-        exc_info.value
-    )
+""" == str(exc_info.value)
 
 
-def assert_same_billings(given: List[GPUBilling], expected: List[GPUBilling]):
+def assert_same_billings(given: list[GPUBilling], expected: list[GPUBilling]):
     assert len(given) == len(expected)
     for given_billing, expected_billing in zip(given, expected):
         assert given_billing.since == expected_billing.since
@@ -270,7 +267,7 @@ def test_download_cluster_config(test_config, remote):
 
     # Get conf file
     expected_content = SLURM_CONF_RAISIN_2020_01_01
-    channel = remote.expect(
+    remote.expect(
         host=cluster.host,
         cmd=f"cat {cluster.slurm_conf_host_path}",
         out=expected_content.encode(),

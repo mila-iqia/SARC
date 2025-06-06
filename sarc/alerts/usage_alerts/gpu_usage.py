@@ -1,6 +1,6 @@
 import logging
+from collections.abc import Sequence
 from datetime import datetime, timedelta
-from typing import Optional, Sequence
 
 from sarc.client.series import load_job_series
 from sarc.config import MTL
@@ -10,11 +10,11 @@ logger = logging.getLogger(__name__)
 
 def check_gpu_type_usage_per_node(
     gpu_type: str,
-    time_interval: Optional[timedelta] = timedelta(hours=24),
-    minimum_runtime: Optional[timedelta] = timedelta(minutes=5),
+    time_interval: timedelta | None = timedelta(hours=24),
+    minimum_runtime: timedelta | None = timedelta(minutes=5),
     threshold=1.0,
     min_tasks=0,
-    ignore_min_tasks_for_clusters: Optional[Sequence[str]] = ("mila",),
+    ignore_min_tasks_for_clusters: Sequence[str] | None = ("mila",),
 ):
     """
     Check if a GPU type is sufficiently used on each node.

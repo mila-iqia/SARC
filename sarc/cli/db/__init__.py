@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import Union
 
 from simple_parsing import subparsers
 
@@ -10,7 +9,7 @@ from sarc.cli.db.init import DbInit
 class Db:
     """this is help"""
 
-    command: Union[DbInit] = subparsers(
+    command: DbInit = subparsers(
         {
             "init": DbInit,
         }

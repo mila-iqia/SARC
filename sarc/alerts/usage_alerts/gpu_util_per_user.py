@@ -1,6 +1,5 @@
 import logging
 from datetime import datetime, timedelta
-from typing import Optional
 
 from sarc.client.series import compute_cost_and_waste, load_job_series
 from sarc.config import MTL
@@ -10,8 +9,8 @@ logger = logging.getLogger(__name__)
 
 def check_gpu_util_per_user(
     threshold: timedelta,
-    time_interval: Optional[timedelta] = timedelta(days=7),
-    minimum_runtime: Optional[timedelta] = timedelta(minutes=5),
+    time_interval: timedelta | None = timedelta(days=7),
+    minimum_runtime: timedelta | None = timedelta(minutes=5),
 ):
     """
     Check if users have enough utilization of GPUs.

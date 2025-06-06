@@ -4,12 +4,13 @@ import functools
 import json
 import os
 import zoneinfo
+from collections.abc import Callable
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field, fields
 from functools import cached_property
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, cast, overload
+from typing import TYPE_CHECKING, Any, Literal, cast, overload
 
 import gifnoc
 import tzlocal
@@ -71,7 +72,7 @@ class ClusterConfig:
             for node in expand_hostlist(node_list)
         }
 
-    def harmonize_gpu(self, nodename: str, gpu_type: str) -> Optional[str]:
+    def harmonize_gpu(self, nodename: str, gpu_type: str) -> str | None:
         """
         Actual utility method to get a GPU name from given node and gpu type.
 
@@ -120,7 +121,7 @@ class ClusterConfig:
         if self.prometheus_headers_file is not None:
             headers = json.load(
                 open(  # pylint: disable=consider-using-with
-                    self.prometheus_headers_file, "r", encoding="utf-8"
+                    self.prometheus_headers_file, encoding="utf-8"
                 )
             )
         else:

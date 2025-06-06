@@ -4,22 +4,14 @@ import json
 import logging
 import os
 import re
+from collections.abc import Callable
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
 from functools import partial, wraps
 from pathlib import Path
-from typing import (
-    IO,
-    Any,
-    Callable,
-    ClassVar,
-    Literal,
-    Optional,
-    Protocol,
-    overload,
-)
+from typing import IO, Any, ClassVar, Literal, Protocol, overload
 
 from .config import config
 
@@ -105,7 +97,7 @@ class CachedFunction[**P, R]:  # pylint: disable=too-many-instance-attributes
     validity: timedelta | Callable[P, timedelta] | Literal[True] = True
     on_disk: bool = True
     live: bool = False
-    cache_root: Optional[Path] = None
+    cache_root: Path | None = None
     live_cache: dict[tuple[Path | None, str], CachedResult[R]] = field(
         default_factory=dict
     )
@@ -314,10 +306,7 @@ class CachedFunction[**P, R]:  # pylint: disable=too-many-instance-attributes
                     )
                 else:
                     difference = (
-                        f"Cached:\n"
-                        f"{repr(cached_value)}\n\n"
-                        f"Value:\n"
-                        f"{repr(value)}\n"
+                        f"Cached:\n{repr(cached_value)}\n\nValue:\n{repr(value)}\n"
                     )
                 raise CacheException(
                     f"\nCached result != live result:\n"

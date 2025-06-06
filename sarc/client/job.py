@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import datetime, time, timedelta
 from enum import Enum
-from typing import Iterable, Optional
 
 from pydantic import field_validator
 from pydantic_mongo import AbstractRepository, PydanticObjectId
@@ -68,16 +68,16 @@ class Statistics(BaseModel):
 class JobStatistics(BaseModel):
     """Statistics for a job."""
 
-    gpu_utilization: Optional[Statistics] = None
-    gpu_utilization_fp16: Optional[Statistics] = None
-    gpu_utilization_fp32: Optional[Statistics] = None
-    gpu_utilization_fp64: Optional[Statistics] = None
-    gpu_sm_occupancy: Optional[Statistics] = None
-    gpu_memory: Optional[Statistics] = None
-    gpu_power: Optional[Statistics] = None
+    gpu_utilization: Statistics | None = None
+    gpu_utilization_fp16: Statistics | None = None
+    gpu_utilization_fp32: Statistics | None = None
+    gpu_utilization_fp64: Statistics | None = None
+    gpu_sm_occupancy: Statistics | None = None
+    gpu_memory: Statistics | None = None
+    gpu_power: Statistics | None = None
 
-    cpu_utilization: Optional[Statistics] = None
-    system_memory: Optional[Statistics] = None
+    cpu_utilization: Statistics | None = None
+    system_memory: Statistics | None = None
 
     def empty(self):
         return (
@@ -96,12 +96,12 @@ class JobStatistics(BaseModel):
 class SlurmResources(BaseModel):
     """Counts for various resources."""
 
-    cpu: Optional[int] = None
-    mem: Optional[int] = None
-    node: Optional[int] = None
-    billing: Optional[int] = None
-    gres_gpu: Optional[int] = None
-    gpu_type: Optional[str] = None
+    cpu: int | None = None
+    mem: int | None = None
+    node: int | None = None
+    billing: int | None = None
+    gres_gpu: int | None = None
+    gpu_type: str | None = None
 
 
 class SlurmJob(BaseModel):
@@ -114,16 +114,16 @@ class SlurmJob(BaseModel):
     cluster_name: str
     account: str
     job_id: int
-    array_job_id: Optional[int] = None
-    task_id: Optional[int] = None
+    array_job_id: int | None = None
+    task_id: int | None = None
     name: str
     user: str
     group: str
 
     # status
     job_state: SlurmState
-    exit_code: Optional[int] = None
-    signal: Optional[int] = None
+    exit_code: int | None = None
+    signal: int | None = None
 
     # allocation information
     partition: str
@@ -131,9 +131,9 @@ class SlurmJob(BaseModel):
     work_dir: str
 
     # Miscellaneous
-    constraints: Optional[str] = None
-    priority: Optional[int] = None
-    qos: Optional[str] = None
+    constraints: str | None = None
+    priority: int | None = None
+    qos: str | None = None
 
     # Flags
     CLEAR_SCHEDULING: bool = False
@@ -142,10 +142,10 @@ class SlurmJob(BaseModel):
     STARTED_ON_BACKFILL: bool = False
 
     # temporal fields
-    time_limit: Optional[int] = None
+    time_limit: int | None = None
     submit_time: datetime
-    start_time: Optional[datetime] = None
-    end_time: Optional[datetime] = None
+    start_time: datetime | None = None
+    end_time: datetime | None = None
     elapsed_time: int
 
     # tres
@@ -153,7 +153,7 @@ class SlurmJob(BaseModel):
     allocated: SlurmResources
 
     # statistics
-    stored_statistics: Optional[JobStatistics] = None
+    stored_statistics: JobStatistics | None = None
 
     @field_validator("submit_time", "start_time", "end_time")
     @classmethod
@@ -403,8 +403,8 @@ class SlurmCLuster(BaseModel):
     id: PydanticObjectId = None
 
     cluster_name: str
-    start_date: Optional[str] = None
-    end_date: Optional[str] = None
+    start_date: str | None = None
+    end_date: str | None = None
     billing_is_gpu: bool = False
 
 

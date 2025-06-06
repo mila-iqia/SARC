@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import copy
 from datetime import datetime, timedelta
-from typing import Optional
 
 from flatten_dict import flatten, unflatten
 
@@ -498,9 +497,7 @@ class JsonJobFactory(JobFactory):
                 },
             )
 
-    def format_dt_tz(
-        self, cluster_name: str, dt: datetime | int | None
-    ) -> Optional[int]:
+    def format_dt_tz(self, cluster_name: str, dt: datetime | int | None) -> int | None:
         if dt is None or isinstance(dt, int):
             return dt
         cluster_tz = config().clusters[cluster_name].timezone

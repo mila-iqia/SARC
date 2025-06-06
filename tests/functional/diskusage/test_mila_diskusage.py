@@ -71,7 +71,7 @@ def test_mila_fetch_diskusage_single(
         count += 1
 
         file = Path(__file__).parent / "mila_reports/report_single_user.txt"
-        with open(file, "r", encoding="utf-8") as f:
+        with open(file, encoding="utf-8") as f:
             raw_report = f.read()
         return raw_report, None
 
@@ -108,7 +108,7 @@ def test_mila_fetch_diskusage_multi(
         count += 1
 
         file = Path(__file__).parent / "mila_reports/report_multiple_user.txt"
-        with open(file, "r", encoding="utf-8") as f:
+        with open(file, encoding="utf-8") as f:
             raw_report = f.read()
         return raw_report, None
 

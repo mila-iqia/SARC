@@ -1,7 +1,6 @@
 import io
 
 from sarc.account_matching.make_matches import _prompt_manual_match, perform_matching
-from sarc.config import config
 
 
 def helper_extract_three_account_sources_from_ground_truth(account_matches):

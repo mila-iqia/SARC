@@ -158,12 +158,12 @@ def query_ldap(local_private_key_file, local_certificate_file, ldap_service_uri)
     we'll make this a separate function.
     """
 
-    assert os.path.exists(
-        local_private_key_file
-    ), f"Missing local_private_key_file {local_private_key_file}."
-    assert os.path.exists(
-        local_certificate_file
-    ), f"Missing local_certificate_file {local_certificate_file}."
+    assert os.path.exists(local_private_key_file), (
+        f"Missing local_private_key_file {local_private_key_file}."
+    )
+    assert os.path.exists(local_certificate_file), (
+        f"Missing local_certificate_file {local_certificate_file}."
+    )
 
     # Prepare TLS Settings
     tls_conf = Tls(
@@ -306,7 +306,7 @@ def load_ldap_exceptions(ldap_config: LDAPConfig):
     if ldap_config.exceptions_json_path is None:
         return {}
 
-    with open(ldap_config.exceptions_json_path, "r", encoding="utf-8") as file:
+    with open(ldap_config.exceptions_json_path, encoding="utf-8") as file:
         return json.load(file)
 
 
@@ -314,7 +314,7 @@ def load_group_to_prof_mapping(ldap_config: LDAPConfig):
     if ldap_config.group_to_prof_json_path is None:
         return {}
 
-    with open(ldap_config.group_to_prof_json_path, "r", encoding="utf-8") as file:
+    with open(ldap_config.group_to_prof_json_path, encoding="utf-8") as file:
         return json.load(file)
 
 

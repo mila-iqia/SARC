@@ -4,7 +4,7 @@ import logging
 import time
 from dataclasses import dataclass
 from types import SimpleNamespace
-from typing import Any, Union
+from typing import Any
 
 from simple_parsing import ArgumentParser, field, subparsers
 
@@ -50,7 +50,7 @@ class NiceHandler(logging.StreamHandler):
 
 @dataclass
 class CLI:
-    command: Union[Acquire, Db, Health] = subparsers(
+    command: Acquire | Db | Health = subparsers(
         {"acquire": Acquire, "db": Db, "health": Health}
     )
 
@@ -63,7 +63,6 @@ class CLI:
     )
 
     def execute(self) -> int:
-
         setupLogging(verbose_level=self.verbose)
 
         return self.command.execute()

@@ -1,6 +1,8 @@
 from collections import namedtuple
 from types import SimpleNamespace
 
+import pytest
+
 import sarc.users.read_mila_ldap
 from sarc.users.read_mila_ldap import resolve_supervisors, run
 from sarc.users.supervisor import _student_or_prof, extract_groups
@@ -227,7 +229,8 @@ def test_resolve_missing_supervisors_mapping():
     assert len(errors.prof_and_student) == 1
 
 
-def test_student_and_prof():
+@pytest.mark.skip("This test never ran because of a name conflict and seems broken")
+def test_resolve_missing_supervisor2():
     ldap_people = ldap_mock_missing_supervisor_mapping()
 
     errors = resolve_supervisors(ldap_people, group_to_prof(), exceptions=None)
@@ -339,6 +342,6 @@ def test_ldap_simple_sync(monkeypatch):
 
     student = d._doc["$set"]["mila_ldap"]
     assert student["supervisor"] == "supervisor@email.com", "Supervisor was found"
-    assert (
-        student["co_supervisor"] == "co.supervisor@email.com"
-    ), "2nd supervisor was found"
+    assert student["co_supervisor"] == "co.supervisor@email.com", (
+        "2nd supervisor was found"
+    )

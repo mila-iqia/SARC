@@ -7,7 +7,6 @@ https://mila-iqia.atlassian.net/wiki/spaces/IDT/pages/2190737548/Planification
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
 
 from pydantic_mongo import AbstractRepository, PydanticObjectId
 
@@ -28,16 +27,16 @@ class User(BaseModel):
     name: str
 
     mila: Credentials
-    drac: Optional[Credentials] = None
+    drac: Credentials | None = None
 
-    teacher_delegations: Optional[list[str]] = None
+    teacher_delegations: list[str] | None = None
 
     mila_ldap: dict
-    drac_members: Optional[dict] = None
-    drac_roles: Optional[dict] = None
+    drac_members: dict | None = None
+    drac_roles: dict | None = None
 
-    record_start: Optional[datetime] = None
-    record_end: Optional[datetime] = None
+    record_start: datetime | None = None
+    record_end: datetime | None = None
 
 
 class _UserRepository(AbstractRepository[User]):
@@ -78,7 +77,7 @@ def get_users(query=None, query_options: dict | None = None, latest=True) -> lis
 
 def get_user(
     mila_email_username=None, mila_cluster_username=None, drac_account_username=None
-) -> Optional[User]:
+) -> User | None:
     if mila_email_username is not None:
         query = {
             "$and": [

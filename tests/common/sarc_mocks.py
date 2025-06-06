@@ -1,8 +1,6 @@
 from copy import deepcopy
 from datetime import date
 
-import pandas as pd
-
 _membership_types = [
     # Student
     [

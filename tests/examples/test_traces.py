@@ -5,13 +5,13 @@ def test_trace1(captrace):
     tracer = get_tracer("test_trace1")
 
     # This is fake traced work
-    with tracer.start_as_current_span("span1") as span:
+    with tracer.start_as_current_span("span1"):
         pass
 
-    l = captrace.get_finished_spans()
+    ls = captrace.get_finished_spans()
 
-    assert len(l) == 1
-    span1 = l[0]
+    assert len(ls) == 1
+    span1 = ls[0]
     assert span1.name == "span1"
 
 
@@ -20,15 +20,15 @@ def test_trace2(captrace):
 
     with tracer.start_as_current_span("span2") as span:
         try:
-            1 / 0
+            _ = 1 / 0
         except Exception as exc:
             span.set_status(Status(StatusCode.ERROR))
             span.record_exception(exc)
 
-    l = captrace.get_finished_spans()
+    ls = captrace.get_finished_spans()
 
-    assert len(l) == 1
-    span2 = l[0]
+    assert len(ls) == 1
+    span2 = ls[0]
     assert span2.name == "span2"
     assert span2.status.status_code == StatusCode.ERROR
     assert len(span2.events) == 1

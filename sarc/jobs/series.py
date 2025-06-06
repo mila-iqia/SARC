@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable, Sequence
 from datetime import datetime
-from typing import Callable, Sequence, Union
 
 import pandas
 from pandas import DataFrame
@@ -18,7 +18,7 @@ from sarc.traces import trace_decorator
 @trace_decorator()
 def get_job_time_series(
     job: SlurmJob,
-    metric: Union[str, Sequence[str]],
+    metric: str | Sequence[str],
     min_interval: int = 30,
     max_points: int = 100,
     measure: str | None = None,
@@ -66,7 +66,7 @@ def get_job_time_series(
 @trace_decorator()
 def _get_job_time_series_data(
     job: SlurmJob,
-    metric: Union[str, Sequence[str]],
+    metric: str | Sequence[str],
     min_interval: int = 30,
     max_points: int = 100,
     measure: str | None = None,
@@ -153,7 +153,7 @@ def _get_job_time_series_data(
 
 def _get_job_time_series_data_cache_key(
     job: SlurmJob,
-    metric: Union[str, Sequence[str]],
+    metric: str | Sequence[str],
     min_interval: int = 30,
     max_points: int = 100,
     measure: str | None = None,

@@ -1,7 +1,6 @@
 import logging
 from collections import Counter
 from datetime import datetime, timedelta
-from typing import Dict, Optional
 
 from tqdm import tqdm
 
@@ -12,8 +11,8 @@ logger = logging.getLogger(__name__)
 
 
 def check_same_job_id(
-    time_interval: Optional[timedelta] = timedelta(days=7),
-    since: Optional[datetime] = None,
+    time_interval: timedelta | None = timedelta(days=7),
+    since: datetime | None = None,
 ):
     """
     Check if there are many jobs with same job ID in given time interval.
@@ -49,7 +48,7 @@ def check_same_job_id(
 
     # Collect job indices, and count occurrences of clusters
     # among jobs which have same job ID.
-    job_id_to_cluster_to_count: Dict[int, Counter] = {}
+    job_id_to_cluster_to_count: dict[int, Counter] = {}
     for job in tqdm(get_jobs(**query), total=nb_jobs, desc="get jobs"):
         job_id_to_cluster_to_count.setdefault(job.job_id, Counter()).update(
             [job.cluster_name]

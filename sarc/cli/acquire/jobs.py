@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Generator
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Generator
 
 from simple_parsing import field
 
@@ -35,9 +35,7 @@ def parse_dates(dates: list[str], cluster_name: str) -> list[tuple[datetime, boo
     return parsed_dates
 
 
-def _daterange(
-    start_date: datetime, end_date: datetime
-) -> Generator[datetime, None, None]:
+def _daterange(start_date: datetime, end_date: datetime) -> Generator[datetime]:
     for n in range(int((end_date - start_date).days)):
         yield start_date + timedelta(n)
 
