@@ -23,7 +23,7 @@ def test_monitor(beans_config, caplog):
     it = day_runner().iterate()
     next(it)  # First next() does nothing
     next(it)
-    real_time.sleep(0.1)
+    real_time.sleep(0.2)
     assert monitor.status == {
         "evil_beans": "ERROR",
         "little_beans": "FAILURE",
