@@ -266,7 +266,7 @@ def test_scraper_with_malformed_cache(test_config, remote, scraper, caplog):
     with open(cache_path, "w") as f:
         f.write("I am malformed!! :'(")
 
-    channel = remote.expect(
+    remote.expect(
         host="patate",
         cmd="/opt/slurm/bin/sacct  -X -S 2023-02-14T00:00 -E 2023-02-15T00:00 --allusers --json",
         out=b"{}",
@@ -285,7 +285,7 @@ def test_sacct_bin_and_accounts(test_config, remote):
     scraper = SAcctScraper(
         cluster=config().clusters["patate"], day=datetime(2023, 2, 14)
     )
-    channel = remote.expect(
+    remote.expect(
         host="patate",
         cmd="/opt/software/slurm/bin/sacct -A rrg-bonhomme-ad_gpu,rrg-bonhomme-ad_cpu,def-bonhomme_gpu,def-bonhomme_cpu -X -S 2023-02-14T00:00 -E 2023-02-15T00:00 --allusers --json",
         out=b'{"jobs": []}',
@@ -325,7 +325,7 @@ def test_localhost(os_system, monkeypatch):
 def test_stdout_message_before_json(
     test_config, sacct_json, remote, file_regression, cli_main, prom_custom_query_mock
 ):
-    channel = remote.expect(
+    remote.expect(
         host="raisin",
         cmd="/opt/slurm/bin/sacct  -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
         out=f"Welcome on raisin,\nThe sweetest supercomputer in the world!\n{sacct_json}".encode(
@@ -365,7 +365,7 @@ def test_stdout_message_before_json(
 def test_get_gpu_type_from_prometheus(
     test_config, sacct_json, remote, file_regression, cli_main, monkeypatch
 ):
-    channel = remote.expect(
+    remote.expect(
         host="raisin",
         cmd="/opt/slurm/bin/sacct  -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
         out=f"Welcome on raisin,\nThe sweetest supercomputer in the world!\n{sacct_json}".encode(
@@ -428,7 +428,7 @@ def test_get_gpu_type_from_prometheus(
 def test_get_gpu_type_without_prometheus(
     test_config, sacct_json, remote, file_regression, cli_main, monkeypatch
 ):
-    channel = remote.expect(
+    remote.expect(
         host="raisin_no_prometheus",
         cmd="/opt/slurm/bin/sacct  -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
         out=f"Welcome on raisin_no_prometheus,\nThe sweetest supercomputer in the world!\n{sacct_json}".encode(
@@ -510,7 +510,7 @@ def _save_slurm_conf(cluster_name: str, day: str, content: str):
 def test_save_job(
     test_config, sacct_json, remote, file_regression, cli_main, prom_custom_query_mock
 ):
-    channel = remote.expect(
+    remote.expect(
         host="raisin",
         cmd="/opt/slurm/bin/sacct  -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
         out=sacct_json.encode("utf-8"),
@@ -548,7 +548,7 @@ def test_save_job(
 def test_update_job(
     test_config, sacct_json, remote, file_regression, cli_main, prom_custom_query_mock
 ):
-    channel = remote.expect(
+    remote.expect(
         host="raisin",
         commands=[
             Command(
@@ -625,7 +625,7 @@ def test_update_job(
 def test_save_preempted_job(
     test_config, sacct_json, remote, file_regression, cli_main, prom_custom_query_mock
 ):
-    channel = remote.expect(
+    remote.expect(
         cmd="/opt/slurm/bin/sacct  -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
         host="raisin",
         out=sacct_json.encode("utf-8"),
@@ -665,7 +665,7 @@ def test_multiple_dates(
     datetimes = [
         datetime(2023, 2, 15, tzinfo=MTL) + timedelta(days=i) for i in range(5)
     ]
-    channel = remote.expect(
+    remote.expect(
         host="raisin",
         commands=[
             Command(
@@ -756,7 +756,7 @@ def test_multiple_clusters_and_dates(
             ],
         )
 
-    channel = remote.expect_sessions(
+    remote.expect_sessions(
         _create_session(
             "raisin",
             "/opt/slurm/bin/sacct  -X -S {start} -E {end} --allusers --json",
@@ -866,7 +866,7 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
             + [_gen_error_command(cmd_template, datetime(2023, 3, 16, tzinfo=MTL))],
         )
 
-    channel = remote.expect_sessions(
+    remote.expect_sessions(
         _create_session(
             "raisin",
             "/opt/slurm/bin/sacct  -X -S {start} -E {end} --allusers --json",
@@ -987,7 +987,7 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
 )
 @pytest.mark.usefixtures("empty_read_write_db")
 def test_job_tz(test_config, sacct_json, remote, cli_main, prom_custom_query_mock):
-    channel = remote.expect(
+    remote.expect(
         host="patate",
         cmd="/opt/software/slurm/bin/sacct -A rrg-bonhomme-ad_gpu,rrg-bonhomme-ad_cpu,def-bonhomme_gpu,def-bonhomme_cpu -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
         out=sacct_json.encode("utf-8"),

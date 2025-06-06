@@ -41,7 +41,6 @@ def test_using_trace_default_exception(captrace):
 
 
 def test_using_trace_expected_exception(captrace):
-    exception_caught = False
     with using_trace("test_using_trace_noerror", "span1") as span:
         pass
     with using_trace(

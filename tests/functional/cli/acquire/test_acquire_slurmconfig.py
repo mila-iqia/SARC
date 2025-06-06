@@ -77,7 +77,7 @@ PartitionName=partition4 Nodes=alone_node
 @pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
 def test_acquire_slurmconfig(cli_main, caplog):
     assert get_cluster_gpu_billings("raisin") == []
-    assert get_node_to_gpu("raisin") == None
+    assert get_node_to_gpu("raisin") is None
 
     _save_slurm_conf("raisin", "2020-01-01", SLURM_CONF_RAISIN_2020_01_01)
 
@@ -270,7 +270,7 @@ def test_download_cluster_config(test_config, remote):
 
     # Get conf file
     expected_content = SLURM_CONF_RAISIN_2020_01_01
-    channel = remote.expect(
+    remote.expect(
         host=cluster.host,
         cmd=f"cat {cluster.slurm_conf_host_path}",
         out=expected_content.encode(),

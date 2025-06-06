@@ -122,7 +122,7 @@ def test_acquire_users(cli_main, patch_return_values, mock_file, captrace):
     js_user = get_user(mila_email_username="john.smith001@mila.quebec")
     assert js_user is not None
     assert js_user.mila_ldap["supervisor"] == "john.smith003@mila.quebec"
-    assert js_user.mila_ldap["co_supervisor"] == None
+    assert js_user.mila_ldap["co_supervisor"] is None
 
     js_user = get_user(mila_email_username="john.smith002@mila.quebec")
     assert js_user is not None
@@ -143,11 +143,11 @@ def test_acquire_users(cli_main, patch_return_values, mock_file, captrace):
 
     js_user = get_user(mila_email_username="john.smith004@mila.quebec")
     assert js_user is not None
-    assert js_user.teacher_delegations == None
+    assert js_user.teacher_delegations is None
 
     js_user = get_user(mila_email_username="john.smith005@mila.quebec")
     assert js_user is not None
-    assert js_user.teacher_delegations == None
+    assert js_user.teacher_delegations is None
 
     # Check traces
     # NB: We don't check logging here, because

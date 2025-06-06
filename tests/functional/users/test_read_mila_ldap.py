@@ -115,7 +115,8 @@ def test_query_to_ldap_server_and_commit_to_db(patch_return_values, mock_file):
     def transform_user_list(L_u):
         return [{"mila_ldap": sarc.users.read_mila_ldap.process_user(u)} for u in L_u]
 
-    sorted_order_func = lambda u: u["mila_ldap"]["mila_email_username"]
+    def sorted_order_func(u):
+        return u["mila_ldap"]["mila_email_username"]
 
     def remove_newkeys(obj):
         obj.pop("record_start", None)
