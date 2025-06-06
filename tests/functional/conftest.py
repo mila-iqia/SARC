@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from contextlib import contextmanager
 
 import freezegun
@@ -76,7 +77,7 @@ def fill_db(db, with_users=False, with_clusters=False, job_patch=None):
 
 
 def create_db_configuration_fixture(
-    db_name,
+    db_name=None,
     empty=False,
     with_users=False,
     with_clusters=False,
@@ -84,8 +85,14 @@ def create_db_configuration_fixture(
     scope="function",
 ):
     @pytest.fixture(scope=scope)
-    def fixture():
-        with custom_db_config(db_name):
+    def fixture(request):
+        if db_name is None:
+            m = hashlib.md5()
+            m.update(request.node.nodeid.encode())
+            dname = f"test-db-{m.hexdigest()}"
+        else:
+            dname = db_name
+        with custom_db_config(dname):
             db = config().mongo.database_instance
             clear_db(db)
             if not empty:
@@ -95,27 +102,24 @@ def create_db_configuration_fixture(
                     with_clusters=with_clusters,
                     job_patch=job_patch,
                 )
-            yield db_name
+            yield dname
 
     return fixture
 
 
 empty_read_write_db_config_object = create_db_configuration_fixture(
-    db_name="sarc-read-write-test",
     empty=True,
     scope="function",
 )
 
 
 read_write_db_config_object = create_db_configuration_fixture(
-    db_name="sarc-read-write-test",
     scope="function",
 )
 
 
 read_only_db_config_object = create_db_configuration_fixture(
-    db_name="sarc-read-only-test",
-    scope="session",
+    scope="function",
 )
 
 read_only_db_with_many_cpu_jobs_config_object = create_db_configuration_fixture(
