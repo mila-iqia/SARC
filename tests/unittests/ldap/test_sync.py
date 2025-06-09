@@ -339,6 +339,6 @@ def test_ldap_simple_sync(monkeypatch):
 
     student = d._doc["$set"]["mila_ldap"]
     assert student["supervisor"] == "supervisor@email.com", "Supervisor was found"
-    assert (
-        student["co_supervisor"] == "co.supervisor@email.com"
-    ), "2nd supervisor was found"
+    assert student["co_supervisor"] == "co.supervisor@email.com", (
+        "2nd supervisor was found"
+    )

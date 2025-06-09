@@ -146,13 +146,13 @@ def perform_matching(
             assert D_member["email"].endswith("@mila.quebec")
             if D_member["email"] in S_mila_emails_to_ignore:
                 if verbose:
-                    logging.info(f'Ignoring phantom {D_member["email"]} (ignore list).')
+                    logging.info(f"Ignoring phantom {D_member['email']} (ignore list).")
                 continue
             if D_member["email"] not in DD_persons:
                 # we WANT to create an entry in DD_persons with the mila username, and the name from the cc_source !
                 if verbose:
                     logging.info(
-                        f'Creating phantom profile for {D_member["email"]} (automatic).'
+                        f"Creating phantom profile for {D_member['email']} (automatic)."
                     )
                 DD_persons[D_member["email"]] = {}
                 mila_ldap = {}

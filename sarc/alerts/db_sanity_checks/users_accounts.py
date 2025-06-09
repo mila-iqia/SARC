@@ -31,7 +31,6 @@ def find_missing_user_to_mila_emails(
 def check_users_in_jobs(
     time_interval: Optional[timedelta] = timedelta(hours=24),
 ) -> list[str]:
-
     logging.info("Checking users in jobs; timedelta: %s", time_interval)
 
     # Parse time_interval

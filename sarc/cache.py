@@ -314,10 +314,7 @@ class CachedFunction[**P, R]:  # pylint: disable=too-many-instance-attributes
                     )
                 else:
                     difference = (
-                        f"Cached:\n"
-                        f"{repr(cached_value)}\n\n"
-                        f"Value:\n"
-                        f"{repr(value)}\n"
+                        f"Cached:\n{repr(cached_value)}\n\nValue:\n{repr(value)}\n"
                     )
                 raise CacheException(
                     f"\nCached result != live result:\n"

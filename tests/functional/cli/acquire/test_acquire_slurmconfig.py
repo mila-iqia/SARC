@@ -215,9 +215,7 @@ PartitionName=partition1 Nodes=mynode[1,5,6,29-41] TRESBillingWeights=x=1,GRES/g
 New value: 6000.0
 From line: 5
 PartitionName=partition2 Nodes=mynode[2,8-11,42] TRESBillingWeights=x=1,GRES/gpu:gpu1=6000,y=2
-""" == str(
-        exc_info.value
-    )
+""" == str(exc_info.value)
 
 
 def assert_same_billings(given: List[GPUBilling], expected: List[GPUBilling]):
