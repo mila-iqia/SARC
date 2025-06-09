@@ -64,7 +64,7 @@ dev = [
 examples = ["seaborn>=0.13.2,<0.14"]
 
 [tool.ruff.lint]
-select = ["PL"]
+select = ["PL", "F811"]
 ignore = [
   "PLW2901",  # loop variable overwritten by assignment
   "PLR0912",  # too many branches
@@ -72,9 +72,6 @@ ignore = [
   "PLR0915",  # too many statements
   "PLR2004",  # replace magic value by variable
 ]
-
-[tool.ruff.lint.per-file-ignores]
-"tests/*" = ["PL"]
 
 [tool.uv]
 default-groups = [
