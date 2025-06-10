@@ -22,7 +22,9 @@ from pathlib import PosixPath
 from sarc.account_matching import name_distances
 
 
-def load_data_from_files(data_paths):
+def load_data_from_files(
+    data_paths: dict[str, str | list[dict[str, str]]],
+) -> dict[str, list[dict[str, str]]]:
     """
     Takes in a dict of paths to data files, and returns a dict of the data.
         data_paths = {
@@ -41,10 +43,10 @@ def load_data_from_files(data_paths):
     we can just return it directly.
     """
 
-    def dict_to_lowercase(D):
+    def dict_to_lowercase[T](D: dict[str, T]) -> dict[str, T]:
         return dict((k.lower(), v) for (k, v) in D.items())
 
-    data = {}
+    data: dict[str, list[dict[str, str]]] = {}
     for k, v in data_paths.items():
         if isinstance(v, list):
             # pass through
@@ -66,13 +68,13 @@ def load_data_from_files(data_paths):
 
 def perform_matching(
     # pylint: disable=too-many-branches
-    DLD_data: dict[str, list[dict]],
+    DLD_data: dict[str, list[dict[str, str]]],
     mila_emails_to_ignore: list[str],
     override_matches_mila_to_cc: dict[str, str],
-    name_distance_delta_threshold=2,  # mostly for testing
-    verbose=False,
-    prompt=False,
-):
+    name_distance_delta_threshold: int = 2,  # mostly for testing
+    verbose: bool = False,
+    prompt: bool = False,
+) -> tuple[dict[str, dict[str, dict[str, str] | None]], dict[str, str]]:
     """
     This is the function with the core functionality.
     The rest is just a wrapper. At this point, this function
@@ -112,7 +114,7 @@ def perform_matching(
 
     if "drac_roles" in DLD_data:
         DLD_data["drac_roles"] = [
-            D for D in DLD_data["drac_roles"] if D["status"].lower() in ["activated"]
+            D for D in DLD_data["drac_roles"] if D["status"].lower() == "activated"
         ]
         # because "John.Appleseed@mila.quebec" wrote their email with uppercases
         for e in DLD_data["drac_roles"]:
@@ -121,7 +123,7 @@ def perform_matching(
     # Dict indexed by @mila.quebec email addresses
     # with 3 subdicts : "mila_ldap", "drac_roles", "drac_members"
     # that contains all the information that we could match.
-    DD_persons = {}
+    DD_persons: dict[str, dict[str, dict[str, str] | None]] = {}
     for D in DLD_data["mila_ldap"]:
         DD_persons[D["mila_email_username"]] = {}
         DD_persons[D["mila_email_username"]]["mila_ldap"] = D
@@ -155,7 +157,7 @@ def perform_matching(
                         f"Creating phantom profile for {D_member['email']} (automatic)."
                     )
                 DD_persons[D_member["email"]] = {}
-                mila_ldap = {}
+                mila_ldap: dict[str, str] = {}
                 mila_ldap["mila_email_username"] = D_member["email"]
                 mila_ldap["mila_cluster_username"] = D_member["email"].split("@")[0]
                 mila_ldap["mila_cluster_uid"] = "0"
@@ -190,7 +192,12 @@ def perform_matching(
     return DD_persons, new_manual_matches
 
 
-def _matching_names(DLD_data, DD_persons, name_distance_delta_threshold, prompt=False):
+def _matching_names(
+    DLD_data: dict[str, list[dict[str, str]]],
+    DD_persons: dict[str, dict[str, dict[str, str] | None]],
+    name_distance_delta_threshold: int,
+    prompt: bool = False,
+) -> dict[str, str]:
     """
     Substep of the `perform_matching` function.
     Mutates the entries of `DD_persons` in-place.
@@ -201,7 +208,7 @@ def _matching_names(DLD_data, DD_persons, name_distance_delta_threshold, prompt=
     mapping a mila email to manually-associated DRAC username.
     """
 
-    mila_email_to_cc_username = {}
+    mila_email_to_cc_username: dict[str, str] = {}
 
     for name_or_nom, cc_source in [("name", "drac_members"), ("nom", "drac_roles")]:
         # Get 10 best matches for each mila display name.
@@ -241,7 +248,7 @@ def _matching_names(DLD_data, DD_persons, name_distance_delta_threshold, prompt=
                 D_person_found = [
                     D_person
                     for D_person in DD_persons.values()
-                    if D_person["mila_ldap"]["display_name"] == mila_display_name
+                    if D_person["mila_ldap"]["display_name"] == mila_display_name  # type: ignore[index]
                 ][0]
                 # Find match that corresponds to `cc_match`.
                 match = [e for e in DLD_data[cc_source] if e[name_or_nom] == cc_match][
@@ -257,7 +264,7 @@ def _matching_names(DLD_data, DD_persons, name_distance_delta_threshold, prompt=
 
                 # If match is manual, save it in output dictionary.
                 if match_is_manual:
-                    mila_email = D_person_found["mila_ldap"]["mila_email_username"]
+                    mila_email = D_person_found["mila_ldap"]["mila_email_username"]  # type: ignore[index]
                     cc_username = match["username"]
                     mila_email_to_cc_username[mila_email] = cc_username
 
@@ -443,4 +450,5 @@ def _how_many_drac_accounts_with_mila_emails(
     # Sort by email, to make logging easier to understand
     LD_members.sort(key=lambda D_member: D_member["email"])
 
+    return LD_members
     return LD_members
