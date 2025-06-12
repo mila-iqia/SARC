@@ -18,7 +18,7 @@ import logging
 from collections.abc import Iterable
 from copy import deepcopy
 from datetime import datetime
-from typing import TypeGuard, cast
+from typing import cast
 
 from pymongo import InsertOne, UpdateOne
 from pymongo.collection import Collection
