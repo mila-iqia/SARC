@@ -3,19 +3,19 @@ from typing import IO, Any
 
 import pandas as pd
 
-from sarc.cache import FormatterProto, with_cache
-from sarc.config import MyMilaConfig
+from sarc.cache import CachePolicy, FormatterProto, with_cache
+from sarc.config import Config, MyMilaConfig
 
 START_DATE_KEY = "Start Date with MILA"
 END_DATE_KEY = "End Date with MILA"
 
 
-class CSV_formatter(FormatterProto):
+class CSV_formatter(FormatterProto[pd.DataFrame]):
     read_flags = "r"
     write_flags = "w"
 
     @staticmethod
-    def load(fp: IO[Any]):
+    def load(fp: IO[Any]) -> pd.DataFrame:
         return pd.read_csv(fp.name)
 
     @staticmethod
@@ -29,16 +29,18 @@ class CSV_formatter(FormatterProto):
     formatter=CSV_formatter,
     key=lambda *_, **__: "mymila_export_{time}.csv",
     validity=timedelta(days=120),
-)
-def query_mymila_csv(cfg: MyMilaConfig):
+)  # type: ignore
+def query_mymila_csv(cfg: MyMilaConfig) -> pd.DataFrame:
     raise NotImplementedError("Cannot read from mymila yet.")
 
 
-def query_mymila(cfg: MyMilaConfig, cache_policy=True):
+def query_mymila(
+    cfg: MyMilaConfig, cache_policy: CachePolicy = CachePolicy.use
+) -> pd.DataFrame:
     return pd.DataFrame(query_mymila_csv(cfg, cache_policy=cache_policy))
 
 
-def to_records(df):
+def to_records(df: pd.DataFrame) -> list[dict]:
     # NOTE: Select columns that should be used from MyMila.
     wanted_cols = [
         "mila_email_username",
@@ -71,7 +73,7 @@ def to_records(df):
     return records
 
 
-def combine(LD_users, mymila_data):
+def combine(LD_users: list[dict], mymila_data: pd.DataFrame) -> list[dict]:
     if not mymila_data.empty:
         df_users = pd.DataFrame(LD_users)
         # Set the empty values to NA
@@ -122,6 +124,9 @@ def combine(LD_users, mymila_data):
     return LD_users
 
 
-def fetch_mymila(cfg, LD_users, cache_policy=True):
+def fetch_mymila(
+    cfg: Config, LD_users: list[dict], cache_policy: CachePolicy = CachePolicy.use
+) -> list[dict]:
+    assert cfg.mymila is not None
     mymila_data = query_mymila(cfg.mymila, cache_policy=cache_policy)
     return combine(LD_users, mymila_data)

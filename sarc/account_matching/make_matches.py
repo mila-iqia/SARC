@@ -17,13 +17,13 @@ import copy
 import csv
 import json
 import logging
-from pathlib import PosixPath
+from pathlib import Path
 
 from sarc.account_matching import name_distances
 
 
 def load_data_from_files(
-    data_paths: dict[str, str | list[dict[str, str]]],
+    data_paths: dict[str, Path | list[dict[str, str]]],
 ) -> dict[str, list[dict[str, str]]]:
     """
     Takes in a dict of paths to data files, and returns a dict of the data.
@@ -54,11 +54,11 @@ def load_data_from_files(
         else:
             with open(v, "r", encoding="utf-8") as f_in:
                 if (isinstance(v, str) and v.endswith("csv")) or (
-                    isinstance(v, PosixPath) and v.suffix == ".csv"
+                    isinstance(v, Path) and v.suffix == ".csv"
                 ):
                     data[k] = [dict_to_lowercase(D) for D in csv.DictReader(f_in)]
                 elif (isinstance(v, str) and v.endswith("json")) or (
-                    isinstance(v, PosixPath) and v.suffix == ".json"
+                    isinstance(v, Path) and v.suffix == ".json"
                 ):
                     data[k] = json.load(f_in)
                 else:

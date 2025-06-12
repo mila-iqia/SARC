@@ -10,16 +10,7 @@ from datetime import datetime, timedelta
 from enum import Enum
 from functools import partial, wraps
 from pathlib import Path
-from typing import (
-    IO,
-    Any,
-    Callable,
-    ClassVar,
-    Literal,
-    Optional,
-    Protocol,
-    overload,
-)
+from typing import IO, Any, Callable, ClassVar, Literal, Optional, Protocol, overload
 
 from .config import config
 
@@ -363,29 +354,29 @@ def make_cached_function[**P, R](
 
 
 @overload
-def with_cache[**P1, R1](
-    fn: Callable[P1, R1],
-    formatter: type[FormatterProto[R1]] = JSONFormatter,
-    key: Callable[P1, str] | None = None,
+def with_cache[**P, R](
+    fn: Callable[P, R],
+    formatter: type[FormatterProto[R]] = JSONFormatter,
+    key: Callable[P, str] | None = None,
     subdirectory: str | None = None,
-    validity: timedelta | Callable[P1, timedelta] | Literal[True] = True,
+    validity: timedelta | Callable[P, timedelta] | Literal[True] = True,
     on_disk: bool = True,
     live: bool = False,
     cache_root: Path | None = None,
-) -> CachedFunction[P1, R1]: ...
+) -> CachedFunction[P, R]: ...
 
 
 @overload
-def with_cache[**P2, R2](
+def with_cache[**P, R](
     fn: None = None,
-    formatter: type[FormatterProto[R2]] = JSONFormatter,
-    key: Callable[P2, str] | None = None,
+    formatter: type[FormatterProto[R]] = JSONFormatter,
+    key: Callable[P, str] | None = None,
     subdirectory: str | None = None,
-    validity: timedelta | Callable[P2, timedelta] | Literal[True] = True,
+    validity: timedelta | Callable[P, timedelta] | Literal[True] = True,
     on_disk: bool = True,
     live: bool = False,
     cache_root: Path | None = None,
-) -> Callable[[Callable[P2, R2]], CachedFunction[P2, R2]]: ...
+) -> Callable[[Callable[P, R]], CachedFunction[P, R]]: ...
 
 
 def with_cache[**P, R](
