@@ -140,6 +140,7 @@ import os
 import ssl
 from datetime import timedelta
 from pathlib import Path
+from typing import cast
 
 # Requirements
 # - pip install ldap3
@@ -216,8 +217,8 @@ def process_user(user_raw: dict[str, list[str]]) -> dict[str, str | None]:
     the "@mila.quebec" suffix).
     """
 
-    supervisor = user_raw.get("supervisor")
-    cosupervisor = user_raw.get("co_supervisor")
+    supervisor = cast(str | None, user_raw.get("supervisor"))
+    cosupervisor = cast(str | None, user_raw.get("co_supervisor"))
 
     user: dict[str, str | None] = {
         # include the suffix "@mila.quebec"
@@ -226,8 +227,8 @@ def process_user(user_raw: dict[str, list[str]]) -> dict[str, str | None]:
         "mila_cluster_uid": user_raw["uidNumber"][0],
         "mila_cluster_gid": user_raw["gidNumber"][0],
         "display_name": user_raw["displayName"][0],
-        "supervisor": supervisor[0] if supervisor else None,
-        "co_supervisor": cosupervisor[0] if cosupervisor else None,
+        "supervisor": supervisor if supervisor else None,
+        "co_supervisor": cosupervisor if cosupervisor else None,
         "status": (
             "disabled"
             if (user_raw["suspended"][0] in ["True", "true", True])
