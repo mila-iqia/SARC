@@ -59,14 +59,14 @@ def run(
 
     # MyMila scraping "NotImplementedError" is temporarily ignored until we have a working fetching implementation,
     # or a working workaround using CSV cache.
-    # with using_trace(
-    #    "sarc.users.acquire", "fetch_mymila", exception_types=(NotImplementedError,)
-    # ) as span:
-    #    LD_users = fetch_mymila(
-    #        cfg,
-    #        LD_users,
-    #        cache_policy=cache_policy,
-    #    )
+    with using_trace(
+        "sarc.users.acquire", "fetch_mymila", exception_types=(NotImplementedError,)
+    ) as span:
+        LD_users = sarc.users.mymila.fetch_mymila(
+            cfg,
+            LD_users,
+            cache_policy=cache_policy,
+        )
 
     # For each supervisor or co-supervisor, look for a mila_email_username
     # matching the display name. If None has been found, the previous value remains
