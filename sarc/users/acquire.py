@@ -17,7 +17,6 @@ from typing import Any, cast
 import sarc.account_matching.make_matches
 import sarc.users.mymila
 from sarc.cache import CachePolicy
-from sarc.client.users.api import Credentials
 from sarc.config import config
 from sarc.traces import using_trace
 

@@ -451,4 +451,3 @@ def _how_many_drac_accounts_with_mila_emails(
     LD_members.sort(key=lambda D_member: D_member["email"])
 
     return LD_members
-    return LD_members
