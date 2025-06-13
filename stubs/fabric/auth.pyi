@@ -1,0 +1,16 @@
+from collections.abc import Generator
+
+from _typeshed import Incomplete
+from paramiko.auth_strategy import AuthStrategy
+
+from .util import win32 as win32
+
+class OpenSSHAuthStrategy(AuthStrategy):
+    username: Incomplete
+    config: Incomplete
+    agent: Incomplete
+    def __init__(self, ssh_config, fabric_config, username) -> None: ...
+    def get_pubkeys(self) -> Generator[Incomplete]: ...
+    def get_sources(self) -> Generator[Incomplete, Incomplete]: ...
+    def authenticate(self, *args, **kwargs): ...
+    def close(self) -> None: ...
