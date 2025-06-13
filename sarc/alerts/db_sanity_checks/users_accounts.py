@@ -1,6 +1,5 @@
 import logging
 from datetime import datetime, timedelta
-from typing import Optional
 
 import pandas as pd
 
@@ -15,7 +14,7 @@ def find_missing_user_to_mila_emails(
 
     n_missing = missing_mila_email.sum()
     if not n_missing:
-        return df, []
+        return []
 
     N = df.shape[0]
     print(f"'user.mila.email' is missing in {n_missing} jobs ({n_missing / N:.2%})")
@@ -29,7 +28,7 @@ def find_missing_user_to_mila_emails(
 # exist in the database, and have a mila email address.
 # return value: list of users IDs that are not in the database
 def check_users_in_jobs(
-    time_interval: Optional[timedelta] = timedelta(hours=24),
+    time_interval: timedelta | None = timedelta(hours=24),
 ) -> list[str]:
     logging.info("Checking users in jobs; timedelta: %s", time_interval)
 
