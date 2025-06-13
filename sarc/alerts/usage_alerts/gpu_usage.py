@@ -1,9 +1,7 @@
 import logging
 from collections.abc import Iterable
 from datetime import datetime, timedelta
-from typing import cast, reveal_type
-
-import pandas
+from typing import cast
 
 from sarc.client.series import load_job_series
 from sarc.config import MTL
