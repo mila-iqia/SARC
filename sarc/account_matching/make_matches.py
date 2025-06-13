@@ -146,13 +146,13 @@ def perform_matching(
             assert D_member["email"].endswith("@mila.quebec")
             if D_member["email"] in S_mila_emails_to_ignore:
                 if verbose:
-                    logging.info(f'Ignoring phantom {D_member["email"]} (ignore list).')
+                    logging.info(f"Ignoring phantom {D_member['email']} (ignore list).")
                 continue
             if D_member["email"] not in DD_persons:
                 # we WANT to create an entry in DD_persons with the mila username, and the name from the cc_source !
                 if verbose:
                     logging.info(
-                        f'Creating phantom profile for {D_member["email"]} (automatic).'
+                        f"Creating phantom profile for {D_member['email']} (automatic)."
                     )
                 DD_persons[D_member["email"]] = {}
                 mila_ldap = {}
@@ -344,14 +344,13 @@ def _manual_matching(DLD_data, DD_persons, override_matches_mila_to_cc):
                 # we will just log the error and move on
                 logging.error(msg)
                 # raise ValueError(msg)
-            else:
-                # Note that `matching[drac_account_username]` is itself a dict
-                # with user information from CC. It's not just a username string.
-                if drac_account_username in matching:
-                    assert isinstance(matching[drac_account_username], dict)
-                    DD_persons[mila_email_username][drac_source] = matching[
-                        drac_account_username
-                    ]
+            # Note that `matching[drac_account_username]` is itself a dict
+            # with user information from CC. It's not just a username string.
+            elif drac_account_username in matching:
+                assert isinstance(matching[drac_account_username], dict)
+                DD_persons[mila_email_username][drac_source] = matching[
+                    drac_account_username
+                ]
 
 
 def _make_matches_status_report(DLD_data, DD_persons):

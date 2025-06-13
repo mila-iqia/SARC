@@ -13,7 +13,6 @@ from sarc.config import LoggingConfig, config
 def getOpenTelemetryLoggingHandler(
     log_conf: LoggingConfig, log_level: int = logging.WARNING
 ):
-
     logger_provider = LoggerProvider(
         resource=Resource.create(
             {
@@ -43,7 +42,6 @@ def setupLogging(verbose_level: int = 0):
     conf = config()
     # Apparently this can be called in client mode which doesn't have logging
     if hasattr(conf, "logging") and conf.logging:
-
         config_log_level = logging_levels.get(conf.logging.log_level, logging.WARNING)
         # verbose priority:
         # in 0 (not specified in command line) then config log level is used
