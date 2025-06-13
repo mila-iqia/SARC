@@ -126,7 +126,7 @@ class HealthCheck:
     interval: timedelta
 
     # Name of the check
-    name: str
+    name: str = "NOTSET"
 
     # Parameters of the check
     parameters: dict[str, str] = field(default_factory=dict)
@@ -137,7 +137,7 @@ class HealthCheck:
 
     # Other checks on which this check depends. If these checks fail, this
     # check will not be run.
-    depends: list[str] = field(default_factory=list)
+    depends: list[str] | str = field(default_factory=list)
 
     def __post_init__(self):
         if isinstance(self.depends, str):
