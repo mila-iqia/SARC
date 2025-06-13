@@ -30,12 +30,12 @@ class CSV_formatter(FormatterProto[pd.DataFrame]):
     key=lambda *_, **__: "mymila_export_{time}.csv",
     validity=timedelta(days=120),
 )  # type: ignore
-def query_mymila_csv(cfg: MyMilaConfig) -> pd.DataFrame:
+def query_mymila_csv(cfg: MyMilaConfig | None) -> pd.DataFrame:
     raise NotImplementedError("Cannot read from mymila yet.")
 
 
 def query_mymila(
-    cfg: MyMilaConfig, cache_policy: CachePolicy = CachePolicy.use
+    cfg: MyMilaConfig | None, cache_policy: CachePolicy = CachePolicy.use
 ) -> pd.DataFrame:
     return pd.DataFrame(query_mymila_csv(cfg, cache_policy=cache_policy))
 
@@ -127,6 +127,5 @@ def combine(LD_users: list[dict], mymila_data: pd.DataFrame) -> list[dict]:
 def fetch_mymila(
     cfg: Config, LD_users: list[dict], cache_policy: CachePolicy = CachePolicy.use
 ) -> list[dict]:
-    assert cfg.mymila is not None
     mymila_data = query_mymila(cfg.mymila, cache_policy=cache_policy)
     return combine(LD_users, mymila_data)
