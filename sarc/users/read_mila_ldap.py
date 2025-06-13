@@ -139,11 +139,14 @@ import json
 import os
 import ssl
 from datetime import timedelta
+from pathlib import Path
+from typing import cast
 
 # Requirements
 # - pip install ldap3
 from ldap3 import ALL_ATTRIBUTES, SUBTREE, Connection, Server, Tls
-from pymongo import MongoClient, UpdateOne
+from pymongo import UpdateOne
+from pymongo.collection import Collection
 
 from sarc.cache import CachePolicy, with_cache
 
@@ -151,8 +154,9 @@ from ..config import LDAPConfig
 from .supervisor import resolve_supervisors
 
 
-@with_cache(subdirectory="users", validity=timedelta(days=1))
-def query_ldap(local_private_key_file, local_certificate_file, ldap_service_uri):
+def _query_ldap(
+    local_private_key_file: Path, local_certificate_file: Path, ldap_service_uri: str
+) -> list[dict[str, list[str]]]:
     """
     Since we don't always query the LDAP (i.e. omitted when --input_json_file is given),
     we'll make this a separate function.
@@ -188,7 +192,13 @@ def query_ldap(local_private_key_file, local_certificate_file, ldap_service_uri)
     return [json.loads(entry.entry_to_json())["attributes"] for entry in conn.entries]
 
 
-def process_user(user_raw: dict) -> dict:
+# mypy is bad at resolving types across functions (it tries to type the
+# with_cache call independently and fails because it need the type information
+# of the decorated function to work) so we do this
+query_ldap = with_cache(_query_ldap, subdirectory="users", validity=timedelta(days=1))
+
+
+def process_user(user_raw: dict[str, list[str]]) -> dict[str, str | None]:
     """
     This takes a dict with a LOT of fields, as described by GEN-1744,
     and it uses only the following ones, which are renamed.
@@ -207,10 +217,10 @@ def process_user(user_raw: dict) -> dict:
     the "@mila.quebec" suffix).
     """
 
-    supervisor = user_raw.get("supervisor")
-    cosupervisor = user_raw.get("co_supervisor")
+    supervisor = cast(str | None, user_raw.get("supervisor"))
+    cosupervisor = cast(str | None, user_raw.get("co_supervisor"))
 
-    user = {
+    user: dict[str, str | None] = {
         # include the suffix "@mila.quebec"
         "mila_email_username": user_raw["mail"][0],
         "mila_cluster_username": user_raw["posixUid"][0],
@@ -230,7 +240,9 @@ def process_user(user_raw: dict) -> dict:
     return user
 
 
-def client_side_user_updates(LD_users_DB, LD_users_LDAP):
+def client_side_user_updates(
+    LD_users_DB: list[dict[str, str | None]], LD_users_LDAP: list[dict[str, str | None]]
+) -> list[dict[str, str | None]]:
     """
     Instead of having complicated updates that depend on multiple MongoDB
     updates to cover all cases involving the "status" field, we'll do all
@@ -265,12 +277,13 @@ def client_side_user_updates(LD_users_DB, LD_users_LDAP):
             # As of right now, we have no need to do that.
             entry = DD_users_LDAP[meu]
 
-        assert "status" in entry  # sanity check
         LD_users_to_update_or_insert.append(entry)
     return LD_users_to_update_or_insert
 
 
-def _save_to_mongo(collection, LD_users):
+def _save_to_mongo(
+    collection: Collection | None, LD_users: list[dict[str, str | None]]
+):
     if collection is None:
         return
 
@@ -302,7 +315,7 @@ def _save_to_mongo(collection, LD_users):
         print(result.bulk_api_result)
 
 
-def load_ldap_exceptions(ldap_config: LDAPConfig):
+def load_ldap_exceptions(ldap_config: LDAPConfig) -> dict[str, list[str]]:
     if ldap_config.exceptions_json_path is None:
         return {}
 
@@ -310,7 +323,7 @@ def load_ldap_exceptions(ldap_config: LDAPConfig):
         return json.load(file)
 
 
-def load_group_to_prof_mapping(ldap_config: LDAPConfig):
+def load_group_to_prof_mapping(ldap_config: LDAPConfig) -> dict[str, str]:
     if ldap_config.group_to_prof_json_path is None:
         return {}
 
@@ -318,7 +331,9 @@ def load_group_to_prof_mapping(ldap_config: LDAPConfig):
         return json.load(file)
 
 
-def fetch_ldap(ldap, cache_policy=CachePolicy.use):
+def fetch_ldap(
+    ldap: LDAPConfig, cache_policy=CachePolicy.use
+) -> list[dict[str, str | None]]:
     # Retrieve users from LDAP
     LD_users_raw = query_ldap(
         ldap.local_private_key_file,
@@ -339,11 +354,11 @@ def fetch_ldap(ldap, cache_policy=CachePolicy.use):
 
 
 def run(
-    ldap,
-    mongodb_collection=None,
-    output_json_file=None,
-    cache_policy=CachePolicy.use,
-):
+    ldap: LDAPConfig,
+    mongodb_collection: Collection | None = None,
+    output_json_file: Path | None = None,
+    cache_policy: CachePolicy = CachePolicy.use,
+) -> None:
     """Runs periodically to synchronize mongodb with LDAP"""
 
     LD_users = fetch_ldap(ldap, cache_policy=cache_policy)
@@ -354,27 +369,3 @@ def run(
         with open(output_json_file, "w", encoding="utf-8") as f_out:
             json.dump(LD_users, f_out, indent=4)
             print(f"Wrote {output_json_file}.")
-
-
-def get_ldap_collection(cfg):
-    mongodb_database_instance = cfg.mongo.database_instance
-    mongodb_collection = cfg.ldap.mongo_collection_name
-    mongodb_connection_string = cfg.mongo.connection_string
-    mongodb_database_name = cfg.mongo.database_name
-
-    # Two ways to get the MongoDB collection, and then it's possible that we don't care
-    # about getting one, in which case we'll skip that step of the output.
-    if mongodb_database_instance is not None and mongodb_collection is not None:
-        users_collection = mongodb_database_instance[mongodb_collection]
-    elif (
-        mongodb_connection_string is not None
-        and mongodb_database_name is not None
-        and mongodb_collection is not None
-    ):
-        users_collection = MongoClient(mongodb_connection_string)[
-            mongodb_database_name
-        ][mongodb_collection]
-    else:
-        users_collection = None
-
-    return users_collection
