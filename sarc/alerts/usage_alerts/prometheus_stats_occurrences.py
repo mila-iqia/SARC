@@ -1,7 +1,7 @@
 import logging
 from collections.abc import Iterable
 from datetime import datetime, timedelta
-from typing import Sequence, cast, reveal_type
+from typing import Sequence, cast
 
 from sarc.client.series import compute_time_frames, load_job_series
 from sarc.config import MTL

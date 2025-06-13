@@ -239,6 +239,8 @@ class HealthCheck:
                     results = self.result(status=raw_results)
                 else:
                     results = raw_results()
+            else:
+                results = raw_results
         except Exception as exc:  # pylint: disable=W0718
             results = self.result(
                 CheckStatus.ERROR, exception=CheckException.from_exception(exc)
