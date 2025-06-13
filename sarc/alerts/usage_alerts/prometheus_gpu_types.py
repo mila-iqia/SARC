@@ -1,12 +1,13 @@
 import logging
+from collections.abc import Iterable
 
-from sarc.config import config
+from sarc.config import ClusterConfig, config
 from sarc.jobs.node_gpu_mapping import get_node_to_gpu
 
 logger = logging.getLogger(__name__)
 
 
-def check_prometheus_vs_slurmconfig(cluster_name=None):
+def check_prometheus_vs_slurmconfig(cluster_name: str | None = None) -> None:
     """
     Check if GPU types from Prometheus are the same as the ones in slurm config files.
 
@@ -25,9 +26,9 @@ def check_prometheus_vs_slurmconfig(cluster_name=None):
         Name of cluster to check. If None, all clusters are checked.
     """
     if cluster_name is None:
-        clusters = config().clusters.values()
+        clusters: Iterable[ClusterConfig] = config("scraping").clusters.values()
     else:
-        clusters = [config().clusters[cluster_name]]
+        clusters = [config("scraping").clusters[cluster_name]]
 
     for cluster in clusters:
         # We only check clusters which have a prometheus_url
@@ -37,6 +38,7 @@ def check_prometheus_vs_slurmconfig(cluster_name=None):
         # Get slurm config GPU types from latest
         # node => GPU mappings stored in database
         slurmconfig_gpu_types = set()
+        assert cluster.name is not None
         mapping = get_node_to_gpu(cluster.name)
         if mapping:
             for gpu_types in mapping.node_to_gpu.values():

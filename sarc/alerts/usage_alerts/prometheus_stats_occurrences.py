@@ -1,6 +1,7 @@
 import logging
+from collections.abc import Iterable
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Sequence, Union
+from typing import Sequence, cast, reveal_type
 
 from sarc.client.series import compute_time_frames, load_job_series
 from sarc.config import MTL
@@ -11,27 +12,27 @@ logger = logging.getLogger(__name__)
 class PrometheusStatInfo:
     """Prometheus stat context, used in checking below."""
 
-    def __init__(self, name):
+    def __init__(self, name: str):
         self.name = name
         self.col_has = f"has_{name}"
         self.col_ratio = f"ratio_{name}"
-        self.avg = None
-        self.stddev = None
-        self.threshold = None
+        self.avg: float | None = None
+        self.stddev: float | None = None
+        self.threshold: float | None = None
 
 
 # pylint: disable=too-many-branches
 def check_prometheus_stats_occurrences(
-    time_interval: Optional[timedelta] = timedelta(days=7),
-    time_unit=timedelta(days=1),
-    minimum_runtime: Optional[timedelta] = timedelta(minutes=5),
-    cluster_names: Optional[List[str]] = None,
-    group_by_node: Union[bool, Sequence[str]] = ("mila",),
-    min_jobs_per_group: Optional[Union[int, Dict[str, int]]] = None,
-    nb_stddev=2,
-    with_gres_gpu=False,
-    prometheus_stats=("cpu_utilization", "system_memory"),
-):
+    time_interval: timedelta | None = timedelta(days=7),
+    time_unit: timedelta = timedelta(days=1),
+    minimum_runtime: timedelta | None = timedelta(minutes=5),
+    cluster_names: list[str] | None = None,
+    group_by_node: bool | Sequence[str] = ("mila",),
+    min_jobs_per_group: int | dict[str, int] | None = None,
+    nb_stddev: float = 2,
+    with_gres_gpu: bool = False,
+    prometheus_stats: Iterable[str] = ("cpu_utilization", "system_memory"),
+) -> None:
     """
     Check if we have scrapped Prometheus stats for enough jobs per node per cluster per time unit.
     Log a warning for each node / cluster where ratio of jobs with Prometheus stats is lower than
@@ -84,7 +85,9 @@ def check_prometheus_stats_occurrences(
     """
 
     # Parse time_interval and get data frame
-    start, end, clip_time = None, None, False
+    start: datetime | None
+    end: datetime | None
+    clip_time = False
     if time_interval is not None:
         end = datetime.now(tz=MTL)
         start = end - time_interval
@@ -172,11 +175,11 @@ def check_prometheus_stats_occurrences(
     assert isinstance(min_jobs_per_group, dict)
 
     # Now we can check
-    clusters_seen = set()
+    clusters_seen: set[str] = set()
     for row in f_stats.itertuples():
-        timestamp, cluster_name, node = row.Index
+        timestamp, cluster_name, node = row.Index  # type: ignore[misc, assignment]
         clusters_seen.add(cluster_name)
-        nb_jobs = row.task_
+        nb_jobs = cast(int, row.task_)
         if nb_jobs >= min_jobs_per_group.get(cluster_name, default_min_jobs):
             grouping_type = "cluster" if node == cluster_node_name else "node / cluster"
             grouping_name = (
@@ -204,14 +207,14 @@ def check_prometheus_stats_occurrences(
 
 
 def check_prometheus_stats_for_gpu_jobs(
-    time_interval: Optional[timedelta] = timedelta(days=7),
-    time_unit=timedelta(days=1),
-    minimum_runtime: Optional[timedelta] = timedelta(minutes=5),
-    cluster_names: Optional[List[str]] = None,
+    time_interval: timedelta | None = timedelta(days=7),
+    time_unit: timedelta = timedelta(days=1),
+    minimum_runtime: timedelta | None = timedelta(minutes=5),
+    cluster_names: list[str] | None = None,
     # For GPU jobs, default behaviour is to group each cluster by nodes for checking.
-    group_by_node: Union[bool, Sequence[str]] = True,
-    min_jobs_per_group: Optional[Union[int, Dict[str, int]]] = None,
-    nb_stddev=2,
+    group_by_node: bool | Sequence[str] = True,
+    min_jobs_per_group: int | dict[str, int] | None = None,
+    nb_stddev: int = 2,
 ):
     """
     Check if we have scrapped Prometheus stats for enough GPU jobs per node per cluster per time unit.
