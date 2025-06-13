@@ -193,6 +193,14 @@ class ClientConfig:
     tempo: TempoConfig | None = None
     health_monitor: HealthMonitorConfig | None = None
 
+    @property
+    def lock_path(self) -> Path:
+        """
+        Return a convenient path to be used as lock file for database operations.
+        """
+        assert self.cache
+        return self.cache / "lockfile.lock"
+
 
 @dataclass
 class Config(ClientConfig):
@@ -268,7 +276,7 @@ def config(mode: Modes | None = None) -> Config | ClientConfig:
         return full_config
     else:
         accept = [f.name for f in fields(ClientConfig)]
-        return cast(ClientConfig, WhitelistProxy(full_config, *accept))
+        return cast(ClientConfig, WhitelistProxy(full_config, *accept, "lock_path"))
 
 
 class ScrapingModeRequired(Exception):
