@@ -99,7 +99,7 @@ build-backend = "hatchling.build"
 norecursedirs = "tests/common"
 
 [[tool.mypy.overrides]]
-module = "sarc.alerts.*,sarc.account_matching.*,sarc.users.*,sarc.client.*,sarc.jobs.*,sarc.cli.*"
+module = "sarc.account_matching.*,sarc.users.*,sarc.client.*,sarc.jobs.*,sarc.cli.*"
 ignore_errors = true
 
 [[tool.mypy.overrides]]
@@ -114,3 +114,6 @@ ignore_missing_imports = true
 module = "fabric.*"
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+module = "serieux.*"
+ignore_missing_imports = true
