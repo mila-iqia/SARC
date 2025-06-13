@@ -35,7 +35,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        toxenv: [black, isort, lint, mypy]
+        toxenv: [ruff, mypy]
 
     steps:
     - uses: actions/checkout@v4

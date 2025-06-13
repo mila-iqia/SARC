@@ -25,13 +25,12 @@ class CheckRunner:
         """
         if result is None:
             result = check.latest_result()
-        else:
-            if result.status == CheckStatus.OK:
-                logger.info(f"Check '{check.name}' succeeded.")
-            elif result.status == CheckStatus.FAILURE:
-                logger.error(f"Check '{check.name}' failed.")
-            elif result.status == CheckStatus.ERROR:
-                logger.error(f"Check '{check.name}' errored.")
+        elif result.status == CheckStatus.OK:
+            logger.info(f"Check '{check.name}' succeeded.")
+        elif result.status == CheckStatus.FAILURE:
+            logger.error(f"Check '{check.name}' failed.")
+        elif result.status == CheckStatus.ERROR:
+            logger.error(f"Check '{check.name}' errored.")
         next_schedule = check.next_schedule(result)
         self.state[check.name] = (check, result, next_schedule)
         return next_schedule
