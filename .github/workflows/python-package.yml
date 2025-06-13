@@ -22,7 +22,7 @@ jobs:
     - name: Set up uv
       uses: astral-sh/setup-uv@v6
       with:
-        version: "0.7.12"
+        version: "0.7.13"
 
     - name: Install MongoDB
       run: |
@@ -48,7 +48,7 @@ jobs:
     - name: Set up uv
       uses: astral-sh/setup-uv@v6
       with:
-        version: "0.7.12"
+        version: "0.7.13"
 
     - name: Tests with tox
       run: uv run tox -e ${{ matrix.toxenv }}
@@ -62,7 +62,7 @@ jobs:
     - name: Set up uv
       uses: astral-sh/setup-uv@v6
       with:
-        version: "0.7.12"
+        version: "0.7.13"
 
     - name: Install dependencies
       run: |

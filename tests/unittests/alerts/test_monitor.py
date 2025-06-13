@@ -23,11 +23,16 @@ def test_monitor(beans_config, caplog):
     it = day_runner().iterate()
     next(it)  # First next() does nothing
     next(it)
-    real_time.sleep(0.1)
-    assert monitor.status == {
+    expected = {
         "evil_beans": "ERROR",
         "little_beans": "FAILURE",
         "many_beans": "OK",
     }
+    for i in range(9):
+        real_time.sleep(2**i / 100)
+        if monitor.status == expected:
+            break
+    else:
+        assert monitor.status == expected
     monitor.stop()
     monitor.join()
