@@ -70,9 +70,9 @@ parameters = {
     "job", parameters.values(), ids=parameters.keys(), indirect=True
 )
 def test_get_job_time_series(job, prom_custom_query_mock, file_regression):
-    assert (
-        get_job_time_series(job, "slurm_job_core_usage", dataframe=False) == []
-    ), "custom_query was not mocked properly"
+    assert get_job_time_series(job, "slurm_job_core_usage", dataframe=False) == [], (
+        "custom_query was not mocked properly"
+    )
 
     file_regression.check(prom_custom_query_mock.call_args[0][0])
 

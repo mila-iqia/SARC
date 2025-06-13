@@ -222,9 +222,8 @@ def commit_matches_to_database(users_collection, DD_persons_matched, verbose=Fal
         result = users_collection.bulk_write(L_updates_to_do)  #  <- the actual commit
         if verbose:
             logging.info(f"User updates: bulk write results: {result.bulk_api_result}")
-    else:
-        if verbose:
-            logging.info("User updates: nothing to do.")
+    elif verbose:
+        logging.info("User updates: nothing to do.")
 
     # might as well return this result in case we'd like to write tests for it
 

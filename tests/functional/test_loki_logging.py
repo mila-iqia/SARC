@@ -11,7 +11,6 @@ from sarc.logging import getOpenTelemetryLoggingHandler
 
 @pytest.fixture
 def httpserver(httpserver: HTTPServer):
-
     # Configurer le mock pour l'endpoint Loki
     httpserver.expect_request("/otlp/v1/logs", method="POST").respond_with_json(
         {"status": "success", "data": {"result": []}}
