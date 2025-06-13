@@ -85,8 +85,8 @@ def check_prometheus_stats_occurrences(
     """
 
     # Parse time_interval and get data frame
-    start: datetime | None
-    end: datetime | None
+    start: datetime | None = None
+    end: datetime | None = None
     clip_time = False
     if time_interval is not None:
         end = datetime.now(tz=MTL)
