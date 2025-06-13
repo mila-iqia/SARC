@@ -13,6 +13,7 @@ def test_monitor(beans_config, caplog):
     monitor = HealthMonitor(
         directory=hc.directory,
         checks=hc.checks,
+        poll=0.1,
     )
     monitor.start()
     assert monitor.status == {

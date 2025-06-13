@@ -9,12 +9,7 @@ on:
 
 jobs:
   tests:
-
     runs-on: ubuntu-24.04
-    strategy:
-      fail-fast: false
-      matrix:
-        toxenv: [test]
 
     steps:
     - uses: actions/checkout@v4
@@ -34,7 +29,7 @@ jobs:
         mongosh --version
 
     - name: Test with tox
-      run: uv run tox -e ${{ matrix.toxenv }}
+      run: uv run tox -e test -- -n 4
 
   lint:
     runs-on: ubuntu-latest
