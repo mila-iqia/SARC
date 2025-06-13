@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import cast
 
 from sarc.client.series import compute_cost_and_waste, load_job_series
 from sarc.config import MTL
@@ -10,9 +10,9 @@ logger = logging.getLogger(__name__)
 
 def check_gpu_util_per_user(
     threshold: timedelta,
-    time_interval: Optional[timedelta] = timedelta(days=7),
-    minimum_runtime: Optional[timedelta] = timedelta(minutes=5),
-):
+    time_interval: timedelta | None = timedelta(days=7),
+    minimum_runtime: timedelta | None = timedelta(minutes=5),
+) -> None:
     """
     Check if users have enough utilization of GPUs.
     Log a warning for each user if average GPU-util of user jobs
@@ -38,7 +38,9 @@ def check_gpu_util_per_user(
         If None, set to 0.
     """
     # Parse time_interval
-    start, end, clip_time = None, None, False
+    start: datetime | None = None
+    end: datetime | None = None
+    clip_time = False
     if time_interval is not None:
         end = datetime.now(tz=MTL)
         start = end - time_interval
@@ -69,7 +71,7 @@ def check_gpu_util_per_user(
     # Now we can check
     for row in f_stats.itertuples():
         user = row.Index
-        gpu_util = row.gpu_util
+        gpu_util = cast(float, row.gpu_util)
         if gpu_util < threshold.total_seconds():
             logger.warning(
                 f"[{user}] insufficient average gpu_util: {gpu_util} GPU-seconds; "

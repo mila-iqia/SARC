@@ -1,7 +1,6 @@
 import logging
 import sys
 from datetime import datetime, timedelta
-from typing import List, Optional
 
 import pandas
 
@@ -12,12 +11,12 @@ logger = logging.getLogger(__name__)
 
 
 def check_nb_jobs_per_cluster_per_time(
-    time_interval: Optional[timedelta] = timedelta(days=7),
-    time_unit=timedelta(days=1),
-    cluster_names: Optional[List[str]] = None,
-    nb_stddev=2,
-    verbose=False,
-):
+    time_interval: timedelta | None = timedelta(days=7),
+    time_unit: timedelta = timedelta(days=1),
+    cluster_names: list[str] | None = None,
+    nb_stddev: int = 2,
+    verbose: bool = False,
+) -> None:
     """
     Check if we have scraped enough jobs per time unit per cluster on given time interval.
     Log a warning for each cluster where number of jobs per time unit is lower than a limit
