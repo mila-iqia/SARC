@@ -25,7 +25,7 @@ class MonitorHandler(FileSystemEventHandler):
 
 
 class HealthMonitor:
-    def __init__(self, directory, checks, poll=False):
+    def __init__(self, directory, checks, poll=0):
         self.directory = directory
         self.checks: dict[str, HealthCheck] = checks
         self.poll = poll
@@ -66,7 +66,7 @@ class HealthMonitor:
     def start(self):
         """Start the monitor."""
         self.recover_state()
-        self.observer = (PollingObserver if self.poll else Observer)()
+        self.observer = PollingObserver(timeout=self.poll) if self.poll else Observer()
         self.observer.schedule(MonitorHandler(self), self.directory, recursive=True)
         self.observer.start()
 
