@@ -183,9 +183,9 @@ def run(
 def filter_duplicate_drac_members(
     LD_drac_members: list[dict[str, str]],
 ) -> list[dict[str, str]]:
-    DL_users: dict[str, list[dict[str, str]]] = (
-        {}
-    )  # dict of list of drac members, key=username
+    DL_users: dict[
+        str, list[dict[str, str]]
+    ] = {}  # dict of list of drac members, key=username
     for user in LD_drac_members:
         if user["username"] not in DL_users:
             DL_users[user["username"]] = []
