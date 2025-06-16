@@ -1,5 +1,6 @@
 import logging
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from itertools import chain
 
@@ -18,7 +19,9 @@ class MultipleSupervisor(Exception):
     pass
 
 
-def extract_groups(member_of: list[str]):
+def extract_groups(
+    member_of: list[str],
+) -> tuple[list[str], list[str], str | None, bool, bool]:
     supervisors = []
     groups = []
     is_student = False
@@ -53,15 +56,14 @@ class Result:
     is_prof: bool
     is_core: bool
     is_student: bool
-    supervisors: list
-    cn_groups: list
-    university: str
+    supervisors: list[str]
+    cn_groups: list[str]
+    university: str | None
 
 
-def _student_or_prof(person: dict, S_profs: set[str], exceptions: dict) -> Result:
-    if exceptions is None:
-        exceptions = {}
-
+def _student_or_prof(
+    person: dict[str, list[str]], S_profs: set[str], exceptions: dict[str, list[str]]
+) -> Result | None:
     # the most straightforward way to determine if a person is a prof,
     # because you can't trust the cn_groups "core-profs" where
     # the mila directors are also listed
@@ -94,7 +96,7 @@ def _student_or_prof(person: dict, S_profs: set[str], exceptions: dict) -> Resul
             is_core=is_core,
             is_prof=is_prof,
             is_student=is_student,
-            cn_groups=set(cn_groups),
+            cn_groups=list(set(cn_groups)),
         )
 
     return Result(
@@ -110,13 +112,13 @@ def _student_or_prof(person: dict, S_profs: set[str], exceptions: dict) -> Resul
 
 @dataclass
 class SupervisorMatchingErrors:
-    no_supervisors: list = field(default_factory=list)
-    too_many_supervisors: list = field(default_factory=list)
-    unknown_supervisors: list = field(default_factory=list)
-    unknown_group: list = field(default_factory=list)
-    prof_and_student: list = field(default_factory=list)
+    no_supervisors: list[Result] = field(default_factory=list)
+    too_many_supervisors: list[Result] = field(default_factory=list)
+    unknown_supervisors: list[str] = field(default_factory=list)
+    unknown_group: list[str] = field(default_factory=list)
+    prof_and_student: list[Result] = field(default_factory=list)
 
-    def errors(self):
+    def errors(self) -> Iterable[Result | str]:
         return chain(
             self.no_supervisors,
             self.too_many_supervisors,
@@ -125,17 +127,17 @@ class SupervisorMatchingErrors:
             self.prof_and_student,
         )
 
-    def error_count(self):
+    def error_count(self) -> int:
         return len(list(self.errors()))
 
-    def has_errors(self):
+    def has_errors(self) -> bool:
         return self.error_count() > 0
 
-    def show(self):
-        def make_list(errors):
+    def show(self) -> None:
+        def make_list(errors: list[Result]) -> list[str]:
             return [person.ldap["mail"][0] for person in errors]
 
-        def show_error(msg, array):
+        def show_error(msg: str, array: list[Result]) -> None:
             unique_values = sorted(set(make_list(array)))
             if len(unique_values) > 0:
                 logging.error(f"{msg} {unique_values}")
@@ -156,9 +158,12 @@ class SupervisorMatchingErrors:
 
 
 def _extract_supervisors_from_groups(
-    person: Result, group_to_prof: dict, errors: SupervisorMatchingErrors, index: dict
-) -> list:
-    supervisors = []
+    person: Result,
+    group_to_prof: dict[str, str],
+    errors: SupervisorMatchingErrors,
+    index: dict[str, Result],
+) -> list[str]:
+    supervisors: list[str] = []
 
     for group in person.supervisors:
         prof = group_to_prof.get(group)
@@ -174,7 +179,7 @@ def _extract_supervisors_from_groups(
             supervisors.append(prof)
 
     # We need to sort them, make the core prof index 0
-    def sortkey(x):
+    def sortkey(x: str) -> int:
         person = index.get(x)
         if person:
             return int(person.is_core)
@@ -185,17 +190,19 @@ def _extract_supervisors_from_groups(
 
 # pylint: disable=too-many-branches
 def resolve_supervisors(
-    ldap_people: list[dict], group_to_prof: dict, exceptions: dict
+    ldap_people: list[dict],
+    group_to_prof: dict[str, str],
+    exceptions: dict[str, list[str]],
 ) -> SupervisorMatchingErrors:
-    index = {}
-    people = []
+    index: dict[str, Result] = {}
+    people: list[Result] = []
     S_profs = set(group_to_prof.values())
     errors = SupervisorMatchingErrors()
 
     # Build the index for supervisor resolution
-    for person in ldap_people:
+    for ldap_person in ldap_people:
         result = _student_or_prof(
-            person,
+            ldap_person,
             S_profs,
             exceptions,
         )

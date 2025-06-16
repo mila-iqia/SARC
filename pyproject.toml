@@ -99,7 +99,7 @@ build-backend = "hatchling.build"
 norecursedirs = "tests/common"
 
 [[tool.mypy.overrides]]
-module = "sarc.alerts.*,sarc.account_matching.*,sarc.users.*,sarc.client.*,sarc.jobs.*,sarc.cli.*"
+module = "sarc.alerts.*,sarc.client.*,sarc.jobs.*,sarc.cli.*"
 ignore_errors = true
 
 [[tool.mypy.overrides]]

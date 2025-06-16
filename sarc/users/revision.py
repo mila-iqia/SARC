@@ -15,28 +15,30 @@ The revison works as follow:
 """
 
 import logging
+from collections.abc import Iterable
 from copy import deepcopy
 from datetime import datetime
+from typing import cast
 
 from pymongo import InsertOne, UpdateOne
 from pymongo.collection import Collection
 
-DEFAULT_DATE = datetime.utcfromtimestamp(0)
+DEFAULT_DATE = datetime.fromtimestamp(0)
 
 
-def is_date_missing(date):
+def is_date_missing(date: datetime | None) -> bool:
     return date is None or date == DEFAULT_DATE
 
 
-def has_changed(
-    user_db,
-    user_latest,
-    excluded=(
+def has_changed[T](
+    user_db: dict[str, T],
+    user_latest: dict[str, T],
+    excluded: Iterable[str] = (
         "_id",
         "record_start",
         "record_end",
     ),
-):
+) -> bool:
     keys = set(list(user_db.keys()) + list(user_latest.keys()))
 
     for k in keys:
@@ -50,14 +52,14 @@ def has_changed(
     return False
 
 
-def guess_date(date):
+def guess_date(date: datetime | None) -> datetime:
     # If the end_date is unknown (default or None) we put it at today
     if is_date_missing(date):
-        return datetime.utcnow()
-    return date
+        return datetime.now()
+    return cast(datetime, date)
 
 
-def close_record(user_db: dict, end_date=None):
+def close_record(user_db: dict, end_date: datetime | None = None) -> UpdateOne:
     # usually, end_date will be the record_start of the new record
     # because record_end is a new field its date might not always be accurate
     #
@@ -74,13 +76,13 @@ def close_record(user_db: dict, end_date=None):
     )
 
 
-def update_user(collection: Collection, user: dict):
-    username = user.get("mila_ldap", {}).get("mila_email_username")
+def update_user(collection: Collection, user: dict) -> None:
+    username: str | None = user.get("mila_ldap", {}).get("mila_email_username")
 
     if username is None:
         raise RuntimeError("mila_ldap.mila_email_username is none")
 
-    userdb = list(
+    userdbl = list(
         collection.find(
             {
                 "$and": [
@@ -91,23 +93,21 @@ def update_user(collection: Collection, user: dict):
         )
     )
 
-    if len(userdb) == 0:
-        return collection.bulk_write([user_insert(user)])
+    if len(userdbl) == 0:
+        collection.bulk_write([user_insert(user)])
     else:
-        userdb = list(userdb)[0]
+        userdb = list(userdbl)[0]
 
         if has_changed(userdb, user):
-            return collection.bulk_write(
+            collection.bulk_write(
                 [
                     close_record(userdb, end_date=user.get("record_start")),
                     user_insert(user),
                 ]
             )
 
-    return 0
 
-
-def user_insert(newuser: dict) -> list:
+def user_insert(newuser: dict) -> InsertOne:
     expected_keys = (
         "mila_ldap",
         "name",
@@ -133,7 +133,7 @@ def user_insert(newuser: dict) -> list:
     return InsertOne(update)
 
 
-def user_disapeared(user_db):
+def user_disapeared(user_db: dict) -> list:
     # this is an archived user and is already saved as such in the DB
     if user_db["mila_ldap"]["status"] == "archived":
         return []
@@ -149,8 +149,11 @@ def user_disapeared(user_db):
     ]
 
 
-def compute_update(username: str, user_db: dict, user_latest: dict) -> list:
+def compute_update(
+    username: str, user_db: dict | None, user_latest: dict | None
+) -> list:
     if user_latest is None:
+        assert user_db is not None
         return user_disapeared(user_db)
 
     assert user_latest["mila_ldap"]["mila_email_username"] == username
@@ -174,7 +177,7 @@ def query_latest_records() -> dict:
     return {"$or": [{"record_end": {"$exists": False}}, {"record_end": None}]}
 
 
-def get_all_users(users_collection):
+def get_all_users(users_collection: Collection) -> list[dict]:
     """returns all the users latest record"""
     query = query_latest_records()
 
@@ -183,9 +186,13 @@ def get_all_users(users_collection):
     return list(results)
 
 
-def commit_matches_to_database(users_collection, DD_persons_matched, verbose=False):
-    users_db = get_all_users(users_collection)
-    user_to_update = []
+def commit_matches_to_database(
+    users_collection: Collection,
+    DD_persons_matched: dict[str, dict],
+    verbose: bool = False,
+) -> None:
+    users_db: list[dict] = get_all_users(users_collection)
+    user_to_update: list[tuple[str, dict | None, dict | None]] = []
 
     nb_users_updated = 0
 
@@ -213,18 +220,13 @@ def commit_matches_to_database(users_collection, DD_persons_matched, verbose=Fal
 
     # Compute the updates to make
     L_updates_to_do = []
-    for username, user_db, user_latest in user_to_update:
-        L_updates_to_do.extend(compute_update(username, user_db, user_latest))
+    for username, user_db2, user_latest in user_to_update:
+        L_updates_to_do.extend(compute_update(username, user_db2, user_latest))
 
     # Final write
-    result = 0
     if L_updates_to_do:
         result = users_collection.bulk_write(L_updates_to_do)  #  <- the actual commit
         if verbose:
             logging.info(f"User updates: bulk write results: {result.bulk_api_result}")
     elif verbose:
         logging.info("User updates: nothing to do.")
-
-    # might as well return this result in case we'd like to write tests for it
-
-    return result

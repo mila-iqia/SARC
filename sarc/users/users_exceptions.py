@@ -1,8 +1,12 @@
+from opentelemetry.trace import Span
+
 from sarc.config import LDAPConfig
 from sarc.users.read_mila_ldap import load_ldap_exceptions
 
 
-def apply_users_delegation_exceptions(DD_persons, ldap_config: LDAPConfig, span):
+def apply_users_delegation_exceptions(
+    DD_persons, ldap_config: LDAPConfig, span: Span
+) -> None:
     """
     Apply manual exceptions to users;
     these exceptions are defined in the exceptions.json file refered in the LDAPConfig.
@@ -24,7 +28,9 @@ def apply_users_delegation_exceptions(DD_persons, ldap_config: LDAPConfig, span)
             ]
 
 
-def apply_users_supervisor_exceptions(DD_persons, ldap_config: LDAPConfig, span):
+def apply_users_supervisor_exceptions(
+    DD_persons: dict[str, dict], ldap_config: LDAPConfig, span: Span
+) -> None:
     """
     Apply manual exceptions to users;
     these exceptions are defined in the exceptions.json file refered in the LDAPConfig.
