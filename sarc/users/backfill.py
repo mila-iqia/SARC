@@ -133,9 +133,9 @@ def sync_history_diff(
         start_match = entry[START] == start
         end_match = entry[END] == end
 
-        assert (
-            start_match == end_match
-        ), "Either both match or None, else that would be a headache"
+        assert start_match == end_match, (
+            "Either both match or None, else that would be a headache"
+        )
         return start_match and end_match
 
     missing_entries: list[dict] = []
