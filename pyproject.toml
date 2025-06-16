@@ -31,6 +31,7 @@ dependencies = [
     "python-dateutil>=2.9.0.post0,<3",
     "opentelemetry-exporter-otlp>=1.23.0,<2",
     "iguane",
+    "filelock>=3.18.0",
 ]
 
 [project.scripts]
