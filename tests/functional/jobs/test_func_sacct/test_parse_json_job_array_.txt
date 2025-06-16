@@ -26,7 +26,7 @@
     "submit_time": "2023-02-14T00:00:00-05:00",
     "start_time": "2023-02-14T00:01:00-05:00",
     "end_time": "2023-02-14T12:01:00-05:00",
-    "elapsed_time": 43200,
+    "elapsed_time": 43200.0,
     "requested": {
         "cpu": 4,
         "mem": 49152,
