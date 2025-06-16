@@ -1,0 +1,16 @@
+import invoke
+from _typeshed import Incomplete
+
+from .connection import Connection as Connection
+
+class Task(invoke.Task):
+    hosts: Incomplete
+    def __init__(self, *args, **kwargs) -> None: ...
+
+def task(*args, **kwargs): ...
+
+class ConnectionCall(invoke.Call):
+    init_kwargs: Incomplete
+    def __init__(self, *args, **kwargs) -> None: ...
+    def clone_kwargs(self): ...
+    def make_context(self, config): ...
