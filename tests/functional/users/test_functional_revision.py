@@ -174,7 +174,6 @@ def test_update_status_users_exists_on_both(start, end):
 
     users = user_dict([make_user(end, record_start=datetime(2000, 1, 1))])
 
-    #
     commit_matches_to_database(collection, users, verbose=True)
 
     documents_after = list(collection.find({}))

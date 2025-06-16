@@ -9,12 +9,7 @@ on:
 
 jobs:
   tests:
-
     runs-on: ubuntu-24.04
-    strategy:
-      fail-fast: false
-      matrix:
-        toxenv: [test]
 
     steps:
     - uses: actions/checkout@v4
@@ -22,7 +17,7 @@ jobs:
     - name: Set up uv
       uses: astral-sh/setup-uv@v6
       with:
-        version: "0.7.12"
+        version: "0.7.13"
 
     - name: Install MongoDB
       run: |
@@ -34,13 +29,13 @@ jobs:
         mongosh --version
 
     - name: Test with tox
-      run: uv run tox -e ${{ matrix.toxenv }}
+      run: uv run tox -e test -- -n 4
 
   lint:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        toxenv: [black, isort, lint, mypy]
+        toxenv: [ruff, mypy]
 
     steps:
     - uses: actions/checkout@v4
@@ -48,7 +43,7 @@ jobs:
     - name: Set up uv
       uses: astral-sh/setup-uv@v6
       with:
-        version: "0.7.12"
+        version: "0.7.13"
 
     - name: Tests with tox
       run: uv run tox -e ${{ matrix.toxenv }}
@@ -62,7 +57,7 @@ jobs:
     - name: Set up uv
       uses: astral-sh/setup-uv@v6
       with:
-        version: "0.7.12"
+        version: "0.7.13"
 
     - name: Install dependencies
       run: |

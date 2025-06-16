@@ -84,7 +84,7 @@ def main():
     args: Args = parser.parse_args().args
     start_date = args.start_date
     if isinstance(start_date, str):
-        start_date = start_date = datetime.fromisoformat(start_date).astimezone(tz=MTL)
+        start_date = datetime.fromisoformat(start_date).astimezone(tz=MTL)
     end_date = args.end_date
     if isinstance(end_date, str):
         end_date = datetime.fromisoformat(end_date).astimezone(tz=MTL)
