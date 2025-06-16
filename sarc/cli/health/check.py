@@ -14,15 +14,16 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class HealthCheckCommand:
-    config: Path = None
+    config: Path | None = None
     once: bool = False
 
-    name: str = None
+    name: str | None = None
 
     def execute(self) -> int:
         hcfg = config().health_monitor
+        assert hcfg is not None
         with gifnoc.use(self.config):
-            if self.name:
+            if self.name is not None:
                 # only run one check, once (no CheckRunner)
                 check = hcfg.checks[self.name]
                 results = check(write=False)

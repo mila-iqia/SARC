@@ -10,11 +10,12 @@ from sarc.config import config
 
 @dataclass
 class HealthMonitorCommand:
-    config: Path = None
+    config: Path | None = None
 
     def execute(self) -> int:
         hcfg = config().health_monitor
         with gifnoc.use(self.config):
+            assert hcfg is not None
             monitor = HealthMonitor(directory=hcfg.directory, checks=hcfg.checks)
             try:
                 while True:

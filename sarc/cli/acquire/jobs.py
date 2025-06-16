@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Generator
+from typing import Generator, Iterable
 
 from simple_parsing import field
 
@@ -35,14 +35,12 @@ def parse_dates(dates: list[str], cluster_name: str) -> list[tuple[datetime, boo
     return parsed_dates
 
 
-def _daterange(
-    start_date: datetime, end_date: datetime
-) -> Generator[datetime, None, None]:
+def _daterange(start_date: datetime, end_date: datetime) -> Generator[datetime]:
     for n in range(int((end_date - start_date).days)):
         yield start_date + timedelta(n)
 
 
-def _dates_auto(cluster_name: str) -> list[datetime]:
+def _dates_auto(cluster_name: str) -> Iterable[datetime]:
     # we want to get the list of dates from the last valid date+1 in the database, until yesterday
     start = _dates_auto_first_date(cluster_name)
     end = datetime.today()
@@ -91,7 +89,7 @@ class AcquireJobs:
     )
 
     def execute(self) -> int:
-        cfg = config()
+        cfg = config("scraping")
         clusters_configs = cfg.clusters
 
         for cluster_name in self.cluster_names:
