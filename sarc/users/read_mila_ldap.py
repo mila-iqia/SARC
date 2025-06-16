@@ -158,12 +158,12 @@ def query_ldap(local_private_key_file, local_certificate_file, ldap_service_uri)
     we'll make this a separate function.
     """
 
-    assert os.path.exists(
-        local_private_key_file
-    ), f"Missing local_private_key_file {local_private_key_file}."
-    assert os.path.exists(
-        local_certificate_file
-    ), f"Missing local_certificate_file {local_certificate_file}."
+    assert os.path.exists(local_private_key_file), (
+        f"Missing local_private_key_file {local_private_key_file}."
+    )
+    assert os.path.exists(local_certificate_file), (
+        f"Missing local_certificate_file {local_certificate_file}."
+    )
 
     # Prepare TLS Settings
     tls_conf = Tls(

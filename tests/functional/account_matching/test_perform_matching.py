@@ -11,9 +11,9 @@ def helper_extract_three_account_sources_from_ground_truth(account_matches):
 
     DLD_data = {"mila_ldap": [], "drac_members": [], "drac_roles": []}
     for _, data in account_matches.items():
-        for k in DLD_data:  # "mila_ldap", "drac_members", "drac_roles"
+        for k, l in DLD_data.items():  # "mila_ldap", "drac_members", "drac_roles"
             if data[k] is not None:
-                DLD_data[k].append(data[k])
+                l.append(data[k])
 
     # as described in test fixture
     mila_emails_to_ignore = ["ignoramus.mikey@mila.quebec"]

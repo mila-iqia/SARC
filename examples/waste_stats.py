@@ -1,4 +1,5 @@
 import os
+import sys
 from datetime import datetime, timedelta
 
 import pandas as pd
@@ -53,7 +54,7 @@ def load_job_series(filename=None) -> pd.DataFrame:
 config_class = _config_class(os.getenv("SARC_MODE", "none"))
 if config_class is not ScraperConfig:
     print("SARC_MODE=scraping is required to access job series (prometheus))")
-    exit(0)
+    sys.exit(0)
 
 filename = "mila_job_series4.pkl"
 df = load_job_series(filename)

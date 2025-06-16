@@ -125,9 +125,9 @@ def test_backfill_simple_insert_history(mymiladata, captrace):
     updates, latest = _user_record_backfill(FakeConfig(), collection)
 
     assert len(latest) == 1, "Should have a single user"
-    assert (
-        len(updates) == 3
-    ), "Single user should have 3 previous records to be inserted"
+    assert len(updates) == 3, (
+        "Single user should have 3 previous records to be inserted"
+    )
 
     assert updates[0]._doc["record_start"] == datetime(2000, 1, 1)
     assert updates[0]._doc["record_end"] == updates[1]._doc["record_start"]
@@ -255,9 +255,9 @@ def test_backfill_sync_history_diff(mymiladata):
 
     assert len(latest) == 1, "Should have a single user"
     assert len(updates) == 1, "Should have one update"
-    assert (
-        updates[0]._doc["mila_ldap"]["display_name"] == "first_name last_name"
-    ), "Should have the right display name"
+    assert updates[0]._doc["mila_ldap"]["display_name"] == "first_name last_name", (
+        "Should have the right display name"
+    )
 
 
 def test_backfill_fail(mymiladata):
