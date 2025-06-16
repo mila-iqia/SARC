@@ -230,7 +230,3 @@ def commit_matches_to_database(
             logging.info(f"User updates: bulk write results: {result.bulk_api_result}")
     elif verbose:
         logging.info("User updates: nothing to do.")
-
-    # might as well return this result in case we'd like to write tests for it
-
-    return result
