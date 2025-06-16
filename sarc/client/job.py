@@ -140,7 +140,7 @@ class SlurmJob(BaseModel):
     submit_time: datetime
     start_time: datetime | None = None
     end_time: datetime | None = None
-    elapsed_time: int
+    elapsed_time: float
 
     # tres
     requested: SlurmResources

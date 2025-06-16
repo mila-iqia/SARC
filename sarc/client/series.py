@@ -114,9 +114,7 @@ def load_job_series(
             # Could be negative if job started after end. We don't want to filter
             # them out because they have been submitted before end, and we want to
             # compute their wait time.
-            job.elapsed_time = int(
-                max((job.end_time - job.start_time).total_seconds(), 0)
-            )
+            job.elapsed_time = max((job.end_time - job.start_time).total_seconds(), 0)
 
         if job.stored_statistics is None:
             job_series = DUMMY_STATS.copy()
