@@ -3,10 +3,10 @@ import requests_mock
 
 from sarc.config import config
 
-_URI = config().tempo.uri
+_URI = config().tempo.uri  # type: ignore[union-attr]
 
 
-def query(traceid: str, start: str = None, end: str = None):
+def query(traceid: str, start: str | None = None, end: str | None = None):
     """Query Tempo to retrieve a trace from the query frontend service.
 
     https://grafana.com/docs/tempo/latest/api_docs/#query
@@ -31,6 +31,7 @@ def query(traceid: str, start: str = None, end: str = None):
     if end is not None:
         params["end"] = end
 
+    # WTF does this does outside of tests?
     with requests_mock.Mocker() as m:
         m.get(
             url,
