@@ -18,8 +18,8 @@ def parse_date(s: str) -> datetime:
 @dataclass
 class HealthHistoryCommand:
     config: Path | None = None
-    start: datetime | None = simple_parsing.field(type=parse_date)
-    end: datetime | None = simple_parsing.field(type=parse_date)
+    start: datetime | None = simple_parsing.field(type=parse_date, default=None)
+    end: datetime | None = simple_parsing.field(type=parse_date, default=None)
     name: str | None = None
 
     def execute(self) -> int:
