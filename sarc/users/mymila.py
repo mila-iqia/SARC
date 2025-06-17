@@ -7,7 +7,7 @@ import pandas as pd
 import pyodbc
 from azure.identity import ClientSecretCredential
 
-from sarc.cache import FormatterProto, with_cache
+from sarc.cache import with_cache
 from sarc.config import MyMilaConfig
 
 START_DATE_KEY = "Start Date with MILA"
