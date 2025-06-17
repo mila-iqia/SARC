@@ -68,7 +68,7 @@ examples = ["seaborn>=0.13.2,<0.14"]
 #  - DTZ: datetimes without timezones (not right now)
 
 [tool.ruff.lint]
-select = ["FA", "LOG", "PL", "F811"]
+select = ["FA", "LOG", "PIE", "PL", "F811"]
 ignore = [
   "PLW2901",  # loop variable overwritten by assignment
   "PLR0912",  # too many branches

@@ -28,7 +28,7 @@ def write_to_job():
 
 
 def read_job():
-    jobs = list(get_jobs(**{"job_state": "COMPLETED"}))
+    jobs = list(get_jobs(job_state="COMPLETED"))
     assert len(jobs) == 1
 
 

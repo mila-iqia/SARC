@@ -86,7 +86,7 @@ class MongoInstance:
             ["bash", "-c", f". {self.script} && mongo_stop"],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-            env={**os.environ, **self.env, **{"LAUNCH_MONGO": "0"}},
+            env={**os.environ, **self.env, "LAUNCH_MONGO": "0"},
         )
 
     def __enter__(self):
