@@ -71,6 +71,7 @@ ignore = [
   "PLR0913",  # too many function arguments
   "PLR0915",  # too many statements
   "PLR2004",  # replace magic value by variable
+  "PLC0415",  # imports should be a the top level
 ]
 
 [tool.uv]
