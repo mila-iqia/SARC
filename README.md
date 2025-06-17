@@ -42,9 +42,10 @@ $ uv run python example/waste_stats.py
 
 ### Before commits
 
-This command is for the proper formatting.
+Those commands are for the proper formatting.
 ```
 uv run ruff format
+uv run tox -e ruff
 ```
 
 ### How to add dependencies
