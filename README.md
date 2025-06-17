@@ -42,13 +42,9 @@ $ uv run python example/waste_stats.py
 
 ### Before commits
 
-Those commands are for the proper formatting.
+This command is for the proper formatting.
 ```
-uv run black .
-uv run isort --profile black .
-uv run tox -e isort
-uv run tox -e black
-uv run tox -e lint
+uv run ruff format
 ```
 
 ### How to add dependencies
