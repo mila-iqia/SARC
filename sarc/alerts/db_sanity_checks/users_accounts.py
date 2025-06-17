@@ -19,7 +19,9 @@ def find_missing_user_to_mila_emails(
         return []
 
     N = df.shape[0]
-    print(f"'user.mila.email' is missing in {n_missing} jobs ({n_missing / N:.2%})")
+    logger.warn(
+        f"'user.mila.email' is missing in {n_missing} jobs ({n_missing / N:.2%})"
+    )
 
     unique_users = df[missing_mila_email]["user"].unique()
 
