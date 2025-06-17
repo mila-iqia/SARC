@@ -13,6 +13,8 @@ from sarc.client.job import JobStatistics, SlurmJob, Statistics
 from sarc.config import MTL, UTC
 from sarc.traces import trace_decorator
 
+logger = logging.getLogger(__name__)
+
 
 @overload
 def get_job_time_series(
@@ -174,7 +176,7 @@ def _get_job_time_series_data(
     else:
         query = f"{query}[{duration_seconds}s:{interval}s] {offset_string}"
 
-    logging.info(f"prometheus query with offset: {query}")
+    logger.info(f"prometheus query with offset: {query}")
     return job.fetch_cluster_config().prometheus.custom_query(query)
 
 

@@ -20,6 +20,8 @@ from sarc.client.job import get_job
 from sarc.config import scraping_mode_required
 from sarc.jobs.series import get_job_time_series
 
+logger = logging.getLogger(__name__)
+
 
 class Profiler:
     """Helper class to profile calls to get_job_time_series()."""
@@ -73,7 +75,7 @@ def main():
     )
 
     for i, (cluster_name, job_id) in enumerate(job_identifiers):
-        logging.info(f"[{i + 1}/{len(job_identifiers)}] {cluster_name} {job_id}")
+        logger.info(f"[{i + 1}/{len(job_identifiers)}] {cluster_name} {job_id}")
         job = get_job(cluster=cluster_name, job_id=job_id)
 
         # Make N calls to get_job_time_series() with 1 metric each.
@@ -84,14 +86,14 @@ def main():
                 )
                 for metric in metrics
             }
-        logging.info(f"Time results with many calls: {pf_many_calls}")
+        logger.info(f"Time results with many calls: {pf_many_calls}")
 
         # Make 1 call to get_job_time_series() with N metrics.
         with Profiler() as pf_one_call:
             ret_one_call = get_job_time_series(
                 job=job, metric=metrics, max_points=10_000, dataframe=False
             )
-        logging.info(f"Time results with one call: {pf_one_call}")
+        logger.info(f"Time results with one call: {pf_one_call}")
 
         # We need to rearrange data returned by the unique call.
         data = {metric: [] for metric in metrics}
@@ -103,7 +105,7 @@ def main():
             series_from_many = data[metric]
             series_from_one = ret_many_calls[metric]
             if series_from_many == series_from_one:
-                logging.info(
+                logger.info(
                     f"SAME: {metric}, "
                     f"{_nb_values(series_from_many)} vs {_nb_values(series_from_one)}"
                 )
@@ -112,7 +114,7 @@ def main():
                     f"DIFF: {metric}, "
                     f"{_nb_values(series_from_many)} vs {_nb_values(series_from_one)}"
                 )
-                logging.info(message)
+                logger.info(message)
                 print(message)
                 print("=" * 90)
                 print(_diff(series_from_many, series_from_one))

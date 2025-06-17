@@ -16,6 +16,8 @@ from sarc.config import MTL
 from sarc.traces import trace_decorator
 from sarc.utils import flatten
 
+logger = logging.getLogger(__name__)
+
 DUMMY_STATS: dict[str, Any] = {
     label: np.nan
     for label in [
@@ -376,7 +378,7 @@ def update_cluster_job_series_rgu(df: DataFrame, cluster_name: str) -> DataFrame
     # Get GPU->billing mappings, sorted by billing start date in ascending order.
     dated_gpu_billings = get_cluster_gpu_billings(cluster_name=cluster_name)
     if not dated_gpu_billings:
-        logging.warning(
+        logger.warning(
             f"RGU update: no GPU billing available for cluster {cluster_name}"
         )
         return df
