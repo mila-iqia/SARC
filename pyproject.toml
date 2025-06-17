@@ -66,9 +66,11 @@ examples = ["seaborn>=0.13.2,<0.14"]
 
 # to consider
 #  - DTZ: datetimes without timezones (not right now)
+#  - TC: type checking style
+
 
 [tool.ruff.lint]
-select = ["FA", "LOG", "PIE", "PL", "F811", "T20"]
+select = ["ARG", "F811", "FA", "LOG", "PIE", "PL", "T20"]
 ignore = [
   "PLW2901",  # loop variable overwritten by assignment
   "PLR0912",  # too many branches
@@ -79,7 +81,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["T20"]
+"tests/**" = ["ARG", "T20"]
 "sarc/testing/**" = ["T20"]
 "examples/**" = ["T20"]
 "docs/**" = ["T20"]
