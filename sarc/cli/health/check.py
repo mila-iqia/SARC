@@ -1,7 +1,7 @@
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from pprint import pprint
+from pprint import pformat, pprint
 
 import gifnoc
 
@@ -27,24 +27,27 @@ class HealthCheckCommand:
                 # only run one check, once (no CheckRunner)
                 check = hcfg.checks[self.name]
                 results = check(write=False)
-                pprint(results)
+                msg = pformat(results) + "\n"
                 for k, status in results.statuses.items():
                     assert isinstance(status, CheckStatus)
-                    print(f"{status.name} -- {k}")
-                print(f"{results.status.name}")
+                    msg += f"{status.name} -- {k}\n"
+                msg += f"{results.status.name}"
+                logger.info(msg)
             elif self.once:
                 # run all checks, once (no CheckRunner)
                 for check in [c for c in hcfg.checks.values() if c.active]:
                     results = check(write=False)
                     if results.status == CheckStatus.OK:
-                        print(f"Check '{check.name}' succeeded.")
+                        logger.info(f"Check '{check.name}' succeeded.")
                     else:
-                        print(f"Check '{check.name}' failed.")
-                        pprint(results)
+                        msg = (
+                            f"Check '{check.name}' failed.\n" + pformat(results) + "\n"
+                        )
                         for k, status in results.statuses.items():
                             assert isinstance(status, CheckStatus)
-                            print(f"{status.name} -- {k}")
-                        print(f"{results.status.name}")
+                            msg += f"{status.name} -- {k}\n"
+                        msg += f"{results.status.name}"
+                        logger.error(msg)
             else:
                 try:
                     runner = CheckRunner(directory=hcfg.directory, checks=hcfg.checks)

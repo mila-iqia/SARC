@@ -308,7 +308,7 @@ def _prompt_manual_match(mila_display_name, cc_source, best_matches):
         except (ValueError, IndexError) as exc:
             # We may get a value error from parsing,
             # or an index error when selecting a match.
-            print("Invalid index:", exc)
+            print("Invalid index:", exc)  # noqa: T201
             # Re-prompt.
 
     if cc_match:

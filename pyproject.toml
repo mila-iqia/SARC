@@ -68,7 +68,7 @@ examples = ["seaborn>=0.13.2,<0.14"]
 #  - DTZ: datetimes without timezones (not right now)
 
 [tool.ruff.lint]
-select = ["FA", "LOG", "PIE", "PL", "F811"]
+select = ["FA", "LOG", "PIE", "PL", "F811", "T20"]
 ignore = [
   "PLW2901",  # loop variable overwritten by assignment
   "PLR0912",  # too many branches
@@ -77,6 +77,13 @@ ignore = [
   "PLR2004",  # replace magic value by variable
   "PLC0415",  # imports should be a the top level
 ]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["T20"]
+"sarc/testing/**" = ["T20"]
+"examples/**" = ["T20"]
+"docs/**" = ["T20"]
+
 
 [tool.uv]
 default-groups = [
