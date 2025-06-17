@@ -25,6 +25,8 @@ from pymongo.collection import Collection
 
 DEFAULT_DATE = datetime.fromtimestamp(0)
 
+logger = logging.getLogger(__name__)
+
 
 def is_date_missing(date: datetime | None) -> bool:
     return date is None or date == DEFAULT_DATE
@@ -211,7 +213,7 @@ def commit_matches_to_database(
 
     nb_users_in_db = len(users_db)
     nb_new_users = len(DD_persons_matched)
-    logging.info(
+    logger.info(
         f"Users to update: "
         f"in DB {nb_users_in_db}, "
         f"updates {nb_users_updated}, "
@@ -227,6 +229,6 @@ def commit_matches_to_database(
     if L_updates_to_do:
         result = users_collection.bulk_write(L_updates_to_do)  #  <- the actual commit
         if verbose:
-            logging.info(f"User updates: bulk write results: {result.bulk_api_result}")
+            logger.info(f"User updates: bulk write results: {result.bulk_api_result}")
     elif verbose:
-        logging.info("User updates: nothing to do.")
+        logger.info("User updates: nothing to do.")

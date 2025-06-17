@@ -965,13 +965,13 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     print(caplog.text)
     assert bool(
         re.search(
-            r"root:jobs\.py:[0-9]+ Acquire data on raisin for date: 2023-02-15 00:00:00 \(is_auto=False\)",
+            r"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Acquire data on raisin for date: 2023-02-15 00:00:00 \(is_auto=False\)",
             caplog.text,
         )
     )
     assert bool(
         re.search(
-            r"root:jobs\.py:[0-9]+ Acquire data on patate for date: 2023-02-15 00:00:00 \(is_auto=False\)",
+            r"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Acquire data on patate for date: 2023-02-15 00:00:00 \(is_auto=False\)",
             caplog.text,
         )
     )
@@ -990,13 +990,13 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     # There should be 2 acquisition errors for unexpected data 2023-03-16, one per cluster.
     assert bool(
         re.search(
-            r"root:jobs\.py:[0-9]+ Failed to acquire data for raisin on 2023-03-16 00:00:00:",
+            r"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Failed to acquire data for raisin on 2023-03-16 00:00:00:",
             caplog.text,
         )
     )
     assert bool(
         re.search(
-            r"root:jobs\.py:[0-9]+ Failed to acquire data for patate on 2023-03-16 00:00:00:",
+            r"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Failed to acquire data for patate on 2023-03-16 00:00:00:",
             caplog.text,
         )
     )

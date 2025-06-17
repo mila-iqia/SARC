@@ -21,6 +21,8 @@ from pathlib import Path
 
 from sarc.account_matching import name_distances
 
+logger = logging.getLogger(__name__)
+
 
 def load_data_from_files(
     data_paths: dict[str, Path | list[dict[str, str]]],
@@ -131,7 +133,7 @@ def perform_matching(
         if drac_source not in DLD_data:
             # we might not have all three source files
             if verbose:
-                logging.warning(f"{drac_source} file missing !")
+                logger.warning(f"{drac_source} file missing !")
             continue
         LD_members = _how_many_drac_accounts_with_mila_emails(
             DLD_data, drac_source, verbose=verbose
@@ -140,12 +142,12 @@ def perform_matching(
             assert D_member["email"].endswith("@mila.quebec")
             if D_member["email"] in S_mila_emails_to_ignore:
                 if verbose:
-                    logging.info(f"Ignoring phantom {D_member['email']} (ignore list).")
+                    logger.info(f"Ignoring phantom {D_member['email']} (ignore list).")
                 continue
             if D_member["email"] not in DD_persons:
                 # we WANT to create an entry in DD_persons with the mila username, and the name from the cc_source !
                 if verbose:
-                    logging.info(
+                    logger.info(
                         f"Creating phantom profile for {D_member['email']} (automatic)."
                     )
                 DD_persons[D_member["email"]] = {}
@@ -266,10 +268,7 @@ def _manual_matching(DLD_data, DD_persons, override_matches_mila_to_cc):
                     f"but there are not such entries in LDAP.\n"
                     f"Someone messed up the manual matching by specifying a Mila email username that does not exist, or not ANYMORE."
                 )
-                # we don't want to raise an error here because it will break the pipeline
-                # we will just log the error and move on
-                logging.error(msg)
-                # raise ValueError(msg)
+                logger.error(msg)
             # Note that `matching[drac_account_username]` is itself a dict
             # with user information from CC. It's not just a username string.
             elif drac_account_username in matching:
@@ -303,10 +302,10 @@ def _make_matches_status_report(DLD_data, DD_persons):
         else:
             disabled_count += 1
 
-    logging.info(
+    logger.info(
         f"We have {enabled_count} enabled accounts and {disabled_count} disabled accounts."
     )
-    logging.info(
+    logger.info(
         f"Out of those enabled accounts, there are {good_count} successful matches "
         f"and {bad_count} failed matches."
     )
@@ -321,7 +320,7 @@ def _make_matches_status_report(DLD_data, DD_persons):
                 if D["activation_status"] in ["activated"]
             ]
         )
-        logging.info(f"We have {count_drac_members_activated} activated drac_members.")
+        logger.info(f"We have {count_drac_members_activated} activated drac_members.")
 
         # let's try to be more precise about things to find the missing accounts
         set_A = {
@@ -336,7 +335,7 @@ def _make_matches_status_report(DLD_data, DD_persons):
         }
         diff = sorted(set_A.difference(set_B))
         if diff:
-            logging.warning(
+            logger.warning(
                 "We could not find matches in the Mila LDAP for the CC accounts "
                 f"associated with the following {len(diff)} emails: {diff}."
             )
@@ -347,7 +346,7 @@ def _make_matches_status_report(DLD_data, DD_persons):
         count_drac_roles_activated = len(
             [D for D in DLD_data["drac_roles"] if D["status"].lower() in ["activated"]]
         )
-        logging.info(f"We have {count_drac_roles_activated} activated drac_roles.")
+        logger.info(f"We have {count_drac_roles_activated} activated drac_roles.")
 
 
 def _how_many_drac_accounts_with_mila_emails(
@@ -361,7 +360,7 @@ def _how_many_drac_accounts_with_mila_emails(
     ]
 
     if verbose:
-        logging.info(
+        logger.info(
             f"We have {len(LD_members)} {drac_source} accounts with @mila.quebec, "
             f"out of {len(data[drac_source])}."
         )
