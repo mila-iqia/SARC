@@ -44,11 +44,8 @@ $ uv run python example/waste_stats.py
 
 Those commands are for the proper formatting.
 ```
-uv run black .
-uv run isort --profile black .
-uv run tox -e isort
-uv run tox -e black
-uv run tox -e lint
+uv run ruff format
+uv run tox -e ruff
 ```
 
 ### How to add dependencies
