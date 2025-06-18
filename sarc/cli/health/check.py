@@ -1,7 +1,7 @@
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from pprint import pformat, pprint
+from pprint import pformat
 
 import gifnoc
 

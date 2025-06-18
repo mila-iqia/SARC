@@ -1,5 +1,4 @@
 import pymongo
-import pytest
 
 from sarc.config import config
 

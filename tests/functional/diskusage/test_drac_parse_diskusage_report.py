@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 
 from sarc.storage.drac import _parse_body as parse_body

@@ -21,7 +21,7 @@ def test_drac_fetch_diskusage_report(test_config, remote, file_regression):
     ) as f:
         raw_report = f.read()
     assert raw_report
-    channel = remote.expect(
+    remote.expect(
         host=cluster.host,
         cmd=cluster.diskusage_report_command,
         out=str.encode(raw_report),
@@ -44,7 +44,7 @@ def test_drac_acquire_storages(test_config, remote, cli_main, file_regression):
     ) as f:
         raw_report = f.read()
     assert raw_report
-    channel = remote.expect(
+    remote.expect(
         host=cluster.host,
         cmd=cluster.diskusage_report_command,
         out=str.encode(raw_report),

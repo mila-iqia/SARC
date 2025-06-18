@@ -1,7 +1,7 @@
 # test the spans helper context manager
 
 import pytest
-from opentelemetry.trace import Status, StatusCode, get_tracer
+from opentelemetry.trace import StatusCode
 
 from sarc.traces import using_trace
 
@@ -41,7 +41,6 @@ def test_using_trace_default_exception(captrace):
 
 
 def test_using_trace_expected_exception(captrace):
-    exception_caught = False
     with using_trace("test_using_trace_noerror", "span1") as span:
         pass
     with using_trace(
@@ -50,7 +49,7 @@ def test_using_trace_expected_exception(captrace):
         exception_types=(ZeroDivisionError,),
     ) as span:
         span.add_event("event1")
-        a = 1 / 0
+        _ = 1 / 0
 
     spans = captrace.get_finished_spans()
     assert len(spans) == 2
@@ -60,7 +59,6 @@ def test_using_trace_expected_exception(captrace):
 
 
 def test_using_trace_unexpected_exception(captrace):
-    exception_caught = False
     with pytest.raises(AssertionError):
         with using_trace("test_using_trace_noerror", "span1") as span:
             pass
@@ -145,7 +143,7 @@ def test_using_trace_error_nested(captrace):
             exception_types=[ZeroDivisionError],
         ) as span2:
             span2.add_event("event2")
-            a = 1 / 0
+            _ = 1 / 0
         span.add_event("event1.2")
 
     # check spans

@@ -3,7 +3,6 @@ from datetime import date, timezone
 
 import matplotlib.pyplot as plt
 import pandas as pd
-import seaborn as sns
 from tqdm import tqdm
 
 from sarc.allocations import get_allocation_summaries
