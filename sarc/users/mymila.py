@@ -16,7 +16,7 @@ END_DATE_KEY = "End Date with MILA"
 
 @with_cache(
     subdirectory="mymila",
-    key=lambda *_, **__: "mymila_export_{time}.json",
+    key=lambda cfg: "mymila_export_{time}.json",
     validity=timedelta(days=120),
 )
 def query_mymila(cfg: MyMilaConfig):
