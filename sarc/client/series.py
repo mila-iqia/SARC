@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta
-from typing import Callable, Dict, Optional
+from typing import Any, Callable, Dict, Literal, Optional
 
 import numpy as np
 import pandas
@@ -16,7 +16,7 @@ from sarc.config import MTL
 from sarc.traces import trace_decorator
 from sarc.utils import flatten
 
-DUMMY_STATS = {
+DUMMY_STATS: dict[str, Any] = {
     label: np.nan
     for label in [
         "gpu_utilization",
@@ -36,7 +36,7 @@ def load_job_series(
     clip_time: bool = False,
     callback: None | Callable = None,
     **jobs_args,
-) -> pandas.DataFrame:
+) -> DataFrame:
     """
     Query jobs from the database and return them in a DataFrame, including full user info
     for each job.
@@ -78,8 +78,8 @@ def load_job_series(
     elif fields is None:
         fields = {}
 
-    start = jobs_args.get("start", None)
-    end = jobs_args.get("end", None)
+    start: datetime | str | None = jobs_args.get("start", None)
+    end: datetime | str | None = jobs_args.get("end", None)
 
     total = count_jobs(**jobs_args)
 
@@ -106,8 +106,10 @@ def load_job_series(
                 raise ValueError("Clip time: missing end")
             # Clip the job to the time range we are interested in.
             unclipped_start = job.start_time
+            assert not isinstance(start, str)
             job.start_time = max(job.start_time, start)
             unclipped_end = job.end_time
+            assert not isinstance(end, str)
             job.end_time = min(job.end_time, end)
             # Could be negative if job started after end. We don't want to filter
             # them out because they have been submitted before end, and we want to
@@ -252,7 +254,7 @@ class UserFlattener:
         schema = User.model_json_schema()
         schema_props = schema["properties"]
 
-        def filt(prop_desc):
+        def filt(prop_desc: dict[str, Any]) -> bool:
             """
             In the schema type can be a simple 'type' marker if
             the field has a single type or "'anyOf': [{'type': '...'},
@@ -272,7 +274,7 @@ class UserFlattener:
             key for key, prop_desc in schema_props.items() if filt(prop_desc)
         }
 
-    def flatten(self, user: User) -> dict:
+    def flatten(self, user: User) -> dict[str, Any]:
         """Flatten given user."""
         # Get user dict.
         base_user_dict = user.model_dump(exclude={"id"})
@@ -289,7 +291,7 @@ class UserFlattener:
         return user_dict
 
 
-def _select_stat(name, dist):
+def _select_stat(name: str, dist: dict[str, float]) -> float:
     if not dist:
         return np.nan
 
@@ -299,7 +301,7 @@ def _select_stat(name, dist):
     return dist["median"]
 
 
-def update_job_series_rgu(df: DataFrame):
+def update_job_series_rgu(df: DataFrame) -> DataFrame:
     """
     Compute RGU information for jobs in given data frame.
 
@@ -325,9 +327,7 @@ def update_job_series_rgu(df: DataFrame):
     return df
 
 
-def update_cluster_job_series_rgu(
-    df: pandas.DataFrame, cluster_name: str
-) -> pandas.DataFrame:
+def update_cluster_job_series_rgu(df: DataFrame, cluster_name: str) -> DataFrame:
     """
     Compute RGU information for jobs related to given cluster in a data frame.
 
@@ -403,11 +403,11 @@ def update_cluster_job_series_rgu(
 
 
 def _compute_rgu_stats_before_date(
-    df: pandas.DataFrame,
+    df: DataFrame,
     cluster_name: str,
-    gpu_to_rgu: Dict[str, float],
+    gpu_to_rgu: dict[str, float],
     gpu_billing: GPUBilling,
-):
+) -> None:
     """
     Compute RGU information for jobs which ran before
     the start of given GPU billing.
@@ -426,12 +426,12 @@ def _compute_rgu_stats_before_date(
 
 def _compute_rgu_stats_after_date(
     cluster: SlurmCLuster,
-    df: pandas.DataFrame,
+    df: DataFrame,
     cluster_name: str,
-    gpu_to_rgu: Dict[str, float],
+    gpu_to_rgu: dict[str, float],
     curr_gpu_billing: GPUBilling,
-    next_billing_date: Optional[datetime] = None,
-):
+    next_billing_date: datetime | None = None,
+) -> None:
     """
     Compute RGU information for jobs which run
     from given current GPU billing,
@@ -459,8 +459,8 @@ def _compute_rgu_stats_after_date(
 
 
 def _compute_rgu_stats_from_gpu_count(
-    df: pandas.DataFrame, slice_rows, gpu_to_rgu: Dict[str, float]
-):
+    df: DataFrame, slice_rows, gpu_to_rgu: dict[str, float]
+) -> None:
     """
     Compute RGU stats on slice where billing is GPU
     (i.e. allocated.gres_gpu is GPU count).
@@ -492,11 +492,11 @@ def _compute_rgu_stats_from_gpu_count(
 
 
 def _compute_rgu_stats_from_scaled_rgu(
-    df: pandas.DataFrame,
+    df: DataFrame,
     slice_rows,
-    gpu_to_rgu: Dict[str, float],
+    gpu_to_rgu: dict[str, float],
     curr_gpu_billing: GPUBilling,
-):
+) -> None:
     """
     Compute RGU stats on slice where billing is scaled RGU
     (i.e. allocated.gres_gpu is a "billing" in its own unit,
@@ -536,7 +536,9 @@ def _compute_rgu_stats_from_scaled_rgu(
     df.loc[slice_rows, "allocated.gpu_type_rgu"] = col_gpu_to_rgu
 
 
-def _gpu_type_to_rgu_mapper(gpu_to_rgu: Dict[str, float]):
+def _gpu_type_to_rgu_mapper(
+    gpu_to_rgu: dict[str, float],
+) -> Callable[[str], float | None]:
     """
     Return a function to map job's allocated.gpu_type to RGU value.
 
@@ -547,8 +549,8 @@ def _gpu_type_to_rgu_mapper(gpu_to_rgu: Dict[str, float]):
     (i.e. harmonized GPU name + " : " + MIG name).
     """
     # NB: we assume RGU value for a MIG == RGU value from whole GPU.
-    return lambda gpu_type: gpu_to_rgu.get(
-        gpu_type.split(":")[0].rstrip() if gpu_type else None
+    return lambda gpu_type: (
+        gpu_to_rgu.get(gpu_type.split(":")[0].rstrip()) if gpu_type else None
     )
 
 
@@ -573,7 +575,9 @@ def compute_cost_and_waste(full_df: pandas.DataFrame) -> pandas.DataFrame:
     return full_df
 
 
-def _compute_cost_and_wastes(data, device):
+def _compute_cost_and_wastes(
+    data: DataFrame, device: Literal["cpu", "gpu"]
+) -> DataFrame:
     device_col = {"cpu": "cpu", "gpu": "gres_gpu"}[device]
 
     data[f"{device}_cost"] = data["elapsed_time"] * data[f"requested.{device_col}"]
@@ -596,12 +600,12 @@ def _compute_cost_and_wastes(data, device):
 
 
 def compute_time_frames(
-    jobs,
+    jobs: DataFrame,
     columns: list[str] | None = None,
     start: datetime | None = None,
     end: datetime | None = None,
     frame_size: timedelta = timedelta(days=7),
-):
+) -> DataFrame:
     """Slice jobs into time frames and adjust columns to fit the time frames.
 
     Jobs that start before `start` or ends after `end` will have their running
@@ -668,8 +672,8 @@ def compute_time_frames(
         mask = (jobs[col_start] < frame_end) * (jobs[col_end] > frame_start)
         frame = jobs[mask].copy()
         total_durations_in_frame = total_durations[mask]
-        frame[col_start] = frame[col_start].clip(frame_start, frame_end)
-        frame[col_end] = frame[col_end].clip(frame_start, frame_end)
+        frame[col_start] = frame[col_start].clip(frame_start, frame_end)  # type: ignore[call-overload]
+        frame[col_end] = frame[col_end].clip(frame_start, frame_end)  # type: ignore[call-overload]
         frame["duration"] = (frame[col_end] - frame[col_start]).dt.total_seconds()
 
         # Adjust columns to fit the time frame.

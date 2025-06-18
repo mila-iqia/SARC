@@ -3,7 +3,7 @@ import requests_mock
 
 from sarc.config import config
 
-_URI = config().loki.uri
+_URI = config().loki.uri  # type: ignore[union-attr]
 
 
 def query_range(
@@ -24,8 +24,9 @@ def query_range(
                    forward or backward.
     """
     url = f"{_URI}/api/v1/query_range"
-    limit = 100
+    limit = "100"
 
+    # WTF does this do outside of tests?
     with requests_mock.Mocker() as m:
         m.get(
             url,

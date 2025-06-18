@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 from datetime import datetime, time
 from types import SimpleNamespace
-from typing import Dict, List
 
 from iguane.fom import RAWDATA, fom_ugr
 from pydantic import field_validator
@@ -19,15 +18,15 @@ class GPUBilling(BaseModel):
     """Holds data for a GPU Billing."""
 
     # # Database ID
-    id: PydanticObjectId = None
+    id: PydanticObjectId | None = None
 
     cluster_name: str
     since: datetime
-    gpu_to_billing: Dict[str, float]
+    gpu_to_billing: dict[str, float]
 
     @field_validator("since", mode="before")
     @classmethod
-    def _ensure_since(cls, value):
+    def _ensure_since(cls, value: str | datetime) -> datetime:
         """Parse `since` from stored string to Python datetime."""
         if isinstance(value, str):
             return datetime.combine(datetime.fromisoformat(value), time.min).replace(
@@ -47,13 +46,13 @@ class GPUBillingRepository(AbstractRepository[GPUBilling]):
         self,
         cluster_name: str,
         since: str,
-        gpu_to_billing: Dict[str, float],
-    ):
+        gpu_to_billing: dict[str, float],
+    ) -> None:
         """Save GPU->billing mapping into database."""
 
         billing = GPUBilling(
             cluster_name=cluster_name,
-            since=since,
+            since=since,  # type: ignore[arg-type]
             gpu_to_billing=gpu_to_billing,
         )
         # Check if a GPU->billing mapping was already registered
@@ -88,13 +87,13 @@ class GPUBillingRepository(AbstractRepository[GPUBilling]):
             )
 
 
-def _gpu_billing_collection():
+def _gpu_billing_collection() -> GPUBillingRepository:
     """Return the gpu_billing collection in the current MongoDB."""
     db = config().mongo.database_instance
     return GPUBillingRepository(database=db)
 
 
-def get_cluster_gpu_billings(cluster_name: str) -> List[GPUBilling]:
+def get_cluster_gpu_billings(cluster_name: str) -> list[GPUBilling]:
     """Return GPU->billing mapping records for a cluster, sorted by ascending `since`."""
     return sorted(
         _gpu_billing_collection().find_by({"cluster_name": cluster_name}),
@@ -102,7 +101,7 @@ def get_cluster_gpu_billings(cluster_name: str) -> List[GPUBilling]:
     )
 
 
-def get_rgus(rgu_version="1.0") -> Dict[str, float]:
+def get_rgus(rgu_version: str = "1.0") -> dict[str, float]:
     """
     Return GPU->RGU mapping for given RGU version.
 
