@@ -15,7 +15,7 @@ def apply_users_delegation_exceptions(
     # Load exceptions
     exceptions = load_ldap_exceptions(ldap_config)
 
-    for _, user in DD_persons.items():
+    for user in DD_persons.values():
         if (
             exceptions
             and user["mila_ldap"]["mila_email_username"] in exceptions["delegations"]
@@ -39,7 +39,7 @@ def apply_users_supervisor_exceptions(
     # Load exceptions
     exceptions = load_ldap_exceptions(ldap_config)
 
-    for _, user in DD_persons.items():
+    for user in DD_persons.values():
         # if there is a supervisors override, use it whatever the student status may be
         if exceptions and user["mila_ldap"]["mila_email_username"] in exceptions.get(
             "supervisors_overrides", []

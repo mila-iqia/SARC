@@ -70,7 +70,7 @@ examples = ["seaborn>=0.13.2,<0.14"]
 
 
 [tool.ruff.lint]
-select = ["ARG", "F811", "FA", "LOG", "PIE", "PL", "T20"]
+select = ["ARG", "F811", "FA", "LOG", "PERF", "PIE", "PL", "T20"]
 ignore = [
   "PLW2901",  # loop variable overwritten by assignment
   "PLR0912",  # too many branches
@@ -81,7 +81,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["ARG", "T20"]
+"tests/**" = ["ARG", "PERF", "T20"]
 "sarc/testing/**" = ["T20"]
 "examples/**" = ["T20"]
 "docs/**" = ["T20"]
