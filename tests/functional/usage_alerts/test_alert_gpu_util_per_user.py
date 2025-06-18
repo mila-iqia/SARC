@@ -1,4 +1,3 @@
-import functools
 import re
 from datetime import timedelta
 
