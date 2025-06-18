@@ -181,20 +181,20 @@ Mysterious Stranger,BigProf,Manager,activated,stranger.person,ms@hotmail.com
         "not_student": [],
         "delegations": {
             "john.smith003@mila.quebec": [
-                "john.smith004@mila.quebec",            
-                "john.smith005@mila.quebec"            
+                "john.smith004@mila.quebec",
+                "john.smith005@mila.quebec"
             ]
         },
         "supervisors_overrides": {
             "john.smith001@mila.quebec": [
-                "john.smith003@mila.quebec"        
+                "john.smith003@mila.quebec"
             ],
             "john.smith002@mila.quebec": [
-                "john.smith003@mila.quebec",            
-                "john.smith004@mila.quebec"            
+                "john.smith003@mila.quebec",
+                "john.smith004@mila.quebec"
             ]
         }
-        
+
     }
     """
 

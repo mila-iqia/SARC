@@ -70,7 +70,7 @@ examples = ["seaborn>=0.13.2,<0.14"]
 
 
 [tool.ruff.lint]
-select = ["ARG", "E", "F811", "FA", "LOG", "PERF", "PIE", "PL", "T20"]
+select = ["ARG", "E", "F811", "FA", "LOG", "PERF", "PIE", "PL", "T20", "W"]
 ignore = [
   "E501",     # line too long (ruff format will handle it)
   "PLW2901",  # loop variable overwritten by assignment
