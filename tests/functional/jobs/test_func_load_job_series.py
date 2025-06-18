@@ -438,7 +438,7 @@ def test_load_job_series_clip_time_false(params, file_regression):
     "params", params_no_start_or_end.values(), ids=params_no_start_or_end.keys()
 )
 def test_load_job_series_clip_time_true_no_start_or_end(params, file_regression):
-    with pytest.raises(ValueError, match="Clip time\: missing (start|end)"):
+    with pytest.raises(ValueError, match=r"Clip time\: missing (start|end)"):
         load_job_series(clip_time=True, **params)
 
 
