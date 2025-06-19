@@ -1,8 +1,12 @@
 from collections import defaultdict
+from collections.abc import Iterable
+from datetime import datetime
 
 from pymongo import InsertOne, UpdateOne
+from pymongo.collection import Collection
 
-from sarc.config import config
+from sarc.cache import CachePolicy
+from sarc.config import Config, config
 from sarc.traces import using_trace
 from sarc.users.mymila import fetch_mymila
 
@@ -10,7 +14,7 @@ START = "mymila_start"
 END = "mymila_end"
 
 
-def _check_timeline_consistency(history):
+def _check_timeline_consistency(history: list[dict[str, datetime | None]]) -> None:
     start = None
     end = None
 
@@ -36,7 +40,7 @@ def _check_timeline_consistency(history):
         end = new_end
 
 
-def user_from_entry(username, entry):
+def user_from_entry(username: str, entry: dict) -> dict:
     return {
         "name": entry["display_name"],
         "mila_ldap": {
@@ -51,7 +55,7 @@ def user_from_entry(username, entry):
     }
 
 
-def insert_history(user, original_history):
+def insert_history(user: str, original_history: list[dict]):
     updates = []
 
     # ignore latest entry
@@ -65,7 +69,12 @@ def insert_history(user, original_history):
     return updates
 
 
-def compute_entry_diff(entry, entry_db, diff=None, excluded=("_id",)):
+def compute_entry_diff[V](
+    entry: dict[str, V],
+    entry_db: dict[str, V],
+    diff: dict[str, V] | None = None,
+    excluded: Iterable[str] = ("_id",),
+) -> dict[str, V]:
     keys = set(entry.keys())
 
     if diff is None:
@@ -84,7 +93,7 @@ def compute_entry_diff(entry, entry_db, diff=None, excluded=("_id",)):
     return diff
 
 
-def sync_entries(user, entry, entry_db) -> list:
+def sync_entries[V](user: str, entry: dict[str, V], entry_db: dict[str, V]) -> list:
     diff = compute_entry_diff(user_from_entry(user, entry), entry_db)
 
     if len(diff) > 0:
@@ -97,7 +106,9 @@ def sync_entries(user, entry, entry_db) -> list:
     return []
 
 
-def sync_history_diff(user, original_history, original_history_db):
+def sync_history_diff(
+    user: str, original_history: list[dict], original_history_db: list[dict]
+) -> list:
     # ignore latest entry
     # it will be handled by the regular update
     history_db = original_history_db
@@ -127,9 +138,9 @@ def sync_history_diff(user, original_history, original_history_db):
         )
         return start_match and end_match
 
-    missing_entries = []
-    matched_entries = defaultdict(int)
-    matched = []
+    missing_entries: list[dict] = []
+    matched_entries: dict[int, int] = defaultdict(int)
+    matched: list[tuple[str, dict, dict]] = []
 
     for entry in history:
         for entry_db in history_db:
@@ -154,7 +165,9 @@ def sync_history_diff(user, original_history, original_history_db):
     return updates
 
 
-def user_history_diff(users_collection, userhistory: dict[str, list[dict]]):
+def user_history_diff(
+    users_collection: Collection, userhistory: dict[str, list[dict]]
+) -> list:
     dbusers = users_collection.find({})
     userhistory_db = defaultdict(list)
     updates = []
@@ -186,8 +199,10 @@ def user_history_diff(users_collection, userhistory: dict[str, list[dict]]):
     return updates
 
 
-def user_history_backfill(users_collection, LD_users, backfill=True):
-    userhistory = defaultdict(list)
+def user_history_backfill(
+    users_collection: Collection, LD_users: list[dict], backfill: bool = True
+) -> tuple[list | None, dict[str, dict]]:
+    userhistory: dict[str, list[dict]] = defaultdict(list)
     updates = None
 
     # Group user by their emails
@@ -196,7 +211,7 @@ def user_history_backfill(users_collection, LD_users, backfill=True):
         userhistory[index].append(user)
 
     # make sure the history is clean
-    for user, history in userhistory.items():
+    for history in userhistory.values():
         history.sort(key=lambda item: item[START])
 
         _check_timeline_consistency(history)
@@ -205,22 +220,26 @@ def user_history_backfill(users_collection, LD_users, backfill=True):
     if backfill:
         # users that have a single entry will be upated
         # by the regular flow
-        user_with_history = {}
-        for user, history in userhistory.items():
+        user_with_history: dict[str, list[dict]] = {}
+        for u, history in userhistory.items():
             if len(history) > 1:
-                user_with_history[user] = history
+                user_with_history[u] = history
 
         updates = user_history_diff(users_collection, user_with_history)
 
     # latest records
-    latest = {}
-    for user, history in userhistory.items():
-        latest[user] = history[-1]
+    latest: dict[str, dict] = {}
+    for u2, history in userhistory.items():
+        latest[u2] = history[-1]
 
     return updates, latest
 
 
-def _user_record_backfill(cfg, user_collection, cache_policy=True):
+def _user_record_backfill(
+    cfg: Config,
+    user_collection: Collection,
+    cache_policy: CachePolicy = CachePolicy.use,
+) -> tuple[list | None, dict[str, dict]]:
     """No global version for simpler testing"""
     # We do not set expected exceptions, so that any exception will be re-raised by tracing.
     with using_trace(
@@ -233,9 +252,10 @@ def _user_record_backfill(cfg, user_collection, cache_policy=True):
         return user_history_backfill(user_collection, mymila_data)
 
 
-def user_record_backfill(cache_policy=True):
-    cfg = config()
+def user_record_backfill(cache_policy: CachePolicy = CachePolicy.use):
+    cfg = config("scraping")
 
+    assert cfg.ldap is not None
     user_collection = cfg.mongo.database_instance[cfg.ldap.mongo_collection_name]
 
     _user_record_backfill(cfg, user_collection, cache_policy=cache_policy)

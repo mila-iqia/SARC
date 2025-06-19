@@ -173,7 +173,7 @@ def test_extract_groups_is_core():
 def test_resolve_supervisors():
     ldap_people = ldap_mock()
 
-    errors = resolve_supervisors(ldap_people, group_to_prof(), exceptions=None)
+    errors = resolve_supervisors(ldap_people, group_to_prof(), exceptions={})
 
     assert errors.has_errors() is False
 
@@ -185,7 +185,7 @@ def test_resolve_supervisors():
 def test_resolve_no_supervisors():
     ldap_people = ldap_mock_no_supervisor()
 
-    errors = resolve_supervisors(ldap_people, group_to_prof(), exceptions=None)
+    errors = resolve_supervisors(ldap_people, group_to_prof(), exceptions={})
 
     errors.show()
 
@@ -197,7 +197,7 @@ def test_resolve_no_supervisors():
 def test_resolve_too_many_supervisors():
     ldap_people = ldap_mock_too_many_supervisor()
 
-    errors = resolve_supervisors(ldap_people, group_to_prof(), exceptions=None)
+    errors = resolve_supervisors(ldap_people, group_to_prof(), exceptions={})
 
     errors.show()
     assert errors.has_errors() is True
@@ -208,7 +208,7 @@ def test_resolve_too_many_supervisors():
 def test_resolve_missing_supervisors():
     ldap_people = ldap_mock_missing_supervisor()
 
-    errors = resolve_supervisors(ldap_people, group_to_prof(), exceptions=None)
+    errors = resolve_supervisors(ldap_people, group_to_prof(), exceptions={})
 
     errors.show()
     assert errors.has_errors() is True
@@ -221,7 +221,7 @@ def test_resolve_missing_supervisors_mapping():
         make_student("supervisor", ["mcgill", "supervisor"]),
     ]
 
-    errors = resolve_supervisors(ldap_people, group_to_prof(), exceptions=None)
+    errors = resolve_supervisors(ldap_people, group_to_prof(), exceptions={})
 
     errors.show()
     assert errors.has_errors() is True
@@ -234,7 +234,7 @@ def test_resolve_missing_supervisors_mapping():
 def test_resolve_missing_supervisor2():
     ldap_people = ldap_mock_missing_supervisor_mapping()
 
-    errors = resolve_supervisors(ldap_people, group_to_prof(), exceptions=None)
+    errors = resolve_supervisors(ldap_people, group_to_prof(), exceptions={})
 
     errors.show()
     assert errors.has_errors() is True
