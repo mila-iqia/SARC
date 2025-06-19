@@ -2350,6 +2350,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "fabric" },
+    { name = "filelock" },
     { name = "flatten-dict" },
     { name = "gifnoc" },
     { name = "iguane" },
@@ -2408,6 +2409,7 @@ examples = [
 [package.metadata]
 requires-dist = [
     { name = "fabric", specifier = ">=3.0.0,<4" },
+    { name = "filelock", specifier = ">=3.18.0" },
     { name = "flatten-dict", specifier = ">=0.4.2,<0.5" },
     { name = "gifnoc", specifier = ">=0.5.2,<0.6" },
     { name = "iguane", git = "https://github.com/mila-iqia/IGUANE.git?rev=428a433d395ed17c00818beb865a38d321adf169" },
