@@ -7,7 +7,7 @@ from sarc.config import MTL
 logger = logging.getLogger(__name__)
 
 
-def check_cluster_response(time_interval: timedelta = timedelta(days=7)):
+def check_cluster_response(time_interval: timedelta = timedelta(days=7)) -> None:
     """
     Check if we scraped clusters recently.
     Log a warning for each cluster not scraped since `time_interval` from now.

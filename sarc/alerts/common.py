@@ -1,5 +1,7 @@
 """Core classes for the health monitor."""
 
+from __future__ import annotations
+
 import itertools
 import json
 import logging
@@ -10,7 +12,7 @@ from datetime import datetime, timedelta
 from enum import Enum
 from graphlib import TopologicalSorter
 from pathlib import Path
-from typing import Optional, Union
+from typing import Callable, Generator, Self, cast
 
 from gifnoc.std import time
 from serieux import TaggedSubclass, deserialize, serialize
@@ -45,7 +47,7 @@ class CheckException:
     message: str
 
     @staticmethod
-    def from_exception(exc):
+    def from_exception(exc: Exception) -> CheckException:
         return CheckException(
             type=type(exc).__qualname__,
             message=str(exc),
@@ -60,7 +62,7 @@ class CheckResult:
     """Results of a check."""
 
     # Name of the health check that has this result
-    name: str = None
+    name: str
 
     # Global status of the check
     status: CheckStatus = CheckStatus.ABSENT
@@ -69,38 +71,38 @@ class CheckResult:
     statuses: StatusDict = field(default_factory=dict)
 
     # Information about the exception, if the check has ERROR status
-    exception: Optional[CheckException] = None
+    exception: CheckException | None = None
 
     # Date at which the check finished
     issue_date: datetime = field(default_factory=lambda: time.now().astimezone())
 
     # Date at which the check will be considered STALE
-    expiry: Optional[datetime] = None
+    expiry: datetime | None = None
 
     # Check object
-    check: Optional["TaggedSubclass[HealthCheck]"] = None
+    check: TaggedSubclass[HealthCheck] | None = None
 
-    def get_failures(self):
+    def get_failures(self) -> dict[str, CheckStatus]:
         """Return a dictionary of status/substatus: CheckStatus for failures."""
         failure_statuses = (CheckStatus.FAILURE, CheckStatus.ERROR)
-        results = {}
+        results: dict[str, CheckStatus] = {}
         if self.status in failure_statuses:
             results[self.name] = self.status
         results.update(
             {
-                f"{self.name}/{k}": status
+                f"{self.name}/{k}": cast(CheckStatus, status)
                 for k, status in self.statuses.items()
                 if status in failure_statuses
             }
         )
         return results
 
-    def get_save_path(self, directory):
+    def get_save_path(self, directory: Path) -> Path:
         """Generate save path given the parent directory."""
         timestring = self.issue_date.strftime("%Y-%m-%d-%H-%M-%S")
         return directory / f"{timestring}.json"
 
-    def save(self, directory):
+    def save(self, directory: Path) -> None:
         """Save this result in a directory."""
         os.makedirs(directory, exist_ok=True)
         # TaggedSubclass[CheckResult] allows serializing a subclass of CheckResult
@@ -124,24 +126,24 @@ class HealthCheck:
     interval: timedelta
 
     # Name of the check
-    name: str = None
+    name: str = "NOTSET"
 
     # Parameters of the check
     parameters: dict[str, str] = field(default_factory=dict)
 
     # Directory in which to serialize results
     # Note: this is typically set by the parent to be root_check_dir/check.name
-    directory: Path = None
+    directory: Path | None = None
 
     # Other checks on which this check depends. If these checks fail, this
     # check will not be run.
-    depends: Union[str, list[str]] = field(default_factory=list)
+    depends: list[str] | str = field(default_factory=list)
 
     def __post_init__(self):
         if isinstance(self.depends, str):
             self.depends = [self.depends]
 
-    def parameterize(self, **parameters):
+    def parameterize(self, **parameters) -> Self:
         """Parameterize this check.
 
         * Set the `parameters` field
@@ -177,11 +179,13 @@ class HealthCheck:
         """Shortcut to generate FAIL status."""
         return self.result(CheckStatus.FAILURE, **kwargs)
 
-    def check(self) -> Union[CheckResult, CheckStatus]:  # pragma: no cover
+    def check(
+        self,
+    ) -> CheckResult | CheckStatus | dict[str, bool] | Callable[[], CheckResult]:
         """Perform the check and return a result or status."""
         raise NotImplementedError("Please override in subclass.")
 
-    def all_results(self, ascending=False):
+    def all_results(self, ascending: bool = False) -> Generator[CheckResult]:
         """Yield all results, starting from the most recent.
 
         Arguments:
@@ -198,7 +202,7 @@ class HealthCheck:
         for file in config_files:
             yield self.read_result(file)
 
-    def read_result(self, path) -> CheckResult:
+    def read_result(self, path: Path) -> CheckResult:
         """Read results from the file at the given path."""
         data = json.loads(path.read_text())
         return deserialize(TaggedSubclass[CheckResult], data)
@@ -223,28 +227,31 @@ class HealthCheck:
         * If there is an exception, generate ERROR result.
         """
         try:
-            results = self.check()
-            if not isinstance(results, CheckResult):
-                if isinstance(results, dict):
+            raw_results = self.check()
+            if not isinstance(raw_results, CheckResult):
+                if isinstance(raw_results, dict):
                     statuses = {
                         k: CheckStatus.OK if success else CheckStatus.FAILURE
-                        for k, success in results.items()
+                        for k, success in raw_results.items()
                     }
                     results = self.result(CheckStatus.OK, statuses=statuses)
-                elif results in (self.ok, self.fail):
-                    results = results()
+                elif isinstance(raw_results, CheckStatus):
+                    results = self.result(status=raw_results)
                 else:
-                    results = self.result(status=results)
+                    results = raw_results()
+            else:
+                results = raw_results
         except Exception as exc:  # pylint: disable=W0718
             results = self.result(
                 CheckStatus.ERROR, exception=CheckException.from_exception(exc)
             )
         return results
 
-    def __call__(self, write=True):
+    def __call__(self, write: bool = True) -> CheckResult:
         """Perform the check and save it (unless save=False)."""
         results = self.wrapped_check()
         if write:
+            assert self.directory is not None
             results.save(self.directory)
         return results
 
