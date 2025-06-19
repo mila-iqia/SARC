@@ -6,12 +6,100 @@ from typing import Sequence
 import pandas as pd
 import pyodbc
 from azure.identity import ClientSecretCredential
+from pydantic import BaseModel
 
 from sarc.cache import with_cache
 from sarc.config import MyMilaConfig
 
 START_DATE_KEY = "Start Date with MILA"
 END_DATE_KEY = "End Date with MILA"
+
+
+class Affiliation(BaseModel):
+    university: str
+    type: str
+    departement: str
+
+
+class MyMilaInfo(BaseModel):
+    mymila_id: int
+    affiliation: Affiliation | None
+    drac_account: str | None
+    supervisor: int | None
+    co_supervisor: int | None
+    first_name: str
+    last_name: str
+    github_username: str | None
+    google_scholar_profile: str | None
+    mila_email: str
+    mila_number: str
+    member_type: str
+
+
+def _to_entry(s: pd.Series) -> MyMilaInfo:
+    first_name = s["Preferred_First_Name"]
+    if first_name is None:
+        first_name = s["First_Name"]
+    return MyMilaInfo(
+        mymila_id=int(s["internal_id"]),
+        affiliation=Affiliation(
+            university=s["Affiliated_university"],
+            type=s["Affiliation_type"],
+            departement=s["Department_affiliated"],
+        ),
+        drac_account=s["Alliance-DRAC_account"],
+        supervisor=s["Supervisor_Principal__MEMBER_NUM_"],
+        co_supervisor=s["Co-Supervisor__MEMBER_NUM_"],
+        # End_date_of_academic_nomination
+        # End_date_of_studiesç
+        # End_date_of_visit-internship
+        # Faculty_affiliated
+        first_name=first_name,
+        last_name=s["Last_Name"],
+        github_username=s["GitHub_username"],
+        google_scholar_profile=s["Google_Scholar_profile"],
+        mila_email=s["MILA_Email"],
+        # Membership_Type
+        mila_number=s["Mila_Number"],
+        member_type=s["Profile_Type"],
+    )
+
+
+# Current columns
+
+# 'Affiliated_university',
+# 'Affiliation_type',
+# 'Alliance-DRAC_account',
+# 'Co-Supervisor_Membership_Type',
+# 'Co-Supervisor__MEMBER_NAME_',
+# 'Co-Supervisor__MEMBER_NUM_',
+# 'Department_affiliated',
+# 'End_date_of_academic_nomination',
+# 'End_date_of_studies',
+# 'End_date_of_visit-internship',
+# 'Faculty_affiliated',
+# 'First_Name',
+# 'GitHub_username',
+# 'Google_Scholar_profile',
+# 'Last_Name',
+# 'MILA_Email',
+# 'Membership_Type',
+# 'Mila_Number',
+# 'Preferred_First_Name',
+# 'Profile_Type',
+# 'Start_Date_with_MILA',
+# 'Start_date_of_academic_nomination',
+# 'Start_date_of_studies',
+# 'Start_date_of_visit-internship',
+# 'End_Date_with_MILA',
+# 'Status',
+# 'Supervisor_Principal_Membership_Type',
+# 'Supervisor_Principal__MEMBER_NAME_',
+# 'Supervisor_Principal__MEMBER_NUM_',
+# 'internal_id',
+# 'Co-Supervisor_CCAI_Chair_CIFAR',
+# 'Supervisor_Principal_CCAI_Chair_CIFAR',
+# 'CCAI_Chair_CIFAR'
 
 
 @with_cache(
@@ -40,7 +128,7 @@ def query_mymila(cfg: MyMilaConfig):
     records = cursor.fetchall()
     headers = [i[0] for i in cursor.description]
     df = pd.DataFrame(records, columns=headers)
-    return df
+    return [_to_entry(s) for s in df]
 
 
 def to_records(df):
