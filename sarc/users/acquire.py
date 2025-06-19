@@ -29,10 +29,7 @@ from sarc.users.users_exceptions import (
 )
 
 
-def run(
-    prompt: bool = False,
-    cache_policy: CachePolicy = CachePolicy.use,
-) -> None:
+def run(cache_policy: CachePolicy = CachePolicy.use) -> None:
     """If prompt is True, script will prompt for manual matching.
 
     Arguments:
@@ -140,7 +137,6 @@ def run(
             ],
             name_distance_delta_threshold=0,
             verbose=True,
-            prompt=prompt,
         )
 
         # `DD_persons_matched` is indexed by mila_email_username values,
