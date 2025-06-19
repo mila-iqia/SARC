@@ -16,7 +16,9 @@ class HealthMonitorCommand:
         hcfg = config().health_monitor
         with gifnoc.use(self.config):
             assert hcfg is not None
-            monitor = HealthMonitor(directory=hcfg.directory, checks=hcfg.checks)
+            monitor = HealthMonitor(
+                directory=hcfg.directory.as_uri(), checks=hcfg.checks
+            )
             try:
                 while True:
                     print(monitor.status)

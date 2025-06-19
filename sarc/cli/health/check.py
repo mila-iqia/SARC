@@ -29,6 +29,7 @@ class HealthCheckCommand:
                 results = check(write=False)
                 pprint(results)
                 for k, status in results.statuses.items():
+                    assert isinstance(status, CheckStatus)
                     print(f"{status.name} -- {k}")
                 print(f"{results.status.name}")
             elif self.once:
@@ -41,6 +42,7 @@ class HealthCheckCommand:
                         print(f"Check '{check.name}' failed.")
                         pprint(results)
                         for k, status in results.statuses.items():
+                            assert isinstance(status, CheckStatus)
                             print(f"{status.name} -- {k}")
                         print(f"{results.status.name}")
             else:
