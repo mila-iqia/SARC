@@ -49,6 +49,7 @@ class DbBackup:
                 if self.output:
                     backup_path = Path(self.output)
                 else:
+                    assert cfg.cache is not None
                     backup_path = cfg.cache / "backup" / _get_current_timestring()
                 backup_path = backup_path.resolve()
 

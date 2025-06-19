@@ -14,20 +14,22 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class HealthCheckCommand:
-    config: Path = None
+    config: Path | None = None
     once: bool = False
 
-    name: str = None
+    name: str | None = None
 
     def execute(self) -> int:
         hcfg = config().health_monitor
+        assert hcfg is not None
         with gifnoc.use(self.config):
-            if self.name:
+            if self.name is not None:
                 # only run one check, once (no CheckRunner)
                 check = hcfg.checks[self.name]
                 results = check(write=False)
                 pprint(results)
                 for k, status in results.statuses.items():
+                    assert isinstance(status, CheckStatus)
                     print(f"{status.name} -- {k}")
                 print(f"{results.status.name}")
             elif self.once:
@@ -40,6 +42,7 @@ class HealthCheckCommand:
                         print(f"Check '{check.name}' failed.")
                         pprint(results)
                         for k, status in results.statuses.items():
+                            assert isinstance(status, CheckStatus)
                             print(f"{status.name} -- {k}")
                         print(f"{results.status.name}")
             else:

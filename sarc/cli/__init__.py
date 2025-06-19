@@ -36,7 +36,7 @@ level_colors = {
 
 
 class NiceHandler(logging.StreamHandler):
-    def format(self, record):
+    def format(self, record: logging.LogRecord) -> str:
         color = getattr(colors, level_colors.get(record.levelname, "grey"))
         ts = time.asctime(time.localtime(record.created))
         parts = [
@@ -68,7 +68,7 @@ class CLI:
         return self.command.execute()
 
 
-def main(argv: list[Any] | None = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     """Main commandline for SARC"""
 
     parser = ArgumentParser()

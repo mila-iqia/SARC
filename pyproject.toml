@@ -101,10 +101,6 @@ build-backend = "hatchling.build"
 norecursedirs = "tests/common"
 
 [[tool.mypy.overrides]]
-module = "sarc.cli.*"
-ignore_errors = true
-
-[[tool.mypy.overrides]]
 module = "gifnoc.*"
 ignore_missing_imports = true
 
@@ -123,4 +119,3 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = "serieux.*"
 ignore_missing_imports = true
-

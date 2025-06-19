@@ -1,13 +1,14 @@
 from dataclasses import dataclass
+from typing import Callable
 
 from simple_parsing import field
 
-from sarc.config import config
-from sarc.storage.diskusage import get_diskusage_collection
+from sarc.config import ClusterConfig, config
+from sarc.storage.diskusage import DiskUsage, get_diskusage_collection
 from sarc.storage.drac import fetch_diskusage_report as fetch_dirac_diskusage
 from sarc.storage.mila import fetch_diskusage_report as fetch_mila_diskusage
 
-methods = {
+methods: dict[str, Callable[[ClusterConfig], DiskUsage]] = {
     "default": fetch_dirac_diskusage,
     "mila": fetch_mila_diskusage,
 }
@@ -19,7 +20,7 @@ class AcquireStorages:
     dry: bool = False
 
     def execute(self) -> int:
-        cfg = config()
+        cfg = config("scraping")
 
         for cluster_name in self.cluster_names:
             print(f"Acquiring {cluster_name} storages report...")
@@ -34,6 +35,6 @@ class AcquireStorages:
                 collection.add(du)
             else:
                 print("Document:")
-                print(du.json(indent=2))
+                print(du.model_dump_json(indent=2))
 
         return 0

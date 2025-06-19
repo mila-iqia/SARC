@@ -9,7 +9,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field, fields
 from functools import cached_property
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, cast, overload
+from typing import TYPE_CHECKING, Any, Callable, Literal, cast, overload
 
 import gifnoc
 import tzlocal
@@ -71,7 +71,7 @@ class ClusterConfig:
             for node in expand_hostlist(node_list)
         }
 
-    def harmonize_gpu(self, nodename: str | None, gpu_type: str) -> Optional[str]:
+    def harmonize_gpu(self, nodename: str | None, gpu_type: str) -> str | None:
         """
         Actual utility method to get a GPU name from given node and gpu type.
 
