@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta
-from typing import Any, Callable, Dict, Literal, Optional
+from typing import Any, Callable, Literal
 
 import numpy as np
 import pandas
