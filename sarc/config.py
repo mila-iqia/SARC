@@ -71,7 +71,7 @@ class ClusterConfig:
             for node in expand_hostlist(node_list)
         }
 
-    def harmonize_gpu(self, nodename: str, gpu_type: str) -> Optional[str]:
+    def harmonize_gpu(self, nodename: str | None, gpu_type: str) -> Optional[str]:
         """
         Actual utility method to get a GPU name from given node and gpu type.
 
@@ -84,7 +84,7 @@ class ClusterConfig:
         gpu_type = gpu_type_parts[0]
 
         # Try to get harmonized GPU from nodename mapping
-        harmonized_gpu = self.gpus_per_nodes.get(nodename, {}).get(gpu_type)
+        harmonized_gpu = self.gpus_per_nodes.get(cast(str, nodename), {}).get(gpu_type)
 
         # Otherwise, try to get harmonized GPU from default mapping
         if harmonized_gpu is None:
