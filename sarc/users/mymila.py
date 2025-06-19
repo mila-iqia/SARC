@@ -36,7 +36,7 @@ def query_mymila(cfg: MyMilaConfig):
 
     connection = pyodbc.connect(connection_string, attrs_before=attrs_before)
     cursor = connection.cursor()
-    cursor.execute("SELECT * FROM MyMila_Extract_Etudiants")
+    cursor.execute("SELECT * FROM MyMila_Extract_Etudiants_2")
     records = cursor.fetchall()
     headers = [i[0] for i in cursor.description]
     df = pd.DataFrame(records, columns=headers)
