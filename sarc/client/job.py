@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from datetime import date, datetime, time, timedelta
+from collections.abc import Sequence
+from datetime import datetime, time, timedelta
 from enum import Enum
-from typing import Iterable, Optional
+from typing import Iterable, Literal, overload
 
-from prometheus_api_client import MetricRangeDataFrame
+from pandas import DataFrame
 from pydantic import field_validator
 from pydantic_mongo import AbstractRepository, PydanticObjectId
 
@@ -163,11 +164,49 @@ class SlurmJob(BaseModel):
 
         return timedelta(seconds=0)
 
+    @overload
+    def series(
+        self,
+        metric: str | Sequence[str],
+        min_interval: int = 30,
+        max_points: int = 100,
+        measure: str | None = None,
+        aggregation: Literal["total", "interval"] | None = "total",
+        dataframe: Literal[True] = True,
+    ) -> DataFrame | None: ...
+
+    @overload
+    def series(
+        self,
+        metric: str | Sequence[str],
+        min_interval: int = 30,
+        max_points: int = 100,
+        measure: str | None = None,
+        aggregation: Literal["total", "interval"] | None = "total",
+        dataframe: Literal[False] = False,
+    ) -> list | None: ...
+
     @scraping_mode_required
-    def series(self, **kwargs) -> MetricRangeDataFrame | list | None:
+    def series(
+        self,
+        metric: str | Sequence[str],
+        min_interval: int = 30,
+        max_points: int = 100,
+        measure: str | None = None,
+        aggregation: Literal["total", "interval"] | None = "total",
+        dataframe: bool = True,
+    ) -> DataFrame | list | None:
         from sarc.jobs.series import get_job_time_series
 
-        return get_job_time_series(job=self, **kwargs)
+        return get_job_time_series(
+            job=self,
+            metric=metric,
+            min_interval=min_interval,
+            max_points=max_points,
+            measure=measure,
+            aggregation=aggregation,
+            dataframe=dataframe,
+        )  # type: ignore[call-overload]
 
     @trace_decorator()
     @scraping_mode_required

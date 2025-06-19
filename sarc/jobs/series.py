@@ -289,7 +289,7 @@ def compute_job_statistics_one_metric(
     unused_threshold: float | None = 0.01,
     is_time_counter: bool = False,
 ) -> STATS | None:
-    df = job.series(metric=metric_name, max_points=10_000)
+    df = job.series(metric=metric_name, max_points=10_000, dataframe=True)
     if df is None:
         return None
     return compute_job_statistics_from_dataframe(
