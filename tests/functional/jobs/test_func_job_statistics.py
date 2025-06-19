@@ -19,7 +19,7 @@ def format_fake_timeseries(metric, values, t0, delta):
 def generate_fake_timeseries(job: SlurmJob, metric, max_points=100, dataframe=True):
     assert job.nodes
 
-    n = job.elapsed_time // 30
+    n = int(job.elapsed_time // 30)
 
     if n == 0:
         return None

@@ -1,22 +1,16 @@
 from __future__ import annotations
 
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 from enum import Enum
 from typing import Iterable, Optional
 
+from prometheus_api_client import MetricRangeDataFrame
 from pydantic import field_validator
 from pydantic_mongo import AbstractRepository, PydanticObjectId
 
 from sarc.traces import trace_decorator
 
-from ..config import (
-    MTL,
-    TZLOCAL,
-    UTC,
-    ClusterConfig,
-    config,
-    scraping_mode_required,
-)
+from ..config import MTL, TZLOCAL, UTC, ClusterConfig, config, scraping_mode_required
 from ..model import BaseModel
 
 
@@ -68,18 +62,18 @@ class Statistics(BaseModel):
 class JobStatistics(BaseModel):
     """Statistics for a job."""
 
-    gpu_utilization: Optional[Statistics] = None
-    gpu_utilization_fp16: Optional[Statistics] = None
-    gpu_utilization_fp32: Optional[Statistics] = None
-    gpu_utilization_fp64: Optional[Statistics] = None
-    gpu_sm_occupancy: Optional[Statistics] = None
-    gpu_memory: Optional[Statistics] = None
-    gpu_power: Optional[Statistics] = None
+    gpu_utilization: Statistics | None = None
+    gpu_utilization_fp16: Statistics | None = None
+    gpu_utilization_fp32: Statistics | None = None
+    gpu_utilization_fp64: Statistics | None = None
+    gpu_sm_occupancy: Statistics | None = None
+    gpu_memory: Statistics | None = None
+    gpu_power: Statistics | None = None
 
-    cpu_utilization: Optional[Statistics] = None
-    system_memory: Optional[Statistics] = None
+    cpu_utilization: Statistics | None = None
+    system_memory: Statistics | None = None
 
-    def empty(self):
+    def empty(self) -> bool:
         return (
             self.gpu_utilization is None
             and self.gpu_utilization_fp16 is None
@@ -96,34 +90,34 @@ class JobStatistics(BaseModel):
 class SlurmResources(BaseModel):
     """Counts for various resources."""
 
-    cpu: Optional[int] = None
-    mem: Optional[int] = None
-    node: Optional[int] = None
-    billing: Optional[int] = None
-    gres_gpu: Optional[int] = None
-    gpu_type: Optional[str] = None
+    cpu: int | None = None
+    mem: int | None = None
+    node: int | None = None
+    billing: int | None = None
+    gres_gpu: int | None = None
+    gpu_type: str | None = None
 
 
 class SlurmJob(BaseModel):
     """Holds data for a Slurm job."""
 
     # Database ID
-    id: PydanticObjectId = None
+    id: PydanticObjectId | None = None
 
     # job identification
     cluster_name: str
     account: str
     job_id: int
-    array_job_id: Optional[int] = None
-    task_id: Optional[int] = None
+    array_job_id: int | None = None
+    task_id: int | None = None
     name: str
     user: str
     group: str
 
     # status
     job_state: SlurmState
-    exit_code: Optional[int] = None
-    signal: Optional[int] = None
+    exit_code: int | None = None
+    signal: int | None = None
 
     # allocation information
     partition: str
@@ -131,9 +125,9 @@ class SlurmJob(BaseModel):
     work_dir: str
 
     # Miscellaneous
-    constraints: Optional[str] = None
-    priority: Optional[int] = None
-    qos: Optional[str] = None
+    constraints: str | None = None
+    priority: int | None = None
+    qos: str | None = None
 
     # Flags
     CLEAR_SCHEDULING: bool = False
@@ -142,50 +136,55 @@ class SlurmJob(BaseModel):
     STARTED_ON_BACKFILL: bool = False
 
     # temporal fields
-    time_limit: Optional[int] = None
+    time_limit: int | None = None
     submit_time: datetime
-    start_time: Optional[datetime] = None
-    end_time: Optional[datetime] = None
-    elapsed_time: int
+    start_time: datetime | None = None
+    end_time: datetime | None = None
+    elapsed_time: float
 
     # tres
     requested: SlurmResources
     allocated: SlurmResources
 
     # statistics
-    stored_statistics: Optional[JobStatistics] = None
+    stored_statistics: JobStatistics | None = None
 
     @field_validator("submit_time", "start_time", "end_time")
     @classmethod
-    def _ensure_timezone(cls, v):
+    def _ensure_timezone(cls, v: datetime | None) -> datetime | None:
         # We'll store in MTL timezone because why not
         return v and v.replace(tzinfo=UTC).astimezone(MTL)
 
     @property
-    def duration(self):
-        if self.end_time:
+    def duration(self) -> timedelta:
+        if self.end_time is not None:
+            assert self.start_time is not None
             return self.end_time - self.start_time
 
         return timedelta(seconds=0)
 
     @scraping_mode_required
-    def series(self, **kwargs):
-        from sarc.jobs.series import (  # pylint: disable=cyclic-import
-            get_job_time_series,
-        )
+    def series(self, **kwargs) -> MetricRangeDataFrame | list | None:
+        from sarc.jobs.series import get_job_time_series
 
         return get_job_time_series(job=self, **kwargs)
 
     @trace_decorator()
     @scraping_mode_required
-    def statistics(self, recompute=False, save=True, overwrite_when_empty=False):
-        from sarc.jobs.series import (  # pylint: disable=cyclic-import
-            compute_job_statistics,
-        )
+    def statistics(
+        self,
+        recompute: bool = False,
+        save: bool = True,
+        overwrite_when_empty: bool = False,
+    ) -> JobStatistics | None:
+        from sarc.jobs.series import compute_job_statistics
 
-        if self.stored_statistics and not recompute:
+        if self.stored_statistics is not None and not recompute:
             return self.stored_statistics
-        elif self.end_time and self.fetch_cluster_config().prometheus_url:
+        elif (
+            self.end_time is not None
+            and self.fetch_cluster_config().prometheus_url is not None
+        ):
             statistics = compute_job_statistics(self)
             if save and (
                 overwrite_when_empty
@@ -203,9 +202,9 @@ class SlurmJob(BaseModel):
         _jobs_collection().save_job(self)
 
     @scraping_mode_required
-    def fetch_cluster_config(self):
+    def fetch_cluster_config(self) -> ClusterConfig:
         """This function is only available on the admin side"""
-        return config().clusters[self.cluster_name]
+        return config("scraping").clusters[self.cluster_name]
 
 
 class SlurmJobRepository(AbstractRepository[SlurmJob]):
@@ -213,7 +212,7 @@ class SlurmJobRepository(AbstractRepository[SlurmJob]):
         collection_name = "jobs"
 
     @scraping_mode_required
-    def save_job(self, model: SlurmJob):
+    def save_job(self, model: SlurmJob) -> None:
         """Save a SlurmJob into the database.
 
         Note: This overrides AbstractRepository's save function to do an upsert when
@@ -222,7 +221,7 @@ class SlurmJobRepository(AbstractRepository[SlurmJob]):
         document = self.to_document(model)
         # Resubmitted jobs have the same job ID can be distinguished by their submit time,
         # as per sacct's documentation.
-        return self.get_collection().update_one(
+        self.get_collection().update_one(
             {
                 "job_id": model.job_id,
                 "cluster_name": model.cluster_name,
@@ -233,7 +232,7 @@ class SlurmJobRepository(AbstractRepository[SlurmJob]):
         )
 
 
-def _jobs_collection():
+def _jobs_collection() -> SlurmJobRepository:
     """Return the jobs collection in the current MongoDB."""
     db = config().mongo.database_instance
     return SlurmJobRepository(database=db)
@@ -276,7 +275,7 @@ def _compute_jobs_query(
     if end is not None:
         end = end.astimezone(UTC)
 
-    query = {}
+    query: dict = {}
     if cluster_name:
         query["cluster_name"] = cluster_name
 
@@ -380,7 +379,7 @@ def get_jobs(
 
 
 # pylint: disable=dangerous-default-value
-def get_job(*, query_options={}, **kwargs):
+def get_job(*, query_options: dict = {}, **kwargs) -> SlurmJob | None:
     """Get a single job that matches the query, or None if nothing is found.
 
     Same signature as `get_jobs`.
@@ -400,11 +399,11 @@ class SlurmCLuster(BaseModel):
     """Hold data for a Slurm cluster."""
 
     # Database ID
-    id: PydanticObjectId = None
+    id: PydanticObjectId | None = None
 
     cluster_name: str
-    start_date: Optional[str] = None
-    end_date: Optional[str] = None
+    start_date: str | None = None
+    end_date: str | None = None
     billing_is_gpu: bool = False
 
 

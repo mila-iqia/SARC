@@ -23,21 +23,21 @@ class Credentials(BaseModel):
 
 
 class User(BaseModel):
-    id: PydanticObjectId = None
+    id: PydanticObjectId | None = None
 
     name: str
 
     mila: Credentials
-    drac: Optional[Credentials] = None
+    drac: Credentials | None = None
 
-    teacher_delegations: Optional[list[str]] = None
+    teacher_delegations: list[str] | None = None
 
     mila_ldap: dict
-    drac_members: Optional[dict] = None
-    drac_roles: Optional[dict] = None
+    drac_members: dict | None = None
+    drac_roles: dict | None = None
 
-    record_start: Optional[datetime] = None
-    record_end: Optional[datetime] = None
+    record_start: datetime | None = None
+    record_end: datetime | None = None
 
 
 class _UserRepository(AbstractRepository[User]):
@@ -50,13 +50,15 @@ class _UserRepository(AbstractRepository[User]):
     # use: revision.update_user
 
 
-def _users_collection():
+def _users_collection() -> _UserRepository:
     """Return the jobs collection in the current MongoDB."""
     db = config().mongo.database_instance
     return _UserRepository(database=db)
 
 
-def get_users(query=None, query_options: dict | None = None, latest=True) -> list[User]:
+def get_users(
+    query: dict | None = None, query_options: dict | None = None, latest: bool = True
+) -> list[User]:
     if query_options is None:
         query_options = {}
 
@@ -77,8 +79,10 @@ def get_users(query=None, query_options: dict | None = None, latest=True) -> lis
 
 
 def get_user(
-    mila_email_username=None, mila_cluster_username=None, drac_account_username=None
-) -> Optional[User]:
+    mila_email_username: str | None = None,
+    mila_cluster_username: str | None = None,
+    drac_account_username: str | None = None,
+) -> User | None:
     if mila_email_username is not None:
         query = {
             "$and": [

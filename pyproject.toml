@@ -25,8 +25,8 @@ dependencies = [
     "opentelemetry-sdk>=1.23.0,<2",
     "requests-mock>=1.11.0,<2",
     "pandas>=2.3.0,<2.4.0",
-    "gifnoc>=0.5.0,<0.6",
-    "serieux>=0.0.7",
+    "gifnoc>=0.5.2,<0.6",
+    "serieux>=0.1,<0.2",
     "watchdog>=6,<7",
     "python-dateutil>=2.9.0.post0,<3",
     "opentelemetry-exporter-otlp>=1.23.0,<2",
@@ -59,7 +59,7 @@ dev = [
     "types-ldap3>=2.9.13.20240205",
     "types-tqdm>=4.67.0.20250417",
     "pytest-env>=1.1.5,<2",
-    "ruff>=0.11.13,<0.12",
+    "ruff>=0.12,<0.13",
 ]
 examples = ["seaborn>=0.13.2,<0.14"]
 
@@ -71,6 +71,7 @@ ignore = [
   "PLR0913",  # too many function arguments
   "PLR0915",  # too many statements
   "PLR2004",  # replace magic value by variable
+  "PLC0415",  # imports should be a the top level
 ]
 
 [tool.uv]
@@ -99,7 +100,7 @@ build-backend = "hatchling.build"
 norecursedirs = "tests/common"
 
 [[tool.mypy.overrides]]
-module = "sarc.account_matching.*,sarc.users.*,sarc.client.*,sarc.jobs.*,sarc.cli.*"
+module = "sarc.account_matching.*,sarc.users.*,sarc.jobs.*,sarc.cli.*"
 ignore_errors = true
 
 [[tool.mypy.overrides]]
@@ -115,5 +116,10 @@ module = "fabric.*"
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
+module = "iguane.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
 module = "serieux.*"
 ignore_missing_imports = true
+
