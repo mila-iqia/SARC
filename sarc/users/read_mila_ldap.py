@@ -136,6 +136,7 @@ they are structured as follows:
 """
 
 import json
+import logging
 import os
 import ssl
 from datetime import timedelta
@@ -152,6 +153,8 @@ from sarc.cache import CachePolicy, with_cache
 
 from ..config import LDAPConfig
 from .supervisor import resolve_supervisors
+
+logger = logging.getLogger(__name__)
 
 
 def _query_ldap(
@@ -312,7 +315,7 @@ def _save_to_mongo(
 
     if L_updates_to_do:
         result = collection.bulk_write(L_updates_to_do)  #  <- the actual commit
-        print(result.bulk_api_result)
+        logger.info(result.bulk_api_result)
 
 
 def load_ldap_exceptions(ldap_config: LDAPConfig) -> dict[str, list[str]]:
@@ -368,4 +371,4 @@ def run(
     if output_json_file:
         with open(output_json_file, "w", encoding="utf-8") as f_out:
             json.dump(LD_users, f_out, indent=4)
-            print(f"Wrote {output_json_file}.")
+            logger.info(f"Wrote {output_json_file}.")

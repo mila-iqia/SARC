@@ -95,10 +95,10 @@ def check_nb_jobs_per_cluster_per_time(
         threshold = max(0, avg - nb_stddev * stddev)
 
         if verbose:
-            print(f"[{cluster_name}]", file=sys.stderr)
-            print(c, file=sys.stderr)
-            print(f"avg {avg}, stddev {stddev}, threshold {threshold}", file=sys.stderr)
-            print(file=sys.stderr)
+            print(f"[{cluster_name}]", file=sys.stderr)  # noqa: T201
+            print(c, file=sys.stderr)  # noqa: T201
+            print(f"avg {avg}, stddev {stddev}, threshold {threshold}", file=sys.stderr)  # noqa: T201
+            print(file=sys.stderr)  # noqa: T201
 
         if threshold == 0:
             # If threshold is zero, no check can be done, as jobs count will be always >= 0.

@@ -6,6 +6,8 @@ import pandas as pd
 from sarc.client.series import load_job_series
 from sarc.config import MTL
 
+logger = logging.getLogger(__name__)
+
 
 def find_missing_user_to_mila_emails(
     df: pd.DataFrame,
@@ -17,7 +19,9 @@ def find_missing_user_to_mila_emails(
         return []
 
     N = df.shape[0]
-    print(f"'user.mila.email' is missing in {n_missing} jobs ({n_missing / N:.2%})")
+    logger.warn(
+        f"'user.mila.email' is missing in {n_missing} jobs ({n_missing / N:.2%})"
+    )
 
     unique_users = df[missing_mila_email]["user"].unique()
 
@@ -30,7 +34,7 @@ def find_missing_user_to_mila_emails(
 def check_users_in_jobs(
     time_interval: timedelta | None = timedelta(hours=24),
 ) -> list[str]:
-    logging.info("Checking users in jobs; timedelta: %s", time_interval)
+    logger.info("Checking users in jobs; timedelta: %s", time_interval)
 
     # Parse time_interval
     start, end, clip_time = None, None, False

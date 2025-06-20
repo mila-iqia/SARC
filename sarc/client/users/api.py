@@ -7,7 +7,6 @@ https://mila-iqia.atlassian.net/wiki/spaces/IDT/pages/2190737548/Planification
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
 
 from pydantic_mongo import AbstractRepository, PydanticObjectId
 

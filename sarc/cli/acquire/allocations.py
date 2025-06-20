@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -15,6 +16,8 @@ from sarc.allocations.allocations import (
     AllocationStorage,
     get_allocations_collection,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def convert_csv_row_to_allocation(
@@ -79,8 +82,7 @@ class AcquireAllocations:
                 try:
                     allocation = convert_csv_row_to_allocation(**row)  # type: ignore[arg-type]
                 except Exception as e:
-                    print(f"Skipping row: {row}")
-                    print(e)
+                    logger.exception(f"Skipping row: {row}", exc_info=e)
                     continue
 
                 collection.add(allocation)
