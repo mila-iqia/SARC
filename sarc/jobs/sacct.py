@@ -17,6 +17,9 @@ from sarc.traces import trace_decorator, using_trace
 
 logger = logging.getLogger(__name__)
 
+class JobConversionError(Exception):
+    """Exception raised when there's an error converting a job entry from sacct."""
+    pass
 
 def parse_in_timezone(timestamp: int | None) -> datetime | None:
     if timestamp is None or timestamp == 0:
@@ -86,11 +89,16 @@ class SAcctScraper:
             or self.get_raw().get("meta", {}).get("slurm", {})
         ).get("version", None)
         for entry in self.get_raw()["jobs"]:
-            with using_trace("sarc.jobs.sacct", "SAcctScraper.__iter__") as span:
+            with using_trace("sarc.jobs.sacct", "SAcctScraper.__iter__", exception_types=()) as span:
                 span.set_attribute("entry", json.dumps(entry))
-                converted = self.convert(entry, version)
-                if converted is not None:
-                    yield converted
+                try:    
+                    converted = self.convert(entry, version)
+                    if converted is not None:
+                        yield converted
+                except JobConversionError as e:
+                    logging.error(f"Critical JobConversionError while converting job {entry['job_id']}: {e}")
+                    raise e
+                
 
     def convert(self, entry: dict, version: dict | None = None) -> SlurmJob | None:
         """Convert a single job entry from sacct to a SlurmJob."""
@@ -244,8 +252,46 @@ class SAcctScraper:
                 **resources,  # type: ignore[arg-type]
                 **flags,  # type: ignore[arg-type]
             )
+        
+        # if int(version["major"]) == 24:
+        #     return SlurmJob(
+        #         cluster_name=self.cluster.name,
+        #         job_id=entry["job_id"],
+        #         array_job_id=entry["array"]["job_id"] or None,
+        #         task_id=entry["array"]["task_id"]["number"],
+        #         name=entry["name"],
+        #         user=entry["user"],
+        #         group=entry["group"],
+        #         account=entry["account"],
+        #         job_state=entry["state"]["current"][0],
+        #         exit_code=entry["exit_code"]["return_code"]["number"],
+        #         signal=entry["exit_code"]
+        #         .get("signal", {})
+        #         .get("id", {})
+        #         .get("number", None),
+        #         time_limit=(tlimit := entry["time"]["limit"]["number"])
+        #         and tlimit * 60,
+        #         submit_time=submit_time,
+        #         start_time=start_time,
+        #         end_time=end_time,
+        #         elapsed_time=elapsed_time,
+        #         partition=entry["partition"],
+        #         nodes=(
+        #             sorted(expand_hostlist(nodes))
+        #             if nodes != "None assigned"
+        #             else []
+        #         ),
+        #         constraints=entry["constraints"],
+        #         priority=entry["priority"]["number"],
+        #         qos=entry["qos"],
+        #         work_dir=entry["working_directory"],
+        #         **resources,
+        #         **flags,
+                
+        #     )
 
-        raise ValueError(f"Unsupported slurm version: {version}")
+        print(f"(debug)exception raised")
+        raise JobConversionError(f"Unsupported slurm version: {version}")
 
 
 @trace_decorator()
@@ -268,17 +314,24 @@ def sacct_mongodb_import(
     scraper = SAcctScraper(cluster, day)
     logger.info(f"Getting the sacct data for cluster {cluster.name}, date {day}...")
     scraper.get_raw()
+    print(f"Saving into mongodb collection '{collection.Meta.collection_name}'...")
     logger.info(
         f"Saving into mongodb collection '{collection.Meta.collection_name}'..."
     )
-    for entry in tqdm(scraper):
-        saved = False
-        if not no_prometheus:
-            update_allocated_gpu_type(cluster, entry)
-            saved = entry.statistics(recompute=True, save=True) is not None
+    try:
+        # for entry in tqdm(scraper):
+        for entry in scraper:
+            saved = False
+            if not no_prometheus:
+                update_allocated_gpu_type(cluster, entry)
+                saved = entry.statistics(recompute=True, save=True) is not None
 
-        if not saved:
-            collection.save_job(entry)
+            if not saved:
+                collection.save_job(entry)
+    except Exception as e:
+        print(f"(debug)job {entry.job_id} not saved: {e}")
+        raise e
+    print(f"(debug)saved {len(scraper)} entries")
     logger.info(f"Saved {len(scraper)} entries.")
 
 
