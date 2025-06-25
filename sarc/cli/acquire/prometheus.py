@@ -27,7 +27,7 @@ def _str_to_extended_dt(dt_str: str) -> datetime:
 
 
 def parse_dates(dates: list[str]) -> list[datetime]:
-    parsed_dates = []  # return values are tuples (date, is_auto)
+    parsed_dates: list[datetime] = []
     for date in dates:
         if date.count("-") == 5:
             start = _str_to_dt("-".join(date.split("-")[:3]))
@@ -53,7 +53,7 @@ class AcquirePrometheus:
 
     dates: list[str] = field(alias=["-d"], default_factory=list)
 
-    time_from: str = field(
+    time_from: str | None = field(
         alias=["-a"],
         default=None,
         help=(
@@ -64,7 +64,7 @@ class AcquirePrometheus:
         ),
     )
 
-    time_to: str = field(
+    time_to: str | None = field(
         alias=["-b"],
         default=None,
         help=(
@@ -103,7 +103,7 @@ class AcquirePrometheus:
                 return -1
             time_intervals.append((time_from, time_to))
 
-        cfg = config()
+        cfg = config("scraping")
         clusters_configs = cfg.clusters
 
         for cluster_name in self.cluster_names:
