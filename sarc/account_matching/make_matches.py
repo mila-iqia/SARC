@@ -73,7 +73,7 @@ def perform_matching(
     override_matches_mila_to_cc: dict[str, str],
     name_distance_delta_threshold: int = 2,  # mostly for testing
     verbose: bool = False,
-) -> tuple[dict[str, dict[str, dict[str, str] | None]], dict[str, str]]:
+) -> dict[str, dict[str, dict[str, str] | None]]:
     """
     This is the function with the core functionality.
     The rest is just a wrapper. At this point, this function
@@ -81,13 +81,9 @@ def perform_matching(
     fetch things from the `config` or to the `database`.
     All the SARC-related tasks are done outside of this function.
 
-    Returns a couple containing:
-    - a dict of dicts, indexed by @mila.quebec email addresses,
-      and containing entries of the form
+    Returns a dict of dicts, indexed by @mila.quebec email addresses,
+    and containing entries of the form
         {"mila_ldap": {...}, "drac_roles": {...}, "drac_members": {...}}
-    - a dict of new manual matches occurred during matching,
-      mapping a mila email to a DRAC username. As manual
-      matches rely on prompt, dict will be empty if prompt is False.
     """
 
     # because this function feels entitled to modify the input data
@@ -172,9 +168,7 @@ def perform_matching(
     # We have 42 drac_roles accounts with @mila.quebec, out of 610.
 
     # Matching.
-    new_manual_matches = _matching_names(
-        DLD_data, DD_persons, name_distance_delta_threshold
-    )
+    _matching_names(DLD_data, DD_persons, name_distance_delta_threshold)
 
     # NB: In any case, match overriding is applied.
     _manual_matching(DLD_data, DD_persons, override_matches_mila_to_cc)
@@ -182,24 +176,19 @@ def perform_matching(
     if verbose:
         _make_matches_status_report(DLD_data, DD_persons)
 
-    return DD_persons, new_manual_matches
+    return DD_persons
 
 
 def _matching_names(
     DLD_data: dict[str, list[dict[str, str]]],
     DD_persons: dict[str, dict[str, dict[str, str] | None]],
     name_distance_delta_threshold: int,
-) -> dict[str, str]:
+) -> None:
     """
     Substep of the `perform_matching` function.
     Mutates the entries of `DD_persons` in-place.
-    First argument names are the same as in the body of `perform_matching`.
-
-    Return a dictionary of manual matches,
-    mapping a mila email to manually-associated DRAC username.
+    All argument names are the same as in the body of `perform_matching`.
     """
-
-    mila_email_to_cc_username: dict[str, str] = {}
 
     for name_or_nom, cc_source in [("name", "drac_members"), ("nom", "drac_roles")]:
         # Get 10 best matches for each mila display name.
@@ -245,8 +234,6 @@ def _matching_names(
                 D_person_found[cc_source] = match
 
                 del D_person_found
-
-    return mila_email_to_cc_username
 
 
 def _manual_matching(DLD_data, DD_persons, override_matches_mila_to_cc):

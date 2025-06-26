@@ -13,67 +13,6 @@ from sarc.config import config
 from tests.common.sarc_mocks import fake_mymila_data, fake_raw_ldap_data
 
 
-class MyStringIO(StringIO):
-    """
-    Special StringIO class which always save
-    its content in a `text` field, especially
-    on `close()`, so that content can be read
-    even after object is closed.
-    """
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.text = self.getvalue()
-
-    def close(self):
-        self.text = self.getvalue()
-        return super().close()
-
-
-class FileSimulator:
-    """
-    Helper class to mock `open` builtin function.
-    """
-
-    def __init__(self, contents):
-        """Initialize.
-
-        contents must be a dictionary matching filename to (str) content,
-        used to provide filename content when opening file.
-        """
-        self.contents = contents
-        self.files = {}
-
-    def get(self, filename):
-        """Return filename content if loaded, empty string otherwise."""
-        if filename in self.files:
-            return self.files[filename].text
-        return ""
-
-    def __call__(self, filename, *args, **kwargs):
-        """
-        Mock for `open` function.
-
-        File is managed as a MyStringIO object.
-        """
-
-        # Return an empty file if mode is "w", whatever the filename.
-        if kwargs.get("mode") == "w" or (args and args[0] == "w"):
-            file = MyStringIO()
-        # Otherwise, return a file with content if filename is known.
-        elif filename in self.contents:
-            file = MyStringIO(self.contents[filename])
-        # Otherwise, return an empty file.
-        else:
-            file = MyStringIO()
-
-        # Store open file for further content reading.
-        self.files[filename] = file
-
-        # And return open file.
-        return file
-
-
 @pytest.mark.usefixtures("empty_read_write_db")
 def test_acquire_users(cli_main, patch_return_values, mock_file, captrace):
     """Test command line `sarc acquire users`.

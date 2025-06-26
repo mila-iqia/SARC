@@ -53,7 +53,7 @@ def test_perform_matching(account_matches):
         override_matches_mila_to_cc,
     ) = helper_extract_three_account_sources_from_ground_truth(account_matches)
 
-    DD_persons, new_matches = perform_matching(
+    DD_persons = perform_matching(
         DLD_data,
         mila_emails_to_ignore=mila_emails_to_ignore,
         override_matches_mila_to_cc=override_matches_mila_to_cc,
@@ -61,8 +61,6 @@ def test_perform_matching(account_matches):
     )
 
     assert account_matches == DD_persons
-
-    assert not new_matches
 
     # for mila_email_username in DD_persons:
     #    # source_name in "mila_ldap", "drac_members", "drac_roles
@@ -91,7 +89,7 @@ def test_perform_matching_with_bad_email_capitalization(account_matches):
     DLD_data["drac_members"][0]["email"] = DLD_data["drac_members"][0]["email"].upper()
     DLD_data["drac_roles"][1]["email"] = DLD_data["drac_roles"][1]["email"].upper()
 
-    DD_persons, new_matches = perform_matching(
+    DD_persons = perform_matching(
         DLD_data,
         mila_emails_to_ignore=mila_emails_to_ignore,
         override_matches_mila_to_cc=override_matches_mila_to_cc,
@@ -109,4 +107,3 @@ def test_perform_matching_with_bad_email_capitalization(account_matches):
 
     # recursive matching of dicts
     assert account_matches == DD_persons
-    assert not new_matches

@@ -124,10 +124,7 @@ def run(cache_policy: CachePolicy = CachePolicy.use) -> None:
             make_matches_config = json.load(json_file)
 
         span.add_event("Matching DRAC/CC to mila accounts ...")
-        (
-            DD_persons_matched,
-            new_manual_matches,
-        ) = sarc.account_matching.make_matches.perform_matching(
+        DD_persons_matched = sarc.account_matching.make_matches.perform_matching(
             DLD_data=DLD_data,
             mila_emails_to_ignore=make_matches_config[
                 "L_phantom_mila_emails_to_ignore"
@@ -162,18 +159,6 @@ def run(cache_policy: CachePolicy = CachePolicy.use) -> None:
         # These associations can now be propagated to the database.
         span.add_event("Committing matches to database ...")
         commit_matches_to_database(user_collection, DD_persons_matched, verbose=True)
-
-        # If new manual matches are available, save them.
-        if new_manual_matches:
-            span.add_event(f"Saving {len(new_manual_matches)} manual matches ...")
-            logging.info(f"Saving {len(new_manual_matches)} manual matches ...")
-            make_matches_config[
-                "D_override_matches_mila_to_cc_account_username"
-            ].update(new_manual_matches)
-            with open(
-                cfg.account_matching.make_matches_config, "w", encoding="utf-8"
-            ) as json_file:
-                json.dump(make_matches_config, json_file, indent=4)
 
 
 def filter_duplicate_drac_members(
