@@ -130,6 +130,7 @@ class ClusterConfig:
             fconfig = FabricConfig(ssh_config=SSHConfig.from_path(self.sshconfig))
         fconfig["run"]["pty"] = False
         fconfig["run"]["in_stream"] = False
+        fconfig["run"]["env"] = {"TZ": "UTC"}
         return Connection(self.host, config=fconfig)
 
     @cached_property
