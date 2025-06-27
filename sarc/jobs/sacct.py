@@ -84,7 +84,9 @@ class SAcctScraper:
                 env={"TZ": "UTC"},
             )
         else:
-            results = self.cluster.ssh.run(cmd, hide=True)
+            ssh = self.cluster.ssh
+            ssh.config.run.env = {"TZ": "UTC"}
+            results = ssh.run(cmd, hide=True)
         return json.loads(results.stdout[results.stdout.find("{") :])
 
     def _cache_key(self) -> str | None:
