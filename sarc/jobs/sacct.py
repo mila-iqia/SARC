@@ -80,10 +80,17 @@ class SAcctScraper:
         logger.info(f"{self.cluster.name} $ {cmd}")
         if self.cluster.host == "localhost":
             results: subprocess.CompletedProcess[str] | Result = subprocess.run(
-                cmd, shell=True, text=True, capture_output=True, check=False
+                cmd,
+                shell=True,
+                text=True,
+                capture_output=True,
+                check=False,
+                env={"TZ": "UTC"},
             )
         else:
-            results = self.cluster.ssh.run(cmd, hide=True)
+            ssh = self.cluster.ssh
+            ssh.config.run.env = {"TZ": "UTC"}
+            results = ssh.run(cmd, hide=True)
         return json.loads(results.stdout[results.stdout.find("{") :])
 
     def _cache_key(self) -> str | None:
