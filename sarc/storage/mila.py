@@ -2,6 +2,7 @@
 Fetching and parsing code specific to the mila cluster
 """
 
+import logging
 from datetime import datetime
 from typing import cast
 
@@ -12,6 +13,8 @@ from tqdm import tqdm
 from sarc.client.users.api import get_users
 from sarc.config import ClusterConfig
 from sarc.storage.diskusage import DiskUsage, DiskUsageGroup, DiskUsageUser
+
+logger = logging.getLogger(__name__)
 
 beegfs_header = "name,id,size,hard,files,hard"
 
@@ -35,7 +38,7 @@ def parse_beegfs_csv(output: str) -> DiskUsageGroup:
             )
 
     if len(documents) < 1:
-        print("Beegfs output was empty")
+        logger.warn("Beegfs output was empty")
 
     return DiskUsageGroup(group_name="mila", users=documents)
 
@@ -107,9 +110,11 @@ def fetch_diskusage_report(cluster: ClusterConfig, retries: int = 3) -> DiskUsag
             group = parse_beegfs_csv(result)
             usage.extend(group.users)
 
-    print(f"Error Count: {len(errors)}")
-    print(f"Failures: {len(failures)}")
-    print(f"    Details: {failures}")
+    logger.info(
+        f"Error Count: {len(errors)}\n"
+        + f"Failures: {len(failures)}\n"
+        + f"    Details: {failures}"
+    )
 
     assert cluster.name is not None
 

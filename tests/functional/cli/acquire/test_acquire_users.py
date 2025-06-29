@@ -271,7 +271,7 @@ def test_acquire_users_supervisors(
 
     # Validate the results of all of this by inspecting the database.
     js_user = get_user(
-        mila_email_username=f"john.smith003@mila.quebec"
+        mila_email_username="john.smith003@mila.quebec"
     )  # We modified the user with index 3; thus this is the one we retrieve
     assert js_user.mila_ldap["supervisor"] == expected_supervisor
 
@@ -359,7 +359,7 @@ def test_acquire_users_co_supervisors(
 
     # Validate the results of all of this by inspecting the database.
     js_user = get_user(
-        mila_email_username=f"john.smith003@mila.quebec"
+        mila_email_username="john.smith003@mila.quebec"
     )  # We modified the user with index 3; thus this is the one we retrieve
     assert js_user.mila_ldap["co_supervisor"] == expected_co_supervisor
 
@@ -445,13 +445,14 @@ def test_acquire_users_prompt(
     # since we go through manual prompts, where some logs are printed.
     assert bool(
         re.search(
-            r"root:make_matches\.py:[0-9]+ \[prompt] John Smith the 003rd \(ignored\)",
+            r"sarc.account_matching.make_matches:make_matches\.py:[0-9]+ \[prompt] John Smith the 003rd \(ignored\)",
             caplog.text,
         )
     )
     assert bool(
         re.search(
-            r"root:acquire\.py:[0-9]+ Saving 1 manual matches \.\.\.", caplog.text
+            r"sarc.users.acquire:acquire\.py:[0-9]+ Saving 1 manual matches \.\.\.",
+            caplog.text,
         )
     )
 

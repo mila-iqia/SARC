@@ -28,6 +28,8 @@ from sarc.users.users_exceptions import (
     apply_users_supervisor_exceptions,
 )
 
+logger = logging.getLogger(__name__)
+
 
 def run(
     prompt: bool = False,
@@ -89,7 +91,7 @@ def run(
                         break
                 else:
                     # No match, logging.
-                    logging.warning(
+                    logger.warning(
                         f"No mila_email_username found for {supervisor_key} {user[supervisor_key]}."
                     )
 
@@ -170,7 +172,7 @@ def run(
         # If new manual matches are available, save them.
         if new_manual_matches:
             span.add_event(f"Saving {len(new_manual_matches)} manual matches ...")
-            logging.info(f"Saving {len(new_manual_matches)} manual matches ...")
+            logger.info(f"Saving {len(new_manual_matches)} manual matches ...")
             make_matches_config[
                 "D_override_matches_mila_to_cc_account_username"
             ].update(new_manual_matches)
@@ -192,7 +194,7 @@ def filter_duplicate_drac_members(
         DL_users[user["username"]].append(user)
 
     LD_filtered_drac_members: list[dict[str, str]] = []
-    for _, users in DL_users.items():
+    for users in DL_users.values():
         # keep the active entry, or the  the last entry if no active one
         active_users = [
             user for user in users if user["activation_status"] == "activated"
