@@ -1,15 +1,38 @@
-import copy
 import json
 import tempfile
-from datetime import date
 from unittest.mock import patch
 
-import pandas as pd
 import pytest
-from sarc_mocks import fake_raw_ldap_data
+from pymongo.collection import Collection
 
 import sarc.users.read_mila_ldap  # will monkeypatch "query_ldap"
-from sarc.config import config
+from sarc.config import Config, config
+from tests.common.sarc_mocks import fake_raw_ldap_data
+
+
+def get_ldap_collection(cfg: Config) -> Collection | None:
+    mongodb_database_instance = cfg.mongo.database_instance
+    assert cfg.ldap is not None
+    mongodb_collection = cfg.ldap.mongo_collection_name
+    mongodb_connection_string = cfg.mongo.connection_string
+    mongodb_database_name = cfg.mongo.database_name
+
+    # Two ways to get the MongoDB collection, and then it's possible that we don't care
+    # about getting one, in which case we'll skip that step of the output.
+    if mongodb_database_instance is not None and mongodb_collection is not None:
+        users_collection = mongodb_database_instance[mongodb_collection]
+    elif (
+        mongodb_connection_string is not None
+        and mongodb_database_name is not None
+        and mongodb_collection is not None
+    ):
+        users_collection = MongoClient(mongodb_connection_string)[
+            mongodb_database_name
+        ][mongodb_collection]
+    else:
+        users_collection = None
+
+    return users_collection
 
 
 def test_query_to_ldap_server_and_writing_to_output_json(
@@ -94,7 +117,7 @@ def test_query_to_ldap_server_and_commit_to_db(patch_return_values, mock_file):
             sarc.users.read_mila_ldap.run(
                 cfg.ldap,
                 # write results to here
-                mongodb_collection=sarc.users.read_mila_ldap.get_ldap_collection(cfg),
+                mongodb_collection=get_ldap_collection(cfg),
             )
         L_users = list(db[cfg.ldap.mongo_collection_name].find({}, {"_id": False}))
         return L_users

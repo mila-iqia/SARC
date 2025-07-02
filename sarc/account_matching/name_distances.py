@@ -1,11 +1,12 @@
 from collections import defaultdict
+from collections.abc import Iterable
 
 
-def bag_of_words_projection(name):
-    letter_counts = defaultdict(int)
+def bag_of_words_projection(name: str) -> dict[str, int]:
+    letter_counts: dict[str, int] = defaultdict(int)
     for c in name:
         if c in " -":
-            # skipping spaces and hiphens
+            # skipping spaces and hyphens
             pass
         c = c.lower()
         if c in "éèëê":
@@ -18,7 +19,7 @@ def bag_of_words_projection(name):
     return letter_counts
 
 
-def bow_distance(bow_A, bow_B):
+def bow_distance(bow_A: dict[str, int], bow_B: dict[str, int]) -> int:
     """
     For each letter, add how much the counts differ.
     Return the total.
@@ -30,7 +31,9 @@ def bow_distance(bow_A, bow_B):
     return distance
 
 
-def find_best_word_matches(L_names_A, L_names_B, nb_best_matches=10):
+def find_best_word_matches(
+    L_names_A: Iterable[str], L_names_B: Iterable[str], nb_best_matches: int = 10
+) -> list[tuple[str, list[tuple[int, str]]]]:
     """Get the `nb_best_matches` values from L_names_B closest to values in `L_names_A`.
 
     Return a list of couples, each with format:
@@ -42,7 +45,7 @@ def find_best_word_matches(L_names_A, L_names_B, nb_best_matches=10):
     # NB: in next line, L_names_A is sorted to make matching pipeline more predictable.
     LP_names_A = [(a, bag_of_words_projection(a)) for a in sorted(L_names_A)]
     LP_names_B = [(b, bag_of_words_projection(b)) for b in L_names_B]
-    LP_results = []
+    LP_results: list[tuple[str, list[tuple[int, str]]]] = []
     for a, bow_A in LP_names_A:
         comparisons = sorted(
             ((bow_distance(bow_A, bow_B), b) for b, bow_B in LP_names_B),

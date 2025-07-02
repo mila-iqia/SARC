@@ -11,7 +11,7 @@ dependencies = [
     "pydantic>=2.11.4,<3",
     "pydantic-mongo>=3.1,<4",
     "pymongo>=4.3.3,<5",
-    "numpy>=2.2.4,<2.3",
+    "numpy>=2.3,<2.4",
     "ldap3>=2.9.1,<3",
     "python-hostlist>=2.2.1,<3",
     "tqdm>=4.66,<5",
@@ -24,12 +24,14 @@ dependencies = [
     "opentelemetry-api>=1.23.0,<2",
     "opentelemetry-sdk>=1.23.0,<2",
     "requests-mock>=1.11.0,<2",
-    "pandas>=2.2.0,<2.3.0",
-    "gifnoc>=0.5.0,<0.6",
-    "serieux>=0.0.7",
+    "pandas>=2.3.0,<2.4.0",
+    "gifnoc>=0.5.2,<0.6",
+    "serieux>=0.1,<0.2",
     "watchdog>=6,<7",
     "python-dateutil>=2.9.0.post0,<3",
     "opentelemetry-exporter-otlp>=1.23.0,<2",
+    "iguane",
+    "filelock>=3.18.0",
 ]
 
 [project.scripts]
@@ -37,38 +39,50 @@ sarc = "sarc.cli:main"
 
 [dependency-groups]
 dev = [
-    "black>= 22.12.0",
-    "pylint>= 2.15.10",
-    "isort>= 5.11.4",
-    "mypy>= 0.991",
-    "pytest>= 7.2.1",
-    "pytest-cov>= 4.0.0",
-    "pytest-regressions>= 2.4.2",
-    "tox>= 4.4.5",
-    "pytest-freezegun>= 0.4.2",
+    "mypy>=1.15.0,<2",
+    "pytest>=8.3.5,<9",
+    "pytest-cov>=6.1.1,<7",
+    "pytest-regressions>=2.7.0,<3",
+    "tox>=4.25.0,<5",
+    "pytest-freezegun>=0.4.2,<0.5",
     "fabric[testing]>=3.0.0,<4",
     "pytest-timeout>=2.1.0,<3",
-    "pytest-custom-exit-code>= 0.3.0",
+    "pytest-custom-exit-code>=0.3.0,<0.4",
     "coverage>=7.2.7,<8",
     "pytest-xdist>=3.3.1,<4",
     "jupyter>=1.0.0,<2",
     "tabulate>=0.9.0,<0.10",
-    "tox-uv>=1.25.0",
-    "pytest-httpserver>=1.1.0",
+    "tox-uv>=1.25.0,<2",
+    "pytest-httpserver>=1.1.3,<2",
     "types-paramiko>=3.5.0.20240928",
     "pandas-stubs>=2.2.3.250308",
     "types-requests>=2.32.0.20250328",
     "types-ldap3>=2.9.13.20240205",
     "types-tqdm>=4.67.0.20250417",
-    "pytest-env>=1.1.5",
+    "pytest-env>=1.1.5,<2",
+    "ruff>=0.12,<0.13",
 ]
 examples = ["seaborn>=0.13.2,<0.14"]
+
+[tool.ruff.lint]
+select = ["PL", "F811"]
+ignore = [
+  "PLW2901",  # loop variable overwritten by assignment
+  "PLR0912",  # too many branches
+  "PLR0913",  # too many function arguments
+  "PLR0915",  # too many statements
+  "PLR2004",  # replace magic value by variable
+  "PLC0415",  # imports should be a the top level
+]
 
 [tool.uv]
 default-groups = [
     "dev",
     "examples",
 ]
+
+[tool.uv.sources]
+iguane = { git = "https://github.com/mila-iqia/IGUANE.git", rev = "428a433d395ed17c00818beb865a38d321adf169" }
 
 [tool.pytest_env]
 TQDM_DISABLE = "1"
@@ -86,34 +100,6 @@ build-backend = "hatchling.build"
 [tool.pytest]
 norecursedirs = "tests/common"
 
-[tool.pylint]
-ignore-paths = []
-disable = [
-    "no-self-argument",  # Pydantic validators don't have one
-    "too-few-public-methods",  # Triggered on Pydantic models
-    "import-outside-toplevel",  # These imports are useful to reduce loading times
-    "too-many-arguments",
-    "too-many-locals",
-    "too-many-positional-arguments",
-    "missing-module-docstring",
-    "missing-class-docstring",
-    "missing-function-docstring",
-    "invalid-name",
-    "no-else-return",  # Bad rule IMO (- OB)
-    "line-too-long",  # Black takes care of line length.
-    "logging-fstring-interpolation",
-    "duplicate-code",
-    "too-many-positional-arguments",
-]
-extension-pkg-whitelist = "pydantic"
-
-[tool.isort]
-profile = "black"
-
-[[tool.mypy.overrides]]
-module = "sarc.alerts.*,sarc.account_matching.*,sarc.cache.*,sarc.users.*,sarc.storage.*,sarc.client.*,sarc.jobs.*,sarc.allocations.*,sarc.cli.*,sarc.nodes.*"
-ignore_errors = true
-
 [[tool.mypy.overrides]]
 module = "gifnoc.*"
 ignore_missing_imports = true
@@ -127,5 +113,9 @@ module = "fabric.*"
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = "prometheus_api_client.*"
+module = "iguane.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "serieux.*"
 ignore_missing_imports = true

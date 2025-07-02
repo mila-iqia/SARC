@@ -40,7 +40,7 @@ def test_acquire_ldap(patch_return_values, mock_file):
         # )
 
         # test some drac_roles and drac_members fields
-        js_user_d = js_user.dict()
+        js_user_d = js_user.model_dump()
         print(i, js_user_d)
         for segment in ["drac_roles", "drac_members"]:
             assert segment in js_user_d

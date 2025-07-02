@@ -1,41 +1,59 @@
 from __future__ import annotations
 
-import json
 import logging
-import os
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import Callable, Literal, Sequence, TypedDict, overload
 
-import numpy as np
 import pandas
-from pandas import DataFrame
-from prometheus_api_client import MetricRangeDataFrame
+from pandas import DataFrame, Series
+from prometheus_api_client.metric_range_df import MetricRangeDataFrame
 
+from sarc.cache import with_cache
 from sarc.client.job import JobStatistics, SlurmJob, Statistics
-from sarc.config import MTL, UTC, ClusterConfig, config
+from sarc.config import MTL, UTC
 from sarc.traces import trace_decorator
 
-if TYPE_CHECKING:
-    pass
+
+@overload
+def get_job_time_series(
+    job: SlurmJob,
+    metric: str | Sequence[str],
+    min_interval: int = 30,
+    max_points: int = 100,
+    measure: str | None = None,
+    aggregation: Literal["total", "interval"] | None = "total",
+    dataframe: Literal[True] = True,
+) -> DataFrame | None: ...
+
+
+@overload
+def get_job_time_series(
+    job: SlurmJob,
+    metric: str | Sequence[str],
+    min_interval: int = 30,
+    max_points: int = 100,
+    measure: str | None = None,
+    aggregation: Literal["total", "interval"] | None = "total",
+    dataframe: Literal[False] = False,
+) -> list[dict]: ...
 
 
 # pylint: disable=too-many-branches
 @trace_decorator()
 def get_job_time_series(
     job: SlurmJob,
-    metric: str,
+    metric: str | Sequence[str],
     min_interval: int = 30,
     max_points: int = 100,
     measure: str | None = None,
-    aggregation: str = "total",
+    aggregation: Literal["total", "interval"] | None = "total",
     dataframe: bool = True,
-):
+) -> DataFrame | list[dict] | None:
     """Fetch job metrics.
 
     Arguments:
-        cluster: The cluster on which to fetch metrics.
         job: The job for which to fetch metrics.
-        metric: The metric, which must be in ``slurm_job_metric_names``.
+        metric: The metric or list of metrics, which must be in ``slurm_job_metric_names``.
         min_interval: The minimal reporting interval, in seconds.
         max_points: The maximal number of data points to return.
         measure: The aggregation measure to use ("avg_over_time", etc.)
@@ -46,20 +64,79 @@ def get_job_time_series(
         dataframe: If True, return a DataFrame. Otherwise, return the list of
             dicts returned by Prometheus's API.
     """
+    results = with_cache(
+        _get_job_time_series_data,
+        key=_get_job_time_series_data_cache_key,
+        subdirectory="prometheus",
+    )(
+        job=job,
+        metric=metric,
+        min_interval=min_interval,
+        max_points=max_points,
+        measure=measure,
+        aggregation=aggregation,
+        # cache_policy is None,
+        # so that it can be set
+        # with env var SARC_CACHE
+        cache_policy=None,
+    )
+    if dataframe:
+        return MetricRangeDataFrame(results) if results else None
+    else:
+        return results
 
+
+# pylint: disable=too-many-branches
+@trace_decorator()
+def _get_job_time_series_data(
+    job: SlurmJob,
+    metric: str | Sequence[str],
+    min_interval: int = 30,
+    max_points: int = 100,
+    measure: str | None = None,
+    aggregation: str = "total",
+) -> list:
+    """Fetch job metrics.
+
+    Arguments:
+        job: The job for which to fetch metrics.
+        metric: The metric or list of metrics, which must be in ``slurm_job_metric_names``.
+        min_interval: The minimal reporting interval, in seconds.
+        max_points: The maximal number of data points to return.
+        measure: The aggregation measure to use ("avg_over_time", etc.)
+            A format string can be passed, e.g. ("quantile_over_time(0.5, {})")
+            to get the median.
+        aggregation: Either "total", to aggregate over the whole range, or
+            "interval", to aggregate over each interval.
+    """
+    metrics = [metric] if isinstance(metric, str) else metric
+    if not metrics:
+        raise ValueError("No metrics given")
+    for m in metrics:
+        if m not in slurm_job_metric_names:
+            raise ValueError(f"Unknown metric name: {m}")
     if aggregation not in ("interval", "total", None):
         raise ValueError(
             f"Aggregation must be one of ['total', 'interval', None]: {aggregation}"
         )
 
     if job.job_state != "RUNNING" and not job.elapsed_time:
-        return None if dataframe else []
-    if metric not in slurm_job_metric_names:
-        raise ValueError(f"Unknown metric name: {metric}")
+        return []
 
-    selector = f'{metric}{{slurmjobid=~"{job.job_id}"}}'
+    if len(metrics) == 1:
+        (prefix,) = metrics
+        label_exprs = []
+    else:
+        prefix = ""
+        label_exprs = [f'__name__=~"^({"|".join(metrics)})$"']
+
+    label_exprs.append(f'slurmjobid="{job.job_id}"')
+    selector = prefix + "{" + ", ".join(label_exprs) + "}"
 
     now = datetime.now(tz=UTC).astimezone(MTL)
+
+    if job.start_time is None:
+        raise ValueError("Job hasn't started yet")
 
     ago = now - job.start_time
     duration = (job.end_time or now) - job.start_time
@@ -74,7 +151,7 @@ def get_job_time_series(
         duration_seconds += offset
 
     if duration_seconds <= 0:
-        return None if dataframe else []
+        return []
 
     interval = int(max(duration_seconds / max_points, min_interval))
 
@@ -84,7 +161,6 @@ def get_job_time_series(
         if aggregation == "interval":
             range_seconds = interval
         elif aggregation == "total":
-            offset += duration_seconds
             range_seconds = duration_seconds
         else:
             raise ValueError(f"Unknown aggregation: {aggregation}")
@@ -98,26 +174,83 @@ def get_job_time_series(
     else:
         query = f"{query}[{duration_seconds}s:{interval}s] {offset_string}"
 
-    results = job.fetch_cluster_config().prometheus.custom_query(query)
-    if dataframe:
-        return MetricRangeDataFrame(results) if results else None
-    else:
-        return results
+    logging.info(f"prometheus query with offset: {query}")
+    return job.fetch_cluster_config().prometheus.custom_query(query)
 
 
-def get_job_time_series_metric_names():
+def _get_job_time_series_data_cache_key(
+    job: SlurmJob,
+    metric: str | Sequence[str],
+    min_interval: int = 30,
+    max_points: int = 100,
+    measure: str | None = None,
+    aggregation: str = "total",
+) -> str | None:
+    metrics = [metric] if isinstance(metric, str) else sorted(metric)
+    if (
+        not metrics
+        or any(m not in slurm_job_metric_names for m in metrics)
+        or aggregation not in ("interval", "total", None)
+        or (job.job_state != "RUNNING" and not job.elapsed_time)
+    ):
+        # We don't cache for exception cases or special cases
+        # from _get_job_time_series_data()
+        return None
+
+    if job.end_time is None:
+        # If job.end_time is None, then Prometheus queries
+        # are based on current time (now).
+        # We should not cache such results.
+        return None
+
+    job_start_time = job.start_time
+    assert job_start_time is not None
+    fmt = "%Y-%m-%dT%Hh%Mm%Ss"
+    return (
+        f"{job.cluster_name}"
+        f".{job.job_id}"
+        f".{job_start_time.strftime(fmt)}_to_{job.end_time.strftime(fmt)}"
+        # To reduce key size, we use short metric names
+        # from dictionary `slurm_job_metric_names`
+        f".{'+'.join(slurm_job_metric_names[m] for m in metrics)}"
+        f".min-itv-{min_interval}s"
+        f".max-pts-{max_points}"
+        f".{f'measure-{measure}-{aggregation}' if measure and aggregation else 'no_measure'}"
+        f".json"
+    )
+
+
+def get_job_time_series_metric_names() -> dict[str, str]:
     """Return all the metric names that relate to slurm jobs."""
     return slurm_job_metric_names
 
 
+STATS = TypedDict(
+    "STATS",
+    {
+        "mean": float,
+        "std": float,
+        "max": float,
+        "q25": float,
+        "median": float,
+        "q75": float,
+        "q05": float,
+        "unused": int,
+    },
+)
+
+
 @trace_decorator()
 def compute_job_statistics_from_dataframe(
-    df: DataFrame,
-    statistics,
-    normalization=float,
-    unused_threshold=0.01,
-    is_time_counter=False,
-):
+    df: DataFrame | None,
+    statistics: dict[str, Callable[[Series], float]],
+    normalization: Callable[[float], float] = float,
+    unused_threshold: float | None = 0.01,
+    is_time_counter: bool = False,
+) -> STATS | None:
+    if df is None:
+        return None
+
     df = df.reset_index()
 
     groupby = ["instance", "core", "gpu"]
@@ -145,18 +278,18 @@ def compute_job_statistics_from_dataframe(
         n_unused = 0
 
     rval = {name: normalization(fn(df["value"])) for name, fn in statistics.items()}
-    return {**rval, "unused": n_unused}
+    return {**rval, "unused": n_unused}  # type: ignore[return-value, typeddict-item]
 
 
 def compute_job_statistics_one_metric(
     job: SlurmJob,
-    metric_name,
-    statistics,
-    normalization=float,
-    unused_threshold=0.01,
-    is_time_counter=False,
-):
-    df = job.series(metric=metric_name, max_points=10_000)
+    metric_name: str,
+    statistics: dict[str, Callable[[Series], float]],
+    normalization: Callable[[float], float] = float,
+    unused_threshold: float | None = 0.01,
+    is_time_counter: bool = False,
+) -> STATS | None:
+    df = job.series(metric=metric_name, max_points=10_000, dataframe=True)
     if df is None:
         return None
     return compute_job_statistics_from_dataframe(
@@ -169,7 +302,7 @@ def compute_job_statistics_one_metric(
 
 
 @trace_decorator()
-def compute_job_statistics(job: SlurmJob):
+def compute_job_statistics(job: SlurmJob) -> JobStatistics:
     statistics_dict = {
         "mean": lambda self: self.mean(),
         "std": lambda self: self.std(),
@@ -180,288 +313,148 @@ def compute_job_statistics(job: SlurmJob):
         "q05": lambda self: self.quantile(0.05),
     }
 
-    gpu_utilization = compute_job_statistics_one_metric(
-        job,
+    # We will get all required job time series
+    # with just 1 call to get_job_time_series()
+    metric_names = (
         "slurm_job_utilization_gpu",
-        statistics=statistics_dict,
-        unused_threshold=0.01,
-        normalization=lambda x: float(x / 100),
-    )
-
-    gpu_utilization_fp16 = compute_job_statistics_one_metric(
-        job,
         "slurm_job_fp16_gpu",
-        statistics=statistics_dict,
-        unused_threshold=0.01,
-        normalization=lambda x: float(x / 100),
-    )
-
-    gpu_utilization_fp32 = compute_job_statistics_one_metric(
-        job,
         "slurm_job_fp32_gpu",
-        statistics=statistics_dict,
-        unused_threshold=0.01,
-        normalization=lambda x: float(x / 100),
-    )
-
-    gpu_utilization_fp64 = compute_job_statistics_one_metric(
-        job,
         "slurm_job_fp64_gpu",
-        statistics=statistics_dict,
-        unused_threshold=0.01,
-        normalization=lambda x: float(x / 100),
-    )
-
-    gpu_sm_occupancy = compute_job_statistics_one_metric(
-        job,
         "slurm_job_sm_occupancy_gpu",
+        "slurm_job_utilization_gpu_memory",
+        "slurm_job_power_gpu",
+        "slurm_job_core_usage",
+        "slurm_job_memory_usage",
+    )
+    metric_to_data: dict[str, list[dict]] = {metric: [] for metric in metric_names}
+    for result in get_job_time_series(
+        job, metric_names, max_points=10_000, dataframe=False
+    ):
+        metric_to_data[result["metric"]["__name__"]].append(result)
+    # Then we convert series to data frames for each metric
+    metrics = {
+        metric: MetricRangeDataFrame(results) if results else None
+        for metric, results in metric_to_data.items()
+    }
+    # Now we can use data frames to compute statistics for each metric,
+    # by directly using compute_job_statistics_from_dataframe().
+
+    gpu_utilization = compute_job_statistics_from_dataframe(
+        metrics["slurm_job_utilization_gpu"],
         statistics=statistics_dict,
         unused_threshold=0.01,
         normalization=lambda x: float(x / 100),
     )
 
-    gpu_memory = compute_job_statistics_one_metric(
-        job,
-        "slurm_job_utilization_gpu_memory",
+    gpu_utilization_fp16 = compute_job_statistics_from_dataframe(
+        metrics["slurm_job_fp16_gpu"],
+        statistics=statistics_dict,
+        unused_threshold=0.01,
+        normalization=lambda x: float(x / 100),
+    )
+
+    gpu_utilization_fp32 = compute_job_statistics_from_dataframe(
+        metrics["slurm_job_fp32_gpu"],
+        statistics=statistics_dict,
+        unused_threshold=0.01,
+        normalization=lambda x: float(x / 100),
+    )
+
+    gpu_utilization_fp64 = compute_job_statistics_from_dataframe(
+        metrics["slurm_job_fp64_gpu"],
+        statistics=statistics_dict,
+        unused_threshold=0.01,
+        normalization=lambda x: float(x / 100),
+    )
+
+    gpu_sm_occupancy = compute_job_statistics_from_dataframe(
+        metrics["slurm_job_sm_occupancy_gpu"],
+        statistics=statistics_dict,
+        unused_threshold=0.01,
+        normalization=lambda x: float(x / 100),
+    )
+
+    gpu_memory = compute_job_statistics_from_dataframe(
+        metrics["slurm_job_utilization_gpu_memory"],
         statistics=statistics_dict,
         normalization=lambda x: float(x / 100),
-        unused_threshold=None,
+        unused_threshold=False,
     )
 
-    gpu_power = compute_job_statistics_one_metric(
-        job,
-        "slurm_job_power_gpu",
+    gpu_power = compute_job_statistics_from_dataframe(
+        metrics["slurm_job_power_gpu"],
         statistics=statistics_dict,
-        unused_threshold=None,
+        unused_threshold=False,
     )
 
-    cpu_utilization = compute_job_statistics_one_metric(
-        job,
-        "slurm_job_core_usage",
+    cpu_utilization = compute_job_statistics_from_dataframe(
+        metrics["slurm_job_core_usage"],
         statistics=statistics_dict,
         unused_threshold=0.01,
         is_time_counter=True,
     )
-
-    system_memory = compute_job_statistics_one_metric(
-        job,
-        "slurm_job_memory_usage",
+    job_mem = job.allocated.mem
+    assert job_mem is not None
+    system_memory = compute_job_statistics_from_dataframe(
+        metrics["slurm_job_memory_usage"],
         statistics=statistics_dict,
-        normalization=lambda x: float(x / 1e6 / job.allocated.mem),
-        unused_threshold=None,
+        normalization=lambda x: float(x / 1e6 / job_mem),
+        unused_threshold=False,
     )
 
     return JobStatistics(
-        gpu_utilization=gpu_utilization and Statistics(**gpu_utilization),
-        gpu_utilization_fp16=gpu_utilization_fp16
-        and Statistics(**gpu_utilization_fp16),
-        gpu_utilization_fp32=gpu_utilization_fp32
-        and Statistics(**gpu_utilization_fp32),
-        gpu_utilization_fp64=gpu_utilization_fp64
-        and Statistics(**gpu_utilization_fp64),
-        gpu_sm_occupancy=gpu_sm_occupancy and Statistics(**gpu_sm_occupancy),
-        gpu_memory=gpu_memory and Statistics(**gpu_memory),
-        gpu_power=gpu_power and Statistics(**gpu_power),
-        cpu_utilization=cpu_utilization and Statistics(**cpu_utilization),
-        system_memory=system_memory and Statistics(**system_memory),
+        gpu_utilization=Statistics(**gpu_utilization) if gpu_utilization else None,
+        gpu_utilization_fp16=(
+            Statistics(**gpu_utilization_fp16) if gpu_utilization_fp16 else None
+        ),
+        gpu_utilization_fp32=(
+            Statistics(**gpu_utilization_fp32) if gpu_utilization_fp32 else None
+        ),
+        gpu_utilization_fp64=(
+            Statistics(**gpu_utilization_fp64) if gpu_utilization_fp64 else None
+        ),
+        gpu_sm_occupancy=Statistics(**gpu_sm_occupancy) if gpu_sm_occupancy else None,
+        gpu_memory=Statistics(**gpu_memory) if gpu_memory else None,
+        gpu_power=Statistics(**gpu_power) if gpu_power else None,
+        cpu_utilization=Statistics(**cpu_utilization) if cpu_utilization else None,
+        system_memory=Statistics(**system_memory) if system_memory else None,
     )
 
 
-def update_cluster_job_series_rgu(
-    df: pandas.DataFrame, cluster_config: ClusterConfig
-) -> pandas.DataFrame:
-    """
-    Compute RGU information for jobs related to given cluster config in a data frame.
-
-    Parameters
-    ----------
-    df: DataFrame
-        Data frame to update, typically returned by `load_job_series`.
-        Should contain fields:
-        "cluster_name", "start_time", "allocated.gpu_type", "allocated.gres_gpu".
-    cluster_config: ClusterConfig
-        Configuration of cluster to which jobs to update belong.
-        Should define following config:
-        "rgu_start_date": date since when billing is given as RGU.
-        "gpu_to_rgu_billing": path to a JSON file containing a dict which maps
-        GPU type to RGU cost per GPU.
-
-    Returns
-    -------
-    DataFrame
-        Input data frame with:
-        - column `allocated.gres_gpu` updated if necessary.
-        - column `allocated.gres_rgu` added or updated to contain RGU billing.
-          Set to NaN (or unchanged if already present) for jobs from other clusters.
-        - column `gpu_type_rgu` added or updated to contain RGU cost per GPU (RGU/GPU ratio).
-          Set to NaN (or unchanged if already present) for jobs from other clusters.
-
-    Pseudocode describing how we update data frame:
-    for each job: if job.cluster_name == cluster_config.name:
-        if start_time < cluster_config.rgu_start_date:
-            # We are BEFORE transition to RGU
-            if allocated.gpu_type in gpu_to_rgu_billing:
-                # compute rgu columns
-                allocated.gres_rgu = allocated.gres_gpu * gpu_to_rgu_billing[allocated.gpu_type]
-                allocated.gpu_type_rgu = gpu_to_rgu_billing[allocated.gpu_type]
-            else:
-                # set rgu columns to nan
-                allocated.gres_rgu = nan
-                allocated.gpu_type_rgu = nan
-        else:
-            # We are AFTER transition to RGU
-            # Anyway, we assume gres_rgu is current gres_gpu
-            allocated.gres_rgu = allocated.gres_gpu
-
-            if allocated.gpu_type in gpu_to_rgu_billing:
-                # we fix gres_gpu by dividing it with RGU/GPU ratio
-                allocated.gres_gpu = allocated.gres_gpu / gpu_to_rgu_billing[allocated.gpu_type]
-                # we save RGU/GPU ratio
-                allocated.gpu_type_rgu = gpu_to_rgu_billing[allocated.gpu_type]
-            else:
-                # we cannot fix gres_gpu, so we set it to nan
-                allocated.gres_gpu = nan
-                # we cannot get RGU/GPU ratio, so we set it to nan
-                allocated.gpu_type_rgu = nan
-    """
-
-    # Make sure frame will have new RGU columns anyway, with NaN as default value.
-    if "allocated.gres_rgu" not in df.columns:
-        df["allocated.gres_rgu"] = np.nan
-    if "allocated.gpu_type_rgu" not in df.columns:
-        df["allocated.gpu_type_rgu"] = np.nan
-
-    if cluster_config.rgu_start_date is None:
-        logging.warning(
-            f"RGU update: no RGU start date for cluster {cluster_config.name}"
-        )
-        return df
-
-    if cluster_config.gpu_to_rgu_billing is None:
-        logging.warning(
-            f"RGU update: no RGU/GPU JSON path for cluster {cluster_config.name}"
-        )
-        return df
-
-    if not os.path.isfile(cluster_config.gpu_to_rgu_billing):
-        logging.warning(
-            f"RGU update: RGU/GPU JSON file not found for cluster {cluster_config.name} "
-            f"at: {cluster_config.gpu_to_rgu_billing}"
-        )
-        return df
-
-    # Otherwise, parse RGU start date.
-    rgu_start_date = datetime.fromisoformat(cluster_config.rgu_start_date).astimezone(
-        MTL
-    )
-
-    # Get RGU/GPU ratios.
-    with open(cluster_config.gpu_to_rgu_billing, "r", encoding="utf-8") as file:
-        gpu_to_rgu_billing = json.load(file)
-        assert isinstance(gpu_to_rgu_billing, dict)
-    if not gpu_to_rgu_billing:
-        logging.warning(
-            f"RGU update: no RGU/GPU available for cluster {cluster_config.name}"
-        )
-        return df
-
-    # We have now both RGU stare date and RGU/GPU ratios. We can update columns.
-
-    # Compute column allocated.gpu_type_rgu
-    # If a GPU type is not found in RGU/GPU ratios,
-    # then ratio will be set to NaN in output column.
-    col_ratio_rgu_by_gpu = df["allocated.gpu_type"].map(gpu_to_rgu_billing)
-
-    # Compute slices for both before and since RGU start date.
-    slice_before_rgu_time = (df["cluster_name"] == cluster_config.name) & (
-        df["start_time"] < rgu_start_date
-    )
-    slice_after_rgu_time = (df["cluster_name"] == cluster_config.name) & (
-        df["start_time"] >= rgu_start_date
-    )
-
-    # We can already set column allocated.gpu_type_rgu anyway.
-    df.loc[slice_before_rgu_time, "allocated.gpu_type_rgu"] = col_ratio_rgu_by_gpu[
-        slice_before_rgu_time
-    ]
-    df.loc[slice_after_rgu_time, "allocated.gpu_type_rgu"] = col_ratio_rgu_by_gpu[
-        slice_after_rgu_time
-    ]
-
-    # Compute allocated.gres_rgu where job started before RGU time.
-    df.loc[slice_before_rgu_time, "allocated.gres_rgu"] = (
-        df["allocated.gres_gpu"][slice_before_rgu_time]
-        * col_ratio_rgu_by_gpu[slice_before_rgu_time]
-    )
-
-    # Set allocated.gres_rgu with previous allocated.gres_gpu where job started after RGU time.
-    df.loc[slice_after_rgu_time, "allocated.gres_rgu"] = df["allocated.gres_gpu"][
-        slice_after_rgu_time
-    ]
-    # Then update allocated.gres_gpu where job started after RGU time.
-    df.loc[slice_after_rgu_time, "allocated.gres_gpu"] = (
-        df["allocated.gres_gpu"][slice_after_rgu_time]
-        / col_ratio_rgu_by_gpu[slice_after_rgu_time]
-    )
-
-    return df
-
-
-def update_job_series_rgu(df: DataFrame):
-    """
-    Compute RGU information for jobs in given data frame.
-
-    Parameters
-    ----------
-    df: DataFrame
-        Data frame to update, typically returned by `load_job_series`.
-        Should contain fields:
-         "cluster_name", "start_time", "allocated.gpu_type", "allocated.gres_gpu".
-
-    Returns
-    -------
-    DataFrame
-        Input data frame with:
-        - column `allocated.gres_gpu` updated if necessary.
-        - column `allocated.gres_rgu` added or updated to contain RGU billing.
-          Set to NaN (or unchanged if already present) for jobs from clusters without RGU.
-        - column `gpu_type_rgu` added or updated to contain RGU cost per GPU (RGU/GPU ratio).
-          Set to NaN (or unchanged if already present) for jobs from clusters without RGU.
-
-    For more details about implementation, see function `update_cluster_job_series_rgu`
-    """
-    for cluster_config in config().clusters.values():
-        update_cluster_job_series_rgu(df, cluster_config)
-    return df
-
-
-slurm_job_metric_names = [
-    "slurm_job_core_usage",
-    "slurm_job_core_usage_total",
-    "slurm_job_fp16_gpu",
-    "slurm_job_fp32_gpu",
-    "slurm_job_fp64_gpu",
-    "slurm_job_memory_active_file",
-    "slurm_job_memory_cache",
-    "slurm_job_memory_inactive_file",
-    "slurm_job_memory_limit",
-    "slurm_job_memory_mapped_file",
-    "slurm_job_memory_max",
-    "slurm_job_memory_rss",
-    "slurm_job_memory_rss_huge",
-    "slurm_job_memory_unevictable",
-    "slurm_job_memory_usage",
-    "slurm_job_memory_usage_gpu",
-    "slurm_job_nvlink_gpu",
-    "slurm_job_nvlink_gpu_total",
-    "slurm_job_pcie_gpu",
-    "slurm_job_pcie_gpu_total",
-    "slurm_job_power_gpu",
-    "slurm_job_process_count",
-    "slurm_job_sm_occupancy_gpu",
-    "slurm_job_states",
-    "slurm_job_tensor_gpu",
-    "slurm_job_threads_count",
-    "slurm_job_utilization_gpu",
-    "slurm_job_utilization_gpu_memory",
-]
+# Dictionary of slurm metric names:
+# We both list allowed metric names as key,
+# and we map each metric to a short name,
+# intended to be used to generate short cache key
+# for get_job_time_series().
+slurm_job_metric_names = {
+    "slurm_job_core_usage": "cu",
+    "slurm_job_core_usage_total": "cut",
+    "slurm_job_fp16_gpu": "f16g",
+    "slurm_job_fp32_gpu": "f32g",
+    "slurm_job_fp64_gpu": "f64g",
+    "slurm_job_memory_active_file": "maf",
+    "slurm_job_memory_cache": "mc",
+    "slurm_job_memory_inactive_file": "mif",
+    "slurm_job_memory_limit": "ml",
+    "slurm_job_memory_mapped_file": "mmf",
+    "slurm_job_memory_max": "mm",
+    "slurm_job_memory_rss": "mr",
+    "slurm_job_memory_rss_huge": "mrh",
+    "slurm_job_memory_unevictable": "mun",
+    "slurm_job_memory_usage": "mus",
+    "slurm_job_memory_usage_gpu": "mug",
+    "slurm_job_nvlink_gpu": "ng",
+    "slurm_job_nvlink_gpu_total": "ngt",
+    "slurm_job_pcie_gpu": "pcg",
+    "slurm_job_pcie_gpu_total": "pgt",
+    "slurm_job_power_gpu": "pwg",
+    "slurm_job_process_count": "pc",
+    "slurm_job_sm_occupancy_gpu": "sog",
+    "slurm_job_states": "s",
+    "slurm_job_tensor_gpu": "tg",
+    "slurm_job_threads_count": "tc",
+    "slurm_job_utilization_gpu": "ug",
+    "slurm_job_utilization_gpu_memory": "ugm",
+}
+# We check that short names are unique and cover all metrics.
+assert len(set(slurm_job_metric_names.values())) == len(slurm_job_metric_names)

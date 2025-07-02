@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from contextlib import contextmanager
 
 import freezegun
@@ -12,7 +13,12 @@ from sarc.testing import MongoInstance
 
 from .allocations.factory import create_allocations
 from .diskusage.factory import create_diskusages
-from .jobs.factory import create_cluster_entries, create_jobs, create_users
+from .jobs.factory import (
+    create_cluster_entries,
+    create_gpu_billings,
+    create_jobs,
+    create_users,
+)
 
 # this is to make the pytest-freezegun types serializable by pyyaml
 # (for use in pytest-regression)
@@ -61,25 +67,26 @@ def fill_db(db, with_users=False, with_clusters=False, job_patch=None):
     db.allocations.insert_many(create_allocations())
     db.jobs.insert_many(create_jobs(job_patch=job_patch))
     db.diskusage.insert_many(create_diskusages())
+    db.gpu_billing.insert_many(create_gpu_billings())
     if with_users:
         db.users.insert_many(create_users())
 
     if with_clusters:
         # Fill collection `clusters`.
-        cluster_names = {job["cluster_name"] for job in db.jobs.find({})}
-        db.clusters.insert_many(create_cluster_entries(db))
+        db.clusters.insert_many(create_cluster_entries())
 
 
 def create_db_configuration_fixture(
-    db_name,
     empty=False,
     with_users=False,
     with_clusters=False,
     job_patch=None,
-    scope="function",
 ):
-    @pytest.fixture(scope=scope)
-    def fixture():
+    @pytest.fixture(scope="function")
+    def fixture(request):
+        m = hashlib.md5()
+        m.update(request.node.nodeid.encode())
+        db_name = f"test-db-{m.hexdigest()}"
         with custom_db_config(db_name):
             db = config().mongo.database_instance
             clear_db(db)
@@ -95,39 +102,22 @@ def create_db_configuration_fixture(
     return fixture
 
 
-empty_read_write_db_config_object = create_db_configuration_fixture(
-    db_name="sarc-read-write-test",
-    empty=True,
-    scope="function",
-)
+empty_read_write_db_config_object = create_db_configuration_fixture(empty=True)
 
+read_write_db_config_object = create_db_configuration_fixture()
 
-read_write_db_config_object = create_db_configuration_fixture(
-    db_name="sarc-read-write-test",
-    scope="function",
-)
-
-
-read_only_db_config_object = create_db_configuration_fixture(
-    db_name="sarc-read-only-test",
-    scope="session",
-)
+read_only_db_config_object = create_db_configuration_fixture()
 
 read_only_db_with_many_cpu_jobs_config_object = create_db_configuration_fixture(
-    db_name="sarc-read-only-with-many-cpu-jobs-test",
-    scope="session",
     job_patch={
         "allocated": {"billing": 0, "cpu": 0, "gres_gpu": 0, "mem": 0, "node": 0},
         "requested": {"billing": 0, "cpu": 0, "gres_gpu": 0, "mem": 0, "node": 0},
-    },
+    }
 )
 
-
 read_only_db_with_users_config_object = create_db_configuration_fixture(
-    db_name="sarc-read-only-with-users-test",
     with_users=True,
     with_clusters=True,
-    scope="session",
 )
 
 

@@ -1,6 +1,7 @@
 import logging
+from collections.abc import Iterable
 from datetime import datetime, timedelta
-from typing import Optional, Sequence
+from typing import cast
 
 from sarc.client.series import load_job_series
 from sarc.config import MTL
@@ -10,11 +11,11 @@ logger = logging.getLogger(__name__)
 
 def check_gpu_type_usage_per_node(
     gpu_type: str,
-    time_interval: Optional[timedelta] = timedelta(hours=24),
-    minimum_runtime: Optional[timedelta] = timedelta(minutes=5),
-    threshold=1.0,
-    min_tasks=0,
-    ignore_min_tasks_for_clusters: Optional[Sequence[str]] = ("mila",),
+    time_interval: timedelta | None = timedelta(hours=24),
+    minimum_runtime: timedelta | None = timedelta(minutes=5),
+    threshold: float = 1.0,
+    min_tasks: int = 0,
+    ignore_min_tasks_for_clusters: Iterable[str] | None = ("mila",),
 ):
     """
     Check if a GPU type is sufficiently used on each node.
@@ -82,10 +83,10 @@ def check_gpu_type_usage_per_node(
     # We can now check GPU usage.
     ignore_min_tasks_for_clusters = set(ignore_min_tasks_for_clusters or ())
     for row in ff.itertuples():
-        cluster_name, node = row.Index
+        cluster_name, node = row.Index  # type: ignore[misc]
         nb_gpu_tasks = row.gpu_task_
-        nb_tasks = row.task_
-        gpu_usage = row.gpu_usage_
+        nb_tasks = cast(int, row.task_)
+        gpu_usage = cast(float, row.gpu_usage_)
         if gpu_usage < threshold and (
             cluster_name in ignore_min_tasks_for_clusters or nb_tasks >= min_tasks
         ):

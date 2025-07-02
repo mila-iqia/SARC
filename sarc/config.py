@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import functools
 import json
 import os
@@ -7,7 +9,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field, fields
 from functools import cached_property
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Any, Callable, Literal, cast, overload
 
 import gifnoc
 import tzlocal
@@ -15,13 +17,19 @@ from hostlist import expand_hostlist
 
 from .alerts.common import HealthMonitorConfig
 
+if TYPE_CHECKING:
+    from fabric import Connection
+    from prometheus_api_client import PrometheusConnect
+    from pymongo.database import Database
+
+
 MTL = zoneinfo.ZoneInfo("America/Montreal")
 PST = zoneinfo.ZoneInfo("America/Vancouver")
 UTC = zoneinfo.ZoneInfo("UTC")
 TZLOCAL = zoneinfo.ZoneInfo(tzlocal.get_localzone_name())
 
 
-MIG_FLAG = "__MIG__"
+MIG_FLAG = "__MIG_FLAG__"
 DEFAULTS_FLAG = "__DEFAULTS__"
 
 
@@ -45,8 +53,6 @@ class ClusterConfig:
     duc_storage_command: str | None = None
     diskusage_report_command: str | None = None
     start_date: str = "2022-04-01"
-    rgu_start_date: str | None = None
-    gpu_to_rgu_billing: Path | None = None
     slurm_conf_host_path: Path = Path("/etc/slurm/slurm.conf")
 
     # Tell if billing (in job's requested|allocated field) is number of GPUs (True) or RGU (False)
@@ -65,7 +71,7 @@ class ClusterConfig:
             for node in expand_hostlist(node_list)
         }
 
-    def harmonize_gpu(self, nodename: str, gpu_type: str) -> Optional[str]:
+    def harmonize_gpu(self, nodename: str | None, gpu_type: str) -> str | None:
         """
         Actual utility method to get a GPU name from given node and gpu type.
 
@@ -78,7 +84,7 @@ class ClusterConfig:
         gpu_type = gpu_type_parts[0]
 
         # Try to get harmonized GPU from nodename mapping
-        harmonized_gpu = self.gpus_per_nodes.get(nodename, {}).get(gpu_type)
+        harmonized_gpu = self.gpus_per_nodes.get(cast(str, nodename), {}).get(gpu_type)
 
         # Otherwise, try to get harmonized GPU from default mapping
         if harmonized_gpu is None:
@@ -94,7 +100,7 @@ class ClusterConfig:
         return harmonized_gpu
 
     @cached_property
-    def ssh(self):
+    def ssh(self) -> Connection:
         from fabric import Config as FabricConfig
         from fabric import Connection
         from paramiko import SSHConfig
@@ -108,7 +114,7 @@ class ClusterConfig:
         return Connection(self.host, config=fconfig)
 
     @cached_property
-    def prometheus(self):
+    def prometheus(self) -> PrometheusConnect:
         from prometheus_api_client import PrometheusConnect
 
         if self.prometheus_headers_file is not None:
@@ -133,10 +139,10 @@ class MongoConfig:
     database_name: str
 
     @cached_property
-    def database_instance(self):
+    def database_instance(self) -> Database:
         from pymongo import MongoClient
 
-        client = MongoClient(self.connection_string)
+        client: MongoClient = MongoClient(self.connection_string)
         return client.get_database(self.database_name)
 
 
@@ -187,6 +193,14 @@ class ClientConfig:
     tempo: TempoConfig | None = None
     health_monitor: HealthMonitorConfig | None = None
 
+    @property
+    def lock_path(self) -> Path:
+        """
+        Return a convenient path to be used as lock file for database operations.
+        """
+        assert self.cache
+        return self.cache / "lockfile.lock"
+
 
 @dataclass
 class Config(ClientConfig):
@@ -194,24 +208,23 @@ class Config(ClientConfig):
     mymila: MyMilaConfig | None = None
     account_matching: AccountMatchingConfig | None = None
     sshconfig: Path | None = None
-    clusters: dict[str, ClusterConfig] | None = None
+    clusters: dict[str, ClusterConfig] = field(default_factory=dict)
     logging: LoggingConfig | None = None
 
     def __post_init__(self):
-        if self.clusters:
-            for name, cluster in self.clusters.items():
-                if not cluster.name:
-                    cluster.name = name
-                if not cluster.sshconfig:
-                    cluster.sshconfig = self.sshconfig
+        for name, cluster in self.clusters.items():
+            if not cluster.name:
+                cluster.name = name
+            if not cluster.sshconfig:
+                cluster.sshconfig = self.sshconfig
 
 
 class WhitelistProxy:
-    def __init__(self, obj, *whitelist):
+    def __init__(self, obj: Any, *whitelist: str):
         self._obj = obj
         self._whitelist = whitelist
 
-    def __getattr__(self, attr):
+    def __getattr__(self, attr: str) -> Any:
         if attr in self._whitelist:
             return getattr(self._obj, attr)
         elif hasattr(self._obj, attr):
@@ -230,9 +243,11 @@ gifnoc.set_sources("${envfile:SARC_CONFIG}")
 
 sarc_mode = ContextVar("sarc_mode", default=os.getenv("SARC_MODE", "client"))
 
+Modes = Literal["scraping", "client"]
+
 
 @contextmanager
-def using_sarc_mode(mode):
+def using_sarc_mode(mode: Modes):
     token = sarc_mode.set(mode)
     try:
         yield
@@ -240,19 +255,35 @@ def using_sarc_mode(mode):
         sarc_mode.reset(token)
 
 
-def config():
-    if sarc_mode.get() == "scraping":
+@overload
+def config(mode: Literal["scraping"]) -> Config: ...
+
+
+@overload
+def config(mode: Literal["client"]) -> ClientConfig: ...
+
+
+@overload
+def config(mode: None = None) -> Config | ClientConfig: ...
+
+
+def config(mode: Modes | None = None) -> Config | ClientConfig:
+    cur_mode = sarc_mode.get()
+    # If we request client mode and we are in scraping mode, that is fine.
+    if mode == "scraping" and cur_mode != "scraping":
+        raise ScrapingModeRequired()
+    if cur_mode == "scraping":
         return full_config
     else:
         accept = [f.name for f in fields(ClientConfig)]
-        return WhitelistProxy(full_config, *accept)
+        return cast(ClientConfig, WhitelistProxy(full_config, *accept, "lock_path"))
 
 
 class ScrapingModeRequired(Exception):
     """Exception raised if a code requiring scraping mode is executed in client mode."""
 
 
-def scraping_mode_required(fn):
+def scraping_mode_required[**P, R](fn: Callable[P, R]) -> Callable[P, R]:
     """
     Decorator to wrap a function that requires scraping mode to be executed.
 
@@ -261,7 +292,7 @@ def scraping_mode_required(fn):
     """
 
     @functools.wraps(fn)
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
         if sarc_mode.get() != "scraping":
             raise ScrapingModeRequired()
         return fn(*args, **kwargs)

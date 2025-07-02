@@ -1,7 +1,8 @@
 from dataclasses import dataclass
-from typing import Optional
+from typing import Literal
 
 import pymongo
+from pymongo.database import Database
 from simple_parsing import choice
 
 from sarc.allocations.allocations import AllocationsRepository
@@ -12,12 +13,12 @@ from sarc.storage.diskusage import ClusterDiskUsageRepository
 
 @dataclass
 class DbInit:
-    url: Optional[str]
-    database: Optional[str]
+    url: str | None
+    database: str | None
 
-    username: Optional[str]
-    password: Optional[str]
-    account: Optional[str] = choice("admin", "write", "read")
+    username: str | None
+    password: str | None
+    account: Literal["admin", "write", "read"] | None = choice("admin", "write", "read")
 
     def execute(self) -> int:
         cfg = config()
@@ -26,7 +27,7 @@ class DbInit:
             cfg.mongo.database_name if self.database is None else self.database
         )
 
-        client = pymongo.MongoClient(url)
+        client: pymongo.MongoClient = pymongo.MongoClient(url)
         db = client.get_database(self.database)
 
         self.create_readonly_role(db)
@@ -58,7 +59,7 @@ class DbInit:
 
         return 0
 
-    def create_acount(self, client, db):
+    def create_acount(self, client: pymongo.MongoClient, db: Database) -> None:
         if self.username is None or self.password is None:
             return
 
@@ -89,7 +90,7 @@ class DbInit:
                 roles=[{"role": "readWrite", "db": self.database}],
             )
 
-    def create_readonly_role(self, db):
+    def create_readonly_role(self, db: Database) -> None:
         collections = [
             "allocations",
             "diskusage",
@@ -118,11 +119,11 @@ class DbInit:
                 raise
 
 
-def create_clusters(db):
+def create_clusters(db: Database) -> None:
     db_cluster = db.clusters
     # populate the db with default starting dates for each cluster
-    for cluster_name in config().clusters:
-        cluster = config().clusters[cluster_name]
+    clusters = config("scraping").clusters
+    for cluster_name, cluster in clusters.items():
         db_cluster.update_one(
             {"cluster_name": cluster_name},
             {
@@ -136,12 +137,12 @@ def create_clusters(db):
         )
 
 
-def create_clusters_indices(db):
+def create_clusters_indices(db: Database) -> None:
     db_collection = db.clusters
     db_collection.create_index([("cluster_name", pymongo.ASCENDING)], unique=True)
 
 
-def create_users_indices(db):
+def create_users_indices(db: Database) -> None:
     # db_collection = _UserRepository(database=db).get_collection()
     db_collection = db.users
 
@@ -155,7 +156,7 @@ def create_users_indices(db):
     )
 
 
-def create_gpu_billing_indices(db):
+def create_gpu_billing_indices(db: Database) -> None:
     db_collection = db.gpu_billing
     db_collection.create_index(
         [
@@ -166,7 +167,7 @@ def create_gpu_billing_indices(db):
     )
 
 
-def create_node_gpu_mapping_indices(db):
+def create_node_gpu_mapping_indices(db: Database) -> None:
     db_collection = db.node_gpu_mapping
     db_collection.create_index(
         [
@@ -177,7 +178,7 @@ def create_node_gpu_mapping_indices(db):
     )
 
 
-def create_allocations_indices(db):
+def create_allocations_indices(db: Database) -> None:
     db_collection = AllocationsRepository(database=db).get_collection()
 
     # Index most useful for querying allocations for a given cluster
@@ -198,7 +199,7 @@ def create_allocations_indices(db):
     )
 
 
-def create_storages_indices(db):
+def create_storages_indices(db: Database) -> None:
     db_collection = ClusterDiskUsageRepository(database=db).get_collection()
 
     # Index most useful for querying diskusages for a given cluster and a given group
@@ -226,7 +227,7 @@ def create_storages_indices(db):
     )
 
 
-def create_jobs_indices(db):
+def create_jobs_indices(db: Database) -> None:
     db_collection = SlurmJobRepository(database=db).get_collection()
 
     # Index most useful for querying single jobs.
