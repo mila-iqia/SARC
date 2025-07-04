@@ -320,11 +320,29 @@ class ParsedPartition:
                         )
                         harmonized_gpu_to_billing[name] = billing
             else:
-                logger.warning(
+                logger.debug(
                     self.partition.message(
                         f"GPU not in partition nodes: {gpu} (billing: {billing})"
                     )
                 )
+                # Try to harmonize GPU name anyway.
+                # Passing None as nodename, harmonization will look for __DEFAULTS__
+                # in `gpu_per_nodes` field of cluster config.
+                h_name = cluster.harmonize_gpu(None, gpu)
+                if h_name:
+                    assert h_name not in harmonized_gpu_to_billing, (
+                        h_name,
+                        billing,
+                        harmonized_gpu_to_billing,
+                    )
+                    harmonized_gpu_to_billing[h_name] = billing
+                else:
+                    logger.warning(
+                        self.partition.message(
+                            f"Cannot harmonize: {gpu} (keep this name as-is) : {self.partition.nodes}"
+                        )
+                    )
+                    harmonized_gpu_to_billing[gpu] = billing
         return harmonized_gpu_to_billing
 
 
