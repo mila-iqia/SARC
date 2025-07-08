@@ -172,7 +172,8 @@ def test_parse_malformed_jobs(sacct_json, scraper, captrace):
     scraper.get_raw._save_for_key(
         key=scraper.get_raw.key(), value=json.loads(sacct_json)
     )
-    assert list(scraper) == []
+    with pytest.raises(KeyError):
+        list(scraper)
     spans = captrace.get_finished_spans()
     assert len(spans) > 0
     # Just check the span that should have got an error.

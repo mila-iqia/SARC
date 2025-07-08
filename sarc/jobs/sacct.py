@@ -86,7 +86,9 @@ class SAcctScraper:
             or self.get_raw().get("meta", {}).get("slurm", {})
         ).get("version", None)
         for entry in self.get_raw()["jobs"]:
-            with using_trace("sarc.jobs.sacct", "SAcctScraper.__iter__") as span:
+            with using_trace(
+                "sarc.jobs.sacct", "SAcctScraper.__iter__", exception_types=()
+            ) as span:
                 span.set_attribute("entry", json.dumps(entry))
                 converted = self.convert(entry, version)
                 if converted is not None:
@@ -312,8 +314,9 @@ def update_allocated_gpu_type(cluster: ClusterConfig, entry: SlurmJob) -> Option
         )
         if output:
             gpu_type = output[0]["metric"]["gpu_type"]
-    else:
-        # No prometheus config. Try to get GPU type from entry nodes.
+
+    if gpu_type is None:
+        # No prometheus config or no prometheus result. Try to get GPU type from entry nodes.
         assert cluster.name is not None
         node_gpu_mapping = get_node_to_gpu(cluster.name, entry.start_time)
         if node_gpu_mapping:
@@ -324,10 +327,12 @@ def update_allocated_gpu_type(cluster: ClusterConfig, entry: SlurmJob) -> Option
             # We infer gpu_type only if we found 1 GPU for this job.
             if len(gpu_types) == 1:
                 gpu_type = gpu_types.pop()
-            else:
-                # Otherwise, we take current value in entry.allocated.gpu_type.
-                # If value is not None, it could be harmonized below.
-                gpu_type = entry.allocated.gpu_type
+
+    if gpu_type is None:
+        # No gpu_type from neither prometheus nor entry nodes.
+        # Just take current value in entry.allocated.gpu_type.
+        # If value is not None, it could be harmonized below.
+        gpu_type = entry.allocated.gpu_type
 
     # If we found a GPU type, try to infer descriptive GPU name
     if gpu_type is not None:
