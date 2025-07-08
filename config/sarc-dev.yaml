@@ -132,20 +132,20 @@ sarc:
       prometheus_headers_file:
       start_date: '2022-04-01'
       gpus_per_nodes:
+        __DEFAULTS__:
+          a5000: A5000
+          t4: T4
+          v100: V100-SXM2-32GB
         gra[828-987]:
           p100: P100-PCIe-12GB
         gra[1147-1153]:
           v100: V100-PCIe-16GB
-        gra[1154-1189]:
-          t4: T4
         gra[1337-1338]:
           v100: V100-SXM2-32GB
         gra1342:
           a100: A100-SXM4-80GB
         gra[1361-1362]:
           a100: A100-PCIe-80GB
-        gra[1363-1373]:
-          a5000: A5000
     cedar:
       host: cedar.computecanada.ca
       timezone: America/Vancouver
