@@ -11,7 +11,7 @@ from sarc.config import LoggingConfig, config
 
 
 def getOpenTelemetryLoggingHandler(
-    log_conf: LoggingConfig, log_level: int = logging.WARNING
+    log_conf: LoggingConfig
 ):
     logger_provider = LoggerProvider(
         resource=Resource.create(
@@ -25,7 +25,8 @@ def getOpenTelemetryLoggingHandler(
 
     otlp_exporter = OTLPLogExporter(log_conf.OTLP_endpoint)
     logger_provider.add_log_record_processor(BatchLogRecordProcessor(otlp_exporter))
-    return LoggingHandler(level=log_level, logger_provider=logger_provider)
+    # Use logging.NOTSET to let the logger level control filtering, not the handler
+    return LoggingHandler(level=logging.NOTSET, logger_provider=logger_provider)
 
 
 def setupLogging(verbose_level: int = 0):
@@ -39,6 +40,9 @@ def setupLogging(verbose_level: int = 0):
         "CRITICAL": logging.CRITICAL,
     }
 
+    for key, value in logging_levels.items():
+        print(f"{key}={value}")
+
     conf = config()
     # Apparently this can be called in client mode which doesn't have logging
     if hasattr(conf, "logging") and conf.logging:
@@ -47,20 +51,36 @@ def setupLogging(verbose_level: int = 0):
         # in 0 (not specified in command line) then config log level is used
         # otherwise, command-line verbose level is used
         log_level = verbose_levels.get(verbose_level, config_log_level)
+    
+        # Create the OpenTelemetry handler with NOTSET level
+        ot_handler = getOpenTelemetryLoggingHandler(conf.logging)
 
-        handler = getOpenTelemetryLoggingHandler(conf.logging, log_level)
-
+        # Create a single formatter that will be used by both handlers
         formatter = logging.Formatter(
-            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+            "%(asctime)-15s::%(levelname)s::%(name)s::%(message)s"
         )
+        
+        # Configure console handler
         console_handler = logging.StreamHandler()
         console_handler.setFormatter(formatter)
+        console_handler.setLevel(logging.NOTSET)  # Let logger level control filtering
+        
+        # Configure OpenTelemetry handler
+        ot_handler.setFormatter(formatter)  # Apply the same formatter
+        ot_handler.setLevel(logging.NOTSET)  # Let logger level control filtering
 
-        logging.basicConfig(
-            handlers=[handler, console_handler],
-            format="%(asctime)-15s::%(levelname)s::%(name)s::%(message)s",
-            level=log_level,
-        )
+        # Clear any existing handlers and configure logging
+        root_logger = logging.getLogger()
+        root_logger.handlers.clear()  # Remove any existing handlers
+        
+        # Add our handlers
+        root_logger.addHandler(ot_handler)
+        root_logger.addHandler(console_handler)
+        
+        # Set the logger level (this controls what messages get processed)
+        root_logger.setLevel(log_level)
+
+        logging.debug("setupLogging done")
 
     else:
         # no logging level in config file
