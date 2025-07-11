@@ -54,7 +54,7 @@ class SAcctScraper:
         accounts = ",".join(self.cluster.accounts) if self.cluster.accounts else None
         accounts_option = f"-A {accounts}" if accounts else ""
         cmd = f"{self.cluster.sacct_bin} {accounts_option} -X -S {start} -E {end} --allusers --json"
-        logger.info(f"{self.cluster.name} $ {cmd}")
+        logger.debug(f"{self.cluster.name} $ {cmd}")
         if self.cluster.host == "localhost":
             results: subprocess.CompletedProcess[str] | Result = subprocess.run(
                 cmd, shell=True, text=True, capture_output=True, check=False
@@ -91,8 +91,7 @@ class SAcctScraper:
             ) as span:
                 span.set_attribute("entry", json.dumps(entry))
                 converted = self.convert(entry, version)
-                if converted is not None:
-                    yield converted
+                yield converted
 
     def convert(self, entry: dict, version: dict | None = None) -> SlurmJob | None:
         """Convert a single job entry from sacct to a SlurmJob."""
@@ -273,15 +272,18 @@ def sacct_mongodb_import(
     logger.info(
         f"Saving into mongodb collection '{collection.Meta.collection_name}'..."
     )
+    nb_entries = 0
     for entry in tqdm(scraper):
-        saved = False
-        if not no_prometheus:
-            update_allocated_gpu_type(cluster, entry)
-            saved = entry.statistics(recompute=True, save=True) is not None
+        if entry is not None:
+            nb_entries += 1
+            saved = False
+            if not no_prometheus:
+                update_allocated_gpu_type(cluster, entry)
+                saved = entry.statistics(recompute=True, save=True) is not None
 
-        if not saved:
-            collection.save_job(entry)
-    logger.info(f"Saved {len(scraper)} entries.")
+            if not saved:
+                collection.save_job(entry)
+    logger.info(f"Saved {nb_entries}/{len(scraper)} entries.")
 
 
 @trace_decorator()
