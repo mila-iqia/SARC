@@ -394,14 +394,16 @@ def compute_job_statistics(job: SlurmJob) -> JobStatistics:
         is_time_counter=True,
     )
 
+    system_memory = None
     if job.allocated.mem is None:
         logging.warning(f"job.allocated.mem is None for job {job.job_id}")
-    system_memory = compute_job_statistics_from_dataframe(
-        metrics["slurm_job_memory_usage"],
-        statistics=statistics_dict,
-        normalization=lambda x: float(x / 1e6 / job.allocated.mem),
-        unused_threshold=False,
-    )
+    else:
+        system_memory = compute_job_statistics_from_dataframe(
+            metrics["slurm_job_memory_usage"],
+            statistics=statistics_dict,
+            normalization=lambda x: float(x / 1e6 / job.allocated.mem),
+            unused_threshold=False,
+        )
 
     return JobStatistics(
         gpu_utilization=Statistics(**gpu_utilization) if gpu_utilization else None,
