@@ -38,9 +38,6 @@ def setupLogging(verbose_level: int = 0):
         "CRITICAL": logging.CRITICAL,
     }
 
-    for key, value in logging_levels.items():
-        print(f"{key}={value}")
-
     conf = config()
     # Apparently this can be called in client mode which doesn't have logging
     if hasattr(conf, "logging") and conf.logging:
