@@ -159,19 +159,20 @@ class CachedFunction[**P, R]:  # pylint: disable=too-many-instance-attributes
             possible = [c for c in candidates if c.name <= maximum]
             if possible:
                 candidate = possible[0]
-                m = re.match(
-                    string=candidate.name,
-                    pattern=key_value.format(time=f"({_time_regexp})"),
-                )
-                if m is None:
-                    raise CacheException(
-                        f"Could not parse cache file name '{candidate}'"
+
+                if valid is True:
+                    candidate_time = datetime.now()
+                else:
+                    m = re.match(
+                        string=candidate.name,
+                        pattern=key_value.format(time=f"({_time_regexp})"),
                     )
-                candidate_time = (
-                    datetime.now()
-                    if valid is True
-                    else datetime.strptime(m.group(1), _time_format)
-                )
+                    if m is None:
+                        raise CacheException(
+                            f"Could not parse time from cache file name '{candidate}'"
+                        )
+                    candidate_time = datetime.strptime(m.group(1), _time_format)
+
                 if valid is True or at_time <= candidate_time + valid:
                     encoding = None if "b" in self.formatter.read_flags else "utf-8"
                     with open(
