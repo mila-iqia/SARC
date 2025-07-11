@@ -54,7 +54,7 @@ class SAcctScraper:
         accounts = ",".join(self.cluster.accounts) if self.cluster.accounts else None
         accounts_option = f"-A {accounts}" if accounts else ""
         cmd = f"{self.cluster.sacct_bin} {accounts_option} -X -S {start} -E {end} --allusers --json"
-        logger.info(f"{self.cluster.name} $ {cmd}")
+        logger.debug(f"{self.cluster.name} $ {cmd}")
         if self.cluster.host == "localhost":
             results: subprocess.CompletedProcess[str] | Result = subprocess.run(
                 cmd, shell=True, text=True, capture_output=True, check=False
