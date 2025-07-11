@@ -10,9 +10,7 @@ from opentelemetry.sdk.resources import Resource
 from sarc.config import LoggingConfig, config
 
 
-def getOpenTelemetryLoggingHandler(
-    log_conf: LoggingConfig
-):
+def getOpenTelemetryLoggingHandler(log_conf: LoggingConfig):
     logger_provider = LoggerProvider(
         resource=Resource.create(
             {
@@ -51,7 +49,7 @@ def setupLogging(verbose_level: int = 0):
         # in 0 (not specified in command line) then config log level is used
         # otherwise, command-line verbose level is used
         log_level = verbose_levels.get(verbose_level, config_log_level)
-    
+
         # Create the OpenTelemetry handler with NOTSET level
         ot_handler = getOpenTelemetryLoggingHandler(conf.logging)
 
@@ -59,12 +57,12 @@ def setupLogging(verbose_level: int = 0):
         formatter = logging.Formatter(
             "%(asctime)-15s::%(levelname)s::%(name)s::%(message)s"
         )
-        
+
         # Configure console handler
         console_handler = logging.StreamHandler()
         console_handler.setFormatter(formatter)
         console_handler.setLevel(logging.NOTSET)  # Let logger level control filtering
-        
+
         # Configure OpenTelemetry handler
         ot_handler.setFormatter(formatter)  # Apply the same formatter
         ot_handler.setLevel(logging.NOTSET)  # Let logger level control filtering
@@ -72,11 +70,11 @@ def setupLogging(verbose_level: int = 0):
         # Clear any existing handlers and configure logging
         root_logger = logging.getLogger()
         root_logger.handlers.clear()  # Remove any existing handlers
-        
+
         # Add our handlers
         root_logger.addHandler(ot_handler)
         root_logger.addHandler(console_handler)
-        
+
         # Set the logger level (this controls what messages get processed)
         root_logger.setLevel(log_level)
 
