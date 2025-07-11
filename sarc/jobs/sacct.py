@@ -89,8 +89,7 @@ class SAcctScraper:
             with using_trace("sarc.jobs.sacct", "SAcctScraper.__iter__") as span:
                 span.set_attribute("entry", json.dumps(entry))
                 converted = self.convert(entry, version)
-                if converted is not None:
-                    yield converted
+                yield converted
 
     def convert(self, entry: dict, version: dict | None = None) -> SlurmJob | None:
         """Convert a single job entry from sacct to a SlurmJob."""
@@ -271,15 +270,18 @@ def sacct_mongodb_import(
     logger.info(
         f"Saving into mongodb collection '{collection.Meta.collection_name}'..."
     )
+    nb_entries = 0
     for entry in tqdm(scraper):
-        saved = False
-        if not no_prometheus:
-            update_allocated_gpu_type(cluster, entry)
-            saved = entry.statistics(recompute=True, save=True) is not None
+        if entry is not None:
+            nb_entries += 1
+            saved = False
+            if not no_prometheus:
+                update_allocated_gpu_type(cluster, entry)
+                saved = entry.statistics(recompute=True, save=True) is not None
 
-        if not saved:
-            collection.save_job(entry)
-    logger.info(f"Saved {len(scraper)} entries.")
+            if not saved:
+                collection.save_job(entry)
+    logger.info(f"Saved {nb_entries}/{len(scraper)} entries.")
 
 
 @trace_decorator()
