@@ -79,7 +79,7 @@ class SAcctScraper:
     def __len__(self) -> int:
         return len(self.get_raw()["jobs"])
 
-    def __iter__(self) -> Iterator[SlurmJob]:
+    def __iter__(self) -> Iterator[SlurmJob | None]:
         """Fetch and iterate on all jobs as SlurmJob objects."""
         version: dict = (
             self.get_raw().get("meta", {}).get("Slurm", None)

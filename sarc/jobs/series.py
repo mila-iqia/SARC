@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Callable, Literal, Sequence, TypedDict, overload
+from typing import Callable, Literal, Sequence, TypedDict, overload, cast
 
 import pandas
 from pandas import DataFrame, Series
@@ -399,7 +399,7 @@ def compute_job_statistics(job: SlurmJob) -> JobStatistics:
         system_memory = compute_job_statistics_from_dataframe(
             metrics["slurm_job_memory_usage"],
             statistics=statistics_dict,
-            normalization=lambda x: float(x / 1e6 / job.allocated.mem),
+            normalization=lambda x: float(x / 1e6 / cast(int, job.allocated.mem)),
             unused_threshold=False,
         )
     elif metrics["slurm_job_memory_usage"] is not None:
