@@ -94,6 +94,7 @@ class SAcctScraper:
                 try:    
                     converted = self.convert(entry, version)
                     if converted is not None:
+                        print(f"converted is not None")
                         yield converted
                 except JobConversionError as e:
                     logging.error(f"Critical JobConversionError while converting job {entry['job_id']}: {e}")
@@ -290,7 +291,8 @@ class SAcctScraper:
                 
         #     )
 
-        print(f"(debug)exception raised")
+        print("Conversion error")
+        # return None
         raise JobConversionError(f"Unsupported slurm version: {version}")
 
 
@@ -314,7 +316,6 @@ def sacct_mongodb_import(
     scraper = SAcctScraper(cluster, day)
     logger.info(f"Getting the sacct data for cluster {cluster.name}, date {day}...")
     scraper.get_raw()
-    print(f"Saving into mongodb collection '{collection.Meta.collection_name}'...")
     logger.info(
         f"Saving into mongodb collection '{collection.Meta.collection_name}'..."
     )
@@ -329,9 +330,8 @@ def sacct_mongodb_import(
             if not saved:
                 collection.save_job(entry)
     except Exception as e:
-        print(f"(debug)job {entry.job_id} not saved: {e}")
+        logger.error(f"job {entry.job_id} not saved: {e}")
         raise e
-    print(f"(debug)saved {len(scraper)} entries")
     logger.info(f"Saved {len(scraper)} entries.")
 
 
