@@ -5,7 +5,7 @@ import pytest
 from fabric.testing.base import Command, MockRemote, Session
 
 from sarc.config import config
-from sarc.jobs.sacct import SAcctScraper
+from sarc.jobs.sacct import JobConversionError, SAcctScraper
 
 
 @pytest.mark.parametrize(
@@ -94,3 +94,89 @@ def test_SAcctScraper_get_cache(test_config, enabled_cache, remote):
     assert not isfile(cachefile)
     scraper_today.get_raw()
     assert not isfile(cachefile)
+
+
+@pytest.mark.parametrize(
+    "test_config", [{"clusters": {"test": {"host": "test"}}}], indirect=True
+)
+def test_SAcctScraper_convert_version_supported(test_config, monkeypatch, caplog):
+    scraper = SAcctScraper(
+        cluster=test_config.clusters["test"],
+        day=datetime(2023, 2, 28),
+    )
+    version_supported = {"major": "24", "micro": "1", "minor": "11"}
+    version_unsupported = {"major": "124", "micro": "1", "minor": "11"}
+
+    entry = {
+        "job_id": 123456,
+        "array": {
+            "job_id": 0,
+            "limits": {"max": {"running": {"tasks": 0}}},
+            "task_id": {"set": False, "infinite": False, "number": 0},
+            "task": "",
+        },
+        "name": "my_job_name",
+        "user": "toto",
+        "group": "toto_group",
+        "account": "toto_account",
+        "state": {"current": ["TIMEOUT"], "reason": "None"},
+        "exit_code": {
+            "status": ["SUCCESS"],
+            "return_code": {"set": True, "infinite": False, "number": 0},
+            "signal": {
+                "id": {"set": False, "infinite": False, "number": 0},
+                "name": "",
+            },
+        },
+        "time": {
+            "elapsed": 259223,
+            "eligible": 1747064484,
+            "end": 1751866893,
+            "planned": {"set": True, "infinite": False, "number": 4543186},
+            "start": 1751607670,
+            "submission": 1747064484,
+            "suspended": 0,
+            "system": {"seconds": 0, "microseconds": 0},
+            "limit": {"set": True, "infinite": False, "number": 4320},
+            "total": {"seconds": 0, "microseconds": 0},
+            "user": {"seconds": 0, "microseconds": 0},
+        },
+        "nodes": "node123",
+        "partition": "partition123",
+        "constraints": "[cascade|milan]",
+        "priority": {"set": True, "infinite": False, "number": 489206},
+        "qos": "normal",
+        "working_directory": "/home/toto/my_job_name",
+        "tres": {
+            "allocated": [
+                {"type": "cpu", "name": "", "id": 1, "count": 8},
+                {"type": "mem", "name": "", "id": 2, "count": 16000},
+                {"type": "node", "name": "", "id": 4, "count": 1},
+                {"type": "billing", "name": "", "id": 5, "count": 8000},
+            ],
+            "requested": [
+                {"type": "cpu", "name": "", "id": 1, "count": 8},
+                {"type": "mem", "name": "", "id": 2, "count": 16000},
+                {"type": "node", "name": "", "id": 4, "count": 1},
+                {"type": "billing", "name": "", "id": 5, "count": 8000},
+            ],
+        },
+        "flags": ["STARTED_ON_BACKFILL", "START_RECEIVED"],
+        "cluster": "test",
+    }
+
+    # test version supported
+    slurmjob = scraper.convert(entry, version_supported)
+
+    assert slurmjob is not None
+    assert slurmjob.job_id == 123456
+    assert slurmjob.user == "toto"
+    assert slurmjob.group == "toto_group"
+    assert slurmjob.account == "toto_account"
+    assert slurmjob.partition == "partition123"
+    assert slurmjob.job_state == "TIMEOUT"
+    assert slurmjob.work_dir == "/home/toto/my_job_name"
+
+    # test version unsupported
+    with pytest.raises(JobConversionError):
+        slurmjob = scraper.convert(entry, version_unsupported)

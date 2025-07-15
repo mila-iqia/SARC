@@ -18,6 +18,12 @@ from sarc.traces import trace_decorator, using_trace
 logger = logging.getLogger(__name__)
 
 
+class JobConversionError(Exception):
+    """Exception raised when there's an error converting a job entry from sacct."""
+
+    pass
+
+
 def parse_in_timezone(timestamp: int | None) -> datetime | None:
     if timestamp is None or timestamp == 0:
         return None
@@ -246,7 +252,41 @@ class SAcctScraper:
                 **flags,  # type: ignore[arg-type]
             )
 
-        raise ValueError(f"Unsupported slurm version: {version}")
+        if int(version["major"]) == 24:
+            return SlurmJob(
+                cluster_name=self.cluster.name,
+                job_id=entry["job_id"],
+                array_job_id=entry["array"]["job_id"] or None,
+                task_id=entry["array"]["task_id"]["number"],
+                name=entry["name"],
+                user=entry["user"],
+                group=entry["group"],
+                account=entry["account"],
+                job_state=entry["state"]["current"][0],
+                exit_code=entry["exit_code"]["return_code"]["number"],
+                signal=entry["exit_code"]
+                .get("signal", {})
+                .get("id", {})
+                .get("number", None),
+                time_limit=(tlimit := entry["time"]["limit"]["number"]) and tlimit * 60,
+                submit_time=submit_time,
+                start_time=start_time,
+                end_time=end_time,
+                elapsed_time=elapsed_time,
+                partition=entry["partition"],
+                nodes=(
+                    sorted(expand_hostlist(nodes)) if nodes != "None assigned" else []
+                ),
+                constraints=entry["constraints"],
+                priority=entry["priority"]["number"],
+                qos=entry["qos"],
+                work_dir=entry["working_directory"],
+                **resources,  # type: ignore[arg-type]
+                **flags,  # type: ignore[arg-type]
+            )
+
+        # if we arrive here, it means that the version is not supported :-(
+        raise JobConversionError(f"Unsupported slurm version: {version}")
 
 
 @trace_decorator()
@@ -280,7 +320,6 @@ def sacct_mongodb_import(
             if not no_prometheus:
                 update_allocated_gpu_type(cluster, entry)
                 saved = entry.statistics(recompute=True, save=True) is not None
-
             if not saved:
                 collection.save_job(entry)
     logger.info(f"Saved {nb_entries}/{len(scraper)} entries.")
