@@ -99,10 +99,11 @@ def test_SAcctScraper_get_cache(test_config, enabled_cache, remote):
 def _setup_logging_do_nothing(*args, **kwargs):
     pass
 
+
 @pytest.mark.parametrize(
     "test_config", [{"clusters": {"test": {"host": "test"}}}], indirect=True
 )
-def test_SAcctScraper_convert_version_supported(test_config,monkeypatch):
+def test_SAcctScraper_convert_version_supported(test_config, monkeypatch, caplog):
     monkeypatch.setattr("sarc.cli.setupLogging", _setup_logging_do_nothing)
     scraper = SAcctScraper(
         cluster=test_config.clusters["test"],
