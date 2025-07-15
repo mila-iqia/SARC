@@ -17,9 +17,12 @@ from sarc.traces import trace_decorator, using_trace
 
 logger = logging.getLogger(__name__)
 
+
 class JobConversionError(Exception):
     """Exception raised when there's an error converting a job entry from sacct."""
+
     pass
+
 
 def parse_in_timezone(timestamp: int | None) -> datetime | None:
     if timestamp is None or timestamp == 0:
@@ -96,7 +99,7 @@ class SAcctScraper:
                 span.set_attribute("entry", json.dumps(entry))
                 converted = self.convert(entry, version)
                 yield converted
-                
+
     def convert(self, entry: dict, version: dict | None = None) -> SlurmJob | None:
         """Convert a single job entry from sacct to a SlurmJob."""
         resources: dict[str, dict] = {"requested": {}, "allocated": {}}
@@ -249,7 +252,7 @@ class SAcctScraper:
                 **resources,  # type: ignore[arg-type]
                 **flags,  # type: ignore[arg-type]
             )
-        
+
         if int(version["major"]) == 24:
             return SlurmJob(
                 cluster_name=self.cluster.name,
@@ -266,17 +269,14 @@ class SAcctScraper:
                 .get("signal", {})
                 .get("id", {})
                 .get("number", None),
-                time_limit=(tlimit := entry["time"]["limit"]["number"])
-                and tlimit * 60,
+                time_limit=(tlimit := entry["time"]["limit"]["number"]) and tlimit * 60,
                 submit_time=submit_time,
                 start_time=start_time,
                 end_time=end_time,
                 elapsed_time=elapsed_time,
                 partition=entry["partition"],
                 nodes=(
-                    sorted(expand_hostlist(nodes))
-                    if nodes != "None assigned"
-                    else []
+                    sorted(expand_hostlist(nodes)) if nodes != "None assigned" else []
                 ),
                 constraints=entry["constraints"],
                 priority=entry["priority"]["number"],
