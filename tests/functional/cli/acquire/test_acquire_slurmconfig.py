@@ -74,8 +74,22 @@ PartitionName=partition4 Nodes=alone_node
 """
 
 
+def _setup_logging_do_nothing(*args, **kwargs):
+    """
+    Mock used to deactivate sarc.logging.setupLogging when using caplog.
+
+    caplog adds a logging handler but this handler is deleted by
+    sarc.logging.setupLogging and replaced with custom handlers.
+
+    As we just want to check logging messages, we can simply remove
+    call to setupLogging.
+    """
+
+
 @pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
-def test_acquire_slurmconfig(cli_main, caplog):
+def test_acquire_slurmconfig(cli_main, caplog, monkeypatch):
+    monkeypatch.setattr("sarc.cli.setupLogging", _setup_logging_do_nothing)
+
     assert get_cluster_gpu_billings("raisin") == []
     assert get_node_to_gpu("raisin") == None
 
@@ -190,7 +204,7 @@ def test_acquire_slurmconfig(cli_main, caplog):
 
 
 @pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
-def test_acuire_slurmconfig_inconsistent_billing(cli_main, caplog):
+def test_acuire_slurmconfig_inconsistent_billing(cli_main):
     _save_slurm_conf(
         "raisin",
         "2020-01-01",
