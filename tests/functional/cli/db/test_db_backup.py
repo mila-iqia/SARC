@@ -14,8 +14,13 @@ def mock_shutil_which_valid(*args, **kwargs):
     return "mongodump"
 
 
+def _setup_logging_do_nothing(*args, **kwargs):
+    pass
+
+
 @pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
 def test_check_mongodump(cli_main, monkeypatch, caplog):
+    monkeypatch.setattr("sarc.cli.setupLogging", _setup_logging_do_nothing)
     monkeypatch.setattr(shutil, "which", mock_shutil_which_none)
     assert cli_main(["db", "backup"]) == -1
 

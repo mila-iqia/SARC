@@ -14,11 +14,16 @@ def mock_shutil_which_valid(*args, **kwargs):
     return "mongorestore"
 
 
+def _setup_logging_do_nothing(*args, **kwargs):
+    pass
+
+
 @pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
 def test_check_mongorestore(cli_main, tmp_path, monkeypatch, caplog):
     tmp_dump = tmp_path / "backup"
     tmp_dump.mkdir()
 
+    monkeypatch.setattr("sarc.cli.setupLogging", _setup_logging_do_nothing)
     monkeypatch.setattr(shutil, "which", mock_shutil_which_none)
     assert cli_main(["db", "restore", "-i", str(tmp_dump)]) == -1
 

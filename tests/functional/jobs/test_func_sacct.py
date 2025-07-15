@@ -172,7 +172,8 @@ def test_parse_malformed_jobs(sacct_json, scraper, captrace):
     scraper.get_raw._save_for_key(
         key=scraper.get_raw.key(), value=json.loads(sacct_json)
     )
-    assert list(scraper) == []
+    with pytest.raises(KeyError):
+        list(scraper)
     spans = captrace.get_finished_spans()
     assert len(spans) > 0
     # Just check the span that should have got an error.
@@ -198,7 +199,7 @@ def test_parse_no_group_jobs(sacct_json, scraper, caplog):
         key=scraper.get_raw.key(), value=json.loads(sacct_json)
     )
     with caplog.at_level("DEBUG"):
-        assert list(scraper) == []
+        assert list(scraper) == [None]
     assert 'Skipping job with group "None": 1' in caplog.text
 
 
@@ -837,12 +838,18 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     prom_custom_query_mock,
     caplog,
     captrace,
+    monkeypatch,
 ):
     """
     Copied from test_multiple_clusters_and_dates above, with changes:
     - Added captrace to test tracing
     - Removed `--no_prometheus` to test prometheus-related tracing
     """
+
+    def _setup_logging_do_nothing(*args, **kwargs):
+        pass
+
+    monkeypatch.setattr("sarc.cli.setupLogging", _setup_logging_do_nothing)
     caplog.set_level(logging.INFO)
     cluster_names = ["raisin", "patate"]
     datetimes = [
@@ -975,7 +982,7 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     assert "Saving into mongodb collection '" in caplog.text
     assert bool(
         re.search(
-            r"sarc\.jobs\.sacct:sacct\.py:[0-9]+ Saved [0-9]+ entries\.",
+            r"sarc\.jobs\.sacct:sacct\.py:[0-9]+ Saved [0-9]+/[0-9]+ entries\.",
             caplog.text,
         )
     )

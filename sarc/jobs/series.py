@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Callable, Literal, Sequence, TypedDict, overload
+from typing import Callable, Literal, Sequence, TypedDict, overload, cast
 
 import pandas
 from pandas import DataFrame, Series
@@ -174,7 +174,7 @@ def _get_job_time_series_data(
     else:
         query = f"{query}[{duration_seconds}s:{interval}s] {offset_string}"
 
-    logging.info(f"prometheus query with offset: {query}")
+    logging.debug(f"prometheus query with offset: {query}")
     return job.fetch_cluster_config().prometheus.custom_query(query)
 
 
@@ -393,14 +393,19 @@ def compute_job_statistics(job: SlurmJob) -> JobStatistics:
         unused_threshold=0.01,
         is_time_counter=True,
     )
-    job_mem = job.allocated.mem
-    assert job_mem is not None
-    system_memory = compute_job_statistics_from_dataframe(
-        metrics["slurm_job_memory_usage"],
-        statistics=statistics_dict,
-        normalization=lambda x: float(x / 1e6 / job_mem),
-        unused_threshold=False,
-    )
+
+    system_memory = None
+    if job.allocated.mem is not None:
+        system_memory = compute_job_statistics_from_dataframe(
+            metrics["slurm_job_memory_usage"],
+            statistics=statistics_dict,
+            normalization=lambda x: float(x / 1e6 / cast(int, job.allocated.mem)),
+            unused_threshold=False,
+        )
+    elif metrics["slurm_job_memory_usage"] is not None:
+        logging.warning(
+            f"job.allocated.mem is None for job {job.job_id} (job status: {job.job_state.value})"
+        )
 
     return JobStatistics(
         gpu_utilization=Statistics(**gpu_utilization) if gpu_utilization else None,
