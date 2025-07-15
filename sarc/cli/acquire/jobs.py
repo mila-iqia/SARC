@@ -9,7 +9,7 @@ from simple_parsing import field
 
 from sarc.config import config
 from sarc.errors import ClusterNotFound
-from sarc.jobs.sacct import JobConversionError, sacct_mongodb_import
+from sarc.jobs.sacct import sacct_mongodb_import
 from sarc.traces import using_trace
 
 
