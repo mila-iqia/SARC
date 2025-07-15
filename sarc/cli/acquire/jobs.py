@@ -9,7 +9,7 @@ from simple_parsing import field
 
 from sarc.config import config
 from sarc.errors import ClusterNotFound
-from sarc.jobs.sacct import sacct_mongodb_import
+from sarc.jobs.sacct import JobConversionError, sacct_mongodb_import
 from sarc.traces import using_trace
 
 
@@ -114,12 +114,14 @@ class AcquireJobs:
                         # pylint: disable=broad-exception-caught
                         except Exception as e:
                             logging.error(
-                                f"Failed to acquire data for {cluster_name} on {date}: {e}"
+                                f"Failed to acquire data for {cluster_name} on {date}: {type(e).__name__}: {e}"
                             )
                             raise e
             # pylint: disable=broad-exception-caught
-            except Exception:
-                # Error while acquiring data on a cluster from given dates.
+            except Exception as e:
+                logging.error(
+                    f"Error while acquiring data on {cluster_name}; skipping cluster."
+                )
                 # Continue to next cluster.
                 continue
         return 0

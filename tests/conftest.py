@@ -50,6 +50,14 @@ def base_config(test_config_path):
             yield
 
 
+@pytest.fixture(scope="session")
+def base_config_with_logging():
+    """To be used where config.logging is required"""
+    with gifnoc.use(Path(__file__).parent / "sarc-test-with-logging.yaml"):
+        with using_sarc_mode("scraping"):
+            yield
+
+
 @pytest.fixture
 def enabled_cache(tmp_path):
     with gifnoc.overlay({"sarc.cache": str(tmp_path / "sarc-tmp-test-cache")}):
