@@ -250,44 +250,43 @@ class SAcctScraper:
                 **flags,  # type: ignore[arg-type]
             )
         
-        # if int(version["major"]) == 24:
-        #     return SlurmJob(
-        #         cluster_name=self.cluster.name,
-        #         job_id=entry["job_id"],
-        #         array_job_id=entry["array"]["job_id"] or None,
-        #         task_id=entry["array"]["task_id"]["number"],
-        #         name=entry["name"],
-        #         user=entry["user"],
-        #         group=entry["group"],
-        #         account=entry["account"],
-        #         job_state=entry["state"]["current"][0],
-        #         exit_code=entry["exit_code"]["return_code"]["number"],
-        #         signal=entry["exit_code"]
-        #         .get("signal", {})
-        #         .get("id", {})
-        #         .get("number", None),
-        #         time_limit=(tlimit := entry["time"]["limit"]["number"])
-        #         and tlimit * 60,
-        #         submit_time=submit_time,
-        #         start_time=start_time,
-        #         end_time=end_time,
-        #         elapsed_time=elapsed_time,
-        #         partition=entry["partition"],
-        #         nodes=(
-        #             sorted(expand_hostlist(nodes))
-        #             if nodes != "None assigned"
-        #             else []
-        #         ),
-        #         constraints=entry["constraints"],
-        #         priority=entry["priority"]["number"],
-        #         qos=entry["qos"],
-        #         work_dir=entry["working_directory"],
-        #         **resources,
-        #         **flags,
-                
-        #     )
+        if int(version["major"]) == 24:
+            return SlurmJob(
+                cluster_name=self.cluster.name,
+                job_id=entry["job_id"],
+                array_job_id=entry["array"]["job_id"] or None,
+                task_id=entry["array"]["task_id"]["number"],
+                name=entry["name"],
+                user=entry["user"],
+                group=entry["group"],
+                account=entry["account"],
+                job_state=entry["state"]["current"][0],
+                exit_code=entry["exit_code"]["return_code"]["number"],
+                signal=entry["exit_code"]
+                .get("signal", {})
+                .get("id", {})
+                .get("number", None),
+                time_limit=(tlimit := entry["time"]["limit"]["number"])
+                and tlimit * 60,
+                submit_time=submit_time,
+                start_time=start_time,
+                end_time=end_time,
+                elapsed_time=elapsed_time,
+                partition=entry["partition"],
+                nodes=(
+                    sorted(expand_hostlist(nodes))
+                    if nodes != "None assigned"
+                    else []
+                ),
+                constraints=entry["constraints"],
+                priority=entry["priority"]["number"],
+                qos=entry["qos"],
+                work_dir=entry["working_directory"],
+                **resources,
+                **flags,
+            )
 
-        # return None
+        # if we arrive here, it means that the version is not supported :-(
         raise JobConversionError(f"Unsupported slurm version: {version}")
 
 
