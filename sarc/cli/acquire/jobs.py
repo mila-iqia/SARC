@@ -114,16 +114,12 @@ class AcquireJobs:
                         # pylint: disable=broad-exception-caught
                         except Exception as e:
                             logging.error(
-                                f"{__file__}:117 Failed to acquire data for {cluster_name} on {date}: {type(e).__name__}: {e}"
+                                f"Failed to acquire data for {cluster_name} on {date}: {type(e).__name__}: {e}"
                             )
                             raise e
             # pylint: disable=broad-exception-caught
-            except JobConversionError as e:
-                logging.error(f"{__file__}:122 Critical JobConversionError while acquiring data on {cluster_name}: {e}")
-                raise e
             except Exception as e:
-                logging.error(f"{__file__}:125 Error while acquiring data on {cluster_name} : {e}; continue to next cluster")
-                # Error while acquiring data on a cluster from given dates.
+                logging.error(f"Error while acquiring data on {cluster_name}; skipping cluster.")
                 # Continue to next cluster.
                 continue
         return 0

@@ -92,13 +92,10 @@ class SAcctScraper:
             with using_trace(
                 "sarc.jobs.sacct", "SAcctScraper.__iter__", exception_types=()
             ) as span:
+                # print(f"SAcctScrapper.__iter__: entry: {entry}")
                 span.set_attribute("entry", json.dumps(entry))
-                try:    
-                    converted = self.convert(entry, version)
-                    yield converted
-                except JobConversionError as e:
-                    logging.error(f"Critical JobConversionError while converting job {entry['job_id']}: {e}")
-                    raise e
+                converted = self.convert(entry, version)
+                yield converted
                 
     def convert(self, entry: dict, version: dict | None = None) -> SlurmJob | None:
         """Convert a single job entry from sacct to a SlurmJob."""
@@ -290,7 +287,6 @@ class SAcctScraper:
                 
         #     )
 
-        print("Conversion error")
         # return None
         raise JobConversionError(f"Unsupported slurm version: {version}")
 
@@ -318,21 +314,22 @@ def sacct_mongodb_import(
     logger.info(
         f"Saving into mongodb collection '{collection.Meta.collection_name}'..."
     )
-    try:
-        nb_entries = 0
-        for entry in tqdm(scraper):
-            if entry is not None:
-                nb_entries += 1
-                saved = False
-                if not no_prometheus:
-                    update_allocated_gpu_type(cluster, entry)
-                    saved = entry.statistics(recompute=True, save=True) is not None
+    # try:
+    nb_entries = 0
+    for entry in tqdm(scraper):
+        if entry is not None:
+            nb_entries += 1
+            saved = False
+            if not no_prometheus:
+                update_allocated_gpu_type(cluster, entry)
+                saved = entry.statistics(recompute=True, save=True) is not None
 
-                if not saved:
-                    collection.save_job(entry)
-    except Exception as e:
-        logger.error(f"job {entry.job_id} not saved: {e}")
-        raise e
+        if not saved:
+            collection.save_job(entry)
+
+    # except Exception as e:
+    #     logger.error(f"Scraping error: {e}")
+    #     raise e
     logger.info(f"Saved {nb_entries}/{len(scraper)} entries.")
 
 
