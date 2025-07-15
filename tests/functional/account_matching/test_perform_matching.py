@@ -1,7 +1,6 @@
 import io
 
-from sarc.account_matching.make_matches import _prompt_manual_match, perform_matching
-from sarc.config import config
+from sarc.account_matching.make_matches import perform_matching
 
 
 def helper_extract_three_account_sources_from_ground_truth(account_matches):
@@ -54,7 +53,7 @@ def test_perform_matching(account_matches):
         override_matches_mila_to_cc,
     ) = helper_extract_three_account_sources_from_ground_truth(account_matches)
 
-    DD_persons, new_matches = perform_matching(
+    DD_persons = perform_matching(
         DLD_data,
         mila_emails_to_ignore=mila_emails_to_ignore,
         override_matches_mila_to_cc=override_matches_mila_to_cc,
@@ -62,8 +61,6 @@ def test_perform_matching(account_matches):
     )
 
     assert account_matches == DD_persons
-
-    assert not new_matches
 
     # for mila_email_username in DD_persons:
     #    # source_name in "mila_ldap", "drac_members", "drac_roles
@@ -92,7 +89,7 @@ def test_perform_matching_with_bad_email_capitalization(account_matches):
     DLD_data["drac_members"][0]["email"] = DLD_data["drac_members"][0]["email"].upper()
     DLD_data["drac_roles"][1]["email"] = DLD_data["drac_roles"][1]["email"].upper()
 
-    DD_persons, new_matches = perform_matching(
+    DD_persons = perform_matching(
         DLD_data,
         mila_emails_to_ignore=mila_emails_to_ignore,
         override_matches_mila_to_cc=override_matches_mila_to_cc,
@@ -110,35 +107,3 @@ def test_perform_matching_with_bad_email_capitalization(account_matches):
 
     # recursive matching of dicts
     assert account_matches == DD_persons
-    assert not new_matches
-
-
-def test_prompt_manual_match(monkeypatch):
-    mila_display_name = "a_name"
-    cc_source = "drac_members"
-    matches = [f"name_{i}" for i in range(5)]
-
-    # Choose index 0
-    monkeypatch.setattr("sys.stdin", io.StringIO("0\n"))
-    choice = _prompt_manual_match(mila_display_name, cc_source, matches)
-    assert choice == "name_0"
-
-    # Choose nothing
-    monkeypatch.setattr("sys.stdin", io.StringIO("\n"))
-    choice = _prompt_manual_match(mila_display_name, cc_source, matches)
-    assert choice is None
-
-    # Invalid number ("a") then valid ("4")
-    monkeypatch.setattr("sys.stdin", io.StringIO("a\n4\n"))
-    choice = _prompt_manual_match(mila_display_name, cc_source, matches)
-    assert choice == "name_4"
-
-    # Invalid index ("5") then valid ("3")
-    monkeypatch.setattr("sys.stdin", io.StringIO("5\n3\n"))
-    choice = _prompt_manual_match(mila_display_name, cc_source, matches)
-    assert choice == "name_3"
-
-    # Invalid number ("a"), then invalid index ("10"), then valid ("2")
-    monkeypatch.setattr("sys.stdin", io.StringIO("a\n10\n2\n"))
-    choice = _prompt_manual_match(mila_display_name, cc_source, matches)
-    assert choice == "name_2"

@@ -33,16 +33,23 @@ class AcquireSlurmConfig:
     )
 
     def execute(self) -> int:
+        parse_gpu_billing = True
         if self.cluster_name == "mila":
-            logger.error("Cluster `mila` not yet supported.")
-            return -1
+            logger.warning(
+                "GPU billing won't be parsed on cluster `mila`, "
+                "since billing is directly expressed as number of GPUs on this cluster."
+            )
+            parse_gpu_billing = False
 
         cluster_config = config("scraping").clusters[self.cluster_name]
-        parser = SlurmConfigParser(cluster_config, self.day)
-        slurm_conf = parser.get_slurm_config()
-        _gpu_billing_collection().save_gpu_billing(
-            self.cluster_name, parser.day, slurm_conf.gpu_to_billing
+        parser = SlurmConfigParser(
+            cluster_config, self.day, parse_gpu_billing=parse_gpu_billing
         )
+        slurm_conf = parser.get_slurm_config()
+        if slurm_conf.gpu_to_billing is not None:
+            _gpu_billing_collection().save_gpu_billing(
+                self.cluster_name, parser.day, slurm_conf.gpu_to_billing
+            )
         _node_gpu_mapping_collection().save_node_gpu_mapping(
             self.cluster_name, parser.day, slurm_conf.node_to_gpus
         )
@@ -68,7 +75,12 @@ class FileContent(FormatterProto[str]):
 
 
 class SlurmConfigParser:
-    def __init__(self, cluster: ClusterConfig, day: str | None = None):
+    def __init__(
+        self,
+        cluster: ClusterConfig,
+        day: str | None = None,
+        parse_gpu_billing: bool = True,
+    ):
         if day is None:
             # No day given, get current day
             day = datetime.now().strftime("%Y-%m-%d")
@@ -81,6 +93,7 @@ class SlurmConfigParser:
         self.cluster = cluster
         self.day = day
         self.cache_policy = cache_policy
+        self.parse_gpu_billing = bool(parse_gpu_billing)
 
     def get_slurm_config(self) -> SlurmConfig:
         content = with_cache(
@@ -139,7 +152,11 @@ class SlurmConfigParser:
                     )
 
         # Parse partitions: extract gpu_to_billing
-        gpu_to_billing = self._parse_gpu_to_billing(partitions, node_to_gpus)
+        gpu_to_billing = (
+            self._parse_gpu_to_billing(partitions, node_to_gpus)
+            if self.parse_gpu_billing
+            else None
+        )
 
         # Return parsed data
         return SlurmConfig(node_to_gpus=node_to_gpus, gpu_to_billing=gpu_to_billing)
@@ -180,7 +197,7 @@ class SlurmConfig:
     """Parsed data from slurm config file"""
 
     node_to_gpus: dict[str, list[str]]
-    gpu_to_billing: dict[str, float]
+    gpu_to_billing: dict[str, float] | None
 
 
 @dataclass
@@ -320,11 +337,29 @@ class ParsedPartition:
                         )
                         harmonized_gpu_to_billing[name] = billing
             else:
-                logger.warning(
+                logger.debug(
                     self.partition.message(
                         f"GPU not in partition nodes: {gpu} (billing: {billing})"
                     )
                 )
+                # Try to harmonize GPU name anyway.
+                # Passing None as nodename, harmonization will look for __DEFAULTS__
+                # in `gpu_per_nodes` field of cluster config.
+                h_name = cluster.harmonize_gpu(None, gpu)
+                if h_name:
+                    assert h_name not in harmonized_gpu_to_billing, (
+                        h_name,
+                        billing,
+                        harmonized_gpu_to_billing,
+                    )
+                    harmonized_gpu_to_billing[h_name] = billing
+                else:
+                    logger.warning(
+                        self.partition.message(
+                            f"Cannot harmonize: {gpu} (keep this name as-is) : {self.partition.nodes}"
+                        )
+                    )
+                    harmonized_gpu_to_billing[gpu] = billing
         return harmonized_gpu_to_billing
 
 
