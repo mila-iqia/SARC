@@ -85,7 +85,7 @@ class SAcctScraper:
     def __len__(self) -> int:
         return len(self.get_raw()["jobs"])
 
-    def __iter__(self) -> Iterator[SlurmJob]:
+    def __iter__(self) -> Iterator[SlurmJob | None]:
         """Fetch and iterate on all jobs as SlurmJob objects."""
         version: dict = (
             self.get_raw().get("meta", {}).get("Slurm", None)
@@ -282,8 +282,8 @@ class SAcctScraper:
                 priority=entry["priority"]["number"],
                 qos=entry["qos"],
                 work_dir=entry["working_directory"],
-                **resources,
-                **flags,
+                **resources,  # type: ignore[arg-type]
+                **flags,  # type: ignore[arg-type]
             )
 
         # if we arrive here, it means that the version is not supported :-(
@@ -323,8 +323,8 @@ def sacct_mongodb_import(
                 update_allocated_gpu_type(cluster, entry)
                 saved = entry.statistics(recompute=True, save=True) is not None
 
-        if not saved:
-            collection.save_job(entry)
+            if not saved:
+                collection.save_job(entry)
 
     # except Exception as e:
     #     logger.error(f"Scraping error: {e}")
