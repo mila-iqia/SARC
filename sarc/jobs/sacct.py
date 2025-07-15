@@ -95,7 +95,6 @@ class SAcctScraper:
             with using_trace(
                 "sarc.jobs.sacct", "SAcctScraper.__iter__", exception_types=()
             ) as span:
-                # print(f"SAcctScrapper.__iter__: entry: {entry}")
                 span.set_attribute("entry", json.dumps(entry))
                 converted = self.convert(entry, version)
                 yield converted
@@ -313,7 +312,6 @@ def sacct_mongodb_import(
     logger.info(
         f"Saving into mongodb collection '{collection.Meta.collection_name}'..."
     )
-    # try:
     nb_entries = 0
     for entry in tqdm(scraper):
         if entry is not None:
@@ -322,13 +320,8 @@ def sacct_mongodb_import(
             if not no_prometheus:
                 update_allocated_gpu_type(cluster, entry)
                 saved = entry.statistics(recompute=True, save=True) is not None
-
             if not saved:
                 collection.save_job(entry)
-
-    # except Exception as e:
-    #     logger.error(f"Scraping error: {e}")
-    #     raise e
     logger.info(f"Saved {nb_entries}/{len(scraper)} entries.")
 
 
