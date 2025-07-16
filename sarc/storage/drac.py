@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import TypedDict
 
 from sarc.config import ClusterConfig
-from sarc.storage.diskusage import DiskUsage, DiskUsageGroup, DiskUsageUser
+from sarc.core.models.diskusage import DiskUsage, DiskUsageGroup, DiskUsageUser
 
 
 def _parse_fraction(s: str) -> str:
