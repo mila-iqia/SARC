@@ -9,6 +9,8 @@ from opentelemetry.sdk.resources import Resource
 
 from sarc.config import LoggingConfig, config
 
+logger = logging.getLogger(__name__)
+
 
 def getOpenTelemetryLoggingHandler(log_conf: LoggingConfig):
     logger_provider = LoggerProvider(
@@ -75,7 +77,7 @@ def setupLogging(verbose_level: int = 0):
         # Set the logger level (this controls what messages get processed)
         root_logger.setLevel(log_level)
 
-        logging.debug("setupLogging done")
+        logger.debug("setupLogging done")
 
     else:
         # no logging level in config file

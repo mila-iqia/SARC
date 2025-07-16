@@ -120,7 +120,7 @@ class AcquireJobs:
                             )
                             raise e
             # pylint: disable=broad-exception-caught
-            except Exception as e:
+            except Exception:
                 logger.error(
                     f"Error while acquiring data on {cluster_name}; skipping cluster."
                 )

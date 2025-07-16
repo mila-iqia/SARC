@@ -405,7 +405,7 @@ def compute_job_statistics(job: SlurmJob) -> JobStatistics:
             unused_threshold=False,
         )
     elif metrics["slurm_job_memory_usage"] is not None:
-        logging.warning(
+        logger.warning(
             f"job.allocated.mem is None for job {job.job_id} (job status: {job.job_state.value})"
         )
 
