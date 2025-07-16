@@ -1,5 +1,3 @@
-import io
-
 from sarc.account_matching.make_matches import perform_matching
 
 

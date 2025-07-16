@@ -21,8 +21,6 @@ logger = logging.getLogger(__name__)
 class JobConversionError(Exception):
     """Exception raised when there's an error converting a job entry from sacct."""
 
-    pass
-
 
 def parse_in_timezone(timestamp: int | None) -> datetime | None:
     if timestamp is None or timestamp == 0:

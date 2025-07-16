@@ -28,6 +28,8 @@ from sarc.users.users_exceptions import (
     apply_users_supervisor_exceptions,
 )
 
+logger = logging.getLogger(__name__)
+
 
 def run(cache_policy: CachePolicy = CachePolicy.use) -> None:
     """If prompt is True, script will prompt for manual matching.
@@ -86,7 +88,7 @@ def run(cache_policy: CachePolicy = CachePolicy.use) -> None:
                         break
                 else:
                     # No match, logging.
-                    logging.warning(
+                    logger.warning(
                         f"No mila_email_username found for {supervisor_key} {user[supervisor_key]}."
                     )
 
@@ -173,7 +175,7 @@ def filter_duplicate_drac_members(
         DL_users[user["username"]].append(user)
 
     LD_filtered_drac_members: list[dict[str, str]] = []
-    for _, users in DL_users.items():
+    for users in DL_users.values():
         # keep the active entry, or the  the last entry if no active one
         active_users = [
             user for user in users if user["activation_status"] == "activated"
