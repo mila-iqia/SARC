@@ -27,8 +27,11 @@ sarc:
       sacct_bin: "/opt/slurm/bin/sacct"
       duc_inodes_command:
       duc_storage_command:
-      diskusage_report_command: beegfs-ctl --cfgFile=/etc/beegfs/home.d/beegfs-client.conf
-        --getquota --uid $USER --csv
+      diskusage:
+        name: beegfs
+        params:
+          config_files:
+            default: /etc/beegfs/scratch.d/beegfs-client.conf
       prometheus_url: http://prometheus01.server.mila.quebec:9090/
       start_date: '2022-04-01'
       billing_is_gpu: true
