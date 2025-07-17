@@ -84,7 +84,8 @@ sarc:
         --count /project/rrg-bengioy-ad
       duc_storage_command: duc ls -d /project/.duc_databases/rrg-bengioy-ad.sqlite
         /project/rrg-bengioy-ad
-      diskusage_report_command: diskusage_report --project --all_users
+      diskusage:
+        - name: drac
       prometheus_url: https://mila-thanos.calculquebec.ca
       prometheus_headers_file: ../../SARC_secrets/secrets/drac_prometheus/headers.json
       start_date: '2022-04-01'
