@@ -211,7 +211,7 @@ class Partition:
     @property
     def nodes(self) -> str:
         """Return hostlist of partition nodes"""
-        return self.info["Nodes"]
+        return self.info.get("Nodes", "")
 
     def message(self, msg: str) -> str:
         """For logging: prepend given message with cluster name and partition name"""
