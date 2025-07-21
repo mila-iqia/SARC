@@ -5,14 +5,20 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from sarc.client.job import SlurmJob, SlurmState
 from sarc.client.job import get_job as _get_job
+from sarc.client.job import get_jobs as _get_jobs
 from sarc.config import config
 
-from .auth import PermsType
-
-router = APIRouter(prefix="/v1")
+router = APIRouter(prefix="/v0")
 
 
 class JobQuery:
+    cluster: str | None
+    job_id: int | list[int] | None
+    job_state: SlurmState | None
+    username: str | None
+    start: datetime | None
+    end: datetime | None
+
     def __init__(
         self,
         cluster: str | None = None,
@@ -49,14 +55,23 @@ JobQueryType = Annotated[JobQuery, Depends(JobQuery)]
 
 
 @router.get("/job/{job_id}")
-def get_job(job_id: int, perms: PermsType) -> SlurmJob:
-    job = _get_job(query_options={"job_id": job_id})
-    if job is None or job.user not in perms.detail.get(job.cluster_name, []):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+def get_job(job_id: int) -> SlurmJob:
+    job = _get_job(query_options={"id": job_id})
+    if job is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Job not found"
+        )
     return job
 
 
-@router.get("/jobs/count")
-def get_job_count(perms: PermsType, query_opt: JobQueryType) -> int:
-    # TODO
-    return 0
+@router.get("/job/query")
+def get_jobs(query_opt: JobQueryType) -> list[SlurmJob]:
+    jobs = _get_jobs(
+        cluster=query_opt.cluster,
+        job_id=query_opt.job_id,
+        job_state=query_opt.job_state,
+        user=query_opt.username,
+        start=query_opt.start,
+        end=query_opt.end,
+    )
+    return list(jobs)
