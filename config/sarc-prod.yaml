@@ -163,4 +163,16 @@ sarc:
           p100: P100-PCIe-12GB
           p100l: P100-PCIe-16GB
           v100l: V100-PCIe-32GB
+    tamia:
+      host: tamia.alliancecan.ca
+      timezone: America/Montreal
+      accounts:
+      sacct_bin: "/opt/slurm/bin/sacct"
+      duc_inodes_command: 
+      duc_storage_command: 
+      diskusage_report_command: diskusage_report --project --all_users
+      prometheus_url: 
+      prometheus_headers_file: 
+      start_date: '2025-02-01'
+
 
