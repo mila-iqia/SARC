@@ -69,7 +69,7 @@ async def get_permissions(user: Annotated[User, Depends(get_user)]) -> Permissio
     if user.mila.active:
         detailed["mila"] = [user.mila.username]
     if user.drac and user.drac.active:
-        for cluster_name in config().clusters.keys():
+        for cluster_name in config("scraping").clusters.keys():
             detailed[cluster_name] = [user.drac.username]
     return Permissions(detail=detailed)
 
