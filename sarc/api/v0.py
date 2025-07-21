@@ -54,16 +54,6 @@ class JobQuery:
 JobQueryType = Annotated[JobQuery, Depends(JobQuery)]
 
 
-@router.get("/job/{job_id}")
-def get_job(job_id: int) -> SlurmJob:
-    job = _get_job(query_options={"id": job_id})
-    if job is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Job not found"
-        )
-    return job
-
-
 @router.get("/job/query")
 def get_jobs(query_opt: JobQueryType) -> list[SlurmJob]:
     jobs = _get_jobs(
@@ -75,3 +65,13 @@ def get_jobs(query_opt: JobQueryType) -> list[SlurmJob]:
         end=query_opt.end,
     )
     return list(jobs)
+
+
+@router.get("/job/{job_id}")
+def get_job(job_id: int) -> SlurmJob:
+    job = _get_job(query_options={"id": job_id})
+    if job is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Job not found"
+        )
+    return job
