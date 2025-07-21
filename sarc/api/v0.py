@@ -66,6 +66,12 @@ def get_jobs(query_opt: JobQueryType) -> list[SlurmJob]:
     return list(jobs)
 
 
+@router.get("/job/count")
+def count_jobs(query_opt: JobQueryType) -> int:
+    coll = _jobs_collection()
+    return coll.get_collection().count_documents(query_opt.get_query())
+
+
 @router.get("/job/id/{oid}")
 def get_job(oid: str) -> SlurmJob:
     try:
