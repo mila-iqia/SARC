@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 import pytest
 from fabric.testing.base import Command, Session
-from opentelemetry.trace import Status, StatusCode, get_tracer
+from opentelemetry.trace import StatusCode
 
 from sarc.client.job import JobStatistics, get_jobs
 from sarc.config import MTL, PST, UTC, config
@@ -267,7 +267,7 @@ def test_scraper_with_malformed_cache(test_config, remote, scraper, caplog):
     with open(cache_path, "w") as f:
         f.write("I am malformed!! :'(")
 
-    channel = remote.expect(
+    remote.expect(
         host="patate",
         cmd="/opt/slurm/bin/sacct  -X -S 2023-02-14T00:00 -E 2023-02-15T00:00 --allusers --json",
         out=b"{}",
@@ -286,7 +286,7 @@ def test_sacct_bin_and_accounts(test_config, remote):
     scraper = SAcctScraper(
         cluster=config().clusters["patate"], day=datetime(2023, 2, 14)
     )
-    channel = remote.expect(
+    remote.expect(
         host="patate",
         cmd="/opt/software/slurm/bin/sacct -A rrg-bonhomme-ad_gpu,rrg-bonhomme-ad_cpu,def-bonhomme_gpu,def-bonhomme_cpu -X -S 2023-02-14T00:00 -E 2023-02-15T00:00 --allusers --json",
         out=b'{"jobs": []}',
@@ -326,7 +326,7 @@ def test_localhost(os_system, monkeypatch):
 def test_stdout_message_before_json(
     test_config, sacct_json, remote, file_regression, cli_main, prom_custom_query_mock
 ):
-    channel = remote.expect(
+    remote.expect(
         host="raisin",
         cmd="/opt/slurm/bin/sacct  -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
         out=f"Welcome on raisin,\nThe sweetest supercomputer in the world!\n{sacct_json}".encode(
@@ -335,7 +335,7 @@ def test_stdout_message_before_json(
     )
 
     # Import here so that config() is setup correctly when CLI is created.
-    import sarc.cli
+    import sarc.cli  # noqa: F401
 
     assert (
         cli_main(
@@ -369,7 +369,7 @@ def test_stdout_message_before_json(
 def test_get_gpu_type_from_prometheus(
     test_config, sacct_json, remote, file_regression, cli_main, monkeypatch
 ):
-    channel = remote.expect(
+    remote.expect(
         host="raisin",
         cmd="/opt/slurm/bin/sacct  -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
         out=f"Welcome on raisin,\nThe sweetest supercomputer in the world!\n{sacct_json}".encode(
@@ -378,9 +378,7 @@ def test_get_gpu_type_from_prometheus(
     )
 
     # Import here so that config() is setup correctly when CLI is created.
-    from prometheus_api_client import PrometheusConnect
-
-    import sarc.cli
+    import sarc.cli  # noqa: F401
 
     def mock_compute_job_statistics(job):
         mock_compute_job_statistics.called += 1
@@ -437,7 +435,7 @@ def test_get_gpu_type_from_prometheus(
 def test_get_gpu_type_without_prometheus(
     test_config, sacct_json, remote, file_regression, cli_main, monkeypatch
 ):
-    channel = remote.expect(
+    remote.expect(
         host="raisin_no_prometheus",
         cmd="/opt/slurm/bin/sacct  -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
         out=f"Welcome on raisin_no_prometheus,\nThe sweetest supercomputer in the world!\n{sacct_json}".encode(
@@ -446,7 +444,7 @@ def test_get_gpu_type_without_prometheus(
     )
 
     # Import here so that config() is setup correctly when CLI is created.
-    import sarc.cli
+    import sarc.cli  # noqa: F401
 
     # Save slurm config in cache.
     _save_slurm_conf(
@@ -522,14 +520,14 @@ def _save_slurm_conf(cluster_name: str, day: str, content: str):
 def test_save_job(
     test_config, sacct_json, remote, file_regression, cli_main, prom_custom_query_mock
 ):
-    channel = remote.expect(
+    remote.expect(
         host="raisin",
         cmd="/opt/slurm/bin/sacct  -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
         out=sacct_json.encode("utf-8"),
     )
 
     # Import here so that config() is setup correctly when CLI is created.
-    import sarc.cli
+    import sarc.cli  # noqa: F401
 
     assert (
         cli_main(
@@ -563,7 +561,7 @@ def test_save_job(
 def test_update_job(
     test_config, sacct_json, remote, file_regression, cli_main, prom_custom_query_mock
 ):
-    channel = remote.expect(
+    remote.expect(
         host="raisin",
         commands=[
             Command(
@@ -575,7 +573,7 @@ def test_update_job(
     )
 
     # Import here so that config() is setup correctly when CLI is created.
-    import sarc.cli
+    import sarc.cli  # noqa: F401
 
     assert (
         cli_main(
@@ -643,14 +641,14 @@ def test_update_job(
 def test_save_preempted_job(
     test_config, sacct_json, remote, file_regression, cli_main, prom_custom_query_mock
 ):
-    channel = remote.expect(
+    remote.expect(
         cmd="/opt/slurm/bin/sacct  -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
         host="raisin",
         out=sacct_json.encode("utf-8"),
     )
 
     # Import here so that config() is setup correctly when CLI is created.
-    import sarc.cli
+    import sarc.cli  # noqa: F401
 
     assert (
         cli_main(
@@ -686,7 +684,7 @@ def test_multiple_dates(
     datetimes = [
         datetime(2023, 2, 15, tzinfo=MTL) + timedelta(days=i) for i in range(5)
     ]
-    channel = remote.expect(
+    remote.expect(
         host="raisin",
         commands=[
             Command(
@@ -712,7 +710,7 @@ def test_multiple_dates(
     )
 
     # Import here so that config() is setup correctly when CLI is created.
-    import sarc.cli
+    import sarc.cli  # noqa: F401
 
     assert (
         cli_main(
@@ -780,7 +778,7 @@ def test_multiple_clusters_and_dates(
             ],
         )
 
-    channel = remote.expect_sessions(
+    remote.expect_sessions(
         _create_session(
             "raisin",
             "/opt/slurm/bin/sacct  -X -S {start} -E {end} --allusers --json",
@@ -798,7 +796,7 @@ def test_multiple_clusters_and_dates(
     )
 
     # Import here so that config() is setup correctly when CLI is created.
-    import sarc.cli
+    import sarc.cli  # noqa: F401
 
     assert (
         cli_main(
@@ -899,7 +897,7 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
             + [_gen_error_command(cmd_template, datetime(2023, 3, 16, tzinfo=MTL))],
         )
 
-    channel = remote.expect_sessions(
+    remote.expect_sessions(
         _create_session(
             "raisin",
             "/opt/slurm/bin/sacct  -X -S {start} -E {end} --allusers --json",
@@ -917,7 +915,7 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     )
 
     # Import here so that config() is setup correctly when CLI is created.
-    import sarc.cli
+    import sarc.cli  # noqa: F401
 
     assert (
         cli_main(
@@ -965,13 +963,13 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     print(caplog.text)
     assert bool(
         re.search(
-            r"root:jobs\.py:[0-9]+ Acquire data on raisin for date: 2023-02-15 00:00:00 \(is_auto=False\)",
+            r"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Acquire data on raisin for date: 2023-02-15 00:00:00 \(is_auto=False\)",
             caplog.text,
         )
     )
     assert bool(
         re.search(
-            r"root:jobs\.py:[0-9]+ Acquire data on patate for date: 2023-02-15 00:00:00 \(is_auto=False\)",
+            r"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Acquire data on patate for date: 2023-02-15 00:00:00 \(is_auto=False\)",
             caplog.text,
         )
     )
@@ -990,13 +988,13 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     # There should be 2 acquisition errors for unexpected data 2023-03-16, one per cluster.
     assert bool(
         re.search(
-            r"root:jobs\.py:[0-9]+ Failed to acquire data for raisin on 2023-03-16 00:00:00:",
+            r"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Failed to acquire data for raisin on 2023-03-16 00:00:00:",
             caplog.text,
         )
     )
     assert bool(
         re.search(
-            r"root:jobs\.py:[0-9]+ Failed to acquire data for patate on 2023-03-16 00:00:00:",
+            r"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Failed to acquire data for patate on 2023-03-16 00:00:00:",
             caplog.text,
         )
     )
@@ -1023,7 +1021,7 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
 )
 @pytest.mark.usefixtures("empty_read_write_db")
 def test_job_tz(test_config, sacct_json, remote, cli_main, prom_custom_query_mock):
-    channel = remote.expect(
+    remote.expect(
         host="patate",
         cmd="/opt/software/slurm/bin/sacct -A rrg-bonhomme-ad_gpu,rrg-bonhomme-ad_cpu,def-bonhomme_gpu,def-bonhomme_cpu -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
         out=sacct_json.encode("utf-8"),

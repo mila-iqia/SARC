@@ -19,5 +19,5 @@ def test_get_user(file_regression):
     user = get_user(mila_email_username="bonhomme@mila.quebec")
     assert user is not None
     file_regression.check(
-        f"Found user:\n" + user.model_dump_json(exclude={"id": True}, indent=4)
+        "Found user:\n" + user.model_dump_json(exclude={"id": True}, indent=4)
     )

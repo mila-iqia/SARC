@@ -1,4 +1,5 @@
 import json
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -9,6 +10,8 @@ from serieux import TaggedSubclass, deserialize
 
 from sarc.alerts.common import CheckResult
 from sarc.config import config
+
+logger = logging.getLogger(__name__)
 
 
 def parse_date(s: str) -> datetime:
@@ -44,5 +47,5 @@ class HealthHistoryCommand:
                     continue
                 for k, status in results.get_failures().items():
                     timestring = results.issue_date.strftime("%Y-%m-%d-%H-%M-%S")
-                    print(f"[{timestring}]  {k:30} {status.name}")
+                    logger.info(f"[{timestring}]  {k:30} {status.name}")
         return 0

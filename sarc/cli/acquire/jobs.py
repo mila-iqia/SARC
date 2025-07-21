@@ -12,6 +12,8 @@ from sarc.errors import ClusterNotFound
 from sarc.jobs.sacct import sacct_mongodb_import
 from sarc.traces import using_trace
 
+logger = logging.getLogger(__name__)
+
 
 def _str_to_dt(dt_str: str) -> datetime:
     return datetime.strptime(dt_str, "%Y-%m-%d")
@@ -56,9 +58,9 @@ def _dates_auto_first_date(cluster_name: str) -> datetime:
     if cluster is None:
         raise ClusterNotFound(f"Cluster {cluster_name} not found in database")
     start_date = cluster["start_date"]
-    logging.info(f"start_date={start_date}")
+    logger.info(f"start_date={start_date}")
     end_date = cluster["end_date"]
-    logging.info(f"end_date={end_date}")
+    logger.info(f"end_date={end_date}")
     if end_date is None:
         return _str_to_dt(start_date)
     return _str_to_dt(end_date) + timedelta(days=1)
@@ -66,7 +68,7 @@ def _dates_auto_first_date(cluster_name: str) -> datetime:
 
 def _dates_set_last_date(cluster_name: str, date: datetime) -> None:
     # set the last valid date in the database for the cluster
-    logging.info(f"set last successful date for cluster {cluster_name} to {date}")
+    logger.info(f"set last successful date for cluster {cluster_name} to {date}")
     db = config().mongo.database_instance
     db_collection = db.clusters
     db_collection.update_one(
@@ -102,7 +104,7 @@ class AcquireJobs:
                         span.set_attribute("date", str(date))
                         span.set_attribute("is_auto", is_auto)
                         try:
-                            logging.info(
+                            logger.info(
                                 f"Acquire data on {cluster_name} for date: {date} (is_auto={is_auto})"
                             )
 
@@ -113,13 +115,13 @@ class AcquireJobs:
                                 _dates_set_last_date(cluster_name, date)
                         # pylint: disable=broad-exception-caught
                         except Exception as e:
-                            logging.error(
+                            logger.error(
                                 f"Failed to acquire data for {cluster_name} on {date}: {type(e).__name__}: {e}"
                             )
                             raise e
             # pylint: disable=broad-exception-caught
-            except Exception as e:
-                logging.error(
+            except Exception:
+                logger.error(
                     f"Error while acquiring data on {cluster_name}; skipping cluster."
                 )
                 # Continue to next cluster.

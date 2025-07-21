@@ -55,10 +55,7 @@ def to_records(df: pd.DataFrame) -> list[dict]:
         "mymila_end",
     ]
 
-    selected = []
-    for col in wanted_cols:
-        if col in df.columns:
-            selected.append(col)
+    selected = [col for col in wanted_cols if col in df.columns]
 
     records = df[selected].to_dict("records")
 

@@ -4,7 +4,6 @@ import io
 import logging
 from dataclasses import dataclass
 from datetime import datetime
-from pathlib import Path
 from typing import IO, Any, cast
 
 from hostlist import expand_hostlist

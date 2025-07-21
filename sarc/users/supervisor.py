@@ -4,6 +4,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from itertools import chain
 
+logger = logging.getLogger(__name__)
+
 universities = {
     "mcgill",
     "udem",
@@ -140,19 +142,19 @@ class SupervisorMatchingErrors:
         def show_error(msg: str, array: list[Result]) -> None:
             unique_values = sorted(set(make_list(array)))
             if len(unique_values) > 0:
-                logging.error(f"{msg} {unique_values}")
+                logger.error(f"{msg} {unique_values}")
 
         show_error("     Missing supervisors:", self.no_supervisors)
         show_error("    Too many supervisors:", self.too_many_supervisors)
         show_error("        Prof and Student:", self.prof_and_student)
 
         if self.unknown_supervisors:
-            logging.warning(
+            logger.warning(
                 f"     Unknown supervisors: {sorted(set(self.unknown_supervisors))}"
             )
 
         if self.unknown_group:
-            logging.warning(
+            logger.warning(
                 f"           Unknown group: {sorted(set(self.unknown_group))}"
             )
 

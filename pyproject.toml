@@ -64,9 +64,15 @@ dev = [
 ]
 examples = ["seaborn>=0.13.2,<0.14"]
 
+# to consider
+#  - DTZ: datetimes without timezones (not right now)
+#  - TC: type checking style
+
+
 [tool.ruff.lint]
-select = ["PL", "F811"]
+select = ["ARG", "E", "F", "FA", "LOG", "PERF", "PIE", "PL", "T20", "W"]
 ignore = [
+  "E501",     # line too long (ruff format will handle it)
   "PLW2901",  # loop variable overwritten by assignment
   "PLR0912",  # too many branches
   "PLR0913",  # too many function arguments
@@ -74,6 +80,13 @@ ignore = [
   "PLR2004",  # replace magic value by variable
   "PLC0415",  # imports should be a the top level
 ]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["ARG", "E", "PERF", "T20"]
+"sarc/testing/**" = ["T20"]
+"examples/**" = ["T20"]
+"docs/**" = ["T20"]
+
 
 [tool.uv]
 default-groups = [

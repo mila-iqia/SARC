@@ -18,7 +18,7 @@ from datetime import datetime, timedelta
 import pytest
 
 from sarc.alerts.usage_alerts.same_job_id import check_same_job_id
-from sarc.config import MTL, UTC
+from sarc.config import UTC
 from tests.functional.jobs.test_func_load_job_series import MOCK_TIME
 
 PARAMETERS = {

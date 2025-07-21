@@ -282,7 +282,7 @@ def test_download_cluster_config(test_config, remote):
 
     # Get conf file
     expected_content = SLURM_CONF_RAISIN_2020_01_01
-    channel = remote.expect(
+    remote.expect(
         host=cluster.host,
         cmd=f"cat {cluster.slurm_conf_host_path}",
         out=expected_content.encode(),

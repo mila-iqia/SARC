@@ -56,17 +56,12 @@ def user_from_entry(username: str, entry: dict) -> dict:
 
 
 def insert_history(user: str, original_history: list[dict]):
-    updates = []
-
     # ignore latest entry
     # it will be handled by the regular update
     history = original_history[:-1]
 
     # Insert the old entries has past records
-    for entry in history:
-        updates.append(InsertOne(user_from_entry(user, entry)))
-
-    return updates
+    return [InsertOne(user_from_entry(user, entry)) for entry in history]
 
 
 def compute_entry_diff[V](
@@ -159,8 +154,9 @@ def sync_history_diff(
     for match in matched:
         updates.extend(sync_entries(*match))
 
-    for missing in missing_entries:
-        updates.append(InsertOne(user_from_entry(user, missing)))
+    updates.extend(
+        InsertOne(user_from_entry(user, missing)) for missing in missing_entries
+    )
 
     return updates
 
@@ -220,10 +216,9 @@ def user_history_backfill(
     if backfill:
         # users that have a single entry will be upated
         # by the regular flow
-        user_with_history: dict[str, list[dict]] = {}
-        for u, history in userhistory.items():
-            if len(history) > 1:
-                user_with_history[u] = history
+        user_with_history = {
+            user: history for user, history in userhistory.items() if len(history) > 1
+        }
 
         updates = user_history_diff(users_collection, user_with_history)
 

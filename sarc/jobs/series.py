@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Callable, Literal, Sequence, TypedDict, overload, cast
+from typing import Callable, Literal, Sequence, TypedDict, cast, overload
 
 import pandas
 from pandas import DataFrame, Series
@@ -12,6 +12,8 @@ from sarc.cache import with_cache
 from sarc.client.job import JobStatistics, SlurmJob, Statistics
 from sarc.config import MTL, UTC
 from sarc.traces import trace_decorator
+
+logger = logging.getLogger(__name__)
 
 
 @overload
@@ -174,7 +176,7 @@ def _get_job_time_series_data(
     else:
         query = f"{query}[{duration_seconds}s:{interval}s] {offset_string}"
 
-    logging.debug(f"prometheus query with offset: {query}")
+    logger.debug(f"prometheus query with offset: {query}")
     return job.fetch_cluster_config().prometheus.custom_query(query)
 
 
@@ -403,7 +405,7 @@ def compute_job_statistics(job: SlurmJob) -> JobStatistics:
             unused_threshold=False,
         )
     elif metrics["slurm_job_memory_usage"] is not None:
-        logging.warning(
+        logger.warning(
             f"job.allocated.mem is None for job {job.job_id} (job status: {job.job_state.value})"
         )
 
