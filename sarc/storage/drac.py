@@ -129,6 +129,11 @@ def _parse_body(L_lines: list[str]) -> list[DiskUsageGroup]:
             m = re.match(r"^\s*([\w\.]+)\s+(\d+)\s+([\d\.]+)\s(\w+)\s*", line)
             assert m, f"If this line doesn't match, we've got a problem.\n{line}"
             username = m.group(1)
+
+            # Skip the "Total" line as it's a summary, not a user
+            if username == "Total":
+                continue
+
             nbr_files = int(m.group(2))
             size = f"{m.group(3)} {m.group(4)}"
             LD_results.append(

@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, date, datetime
 from typing import Any
 
+from pydantic import field_validator
 from pydantic_mongo import AbstractRepository, PydanticObjectId
 
 from sarc.config import config
@@ -16,6 +17,19 @@ class DiskUsageDB(DiskUsage):
 
     # Database ID
     id: PydanticObjectId | None = None
+
+    @field_validator("timestamp", mode="before")
+    @classmethod
+    def _ensure_timestamp_utc(cls, value: str | datetime) -> datetime:
+        """Ensure timestamp has UTC timezone when reading from database."""
+        if isinstance(value, str):
+            return datetime.fromisoformat(value).replace(tzinfo=UTC)
+        elif isinstance(value, datetime):
+            if value.tzinfo is None:
+                # Convert naive datetime to UTC (from database storage)
+                return value.replace(tzinfo=UTC)
+            return value
+        return value
 
 
 class ClusterDiskUsageRepository(AbstractRepository[DiskUsageDB]):
@@ -31,6 +45,7 @@ class ClusterDiskUsageRepository(AbstractRepository[DiskUsageDB]):
             year=disk_usage.timestamp.year,
             month=disk_usage.timestamp.month,
             day=disk_usage.timestamp.day,
+            tzinfo=UTC,
         )
         disk_usage.timestamp = day_at_midnight
         document = self.to_document(DiskUsageDB(**disk_usage.model_dump()))

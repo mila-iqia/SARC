@@ -23,11 +23,6 @@
                     "user": "mipha",
                     "nbr_files": 2,
                     "size": 0
-                },
-                {
-                    "user": "Total",
-                    "nbr_files": 696928,
-                    "size": 942219187978
                 }
             ]
         },
@@ -58,14 +53,9 @@
                     "user": "rhoam",
                     "nbr_files": 2,
                     "size": 0
-                },
-                {
-                    "user": "Total",
-                    "nbr_files": 3626455,
-                    "size": 32222004295761
                 }
             ]
         }
     ],
-    "timestamp": "2023-05-12T00:00:00"
+    "timestamp": "2023-05-12T00:00:00Z"
 }
