@@ -42,7 +42,7 @@ class ConfigurationError(Exception):
 @dataclass
 class DiskUsageConfig:
     name: str
-    params: JSON = {}
+    params: JSON = field(default_factory=dict)
 
 
 @dataclass

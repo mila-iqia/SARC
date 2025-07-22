@@ -4,7 +4,7 @@ Fetching and parsing code specific to the mila cluster
 
 import json
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import cast
 
 from fabric import Connection
@@ -76,7 +76,7 @@ class BeeGFSDiskUsage(DiskUsageScraper[BeeGFSDiskUsageConfig]):
         return DiskUsage(
             cluster_name=cluster_name,
             groups=groups,
-            timestamp=datetime.now(),
+            timestamp=datetime.now(UTC),
         )
 
 
