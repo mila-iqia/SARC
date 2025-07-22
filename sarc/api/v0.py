@@ -1,10 +1,9 @@
 from datetime import datetime
 from typing import Annotated, Any
 
-from bson import ObjectId
-from bson.errors import InvalidId
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import AfterValidator, BaseModel
+from pydantic_mongo import PydanticObjectId
 
 from sarc.client.job import SlurmJob, SlurmState, _jobs_collection
 from sarc.config import config
@@ -60,10 +59,10 @@ JobQueryType = Annotated[JobQuery, Depends(JobQuery)]
 
 
 @router.get("/job/query")
-def get_jobs(query_opt: JobQueryType) -> list[SlurmJob]:
+def get_jobs(query_opt: JobQueryType) -> list[PydanticObjectId]:
     coll = _jobs_collection()
-    jobs = coll.find_by(query=query_opt.get_query())
-    return list(jobs)
+    jobs = coll.get_collection().find(query_opt.get_query(), ["_id"])
+    return list(j["_id"] for j in jobs)
 
 
 @router.get("/job/count")
@@ -73,15 +72,9 @@ def count_jobs(query_opt: JobQueryType) -> int:
 
 
 @router.get("/job/id/{oid}")
-def get_job(oid: str) -> SlurmJob:
-    try:
-        boid = ObjectId(oid)
-    except InvalidId as e:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid object id"
-        ) from e
+def get_job(oid: PydanticObjectId) -> SlurmJob:
     coll = _jobs_collection()
-    job = coll.find_one_by_id(boid)
+    job = coll.find_one_by_id(oid)
     if job is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Job not found"

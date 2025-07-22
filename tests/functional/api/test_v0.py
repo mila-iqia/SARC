@@ -37,7 +37,10 @@ def test_get_jobs_by_cluster(client):
     data = response.json()
     assert isinstance(data, list)
     assert len(data) > 0
-    for job in data:
+    for jid in data:
+        r = client.get(f"/v0/job/id/{jid}")
+        assert r.status_code == 200
+        job = r.json()
         assert job["cluster_name"] == "raisin"
 
 
@@ -50,26 +53,11 @@ def test_get_jobs_by_job_id(client):
     data = response.json()
     assert isinstance(data, list)
     assert len(data) > 0
-    for job in data:
+    for jid in data:
+        r = client.get(f"/v0/job/id/{jid}")
+        assert r.status_code == 200
+        job = r.json()
         assert job["job_id"] == 10
-
-
-@pytest.mark.usefixtures("read_only_db")
-def test_get_job(client):
-    """Test jobs query by job ID."""
-    response = client.get("/v0/job/query?job_id=1")
-
-    assert response.status_code == 200
-    data = response.json()
-    assert isinstance(data, list)
-    assert len(data) > 0
-    db_id = data[0]["id"]
-    response = client.get(f"/v0/job/id/{db_id}")
-
-    assert response.status_code == 200
-    data = response.json()
-
-    assert data["job_id"] == 1
 
 
 @pytest.mark.usefixtures("read_only_db")
@@ -81,7 +69,10 @@ def test_get_jobs_by_user(client):
     data = response.json()
     assert isinstance(data, list)
     assert len(data) > 0
-    for job in data:
+    for jid in data:
+        r = client.get(f"/v0/job/id/{jid}")
+        assert r.status_code == 200
+        job = r.json()
         assert job["user"] == "petitbonhomme"
 
 
@@ -94,7 +85,10 @@ def test_get_jobs_by_state(client):
     data = response.json()
     assert isinstance(data, list)
     assert len(data) > 0
-    for job in data:
+    for jid in data:
+        r = client.get(f"/v0/job/id/{jid}")
+        assert r.status_code == 200
+        job = r.json()
         assert job["job_state"] == "COMPLETED"
 
 
@@ -157,7 +151,10 @@ def test_get_jobs_multiple_filters(client):
     data = response.json()
     assert isinstance(data, list)
     assert len(data) > 0
-    for job in data:
+    for jid in data:
+        r = client.get(f"/v0/job/id/{jid}")
+        assert r.status_code == 200
+        job = r.json()
         assert job["cluster_name"] == "raisin"
         assert job["job_state"] == "COMPLETED"
 
