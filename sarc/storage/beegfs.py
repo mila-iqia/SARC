@@ -66,12 +66,12 @@ class BeeGFSDiskUsage(DiskUsageScraper[BeeGFSDiskUsageConfig]):
         groups: list[DiskUsageGroup] = []
         data: dict[str, str] = json.loads(data_str)
 
-        for name in config.config_files.keys():
-            groups.append(
-                DiskUsageGroup(
-                    group_name=name, users=[_parse_line(line) for line in data[name]]
-                )
+        groups = [
+            DiskUsageGroup(
+                group_name=name, users=[_parse_line(line) for line in data[name]]
             )
+            for name in config.config_files.keys()
+        ]
 
         return DiskUsage(
             cluster_name=cluster_name,
