@@ -7,7 +7,6 @@ import sarc.storage.beegfs
 from sarc.client.users.api import Credentials, User
 from sarc.config import config
 from sarc.core.scraping.diskusage import get_diskusage_scraper
-from sarc.storage.diskusage import get_diskusages
 
 
 def mock_get_users():

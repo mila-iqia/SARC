@@ -6,12 +6,11 @@ import logging
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TypedDict, cast
+from typing import cast
 
 from fabric import Connection
 from pydantic import ByteSize
 
-from sarc.config import ClusterConfig
 from sarc.core.models.diskusage import DiskUsage, DiskUsageGroup, DiskUsageUser
 from sarc.core.scraping.diskusage import DiskUsageScraper, _builtin_scrapers
 from sarc.core.utils import run_command
@@ -69,7 +68,10 @@ class DRACDiskUsage(DiskUsageScraper[DRACDiskUsageConfig]):
         return output
 
     def parse_diskusage_report(
-        self, config: DRACDiskUsageConfig, cluster_name: str, data: str
+        self,
+        config: DRACDiskUsageConfig,  # noqa: ARG002
+        cluster_name: str,
+        data: str,
     ) -> DiskUsage:
         report = data.split("\n")
         groups = _parse_body(report)

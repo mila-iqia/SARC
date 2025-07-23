@@ -4,7 +4,6 @@ from pathlib import Path
 import pytest
 from fabric.testing.base import Command, Session
 
-import sarc.storage.drac
 from sarc.storage.diskusage import get_diskusages
 
 FOLDER = os.path.dirname(os.path.abspath(__file__))
@@ -21,7 +20,7 @@ def test_update_drac_diskusage_one(file_regression, cli_main, remote):
         raw_report = f.read()
 
     # Mock the SSH command using remote fixture
-    channel = remote.expect(
+    remote.expect(
         host="gerudo",
         cmd="diskusage_report --project --all_users",
         out=str.encode(raw_report),
