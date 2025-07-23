@@ -2,7 +2,6 @@ from pathlib import Path
 
 import pytest
 
-import sarc.storage  # Import storage module to register scrapers
 from sarc.config import config
 from sarc.core.scraping.diskusage import get_diskusage_scraper
 from sarc.storage.diskusage import get_diskusages
