@@ -4,7 +4,6 @@ import io
 import logging
 from dataclasses import dataclass
 from datetime import datetime
-from pathlib import Path
 from typing import IO, Any, cast
 
 from hostlist import expand_hostlist
@@ -212,7 +211,7 @@ class Partition:
     @property
     def nodes(self) -> str:
         """Return hostlist of partition nodes"""
-        return self.info["Nodes"]
+        return self.info.get("Nodes", "")
 
     def message(self, msg: str) -> str:
         """For logging: prepend given message with cluster name and partition name"""

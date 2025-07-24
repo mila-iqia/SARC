@@ -1,3 +1,4 @@
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -6,6 +7,8 @@ from gifnoc.std import time
 
 from sarc.alerts.monitor import HealthMonitor
 from sarc.config import config
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -21,7 +24,7 @@ class HealthMonitorCommand:
             )
             try:
                 while True:
-                    print(monitor.status)
+                    logger.info(monitor.status)
                     time.sleep(1)
             except KeyboardInterrupt:
                 return 0

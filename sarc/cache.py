@@ -10,9 +10,11 @@ from datetime import datetime, timedelta
 from enum import Enum
 from functools import partial, wraps
 from pathlib import Path
-from typing import IO, Any, Callable, ClassVar, Literal, Optional, Protocol, overload
+from typing import IO, Any, Callable, ClassVar, Literal, Protocol, overload
 
 from .config import config
+
+logger = logging.getLogger(__name__)
 
 
 class FormatterProto[T](Protocol):
@@ -81,7 +83,7 @@ def _cache_policy_from_env() -> CachePolicy:
 
     policy_name = os.getenv("SARC_CACHE", "use")
     policy = getattr(CachePolicy, policy_name, CachePolicy.use)
-    logging.info(f"inferred cache policy: {policy}")
+    logger.info(f"inferred cache policy: {policy}")
 
     cache_policy_var.set(policy)
     return policy
@@ -96,7 +98,7 @@ class CachedFunction[**P, R]:  # pylint: disable=too-many-instance-attributes
     validity: timedelta | Callable[P, timedelta] | Literal[True] = True
     on_disk: bool = True
     live: bool = False
-    cache_root: Optional[Path] = None
+    cache_root: Path | None = None
     live_cache: dict[tuple[Path | None, str], CachedResult[R]] = field(
         default_factory=dict
     )
@@ -285,7 +287,7 @@ class CachedFunction[**P, R]:  # pylint: disable=too-many-instance-attributes
 
         if cache_policy is CachePolicy.check and has_cache:
             if cached_value == value:
-                logging.info(f"cache checked: {key_value}")
+                logger.info(f"cache checked: {key_value}")
             else:
                 # Live result != cached result. Raise an exception.
                 # Try to pretty print diff if we have JSON data.

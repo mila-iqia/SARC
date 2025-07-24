@@ -163,4 +163,21 @@ sarc:
           p100: P100-PCIe-12GB
           p100l: P100-PCIe-16GB
           v100l: V100-PCIe-32GB
+    tamia:
+      host: tamia.alliancecan.ca
+      timezone: America/Montreal
+      accounts:
+      sacct_bin: "/opt/slurm/bin/sacct"
+      duc_inodes_command: 
+      duc_storage_command: 
+      diskusage_report_command: diskusage_report --project --all_users
+      prometheus_url: 
+      prometheus_headers_file: 
+      start_date: '2025-02-01'
+      gpus_per_nodes:
+        __DEFAULTS__:
+          h100: H100-SXM5-80GB
+        tg[10601-10606,10701-10707,10801-10807,10901-10908,11101-11107,11201-11207]:
+          h100: H100-SXM5-80GB
+
 
