@@ -89,12 +89,17 @@ sarc:
         __DEFAULTS__:
           a100: A100-SXM4-40GB
           a100_1g.5gb: __MIG_FLAG__a100
+          1g.5gb: $a100_1g.5gb
           a100_2g.10gb: __MIG_FLAG__a100
-          2g.10gb: __MIG_FLAG__a100
+          2g.10gb: $a100_2g.10gb
           a100_3g.20gb: __MIG_FLAG__a100
-          3g.20gb: __MIG_FLAG__a100
+          3g.20gb: $a100_3g.20gb
           a100_4g.20gb: __MIG_FLAG__a100
-          4g.20gb: __MIG_FLAG__a100
+          4g.20gb: $a100_4g.20gb
+          "A100-SXM4-40GB : 1g.5gb": $a100_1g.5gb
+          "A100-SXM4-40GB : 2g.10gb": $a100_2g.10gb
+          "A100-SXM4-40GB : 3g.20gb": $a100_3g.20gb
+          "A100-SXM4-40GB : 4g.20gb": $a100_4g.20gb
           NVIDIA A100-SXM4-40GB: A100-SXM4-40GB
     beluga:
       host: beluga.computecanada.ca
