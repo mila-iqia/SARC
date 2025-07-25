@@ -219,14 +219,9 @@ def test_load_job_series_check_end_times(params):
         if job.end_time is None:
             frame_1_end_times.append(frame_1["end_time"][i])
             frame_2_end_times.append(frame_2["end_time"][i])
-            # End time won't be None in data frames, because
-            # load_job_series() will have set it to current time.
+            # End time won't be None in data frames.
             assert frame_1["end_time"][i]
             assert frame_2["end_time"][i]
-            # As frame_2 is generated after frame_1,
-            # end times in frame 2 will be set to a current time more recent
-            # than in frame 1.
-            assert frame_2["end_time"][i] > frame_1["end_time"][i]
         else:
             # End time won't be changed.
             assert job.end_time == frame_1["end_time"][i]
@@ -234,9 +229,8 @@ def test_load_job_series_check_end_times(params):
     # Check we really got many raw jobs with no end time.
     assert len(frame_1_end_times) > 1
     assert len(frame_2_end_times) > 1
-    # All missing end times set by a call to load_job_series() must have same value.
-    assert len(set(frame_1_end_times)) == 1
-    assert len(set(frame_2_end_times)) == 1
+    # We must compute same end times across 2 calls to load_job_series
+    assert frame_1_end_times == frame_2_end_times
 
 
 @pytest.mark.usefixtures("read_write_db", "tzlocal_is_mtl")

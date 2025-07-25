@@ -20,6 +20,8 @@ from .jobs.factory import (
     create_users,
 )
 
+MOCK_TIME = "2023-11-22"
+
 # this is to make the pytest-freezegun types serializable by pyyaml
 # (for use in pytest-regression)
 
@@ -87,17 +89,18 @@ def create_db_configuration_fixture(
         m = hashlib.md5()
         m.update(request.node.nodeid.encode())
         db_name = f"test-db-{m.hexdigest()}"
-        with custom_db_config(db_name):
-            db = config().mongo.database_instance
-            clear_db(db)
-            if not empty:
-                fill_db(
-                    db,
-                    with_users=with_users,
-                    with_clusters=with_clusters,
-                    job_patch=job_patch,
-                )
-            yield db_name
+        with freezegun.freeze_time(MOCK_TIME):
+            with custom_db_config(db_name):
+                db = config().mongo.database_instance
+                clear_db(db)
+                if not empty:
+                    fill_db(
+                        db,
+                        with_users=with_users,
+                        with_clusters=with_clusters,
+                        job_patch=job_patch,
+                    )
+                yield db_name
 
     return fixture
 

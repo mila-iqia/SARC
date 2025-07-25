@@ -89,15 +89,27 @@ def load_job_series(
     users_frame = _get_user_data_frame()
 
     rows = []
-    now = datetime.now(tz=MTL)
     # Fetch all jobs from the clusters
     for job in tqdm(get_jobs(**jobs_args), total=total, desc="load job series"):
-        if job.end_time is None:
-            job.end_time = now
+        elapsed = timedelta(seconds=job.elapsed_time)
 
-        # For some reason start time is not reliable, often equal to submit time,
-        # so we infer it based on end_time and elapsed_time.
-        job.start_time = job.end_time - timedelta(seconds=job.elapsed_time)
+        if job.start_time is None and job.end_time is None:
+            # May happen, e.g. for PENDING jobs
+            # Just to have valid dates in these fields,
+            # let's set start_time as submit_time,
+            # then end_time as start_time + elapsed_time
+            job.start_time = job.submit_time
+            job.end_time = job.start_time + elapsed
+        elif job.start_time is None:
+            # Should not happen, but handle it anyway
+            # We compute start_time using end_time - elapsed_time
+            job.start_time = job.end_time - elapsed
+        elif job.end_time is None:
+            # May happen, e.g. for RUNNING jobs
+            # We compute end_time using start_time + elapsed_time
+            job.end_time = job.start_time + elapsed
+        # Otherwise, we keep available start_time and end_time
+        # NB: We don't check if we really have end_time - start_time == elapsed_time
 
         unclipped_start = None
         unclipped_end = None
@@ -324,6 +336,9 @@ def update_job_series_rgu(df: DataFrame) -> DataFrame:
         - column `gpu_type_rgu` added or updated to contain RGU cost per GPU (RGU/GPU ratio).
           Set to NaN (or unchanged if already present) for jobs from clusters without RGU.
     """
+    # Change type of allocated.gres_gpu to float
+    df["allocated.gres_gpu"] = df["allocated.gres_gpu"].astype("float")
+
     for cluster in get_available_clusters():
         update_cluster_job_series_rgu(df, cluster.cluster_name)
     return df
@@ -368,7 +383,9 @@ def update_cluster_job_series_rgu(df: DataFrame, cluster_name: str) -> DataFrame
     if cluster.billing_is_gpu:
         # If billing is GPU count on this cluster, then we just need
         # gpu_to_rgu to compute jobs RGU billing.
-        slice_rows = df["cluster_name"] == cluster_name
+        slice_rows = (df["cluster_name"] == cluster_name) & (
+            df["allocated.gpu_type"].notnull()
+        )
         _compute_rgu_stats_from_gpu_count(df, slice_rows, gpu_to_rgu)
         return df
 
@@ -419,8 +436,10 @@ def _compute_rgu_stats_before_date(
     """
 
     # Compute slice for jobs before billing start date.
-    slice_rows = (df["cluster_name"] == cluster_name) & (
-        df["start_time"] < gpu_billing.since
+    slice_rows = (
+        (df["cluster_name"] == cluster_name)
+        & (df["allocated.gpu_type"].notnull())
+        & (df["start_time"] < gpu_billing.since)
     )
     # Then compute RGU stats.
     _compute_rgu_stats_from_gpu_count(df, slice_rows, gpu_to_rgu)
@@ -443,12 +462,15 @@ def _compute_rgu_stats_after_date(
     # We work on curr_mapping
     # Compute slice: curr mapping date <= start time < next mapping date (if next is available)
     if next_billing_date is None:
-        slice_rows = (df["cluster_name"] == cluster_name) & (
-            df["start_time"] >= curr_gpu_billing.since
+        slice_rows = (
+            (df["cluster_name"] == cluster_name)
+            & (df["allocated.gpu_type"].notnull())
+            & (df["start_time"] >= curr_gpu_billing.since)
         )
     else:
         slice_rows = (
             (df["cluster_name"] == cluster_name)
+            & (df["allocated.gpu_type"].notnull())
             & (df["start_time"] >= curr_gpu_billing.since)
             & (df["start_time"] < next_billing_date)
         )
@@ -517,13 +539,33 @@ def _compute_rgu_stats_from_scaled_rgu(
         allocated.gpu_type_rgu: rgu
     """
 
+    # Try to compute RGU value for MIG GPUs not yet present in gpu_to_rgu.
+    # To compute, we assume that MIG billing wr/t main GPU billing is
+    # proportional to MIG RGU wr/t main RGU, ie:
+    # mig_billing / main_billing = mig_rgu / main_rgu, so that:
+    # mig_rgu = main_rgu * mig_billing / main_billing
+    missing_mig_gpus = [
+        gpu
+        for gpu in curr_gpu_billing.gpu_to_billing.keys()
+        if " : " in gpu and gpu not in gpu_to_rgu
+    ]
+    mig_gpu_to_rgu = {}
+    for mig_gpu in missing_mig_gpus:
+        main_gpu = mig_gpu.split(" : ")[0]
+        if main_gpu in gpu_to_rgu and main_gpu in curr_gpu_billing.gpu_to_billing:
+            mig_gpu_billing = curr_gpu_billing.gpu_to_billing[mig_gpu]
+            main_gpu_billing = curr_gpu_billing.gpu_to_billing[main_gpu]
+            mig_gpu_to_rgu[mig_gpu] = (
+                gpu_to_rgu[main_gpu] * mig_gpu_billing / main_gpu_billing
+            )
+    if mig_gpu_to_rgu:
+        gpu_to_rgu = {**mig_gpu_to_rgu, **gpu_to_rgu}
+
     # Map GPU type to RGU and billing for related jobs.
     # If a GPU type is not found in any of dicts,
     # mapping will be set to NaN.
     col_gpu_to_rgu = (
-        df["allocated.gpu_type"][slice_rows]
-        .map(_gpu_type_to_rgu_mapper(gpu_to_rgu))
-        .astype("float")
+        df["allocated.gpu_type"][slice_rows].map(gpu_to_rgu).astype("float")
     )
     col_gpu_to_billing = df["allocated.gpu_type"][slice_rows].map(
         curr_gpu_billing.gpu_to_billing

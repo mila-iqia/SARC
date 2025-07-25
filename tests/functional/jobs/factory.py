@@ -68,12 +68,18 @@ class JobFactory:
     def format_kwargs(self, kwargs):
         kwargs.setdefault("elapsed_time", base_job["elapsed_time"])
         kwargs.setdefault("submit_time", self.next_submit_time)
-        kwargs.setdefault("start_time", kwargs["submit_time"] + timedelta(seconds=60))
         kwargs.setdefault("job_state", base_job["job_state"])
 
         if kwargs["job_state"] in ["RUNNING", "PENDING"]:
             kwargs.setdefault("end_time", None)
+            now = datetime.now(tz=MTL)
+            kwargs.setdefault(
+                "start_time", now - timedelta(seconds=kwargs["elapsed_time"])
+            )
         else:
+            kwargs.setdefault(
+                "start_time", kwargs["submit_time"] + timedelta(seconds=60)
+            )
             kwargs.setdefault(
                 "end_time",
                 kwargs["start_time"]
