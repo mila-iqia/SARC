@@ -77,11 +77,9 @@ class ClusterConfig:
 
         Return None if GPU name cannot be inferred.
         """
-
-        gpu_type_parts = gpu_type.lower().replace(" ", "-").split(":")
-        if gpu_type_parts[0] == "gpu":
-            gpu_type_parts.pop(0)
-        gpu_type = gpu_type_parts[0]
+        gpu_type = gpu_type.lower().replace(" ", "-")
+        if gpu_type.startswith("gpu:"):
+            gpu_type = gpu_type.split(":")[1]
 
         # Try to get harmonized GPU from nodename mapping
         harmonized_gpu = self.gpus_per_nodes.get(cast(str, nodename), {}).get(gpu_type)
@@ -90,7 +88,11 @@ class ClusterConfig:
         if harmonized_gpu is None:
             harmonized_gpu = self.gpus_per_nodes.get(DEFAULTS_FLAG, {}).get(gpu_type)
 
-        # For MIG GPUs, use this method recursively
+        # If harmonized name starts with "$", then we must recursively harmonize again.
+        if harmonized_gpu and harmonized_gpu.startswith("$"):
+            harmonized_gpu = self.harmonize_gpu(nodename, harmonized_gpu[1:])
+
+        # For MIG GPUs, use this method recursively and append MIG name.
         if harmonized_gpu and harmonized_gpu.startswith(MIG_FLAG):
             harmonized_gpu = self.harmonize_gpu(
                 nodename, harmonized_gpu[len(MIG_FLAG) :]
