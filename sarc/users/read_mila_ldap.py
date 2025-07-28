@@ -139,22 +139,78 @@ import json
 import logging
 import os
 import ssl
+from collections.abc import Iterable
 from datetime import timedelta
 from pathlib import Path
 from typing import cast
 
 # Requirements
 # - pip install ldap3
+from attr import dataclass
 from ldap3 import ALL_ATTRIBUTES, SUBTREE, Connection, Server, Tls
 from pymongo import UpdateOne
 from pymongo.collection import Collection
 
 from sarc.cache import CachePolicy, with_cache
+from sarc.core.models.users import Credentials
+from sarc.core.scraping.users import UserMatch, UserScraper
 
 from ..config import LDAPConfig
 from .supervisor import resolve_supervisors
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class MilaLDAPConfig:
+    service_uri: str
+    private_key_file: Path
+    certificate_file: Path
+
+
+class MilaLDAPScraper(UserScraper[MilaLDAPConfig]):
+    config_type = MilaLDAPConfig
+
+    def get_user_data(self, config: MilaLDAPConfig) -> str:
+        return json.dumps(
+            _query_ldap(
+                config.private_key_file, config.certificate_file, config.service_uri
+            )
+        )
+
+    def update_user_data(
+        self, _config: MilaLDAPConfig, data: str
+    ) -> Iterable[UserMatch]:
+        """
+        mail[0]        -> mila_email_username  (includes the "@mila.quebec")
+        posixUid[0]    -> mila_cluster_username
+        uidNumber[0]   -> mila_cluster_uid
+        gidNumber[0]   -> mila_cluster_gid
+        displayName[0] -> display_name
+        suspended[0]   -> status  (as string "enabled" or "disabled")
+        """
+
+        for user_raw in json.loads(data):
+            yield UserMatch(
+                display_name=user_raw["displayName"][0],
+                email=user_raw["mail"][0],
+                associated_accounts={
+                    "mila": [
+                        Credentials(
+                            username=user_raw["posixUid"][0],
+                            uid=int(user_raw["uidNumber"][0]),
+                            gid=int(user_raw["gidNumber"][0]),
+                            active=user_raw["suspended"][0] == "false",
+                        )
+                    ]
+                },
+                supervisor=None,
+                co_supervisors=None,
+                matching_id=user_raw["mail"][0],
+                known_matches={},
+                record_start=None,
+                record_end=None,
+            )
 
 
 def _query_ldap(

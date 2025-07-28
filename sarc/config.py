@@ -194,6 +194,11 @@ class LoggingConfig:
 
 
 @dataclass
+class UserScrapingConfig:
+    scrapers: dict[str, Any]
+
+
+@dataclass
 class ClientConfig:
     mongo: MongoConfig
     cache: Path | None = None
