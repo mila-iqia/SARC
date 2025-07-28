@@ -5,16 +5,20 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import AfterValidator, BaseModel
 from pydantic_mongo import PydanticObjectId
 
-from sarc.client.job import SlurmJob, SlurmState, _jobs_collection
-from sarc.config import config
+from sarc.client.job import (
+    SlurmJob,
+    SlurmState,
+    _jobs_collection,
+    get_available_clusters,
+)
 
 router = APIRouter(prefix="/v0")
 
 
 def valid_cluster(cluster: str):
-    conf = config("scraping")
+    cluster_names = list(cl.cluster_name for cl in get_available_clusters())
     if cluster is not None:
-        if cluster not in conf.clusters.keys():
+        if cluster not in cluster_names:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"No such cluster '{cluster}'",

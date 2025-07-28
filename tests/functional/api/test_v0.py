@@ -28,7 +28,7 @@ def test_get_job_not_found(client):
     assert response.status_code == 422
 
 
-@pytest.mark.usefixtures("read_only_db")
+@pytest.mark.usefixtures("read_only_db_with_users")
 def test_get_jobs_by_cluster(client):
     """Test successful jobs query by cluster."""
     response = client.get("/v0/job/query?cluster=raisin")
@@ -136,7 +136,7 @@ def test_get_jobs_with_datetime_filters(client):
     assert len(data) > 0
 
 
-@pytest.mark.usefixtures("read_only_db")
+@pytest.mark.usefixtures("read_only_db_with_users")
 def test_get_jobs_multiple_filters(client):
     """Test jobs query with multiple filters."""
     params = {
@@ -170,7 +170,7 @@ def test_get_jobs_no_filters(client):
     assert len(data) == 24
 
 
-@pytest.mark.usefixtures("read_only_db")
+@pytest.mark.usefixtures("read_only_db_with_users")
 def test_count_jobs_by_cluster(client):
     """Test jobs count by cluster."""
     response = client.get("/v0/job/count?cluster=raisin")
@@ -257,7 +257,7 @@ def test_count_jobs_with_datetime_filters(client):
     assert count == 8
 
 
-@pytest.mark.usefixtures("read_only_db")
+@pytest.mark.usefixtures("read_only_db_with_users")
 def test_count_jobs_multiple_filters(client):
     """Test jobs count with multiple filters."""
     params = {
@@ -285,7 +285,7 @@ def test_count_jobs_no_filters(client):
     assert count == 24
 
 
-@pytest.mark.usefixtures("read_only_db")
+@pytest.mark.usefixtures("read_only_db_with_users")
 def test_count_jobs_matches_query_length(client):
     """Test that jobs count matches the length of jobs query results."""
     # Test with a specific filter
