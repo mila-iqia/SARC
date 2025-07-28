@@ -1,11 +1,12 @@
 from collections.abc import Iterable
+from datetime import UTC
 from importlib.metadata import entry_points
 from typing import Any, Protocol, Type
 
 from pydantic import BaseModel
 from serieux import deserialize
 
-from sarc.core.models.users import Credentials
+from sarc.core.models.users import Credentials, UserData
 from sarc.core.models.validators import datetime_utc
 
 
@@ -116,7 +117,7 @@ def update_user_match(*, value: UserMatch, update: UserMatch) -> None:
         value.known_matches[name] = id
 
 
-def scrape_users(scrapers: list[tuple[str, Any]]) -> None:
+def scrape_users(scrapers: list[tuple[str, Any]]) -> Iterable[UserData]:
     """
     Perform user scraping and matching according to the list of plugins/config passed in.
 
@@ -177,3 +178,11 @@ def scrape_users(scrapers: list[tuple[str, Any]]) -> None:
                     # Update all references to the same UserMatch struct
                     for name, id in final_userm.known_matches.items():
                         user_refs[f"{name}:{id}"] = final_userm
+
+    for id, umatch in user_refs.items():
+        if umatch.matching_id != id:
+            # We only want to handle "primary" entries to avoid duplication
+            continue
+        if umatch.record_start is None:
+            umatch.record_start = datetime.now(UTC)
+        yield UserData
