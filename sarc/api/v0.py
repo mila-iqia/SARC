@@ -35,10 +35,7 @@ class JobQuery(BaseModel):
         if self.cluster is not None:
             query["cluster_name"] = self.cluster
         if self.job_id is not None:
-            if isinstance(self.job_id, list):
-                query["job_id"] = {"$in": self.job_id}
-            else:
-                query["job_id"] = self.job_id
+            query["job_id"] = self.job_id
         if self.job_state is not None:
             query["job_state"] = self.job_state
         if self.username is not None:
