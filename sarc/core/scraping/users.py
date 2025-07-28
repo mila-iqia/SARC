@@ -1,5 +1,5 @@
 from collections.abc import Iterable
-from datetime import UTC
+from datetime import UTC, datetime
 from importlib.metadata import entry_points
 from typing import Any, Protocol, Type
 
@@ -117,11 +117,15 @@ def update_user_match(*, value: UserMatch, update: UserMatch) -> None:
         value.known_matches[name] = id
 
 
-def scrape_users(scrapers: list[tuple[str, Any]]) -> Iterable[UserData]:
+def scrape_users(scrapers: list[tuple[str, Any]]) -> Iterable[UserMatch]:
     """
-    Perform user scraping and matching according to the list of plugins/config passed in.
+    Perform user scraping and matching according to the list of plugins passed in.
 
-    The first plugin to specify information wins in this case.
+    The first plugin to specify information wins in case of conflict.
+
+    This returns one UserMatch structure per scraped user, across all plugins.
+    The collected information is aggregated amongst plugins, but not with the
+    information in the database.
     """
     raw_data: dict[str, tuple[str, Any]] = {}
     for scraper_name, config_data in scrapers:
@@ -185,4 +189,4 @@ def scrape_users(scrapers: list[tuple[str, Any]]) -> Iterable[UserData]:
             continue
         if umatch.record_start is None:
             umatch.record_start = datetime.now(UTC)
-        yield UserData
+        yield umatch
