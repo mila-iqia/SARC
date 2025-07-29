@@ -15,7 +15,7 @@ from opentelemetry.trace import StatusCode
 
 from sarc.client.job import JobStatistics, get_jobs
 from sarc.config import MTL, PST, UTC, config
-from sarc.jobs import prometheus_scraping, sacct
+from sarc.jobs import prometheus_scraping
 from sarc.jobs.sacct import SAcctScraper
 
 from .factory import JsonJobFactory, json_raw
@@ -1141,7 +1141,7 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
             ],
         )
 
-    channel = remote.expect_sessions(
+    remote.expect_sessions(
         _create_session(
             "raisin",
             "export TZ=UTC && /opt/slurm/bin/sacct  -X -S {start} -E {end} --allusers --json",
@@ -1157,9 +1157,6 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
             datetimes=datetimes,
         ),
     )
-
-    # Import here so that config() is setup correctly when CLI is created.
-    import sarc.cli
 
     def mock_compute_job_statistics(job):
         return JobStatistics()
@@ -1282,7 +1279,7 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
     for cluster_name in cluster_names:
         assert bool(
             re.search(
-                rf"root:jobs\.py:[0-9]+ Acquire data on {cluster_name} for interval: 2023-02-15 01:00:00 to 2023-02-15 01:05:00 \(5.0 min\)",
+                rf"sarc\.cli\.acquire\.jobs:jobs\.py:[0-9]+ Acquire data on {cluster_name} for interval: 2023-02-15 01:00:00 to 2023-02-15 01:05:00 \(5.0 min\)",
                 caplog.text,
             )
         )
@@ -1294,7 +1291,7 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
     assert "Saving into mongodb collection '" in caplog.text
     assert bool(
         re.search(
-            r"sarc\.jobs\.sacct:sacct\.py:[0-9]+ Saved [0-9]+ entries\.",
+            r"sarc\.jobs\.sacct:sacct\.py:[0-9]+ Saved [0-9]+/[0-9]+ entries\.",
             caplog.text,
         )
     )
@@ -1303,7 +1300,7 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
     for cluster_name in cluster_names:
         assert bool(
             re.search(
-                rf"root:jobs\.py:[0-9]+ Failed to acquire data on {cluster_name} for interval: 2023-03-16 01:00:00 to 2023-03-16 01:05:00:",
+                rf"sarc\.cli\.acquire\.jobs:jobs\.py:[0-9]+ Failed to acquire data on {cluster_name} for interval: 2023-03-16 01:00:00 to 2023-03-16 01:05:00:",
                 caplog.text,
             )
         )
@@ -1364,7 +1361,7 @@ def test_acquire_prometheus_for_cluster_without_prometheus(
     print(caplog.text)
     assert bool(
         re.search(
-            rf"root:prometheus\.py:[0-9]+ No prometheus URL for cluster: raisin_no_prometheus, cannot get Prometheus metrics\.",
+            r"sarc\.cli\.acquire\.prometheus:prometheus\.py:[0-9]+ No prometheus URL for cluster: raisin_no_prometheus, cannot get Prometheus metrics\.",
             caplog.text,
         )
     )
