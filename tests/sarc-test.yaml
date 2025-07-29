@@ -109,6 +109,7 @@ sarc:
       gpus_per_nodes:
         __DEFAULTS__:
           gpu2: THE GPU II
+          phantom_gpu: PHANTOM GPU MENACE
     raisin_no_prometheus:
       accounts: null
       diskusage_report_command: null

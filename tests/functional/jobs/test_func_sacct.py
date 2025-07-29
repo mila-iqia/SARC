@@ -361,67 +361,115 @@ def test_stdout_message_before_json(
 
 
 @pytest.mark.parametrize(
-    "test_config", [{"clusters": {"raisin": {"host": "raisin"}}}], indirect=True
+    "test_config",
+    [{"clusters": {"raisin": {"host": "raisin"}}}],
+    indirect=True,
 )
-@pytest.mark.parametrize("json_jobs", [{}], indirect=True)
-@pytest.mark.usefixtures("empty_read_write_db")
-def test_get_gpu_type_from_prometheus(
-    test_config, sacct_json, remote, file_regression, cli_main, monkeypatch
-):
+@pytest.mark.parametrize(
+    "json_jobs",
+    [
+        {
+            "tres": {
+                "allocated": [
+                    {
+                        "count": 1,
+                        "id": 1002,
+                        "name": "gpu:gpu_name_from_sacct",
+                        "type": "gres",
+                    },
+                ],
+            }
+        }
+    ],
+    indirect=True,
+)
+@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
+def test_get_gpu_type(test_config, sacct_json, remote, cli_main, monkeypatch):
+    """Test all 3 sources of GPU type (sacct, node->GPU and prometheus)"""
+
     remote.expect(
         host="raisin",
-        cmd="export TZ=UTC && /opt/slurm/bin/sacct  -X -S 2023-02-14T00:00 -E 2023-02-15T00:00 --allusers --json",
+        cmd="export TZ=UTC && /opt/slurm/bin/sacct  -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
         out=f"Welcome on raisin,\nThe sweetest supercomputer in the world!\n{sacct_json}".encode(
             "utf-8"
         ),
     )
 
-    # Import here so that config() is setup correctly when CLI is created.
-    import sarc.cli  # noqa: F401
+    cmd_sacct = [
+        "acquire",
+        "jobs",
+        "--cluster_name",
+        "raisin",
+        "--dates",
+        "2023-02-15",
+    ]
 
+    # Test `acquire jobs` without node->gpu available
+    # -----------------------------------------------
+    # Should return GPU name from sacct
+    assert cli_main(cmd_sacct) == 0
+    jobs = list(get_jobs())
+    assert len(jobs) == 1
+    job = jobs[0]
+    print(job)
+    print(job.nodes)
+    assert job.allocated.gpu_type == "gpu_name_from_sacct"
+    assert not job.stored_statistics
+
+    # Test `acquire jobs` with node->gpu available
+    # --------------------------------------------
+    # node->gpu is prior to sacct data
+    # Save slurm config in cache.
+    _save_slurm_conf(
+        "raisin",
+        "2023-02-15",
+        "NodeName=cn-c0[18-30] Param1=Anything1 Param2=Anything2 Gres=gpu:gpu2:4 Param3=Anything3",
+    )
+    # Acquire slurm config.
+    assert (
+        cli_main(
+            [
+                "acquire",
+                "slurmconfig",
+                "--cluster_name",
+                "raisin",
+                "--day",
+                "2023-02-15",
+            ]
+        )
+        == 0
+    )
+    # acquire jobs
+    assert cli_main(cmd_sacct) == 0
+    jobs = list(get_jobs())
+    assert len(jobs) == 1
+    job = jobs[0]
+    assert job.allocated.gpu_type == "THE GPU II"
+    assert not job.stored_statistics
+
+    # Test `acquire prometheus`
+    # -------------------------
+    # Prometheus data is prior to node->gpu and sacct data
     def mock_compute_job_statistics(job):
         mock_compute_job_statistics.called += 1
         return JobStatistics()
 
     mock_compute_job_statistics.called = 0
-
     monkeypatch.setattr(
         "sarc.jobs.series.compute_job_statistics", mock_compute_job_statistics
     )
 
     def mock_get_job_time_series(job, metric, **kwargs):
+        mock_get_job_time_series.called += 1
         assert metric == "slurm_job_utilization_gpu_memory"
         assert job.job_id == 1
         return [{"metric": {"gpu_type": "phantom_gpu"}}]
 
+    mock_get_job_time_series.called = 0
     monkeypatch.setattr(
         prometheus_scraping, "get_job_time_series", mock_get_job_time_series
     )
 
-    # First, scrap jobs
-    jobs = list(get_jobs())
-    assert len(jobs) == 0
-
-    assert (
-        cli_main(
-            [
-                "acquire",
-                "jobs",
-                "--cluster_name",
-                "raisin",
-                "--dates",
-                "2023-02-14",
-            ]
-        )
-        == 0
-    )
-
-    jobs = list(get_jobs())
-    assert len(jobs) == 1
-    job = jobs[0]
-    assert job.allocated.gpu_type is None
-
-    # Then, scrap prometheus info
     assert (
         cli_main(
             [
@@ -435,91 +483,13 @@ def test_get_gpu_type_from_prometheus(
         )
         == 0
     )
-
+    assert mock_compute_job_statistics.called == 1
+    assert mock_get_job_time_series.called == 1
     jobs = list(get_jobs())
-
     assert len(jobs) == 1
     job = jobs[0]
-    assert job.allocated.gpu_type == "phantom_gpu"
-
-    file_regression.check(
-        f"Found {len(jobs)} job(s):\n"
-        + "\n".join(
-            [job.model_dump_json(exclude={"id": True}, indent=4) for job in jobs]
-        )
-    )
-
-
-@pytest.mark.parametrize(
-    "test_config",
-    [{"clusters": {"raisin_no_prometheus": {"host": "raisin_no_prometheus"}}}],
-    indirect=True,
-)
-@pytest.mark.parametrize("json_jobs", [{}], indirect=True)
-@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
-def test_get_gpu_type_without_prometheus(
-    test_config, sacct_json, remote, file_regression, cli_main, monkeypatch
-):
-    remote.expect(
-        host="raisin_no_prometheus",
-        cmd="export TZ=UTC && /opt/slurm/bin/sacct  -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
-        out=f"Welcome on raisin_no_prometheus,\nThe sweetest supercomputer in the world!\n{sacct_json}".encode(
-            "utf-8"
-        ),
-    )
-
-    # Import here so that config() is setup correctly when CLI is created.
-    import sarc.cli  # noqa: F401
-
-    # Save slurm config in cache.
-    _save_slurm_conf(
-        "raisin_no_prometheus",
-        "2023-02-15",
-        "NodeName=cn-c0[18-30] Param1=Anything1 Param2=Anything2 Gres=gpu:asupergpu:4 Param3=Anything3",
-    )
-    # Acquire slurm config.
-    assert (
-        cli_main(
-            [
-                "acquire",
-                "slurmconfig",
-                "--cluster_name",
-                "raisin_no_prometheus",
-                "--day",
-                "2023-02-15",
-            ]
-        )
-        == 0
-    )
-
-    assert (
-        cli_main(
-            [
-                "acquire",
-                "jobs",
-                "--cluster_name",
-                "raisin_no_prometheus",
-                "--dates",
-                "2023-02-15",
-            ]
-        )
-        == 0
-    )
-
-    jobs = list(get_jobs())
-
-    assert len(jobs) == 1
-    job = jobs[0]
-    print(job)
-    print(job.nodes)
-    assert job.allocated.gpu_type == "Nec Plus ULTRA GPU 2000"
-
-    file_regression.check(
-        f"Found {len(jobs)} job(s):\n"
-        + "\n".join(
-            [job.model_dump_json(exclude={"id": True}, indent=4) for job in jobs]
-        )
-    )
+    assert job.allocated.gpu_type == "PHANTOM GPU MENACE"
+    assert job.stored_statistics
 
 
 def _save_slurm_conf(cluster_name: str, day: str, content: str):
