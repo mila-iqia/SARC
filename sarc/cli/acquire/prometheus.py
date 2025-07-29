@@ -16,6 +16,8 @@ from sarc.config import MTL, config
 from sarc.jobs.prometheus_scraping import scrap_prometheus
 from sarc.traces import using_trace
 
+logger = logging.getLogger(__name__)
+
 
 def _str_to_dt(dt_str: str) -> datetime:
     return datetime.strptime(dt_str, "%Y-%m-%d").replace(tzinfo=MTL)
@@ -39,9 +41,7 @@ def parse_dates(dates: list[str]) -> list[datetime]:
     return parsed_dates
 
 
-def _daterange(
-    start_date: datetime, end_date: datetime
-) -> Generator[datetime, None, None]:
+def _daterange(start_date: datetime, end_date: datetime) -> Generator[datetime]:
     for n in range(int((end_date - start_date).days)):
         yield start_date + timedelta(n)
 
@@ -79,7 +79,7 @@ class AcquirePrometheus:
         time_intervals = []
         if self.dates:
             if self.time_from or self.time_to:
-                logging.error(
+                logger.error(
                     "Parameters mutually exclusive: either --date "
                     "or (--time_from ... --time_to ...), not both."
                 )
@@ -92,12 +92,12 @@ class AcquirePrometheus:
                 time_intervals.append((start, end))
         elif self.time_from or self.time_to:
             if not self.time_from or not self.time_to:
-                logging.error("Both parameters needed: --time_from, --time_to")
+                logger.error("Both parameters needed: --time_from, --time_to")
                 return -1
             time_from = _str_to_extended_dt(self.time_from)
             time_to = _str_to_extended_dt(self.time_to)
             if time_from >= time_to:
-                logging.error(
+                logger.error(
                     f"Expected time_from < time_to, instead got time_from: {time_from}, time_to: {time_to}"
                 )
                 return -1
@@ -109,7 +109,7 @@ class AcquirePrometheus:
         for cluster_name in self.cluster_names:
             cluster = clusters_configs[cluster_name]
             if not cluster.prometheus_url:
-                logging.error(
+                logger.error(
                     f"No prometheus URL for cluster: {cluster_name}, cannot get Prometheus metrics."
                 )
                 continue
@@ -125,7 +125,7 @@ class AcquirePrometheus:
                         span.set_attribute("end", str(end))
                         interval_minutes = (end - start).total_seconds() / 60
                         try:
-                            logging.info(
+                            logger.info(
                                 f"Acquire Prometheus metrics on {cluster_name} for jobs from "
                                 f"{start} to {end} ({interval_minutes} min)"
                             )
@@ -133,14 +133,16 @@ class AcquirePrometheus:
                             scrap_prometheus(cluster, start, end)
                         # pylint: disable=broad-exception-caught
                         except Exception as e:
-                            logging.error(
+                            logger.error(
                                 f"Failed to acquire Prometheus metrics on {cluster_name} for interval: "
-                                f"{start} to {end} ({interval_minutes} min): {e}"
+                                f"{start} to {end} ({interval_minutes} min): {type(e).__name__}: {e}"
                             )
                             raise e
             # pylint: disable=broad-exception-caught
-            except Exception:
-                # Error while acquiring data on a cluster from given dates.
+            except Exception as e:
+                logger.error(
+                    f"Error while acquiring Prometheus metrics on {cluster_name}: {type(e).__name__}: {e} ; skipping cluster."
+                )
                 # Continue to next cluster.
                 continue
         return 0

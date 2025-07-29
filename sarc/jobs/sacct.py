@@ -77,7 +77,7 @@ class SAcctScraper:
         accounts = ",".join(self.cluster.accounts) if self.cluster.accounts else None
         accounts_option = f"-A {accounts}" if accounts else ""
         cmd = f"{self.cluster.sacct_bin} {accounts_option} -X -S {start} -E {end} --allusers --json"
-        logger.info(f"{self.cluster.name} $ {cmd}")
+        logger.debug(f"{self.cluster.name} $ {cmd}")
         if self.cluster.host == "localhost":
             results: subprocess.CompletedProcess[str] | Result = subprocess.run(
                 cmd,
@@ -365,7 +365,6 @@ def update_allocated_gpu_type_from_nodes(
 ) -> Optional[str]:
     """
     Try to infer job GPU type from entry nodes
-    if cluster has not configured a Prometheusn connection.
 
     Parameters
     ----------
@@ -383,18 +382,17 @@ def update_allocated_gpu_type_from_nodes(
     """
     gpu_type = None
 
-    if not cluster.prometheus_url:
-        # No prometheus config. Try to get GPU type from entry nodes.
-        assert cluster.name is not None
-        node_gpu_mapping = get_node_to_gpu(cluster.name, entry.start_time)
-        if node_gpu_mapping:
-            node_to_gpu = node_gpu_mapping.node_to_gpu
-            gpu_types = {
-                gpu for nodename in entry.nodes for gpu in node_to_gpu.get(nodename, ())
-            }
-            # We infer gpu_type only if we found 1 GPU for this job.
-            if len(gpu_types) == 1:
-                gpu_type = gpu_types.pop()
+    # Try to get GPU type from entry nodes.
+    assert cluster.name is not None
+    node_gpu_mapping = get_node_to_gpu(cluster.name, entry.start_time)
+    if node_gpu_mapping:
+        node_to_gpu = node_gpu_mapping.node_to_gpu
+        gpu_types = {
+            gpu for nodename in entry.nodes for gpu in node_to_gpu.get(nodename, ())
+        }
+        # We infer gpu_type only if we found 1 GPU for this job.
+        if len(gpu_types) == 1:
+            gpu_type = gpu_types.pop()
 
     if gpu_type is None:
         # No gpu_type from neither prometheus nor entry nodes.

@@ -117,19 +117,19 @@ class AcquireJobs:
         time_to: datetime | None = None
         if self.dates:
             if self.time_from or self.time_to:
-                logging.error(
+                logger.error(
                     "Parameters mutually exclusive: either --date "
                     "or (--time_from ... --time_to ...), not both."
                 )
                 return -1
         elif self.time_from or self.time_to:
             if not self.time_from or not self.time_to:
-                logging.error("Both parameters needed: --time_from, --time_to")
+                logger.error("Both parameters needed: --time_from, --time_to")
                 return -1
             time_from = _str_to_extended_dt(self.time_from)
             time_to = _str_to_extended_dt(self.time_to)
             if time_from >= time_to:
-                logging.error(
+                logger.error(
                     f"Expected time_from < time_to, instead got time_from: {time_from}, time_to: {time_to}"
                 )
                 return -1
@@ -139,7 +139,33 @@ class AcquireJobs:
 
         for cluster_name in self.cluster_names:
             try:
-                if time_from is not None:
+                if time_from is None:
+                    # Use --date
+                    for date, is_auto in parse_dates(self.dates, cluster_name):
+                        with using_trace(
+                            "AcquireJobs", "acquire_cluster_data", exception_types=()
+                        ) as span:
+                            span.set_attribute("cluster_name", cluster_name)
+                            span.set_attribute("date", str(date))
+                            span.set_attribute("is_auto", is_auto)
+                            try:
+                                logger.info(
+                                    f"Acquire data on {cluster_name} for date: {date} (is_auto={is_auto})"
+                                )
+
+                                sacct_mongodb_import(
+                                    clusters_configs[cluster_name], date
+                                )
+                                if is_auto:
+                                    _dates_set_last_date(cluster_name, date)
+                            # pylint: disable=broad-exception-caught
+                            except Exception as e:
+                                logger.error(
+                                    f"Failed to acquire data for {cluster_name} on {date}: {type(e).__name__}: {e}"
+                                )
+                                raise e
+                else:
+                    # Use --time_from --time_to
                     assert time_to is not None
                     with using_trace(
                         "AcquireJobs",
@@ -163,33 +189,9 @@ class AcquireJobs:
                         # pylint: disable=broad-exception-caught
                         except Exception as e:
                             logger.error(
-                                f"Failed to acquire data on {cluster_name} for interval: {time_from} to {time_to}: {e}"
+                                f"Failed to acquire data on {cluster_name} for interval: {time_from} to {time_to}: {type(e).__name__}: {e}"
                             )
                             raise e
-                else:
-                    for date, is_auto in parse_dates(self.dates, cluster_name):
-                        with using_trace(
-                            "AcquireJobs", "acquire_cluster_data", exception_types=()
-                        ) as span:
-                            span.set_attribute("cluster_name", cluster_name)
-                            span.set_attribute("date", str(date))
-                            span.set_attribute("is_auto", is_auto)
-                            try:
-                                logging.info(
-                                    f"Acquire data on {cluster_name} for date: {date} (is_auto={is_auto})"
-                                )
-
-                                sacct_mongodb_import(
-                                    clusters_configs[cluster_name], date
-                                )
-                                if is_auto:
-                                    _dates_set_last_date(cluster_name, date)
-                            # pylint: disable=broad-exception-caught
-                            except Exception as e:
-                                logging.error(
-                                    f"Failed to acquire data for {cluster_name} on {date}: {e}"
-                                )
-                                raise e
             # pylint: disable=broad-exception-caught
             except Exception as e:
                 logger.error(

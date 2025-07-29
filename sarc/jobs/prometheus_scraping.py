@@ -33,7 +33,6 @@ def scrap_prometheus(
     logger.info(
         f"Saving into mongodb collection '{collection.Meta.collection_name}'..."
     )
-    job_args = {"cluster": cluster.name, "start": start, "end": end}
     nb_jobs = count_jobs(cluster=cluster.name, start=start, end=end)
     for entry in tqdm(
         get_jobs(cluster=cluster.name, start=start, end=end),
@@ -71,8 +70,6 @@ def update_allocated_gpu_type_from_prometheus(
     None
         Unable to infer gpu type.
     """
-    gpu_type = None
-
     if cluster.prometheus_url:
         # Cluster does have prometheus config.
         output = get_job_time_series(
@@ -83,11 +80,10 @@ def update_allocated_gpu_type_from_prometheus(
         )
         if output:
             gpu_type = output[0]["metric"]["gpu_type"]
-
-    # If we found a GPU type, try to infer descriptive GPU name
-    if gpu_type is not None:
-        entry.allocated.gpu_type = (
-            cluster.harmonize_gpu_from_nodes(entry.nodes, gpu_type) or gpu_type
-        )
+            # If we found a GPU type, try to infer descriptive GPU name
+            if gpu_type is not None:
+                entry.allocated.gpu_type = (
+                    cluster.harmonize_gpu_from_nodes(entry.nodes, gpu_type) or gpu_type
+                )
 
     return entry.allocated.gpu_type
