@@ -1,12 +1,11 @@
 from collections.abc import Iterable
-from datetime import UTC, datetime
 from importlib.metadata import entry_points
 from typing import Any, Protocol, Type
 
 from pydantic import BaseModel
 from serieux import deserialize
 
-from sarc.core.models.users import Credentials, UserData
+from sarc.core.models.users import Credentials
 from sarc.core.models.validators import datetime_utc
 
 
@@ -187,6 +186,4 @@ def scrape_users(scrapers: list[tuple[str, Any]]) -> Iterable[UserMatch]:
         if umatch.matching_id != id:
             # We only want to handle "primary" entries to avoid duplication
             continue
-        if umatch.record_start is None:
-            umatch.record_start = datetime.now(UTC)
         yield umatch
