@@ -235,8 +235,8 @@ Found 46 span(s):
   "span_events": [],
   "span_attributes": {
    "cluster_name": "patate",
-   "start": "2023-03-16 00:00:00-04:00",
-   "end": "2023-03-17 00:00:00-04:00"
+   "start": "2023-03-16 00:00:00+00:00",
+   "end": "2023-03-17 00:00:00+00:00"
   },
   "span_has_error": false
  },
@@ -251,8 +251,8 @@ Found 46 span(s):
   "span_events": [],
   "span_attributes": {
    "cluster_name": "patate",
-   "start": "2023-02-16 00:00:00-05:00",
-   "end": "2023-02-17 00:00:00-05:00"
+   "start": "2023-02-16 00:00:00+00:00",
+   "end": "2023-02-17 00:00:00+00:00"
   },
   "span_has_error": false
  },
@@ -279,8 +279,8 @@ Found 46 span(s):
   "span_events": [],
   "span_attributes": {
    "cluster_name": "patate",
-   "start": "2023-02-15 00:00:00-05:00",
-   "end": "2023-02-16 00:00:00-05:00"
+   "start": "2023-02-15 00:00:00+00:00",
+   "end": "2023-02-16 00:00:00+00:00"
   },
   "span_has_error": false
  },
@@ -307,8 +307,8 @@ Found 46 span(s):
   "span_events": [],
   "span_attributes": {
    "cluster_name": "raisin",
-   "start": "2023-03-16 00:00:00-04:00",
-   "end": "2023-03-17 00:00:00-04:00"
+   "start": "2023-03-16 00:00:00+00:00",
+   "end": "2023-03-17 00:00:00+00:00"
   },
   "span_has_error": false
  },
@@ -323,8 +323,8 @@ Found 46 span(s):
   "span_events": [],
   "span_attributes": {
    "cluster_name": "raisin",
-   "start": "2023-02-16 00:00:00-05:00",
-   "end": "2023-02-17 00:00:00-05:00"
+   "start": "2023-02-16 00:00:00+00:00",
+   "end": "2023-02-17 00:00:00+00:00"
   },
   "span_has_error": false
  },
@@ -351,8 +351,8 @@ Found 46 span(s):
   "span_events": [],
   "span_attributes": {
    "cluster_name": "raisin",
-   "start": "2023-02-15 00:00:00-05:00",
-   "end": "2023-02-16 00:00:00-05:00"
+   "start": "2023-02-15 00:00:00+00:00",
+   "end": "2023-02-16 00:00:00+00:00"
   },
   "span_has_error": false
  },

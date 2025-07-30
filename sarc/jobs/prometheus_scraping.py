@@ -37,7 +37,7 @@ def scrap_prometheus(
     for entry in tqdm(
         get_jobs(cluster=cluster.name, start=start, end=end),
         total=nb_jobs,
-        desc="get Prometheus metrics",
+        desc="Prometheus metrics",
     ):
         update_allocated_gpu_type_from_prometheus(cluster, entry)
         saved = entry.statistics(recompute=True, save=True) is not None

@@ -1027,19 +1027,19 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     for cluster_name in cluster_names:
         assert bool(
             re.search(
-                rf"sarc\.jobs\.prometheus_scraping:prometheus_scraping\.py:[0-9]+ Saved Prometheus metrics for 1 jobs on {cluster_name} from 2023-02-15 00:00:00-05:00 to 2023-02-16 00:00:00-05:00\.",
+                rf"sarc\.jobs\.prometheus_scraping:prometheus_scraping\.py:[0-9]+ Saved Prometheus metrics for 1 jobs on {cluster_name} from 2023-02-15 00:00:00\+00:00 to 2023-02-16 00:00:00\+00:00\.",
                 caplog.text,
             )
         )
         assert bool(
             re.search(
-                rf"sarc\.jobs\.prometheus_scraping:prometheus_scraping\.py:[0-9]+ Saved Prometheus metrics for 1 jobs on {cluster_name} from 2023-02-16 00:00:00-05:00 to 2023-02-17 00:00:00-05:00\.",
+                rf"sarc\.jobs\.prometheus_scraping:prometheus_scraping\.py:[0-9]+ Saved Prometheus metrics for 1 jobs on {cluster_name} from 2023-02-16 00:00:00\+00:00 to 2023-02-17 00:00:00\+00:00\.",
                 caplog.text,
             )
         )
         assert bool(
             re.search(
-                rf"sarc\.jobs\.prometheus_scraping:prometheus_scraping\.py:[0-9]+ Saved Prometheus metrics for 0 jobs on {cluster_name} from 2023-03-16 00:00:00-04:00 to 2023-03-17 00:00:00-04:00\.",
+                rf"sarc\.jobs\.prometheus_scraping:prometheus_scraping\.py:[0-9]+ Saved Prometheus metrics for 0 jobs on {cluster_name} from 2023-03-16 00:00:00\+00:00 to 2023-03-17 00:00:00\+00:00\.",
                 caplog.text,
             )
         )
@@ -1063,7 +1063,7 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
     """
     caplog.set_level(logging.INFO)
     cluster_names = ["raisin", "patate"]
-    datetimes = [datetime(2023, 2, 15, hour=1, tzinfo=MTL)]
+    datetimes = [datetime(2023, 2, 15, hour=1, tzinfo=UTC)]
     delta = timedelta(minutes=5)
 
     def _gen_error_command(cmd_template, job_submit_datetime):
@@ -1106,7 +1106,7 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
             ]
             + [
                 _gen_error_command(
-                    cmd_template, datetime(2023, 3, 16, hour=1, tzinfo=MTL)
+                    cmd_template, datetime(2023, 3, 16, hour=1, tzinfo=UTC)
                 )
             ],
         )
@@ -1280,13 +1280,13 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
     for cluster_name in cluster_names:
         assert bool(
             re.search(
-                rf"sarc\.jobs\.prometheus_scraping:prometheus_scraping\.py:[0-9]+ Saved Prometheus metrics for 1 jobs on {cluster_name} from 2023-02-15 01:00:00-05:00 to 2023-02-15 01:05:00-05:00\.",
+                rf"sarc\.jobs\.prometheus_scraping:prometheus_scraping\.py:[0-9]+ Saved Prometheus metrics for 1 jobs on {cluster_name} from 2023-02-15 01:00:00\+00:00 to 2023-02-15 01:05:00\+00:00\.",
                 caplog.text,
             )
         )
         assert bool(
             re.search(
-                rf"sarc\.jobs\.prometheus_scraping:prometheus_scraping\.py:[0-9]+ Saved Prometheus metrics for 0 jobs on {cluster_name} from 2023-03-16 01:00:00-04:00 to 2023-03-16 01:05:00-04:00\.",
+                rf"sarc\.jobs\.prometheus_scraping:prometheus_scraping\.py:[0-9]+ Saved Prometheus metrics for 0 jobs on {cluster_name} from 2023-03-16 01:00:00\+00:00 to 2023-03-16 01:05:00\+00:00\.",
                 caplog.text,
             )
         )
@@ -1296,7 +1296,6 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
 def test_acquire_prometheus_for_cluster_without_prometheus(
     test_config,
     remote,
-    file_regression,
     cli_main,
     prom_custom_query_mock,
     caplog,

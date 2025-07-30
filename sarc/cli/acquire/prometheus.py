@@ -1,6 +1,6 @@
 """
 Script to acquire prometheus metrics.
-NB: Dates are parsed in MTL timezone.
+NB: Dates are parsed in UTC timezone.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from typing import Generator
 
 from simple_parsing import field
 
-from sarc.config import MTL, config
+from sarc.config import config, UTC
 from sarc.jobs.prometheus_scraping import scrap_prometheus
 from sarc.traces import using_trace
 
@@ -20,12 +20,12 @@ logger = logging.getLogger(__name__)
 
 
 def _str_to_dt(dt_str: str) -> datetime:
-    return datetime.strptime(dt_str, "%Y-%m-%d").replace(tzinfo=MTL)
+    return datetime.strptime(dt_str, "%Y-%m-%d").replace(tzinfo=UTC)
 
 
 def _str_to_extended_dt(dt_str: str) -> datetime:
     """Parse date up to minute, with format %Y-%m-%dT%H:%M"""
-    return datetime.strptime(dt_str, "%Y-%m-%dT%H:%M").replace(tzinfo=MTL)
+    return datetime.strptime(dt_str, "%Y-%m-%dT%H:%M").replace(tzinfo=UTC)
 
 
 def parse_dates(dates: list[str]) -> list[datetime]:
