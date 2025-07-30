@@ -5,7 +5,8 @@ from typing import Any, Protocol, Type
 from pydantic import BaseModel
 from serieux import deserialize
 
-from sarc.core.models.users import Affiliation, Credentials
+from sarc.core.models.users import Credentials
+from sarc.core.models.validators import ValidField
 
 
 # Any value set to None is considered to mean "unknown"
@@ -13,21 +14,21 @@ class UserMatch(BaseModel):
     display_name: str | None = None
     email: str | None = None
 
-    # this is per domain, not per cluster
-    associated_accounts: dict[str, list[Credentials]]
-
-    affiliations: list[Affiliation] | None
-
-    # The strings must be matching_ids from the plugin
-    supervisor: str | None
-    co_supervisors: list[str] | None
-
-    github_username: str | None
-    google_scholar_profile: str | None
-
+    original_plugin: str
     matching_id: str
     # If the plugins gets an id that works with another plugin, it can be stored here.
     known_matches: dict[str, str]
+
+    member_type: ValidField[str] | None
+    # this is per domain, not per cluster
+    associated_accounts: dict[str, Credentials]
+
+    # The strings must be matching_ids from the plugin
+    supervisor: ValidField[str] | None
+    co_supervisors: ValidField[list[str]] | None
+
+    github_username: ValidField[str] | None
+    google_scholar_profile: ValidField[str] | None
 
 
 # plugins are run in the order they are defined in the config file and the first plugin to define a value wins.
@@ -56,30 +57,6 @@ def get_user_scraper(name: str) -> UserScraper:
     return val.load()
 
 
-def _fix_ids(scraper_name: str, userm: UserMatch) -> None:
-    """
-    Fix ups ids by prepending the scraper_name to them to make them unique
-    """
-    userm.matching_id = f"{scraper_name}:{userm.matching_id}"
-    if userm.supervisor is not None:
-        userm.supervisor = f"{scraper_name}:{userm.supervisor}"
-    if userm.co_supervisors is not None:
-        userm.co_supervisors = [
-            f"{scraper_name}:{co_sup}" for co_sup in userm.co_supervisors
-        ]
-
-
-def _find_pos(scraper_names: Iterable[str], matching_id: str) -> int:
-    """
-    Find the position of a scraper in the scraper list based on a matching_id.
-    """
-    scraper_name = matching_id.split(":", 1)[0]
-    for i, name in enumerate(scraper_names):
-        if name == scraper_name:
-            return i
-    raise ValueError("Invalid inputs: scraper not in list")
-
-
 def update_user_match(*, value: UserMatch, update: UserMatch) -> None:
     """
     Fills in any missing information in value with the data in update.
@@ -90,24 +67,28 @@ def update_user_match(*, value: UserMatch, update: UserMatch) -> None:
     if value.email is None:
         value.email = update.email
 
+    # Add the matching ids of the new usermatch to make sure that we have all the ids that this user is known under.
+    name, id = update.matching_id.split(":", maxsplit=1)
+    if name in value.known_matches:
+        assert value.known_matches[name] == id
+    else:
+        value.known_matches[name] = id
+
+    # TODO: complete this.
+
     if value.supervisor is None:
         value.supervisor = update.supervisor
 
     if value.co_supervisors is None:
         value.co_supervisors = update.co_supervisors
     elif update.co_supervisors is not None:
-        value.co_supervisors.extend(update.co_supervisors)
+        value.co_supervisors.merge_with(update.co_supervisors)
 
     for domain, credentials in update.associated_accounts.items():
         if domain not in value.associated_accounts:
             value.associated_accounts[domain] = credentials
-
-    # Add the matching id of the new usermatch to make sure that we have all the ids that this user is known under.
-    name, id = update.matching_id.split(":", maxsplit=1)
-    if name in value.known_matches:
-        assert value.known_matches[name] == id
-    else:
-        value.known_matches[name] = id
+        else:
+            value.associated_accounts[domain].merge_with(credentials)
 
 
 def scrape_users(scrapers: list[tuple[str, Any]]) -> Iterable[UserMatch]:
@@ -132,26 +113,26 @@ def scrape_users(scrapers: list[tuple[str, Any]]) -> Iterable[UserMatch]:
     # TODO: save the raw data for cache purposes
 
     # UserMatches, referenced by plugin name and matching id
-    user_refs: dict[str, UserMatch] = {}
+    user_refs: dict[tuple[str, str], UserMatch] = {}
     for scraper_name, (rdata, config) in raw_data.items():
         for userm in scraper.update_user_data(config, rdata):
-            _fix_ids(scraper_name, userm)
-            prev_userm = user_refs.get(userm.matching_id, None)
+            userm.original_plugin = scraper_name
+            key = (userm.original_plugin, userm.matching_id)
+            prev_userm = user_refs.get(key, None)
             if prev_userm is None:
-                user_refs[userm.matching_id] = userm
+                user_refs[key] = userm
             else:
                 update_user_match(value=prev_userm, update=userm)
-                user_refs[userm.matching_id] = userm
                 userm = prev_userm
             for name, id in userm.known_matches.items():
-                key = f"{name}:{id}"
+                key = (name, id)
                 old_userm = user_refs.get(key, None)
                 if old_userm is None:
                     user_refs[key] = userm
                 elif prev_userm is None:
                     # If there was no match using the main matching ID, but we found one with the alternates, treat that as the main one.
                     update_user_match(value=old_userm, update=userm)
-                    user_refs[userm.matching_id] = old_userm
+                    user_refs[(userm.original_plugin, userm.matching_id)] = old_userm
                     prev_userm = old_userm
                     userm = old_userm
                 elif prev_userm is old_userm:
@@ -160,12 +141,9 @@ def scrape_users(scrapers: list[tuple[str, Any]]) -> Iterable[UserMatch]:
                     pass
                 else:
                     # We found two matches that are not the same entry.  Order them by plugin name according to the input list and merge them
-                    old_pos = _find_pos(
-                        (name for name, _ in scrapers), old_userm.matching_id
-                    )
-                    prev_pos = _find_pos(
-                        (name for name, _ in scrapers), prev_userm.matching_id
-                    )
+                    scraper_names = list(name for name, _ in scrapers)
+                    old_pos = scraper_names.index(old_userm.original_plugin)
+                    prev_pos = scraper_names.index(prev_userm.original_plugin)
                     if old_pos < prev_pos:
                         update_user_match(value=old_userm, update=prev_userm)
                         final_userm = old_userm
@@ -173,11 +151,14 @@ def scrape_users(scrapers: list[tuple[str, Any]]) -> Iterable[UserMatch]:
                         update_user_match(value=prev_userm, update=old_userm)
                         final_userm = prev_userm
                     # Update all references to the same UserMatch struct
+                    old_userm = final_userm
+                    prev_userm = final_userm
+                    userm = final_userm
                     for name, id in final_userm.known_matches.items():
-                        user_refs[f"{name}:{id}"] = final_userm
+                        user_refs[(name, id)] = final_userm
 
-    for id, umatch in user_refs.items():
-        if umatch.matching_id != id:
+    for (name, id), umatch in user_refs.items():
+        if umatch.original_plugin != name:
             # We only want to handle "primary" entries to avoid duplication
             continue
         yield umatch
