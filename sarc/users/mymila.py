@@ -1,128 +1,301 @@
-from datetime import timedelta
-from typing import IO, Any
+"""
+This is a plugin to read user data from MyMila
 
+A MyMila entry contains the following fields:
+
+- Affiliated_university
+- Affiliation_type
+- Alliance-DRAC_account
+- Co-Supervisor_Membership_Type
+- Co-Supervisor__MEMBER_NAME_
+- Co-Supervisor__MEMBER_NUM_
+- Department_affiliated
+- End_date_of_academic_nomination
+- End_date_of_studies
+- End_date_of_visit-internship
+- Faculty_affiliated
+- First_Name
+- GitHub_username
+- Google_Scholar_profile
+- Last_Name
+- MILA_Email
+- Membership_Type
+- Mila_Number
+- Preferred_First_Name
+- Profile_Type
+- Start_Date_with_MILA
+- Start_date_of_academic_nomination
+- Start_date_of_studies
+- Start_date_of_visit-internship
+- End_Date_with_MILA
+- Status
+- Supervisor_Principal_Membership_Type
+- Supervisor_Principal__MEMBER_NAME_
+- Supervisor_Principal__MEMBER_NUM_
+- internal_id
+- Co-Supervisor_CCAI_Chair_CIFAR
+- Supervisor_Principal_CCAI_Chair_CIFAR
+- CCAI_Chair_CIFAR
+- _MEMBER_NUM_
+"""
+
+#
+# Requirements
+#
+
+from attr import dataclass
+from azure.identity import ClientSecretCredential
+from itertools import chain, repeat
+from pydantic import BaseModel
+from typing import Sequence
+
+import logging
 import pandas as pd
+import struct
 
-from sarc.cache import CachePolicy, FormatterProto, with_cache
-from sarc.config import Config, MyMilaConfig
+from sarc.core.scraping.users import UserMatch, UserScraper, _builtin_scrapers
 
-START_DATE_KEY = "Start Date with MILA"
-END_DATE_KEY = "End Date with MILA"
+logger = logging.getLogger(__name__)
 
 
-class CSV_formatter(FormatterProto[pd.DataFrame]):
-    read_flags = "r"
-    write_flags = "w"
+#
+# Data models
+#
 
-    @staticmethod
-    def load(fp: IO[Any]) -> pd.DataFrame:
-        return pd.read_csv(fp.name)
+class Affiliation(BaseModel):
+    """
+    Data related to the affiliation of a user
+    from MyMila
+    """
+    type: str | None # Affiliation_type
+    university: str # Affiliated_university
+    faculty: str # Faculty_affiliated
+    department: str # Department_affiliated
 
-    @staticmethod
-    def dump(obj: pd.DataFrame, fp: IO[Any]):
-        raise NotImplementedError("Cannot dump mymila CSV cache yet.")
-        # obj.to_csv(fp.name)
+class Accounts(BaseModel):
+    """
+    Third parties accounts of the user
+    """
+    drac_account: str | None # Alliance-DRAC_account
+    github_username: str | None # GitHub_username
+    google_scholar_profile: str | None # Google_Scholar_profile
+
+class Supervision(BaseModel):
+    """
+    Supervisor and co-supervisor of the user
+    """
+    supervisor_member_num: float # Supervisor_Principal__MEMBER_NUM_
+    co_supervisor_member_num: float # Co-Supervisor__MEMBER_NUM_
+
+class TimePeriod(BaseModel):
+    """
+    """
+    start: str | None
+    end: str | None
+
+class Status(BaseModel):
+    status: str # Status
+    profile_type: str # Profile_Type
+    membership_type: str # Membership_Type
+    ccai_chair_cifar: str # CCAI_Chair_CIFAR
+
+    academic_nomination_dates: TimePeriod # Start_date_of_academic_nomination and End_date_of_academic_nomination
+    studies_dates: TimePeriod # Start_date_of_studies and End_date_of_studies
+    visit_internship_dates: TimePeriod # Start_date_of_visit_internship and End_date_of_visit_internship
+    mila_dates: TimePeriod # Start_Date_with_MILA and End_Date_with_MILA
+
+
+class MyMilaUser(BaseModel):
+    """
+    User data from MyMila
+    """
+    member_num: float # _MEMBER_NUM_
+    mymila_id: int # internal_id
+    mila_number: str | None # Mila_Number
+
+    first_name: str # Preferred_First_Name or First_Name if None
+    last_name: str # Last_Name
+    mila_email: str | None # MILA_Email
+
+    status: Status
+    affiliation: Affiliation
+    supervision: Supervision
+    accounts: Accounts
+
+    def to_common_user(self):
+        """
+        This function is used to convert a MyMilaUser to a common
+        User. This is done in order to be able to merge the data of
+        different sources
+        """
+        # TODO: once a common class User has been defined
+        pass
+
+
+#
+# Configuration
+# 
+
+@dataclass
+class MyMilaConfig:
+    tenant_id: str
+    client_id: str
+    client_secret: str
+    sql_endpoint: str
+    database: str = "wh_sarc"
+
+
+#
+# Scraper
+#
+class MyMilaScraper(UserScraper[MyMilaConfig]):
+    """
+
+    """
+    config_type = MyMilaConfig
+
+    def get_user_data(self, config: MyMilaConfig) -> str:
+        """
+        Get the list of users from the MyMila data source
+        Parameters:
+            config  Configuration used to access MyMila data
+
+        Returns
+            A list of MyMilaUsers which describe the user retrieved
+            from MyMila
+        """
+        # TODO: once the MyMilaUser.to_common_user will be defined,
+        #       we will be able to return a list of common users instead 
+        return _query_mymila(config)
+
+    def update_user_data(self, config: T, data: str) -> Iterable[UserMatch]: ...
+
+
+
+
+
+_builtin_scrapers["mymila"] = MyMilaScraper()
+
+
 
 
 @with_cache(
     subdirectory="mymila",
-    formatter=CSV_formatter,
-    key=lambda *_, **__: "mymila_export_{time}.csv",
+    key=lambda cfg: "mymila_export_{time}.json",
     validity=timedelta(days=120),
-)  # type: ignore
-def query_mymila_csv(cfg: MyMilaConfig | None) -> pd.DataFrame:
-    raise NotImplementedError("Cannot read from mymila yet.")
+)
+def _query_mymila(cfg: MyMilaConfig):
+    """
+    Contact MyMila in order to retrieve users data,
+    then return these data as MyMilaUser elements.
+    """
+    # Retrieve MyMila data
+    credential = ClientSecretCredential(
+        client_id=cfg.client_id,
+        tenant_id=cfg.tenant_id,
+        client_secret=cfg.client_secret,
+    )
+    connection_string = f"Driver={{ODBC Driver 18 for SQL Server}};Server={cfg.sql_endpoint},1433;Database={cfg.database};Encrypt=Yes;TrustServerCertificate=No"
+    token_object = credential.get_token("https://database.windows.net/.default")
+    token_as_bytes = token_object.token.encode("UTF-8")
+    encoded_bytes = bytes(chain.from_iterable(zip(token_as_bytes, repeat(0))))
+    token_bytes = struct.pack("<i", len(encoded_bytes)) + encoded_bytes
+    attrs_before: dict[int, int | bytes | bytearray | str | Sequence[str]] = {
+        1256: token_bytes
+    }
+
+    connection = pyodbc.connect(connection_string, attrs_before=attrs_before)
+    cursor = connection.cursor()
+    cursor.execute("SELECT * FROM MyMila_Extract_Etudiants_2")
+    records = cursor.fetchall()
+
+    # Convert these data into a pandas Dataframe
+    headers = [i[0] for i in cursor.description]
+    df = pd.DataFrame(records, columns=headers)
+
+    # Return the data converted as MyMilUser elements
+    return [_to_entry(s) for s in df]
 
 
-def query_mymila(
-    cfg: MyMilaConfig | None, cache_policy: CachePolicy = CachePolicy.use
-) -> pd.DataFrame:
-    return pd.DataFrame(query_mymila_csv(cfg, cache_policy=cache_policy))
 
+def _to_entry(s: pd.Series) -> MyMilaUser:
+    """
+    Convert user data retrieved from MyMila and stored as a pandas dataframe
+    to MyMilaUser entries
+    """
 
-def to_records(df: pd.DataFrame) -> list[dict]:
-    # NOTE: Select columns that should be used from MyMila.
-    wanted_cols = [
-        "mila_email_username",
-        "mila_cluster_username",
-        "mila_cluster_uid",
-        "mila_cluster_gid",
-        "display_name",
-        "supervisor",
-        "co_supervisor",
-        "status",
-        "mymila_start",
-        "mymila_end",
-    ]
+    # Personal data
+    first_name = s["Preferred_First_Name"]
+    if first_name is None:
+        first_name = s["First_Name"]
 
-    selected = [col for col in wanted_cols if col in df.columns]
+    # Status
+    status = Status(
+        status = s["Status"],
+        profile_type = s["Profile_Type"],
+        membership_type = s["Membership_Type"],
+        ccai_chair_cifar = s["CCAI_Chair_CIFAR"],
 
-    records = df[selected].to_dict("records")
+        academic_nomination_dates = TimePeriod(
+            start = s["Start_date_of_academic_nomination"],
+            end = s["End_date_of_academic_nomination"]
+        ),
 
-    # Pandas really likes NaT (Not a Time)
-    # but mongo does not
-    for record in records:
-        end_date = record.get("mymila_end", None)
-        if pd.isna(end_date):
-            end_date = None
-        record["mymila_end"] = end_date
+        studies_dates = TimePeriod(
+            start = s["Start_date_of_studies"],
+            end = s["End_date_of_studies"]
+        ),
 
-    return records
+        visit_internship_dates = TimePeriod(
+            start = s["Start_date_of_visit_internship"],
+            end = s["End_date_of_visit_internship"]
+        ),
 
-
-def combine(LD_users: list[dict], mymila_data: pd.DataFrame) -> list[dict]:
-    if not mymila_data.empty:
-        df_users = pd.DataFrame(LD_users)
-        # Set the empty values to NA
-        df_users = df_users.where((pd.notnull(df_users)) & (df_users != ""), pd.NA)
-
-        # Preprocess
-        mymila_data = mymila_data.rename(columns={"MILA Email": "mila_email_username"})
-        # Set the empty values to NA
-        mymila_data = mymila_data.where(
-            (pd.notnull(mymila_data)) & (mymila_data != ""), pd.NA
+        mila_dates = TimePeriod(
+            start = s["Start_Date_with_MILA"],
+            end = s["End_Date_with_MILA"]
         )
+    )
 
-        if LD_users:
-            df = pd.merge(df_users, mymila_data, on="mila_email_username", how="outer")
+    # Affiliation
+    affiliation = Affiliation(
+        type=s["Affiliation_type"],
+        faculty = s["Faculty_affiliated"],
+        university=s["Affiliated_university"],
+        departement=s["Department_affiliated"]
+    )
 
-            # mymila value should take precedence here
-            #   Take the mymila columns and fill it with ldap if missing
-            def mergecol(mymila_col, ldap_col):
-                df[mymila_col] = df[mymila_col].fillna(df[ldap_col])
+    # Supervision
+    supervision = Supervision(
+        supervisor=s["Supervisor_Principal__MEMBER_NUM_"] | None,
+        co_supervisor=s["Co-Supervisor__MEMBER_NUM_"] | None
+    )
 
-            mergecol("Status", "status")
-            mergecol("Supervisor Principal", "supervisor")
-            mergecol("Co-Supervisor", "co_supervisor")
+    # Accounts
+    accounts = Accounts(
+        drac_account=s["Alliance-DRAC_account"] | None,
+        github_username=s["GitHub_username"] | None,
+        google_scholar_profile=s["Google_Scholar_profile"] | None
+    )
 
-        else:
-            df = mymila_data
+    # Return the resulting MyMilaUser
+    return MyMilaUser(
+        # Identifiers
+        member_num = s["_MEMBER_NUM_"],
+        mymila_id = s["internal_id"],
+        mila_number = s["Mila_Number"],
 
-        # Use mymila field
-        df = df.rename(
-            columns={
-                "Status": "status",
-                "Supervisor Principal": "supervisor",
-                "Co-Supervisor": "co_supervisor",
-            }
-        )
+        # Personal data
+        first_name = first_name,
+        last_name = s["Last_Name"],
+        mila_email=s["MILA_Email"],
 
-        # Create the new display name
-        df["display_name"] = df["Preferred First Name"] + " " + df["Last Name"]
-
-        # Coerce datetime.date into datetime because bson does not understand date
-        def convert_datetime(col, origin):
-            df[col] = pd.to_datetime(df[origin], errors="ignore")
-
-        convert_datetime("mymila_start", START_DATE_KEY)
-        convert_datetime("mymila_end", END_DATE_KEY)
-
-        LD_users = to_records(df)
-    return LD_users
-
-
-def fetch_mymila(
-    cfg: Config, LD_users: list[dict], cache_policy: CachePolicy = CachePolicy.use
-) -> list[dict]:
-    mymila_data = query_mymila(cfg.mymila, cache_policy=cache_policy)
-    return combine(LD_users, mymila_data)
+        # Status
+        status = status,
+        # Affiliation
+        affiliation = affiliation | None,
+        # Supervision
+        supervision = supervision | None,
+        # Accounts
+        accounts = accounts
+    )
