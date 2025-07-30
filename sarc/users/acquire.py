@@ -23,10 +23,6 @@ from sarc.traces import using_trace
 # from sarc.users.mymila import fetch_mymila
 from sarc.users.read_mila_ldap import fetch_ldap
 from sarc.users.revision import commit_matches_to_database
-from sarc.users.users_exceptions import (
-    apply_users_delegation_exceptions,
-    apply_users_supervisor_exceptions,
-)
 
 logger = logging.getLogger(__name__)
 

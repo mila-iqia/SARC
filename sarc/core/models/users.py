@@ -1,15 +1,33 @@
+from enum import Enum
 from uuid import uuid4
 
 from pydantic import UUID4, BaseModel, Field
 
-from .validators import datetime_utc
+from .validators import ValidField
 
 
-class Credentials(BaseModel):
-    username: str
-    uid: int
-    gid: int
-    active: bool
+# Can the username change (DRAC: no, mila: )
+class Credentials(ValidField[str]):
+    pass
+
+
+# do we want to do this?
+class AffiliationType(Enum):
+    MASTER_STUDENT = "master"
+    PHD_STUDENT = "phd"
+    PROFESSOR = "prof"
+    STAFF = "staff"
+    INTERN = "intern"
+
+
+class _Affiliation(BaseModel):
+    university: str
+    type: AffiliationType
+    departement: str
+
+
+class Affiliations(ValidField[_Affiliation]):
+    pass
 
 
 class UserData(BaseModel):
@@ -21,16 +39,18 @@ class UserData(BaseModel):
     connection_type: str
 
     # this is per domain, not per cluster
-    associated_accounts: dict[str, list[Credentials]]
+    associated_accounts: dict[str, Credentials]
+
+    affiliations: Affiliations
 
     supervisor: UUID4 | None
     co_supervisors: list[UUID4] | None
 
+    github_username: str | None
+    google_scholar_profile: str | None
+
     # Each user plugin can specify a matching ID which will be stored here.
-    matching_id: dict[str, str]
+    matching_ids: dict[str, str]
 
     # voir avec Xavier pour ça
     # teacher_delegation
-
-    record_start: datetime_utc | None
-    record_end: datetime_utc | None
