@@ -5,8 +5,7 @@ from typing import Any, Protocol, Type
 from pydantic import BaseModel
 from serieux import deserialize
 
-from sarc.core.models.users import Credentials
-from sarc.core.models.validators import datetime_utc
+from sarc.core.models.users import Affiliation, Credentials
 
 
 # Any value set to None is considered to mean "unknown"
@@ -17,13 +16,14 @@ class UserMatch(BaseModel):
     # this is per domain, not per cluster
     associated_accounts: dict[str, list[Credentials]]
 
+    affiliations: list[Affiliation] | None
+
     # The strings must be matching_ids from the plugin
     supervisor: str | None
     co_supervisors: list[str] | None
 
-    # when set by the plugin it indicates the start and end of the validity of the data
-    record_start: datetime_utc | None
-    record_end: datetime_utc | None
+    github_username: str | None
+    google_scholar_profile: str | None
 
     matching_id: str
     # If the plugins gets an id that works with another plugin, it can be stored here.
@@ -97,12 +97,6 @@ def update_user_match(*, value: UserMatch, update: UserMatch) -> None:
         value.co_supervisors = update.co_supervisors
     elif update.co_supervisors is not None:
         value.co_supervisors.extend(update.co_supervisors)
-
-    if value.record_start is None:
-        value.record_start = update.record_start
-
-    if value.record_end is None:
-        value.record_end = update.record_end
 
     for domain, credentials in update.associated_accounts.items():
         if domain not in value.associated_accounts:

@@ -129,18 +129,18 @@ class MilaLDAPScraper(UserScraper[MilaLDAPConfig]):
                     "mila": [
                         Credentials(
                             username=user_raw["posixUid"][0],
-                            uid=int(user_raw["uidNumber"][0]),
-                            gid=int(user_raw["gidNumber"][0]),
-                            active=user_raw["suspended"][0] == "false",
+                            valid_start=None,
+                            valid_end=None,
                         )
                     ]
                 },
+                affiliations=None,
                 supervisor=None,
                 co_supervisors=None,
+                github_username=None,
+                google_scholar_profile=None,
                 matching_id=user_raw["mail"][0],
                 known_matches={},
-                record_start=None,
-                record_end=None,
             )
 
 
