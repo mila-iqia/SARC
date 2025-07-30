@@ -6,51 +6,48 @@ from pydantic import UUID4, BaseModel, Field
 from .validators import ValidField
 
 
-# Can the username change (DRAC: no, mila: )
 class Credentials(ValidField[str]):
     pass
 
 
-# do we want to do this?
-class AffiliationType(Enum):
+class MemberType(Enum):
     MASTER_STUDENT = "master"
     PHD_STUDENT = "phd"
+    POSTDOC = "postdoc"
     PROFESSOR = "prof"
     STAFF = "staff"
     INTERN = "intern"
-
-
-class _Affiliation(BaseModel):
-    university: str
-    type: AffiliationType
-    departement: str
-
-
-class Affiliations(ValidField[_Affiliation]):
-    pass
+    # There are probably some missing status
 
 
 class UserData(BaseModel):
-    uuid: UUID4 = Field(default_factory=lambda: uuid4())
+    # This is the base data for a user. Except for the uuid, it can change but
+    # we are not interested in tracking past values for this.
+    uuid: UUID4 = Field(default_factory=lambda: uuid4(), frozen=True)
     display_name: str
     email: str
 
     connection_id: str
     connection_type: str
 
-    # this is per domain, not per cluster
-    associated_accounts: dict[str, Credentials]
-
-    affiliations: Affiliations
-
-    supervisor: UUID4 | None
-    co_supervisors: list[UUID4] | None
-
-    github_username: str | None
-    google_scholar_profile: str | None
-
     # Each user plugin can specify a matching ID which will be stored here.
     matching_ids: dict[str, str]
 
-    # voir avec Xavier pour ça
-    # teacher_delegation
+    # Below is the tracked data for a user. Each field or value tracks changes
+    # and validity periods. Insert new values with field.insert(value, [start,
+    # end]) and get the values with .get_value([date]). Do not modify the values
+    # in the fields without going through those methods. See the ValidField
+    # documentation for more details.
+
+    member_type: ValidField[MemberType] = Field(default_factory=ValidField[MemberType])
+
+    # this is per domain (i.e. "drac"), not per cluster
+    associated_accounts: dict[str, Credentials]
+
+    supervisor: ValidField[UUID4] = Field(default_factory=ValidField[UUID4])
+    co_supervisors: ValidField[list[UUID4]] = Field(
+        default_factory=ValidField[list[UUID4]]
+    )
+
+    github_username: ValidField[str] = Field(default_factory=ValidField[str])
+    google_scholar_profile: ValidField[str] = Field(default_factory=ValidField[str])

@@ -122,18 +122,12 @@ class MilaLDAPScraper(UserScraper[MilaLDAPConfig]):
         """
 
         for user_raw in json.loads(data):
+            creds = Credentials()
+            creds.insert(user_raw["posixUid"][0])
             yield UserMatch(
                 display_name=user_raw["displayName"][0],
                 email=user_raw["mail"][0],
-                associated_accounts={
-                    "mila": [
-                        Credentials(
-                            username=user_raw["posixUid"][0],
-                            valid_start=None,
-                            valid_end=None,
-                        )
-                    ]
-                },
+                associated_accounts={"mila": creds},
                 affiliations=None,
                 supervisor=None,
                 co_supervisors=None,
