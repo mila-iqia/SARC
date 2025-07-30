@@ -124,7 +124,7 @@ class AcquireJobs:
                 return -1
         elif self.time_from or self.time_to:
             if not self.time_from or not self.time_to:
-                logger.error("Both parameters needed: --time_from, --time_to")
+                logger.error("Both parameters required: --time_from, --time_to")
                 return -1
             time_from = _str_to_extended_dt(self.time_from)
             time_to = _str_to_extended_dt(self.time_to)

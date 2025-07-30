@@ -141,7 +141,8 @@ class AcquirePrometheus:
             # pylint: disable=broad-exception-caught
             except Exception as e:
                 logger.error(
-                    f"Error while acquiring Prometheus metrics on {cluster_name}: {type(e).__name__}: {e} ; skipping cluster."
+                    f"Error while acquiring Prometheus metrics on {cluster_name}: "
+                    f"{type(e).__name__}: {e} ; skipping cluster."
                 )
                 # Continue to next cluster.
                 continue

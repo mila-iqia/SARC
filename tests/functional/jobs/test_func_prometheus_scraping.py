@@ -106,6 +106,7 @@ def test_get_gpu_type(
     # Test `acquire jobs` with node->gpu available
     # --------------------------------------------
     # node->gpu is prior to sacct data
+
     # Save slurm config in cache.
     _save_slurm_conf(
         "raisin",

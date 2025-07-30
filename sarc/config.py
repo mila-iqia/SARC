@@ -109,7 +109,7 @@ class ClusterConfig:
         """
         # Collect harmonized names for given nodes
         # NB: If `nodes` is empty, we harmonize using "",
-        # so that harmonization function will check __DEFAULT__
+        # so that harmonization function will check __DEFAULTS__
         # harmonized names if available.
         harmonized_gpu_names = {
             self.harmonize_gpu(nodename, gpu_type) for nodename in (nodes or [""])
