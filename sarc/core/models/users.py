@@ -42,7 +42,7 @@ class UserData(BaseModel):
     member_type: ValidField[MemberType] = Field(default_factory=ValidField[MemberType])
 
     # this is per domain (i.e. "drac"), not per cluster
-    associated_accounts: dict[str, Credentials]
+    associated_accounts: dict[str, Credentials] = Field(default_factory=dict)
 
     supervisor: ValidField[UUID4] = Field(default_factory=ValidField[UUID4])
     co_supervisors: ValidField[list[UUID4]] = Field(
