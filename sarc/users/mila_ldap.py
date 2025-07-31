@@ -129,13 +129,7 @@ class MilaLDAPScraper(UserScraper[MilaLDAPConfig]):
                 email=user_raw["mail"][0],
                 original_plugin="mila_ldap",
                 matching_id=user_raw["mail"][0],
-                known_matches={},
                 associated_accounts={"mila": creds},
-                member_type=None,
-                supervisor=None,
-                co_supervisors=None,
-                github_username=None,
-                google_scholar_profile=None,
             )
 
 

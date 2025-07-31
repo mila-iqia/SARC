@@ -2,10 +2,10 @@ from collections.abc import Iterable
 from importlib.metadata import entry_points
 from typing import Any, Protocol, Type
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from serieux import deserialize
 
-from sarc.core.models.users import Credentials
+from sarc.core.models.users import Credentials, MemberType
 from sarc.core.models.validators import ValidField
 
 
@@ -17,18 +17,18 @@ class UserMatch(BaseModel):
     original_plugin: str
     matching_id: str
     # If the plugins gets an id that works with another plugin, it can be stored here.
-    known_matches: dict[str, str]
+    known_matches: dict[str, str] = Field(default_factory=dict)
 
-    member_type: ValidField[str] | None
+    member_type: ValidField[MemberType] = Field(default_factory=ValidField[MemberType])
     # this is per domain, not per cluster
     associated_accounts: dict[str, Credentials]
 
     # The strings must be matching_ids from the plugin
-    supervisor: ValidField[str] | None
-    co_supervisors: ValidField[list[str]] | None
+    supervisor: ValidField[str] = Field(default_factory=ValidField[str])
+    co_supervisors: ValidField[list[str]] = Field(default_factory=ValidField[list[str]])
 
-    github_username: ValidField[str] | None
-    google_scholar_profile: ValidField[str] | None
+    github_username: ValidField[str] = Field(default_factory=ValidField[str])
+    google_scholar_profile: ValidField[str] = Field(default_factory=ValidField[str])
 
 
 # plugins are run in the order they are defined in the config file and the first plugin to define a value wins.
@@ -74,21 +74,19 @@ def update_user_match(*, value: UserMatch, update: UserMatch) -> None:
     else:
         value.known_matches[name] = id
 
-    # TODO: complete this.
-
-    if value.supervisor is None:
-        value.supervisor = update.supervisor
-
-    if value.co_supervisors is None:
-        value.co_supervisors = update.co_supervisors
-    elif update.co_supervisors is not None:
-        value.co_supervisors.merge_with(update.co_supervisors)
-
     for domain, credentials in update.associated_accounts.items():
         if domain not in value.associated_accounts:
             value.associated_accounts[domain] = credentials
         else:
-            value.associated_accounts[domain].merge_with(credentials)
+            value.associated_accounts[domain].merge_with(credentials, truncate=True)
+
+    value.supervisor.merge_with(update.supervisor, truncate=True)
+    value.co_supervisors.merge_with(update.co_supervisors, truncate=True)
+
+    value.github_username.merge_with(update.github_username, truncate=True)
+    value.google_scholar_profile.merge_with(
+        update.google_scholar_profile, truncate=True
+    )
 
 
 def scrape_users(scrapers: list[tuple[str, Any]]) -> Iterable[UserMatch]:
