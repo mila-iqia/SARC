@@ -44,7 +44,7 @@ class UserScraper[T](Protocol):
 
 
 _builtin_scrapers: dict[str, UserScraper] = dict()
-_diskusage_scrapers = entry_points(group="sarc.user_scraper")
+_user_scrapers = entry_points(group="sarc.user_scraper")
 
 
 def get_user_scraper(name: str) -> UserScraper:
@@ -53,7 +53,7 @@ def get_user_scraper(name: str) -> UserScraper:
         return _builtin_scrapers[name]
     except KeyError:
         pass
-    val = _diskusage_scrapers[name]
+    val = _user_scrapers[name]
     return val.load()
 
 
