@@ -17,7 +17,7 @@ class MemberType(Enum):
     PROFESSOR = "prof"
     STAFF = "staff"
     INTERN = "intern"
-    # There are probably some missing status
+    # There are probably some missing types so feel free to add them
 
 
 class UserData(BaseModel):
