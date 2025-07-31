@@ -109,7 +109,7 @@ class MilaLDAPScraper(UserScraper[MilaLDAPConfig]):
             )
         )
 
-    def update_user_data(
+    def parse_user_data(
         self, _config: MilaLDAPConfig, data: str
     ) -> Iterable[UserMatch]:
         """
@@ -127,14 +127,15 @@ class MilaLDAPScraper(UserScraper[MilaLDAPConfig]):
             yield UserMatch(
                 display_name=user_raw["displayName"][0],
                 email=user_raw["mail"][0],
+                original_plugin="mila_ldap",
+                matching_id=user_raw["mail"][0],
+                known_matches={},
                 associated_accounts={"mila": creds},
-                affiliations=None,
+                member_type=None,
                 supervisor=None,
                 co_supervisors=None,
                 github_username=None,
                 google_scholar_profile=None,
-                matching_id=user_raw["mail"][0],
-                known_matches={},
             )
 
 
