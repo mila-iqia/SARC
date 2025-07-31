@@ -30,6 +30,16 @@ class UserMatch(BaseModel):
     github_username: ValidField[str] = Field(default_factory=ValidField[str])
     google_scholar_profile: ValidField[str] = Field(default_factory=ValidField[str])
 
+    def __eq__(self, other: object) -> bool:
+        return (
+            isinstance(other, UserMatch)
+            and self.original_plugin == other.original_plugin
+            and self.matching_id == other.matching_id
+        )
+
+    def __hash__(self) -> int:
+        return hash((self.original_plugin, self.matching_id))
+
 
 # plugins are run in the order they are defined in the config file and the first plugin to define a value wins.
 class UserScraper[T](Protocol):
@@ -67,11 +77,15 @@ def update_user_match(*, value: UserMatch, update: UserMatch) -> None:
     if value.email is None:
         value.email = update.email
 
-    # Add the matching ids of the new usermatch to make sure that we have all the ids that this user is known under.
-    name, id = update.matching_id.split(":", maxsplit=1)
-    if name in value.known_matches:
-        assert value.known_matches[name] == id
-    else:
+    # Add the matching ids of the new usermatch to make sure that we have all
+    # the ids that this user is known under.
+    assert (
+        value.known_matches.get(update.original_plugin, update.matching_id)
+        == update.matching_id
+    )
+    value.known_matches[update.original_plugin] = update.matching_id
+    for name, id in update.known_matches.items():
+        assert value.known_matches.get(name, id) == id
         value.known_matches[name] = id
 
     for domain, credentials in update.associated_accounts.items():
@@ -113,50 +127,38 @@ def scrape_users(scrapers: list[tuple[str, Any]]) -> Iterable[UserMatch]:
     # UserMatches, referenced by plugin name and matching id
     user_refs: dict[tuple[str, str], UserMatch] = {}
     for scraper_name, (rdata, config) in raw_data.items():
-        for userm in scraper.update_user_data(config, rdata):
+        for userm in scraper.parse_user_data(config, rdata):
             userm.original_plugin = scraper_name
+            # First, get all the userm that matche with this one.
             key = (userm.original_plugin, userm.matching_id)
-            prev_userm = user_refs.get(key, None)
-            if prev_userm is None:
-                user_refs[key] = userm
-            else:
-                update_user_match(value=prev_userm, update=userm)
-                userm = prev_userm
+            prev_userms: list[UserMatch] = [userm]
+            prev = user_refs.get(key, None)
+            if prev is not None:
+                prev_userms.append(prev)
             for name, id in userm.known_matches.items():
                 key = (name, id)
-                old_userm = user_refs.get(key, None)
-                if old_userm is None:
-                    user_refs[key] = userm
-                elif prev_userm is None:
-                    # If there was no match using the main matching ID, but we found one with the alternates, treat that as the main one.
-                    update_user_match(value=old_userm, update=userm)
-                    user_refs[(userm.original_plugin, userm.matching_id)] = old_userm
-                    prev_userm = old_userm
-                    userm = old_userm
-                elif prev_userm is old_userm:
-                    # If we just found another name for the same entry, then we don't need to do anything
-                    # The update was already done on prev_userm before.
-                    pass
-                else:
-                    # We found two matches that are not the same entry.  Order them by plugin name according to the input list and merge them
-                    scraper_names = list(name for name, _ in scrapers)
-                    old_pos = scraper_names.index(old_userm.original_plugin)
-                    prev_pos = scraper_names.index(prev_userm.original_plugin)
-                    if old_pos < prev_pos:
-                        update_user_match(value=old_userm, update=prev_userm)
-                        final_userm = old_userm
-                    else:
-                        update_user_match(value=prev_userm, update=old_userm)
-                        final_userm = prev_userm
-                    # Update all references to the same UserMatch struct
-                    old_userm = final_userm
-                    prev_userm = final_userm
-                    userm = final_userm
-                    for name, id in final_userm.known_matches.items():
-                        user_refs[(name, id)] = final_userm
+                prev = user_refs.get(key, None)
+                if prev is not None:
+                    prev_userms.append(prev)
+            # Second, filter out duplicates and sort the rest according to plugin rank
+            scraper_names = [name for name, _ in scrapers]
+            matching_userms = sorted(
+                set(prev_userms), key=lambda um: scraper_names.index(um.original_plugin)
+            )
+            # Third, merge everything into the oldest entry
+            oldest_userm = matching_userms.pop(0)
+            for newer_userm in matching_userms:
+                update_user_match(value=oldest_userm, update=newer_userm)
+            # Finally, update all references to point to the new merged UserMatch
+            user_refs[(oldest_userm.original_plugin, oldest_userm.matching_id)] = (
+                oldest_userm
+            )
+            for name, id in oldest_userm.known_matches.items():
+                user_refs[(name, id)] = oldest_userm
 
+    # Yield all "primary" UserMatches (those whose reference name match the
+    # original plugin name)
     for (name, id), umatch in user_refs.items():
         if umatch.original_plugin != name:
-            # We only want to handle "primary" entries to avoid duplication
             continue
         yield umatch
