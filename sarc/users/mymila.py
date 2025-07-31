@@ -45,6 +45,7 @@ A MyMila entry contains the following fields:
 
 from attr import dataclass
 from azure.identity import ClientSecretCredential
+from collections.abc import Iterable
 from itertools import chain, repeat
 from pydantic import BaseModel
 from typing import Sequence
@@ -53,74 +54,97 @@ import logging
 import pandas as pd
 import struct
 
+from sarc.core.models.users import Credentials
 from sarc.core.scraping.users import UserMatch, UserScraper, _builtin_scrapers
+
 
 logger = logging.getLogger(__name__)
 
 
 #
-# Data models
+# Plugin data models
 #
+
 
 class Affiliation(BaseModel):
     """
     Data related to the affiliation of a user
     from MyMila
     """
-    type: str | None # Affiliation_type
-    university: str # Affiliated_university
-    faculty: str # Faculty_affiliated
-    department: str # Department_affiliated
+
+    type: str | None  # Affiliation_type
+    university: str  # Affiliated_university
+    faculty: str  # Faculty_affiliated
+    department: str  # Department_affiliated
+
 
 class Accounts(BaseModel):
     """
     Third parties accounts of the user
     """
-    drac_account: str | None # Alliance-DRAC_account
-    github_username: str | None # GitHub_username
-    google_scholar_profile: str | None # Google_Scholar_profile
+
+    drac_account: str | None  # Alliance-DRAC_account
+    github_username: str | None  # GitHub_username
+    google_scholar_profile: str | None  # Google_Scholar_profile
+
 
 class Supervision(BaseModel):
     """
     Supervisor and co-supervisor of the user
     """
-    supervisor_member_num: float # Supervisor_Principal__MEMBER_NUM_
-    co_supervisor_member_num: float # Co-Supervisor__MEMBER_NUM_
+
+    supervisor_member_num: float  # Supervisor_Principal__MEMBER_NUM_
+    co_supervisor_member_num: float  # Co-Supervisor__MEMBER_NUM_
+
 
 class TimePeriod(BaseModel):
-    """
-    """
+    """ """
+
     start: str | None
     end: str | None
 
-class Status(BaseModel):
-    status: str # Status
-    profile_type: str # Profile_Type
-    membership_type: str # Membership_Type
-    ccai_chair_cifar: str # CCAI_Chair_CIFAR
 
-    academic_nomination_dates: TimePeriod # Start_date_of_academic_nomination and End_date_of_academic_nomination
-    studies_dates: TimePeriod # Start_date_of_studies and End_date_of_studies
-    visit_internship_dates: TimePeriod # Start_date_of_visit_internship and End_date_of_visit_internship
-    mila_dates: TimePeriod # Start_Date_with_MILA and End_Date_with_MILA
+class Status(BaseModel):
+    status: str  # Status
+    profile_type: str  # Profile_Type
+    membership_type: str  # Membership_Type
+    ccai_chair_cifar: str  # CCAI_Chair_CIFAR
+
+    academic_nomination_dates: TimePeriod  # Start_date_of_academic_nomination and End_date_of_academic_nomination
+    studies_dates: TimePeriod  # Start_date_of_studies and End_date_of_studies
+    visit_internship_dates: (
+        TimePeriod  # Start_date_of_visit_internship and End_date_of_visit_internship
+    )
+    mila_dates: TimePeriod  # Start_Date_with_MILA and End_Date_with_MILA
 
 
 class MyMilaUser(BaseModel):
     """
     User data from MyMila
-    """
-    member_num: float # _MEMBER_NUM_
-    mymila_id: int # internal_id
-    mila_number: str | None # Mila_Number
 
-    first_name: str # Preferred_First_Name or First_Name if None
-    last_name: str # Last_Name
-    mila_email: str | None # MILA_Email
+    The id used in this plugin is the parameter "member_num"
+    """
+
+    member_num: float  # _MEMBER_NUM_
+    mymila_id: int  # internal_id
+    mila_number: str | None  # Mila_Number
+
+    first_name: str  # Preferred_First_Name or First_Name if None
+    last_name: str  # Last_Name
+    mila_email: str | None  # MILA_Email
 
     status: Status
     affiliation: Affiliation
     supervision: Supervision
     accounts: Accounts
+
+    def get_display_name(self):
+        """
+        Return the preferred first name or first name, followed
+        by the name of the user
+        """
+
+        return f"{self.first_name} {self.last_name}"
 
     def to_common_user(self):
         """
@@ -133,8 +157,9 @@ class MyMilaUser(BaseModel):
 
 
 #
-# Configuration
-# 
+# Plugin configuration
+#
+
 
 @dataclass
 class MyMilaConfig:
@@ -146,12 +171,11 @@ class MyMilaConfig:
 
 
 #
-# Scraper
+# Plugin scraper
 #
 class MyMilaScraper(UserScraper[MyMilaConfig]):
-    """
+    """ """
 
-    """
     config_type = MyMilaConfig
 
     def get_user_data(self, config: MyMilaConfig) -> str:
@@ -165,18 +189,59 @@ class MyMilaScraper(UserScraper[MyMilaConfig]):
             from MyMila
         """
         # TODO: once the MyMilaUser.to_common_user will be defined,
-        #       we will be able to return a list of common users instead 
+        #       we will be able to return a list of common users instead
         return _query_mymila(config)
 
-    def update_user_data(self, config: T, data: str) -> Iterable[UserMatch]: ...
+    def update_user_data(self, config: MyMilaConfig, data: str) -> Iterable[UserMatch]:
+        """
 
+        Parameters:
+            config  Configuration of the MyMila scraper
+            data    String describing a list of users
 
+        Returns an iteration of UserMatch
+        """
 
+        for user in users:
+            yield UserMatch(
+                display_name=user.get_display_name(),
+                email=user.mila_email,
+                associated_accounts={
+                    "drac": [
+                        Credentials(
+                            username=user.accounts.drac_account,
+                            uid=None,  # TODO
+                            gid=None,  # TODO
+                            active=False,
+                        ),  # TODO
+                    ],
+                    "github": [
+                        Credentials(
+                            username=user.accounts.github_username,
+                            uid=None,  # TODO
+                            gid=None,  # TODO
+                            active=False,
+                        ),  # TODO
+                    ],
+                    "google_scholar": [
+                        Credentials(
+                            username=user.accounts.google_scholar_profile,
+                            uid=None,  # TODO
+                            gid=None,  # TODO
+                            active=False,
+                        ),  # TODO
+                    ],
+                },
+                supervisor=user.supervision.supervisor_member_num,
+                co_supervisor=user.supervision.co_supervisor_member_num,
+                record_start=None,  # TODO
+                record_end=None,  # TODO
+                matching_id=user.member_num,
+                known_matches={},  # TODO
+            )
 
 
 _builtin_scrapers["mymila"] = MyMilaScraper()
-
-
 
 
 @with_cache(
@@ -217,7 +282,6 @@ def _query_mymila(cfg: MyMilaConfig):
     return [_to_entry(s) for s in df]
 
 
-
 def _to_entry(s: pd.Series) -> MyMilaUser:
     """
     Convert user data retrieved from MyMila and stored as a pandas dataframe
@@ -231,71 +295,63 @@ def _to_entry(s: pd.Series) -> MyMilaUser:
 
     # Status
     status = Status(
-        status = s["Status"],
-        profile_type = s["Profile_Type"],
-        membership_type = s["Membership_Type"],
-        ccai_chair_cifar = s["CCAI_Chair_CIFAR"],
-
-        academic_nomination_dates = TimePeriod(
-            start = s["Start_date_of_academic_nomination"],
-            end = s["End_date_of_academic_nomination"]
+        status=s["Status"],
+        profile_type=s["Profile_Type"],
+        membership_type=s["Membership_Type"],
+        ccai_chair_cifar=s["CCAI_Chair_CIFAR"],
+        academic_nomination_dates=TimePeriod(
+            start=s["Start_date_of_academic_nomination"],
+            end=s["End_date_of_academic_nomination"],
         ),
-
-        studies_dates = TimePeriod(
-            start = s["Start_date_of_studies"],
-            end = s["End_date_of_studies"]
+        studies_dates=TimePeriod(
+            start=s["Start_date_of_studies"], end=s["End_date_of_studies"]
         ),
-
-        visit_internship_dates = TimePeriod(
-            start = s["Start_date_of_visit_internship"],
-            end = s["End_date_of_visit_internship"]
+        visit_internship_dates=TimePeriod(
+            start=s["Start_date_of_visit_internship"],
+            end=s["End_date_of_visit_internship"],
         ),
-
-        mila_dates = TimePeriod(
-            start = s["Start_Date_with_MILA"],
-            end = s["End_Date_with_MILA"]
-        )
+        mila_dates=TimePeriod(
+            start=s["Start_Date_with_MILA"], end=s["End_Date_with_MILA"]
+        ),
     )
 
     # Affiliation
     affiliation = Affiliation(
         type=s["Affiliation_type"],
-        faculty = s["Faculty_affiliated"],
+        faculty=s["Faculty_affiliated"],
         university=s["Affiliated_university"],
-        departement=s["Department_affiliated"]
+        departement=s["Department_affiliated"],
     )
 
     # Supervision
     supervision = Supervision(
         supervisor=s["Supervisor_Principal__MEMBER_NUM_"] | None,
-        co_supervisor=s["Co-Supervisor__MEMBER_NUM_"] | None
+        co_supervisor=s["Co-Supervisor__MEMBER_NUM_"] | None,
     )
 
     # Accounts
     accounts = Accounts(
         drac_account=s["Alliance-DRAC_account"] | None,
         github_username=s["GitHub_username"] | None,
-        google_scholar_profile=s["Google_Scholar_profile"] | None
+        google_scholar_profile=s["Google_Scholar_profile"] | None,
     )
 
     # Return the resulting MyMilaUser
     return MyMilaUser(
         # Identifiers
-        member_num = s["_MEMBER_NUM_"],
-        mymila_id = s["internal_id"],
-        mila_number = s["Mila_Number"],
-
+        member_num=s["_MEMBER_NUM_"],
+        mymila_id=s["internal_id"],
+        mila_number=s["Mila_Number"],
         # Personal data
-        first_name = first_name,
-        last_name = s["Last_Name"],
+        first_name=first_name,
+        last_name=s["Last_Name"],
         mila_email=s["MILA_Email"],
-
         # Status
-        status = status,
+        status=status,
         # Affiliation
-        affiliation = affiliation | None,
+        affiliation=affiliation | None,
         # Supervision
-        supervision = supervision | None,
+        supervision=supervision | None,
         # Accounts
-        accounts = accounts
+        accounts=accounts,
     )
