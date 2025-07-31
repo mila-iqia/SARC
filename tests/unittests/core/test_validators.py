@@ -420,3 +420,218 @@ class TestValidField:
         assert field.values[0].value == "value2"
         assert field.values[0].valid_start == datetime(2023, 7, 1, tzinfo=UTC)
         assert field.values[0].valid_end == datetime(2023, 9, 1, tzinfo=UTC)
+
+    def test_merge_with_truncate_clips_start(self):
+        """Test merge with truncate=True clips overlapping values at start."""
+        field1 = ValidField[str]()
+        field2 = ValidField[str]()
+
+        # Field1 has value1 from Jan-Jun
+        field1.insert(
+            "value1",
+            datetime(2023, 1, 1, tzinfo=UTC),
+            datetime(2023, 6, 30, tzinfo=UTC),
+        )
+
+        # Field2 has value2 from Mar-Sep (overlaps with field1)
+        field2.insert(
+            "value2",
+            datetime(2023, 3, 1, tzinfo=UTC),
+            datetime(2023, 9, 30, tzinfo=UTC),
+        )
+
+        # With truncate=True, value2 should be clipped to start at Jun 30
+        field1.merge_with(field2, truncate=True)
+
+        assert len(field1.values) == 2
+        # Original value1 should be unchanged
+        assert field1.get_value(datetime(2023, 4, 1, tzinfo=UTC)) == "value1"
+        # value2 should start after value1 ends
+        assert field1.get_value(datetime(2023, 7, 1, tzinfo=UTC)) == "value2"
+
+        # Check that value2 was clipped at the start
+        assert field1.values[0].value == "value2"
+        assert field1.values[0].valid_start == datetime(2023, 6, 30, tzinfo=UTC)
+
+    def test_merge_with_truncate_clips_end(self):
+        """Test merge with truncate=True clips overlapping values at end."""
+        field1 = ValidField[str]()
+        field2 = ValidField[str]()
+
+        # Field1 has value1 from Jul-Dec
+        field1.insert(
+            "value1",
+            datetime(2023, 7, 1, tzinfo=UTC),
+            datetime(2023, 12, 31, tzinfo=UTC),
+        )
+
+        # Field2 has value2 from Jan-Sep (overlaps with field1)
+        field2.insert(
+            "value2",
+            datetime(2023, 1, 1, tzinfo=UTC),
+            datetime(2023, 9, 30, tzinfo=UTC),
+        )
+
+        # With truncate=True, value2 should be clipped to end at Jul 1
+        field1.merge_with(field2, truncate=True)
+
+        assert len(field1.values) == 2
+        # value2 should be clipped at the end
+        assert field1.get_value(datetime(2023, 4, 1, tzinfo=UTC)) == "value2"
+        # Original value1 should be unchanged
+        assert field1.get_value(datetime(2023, 9, 1, tzinfo=UTC)) == "value1"
+
+        # Check that value2 was clipped at the end
+        assert field1.values[1].value == "value2"
+        assert field1.values[1].valid_end == datetime(2023, 7, 1, tzinfo=UTC)
+
+    def test_merge_with_truncate_splits_overlapping_value(self):
+        """Test merge with truncate=True splits a value that fully overlaps existing one."""
+        field1 = ValidField[str]()
+        field2 = ValidField[str]()
+
+        # Field1 has value1 from Apr-Aug
+        field1.insert(
+            "value1",
+            datetime(2023, 4, 1, tzinfo=UTC),
+            datetime(2023, 8, 31, tzinfo=UTC),
+        )
+
+        # Field2 has value2 from Jan-Dec (fully overlaps field1's value)
+        field2.insert(
+            "value2",
+            datetime(2023, 1, 1, tzinfo=UTC),
+            datetime(2023, 12, 31, tzinfo=UTC),
+        )
+
+        # With truncate=True, value2 should be split into two parts
+        field1.merge_with(field2, truncate=True)
+
+        assert len(field1.values) == 3
+
+        # Should have value2 from Jan-Apr, value1 from Apr-Aug, value2 from Aug-Dec
+        assert field1.get_value(datetime(2023, 2, 1, tzinfo=UTC)) == "value2"
+        assert field1.get_value(datetime(2023, 6, 1, tzinfo=UTC)) == "value1"
+        assert field1.get_value(datetime(2023, 10, 1, tzinfo=UTC)) == "value2"
+
+        # One part should end at Apr 1, other should start at Aug 31
+        assert field1.values[2].valid_end == datetime(2023, 4, 1, tzinfo=UTC)
+        assert field1.values[0].valid_start == datetime(2023, 8, 31, tzinfo=UTC)
+
+    def test_merge_with_truncate_completely_overlapped_value_dropped(self):
+        """Test that a completely overlapped value gets dropped when truncated."""
+        field1 = ValidField[str]()
+        field2 = ValidField[str]()
+
+        # Field1 has value1 from Jan-Dec
+        field1.insert(
+            "value1",
+            datetime(2023, 1, 1, tzinfo=UTC),
+            datetime(2023, 12, 31, tzinfo=UTC),
+        )
+
+        # Field2 has value2 from Mar-Jun (completely within field1's range)
+        field2.insert(
+            "value2",
+            datetime(2023, 3, 1, tzinfo=UTC),
+            datetime(2023, 6, 30, tzinfo=UTC),
+        )
+
+        # With truncate=True, value2 should be completely dropped
+        field1.merge_with(field2, truncate=True)
+
+        assert len(field1.values) == 1
+        assert field1.get_value(datetime(2023, 4, 1, tzinfo=UTC)) == "value1"
+
+    def test_merge_with_truncate_multiple_overlaps(self):
+        """Test merge with truncate=True handling multiple overlapping values."""
+        field1 = ValidField[str]()
+        field2 = ValidField[str]()
+
+        # Field1 has non-overlapping values
+        field1.insert(
+            "existing1",
+            datetime(2023, 2, 1, tzinfo=UTC),
+            datetime(2023, 4, 1, tzinfo=UTC),
+        )
+        field1.insert(
+            "existing2",
+            datetime(2023, 6, 1, tzinfo=UTC),
+            datetime(2023, 8, 1, tzinfo=UTC),
+        )
+        field1.insert(
+            "existing3",
+            datetime(2023, 10, 1, tzinfo=UTC),
+            datetime(2023, 12, 1, tzinfo=UTC),
+        )
+
+        # Field2 has values that overlap with multiple existing values
+        field2.insert(
+            "new1",
+            datetime(2023, 1, 1, tzinfo=UTC),
+            datetime(2023, 3, 1, tzinfo=UTC),  # Overlaps with existing1
+        )
+        field2.insert(
+            "new2",
+            datetime(2023, 5, 1, tzinfo=UTC),
+            datetime(2023, 9, 1, tzinfo=UTC),  # Overlaps with existing2
+        )
+
+        field1.merge_with(field2, truncate=True)
+
+        assert len(field1.values) == 6
+        # new1 should be clipped to end before existing1
+        assert field1.get_value(datetime(2023, 1, 15, tzinfo=UTC)) == "new1"
+        assert field1.get_value(datetime(2023, 2, 15, tzinfo=UTC)) == "existing1"
+
+        # new2 should be clipped to fit around existing2
+        assert field1.get_value(datetime(2023, 5, 15, tzinfo=UTC)) == "new2"
+        assert field1.get_value(datetime(2023, 7, 1, tzinfo=UTC)) == "existing2"
+        assert field1.get_value(datetime(2023, 8, 15, tzinfo=UTC)) == "new2"
+
+    def test_merge_with_truncate_false_still_raises_error(self):
+        """Test that merge_with with truncate=False (default) still raises errors."""
+        field1 = ValidField[str]()
+        field2 = ValidField[str]()
+
+        field1.insert(
+            "value1",
+            datetime(2023, 1, 1, tzinfo=UTC),
+            datetime(2023, 6, 30, tzinfo=UTC),
+        )
+        field2.insert(
+            "value2",
+            datetime(2023, 6, 1, tzinfo=UTC),
+            datetime(2023, 12, 31, tzinfo=UTC),
+        )
+
+        # Without truncate=True, should still raise DateOverlapError
+        with pytest.raises(DateOverlapError):
+            field1.merge_with(field2, truncate=False)
+
+        # Default behavior should also raise error
+        with pytest.raises(DateOverlapError):
+            field1.merge_with(field2)
+
+    def test_merge_with_truncate_same_values_still_merges(self):
+        """Test that truncate=True still merges overlapping same values."""
+        field1 = ValidField[str]()
+        field2 = ValidField[str]()
+
+        field1.insert(
+            "same_value",
+            datetime(2023, 1, 1, tzinfo=UTC),
+            datetime(2023, 6, 30, tzinfo=UTC),
+        )
+        field2.insert(
+            "same_value",
+            datetime(2023, 6, 1, tzinfo=UTC),
+            datetime(2023, 12, 31, tzinfo=UTC),
+        )
+
+        field1.merge_with(field2, truncate=True)
+
+        # Should still merge same values even with truncate=True
+        assert len(field1.values) == 1
+        assert field1.get_value(datetime(2023, 3, 1, tzinfo=UTC)) == "same_value"
+        assert field1.get_value(datetime(2023, 9, 1, tzinfo=UTC)) == "same_value"
