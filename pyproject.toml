@@ -114,23 +114,3 @@ build-backend = "hatchling.build"
 
 [tool.pytest]
 norecursedirs = "tests/common"
-
-[[tool.mypy.overrides]]
-module = "gifnoc.*"
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = "hostlist.*"
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = "fabric.*"
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = "iguane.*"
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = "serieux.*"
-ignore_missing_imports = true
