@@ -27,9 +27,6 @@ class UserData(BaseModel):
     display_name: str
     email: str
 
-    connection_id: str
-    connection_type: str
-
     # Each user plugin can specify a matching ID which will be stored here.
     matching_ids: dict[str, str]
 
