@@ -30,7 +30,7 @@ class BeeGFSDiskUsage(DiskUsageScraper[BeeGFSDiskUsageConfig]):
 
     def get_diskusage_report(
         self, ssh: Connection, config: BeeGFSDiskUsageConfig
-    ) -> str:
+    ) -> bytes:
         users = get_users()
         assert len(users) > 0
 
@@ -58,13 +58,13 @@ class BeeGFSDiskUsage(DiskUsageScraper[BeeGFSDiskUsageConfig]):
 
             output[name] = usage
 
-        return json.dumps(output)
+        return json.dumps(output).encode()
 
     def parse_diskusage_report(
-        self, config: BeeGFSDiskUsageConfig, cluster_name: str, data_str: str
+        self, config: BeeGFSDiskUsageConfig, cluster_name: str, data_raw: bytes
     ) -> DiskUsage:
         groups: list[DiskUsageGroup] = []
-        data: dict[str, str] = json.loads(data_str)
+        data: dict[str, str] = json.loads(data_raw.decode())
 
         groups = [
             DiskUsageGroup(

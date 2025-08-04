@@ -26,7 +26,9 @@ class DRACDiskUsageConfig:
 class DRACDiskUsage(DiskUsageScraper[DRACDiskUsageConfig]):
     config_type = DRACDiskUsageConfig
 
-    def get_diskusage_report(self, ssh: Connection, config: DRACDiskUsageConfig) -> str:
+    def get_diskusage_report(
+        self, ssh: Connection, config: DRACDiskUsageConfig
+    ) -> bytes:
         """
         Get the output of the command diskusage_report --project --all_users on the wanted cluster
 
@@ -64,16 +66,16 @@ class DRACDiskUsage(DiskUsageScraper[DRACDiskUsageConfig]):
         output, errors = run_command(ssh, cmd, 1)
         if output is None:
             logger.warning("Could not fetch diskusage report", exc_info=errors[0])
-            return ""
-        return output
+            return "".encode()
+        return output.encode()
 
     def parse_diskusage_report(
         self,
         config: DRACDiskUsageConfig,  # noqa: ARG002
         cluster_name: str,
-        data: str,
+        data: bytes,
     ) -> DiskUsage:
-        report = data.split("\n")
+        report = data.decode().split("\n")
         groups = _parse_body(report)
 
         return DiskUsage(

@@ -19,8 +19,7 @@ def test_drac_fetch_report(remote, file_regression):
     raw_report = None
     with open(
         Path(__file__).parent / "drac_reports/report_gerudo.txt",
-        "r",
-        encoding="utf-8",
+        "rb",
     ) as f:
         raw_report = f.read()
     assert raw_report
@@ -28,16 +27,16 @@ def test_drac_fetch_report(remote, file_regression):
     remote.expect(
         host=cluster.host,
         cmd=f"{dconfig.diskusage_path} --project --all_users",
-        out=str.encode(raw_report),
+        out=raw_report,
     )
 
     report = scraper.get_diskusage_report(cluster.ssh, dconfig)
-    file_regression.check(report)
+    file_regression.check(report.decode())
 
 
 # Test DRAC scraper parsing functionality through the proper interface
 def test_drac_parse_report(file_regression):
-    with open(Path(__file__).parent / "drac_reports/report_hyrule.txt", "r") as f:
+    with open(Path(__file__).parent / "drac_reports/report_hyrule.txt", "rb") as f:
         raw_report = f.read()
 
     scraper = get_diskusage_scraper("drac")
@@ -61,8 +60,7 @@ def test_drac_acquire_storages(remote, cli_main, file_regression):
     raw_report = None
     with open(
         Path(__file__).parent / "drac_reports/report_hyrule.txt",
-        "r",
-        encoding="utf-8",
+        "rb",
     ) as f:
         raw_report = f.read()
     assert raw_report
@@ -70,7 +68,7 @@ def test_drac_acquire_storages(remote, cli_main, file_regression):
     remote.expect(
         host=cluster.host,
         cmd=f"{dconfig.diskusage_path} --project --all_users",
-        out=str.encode(raw_report),
+        out=raw_report,
     )
 
     cli_main(
