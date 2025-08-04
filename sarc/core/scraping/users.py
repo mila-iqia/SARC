@@ -48,9 +48,9 @@ class UserScraper[T](Protocol):
     def validate_config(self, config_data: Any) -> T:
         return deserialize(self.config_type, config_data)
 
-    def get_user_data(self, config: T) -> str: ...
+    def get_user_data(self, config: T) -> bytes: ...
 
-    def parse_user_data(self, config: T, data: str) -> Iterable[UserMatch]: ...
+    def parse_user_data(self, config: T, data: bytes) -> Iterable[UserMatch]: ...
 
 
 _builtin_scrapers: dict[str, UserScraper] = dict()
@@ -113,7 +113,7 @@ def scrape_users(scrapers: list[tuple[str, Any]]) -> Iterable[UserMatch]:
     The collected information is aggregated amongst plugins, but not with the
     information in the database.
     """
-    raw_data: dict[str, tuple[str, Any]] = {}
+    raw_data: dict[str, tuple[bytes, Any]] = {}
     for scraper_name, config_data in scrapers:
         try:
             scraper = get_user_scraper(scraper_name)
