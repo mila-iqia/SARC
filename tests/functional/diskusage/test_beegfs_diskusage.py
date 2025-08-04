@@ -47,7 +47,7 @@ def mock_get_users():
 
 
 @pytest.mark.freeze_time("2023-07-25")
-def test_beegfs_fetch_report(monkeypatch, remote, cli_main, file_regression):
+def test_beegfs_fetch_report(monkeypatch, remote, file_regression):
     cluster = config("scraping").clusters["mila"]
     diskusages = cluster.diskusage
     assert diskusages is not None
@@ -58,20 +58,17 @@ def test_beegfs_fetch_report(monkeypatch, remote, cli_main, file_regression):
     dconfig = scraper.validate_config(diskusage.params)
     with open(
         Path(__file__).parent / "mila_reports/report_user1.txt",
-        "r",
-        encoding="utf-8",
+        "rb",
     ) as f:
         report1 = f.read()
     with open(
         Path(__file__).parent / "mila_reports/report_user2.txt",
-        "r",
-        encoding="utf-8",
+        "rb",
     ) as f:
         report2 = f.read()
     with open(
         Path(__file__).parent / "mila_reports/report_user3.txt",
-        "r",
-        encoding="utf-8",
+        "rb",
     ) as f:
         report3 = f.read()
 
@@ -83,27 +80,27 @@ def test_beegfs_fetch_report(monkeypatch, remote, cli_main, file_regression):
         commands=[
             Command(
                 cmd=f"{dconfig.beegfs_ctl_path} --cfgFile={cfile} --getquota --uid user1 --csv",
-                out=str.encode(report1),
+                out=report1,
             ),
             Command(
                 cmd=f"{dconfig.beegfs_ctl_path} --cfgFile={cfile} --getquota --uid user2 --csv",
-                out=str.encode(report2),
+                out=report2,
             ),
             Command(
                 cmd=f"{dconfig.beegfs_ctl_path} --cfgFile={cfile} --getquota --uid user3 --csv",
-                out=str.encode(report3),
+                out=report3,
             ),
         ],
     )
     monkeypatch.setattr(sarc.storage.beegfs, "get_users", mock_get_users)
 
     report = scraper.get_diskusage_report(cluster.ssh, dconfig)
-    file_regression.check(report)
+    file_regression.check(report.decode())
 
 
 @pytest.mark.freeze_time("2023-07-25")
 def test_beegfs_parse_report(file_regression):
-    with open(Path(__file__).parent / "mila_reports/report_all.txt", "r") as f:
+    with open(Path(__file__).parent / "mila_reports/report_all.txt", "rb") as f:
         raw_report = f.read()
 
     scraper = get_diskusage_scraper("beegfs")
