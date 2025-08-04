@@ -102,15 +102,15 @@ class MilaLDAPConfig:
 class MilaLDAPScraper(UserScraper[MilaLDAPConfig]):
     config_type = MilaLDAPConfig
 
-    def get_user_data(self, config: MilaLDAPConfig) -> str:
+    def get_user_data(self, config: MilaLDAPConfig) -> bytes:
         return json.dumps(
             _query_ldap(
                 config.private_key_file, config.certificate_file, config.service_uri
             )
-        )
+        ).encode()
 
     def parse_user_data(
-        self, _config: MilaLDAPConfig, data: str
+        self, _config: MilaLDAPConfig, data: bytes
     ) -> Iterable[UserMatch]:
         """
         mail[0]        -> mila_email_username  (includes the "@mila.quebec")
@@ -121,7 +121,7 @@ class MilaLDAPScraper(UserScraper[MilaLDAPConfig]):
         suspended[0]   -> status  (as string "enabled" or "disabled")
         """
 
-        for user_raw in json.loads(data):
+        for user_raw in json.loads(data.decode()):
             creds = Credentials()
             creds.insert(user_raw["posixUid"][0])
             yield UserMatch(
