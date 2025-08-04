@@ -1,8 +1,8 @@
-                                Description                Space           # of files
-                /project (group def-bengioy)           971G/1000G           791k/1005k
-                /project (group rpp-bengioy)            31T/2048k           3626k/1025
+                             Description                Space           # of files
+       /project (project rrg-bengioy-ad)              39T/75T          1316k/5000k
+          /project (project def-bengioy)           956G/1000G            226k/500k
     
-Breakdown for project def-bengioy (Last update: 2022-10-25 14:01:28)
+Breakdown for project rrg-bengioy-ad (Last update: 2022-10-25 14:01:28)
             User      File count                 Size             Location
 -------------------------------------------------------------------------
          revali               2             0.00 GiB              On disk
@@ -12,7 +12,7 @@ Breakdown for project def-bengioy (Last update: 2022-10-25 14:01:28)
           Total          696928           877.51 GiB              On disk    
 
 
-Breakdown for project rpp-bengioy (Last update: 2022-10-25 13:09:53)
+Breakdown for project def-bengioy (Last update: 2022-10-25 13:09:53)
            User      File count                 Size             Location
 -------------------------------------------------------------------------
            riju           47085             4.20 GiB              On disk
@@ -22,3 +22,4 @@ Breakdown for project rpp-bengioy (Last update: 2022-10-25 13:09:53)
           rhoam               2             0.00 GiB              On disk    
           Total         3626455         30009.08 GiB              On disk
 
+          

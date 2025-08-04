@@ -17,6 +17,8 @@ from hostlist import expand_hostlist
 
 from .alerts.common import HealthMonitorConfig
 
+type JSON = list[JSON] | dict[str, JSON] | int | str | float | bool | None
+
 if TYPE_CHECKING:
     from fabric import Connection
     from prometheus_api_client import PrometheusConnect
@@ -38,6 +40,12 @@ class ConfigurationError(Exception):
 
 
 @dataclass
+class DiskUsageConfig:
+    name: str
+    params: JSON = field(default_factory=dict)
+
+
+@dataclass
 class ClusterConfig:
     # pylint: disable=too-many-instance-attributes
 
@@ -51,7 +59,7 @@ class ClusterConfig:
     sshconfig: Path | None = None
     duc_inodes_command: str | None = None
     duc_storage_command: str | None = None
-    diskusage_report_command: str | None = None
+    diskusage: list[DiskUsageConfig] | None = None
     start_date: str = "2022-04-01"
     slurm_conf_host_path: Path = Path("/etc/slurm/slurm.conf")
 
