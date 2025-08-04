@@ -18,6 +18,10 @@ from sarc.traces import trace_decorator, using_trace
 logger = logging.getLogger(__name__)
 
 
+class JobConversionError(Exception):
+    """Exception raised when there's an error converting a job entry from sacct."""
+
+
 def parse_in_timezone(timestamp: int | None) -> datetime | None:
     if timestamp is None or timestamp == 0:
         return None
@@ -54,7 +58,7 @@ class SAcctScraper:
         accounts = ",".join(self.cluster.accounts) if self.cluster.accounts else None
         accounts_option = f"-A {accounts}" if accounts else ""
         cmd = f"{self.cluster.sacct_bin} {accounts_option} -X -S {start} -E {end} --allusers --json"
-        logger.info(f"{self.cluster.name} $ {cmd}")
+        logger.debug(f"{self.cluster.name} $ {cmd}")
         if self.cluster.host == "localhost":
             results: subprocess.CompletedProcess[str] | Result = subprocess.run(
                 cmd, shell=True, text=True, capture_output=True, check=False
@@ -79,18 +83,19 @@ class SAcctScraper:
     def __len__(self) -> int:
         return len(self.get_raw()["jobs"])
 
-    def __iter__(self) -> Iterator[SlurmJob]:
+    def __iter__(self) -> Iterator[SlurmJob | None]:
         """Fetch and iterate on all jobs as SlurmJob objects."""
         version: dict = (
             self.get_raw().get("meta", {}).get("Slurm", None)
             or self.get_raw().get("meta", {}).get("slurm", {})
         ).get("version", None)
         for entry in self.get_raw()["jobs"]:
-            with using_trace("sarc.jobs.sacct", "SAcctScraper.__iter__") as span:
+            with using_trace(
+                "sarc.jobs.sacct", "SAcctScraper.__iter__", exception_types=()
+            ) as span:
                 span.set_attribute("entry", json.dumps(entry))
                 converted = self.convert(entry, version)
-                if converted is not None:
-                    yield converted
+                yield converted
 
     def convert(self, entry: dict, version: dict | None = None) -> SlurmJob | None:
         """Convert a single job entry from sacct to a SlurmJob."""
@@ -245,7 +250,41 @@ class SAcctScraper:
                 **flags,  # type: ignore[arg-type]
             )
 
-        raise ValueError(f"Unsupported slurm version: {version}")
+        if int(version["major"]) == 24:
+            return SlurmJob(
+                cluster_name=self.cluster.name,
+                job_id=entry["job_id"],
+                array_job_id=entry["array"]["job_id"] or None,
+                task_id=entry["array"]["task_id"]["number"],
+                name=entry["name"],
+                user=entry["user"],
+                group=entry["group"],
+                account=entry["account"],
+                job_state=entry["state"]["current"][0],
+                exit_code=entry["exit_code"]["return_code"]["number"],
+                signal=entry["exit_code"]
+                .get("signal", {})
+                .get("id", {})
+                .get("number", None),
+                time_limit=(tlimit := entry["time"]["limit"]["number"]) and tlimit * 60,
+                submit_time=submit_time,
+                start_time=start_time,
+                end_time=end_time,
+                elapsed_time=elapsed_time,
+                partition=entry["partition"],
+                nodes=(
+                    sorted(expand_hostlist(nodes)) if nodes != "None assigned" else []
+                ),
+                constraints=entry["constraints"],
+                priority=entry["priority"]["number"],
+                qos=entry["qos"],
+                work_dir=entry["working_directory"],
+                **resources,  # type: ignore[arg-type]
+                **flags,  # type: ignore[arg-type]
+            )
+
+        # if we arrive here, it means that the version is not supported :-(
+        raise JobConversionError(f"Unsupported slurm version: {version}")
 
 
 @trace_decorator()
@@ -271,15 +310,17 @@ def sacct_mongodb_import(
     logger.info(
         f"Saving into mongodb collection '{collection.Meta.collection_name}'..."
     )
+    nb_entries = 0
     for entry in tqdm(scraper):
-        saved = False
-        if not no_prometheus:
-            update_allocated_gpu_type(cluster, entry)
-            saved = entry.statistics(recompute=True, save=True) is not None
-
-        if not saved:
-            collection.save_job(entry)
-    logger.info(f"Saved {len(scraper)} entries.")
+        if entry is not None:
+            nb_entries += 1
+            saved = False
+            if not no_prometheus:
+                update_allocated_gpu_type(cluster, entry)
+                saved = entry.statistics(recompute=True, save=True) is not None
+            if not saved:
+                collection.save_job(entry)
+    logger.info(f"Saved {nb_entries}/{len(scraper)} entries.")
 
 
 @trace_decorator()
@@ -312,8 +353,9 @@ def update_allocated_gpu_type(cluster: ClusterConfig, entry: SlurmJob) -> Option
         )
         if output:
             gpu_type = output[0]["metric"]["gpu_type"]
-    else:
-        # No prometheus config. Try to get GPU type from entry nodes.
+
+    if gpu_type is None:
+        # No prometheus config or no prometheus result. Try to get GPU type from entry nodes.
         assert cluster.name is not None
         node_gpu_mapping = get_node_to_gpu(cluster.name, entry.start_time)
         if node_gpu_mapping:
@@ -324,10 +366,12 @@ def update_allocated_gpu_type(cluster: ClusterConfig, entry: SlurmJob) -> Option
             # We infer gpu_type only if we found 1 GPU for this job.
             if len(gpu_types) == 1:
                 gpu_type = gpu_types.pop()
-            else:
-                # Otherwise, we take current value in entry.allocated.gpu_type.
-                # If value is not None, it could be harmonized below.
-                gpu_type = entry.allocated.gpu_type
+
+    if gpu_type is None:
+        # No gpu_type from neither prometheus nor entry nodes.
+        # Just take current value in entry.allocated.gpu_type.
+        # If value is not None, it could be harmonized below.
+        gpu_type = entry.allocated.gpu_type
 
     # If we found a GPU type, try to infer descriptive GPU name
     if gpu_type is not None:

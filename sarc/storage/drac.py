@@ -184,15 +184,14 @@ def convert_parsed_report_to_diskusage(
     """
     groups = []
     for group_name in parsed_report.keys():
-        users = []
-        for user in parsed_report[group_name]:
-            users.append(
-                DiskUsageUser(
-                    user=user["username"],
-                    nbr_files=user["nbr_files"],
-                    size=user["size"],  # type: ignore
-                )
+        users = [
+            DiskUsageUser(
+                user=user["username"],
+                nbr_files=user["nbr_files"],
+                size=user["size"],  # type: ignore
             )
+            for user in parsed_report[group_name]
+        ]
         groups.append(DiskUsageGroup(group_name=group_name, users=users))
 
     # timestamp will be set to 00:00 UTC automatically in ClusterDiskUsageRepository.add

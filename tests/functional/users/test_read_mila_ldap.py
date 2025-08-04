@@ -3,6 +3,7 @@ import tempfile
 from unittest.mock import patch
 
 import pytest
+from pymongo import MongoClient
 from pymongo.collection import Collection
 
 import sarc.users.read_mila_ldap  # will monkeypatch "query_ldap"

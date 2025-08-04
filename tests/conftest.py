@@ -50,6 +50,14 @@ def base_config(test_config_path):
             yield
 
 
+@pytest.fixture(scope="session")
+def base_config_with_logging():
+    """To be used where config.logging is required"""
+    with gifnoc.use(Path(__file__).parent / "sarc-test-with-logging.yaml"):
+        with using_sarc_mode("scraping"):
+            yield
+
+
 @pytest.fixture
 def enabled_cache(tmp_path):
     with gifnoc.overlay({"sarc.cache": str(tmp_path / "sarc-tmp-test-cache")}):
@@ -173,20 +181,20 @@ Mysterious Stranger,BigProf,Manager,activated,stranger.person,ms@hotmail.com
         "not_student": [],
         "delegations": {
             "john.smith003@mila.quebec": [
-                "john.smith004@mila.quebec",            
-                "john.smith005@mila.quebec"            
+                "john.smith004@mila.quebec",
+                "john.smith005@mila.quebec"
             ]
         },
         "supervisors_overrides": {
             "john.smith001@mila.quebec": [
-                "john.smith003@mila.quebec"        
+                "john.smith003@mila.quebec"
             ],
             "john.smith002@mila.quebec": [
-                "john.smith003@mila.quebec",            
-                "john.smith004@mila.quebec"            
+                "john.smith003@mila.quebec",
+                "john.smith004@mila.quebec"
             ]
         }
-        
+
     }
     """
 

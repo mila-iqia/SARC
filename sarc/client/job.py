@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from datetime import datetime, time, timedelta
 from enum import Enum
-from typing import Iterable, Literal, overload
+from typing import Any, Iterable, Literal, overload
 
 from pandas import DataFrame
 from pydantic import field_validator
@@ -314,7 +314,7 @@ def _compute_jobs_query(
     if end is not None:
         end = end.astimezone(UTC)
 
-    query: dict = {}
+    query: dict[str, Any] = {}
     if cluster_name:
         query["cluster_name"] = cluster_name
 

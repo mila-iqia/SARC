@@ -4,7 +4,7 @@ import logging
 import time
 from dataclasses import dataclass
 from types import SimpleNamespace
-from typing import Any, Union
+from typing import Union
 
 from simple_parsing import ArgumentParser, field, subparsers
 
