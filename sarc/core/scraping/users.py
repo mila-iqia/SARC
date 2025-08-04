@@ -21,7 +21,7 @@ class UserMatch(BaseModel):
 
     member_type: ValidField[MemberType] = Field(default_factory=ValidField[MemberType])
     # this is per domain, not per cluster
-    associated_accounts: dict[str, Credentials]
+    associated_accounts: dict[str, Credentials] = Field(default_factory=dict)
 
     # The strings must be matching_ids from the plugin
     supervisor: ValidField[str] = Field(default_factory=ValidField[str])
