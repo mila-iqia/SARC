@@ -42,7 +42,7 @@ sarc = "sarc.cli:main"
 
 [dependency-groups]
 dev = [
-    "mypy>=1.15.0,<2",
+    "mypy>=1.17.1,<2",
     "pytest>=8.3.5,<9",
     "pytest-cov>=6.1.1,<7",
     "pytest-regressions>=2.7.0,<3",
@@ -114,3 +114,6 @@ build-backend = "hatchling.build"
 
 [tool.pytest]
 norecursedirs = "tests/common"
+
+[tool.mypy]
+follow_untyped_imports = "true"
