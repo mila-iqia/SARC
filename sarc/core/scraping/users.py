@@ -5,6 +5,7 @@ from typing import Any, Protocol, Type
 from pydantic import BaseModel, Field
 from serieux import deserialize
 
+from sarc.cache import CachePolicy
 from sarc.core.models.users import Credentials, MemberType
 from sarc.core.models.validators import ValidField
 
@@ -116,7 +117,9 @@ def update_user_match(*, value: UserMatch, update: UserMatch) -> None:
     )
 
 
-def scrape_users(scrapers: list[tuple[str, Any]]) -> Iterable[UserMatch]:
+def scrape_users(
+    scrapers: list[tuple[str, Any]], cache_policy: CachePolicy = CachePolicy.use
+) -> Iterable[UserMatch]:
     """
     Perform user scraping and matching according to the list of plugins passed in.
 
@@ -136,6 +139,7 @@ def scrape_users(scrapers: list[tuple[str, Any]]) -> Iterable[UserMatch]:
         raw_data[scraper_name] = (scraper.get_user_data(config), config)
 
     # TODO: save the raw data for cache purposes
+    #  - Should refactor cache so that we don't *have* to use the function wrapper interface
 
     # UserMatches, referenced by plugin name and matching id
     user_refs: dict[MatchID, UserMatch] = {}
