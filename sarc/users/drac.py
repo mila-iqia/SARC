@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from sarc.core.models.users import Credentials
-from sarc.core.scraping.users import UserMatch, UserScraper, _builtin_scrapers
+from sarc.core.scraping.users import MatchID, UserMatch, UserScraper, _builtin_scrapers
 
 
 @dataclass
@@ -33,8 +33,7 @@ class DRACRolesScraper(UserScraper[DRACRolesConfig]):
             yield UserMatch(
                 display_name=d["nom"],
                 email=d["email"],
-                original_plugin="drac_roles",
-                matching_id=d["ccri"][:-3],
+                matching_id=MatchID(name="drac_role", mid=d["ccri"][:-3]),
             )
 
 
@@ -64,7 +63,6 @@ class DRACMemberScraper(UserScraper[DRACMemberConfig]):
             yield UserMatch(
                 display_name=d["name"],
                 email=d["email"],
-                original_plugin="drac_member",
-                matching_id=d["ccri"][:-3],
+                matching_id=MatchID(name="drac_member", mid=d["ccri"][:-3]),
                 associated_accounts={"drac": creds},
             )
