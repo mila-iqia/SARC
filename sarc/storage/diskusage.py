@@ -23,8 +23,8 @@ class DiskUsageDB(DiskUsage):
     def _ensure_timestamp_utc(cls, value: str | datetime) -> datetime:
         """Ensure timestamp has UTC timezone when reading from database."""
         if isinstance(value, str):
-            return datetime.fromisoformat(value).replace(tzinfo=UTC)
-        elif isinstance(value, datetime):
+            value = datetime.fromisoformat(value)
+        if isinstance(value, datetime):
             if value.tzinfo is None:
                 # Convert naive datetime to UTC (from database storage)
                 return value.replace(tzinfo=UTC)
@@ -45,7 +45,7 @@ class ClusterDiskUsageRepository(AbstractRepository[DiskUsageDB]):
             year=disk_usage.timestamp.year,
             month=disk_usage.timestamp.month,
             day=disk_usage.timestamp.day,
-            tzinfo=UTC,
+            tzinfo=disk_usage.timestamp.tzinfo,
         )
         disk_usage.timestamp = day_at_midnight
         document = self.to_document(DiskUsageDB(**disk_usage.model_dump()))
