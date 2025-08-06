@@ -5,17 +5,13 @@ from dataclasses import dataclass
 from simple_parsing import field
 
 from sarc.cache import CachePolicy
-from sarc.users.acquire import run as update_user_records
-from sarc.users.backfill import user_record_backfill
+from sarc.config import config
+from sarc.core.scraping.users import scrape_users
+from sarc.users.db import get_user_collection
 
 
 @dataclass
 class AcquireUsers:
-    backfill: bool = field(
-        action="store_true",
-        help="Backfill record history from mymila",
-    )
-
     force: bool = field(
         action="store_true",
         help="Force recalculating the data rather than use the cache",
@@ -35,8 +31,13 @@ class AcquireUsers:
         else:
             cache_policy = CachePolicy.use
 
-        if self.backfill:
-            user_record_backfill(cache_policy=cache_policy)
+        users_cfg = config("scraping").users
+        assert users_cfg is not None
 
-        update_user_records(cache_policy=cache_policy)
+        coll = get_user_collection()
+        for um in scrape_users(
+            list(users_cfg.scrapers.items()), cache_policy=cache_policy
+        ):
+            coll.update_user(um)
+
         return 0
