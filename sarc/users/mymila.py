@@ -52,7 +52,7 @@ import pyodbc
 from attr import dataclass
 from azure.identity import ClientSecretCredential
 
-from sarc.core.scraping.users import UserMatch, UserScraper, _builtin_scrapers
+from sarc.core.scraping.users import MatchID, UserMatch, UserScraper, _builtin_scrapers
 
 logger = logging.getLogger(__name__)
 
@@ -87,9 +87,8 @@ class MyMilaScraper(UserScraper[MyMilaConfig]):
             um = UserMatch(
                 display_name=f"{first_name} {s['Last_Name']}",
                 email=s["MILA_Email"],
-                original_plugin="mymila",
-                matching_id=s["_MEMBER_NUM_"],
-                known_matches={"mila_ldap": s["MILA_Email"]},
+                matching_id=MatchID(name="mymila", mid=s["_MEMBER_NUM_"]),
+                known_matches=set([MatchID(name="mila_ldap", mid=s["MILA_Email"])]),
             )
             supervisor = s["Supervisor_Principal__MEMBER_NUM_"]
             if supervisor:
@@ -98,14 +97,18 @@ class MyMilaScraper(UserScraper[MyMilaConfig]):
             co_supervisor = s["Co-Supervisor__MEMBER_NUM_"]
             if co_supervisor:
                 # TODO: figure out the dates
-                um.co_supervisors.insert([co_supervisor], start=None, end=None)
+                um.co_supervisors.insert(
+                    set([MatchID(name="mymila", mid=co_supervisor)]),
+                    start=None,
+                    end=None,
+                )
             drac_account: str | None = s["Alliance-DRAC_account"]
             if drac_account:
                 drac_account = drac_account.strip()
                 if CCI_RE.fullmatch(drac_account):
-                    um.known_matches["drac"] = drac_account
+                    um.known_matches.add(MatchID(name="drac", mid=drac_account))
                 if CCRI_RE.fullmatch(drac_account):
-                    um.known_matches["drac"] = drac_account[:-3]
+                    um.known_matches.add(MatchID(name="drac", mid=drac_account[:-3]))
                 logger.warning(
                     "Invalid data in 'Alliance-DRAC_account' field (not a CCI or CCRI): %s",
                     drac_account,

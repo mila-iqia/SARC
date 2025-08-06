@@ -87,7 +87,7 @@ from attr import dataclass
 from ldap3 import ALL_ATTRIBUTES, SUBTREE, Connection, Server, Tls
 
 from sarc.core.models.users import Credentials
-from sarc.core.scraping.users import UserMatch, UserScraper, _builtin_scrapers
+from sarc.core.scraping.users import MatchID, UserMatch, UserScraper, _builtin_scrapers
 
 logger = logging.getLogger(__name__)
 
@@ -127,8 +127,7 @@ class MilaLDAPScraper(UserScraper[MilaLDAPConfig]):
             yield UserMatch(
                 display_name=user_raw["displayName"][0],
                 email=user_raw["mail"][0],
-                original_plugin="mila_ldap",
-                matching_id=user_raw["mail"][0],
+                matching_id=MatchID(name="mila_ldap", mid=user_raw["mail"][0]),
                 associated_accounts={"mila": creds},
             )
 

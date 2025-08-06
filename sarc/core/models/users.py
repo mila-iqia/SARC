@@ -42,8 +42,8 @@ class UserData(BaseModel):
     associated_accounts: dict[str, Credentials] = Field(default_factory=dict)
 
     supervisor: ValidField[UUID4] = Field(default_factory=ValidField[UUID4])
-    co_supervisors: ValidField[list[UUID4]] = Field(
-        default_factory=ValidField[list[UUID4]]
+    co_supervisors: ValidField[set[UUID4]] = Field(
+        default_factory=ValidField[set[UUID4]]
     )
 
     github_username: ValidField[str] = Field(default_factory=ValidField[str])

@@ -1,1 +1,2 @@
-from . import mila_ldap  # noqa: F401 # This is to register the builtin plugins
+# This is to register the builtin plugins
+from . import drac, mila_ldap, mymila  # noqa: F401
