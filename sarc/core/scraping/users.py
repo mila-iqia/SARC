@@ -118,7 +118,7 @@ def update_user_match(*, value: UserMatch, update: UserMatch) -> None:
 
 
 def scrape_users(
-    scrapers: list[tuple[str, Any]], cache_policy: CachePolicy = CachePolicy.use
+    scrapers: list[tuple[str, Any]], _cache_policy: CachePolicy = CachePolicy.use
 ) -> Iterable[UserMatch]:
     """
     Perform user scraping and matching according to the list of plugins passed in.
