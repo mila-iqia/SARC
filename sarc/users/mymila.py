@@ -48,7 +48,7 @@ from itertools import chain, repeat
 from typing import Sequence
 
 import pandas as pd
-import pyodbc
+import pyodbc  # type: ignore[import-not-found]
 from attr import dataclass
 from azure.identity import ClientSecretCredential
 

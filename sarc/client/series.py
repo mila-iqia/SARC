@@ -11,9 +11,10 @@ from tqdm import tqdm
 
 from sarc.client.gpumetrics import GPUBilling, get_cluster_gpu_billings, get_rgus
 from sarc.client.job import SlurmCLuster, count_jobs, get_available_clusters, get_jobs
-from sarc.client.users.api import User, get_users
 from sarc.config import MTL
+from sarc.core.models.users import UserData
 from sarc.traces import trace_decorator
+from sarc.users.db import get_users
 from sarc.utils import flatten
 
 logger = logging.getLogger(__name__)
@@ -253,7 +254,7 @@ class UserFlattener:
         # List "plain" attributes, i.e. attributes that are not objects.
         # This will exclude both nested Model objects as well a nested dicts.
         # Note that a `date` is described as a 'string' in schemas.
-        schema = User.model_json_schema()
+        schema = UserData.model_json_schema()
         schema_props = schema["properties"]
 
         def filt(prop_desc: dict[str, Any]) -> bool:
@@ -276,7 +277,7 @@ class UserFlattener:
             key for key, prop_desc in schema_props.items() if filt(prop_desc)
         }
 
-    def flatten(self, user: User) -> dict[str, Any]:
+    def flatten(self, user: UserData) -> dict[str, Any]:
         """Flatten given user."""
         # Get user dict.
         base_user_dict = user.model_dump(exclude={"id"})
@@ -289,7 +290,7 @@ class UserFlattener:
         # Now flatten user dict.
         user_dict = flatten({"user": base_user_dict})
         # And add special key `user.primary_email`.
-        user_dict["user.primary_email"] = user.mila.email
+        user_dict["user.primary_email"] = user.email
         return user_dict
 
 
