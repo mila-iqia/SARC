@@ -177,18 +177,6 @@ class TempoConfig:
 
 
 @dataclass
-class MyMilaConfig:
-    tmp_json_path: Path | None = None
-
-
-@dataclass
-class AccountMatchingConfig:
-    drac_members_csv_path: Path
-    drac_roles_csv_path: Path
-    make_matches_config: Path
-
-
-@dataclass
 class LoggingConfig:
     log_level: str
     OTLP_endpoint: str
@@ -219,9 +207,7 @@ class ClientConfig:
 
 @dataclass
 class Config(ClientConfig):
-    ldap: LDAPConfig | None = None
-    mymila: MyMilaConfig | None = None
-    account_matching: AccountMatchingConfig | None = None
+    users: UserScrapingConfig | None = None
     sshconfig: Path | None = None
     clusters: dict[str, ClusterConfig] = field(default_factory=dict)
     logging: LoggingConfig | None = None
