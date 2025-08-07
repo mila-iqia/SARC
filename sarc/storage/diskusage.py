@@ -18,19 +18,6 @@ class DiskUsageDB(DiskUsage):
     # Database ID
     id: PydanticObjectId | None = None
 
-    @field_validator("timestamp", mode="before")
-    @classmethod
-    def _ensure_timestamp_utc(cls, value: str | datetime) -> datetime:
-        """Ensure timestamp has UTC timezone when reading from database."""
-        if isinstance(value, str):
-            value = datetime.fromisoformat(value)
-        if isinstance(value, datetime):
-            if value.tzinfo is None:
-                # Convert naive datetime to UTC (from database storage)
-                return value.replace(tzinfo=UTC)
-            return value
-        return value
-
 
 class ClusterDiskUsageRepository(AbstractRepository[DiskUsageDB]):
     class Meta:

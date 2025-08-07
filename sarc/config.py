@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, Callable, Literal, cast, overload
 
 import gifnoc
 import tzlocal
+from bson import CodecOptions, UuidRepresentation
 from hostlist import expand_hostlist
 
 from .alerts.common import HealthMonitorConfig
@@ -153,7 +154,12 @@ class MongoConfig:
         from pymongo import MongoClient
 
         client: MongoClient = MongoClient(self.connection_string)
-        return client.get_database(self.database_name)
+        return client.get_database(
+            self.database_name,
+            codec_options=CodecOptions(
+                uuid_representation=UuidRepresentation.STANDARD, tz_aware=True
+            ),
+        )
 
 
 @dataclass

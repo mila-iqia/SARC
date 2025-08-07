@@ -264,3 +264,7 @@ def get_users(
     results = get_user_collection().find_by(query, **query_options)
 
     return list(results)
+
+
+def get_user(email: str) -> UserData | None:
+    return get_user_collection().find_one_by({"email": email})
