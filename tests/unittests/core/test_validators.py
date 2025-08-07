@@ -421,6 +421,80 @@ class TestValidField:
         assert field.values[0].valid_start == datetime(2023, 7, 1, tzinfo=UTC)
         assert field.values[0].valid_end == datetime(2023, 9, 1, tzinfo=UTC)
 
+    def test_recursive_merge_failure_with_restore(self):
+        """Test recursive merge that fails and restores the removed tag."""
+        field = ValidField[str]()
+
+        # Insert values in a way that will trigger recursive merge
+        # value1: Jan-Mar
+        field.insert(
+            "value1",
+            datetime(2023, 1, 1, tzinfo=UTC),
+            datetime(2023, 3, 31, tzinfo=UTC),
+        )
+        # value2: Apr-Jun (same value as value1, will be merged)
+        field.insert(
+            "value1",
+            datetime(2023, 4, 1, tzinfo=UTC),
+            datetime(2023, 6, 30, tzinfo=UTC),
+        )
+        # value3: Jul-Sep (different value, will cause conflict)
+        field.insert(
+            "value3",
+            datetime(2023, 7, 1, tzinfo=UTC),
+            datetime(2023, 9, 30, tzinfo=UTC),
+        )
+
+        # Now try to insert a value that starts before value1 but overlaps with value3
+        # This should trigger recursive merge, but fail due to overlap with value3
+        with pytest.raises(DateOverlapError):
+            field.insert(
+                "value1",
+                datetime(2022, 12, 1, tzinfo=UTC),
+                datetime(2023, 8, 1, tzinfo=UTC),
+            )
+
+        # The field should remain unchanged after the failed insertion
+        # Check that we still have the same number of values
+        assert len(field.values) == 3
+
+        # Check that we can still get the expected values at their expected times
+        assert field.get_value(datetime(2023, 2, 1, tzinfo=UTC)) == "value1"
+        assert field.get_value(datetime(2023, 5, 1, tzinfo=UTC)) == "value1"
+        assert field.get_value(datetime(2023, 8, 1, tzinfo=UTC)) == "value3"
+
+    def test_recursive_merge_success_with_overlap(self):
+        """Test recursive merge that succeeds but encounters overlap during recursive insertion."""
+        field = ValidField[str]()
+
+        field.insert(
+            "value1",
+            datetime(2023, 1, 1, tzinfo=UTC),
+            datetime(2023, 3, 31, tzinfo=UTC),
+        )
+        field.insert(
+            "value1",
+            datetime(2023, 4, 1, tzinfo=UTC),
+            datetime(2023, 6, 30, tzinfo=UTC),
+        )
+        field.insert(
+            "value2",
+            datetime(2023, 10, 1, tzinfo=UTC),
+            datetime(2023, 12, 31, tzinfo=UTC),
+        )
+
+        field.insert(
+            "value1",
+            datetime(2022, 12, 1, tzinfo=UTC),
+            datetime(2023, 8, 1, tzinfo=UTC),
+        )
+
+        # The field should remain unchanged after the failed insertion
+        assert len(field.values) == 2
+        assert field.get_value(datetime(2023, 2, 1, tzinfo=UTC)) == "value1"
+        assert field.get_value(datetime(2023, 5, 1, tzinfo=UTC)) == "value1"
+        assert field.get_value(datetime(2023, 11, 1, tzinfo=UTC)) == "value2"
+
     def test_merge_with_truncate_clips_start(self):
         """Test merge with truncate=True clips overlapping values at start."""
         field1 = ValidField[str]()
