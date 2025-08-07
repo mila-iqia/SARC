@@ -665,15 +665,15 @@ wheels = [
 
 [[package]]
 name = "gifnoc"
-version = "0.5.2"
+version = "0.6.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "ovld" },
     { name = "serieux" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/d8/9a/dc4c747d22c02ee01120d5cbda3cbdd0fb38becb3109fb0e8d0894bc77e2/gifnoc-0.5.2.tar.gz", hash = "sha256:601eeb17e59fa1d06132d409c60f7b55774ab00d1309c3da7aea44d32f5adc17", size = 26274, upload-time = "2025-06-17T19:16:24.247Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/0a/3f/d4589737d54f989d055a2fb0e120df4ac2d01672330b6b9db47282948657/gifnoc-0.6.0.tar.gz", hash = "sha256:7f33bb0f6eb1917c4ce35fc510a930638c5c8e7037c39ce0657c7f8e22f2d974", size = 29511, upload-time = "2025-08-01T15:40:43.686Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/84/e1/26f824ad93e543c0f5ec5b37b23d97f58d66b668b192e0c5f081e9ef6eb3/gifnoc-0.5.2-py3-none-any.whl", hash = "sha256:aef8dbdd3825745081576f40e7b4374292e8aad8da58e354dde8b5f9a2a77d75", size = 9011, upload-time = "2025-06-17T19:16:23.286Z" },
+    { url = "https://files.pythonhosted.org/packages/25/94/2dcad932d0f9a993d9a6540197fe29556f91b7b872cd4a5164ac037cef6d/gifnoc-0.6.0-py3-none-any.whl", hash = "sha256:63d91b9fc9ee50e335f282db6fa8ea0ad9981c2fc204d7c12f7b6d9daaa66023", size = 9336, upload-time = "2025-08-01T15:40:42.169Z" },
 ]
 
 [[package]]
@@ -1672,11 +1672,11 @@ wheels = [
 
 [[package]]
 name = "ovld"
-version = "0.5.3"
+version = "0.5.9"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/4c/df/dc23bd153887e026348345cc2610aec4fd69c5a554e3e5a8c3afed286365/ovld-0.5.3.tar.gz", hash = "sha256:53666c0ec3ad666ae269eadcfde41ee5b321eff05f2efeee1c5ba19652e933b6", size = 96814, upload-time = "2025-04-29T21:00:29.712Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/bb/46/bdf1737f1748281cc84d03064dce3cfb7d738c9654c0f5b069e72551f0fa/ovld-0.5.9.tar.gz", hash = "sha256:ce7e1e20ec491c12e53e7407513615e1f7ad840aa19189aafc47f37fa67e9f96", size = 102181, upload-time = "2025-07-29T03:16:14.612Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/4c/7d/50e78aa548b0cc7ecca94eb2f1d2587f7d4948155ad8398c033bf2ecf92b/ovld-0.5.3-py3-none-any.whl", hash = "sha256:2344b0961895fea20b48d863ade2777d57dcd972d67360dd31c19f44640d5238", size = 38515, upload-time = "2025-04-29T21:00:27.934Z" },
+    { url = "https://files.pythonhosted.org/packages/82/49/da0b2e2cc4dcd27dff26f6b87294bd4d3bf957314e403cc40a631b45d9ed/ovld-0.5.9-py3-none-any.whl", hash = "sha256:75f7ad81c091d27a338665b9a383ca6de29b6a34259f3f186933ff51505d4c99", size = 39509, upload-time = "2025-07-29T03:16:13.226Z" },
 ]
 
 [[package]]
@@ -2581,7 +2581,7 @@ requires-dist = [
     { name = "fastapi", extras = ["standard-no-fastapi-cloud-cli"], specifier = ">=0.116.1,<0.117" },
     { name = "filelock", specifier = ">=3.18.0" },
     { name = "flatten-dict", specifier = ">=0.4.2,<0.5" },
-    { name = "gifnoc", specifier = ">=0.5.2,<0.6" },
+    { name = "gifnoc", specifier = ">=0.6,<0.7" },
     { name = "google-auth", specifier = ">=2.40.2,<3" },
     { name = "iguane", git = "https://github.com/mila-iqia/IGUANE.git?rev=428a433d395ed17c00818beb865a38d321adf169" },
     { name = "ldap3", specifier = ">=2.9.1,<3" },
@@ -2600,7 +2600,7 @@ requires-dist = [
     { name = "python-hostlist", specifier = ">=2.2.1,<3" },
     { name = "requests", specifier = ">=2.32.3,<3" },
     { name = "requests-mock", specifier = ">=1.11.0,<2" },
-    { name = "serieux", specifier = ">=0.1,<0.2" },
+    { name = "serieux", specifier = ">=0.2,<0.3" },
     { name = "simple-parsing", specifier = ">=0.1.0,<0.2" },
     { name = "sphinx", specifier = ">=8.2.3,<9" },
     { name = "sphinx-rtd-theme", specifier = ">=3.0.2,<4" },
@@ -2660,15 +2660,15 @@ wheels = [
 
 [[package]]
 name = "serieux"
-version = "0.1.0"
+version = "0.2.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "ovld" },
     { name = "pyyaml" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/35/7b/877c8584917d973b4939a6c1d34c54fa7d0dad910944d5440717f48dde5b/serieux-0.1.0.tar.gz", hash = "sha256:a6de1c94e8736a1de63c62d3d709fa6c8307f88132932e5d781901e3af969a6e", size = 99816, upload-time = "2025-06-17T18:33:49.043Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/0a/4a/f002561d5dcf7e1dea31b212a9a39f474ad0fdc10f3b378b9519bf70cfa6/serieux-0.2.1.tar.gz", hash = "sha256:8d5dffae0ace7f3c8c52dc71dd4a94cdacf5d0e56b99884e84846e09438c2451", size = 113159, upload-time = "2025-08-05T21:02:33.831Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/2b/ad/5d00172095a8dfd3ddecb9dd9e5dcf1dc31ee31bd843caef4a9bf845e545/serieux-0.1.0-py3-none-any.whl", hash = "sha256:8b72cbcaa99c79d8aa1a78a249a679cc864d45fe95703223904d3bacf5a0abdf", size = 38358, upload-time = "2025-06-17T18:33:47.954Z" },
+    { url = "https://files.pythonhosted.org/packages/be/da/7805e7f12e1f6b6a7135cf821429f83a86499a150fee09e31fdf1da2afed/serieux-0.2.1-py3-none-any.whl", hash = "sha256:c14440279ea94c18ca4d41182c33b23bf4fc482e29a5350f1b249f88b6e4315a", size = 41255, upload-time = "2025-08-05T21:02:32.338Z" },
 ]
 
 [[package]]
