@@ -2548,7 +2548,6 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "coverage" },
     { name = "fabric" },
     { name = "jupyter" },
     { name = "mypy" },
@@ -2610,7 +2609,6 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "coverage", specifier = ">=7.2.7,<8" },
     { name = "fabric", extras = ["testing"], specifier = ">=3.0.0,<4" },
     { name = "jupyter", specifier = ">=1.0.0,<2" },
     { name = "mypy", specifier = ">=1.15.0,<2" },
