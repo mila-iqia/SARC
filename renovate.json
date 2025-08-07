@@ -17,5 +17,24 @@
       "depNameTemplate": "uv",
       "packageNameTemplate": "uv"
     }
+  ],
+  "lockFileMaintenance": {
+    "enabled": true,
+    "automerge": true
+  },
+  "packageRules": [
+    {
+      "matchPackageNames": [
+        "uv"
+      ],
+      "automerge": true
+    },
+    {
+      "matchPackageNames": [
+        "serieux",
+        "gifnoc"
+      ],
+      "groupName": "breuleux"
+    }
   ]
 }
