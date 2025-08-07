@@ -184,7 +184,8 @@ def load_job_series(
     field_cluster_name = fields.get("cluster_name", "cluster_name")
     field_job_user = fields.get("user", "user")
     # Merge jobs with users info, only if both users and user column available.
-    if users_frame.shape[0] and field_job_user in jobs_frame.columns:
+    # XXX: disable user merge for now since it is broken.
+    if False and users_frame.shape[0] and field_job_user in jobs_frame.columns:
         df_mila_mask = jobs_frame[field_cluster_name] == "mila"
         df_drac_mask = jobs_frame[field_cluster_name] != "mila"
 

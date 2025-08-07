@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 import copy
+import datetime as dt
 from datetime import datetime, timedelta
 from typing import Optional
 
 from flatten_dict import flatten, unflatten
 
 from sarc.config import MTL, UTC, config
+from sarc.core.models.users import Credentials
+from sarc.core.models.validators import END_TIME, ValidTag
 from sarc.jobs.sacct import parse_in_timezone
+from sarc.users.db import UserDB
 
 elapsed_time = 60 * 60 * 12
 end_time = datetime(2023, 2, 14, 23, 48, 54, tzinfo=MTL).astimezone(UTC)
@@ -125,74 +129,49 @@ class JobFactory:
 
 def create_users():
     users = []
-    for username, has_drac_account in [
+    for username, drac_account in [
         # Do not set a DRAC account for "bonhomme".
         # Thus, job from user `bonhomme` on a non-mila cluster
         # won't find associated user info.
-        ("bonhomme", False),
-        ("petitbonhomme", True),
+        ("bonhomme", None),
+        ("petitbonhomme", "aaa-001"),
         # ("grosbonhomme", True),  # not added, so related jobs cannot find him.
-        ("beaubonhomme", True),
+        ("beaubonhomme", "aaa-002"),
     ]:
-        users.append(_create_user(username=username, with_drac=has_drac_account))
+        users.append(_create_user(username=username, with_drac=drac_account))
     return users
 
 
-def _create_user(username: str, with_drac=True):
-    name = f"M/Ms {username[0].upper()}{username[1:]}"
-    mila_email_username = f"{username}@mila.quebec"
-
-    drac = None
-    drac_members = None
-    drac_roles = None
-    if with_drac:
-        drac_email = f"{username}@example.com"
-        drac_username = username
-        drac = {
-            "active": True,
-            "email": drac_email,
-            "username": drac_username,
-        }
-        drac_members = {
-            "activation_status": "activated",
-            "email": drac_email,
-            "name": name,
-            "permission": "Manager",
-            "sponsor": "BigProf",
-            "username": drac_username,
-        }
-        drac_roles = {
-            "email": drac_email,
-            "nom": name,
-            "status": "Activated",
-            "username": drac_username,
-            "état du compte": "activé",
-        }
-
-    return {
-        "drac": drac,
-        "drac_members": drac_members,
-        "drac_roles": drac_roles,
-        "mila": {
-            "active": True,
-            "email": mila_email_username,
-            # Set a different username for mila
-            "username": f"{username}_mila",
+def _create_user(username: str, with_drac: str | None) -> dict:
+    u = UserDB(
+        display_name=f"M/Ms {username[0].upper()}{username[1:]}",
+        email=f"{username}@mila.quebec",
+        matching_ids={"mila": f"{username}@mila.quebec"},
+        associated_accounts={
+            "mila": Credentials(
+                values=[
+                    ValidTag(
+                        value=f"{username}_mila",
+                        valid_start=datetime(2024, 4, 11, 0, 0, tzinfo=dt.UTC),
+                        valid_end=END_TIME,
+                    )
+                ]
+            )
         },
-        "mila_ldap": {
-            "co_supervisor": None,
-            "display_name": name,
-            "mila_cluster_gid": "1500000003",
-            "mila_cluster_uid": "1500000003",
-            "mila_cluster_username": username,
-            "mila_email_username": mila_email_username,
-            "status": "enabled",
-            "supervisor": None,
-        },
-        "name": name,
-        "record_end": None,
-        "record_start": datetime(2024, 4, 11, 0, 0),
-    }
+    )
+
+    if with_drac is not None:
+        u.associated_accounts["drac"] = Credentials(
+            values=[
+                ValidTag(
+                    value=username,
+                    valid_start=datetime(2024, 4, 11, 0, 0, tzinfo=dt.UTC),
+                    valid_end=END_TIME,
+                )
+            ]
+        )
+        u.matching_ids["drac_role"] = with_drac
+    return u.model_dump(exclude={"id"})
 
 
 def create_jobs(job_factory: JobFactory | None = None, job_patch: dict | None = None):
