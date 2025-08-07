@@ -35,9 +35,7 @@ class AcquireUsers:
         assert users_cfg is not None
 
         coll = get_user_collection()
-        for um in scrape_users(
-            list(users_cfg.scrapers.items()), cache_policy=cache_policy
-        ):
+        for um in scrape_users(list(users_cfg.scrapers.items()), cache_policy):
             coll.update_user(um)
 
         return 0

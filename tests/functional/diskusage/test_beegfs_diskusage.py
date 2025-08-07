@@ -1,47 +1,75 @@
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 from fabric.testing.base import Command
 
 import sarc.storage.beegfs
-from sarc.client.users.api import Credentials, User
 from sarc.config import config
+from sarc.core.models.users import Credentials, UserData
+from sarc.core.models.validators import END_TIME, START_TIME, ValidTag
 from sarc.core.scraping.diskusage import get_diskusage_scraper
 
 
 def mock_get_users():
     return [
-        User(
-            name="user1",
-            mila=Credentials(username="user1", email="@", active=True),
-            drac=None,
-            mila_ldap=dict(),
-            drac_members=None,
-            drac_roles=None,
+        UserData(
+            display_name="user1",
+            email="@",
+            associated_accounts={
+                "mila": Credentials(
+                    values=[
+                        ValidTag(
+                            value="user1", valid_start=START_TIME, valid_end=END_TIME
+                        )
+                    ]
+                )
+            },
+            matching_ids={},
         ),
-        User(
-            name="user2",
-            mila=Credentials(username="user2", email="@", active=True),
-            drac=None,
-            mila_ldap=dict(),
-            drac_members=None,
-            drac_roles=None,
+        UserData(
+            display_name="user2",
+            email="@",
+            associated_accounts={
+                "mila": Credentials(
+                    values=[
+                        ValidTag(
+                            value="user2", valid_start=START_TIME, valid_end=END_TIME
+                        )
+                    ]
+                )
+            },
+            matching_ids={},
         ),
-        User(
-            name="user3",
-            mila=Credentials(username="user3", email="@", active=True),
-            drac=None,
-            mila_ldap=dict(),
-            drac_members=None,
-            drac_roles=None,
+        UserData(
+            display_name="user3",
+            email="@",
+            associated_accounts={
+                "mila": Credentials(
+                    values=[
+                        ValidTag(
+                            value="user3", valid_start=START_TIME, valid_end=END_TIME
+                        )
+                    ]
+                )
+            },
+            matching_ids={},
         ),
-        User(
-            name="user4",
-            mila=Credentials(username="none", email="@", active=False),
-            drac=None,
-            mila_ldap=dict(),
-            drac_members=None,
-            drac_roles=None,
+        UserData(
+            display_name="user4",
+            email="@",
+            associated_accounts={
+                "mila": Credentials(
+                    values=[
+                        ValidTag(
+                            value="none",
+                            valid_start=START_TIME,
+                            valid_end=datetime(2023, 6, 30, tzinfo=UTC),
+                        )
+                    ]
+                )
+            },
+            matching_ids={},
         ),
     ]
 
