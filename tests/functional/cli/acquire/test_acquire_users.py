@@ -1,9 +1,10 @@
+from datetime import UTC, datetime
 from unittest.mock import patch
 
 import pytest
 from opentelemetry.trace import StatusCode
 
-from sarc.client.users.api import get_user
+from sarc.users.db import get_user
 from tests.common.sarc_mocks import fake_mymila_data, fake_raw_ldap_data
 
 
@@ -36,23 +37,24 @@ def test_acquire_users(cli_main, patch_return_values, mock_file, captrace):
 
     # Validate the results of all of this by inspecting the database.
     for i in range(3):
-        js_user = get_user(mila_email_username=f"john.smith{i:03d}@mila.quebec")
+        js_user = get_user(f"john.smith{i:03d}@mila.quebec")
         assert js_user is not None
 
         # test some drac_roles and drac_members fields
-        for segment in [js_user.drac_roles, js_user.drac_members]:
-            assert segment is not None
-            assert "email" in segment
-            assert segment["email"] == f"js{i:03d}@yahoo.ca"
-            assert "username" in segment
-            assert segment["username"] == f"john.smith{i:03d}"
+        assert "drac" in js_user.associated_accounts
+        assert (
+            js_user.associated_accounts["drac"].get_value(
+                datetime(2022, 6, 1, tzinfo=UTC)
+            )
+            == f"john.smith{i:03d}"
+        )
 
     # test the absence of the mysterious stranger
-    js_user = get_user(drac_account_username="stranger.person")
+    js_user = get_user("stranger.person@mila.quebec")
     assert js_user is None
 
     # test supervisor overrides
-    js_user = get_user(mila_email_username="john.smith001@mila.quebec")
+    js_user = get_user("john.smith001@mila.quebec")
     assert js_user is not None
     assert js_user.mila_ldap["supervisor"] == "john.smith003@mila.quebec"
     assert js_user.mila_ldap["co_supervisor"] == None
