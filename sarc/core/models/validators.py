@@ -118,65 +118,62 @@ class ValidField[V](BaseModel):
                 ltag.valid_end = tag.valid_end
             else:
                 self.values.insert(i, tag)
-        elif tag.valid_start < ltag.valid_end:
+        elif tag.value == ltag.value:
             # The new tag overlaps ltag
-            if tag.value == ltag.value:
-                if tag.valid_start >= ltag.valid_start:
-                    # Since the values are the same and tag starts after ltag,
-                    # we can just merge into ltag and be done
-                    ltag.valid_end = max(ltag.valid_end, tag.valid_end)
-                else:
-                    # tag starts before ltag so we need to check previous
-                    # tag(s). to do it, we merge ltag into tag, remove ltag from
-                    # the list and try to insert again. This can happen
-                    # recursively, but since we do not expect the list to grow
-                    # large, it is fine for now
-                    tag.valid_end = max(ltag.valid_end, tag.valid_end)
-                    self.values.pop(i)
-                    try:
-                        return self._insert_tag(tag, truncate=truncate)
-                    except DateOverlapError:
-                        # if there is an overlap, we restore the removed tag to
-                        # leave the list as it was
-                        self.values.insert(i, ltag)
-                        raise
-
-            # exception for new "current" value as described in insert()
-            elif (
-                i == 0
-                and ltag.valid_end == END_TIME
-                and tag.valid_start > ltag.valid_start
-            ):
-                ltag.valid_end = tag.valid_start
-                self.values.insert(i, tag)
-            elif not truncate:
-                # We have an overlap and the values differ
-                raise DateOverlapError(tag, ltag)
-            elif tag.valid_start >= ltag.valid_start:
-                # If the tag starts after ltag, we can just clip its starting point
-                tag.valid_start = ltag.valid_end
-                # if that makes the tag start after its end, it means that it
-                # fully overlaps with ltag and so we just drop it otherwise we
-                # add the trucated tag.
-                if tag.valid_start < tag.valid_end:
-                    self.values.insert(i, tag)
-                ### from here we know that tag starts before ltag ###
-            elif tag.valid_end < ltag.valid_end:
-                # If tag ends within ltag, clip the end and retry
-                tag.valid_end = ltag.valid_start
-                self._insert_tag(tag, truncate=truncate)
+            if tag.valid_start >= ltag.valid_start:
+                # Since the values are the same and tag starts after ltag,
+                # we can just merge into ltag and be done
+                ltag.valid_end = max(ltag.valid_end, tag.valid_end)
             else:
-                # tag fully overlaps ltag, so we split tag in two, add the part
-                # that goes after ltag, and try again for the part that goes
-                # before.
-                tag2 = ValidTag(
-                    value=tag.value,
-                    valid_start=tag.valid_start,
-                    valid_end=ltag.valid_start,
-                )
-                tag.valid_start = ltag.valid_end
+                # tag starts before ltag so we need to check previous
+                # tag(s). to do it, we merge ltag into tag, remove ltag from
+                # the list and try to insert again. This can happen
+                # recursively, but since we do not expect the list to grow
+                # large, it is fine for now
+                tag.valid_end = max(ltag.valid_end, tag.valid_end)
+                self.values.pop(i)
+                try:
+                    return self._insert_tag(tag, truncate=truncate)
+                except DateOverlapError:
+                    # if there is an overlap, we restore the removed tag to
+                    # leave the list as it was
+                    self.values.insert(i, ltag)
+                    raise
+
+        # exception for new "current" value as described in insert()
+        elif (
+            i == 0 and ltag.valid_end == END_TIME and tag.valid_start > ltag.valid_start
+        ):
+            ltag.valid_end = tag.valid_start
+            self.values.insert(i, tag)
+        elif not truncate:
+            # We have an overlap and the values differ
+            raise DateOverlapError(tag, ltag)
+        elif tag.valid_start >= ltag.valid_start:
+            # If the tag starts after ltag, we can just clip its starting point
+            tag.valid_start = ltag.valid_end
+            # if that makes the tag start after its end, it means that it
+            # fully overlaps with ltag and so we just drop it otherwise we
+            # add the trucated tag.
+            if tag.valid_start < tag.valid_end:
                 self.values.insert(i, tag)
-                self._insert_tag(tag2, truncate=truncate)
+            ### from here we know that tag starts before ltag ###
+        elif tag.valid_end < ltag.valid_end:
+            # If tag ends within ltag, clip the end and retry
+            tag.valid_end = ltag.valid_start
+            self._insert_tag(tag, truncate=truncate)
+        else:
+            # tag fully overlaps ltag, so we split tag in two, add the part
+            # that goes after ltag, and try again for the part that goes
+            # before.
+            tag2 = ValidTag(
+                value=tag.value,
+                valid_start=tag.valid_start,
+                valid_end=ltag.valid_start,
+            )
+            tag.valid_start = ltag.valid_end
+            self.values.insert(i, tag)
+            self._insert_tag(tag2, truncate=truncate)
 
     def get_value(self, date: datetime | None = None) -> V:
         """Get the valid value at specified time.
