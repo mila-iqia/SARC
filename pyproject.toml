@@ -116,4 +116,4 @@ build-backend = "hatchling.build"
 norecursedirs = "tests/common"
 
 [tool.mypy]
-follow_untyped_imports = "true"
+follow_untyped_imports = true
