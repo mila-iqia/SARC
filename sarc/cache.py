@@ -23,10 +23,10 @@ class FormatterProto[T](Protocol):
     write_flags: ClassVar[str]
 
     @staticmethod
-    def load(fp: IO[Any]) -> T: ...
+    def load(fp: IO[Any]) -> T: ...  # pragma: nocover
 
     @staticmethod
-    def dump(obj: T, fp: IO[Any]) -> None: ...
+    def dump(obj: T, fp: IO[Any]) -> None: ...  # pragma: nocover
 
 
 class JSONFormatter[T](FormatterProto[T]):
@@ -120,7 +120,7 @@ class Cache[T]:
     def read(
         self,
         key: str,
-        at_time: datetime | None,
+        at_time: datetime | None = None,
         valid: timedelta | Literal[True] = True,
     ) -> T:
         if at_time is None:
@@ -182,7 +182,9 @@ class Cache[T]:
                             "Could not parse time from cache file name '%s'", candidate
                         )
                         continue
-                    candidate_time = datetime.strptime(m.group(1), _time_format)
+                    candidate_time = datetime.strptime(
+                        m.group(1), _time_format
+                    ).replace(tzinfo=UTC)
 
                 if valid is True or at_time <= candidate_time + valid:
                     encoding = None if "b" in self.formatter.read_flags else "utf-8"

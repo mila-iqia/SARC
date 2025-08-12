@@ -1,11 +1,22 @@
 import json
+import logging
 import os
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import gifnoc
 import pytest
 
-from sarc.cache import FormatterProto, with_cache
+from sarc.cache import (
+    Cache,
+    CachePolicy,
+    FormatterProto,
+    JSONFormatter,
+    _cache_policy_from_env,
+    cache_policy_var,
+    make_cached_function,
+    with_cache,
+)
 
 
 class plaintext(FormatterProto):
@@ -91,11 +102,14 @@ def test_use_cache(tmpdir):
     # Use cache
     assert fn(1, 2, version=1) == "1 * 2 = 2 [v0]"
     # Recompute and save
-    assert fn(1, 2, version=2, cache_policy=False) == "1 * 2 = 2 [v2]"
+    assert fn(1, 2, version=2, cache_policy=CachePolicy.refresh) == "1 * 2 = 2 [v2]"
     # Use cache
     assert fn(1, 2, version=3) == "1 * 2 = 2 [v2]"
     # Recompute but do not save
-    assert fn(1, 2, version=4, cache_policy=False, save_cache=False) == "1 * 2 = 2 [v4]"
+    assert (
+        fn(1, 2, version=4, cache_policy=CachePolicy.refresh, save_cache=False)
+        == "1 * 2 = 2 [v4]"
+    )
     # Use cache (older)
     assert fn(1, 2, version=5) == "1 * 2 = 2 [v2]"
 
@@ -111,7 +125,7 @@ def test_require_cache(tmpdir):
     )
     fn = decorator(la_fonction)
     with pytest.raises(Exception, match="There is no cached result"):
-        fn(2, 3, version=0, at_time=reference, cache_policy="always")
+        fn(2, 3, version=0, at_time=reference, cache_policy=CachePolicy.always)
 
     assert fn(2, 3, version=1, at_time=reference) == "2 * 3 = 6 [v1]"
     assert (
@@ -119,7 +133,7 @@ def test_require_cache(tmpdir):
             2,
             3,
             version=2,
-            cache_policy="always",
+            cache_policy=CachePolicy.always,
             at_time=reference + timedelta(days=10),
         )
         == "2 * 3 = 6 [v1]"
@@ -129,7 +143,7 @@ def test_require_cache(tmpdir):
             2,
             3,
             version=4,
-            cache_policy="always",
+            cache_policy=CachePolicy.always,
             at_time=reference + timedelta(days=10),
         )
         == "2 * 3 = 6 [v1]"
@@ -145,7 +159,7 @@ def test_cache_validity(tmpdir):
         cache_root=tmpdir,
         validity=timedelta(days=1),
     )
-    reference = datetime(year=2024, month=1, day=1)
+    reference = datetime(year=2024, month=1, day=1, tzinfo=UTC)
 
     assert (result1 := fn(2, 3, version=0, at_time=reference)) == "2 * 3 = 6 [v0]"
     file1 = tmpdir / "xy" / "2.3.2024-01-01-00-00-00.json"
@@ -177,7 +191,7 @@ def test_cache_dynamic_validity(tmpdir):
         cache_root=tmpdir,
         validity=la_validite,
     )
-    reference = datetime(year=2024, month=1, day=1)
+    reference = datetime(year=2024, month=1, day=1, tzinfo=UTC)
 
     assert fn(2, 3, version=0, at_time=reference) == "2 * 3 = 6 [v0]"
     assert (
@@ -326,7 +340,7 @@ def test_no_cachedir(disabled_cache):
     assert fn(2, 3, version=0) == "2 * 3 = 6 [v0]"
     assert fn(2, 3, version=1) == "2 * 3 = 6 [v1]"
     with pytest.raises(Exception, match="There is no cached result"):
-        fn(2, 3, version=2, cache_policy="always")
+        fn(2, 3, version=2, cache_policy=CachePolicy.always)
 
 
 def test_cache_method(tmpdir):
@@ -359,3 +373,488 @@ def test_cache_method(tmpdir):
 
     assert b1.f1.name.endswith("f1")
     assert b1.f2.name.endswith("f2")
+
+
+def test_binary_formatter(tmpdir):
+    """Test BinaryFormatter with binary data."""
+    from sarc.cache import BinaryFormatter
+
+    tmpdir = Path(tmpdir)
+    test_data = b"Hello, this is binary data with some bytes!"
+
+    # Test saving binary data
+    output_file = tmpdir / "test.bin"
+    with open(output_file, "wb") as fp:
+        BinaryFormatter.dump(test_data, fp)
+
+    # Test loading binary data
+    with open(output_file, "rb") as fp:
+        loaded_data = BinaryFormatter.load(fp)
+
+    assert loaded_data == test_data
+    assert output_file.exists()
+
+
+def test_cache_read_save_none_at_time(tmpdir):
+    """Test Cache.read() and Cache.save() when at_time is None."""
+    from sarc.cache import Cache, JSONFormatter
+
+    tmpdir = Path(tmpdir)
+    cache = Cache(cache_dir=tmpdir, formatter=JSONFormatter)
+
+    cache.save("test.json", {"data": "value"}, at_time=None)
+
+    result = cache.read("test.json")
+    assert result == {"data": "value"}
+
+
+def test_cache_read_valid_true(tmpdir):
+    """Test Cache._read_for_key when valid is True."""
+    from sarc.cache import Cache, JSONFormatter
+
+    tmpdir = Path(tmpdir)
+    cache = Cache(cache_dir=tmpdir, formatter=JSONFormatter)
+
+    cache.save("test.json", {"data": "value"})
+
+    result = cache.read("test.json", valid=True)
+    assert result == {"data": "value"}
+
+
+def test_cache_malformed_file(tmpdir):
+    """Test handling of malformed cache files."""
+    from sarc.cache import Cache, CacheException, JSONFormatter
+
+    tmpdir = Path(tmpdir)
+    cache = Cache(cache_dir=tmpdir, formatter=JSONFormatter)
+
+    # Create a malformed JSON file
+    malformed_file = tmpdir / "malformed.json"
+    malformed_file.write_text("{invalid json")
+
+    # Try to read from malformed file - should skip it and raise CacheException
+    with pytest.raises(CacheException, match="There is no cached result"):
+        cache.read("malformed.json", at_time=datetime.now(UTC))
+
+
+def test_cache_policy_check_same_value(tmpdir):
+    """Test CachePolicy.check when cached and live values are the same."""
+    from sarc.cache import CachePolicy
+
+    tmpdir = Path(tmpdir)
+    decorator = with_cache(
+        key=la_cle,
+        subdirectory="xy",
+        cache_root=tmpdir,
+    )
+    fn = decorator(la_fonction)
+
+    # First call to create cache
+    result1 = fn(1, 2, version=0)
+
+    # Second call with check policy - should pass since values are the same
+    result2 = fn(1, 2, version=0, cache_policy=CachePolicy.check)
+    assert result1 == result2
+
+
+def test_cache_policy_check_different_value(tmpdir):
+    """Test CachePolicy.check when cached and live values are different."""
+    from sarc.cache import CacheException, CachePolicy
+
+    tmpdir = Path(tmpdir)
+    decorator = with_cache(
+        key=la_cle,
+        subdirectory="xy",
+        cache_root=tmpdir,
+    )
+    fn = decorator(la_fonction)
+
+    # First call to create cache
+    fn(1, 2, version=0)
+
+    # Second call with different version - should raise exception due to mismatch
+    with pytest.raises(CacheException, match="Cached result != live result"):
+        fn(1, 2, version=1, cache_policy=CachePolicy.check)
+
+
+def test_cache_policy_check_non_json_diff(tmpdir):
+    """Test CachePolicy.check with non-JSON formatter."""
+    from sarc.cache import CacheException, CachePolicy
+
+    tmpdir = Path(tmpdir)
+    decorator = with_cache(
+        key=la_cle,
+        subdirectory="xy",
+        cache_root=tmpdir,
+        formatter=plaintext,
+    )
+    fn = decorator(la_fonction)
+
+    # First call to create cache
+    fn(1, 2, version=0)
+
+    # Second call with different version - should raise exception with repr diff
+    with pytest.raises(CacheException, match="Cached result != live result"):
+        fn(1, 2, version=1, cache_policy=CachePolicy.check)
+
+
+def test_cache_policy_from_env(monkeypatch):
+    """Test _cache_policy_from_env function."""
+
+    # Reset the context var
+    cache_policy_var.set(None)
+
+    # Test with different environment variables
+    test_cases = [
+        ("use", CachePolicy.use),
+        ("refresh", CachePolicy.refresh),
+        ("ignore", CachePolicy.ignore),
+        ("always", CachePolicy.always),
+        ("check", CachePolicy.check),
+        ("invalid", CachePolicy.use),  # Default fallback
+    ]
+
+    for env_value, expected_policy in test_cases:
+        monkeypatch.setenv("SARC_CACHE", env_value)
+        cache_policy_var.set(None)  # Reset for each test
+        policy = _cache_policy_from_env()
+        assert policy == expected_policy
+
+
+def test_cache_policy_from_env_cached(monkeypatch):
+    """Test _cache_policy_from_env when value is already cached in context var."""
+
+    # Set a cached value
+    cache_policy_var.set(CachePolicy.always)
+
+    # Change environment but should still return cached value
+    monkeypatch.setenv("SARC_CACHE", "use")
+    policy = _cache_policy_from_env()
+    assert policy == CachePolicy.always
+
+
+def test_make_cached_function_with_config_cache(tmpdir):
+    """Test make_cached_function when cache_root is None and config().cache is used."""
+    # Mock config().cache to return a path
+    mock_cache_path = Path(tmpdir) / "config_cache"
+    mock_cache_path.mkdir()
+
+    def test_function(x, y):
+        return x + y
+
+    def test_key(x, y):
+        return f"{x}_{y}.json"
+
+    with gifnoc.overlay({"sarc.cache": str(mock_cache_path)}):
+        cached_fn = make_cached_function(
+            fn=test_function,
+            formatter=JSONFormatter,
+            key=test_key,
+            subdirectory="test_subdir",
+            validity=True,
+            on_disk=True,
+            live=False,
+            cache_root=None,
+        )
+
+        assert cached_fn.cache_dir is not None
+
+        result = cached_fn(1, 2)
+        assert result == 3
+
+        cache_file = mock_cache_path / "test_subdir" / "1_2.json"
+        assert cache_file.exists()
+
+
+def test_make_cached_function_no_cache_root():
+    """Test make_cached_function when cache_root is None and config().cache is None."""
+
+    def test_function(x, y):
+        return x + y
+
+    def test_key(x, y):
+        return f"{x}_{y}.json"
+
+    # Create cached function with cache_root=None and no config cache
+    cached_fn = make_cached_function(
+        fn=test_function,
+        formatter=JSONFormatter,
+        key=test_key,
+        subdirectory="test_subdir",
+        validity=True,
+        on_disk=True,
+        live=False,
+        cache_root=None,
+    )
+
+    assert cached_fn.cache_dir is None
+
+    result = cached_fn(1, 2)
+    assert result == 3
+
+
+def test_make_cached_function_no_disk(tmpdir):
+    """Test make_cached_function when on_disk=False."""
+
+    def test_function(x, y):
+        return x + y
+
+    def test_key(x, y):
+        return f"{x}_{y}.json"
+
+    # Create cached function with on_disk=False
+    cached_fn = make_cached_function(
+        fn=test_function,
+        formatter=JSONFormatter,
+        key=test_key,
+        subdirectory="test_subdir",
+        validity=True,
+        on_disk=False,
+        live=False,
+        cache_root=tmpdir,
+    )
+
+    assert cached_fn.cache_dir is None
+
+    result = cached_fn(1, 2)
+    assert result == 3
+
+    # Check that no cache file was created
+    cache_dir = tmpdir / "test_subdir"
+    assert not cache_dir.exists()
+
+
+def test_with_cache_decorator_no_function():
+    """Test with_cache decorator when called without function (decorator mode)."""
+
+    # Test decorator mode
+    decorator = with_cache(
+        formatter=JSONFormatter,
+        subdirectory="test_decorator",
+    )
+
+    @decorator
+    def test_function(x, y):
+        return x * y
+
+    # Test the decorated function
+    result = test_function(3, 4)
+    assert result == 12
+
+
+def test_with_cache_decorator_with_function():
+    """Test with_cache decorator when called with function."""
+
+    def test_function(x, y):
+        return x * y
+
+    # Test direct function decoration
+    decorated_fn = with_cache(
+        test_function,
+        formatter=JSONFormatter,
+        subdirectory="test_direct",
+    )
+
+    # Test the decorated function
+    result = decorated_fn(3, 4)
+    assert result == 12
+
+
+def test_cache_read_valid_true_with_time_parsing(tmpdir):
+    """Test Cache._read_for_key when valid is True and time parsing is needed."""
+
+    tmpdir = Path(tmpdir)
+    cache = Cache(cache_dir=tmpdir, formatter=JSONFormatter)
+
+    # Create a cache file with time in filename
+    test_time = datetime.now(UTC)
+    time_str = test_time.strftime("%Y-%m-%d-%H-%M-%S")
+    cache_file = tmpdir / f"test.{time_str}.json"
+    cache_file.write_text('{"data": "value"}')
+
+    # Read with valid=True - should parse time from filename
+    result = cache.read("test.{time}.json", at_time=test_time, valid=True)
+    assert result == {"data": "value"}
+
+
+def function_with_qualname(x, y):
+    return x + y
+
+
+def test_make_cached_function_none_subdirectory(tmpdir):
+    """Test make_cached_function when subdirectory is None (uses fn.__qualname__)."""
+
+    def test_key(x, y):
+        return f"{x}_{y}.json"
+
+    # Create cached function with subdirectory=None
+    cached_fn = make_cached_function(
+        fn=function_with_qualname,
+        formatter=JSONFormatter,
+        key=test_key,
+        subdirectory=None,  # Should use fn.__qualname__
+        validity=True,
+        on_disk=True,
+        live=False,
+        cache_root=Path(tmpdir),
+    )
+
+    # Test the function
+    result = cached_fn(1, 2)
+    assert result == 3
+
+    # Check that cache file was created in the function's qualname directory
+    # The qualname for a local function includes the test function name
+    cache_dir = Path(tmpdir) / "function_with_qualname"
+    cache_file = cache_dir / "1_2.json"
+    assert cache_file.exists()
+
+
+def test_cache_policy_none_uses_env(tmpdir, monkeypatch):
+    """Test that cache_policy=None uses environment variable."""
+    tmpdir = Path(tmpdir)
+
+    # Set environment variable
+    monkeypatch.setenv("SARC_CACHE", "always")
+
+    decorator = with_cache(
+        key=la_cle,
+        subdirectory="xy",
+        cache_root=tmpdir,
+    )
+    fn = decorator(la_fonction)
+
+    # Call with cache_policy=None - should use env var (always)
+    with pytest.raises(Exception, match="There is no cached result"):
+        fn(1, 2, version=0, cache_policy=None)
+
+
+def test_cache_policy_none_uses_env_default(tmpdir, monkeypatch):
+    """Test that cache_policy=None uses default when env var is not set."""
+
+    tmpdir = Path(tmpdir)
+
+    # Reset the context var and ensure environment variable is not set
+    cache_policy_var.set(None)
+    monkeypatch.delenv("SARC_CACHE", raising=False)
+
+    decorator = with_cache(
+        key=la_cle,
+        subdirectory="xy",
+        cache_root=tmpdir,
+    )
+    fn = decorator(la_fonction)
+
+    # Call with cache_policy=None - should use default (use)
+    result1 = fn(1, 2, version=0, cache_policy=None)
+    result2 = fn(1, 2, version=1, cache_policy=None)
+    assert result1 == result2  # Should use cache
+
+
+@pytest.mark.freeze_time("2024-06-01")
+def test_cache_read_valid_true_with_time_parsing_complex(tmpdir, caplog):
+    """Test Cache._read_for_key with complex time parsing scenarios."""
+
+    tmpdir = Path(tmpdir)
+    cache = Cache(cache_dir=tmpdir, formatter=JSONFormatter)
+
+    # Create multiple cache files with different times
+    test_time1 = datetime(2024, 6, 1, 2, tzinfo=UTC)
+    test_time2 = datetime(2024, 6, 1, 4, tzinfo=UTC)
+    test_time3 = datetime(2024, 6, 1, 5, tzinfo=UTC)
+
+    time_str1 = test_time1.strftime("%Y-%m-%d-%H-%M-%S")
+    time_str2 = test_time2.strftime("%Y-%m-%d-%H-%M-%S")
+    time_str3 = test_time3.strftime("%Y-%m-%d-%H-%M-%S")
+
+    # Create files with different times
+    cache_file1 = tmpdir / f"test.{time_str1}.json"
+    cache_file2 = tmpdir / f"test.{time_str2}.json"
+    cache_file3 = tmpdir / f"test.{time_str3}.json"
+
+    cache_file1.write_text('{"data": "value1"}')
+    cache_file2.write_text('{"data": "value2"}')
+    cache_file3.write_text('{"data": "value3"}')
+
+    # Read with valid=True and different at_time values
+    # Should get the most recent file that's <= at_time
+    result1 = cache.read("test.{time}.json", at_time=test_time1, valid=True)
+    assert result1 == {"data": "value1"}
+
+    result2 = cache.read("test.{time}.json", at_time=test_time2, valid=True)
+    assert result2 == {"data": "value2"}
+
+    result3 = cache.read("test.{time}.json", at_time=test_time3, valid=True)
+    assert result3 == {"data": "value3"}
+
+    test_time_bad = datetime(2024, 6, 1, 6, tzinfo=UTC)
+    time_str_bad = test_time_bad.strftime("%Y-%m-%d-%H-%M-%S")
+    time_str_bad = time_str_bad[:-2] + "AA"
+
+    cache_file_bad = tmpdir / f"test.{time_str_bad}.json"
+    cache_file_bad.write_text("")
+
+    with caplog.at_level(logging.WARNING):
+        cache.read(
+            "test.{time}.json",
+            at_time=datetime(2024, 6, 1, 7, tzinfo=UTC),
+            valid=timedelta(days=1),
+        )
+    assert caplog.messages[0].startswith("Could not parse time from cache file name")
+
+
+def test_cache_save(tmpdir):
+    """Test Cache.save() return statement."""
+
+    tmpdir = Path(tmpdir)
+    cache = Cache(cache_dir=tmpdir, formatter=JSONFormatter)
+
+    cache.save("test.json", {"data": "value"})
+
+    # Verify the file was created
+    cache_file = tmpdir / "test.json"
+    assert cache_file.exists()
+    assert cache_file.read_text() == '{"data": "value"}'
+
+    cache.save("test-{time}.json", {"data": "value2"}, datetime(2024, 6, 1))
+
+    cache_file = tmpdir / "test-2024-06-01-00-00-00.json"
+    assert cache_file.exists()
+    assert cache_file.read_text() == '{"data": "value2"}'
+
+
+def test_key_function_returns_none(tmpdir):
+    """Test that when a key function returns None, the result is not cached."""
+    tmpdir = Path(tmpdir)
+
+    def key_returns_none(x, y, version):
+        return None
+
+    def test_function(x, y, version=0):
+        return f"{x} * {y} = {x * y} [v{version}]"
+
+    decorator = with_cache(
+        key=key_returns_none,
+        subdirectory="xy",
+        cache_root=tmpdir,
+    )
+    fn = decorator(test_function)
+
+    # First call - should compute and not cache
+    result1 = fn(1, 2, version=0)
+    assert result1 == "1 * 2 = 2 [v0]"
+
+    # Second call with same parameters - should compute again (not use cache)
+    result2 = fn(1, 2, version=0)
+    assert result2 == "1 * 2 = 2 [v0]"
+
+    # Third call with different parameters - should compute again
+    result3 = fn(3, 4, version=0)
+    assert result3 == "3 * 4 = 12 [v0]"
+
+    # Verify no cache files were created since key function returns None
+    cache_dir = tmpdir / "xy"
+    if cache_dir.exists():
+        assert len(list(cache_dir.iterdir())) == 0
+    else:
+        assert not cache_dir.exists()
