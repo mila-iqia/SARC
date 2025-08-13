@@ -45,7 +45,7 @@ dev = [
     "mypy>=1.15.0,<2",
     "pytest>=8.3.5,<9",
     "pytest-cov>=6.1.1,<7",
-    "pytest-regressions>=2.7.0,<2.8.1",
+    "pytest-regressions>=2.7.0,<3,!=2.8.1",
     "tox>=4.25.0,<5",
     "pytest-freezegun>=0.4.2,<0.5",
     "fabric[testing]>=3.0.0,<4",
