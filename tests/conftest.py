@@ -1,9 +1,8 @@
 import os
 import sys
-import tempfile
 import zoneinfo
 from pathlib import Path
-from unittest.mock import MagicMock, mock_open
+from unittest.mock import MagicMock
 
 import gifnoc
 from opentelemetry.sdk.trace import TracerProvider

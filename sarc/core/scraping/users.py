@@ -61,9 +61,11 @@ class UserScraper[T](Protocol):
     def validate_config(self, config_data: Any) -> T:
         return deserialize(self.config_type, config_data)
 
-    def get_user_data(self, config: T) -> bytes: ...
+    def get_user_data(self, config: T) -> bytes: ...  # pragma: nocover
 
-    def parse_user_data(self, config: T, data: bytes) -> Iterable[UserMatch]: ...
+    def parse_user_data(
+        self, config: T, data: bytes
+    ) -> Iterable[UserMatch]: ...  # pragma: nocover
 
 
 _builtin_scrapers: dict[str, UserScraper] = dict()
@@ -77,7 +79,7 @@ def get_user_scraper(name: str) -> UserScraper:
     except KeyError:
         pass
     val = _user_scrapers[name]
-    return val.load()
+    return val.load()()
 
 
 def update_user_match(*, value: UserMatch, update: UserMatch) -> None:
@@ -146,7 +148,7 @@ def scrape_users(
     for scraper_name, (rdata, config) in raw_data.items():
         for userm in scraper.parse_user_data(config, rdata):
             userm.matching_id.name = scraper_name
-            # First, get all the userm that matche with this one.
+            # First, get all the userm that match with this one.
             prev_userms: list[UserMatch] = [userm]
             prev = user_refs.get(userm.matching_id, None)
             if prev is not None:
