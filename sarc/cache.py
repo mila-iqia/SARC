@@ -111,11 +111,18 @@ def _cache_policy_from_env() -> CachePolicy:
 @dataclass(kw_only=True)
 class Cache[T]:
     formatter: type[FormatterProto[T]] = JSONFormatter[T]
-    cache_dir: Path | None
+    cache_root: Path | None
+    subdirectory: str
+    on_disk: bool = True
     live: bool = False
     live_cache: dict[tuple[Path | None, str], CachedResult[T]] = field(
         default_factory=dict
     )
+
+    @property
+    def cache_dir(self) -> Path | None:
+        root = self.cache_root or config().cache
+        return root and root / self.subdirectory
 
     def read(
         self,
@@ -139,11 +146,10 @@ class Cache[T]:
                 issued=at_time,
                 value=value,
             )
-        if self.cache_dir is not None:
-            self.cache_dir.mkdir(parents=True, exist_ok=True)
-            output_file = self.cache_dir / key.format(
-                time=at_time.strftime(_time_format)
-            )
+        cdir = self.cache_dir
+        if self.on_disk and cdir is not None:
+            cdir.mkdir(parents=True, exist_ok=True)
+            output_file = cdir / key.format(time=at_time.strftime(_time_format))
             encoding = None if "b" in self.formatter.write_flags else "utf-8"
             with open(
                 output_file, self.formatter.write_flags, encoding=encoding
@@ -162,9 +168,10 @@ class Cache[T]:
                 logger.debug("read from live cache for key '%s'", key_value)
                 return previous_result.value
 
-        if self.cache_dir is not None:
+        cdir = self.cache_dir
+        if self.on_disk and cdir is not None:
             candidates = sorted(
-                self.cache_dir.glob(key_value.format(time=_time_glob_pattern)),
+                cdir.glob(key_value.format(time=_time_glob_pattern)),
                 reverse=True,
             )
             maximum = key_value.format(time=timestring)
@@ -238,7 +245,8 @@ class CachedFunction[**P, R](Cache[R]):  # pylint: disable=too-many-instance-att
                     else self.validity
                 ),
                 live=self.live,
-                cache_dir=self.cache_dir,
+                cache_root=self.cache_root,
+                subdirectory=self.subdirectory,
             )
             setattr(parent, symbol, cf)
         return cf
@@ -361,17 +369,8 @@ def make_cached_function[**P, R](
     live: bool,
     cache_root: Path | None,
 ) -> CachedFunction[P, R]:
-    if on_disk:
-        if cache_root is None:
-            cache_root = config().cache
-        if cache_root is not None:
-            if subdirectory is None:
-                subdirectory = fn.__qualname__
-            cache_dir = cache_root / subdirectory
-        else:
-            cache_dir = None
-    else:
-        cache_dir = None
+    if subdirectory is None:
+        subdirectory = fn.__qualname__
 
     return CachedFunction(
         fn=fn,
@@ -379,7 +378,9 @@ def make_cached_function[**P, R](
         key=key or default_key,
         validity=validity,
         live=live,
-        cache_dir=cache_dir,
+        on_disk=on_disk,
+        cache_root=cache_root,
+        subdirectory=subdirectory,
     )
 
 
