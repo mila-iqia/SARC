@@ -25,7 +25,7 @@ def httpserver(httpserver: HTTPServer):
 # The only thing that is not tested in the message pipeline is the logging library itself,
 # which can be considered reliable ?
 @pytest.mark.skip(
-    reason="Broken because opentelemetry swicth to doing the flush in a thead in the background"
+    reason="Broken because opentelemetry switched to doing the flush in a thread in the background"
 )
 @pytest.mark.usefixtures("base_config_with_logging")
 def test_loki_logging_handler(httpserver):
