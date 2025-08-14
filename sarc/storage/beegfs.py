@@ -85,17 +85,9 @@ _builtin_scrapers["beegfs"] = BeeGFSDiskUsage()
 
 
 def _trim_beegfs_output(output: str) -> str:
-    collect = []
-    started = False
-
-    for line in output.splitlines():
-        if beegfs_header in line:
-            started = True
-            continue
-        if started:
-            collect.append(line)
-
-    return "\n".join(collect)
+    splitted = output.splitlines()
+    header_index = splitted.index(beegfs_header)
+    return "\n".join(splitted[header_index + 1:])
 
 
 def _parse_line(line: str) -> DiskUsageUser:
