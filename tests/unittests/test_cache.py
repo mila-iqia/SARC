@@ -537,7 +537,7 @@ def test_make_cached_function_with_config_cache(tmp_path):
             cache_root=None,
         )
 
-        assert cached_fn.cache_dir is not None
+        assert cached_fn.cache_dir.parent == mock_cache_path
 
         result = cached_fn(1, 2)
         assert result == 3
