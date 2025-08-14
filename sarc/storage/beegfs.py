@@ -90,6 +90,12 @@ def _trim_beegfs_output(output: str) -> str:
     return "\n".join(splitted[header_index + 1:])
 
 
-def _parse_line(line: str) -> DiskUsageUser:
-    name, _, size, _, files, _ = line.split(",")
-    return DiskUsageUser(user=name, nbr_files=int(files), size=cast(ByteSize, size))
+def _parse_line(line: list[str]) -> DiskUsageUser:
+    columns = {
+        key.strip(): value.strip() for key, value in zip(beegfs_header.split(","), line)
+    }
+    return DiskUsageUser(
+        user=columns["name"],
+        nbr_files=int(columns["files"]),
+        size=cast(ByteSize, columns["size"]),
+    )
