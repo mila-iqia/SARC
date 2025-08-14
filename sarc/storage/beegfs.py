@@ -2,9 +2,11 @@
 Fetching and parsing code specific to the mila cluster
 """
 
+import csv
 import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from io import StringIO
 from typing import cast
 
 from fabric import Connection
@@ -88,7 +90,7 @@ _builtin_scrapers["beegfs"] = BeeGFSDiskUsage()
 def _trim_beegfs_output(output: str) -> str:
     splitted = output.splitlines()
     header_index = splitted.index(beegfs_header)
-    return "\n".join(splitted[header_index + 1:])
+    return "\n".join(splitted[header_index + 1 :])
 
 
 def _parse_line(line: list[str]) -> DiskUsageUser:
