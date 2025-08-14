@@ -6,7 +6,7 @@ import os
 import re
 from contextvars import ContextVar
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from functools import partial, wraps
 from pathlib import Path
@@ -15,6 +15,7 @@ from typing import IO, Any, Callable, ClassVar, Literal, Protocol, overload
 from .config import config
 
 logger = logging.getLogger(__name__)
+UTCOFFSET = timedelta(0)
 
 
 class FormatterProto[T](Protocol):
@@ -22,10 +23,10 @@ class FormatterProto[T](Protocol):
     write_flags: ClassVar[str]
 
     @staticmethod
-    def load(fp: IO[Any]) -> T: ...
+    def load(fp: IO[Any]) -> T: ...  # pragma: nocover
 
     @staticmethod
-    def dump(obj: T, fp: IO[Any]) -> None: ...
+    def dump(obj: T, fp: IO[Any]) -> None: ...  # pragma: nocover
 
 
 class JSONFormatter[T](FormatterProto[T]):
@@ -39,6 +40,24 @@ class JSONFormatter[T](FormatterProto[T]):
     @staticmethod
     def dump(obj: T, fp: IO[Any]) -> None:
         json.dump(obj, fp)
+
+
+class BinaryFormatter(FormatterProto[bytes]):
+    read_flags = "rb"
+    write_flags = "wb"
+
+    @staticmethod
+    def load(fp: IO[bytes]) -> bytes:
+        return fp.read()
+
+    @staticmethod
+    def dump(obj: bytes, fp: IO[bytes]) -> None:
+        todo = len(obj)
+        while todo:
+            res = fp.write(obj)
+            if res > 0:
+                todo -= res
+            obj = obj[res:]
 
 
 class CacheException(Exception):
@@ -90,41 +109,45 @@ def _cache_policy_from_env() -> CachePolicy:
 
 
 @dataclass(kw_only=True)
-class CachedFunction[**P, R]:  # pylint: disable=too-many-instance-attributes
-    fn: Callable[P, R]
-    formatter: type[FormatterProto[R]] = JSONFormatter[R]
-    key: Callable[P, str | None]
+class Cache[T]:
+    formatter: type[FormatterProto[T]] = JSONFormatter[T]
+    cache_root: Path | None
     subdirectory: str
-    validity: timedelta | Callable[P, timedelta] | Literal[True] = True
     on_disk: bool = True
     live: bool = False
-    cache_root: Path | None = None
-    live_cache: dict[tuple[Path | None, str], CachedResult[R]] = field(
+    live_cache: dict[tuple[Path | None, str], CachedResult[T]] = field(
         default_factory=dict
     )
 
-    def __post_init__(self):
-        self.logger = logging.getLogger(self.fn.__module__)
-        self.name = self.fn.__qualname__
-
     @property
     def cache_dir(self) -> Path | None:
-        """Return the cache directory."""
         root = self.cache_root or config().cache
-        return root and (root / self.subdirectory)
+        return root and root / self.subdirectory
 
-    def _save_for_key(
-        self, key: str, value: R, at_time: datetime | None = None
-    ) -> None:
+    def read(
+        self,
+        key: str,
+        at_time: datetime | None = None,
+        valid: timedelta | Literal[True] = True,
+    ) -> T:
+        if at_time is None:
+            at_time = datetime.now(UTC)
+        return self._read_for_key(key, at_time, valid)
+
+    def save(self, key: str, value: T, at_time: datetime | None = None) -> None:
+        if at_time is None:
+            at_time = datetime.now(UTC)
+        return self._save_for_key(key, value, at_time)
+
+    def _save_for_key(self, key: str, value: T, at_time: datetime) -> None:
         """Save a value in cache for the given key."""
-        at_time = at_time or datetime.now()
-        cdir = self.cache_dir
         if self.live:
-            self.live_cache[(cdir, key)] = CachedResult(
+            self.live_cache[(self.cache_dir, key)] = CachedResult(
                 issued=at_time,
                 value=value,
             )
-        if cdir and self.on_disk:
+        cdir = self.cache_dir
+        if self.on_disk and cdir is not None:
             cdir.mkdir(parents=True, exist_ok=True)
             output_file = cdir / key.format(time=at_time.strftime(_time_format))
             encoding = None if "b" in self.formatter.write_flags else "utf-8"
@@ -132,48 +155,43 @@ class CachedFunction[**P, R]:  # pylint: disable=too-many-instance-attributes
                 output_file, self.formatter.write_flags, encoding=encoding
             ) as output_fp:
                 self.formatter.dump(value, output_fp)
-            self.logger.debug(f"{self.name}(...) saved to cache file '{output_file}'")
+            logger.debug("saved to cache file '%s'", output_file)
 
     def _read_for_key(
-        self,
-        key_value: str,
-        valid: timedelta | Literal[True] = True,
-        at_time: datetime | None = None,
-    ) -> R:
-        at_time = at_time or datetime.now()
+        self, key_value: str, at_time: datetime, valid: timedelta | Literal[True] = True
+    ) -> T:
         timestring = at_time.strftime(_time_format)
-        cdir = self.cache_dir
-        live_key = (cdir, key_value)
+        live_key = (self.cache_dir, key_value)
 
         if self.live and (previous_result := self.live_cache.get(live_key, None)):
             if valid is True or at_time <= previous_result.issued + valid:
-                self.logger.debug(
-                    f"{self.name}(...) read from live cache for key '{key_value}'"
-                )
+                logger.debug("read from live cache for key '%s'", key_value)
                 return previous_result.value
 
-        if cdir and self.on_disk:
+        cdir = self.cache_dir
+        if self.on_disk and cdir is not None:
             candidates = sorted(
                 cdir.glob(key_value.format(time=_time_glob_pattern)),
                 reverse=True,
             )
             maximum = key_value.format(time=timestring)
             possible = [c for c in candidates if c.name <= maximum]
-            if possible:
-                candidate = possible[0]
-
+            for candidate in possible:
                 if valid is True:
-                    candidate_time = datetime.now()
+                    candidate_time = datetime.now(UTC)
                 else:
                     m = re.match(
                         string=candidate.name,
                         pattern=key_value.format(time=f"({_time_regexp})"),
                     )
                     if m is None:
-                        raise CacheException(
-                            f"Could not parse time from cache file name '{candidate}'"
+                        logger.warning(
+                            "Could not parse time from cache file name '%s'", candidate
                         )
-                    candidate_time = datetime.strptime(m.group(1), _time_format)
+                        continue
+                    candidate_time = datetime.strptime(
+                        m.group(1), _time_format
+                    ).replace(tzinfo=UTC)
 
                 if valid is True or at_time <= candidate_time + valid:
                     encoding = None if "b" in self.formatter.read_flags else "utf-8"
@@ -185,24 +203,32 @@ class CachedFunction[**P, R]:  # pylint: disable=too-many-instance-attributes
                         except (  # pylint: disable=broad-exception-caught
                             Exception
                         ) as exc:
-                            self.logger.warning(
-                                f"Could not load malformed cache file: {candidate}",
+                            logger.warning(
+                                "Could not load malformed cache file: %s",
+                                candidate,
                                 exc_info=exc,
                             )
-                            raise CacheException(
-                                f"Could not load malformed cache file: {candidate}"
-                            ) from exc
+                            continue
                     if self.live:
                         self.live_cache[live_key] = CachedResult(
                             issued=candidate_time,
                             value=value,
                         )
-                    self.logger.debug(
-                        f"{self.name}(...) read from cache file '{candidate}'"
-                    )
+                    logger.debug("read from cache file '%s'", candidate)
                     return value
 
         raise CacheException(f"There is no cached result for key `{key_value}`")
+
+
+@dataclass(kw_only=True)
+class CachedFunction[**P, R](Cache[R]):  # pylint: disable=too-many-instance-attributes
+    fn: Callable[P, R]
+    key: Callable[P, str | None]
+    validity: timedelta | Callable[P, timedelta] | Literal[True] = True
+
+    def __post_init__(self):
+        self.logger = logging.getLogger(self.fn.__module__)
+        self.name = self.fn.__qualname__
 
     def __get__(self, parent, _):
         """Called when a cached function is a method."""
@@ -213,15 +239,14 @@ class CachedFunction[**P, R]:  # pylint: disable=too-many-instance-attributes
                 fn=self.fn.__get__(parent),
                 formatter=self.formatter,
                 key=self.key.__get__(parent),
-                subdirectory=self.subdirectory,
                 validity=(
                     self.validity.__get__(parent)
                     if callable(self.validity)
                     else self.validity
                 ),
-                on_disk=self.on_disk,
                 live=self.live,
                 cache_root=self.cache_root,
+                subdirectory=self.subdirectory,
             )
             setattr(parent, symbol, cf)
         return cf
@@ -344,15 +369,18 @@ def make_cached_function[**P, R](
     live: bool,
     cache_root: Path | None,
 ) -> CachedFunction[P, R]:
+    if subdirectory is None:
+        subdirectory = fn.__qualname__
+
     return CachedFunction(
         fn=fn,
         formatter=formatter,
         key=key or default_key,
-        subdirectory=subdirectory or fn.__qualname__,
         validity=validity,
-        on_disk=on_disk,
         live=live,
+        on_disk=on_disk,
         cache_root=cache_root,
+        subdirectory=subdirectory,
     )
 
 
