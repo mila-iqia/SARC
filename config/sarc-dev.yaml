@@ -32,6 +32,10 @@ sarc:
            params:
              config_files:
                default: /etc/beegfs/scratch.d/beegfs-client.conf
+         - name: beegfs
+           params:
+             config_files:
+               default: /etc/beegfs/projects.d/beegfs-client.conf
       prometheus_url: http://prometheus01.server.mila.quebec:9090/
       start_date: '2022-04-01'
       billing_is_gpu: true
