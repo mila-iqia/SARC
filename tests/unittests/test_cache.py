@@ -606,15 +606,30 @@ def test_with_cache_decorator_with_function():
 
 
 def test_cache_read_valid_true_with_time_parsing(tmp_path):
+    """Test Cache._read_for_key when valid is True and time parsing is needed."""
+    from sarc.cache import CacheException
+
     cache = Cache(cache_root=tmp_path, subdirectory="", formatter=JSONFormatter)
+    test_time = datetime.now(UTC)
+    valid_timedelta = timedelta(days=1)
+
+    # Create a cache file with time older than timedelta in filename
+    time_str = (test_time - valid_timedelta).strftime("%Y-%m-%d-%H-%M-%S")
+    cache_file = tmp_path / f"test.{time_str}.json"
+    cache_file.write_text('{"data": "value"}')
+
+    # Test with valid=timedelta and file too old - should skip it and raise CacheException
+    with pytest.raises(CacheException, match="There is no cached result"):
+        cache.read("test.{time}.json", at_time=test_time, valid=valid_timedelta)
 
     # Create a cache file with time in filename
-    test_time = datetime.now(UTC)
     time_str = test_time.strftime("%Y-%m-%d-%H-%M-%S")
     cache_file = tmp_path / f"test.{time_str}.json"
     cache_file.write_text('{"data": "value"}')
 
-    # Read with valid=True - should parse time from filename
+    # Read with valid=timedelta and valid=True - should parse time from filename
+    result = cache.read("test.{time}.json", at_time=test_time, valid=valid_timedelta)
+    assert result == {"data": "value"}
     result = cache.read("test.{time}.json", at_time=test_time, valid=True)
     assert result == {"data": "value"}
 
