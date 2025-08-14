@@ -71,7 +71,10 @@ class BeeGFSDiskUsage(DiskUsageScraper[BeeGFSDiskUsageConfig]):
         groups = [
             DiskUsageGroup(
                 group_name=name,
-                users=[_parse_line(line) for line in csv.reader(StringIO(data[name]))],
+                users=[
+                    _parse_line(line)
+                    for line in csv.reader(StringIO("\n".join(data[name])))
+                ],
             )
             for name in config.config_files.keys()
         ]
