@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import json
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -552,3 +553,17 @@ class JsonJobFactory(JobFactory):
         flattened_sacct_job.update(flatten(kwargs))
 
         return unflatten(flattened_sacct_job)
+
+
+def create_sacct_json(configs: list[dict]) -> str:
+    tmp_json_raw = copy.deepcopy(json_raw)
+    tmp_json_raw["jobs"] = create_json_jobs(configs)
+    return json.dumps(tmp_json_raw)
+
+
+def create_json_jobs(json_jobs: list[dict]) -> list[dict]:
+    json_job_factory = JsonJobFactory()
+    for job in json_jobs:
+        json_job_factory.add_job(**job)
+
+    return json_job_factory.jobs
