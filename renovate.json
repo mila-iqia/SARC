@@ -10,12 +10,6 @@
   "packageRules": [
     {
       "matchPackageNames": [
-        "uv"
-      ],
-      "automerge": true
-    },
-    {
-      "matchPackageNames": [
         "serieux",
         "gifnoc"
       ],
