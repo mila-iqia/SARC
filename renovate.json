@@ -3,21 +3,6 @@
   "extends": [
     "config:recommended"
   ],
-  "customManagers": [
-    {
-      "customType": "regex",
-      "managerFilePatterns": [
-        ".github/workflows/python-package.yml"
-      ],
-      "matchStrings": [
-        "uses:\\s+astral-sh/setup-uv@v\\d+\\s+with:\\s+version:\\s+\"(?<currentValue>\\d+\\.\\d+\\.\\d+)\""
-      ],
-      "depTypeTemplate": "python",
-      "datasourceTemplate": "pypi",
-      "depNameTemplate": "uv",
-      "packageNameTemplate": "uv"
-    }
-  ],
   "lockFileMaintenance": {
     "enabled": true,
     "automerge": true
