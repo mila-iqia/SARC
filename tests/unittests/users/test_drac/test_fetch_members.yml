@@ -1,0 +1,26 @@
+- activation_status: activated
+  ccri: abc-123-45
+  department: Informatique Et Recherche Opérationnelle
+  email: john.doe@example.com
+  groupname: rrg-johndoe-ad
+  institution: Université de Montréal
+  member_since: 2023-01-01 13:54:23 -0500
+  name: John Doe
+  permission: Manager
+  position: Professeure ou professeur
+  rapi: abc-000-ag
+  sponsor: John Doe
+  username: johndoe
+- activation_status: activated
+  ccri: def-456-78
+  department: Informatique Et Recherche Opérationnelle
+  email: jane.smith@example.com
+  groupname: rrg-johndoe-ad
+  institution: Université de Montréal
+  member_since: 2023-02-01 17:34:48 -0500
+  name: Jane Smith
+  permission: Member
+  position: Professeure ou professeur
+  rapi: abc-000-ag
+  sponsor: John Doe
+  username: janesmith

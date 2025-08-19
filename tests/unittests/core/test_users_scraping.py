@@ -19,6 +19,30 @@ from sarc.core.scraping.users import (
 )
 
 
+class UserPluginTester:
+    plugin = None
+    raw_config = None
+    parsed_config = {}
+    raw_datas = []
+    parsed_datas = []
+
+    def test_config_validation(self):
+        conf = self.plugin.validate_config(self.raw_config)
+        assert isinstance(conf, self.plugin.config_type)
+        assert conf == self.parsed_config
+
+    def test_fetch_data(self):
+        raise NotImplementedError()
+
+    def test_parse_data(self, raw_data, data_regression):
+        raise NotImplementedError()
+        # This code is what you should put in your implementation, but
+        # limitations on parametrize require that the method be in your class
+        # rather than this one.
+        data = self.plugin.parse_user_data(self.parsed_config, raw_data)
+        data_regression.check(data)
+
+
 @dataclass
 class MockConfig:
     api_url: str
@@ -360,4 +384,5 @@ def test_update_user_match_merge_credentials_existing_domain():
     update_user_match(value=base_user, update=update_user)
 
     assert "drac" in base_user.associated_accounts
+    assert base_user.associated_accounts["drac"].get_value() == "user1_drac"
     assert base_user.associated_accounts["drac"].get_value() == "user1_drac"

@@ -5,20 +5,19 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import gifnoc
+import pytest
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from opentelemetry.trace import set_tracer_provider
+
+from sarc.config import config, using_sarc_mode
 
 _tracer_provider = TracerProvider()
 _exporter = InMemorySpanExporter()
 _tracer_provider.add_span_processor(SimpleSpanProcessor(_exporter))
 set_tracer_provider(_tracer_provider)
 del _tracer_provider
-
-import pytest
-
-from sarc.config import config, using_sarc_mode
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "common"))
 

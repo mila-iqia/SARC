@@ -77,8 +77,8 @@ class ValidField[V](BaseModel):
         instead of an overlapping error, the bound of the most recent value will
         be adjusted to end at the start of the new value.
         """
-        assert start is None or start.tzinfo == UTC
-        assert end is None or end.tzinfo == UTC
+        assert start is None or start.tzinfo is not None
+        assert end is None or end.tzinfo is not None
 
         if start is not None and end is not None:
             assert start < end
@@ -86,6 +86,8 @@ class ValidField[V](BaseModel):
             start = START_TIME
         if end is None or end > END_TIME:
             end = END_TIME
+        start = start.astimezone(UTC)
+        end = end.astimezone(UTC)
         tag = ValidTag(value=value, valid_start=start, valid_end=end)
         self._insert_tag(tag, truncate=False)
 
@@ -181,10 +183,12 @@ class ValidField[V](BaseModel):
         If date is None, we the the current time as the date.
         If there was no value as the specified date, raises DateMatchError.
         """
-        assert date is None or date.tzinfo == UTC
+        assert date is None or date.tzinfo is not None
 
         if date is None:
             date = datetime.now(UTC)
+
+        date = date.astimezone(UTC)
 
         for tag in self.values:
             if date >= tag.valid_start and date < tag.valid_end:
