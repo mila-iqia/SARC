@@ -5,8 +5,14 @@ from sarc.core.scraping.users import MatchID, UserMatch, UserScraper, _builtin_s
 
 
 @dataclass
+class ConfigMatchID:
+    name: str
+    mid: str
+
+
+@dataclass
 class ManualUserConfig:
-    id_pairs: dict[str, list[MatchID]]
+    id_pairs: dict[str, list[ConfigMatchID]]
 
 
 class ManualUserScraper(UserScraper[ManualUserConfig]):
@@ -30,7 +36,8 @@ class ManualUserScraper(UserScraper[ManualUserConfig]):
         #  - It could be another db on the side, like a SQLite or something.
         for name, mids in config.id_pairs.items():
             yield UserMatch(
-                matching_id=MatchID(name="manual", mid=name), known_matches=set(mids)
+                matching_id=MatchID(name="manual", mid=name),
+                known_matches=set(MatchID(name=m.name, mid=m.mid) for m in mids),
             )
 
 
