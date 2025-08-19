@@ -6,10 +6,12 @@ from unittest.mock import MagicMock
 
 import gifnoc
 import pytest
+from freezegun.api import FakeDatetime
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from opentelemetry.trace import set_tracer_provider
+from pytest_regressions.data_regression import RegressionYamlDumper
 
 from sarc.config import config, using_sarc_mode
 
@@ -22,6 +24,10 @@ del _tracer_provider
 sys.path.append(os.path.join(os.path.dirname(__file__), "common"))
 
 pytest_plugins = "fabric.testing.fixtures"
+
+RegressionYamlDumper.add_custom_yaml_representer(
+    FakeDatetime, lambda dumper, data: dumper.represent_datetime(data)
+)
 
 
 @pytest.fixture

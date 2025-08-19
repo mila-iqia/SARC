@@ -74,19 +74,19 @@ they are structured as follows:
 
 """
 
+import datetime
 import json
 import logging
 import os
 import ssl
 from collections.abc import Iterable
+from dataclasses import dataclass
 from pathlib import Path
 
-# Requirements
-# - pip install ldap3
-from attr import dataclass
 from ldap3 import ALL_ATTRIBUTES, SUBTREE, Connection, Server, Tls
 
 from sarc.core.models.users import Credentials
+from sarc.core.models.validators import END_TIME
 from sarc.core.scraping.users import MatchID, UserMatch, UserScraper, _builtin_scrapers
 
 logger = logging.getLogger(__name__)
@@ -123,7 +123,10 @@ class MilaLDAPScraper(UserScraper[MilaLDAPConfig]):
 
         for user_raw in json.loads(data.decode()):
             creds = Credentials()
-            creds.insert(user_raw["posixUid"][0])
+            end = END_TIME
+            if user_raw["suspended"][0] != "false":
+                end = datetime.datetime.now(datetime.UTC)
+            creds.insert(user_raw["posixUid"][0], end=end)
             yield UserMatch(
                 display_name=user_raw["displayName"][0],
                 email=user_raw["mail"][0],
