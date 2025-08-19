@@ -1,0 +1,20 @@
+- ccri: abc-123-45
+  département: Génie Informatique Et Génie Logiciel
+  email: john.doe@example.com
+  institution: École Polytechnique
+  lastname: Doe
+  nom: John Doe
+  status: Activated
+  statut: Étudiant 1er cycle
+  username: johndoe
+  état du compte: activé expire le 10 mai 2023
+- ccri: def-567-89
+  département: Génie Informatique Et Génie Logiciel
+  email: jane.smith@example.com
+  institution: École Polytechnique
+  lastname: Smith
+  nom: Jane Smith
+  status: Activated
+  statut: Étudiant 1er cycle
+  username: janesmith
+  état du compte: activé expire le 11 janvier 2024

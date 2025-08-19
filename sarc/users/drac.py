@@ -1,4 +1,5 @@
 import csv
+import datetime
 import json
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -59,7 +60,12 @@ class DRACMemberScraper(UserScraper[DRACMemberConfig]):
     ) -> Iterable[UserMatch]:
         for d in json.loads(data.decode()):
             creds = Credentials()
-            creds.insert(d["username"], start=d["member_since"])
+            creds.insert(
+                d["username"],
+                start=datetime.datetime.strptime(
+                    d["member_since"], "%Y-%m-%d %H:%M:%S %z"
+                ),
+            )
             yield UserMatch(
                 display_name=d["name"],
                 email=d["email"],

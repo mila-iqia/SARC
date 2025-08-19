@@ -1,0 +1,44 @@
+- associated_accounts:
+    drac:
+      values:
+      - valid_end: 3000-01-01 00:00:00+00:00
+        valid_start: 2023-01-01 18:54:23+00:00
+        value: johndoe
+  co_supervisors:
+    values: []
+  display_name: John Doe
+  email: john.doe@example.com
+  github_username:
+    values: []
+  google_scholar_profile:
+    values: []
+  known_matches: !!set {}
+  matching_id:
+    mid: abc-123
+    name: drac_member
+  member_type:
+    values: []
+  supervisor:
+    values: []
+- associated_accounts:
+    drac:
+      values:
+      - valid_end: 3000-01-01 00:00:00+00:00
+        valid_start: 2023-02-01 22:34:48+00:00
+        value: janesmith
+  co_supervisors:
+    values: []
+  display_name: Jane Smith
+  email: jane.smith@example.com
+  github_username:
+    values: []
+  google_scholar_profile:
+    values: []
+  known_matches: !!set {}
+  matching_id:
+    mid: def-456
+    name: drac_member
+  member_type:
+    values: []
+  supervisor:
+    values: []
