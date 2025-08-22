@@ -45,7 +45,7 @@ class TestMilaLDAPScraper(UserPluginTester):
             raw_data = f.read()
 
         data = list(
-            d.model_dump()
+            d.model_dump(mode="json")
             for d in self.plugin.parse_user_data(self.parsed_config, raw_data)
         )
         data_regression.check(data)

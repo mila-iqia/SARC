@@ -1,21 +1,60 @@
 from copy import deepcopy
 from datetime import date
+from typing import Any, Callable
+
+from sarc.users.mymila import Headers
+
+MYMILA_HEADERS = (
+    "Affiliated_university",
+    "Affiliation_type",
+    "Alliance-DRAC_account",
+    "Co-Supervisor_Membership_Type",
+    "Co-Supervisor__MEMBER_NAME_",
+    "Co-Supervisor__MEMBER_NUM_",
+    "Department_affiliated",
+    "End_date_of_academic_nomination",
+    "End_date_of_studies",
+    "End_date_of_visit-internship",
+    "Faculty_affiliated",
+    "First_Name",
+    "GitHub_username",
+    "Google_Scholar_profile",
+    "Last_Name",
+    "MILA_Email",
+    "Membership_Type",
+    "Mila_Number",
+    "Preferred_First_Name",
+    "Profile_Type",
+    "Start_Date_with_MILA",
+    "Start_date_of_academic_nomination",
+    "Start_date_of_studies",
+    "Start_date_of_visit-internship",
+    "End_Date_with_MILA",
+    "Status",
+    "Supervisor_Principal_Membership_Type",
+    "Supervisor_Principal__MEMBER_NAME_",
+    "Supervisor_Principal__MEMBER_NUM_",
+    "internal_id",
+    "Co-Supervisor_CCAI_Chair_CIFAR",
+    "Supervisor_Principal_CCAI_Chair_CIFAR",
+    "CCAI_Chair_CIFAR",
+    "_MEMBER_NUM_",
+)
 
 
-_membership_types = [
+_membership_types: list[list[str]] = [
     # Student
     [
-        "Research intern",
-        "",
+        "Permanent HQP",
+        "Collaborating Researcher",
     ],
     # Prof
     [
-        "Permanent HQP",
-        "Visiting Researcher",
-        "Collaborating Researcher",
+        "Associate academic member",
+        "Core Academic Member",
     ],
 ]
-_affiliation_types = [
+_affiliation_types: list[list[Any]] = [
     # Student
     [
         "HQP - DESS",
@@ -24,85 +63,17 @@ _affiliation_types = [
         "HQP - Professional Master's",
         "HQP - Undergraduate",
         "Research Intern",
-        "",
+        None,
     ],
     # Prof
     [
-        "Collaborating Alumni",
-        "Collaborating researcher",
-        "HQP - Postdoctorate",
-        "visiting researcher",
-        "",
-    ],
-]
-_supervisors = [
-    # Student
-    [f"John Smith{i:03d}" for i in range(5)],
-    # Prof
-    [""],
-]
-_current_university_title = [
-    # Student
-    [
-        "",
-    ],
-    # Prof
-    [
-        "Canada Research Chair (Tier 2) and Assistant Professor",
-        "Assistant Professor, School of Computer Science",
-        "Professeur sous octrois agrégé / Associate Research Professor",
-        "",
+        "Core Academic Member",
+        "Associate academic member",
     ],
 ]
 
 
-mymila_template = {
-    "Profile Type": "",
-    "Applicant Type": "",
-    "internal id": "",
-    "Mila Number": "",
-    "Membership Type": "",
-    "Affiliation type": "",
-    "Assistant email": "",
-    "Preferred email": "",
-    "Faculty affiliated": "",
-    "Department affiliated": "",
-    "ID affiliated": "",
-    "Affiliated university 2": "",
-    "Second affiliated university": "",
-    "Affiliated university 3": "",
-    "Third affiliated university": "",
-    "Program of study": "",
-    "GitHub username": "",
-    "Google Scholar profile": "",
-    "Cluster access": "",
-    "Access privileges": "",
-    "Status": "",
-    "Membership Type.1": "",
-    "Affiliation type.1": "",
-    "Last Name": "",
-    "First Name": "",
-    "Preferred First Name": "",
-    "Email": "email",
-    "Supervisor Principal": "",
-    "Co-Supervisor": "",
-    "Start date of studies": "",
-    "End date of studies": "",
-    "Start date of visit-internship": "",
-    "End date of visit-internship": "",
-    "Affiliated university": "",
-    "Current university title": "",
-    "Start date of academic nomination": "",
-    "End date of academic nomination": "",
-    "Alliance-DRAC account": "",
-    "MILA Email": "email",
-    "Start Date with MILA": "",
-    "End Date with MILA": "",
-    "Type of membership": "",
-}
-
-
-def dictset(dictionnary: dict, operation: dict):
+def dictset(dictionnary: dict, operation: dict) -> dict:
     result = deepcopy(dictionnary)
 
     for path, value in operation.items():
@@ -117,26 +88,27 @@ def dictset(dictionnary: dict, operation: dict):
     return result
 
 
-def fake_mymila_data(nbr_users=10, nbr_profs=5, hardcoded_values_by_user={}):
-    entry_ctor = mymila_entry_builder(nbr_profs, hardcoded_values_by_user)
-    return list([entry_ctor(i) for i in range(nbr_users)])
+def fake_mymila_data(
+    nbr_users: int = 10,
+    nbr_profs: int = 5,
+    hardcoded_values_by_user: dict[int, dict[str, Any]] = {},
+) -> tuple[list[tuple], tuple]:
+    records: list[tuple] = []
+    headers = MYMILA_HEADERS
+    entry_ctor = mymila_entry_builder(records, nbr_profs, hardcoded_values_by_user)
+    for i in range(nbr_users):
+        records.append(entry_ctor(i))
+    return records, headers
 
 
-def fake_mymila_data_with_history(nbr_users=10, nbr_profs=5):
-    pass
-
-
-def mymila_entry_builder(nbr_profs=5, hardcoded_values_by_user={}):
+def mymila_entry_builder(
+    records: list[tuple],
+    nbr_profs: int,
+    hardcoded_values_by_user: dict[int, dict[str, Any]],
+) -> Callable[[int], tuple]:
     """
     Return a deterministically-generated list of fake MyMila users just as
-    they would be returned by the function `load_mymila` (yet to be developped).
-    This is used for mocking the reading of a CSV file, since we don't expect
-    being able to read directly from the database itself in the short term.
-
-    Records must have some matching points with the fake LDAP data, to allow
-    for matching to be tested.
-
-    Returns a list of dictionaries, easy to convert to a dataframe.
+    they would be returned by the function `_query_mymila`.
     """
 
     faculty_affiliated = [
@@ -144,45 +116,54 @@ def mymila_entry_builder(nbr_profs=5, hardcoded_values_by_user={}):
         "Electrical and Computer Engineering",
         "Mathematics and Statistics",
         "Physics",
-        "Psychology",
-        "Other",
-        "",
+    ]
+    departement_affiliated = [
+        "Informatique et de recherche opérationnelle",
+        "Mathématique",
     ]
     program_of_study = [
         "Computer Science",
         "Doctorat en Informatique",
-        "",
-    ]
-    status = [
-        "Active",
-        "Inactive",
-        "",
+        None,
     ]
     affiliated_university = [
         "McGill",
         "UdeM",
         "Samsung SAIT",
-        "",
+        None,
     ]
 
-    # by convention, first 'nbr_profs' names will be professors and the rest students
-    def mymila_entry(i: int):
-        # 2 different types of entries: prof and student
+    # first 'nbr_profs' names will be professors and the rest students
+    def mymila_entry(i: int) -> tuple:
         is_prof = i < nbr_profs
+        is_employee = i == nbr_profs
+        is_applicant = i % 5 == 0 and not is_employee
+        is_inactive = i % 5 == 4
+        drac_account = [f"abc-{i:03d}", f"abc-{i:03d}-01", "test123", None][i % 4]
+
+        supervisor = None if is_prof or is_employee else i % nbr_profs
+        co_supervisor = None if is_prof or is_employee or i % 3 else (i + 1) % nbr_profs
 
         membership_types = _membership_types[int(is_prof)]
         affiliation_types = _affiliation_types[int(is_prof)]
-        supervisors = _supervisors[int(is_prof)]
-        current_university_title = _current_university_title[int(is_prof)]
-        uni_title = current_university_title[i % len(current_university_title)]
         first_name = "John"
         last_name = f"Smith{i:03d}"
         email = f"john.smith{i:03d}@mila.quebec"
+        # Theses are all value formats that i've seen in the real data even if it doesn't really make sense
+        github_usernames = [
+            f"jsmith{i:d}",
+            None,
+            f"https://github.com/jsmith{i:d}",
+            f"john.smith{i:d}@example.com",
+        ]
+        scholar_profiles = [
+            f"https://scholar.google.com/citations?user=PataTe_{i:03d}AJ&hl=en",
+            "https://portal.mila.quebec/site/forms/prof-candidate",
+            f"https://bit.ly/john-smith-{i:d}-googlescholar",
+            None,
+        ]
 
-        def fdate(year, month, day):
-            return date(year, month, day).strftime("%Y-%m-%d")
-
-        def _define_value(i, key, default_value):
+        def _define_value[T](i: int, key: str, default_value: T) -> T:
             """
             Retrieve the hardcoded value to associate to a key for a user, if any,
             or use the default value given as parameter.
@@ -198,67 +179,164 @@ def mymila_entry_builder(nbr_profs=5, hardcoded_values_by_user={}):
             """
             return define_value(i, key, default_value, hardcoded_values_by_user)
 
-        return dictset(
-            mymila_template,
-            {
-                "Status": _define_value(i, "Status", status[i % len(status)]),
-                "Last Name": _define_value(i, "Last Name", last_name),
-                "First Name": _define_value(i, "First Name", first_name),
-                "Preferred First Name": _define_value(
-                    i, "Preferred First Name", first_name
-                ),
-                "MILA Email": _define_value(i, "MILA Email", email),
-                "Start Date with MILA": _define_value(
-                    i, "Start Date with MILA", fdate(2022, 1, 1)
-                ),
-                "End Date with MILA": _define_value(
-                    i, "End Date with MILA", [fdate(2027, 12, 31), None][i % 2]
-                ),
-                "Supervisor Principal": _define_value(
-                    i, "Supervisor Principal", supervisors[i % len(supervisors)]
-                ),
-                "Co-Supervisor": _define_value(
-                    i, "Co-Supervisor", supervisors[(i + 1) % len(supervisors)]
-                ),
-                # Optional
-                "Membership Type": _define_value(
-                    i, "Membership Type", membership_types[i % len(membership_types)]
-                ),
-                "Affiliation type": _define_value(
-                    i, "Affiliation type", affiliation_types[i % len(affiliation_types)]
-                ),
-                "Faculty affiliated": _define_value(
-                    i,
-                    "Faculty affiliated",
-                    faculty_affiliated[i % len(faculty_affiliated)],
-                ),
-                "Program of study": _define_value(
-                    i, "Program of study", program_of_study[i % len(program_of_study)]
-                ),
-                "Start date of studies": _define_value(
-                    i, "Start date of studies", fdate(year=2022, month=1, day=1)
-                ),
-                "End date of studies": _define_value(
-                    i, "End date of studies", fdate(year=2027, month=12, day=31)
-                ),
-                "Affiliated university": _define_value(
-                    i,
-                    "Affiliated university",
-                    affiliated_university[i % len(affiliated_university)],
-                ),
-                "Current university title": _define_value(
-                    i, "Current university title", uni_title
-                ),
-                "Start date of academic nomination": _define_value(
-                    i, "Start date of academic nomination", fdate(2022, 1, 1)
-                ),
-                "End date of academic nomination": _define_value(
-                    i,
-                    "End date of academic nomination",
-                    [fdate(2027, 12, 31), None][i % 2],
-                ),
-                "Email": _define_value(i, "Email", email),
-            },
+        return (
+            _define_value(
+                i,
+                "Affiliated_university",
+                None
+                if is_applicant or is_inactive or is_employee
+                else affiliated_university[i % len(affiliated_university)],
+            ),
+            _define_value(
+                i,
+                "Affiliation_type",
+                None
+                if is_applicant or is_employee
+                else affiliation_types[i % len(affiliation_types)],
+            ),
+            _define_value(
+                i, "Alliance-DRAC_account", None if is_employee else drac_account
+            ),
+            # These are not _define_values because they depend on the id
+            (
+                None
+                if co_supervisor is None
+                else records[co_supervisor][Headers.Membership_Type]
+            ),  # "Co-Supervisor_Membership_Type"
+            (
+                None
+                if co_supervisor is None
+                else (
+                    records[co_supervisor][Headers.Last_Name]
+                    + " "
+                    + (
+                        records[co_supervisor][Headers.Preferred_First_Name]
+                        or records[co_supervisor][Headers.First_Name]
+                    )
+                )
+            ),  # "Co-Supervisor__MEMBER_NAME_"
+            _define_value(i, "Co-Supervisor__MEMBER_NUM_", co_supervisor),
+            _define_value(
+                i,
+                "Department_affiliated",
+                None
+                if is_employee or (is_applicant and not is_prof)
+                else departement_affiliated[i % len(departement_affiliated)],
+            ),
+            _define_value(i, "End_date_of_academic_nomination", None),
+            _define_value(
+                i,
+                "End_date_of_studies",
+                None if is_employee or is_prof or i % 3 != 0 else date(2026, 5, 31),
+            ),
+            _define_value(i, "End_date_of_visit-internship", None),
+            _define_value(
+                i,
+                "Faculty_affiliated",
+                None
+                if is_employee or (is_applicant and not is_prof) or is_inactive
+                else faculty_affiliated[i % len(faculty_affiliated)],
+            ),
+            _define_value(i, "First_Name", first_name),
+            _define_value(
+                i,
+                "GitHub_username",
+                None if is_employee else github_usernames[i % len(github_usernames)],
+            ),
+            _define_value(
+                i,
+                "Google_Scholar_profile",
+                None if is_employee else scholar_profiles[i % len(scholar_profiles)],
+            ),
+            _define_value(i, "Last_Name", last_name),
+            _define_value(i, "MILA_Email", email),
+            _define_value(
+                i,
+                "Membership_Type",
+                None
+                if is_employee or is_applicant
+                else membership_types[i % len(membership_types)],
+            ),
+            _define_value(
+                i,
+                "Mila_Number",
+                None
+                if is_employee or is_applicant
+                else (f"PR-{i:04d}" if is_prof else f"ST-{i:04d}"),
+            ),
+            _define_value(i, "Preferred_First_Name", None if i % 2 else "Jane"),
+            _define_value(
+                i,
+                "Profile_Type",
+                "Professor" if is_prof else ("Employee" if is_employee else "Student"),
+            ),
+            _define_value(
+                i,
+                "Start_Date_with_MILA",
+                None if is_employee or is_applicant else date(2023, 9, 1),
+            ),
+            _define_value(
+                i,
+                "Start_date_of_academic_nomination",
+                None
+                if not is_prof or is_employee or is_inactive
+                else date(2022, 4, 20),
+            ),
+            _define_value(
+                i,
+                "Start_date_of_studies",
+                None if is_employee or is_prof or i % 3 != 0 else date(2023, 8, 1),
+            ),
+            _define_value(i, "Start_date_of_visit-internship", None),
+            _define_value(
+                i,
+                "End_Date_with_MILA",
+                None
+                if is_employee or is_applicant
+                else (date(2024, 9, 1) if is_inactive else date(2025, 9, 1)),
+            ),
+            _define_value(
+                i,
+                "Status",
+                "Applicant"
+                if is_applicant
+                else ("Inactive" if is_inactive else "Active"),
+            ),
+            (
+                None
+                if supervisor is None
+                else records[supervisor][Headers.Membership_Type]
+            ),  # "Supervisor_Principal_Membership_Type"
+            (
+                None
+                if supervisor is None
+                else (
+                    records[supervisor][Headers.Last_Name]
+                    + " "
+                    + (
+                        records[supervisor][Headers.Preferred_First_Name]
+                        or records[supervisor][Headers.First_Name]
+                    )
+                )
+            ),  # "Supervisor_Principal__MEMBER_NAME_"
+            _define_value(i, "Supervisor_Principal__MEMBER_NUM_", supervisor),
+            _define_value(i, "internal_id", str(i)),
+            (
+                None
+                if co_supervisor is None
+                else records[co_supervisor][Headers.CCAI_Chair_CIFAR]
+            ),  # "Co-Supervisor_CCAI_Chair_CIFAR"
+            (
+                None
+                if supervisor is None
+                else records[supervisor][Headers.CCAI_Chair_CIFAR]
+            ),  # "Supervisor_Principal_CCAI_Chair_CIFAR"
+            _define_value(
+                i,
+                "CCAI_Chair_CIFAR",
+                None if (not is_prof) or is_applicant else ["Yes", "No"][i % 2],
+            ),
+            _define_value(i, "_MEMBER_NUM_", i),
         )
 
     return mymila_entry
@@ -279,7 +357,12 @@ def fake_member_of(index, count):
     return member_of_config.get(index, [])
 
 
-def define_value(i, key, default_value, hardcoded_values_by_user):
+def define_value[T](
+    i: int,
+    key: str,
+    default_value: T,
+    hardcoded_values_by_user: dict[int, dict[str, T | Any]],
+) -> T:
     """ """
 
     return (

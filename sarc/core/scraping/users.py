@@ -2,7 +2,7 @@ from collections.abc import Iterable
 from importlib.metadata import entry_points
 from typing import Any, Protocol, Type
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_serializer
 from serieux import deserialize
 
 from sarc.cache import CachePolicy
@@ -46,6 +46,13 @@ class UserMatch(BaseModel):
 
     github_username: ValidField[str] = Field(default_factory=ValidField[str])
     google_scholar_profile: ValidField[str] = Field(default_factory=ValidField[str])
+
+    # This is not really required for serialization, but it makes the order or
+    # known_matches random if not present and complicates testing. If it becomes
+    # a problem outside of tests we can find another solution.
+    @field_serializer("known_matches", when_used="json")
+    def _serialize_deterministic(self, value: set[MatchID]):
+        return sorted(value, key=lambda m: (m.name, m.mid))
 
     def __eq__(self, other: object) -> bool:
         return isinstance(other, UserMatch) and self.matching_id == other.matching_id
