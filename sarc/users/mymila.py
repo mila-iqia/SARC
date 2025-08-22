@@ -44,12 +44,13 @@ import logging
 import re
 import struct
 from collections.abc import Iterable
+from dataclasses import dataclass
+from datetime import date
+from enum import IntEnum, unique
 from itertools import chain, repeat
 from typing import Sequence
 
-import pandas as pd
 import pyodbc  # type: ignore[import-not-found]
-from attr import dataclass
 from azure.identity import ClientSecretCredential
 
 from sarc.core.scraping.users import MatchID, UserMatch, UserScraper, _builtin_scrapers
@@ -61,6 +62,44 @@ CCI_RE = re.compile(r"[a-z]{3}-\d{3}")
 CCRI_RE = re.compile(r"[a-z]{3}-\d{3}-\d{2}")
 
 
+@unique
+class Headers(IntEnum):
+    Affiliated_university = 0
+    Affiliation_type = 1
+    Alliance_DRAC_account = 2
+    Co_Supervisor_Membership_Type = 3
+    Co_Supervisor__MEMBER_NAME_ = 4
+    Co_Supervisor__MEMBER_NUM_ = 5
+    Department_affiliated = 6
+    End_date_of_academic_nomination = 7
+    End_date_of_studies = 8
+    End_date_of_visit_internship = 9
+    Faculty_affiliated = 10
+    First_Name = 11
+    GitHub_username = 12
+    Google_Scholar_profile = 13
+    Last_Name = 14
+    MILA_Email = 15
+    Membership_Type = 16
+    Mila_Number = 17
+    Preferred_First_Name = 18
+    Profile_Type = 19
+    Start_Date_with_MILA = 20
+    Start_date_of_academic_nomination = 21
+    Start_date_of_studies = 22
+    Start_date_of_visit_internship = 23
+    End_Date_with_MILA = 24
+    Status = 25
+    Supervisor_Principal_Membership_Type = 26
+    Supervisor_Principal__MEMBER_NAME_ = 27
+    Supervisor_Principal__MEMBER_NUM_ = 28
+    internal_id = 29
+    Co_Supervisor_CCAI_Chair_CIFAR = 30
+    Supervisor_Principal_CCAI_Chair_CIFAR = 31
+    CCAI_Chair_CIFAR = 32
+    MEMBER_NUM = 33
+
+
 @dataclass
 class MyMilaConfig:
     tenant_id: str
@@ -70,39 +109,53 @@ class MyMilaConfig:
     database: str = "wh_sarc"
 
 
+def _json_serial(obj: object) -> str:
+    if isinstance(obj, date):
+        return obj.isoformat()
+    raise TypeError("Type %s not serializable" % type(obj))  # pragma: no cover
+
+
 class MyMilaScraper(UserScraper[MyMilaConfig]):
     config_type = MyMilaConfig
 
     def get_user_data(self, config: MyMilaConfig) -> bytes:
-        return json.dumps(_query_mymila(config)).encode()
+        return json.dumps(_query_mymila(config), default=_json_serial).encode()
 
     def parse_user_data(
         self, _config: MyMilaConfig, data: bytes
     ) -> Iterable[UserMatch]:
         records, headers = json.loads(data.decode())
-        for _, s in pd.DataFrame(records, columns=headers).iterrows():
-            first_name = s["Preferred_First_Name"]
+        headers = [h.replace("-", "_") for h in headers]
+        assert headers[-1] == "_MEMBER_NUM_"
+        headers[-1] = "MEMBER_NUM"
+        assert headers == [h.name for h in Headers]
+        for record in records:
+            first_name = record[Headers.Preferred_First_Name]
             if first_name is None:
-                first_name = s["First_Name"]
+                first_name = record[Headers.First_Name]
             um = UserMatch(
-                display_name=f"{first_name} {s['Last_Name']}",
-                email=s["MILA_Email"],
-                matching_id=MatchID(name="mymila", mid=s["_MEMBER_NUM_"]),
-                known_matches=set([MatchID(name="mila_ldap", mid=s["MILA_Email"])]),
+                display_name=f"{first_name} {record[Headers.Last_Name]}",
+                email=record[Headers.MILA_Email],
+                matching_id=MatchID(name="mymila", mid=str(record[Headers.MEMBER_NUM])),
+                known_matches={
+                    MatchID(name="mila_ldap", mid=record[Headers.MILA_Email])
+                },
             )
-            supervisor = s["Supervisor_Principal__MEMBER_NUM_"]
-            if supervisor:
+            supervisor = record[Headers.Supervisor_Principal__MEMBER_NUM_]
+            if supervisor is not None:
                 # TODO: figure out which dates apply
-                um.supervisor.insert(supervisor, start=None, end=None)
-            co_supervisor = s["Co-Supervisor__MEMBER_NUM_"]
-            if co_supervisor:
+                um.supervisor.insert(
+                    MatchID(name="mymila", mid=str(supervisor)), start=None, end=None
+                )
+            co_supervisor = record[Headers.Co_Supervisor__MEMBER_NUM_]
+            if co_supervisor is not None:
                 # TODO: figure out the dates
                 um.co_supervisors.insert(
-                    set([MatchID(name="mymila", mid=co_supervisor)]),
+                    {MatchID(name="mymila", mid=str(co_supervisor))},
                     start=None,
                     end=None,
                 )
-            drac_account: str | None = s["Alliance-DRAC_account"]
+            drac_account: str | None = record[Headers.Alliance_DRAC_account]
             if drac_account:
                 drac_account = drac_account.strip()
                 if CCI_RE.fullmatch(drac_account):
@@ -113,10 +166,10 @@ class MyMilaScraper(UserScraper[MyMilaConfig]):
                     "Invalid data in 'Alliance-DRAC_account' field (not a CCI or CCRI): %s",
                     drac_account,
                 )
-            gh_user = s["GitHub_username"]
+            gh_user = record[Headers.GitHub_username]
             if gh_user:
                 um.github_username.insert(gh_user)
-            gs_profile = s["Google_Scholar_profile"]
+            gs_profile = record[Headers.Google_Scholar_profile]
             if gs_profile:
                 um.google_scholar_profile.insert(gs_profile)
             yield um
@@ -148,8 +201,7 @@ def _query_mymila(cfg: MyMilaConfig):
     connection = pyodbc.connect(connection_string, attrs_before=attrs_before)
     cursor = connection.cursor()
     cursor.execute("SELECT * FROM MyMila_Extract_Etudiants_2")
-    records = cursor.fetchall()
-
-    # Convert these data into a pandas Dataframe
+    records = [tuple(row) for row in cursor.fetchall()]
     headers = [i[0] for i in cursor.description]
+
     return records, headers
