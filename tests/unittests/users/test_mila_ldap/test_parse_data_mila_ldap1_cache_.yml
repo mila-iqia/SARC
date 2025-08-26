@@ -1,8 +1,8 @@
 - associated_accounts:
     mila:
       values:
-      - valid_end: 3000-01-01 00:00:00+00:00
-        valid_start: 2000-01-01 00:00:00+00:00
+      - valid_end: '3000-01-01T00:00:00Z'
+        valid_start: '2000-01-01T00:00:00Z'
         value: smithj000
   co_supervisors:
     values: []
@@ -12,7 +12,7 @@
     values: []
   google_scholar_profile:
     values: []
-  known_matches: !!set {}
+  known_matches: []
   matching_id:
     mid: john.smith000@mila.quebec
     name: mila_ldap
@@ -23,8 +23,8 @@
 - associated_accounts:
     mila:
       values:
-      - valid_end: 3000-01-01 00:00:00+00:00
-        valid_start: 2000-01-01 00:00:00+00:00
+      - valid_end: '3000-01-01T00:00:00Z'
+        valid_start: '2000-01-01T00:00:00Z'
         value: smithj001
   co_supervisors:
     values: []
@@ -34,7 +34,7 @@
     values: []
   google_scholar_profile:
     values: []
-  known_matches: !!set {}
+  known_matches: []
   matching_id:
     mid: john.smith001@mila.quebec
     name: mila_ldap
@@ -45,8 +45,8 @@
 - associated_accounts:
     mila:
       values:
-      - valid_end: 3000-01-01 00:00:00+00:00
-        valid_start: 2000-01-01 00:00:00+00:00
+      - valid_end: '3000-01-01T00:00:00Z'
+        valid_start: '2000-01-01T00:00:00Z'
         value: smithj002
   co_supervisors:
     values: []
@@ -56,7 +56,7 @@
     values: []
   google_scholar_profile:
     values: []
-  known_matches: !!set {}
+  known_matches: []
   matching_id:
     mid: john.smith002@mila.quebec
     name: mila_ldap
@@ -67,8 +67,8 @@
 - associated_accounts:
     mila:
       values:
-      - valid_end: 2023-01-01 00:00:00+00:00
-        valid_start: 2000-01-01 00:00:00+00:00
+      - valid_end: '2023-01-01T00:00:00Z'
+        valid_start: '2000-01-01T00:00:00Z'
         value: smithj003
   co_supervisors:
     values: []
@@ -78,7 +78,7 @@
     values: []
   google_scholar_profile:
     values: []
-  known_matches: !!set {}
+  known_matches: []
   matching_id:
     mid: john.smith003@mila.quebec
     name: mila_ldap
@@ -89,8 +89,8 @@
 - associated_accounts:
     mila:
       values:
-      - valid_end: 3000-01-01 00:00:00+00:00
-        valid_start: 2000-01-01 00:00:00+00:00
+      - valid_end: '3000-01-01T00:00:00Z'
+        valid_start: '2000-01-01T00:00:00Z'
         value: smithj004
   co_supervisors:
     values: []
@@ -100,7 +100,7 @@
     values: []
   google_scholar_profile:
     values: []
-  known_matches: !!set {}
+  known_matches: []
   matching_id:
     mid: john.smith004@mila.quebec
     name: mila_ldap
@@ -111,8 +111,8 @@
 - associated_accounts:
     mila:
       values:
-      - valid_end: 3000-01-01 00:00:00+00:00
-        valid_start: 2000-01-01 00:00:00+00:00
+      - valid_end: '3000-01-01T00:00:00Z'
+        valid_start: '2000-01-01T00:00:00Z'
         value: smithj005
   co_supervisors:
     values: []
@@ -122,7 +122,7 @@
     values: []
   google_scholar_profile:
     values: []
-  known_matches: !!set {}
+  known_matches: []
   matching_id:
     mid: john.smith005@mila.quebec
     name: mila_ldap
@@ -133,8 +133,8 @@
 - associated_accounts:
     mila:
       values:
-      - valid_end: 3000-01-01 00:00:00+00:00
-        valid_start: 2000-01-01 00:00:00+00:00
+      - valid_end: '3000-01-01T00:00:00Z'
+        valid_start: '2000-01-01T00:00:00Z'
         value: smithj006
   co_supervisors:
     values: []
@@ -144,7 +144,7 @@
     values: []
   google_scholar_profile:
     values: []
-  known_matches: !!set {}
+  known_matches: []
   matching_id:
     mid: john.smith006@mila.quebec
     name: mila_ldap
@@ -155,8 +155,8 @@
 - associated_accounts:
     mila:
       values:
-      - valid_end: 3000-01-01 00:00:00+00:00
-        valid_start: 2000-01-01 00:00:00+00:00
+      - valid_end: '3000-01-01T00:00:00Z'
+        valid_start: '2000-01-01T00:00:00Z'
         value: smithj007
   co_supervisors:
     values: []
@@ -166,7 +166,7 @@
     values: []
   google_scholar_profile:
     values: []
-  known_matches: !!set {}
+  known_matches: []
   matching_id:
     mid: john.smith007@mila.quebec
     name: mila_ldap
@@ -177,8 +177,8 @@
 - associated_accounts:
     mila:
       values:
-      - valid_end: 3000-01-01 00:00:00+00:00
-        valid_start: 2000-01-01 00:00:00+00:00
+      - valid_end: '3000-01-01T00:00:00Z'
+        valid_start: '2000-01-01T00:00:00Z'
         value: smithj008
   co_supervisors:
     values: []
@@ -188,7 +188,7 @@
     values: []
   google_scholar_profile:
     values: []
-  known_matches: !!set {}
+  known_matches: []
   matching_id:
     mid: john.smith008@mila.quebec
     name: mila_ldap
@@ -199,8 +199,8 @@
 - associated_accounts:
     mila:
       values:
-      - valid_end: 3000-01-01 00:00:00+00:00
-        valid_start: 2000-01-01 00:00:00+00:00
+      - valid_end: '3000-01-01T00:00:00Z'
+        valid_start: '2000-01-01T00:00:00Z'
         value: smithj009
   co_supervisors:
     values: []
@@ -210,7 +210,7 @@
     values: []
   google_scholar_profile:
     values: []
-  known_matches: !!set {}
+  known_matches: []
   matching_id:
     mid: john.smith009@mila.quebec
     name: mila_ldap
