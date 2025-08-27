@@ -1,0 +1,43 @@
+associated_accounts:
+  cluster:
+    values:
+    - valid_end: '3000-01-01T00:00:00Z'
+      valid_start: '2000-01-01T00:00:00Z'
+      value: user
+  test:
+    values:
+    - valid_end: '2023-01-01T00:00:00Z'
+      valid_start: '2022-01-01T00:00:00Z'
+      value: user
+co_supervisors:
+  values:
+  - valid_end: '2023-01-01T00:00:00Z'
+    valid_start: '2022-01-01T00:00:00Z'
+    value:
+    - 7ecd3a8a-ab71-499e-b38a-ceacd91a99c4
+display_name: Test User
+email: test@example.com
+github_username:
+  values:
+  - valid_end: '2023-01-01T00:00:00Z'
+    valid_start: '2022-01-01T00:00:00Z'
+    value: test123
+google_scholar_profile:
+  values:
+  - valid_end: '2023-01-01T00:00:00Z'
+    valid_start: '2022-01-01T00:00:00Z'
+    value: profileA
+matching_ids:
+  test1: aaa
+  test2: '123'
+  test_match: abc
+member_type:
+  values:
+  - valid_end: '2023-01-01T00:00:00Z'
+    valid_start: '2022-01-01T00:00:00Z'
+    value: professor
+supervisor:
+  values:
+  - valid_end: '2023-01-01T00:00:00Z'
+    valid_start: '2022-01-01T00:00:00Z'
+    value: 1f9b04e5-0ec4-4577-9196-2b03d254e344

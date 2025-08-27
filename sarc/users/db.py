@@ -12,12 +12,12 @@ referenced by "cfg.ldap.mongo_collection_name" will be updated.
 
 import logging
 
-from pydantic import UUID4
+from pydantic import UUID4, field_serializer
 from pydantic_mongo import AbstractRepository, PydanticObjectId
 
 from sarc.config import config
-from sarc.core.models.users import UserData
-from sarc.core.models.validators import DateOverlapError
+from sarc.core.models.users import MemberType, UserData
+from sarc.core.models.validators import DateOverlapError, ValidField, ValidTag
 from sarc.core.scraping.users import MatchID, UserMatch
 
 logger = logging.getLogger(__name__)
@@ -31,6 +31,34 @@ class UserDB(UserData):
     # Database ID
     id: PydanticObjectId | None = None
 
+    @field_serializer("member_type")
+    def _valid_enum_to_str(self, value: ValidField[MemberType]) -> ValidField[str]:
+        return ValidField(
+            values=[
+                ValidTag(
+                    value=vt.value.value,
+                    valid_start=vt.valid_start,
+                    valid_end=vt.valid_end,
+                )
+                for vt in value.values
+            ]
+        )
+
+    @field_serializer("co_supervisors")
+    def _serialize_as_list(
+        self, value: ValidField[set[UUID4]]
+    ) -> ValidField[list[UUID4]]:
+        return ValidField(
+            values=[
+                ValidTag(
+                    value=list(v.value),
+                    valid_start=v.valid_start,
+                    valid_end=v.valid_end,
+                )
+                for v in value.values
+            ]
+        )
+
 
 class UserRepository(AbstractRepository[UserDB]):
     class Meta:
@@ -38,7 +66,9 @@ class UserRepository(AbstractRepository[UserDB]):
 
     def update_user(self, user: UserMatch) -> None:
         results = list(
-            self.find_by({"matching_id": {user.matching_id.name: user.matching_id.mid}})
+            self.find_by(
+                {f"matching_ids.{user.matching_id.name}": user.matching_id.mid}
+            )
         )
         if len(results) == 0:
             return self._insert_new(user)
@@ -54,7 +84,7 @@ class UserRepository(AbstractRepository[UserDB]):
             return self._merge_and_update(db_merged, user)
 
     def _lookup_matching_id(self, mid: MatchID) -> UserDB | None:
-        result = list(self.find_by({"matching_id": {mid.name: mid.mid}}))
+        result = list(self.find_by({f"matching_ids.{mid.name}": mid.mid}))
         if len(result) == 0:
             return None
         elif len(result) > 1:
@@ -119,7 +149,7 @@ class UserRepository(AbstractRepository[UserDB]):
             db_user.member_type.merge_with(user.member_type)
         except DateOverlapError as e:
             logger.error(
-                "Cant update member_type for user %s, date overlap error: %s",
+                "Can't update member_type for user %s, date overlap error: %s",
                 db_user.uuid,
                 e,
             )
@@ -127,7 +157,7 @@ class UserRepository(AbstractRepository[UserDB]):
             db_user.github_username.merge_with(user.github_username)
         except DateOverlapError as e:
             logger.error(
-                "Cant update github_username for user %s, date overlap error: %s",
+                "Can't update github_username for user %s, date overlap error: %s",
                 db_user.uuid,
                 e,
             )
@@ -135,7 +165,7 @@ class UserRepository(AbstractRepository[UserDB]):
             db_user.google_scholar_profile.merge_with(user.google_scholar_profile)
         except DateOverlapError as e:
             logger.error(
-                "Cant update google_scholar_profile for user %s, date overlap error: %s",
+                "Can't update google_scholar_profile for user %s, date overlap error: %s",
                 db_user.uuid,
                 e,
             )
@@ -150,23 +180,27 @@ class UserRepository(AbstractRepository[UserDB]):
                 db_user.matching_ids[mid.name] = mid.mid
             elif db_user.matching_ids[mid.name] != mid.mid:
                 logger.error(
-                    "User %s has matching id (%s:%s) but update has %s",
+                    "User %s has matching id (%s:%s) but update has (%s:%s), using update",
                     db_user.uuid,
                     mid.name,
                     db_user.matching_ids[mid.name],
-                    mid,
+                    mid.name,
+                    mid.mid,
                 )
+                db_user.matching_ids[mid.name] = mid.mid
         self.save(db_user)
 
     def _combine_users(self, db_user1: UserDB, db_user2: UserDB) -> UserDB:
         # Merge db_user2 into db_user1
 
+        # we prefer the name from db_user1
         if db_user2.display_name != db_user1.display_name:
             logger.warning(
-                "Merging user %s into user %s and their display_name differs (%s vs %s), ignoring",
+                "Merging user %s into user %s and their display_name differs (%s vs %s), %s is picked",
                 db_user2.uuid,
                 db_user1.uuid,
                 db_user2.display_name,
+                db_user1.display_name,
                 db_user1.display_name,
             )
         # we ignore email as it's of no consequence.
@@ -175,7 +209,7 @@ class UserRepository(AbstractRepository[UserDB]):
             db_user1.member_type.merge_with(db_user2.member_type)
         except DateOverlapError as e:
             logger.error(
-                "Cant update member_type for user %s, date overlap error: %s",
+                "Can't update member_type for user %s, date overlap error: %s",
                 db_user1.uuid,
                 e,
             )
@@ -184,7 +218,7 @@ class UserRepository(AbstractRepository[UserDB]):
             db_user1.github_username.merge_with(db_user2.github_username)
         except DateOverlapError as e:
             logger.error(
-                "Cant update github_username for user %s, date overlap error: %s",
+                "Can't update github_username for user %s, date overlap error: %s",
                 db_user1.uuid,
                 e,
             )
@@ -193,7 +227,7 @@ class UserRepository(AbstractRepository[UserDB]):
             db_user1.google_scholar_profile.merge_with(db_user2.google_scholar_profile)
         except DateOverlapError as e:
             logger.error(
-                "Cant update google_scholar_profile for user %s, date overlap error: %s",
+                "Can't update google_scholar_profile for user %s, date overlap error: %s",
                 db_user1.uuid,
                 e,
             )
@@ -204,7 +238,7 @@ class UserRepository(AbstractRepository[UserDB]):
                     db_user1.associated_accounts[name].merge_with(creds)
                 except DateOverlapError as e:
                     logger.error(
-                        "Cant update credentials for user %s, domain %s, date overlap error: %s",
+                        "Can't update credentials for user %s, domain %s, date overlap error: %s",
                         db_user1.uuid,
                         name,
                         e,
@@ -216,7 +250,7 @@ class UserRepository(AbstractRepository[UserDB]):
             db_user1.supervisor.merge_with(db_user2.supervisor)
         except DateOverlapError as e:
             logger.error(
-                "Cant update supervisor for user %s, date overlap error: %s",
+                "Can't update supervisor for user %s, date overlap error: %s",
                 db_user1.uuid,
                 e,
             )
@@ -225,24 +259,23 @@ class UserRepository(AbstractRepository[UserDB]):
             db_user1.co_supervisors.merge_with(db_user2.co_supervisors)
         except DateOverlapError as e:
             logger.error(
-                "Cant update co_supervisors for user %s, date overlap error: %s",
+                "Can't update co_supervisors for user %s, date overlap error: %s",
                 db_user1.uuid,
                 e,
             )
 
-        # Merge matching_ids - prefer values from db_user2 if there's a conflict
+        # Merge matching_ids - prefer values from db_user1 if there's a conflict
         for name, mid in db_user2.matching_ids.items():
             if name not in db_user1.matching_ids:
                 db_user1.matching_ids[name] = mid
             elif db_user1.matching_ids[name] != mid:
                 logger.warning(
-                    "User %s has matching id (%s:%s) but db_user2 has %s, using db_user2 value",
+                    "User %s has matching id (%s:%s) but db_user2 has %s, using db_user1 value",
                     db_user1.uuid,
                     name,
                     db_user1.matching_ids[name],
                     mid,
                 )
-                db_user1.matching_ids[name] = mid
 
         return db_user1
 
