@@ -3,6 +3,7 @@
 from collections.abc import Iterable
 from dataclasses import dataclass
 from importlib.metadata import EntryPoint, EntryPoints
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -20,11 +21,9 @@ from sarc.core.scraping.users import (
 
 
 class UserPluginTester:
-    plugin = None
-    raw_config = None
-    parsed_config = {}
-    raw_datas = []
-    parsed_datas = []
+    plugin: UserScraper
+    raw_config: Any = None
+    parsed_config: Any = {}
 
     def test_config_validation(self):
         conf = self.plugin.validate_config(self.raw_config)

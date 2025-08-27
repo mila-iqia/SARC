@@ -1,0 +1,29 @@
+associated_accounts:
+  drac:
+    values:
+    - valid_end: '3000-01-01T00:00:00Z'
+      valid_start: '2000-01-01T00:00:00Z'
+      value: doej001
+  mila:
+    values:
+    - valid_end: '3000-01-01T00:00:00Z'
+      valid_start: '2000-01-01T00:00:00Z'
+      value: jdoe
+co_supervisors:
+  values: []
+display_name: Jane Doe
+email: jdoe@example.com
+github_username:
+  values: []
+google_scholar_profile:
+  values: []
+matching_ids:
+  mila_ldap: doej@mila.quebec
+  mymila: '111'
+member_type:
+  values:
+  - valid_end: '2027-09-01T00:00:00Z'
+    valid_start: '2020-09-01T00:00:00Z'
+    value: professor
+supervisor:
+  values: []

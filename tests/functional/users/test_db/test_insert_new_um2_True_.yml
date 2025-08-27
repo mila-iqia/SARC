@@ -1,0 +1,15 @@
+associated_accounts: {}
+co_supervisors:
+  values: []
+display_name: Test 123
+email: test123@example.com
+github_username:
+  values: []
+google_scholar_profile:
+  values: []
+matching_ids:
+  test: '123'
+member_type:
+  values: []
+supervisor:
+  values: []

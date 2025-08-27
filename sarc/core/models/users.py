@@ -14,7 +14,7 @@ class MemberType(Enum):
     MASTER_STUDENT = "master"
     PHD_STUDENT = "phd"
     POSTDOC = "postdoc"
-    PROFESSOR = "prof"
+    PROFESSOR = "professor"
     STAFF = "staff"
     INTERN = "intern"
     # There are probably some missing types so feel free to add them
