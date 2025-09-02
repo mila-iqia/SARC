@@ -7,6 +7,6 @@ sarc:
         - gamma
 
 time:
-  class: FrozenTime
+  $class: FrozenTime
   time: "2024-01-01T15:00:00Z"
   sleep_beat: 0
