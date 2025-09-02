@@ -210,7 +210,7 @@ def test_insert_new(read_write_db_with_users, caplog, data_regression, um, expec
                     "mila": Credentials(
                         values=[
                             ValidTag(
-                                value="bonhomme",
+                                value="bonhomme_mila",
                                 valid_start=START_TIME,
                                 valid_end=END_TIME,
                             )

@@ -89,36 +89,20 @@ ALL_COLUMNS = [
 # For testing, we still check expected columns.
 # If attributes in User class change, we may need to update this list.
 USER_COLUMNS = [
-    "user.primary_email",
-    "user.name",
-    "user.record_start",
-    "user.record_end",
-    "user.teacher_delegations",
-    "user.mila.username",
-    "user.mila.email",
-    "user.mila.active",
-    "user.drac.username",
-    "user.drac.email",
-    "user.drac.active",
-    "user.mila_ldap.co_supervisor",
-    "user.mila_ldap.display_name",
-    "user.mila_ldap.mila_cluster_gid",
-    "user.mila_ldap.mila_cluster_uid",
-    "user.mila_ldap.mila_cluster_username",
-    "user.mila_ldap.mila_email_username",
-    "user.mila_ldap.status",
-    "user.mila_ldap.supervisor",
-    "user.drac_members.activation_status",
-    "user.drac_members.email",
-    "user.drac_members.name",
-    "user.drac_members.permission",
-    "user.drac_members.sponsor",
-    "user.drac_members.username",
-    "user.drac_roles.email",
-    "user.drac_roles.nom",
-    "user.drac_roles.status",
-    "user.drac_roles.username",
-    "user.drac_roles.état du compte",
+    "user.uuid",
+    "user.email",
+    "user.display_name",
+    "user.associated_accounts.cluster.values",
+    "user.associated_accounts.drac.values",
+    "user.associated_accounts.mila.values",
+    "user.associated_accounts.test.values",
+    "user.supervisor.values",
+    "user.co_supervisors.values",
+    "user.github_username.values",
+    "user.google_scholar_profile.values",
+    "user.member_type.values",
+    "user.mila_username",
+    "user.drac_username",
 ]
 
 # For file regression tests, we will save data frame into a CSV.
@@ -130,8 +114,7 @@ CSV_COLUMNS = [col for col in ALL_COLUMNS if col not in ["id"]]
 MOCK_TIME = "2023-11-22"
 
 
-@pytest.mark.skip("loading users with jobs is broken for now")
-@pytest.mark.freeze_time(MOCK_TIME)
+@pytest.mark.freeze_time("2025-01-01")
 @pytest.mark.usefixtures("read_only_db_with_users", "client_mode", "tzlocal_is_mtl")
 def test_load_job_series_with_users(file_regression):
     """Test job to user mapping.
@@ -146,7 +129,7 @@ def test_load_job_series_with_users(file_regression):
 
     Matching can be checked in ./test_func_load_job_series/test_load_job_series_with_users.txt
     """
-    assert len(get_users()) == 3
+    assert len(get_users()) == 10
     data_frame = load_job_series()
     expected_columns = sorted(ALL_COLUMNS + USER_COLUMNS)
     assert sorted(data_frame.keys().tolist()) == expected_columns
@@ -168,7 +151,7 @@ def test_load_job_series_without_user_column(file_regression):
     then users column should not be added to frame.
     """
     # Check we have users in database
-    assert len(get_users()) == 3
+    assert len(get_users()) == 10
     # But load job series only with columns `job_id` and `cluster_name`, ie. without column `user`
     data_frame = load_job_series(fields=["job_id", "cluster_name"])
     # So, we won't have users columns in data frame

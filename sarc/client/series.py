@@ -13,6 +13,7 @@ from sarc.client.gpumetrics import GPUBilling, get_cluster_gpu_billings, get_rgu
 from sarc.client.job import SlurmCLuster, count_jobs, get_available_clusters, get_jobs
 from sarc.config import MTL
 from sarc.core.models.users import UserData
+from sarc.core.models.validators import DateMatchError
 from sarc.traces import trace_decorator
 from sarc.users.db import get_users
 from sarc.utils import flatten
@@ -184,21 +185,20 @@ def load_job_series(
     field_cluster_name = fields.get("cluster_name", "cluster_name")
     field_job_user = fields.get("user", "user")
     # Merge jobs with users info, only if both users and user column available.
-    # XXX: disable user merge for now since it is broken.
-    if False and users_frame.shape[0] and field_job_user in jobs_frame.columns:
+    if users_frame.shape[0] and field_job_user in jobs_frame.columns:
         df_mila_mask = jobs_frame[field_cluster_name] == "mila"
         df_drac_mask = jobs_frame[field_cluster_name] != "mila"
 
         merged_mila = jobs_frame[df_mila_mask].merge(
             users_frame,
             left_on=field_job_user,
-            right_on="user.mila.username",
+            right_on="user.mila_username",
             how="left",
         )
         merged_drac = jobs_frame[df_drac_mask].merge(
             users_frame,
             left_on=field_job_user,
-            right_on="user.drac.username",
+            right_on="user.drac_username",
             how="left",
         )
 
@@ -207,12 +207,6 @@ def load_job_series(
         # Try to sort output to keep initial jobs order, by using first column from jobs frame.
         # Sort inplace to avoid producing a supplementary frame.
         output.sort_values(by=jobs_frame.columns[0], inplace=True, ignore_index=True)
-
-        # Replace NaN in column `user.primary_email` with corresponding value in `job.user`
-        df_primary_email_nan_mask = output["user.primary_email"].isnull()
-        output.loc[df_primary_email_nan_mask, "user.primary_email"] = output[
-            field_job_user
-        ][df_primary_email_nan_mask]
 
         return output
     else:
@@ -281,17 +275,32 @@ class UserFlattener:
     def flatten(self, user: UserData) -> dict[str, Any]:
         """Flatten given user."""
         # Get user dict.
-        base_user_dict = user.model_dump(exclude={"id"})
+        base_user_dict = user.model_dump(exclude={"id", "matching_ids"})
         # Keep only plain attributes, or complex attributes that are not None.
         base_user_dict = {
             key: value
             for key, value in base_user_dict.items()
             if key in self.plain_attributes or value is not None
         }
+        # We add these two fields for backward compat for now. When the job
+        # struct is modified to have a UUID reference to the user, we can get
+        # rid of this.
+        try:
+            base_user_dict["mila_username"] = user.associated_accounts[
+                "mila"
+            ].get_value()
+        except (DateMatchError, KeyError):
+            pass
+        try:
+            base_user_dict["drac_username"] = user.associated_accounts[
+                "drac"
+            ].get_value()
+        except (DateMatchError, KeyError):
+            pass
+
         # Now flatten user dict.
         user_dict = flatten({"user": base_user_dict})
-        # And add special key `user.primary_email`.
-        user_dict["user.primary_email"] = user.email
+
         return user_dict
 
 

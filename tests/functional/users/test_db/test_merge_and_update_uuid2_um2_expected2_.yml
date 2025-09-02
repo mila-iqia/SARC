@@ -8,7 +8,7 @@ associated_accounts:
     values:
     - valid_end: '3000-01-01T00:00:00Z'
       valid_start: '2024-04-11T00:00:00Z'
-      value: petitbonhomme
+      value: petitbonhomme_mila
 co_supervisors:
   values: []
 display_name: M/Ms Petitbonhomme

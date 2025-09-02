@@ -352,7 +352,14 @@ def create_users(user_factory=None) -> Iterable[dict]:
         # ("grosbonhomme", True),  # not added, so related jobs cannot find him.
         (UUID("edf47681-5cd1-4be5-876d-1b8b3c6f6b71"), "beaubonhomme", "aaa-002"),
     ]:
-        accts = [("mila", username, datetime(2024, 4, 11, 0, 0, tzinfo=dt.UTC), None)]
+        accts = [
+            (
+                "mila",
+                f"{username}_mila",
+                datetime(2024, 4, 11, 0, 0, tzinfo=dt.UTC),
+                None,
+            )
+        ]
         if drac_account:
             accts.append(
                 ("drac", username, datetime(2024, 4, 11, 0, 0, tzinfo=dt.UTC), None)
