@@ -121,11 +121,6 @@ def mymila_entry_builder(
         "Informatique et de recherche opérationnelle",
         "Mathématique",
     ]
-    program_of_study = [
-        "Computer Science",
-        "Doctorat en Informatique",
-        None,
-    ]
     affiliated_university = [
         "McGill",
         "UdeM",
