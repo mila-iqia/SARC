@@ -17,7 +17,7 @@
       project_inodes: null
       project_size: null
   start: 2017-04-01 00:00:00
-  timestamp: 2023-02-15 00:00:00
+  timestamp: 2023-02-15 00:00:00+00:00
 - cluster_name: patate
   end: 2018-04-01 00:00:00
   group_name: rrg-bonhomme-ad
@@ -37,4 +37,4 @@
       project_inodes: 5000000.0
       project_size: 50000000000000
   start: 2017-04-01 00:00:00
-  timestamp: 2023-02-15 00:00:00
+  timestamp: 2023-02-15 00:00:00+00:00

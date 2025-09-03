@@ -1,15 +1,18 @@
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timedelta
 from typing import Annotated, Any, Callable
 
 from pydantic import GetCoreSchemaHandler
 from pydantic_core import CoreSchema, core_schema
 
+UTCOFFSET = timedelta(0)
+
 
 @dataclass(frozen=True)
 class DatetimeUTCValidator:
     def validate_tz_utc(self, value: datetime, handler: Callable):
-        assert value.tzinfo == UTC, "date is not in UTC time"
+        assert value.tzinfo is not None, "date is not tz-aware"
+        assert value.utcoffset() == UTCOFFSET, "date in not in UTC timezone"
 
         return handler(value)
 

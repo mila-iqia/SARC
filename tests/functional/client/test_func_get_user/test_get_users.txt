@@ -20,7 +20,7 @@ Found 3 users(s):
     },
     "drac_members": null,
     "drac_roles": null,
-    "record_start": "2024-04-11T00:00:00",
+    "record_start": "2024-04-11T00:00:00Z",
     "record_end": null
 }
 {
@@ -61,7 +61,7 @@ Found 3 users(s):
         "username": "petitbonhomme",
         "état du compte": "activé"
     },
-    "record_start": "2024-04-11T00:00:00",
+    "record_start": "2024-04-11T00:00:00Z",
     "record_end": null
 }
 {
@@ -102,6 +102,6 @@ Found 3 users(s):
         "username": "beaubonhomme",
         "état du compte": "activé"
     },
-    "record_start": "2024-04-11T00:00:00",
+    "record_start": "2024-04-11T00:00:00Z",
     "record_end": null
 }
