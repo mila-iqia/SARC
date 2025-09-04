@@ -170,7 +170,9 @@ def test_parse_json_job(json_jobs, scraper, file_regression):
 )
 def test_parse_malformed_jobs(sacct_json, scraper, captrace):
     scraper.get_raw._save_for_key(
-        key=scraper.get_raw.key(), value=json.loads(sacct_json)
+        key=scraper.get_raw.key(),
+        value=json.loads(sacct_json),
+        at_time=datetime.now(UTC),
     )
     with pytest.raises(KeyError):
         list(scraper)
@@ -196,7 +198,9 @@ def test_parse_malformed_jobs(sacct_json, scraper, captrace):
 )
 def test_parse_no_group_jobs(sacct_json, scraper, caplog):
     scraper.get_raw._save_for_key(
-        key=scraper.get_raw.key(), value=json.loads(sacct_json)
+        key=scraper.get_raw.key(),
+        value=json.loads(sacct_json),
+        at_time=datetime.now(UTC),
     )
     with caplog.at_level("DEBUG"):
         assert list(scraper) == [None]
@@ -211,7 +215,9 @@ def test_parse_no_group_jobs(sacct_json, scraper, caplog):
 )
 def test_scrape_lost_job_on_wrong_cluster(sacct_json, scraper, caplog):
     scraper.get_raw._save_for_key(
-        key=scraper.get_raw.key(), value=json.loads(sacct_json)
+        key=scraper.get_raw.key(),
+        value=json.loads(sacct_json),
+        at_time=datetime.now(UTC),
     )
     with caplog.at_level("WARNING"):
         jobs = list(scraper)
@@ -1120,7 +1126,9 @@ def test_cli_ignore_stats(
 def test_parse_sacct_slurm_versions(sacct_outputs, scraper):
     file = Path(__file__).parent / "sacct_outputs" / sacct_outputs
     scraper.get_raw._save_for_key(
-        key=scraper.get_raw.key(), value=json.load(open(file, "r", encoding="utf8"))
+        key=scraper.get_raw.key(),
+        value=json.load(open(file, "r", encoding="utf8")),
+        at_time=datetime.now(UTC),
     )
     jobs = list(scraper)
     assert len(jobs) == 1

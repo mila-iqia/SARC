@@ -324,6 +324,9 @@ def update_job_series_rgu(df: DataFrame) -> DataFrame:
         - column `gpu_type_rgu` added or updated to contain RGU cost per GPU (RGU/GPU ratio).
           Set to NaN (or unchanged if already present) for jobs from clusters without RGU.
     """
+    # Change type of allocated.gres_gpu to float
+    df["allocated.gres_gpu"] = df["allocated.gres_gpu"].astype("float")
+
     for cluster in get_available_clusters():
         update_cluster_job_series_rgu(df, cluster.cluster_name)
     return df

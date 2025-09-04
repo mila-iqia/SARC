@@ -21,17 +21,20 @@ dependencies = [
     "myst-parser>=4.0.1,<5",
     "sphinx-rtd-theme>=3.0.2,<4",
     "nbsphinx>=0.9.3,<0.10",
-    "opentelemetry-api>=1.23.0,<2",
-    "opentelemetry-sdk>=1.23.0,<2",
+    "opentelemetry-api>=1.36.0,<2",
+    "opentelemetry-sdk>=1.36.0,<2",
     "requests-mock>=1.11.0,<2",
     "pandas>=2.3.0,<2.4.0",
-    "gifnoc>=0.5.2,<0.6",
-    "serieux>=0.1,<0.2",
+    "gifnoc>=0.6,<0.7",
+    "serieux>=0.2,<0.3",
     "watchdog>=6,<7",
     "python-dateutil>=2.9.0.post0,<3",
     "opentelemetry-exporter-otlp>=1.23.0,<2",
     "iguane",
     "filelock>=3.18.0",
+    "fastapi[standard-no-fastapi-cloud-cli]>=0.116.1,<0.117",
+    "requests>=2.32.3,<3",
+    "google-auth>=2.40.2,<3",
 ]
 
 [project.scripts]
@@ -39,16 +42,15 @@ sarc = "sarc.cli:main"
 
 [dependency-groups]
 dev = [
-    "mypy>=1.15.0,<2",
+    "mypy>=1.17.1,<2",
     "pytest>=8.3.5,<9",
     "pytest-cov>=6.1.1,<7",
-    "pytest-regressions>=2.7.0,<3",
+    "pytest-regressions>=2.7.0,<3,!=2.8.1",
     "tox>=4.25.0,<5",
     "pytest-freezegun>=0.4.2,<0.5",
     "fabric[testing]>=3.0.0,<4",
     "pytest-timeout>=2.1.0,<3",
     "pytest-custom-exit-code>=0.3.0,<0.4",
-    "coverage>=7.2.7,<8",
     "pytest-xdist>=3.3.1,<4",
     "jupyter>=1.0.0,<2",
     "tabulate>=0.9.0,<0.10",
@@ -95,7 +97,7 @@ default-groups = [
 ]
 
 [tool.uv.sources]
-iguane = { git = "https://github.com/mila-iqia/IGUANE.git", rev = "428a433d395ed17c00818beb865a38d321adf169" }
+iguane = { git = "https://github.com/mila-iqia/IGUANE.git", rev = "9cd7b5e1253033c935e39da9c1b8a22cda440112" }
 
 [tool.pytest_env]
 TQDM_DISABLE = "1"
@@ -113,22 +115,5 @@ build-backend = "hatchling.build"
 [tool.pytest]
 norecursedirs = "tests/common"
 
-[[tool.mypy.overrides]]
-module = "gifnoc.*"
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = "hostlist.*"
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = "fabric.*"
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = "iguane.*"
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = "serieux.*"
-ignore_missing_imports = true
+[tool.mypy]
+follow_untyped_imports = true

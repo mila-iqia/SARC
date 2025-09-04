@@ -393,7 +393,9 @@ def test_update_job_series_rgu_one_date(
         expected_gres_rgu,
         expected_gpu_type_rgu,
     ) = data.get_expected()
-    assert frame["allocated.gres_gpu"].equals(pandas.Series(expected_gres_gpu))
+    assert frame["allocated.gres_gpu"].equals(
+        pandas.Series(expected_gres_gpu, dtype=float)
+    )
     assert frame["allocated.gres_rgu"].equals(pandas.Series(expected_gres_rgu))
     assert frame["allocated.gpu_type_rgu"].equals(pandas.Series(expected_gpu_type_rgu))
 
@@ -453,7 +455,9 @@ def test_update_job_series_rgu_with_many_dates(
         expected_gres_rgu,
         expected_gpu_type_rgu,
     ) = data.get_expected()
-    assert frame["allocated.gres_gpu"].equals(pandas.Series(expected_gres_gpu))
+    assert frame["allocated.gres_gpu"].equals(
+        pandas.Series(expected_gres_gpu, dtype=float)
+    )
     assert frame["allocated.gres_rgu"].equals(pandas.Series(expected_gres_rgu))
     assert frame["allocated.gpu_type_rgu"].equals(pandas.Series(expected_gpu_type_rgu))
 
@@ -514,7 +518,9 @@ def test_update_job_series_rgu_billing_is_gpu(
         expected_gres_rgu,
         expected_gpu_type_rgu,
     ) = data.get_expected()
-    assert frame["allocated.gres_gpu"].equals(pandas.Series(expected_gres_gpu))
+    assert frame["allocated.gres_gpu"].equals(
+        pandas.Series(expected_gres_gpu, dtype=float)
+    )
     assert frame["allocated.gres_rgu"].equals(pandas.Series(expected_gres_rgu))
     assert frame["allocated.gpu_type_rgu"].equals(pandas.Series(expected_gpu_type_rgu))
 

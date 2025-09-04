@@ -1,40 +1,24 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 
-from pydantic import ByteSize
 from pydantic_mongo import AbstractRepository, PydanticObjectId
 
 from sarc.config import config
-from sarc.model import BaseModel
+from sarc.core.models.diskusage import DiskUsage
 
 
-class DiskUsageUser(BaseModel):
-    user: str
-    nbr_files: int
-    size: ByteSize
-
-
-class DiskUsageGroup(BaseModel):
-    group_name: str
-    users: list[DiskUsageUser]
-
-
-class DiskUsage(BaseModel):
+class DiskUsageDB(DiskUsage):
     """
     Disk usage on a given cluster
     """
 
-    # # Database ID
+    # Database ID
     id: PydanticObjectId | None = None
 
-    cluster_name: str
-    groups: list[DiskUsageGroup]
-    timestamp: datetime
 
-
-class ClusterDiskUsageRepository(AbstractRepository[DiskUsage]):
+class ClusterDiskUsageRepository(AbstractRepository[DiskUsageDB]):
     class Meta:
         collection_name = "diskusage"
 
@@ -42,13 +26,15 @@ class ClusterDiskUsageRepository(AbstractRepository[DiskUsage]):
         # we only keep the date part of the timestamp
         # this way we keep only one report per day and per cluster
         # mongo does not support the date format, we have to stick to datetime format
+        disk_usage.timestamp.date
         day_at_midnight = datetime(
             year=disk_usage.timestamp.year,
             month=disk_usage.timestamp.month,
             day=disk_usage.timestamp.day,
+            tzinfo=disk_usage.timestamp.tzinfo,
         )
         disk_usage.timestamp = day_at_midnight
-        document = self.to_document(disk_usage)
+        document = self.to_document(DiskUsageDB(**disk_usage.model_dump()))
         query_attrs = ["cluster_name", "timestamp"]
         query = {key: document[key] for key in query_attrs}
         self.get_collection().update_one(query, {"$set": document}, upsert=True)
@@ -60,7 +46,7 @@ def get_diskusage_collection() -> ClusterDiskUsageRepository:
 
 
 def _convert_date_to_iso(date_value: date) -> datetime:
-    return datetime(date_value.year, date_value.month, date_value.day)
+    return datetime(date_value.year, date_value.month, date_value.day, tzinfo=UTC)
 
 
 # pylint: disable=duplicate-code

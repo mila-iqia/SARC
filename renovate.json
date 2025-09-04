@@ -3,19 +3,17 @@
   "extends": [
     "config:recommended"
   ],
-  "customManagers": [
+  "lockFileMaintenance": {
+    "enabled": true,
+    "automerge": true
+  },
+  "packageRules": [
     {
-      "customType": "regex",
-      "managerFilePatterns": [
-        ".github/workflows/python-package.yml"
+      "matchPackageNames": [
+        "serieux",
+        "gifnoc"
       ],
-      "matchStrings": [
-        "uses:\\s+astral-sh/setup-uv@v\\d+\\s+with:\\s+version:\\s+\"(?<currentValue>\\d+\\.\\d+\\.\\d+)\""
-      ],
-      "depTypeTemplate": "python",
-      "datasourceTemplate": "pypi",
-      "depNameTemplate": "uv",
-      "packageNameTemplate": "uv"
+      "groupName": "breuleux"
     }
   ]
 }
