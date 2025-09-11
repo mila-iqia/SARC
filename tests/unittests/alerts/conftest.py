@@ -11,7 +11,7 @@ here = Path(__file__).parent
 @pytest.fixture
 def frozen_gifnoc_time():
     with gifnoc.overlay(
-        {"time": {"class": "FrozenTime", "time": "2024-01-01T00:00", "sleep_beat": 0}}
+        {"time": {"$class": "FrozenTime", "time": "2024-01-01T00:00", "sleep_beat": 0}}
     ):
         yield
 

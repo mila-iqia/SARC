@@ -13,9 +13,12 @@ from typing import TYPE_CHECKING, Any, Callable, Literal, cast, overload
 
 import gifnoc
 import tzlocal
+from bson import CodecOptions, UuidRepresentation
 from hostlist import expand_hostlist
 
 from .alerts.common import HealthMonitorConfig
+
+type JSON = list[JSON] | dict[str, JSON] | int | str | float | bool | None
 
 if TYPE_CHECKING:
     from fabric import Connection
@@ -38,6 +41,12 @@ class ConfigurationError(Exception):
 
 
 @dataclass
+class DiskUsageConfig:
+    name: str
+    params: JSON = field(default_factory=dict)
+
+
+@dataclass
 class ClusterConfig:
     # pylint: disable=too-many-instance-attributes
 
@@ -51,7 +60,7 @@ class ClusterConfig:
     sshconfig: Path | None = None
     duc_inodes_command: str | None = None
     duc_storage_command: str | None = None
-    diskusage_report_command: str | None = None
+    diskusage: list[DiskUsageConfig] | None = None
     start_date: str = "2022-04-01"
     slurm_conf_host_path: Path = Path("/etc/slurm/slurm.conf")
 
@@ -164,7 +173,12 @@ class MongoConfig:
         from pymongo import MongoClient
 
         client: MongoClient = MongoClient(self.connection_string)
-        return client.get_database(self.database_name)
+        return client.get_database(
+            self.database_name,
+            codec_options=CodecOptions(
+                uuid_representation=UuidRepresentation.STANDARD, tz_aware=True
+            ),
+        )
 
 
 @dataclass

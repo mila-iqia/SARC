@@ -11,7 +11,8 @@ sarc:
       - rrg-bonhomme-ad_cpu
       - def-bonhomme_gpu
       - def-bonhomme_cpu
-      diskusage_report_command: diskusage_report --project --all_users
+      diskusage:
+      - name: drac
       duc_inodes_command: duc ls -d /project/.duc_databases/rrg-bonhomme-ad.sqlite --count
         /project/rrg-bonhomme-ad
       duc_storage_command: duc ls -d /project/.duc_databases/rrg-bonhomme-ad.sqlite
@@ -27,7 +28,8 @@ sarc:
       - rrg-bonhomme-ad_cpu
       - def-bonhomme_gpu
       - def-bonhomme_cpu
-      diskusage_report_command: diskusage_report --project --all_users
+      diskusage:
+      - name: drac
       duc_inodes_command: duc ls -d /project/.duc_databases/rrg-bonhomme-ad.sqlite --count
         /project/rrg-bonhomme-ad
       duc_storage_command: duc ls -d /project/.duc_databases/rrg-bonhomme-ad.sqlite
@@ -43,7 +45,8 @@ sarc:
       - rrg-bonhomme-ad_cpu
       - def-bonhomme_gpu
       - def-bonhomme_cpu
-      diskusage_report_command: diskusage_report --project --all_users
+      diskusage:
+      - name: drac
       duc_inodes_command: duc ls -d /project/.duc_databases/rrg-bonhomme-ad.sqlite --count
         /project/rrg-bonhomme-ad
       duc_storage_command: duc ls -d /project/.duc_databases/rrg-bonhomme-ad.sqlite
@@ -55,7 +58,6 @@ sarc:
       timezone: America/Vancouver
     local:
       accounts: null
-      diskusage_report_command: null
       duc_inodes_command: null
       duc_storage_command: null
       host: localhost
@@ -69,7 +71,11 @@ sarc:
       - def-bonhomme_gpu
       - def-bonhomme_cpu
       billing_is_gpu: true
-      diskusage_report_command: diskusage_report --project --all_users
+      diskusage:
+      - name: beegfs
+        params:
+          config_files:
+            default: /etc/beegfs/scratch.d/beegfs-client.conf
       duc_inodes_command: duc ls -d /project/.duc_databases/rrg-bonhomme-ad.sqlite --count
         /project/rrg-bonhomme-ad
       duc_storage_command: duc ls -d /project/.duc_databases/rrg-bonhomme-ad.sqlite
@@ -86,7 +92,8 @@ sarc:
       - rrg-bonhomme-ad_cpu
       - def-bonhomme_gpu
       - def-bonhomme_cpu
-      diskusage_report_command: diskusage_report --project --all_users
+      diskusage:
+      - name: drac
       duc_inodes_command: duc ls -d /project/.duc_databases/rrg-bonhomme-ad.sqlite --count
         /project/rrg-bonhomme-ad
       duc_storage_command: duc ls -d /project/.duc_databases/rrg-bonhomme-ad.sqlite
@@ -99,7 +106,6 @@ sarc:
       timezone: America/Vancouver
     raisin:
       accounts: null
-      diskusage_report_command: null
       duc_inodes_command: null
       duc_storage_command: null
       host: raisin
@@ -112,7 +118,6 @@ sarc:
           phantom_gpu: PHANTOM GPU MENACE
     raisin_no_prometheus:
       accounts: null
-      diskusage_report_command: null
       duc_inodes_command: null
       duc_storage_command: null
       gpus_per_nodes:

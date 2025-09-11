@@ -281,7 +281,7 @@ class SAcctScraper:
                 **flags,  # type: ignore[arg-type]
             )
 
-        if int(version["major"]) == 24:
+        if int(version["major"]) in [24, 25]:
             return SlurmJob(
                 cluster_name=self.cluster.name,
                 job_id=entry["job_id"],

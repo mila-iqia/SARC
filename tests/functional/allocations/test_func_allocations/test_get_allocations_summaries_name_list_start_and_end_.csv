@@ -1,3 +1,3 @@
 ,cluster_name,group_name,timestamp,start,end,resources.compute.gpu_year,resources.compute.cpu_year,resources.compute.vcpu_year,resources.compute.vgpu_year,resources.storage.project_size,resources.storage.project_inodes,resources.storage.nearline,resources.storage.dCache,resources.storage.object,resources.storage.cloud_volume,resources.storage.cloud_shared
-0,fromage,rrg-bonhomme-ad,2023-02-01,2018-04-01,2019-04-01,100,0,0,0,70000000000000,0,0,0,0,0,0
-1,patate,rrg-bonhomme-ad,2023-02-01,2019-04-01,2020-04-01,190,0,0,0,90000000000000,5000000,90000000000000,0,0,0,0
+0,fromage,rrg-bonhomme-ad,2023-02-01 00:00:00+00:00,2018-04-01,2019-04-01,100,0,0,0,70000000000000,0,0,0,0,0,0
+1,patate,rrg-bonhomme-ad,2023-02-01 00:00:00+00:00,2019-04-01,2020-04-01,190,0,0,0,90000000000000,5000000,90000000000000,0,0,0,0
