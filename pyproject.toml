@@ -46,7 +46,7 @@ sarc = "sarc.cli:main"
 dev = [
     "mypy>=1.17.1,<2",
     "pytest>=8.3.5,<9",
-    "pytest-cov>=6.1.1,<7",
+    "pytest-cov>=7,<8",
     "pytest-regressions>=2.7.0,<3,!=2.8.1",
     "tox>=4.25.0,<5",
     "pytest-freezegun>=0.4.2,<0.5",
@@ -64,7 +64,7 @@ dev = [
     "types-ldap3>=2.9.13.20240205",
     "types-tqdm>=4.67.0.20250417",
     "pytest-env>=1.1.5,<2",
-    "ruff>=0.12,<0.13",
+    "ruff>=0.13,<0.14",
 ]
 examples = ["seaborn>=0.13.2,<0.14"]
 
