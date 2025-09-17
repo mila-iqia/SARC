@@ -1,15 +1,3 @@
-"""
-This script is basically a wrapper around the "read_mila_ldap.py" script.
-Instead of taking arguments from the command line, it takes them from
-the SARC configuration file.
-
-This is possible because the "read_mila_ldap.py" script has a `run` function
-that takes the arguments as parameters, so the argparse step comes earlier.
-
-As a result of running this script, the values in the collection
-referenced by "cfg.ldap.mongo_collection_name" will be updated.
-"""
-
 import logging
 
 from pydantic import UUID4, field_serializer

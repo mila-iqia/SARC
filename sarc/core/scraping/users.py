@@ -31,7 +31,7 @@ class UserMatch(BaseModel):
     email: str | None = None
 
     matching_id: MatchID
-    # If the plugins gets an id that works with another plugin, it can be stored here.
+    # If the plugin gets an id that works with another plugin, it can be stored here.
     known_matches: set[MatchID] = Field(default_factory=set)
 
     member_type: ValidField[MemberType] = Field(default_factory=ValidField[MemberType])

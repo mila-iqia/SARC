@@ -73,7 +73,6 @@ def load_job_series(
           "unclipped_start" and "unclipped_end"
         - Optional user info fields if job users found.
           Fields from `User.model_dump()` in format `user.<flattened dot-separated field>`,
-          + special field `user.primary_email` containing either `user.mila.email` or fallback `job.user`.
     """
 
     # If fields is a list, convert it to a renaming dict with same old and new names.
