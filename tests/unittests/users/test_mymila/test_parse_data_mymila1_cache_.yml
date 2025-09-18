@@ -1,0 +1,272 @@
+- associated_accounts: {}
+  co_supervisors:
+    values: []
+  display_name: Jane Smith000
+  email: john.smith000@mila.quebec
+  github_username:
+    values:
+    - valid_end: '3000-01-01T00:00:00Z'
+      valid_start: '2000-01-01T00:00:00Z'
+      value: jsmith0
+  google_scholar_profile:
+    values:
+    - valid_end: '3000-01-01T00:00:00Z'
+      valid_start: '2000-01-01T00:00:00Z'
+      value: https://scholar.google.com/citations?user=PataTe_000AJ&hl=en
+  known_matches:
+  - mid: abc-000
+    name: drac
+  - mid: john.smith000@mila.quebec
+    name: mila_ldap
+  matching_id:
+    mid: '0'
+    name: mymila
+  member_type:
+    values: []
+  supervisor:
+    values: []
+- associated_accounts: {}
+  co_supervisors:
+    values: []
+  display_name: John Smith001
+  email: john.smith001@mila.quebec
+  github_username:
+    values: []
+  google_scholar_profile:
+    values:
+    - valid_end: '3000-01-01T00:00:00Z'
+      valid_start: '2000-01-01T00:00:00Z'
+      value: https://portal.mila.quebec/site/forms/prof-candidate
+  known_matches:
+  - mid: abc-001
+    name: drac
+  - mid: john.smith001@mila.quebec
+    name: mila_ldap
+  matching_id:
+    mid: '1'
+    name: mymila
+  member_type:
+    values: []
+  supervisor:
+    values: []
+- associated_accounts: {}
+  co_supervisors:
+    values: []
+  display_name: Jane Smith002
+  email: john.smith002@mila.quebec
+  github_username:
+    values:
+    - valid_end: '3000-01-01T00:00:00Z'
+      valid_start: '2000-01-01T00:00:00Z'
+      value: https://github.com/jsmith2
+  google_scholar_profile:
+    values:
+    - valid_end: '3000-01-01T00:00:00Z'
+      valid_start: '2000-01-01T00:00:00Z'
+      value: https://bit.ly/john-smith-2-googlescholar
+  known_matches:
+  - mid: john.smith002@mila.quebec
+    name: mila_ldap
+  matching_id:
+    mid: '2'
+    name: mymila
+  member_type:
+    values: []
+  supervisor:
+    values: []
+- associated_accounts: {}
+  co_supervisors:
+    values: []
+  display_name: John Smith003
+  email: john.smith003@mila.quebec
+  github_username:
+    values:
+    - valid_end: '3000-01-01T00:00:00Z'
+      valid_start: '2000-01-01T00:00:00Z'
+      value: john.smith3@example.com
+  google_scholar_profile:
+    values: []
+  known_matches:
+  - mid: john.smith003@mila.quebec
+    name: mila_ldap
+  matching_id:
+    mid: '3'
+    name: mymila
+  member_type:
+    values: []
+  supervisor:
+    values: []
+- associated_accounts: {}
+  co_supervisors:
+    values: []
+  display_name: Jane Smith004
+  email: john.smith004@mila.quebec
+  github_username:
+    values:
+    - valid_end: '3000-01-01T00:00:00Z'
+      valid_start: '2000-01-01T00:00:00Z'
+      value: jsmith4
+  google_scholar_profile:
+    values:
+    - valid_end: '3000-01-01T00:00:00Z'
+      valid_start: '2000-01-01T00:00:00Z'
+      value: https://scholar.google.com/citations?user=PataTe_004AJ&hl=en
+  known_matches:
+  - mid: abc-004
+    name: drac
+  - mid: john.smith004@mila.quebec
+    name: mila_ldap
+  matching_id:
+    mid: '4'
+    name: mymila
+  member_type:
+    values: []
+  supervisor:
+    values: []
+- associated_accounts: {}
+  co_supervisors:
+    values: []
+  display_name: John Smith005
+  email: john.smith005@mila.quebec
+  github_username:
+    values: []
+  google_scholar_profile:
+    values: []
+  known_matches:
+  - mid: john.smith005@mila.quebec
+    name: mila_ldap
+  matching_id:
+    mid: '5'
+    name: mymila
+  member_type:
+    values: []
+  supervisor:
+    values: []
+- associated_accounts: {}
+  co_supervisors:
+    values:
+    - valid_end: '3000-01-01T00:00:00Z'
+      valid_start: '2000-01-01T00:00:00Z'
+      value:
+      - mid: '2'
+        name: mymila
+  display_name: Jane Smith006
+  email: john.smith006@mila.quebec
+  github_username:
+    values:
+    - valid_end: '3000-01-01T00:00:00Z'
+      valid_start: '2000-01-01T00:00:00Z'
+      value: https://github.com/jsmith6
+  google_scholar_profile:
+    values:
+    - valid_end: '3000-01-01T00:00:00Z'
+      valid_start: '2000-01-01T00:00:00Z'
+      value: https://bit.ly/john-smith-6-googlescholar
+  known_matches:
+  - mid: john.smith006@mila.quebec
+    name: mila_ldap
+  matching_id:
+    mid: '6'
+    name: mymila
+  member_type:
+    values: []
+  supervisor:
+    values:
+    - valid_end: '3000-01-01T00:00:00Z'
+      valid_start: '2000-01-01T00:00:00Z'
+      value:
+        mid: '1'
+        name: mymila
+- associated_accounts: {}
+  co_supervisors:
+    values: []
+  display_name: John Smith007
+  email: john.smith007@mila.quebec
+  github_username:
+    values:
+    - valid_end: '3000-01-01T00:00:00Z'
+      valid_start: '2000-01-01T00:00:00Z'
+      value: john.smith7@example.com
+  google_scholar_profile:
+    values: []
+  known_matches:
+  - mid: john.smith007@mila.quebec
+    name: mila_ldap
+  matching_id:
+    mid: '7'
+    name: mymila
+  member_type:
+    values: []
+  supervisor:
+    values:
+    - valid_end: '3000-01-01T00:00:00Z'
+      valid_start: '2000-01-01T00:00:00Z'
+      value:
+        mid: '2'
+        name: mymila
+- associated_accounts: {}
+  co_supervisors:
+    values: []
+  display_name: Jane Smith008
+  email: john.smith008@mila.quebec
+  github_username:
+    values:
+    - valid_end: '3000-01-01T00:00:00Z'
+      valid_start: '2000-01-01T00:00:00Z'
+      value: jsmith8
+  google_scholar_profile:
+    values:
+    - valid_end: '3000-01-01T00:00:00Z'
+      valid_start: '2000-01-01T00:00:00Z'
+      value: https://scholar.google.com/citations?user=PataTe_008AJ&hl=en
+  known_matches:
+  - mid: abc-008
+    name: drac
+  - mid: john.smith008@mila.quebec
+    name: mila_ldap
+  matching_id:
+    mid: '8'
+    name: mymila
+  member_type:
+    values: []
+  supervisor:
+    values:
+    - valid_end: '3000-01-01T00:00:00Z'
+      valid_start: '2000-01-01T00:00:00Z'
+      value:
+        mid: '3'
+        name: mymila
+- associated_accounts: {}
+  co_supervisors:
+    values:
+    - valid_end: '3000-01-01T00:00:00Z'
+      valid_start: '2000-01-01T00:00:00Z'
+      value:
+      - mid: '0'
+        name: mymila
+  display_name: John Smith009
+  email: john.smith009@mila.quebec
+  github_username:
+    values: []
+  google_scholar_profile:
+    values:
+    - valid_end: '3000-01-01T00:00:00Z'
+      valid_start: '2000-01-01T00:00:00Z'
+      value: https://portal.mila.quebec/site/forms/prof-candidate
+  known_matches:
+  - mid: abc-009
+    name: drac
+  - mid: john.smith009@mila.quebec
+    name: mila_ldap
+  matching_id:
+    mid: '9'
+    name: mymila
+  member_type:
+    values: []
+  supervisor:
+    values:
+    - valid_end: '3000-01-01T00:00:00Z'
+      valid_start: '2000-01-01T00:00:00Z'
+      value:
+        mid: '4'
+        name: mymila
