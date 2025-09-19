@@ -1,7 +1,7 @@
 import json
 import logging
 import subprocess
-from datetime import date, datetime, time, timedelta
+from datetime import datetime, timedelta
 from typing import Iterator, Optional
 
 from hostlist import expand_hostlist
@@ -29,44 +29,26 @@ def parse_in_timezone(timestamp: int | None) -> datetime | None:
 
 
 class SAcctScraper:
-    """Scrape info from Slurm using the sacct command.
-
-    The scraper is currently hard-coded to fetch data for a day.
-    """
+    """Scrape info from Slurm using the sacct command."""
 
     def __init__(
         self,
         cluster: ClusterConfig,
-        day: datetime | None = None,
-        start: datetime | None = None,
-        end: datetime | None = None,
+        start: datetime,
+        end: datetime,
     ):
         """Initialize a SAcctScraper.
 
         Arguments:
             cluster: The cluster on which to scrape the data.
-            day: The day we wish to scrape, as a datetime object. The time
-                does not matter: we will fetch from 00:00 on that day to
-                00:00 on the next day.
-            start: the datetime from which we wish to scrape.
-                Used only if `day` is None. May be precise
-                up to time. To be used with `end`.
-            end: the datetime until which we wish to scrape.
-                Used only if `day` is None. May be precise
-                up to time. To be used with `start`.
+            start: the UTC datetime from which we wish to scrape.
+                Should be precise up to minute.
+            end: the UTC datetime until which we wish to scrape.
+                Should be precise up to minute.
         """
         self.cluster = cluster
-        self.day = day
-        if day is not None:
-            assert start is None
-            assert end is None
-            self.start = datetime.combine(day, time.min)
-            self.end = self.start + timedelta(days=1)
-        else:
-            assert start is not None
-            assert end is not None
-            self.start = start
-            self.end = end
+        self.start = start.replace(tzinfo=UTC)
+        self.end = end.replace(tzinfo=UTC)
 
     @trace_decorator()
     def fetch_raw(self) -> dict:
@@ -94,15 +76,12 @@ class SAcctScraper:
         return json.loads(results.stdout[results.stdout.find("{") :])
 
     def _cache_key(self) -> str | None:
-        today = datetime.combine(date.today(), datetime.min.time())
-        if self.day is None:
+        now = datetime.now().astimezone(UTC)
+        if self.start < self.end < now:
             fmt = "%Y-%m-%dT%H:%M"
             startstr = self.start.strftime(fmt)
             endstr = self.end.strftime(fmt)
             return f"{self.cluster.name}.{startstr}.{endstr}.json"
-        elif self.day < today:
-            daystr = self.day.strftime("%Y-%m-%d")
-            return f"{self.cluster.name}.{daystr}.json"
         else:
             # Not cachable
             return None
@@ -320,10 +299,7 @@ class SAcctScraper:
 
 @trace_decorator()
 def sacct_mongodb_import(
-    cluster: ClusterConfig,
-    day: datetime | None,
-    start: datetime | None = None,
-    end: datetime | None = None,
+    cluster: ClusterConfig, start: datetime, end: datetime
 ) -> None:
     """Fetch sacct data and store it in MongoDB.
 
@@ -331,20 +307,17 @@ def sacct_mongodb_import(
     ----------
     cluster: ClusterConfig
         The configuration of the cluster on which to fetch the data.
-    day: datetime
-        The day for which to fetch the data. The time does not matter.
     start: datetime
-        The datetime from which to fetch the data. Time matters.
-        Used with `end`, and only if `day` is None.
+        The UTC datetime from which to fetch the data. Hour and minute matter.
     end: datetime
-        The datetime up to which we fetch the data. Time matters.
-        Use with `start`, and only if `day` is None.
+        The UTC datetime up to which we fetch the data. Hour and minute matter.
     """
     collection = _jobs_collection()
-    scraper = SAcctScraper(cluster, day, start, end)
+    scraper = SAcctScraper(cluster, start, end)
 
-    timestr = f"date {day}" if day is not None else f"time {start} to {end}"
-    logger.info(f"Getting the sacct data for cluster {cluster.name}, {timestr}...")
+    logger.info(
+        f"Getting the sacct data for cluster {cluster.name}, time {start} to {end}..."
+    )
 
     scraper.get_raw()
     logger.info(

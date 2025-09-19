@@ -9,7 +9,7 @@ import pytest
 from fabric.testing.base import Command, Session
 from opentelemetry.trace import StatusCode
 
-from sarc.client.job import JobStatistics, get_jobs
+from sarc.client.job import JobStatistics, get_jobs, get_available_clusters
 from sarc.config import MTL, UTC, config
 from sarc.jobs import prometheus_scraping
 
@@ -87,8 +87,8 @@ def test_get_gpu_type(
         "jobs",
         "--cluster_name",
         "raisin",
-        "--dates",
-        "2023-02-15",
+        "--intervals",
+        "2023-02-15T00:00-2023-02-16T00:00",
     ]
 
     # Test `acquire jobs` without node->gpu available
@@ -157,8 +157,8 @@ def test_get_gpu_type(
                 "prometheus",
                 "--cluster_name",
                 "raisin",
-                "--dates",
-                "2023-02-14",
+                "--intervals",
+                "2023-02-14T00:00-2023-02-15T00:00",
             ]
         )
         == 0
@@ -275,10 +275,10 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
                 "--cluster_name",
                 "raisin",
                 "patate",
-                "--dates",
-                "2023-02-15",
-                "2023-02-16",
-                "2023-03-16",
+                "--intervals",
+                "2023-02-15T00:00-2023-02-16T00:00",
+                "2023-02-16T00:00-2023-02-17T00:00",
+                "2023-03-16T00:00-2023-03-17T00:00",
             ]
         )
         == 0
@@ -292,10 +292,10 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
                 "--cluster_name",
                 "raisin",
                 "patate",
-                "--dates",
-                "2023-02-15",
-                "2023-02-16",
-                "2023-03-16",
+                "--intervals",
+                "2023-02-15T00:00-2023-02-16T00:00",
+                "2023-02-16T00:00-2023-02-17T00:00",
+                "2023-03-16T00:00-2023-03-17T00:00",
             ]
         )
         == 0
@@ -330,18 +330,18 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     print(caplog.text)
     assert bool(
         re.search(
-            r"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Acquire data on raisin for date: 2023-02-15 00:00:00 \(is_auto=False\)",
+            r"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Acquire data on raisin for interval: 2023-02-15 00:00:00\+00:00 to 2023-02-16 00:00:00\+00:00 \(1440.0 min\)",
             caplog.text,
         )
     )
     assert bool(
         re.search(
-            r"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Acquire data on patate for date: 2023-02-15 00:00:00 \(is_auto=False\)",
+            r"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Acquire data on patate for interval: 2023-02-15 00:00:00\+00:00 to 2023-02-16 00:00:00\+00:00 \(1440.0 min\)",
             caplog.text,
         )
     )
     assert (
-        "Getting the sacct data for cluster raisin, date 2023-02-15 00:00:00..."
+        "Getting the sacct data for cluster raisin, time 2023-02-15 00:00:00+00:00 to 2023-02-16 00:00:00+00:00..."
         in caplog.text
     )
     assert "Saving into mongodb collection '" in caplog.text
@@ -355,13 +355,13 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     # There should be 2 acquisition errors for unexpected data 2023-03-16, one per cluster.
     assert bool(
         re.search(
-            r"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Failed to acquire data for raisin on 2023-03-16 00:00:00:",
+            r"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Failed to acquire data on raisin for interval: 2023-03-16 00:00:00\+00:00 to 2023-03-17 00:00:00\+00:00:",
             caplog.text,
         )
     )
     assert bool(
         re.search(
-            r"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Failed to acquire data for patate on 2023-03-16 00:00:00:",
+            r"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Failed to acquire data on patate for interval: 2023-03-16 00:00:00\+00:00 to 2023-03-17 00:00:00\+00:00:",
             caplog.text,
         )
     )
@@ -492,10 +492,8 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
                 "--cluster_name",
                 "raisin",
                 "patate",
-                "--time_from",
-                "2023-02-15T01:00",
-                "--time_to",
-                "2023-02-15T01:05",
+                "--intervals",
+                "2023-02-15T01:00-2023-02-15T01:05",
             ]
         )
         == 0
@@ -511,10 +509,8 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
                 "--cluster_name",
                 "raisin",
                 "patate",
-                "--time_from",
-                "2023-03-16T01:00",
-                "--time_to",
-                "2023-03-16T01:05",
+                "--intervals",
+                "2023-03-16T01:00-2023-03-16T01:05",
             ]
         )
         == 0
@@ -530,10 +526,8 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
                 "--cluster_name",
                 "raisin",
                 "patate",
-                "--time_from",
-                "2023-02-15T01:00",
-                "--time_to",
-                "2023-02-15T01:05",
+                "--intervals",
+                "2023-02-15T01:00-2023-02-15T01:05",
             ]
         )
         == 0
@@ -547,10 +541,8 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
                 "--cluster_name",
                 "raisin",
                 "patate",
-                "--time_from",
-                "2023-03-16T01:00",
-                "--time_to",
-                "2023-03-16T01:05",
+                "--intervals",
+                "2023-03-16T01:00-2023-03-16T01:05",
             ]
         )
         == 0
@@ -586,12 +578,12 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
     for cluster_name in cluster_names:
         assert bool(
             re.search(
-                rf"sarc\.cli\.acquire\.jobs:jobs\.py:[0-9]+ Acquire data on {cluster_name} for interval: 2023-02-15 01:00:00 to 2023-02-15 01:05:00 \(5.0 min\)",
+                rf"sarc\.cli\.acquire\.jobs:jobs\.py:[0-9]+ Acquire data on {cluster_name} for interval: 2023-02-15 01:00:00\+00:00 to 2023-02-15 01:05:00\+00:00 \(5.0 min\)",
                 caplog.text,
             )
         )
         assert (
-            f"Getting the sacct data for cluster {cluster_name}, time 2023-02-15 01:00:00 to 2023-02-15 01:05:00..."
+            f"Getting the sacct data for cluster {cluster_name}, time 2023-02-15 01:00:00+00:00 to 2023-02-15 01:05:00+00:00..."
             in caplog.text
         )
 
@@ -607,7 +599,7 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
     for cluster_name in cluster_names:
         assert bool(
             re.search(
-                rf"sarc\.cli\.acquire\.jobs:jobs\.py:[0-9]+ Failed to acquire data on {cluster_name} for interval: 2023-03-16 01:00:00 to 2023-03-16 01:05:00:",
+                rf"sarc\.cli\.acquire\.jobs:jobs\.py:[0-9]+ Failed to acquire data on {cluster_name} for interval: 2023-03-16 01:00:00\+00:00 to 2023-03-16 01:05:00\+00:00:",
                 caplog.text,
             )
         )
@@ -648,10 +640,8 @@ def test_acquire_prometheus_for_cluster_without_prometheus(
                 "prometheus",
                 "--cluster_name",
                 "raisin_no_prometheus",
-                "--time_from",
-                "2023-02-15T01:00",
-                "--time_to",
-                "2023-02-15T01:05",
+                "--intervals",
+                "2023-02-15T01:00-2023-02-15T01:05",
             ]
         )
         == 0
@@ -667,3 +657,180 @@ def test_acquire_prometheus_for_cluster_without_prometheus(
             caplog.text,
         )
     )
+
+
+def test_acquire_prometheus_mutually_exclusive_args(cli_main, caplog):
+    # Both --intervals and --auto_interval: must fail
+    assert (
+        cli_main(
+            [
+                "acquire",
+                "prometheus",
+                "--cluster_name",
+                "raisin",
+                "--intervals",
+                "2023-02-15T00:00-2023-02-16T00:00",
+                "--auto_interval",
+                "10",
+            ]
+        )
+        == -1
+    )
+
+    assert not list(get_jobs())
+    assert (
+        "Parameters mutually exclusive: either --intervals or --auto_interval, not both"
+        in caplog.text
+    )
+
+
+def test_acquire_prometheus_invalid_interval(cli_main, caplog):
+    # Malformed interval
+    assert (
+        cli_main(
+            [
+                "acquire",
+                "prometheus",
+                "--cluster_name",
+                "raisin",
+                "--intervals",
+                "2023-02-15x00:00-2023-02-16T00:00",
+            ]
+        )
+        == 0
+    )
+    assert (
+        "Invalid interval 2023-02-15x00:00-2023-02-16T00:00 ; skipping cluster"
+        in caplog.text
+    )
+
+
+def test_acquire_prometheus_interval_start_gt_end(cli_main, caplog):
+    # Malformed interval: start > end
+    assert (
+        cli_main(
+            [
+                "acquire",
+                "prometheus",
+                "--cluster_name",
+                "raisin",
+                "--intervals",
+                "2023-02-17T00:00-2023-02-16T00:00",
+            ]
+        )
+        == 0
+    )
+    assert (
+        "Interval: 2023-02-17 00:00:00+00:00 > 2023-02-16 00:00:00+00:00 ; skipping cluster"
+        in caplog.text
+    )
+
+
+def test_acquire_prometheus_args_no_interval(cli_main, caplog):
+    # No interval, nothing to do
+    assert (
+        cli_main(
+            [
+                "acquire",
+                "prometheus",
+                "--cluster_name",
+                "raisin",
+            ]
+        )
+        == 0
+    )
+    assert "No --intervals or --auto_interval parsed, nothing to do." in caplog.text
+
+
+def _get_cluster_raisin():
+    return [
+        cluster
+        for cluster in get_available_clusters()
+        if cluster.cluster_name == "raisin"
+    ][0]
+
+
+@pytest.mark.usefixtures("read_write_db", "enabled_cache")
+def test_auto_interval(cli_main, monkeypatch, freezer, caplog):
+    """Test auto_interval."""
+
+    def mock_scrap_prometheus(*args, **kwargs):
+        mock_scrap_prometheus.called += 1
+
+    mock_scrap_prometheus.called = 0
+
+    monkeypatch.setattr(
+        "sarc.cli.acquire.prometheus.scrap_prometheus", mock_scrap_prometheus
+    )
+
+    orig_end_time = datetime.strptime(
+        _get_cluster_raisin().end_time_prometheus, "%Y-%m-%dT%H:%M"
+    )
+    expected_final_end_time = orig_end_time + timedelta(minutes=300)
+    freezer.move_to(expected_final_end_time)
+
+    assert (
+        cli_main(
+            [
+                "-v",
+                "acquire",
+                "prometheus",
+                "--cluster_name",
+                "raisin",
+                "--auto_interval",
+                "60",
+            ]
+        )
+        == 0
+    )
+    print(caplog.text)
+    # end_time_prometheus should have been updated
+    assert (
+        datetime.strptime(_get_cluster_raisin().end_time_prometheus, "%Y-%m-%dT%H:%M")
+        == expected_final_end_time
+    )
+    # We should have scraped 5 times
+    assert mock_scrap_prometheus.called == 5
+
+
+@pytest.mark.usefixtures("read_write_db", "enabled_cache")
+def test_auto_interval_0(cli_main, monkeypatch, freezer, caplog):
+    """Test auto_interval with unique interval."""
+
+    def mock_scrap_prometheus(*args, **kwargs):
+        mock_scrap_prometheus.called += 1
+
+    mock_scrap_prometheus.called = 0
+
+    monkeypatch.setattr(
+        "sarc.cli.acquire.prometheus.scrap_prometheus", mock_scrap_prometheus
+    )
+
+    orig_end_time = datetime.strptime(
+        _get_cluster_raisin().end_time_prometheus, "%Y-%m-%dT%H:%M"
+    )
+    expected_final_end_time = orig_end_time + timedelta(minutes=300)
+    freezer.move_to(expected_final_end_time)
+
+    assert (
+        cli_main(
+            [
+                "-v",
+                "acquire",
+                "prometheus",
+                "--cluster_name",
+                "raisin",
+                "--auto_interval",
+                "0",
+            ]
+        )
+        == 0
+    )
+    print(caplog.text)
+    # end_time_prometheus should have been updated
+    assert (
+        datetime.strptime(_get_cluster_raisin().end_time_prometheus, "%Y-%m-%dT%H:%M")
+        == expected_final_end_time
+    )
+    # We should have scraped 1 time
+    assert mock_scrap_prometheus.called == 1

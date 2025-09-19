@@ -1,49 +1,23 @@
-"""
-Script to acquire prometheus metrics.
-NB: Dates are parsed in UTC timezone.
-"""
+"""Script to acquire prometheus metrics."""
 
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta
-from typing import Generator
+from datetime import datetime
 
 from simple_parsing import field
 
-from sarc.config import config, UTC
+from sarc.config import config
 from sarc.jobs.prometheus_scraping import scrap_prometheus
+from sarc.cli.acquire.jobs import (
+    parse_intervals,
+    parse_auto_intervals,
+    set_auto_end_time,
+)
 from sarc.traces import using_trace
 
 logger = logging.getLogger(__name__)
-
-
-def _str_to_dt(dt_str: str) -> datetime:
-    return datetime.strptime(dt_str, "%Y-%m-%d").replace(tzinfo=UTC)
-
-
-def _str_to_extended_dt(dt_str: str) -> datetime:
-    """Parse date up to minute, with format %Y-%m-%dT%H:%M"""
-    return datetime.strptime(dt_str, "%Y-%m-%dT%H:%M").replace(tzinfo=UTC)
-
-
-def parse_dates(dates: list[str]) -> list[datetime]:
-    parsed_dates: list[datetime] = []
-    for date in dates:
-        if date.count("-") == 5:
-            start = _str_to_dt("-".join(date.split("-")[:3]))
-            end = _str_to_dt("-".join(date.split("-")[3:]))
-            parsed_dates.extend(date for date in _daterange(start, end))
-        else:
-            parsed_dates.append(_str_to_dt(date))
-
-    return parsed_dates
-
-
-def _daterange(start_date: datetime, end_date: datetime) -> Generator[datetime]:
-    for n in range(int((end_date - start_date).days)):
-        yield start_date + timedelta(n)
 
 
 # pylint: disable=logging-not-lazy,too-many-branches
@@ -51,60 +25,41 @@ def _daterange(start_date: datetime, end_date: datetime) -> Generator[datetime]:
 class AcquirePrometheus:
     cluster_names: list[str] = field(alias=["-c"], default_factory=list)
 
-    dates: list[str] = field(alias=["-d"], default_factory=list)
-
-    time_from: str | None = field(
-        alias=["-a"],
+    intervals: list[str] | None = field(
+        alias=["-i"],
         default=None,
         help=(
-            "Acquire Prometheus metrics for jobs from this datetime. "
-            "Expected format: %%Y-%%m-%%dT%%H:%%M (e.g.: 2020-01-01T17:00). "
-            "Should be used along with --time_to. "
-            "Mutually exclusive with --dates."
+            "Acquire Prometheus metrics in these intervals. "
+            "Expected format for each interval: <date-from>-<date-to>, "
+            "with <date-from> and <date-to> in format: YYYY-MM-DDTHH:mm "
+            "(e.g.: 2020-01-01T17:05-2020-01-01T18:00). "
+            "Dates will be interpreted as UTC. "
+            "Mutually exclusive with --auto_interval."
         ),
     )
 
-    time_to: str | None = field(
-        alias=["-b"],
+    auto_interval: int | None = field(
+        alias=["-a"],
+        type=int,
         default=None,
         help=(
-            "Acquire Prometheus metrics for jobs until this datetime. "
-            "Expected format: %%Y-%%m-%%dT%%H:%%M  (e.g.: 2020-01-01T17:05). "
-            "Should be used along with --time_from. "
-            "Mutually exclusive with --dates."
+            "Acquire Prometheus metrics every <auto_interval> minutes "
+            "since latest scraping date until now. "
+            "If <= 0, use only one interval since latest scraping date until now. "
+            "Mutually exclusive with --intervals."
         ),
     )
 
     def execute(self) -> int:
-        time_intervals = []
-        if self.dates:
-            if self.time_from or self.time_to:
-                logger.error(
-                    "Parameters mutually exclusive: either --date "
-                    "or (--time_from ... --time_to ...), not both."
-                )
-                return -1
-            # Parse dates and convert each date to a time interval
-            # of 1 day length (from date:00h00 to (date+1day):00h00)
-            for date in parse_dates(self.dates):
-                start = date
-                end = start + timedelta(days=1)
-                time_intervals.append((start, end))
-        elif self.time_from or self.time_to:
-            if not self.time_from or not self.time_to:
-                logger.error("Both parameters needed: --time_from, --time_to")
-                return -1
-            time_from = _str_to_extended_dt(self.time_from)
-            time_to = _str_to_extended_dt(self.time_to)
-            if time_from >= time_to:
-                logger.error(
-                    f"Expected time_from < time_to, instead got time_from: {time_from}, time_to: {time_to}"
-                )
-                return -1
-            time_intervals.append((time_from, time_to))
+        if self.intervals is not None and self.auto_interval is not None:
+            logger.error(
+                "Parameters mutually exclusive: either --intervals or --auto_interval, not both"
+            )
+            return -1
 
         cfg = config("scraping")
         clusters_configs = cfg.clusters
+        auto_end_field = "end_time_prometheus"
 
         for cluster_name in self.cluster_names:
             cluster = clusters_configs[cluster_name]
@@ -114,28 +69,44 @@ class AcquirePrometheus:
                 )
                 continue
             try:
-                for start, end in time_intervals:
+                intervals: list[tuple[datetime, datetime]] = []
+                if self.intervals is not None:
+                    intervals = parse_intervals(self.intervals)
+                elif self.auto_interval is not None:
+                    intervals = parse_auto_intervals(
+                        cluster_name, auto_end_field, self.auto_interval
+                    )
+                if not intervals:
+                    logger.warning(
+                        "No --intervals or --auto_interval parsed, nothing to do."
+                    )
+                    continue
+
+                for time_from, time_to in intervals:
                     with using_trace(
                         "AcquirePrometheus",
                         "acquire_prometheus_metrics_from_time_interval",
                         exception_types=(),
                     ) as span:
                         span.set_attribute("cluster_name", cluster_name)
-                        span.set_attribute("start", str(start))
-                        span.set_attribute("end", str(end))
-                        interval_minutes = (end - start).total_seconds() / 60
+                        span.set_attribute("time_from", str(time_from))
+                        span.set_attribute("time_to", str(time_to))
+                        interval_minutes = (time_to - time_from).total_seconds() / 60
                         try:
                             logger.info(
                                 f"Acquire Prometheus metrics on {cluster_name} for jobs from "
-                                f"{start} to {end} ({interval_minutes} min)"
+                                f"{time_from} to {time_to} ({interval_minutes} min)"
                             )
 
-                            scrap_prometheus(cluster, start, end)
+                            scrap_prometheus(cluster, time_from, time_to)
+
+                            if self.auto_interval is not None:
+                                set_auto_end_time(cluster_name, auto_end_field, time_to)
                         # pylint: disable=broad-exception-caught
                         except Exception as e:
                             logger.error(
                                 f"Failed to acquire Prometheus metrics on {cluster_name} for interval: "
-                                f"{start} to {end} ({interval_minutes} min): {type(e).__name__}: {e}"
+                                f"{time_from} to {time_to} ({interval_minutes} min): {type(e).__name__}: {e}"
                             )
                             raise e
             # pylint: disable=broad-exception-caught

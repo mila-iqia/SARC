@@ -289,6 +289,7 @@ def create_cluster_entries():
     cluster_entries = []
 
     date_format = "%Y-%m-%d"
+    time_format = "%Y-%m-%dT%H:%M"
 
     for i, cluster_name in enumerate(cluster_names):
         cluster_end_time = end_time - timedelta(days=i)
@@ -297,7 +298,8 @@ def create_cluster_entries():
             {
                 "cluster_name": cluster_name,
                 "start_date": cluster_start_time.strftime(date_format),
-                "end_date": cluster_end_time.strftime(date_format),
+                "end_time_sacct": cluster_end_time.strftime(time_format),
+                "end_time_prometheus": cluster_end_time.strftime(time_format),
                 "billing_is_gpu": True if cluster_name == "mila" else False,
             }
         )

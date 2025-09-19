@@ -14,7 +14,8 @@ from sarc.jobs.sacct import JobConversionError, SAcctScraper
 def test_SAcctScraper_fetch_raw(test_config, remote):
     scraper = SAcctScraper(
         cluster=test_config.clusters["test"],
-        day=datetime(2023, 2, 28),
+        start=datetime(2023, 2, 28),
+        end=datetime(2023, 3, 1),
     )
     remote.expect(
         host="patate",
@@ -30,7 +31,8 @@ def test_SAcctScraper_fetch_raw(test_config, remote):
 def test_SAcctScraper_fetch_raw2(test_config, remote):
     scraper = SAcctScraper(
         cluster=test_config.clusters["test"],
-        day=datetime(2023, 2, 28),
+        start=datetime(2023, 2, 28),
+        end=datetime(2023, 3, 1),
     )
     remote.expect(
         commands=[
@@ -59,11 +61,13 @@ def test_SAcctScraper_get_cache(test_config, enabled_cache, remote):
 
     scraper_today = SAcctScraper(
         cluster=test_config.clusters["test"],
-        day=today,
+        start=today,
+        end=tomorrow,
     )
     scraper_yesterday = SAcctScraper(
         cluster=test_config.clusters["test"],
-        day=yesterday,
+        start=yesterday,
+        end=today,
     )
 
     # we ask for yesterday, today and tomorrow
@@ -83,14 +87,20 @@ def test_SAcctScraper_get_cache(test_config, enabled_cache, remote):
 
     cachedir = config().cache
     cachedir = cachedir / "sacct"
-    cachefile = cachedir / f"test.{yesterday.strftime('%Y-%m-%d')}.json"
+    cachefile = (
+        cachedir
+        / f"test.{yesterday.strftime('%Y-%m-%dT%H:%M')}.{today.strftime('%Y-%m-%dT%H:%M')}.json"
+    )
     assert not isfile(cachefile)
     scraper_yesterday.get_raw()
     assert isfile(cachefile)
 
     cachedir = config().cache
     cachedir = cachedir / "sacct"
-    cachefile = cachedir / f"test.{today.strftime('%Y-%m-%d')}.json"
+    cachefile = (
+        cachedir
+        / f"test.{today.strftime('%Y-%m-%dT%H:%M')}.{tomorrow.strftime('%Y-%m-%dT%H:%M')}.json"
+    )
     assert not isfile(cachefile)
     scraper_today.get_raw()
     assert not isfile(cachefile)
@@ -102,7 +112,8 @@ def test_SAcctScraper_get_cache(test_config, enabled_cache, remote):
 def test_SAcctScraper_convert_version_supported(test_config, monkeypatch, caplog):
     scraper = SAcctScraper(
         cluster=test_config.clusters["test"],
-        day=datetime(2023, 2, 28),
+        start=datetime(2023, 2, 28),
+        end=datetime(2023, 3, 1),
     )
     version_supported = {"major": "24", "micro": "1", "minor": "11"}
     version_unsupported = {"major": "124", "micro": "1", "minor": "11"}

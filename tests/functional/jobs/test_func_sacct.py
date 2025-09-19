@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -10,6 +11,7 @@ import pytest
 from fabric.testing.base import Command, Session
 from opentelemetry.trace import StatusCode
 
+from sarc.client import get_available_clusters
 from sarc.client.job import get_jobs
 from sarc.config import MTL, PST, UTC, config
 from sarc.jobs.sacct import SAcctScraper
@@ -94,7 +96,11 @@ parameters = {
 
 @pytest.fixture
 def scraper():
-    return SAcctScraper(cluster=config().clusters["raisin"], day=datetime(2023, 2, 14))
+    return SAcctScraper(
+        cluster=config().clusters["raisin"],
+        start=datetime(2023, 2, 14),
+        end=datetime(2023, 2, 15),
+    )
 
 
 @pytest.mark.usefixtures("tzlocal_is_mtl")
@@ -257,7 +263,9 @@ def test_scraper_with_malformed_cache(test_config, remote, scraper, caplog):
 )
 def test_sacct_bin_and_accounts(test_config, remote):
     scraper = SAcctScraper(
-        cluster=config().clusters["patate"], day=datetime(2023, 2, 14)
+        cluster=config().clusters["patate"],
+        start=datetime(2023, 2, 14),
+        end=datetime(2023, 2, 15),
     )
     remote.expect(
         host="patate",
@@ -284,7 +292,9 @@ def test_localhost(os_system, monkeypatch):
     monkeypatch.setattr(subprocess, "run", mock_subprocess_run)
 
     scraper = SAcctScraper(
-        cluster=config().clusters["local"], day=datetime(2023, 2, 14)
+        cluster=config().clusters["local"],
+        start=datetime(2023, 2, 14),
+        end=datetime(2023, 2, 15),
     )
 
     assert len(list(scraper)) == 0
@@ -317,8 +327,8 @@ def test_stdout_message_before_json(
                 "jobs",
                 "--cluster_name",
                 "raisin",
-                "--dates",
-                "2023-02-15",
+                "--intervals",
+                "2023-02-15T00:00-2023-02-16T00:00",
             ]
         )
         == 0
@@ -355,8 +365,8 @@ def test_save_job(test_config, sacct_json, remote, file_regression, cli_main):
                 "jobs",
                 "--cluster_name",
                 "raisin",
-                "--dates",
-                "2023-02-15",
+                "--intervals",
+                "2023-02-15T00:00-2023-02-16T00:00",
             ]
         )
         == 0
@@ -398,8 +408,8 @@ def test_update_job(test_config, sacct_json, remote, file_regression, cli_main):
                 "jobs",
                 "--cluster_name",
                 "raisin",
-                "--dates",
-                "2023-02-15",
+                "--intervals",
+                "2023-02-15T00:00-2023-02-16T00:00",
             ]
         )
         == 0
@@ -414,8 +424,8 @@ def test_update_job(test_config, sacct_json, remote, file_regression, cli_main):
                 "jobs",
                 "--cluster_name",
                 "raisin",
-                "--dates",
-                "2023-02-15",
+                "--intervals",
+                "2023-02-15T00:00-2023-02-16T00:00",
             ]
         )
         == 0
@@ -469,8 +479,8 @@ def test_save_preempted_job(test_config, sacct_json, remote, file_regression, cl
                 "jobs",
                 "--cluster_name",
                 "raisin",
-                "--dates",
-                "2023-02-15",
+                "--intervals",
+                "2023-02-15T00:00-2023-02-16T00:00",
             ]
         )
         == 0
@@ -528,9 +538,12 @@ def test_multiple_dates(test_config, remote, file_regression, cli_main):
                 "jobs",
                 "--cluster_name",
                 "raisin",
-                "--dates",
-                "2023-02-15",
-                "2023-02-16-2023-02-20",
+                "--intervals",
+                "2023-02-15T00:00-2023-02-16T00:00",
+                "2023-02-16T00:00-2023-02-17T00:00",
+                "2023-02-17T00:00-2023-02-18T00:00",
+                "2023-02-18T00:00-2023-02-19T00:00",
+                "2023-02-19T00:00-2023-02-20T00:00",
             ]
         )
         == 0
@@ -612,9 +625,9 @@ def test_multiple_clusters_and_dates(test_config, remote, file_regression, cli_m
                 "--cluster_name",
                 "raisin",
                 "patate",
-                "--dates",
-                "2023-02-15",
-                "2023-02-16",
+                "--intervals",
+                "2023-02-15T00:00-2023-02-16T00:00",
+                "2023-02-16T00:00-2023-02-17T00:00",
             ]
         )
         == 0
@@ -666,8 +679,8 @@ def test_job_tz(test_config, sacct_json, remote, cli_main):
                 "jobs",
                 "--cluster_name",
                 "patate",
-                "--dates",
-                "2023-02-15",
+                "--intervals",
+                "2023-02-15T00:00-2023-02-16T00:00",
             ]
         )
         == 0
@@ -696,3 +709,218 @@ def test_parse_sacct_slurm_versions(sacct_outputs, scraper):
     )
     jobs = list(scraper)
     assert len(jobs) == 1
+
+
+def test_acquire_jobs_mutually_exclusive_args(cli_main, caplog):
+    # Both --intervals and --auto_interval: must fail
+    assert (
+        cli_main(
+            [
+                "acquire",
+                "jobs",
+                "--cluster_name",
+                "raisin",
+                "--intervals",
+                "2023-02-15T00:00-2023-02-16T00:00",
+                "--auto_interval",
+                "10",
+            ]
+        )
+        == -1
+    )
+
+    assert not list(get_jobs())
+    assert (
+        "Parameters mutually exclusive: either --intervals or --auto_interval, not both"
+        in caplog.text
+    )
+
+
+def test_acquire_jobs_invalid_interval(cli_main, caplog):
+    # Malformed interval
+    assert (
+        cli_main(
+            [
+                "acquire",
+                "jobs",
+                "--cluster_name",
+                "raisin",
+                "--intervals",
+                "2023-02-15x00:00-2023-02-16T00:00",
+            ]
+        )
+        == 0
+    )
+    assert not list(get_jobs())
+    assert (
+        "Invalid interval 2023-02-15x00:00-2023-02-16T00:00 ; skipping cluster"
+        in caplog.text
+    )
+
+
+def test_acquire_jobs_interval_start_gt_end(cli_main, caplog):
+    # Malformed interval: start > end
+    assert (
+        cli_main(
+            [
+                "acquire",
+                "jobs",
+                "--cluster_name",
+                "raisin",
+                "--intervals",
+                "2023-02-17T00:00-2023-02-16T00:00",
+            ]
+        )
+        == 0
+    )
+    assert not list(get_jobs())
+    assert (
+        "Interval: 2023-02-17 00:00:00+00:00 > 2023-02-16 00:00:00+00:00 ; skipping cluster"
+        in caplog.text
+    )
+
+
+def test_acquire_jobs_args_no_interval(cli_main, caplog):
+    # No interval, nothing to do
+    assert (
+        cli_main(
+            [
+                "acquire",
+                "jobs",
+                "--cluster_name",
+                "raisin",
+            ]
+        )
+        == 0
+    )
+    assert not list(get_jobs())
+    assert "No --intervals or --auto_interval parsed, nothing to do." in caplog.text
+
+
+def _get_cluster_raisin():
+    return [
+        cluster
+        for cluster in get_available_clusters()
+        if cluster.cluster_name == "raisin"
+    ][0]
+
+
+@pytest.mark.usefixtures("read_write_db", "enabled_cache")
+def test_auto_interval(cli_main, monkeypatch, freezer, caplog):
+    """Test auto_interval and check generated cache files."""
+
+    def mock_fetch_raw(*args, **kwargs):
+        mock_fetch_raw.called += 1
+        return {"jobs": []}
+
+    mock_fetch_raw.called = 0
+
+    import sarc.jobs.sacct
+
+    monkeypatch.setattr(sarc.jobs.sacct.SAcctScraper, "fetch_raw", mock_fetch_raw)
+
+    orig_end_time = datetime.strptime(
+        _get_cluster_raisin().end_time_sacct, "%Y-%m-%dT%H:%M"
+    )
+    expected_final_end_time = orig_end_time + timedelta(minutes=300)
+    freezer.move_to(expected_final_end_time)
+
+    sacct_folder = config().cache / "sacct"
+    # Cache should not yet exist
+    assert not sacct_folder.exists()
+    assert (
+        cli_main(
+            [
+                "-v",
+                "acquire",
+                "jobs",
+                "--cluster_name",
+                "raisin",
+                "--auto_interval",
+                "60",
+            ]
+        )
+        == 0
+    )
+    print(caplog.text)
+    # end_time_sacct should have been updated
+    assert (
+        datetime.strptime(_get_cluster_raisin().end_time_sacct, "%Y-%m-%dT%H:%M")
+        == expected_final_end_time
+    )
+    # 300 minutes every 60 minutes => 5 intervals => 5 cached files
+    assert mock_fetch_raw.called == 5
+    assert sacct_folder.exists()
+    cached_filenames = sorted(path.name for path in sacct_folder.iterdir())
+    assert len(cached_filenames) == 5
+
+    def _str_next_time(minutes: int):
+        next_time = orig_end_time + timedelta(minutes=minutes)
+        return next_time.strftime("%Y-%m-%dT%H:%M")
+
+    expected_filenames = [
+        f"raisin.{_str_next_time(0)}.{_str_next_time(60)}.json",
+        f"raisin.{_str_next_time(60)}.{_str_next_time(120)}.json",
+        f"raisin.{_str_next_time(120)}.{_str_next_time(180)}.json",
+        f"raisin.{_str_next_time(180)}.{_str_next_time(240)}.json",
+        f"raisin.{_str_next_time(240)}.{_str_next_time(300)}.json",
+    ]
+    assert cached_filenames == expected_filenames
+
+
+@pytest.mark.freeze_time
+@pytest.mark.usefixtures("read_write_db", "enabled_cache")
+def test_auto_interval_0(cli_main, monkeypatch, freezer, caplog):
+    """Test auto_interval with unique interval and check generated cache files."""
+
+    def mock_fetch_raw(scrp):
+        mock_fetch_raw.called += 1
+        return {"jobs": []}
+
+    mock_fetch_raw.called = 0
+
+    import sarc.jobs.sacct
+
+    monkeypatch.setattr(sarc.jobs.sacct.SAcctScraper, "fetch_raw", mock_fetch_raw)
+
+    orig_end_time = datetime.strptime(
+        _get_cluster_raisin().end_time_sacct, "%Y-%m-%dT%H:%M"
+    )
+    expected_final_end_time = orig_end_time + timedelta(minutes=300)
+    freezer.move_to(expected_final_end_time)
+
+    sacct_folder = config().cache / "sacct"
+    # Cache should not yet exist
+    assert not sacct_folder.exists()
+    assert (
+        cli_main(
+            [
+                "-v",
+                "acquire",
+                "jobs",
+                "--cluster_name",
+                "raisin",
+                "--auto_interval",
+                "0",  # no minutes => take whole time
+            ]
+        )
+        == 0
+    )
+    print(caplog.text)
+    # end_time_sacct should have been updated
+    assert (
+        datetime.strptime(_get_cluster_raisin().end_time_sacct, "%Y-%m-%dT%H:%M")
+        == expected_final_end_time
+    )
+    # We expected only 1 interval and cache
+    assert mock_fetch_raw.called == 1
+    assert sacct_folder.exists()
+    cached_filenames = sorted(path.name for path in sacct_folder.iterdir())
+    assert len(cached_filenames) == 1
+
+    def _str_next_time(minutes: int):
+        next_time = orig_end_time + timedelta(minutes=minutes)
+        return next_time.strftime("%Y-%m-%dT%H:%M")
+
+    expected_filenames = [f"raisin.{_str_next_time(0)}.{_str_next_time(300)}.json"]
+    assert cached_filenames == expected_filenames
