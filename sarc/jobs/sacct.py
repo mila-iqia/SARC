@@ -77,7 +77,7 @@ class SAcctScraper:
 
     def _cache_key(self) -> str | None:
         now = datetime.now().astimezone(UTC)
-        if self.start < self.end < now:
+        if self.start < self.end <= now:
             fmt = "%Y-%m-%dT%H:%M"
             startstr = self.start.strftime(fmt)
             endstr = self.end.strftime(fmt)
