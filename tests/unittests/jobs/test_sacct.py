@@ -14,11 +14,12 @@ from sarc.jobs.sacct import JobConversionError, SAcctScraper
 def test_SAcctScraper_fetch_raw(test_config, remote):
     scraper = SAcctScraper(
         cluster=test_config.clusters["test"],
-        day=datetime(2023, 2, 28),
+        start=datetime(2023, 2, 28),
+        end=datetime(2023, 3, 1),
     )
     remote.expect(
         host="patate",
-        cmd="sacct  -X -S 2023-02-28T00:00 -E 2023-03-01T00:00 --allusers --json",
+        cmd="export TZ=UTC && sacct  -X -S 2023-02-28T00:00 -E 2023-03-01T00:00 --allusers --json",
         out=b"{}",
     )
     assert scraper.fetch_raw() == {}
@@ -30,16 +31,17 @@ def test_SAcctScraper_fetch_raw(test_config, remote):
 def test_SAcctScraper_fetch_raw2(test_config, remote):
     scraper = SAcctScraper(
         cluster=test_config.clusters["test"],
-        day=datetime(2023, 2, 28),
+        start=datetime(2023, 2, 28),
+        end=datetime(2023, 3, 1),
     )
     remote.expect(
         commands=[
             Command(
-                "sacct  -X -S 2023-02-28T00:00 -E 2023-03-01T00:00 --allusers --json",
+                "export TZ=UTC && sacct  -X -S 2023-02-28T00:00 -E 2023-03-01T00:00 --allusers --json",
                 out=b"{}",
             ),
             Command(
-                "sacct  -X -S 2023-02-28T00:00 -E 2023-03-01T00:00 --allusers --json",
+                "export TZ=UTC && sacct  -X -S 2023-02-28T00:00 -E 2023-03-01T00:00 --allusers --json",
                 out=b'{ "value": 2 }',
             ),
         ]
@@ -59,11 +61,13 @@ def test_SAcctScraper_get_cache(test_config, enabled_cache, remote):
 
     scraper_today = SAcctScraper(
         cluster=test_config.clusters["test"],
-        day=today,
+        start=today,
+        end=tomorrow,
     )
     scraper_yesterday = SAcctScraper(
         cluster=test_config.clusters["test"],
-        day=yesterday,
+        start=yesterday,
+        end=today,
     )
 
     # we ask for yesterday, today and tomorrow
@@ -71,11 +75,11 @@ def test_SAcctScraper_get_cache(test_config, enabled_cache, remote):
     remote.expect(
         commands=[
             Command(
-                f"sacct  -X -S {yesterday.strftime(fmt)} -E {today.strftime(fmt)} --allusers --json",
+                f"export TZ=UTC && sacct  -X -S {yesterday.strftime(fmt)} -E {today.strftime(fmt)} --allusers --json",
                 out=b'{"value": 2}',
             ),
             Command(
-                f"sacct  -X -S {today.strftime(fmt)} -E {tomorrow.strftime(fmt)} --allusers --json",
+                f"export TZ=UTC && sacct  -X -S {today.strftime(fmt)} -E {tomorrow.strftime(fmt)} --allusers --json",
                 out=b'{"value": 2}',
             ),
         ]
@@ -83,14 +87,20 @@ def test_SAcctScraper_get_cache(test_config, enabled_cache, remote):
 
     cachedir = config().cache
     cachedir = cachedir / "sacct"
-    cachefile = cachedir / f"test.{yesterday.strftime('%Y-%m-%d')}.json"
+    cachefile = (
+        cachedir
+        / f"test.{yesterday.strftime('%Y-%m-%dT%H:%M')}.{today.strftime('%Y-%m-%dT%H:%M')}.json"
+    )
     assert not isfile(cachefile)
     scraper_yesterday.get_raw()
     assert isfile(cachefile)
 
     cachedir = config().cache
     cachedir = cachedir / "sacct"
-    cachefile = cachedir / f"test.{today.strftime('%Y-%m-%d')}.json"
+    cachefile = (
+        cachedir
+        / f"test.{today.strftime('%Y-%m-%dT%H:%M')}.{tomorrow.strftime('%Y-%m-%dT%H:%M')}.json"
+    )
     assert not isfile(cachefile)
     scraper_today.get_raw()
     assert not isfile(cachefile)
@@ -102,7 +112,8 @@ def test_SAcctScraper_get_cache(test_config, enabled_cache, remote):
 def test_SAcctScraper_convert_version_supported(test_config, monkeypatch, caplog):
     scraper = SAcctScraper(
         cluster=test_config.clusters["test"],
-        day=datetime(2023, 2, 28),
+        start=datetime(2023, 2, 28),
+        end=datetime(2023, 3, 1),
     )
     version_supported = {"major": "24", "micro": "1", "minor": "11"}
     version_unsupported = {"major": "124", "micro": "1", "minor": "11"}

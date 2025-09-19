@@ -442,7 +442,8 @@ class SlurmCLuster(BaseModel):
 
     cluster_name: str
     start_date: str | None = None
-    end_date: str | None = None
+    end_time_sacct: str | None = None
+    end_time_prometheus: str | None = None
     billing_is_gpu: bool = False
 
 
