@@ -3,14 +3,15 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from simple_parsing import field
 from typing import Generator, Iterable
 
-from simple_parsing import field
 
 from sarc.config import config
 from sarc.errors import ClusterNotFound
-from sarc.jobs.sacct import sacct_mongodb_import
+from sarc.jobs.sacct_plugin.scrapers.sacct_scraping import sacct_acquire
 from sarc.traces import using_trace
+
 
 logger = logging.getLogger(__name__)
 
@@ -108,9 +109,10 @@ class AcquireJobs:
                                 f"Acquire data on {cluster_name} for date: {date} (is_auto={is_auto})"
                             )
 
-                            sacct_mongodb_import(
+                            sacct_acquire(
                                 clusters_configs[cluster_name], date, self.no_prometheus
                             )
+
                             if is_auto:
                                 _dates_set_last_date(cluster_name, date)
                         # pylint: disable=broad-exception-caught
