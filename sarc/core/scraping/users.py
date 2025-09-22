@@ -155,6 +155,7 @@ def scrape_users(
     # UserMatches, referenced by plugin name and matching id
     user_refs: dict[MatchID, UserMatch] = {}
     for scraper_name, (rdata, config) in raw_data.items():
+        scraper = get_user_scraper(scraper_name)
         for userm in scraper.parse_user_data(config, rdata):
             userm.matching_id.name = scraper_name
             # First, get all the userm that match with this one.
