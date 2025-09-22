@@ -111,6 +111,8 @@ def update_user_match(*, value: UserMatch, update: UserMatch) -> None:
         assert name_dict.get(mid.name, mid) == mid
         value.known_matches.add(mid)
 
+    value.member_type.merge_with(update.member_type, truncate=True)
+
     for domain, credentials in update.associated_accounts.items():
         if domain not in value.associated_accounts:
             value.associated_accounts[domain] = credentials
