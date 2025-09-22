@@ -72,3 +72,6 @@ class DRACMemberScraper(UserScraper[DRACMemberConfig]):
                 matching_id=MatchID(name="drac_member", mid=d["ccri"][:-3]),
                 associated_accounts={"drac": creds},
             )
+
+
+_builtin_scrapers["drac_member"] = DRACMemberScraper()
