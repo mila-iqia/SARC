@@ -87,17 +87,6 @@ class MockUserScraper(UserScraper[MockConfig]):
         return users
 
 
-test_entry_points = EntryPoints(
-    [
-        EntryPoint(
-            name="test_plugin",
-            group="sarc.user_scraper",
-            value=f"{MockUserScraper.__module__}:{MockUserScraper.__name__}",
-        )
-    ]
-)
-
-
 @pytest.fixture
 def user_plugin(monkeypatch):
     yield monkeypatch.setattr(
