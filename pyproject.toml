@@ -32,7 +32,7 @@ dependencies = [
     "opentelemetry-exporter-otlp>=1.23.0,<2",
     "iguane",
     "filelock>=3.18.0",
-    "fastapi[standard-no-fastapi-cloud-cli]>=0.116.1,<0.117",
+    "fastapi[standard-no-fastapi-cloud-cli]>=0.117.1,<0.118",
     "requests>=2.32.3,<3",
     "google-auth>=2.40.2,<3",
     "pyodbc>=5.2.0,<6",
