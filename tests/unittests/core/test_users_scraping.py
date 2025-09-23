@@ -87,6 +87,37 @@ class MockUserScraper(UserScraper[MockConfig]):
         return users
 
 
+@dataclass
+class TestConfig:
+    domain: str
+
+
+class TestPlugin(UserScraper[TestConfig]):
+    config_type: TestConfig
+
+    def validate_config(self, config_data: Any) -> TestConfig:
+        return TestConfig(domain=config_data)
+
+    def get_user_data(self, config: TestConfig) -> bytes:
+        return b""
+
+    def parse_user_data(self, config: TestConfig, data: bytes) -> Iterable[UserMatch]:
+        users = []
+        users.append(
+            UserMatch(
+                email=f"john@{config.domain}",
+                matching_id=MatchID(name="test", mid="john"),
+            )
+        )
+        users.append(
+            UserMatch(
+                email=f"jane@{config.domain}",
+                matching_id=MatchID(name="test", mid="jane"),
+            )
+        )
+        return users
+
+
 @pytest.fixture
 def user_plugin(monkeypatch):
     yield monkeypatch.setattr(
@@ -374,3 +405,44 @@ def test_update_user_match_merge_credentials_existing_domain():
     assert "drac" in base_user.associated_accounts
     assert base_user.associated_accounts["drac"].get_value() == "user1_drac"
     assert base_user.associated_accounts["drac"].get_value() == "user1_drac"
+
+
+def test_multiple_different_scrapers(monkeypatch):
+    """Test scraping users with multiple different scrapers and verify merging behavior."""
+    # Set up both scrapers in the builtin scrapers
+    mock_scraper = MockUserScraper()
+    test_plugin = TestPlugin()
+    monkeypatch.setitem(_builtin_scrapers, "mock_scraper", mock_scraper)
+    monkeypatch.setitem(_builtin_scrapers, "test_plugin", test_plugin)
+
+    scrapers = [
+        ("mock_scraper", {"api_url": "https://api.example.com", "api_key": "secret"}),
+        ("test_plugin", "example.com"),
+    ]
+
+    users = list(scrape_users(scrapers))
+
+    # MockUserScraper returns 3 users, TestPlugin returns 2 users
+    # Total should be 5 users (no merging expected since they have different matching IDs)
+    assert len(users) == 5
+
+    # Check that we have users from both scrapers
+    mock_users = [u for u in users if u.matching_id.name == "mock_scraper"]
+    test_users = [u for u in users if u.matching_id.name == "test_plugin"]
+
+    assert len(mock_users) == 3
+    assert len(test_users) == 2
+
+    # Verify MockUserScraper users have the expected data
+    mock_user_emails = {u.email for u in mock_users if u.email}
+    expected_mock_emails = {"john.doe@example.com", "bob.wilson@example.com"}
+    assert mock_user_emails == expected_mock_emails
+
+    # Verify TestPlugin users have the expected domain-based emails
+    test_user_emails = {u.email for u in test_users if u.email}
+    expected_test_emails = {"john@example.com", "jane@example.com"}
+    assert test_user_emails == expected_test_emails
+
+    # Verify that all users have the correct scraper name in their matching_id
+    for user in users:
+        assert user.matching_id.name in ["mock_scraper", "test_plugin"]
