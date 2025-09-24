@@ -1,15 +1,33 @@
 import logging
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Iterable
 
 from tqdm import tqdm
 
-from sarc.client.job import SlurmJob, _jobs_collection, count_jobs, get_jobs
-from sarc.config import ClusterConfig
+from sarc.client.job import SlurmJob, _jobs_collection
+from sarc.config import ClusterConfig, config
 from sarc.jobs.series import get_job_time_series
 from sarc.traces import trace_decorator
 
 logger = logging.getLogger(__name__)
+
+
+def get_jobs_at_scraped_time(
+    cluster_name: str, start: datetime, end: datetime
+) -> Iterable[SlurmJob]:
+    query = {
+        "cluster_name": cluster_name,
+        # start <= last_scraped_time < end
+        "last_scraped_time": {
+            "$gte": start,
+            "$lt": end,
+        },
+    }
+    coll_jobs = config().mongo.database_instance.jobs
+    nb_jobs = coll_jobs.count_documents(query)
+    yield from tqdm(
+        _jobs_collection().find_by(query), total=nb_jobs, desc="Prometheus metrics"
+    )
 
 
 @trace_decorator()
@@ -33,12 +51,10 @@ def scrap_prometheus(
     logger.info(
         f"Saving into mongodb collection '{collection.Meta.collection_name}'..."
     )
-    nb_jobs = count_jobs(cluster=cluster.name, start=start, end=end)
-    for entry in tqdm(
-        get_jobs(cluster=cluster.name, start=start, end=end),
-        total=nb_jobs,
-        desc="Prometheus metrics",
-    ):
+    assert cluster.name is not None
+    nb_jobs = 0
+    for entry in get_jobs_at_scraped_time(cluster.name, start, end):
+        nb_jobs += 1
         update_allocated_gpu_type_from_prometheus(cluster, entry)
         saved = entry.statistics(recompute=True, save=True) is not None
         if not saved:

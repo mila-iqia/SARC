@@ -276,3 +276,11 @@ def create_jobs_indices(db: Database) -> None:
             ("end_time", pymongo.ASCENDING),
         ],
     )
+
+    # Index most useful for querying jobs for a given cluster and scraping time
+    db_collection.create_index(
+        [
+            ("cluster_name", pymongo.ASCENDING),
+            ("last_scraped_time", pymongo.ASCENDING),
+        ],
+    )

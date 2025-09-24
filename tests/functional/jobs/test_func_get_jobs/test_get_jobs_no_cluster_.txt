@@ -28,6 +28,7 @@ Found 24 job(s):
     "start_time": "2023-02-14T00:01:00-05:00",
     "end_time": "2023-02-14T12:01:00-05:00",
     "elapsed_time": 43200.0,
+    "last_scraped_time": null,
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -75,6 +76,7 @@ Found 24 job(s):
     "start_time": "2023-02-14T06:01:00-05:00",
     "end_time": "2023-02-14T18:01:00-05:00",
     "elapsed_time": 43200.0,
+    "last_scraped_time": null,
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -122,6 +124,7 @@ Found 24 job(s):
     "start_time": "2023-02-14T12:01:00-05:00",
     "end_time": "2023-02-15T00:01:00-05:00",
     "elapsed_time": 43200.0,
+    "last_scraped_time": null,
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -169,6 +172,7 @@ Found 24 job(s):
     "start_time": "2023-02-14T18:01:00-05:00",
     "end_time": "2023-02-15T06:01:00-05:00",
     "elapsed_time": 43200.0,
+    "last_scraped_time": null,
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -216,6 +220,7 @@ Found 24 job(s):
     "start_time": "2023-02-15T00:01:00-05:00",
     "end_time": "2023-02-15T12:01:00-05:00",
     "elapsed_time": 43200.0,
+    "last_scraped_time": null,
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -263,6 +268,7 @@ Found 24 job(s):
     "start_time": "2023-02-15T06:01:00-05:00",
     "end_time": "2023-02-15T18:01:00-05:00",
     "elapsed_time": 43200.0,
+    "last_scraped_time": null,
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -310,6 +316,7 @@ Found 24 job(s):
     "start_time": "2023-02-15T12:01:00-05:00",
     "end_time": null,
     "elapsed_time": 43200.0,
+    "last_scraped_time": null,
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -357,6 +364,7 @@ Found 24 job(s):
     "start_time": "2023-02-15T18:01:00-05:00",
     "end_time": null,
     "elapsed_time": 43200.0,
+    "last_scraped_time": null,
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -404,6 +412,7 @@ Found 24 job(s):
     "start_time": "2023-02-16T00:01:00-05:00",
     "end_time": "2023-02-16T12:01:00-05:00",
     "elapsed_time": 43200.0,
+    "last_scraped_time": null,
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -451,6 +460,7 @@ Found 24 job(s):
     "start_time": "2023-02-16T00:01:00-05:00",
     "end_time": "2023-02-16T12:01:00-05:00",
     "elapsed_time": 43200.0,
+    "last_scraped_time": null,
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -498,6 +508,7 @@ Found 24 job(s):
     "start_time": "2023-02-16T00:01:00-05:00",
     "end_time": "2023-02-16T12:01:00-05:00",
     "elapsed_time": 43200.0,
+    "last_scraped_time": null,
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -545,6 +556,7 @@ Found 24 job(s):
     "start_time": "2023-02-16T18:01:00-05:00",
     "end_time": "2023-02-17T06:01:00-05:00",
     "elapsed_time": 43200.0,
+    "last_scraped_time": null,
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -594,6 +606,7 @@ Found 24 job(s):
     "start_time": "2023-02-17T00:01:00-05:00",
     "end_time": "2023-02-17T12:01:00-05:00",
     "elapsed_time": 43200.0,
+    "last_scraped_time": null,
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -641,6 +654,7 @@ Found 24 job(s):
     "start_time": "2023-02-17T06:01:00-05:00",
     "end_time": "2023-02-17T18:01:00-05:00",
     "elapsed_time": 43200.0,
+    "last_scraped_time": null,
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -688,6 +702,7 @@ Found 24 job(s):
     "start_time": "2023-02-17T12:01:00-05:00",
     "end_time": "2023-02-18T00:01:00-05:00",
     "elapsed_time": 43200.0,
+    "last_scraped_time": null,
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -735,6 +750,7 @@ Found 24 job(s):
     "start_time": "2023-02-17T18:01:00-05:00",
     "end_time": "2023-02-18T06:01:00-05:00",
     "elapsed_time": 43200.0,
+    "last_scraped_time": null,
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -782,6 +798,7 @@ Found 24 job(s):
     "start_time": "2023-02-18T00:01:00-05:00",
     "end_time": "2023-02-18T12:01:00-05:00",
     "elapsed_time": 43200.0,
+    "last_scraped_time": null,
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -829,6 +846,7 @@ Found 24 job(s):
     "start_time": "2023-02-18T06:01:00-05:00",
     "end_time": "2023-02-18T18:01:00-05:00",
     "elapsed_time": 43200.0,
+    "last_scraped_time": null,
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -876,6 +894,7 @@ Found 24 job(s):
     "start_time": "2023-02-18T12:01:00-05:00",
     "end_time": "2023-02-19T00:01:00-05:00",
     "elapsed_time": 43200.0,
+    "last_scraped_time": null,
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -923,6 +942,7 @@ Found 24 job(s):
     "start_time": "2023-02-18T18:01:00-05:00",
     "end_time": "2023-02-19T06:01:00-05:00",
     "elapsed_time": 43200.0,
+    "last_scraped_time": null,
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -970,6 +990,7 @@ Found 24 job(s):
     "start_time": "2023-02-19T00:01:00-05:00",
     "end_time": "2023-02-19T12:01:00-05:00",
     "elapsed_time": 43200.0,
+    "last_scraped_time": null,
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -1017,6 +1038,7 @@ Found 24 job(s):
     "start_time": "2023-02-19T06:01:00-05:00",
     "end_time": "2023-02-19T18:01:00-05:00",
     "elapsed_time": 43200.0,
+    "last_scraped_time": null,
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -1064,6 +1086,7 @@ Found 24 job(s):
     "start_time": "2023-02-19T12:01:00-05:00",
     "end_time": "2023-02-20T00:01:00-05:00",
     "elapsed_time": 43200.0,
+    "last_scraped_time": null,
     "requested": {
         "cpu": 12,
         "mem": 59152,
@@ -1111,6 +1134,7 @@ Found 24 job(s):
     "start_time": "2023-02-19T18:01:00-05:00",
     "end_time": "2023-02-20T12:01:00-05:00",
     "elapsed_time": 64800.0,
+    "last_scraped_time": null,
     "requested": {
         "cpu": 12,
         "mem": 59152,
