@@ -155,13 +155,6 @@ class SAcctScraper:
             # inaccurate value in for RUNNING jobs.
             start_time = end_time - timedelta(seconds=elapsed_time)
 
-        # Here we add supplementary SlurmJob attributes
-        # which shoule be common to all slurm versions.
-        extra = {
-            # We use scraper start date as last_scraped_time
-            "last_scraped_time": self.start,
-        }
-
         assert self.cluster.name is not None
 
         if self.cluster.name != entry["cluster"]:
@@ -200,7 +193,6 @@ class SAcctScraper:
                 work_dir=entry["working_directory"],
                 **resources,  # type: ignore[arg-type]
                 **flags,  # type: ignore[arg-type]
-                **extra,  # type: ignore[arg-type]
             )
         if int(version["major"]) == 23:
             if int(version["minor"]) == 11:
@@ -237,7 +229,6 @@ class SAcctScraper:
                     work_dir=entry["working_directory"],
                     **resources,  # type: ignore[arg-type]
                     **flags,  # type: ignore[arg-type]
-                    **extra,  # type: ignore[arg-type]
                 )
 
             return SlurmJob(
@@ -267,7 +258,6 @@ class SAcctScraper:
                 work_dir=entry["working_directory"],
                 **resources,  # type: ignore[arg-type]
                 **flags,  # type: ignore[arg-type]
-                **extra,  # type: ignore[arg-type]
             )
 
         if int(version["major"]) in [24, 25]:
@@ -301,7 +291,6 @@ class SAcctScraper:
                 work_dir=entry["working_directory"],
                 **resources,  # type: ignore[arg-type]
                 **flags,  # type: ignore[arg-type]
-                **extra,  # type: ignore[arg-type]
             )
 
         # if we arrive here, it means that the version is not supported :-(

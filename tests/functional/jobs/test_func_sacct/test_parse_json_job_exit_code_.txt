@@ -27,7 +27,6 @@
     "start_time": "2023-02-14T00:01:00-05:00",
     "end_time": "2023-02-14T12:01:00-05:00",
     "elapsed_time": 43200.0,
-    "last_scraped_time": "2023-02-14T00:00:00Z",
     "requested": {
         "cpu": 4,
         "mem": 49152,

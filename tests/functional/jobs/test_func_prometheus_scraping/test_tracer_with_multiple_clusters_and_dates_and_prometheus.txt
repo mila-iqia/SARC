@@ -28,7 +28,6 @@ Found 4 job(s):
     "start_time": "2023-02-15T00:01:00-05:00",
     "end_time": "2023-02-15T12:01:00-05:00",
     "elapsed_time": 43200.0,
-    "last_scraped_time": "2023-02-15T00:00:00Z",
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -86,7 +85,6 @@ Found 4 job(s):
     "start_time": "2023-02-16T00:01:00-05:00",
     "end_time": "2023-02-16T12:01:00-05:00",
     "elapsed_time": 43200.0,
-    "last_scraped_time": "2023-02-16T00:00:00Z",
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -144,7 +142,6 @@ Found 4 job(s):
     "start_time": "2023-02-15T00:01:00-05:00",
     "end_time": "2023-02-15T12:01:00-05:00",
     "elapsed_time": 43200.0,
-    "last_scraped_time": "2023-02-15T00:00:00Z",
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -202,7 +199,6 @@ Found 4 job(s):
     "start_time": "2023-02-16T00:01:00-05:00",
     "end_time": "2023-02-16T12:01:00-05:00",
     "elapsed_time": 43200.0,
-    "last_scraped_time": "2023-02-16T00:00:00Z",
     "requested": {
         "cpu": 4,
         "mem": 49152,

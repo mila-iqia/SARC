@@ -28,7 +28,6 @@ Found 1 job(s):
     "start_time": "2023-02-18T18:01:00-05:00",
     "end_time": "2023-02-19T06:01:00-05:00",
     "elapsed_time": 43200.0,
-    "last_scraped_time": null,
     "requested": {
         "cpu": 4,
         "mem": 49152,
