@@ -127,7 +127,9 @@ parameters = {
 
 @pytest.fixture
 def scraper():
-    return SAcctScraper(cluster=config().clusters["raisin"], day=datetime(2023, 2, 14))
+    return SAcctScraper(
+        cluster=config().clusters["raisin"], day=datetime(2023, 2, 14, tzinfo=MTL)
+    )
 
 
 @pytest.mark.usefixtures("tzlocal_is_mtl")
@@ -643,7 +645,7 @@ def test_update_job(
     ],
     indirect=True,
 )
-@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache", "tzlocal_is_mtl")
 def test_save_preempted_job(
     test_config, sacct_json, remote, file_regression, cli_main, prom_custom_query_mock
 ):

@@ -153,7 +153,13 @@ class SlurmJob(BaseModel):
     # statistics
     stored_statistics: JobStatistics | None = None
 
-    @field_validator("submit_time", "start_time", "end_time")
+    @field_validator(
+        "submit_time",
+        "start_time",
+        "end_time",
+        "latest_scraped_start",
+        "latest_scraped_end",
+    )
     @classmethod
     def _ensure_timezone(cls, v: datetime | None) -> datetime | None:
         # We'll store in MTL timezone because why not
