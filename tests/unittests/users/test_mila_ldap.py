@@ -27,7 +27,7 @@ class TestMilaLDAPScraper(UserPluginTester):
     def test_fetch_data(self, data_regression, patch_return_values):
         patch_return_values(
             {
-                "sarc.users.mila_ldap._query_ldap": fake_raw_ldap_data(
+                "sarc.users.mila_ldap.query_ldap": fake_raw_ldap_data(
                     10, hardcoded_values_by_user={3: {"suspended": ["true"]}}
                 ),
             }
