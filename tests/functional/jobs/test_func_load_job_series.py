@@ -64,6 +64,8 @@ ALL_COLUMNS = [
     "id",
     "job_id",
     "job_state",
+    "latest_scraped_end",
+    "latest_scraped_start",
     "name",
     "nodes",
     "partition",
