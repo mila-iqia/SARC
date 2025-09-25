@@ -15,7 +15,6 @@ import gifnoc
 import tzlocal
 from bson import CodecOptions, UuidRepresentation
 from hostlist import expand_hostlist
-from serieux import JSON
 
 from .alerts.common import HealthMonitorConfig
 
