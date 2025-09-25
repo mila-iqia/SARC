@@ -1,3 +1,4 @@
+import pymongo
 import pytest
 
 from sarc.config import config
@@ -38,3 +39,15 @@ def test_db_init(cli_main):
     ]:
         collection = db[collection_name]
         assert collection.index_information()
+
+    scraped_time_index = [
+        index
+        for index in db["jobs"].index_information().values()
+        if index["key"]
+        == [
+            ("cluster_name", pymongo.ASCENDING),
+            ("latest_scraped_start", pymongo.ASCENDING),
+            ("latest_scraped_end", pymongo.ASCENDING),
+        ]
+    ]
+    assert len(scraped_time_index) == 1
