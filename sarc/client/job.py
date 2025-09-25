@@ -142,6 +142,9 @@ class SlurmJob(BaseModel):
     start_time: datetime | None = None
     end_time: datetime | None = None
     elapsed_time: float
+    # Latest period the job was scraped with sacct
+    latest_scraped_start: datetime | None = None
+    latest_scraped_end: datetime | None = None
 
     # tres
     requested: SlurmResources
