@@ -46,7 +46,7 @@ class SAcctScraper:
         """
         self.cluster = cluster
         self.day = day
-        self.start = datetime.combine(day, time.min)
+        self.start = datetime.combine(day, time.min, tzinfo=day.tzinfo)
         self.end = self.start + timedelta(days=1)
 
     @trace_decorator()
@@ -68,7 +68,9 @@ class SAcctScraper:
         return json.loads(results.stdout[results.stdout.find("{") :])
 
     def _cache_key(self) -> str | None:
-        today = datetime.combine(date.today(), datetime.min.time())
+        today = datetime.combine(
+            date.today(), datetime.min.time(), tzinfo=self.day.tzinfo
+        )
         if self.day < today:
             daystr = self.day.strftime("%Y-%m-%d")
             return f"{self.cluster.name}.{daystr}.json"

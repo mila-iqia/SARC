@@ -328,7 +328,7 @@ def test_localhost(os_system, monkeypatch):
     "test_config", [{"clusters": {"raisin": {"host": "raisin"}}}], indirect=True
 )
 @pytest.mark.parametrize("json_jobs", [{}], indirect=True)
-@pytest.mark.usefixtures("empty_read_write_db")
+@pytest.mark.usefixtures("empty_read_write_db", "tzlocal_is_mtl")
 def test_stdout_message_before_json(
     test_config, sacct_json, remote, file_regression, cli_main, prom_custom_query_mock
 ):
@@ -371,7 +371,7 @@ def test_stdout_message_before_json(
     "test_config", [{"clusters": {"raisin": {"host": "raisin"}}}], indirect=True
 )
 @pytest.mark.parametrize("json_jobs", [{}], indirect=True)
-@pytest.mark.usefixtures("empty_read_write_db")
+@pytest.mark.usefixtures("empty_read_write_db", "tzlocal_is_mtl")
 def test_get_gpu_type_from_prometheus(
     test_config, sacct_json, remote, file_regression, cli_main, monkeypatch
 ):
@@ -437,7 +437,7 @@ def test_get_gpu_type_from_prometheus(
     indirect=True,
 )
 @pytest.mark.parametrize("json_jobs", [{}], indirect=True)
-@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache", "tzlocal_is_mtl")
 def test_get_gpu_type_without_prometheus(
     test_config, sacct_json, remote, file_regression, cli_main, monkeypatch
 ):
@@ -522,7 +522,7 @@ def _save_slurm_conf(cluster_name: str, day: str, content: str):
     "test_config", [{"clusters": {"raisin": {"host": "raisin"}}}], indirect=True
 )
 @pytest.mark.parametrize("json_jobs", [{}], indirect=True)
-@pytest.mark.usefixtures("empty_read_write_db")
+@pytest.mark.usefixtures("empty_read_write_db", "tzlocal_is_mtl")
 def test_save_job(
     test_config, sacct_json, remote, file_regression, cli_main, prom_custom_query_mock
 ):
@@ -563,7 +563,7 @@ def test_save_job(
     "test_config", [{"clusters": {"raisin": {"host": "raisin"}}}], indirect=True
 )
 @pytest.mark.parametrize("json_jobs", [{}], indirect=True)
-@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache", "tzlocal_is_mtl")
 def test_update_job(
     test_config, sacct_json, remote, file_regression, cli_main, prom_custom_query_mock
 ):
@@ -683,7 +683,7 @@ def test_save_preempted_job(
     )
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache", "tzlocal_is_mtl")
 def test_multiple_dates(
     test_config, remote, file_regression, cli_main, prom_custom_query_mock
 ):
@@ -746,7 +746,7 @@ def test_multiple_dates(
     )
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache", "tzlocal_is_mtl")
 def test_multiple_clusters_and_dates(
     test_config, remote, file_regression, cli_main, prom_custom_query_mock
 ):
@@ -833,7 +833,7 @@ def test_multiple_clusters_and_dates(
     )
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache", "tzlocal_is_mtl")
 def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     test_config,
     remote,
@@ -969,18 +969,18 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     print(caplog.text)
     assert bool(
         re.search(
-            r"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Acquire data on raisin for date: 2023-02-15 00:00:00 \(is_auto=False\)",
+            r"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Acquire data on raisin for date: 2023-02-15 00:00:00-05:00 \(is_auto=False\)",
             caplog.text,
         )
     )
     assert bool(
         re.search(
-            r"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Acquire data on patate for date: 2023-02-15 00:00:00 \(is_auto=False\)",
+            r"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Acquire data on patate for date: 2023-02-15 00:00:00-05:00 \(is_auto=False\)",
             caplog.text,
         )
     )
     assert (
-        "Getting the sacct data for cluster raisin, date 2023-02-15 00:00:00..."
+        "Getting the sacct data for cluster raisin, date 2023-02-15 00:00:00-05:00..."
         in caplog.text
     )
     assert "Saving into mongodb collection '" in caplog.text
@@ -994,13 +994,13 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     # There should be 2 acquisition errors for unexpected data 2023-03-16, one per cluster.
     assert bool(
         re.search(
-            r"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Failed to acquire data for raisin on 2023-03-16 00:00:00:",
+            r"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Failed to acquire data for raisin on 2023-03-16 00:00:00-04:00:",
             caplog.text,
         )
     )
     assert bool(
         re.search(
-            r"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Failed to acquire data for patate on 2023-03-16 00:00:00:",
+            r"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Failed to acquire data for patate on 2023-03-16 00:00:00-04:00:",
             caplog.text,
         )
     )

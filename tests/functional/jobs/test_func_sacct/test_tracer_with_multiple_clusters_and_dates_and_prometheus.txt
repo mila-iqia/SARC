@@ -246,7 +246,7 @@ Found 86 span(s):
   ],
   "span_attributes": {
    "cluster_name": "patate",
-   "date": "2023-03-16 00:00:00",
+   "date": "2023-03-16 00:00:00-04:00",
    "is_auto": false
   },
   "span_has_error": true
@@ -274,7 +274,7 @@ Found 86 span(s):
   "span_events": [],
   "span_attributes": {
    "cluster_name": "patate",
-   "date": "2023-02-16 00:00:00",
+   "date": "2023-02-16 00:00:00-05:00",
    "is_auto": false
   },
   "span_has_error": false
@@ -400,7 +400,7 @@ Found 86 span(s):
   "span_events": [],
   "span_attributes": {
    "cluster_name": "patate",
-   "date": "2023-02-15 00:00:00",
+   "date": "2023-02-15 00:00:00-05:00",
    "is_auto": false
   },
   "span_has_error": false
@@ -529,7 +529,7 @@ Found 86 span(s):
   ],
   "span_attributes": {
    "cluster_name": "raisin",
-   "date": "2023-03-16 00:00:00",
+   "date": "2023-03-16 00:00:00-04:00",
    "is_auto": false
   },
   "span_has_error": true
@@ -557,7 +557,7 @@ Found 86 span(s):
   "span_events": [],
   "span_attributes": {
    "cluster_name": "raisin",
-   "date": "2023-02-16 00:00:00",
+   "date": "2023-02-16 00:00:00-05:00",
    "is_auto": false
   },
   "span_has_error": false
@@ -683,7 +683,7 @@ Found 86 span(s):
   "span_events": [],
   "span_attributes": {
    "cluster_name": "raisin",
-   "date": "2023-02-15 00:00:00",
+   "date": "2023-02-15 00:00:00-05:00",
    "is_auto": false
   },
   "span_has_error": false
