@@ -15,6 +15,7 @@ import gifnoc
 import tzlocal
 from bson import CodecOptions, UuidRepresentation
 from hostlist import expand_hostlist
+from serieux import JSON
 
 from .alerts.common import HealthMonitorConfig
 
@@ -181,7 +182,7 @@ class LoggingConfig:
 
 @dataclass
 class UserScrapingConfig:
-    scrapers: dict[str, Any]
+    scrapers: dict[str, JSON]
 
 
 @dataclass
