@@ -1,0 +1,3 @@
+RAPI,Groupname,Name,Position,Institution,Department,Sponsor,Permission,Activation_Status,username,CCRI,Email,Member_Since
+abc-000-ag,rrg-johndoe-ad,John Doe,Professeure ou professeur,Université de Montréal,Informatique Et Recherche Opérationnelle,John Doe,Manager,activated,johndoe,abc-123-45,john.doe@example.com,2023-01-01 13:54:23 -0500
+abc-000-ag,rrg-johndoe-ad,Jane Smith,Professeure ou professeur,Université de Montréal,Informatique Et Recherche Opérationnelle,John Doe,Member,activated,janesmith,def-456-78,jane.smith@example.com,2023-02-01 17:34:48 -0500
