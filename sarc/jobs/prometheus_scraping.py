@@ -1,15 +1,44 @@
 import logging
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Iterable
 
 from tqdm import tqdm
 
-from sarc.client.job import SlurmJob, _jobs_collection, count_jobs, get_jobs
-from sarc.config import ClusterConfig
+from sarc.client.job import SlurmJob, _jobs_collection
+from sarc.config import ClusterConfig, config
 from sarc.jobs.series import get_job_time_series
 from sarc.traces import trace_decorator
 
 logger = logging.getLogger(__name__)
+
+
+def get_jobs_in_scraped_period(
+    cluster_name: str, start: datetime, end: datetime
+) -> Iterable[SlurmJob]:
+    """
+    Get jobs whom latest scraped period instersects with given [start, end].
+
+    There is an intersection if:
+    start < latest_scraped_end and latest_scraped_start < end
+
+    NB: We check "<" instead of "<=" because
+    we want intervals to have an overlap,
+    not just 1 common border date.
+    """
+    query = {
+        "cluster_name": cluster_name,
+        "latest_scraped_start": {
+            "$lt": end,
+        },
+        "latest_scraped_end": {
+            "$gt": start,
+        },
+    }
+    coll_jobs = config().mongo.database_instance.jobs
+    nb_jobs = coll_jobs.count_documents(query)
+    yield from tqdm(
+        _jobs_collection().find_by(query), total=nb_jobs, desc="Prometheus metrics"
+    )
 
 
 @trace_decorator()
@@ -19,6 +48,10 @@ def scrap_prometheus(
     end: datetime,
 ) -> None:
     """Scrap Prometheus metrics for jobs fromm start to end and save it to database.
+
+    NB: Current code scrapes metrics for jobs where
+    latest sacct scraped period intersects
+    with given [start, end].
 
     Parameters
     ----------
@@ -33,12 +66,10 @@ def scrap_prometheus(
     logger.info(
         f"Saving into mongodb collection '{collection.Meta.collection_name}'..."
     )
-    nb_jobs = count_jobs(cluster=cluster.name, start=start, end=end)
-    for entry in tqdm(
-        get_jobs(cluster=cluster.name, start=start, end=end),
-        total=nb_jobs,
-        desc="Prometheus metrics",
-    ):
+    assert cluster.name is not None
+    nb_jobs = 0
+    for entry in get_jobs_in_scraped_period(cluster.name, start, end):
+        nb_jobs += 1
         update_allocated_gpu_type_from_prometheus(cluster, entry)
         saved = entry.statistics(recompute=True, save=True) is not None
         if not saved:

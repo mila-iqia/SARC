@@ -159,7 +159,7 @@ def test_get_gpu_type(
                 "--cluster_name",
                 "raisin",
                 "--intervals",
-                "2023-02-14T00:00-2023-02-15T00:00",
+                "2023-02-15T00:00-2023-02-16T00:00",
             ]
         )
         == 0
@@ -299,9 +299,9 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
                 "raisin",
                 "patate",
                 "--intervals",
-                "2023-02-15T00:00-2023-02-16T00:00",
-                "2023-02-16T00:00-2023-02-17T00:00",
-                "2023-03-16T00:00-2023-03-17T00:00",
+                f"{_dtfmt(2023, 2, 15)}-{_dtfmt(2023, 2, 16)}",
+                f"{_dtfmt(2023, 2, 16)}-{_dtfmt(2023, 2, 17)}",
+                f"{_dtfmt(2023, 3, 16)}-{_dtfmt(2023, 3, 17)}",
             ]
         )
         == 0
@@ -377,19 +377,19 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     for cluster_name in cluster_names:
         assert bool(
             re.search(
-                rf"sarc\.jobs\.prometheus_scraping:prometheus_scraping\.py:[0-9]+ Saved Prometheus metrics for 1 jobs on {cluster_name} from 2023-02-15 00:00:00\+00:00 to 2023-02-16 00:00:00\+00:00\.",
+                rf"sarc\.jobs\.prometheus_scraping:prometheus_scraping\.py:[0-9]+ Saved Prometheus metrics for 1 jobs on {cluster_name} from {_dtreg(2023, 2, 15)} to {_dtreg(2023, 2, 16)}\.",
                 caplog.text,
             )
         )
         assert bool(
             re.search(
-                rf"sarc\.jobs\.prometheus_scraping:prometheus_scraping\.py:[0-9]+ Saved Prometheus metrics for 1 jobs on {cluster_name} from 2023-02-16 00:00:00\+00:00 to 2023-02-17 00:00:00\+00:00\.",
+                rf"sarc\.jobs\.prometheus_scraping:prometheus_scraping\.py:[0-9]+ Saved Prometheus metrics for 1 jobs on {cluster_name} from {_dtreg(2023, 2, 16)} to {_dtreg(2023, 2, 17)}\.",
                 caplog.text,
             )
         )
         assert bool(
             re.search(
-                rf"sarc\.jobs\.prometheus_scraping:prometheus_scraping\.py:[0-9]+ Saved Prometheus metrics for 0 jobs on {cluster_name} from 2023-03-16 00:00:00\+00:00 to 2023-03-17 00:00:00\+00:00\.",
+                rf"sarc\.jobs\.prometheus_scraping:prometheus_scraping\.py:[0-9]+ Saved Prometheus metrics for 0 jobs on {cluster_name} from {_dtreg(2023, 3, 16)} to {_dtreg(2023, 3, 17)}\.",
                 caplog.text,
             )
         )
