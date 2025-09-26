@@ -82,16 +82,12 @@ import ssl
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from datetime import timedelta
 
 from ldap3 import ALL_ATTRIBUTES, SUBTREE, Connection, Server, Tls
 
 from sarc.core.models.users import Credentials
 from sarc.core.models.validators import END_TIME
 from sarc.core.scraping.users import MatchID, UserMatch, UserScraper, _builtin_scrapers
-
-from sarc.cache import with_cache
-
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +104,7 @@ class MilaLDAPScraper(UserScraper[MilaLDAPConfig]):
 
     def get_user_data(self, config: MilaLDAPConfig) -> bytes:
         return json.dumps(
-            query_ldap(
+            _query_ldap(
                 config.private_key_file, config.certificate_file, config.service_uri
             )
         ).encode()
@@ -178,9 +174,3 @@ def _query_ldap(
     # We make the decision here to return only the "attributes"
     # and leave out the "dn" field.
     return [json.loads(entry.entry_to_json())["attributes"] for entry in conn.entries]
-
-
-# mypy is bad at resolving types across functions (it tries to type the
-# with_cache call independently and fails because it need the type information
-# of the decorated function to work) so we do this
-query_ldap = with_cache(_query_ldap, subdirectory="ldap", validity=timedelta(days=1))
