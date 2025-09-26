@@ -14,6 +14,7 @@ from sarc.config import MTL, UTC, config
 from sarc.jobs import prometheus_scraping
 
 from .factory import create_sacct_json
+from ...common.dateutils import _dtfmt, _dtstr, _dtreg
 
 
 def _save_slurm_conf(cluster_name: str, day: str, content: str):
@@ -191,7 +192,8 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     caplog.set_level(logging.INFO)
     cluster_names = ["raisin", "patate"]
     datetimes = [
-        datetime(2023, 2, 15, tzinfo=MTL) + timedelta(days=i) for i in range(2)
+        datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC) + timedelta(days=i)
+        for i in range(2)
     ]
 
     def _gen_error_command(cmd_template, job_submit_datetime):
@@ -234,7 +236,11 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
                 )
                 for job_id, job_submit_datetime in enumerate(datetimes)
             ]
-            + [_gen_error_command(cmd_template, datetime(2023, 3, 16, tzinfo=MTL))],
+            + [
+                _gen_error_command(
+                    cmd_template, datetime(2023, 3, 16, tzinfo=MTL).astimezone(UTC)
+                )
+            ],
         )
 
     remote.expect_sessions(
@@ -276,9 +282,9 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
                 "raisin",
                 "patate",
                 "--intervals",
-                "2023-02-15T00:00-2023-02-16T00:00",
-                "2023-02-16T00:00-2023-02-17T00:00",
-                "2023-03-16T00:00-2023-03-17T00:00",
+                f"{_dtfmt(2023, 2, 15)}-{_dtfmt(2023, 2, 16)}",
+                f"{_dtfmt(2023, 2, 16)}-{_dtfmt(2023, 2, 17)}",
+                f"{_dtfmt(2023, 3, 16)}-{_dtfmt(2023, 3, 17)}",
             ]
         )
         == 0
@@ -330,18 +336,18 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     print(caplog.text)
     assert bool(
         re.search(
-            r"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Acquire data on raisin for interval: 2023-02-15 00:00:00\+00:00 to 2023-02-16 00:00:00\+00:00 \(1440.0 min\)",
+            rf"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Acquire data on raisin for interval: {_dtreg(2023, 2, 15)} to {_dtreg(2023, 2, 16)} \(1440.0 min\)",
             caplog.text,
         )
     )
     assert bool(
         re.search(
-            r"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Acquire data on patate for interval: 2023-02-15 00:00:00\+00:00 to 2023-02-16 00:00:00\+00:00 \(1440.0 min\)",
+            rf"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Acquire data on patate for interval: {_dtreg(2023, 2, 15)} to {_dtreg(2023, 2, 16)} \(1440.0 min\)",
             caplog.text,
         )
     )
     assert (
-        "Getting the sacct data for cluster raisin, time 2023-02-15 00:00:00+00:00 to 2023-02-16 00:00:00+00:00..."
+        f"Getting the sacct data for cluster raisin, time {_dtstr(2023, 2, 15)} to {_dtstr(2023, 2, 16)}..."
         in caplog.text
     )
     assert "Saving into mongodb collection '" in caplog.text
@@ -355,13 +361,13 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     # There should be 2 acquisition errors for unexpected data 2023-03-16, one per cluster.
     assert bool(
         re.search(
-            r"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Failed to acquire data on raisin for interval: 2023-03-16 00:00:00\+00:00 to 2023-03-17 00:00:00\+00:00:",
+            rf"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Failed to acquire data on raisin for interval: {_dtreg(2023, 3, 16)} to {_dtreg(2023, 3, 17)}:",
             caplog.text,
         )
     )
     assert bool(
         re.search(
-            r"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Failed to acquire data on patate for interval: 2023-03-16 00:00:00\+00:00 to 2023-03-17 00:00:00\+00:00:",
+            rf"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Failed to acquire data on patate for interval: {_dtreg(2023, 3, 16)} to {_dtreg(2023, 3, 17)}:",
             caplog.text,
         )
     )
@@ -404,6 +410,7 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
     Copied from test_tracer_with_multiple_clusters_and_dates_and_prometheus above,
     with changes:
     - test --time_from and --time_to
+    - directly use UTC dates, instead of MTL->UTC pipeline
     """
     caplog.set_level(logging.INFO)
     cluster_names = ["raisin", "patate"]

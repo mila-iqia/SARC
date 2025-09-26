@@ -15,6 +15,7 @@ from sarc.client.job import get_jobs
 from sarc.config import MTL, PST, UTC, config
 from sarc.jobs.sacct import SAcctScraper
 
+from ...common.dateutils import _dtfmt
 from .factory import create_sacct_json
 
 
@@ -97,8 +98,8 @@ parameters = {
 def scraper():
     return SAcctScraper(
         cluster=config().clusters["raisin"],
-        start=datetime(2023, 2, 14),
-        end=datetime(2023, 2, 15),
+        start=datetime(2023, 2, 14, tzinfo=MTL).astimezone(UTC),
+        end=datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC),
     )
 
 
@@ -247,7 +248,7 @@ def test_scraper_with_malformed_cache(test_config, remote, scraper, caplog):
 
     remote.expect(
         host="patate",
-        cmd="export TZ=UTC && /opt/slurm/bin/sacct  -X -S 2023-02-14T00:00 -E 2023-02-15T00:00 --allusers --json",
+        cmd=f"export TZ=UTC && /opt/slurm/bin/sacct  -X -S {_dtfmt(2023, 2, 14)} -E {_dtfmt(2023, 2, 15)} --allusers --json",
         out=b"{}",
     )
 
@@ -263,12 +264,12 @@ def test_scraper_with_malformed_cache(test_config, remote, scraper, caplog):
 def test_sacct_bin_and_accounts(test_config, remote):
     scraper = SAcctScraper(
         cluster=config().clusters["patate"],
-        start=datetime(2023, 2, 14),
-        end=datetime(2023, 2, 15),
+        start=datetime(2023, 2, 14, tzinfo=MTL).astimezone(UTC),
+        end=datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC),
     )
     remote.expect(
         host="patate",
-        cmd="export TZ=UTC && /opt/software/slurm/bin/sacct -A rrg-bonhomme-ad_gpu,rrg-bonhomme-ad_cpu,def-bonhomme_gpu,def-bonhomme_cpu -X -S 2023-02-14T00:00 -E 2023-02-15T00:00 --allusers --json",
+        cmd=f"export TZ=UTC && /opt/software/slurm/bin/sacct -A rrg-bonhomme-ad_gpu,rrg-bonhomme-ad_cpu,def-bonhomme_gpu,def-bonhomme_cpu -X -S {_dtfmt(2023, 2, 14)} -E {_dtfmt(2023, 2, 15)} --allusers --json",
         out=b'{"jobs": []}',
     )
 
@@ -292,8 +293,8 @@ def test_localhost(os_system, monkeypatch):
 
     scraper = SAcctScraper(
         cluster=config().clusters["local"],
-        start=datetime(2023, 2, 14),
-        end=datetime(2023, 2, 15),
+        start=datetime(2023, 2, 14, tzinfo=MTL).astimezone(UTC),
+        end=datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC),
     )
 
     assert len(list(scraper)) == 0
@@ -310,7 +311,7 @@ def test_stdout_message_before_json(
 ):
     remote.expect(
         host="raisin",
-        cmd="export TZ=UTC && /opt/slurm/bin/sacct  -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
+        cmd=f"export TZ=UTC && /opt/slurm/bin/sacct  -X -S {_dtfmt(2023, 2, 15)} -E {_dtfmt(2023, 2, 16)} --allusers --json",
         out=f"Welcome on raisin,\nThe sweetest supercomputer in the world!\n{sacct_json}".encode(
             "utf-8"
         ),
@@ -327,7 +328,7 @@ def test_stdout_message_before_json(
                 "--cluster_name",
                 "raisin",
                 "--intervals",
-                "2023-02-15T00:00-2023-02-16T00:00",
+                f"{_dtfmt(2023, 2, 15)}-{_dtfmt(2023, 2, 16)}",
             ]
         )
         == 0
@@ -350,7 +351,7 @@ def test_stdout_message_before_json(
 def test_save_job(test_config, sacct_json, remote, file_regression, cli_main):
     remote.expect(
         host="raisin",
-        cmd="export TZ=UTC && /opt/slurm/bin/sacct  -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
+        cmd=f"export TZ=UTC && /opt/slurm/bin/sacct  -X -S {_dtfmt(2023, 2, 15)} -E {_dtfmt(2023, 2, 16)} --allusers --json",
         out=sacct_json.encode("utf-8"),
     )
 
@@ -365,7 +366,7 @@ def test_save_job(test_config, sacct_json, remote, file_regression, cli_main):
                 "--cluster_name",
                 "raisin",
                 "--intervals",
-                "2023-02-15T00:00-2023-02-16T00:00",
+                f"{_dtfmt(2023, 2, 15)}-{_dtfmt(2023, 2, 16)}",
             ]
         )
         == 0
@@ -390,7 +391,7 @@ def test_update_job(test_config, sacct_json, remote, file_regression, cli_main):
         host="raisin",
         commands=[
             Command(
-                cmd="export TZ=UTC && /opt/slurm/bin/sacct  -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
+                cmd=f"export TZ=UTC && /opt/slurm/bin/sacct  -X -S {_dtfmt(2023, 2, 15)} -E {_dtfmt(2023, 2, 16)} --allusers --json",
                 out=sacct_json.encode("utf-8"),
             )
             for _ in range(2)
@@ -408,7 +409,7 @@ def test_update_job(test_config, sacct_json, remote, file_regression, cli_main):
                 "--cluster_name",
                 "raisin",
                 "--intervals",
-                "2023-02-15T00:00-2023-02-16T00:00",
+                f"{_dtfmt(2023, 2, 15)}-{_dtfmt(2023, 2, 16)}",
             ]
         )
         == 0
@@ -424,7 +425,7 @@ def test_update_job(test_config, sacct_json, remote, file_regression, cli_main):
                 "--cluster_name",
                 "raisin",
                 "--intervals",
-                "2023-02-15T00:00-2023-02-16T00:00",
+                f"{_dtfmt(2023, 2, 15)}-{_dtfmt(2023, 2, 16)}",
             ]
         )
         == 0
@@ -463,7 +464,7 @@ def test_update_job(test_config, sacct_json, remote, file_regression, cli_main):
 @pytest.mark.usefixtures("empty_read_write_db", "disabled_cache")
 def test_save_preempted_job(test_config, sacct_json, remote, file_regression, cli_main):
     remote.expect(
-        cmd="export TZ=UTC && /opt/slurm/bin/sacct  -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
+        cmd=f"export TZ=UTC && /opt/slurm/bin/sacct  -X -S {_dtfmt(2023, 2, 15)} -E {_dtfmt(2023, 2, 16)} --allusers --json",
         host="raisin",
         out=sacct_json.encode("utf-8"),
     )
@@ -479,7 +480,7 @@ def test_save_preempted_job(test_config, sacct_json, remote, file_regression, cl
                 "--cluster_name",
                 "raisin",
                 "--intervals",
-                "2023-02-15T00:00-2023-02-16T00:00",
+                f"{_dtfmt(2023, 2, 15)}-{_dtfmt(2023, 2, 16)}",
             ]
         )
         == 0
@@ -500,7 +501,8 @@ def test_save_preempted_job(test_config, sacct_json, remote, file_regression, cl
 @pytest.mark.usefixtures("empty_read_write_db", "disabled_cache")
 def test_multiple_dates(test_config, remote, file_regression, cli_main):
     datetimes = [
-        datetime(2023, 2, 15, tzinfo=MTL) + timedelta(days=i) for i in range(5)
+        datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC) + timedelta(days=i)
+        for i in range(5)
     ]
     remote.expect(
         host="raisin",
@@ -538,11 +540,11 @@ def test_multiple_dates(test_config, remote, file_regression, cli_main):
                 "--cluster_name",
                 "raisin",
                 "--intervals",
-                "2023-02-15T00:00-2023-02-16T00:00",
-                "2023-02-16T00:00-2023-02-17T00:00",
-                "2023-02-17T00:00-2023-02-18T00:00",
-                "2023-02-18T00:00-2023-02-19T00:00",
-                "2023-02-19T00:00-2023-02-20T00:00",
+                f"{_dtfmt(2023, 2, 15)}-{_dtfmt(2023, 2, 16)}",
+                f"{_dtfmt(2023, 2, 16)}-{_dtfmt(2023, 2, 17)}",
+                f"{_dtfmt(2023, 2, 17)}-{_dtfmt(2023, 2, 18)}",
+                f"{_dtfmt(2023, 2, 18)}-{_dtfmt(2023, 2, 19)}",
+                f"{_dtfmt(2023, 2, 19)}-{_dtfmt(2023, 2, 20)}",
             ]
         )
         == 0
@@ -564,7 +566,8 @@ def test_multiple_dates(test_config, remote, file_regression, cli_main):
 def test_multiple_clusters_and_dates(test_config, remote, file_regression, cli_main):
     cluster_names = ["raisin", "patate"]
     datetimes = [
-        datetime(2023, 2, 15, tzinfo=MTL) + timedelta(days=i) for i in range(2)
+        datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC) + timedelta(days=i)
+        for i in range(2)
     ]
 
     def _create_session(cluster_name, cmd_template, datetimes):
@@ -625,8 +628,8 @@ def test_multiple_clusters_and_dates(test_config, remote, file_regression, cli_m
                 "raisin",
                 "patate",
                 "--intervals",
-                "2023-02-15T00:00-2023-02-16T00:00",
-                "2023-02-16T00:00-2023-02-17T00:00",
+                f"{_dtfmt(2023, 2, 15)}-{_dtfmt(2023, 2, 16)}",
+                f"{_dtfmt(2023, 2, 16)}-{_dtfmt(2023, 2, 17)}",
             ]
         )
         == 0

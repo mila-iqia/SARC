@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 
 from simple_parsing import field
 
-from sarc.config import config, UTC, MTL
+from sarc.config import config, UTC, TZLOCAL
 from sarc.errors import ClusterNotFound
 from sarc.jobs.sacct import sacct_mongodb_import
 from sarc.traces import using_trace
@@ -70,7 +70,7 @@ def parse_auto_intervals(
 ) -> list[tuple[datetime, datetime]]:
     intervals = []
     start = _time_auto_first_date(cluster_name, end_field)
-    end = datetime.now(tz=MTL).astimezone(UTC)
+    end = datetime.now(tz=TZLOCAL).astimezone(UTC)
     if minutes <= 0:
         # Invalid minutes. Let's just create a unique interval.
         intervals.append((start, end))

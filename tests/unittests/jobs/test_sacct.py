@@ -4,8 +4,9 @@ from os.path import isfile
 import pytest
 from fabric.testing.base import Command
 
-from sarc.config import config
+from sarc.config import config, MTL, UTC
 from sarc.jobs.sacct import JobConversionError, SAcctScraper
+from tests.common.dateutils import _dtfmt
 
 
 @pytest.mark.parametrize(
@@ -14,12 +15,12 @@ from sarc.jobs.sacct import JobConversionError, SAcctScraper
 def test_SAcctScraper_fetch_raw(test_config, remote):
     scraper = SAcctScraper(
         cluster=test_config.clusters["test"],
-        start=datetime(2023, 2, 28),
-        end=datetime(2023, 3, 1),
+        start=datetime(2023, 2, 28, tzinfo=MTL).astimezone(UTC),
+        end=datetime(2023, 3, 1, tzinfo=MTL).astimezone(UTC),
     )
     remote.expect(
         host="patate",
-        cmd="export TZ=UTC && sacct  -X -S 2023-02-28T00:00 -E 2023-03-01T00:00 --allusers --json",
+        cmd=f"export TZ=UTC && sacct  -X -S {_dtfmt(2023, 2, 28)} -E {_dtfmt(2023, 3, 1)} --allusers --json",
         out=b"{}",
     )
     assert scraper.fetch_raw() == {}
@@ -31,17 +32,17 @@ def test_SAcctScraper_fetch_raw(test_config, remote):
 def test_SAcctScraper_fetch_raw2(test_config, remote):
     scraper = SAcctScraper(
         cluster=test_config.clusters["test"],
-        start=datetime(2023, 2, 28),
-        end=datetime(2023, 3, 1),
+        start=datetime(2023, 2, 28, tzinfo=MTL).astimezone(UTC),
+        end=datetime(2023, 3, 1, tzinfo=MTL).astimezone(UTC),
     )
     remote.expect(
         commands=[
             Command(
-                "export TZ=UTC && sacct  -X -S 2023-02-28T00:00 -E 2023-03-01T00:00 --allusers --json",
+                f"export TZ=UTC && sacct  -X -S {_dtfmt(2023, 2, 28)} -E {_dtfmt(2023, 3, 1)} --allusers --json",
                 out=b"{}",
             ),
             Command(
-                "export TZ=UTC && sacct  -X -S 2023-02-28T00:00 -E 2023-03-01T00:00 --allusers --json",
+                f"export TZ=UTC && sacct  -X -S {_dtfmt(2023, 2, 28)} -E {_dtfmt(2023, 3, 1)} --allusers --json",
                 out=b'{ "value": 2 }',
             ),
         ]
@@ -55,7 +56,9 @@ def test_SAcctScraper_fetch_raw2(test_config, remote):
 )
 @pytest.mark.freeze_time("2023-02-28")
 def test_SAcctScraper_get_cache(test_config, enabled_cache, remote):
-    today = datetime.combine(date.today(), datetime.min.time())
+    today = datetime.combine(date.today(), datetime.min.time(), tzinfo=MTL).astimezone(
+        UTC
+    )
     yesterday = today - timedelta(days=1)
     tomorrow = today + timedelta(days=1)
 
@@ -112,8 +115,8 @@ def test_SAcctScraper_get_cache(test_config, enabled_cache, remote):
 def test_SAcctScraper_convert_version_supported(test_config, monkeypatch, caplog):
     scraper = SAcctScraper(
         cluster=test_config.clusters["test"],
-        start=datetime(2023, 2, 28),
-        end=datetime(2023, 3, 1),
+        start=datetime(2023, 2, 28, tzinfo=MTL).astimezone(UTC),
+        end=datetime(2023, 3, 1, tzinfo=MTL).astimezone(UTC),
     )
     version_supported = {"major": "24", "micro": "1", "minor": "11"}
     version_unsupported = {"major": "124", "micro": "1", "minor": "11"}

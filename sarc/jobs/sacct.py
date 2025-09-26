@@ -11,6 +11,7 @@ from tqdm import tqdm
 from sarc.cache import with_cache
 from sarc.client.job import SlurmJob, _jobs_collection
 from sarc.config import UTC, ClusterConfig
+from sarc.core.models.validators import UTCOFFSET
 from sarc.jobs.node_gpu_mapping import get_node_to_gpu
 from sarc.traces import trace_decorator, using_trace
 
@@ -26,6 +27,11 @@ def parse_in_timezone(timestamp: int | None) -> datetime | None:
         return None
     # Slurm returns timestamps in UTC
     return datetime.fromtimestamp(timestamp, UTC)
+
+
+def _date_is_utc(value: datetime) -> bool:
+    """Return True if given date is in UTC timezone."""
+    return value.tzinfo is not None and value.utcoffset() == UTCOFFSET
 
 
 class SAcctScraper:
@@ -46,9 +52,14 @@ class SAcctScraper:
             end: the UTC datetime until which we wish to scrape.
                 Should be precise up to minute.
         """
+        if not _date_is_utc(start):
+            raise ValueError(f"sacct scraper: start date not in UTC: {start}")
+        if not _date_is_utc(end):
+            raise ValueError(f"sacct scraper: end date not in UTC: {end}")
+
         self.cluster = cluster
-        self.start = start.replace(tzinfo=UTC)
-        self.end = end.replace(tzinfo=UTC)
+        self.start = start
+        self.end = end
 
     @trace_decorator()
     def fetch_raw(self) -> dict:
