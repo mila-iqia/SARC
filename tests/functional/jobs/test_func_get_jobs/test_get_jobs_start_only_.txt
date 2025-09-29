@@ -27,7 +27,9 @@ Found 8 job(s):
     "submit_time": "2023-02-15T12:00:00-05:00",
     "start_time": "2023-02-15T12:01:00-05:00",
     "end_time": null,
-    "elapsed_time": 43200,
+    "elapsed_time": 43200.0,
+    "latest_scraped_start": null,
+    "latest_scraped_end": null,
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -74,7 +76,9 @@ Found 8 job(s):
     "submit_time": "2023-02-15T18:00:00-05:00",
     "start_time": "2023-02-15T18:01:00-05:00",
     "end_time": null,
-    "elapsed_time": 43200,
+    "elapsed_time": 43200.0,
+    "latest_scraped_start": null,
+    "latest_scraped_end": null,
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -94,7 +98,7 @@ Found 8 job(s):
     "stored_statistics": null
 }
 {
-    "cluster_name": "raisin",
+    "cluster_name": "mila",
     "account": "mila",
     "job_id": 19,
     "array_job_id": null,
@@ -121,7 +125,9 @@ Found 8 job(s):
     "submit_time": "2023-02-18T12:00:00-05:00",
     "start_time": "2023-02-18T12:01:00-05:00",
     "end_time": "2023-02-19T00:01:00-05:00",
-    "elapsed_time": 43200,
+    "elapsed_time": 43200.0,
+    "latest_scraped_start": null,
+    "latest_scraped_end": null,
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -168,7 +174,9 @@ Found 8 job(s):
     "submit_time": "2023-02-18T18:00:00-05:00",
     "start_time": "2023-02-18T18:01:00-05:00",
     "end_time": "2023-02-19T06:01:00-05:00",
-    "elapsed_time": 43200,
+    "elapsed_time": 43200.0,
+    "latest_scraped_start": null,
+    "latest_scraped_end": null,
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -215,7 +223,9 @@ Found 8 job(s):
     "submit_time": "2023-02-19T00:00:00-05:00",
     "start_time": "2023-02-19T00:01:00-05:00",
     "end_time": "2023-02-19T12:01:00-05:00",
-    "elapsed_time": 43200,
+    "elapsed_time": 43200.0,
+    "latest_scraped_start": null,
+    "latest_scraped_end": null,
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -262,7 +272,9 @@ Found 8 job(s):
     "submit_time": "2023-02-19T06:00:00-05:00",
     "start_time": "2023-02-19T06:01:00-05:00",
     "end_time": "2023-02-19T18:01:00-05:00",
-    "elapsed_time": 43200,
+    "elapsed_time": 43200.0,
+    "latest_scraped_start": null,
+    "latest_scraped_end": null,
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -309,7 +321,9 @@ Found 8 job(s):
     "submit_time": "2023-02-19T12:00:00-05:00",
     "start_time": "2023-02-19T12:01:00-05:00",
     "end_time": "2023-02-20T00:01:00-05:00",
-    "elapsed_time": 43200,
+    "elapsed_time": 43200.0,
+    "latest_scraped_start": null,
+    "latest_scraped_end": null,
     "requested": {
         "cpu": 12,
         "mem": 59152,
@@ -329,13 +343,13 @@ Found 8 job(s):
     "stored_statistics": null
 }
 {
-    "cluster_name": "raisin",
+    "cluster_name": "mila",
     "account": "mila",
     "job_id": 999999999,
     "array_job_id": null,
     "task_id": null,
     "name": "main.sh",
-    "user": "petitbonhomme",
+    "user": "petitbonhomme_mila",
     "group": "petitbonhomme",
     "job_state": "CANCELLED",
     "exit_code": 0,
@@ -356,7 +370,9 @@ Found 8 job(s):
     "submit_time": "2023-02-19T18:00:00-05:00",
     "start_time": "2023-02-19T18:01:00-05:00",
     "end_time": "2023-02-20T12:01:00-05:00",
-    "elapsed_time": 64800,
+    "elapsed_time": 64800.0,
+    "latest_scraped_start": null,
+    "latest_scraped_end": null,
     "requested": {
         "cpu": 12,
         "mem": 59152,

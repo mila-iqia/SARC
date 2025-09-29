@@ -1,10 +1,38 @@
-- '{"cluster_name": "botw", "groups": [{"group_name": "gerudo", "users": [{"user":
-  "urbosa", "nbr_files": 2, "size": 0}, {"user": "riju", "nbr_files": 50, "size":
-  14484777205}, {"user": "mipha", "nbr_files": 2, "size": 0}]}, {"group_name": "piaf",
-  "users": [{"user": "revali", "nbr_files": 47085, "size": 4509715660}]}], "timestamp":
-  "2021-12-01T00:00:00"}'
-- '{"cluster_name": "botw", "groups": [{"group_name": "gerudo", "users": [{"user":
-  "urbosa", "nbr_files": 2, "size": 0}, {"user": "riju", "nbr_files": 50, "size":
-  14484777205}, {"user": "mipha", "nbr_files": 2, "size": 0}]}, {"group_name": "piaf",
-  "users": [{"user": "revali", "nbr_files": 47085, "size": 4509715660}]}], "timestamp":
-  "2023-02-14T00:00:00"}'
+- cluster_name: botw
+  groups:
+  - group_name: gerudo
+    users:
+    - nbr_files: 2
+      size: 0
+      user: urbosa
+    - nbr_files: 50
+      size: 14484777205
+      user: riju
+    - nbr_files: 2
+      size: 0
+      user: mipha
+  - group_name: piaf
+    users:
+    - nbr_files: 47085
+      size: 4509715660
+      user: revali
+  timestamp: 2021-12-01 00:00:00+00:00
+- cluster_name: botw
+  groups:
+  - group_name: gerudo
+    users:
+    - nbr_files: 2
+      size: 0
+      user: urbosa
+    - nbr_files: 50
+      size: 14484777205
+      user: riju
+    - nbr_files: 2
+      size: 0
+      user: mipha
+  - group_name: piaf
+    users:
+    - nbr_files: 47085
+      size: 4509715660
+      user: revali
+  timestamp: 2023-02-14 00:00:00+00:00

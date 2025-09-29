@@ -11,11 +11,11 @@ from unittest.mock import patch
 
 import pytest
 from fabric.testing.base import Command, Session
-from opentelemetry.trace import Status, StatusCode, get_tracer
+from opentelemetry.trace import StatusCode
 
+from sarc.client.job import JobStatistics, get_jobs
 from sarc.config import MTL, PST, UTC, config
 from sarc.jobs import sacct
-from sarc.jobs.job import JobStatistics, get_jobs
 from sarc.jobs.sacct import SAcctScraper
 
 from .factory import JsonJobFactory, json_raw
@@ -29,7 +29,6 @@ def create_json_jobs(json_jobs: list[dict]) -> list[dict]:
     return json_job_factory.jobs
 
 
-@pytest.mark.usefixtures("standard_config")
 @pytest.fixture
 def json_jobs(request):
     if isinstance(request.param, dict):
@@ -128,16 +127,19 @@ parameters = {
 
 @pytest.fixture
 def scraper():
-    return SAcctScraper(cluster=config().clusters["raisin"], day=datetime(2023, 2, 14))
+    return SAcctScraper(
+        cluster=config().clusters["raisin"], day=datetime(2023, 2, 14, tzinfo=MTL)
+    )
 
 
-@pytest.mark.usefixtures("standard_config")
 @pytest.mark.usefixtures("tzlocal_is_mtl")
 @pytest.mark.parametrize(
     "json_jobs", parameters.values(), ids=parameters.keys(), indirect=True
 )
 def test_parse_json_job(json_jobs, scraper, file_regression):
-    file_regression.check(scraper.convert(json_jobs[0]).json(indent=4))
+    file_regression.check(
+        scraper.convert(json_jobs[0]).model_dump_json(exclude={"id": True}, indent=4)
+    )
 
 
 @pytest.mark.usefixtures("tzlocal_is_mtl")
@@ -168,12 +170,16 @@ def test_parse_json_job(json_jobs, scraper, file_regression):
     ],
     indirect=True,
 )
-@pytest.mark.usefixtures("standard_config")
 def test_parse_malformed_jobs(sacct_json, scraper, captrace):
-    scraper.results = json.loads(sacct_json)
-    assert list(scraper) == []
+    scraper.get_raw._save_for_key(
+        key=scraper.get_raw.key(),
+        value=json.loads(sacct_json),
+        at_time=datetime.now(UTC),
+    )
+    with pytest.raises(KeyError):
+        list(scraper)
     spans = captrace.get_finished_spans()
-    assert len(spans) > 1
+    assert len(spans) > 0
     # Just check the span that should have got an error.
     error_spans = [
         span for span in spans if span.status.status_code == StatusCode.ERROR
@@ -186,7 +192,6 @@ def test_parse_malformed_jobs(sacct_json, scraper, captrace):
     assert entry["account"] == "mila"
 
 
-@pytest.mark.usefixtures("standard_config")
 @pytest.mark.usefixtures("tzlocal_is_mtl")
 @pytest.mark.parametrize(
     "json_jobs",
@@ -194,13 +199,16 @@ def test_parse_malformed_jobs(sacct_json, scraper, captrace):
     indirect=True,
 )
 def test_parse_no_group_jobs(sacct_json, scraper, caplog):
-    scraper.results = json.loads(sacct_json)
+    scraper.get_raw._save_for_key(
+        key=scraper.get_raw.key(),
+        value=json.loads(sacct_json),
+        at_time=datetime.now(UTC),
+    )
     with caplog.at_level("DEBUG"):
-        assert list(scraper) == []
+        assert list(scraper) == [None]
     assert 'Skipping job with group "None": 1' in caplog.text
 
 
-@pytest.mark.usefixtures("standard_config")
 @pytest.mark.usefixtures("tzlocal_is_mtl")
 @pytest.mark.parametrize(
     "json_jobs",
@@ -208,7 +216,11 @@ def test_parse_no_group_jobs(sacct_json, scraper, caplog):
     indirect=True,
 )
 def test_scrape_lost_job_on_wrong_cluster(sacct_json, scraper, caplog):
-    scraper.results = json.loads(sacct_json)
+    scraper.get_raw._save_for_key(
+        key=scraper.get_raw.key(),
+        value=json.loads(sacct_json),
+        at_time=datetime.now(UTC),
+    )
     with caplog.at_level("WARNING"):
         jobs = list(scraper)
 
@@ -222,35 +234,48 @@ def test_scrape_lost_job_on_wrong_cluster(sacct_json, scraper, caplog):
     )
 
 
-@pytest.mark.usefixtures("standard_config")
-@pytest.mark.usefixtures("tzlocal_is_mtl")
+@pytest.mark.usefixtures("tzlocal_is_mtl", "enabled_cache")
 @pytest.mark.parametrize("json_jobs", [{}], indirect=True)
 def test_scraper_with_cache(scraper, sacct_json, file_regression):
     # We'd like to test that this starts with "/tmp/pytest",
     # but this isn't the case when we run the tests on Mac OS,
     # ending up in '/private/var/folders/*/pytest-of-gyomalin/pytest-63'.
-    assert "pytest" in str(scraper.cachefile)
+    assert "pytest" in str(scraper.get_raw.cache_dir)
 
-    with open(scraper.cachefile, "w") as f:
+    scraper.get_raw.cache_dir.mkdir(parents=True, exist_ok=True)
+
+    cache_path = scraper.get_raw.cache_dir / scraper.get_raw.key().format(
+        time=datetime.now()
+    )
+
+    with open(cache_path, "w") as f:
         f.write(sacct_json)
 
     jobs = list(scraper)
 
-    file_regression.check("\n".join([job.json(indent=1) for job in jobs]))
+    file_regression.check(
+        "\n".join([job.model_dump_json(exclude={"id": True}, indent=1) for job in jobs])
+    )
 
 
-@pytest.mark.usefixtures("tzlocal_is_mtl")
+@pytest.mark.usefixtures("tzlocal_is_mtl", "enabled_cache")
 @pytest.mark.parametrize(
     "test_config", [{"clusters": {"raisin": {"host": "patate"}}}], indirect=True
 )
 def test_scraper_with_malformed_cache(test_config, remote, scraper, caplog):
     # see remark in `test_scraper_with_cache` for that "pytest" substring check
-    assert "pytest" in str(scraper.cachefile)
+    assert "pytest" in str(scraper.get_raw.cache_dir)
 
-    with open(scraper.cachefile, "w") as f:
+    scraper.get_raw.cache_dir.mkdir(parents=True, exist_ok=True)
+
+    cache_path = scraper.get_raw.cache_dir / scraper.get_raw.key().format(
+        time=datetime.now()
+    )
+
+    with open(cache_path, "w") as f:
         f.write("I am malformed!! :'(")
 
-    channel = remote.expect(
+    remote.expect(
         host="patate",
         cmd="/opt/slurm/bin/sacct  -X -S 2023-02-14T00:00 -E 2023-02-15T00:00 --allusers --json",
         out=b"{}",
@@ -259,7 +284,7 @@ def test_scraper_with_malformed_cache(test_config, remote, scraper, caplog):
     with caplog.at_level("WARNING"):
         assert len(scraper.get_raw()) == 0
 
-    assert "Need to re-fetch because cache has malformed JSON." in caplog.text
+    assert "Could not load malformed cache file" in caplog.text
 
 
 @pytest.mark.parametrize(
@@ -269,7 +294,7 @@ def test_sacct_bin_and_accounts(test_config, remote):
     scraper = SAcctScraper(
         cluster=config().clusters["patate"], day=datetime(2023, 2, 14)
     )
-    channel = remote.expect(
+    remote.expect(
         host="patate",
         cmd="/opt/software/slurm/bin/sacct -A rrg-bonhomme-ad_gpu,rrg-bonhomme-ad_cpu,def-bonhomme_gpu,def-bonhomme_cpu -X -S 2023-02-14T00:00 -E 2023-02-15T00:00 --allusers --json",
         out=b'{"jobs": []}',
@@ -305,11 +330,11 @@ def test_localhost(os_system, monkeypatch):
     "test_config", [{"clusters": {"raisin": {"host": "raisin"}}}], indirect=True
 )
 @pytest.mark.parametrize("json_jobs", [{}], indirect=True)
-@pytest.mark.usefixtures("empty_read_write_db")
+@pytest.mark.usefixtures("empty_read_write_db", "tzlocal_is_mtl")
 def test_stdout_message_before_json(
     test_config, sacct_json, remote, file_regression, cli_main, prom_custom_query_mock
 ):
-    channel = remote.expect(
+    remote.expect(
         host="raisin",
         cmd="/opt/slurm/bin/sacct  -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
         out=f"Welcome on raisin,\nThe sweetest supercomputer in the world!\n{sacct_json}".encode(
@@ -318,7 +343,7 @@ def test_stdout_message_before_json(
     )
 
     # Import here so that config() is setup correctly when CLI is created.
-    import sarc.cli
+    import sarc.cli  # noqa: F401
 
     assert (
         cli_main(
@@ -338,7 +363,9 @@ def test_stdout_message_before_json(
     jobs = list(get_jobs())
     file_regression.check(
         f"Found {len(jobs)} job(s):\n"
-        + "\n".join([job.json(exclude={"id": True}, indent=4) for job in jobs])
+        + "\n".join(
+            [job.model_dump_json(exclude={"id": True}, indent=4) for job in jobs]
+        )
     )
 
 
@@ -346,11 +373,11 @@ def test_stdout_message_before_json(
     "test_config", [{"clusters": {"raisin": {"host": "raisin"}}}], indirect=True
 )
 @pytest.mark.parametrize("json_jobs", [{}], indirect=True)
-@pytest.mark.usefixtures("empty_read_write_db")
+@pytest.mark.usefixtures("empty_read_write_db", "tzlocal_is_mtl")
 def test_get_gpu_type_from_prometheus(
     test_config, sacct_json, remote, file_regression, cli_main, monkeypatch
 ):
-    channel = remote.expect(
+    remote.expect(
         host="raisin",
         cmd="/opt/slurm/bin/sacct  -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
         out=f"Welcome on raisin,\nThe sweetest supercomputer in the world!\n{sacct_json}".encode(
@@ -359,9 +386,7 @@ def test_get_gpu_type_from_prometheus(
     )
 
     # Import here so that config() is setup correctly when CLI is created.
-    from prometheus_api_client import PrometheusConnect
-
-    import sarc.cli
+    import sarc.cli  # noqa: F401
 
     def mock_compute_job_statistics(job):
         mock_compute_job_statistics.called += 1
@@ -402,7 +427,9 @@ def test_get_gpu_type_from_prometheus(
 
     file_regression.check(
         f"Found {len(jobs)} job(s):\n"
-        + "\n".join([job.json(exclude={"id": True}, indent=4) for job in jobs])
+        + "\n".join(
+            [job.model_dump_json(exclude={"id": True}, indent=4) for job in jobs]
+        )
     )
 
 
@@ -412,11 +439,11 @@ def test_get_gpu_type_from_prometheus(
     indirect=True,
 )
 @pytest.mark.parametrize("json_jobs", [{}], indirect=True)
-@pytest.mark.usefixtures("empty_read_write_db")
+@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache", "tzlocal_is_mtl")
 def test_get_gpu_type_without_prometheus(
     test_config, sacct_json, remote, file_regression, cli_main, monkeypatch
 ):
-    channel = remote.expect(
+    remote.expect(
         host="raisin_no_prometheus",
         cmd="/opt/slurm/bin/sacct  -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
         out=f"Welcome on raisin_no_prometheus,\nThe sweetest supercomputer in the world!\n{sacct_json}".encode(
@@ -425,7 +452,28 @@ def test_get_gpu_type_without_prometheus(
     )
 
     # Import here so that config() is setup correctly when CLI is created.
-    import sarc.cli
+    import sarc.cli  # noqa: F401
+
+    # Save slurm config in cache.
+    _save_slurm_conf(
+        "raisin_no_prometheus",
+        "2023-02-15",
+        "NodeName=cn-c0[18-30] Param1=Anything1 Param2=Anything2 Gres=gpu:asupergpu:4 Param3=Anything3",
+    )
+    # Acquire slurm config.
+    assert (
+        cli_main(
+            [
+                "acquire",
+                "slurmconfig",
+                "--cluster_name",
+                "raisin_no_prometheus",
+                "--day",
+                "2023-02-15",
+            ]
+        )
+        == 0
+    )
 
     assert (
         cli_main(
@@ -447,30 +495,47 @@ def test_get_gpu_type_without_prometheus(
     job = jobs[0]
     print(job)
     print(job.nodes)
-    assert job.allocated.gpu_type == "gpu:asupergpu:4"
+    assert job.allocated.gpu_type == "Nec Plus ULTRA GPU 2000"
 
     file_regression.check(
         f"Found {len(jobs)} job(s):\n"
-        + "\n".join([job.json(exclude={"id": True}, indent=4) for job in jobs])
+        + "\n".join(
+            [job.model_dump_json(exclude={"id": True}, indent=4) for job in jobs]
+        )
     )
+
+
+def _save_slurm_conf(cluster_name: str, day: str, content: str):
+    from sarc.cli.acquire.slurmconfig import SlurmConfigParser
+
+    scp = SlurmConfigParser(config().clusters[cluster_name], day)
+    folder = "slurm_conf"
+    filename = scp._cache_key()
+    cache_dir = config().cache
+    file_dir = cache_dir / folder
+    file_dir.mkdir(parents=True, exist_ok=True)
+    file_path = file_dir / filename
+    print(file_path)
+    with file_path.open("w") as file:
+        file.write(content)
 
 
 @pytest.mark.parametrize(
     "test_config", [{"clusters": {"raisin": {"host": "raisin"}}}], indirect=True
 )
 @pytest.mark.parametrize("json_jobs", [{}], indirect=True)
-@pytest.mark.usefixtures("empty_read_write_db")
+@pytest.mark.usefixtures("empty_read_write_db", "tzlocal_is_mtl")
 def test_save_job(
     test_config, sacct_json, remote, file_regression, cli_main, prom_custom_query_mock
 ):
-    channel = remote.expect(
+    remote.expect(
         host="raisin",
         cmd="/opt/slurm/bin/sacct  -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
         out=sacct_json.encode("utf-8"),
     )
 
     # Import here so that config() is setup correctly when CLI is created.
-    import sarc.cli
+    import sarc.cli  # noqa: F401
 
     assert (
         cli_main(
@@ -490,7 +555,9 @@ def test_save_job(
     jobs = list(get_jobs())
     file_regression.check(
         f"Found {len(jobs)} job(s):\n"
-        + "\n".join([job.json(exclude={"id": True}, indent=4) for job in jobs])
+        + "\n".join(
+            [job.model_dump_json(exclude={"id": True}, indent=4) for job in jobs]
+        )
     )
 
 
@@ -498,11 +565,11 @@ def test_save_job(
     "test_config", [{"clusters": {"raisin": {"host": "raisin"}}}], indirect=True
 )
 @pytest.mark.parametrize("json_jobs", [{}], indirect=True)
-@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache", "tzlocal_is_mtl")
 def test_update_job(
     test_config, sacct_json, remote, file_regression, cli_main, prom_custom_query_mock
 ):
-    channel = remote.expect(
+    remote.expect(
         host="raisin",
         commands=[
             Command(
@@ -514,7 +581,7 @@ def test_update_job(
     )
 
     # Import here so that config() is setup correctly when CLI is created.
-    import sarc.cli
+    import sarc.cli  # noqa: F401
 
     assert (
         cli_main(
@@ -554,7 +621,9 @@ def test_update_job(
 
     file_regression.check(
         f"Found {len(jobs)} job(s):\n"
-        + "\n".join([job.json(exclude={"id": True}, indent=4) for job in jobs])
+        + "\n".join(
+            [job.model_dump_json(exclude={"id": True}, indent=4) for job in jobs]
+        )
     )
 
 
@@ -576,18 +645,18 @@ def test_update_job(
     ],
     indirect=True,
 )
-@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache", "tzlocal_is_mtl")
 def test_save_preempted_job(
     test_config, sacct_json, remote, file_regression, cli_main, prom_custom_query_mock
 ):
-    channel = remote.expect(
+    remote.expect(
         cmd="/opt/slurm/bin/sacct  -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
         host="raisin",
         out=sacct_json.encode("utf-8"),
     )
 
     # Import here so that config() is setup correctly when CLI is created.
-    import sarc.cli
+    import sarc.cli  # noqa: F401
 
     assert (
         cli_main(
@@ -610,18 +679,20 @@ def test_save_preempted_job(
 
     file_regression.check(
         f"Found {len(jobs)} job(s):\n"
-        + "\n".join([job.json(exclude={"id": True}, indent=4) for job in jobs])
+        + "\n".join(
+            [job.model_dump_json(exclude={"id": True}, indent=4) for job in jobs]
+        )
     )
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache", "tzlocal_is_mtl")
 def test_multiple_dates(
     test_config, remote, file_regression, cli_main, prom_custom_query_mock
 ):
     datetimes = [
         datetime(2023, 2, 15, tzinfo=MTL) + timedelta(days=i) for i in range(5)
     ]
-    channel = remote.expect(
+    remote.expect(
         host="raisin",
         commands=[
             Command(
@@ -647,7 +718,7 @@ def test_multiple_dates(
     )
 
     # Import here so that config() is setup correctly when CLI is created.
-    import sarc.cli
+    import sarc.cli  # noqa: F401
 
     assert (
         cli_main(
@@ -671,11 +742,13 @@ def test_multiple_dates(
 
     file_regression.check(
         f"Found {len(jobs)} job(s):\n"
-        + "\n".join([job.json(exclude={"id": True}, indent=4) for job in jobs])
+        + "\n".join(
+            [job.model_dump_json(exclude={"id": True}, indent=4) for job in jobs]
+        )
     )
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache", "tzlocal_is_mtl")
 def test_multiple_clusters_and_dates(
     test_config, remote, file_regression, cli_main, prom_custom_query_mock
 ):
@@ -713,7 +786,7 @@ def test_multiple_clusters_and_dates(
             ],
         )
 
-    channel = remote.expect_sessions(
+    remote.expect_sessions(
         _create_session(
             "raisin",
             "/opt/slurm/bin/sacct  -X -S {start} -E {end} --allusers --json",
@@ -731,7 +804,7 @@ def test_multiple_clusters_and_dates(
     )
 
     # Import here so that config() is setup correctly when CLI is created.
-    import sarc.cli
+    import sarc.cli  # noqa: F401
 
     assert (
         cli_main(
@@ -756,11 +829,13 @@ def test_multiple_clusters_and_dates(
 
     file_regression.check(
         f"Found {len(jobs)} job(s):\n"
-        + "\n".join([job.json(exclude={"id": True}, indent=4) for job in jobs])
+        + "\n".join(
+            [job.model_dump_json(exclude={"id": True}, indent=4) for job in jobs]
+        )
     )
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache", "tzlocal_is_mtl")
 def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     test_config,
     remote,
@@ -769,12 +844,18 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     prom_custom_query_mock,
     caplog,
     captrace,
+    monkeypatch,
 ):
     """
     Copied from test_multiple_clusters_and_dates above, with changes:
     - Added captrace to test tracing
     - Removed `--no_prometheus` to test prometheus-related tracing
     """
+
+    def _setup_logging_do_nothing(*args, **kwargs):
+        pass
+
+    monkeypatch.setattr("sarc.cli.setupLogging", _setup_logging_do_nothing)
     caplog.set_level(logging.INFO)
     cluster_names = ["raisin", "patate"]
     datetimes = [
@@ -824,7 +905,7 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
             + [_gen_error_command(cmd_template, datetime(2023, 3, 16, tzinfo=MTL))],
         )
 
-    channel = remote.expect_sessions(
+    remote.expect_sessions(
         _create_session(
             "raisin",
             "/opt/slurm/bin/sacct  -X -S {start} -E {end} --allusers --json",
@@ -842,7 +923,7 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     )
 
     # Import here so that config() is setup correctly when CLI is created.
-    import sarc.cli
+    import sarc.cli  # noqa: F401
 
     assert (
         cli_main(
@@ -879,7 +960,9 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
 
     file_regression.check(
         f"Found {len(jobs)} job(s):\n"
-        + "\n".join([job.json(exclude={"id": True}, indent=4) for job in jobs])
+        + "\n".join(
+            [job.model_dump_json(exclude={"id": True}, indent=4) for job in jobs]
+        )
         + f"\n\nFound {len(spans)} span(s):\n"
         + json.dumps(spans_data, indent=1)
     )
@@ -888,21 +971,24 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     print(caplog.text)
     assert bool(
         re.search(
-            r"root:jobs\.py:[0-9]+ Acquire data on raisin for date: 2023-02-15 00:00:00 \(is_auto=False\)",
+            r"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Acquire data on raisin for date: 2023-02-15 00:00:00-05:00 \(is_auto=False\)",
             caplog.text,
         )
     )
     assert bool(
         re.search(
-            r"root:jobs\.py:[0-9]+ Acquire data on patate for date: 2023-02-15 00:00:00 \(is_auto=False\)",
+            r"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Acquire data on patate for date: 2023-02-15 00:00:00-05:00 \(is_auto=False\)",
             caplog.text,
         )
     )
-    assert "Getting the sacct data..." in caplog.text
+    assert (
+        "Getting the sacct data for cluster raisin, date 2023-02-15 00:00:00-05:00..."
+        in caplog.text
+    )
     assert "Saving into mongodb collection '" in caplog.text
     assert bool(
         re.search(
-            r"sarc\.jobs\.sacct:sacct\.py:[0-9]+ Saved [0-9]+ entries\.",
+            r"sarc\.jobs\.sacct:sacct\.py:[0-9]+ Saved [0-9]+/[0-9]+ entries\.",
             caplog.text,
         )
     )
@@ -910,13 +996,13 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     # There should be 2 acquisition errors for unexpected data 2023-03-16, one per cluster.
     assert bool(
         re.search(
-            r"root:jobs\.py:[0-9]+ Failed to acquire data for raisin on 2023-03-16 00:00:00:",
+            r"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Failed to acquire data for raisin on 2023-03-16 00:00:00-04:00:",
             caplog.text,
         )
     )
     assert bool(
         re.search(
-            r"root:jobs\.py:[0-9]+ Failed to acquire data for patate on 2023-03-16 00:00:00:",
+            r"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Failed to acquire data for patate on 2023-03-16 00:00:00-04:00:",
             caplog.text,
         )
     )
@@ -943,7 +1029,7 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
 )
 @pytest.mark.usefixtures("empty_read_write_db")
 def test_job_tz(test_config, sacct_json, remote, cli_main, prom_custom_query_mock):
-    channel = remote.expect(
+    remote.expect(
         host="patate",
         cmd="/opt/software/slurm/bin/sacct -A rrg-bonhomme-ad_gpu,rrg-bonhomme-ad_cpu,def-bonhomme_gpu,def-bonhomme_cpu -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
         out=sacct_json.encode("utf-8"),
@@ -969,7 +1055,7 @@ def test_job_tz(test_config, sacct_json, remote, cli_main, prom_custom_query_moc
     assert jobs[0].submit_time == datetime(2023, 2, 15, 12 + 3, 0, 0, tzinfo=MTL)
 
 
-@pytest.mark.usefixtures("tzlocal_is_mtl")
+@pytest.mark.usefixtures("tzlocal_is_mtl", "enabled_cache")
 @pytest.mark.parametrize("json_jobs", [{}], indirect=True)
 @pytest.mark.usefixtures("empty_read_write_db")
 @pytest.mark.parametrize("no_prometheus", [True, False])
@@ -984,11 +1070,16 @@ def test_cli_ignore_stats(
     # We'd like to test that this starts with "/tmp/pytest",
     # but this isn't the case when we run the tests on Mac OS,
     # ending up in '/private/var/folders/*/pytest-of-gyomalin/pytest-63'.
-    assert "pytest" in str(scraper.cachefile)
+    assert "pytest" in str(scraper.get_raw.cache_dir)
 
-    print(scraper.cachefile)
+    print(scraper.get_raw.cache_dir)
+    scraper.get_raw.cache_dir.mkdir(parents=True, exist_ok=True)
 
-    with open(scraper.cachefile, "w") as f:
+    cache_path = scraper.get_raw.cache_dir / scraper.get_raw.key().format(
+        time=datetime.now()
+    )
+
+    with open(cache_path, "w") as f:
         f.write(sacct_json)
 
     def mock_compute_job_statistics(job):
@@ -1025,13 +1116,21 @@ def test_cli_ignore_stats(
         assert mock_compute_job_statistics.called >= 1
 
 
-@pytest.mark.usefixtures("standard_config")
 @pytest.mark.parametrize(
     "sacct_outputs",
-    ["slurm_21_8_8.json", "slurm_22_5_9.json", "slurm_23_2_6.json"],
+    [
+        "slurm_21_8_8.json",
+        "slurm_22_5_9.json",
+        "slurm_23_2_6.json",
+        "slurm_23_11_5.json",
+    ],
 )
 def test_parse_sacct_slurm_versions(sacct_outputs, scraper):
     file = Path(__file__).parent / "sacct_outputs" / sacct_outputs
-    scraper.results = json.load(open(file, "r", encoding="utf8"))
+    scraper.get_raw._save_for_key(
+        key=scraper.get_raw.key(),
+        value=json.load(open(file, "r", encoding="utf8")),
+        at_time=datetime.now(UTC),
+    )
     jobs = list(scraper)
     assert len(jobs) == 1

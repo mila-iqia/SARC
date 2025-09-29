@@ -1,80 +1,119 @@
-[tool.poetry]
+[project]
 name = "sarc"
 version = "0.1.0"
 description = "Surveillance et analyse des ressources de calcul"
-authors = ["Mila-IDT"]
+authors = [{ name = "Mila-IDT" }]
+requires-python = "==3.13.*"
 readme = "README.md"
-packages = [{include = 'sarc'}]
+dependencies = [
+    "fabric>=3.0.0,<4",
+    "prometheus-api-client>=0.6,<0.7",
+    "pydantic>=2.11.4,<3",
+    "pydantic-mongo>=3.1,<4",
+    "pymongo>=4.3.3,<5",
+    "numpy>=2.3,<2.4",
+    "ldap3>=2.9.1,<3",
+    "python-hostlist>=2.2.1,<3",
+    "tqdm>=4.66,<5",
+    "flatten-dict>=0.4.2,<0.5",
+    "simple-parsing>=0.1.0,<0.2",
+    "sphinx>=8.2.3,<9",
+    "myst-parser>=4.0.1,<5",
+    "sphinx-rtd-theme>=3.0.2,<4",
+    "nbsphinx>=0.9.3,<0.10",
+    "opentelemetry-api>=1.36.0,<2",
+    "opentelemetry-sdk>=1.36.0,<2",
+    "requests-mock>=1.11.0,<2",
+    "pandas>=2.3.0,<2.4.0",
+    "gifnoc>=0.6,<0.7",
+    "serieux>=0.2,<0.3",
+    "watchdog>=6,<7",
+    "python-dateutil>=2.9.0.post0,<3",
+    "opentelemetry-exporter-otlp>=1.23.0,<2",
+    "iguane",
+    "filelock>=3.18.0",
+    "fastapi[standard-no-fastapi-cloud-cli]>=0.117.1,<0.118",
+    "requests>=2.32.3,<3",
+    "google-auth>=2.40.2,<3",
+]
 
-[tool.poetry.dependencies]
-python = "^3.9"
-fabric = "^3.0.0"
-prometheus-api-client = "^0.5.2"
-pydantic = "^1.10.4"
-pydantic-mongo = "^1.0.1"
-pymongo = "^4.3.3"
-numpy = ">= 1.24.0"
-ldap3 = "^2.9.1"
-python-hostlist = "^1.23.0"
-tqdm = "^4.64.1"
-flatten-dict = "^0.4.2"
-simple-parsing = "^0.1.0"
-sphinx = "^6.2.1"
-myst-parser = "^2.0.0"
-sphinx-rtd-theme = "^1.2.2"
-nbsphinx = "^0.9.3"
-opentelemetry-api = "^1.23.0"
-opentelemetry-sdk = "^1.23.0"
-requests-mock = "^1.11.0"
+[project.scripts]
+sarc = "sarc.cli:main"
 
-[tool.poetry.group.dev.dependencies]
-black = ">= 22.12.0"
-pylint = ">= 2.15.10"
-isort = ">= 5.11.4"
-mypy = ">= 0.991"
-pytest = ">= 7.2.1"
-pytest-cov = ">= 4.0.0"
-pytest-regressions = ">= 2.4.2"
-tox = ">= 4.4.5"
-pytest-freezegun = ">= 0.4.2"
-fabric = {extras = ["testing"], version = "^3.0.0"}
-pytest-timeout = "^2.1.0"
-pytest-custom-exit-code = ">= 0.3.0"
-coverage = "^7.2.7"
-pytest-xdist = "^3.3.1"
-jupyter = "^1.0.0"
-tabulate = "^0.9.0"
+[dependency-groups]
+dev = [
+    "mypy>=1.17.1,<2",
+    "pytest>=8.3.5,<9",
+    "pytest-cov>=7,<8",
+    "pytest-regressions>=2.7.0,<3,!=2.8.1",
+    "tox>=4.25.0,<5",
+    "pytest-freezegun>=0.4.2,<0.5",
+    "fabric[testing]>=3.0.0,<4",
+    "pytest-timeout>=2.1.0,<3",
+    "pytest-custom-exit-code>=0.3.0,<0.4",
+    "pytest-xdist>=3.3.1,<4",
+    "jupyter>=1.0.0,<2",
+    "tabulate>=0.9.0,<0.10",
+    "tox-uv>=1.25.0,<2",
+    "pytest-httpserver>=1.1.3,<2",
+    "types-paramiko>=3.5.0.20240928",
+    "pandas-stubs>=2.2.3.250308",
+    "types-requests>=2.32.0.20250328",
+    "types-ldap3>=2.9.13.20240205",
+    "types-tqdm>=4.67.0.20250417",
+    "pytest-env>=1.1.5,<2",
+    "ruff>=0.13,<0.14",
+]
+examples = ["seaborn>=0.13.2,<0.14"]
 
-[tool.poetry.group.examples.dependencies]
-seaborn = "^0.12.2"
+# to consider
+#  - DTZ: datetimes without timezones (not right now)
+#  - TC: type checking style
+
+
+[tool.ruff.lint]
+select = ["ARG", "E", "F", "FA", "LOG", "PERF", "PIE", "PL", "T20", "W"]
+ignore = [
+  "E501",     # line too long (ruff format will handle it)
+  "PLW2901",  # loop variable overwritten by assignment
+  "PLR0912",  # too many branches
+  "PLR0913",  # too many function arguments
+  "PLR0915",  # too many statements
+  "PLR2004",  # replace magic value by variable
+  "PLC0415",  # imports should be a the top level
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["ARG", "E", "PERF", "T20"]
+"sarc/testing/**" = ["T20"]
+"examples/**" = ["T20"]
+"docs/**" = ["T20"]
+
+
+[tool.uv]
+default-groups = [
+    "dev",
+    "examples",
+]
+
+[tool.uv.sources]
+iguane = { git = "https://github.com/mila-iqia/IGUANE.git", rev = "9cd7b5e1253033c935e39da9c1b8a22cda440112" }
+
+[tool.pytest_env]
+TQDM_DISABLE = "1"
+
+[tool.hatch.build.targets.sdist]
+include = ["sarc"]
+
+[tool.hatch.build.targets.wheel]
+include = ["sarc"]
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
-
-[tool.poetry.scripts]
-sarc = 'sarc.cli:main'
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [tool.pytest]
 norecursedirs = "tests/common"
 
-[tool.pylint]
-ignore-paths = []
-disable = [
-    "no-self-argument",  # Pydantic validators don't have one
-    "too-few-public-methods",  # Triggered on Pydantic models
-    "import-outside-toplevel",  # These imports are useful to reduce loading times
-    "too-many-arguments",
-    "too-many-locals",
-    "missing-module-docstring",
-    "missing-class-docstring",
-    "missing-function-docstring",
-    "invalid-name",
-    "no-else-return",  # Bad rule IMO (- OB)
-    "line-too-long",  # Black takes care of line length.
-    "logging-fstring-interpolation"
-]
-extension-pkg-whitelist = "pydantic"
-
-[tool.isort]
-profile = "black"
+[tool.mypy]
+follow_untyped_imports = true

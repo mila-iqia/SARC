@@ -5,6 +5,9 @@ import csv
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import cast
+
+from pydantic import ByteSize
 
 from sarc.traces import trace_decorator
 
@@ -34,12 +37,12 @@ def convert_csv_row_to_allocation(
     project_size: None | str = None,
     project_inodes: None | str = None,
     nearline_size: None | str = None,
-):
+) -> Allocation:
     return Allocation(
         cluster_name=cluster_name,
         resource_name=resource_name,
         group_name=group_name,
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(),
         start=start,
         end=end,
         resources=AllocationRessources(
@@ -51,9 +54,9 @@ def convert_csv_row_to_allocation(
                 vgpu_year=vgpu_year,
             ),
             storage=AllocationStorage(
-                project_size=project_size,
-                project_inodes=project_inodes,
-                nearline=nearline_size,
+                project_size=cast(ByteSize, project_size),
+                project_inodes=cast(ByteSize, project_inodes),
+                nearline=cast(ByteSize, nearline_size),
                 dCache=None,
                 object=None,
                 cloud_volume=None,
@@ -84,9 +87,9 @@ class AcquireAllocations:
                         row.pop(key)
 
                 try:
-                    allocation = convert_csv_row_to_allocation(**row)
-                except Exception as e:  # pylint: disable=broad-exception-caught
-                    logger.warning(f"Skipping row: {row}")
+                    allocation = convert_csv_row_to_allocation(**row)  # type: ignore[arg-type]
+                except Exception as e:
+                    logger.exception(f"Skipping row: {row}", exc_info=e)
                     continue
 
                 logger.info(f"Adding allocation: {allocation}")

@@ -1,8 +1,11 @@
 from collections import namedtuple
+from types import SimpleNamespace
 
-import sarc.ldap.read_mila_ldap
-from sarc.ldap.read_mila_ldap import resolve_supervisors, run
-from sarc.ldap.supervisor import _student_or_prof, extract_groups
+import pytest
+
+import sarc.users.read_mila_ldap
+from sarc.users.read_mila_ldap import resolve_supervisors, run
+from sarc.users.supervisor import _student_or_prof, extract_groups
 
 
 class CollectionMock:
@@ -170,7 +173,7 @@ def test_extract_groups_is_core():
 def test_resolve_supervisors():
     ldap_people = ldap_mock()
 
-    errors = resolve_supervisors(ldap_people, group_to_prof(), exceptions=None)
+    errors = resolve_supervisors(ldap_people, group_to_prof(), exceptions={})
 
     assert errors.has_errors() is False
 
@@ -182,7 +185,7 @@ def test_resolve_supervisors():
 def test_resolve_no_supervisors():
     ldap_people = ldap_mock_no_supervisor()
 
-    errors = resolve_supervisors(ldap_people, group_to_prof(), exceptions=None)
+    errors = resolve_supervisors(ldap_people, group_to_prof(), exceptions={})
 
     errors.show()
 
@@ -194,7 +197,7 @@ def test_resolve_no_supervisors():
 def test_resolve_too_many_supervisors():
     ldap_people = ldap_mock_too_many_supervisor()
 
-    errors = resolve_supervisors(ldap_people, group_to_prof(), exceptions=None)
+    errors = resolve_supervisors(ldap_people, group_to_prof(), exceptions={})
 
     errors.show()
     assert errors.has_errors() is True
@@ -205,7 +208,7 @@ def test_resolve_too_many_supervisors():
 def test_resolve_missing_supervisors():
     ldap_people = ldap_mock_missing_supervisor()
 
-    errors = resolve_supervisors(ldap_people, group_to_prof(), exceptions=None)
+    errors = resolve_supervisors(ldap_people, group_to_prof(), exceptions={})
 
     errors.show()
     assert errors.has_errors() is True
@@ -218,7 +221,7 @@ def test_resolve_missing_supervisors_mapping():
         make_student("supervisor", ["mcgill", "supervisor"]),
     ]
 
-    errors = resolve_supervisors(ldap_people, group_to_prof(), exceptions=None)
+    errors = resolve_supervisors(ldap_people, group_to_prof(), exceptions={})
 
     errors.show()
     assert errors.has_errors() is True
@@ -226,10 +229,12 @@ def test_resolve_missing_supervisors_mapping():
     assert len(errors.prof_and_student) == 1
 
 
-def test_student_and_prof():
+# This may not be an accurate name for this because I'm not sure what it is testing.
+@pytest.mark.skip("The test never ran due to naming clash and seems broken")
+def test_resolve_missing_supervisor2():
     ldap_people = ldap_mock_missing_supervisor_mapping()
 
-    errors = resolve_supervisors(ldap_people, group_to_prof(), exceptions=None)
+    errors = resolve_supervisors(ldap_people, group_to_prof(), exceptions={})
 
     errors.show()
     assert errors.has_errors() is True
@@ -308,18 +313,22 @@ def ldap_exception(*args):
 
 
 def test_ldap_simple_sync(monkeypatch):
-    monkeypatch.setattr(sarc.ldap.read_mila_ldap, "_query_and_dump", ldap_mock)
+    monkeypatch.setattr(sarc.users.read_mila_ldap, "query_ldap", ldap_mock)
     monkeypatch.setattr(
-        sarc.ldap.read_mila_ldap, "load_ldap_exceptions", ldap_exception
+        sarc.users.read_mila_ldap, "load_ldap_exceptions", ldap_exception
     )
     monkeypatch.setattr(
-        sarc.ldap.read_mila_ldap, "load_group_to_prof_mapping", group_to_prof
+        sarc.users.read_mila_ldap, "load_group_to_prof_mapping", group_to_prof
     )
 
     collection = CollectionMock()
 
     run(
-        ldap=None,
+        ldap=SimpleNamespace(
+            local_private_key_file=None,
+            local_certificate_file=None,
+            ldap_service_uri=None,
+        ),
         mongodb_collection=collection,
     )
 
@@ -334,6 +343,6 @@ def test_ldap_simple_sync(monkeypatch):
 
     student = d._doc["$set"]["mila_ldap"]
     assert student["supervisor"] == "supervisor@email.com", "Supervisor was found"
-    assert (
-        student["co_supervisor"] == "co.supervisor@email.com"
-    ), "2nd supervisor was found"
+    assert student["co_supervisor"] == "co.supervisor@email.com", (
+        "2nd supervisor was found"
+    )

@@ -3,21 +3,23 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Generator
+from typing import Generator, Iterable
 
 from simple_parsing import field
 
-from sarc.config import config
+from sarc.config import config, TZLOCAL
 from sarc.errors import ClusterNotFound
 from sarc.jobs.sacct import sacct_mongodb_import
 from sarc.traces import using_trace
 
+logger = logging.getLogger(__name__)
+
 
 def _str_to_dt(dt_str: str) -> datetime:
-    return datetime.strptime(dt_str, "%Y-%m-%d")
+    return datetime.strptime(dt_str, "%Y-%m-%d").replace(tzinfo=TZLOCAL)
 
 
-def parse_dates(dates: list[str], cluster_name: str) -> list[(datetime, bool)]:
+def parse_dates(dates: list[str], cluster_name: str) -> list[tuple[datetime, bool]]:
     parsed_dates = []  # return values are tuples (date, is_auto)
     for date in dates:
         if date == "auto":
@@ -35,14 +37,12 @@ def parse_dates(dates: list[str], cluster_name: str) -> list[(datetime, bool)]:
     return parsed_dates
 
 
-def _daterange(
-    start_date: datetime, end_date: datetime
-) -> Generator[datetime, None, None]:
+def _daterange(start_date: datetime, end_date: datetime) -> Generator[datetime]:
     for n in range(int((end_date - start_date).days)):
         yield start_date + timedelta(n)
 
 
-def _dates_auto(cluster_name: str) -> list[datetime]:
+def _dates_auto(cluster_name: str) -> Iterable[datetime]:
     # we want to get the list of dates from the last valid date+1 in the database, until yesterday
     start = _dates_auto_first_date(cluster_name)
     end = datetime.today()
@@ -58,9 +58,9 @@ def _dates_auto_first_date(cluster_name: str) -> datetime:
     if cluster is None:
         raise ClusterNotFound(f"Cluster {cluster_name} not found in database")
     start_date = cluster["start_date"]
-    logging.info(f"start_date={start_date}")
+    logger.info(f"start_date={start_date}")
     end_date = cluster["end_date"]
-    logging.info(f"end_date={end_date}")
+    logger.info(f"end_date={end_date}")
     if end_date is None:
         return _str_to_dt(start_date)
     return _str_to_dt(end_date) + timedelta(days=1)
@@ -68,7 +68,7 @@ def _dates_auto_first_date(cluster_name: str) -> datetime:
 
 def _dates_set_last_date(cluster_name: str, date: datetime) -> None:
     # set the last valid date in the database for the cluster
-    logging.info(f"set last successful date for cluster {cluster_name} to {date}")
+    logger.info(f"set last successful date for cluster {cluster_name} to {date}")
     db = config().mongo.database_instance
     db_collection = db.clusters
     db_collection.update_one(
@@ -91,7 +91,7 @@ class AcquireJobs:
     )
 
     def execute(self) -> int:
-        cfg = config()
+        cfg = config("scraping")
         clusters_configs = cfg.clusters
 
         for cluster_name in self.cluster_names:
@@ -104,7 +104,7 @@ class AcquireJobs:
                         span.set_attribute("date", str(date))
                         span.set_attribute("is_auto", is_auto)
                         try:
-                            logging.info(
+                            logger.info(
                                 f"Acquire data on {cluster_name} for date: {date} (is_auto={is_auto})"
                             )
 
@@ -115,13 +115,15 @@ class AcquireJobs:
                                 _dates_set_last_date(cluster_name, date)
                         # pylint: disable=broad-exception-caught
                         except Exception as e:
-                            logging.error(
-                                f"Failed to acquire data for {cluster_name} on {date}: {e}"
+                            logger.error(
+                                f"Failed to acquire data for {cluster_name} on {date}: {type(e).__name__}: {e}"
                             )
                             raise e
             # pylint: disable=broad-exception-caught
-            except Exception:
-                # Error while acquiring data on a cluster from given dates.
+            except Exception as e:
+                logger.error(
+                    f"Error while acquiring data on {cluster_name}: {type(e).__name__}: {e} ; skipping cluster."
+                )
                 # Continue to next cluster.
                 continue
         return 0

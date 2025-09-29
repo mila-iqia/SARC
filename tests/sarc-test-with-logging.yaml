@@ -1,0 +1,145 @@
+sarc:
+  account_matching:
+    drac_members_csv_path: drac_members_not_valid_path.csv
+    drac_roles_csv_path: drac_roles_not_valid_path.csv
+    make_matches_config: make_matches_config_not_valid_path.json
+  cache: null
+  clusters:
+    fromage:
+      accounts:
+      - rrg-bonhomme-ad_gpu
+      - rrg-bonhomme-ad_cpu
+      - def-bonhomme_gpu
+      - def-bonhomme_cpu
+      diskusage_report_command: diskusage_report --project --all_users
+      duc_inodes_command: duc ls -d /project/.duc_databases/rrg-bonhomme-ad.sqlite --count
+        /project/rrg-bonhomme-ad
+      duc_storage_command: duc ls -d /project/.duc_databases/rrg-bonhomme-ad.sqlite
+        /project/rrg-bonhomme-ad
+      host: fromage
+      prometheus_headers_file: tests/not-so-secrets/fromage_prometheus/headers.json
+      prometheus_url: https://fromage-thanos.calcul.ca
+      sacct_bin: /opt/software/slurm/bin/sacct
+      timezone: Europe/Paris
+    gerudo:
+      accounts:
+      - rrg-bonhomme-ad_gpu
+      - rrg-bonhomme-ad_cpu
+      - def-bonhomme_gpu
+      - def-bonhomme_cpu
+      diskusage_report_command: diskusage_report --project --all_users
+      duc_inodes_command: duc ls -d /project/.duc_databases/rrg-bonhomme-ad.sqlite --count
+        /project/rrg-bonhomme-ad
+      duc_storage_command: duc ls -d /project/.duc_databases/rrg-bonhomme-ad.sqlite
+        /project/rrg-bonhomme-ad
+      host: gerudo
+      prometheus_headers_file: tests/not-so-secrets/patate_prometheus/headers.json
+      prometheus_url: https://gerudo-thanos.calcul.ca
+      sacct_bin: /opt/software/slurm/bin/sacct
+      timezone: America/Vancouver
+    hyrule:
+      accounts:
+      - rrg-bonhomme-ad_gpu
+      - rrg-bonhomme-ad_cpu
+      - def-bonhomme_gpu
+      - def-bonhomme_cpu
+      diskusage_report_command: diskusage_report --project --all_users
+      duc_inodes_command: duc ls -d /project/.duc_databases/rrg-bonhomme-ad.sqlite --count
+        /project/rrg-bonhomme-ad
+      duc_storage_command: duc ls -d /project/.duc_databases/rrg-bonhomme-ad.sqlite
+        /project/rrg-bonhomme-ad
+      host: hyrule
+      prometheus_headers_file: tests/not-so-secrets/patate_prometheus/headers.json
+      prometheus_url: https://hyrule-thanos.calcul.ca
+      sacct_bin: /opt/software/slurm/bin/sacct
+      timezone: America/Vancouver
+    local:
+      accounts: null
+      diskusage_report_command: null
+      duc_inodes_command: null
+      duc_storage_command: null
+      host: localhost
+      prometheus_url: null
+      sacct_bin: /opt/slurm/bin/sacct
+      timezone: America/Montreal
+    mila:
+      accounts:
+      - rrg-bonhomme-ad_gpu
+      - rrg-bonhomme-ad_cpu
+      - def-bonhomme_gpu
+      - def-bonhomme_cpu
+      billing_is_gpu: true
+      diskusage_report_command: diskusage_report --project --all_users
+      duc_inodes_command: duc ls -d /project/.duc_databases/rrg-bonhomme-ad.sqlite --count
+        /project/rrg-bonhomme-ad
+      duc_storage_command: duc ls -d /project/.duc_databases/rrg-bonhomme-ad.sqlite
+        /project/rrg-bonhomme-ad
+      host: mila
+      name: mila
+      prometheus_headers_file: tests/not-so-secrets/patate_prometheus/headers.json
+      prometheus_url: https://hyrule-thanos.calcul.ca
+      sacct_bin: /opt/software/slurm/bin/sacct
+      timezone: America/Vancouver
+    patate:
+      accounts:
+      - rrg-bonhomme-ad_gpu
+      - rrg-bonhomme-ad_cpu
+      - def-bonhomme_gpu
+      - def-bonhomme_cpu
+      diskusage_report_command: diskusage_report --project --all_users
+      duc_inodes_command: duc ls -d /project/.duc_databases/rrg-bonhomme-ad.sqlite --count
+        /project/rrg-bonhomme-ad
+      duc_storage_command: duc ls -d /project/.duc_databases/rrg-bonhomme-ad.sqlite
+        /project/rrg-bonhomme-ad
+      host: patate
+      prometheus_headers_file: tests/not-so-secrets/patate_prometheus/headers.json
+      prometheus_url: https://fromage-thanos.calcul.ca
+      sacct_bin: /opt/software/slurm/bin/sacct
+      slurm_conf_host_path: /the/path/to/slurm.conf
+      timezone: America/Vancouver
+    raisin:
+      accounts: null
+      diskusage_report_command: null
+      duc_inodes_command: null
+      duc_storage_command: null
+      host: raisin
+      prometheus_url: http://monitoring.server.raisin.quebec:9090/
+      sacct_bin: /opt/slurm/bin/sacct
+      timezone: America/Montreal
+      gpus_per_nodes:
+        __DEFAULTS__:
+          gpu2: THE GPU II
+    raisin_no_prometheus:
+      accounts: null
+      diskusage_report_command: null
+      duc_inodes_command: null
+      duc_storage_command: null
+      gpus_per_nodes:
+        cn-c018:
+          asupergpu: Nec Plus Plus ULTRA GPU 2000
+        cn-c[019-030]:
+          asupergpu: Nec Plus ULTRA GPU 2000
+      host: raisin_no_prometheus
+      prometheus_url: null
+      sacct_bin: /opt/slurm/bin/sacct
+      timezone: America/Montreal
+  ldap:
+    exceptions_json_path: secrets/exceptions.json
+    group_to_prof_json_path: secrets/group_to_prof.json
+    ldap_service_uri: ldaps://ldap.google.com
+    local_certificate_file: not_a_valid_path.crt
+    local_private_key_file: not_a_valid_path.key
+    mongo_collection_name: users
+  logging:
+    OTLP_endpoint: http://127.0.0.1/otlp/v1/logs
+    log_level: WARNING
+    service_name: sarc-test
+  mongo:
+    connection_string: localhost:27017
+    database_name: sarc-test
+  mymila:
+    tmp_json_path: secrets/tmp_mymila.json
+  loki:
+      uri: "https://localhost/loki"
+  tempo:
+      uri: "https://localhost/tempo"

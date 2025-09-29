@@ -1,12 +1,11 @@
 import os
-import shutil
 import sys
 import tempfile
-import time
 import zoneinfo
 from pathlib import Path
 from unittest.mock import MagicMock, mock_open
 
+import gifnoc
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
@@ -18,109 +17,74 @@ _tracer_provider.add_span_processor(SimpleSpanProcessor(_exporter))
 set_tracer_provider(_tracer_provider)
 del _tracer_provider
 
-
 import pytest
-from _pytest.monkeypatch import MonkeyPatch
 
-from sarc.config import (
-    ClusterConfig,
-    Config,
-    ScraperConfig,
-    config,
-    parse_config,
-    using_config,
-)
+from sarc.config import config, using_sarc_mode
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "common"))
 
 pytest_plugins = "fabric.testing.fixtures"
 
 
-@pytest.fixture(scope="session")
-def standard_config_object():
-    mpatch = MonkeyPatch()
-    mpatch.setenv("SARC_MODE", "scraping")
-    yield parse_config(Path(__file__).parent / "sarc-test.json", ScraperConfig)
-    mpatch.undo()
+@pytest.fixture
+def client_mode():
+    with using_sarc_mode("client"):
+        yield
+
+
+@pytest.fixture
+def scraping_mode():
+    with using_sarc_mode("scraping"):
+        yield
 
 
 @pytest.fixture(scope="session")
-def client_config_object():
-    mpatch = MonkeyPatch()
-    mpatch.setenv("SARC_MODE", "client")
-    yield parse_config(Path(__file__).parent / "sarc-test-client.json", Config)
-    mpatch.undo()
+def test_config_path():
+    yield Path(__file__).parent / "sarc-test.yaml"
 
 
-@pytest.fixture()
-def client_config(client_config_object, tmp_path):
-    cfg = client_config_object.replace(cache=tmp_path / "sarc-tmp-test-cache")
-    with using_config(cfg, Config) as cfg:
-        yield cfg
+@pytest.fixture(scope="session", autouse=True)
+def base_config(test_config_path):
+    with gifnoc.use(test_config_path):
+        with using_sarc_mode("scraping"):
+            yield
 
 
-@pytest.fixture()
-def standard_config(standard_config_object, tmp_path):
-    cfg = standard_config_object.replace(cache=tmp_path / "sarc-tmp-test-cache")
-    with using_config(cfg, ScraperConfig) as cfg:
-        yield cfg
+@pytest.fixture(scope="session")
+def base_config_with_logging():
+    """To be used where config.logging is required"""
+    with gifnoc.use(Path(__file__).parent / "sarc-test-with-logging.yaml"):
+        with using_sarc_mode("scraping"):
+            yield
+
+
+@pytest.fixture
+def enabled_cache(tmp_path):
+    with gifnoc.overlay({"sarc.cache": str(tmp_path / "sarc-tmp-test-cache")}):
+        yield
 
 
 @pytest.fixture
 def disabled_cache():
-    cfg = config().replace(cache=None)
-    with using_config(cfg, ScraperConfig) as cfg:
+    with gifnoc.overlay({"sarc.cache": None}):
         yield
-
-
-@pytest.fixture(scope="session", autouse=True)
-def clean_up_test_cache_before_run(standard_config_object, worker_id):
-    if worker_id in ("master", 0):
-        if standard_config_object.cache.exists():
-            shutil.rmtree(str(standard_config_object.cache))
-    else:
-        while standard_config_object.cache.exists():
-            time.sleep(1)
-    yield
 
 
 @pytest.fixture
 def tzlocal_is_mtl(monkeypatch):
     monkeypatch.setattr("sarc.config.TZLOCAL", zoneinfo.ZoneInfo("America/Montreal"))
-    monkeypatch.setattr("sarc.jobs.job.TZLOCAL", zoneinfo.ZoneInfo("America/Montreal"))
+    monkeypatch.setattr(
+        "sarc.client.job.TZLOCAL", zoneinfo.ZoneInfo("America/Montreal")
+    )
+    monkeypatch.setattr(
+        "sarc.cli.acquire.jobs.TZLOCAL", zoneinfo.ZoneInfo("America/Montreal")
+    )
 
 
 @pytest.fixture
-def test_config(request, standard_config):
-    current = config()
-
-    vals = getattr(request, "param", dict())
-
-    mongo_repl = vals.pop("mongo", {})
-    clusters_repl = vals.pop("clusters", {})
-    clusters_orig = current.clusters
-
-    new_clusters = {}
-    for name in clusters_orig:
-        if name in clusters_repl:
-            new_clusters[name] = clusters_orig[name].replace(**clusters_repl[name])
-        else:
-            # This is to make a clone
-            new_clusters[name] = clusters_orig[name].replace()
-
-    # Look at all the new names in repl
-    for name in set(clusters_repl.keys()) - set(clusters_orig.keys()):
-        new_clusters[name] = ClusterConfig(
-            **(dict(host="test", timezone="America/Montreal") | clusters_repl[name])
-        )
-
-    conf = current.replace(
-        mongo=current.mongo.replace(**mongo_repl),
-        sshconfig=None,
-        clusters=new_clusters,
-    )
-    with using_config(conf):
-        yield conf
+def test_config(request):
+    with gifnoc.overlay({"sarc": getattr(request, "param", dict())}):
+        yield config()
 
 
 @pytest.fixture
@@ -216,8 +180,24 @@ Mysterious Stranger,BigProf,Manager,activated,stranger.person,ms@hotmail.com
     """
     exceptions_json_path = """
     {
-        "not_prof": [],
-        "not_student": []
+        "not_teacher": [],
+        "not_student": [],
+        "delegations": {
+            "john.smith003@mila.quebec": [
+                "john.smith004@mila.quebec",
+                "john.smith005@mila.quebec"
+            ]
+        },
+        "supervisors_overrides": {
+            "john.smith001@mila.quebec": [
+                "john.smith003@mila.quebec"
+            ],
+            "john.smith002@mila.quebec": [
+                "john.smith003@mila.quebec",
+                "john.smith004@mila.quebec"
+            ]
+        }
+
     }
     """
 
@@ -255,3 +235,15 @@ def mock_file(file_contents):
             raise FileNotFoundError(filename)
 
     return _mock_file
+
+
+@pytest.fixture
+def patch_return_values(monkeypatch):
+    def returner(v):
+        return lambda *_, **__: v
+
+    def patch(values):
+        for k, v in values.items():
+            monkeypatch.setattr(k, returner(v))
+
+    yield patch

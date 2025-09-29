@@ -1,0 +1,61 @@
+{
+    "cluster_name": "hyrule",
+    "groups": [
+        {
+            "group_name": "def-bengioy",
+            "users": [
+                {
+                    "user": "revali",
+                    "nbr_files": 2,
+                    "size": 0
+                },
+                {
+                    "user": "urbosa",
+                    "nbr_files": 2,
+                    "size": 0
+                },
+                {
+                    "user": "daruk",
+                    "nbr_files": 50,
+                    "size": 14484777205
+                },
+                {
+                    "user": "mipha",
+                    "nbr_files": 2,
+                    "size": 0
+                }
+            ]
+        },
+        {
+            "group_name": "rpp-bengioy",
+            "users": [
+                {
+                    "user": "riju",
+                    "nbr_files": 47085,
+                    "size": 4509715660
+                },
+                {
+                    "user": "grosaillieh",
+                    "nbr_files": 2,
+                    "size": 0
+                },
+                {
+                    "user": "bourgette",
+                    "nbr_files": 2,
+                    "size": 0
+                },
+                {
+                    "user": "kohga",
+                    "nbr_files": 2,
+                    "size": 0
+                },
+                {
+                    "user": "rhoam",
+                    "nbr_files": 2,
+                    "size": 0
+                }
+            ]
+        }
+    ],
+    "timestamp": "2023-05-12T00:00:00Z"
+}

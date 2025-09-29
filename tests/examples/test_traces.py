@@ -5,7 +5,7 @@ def test_trace1(captrace):
     tracer = get_tracer("test_trace1")
 
     # This is fake traced work
-    with tracer.start_as_current_span("span1") as span:
+    with tracer.start_as_current_span("span1"):
         pass
 
     l = captrace.get_finished_spans()

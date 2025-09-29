@@ -1,16 +1,13 @@
+import logging
 from dataclasses import dataclass
 
 from simple_parsing import field
 
 from sarc.config import config
+from sarc.core.scraping.diskusage import get_diskusage_scraper
 from sarc.storage.diskusage import get_diskusage_collection
-from sarc.storage.drac import fetch_diskusage_report as fetch_dirac_diskusage
-from sarc.storage.mila import fetch_diskusage_report as fetch_mila_diskusage
 
-methods = {
-    "default": fetch_dirac_diskusage,
-    "mila": fetch_mila_diskusage,
-}
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -19,21 +16,36 @@ class AcquireStorages:
     dry: bool = False
 
     def execute(self) -> int:
-        cfg = config()
+        cfg = config("scraping")
 
         for cluster_name in self.cluster_names:
-            print(f"Acquiring {cluster_name} storages report...")
+            logger.info(f"Acquiring {cluster_name} storages report...")
 
             cluster = cfg.clusters[cluster_name]
+            diskusage_configs = cluster.diskusage
+            if diskusage_configs is None:
+                continue
 
-            fetch_diskusage = methods.get(cluster_name, methods["default"])
-            du = fetch_diskusage(cluster)
+            # Process each diskusage configuration
+            for diskusage_config in diskusage_configs:
+                try:
+                    scraper = get_diskusage_scraper(diskusage_config.name)
+                except KeyError as ke:
+                    logger.exception(
+                        "Invalid or absent diskusage scraper name: %s",
+                        diskusage_config.name,
+                        exc_info=ke,
+                    )
+                    continue
 
-            if not self.dry:
-                collection = get_diskusage_collection()
-                collection.add(du)
-            else:
-                print("Document:")
-                print(du.json(indent=2))
+                disk_config = scraper.validate_config(diskusage_config.params)
+                data = scraper.get_diskusage_report(cluster.ssh, disk_config)
+                du = scraper.parse_diskusage_report(disk_config, cluster_name, data)
+
+                if not self.dry:
+                    collection = get_diskusage_collection()
+                    collection.add(du)
+                else:
+                    logger.info("Document:\n" + du.model_dump_json(indent=2))
 
         return 0

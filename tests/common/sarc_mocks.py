@@ -1,7 +1,6 @@
 from copy import deepcopy
 from datetime import date
 
-import pandas as pd
 
 _membership_types = [
     # Student
@@ -120,8 +119,7 @@ def dictset(dictionnary: dict, operation: dict):
 
 def fake_mymila_data(nbr_users=10, nbr_profs=5, hardcoded_values_by_user={}):
     entry_ctor = mymila_entry_builder(nbr_profs, hardcoded_values_by_user)
-
-    return pd.DataFrame(list([entry_ctor(i) for i in range(nbr_users)]))
+    return list([entry_ctor(i) for i in range(nbr_users)])
 
 
 def fake_mymila_data_with_history(nbr_users=10, nbr_profs=5):
@@ -181,6 +179,9 @@ def mymila_entry_builder(nbr_profs=5, hardcoded_values_by_user={}):
         last_name = f"Smith{i:03d}"
         email = f"john.smith{i:03d}@mila.quebec"
 
+        def fdate(year, month, day):
+            return date(year, month, day).strftime("%Y-%m-%d")
+
         def _define_value(i, key, default_value):
             """
             Retrieve the hardcoded value to associate to a key for a user, if any,
@@ -208,10 +209,10 @@ def mymila_entry_builder(nbr_profs=5, hardcoded_values_by_user={}):
                 ),
                 "MILA Email": _define_value(i, "MILA Email", email),
                 "Start Date with MILA": _define_value(
-                    i, "Start Date with MILA", date(2022, 1, 1)
+                    i, "Start Date with MILA", fdate(2022, 1, 1)
                 ),
                 "End Date with MILA": _define_value(
-                    i, "End Date with MILA", [date(2027, 12, 31), None][i % 2]
+                    i, "End Date with MILA", [fdate(2027, 12, 31), None][i % 2]
                 ),
                 "Supervisor Principal": _define_value(
                     i, "Supervisor Principal", supervisors[i % len(supervisors)]
@@ -235,10 +236,10 @@ def mymila_entry_builder(nbr_profs=5, hardcoded_values_by_user={}):
                     i, "Program of study", program_of_study[i % len(program_of_study)]
                 ),
                 "Start date of studies": _define_value(
-                    i, "Start date of studies", date(year=2022, month=1, day=1)
+                    i, "Start date of studies", fdate(year=2022, month=1, day=1)
                 ),
                 "End date of studies": _define_value(
-                    i, "End date of studies", date(year=2027, month=12, day=31)
+                    i, "End date of studies", fdate(year=2027, month=12, day=31)
                 ),
                 "Affiliated university": _define_value(
                     i,
@@ -249,12 +250,12 @@ def mymila_entry_builder(nbr_profs=5, hardcoded_values_by_user={}):
                     i, "Current university title", uni_title
                 ),
                 "Start date of academic nomination": _define_value(
-                    i, "Start date of academic nomination", date(2022, 1, 1)
+                    i, "Start date of academic nomination", fdate(2022, 1, 1)
                 ),
                 "End date of academic nomination": _define_value(
                     i,
                     "End date of academic nomination",
-                    [date(2027, 12, 31), None][i % 2],
+                    [fdate(2027, 12, 31), None][i % 2],
                 ),
                 "Email": _define_value(i, "Email", email),
             },

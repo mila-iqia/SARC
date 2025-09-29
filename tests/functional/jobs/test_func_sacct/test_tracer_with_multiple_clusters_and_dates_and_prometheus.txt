@@ -27,7 +27,9 @@ Found 4 job(s):
     "submit_time": "2023-02-15T00:00:00-05:00",
     "start_time": "2023-02-15T00:01:00-05:00",
     "end_time": "2023-02-15T12:01:00-05:00",
-    "elapsed_time": 43200,
+    "elapsed_time": 43200.0,
+    "latest_scraped_start": "2023-02-15T00:00:00-05:00",
+    "latest_scraped_end": "2023-02-16T00:00:00-05:00",
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -84,7 +86,9 @@ Found 4 job(s):
     "submit_time": "2023-02-16T00:00:00-05:00",
     "start_time": "2023-02-16T00:01:00-05:00",
     "end_time": "2023-02-16T12:01:00-05:00",
-    "elapsed_time": 43200,
+    "elapsed_time": 43200.0,
+    "latest_scraped_start": "2023-02-16T00:00:00-05:00",
+    "latest_scraped_end": "2023-02-17T00:00:00-05:00",
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -141,7 +145,9 @@ Found 4 job(s):
     "submit_time": "2023-02-15T00:00:00-05:00",
     "start_time": "2023-02-15T00:01:00-05:00",
     "end_time": "2023-02-15T12:01:00-05:00",
-    "elapsed_time": 43200,
+    "elapsed_time": 43200.0,
+    "latest_scraped_start": "2023-02-15T00:00:00-05:00",
+    "latest_scraped_end": "2023-02-16T00:00:00-05:00",
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -198,7 +204,9 @@ Found 4 job(s):
     "submit_time": "2023-02-16T00:00:00-05:00",
     "start_time": "2023-02-16T00:01:00-05:00",
     "end_time": "2023-02-16T12:01:00-05:00",
-    "elapsed_time": 43200,
+    "elapsed_time": 43200.0,
+    "latest_scraped_start": "2023-02-16T00:00:00-05:00",
+    "latest_scraped_end": "2023-02-17T00:00:00-05:00",
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -228,7 +236,7 @@ Found 4 job(s):
     }
 }
 
-Found 90 span(s):
+Found 86 span(s):
 [
  {
   "span_name": "acquire_cluster_data",
@@ -238,7 +246,7 @@ Found 90 span(s):
   ],
   "span_attributes": {
    "cluster_name": "patate",
-   "date": "2023-03-16 00:00:00",
+   "date": "2023-03-16 00:00:00-04:00",
    "is_auto": false
   },
   "span_has_error": true
@@ -253,7 +261,7 @@ Found 90 span(s):
   "span_has_error": true
  },
  {
-  "span_name": "SAcctScraper.get_raw",
+  "span_name": "SAcctScraper.fetch_raw",
   "span_events": [
    "exception",
    "exception"
@@ -266,19 +274,13 @@ Found 90 span(s):
   "span_events": [],
   "span_attributes": {
    "cluster_name": "patate",
-   "date": "2023-02-16 00:00:00",
+   "date": "2023-02-16 00:00:00-05:00",
    "is_auto": false
   },
   "span_has_error": false
  },
  {
   "span_name": "sacct_mongodb_import",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "SAcctScraper.get_raw",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
@@ -304,7 +306,55 @@ Found 90 span(s):
   "span_has_error": false
  },
  {
-  "span_name": "get_job_time_series",
+  "span_name": "compute_job_statistics_from_dataframe",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "compute_job_statistics_from_dataframe",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "compute_job_statistics_from_dataframe",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "compute_job_statistics_from_dataframe",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "compute_job_statistics_from_dataframe",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "compute_job_statistics_from_dataframe",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "compute_job_statistics_from_dataframe",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "compute_job_statistics_from_dataframe",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "compute_job_statistics_from_dataframe",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
@@ -316,43 +366,7 @@ Found 90 span(s):
   "span_has_error": false
  },
  {
-  "span_name": "get_job_time_series",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "get_job_time_series",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "get_job_time_series",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "get_job_time_series",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "get_job_time_series",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "get_job_time_series",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "get_job_time_series",
+  "span_name": "_get_job_time_series_data",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
@@ -370,25 +384,13 @@ Found 90 span(s):
   "span_has_error": false
  },
  {
-  "span_name": "SAcctScraper.get_raw",
+  "span_name": "_get_job_time_series_data",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
  },
  {
-  "span_name": "SAcctScraper.get_raw",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "SAcctScraper.get_raw",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "SAcctScraper.get_raw",
+  "span_name": "SAcctScraper.fetch_raw",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
@@ -398,19 +400,13 @@ Found 90 span(s):
   "span_events": [],
   "span_attributes": {
    "cluster_name": "patate",
-   "date": "2023-02-15 00:00:00",
+   "date": "2023-02-15 00:00:00-05:00",
    "is_auto": false
   },
   "span_has_error": false
  },
  {
   "span_name": "sacct_mongodb_import",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "SAcctScraper.get_raw",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
@@ -436,7 +432,55 @@ Found 90 span(s):
   "span_has_error": false
  },
  {
-  "span_name": "get_job_time_series",
+  "span_name": "compute_job_statistics_from_dataframe",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "compute_job_statistics_from_dataframe",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "compute_job_statistics_from_dataframe",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "compute_job_statistics_from_dataframe",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "compute_job_statistics_from_dataframe",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "compute_job_statistics_from_dataframe",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "compute_job_statistics_from_dataframe",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "compute_job_statistics_from_dataframe",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "compute_job_statistics_from_dataframe",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
@@ -448,43 +492,7 @@ Found 90 span(s):
   "span_has_error": false
  },
  {
-  "span_name": "get_job_time_series",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "get_job_time_series",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "get_job_time_series",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "get_job_time_series",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "get_job_time_series",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "get_job_time_series",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "get_job_time_series",
+  "span_name": "_get_job_time_series_data",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
@@ -502,25 +510,13 @@ Found 90 span(s):
   "span_has_error": false
  },
  {
-  "span_name": "SAcctScraper.get_raw",
+  "span_name": "_get_job_time_series_data",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
  },
  {
-  "span_name": "SAcctScraper.get_raw",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "SAcctScraper.get_raw",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "SAcctScraper.get_raw",
+  "span_name": "SAcctScraper.fetch_raw",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
@@ -533,7 +529,7 @@ Found 90 span(s):
   ],
   "span_attributes": {
    "cluster_name": "raisin",
-   "date": "2023-03-16 00:00:00",
+   "date": "2023-03-16 00:00:00-04:00",
    "is_auto": false
   },
   "span_has_error": true
@@ -548,7 +544,7 @@ Found 90 span(s):
   "span_has_error": true
  },
  {
-  "span_name": "SAcctScraper.get_raw",
+  "span_name": "SAcctScraper.fetch_raw",
   "span_events": [
    "exception",
    "exception"
@@ -561,19 +557,13 @@ Found 90 span(s):
   "span_events": [],
   "span_attributes": {
    "cluster_name": "raisin",
-   "date": "2023-02-16 00:00:00",
+   "date": "2023-02-16 00:00:00-05:00",
    "is_auto": false
   },
   "span_has_error": false
  },
  {
   "span_name": "sacct_mongodb_import",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "SAcctScraper.get_raw",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
@@ -599,7 +589,55 @@ Found 90 span(s):
   "span_has_error": false
  },
  {
-  "span_name": "get_job_time_series",
+  "span_name": "compute_job_statistics_from_dataframe",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "compute_job_statistics_from_dataframe",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "compute_job_statistics_from_dataframe",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "compute_job_statistics_from_dataframe",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "compute_job_statistics_from_dataframe",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "compute_job_statistics_from_dataframe",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "compute_job_statistics_from_dataframe",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "compute_job_statistics_from_dataframe",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "compute_job_statistics_from_dataframe",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
@@ -611,43 +649,7 @@ Found 90 span(s):
   "span_has_error": false
  },
  {
-  "span_name": "get_job_time_series",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "get_job_time_series",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "get_job_time_series",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "get_job_time_series",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "get_job_time_series",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "get_job_time_series",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "get_job_time_series",
+  "span_name": "_get_job_time_series_data",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
@@ -665,25 +667,13 @@ Found 90 span(s):
   "span_has_error": false
  },
  {
-  "span_name": "SAcctScraper.get_raw",
+  "span_name": "_get_job_time_series_data",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
  },
  {
-  "span_name": "SAcctScraper.get_raw",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "SAcctScraper.get_raw",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "SAcctScraper.get_raw",
+  "span_name": "SAcctScraper.fetch_raw",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
@@ -693,19 +683,13 @@ Found 90 span(s):
   "span_events": [],
   "span_attributes": {
    "cluster_name": "raisin",
-   "date": "2023-02-15 00:00:00",
+   "date": "2023-02-15 00:00:00-05:00",
    "is_auto": false
   },
   "span_has_error": false
  },
  {
   "span_name": "sacct_mongodb_import",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "SAcctScraper.get_raw",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
@@ -731,7 +715,55 @@ Found 90 span(s):
   "span_has_error": false
  },
  {
-  "span_name": "get_job_time_series",
+  "span_name": "compute_job_statistics_from_dataframe",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "compute_job_statistics_from_dataframe",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "compute_job_statistics_from_dataframe",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "compute_job_statistics_from_dataframe",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "compute_job_statistics_from_dataframe",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "compute_job_statistics_from_dataframe",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "compute_job_statistics_from_dataframe",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "compute_job_statistics_from_dataframe",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "compute_job_statistics_from_dataframe",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
@@ -743,43 +775,7 @@ Found 90 span(s):
   "span_has_error": false
  },
  {
-  "span_name": "get_job_time_series",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "get_job_time_series",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "get_job_time_series",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "get_job_time_series",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "get_job_time_series",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "get_job_time_series",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "get_job_time_series",
+  "span_name": "_get_job_time_series_data",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
@@ -797,25 +793,13 @@ Found 90 span(s):
   "span_has_error": false
  },
  {
-  "span_name": "SAcctScraper.get_raw",
+  "span_name": "_get_job_time_series_data",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
  },
  {
-  "span_name": "SAcctScraper.get_raw",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "SAcctScraper.get_raw",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "SAcctScraper.get_raw",
+  "span_name": "SAcctScraper.fetch_raw",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false

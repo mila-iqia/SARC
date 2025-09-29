@@ -1,22 +1,80 @@
-- '{"cluster_name": "fromage", "resource_name": "fromage-gpu", "group_name": "rrg-bonhomme-ad",
-  "timestamp": "2023-02-01T00:00:00", "start": "2017-04-01", "end": "2018-04-01",
-  "resources": {"compute": {"gpu_year": 100, "cpu_year": null, "vcpu_year": null,
-  "vgpu_year": null}, "storage": {"project_size": null, "project_inodes": null, "nearline":
-  null, "dCache": 0, "object": 0, "cloud_volume": 0, "cloud_shared": 0}}}'
-- '{"cluster_name": "fromage", "resource_name": "fromage-storage", "group_name": "rrg-bonhomme-ad",
-  "timestamp": "2023-02-01T00:00:00", "start": "2017-04-01", "end": "2018-04-01",
-  "resources": {"compute": {"gpu_year": null, "cpu_year": null, "vcpu_year": null,
-  "vgpu_year": null}, "storage": {"project_size": 50000000000000, "project_inodes":
-  5000000.0, "nearline": 15000000000000, "dCache": 0, "object": 0, "cloud_volume":
-  0, "cloud_shared": 0}}}'
-- '{"cluster_name": "fromage", "resource_name": "fromage-gpu", "group_name": "rrg-bonhomme-ad",
-  "timestamp": "2023-02-01T00:00:00", "start": "2018-04-01", "end": "2019-04-01",
-  "resources": {"compute": {"gpu_year": 100, "cpu_year": null, "vcpu_year": null,
-  "vgpu_year": null}, "storage": {"project_size": null, "project_inodes": null, "nearline":
-  null, "dCache": 0, "object": 0, "cloud_volume": 0, "cloud_shared": 0}}}'
-- '{"cluster_name": "fromage", "resource_name": "fromage-storage", "group_name": "rrg-bonhomme-ad",
-  "timestamp": "2023-02-01T00:00:00", "start": "2018-04-01", "end": "2019-04-01",
-  "resources": {"compute": {"gpu_year": null, "cpu_year": null, "vcpu_year": null,
-  "vgpu_year": null}, "storage": {"project_size": 70000000000000, "project_inodes":
-  null, "nearline": null, "dCache": 0, "object": 0, "cloud_volume": 0, "cloud_shared":
-  0}}}'
+- cluster_name: fromage
+  end: 2018-04-01 00:00:00
+  group_name: rrg-bonhomme-ad
+  resource_name: fromage-gpu
+  resources:
+    compute:
+      cpu_year: null
+      gpu_year: 100
+      vcpu_year: null
+      vgpu_year: null
+    storage:
+      cloud_shared: 0
+      cloud_volume: 0
+      dCache: 0
+      nearline: null
+      object: 0
+      project_inodes: null
+      project_size: null
+  start: 2017-04-01 00:00:00
+  timestamp: 2023-02-01 00:00:00+00:00
+- cluster_name: fromage
+  end: 2018-04-01 00:00:00
+  group_name: rrg-bonhomme-ad
+  resource_name: fromage-storage
+  resources:
+    compute:
+      cpu_year: null
+      gpu_year: null
+      vcpu_year: null
+      vgpu_year: null
+    storage:
+      cloud_shared: 0
+      cloud_volume: 0
+      dCache: 0
+      nearline: 15000000000000
+      object: 0
+      project_inodes: 5000000.0
+      project_size: 50000000000000
+  start: 2017-04-01 00:00:00
+  timestamp: 2023-02-01 00:00:00+00:00
+- cluster_name: fromage
+  end: 2019-04-01 00:00:00
+  group_name: rrg-bonhomme-ad
+  resource_name: fromage-gpu
+  resources:
+    compute:
+      cpu_year: null
+      gpu_year: 100
+      vcpu_year: null
+      vgpu_year: null
+    storage:
+      cloud_shared: 0
+      cloud_volume: 0
+      dCache: 0
+      nearline: null
+      object: 0
+      project_inodes: null
+      project_size: null
+  start: 2018-04-01 00:00:00
+  timestamp: 2023-02-01 00:00:00+00:00
+- cluster_name: fromage
+  end: 2019-04-01 00:00:00
+  group_name: rrg-bonhomme-ad
+  resource_name: fromage-storage
+  resources:
+    compute:
+      cpu_year: null
+      gpu_year: null
+      vcpu_year: null
+      vgpu_year: null
+    storage:
+      cloud_shared: 0
+      cloud_volume: 0
+      dCache: 0
+      nearline: null
+      object: 0
+      project_inodes: null
+      project_size: 70000000000000
+  start: 2018-04-01 00:00:00
+  timestamp: 2023-02-01 00:00:00+00:00

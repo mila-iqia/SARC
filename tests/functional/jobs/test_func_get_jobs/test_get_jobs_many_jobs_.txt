@@ -27,7 +27,9 @@ Found 2 job(s):
     "submit_time": "2023-02-15T18:00:00-05:00",
     "start_time": "2023-02-15T18:01:00-05:00",
     "end_time": null,
-    "elapsed_time": 43200,
+    "elapsed_time": 43200.0,
+    "latest_scraped_start": null,
+    "latest_scraped_end": null,
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -74,7 +76,9 @@ Found 2 job(s):
     "submit_time": "2023-02-16T00:00:00-05:00",
     "start_time": "2023-02-16T00:01:00-05:00",
     "end_time": "2023-02-16T12:01:00-05:00",
-    "elapsed_time": 43200,
+    "elapsed_time": 43200.0,
+    "latest_scraped_start": null,
+    "latest_scraped_end": null,
     "requested": {
         "cpu": 4,
         "mem": 49152,

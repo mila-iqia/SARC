@@ -4,9 +4,10 @@ from datetime import datetime
 import pandas
 import pytest
 
+from sarc.client.job import JobStatistics, Statistics, get_jobs
+from sarc.client.series import load_job_series
+from sarc.client.users.api import get_users
 from sarc.config import MTL
-from sarc.jobs.job import get_jobs
-from sarc.jobs.series import load_job_series
 
 from .test_func_job_statistics import generate_fake_timeseries
 
@@ -63,6 +64,8 @@ ALL_COLUMNS = [
     "id",
     "job_id",
     "job_state",
+    "latest_scraped_end",
+    "latest_scraped_start",
     "name",
     "nodes",
     "partition",
@@ -85,6 +88,40 @@ ALL_COLUMNS = [
     "work_dir",
 ]
 
+# For testing, we still check expected columns.
+# If attributes in User class change, we may need to update this list.
+USER_COLUMNS = [
+    "user.primary_email",
+    "user.name",
+    "user.record_start",
+    "user.record_end",
+    "user.teacher_delegations",
+    "user.mila.username",
+    "user.mila.email",
+    "user.mila.active",
+    "user.drac.username",
+    "user.drac.email",
+    "user.drac.active",
+    "user.mila_ldap.co_supervisor",
+    "user.mila_ldap.display_name",
+    "user.mila_ldap.mila_cluster_gid",
+    "user.mila_ldap.mila_cluster_uid",
+    "user.mila_ldap.mila_cluster_username",
+    "user.mila_ldap.mila_email_username",
+    "user.mila_ldap.status",
+    "user.mila_ldap.supervisor",
+    "user.drac_members.activation_status",
+    "user.drac_members.email",
+    "user.drac_members.name",
+    "user.drac_members.permission",
+    "user.drac_members.sponsor",
+    "user.drac_members.username",
+    "user.drac_roles.email",
+    "user.drac_roles.nom",
+    "user.drac_roles.status",
+    "user.drac_roles.username",
+    "user.drac_roles.état du compte",
+]
 
 # For file regression tests, we will save data frame into a CSV.
 # We won't include job `id` because it changes from a call to another
@@ -96,7 +133,57 @@ MOCK_TIME = "2023-11-22"
 
 
 @pytest.mark.freeze_time(MOCK_TIME)
-@pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db_with_users", "client_mode", "tzlocal_is_mtl")
+def test_load_job_series_with_users(file_regression):
+    """Test job to user mapping.
+
+    NB: With current testing:
+    - jobs from users `petitbonhomme` will always find him in both DRAC and mila clusters
+      (note that his username on mila cluster is `petitbonhome_mila`).
+    - jobs from user `bonhomme` won't find him on a DRAC cluster because he does not have a DRAC account.
+    - jobs from user `grosbonhomme` won't find him anywhere, because he's not registered as a user.
+    - jobs from user `beaubonhomme` will always find him as for `petitbonhomme`,
+      but he has only 1 job, on a DRAC cluster.
+
+    Matching can be checked in ./test_func_load_job_series/test_load_job_series_with_users.txt
+    """
+    assert len(get_users()) == 3
+    data_frame = load_job_series()
+    expected_columns = sorted(ALL_COLUMNS + USER_COLUMNS)
+    assert sorted(data_frame.keys().tolist()) == expected_columns
+
+    str_view = data_frame[
+        ["job_id", "cluster_name", "user"] + USER_COLUMNS
+    ].to_markdown()
+    file_regression.check(
+        f"Found 4 users and {data_frame.shape[0]} job(s):\n\n{str_view}"
+    )
+
+
+@pytest.mark.freeze_time(MOCK_TIME)
+@pytest.mark.usefixtures("read_only_db_with_users", "client_mode", "tzlocal_is_mtl")
+def test_load_job_series_without_user_column(file_regression):
+    """Test job to user mapping when data frame does not contain `user` column.
+
+    If `user` column is not available, one can't map job to user,
+    then users column should not be added to frame.
+    """
+    # Check we have users in database
+    assert len(get_users()) == 3
+    # But load job series only with columns `job_id` and `cluster_name`, ie. without column `user`
+    data_frame = load_job_series(fields=["job_id", "cluster_name"])
+    # So, we won't have users columns in data frame
+    expected_columns = sorted(["job_id", "cluster_name"])
+    assert sorted(data_frame.keys().tolist()) == expected_columns
+
+    str_view = data_frame[["job_id", "cluster_name"]].to_markdown()
+    file_regression.check(
+        f"Found 4 users and {data_frame.shape[0]} job(s):\n\n{str_view}"
+    )
+
+
+@pytest.mark.freeze_time(MOCK_TIME)
+@pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
 @pytest.mark.parametrize("params", parameters.values(), ids=parameters.keys())
 def test_load_job_series(params, file_regression, captrace):
     data_frame = load_job_series(**params)
@@ -119,7 +206,7 @@ def test_load_job_series(params, file_regression, captrace):
     assert spans[0].name == "load_job_series"
 
 
-@pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
 @pytest.mark.parametrize("params", [parameters["no_cluster"]], ids=["no_cluster"])
 def test_load_job_series_check_end_times(params):
     # Get jobs
@@ -210,7 +297,7 @@ def test_load_job_series_with_stored_statistics(monkeypatch):
     re_frame = load_job_series(**params)
     assert re_jobs
     for i, re_job in enumerate(re_jobs):
-        stats = re_job.stored_statistics.dict()
+        stats = re_job.stored_statistics.model_dump()
         assert re_frame["system_memory"][i] == stats["system_memory"]["max"]
         assert re_frame["gpu_memory"][i] == stats["gpu_memory"]["max"]
         assert re_frame["gpu_utilization"][i] == stats["gpu_utilization"]["median"]
@@ -227,7 +314,68 @@ def test_load_job_series_with_stored_statistics(monkeypatch):
         assert all(not math.isnan(value) for value in re_frame[label])
 
 
-@pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_write_db", "tzlocal_is_mtl")
+def test_load_job_series_with_bad_gpu_utilization(file_regression):
+    """Check that gpu_utilization > 1 is replaced with nan in job series."""
+
+    # Check default situation: gpu_utilization is None
+    jobs = list(get_jobs())
+    frame = load_job_series()
+    assert jobs
+    for job in jobs:
+        assert not job.stored_statistics
+    assert all(math.isnan(value) for value in frame["gpu_utilization"])
+
+    # Save job statistics with gpu_utilization manually set.
+    for i, job in enumerate(jobs):
+        # Half of jobs will have gpu_utilization > 1, and should be set to nan in job series
+        job.stored_statistics = JobStatistics(
+            gpu_utilization=Statistics(
+                median=2 * (i + 1) / len(jobs),
+                mean=0,
+                std=0,
+                q05=0,
+                q25=0,
+                q75=0,
+                max=0,
+                unused=0,
+            )
+        )
+        job.save()
+
+    # Generate new data frame.
+    re_jobs = list(get_jobs())
+    re_frame = load_job_series()
+
+    # String representation for jobs
+    jobs_markdown = pandas.DataFrame(
+        {
+            "cluster_name": [job.cluster_name for job in re_jobs],
+            "job_id": [job.job_id for job in re_jobs],
+            "gpu_utilization": [
+                job.stored_statistics.gpu_utilization.median for job in re_jobs
+            ],
+        }
+    ).to_markdown()
+
+    # String representation for job series.
+    series_markdown = re_frame[
+        ["cluster_name", "job_id", "gpu_utilization"]
+    ].to_markdown()
+
+    # For jobs, we expect values in gpu_utilization column.
+    # For job series, we expect nan for any gpu_utilization > 1.
+    file_regression.check(
+        f"gpu_utilization:\n"
+        f"================\n\n"
+        f"Jobs:\n"
+        f"{jobs_markdown}\n\n"
+        f"Job series:\n"
+        f"{series_markdown}\n"
+    )
+
+
+@pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
 @pytest.mark.parametrize("params", few_parameters.values(), ids=few_parameters.keys())
 def test_load_job_series_fields_list(params, file_regression):
     fields = ["gpu_memory", "allocated.mem", "requested.mem", "user", "work_dir"]
@@ -239,7 +387,7 @@ def test_load_job_series_fields_list(params, file_regression):
     )
 
 
-@pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
 @pytest.mark.parametrize("params", few_parameters.values(), ids=few_parameters.keys())
 def test_load_job_series_fields_dict(params, file_regression):
     fields = {
@@ -258,7 +406,7 @@ def test_load_job_series_fields_dict(params, file_regression):
 
 
 @pytest.mark.freeze_time(MOCK_TIME)
-@pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
 @pytest.mark.parametrize("params", param_start_end.values(), ids=param_start_end.keys())
 def test_load_job_series_clip_time_true(params, file_regression):
     assert "start" in params
@@ -274,7 +422,7 @@ def test_load_job_series_clip_time_true(params, file_regression):
 
 
 @pytest.mark.freeze_time(MOCK_TIME)
-@pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
 @pytest.mark.parametrize("params", param_start_end.values(), ids=param_start_end.keys())
 def test_load_job_series_clip_time_false(params, file_regression):
     assert "start" in params
@@ -287,17 +435,17 @@ def test_load_job_series_clip_time_false(params, file_regression):
     )
 
 
-@pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
 @pytest.mark.parametrize(
     "params", params_no_start_or_end.values(), ids=params_no_start_or_end.keys()
 )
 def test_load_job_series_clip_time_true_no_start_or_end(params, file_regression):
-    with pytest.raises(ValueError, match="Clip time\: missing (start|end)"):
+    with pytest.raises(ValueError, match=r"Clip time\: missing (start|end)"):
         load_job_series(clip_time=True, **params)
 
 
 @pytest.mark.freeze_time(MOCK_TIME)
-@pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
 @pytest.mark.parametrize("params", few_parameters.values(), ids=few_parameters.keys())
 def test_load_job_series_callback(params, file_regression):
     def callback(rows):
@@ -315,7 +463,7 @@ def test_load_job_series_callback(params, file_regression):
     )
 
 
-@pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
 @pytest.mark.parametrize("params", param_start_end.values(), ids=param_start_end.keys())
 def test_load_job_series_all_args(params, file_regression):
     def callback(rows):

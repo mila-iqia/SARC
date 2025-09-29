@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import prometheus_api_client.prometheus_connect
 import pytest
@@ -187,7 +187,6 @@ def test_generate_label_configs_no_node_id_cluster_name():
         ),
     ],
 )
-@pytest.mark.usefixtures("standard_config")
 def test_query_prom(
     metric_name, label_config, start, end, running_window, ground_truth, monkeypatch
 ):
@@ -221,8 +220,8 @@ def test_get_nodes_time_series_default_end(freezer, monkeypatch):
     def fake_sleep(cluster, metric_name, label_config, start, end, running_window):
         freezer.move_to(f"2023-01-01 00:{fake_sleep.i}:00")
         fake_sleep.i += 1
-        assert end == datetime(year=2023, month=1, day=1)
-        assert end != datetime.utcnow()
+        assert end == datetime(year=2023, month=1, day=1, tzinfo=UTC)
+        assert end != datetime.now(UTC)
         return [
             {
                 "metric": {
@@ -251,7 +250,6 @@ def test_get_nodes_time_series_default_end(freezer, monkeypatch):
     )
 
 
-@pytest.mark.usefixtures("standard_config")
 @pytest.mark.freeze_time("2023-01-01")
 def test_get_nodes_time_series_queries(monkeypatch):
     expected = [
@@ -304,7 +302,6 @@ def test_get_nodes_time_series_queries(monkeypatch):
         assert df[df["query"] == query].shape == (8, 4)
 
 
-@pytest.mark.usefixtures("standard_config")
 @pytest.mark.freeze_time("2023-01-01")
 def test_get_nodes_time_series_empty_result(monkeypatch):
     def mixed_results(self, query):

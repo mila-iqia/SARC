@@ -1,0 +1,107 @@
+Found 3 users(s):
+{
+    "name": "M/Ms Bonhomme",
+    "mila": {
+        "username": "bonhomme_mila",
+        "email": "bonhomme@mila.quebec",
+        "active": true
+    },
+    "drac": null,
+    "teacher_delegations": null,
+    "mila_ldap": {
+        "co_supervisor": null,
+        "display_name": "M/Ms Bonhomme",
+        "mila_cluster_gid": "1500000003",
+        "mila_cluster_uid": "1500000003",
+        "mila_cluster_username": "bonhomme",
+        "mila_email_username": "bonhomme@mila.quebec",
+        "status": "enabled",
+        "supervisor": null
+    },
+    "drac_members": null,
+    "drac_roles": null,
+    "record_start": "2024-04-11T00:00:00Z",
+    "record_end": null
+}
+{
+    "name": "M/Ms Petitbonhomme",
+    "mila": {
+        "username": "petitbonhomme_mila",
+        "email": "petitbonhomme@mila.quebec",
+        "active": true
+    },
+    "drac": {
+        "username": "petitbonhomme",
+        "email": "petitbonhomme@example.com",
+        "active": true
+    },
+    "teacher_delegations": null,
+    "mila_ldap": {
+        "co_supervisor": null,
+        "display_name": "M/Ms Petitbonhomme",
+        "mila_cluster_gid": "1500000003",
+        "mila_cluster_uid": "1500000003",
+        "mila_cluster_username": "petitbonhomme",
+        "mila_email_username": "petitbonhomme@mila.quebec",
+        "status": "enabled",
+        "supervisor": null
+    },
+    "drac_members": {
+        "activation_status": "activated",
+        "email": "petitbonhomme@example.com",
+        "name": "M/Ms Petitbonhomme",
+        "permission": "Manager",
+        "sponsor": "BigProf",
+        "username": "petitbonhomme"
+    },
+    "drac_roles": {
+        "email": "petitbonhomme@example.com",
+        "nom": "M/Ms Petitbonhomme",
+        "status": "Activated",
+        "username": "petitbonhomme",
+        "état du compte": "activé"
+    },
+    "record_start": "2024-04-11T00:00:00Z",
+    "record_end": null
+}
+{
+    "name": "M/Ms Beaubonhomme",
+    "mila": {
+        "username": "beaubonhomme_mila",
+        "email": "beaubonhomme@mila.quebec",
+        "active": true
+    },
+    "drac": {
+        "username": "beaubonhomme",
+        "email": "beaubonhomme@example.com",
+        "active": true
+    },
+    "teacher_delegations": null,
+    "mila_ldap": {
+        "co_supervisor": null,
+        "display_name": "M/Ms Beaubonhomme",
+        "mila_cluster_gid": "1500000003",
+        "mila_cluster_uid": "1500000003",
+        "mila_cluster_username": "beaubonhomme",
+        "mila_email_username": "beaubonhomme@mila.quebec",
+        "status": "enabled",
+        "supervisor": null
+    },
+    "drac_members": {
+        "activation_status": "activated",
+        "email": "beaubonhomme@example.com",
+        "name": "M/Ms Beaubonhomme",
+        "permission": "Manager",
+        "sponsor": "BigProf",
+        "username": "beaubonhomme"
+    },
+    "drac_roles": {
+        "email": "beaubonhomme@example.com",
+        "nom": "M/Ms Beaubonhomme",
+        "status": "Activated",
+        "username": "beaubonhomme",
+        "état du compte": "activé"
+    },
+    "record_start": "2024-04-11T00:00:00Z",
+    "record_end": null
+}

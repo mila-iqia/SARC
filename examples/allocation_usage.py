@@ -3,12 +3,11 @@ from datetime import date, timezone
 
 import matplotlib.pyplot as plt
 import pandas as pd
-import seaborn as sns
 from tqdm import tqdm
 
 from sarc.allocations import get_allocation_summaries
+from sarc.client.job import get_jobs
 from sarc.config import config
-from sarc.jobs import get_jobs
 
 # Clusters we want to compare
 clusters = ["narval", "beluga", "cedar", "graham"]

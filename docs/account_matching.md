@@ -24,9 +24,9 @@ We will explain the pipeline from Mila LDAP and CC reports to populate those ent
 ```
 export MONGODB_CONNECTION_STRING='mongodb://127.0.0.1:27017'
 
-python3 sarc/ldap/read_mila_ldap.py \
-    --local_private_key_file secrets/ldap/Google_2026_01_26_66827.key \
-    --local_certificate_file secrets/ldap/Google_2026_01_26_66827.crt \
+python3 sarc/users/read_mila_ldap.py \
+    --local_private_key_file ../SARC_secrets/secrets/ldap/Google_2026_01_26_66827.key \
+    --local_certificate_file ../SARC_secrets/secrets/ldap/Google_2026_01_26_66827.crt \
     --ldap_service_uri ldaps://ldap.google.com \
     --mongodb_connection_string ${MONGODB_CONNECTION_STRING} \
     --output_json_file mila_users.json
@@ -34,7 +34,7 @@ python3 sarc/ldap/read_mila_ldap.py \
 
 This command has two effects:
 - It updates the values in the database collection "users".
-- It generates a file like the one found in `secrets/account_matching/2022-11-26_mila_users.json`.
+- It generates a file like the one found in `../SARC_secrets/secrets/account_matching/2022-11-26_mila_users.json`.
 
 When the `--mongodb_connection_string` argument is omitted, nothing happens with the database.
 
@@ -63,10 +63,10 @@ This script could be rewritten to avoid such a situation.
 export PYTHONPATH=$PYTHONPATH:`pwd`
 
 python3 sarc/account_matching/make_matches.py \
-    --config_path secrets/account_matching/make_matches_config.json \
-    --mila_ldap_path secrets/account_matching/2022-11-26_mila_users.json \
-    --drac_members_path secrets/account_matching/members-rrg-bengioy-ad-2022-11-25.csv \
-    --drac_roles_path 'secrets/account_matching/sponsored_roles_for_Yoshua_Bengio_(CCI_jvb-000).csv' \
+    --config_path ../SARC_secrets/secrets/account_matching/make_matches_config.json \
+    --mila_ldap_path ../SARC_secrets/secrets/account_matching/2022-11-26_mila_users.json \
+    --drac_members_path ../SARC_secrets/secrets/account_matching/members-rrg-bengioy-ad-2022-11-25.csv \
+    --drac_roles_path '../SARC_secrets/secrets/account_matching/sponsored_roles_for_Yoshua_Bengio_(CCI_jvb-000).csv' \
     --output_path matches_done.json
 ```
 

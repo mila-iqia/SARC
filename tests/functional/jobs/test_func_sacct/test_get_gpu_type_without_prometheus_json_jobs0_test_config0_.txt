@@ -27,7 +27,9 @@ Found 1 job(s):
     "submit_time": "2023-02-14T00:00:00-05:00",
     "start_time": "2023-02-14T00:01:00-05:00",
     "end_time": "2023-02-14T12:01:00-05:00",
-    "elapsed_time": 43200,
+    "elapsed_time": 43200.0,
+    "latest_scraped_start": "2023-02-15T00:00:00-05:00",
+    "latest_scraped_end": "2023-02-16T00:00:00-05:00",
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -42,7 +44,7 @@ Found 1 job(s):
         "node": 1,
         "billing": 1,
         "gres_gpu": 1,
-        "gpu_type": "gpu:asupergpu:4"
+        "gpu_type": "Nec Plus ULTRA GPU 2000"
     },
     "stored_statistics": null
 }

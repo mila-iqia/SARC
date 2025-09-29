@@ -1,5 +1,5 @@
 import pytest
-from opentelemetry.trace import Status, StatusCode, get_tracer
+from opentelemetry.trace import StatusCode
 
 from sarc.traces import trace_decorator
 

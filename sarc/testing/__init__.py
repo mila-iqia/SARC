@@ -21,6 +21,7 @@ def popen_reader(state, function, args, env, shell=False):
 
                 if len(line) > 0:
                     function(line.strip(), state)
+                print(line, end="")
 
             return sys.exit(process.poll())
         except KeyboardInterrupt:
@@ -53,6 +54,7 @@ class MongoInstance:
         write_pass="write_pass",
         user_name="user_name",
         user_pass="user_pass",
+        sarc_config=None,
     ) -> None:
         self.env = {
             "MONGO_PORT": f"{port}",
@@ -66,6 +68,7 @@ class MongoInstance:
             "READUSER_NAME": user_name,
             "READUSER_PWD": user_pass,
             "LAUNCH_MONGO": "1",
+            "SARC_CONFIG": sarc_config or os.getenv("SARC_CONFIG", ""),
         }
         self.path = path
         self.manager = multiprocessing.Manager()
@@ -83,7 +86,7 @@ class MongoInstance:
             ["bash", "-c", f". {self.script} && mongo_stop"],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-            env={**os.environ, **self.env, **{"LAUNCH_MONGO": "0"}},
+            env={**os.environ, **self.env, "LAUNCH_MONGO": "0"},
         )
 
     def __enter__(self):

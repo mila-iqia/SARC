@@ -1,0 +1,14 @@
+sarc:
+  health_monitor:
+    checks:
+      many_beans:
+        $class: "tests.unittests.alerts.definitions:BeanCheck"
+        active: true
+        interval: 2h
+        beans: 31
+        depends: evil_beans
+      evil_beans:
+        $class: "tests.unittests.alerts.definitions:BeanCheck"
+        active: true
+        interval: 1h
+        beans: 666

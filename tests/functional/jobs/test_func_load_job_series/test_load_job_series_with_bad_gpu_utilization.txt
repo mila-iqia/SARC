@@ -1,0 +1,58 @@
+gpu_utilization:
+================
+
+Jobs:
+|    | cluster_name   |    job_id |   gpu_utilization |
+|---:|:---------------|----------:|------------------:|
+|  0 | raisin         |         1 |         0.0833333 |
+|  1 | raisin         |         2 |         0.166667  |
+|  2 | raisin         |         3 |         0.25      |
+|  3 | raisin         |         4 |         0.333333  |
+|  4 | raisin         |         5 |         0.416667  |
+|  5 | raisin         |         6 |         0.5       |
+|  6 | raisin         |         7 |         0.583333  |
+|  7 | raisin         |         8 |         0.666667  |
+|  8 | raisin         |         9 |         0.75      |
+|  9 | raisin         |        10 |         0.833333  |
+| 10 | raisin         |        11 |         0.916667  |
+| 11 | raisin         |        12 |         1         |
+| 12 | raisin         |        13 |         1.08333   |
+| 13 | raisin         |        14 |         1.16667   |
+| 14 | fromage        |        15 |         1.25      |
+| 15 | patate         |        16 |         1.33333   |
+| 16 | raisin         |        17 |         1.41667   |
+| 17 | raisin         |        18 |         1.5       |
+| 18 | mila           |        19 |         1.58333   |
+| 19 | raisin         |        20 |         1.66667   |
+| 20 | raisin         |   1000000 |         1.75      |
+| 21 | raisin         |   1000000 |         1.83333   |
+| 22 | raisin         |        23 |         1.91667   |
+| 23 | mila           | 999999999 |         2         |
+
+Job series:
+|    | cluster_name   |    job_id |   gpu_utilization |
+|---:|:---------------|----------:|------------------:|
+|  0 | raisin         |         1 |         0.0833333 |
+|  1 | raisin         |         2 |         0.166667  |
+|  2 | raisin         |         3 |         0.25      |
+|  3 | raisin         |         4 |         0.333333  |
+|  4 | raisin         |         5 |         0.416667  |
+|  5 | raisin         |         6 |         0.5       |
+|  6 | raisin         |         7 |         0.583333  |
+|  7 | raisin         |         8 |         0.666667  |
+|  8 | raisin         |         9 |         0.75      |
+|  9 | raisin         |        10 |         0.833333  |
+| 10 | raisin         |        11 |         0.916667  |
+| 11 | raisin         |        12 |         1         |
+| 12 | raisin         |        13 |       nan         |
+| 13 | raisin         |        14 |       nan         |
+| 14 | fromage        |        15 |       nan         |
+| 15 | patate         |        16 |       nan         |
+| 16 | raisin         |        17 |       nan         |
+| 17 | raisin         |        18 |       nan         |
+| 18 | mila           |        19 |       nan         |
+| 19 | raisin         |        20 |       nan         |
+| 20 | raisin         |   1000000 |       nan         |
+| 21 | raisin         |   1000000 |       nan         |
+| 22 | raisin         |        23 |       nan         |
+| 23 | mila           | 999999999 |       nan         |

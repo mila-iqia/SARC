@@ -10,19 +10,23 @@ we have to keep this private, despite how convenient it would be at times to
 have some statements like `if name == "johnappleseed@mila.quebec"`.
 
 These all need to come from a specific configuration file, and that file is include
-with the other secrets in the "secrets/account_matching" directory.
+with the other secrets in the "../SARC_secrets/secrets/account_matching" directory.
 """
 
 import copy
 import csv
 import json
 import logging
-from pathlib import PosixPath
+from pathlib import Path
 
 from sarc.account_matching import name_distances
 
+logger = logging.getLogger(__name__)
 
-def load_data_from_files(data_paths):
+
+def load_data_from_files(
+    data_paths: dict[str, Path | list[dict[str, str]]],
+) -> dict[str, list[dict[str, str]]]:
     """
     Takes in a dict of paths to data files, and returns a dict of the data.
         data_paths = {
@@ -41,10 +45,10 @@ def load_data_from_files(data_paths):
     we can just return it directly.
     """
 
-    def dict_to_lowercase(D):
+    def dict_to_lowercase[T](D: dict[str, T]) -> dict[str, T]:
         return dict((k.lower(), v) for (k, v) in D.items())
 
-    data = {}
+    data: dict[str, list[dict[str, str]]] = {}
     for k, v in data_paths.items():
         if isinstance(v, list):
             # pass through
@@ -52,11 +56,11 @@ def load_data_from_files(data_paths):
         else:
             with open(v, "r", encoding="utf-8") as f_in:
                 if (isinstance(v, str) and v.endswith("csv")) or (
-                    isinstance(v, PosixPath) and v.suffix == ".csv"
+                    isinstance(v, Path) and v.suffix == ".csv"
                 ):
                     data[k] = [dict_to_lowercase(D) for D in csv.DictReader(f_in)]
                 elif (isinstance(v, str) and v.endswith("json")) or (
-                    isinstance(v, PosixPath) and v.suffix == ".json"
+                    isinstance(v, Path) and v.suffix == ".json"
                 ):
                     data[k] = json.load(f_in)
                 else:
@@ -66,13 +70,12 @@ def load_data_from_files(data_paths):
 
 def perform_matching(
     # pylint: disable=too-many-branches
-    DLD_data: dict[str, list[dict]],
+    DLD_data: dict[str, list[dict[str, str]]],
     mila_emails_to_ignore: list[str],
     override_matches_mila_to_cc: dict[str, str],
-    name_distance_delta_threshold=2,  # mostly for testing
-    verbose=False,
-    prompt=False,
-):
+    name_distance_delta_threshold: int = 2,  # mostly for testing
+    verbose: bool = False,
+) -> dict[str, dict[str, dict[str, str] | None]]:
     """
     This is the function with the core functionality.
     The rest is just a wrapper. At this point, this function
@@ -80,16 +83,9 @@ def perform_matching(
     fetch things from the `config` or to the `database`.
     All the SARC-related tasks are done outside of this function.
 
-    If `prompt` is True, a command-line prompt will be provided
-    everywhere manual matching is required.
-
-    Returns a couple containing:
-    - a dict of dicts, indexed by @mila.quebec email addresses,
-      and containing entries of the form
+    Returns a dict of dicts, indexed by @mila.quebec email addresses,
+    and containing entries of the form
         {"mila_ldap": {...}, "drac_roles": {...}, "drac_members": {...}}
-    - a dict of new manual matches occurred during matching,
-      mapping a mila email to a DRAC username. As manual
-      matches rely on prompt, dict will be empty if prompt is False.
     """
 
     # because this function feels entitled to modify the input data
@@ -112,7 +108,7 @@ def perform_matching(
 
     if "drac_roles" in DLD_data:
         DLD_data["drac_roles"] = [
-            D for D in DLD_data["drac_roles"] if D["status"].lower() in ["activated"]
+            D for D in DLD_data["drac_roles"] if D["status"].lower() == "activated"
         ]
         # because "John.Appleseed@mila.quebec" wrote their email with uppercases
         for e in DLD_data["drac_roles"]:
@@ -121,7 +117,7 @@ def perform_matching(
     # Dict indexed by @mila.quebec email addresses
     # with 3 subdicts : "mila_ldap", "drac_roles", "drac_members"
     # that contains all the information that we could match.
-    DD_persons = {}
+    DD_persons: dict[str, dict[str, dict[str, str] | None]] = {}
     for D in DLD_data["mila_ldap"]:
         DD_persons[D["mila_email_username"]] = {}
         DD_persons[D["mila_email_username"]]["mila_ldap"] = D
@@ -137,7 +133,7 @@ def perform_matching(
         if drac_source not in DLD_data:
             # we might not have all three source files
             if verbose:
-                logging.warning(f"{drac_source} file missing !")
+                logger.warning(f"{drac_source} file missing !")
             continue
         LD_members = _how_many_drac_accounts_with_mila_emails(
             DLD_data, drac_source, verbose=verbose
@@ -146,16 +142,16 @@ def perform_matching(
             assert D_member["email"].endswith("@mila.quebec")
             if D_member["email"] in S_mila_emails_to_ignore:
                 if verbose:
-                    logging.info(f'Ignoring phantom {D_member["email"]} (ignore list).')
+                    logger.info(f"Ignoring phantom {D_member['email']} (ignore list).")
                 continue
             if D_member["email"] not in DD_persons:
                 # we WANT to create an entry in DD_persons with the mila username, and the name from the cc_source !
                 if verbose:
-                    logging.info(
-                        f'Creating phantom profile for {D_member["email"]} (automatic).'
+                    logger.info(
+                        f"Creating phantom profile for {D_member['email']} (automatic)."
                     )
                 DD_persons[D_member["email"]] = {}
-                mila_ldap = {}
+                mila_ldap: dict[str, str] = {}
                 mila_ldap["mila_email_username"] = D_member["email"]
                 mila_ldap["mila_cluster_username"] = D_member["email"].split("@")[0]
                 mila_ldap["mila_cluster_uid"] = "0"
@@ -174,34 +170,27 @@ def perform_matching(
     # We have 42 drac_roles accounts with @mila.quebec, out of 610.
 
     # Matching.
-    new_manual_matches = _matching_names(
-        DLD_data, DD_persons, name_distance_delta_threshold, prompt
-    )
+    _matching_names(DLD_data, DD_persons, name_distance_delta_threshold)
 
-    # NB: In any case (even with prompt), match overriding is applied.
-    # This means that even a manually-prompted matching may be overriden
-    # if related mila username is present in override_matches_mila_to_cc.
-    # Is it what we want ?
+    # NB: In any case, match overriding is applied.
     _manual_matching(DLD_data, DD_persons, override_matches_mila_to_cc)
 
     if verbose:
         _make_matches_status_report(DLD_data, DD_persons)
 
-    return DD_persons, new_manual_matches
+    return DD_persons
 
 
-def _matching_names(DLD_data, DD_persons, name_distance_delta_threshold, prompt=False):
+def _matching_names(
+    DLD_data: dict[str, list[dict[str, str]]],
+    DD_persons: dict[str, dict[str, dict[str, str] | None]],
+    name_distance_delta_threshold: int,
+) -> None:
     """
     Substep of the `perform_matching` function.
     Mutates the entries of `DD_persons` in-place.
-    First argument names are the same as in the body of `perform_matching`.
-    If `prompt` is True, a prompt is provided to solve ambiguous cases.
-
-    Return a dictionary of manual matches,
-    mapping a mila email to manually-associated DRAC username.
+    All argument names are the same as in the body of `perform_matching`.
     """
-
-    mila_email_to_cc_username = {}
 
     for name_or_nom, cc_source in [("name", "drac_members"), ("nom", "drac_roles")]:
         # Get 10 best matches for each mila display name.
@@ -213,8 +202,6 @@ def _matching_names(DLD_data, DD_persons, name_distance_delta_threshold, prompt=
 
         # Get best match for each mila display name.
         for mila_display_name, best_matches in LP_best_name_matches:
-            match_is_manual = False
-
             # Try to make match if we find only 1 match <= threshold.
             matches_under_threshold = [
                 match
@@ -223,14 +210,6 @@ def _matching_names(DLD_data, DD_persons, name_distance_delta_threshold, prompt=
             ]
             if len(matches_under_threshold) == 1:
                 cc_match = matches_under_threshold[0][1]
-
-            # Otherwise, prompt if allowed (manual match).
-            elif prompt:
-                cc_match = _prompt_manual_match(
-                    mila_display_name, cc_source, [match[1] for match in best_matches]
-                )
-                match_is_manual = True
-
             # Else, do not match.
             else:
                 cc_match = None
@@ -242,7 +221,7 @@ def _matching_names(DLD_data, DD_persons, name_distance_delta_threshold, prompt=
                 D_person_found = [
                     D_person
                     for D_person in DD_persons.values()
-                    if D_person["mila_ldap"]["display_name"] == mila_display_name
+                    if D_person["mila_ldap"]["display_name"] == mila_display_name  # type: ignore[index]
                 ][0]
                 # Find match that corresponds to `cc_match`.
                 match = [e for e in DLD_data[cc_source] if e[name_or_nom] == cc_match][
@@ -256,59 +235,7 @@ def _matching_names(DLD_data, DD_persons, name_distance_delta_threshold, prompt=
                 # Update new match anyway.
                 D_person_found[cc_source] = match
 
-                # If match is manual, save it in output dictionary.
-                if match_is_manual:
-                    mila_email = D_person_found["mila_ldap"]["mila_email_username"]
-                    cc_username = match["username"]
-                    mila_email_to_cc_username[mila_email] = cc_username
-
                 del D_person_found
-
-    return mila_email_to_cc_username
-
-
-def _prompt_manual_match(mila_display_name, cc_source, best_matches):
-    """
-    Sub-step of `_matching_names_with_prompt`
-
-    Prompt script user to select a `cc_source` match for `mila_display_name`
-    in `best_matches` choices.
-
-    Return selected match, or None if script user did not make a choice.
-    """
-    prompt_message = (
-        f"\n"
-        f"Ambiguous {cc_source}. "
-        f"Type a number to choose match for: {mila_display_name} "
-        f"(default: matching ignored):\n"
-        + "\n".join(f"[{i}] {match}" for i, match in enumerate(best_matches))
-        + "\n"
-    )
-
-    # Loop as long as we don't get a valid prompt.
-    while True:
-        prompted_answer = input(prompt_message).strip()
-        try:
-            if prompted_answer:
-                # Parse input if available.
-                index_match = int(prompted_answer)
-                cc_match = best_matches[index_match]
-            else:
-                # Otherwise, match is ignored.
-                cc_match = None
-            break
-        except (ValueError, IndexError) as exc:
-            # We may get a value error from parsing,
-            # or an index error when selecting a match.
-            print("Invalid index:", exc)
-            # Re-prompt.
-
-    if cc_match:
-        logging.info(f"[prompt] {mila_display_name} (matched with) {cc_match}")
-    else:
-        logging.info(f"[prompt] {mila_display_name} (ignored)")
-
-    return cc_match
 
 
 def _manual_matching(DLD_data, DD_persons, override_matches_mila_to_cc):
@@ -335,15 +262,16 @@ def _manual_matching(DLD_data, DD_persons, override_matches_mila_to_cc):
             drac_account_username,
         ) in override_matches_mila_to_cc.items():
             if mila_email_username not in DD_persons:
-                raise ValueError(
-                    f'"{mila_email_username}" is not found in the actual sources.'
-                    "This was supplied to `override_matches_mila_to_cc` in the `make_matches.py` file, "
+                msg = (
+                    f'"{mila_email_username}" is not found in the actual sources.\n'
+                    f"This was supplied to `override_matches_mila_to_cc` in the `make_matches.py` file, "
                     f"but there are not such entries in LDAP.\n"
-                    "Someone messed up the manual matching by specifying a Mila email username that does not exist."
+                    f"Someone messed up the manual matching by specifying a Mila email username that does not exist, or not ANYMORE."
                 )
+                logger.error(msg)
             # Note that `matching[drac_account_username]` is itself a dict
             # with user information from CC. It's not just a username string.
-            if drac_account_username in matching:
+            elif drac_account_username in matching:
                 assert isinstance(matching[drac_account_username], dict)
                 DD_persons[mila_email_username][drac_source] = matching[
                     drac_account_username
@@ -374,10 +302,10 @@ def _make_matches_status_report(DLD_data, DD_persons):
         else:
             disabled_count += 1
 
-    logging.info(
+    logger.info(
         f"We have {enabled_count} enabled accounts and {disabled_count} disabled accounts."
     )
-    logging.info(
+    logger.info(
         f"Out of those enabled accounts, there are {good_count} successful matches "
         f"and {bad_count} failed matches."
     )
@@ -392,7 +320,7 @@ def _make_matches_status_report(DLD_data, DD_persons):
                 if D["activation_status"] in ["activated"]
             ]
         )
-        logging.info(f"We have {count_drac_members_activated} activated drac_members.")
+        logger.info(f"We have {count_drac_members_activated} activated drac_members.")
 
         # let's try to be more precise about things to find the missing accounts
         set_A = {
@@ -405,10 +333,12 @@ def _make_matches_status_report(DLD_data, DD_persons):
             for D_person in DD_persons.values()
             if D_person.get("drac_members", None) is not None
         }
-        logging.info(
-            "We could not find matches in the Mila LDAP for the CC accounts "
-            f"associated with the following emails: {set_A.difference(set_B)}."
-        )
+        diff = sorted(set_A.difference(set_B))
+        if diff:
+            logger.warning(
+                "We could not find matches in the Mila LDAP for the CC accounts "
+                f"associated with the following {len(diff)} emails: {diff}."
+            )
 
     # see "account_matching.md" for some explanations on the edge cases handled
 
@@ -416,7 +346,7 @@ def _make_matches_status_report(DLD_data, DD_persons):
         count_drac_roles_activated = len(
             [D for D in DLD_data["drac_roles"] if D["status"].lower() in ["activated"]]
         )
-        logging.info(f"We have {count_drac_roles_activated} activated drac_roles.")
+        logger.info(f"We have {count_drac_roles_activated} activated drac_roles.")
 
 
 def _how_many_drac_accounts_with_mila_emails(
@@ -430,8 +360,12 @@ def _how_many_drac_accounts_with_mila_emails(
     ]
 
     if verbose:
-        logging.info(
+        logger.info(
             f"We have {len(LD_members)} {drac_source} accounts with @mila.quebec, "
-            f"out of {len(data['drac_members'])}."
+            f"out of {len(data[drac_source])}."
         )
+
+    # Sort by email, to make logging easier to understand
+    LD_members.sort(key=lambda D_member: D_member["email"])
+
     return LD_members

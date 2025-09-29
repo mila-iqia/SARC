@@ -3,9 +3,9 @@ import datetime
 import pytest
 
 
-@pytest.mark.usefixtures("client_config")
+@pytest.mark.usefixtures("client_mode")
 def test_query():
-    from sarc.tempo import query
+    from sarc.client.tempo import query
 
     id = "2f3e0cee77ae5dc9c17ade3689eb2e54"
     start = datetime.datetime(2023, 5, 1, tzinfo=datetime.timezone.utc)

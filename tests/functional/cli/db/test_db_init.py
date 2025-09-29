@@ -1,3 +1,4 @@
+import pymongo
 import pytest
 
 from sarc.config import config
@@ -13,12 +14,40 @@ def test_db_init(cli_main):
     # from sarc.jobs.job import SlurmJobRepository
     # from sarc.storage.diskusage import ClusterDiskUsageRepository
 
-    for collection_name in ["jobs", "allocations", "diskusage", "users", "clusters"]:
+    for collection_name in [
+        "jobs",
+        "allocations",
+        "diskusage",
+        "users",
+        "clusters",
+        "gpu_billing",
+        "node_gpu_mapping",
+    ]:
         collection = db[collection_name]
         assert not collection.index_information()
 
     cli_main(["db", "init"])
 
-    for collection_name in ["jobs", "allocations", "diskusage", "users", "clusters"]:
+    for collection_name in [
+        "jobs",
+        "allocations",
+        "diskusage",
+        "users",
+        "clusters",
+        "gpu_billing",
+        "node_gpu_mapping",
+    ]:
         collection = db[collection_name]
         assert collection.index_information()
+
+    scraped_time_index = [
+        index
+        for index in db["jobs"].index_information().values()
+        if index["key"]
+        == [
+            ("cluster_name", pymongo.ASCENDING),
+            ("latest_scraped_start", pymongo.ASCENDING),
+            ("latest_scraped_end", pymongo.ASCENDING),
+        ]
+    ]
+    assert len(scraped_time_index) == 1

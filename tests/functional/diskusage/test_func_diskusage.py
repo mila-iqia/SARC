@@ -1,4 +1,3 @@
-import os
 from datetime import date
 
 import pytest
@@ -29,5 +28,5 @@ def test_get_diskusage(params, data_regression):
     data = get_diskusages(**params)
 
     data_regression.check(
-        [allocation.json(exclude={"id": True}) for allocation in data]
+        [allocation.model_dump(exclude={"id": True}) for allocation in data]
     )

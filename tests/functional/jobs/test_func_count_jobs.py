@@ -2,9 +2,8 @@ from datetime import datetime
 
 import pytest
 
+from sarc.client.job import count_jobs, get_job, get_jobs
 from sarc.config import MTL, config
-from sarc.jobs import count_jobs, get_jobs
-from sarc.jobs.job import get_job
 
 parameters = {
     "no_cluster": {},
@@ -27,14 +26,16 @@ parameters = {
 }
 
 
-@pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
 @pytest.mark.parametrize("params", parameters.values(), ids=parameters.keys())
 def test_count_jobs(params, file_regression):
     jobs = list(get_jobs(**params))
     assert len(jobs) == count_jobs(**params)
     file_regression.check(
         f"Found {len(jobs)} job(s):\n"
-        + "\n".join([job.json(exclude={"id": True}, indent=4) for job in jobs])
+        + "\n".join(
+            [job.model_dump_json(exclude={"id": True}, indent=4) for job in jobs]
+        )
     )
 
 
@@ -44,17 +45,19 @@ def test_count_jobs_cluster_cfg(file_regression):
     assert len(jobs) == count_jobs(cluster=config().clusters["fromage"])
     file_regression.check(
         f"Found {len(jobs)} job(s):\n"
-        + "\n".join([job.json(exclude={"id": True}, indent=4) for job in jobs])
+        + "\n".join(
+            [job.model_dump_json(exclude={"id": True}, indent=4) for job in jobs]
+        )
     )
 
 
-@pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
 def test_count_jobs_wrong_job_id():
     with pytest.raises(TypeError, match="job_id must be an int or a list of ints"):
         count_jobs(job_id="wrong id")
 
 
-@pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
 def test_count_job():
     jbs = list(get_jobs(cluster="patate"))
     assert len(jbs) == count_jobs(cluster="patate")
@@ -62,7 +65,7 @@ def test_count_job():
     assert jb in jbs
 
 
-@pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
 def test_get_job_resubmitted():
     assert count_jobs(job_id=1_000_000) == 2
     jb1, jb2 = get_jobs(job_id=1_000_000)

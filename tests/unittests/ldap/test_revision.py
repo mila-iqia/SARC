@@ -5,8 +5,8 @@ from datetime import datetime
 import pytest
 from pymongo import InsertOne, UpdateOne
 
-from sarc.ldap.revision import commit_matches_to_database as _save_to_mongo
-from sarc.ldap.revision import query_latest_records
+from sarc.users.revision import commit_matches_to_database as _save_to_mongo
+from sarc.users.revision import query_latest_records
 
 
 class MockCollection:
@@ -84,14 +84,14 @@ def test_ldap_update_status_nodb_ldap(status):
     # initial insert
     _save_to_mongo(collection, newusers)
 
-    assert (
-        len(collection.writes) == 1
-    ), "User does not exist in DB, it should do a simple insert"
+    assert len(collection.writes) == 1, (
+        "User does not exist in DB, it should do a simple insert"
+    )
 
     written_user = collection.writes[0]._doc
-    assert (
-        written_user["mila_ldap"]["mila_email_username"] == "user1"
-    ), "The right user should be inserted"
+    assert written_user["mila_ldap"]["mila_email_username"] == "user1", (
+        "The right user should be inserted"
+    )
     assert written_user["record_start"] is not None, "record_start should have been set"
     assert written_user["mila_ldap"]["status"] == status, "status should match ldap"
     assert written_user.get("record_end", None) is None, "record_end should not be set"
@@ -106,35 +106,35 @@ def test_ldap_update_status_db_noldap(status):
     _save_to_mongo(collection, ldap_users)
 
     if status in ("archived",):
-        assert (
-            len(collection.writes) == 0
-        ), "User is already archived, should not updates"
+        assert len(collection.writes) == 0, (
+            "User is already archived, should not updates"
+        )
     else:
-        assert (
-            len(collection.writes) == 2
-        ), "User is in db, but does not exist in ldap, should update & insert"
+        assert len(collection.writes) == 2, (
+            "User is in db, but does not exist in ldap, should update & insert"
+        )
 
         assert isinstance(collection.writes[0], UpdateOne)
         written_user = collection.writes[0]._doc["$set"]
 
-        assert (
-            written_user.get("record_start") is None
-        ), "record_start should NOT be updated"
+        assert written_user.get("record_start") is None, (
+            "record_start should NOT be updated"
+        )
         assert written_user["record_end"] is not None, "record_end should have been set"
         assert len(written_user) == 1, "record should have been left as is"
 
         assert isinstance(collection.writes[1], InsertOne)
         entry_insert = collection.writes[1]._doc
-        assert (
-            entry_insert["mila_ldap"]["mila_email_username"] == "user1"
-        ), "The right user should be inserted"
-        assert (
-            entry_insert["record_start"] is not None
-        ), "record_start should be set set"
+        assert entry_insert["mila_ldap"]["mila_email_username"] == "user1", (
+            "The right user should be inserted"
+        )
+        assert entry_insert["record_start"] is not None, (
+            "record_start should be set set"
+        )
         assert entry_insert.get("record_end") is None, "record_end should NOT be set"
-        assert (
-            entry_insert["mila_ldap"]["status"] == "archived"
-        ), "Status should have been moved to archived"
+        assert entry_insert["mila_ldap"]["status"] == "archived", (
+            "Status should have been moved to archived"
+        )
 
 
 @pytest.mark.parametrize("start,end", transitions())
@@ -157,17 +157,17 @@ def test_ldap_update_status_users_exists_on_both(start, end):
 
         assert isinstance(collection.writes[0], UpdateOne)
         entry_update = collection.writes[0]._doc["$set"]
-        assert (
-            entry_update.get("record_start") is None
-        ), "record_start should have NOT been UPDATED"
+        assert entry_update.get("record_start") is None, (
+            "record_start should have NOT been UPDATED"
+        )
         assert entry_update["record_end"] is not None, "record_end should habe been set"
         assert len(entry_update) == 1, "record should have been left as is"
 
         assert isinstance(collection.writes[1], InsertOne)
         entry_insert = collection.writes[1]._doc
-        assert (
-            entry_insert["mila_ldap"]["mila_email_username"] == "user1"
-        ), "The right user should be inserted"
+        assert entry_insert["mila_ldap"]["mila_email_username"] == "user1", (
+            "The right user should be inserted"
+        )
         assert entry_insert["record_start"] is not None, "record_start should be set"
         assert entry_insert.get("record_end") is None, "record_end should NOT be set"
         assert entry_insert["mila_ldap"]["status"] == end, "Status should match ldap"

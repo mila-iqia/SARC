@@ -24,7 +24,7 @@ def test_compute_job_statistics_from_dataframe(captrace):
     df = _generate_df(rows)
     stats = compute_job_statistics_from_dataframe(
         df,
-        {"mean": DataFrame.mean},
+        {"mean": lambda self: self.mean()},
     )
     assert stats == {"mean": 99 / 2, "unused": 0}
 
@@ -39,7 +39,7 @@ def test_compute_job_statistics_from_dataframe_normalization():
     df = _generate_df(rows)
     stats = compute_job_statistics_from_dataframe(
         df,
-        {"mean": DataFrame.mean},
+        {"mean": lambda self: self.mean()},
         normalization=lambda x: x * 10,
     )
     assert stats == {"mean": 10 * 99 / 2, "unused": 0}
@@ -59,7 +59,7 @@ def test_compute_job_statistics_from_dataframe_time_counter(delta):
 
     stats = compute_job_statistics_from_dataframe(
         df,
-        {"mean": DataFrame.mean},
+        {"mean": lambda self: self.mean()},
         is_time_counter=True,
     )
     assert stats == {"mean": (75 / delta + 15 / delta) / 2, "unused": 0}
@@ -97,7 +97,7 @@ def test_compute_job_statistics_from_dataframe_unused_count(nprops, threshold):
 
     stats = compute_job_statistics_from_dataframe(
         df,
-        {"mean": DataFrame.mean},
+        {"mean": lambda self: self.mean()},
         unused_threshold=threshold,
     )
     valid = [v for v in values if threshold is None or v >= threshold]
@@ -147,7 +147,7 @@ def test_compute_job_statistics_from_dataframe_unused_count_timing(nprops, thres
     start = time.perf_counter()
     compute_job_statistics_from_dataframe(
         df,
-        {"mean": DataFrame.mean},
+        {"mean": lambda self: self.mean()},
         unused_threshold=threshold,
     )
     end = time.perf_counter()

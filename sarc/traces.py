@@ -1,16 +1,19 @@
 import functools
 import inspect
 from contextlib import contextmanager
+from typing import Callable, Iterator
 
-from opentelemetry.trace import Status, StatusCode, get_tracer
+from opentelemetry.trace import Span, Status, StatusCode, get_tracer
 
 
 # context manager to manage traces & span,
 # and catch exceptions (in span) without breaking the whole program execution
 @contextmanager
 def using_trace(
-    tracer_name: str, span_name: str, exception_types: tuple = (Exception,)
-):  # pylint: disable=dangerous-default-value
+    tracer_name: str,
+    span_name: str,
+    exception_types: tuple[type[BaseException], ...] = (Exception,),
+) -> Iterator[Span]:  # pylint: disable=dangerous-default-value
     """
     Context manager to manage traces & span, and catch exceptions (in span) without breaking the whole program execution.
 
@@ -46,7 +49,11 @@ def using_trace(
             pass
 
 
-def trace_decorator(tracer_name=None, span_name=None, exception_types=()):
+def trace_decorator[**P, R](
+    tracer_name: str | None = None,
+    span_name: str | None = None,
+    exception_types: tuple[type[BaseException], ...] = (),
+) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """
     Decorator to wrap a function into `using_trace` context manager.
 
@@ -61,11 +68,11 @@ def trace_decorator(tracer_name=None, span_name=None, exception_types=()):
         Default is empty tuple, meaning that all exceptions will be raised.
     """
 
-    def decorator(fn):
+    def decorator(fn: Callable[P, R]) -> Callable[P, R]:
         @functools.wraps(fn)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
             with using_trace(
-                tracer_name or inspect.getmodule(fn).__name__,
+                tracer_name or inspect.getmodule(fn).__name__,  # type: ignore[union-attr]
                 span_name or fn.__qualname__,
                 exception_types,
             ):
