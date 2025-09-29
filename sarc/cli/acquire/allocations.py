@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import cast
 
 from pydantic import ByteSize
+from simple_parsing import field
 
 from sarc.traces import trace_decorator
 
@@ -70,7 +71,11 @@ def convert_csv_row_to_allocation(
 class AcquireAllocations:
     file: Path
     # Do not actually insert the data into the database
-    dry: bool
+    dry: bool = field(
+        type=bool,
+        default=False,
+        help="Do not actually insert the data into the database",
+    )
 
     def execute(self) -> int:
         collection = get_allocations_collection()
