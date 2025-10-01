@@ -6,6 +6,7 @@
     compute:
       cpu_year: null
       gpu_year: 100
+      rgu_year: 300
       vcpu_year: null
       vgpu_year: null
     storage:
@@ -26,6 +27,7 @@
     compute:
       cpu_year: null
       gpu_year: null
+      rgu_year: null
       vcpu_year: null
       vgpu_year: null
     storage:
@@ -46,6 +48,7 @@
     compute:
       cpu_year: null
       gpu_year: 100
+      rgu_year: 300
       vcpu_year: null
       vgpu_year: null
     storage:
@@ -66,6 +69,7 @@
     compute:
       cpu_year: null
       gpu_year: null
+      rgu_year: null
       vcpu_year: null
       vgpu_year: null
     storage:
@@ -86,6 +90,7 @@
     compute:
       cpu_year: null
       gpu_year: 190
+      rgu_year: 400
       vcpu_year: null
       vgpu_year: null
     storage:
@@ -106,6 +111,7 @@
     compute:
       cpu_year: null
       gpu_year: null
+      rgu_year: null
       vcpu_year: null
       vgpu_year: null
     storage:
@@ -126,6 +132,7 @@
     compute:
       cpu_year: null
       gpu_year: 130
+      rgu_year: 350
       vcpu_year: null
       vgpu_year: null
     storage:
@@ -146,6 +153,7 @@
     compute:
       cpu_year: null
       gpu_year: null
+      rgu_year: null
       vcpu_year: null
       vgpu_year: null
     storage:
@@ -166,6 +174,7 @@
     compute:
       cpu_year: 219
       gpu_year: null
+      rgu_year: null
       vcpu_year: null
       vgpu_year: null
     storage:
@@ -186,6 +195,7 @@
     compute:
       cpu_year: null
       gpu_year: 200
+      rgu_year: 450
       vcpu_year: null
       vgpu_year: null
     storage:
@@ -206,6 +216,7 @@
     compute:
       cpu_year: null
       gpu_year: null
+      rgu_year: null
       vcpu_year: null
       vgpu_year: null
     storage:
