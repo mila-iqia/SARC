@@ -24,7 +24,7 @@ def test_update_allocations(data_regression):
 @pytest.mark.freeze_time("2023-02-15")
 @pytest.mark.usefixtures("empty_read_write_db")
 def test_update_allocations_dry(caplog):
-    """Test that --dry deactivates data update."""
+    """Test that --dry deactivates db update."""
     assert get_allocations(cluster_name=["fromage", "patate"]) == []
     with caplog.at_level("INFO"):
         main(
