@@ -28,6 +28,8 @@ Found 4 job(s):
     "start_time": "2023-02-15T00:01:00-05:00",
     "end_time": "2023-02-15T12:01:00-05:00",
     "elapsed_time": 43200.0,
+    "latest_scraped_start": "2023-02-15T00:00:00-05:00",
+    "latest_scraped_end": "2023-02-16T00:00:00-05:00",
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -85,6 +87,8 @@ Found 4 job(s):
     "start_time": "2023-02-16T00:01:00-05:00",
     "end_time": "2023-02-16T12:01:00-05:00",
     "elapsed_time": 43200.0,
+    "latest_scraped_start": "2023-02-16T00:00:00-05:00",
+    "latest_scraped_end": "2023-02-17T00:00:00-05:00",
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -142,6 +146,8 @@ Found 4 job(s):
     "start_time": "2023-02-15T00:01:00-05:00",
     "end_time": "2023-02-15T12:01:00-05:00",
     "elapsed_time": 43200.0,
+    "latest_scraped_start": "2023-02-15T00:00:00-05:00",
+    "latest_scraped_end": "2023-02-16T00:00:00-05:00",
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -199,6 +205,8 @@ Found 4 job(s):
     "start_time": "2023-02-16T00:01:00-05:00",
     "end_time": "2023-02-16T12:01:00-05:00",
     "elapsed_time": 43200.0,
+    "latest_scraped_start": "2023-02-16T00:00:00-05:00",
+    "latest_scraped_end": "2023-02-17T00:00:00-05:00",
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -238,7 +246,7 @@ Found 86 span(s):
   ],
   "span_attributes": {
    "cluster_name": "patate",
-   "date": "2023-03-16 00:00:00",
+   "date": "2023-03-16 00:00:00-04:00",
    "is_auto": false
   },
   "span_has_error": true
@@ -266,7 +274,7 @@ Found 86 span(s):
   "span_events": [],
   "span_attributes": {
    "cluster_name": "patate",
-   "date": "2023-02-16 00:00:00",
+   "date": "2023-02-16 00:00:00-05:00",
    "is_auto": false
   },
   "span_has_error": false
@@ -392,7 +400,7 @@ Found 86 span(s):
   "span_events": [],
   "span_attributes": {
    "cluster_name": "patate",
-   "date": "2023-02-15 00:00:00",
+   "date": "2023-02-15 00:00:00-05:00",
    "is_auto": false
   },
   "span_has_error": false
@@ -521,7 +529,7 @@ Found 86 span(s):
   ],
   "span_attributes": {
    "cluster_name": "raisin",
-   "date": "2023-03-16 00:00:00",
+   "date": "2023-03-16 00:00:00-04:00",
    "is_auto": false
   },
   "span_has_error": true
@@ -549,7 +557,7 @@ Found 86 span(s):
   "span_events": [],
   "span_attributes": {
    "cluster_name": "raisin",
-   "date": "2023-02-16 00:00:00",
+   "date": "2023-02-16 00:00:00-05:00",
    "is_auto": false
   },
   "span_has_error": false
@@ -675,7 +683,7 @@ Found 86 span(s):
   "span_events": [],
   "span_attributes": {
    "cluster_name": "raisin",
-   "date": "2023-02-15 00:00:00",
+   "date": "2023-02-15 00:00:00-05:00",
    "is_auto": false
   },
   "span_has_error": false

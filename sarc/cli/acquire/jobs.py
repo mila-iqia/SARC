@@ -7,7 +7,7 @@ from typing import Generator, Iterable
 
 from simple_parsing import field
 
-from sarc.config import config
+from sarc.config import config, TZLOCAL
 from sarc.errors import ClusterNotFound
 from sarc.jobs.sacct import JobConversionError, sacct_mongodb_import
 from sarc.traces import using_trace
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 def _str_to_dt(dt_str: str) -> datetime:
-    return datetime.strptime(dt_str, "%Y-%m-%d")
+    return datetime.strptime(dt_str, "%Y-%m-%d").replace(tzinfo=TZLOCAL)
 
 
 def parse_dates(dates: list[str], cluster_name: str) -> list[tuple[datetime, bool]]:
@@ -45,7 +45,7 @@ def _daterange(start_date: datetime, end_date: datetime) -> Generator[datetime]:
 def _dates_auto(cluster_name: str) -> Iterable[datetime]:
     # we want to get the list of dates from the last valid date+1 in the database, until yesterday
     start = _dates_auto_first_date(cluster_name)
-    end = datetime.today()
+    end = datetime.today().replace(tzinfo=TZLOCAL)
     return _daterange(start, end)
 
 

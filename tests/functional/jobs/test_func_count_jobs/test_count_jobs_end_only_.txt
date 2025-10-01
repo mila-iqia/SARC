@@ -28,6 +28,8 @@ Found 8 job(s):
     "start_time": "2023-02-14T00:01:00-05:00",
     "end_time": "2023-02-14T12:01:00-05:00",
     "elapsed_time": 43200.0,
+    "latest_scraped_start": null,
+    "latest_scraped_end": null,
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -75,6 +77,8 @@ Found 8 job(s):
     "start_time": "2023-02-14T06:01:00-05:00",
     "end_time": "2023-02-14T18:01:00-05:00",
     "elapsed_time": 43200.0,
+    "latest_scraped_start": null,
+    "latest_scraped_end": null,
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -122,6 +126,8 @@ Found 8 job(s):
     "start_time": "2023-02-14T12:01:00-05:00",
     "end_time": "2023-02-15T00:01:00-05:00",
     "elapsed_time": 43200.0,
+    "latest_scraped_start": null,
+    "latest_scraped_end": null,
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -169,6 +175,8 @@ Found 8 job(s):
     "start_time": "2023-02-14T18:01:00-05:00",
     "end_time": "2023-02-15T06:01:00-05:00",
     "elapsed_time": 43200.0,
+    "latest_scraped_start": null,
+    "latest_scraped_end": null,
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -216,6 +224,8 @@ Found 8 job(s):
     "start_time": "2023-02-15T00:01:00-05:00",
     "end_time": "2023-02-15T12:01:00-05:00",
     "elapsed_time": 43200.0,
+    "latest_scraped_start": null,
+    "latest_scraped_end": null,
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -263,6 +273,8 @@ Found 8 job(s):
     "start_time": "2023-02-15T06:01:00-05:00",
     "end_time": "2023-02-15T18:01:00-05:00",
     "elapsed_time": 43200.0,
+    "latest_scraped_start": null,
+    "latest_scraped_end": null,
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -310,6 +322,8 @@ Found 8 job(s):
     "start_time": "2023-02-15T12:01:00-05:00",
     "end_time": null,
     "elapsed_time": 43200.0,
+    "latest_scraped_start": null,
+    "latest_scraped_end": null,
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -357,6 +371,8 @@ Found 8 job(s):
     "start_time": "2023-02-15T18:01:00-05:00",
     "end_time": null,
     "elapsed_time": 43200.0,
+    "latest_scraped_start": null,
+    "latest_scraped_end": null,
     "requested": {
         "cpu": 4,
         "mem": 49152,

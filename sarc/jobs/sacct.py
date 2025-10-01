@@ -46,7 +46,7 @@ class SAcctScraper:
         """
         self.cluster = cluster
         self.day = day
-        self.start = datetime.combine(day, time.min)
+        self.start = datetime.combine(day, time.min, tzinfo=day.tzinfo)
         self.end = self.start + timedelta(days=1)
 
     @trace_decorator()
@@ -68,7 +68,9 @@ class SAcctScraper:
         return json.loads(results.stdout[results.stdout.find("{") :])
 
     def _cache_key(self) -> str | None:
-        today = datetime.combine(date.today(), datetime.min.time())
+        today = datetime.combine(
+            date.today(), datetime.min.time(), tzinfo=self.day.tzinfo
+        )
         if self.day < today:
             daystr = self.day.strftime("%Y-%m-%d")
             return f"{self.cluster.name}.{daystr}.json"
@@ -145,6 +147,17 @@ class SAcctScraper:
             # inaccurate value in for RUNNING jobs.
             start_time = end_time - timedelta(seconds=elapsed_time)
 
+        # Here we add supplementary SlurmJob attributes
+        # which should be common to all slurm versions.
+        extra = {
+            # Save scraping period in job
+            # We save these dates with timezone UTC
+            # Note: If date is naive (as actually parsed from `acquire jobs`),
+            # then astimezone() assumes date is in local timezone.
+            "latest_scraped_start": self.start.astimezone(UTC),
+            "latest_scraped_end": self.end.astimezone(UTC),
+        }
+
         assert self.cluster.name is not None
 
         if self.cluster.name != entry["cluster"]:
@@ -183,6 +196,7 @@ class SAcctScraper:
                 work_dir=entry["working_directory"],
                 **resources,  # type: ignore[arg-type]
                 **flags,  # type: ignore[arg-type]
+                **extra,  # type: ignore[arg-type]
             )
         if int(version["major"]) == 23:
             if int(version["minor"]) == 11:
@@ -219,6 +233,7 @@ class SAcctScraper:
                     work_dir=entry["working_directory"],
                     **resources,  # type: ignore[arg-type]
                     **flags,  # type: ignore[arg-type]
+                    **extra,  # type: ignore[arg-type]
                 )
 
             return SlurmJob(
@@ -248,6 +263,7 @@ class SAcctScraper:
                 work_dir=entry["working_directory"],
                 **resources,  # type: ignore[arg-type]
                 **flags,  # type: ignore[arg-type]
+                **extra,  # type: ignore[arg-type]
             )
 
         if int(version["major"]) in [24, 25]:
@@ -281,6 +297,7 @@ class SAcctScraper:
                 work_dir=entry["working_directory"],
                 **resources,  # type: ignore[arg-type]
                 **flags,  # type: ignore[arg-type]
+                **extra,  # type: ignore[arg-type]
             )
 
         # if we arrive here, it means that the version is not supported :-(
