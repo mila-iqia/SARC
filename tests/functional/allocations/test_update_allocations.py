@@ -23,6 +23,28 @@ def test_update_allocations(data_regression):
 
 @pytest.mark.freeze_time("2023-02-15")
 @pytest.mark.usefixtures("empty_read_write_db")
+def test_update_allocations_dry(caplog):
+    """Test that --dry deactivates db update."""
+    assert get_allocations(cluster_name=["fromage", "patate"]) == []
+    with caplog.at_level("INFO"):
+        main(
+            [
+                "-v",
+                "acquire",
+                "allocations",
+                "--dry",  # do not save into db
+                "--file",
+                os.path.join(FOLDER, "allocations.csv"),
+            ]
+        )
+    # Code should have run
+    assert "Adding allocation: " in caplog.text
+    # But nothing should have been saved
+    assert get_allocations(cluster_name=["fromage", "patate"]) == []
+
+
+@pytest.mark.freeze_time("2023-02-15")
+@pytest.mark.usefixtures("empty_read_write_db")
 def test_update_allocations_no_duplicates(data_regression):
     assert get_allocations(cluster_name=["fromage", "patate"]) == []
     main(["acquire", "allocations", "--file", os.path.join(FOLDER, "allocations.csv")])
