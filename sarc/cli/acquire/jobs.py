@@ -45,7 +45,7 @@ def _daterange(start_date: datetime, end_date: datetime) -> Generator[datetime]:
 def _dates_auto(cluster_name: str) -> Iterable[datetime]:
     # we want to get the list of dates from the last valid date+1 in the database, until yesterday
     start = _dates_auto_first_date(cluster_name)
-    end = datetime.today()
+    end = datetime.today().replace(tzinfo=TZLOCAL)
     return _daterange(start, end)
 
 
