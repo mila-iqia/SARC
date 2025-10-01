@@ -110,6 +110,25 @@ class ClusterConfig:
 
         return harmonized_gpu
 
+    def harmonize_gpu_from_nodes(self, nodes: list[str], gpu_type: str) -> str | None:
+        """
+        Get a GPU name from given multiple nodes and GPU type.
+
+        Return None if GPU name cannot be inferred.
+        """
+        # Collect harmonized names for given nodes
+        # NB: If `nodes` is empty, we harmonize using "",
+        # so that harmonization function will check __DEFAULTS__
+        # harmonized names if available.
+        harmonized_gpu_names = {
+            self.harmonize_gpu(nodename, gpu_type) for nodename in (nodes or [""])
+        }
+        # If present, remove None from GPU names
+        harmonized_gpu_names.discard(None)
+        # If we got 1 GPU name, use it.
+        # Otherwise, return None.
+        return harmonized_gpu_names.pop() if len(harmonized_gpu_names) == 1 else None
+
     @cached_property
     def ssh(self) -> Connection:
         from fabric import Config as FabricConfig
