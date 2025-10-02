@@ -196,3 +196,48 @@ sarc:
           h100: H100-SXM5-80GB
         tg[10601-10606,10701-10707,10801-10807,10901-10908,11101-11107,11201-11207]:
           h100: H100-SXM5-80GB
+    fir:
+      host: fir.alliancecan.ca
+      timezone: America/Vancouver
+      accounts:
+      - rrg-bengioy-ad_gpu
+      - rrg-bengioy-ad_cpu
+      - def-bengioy_gpu
+      - def-bengioy_cpu
+      sacct_bin: "/opt/software/slurm/bin/sacct"
+      duc_inodes_command:
+      duc_storage_command:
+      diskusage_report_command: diskusage_report --project --all_users
+      prometheus_url:
+      prometheus_headers_file:
+      start_date: '2025-08-11'          
+    nibi:
+      host: nibi.alliancecan.ca
+      timezone: America/Toronto
+      accounts:
+      - rrg-bengioy-ad_gpu
+      - rrg-bengioy-ad_cpu
+      - def-bengioy_gpu
+      - def-bengioy_cpu
+      sacct_bin: "/opt/software/slurm/bin/sacct"
+      duc_inodes_command:
+      duc_storage_command:
+      diskusage_report_command: diskusage_report --project --all_users
+      prometheus_url:
+      prometheus_headers_file:
+      start_date: '2025-07-31'          
+    rorqual:
+      host: rorqual.alliancecan.ca
+      timezone: America/Montreal
+      accounts:
+      - rrg-bengioy-ad_gpu
+      - rrg-bengioy-ad_cpu
+      - def-bengioy_gpu
+      - def-bengioy_cpu
+      sacct_bin: "/opt/software/slurm/bin/sacct"
+      duc_inodes_command:
+      duc_storage_command:
+      diskusage_report_command: diskusage_report --project --all_users
+      prometheus_url:
+      prometheus_headers_file:
+      start_date: '2025-06-19'          
