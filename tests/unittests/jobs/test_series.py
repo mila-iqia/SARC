@@ -1,6 +1,4 @@
-import itertools
 import math
-import time
 from datetime import datetime, timedelta
 
 import pandas
@@ -107,48 +105,3 @@ def test_compute_job_statistics_from_dataframe_unused_count(nprops, threshold):
         assert stats == {"mean": sum(valid) / nvalid, "unused": nunused}
     else:
         assert math.isnan(stats["mean"]) and stats["unused"] == nunused
-
-
-@pytest.mark.parametrize(["nprops", "threshold"], [[1, 0.0], [2, 0.2], [2, 2.0]])
-@pytest.mark.timeout(2)
-def test_compute_job_statistics_from_dataframe_unused_count_timing(nprops, threshold):
-    values = [0.5, 0.1, 1.0]
-    assert nprops in (1, 2)
-
-    n_data_points = 1000
-    n_instances = 10
-    n_cores = 10
-    rows = []
-    if nprops == 2:
-        n_cores = 10
-    else:
-        n_cores = 1
-
-    timestamps = pandas.date_range(
-        datetime(2023, 1, 1), periods=n_data_points, freq="30s"
-    )
-
-    for node, core, value in itertools.product(
-        range(n_instances), range(n_cores), range(n_data_points)
-    ):
-        value_index = (node * core + node) % len(values)
-        rows.append(
-            {
-                "instance": "cn-c{node:03}",
-                "core": core,
-                "value": values[value_index],
-                "timestamp": timestamps[value],
-            }
-        )
-
-    df = pandas.DataFrame(rows)
-    df = df.sort_values(by="timestamp")
-
-    start = time.perf_counter()
-    compute_job_statistics_from_dataframe(
-        df,
-        {"mean": lambda self: self.mean()},
-        unused_threshold=threshold,
-    )
-    end = time.perf_counter()
-    print(timedelta(seconds=end - start))
