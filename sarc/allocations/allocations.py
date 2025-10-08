@@ -7,6 +7,7 @@ import pandas as pd
 from pydantic import BeforeValidator, ByteSize, field_serializer
 from pydantic_mongo import AbstractRepository, PydanticObjectId
 
+from sarc.traces import trace_decorator
 from sarc.config import config
 from sarc.model import BaseModel
 from sarc.utils import flatten
@@ -28,6 +29,7 @@ def validate_date(value: Union[str, date, datetime]) -> date:
 class AllocationCompute(BaseModel):
     gpu_year: Optional[int] = 0
     cpu_year: Optional[int] = 0
+    rgu_year: Optional[int] = 0
     vcpu_year: Optional[int] = 0
     vgpu_year: Optional[int] = 0
 
@@ -73,6 +75,7 @@ class AllocationsRepository(AbstractRepository[Allocation]):
     class Meta:
         collection_name = "allocations"
 
+    @trace_decorator()
     def add(self, allocation: Allocation):
         document = self.to_document(allocation)
         query_attrs = ["cluster_name", "resource_name", "group_name", "start", "end"]
@@ -132,7 +135,7 @@ def get_allocation_summaries(
     for allocation in allocations:
         key = allocation_key(allocation)
         if key in summaries:
-            for field in ["cpu_year", "gpu_year", "vcpu_year", "vgpu_year"]:
+            for field in ["cpu_year", "gpu_year", "rgu_year", "vcpu_year", "vgpu_year"]:
                 setattr(
                     summaries[key].resources.compute,
                     field,

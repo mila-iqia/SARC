@@ -668,9 +668,11 @@ def compute_time_frames(
     if end is None:
         end = jobs[col_end].max()
 
-    data_frames = []
+    data_frames: list[pandas.DataFrame] = []
 
-    total_durations = (jobs[col_end] - jobs[col_start]).dt.total_seconds()
+    total_durations: pandas.Series[float] = (
+        jobs[col_end] - jobs[col_start]
+    ).dt.total_seconds()
     for frame_start in pandas.date_range(start, end, freq=frame_size):
         frame_end = frame_start + frame_size
 
