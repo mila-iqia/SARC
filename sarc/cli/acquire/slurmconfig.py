@@ -4,7 +4,7 @@ import io
 import logging
 from dataclasses import dataclass
 from datetime import datetime
-from typing import IO, Any, cast
+from typing import IO, Any, cast, Iterator
 
 from hostlist import expand_hostlist
 from simple_parsing import field
@@ -111,6 +111,30 @@ class SlurmConfigParser:
     def _cache_key(self) -> str:
         return f"slurm.{self.cluster.name}.{self.day}.conf"
 
+    @classmethod
+    def _file_lines(cls, file) -> Iterator[tuple[int, str]]:
+        """
+        Iterate over lines from a file, and merge lines split with "\".
+        """
+        current_line_number = None
+        current_line = ""
+
+        for line_number, line in enumerate(file):
+            if current_line_number is None:
+                current_line_number = line_number
+
+            line = line.strip()
+            if line.endswith("\\") and not line.startswith("#"):
+                current_line += line[:-1] + " "
+            else:
+                current_line += line
+                yield current_line_number, current_line
+                current_line_number = None
+                current_line = ""
+
+        assert current_line_number is None
+        assert not current_line
+
     def load(self, file: IO[str]) -> SlurmConfig:
         """
         Parse cached slurm conf file and return a SlurmConfig object
@@ -120,7 +144,7 @@ class SlurmConfigParser:
         node_to_gpus: dict[str, list[str]] = {}
 
         # Parse lines: extract partitions and node_to_gpus
-        for line_number, line in enumerate(file):
+        for line_number, line in self._file_lines(file):
             line = line.strip()
             if line.startswith("PartitionName="):
                 partitions.append(
