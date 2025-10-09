@@ -1,3 +1,4 @@
+import io
 import re
 from datetime import datetime, time
 from pathlib import Path
@@ -24,7 +25,7 @@ NodeName=myothernode2[1,2,5-20,30,50] UselessParam=UselessValue Gres=gpu2,gpu:gp
 
 # Node present in a GPU partition below, but
 # GPUs `bad_named_gpu` and `gpu:what;2` are not billed in partitions.
-# thus should be ignored.
+# thus should be ignored. \\
 NodeName=myothernode20 Gres=bad_named_gpu,gpu:what:2
 
 # Node with a GPU, but not present in GPU partitions below. GPU should be ignored.
@@ -33,8 +34,11 @@ NodeName=myothernode[100-102] Gres=gpu3
 NodeName=alone_node UselessParam=UselessValue Gres=gpu:gpu2:1,gpu:gpu1:9
 
 
-PartitionName=partition1 Nodes=mynode[1,5,6,29-41] TRESBillingWeights=x=1,GRES/gpu=5000,y=2
-PartitionName=partition2 Nodes=mynode[2,8-11,42] TRESBillingWeights=x=1,GRES/gpu:gpu1=5000,y=2
+PartitionName=partition1 \\
+Nodes=mynode[1,5,6,29-41] \\
+TRESBillingWeights=x=1,GRES/gpu=5000,y=2
+PartitionName=partition2 Nodes=mynode[2,8-11,42] \\
+TRESBillingWeights=x=1,GRES/gpu:gpu1=5000,y=2
 PartitionName=partition3 Nodes=myothernode[10,20] TRESBillingWeights=GRES/gpu:gpu2=7500
 
 # No gres specified, but billing for node GPUs (gpu:gpu2:1,gpu:gpu1:9) should be inferred
@@ -293,3 +297,49 @@ def test_download_cluster_config(test_config, remote):
     assert file_path.is_file()
     with file_path.open() as file:
         assert file.read() == expected_content
+
+
+def test_file_lines():
+    """
+    Test that we correctly parse the file lines,
+    merging lines split with "\".
+    """
+    content = """
+line 1
+line 2
+
+line 4
+line 5\\
+line 6 \\
+line 7   \\
+line 8
+
+line 10\\
+line 11
+
+# line 13
+# line 14 \\
+# line 15 \\
+# line 16
+line 17
+line 18
+"""
+    with io.StringIO(content) as file:
+        lines = [(i, line) for i, line in SlurmConfigParser._file_lines(file)]
+    assert lines == [
+        (0, ""),
+        (1, "line 1"),
+        (2, "line 2"),
+        (3, ""),
+        (4, "line 4"),
+        (5, "line 5 line 6  line 7    line 8"),
+        (9, ""),
+        (10, "line 10 line 11"),
+        (12, ""),
+        (13, "# line 13"),
+        (14, "# line 14 \\"),
+        (15, "# line 15 \\"),
+        (16, "# line 16"),
+        (17, "line 17"),
+        (18, "line 18"),
+    ]
