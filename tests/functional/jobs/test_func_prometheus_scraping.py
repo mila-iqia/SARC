@@ -749,12 +749,20 @@ def test_acquire_prometheus_args_no_interval(cli_main, caplog):
     assert "No --intervals or --auto_interval parsed, nothing to do." in caplog.text
 
 
-def _get_cluster_raisin():
+def _get_cluster(cluster_name):
     return [
         cluster
         for cluster in get_available_clusters()
-        if cluster.cluster_name == "raisin"
+        if cluster.cluster_name == cluster_name
     ][0]
+
+
+def _get_cluster_raisin():
+    return _get_cluster("raisin")
+
+
+def _get_cluster_patate():
+    return _get_cluster("patate")
 
 
 @pytest.mark.usefixtures("read_write_db", "enabled_cache")
@@ -841,3 +849,40 @@ def test_auto_interval_0(cli_main, monkeypatch, freezer, caplog):
     )
     # We should have scraped 1 time
     assert mock_scrap_prometheus.called == 1
+
+
+@pytest.mark.usefixtures("read_write_db", "enabled_cache")
+def test_auto_interval_sacct_time_too_old(cli_main, monkeypatch, freezer, caplog):
+    """Test auto_interval when end_time_sacct > end_time_prometheus."""
+
+    def mock_scrap_prometheus(*args, **kwargs):
+        mock_scrap_prometheus.called += 1
+
+    mock_scrap_prometheus.called = 0
+
+    monkeypatch.setattr(
+        "sarc.cli.acquire.prometheus.scrap_prometheus", mock_scrap_prometheus
+    )
+
+    assert (
+        cli_main(
+            [
+                "-v",
+                "acquire",
+                "prometheus",
+                "--cluster_name",
+                "patate",
+                "--auto_interval",
+                "60",
+            ]
+        )
+        == 0
+    )
+    print(caplog.text)
+    # end_time_prometheus should have been updated
+    # We should have scraped 5 times
+    assert mock_scrap_prometheus.called == 0
+    assert (
+        "Error while acquiring Prometheus metrics on patate: ValueError: auto intervals: "
+        "start date 2023-02-10 04:48:00+00:00 > end date 2023-02-09 23:48:00+00:00 ; skipping cluster."
+    ) in caplog.text

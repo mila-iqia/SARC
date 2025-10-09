@@ -294,11 +294,19 @@ def create_cluster_entries():
     for i, cluster_name in enumerate(cluster_names):
         cluster_end_time = end_time - timedelta(days=i)
         cluster_start_time = cluster_end_time - timedelta(days=1)
+        if cluster_name == "patate":
+            # Make end_time_sacct older than end_time_prometheus
+            end_time_sacct = cluster_end_time - timedelta(minutes=300)
+        else:
+            # By default, end_time_sacct is more recent than end_time_prometheus,
+            # so that prometheus metrics will be scraped up to this date
+            # for auto-interval scraping.
+            end_time_sacct = cluster_end_time + timedelta(minutes=300)
         cluster_entries.append(
             {
                 "cluster_name": cluster_name,
                 "start_date": cluster_start_time.strftime(date_format),
-                "end_time_sacct": cluster_end_time.strftime(time_format),
+                "end_time_sacct": end_time_sacct.strftime(time_format),
                 "end_time_prometheus": cluster_end_time.strftime(time_format),
                 "billing_is_gpu": True if cluster_name == "mila" else False,
             }

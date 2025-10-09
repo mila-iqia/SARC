@@ -14,10 +14,27 @@ from sarc.cli.acquire.jobs import (
     parse_intervals,
     parse_auto_intervals,
     set_auto_end_time,
+    _time_auto_first_date,
 )
 from sarc.traces import using_trace
 
 logger = logging.getLogger(__name__)
+
+
+AUTO_END_FIELD = "end_time_prometheus"
+
+
+def parse_prometheus_auto_intervals(
+    cluster_name: str, minutes: int
+) -> list[tuple[datetime, datetime]]:
+    """
+    When scraping with auto intervals, we don't want to scrape Prometheus metrics
+    after end_time_sacct.
+    """
+    end_time_sacct = _time_auto_first_date(cluster_name, "end_time_sacct")
+    return parse_auto_intervals(
+        cluster_name, AUTO_END_FIELD, minutes, end=end_time_sacct
+    )
 
 
 # pylint: disable=logging-not-lazy,too-many-branches
@@ -59,7 +76,6 @@ class AcquirePrometheus:
 
         cfg = config("scraping")
         clusters_configs = cfg.clusters
-        auto_end_field = "end_time_prometheus"
 
         for cluster_name in self.cluster_names:
             cluster = clusters_configs[cluster_name]
@@ -73,8 +89,8 @@ class AcquirePrometheus:
                 if self.intervals is not None:
                     intervals = parse_intervals(self.intervals)
                 elif self.auto_interval is not None:
-                    intervals = parse_auto_intervals(
-                        cluster_name, auto_end_field, self.auto_interval
+                    intervals = parse_prometheus_auto_intervals(
+                        cluster_name, self.auto_interval
                     )
                 if not intervals:
                     logger.warning(
@@ -101,7 +117,7 @@ class AcquirePrometheus:
                             scrap_prometheus(cluster, time_from, time_to)
 
                             if self.auto_interval is not None:
-                                set_auto_end_time(cluster_name, auto_end_field, time_to)
+                                set_auto_end_time(cluster_name, AUTO_END_FIELD, time_to)
                         # pylint: disable=broad-exception-caught
                         except Exception as e:
                             logger.error(
