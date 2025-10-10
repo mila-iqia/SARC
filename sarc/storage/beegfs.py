@@ -12,10 +12,12 @@ from typing import cast
 from fabric import Connection
 from pydantic import ByteSize
 
-from sarc.client.users.api import User, get_users
 from sarc.core.models.diskusage import DiskUsage, DiskUsageGroup, DiskUsageUser
+from sarc.core.models.users import UserData
+from sarc.core.models.validators import DateMatchError
 from sarc.core.scraping.diskusage import DiskUsageScraper, _builtin_scrapers
 from sarc.core.utils import run_command
+from sarc.users.db import get_users
 
 beegfs_header = "name,id,size,hard,files,hard"
 
@@ -37,17 +39,23 @@ class BeeGFSDiskUsage(DiskUsageScraper[BeeGFSDiskUsageConfig]):
         assert len(users) > 0
 
         errors: list[Exception] = []
-        failures: list[User] = []
+        failures: list[UserData] = []
         output: dict[str, list[str]] = {}
 
         for name, file in config.config_files.items():
             usage: list[str] = []
 
             for user in users:
-                if not user.mila.active:
+                if "mila" not in user.associated_accounts:
                     continue
 
-                cmd = f"{config.beegfs_ctl_path} --cfgFile={file} --getquota --uid {user.mila.username} --csv"
+                creds = user.associated_accounts["mila"]
+                try:
+                    username = creds.get_value()
+                except DateMatchError:
+                    continue
+
+                cmd = f"{config.beegfs_ctl_path} --cfgFile={file} --getquota --uid {username} --csv"
                 result, err = run_command(ssh, cmd, config.retries)
 
                 if err:
