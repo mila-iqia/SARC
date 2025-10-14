@@ -115,6 +115,7 @@ sarc:
       gpus_per_nodes:
         __DEFAULTS__:
           gpu2: THE GPU II
+          phantom_gpu: PHANTOM GPU MENACE
     raisin_no_prometheus:
       accounts: null
       duc_inodes_command: null
