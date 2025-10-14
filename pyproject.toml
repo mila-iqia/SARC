@@ -35,6 +35,8 @@ dependencies = [
     "fastapi[standard-no-fastapi-cloud-cli]>=0.118,<0.119",
     "requests>=2.32.3,<3",
     "google-auth>=2.40.2,<3",
+    "pyodbc>=5.2.0,<6",
+    "azure-identity>=1.23.1,<2",
 ]
 
 [project.scripts]

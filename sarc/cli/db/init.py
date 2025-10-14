@@ -147,14 +147,8 @@ def create_users_indices(db: Database) -> None:
     # db_collection = _UserRepository(database=db).get_collection()
     db_collection = db.users
 
-    db_collection.create_index([("mila_ldap.mila_email_username", pymongo.ASCENDING)])
-    db_collection.create_index([("mila_ldap.mila_cluster_username", pymongo.ASCENDING)])
-    db_collection.create_index(
-        [
-            ("drac_roles.username", pymongo.ASCENDING),
-            ("drac_members.username", pymongo.ASCENDING),
-        ]
-    )
+    db_collection.create_index([("uuid", pymongo.ASCENDING)], unique=True)
+    db_collection.create_index([("matching_ids.$**", pymongo.ASCENDING)])
 
 
 def create_gpu_billing_indices(db: Database) -> None:

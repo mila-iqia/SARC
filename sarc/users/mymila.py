@@ -1,128 +1,207 @@
-from datetime import timedelta
-from typing import IO, Any
+"""
+This is a plugin to read user data from MyMila
 
-import pandas as pd
+A MyMila entry contains the following fields:
 
-from sarc.cache import CachePolicy, FormatterProto, with_cache
-from sarc.config import Config, MyMilaConfig
+- Affiliated_university
+- Affiliation_type
+- Alliance-DRAC_account
+- Co-Supervisor_Membership_Type
+- Co-Supervisor__MEMBER_NAME_
+- Co-Supervisor__MEMBER_NUM_
+- Department_affiliated
+- End_date_of_academic_nomination
+- End_date_of_studies
+- End_date_of_visit-internship
+- Faculty_affiliated
+- First_Name
+- GitHub_username
+- Google_Scholar_profile
+- Last_Name
+- MILA_Email
+- Membership_Type
+- Mila_Number
+- Preferred_First_Name
+- Profile_Type
+- Start_Date_with_MILA
+- Start_date_of_academic_nomination
+- Start_date_of_studies
+- Start_date_of_visit-internship
+- End_Date_with_MILA
+- Status
+- Supervisor_Principal_Membership_Type
+- Supervisor_Principal__MEMBER_NAME_
+- Supervisor_Principal__MEMBER_NUM_
+- internal_id
+- Co-Supervisor_CCAI_Chair_CIFAR
+- Supervisor_Principal_CCAI_Chair_CIFAR
+- CCAI_Chair_CIFAR
+- _MEMBER_NUM_
+"""
 
-START_DATE_KEY = "Start Date with MILA"
-END_DATE_KEY = "End Date with MILA"
+import json
+import logging
+import re
+import struct
+from collections.abc import Iterable
+from dataclasses import dataclass
+from datetime import date
+from enum import IntEnum, unique
+from itertools import chain, repeat
+from typing import Sequence
 
+import pyodbc  # type: ignore[import-not-found]
+from azure.identity import ClientSecretCredential
 
-class CSV_formatter(FormatterProto[pd.DataFrame]):
-    read_flags = "r"
-    write_flags = "w"
+from sarc.core.scraping.users import MatchID, UserMatch, UserScraper, _builtin_scrapers
 
-    @staticmethod
-    def load(fp: IO[Any]) -> pd.DataFrame:
-        return pd.read_csv(fp.name)
-
-    @staticmethod
-    def dump(obj: pd.DataFrame, fp: IO[Any]):
-        raise NotImplementedError("Cannot dump mymila CSV cache yet.")
-        # obj.to_csv(fp.name)
-
-
-@with_cache(
-    subdirectory="mymila",
-    formatter=CSV_formatter,
-    key=lambda *_, **__: "mymila_export_{time}.csv",
-    validity=timedelta(days=120),
-)  # type: ignore
-def query_mymila_csv(cfg: MyMilaConfig | None) -> pd.DataFrame:
-    raise NotImplementedError("Cannot read from mymila yet.")
-
-
-def query_mymila(
-    cfg: MyMilaConfig | None, cache_policy: CachePolicy = CachePolicy.use
-) -> pd.DataFrame:
-    return pd.DataFrame(query_mymila_csv(cfg, cache_policy=cache_policy))
-
-
-def to_records(df: pd.DataFrame) -> list[dict]:
-    # NOTE: Select columns that should be used from MyMila.
-    wanted_cols = [
-        "mila_email_username",
-        "mila_cluster_username",
-        "mila_cluster_uid",
-        "mila_cluster_gid",
-        "display_name",
-        "supervisor",
-        "co_supervisor",
-        "status",
-        "mymila_start",
-        "mymila_end",
-    ]
-
-    selected = [col for col in wanted_cols if col in df.columns]
-
-    records = df[selected].to_dict("records")
-
-    # Pandas really likes NaT (Not a Time)
-    # but mongo does not
-    for record in records:
-        end_date = record.get("mymila_end", None)
-        if pd.isna(end_date):
-            end_date = None
-        record["mymila_end"] = end_date
-
-    return records
+logger = logging.getLogger(__name__)
 
 
-def combine(LD_users: list[dict], mymila_data: pd.DataFrame) -> list[dict]:
-    if not mymila_data.empty:
-        df_users = pd.DataFrame(LD_users)
-        # Set the empty values to NA
-        df_users = df_users.where((pd.notnull(df_users)) & (df_users != ""), pd.NA)
-
-        # Preprocess
-        mymila_data = mymila_data.rename(columns={"MILA Email": "mila_email_username"})
-        # Set the empty values to NA
-        mymila_data = mymila_data.where(
-            (pd.notnull(mymila_data)) & (mymila_data != ""), pd.NA
-        )
-
-        if LD_users:
-            df = pd.merge(df_users, mymila_data, on="mila_email_username", how="outer")
-
-            # mymila value should take precedence here
-            #   Take the mymila columns and fill it with ldap if missing
-            def mergecol(mymila_col, ldap_col):
-                df[mymila_col] = df[mymila_col].fillna(df[ldap_col])
-
-            mergecol("Status", "status")
-            mergecol("Supervisor Principal", "supervisor")
-            mergecol("Co-Supervisor", "co_supervisor")
-
-        else:
-            df = mymila_data
-
-        # Use mymila field
-        df = df.rename(
-            columns={
-                "Status": "status",
-                "Supervisor Principal": "supervisor",
-                "Co-Supervisor": "co_supervisor",
-            }
-        )
-
-        # Create the new display name
-        df["display_name"] = df["Preferred First Name"] + " " + df["Last Name"]
-
-        # Coerce datetime.date into datetime because bson does not understand date
-        def convert_datetime(col, origin):
-            df[col] = pd.to_datetime(df[origin], errors="ignore")
-
-        convert_datetime("mymila_start", START_DATE_KEY)
-        convert_datetime("mymila_end", END_DATE_KEY)
-
-        LD_users = to_records(df)
-    return LD_users
+CCI_RE = re.compile(r"[a-z]{3}-\d{3}")
+CCRI_RE = re.compile(r"[a-z]{3}-\d{3}-\d{2}")
 
 
-def fetch_mymila(
-    cfg: Config, LD_users: list[dict], cache_policy: CachePolicy = CachePolicy.use
-) -> list[dict]:
-    mymila_data = query_mymila(cfg.mymila, cache_policy=cache_policy)
-    return combine(LD_users, mymila_data)
+@unique
+class Headers(IntEnum):
+    Affiliated_university = 0
+    Affiliation_type = 1
+    Alliance_DRAC_account = 2
+    Co_Supervisor_Membership_Type = 3
+    Co_Supervisor__MEMBER_NAME_ = 4
+    Co_Supervisor__MEMBER_NUM_ = 5
+    Department_affiliated = 6
+    End_date_of_academic_nomination = 7
+    End_date_of_studies = 8
+    End_date_of_visit_internship = 9
+    Faculty_affiliated = 10
+    First_Name = 11
+    GitHub_username = 12
+    Google_Scholar_profile = 13
+    Last_Name = 14
+    MILA_Email = 15
+    Membership_Type = 16
+    Mila_Number = 17
+    Preferred_First_Name = 18
+    Profile_Type = 19
+    Start_Date_with_MILA = 20
+    Start_date_of_academic_nomination = 21
+    Start_date_of_studies = 22
+    Start_date_of_visit_internship = 23
+    End_Date_with_MILA = 24
+    Status = 25
+    Supervisor_Principal_Membership_Type = 26
+    Supervisor_Principal__MEMBER_NAME_ = 27
+    Supervisor_Principal__MEMBER_NUM_ = 28
+    internal_id = 29
+    Co_Supervisor_CCAI_Chair_CIFAR = 30
+    Supervisor_Principal_CCAI_Chair_CIFAR = 31
+    CCAI_Chair_CIFAR = 32
+    MEMBER_NUM = 33
+
+
+@dataclass
+class MyMilaConfig:
+    tenant_id: str
+    client_id: str
+    client_secret: str
+    sql_endpoint: str
+    database: str = "wh_sarc"
+
+
+def _json_serial(obj: object) -> str:
+    if isinstance(obj, date):
+        return obj.isoformat()
+    raise TypeError("Type %s not serializable" % type(obj))  # pragma: no cover
+
+
+class MyMilaScraper(UserScraper[MyMilaConfig]):
+    config_type = MyMilaConfig
+
+    def get_user_data(self, config: MyMilaConfig) -> bytes:
+        return json.dumps(_query_mymila(config), default=_json_serial).encode()
+
+    def parse_user_data(
+        self, _config: MyMilaConfig, data: bytes
+    ) -> Iterable[UserMatch]:
+        records, headers = json.loads(data.decode())
+        headers = [h.replace("-", "_") for h in headers]
+        assert headers[-1] == "_MEMBER_NUM_"
+        headers[-1] = "MEMBER_NUM"
+        assert headers == [h.name for h in Headers]
+        for record in records:
+            first_name = record[Headers.Preferred_First_Name]
+            if first_name is None:
+                first_name = record[Headers.First_Name]
+            um = UserMatch(
+                display_name=f"{first_name} {record[Headers.Last_Name]}",
+                email=record[Headers.MILA_Email],
+                matching_id=MatchID(name="mymila", mid=str(record[Headers.MEMBER_NUM])),
+                known_matches={
+                    MatchID(name="mila_ldap", mid=record[Headers.MILA_Email])
+                },
+            )
+            supervisor = record[Headers.Supervisor_Principal__MEMBER_NUM_]
+            if supervisor is not None:
+                # TODO: figure out which dates apply
+                um.supervisor.insert(
+                    MatchID(name="mymila", mid=str(supervisor)), start=None, end=None
+                )
+            co_supervisor = record[Headers.Co_Supervisor__MEMBER_NUM_]
+            if co_supervisor is not None:
+                # TODO: figure out the dates
+                um.co_supervisors.insert(
+                    {MatchID(name="mymila", mid=str(co_supervisor))},
+                    start=None,
+                    end=None,
+                )
+            drac_account: str | None = record[Headers.Alliance_DRAC_account]
+            if drac_account:
+                drac_account = drac_account.strip()
+                if CCI_RE.fullmatch(drac_account):
+                    um.known_matches.add(MatchID(name="drac", mid=drac_account))
+                if CCRI_RE.fullmatch(drac_account):
+                    um.known_matches.add(MatchID(name="drac", mid=drac_account[:-3]))
+                logger.warning(
+                    "Invalid data in 'Alliance-DRAC_account' field (not a CCI or CCRI): %s",
+                    drac_account,
+                )
+            gh_user = record[Headers.GitHub_username]
+            if gh_user:
+                um.github_username.insert(gh_user)
+            gs_profile = record[Headers.Google_Scholar_profile]
+            if gs_profile:
+                um.google_scholar_profile.insert(gs_profile)
+            yield um
+
+
+_builtin_scrapers["mymila"] = MyMilaScraper()
+
+
+def _query_mymila(cfg: MyMilaConfig):
+    """
+    Contact MyMila in order to retrieve users data,
+    then return these data as MyMilaUser elements.
+    """
+    # Retrieve MyMila data
+    credential = ClientSecretCredential(
+        client_id=cfg.client_id,
+        tenant_id=cfg.tenant_id,
+        client_secret=cfg.client_secret,
+    )
+    connection_string = f"Driver={{ODBC Driver 18 for SQL Server}};Server={cfg.sql_endpoint},1433;Database={cfg.database};Encrypt=Yes;TrustServerCertificate=No"
+    token_object = credential.get_token("https://database.windows.net/.default")
+    token_as_bytes = token_object.token.encode("UTF-8")
+    encoded_bytes = bytes(chain.from_iterable(zip(token_as_bytes, repeat(0))))
+    token_bytes = struct.pack("<i", len(encoded_bytes)) + encoded_bytes
+    attrs_before: dict[int, int | bytes | bytearray | str | Sequence[str]] = {
+        1256: token_bytes
+    }
+
+    connection = pyodbc.connect(connection_string, attrs_before=attrs_before)
+    cursor = connection.cursor()
+    cursor.execute("SELECT * FROM MyMila_Extract_Etudiants_2")
+    records = [tuple(row) for row in cursor.fetchall()]
+    headers = [i[0] for i in cursor.description]
+
+    return records, headers

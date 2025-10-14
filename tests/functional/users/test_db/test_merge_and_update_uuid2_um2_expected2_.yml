@@ -1,0 +1,26 @@
+associated_accounts:
+  drac:
+    values:
+    - valid_end: '3000-01-01T00:00:00Z'
+      valid_start: '2024-04-11T00:00:00Z'
+      value: petitbonhomme
+  mila:
+    values:
+    - valid_end: '3000-01-01T00:00:00Z'
+      valid_start: '2024-04-11T00:00:00Z'
+      value: petitbonhomme_mila
+co_supervisors:
+  values: []
+display_name: M/Ms Petitbonhomme
+email: petitbonhomme@mila.quebec
+github_username:
+  values: []
+google_scholar_profile:
+  values: []
+matching_ids:
+  drac_role: abc-123
+  mila_ldap: petitbonhomme@mila.quebec
+member_type:
+  values: []
+supervisor:
+  values: []

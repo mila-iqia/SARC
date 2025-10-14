@@ -268,7 +268,7 @@ class CachedFunction[**P, R](Cache[R]):  # pylint: disable=too-many-instance-att
             if cache_policy is None
             else CachePolicy(cache_policy)
         )
-        at_time = at_time or datetime.now()
+        at_time = at_time or datetime.now(UTC)
         key_value = self.key(*args, **kwargs)
 
         # Whether to **require** the cache
