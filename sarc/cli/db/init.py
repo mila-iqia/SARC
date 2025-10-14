@@ -129,7 +129,8 @@ def create_clusters(db: Database) -> None:
             {
                 "$setOnInsert": {
                     "start_date": cluster.start_date,
-                    "end_date": None,
+                    "end_time_sacct": None,
+                    "end_time_prometheus": None,
                     "billing_is_gpu": cluster.billing_is_gpu,
                 }
             },

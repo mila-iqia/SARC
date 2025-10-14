@@ -103,7 +103,7 @@ def create_db_configuration_fixture(
 
 empty_read_write_db_config_object = create_db_configuration_fixture(empty=True)
 
-read_write_db_config_object = create_db_configuration_fixture()
+read_write_db_config_object = create_db_configuration_fixture(with_clusters=True)
 
 read_write_db_with_users_config_object = create_db_configuration_fixture(
     with_users=True

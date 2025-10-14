@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import datetime as dt
 from collections.abc import Iterable
+import json
 from datetime import datetime, timedelta
 from uuid import UUID
 
@@ -470,15 +471,25 @@ def create_cluster_entries():
     cluster_entries = []
 
     date_format = "%Y-%m-%d"
+    time_format = "%Y-%m-%dT%H:%M"
 
     for i, cluster_name in enumerate(cluster_names):
         cluster_end_time = end_time - timedelta(days=i)
         cluster_start_time = cluster_end_time - timedelta(days=1)
+        if cluster_name == "patate":
+            # Make end_time_sacct older than end_time_prometheus
+            end_time_sacct = cluster_end_time - timedelta(minutes=300)
+        else:
+            # By default, end_time_sacct is more recent than end_time_prometheus,
+            # so that prometheus metrics will be scraped up to this date
+            # for auto-interval scraping.
+            end_time_sacct = cluster_end_time + timedelta(minutes=300)
         cluster_entries.append(
             {
                 "cluster_name": cluster_name,
                 "start_date": cluster_start_time.strftime(date_format),
-                "end_date": cluster_end_time.strftime(date_format),
+                "end_time_sacct": end_time_sacct.strftime(time_format),
+                "end_time_prometheus": cluster_end_time.strftime(time_format),
                 "billing_is_gpu": True if cluster_name == "mila" else False,
             }
         )
@@ -732,3 +743,17 @@ class JsonJobFactory(JobFactory):
         flattened_sacct_job.update(flatten(kwargs))
 
         return unflatten(flattened_sacct_job)
+
+
+def create_sacct_json(configs: list[dict]) -> str:
+    tmp_json_raw = copy.deepcopy(json_raw)
+    tmp_json_raw["jobs"] = create_json_jobs(configs)
+    return json.dumps(tmp_json_raw)
+
+
+def create_json_jobs(json_jobs: list[dict]) -> list[dict]:
+    json_job_factory = JsonJobFactory()
+    for job in json_jobs:
+        json_job_factory.add_job(**job)
+
+    return json_job_factory.jobs
