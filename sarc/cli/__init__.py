@@ -51,7 +51,7 @@ class NiceHandler(logging.StreamHandler):
 @dataclass
 class CLI:
     command: Union[Acquire, Db, Health] = subparsers(
-        {"acquire": Acquire, "db": Db, "health": Health}
+        {"acquire": Acquire, "db": Db, "health": Health, "fetch": Fetch, "parse": Parse}
     )
 
     color: bool = False
