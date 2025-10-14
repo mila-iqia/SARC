@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-import copy
 import json
-import logging
-import re
 import subprocess
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -13,41 +10,13 @@ import pytest
 from fabric.testing.base import Command, Session
 from opentelemetry.trace import StatusCode
 
-from sarc.client.job import JobStatistics, get_jobs
+from sarc.client import get_available_clusters
+from sarc.client.job import get_jobs
 from sarc.config import MTL, PST, UTC, config
-from sarc.jobs import sacct
 from sarc.jobs.sacct import SAcctScraper
 
-from .factory import JsonJobFactory, json_raw
-
-
-def create_json_jobs(json_jobs: list[dict]) -> list[dict]:
-    json_job_factory = JsonJobFactory()
-    for job in json_jobs:
-        json_job_factory.add_job(**job)
-
-    return json_job_factory.jobs
-
-
-@pytest.fixture
-def json_jobs(request):
-    if isinstance(request.param, dict):
-        request.param = [request.param]
-
-    return create_json_jobs(request.param)
-
-
-@pytest.fixture
-def sacct_json(json_jobs):
-    tmp_json_raw = copy.deepcopy(json_raw)
-    tmp_json_raw["jobs"] = json_jobs
-    return json.dumps(tmp_json_raw)
-
-
-def create_sacct_json(configs: list[dict]) -> str:
-    tmp_json_raw = copy.deepcopy(json_raw)
-    tmp_json_raw["jobs"] = create_json_jobs(configs)
-    return json.dumps(tmp_json_raw)
+from ...common.dateutils import _dtfmt
+from .factory import create_sacct_json
 
 
 parameters = {
@@ -128,7 +97,9 @@ parameters = {
 @pytest.fixture
 def scraper():
     return SAcctScraper(
-        cluster=config().clusters["raisin"], day=datetime(2023, 2, 14, tzinfo=MTL)
+        cluster=config().clusters["raisin"],
+        start=datetime(2023, 2, 14, tzinfo=MTL).astimezone(UTC),
+        end=datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC),
     )
 
 
@@ -277,7 +248,7 @@ def test_scraper_with_malformed_cache(test_config, remote, scraper, caplog):
 
     remote.expect(
         host="patate",
-        cmd="/opt/slurm/bin/sacct  -X -S 2023-02-14T00:00 -E 2023-02-15T00:00 --allusers --json",
+        cmd=f"export TZ=UTC && /opt/slurm/bin/sacct  -X -S {_dtfmt(2023, 2, 14)} -E {_dtfmt(2023, 2, 15)} --allusers --json",
         out=b"{}",
     )
 
@@ -292,11 +263,13 @@ def test_scraper_with_malformed_cache(test_config, remote, scraper, caplog):
 )
 def test_sacct_bin_and_accounts(test_config, remote):
     scraper = SAcctScraper(
-        cluster=config().clusters["patate"], day=datetime(2023, 2, 14)
+        cluster=config().clusters["patate"],
+        start=datetime(2023, 2, 14, tzinfo=MTL).astimezone(UTC),
+        end=datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC),
     )
     remote.expect(
         host="patate",
-        cmd="/opt/software/slurm/bin/sacct -A rrg-bonhomme-ad_gpu,rrg-bonhomme-ad_cpu,def-bonhomme_gpu,def-bonhomme_cpu -X -S 2023-02-14T00:00 -E 2023-02-15T00:00 --allusers --json",
+        cmd=f"export TZ=UTC && /opt/software/slurm/bin/sacct -A rrg-bonhomme-ad_gpu,rrg-bonhomme-ad_cpu,def-bonhomme_gpu,def-bonhomme_cpu -X -S {_dtfmt(2023, 2, 14)} -E {_dtfmt(2023, 2, 15)} --allusers --json",
         out=b'{"jobs": []}',
     )
 
@@ -319,7 +292,9 @@ def test_localhost(os_system, monkeypatch):
     monkeypatch.setattr(subprocess, "run", mock_subprocess_run)
 
     scraper = SAcctScraper(
-        cluster=config().clusters["local"], day=datetime(2023, 2, 14)
+        cluster=config().clusters["local"],
+        start=datetime(2023, 2, 14, tzinfo=MTL).astimezone(UTC),
+        end=datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC),
     )
 
     assert len(list(scraper)) == 0
@@ -330,13 +305,13 @@ def test_localhost(os_system, monkeypatch):
     "test_config", [{"clusters": {"raisin": {"host": "raisin"}}}], indirect=True
 )
 @pytest.mark.parametrize("json_jobs", [{}], indirect=True)
-@pytest.mark.usefixtures("empty_read_write_db", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("empty_read_write_db")
 def test_stdout_message_before_json(
-    test_config, sacct_json, remote, file_regression, cli_main, prom_custom_query_mock
+    test_config, sacct_json, remote, file_regression, cli_main
 ):
     remote.expect(
         host="raisin",
-        cmd="/opt/slurm/bin/sacct  -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
+        cmd=f"export TZ=UTC && /opt/slurm/bin/sacct  -X -S {_dtfmt(2023, 2, 15)} -E {_dtfmt(2023, 2, 16)} --allusers --json",
         out=f"Welcome on raisin,\nThe sweetest supercomputer in the world!\n{sacct_json}".encode(
             "utf-8"
         ),
@@ -352,9 +327,8 @@ def test_stdout_message_before_json(
                 "jobs",
                 "--cluster_name",
                 "raisin",
-                "--dates",
-                "2023-02-15",
-                "--no_prometheus",
+                "--intervals",
+                f"{_dtfmt(2023, 2, 15)}-{_dtfmt(2023, 2, 16)}",
             ]
         )
         == 0
@@ -373,164 +347,11 @@ def test_stdout_message_before_json(
     "test_config", [{"clusters": {"raisin": {"host": "raisin"}}}], indirect=True
 )
 @pytest.mark.parametrize("json_jobs", [{}], indirect=True)
-@pytest.mark.usefixtures("empty_read_write_db", "tzlocal_is_mtl")
-def test_get_gpu_type_from_prometheus(
-    test_config, sacct_json, remote, file_regression, cli_main, monkeypatch
-):
+@pytest.mark.usefixtures("empty_read_write_db")
+def test_save_job(test_config, sacct_json, remote, file_regression, cli_main):
     remote.expect(
         host="raisin",
-        cmd="/opt/slurm/bin/sacct  -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
-        out=f"Welcome on raisin,\nThe sweetest supercomputer in the world!\n{sacct_json}".encode(
-            "utf-8"
-        ),
-    )
-
-    # Import here so that config() is setup correctly when CLI is created.
-    import sarc.cli  # noqa: F401
-
-    def mock_compute_job_statistics(job):
-        mock_compute_job_statistics.called += 1
-        return JobStatistics()
-
-    mock_compute_job_statistics.called = 0
-
-    monkeypatch.setattr(
-        "sarc.jobs.series.compute_job_statistics", mock_compute_job_statistics
-    )
-
-    def mock_get_job_time_series(job, metric, **kwargs):
-        assert metric == "slurm_job_utilization_gpu_memory"
-        assert job.job_id == 1
-        return [{"metric": {"gpu_type": "phantom_gpu"}}]
-
-    monkeypatch.setattr(sacct, "get_job_time_series", mock_get_job_time_series)
-
-    assert (
-        cli_main(
-            [
-                "acquire",
-                "jobs",
-                "--cluster_name",
-                "raisin",
-                "--dates",
-                "2023-02-15",
-            ]
-        )
-        == 0
-    )
-
-    jobs = list(get_jobs())
-
-    assert len(jobs) == 1
-    job = jobs[0]
-    assert job.allocated.gpu_type == "phantom_gpu"
-
-    file_regression.check(
-        f"Found {len(jobs)} job(s):\n"
-        + "\n".join(
-            [job.model_dump_json(exclude={"id": True}, indent=4) for job in jobs]
-        )
-    )
-
-
-@pytest.mark.parametrize(
-    "test_config",
-    [{"clusters": {"raisin_no_prometheus": {"host": "raisin_no_prometheus"}}}],
-    indirect=True,
-)
-@pytest.mark.parametrize("json_jobs", [{}], indirect=True)
-@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache", "tzlocal_is_mtl")
-def test_get_gpu_type_without_prometheus(
-    test_config, sacct_json, remote, file_regression, cli_main, monkeypatch
-):
-    remote.expect(
-        host="raisin_no_prometheus",
-        cmd="/opt/slurm/bin/sacct  -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
-        out=f"Welcome on raisin_no_prometheus,\nThe sweetest supercomputer in the world!\n{sacct_json}".encode(
-            "utf-8"
-        ),
-    )
-
-    # Import here so that config() is setup correctly when CLI is created.
-    import sarc.cli  # noqa: F401
-
-    # Save slurm config in cache.
-    _save_slurm_conf(
-        "raisin_no_prometheus",
-        "2023-02-15",
-        "NodeName=cn-c0[18-30] Param1=Anything1 Param2=Anything2 Gres=gpu:asupergpu:4 Param3=Anything3",
-    )
-    # Acquire slurm config.
-    assert (
-        cli_main(
-            [
-                "acquire",
-                "slurmconfig",
-                "--cluster_name",
-                "raisin_no_prometheus",
-                "--day",
-                "2023-02-15",
-            ]
-        )
-        == 0
-    )
-
-    assert (
-        cli_main(
-            [
-                "acquire",
-                "jobs",
-                "--cluster_name",
-                "raisin_no_prometheus",
-                "--dates",
-                "2023-02-15",
-            ]
-        )
-        == 0
-    )
-
-    jobs = list(get_jobs())
-
-    assert len(jobs) == 1
-    job = jobs[0]
-    print(job)
-    print(job.nodes)
-    assert job.allocated.gpu_type == "Nec Plus ULTRA GPU 2000"
-
-    file_regression.check(
-        f"Found {len(jobs)} job(s):\n"
-        + "\n".join(
-            [job.model_dump_json(exclude={"id": True}, indent=4) for job in jobs]
-        )
-    )
-
-
-def _save_slurm_conf(cluster_name: str, day: str, content: str):
-    from sarc.cli.acquire.slurmconfig import SlurmConfigParser
-
-    scp = SlurmConfigParser(config().clusters[cluster_name], day)
-    folder = "slurm_conf"
-    filename = scp._cache_key()
-    cache_dir = config().cache
-    file_dir = cache_dir / folder
-    file_dir.mkdir(parents=True, exist_ok=True)
-    file_path = file_dir / filename
-    print(file_path)
-    with file_path.open("w") as file:
-        file.write(content)
-
-
-@pytest.mark.parametrize(
-    "test_config", [{"clusters": {"raisin": {"host": "raisin"}}}], indirect=True
-)
-@pytest.mark.parametrize("json_jobs", [{}], indirect=True)
-@pytest.mark.usefixtures("empty_read_write_db", "tzlocal_is_mtl")
-def test_save_job(
-    test_config, sacct_json, remote, file_regression, cli_main, prom_custom_query_mock
-):
-    remote.expect(
-        host="raisin",
-        cmd="/opt/slurm/bin/sacct  -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
+        cmd=f"export TZ=UTC && /opt/slurm/bin/sacct  -X -S {_dtfmt(2023, 2, 15)} -E {_dtfmt(2023, 2, 16)} --allusers --json",
         out=sacct_json.encode("utf-8"),
     )
 
@@ -544,9 +365,8 @@ def test_save_job(
                 "jobs",
                 "--cluster_name",
                 "raisin",
-                "--dates",
-                "2023-02-15",
-                "--no_prometheus",
+                "--intervals",
+                f"{_dtfmt(2023, 2, 15)}-{_dtfmt(2023, 2, 16)}",
             ]
         )
         == 0
@@ -565,15 +385,13 @@ def test_save_job(
     "test_config", [{"clusters": {"raisin": {"host": "raisin"}}}], indirect=True
 )
 @pytest.mark.parametrize("json_jobs", [{}], indirect=True)
-@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache", "tzlocal_is_mtl")
-def test_update_job(
-    test_config, sacct_json, remote, file_regression, cli_main, prom_custom_query_mock
-):
+@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache")
+def test_update_job(test_config, sacct_json, remote, file_regression, cli_main):
     remote.expect(
         host="raisin",
         commands=[
             Command(
-                cmd="/opt/slurm/bin/sacct  -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
+                cmd=f"export TZ=UTC && /opt/slurm/bin/sacct  -X -S {_dtfmt(2023, 2, 15)} -E {_dtfmt(2023, 2, 16)} --allusers --json",
                 out=sacct_json.encode("utf-8"),
             )
             for _ in range(2)
@@ -590,9 +408,8 @@ def test_update_job(
                 "jobs",
                 "--cluster_name",
                 "raisin",
-                "--dates",
-                "2023-02-15",
-                "--no_prometheus",
+                "--intervals",
+                f"{_dtfmt(2023, 2, 15)}-{_dtfmt(2023, 2, 16)}",
             ]
         )
         == 0
@@ -607,9 +424,8 @@ def test_update_job(
                 "jobs",
                 "--cluster_name",
                 "raisin",
-                "--dates",
-                "2023-02-15",
-                "--no_prometheus",
+                "--intervals",
+                f"{_dtfmt(2023, 2, 15)}-{_dtfmt(2023, 2, 16)}",
             ]
         )
         == 0
@@ -645,12 +461,10 @@ def test_update_job(
     ],
     indirect=True,
 )
-@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache", "tzlocal_is_mtl")
-def test_save_preempted_job(
-    test_config, sacct_json, remote, file_regression, cli_main, prom_custom_query_mock
-):
+@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache")
+def test_save_preempted_job(test_config, sacct_json, remote, file_regression, cli_main):
     remote.expect(
-        cmd="/opt/slurm/bin/sacct  -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
+        cmd=f"export TZ=UTC && /opt/slurm/bin/sacct  -X -S {_dtfmt(2023, 2, 15)} -E {_dtfmt(2023, 2, 16)} --allusers --json",
         host="raisin",
         out=sacct_json.encode("utf-8"),
     )
@@ -665,9 +479,8 @@ def test_save_preempted_job(
                 "jobs",
                 "--cluster_name",
                 "raisin",
-                "--dates",
-                "2023-02-15",
-                "--no_prometheus",
+                "--intervals",
+                f"{_dtfmt(2023, 2, 15)}-{_dtfmt(2023, 2, 16)}",
             ]
         )
         == 0
@@ -685,19 +498,18 @@ def test_save_preempted_job(
     )
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache", "tzlocal_is_mtl")
-def test_multiple_dates(
-    test_config, remote, file_regression, cli_main, prom_custom_query_mock
-):
+@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache")
+def test_multiple_dates(test_config, remote, file_regression, cli_main):
     datetimes = [
-        datetime(2023, 2, 15, tzinfo=MTL) + timedelta(days=i) for i in range(5)
+        datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC) + timedelta(days=i)
+        for i in range(5)
     ]
     remote.expect(
         host="raisin",
         commands=[
             Command(
                 cmd=(
-                    "/opt/slurm/bin/sacct  -X "
+                    "export TZ=UTC && /opt/slurm/bin/sacct  -X "
                     f"-S {job_submit_datetime.strftime('%Y-%m-%dT%H:%M')} "
                     f"-E {(job_submit_datetime + timedelta(days=1)).strftime('%Y-%m-%dT%H:%M')} "
                     "--allusers --json"
@@ -727,10 +539,12 @@ def test_multiple_dates(
                 "jobs",
                 "--cluster_name",
                 "raisin",
-                "--dates",
-                "2023-02-15",
-                "2023-02-16-2023-02-20",
-                "--no_prometheus",
+                "--intervals",
+                f"{_dtfmt(2023, 2, 15)}-{_dtfmt(2023, 2, 16)}",
+                f"{_dtfmt(2023, 2, 16)}-{_dtfmt(2023, 2, 17)}",
+                f"{_dtfmt(2023, 2, 17)}-{_dtfmt(2023, 2, 18)}",
+                f"{_dtfmt(2023, 2, 18)}-{_dtfmt(2023, 2, 19)}",
+                f"{_dtfmt(2023, 2, 19)}-{_dtfmt(2023, 2, 20)}",
             ]
         )
         == 0
@@ -748,13 +562,12 @@ def test_multiple_dates(
     )
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache", "tzlocal_is_mtl")
-def test_multiple_clusters_and_dates(
-    test_config, remote, file_regression, cli_main, prom_custom_query_mock
-):
+@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache")
+def test_multiple_clusters_and_dates(test_config, remote, file_regression, cli_main):
     cluster_names = ["raisin", "patate"]
     datetimes = [
-        datetime(2023, 2, 15, tzinfo=MTL) + timedelta(days=i) for i in range(2)
+        datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC) + timedelta(days=i)
+        for i in range(2)
     ]
 
     def _create_session(cluster_name, cmd_template, datetimes):
@@ -789,13 +602,13 @@ def test_multiple_clusters_and_dates(
     remote.expect_sessions(
         _create_session(
             "raisin",
-            "/opt/slurm/bin/sacct  -X -S {start} -E {end} --allusers --json",
+            "export TZ=UTC && /opt/slurm/bin/sacct  -X -S {start} -E {end} --allusers --json",
             datetimes=datetimes,
         ),
         _create_session(
             "patate",
             (
-                "/opt/software/slurm/bin/sacct "
+                "export TZ=UTC && /opt/software/slurm/bin/sacct "
                 "-A rrg-bonhomme-ad_gpu,rrg-bonhomme-ad_cpu,def-bonhomme_gpu,def-bonhomme_cpu "
                 "-X -S {start} -E {end} --allusers --json"
             ),
@@ -814,10 +627,9 @@ def test_multiple_clusters_and_dates(
                 "--cluster_name",
                 "raisin",
                 "patate",
-                "--dates",
-                "2023-02-15",
-                "2023-02-16",
-                "--no_prometheus",
+                "--intervals",
+                f"{_dtfmt(2023, 2, 15)}-{_dtfmt(2023, 2, 16)}",
+                f"{_dtfmt(2023, 2, 16)}-{_dtfmt(2023, 2, 17)}",
             ]
         )
         == 0
@@ -831,179 +643,6 @@ def test_multiple_clusters_and_dates(
         f"Found {len(jobs)} job(s):\n"
         + "\n".join(
             [job.model_dump_json(exclude={"id": True}, indent=4) for job in jobs]
-        )
-    )
-
-
-@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache", "tzlocal_is_mtl")
-def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
-    test_config,
-    remote,
-    file_regression,
-    cli_main,
-    prom_custom_query_mock,
-    caplog,
-    captrace,
-    monkeypatch,
-):
-    """
-    Copied from test_multiple_clusters_and_dates above, with changes:
-    - Added captrace to test tracing
-    - Removed `--no_prometheus` to test prometheus-related tracing
-    """
-
-    def _setup_logging_do_nothing(*args, **kwargs):
-        pass
-
-    monkeypatch.setattr("sarc.cli.setupLogging", _setup_logging_do_nothing)
-    caplog.set_level(logging.INFO)
-    cluster_names = ["raisin", "patate"]
-    datetimes = [
-        datetime(2023, 2, 15, tzinfo=MTL) + timedelta(days=i) for i in range(2)
-    ]
-
-    def _gen_error_command(cmd_template, job_submit_datetime):
-        return Command(
-            cmd=(
-                cmd_template.format(
-                    start=job_submit_datetime.strftime("%Y-%m-%dT%H:%M"),
-                    end=(job_submit_datetime + timedelta(days=1)).strftime(
-                        "%Y-%m-%dT%H:%M"
-                    ),
-                )
-            ),
-            exit=1,
-        )
-
-    def _create_session(cluster_name, cmd_template, datetimes):
-        return Session(
-            host=cluster_name,
-            commands=[
-                Command(
-                    cmd=(
-                        cmd_template.format(
-                            start=job_submit_datetime.strftime("%Y-%m-%dT%H:%M"),
-                            end=(job_submit_datetime + timedelta(days=1)).strftime(
-                                "%Y-%m-%dT%H:%M"
-                            ),
-                        )
-                    ),
-                    out=create_sacct_json(
-                        [
-                            {
-                                "job_id": job_id,
-                                "cluster": cluster_name,
-                                "time": {
-                                    "submission": int(job_submit_datetime.timestamp())
-                                },
-                            }
-                        ]
-                    ).encode("utf-8"),
-                )
-                for job_id, job_submit_datetime in enumerate(datetimes)
-            ]
-            + [_gen_error_command(cmd_template, datetime(2023, 3, 16, tzinfo=MTL))],
-        )
-
-    remote.expect_sessions(
-        _create_session(
-            "raisin",
-            "/opt/slurm/bin/sacct  -X -S {start} -E {end} --allusers --json",
-            datetimes=datetimes,
-        ),
-        _create_session(
-            "patate",
-            (
-                "/opt/software/slurm/bin/sacct "
-                "-A rrg-bonhomme-ad_gpu,rrg-bonhomme-ad_cpu,def-bonhomme_gpu,def-bonhomme_cpu "
-                "-X -S {start} -E {end} --allusers --json"
-            ),
-            datetimes=datetimes,
-        ),
-    )
-
-    # Import here so that config() is setup correctly when CLI is created.
-    import sarc.cli  # noqa: F401
-
-    assert (
-        cli_main(
-            [
-                "acquire",
-                "jobs",
-                "--cluster_name",
-                "raisin",
-                "patate",
-                "--dates",
-                "2023-02-15",
-                "2023-02-16",
-                "2023-03-16",
-            ]
-        )
-        == 0
-    )
-
-    jobs = list(get_jobs())
-
-    assert len(list(get_jobs())) == len(datetimes) * len(cluster_names)
-
-    # Check both jobs and trace in file regression
-    spans = captrace.get_finished_spans()
-    spans_data = [
-        {
-            "span_name": span.name,
-            "span_events": [event.name for event in span.events],
-            "span_attributes": dict(span.attributes),
-            "span_has_error": span.status.status_code == StatusCode.ERROR,
-        }
-        for span in reversed(spans)
-    ]
-
-    file_regression.check(
-        f"Found {len(jobs)} job(s):\n"
-        + "\n".join(
-            [job.model_dump_json(exclude={"id": True}, indent=4) for job in jobs]
-        )
-        + f"\n\nFound {len(spans)} span(s):\n"
-        + json.dumps(spans_data, indent=1)
-    )
-
-    # Check logging
-    print(caplog.text)
-    assert bool(
-        re.search(
-            r"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Acquire data on raisin for date: 2023-02-15 00:00:00-05:00 \(is_auto=False\)",
-            caplog.text,
-        )
-    )
-    assert bool(
-        re.search(
-            r"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Acquire data on patate for date: 2023-02-15 00:00:00-05:00 \(is_auto=False\)",
-            caplog.text,
-        )
-    )
-    assert (
-        "Getting the sacct data for cluster raisin, date 2023-02-15 00:00:00-05:00..."
-        in caplog.text
-    )
-    assert "Saving into mongodb collection '" in caplog.text
-    assert bool(
-        re.search(
-            r"sarc\.jobs\.sacct:sacct\.py:[0-9]+ Saved [0-9]+/[0-9]+ entries\.",
-            caplog.text,
-        )
-    )
-
-    # There should be 2 acquisition errors for unexpected data 2023-03-16, one per cluster.
-    assert bool(
-        re.search(
-            r"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Failed to acquire data for raisin on 2023-03-16 00:00:00-04:00:",
-            caplog.text,
-        )
-    )
-    assert bool(
-        re.search(
-            r"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Failed to acquire data for patate on 2023-03-16 00:00:00-04:00:",
-            caplog.text,
         )
     )
 
@@ -1028,10 +667,10 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     "test_config", [{"clusters": {"patate": {"host": "patate"}}}], indirect=True
 )
 @pytest.mark.usefixtures("empty_read_write_db")
-def test_job_tz(test_config, sacct_json, remote, cli_main, prom_custom_query_mock):
+def test_job_tz(test_config, sacct_json, remote, cli_main):
     remote.expect(
         host="patate",
-        cmd="/opt/software/slurm/bin/sacct -A rrg-bonhomme-ad_gpu,rrg-bonhomme-ad_cpu,def-bonhomme_gpu,def-bonhomme_cpu -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
+        cmd="export TZ=UTC && /opt/software/slurm/bin/sacct -A rrg-bonhomme-ad_gpu,rrg-bonhomme-ad_cpu,def-bonhomme_gpu,def-bonhomme_cpu -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
         out=sacct_json.encode("utf-8"),
     )
 
@@ -1042,9 +681,8 @@ def test_job_tz(test_config, sacct_json, remote, cli_main, prom_custom_query_moc
                 "jobs",
                 "--cluster_name",
                 "patate",
-                "--dates",
-                "2023-02-15",
-                "--no_prometheus",
+                "--intervals",
+                "2023-02-15T00:00-2023-02-16T00:00",
             ]
         )
         == 0
@@ -1053,67 +691,6 @@ def test_job_tz(test_config, sacct_json, remote, cli_main, prom_custom_query_moc
     jobs = list(get_jobs())
     assert len(jobs) == 1
     assert jobs[0].submit_time == datetime(2023, 2, 15, 12 + 3, 0, 0, tzinfo=MTL)
-
-
-@pytest.mark.usefixtures("tzlocal_is_mtl", "enabled_cache")
-@pytest.mark.parametrize("json_jobs", [{}], indirect=True)
-@pytest.mark.usefixtures("empty_read_write_db")
-@pytest.mark.parametrize("no_prometheus", [True, False])
-def test_cli_ignore_stats(
-    sacct_json,
-    cli_main,
-    scraper,
-    no_prometheus,
-    monkeypatch,
-    prom_custom_query_mock,
-):
-    # We'd like to test that this starts with "/tmp/pytest",
-    # but this isn't the case when we run the tests on Mac OS,
-    # ending up in '/private/var/folders/*/pytest-of-gyomalin/pytest-63'.
-    assert "pytest" in str(scraper.get_raw.cache_dir)
-
-    print(scraper.get_raw.cache_dir)
-    scraper.get_raw.cache_dir.mkdir(parents=True, exist_ok=True)
-
-    cache_path = scraper.get_raw.cache_dir / scraper.get_raw.key().format(
-        time=datetime.now()
-    )
-
-    with open(cache_path, "w") as f:
-        f.write(sacct_json)
-
-    def mock_compute_job_statistics(job):
-        mock_compute_job_statistics.called += 1
-        return JobStatistics()
-
-    mock_compute_job_statistics.called = 0
-
-    monkeypatch.setattr(
-        "sarc.jobs.series.compute_job_statistics", mock_compute_job_statistics
-    )
-
-    args = [
-        "acquire",
-        "jobs",
-        "--cluster_name",
-        "raisin",
-        "--dates",
-        "2023-02-14",
-    ]
-
-    if no_prometheus:
-        args += ["--no_prometheus"]
-
-    assert len(list(get_jobs())) == 0
-
-    assert cli_main(args) == 0
-
-    assert len(list(get_jobs())) > 0
-
-    if no_prometheus:
-        assert mock_compute_job_statistics.called == 0
-    else:
-        assert mock_compute_job_statistics.called >= 1
 
 
 @pytest.mark.parametrize(
@@ -1134,3 +711,218 @@ def test_parse_sacct_slurm_versions(sacct_outputs, scraper):
     )
     jobs = list(scraper)
     assert len(jobs) == 1
+
+
+def test_acquire_jobs_mutually_exclusive_args(cli_main, caplog):
+    # Both --intervals and --auto_interval: must fail
+    assert (
+        cli_main(
+            [
+                "acquire",
+                "jobs",
+                "--cluster_name",
+                "raisin",
+                "--intervals",
+                "2023-02-15T00:00-2023-02-16T00:00",
+                "--auto_interval",
+                "10",
+            ]
+        )
+        == -1
+    )
+
+    assert not list(get_jobs())
+    assert (
+        "Parameters mutually exclusive: either --intervals or --auto_interval, not both"
+        in caplog.text
+    )
+
+
+def test_acquire_jobs_invalid_interval(cli_main, caplog):
+    # Malformed interval
+    assert (
+        cli_main(
+            [
+                "acquire",
+                "jobs",
+                "--cluster_name",
+                "raisin",
+                "--intervals",
+                "2023-02-15x00:00-2023-02-16T00:00",
+            ]
+        )
+        == 0
+    )
+    assert not list(get_jobs())
+    assert (
+        "Invalid interval 2023-02-15x00:00-2023-02-16T00:00 ; skipping cluster"
+        in caplog.text
+    )
+
+
+def test_acquire_jobs_interval_start_gt_end(cli_main, caplog):
+    # Malformed interval: start > end
+    assert (
+        cli_main(
+            [
+                "acquire",
+                "jobs",
+                "--cluster_name",
+                "raisin",
+                "--intervals",
+                "2023-02-17T00:00-2023-02-16T00:00",
+            ]
+        )
+        == 0
+    )
+    assert not list(get_jobs())
+    assert (
+        "Interval: 2023-02-17 00:00:00+00:00 > 2023-02-16 00:00:00+00:00 ; skipping cluster"
+        in caplog.text
+    )
+
+
+def test_acquire_jobs_args_no_interval(cli_main, caplog):
+    # No interval, nothing to do
+    assert (
+        cli_main(
+            [
+                "acquire",
+                "jobs",
+                "--cluster_name",
+                "raisin",
+            ]
+        )
+        == 0
+    )
+    assert not list(get_jobs())
+    assert "No --intervals or --auto_interval parsed, nothing to do." in caplog.text
+
+
+def _get_cluster_raisin():
+    return [
+        cluster
+        for cluster in get_available_clusters()
+        if cluster.cluster_name == "raisin"
+    ][0]
+
+
+@pytest.mark.usefixtures("read_write_db", "enabled_cache")
+def test_auto_interval(cli_main, monkeypatch, freezer, caplog):
+    """Test auto_interval and check generated cache files."""
+
+    def mock_fetch_raw(*args, **kwargs):
+        mock_fetch_raw.called += 1
+        return {"jobs": []}
+
+    mock_fetch_raw.called = 0
+
+    import sarc.jobs.sacct
+
+    monkeypatch.setattr(sarc.jobs.sacct.SAcctScraper, "fetch_raw", mock_fetch_raw)
+
+    orig_end_time = datetime.strptime(
+        _get_cluster_raisin().end_time_sacct, "%Y-%m-%dT%H:%M"
+    )
+    expected_final_end_time = orig_end_time + timedelta(minutes=300)
+    freezer.move_to(expected_final_end_time)
+
+    sacct_folder = config().cache / "sacct"
+    # Cache should not yet exist
+    assert not sacct_folder.exists()
+    assert (
+        cli_main(
+            [
+                "-v",
+                "acquire",
+                "jobs",
+                "--cluster_name",
+                "raisin",
+                "--auto_interval",
+                "60",
+            ]
+        )
+        == 0
+    )
+    print(caplog.text)
+    # end_time_sacct should have been updated
+    assert (
+        datetime.strptime(_get_cluster_raisin().end_time_sacct, "%Y-%m-%dT%H:%M")
+        == expected_final_end_time
+    )
+    # 300 minutes every 60 minutes => 5 intervals => 5 cached files
+    assert mock_fetch_raw.called == 5
+    assert sacct_folder.exists()
+    cached_filenames = sorted(path.name for path in sacct_folder.iterdir())
+    assert len(cached_filenames) == 5
+
+    def _str_next_time(minutes: int):
+        next_time = orig_end_time + timedelta(minutes=minutes)
+        return next_time.strftime("%Y-%m-%dT%H:%M")
+
+    expected_filenames = [
+        f"raisin.{_str_next_time(0)}.{_str_next_time(60)}.json",
+        f"raisin.{_str_next_time(60)}.{_str_next_time(120)}.json",
+        f"raisin.{_str_next_time(120)}.{_str_next_time(180)}.json",
+        f"raisin.{_str_next_time(180)}.{_str_next_time(240)}.json",
+        f"raisin.{_str_next_time(240)}.{_str_next_time(300)}.json",
+    ]
+    assert cached_filenames == expected_filenames
+
+
+@pytest.mark.freeze_time
+@pytest.mark.usefixtures("read_write_db", "enabled_cache")
+def test_auto_interval_0(cli_main, monkeypatch, freezer, caplog):
+    """Test auto_interval with unique interval and check generated cache files."""
+
+    def mock_fetch_raw(scrp):
+        mock_fetch_raw.called += 1
+        return {"jobs": []}
+
+    mock_fetch_raw.called = 0
+
+    import sarc.jobs.sacct
+
+    monkeypatch.setattr(sarc.jobs.sacct.SAcctScraper, "fetch_raw", mock_fetch_raw)
+
+    orig_end_time = datetime.strptime(
+        _get_cluster_raisin().end_time_sacct, "%Y-%m-%dT%H:%M"
+    )
+    expected_final_end_time = orig_end_time + timedelta(minutes=300)
+    freezer.move_to(expected_final_end_time)
+
+    sacct_folder = config().cache / "sacct"
+    # Cache should not yet exist
+    assert not sacct_folder.exists()
+    assert (
+        cli_main(
+            [
+                "-v",
+                "acquire",
+                "jobs",
+                "--cluster_name",
+                "raisin",
+                "--auto_interval",
+                "0",  # no minutes => take whole time
+            ]
+        )
+        == 0
+    )
+    print(caplog.text)
+    # end_time_sacct should have been updated
+    assert (
+        datetime.strptime(_get_cluster_raisin().end_time_sacct, "%Y-%m-%dT%H:%M")
+        == expected_final_end_time
+    )
+    # We expected only 1 interval and cache
+    assert mock_fetch_raw.called == 1
+    assert sacct_folder.exists()
+    cached_filenames = sorted(path.name for path in sacct_folder.iterdir())
+    assert len(cached_filenames) == 1
+
+    def _str_next_time(minutes: int):
+        next_time = orig_end_time + timedelta(minutes=minutes)
+        return next_time.strftime("%Y-%m-%dT%H:%M")
+
+    expected_filenames = [f"raisin.{_str_next_time(0)}.{_str_next_time(300)}.json"]
+    assert cached_filenames == expected_filenames
