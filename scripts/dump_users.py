@@ -4,8 +4,9 @@
 #     "pymongo",
 # ]
 # ///
-from pymongo import MongoClient
 import json
+
+from pymongo import MongoClient
 
 connection_string = "mongodb://readuser:readpwd@localhost:27017/sarc"
 database_name = "sarc"
@@ -15,8 +16,7 @@ db = client.get_database(database_name)
 users = list(db.users.find())
 
 for u in users:
-    del u['_id']
+    del u["_id"]
 
 with open("old_users.json", "w") as f:
     json.dump(users, f, default=str)
-
