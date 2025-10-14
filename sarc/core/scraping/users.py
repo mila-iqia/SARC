@@ -1,11 +1,12 @@
 from collections.abc import Iterable
+from datetime import UTC, datetime
 from importlib.metadata import entry_points
 from typing import Any, Protocol, Type
 
 from pydantic import BaseModel, Field, field_serializer
 from serieux import deserialize
 
-from sarc.cache import CachePolicy
+from sarc.cache import Cache
 from sarc.core.models.users import Credentials, MemberType
 from sarc.core.models.validators import ValidField
 
@@ -128,34 +129,47 @@ def update_user_match(*, value: UserMatch, update: UserMatch) -> None:
     )
 
 
-def scrape_users(
-    scrapers: list[tuple[str, Any]], _cache_policy: CachePolicy = CachePolicy.use
-) -> Iterable[UserMatch]:
-    """
-    Perform user scraping and matching according to the list of plugins passed in.
-
-    The first plugin to specify information wins in case of conflict.
-
-    This returns one UserMatch structure per scraped user, across all plugins.
-    The collected information is aggregated amongst plugins, but not with the
-    information in the database.
-    """
-    raw_data: dict[str, tuple[bytes, Any]] = {}
+def fetch_users(scrapers: list[tuple[str, Any]]) -> None:
+    """Fetch user data and place the results in cache."""
+    cache = Cache(subdirectory="users")
     for scraper_name, config_data in scrapers:
         try:
             scraper = get_user_scraper(scraper_name)
         except KeyError as e:
             raise ValueError("Invalid user scraper") from e
         config = scraper.validate_config(config_data)
-        raw_data[scraper_name] = (scraper.get_user_data(config), config)
+        cache.save(
+            key=scraper_name,
+            at_time=datetime.now(UTC),
+            value=scraper.get_user_data(config),
+        )
 
-    # TODO: save the raw data for cache purposes
-    #  - Should refactor cache so that we don't *have* to use the function wrapper interface
 
+def parse_users(
+    scrapers: list[tuple[str, Any]], from_: datetime
+) -> Iterable[UserMatch]:
+    """Parse user data from the cache.
+
+    This returns one UserMatch structure per scraped user, across all plugins.
+    The collected information is aggregated amongst plugins, but not with the
+    information in the database.
+
+    from_: start parsing cached date from that date.
+    """
+    cache = Cache(subdirectory="users")
     # UserMatches, referenced by plugin name and matching id
     user_refs: dict[MatchID, UserMatch] = {}
-    for scraper_name, (rdata, config) in raw_data.items():
-        scraper = get_user_scraper(scraper_name)
+    scrapers_dict: dict[str, tuple[UserScraper, Any]] = {}
+    for scraper_name, config_data in scrapers:
+        try:
+            scraper = get_user_scraper(scraper_name)
+        except KeyError as e:
+            raise ValueError("Invalid user scraper") from e
+        config = scraper.validate_config(config_data)
+        scrapers_dict[scraper_name] = (scraper, config)
+
+    for key, rdata in cache.read_from_all(from_time=from_):
+        scraper, config = scrapers_dict[key]
         for userm in scraper.parse_user_data(config, rdata):
             userm.matching_id.name = scraper_name
             # First, get all the userm that match with this one.

@@ -84,6 +84,9 @@ class Cache:
 
     subdirectory: str
 
+    def __init__(self, subdirectory: str):
+        self.subdirectory = subdirectory
+
     @property
     def cache_dir(self) -> Path:
         """Get the cache directory path for this cache instance.
@@ -134,27 +137,18 @@ class Cache:
             output_fp.write(value)
         logger.debug("saved to cache file '%s'", output_file)
 
-    def read_from(self, key: str, from_time: datetime) -> Iterable[bytes]:
-        """Read cached entries for a key starting from a specific datetime.
+    def _paths_from(self, from_time: datetime) -> Iterable[Path]:
+        """Returns paths starting from a specific datetime.
 
-        Returns an iterator over all cached entries for the given key that
-        were created at or after the specified time. Searches through the
-        date hierarchy starting from the given date and continuing forward
-        through all subsequent dates.
+        Returns an iterator over all cached entries that were created at or
+        after the specified time. Searches through the date hierarchy starting
+        from the given date and continuing forward through all subsequent dates.
 
         Args:
-            key: The cache key to search for (filename suffix).
-            from_time: The earliest datetime to include in results. Will be
-                      converted to UTC if it has timezone info.
+            from_time: The earliest datetime to include in results.
 
         Yields:
-            bytes: The binary data from each matching cache entry.
-
-        Example:
-            >>> cache = Cache()
-            >>> start_time = datetime(2024, 1, 15, 10, 0, 0)
-            >>> for data in cache.read_from("user_data", start_time):
-            ...     print(f"Found cached data: {len(data)} bytes")
+            Path: The path for each matching cache entry.
         """
         cdir = self.cache_dir
         from_time = ensure_utc(from_time)
@@ -166,12 +160,9 @@ class Cache:
             for file in filter(
                 lambda fname: time.fromisoformat(fname.parts[-1].split(".")[0])
                 >= from_time_nodays,
-                filter(
-                    lambda fname: fname.parts[-1].endswith(key),
-                    sorted(first_dir.iterdir()),
-                ),
+                sorted(first_dir.iterdir()),
             ):
-                yield file.read_bytes()
+                yield file
 
         from_time.replace(hour=0, minute=0, second=0, microsecond=0)
         from_time += timedelta(days=1)
@@ -187,13 +178,62 @@ class Cache:
                     while month == from_time.month:
                         day_dir = month_dir / f"{from_time.day:02}"
                         if day_dir.exists():
-                            for file in filter(
-                                lambda fname: fname.parts[-1].endswith(key),
-                                sorted(day_dir.iterdir()),
-                            ):
-                                yield file.read_bytes()
+                            for file in sorted(day_dir.iterdir()):
+                                yield file
                         from_time += timedelta(days=1)
             year_dir = cdir / f"{from_time.year:04}"
+
+    def read_from(self, key: str, from_time: datetime) -> Iterable[bytes]:
+        """Read cached entries for a key starting from a specific datetime.
+
+        Returns an iterator over all cached entries for the given key that
+        were created at or after the specified time. Searches through the
+        date hierarchy starting from the given date and continuing forward
+        through all subsequent dates.
+
+        Args:
+            key: The cache key to search for.
+            from_time: The earliest datetime to include in results.
+
+        Yields:
+            bytes: The binary data from each matching cache entry.
+
+        Example:
+            >>> cache = Cache()
+            >>> start_time = datetime(2024, 1, 15, 10, 0, 0)
+            >>> for data in cache.read_from("user_data", start_time):
+            ...     print(f"Found cached data: {len(data)} bytes")
+        """
+        for file in filter(
+            lambda fname: fname.parts[-1].endswith(key), self._paths_from(from_time)
+        ):
+            yield file.read_bytes()
+
+    def read_from_all(self, from_time: datetime) -> Iterable[tuple[str, bytes]]:
+        """Read all cached entries starting from a specific datetime.
+
+        Returns an iterator over all cached entries that were created at or after
+        the specified time. Unlike `read_from()`, this method returns entries for
+        all keys, not just a specific key. The cache files are searched through
+        the date hierarchy starting from the given date and continuing forward
+        through all subsequent dates.
+
+        Args:
+            from_time: The earliest datetime to include in results. Must be UTC.
+
+        Yields:
+            tuple[str, bytes]: A tuple containing:
+                - The cache key
+                - The binary data from the cache entry
+
+        Example:
+            >>> cache = Cache("my_data")
+            >>> start_time = datetime(2024, 1, 15, 10, 0, 0)
+            >>> for key, data in cache.read_from_all(start_time):
+            ...     print(f"Key: {key}, Data size: {len(data)} bytes")
+        """
+        for file in self._paths_from(from_time):
+            yield file.parts[-1].split(".", maxsplit=1)[1], file.read_bytes()
 
 
 @dataclass
