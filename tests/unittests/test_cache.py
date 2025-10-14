@@ -9,11 +9,11 @@ import pytest
 
 from sarc.cache import (
     BinaryFormatter,
-    Cache,
     CacheException,
     CachePolicy,
     FormatterProto,
     JSONFormatter,
+    OldCache,
     _cache_policy_from_env,
     cache_policy_var,
     make_cached_function,
@@ -381,7 +381,7 @@ def test_binary_formatter(tmp_path):
 
 
 def test_cache_read_save_none_at_time(tmp_path):
-    cache = Cache(cache_root=tmp_path, subdirectory="", formatter=JSONFormatter)
+    cache = OldCache(cache_root=tmp_path, subdirectory="", formatter=JSONFormatter)
 
     cache.save("test.json", {"data": "value"}, at_time=None)
 
@@ -390,7 +390,7 @@ def test_cache_read_save_none_at_time(tmp_path):
 
 
 def test_cache_read_valid_true(tmp_path):
-    cache = Cache(cache_root=tmp_path, subdirectory="", formatter=JSONFormatter)
+    cache = OldCache(cache_root=tmp_path, subdirectory="", formatter=JSONFormatter)
 
     cache.save("test.json", {"data": "value"})
 
@@ -399,7 +399,7 @@ def test_cache_read_valid_true(tmp_path):
 
 
 def test_cache_malformed_file(tmp_path):
-    cache = Cache(cache_root=tmp_path, subdirectory="", formatter=JSONFormatter)
+    cache = OldCache(cache_root=tmp_path, subdirectory="", formatter=JSONFormatter)
 
     # Create a malformed JSON file
     malformed_file = tmp_path / "malformed.json"
@@ -609,7 +609,7 @@ def test_cache_read_valid_true_with_time_parsing(tmp_path):
     """Test Cache._read_for_key when valid is True and time parsing is needed."""
     from sarc.cache import CacheException
 
-    cache = Cache(cache_root=tmp_path, subdirectory="", formatter=JSONFormatter)
+    cache = OldCache(cache_root=tmp_path, subdirectory="", formatter=JSONFormatter)
     test_time = datetime.now(UTC)
     valid_timedelta = timedelta(days=1)
 
@@ -696,7 +696,7 @@ def test_cache_policy_none_uses_env_default(tmp_path, monkeypatch):
 
 @pytest.mark.freeze_time("2024-06-01")
 def test_cache_read_valid_true_with_time_parsing_complex(tmp_path, caplog):
-    cache = Cache(cache_root=tmp_path, subdirectory="", formatter=JSONFormatter)
+    cache = OldCache(cache_root=tmp_path, subdirectory="", formatter=JSONFormatter)
 
     test_time1 = datetime(2024, 6, 1, 2, tzinfo=UTC)
     test_time2 = datetime(2024, 6, 1, 4, tzinfo=UTC)
@@ -740,7 +740,7 @@ def test_cache_read_valid_true_with_time_parsing_complex(tmp_path, caplog):
 
 
 def test_cache_save(tmp_path):
-    cache = Cache(cache_root=tmp_path, subdirectory="", formatter=JSONFormatter)
+    cache = OldCache(cache_root=tmp_path, subdirectory="", formatter=JSONFormatter)
 
     cache.save("test.json", {"data": "value"})
 
