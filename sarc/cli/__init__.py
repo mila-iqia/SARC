@@ -52,6 +52,7 @@ class NiceHandler(logging.StreamHandler):
 @dataclass
 class CLI:
     command: Acquire | Db | Health | Fetch | Parse = subparsers(
+
         {"acquire": Acquire, "db": Db, "health": Health, "fetch": Fetch, "parse": Parse}
     )
 

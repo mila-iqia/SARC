@@ -221,6 +221,7 @@ class Cache:
         first_year_done = False
         first_month_done = False
 
+
         for year_dir in sorted(
             filter(lambda y: int(y.parts[-1]) >= from_time.year, cdir.iterdir())
         ):
@@ -308,6 +309,7 @@ def _basename_to_int(path: Path) -> int:
 
 def _basename_to_time(path: Path) -> time:
     return time.fromisoformat(path.parts[-1])
+
 
 @dataclass
 class CachedResult[T]:

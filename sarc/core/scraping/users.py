@@ -196,6 +196,7 @@ def parse_users(from_: datetime) -> Iterable[UserMatch]:
                 # First, get all the userm that match with this one.
                 prev_userms: list[UserMatch] = [userm]
                 prev = user_refs.get(userm.matching_id, None)
+
                 if prev is not None:
                     prev_userms.append(prev)
                 for mid in userm.known_matches:
