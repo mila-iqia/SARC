@@ -4,9 +4,10 @@ import json
 import logging
 import os
 import re
+from collections.abc import Iterable
 from contextvars import ContextVar
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, time, timedelta
 from enum import Enum
 from functools import partial, wraps
 from pathlib import Path
@@ -64,6 +65,137 @@ class CacheException(Exception):
     pass
 
 
+def ensure_utc(d: datetime) -> datetime:
+    assert d.tzinfo is not None
+    return d.astimezone(UTC)
+
+
+class Cache:
+    """A simple file-based cache that stores data organized by date.
+
+    This cache stores binary data in a hierarchical directory structure based on
+    the date when the data was cached. Files are organized as:
+    cache_root/subdirectory/YYYY/MM/DD/HH:MM:SS.key
+
+    Attributes:
+        subdirectory: The subdirectory name within the cache root where data
+                     will be stored.
+    """
+
+    subdirectory: str
+
+    @property
+    def cache_dir(self) -> Path:
+        """Get the cache directory path for this cache instance.
+
+        Creates the directory if it doesn't exist.
+
+        Returns:
+            Path: The absolute path to the cache directory.
+        """
+        root = config().cache
+        assert root is not None
+        res = root / self.subdirectory
+        res.mkdir(parents=True, exist_ok=True)
+        return res
+
+    def _dir_from_date(self, cdir: Path, d: datetime) -> Path:
+        """Get the directory path for a specific date within the cache.
+
+        Args:
+            cdir: The base cache directory path.
+            d: The datetime for which to get the directory path.
+
+        Returns:
+            Path: The path to the date-specific directory.
+        """
+        return cdir / f"{d.year:04}" / f"{d.month:02}" / f"{d.day:02}"
+
+    def save(self, key: str, at_time: datetime, value: bytes) -> None:
+        """Save binary data to the cache for a specific key and timestamp.
+
+        Args:
+            key: The cache key identifier.
+            at_time: The datetime when this data was generated, must be in UTC.
+            value: The binary data to store in the cache.
+
+        Example:
+            >>> cache = Cache()
+            >>> cache.save("data", datetime.now(), b"binary data")
+        """
+        cdir = self.cache_dir
+
+        at_time = ensure_utc(at_time)
+
+        output_file = self._dir_from_date(cdir, at_time) / at_time.strftime(
+            f"%H:%M:%S.{key}"
+        )
+        with open(output_file, "wb") as output_fp:
+            output_fp.write(value)
+        logger.debug("saved to cache file '%s'", output_file)
+
+    def read_from(self, key: str, from_time: datetime) -> Iterable[bytes]:
+        """Read cached entries for a key starting from a specific datetime.
+
+        Returns an iterator over all cached entries for the given key that
+        were created at or after the specified time. Searches through the
+        date hierarchy starting from the given date and continuing forward
+        through all subsequent dates.
+
+        Args:
+            key: The cache key to search for (filename suffix).
+            from_time: The earliest datetime to include in results. Will be
+                      converted to UTC if it has timezone info.
+
+        Yields:
+            bytes: The binary data from each matching cache entry.
+
+        Example:
+            >>> cache = Cache()
+            >>> start_time = datetime(2024, 1, 15, 10, 0, 0)
+            >>> for data in cache.read_from("user_data", start_time):
+            ...     print(f"Found cached data: {len(data)} bytes")
+        """
+        cdir = self.cache_dir
+        from_time = ensure_utc(from_time)
+
+        first_dir = self._dir_from_date(cdir, from_time)
+
+        if first_dir.exists():
+            from_time_nodays = from_time.time()
+            for file in filter(
+                lambda fname: time.fromisoformat(fname.parts[-1].split(".")[0])
+                >= from_time_nodays,
+                filter(
+                    lambda fname: fname.parts[-1].endswith(key),
+                    sorted(first_dir.iterdir()),
+                ),
+            ):
+                yield file.read_bytes()
+
+        from_time.replace(hour=0, minute=0, second=0, microsecond=0)
+        from_time += timedelta(days=1)
+
+        year_dir = cdir / f"{from_time.year:04}"
+
+        while year_dir.exists():
+            year = from_time.year
+            while year == from_time.year:
+                month_dir = year_dir / f"{from_time.month:02}"
+                if month_dir.exists():
+                    month = from_time.month
+                    while month == from_time.month:
+                        day_dir = month_dir / f"{from_time.day:02}"
+                        if day_dir.exists():
+                            for file in filter(
+                                lambda fname: fname.parts[-1].endswith(key),
+                                sorted(day_dir.iterdir()),
+                            ):
+                                yield file.read_bytes()
+                        from_time += timedelta(days=1)
+            year_dir = cdir / f"{from_time.year:04}"
+
+
 @dataclass
 class CachedResult[T]:
     """Represents a result computed at some time."""
@@ -109,7 +241,7 @@ def _cache_policy_from_env() -> CachePolicy:
 
 
 @dataclass(kw_only=True)
-class Cache[T]:
+class OldCache[T]:
     formatter: type[FormatterProto[T]] = JSONFormatter[T]
     cache_root: Path | None
     subdirectory: str
@@ -178,6 +310,7 @@ class Cache[T]:
             possible = [c for c in candidates if c.name <= maximum]
             for candidate in possible:
                 if valid is True:
+                    # The specific value doesn't matter, it's ignored later
                     candidate_time = datetime.now(UTC)
                 else:
                     m = re.match(
@@ -221,7 +354,7 @@ class Cache[T]:
 
 
 @dataclass(kw_only=True)
-class CachedFunction[**P, R](Cache[R]):  # pylint: disable=too-many-instance-attributes
+class CachedFunction[**P, R](OldCache[R]):  # pylint: disable=too-many-instance-attributes
     fn: Callable[P, R]
     key: Callable[P, str | None]
     validity: timedelta | Callable[P, timedelta] | Literal[True] = True
