@@ -16,6 +16,8 @@ from pathlib import Path
 from typing import IO, Any, Callable, ClassVar, Literal, Protocol, overload
 from zipfile import ZIP_LZMA, ZipFile
 
+from dateutil.relativedelta import relativedelta
+
 from .config import config
 from .core.models.validators import datetime_utc
 
@@ -220,7 +222,6 @@ class Cache:
 
         first_year_done = False
         first_month_done = False
-
 
         for year_dir in sorted(
             filter(lambda y: int(y.parts[-1]) >= from_time.year, cdir.iterdir())
