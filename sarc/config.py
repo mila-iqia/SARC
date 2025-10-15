@@ -216,6 +216,7 @@ class ClientConfig:
         """
         Return a convenient path to be used as lock file for database operations.
         """
+        assert self.cache
         return self.cache / "lockfile.lock"
 
 
