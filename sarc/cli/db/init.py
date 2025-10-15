@@ -279,3 +279,12 @@ def create_jobs_indices(db: Database) -> None:
             ("latest_scraped_end", pymongo.ASCENDING),
         ],
     )
+
+    # Index most useful for querying jobs with potential prometheus data
+    db_collection.create_index(
+        [
+            ("cluster_name", pymongo.ASCENDING),
+            ("allocated.gpu_type", pymongo.ASCENDING),
+            ("stored_statistics", pymongo.ASCENDING),
+        ],
+    )
