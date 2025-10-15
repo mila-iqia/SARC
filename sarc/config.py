@@ -206,7 +206,7 @@ class UserScrapingConfig:
 @dataclass
 class ClientConfig:
     mongo: MongoConfig
-    cache: Path
+    cache: Path | None = None
     loki: LokiConfig | None = None
     tempo: TempoConfig | None = None
     health_monitor: HealthMonitorConfig | None = None

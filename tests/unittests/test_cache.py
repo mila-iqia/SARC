@@ -1,14 +1,17 @@
 import json
 import logging
 import os
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
+from zipfile import ZIP_LZMA, ZipFile
 
 import gifnoc
 import pytest
 
 from sarc.cache import (
     BinaryFormatter,
+    Cache,
+    CacheEntry,
     CacheException,
     CachePolicy,
     FormatterProto,
@@ -16,6 +19,7 @@ from sarc.cache import (
     OldCache,
     _cache_policy_from_env,
     cache_policy_var,
+    ensure_utc,
     make_cached_function,
     with_cache,
 )
@@ -512,6 +516,7 @@ def test_make_cached_function_with_config_cache(tmp_path):
             cache_root=None,
         )
 
+        assert cached_fn.cache_dir is not None
         assert cached_fn.cache_dir.parent == mock_cache_path
 
         result = cached_fn(1, 2)
@@ -739,7 +744,7 @@ def test_cache_read_valid_true_with_time_parsing_complex(tmp_path, caplog):
     assert caplog.messages[0].startswith("Could not parse time from cache file name")
 
 
-def test_cache_save(tmp_path):
+def test_old_cache_save(tmp_path):
     cache = OldCache(cache_root=tmp_path, subdirectory="", formatter=JSONFormatter)
 
     cache.save("test.json", {"data": "value"})
@@ -788,3 +793,332 @@ def test_key_function_returns_none(tmp_path):
         assert len(list(cache_dir.iterdir())) == 0
     else:
         assert not cache_dir.exists()
+
+
+# Tests for Cache and CacheEntry classes
+
+
+def test_cache_entry_add_get_value(tmp_path):
+    """Test CacheEntry add_value and get_value methods."""
+
+    # Create a test zip file manually to test CacheEntry
+    test_file = tmp_path / "test.zip"
+    with ZipFile(test_file, "w", compression=ZIP_LZMA) as zf:
+        zf.writestr("key1", b"value1")
+        zf.writestr("key2", b"value2")
+
+    # Test CacheEntry with existing zip file
+    with ZipFile(test_file, "r") as zf:
+        entry = CacheEntry(zf)
+
+        # Test get_value
+        assert entry.get_value("key1") == b"value1"
+        assert entry.get_value("key2") == b"value2"
+
+        # Test get_keys
+        keys = entry.get_keys()
+        assert "key1" in keys
+        assert "key2" in keys
+        assert len(keys) == 2
+
+
+def test_cache_entry_add_value(tmp_path):
+    """Test CacheEntry add_value method."""
+
+    # Create a new zip file for writing
+    test_file = tmp_path / "test_write.zip"
+    with ZipFile(test_file, "x", compression=ZIP_LZMA) as zf:
+        entry = CacheEntry(zf)
+
+        # Add values
+        entry.add_value("test_key", b"test_value")
+        entry.add_value("another_key", b"another_value")
+
+        # Close the entry
+        entry.close()
+
+    # Verify the zip file was created and contains the data
+    with ZipFile(test_file, "r") as zf:
+        assert zf.read("test_key") == b"test_value"
+        assert zf.read("another_key") == b"another_value"
+        assert zf.namelist() == ["test_key", "another_key"]
+
+
+def test_cache_initialization(tmp_path):
+    """Test Cache class initialization."""
+    with gifnoc.overlay({"sarc.cache": str(tmp_path)}):
+        cache = Cache("test_subdirectory")
+        assert cache.subdirectory == "test_subdirectory"
+
+
+def test_cache_cache_dir_property(tmp_path):
+    """Test Cache cache_dir property with config override."""
+    cache = Cache("test_subdir")
+
+    with gifnoc.overlay({"sarc.cache": str(tmp_path)}):
+        cache_dir = cache.cache_dir
+        expected_dir = tmp_path / "test_subdir"
+        assert cache_dir == expected_dir
+        assert cache_dir.exists()
+
+
+def test_cache_dir_from_date(tmp_path):
+    """Test Cache _dir_from_date method."""
+
+    with gifnoc.overlay({"sarc.cache": str(tmp_path)}):
+        cache = Cache("test")
+        test_date = datetime(2024, 3, 15, 10, 30, 45, tzinfo=UTC)
+
+        result = cache._dir_from_date(tmp_path, test_date)
+        expected = tmp_path / "2024" / "03" / "15"
+        assert result == expected
+
+
+def test_cache_create_entry(tmp_path):
+    """Test Cache create_entry method."""
+
+    cache = Cache("test_cache")
+
+    with gifnoc.overlay({"sarc.cache": str(tmp_path)}):
+        test_time = datetime(2024, 3, 15, 10, 30, 45, tzinfo=UTC)
+        entry = cache.create_entry(test_time)
+
+        # Verify the entry is a CacheEntry
+        assert isinstance(entry, CacheEntry)
+
+        # Add some data and close
+        entry.add_value("test_key", b"test_data")
+        entry.close()
+
+        # Verify the file was created in the expected location
+        expected_file = tmp_path / "test_cache" / "2024" / "03" / "15" / "10:30:45"
+        assert expected_file.exists()
+
+
+def test_cache_save(tmp_path):
+    """Test Cache save method."""
+
+    cache = Cache("test_cache")
+
+    with gifnoc.overlay({"sarc.cache": str(tmp_path)}):
+        test_time = datetime(2024, 3, 15, 10, 30, 45, tzinfo=UTC)
+        test_data = b"Hello, this is test data!"
+
+        cache.save("test_key", test_time, test_data)
+
+        # Verify the file was created
+        expected_file = tmp_path / "test_cache" / "2024" / "03" / "15" / "10:30:45"
+        assert expected_file.exists()
+
+        # Verify the data can be read back
+        with ZipFile(expected_file, "r") as zf:
+            assert zf.read("test_key") == test_data
+
+
+def test_cache_save_multiple_keys(tmp_path):
+    """Test Cache save method with multiple keys in same entry."""
+
+    cache = Cache("test_cache")
+
+    with gifnoc.overlay({"sarc.cache": str(tmp_path)}):
+        test_time = datetime(2024, 3, 15, 10, 30, 45, tzinfo=UTC)
+
+        # Create entry and add multiple keys
+        entry = cache.create_entry(test_time)
+        entry.add_value("key1", b"data1")
+        entry.add_value("key2", b"data2")
+        entry.add_value("key3", b"data3")
+        entry.close()
+
+        # Verify the file was created
+        expected_file = tmp_path / "test_cache" / "2024" / "03" / "15" / "10:30:45"
+        assert expected_file.exists()
+
+        # Verify all data can be read back
+        with ZipFile(expected_file, "r") as zf:
+            assert zf.read("key1") == b"data1"
+            assert zf.read("key2") == b"data2"
+            assert zf.read("key3") == b"data3"
+            assert set(zf.namelist()) == {"key1", "key2", "key3"}
+
+
+def test_cache_paths_from_single_day(tmp_path):
+    """Test Cache _paths_from method with files from a single day."""
+
+    cache = Cache("test_cache")
+
+    with gifnoc.overlay({"sarc.cache": str(tmp_path)}):
+        # Create test files for the same day
+        base_time = datetime(2024, 3, 15, 10, 0, 0, tzinfo=UTC)
+
+        # Create files at different times
+        times = [
+            datetime(2024, 3, 15, 9, 30, 0, tzinfo=UTC),  # Before from_time
+            datetime(2024, 3, 15, 10, 15, 0, tzinfo=UTC),  # After from_time
+            datetime(2024, 3, 15, 11, 0, 0, tzinfo=UTC),  # After from_time
+        ]
+
+        for time in times:
+            cache.save("test_key", time, b"test_data")
+
+        # Test _paths_from starting from base_time
+        paths = list(cache._paths_from(base_time))
+
+        # Should only get files from 10:15 and 11:00 (not 9:30)
+        assert len(paths) == 2
+
+        # Verify the paths are sorted correctly
+        path_names = [p.name for p in paths]
+        assert "10:15:00" in path_names
+        assert "11:00:00" in path_names
+
+
+def test_cache_paths_from_multiple_days(tmp_path):
+    """Test Cache _paths_from method with files from multiple days."""
+
+    cache = Cache("test_cache")
+
+    with gifnoc.overlay({"sarc.cache": str(tmp_path)}):
+        # Create test files for different days
+        times = [
+            datetime(2024, 3, 14, 23, 0, 0, tzinfo=UTC),  # Day before
+            datetime(2024, 3, 15, 10, 0, 0, tzinfo=UTC),  # Target day
+            datetime(2024, 3, 15, 15, 0, 0, tzinfo=UTC),  # Same day, later
+            datetime(2024, 3, 16, 8, 0, 0, tzinfo=UTC),  # Next day
+            datetime(2024, 3, 17, 12, 0, 0, tzinfo=UTC),  # Day after next
+        ]
+
+        for time in times:
+            cache.save("test_key", time, b"test_data")
+
+        # Test _paths_from starting from 2024-03-15 10:00
+        from_time = datetime(2024, 3, 15, 10, 0, 0, tzinfo=UTC)
+        paths = list(cache._paths_from(from_time))
+
+        # Should get files from 15:00 on 3/15, and all files from 3/16 and 3/17
+        assert len(paths) == 4
+
+        # Verify we get the expected files
+        path_names = [p.name for p in paths]
+        assert "15:00:00" in path_names
+        assert "08:00:00" in path_names  # From 3/16
+        assert "12:00:00" in path_names  # From 3/17
+
+
+def test_cache_read_from(tmp_path):
+    """Test Cache read_from method."""
+
+    cache = Cache("test_cache")
+
+    with gifnoc.overlay({"sarc.cache": str(tmp_path)}):
+        # Create test entries with different data
+        times_and_data = [
+            (datetime(2024, 3, 15, 9, 0, 0, tzinfo=UTC), {"key1": b"data1"}),
+            (datetime(2024, 3, 15, 10, 0, 0, tzinfo=UTC), {"key2": b"data2"}),
+            (datetime(2024, 3, 15, 11, 0, 0, tzinfo=UTC), {"key3": b"data3"}),
+        ]
+
+        for time, data in times_and_data:
+            entry = cache.create_entry(time)
+            for key, value in data.items():
+                entry.add_value(key, value)
+            entry.close()
+
+        # Read from 10:00 onwards
+        from_time = datetime(2024, 3, 15, 10, 0, 0, tzinfo=UTC)
+        entries = list(cache.read_from(from_time))
+
+        # Should get 2 entries (10:00 and 11:00, not 9:00)
+        assert len(entries) == 2
+
+        # verify the data
+        assert entries[0].get_keys() == ["key2"]
+        assert entries[1].get_keys() == ["key3"]
+
+        # try to read starting the day before
+        entries = list(cache.read_from(datetime(2024, 3, 14, 0, 0, 0, tzinfo=UTC)))
+        assert len(entries) == 3
+
+
+def test_cache_read_from_with_multiple_keys_per_entry(tmp_path):
+    """Test Cache read_from method with multiple keys per entry."""
+
+    cache = Cache("test_cache")
+
+    with gifnoc.overlay({"sarc.cache": str(tmp_path)}):
+        # Create entries with multiple keys
+        time1 = datetime(2024, 3, 15, 10, 0, 0, tzinfo=UTC)
+        entry1 = cache.create_entry(time1)
+        entry1.add_value("user1", b"user1_data")
+        entry1.add_value("user2", b"user2_data")
+        entry1.close()
+
+        time2 = datetime(2024, 3, 15, 11, 0, 0, tzinfo=UTC)
+        entry2 = cache.create_entry(time2)
+        entry2.add_value("user3", b"user3_data")
+        entry2.close()
+
+        # Read from 10:00 onwards
+        from_time = datetime(2024, 3, 15, 10, 0, 0, tzinfo=UTC)
+        entries = list(cache.read_from(from_time))
+
+        assert len(entries) == 2
+
+        # Check first entry has 2 keys
+        entry1_keys = entries[0].get_keys()
+        assert len(entry1_keys) == 2
+        assert "user1" in entry1_keys
+        assert "user2" in entry1_keys
+
+        # Check second entry has 1 key
+        entry2_keys = entries[1].get_keys()
+        assert len(entry2_keys) == 1
+        assert "user3" in entry2_keys
+
+        # Close all entries
+        for entry in entries:
+            entry.close()
+
+
+def test_cache_ensure_utc():
+    """Test ensure_utc function."""
+    # Test with UTC datetime
+    utc_time = datetime(2024, 3, 15, 10, 0, 0, tzinfo=timezone.utc)
+    result = ensure_utc(utc_time)
+    assert result == utc_time
+
+    # Test with non-UTC datetime
+    est_time = datetime(2024, 3, 15, 5, 0, 0, tzinfo=timezone(timedelta(hours=-5)))
+    result = ensure_utc(est_time)
+    expected = datetime(2024, 3, 15, 10, 0, 0, tzinfo=timezone.utc)
+    assert result == expected
+
+
+def test_cache_with_different_subdirectories(tmp_path):
+    """Test Cache with different subdirectories."""
+    from datetime import UTC, datetime
+    from zipfile import ZipFile
+
+    cache1 = Cache("subdir1")
+    cache2 = Cache("subdir2")
+
+    with gifnoc.overlay({"sarc.cache": str(tmp_path)}):
+        test_time = datetime(2024, 3, 15, 10, 0, 0, tzinfo=UTC)
+
+        # Save data to different caches
+        cache1.save("key1", test_time, b"data1")
+        cache2.save("key2", test_time, b"data2")
+
+        # Verify files are in different subdirectories
+        file1 = tmp_path / "subdir1" / "2024" / "03" / "15" / "10:00:00"
+        file2 = tmp_path / "subdir2" / "2024" / "03" / "15" / "10:00:00"
+
+        assert file1.exists()
+        assert file2.exists()
+
+        # Verify different data
+        with ZipFile(file1, "r") as zf:
+            assert zf.read("key1") == b"data1"
+
+        with ZipFile(file2, "r") as zf:
+            assert zf.read("key2") == b"data2"
