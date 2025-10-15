@@ -1,9 +1,7 @@
-import json
 import os
 from dataclasses import dataclass
 
 from pydantic import BaseModel
-from simple_parsing import field
 
 from sarc.cache import using_cache_policy, CachePolicy, CacheException
 from sarc.client.job import _jobs_collection, JobStatistics, SlurmJob
@@ -59,8 +57,8 @@ class DbPrometheusBackup:
         base_query = {
             "cluster_name": {"$in": prometheus_cluster_names},
             "$or": [
-                {"allocated.gpu_type": {"$ne": None}},
-                {"stored_statistics": {"$ne": None}},
+                {"allocated.gpu_type": {"$type": "string"}},
+                {"stored_statistics": {"$type": "object"}},
             ],
         }
         logger.info("Counting jobs ...")
