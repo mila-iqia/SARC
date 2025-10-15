@@ -7,7 +7,7 @@ from .users import FetchUsers
 
 
 @dataclass
-class Acquire:
+class Fetch:
     command: Union[FetchUsers] = subparsers(
         {
             "users": FetchUsers,

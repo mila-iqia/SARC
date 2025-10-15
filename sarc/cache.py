@@ -96,7 +96,7 @@ class CacheEntry:
         return self._zf.namelist()
 
     def close(self) -> None:
-        """Close the cache entry."""
+        """Close the cache entry. MUST be called for new entries."""
         self._zf.close()
 
 
@@ -145,7 +145,10 @@ class Cache:
         return cdir / f"{d.year:04}" / f"{d.month:02}" / f"{d.day:02}"
 
     def create_entry(self, at_time: datetime) -> CacheEntry:
-        """Create a writable CacheEntry for the specified time."""
+        """Create a writable CacheEntry for the specified time.
+
+        You MUST call close() on the resulting entry when you are finished
+        adding data to it, otherwise the entry could get corrupted."""
         cdir = self.cache_dir
 
         at_time = ensure_utc(at_time)
