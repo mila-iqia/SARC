@@ -12,6 +12,7 @@ from enum import Enum
 from functools import partial, wraps
 from pathlib import Path
 from typing import IO, Any, Callable, ClassVar, Literal, Protocol, overload
+from zipfile import ZIP_LZMA, ZipFile
 
 from .config import config
 
@@ -70,6 +71,33 @@ def ensure_utc(d: datetime) -> datetime:
     return d.astimezone(UTC)
 
 
+class CacheEntry:
+    """Describe a single cache entry at a point in time.
+
+    The cache entry contains multiple key-value pairs."""
+
+    _zf: ZipFile
+
+    def __init__(self, zf: ZipFile):
+        self._zf = zf
+
+    def add_value(self, key: str, value: bytes) -> None:
+        """Add a key-value pair to the cache entry"""
+        self._zf.writestr(key, value)
+
+    def get_value(self, key: str) -> bytes:
+        """Get the value for an existing key in this cache entry"""
+        return self._zf.read(key)
+
+    def get_keys(self) -> list[str]:
+        """Get the list of keys in the order they were added."""
+        return self._zf.namelist()
+
+    def close(self) -> None:
+        """Close the cache entry."""
+        self._zf.close()
+
+
 class Cache:
     """A simple file-based cache that stores data organized by date.
 
@@ -114,8 +142,26 @@ class Cache:
         """
         return cdir / f"{d.year:04}" / f"{d.month:02}" / f"{d.day:02}"
 
+    def create_entry(self, at_time: datetime) -> CacheEntry:
+        """Create a writable CacheEntry for the specified time."""
+        cdir = self.cache_dir
+
+        at_time = ensure_utc(at_time)
+
+        output_file = self._dir_from_date(cdir, at_time) / at_time.time().isoformat(
+            "seconds"
+        )
+        zf = ZipFile(
+            output_file,
+            mode="x",
+            compression=ZIP_LZMA,
+        )
+        return CacheEntry(zf)
+
     def save(self, key: str, at_time: datetime, value: bytes) -> None:
         """Save binary data to the cache for a specific key and timestamp.
+
+        Only use this method if you want to save a single value for a given timestamp.
 
         Args:
             key: The cache key identifier.
@@ -126,16 +172,9 @@ class Cache:
             >>> cache = Cache()
             >>> cache.save("data", datetime.now(), b"binary data")
         """
-        cdir = self.cache_dir
-
-        at_time = ensure_utc(at_time)
-
-        output_file = self._dir_from_date(cdir, at_time) / at_time.strftime(
-            f"%H:%M:%S.{key}"
-        )
-        with open(output_file, "wb") as output_fp:
-            output_fp.write(value)
-        logger.debug("saved to cache file '%s'", output_file)
+        ce = self.create_entry(at_time)
+        ce.add_value(key, value)
+        ce.close()
 
     def _paths_from(self, from_time: datetime) -> Iterable[Path]:
         """Returns paths starting from a specific datetime.
@@ -158,8 +197,7 @@ class Cache:
         if first_dir.exists():
             from_time_nodays = from_time.time()
             for file in filter(
-                lambda fname: time.fromisoformat(fname.parts[-1].split(".")[0])
-                >= from_time_nodays,
+                lambda fname: time.fromisoformat(fname.parts[-1]) >= from_time_nodays,
                 sorted(first_dir.iterdir()),
             ):
                 yield file
@@ -183,33 +221,7 @@ class Cache:
                         from_time += timedelta(days=1)
             year_dir = cdir / f"{from_time.year:04}"
 
-    def read_from(self, key: str, from_time: datetime) -> Iterable[bytes]:
-        """Read cached entries for a key starting from a specific datetime.
-
-        Returns an iterator over all cached entries for the given key that
-        were created at or after the specified time. Searches through the
-        date hierarchy starting from the given date and continuing forward
-        through all subsequent dates.
-
-        Args:
-            key: The cache key to search for.
-            from_time: The earliest datetime to include in results.
-
-        Yields:
-            bytes: The binary data from each matching cache entry.
-
-        Example:
-            >>> cache = Cache()
-            >>> start_time = datetime(2024, 1, 15, 10, 0, 0)
-            >>> for data in cache.read_from("user_data", start_time):
-            ...     print(f"Found cached data: {len(data)} bytes")
-        """
-        for file in filter(
-            lambda fname: fname.parts[-1].endswith(key), self._paths_from(from_time)
-        ):
-            yield file.read_bytes()
-
-    def read_from_all(self, from_time: datetime) -> Iterable[tuple[str, bytes]]:
+    def read_from(self, from_time: datetime) -> Iterable[CacheEntry]:
         """Read all cached entries starting from a specific datetime.
 
         Returns an iterator over all cached entries that were created at or after
@@ -233,7 +245,7 @@ class Cache:
             ...     print(f"Key: {key}, Data size: {len(data)} bytes")
         """
         for file in self._paths_from(from_time):
-            yield file.parts[-1].split(".", maxsplit=1)[1], file.read_bytes()
+            yield CacheEntry(ZipFile(file, mode="r"))
 
 
 @dataclass
