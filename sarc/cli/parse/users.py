@@ -9,11 +9,6 @@ from sarc.users.db import get_user_collection
 
 @dataclass
 class ParseUsers:
-    force: bool = field(
-        action="store_true",
-        help="Re-parse from cached data even if the database contains the data",
-    )
-
     from_: datetime = field(help="Start parsing the cache from the specified date")
 
     def execute(self) -> int:
