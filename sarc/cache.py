@@ -14,6 +14,8 @@ from pathlib import Path
 from typing import IO, Any, Callable, ClassVar, Literal, Protocol, overload
 from zipfile import ZIP_LZMA, ZipFile
 
+from dateutil.relativedelta import relativedelta
+
 from .config import config
 
 logger = logging.getLogger(__name__)
@@ -103,7 +105,7 @@ class Cache:
 
     This cache stores binary data in a hierarchical directory structure based on
     the date when the data was cached. Files are organized as:
-    cache_root/subdirectory/YYYY/MM/DD/HH:MM:SS.key
+    cache_root/subdirectory/YYYY/MM/DD/HH:MM:SS
 
     Attributes:
         subdirectory: The subdirectory name within the cache root where data
@@ -151,6 +153,7 @@ class Cache:
         output_file = self._dir_from_date(cdir, at_time) / at_time.time().isoformat(
             "seconds"
         )
+        output_file.parent.mkdir(parents=True, exist_ok=True)
         zf = ZipFile(
             output_file,
             mode="x",
@@ -202,7 +205,7 @@ class Cache:
             ):
                 yield file
 
-        from_time.replace(hour=0, minute=0, second=0, microsecond=0)
+        from_time = from_time.replace(hour=0, minute=0, second=0, microsecond=0)
         from_time += timedelta(days=1)
 
         year_dir = cdir / f"{from_time.year:04}"
@@ -219,6 +222,8 @@ class Cache:
                             for file in sorted(day_dir.iterdir()):
                                 yield file
                         from_time += timedelta(days=1)
+                else:
+                    from_time += relativedelta(months=1)
             year_dir = cdir / f"{from_time.year:04}"
 
     def read_from(self, from_time: datetime) -> Iterable[CacheEntry]:
