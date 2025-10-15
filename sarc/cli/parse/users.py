@@ -18,13 +18,8 @@ class ParseUsers:
     from_: datetime = field(help="Start parsing the cache from the specified date")
 
     def execute(self) -> int:
-        users_cfg = config("scraping").users
-        assert users_cfg is not None
-
         coll = get_user_collection()
-        for um in parse_users(
-            list(users_cfg.scrapers.items()), from_=self.from_, force=self.force
-        ):
+        for um in parse_users(from_=self.from_):
             coll.update_user(um)
 
         return 0

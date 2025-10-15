@@ -72,7 +72,7 @@ class UserScraper[T](Protocol):
     def get_user_data(self, config: T) -> bytes: ...  # pragma: nocover
 
     def parse_user_data(
-        self, config: T, data: bytes
+        self, data: bytes
     ) -> Iterable[UserMatch]: ...  # pragma: nocover
 
 
@@ -145,9 +145,7 @@ def fetch_users(scrapers: list[tuple[str, Any]]) -> None:
         )
 
 
-def parse_users(
-    scrapers: list[tuple[str, Any]], from_: datetime
-) -> Iterable[UserMatch]:
+def parse_users(from_: datetime) -> Iterable[UserMatch]:
     """Parse user data from the cache.
 
     This returns one UserMatch structure per scraped user, across all plugins.
