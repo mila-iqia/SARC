@@ -12,7 +12,9 @@ from sarc.logging import setupLogging
 
 from .acquire import Acquire
 from .db import Db
+from .fetch import Fetch
 from .health import Health
+from .parse import Parse
 
 colors = SimpleNamespace(
     grey="\033[38;21m",

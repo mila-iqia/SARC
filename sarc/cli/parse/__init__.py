@@ -7,7 +7,7 @@ from .users import ParseUsers
 
 
 @dataclass
-class Acquire:
+class Parse:
     command: Union[ParseUsers] = subparsers(
         {
             "users": ParseUsers,
