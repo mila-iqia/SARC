@@ -3,7 +3,6 @@ from datetime import datetime
 
 from simple_parsing import field
 
-from sarc.config import config
 from sarc.core.scraping.users import parse_users
 from sarc.users.db import get_user_collection
 

@@ -132,17 +132,18 @@ def update_user_match(*, value: UserMatch, update: UserMatch) -> None:
 def fetch_users(scrapers: list[tuple[str, Any]]) -> None:
     """Fetch user data and place the results in cache."""
     cache = Cache(subdirectory="users")
+    ce = cache.create_entry(datetime.now(UTC))
     for scraper_name, config_data in scrapers:
         try:
             scraper = get_user_scraper(scraper_name)
         except KeyError as e:
             raise ValueError("Invalid user scraper") from e
         config = scraper.validate_config(config_data)
-        cache.save(
+        ce.add_value(
             key=scraper_name,
-            at_time=datetime.now(UTC),
             value=scraper.get_user_data(config),
         )
+    ce.close()
 
 
 def parse_users(from_: datetime) -> Iterable[UserMatch]:
@@ -155,48 +156,46 @@ def parse_users(from_: datetime) -> Iterable[UserMatch]:
     from_: start parsing cached date from that date.
     """
     cache = Cache(subdirectory="users")
-    # UserMatches, referenced by plugin name and matching id
-    user_refs: dict[MatchID, UserMatch] = {}
-    scrapers_dict: dict[str, tuple[UserScraper, Any]] = {}
-    for scraper_name, config_data in scrapers:
-        try:
-            scraper = get_user_scraper(scraper_name)
-        except KeyError as e:
-            raise ValueError("Invalid user scraper") from e
-        config = scraper.validate_config(config_data)
-        scrapers_dict[scraper_name] = (scraper, config)
 
-    for key, rdata in cache.read_from_all(from_time=from_):
-        scraper, config = scrapers_dict[key]
-        for userm in scraper.parse_user_data(config, rdata):
-            userm.matching_id.name = scraper_name
-            # First, get all the userm that match with this one.
-            prev_userms: list[UserMatch] = [userm]
-            prev = user_refs.get(userm.matching_id, None)
-            if prev is not None:
-                prev_userms.append(prev)
-            for mid in userm.known_matches:
-                prev = user_refs.get(mid, None)
+    for ce in cache.read_from(from_time=from_):
+        # UserMatches, referenced by matching id
+        user_refs: dict[MatchID, UserMatch] = {}
+        scraper_names = ce.get_keys()
+        for name in scraper_names:
+            try:
+                scraper = get_user_scraper(name)
+            except KeyError as e:
+                raise ValueError("Invalid user scraper") from e
+            for userm in scraper.parse_user_data(ce.get_value(name)):
+                userm.matching_id.name = name
+                # First, get all the userm that match with this one.
+                prev_userms: list[UserMatch] = [userm]
+                prev = user_refs.get(userm.matching_id, None)
                 if prev is not None:
                     prev_userms.append(prev)
-            # Second, filter out duplicates and sort the rest according to plugin rank
-            scraper_names = [name for name, _ in scrapers]
-            matching_userms = sorted(
-                set(prev_userms),
-                key=lambda um: scraper_names.index(um.matching_id.name),
-            )
-            # Third, merge everything into the oldest entry
-            oldest_userm = matching_userms.pop(0)
-            for newer_userm in matching_userms:
-                update_user_match(value=oldest_userm, update=newer_userm)
-            # Finally, update all references to point to the new merged UserMatch
-            user_refs[oldest_userm.matching_id] = oldest_userm
-            for mid in oldest_userm.known_matches:
-                user_refs[mid] = oldest_userm
+                for mid in userm.known_matches:
+                    prev = user_refs.get(mid, None)
+                    if prev is not None:
+                        prev_userms.append(prev)
+                # Second, filter out duplicates and sort the rest according to plugin rank
+                matching_userms = sorted(
+                    set(prev_userms),
+                    key=lambda um: scraper_names.index(um.matching_id.name),
+                )
+                # Third, merge everything into the oldest entry
+                oldest_userm = matching_userms.pop(0)
+                for newer_userm in matching_userms:
+                    update_user_match(value=oldest_userm, update=newer_userm)
+                # Finally, update all references to point to the new merged UserMatch
+                user_refs[oldest_userm.matching_id] = oldest_userm
+                for mid in oldest_userm.known_matches:
+                    user_refs[mid] = oldest_userm
 
-    # Yield all "primary" UserMatches (those whose reference name match the
-    # original plugin name)
-    for mid, umatch in user_refs.items():
-        if umatch.matching_id != mid:
-            continue
-        yield umatch
+        # Yield all "primary" UserMatches (those whose reference name match the
+        # original plugin name). We yield after processing a single CacheEntry
+        # to make sure the behaviour stays consistent with the "normal" scraping
+        # operation.
+        for mid, umatch in user_refs.items():
+            if umatch.matching_id != mid:
+                continue
+            yield umatch
