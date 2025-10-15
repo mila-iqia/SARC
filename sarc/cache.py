@@ -142,7 +142,6 @@ class Cache:
         """
         return cdir / f"{d.year:04}" / f"{d.month:02}" / f"{d.day:02}"
 
-
     @contextlib.contextmanager
     def create_entry(self, at_time: datetime) -> Iterator[CacheEntry]:
         """Create a writable CacheEntry for the specified time.
@@ -166,6 +165,7 @@ class Cache:
             mode="x",
             compression=ZIP_LZMA,
         )
+
         ce = CacheEntry(zf)
         try:
             yield ce
