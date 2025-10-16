@@ -182,16 +182,6 @@ class MongoConfig:
 
 
 @dataclass
-class LDAPConfig:
-    local_private_key_file: Path
-    local_certificate_file: Path
-    ldap_service_uri: str
-    mongo_collection_name: str
-    group_to_prof_json_path: Path | None = None
-    exceptions_json_path: Path | None = None
-
-
-@dataclass
 class LokiConfig:
     uri: str
 
@@ -202,22 +192,15 @@ class TempoConfig:
 
 
 @dataclass
-class MyMilaConfig:
-    tmp_json_path: Path | None = None
-
-
-@dataclass
-class AccountMatchingConfig:
-    drac_members_csv_path: Path
-    drac_roles_csv_path: Path
-    make_matches_config: Path
-
-
-@dataclass
 class LoggingConfig:
     log_level: str
     OTLP_endpoint: str
     service_name: str
+
+
+@dataclass
+class UserScrapingConfig:
+    scrapers: dict[str, JSON]
 
 
 @dataclass
@@ -239,9 +222,7 @@ class ClientConfig:
 
 @dataclass
 class Config(ClientConfig):
-    ldap: LDAPConfig | None = None
-    mymila: MyMilaConfig | None = None
-    account_matching: AccountMatchingConfig | None = None
+    users: UserScrapingConfig | None = None
     sshconfig: Path | None = None
     clusters: dict[str, ClusterConfig] = field(default_factory=dict)
     logging: LoggingConfig | None = None

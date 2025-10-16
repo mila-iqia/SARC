@@ -30,6 +30,15 @@ class AcquireSlurmConfig:
             "If not specified, uses current day and downloads config file from cluster."
         ),
     )
+    threshold: float = field(
+        alias=["-t"],
+        required=False,
+        default=0.1,
+        help=(
+            "Maximum allowed difference (in %%) between two billings for a GPU in different partitions. "
+            "Default is 0.1 (%%)."
+        ),
+    )
 
     def execute(self) -> int:
         parse_gpu_billing = True
@@ -42,7 +51,10 @@ class AcquireSlurmConfig:
 
         cluster_config = config("scraping").clusters[self.cluster_name]
         parser = SlurmConfigParser(
-            cluster_config, self.day, parse_gpu_billing=parse_gpu_billing
+            cluster_config,
+            self.day,
+            parse_gpu_billing=parse_gpu_billing,
+            threshold=self.threshold,
         )
         slurm_conf = parser.get_slurm_config()
         if slurm_conf.gpu_to_billing is not None:
@@ -79,6 +91,7 @@ class SlurmConfigParser:
         cluster: ClusterConfig,
         day: str | None = None,
         parse_gpu_billing: bool = True,
+        threshold: float = 0.1,
     ):
         if day is None:
             # No day given, get current day
@@ -93,6 +106,7 @@ class SlurmConfigParser:
         self.day = day
         self.cache_policy = cache_policy
         self.parse_gpu_billing = bool(parse_gpu_billing)
+        self.threshold = threshold
 
     def get_slurm_config(self) -> SlurmConfig:
         content = with_cache(
@@ -190,29 +204,39 @@ class SlurmConfigParser:
         # Mapping of GPU to partition billing.
         # Allow to check that inferred billing for a GPU is the same across partitions.
         # If not, an error will be raised with additional info about involved partitions.
-        gpu_to_partition_billing: dict[str, PartitionGPUBilling] = {}
+        gpu_to_partition_billings: dict[str, list[PartitionGPUBilling]] = {}
 
         for partition in partitions:
-            # Get billing from this partition
+            # Get billings from this partition
             parsed_partition = partition.parse(node_to_gpus)
             local_gpu_to_billing = parsed_partition.get_harmonized_gpu_to_billing(
                 self.cluster
             )
-
             # Merge local GPU billings into global GPU billings
             for gpu_type, value in local_gpu_to_billing.items():
                 new_billing = PartitionGPUBilling(
                     gpu_type=gpu_type, value=value, partition=partition
                 )
-                if gpu_type not in gpu_to_partition_billing:
-                    # New GPU found, add it
-                    gpu_to_partition_billing[gpu_type] = new_billing
-                elif gpu_to_partition_billing[gpu_type].value != value:
-                    # GPU already found, with a different billing. Problem.
-                    raise InconsistentGPUBillingError(
-                        gpu_type, gpu_to_partition_billing[gpu_type], new_billing
-                    )
-        return {gpu: billing.value for gpu, billing in gpu_to_partition_billing.items()}
+                if gpu_type not in gpu_to_partition_billings:
+                    gpu_to_partition_billings[gpu_type] = [new_billing]
+                else:
+                    ref_billing = gpu_to_partition_billings[gpu_type][0]
+                    ref_value = ref_billing.value
+                    if abs(ref_value - value) / ref_value > self.threshold / 100:
+                        raise InconsistentGPUBillingError(
+                            gpu_type, ref_billing, new_billing, self.threshold
+                        )
+                    gpu_to_partition_billings[gpu_type].append(new_billing)
+
+        # Infer billing for each GPU across partitions
+        gpu_to_billing: dict[str, float] = {}
+        for gpu_type, partition_billings in gpu_to_partition_billings.items():
+            average_value = sum(pb.value for pb in partition_billings) / len(
+                partition_billings
+            )
+            gpu_to_billing[gpu_type] = average_value
+
+        return gpu_to_billing
 
 
 @dataclass
@@ -401,10 +425,11 @@ class InconsistentGPUBillingError(Exception):
         gpu_type: str,
         prev_billing: PartitionGPUBilling,
         new_billing: PartitionGPUBilling,
+        threshold: float,
     ):
         super().__init__(
             f"\n"
-            f"GPU billing differs.\n"
+            f"GPU billing differs (threshold {threshold} %).\n"
             f"GPU name: {gpu_type}\n"
             f"Previous value: {prev_billing.value}\n"
             f"From line: {prev_billing.partition.line_number}\n"

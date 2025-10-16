@@ -1,0 +1,25 @@
+associated_accounts:
+  mila:
+    values:
+    - valid_end: '3000-01-01T00:00:00Z'
+      valid_start: '2000-01-01T00:00:00Z'
+      value: test
+co_supervisors:
+  values: []
+display_name: Test User
+email: test@example.com
+github_username:
+  values:
+  - valid_end: '2030-12-30T00:00:00Z'
+    valid_start: '2023-03-03T00:00:00Z'
+    value: testuser
+google_scholar_profile:
+  values:
+  - valid_end: '2030-12-30T00:00:00Z'
+    valid_start: '2019-10-11T00:00:00Z'
+    value: https://scholar.google.com/citations?user=PataTe_111AJ&hl=en
+matching_ids: {}
+member_type:
+  values: []
+supervisor:
+  values: []
