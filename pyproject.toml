@@ -3,7 +3,7 @@ name = "sarc"
 version = "0.1.0"
 description = "Surveillance et analyse des ressources de calcul"
 authors = [{ name = "Mila-IDT" }]
-requires-python = "==3.13.*"
+requires-python = "==3.14.*"
 readme = "README.md"
 dependencies = [
     "fabric>=3.0.0,<4",
