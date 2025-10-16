@@ -1,0 +1,537 @@
+- associated_accounts:
+    mila:
+      values:
+      - valid_end: '3000-01-01T00:00:00Z'
+        valid_start: '2000-01-01T00:00:00Z'
+        value: prof2
+  co_supervisors:
+    values: []
+  display_name: Prof 2
+  email: prof2@mila.quebec
+  github_username:
+    values: []
+  google_scholar_profile:
+    values: []
+  known_matches:
+  - mid: prof2@mila.quebec
+    name: mila_ldap
+  matching_id:
+    mid: prof2@mila.quebec
+    name: legacy_dump
+  member_type:
+    values: []
+  supervisor:
+    values: []
+- associated_accounts:
+    mila:
+      values:
+      - valid_end: '3000-01-01T00:00:00Z'
+        valid_start: '2025-09-04T04:02:51.144000Z'
+        value: smithj
+  co_supervisors:
+    values: []
+  display_name: John Smith
+  email: john.smith@mila.quebec
+  github_username:
+    values: []
+  google_scholar_profile:
+    values: []
+  known_matches:
+  - mid: john.smith@mila.quebec
+    name: mila_ldap
+  matching_id:
+    mid: john.smith@mila.quebec
+    name: legacy_dump
+  member_type:
+    values: []
+  supervisor:
+    values: []
+- associated_accounts:
+    drac:
+      values:
+      - valid_end: '2025-09-04T04:02:51.144000Z'
+        valid_start: '2025-09-02T15:47:34.684000Z'
+        value: jdoe99
+  co_supervisors:
+    values: []
+  display_name: Jane Doe
+  email: jane.doe@mila.quebec
+  github_username:
+    values: []
+  google_scholar_profile:
+    values: []
+  known_matches:
+  - mid: abd-123
+    name: drac_member
+  - mid: abd-123
+    name: drac_role
+  - mid: jane.doe@mila.quebec
+    name: mila_ldap
+  matching_id:
+    mid: jane.doe@mila.quebec
+    name: legacy_dump
+  member_type:
+    values:
+    - valid_end: '2025-09-04T04:02:51.144000Z'
+      valid_start: '2025-09-02T15:47:34.684000Z'
+      value: master
+  supervisor:
+    values: []
+- associated_accounts:
+    drac:
+      values:
+      - valid_end: '3000-01-01T00:00:00Z'
+        valid_start: '2025-09-04T04:02:51.144000Z'
+        value: jdoe99
+    mila:
+      values:
+      - valid_end: '3000-01-01T00:00:00Z'
+        valid_start: '2025-09-04T04:02:51.144000Z'
+        value: jane.doe
+  co_supervisors:
+    values: []
+  display_name: Jane Doe
+  email: jane.doe@mila.quebec
+  github_username:
+    values: []
+  google_scholar_profile:
+    values: []
+  known_matches:
+  - mid: abc-123
+    name: drac_member
+  - mid: abc-123
+    name: drac_role
+  - mid: jane.doe@mila.quebec
+    name: mila_ldap
+  matching_id:
+    mid: jane.doe@mila.quebec
+    name: legacy_dump
+  member_type:
+    values:
+    - valid_end: '3000-01-01T00:00:00Z'
+      valid_start: '2025-09-04T04:02:51.144000Z'
+      value: master
+  supervisor:
+    values:
+    - valid_end: '3000-01-01T00:00:00Z'
+      valid_start: '2025-09-04T04:02:51.144000Z'
+      value:
+        mid: prof2@mila.quebec
+        name: legacy_dump
+- associated_accounts:
+    drac:
+      values:
+      - valid_end: '2026-01-01T04:59:59.999999Z'
+        valid_start: '2025-01-01T05:00:00Z'
+        value: edgecase_drac
+    mila:
+      values:
+      - valid_end: '2026-01-01T04:59:59.999999Z'
+        valid_start: '2025-01-01T05:00:00Z'
+        value: edgecase
+  co_supervisors:
+    values:
+    - valid_end: '2026-01-01T04:59:59.999999Z'
+      valid_start: '2025-01-01T05:00:00Z'
+      value:
+      - mid: cosupervisor@mila.quebec
+        name: legacy_dump
+  display_name: Edge Case User
+  email: edge.case@mila.quebec
+  github_username:
+    values: []
+  google_scholar_profile:
+    values: []
+  known_matches:
+  - mid: edge-999
+    name: drac_member
+  - mid: edge-999
+    name: drac_role
+  - mid: edge.case@mila.quebec
+    name: mila_ldap
+  matching_id:
+    mid: edge.case@mila.quebec
+    name: legacy_dump
+  member_type:
+    values:
+    - valid_end: '2026-01-01T04:59:59.999999Z'
+      valid_start: '2025-01-01T05:00:00Z'
+      value: phd
+  supervisor:
+    values:
+    - valid_end: '2026-01-01T04:59:59.999999Z'
+      valid_start: '2025-01-01T05:00:00Z'
+      value:
+        mid: supervisor@mila.quebec
+        name: legacy_dump
+- associated_accounts: {}
+  co_supervisors:
+    values: []
+  display_name: No Timestamps User
+  email: no.timestamps@mila.quebec
+  github_username:
+    values: []
+  google_scholar_profile:
+    values: []
+  known_matches:
+  - mid: no.timestamps@mila.quebec
+    name: mila_ldap
+  matching_id:
+    mid: no.timestamps@mila.quebec
+    name: legacy_dump
+  member_type:
+    values: []
+  supervisor:
+    values: []
+- associated_accounts:
+    drac:
+      values:
+      - valid_end: '2025-06-15T18:30:01.123456Z'
+        valid_start: '2025-06-15T18:30:00.123456Z'
+        value: samestartend_drac
+    mila:
+      values:
+      - valid_end: '2025-06-15T18:30:01.123456Z'
+        valid_start: '2025-06-15T18:30:00.123456Z'
+        value: samestartend
+  co_supervisors:
+    values: []
+  display_name: Same Start End User
+  email: same.start.end@mila.quebec
+  github_username:
+    values: []
+  google_scholar_profile:
+    values: []
+  known_matches:
+  - mid: same-777
+    name: drac_member
+  - mid: same-777
+    name: drac_role
+  - mid: same.start.end@mila.quebec
+    name: mila_ldap
+  matching_id:
+    mid: same.start.end@mila.quebec
+    name: legacy_dump
+  member_type:
+    values:
+    - valid_end: '2025-06-15T18:30:01.123456Z'
+      valid_start: '2025-06-15T18:30:00.123456Z'
+      value: intern
+  supervisor:
+    values: []
+- associated_accounts:
+    mila:
+      values:
+      - valid_end: '3000-01-01T00:00:00Z'
+        valid_start: '2000-01-01T00:00:00Z'
+        value: minimal
+  co_supervisors:
+    values: []
+  display_name: Minimal User
+  email: minimal@mila.quebec
+  github_username:
+    values: []
+  google_scholar_profile:
+    values: []
+  known_matches:
+  - mid: minimal@mila.quebec
+    name: mila_ldap
+  matching_id:
+    mid: minimal@mila.quebec
+    name: legacy_dump
+  member_type:
+    values: []
+  supervisor:
+    values: []
+- associated_accounts:
+    mila:
+      values:
+      - valid_end: '3000-01-01T00:00:00Z'
+        valid_start: '2000-01-01T00:00:00Z'
+        value: professor
+  co_supervisors:
+    values: []
+  display_name: Professor User
+  email: professor@mila.quebec
+  github_username:
+    values: []
+  google_scholar_profile:
+    values: []
+  known_matches:
+  - mid: professor@mila.quebec
+    name: mila_ldap
+  matching_id:
+    mid: professor@mila.quebec
+    name: legacy_dump
+  member_type:
+    values:
+    - valid_end: '3000-01-01T00:00:00Z'
+      valid_start: '2000-01-01T00:00:00Z'
+      value: professor
+  supervisor:
+    values: []
+- associated_accounts:
+    mila:
+      values:
+      - valid_end: '3000-01-01T00:00:00Z'
+        valid_start: '2000-01-01T00:00:00Z'
+        value: master
+  co_supervisors:
+    values: []
+  display_name: Master Student
+  email: master@mila.quebec
+  github_username:
+    values: []
+  google_scholar_profile:
+    values: []
+  known_matches:
+  - mid: master@mila.quebec
+    name: mila_ldap
+  matching_id:
+    mid: master@mila.quebec
+    name: legacy_dump
+  member_type:
+    values:
+    - valid_end: '3000-01-01T00:00:00Z'
+      valid_start: '2000-01-01T00:00:00Z'
+      value: master
+  supervisor:
+    values: []
+- associated_accounts:
+    mila:
+      values:
+      - valid_end: '3000-01-01T00:00:00Z'
+        valid_start: '2000-01-01T00:00:00Z'
+        value: phd
+  co_supervisors:
+    values: []
+  display_name: PhD Student
+  email: phd@mila.quebec
+  github_username:
+    values: []
+  google_scholar_profile:
+    values: []
+  known_matches:
+  - mid: phd@mila.quebec
+    name: mila_ldap
+  matching_id:
+    mid: phd@mila.quebec
+    name: legacy_dump
+  member_type:
+    values:
+    - valid_end: '3000-01-01T00:00:00Z'
+      valid_start: '2000-01-01T00:00:00Z'
+      value: phd
+  supervisor:
+    values: []
+- associated_accounts:
+    mila:
+      values:
+      - valid_end: '3000-01-01T00:00:00Z'
+        valid_start: '2000-01-01T00:00:00Z'
+        value: postdoc
+  co_supervisors:
+    values: []
+  display_name: Postdoc User
+  email: postdoc@mila.quebec
+  github_username:
+    values: []
+  google_scholar_profile:
+    values: []
+  known_matches:
+  - mid: postdoc@mila.quebec
+    name: mila_ldap
+  matching_id:
+    mid: postdoc@mila.quebec
+    name: legacy_dump
+  member_type:
+    values:
+    - valid_end: '3000-01-01T00:00:00Z'
+      valid_start: '2000-01-01T00:00:00Z'
+      value: postdoc
+  supervisor:
+    values: []
+- associated_accounts:
+    mila:
+      values:
+      - valid_end: '3000-01-01T00:00:00Z'
+        valid_start: '2000-01-01T00:00:00Z'
+        value: intern
+  co_supervisors:
+    values: []
+  display_name: Intern User
+  email: intern@mila.quebec
+  github_username:
+    values: []
+  google_scholar_profile:
+    values: []
+  known_matches:
+  - mid: intern@mila.quebec
+    name: mila_ldap
+  matching_id:
+    mid: intern@mila.quebec
+    name: legacy_dump
+  member_type:
+    values:
+    - valid_end: '3000-01-01T00:00:00Z'
+      valid_start: '2000-01-01T00:00:00Z'
+      value: intern
+  supervisor:
+    values: []
+- associated_accounts:
+    mila:
+      values:
+      - valid_end: '3000-01-01T00:00:00Z'
+        valid_start: '2000-01-01T00:00:00Z'
+        value: staff
+  co_supervisors:
+    values: []
+  display_name: Staff User
+  email: staff@mila.quebec
+  github_username:
+    values: []
+  google_scholar_profile:
+    values: []
+  known_matches:
+  - mid: staff@mila.quebec
+    name: mila_ldap
+  matching_id:
+    mid: staff@mila.quebec
+    name: legacy_dump
+  member_type:
+    values:
+    - valid_end: '3000-01-01T00:00:00Z'
+      valid_start: '2000-01-01T00:00:00Z'
+      value: staff
+  supervisor:
+    values: []
+- associated_accounts:
+    mila:
+      values:
+      - valid_end: '3000-01-01T00:00:00Z'
+        valid_start: '2000-01-01T00:00:00Z'
+        value: supervisor
+  co_supervisors:
+    values: []
+  display_name: Supervisor User
+  email: supervisor@mila.quebec
+  github_username:
+    values: []
+  google_scholar_profile:
+    values: []
+  known_matches:
+  - mid: supervisor@mila.quebec
+    name: mila_ldap
+  matching_id:
+    mid: supervisor@mila.quebec
+    name: legacy_dump
+  member_type:
+    values: []
+  supervisor:
+    values: []
+- associated_accounts:
+    mila:
+      values:
+      - valid_end: '3000-01-01T00:00:00Z'
+        valid_start: '2000-01-01T00:00:00Z'
+        value: student
+  co_supervisors:
+    values:
+    - valid_end: '3000-01-01T00:00:00Z'
+      valid_start: '2000-01-01T00:00:00Z'
+      value:
+      - mid: supervisor@mila.quebec
+        name: legacy_dump
+  display_name: Student User
+  email: student@mila.quebec
+  github_username:
+    values: []
+  google_scholar_profile:
+    values: []
+  known_matches:
+  - mid: student@mila.quebec
+    name: mila_ldap
+  matching_id:
+    mid: student@mila.quebec
+    name: legacy_dump
+  member_type:
+    values: []
+  supervisor:
+    values:
+    - valid_end: '3000-01-01T00:00:00Z'
+      valid_start: '2000-01-01T00:00:00Z'
+      value:
+        mid: supervisor@mila.quebec
+        name: legacy_dump
+- associated_accounts:
+    drac:
+      values:
+      - valid_end: '3000-01-01T00:00:00Z'
+        valid_start: '2000-01-01T00:00:00Z'
+        value: dracuser
+    mila:
+      values:
+      - valid_end: '3000-01-01T00:00:00Z'
+        valid_start: '2000-01-01T00:00:00Z'
+        value: testuser
+  co_supervisors:
+    values: []
+  display_name: Test User
+  email: test@mila.quebec
+  github_username:
+    values: []
+  google_scholar_profile:
+    values: []
+  known_matches:
+  - mid: test-001
+    name: drac_member
+  - mid: test-001
+    name: drac_role
+  - mid: test@mila.quebec
+    name: mila_ldap
+  matching_id:
+    mid: test@mila.quebec
+    name: legacy_dump
+  member_type:
+    values:
+    - valid_end: '3000-01-01T00:00:00Z'
+      valid_start: '2000-01-01T00:00:00Z'
+      value: master
+  supervisor:
+    values: []
+- associated_accounts:
+    drac:
+      values:
+      - valid_end: '3000-01-01T00:00:00Z'
+        valid_start: '2000-01-01T00:00:00Z'
+        value: dracuser
+    mila:
+      values:
+      - valid_end: '3000-01-01T00:00:00Z'
+        valid_start: '2000-01-01T00:00:00Z'
+        value: testuser
+  co_supervisors:
+    values: []
+  display_name: Test User
+  email: test@mila.quebec
+  github_username:
+    values: []
+  google_scholar_profile:
+    values: []
+  known_matches:
+  - mid: abc-123
+    name: drac_member
+  - mid: abc-123
+    name: drac_role
+  - mid: test@mila.quebec
+    name: mila_ldap
+  matching_id:
+    mid: test@mila.quebec
+    name: legacy_dump
+  member_type:
+    values:
+    - valid_end: '3000-01-01T00:00:00Z'
+      valid_start: '2000-01-01T00:00:00Z'
+      value: master
+  supervisor:
+    values: []
