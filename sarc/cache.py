@@ -16,8 +16,6 @@ from pathlib import Path
 from typing import IO, Any, Callable, ClassVar, Literal, Protocol, overload
 from zipfile import ZIP_LZMA, ZipFile
 
-from dateutil.relativedelta import relativedelta
-
 from .config import config
 from .core.models.validators import datetime_utc
 
