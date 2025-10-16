@@ -14,8 +14,6 @@ from pathlib import Path
 from typing import IO, Any, Callable, ClassVar, Literal, Protocol, overload
 from zipfile import ZIP_LZMA, ZipFile
 
-from dateutil.relativedelta import relativedelta
-
 from .config import config
 
 logger = logging.getLogger(__name__)
@@ -211,23 +209,28 @@ class Cache:
         from_time = from_time.replace(hour=0, minute=0, second=0, microsecond=0)
         from_time += timedelta(days=1)
 
-        year_dir = cdir / f"{from_time.year:04}"
+        first_year_done = False
+        first_month_done = False
 
-        while year_dir.exists():
-            year = from_time.year
-            while year == from_time.year:
-                month_dir = year_dir / f"{from_time.month:02}"
-                if month_dir.exists():
-                    month = from_time.month
-                    while month == from_time.month:
-                        day_dir = month_dir / f"{from_time.day:02}"
-                        if day_dir.exists():
-                            for file in sorted(day_dir.iterdir()):
-                                yield file
-                        from_time += timedelta(days=1)
-                else:
-                    from_time += relativedelta(months=1)
-            year_dir = cdir / f"{from_time.year:04}"
+        for year_dir in sorted(
+            filter(lambda y: int(y.parts[-1]) >= from_time.year, cdir.iterdir())
+        ):
+            for month_dir in sorted(
+                filter(
+                    lambda m: first_year_done or int(m.parts[-1]) >= from_time.month,
+                    year_dir.iterdir(),
+                )
+            ):
+                for day_dir in sorted(
+                    filter(
+                        lambda d: first_month_done or int(d.parts[-1]) >= from_time.day,
+                        month_dir.iterdir(),
+                    )
+                ):
+                    for file in sorted(day_dir.iterdir()):
+                        yield file
+                first_month_done = True
+            first_year_done = True
 
     def read_from(self, from_time: datetime) -> Iterable[CacheEntry]:
         """Read all cached entries starting from a specific datetime.
