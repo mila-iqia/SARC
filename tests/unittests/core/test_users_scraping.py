@@ -2,22 +2,27 @@
 
 from collections.abc import Iterable
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from importlib.metadata import EntryPoint, EntryPoints
 from typing import Any
 from unittest.mock import patch
 
 import pytest
 
+from sarc.cache import Cache
 from sarc.core.models.users import Credentials
 from sarc.core.scraping.users import (
     MatchID,
     UserMatch,
     UserScraper,
     _builtin_scrapers,
+    fetch_users,
     get_user_scraper,
-    scrape_users,
+    parse_users,
     update_user_match,
 )
+
+one_hour = timedelta(hours=1)
 
 
 class UserPluginTester:
@@ -52,9 +57,9 @@ class MockUserScraper(UserScraper[MockConfig]):
     config_type = MockConfig
 
     def get_user_data(self, config: MockConfig) -> bytes:
-        return f"mock_data_from_{config.api_url}".encode()
+        return config.api_url.encode()
 
-    def parse_user_data(self, config: MockConfig, data: bytes) -> Iterable[UserMatch]:
+    def parse_user_data(self, _data: bytes) -> Iterable[UserMatch]:
         users = []
 
         user1 = UserMatch(
@@ -93,25 +98,26 @@ class TestConfig:
 
 
 class TestPlugin(UserScraper[TestConfig]):
-    config_type: TestConfig
+    config_type = TestConfig
 
     def validate_config(self, config_data: Any) -> TestConfig:
         return TestConfig(domain=config_data)
 
     def get_user_data(self, config: TestConfig) -> bytes:
-        return b""
+        return config.domain.encode("utf-8")
 
-    def parse_user_data(self, config: TestConfig, data: bytes) -> Iterable[UserMatch]:
+    def parse_user_data(self, data: bytes) -> Iterable[UserMatch]:
         users = []
+        domain = data.decode("utf-8")
         users.append(
             UserMatch(
-                email=f"john@{config.domain}",
+                email=f"john@{domain}",
                 matching_id=MatchID(name="test", mid="john"),
             )
         )
         users.append(
             UserMatch(
-                email=f"jane@{config.domain}",
+                email=f"jane@{domain}",
                 matching_id=MatchID(name="test", mid="jane"),
             )
         )
@@ -265,12 +271,16 @@ def test_get_user_scraper_not_found():
         get_user_scraper("non_existent_scraper")
 
 
-def test_scrape_users_single_plugin(mock_scraper):
+def test_fetch_and_parse_users_single_plugin(mock_scraper, enabled_cache):
     scrapers = [
         ("test_scraper", {"api_url": "https://api.example.com", "api_key": "secret"})
     ]
 
-    users = list(scrape_users(scrapers))
+    # First, fetch the data and store it in cache
+    fetch_users(scrapers)
+
+    # Then, parse the cached data
+    users = list(parse_users(datetime.now(UTC) - one_hour))
 
     assert len(users) == 3
     assert all(isinstance(user, UserMatch) for user in users)
@@ -280,8 +290,8 @@ def test_scrape_users_single_plugin(mock_scraper):
         assert user.matching_id.name == "test_scraper"
 
 
-def test_scrape_users_multiple_plugins(monkeypatch):
-    """Test scraping users with multiple plugins."""
+def test_fetch_and_parse_users_multiple_plugins(monkeypatch, enabled_cache):
+    """Test fetching and parsing users with multiple plugins."""
     mock_scraper = MockUserScraper()
     monkeypatch.setitem(_builtin_scrapers, "plugin1", mock_scraper)
     monkeypatch.setitem(_builtin_scrapers, "plugin2", mock_scraper)
@@ -291,7 +301,11 @@ def test_scrape_users_multiple_plugins(monkeypatch):
         ("plugin2", {"api_url": "https://api2.example.com", "api_key": "secret2"}),
     ]
 
-    users = list(scrape_users(scrapers))
+    # First, fetch the data and store it in cache
+    fetch_users(scrapers)
+
+    # Then, parse the cached data
+    users = list(parse_users(datetime.now(UTC) - one_hour))
 
     assert len(users) == 5  # 3 from plugin1 + 2 from plugin2 (user3 is merged)
 
@@ -301,24 +315,31 @@ def test_scrape_users_multiple_plugins(monkeypatch):
     assert len(plugin2_users) == 2
 
 
-def test_scrape_users_invalid_scraper():
+def test_invalid_scraper(enabled_cache):
     scrapers = [("invalid_scraper", {"api_url": "https://api.example.com"})]
 
     with pytest.raises(ValueError, match="Invalid user scraper"):
-        list(scrape_users(scrapers))
+        fetch_users(scrapers)
+
+    cache = Cache(subdirectory="users")
+    ce = cache.create_entry(datetime(2025, 6, 2, tzinfo=UTC))
+    ce.add_value("invalid_scraper", b"")
+    ce.close()
+
+    with pytest.raises(ValueError, match="Invalid user scraper"):
+        list(parse_users(datetime(2025, 6, 1, tzinfo=UTC)))
 
 
 @patch("sarc.core.scraping.users.get_user_scraper")
-def test_scrape_users_user_matching(mock_get_scraper):
+def test_fetch_and_parse_users_user_matching(mock_get_scraper, enabled_cache):
     """Test that users with matching IDs are properly merged."""
 
     # Create a mock scraper that returns users with known matches
     class MatchingMockScraper(MockUserScraper):
-        def parse_user_data(
-            self, config: MockConfig, data: bytes
-        ) -> Iterable[UserMatch]:
+        def parse_user_data(self, data: bytes) -> Iterable[UserMatch]:
+            api_url = data.decode("utf-8")
             # Return different users based on the config (which plugin)
-            if "api1" in config.api_url:
+            if "api1" in api_url:
                 user1 = UserMatch(
                     display_name="John Doe",
                     email="john@example.com",
@@ -342,7 +363,11 @@ def test_scrape_users_user_matching(mock_get_scraper):
         ("plugin2", {"api_url": "https://api2.example.com", "api_key": "secret2"}),
     ]
 
-    users = list(scrape_users(scrapers))
+    # First, fetch the data and store it in cache
+    fetch_users(scrapers)
+
+    # Then, parse the cached data
+    users = list(parse_users(datetime.now(UTC) - one_hour))
 
     # Should have only one user after merging
     assert len(users) == 1
@@ -407,8 +432,8 @@ def test_update_user_match_merge_credentials_existing_domain():
     assert base_user.associated_accounts["drac"].get_value() == "user1_drac"
 
 
-def test_multiple_different_scrapers(monkeypatch):
-    """Test scraping users with multiple different scrapers and verify merging behavior."""
+def test_fetch_and_parse_multiple_different_scrapers(monkeypatch, enabled_cache):
+    """Test fetching and parsing users with multiple different scrapers and verify merging behavior."""
     # Set up both scrapers in the builtin scrapers
     mock_scraper = MockUserScraper()
     test_plugin = TestPlugin()
@@ -420,7 +445,11 @@ def test_multiple_different_scrapers(monkeypatch):
         ("test_plugin", "example.com"),
     ]
 
-    users = list(scrape_users(scrapers))
+    # First, fetch the data and store it in cache
+    fetch_users(scrapers)
+
+    # Then, parse the cached data
+    users = list(parse_users(datetime.now(UTC) - one_hour))
 
     # MockUserScraper returns 3 users, TestPlugin returns 2 users
     # Total should be 5 users (no merging expected since they have different matching IDs)
