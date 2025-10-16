@@ -1,6 +1,9 @@
 """Tests for Manual user scrapers."""
 
+import json
+
 import pytest
+from serieux import serialize
 
 from sarc.core.scraping.users import MatchID, UserMatch
 from sarc.users.manual import ConfigMatchID, ManualUserConfig, ManualUserScraper
@@ -32,7 +35,7 @@ class TestManualUserScraper(UserPluginTester):
 
     def test_fetch_data(self):
         data = self.plugin.get_user_data(self.parsed_config)
-        assert data == b""
+        assert data == json.dumps(self.raw_config).encode("utf-8")
 
     @pytest.mark.parametrize(
         "config,expected",
@@ -42,10 +45,10 @@ class TestManualUserScraper(UserPluginTester):
                 ManualUserConfig(
                     id_pairs={
                         "user1": [
-                            MatchID(name="drac", mid="cci-001"),
-                            MatchID(name="mila_ldap", mid="user1@mila.quebec"),
+                            ConfigMatchID(name="drac", mid="cci-001"),
+                            ConfigMatchID(name="mila_ldap", mid="user1@mila.quebec"),
                         ],
-                        "user2": [MatchID(name="drac", mid="cci-002")],
+                        "user2": [ConfigMatchID(name="drac", mid="cci-002")],
                     }
                 ),
                 [
@@ -65,5 +68,9 @@ class TestManualUserScraper(UserPluginTester):
         ],
     )
     def test_parse_data(self, config, expected):
-        data = list(self.plugin.parse_user_data(config, b""))
+        data = list(
+            self.plugin.parse_user_data(
+                json.dumps(serialize(ManualUserConfig, config)).encode("utf-8")
+            )
+        )
         assert data == expected

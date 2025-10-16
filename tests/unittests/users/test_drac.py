@@ -37,10 +37,7 @@ class TestDRACRolesScraper(UserPluginTester):
     def test_parse_data(self, raw_file, data_regression):
         with open(Path(__file__).parent / "inputs" / raw_file, "rb") as f:
             raw_data = f.read()
-        data = list(
-            d.model_dump()
-            for d in self.plugin.parse_user_data(self.parsed_config, raw_data)
-        )
+        data = list(d.model_dump() for d in self.plugin.parse_user_data(raw_data))
         data_regression.check(data, basename="test_parse_roles")
 
 
@@ -67,8 +64,5 @@ class TestDRACMemberScraper(UserPluginTester):
     def test_parse_data(self, raw_file, data_regression):
         with open(Path(__file__).parent / "inputs" / raw_file, "rb") as f:
             raw_data = f.read()
-        data = list(
-            d.model_dump()
-            for d in self.plugin.parse_user_data(self.parsed_config, raw_data)
-        )
+        data = list(d.model_dump() for d in self.plugin.parse_user_data(raw_data))
         data_regression.check(data, basename="test_parse_members")
