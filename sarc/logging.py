@@ -7,9 +7,14 @@ from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
 from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.sdk.resources import Resource
 
-from sarc.config import LoggingConfig, config
+from rapporteur.report import Report
+from rapporteur.slack import SlackReporter
+
+from sarc.config import LoggingConfig, SlackConfig, config
 
 logger = logging.getLogger(__name__)
+
+rapporteur_report: Report | None = None
 
 
 def getOpenTelemetryLoggingHandler(log_conf: LoggingConfig):
@@ -29,6 +34,20 @@ def getOpenTelemetryLoggingHandler(log_conf: LoggingConfig):
     return LoggingHandler(level=logging.NOTSET, logger_provider=logger_provider)
 
 
+def setupSlackReport(slack_config: SlackConfig):
+    global rapporteur_report  # noqa: PLW0603
+    slack_reporter = SlackReporter(
+        token=slack_config.token, channel=slack_config.channel
+    )
+    rapporteur_report = Report(
+        description=slack_config.description, reporters=[slack_reporter]
+    )
+
+
+def getSlackReport() -> Report | None:
+    return rapporteur_report
+
+
 def setupLogging(verbose_level: int = 0):
     verbose_levels = {1: logging.INFO, 2: logging.DEBUG}
 
@@ -43,6 +62,9 @@ def setupLogging(verbose_level: int = 0):
     conf = config()
     # Apparently this can be called in client mode which doesn't have logging
     if hasattr(conf, "logging") and conf.logging:
+        if conf.logging.slack:
+            setupSlackReport(conf.logging.slack)
+
         config_log_level = logging_levels.get(conf.logging.log_level, logging.WARNING)
         # verbose priority:
         # in 0 (not specified in command line) then config log level is used

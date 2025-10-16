@@ -192,6 +192,11 @@ class AccountMatchingConfig:
     drac_members_csv_path: Path
     drac_roles_csv_path: Path
     make_matches_config: Path
+@dataclass
+class SlackConfig:
+    description: str
+    token: str
+    channel: str
 
 
 @dataclass
@@ -199,6 +204,7 @@ class LoggingConfig:
     log_level: str
     OTLP_endpoint: str
     service_name: str
+    slack: SlackConfig | None = None
 
 
 @dataclass
