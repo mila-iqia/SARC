@@ -26,6 +26,8 @@ from sarc.users.db import get_user, get_user_collection
 
 one_hour = timedelta(hours=1)
 
+one_hour = timedelta(hours=1)
+
 
 class UserPluginTester:
     plugin: UserScraper
