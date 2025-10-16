@@ -207,24 +207,32 @@ def test_acquire_slurmconfig(cli_main, caplog, monkeypatch):
     )
 
 
+SLURM_CONF_RAISIN_2020_01_01_INCONSISTENT_BILLING = """
+NodeName=mynode[1,2,5-20,30,40-43] UselessParam=UselessValue Gres=gpu1
+
+PartitionName=partition1 Nodes=mynode[1,5,6,29-41] TRESBillingWeights=x=1,GRES/gpu=5000,y=2
+PartitionName=partition2 Nodes=mynode[2,8-11,42] TRESBillingWeights=x=1,GRES/gpu:gpu1=6000,y=2
+"""
+
+
+@pytest.mark.parametrize("threshold", [None, 0.1, 1, 10, 19])
 @pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
-def test_acuire_slurmconfig_inconsistent_billing(cli_main):
+def test_acuire_slurmconfig_inconsistent_billing(cli_main, threshold):
     _save_slurm_conf(
         "raisin",
         "2020-01-01",
-        """
-    NodeName=mynode[1,2,5-20,30,40-43] UselessParam=UselessValue Gres=gpu1
-
-    PartitionName=partition1 Nodes=mynode[1,5,6,29-41] TRESBillingWeights=x=1,GRES/gpu=5000,y=2
-    PartitionName=partition2 Nodes=mynode[2,8-11,42] TRESBillingWeights=x=1,GRES/gpu:gpu1=6000,y=2
-    """,
+        SLURM_CONF_RAISIN_2020_01_01_INCONSISTENT_BILLING,
     )
 
+    command = ["acquire", "slurmconfig", "-c", "raisin", "-d", "2020-01-01"]
+    if threshold is not None:
+        threshold = float(threshold)
+        command += ["--threshold", str(threshold)]
     with pytest.raises(InconsistentGPUBillingError) as exc_info:
-        cli_main(["acquire", "slurmconfig", "-c", "raisin", "-d", "2020-01-01"])
+        cli_main(command)
 
-    assert """
-GPU billing differs.
+    assert f"""
+GPU billing differs (threshold {threshold or 0.1} %).
 GPU name: gpu1
 Previous value: 5000.0
 From line: 4
@@ -234,6 +242,34 @@ New value: 6000.0
 From line: 5
 PartitionName=partition2 Nodes=mynode[2,8-11,42] TRESBillingWeights=x=1,GRES/gpu:gpu1=6000,y=2
 """ == str(exc_info.value)
+
+
+@pytest.mark.parametrize("threshold", [20, 20.1, 30])
+@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
+def test_acquire_slurmconfig_inconsistent_billing_success(cli_main, threshold):
+    """Test that parsing succeeds with greater threshold"""
+    _save_slurm_conf(
+        "raisin",
+        "2020-01-01",
+        SLURM_CONF_RAISIN_2020_01_01_INCONSISTENT_BILLING,
+    )
+    assert (
+        cli_main(
+            [
+                "acquire",
+                "slurmconfig",
+                "-c",
+                "raisin",
+                "-d",
+                "2020-01-01",
+                "-t",
+                str(threshold),
+            ]
+        )
+        == 0
+    )
+    (gpu_billing,) = get_cluster_gpu_billings("raisin")
+    assert gpu_billing.gpu_to_billing == {"gpu1": (5000 + 6000) / 2}
 
 
 def assert_same_billings(given: List[GPUBilling], expected: List[GPUBilling]):
