@@ -1,15 +1,16 @@
+import json
+import logging
 import os
 from dataclasses import dataclass
+from datetime import datetime, timedelta
+from typing import Any
 
 from pydantic import BaseModel
+from tqdm import tqdm
 
 from sarc.cache import using_cache_policy, CachePolicy, CacheException
 from sarc.client.job import _jobs_collection, JobStatistics, SlurmJob
-from datetime import datetime, timedelta
 from sarc.config import config, TZLOCAL
-import logging
-from tqdm import tqdm
-
 from sarc.jobs.prometheus_scraping import update_allocated_gpu_type_from_prometheus
 from sarc.jobs.sacct import update_allocated_gpu_type_from_nodes
 from sarc.jobs.series import compute_job_statistics
@@ -32,7 +33,7 @@ class JobPrometheusData(BaseModel):
 class DbPrometheusBackup:
     def execute(self) -> int:
         cfg = config("scraping")
-        prometheus_cluster_names: list[str] = [
+        prometheus_cluster_names: list[str | None] = [
             cluster.name for cluster in cfg.clusters.values() if cluster.prometheus_url
         ]
         if not prometheus_cluster_names:
@@ -64,6 +65,7 @@ class DbPrometheusBackup:
         logger.info("Counting jobs ...")
         expected = cfg.mongo.database_instance.jobs.count_documents(base_query)
         # Prepare JSONL file
+        assert cfg.cache is not None
         output_dir = (cfg.cache / "prometheus_backup").resolve()
         output_path = output_dir / f"{newest_time.strftime(DATE_FORMAT_HOUR)}.jsonl"
         logger.info(f"Writing prometheus backup to {output_path}")
@@ -86,14 +88,15 @@ class DbPrometheusBackup:
                         {
                             **base_query,
                             "submit_time": {"$gte": current_time, "$lt": next_time},
-                        }
+                        },
+                        sort=[("submit_time", 1)],
                     ):
                         assert (
                             job.allocated.gpu_type is not None
                             or job.stored_statistics is not None
                         )
                         # Get Prometheus metrics
-                        data = {}
+                        data: dict[str, Any] = {}
 
                         if (
                             job.stored_statistics is not None
@@ -126,10 +129,11 @@ class DbPrometheusBackup:
                                 submit_time=job.submit_time,
                                 **data,
                             )
-                            print(
-                                record.model_dump_json(exclude_unset=True),
-                                file=jsonl_file,
+                            record_dict = record.model_dump(
+                                mode="json", exclude_unset=True
                             )
+                            json_output = json.dumps(record_dict, allow_nan=True)
+                            print(json_output, file=jsonl_file)
                             updated += 1
                         pbar.update(1)
                         count += 1
