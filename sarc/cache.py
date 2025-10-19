@@ -4,7 +4,6 @@ import json
 import logging
 import os
 import re
-from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -93,15 +92,6 @@ class CachePolicy(Enum):
 cache_policy_var: ContextVar[CachePolicy | None] = ContextVar(
     "cache_policy_var", default=None
 )
-
-
-@contextmanager
-def using_cache_policy(policy: CachePolicy):
-    token = cache_policy_var.set(policy)
-    try:
-        yield
-    finally:
-        cache_policy_var.reset(token)
 
 
 def _cache_policy_from_env() -> CachePolicy:

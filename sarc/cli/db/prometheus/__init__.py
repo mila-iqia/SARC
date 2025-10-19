@@ -8,13 +8,8 @@ from sarc.cli.db.prometheus.restore import DbPrometheusRestore
 
 @dataclass
 class DbPrometheus:
-    """this is help"""
-
     command: DbPrometheusBackup | DbPrometheusRestore = subparsers(
-        {
-            "backup": DbPrometheusBackup,
-            "restore": DbPrometheusRestore,
-        }
+        {"backup": DbPrometheusBackup, "restore": DbPrometheusRestore}
     )
 
     def execute(self) -> int:
