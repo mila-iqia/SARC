@@ -1,3 +1,4 @@
+import logging
 from collections.abc import Iterable
 from datetime import UTC, datetime
 from importlib.metadata import entry_points
@@ -9,6 +10,8 @@ from serieux import deserialize
 from sarc.cache import Cache
 from sarc.core.models.users import Credentials, MemberType
 from sarc.core.models.validators import ValidField
+
+logger = logging.getLogger(__name__)
 
 
 class MatchID(BaseModel):
@@ -130,20 +133,41 @@ def update_user_match(*, value: UserMatch, update: UserMatch) -> None:
 
 
 def fetch_users(scrapers: list[tuple[str, Any]]) -> None:
-    """Fetch user data and place the results in cache."""
+    """Fetch user data and place the results in cache.
+
+    This method should never raise any exceptions, but will instead log all
+    execution errors.
+
+    The goal is to make sure that all scrapers have a chance to run and that
+    temporary or permanent errors will not discard any previously retrieved
+    data.
+    """
     cache = Cache(subdirectory="users")
-    ce = cache.create_entry(datetime.now(UTC))
-    for scraper_name, config_data in scrapers:
-        try:
-            scraper = get_user_scraper(scraper_name)
-        except KeyError as e:
-            raise ValueError("Invalid user scraper") from e
-        config = scraper.validate_config(config_data)
-        ce.add_value(
-            key=scraper_name,
-            value=scraper.get_user_data(config),
-        )
-    ce.close()
+    with cache.create_entry(datetime.now(UTC)) as ce:
+        for scraper_name, config_data in scrapers:
+            try:
+                scraper = get_user_scraper(scraper_name)
+            except Exception as e:
+                logger.error(
+                    "Could not fetch user scraper: %s", scraper_name, exc_info=e
+                )
+                continue
+            try:
+                config = scraper.validate_config(config_data)
+            except Exception as e:
+                logger.error(
+                    "Error parsing config for scraper: %s", scraper_name, exc_info=e
+                )
+                continue
+            try:
+                ce.add_value(
+                    key=scraper_name,
+                    value=scraper.get_user_data(config),
+                )
+            except Exception as e:
+                logger.error(
+                    "Error fetching data for scraper: %s", scraper_name, exc_info=e
+                )
 
 
 def parse_users(from_: datetime) -> Iterable[UserMatch]:

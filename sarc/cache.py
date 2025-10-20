@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, time, timedelta
@@ -142,11 +143,16 @@ class Cache:
         """
         return cdir / f"{d.year:04}" / f"{d.month:02}" / f"{d.day:02}"
 
-    def create_entry(self, at_time: datetime) -> CacheEntry:
+    @contextlib.contextmanager
+    def create_entry(self, at_time: datetime) -> Iterator[CacheEntry]:
         """Create a writable CacheEntry for the specified time.
 
-        You MUST call close() on the resulting entry when you are finished
-        adding data to it, otherwise the entry could get corrupted."""
+        This is a context manager so use like this:
+
+        with cache.create_entry(date) as ce:
+            ce.add_value(...)
+        # rest of the code
+        """
         cdir = self.cache_dir
 
         at_time = ensure_utc(at_time)
@@ -160,7 +166,11 @@ class Cache:
             mode="x",
             compression=ZIP_LZMA,
         )
-        return CacheEntry(zf)
+        ce = CacheEntry(zf)
+        try:
+            yield ce
+        finally:
+            ce.close()
 
     def save(self, key: str, at_time: datetime, value: bytes) -> None:
         """Save binary data to the cache for a specific key and timestamp.
@@ -176,9 +186,8 @@ class Cache:
             >>> cache = Cache()
             >>> cache.save("data", datetime.now(), b"binary data")
         """
-        ce = self.create_entry(at_time)
-        ce.add_value(key, value)
-        ce.close()
+        with self.create_entry(at_time) as ce:
+            ce.add_value(key, value)
 
     def _paths_from(self, from_time: datetime) -> Iterable[Path]:
         """Returns paths starting from a specific datetime.
