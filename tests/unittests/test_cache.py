@@ -881,14 +881,12 @@ def test_cache_create_entry(tmp_path):
 
     with gifnoc.overlay({"sarc.cache": str(tmp_path)}):
         test_time = datetime(2024, 3, 15, 10, 30, 45, tzinfo=UTC)
-        entry = cache.create_entry(test_time)
+        with cache.create_entry(test_time) as entry:
+            # Verify the entry is a CacheEntry
+            assert isinstance(entry, CacheEntry)
 
-        # Verify the entry is a CacheEntry
-        assert isinstance(entry, CacheEntry)
-
-        # Add some data and close
-        entry.add_value("test_key", b"test_data")
-        entry.close()
+            # Add some data and close
+            entry.add_value("test_key", b"test_data")
 
         # Verify the file was created in the expected location
         expected_file = tmp_path / "test_cache" / "2024" / "03" / "15" / "10:30:45"
@@ -924,11 +922,10 @@ def test_cache_save_multiple_keys(tmp_path):
         test_time = datetime(2024, 3, 15, 10, 30, 45, tzinfo=UTC)
 
         # Create entry and add multiple keys
-        entry = cache.create_entry(test_time)
-        entry.add_value("key1", b"data1")
-        entry.add_value("key2", b"data2")
-        entry.add_value("key3", b"data3")
-        entry.close()
+        with cache.create_entry(test_time) as entry:
+            entry.add_value("key1", b"data1")
+            entry.add_value("key2", b"data2")
+            entry.add_value("key3", b"data3")
 
         # Verify the file was created
         expected_file = tmp_path / "test_cache" / "2024" / "03" / "15" / "10:30:45"
@@ -1019,10 +1016,9 @@ def test_cache_read_from(tmp_path):
         ]
 
         for time, data in times_and_data:
-            entry = cache.create_entry(time)
-            for key, value in data.items():
-                entry.add_value(key, value)
-            entry.close()
+            with cache.create_entry(time) as entry:
+                for key, value in data.items():
+                    entry.add_value(key, value)
 
         # Read from 10:00 onwards
         from_time = datetime(2024, 3, 15, 10, 0, 0, tzinfo=UTC)
@@ -1048,15 +1044,13 @@ def test_cache_read_from_with_multiple_keys_per_entry(tmp_path):
     with gifnoc.overlay({"sarc.cache": str(tmp_path)}):
         # Create entries with multiple keys
         time1 = datetime(2024, 3, 15, 10, 0, 0, tzinfo=UTC)
-        entry1 = cache.create_entry(time1)
-        entry1.add_value("user1", b"user1_data")
-        entry1.add_value("user2", b"user2_data")
-        entry1.close()
+        with cache.create_entry(time1) as entry1:
+            entry1.add_value("user1", b"user1_data")
+            entry1.add_value("user2", b"user2_data")
 
         time2 = datetime(2024, 3, 15, 11, 0, 0, tzinfo=UTC)
-        entry2 = cache.create_entry(time2)
-        entry2.add_value("user3", b"user3_data")
-        entry2.close()
+        with cache.create_entry(time2) as entry2:
+            entry2.add_value("user3", b"user3_data")
 
         # Read from 10:00 onwards
         from_time = datetime(2024, 3, 15, 10, 0, 0, tzinfo=UTC)
