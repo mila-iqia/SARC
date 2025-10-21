@@ -2,14 +2,16 @@ from dataclasses import dataclass
 
 from simple_parsing import subparsers
 
+from .diskusage import FetchDiskUsage
 from .users import FetchUsers
 
 
 @dataclass
 class Fetch:
-    command: FetchUsers = subparsers(
+    command: FetchUsers | FetchDiskUsage = subparsers(
         {
             "users": FetchUsers,
+            "diskusage": FetchDiskUsage,
         }
     )
 
