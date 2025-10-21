@@ -184,14 +184,15 @@ def parse_users(from_: datetime) -> Iterable[UserMatch]:
     for ce in cache.read_from(from_time=from_):
         # UserMatches, referenced by matching id
         user_refs: dict[MatchID, UserMatch] = {}
-        scraper_names = ce.get_keys()
-        for name in scraper_names:
+        # Used for getting results precedence.
+        scraper_names = [it[0] for it in ce.items()]
+        for item in ce.items():
             try:
-                scraper = get_user_scraper(name)
+                scraper = get_user_scraper(item[0])
             except KeyError as e:
                 raise ValueError("Invalid user scraper") from e
-            for userm in scraper.parse_user_data(ce.get_value(name)):
-                userm.matching_id.name = name
+            for userm in scraper.parse_user_data(item[1]):
+                userm.matching_id.name = item[0]
                 # First, get all the userm that match with this one.
                 prev_userms: list[UserMatch] = [userm]
                 prev = user_refs.get(userm.matching_id, None)

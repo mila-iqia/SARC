@@ -75,7 +75,7 @@ def ensure_utc(d: datetime) -> datetime:
 class CacheEntry:
     """Describe a single cache entry at a point in time.
 
-    The cache entry contains multiple key-value pairs."""
+    The cache entry contains multiple key-value pairs and the keys can be repeated with different content."""
 
     _zf: ZipFile
 
@@ -86,13 +86,10 @@ class CacheEntry:
         """Add a key-value pair to the cache entry"""
         self._zf.writestr(key, value)
 
-    def get_value(self, key: str) -> bytes:
-        """Get the value for an existing key in this cache entry"""
-        return self._zf.read(key)
-
-    def get_keys(self) -> list[str]:
-        """Get the list of keys in the order they were added."""
-        return self._zf.namelist()
+    def items(self) -> Iterator[tuple[str, bytes]]:
+        """Get all the key, value pairs in the order they were added."""
+        for zi in self._zf.infolist():
+            yield zi.filename, self._zf.read(zi)
 
     def close(self) -> None:
         """Close the cache entry. MUST be called for new entries."""
