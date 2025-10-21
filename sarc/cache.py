@@ -221,12 +221,16 @@ class Cache:
         for year_dir in sorted(
             filter(lambda y: int(y.parts[-1]) >= from_time.year, cdir.iterdir())
         ):
+            if not first_year_done and int(year_dir.parts[-1]) > from_time.year:
+                first_year_done = True
             for month_dir in sorted(
                 filter(
                     lambda m: first_year_done or int(m.parts[-1]) >= from_time.month,
                     year_dir.iterdir(),
                 )
             ):
+                if not first_month_done and int(month_dir.parts[-1]) > from_time.month:
+                    first_month_done = True
                 for day_dir in sorted(
                     filter(
                         lambda d: first_month_done or int(d.parts[-1]) >= from_time.day,
