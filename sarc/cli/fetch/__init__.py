@@ -3,14 +3,16 @@ from typing import Union
 
 from simple_parsing import subparsers
 
+from .diskusage import FetchDiskUsage
 from .users import FetchUsers
 
 
 @dataclass
 class Fetch:
-    command: Union[FetchUsers] = subparsers(
+    command: Union[FetchUsers, FetchDiskUsage] = subparsers(
         {
             "users": FetchUsers,
+            "diskusage": FetchDiskUsage,
         }
     )
 
