@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from tqdm import tqdm
 
 from sarc.client.job import _jobs_collection, JobStatistics, SlurmJob
-from sarc.config import config, TZLOCAL
+from sarc.config import config, UTC
 from sarc.jobs.sacct import update_allocated_gpu_type_from_nodes
 from sarc.jobs.series import (
     _get_job_time_series_data_cache_key,
@@ -50,7 +50,7 @@ class DbPrometheusBackup:
         # Will be used to get jobs through pagination.
         (oldest_job,) = coll_jobs.find_by({}, sort=[("submit_time", 1)], limit=1)
         oldest_time = oldest_job.submit_time
-        newest_time = datetime.now(tz=TZLOCAL)
+        newest_time = datetime.now(tz=UTC)
         assert isinstance(oldest_time, datetime)
         assert oldest_time < newest_time
         logger.info(
