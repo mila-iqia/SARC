@@ -14,13 +14,13 @@ class DiskUsageScraper[T](Protocol):
         """Validate the configuration"""
         return deserialize(self.config_type, config_data)
 
-    def get_diskusage_report(self, ssh: Connection, config: T) -> bytes:
+    def get_diskusage_report(
+        self, ssh: Connection, cluster_name: str, config: T
+    ) -> bytes:
         """Get the raw disk usage report for caching and archiving purposes"""
         ...
 
-    def parse_diskusage_report(
-        self, config: T, cluster_name: str, data: bytes
-    ) -> DiskUsage:
+    def parse_diskusage_report(self, data: bytes) -> DiskUsage:
         """Parse previously fetched report into a DiskUsage"""
         ...
 
