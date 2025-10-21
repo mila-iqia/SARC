@@ -39,8 +39,10 @@ class AcquireStorages:
                     continue
 
                 disk_config = scraper.validate_config(diskusage_config.params)
-                data = scraper.get_diskusage_report(cluster.ssh, disk_config)
-                du = scraper.parse_diskusage_report(disk_config, cluster_name, data)
+                data = scraper.get_diskusage_report(
+                    cluster.ssh, cluster_name, disk_config
+                )
+                du = scraper.parse_diskusage_report(data)
 
                 if not self.dry:
                     collection = get_diskusage_collection()
