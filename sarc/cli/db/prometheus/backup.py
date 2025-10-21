@@ -45,17 +45,6 @@ class DbPrometheusBackup:
 
     def execute(self) -> int:
         cfg = config("scraping")
-        # Find clusters with prometheus_url
-        prometheus_cluster_names: list[str | None] = [
-            cluster.name for cluster in cfg.clusters.values() if cluster.prometheus_url
-        ]
-        if not prometheus_cluster_names:
-            logger.error(
-                "No cluster with prometheus_url configured, "
-                "we don't expect any job to have Prometheus metrics."
-            )
-            return -1
-
         coll_jobs = _jobs_collection()
         # Get oldest submit_time.
         # Will be used to get jobs through pagination.
@@ -68,10 +57,8 @@ class DbPrometheusBackup:
             f"Oldest submit time in db: {oldest_time} (since {newest_time - oldest_time})"
         )
         # Count relevant jobs
-        # We look for jobs from a cluster with prometheus_url,
-        # which have either allocated.gpu_type or stored_statistics.
+        # We look for jobs which have either allocated.gpu_type or stored_statistics.
         base_query = {
-            "cluster_name": {"$in": prometheus_cluster_names},
             "$or": [
                 {"allocated.gpu_type": {"$type": "string"}},
                 {"stored_statistics": {"$type": "object"}},
