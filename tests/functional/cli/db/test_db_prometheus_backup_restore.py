@@ -26,7 +26,8 @@ import itertools
 class GpuCase(StrEnum):
     # Enumeration to test GPU cases.
     NONE = auto()  # No GPU type in job
-    FROM_NODES = auto()  # GPU can be inferred from sacct or nodes
+    FROM_SACCT = auto()  # GPU was parsed from sacct, neither from nodes nor Prometheus
+    FROM_NODES = auto()  # GPU can be inferred from nodes
     IN_RAW_CACHE = auto()  # GPU cannot be inferred and is in prometheus raw cache
     IN_DB_ONLY = auto()  # GPU cannot be inferred and is only in DB
 
@@ -69,21 +70,20 @@ def _gen_job(job_id: int, gpu_case: GpuCase, stats_case: StatsCase):
 
     if gpu_case == GpuCase.NONE:
         gpu_type = None
-    elif gpu_case == GpuCase.FROM_NODES:
-        gpu_type = "node_gpu"
+    elif gpu_case == GpuCase.FROM_SACCT:
+        gpu_type = "sacct_gpu"
     else:
-        gpu_type = "prometheus_gpu"
-        # We make sure that:
-        # - Job GPU is "prometheus_gpu"
-        # - GPU type inferred from nodes is "node_gpu"
-        # So that job GPU cannot be inferred from sacct or nodes
+        if gpu_case == GpuCase.FROM_NODES:
+            gpu_type = "node_gpu"
+        else:
+            gpu_type = "prometheus_gpu"
+        # Anyway, we make sure there are node->gpu mapping
         _node_gpu_mapping_collection().save_node_gpu_mapping(
             job.cluster_name,
             job.submit_time,
             {node: ["node_gpu"] for node in job.nodes},
         )
-        if gpu_case != GpuCase.IN_DB_ONLY:
-            assert gpu_case == GpuCase.IN_RAW_CACHE
+        if gpu_case == GpuCase.IN_RAW_CACHE:
             # Create prometheus raw cache for gpu
             cache_key = _get_job_time_series_data_cache_key(
                 job=job, metric="slurm_job_utilization_gpu_memory", max_points=1
@@ -151,20 +151,24 @@ def _backup_db(empty_read_write_db, enabled_cache):
     1       none            empty           no                  no                  no
     2       none            in_raw_cache    no                  no                  no
     3       none            in_db_only      no                  yes                 yes
-    4       from_nodes      none            no                  no                  no
-    5       from_nodes      empty           no                  no                  no
-    6       from_nodes      in_raw_cache    no                  no                  no
-    7       from_nodes      in_db_only      no                  yes                 yes
-    8       in_raw_cache    none            no                  no                  no
-    9       in_raw_cache    empty           no                  no                  no
-    10      in_raw_cache    in_raw_cache    no                  no                  no
-    11      in_raw_cache    in_db_only      no                  yes                 yes
-    12      in_db_only      none            yes                 no                  yes
-    13      in_db_only      empty           yes                 no                  yes
-    14      in_db_only      in_raw_cache    yes                 no                  yes
-    15      in_db_only      in_db_only      yes                 yes                 yes
+    4       from_sacct      none            yes                 no                  yes
+    5       from_sacct      empty           yes                 no                  yes
+    6       from_sacct      in_raw_cache    yes                 no                  yes
+    7       from_sacct      in_db_only      yes                 yes                 yes
+    8       from_nodes      none            no                  no                  no
+    9       from_nodes      empty           no                  no                  no
+    10      from_nodes      in_raw_cache    no                  no                  no
+    11      from_nodes      in_db_only      no                  yes                 yes
+    12      in_raw_cache    none            no                  no                  no
+    13      in_raw_cache    empty           no                  no                  no
+    14      in_raw_cache    in_raw_cache    no                  no                  no
+    15      in_raw_cache    in_db_only      no                  yes                 yes
+    16      in_db_only      none            yes                 no                  yes
+    17      in_db_only      empty           yes                 no                  yes
+    18      in_db_only      in_raw_cache    yes                 no                  yes
+    19      in_db_only      in_db_only      yes                 yes                 yes
     ================================================================================================
-    TOTAL                                   4                   4                   7 / 15
+    TOTAL                                   8                   5                   11 / 15
     """
     for job_id, (gpu_status, stats_status) in enumerate(
         itertools.product(GpuCase.__members__.values(), StatsCase.__members__.values())
@@ -180,14 +184,12 @@ def test_db_prometheus_backup(_backup_db, caplog, cli_main, file_regression):
     prometheus_backup_dir = cfg.cache / "prometheus_backup"
     assert not prometheus_backup_dir.exists()
     assert cli_main(["-v", "db", "prometheus", "backup"]) == 0
-    assert "Collected Prometheus metrics for 7/15 jobs" in caplog.text
-    assert "Collected GPU types: 4" in caplog.text
-    assert (
-        "Skipped GPU types that can be inferred from sacct or nodes: 4" in caplog.text
-    )
+    assert "Collected Prometheus metrics for 11/19 jobs" in caplog.text
+    assert "Collected GPU types: 8" in caplog.text
+    assert "Skipped GPU types that can be inferred from job nodes: 4" in caplog.text
     assert "Skipped GPU types already in raw prometheus cache: 4" in caplog.text
-    assert "Collected statistics: 4" in caplog.text
-    assert "Skipped statistics already in raw prometheus cache: 4" in caplog.text
+    assert "Collected statistics: 5" in caplog.text
+    assert "Skipped statistics already in raw prometheus cache: 5" in caplog.text
 
     backup_dir = cfg.cache / "prometheus_backup"
     assert backup_dir.is_dir()
@@ -216,16 +218,16 @@ def test_db_prometheus_restore(_backup_db, caplog, cli_main):
         if job.job_id == 3:
             job.stored_statistics = None  # Should be updated even without --force
             to_save = True
-        elif job.job_id == 7:
+        elif job.job_id == 11:
             job.stored_statistics.gpu_utilization.mean = 1
             to_save = True
-        elif job.job_id == 12:
+        elif job.job_id == 16:
             job.allocated.gpu_type = None  # Should be updated even without --force
             to_save = True
-        elif job.job_id == 13:
+        elif job.job_id == 17:
             job.allocated.gpu_type = "another_gpu_type"
             to_save = True
-        elif job.job_id == 15:
+        elif job.job_id == 19:
             job.stored_statistics.gpu_utilization.std = -1.0
             job.allocated.gpu_type = "again_another_gpu_type"
             to_save = True
@@ -245,7 +247,7 @@ def test_db_prometheus_restore(_backup_db, caplog, cli_main):
         "No --force. Only null GPU type or stored_statistics in DB would be updated."
         in caplog.text
     )
-    assert "Jobs found: 7 / 7" in caplog.text
+    assert "Jobs found: 11 / 11" in caplog.text
     assert "Jobs: to update: 5, updated: 2" in caplog.text
     assert "GPU types: to update: 3, updated: 1" in caplog.text
     assert "Prometheus stats: to update: 3, updated: 1" in caplog.text
@@ -261,7 +263,7 @@ def test_db_prometheus_restore(_backup_db, caplog, cli_main):
             "No --force. Only null GPU type or stored_statistics in DB would be updated."
             in caplog.text
         )
-        assert "Jobs found: 7 / 7" in caplog.text
+        assert "Jobs found: 11 / 11" in caplog.text
         assert "Jobs: to update: 3, updated: 0" in caplog.text
         assert "GPU types: to update: 2, updated: 0" in caplog.text
         assert "Prometheus stats: to update: 2, updated: 0" in caplog.text
@@ -279,7 +281,7 @@ def test_db_prometheus_restore(_backup_db, caplog, cli_main):
         "No --force. Only null GPU type or stored_statistics in DB would be updated."
         not in caplog.text
     )
-    assert "Jobs found: 7 / 7" in caplog.text
+    assert "Jobs found: 11 / 11" in caplog.text
     assert "Jobs: to update: 3, updated: 3" in caplog.text
     assert "GPU types: to update: 2, updated: 2" in caplog.text
     assert "Prometheus stats: to update: 2, updated: 2" in caplog.text
@@ -305,7 +307,7 @@ def test_db_prometheus_restore(_backup_db, caplog, cli_main):
             "No --force. Only null GPU type or stored_statistics in DB would be updated."
             not in caplog.text
         )
-        assert "Jobs found: 7 / 7" in caplog.text
+        assert "Jobs found: 11 / 11" in caplog.text
         assert "Jobs: to update: 0, updated: 0" in caplog.text
         assert "GPU types: to update: 0, updated: 0" in caplog.text
         assert "Prometheus stats: to update: 0, updated: 0" in caplog.text

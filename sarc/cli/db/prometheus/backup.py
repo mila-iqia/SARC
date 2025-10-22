@@ -40,7 +40,7 @@ class DbPrometheusBackup:
     - SlurmJob.stored_statistics,
       if not null and not empty.
     - SlurmJob.allocated_gpu_type,
-      if GPU cannot be inferred from sacct or job nodes.
+      if GPU cannot be inferred from job nodes.
     """
 
     def execute(self) -> int:
@@ -81,7 +81,7 @@ class DbPrometheusBackup:
         count = 0
         updated = 0
         gpu_in_raw_cache = 0
-        gpu_sacct_or_nodes = 0
+        gpu_from_nodes = 0
         gpu_collected = 0
         stats_in_raw_cache = 0
         stats_collected = 0
@@ -120,23 +120,16 @@ class DbPrometheusBackup:
                                 stats_collected += 1
 
                         if job.allocated.gpu_type is not None:
-                            current_gpu_type = job.allocated.gpu_type
-                            sacct_or_nodes_gpu_type = (
-                                update_allocated_gpu_type_from_nodes(
-                                    job.fetch_cluster_config(), job
-                                )
-                            )
-                            if current_gpu_type == sacct_or_nodes_gpu_type:
-                                # When parsing sacct cache, this GPU type
-                                # can be inferred from sacct data or job nodes.
-                                # No need to save it.
-                                gpu_sacct_or_nodes += 1
+                            if gpu_type_can_be_inferred_from_nodes(job):
+                                # This GPU type can be inferred from job nodes
+                                # on job parsing. No need to save it.
+                                gpu_from_nodes += 1
                             elif has_prometheus_cache_for_gpu_type(cfg.cache, job):
                                 # There is Prometheus raw data in cache for this GPU type.
                                 # We don't save it.
                                 gpu_in_raw_cache += 1
                             else:
-                                data["gpu_type"] = current_gpu_type
+                                data["gpu_type"] = job.allocated.gpu_type
                                 gpu_collected += 1
 
                         if data:
@@ -169,7 +162,7 @@ class DbPrometheusBackup:
         logger.info(f"Collected Prometheus metrics for {updated}/{expected} jobs")
         logger.info(f"Collected GPU types: {gpu_collected}")
         logger.info(
-            f"Skipped GPU types that can be inferred from sacct or nodes: {gpu_sacct_or_nodes}"
+            f"Skipped GPU types that can be inferred from job nodes: {gpu_from_nodes}"
         )
         logger.info(
             f"Skipped GPU types already in raw prometheus cache: {gpu_in_raw_cache}"
@@ -205,3 +198,41 @@ def has_prometheus_cache_for_gpu_type(cache: Path, entry: SlurmJob) -> bool:
         max_points=1,
     )
     return cache_key is not None and (cache / "prometheus" / cache_key).exists()
+
+
+def gpu_type_can_be_inferred_from_nodes(entry: SlurmJob) -> bool:
+    """
+    Return True if GPU type can be inferred from job nodes.
+
+    There are 3 sources of info for GPU type:
+    1) `sacct`
+    2) `job nodes` (overwrite `sacct` if available)
+    3) `prometheus` (overwrite `sacct` and `job nodes` if available)
+
+    `job nodes` source will always be computed when running
+    `acquire jobs`. So, if it returns same GPU as the one currently saved,
+    then we don't need to save it here.
+
+    PS: We would also like to check `sacct` vs `prometheus` sources,
+    but we would need to check `sacct` cache to do so: too complicated here.
+    """
+
+    # Get current job GPU type
+    saved_gpu_type = entry.allocated.gpu_type
+
+    # If update_allocated_gpu_type_from_nodes() cannot infer GPU type from nodes,
+    # it returns current value of allocated.gpu_type. So, we set it to None
+    # so that the function returns None by default.
+    entry.allocated.gpu_type = None
+
+    # Now, try to infer GPU type from nodes.
+    gpu_type_from_nodes = update_allocated_gpu_type_from_nodes(
+        entry.fetch_cluster_config(), entry
+    )
+
+    # We set allocated.gpu_type back to saved value
+    entry.allocated.gpu_type = saved_gpu_type
+
+    # If inferred value is same as saved value, then GPU type can be inferred from nodes,
+    # and we won't need to save it as Prometheus data.
+    return gpu_type_from_nodes is not None and gpu_type_from_nodes == saved_gpu_type
