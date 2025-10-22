@@ -120,15 +120,18 @@ class DbPrometheusBackup:
                                 stats_collected += 1
 
                         if job.allocated.gpu_type is not None:
+                            skip = False
                             if gpu_type_can_be_inferred_from_nodes(job):
                                 # This GPU type can be inferred from job nodes
                                 # on job parsing. No need to save it.
                                 gpu_from_nodes += 1
-                            elif has_prometheus_cache_for_gpu_type(cfg.cache, job):
+                                skip = True
+                            if has_prometheus_cache_for_gpu_type(cfg.cache, job):
                                 # There is Prometheus raw data in cache for this GPU type.
                                 # We don't save it.
                                 gpu_in_raw_cache += 1
-                            else:
+                                skip = True
+                            if not skip:
                                 data["gpu_type"] = job.allocated.gpu_type
                                 gpu_collected += 1
 
