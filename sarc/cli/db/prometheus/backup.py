@@ -10,6 +10,7 @@ from tqdm import tqdm
 
 from sarc.client.job import _jobs_collection, JobStatistics, SlurmJob
 from sarc.config import config, UTC
+from sarc.core.models.validators import datetime_utc
 from sarc.jobs.sacct import update_allocated_gpu_type_from_nodes
 from sarc.jobs.series import (
     _get_job_time_series_data_cache_key,
@@ -27,7 +28,7 @@ class JobPrometheusData(BaseModel):
 
     cluster_name: str
     job_id: int
-    submit_time: datetime
+    submit_time: datetime_utc
     stored_statistics: JobStatistics | None = None
     gpu_type: str | None = None
 
@@ -141,7 +142,7 @@ class DbPrometheusBackup:
                             record = JobPrometheusData(
                                 cluster_name=job.cluster_name,
                                 job_id=job.job_id,
-                                submit_time=job.submit_time,
+                                submit_time=job.submit_time.astimezone(UTC),
                                 **data,
                             )
                             # Convert record to JSON-compatible dict.

@@ -2,6 +2,7 @@ import json
 import logging
 import math
 from dataclasses import dataclass
+from datetime import datetime
 
 from simple_parsing import field
 from tqdm import tqdm
@@ -82,6 +83,7 @@ class DbPrometheusRestore:
         with open(self.input, "r", encoding="utf-8") as json_file:
             for line in tqdm(json_file, total=nb_lines, desc="Job Prometheus data"):
                 data = json.loads(line)
+                data["submit_time"] = datetime.fromisoformat(data["submit_time"])
                 record = JobPrometheusData.model_validate(data)
                 jobs = list(
                     coll_jobs.find_by(
