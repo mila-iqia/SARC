@@ -50,7 +50,7 @@ def test_drac_parse_report(file_regression):
 
 @pytest.mark.usefixtures("empty_read_write_db")
 @pytest.mark.freeze_time("2023-05-12")
-def test_drac_acquire_storages(remote, cli_main, file_regression):
+def test_drac_acquire_storages(remote, cli_main, file_regression, enabled_cache):
     cluster = config("scraping").clusters["hyrule"]
     diskusages = cluster.diskusage
     assert diskusages is not None
@@ -73,14 +73,8 @@ def test_drac_acquire_storages(remote, cli_main, file_regression):
         out=raw_report,
     )
 
-    cli_main(
-        [
-            "acquire",
-            "storages",
-            "-c",
-            "hyrule",
-        ]
-    )
+    cli_main(["fetch", "diskusage", "-c", "hyrule"])
+    cli_main(["parse", "diskusage", "--from", "2023-05-11"])
 
     data = get_diskusages(cluster_name=["hyrule"])
     assert len(data) == 1

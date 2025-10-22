@@ -11,7 +11,7 @@ FOLDER = os.path.dirname(os.path.abspath(__file__))
 
 @pytest.mark.usefixtures("empty_read_write_db")
 @pytest.mark.freeze_time("2023-05-12")
-def test_update_drac_diskusage_one(file_regression, cli_main, remote):
+def test_update_drac_diskusage_one(file_regression, cli_main, remote, enabled_cache):
     assert get_diskusages(cluster_name=["gerudo", "hyrule"]) == []
 
     # Load the expected report content
@@ -42,7 +42,7 @@ def test_update_drac_diskusage_one(file_regression, cli_main, remote):
 
 @pytest.mark.usefixtures("empty_read_write_db")
 @pytest.mark.freeze_time("2023-05-12")
-def test_update_drac_diskusage_two(file_regression, cli_main, remote):
+def test_update_drac_diskusage_two(file_regression, cli_main, remote, enabled_cache):
     assert get_diskusages(cluster_name=["gerudo", "hyrule"]) == []
 
     # Load both report contents
