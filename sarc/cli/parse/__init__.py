@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import Union
 
 from simple_parsing import subparsers
 
@@ -9,7 +8,7 @@ from .users import ParseUsers
 
 @dataclass
 class Parse:
-    command: Union[ParseUsers, ParseDiskUsage] = subparsers(
+    command: ParseUsers | ParseDiskUsage = subparsers(
         {
             "users": ParseUsers,
             "diskusage": ParseDiskUsage,
