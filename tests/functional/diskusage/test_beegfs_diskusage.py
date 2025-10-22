@@ -122,7 +122,7 @@ def test_beegfs_fetch_report(monkeypatch, remote, file_regression):
     )
     monkeypatch.setattr(sarc.storage.beegfs, "get_users", mock_get_users)
 
-    report = scraper.get_diskusage_report(cluster.ssh, dconfig)
+    report = scraper.get_diskusage_report(cluster.ssh, "mila", dconfig)
     file_regression.check(report.decode())
 
 
@@ -132,9 +132,6 @@ def test_beegfs_parse_report(file_regression):
         raw_report = f.read()
 
     scraper = get_diskusage_scraper("beegfs")
-    config = scraper.validate_config(
-        {"config_files": {"default": "/etc/beegfs/scratch.d/beegfs-client.conf"}}
-    )
-    result = scraper.parse_diskusage_report(config, "mila", raw_report)
+    result = scraper.parse_diskusage_report(raw_report)
 
     file_regression.check(result.model_dump_json(exclude={"id"}, indent=4))
