@@ -10,7 +10,7 @@ from hostlist import expand_hostlist
 from sarc.cache import CacheException
 from sarc.cli.acquire.slurmconfig import InconsistentGPUBillingError, SlurmConfigParser
 from sarc.client.gpumetrics import GPUBilling, get_cluster_gpu_billings
-from sarc.config import MTL, config
+from sarc.config import MTL, config, UTC
 from sarc.jobs.node_gpu_mapping import NodeGPUMapping, get_node_to_gpu
 from tests.functional.jobs.test_func_load_job_series import MOCK_TIME
 
@@ -120,7 +120,7 @@ def test_acquire_slurmconfig(cli_main, caplog, monkeypatch):
 
     expected_gpu_billing_1 = GPUBilling(
         cluster_name="raisin",
-        since="2020-01-01",
+        since=datetime(2020, 1, 1, tzinfo=MTL).astimezone(UTC),
         gpu_to_billing={
             "gpu1": 5000,
             "THE GPU II": 7500,
@@ -130,7 +130,7 @@ def test_acquire_slurmconfig(cli_main, caplog, monkeypatch):
 
     expected_node_to_gpu_1 = NodeGPUMapping(
         cluster_name="raisin",
-        since="2020-01-01",
+        since=datetime(2020, 1, 1, tzinfo=MTL).astimezone(UTC),
         node_to_gpu={
             **{
                 node_name: ["gpu1"]
@@ -162,7 +162,7 @@ def test_acquire_slurmconfig(cli_main, caplog, monkeypatch):
     )
     expected_gpu_billing_2 = GPUBilling(
         cluster_name="raisin",
-        since="2020-05-01",
+        since=datetime(2020, 5, 1, tzinfo=MTL).astimezone(UTC),
         gpu_to_billing={
             "gpu1": 4000,
             "THE GPU II": 9000,
@@ -175,7 +175,7 @@ def test_acquire_slurmconfig(cli_main, caplog, monkeypatch):
 
     expected_node_to_gpu_2 = NodeGPUMapping(
         cluster_name="raisin",
-        since="2020-05-01",
+        since=datetime(2020, 5, 1, tzinfo=MTL).astimezone(UTC),
         node_to_gpu=expected_node_to_gpu_1.node_to_gpu.copy(),
     )
     del expected_node_to_gpu_2.node_to_gpu["alone_node"]
@@ -287,7 +287,10 @@ def assert_same_node_gpu_mapping(
 
 
 def _save_slurm_conf(cluster_name: str, day: str, content: str):
-    scp = SlurmConfigParser(config().clusters[cluster_name], day)
+    scp = SlurmConfigParser(
+        config().clusters[cluster_name],
+        datetime.strptime(day, "%Y-%m-%d").replace(tzinfo=MTL),
+    )
     folder = "slurm_conf"
     filename = scp._cache_key()
     cache_dir = config().cache
