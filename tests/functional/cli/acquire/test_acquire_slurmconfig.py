@@ -90,7 +90,7 @@ def _setup_logging_do_nothing(*args, **kwargs):
     """
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache", "tzlocal_is_mtl")
 def test_acquire_slurmconfig(cli_main, caplog, monkeypatch):
     monkeypatch.setattr("sarc.cli.setupLogging", _setup_logging_do_nothing)
 
