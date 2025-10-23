@@ -1,0 +1,510 @@
+[
+    {
+        "mila_ldap": {
+            "mila_email_username": "prof2@mila.quebec",
+            "mila_cluster_username": "prof2",
+            "mila_cluster_uid": "1500000135",
+            "mila_cluster_gid": "1500000135",
+            "display_name": "Prof 2",
+            "supervisor": null,
+            "co_supervisor": null,
+            "status": "enabled"
+        },
+        "drac": null,
+        "drac_members": null,
+        "drac_roles": null,
+        "mila": {
+            "username": "prof2",
+            "email": "prof2@mila.quebec",
+            "active": true
+        },
+        "name": "Prof 2"
+    },
+    {
+        "record_start": "2025-09-04 00:02:51.144000",
+        "record_end": null,
+        "mila_ldap": {
+            "mila_email_username": "john.smith@mila.quebec",
+            "mila_cluster_username": "smithj",
+            "mila_cluster_uid": "1500001765",
+            "mila_cluster_gid": "1500001765",
+            "display_name": "John Smith",
+            "supervisor": null,
+            "co_supervisor": null,
+            "status": "enabled"
+        },
+        "name": "John Smith",
+        "drac": null,
+        "mila": {
+            "username": "smithj",
+            "email": "john.smith@mila.quebec",
+            "active": true
+        },
+        "drac_roles": null,
+        "drac_members": null
+    },
+    {
+        "record_start": "2025-09-02 11:47:34.684000",
+        "record_end": "2025-09-04 00:02:51.144000",
+        "mila_ldap": {
+            "mila_email_username": "jane.doe@mila.quebec",
+            "mila_cluster_username": "jane.doe",
+            "mila_cluster_uid": "0",
+            "mila_cluster_gid": "0",
+            "display_name": "Jane Doe",
+            "status": "unknown"
+        },
+        "name": "Jane Doe",
+        "drac": {
+            "username": "jdoe99",
+            "email": "jane.doe@mila.quebec",
+            "active": false
+        },
+        "mila": {
+            "username": "jane.doe",
+            "email": "jane.doe@mila.quebec",
+            "active": false
+        },
+        "drac_roles": null,
+        "drac_members": {
+            "rapi": "jvb-000-ag",
+            "groupname": "rrg-bengioy-ad",
+            "name": "Jane Doe",
+            "position": "Étudiant à la maîtrise",
+            "institution": "Université de Montréal",
+            "department": "Informatique Et Recherche Opérationnelle",
+            "sponsor": "Yoshua Bengio",
+            "permission": "Member",
+            "activation_status": "older_deactivated",
+            "username": "jdoe99",
+            "ccri": "abd-123-01",
+            "email": "jane.doe@mila.quebec",
+            "member_since": "2022-02-17 15:39:54 -0500"
+        }
+    },
+    {
+        "record_start": "2025-09-04 00:02:51.144000",
+        "record_end": null,
+        "mila_ldap": {
+            "mila_email_username": "jane.doe@mila.quebec",
+            "mila_cluster_username": "jane.doe",
+            "mila_cluster_uid": "1832675021",
+            "mila_cluster_gid": "1832675021",
+            "display_name": "Jane Doe",
+            "supervisor": "prof2@mila.quebec",
+            "co_supervisor": null,
+            "status": "enabled"
+        },
+        "name": "Jane Doe",
+        "drac": {
+            "username": "jdoe99",
+            "email": "jane.doe@mila.quebec",
+            "active": false
+        },
+        "mila": {
+            "username": "jane.doe",
+            "email": "jane.doe@mila.quebec",
+            "active": true
+        },
+        "drac_roles": null,
+        "drac_members": {
+            "rapi": "jvb-000-ag",
+            "groupname": "rrg-bengioy-ad",
+            "name": "Jane Doe",
+            "position": "Étudiant à la maîtrise",
+            "institution": "Université de Montréal",
+            "department": "Informatique Et Recherche Opérationnelle",
+            "sponsor": "Yoshua Bengio",
+            "permission": "Member",
+            "activation_status": "older_deactivated",
+            "username": "jdoe99",
+            "ccri": "abc-123-01",
+            "email": "jane.doe@mila.quebec",
+            "member_since": "2022-02-17 15:39:54 -0500"
+        }
+    },
+    {
+        "record_start": "2025-01-01 00:00:00.000000",
+        "record_end": "2025-12-31 23:59:59.999999",
+        "mila_ldap": {
+            "mila_email_username": "edge.case@mila.quebec",
+            "mila_cluster_username": "edgecase",
+            "mila_cluster_uid": "9999999999",
+            "mila_cluster_gid": "9999999999",
+            "display_name": "Edge Case User",
+            "supervisor": "supervisor@mila.quebec",
+            "co_supervisor": "cosupervisor@mila.quebec",
+            "status": "enabled"
+        },
+        "name": "Edge Case User",
+        "drac": {
+            "username": "edgecase_drac",
+            "email": "edge.case@mila.quebec",
+            "active": true
+        },
+        "mila": {
+            "username": "edgecase",
+            "email": "edge.case@mila.quebec",
+            "active": true
+        },
+        "drac_roles": null,
+        "drac_members": {
+            "rapi": "edge-000-ag",
+            "groupname": "rrg-edge-ad",
+            "name": "Edge Case User",
+            "position": "Étudiant au doctorat",
+            "institution": "Université de Montréal",
+            "department": "Informatique Et Recherche Opérationnelle",
+            "sponsor": "Edge Supervisor",
+            "permission": "Member",
+            "activation_status": "active",
+            "username": "edgecase_drac",
+            "ccri": "edge-999-99",
+            "email": "edge.case@mila.quebec",
+            "member_since": "2023-01-01 12:00:00 -0500"
+        }
+    },
+    {
+        "record_start": null,
+        "record_end": null,
+        "mila_ldap": {
+            "mila_email_username": "no.timestamps@mila.quebec",
+            "mila_cluster_username": "notimestamps",
+            "mila_cluster_uid": "8888888888",
+            "mila_cluster_gid": "8888888888",
+            "display_name": "No Timestamps User",
+            "supervisor": null,
+            "co_supervisor": null,
+            "status": "disabled"
+        },
+        "name": "No Timestamps User",
+        "drac": null,
+        "mila": {
+            "username": "notimestamps",
+            "email": "no.timestamps@mila.quebec",
+            "active": false
+        },
+        "drac_roles": null,
+        "drac_members": null
+    },
+    {
+        "record_start": "2025-06-15 14:30:00.123456",
+        "record_end": "2025-06-15 14:30:01.123456",
+        "mila_ldap": {
+            "mila_email_username": "same.start.end@mila.quebec",
+            "mila_cluster_username": "samestartend",
+            "mila_cluster_uid": "7777777777",
+            "mila_cluster_gid": "7777777777",
+            "display_name": "Same Start End User",
+            "supervisor": null,
+            "co_supervisor": null,
+            "status": "enabled"
+        },
+        "name": "Same Start End User",
+        "drac": {
+            "username": "samestartend_drac",
+            "email": "same.start.end@mila.quebec",
+            "active": false
+        },
+        "mila": {
+            "username": "samestartend",
+            "email": "same.start.end@mila.quebec",
+            "active": true
+        },
+        "drac_roles": null,
+        "drac_members": {
+            "rapi": "same-000-ag",
+            "groupname": "rrg-same-ad",
+            "name": "Same Start End User",
+            "position": "Stagiaire",
+            "institution": "Université de Montréal",
+            "department": "Informatique Et Recherche Opérationnelle",
+            "sponsor": "Same Supervisor",
+            "permission": "Member",
+            "activation_status": "inactive",
+            "username": "samestartend_drac",
+            "ccri": "same-777-77",
+            "email": "same.start.end@mila.quebec",
+            "member_since": "2024-01-01 00:00:00 -0500"
+        }
+    },
+    {
+        "mila_ldap": {
+            "mila_email_username": "minimal@mila.quebec",
+            "mila_cluster_username": "minimal",
+            "mila_cluster_uid": "1111111111",
+            "mila_cluster_gid": "1111111111",
+            "display_name": "Minimal User",
+            "supervisor": null,
+            "co_supervisor": null,
+            "status": "enabled"
+        },
+        "name": "Minimal User",
+        "drac": null,
+        "mila": {
+            "username": "minimal",
+            "email": "minimal@mila.quebec",
+            "active": true
+        },
+        "drac_roles": null,
+        "drac_members": null
+    },
+    {
+        "mila_ldap": {
+            "mila_email_username": "professor@mila.quebec",
+            "mila_cluster_username": "professor",
+            "mila_cluster_uid": "1000000001",
+            "mila_cluster_gid": "1000000001",
+            "display_name": "Professor User",
+            "supervisor": null,
+            "co_supervisor": null,
+            "status": "enabled"
+        },
+        "name": "Professor User",
+        "drac": null,
+        "mila": {
+            "username": "professor",
+            "email": "professor@mila.quebec",
+            "active": true
+        },
+        "drac_roles": null,
+        "drac_members": {
+            "position": "Professeur"
+        }
+    },
+    {
+        "mila_ldap": {
+            "mila_email_username": "master@mila.quebec",
+            "mila_cluster_username": "master",
+            "mila_cluster_uid": "1000000002",
+            "mila_cluster_gid": "1000000002",
+            "display_name": "Master Student",
+            "supervisor": null,
+            "co_supervisor": null,
+            "status": "enabled"
+        },
+        "name": "Master Student",
+        "drac": null,
+        "mila": {
+            "username": "master",
+            "email": "master@mila.quebec",
+            "active": true
+        },
+        "drac_roles": null,
+        "drac_members": {
+            "position": "Étudiant à la maîtrise"
+        }
+    },
+    {
+        "mila_ldap": {
+            "mila_email_username": "phd@mila.quebec",
+            "mila_cluster_username": "phd",
+            "mila_cluster_uid": "1000000003",
+            "mila_cluster_gid": "1000000003",
+            "display_name": "PhD Student",
+            "supervisor": null,
+            "co_supervisor": null,
+            "status": "enabled"
+        },
+        "name": "PhD Student",
+        "drac": null,
+        "mila": {
+            "username": "phd",
+            "email": "phd@mila.quebec",
+            "active": true
+        },
+        "drac_roles": null,
+        "drac_members": {
+            "position": "Étudiant au doctorat"
+        }
+    },
+    {
+        "mila_ldap": {
+            "mila_email_username": "postdoc@mila.quebec",
+            "mila_cluster_username": "postdoc",
+            "mila_cluster_uid": "1000000004",
+            "mila_cluster_gid": "1000000004",
+            "display_name": "Postdoc User",
+            "supervisor": null,
+            "co_supervisor": null,
+            "status": "enabled"
+        },
+        "name": "Postdoc User",
+        "drac": null,
+        "mila": {
+            "username": "postdoc",
+            "email": "postdoc@mila.quebec",
+            "active": true
+        },
+        "drac_roles": null,
+        "drac_members": {
+            "position": "Postdoc"
+        }
+    },
+    {
+        "mila_ldap": {
+            "mila_email_username": "intern@mila.quebec",
+            "mila_cluster_username": "intern",
+            "mila_cluster_uid": "1000000005",
+            "mila_cluster_gid": "1000000005",
+            "display_name": "Intern User",
+            "supervisor": null,
+            "co_supervisor": null,
+            "status": "enabled"
+        },
+        "name": "Intern User",
+        "drac": null,
+        "mila": {
+            "username": "intern",
+            "email": "intern@mila.quebec",
+            "active": true
+        },
+        "drac_roles": null,
+        "drac_members": {
+            "position": "Stagiaire"
+        }
+    },
+    {
+        "mila_ldap": {
+            "mila_email_username": "staff@mila.quebec",
+            "mila_cluster_username": "staff",
+            "mila_cluster_uid": "1000000006",
+            "mila_cluster_gid": "1000000006",
+            "display_name": "Staff User",
+            "supervisor": null,
+            "co_supervisor": null,
+            "status": "enabled"
+        },
+        "name": "Staff User",
+        "drac": null,
+        "mila": {
+            "username": "staff",
+            "email": "staff@mila.quebec",
+            "active": true
+        },
+        "drac_roles": null,
+        "drac_members": {
+            "position": "Staff"
+        }
+    },
+    {
+        "mila_ldap": {
+            "mila_email_username": "supervisor@mila.quebec",
+            "mila_cluster_username": "supervisor",
+            "mila_cluster_uid": "2000000001",
+            "mila_cluster_gid": "2000000001",
+            "display_name": "Supervisor User",
+            "supervisor": null,
+            "co_supervisor": null,
+            "status": "enabled"
+        },
+        "name": "Supervisor User",
+        "drac": null,
+        "mila": {
+            "username": "supervisor",
+            "email": "supervisor@mila.quebec",
+            "active": true
+        },
+        "drac_roles": null,
+        "drac_members": null
+    },
+    {
+        "mila_ldap": {
+            "mila_email_username": "student@mila.quebec",
+            "mila_cluster_username": "student",
+            "mila_cluster_uid": "2000000002",
+            "mila_cluster_gid": "2000000002",
+            "display_name": "Student User",
+            "supervisor": "supervisor@mila.quebec",
+            "co_supervisor": "supervisor@mila.quebec",
+            "status": "enabled"
+        },
+        "name": "Student User",
+        "drac": null,
+        "mila": {
+            "username": "student",
+            "email": "student@mila.quebec",
+            "active": true
+        },
+        "drac_roles": null,
+        "drac_members": null
+    },
+    {
+        "mila_ldap": {
+            "mila_email_username": "test@mila.quebec",
+            "mila_cluster_username": "testuser",
+            "mila_cluster_uid": "3000000001",
+            "mila_cluster_gid": "3000000001",
+            "display_name": "Test User",
+            "supervisor": null,
+            "co_supervisor": null,
+            "status": "enabled"
+        },
+        "name": "Test User",
+        "drac": {
+            "username": "dracuser",
+            "email": "test@mila.quebec",
+            "active": true
+        },
+        "mila": {
+            "username": "testuser",
+            "email": "test@mila.quebec",
+            "active": true
+        },
+        "drac_roles": null,
+        "drac_members": {
+            "rapi": "test-000-ag",
+            "groupname": "rrg-test-ad",
+            "name": "Test User",
+            "position": "Étudiant à la maîtrise",
+            "institution": "Université de Montréal",
+            "department": "Informatique Et Recherche Opérationnelle",
+            "sponsor": "Test Supervisor",
+            "permission": "Member",
+            "activation_status": "active",
+            "username": "dracuser",
+            "ccri": "test-001-01",
+            "email": "test@mila.quebec",
+            "member_since": "2023-01-01 12:00:00 -0500"
+        }
+    },
+    {
+        "mila_ldap": {
+            "mila_email_username": "test@mila.quebec",
+            "mila_cluster_username": "testuser",
+            "mila_cluster_uid": "4000000001",
+            "mila_cluster_gid": "4000000001",
+            "display_name": "Test User",
+            "supervisor": null,
+            "co_supervisor": null,
+            "status": "enabled"
+        },
+        "name": "Test User",
+        "drac": {
+            "username": "dracuser",
+            "email": "test@mila.quebec",
+            "active": true
+        },
+        "mila": {
+            "username": "testuser",
+            "email": "test@mila.quebec",
+            "active": true
+        },
+        "drac_roles": null,
+        "drac_members": {
+            "rapi": "test-000-ag",
+            "groupname": "rrg-test-ad",
+            "name": "Test User",
+            "position": "Étudiant à la maîtrise",
+            "institution": "Université de Montréal",
+            "department": "Informatique Et Recherche Opérationnelle",
+            "sponsor": "Test Supervisor",
+            "permission": "Member",
+            "activation_status": "active",
+            "username": "dracuser",
+            "ccri": "abc-123-01",
+            "email": "test@mila.quebec",
+            "member_since": "2023-01-01 12:00:00 -0500"
+        }
+    }
+]
