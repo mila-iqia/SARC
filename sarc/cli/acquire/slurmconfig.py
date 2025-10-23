@@ -11,7 +11,7 @@ from simple_parsing import field
 
 from sarc.cache import CachePolicy, FormatterProto, with_cache
 from sarc.client.gpumetrics import _gpu_billing_collection
-from sarc.config import ClusterConfig, config
+from sarc.config import ClusterConfig, config, UTC, TZLOCAL
 from sarc.jobs.node_gpu_mapping import _node_gpu_mapping_collection
 
 logger = logging.getLogger(__name__)
@@ -25,9 +25,9 @@ class AcquireSlurmConfig:
         required=False,
         help=(
             "Cluster config file date (format YYYY-MM-DD). "
-            "Used for file versioning. Should represent a day when config file has been updated "
-            "(e.g. for new GPU billings, node GPUs, etc.). "
-            "If not specified, uses current day and downloads config file from cluster."
+            "Used for file versioning. Should represent day when config file has been downloaded. "
+            "If not specified, uses current day and downloads config file from cluster. "
+            "NB: Day is assumed to be in local timezone."
         ),
     )
     threshold: float = field(
@@ -52,17 +52,17 @@ class AcquireSlurmConfig:
         cluster_config = config("scraping").clusters[self.cluster_name]
         parser = SlurmConfigParser(
             cluster_config,
-            self.day,
+            datetime.strptime(self.day, "%Y-%m-%d").replace(tzinfo=TZLOCAL),
             parse_gpu_billing=parse_gpu_billing,
             threshold=self.threshold,
         )
         slurm_conf = parser.get_slurm_config()
         if slurm_conf.gpu_to_billing is not None:
             _gpu_billing_collection().save_gpu_billing(
-                self.cluster_name, parser.day, slurm_conf.gpu_to_billing
+                self.cluster_name, parser.day.astimezone(UTC), slurm_conf.gpu_to_billing
             )
         _node_gpu_mapping_collection().save_node_gpu_mapping(
-            self.cluster_name, parser.day, slurm_conf.node_to_gpus
+            self.cluster_name, parser.day.astimezone(UTC), slurm_conf.node_to_gpus
         )
         return 0
 
@@ -89,21 +89,32 @@ class SlurmConfigParser:
     def __init__(
         self,
         cluster: ClusterConfig,
-        day: str | None = None,
+        day: datetime | None = None,
         parse_gpu_billing: bool = True,
         threshold: float = 0.1,
     ):
         if day is None:
             # No day given, get current day
-            day = datetime.now().strftime("%Y-%m-%d")
+            day = datetime.now(tz=TZLOCAL).replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
             # Cache must download slurm conf file and save it locally.
             cache_policy = CachePolicy.use
             logger.info(f"Looking for config file at current date: {day}")
         else:
             # Day given. Slurm conf file must be retrieved from cache only.
             cache_policy = CachePolicy.always
+
+        # We want a day, i.e. datetime at 00h 00min 00sec 00microsec
+        assert (
+            day.hour == 0
+            and day.minute == 0
+            and day.second == 0
+            and day.microsecond == 0
+        ), day
+
         self.cluster = cluster
-        self.day = day
+        self.day: datetime = day
         self.cache_policy = cache_policy
         self.parse_gpu_billing = bool(parse_gpu_billing)
         self.threshold = threshold
@@ -123,7 +134,8 @@ class SlurmConfigParser:
         return result.stdout
 
     def _cache_key(self) -> str:
-        return f"slurm.{self.cluster.name}.{self.day}.conf"
+        day_str = self.day.strftime("%Y-%m-%d")
+        return f"slurm.{self.cluster.name}.{day_str}.conf"
 
     @classmethod
     def _file_lines(cls, file) -> Iterator[tuple[int, str]]:
