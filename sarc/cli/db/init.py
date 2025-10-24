@@ -279,3 +279,21 @@ def create_jobs_indices(db: Database) -> None:
             ("latest_scraped_end", pymongo.ASCENDING),
         ],
     )
+
+    # Indexes most useful for querying jobs with potential prometheus data
+    db_collection.create_index(
+        [
+            ("cluster_name", pymongo.ASCENDING),
+            ("allocated.gpu_type", pymongo.ASCENDING),
+        ],
+        name="idx_stats_not_none",
+        partialFilterExpression={"stored_statistics": {"$type": "object"}},
+    )
+    db_collection.create_index(
+        [
+            ("cluster_name", pymongo.ASCENDING),
+            ("allocated.gpu_type", pymongo.ASCENDING),
+        ],
+        name="idx_gpu_type_not_none",
+        partialFilterExpression={"allocated.gpu_type": {"$type": "string"}},
+    )
