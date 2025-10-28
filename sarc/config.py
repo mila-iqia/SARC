@@ -222,7 +222,9 @@ class ClientConfig:
 
 @dataclass(kw_only=True)
 class Config(ClientConfig):
-    users: UserScrapingConfig | None = None
+    users: UserScrapingConfig = field(
+        default_factory=lambda: UserScrapingConfig(scrapers=dict())
+    )
     sshconfig: Path | None = None
     clusters: dict[str, ClusterConfig] = field(default_factory=dict)
     logging: LoggingConfig | None = None

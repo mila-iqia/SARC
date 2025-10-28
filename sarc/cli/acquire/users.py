@@ -32,7 +32,6 @@ class AcquireUsers:
             cache_policy = CachePolicy.use
 
         users_cfg = config("scraping").users
-        assert users_cfg is not None
 
         coll = get_user_collection()
         for um in scrape_users(list(users_cfg.scrapers.items()), cache_policy):
