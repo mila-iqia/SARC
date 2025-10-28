@@ -203,7 +203,7 @@ class UserScrapingConfig:
     scrapers: dict[str, JSON]
 
 
-@dataclass
+@dataclass(kw_only=True)
 class ClientConfig:
     mongo: MongoConfig
     cache: Path
@@ -220,7 +220,7 @@ class ClientConfig:
         return self.cache / "lockfile.lock"
 
 
-@dataclass
+@dataclass(kw_only=True)
 class Config(ClientConfig):
     users: UserScrapingConfig | None = None
     sshconfig: Path | None = None
