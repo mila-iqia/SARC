@@ -63,14 +63,8 @@ def base_config_with_logging():
 
 
 @pytest.fixture
-def enabled_cache(tmp_path):
+def isolated_cache(tmp_path):
     with gifnoc.overlay({"sarc.cache": str(tmp_path / "sarc-tmp-test-cache")}):
-        yield
-
-
-@pytest.fixture
-def disabled_cache():
-    with gifnoc.overlay({"sarc.cache": None}):
         yield
 
 

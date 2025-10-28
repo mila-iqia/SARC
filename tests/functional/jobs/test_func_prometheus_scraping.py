@@ -9,13 +9,13 @@ import pytest
 from fabric.testing.base import Command, Session
 from opentelemetry.trace import StatusCode
 
-from sarc.client.job import JobStatistics, get_jobs, get_available_clusters
+from sarc.client.job import JobStatistics, get_available_clusters, get_jobs
 from sarc.config import MTL, UTC
 from sarc.jobs import prometheus_scraping
 
-from .factory import create_sacct_json
+from ...common.dateutils import _dtfmt, _dtreg, _dtstr
 from ..cli.acquire.test_acquire_slurmconfig import _save_slurm_conf
-from ...common.dateutils import _dtfmt, _dtstr, _dtreg
+from .factory import create_sacct_json
 
 
 @pytest.fixture
@@ -55,7 +55,7 @@ def mock_compute_job_statistics(monkeypatch):
     ],
     indirect=True,
 )
-@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db", "isolated_cache")
 def test_get_gpu_type(
     test_config, sacct_json, remote, cli_main, monkeypatch, mock_compute_job_statistics
 ):
@@ -159,7 +159,7 @@ def test_get_gpu_type(
     assert job.stored_statistics
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db")
 def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     test_config,
     remote,
@@ -169,6 +169,7 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     captrace,
     monkeypatch,
     mock_compute_job_statistics,
+    isolated_cache,
 ):
     """
     Copied from test_multiple_clusters_and_dates above, with changes:
@@ -381,7 +382,7 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
         )
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db")
 def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
     test_config,
     remote,
@@ -391,6 +392,7 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
     captrace,
     monkeypatch,
     mock_compute_job_statistics,
+    isolated_cache,
 ):
     """
     Copied from test_tracer_with_multiple_clusters_and_dates_and_prometheus above,
@@ -614,7 +616,7 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
         )
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db")
 def test_acquire_prometheus_for_cluster_without_prometheus(
     test_config,
     cli_main,
@@ -751,7 +753,7 @@ def _get_cluster_patate():
     return _get_cluster("patate")
 
 
-@pytest.mark.usefixtures("read_write_db", "enabled_cache")
+@pytest.mark.usefixtures("read_write_db", "isolated_cache")
 def test_auto_interval(cli_main, monkeypatch, freezer, caplog):
     """Test auto_interval."""
 
@@ -794,7 +796,7 @@ def test_auto_interval(cli_main, monkeypatch, freezer, caplog):
     assert mock_scrap_prometheus.called == 5
 
 
-@pytest.mark.usefixtures("read_write_db", "enabled_cache")
+@pytest.mark.usefixtures("read_write_db", "isolated_cache")
 def test_auto_interval_0(cli_main, monkeypatch, freezer, caplog):
     """Test auto_interval with unique interval."""
 
@@ -837,7 +839,7 @@ def test_auto_interval_0(cli_main, monkeypatch, freezer, caplog):
     assert mock_scrap_prometheus.called == 1
 
 
-@pytest.mark.usefixtures("read_write_db", "enabled_cache")
+@pytest.mark.usefixtures("read_write_db", "isolated_cache")
 def test_auto_interval_sacct_time_too_old(cli_main, monkeypatch, freezer, caplog):
     """Test auto_interval when end_time_sacct > end_time_prometheus."""
 

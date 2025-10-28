@@ -18,7 +18,6 @@ from sarc.jobs.sacct import SAcctScraper
 from ...common.dateutils import _dtfmt
 from .factory import create_sacct_json
 
-
 parameters = {
     "user": {"user": "longbonhomme"},
     "job_state": {"state": {"current": "OUT_OF_MEMORY", "reason": "None"}},
@@ -205,7 +204,7 @@ def test_scrape_lost_job_on_wrong_cluster(sacct_json, scraper, caplog):
     )
 
 
-@pytest.mark.usefixtures("tzlocal_is_mtl", "enabled_cache")
+@pytest.mark.usefixtures("tzlocal_is_mtl", "isolated_cache")
 @pytest.mark.parametrize("json_jobs", [{}], indirect=True)
 def test_scraper_with_cache(scraper, sacct_json, file_regression):
     # We'd like to test that this starts with "/tmp/pytest",
@@ -229,7 +228,7 @@ def test_scraper_with_cache(scraper, sacct_json, file_regression):
     )
 
 
-@pytest.mark.usefixtures("tzlocal_is_mtl", "enabled_cache")
+@pytest.mark.usefixtures("tzlocal_is_mtl", "isolated_cache")
 @pytest.mark.parametrize(
     "test_config", [{"clusters": {"raisin": {"host": "patate"}}}], indirect=True
 )
@@ -261,7 +260,7 @@ def test_scraper_with_malformed_cache(test_config, remote, scraper, caplog):
 @pytest.mark.parametrize(
     "test_config", [{"clusters": {"patate": {"host": "patate"}}}], indirect=True
 )
-def test_sacct_bin_and_accounts(test_config, remote):
+def test_sacct_bin_and_accounts(test_config, remote, isolated_cache):
     scraper = SAcctScraper(
         cluster=config().clusters["patate"],
         start=datetime(2023, 2, 14, tzinfo=MTL).astimezone(UTC),
@@ -278,7 +277,7 @@ def test_sacct_bin_and_accounts(test_config, remote):
 
 @patch("os.system")
 @pytest.mark.usefixtures("write_setup")
-def test_localhost(os_system, monkeypatch):
+def test_localhost(os_system, monkeypatch, isolated_cache):
     # This test requires write_setup.cache to be empty else it will never call
     # mock_subprocess_run
     def mock_subprocess_run(*args, **kwargs):
@@ -307,7 +306,7 @@ def test_localhost(os_system, monkeypatch):
 @pytest.mark.parametrize("json_jobs", [{}], indirect=True)
 @pytest.mark.usefixtures("empty_read_write_db")
 def test_stdout_message_before_json(
-    test_config, sacct_json, remote, file_regression, cli_main
+    test_config, sacct_json, remote, file_regression, cli_main, isolated_cache
 ):
     remote.expect(
         host="raisin",
@@ -348,7 +347,9 @@ def test_stdout_message_before_json(
 )
 @pytest.mark.parametrize("json_jobs", [{}], indirect=True)
 @pytest.mark.usefixtures("empty_read_write_db")
-def test_save_job(test_config, sacct_json, remote, file_regression, cli_main):
+def test_save_job(
+    test_config, sacct_json, remote, file_regression, cli_main, isolated_cache
+):
     remote.expect(
         host="raisin",
         cmd=f"export TZ=UTC && /opt/slurm/bin/sacct  -X -S {_dtfmt(2023, 2, 15)} -E {_dtfmt(2023, 2, 16)} --allusers --json",
@@ -385,8 +386,12 @@ def test_save_job(test_config, sacct_json, remote, file_regression, cli_main):
     "test_config", [{"clusters": {"raisin": {"host": "raisin"}}}], indirect=True
 )
 @pytest.mark.parametrize("json_jobs", [{}], indirect=True)
-@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache")
-def test_update_job(test_config, sacct_json, remote, file_regression, cli_main):
+@pytest.mark.usefixtures("empty_read_write_db")
+def test_update_job(
+    test_config, sacct_json, remote, file_regression, cli_main, isolated_cache
+):
+    # TODO: maybe we should restructure this test once the job import is redone
+    # since I'm not sure it is acutally updating anything now.
     remote.expect(
         host="raisin",
         commands=[
@@ -394,7 +399,6 @@ def test_update_job(test_config, sacct_json, remote, file_regression, cli_main):
                 cmd=f"export TZ=UTC && /opt/slurm/bin/sacct  -X -S {_dtfmt(2023, 2, 15)} -E {_dtfmt(2023, 2, 16)} --allusers --json",
                 out=sacct_json.encode("utf-8"),
             )
-            for _ in range(2)
         ],
     )
 
@@ -461,8 +465,10 @@ def test_update_job(test_config, sacct_json, remote, file_regression, cli_main):
     ],
     indirect=True,
 )
-@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache")
-def test_save_preempted_job(test_config, sacct_json, remote, file_regression, cli_main):
+@pytest.mark.usefixtures("empty_read_write_db")
+def test_save_preempted_job(
+    test_config, sacct_json, remote, file_regression, cli_main, isolated_cache
+):
     remote.expect(
         cmd=f"export TZ=UTC && /opt/slurm/bin/sacct  -X -S {_dtfmt(2023, 2, 15)} -E {_dtfmt(2023, 2, 16)} --allusers --json",
         host="raisin",
@@ -498,8 +504,8 @@ def test_save_preempted_job(test_config, sacct_json, remote, file_regression, cl
     )
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache")
-def test_multiple_dates(test_config, remote, file_regression, cli_main):
+@pytest.mark.usefixtures("empty_read_write_db")
+def test_multiple_dates(test_config, remote, file_regression, cli_main, isolated_cache):
     datetimes = [
         datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC) + timedelta(days=i)
         for i in range(5)
@@ -562,8 +568,10 @@ def test_multiple_dates(test_config, remote, file_regression, cli_main):
     )
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache")
-def test_multiple_clusters_and_dates(test_config, remote, file_regression, cli_main):
+@pytest.mark.usefixtures("empty_read_write_db")
+def test_multiple_clusters_and_dates(
+    test_config, remote, file_regression, cli_main, isolated_cache
+):
     cluster_names = ["raisin", "patate"]
     datetimes = [
         datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC) + timedelta(days=i)
@@ -667,7 +675,7 @@ def test_multiple_clusters_and_dates(test_config, remote, file_regression, cli_m
     "test_config", [{"clusters": {"patate": {"host": "patate"}}}], indirect=True
 )
 @pytest.mark.usefixtures("empty_read_write_db")
-def test_job_tz(test_config, sacct_json, remote, cli_main):
+def test_job_tz(test_config, sacct_json, remote, cli_main, isolated_cache):
     remote.expect(
         host="patate",
         cmd="export TZ=UTC && /opt/software/slurm/bin/sacct -A rrg-bonhomme-ad_gpu,rrg-bonhomme-ad_cpu,def-bonhomme_gpu,def-bonhomme_cpu -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
@@ -807,7 +815,7 @@ def _get_cluster_raisin():
     ][0]
 
 
-@pytest.mark.usefixtures("read_write_db", "enabled_cache")
+@pytest.mark.usefixtures("read_write_db", "isolated_cache")
 def test_auto_interval(cli_main, monkeypatch, freezer, caplog):
     """Test auto_interval and check generated cache files."""
 
@@ -871,7 +879,7 @@ def test_auto_interval(cli_main, monkeypatch, freezer, caplog):
 
 
 @pytest.mark.freeze_time
-@pytest.mark.usefixtures("read_write_db", "enabled_cache")
+@pytest.mark.usefixtures("read_write_db", "isolated_cache")
 def test_auto_interval_0(cli_main, monkeypatch, freezer, caplog):
     """Test auto_interval with unique interval and check generated cache files."""
 

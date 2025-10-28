@@ -120,9 +120,9 @@ class Cache[T]:
     )
 
     @property
-    def cache_dir(self) -> Path | None:
+    def cache_dir(self) -> Path:
         root = self.cache_root or config().cache
-        return root and root / self.subdirectory
+        return root / self.subdirectory
 
     def read(
         self,
@@ -147,7 +147,7 @@ class Cache[T]:
                 value=value,
             )
         cdir = self.cache_dir
-        if self.on_disk and cdir is not None:
+        if self.on_disk:
             cdir.mkdir(parents=True, exist_ok=True)
             output_file = cdir / key.format(time=at_time.strftime(_time_format))
             encoding = None if "b" in self.formatter.write_flags else "utf-8"
@@ -169,7 +169,7 @@ class Cache[T]:
                 return previous_result.value
 
         cdir = self.cache_dir
-        if self.on_disk and cdir is not None:
+        if self.on_disk:
             candidates = sorted(
                 cdir.glob(key_value.format(time=_time_glob_pattern)),
                 reverse=True,

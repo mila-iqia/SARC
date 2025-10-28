@@ -323,17 +323,6 @@ def test_custom_format(tmp_path):
     assert fn(7, 8, version=0) == "QUACK"
 
 
-def test_no_cachedir(disabled_cache):
-    decorator = with_cache(
-        subdirectory="xy",
-    )
-    fn = decorator(la_fonction)
-    assert fn(2, 3, version=0) == "2 * 3 = 6 [v0]"
-    assert fn(2, 3, version=1) == "2 * 3 = 6 [v1]"
-    with pytest.raises(Exception, match="There is no cached result"):
-        fn(2, 3, version=2, cache_policy=CachePolicy.always)
-
-
 def test_cache_method(tmp_path):
     class Booger:
         def __init__(self, value):
@@ -539,7 +528,7 @@ def test_make_cached_function_no_cache_root():
         cache_root=None,
     )
 
-    assert cached_fn.cache_dir is None
+    assert cached_fn.cache_dir == Path("/tmp/sarc-cache-test/test_subdir")
 
     result = cached_fn(1, 2)
     assert result == 3

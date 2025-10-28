@@ -18,7 +18,7 @@ def _setup_logging_do_nothing(*args, **kwargs):
     pass
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db", "isolated_cache")
 def test_check_mongodump(cli_main, monkeypatch, caplog):
     monkeypatch.setattr("sarc.cli.setupLogging", _setup_logging_do_nothing)
     monkeypatch.setattr(shutil, "which", mock_shutil_which_none)
@@ -27,7 +27,7 @@ def test_check_mongodump(cli_main, monkeypatch, caplog):
     assert "Cannot find executable mongodump in environment paths" in caplog.text
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db", "isolated_cache")
 @pytest.mark.freeze_time("2023-02-28")
 def test_db_backup(cli_main, monkeypatch):
     """Only test if mongodump is called with expected arguments."""
@@ -54,7 +54,7 @@ def test_db_backup(cli_main, monkeypatch):
     assert mock_subprocess_run.called == 1
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db", "isolated_cache")
 @pytest.mark.freeze_time("2023-02-28")
 def test_db_backup_explicit_folder(cli_main, monkeypatch, tmp_path):
     cfg = config()

@@ -18,7 +18,7 @@ def _setup_logging_do_nothing(*args, **kwargs):
     pass
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db", "isolated_cache")
 def test_check_mongorestore(cli_main, tmp_path, monkeypatch, caplog):
     tmp_dump = tmp_path / "backup"
     tmp_dump.mkdir()
@@ -30,7 +30,7 @@ def test_check_mongorestore(cli_main, tmp_path, monkeypatch, caplog):
     assert "Cannot find executable mongorestore in environment paths" in caplog.text
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db", "isolated_cache")
 @pytest.mark.freeze_time("2023-02-28")
 def test_db_restore(cli_main, tmp_path, monkeypatch):
     """Only test if mongorestore is called with expected arguments."""
@@ -64,7 +64,7 @@ def test_db_restore(cli_main, tmp_path, monkeypatch):
     assert mock_subprocess_run.called == 1
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db", "isolated_cache")
 @pytest.mark.freeze_time("2023-02-28")
 def test_db_restore_force(cli_main, tmp_path, monkeypatch):
     tmp_dump = tmp_path / "backup"

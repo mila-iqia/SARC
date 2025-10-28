@@ -10,7 +10,7 @@ from hostlist import expand_hostlist
 from sarc.cache import CacheException
 from sarc.cli.acquire.slurmconfig import InconsistentGPUBillingError, SlurmConfigParser
 from sarc.client.gpumetrics import GPUBilling, get_cluster_gpu_billings
-from sarc.config import MTL, config, UTC
+from sarc.config import MTL, UTC, config
 from sarc.jobs.node_gpu_mapping import NodeGPUMapping, get_node_to_gpu
 from tests.functional.jobs.test_func_load_job_series import MOCK_TIME
 
@@ -90,7 +90,7 @@ def _setup_logging_do_nothing(*args, **kwargs):
     """
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("empty_read_write_db", "isolated_cache", "tzlocal_is_mtl")
 def test_acquire_slurmconfig(cli_main, caplog, monkeypatch):
     monkeypatch.setattr("sarc.cli.setupLogging", _setup_logging_do_nothing)
 
@@ -216,7 +216,7 @@ PartitionName=partition2 Nodes=mynode[2,8-11,42] TRESBillingWeights=x=1,GRES/gpu
 
 
 @pytest.mark.parametrize("threshold", [None, 0.1, 1, 10, 19])
-@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db", "isolated_cache")
 def test_acuire_slurmconfig_inconsistent_billing(cli_main, threshold):
     _save_slurm_conf(
         "raisin",
@@ -245,7 +245,7 @@ PartitionName=partition2 Nodes=mynode[2,8-11,42] TRESBillingWeights=x=1,GRES/gpu
 
 
 @pytest.mark.parametrize("threshold", [20, 20.1, 30])
-@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db", "isolated_cache")
 def test_acquire_slurmconfig_inconsistent_billing_success(cli_main, threshold):
     """Test that parsing succeeds with greater threshold"""
     _save_slurm_conf(
@@ -301,7 +301,7 @@ def _save_slurm_conf(cluster_name: str, day: str, content: str):
         file.write(content)
 
 
-@pytest.mark.usefixtures("enabled_cache")
+@pytest.mark.usefixtures("isolated_cache")
 @pytest.mark.freeze_time(MOCK_TIME)
 def test_download_cluster_config(test_config, remote):
     """Test slurm conf file downloading."""

@@ -4,7 +4,7 @@ from os.path import isfile
 import pytest
 from fabric.testing.base import Command
 
-from sarc.config import config, MTL, UTC
+from sarc.config import MTL, UTC, config
 from sarc.jobs.sacct import JobConversionError, SAcctScraper
 from tests.common.dateutils import _dtfmt
 
@@ -55,7 +55,7 @@ def test_SAcctScraper_fetch_raw2(test_config, remote):
     "test_config", [{"clusters": {"test": {"host": "patate"}}}], indirect=True
 )
 @pytest.mark.freeze_time(datetime(2023, 2, 28, tzinfo=MTL))
-def test_SAcctScraper_get_cache(test_config, enabled_cache, remote):
+def test_SAcctScraper_get_cache(test_config, isolated_cache, remote):
     today = datetime.combine(date.today(), datetime.min.time(), tzinfo=MTL).astimezone(
         UTC
     )

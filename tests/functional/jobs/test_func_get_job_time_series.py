@@ -69,7 +69,9 @@ parameters = {
 @pytest.mark.parametrize(
     "job", parameters.values(), ids=parameters.keys(), indirect=True
 )
-def test_get_job_time_series(job, prom_custom_query_mock, file_regression):
+def test_get_job_time_series(
+    job, prom_custom_query_mock, file_regression, isolated_cache
+):
     assert get_job_time_series(job, "slurm_job_core_usage", dataframe=False) == [], (
         "custom_query was not mocked properly"
     )
@@ -113,14 +115,17 @@ def test_jobs_with_no_duration(job):
     ),
 )
 def test_measure_and_aggregation(
-    job, measure, aggregation, prom_custom_query_mock, file_regression
+    job, measure, aggregation, prom_custom_query_mock, file_regression, isolated_cache
 ):
-    assert not get_job_time_series(
-        job,
-        metric="slurm_job_fp16_gpu",
-        measure=measure,
-        aggregation=aggregation,
-        dataframe=True,
+    assert (
+        get_job_time_series(
+            job,
+            metric="slurm_job_fp16_gpu",
+            measure=measure,
+            aggregation=aggregation,
+            dataframe=True,
+        )
+        is None
     ), "custom_query was not mocked properly"
 
     file_regression.check(prom_custom_query_mock.call_args[0][0])
@@ -147,16 +152,24 @@ def test_invalid_aggregation(job):
     ],
 )
 def test_intervals(
-    job, min_interval, max_points, prom_custom_query_mock, file_regression
+    job,
+    min_interval,
+    max_points,
+    prom_custom_query_mock,
+    file_regression,
+    isolated_cache,
 ):
-    assert not get_job_time_series(
-        job,
-        "slurm_job_fp16_gpu",
-        dataframe=True,
-        measure="avg_over_time",
-        aggregation="interval",
-        min_interval=min_interval,
-        max_points=max_points,
+    assert (
+        get_job_time_series(
+            job,
+            "slurm_job_fp16_gpu",
+            dataframe=True,
+            measure="avg_over_time",
+            aggregation="interval",
+            min_interval=min_interval,
+            max_points=max_points,
+        )
+        is None
     ), "custom_query was not mocked properly"
 
     file_regression.check(prom_custom_query_mock.call_args[0][0])
@@ -199,7 +212,7 @@ def test_preempted_and_resumed():
     assert preempted_job.job_id == resumed_job.job_id
 
 
-@pytest.mark.usefixtures("enabled_cache")
+@pytest.mark.usefixtures("isolated_cache")
 def test_get_job_time_series_cache(job, test_config, monkeypatch, capsys):
     """Test cache for get_job_time_series"""
 
@@ -253,7 +266,7 @@ def test_get_job_time_series_cache(job, test_config, monkeypatch, capsys):
     assert captured.out.strip() == ""
 
 
-@pytest.mark.usefixtures("enabled_cache")
+@pytest.mark.usefixtures("isolated_cache")
 def test_get_job_time_series_cache_check(job, test_config, monkeypatch):
     """Test cache checking for get_job_time_series using SARC_CACHE=check"""
 
