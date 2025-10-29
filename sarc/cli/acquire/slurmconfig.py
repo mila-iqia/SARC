@@ -52,7 +52,9 @@ class AcquireSlurmConfig:
         cluster_config = config("scraping").clusters[self.cluster_name]
         parser = SlurmConfigParser(
             cluster_config,
-            datetime.strptime(self.day, "%Y-%m-%d").replace(tzinfo=TZLOCAL),
+            None
+            if self.day is None
+            else datetime.strptime(self.day, "%Y-%m-%d").replace(tzinfo=TZLOCAL),
             parse_gpu_billing=parse_gpu_billing,
             threshold=self.threshold,
         )
