@@ -1,4 +1,5 @@
 import io
+import logging
 import re
 from datetime import datetime, time
 from pathlib import Path
@@ -12,7 +13,6 @@ from sarc.cli.acquire.slurmconfig import InconsistentGPUBillingError, SlurmConfi
 from sarc.client.gpumetrics import GPUBilling, get_cluster_gpu_billings
 from sarc.config import MTL, config, UTC
 from sarc.jobs.node_gpu_mapping import NodeGPUMapping, get_node_to_gpu
-from tests.functional.jobs.test_func_load_job_series import MOCK_TIME
 
 SLURM_CONF_RAISIN_2020_01_01 = """
 NodeName=mynode[1,2,5-20,30,40-43] UselessParam=UselessValue Gres=gpu1
@@ -301,26 +301,24 @@ def _save_slurm_conf(cluster_name: str, day: str, content: str):
         file.write(content)
 
 
-@pytest.mark.usefixtures("enabled_cache")
-@pytest.mark.freeze_time(MOCK_TIME)
-def test_download_cluster_config(test_config, remote):
+@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
+@pytest.mark.freeze_time(datetime(2020, 1, 1, tzinfo=MTL))
+def test_download_cluster_config(cli_main, test_config, remote, caplog):
     """Test slurm conf file downloading."""
 
     clusters = test_config.clusters
-    # Check default value for "slurm_conf_host_path" (with cluster raisina)
+    # Check default value for "slurm_conf_host_path" (with cluster raisin)
     assert clusters["raisin"].slurm_conf_host_path == Path("/etc/slurm/slurm.conf")
-    # Check custom value for "slurm_conf_host_path" (with cluster patate)
-    assert clusters["patate"].slurm_conf_host_path == Path("/the/path/to/slurm.conf")
 
-    # Use cluster patate for download test
-    cluster = clusters["patate"]
+    # Use cluster raisin for download test
+    cluster = clusters["raisin"]
     scp = SlurmConfigParser(cluster)
 
     file_dir = test_config.cache / "slurm_conf"
     file_dir.mkdir(parents=True, exist_ok=True)
     file_path = file_dir / scp._cache_key()
 
-    # Slurm conf file should not yet exist
+    # Downloaded slurm conf file should not yet exist
     assert not file_path.exists()
 
     # Get conf file
@@ -330,7 +328,17 @@ def test_download_cluster_config(test_config, remote):
         cmd=f"cat {cluster.slurm_conf_host_path}",
         out=expected_content.encode(),
     )
-    scp.get_slurm_config()
+
+    # Should download from current day
+    caplog.set_level(logging.INFO)
+    assert cli_main(["acquire", "slurmconfig", "-c", "raisin"]) == 0
+
+    assert (
+        "Looking for config file at current date: 2020-01-01 00:00:00-05:00"
+        in caplog.text
+    )
+    assert "GPU<->billing saved for: 2020-01-01 05:00:00+00:00" in caplog.text
+    assert "node<->GPU saved for: 2020-01-01 05:00:00+00:00" in caplog.text
 
     # Now, slurm file should exist
     assert file_path.is_file()
