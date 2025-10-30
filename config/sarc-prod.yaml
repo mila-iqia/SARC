@@ -3,6 +3,10 @@ sarc:
     log_level: INFO
     OTLP_endpoint: http://loki01.server.mila.quebec:3100/otlp/v1/logs
     service_name: sarc-dev
+    slack: null
+      # description: SARC-prod
+      # token: slack-token-replaceme
+      # channel: slack-channel-id-replace-me
   mongo: ../../SARC_secrets/secrets/mongo-prod.yaml
   ldap:
     local_private_key_file: ../../SARC_secrets/secrets/ldap/Google_2026_01_26_66827.key
