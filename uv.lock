@@ -2533,6 +2533,21 @@ wheels = [
 ]
 
 [[package]]
+name = "rapporteur"
+version = "0.1.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "cryptography" },
+    { name = "pyyaml" },
+    { name = "serieux" },
+    { name = "slack-sdk" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/d2/9b/22f80fd3d86d09ec4d400e3db85006e40e01fd410d2cd500c7022d8fea2f/rapporteur-0.1.2.tar.gz", hash = "sha256:447af79fb6021fc9c567dd61cccf6825713a791c515c89b7296a675ecf382a46", size = 3475, upload-time = "2025-10-27T22:14:48.669Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/04/21/35983aaaf74693abf00647e214801a0b388080f67ea78f383b51091e7712/rapporteur-0.1.2-py3-none-any.whl", hash = "sha256:52389280bdccf743fdeb9929faf13a6c1bd9f7deb21aeb055ace4665ac6d6022", size = 4886, upload-time = "2025-10-27T22:14:47.58Z" },
+]
+
+[[package]]
 name = "referencing"
 version = "0.37.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2780,6 +2795,7 @@ dependencies = [
     { name = "pyodbc" },
     { name = "python-dateutil" },
     { name = "python-hostlist" },
+    { name = "rapporteur" },
     { name = "requests" },
     { name = "requests-mock" },
     { name = "serieux" },
@@ -2843,6 +2859,7 @@ requires-dist = [
     { name = "pyodbc", specifier = ">=5.2.0,<6" },
     { name = "python-dateutil", specifier = ">=2.9.0.post0,<3" },
     { name = "python-hostlist", specifier = ">=2.2.1,<3" },
+    { name = "rapporteur", specifier = ">=0.1.1" },
     { name = "requests", specifier = ">=2.32.3,<3" },
     { name = "requests-mock", specifier = ">=1.11.0,<2" },
     { name = "serieux", specifier = ">=0.2,<0.3" },
@@ -2952,6 +2969,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/94/e7/b2c673351809dca68a0e064b6af791aa332cf192da575fd474ed7d6f16a2/six-1.17.0.tar.gz", hash = "sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81", size = 34031, upload-time = "2024-12-04T17:35:28.174Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b7/ce/149a00dd41f10bc29e5921b496af8b574d8413afcd5e30dfa0ed46c2cc5e/six-1.17.0-py2.py3-none-any.whl", hash = "sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274", size = 11050, upload-time = "2024-12-04T17:35:26.475Z" },
+]
+
+[[package]]
+name = "slack-sdk"
+version = "3.37.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/8e/c2/0a174a155623d7dc3ed4d1360cdf755590acdc2c3fc9ce0d2340f468909f/slack_sdk-3.37.0.tar.gz", hash = "sha256:242d6cffbd9e843af807487ff04853189b812081aeaa22f90a8f159f20220ed9", size = 241612, upload-time = "2025-10-06T23:07:20.856Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/07/fd/a502ee24d8c7d12a8f749878ae0949b8eeb50aeac22dc5a613d417a256d0/slack_sdk-3.37.0-py2.py3-none-any.whl", hash = "sha256:e108a0836eafda74d8a95e76c12c2bcb010e645d504d8497451e4c7ebb229c87", size = 302751, upload-time = "2025-10-06T23:07:19.542Z" },
 ]
 
 [[package]]
