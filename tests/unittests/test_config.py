@@ -41,11 +41,6 @@ def test_prod_config():
     connection_string: mongodb://localhost:27017/sarc-test
     database_name: sarc-test
     """
-    mock_slack_content = """
-    description: SARC-test-local
-    token: slack-token
-    channel: slack-channel-id
-    """
 
     # Create a selective mock for read_text that returns our content
     original_read_text = Path.read_text
@@ -53,8 +48,6 @@ def test_prod_config():
     def mock_read_text_selective(path_obj, *args, **kwargs):
         if "mongo-prod.yaml" in str(path_obj):
             return mock_mongo_content
-        elif "slack-prod.yaml" in str(path_obj):
-            return mock_slack_content
         return original_read_text(path_obj, *args, **kwargs)
 
     # Create a selective mock for exists that returns True for our file
