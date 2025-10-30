@@ -27,9 +27,7 @@ class DRACRolesScraper(UserScraper[DRACRolesConfig]):
                 [_dict_to_lowercase(d) for d in csv.DictReader(f_in)]
             ).encode()
 
-    def parse_user_data(
-        self, _config: DRACRolesConfig, data: bytes
-    ) -> Iterable[UserMatch]:
+    def parse_user_data(self, data: bytes) -> Iterable[UserMatch]:
         for d in json.loads(data.decode()):
             yield UserMatch(
                 display_name=d["nom"],
@@ -55,9 +53,7 @@ class DRACMemberScraper(UserScraper[DRACMemberConfig]):
                 [_dict_to_lowercase(d) for d in csv.DictReader(f_in)]
             ).encode()
 
-    def parse_user_data(
-        self, _config: DRACMemberConfig, data: bytes
-    ) -> Iterable[UserMatch]:
+    def parse_user_data(self, data: bytes) -> Iterable[UserMatch]:
         for d in json.loads(data.decode()):
             creds = Credentials()
             creds.insert(
