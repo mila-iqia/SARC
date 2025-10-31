@@ -2,6 +2,7 @@
 Fetching and parsing code specific to DRAC clusters
 """
 
+import json
 import logging
 import re
 from dataclasses import dataclass
@@ -27,7 +28,7 @@ class DRACDiskUsage(DiskUsageScraper[DRACDiskUsageConfig]):
     config_type = DRACDiskUsageConfig
 
     def get_diskusage_report(
-        self, ssh: Connection, config: DRACDiskUsageConfig
+        self, ssh: Connection, cluster_name: str, config: DRACDiskUsageConfig
     ) -> bytes:
         """
         Get the output of the command diskusage_report --project --all_users on the wanted cluster
@@ -64,23 +65,26 @@ class DRACDiskUsage(DiskUsageScraper[DRACDiskUsageConfig]):
         """
         cmd = f"{config.diskusage_path} --project --all_users"
         output, errors = run_command(ssh, cmd, 1)
+        for err in errors:
+            logger.exception("Error fetching diskusage report", exc_info=err)
         if output is None:
-            logger.warning("Could not fetch diskusage report", exc_info=errors[0])
-            return "".encode()
-        return output.encode()
+            output = ""
+        return json.dumps(
+            {
+                "output": output,
+                "cluster_name": cluster_name,
+                "timestamp": datetime.now(UTC).isoformat(timespec="seconds"),
+            }
+        ).encode()
 
-    def parse_diskusage_report(
-        self,
-        config: DRACDiskUsageConfig,  # noqa: ARG002
-        cluster_name: str,
-        data: bytes,
-    ) -> DiskUsage:
-        report = data.decode().split("\n")
+    def parse_diskusage_report(self, raw_data: bytes) -> DiskUsage:
+        cached_data = json.loads(raw_data.decode())
+        cluster_name = cached_data["cluster_name"]
+        timestamp = datetime.fromisoformat(cached_data["timestamp"])
+        report = cached_data["output"].split("\n")
         groups = _parse_body(report)
 
-        return DiskUsage(
-            cluster_name=cluster_name, groups=groups, timestamp=datetime.now(UTC)
-        )
+        return DiskUsage(cluster_name=cluster_name, groups=groups, timestamp=timestamp)
 
 
 # Register the scraper to make it available
