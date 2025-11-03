@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from simple_parsing import subparsers
 
 from .slurmconfig import ParseSlurmConfig
+from .jobs import ParseJobs
 from .users import ParseUsers
 
 
@@ -12,6 +13,7 @@ class Parse:
         {
             "users": ParseUsers,
             "slurmconfig": ParseSlurmConfig,
+            "jobs": ParseJobs
         }
     )
 
