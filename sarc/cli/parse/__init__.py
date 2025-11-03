@@ -3,6 +3,7 @@ from typing import Union
 
 from simple_parsing import subparsers
 
+from .jobs import ParseJobs
 from .users import ParseUsers
 
 
@@ -11,6 +12,7 @@ class Parse:
     command: Union[ParseUsers] = subparsers(
         {
             "users": ParseUsers,
+            "jobs": ParseJobs
         }
     )
 
