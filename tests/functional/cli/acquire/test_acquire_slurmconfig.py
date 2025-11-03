@@ -6,10 +6,12 @@ from pathlib import Path
 from typing import List
 
 import pytest
+from fabric.testing.base import Session
 from hostlist import expand_hostlist
 
 from sarc.cache import CacheException
 from sarc.cli.acquire.slurmconfig import InconsistentGPUBillingError, SlurmConfigParser
+from sarc.cli.fetch.slurmconfig import SlurmConfigDownloader
 from sarc.client.gpumetrics import GPUBilling, get_cluster_gpu_billings
 from sarc.config import MTL, config, UTC
 from sarc.jobs.node_gpu_mapping import NodeGPUMapping, get_node_to_gpu
@@ -301,10 +303,14 @@ def _save_slurm_conf(cluster_name: str, day: str, content: str):
         file.write(content)
 
 
+DATE_2020_01_01_MTL = datetime(2020, 1, 1, tzinfo=MTL)
+DATE_2020_05_01_MTL = datetime(2020, 5, 1, tzinfo=MTL)
+
+
 @pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
-@pytest.mark.freeze_time(datetime(2020, 1, 1, tzinfo=MTL))
-def test_download_cluster_config(cli_main, test_config, remote, caplog):
+def test_fetch_slurmconfig(cli_main, test_config, remote, caplog, freezer):
     """Test slurm conf file downloading."""
+    caplog.set_level(logging.INFO)
 
     clusters = test_config.clusters
     # Check default value for "slurm_conf_host_path" (with cluster raisin)
@@ -312,38 +318,56 @@ def test_download_cluster_config(cli_main, test_config, remote, caplog):
 
     # Use cluster raisin for download test
     cluster = clusters["raisin"]
-    scp = SlurmConfigParser(cluster)
-
+    scd_2020_01_01 = SlurmConfigDownloader(cluster=cluster, date=DATE_2020_01_01_MTL.astimezone(UTC))
+    scd_2020_05_01 = SlurmConfigDownloader(cluster=cluster, date=DATE_2020_05_01_MTL.astimezone(UTC))
     file_dir = test_config.cache / "slurm_conf"
     file_dir.mkdir(parents=True, exist_ok=True)
-    file_path = file_dir / scp._cache_key()
+    file_path_2020_01_01 = file_dir / scd_2020_01_01._cache_key()
+    file_path_2020_05_01 = file_dir / scd_2020_05_01._cache_key()
 
-    # Downloaded slurm conf file should not yet exist
-    assert not file_path.exists()
-
-    # Get conf file
-    expected_content = SLURM_CONF_RAISIN_2020_01_01
-    remote.expect(
-        host=cluster.host,
-        cmd=f"cat {cluster.slurm_conf_host_path}",
-        out=expected_content.encode(),
+    clients = remote.expect_sessions(
+        Session(
+            host=cluster.host,
+            cmd=f"cat {cluster.slurm_conf_host_path}",
+            out=SLURM_CONF_RAISIN_2020_01_01.encode(),
+        ),
+        Session(
+            host=cluster.host,
+            cmd=f"cat {cluster.slurm_conf_host_path}",
+            out=SLURM_CONF_RAISIN_2020_05_01.encode(),
+        )
     )
+    for client in clients:
+        print(client)
+
+    assert not file_path_2020_01_01.exists()
+    assert not file_path_2020_05_01.exists()
 
     # Should download from current day
-    caplog.set_level(logging.INFO)
-    assert cli_main(["acquire", "slurmconfig", "-c", "raisin"]) == 0
+    freezer.move_to(DATE_2020_01_01_MTL)
+    assert cli_main(["fetch", "slurmconfig", "-c", "raisin"]) == 0
+    assert cli_main(["fetch", "slurmconfig", "-c", "raisin"]) == 0
+    assert cli_main(["fetch", "slurmconfig", "-c", "raisin"]) == 0
+    assert cli_main(["fetch", "slurmconfig", "-c", "raisin"]) == 0
+    assert cli_main(["fetch", "slurmconfig", "-c", "raisin"]) == 0
+    assert file_path_2020_01_01.is_file(), file_path_2020_01_01
+    assert not file_path_2020_05_01.is_file(), file_path_2020_05_01
+    with file_path_2020_01_01.open() as file:
+        assert file.read() == SLURM_CONF_RAISIN_2020_01_01
+    caplog.clear()
 
-    assert (
-        "Looking for config file at current date: 2020-01-01 00:00:00-05:00"
-        in caplog.text
-    )
-    assert "GPU<->billing saved for: 2020-01-01 05:00:00+00:00" in caplog.text
-    assert "node<->GPU saved for: 2020-01-01 05:00:00+00:00" in caplog.text
-
-    # Now, slurm file should exist
-    assert file_path.is_file()
-    with file_path.open() as file:
-        assert file.read() == expected_content
+    freezer.move_to(DATE_2020_05_01_MTL)
+    assert cli_main(["fetch", "slurmconfig", "-c", "raisin"]) == 0
+    assert cli_main(["fetch", "slurmconfig", "-c", "raisin"]) == 0
+    assert cli_main(["fetch", "slurmconfig", "-c", "raisin"]) == 0
+    assert cli_main(["fetch", "slurmconfig", "-c", "raisin"]) == 0
+    assert cli_main(["fetch", "slurmconfig", "-c", "raisin"]) == 0
+    assert file_path_2020_01_01.is_file(), file_path_2020_01_01
+    assert file_path_2020_05_01.is_file(), file_path_2020_05_01
+    with file_path_2020_01_01.open() as file:
+        assert file.read() == SLURM_CONF_RAISIN_2020_01_01
+    with file_path_2020_05_01.open() as file:
+        assert file.read() == SLURM_CONF_RAISIN_2020_05_01
 
 
 def test_file_lines():
