@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, time, timedelta
@@ -74,7 +75,7 @@ def ensure_utc(d: datetime) -> datetime:
 class CacheEntry:
     """Describe a single cache entry at a point in time.
 
-    The cache entry contains multiple key-value pairs."""
+    The cache entry contains multiple key-value pairs and the keys can be repeated with different content."""
 
     _zf: ZipFile
 
@@ -85,13 +86,10 @@ class CacheEntry:
         """Add a key-value pair to the cache entry"""
         self._zf.writestr(key, value)
 
-    def get_value(self, key: str) -> bytes:
-        """Get the value for an existing key in this cache entry"""
-        return self._zf.read(key)
-
-    def get_keys(self) -> list[str]:
-        """Get the list of keys in the order they were added."""
-        return self._zf.namelist()
+    def items(self) -> Iterator[tuple[str, bytes]]:
+        """Get all the key, value pairs in the order they were added."""
+        for zi in self._zf.infolist():
+            yield zi.filename, self._zf.read(zi)
 
     def close(self) -> None:
         """Close the cache entry. MUST be called for new entries."""
@@ -142,11 +140,16 @@ class Cache:
         """
         return cdir / f"{d.year:04}" / f"{d.month:02}" / f"{d.day:02}"
 
-    def create_entry(self, at_time: datetime) -> CacheEntry:
+    @contextlib.contextmanager
+    def create_entry(self, at_time: datetime) -> Iterator[CacheEntry]:
         """Create a writable CacheEntry for the specified time.
 
-        You MUST call close() on the resulting entry when you are finished
-        adding data to it, otherwise the entry could get corrupted."""
+        This is a context manager so use like this:
+
+        with cache.create_entry(date) as ce:
+            ce.add_value(...)
+        # rest of the code
+        """
         cdir = self.cache_dir
 
         at_time = ensure_utc(at_time)
@@ -160,7 +163,11 @@ class Cache:
             mode="x",
             compression=ZIP_LZMA,
         )
-        return CacheEntry(zf)
+        ce = CacheEntry(zf)
+        try:
+            yield ce
+        finally:
+            ce.close()
 
     def save(self, key: str, at_time: datetime, value: bytes) -> None:
         """Save binary data to the cache for a specific key and timestamp.
@@ -176,9 +183,8 @@ class Cache:
             >>> cache = Cache()
             >>> cache.save("data", datetime.now(), b"binary data")
         """
-        ce = self.create_entry(at_time)
-        ce.add_value(key, value)
-        ce.close()
+        with self.create_entry(at_time) as ce:
+            ce.add_value(key, value)
 
     def _paths_from(self, from_time: datetime) -> Iterable[Path]:
         """Returns paths starting from a specific datetime.
@@ -215,12 +221,16 @@ class Cache:
         for year_dir in sorted(
             filter(lambda y: int(y.parts[-1]) >= from_time.year, cdir.iterdir())
         ):
+            if not first_year_done and int(year_dir.parts[-1]) > from_time.year:
+                first_year_done = True
             for month_dir in sorted(
                 filter(
                     lambda m: first_year_done or int(m.parts[-1]) >= from_time.month,
                     year_dir.iterdir(),
                 )
             ):
+                if not first_month_done and int(month_dir.parts[-1]) > from_time.month:
+                    first_month_done = True
                 for day_dir in sorted(
                     filter(
                         lambda d: first_month_done or int(d.parts[-1]) >= from_time.day,

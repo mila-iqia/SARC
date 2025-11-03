@@ -303,6 +303,19 @@ def compute_job_statistics_one_metric(
     )
 
 
+JOB_STATISTICS_METRIC_NAMES = (
+    "slurm_job_utilization_gpu",
+    "slurm_job_fp16_gpu",
+    "slurm_job_fp32_gpu",
+    "slurm_job_fp64_gpu",
+    "slurm_job_sm_occupancy_gpu",
+    "slurm_job_utilization_gpu_memory",
+    "slurm_job_power_gpu",
+    "slurm_job_core_usage",
+    "slurm_job_memory_usage",
+)
+
+
 @trace_decorator()
 def compute_job_statistics(job: SlurmJob) -> JobStatistics:
     statistics_dict = {
@@ -317,20 +330,11 @@ def compute_job_statistics(job: SlurmJob) -> JobStatistics:
 
     # We will get all required job time series
     # with just 1 call to get_job_time_series()
-    metric_names = (
-        "slurm_job_utilization_gpu",
-        "slurm_job_fp16_gpu",
-        "slurm_job_fp32_gpu",
-        "slurm_job_fp64_gpu",
-        "slurm_job_sm_occupancy_gpu",
-        "slurm_job_utilization_gpu_memory",
-        "slurm_job_power_gpu",
-        "slurm_job_core_usage",
-        "slurm_job_memory_usage",
-    )
-    metric_to_data: dict[str, list[dict]] = {metric: [] for metric in metric_names}
+    metric_to_data: dict[str, list[dict]] = {
+        metric: [] for metric in JOB_STATISTICS_METRIC_NAMES
+    }
     for result in get_job_time_series(
-        job, metric_names, max_points=10_000, dataframe=False
+        job, JOB_STATISTICS_METRIC_NAMES, max_points=10_000, dataframe=False
     ):
         metric_to_data[result["metric"]["__name__"]].append(result)
     # Then we convert series to data frames for each metric

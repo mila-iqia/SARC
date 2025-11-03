@@ -807,19 +807,10 @@ def test_cache_entry_add_get_value(tmp_path):
         zf.writestr("key1", b"value1")
         zf.writestr("key2", b"value2")
 
-    # Test CacheEntry with existing zip file
     with ZipFile(test_file, "r") as zf:
         entry = CacheEntry(zf)
 
-        # Test get_value
-        assert entry.get_value("key1") == b"value1"
-        assert entry.get_value("key2") == b"value2"
-
-        # Test get_keys
-        keys = entry.get_keys()
-        assert "key1" in keys
-        assert "key2" in keys
-        assert len(keys) == 2
+        assert list(entry.items()) == [("key1", b"value1"), ("key2", b"value2")]
 
 
 def test_cache_entry_add_value(tmp_path):
@@ -881,18 +872,27 @@ def test_cache_create_entry(tmp_path):
 
     with gifnoc.overlay({"sarc.cache": str(tmp_path)}):
         test_time = datetime(2024, 3, 15, 10, 30, 45, tzinfo=UTC)
-        entry = cache.create_entry(test_time)
+        with cache.create_entry(test_time) as entry:
+            # Verify the entry is a CacheEntry
+            assert isinstance(entry, CacheEntry)
 
-        # Verify the entry is a CacheEntry
-        assert isinstance(entry, CacheEntry)
-
-        # Add some data and close
-        entry.add_value("test_key", b"test_data")
-        entry.close()
+            # Add some data and close
+            entry.add_value("test_key", b"test_data")
 
         # Verify the file was created in the expected location
         expected_file = tmp_path / "test_cache" / "2024" / "03" / "15" / "10:30:45"
         assert expected_file.exists()
+
+
+def test_cache_multiple_key_same_name(tmp_path):
+    with gifnoc.overlay({"sarc.cache": str(tmp_path)}):
+        cache = Cache("test_entries")
+        with cache.create_entry(datetime(2024, 6, 1, tzinfo=UTC)) as ce:
+            ce.add_value("key", b"val1")
+            ce.add_value("key", b"val2")
+
+        ce = list(cache.read_from(datetime(2024, 5, 30, tzinfo=UTC)))[0]
+        assert list(ce.items()) == [("key", b"val1"), ("key", b"val2")]
 
 
 def test_cache_save(tmp_path):
@@ -924,11 +924,10 @@ def test_cache_save_multiple_keys(tmp_path):
         test_time = datetime(2024, 3, 15, 10, 30, 45, tzinfo=UTC)
 
         # Create entry and add multiple keys
-        entry = cache.create_entry(test_time)
-        entry.add_value("key1", b"data1")
-        entry.add_value("key2", b"data2")
-        entry.add_value("key3", b"data3")
-        entry.close()
+        with cache.create_entry(test_time) as entry:
+            entry.add_value("key1", b"data1")
+            entry.add_value("key2", b"data2")
+            entry.add_value("key3", b"data3")
 
         # Verify the file was created
         expected_file = tmp_path / "test_cache" / "2024" / "03" / "15" / "10:30:45"
@@ -1019,10 +1018,9 @@ def test_cache_read_from(tmp_path):
         ]
 
         for time, data in times_and_data:
-            entry = cache.create_entry(time)
-            for key, value in data.items():
-                entry.add_value(key, value)
-            entry.close()
+            with cache.create_entry(time) as entry:
+                for key, value in data.items():
+                    entry.add_value(key, value)
 
         # Read from 10:00 onwards
         from_time = datetime(2024, 3, 15, 10, 0, 0, tzinfo=UTC)
@@ -1032,8 +1030,8 @@ def test_cache_read_from(tmp_path):
         assert len(entries) == 2
 
         # verify the data
-        assert entries[0].get_keys() == ["key2"]
-        assert entries[1].get_keys() == ["key3"]
+        assert list(entries[0].items()) == [("key2", b"data2")]
+        assert list(entries[1].items()) == [("key3", b"data3")]
 
         # try to read starting the day before
         entries = list(cache.read_from(datetime(2024, 3, 14, 0, 0, 0, tzinfo=UTC)))
@@ -1048,15 +1046,13 @@ def test_cache_read_from_with_multiple_keys_per_entry(tmp_path):
     with gifnoc.overlay({"sarc.cache": str(tmp_path)}):
         # Create entries with multiple keys
         time1 = datetime(2024, 3, 15, 10, 0, 0, tzinfo=UTC)
-        entry1 = cache.create_entry(time1)
-        entry1.add_value("user1", b"user1_data")
-        entry1.add_value("user2", b"user2_data")
-        entry1.close()
+        with cache.create_entry(time1) as entry1:
+            entry1.add_value("user1", b"user1_data")
+            entry1.add_value("user2", b"user2_data")
 
         time2 = datetime(2024, 3, 15, 11, 0, 0, tzinfo=UTC)
-        entry2 = cache.create_entry(time2)
-        entry2.add_value("user3", b"user3_data")
-        entry2.close()
+        with cache.create_entry(time2) as entry2:
+            entry2.add_value("user3", b"user3_data")
 
         # Read from 10:00 onwards
         from_time = datetime(2024, 3, 15, 10, 0, 0, tzinfo=UTC)
@@ -1064,20 +1060,13 @@ def test_cache_read_from_with_multiple_keys_per_entry(tmp_path):
 
         assert len(entries) == 2
 
-        # Check first entry has 2 keys
-        entry1_keys = entries[0].get_keys()
-        assert len(entry1_keys) == 2
-        assert "user1" in entry1_keys
-        assert "user2" in entry1_keys
+        assert list(entries[0].items()) == [
+            ("user1", b"user1_data"),
+            ("user2", b"user2_data"),
+        ]
 
         # Check second entry has 1 key
-        entry2_keys = entries[1].get_keys()
-        assert len(entry2_keys) == 1
-        assert "user3" in entry2_keys
-
-        # Close all entries
-        for entry in entries:
-            entry.close()
+        assert list(entries[1].items()) == [("user3", b"user3_data")]
 
 
 def test_cache_ensure_utc():

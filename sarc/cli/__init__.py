@@ -8,7 +8,7 @@ from typing import Union
 
 from simple_parsing import ArgumentParser, field, subparsers
 
-from sarc.logging import setupLogging
+from sarc.logging import setupLogging, getSlackReport
 
 from .acquire import Acquire
 from .db import Db
@@ -66,7 +66,11 @@ class CLI:
 
     def execute(self) -> int:
         setupLogging(verbose_level=self.verbose)
+        report = getSlackReport()
 
+        if report is not None:
+            with report:
+                return self.command.execute()
         return self.command.execute()
 
 

@@ -10,26 +10,12 @@ from fabric.testing.base import Command, Session
 from opentelemetry.trace import StatusCode
 
 from sarc.client.job import JobStatistics, get_jobs, get_available_clusters
-from sarc.config import MTL, UTC, config
+from sarc.config import MTL, UTC
 from sarc.jobs import prometheus_scraping
 
 from .factory import create_sacct_json
+from ..cli.acquire.test_acquire_slurmconfig import _save_slurm_conf
 from ...common.dateutils import _dtfmt, _dtstr, _dtreg
-
-
-def _save_slurm_conf(cluster_name: str, day: str, content: str):
-    from sarc.cli.acquire.slurmconfig import SlurmConfigParser
-
-    scp = SlurmConfigParser(config().clusters[cluster_name], day)
-    folder = "slurm_conf"
-    filename = scp._cache_key()
-    cache_dir = config().cache
-    file_dir = cache_dir / folder
-    file_dir.mkdir(parents=True, exist_ok=True)
-    file_path = file_dir / filename
-    print(file_path)
-    with file_path.open("w") as file:
-        file.write(content)
 
 
 @pytest.fixture

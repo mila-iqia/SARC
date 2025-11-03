@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, time
 from types import SimpleNamespace
 
 from iguane.fom import RAWDATA, fom_ugr
-from pydantic import field_validator
 from pydantic_mongo import AbstractRepository, PydanticObjectId
 
-from sarc.config import MTL, UTC, config, scraping_mode_required
+from sarc.config import config, scraping_mode_required
+from sarc.core.models.validators import datetime_utc
 from sarc.model import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -21,20 +20,8 @@ class GPUBilling(BaseModel):
     id: PydanticObjectId | None = None
 
     cluster_name: str
-    since: datetime
+    since: datetime_utc
     gpu_to_billing: dict[str, float]
-
-    @field_validator("since", mode="before")
-    @classmethod
-    def _ensure_since(cls, value: str | datetime) -> datetime:
-        """Parse `since` from stored string to Python datetime."""
-        if isinstance(value, str):
-            return datetime.combine(datetime.fromisoformat(value), time.min).replace(
-                tzinfo=MTL
-            )
-        else:
-            assert isinstance(value, datetime)
-            return value.replace(tzinfo=UTC).astimezone(MTL)
 
 
 class GPUBillingRepository(AbstractRepository[GPUBilling]):
@@ -45,7 +32,7 @@ class GPUBillingRepository(AbstractRepository[GPUBilling]):
     def save_gpu_billing(
         self,
         cluster_name: str,
-        since: str,
+        since: datetime_utc,
         gpu_to_billing: dict[str, float],
     ) -> None:
         """Save GPU->billing mapping into database."""

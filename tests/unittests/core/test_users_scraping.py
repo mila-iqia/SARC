@@ -1,5 +1,6 @@
 """Tests for the user scraping plugin system."""
 
+import logging
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -315,16 +316,19 @@ def test_fetch_and_parse_users_multiple_plugins(monkeypatch, enabled_cache):
     assert len(plugin2_users) == 2
 
 
-def test_invalid_scraper(enabled_cache):
+def test_invalid_scraper(enabled_cache, caplog):
     scrapers = [("invalid_scraper", {"api_url": "https://api.example.com"})]
 
-    with pytest.raises(ValueError, match="Invalid user scraper"):
-        fetch_users(scrapers)
+    fetch_users(scrapers)
+    assert caplog.record_tuples[0] == (
+        "sarc.core.scraping.users",
+        logging.ERROR,
+        "Could not fetch user scraper: invalid_scraper",
+    )
 
     cache = Cache(subdirectory="users")
-    ce = cache.create_entry(datetime(2025, 6, 2, tzinfo=UTC))
-    ce.add_value("invalid_scraper", b"")
-    ce.close()
+    with cache.create_entry(datetime(2025, 6, 2, tzinfo=UTC)) as ce:
+        ce.add_value("invalid_scraper", b"")
 
     with pytest.raises(ValueError, match="Invalid user scraper"):
         list(parse_users(datetime(2025, 6, 1, tzinfo=UTC)))
