@@ -500,7 +500,7 @@ def create_gpu_billings():
     return [
         {
             "cluster_name": "patate",
-            "since": "2023-02-15",
+            "since": datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC),
             "gpu_to_billing": {
                 "patate_gpu_no_rgu_with_billing": 120,
                 "patate_gpu_with_rgu_with_billing": 90,
@@ -509,7 +509,7 @@ def create_gpu_billings():
         },
         {
             "cluster_name": "patate",
-            "since": "2023-02-18",
+            "since": datetime(2023, 2, 18, tzinfo=MTL).astimezone(UTC),
             "gpu_to_billing": {
                 "patate_gpu_no_rgu_with_billing": 240,  # / 2
                 "patate_gpu_with_rgu_with_billing": 180,  # x 2
@@ -518,7 +518,7 @@ def create_gpu_billings():
         },
         {
             "cluster_name": "raisin",
-            "since": "2023-02-15",
+            "since": datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC),
             "gpu_to_billing": {
                 "raisin_gpu_no_rgu_with_billing": 150,
                 "raisin_gpu_with_rgu_with_billing": 50,
