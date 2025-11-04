@@ -17,8 +17,9 @@ def check_prometheus_vs_slurmconfig(cluster_name: str | None = None) -> None:
 
     To get slurm config GPU types, we collect all GPU types
     from latest node => GPU mapping in database.
-    Node => GPU mappings should have been collected using command line
-    `sarc acquire slurmconfig -c <cluster name>`.
+    Node => GPU mappings should have been collected using command lines
+    `sarc fetch slurmconfig -c <cluster name>`, then
+    `sarc parse slurmconfig -c <cluster name>`.
 
     Parameters
     ----------
@@ -54,7 +55,7 @@ def check_prometheus_vs_slurmconfig(cluster_name: str | None = None) -> None:
             # Warn if there is no slurm config GPUs available.
             logger.warning(
                 f"[prometheus][{cluster.name}] cannot find GPU types from slurm config file. "
-                f"You may need to call `sarc acquire slurmconfig -c {cluster.name}`"
+                f"You may need to fetch and parse slurm.conf files for this cluster."
             )
         else:
             # Get Prometheus GPU types

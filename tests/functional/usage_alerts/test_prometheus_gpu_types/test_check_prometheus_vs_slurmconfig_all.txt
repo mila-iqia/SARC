@@ -1,4 +1,4 @@
 [prometheus][fromage] gpu_type not found in slurm config file: phantom_gpu. Expected: gpu0
-[prometheus][gerudo] cannot find GPU types from slurm config file. You may need to call `sarc acquire slurmconfig -c gerudo`
-[prometheus][hyrule] cannot find GPU types from slurm config file. You may need to call `sarc acquire slurmconfig -c hyrule`
-[prometheus][mila] cannot find GPU types from slurm config file. You may need to call `sarc acquire slurmconfig -c mila`
+[prometheus][gerudo] cannot find GPU types from slurm config file. You may need to fetch and parse slurm.conf files for this cluster.
+[prometheus][hyrule] cannot find GPU types from slurm config file. You may need to fetch and parse slurm.conf files for this cluster.
+[prometheus][mila] cannot find GPU types from slurm config file. You may need to fetch and parse slurm.conf files for this cluster.
