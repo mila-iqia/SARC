@@ -2,16 +2,14 @@ import io
 import logging
 import re
 from datetime import datetime, time
-from pathlib import Path
 from typing import List
 
 import pytest
-from fabric.testing.base import Session
+from fabric.testing.base import Session, Command
 from hostlist import expand_hostlist
 
-from sarc.cache import CacheException
-from sarc.cli.acquire.slurmconfig import InconsistentGPUBillingError, SlurmConfigParser
 from sarc.cli.fetch.slurmconfig import SlurmConfigDownloader
+from sarc.cli.parse.slurmconfig import InconsistentGPUBillingError, SlurmConfigParser
 from sarc.client.gpumetrics import GPUBilling, get_cluster_gpu_billings
 from sarc.config import MTL, config, UTC
 from sarc.jobs.node_gpu_mapping import NodeGPUMapping, get_node_to_gpu
@@ -93,29 +91,29 @@ def _setup_logging_do_nothing(*args, **kwargs):
 
 
 @pytest.mark.usefixtures("empty_read_write_db", "enabled_cache", "tzlocal_is_mtl")
-def test_acquire_slurmconfig(cli_main, caplog, monkeypatch):
+def test_parse_slurmconfig(cli_main, caplog, monkeypatch):
     monkeypatch.setattr("sarc.cli.setupLogging", _setup_logging_do_nothing)
+    caplog.set_level(logging.INFO)
 
     assert get_cluster_gpu_billings("raisin") == []
     assert get_node_to_gpu("raisin") == None
 
+    #  when cache is empty
+    assert cli_main(["parse", "slurmconfig", "-c", "raisin"]) == -1
+    assert "No cache folder available" in caplog.text
+    caplog.clear()
+
     _save_slurm_conf("raisin", "2020-01-01", SLURM_CONF_RAISIN_2020_01_01)
 
     with pytest.raises(KeyError) as exc_info:
-        cli_main(["acquire", "slurmconfig", "-c", "unknown_raisin", "-d", "2020-01-01"])
+        cli_main(["parse", "slurmconfig", "-c", "unknown_raisin"])
         assert str(exc_info.value) == "unknown_raisin"
 
-    with pytest.raises(CacheException):
-        cli_main(["acquire", "slurmconfig", "-c", "raisin", "-d", "1999-01-01"])
-
-    assert (
-        cli_main(["-v", "acquire", "slurmconfig", "-c", "raisin", "-d", "2020-01-01"])
-        == 0
-    )
+    assert cli_main(["-v", "parse", "slurmconfig", "-c", "raisin"]) == 0
 
     # No harmonization available for gpu1
     assert re.search(
-        r"WARNING +sarc\.cli\.acquire\.slurmconfig:slurmconfig\.py:[0-9]+ \[raisin]\[partition2] +"
+        r"WARNING +sarc\.cli\.parse\.slurmconfig:slurmconfig\.py:[0-9]+ \[raisin]\[partition2] +"
         r"Cannot harmonize: gpu1 \(keep this name as-is\) : mynode\[2,8-11,42]",
         caplog.text,
     )
@@ -158,10 +156,7 @@ def test_acquire_slurmconfig(cli_main, caplog, monkeypatch):
 
     # Save next conf file
     _save_slurm_conf("raisin", "2020-05-01", SLURM_CONF_RAISIN_2020_05_01)
-    assert (
-        cli_main(["-v", "acquire", "slurmconfig", "-c", "raisin", "-d", "2020-05-01"])
-        == 0
-    )
+    assert cli_main(["-v", "parse", "slurmconfig", "-c", "raisin"]) == 0
     expected_gpu_billing_2 = GPUBilling(
         cluster_name="raisin",
         since=datetime(2020, 5, 1, tzinfo=MTL).astimezone(UTC),
@@ -209,6 +204,112 @@ def test_acquire_slurmconfig(cli_main, caplog, monkeypatch):
     )
 
 
+@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache", "tzlocal_is_mtl")
+def test_parse_slurmconfig_mila(cli_main, caplog, monkeypatch):
+    """Test parse_slurmconfig on cluster mila, where billing_is_gpu is True."""
+    cluster_name_mila = "mila"
+
+    monkeypatch.setattr("sarc.cli.setupLogging", _setup_logging_do_nothing)
+    caplog.set_level(logging.INFO)
+
+    assert get_cluster_gpu_billings(cluster_name_mila) == []
+    assert get_node_to_gpu(cluster_name_mila) == None
+
+    _save_slurm_conf(cluster_name_mila, "2020-01-01", SLURM_CONF_RAISIN_2020_01_01)
+
+    assert cli_main(["-v", "parse", "slurmconfig", "-c", cluster_name_mila]) == 0
+    assert (
+        f"GPU billing won't be parsed on cluster `{cluster_name_mila}`, "
+        f"since billing is directly expressed as number of GPUs on this cluster."
+    ) in caplog.text
+    caplog.clear()
+    # No GPU->billing must be parsed
+    assert get_cluster_gpu_billings(cluster_name_mila) == []
+
+    # GPU->node must be parsed
+    expected_node_to_gpu_1 = NodeGPUMapping(
+        cluster_name=cluster_name_mila,
+        since=datetime(2020, 1, 1, tzinfo=MTL).astimezone(UTC),
+        node_to_gpu={
+            **{
+                node_name: ["gpu1"]
+                for node_name in expand_hostlist("mynode[1,2,5-20,30,40-43]")
+            },
+            **{
+                node_name: ["gpu2"]
+                for node_name in expand_hostlist("myothernode[1,2,5-20,30,40-43]")
+            },
+            **{
+                node_name: ["gpu2", "gpu:gpu1:5"]
+                for node_name in expand_hostlist("myothernode2[1,2,5-20,30,50]")
+            },
+            "myothernode20": ["bad_named_gpu", "gpu:what:2"],
+            **{
+                node_name: ["gpu3"]
+                for node_name in expand_hostlist("myothernode[100-102]")
+            },
+            "alone_node": ["gpu:gpu2:1", "gpu:gpu1:9"],
+        },
+    )
+    assert_same_node_gpu_mapping(
+        get_node_to_gpu(cluster_name_mila), expected_node_to_gpu_1
+    )
+
+    # Save next conf file
+    _save_slurm_conf("mila", "2020-05-01", SLURM_CONF_RAISIN_2020_05_01)
+    assert cli_main(["-v", "parse", "slurmconfig", "-c", cluster_name_mila]) == 0
+    assert (
+        f"GPU billing won't be parsed on cluster `{cluster_name_mila}`, "
+        f"since billing is directly expressed as number of GPUs on this cluster."
+    ) in caplog.text
+    caplog.clear()
+
+    # No GPU->billing must be parsed
+    assert get_cluster_gpu_billings("mila") == []
+
+    # GPU->node must be parsed
+    expected_node_to_gpu_2 = NodeGPUMapping(
+        cluster_name=cluster_name_mila,
+        since=datetime(2020, 5, 1, tzinfo=MTL).astimezone(UTC),
+        node_to_gpu=expected_node_to_gpu_1.node_to_gpu.copy(),
+    )
+    del expected_node_to_gpu_2.node_to_gpu["alone_node"]
+    assert_same_node_gpu_mapping(
+        get_node_to_gpu(cluster_name_mila), expected_node_to_gpu_2
+    )
+
+    # Check that we get the right node_to_gpu for a given date
+    def _parse_date(value: str):
+        return datetime.combine(datetime.fromisoformat(value), time.min).replace(
+            tzinfo=MTL
+        )
+
+    assert_same_node_gpu_mapping(
+        get_node_to_gpu(cluster_name_mila, _parse_date("2019-12-01")),
+        expected_node_to_gpu_1,
+    )
+    assert_same_node_gpu_mapping(
+        get_node_to_gpu(cluster_name_mila, _parse_date("2020-01-01")),
+        expected_node_to_gpu_1,
+    )
+    assert_same_node_gpu_mapping(
+        get_node_to_gpu(cluster_name_mila, _parse_date("2020-03-07")),
+        expected_node_to_gpu_1,
+    )
+    assert_same_node_gpu_mapping(
+        get_node_to_gpu(cluster_name_mila, _parse_date("2020-05-01")),
+        expected_node_to_gpu_2,
+    )
+    assert_same_node_gpu_mapping(
+        get_node_to_gpu(cluster_name_mila, _parse_date("2020-05-20")),
+        expected_node_to_gpu_2,
+    )
+    assert_same_node_gpu_mapping(
+        get_node_to_gpu(cluster_name_mila, _parse_date("2020-10-10")),
+        expected_node_to_gpu_2,
+    )
+
+
 SLURM_CONF_RAISIN_2020_01_01_INCONSISTENT_BILLING = """
 NodeName=mynode[1,2,5-20,30,40-43] UselessParam=UselessValue Gres=gpu1
 
@@ -219,14 +320,14 @@ PartitionName=partition2 Nodes=mynode[2,8-11,42] TRESBillingWeights=x=1,GRES/gpu
 
 @pytest.mark.parametrize("threshold", [None, 0.1, 1, 10, 19])
 @pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
-def test_acuire_slurmconfig_inconsistent_billing(cli_main, threshold):
+def test_parse_slurmconfig_inconsistent_billing(cli_main, threshold):
     _save_slurm_conf(
         "raisin",
         "2020-01-01",
         SLURM_CONF_RAISIN_2020_01_01_INCONSISTENT_BILLING,
     )
 
-    command = ["acquire", "slurmconfig", "-c", "raisin", "-d", "2020-01-01"]
+    command = ["parse", "slurmconfig", "-c", "raisin"]
     if threshold is not None:
         threshold = float(threshold)
         command += ["--threshold", str(threshold)]
@@ -248,7 +349,7 @@ PartitionName=partition2 Nodes=mynode[2,8-11,42] TRESBillingWeights=x=1,GRES/gpu
 
 @pytest.mark.parametrize("threshold", [20, 20.1, 30])
 @pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
-def test_acquire_slurmconfig_inconsistent_billing_success(cli_main, threshold):
+def test_parse_slurmconfig_inconsistent_billing_success(cli_main, threshold):
     """Test that parsing succeeds with greater threshold"""
     _save_slurm_conf(
         "raisin",
@@ -258,12 +359,10 @@ def test_acquire_slurmconfig_inconsistent_billing_success(cli_main, threshold):
     assert (
         cli_main(
             [
-                "acquire",
+                "parse",
                 "slurmconfig",
                 "-c",
                 "raisin",
-                "-d",
-                "2020-01-01",
                 "-t",
                 str(threshold),
             ]
@@ -281,24 +380,19 @@ def assert_same_billings(given: List[GPUBilling], expected: List[GPUBilling]):
         assert given_billing.gpu_to_billing == expected_billing.gpu_to_billing
 
 
-def assert_same_node_gpu_mapping(
-    given_billing: NodeGPUMapping, expected_billing: NodeGPUMapping
-):
-    assert given_billing.since == expected_billing.since
-    assert given_billing.node_to_gpu == expected_billing.node_to_gpu
+def assert_same_node_gpu_mapping(given: NodeGPUMapping, expected: NodeGPUMapping):
+    assert given.since == expected.since
+    assert given.node_to_gpu == expected.node_to_gpu
 
 
 def _save_slurm_conf(cluster_name: str, day: str, content: str):
-    scp = SlurmConfigParser(
-        config().clusters[cluster_name],
-        datetime.strptime(day, "%Y-%m-%d").replace(tzinfo=MTL),
+    scp = SlurmConfigDownloader(
+        cluster=config().clusters[cluster_name],
+        date=datetime.strptime(day, "%Y-%m-%d").replace(tzinfo=MTL).astimezone(UTC),
     )
-    folder = "slurm_conf"
-    filename = scp._cache_key()
-    cache_dir = config().cache
-    file_dir = cache_dir / folder
+    file_dir = config().cache / "slurm_conf"
     file_dir.mkdir(parents=True, exist_ok=True)
-    file_path = file_dir / filename
+    file_path = file_dir / scp._cache_key()
     with file_path.open("w") as file:
         file.write(content)
 
@@ -309,39 +403,42 @@ DATE_2020_05_01_MTL = datetime(2020, 5, 1, tzinfo=MTL)
 
 @pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
 def test_fetch_slurmconfig(cli_main, test_config, remote, caplog, freezer):
-    """Test slurm conf file downloading."""
+    """Test slurm conf file downloading using `fetch slurmconfig`."""
     caplog.set_level(logging.INFO)
 
-    clusters = test_config.clusters
-    # Check default value for "slurm_conf_host_path" (with cluster raisin)
-    assert clusters["raisin"].slurm_conf_host_path == Path("/etc/slurm/slurm.conf")
-
     # Use cluster raisin for download test
+    clusters = test_config.clusters
     cluster = clusters["raisin"]
-    scd_2020_01_01 = SlurmConfigDownloader(cluster=cluster, date=DATE_2020_01_01_MTL.astimezone(UTC))
-    scd_2020_05_01 = SlurmConfigDownloader(cluster=cluster, date=DATE_2020_05_01_MTL.astimezone(UTC))
+
+    scd_2020_01_01 = SlurmConfigDownloader(
+        cluster=cluster, date=DATE_2020_01_01_MTL.astimezone(UTC)
+    )
+    scd_2020_05_01 = SlurmConfigDownloader(
+        cluster=cluster, date=DATE_2020_05_01_MTL.astimezone(UTC)
+    )
     file_dir = test_config.cache / "slurm_conf"
     file_dir.mkdir(parents=True, exist_ok=True)
     file_path_2020_01_01 = file_dir / scd_2020_01_01._cache_key()
     file_path_2020_05_01 = file_dir / scd_2020_05_01._cache_key()
 
-    clients = remote.expect_sessions(
-        Session(
-            host=cluster.host,
-            cmd=f"cat {cluster.slurm_conf_host_path}",
-            out=SLURM_CONF_RAISIN_2020_01_01.encode(),
-        ),
-        Session(
-            host=cluster.host,
-            cmd=f"cat {cluster.slurm_conf_host_path}",
-            out=SLURM_CONF_RAISIN_2020_05_01.encode(),
-        )
-    )
-    for client in clients:
-        print(client)
-
     assert not file_path_2020_01_01.exists()
     assert not file_path_2020_05_01.exists()
+
+    remote.expect_sessions(
+        Session(
+            host=cluster.host,
+            commands=[
+                Command(
+                    cmd=f"cat {cluster.slurm_conf_host_path}",
+                    out=SLURM_CONF_RAISIN_2020_01_01.encode(),
+                ),
+                Command(
+                    cmd=f"cat {cluster.slurm_conf_host_path}",
+                    out=SLURM_CONF_RAISIN_2020_05_01.encode(),
+                ),
+            ],
+        ),
+    )
 
     # Should download from current day
     freezer.move_to(DATE_2020_01_01_MTL)
@@ -350,18 +447,21 @@ def test_fetch_slurmconfig(cli_main, test_config, remote, caplog, freezer):
     assert cli_main(["fetch", "slurmconfig", "-c", "raisin"]) == 0
     assert cli_main(["fetch", "slurmconfig", "-c", "raisin"]) == 0
     assert cli_main(["fetch", "slurmconfig", "-c", "raisin"]) == 0
+    # Only file matching current day should exist
     assert file_path_2020_01_01.is_file(), file_path_2020_01_01
     assert not file_path_2020_05_01.is_file(), file_path_2020_05_01
     with file_path_2020_01_01.open() as file:
         assert file.read() == SLURM_CONF_RAISIN_2020_01_01
     caplog.clear()
 
+    # Now move to another day and download again
     freezer.move_to(DATE_2020_05_01_MTL)
     assert cli_main(["fetch", "slurmconfig", "-c", "raisin"]) == 0
     assert cli_main(["fetch", "slurmconfig", "-c", "raisin"]) == 0
     assert cli_main(["fetch", "slurmconfig", "-c", "raisin"]) == 0
     assert cli_main(["fetch", "slurmconfig", "-c", "raisin"]) == 0
     assert cli_main(["fetch", "slurmconfig", "-c", "raisin"]) == 0
+    # Now we must have both files for the two tested days
     assert file_path_2020_01_01.is_file(), file_path_2020_01_01
     assert file_path_2020_05_01.is_file(), file_path_2020_05_01
     with file_path_2020_01_01.open() as file:
