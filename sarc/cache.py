@@ -247,11 +247,10 @@ class Cache:
     def read_from(self, from_time: datetime) -> Iterable[CacheEntry]:
         """Read all cached entries starting from a specific datetime.
 
-        Returns an iterator over all cached entries that were created at or after
-        the specified time. Unlike `read_from()`, this method returns entries for
-        all keys, not just a specific key. The cache files are searched through
-        the date hierarchy starting from the given date and continuing forward
-        through all subsequent dates.
+        Returns an iterator over all cached entries that were created at or
+        after the specified time. The cache files are searched through the date
+        hierarchy starting from the given date and continuing forward through
+        all subsequent dates.
 
         Args:
             from_time: The earliest datetime to include in results. Must be UTC.
@@ -264,8 +263,9 @@ class Cache:
         Example:
             >>> cache = Cache("my_data")
             >>> start_time = datetime(2024, 1, 15, 10, 0, 0)
-            >>> for key, data in cache.read_from_all(start_time):
-            ...     print(f"Key: {key}, Data size: {len(data)} bytes")
+            >>> for ce in cache.read_from(start_time):
+            >>>     for key, data in ce.items():
+            ...         print(f"Key: {key}, Data size: {len(data)} bytes")
         """
         for file in self._paths_from(from_time):
             yield CacheEntry(ZipFile(file, mode="r"))
