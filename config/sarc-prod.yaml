@@ -8,17 +8,6 @@ sarc:
       # token: slack-token-replaceme
       # channel: slack-channel-id-replace-me
   mongo: ../../SARC_secrets/secrets/mongo-prod.yaml
-  ldap:
-    local_private_key_file: ../../SARC_secrets/secrets/ldap/Google_2026_01_26_66827.key
-    local_certificate_file: ../../SARC_secrets/secrets/ldap/Google_2026_01_26_66827.crt
-    ldap_service_uri: ldaps://ldap.google.com
-    mongo_collection_name: users
-    group_to_prof_json_path: ../../SARC_secrets/secrets/group_to_prof.json
-    exceptions_json_path: ../../SARC_secrets/secrets/exceptions.json
-  account_matching:
-    drac_members_csv_path: ../../SARC_secrets/secrets/account_matching/members-rrg-bengioy-ad-2025-10-29.csv
-    drac_roles_csv_path: ../../SARC_secrets/secrets/account_matching/sponsored_roles_for_Yoshua_Bengio_(CCI_jvb-000).csv
-    make_matches_config: ../../SARC_secrets/secrets/account_matching/make_matches_config.json
   cache: "../sarc-cache"
   sshconfig: "~/.ssh/config"
   clusters:
