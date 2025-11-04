@@ -227,6 +227,9 @@ class ClientConfig:
         assert self.cache
         return self.cache / "lockfile.lock"
 
+    class SerieuxConfig:
+        allow_extras = True
+
 
 @dataclass
 class Config(ClientConfig):
