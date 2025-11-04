@@ -29,8 +29,6 @@ sarc:
       sacct_bin: "/opt/slurm/bin/sacct"
       duc_inodes_command:
       duc_storage_command:
-      diskusage_report_command: beegfs-ctl --cfgFile=/etc/beegfs/home.d/beegfs-client.conf
-        --getquota --uid $USER --csv
       prometheus_url: http://prometheus01.server.mila.quebec:9090/
       start_date: '2022-04-01'
       billing_is_gpu: true
@@ -82,7 +80,6 @@ sarc:
       duc_inodes_command: duc ls -d /project/.duc_databases/rrg-bengioy-ad.sqlite --count
         /project/rrg-bengioy-ad
       duc_storage_command: duc ls -d /project/.duc_databases/rrg-bengioy-ad.sqlite /project/rrg-bengioy-ad
-      diskusage_report_command: diskusage_report --project --all_users
       prometheus_url: https://mila-thanos.calculquebec.ca
       prometheus_headers_file: ../../SARC_secrets/secrets/drac_prometheus/headers.json
       start_date: '2022-04-01'
@@ -114,7 +111,6 @@ sarc:
       duc_inodes_command: duc ls -d /project/.duc_databases/rrg-bengioy-ad.sqlite --count
         /project/rrg-bengioy-ad
       duc_storage_command: duc ls -d /project/.duc_databases/rrg-bengioy-ad.sqlite /project/rrg-bengioy-ad
-      diskusage_report_command: diskusage_report --project --all_users
       prometheus_url: https://mila-thanos.calculquebec.ca
       prometheus_headers_file: ../../SARC_secrets/secrets/drac_prometheus/headers.json
       start_date: '2022-04-01'
@@ -133,7 +129,6 @@ sarc:
       sacct_bin: "/opt/software/slurm/bin/sacct"
       duc_inodes_command:
       duc_storage_command:
-      diskusage_report_command: diskusage_report --project --all_users
       prometheus_url:
       prometheus_headers_file:
       start_date: '2022-04-01'
@@ -163,7 +158,6 @@ sarc:
       sacct_bin: "/opt/software/slurm/bin/sacct"
       duc_inodes_command:
       duc_storage_command:
-      diskusage_report_command: diskusage_report --project --all_users
       prometheus_url:
       prometheus_headers_file:
       start_date: '2022-04-01'
@@ -179,7 +173,6 @@ sarc:
       sacct_bin: "/opt/slurm/bin/sacct"
       duc_inodes_command:
       duc_storage_command:
-      diskusage_report_command: diskusage_report --project --all_users
       prometheus_url:
       prometheus_headers_file:
       start_date: '2025-02-01'
