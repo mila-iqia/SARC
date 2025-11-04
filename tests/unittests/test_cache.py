@@ -1111,3 +1111,31 @@ def test_cache_with_different_subdirectories(tmp_path):
 
         with ZipFile(file2, "r") as zf:
             assert zf.read("key2") == b"data2"
+
+
+def test_cache_proper_iteration(enabled_cache):
+    cache = Cache("datetest")
+
+    # Fill cache
+    dates = [
+        datetime(2020, 5, 1, tzinfo=UTC),
+        datetime(2020, 5, 2, tzinfo=UTC),
+        datetime(2021, 1, 1, tzinfo=UTC),
+        datetime(2021, 1, 2, tzinfo=UTC),
+        datetime(2021, 2, 1, tzinfo=UTC),
+        datetime(2021, 12, 1, tzinfo=UTC),
+        datetime(2023, 1, 1, tzinfo=UTC),
+        datetime(2023, 4, 1, tzinfo=UTC),
+        datetime(2023, 9, 1, tzinfo=UTC),
+    ]
+    for date in dates:
+        try:
+            with cache.create_entry(date) as cache_entry:
+                cache_entry.add_value("cache_date", date.isoformat().encode("utf-8"))
+        except FileExistsError:
+            pass
+
+    data1 = list(cache.read_from(datetime(2020, 1, 1, tzinfo=UTC)))
+    assert len(data1) == 9
+    data2 = list(cache.read_from(datetime(2022, 4, 1, tzinfo=UTC)))
+    assert len(data2) == 3
