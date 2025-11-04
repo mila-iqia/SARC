@@ -3,6 +3,7 @@ sarc:
     log_level: WARNING
     OTLP_endpoint: http://loki01.server.mila.quebec:3100/otlp/v1/logs
     service_name: sarc-dev
+    slack: null
   mongo:
     connection_string: mongodb://localhost:27017/sarc-dev
     database_name: sarc-dev
