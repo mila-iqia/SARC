@@ -5,13 +5,12 @@ import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Iterator, IO, Any, cast
+from typing import Iterator, IO, cast
 
 from hostlist import expand_hostlist
 from pydantic import BaseModel
 from simple_parsing import field
 
-from sarc.cache import FormatterProto
 from sarc.cli.fetch.slurmconfig import SlurmConfigDownloader
 from sarc.client.gpumetrics import _gpu_billing_collection
 from sarc.config import config, ClusterConfig, UTC, TZLOCAL
@@ -42,6 +41,7 @@ class ParseSlurmConfig:
         slurm_conf_dir = placeholder.get_slurm_config.cache_dir
         if slurm_conf_dir is None or not slurm_conf_dir.is_dir():
             logger.error("No cache folder available")
+            return -1
 
         prefix = f"slurm.{self.cluster_name}."
         suffix = ".conf"
@@ -86,24 +86,6 @@ class ParseSlurmConfig:
                     self.cluster_name, cache_date, slurm_conf.node_to_gpus
                 )
         return 0
-
-
-class FileContent(FormatterProto[str]):
-    """
-    Formatter for slurm conf file cache.
-    Just read and write entire text content from file.
-    """
-
-    read_flags = "r"
-    write_flags = "w"
-
-    @staticmethod
-    def load(fp: IO[Any]) -> str:
-        return fp.read()
-
-    @staticmethod
-    def dump(obj: str, fp: IO[Any]):
-        fp.write(obj)
 
 
 class SlurmConfigParser(BaseModel):
