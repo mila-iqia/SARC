@@ -3,18 +3,11 @@ sarc:
     log_level: INFO
     OTLP_endpoint: http://loki01.server.mila.quebec:3100/otlp/v1/logs
     service_name: sarc-dev
+    slack: null
+      # description: SARC-prod
+      # token: slack-token-replaceme
+      # channel: slack-channel-id-replace-me
   mongo: ../../SARC_secrets/secrets/mongo-prod.yaml
-  ldap:
-    local_private_key_file: ../../SARC_secrets/secrets/ldap/Google_2026_01_26_66827.key
-    local_certificate_file: ../../SARC_secrets/secrets/ldap/Google_2026_01_26_66827.crt
-    ldap_service_uri: ldaps://ldap.google.com
-    mongo_collection_name: users
-    group_to_prof_json_path: ../../SARC_secrets/secrets/group_to_prof.json
-    exceptions_json_path: ../../SARC_secrets/secrets/exceptions.json
-  account_matching:
-    drac_members_csv_path: ../../SARC_secrets/secrets/account_matching/members-rrg-bengioy-ad-2025-05-29.csv
-    drac_roles_csv_path: ../../SARC_secrets/secrets/account_matching/sponsored_roles_for_Yoshua_Bengio_(CCI_jvb-000).csv
-    make_matches_config: ../../SARC_secrets/secrets/account_matching/make_matches_config.json
   cache: "../sarc-cache"
   sshconfig: "~/.ssh/config"
   clusters:
@@ -25,8 +18,6 @@ sarc:
       sacct_bin: "/opt/slurm/bin/sacct"
       duc_inodes_command:
       duc_storage_command:
-      diskusage_report_command: beegfs-ctl --cfgFile=/etc/beegfs/home.d/beegfs-client.conf
-        --getquota --uid $USER --csv
       prometheus_url: http://prometheus01.server.mila.quebec:9090/
       start_date: '2022-04-01'
       billing_is_gpu: true
@@ -78,7 +69,6 @@ sarc:
       duc_inodes_command: duc ls -d /project/.duc_databases/rrg-bengioy-ad.sqlite --count
         /project/rrg-bengioy-ad
       duc_storage_command: duc ls -d /project/.duc_databases/rrg-bengioy-ad.sqlite /project/rrg-bengioy-ad
-      diskusage_report_command: diskusage_report --project --all_users
       prometheus_url: https://mila-thanos.calculquebec.ca
       prometheus_headers_file: ../../SARC_secrets/secrets/drac_prometheus/headers.json
       start_date: '2022-04-01'
@@ -110,7 +100,6 @@ sarc:
       duc_inodes_command: duc ls -d /project/.duc_databases/rrg-bengioy-ad.sqlite --count
         /project/rrg-bengioy-ad
       duc_storage_command: duc ls -d /project/.duc_databases/rrg-bengioy-ad.sqlite /project/rrg-bengioy-ad
-      diskusage_report_command: diskusage_report --project --all_users
       prometheus_url: https://mila-thanos.calculquebec.ca
       prometheus_headers_file: ../../SARC_secrets/secrets/drac_prometheus/headers.json
       start_date: '2022-04-01'
@@ -129,7 +118,6 @@ sarc:
       sacct_bin: "/opt/software/slurm/bin/sacct"
       duc_inodes_command:
       duc_storage_command:
-      diskusage_report_command: diskusage_report --project --all_users
       prometheus_url:
       prometheus_headers_file:
       start_date: '2022-04-01'
@@ -159,7 +147,6 @@ sarc:
       sacct_bin: "/opt/software/slurm/bin/sacct"
       duc_inodes_command:
       duc_storage_command:
-      diskusage_report_command: diskusage_report --project --all_users
       prometheus_url:
       prometheus_headers_file:
       start_date: '2022-04-01'
@@ -175,7 +162,6 @@ sarc:
       sacct_bin: "/opt/slurm/bin/sacct"
       duc_inodes_command:
       duc_storage_command:
-      diskusage_report_command: diskusage_report --project --all_users
       prometheus_url:
       prometheus_headers_file:
       start_date: '2025-02-01'

@@ -192,10 +192,18 @@ class TempoConfig:
 
 
 @dataclass
+class SlackConfig:
+    description: str
+    token: str
+    channel: str
+
+
+@dataclass
 class LoggingConfig:
     log_level: str
     OTLP_endpoint: str
     service_name: str
+    slack: SlackConfig | None = None
 
 
 @dataclass
@@ -218,6 +226,11 @@ class ClientConfig:
         """
         assert self.cache
         return self.cache / "lockfile.lock"
+
+    class SerieuxConfig:
+        # Config adds extra fields to ClientConfig, so to be able to read
+        # a Config as a ClientConfig we need allow_extras to be True
+        allow_extras = True
 
 
 @dataclass

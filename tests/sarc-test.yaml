@@ -1,8 +1,4 @@
 sarc:
-  account_matching:
-    drac_members_csv_path: drac_members_not_valid_path.csv
-    drac_roles_csv_path: drac_roles_not_valid_path.csv
-    make_matches_config: make_matches_config_not_valid_path.json
   cache: null
   clusters:
     fromage:
@@ -129,13 +125,6 @@ sarc:
       prometheus_url: null
       sacct_bin: /opt/slurm/bin/sacct
       timezone: America/Montreal
-  ldap:
-    exceptions_json_path: secrets/exceptions.json
-    group_to_prof_json_path: secrets/group_to_prof.json
-    ldap_service_uri: ldaps://ldap.google.com
-    local_certificate_file: not_a_valid_path.crt
-    local_private_key_file: not_a_valid_path.key
-    mongo_collection_name: users
   mongo:
     connection_string: localhost:27017
     database_name: sarc-test
