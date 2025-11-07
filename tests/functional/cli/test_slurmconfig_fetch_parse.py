@@ -196,7 +196,7 @@ def test_fetch_slurmconfig_no_change(cli_main, test_config, remote, caplog):
 
 
 @pytest.mark.freeze_time(DATE_2020_12_01_MTL)
-@pytest.mark.usefixtures("enabled_cache")
+@pytest.mark.usefixtures("enabled_cache", "tzlocal_is_mtl")
 def test_fetch_slurmconfig_legacy(cli_main, test_config, remote, caplog):
     """test that fetch slurmconfig correctly handles legacy cached files"""
     caplog.set_level(logging.INFO)
