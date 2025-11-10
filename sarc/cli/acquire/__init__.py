@@ -6,9 +6,7 @@ from simple_parsing import subparsers
 from sarc.cli.acquire.allocations import AcquireAllocations
 from sarc.cli.acquire.jobs import AcquireJobs
 from sarc.cli.acquire.prometheus import AcquirePrometheus
-from sarc.cli.acquire.slurmconfig import AcquireSlurmConfig
 from sarc.cli.acquire.storages import AcquireStorages
-from sarc.cli.acquire.users import AcquireUsers
 
 
 @dataclass
@@ -18,8 +16,6 @@ class Acquire:
             "allocations": AcquireAllocations,
             "jobs": AcquireJobs,
             "storages": AcquireStorages,
-            "users": AcquireUsers,
-            "slurmconfig": AcquireSlurmConfig,
             "prometheus": AcquirePrometheus,
         }
     )

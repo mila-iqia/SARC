@@ -12,9 +12,8 @@ from opentelemetry.trace import StatusCode
 from sarc.client.job import JobStatistics, get_jobs, get_available_clusters
 from sarc.config import MTL, UTC
 from sarc.jobs import prometheus_scraping
-
 from .factory import create_sacct_json
-from ..cli.acquire.test_acquire_slurmconfig import _save_slurm_conf
+from ..cli.test_slurmconfig_fetch_parse import _save_slurm_conf
 from ...common.dateutils import _dtfmt, _dtstr, _dtreg
 
 
@@ -104,12 +103,10 @@ def test_get_gpu_type(
     assert (
         cli_main(
             [
-                "acquire",
+                "parse",
                 "slurmconfig",
                 "--cluster_name",
                 "raisin",
-                "--day",
-                "2023-02-15",
             ]
         )
         == 0

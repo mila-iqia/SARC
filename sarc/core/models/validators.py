@@ -14,7 +14,7 @@ END_TIME = datetime(year=3000, month=1, day=1, tzinfo=UTC)
 class DatetimeUTCValidator:
     def validate_tz_utc(self, value: datetime, handler: Callable):
         assert value.tzinfo is not None, "date is not tz-aware"
-        assert value.utcoffset() == UTCOFFSET, "date in not in UTC timezone"
+        assert value.utcoffset() == UTCOFFSET, "date is not in UTC timezone"
 
         return handler(value)
 
