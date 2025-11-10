@@ -6,6 +6,8 @@ __pycache__/
 .coverage
 .coverage.*
 .pytest_cache
+.mypy_cache
+.ruff_cache
 .envrc
 clockwork_ldap.crt
 clockwork_ldap.key
