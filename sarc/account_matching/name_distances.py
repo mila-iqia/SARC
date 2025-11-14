@@ -1,22 +1,38 @@
 from collections import defaultdict
 from collections.abc import Iterable
-
+from copy import deepcopy
 
 def bag_of_words_projection(name: str) -> dict[str, int]:
-    letter_counts: dict[str, int] = defaultdict(int)
-    for c in name:
-        if c in " -":
-            # skipping spaces and hyphens
-            pass
-        c = c.lower()
-        if c in "éèëê":
-            c = "e"
-        if c in "ç":
-            c = "c"
-        if c in "îï":
-            c = "i"
-        letter_counts[c] += 1
-    return letter_counts
+    word_counts: dict[str, int] = defaultdict(int)
+    translation_table = str.maketrans({
+        "-": " ",
+        "é": "e",
+        "è": "e",
+        "ë": "e",
+        "ê": "e",
+        "ç": "c",
+        "î": "i",
+        "ï": "i",
+        "à": "a",
+        "â": "a",
+        "ä": "a",
+        "ô": "o",
+        "ö": "o",
+        "û": "u",
+        "ü": "u",
+        "ù": "u",
+        "ú": "u",
+        "ý": "y",
+        "ÿ": "y",
+        "œ": "oe",
+        "æ": "ae",
+        "ø": "o",
+        "å": "a"})
+    name = name.lower().translate(translation_table)
+    words = name.split()
+    for w in words:
+        word_counts[w] += 1
+    return word_counts
 
 
 def bow_distance(bow_A: dict[str, int], bow_B: dict[str, int]) -> int:
@@ -24,9 +40,11 @@ def bow_distance(bow_A: dict[str, int], bow_B: dict[str, int]) -> int:
     For each letter, add how much the counts differ.
     Return the total.
     """
+    bow_A = deepcopy(bow_A)
+    bow_B = deepcopy(bow_B)
     distance = 0
-    all_letters = set(bow_A.keys()) | set(bow_B.keys())
-    for k in all_letters:
+    all_words = set(bow_A.keys()) | set(bow_B.keys())
+    for k in all_words:
         distance += abs(bow_A[k] - bow_B[k])
     return distance
 
