@@ -140,6 +140,10 @@ def perform_matching(
         )
         for D_member in LD_members:
             assert D_member["email"].endswith("@mila.quebec")
+            if D_member["username"] in override_matches_mila_to_cc.values():
+                if verbose:
+                    logger.info(f"Ignoring cc username {D_member['username']} (override list).")
+                continue
             if D_member["email"] in S_mila_emails_to_ignore:
                 if verbose:
                     logger.info(f"Ignoring phantom {D_member['email']} (ignore list).")
