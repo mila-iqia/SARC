@@ -222,11 +222,18 @@ def _matching_names(
                 # A match was selected.
 
                 # Find which entry of `DD_persons` corresponds to `mila_display_name`
-                D_person_found = [
+                D_persons_found = [
                     D_person
                     for D_person in DD_persons.values()
                     if D_person["mila_ldap"]["display_name"] == mila_display_name  # type: ignore[index]
-                ][0]
+                ]
+                # we can have complete homonyms, so we need to handle this case
+                # by ignoring mathcing names for this entry; handle it manually in the override_matches_mila_to_cc dictionary
+                if len(D_persons_found) > 1:
+                    logger.warning(f"Found {len(D_persons_found)} homonyms for {mila_display_name}; ignoring name matching for this entry")
+                    continue
+                D_person_found = D_persons_found[0]
+
                 # Find match that corresponds to `cc_match`.
                 match = [e for e in DLD_data[cc_source] if e[name_or_nom] == cc_match][
                     0
