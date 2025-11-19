@@ -299,3 +299,193 @@ def test_count_jobs_matches_query_length(client):
     count = response_count.json()
 
     assert len(jobs) == count
+
+
+@pytest.mark.usefixtures("read_only_db_with_users")
+def test_cluster_list(client):
+    """Test cluster list."""
+    response = client.get("/v0/cluster/list")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) > 0
+    for cluster_name in ("raisin", "fromage", "patate"):
+        assert cluster_name in data
+
+
+def _gen_fake_rgus():
+    """Mock for sarc.client.gpumetrics.get_rgus()"""
+    return {
+        "A100": 3.21,
+        "gpu1": 1.5,
+        "gpu_2": 4.5,
+        "GPU 3": 4 * 7,
+    }
+
+
+@pytest.mark.usefixtures("read_only_db_with_users")
+def test_gpu_rgu(client, monkeypatch):
+    monkeypatch.setattr("sarc.api.v0.get_rgus", _gen_fake_rgus)
+
+    response = client.get("/v0/gpu/rgu")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, dict)
+    assert data == _gen_fake_rgus()
+
+
+@pytest.mark.usefixtures("read_only_db_with_users")
+def test_user_query_by_display_name(client):
+    response = client.get("/v0/user/query?display_name=janE")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) == 1
+    assert data[0] == "1f9b04e5-0ec4-4577-9196-2b03d254e344"
+
+    r = client.get(f"/v0/user/id/{data[0]}")
+    assert r.status_code == 200
+    user = r.json()
+    assert isinstance(user, dict)
+    assert user["display_name"] == "Jane Doe"
+    assert user["uuid"] == data[0]
+    assert user["email"] == "jdoe@example.com"
+
+
+@pytest.mark.usefixtures("read_only_db_with_users")
+def test_user_query_by_email(client):
+    response = client.get("/v0/user/query?email=bonhomme@mila.quebec")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) == 1
+    assert data[0] == "5a8b9e7f-afcc-4ced-b596-44fcdb3a0cff"
+
+    r = client.get(f"/v0/user/id/{data[0]}")
+    assert r.status_code == 200
+    user = r.json()
+    assert isinstance(user, dict)
+    assert user["display_name"] == "M/Ms Bonhomme"
+    assert user["uuid"] == data[0]
+    assert user["email"] == "bonhomme@mila.quebec"
+
+
+@pytest.mark.usefixtures("read_only_db_with_users")
+def test_user_query_by_member_type(client):
+    response = client.get("/v0/user/query?member_type=professor")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) == 3
+    assert sorted(data) == [
+        "1f9b04e5-0ec4-4577-9196-2b03d254e344",
+        "7ecd3a8a-ab71-499e-b38a-ceacd91a99c4",
+        "7ee5849c-241e-4d84-a4d2-1f73e22784f9",
+    ]
+
+    r = client.get("/v0/user/query?member_type=staff")
+    assert r.status_code == 200
+    data = r.json()
+    assert isinstance(data, list)
+    assert len(data) == 1
+    assert sorted(data) == ["8b4fef2b-8f47-4eb6-9992-3e7e1133b42a"]
+
+
+@pytest.mark.usefixtures("read_only_db_with_users")
+def test_user_query_by_supervisor(client):
+    response = client.get(
+        "/v0/user/query?supervisor=1f9b04e5-0ec4-4577-9196-2b03d254e344"
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) == 2
+    assert sorted(data) == [
+        "7ecd3a8a-ab71-499e-b38a-ceacd91a99c4",
+        "7ee5849c-241e-4d84-a4d2-1f73e22784f9",
+    ]
+
+
+@pytest.mark.usefixtures("read_only_db_with_users")
+def test_user_query_by_cosupervisor(client):
+    response = client.get(
+        "/v0/user/query?co_supervisor=1f9b04e5-0ec4-4577-9196-2b03d254e344"
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) == 1
+    assert sorted(data) == ["8b4fef2b-8f47-4eb6-9992-3e7e1133b42a"]
+
+
+@pytest.mark.usefixtures("read_only_db_with_users")
+def test_user_query_empty_result(client):
+    response = client.get("/v0/user/query?email=nothing@nothing.nothing")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) == 0
+
+
+@pytest.mark.usefixtures("read_only_db_with_users")
+def test_user_query_no_filters(client):
+    response = client.get("/v0/user/query")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) == 10
+
+
+@pytest.mark.usefixtures("read_only_db_with_users")
+def test_user_query_multiple_filters(client):
+    response = client.get(
+        "/v0/user/query?supervisor=1f9b04e5-0ec4-4577-9196-2b03d254e344&display_name=sMiTh"
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) == 1
+    assert data[0] == "7ecd3a8a-ab71-499e-b38a-ceacd91a99c4"
+
+    r = client.get(f"/v0/user/id/{data[0]}")
+    assert r.status_code == 200
+    user = r.json()
+    assert isinstance(user, dict)
+    assert user["display_name"] == "John Smith"
+    assert user["uuid"] == data[0]
+
+
+@pytest.mark.usefixtures("read_only_db_with_users")
+def test_get_user_by_uuid(client):
+    response = client.get("/v0/user/id/7ecd3a8a-ab71-499e-b38a-ceacd91a99c4")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, dict)
+    assert data["email"] == "jsmith@example.com"
+
+
+@pytest.mark.usefixtures("read_only_db_with_users")
+def test_get_user_by_uuid_invalid(client):
+    response = client.get("/v0/user/id/invalid")
+    assert response.status_code == 422
+
+
+@pytest.mark.usefixtures("read_only_db_with_users")
+def test_get_user_by_uuid_unknown(client):
+    response = client.get("/v0/user/id/70000000-a000-4000-b000-c00000000000")
+    assert response.status_code == 404
+
+
+@pytest.mark.usefixtures("read_only_db_with_users")
+def test_get_user_by_email(client):
+    response = client.get("/v0/user/email/jsmith@example.com")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, dict)
+    assert data["uuid"] == "7ecd3a8a-ab71-499e-b38a-ceacd91a99c4"
+
+
+@pytest.mark.usefixtures("read_only_db_with_users")
+def test_get_user_by_email_unknown(client):
+    response = client.get("/v0/user/email/unknown")
+    assert response.status_code == 404
