@@ -113,16 +113,19 @@ def get_job(oid: PydanticObjectId) -> SlurmJob:
 
 @router.get("/cluster/list")
 def get_cluster_names() -> list[str]:
+    """Return the names of available clusters."""
     return sorted(cl.cluster_name for cl in get_available_clusters())
 
 
 @router.get("/gpu/rgu")
 def get_rgu_value_per_gpu() -> dict[str, float]:
+    """Return the mapping GPU->RGU."""
     return get_rgus()
 
 
 @router.get("/user/query")
 def query_users(query_opt: UserQueryType) -> list[UUID4]:
+    """Search users. Return user UUIDs."""
     coll = get_user_collection()
     users = coll.get_collection().find(query_opt.get_query(), ["uuid"])
     return [user["uuid"] for user in users]
@@ -130,6 +133,7 @@ def query_users(query_opt: UserQueryType) -> list[UUID4]:
 
 @router.get("/user/id/{uuid}")
 def get_user_by_id(uuid: UUID4) -> UserData:
+    """Get user with given UUID."""
     user = get_user_collection().find_one_by({"uuid": uuid})
     if user is None:
         raise HTTPException(
@@ -140,6 +144,7 @@ def get_user_by_id(uuid: UUID4) -> UserData:
 
 @router.get("/user/email/{email}")
 def get_user_by_email(email: str) -> UserData:
+    """Get user with given email."""
     user = get_user_collection().find_one_by({"email": email})
     if user is None:
         raise HTTPException(
