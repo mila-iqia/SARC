@@ -109,9 +109,7 @@ class MilaLDAPScraper(UserScraper[MilaLDAPConfig]):
             )
         ).encode()
 
-    def parse_user_data(
-        self, _config: MilaLDAPConfig, data: bytes
-    ) -> Iterable[UserMatch]:
+    def parse_user_data(self, data: bytes) -> Iterable[UserMatch]:
         """
         mail[0]        -> mila_email_username  (includes the "@mila.quebec")
         posixUid[0]    -> mila_cluster_username
