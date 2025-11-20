@@ -12,6 +12,8 @@ from sarc.client.job import (
     _jobs_collection,
     get_available_clusters,
 )
+from sarc.config import UTC
+from sarc.core.models import validators
 from sarc.core.models.users import MemberType, UserData
 from sarc.users.db import get_user_collection
 
@@ -65,9 +67,57 @@ JobQueryType = Annotated[JobQuery, Depends(JobQuery)]
 class UserQuery(BaseModel):
     display_name: str | None = None
     email: str | None = None
+
     member_type: MemberType | None = None
+    member_start: datetime | None = None
+    member_end: datetime | None = None
+
     supervisor: UUID4 | None = None
+    supervisor_start: datetime | None = None
+    supervisor_end: datetime | None = None
+
     co_supervisor: UUID4 | None = None
+    co_supervisor_start: datetime | None = None
+    co_supervisor_end: datetime | None = None
+
+    def _get_valid_tag_query(
+        self,
+        value_field: str,
+        start_field: str,
+        end_field: str,
+        field: str | None = None,
+    ) -> dict[str, Any]:
+        value = getattr(self, value_field)
+        start = getattr(self, start_field)
+        end = getattr(self, end_field)
+        if value is not None:
+            now = datetime.now(UTC)
+            if start is None and end is None:
+                # Look for tag matching current time [now, now]
+                start = now
+                end = now
+            elif end is None:
+                # Look for tags that overlap [start, +inf)
+                end = validators.END_TIME
+            elif start is None:
+                # Look for tags that overlap (-inf, end]
+                start = validators.START_TIME
+            if start > end:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Expected {start_field} <= {end_field}",
+                )
+            field = field or value_field
+            return {
+                f"{field}.values": {
+                    "$elemMatch": {
+                        "value": value,
+                        "valid_start": {"$lte": end},
+                        "valid_end": {"$gte": start},
+                    }
+                }
+            }
+        return {}
 
     def get_query(self) -> dict[str, Any]:
         query: dict[str, Any] = {}
@@ -75,12 +125,22 @@ class UserQuery(BaseModel):
             query["display_name"] = {"$regex": self.display_name, "$options": "i"}
         if self.email is not None:
             query["email"] = self.email
-        if self.member_type is not None:
-            query["member_type.values.value"] = self.member_type
-        if self.supervisor is not None:
-            query["supervisor.values.value"] = self.supervisor
-        if self.co_supervisor is not None:
-            query["co_supervisors.values.value"] = self.co_supervisor
+        query.update(
+            self._get_valid_tag_query("member_type", "member_start", "member_end")
+        )
+        query.update(
+            self._get_valid_tag_query(
+                "supervisor", "supervisor_start", "supervisor_end"
+            )
+        )
+        query.update(
+            self._get_valid_tag_query(
+                "co_supervisor",
+                "co_supervisor_start",
+                "co_supervisor_end",
+                field="co_supervisors",
+            )
+        )
         return query
 
 
