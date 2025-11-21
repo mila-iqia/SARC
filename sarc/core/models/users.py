@@ -10,7 +10,7 @@ class Credentials(ValidField[str]):
     pass
 
 
-class MemberType(Enum):
+class MemberType(str, Enum):
     MASTER_STUDENT = "master"
     PHD_STUDENT = "phd"
     POSTDOC = "postdoc"
