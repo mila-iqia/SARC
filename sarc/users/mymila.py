@@ -121,9 +121,7 @@ class MyMilaScraper(UserScraper[MyMilaConfig]):
     def get_user_data(self, config: MyMilaConfig) -> bytes:
         return json.dumps(_query_mymila(config), default=_json_serial).encode()
 
-    def parse_user_data(
-        self, _config: MyMilaConfig, data: bytes
-    ) -> Iterable[UserMatch]:
+    def parse_user_data(self, data: bytes) -> Iterable[UserMatch]:
         records, headers = json.loads(data.decode())
         headers = [h.replace("-", "_") for h in headers]
         assert headers[-1] == "_MEMBER_NUM_"
