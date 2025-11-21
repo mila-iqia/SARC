@@ -84,7 +84,7 @@ def tzlocal_is_mtl(monkeypatch):
         "sarc.cli.acquire.jobs.TZLOCAL", zoneinfo.ZoneInfo("America/Montreal")
     )
     monkeypatch.setattr(
-        "sarc.cli.acquire.slurmconfig.TZLOCAL", zoneinfo.ZoneInfo("America/Montreal")
+        "sarc.cli.fetch.slurmconfig.TZLOCAL", zoneinfo.ZoneInfo("America/Montreal")
     )
 
 

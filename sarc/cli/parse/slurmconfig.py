@@ -4,32 +4,24 @@ import io
 import logging
 from dataclasses import dataclass
 from datetime import datetime
-from typing import IO, Any, cast, Iterator
+from typing import Iterator, IO, cast
 
 from hostlist import expand_hostlist
+from pydantic import BaseModel
 from simple_parsing import field
 
-from sarc.cache import CachePolicy, FormatterProto, with_cache
+from sarc.cache import Cache
 from sarc.client.gpumetrics import _gpu_billing_collection
-from sarc.config import ClusterConfig, config, UTC, TZLOCAL
+from sarc.config import config, ClusterConfig, UTC
+from sarc.core.models.validators import datetime_utc, UTCOFFSET
 from sarc.jobs.node_gpu_mapping import _node_gpu_mapping_collection
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
-class AcquireSlurmConfig:
+class ParseSlurmConfig:
     cluster_name: str = field(alias=["-c"])
-    day: str = field(
-        alias=["-d"],
-        required=False,
-        help=(
-            "Cluster config file date (format YYYY-MM-DD). "
-            "Used for file versioning. Should represent day when config file has been downloaded. "
-            "If not specified, uses current day and downloads config file from cluster. "
-            "NB: Day is assumed to be in local timezone."
-        ),
-    )
     threshold: float = field(
         alias=["-t"],
         required=False,
@@ -39,103 +31,61 @@ class AcquireSlurmConfig:
             "Default is 0.1 (%%)."
         ),
     )
+    since: str | None = field(
+        alias=["-s"],
+        required=False,
+        default=None,
+        help=(
+            "Start parsing the cache from the specified date. "
+            "Must be in ISO format. If timezone is not specified, interpreted as UTC. "
+            "Default: oldest date in cache."
+        ),
+    )
 
     def execute(self) -> int:
-        parse_gpu_billing = True
-        if self.cluster_name == "mila":
-            logger.warning(
-                "GPU billing won't be parsed on cluster `mila`, "
-                "since billing is directly expressed as number of GPUs on this cluster."
-            )
-            parse_gpu_billing = False
+        cache = Cache(subdirectory=f"slurm_conf/{self.cluster_name}")
+
+        if self.since is None:
+            ts = cache.oldest_year()
+        else:
+            ts = datetime.fromisoformat(self.since)
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=UTC)
+            ts = ts.astimezone(UTC)
+        logger.info(f"Parsing since: {ts}")
 
         cluster_config = config("scraping").clusters[self.cluster_name]
-        parser = SlurmConfigParser(
-            cluster_config,
-            datetime.strptime(self.day, "%Y-%m-%d").replace(tzinfo=TZLOCAL),
-            parse_gpu_billing=parse_gpu_billing,
-            threshold=self.threshold,
-        )
-        slurm_conf = parser.get_slurm_config()
-        if slurm_conf.gpu_to_billing is not None:
-            _gpu_billing_collection().save_gpu_billing(
-                self.cluster_name, parser.day.astimezone(UTC), slurm_conf.gpu_to_billing
+        if cluster_config.billing_is_gpu:
+            logger.warning(
+                f"GPU billing won't be parsed on cluster `{cluster_config.name}`, "
+                "since billing is directly expressed as number of GPUs on this cluster."
             )
-        _node_gpu_mapping_collection().save_node_gpu_mapping(
-            self.cluster_name, parser.day.astimezone(UTC), slurm_conf.node_to_gpus
-        )
+
+        for cache_entry in cache.read_from(ts):
+            ((key, blob),) = cache_entry.items()
+
+            cache_date: datetime_utc = datetime.fromisoformat(key)
+            assert cache_date.tzinfo is not None, "date is not tz-aware"
+            assert cache_date.utcoffset() == UTCOFFSET, "date is not in UTC timezone"
+
+            content = blob.decode(encoding="utf-8")
+
+            logger.info(f"Parsing at {cache_date}")
+            parser = SlurmConfigParser(cluster=cluster_config, threshold=self.threshold)
+            slurm_conf = parser.load(io.StringIO(content))
+            if slurm_conf.gpu_to_billing is not None:
+                _gpu_billing_collection().save_gpu_billing(
+                    self.cluster_name, cache_date, slurm_conf.gpu_to_billing
+                )
+            _node_gpu_mapping_collection().save_node_gpu_mapping(
+                self.cluster_name, cache_date, slurm_conf.node_to_gpus
+            )
         return 0
 
 
-class FileContent(FormatterProto[str]):
-    """
-    Formatter for slurm conf file cache.
-    Just read and write entire text content from file.
-    """
-
-    read_flags = "r"
-    write_flags = "w"
-
-    @staticmethod
-    def load(fp: IO[Any]) -> str:
-        return fp.read()
-
-    @staticmethod
-    def dump(obj: str, fp: IO[Any]):
-        fp.write(obj)
-
-
-class SlurmConfigParser:
-    def __init__(
-        self,
-        cluster: ClusterConfig,
-        day: datetime | None = None,
-        parse_gpu_billing: bool = True,
-        threshold: float = 0.1,
-    ):
-        if day is None:
-            # No day given, get current day
-            day = datetime.now(tz=TZLOCAL).replace(
-                hour=0, minute=0, second=0, microsecond=0
-            )
-            # Cache must download slurm conf file and save it locally.
-            cache_policy = CachePolicy.use
-            logger.info(f"Looking for config file at current date: {day}")
-        else:
-            # Day given. Slurm conf file must be retrieved from cache only.
-            cache_policy = CachePolicy.always
-
-        # We want a day, i.e. datetime at 00h 00min 00sec 00microsec
-        assert (
-            day.hour == 0
-            and day.minute == 0
-            and day.second == 0
-            and day.microsecond == 0
-        ), day
-
-        self.cluster = cluster
-        self.day: datetime = day
-        self.cache_policy = cache_policy
-        self.parse_gpu_billing = bool(parse_gpu_billing)
-        self.threshold = threshold
-
-    def get_slurm_config(self) -> SlurmConfig:
-        content = with_cache(
-            self._get_slurm_conf,
-            subdirectory="slurm_conf",
-            key=self._cache_key,
-            formatter=FileContent,
-        )(cache_policy=self.cache_policy)
-        return self.load(io.StringIO(content))
-
-    def _get_slurm_conf(self) -> str:
-        cmd = f"cat {self.cluster.slurm_conf_host_path}"
-        result = self.cluster.ssh.run(cmd, hide=True)
-        return result.stdout
-
-    def _cache_key(self) -> str:
-        day_str = self.day.strftime("%Y-%m-%d")
-        return f"slurm.{self.cluster.name}.{day_str}.conf"
+class SlurmConfigParser(BaseModel):
+    cluster: ClusterConfig
+    threshold: float
 
     @classmethod
     def _file_lines(cls, file) -> Iterator[tuple[int, str]]:
@@ -201,10 +151,11 @@ class SlurmConfigParser:
                     )
 
         # Parse partitions: extract gpu_to_billing
+        # only if billing is not GPU count on this cluster.
         gpu_to_billing = (
-            self._parse_gpu_to_billing(partitions, node_to_gpus)
-            if self.parse_gpu_billing
-            else None
+            None
+            if self.cluster.billing_is_gpu
+            else self._parse_gpu_to_billing(partitions, node_to_gpus)
         )
 
         # Return parsed data
