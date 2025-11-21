@@ -18,6 +18,8 @@ rapporteur_report: Report | None = None
 
 
 def getOpenTelemetryLoggingHandler(log_conf: LoggingConfig):
+    if log_conf.OTLP_endpoint is None or log_conf.service_name is None:
+        return None
     logger_provider = LoggerProvider(
         resource=Resource.create(
             {
@@ -85,15 +87,17 @@ def setupLogging(verbose_level: int = 0):
         console_handler.setLevel(logging.NOTSET)  # Let logger level control filtering
 
         # Configure OpenTelemetry handler
-        ot_handler.setFormatter(formatter)  # Apply the same formatter
-        ot_handler.setLevel(logging.NOTSET)  # Let logger level control filtering
+        if ot_handler is not None:
+            ot_handler.setFormatter(formatter)  # Apply the same formatter
+            ot_handler.setLevel(logging.NOTSET)  # Let logger level control filtering
 
         # Clear any existing handlers and configure logging
         root_logger = logging.getLogger()
         root_logger.handlers.clear()  # Remove any existing handlers
 
         # Add our handlers
-        root_logger.addHandler(ot_handler)
+        if ot_handler is not None:
+            root_logger.addHandler(ot_handler)
         root_logger.addHandler(console_handler)
 
         # Set the logger level (this controls what messages get processed)
