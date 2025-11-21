@@ -1,0 +1,1436 @@
+{
+ "openapi": "3.1.0",
+ "info": {
+  "title": "FastAPI",
+  "version": "0.1.0"
+ },
+ "paths": {
+  "/v0/job/query": {
+   "get": {
+    "summary": "Get Jobs",
+    "operationId": "get_jobs_v0_job_query_get",
+    "parameters": [
+     {
+      "name": "cluster",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Cluster"
+      }
+     },
+     {
+      "name": "job_id",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Job Id"
+      }
+     },
+     {
+      "name": "job_state",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "$ref": "#/components/schemas/SlurmState"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Job State"
+      }
+     },
+     {
+      "name": "username",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Username"
+      }
+     },
+     {
+      "name": "start",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string",
+         "format": "date-time"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Start"
+      }
+     },
+     {
+      "name": "end",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string",
+         "format": "date-time"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "End"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "type": "string"
+         },
+         "title": "Response Get Jobs V0 Job Query Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/v0/job/count": {
+   "get": {
+    "summary": "Count Jobs",
+    "operationId": "count_jobs_v0_job_count_get",
+    "parameters": [
+     {
+      "name": "cluster",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Cluster"
+      }
+     },
+     {
+      "name": "job_id",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Job Id"
+      }
+     },
+     {
+      "name": "job_state",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "$ref": "#/components/schemas/SlurmState"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Job State"
+      }
+     },
+     {
+      "name": "username",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Username"
+      }
+     },
+     {
+      "name": "start",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string",
+         "format": "date-time"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Start"
+      }
+     },
+     {
+      "name": "end",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string",
+         "format": "date-time"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "End"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "integer",
+         "title": "Response Count Jobs V0 Job Count Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/v0/job/id/{oid}": {
+   "get": {
+    "summary": "Get Job",
+    "operationId": "get_job_v0_job_id__oid__get",
+    "parameters": [
+     {
+      "name": "oid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Oid"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/SlurmJob"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/v0/cluster/list": {
+   "get": {
+    "summary": "Get Cluster Names",
+    "description": "Return the names of available clusters.",
+    "operationId": "get_cluster_names_v0_cluster_list_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "items": {
+          "type": "string"
+         },
+         "type": "array",
+         "title": "Response Get Cluster Names V0 Cluster List Get"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/v0/gpu/rgu": {
+   "get": {
+    "summary": "Get Rgu Value Per Gpu",
+    "description": "Return the mapping GPU->RGU.",
+    "operationId": "get_rgu_value_per_gpu_v0_gpu_rgu_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": {
+          "type": "number"
+         },
+         "type": "object",
+         "title": "Response Get Rgu Value Per Gpu V0 Gpu Rgu Get"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/v0/user/query": {
+   "get": {
+    "summary": "Query Users",
+    "description": "Search users. Return user UUIDs.",
+    "operationId": "query_users_v0_user_query_get",
+    "parameters": [
+     {
+      "name": "display_name",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Display Name"
+      }
+     },
+     {
+      "name": "email",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Email"
+      }
+     },
+     {
+      "name": "member_type",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "$ref": "#/components/schemas/MemberType"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Member Type"
+      }
+     },
+     {
+      "name": "member_start",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string",
+         "format": "date-time"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Member Start"
+      }
+     },
+     {
+      "name": "member_end",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string",
+         "format": "date-time"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Member End"
+      }
+     },
+     {
+      "name": "supervisor",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string",
+         "format": "uuid4"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Supervisor"
+      }
+     },
+     {
+      "name": "supervisor_start",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string",
+         "format": "date-time"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Supervisor Start"
+      }
+     },
+     {
+      "name": "supervisor_end",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string",
+         "format": "date-time"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Supervisor End"
+      }
+     },
+     {
+      "name": "co_supervisor",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string",
+         "format": "uuid4"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Co Supervisor"
+      }
+     },
+     {
+      "name": "co_supervisor_start",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string",
+         "format": "date-time"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Co Supervisor Start"
+      }
+     },
+     {
+      "name": "co_supervisor_end",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string",
+         "format": "date-time"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Co Supervisor End"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "type": "string",
+          "format": "uuid4"
+         },
+         "title": "Response Query Users V0 User Query Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/v0/user/id/{uuid}": {
+   "get": {
+    "summary": "Get User By Id",
+    "description": "Get user with given UUID.",
+    "operationId": "get_user_by_id_v0_user_id__uuid__get",
+    "parameters": [
+     {
+      "name": "uuid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid4",
+       "title": "Uuid"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/UserData"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/v0/user/email/{email}": {
+   "get": {
+    "summary": "Get User By Email",
+    "description": "Get user with given email.",
+    "operationId": "get_user_by_email_v0_user_email__email__get",
+    "parameters": [
+     {
+      "name": "email",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Email"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/UserData"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  }
+ },
+ "components": {
+  "schemas": {
+   "Credentials": {
+    "properties": {
+     "values": {
+      "items": {
+       "$ref": "#/components/schemas/ValidTag_str_"
+      },
+      "type": "array",
+      "title": "Values"
+     }
+    },
+    "type": "object",
+    "title": "Credentials"
+   },
+   "HTTPValidationError": {
+    "properties": {
+     "detail": {
+      "items": {
+       "$ref": "#/components/schemas/ValidationError"
+      },
+      "type": "array",
+      "title": "Detail"
+     }
+    },
+    "type": "object",
+    "title": "HTTPValidationError"
+   },
+   "JobStatistics": {
+    "properties": {
+     "gpu_utilization": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/Statistics"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "gpu_utilization_fp16": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/Statistics"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "gpu_utilization_fp32": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/Statistics"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "gpu_utilization_fp64": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/Statistics"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "gpu_sm_occupancy": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/Statistics"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "gpu_memory": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/Statistics"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "gpu_power": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/Statistics"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "cpu_utilization": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/Statistics"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "system_memory": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/Statistics"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     }
+    },
+    "type": "object",
+    "title": "JobStatistics",
+    "description": "Statistics for a job."
+   },
+   "MemberType": {
+    "type": "string",
+    "enum": [
+     "master",
+     "phd",
+     "postdoc",
+     "professor",
+     "staff",
+     "intern"
+    ],
+    "title": "MemberType"
+   },
+   "SlurmJob": {
+    "properties": {
+     "id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Id"
+     },
+     "cluster_name": {
+      "type": "string",
+      "title": "Cluster Name"
+     },
+     "account": {
+      "type": "string",
+      "title": "Account"
+     },
+     "job_id": {
+      "type": "integer",
+      "title": "Job Id"
+     },
+     "array_job_id": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Array Job Id"
+     },
+     "task_id": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Task Id"
+     },
+     "name": {
+      "type": "string",
+      "title": "Name"
+     },
+     "user": {
+      "type": "string",
+      "title": "User"
+     },
+     "group": {
+      "type": "string",
+      "title": "Group"
+     },
+     "job_state": {
+      "$ref": "#/components/schemas/SlurmState"
+     },
+     "exit_code": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Exit Code"
+     },
+     "signal": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Signal"
+     },
+     "partition": {
+      "type": "string",
+      "title": "Partition"
+     },
+     "nodes": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "title": "Nodes"
+     },
+     "work_dir": {
+      "type": "string",
+      "title": "Work Dir"
+     },
+     "constraints": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Constraints"
+     },
+     "priority": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Priority"
+     },
+     "qos": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Qos"
+     },
+     "CLEAR_SCHEDULING": {
+      "type": "boolean",
+      "title": "Clear Scheduling",
+      "default": false
+     },
+     "STARTED_ON_SUBMIT": {
+      "type": "boolean",
+      "title": "Started On Submit",
+      "default": false
+     },
+     "STARTED_ON_SCHEDULE": {
+      "type": "boolean",
+      "title": "Started On Schedule",
+      "default": false
+     },
+     "STARTED_ON_BACKFILL": {
+      "type": "boolean",
+      "title": "Started On Backfill",
+      "default": false
+     },
+     "time_limit": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Time Limit"
+     },
+     "submit_time": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Submit Time"
+     },
+     "start_time": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "date-time"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Start Time"
+     },
+     "end_time": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "date-time"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "End Time"
+     },
+     "elapsed_time": {
+      "type": "number",
+      "title": "Elapsed Time"
+     },
+     "latest_scraped_start": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "date-time"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Latest Scraped Start"
+     },
+     "latest_scraped_end": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "date-time"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Latest Scraped End"
+     },
+     "requested": {
+      "$ref": "#/components/schemas/SlurmResources"
+     },
+     "allocated": {
+      "$ref": "#/components/schemas/SlurmResources"
+     },
+     "stored_statistics": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/JobStatistics"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     }
+    },
+    "type": "object",
+    "required": [
+     "cluster_name",
+     "account",
+     "job_id",
+     "name",
+     "user",
+     "group",
+     "job_state",
+     "partition",
+     "nodes",
+     "work_dir",
+     "submit_time",
+     "elapsed_time",
+     "requested",
+     "allocated"
+    ],
+    "title": "SlurmJob",
+    "description": "Holds data for a Slurm job."
+   },
+   "SlurmResources": {
+    "properties": {
+     "cpu": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Cpu"
+     },
+     "mem": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Mem"
+     },
+     "node": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Node"
+     },
+     "billing": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Billing"
+     },
+     "gres_gpu": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Gres Gpu"
+     },
+     "gpu_type": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Gpu Type"
+     }
+    },
+    "type": "object",
+    "title": "SlurmResources",
+    "description": "Counts for various resources."
+   },
+   "SlurmState": {
+    "type": "string",
+    "enum": [
+     "BOOT_FAIL",
+     "CANCELLED",
+     "COMPLETED",
+     "CONFIGURING",
+     "COMPLETING",
+     "DEADLINE",
+     "FAILED",
+     "NODE_FAIL",
+     "OUT_OF_MEMORY",
+     "PENDING",
+     "PREEMPTED",
+     "RUNNING",
+     "RESV_DEL_HOLD",
+     "REQUEUE_FED",
+     "REQUEUE_HOLD",
+     "REQUEUED",
+     "RESIZING",
+     "REVOKED",
+     "SIGNALING",
+     "SPECIAL_EXIT",
+     "STAGE_OUT",
+     "STOPPED",
+     "SUSPENDED",
+     "TIMEOUT"
+    ],
+    "title": "SlurmState",
+    "description": "Possible Slurm job states.\n\nReference: https://slurm.schedmd.com/squeue.html#SECTION_JOB-STATE-CODES"
+   },
+   "Statistics": {
+    "properties": {
+     "mean": {
+      "type": "number",
+      "title": "Mean"
+     },
+     "std": {
+      "type": "number",
+      "title": "Std"
+     },
+     "q05": {
+      "type": "number",
+      "title": "Q05"
+     },
+     "q25": {
+      "type": "number",
+      "title": "Q25"
+     },
+     "median": {
+      "type": "number",
+      "title": "Median"
+     },
+     "q75": {
+      "type": "number",
+      "title": "Q75"
+     },
+     "max": {
+      "type": "number",
+      "title": "Max"
+     },
+     "unused": {
+      "type": "integer",
+      "title": "Unused"
+     }
+    },
+    "type": "object",
+    "required": [
+     "mean",
+     "std",
+     "q05",
+     "q25",
+     "median",
+     "q75",
+     "max",
+     "unused"
+    ],
+    "title": "Statistics",
+    "description": "Statistics for a timeseries."
+   },
+   "UserData": {
+    "properties": {
+     "uuid": {
+      "type": "string",
+      "format": "uuid4",
+      "title": "Uuid"
+     },
+     "display_name": {
+      "type": "string",
+      "title": "Display Name"
+     },
+     "email": {
+      "type": "string",
+      "title": "Email"
+     },
+     "matching_ids": {
+      "additionalProperties": {
+       "type": "string"
+      },
+      "type": "object",
+      "title": "Matching Ids"
+     },
+     "member_type": {
+      "$ref": "#/components/schemas/ValidField_MemberType_"
+     },
+     "associated_accounts": {
+      "additionalProperties": {
+       "$ref": "#/components/schemas/Credentials"
+      },
+      "type": "object",
+      "title": "Associated Accounts"
+     },
+     "supervisor": {
+      "$ref": "#/components/schemas/ValidField_Annotated_UUID__UuidVersion__"
+     },
+     "co_supervisors": {
+      "$ref": "#/components/schemas/ValidField_set_Annotated_UUID__UuidVersion___"
+     },
+     "github_username": {
+      "$ref": "#/components/schemas/ValidField_str_"
+     },
+     "google_scholar_profile": {
+      "$ref": "#/components/schemas/ValidField_str_"
+     }
+    },
+    "type": "object",
+    "required": [
+     "display_name",
+     "email",
+     "matching_ids"
+    ],
+    "title": "UserData"
+   },
+   "ValidField_Annotated_UUID__UuidVersion__": {
+    "properties": {
+     "values": {
+      "items": {
+       "$ref": "#/components/schemas/ValidTag_Annotated_UUID__UuidVersion__"
+      },
+      "type": "array",
+      "title": "Values"
+     }
+    },
+    "type": "object",
+    "title": "ValidField[Annotated[UUID, UuidVersion]]"
+   },
+   "ValidField_MemberType_": {
+    "properties": {
+     "values": {
+      "items": {
+       "$ref": "#/components/schemas/ValidTag_MemberType_"
+      },
+      "type": "array",
+      "title": "Values"
+     }
+    },
+    "type": "object",
+    "title": "ValidField[MemberType]"
+   },
+   "ValidField_set_Annotated_UUID__UuidVersion___": {
+    "properties": {
+     "values": {
+      "items": {
+       "$ref": "#/components/schemas/ValidTag_set_Annotated_UUID__UuidVersion___"
+      },
+      "type": "array",
+      "title": "Values"
+     }
+    },
+    "type": "object",
+    "title": "ValidField[set[Annotated[UUID, UuidVersion]]]"
+   },
+   "ValidField_str_": {
+    "properties": {
+     "values": {
+      "items": {
+       "$ref": "#/components/schemas/ValidTag_str_"
+      },
+      "type": "array",
+      "title": "Values"
+     }
+    },
+    "type": "object",
+    "title": "ValidField[str]"
+   },
+   "ValidTag_Annotated_UUID__UuidVersion__": {
+    "properties": {
+     "value": {
+      "type": "string",
+      "format": "uuid4",
+      "title": "Value"
+     },
+     "valid_start": {
+      "$ref": "#/components/schemas/datetime_utc"
+     },
+     "valid_end": {
+      "$ref": "#/components/schemas/datetime_utc"
+     }
+    },
+    "type": "object",
+    "required": [
+     "value",
+     "valid_start",
+     "valid_end"
+    ],
+    "title": "ValidTag[Annotated[UUID, UuidVersion]]"
+   },
+   "ValidTag_MemberType_": {
+    "properties": {
+     "value": {
+      "$ref": "#/components/schemas/MemberType"
+     },
+     "valid_start": {
+      "$ref": "#/components/schemas/datetime_utc"
+     },
+     "valid_end": {
+      "$ref": "#/components/schemas/datetime_utc"
+     }
+    },
+    "type": "object",
+    "required": [
+     "value",
+     "valid_start",
+     "valid_end"
+    ],
+    "title": "ValidTag[MemberType]"
+   },
+   "ValidTag_set_Annotated_UUID__UuidVersion___": {
+    "properties": {
+     "value": {
+      "items": {
+       "type": "string",
+       "format": "uuid4"
+      },
+      "type": "array",
+      "uniqueItems": true,
+      "title": "Value"
+     },
+     "valid_start": {
+      "$ref": "#/components/schemas/datetime_utc"
+     },
+     "valid_end": {
+      "$ref": "#/components/schemas/datetime_utc"
+     }
+    },
+    "type": "object",
+    "required": [
+     "value",
+     "valid_start",
+     "valid_end"
+    ],
+    "title": "ValidTag[set[Annotated[UUID, UuidVersion]]]"
+   },
+   "ValidTag_str_": {
+    "properties": {
+     "value": {
+      "type": "string",
+      "title": "Value"
+     },
+     "valid_start": {
+      "$ref": "#/components/schemas/datetime_utc"
+     },
+     "valid_end": {
+      "$ref": "#/components/schemas/datetime_utc"
+     }
+    },
+    "type": "object",
+    "required": [
+     "value",
+     "valid_start",
+     "valid_end"
+    ],
+    "title": "ValidTag[str]"
+   },
+   "ValidationError": {
+    "properties": {
+     "loc": {
+      "items": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "integer"
+        }
+       ]
+      },
+      "type": "array",
+      "title": "Location"
+     },
+     "msg": {
+      "type": "string",
+      "title": "Message"
+     },
+     "type": {
+      "type": "string",
+      "title": "Error Type"
+     }
+    },
+    "type": "object",
+    "required": [
+     "loc",
+     "msg",
+     "type"
+    ],
+    "title": "ValidationError"
+   },
+   "datetime_utc": {
+    "type": "string",
+    "format": "date-time"
+   }
+  }
+ }
+}
