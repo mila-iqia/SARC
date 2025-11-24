@@ -227,6 +227,11 @@ class ClientConfig:
         assert self.cache
         return self.cache / "lockfile.lock"
 
+    class SerieuxConfig:
+        # Config adds extra fields to ClientConfig, so to be able to read
+        # a Config as a ClientConfig we need allow_extras to be True
+        allow_extras = True
+
 
 @dataclass
 class Config(ClientConfig):

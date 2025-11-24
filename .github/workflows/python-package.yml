@@ -12,12 +12,12 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v6
 
     - name: Set up uv
       uses: astral-sh/setup-uv@v7
       with:
-        version: "0.9.7"
+        version: "0.9.10"
 
     - name: Install MongoDB
       run: |
@@ -38,12 +38,12 @@ jobs:
         toxenv: [ruff, mypy]
 
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v6
 
     - name: Set up uv
       uses: astral-sh/setup-uv@v7
       with:
-        version: "0.9.7"
+        version: "0.9.10"
 
     - name: Tests with tox
       run: uv run tox -e ${{ matrix.toxenv }}
@@ -52,12 +52,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v6
 
     - name: Set up uv
       uses: astral-sh/setup-uv@v7
       with:
-        version: "0.9.7"
+        version: "0.9.10"
 
     - name: Install dependencies
       run: |
