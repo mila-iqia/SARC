@@ -46,7 +46,7 @@ sarc = "sarc.cli:main"
 [dependency-groups]
 dev = [
     "mypy>=1.17.1,<2",
-    "pytest>=8.3.5,<9",
+    "pytest>=9.0.1,<10",
     "pytest-cov>=7,<8",
     "pytest-regressions>=2.7.0,<3,!=2.8.1",
     "tox>=4.25.0,<5",
