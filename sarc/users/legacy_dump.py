@@ -137,8 +137,7 @@ class LegacyDumpScraper(UserScraper[LegacyDumpConfig]):
             drac_data = record.get("drac")
             if drac_data and drac_data.get("username"):
                 drac_creds = Credentials()
-                drac_start = record_start
-                drac_creds.insert(drac_data["username"], drac_start, record_end)
+                drac_creds.insert(drac_data["username"], record_start, record_end)
                 user_match.associated_accounts["drac"] = drac_creds
 
             # Supervisor information

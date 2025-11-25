@@ -216,11 +216,28 @@ def parse_users(from_: datetime) -> Iterable[UserMatch]:
                 for mid in oldest_userm.known_matches:
                     user_refs[mid] = oldest_userm
 
-        # Yield all "primary" UserMatches (those whose reference name match the
-        # original plugin name). We yield after processing a single CacheEntry
-        # to make sure the behaviour stays consistent with the "normal" scraping
-        # operation.
-        for mid, umatch in user_refs.items():
-            if umatch.matching_id != mid:
-                continue
-            yield umatch
+        def _get_refs(um: UserMatch) -> set[MatchID]:
+            res = set[MatchID]()
+            for tag in um.supervisor.values:
+                res.add(tag.value)
+            for tags in um.co_supervisors.values:
+                res.update(tags.value)
+            return res
+
+        # Filter for "primary" UserMatches (those whose reference name match the
+        # original plugin name).
+        refs = {k: _get_refs(v) for k, v in user_refs.items() if v.matching_id == k}
+
+        # Here we do a topological sort of the usermatches to ensure that the
+        # supervisors are yielded first and make it to the database before their
+        # students.
+        while len(refs) != 0:
+            roots = set()
+            for k, v in refs.items():
+                if len(v) == 0:
+                    yield user_refs[k]
+                    roots.add(k)
+            refs = {k: v - roots for k, v in refs.items() if k not in roots}
+            if len(roots) == 0:
+                for k in refs:
+                    yield user_refs[k]
