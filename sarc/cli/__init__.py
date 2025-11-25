@@ -4,11 +4,10 @@ import logging
 import time
 from dataclasses import dataclass
 from types import SimpleNamespace
-from typing import Union
 
 from simple_parsing import ArgumentParser, field, subparsers
 
-from sarc.logging import setupLogging, getSlackReport
+from sarc.logging import getSlackReport, setupLogging
 
 from .acquire import Acquire
 from .db import Db
@@ -52,7 +51,7 @@ class NiceHandler(logging.StreamHandler):
 
 @dataclass
 class CLI:
-    command: Union[Acquire, Db, Health] = subparsers(
+    command: Acquire | Db | Health | Fetch | Parse = subparsers(
         {"acquire": Acquire, "db": Db, "health": Health, "fetch": Fetch, "parse": Parse}
     )
 
@@ -67,7 +66,7 @@ class CLI:
     def execute(self) -> int:
         # build command name
         command_names = []
-        c = self.command
+        c: object = self.command
         while c is not None:
             command_names.append(c.__class__.__name__)
             if hasattr(c, "command"):
