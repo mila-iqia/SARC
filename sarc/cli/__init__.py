@@ -65,7 +65,6 @@ class CLI:
     )
 
     def execute(self) -> int:
-
         # build command name
         command_names = []
         c = self.command

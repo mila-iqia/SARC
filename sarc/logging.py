@@ -44,9 +44,7 @@ def setupSlackReport(slack_config: SlackConfig, command_name: str | None = None)
     desc = slack_config.description
     if command_name is not None:
         desc += f" ({command_name})"
-    rapporteur_report = Report(
-        description=desc, reporters=[slack_reporter]
-    )
+    rapporteur_report = Report(description=desc, reporters=[slack_reporter])
 
 
 def getSlackReport() -> Report | None:
