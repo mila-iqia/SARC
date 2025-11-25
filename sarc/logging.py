@@ -36,13 +36,16 @@ def getOpenTelemetryLoggingHandler(log_conf: LoggingConfig):
     return LoggingHandler(level=logging.NOTSET, logger_provider=logger_provider)
 
 
-def setupSlackReport(slack_config: SlackConfig):
+def setupSlackReport(slack_config: SlackConfig, command_name: str | None = None):
     global rapporteur_report  # noqa: PLW0603
     slack_reporter = SlackReporter(
         token=slack_config.token, channel=slack_config.channel
     )
+    desc = slack_config.description
+    if command_name is not None:
+        desc += f" ({command_name})"
     rapporteur_report = Report(
-        description=slack_config.description, reporters=[slack_reporter]
+        description=desc, reporters=[slack_reporter]
     )
 
 
@@ -50,7 +53,7 @@ def getSlackReport() -> Report | None:
     return rapporteur_report
 
 
-def setupLogging(verbose_level: int = 0):
+def setupLogging(verbose_level: int = 0, command_name: str | None = None):
     verbose_levels = {1: logging.INFO, 2: logging.DEBUG}
 
     logging_levels = {
@@ -65,7 +68,7 @@ def setupLogging(verbose_level: int = 0):
     # Apparently this can be called in client mode which doesn't have logging
     if hasattr(conf, "logging") and conf.logging:
         if conf.logging.slack:
-            setupSlackReport(conf.logging.slack)
+            setupSlackReport(conf.logging.slack, command_name)
 
         config_log_level = logging_levels.get(conf.logging.log_level, logging.WARNING)
         # verbose priority:

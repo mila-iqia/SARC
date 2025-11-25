@@ -65,12 +65,24 @@ class CLI:
     )
 
     def execute(self) -> int:
-        setupLogging(verbose_level=self.verbose)
+
+        # build command name
+        command_names = []
+        c = self.command
+        while c is not None:
+            command_names.append(c.__class__.__name__)
+            if hasattr(c, "command"):
+                c = c.command
+            else:
+                c = None
+
+        setupLogging(verbose_level=self.verbose, command_name=".".join(command_names))
         report = getSlackReport()
 
         if report is not None:
             with report:
                 return self.command.execute()
+
         return self.command.execute()
 
 
