@@ -22,6 +22,7 @@ from sarc.core.scraping.users import (
     parse_users,
     update_user_match,
 )
+from sarc.users.db import get_user, get_user_collection
 
 one_hour = timedelta(hours=1)
 
@@ -479,3 +480,63 @@ def test_fetch_and_parse_multiple_different_scrapers(monkeypatch, enabled_cache)
     # Verify that all users have the correct scraper name in their matching_id
     for user in users:
         assert user.matching_id.name in ["mock_scraper", "test_plugin"]
+
+
+@patch("sarc.core.scraping.users.get_user_scraper")
+def test_parse_users_supervisor_ordering_before_fix(mock_get_scraper, enabled_cache):
+    """Test that plugins returning users before supervisors are correctly ordered.
+
+    This test reproduces the issue where a plugin returns user entries before
+    their supervisor entry. The topological sort should ensure supervisors are
+    yielded first, preventing database lookup failures and conflicts on second import.
+    """
+
+    class SupervisorOrderingMockScraper(MockUserScraper):
+        def parse_user_data(self, data: bytes) -> Iterable[UserMatch]:
+            student = UserMatch(
+                display_name="Alice Student",
+                email="alice@example.com",
+                matching_id=MatchID(name="bad_order_plugin", mid="student1"),
+            )
+            student.co_supervisors.insert(
+                {MatchID(name="bad_order_plugin", mid="supervisor1")},
+                start=None,
+                end=None,
+            )
+
+            supervisor = UserMatch(
+                display_name="Bob Supervisor",
+                email="bob@example.com",
+                matching_id=MatchID(name="bad_order_plugin", mid="supervisor1"),
+            )
+
+            return [student, supervisor]
+
+    mock_scraper = SupervisorOrderingMockScraper()
+    mock_get_scraper.return_value = mock_scraper
+
+    scrapers = [
+        (
+            "bad_order_plugin",
+            {"api_url": "https://bad_order.example.com", "api_key": "secret"},
+        ),
+    ]
+
+    fetch_users(scrapers)
+
+    coll = get_user_collection()
+    for um in parse_users(datetime.now(UTC) - one_hour):
+        coll.update_user(um)
+
+    u = get_user("alice@example.com")
+    assert u is not None
+    assert len(u.co_supervisors.values) == 1
+    assert len(u.co_supervisors.values[0].value) == 1
+
+    for um in parse_users(datetime.now(UTC) - one_hour):
+        coll.update_user(um)
+
+    u = get_user("alice@example.com")
+    assert u is not None
+    assert len(u.co_supervisors.values) == 1
+    assert len(u.co_supervisors.values[0].value) == 1
