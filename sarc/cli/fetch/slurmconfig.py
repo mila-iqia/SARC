@@ -13,9 +13,6 @@ from sarc.core.models.validators import datetime_utc, UTCOFFSET
 logger = logging.getLogger(__name__)
 
 
-_CACHE_SUBDIRECTORY = "slurm_conf"
-
-
 @dataclass
 class FetchSlurmConfig:
     """Download slurm.conf file for given cluster at current time."""
@@ -26,7 +23,7 @@ class FetchSlurmConfig:
         cfg = config("scraping")
 
         # Cache slurm.conf files in folder <sarc-cache>/slurm_conf/<cluster_name>
-        cache = Cache(subdirectory=f"{_CACHE_SUBDIRECTORY}/{self.cluster_name}")
+        cache = Cache(subdirectory=f"slurm_conf/{self.cluster_name}")
 
         # Make sure any legacy cached slurm.conf file is transferred to new cache system
         _fetch_legacy_cache_files(cfg, self.cluster_name, cache)
@@ -48,7 +45,7 @@ def _fetch_legacy_cache_files(cfg: Config, cluster_name: str, cache: Cache):
     so that it's not parsed anymore if we run this command again.
     """
     assert cfg.cache is not None
-    slurm_conf_dir = cfg.cache / _CACHE_SUBDIRECTORY
+    slurm_conf_dir = cfg.cache / "slurm_conf"
 
     prefix = f"slurm.{cluster_name}."
     suffix = ".conf"
@@ -100,7 +97,7 @@ def _save_into_cache(cache: Cache, content: str, date: datetime_utc) -> bool:
     # Otherwise, save it into cache
     with cache.create_entry(date) as cache_entry:
         # key is date in isoformat
-        # value if slurm.conf file content
+        # value is slurm.conf file content
         cache_entry.add_value(date.isoformat(), content.encode("utf-8"))
     return True
 
