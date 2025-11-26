@@ -2,14 +2,17 @@ from dataclasses import dataclass
 
 from simple_parsing import subparsers
 
+from .diskusage import ParseDiskUsage
 from .users import ParseUsers
 
 
 @dataclass
 class Parse:
-    command: ParseUsers = subparsers(
+    # See https://github.com/python/mypy/issues/20140 for a description of the mypy bug
+    command: ParseUsers | ParseDiskUsage = subparsers(  # type: ignore [type-var]
         {
             "users": ParseUsers,
+            "diskusage": ParseDiskUsage,
         }
     )
 

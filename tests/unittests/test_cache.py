@@ -835,11 +835,10 @@ def test_cache_entry_add_value(tmp_path):
         assert zf.namelist() == ["test_key", "another_key"]
 
 
-def test_cache_initialization(tmp_path):
+def test_cache_initialization(enabled_cache):
     """Test Cache class initialization."""
-    with gifnoc.overlay({"sarc.cache": str(tmp_path)}):
-        cache = Cache("test_subdirectory")
-        assert cache.subdirectory == "test_subdirectory"
+    cache = Cache("test_subdirectory")
+    assert cache.subdirectory == "test_subdirectory"
 
 
 def test_cache_cache_dir_property(tmp_path):
@@ -884,15 +883,14 @@ def test_cache_create_entry(tmp_path):
         assert expected_file.exists()
 
 
-def test_cache_multiple_key_same_name(tmp_path):
-    with gifnoc.overlay({"sarc.cache": str(tmp_path)}):
-        cache = Cache("test_entries")
-        with cache.create_entry(datetime(2024, 6, 1, tzinfo=UTC)) as ce:
-            ce.add_value("key", b"val1")
-            ce.add_value("key", b"val2")
+def test_cache_multiple_key_same_name(enabled_cache):
+    cache = Cache("test_entries")
+    with cache.create_entry(datetime(2024, 6, 1, tzinfo=UTC)) as ce:
+        ce.add_value("key", b"val1")
+        ce.add_value("key", b"val2")
 
-        ce = list(cache.read_from(datetime(2024, 5, 30, tzinfo=UTC)))[0]
-        assert list(ce.items()) == [("key", b"val1"), ("key", b"val2")]
+    ce = list(cache.read_from(datetime(2024, 5, 30, tzinfo=UTC)))[0]
+    assert list(ce.items()) == [("key", b"val1"), ("key", b"val2")]
 
 
 def test_cache_save(tmp_path):
@@ -941,132 +939,128 @@ def test_cache_save_multiple_keys(tmp_path):
             assert set(zf.namelist()) == {"key1", "key2", "key3"}
 
 
-def test_cache_paths_from_single_day(tmp_path):
+def test_cache_paths_from_single_day(enabled_cache):
     """Test Cache _paths_from method with files from a single day."""
 
     cache = Cache("test_cache")
 
-    with gifnoc.overlay({"sarc.cache": str(tmp_path)}):
-        # Create test files for the same day
-        base_time = datetime(2024, 3, 15, 10, 0, 0, tzinfo=UTC)
+    # Create test files for the same day
+    base_time = datetime(2024, 3, 15, 10, 0, 0, tzinfo=UTC)
 
-        # Create files at different times
-        times = [
-            datetime(2024, 3, 15, 9, 30, 0, tzinfo=UTC),  # Before from_time
-            datetime(2024, 3, 15, 10, 15, 0, tzinfo=UTC),  # After from_time
-            datetime(2024, 3, 15, 11, 0, 0, tzinfo=UTC),  # After from_time
-        ]
+    # Create files at different times
+    times = [
+        datetime(2024, 3, 15, 9, 30, 0, tzinfo=UTC),  # Before from_time
+        datetime(2024, 3, 15, 10, 15, 0, tzinfo=UTC),  # After from_time
+        datetime(2024, 3, 15, 11, 0, 0, tzinfo=UTC),  # After from_time
+    ]
 
-        for time in times:
-            cache.save("test_key", time, b"test_data")
+    for time in times:
+        cache.save("test_key", time, b"test_data")
 
-        # Test _paths_from starting from base_time
-        paths = list(cache._paths_from(base_time))
+    # Test _paths_from starting from base_time
+    paths = list(cache._paths_from(base_time))
 
-        # Should only get files from 10:15 and 11:00 (not 9:30)
-        assert len(paths) == 2
+    # Should only get files from 10:15 and 11:00 (not 9:30)
+    assert len(paths) == 2
 
-        # Verify the paths are sorted correctly
-        path_names = [p.name for p in paths]
-        assert "10:15:00" in path_names
-        assert "11:00:00" in path_names
+    # Verify the paths are sorted correctly
+    path_names = [p.name for p in paths]
+    assert "10:15:00" in path_names
+    assert "11:00:00" in path_names
 
 
-def test_cache_paths_from_multiple_days(tmp_path):
+def test_cache_paths_from_multiple_days(enabled_cache):
     """Test Cache _paths_from method with files from multiple days."""
 
     cache = Cache("test_cache")
 
-    with gifnoc.overlay({"sarc.cache": str(tmp_path)}):
-        # Create test files for different days
-        times = [
-            datetime(2024, 3, 14, 23, 0, 0, tzinfo=UTC),  # Day before
-            datetime(2024, 3, 15, 10, 0, 0, tzinfo=UTC),  # Target day
-            datetime(2024, 3, 15, 15, 0, 0, tzinfo=UTC),  # Same day, later
-            datetime(2024, 3, 16, 8, 0, 0, tzinfo=UTC),  # Next day
-            datetime(2024, 3, 17, 12, 0, 0, tzinfo=UTC),  # Day after next
-        ]
+    # Create test files for different days
+    times = [
+        datetime(2024, 3, 14, 23, 0, 0, tzinfo=UTC),  # Day before
+        datetime(2024, 3, 15, 10, 0, 0, tzinfo=UTC),  # Target day
+        datetime(2024, 3, 15, 15, 0, 0, tzinfo=UTC),  # Same day, later
+        datetime(2024, 3, 16, 8, 0, 0, tzinfo=UTC),  # Next day
+        datetime(2024, 3, 17, 12, 0, 0, tzinfo=UTC),  # Day after next
+    ]
 
-        for time in times:
-            cache.save("test_key", time, b"test_data")
+    for time in times:
+        cache.save("test_key", time, b"test_data")
 
-        # Test _paths_from starting from 2024-03-15 10:00
-        from_time = datetime(2024, 3, 15, 10, 0, 0, tzinfo=UTC)
-        paths = list(cache._paths_from(from_time))
+    # Test _paths_from starting from 2024-03-15 10:00
+    from_time = datetime(2024, 3, 15, 10, 0, 0, tzinfo=UTC)
+    paths = list(cache._paths_from(from_time))
 
-        # Should get files from 15:00 on 3/15, and all files from 3/16 and 3/17
-        assert len(paths) == 4
+    # Should get files from 15:00 on 3/15, and all files from 3/16 and 3/17
+    assert len(paths) == 4
 
-        # Verify we get the expected files
-        path_names = [p.name for p in paths]
-        assert "15:00:00" in path_names
-        assert "08:00:00" in path_names  # From 3/16
-        assert "12:00:00" in path_names  # From 3/17
+    # Verify we get the expected files
+    path_names = [p.name for p in paths]
+    assert "15:00:00" in path_names
+    assert "08:00:00" in path_names  # From 3/16
+    assert "12:00:00" in path_names  # From 3/17
 
 
-def test_cache_read_from(tmp_path):
+def test_cache_read_from(enabled_cache):
     """Test Cache read_from method."""
 
     cache = Cache("test_cache")
 
-    with gifnoc.overlay({"sarc.cache": str(tmp_path)}):
-        # Create test entries with different data
-        times_and_data = [
-            (datetime(2024, 3, 15, 9, 0, 0, tzinfo=UTC), {"key1": b"data1"}),
-            (datetime(2024, 3, 15, 10, 0, 0, tzinfo=UTC), {"key2": b"data2"}),
-            (datetime(2024, 3, 15, 11, 0, 0, tzinfo=UTC), {"key3": b"data3"}),
-        ]
+    # Create test entries with different data
+    times_and_data = [
+        (datetime(2024, 3, 15, 9, 0, 0, tzinfo=UTC), {"key1": b"data1"}),
+        (datetime(2024, 3, 15, 10, 0, 0, tzinfo=UTC), {"key2": b"data2"}),
+        (datetime(2024, 3, 15, 11, 0, 0, tzinfo=UTC), {"key3": b"data3"}),
+    ]
 
-        for time, data in times_and_data:
-            with cache.create_entry(time) as entry:
-                for key, value in data.items():
-                    entry.add_value(key, value)
+    for time, data in times_and_data:
+        with cache.create_entry(time) as entry:
+            for key, value in data.items():
+                entry.add_value(key, value)
 
-        # Read from 10:00 onwards
-        from_time = datetime(2024, 3, 15, 10, 0, 0, tzinfo=UTC)
-        entries = list(cache.read_from(from_time))
+    # Read from 10:00 onwards
+    from_time = datetime(2024, 3, 15, 10, 0, 0, tzinfo=UTC)
+    entries = list(cache.read_from(from_time))
 
-        # Should get 2 entries (10:00 and 11:00, not 9:00)
-        assert len(entries) == 2
+    # Should get 2 entries (10:00 and 11:00, not 9:00)
+    assert len(entries) == 2
 
-        # verify the data
-        assert list(entries[0].items()) == [("key2", b"data2")]
-        assert list(entries[1].items()) == [("key3", b"data3")]
+    # verify the data
+    assert list(entries[0].items()) == [("key2", b"data2")]
+    assert list(entries[1].items()) == [("key3", b"data3")]
 
-        # try to read starting the day before
-        entries = list(cache.read_from(datetime(2024, 3, 14, 0, 0, 0, tzinfo=UTC)))
-        assert len(entries) == 3
+    # try to read starting the day before
+    entries = list(cache.read_from(datetime(2024, 3, 14, 0, 0, 0, tzinfo=UTC)))
+    assert len(entries) == 3
 
 
-def test_cache_read_from_with_multiple_keys_per_entry(tmp_path):
+def test_cache_read_from_with_multiple_keys_per_entry(enabled_cache):
     """Test Cache read_from method with multiple keys per entry."""
 
     cache = Cache("test_cache")
 
-    with gifnoc.overlay({"sarc.cache": str(tmp_path)}):
-        # Create entries with multiple keys
-        time1 = datetime(2024, 3, 15, 10, 0, 0, tzinfo=UTC)
-        with cache.create_entry(time1) as entry1:
-            entry1.add_value("user1", b"user1_data")
-            entry1.add_value("user2", b"user2_data")
+    # Create entries with multiple keys
+    time1 = datetime(2024, 3, 15, 10, 0, 0, tzinfo=UTC)
+    with cache.create_entry(time1) as entry1:
+        entry1.add_value("user1", b"user1_data")
+        entry1.add_value("user2", b"user2_data")
 
-        time2 = datetime(2024, 3, 15, 11, 0, 0, tzinfo=UTC)
-        with cache.create_entry(time2) as entry2:
-            entry2.add_value("user3", b"user3_data")
+    time2 = datetime(2024, 3, 15, 11, 0, 0, tzinfo=UTC)
+    with cache.create_entry(time2) as entry2:
+        entry2.add_value("user3", b"user3_data")
 
-        # Read from 10:00 onwards
-        from_time = datetime(2024, 3, 15, 10, 0, 0, tzinfo=UTC)
-        entries = list(cache.read_from(from_time))
+    # Read from 10:00 onwards
+    from_time = datetime(2024, 3, 15, 10, 0, 0, tzinfo=UTC)
+    entries = list(cache.read_from(from_time))
 
-        assert len(entries) == 2
+    assert len(entries) == 2
 
-        assert list(entries[0].items()) == [
-            ("user1", b"user1_data"),
-            ("user2", b"user2_data"),
-        ]
+    assert list(entries[0].items()) == [
+        ("user1", b"user1_data"),
+        ("user2", b"user2_data"),
+    ]
 
-        # Check second entry has 1 key
-        assert list(entries[1].items()) == [("user3", b"user3_data")]
+    # Check second entry has 1 key
+    assert list(entries[1].items()) == [("user3", b"user3_data")]
 
 
 def test_cache_ensure_utc():

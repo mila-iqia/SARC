@@ -6,6 +6,8 @@ __pycache__/
 .coverage
 .coverage.*
 .pytest_cache
+.mypy_cache
+.ruff_cache
 .envrc
 clockwork_ldap.crt
 clockwork_ldap.key
@@ -20,4 +22,7 @@ sarc-test-cache
 dbconfig.txt
 token.json
 .vscode
+<<<<<<< HEAD
 .mypy_cache
+=======
+>>>>>>> 61f9735 (ignore more cache dirs)
