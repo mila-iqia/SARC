@@ -2890,7 +2890,7 @@ requires-dist = [
     { name = "rapporteur", specifier = ">=0.1.1" },
     { name = "requests", specifier = ">=2.32.3,<3" },
     { name = "requests-mock", specifier = ">=1.11.0,<2" },
-    { name = "serieux", specifier = ">=0.3.2,<0.4" },
+    { name = "serieux", specifier = ">=0.3.6,<0.4" },
     { name = "simple-parsing", specifier = ">=0.1.0,<0.2" },
     { name = "sphinx", specifier = ">=8.2.3,<9" },
     { name = "sphinx-rtd-theme", specifier = ">=3.0.2,<4" },
@@ -2950,14 +2950,14 @@ wheels = [
 
 [[package]]
 name = "serieux"
-version = "0.3.5"
+version = "0.3.6"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "ovld" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/78/12/2e1a4909fe31fbf612a442be559aee98c9eab90c04e9dbe4b508c4a31010/serieux-0.3.5.tar.gz", hash = "sha256:42ae6c437e4f85fb00bb56332c7d64bd25c14dfa7366981caed9a87ac0ca58c8", size = 169823, upload-time = "2025-11-25T20:46:53.77Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/7f/7b/6d19bcb8cafd947dc967603e0e3cf94affd9547ab8884b1e7dbc6d5888ce/serieux-0.3.6.tar.gz", hash = "sha256:ed599944fc25c242d87440b95f8d2ed00772b171635719f29ecaadf11ecbc223", size = 171704, upload-time = "2025-11-26T16:40:11.912Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ef/b8/762d4f877eff7b6cb55c7ba1f805dd8af2a53857b8008d996101a2dd9237/serieux-0.3.5-py3-none-any.whl", hash = "sha256:5891f49ca59667055cc741d0707423127c8a702e2cc3783713abb943df37c381", size = 53469, upload-time = "2025-11-25T20:46:52.353Z" },
+    { url = "https://files.pythonhosted.org/packages/d6/9c/db200d9153adb4ac65d4072ebd4858d342361b99910276181e4fa9f92e5d/serieux-0.3.6-py3-none-any.whl", hash = "sha256:c912823e4be87bfb4c11c3f9aabca5699b0468aeb9946597fd4c14bbbf444c14", size = 53506, upload-time = "2025-11-26T16:40:10.537Z" },
 ]
 
 [[package]]
