@@ -20,3 +20,4 @@ sarc-test-cache
 dbconfig.txt
 token.json
 .vscode
+.mypy_cache

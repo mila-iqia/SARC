@@ -17,7 +17,6 @@ utc_test_time = mtl_test_time.astimezone(UTC)
 test_time_str = utc_test_time.strftime("%Y-%m-%dT%H:%M %Z")
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "empty_read_write_prometheus")
 @pytest.fixture
 def job(request):
     params = getattr(request, "param", {})

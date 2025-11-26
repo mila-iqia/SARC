@@ -64,17 +64,14 @@ class LegacyDumpConfig:
 class LegacyDumpScraper(UserScraper[LegacyDumpConfig]):
     config_type = LegacyDumpConfig
 
-    def get_user_data(self, _config: LegacyDumpConfig) -> bytes:
+    def get_user_data(self, config: LegacyDumpConfig) -> bytes:
         """Read the JSON dump file."""
-        return b""
-
-    def parse_user_data(
-        self, config: LegacyDumpConfig, data: bytes
-    ) -> Iterable[UserMatch]:
-        """Parse the legacy user data and convert to UserMatch format."""
-        assert data == b""
         with open(config.json_file_path, "r", encoding="utf-8") as f:
-            records = json.load(f)
+            return f.read().encode("utf-8")
+
+    def parse_user_data(self, data: bytes) -> Iterable[UserMatch]:
+        """Parse the legacy user data and convert to UserMatch format."""
+        records = json.loads(data.decode("utf-8"))
         for record in records:
             # Extract basic information
             name = record.get("name")
@@ -140,8 +137,7 @@ class LegacyDumpScraper(UserScraper[LegacyDumpConfig]):
             drac_data = record.get("drac")
             if drac_data and drac_data.get("username"):
                 drac_creds = Credentials()
-                drac_start = record_start
-                drac_creds.insert(drac_data["username"], drac_start, record_end)
+                drac_creds.insert(drac_data["username"], record_start, record_end)
                 user_match.associated_accounts["drac"] = drac_creds
 
             # Supervisor information
