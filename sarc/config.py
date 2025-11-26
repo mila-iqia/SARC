@@ -201,8 +201,8 @@ class SlackConfig:
 @dataclass
 class LoggingConfig:
     log_level: str
-    OTLP_endpoint: str
-    service_name: str
+    OTLP_endpoint: str | None = None
+    service_name: str | None = None
     slack: SlackConfig | None = None
 
 

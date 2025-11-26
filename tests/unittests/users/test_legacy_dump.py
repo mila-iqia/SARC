@@ -1,5 +1,6 @@
 """Tests for LegacyDump user scraper."""
 
+import json
 from pathlib import Path
 
 from sarc.users.legacy_dump import LegacyDumpConfig, LegacyDumpScraper
@@ -18,15 +19,14 @@ class TestLegacyDumpScraper(UserPluginTester):
             json_file_path=Path(__file__).parent / "inputs" / "userdump_test.json"
         )
         data = self.plugin.get_user_data(config)
-        assert data == b""
+        records = json.loads(data.decode("utf-8"))
+        assert len(records) > 0
 
     def test_parse_data(self, data_regression):
-        """Test parsing of consolidated legacy dump data file with all test cases."""
-        config = LegacyDumpConfig(
-            json_file_path=Path(__file__).parent / "inputs" / "userdump_test.json"
-        )
-
+        json_path = Path(__file__).parent / "inputs" / "userdump_test.json"
+        with open(json_path, "r", encoding="utf-8") as f:
+            json_data = f.read().encode("utf-8")
         data = list(
-            d.model_dump(mode="json") for d in self.plugin.parse_user_data(config, b"")
+            d.model_dump(mode="json") for d in self.plugin.parse_user_data(json_data)
         )
         data_regression.check(data)
