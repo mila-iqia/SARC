@@ -1,14 +1,15 @@
 import json
 import math
 from dataclasses import dataclass
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 
 import numpy as np
 import pandas
 import pytest
 
-from sarc.client import get_available_clusters
+from sarc.client import get_available_clusters, get_jobs
 from sarc.client.gpumetrics import GPUBilling, get_cluster_gpu_billings
+from sarc.client.job import SlurmJob, SlurmResources, SlurmState
 from sarc.client.series import (
     load_job_series,
     update_cluster_job_series_rgu,
@@ -47,13 +48,13 @@ class Row:
     """Helper class to represent relevant RGU data for a job in a dataframe."""
 
     def __init__(
-        self, cluster_name: str, start_time: str, gres_gpu: float, gpu_type: str
+        self, cluster_name: str, start_time: str, gres_gpu: int, gpu_type: str
     ):
         self.cluster_name = cluster_name
         self.start_time = datetime.combine(
             datetime.strptime(start_time, "%Y-%m-%d"), time.min
         ).replace(tzinfo=MTL)
-        self.gres_gpu = gres_gpu
+        self.gres_gpu: int = gres_gpu
         self.gpu_type = gpu_type
         self.expected = None
 
@@ -234,6 +235,33 @@ class ExampleData:
             ]
         )
 
+    def jobs(self) -> list[SlurmJob]:
+        elapsed_seconds = 10
+        elapsed_timedelta = timedelta(seconds=elapsed_seconds)
+        return [
+            SlurmJob(
+                cluster_name=row.cluster_name,
+                start_time=row.start_time,
+                end_time=row.start_time + elapsed_timedelta,
+                elapsed_time=elapsed_seconds,
+                allocated=SlurmResources(
+                    gres_gpu=row.gres_gpu, billing=row.gres_gpu, gpu_type=row.gpu_type
+                ),
+                requested=SlurmResources(gres_gpu=row.gres_gpu),
+                account="account",
+                job_id=i,
+                name="name",
+                user="user",
+                group="group",
+                partition="partition",
+                job_state=SlurmState.RUNNING,
+                nodes=[],
+                work_dir="work_dir",
+                submit_time=datetime.now(tz=MTL),
+            )
+            for i, row in enumerate(self.data)
+        ]
+
     def get_expected(self):
         """Compute expected RGU values."""
         clusters = {
@@ -372,6 +400,7 @@ def test_update_job_series_rgu_one_date(
 ):
     """Concrete test with a cluster which does have 1 billing date."""
     monkeypatch.setattr("sarc.client.series.get_rgus", _gen_fake_rgus)
+    monkeypatch.setattr("sarc.client.job.get_rgus", _gen_fake_rgus)
 
     data = ExampleData(cluster=cluster_gpu_billing_one_date)
     frame = data.frame()
@@ -398,6 +427,12 @@ def test_update_job_series_rgu_one_date(
     )
     assert frame["allocated.gres_rgu"].equals(pandas.Series(expected_gres_rgu))
     assert frame["allocated.gpu_type_rgu"].equals(pandas.Series(expected_gpu_type_rgu))
+
+    jobs = data.jobs()
+    rgu_from_jobs = pandas.Series([job.rgu for job in jobs])
+    gpu_type_rgu_from_jobs = pandas.Series([job.gpu_type_rgu for job in jobs])
+    assert rgu_from_jobs.equals(pandas.Series(expected_gres_rgu))
+    assert gpu_type_rgu_from_jobs.equals(pandas.Series(expected_gpu_type_rgu))
 
     all_gpu_billings = {
         cluster_name: [
@@ -434,6 +469,7 @@ def test_update_job_series_rgu_with_many_dates(
 ):
     """Concrete test with a cluster which does have many billing dates."""
     monkeypatch.setattr("sarc.client.series.get_rgus", _gen_fake_rgus)
+    monkeypatch.setattr("sarc.client.job.get_rgus", _gen_fake_rgus)
 
     data = ExampleData(cluster=cluster_gpu_billing_many_dates)
     frame = data.frame()
@@ -460,6 +496,12 @@ def test_update_job_series_rgu_with_many_dates(
     )
     assert frame["allocated.gres_rgu"].equals(pandas.Series(expected_gres_rgu))
     assert frame["allocated.gpu_type_rgu"].equals(pandas.Series(expected_gpu_type_rgu))
+
+    jobs = data.jobs()
+    rgu_from_jobs = pandas.Series([job.rgu for job in jobs])
+    gpu_type_rgu_from_jobs = pandas.Series([job.gpu_type_rgu for job in jobs])
+    assert rgu_from_jobs.equals(pandas.Series(expected_gres_rgu))
+    assert gpu_type_rgu_from_jobs.equals(pandas.Series(expected_gpu_type_rgu))
 
     all_gpu_billings = {
         cluster_name: [
@@ -497,6 +539,7 @@ def test_update_job_series_rgu_billing_is_gpu(
 ):
     """Concrete test with a cluster where billing_is_gpu is True."""
     monkeypatch.setattr("sarc.client.series.get_rgus", _gen_fake_rgus)
+    monkeypatch.setattr("sarc.client.job.get_rgus", _gen_fake_rgus)
 
     data = ExampleData(cluster=cluster_gpu_billing_is_gpu)
     frame = data.frame()
@@ -524,6 +567,12 @@ def test_update_job_series_rgu_billing_is_gpu(
     assert frame["allocated.gres_rgu"].equals(pandas.Series(expected_gres_rgu))
     assert frame["allocated.gpu_type_rgu"].equals(pandas.Series(expected_gpu_type_rgu))
 
+    jobs = data.jobs()
+    rgu_from_jobs = pandas.Series([job.rgu for job in jobs])
+    gpu_type_rgu_from_jobs = pandas.Series([job.gpu_type_rgu for job in jobs])
+    assert rgu_from_jobs.equals(pandas.Series(expected_gres_rgu))
+    assert gpu_type_rgu_from_jobs.equals(pandas.Series(expected_gpu_type_rgu))
+
     file_regression.check(
         f"==================================================================================\n"
         f"Example data with expected RGU information [main cluster: {cluster_gpu_billing_is_gpu} (no billing date)]:\n"
@@ -546,6 +595,7 @@ def test_update_job_series_rgu_with_read_only_db(
 ):
     """Concrete tests with jobs from read_only_db"""
     monkeypatch.setattr("sarc.client.series.get_rgus", _gen_fake_rgus)
+    monkeypatch.setattr("sarc.client.job.get_rgus", _gen_fake_rgus)
 
     def _df_to_pretty_str_before(df: pandas.DataFrame) -> str:
         fields = [
@@ -574,6 +624,34 @@ def test_update_job_series_rgu_with_read_only_db(
     str_frame_before = _df_to_pretty_str_before(frame)
     update_cluster_job_series_rgu(frame, cluster_gpu_billing_one_date)
     str_frame_after = _df_to_pretty_str(frame)
+
+    # Compare with SlurmJob.rgu
+    jobs = list(get_jobs())
+    sub_df = frame[
+        [
+            "cluster_name",
+            "job_id",
+            "submit_time",
+            "start_time",
+            "allocated.gpu_type",
+            "allocated.gpu_type_rgu",
+            "allocated.gres_rgu",
+        ]
+    ]
+    assert len(jobs) == sub_df.shape[0] > 0
+    for job, row in zip(jobs, sub_df.itertuples()):
+        assert row.cluster_name == job.cluster_name
+        assert row.job_id == job.job_id
+        assert row.submit_time == job.submit_time
+        assert row[5] == job.allocated.gpu_type
+        for given, expected in (
+            (row[6], job.gpu_type_rgu),
+            (row[7], job.rgu),
+        ):
+            if math.isnan(expected):
+                assert math.isnan(given), (expected, given)
+            else:
+                assert expected == given
 
     all_gpu_billings = {
         cluster_name: [
