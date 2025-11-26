@@ -32,7 +32,7 @@ dependencies = [
     "opentelemetry-exporter-otlp>=1.23.0,<2",
     "iguane",
     "filelock>=3.18.0",
-    "fastapi[standard-no-fastapi-cloud-cli]>=0.121,<0.122",
+    "fastapi[standard-no-fastapi-cloud-cli]>=0.122,<0.123",
     "requests>=2.32.3,<3",
     "google-auth>=2.40.2,<3",
     "pyodbc>=5.2.0,<6",
@@ -46,7 +46,7 @@ sarc = "sarc.cli:main"
 [dependency-groups]
 dev = [
     "mypy>=1.17.1,<2",
-    "pytest>=8.3.5,<9",
+    "pytest>=9.0.1,<10",
     "pytest-cov>=7,<8",
     "pytest-regressions>=2.7.0,<3,!=2.8.1",
     "tox>=4.25.0,<5",
@@ -114,9 +114,6 @@ include = ["sarc"]
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
-
-[tool.pytest]
-norecursedirs = "tests/common"
 
 [tool.mypy]
 follow_untyped_imports = true
