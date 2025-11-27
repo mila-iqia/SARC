@@ -18,4 +18,6 @@ class ParseUsers:
 
         coll = get_user_collection()
         for um in parse_users(from_=ts):
+            coll.update_user(um)
+
         return 0

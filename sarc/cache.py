@@ -233,6 +233,7 @@ class Cache:
                     year_dir.iterdir(),
                 )
             ):
+
                 if not first_month_done and (
                     int(month_dir.parts[-1]) > from_time.month or first_year_done
                 ):
