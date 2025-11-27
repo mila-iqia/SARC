@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import re
+
 from collections.abc import Iterable, Iterator
 from contextvars import ContextVar
 from dataclasses import dataclass, field
@@ -140,6 +141,7 @@ class Cache:
             Path: The path to the date-specific directory.
         """
         return cdir / f"{d.year:04}" / f"{d.month:02}" / f"{d.day:02}"
+
 
     @contextlib.contextmanager
     def create_entry(self, at_time: datetime) -> Iterator[CacheEntry]:
@@ -306,7 +308,6 @@ def _basename_to_int(path: Path) -> int:
 
 def _basename_to_time(path: Path) -> time:
     return time.fromisoformat(path.parts[-1])
-
 
 @dataclass
 class CachedResult[T]:

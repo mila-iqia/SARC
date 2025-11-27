@@ -214,7 +214,7 @@ class UserScrapingConfig:
 @dataclass
 class ClientConfig:
     mongo: MongoConfig
-    cache: Path | None = None
+    cache: Path
     loki: LokiConfig | None = None
     tempo: TempoConfig | None = None
     health_monitor: HealthMonitorConfig | None = None
@@ -224,7 +224,6 @@ class ClientConfig:
         """
         Return a convenient path to be used as lock file for database operations.
         """
-        assert self.cache
         return self.cache / "lockfile.lock"
 
     class SerieuxConfig:
