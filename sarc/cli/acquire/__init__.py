@@ -3,7 +3,6 @@ from typing import Union
 
 from simple_parsing import subparsers
 
-from sarc.cli.acquire.allocations import AcquireAllocations
 from sarc.cli.acquire.jobs import AcquireJobs
 from sarc.cli.acquire.prometheus import AcquirePrometheus
 from sarc.cli.acquire.storages import AcquireStorages
@@ -11,9 +10,8 @@ from sarc.cli.acquire.storages import AcquireStorages
 
 @dataclass
 class Acquire:
-    command: Union[AcquireAllocations, AcquireJobs, AcquireStorages] = subparsers(
+    command: Union[AcquireJobs, AcquireStorages] = subparsers(
         {
-            "allocations": AcquireAllocations,
             "jobs": AcquireJobs,
             "storages": AcquireStorages,
             "prometheus": AcquirePrometheus,

@@ -1,16 +1,11 @@
-from __future__ import annotations
-
-import logging
 import csv
+import logging
 from dataclasses import dataclass
-from datetime import datetime
-from pathlib import Path
+from datetime import UTC, datetime
 from typing import cast
 
 from pydantic import ByteSize
 from simple_parsing import field
-
-from sarc.traces import trace_decorator
 
 from sarc.allocations.allocations import (
     Allocation,
@@ -19,6 +14,8 @@ from sarc.allocations.allocations import (
     AllocationStorage,
     get_allocations_collection,
 )
+from sarc.cache import Cache
+from sarc.traces import trace_decorator
 
 logger = logging.getLogger(__name__)
 
@@ -68,37 +65,40 @@ def convert_csv_row_to_allocation(
 
 
 @dataclass
-class AcquireAllocations:
-    file: Path
-    # Do not actually insert the data into the database
-    dry: bool = field(
-        type=bool,
-        default=False,
-        help="Do not actually insert the data into the database",
-    )
+class ParseAllocations:
+    since: str = field(help="Start parsing the cache from the specified date")
 
     def execute(self) -> int:
         collection = get_allocations_collection()
+        cache = Cache(subdirectory="allocations")
 
-        with open(self.file, "r", encoding="utf-8") as f:
-            reader = csv.DictReader(
-                f, skipinitialspace=True, restkey="garbage", restval=""
-            )
-            for row in reader:
-                row.pop("garbage", None)
+        ts = datetime.fromisoformat(self.since)
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=UTC)
+        ts = ts.astimezone(UTC)
 
-                for key in list(row.keys()):
-                    if row[key].strip(" ") == "":
-                        row.pop(key)
+        for ce in cache.read_from(ts):
+            for _, value in ce.items():  # noqa: PERF102
+                reader = csv.DictReader(
+                    value.decode("utf-8"),
+                    skipinitialspace=True,
+                    restkey="garbage",
+                    restval="",
+                )
+                for row in reader:
+                    row.pop("garbage", None)
 
-                try:
-                    allocation = convert_csv_row_to_allocation(**row)  # type: ignore[arg-type]
-                except Exception as e:
-                    logger.exception(f"Skipping row: {row}", exc_info=e)
-                    continue
+                    for key in list(row.keys()):
+                        if row[key].strip(" ") == "":
+                            row.pop(key)
 
-                logger.info(f"Adding allocation: {allocation}")
-                if not self.dry:
+                    try:
+                        allocation = convert_csv_row_to_allocation(**row)  # type: ignore[arg-type]
+                    except Exception as e:
+                        logger.exception(f"Skipping row: {row}", exc_info=e)
+                        continue
+
+                    logger.info(f"Adding allocation: {allocation}")
                     collection.add(allocation)
 
         return 0
