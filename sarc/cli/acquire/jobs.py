@@ -10,7 +10,6 @@ from simple_parsing import field
 from sarc.config import config, UTC, TZLOCAL
 from sarc.errors import ClusterNotFound
 from sarc.core.scraping.jobs import fetch_jobs
-from sarc.traces import using_trace
 
 logger = logging.getLogger(__name__)
 
@@ -130,7 +129,6 @@ class AcquireJobs:
     )
 
     def execute(self) -> int:
-
         if self.intervals is not None and self.auto_interval is not None:
             logger.error(
                 "Parameters mutually exclusive: either --intervals or --auto_interval, not both"
@@ -140,6 +138,8 @@ class AcquireJobs:
         cfg = config("scraping")
         clusters_configs = cfg.clusters
 
-        fetch_jobs(self.cluster_names, clusters_configs, self.intervals, self.auto_interval)
+        fetch_jobs(
+            self.cluster_names, clusters_configs, self.intervals, self.auto_interval
+        )
 
         return 0

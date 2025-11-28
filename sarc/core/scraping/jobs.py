@@ -69,7 +69,6 @@ def fetch_jobs(
         # Define cache directory
         cache = Cache(subdirectory=f"jobs/{cluster_name}")
         with cache.create_entry(datetime.now(UTC)) as cache_entry:
-
             try:
                 # Define the time intervals on which we want to retrieve the jobs
                 intervals: list[tuple[datetime, datetime]] = []
@@ -106,7 +105,9 @@ def fetch_jobs(
 
                             cache_entry.add_value(
                                 key=key,
-                                value=get_jobs(clusters[cluster_name], time_from, time_to),
+                                value=get_jobs(
+                                    clusters[cluster_name], time_from, time_to
+                                ),
                             )
 
                             if auto_interval is not None:
@@ -126,7 +127,6 @@ def fetch_jobs(
                 )
                 # Continue to next cluster.
                 continue
-
 
 
 def parse_jobs(
