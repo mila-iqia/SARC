@@ -68,66 +68,65 @@ def fetch_jobs(
     for cluster_name in cluster_names:
         # Define cache directory
         cache = Cache(subdirectory=f"jobs/{cluster_name}")
-        ce = cache.create_entry(datetime.now(UTC))
+        with cache.create_entry(datetime.now(UTC)) as cache_entry:
 
-        try:
-            # Define the time intervals on which we want to retrieve the jobs
-            intervals: list[tuple[datetime, datetime]] = []
-            if unparsed_intervals is not None:
-                intervals = parse_intervals(unparsed_intervals)
-            elif auto_interval is not None:
-                intervals = parse_auto_intervals(
-                    cluster_name, auto_end_field, auto_interval
+            try:
+                # Define the time intervals on which we want to retrieve the jobs
+                intervals: list[tuple[datetime, datetime]] = []
+                if unparsed_intervals is not None:
+                    intervals = parse_intervals(unparsed_intervals)
+                elif auto_interval is not None:
+                    intervals = parse_auto_intervals(
+                        cluster_name, auto_end_field, auto_interval
+                    )
+                if not intervals:
+                    logger.warning(
+                        "No --intervals or --auto_interval parsed, nothing to do."
+                    )
+                    continue
+
+                # Fetch the jobs for each time interval
+                for time_from, time_to in intervals:
+                    with using_trace(
+                        "FetchJobs",
+                        "acquire_cluster_data_from_time_interval",
+                        exception_types=(),
+                    ) as span:
+                        span.set_attribute("cluster_name", cluster_name)
+                        span.set_attribute("time_from", str(time_from))
+                        span.set_attribute("time_to", str(time_to))
+                        interval_minutes = (time_to - time_from).total_seconds() / 60
+                        try:
+                            logger.info(
+                                f"Acquire data on {cluster_name} for interval: "
+                                f"{time_from} to {time_to} ({interval_minutes} min)"
+                            )
+
+                            key = f"{time_from.strftime(DATE_FORMAT_HOUR)}_{time_to.strftime(DATE_FORMAT_HOUR)}"
+
+                            cache_entry.add_value(
+                                key=key,
+                                value=get_jobs(clusters[cluster_name], time_from, time_to),
+                            )
+
+                            if auto_interval is not None:
+                                set_auto_end_time(cluster_name, auto_end_field, time_to)
+                        # pylint: disable=broad-exception-caught
+                        except Exception as e:
+                            logger.error(
+                                f"Failed to acquire data on {cluster_name} for interval: "
+                                f"{time_from} to {time_to}: {type(e).__name__}: {e}"
+                            )
+                            raise e
+
+            # pylint: disable=broad-exception-caught
+            except Exception as e:
+                logger.error(
+                    f"Error while acquiring data on {cluster_name}: {type(e).__name__}: {e} ; skipping cluster."
                 )
-            if not intervals:
-                logger.warning(
-                    "No --intervals or --auto_interval parsed, nothing to do."
-                )
+                # Continue to next cluster.
                 continue
 
-            # Fetch the jobs for each time interval
-            for time_from, time_to in intervals:
-                with using_trace(
-                    "FetchJobs",
-                    "acquire_cluster_data_from_time_interval",
-                    exception_types=(),
-                ) as span:
-                    span.set_attribute("cluster_name", cluster_name)
-                    span.set_attribute("time_from", str(time_from))
-                    span.set_attribute("time_to", str(time_to))
-                    interval_minutes = (time_to - time_from).total_seconds() / 60
-                    try:
-                        logger.info(
-                            f"Acquire data on {cluster_name} for interval: "
-                            f"{time_from} to {time_to} ({interval_minutes} min)"
-                        )
-
-                        key = f"{time_from.strftime(DATE_FORMAT_HOUR)}_{time_to.strftime(DATE_FORMAT_HOUR)}"
-
-                        ce.add_value(
-                            key=key,
-                            value=get_jobs(clusters[cluster_name], time_from, time_to),
-                        )
-
-                        if auto_interval is not None:
-                            set_auto_end_time(cluster_name, auto_end_field, time_to)
-                    # pylint: disable=broad-exception-caught
-                    except Exception as e:
-                        logger.error(
-                            f"Failed to acquire data on {cluster_name} for interval: "
-                            f"{time_from} to {time_to}: {type(e).__name__}: {e}"
-                        )
-                        raise e
-
-        # pylint: disable=broad-exception-caught
-        except Exception as e:
-            logger.error(
-                f"Error while acquiring data on {cluster_name}: {type(e).__name__}: {e} ; skipping cluster."
-            )
-            # Continue to next cluster.
-            continue
-
-        ce.close()
 
 
 def parse_jobs(

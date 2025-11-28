@@ -9,7 +9,7 @@ from simple_parsing import field
 
 from sarc.config import config, UTC, TZLOCAL
 from sarc.errors import ClusterNotFound
-from sarc.jobs.sacct import sacct_mongodb_import
+from sarc.core.scraping.jobs import fetch_jobs
 from sarc.traces import using_trace
 
 logger = logging.getLogger(__name__)
@@ -130,6 +130,7 @@ class AcquireJobs:
     )
 
     def execute(self) -> int:
+
         if self.intervals is not None and self.auto_interval is not None:
             logger.error(
                 "Parameters mutually exclusive: either --intervals or --auto_interval, not both"
@@ -138,57 +139,7 @@ class AcquireJobs:
 
         cfg = config("scraping")
         clusters_configs = cfg.clusters
-        auto_end_field = "end_time_sacct"
 
-        for cluster_name in self.cluster_names:
-            try:
-                intervals: list[tuple[datetime, datetime]] = []
-                if self.intervals is not None:
-                    intervals = parse_intervals(self.intervals)
-                elif self.auto_interval is not None:
-                    intervals = parse_auto_intervals(
-                        cluster_name, auto_end_field, self.auto_interval
-                    )
-                if not intervals:
-                    logger.warning(
-                        "No --intervals or --auto_interval parsed, nothing to do."
-                    )
-                    continue
+        fetch_jobs(self.cluster_names, clusters_configs, self.intervals, self.auto_interval)
 
-                for time_from, time_to in intervals:
-                    with using_trace(
-                        "AcquireJobs",
-                        "acquire_cluster_data_from_time_interval",
-                        exception_types=(),
-                    ) as span:
-                        span.set_attribute("cluster_name", cluster_name)
-                        span.set_attribute("time_from", str(time_from))
-                        span.set_attribute("time_to", str(time_to))
-                        interval_minutes = (time_to - time_from).total_seconds() / 60
-                        try:
-                            logger.info(
-                                f"Acquire data on {cluster_name} for interval: "
-                                f"{time_from} to {time_to} ({interval_minutes} min)"
-                            )
-
-                            sacct_mongodb_import(
-                                clusters_configs[cluster_name], time_from, time_to
-                            )
-
-                            if self.auto_interval is not None:
-                                set_auto_end_time(cluster_name, auto_end_field, time_to)
-                        # pylint: disable=broad-exception-caught
-                        except Exception as e:
-                            logger.error(
-                                f"Failed to acquire data on {cluster_name} for interval: "
-                                f"{time_from} to {time_to}: {type(e).__name__}: {e}"
-                            )
-                            raise e
-            # pylint: disable=broad-exception-caught
-            except Exception as e:
-                logger.error(
-                    f"Error while acquiring data on {cluster_name}: {type(e).__name__}: {e} ; skipping cluster."
-                )
-                # Continue to next cluster.
-                continue
         return 0
