@@ -11,9 +11,9 @@ from sarc.client.job import SlurmJob
 from sarc.cache import with_cache
 from sarc.config import ClusterConfig, config, UTC, TZLOCAL
 from sarc.core.models.validators import UTCOFFSET
-from sarc.errors import ClusterNotFound, using_trace
+from sarc.errors import ClusterNotFound
 from sarc.jobs.node_gpu_mapping import get_node_to_gpu
-from sarc.traces import trace_decorator
+from sarc.traces import trace_decorator, using_trace
 
 
 logger = logging.getLogger(__name__)
@@ -119,7 +119,7 @@ def _date_is_utc(value: datetime) -> bool:
     return value.tzinfo is not None and value.utcoffset() == UTCOFFSET
 
 
-class SAcctScraper:
+class SacctScraper:
     """Scrape info from Slurm using the sacct command."""
 
     def __init__(
@@ -128,7 +128,7 @@ class SAcctScraper:
         start: datetime,
         end: datetime,
     ):
-        """Initialize a SAcctScraper.
+        """Initialize a SacctScraper.
 
         Arguments:
             cluster: The cluster on which to scrape the data.
@@ -197,7 +197,7 @@ class SAcctScraper:
         ).get("version", None)
         for entry in self.get_raw()["jobs"]:
             with using_trace(
-                "sarc.jobs.sacct", "SAcctScraper.__iter__", exception_types=()
+                "sarc.jobs.sacct", "SacctScraper.__iter__", exception_types=()
             ) as span:
                 span.set_attribute("entry", json.dumps(entry))
                 converted = self.convert(entry, version)

@@ -38,11 +38,6 @@ class FetchJobs:
         ),
     )
 
-    force: bool = field(
-        action="store_true",
-        help="Force recalculating the data rather than use the cache",
-    )
-
     def execute(self) -> int:
         if self.intervals is not None and self.auto_interval is not None:
             logger.error(
@@ -50,8 +45,10 @@ class FetchJobs:
             )
             return -1
 
-        clusters_cfg = config("scraping").clusters
-        assert clusters_cfg is not None
+        clusters_configs = config("scraping").clusters
+        assert clusters_configs is not None
 
-        fetch_jobs(self.cluster_names, clusters_cfg, self.intervals)  # TODOSO
+        fetch_jobs(
+            self.cluster_names, clusters_configs, self.intervals, self.auto_interval
+        )
         return 0

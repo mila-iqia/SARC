@@ -38,7 +38,7 @@ def get_jobs(cluster: ClusterConfig, start: datetime, end: datetime) -> bytes:
 def fetch_jobs(
     cluster_names: list[str],
     clusters: dict[str, ClusterConfig],
-    unparsed_intervals: Optional[list[tuple[datetime, datetime]]],
+    unparsed_intervals: Optional[list[str]],
     auto_interval: Optional[int],
 ) -> None:
     """
@@ -141,28 +141,13 @@ def parse_jobs(
 
         # Retrieve from the cache
         cache = Cache(subdirectory=f"jobs/{cluster_name}")
-        for ce in cache.read_from(from_time=from_):
-
-            def get_datetimes_from_key(time_interval):
-                str_dates = time_interval.split("T")
-                start_date = datetime.strptime(str_dates[0])
-                end_date = datetime.strptime(str_dates[1])
-                return (start_date, end_date)
-
-            time_intervals = [get_datetimes_from_key(key) for key in ce.get_keys()]
-
+        for cache_entry in cache.read_from(from_time=from_):
             nb_jobs = 0
             nb_entries = 0
 
-            # Sort the time intervals stored in cluster_jobs
-            # The intervals are preferably sorted by the oldest end time,
-            # then sorted by the oldest start time
-            time_intervals.sort(key=lambda x: (x[1], x[0]))
-
-            # Retrieve all jobs associated to the time intervals
-            for time_interval in time_intervals:
-                key = f"{time_interval[0].strftime(DATE_FORMAT_HOUR)}_{time_interval[1].strftime(DATE_FORMAT_HOUR)}"
-                jobs = pickle.loads(ce.get_value(key))
+            # Retrieve all jobs associated to the sorted time intervals
+            for value in cache_entry.values():
+                jobs = pickle.loads(value)
                 nb_jobs += len(jobs)
 
                 # Store the jobs in the database, beginning by the
