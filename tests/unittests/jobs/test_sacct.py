@@ -5,7 +5,7 @@ import pytest
 from fabric.testing.base import Command
 
 from sarc.config import config, MTL, UTC
-from sarc.jobs.sacct import JobConversionError, SAcctScraper
+from sarc.core.scraping.jobs_utils import JobConversionError, SAcctScraper
 from tests.common.dateutils import _dtfmt
 
 

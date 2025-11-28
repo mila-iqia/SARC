@@ -7,7 +7,7 @@ from sarc.core.scraping.jobs import parse_jobs
 
 
 @dataclass
-class ParseUsers:
+class ParseJobs:
     cluster_names: list[str] = field(alias=["-c"], default_factory=list)
 
     from_: datetime = field(help="Start parsing the cache from the specified date")
