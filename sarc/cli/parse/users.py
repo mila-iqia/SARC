@@ -2,7 +2,6 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from simple_parsing import field
-
 from sarc.core.scraping.users import parse_users
 from sarc.users.db import get_user_collection
 

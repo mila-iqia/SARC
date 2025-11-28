@@ -1,25 +1,110 @@
-import json
-import logging
-import subprocess
 from datetime import datetime, timedelta
-from typing import Iterator, Optional
-
 from hostlist import expand_hostlist
 from invoke.runners import Result
-from tqdm import tqdm
+import json
+import logging
+import re
+import subprocess
+from typing import Iterator, Optional
 
+from sarc.client.job import SlurmJob
 from sarc.cache import with_cache
-from sarc.client.job import SlurmJob, _jobs_collection
-from sarc.config import UTC, ClusterConfig
+from sarc.config import ClusterConfig, config, UTC, TZLOCAL
 from sarc.core.models.validators import UTCOFFSET
+from sarc.errors import ClusterNotFound
 from sarc.jobs.node_gpu_mapping import get_node_to_gpu
 from sarc.traces import trace_decorator, using_trace
+
 
 logger = logging.getLogger(__name__)
 
 
+DATE_FORMAT_HOUR = "%Y-%m-%dT%H:%M"
+
+
 class JobConversionError(Exception):
     """Exception raised when there's an error converting a job entry from sacct."""
+
+
+def _str_to_dt(dt_str: str) -> datetime:
+    return datetime.strptime(dt_str, "%Y-%m-%d").replace(tzinfo=UTC)
+
+
+def _str_to_extended_dt(dt_str: str) -> datetime:
+    """Parse date up to minute, with format %Y-%m-%dT%H:%M"""
+    return datetime.strptime(dt_str, DATE_FORMAT_HOUR).replace(tzinfo=UTC)
+
+
+def _time_auto_first_date(cluster_name: str, end_field: str) -> datetime:
+    # get the last valid date in the database for the cluster
+    # pylint: disable=broad-exception-raised
+    db = config().mongo.database_instance
+    db_collection = db.clusters
+    cluster = db_collection.find_one({"cluster_name": cluster_name})
+    if cluster is None:
+        raise ClusterNotFound(f"Cluster {cluster_name} not found in database")
+    start_date = cluster["start_date"]
+    logger.info(f"start_date={start_date}")
+    end_time = cluster[end_field]
+    logger.info(f"{end_field}={end_time}")
+    if end_time is None:
+        # Use cluster start date
+        # NB: Cluster start date is a day, like YYYY-MM-DD
+        return _str_to_dt(start_date)
+    # Use cluster end time for sacct
+    # Cluster end time is an hour, like YYYY-MM-DDTHH:mm
+    return _str_to_extended_dt(end_time)
+
+
+def parse_intervals(intervals: list[str]) -> list[tuple[datetime, datetime]]:
+    regex_interval = re.compile(
+        r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})-(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})$", re.ASCII
+    )
+    parsed_intervals = []
+    for interval in intervals:
+        match = regex_interval.fullmatch(interval)
+        if match is None:
+            raise ValueError(f"Invalid interval {interval}")
+        date_from = _str_to_extended_dt(match.group(1))
+        date_to = _str_to_extended_dt(match.group(2))
+        if date_from > date_to:
+            raise ValueError(f"Interval: {date_from} > {date_to}")
+        parsed_intervals.append((date_from, date_to))
+    return parsed_intervals
+
+
+def parse_auto_intervals(
+    cluster_name: str, end_field: str, minutes: int, end: datetime | None = None
+) -> list[tuple[datetime, datetime]]:
+    intervals = []
+    start = _time_auto_first_date(cluster_name, end_field)
+    end = end or datetime.now(tz=TZLOCAL).astimezone(UTC)
+    if start > end:
+        raise ValueError(f"auto intervals: start date {start} > end date {end}")
+    if minutes <= 0:
+        # Invalid minutes. Let's just create a unique interval.
+        intervals.append((start, end))
+    else:
+        # Valid minutes. Generate many intervals to cover [start, end].
+        delta = timedelta(minutes=minutes)
+        curr = start
+        while curr < end:
+            next_time = curr + delta
+            intervals.append((curr, next_time))
+            curr = next_time
+    return intervals
+
+
+def set_auto_end_time(cluster_name: str, end_field: str, date: datetime) -> None:
+    # set the last valid date in the database for the cluster
+    logger.info(f"set last successful date for cluster {cluster_name} to {date}")
+    db = config().mongo.database_instance
+    db_collection = db.clusters
+    db_collection.update_one(
+        {"cluster_name": cluster_name},
+        {"$set": {end_field: date.strftime(DATE_FORMAT_HOUR)}},
+        upsert=True,
+    )
 
 
 def parse_in_timezone(timestamp: int | None) -> datetime | None:
@@ -34,7 +119,7 @@ def _date_is_utc(value: datetime) -> bool:
     return value.tzinfo is not None and value.utcoffset() == UTCOFFSET
 
 
-class SAcctScraper:
+class SacctScraper:
     """Scrape info from Slurm using the sacct command."""
 
     def __init__(
@@ -43,7 +128,7 @@ class SAcctScraper:
         start: datetime,
         end: datetime,
     ):
-        """Initialize a SAcctScraper.
+        """Initialize a SacctScraper.
 
         Arguments:
             cluster: The cluster on which to scrape the data.
@@ -112,7 +197,7 @@ class SAcctScraper:
         ).get("version", None)
         for entry in self.get_raw()["jobs"]:
             with using_trace(
-                "sarc.jobs.sacct", "SAcctScraper.__iter__", exception_types=()
+                "sarc.jobs.sacct", "SacctScraper.__iter__", exception_types=()
             ) as span:
                 span.set_attribute("entry", json.dumps(entry))
                 converted = self.convert(entry, version)
@@ -321,41 +406,6 @@ class SAcctScraper:
 
         # if we arrive here, it means that the version is not supported :-(
         raise JobConversionError(f"Unsupported slurm version: {version}")
-
-
-@trace_decorator()
-def sacct_mongodb_import(
-    cluster: ClusterConfig, start: datetime, end: datetime
-) -> None:
-    """Fetch sacct data and store it in MongoDB.
-
-    Parameters
-    ----------
-    cluster: ClusterConfig
-        The configuration of the cluster on which to fetch the data.
-    start: datetime
-        The UTC datetime from which to fetch the data. Hour and minute matter.
-    end: datetime
-        The UTC datetime up to which we fetch the data. Hour and minute matter.
-    """
-    collection = _jobs_collection()
-    scraper = SAcctScraper(cluster, start, end)
-
-    logger.info(
-        f"Getting the sacct data for cluster {cluster.name}, time {start} to {end}..."
-    )
-
-    scraper.get_raw()
-    logger.info(
-        f"Saving into mongodb collection '{collection.Meta.collection_name}'..."
-    )
-    nb_entries = 0
-    for entry in tqdm(scraper):
-        if entry is not None:
-            nb_entries += 1
-            update_allocated_gpu_type_from_nodes(cluster, entry)
-            collection.save_job(entry)
-    logger.info(f"Saved {nb_entries}/{len(scraper)} entries.")
 
 
 @trace_decorator()

@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import re
+
 from collections.abc import Iterable, Iterator
 from contextvars import ContextVar
 from dataclasses import dataclass, field
@@ -151,6 +152,7 @@ class Cache:
             ce.add_value(...)
         # rest of the code
         """
+
         cdir = self.cache_dir
 
         at_time = ensure_utc(at_time)
@@ -164,6 +166,7 @@ class Cache:
             mode="x",
             compression=ZIP_LZMA,
         )
+
         ce = CacheEntry(zf)
         try:
             yield ce
