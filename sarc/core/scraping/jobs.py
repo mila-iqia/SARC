@@ -146,7 +146,7 @@ def parse_jobs(
             nb_entries = 0
 
             # Retrieve all jobs associated to the sorted time intervals
-            for value in cache_entry.values():
+            for key, value in cache_entry.items():
                 jobs = pickle.loads(value)
                 nb_jobs += len(jobs)
 
@@ -159,5 +159,6 @@ def parse_jobs(
                             clusters[cluster_name], entry
                         )
                         collection.save_job(entry)
+                logger.info(f"Saved jobs on cluster {cluster_name} for timestamp {key}")
 
             logger.info(f"Saved {nb_entries}/{nb_jobs} entries.")
