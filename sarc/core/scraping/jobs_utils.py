@@ -8,6 +8,7 @@ import subprocess
 from typing import Iterator, Optional
 
 from sarc.client.job import SlurmJob
+from sarc.cache import with_cache
 from sarc.config import ClusterConfig, config, UTC, TZLOCAL
 from sarc.core.models.validators import UTCOFFSET
 from sarc.errors import ClusterNotFound, using_trace
@@ -25,9 +26,9 @@ class JobConversionError(Exception):
     """Exception raised when there's an error converting a job entry from sacct."""
 
 
-
 def _str_to_dt(dt_str: str) -> datetime:
     return datetime.strptime(dt_str, "%Y-%m-%d").replace(tzinfo=UTC)
+
 
 def _str_to_extended_dt(dt_str: str) -> datetime:
     """Parse date up to minute, with format %Y-%m-%dT%H:%M"""
@@ -53,7 +54,6 @@ def _time_auto_first_date(cluster_name: str, end_field: str) -> datetime:
     # Use cluster end time for sacct
     # Cluster end time is an hour, like YYYY-MM-DDTHH:mm
     return _str_to_extended_dt(end_time)
-
 
 
 def parse_intervals(intervals: list[str]) -> list[tuple[datetime, datetime]]:
@@ -94,6 +94,7 @@ def parse_auto_intervals(
             curr = next_time
     return intervals
 
+
 def set_auto_end_time(cluster_name: str, end_field: str, date: datetime) -> None:
     # set the last valid date in the database for the cluster
     logger.info(f"set last successful date for cluster {cluster_name} to {date}")
@@ -105,6 +106,7 @@ def set_auto_end_time(cluster_name: str, end_field: str, date: datetime) -> None
         upsert=True,
     )
 
+
 def parse_in_timezone(timestamp: int | None) -> datetime | None:
     if timestamp is None or timestamp == 0:
         return None
@@ -115,7 +117,6 @@ def parse_in_timezone(timestamp: int | None) -> datetime | None:
 def _date_is_utc(value: datetime) -> bool:
     """Return True if given date is in UTC timezone."""
     return value.tzinfo is not None and value.utcoffset() == UTCOFFSET
-
 
 
 class SAcctScraper:

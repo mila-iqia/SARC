@@ -1,16 +1,12 @@
 from dataclasses import dataclass
-from datetime import datetime, timedelta
 import logging
 from simple_parsing import field
 
-from sarc.config import config, UTC, TZLOCAL
+from sarc.config import config
 from sarc.core.scraping.jobs import fetch_jobs
-from sarc.errors import ClusterNotFound
 
 
 logger = logging.getLogger(__name__)
-
-
 
 
 @dataclass
@@ -47,18 +43,15 @@ class FetchJobs:
         help="Force recalculating the data rather than use the cache",
     )
 
-
-
     def execute(self) -> int:
         if self.intervals is not None and self.auto_interval is not None:
             logger.error(
                 "Parameters mutually exclusive: either --intervals or --auto_interval, not both"
             )
             return -1
-        
+
         clusters_cfg = config("scraping").clusters
         assert clusters_cfg is not None
 
-
-        fetch_jobs(self.cluster_names, clusters_cfg, self.intervals) # TODOSO
+        fetch_jobs(self.cluster_names, clusters_cfg, self.intervals)  # TODOSO
         return 0

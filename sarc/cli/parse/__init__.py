@@ -10,11 +10,7 @@ from .users import ParseUsers
 @dataclass
 class Parse:
     command: ParseUsers | ParseSlurmConfig = subparsers(
-        {
-            "users": ParseUsers,
-            "slurmconfig": ParseSlurmConfig,
-            "jobs": ParseJobs
-        }
+        {"users": ParseUsers, "slurmconfig": ParseSlurmConfig, "jobs": ParseJobs}
     )
 
     def execute(self) -> int:
