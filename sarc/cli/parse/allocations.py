@@ -80,7 +80,7 @@ class ParseAllocations:
         for ce in cache.read_from(ts):
             for _, value in ce.items():  # noqa: PERF102
                 reader = csv.DictReader(
-                    value.decode("utf-8"),
+                    value.decode("utf-8").split("\n"),
                     skipinitialspace=True,
                     restkey="garbage",
                     restval="",
