@@ -80,7 +80,7 @@ def parse_auto_intervals(
         # Valid minutes. Generate many intervals to cover [start, end].
         delta = timedelta(minutes=minutes)
         curr = start
-        while curr < end:
+        while curr + delta <= end:
             next_time = curr + delta
             intervals.append((curr, next_time))
             curr = next_time
