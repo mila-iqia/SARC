@@ -50,7 +50,6 @@ from enum import IntEnum, unique
 from itertools import chain, repeat
 from typing import Sequence
 
-import pyodbc  # type: ignore[import-not-found]
 from azure.identity import ClientSecretCredential
 
 from sarc.core.scraping.users import MatchID, UserMatch, UserScraper, _builtin_scrapers
@@ -181,6 +180,8 @@ def _query_mymila(cfg: MyMilaConfig):
     Contact MyMila in order to retrieve users data,
     then return these data as MyMilaUser elements.
     """
+    import pyodbc  # type: ignore[import-not-found]
+
     # Retrieve MyMila data
     credential = ClientSecretCredential(
         client_id=cfg.client_id,
