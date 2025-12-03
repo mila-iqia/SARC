@@ -3,7 +3,8 @@ sarc:
     log_level: INFO
     OTLP_endpoint: http://loki01.server.mila.quebec:3100/otlp/v1/logs
     service_name: sarc-dev
-    slack: ../../SARC_secrets/secrets/slack-prod.yaml
+    slack: null
+    # slack: ../../SARC_secrets/secrets/slack-prod.yaml
       # description: SARC-prod
       # token: slack-token-replaceme
       # channel: slack-channel-id-replace-me
