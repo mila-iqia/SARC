@@ -88,7 +88,7 @@ sarc:
         /project/rrg-bengioy-ad
       duc_storage_command: duc ls -d /project/.duc_databases/rrg-bengioy-ad.sqlite /project/rrg-bengioy-ad
       prometheus_url: https://mila-thanos.calculquebec.ca
-      prometheus_headers_file: ../../SARC_secrets/secrets/drac_prometheus/headers.json
+      prometheus_headers_file: ../SARC_secrets/secrets/drac_prometheus/headers.json
       start_date: '2022-04-01'
       gpus_per_nodes:
         __DEFAULTS__:
@@ -188,20 +188,93 @@ sarc:
     #       p100: P100-PCIe-12GB
     #       p100l: P100-PCIe-16GB
     #       v100l: V100-PCIe-32GB
-    # tamia:
-    #   host: tamia.alliancecan.ca
-    #   timezone: America/Montreal
-    #   accounts:
-    #   sacct_bin: "/opt/slurm/bin/sacct"
-    #   duc_inodes_command:
-    #   duc_storage_command:
-    #   prometheus_url:
-    #   prometheus_headers_file:
-    #   start_date: '2025-02-01'
-    #   gpus_per_nodes:
-    #     __DEFAULTS__:
-    #       h100: H100-SXM5-80GB
-    #     tg[10601-10606,10701-10707,10801-10807,10901-10908,11101-11107,11201-11207]:
-    #       h100: H100-SXM5-80GB
-
-
+    tamia:
+      host: tamia
+      timezone: America/Montreal
+      accounts:
+      sacct_bin: "/opt/slurm/bin/sacct"
+      duc_inodes_command: 
+      duc_storage_command: 
+      # diskusage_report_command: diskusage_report --project --all_users
+      prometheus_url: 
+      prometheus_headers_file: 
+      start_date: '2025-02-01'
+      gpus_per_nodes:
+        __DEFAULTS__:
+          h100: H100-SXM5-80GB
+        tg[10601-10606,10701-10707,10801-10807,10901-10908,11101-11107,11201-11207]:
+          h100: H100-SXM5-80GB
+    fir:
+      host: robot.fir.alliancecan.ca
+      timezone: America/Vancouver
+      accounts:
+      - rrg-bengioy-ad_gpu
+      - rrg-bengioy-ad_cpu
+      - def-bengioy_gpu
+      - def-bengioy_cpu
+      sacct_bin: "/opt/software/slurm/bin/sacct"
+      ignore_tz_utc: true
+      duc_inodes_command:
+      duc_storage_command:
+      prometheus_url:
+      prometheus_headers_file:
+      start_date: '2025-08-11'          
+    nibi:
+      host: nibi
+      timezone: America/Toronto
+      accounts:
+      - rrg-bengioy-ad_gpu
+      - rrg-bengioy-ad_cpu
+      - def-bengioy_gpu
+      - def-bengioy_cpu
+      sacct_bin: "/opt/software/slurm/bin/sacct"
+      duc_inodes_command:
+      duc_storage_command:
+      # diskusage_report_command: diskusage_report --project --all_users
+      prometheus_url:
+      prometheus_headers_file:
+      start_date: '2025-07-31'          
+      gpus_per_nodes:
+        __DEFAULTS__:
+          h100: H100-SXM5-80GB
+          nvidia_h100_80gb_hbm3_1g.10gb: __MIG_FLAG__h100
+          nvidia_h100_80gb_hbm3_2g.20gb: __MIG_FLAG__h100
+          nvidia_h100_80gb_hbm3_3g.40gb: __MIG_FLAG__h100
+    rorqual:
+      host: rorqual
+      timezone: America/Montreal
+      accounts:
+      - rrg-bengioy-ad_gpu
+      - rrg-bengioy-ad_cpu
+      - def-bengioy_gpu
+      - def-bengioy_cpu
+      sacct_bin: "/opt/software/slurm/bin/sacct"
+      duc_inodes_command:
+      duc_storage_command:
+      # diskusage_report_command: diskusage_report --project --all_users
+      prometheus_url: https://mila-thanos.calculquebec.ca
+      prometheus_headers_file: ../SARC_secrets/secrets/drac_prometheus/headers.json
+      # prometheus_url:
+      # prometheus_headers_file:
+      start_date: '2025-06-19'          
+      gpus_per_nodes:
+        __DEFAULTS__:
+          h100: H100-SXM5-80GB
+          nvidia_h100_80gb_hbm3_1g.10gb: __MIG_FLAG__h100
+          nvidia_h100_80gb_hbm3_2g.20gb: __MIG_FLAG__h100
+          nvidia_h100_80gb_hbm3_3g.40gb: __MIG_FLAG__h100
+    trillium:
+      host: trillium
+      timezone: America/Montreal
+      accounts:
+      - rrg-bengioy-ad_gpu
+      - rrg-bengioy-ad_cpu
+      - def-bengioy_gpu
+      - def-bengioy_cpu
+      sacct_bin: "/opt/slurm/bin/sacct"
+      duc_inodes_command:
+      duc_storage_command:
+      # diskusage_report_command: diskusage_report --project --all_users
+      prometheus_url:
+      prometheus_headers_file:
+      start_date: '2025-06-19'          
