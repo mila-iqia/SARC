@@ -11,7 +11,7 @@ from flatten_dict import flatten, unflatten
 
 from sarc.config import MTL, UTC, config
 from sarc.core.models.users import Credentials, MemberType
-from sarc.jobs.sacct import parse_in_timezone
+from sarc.core.scraping.jobs_utils import parse_in_timezone
 from sarc.users.db import UserDB
 
 elapsed_time = 60 * 60 * 12

@@ -12,7 +12,7 @@ from simple_parsing import ArgumentParser
 from sarc.client.job import _jobs_collection, JobStatistics, SlurmJob
 from sarc.config import config, UTC
 from sarc.core.models.validators import datetime_utc
-from sarc.jobs.sacct import update_allocated_gpu_type_from_nodes
+from sarc.core.scraping.jobs_utils import update_allocated_gpu_type_from_nodes
 from sarc.jobs.series import (
     _get_job_time_series_data_cache_key,
     JOB_STATISTICS_METRIC_NAMES,

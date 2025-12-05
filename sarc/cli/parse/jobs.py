@@ -7,15 +7,12 @@ from sarc.core.scraping.jobs import parse_jobs
 
 
 @dataclass
-class ParseUsers:
-    cluster_names: list[str] = field(alias=["-c"], default_factory=list)
-
-
-
+class ParseJobs:
     from_: datetime = field(help="Start parsing the cache from the specified date")
 
-    def execute(self) -> int:
+    cluster_names: list[str] = field(alias=["-c"], default_factory=list)
 
+    def execute(self) -> int:
         clusters_cfg = config("scraping").clusters
         assert clusters_cfg is not None
 
