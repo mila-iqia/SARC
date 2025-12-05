@@ -841,18 +841,6 @@ wheels = [
 ]
 
 [[package]]
-name = "httmock"
-version = "1.4.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "requests" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/e0/35/d881561984239dcf507625ec86f9653ba5526213ed94138a9ea6b0305169/httmock-1.4.0.tar.gz", hash = "sha256:44eaf4bb59cc64cd6f5d8bf8700b46aa3097cc5651b9bc85c527dfbc71792f41", size = 4795, upload-time = "2020-10-28T12:01:30.325Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/ce/99/f950e23335affb58ae116aaf32565258a732b2b570aa961764df2ac0540d/httmock-1.4.0-py3-none-any.whl", hash = "sha256:13e6c63f135a928e15d386af789a2890efb03e0e280f29bdc9961f3f0dc34cb9", size = 4754, upload-time = "2020-10-28T12:01:29.1Z" },
-]
-
-[[package]]
 name = "httpcore"
 version = "1.0.9"
 source = { registry = "https://pypi.org/simple" }
@@ -2014,19 +2002,15 @@ wheels = [
 
 [[package]]
 name = "prometheus-api-client"
-version = "0.6.0"
+version = "0.7.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "dateparser" },
-    { name = "httmock" },
-    { name = "matplotlib" },
-    { name = "numpy" },
-    { name = "pandas" },
     { name = "requests" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/78/18/893d14d805164b6bd479aff7659a9cbf249628006dc4369058609029b9e1/prometheus_api_client-0.6.0.tar.gz", hash = "sha256:80822f1bb599febcab27c5ba2924b1c236d01f9b0df0308f91b5087937a6ad3e", size = 26004, upload-time = "2025-04-18T04:24:45.138Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/82/23/2717930b85bd7825935cfc95295228a0b04079e962139d2f315a57e3af13/prometheus_api_client-0.7.0.tar.gz", hash = "sha256:21af9f2bb24a0280083a744231b21bacab4f42159c38e374a090ec503edf4e70", size = 21493, upload-time = "2025-12-05T02:10:18.913Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/fb/24/0c06c1d10aada3f9b44174c743e48d25e19f953ee9de5caf2c30099c342d/prometheus_api_client-0.6.0-py3-none-any.whl", hash = "sha256:137fa4576a76177547c4d7bb43e2a457df95f5bd81afe782896ba77ab87ebaf6", size = 30170, upload-time = "2025-04-18T04:24:43.639Z" },
+    { url = "https://files.pythonhosted.org/packages/7a/85/492f2909c25a22b6024e4cb279bd7c2c0ac494ce8ee851f64c9364bf5b1b/prometheus_api_client-0.7.0-py3-none-any.whl", hash = "sha256:862e10617bc6ebf89216259bfe7449f38f2e6162b9a833f681391a0088cf176b", size = 21970, upload-time = "2025-12-05T02:10:17.637Z" },
 ]
 
 [[package]]
@@ -2910,7 +2894,7 @@ requires-dist = [
     { name = "opentelemetry-exporter-otlp", specifier = ">=1.23.0,<2" },
     { name = "opentelemetry-sdk", specifier = ">=1.36.0,<2" },
     { name = "pandas", specifier = ">=2.3.0,<2.4.0" },
-    { name = "prometheus-api-client", specifier = ">=0.6,<0.7" },
+    { name = "prometheus-api-client", specifier = ">=0.7,<0.8" },
     { name = "pydantic", specifier = ">=2.11.4,<3" },
     { name = "pydantic-mongo", specifier = ">=3.1,<4" },
     { name = "pymongo", specifier = ">=4.3.3,<5" },
