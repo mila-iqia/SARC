@@ -2,16 +2,18 @@ from dataclasses import dataclass
 
 from simple_parsing import subparsers
 
+from .allocations import ParseAllocations
 from .slurmconfig import ParseSlurmConfig
 from .users import ParseUsers
 
 
 @dataclass
 class Parse:
-    command: ParseUsers | ParseSlurmConfig = subparsers(
+    command: ParseAllocations | ParseUsers | ParseSlurmConfig = subparsers(
         {
             "users": ParseUsers,
             "slurmconfig": ParseSlurmConfig,
+            "allocations": ParseAllocations,
         }
     )
 
