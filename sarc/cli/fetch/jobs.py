@@ -53,5 +53,5 @@ class FetchJobs:
         clusters_cfg = config("scraping").clusters
         assert clusters_cfg is not None
 
-        fetch_jobs(self.cluster_names, clusters_cfg, self.intervals)  # TODOSO
+        fetch_jobs(self.cluster_names, clusters_cfg, self.intervals, self.auto_interval)
         return 0
