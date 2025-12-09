@@ -8,10 +8,8 @@ DRAC cluster to extract important cluster data:
 
 Examples:
 ```
-uv run sarc acquire slurmconfig -c cedar -d 2024-04-01
-uv run sarc acquire slurmconfig -c beluga -d 2024-04-01
-uv run sarc acquire slurmconfig -c graham -d 2024-04-01
-uv run sarc acquire slurmconfig -c narval -d 2024-04-01
+uv run sarc fetch slurmconfig -c cedar
+uv run sarc parse slurmconfig -c cedar
 ```
 
 ## Node -> GPU type

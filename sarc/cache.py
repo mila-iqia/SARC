@@ -16,6 +16,7 @@ from typing import IO, Any, Callable, ClassVar, Literal, Protocol, overload
 from zipfile import ZIP_LZMA, ZipFile
 
 from .config import config
+from .core.models.validators import datetime_utc
 
 logger = logging.getLogger(__name__)
 UTCOFFSET = timedelta(0)
@@ -269,6 +270,42 @@ class Cache:
         """
         for file in self._paths_from(from_time):
             yield CacheEntry(ZipFile(file, mode="r"))
+
+    def latest_entry(self) -> CacheEntry | None:
+        """Returns the most recent cache entry if exists, otherwise None."""
+        cdir = self.cache_dir
+        for year_dir in sorted(cdir.iterdir(), key=_basename_to_int, reverse=True):
+            for month_dir in sorted(
+                year_dir.iterdir(), key=_basename_to_int, reverse=True
+            ):
+                for day_dir in sorted(
+                    month_dir.iterdir(), key=_basename_to_int, reverse=True
+                ):
+                    for file in sorted(
+                        day_dir.iterdir(), key=_basename_to_time, reverse=True
+                    ):
+                        return CacheEntry(ZipFile(file, mode="r"))
+        return None
+
+    def oldest_year(self) -> datetime_utc:
+        """
+        Return the oldest year in the cache if exists, otherwise current year.
+        return: January 1st of year found, at 00h 00min 00sec 00microseconds in UTC timezone.
+        """
+        cdir = self.cache_dir
+        for year_dir in sorted(cdir.iterdir(), key=_basename_to_int):
+            return datetime(year=_basename_to_int(year_dir), month=1, day=1, tzinfo=UTC)
+        return datetime.now(tz=UTC).replace(
+            month=1, day=1, hour=0, minute=0, second=0, microsecond=0
+        )
+
+
+def _basename_to_int(path: Path) -> int:
+    return int(path.parts[-1])
+
+
+def _basename_to_time(path: Path) -> time:
+    return time.fromisoformat(path.parts[-1])
 
 
 @dataclass

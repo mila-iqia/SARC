@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from simple_parsing import subparsers
 
 from .diskusage import ParseDiskUsage
+from .slurmconfig import ParseSlurmConfig
 from .users import ParseUsers
 
 
@@ -13,6 +14,7 @@ class Parse:
         {
             "users": ParseUsers,
             "diskusage": ParseDiskUsage,
+            "slurmconfig": ParseSlurmConfig,
         }
     )
 

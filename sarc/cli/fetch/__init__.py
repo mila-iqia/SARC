@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from simple_parsing import subparsers
 
 from .diskusage import FetchDiskUsage
+from .slurmconfig import FetchSlurmConfig
 from .users import FetchUsers
 
 
@@ -12,6 +13,7 @@ class Fetch:
         {
             "users": FetchUsers,
             "diskusage": FetchDiskUsage,
+            "slurmconfig": FetchSlurmConfig,
         }
     )
 
