@@ -7,6 +7,7 @@ from sarc.core.scraping.diskusage import get_diskusage_scraper
 from sarc.storage.diskusage import get_diskusages
 
 
+@pytest.mark.freeze_time("2023-07-25")
 def test_drac_fetch_report(remote, file_regression):
     cluster = config("scraping").clusters["gerudo"]
     diskusages = cluster.diskusage
@@ -30,25 +31,26 @@ def test_drac_fetch_report(remote, file_regression):
         out=raw_report,
     )
 
-    report = scraper.get_diskusage_report(cluster.ssh, dconfig)
+    report = scraper.get_diskusage_report(cluster.ssh, "gerudo", dconfig)
     file_regression.check(report.decode())
 
 
 # Test DRAC scraper parsing functionality through the proper interface
 def test_drac_parse_report(file_regression):
-    with open(Path(__file__).parent / "drac_reports/report_hyrule.txt", "rb") as f:
+    with open(
+        Path(__file__).parent / "drac_reports/cached_report_hyrule.txt", "rb"
+    ) as f:
         raw_report = f.read()
 
     scraper = get_diskusage_scraper("drac")
-    config = scraper.validate_config({})  # Use default config
-    result = scraper.parse_diskusage_report(config, "hyrule", raw_report)
+    result = scraper.parse_diskusage_report(raw_report)
 
     file_regression.check(result.model_dump_json(exclude={"timestamp", "id"}, indent=2))
 
 
 @pytest.mark.usefixtures("empty_read_write_db")
 @pytest.mark.freeze_time("2023-05-12")
-def test_drac_acquire_storages(remote, cli_main, file_regression):
+def test_drac_acquire_storages(remote, cli_main, file_regression, enabled_cache):
     cluster = config("scraping").clusters["hyrule"]
     diskusages = cluster.diskusage
     assert diskusages is not None
@@ -71,14 +73,8 @@ def test_drac_acquire_storages(remote, cli_main, file_regression):
         out=raw_report,
     )
 
-    cli_main(
-        [
-            "acquire",
-            "storages",
-            "-c",
-            "hyrule",
-        ]
-    )
+    cli_main(["fetch", "diskusage", "-c", "hyrule"])
+    cli_main(["parse", "diskusage", "--from", "2023-05-11"])
 
     data = get_diskusages(cluster_name=["hyrule"])
     assert len(data) == 1

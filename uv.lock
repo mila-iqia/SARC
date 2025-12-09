@@ -2916,7 +2916,7 @@ requires-dist = [
 dev = [
     { name = "fabric", extras = ["testing"], specifier = ">=3.0.0,<4" },
     { name = "jupyter", specifier = ">=1.0.0,<2" },
-    { name = "mypy", specifier = ">=1.17.1,<2" },
+    { name = "mypy", specifier = ">=1.18.1,<2" },
     { name = "pandas-stubs", specifier = ">=2.2.3.250308" },
     { name = "pytest", specifier = ">=9.0.1,<10" },
     { name = "pytest-cov", specifier = ">=7,<8" },
