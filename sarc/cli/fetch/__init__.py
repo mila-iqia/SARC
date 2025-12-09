@@ -9,7 +9,7 @@ from .users import FetchUsers
 
 @dataclass
 class Fetch:
-    command: FetchUsers | FetchDiskUsage = subparsers(
+    command: FetchUsers | FetchDiskUsage | FetchSlurmConfig = subparsers(
         {
             "users": FetchUsers,
             "diskusage": FetchDiskUsage,
