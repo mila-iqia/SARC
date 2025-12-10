@@ -3,16 +3,14 @@ from typing import Union
 
 from simple_parsing import subparsers
 
-from sarc.cli.acquire.allocations import AcquireAllocations
 from sarc.cli.acquire.jobs import AcquireJobs
 from sarc.cli.acquire.prometheus import AcquirePrometheus
 
 
 @dataclass
 class Acquire:
-    command: Union[AcquireAllocations, AcquireJobs, AcquirePrometheus] = subparsers(
+    command: Union[AcquireJobs, AcquirePrometheus] = subparsers(  # type: ignore[type-var]
         {
-            "allocations": AcquireAllocations,
             "jobs": AcquireJobs,
             "prometheus": AcquirePrometheus,
         }
