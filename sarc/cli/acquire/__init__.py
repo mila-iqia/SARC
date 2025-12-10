@@ -9,7 +9,7 @@ from sarc.cli.acquire.prometheus import AcquirePrometheus
 
 @dataclass
 class Acquire:
-    command: Union[AcquireJobs, AcquirePrometheus] = subparsers(
+    command: Union[AcquireJobs, AcquirePrometheus] = subparsers(  # type: ignore[type-var]
         {
             "jobs": AcquireJobs,
             "prometheus": AcquirePrometheus,
