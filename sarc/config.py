@@ -56,6 +56,7 @@ class ClusterConfig:
     prometheus_headers_file: str | None = None
     name: str | None = None
     sacct_bin: str = "sacct"
+    ignore_tz_utc: bool = False
     accounts: list[str] | None = None
     sshconfig: Path | None = None
     diskusage: list[DiskUsageConfig] | None = None

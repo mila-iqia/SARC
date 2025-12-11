@@ -48,17 +48,17 @@ def test_prod_config():
     def mock_read_text_selective(path_obj, *args, **kwargs):
         if "mongo-prod.yaml" in str(path_obj):
             return mock_mongo_content
+        if "slack-prod.yaml" in str(path_obj):
+            return "null"
         return original_read_text(path_obj, *args, **kwargs)
 
     # Create a selective mock for exists that returns True for our file
     original_exists = Path.exists
 
     def mock_exists_selective(path_obj):
-        if "mongo-prod.yaml" in str(path_obj):
+        if "mongo-prod.yaml" in str(path_obj) or "slack-prod.yaml" in str(path_obj):
             return True
         return original_exists(path_obj)
-
-    print("test_prod_config")
 
     # Apply both patches
     with (
