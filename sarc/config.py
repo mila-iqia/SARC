@@ -58,8 +58,6 @@ class ClusterConfig:
     sacct_bin: str = "sacct"
     accounts: list[str] | None = None
     sshconfig: Path | None = None
-    duc_inodes_command: str | None = None
-    duc_storage_command: str | None = None
     diskusage: list[DiskUsageConfig] | None = None
     start_date: str = "2022-04-01"
     slurm_conf_host_path: Path = Path("/etc/slurm/slurm.conf")
