@@ -682,7 +682,7 @@ def compute_time_frames(
 
     total_durations: pandas.Series[float] = (
         jobs[col_end] - jobs[col_start]
-    ).dt.total_seconds()
+    ).dt.total_seconds()  # type: ignore[attr-defined]
     for frame_start in pandas.date_range(start, end, freq=frame_size):
         frame_end = frame_start + frame_size
 
@@ -691,7 +691,7 @@ def compute_time_frames(
         total_durations_in_frame = total_durations[mask]
         frame[col_start] = frame[col_start].clip(frame_start, frame_end)  # type: ignore[call-overload]
         frame[col_end] = frame[col_end].clip(frame_start, frame_end)  # type: ignore[call-overload]
-        frame["duration"] = (frame[col_end] - frame[col_start]).dt.total_seconds()
+        frame["duration"] = (frame[col_end] - frame[col_start]).dt.total_seconds()  # type: ignore[attr-defined]
 
         # Adjust columns to fit the time frame.
         for column in columns:
