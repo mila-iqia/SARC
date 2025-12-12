@@ -319,13 +319,13 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     print(caplog.text)
     assert bool(
         re.search(
-            rf"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Acquire data on raisin for interval: {_dtreg(2023, 2, 15)} to {_dtreg(2023, 2, 16)} \(1440.0 min\)",
+            rf"sarc.core.scraping.jobs:jobs\.py:[0-9]+ Acquire data on raisin for interval: {_dtreg(2023, 2, 15)} to {_dtreg(2023, 2, 16)} \(1440.0 min\)",
             caplog.text,
         )
     )
     assert bool(
         re.search(
-            rf"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Acquire data on patate for interval: {_dtreg(2023, 2, 15)} to {_dtreg(2023, 2, 16)} \(1440.0 min\)",
+            rf"sarc.core.scraping.jobs:jobs\.py:[0-9]+ Acquire data on patate for interval: {_dtreg(2023, 2, 15)} to {_dtreg(2023, 2, 16)} \(1440.0 min\)",
             caplog.text,
         )
     )
@@ -336,7 +336,7 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     assert "Saving into mongodb collection '" in caplog.text
     assert bool(
         re.search(
-            r"sarc\.jobs\.sacct:sacct\.py:[0-9]+ Saved [0-9]+/[0-9]+ entries\.",
+            r"sarc\.core\.scraping\.jobs:jobs\.py:[0-9]+ Saved [0-9]+/[0-9]+ entries\.",
             caplog.text,
         )
     )
@@ -344,13 +344,13 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     # There should be 2 acquisition errors for unexpected data 2023-03-16, one per cluster.
     assert bool(
         re.search(
-            rf"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Failed to acquire data on raisin for interval: {_dtreg(2023, 3, 16)} to {_dtreg(2023, 3, 17)}:",
+            rf"sarc.core.scraping.jobs:jobs\.py:[0-9]+ Failed to acquire data on raisin for interval: {_dtreg(2023, 3, 16)} to {_dtreg(2023, 3, 17)}:",
             caplog.text,
         )
     )
     assert bool(
         re.search(
-            rf"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Failed to acquire data on patate for interval: {_dtreg(2023, 3, 16)} to {_dtreg(2023, 3, 17)}:",
+            rf"sarc.core.scraping.jobs:jobs\.py:[0-9]+ Failed to acquire data on patate for interval: {_dtreg(2023, 3, 16)} to {_dtreg(2023, 3, 17)}:",
             caplog.text,
         )
     )
@@ -568,7 +568,7 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
     for cluster_name in cluster_names:
         assert bool(
             re.search(
-                rf"sarc\.cli\.acquire\.jobs:jobs\.py:[0-9]+ Acquire data on {cluster_name} for interval: 2023-02-15 01:00:00\+00:00 to 2023-02-15 01:05:00\+00:00 \(5.0 min\)",
+                rf"sarc\.core\.scraping\.jobs:jobs\.py:[0-9]+ Acquire data on {cluster_name} for interval: 2023-02-15 01:00:00\+00:00 to 2023-02-15 01:05:00\+00:00 \(5.0 min\)",
                 caplog.text,
             )
         )
@@ -580,7 +580,7 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
     assert "Saving into mongodb collection '" in caplog.text
     assert bool(
         re.search(
-            r"sarc\.jobs\.sacct:sacct\.py:[0-9]+ Saved [0-9]+/[0-9]+ entries\.",
+            r"sarc\.core\.scraping\.jobs:jobs\.py:[0-9]+ Saved [0-9]+/[0-9]+ entries\.",
             caplog.text,
         )
     )
@@ -589,7 +589,7 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
     for cluster_name in cluster_names:
         assert bool(
             re.search(
-                rf"sarc\.cli\.acquire\.jobs:jobs\.py:[0-9]+ Failed to acquire data on {cluster_name} for interval: 2023-03-16 01:00:00\+00:00 to 2023-03-16 01:05:00\+00:00:",
+                rf"sarc\.core\.scraping\.jobs:jobs\.py:[0-9]+ Failed to acquire data on {cluster_name} for interval: 2023-03-16 01:00:00\+00:00 to 2023-03-16 01:05:00\+00:00:",
                 caplog.text,
             )
         )
