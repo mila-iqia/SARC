@@ -323,7 +323,7 @@ def test_stdout_message_before_json(
     assert (
         cli_main(
             [
-                "acquire",
+                "fetch",
                 "jobs",
                 "--cluster_name",
                 "raisin",
@@ -361,7 +361,7 @@ def test_save_job(test_config, sacct_json, remote, file_regression, cli_main):
     assert (
         cli_main(
             [
-                "acquire",
+                "fetch",
                 "jobs",
                 "--cluster_name",
                 "raisin",
@@ -404,7 +404,7 @@ def test_update_job(test_config, sacct_json, remote, file_regression, cli_main):
     assert (
         cli_main(
             [
-                "acquire",
+                "fetch",
                 "jobs",
                 "--cluster_name",
                 "raisin",
@@ -420,7 +420,7 @@ def test_update_job(test_config, sacct_json, remote, file_regression, cli_main):
     assert (
         cli_main(
             [
-                "acquire",
+                "fetch",
                 "jobs",
                 "--cluster_name",
                 "raisin",
@@ -475,7 +475,7 @@ def test_save_preempted_job(test_config, sacct_json, remote, file_regression, cl
     assert (
         cli_main(
             [
-                "acquire",
+                "fetch",
                 "jobs",
                 "--cluster_name",
                 "raisin",
@@ -535,7 +535,7 @@ def test_multiple_dates(test_config, remote, file_regression, cli_main):
     assert (
         cli_main(
             [
-                "acquire",
+                "fetch",
                 "jobs",
                 "--cluster_name",
                 "raisin",
@@ -622,7 +622,7 @@ def test_multiple_clusters_and_dates(test_config, remote, file_regression, cli_m
     assert (
         cli_main(
             [
-                "acquire",
+                "fetch",
                 "jobs",
                 "--cluster_name",
                 "raisin",
@@ -677,7 +677,7 @@ def test_job_tz(test_config, sacct_json, remote, cli_main):
     assert (
         cli_main(
             [
-                "acquire",
+                "fetch",
                 "jobs",
                 "--cluster_name",
                 "patate",
@@ -718,7 +718,7 @@ def test_acquire_jobs_mutually_exclusive_args(cli_main, caplog):
     assert (
         cli_main(
             [
-                "acquire",
+                "fetch",
                 "jobs",
                 "--cluster_name",
                 "raisin",
@@ -743,7 +743,7 @@ def test_acquire_jobs_invalid_interval(cli_main, caplog):
     assert (
         cli_main(
             [
-                "acquire",
+                "fetch",
                 "jobs",
                 "--cluster_name",
                 "raisin",
@@ -765,7 +765,7 @@ def test_acquire_jobs_interval_start_gt_end(cli_main, caplog):
     assert (
         cli_main(
             [
-                "acquire",
+                "fetch",
                 "jobs",
                 "--cluster_name",
                 "raisin",
@@ -787,7 +787,7 @@ def test_acquire_jobs_args_no_interval(cli_main, caplog):
     assert (
         cli_main(
             [
-                "acquire",
+                "fetch",
                 "jobs",
                 "--cluster_name",
                 "raisin",
@@ -836,7 +836,7 @@ def test_auto_interval(cli_main, monkeypatch, freezer, caplog):
         cli_main(
             [
                 "-v",
-                "acquire",
+                "fetch",
                 "jobs",
                 "--cluster_name",
                 "raisin",
@@ -902,7 +902,7 @@ def test_auto_interval_0(cli_main, monkeypatch, freezer, caplog):
         cli_main(
             [
                 "-v",
-                "acquire",
+                "fetch",
                 "jobs",
                 "--cluster_name",
                 "raisin",

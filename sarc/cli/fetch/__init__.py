@@ -9,7 +9,7 @@ from .jobs import FetchJobs
 
 @dataclass
 class Fetch:
-    command: FetchUsers | FetchSlurmConfig = subparsers(
+    command: FetchJobs | FetchUsers | FetchSlurmConfig = subparsers(
         {
             "jobs": FetchJobs,
             "users": FetchUsers,
