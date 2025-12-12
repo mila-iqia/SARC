@@ -11,16 +11,16 @@ from .jobs import FetchJobs
 
 @dataclass
 class Fetch:
-    command: FetchUsers | FetchDiskUsage | FetchSlurmConfig | FetchAllocations | FetchJobs = (
-        subparsers(
-            {
-                "users": FetchUsers,
-                "diskusage": FetchDiskUsage,
-                "slurmconfig": FetchSlurmConfig,
-                "allocations": FetchAllocations,
-                "jobs": FetchJobs,
-            }
-        )
+    command: (
+        FetchUsers | FetchDiskUsage | FetchSlurmConfig | FetchAllocations | FetchJobs
+    ) = subparsers(
+        {
+            "users": FetchUsers,
+            "diskusage": FetchDiskUsage,
+            "slurmconfig": FetchSlurmConfig,
+            "allocations": FetchAllocations,
+            "jobs": FetchJobs,
+        }
     )
 
     def execute(self) -> int:

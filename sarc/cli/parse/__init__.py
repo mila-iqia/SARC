@@ -11,16 +11,16 @@ from .users import ParseUsers
 
 @dataclass
 class Parse:
-    command: ParseUsers | ParseDiskUsage | ParseSlurmConfig | ParseAllocations | ParseJobs = (
-        subparsers(
-            {
-                "users": ParseUsers,
-                "diskusage": ParseDiskUsage,
-                "slurmconfig": ParseSlurmConfig,
-                "allocations": ParseAllocations,
-                "jobs": ParseJobs,
-            }
-        )
+    command: (
+        ParseUsers | ParseDiskUsage | ParseSlurmConfig | ParseAllocations | ParseJobs
+    ) = subparsers(
+        {
+            "users": ParseUsers,
+            "diskusage": ParseDiskUsage,
+            "slurmconfig": ParseSlurmConfig,
+            "allocations": ParseAllocations,
+            "jobs": ParseJobs,
+        }
     )
 
     def execute(self) -> int:
