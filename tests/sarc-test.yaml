@@ -9,10 +9,6 @@ sarc:
       - def-bonhomme_cpu
       diskusage:
       - name: drac
-      duc_inodes_command: duc ls -d /project/.duc_databases/rrg-bonhomme-ad.sqlite --count
-        /project/rrg-bonhomme-ad
-      duc_storage_command: duc ls -d /project/.duc_databases/rrg-bonhomme-ad.sqlite
-        /project/rrg-bonhomme-ad
       host: fromage
       prometheus_headers_file: tests/not-so-secrets/fromage_prometheus/headers.json
       prometheus_url: https://fromage-thanos.calcul.ca
@@ -26,10 +22,6 @@ sarc:
       - def-bonhomme_cpu
       diskusage:
       - name: drac
-      duc_inodes_command: duc ls -d /project/.duc_databases/rrg-bonhomme-ad.sqlite --count
-        /project/rrg-bonhomme-ad
-      duc_storage_command: duc ls -d /project/.duc_databases/rrg-bonhomme-ad.sqlite
-        /project/rrg-bonhomme-ad
       host: gerudo
       prometheus_headers_file: tests/not-so-secrets/patate_prometheus/headers.json
       prometheus_url: https://gerudo-thanos.calcul.ca
@@ -43,10 +35,6 @@ sarc:
       - def-bonhomme_cpu
       diskusage:
       - name: drac
-      duc_inodes_command: duc ls -d /project/.duc_databases/rrg-bonhomme-ad.sqlite --count
-        /project/rrg-bonhomme-ad
-      duc_storage_command: duc ls -d /project/.duc_databases/rrg-bonhomme-ad.sqlite
-        /project/rrg-bonhomme-ad
       host: hyrule
       prometheus_headers_file: tests/not-so-secrets/patate_prometheus/headers.json
       prometheus_url: https://hyrule-thanos.calcul.ca
@@ -54,8 +42,6 @@ sarc:
       timezone: America/Vancouver
     local:
       accounts: null
-      duc_inodes_command: null
-      duc_storage_command: null
       host: localhost
       prometheus_url: null
       sacct_bin: /opt/slurm/bin/sacct
@@ -72,10 +58,6 @@ sarc:
         params:
           config_files:
             default: /etc/beegfs/scratch.d/beegfs-client.conf
-      duc_inodes_command: duc ls -d /project/.duc_databases/rrg-bonhomme-ad.sqlite --count
-        /project/rrg-bonhomme-ad
-      duc_storage_command: duc ls -d /project/.duc_databases/rrg-bonhomme-ad.sqlite
-        /project/rrg-bonhomme-ad
       host: mila
       name: mila
       prometheus_headers_file: tests/not-so-secrets/patate_prometheus/headers.json
@@ -90,10 +72,6 @@ sarc:
       - def-bonhomme_cpu
       diskusage:
       - name: drac
-      duc_inodes_command: duc ls -d /project/.duc_databases/rrg-bonhomme-ad.sqlite --count
-        /project/rrg-bonhomme-ad
-      duc_storage_command: duc ls -d /project/.duc_databases/rrg-bonhomme-ad.sqlite
-        /project/rrg-bonhomme-ad
       host: patate
       prometheus_headers_file: tests/not-so-secrets/patate_prometheus/headers.json
       prometheus_url: https://fromage-thanos.calcul.ca
@@ -102,8 +80,6 @@ sarc:
       timezone: America/Vancouver
     raisin:
       accounts: null
-      duc_inodes_command: null
-      duc_storage_command: null
       host: raisin
       prometheus_url: http://monitoring.server.raisin.quebec:9090/
       sacct_bin: /opt/slurm/bin/sacct
@@ -114,8 +90,6 @@ sarc:
           phantom_gpu: PHANTOM GPU MENACE
     raisin_no_prometheus:
       accounts: null
-      duc_inodes_command: null
-      duc_storage_command: null
       gpus_per_nodes:
         cn-c018:
           asupergpu: Nec Plus Plus ULTRA GPU 2000
