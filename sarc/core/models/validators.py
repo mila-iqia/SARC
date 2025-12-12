@@ -196,14 +196,17 @@ class ValidField[V](BaseModel):
         raise DateMatchError(date)
 
     def values_in_range(self, start: datetime_utc, end: datetime_utc) -> list[V]:
+        """Get values in a range
+
+        The range starts at `start` and ends just before `end`.  This means that
+        start is included, but end is not.
+        """
         res = list[V]()
         start = start.astimezone(UTC)
         end = end.astimezone(UTC)
 
         for tag in self.values:
-            if (tag.valid_start >= start and tag.valid_start <= end) or (
-                tag.valid_end >= start and tag.valid_end <= end
-            ):
+            if not (end <= tag.valid_start or start >= tag.valid_end):
                 res.append(tag.value)
 
         return res
