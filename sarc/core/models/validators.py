@@ -195,6 +195,19 @@ class ValidField[V](BaseModel):
                 return tag.value
         raise DateMatchError(date)
 
+    def values_in_range(self, start: datetime_utc, end: datetime_utc) -> list[V]:
+        res = list[V]()
+        start = start.astimezone(UTC)
+        end = end.astimezone(UTC)
+
+        for tag in self.values:
+            if (tag.valid_start >= start and tag.valid_start <= end) or (
+                tag.valid_end >= start and tag.valid_end <= end
+            ):
+                res.append(tag.value)
+
+        return res
+
     def merge_with(self, other: Self, truncate=False) -> None:
         """Insert all the values in other in self.
 
