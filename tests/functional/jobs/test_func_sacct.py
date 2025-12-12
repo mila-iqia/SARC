@@ -13,7 +13,7 @@ from opentelemetry.trace import StatusCode
 from sarc.client import get_available_clusters
 from sarc.client.job import get_jobs
 from sarc.config import MTL, PST, UTC, config
-from sarc.jobs.sacct import SAcctScraper
+from sarc.core.scraping.jobs_utils import SacctScraper
 
 from ...common.dateutils import _dtfmt
 from .factory import create_sacct_json
@@ -96,7 +96,7 @@ parameters = {
 
 @pytest.fixture
 def scraper():
-    return SAcctScraper(
+    return SacctScraper(
         cluster=config().clusters["raisin"],
         start=datetime(2023, 2, 14, tzinfo=MTL).astimezone(UTC),
         end=datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC),
@@ -157,7 +157,7 @@ def test_parse_malformed_jobs(sacct_json, scraper, captrace):
     ]
     assert len(error_spans) == 1
     (error_span,) = error_spans
-    assert error_span.name == "SAcctScraper.__iter__"
+    assert error_span.name == "SacctScraper.__iter__"
     entry = json.loads(error_span.attributes["entry"])
     assert isinstance(entry, dict)
     assert entry["account"] == "mila"
@@ -262,7 +262,7 @@ def test_scraper_with_malformed_cache(test_config, remote, scraper, caplog):
     "test_config", [{"clusters": {"patate": {"host": "patate"}}}], indirect=True
 )
 def test_sacct_bin_and_accounts(test_config, remote):
-    scraper = SAcctScraper(
+    scraper = SacctScraper(
         cluster=config().clusters["patate"],
         start=datetime(2023, 2, 14, tzinfo=MTL).astimezone(UTC),
         end=datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC),
@@ -291,7 +291,7 @@ def test_localhost(os_system, monkeypatch):
 
     monkeypatch.setattr(subprocess, "run", mock_subprocess_run)
 
-    scraper = SAcctScraper(
+    scraper = SacctScraper(
         cluster=config().clusters["local"],
         start=datetime(2023, 2, 14, tzinfo=MTL).astimezone(UTC),
         end=datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC),
@@ -323,7 +323,7 @@ def test_stdout_message_before_json(
     assert (
         cli_main(
             [
-                "acquire",
+                "fetch",
                 "jobs",
                 "--cluster_name",
                 "raisin",
@@ -361,7 +361,7 @@ def test_save_job(test_config, sacct_json, remote, file_regression, cli_main):
     assert (
         cli_main(
             [
-                "acquire",
+                "fetch",
                 "jobs",
                 "--cluster_name",
                 "raisin",
@@ -404,7 +404,7 @@ def test_update_job(test_config, sacct_json, remote, file_regression, cli_main):
     assert (
         cli_main(
             [
-                "acquire",
+                "fetch",
                 "jobs",
                 "--cluster_name",
                 "raisin",
@@ -420,7 +420,7 @@ def test_update_job(test_config, sacct_json, remote, file_regression, cli_main):
     assert (
         cli_main(
             [
-                "acquire",
+                "fetch",
                 "jobs",
                 "--cluster_name",
                 "raisin",
@@ -475,7 +475,7 @@ def test_save_preempted_job(test_config, sacct_json, remote, file_regression, cl
     assert (
         cli_main(
             [
-                "acquire",
+                "fetch",
                 "jobs",
                 "--cluster_name",
                 "raisin",
@@ -535,7 +535,7 @@ def test_multiple_dates(test_config, remote, file_regression, cli_main):
     assert (
         cli_main(
             [
-                "acquire",
+                "fetch",
                 "jobs",
                 "--cluster_name",
                 "raisin",
@@ -622,7 +622,7 @@ def test_multiple_clusters_and_dates(test_config, remote, file_regression, cli_m
     assert (
         cli_main(
             [
-                "acquire",
+                "fetch",
                 "jobs",
                 "--cluster_name",
                 "raisin",
@@ -677,7 +677,7 @@ def test_job_tz(test_config, sacct_json, remote, cli_main):
     assert (
         cli_main(
             [
-                "acquire",
+                "fetch",
                 "jobs",
                 "--cluster_name",
                 "patate",
@@ -718,7 +718,7 @@ def test_acquire_jobs_mutually_exclusive_args(cli_main, caplog):
     assert (
         cli_main(
             [
-                "acquire",
+                "fetch",
                 "jobs",
                 "--cluster_name",
                 "raisin",
@@ -743,7 +743,7 @@ def test_acquire_jobs_invalid_interval(cli_main, caplog):
     assert (
         cli_main(
             [
-                "acquire",
+                "fetch",
                 "jobs",
                 "--cluster_name",
                 "raisin",
@@ -765,7 +765,7 @@ def test_acquire_jobs_interval_start_gt_end(cli_main, caplog):
     assert (
         cli_main(
             [
-                "acquire",
+                "fetch",
                 "jobs",
                 "--cluster_name",
                 "raisin",
@@ -787,7 +787,7 @@ def test_acquire_jobs_args_no_interval(cli_main, caplog):
     assert (
         cli_main(
             [
-                "acquire",
+                "fetch",
                 "jobs",
                 "--cluster_name",
                 "raisin",
@@ -817,9 +817,11 @@ def test_auto_interval(cli_main, monkeypatch, freezer, caplog):
 
     mock_fetch_raw.called = 0
 
-    import sarc.jobs.sacct
+    import sarc.core.scraping.jobs_utils
 
-    monkeypatch.setattr(sarc.jobs.sacct.SAcctScraper, "fetch_raw", mock_fetch_raw)
+    monkeypatch.setattr(
+        sarc.core.scraping.jobs_utils.SacctScraper, "fetch_raw", mock_fetch_raw
+    )
 
     orig_end_time = datetime.strptime(
         _get_cluster_raisin().end_time_sacct, "%Y-%m-%dT%H:%M"
@@ -834,7 +836,7 @@ def test_auto_interval(cli_main, monkeypatch, freezer, caplog):
         cli_main(
             [
                 "-v",
-                "acquire",
+                "fetch",
                 "jobs",
                 "--cluster_name",
                 "raisin",
@@ -881,9 +883,11 @@ def test_auto_interval_0(cli_main, monkeypatch, freezer, caplog):
 
     mock_fetch_raw.called = 0
 
-    import sarc.jobs.sacct
+    import sarc.core.scraping.jobs_utils
 
-    monkeypatch.setattr(sarc.jobs.sacct.SAcctScraper, "fetch_raw", mock_fetch_raw)
+    monkeypatch.setattr(
+        sarc.core.scraping.jobs_utils.SacctScraper, "fetch_raw", mock_fetch_raw
+    )
 
     orig_end_time = datetime.strptime(
         _get_cluster_raisin().end_time_sacct, "%Y-%m-%dT%H:%M"
@@ -898,7 +902,7 @@ def test_auto_interval_0(cli_main, monkeypatch, freezer, caplog):
         cli_main(
             [
                 "-v",
-                "acquire",
+                "fetch",
                 "jobs",
                 "--cluster_name",
                 "raisin",

@@ -10,7 +10,7 @@ from simple_parsing import field
 
 from sarc.config import config
 from sarc.jobs.prometheus_scraping import scrap_prometheus
-from sarc.cli.acquire.jobs import (
+from sarc.core.scraping.jobs_utils import (
     parse_intervals,
     parse_auto_intervals,
     set_auto_end_time,
