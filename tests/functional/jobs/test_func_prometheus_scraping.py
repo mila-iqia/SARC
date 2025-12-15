@@ -62,7 +62,7 @@ def test_get_gpu_type(
 
     remote.expect(
         host="raisin",
-        cmd="export TZ=UTC && /opt/slurm/bin/sacct  -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
+        cmd="export TZ=UTC && /opt/slurm/bin/sacct -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
         out=f"Welcome on raisin,\nThe sweetest supercomputer in the world!\n{sacct_json}".encode(
             "utf-8"
         ),
@@ -229,7 +229,7 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     remote.expect_sessions(
         _create_session(
             "raisin",
-            "export TZ=UTC && /opt/slurm/bin/sacct  -X -S {start} -E {end} --allusers --json",
+            "export TZ=UTC && /opt/slurm/bin/sacct -X -S {start} -E {end} --allusers --json",
             datetimes=datetimes,
         ),
         _create_session(
@@ -448,7 +448,7 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
     remote.expect_sessions(
         _create_session(
             "raisin",
-            "export TZ=UTC && /opt/slurm/bin/sacct  -X -S {start} -E {end} --allusers --json",
+            "export TZ=UTC && /opt/slurm/bin/sacct -X -S {start} -E {end} --allusers --json",
             datetimes=datetimes,
         ),
         _create_session(

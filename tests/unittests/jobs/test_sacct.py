@@ -20,7 +20,7 @@ def test_SAcctScraper_fetch_raw(test_config, remote):
     )
     remote.expect(
         host="patate",
-        cmd=f"export TZ=UTC && sacct  -X -S {_dtfmt(2023, 2, 28)} -E {_dtfmt(2023, 3, 1)} --allusers --json",
+        cmd=f"export TZ=UTC && sacct -X -S {_dtfmt(2023, 2, 28)} -E {_dtfmt(2023, 3, 1)} --allusers --json",
         out=b"{}",
     )
     assert scraper.fetch_raw() == {}
@@ -38,11 +38,11 @@ def test_SAcctScraper_fetch_raw2(test_config, remote):
     remote.expect(
         commands=[
             Command(
-                f"export TZ=UTC && sacct  -X -S {_dtfmt(2023, 2, 28)} -E {_dtfmt(2023, 3, 1)} --allusers --json",
+                f"export TZ=UTC && sacct -X -S {_dtfmt(2023, 2, 28)} -E {_dtfmt(2023, 3, 1)} --allusers --json",
                 out=b"{}",
             ),
             Command(
-                f"export TZ=UTC && sacct  -X -S {_dtfmt(2023, 2, 28)} -E {_dtfmt(2023, 3, 1)} --allusers --json",
+                f"export TZ=UTC && sacct -X -S {_dtfmt(2023, 2, 28)} -E {_dtfmt(2023, 3, 1)} --allusers --json",
                 out=b'{ "value": 2 }',
             ),
         ]
@@ -78,11 +78,11 @@ def test_SAcctScraper_get_cache(test_config, enabled_cache, remote):
     remote.expect(
         commands=[
             Command(
-                f"export TZ=UTC && sacct  -X -S {yesterday.strftime(fmt)} -E {today.strftime(fmt)} --allusers --json",
+                f"export TZ=UTC && sacct -X -S {yesterday.strftime(fmt)} -E {today.strftime(fmt)} --allusers --json",
                 out=b'{"value": 2}',
             ),
             Command(
-                f"export TZ=UTC && sacct  -X -S {today.strftime(fmt)} -E {tomorrow.strftime(fmt)} --allusers --json",
+                f"export TZ=UTC && sacct -X -S {today.strftime(fmt)} -E {tomorrow.strftime(fmt)} --allusers --json",
                 out=b'{"value": 2}',
             ),
         ]
