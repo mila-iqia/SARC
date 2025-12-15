@@ -1,40 +1,23 @@
 import logging
-from typing import Annotated
 
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer
-from google.auth.transport import requests
-from google.oauth2 import id_token
+from easy_oauth import OAuthManager
+
+from sarc.config import config
 
 logger = logging.getLogger(__name__)
 
-auth_scheme = HTTPBearer()
 
+def get_oauth() -> OAuthManager | None:
+    conf = config("scraping")
 
-# The client needs to request the "profile" and "email" scopes at least for
-# authentication to succeed.
-def get_email(token: Annotated[str, Depends(auth_scheme)]) -> str:
-    try:
-        # Note that we do not validate the client id of the token because there
-        # will be multiple applications that will call this service and we don't
-        # want to have to constantly update the SARC config to account for that.
-        idinfo = id_token.verify_oauth2_token(
-            id_token=token, request=requests.Request()
+    if conf.auth is not None:
+        return OAuthManager(
+            server_metadata_url=conf.auth.metadata_url,
+            secret_key=conf.auth.secret_key,
+            client_id=conf.auth.client_id,
+            client_secret=conf.auth.client_secret,
+            client_kwargs={"scope": "openid email", "prompt": "select_account"},
+            prefix="/0",
         )
-
-        # The google OpenID Connect authentication flow only works for mila for
-        # now.  We may revisit this if we add support for other institutes.
-        if idinfo.get("hd", None) != "mila.quebec":
-            raise ValueError("Token not from authorized domain")
-        if "email" not in idinfo:
-            raise ValueError("Token doesn't have the proper scopes")
-        if not idinfo.get("email_verified", False):
-            raise ValueError("Email is not verified")
-        return idinfo["email"]
-    except ValueError as e:
-        logger.error(f"Authentication error: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    else:
+        return None

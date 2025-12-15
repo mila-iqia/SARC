@@ -211,6 +211,14 @@ class UserScrapingConfig:
 
 
 @dataclass
+class AuthConfig:
+    metadata_url: str
+    client_secret: str
+    client_id: str
+    secret_key: str
+
+
+@dataclass
 class ClientConfig:
     mongo: MongoConfig
     cache: Path | None = None
@@ -238,6 +246,7 @@ class Config(ClientConfig):
     sshconfig: Path | None = None
     clusters: dict[str, ClusterConfig] = field(default_factory=dict)
     logging: LoggingConfig | None = None
+    auth: AuthConfig | None = None
 
     def __post_init__(self):
         for name, cluster in self.clusters.items():
