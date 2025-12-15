@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 import pytest
 from fastapi.testclient import TestClient
 
-from sarc.api.v0 import router
+from sarc.api.v0 import build
 from sarc.config import UTC
 
 
@@ -13,7 +13,7 @@ def app():
     from fastapi import FastAPI
 
     app = FastAPI()
-    app.include_router(router)
+    app.include_router(build())
     return app
 
 

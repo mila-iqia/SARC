@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import AfterValidator, BaseModel, UUID4
+from pydantic import UUID4, AfterValidator, BaseModel
 from pydantic_mongo import PydanticObjectId
 
 from sarc.client import get_rgus
@@ -16,8 +16,6 @@ from sarc.config import UTC
 from sarc.core.models import validators
 from sarc.core.models.users import MemberType, UserData
 from sarc.users.db import get_user_collection
-
-router = APIRouter(prefix="/v0")
 
 
 def valid_cluster(cluster: str):
@@ -147,67 +145,66 @@ class UserQuery(BaseModel):
 UserQueryType = Annotated[UserQuery, Depends(UserQuery)]
 
 
-@router.get("/job/query")
-def get_jobs(query_opt: JobQueryType) -> list[PydanticObjectId]:
-    coll = _jobs_collection()
-    jobs = coll.get_collection().find(query_opt.get_query(), ["_id"])
-    return list(j["_id"] for j in jobs)
+def build() -> APIRouter:
+    router = APIRouter(prefix="/v0")
 
+    @router.get("/job/query")
+    def get_jobs(query_opt: JobQueryType) -> list[PydanticObjectId]:
+        coll = _jobs_collection()
+        jobs = coll.get_collection().find(query_opt.get_query(), ["_id"])
+        return list(j["_id"] for j in jobs)
 
-@router.get("/job/count")
-def count_jobs(query_opt: JobQueryType) -> int:
-    coll = _jobs_collection()
-    return coll.get_collection().count_documents(query_opt.get_query())
+    @router.get("/job/count")
+    def count_jobs(query_opt: JobQueryType) -> int:
+        coll = _jobs_collection()
+        return coll.get_collection().count_documents(query_opt.get_query())
 
+    @router.get("/job/id/{oid}")
+    def get_job(oid: PydanticObjectId) -> SlurmJob:
+        coll = _jobs_collection()
+        job = coll.find_one_by_id(oid)
+        if job is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Job not found"
+            )
 
-@router.get("/job/id/{oid}")
-def get_job(oid: PydanticObjectId) -> SlurmJob:
-    coll = _jobs_collection()
-    job = coll.find_one_by_id(oid)
-    if job is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Job not found"
-        )
-    return job
+        return job
 
+    @router.get("/cluster/list")
+    def get_cluster_names() -> list[str]:
+        """Return the names of available clusters."""
+        return sorted(cl.cluster_name for cl in get_available_clusters())
 
-@router.get("/cluster/list")
-def get_cluster_names() -> list[str]:
-    """Return the names of available clusters."""
-    return sorted(cl.cluster_name for cl in get_available_clusters())
+    @router.get("/gpu/rgu")
+    def get_rgu_value_per_gpu() -> dict[str, float]:
+        """Return the mapping GPU->RGU."""
+        return get_rgus()
 
+    @router.get("/user/query")
+    def query_users(query_opt: UserQueryType) -> list[UUID4]:
+        """Search users. Return user UUIDs."""
+        coll = get_user_collection()
+        users = coll.get_collection().find(query_opt.get_query(), ["uuid"])
+        return [user["uuid"] for user in users]
 
-@router.get("/gpu/rgu")
-def get_rgu_value_per_gpu() -> dict[str, float]:
-    """Return the mapping GPU->RGU."""
-    return get_rgus()
+    @router.get("/user/id/{uuid}")
+    def get_user_by_id(uuid: UUID4) -> UserData:
+        """Get user with given UUID."""
+        user = get_user_collection().find_one_by({"uuid": uuid})
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+            )
+        return user
 
+    @router.get("/user/email/{email}")
+    def get_user_by_email(email: str) -> UserData:
+        """Get user with given email."""
+        user = get_user_collection().find_one_by({"email": email})
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+            )
+        return user
 
-@router.get("/user/query")
-def query_users(query_opt: UserQueryType) -> list[UUID4]:
-    """Search users. Return user UUIDs."""
-    coll = get_user_collection()
-    users = coll.get_collection().find(query_opt.get_query(), ["uuid"])
-    return [user["uuid"] for user in users]
-
-
-@router.get("/user/id/{uuid}")
-def get_user_by_id(uuid: UUID4) -> UserData:
-    """Get user with given UUID."""
-    user = get_user_collection().find_one_by({"uuid": uuid})
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
-        )
-    return user
-
-
-@router.get("/user/email/{email}")
-def get_user_by_email(email: str) -> UserData:
-    """Get user with given email."""
-    user = get_user_collection().find_one_by({"email": email})
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
-        )
-    return user
+    return router

@@ -1,7 +1,11 @@
 from fastapi import FastAPI
 
-from .v0 import router as v0_router
+from .auth import get_oauth
+from .v0 import build as v0_build
 
 app = FastAPI()
 
-app.include_router(v0_router)
+if (auth := get_oauth()) is not None:
+    auth.install(app)
+
+app.include_router(v0_build())
