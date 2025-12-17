@@ -68,19 +68,29 @@ def test_get_gpu_type(
         ),
     )
 
-    cmd_sacct = [
-        "acquire",
+    cmd_sacct_fetch = [
+        "fetch",
         "jobs",
-        "--cluster_name",
+        "--cluster_names",
         "raisin",
         "--intervals",
         "2023-02-15T00:00-2023-02-16T00:00",
     ]
 
+    cmd_sacct_parse = [
+        "parse",
+        "jobs",
+        "--cluster_names",
+        "raisin",
+        "--since",
+        "2023-02-14T00:00",
+    ]
+
     # Test `acquire jobs` without node->gpu available
     # -----------------------------------------------
     # Should return GPU name from sacct
-    assert cli_main(cmd_sacct) == 0
+    assert cli_main(cmd_sacct_fetch) == 0
+    assert cli_main(cmd_sacct_parse) == 0
     jobs = list(get_jobs())
     assert len(jobs) == 1
     job = jobs[0]
@@ -89,7 +99,7 @@ def test_get_gpu_type(
     assert job.allocated.gpu_type == "gpu_name_from_sacct"
     assert not job.stored_statistics
 
-    # Test `acquire jobs` with node->gpu available
+    # Test `fetch jobs` and `parse_jobs` with node->gpu available
     # --------------------------------------------
     # node->gpu is prior to sacct data
 
@@ -112,7 +122,8 @@ def test_get_gpu_type(
         == 0
     )
     # acquire jobs
-    assert cli_main(cmd_sacct) == 0
+    assert cli_main(cmd_sacct_fetch) == 0
+    assert cli_main(cmd_sacct_parse) == 0
     jobs = list(get_jobs())
     assert len(jobs) == 1
     job = jobs[0]
@@ -259,15 +270,30 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     assert (
         cli_main(
             [
-                "acquire",
+                "fetch",
                 "jobs",
-                "--cluster_name",
+                "--cluster_names",
                 "raisin",
                 "patate",
                 "--intervals",
                 f"{_dtfmt(2023, 2, 15)}-{_dtfmt(2023, 2, 16)}",
                 f"{_dtfmt(2023, 2, 16)}-{_dtfmt(2023, 2, 17)}",
                 f"{_dtfmt(2023, 3, 16)}-{_dtfmt(2023, 3, 17)}",
+            ]
+        )
+        == 0
+    )
+
+    assert (
+        cli_main(
+            [
+                "parse",
+                "jobs",
+                "--cluster_names",
+                "raisin",
+                "patate",
+                "--since",
+                "2023-02-14T00:00",
             ]
         )
         == 0
@@ -319,13 +345,13 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     print(caplog.text)
     assert bool(
         re.search(
-            rf"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Acquire data on raisin for interval: {_dtreg(2023, 2, 15)} to {_dtreg(2023, 2, 16)} \(1440.0 min\)",
+            rf"sarc.core.scraping.jobs:jobs\.py:[0-9]+ Acquire data on raisin for interval: {_dtreg(2023, 2, 15)} to {_dtreg(2023, 2, 16)} \(1440.0 min\)",
             caplog.text,
         )
     )
     assert bool(
         re.search(
-            rf"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Acquire data on patate for interval: {_dtreg(2023, 2, 15)} to {_dtreg(2023, 2, 16)} \(1440.0 min\)",
+            rf"sarc.core.scraping.jobs:jobs\.py:[0-9]+ Acquire data on patate for interval: {_dtreg(2023, 2, 15)} to {_dtreg(2023, 2, 16)} \(1440.0 min\)",
             caplog.text,
         )
     )
@@ -336,7 +362,7 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     assert "Saving into mongodb collection '" in caplog.text
     assert bool(
         re.search(
-            r"sarc\.jobs\.sacct:sacct\.py:[0-9]+ Saved [0-9]+/[0-9]+ entries\.",
+            r"sarc\.core\.scraping\.jobs:jobs\.py:[0-9]+ Saved [0-9]+/[0-9]+ entries\.",
             caplog.text,
         )
     )
@@ -344,13 +370,13 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     # There should be 2 acquisition errors for unexpected data 2023-03-16, one per cluster.
     assert bool(
         re.search(
-            rf"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Failed to acquire data on raisin for interval: {_dtreg(2023, 3, 16)} to {_dtreg(2023, 3, 17)}:",
+            rf"sarc.core.scraping.jobs:jobs\.py:[0-9]+ Failed to acquire data on raisin for interval: {_dtreg(2023, 3, 16)} to {_dtreg(2023, 3, 17)}:",
             caplog.text,
         )
     )
     assert bool(
         re.search(
-            rf"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Failed to acquire data on patate for interval: {_dtreg(2023, 3, 16)} to {_dtreg(2023, 3, 17)}:",
+            rf"sarc.core.scraping.jobs:jobs\.py:[0-9]+ Failed to acquire data on patate for interval: {_dtreg(2023, 3, 16)} to {_dtreg(2023, 3, 17)}:",
             caplog.text,
         )
     )
@@ -477,13 +503,28 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
     assert (
         cli_main(
             [
-                "acquire",
+                "fetch",
                 "jobs",
-                "--cluster_name",
+                "--cluster_names",
                 "raisin",
                 "patate",
                 "--intervals",
                 "2023-02-15T01:00-2023-02-15T01:05",
+            ]
+        )
+        == 0
+    )
+
+    assert (
+        cli_main(
+            [
+                "parse",
+                "jobs",
+                "--cluster_names",
+                "raisin",
+                "patate",
+                "--since",
+                "2023-02-14T00:00",
             ]
         )
         == 0
@@ -494,13 +535,28 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
     assert (
         cli_main(
             [
-                "acquire",
+                "fetch",
                 "jobs",
-                "--cluster_name",
+                "--cluster_names",
                 "raisin",
                 "patate",
                 "--intervals",
                 "2023-03-16T01:00-2023-03-16T01:05",
+            ]
+        )
+        == 0
+    )
+
+    assert (
+        cli_main(
+            [
+                "parse",
+                "jobs",
+                "--cluster_names",
+                "raisin",
+                "patate",
+                "--since",
+                "2023-02-14T00:00",
             ]
         )
         == 0
@@ -568,7 +624,7 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
     for cluster_name in cluster_names:
         assert bool(
             re.search(
-                rf"sarc\.cli\.acquire\.jobs:jobs\.py:[0-9]+ Acquire data on {cluster_name} for interval: 2023-02-15 01:00:00\+00:00 to 2023-02-15 01:05:00\+00:00 \(5.0 min\)",
+                rf"sarc\.core\.scraping\.jobs:jobs\.py:[0-9]+ Acquire data on {cluster_name} for interval: 2023-02-15 01:00:00\+00:00 to 2023-02-15 01:05:00\+00:00 \(5.0 min\)",
                 caplog.text,
             )
         )
@@ -580,7 +636,7 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
     assert "Saving into mongodb collection '" in caplog.text
     assert bool(
         re.search(
-            r"sarc\.jobs\.sacct:sacct\.py:[0-9]+ Saved [0-9]+/[0-9]+ entries\.",
+            r"sarc\.core\.scraping\.jobs:jobs\.py:[0-9]+ Saved [0-9]+/[0-9]+ entries\.",
             caplog.text,
         )
     )
@@ -589,7 +645,7 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
     for cluster_name in cluster_names:
         assert bool(
             re.search(
-                rf"sarc\.cli\.acquire\.jobs:jobs\.py:[0-9]+ Failed to acquire data on {cluster_name} for interval: 2023-03-16 01:00:00\+00:00 to 2023-03-16 01:05:00\+00:00:",
+                rf"sarc\.core\.scraping\.jobs:jobs\.py:[0-9]+ Failed to acquire data on {cluster_name} for interval: 2023-03-16 01:00:00\+00:00 to 2023-03-16 01:05:00\+00:00:",
                 caplog.text,
             )
         )
