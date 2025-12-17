@@ -68,19 +68,29 @@ def test_get_gpu_type(
         ),
     )
 
-    cmd_sacct = [
-        "acquire",
+    cmd_sacct_fetch = [
+        "fetch",
         "jobs",
-        "--cluster_name",
+        "--cluster_names",
         "raisin",
         "--intervals",
         "2023-02-15T00:00-2023-02-16T00:00",
     ]
 
+    cmd_sacct_parse = [
+        "parse",
+        "jobs",
+        "--cluster_names",
+        "raisin",
+        "--since",
+        "2023-02-14T00:00",
+    ]
+
     # Test `acquire jobs` without node->gpu available
     # -----------------------------------------------
     # Should return GPU name from sacct
-    assert cli_main(cmd_sacct) == 0
+    assert cli_main(cmd_sacct_fetch) == 0
+    assert cli_main(cmd_sacct_parse) == 0
     jobs = list(get_jobs())
     assert len(jobs) == 1
     job = jobs[0]
@@ -89,7 +99,7 @@ def test_get_gpu_type(
     assert job.allocated.gpu_type == "gpu_name_from_sacct"
     assert not job.stored_statistics
 
-    # Test `acquire jobs` with node->gpu available
+    # Test `fetch jobs` and `parse_jobs` with node->gpu available
     # --------------------------------------------
     # node->gpu is prior to sacct data
 
@@ -112,7 +122,8 @@ def test_get_gpu_type(
         == 0
     )
     # acquire jobs
-    assert cli_main(cmd_sacct) == 0
+    assert cli_main(cmd_sacct_fetch) == 0
+    assert cli_main(cmd_sacct_parse) == 0
     jobs = list(get_jobs())
     assert len(jobs) == 1
     job = jobs[0]
@@ -259,15 +270,30 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     assert (
         cli_main(
             [
-                "acquire",
+                "fetch",
                 "jobs",
-                "--cluster_name",
+                "--cluster_names",
                 "raisin",
                 "patate",
                 "--intervals",
                 f"{_dtfmt(2023, 2, 15)}-{_dtfmt(2023, 2, 16)}",
                 f"{_dtfmt(2023, 2, 16)}-{_dtfmt(2023, 2, 17)}",
                 f"{_dtfmt(2023, 3, 16)}-{_dtfmt(2023, 3, 17)}",
+            ]
+        )
+        == 0
+    )
+
+    assert (
+        cli_main(
+            [
+                "parse",
+                "jobs",
+                "--cluster_names",
+                "raisin",
+                "patate",
+                "--since",
+                "2023-02-14T00:00",
             ]
         )
         == 0
@@ -477,13 +503,28 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
     assert (
         cli_main(
             [
-                "acquire",
+                "fetch",
                 "jobs",
-                "--cluster_name",
+                "--cluster_names",
                 "raisin",
                 "patate",
                 "--intervals",
                 "2023-02-15T01:00-2023-02-15T01:05",
+            ]
+        )
+        == 0
+    )
+
+    assert (
+        cli_main(
+            [
+                "parse",
+                "jobs",
+                "--cluster_names",
+                "raisin",
+                "patate",
+                "--since",
+                "2023-02-14T00:00",
             ]
         )
         == 0
@@ -494,13 +535,28 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
     assert (
         cli_main(
             [
-                "acquire",
+                "fetch",
                 "jobs",
-                "--cluster_name",
+                "--cluster_names",
                 "raisin",
                 "patate",
                 "--intervals",
                 "2023-03-16T01:00-2023-03-16T01:05",
+            ]
+        )
+        == 0
+    )
+
+    assert (
+        cli_main(
+            [
+                "parse",
+                "jobs",
+                "--cluster_names",
+                "raisin",
+                "patate",
+                "--since",
+                "2023-02-14T00:00",
             ]
         )
         == 0
