@@ -106,10 +106,9 @@ sarc:
       timezone: America/Montreal
       accounts:
       sacct_bin: "/opt/slurm/bin/sacct"
+      prometheus_url:
+      prometheus_headers_file:
       start_date: '2025-02-01'
-      prometheus_url: https://mila-thanos.calculquebec.ca
-      prometheus_headers_file: ../../SARC_secrets/secrets/drac_prometheus/headers.json
-      start_date: '2022-04-01'
       gpus_per_nodes:
         __DEFAULTS__:
           h100: H100-SXM5-80GB
