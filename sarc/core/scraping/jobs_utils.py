@@ -153,8 +153,8 @@ class SacctScraper:
         start = self.start.strftime(fmt)
         end = self.end.strftime(fmt)
         accounts = ",".join(self.cluster.accounts) if self.cluster.accounts else None
-        accounts_option = f"-A {accounts}" if accounts else ""
-        cmd = f"{self.cluster.sacct_bin} {accounts_option} -X -S {start} -E {end} --allusers --json"
+        accounts_option = f"-A {accounts} " if accounts else ""
+        cmd = f"{self.cluster.sacct_bin} {accounts_option}-X -S {start} -E {end} --allusers --json"
         logger.debug(f"{self.cluster.name} $ {cmd}")
         if self.cluster.host == "localhost":
             results: subprocess.CompletedProcess[str] | Result = subprocess.run(
@@ -163,12 +163,13 @@ class SacctScraper:
                 text=True,
                 capture_output=True,
                 check=False,
-                env={"TZ": "UTC"},
+                env={"TZ": "UTC"} if not self.cluster.ignore_tz_utc else {},
             )
         else:
             ssh = self.cluster.ssh
-            ssh.config.run.env = {"TZ": "UTC"}
+            ssh.config.run.env = {"TZ": "UTC"} if not self.cluster.ignore_tz_utc else {}
             results = ssh.run(cmd, hide=True)
+            logger.debug(results.stdout)
         return json.loads(results.stdout[results.stdout.find("{") :])
 
     def _cache_key(self) -> str | None:

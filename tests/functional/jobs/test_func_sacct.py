@@ -248,7 +248,7 @@ def test_scraper_with_malformed_cache(test_config, remote, scraper, caplog):
 
     remote.expect(
         host="patate",
-        cmd=f"export TZ=UTC && /opt/slurm/bin/sacct  -X -S {_dtfmt(2023, 2, 14)} -E {_dtfmt(2023, 2, 15)} --allusers --json",
+        cmd=f"export TZ=UTC && /opt/slurm/bin/sacct -X -S {_dtfmt(2023, 2, 14)} -E {_dtfmt(2023, 2, 15)} --allusers --json",
         out=b"{}",
     )
 
@@ -311,7 +311,7 @@ def test_stdout_message_before_json(
 ):
     remote.expect(
         host="raisin",
-        cmd=f"export TZ=UTC && /opt/slurm/bin/sacct  -X -S {_dtfmt(2023, 2, 15)} -E {_dtfmt(2023, 2, 16)} --allusers --json",
+        cmd=f"export TZ=UTC && /opt/slurm/bin/sacct -X -S {_dtfmt(2023, 2, 15)} -E {_dtfmt(2023, 2, 16)} --allusers --json",
         out=f"Welcome on raisin,\nThe sweetest supercomputer in the world!\n{sacct_json}".encode(
             "utf-8"
         ),
@@ -366,7 +366,7 @@ def test_stdout_message_before_json(
 def test_save_job(test_config, sacct_json, remote, file_regression, cli_main):
     remote.expect(
         host="raisin",
-        cmd=f"export TZ=UTC && /opt/slurm/bin/sacct  -X -S {_dtfmt(2023, 2, 15)} -E {_dtfmt(2023, 2, 16)} --allusers --json",
+        cmd=f"export TZ=UTC && /opt/slurm/bin/sacct -X -S {_dtfmt(2023, 2, 15)} -E {_dtfmt(2023, 2, 16)} --allusers --json",
         out=sacct_json.encode("utf-8"),
     )
 
@@ -421,7 +421,7 @@ def test_update_job(test_config, sacct_json, remote, file_regression, cli_main):
         host="raisin",
         commands=[
             Command(
-                cmd=f"export TZ=UTC && /opt/slurm/bin/sacct  -X -S {_dtfmt(2023, 2, 15)} -E {_dtfmt(2023, 2, 16)} --allusers --json",
+                cmd=f"export TZ=UTC && /opt/slurm/bin/sacct -X -S {_dtfmt(2023, 2, 15)} -E {_dtfmt(2023, 2, 16)} --allusers --json",
                 out=sacct_json.encode("utf-8"),
             )
             for _ in range(2)
@@ -523,7 +523,7 @@ def test_update_job(test_config, sacct_json, remote, file_regression, cli_main):
 @pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
 def test_save_preempted_job(test_config, sacct_json, remote, file_regression, cli_main):
     remote.expect(
-        cmd=f"export TZ=UTC && /opt/slurm/bin/sacct  -X -S {_dtfmt(2023, 2, 15)} -E {_dtfmt(2023, 2, 16)} --allusers --json",
+        cmd=f"export TZ=UTC && /opt/slurm/bin/sacct -X -S {_dtfmt(2023, 2, 15)} -E {_dtfmt(2023, 2, 16)} --allusers --json",
         host="raisin",
         out=sacct_json.encode("utf-8"),
     )
@@ -583,7 +583,7 @@ def test_multiple_dates(test_config, remote, file_regression, cli_main):
         commands=[
             Command(
                 cmd=(
-                    "export TZ=UTC && /opt/slurm/bin/sacct  -X "
+                    "export TZ=UTC && /opt/slurm/bin/sacct -X "
                     f"-S {job_submit_datetime.strftime('%Y-%m-%dT%H:%M')} "
                     f"-E {(job_submit_datetime + timedelta(days=1)).strftime('%Y-%m-%dT%H:%M')} "
                     "--allusers --json"
@@ -691,7 +691,7 @@ def test_multiple_clusters_and_dates(test_config, remote, file_regression, cli_m
     remote.expect_sessions(
         _create_session(
             "raisin",
-            "export TZ=UTC && /opt/slurm/bin/sacct  -X -S {start} -E {end} --allusers --json",
+            "export TZ=UTC && /opt/slurm/bin/sacct -X -S {start} -E {end} --allusers --json",
             datetimes=datetimes,
         ),
         _create_session(
