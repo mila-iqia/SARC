@@ -1,9 +1,9 @@
 [Unit]
 Description=SARC scrapers every day
-Requires=sarc_scrapers.service
+Requires=sarc_scrapers_daily.service
 
 [Timer]
-Unit=sarc_scrapers.service
+Unit=sarc_scrapers_daily.service
 OnCalendar=*-*-* 03:30:00
 
 [Install]

@@ -1,13 +1,13 @@
 [Unit]
 Description=SARC scrapers
-Wants=sarc_scrapers.timer
+Wants=sarc_scrapers_daily.timer
 
 [Service]
 Type=oneshot
 # this hard-coded path is UGLY as hell.
 # replace it asap as soone as we know a way to
 # dynamically determine the dirpath of this script
-ExecStart=/bin/bash /home/sarc/SARC/scripts/systemd/scrapers.sh
+ExecStart=/bin/bash /home/sarc/SARC/scripts/systemd/scrapers_daily.sh
 
 [Install]
 WantedBy=multi-user.agent
