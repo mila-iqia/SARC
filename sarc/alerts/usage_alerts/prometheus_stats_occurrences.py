@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from typing import Sequence, cast
 
 from sarc.client.series import compute_time_frames, load_job_series
-from sarc.config import MTL
+from sarc.config import TZLOCAL
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +89,7 @@ def check_prometheus_stats_occurrences(
     end: datetime | None = None
     clip_time = False
     if time_interval is not None:
-        end = datetime.now(tz=MTL)
+        end = datetime.now(tz=TZLOCAL)
         start = end - time_interval
         clip_time = True
     df = load_job_series(start=start, end=end, clip_time=clip_time)

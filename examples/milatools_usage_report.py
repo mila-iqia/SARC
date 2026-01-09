@@ -10,6 +10,9 @@
 #     "pydantic",
 #     "tzlocal",
 # ]
+#
+# [tool.uv.sources]
+# sarc = { git = "https://github.com/mila-iqia/SARC.git" }
 # ///
 from __future__ import annotations
 
@@ -37,7 +40,7 @@ from pandas.core.indexes.datetimes import DatetimeIndex
 from typing_extensions import TypeGuard
 
 from sarc.client.job import _jobs_collection
-from sarc.config import MTL
+from sarc.config import TZLOCAL
 
 logger = get_logger(__name__)
 
@@ -59,12 +62,12 @@ if "SARC_CONFIG" not in os.environ:
 class Args:
     start_date: datetime | str = datetime.today().replace(
         hour=0, minute=0, second=0, microsecond=0
-    ).astimezone(tz=MTL) - timedelta(days=30)
+    ).astimezone(tz=TZLOCAL) - timedelta(days=30)
 
     end_date: datetime | str = (
         datetime.today()
         .replace(hour=0, minute=0, second=0, microsecond=0)
-        .astimezone(tz=MTL)
+        .astimezone(tz=TZLOCAL)
     )
 
     verbose: int = simple_parsing.field(
@@ -84,10 +87,10 @@ def main():
     args: Args = parser.parse_args().args
     start_date = args.start_date
     if isinstance(start_date, str):
-        start_date = datetime.fromisoformat(start_date).astimezone(tz=MTL)
+        start_date = datetime.fromisoformat(start_date).astimezone(tz=TZLOCAL)
     end_date = args.end_date
     if isinstance(end_date, str):
-        end_date = datetime.fromisoformat(end_date).astimezone(tz=MTL)
+        end_date = datetime.fromisoformat(end_date).astimezone(tz=TZLOCAL)
 
     print("Args:")
     pprint.pprint(dataclasses.asdict(args))

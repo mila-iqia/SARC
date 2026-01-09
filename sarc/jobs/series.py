@@ -10,7 +10,7 @@ from prometheus_api_client.metric_range_df import MetricRangeDataFrame
 
 from sarc.cache import with_cache
 from sarc.client.job import JobStatistics, SlurmJob, Statistics
-from sarc.config import MTL, UTC
+from sarc.config import TZLOCAL
 from sarc.traces import trace_decorator
 
 logger = logging.getLogger(__name__)
@@ -135,7 +135,7 @@ def _get_job_time_series_data(
     label_exprs.append(f'slurmjobid="{job.job_id}"')
     selector = prefix + "{" + ", ".join(label_exprs) + "}"
 
-    now = datetime.now(tz=UTC).astimezone(MTL)
+    now = datetime.now(tz=TZLOCAL)
 
     if job.start_time is None:
         raise ValueError("Job hasn't started yet")

@@ -165,6 +165,7 @@ class SlurmJob(BaseModel):
     @classmethod
     def _ensure_timezone(cls, v: datetime | None) -> datetime | None:
         # We'll store in MTL timezone because why not
+        # TODO: Could we instead just store it in UTC ?
         return v and v.replace(tzinfo=UTC).astimezone(MTL)
 
     @property

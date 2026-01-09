@@ -2,7 +2,7 @@ import logging
 from datetime import datetime, time, timedelta
 
 from sarc.client.job import get_available_clusters
-from sarc.config import MTL
+from sarc.config import TZLOCAL
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +20,7 @@ def check_cluster_response(time_interval: timedelta = timedelta(days=7)) -> None
         Default is 7 days.
     """
     # Get current date
-    current_date = datetime.now(tz=MTL)
+    current_date = datetime.now(tz=TZLOCAL)
     # Get the oldest date allowed from now
     oldest_allowed_date = current_date - time_interval
     # Check each available cluster
@@ -36,7 +36,7 @@ def check_cluster_response(time_interval: timedelta = timedelta(days=7)) -> None
             # `en_date` is parsed the same way as start/end parameters in `get_jobs()`.
             cluster_end_date = datetime.combine(
                 datetime.strptime(cluster.end_time_sacct, "%Y-%m-%dT%H:%M"), time.min
-            ).replace(tzinfo=MTL)
+            ).replace(tzinfo=TZLOCAL)
             # Now we can check.
             if cluster_end_date < oldest_allowed_date:
                 logger.warning(
