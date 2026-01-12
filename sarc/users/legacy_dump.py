@@ -12,11 +12,13 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
-from sarc.config import TZLOCAL
 from sarc.core.models.users import Credentials, MemberType
 from sarc.core.models.validators import END_TIME, START_TIME
 from sarc.core.scraping.users import MatchID, UserMatch, UserScraper, _builtin_scrapers
+
+MTL = ZoneInfo("America/Montreal")
 
 
 def _parse_mtl_datetime(date_str: str | None) -> datetime | None:
@@ -24,7 +26,7 @@ def _parse_mtl_datetime(date_str: str | None) -> datetime | None:
     if date_str is None:
         return None
 
-    return datetime.fromisoformat(date_str).replace(tzinfo=TZLOCAL).astimezone(UTC)
+    return datetime.fromisoformat(date_str).replace(tzinfo=MTL).astimezone(UTC)
 
 
 def _determine_member_type(drac_members: dict[str, Any] | None) -> MemberType | None:  # noqa: PLR0911
