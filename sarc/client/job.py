@@ -285,7 +285,7 @@ class SlurmJob(BaseModel):
         """
         end_time = self.end_time
         if end_time is None:
-            end_time = datetime.now(tz=TZLOCAL)
+            end_time = datetime.now(tz=UTC)
         start_time = end_time - timedelta(seconds=self.elapsed_time)
         gpu_type = self.allocated.gpu_type
         if start_time is None or gpu_type is None:

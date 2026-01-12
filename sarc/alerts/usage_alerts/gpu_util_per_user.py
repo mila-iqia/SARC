@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from typing import cast
 
 from sarc.client.series import compute_cost_and_waste, load_job_series
-from sarc.config import TZLOCAL
+from sarc.config import UTC
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +42,7 @@ def check_gpu_util_per_user(
     end: datetime | None = None
     clip_time = False
     if time_interval is not None:
-        end = datetime.now(tz=TZLOCAL)
+        end = datetime.now(tz=UTC)
         start = end - time_interval
         clip_time = True
 

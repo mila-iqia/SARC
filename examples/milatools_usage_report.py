@@ -40,7 +40,7 @@ from pandas.core.indexes.datetimes import DatetimeIndex
 from typing_extensions import TypeGuard
 
 from sarc.client.job import _jobs_collection
-from sarc.config import TZLOCAL
+from sarc.config import UTC
 
 logger = get_logger(__name__)
 
@@ -62,12 +62,12 @@ if "SARC_CONFIG" not in os.environ:
 class Args:
     start_date: datetime | str = datetime.today().replace(
         hour=0, minute=0, second=0, microsecond=0
-    ).astimezone(tz=TZLOCAL) - timedelta(days=30)
+    ).astimezone(UTC) - timedelta(days=30)
 
     end_date: datetime | str = (
         datetime.today()
         .replace(hour=0, minute=0, second=0, microsecond=0)
-        .astimezone(tz=TZLOCAL)
+        .astimezone(UTC)
     )
 
     verbose: int = simple_parsing.field(
@@ -87,10 +87,10 @@ def main():
     args: Args = parser.parse_args().args
     start_date = args.start_date
     if isinstance(start_date, str):
-        start_date = datetime.fromisoformat(start_date).astimezone(tz=TZLOCAL)
+        start_date = datetime.fromisoformat(start_date).astimezone(tz=UTC)
     end_date = args.end_date
     if isinstance(end_date, str):
-        end_date = datetime.fromisoformat(end_date).astimezone(tz=TZLOCAL)
+        end_date = datetime.fromisoformat(end_date).astimezone(tz=UTC)
 
     print("Args:")
     pprint.pprint(dataclasses.asdict(args))

@@ -6,7 +6,7 @@ from typing import Dict
 from tqdm import tqdm
 
 from sarc.client import count_jobs, get_jobs
-from sarc.config import TZLOCAL
+from sarc.config import UTC
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ def check_same_job_id(
             start: datetime | None = None
             end: datetime | None = None
         else:
-            end = datetime.now(tz=TZLOCAL)
+            end = datetime.now(tz=UTC)
             start = end - time_interval
     elif time_interval is None:
         start = since

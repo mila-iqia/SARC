@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 import pandas as pd
 
 from sarc.client.series import load_job_series
-from sarc.config import TZLOCAL
+from sarc.config import UTC
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +39,7 @@ def check_users_in_jobs(
     # Parse time_interval
     start, end, clip_time = None, None, False
     if time_interval is not None:
-        end = datetime.now(tz=TZLOCAL)
+        end = datetime.now(tz=UTC)
         start = end - time_interval
         clip_time = True
 
