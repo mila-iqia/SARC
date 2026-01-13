@@ -1,19 +1,17 @@
-import json
 import logging
 import subprocess
 from datetime import datetime, timedelta
-from typing import Iterator, Optional
+from typing import Optional
 
 from hostlist import expand_hostlist
 from invoke.runners import Result
 from tqdm import tqdm
 
-from sarc.cache import with_cache
 from sarc.client.job import SlurmJob, _jobs_collection
 from sarc.config import UTC, ClusterConfig
 from sarc.core.models.validators import UTCOFFSET
 from sarc.jobs.node_gpu_mapping import get_node_to_gpu
-from sarc.traces import trace_decorator, using_trace
+from sarc.traces import trace_decorator
 
 logger = logging.getLogger(__name__)
 
@@ -87,37 +85,6 @@ class SAcctScraper:
             logger.debug(results.stdout)
         return json.loads(results.stdout[results.stdout.find("{") :])
 
-    def _cache_key(self) -> str | None:
-        now = datetime.now().astimezone(UTC)
-        if self.start < self.end <= now:
-            fmt = "%Y-%m-%dT%H:%M"
-            startstr = self.start.strftime(fmt)
-            endstr = self.end.strftime(fmt)
-            return f"{self.cluster.name}.{startstr}.{endstr}.json"
-        else:
-            # Not cachable
-            return None
-
-    @with_cache(subdirectory="sacct", key=_cache_key, live=True)  # type: ignore[arg-type] # mypy has some trouble with methods
-    def get_raw(self) -> dict:
-        return self.fetch_raw()
-
-    def __len__(self) -> int:
-        return len(self.get_raw()["jobs"])
-
-    def __iter__(self) -> Iterator[SlurmJob | None]:
-        """Fetch and iterate on all jobs as SlurmJob objects."""
-        version: dict = (
-            self.get_raw().get("meta", {}).get("Slurm", None)
-            or self.get_raw().get("meta", {}).get("slurm", {})
-        ).get("version", None)
-        for entry in self.get_raw()["jobs"]:
-            with using_trace(
-                "sarc.jobs.sacct", "SAcctScraper.__iter__", exception_types=()
-            ) as span:
-                span.set_attribute("entry", json.dumps(entry))
-                converted = self.convert(entry, version)
-                yield converted
 
     def convert(self, entry: dict, version: dict | None = None) -> SlurmJob | None:
         """Convert a single job entry from sacct to a SlurmJob."""
