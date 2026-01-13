@@ -15,15 +15,6 @@ sarc:
       timezone: America/Montreal
       accounts:
       sacct_bin: "/opt/slurm/bin/sacct"
-      diskusage:
-         - name: beegfs
-           params:
-             config_files:
-               default: /etc/beegfs/scratch.d/beegfs-client.conf
-         - name: beegfs
-           params:
-             config_files:
-               default: /etc/beegfs/projects.d/beegfs-client.conf
       prometheus_url: http://prometheus01.server.mila.quebec:9090/
       start_date: '2022-04-01'
       billing_is_gpu: true
@@ -107,7 +98,7 @@ sarc:
         tg[10601-10606,10701-10707,10801-10807,10901-10908,11101-11107,11201-11207]:
           h100: H100-SXM5-80GB
     fir:
-      host: robot.fir.alliancecan.ca
+      host: fir.alliancecan.ca
       timezone: America/Vancouver
       accounts:
       - rrg-bengioy-ad_gpu
@@ -120,7 +111,7 @@ sarc:
       prometheus_headers_file:
       start_date: '2025-08-11'          
     nibi:
-      host: nibi
+      host: nibi.alliancecan.ca
       timezone: America/Toronto
       accounts:
       - rrg-bengioy-ad_gpu
@@ -138,7 +129,7 @@ sarc:
           nvidia_h100_80gb_hbm3_2g.20gb: __MIG_FLAG__h100
           nvidia_h100_80gb_hbm3_3g.40gb: __MIG_FLAG__h100
     rorqual:
-      host: rorqual
+      host: rorqual.alliancecan.ca
       timezone: America/Montreal
       accounts:
       - rrg-bengioy-ad_gpu
@@ -156,7 +147,7 @@ sarc:
           nvidia_h100_80gb_hbm3_2g.20gb: __MIG_FLAG__h100
           nvidia_h100_80gb_hbm3_3g.40gb: __MIG_FLAG__h100
     trillium:
-      host: trillium
+      host: trillium.alliancecan.ca
       timezone: America/Montreal
       accounts:
       - rrg-bengioy-ad_gpu

@@ -128,7 +128,7 @@ sarc:
       prometheus_headers_file:
       start_date: '2025-08-11'          
     nibi:
-      host: nibi
+      host: robot.nibi.alliancecan.ca
       timezone: America/Toronto
       accounts:
       - rrg-bengioy-ad_gpu
@@ -136,6 +136,7 @@ sarc:
       - def-bengioy_gpu
       - def-bengioy_cpu
       sacct_bin: "/opt/software/slurm/bin/sacct"
+      ignore_tz_utc: true
       prometheus_url:
       prometheus_headers_file:
       start_date: '2025-07-31'          
@@ -146,7 +147,7 @@ sarc:
           nvidia_h100_80gb_hbm3_2g.20gb: __MIG_FLAG__h100
           nvidia_h100_80gb_hbm3_3g.40gb: __MIG_FLAG__h100
     rorqual:
-      host: rorqual
+      host: robot.rorqual.alliancecan.ca
       timezone: America/Montreal
       accounts:
       - rrg-bengioy-ad_gpu
@@ -154,6 +155,7 @@ sarc:
       - def-bengioy_gpu
       - def-bengioy_cpu
       sacct_bin: "/opt/software/slurm/bin/sacct"
+      ignore_tz_utc: true
       prometheus_url: https://mila-thanos.calculquebec.ca
       prometheus_headers_file: ../SARC_secrets/secrets/drac_prometheus/headers.json
       start_date: '2025-06-19'          
