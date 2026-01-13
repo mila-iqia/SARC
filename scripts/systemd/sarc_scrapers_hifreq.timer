@@ -4,7 +4,7 @@ Requires=sarc_scrapers_hifreq.service
 
 [Timer]
 Unit=sarc_scrapers_hifreq.service
-OnCalendar=*-*-* *:00:00
+OnCalendar=*-*-* *:05:00
 
 [Install]
 WantedBy=timers.target
