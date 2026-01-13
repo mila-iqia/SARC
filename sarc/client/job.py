@@ -12,7 +12,7 @@ from pydantic import field_validator
 from pydantic_mongo import AbstractRepository, PydanticObjectId
 
 from sarc.client.gpumetrics import get_rgus, get_cluster_gpu_billings
-from sarc.config import MTL, TZLOCAL, UTC, ClusterConfig, config, scraping_mode_required
+from sarc.config import TZLOCAL, UTC, ClusterConfig, config, scraping_mode_required
 from sarc.model import BaseModel
 from sarc.traces import trace_decorator
 
@@ -164,9 +164,8 @@ class SlurmJob(BaseModel):
     )
     @classmethod
     def _ensure_timezone(cls, v: datetime | None) -> datetime | None:
-        # We'll store in MTL timezone because why not
-        # TODO: Could we instead just store it in UTC ?
-        return v and v.replace(tzinfo=UTC).astimezone(MTL)
+        # We'll store in TZLOCAL timezone because why not
+        return v and v.replace(tzinfo=UTC).astimezone(TZLOCAL)
 
     @property
     def duration(self) -> timedelta:

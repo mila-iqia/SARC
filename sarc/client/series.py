@@ -11,7 +11,7 @@ from tqdm import tqdm
 
 from sarc.client.gpumetrics import GPUBilling, get_cluster_gpu_billings, get_rgus
 from sarc.client.job import SlurmCLuster, count_jobs, get_available_clusters, get_jobs
-from sarc.config import UTC
+from sarc.config import TZLOCAL
 from sarc.core.models.users import UserData
 from sarc.core.models.validators import DateMatchError
 from sarc.traces import trace_decorator
@@ -90,7 +90,7 @@ def load_job_series(
     users_frame = _get_user_data_frame()
 
     rows = []
-    now = datetime.now(tz=UTC)
+    now = datetime.now(tz=TZLOCAL)
     # Fetch all jobs from the clusters
     for job in tqdm(get_jobs(**jobs_args), total=total, desc="load job series"):
         if job.end_time is None:
