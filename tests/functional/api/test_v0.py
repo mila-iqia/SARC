@@ -1,7 +1,10 @@
+from datetime import datetime, timedelta
+
 import pytest
 from fastapi.testclient import TestClient
 
 from sarc.api.v0 import router
+from sarc.config import UTC
 
 
 @pytest.fixture
@@ -299,3 +302,342 @@ def test_count_jobs_matches_query_length(client):
     count = response_count.json()
 
     assert len(jobs) == count
+
+
+@pytest.mark.usefixtures("read_only_db_with_users")
+def test_cluster_list(client):
+    """Test cluster list."""
+    response = client.get("/v0/cluster/list")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) > 0
+    for cluster_name in ("raisin", "fromage", "patate"):
+        assert cluster_name in data
+
+
+def _gen_fake_rgus():
+    """Mock for sarc.client.gpumetrics.get_rgus()"""
+    return {
+        "A100": 3.21,
+        "gpu1": 1.5,
+        "gpu_2": 4.5,
+        "GPU 3": 4 * 7,
+    }
+
+
+@pytest.mark.usefixtures("read_only_db_with_users")
+def test_gpu_rgu(client, monkeypatch):
+    monkeypatch.setattr("sarc.api.v0.get_rgus", _gen_fake_rgus)
+
+    response = client.get("/v0/gpu/rgu")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, dict)
+    assert data == _gen_fake_rgus()
+
+
+@pytest.mark.usefixtures("read_only_db_with_users")
+def test_user_query_by_display_name(client):
+    response = client.get("/v0/user/query?display_name=janE")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) == 1
+    assert data[0] == "1f9b04e5-0ec4-4577-9196-2b03d254e344"
+
+    r = client.get(f"/v0/user/id/{data[0]}")
+    assert r.status_code == 200
+    user = r.json()
+    assert isinstance(user, dict)
+    assert user["display_name"] == "Jane Doe"
+    assert user["uuid"] == data[0]
+    assert user["email"] == "jdoe@example.com"
+
+
+@pytest.mark.usefixtures("read_only_db_with_users")
+def test_user_query_by_email(client):
+    response = client.get("/v0/user/query?email=bonhomme@mila.quebec")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) == 1
+    assert data[0] == "5a8b9e7f-afcc-4ced-b596-44fcdb3a0cff"
+
+    r = client.get(f"/v0/user/id/{data[0]}")
+    assert r.status_code == 200
+    user = r.json()
+    assert isinstance(user, dict)
+    assert user["display_name"] == "M/Ms Bonhomme"
+    assert user["uuid"] == data[0]
+    assert user["email"] == "bonhomme@mila.quebec"
+
+
+@pytest.mark.parametrize(
+    "date,expected",
+    [
+        # After 2026/05/01 and until 2027/09/01, there should be only 1 match
+        (datetime(2027, 9, 1, tzinfo=UTC), True),
+        (datetime(2027, 8, 20, tzinfo=UTC), True),
+        (datetime(2026, 5, 2, tzinfo=UTC), True),
+        # Before 2020/09/01 and after 2027/09/01, there should be not match
+        (datetime(2005, 8, 31, tzinfo=UTC), False),
+        (datetime(2010, 8, 31, tzinfo=UTC), False),
+        (datetime(2018, 8, 31, tzinfo=UTC), False),
+        (datetime(2020, 8, 31, 23, 59, 59, 999999, tzinfo=UTC), False),
+        (datetime(2027, 9, 1, 0, 0, 1, tzinfo=UTC), False),
+        (datetime(2027, 12, 1, tzinfo=UTC), False),
+        (datetime(2044, 7, 1, tzinfo=UTC), False),
+    ],
+)
+@pytest.mark.usefixtures("read_only_db_with_users")
+def test_user_query_by_member_type_professor_now(client, freezer, date, expected):
+    freezer.move_to(date)
+    response = client.get("/v0/user/query?member_type=professor")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    if expected:
+        assert len(data) == 1
+        assert sorted(data) == ["1f9b04e5-0ec4-4577-9196-2b03d254e344"]
+    else:
+        assert len(data) == 0
+
+
+@pytest.mark.parametrize(
+    "member_type,date,identifiers",
+    [
+        (
+            "phd",
+            datetime(2020, 8, 31, 23, 59, 59, 999999, tzinfo=UTC),
+            ["7ecd3a8a-ab71-499e-b38a-ceacd91a99c4"],
+        ),
+        (
+            "staff",
+            datetime(2022, 5, 1, tzinfo=UTC),
+            ["8b4fef2b-8f47-4eb6-9992-3e7e1133b42a"],
+        ),
+    ],
+)
+@pytest.mark.usefixtures("read_only_db_with_users")
+def test_user_query_by_member_type_other_now(
+    client, freezer, member_type, date, identifiers
+):
+    freezer.move_to(date)
+    response = client.get(f"/v0/user/query?member_type={member_type}")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert sorted(data) == sorted(identifiers)
+
+
+@pytest.mark.parametrize(
+    "start,nb_expected",
+    [
+        # Start old enough to get all supervised users (2 users)
+        (datetime(2005, 1, 1, tzinfo=UTC), 2),
+        (datetime(2018, 8, 31, 23, 59, 59, 999999, tzinfo=UTC), 2),
+        (datetime(2018, 9, 1, tzinfo=UTC), 2),
+        (datetime(2019, 9, 1, tzinfo=UTC), 2),
+        (datetime(2020, 9, 1, tzinfo=UTC), 2),
+        # From these start dates, we get only 1 supervised user
+        (datetime(2021, 5, 2, 0, 0, 0, 1, tzinfo=UTC), 1),
+        (datetime(2022, 1, 1, tzinfo=UTC), 1),
+        (datetime(2022, 10, 1, tzinfo=UTC), 1),
+        (datetime(2022, 5, 1, tzinfo=UTC), 1),
+        # From these start dates, there is no more user supervised by this prof.
+        (datetime(2023, 1, 1, 0, 0, 1, tzinfo=UTC), 0),
+        (datetime(2025, 1, 1, tzinfo=UTC), 0),
+        (datetime(2035, 1, 1, tzinfo=UTC), 0),
+    ],
+)
+@pytest.mark.usefixtures("read_only_db_with_users")
+def test_user_query_by_supervisor_start(client, start, nb_expected):
+    supervisor = "1f9b04e5-0ec4-4577-9196-2b03d254e344"
+    response = client.get(
+        "/v0/user/query",
+        params={"supervisor": supervisor, "supervisor_start": start.isoformat()},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) == nb_expected
+    if nb_expected == 2:
+        assert sorted(data) == [
+            "7ecd3a8a-ab71-499e-b38a-ceacd91a99c4",
+            "7ee5849c-241e-4d84-a4d2-1f73e22784f9",
+        ]
+    elif nb_expected == 1:
+        assert data == ["7ee5849c-241e-4d84-a4d2-1f73e22784f9"]
+    else:
+        assert not data
+
+
+@pytest.mark.parametrize(
+    "end,nb_expected",
+    [
+        # End new enough to get all supervised users (2 users)
+        (datetime(2035, 1, 1, tzinfo=UTC), 2),
+        (datetime(2025, 1, 1, tzinfo=UTC), 2),
+        (datetime(2023, 1, 1, tzinfo=UTC), 2),
+        (datetime(2022, 5, 1, tzinfo=UTC), 2),
+        (datetime(2022, 1, 1, tzinfo=UTC), 2),
+        # Until these end dates, we get only 1 supervised user
+        (datetime(2021, 5, 1, tzinfo=UTC), 1),
+        (datetime(2020, 1, 1, tzinfo=UTC), 1),
+        (datetime(2019, 1, 1, tzinfo=UTC), 1),
+        (datetime(2018, 9, 1, tzinfo=UTC), 1),
+        # Until these end dates, there is no more user supervised by this prof.
+        (datetime(2018, 8, 31, 23, 59, 59, 9999, tzinfo=UTC), 0),
+        (datetime(2017, 1, 1, tzinfo=UTC), 0),
+        (datetime(2005, 1, 1, tzinfo=UTC), 0),
+    ],
+)
+@pytest.mark.usefixtures("read_only_db_with_users")
+def test_user_query_by_supervisor_end(client, end, nb_expected):
+    supervisor = "1f9b04e5-0ec4-4577-9196-2b03d254e344"
+    response = client.get(
+        "/v0/user/query",
+        params={"supervisor": supervisor, "supervisor_end": end.isoformat()},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) == nb_expected
+    if nb_expected == 2:
+        assert sorted(data) == [
+            "7ecd3a8a-ab71-499e-b38a-ceacd91a99c4",
+            "7ee5849c-241e-4d84-a4d2-1f73e22784f9",
+        ]
+    elif nb_expected == 1:
+        assert data == ["7ecd3a8a-ab71-499e-b38a-ceacd91a99c4"]
+    else:
+        assert not data
+
+
+@pytest.mark.parametrize(
+    "start,end,expected",
+    [
+        (datetime(2022, 1, 1, tzinfo=UTC), datetime(2023, 1, 1, tzinfo=UTC), True),
+        (datetime(2022, 1, 1, tzinfo=UTC), datetime(2022, 5, 1, tzinfo=UTC), True),
+        (datetime(2022, 5, 1, tzinfo=UTC), datetime(2023, 1, 1, tzinfo=UTC), True),
+        (datetime(2022, 5, 1, tzinfo=UTC), datetime(2022, 8, 1, tzinfo=UTC), True),
+        (datetime(2021, 1, 1, tzinfo=UTC), datetime(2022, 1, 1, tzinfo=UTC), True),
+        (datetime(2023, 1, 1, tzinfo=UTC), datetime(2025, 1, 1, tzinfo=UTC), True),
+        # outside
+        (datetime(2021, 1, 1, tzinfo=UTC), datetime(2021, 9, 1, tzinfo=UTC), False),
+        (datetime(2023, 1, 2, tzinfo=UTC), datetime(2025, 1, 1, tzinfo=UTC), False),
+    ],
+)
+@pytest.mark.usefixtures("read_only_db_with_users")
+def test_user_query_by_cosupervisor_start_end(client, start, end, expected):
+    cosupervisor = "1f9b04e5-0ec4-4577-9196-2b03d254e344"
+    response = client.get(
+        "/v0/user/query",
+        params={
+            "co_supervisor": cosupervisor,
+            "co_supervisor_start": start.isoformat(),
+            "co_supervisor_end": end.isoformat(),
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    if expected:
+        assert len(data) == 1
+        assert data == ["8b4fef2b-8f47-4eb6-9992-3e7e1133b42a"]
+    else:
+        assert not data
+
+
+@pytest.mark.usefixtures("read_only_db_with_users")
+def test_user_query_by_cosupervisor_bad_start_end(client):
+    start = datetime(2022, 1, 1, tzinfo=UTC)
+    end = start - timedelta(days=1)
+    response = client.get(
+        "/v0/user/query",
+        params={
+            "co_supervisor": "1f9b04e5-0ec4-4577-9196-2b03d254e344",
+            "co_supervisor_start": start.isoformat(),
+            "co_supervisor_end": end.isoformat(),
+        },
+    )
+    assert response.status_code == 400
+
+
+@pytest.mark.usefixtures("read_only_db_with_users")
+def test_user_query_empty_result(client):
+    response = client.get("/v0/user/query?email=nothing@nothing.nothing")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) == 0
+
+
+@pytest.mark.usefixtures("read_only_db_with_users")
+def test_user_query_no_filters(client):
+    response = client.get("/v0/user/query")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) == 10
+
+
+@pytest.mark.usefixtures("read_only_db_with_users")
+def test_user_query_multiple_filters(client):
+    response = client.get(
+        "/v0/user/query",
+        params={
+            "supervisor": "1f9b04e5-0ec4-4577-9196-2b03d254e344",
+            "supervisor_start": datetime(2020, 1, 1, tzinfo=UTC),
+            "display_name": "sMiTh",
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) == 1
+    assert data[0] == "7ecd3a8a-ab71-499e-b38a-ceacd91a99c4"
+
+    r = client.get(f"/v0/user/id/{data[0]}")
+    assert r.status_code == 200
+    user = r.json()
+    assert isinstance(user, dict)
+    assert user["display_name"] == "John Smith"
+    assert user["uuid"] == data[0]
+
+
+@pytest.mark.usefixtures("read_only_db_with_users")
+def test_get_user_by_uuid(client):
+    response = client.get("/v0/user/id/7ecd3a8a-ab71-499e-b38a-ceacd91a99c4")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, dict)
+    assert data["email"] == "jsmith@example.com"
+
+
+@pytest.mark.usefixtures("read_only_db_with_users")
+def test_get_user_by_uuid_invalid(client):
+    response = client.get("/v0/user/id/invalid")
+    assert response.status_code == 422
+
+
+@pytest.mark.usefixtures("read_only_db_with_users")
+def test_get_user_by_uuid_unknown(client):
+    response = client.get("/v0/user/id/70000000-a000-4000-b000-c00000000000")
+    assert response.status_code == 404
+
+
+@pytest.mark.usefixtures("read_only_db_with_users")
+def test_get_user_by_email(client):
+    response = client.get("/v0/user/email/jsmith@example.com")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, dict)
+    assert data["uuid"] == "7ecd3a8a-ab71-499e-b38a-ceacd91a99c4"
+
+
+@pytest.mark.usefixtures("read_only_db_with_users")
+def test_get_user_by_email_unknown(client):
+    response = client.get("/v0/user/email/unknown")
+    assert response.status_code == 404

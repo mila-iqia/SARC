@@ -13,6 +13,7 @@ from sarc.client.gpumetrics import GPUBilling, get_cluster_gpu_billings, get_rgu
 from sarc.client.job import SlurmCLuster, count_jobs, get_available_clusters, get_jobs
 from sarc.config import MTL
 from sarc.core.models.users import UserData
+from sarc.core.models.validators import DateMatchError
 from sarc.traces import trace_decorator
 from sarc.users.db import get_users
 from sarc.utils import flatten
@@ -72,7 +73,6 @@ def load_job_series(
           "unclipped_start" and "unclipped_end"
         - Optional user info fields if job users found.
           Fields from `User.model_dump()` in format `user.<flattened dot-separated field>`,
-          + special field `user.primary_email` containing either `user.mila.email` or fallback `job.user`.
     """
 
     # If fields is a list, convert it to a renaming dict with same old and new names.
@@ -192,13 +192,13 @@ def load_job_series(
         merged_mila = jobs_frame[df_mila_mask].merge(
             users_frame,
             left_on=field_job_user,
-            right_on="user.mila.username",
+            right_on="user.mila_username",
             how="left",
         )
         merged_drac = jobs_frame[df_drac_mask].merge(
             users_frame,
             left_on=field_job_user,
-            right_on="user.drac.username",
+            right_on="user.drac_username",
             how="left",
         )
 
@@ -207,12 +207,6 @@ def load_job_series(
         # Try to sort output to keep initial jobs order, by using first column from jobs frame.
         # Sort inplace to avoid producing a supplementary frame.
         output.sort_values(by=jobs_frame.columns[0], inplace=True, ignore_index=True)
-
-        # Replace NaN in column `user.primary_email` with corresponding value in `job.user`
-        df_primary_email_nan_mask = output["user.primary_email"].isnull()
-        output.loc[df_primary_email_nan_mask, "user.primary_email"] = output[
-            field_job_user
-        ][df_primary_email_nan_mask]
 
         return output
     else:
@@ -281,17 +275,31 @@ class UserFlattener:
     def flatten(self, user: UserData) -> dict[str, Any]:
         """Flatten given user."""
         # Get user dict.
-        base_user_dict = user.model_dump(exclude={"id"})
+        base_user_dict = user.model_dump(exclude={"id", "matching_ids"})
         # Keep only plain attributes, or complex attributes that are not None.
         base_user_dict = {
             key: value
             for key, value in base_user_dict.items()
             if key in self.plain_attributes or value is not None
         }
+        # We add these two fields for backward compat for now. When the job
+        # struct is modified to have a UUID reference to the user, we can get
+        # rid of this.
+        try:
+            base_user_dict["mila_username"] = user.associated_accounts[
+                "mila"
+            ].get_value()
+        except (DateMatchError, KeyError):
+            pass
+        try:
+            base_user_dict["drac_username"] = user.associated_accounts[
+                "drac"
+            ].get_value()
+        except (DateMatchError, KeyError):
+            pass
+
         # Now flatten user dict.
         user_dict = flatten({"user": base_user_dict})
-        # And add special key `user.primary_email`.
-        user_dict["user.primary_email"] = user.email
         return user_dict
 
 
@@ -326,6 +334,9 @@ def update_job_series_rgu(df: DataFrame) -> DataFrame:
         - column `gpu_type_rgu` added or updated to contain RGU cost per GPU (RGU/GPU ratio).
           Set to NaN (or unchanged if already present) for jobs from clusters without RGU.
     """
+    # Change type of allocated.gres_gpu to float
+    df["allocated.gres_gpu"] = df["allocated.gres_gpu"].astype("float")
+
     for cluster in get_available_clusters():
         update_cluster_job_series_rgu(df, cluster.cluster_name)
     return df
@@ -667,9 +678,11 @@ def compute_time_frames(
     if end is None:
         end = jobs[col_end].max()
 
-    data_frames = []
+    data_frames: list[pandas.DataFrame] = []
 
-    total_durations = (jobs[col_end] - jobs[col_start]).dt.total_seconds()
+    total_durations: pandas.Series[float] = (
+        jobs[col_end] - jobs[col_start]
+    ).dt.total_seconds()  # type: ignore[attr-defined]
     for frame_start in pandas.date_range(start, end, freq=frame_size):
         frame_end = frame_start + frame_size
 
@@ -678,7 +691,7 @@ def compute_time_frames(
         total_durations_in_frame = total_durations[mask]
         frame[col_start] = frame[col_start].clip(frame_start, frame_end)  # type: ignore[call-overload]
         frame[col_end] = frame[col_end].clip(frame_start, frame_end)  # type: ignore[call-overload]
-        frame["duration"] = (frame[col_end] - frame[col_start]).dt.total_seconds()
+        frame["duration"] = (frame[col_end] - frame[col_start]).dt.total_seconds()  # type: ignore[attr-defined]
 
         # Adjust columns to fit the time frame.
         for column in columns:

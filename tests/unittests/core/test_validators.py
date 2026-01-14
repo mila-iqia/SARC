@@ -709,3 +709,166 @@ class TestValidField:
         assert len(field1.values) == 1
         assert field1.get_value(datetime(2023, 3, 1, tzinfo=UTC)) == "same_value"
         assert field1.get_value(datetime(2023, 9, 1, tzinfo=UTC)) == "same_value"
+
+    def test_values_in_range_empty_field(self):
+        field = ValidField[str]()
+        start = datetime(2023, 1, 1, tzinfo=UTC)
+        end = datetime(2023, 12, 31, tzinfo=UTC)
+
+        result = field.values_in_range(start, end)
+        assert result == []
+
+    def test_values_in_range_single_value_overlapping(self):
+        field = ValidField[str]()
+        field.insert(
+            "value1",
+            datetime(2023, 3, 1, tzinfo=UTC),
+            datetime(2023, 6, 30, tzinfo=UTC),
+        )
+
+        start = datetime(2023, 2, 1, tzinfo=UTC)
+        end = datetime(2023, 4, 1, tzinfo=UTC)
+
+        result = field.values_in_range(start, end)
+        assert result == ["value1"]
+
+    def test_values_in_range_single_value_no_overlap(self):
+        field = ValidField[str]()
+        field.insert(
+            "value1",
+            datetime(2023, 1, 1, tzinfo=UTC),
+            datetime(2023, 2, 28, tzinfo=UTC),
+        )
+
+        start = datetime(2023, 4, 1, tzinfo=UTC)
+        end = datetime(2023, 5, 31, tzinfo=UTC)
+
+        result = field.values_in_range(start, end)
+        assert result == []
+
+    def test_values_in_range_value_fully_contains_range(self):
+        field = ValidField[str]()
+        field.insert(
+            "value1",
+            datetime(2023, 1, 1, tzinfo=UTC),
+            datetime(2023, 12, 31, tzinfo=UTC),
+        )
+
+        start = datetime(2023, 2, 1, tzinfo=UTC)
+        end = datetime(2023, 3, 1, tzinfo=UTC)
+
+        result = field.values_in_range(start, end)
+        assert result == ["value1"]
+
+    def test_values_in_range_value_fully_contained_in_range(self):
+        field = ValidField[str]()
+        field.insert(
+            "value1",
+            datetime(2023, 4, 1, tzinfo=UTC),
+            datetime(2023, 5, 31, tzinfo=UTC),
+        )
+
+        start = datetime(2023, 1, 1, tzinfo=UTC)
+        end = datetime(2023, 12, 31, tzinfo=UTC)
+
+        result = field.values_in_range(start, end)
+        assert result == ["value1"]
+
+    def test_values_in_range_value_starts_before_ends_within(self):
+        field = ValidField[str]()
+        field.insert(
+            "value1",
+            datetime(2023, 1, 1, tzinfo=UTC),
+            datetime(2023, 5, 31, tzinfo=UTC),
+        )
+
+        start = datetime(2023, 3, 1, tzinfo=UTC)
+        end = datetime(2023, 6, 30, tzinfo=UTC)
+
+        result = field.values_in_range(start, end)
+        assert result == ["value1"]
+
+    def test_values_in_range_value_starts_within_ends_after(self):
+        field = ValidField[str]()
+        field.insert(
+            "value1",
+            datetime(2023, 4, 1, tzinfo=UTC),
+            datetime(2023, 9, 30, tzinfo=UTC),
+        )
+
+        start = datetime(2023, 2, 1, tzinfo=UTC)
+        end = datetime(2023, 6, 30, tzinfo=UTC)
+
+        result = field.values_in_range(start, end)
+        assert result == ["value1"]
+
+    def test_values_in_range_multiple_values_some_overlapping(self):
+        field = ValidField[str]()
+        field.insert(
+            "value1",
+            datetime(2023, 1, 1, tzinfo=UTC),
+            datetime(2023, 3, 31, tzinfo=UTC),
+        )
+        field.insert(
+            "value2",
+            datetime(2023, 4, 1, tzinfo=UTC),
+            datetime(2023, 6, 30, tzinfo=UTC),
+        )
+        field.insert(
+            "value3",
+            datetime(2023, 7, 1, tzinfo=UTC),
+            datetime(2023, 9, 30, tzinfo=UTC),
+        )
+
+        start = datetime(2023, 5, 1, tzinfo=UTC)
+        end = datetime(2023, 8, 31, tzinfo=UTC)
+
+        result = field.values_in_range(start, end)
+        assert set(result) == {"value2", "value3"}
+
+    def test_values_in_range_boundary_at_start(self):
+        field = ValidField[str]()
+        field.insert(
+            "value1",
+            datetime(2023, 4, 1, tzinfo=UTC),
+            datetime(2023, 6, 30, tzinfo=UTC),
+        )
+
+        start = datetime(2023, 3, 1, tzinfo=UTC)
+        end = datetime(2023, 4, 1, tzinfo=UTC)
+
+        result = field.values_in_range(start, end)
+        assert result == []
+
+    def test_values_in_range_boundary_at_end(self):
+        field = ValidField[str]()
+        field.insert(
+            "value1",
+            datetime(2023, 4, 1, tzinfo=UTC),
+            datetime(2023, 5, 1, tzinfo=UTC),
+        )
+
+        start = datetime(2023, 5, 1, tzinfo=UTC)
+        end = datetime(2023, 6, 30, tzinfo=UTC)
+
+        result = field.values_in_range(start, end)
+        assert result == []
+
+    def test_values_in_range_adjacent_values_no_overlap(self):
+        field = ValidField[str]()
+        field.insert(
+            "value1",
+            datetime(2023, 1, 1, tzinfo=UTC),
+            datetime(2023, 4, 1, tzinfo=UTC),
+        )
+        field.insert(
+            "value2",
+            datetime(2023, 4, 1, tzinfo=UTC),
+            datetime(2023, 6, 30, tzinfo=UTC),
+        )
+
+        start = datetime(2023, 3, 30, tzinfo=UTC)
+        end = datetime(2023, 4, 1, tzinfo=UTC)
+
+        result = field.values_in_range(start, end)
+        assert result == ["value1"]

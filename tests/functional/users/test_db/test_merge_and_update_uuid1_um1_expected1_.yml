@@ -1,0 +1,38 @@
+associated_accounts:
+  mila:
+    values:
+    - valid_end: '3000-01-01T00:00:00Z'
+      valid_start: '2000-01-01T00:00:00Z'
+      value: bonhomme_mila
+  new_cluster:
+    values:
+    - valid_end: '3000-01-01T00:00:00Z'
+      valid_start: '2023-01-01T00:00:00Z'
+      value: newuser
+co_supervisors:
+  values: []
+display_name: Updated Name
+email: updated@example.com
+github_username:
+  values:
+  - valid_end: '3000-01-01T00:00:00Z'
+    valid_start: '2023-01-01T00:00:00Z'
+    value: newgithub
+google_scholar_profile:
+  values:
+  - valid_end: '3000-01-01T00:00:00Z'
+    valid_start: '2023-01-01T00:00:00Z'
+    value: https://scholar.google.com/newprofile
+matching_ids:
+  mila_ldap: bonhomme@mila.quebec
+  new_source: new_id
+member_type:
+  values:
+  - valid_end: '2024-01-01T00:00:00Z'
+    valid_start: '2023-01-01T00:00:00Z'
+    value: phd
+supervisor:
+  values:
+  - valid_end: '2024-01-01T00:00:00Z'
+    valid_start: '2023-01-01T00:00:00Z'
+    value: 7ecd3a8a-ab71-499e-b38a-ceacd91a99c4

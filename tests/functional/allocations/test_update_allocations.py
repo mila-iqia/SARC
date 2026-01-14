@@ -11,9 +11,10 @@ FOLDER = os.path.dirname(os.path.abspath(__file__))
 
 @pytest.mark.freeze_time("2023-02-15")
 @pytest.mark.usefixtures("empty_read_write_db")
-def test_update_allocations(data_regression):
+def test_update_allocations(data_regression, enabled_cache):
     assert get_allocations(cluster_name=["fromage", "patate"]) == []
-    main(["acquire", "allocations", "--file", os.path.join(FOLDER, "allocations.csv")])
+    main(["fetch", "allocations", "--file", os.path.join(FOLDER, "allocations.csv")])
+    main(["parse", "allocations", "--since", "2023-02-14"])
     data = get_allocations(cluster_name=["fromage", "patate"])
     assert len(data) == 11
     data_regression.check(
@@ -23,12 +24,13 @@ def test_update_allocations(data_regression):
 
 @pytest.mark.freeze_time("2023-02-15")
 @pytest.mark.usefixtures("empty_read_write_db")
-def test_update_allocations_no_duplicates(data_regression):
+def test_update_allocations_no_duplicates(data_regression, enabled_cache):
     assert get_allocations(cluster_name=["fromage", "patate"]) == []
-    main(["acquire", "allocations", "--file", os.path.join(FOLDER, "allocations.csv")])
+    main(["fetch", "allocations", "--file", os.path.join(FOLDER, "allocations.csv")])
+    main(["parse", "allocations", "--since", "2023-02-14"])
     data = get_allocations(cluster_name=["fromage", "patate"])
     assert len(data) == 11
-    main(["acquire", "allocations", "--file", os.path.join(FOLDER, "allocations.csv")])
+    main(["parse", "allocations", "--since", "2023-02-14"])
     data = get_allocations(cluster_name=["fromage", "patate"])
     assert len(data) == 11
     data_regression.check(
@@ -38,16 +40,17 @@ def test_update_allocations_no_duplicates(data_regression):
 
 @pytest.mark.freeze_time("2023-02-15")
 @pytest.mark.usefixtures("empty_read_write_db")
-def test_update_allocations_invalid_with_some_valid(data_regression):
+def test_update_allocations_invalid_with_some_valid(data_regression, enabled_cache):
     assert get_allocations(cluster_name=["fromage", "patate"]) == []
     main(
         [
-            "acquire",
+            "fetch",
             "allocations",
             "--file",
             os.path.join(FOLDER, "invalid_allocations.csv"),
         ]
     )
+    main(["parse", "allocations", "--since", "2023-02-14"])
     data = get_allocations(cluster_name=["fromage", "patate"])
     assert len(data) == 2
     data_regression.check(
@@ -57,16 +60,17 @@ def test_update_allocations_invalid_with_some_valid(data_regression):
 
 @pytest.mark.freeze_time("2023-02-14")
 @pytest.mark.usefixtures("empty_read_write_db")
-def test_update_allocations_invalid_error_msg(caplog):
+def test_update_allocations_invalid_error_msg(caplog, enabled_cache):
     assert get_allocations(cluster_name=["fromage", "patate"]) == []
     main(
         [
-            "acquire",
+            "fetch",
             "allocations",
             "--file",
             os.path.join(FOLDER, "invalid_allocations.csv"),
         ]
     )
+    main(["parse", "allocations", "--since", "2023-02-13"])
     data = get_allocations(cluster_name=["fromage", "patate"])
     assert len(data) == 2
     print(caplog.text)

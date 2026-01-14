@@ -1,4 +1,5 @@
 import csv
+import datetime
 import json
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -26,9 +27,7 @@ class DRACRolesScraper(UserScraper[DRACRolesConfig]):
                 [_dict_to_lowercase(d) for d in csv.DictReader(f_in)]
             ).encode()
 
-    def parse_user_data(
-        self, _config: DRACRolesConfig, data: bytes
-    ) -> Iterable[UserMatch]:
+    def parse_user_data(self, data: bytes) -> Iterable[UserMatch]:
         for d in json.loads(data.decode()):
             yield UserMatch(
                 display_name=d["nom"],
@@ -54,15 +53,21 @@ class DRACMemberScraper(UserScraper[DRACMemberConfig]):
                 [_dict_to_lowercase(d) for d in csv.DictReader(f_in)]
             ).encode()
 
-    def parse_user_data(
-        self, _config: DRACMemberConfig, data: bytes
-    ) -> Iterable[UserMatch]:
+    def parse_user_data(self, data: bytes) -> Iterable[UserMatch]:
         for d in json.loads(data.decode()):
             creds = Credentials()
-            creds.insert(d["username"], start=d["member_since"])
+            creds.insert(
+                d["username"],
+                start=datetime.datetime.strptime(
+                    d["member_since"], "%Y-%m-%d %H:%M:%S %z"
+                ),
+            )
             yield UserMatch(
                 display_name=d["name"],
                 email=d["email"],
                 matching_id=MatchID(name="drac_member", mid=d["ccri"][:-3]),
                 associated_accounts={"drac": creds},
             )
+
+
+_builtin_scrapers["drac_member"] = DRACMemberScraper()

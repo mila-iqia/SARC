@@ -14,7 +14,7 @@ END_TIME = datetime(year=3000, month=1, day=1, tzinfo=UTC)
 class DatetimeUTCValidator:
     def validate_tz_utc(self, value: datetime, handler: Callable):
         assert value.tzinfo is not None, "date is not tz-aware"
-        assert value.utcoffset() == UTCOFFSET, "date in not in UTC timezone"
+        assert value.utcoffset() == UTCOFFSET, "date is not in UTC timezone"
 
         return handler(value)
 
@@ -77,8 +77,8 @@ class ValidField[V](BaseModel):
         instead of an overlapping error, the bound of the most recent value will
         be adjusted to end at the start of the new value.
         """
-        assert start is None or start.tzinfo == UTC
-        assert end is None or end.tzinfo == UTC
+        assert start is None or start.tzinfo is not None
+        assert end is None or end.tzinfo is not None
 
         if start is not None and end is not None:
             assert start < end
@@ -86,6 +86,8 @@ class ValidField[V](BaseModel):
             start = START_TIME
         if end is None or end > END_TIME:
             end = END_TIME
+        start = start.astimezone(UTC)
+        end = end.astimezone(UTC)
         tag = ValidTag(value=value, valid_start=start, valid_end=end)
         self._insert_tag(tag, truncate=False)
 
@@ -181,15 +183,33 @@ class ValidField[V](BaseModel):
         If date is None, we the the current time as the date.
         If there was no value as the specified date, raises DateMatchError.
         """
-        assert date is None or date.tzinfo == UTC
+        assert date is None or date.tzinfo is not None
 
         if date is None:
             date = datetime.now(UTC)
+
+        date = date.astimezone(UTC)
 
         for tag in self.values:
             if date >= tag.valid_start and date < tag.valid_end:
                 return tag.value
         raise DateMatchError(date)
+
+    def values_in_range(self, start: datetime_utc, end: datetime_utc) -> list[V]:
+        """Get values in a range
+
+        The range starts at `start` and ends just before `end`.  This means that
+        start is included, but end is not.
+        """
+        res = list[V]()
+        start = start.astimezone(UTC)
+        end = end.astimezone(UTC)
+
+        for tag in self.values:
+            if not (end <= tag.valid_start or start >= tag.valid_end):
+                res.append(tag.value)
+
+        return res
 
     def merge_with(self, other: Self, truncate=False) -> None:
         """Insert all the values in other in self.

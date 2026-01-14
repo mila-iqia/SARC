@@ -4,15 +4,16 @@ import logging
 import time
 from dataclasses import dataclass
 from types import SimpleNamespace
-from typing import Union
 
 from simple_parsing import ArgumentParser, field, subparsers
 
-from sarc.logging import setupLogging
+from sarc.logging import getSlackReport, setupLogging
 
 from .acquire import Acquire
 from .db import Db
+from .fetch import Fetch
 from .health import Health
+from .parse import Parse
 
 colors = SimpleNamespace(
     grey="\033[38;21m",
@@ -50,8 +51,8 @@ class NiceHandler(logging.StreamHandler):
 
 @dataclass
 class CLI:
-    command: Union[Acquire, Db, Health] = subparsers(
-        {"acquire": Acquire, "db": Db, "health": Health}
+    command: Acquire | Db | Health | Fetch | Parse = subparsers(
+        {"acquire": Acquire, "db": Db, "health": Health, "fetch": Fetch, "parse": Parse}
     )
 
     color: bool = False
@@ -63,7 +64,22 @@ class CLI:
     )
 
     def execute(self) -> int:
-        setupLogging(verbose_level=self.verbose)
+        # build command name
+        command_names = []
+        c: object = self.command
+        while c is not None:
+            command_names.append(c.__class__.__name__)
+            if hasattr(c, "command"):
+                c = c.command
+            else:
+                c = None
+
+        setupLogging(verbose_level=self.verbose, command_name=".".join(command_names))
+        report = getSlackReport()
+
+        if report is not None:
+            with report:
+                return self.command.execute()
 
         return self.command.execute()
 

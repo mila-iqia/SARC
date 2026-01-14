@@ -1,13 +1,17 @@
+import logging
 from collections.abc import Iterable
+from datetime import UTC, datetime
 from importlib.metadata import entry_points
 from typing import Any, Protocol, Type
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_serializer
 from serieux import deserialize
 
-from sarc.cache import CachePolicy
+from sarc.cache import Cache
 from sarc.core.models.users import Credentials, MemberType
 from sarc.core.models.validators import ValidField
+
+logger = logging.getLogger(__name__)
 
 
 class MatchID(BaseModel):
@@ -31,7 +35,7 @@ class UserMatch(BaseModel):
     email: str | None = None
 
     matching_id: MatchID
-    # If the plugins gets an id that works with another plugin, it can be stored here.
+    # If the plugin gets an id that works with another plugin, it can be stored here.
     known_matches: set[MatchID] = Field(default_factory=set)
 
     member_type: ValidField[MemberType] = Field(default_factory=ValidField[MemberType])
@@ -47,6 +51,13 @@ class UserMatch(BaseModel):
     github_username: ValidField[str] = Field(default_factory=ValidField[str])
     google_scholar_profile: ValidField[str] = Field(default_factory=ValidField[str])
 
+    # This is not really required for serialization, but it makes the order or
+    # known_matches random if not present and complicates testing. If it becomes
+    # a problem outside of tests we can find another solution.
+    @field_serializer("known_matches", when_used="json")
+    def _serialize_deterministic(self, value: set[MatchID]):
+        return sorted(value, key=lambda m: (m.name, m.mid))
+
     def __eq__(self, other: object) -> bool:
         return isinstance(other, UserMatch) and self.matching_id == other.matching_id
 
@@ -61,9 +72,11 @@ class UserScraper[T](Protocol):
     def validate_config(self, config_data: Any) -> T:
         return deserialize(self.config_type, config_data)
 
-    def get_user_data(self, config: T) -> bytes: ...
+    def get_user_data(self, config: T) -> bytes: ...  # pragma: nocover
 
-    def parse_user_data(self, config: T, data: bytes) -> Iterable[UserMatch]: ...
+    def parse_user_data(
+        self, data: bytes
+    ) -> Iterable[UserMatch]: ...  # pragma: nocover
 
 
 _builtin_scrapers: dict[str, UserScraper] = dict()
@@ -77,7 +90,7 @@ def get_user_scraper(name: str) -> UserScraper:
     except KeyError:
         pass
     val = _user_scrapers[name]
-    return val.load()
+    return val.load()()
 
 
 def update_user_match(*, value: UserMatch, update: UserMatch) -> None:
@@ -102,6 +115,8 @@ def update_user_match(*, value: UserMatch, update: UserMatch) -> None:
         assert name_dict.get(mid.name, mid) == mid
         value.known_matches.add(mid)
 
+    value.member_type.merge_with(update.member_type, truncate=True)
+
     for domain, credentials in update.associated_accounts.items():
         if domain not in value.associated_accounts:
             value.associated_accounts[domain] = credentials
@@ -117,62 +132,112 @@ def update_user_match(*, value: UserMatch, update: UserMatch) -> None:
     )
 
 
-def scrape_users(
-    scrapers: list[tuple[str, Any]], _cache_policy: CachePolicy = CachePolicy.use
-) -> Iterable[UserMatch]:
-    """
-    Perform user scraping and matching according to the list of plugins passed in.
+def fetch_users(scrapers: list[tuple[str, Any]]) -> None:
+    """Fetch user data and place the results in cache.
 
-    The first plugin to specify information wins in case of conflict.
+    This method should never raise any exceptions, but will instead log all
+    execution errors.
+
+    The goal is to make sure that all scrapers have a chance to run and that
+    temporary or permanent errors will not discard any previously retrieved
+    data.
+    """
+    cache = Cache(subdirectory="users")
+    with cache.create_entry(datetime.now(UTC)) as ce:
+        for scraper_name, config_data in scrapers:
+            try:
+                scraper = get_user_scraper(scraper_name)
+            except Exception as e:
+                logger.error(
+                    "Could not fetch user scraper: %s", scraper_name, exc_info=e
+                )
+                continue
+            try:
+                config = scraper.validate_config(config_data)
+            except Exception as e:
+                logger.error(
+                    "Error parsing config for scraper: %s", scraper_name, exc_info=e
+                )
+                continue
+            try:
+                ce.add_value(
+                    key=scraper_name,
+                    value=scraper.get_user_data(config),
+                )
+            except Exception as e:
+                logger.error(
+                    "Error fetching data for scraper: %s", scraper_name, exc_info=e
+                )
+
+
+def parse_users(from_: datetime) -> Iterable[UserMatch]:
+    """Parse user data from the cache.
 
     This returns one UserMatch structure per scraped user, across all plugins.
     The collected information is aggregated amongst plugins, but not with the
     information in the database.
+
+    from_: start parsing cached date from that date.
     """
-    raw_data: dict[str, tuple[bytes, Any]] = {}
-    for scraper_name, config_data in scrapers:
-        try:
-            scraper = get_user_scraper(scraper_name)
-        except KeyError as e:
-            raise ValueError("Invalid user scraper") from e
-        config = scraper.validate_config(config_data)
-        raw_data[scraper_name] = (scraper.get_user_data(config), config)
+    cache = Cache(subdirectory="users")
 
-    # TODO: save the raw data for cache purposes
-    #  - Should refactor cache so that we don't *have* to use the function wrapper interface
-
-    # UserMatches, referenced by plugin name and matching id
-    user_refs: dict[MatchID, UserMatch] = {}
-    for scraper_name, (rdata, config) in raw_data.items():
-        for userm in scraper.parse_user_data(config, rdata):
-            userm.matching_id.name = scraper_name
-            # First, get all the userm that matche with this one.
-            prev_userms: list[UserMatch] = [userm]
-            prev = user_refs.get(userm.matching_id, None)
-            if prev is not None:
-                prev_userms.append(prev)
-            for mid in userm.known_matches:
-                prev = user_refs.get(mid, None)
+    for ce in cache.read_from(from_time=from_):
+        # UserMatches, referenced by matching id
+        user_refs: dict[MatchID, UserMatch] = {}
+        # Used for getting results precedence.
+        scraper_names = [it[0] for it in ce.items()]
+        for item in ce.items():
+            try:
+                scraper = get_user_scraper(item[0])
+            except KeyError as e:
+                raise ValueError("Invalid user scraper") from e
+            for userm in scraper.parse_user_data(item[1]):
+                userm.matching_id.name = item[0]
+                # First, get all the userm that match with this one.
+                prev_userms: list[UserMatch] = [userm]
+                prev = user_refs.get(userm.matching_id, None)
                 if prev is not None:
                     prev_userms.append(prev)
-            # Second, filter out duplicates and sort the rest according to plugin rank
-            scraper_names = [name for name, _ in scrapers]
-            matching_userms = sorted(
-                set(prev_userms),
-                key=lambda um: scraper_names.index(um.matching_id.name),
-            )
-            # Third, merge everything into the oldest entry
-            oldest_userm = matching_userms.pop(0)
-            for newer_userm in matching_userms:
-                update_user_match(value=oldest_userm, update=newer_userm)
-            # Finally, update all references to point to the new merged UserMatch
-            user_refs[oldest_userm.matching_id] = oldest_userm
-            for mid in oldest_userm.known_matches:
-                user_refs[mid] = oldest_userm
+                for mid in userm.known_matches:
+                    prev = user_refs.get(mid, None)
+                    if prev is not None:
+                        prev_userms.append(prev)
+                # Second, filter out duplicates and sort the rest according to plugin rank
+                matching_userms = sorted(
+                    set(prev_userms),
+                    key=lambda um: scraper_names.index(um.matching_id.name),
+                )
+                # Third, merge everything into the oldest entry
+                oldest_userm = matching_userms.pop(0)
+                for newer_userm in matching_userms:
+                    update_user_match(value=oldest_userm, update=newer_userm)
+                # Finally, update all references to point to the new merged UserMatch
+                user_refs[oldest_userm.matching_id] = oldest_userm
+                for mid in oldest_userm.known_matches:
+                    user_refs[mid] = oldest_userm
 
-    # Yield all "primary" UserMatches (those whose reference name match the
-    # original plugin name)
-    for mid, umatch in user_refs.items():
-        if umatch.matching_id != mid:
-            continue
-        yield umatch
+        def _get_refs(um: UserMatch) -> set[MatchID]:
+            res = set[MatchID]()
+            for tag in um.supervisor.values:
+                res.add(tag.value)
+            for tags in um.co_supervisors.values:
+                res.update(tags.value)
+            return res
+
+        # Filter for "primary" UserMatches (those whose reference name match the
+        # original plugin name).
+        refs = {k: _get_refs(v) for k, v in user_refs.items() if v.matching_id == k}
+
+        # Here we do a topological sort of the usermatches to ensure that the
+        # supervisors are yielded first and make it to the database before their
+        # students.
+        while len(refs) != 0:
+            roots = set()
+            for k, v in refs.items():
+                if len(v) == 0:
+                    yield user_refs[k]
+                    roots.add(k)
+            refs = {k: v - roots for k, v in refs.items() if k not in roots}
+            if len(roots) == 0:
+                for k in refs:
+                    yield user_refs[k]

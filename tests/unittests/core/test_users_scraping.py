@@ -1,44 +1,69 @@
 """Tests for the user scraping plugin system."""
 
+import logging
 from collections.abc import Iterable
 from dataclasses import dataclass
-from unittest.mock import MagicMock, patch
+from datetime import UTC, datetime, timedelta
+from importlib.metadata import EntryPoint, EntryPoints
+from typing import Any
+from unittest.mock import patch
 
 import pytest
 
+from sarc.cache import Cache
+from sarc.core.models.users import Credentials
 from sarc.core.scraping.users import (
     MatchID,
     UserMatch,
     UserScraper,
+    _builtin_scrapers,
+    fetch_users,
     get_user_scraper,
-    scrape_users,
+    parse_users,
     update_user_match,
 )
+from sarc.users.db import get_user, get_user_collection
+
+one_hour = timedelta(hours=1)
+
+
+class UserPluginTester:
+    plugin: UserScraper
+    raw_config: Any = None
+    parsed_config: Any = {}
+
+    def test_config_validation(self):
+        conf = self.plugin.validate_config(self.raw_config)
+        assert isinstance(conf, self.plugin.config_type)
+        assert conf == self.parsed_config
+
+    def test_fetch_data(self):
+        raise NotImplementedError()
+
+    def test_parse_data(self, raw_data, data_regression):
+        raise NotImplementedError()
+        # This code is what you should put in your implementation, but
+        # limitations on parametrize require that the method be in your class
+        # rather than this one.
+        data = self.plugin.parse_user_data(self.parsed_config, raw_data)
+        data_regression.check(data)
 
 
 @dataclass
 class MockConfig:
-    """Mock configuration for testing."""
-
     api_url: str
     api_key: str
 
 
 class MockUserScraper(UserScraper[MockConfig]):
-    """Mock user scraper for testing the plugin interface."""
-
     config_type = MockConfig
 
     def get_user_data(self, config: MockConfig) -> bytes:
-        """Return mock user data."""
-        return f"mock_data_from_{config.api_url}".encode()
+        return config.api_url.encode()
 
-    def parse_user_data(self, config: MockConfig, data: bytes) -> Iterable[UserMatch]:
-        """Parse mock user data and return UserMatch objects."""
-        # Create some mock users based on the config
+    def parse_user_data(self, _data: bytes) -> Iterable[UserMatch]:
         users = []
 
-        # User 1: Complete profile
         user1 = UserMatch(
             display_name="John Doe",
             email="john.doe@example.com",
@@ -48,15 +73,13 @@ class MockUserScraper(UserScraper[MockConfig]):
         user1.google_scholar_profile.insert("scholar.google.com/citations?user=abc123")
         users.append(user1)
 
-        # User 2: Partial profile
         user2 = UserMatch(
             display_name="Jane Smith",
-            email=None,  # Missing email
+            email=None,
             matching_id=MatchID(name="mock_plugin", mid="user2"),
         )
         users.append(user2)
 
-        # User 3: With known matches
         user3 = UserMatch(
             display_name="Bob Wilson",
             email="bob.wilson@example.com",
@@ -71,62 +94,70 @@ class MockUserScraper(UserScraper[MockConfig]):
         return users
 
 
-# Test functions for MatchID
-def test_match_id_creation():
-    """Test creating a MatchID."""
-    mid = MatchID(name="test_plugin", mid="user123")
-    assert mid.name == "test_plugin"
-    assert mid.mid == "user123"
+@dataclass
+class TestConfig:
+    domain: str
 
 
-def test_match_id_hash():
-    """Test that MatchID objects are hashable."""
+class TestPlugin(UserScraper[TestConfig]):
+    config_type = TestConfig
+
+    def validate_config(self, config_data: Any) -> TestConfig:
+        return TestConfig(domain=config_data)
+
+    def get_user_data(self, config: TestConfig) -> bytes:
+        return config.domain.encode("utf-8")
+
+    def parse_user_data(self, data: bytes) -> Iterable[UserMatch]:
+        users = []
+        domain = data.decode("utf-8")
+        users.append(
+            UserMatch(
+                email=f"john@{domain}",
+                matching_id=MatchID(name="test", mid="john"),
+            )
+        )
+        users.append(
+            UserMatch(
+                email=f"jane@{domain}",
+                matching_id=MatchID(name="test", mid="jane"),
+            )
+        )
+        return users
+
+
+@pytest.fixture
+def user_plugin(monkeypatch):
+    yield monkeypatch.setattr(
+        "sarc.core.scraping.users._user_scrapers",
+        EntryPoints(
+            [
+                EntryPoint(
+                    name="test_plugin",
+                    group="sarc.user_scraper",
+                    value=f"{MockUserScraper.__module__}:{MockUserScraper.__name__}",
+                )
+            ]
+        ),
+    )
+
+
+@pytest.fixture
+def mock_scraper(monkeypatch):
+    mock_scraper = MockUserScraper()
+    yield monkeypatch.setitem(_builtin_scrapers, "test_scraper", mock_scraper)
+
+
+def test_match_id():
     mid1 = MatchID(name="test_plugin", mid="user123")
     mid2 = MatchID(name="test_plugin", mid="user123")
     mid3 = MatchID(name="test_plugin", mid="user456")
 
     assert hash(mid1) == hash(mid2)
-    assert hash(mid1) != hash(mid3)
-
-
-def test_match_id_equality():
-    """Test MatchID equality."""
-    mid1 = MatchID(name="test_plugin", mid="user123")
-    mid2 = MatchID(name="test_plugin", mid="user123")
-    mid3 = MatchID(name="test_plugin", mid="user456")
-
     assert mid1 == mid2
+    assert hash(mid1) != hash(mid3)
     assert mid1 != mid3
     assert mid1 != "not_a_match_id"
-
-
-# Test functions for UserMatch
-def test_user_match_creation():
-    """Test creating a UserMatch with minimal data."""
-    mid = MatchID(name="test_plugin", mid="user123")
-    user = UserMatch(matching_id=mid)
-
-    assert user.matching_id == mid
-    assert user.display_name is None
-    assert user.email is None
-    assert user.known_matches == set()
-    assert user.associated_accounts == {}
-
-
-def test_user_match_with_data():
-    """Test creating a UserMatch with complete data."""
-    mid = MatchID(name="test_plugin", mid="user123")
-    user = UserMatch(
-        display_name="Test User",
-        email="test@example.com",
-        matching_id=mid,
-        known_matches={MatchID(name="other_plugin", mid="user123")},
-    )
-
-    assert user.display_name == "Test User"
-    assert user.email == "test@example.com"
-    assert user.matching_id == mid
-    assert len(user.known_matches) == 1
 
 
 def test_user_match_equality():
@@ -134,49 +165,16 @@ def test_user_match_equality():
     mid1 = MatchID(name="test_plugin", mid="user123")
     mid2 = MatchID(name="test_plugin", mid="user456")
 
-    user1 = UserMatch(matching_id=mid1)
-    user2 = UserMatch(matching_id=mid1)
+    user1 = UserMatch(matching_id=mid1, display_name="A")
+    user2 = UserMatch(matching_id=mid1, display_name="B")
     user3 = UserMatch(matching_id=mid2)
 
+    assert hash(user1) == hash(user2)
     assert user1 == user2
     assert user1 != user3
 
 
-def test_user_match_hash():
-    """Test that UserMatch objects are hashable."""
-    mid = MatchID(name="test_plugin", mid="user123")
-    user1 = UserMatch(matching_id=mid)
-    user2 = UserMatch(matching_id=mid)
-
-    assert hash(user1) == hash(user2)
-
-
-# Test functions for UserScraper protocol
-def test_mock_scraper_protocol_compliance():
-    """Test that MockUserScraper implements the UserScraper protocol."""
-    scraper = MockUserScraper()
-
-    # Test config validation
-    config_data = {"api_url": "https://api.example.com", "api_key": "secret"}
-    config = scraper.validate_config(config_data)
-    assert isinstance(config, MockConfig)
-    assert config.api_url == "https://api.example.com"
-    assert config.api_key == "secret"
-
-    # Test data retrieval
-    data = scraper.get_user_data(config)
-    assert isinstance(data, bytes)
-    assert data == b"mock_data_from_https://api.example.com"
-
-    # Test data parsing
-    users = list(scraper.parse_user_data(config, data))
-    assert len(users) == 3
-    assert all(isinstance(user, UserMatch) for user in users)
-
-
-# Test functions for update_user_match
 def test_update_user_match_fill_missing_data():
-    """Test updating a UserMatch with missing data."""
     base_user = UserMatch(
         display_name=None,
         email=None,
@@ -196,7 +194,6 @@ def test_update_user_match_fill_missing_data():
 
 
 def test_update_user_match_preserve_existing_data():
-    """Test that existing data is preserved when updating."""
     base_user = UserMatch(
         display_name="John Doe",
         email="john@example.com",
@@ -204,19 +201,18 @@ def test_update_user_match_preserve_existing_data():
     )
 
     update_user = UserMatch(
-        display_name="Different Name",  # Should not override
-        email="different@example.com",  # Should not override
+        display_name="Different Name",
+        email="different@example.com",
         matching_id=MatchID(name="plugin2", mid="user1"),
     )
 
     update_user_match(value=base_user, update=update_user)
 
-    assert base_user.display_name == "John Doe"  # Preserved
-    assert base_user.email == "john@example.com"  # Preserved
+    assert base_user.display_name == "John Doe"
+    assert base_user.email == "john@example.com"
 
 
 def test_update_user_match_merge_known_matches():
-    """Test merging known matches."""
     base_user = UserMatch(
         matching_id=MatchID(name="plugin1", mid="user1"),
         known_matches={MatchID(name="plugin2", mid="user1")},
@@ -238,7 +234,6 @@ def test_update_user_match_merge_known_matches():
 
 
 def test_update_user_match_merge_valid_fields():
-    """Test merging ValidField objects."""
     base_user = UserMatch(
         matching_id=MatchID(name="plugin1", mid="user1"),
     )
@@ -263,130 +258,105 @@ def test_update_user_match_merge_valid_fields():
     )
 
 
-# Test functions for get_user_scraper
-@patch("sarc.core.scraping.users._builtin_scrapers")
-@patch("sarc.core.scraping.users._user_scrapers")
-def test_get_user_scraper_builtin(mock_user_scrapers, mock_builtin_scrapers):
-    """Test getting a builtin scraper."""
-    mock_scraper = MockUserScraper()
-    mock_builtin_scrapers.__getitem__.return_value = mock_scraper
-
+def test_get_user_scraper_builtin(mock_scraper):
     result = get_user_scraper("test_scraper")
-    assert result == mock_scraper
-    mock_builtin_scrapers.__getitem__.assert_called_once_with("test_scraper")
+    assert isinstance(result, MockUserScraper)
 
 
-@patch("sarc.core.scraping.users._builtin_scrapers")
-@patch("sarc.core.scraping.users._user_scrapers")
-def test_get_user_scraper_plugin(mock_user_scrapers, mock_builtin_scrapers):
-    """Test getting a plugin scraper."""
-    mock_builtin_scrapers.__getitem__.side_effect = KeyError("not found")
-
-    mock_entry_point = MagicMock()
-    mock_entry_point.load.return_value = MockUserScraper()
-    mock_user_scrapers.__getitem__.return_value = mock_entry_point
-
+def test_get_user_scraper_plugin(user_plugin):
     result = get_user_scraper("test_plugin")
     assert isinstance(result, MockUserScraper)
-    mock_user_scrapers.__getitem__.assert_called_once_with("test_plugin")
 
 
-@patch("sarc.core.scraping.users._builtin_scrapers")
-@patch("sarc.core.scraping.users._user_scrapers")
-def test_get_user_scraper_not_found(mock_user_scrapers, mock_builtin_scrapers):
-    """Test getting a non-existent scraper raises KeyError."""
-    mock_builtin_scrapers.__getitem__.side_effect = KeyError("not found")
-    mock_user_scrapers.__getitem__.side_effect = KeyError("not found")
-
+def test_get_user_scraper_not_found():
     with pytest.raises(KeyError):
         get_user_scraper("non_existent_scraper")
 
 
-# Test functions for scrape_users
-@patch("sarc.core.scraping.users.get_user_scraper")
-def test_scrape_users_single_plugin(mock_get_scraper):
-    """Test scraping users with a single plugin."""
-    mock_scraper = MockUserScraper()
-    mock_get_scraper.return_value = mock_scraper
-
+def test_fetch_and_parse_users_single_plugin(mock_scraper, enabled_cache):
     scrapers = [
-        ("mock_plugin", {"api_url": "https://api.example.com", "api_key": "secret"})
+        ("test_scraper", {"api_url": "https://api.example.com", "api_key": "secret"})
     ]
 
-    users = list(scrape_users(scrapers))
+    # First, fetch the data and store it in cache
+    fetch_users(scrapers)
+
+    # Then, parse the cached data
+    users = list(parse_users(datetime.now(UTC) - one_hour))
 
     assert len(users) == 3
     assert all(isinstance(user, UserMatch) for user in users)
 
     # Check that the first plugin name was assigned to matching_id.name
     for user in users:
-        assert user.matching_id.name == "mock_plugin"
+        assert user.matching_id.name == "test_scraper"
 
 
-@patch("sarc.core.scraping.users.get_user_scraper")
-def test_scrape_users_multiple_plugins(mock_get_scraper):
-    """Test scraping users with multiple plugins."""
+def test_fetch_and_parse_users_multiple_plugins(monkeypatch, enabled_cache):
+    """Test fetching and parsing users with multiple plugins."""
     mock_scraper = MockUserScraper()
-    mock_get_scraper.return_value = mock_scraper
+    monkeypatch.setitem(_builtin_scrapers, "plugin1", mock_scraper)
+    monkeypatch.setitem(_builtin_scrapers, "plugin2", mock_scraper)
 
     scrapers = [
         ("plugin1", {"api_url": "https://api1.example.com", "api_key": "secret1"}),
         ("plugin2", {"api_url": "https://api2.example.com", "api_key": "secret2"}),
     ]
 
-    users = list(scrape_users(scrapers))
+    # First, fetch the data and store it in cache
+    fetch_users(scrapers)
 
-    # Should get users from both plugins, but user3 from plugin1 has known_matches
-    # that reference plugin2, so it gets merged, resulting in 5 users total
+    # Then, parse the cached data
+    users = list(parse_users(datetime.now(UTC) - one_hour))
+
     assert len(users) == 5  # 3 from plugin1 + 2 from plugin2 (user3 is merged)
 
-    # Check that plugin names are correctly assigned
     plugin1_users = [u for u in users if u.matching_id.name == "plugin1"]
     plugin2_users = [u for u in users if u.matching_id.name == "plugin2"]
     assert len(plugin1_users) == 3
-    assert (
-        len(plugin2_users) == 2
-    )  # user3 from plugin2 gets merged into plugin1's user3
+    assert len(plugin2_users) == 2
 
 
-@patch("sarc.core.scraping.users.get_user_scraper")
-def test_scrape_users_invalid_scraper(mock_get_scraper):
-    """Test scraping with an invalid scraper name."""
-    mock_get_scraper.side_effect = KeyError("scraper not found")
-
+def test_invalid_scraper(enabled_cache, caplog):
     scrapers = [("invalid_scraper", {"api_url": "https://api.example.com"})]
 
+    fetch_users(scrapers)
+    assert caplog.record_tuples[0] == (
+        "sarc.core.scraping.users",
+        logging.ERROR,
+        "Could not fetch user scraper: invalid_scraper",
+    )
+
+    cache = Cache(subdirectory="users")
+    with cache.create_entry(datetime(2025, 6, 2, tzinfo=UTC)) as ce:
+        ce.add_value("invalid_scraper", b"")
+
     with pytest.raises(ValueError, match="Invalid user scraper"):
-        list(scrape_users(scrapers))
+        list(parse_users(datetime(2025, 6, 1, tzinfo=UTC)))
 
 
 @patch("sarc.core.scraping.users.get_user_scraper")
-def test_scrape_users_user_matching(mock_get_scraper):
+def test_fetch_and_parse_users_user_matching(mock_get_scraper, enabled_cache):
     """Test that users with matching IDs are properly merged."""
 
     # Create a mock scraper that returns users with known matches
     class MatchingMockScraper(MockUserScraper):
-        def parse_user_data(
-            self, config: MockConfig, data: bytes
-        ) -> Iterable[UserMatch]:
+        def parse_user_data(self, data: bytes) -> Iterable[UserMatch]:
+            api_url = data.decode("utf-8")
             # Return different users based on the config (which plugin)
-            if "api1" in config.api_url:  # plugin1
+            if "api1" in api_url:
                 user1 = UserMatch(
                     display_name="John Doe",
                     email="john@example.com",
                     matching_id=MatchID(name="plugin1", mid="user1"),
+                    known_matches={MatchID(name="plugin2", mid="user1")},
                 )
                 return [user1]
             else:  # plugin2
                 user2 = UserMatch(
-                    display_name=None,  # Missing name
-                    email="john@example.com",  # Same email as user1
-                    matching_id=MatchID(
-                        name="plugin2", mid="user1"
-                    ),  # Same mid as user1
-                    known_matches={
-                        MatchID(name="plugin1", mid="user1")
-                    },  # References user1
+                    display_name=None,
+                    email="john@example.com",
+                    matching_id=MatchID(name="plugin2", mid="user1"),
                 )
                 return [user2]
 
@@ -398,7 +368,11 @@ def test_scrape_users_user_matching(mock_get_scraper):
         ("plugin2", {"api_url": "https://api2.example.com", "api_key": "secret2"}),
     ]
 
-    users = list(scrape_users(scrapers))
+    # First, fetch the data and store it in cache
+    fetch_users(scrapers)
+
+    # Then, parse the cached data
+    users = list(parse_users(datetime.now(UTC) - one_hour))
 
     # Should have only one user after merging
     assert len(users) == 1
@@ -411,111 +385,158 @@ def test_scrape_users_user_matching(mock_get_scraper):
     assert merged_user.matching_id.name == "plugin1"  # First plugin wins
 
 
-# Test functions for plugin interface
-def test_plugin_interface_requirements():
-    """Test that a plugin must implement the required interface."""
-    # This should work
-    scraper = MockUserScraper()
-    assert hasattr(scraper, "config_type")
-    assert hasattr(scraper, "validate_config")
-    assert hasattr(scraper, "get_user_data")
-    assert hasattr(scraper, "parse_user_data")
+def test_update_user_match_merge_credentials_new_domain():
+    """Test merging credentials when the update user has a new domain."""
+    base_user = UserMatch(
+        matching_id=MatchID(name="plugin1", mid="user1"),
+        associated_accounts={
+            "drac": Credentials(),
+        },
+    )
+    base_user.associated_accounts["drac"].insert("user1_drac")
+
+    update_user = UserMatch(
+        matching_id=MatchID(name="plugin2", mid="user1"),
+        associated_accounts={
+            "mila": Credentials(),
+        },
+    )
+    update_user.associated_accounts["mila"].insert("user1_mila")
+
+    update_user_match(value=base_user, update=update_user)
+
+    # Should have both domains
+    assert "drac" in base_user.associated_accounts
+    assert "mila" in base_user.associated_accounts
+    assert base_user.associated_accounts["drac"].get_value() == "user1_drac"
+    assert base_user.associated_accounts["mila"].get_value() == "user1_mila"
 
 
-def test_plugin_config_validation():
-    """Test plugin config validation."""
-    scraper = MockUserScraper()
+def test_update_user_match_merge_credentials_existing_domain():
+    """Test merging credentials when both users have the same domain."""
+    base_user = UserMatch(
+        matching_id=MatchID(name="plugin1", mid="user1"),
+        associated_accounts={
+            "drac": Credentials(),
+        },
+    )
+    base_user.associated_accounts["drac"].insert("user1_drac")
 
-    # Valid config
-    valid_config = {"api_url": "https://api.example.com", "api_key": "secret"}
-    config = scraper.validate_config(valid_config)
-    assert isinstance(config, MockConfig)
+    update_user = UserMatch(
+        matching_id=MatchID(name="plugin2", mid="user1"),
+        associated_accounts={
+            "drac": Credentials(),
+        },
+    )
+    update_user.associated_accounts["drac"].insert("user1_drac_updated")
 
-    # Invalid config should raise validation error
-    invalid_config = {"api_url": "https://api.example.com"}  # Missing api_key
-    with pytest.raises(Exception):  # Pydantic validation error
-        scraper.validate_config(invalid_config)
+    update_user_match(value=base_user, update=update_user)
 
-
-def test_plugin_data_retrieval():
-    """Test plugin data retrieval."""
-    scraper = MockUserScraper()
-    config = MockConfig(api_url="https://api.example.com", api_key="secret")
-
-    data = scraper.get_user_data(config)
-    assert isinstance(data, bytes)
-    assert len(data) > 0
-
-
-def test_plugin_data_parsing():
-    """Test plugin data parsing."""
-    scraper = MockUserScraper()
-    config = MockConfig(api_url="https://api.example.com", api_key="secret")
-    data = b"mock_data"
-
-    users = list(scraper.parse_user_data(config, data))
-    assert len(users) > 0
-    assert all(isinstance(user, UserMatch) for user in users)
+    assert "drac" in base_user.associated_accounts
+    assert base_user.associated_accounts["drac"].get_value() == "user1_drac"
+    assert base_user.associated_accounts["drac"].get_value() == "user1_drac"
 
 
-# Test functions for unified plugin testing
-def test_plugin_lifecycle():
-    """Test complete plugin lifecycle."""
-    scraper = MockUserScraper()
+def test_fetch_and_parse_multiple_different_scrapers(monkeypatch, enabled_cache):
+    """Test fetching and parsing users with multiple different scrapers and verify merging behavior."""
+    # Set up both scrapers in the builtin scrapers
+    mock_scraper = MockUserScraper()
+    test_plugin = TestPlugin()
+    monkeypatch.setitem(_builtin_scrapers, "mock_scraper", mock_scraper)
+    monkeypatch.setitem(_builtin_scrapers, "test_plugin", test_plugin)
 
-    # 1. Config validation
-    config_data = {"api_url": "https://api.example.com", "api_key": "secret"}
-    config = scraper.validate_config(config_data)
-    assert isinstance(config, scraper.config_type)
+    scrapers = [
+        ("mock_scraper", {"api_url": "https://api.example.com", "api_key": "secret"}),
+        ("test_plugin", "example.com"),
+    ]
 
-    # 2. Data retrieval
-    data = scraper.get_user_data(config)
-    assert isinstance(data, bytes)
+    # First, fetch the data and store it in cache
+    fetch_users(scrapers)
 
-    # 3. Data parsing
-    users = list(scraper.parse_user_data(config, data))
-    assert len(users) > 0
-    assert all(isinstance(user, UserMatch) for user in users)
+    # Then, parse the cached data
+    users = list(parse_users(datetime.now(UTC) - one_hour))
 
-    # 4. Verify user data structure
+    # MockUserScraper returns 3 users, TestPlugin returns 2 users
+    # Total should be 5 users (no merging expected since they have different matching IDs)
+    assert len(users) == 5
+
+    # Check that we have users from both scrapers
+    mock_users = [u for u in users if u.matching_id.name == "mock_scraper"]
+    test_users = [u for u in users if u.matching_id.name == "test_plugin"]
+
+    assert len(mock_users) == 3
+    assert len(test_users) == 2
+
+    # Verify MockUserScraper users have the expected data
+    mock_user_emails = {u.email for u in mock_users if u.email}
+    expected_mock_emails = {"john.doe@example.com", "bob.wilson@example.com"}
+    assert mock_user_emails == expected_mock_emails
+
+    # Verify TestPlugin users have the expected domain-based emails
+    test_user_emails = {u.email for u in test_users if u.email}
+    expected_test_emails = {"john@example.com", "jane@example.com"}
+    assert test_user_emails == expected_test_emails
+
+    # Verify that all users have the correct scraper name in their matching_id
     for user in users:
-        assert isinstance(user.matching_id, MatchID)
-        assert user.matching_id.name == "mock_plugin"  # Set by our mock
+        assert user.matching_id.name in ["mock_scraper", "test_plugin"]
 
 
-def test_plugin_error_handling():
-    """Test plugin error handling."""
+@patch("sarc.core.scraping.users.get_user_scraper")
+def test_parse_users_supervisor_ordering_before_fix(mock_get_scraper, enabled_cache):
+    """Test that plugins returning users before supervisors are correctly ordered.
 
-    class ErrorMockScraper(MockUserScraper):
-        def get_user_data(self, config: MockConfig) -> bytes:
-            raise Exception("API connection failed")
+    This test reproduces the issue where a plugin returns user entries before
+    their supervisor entry. The topological sort should ensure supervisors are
+    yielded first, preventing database lookup failures and conflicts on second import.
+    """
 
-    scraper = ErrorMockScraper()
-    config = MockConfig(api_url="https://api.example.com", api_key="secret")
+    class SupervisorOrderingMockScraper(MockUserScraper):
+        def parse_user_data(self, data: bytes) -> Iterable[UserMatch]:
+            student = UserMatch(
+                display_name="Alice Student",
+                email="alice@example.com",
+                matching_id=MatchID(name="bad_order_plugin", mid="student1"),
+            )
+            student.co_supervisors.insert(
+                {MatchID(name="bad_order_plugin", mid="supervisor1")},
+                start=None,
+                end=None,
+            )
 
-    with pytest.raises(Exception, match="API connection failed"):
-        scraper.get_user_data(config)
+            supervisor = UserMatch(
+                display_name="Bob Supervisor",
+                email="bob@example.com",
+                matching_id=MatchID(name="bad_order_plugin", mid="supervisor1"),
+            )
 
+            return [student, supervisor]
 
-def test_plugin_data_consistency():
-    """Test that plugin data is consistent across calls."""
-    scraper = MockUserScraper()
-    config = MockConfig(api_url="https://api.example.com", api_key="secret")
+    mock_scraper = SupervisorOrderingMockScraper()
+    mock_get_scraper.return_value = mock_scraper
 
-    # Get data twice
-    data1 = scraper.get_user_data(config)
-    data2 = scraper.get_user_data(config)
+    scrapers = [
+        (
+            "bad_order_plugin",
+            {"api_url": "https://bad_order.example.com", "api_key": "secret"},
+        ),
+    ]
 
-    # Should be consistent
-    assert data1 == data2
+    fetch_users(scrapers)
 
-    # Parse data twice
-    users1 = list(scraper.parse_user_data(config, data1))
-    users2 = list(scraper.parse_user_data(config, data2))
+    coll = get_user_collection()
+    for um in parse_users(datetime.now(UTC) - one_hour):
+        coll.update_user(um)
 
-    # Should be consistent
-    assert len(users1) == len(users2)
-    for u1, u2 in zip(users1, users2):
-        assert u1.matching_id == u2.matching_id
-        assert u1.display_name == u2.display_name
-        assert u1.email == u2.email
+    u = get_user("alice@example.com")
+    assert u is not None
+    assert len(u.co_supervisors.values) == 1
+    assert len(u.co_supervisors.values[0].value) == 1
+
+    for um in parse_users(datetime.now(UTC) - one_hour):
+        coll.update_user(um)
+
+    u = get_user("alice@example.com")
+    assert u is not None
+    assert len(u.co_supervisors.values) == 1
+    assert len(u.co_supervisors.values[0].value) == 1

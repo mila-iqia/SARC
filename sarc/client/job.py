@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import bisect
+import math
 from collections.abc import Sequence
 from datetime import datetime, time, timedelta
 from enum import Enum
@@ -9,10 +11,10 @@ from pandas import DataFrame
 from pydantic import field_validator
 from pydantic_mongo import AbstractRepository, PydanticObjectId
 
+from sarc.client.gpumetrics import get_rgus, get_cluster_gpu_billings
+from sarc.config import MTL, TZLOCAL, UTC, ClusterConfig, config, scraping_mode_required
+from sarc.model import BaseModel
 from sarc.traces import trace_decorator
-
-from ..config import MTL, TZLOCAL, UTC, ClusterConfig, config, scraping_mode_required
-from ..model import BaseModel
 
 
 class SlurmState(str, Enum):
@@ -142,6 +144,9 @@ class SlurmJob(BaseModel):
     start_time: datetime | None = None
     end_time: datetime | None = None
     elapsed_time: float
+    # Latest period the job was scraped with sacct
+    latest_scraped_start: datetime | None = None
+    latest_scraped_end: datetime | None = None
 
     # tres
     requested: SlurmResources
@@ -150,7 +155,13 @@ class SlurmJob(BaseModel):
     # statistics
     stored_statistics: JobStatistics | None = None
 
-    @field_validator("submit_time", "start_time", "end_time")
+    @field_validator(
+        "submit_time",
+        "start_time",
+        "end_time",
+        "latest_scraped_start",
+        "latest_scraped_end",
+    )
     @classmethod
     def _ensure_timezone(cls, v: datetime | None) -> datetime | None:
         # We'll store in MTL timezone because why not
@@ -244,6 +255,91 @@ class SlurmJob(BaseModel):
     def fetch_cluster_config(self) -> ClusterConfig:
         """This function is only available on the admin side"""
         return config("scraping").clusters[self.cluster_name]
+
+    @property
+    def gpu_type_rgu(self) -> float:
+        """Get RGU value for the GPU type of this job, or NaN if not applicable."""
+        gpu_type = self.allocated.gpu_type
+        if gpu_type is None:
+            return math.nan
+        else:
+            gpu_to_rgu = get_rgus()
+            # NB: If GPU type is a MIG
+            # (e.g: "A100-SXM4-40GB : a100_1g.5gb"),
+            # we currently return RGU for the main GPU type
+            # (in this example: "A100-SXM4-40GB")
+            return gpu_to_rgu.get(gpu_type.split(":")[0].rstrip(), math.nan)
+
+    @property
+    def rgu(self) -> float:
+        """
+        Get RGU billing for this job, or NaN if not applicable.
+        Same algorithm as in series functions
+        load_job_series() and update_job_series_rgu().
+
+        RGU billing for a job is equivalent to:
+        Number of GPUs used by this job
+        x
+        RGU value for a single GPU (self.gpu_type_rgu)
+        """
+        end_time = self.end_time
+        if end_time is None:
+            end_time = datetime.now(tz=TZLOCAL)
+        start_time = end_time - timedelta(seconds=self.elapsed_time)
+        gpu_type = self.allocated.gpu_type
+        if start_time is None or gpu_type is None:
+            return math.nan
+
+        billing = self.allocated.billing or 0
+        gres_gpu = self.requested.gres_gpu or 0
+        if gres_gpu:
+            gres_gpu = max(billing, gres_gpu)
+
+        gpu_type_rgu = self.gpu_type_rgu
+        # Use get_available_clusters() instead of self.fetch_cluster_config()
+        # so that this code can be executed even in client mode
+        (cluster,) = [
+            cluster
+            for cluster in get_available_clusters()
+            if cluster.cluster_name == self.cluster_name
+        ]
+        if cluster.billing_is_gpu:
+            # Compute RGU from gpu count
+            gpu_count = gres_gpu
+            gres_rgu = gpu_count * gpu_type_rgu
+        else:
+            # Job billing is in its own unit.
+            # We must first infer gpu count
+            # before computing RGU
+            all_cluster_billings = get_cluster_gpu_billings(
+                cluster_name=cluster.cluster_name
+            )
+            if not all_cluster_billings:
+                # No gpu->billing mapping available, cannot compute RGU
+                gres_rgu = math.nan
+            elif start_time < all_cluster_billings[0].since:
+                # Before the oldest gpu->billing mapping available
+                # We assume gres_gpu is gpu count
+                gpu_count = gres_gpu
+                gres_rgu = gpu_count * gpu_type_rgu
+            else:
+                # gpu->billing mappings available
+                # Find mapping for this job, based on start_time
+                index_billing = max(
+                    0,
+                    bisect.bisect_right(
+                        [billing.since for billing in all_cluster_billings], start_time
+                    )
+                    - 1,
+                )
+                cluster_billing = all_cluster_billings[index_billing]
+                # Then find billing for this job GPU type
+                gpu_billing = cluster_billing.gpu_to_billing.get(gpu_type, math.nan)
+                # gres_gpu is job billing
+                job_billing = gres_gpu
+                # So, gpu count == job billing / gpu billing
+                gres_rgu = (job_billing / gpu_billing) * gpu_type_rgu
+        return gres_rgu
 
 
 class SlurmJobRepository(AbstractRepository[SlurmJob]):
@@ -442,7 +538,8 @@ class SlurmCLuster(BaseModel):
 
     cluster_name: str
     start_date: str | None = None
-    end_date: str | None = None
+    end_time_sacct: str | None = None
+    end_time_prometheus: str | None = None
     billing_is_gpu: bool = False
 
 

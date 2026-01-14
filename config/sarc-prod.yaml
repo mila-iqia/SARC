@@ -3,18 +3,28 @@ sarc:
     log_level: INFO
     OTLP_endpoint: http://loki01.server.mila.quebec:3100/otlp/v1/logs
     service_name: sarc-dev
+    # slack: null
+    slack: ../../SARC_secrets/secrets/slack-prod.yaml
+      # description: SARC-prod
+      # token: slack-token-replaceme
+      # channel: slack-channel-id-replace-me
   mongo: ../../SARC_secrets/secrets/mongo-prod.yaml
-  ldap:
-    local_private_key_file: ../../SARC_secrets/secrets/ldap/Google_2026_01_26_66827.key
-    local_certificate_file: ../../SARC_secrets/secrets/ldap/Google_2026_01_26_66827.crt
-    ldap_service_uri: ldaps://ldap.google.com
-    mongo_collection_name: users
-    group_to_prof_json_path: ../../SARC_secrets/secrets/group_to_prof.json
-    exceptions_json_path: ../../SARC_secrets/secrets/exceptions.json
-  account_matching:
-    drac_members_csv_path: ../../SARC_secrets/secrets/account_matching/members-rrg-bengioy-ad-2025-05-29.csv
-    drac_roles_csv_path: ../../SARC_secrets/secrets/account_matching/sponsored_roles_for_Yoshua_Bengio_(CCI_jvb-000).csv
-    make_matches_config: ../../SARC_secrets/secrets/account_matching/make_matches_config.json
+  users:
+    scrapers:
+      # legacy_dump:
+      #   json_file_path: ../SARC_secrets/secrets/account_matching/legacy_dump.json
+      mila_ldap:
+        private_key_file: ../SARC_secrets/secrets/ldap/Google_2026_01_26_66827.key
+        certificate_file: ../SARC_secrets/secrets/ldap/Google_2026_01_26_66827.crt
+        service_uri: ldaps://ldap.google.com
+      drac_role:
+        csv_path: ../SARC_secrets/secrets/account_matching/sponsored_roles_for_Yoshua_Bengio_(CCI_jvb-000).csv
+      drac_member:
+        csv_path: ../SARC_secrets/secrets/account_matching/members-rrg-bengioy-ad-2025-10-29.csv
+      # mymila:
+      #   TODO
+      # manual:
+      #   TODO
   cache: "../sarc-cache"
   sshconfig: "~/.ssh/config"
   clusters:
@@ -23,10 +33,6 @@ sarc:
       timezone: America/Montreal
       accounts:
       sacct_bin: "/opt/slurm/bin/sacct"
-      duc_inodes_command:
-      duc_storage_command:
-      diskusage_report_command: beegfs-ctl --cfgFile=/etc/beegfs/home.d/beegfs-client.conf
-        --getquota --uid $USER --csv
       prometheus_url: http://prometheus01.server.mila.quebec:9090/
       start_date: '2022-04-01'
       billing_is_gpu: true
@@ -67,7 +73,7 @@ sarc:
         cn-n[001-002]:
           h100: H100-SXM5-80GB
     narval:
-      host: narval.computecanada.ca
+      host: robot.narval.alliancecan.ca
       timezone: America/Montreal
       accounts:
       - rrg-bengioy-ad_gpu
@@ -75,12 +81,9 @@ sarc:
       - def-bengioy_gpu
       - def-bengioy_cpu
       sacct_bin: "/opt/software/slurm/bin/sacct"
-      duc_inodes_command: duc ls -d /project/.duc_databases/rrg-bengioy-ad.sqlite --count
-        /project/rrg-bengioy-ad
-      duc_storage_command: duc ls -d /project/.duc_databases/rrg-bengioy-ad.sqlite /project/rrg-bengioy-ad
-      diskusage_report_command: diskusage_report --project --all_users
+      ignore_tz_utc: true
       prometheus_url: https://mila-thanos.calculquebec.ca
-      prometheus_headers_file: ../../SARC_secrets/secrets/drac_prometheus/headers.json
+      prometheus_headers_file: ../SARC_secrets/secrets/drac_prometheus/headers.json
       start_date: '2022-04-01'
       gpus_per_nodes:
         __DEFAULTS__:
@@ -98,84 +101,11 @@ sarc:
           "A100-SXM4-40GB : 3g.20gb": $a100_3g.20gb
           "A100-SXM4-40GB : 4g.20gb": $a100_4g.20gb
           NVIDIA A100-SXM4-40GB: A100-SXM4-40GB
-    beluga:
-      host: beluga.computecanada.ca
-      timezone: America/Montreal
-      accounts:
-      - rrg-bengioy-ad_gpu
-      - rrg-bengioy-ad_cpu
-      - def-bengioy_gpu
-      - def-bengioy_cpu
-      sacct_bin: "/opt/software/slurm/bin/sacct"
-      duc_inodes_command: duc ls -d /project/.duc_databases/rrg-bengioy-ad.sqlite --count
-        /project/rrg-bengioy-ad
-      duc_storage_command: duc ls -d /project/.duc_databases/rrg-bengioy-ad.sqlite /project/rrg-bengioy-ad
-      diskusage_report_command: diskusage_report --project --all_users
-      prometheus_url: https://mila-thanos.calculquebec.ca
-      prometheus_headers_file: ../../SARC_secrets/secrets/drac_prometheus/headers.json
-      start_date: '2022-04-01'
-      gpus_per_nodes:
-        __DEFAULTS__:
-          tesla_v100-sxm2-16gb: V100-SXM2-16GB
-          Tesla V100-SXM2-16GB: V100-SXM2-16GB
-    graham:
-      host: graham.computecanada.ca
-      timezone: America/Toronto
-      accounts:
-      - rrg-bengioy-ad_gpu
-      - rrg-bengioy-ad_cpu
-      - def-bengioy_gpu
-      - def-bengioy_cpu
-      sacct_bin: "/opt/software/slurm/bin/sacct"
-      duc_inodes_command:
-      duc_storage_command:
-      diskusage_report_command: diskusage_report --project --all_users
-      prometheus_url:
-      prometheus_headers_file:
-      start_date: '2022-04-01'
-      gpus_per_nodes:
-        __DEFAULTS__:
-          a5000: A5000
-          t4: T4
-          v100: V100-SXM2-32GB
-        gra[828-987]:
-          p100: P100-PCIe-12GB
-        gra[1147-1153]:
-          v100: V100-PCIe-16GB
-        gra[1337-1338]:
-          v100: V100-SXM2-32GB
-        gra1342:
-          a100: A100-SXM4-80GB
-        gra[1361-1362]:
-          a100: A100-PCIe-80GB
-    cedar:
-      host: cedar.computecanada.ca
-      timezone: America/Vancouver
-      accounts:
-      - rrg-bengioy-ad_gpu
-      - rrg-bengioy-ad_cpu
-      - def-bengioy_gpu
-      - def-bengioy_cpu
-      sacct_bin: "/opt/software/slurm/bin/sacct"
-      duc_inodes_command:
-      duc_storage_command:
-      diskusage_report_command: diskusage_report --project --all_users
-      prometheus_url:
-      prometheus_headers_file:
-      start_date: '2022-04-01'
-      gpus_per_nodes:
-        __DEFAULTS__:
-          p100: P100-PCIe-12GB
-          p100l: P100-PCIe-16GB
-          v100l: V100-PCIe-32GB
     tamia:
-      host: tamia.alliancecan.ca
+      host: tamia
       timezone: America/Montreal
       accounts:
       sacct_bin: "/opt/slurm/bin/sacct"
-      duc_inodes_command:
-      duc_storage_command:
-      diskusage_report_command: diskusage_report --project --all_users
       prometheus_url:
       prometheus_headers_file:
       start_date: '2025-02-01'
@@ -184,5 +114,66 @@ sarc:
           h100: H100-SXM5-80GB
         tg[10601-10606,10701-10707,10801-10807,10901-10908,11101-11107,11201-11207]:
           h100: H100-SXM5-80GB
-
-
+    fir:
+      host: robot.fir.alliancecan.ca
+      timezone: America/Vancouver
+      accounts:
+      - rrg-bengioy-ad_gpu
+      - rrg-bengioy-ad_cpu
+      - def-bengioy_gpu
+      - def-bengioy_cpu
+      sacct_bin: "/opt/software/slurm/bin/sacct"
+      ignore_tz_utc: true
+      prometheus_url:
+      prometheus_headers_file:
+      start_date: '2025-08-11'          
+    nibi:
+      host: robot.nibi.alliancecan.ca
+      timezone: America/Toronto
+      accounts:
+      - rrg-bengioy-ad_gpu
+      - rrg-bengioy-ad_cpu
+      - def-bengioy_gpu
+      - def-bengioy_cpu
+      sacct_bin: "/opt/software/slurm/bin/sacct"
+      ignore_tz_utc: true
+      prometheus_url:
+      prometheus_headers_file:
+      start_date: '2025-07-31'          
+      gpus_per_nodes:
+        __DEFAULTS__:
+          h100: H100-SXM5-80GB
+          nvidia_h100_80gb_hbm3_1g.10gb: __MIG_FLAG__h100
+          nvidia_h100_80gb_hbm3_2g.20gb: __MIG_FLAG__h100
+          nvidia_h100_80gb_hbm3_3g.40gb: __MIG_FLAG__h100
+    rorqual:
+      host: robot.rorqual.alliancecan.ca
+      timezone: America/Montreal
+      accounts:
+      - rrg-bengioy-ad_gpu
+      - rrg-bengioy-ad_cpu
+      - def-bengioy_gpu
+      - def-bengioy_cpu
+      sacct_bin: "/opt/software/slurm/bin/sacct"
+      ignore_tz_utc: true
+      prometheus_url: https://mila-thanos.calculquebec.ca
+      prometheus_headers_file: ../SARC_secrets/secrets/drac_prometheus/headers.json
+      start_date: '2025-06-19'          
+      gpus_per_nodes:
+        __DEFAULTS__:
+          h100: H100-SXM5-80GB
+          nvidia_h100_80gb_hbm3_1g.10gb: __MIG_FLAG__h100
+          nvidia_h100_80gb_hbm3_2g.20gb: __MIG_FLAG__h100
+          nvidia_h100_80gb_hbm3_3g.40gb: __MIG_FLAG__h100
+    trillium:
+      host: trillium
+      timezone: America/Montreal
+      accounts:
+      - rrg-bengioy-ad_gpu
+      - rrg-bengioy-ad_cpu
+      - def-bengioy_gpu
+      - def-bengioy_cpu
+      sacct_bin: "/opt/slurm/bin/sacct"
+      prometheus_url:
+      prometheus_headers_file:
+      start_date: '2025-06-19'          

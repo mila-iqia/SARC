@@ -56,10 +56,9 @@ class ClusterConfig:
     prometheus_headers_file: str | None = None
     name: str | None = None
     sacct_bin: str = "sacct"
+    ignore_tz_utc: bool = False
     accounts: list[str] | None = None
     sshconfig: Path | None = None
-    duc_inodes_command: str | None = None
-    duc_storage_command: str | None = None
     diskusage: list[DiskUsageConfig] | None = None
     start_date: str = "2022-04-01"
     slurm_conf_host_path: Path = Path("/etc/slurm/slurm.conf")
@@ -109,6 +108,25 @@ class ClusterConfig:
             harmonized_gpu = f"{harmonized_gpu} : {gpu_type}"
 
         return harmonized_gpu
+
+    def harmonize_gpu_from_nodes(self, nodes: list[str], gpu_type: str) -> str | None:
+        """
+        Get a GPU name from given multiple nodes and GPU type.
+
+        Return None if GPU name cannot be inferred.
+        """
+        # Collect harmonized names for given nodes
+        # NB: If `nodes` is empty, we harmonize using "",
+        # so that harmonization function will check __DEFAULTS__
+        # harmonized names if available.
+        harmonized_gpu_names = {
+            self.harmonize_gpu(nodename, gpu_type) for nodename in (nodes or [""])
+        }
+        # If present, remove None from GPU names
+        harmonized_gpu_names.discard(None)
+        # If we got 1 GPU name, use it.
+        # Otherwise, return None.
+        return harmonized_gpu_names.pop() if len(harmonized_gpu_names) == 1 else None
 
     @cached_property
     def ssh(self) -> Connection:
@@ -163,16 +181,6 @@ class MongoConfig:
 
 
 @dataclass
-class LDAPConfig:
-    local_private_key_file: Path
-    local_certificate_file: Path
-    ldap_service_uri: str
-    mongo_collection_name: str
-    group_to_prof_json_path: Path | None = None
-    exceptions_json_path: Path | None = None
-
-
-@dataclass
 class LokiConfig:
     uri: str
 
@@ -183,10 +191,23 @@ class TempoConfig:
 
 
 @dataclass
+class SlackConfig:
+    description: str
+    token: str
+    channel: str
+
+
+@dataclass
 class LoggingConfig:
     log_level: str
-    OTLP_endpoint: str
-    service_name: str
+    OTLP_endpoint: str | None = None
+    service_name: str | None = None
+    slack: SlackConfig | None = None
+
+
+@dataclass
+class UserScrapingConfig:
+    scrapers: dict[str, JSON]
 
 
 @dataclass
@@ -209,6 +230,11 @@ class ClientConfig:
         """
         assert self.cache
         return self.cache / "lockfile.lock"
+
+    class SerieuxConfig:
+        # Config adds extra fields to ClientConfig, so to be able to read
+        # a Config as a ClientConfig we need allow_extras to be True
+        allow_extras = True
 
 
 @dataclass

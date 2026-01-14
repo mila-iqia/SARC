@@ -1,15 +1,19 @@
 import os
 import sys
-import tempfile
 import zoneinfo
 from pathlib import Path
-from unittest.mock import MagicMock, mock_open
+from unittest.mock import MagicMock
 
 import gifnoc
+import pytest
+from freezegun.api import FakeDatetime
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from opentelemetry.trace import set_tracer_provider
+from pytest_regressions.data_regression import RegressionYamlDumper
+
+from sarc.config import config, using_sarc_mode
 
 _tracer_provider = TracerProvider()
 _exporter = InMemorySpanExporter()
@@ -17,13 +21,13 @@ _tracer_provider.add_span_processor(SimpleSpanProcessor(_exporter))
 set_tracer_provider(_tracer_provider)
 del _tracer_provider
 
-import pytest
-
-from sarc.config import config, using_sarc_mode
-
 sys.path.append(os.path.join(os.path.dirname(__file__), "common"))
 
 pytest_plugins = "fabric.testing.fixtures"
+
+RegressionYamlDumper.add_custom_yaml_representer(
+    FakeDatetime, lambda dumper, data: dumper.represent_datetime(data)
+)
 
 
 @pytest.fixture
@@ -75,6 +79,12 @@ def tzlocal_is_mtl(monkeypatch):
     monkeypatch.setattr("sarc.config.TZLOCAL", zoneinfo.ZoneInfo("America/Montreal"))
     monkeypatch.setattr(
         "sarc.client.job.TZLOCAL", zoneinfo.ZoneInfo("America/Montreal")
+    )
+    monkeypatch.setattr(
+        "sarc.cli.acquire.jobs.TZLOCAL", zoneinfo.ZoneInfo("America/Montreal")
+    )
+    monkeypatch.setattr(
+        "sarc.cli.fetch.slurmconfig.TZLOCAL", zoneinfo.ZoneInfo("America/Montreal")
     )
 
 

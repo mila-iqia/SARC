@@ -16,6 +16,7 @@ def create_allocations():
                 "compute": {
                     "cpu_year": None,
                     "gpu_year": 100,
+                    "rgu_year": 400,
                     "vcpu_year": None,
                     "vgpu_year": None,
                 },
@@ -37,6 +38,7 @@ def create_allocations():
                 "compute": {
                     "cpu_year": None,
                     "gpu_year": None,
+                    "rgu_year": None,
                     "vcpu_year": None,
                     "vgpu_year": None,
                 },
@@ -58,6 +60,7 @@ def create_allocations():
                 "compute": {
                     "cpu_year": None,
                     "gpu_year": 100,
+                    "rpu_year": 400,
                     "vcpu_year": None,
                     "vgpu_year": None,
                 },
@@ -79,6 +82,7 @@ def create_allocations():
                 "compute": {
                     "cpu_year": None,
                     "gpu_year": None,
+                    "rgu_year": None,
                     "vcpu_year": None,
                     "vgpu_year": None,
                 },
@@ -100,6 +104,7 @@ def create_allocations():
                 "compute": {
                     "cpu_year": None,
                     "gpu_year": 190,
+                    "rgu_year": 190,
                     "vcpu_year": None,
                     "vgpu_year": None,
                 },
@@ -121,6 +126,7 @@ def create_allocations():
                 "compute": {
                     "cpu_year": None,
                     "gpu_year": None,
+                    "rgu_year": None,
                     "vcpu_year": None,
                     "vgpu_year": None,
                 },
@@ -142,6 +148,7 @@ def create_allocations():
                 "compute": {
                     "cpu_year": None,
                     "gpu_year": 130,
+                    "rgu_year": 450,
                     "vcpu_year": None,
                     "vgpu_year": None,
                 },
@@ -163,6 +170,7 @@ def create_allocations():
                 "compute": {
                     "cpu_year": None,
                     "gpu_year": None,
+                    "rgu_year": None,
                     "vcpu_year": None,
                     "vgpu_year": None,
                 },
@@ -184,6 +192,7 @@ def create_allocations():
                 "compute": {
                     "cpu_year": 219,
                     "gpu_year": None,
+                    "rgu_year": None,
                     "vcpu_year": None,
                     "vgpu_year": None,
                 },
@@ -205,6 +214,7 @@ def create_allocations():
                 "compute": {
                     "cpu_year": None,
                     "gpu_year": 200,
+                    "rgu_year": 500,
                     "vcpu_year": None,
                     "vgpu_year": None,
                 },
@@ -226,6 +236,7 @@ def create_allocations():
                 "compute": {
                     "cpu_year": None,
                     "gpu_year": None,
+                    "rgu_year": None,
                     "vcpu_year": None,
                     "vgpu_year": None,
                 },

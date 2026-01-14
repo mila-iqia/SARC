@@ -129,7 +129,8 @@ def create_clusters(db: Database) -> None:
             {
                 "$setOnInsert": {
                     "start_date": cluster.start_date,
-                    "end_date": None,
+                    "end_time_sacct": None,
+                    "end_time_prometheus": None,
                     "billing_is_gpu": cluster.billing_is_gpu,
                 }
             },
@@ -146,14 +147,8 @@ def create_users_indices(db: Database) -> None:
     # db_collection = _UserRepository(database=db).get_collection()
     db_collection = db.users
 
-    db_collection.create_index([("mila_ldap.mila_email_username", pymongo.ASCENDING)])
-    db_collection.create_index([("mila_ldap.mila_cluster_username", pymongo.ASCENDING)])
-    db_collection.create_index(
-        [
-            ("drac_roles.username", pymongo.ASCENDING),
-            ("drac_members.username", pymongo.ASCENDING),
-        ]
-    )
+    db_collection.create_index([("uuid", pymongo.ASCENDING)], unique=True)
+    db_collection.create_index([("matching_ids.$**", pymongo.ASCENDING)])
 
 
 def create_gpu_billing_indices(db: Database) -> None:
@@ -274,4 +269,31 @@ def create_jobs_indices(db: Database) -> None:
             ("submit_time", pymongo.ASCENDING),
             ("end_time", pymongo.ASCENDING),
         ],
+    )
+
+    # Index most useful for querying jobs for a given cluster and scraping period
+    db_collection.create_index(
+        [
+            ("cluster_name", pymongo.ASCENDING),
+            ("latest_scraped_start", pymongo.ASCENDING),
+            ("latest_scraped_end", pymongo.ASCENDING),
+        ],
+    )
+
+    # Indexes most useful for querying jobs with potential prometheus data
+    db_collection.create_index(
+        [
+            ("cluster_name", pymongo.ASCENDING),
+            ("allocated.gpu_type", pymongo.ASCENDING),
+        ],
+        name="idx_stats_not_none",
+        partialFilterExpression={"stored_statistics": {"$type": "object"}},
+    )
+    db_collection.create_index(
+        [
+            ("cluster_name", pymongo.ASCENDING),
+            ("allocated.gpu_type", pymongo.ASCENDING),
+        ],
+        name="idx_gpu_type_not_none",
+        partialFilterExpression={"allocated.gpu_type": {"$type": "string"}},
     )

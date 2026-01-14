@@ -2,14 +2,15 @@ from __future__ import annotations
 
 import copy
 import datetime as dt
+from collections.abc import Iterable
+import json
 from datetime import datetime, timedelta
-from typing import Optional
+from uuid import UUID
 
 from flatten_dict import flatten, unflatten
 
 from sarc.config import MTL, UTC, config
-from sarc.core.models.users import Credentials
-from sarc.core.models.validators import END_TIME, ValidTag
+from sarc.core.models.users import Credentials, MemberType
 from sarc.jobs.sacct import parse_in_timezone
 from sarc.users.db import UserDB
 
@@ -54,7 +55,7 @@ class JobFactory:
         first_job_id: int = 1,
         job_patch: dict | None = None,
     ):
-        self.jobs = []
+        self.jobs: list[dict] = []
         self._first_submit_time = first_submit_time or datetime(
             2023, 2, 14, tzinfo=MTL
         ).astimezone(UTC)
@@ -127,51 +128,254 @@ class JobFactory:
             )
 
 
-def create_users():
-    users = []
-    for username, drac_account in [
+class UserFactory:
+    def __init__(self):
+        self.users = []
+
+    def _create_user(
+        self,
+        uuid,
+        display_name="Test User",
+        email="test@example.com",
+        match_ids=None,
+        member_type=(),
+        accounts=(("mila", "test"),),
+        supervisor=(),
+        cosupervisors=(),
+        github_username=(),
+        google_scholar_profile=(),
+    ) -> UserDB:
+        if match_ids is None:
+            match_ids = {}
+        u = UserDB(
+            uuid=uuid,
+            display_name=display_name,
+            email=email,
+            matching_ids=match_ids,
+        )
+        for mtype in member_type:
+            u.member_type.insert(MemberType(mtype[0]), *mtype[1:])
+        for acct in accounts:
+            creds = u.associated_accounts.get(acct[0], Credentials())
+            creds.insert(*acct[1:])
+            u.associated_accounts[acct[0]] = creds
+        for sup in supervisor:
+            u.supervisor.insert(*sup)
+        for cosup in cosupervisors:
+            u.co_supervisors.insert(*cosup)
+        for uname in github_username:
+            u.github_username.insert(*uname)
+        for profile in google_scholar_profile:
+            u.google_scholar_profile.insert(*profile)
+        return u
+
+    def add_user(self, **kwargs) -> UserDB:
+        u = self._create_user(**kwargs)
+        self.users.append(u)
+        return u
+
+
+def create_users(user_factory=None) -> Iterable[dict]:
+    if user_factory is None:
+        user_factory = UserFactory()
+
+    prof1 = user_factory.add_user(
+        uuid=UUID("1f9b04e5-0ec4-4577-9196-2b03d254e344"),
+        member_type=[
+            (
+                "professor",
+                datetime(2020, 9, 1, tzinfo=dt.UTC),
+                datetime(2027, 9, 1, tzinfo=dt.UTC),
+            )
+        ],
+        display_name="Jane Doe",
+        email="jdoe@example.com",
+        match_ids={"mila_ldap": "doej@mila.quebec", "mymila": "111"},
+        accounts=[("mila", "jdoe", None, None), ("drac", "doej001", None, None)],
+    )
+
+    prof2 = user_factory.add_user(
+        uuid=UUID("7ecd3a8a-ab71-499e-b38a-ceacd91a99c4"),
+        display_name="John Smith",
+        email="jsmith@example.com",
+        match_ids={"mila_ldap": "smithj@mila.quebec", "mymila": "222"},
+        member_type=[
+            (
+                "professor",
+                datetime(2022, 9, 1, tzinfo=dt.UTC),
+                datetime(2026, 5, 1, tzinfo=dt.UTC),
+            ),
+            (
+                "phd",
+                datetime(2018, 9, 1, tzinfo=dt.UTC),
+                datetime(2021, 5, 1, tzinfo=dt.UTC),
+            ),
+        ],
+        accounts=[("mila", "smithj", datetime(2018, 9, 1, tzinfo=dt.UTC))],
+        supervisor=[
+            (
+                prof1.uuid,
+                datetime(2018, 9, 1, tzinfo=dt.UTC),
+                datetime(2021, 5, 1, tzinfo=dt.UTC),
+            )
+        ],
+        google_scholar_profile=[
+            ("https://scholar.google.com/citations?user=PataTe_000AJ&hl=en",)
+        ],
+    )
+    user_factory.add_user(
+        uuid=UUID("7d98dcd3-7268-49f7-9a44-04b575c4c4de"),
+        github_username=[
+            (
+                "testuser",
+                datetime(2023, 3, 3, tzinfo=dt.UTC),
+                datetime(2030, 12, 30, tzinfo=dt.UTC),
+            )
+        ],
+        google_scholar_profile=[
+            (
+                "https://scholar.google.com/citations?user=PataTe_111AJ&hl=en",
+                datetime(2019, 10, 11, tzinfo=dt.UTC),
+                datetime(2030, 12, 30, tzinfo=dt.UTC),
+            )
+        ],
+    )
+    user_factory.add_user(
+        uuid=UUID("d06085b5-8d8d-4b43-88f8-bd70a09d0706"),
+        supervisor=[(prof2.uuid, None, None)],
+    )
+    user_factory.add_user(
+        uuid=UUID("7ee5849c-241e-4d84-a4d2-1f73e22784f9"),
+        match_ids={"test_match": "abc", "test1": "aaa"},
+        member_type=[
+            (
+                "professor",
+                datetime(2022, 1, 1, tzinfo=dt.UTC),
+                datetime(2023, 1, 1, tzinfo=dt.UTC),
+            )
+        ],
+        github_username=[
+            (
+                "test123",
+                datetime(2022, 1, 1, tzinfo=dt.UTC),
+                datetime(2023, 1, 1, tzinfo=dt.UTC),
+            )
+        ],
+        google_scholar_profile=[
+            (
+                "profileA",
+                datetime(2022, 1, 1, tzinfo=dt.UTC),
+                datetime(2023, 1, 1, tzinfo=dt.UTC),
+            )
+        ],
+        accounts=[
+            (
+                "test",
+                "user",
+                datetime(2022, 1, 1, tzinfo=dt.UTC),
+                datetime(2023, 1, 1, tzinfo=dt.UTC),
+            )
+        ],
+        supervisor=[
+            (
+                prof1.uuid,
+                datetime(2022, 1, 1, tzinfo=dt.UTC),
+                datetime(2023, 1, 1, tzinfo=dt.UTC),
+            )
+        ],
+        cosupervisors=[
+            (
+                {prof2.uuid},
+                datetime(2022, 1, 1, tzinfo=dt.UTC),
+                datetime(2023, 1, 1, tzinfo=dt.UTC),
+            )
+        ],
+    )
+    user_factory.add_user(
+        uuid=UUID("5f27fdad-d4ca-4417-8e82-5a9dc7979d1c"),
+        match_ids={"test_match": "abc"},
+    )
+    user_factory.add_user(
+        uuid=UUID("8b4fef2b-8f47-4eb6-9992-3e7e1133b42a"),
+        match_ids={"test_match": "abc", "test1": "bbb", "test2": "123"},
+        display_name="Othername",
+        member_type=[
+            (
+                "staff",
+                datetime(2022, 1, 1, tzinfo=dt.UTC),
+                datetime(2023, 1, 1, tzinfo=dt.UTC),
+            )
+        ],
+        github_username=[
+            (
+                "test_abc",
+                datetime(2022, 1, 1, tzinfo=dt.UTC),
+                datetime(2023, 1, 1, tzinfo=dt.UTC),
+            )
+        ],
+        google_scholar_profile=[
+            (
+                "profileB",
+                datetime(2022, 1, 1, tzinfo=dt.UTC),
+                datetime(2023, 1, 1, tzinfo=dt.UTC),
+            )
+        ],
+        accounts=[
+            (
+                "test",
+                "resu",
+                datetime(2022, 1, 1, tzinfo=dt.UTC),
+                datetime(2023, 1, 1, tzinfo=dt.UTC),
+            ),
+            ("cluster", "user"),
+        ],
+        supervisor=[
+            (
+                prof2.uuid,
+                datetime(2022, 1, 1, tzinfo=dt.UTC),
+                datetime(2023, 1, 1, tzinfo=dt.UTC),
+            )
+        ],
+        cosupervisors=[
+            (
+                {prof1.uuid},
+                datetime(2022, 1, 1, tzinfo=dt.UTC),
+                datetime(2023, 1, 1, tzinfo=dt.UTC),
+            )
+        ],
+    )
+    for uuid, username, drac_account in [
         # Do not set a DRAC account for "bonhomme".
         # Thus, job from user `bonhomme` on a non-mila cluster
         # won't find associated user info.
-        ("bonhomme", None),
-        ("petitbonhomme", "aaa-001"),
+        (UUID("5a8b9e7f-afcc-4ced-b596-44fcdb3a0cff"), "bonhomme", None),
+        (UUID("8d5b2b67-d35b-4cc3-acaa-ec56c9c6f253"), "petitbonhomme", "aaa-001"),
         # ("grosbonhomme", True),  # not added, so related jobs cannot find him.
-        ("beaubonhomme", "aaa-002"),
+        (UUID("edf47681-5cd1-4be5-876d-1b8b3c6f6b71"), "beaubonhomme", "aaa-002"),
     ]:
-        users.append(_create_user(username=username, with_drac=drac_account))
-    return users
-
-
-def _create_user(username: str, with_drac: str | None) -> dict:
-    u = UserDB(
-        display_name=f"M/Ms {username[0].upper()}{username[1:]}",
-        email=f"{username}@mila.quebec",
-        matching_ids={"mila": f"{username}@mila.quebec"},
-        associated_accounts={
-            "mila": Credentials(
-                values=[
-                    ValidTag(
-                        value=f"{username}_mila",
-                        valid_start=datetime(2024, 4, 11, 0, 0, tzinfo=dt.UTC),
-                        valid_end=END_TIME,
-                    )
-                ]
+        accts = [
+            (
+                "mila",
+                f"{username}_mila",
+                datetime(2024, 4, 11, 0, 0, tzinfo=dt.UTC),
+                None,
             )
-        },
-    )
-
-    if with_drac is not None:
-        u.associated_accounts["drac"] = Credentials(
-            values=[
-                ValidTag(
-                    value=username,
-                    valid_start=datetime(2024, 4, 11, 0, 0, tzinfo=dt.UTC),
-                    valid_end=END_TIME,
-                )
-            ]
+        ]
+        if drac_account:
+            accts.append(
+                ("drac", username, datetime(2024, 4, 11, 0, 0, tzinfo=dt.UTC), None)
+            )
+        u = user_factory.add_user(
+            uuid=uuid,
+            display_name=f"M/Ms {username[0].upper()}{username[1:]}",
+            email=f"{username}@mila.quebec",
+            accounts=accts,
+            match_ids={"mila_ldap": f"{username}@mila.quebec"},
         )
-        u.matching_ids["drac_role"] = with_drac
-    return u.model_dump(exclude={"id"})
+        if drac_account:
+            u.matching_ids["drac_role"] = drac_account
+
+    return [u.model_dump(exclude={"id"}) for u in user_factory.users]
 
 
 def create_jobs(job_factory: JobFactory | None = None, job_patch: dict | None = None):
@@ -262,20 +466,30 @@ def create_cluster_entries():
     """Generate cluster entries to fill collection `clusters`."""
 
     # Get all cluster names from scraping config test file
-    cluster_names = sorted(config().clusters.keys())
+    cluster_names = sorted(config("scraping").clusters.keys())
 
     cluster_entries = []
 
     date_format = "%Y-%m-%d"
+    time_format = "%Y-%m-%dT%H:%M"
 
     for i, cluster_name in enumerate(cluster_names):
         cluster_end_time = end_time - timedelta(days=i)
         cluster_start_time = cluster_end_time - timedelta(days=1)
+        if cluster_name == "patate":
+            # Make end_time_sacct older than end_time_prometheus
+            end_time_sacct = cluster_end_time - timedelta(minutes=300)
+        else:
+            # By default, end_time_sacct is more recent than end_time_prometheus,
+            # so that prometheus metrics will be scraped up to this date
+            # for auto-interval scraping.
+            end_time_sacct = cluster_end_time + timedelta(minutes=300)
         cluster_entries.append(
             {
                 "cluster_name": cluster_name,
                 "start_date": cluster_start_time.strftime(date_format),
-                "end_date": cluster_end_time.strftime(date_format),
+                "end_time_sacct": end_time_sacct.strftime(time_format),
+                "end_time_prometheus": cluster_end_time.strftime(time_format),
                 "billing_is_gpu": True if cluster_name == "mila" else False,
             }
         )
@@ -286,7 +500,7 @@ def create_gpu_billings():
     return [
         {
             "cluster_name": "patate",
-            "since": "2023-02-15",
+            "since": datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC),
             "gpu_to_billing": {
                 "patate_gpu_no_rgu_with_billing": 120,
                 "patate_gpu_with_rgu_with_billing": 90,
@@ -295,7 +509,7 @@ def create_gpu_billings():
         },
         {
             "cluster_name": "patate",
-            "since": "2023-02-18",
+            "since": datetime(2023, 2, 18, tzinfo=MTL).astimezone(UTC),
             "gpu_to_billing": {
                 "patate_gpu_no_rgu_with_billing": 240,  # / 2
                 "patate_gpu_with_rgu_with_billing": 180,  # x 2
@@ -304,7 +518,7 @@ def create_gpu_billings():
         },
         {
             "cluster_name": "raisin",
-            "since": "2023-02-15",
+            "since": datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC),
             "gpu_to_billing": {
                 "raisin_gpu_no_rgu_with_billing": 150,
                 "raisin_gpu_with_rgu_with_billing": 50,
@@ -477,9 +691,7 @@ class JsonJobFactory(JobFactory):
                 },
             )
 
-    def format_dt_tz(
-        self, cluster_name: str, dt: datetime | int | None
-    ) -> Optional[int]:
+    def format_dt_tz(self, cluster_name: str, dt: datetime | int | None) -> int | None:
         if dt is None or isinstance(dt, int):
             return dt
         cluster_tz = config().clusters[cluster_name].timezone
@@ -531,3 +743,17 @@ class JsonJobFactory(JobFactory):
         flattened_sacct_job.update(flatten(kwargs))
 
         return unflatten(flattened_sacct_job)
+
+
+def create_sacct_json(configs: list[dict]) -> str:
+    tmp_json_raw = copy.deepcopy(json_raw)
+    tmp_json_raw["jobs"] = create_json_jobs(configs)
+    return json.dumps(tmp_json_raw)
+
+
+def create_json_jobs(json_jobs: list[dict]) -> list[dict]:
+    json_job_factory = JsonJobFactory()
+    for job in json_jobs:
+        json_job_factory.add_job(**job)
+
+    return json_job_factory.jobs
