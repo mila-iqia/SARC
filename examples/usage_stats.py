@@ -5,7 +5,7 @@ import pandas as pd
 from tqdm import tqdm
 
 from sarc.client.job import get_jobs
-from sarc.config import config, TZLOCAL
+from sarc.config import config, TZLOCAL, UTC
 
 # Clusters we want to compare
 clusters = ["mila", "narval", "beluga", "cedar", "graham"]
@@ -90,8 +90,8 @@ def get_jobs_dataframe(filename, start, end) -> pd.DataFrame:
     return df
 
 
-start = datetime(year=2022, month=1, day=1, tzinfo=TZLOCAL)
-end = datetime(year=2023, month=1, day=1, tzinfo=TZLOCAL)
+start = datetime(year=2022, month=1, day=1).astimezone(UTC)
+end = datetime(year=2023, month=1, day=1).astimezone(UTC)
 df = get_jobs_dataframe(
     "total_usage_demo_jobs.pkl",
     start=start,
