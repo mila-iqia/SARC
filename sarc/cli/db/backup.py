@@ -8,7 +8,7 @@ from pathlib import Path
 from filelock import SoftFileLock, Timeout
 from simple_parsing import field
 
-from sarc.config import config
+from sarc.config import config, UTC
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 def _get_current_timestring() -> str:
     """Return a string for current time."""
     fmt = "%Y-%m-%dT%Hh%Mm%Ss%z"
-    return datetime.now().strftime(fmt)
+    return datetime.now(UTC).strftime(fmt)
 
 
 @dataclass

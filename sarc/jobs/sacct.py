@@ -88,7 +88,7 @@ class SAcctScraper:
         return json.loads(results.stdout[results.stdout.find("{") :])
 
     def _cache_key(self) -> str | None:
-        now = datetime.now().astimezone(UTC)
+        now = datetime.now(tz=UTC)
         if self.start < self.end <= now:
             fmt = "%Y-%m-%dT%H:%M"
             startstr = self.start.strftime(fmt)

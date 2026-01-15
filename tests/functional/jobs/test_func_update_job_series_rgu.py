@@ -15,8 +15,7 @@ from sarc.client.series import (
     update_cluster_job_series_rgu,
     update_job_series_rgu,
 )
-from sarc.config import MTL
-
+from tests.common.dateutils import MTL
 from .test_func_load_job_series import MOCK_TIME
 
 

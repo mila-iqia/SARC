@@ -6,9 +6,9 @@ from pathlib import Path
 import pytest
 
 from sarc.client.job import SlurmJob
-from sarc.config import MTL, UTC
+from sarc.config import UTC
 from sarc.jobs.series import _get_job_time_series_data_cache_key, get_job_time_series
-
+from tests.common.dateutils import MTL
 from .factory import JobFactory
 
 mtl_test_time = datetime(2023, 3, 5, 6, 0, tzinfo=MTL)

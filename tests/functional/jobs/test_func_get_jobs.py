@@ -3,7 +3,8 @@ from datetime import datetime
 import pytest
 
 from sarc.client.job import get_job, get_jobs
-from sarc.config import MTL, ScrapingModeRequired, config
+from sarc.config import ScrapingModeRequired, config
+from tests.common.dateutils import MTL
 
 parameters = {
     "no_cluster": {},

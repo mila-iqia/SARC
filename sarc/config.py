@@ -26,8 +26,6 @@ if TYPE_CHECKING:
     from pymongo.database import Database
 
 
-MTL = zoneinfo.ZoneInfo("America/Montreal")
-PST = zoneinfo.ZoneInfo("America/Vancouver")
 UTC = zoneinfo.ZoneInfo("UTC")
 TZLOCAL = zoneinfo.ZoneInfo(tzlocal.get_localzone_name())
 

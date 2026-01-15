@@ -2,17 +2,18 @@ from __future__ import annotations
 
 import copy
 import datetime as dt
-from collections.abc import Iterable
 import json
+from collections.abc import Iterable
 from datetime import datetime, timedelta
 from uuid import UUID
 
 from flatten_dict import flatten, unflatten
 
-from sarc.config import MTL, UTC, config
+from sarc.config import UTC, config
 from sarc.core.models.users import Credentials, MemberType
 from sarc.jobs.sacct import parse_in_timezone
 from sarc.users.db import UserDB
+from tests.common.dateutils import MTL
 
 elapsed_time = 60 * 60 * 12
 end_time = datetime(2023, 2, 14, 23, 48, 54, tzinfo=MTL).astimezone(UTC)

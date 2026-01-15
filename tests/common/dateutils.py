@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import zoneinfo
 from datetime import datetime
 
-from sarc.config import MTL, UTC
+from sarc.config import UTC
 
 _time_format = "%Y-%m-%dT%H:%M"
+
+MTL = zoneinfo.ZoneInfo("America/Montreal")
+PST = zoneinfo.ZoneInfo("America/Vancouver")
 
 
 def _dtfmt(
