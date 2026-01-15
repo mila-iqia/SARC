@@ -76,20 +76,16 @@ def disabled_cache():
 
 @pytest.fixture
 def tzlocal_is_mtl(monkeypatch):
-    """
-    Set TZLOCAL to Montreal everywhere
-
-    NB: This patch may not work if TZLOCAL is used as
-    default value in a function signature.
-    """
-    module_prefix = "sarc."
-    target_name = "TZLOCAL"
-    new_timezone = zoneinfo.ZoneInfo("America/Montreal")
-
-    # Iterate over all loaded modules
-    for name, module in sys.modules.items():
-        if name.startswith(module_prefix) and hasattr(module, target_name):
-            monkeypatch.setattr(f"{name}.{target_name}", new_timezone, raising=False)
+    monkeypatch.setattr("sarc.config.TZLOCAL", zoneinfo.ZoneInfo("America/Montreal"))
+    monkeypatch.setattr(
+        "sarc.client.job.TZLOCAL", zoneinfo.ZoneInfo("America/Montreal")
+    )
+    monkeypatch.setattr(
+        "sarc.client.series.TZLOCAL", zoneinfo.ZoneInfo("America/Montreal")
+    )
+    monkeypatch.setattr(
+        "sarc.cli.fetch.slurmconfig.TZLOCAL", zoneinfo.ZoneInfo("America/Montreal")
+    )
 
 
 @pytest.fixture
