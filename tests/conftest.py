@@ -74,7 +74,7 @@ def disabled_cache():
         yield
 
 
-@pytest.fixture
+@pytest.fixture(scope="function", autouse=True)
 def tzlocal_is_mtl(monkeypatch):
     monkeypatch.setattr("sarc.config.TZLOCAL", zoneinfo.ZoneInfo("America/Montreal"))
     monkeypatch.setattr(
