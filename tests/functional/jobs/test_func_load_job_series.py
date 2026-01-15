@@ -6,9 +6,8 @@ import pytest
 
 from sarc.client.job import JobStatistics, Statistics, get_jobs
 from sarc.client.series import load_job_series
-from sarc.config import MTL
 from sarc.users.db import get_users
-
+from tests.common.dateutils import MTL
 from .test_func_job_statistics import generate_fake_timeseries
 
 parameters = {
