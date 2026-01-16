@@ -364,6 +364,99 @@ def test_stdout_message_before_json(
 )
 @pytest.mark.parametrize("json_jobs", [{}], indirect=True)
 @pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
+def test_update_job(test_config, sacct_json, remote, file_regression, cli_main):
+    remote.expect(
+        host="raisin",
+        commands=[
+            Command(
+                cmd=f"export TZ=UTC && /opt/slurm/bin/sacct -X -S {_dtfmt(2023, 2, 15)} -E {_dtfmt(2023, 2, 16)} --allusers --json",
+                out=sacct_json.encode("utf-8"),
+            )
+            for _ in range(1)
+        ],
+    )
+
+    # Import here so that config() is setup correctly when CLI is created.
+    import sarc.cli  # noqa: F401
+
+    assert (
+        cli_main(
+            [
+                "fetch",
+                "jobs",
+                "--cluster_names",
+                "raisin",
+                "--intervals",
+                f"{_dtfmt(2023, 2, 15)}-{_dtfmt(2023, 2, 16)}",
+            ]
+        )
+        == 0
+    )
+
+    time.sleep(1)
+    assert (
+        cli_main(
+            [
+                "-v",
+                "parse",
+                "jobs",
+                "--cluster_names",
+                "raisin",
+                "--since",
+                "2023-02-14T00:00",
+            ]
+        )
+        == 0
+    )
+
+    assert len(list(get_jobs())) == 1
+
+    assert (
+        cli_main(
+            [
+                "fetch",
+                "jobs",
+                "--cluster_names",
+                "raisin",
+                "--intervals",
+                f"{_dtfmt(2023, 2, 15)}-{_dtfmt(2023, 2, 16)}",
+            ]
+        )
+        == 0
+    )
+
+    assert (
+        cli_main(
+            [
+                "-v",
+                "parse",
+                "jobs",
+                "--cluster_names",
+                "raisin",
+                "--since",
+                "2023-02-15T00:00",
+            ]
+        )
+        == 0
+    )
+
+    jobs = list(get_jobs())
+
+    assert len(list(get_jobs())) == 1
+
+    file_regression.check(
+        f"Found {len(jobs)} job(s):\n"
+        + "\n".join(
+            [job.model_dump_json(exclude={"id": True}, indent=4) for job in jobs]
+        )
+    )
+
+
+@pytest.mark.parametrize(
+    "test_config", [{"clusters": {"raisin": {"host": "raisin"}}}], indirect=True
+)
+@pytest.mark.parametrize("json_jobs", [{}], indirect=True)
+@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
 def test_save_job(test_config, sacct_json, remote, file_regression, cli_main):
     remote.expect(
         host="raisin",
@@ -404,101 +497,6 @@ def test_save_job(test_config, sacct_json, remote, file_regression, cli_main):
     )
 
     jobs = list(get_jobs())
-    file_regression.check(
-        f"Found {len(jobs)} job(s):\n"
-        + "\n".join(
-            [job.model_dump_json(exclude={"id": True}, indent=4) for job in jobs]
-        )
-    )
-
-
-@pytest.mark.parametrize(
-    "test_config", [{"clusters": {"raisin": {"host": "raisin"}}}], indirect=True
-)
-@pytest.mark.parametrize("json_jobs", [{}], indirect=True)
-@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
-def test_update_job(test_config, sacct_json, remote, file_regression, cli_main):
-    remote.expect(
-        host="raisin",
-        commands=[
-            Command(
-                cmd=f"export TZ=UTC && /opt/slurm/bin/sacct -X -S {_dtfmt(2023, 2, 15)} -E {_dtfmt(2023, 2, 16)} --allusers --json",
-                out=sacct_json.encode("utf-8"),
-            )
-            for _ in range(2)
-        ],
-    )
-
-    # Import here so that config() is setup correctly when CLI is created.
-    import sarc.cli  # noqa: F401
-
-    assert (
-        cli_main(
-            [
-                "fetch",
-                "jobs",
-                "--cluster_names",
-                "raisin",
-                "--intervals",
-                f"{_dtfmt(2023, 2, 15)}-{_dtfmt(2023, 2, 16)}",
-            ]
-        )
-        == 0
-    )
-
-    time.sleep(1)
-    assert (
-        cli_main(
-            [
-                "-v",
-                "parse",
-                "jobs",
-                "--cluster_names",
-                "raisin",
-                "--since",
-                "2023-02-14T00:00",
-            ]
-        )
-        == 0
-    )
-
-    assert len(list(get_jobs())) == 1
-
-
-    assert (
-        cli_main(
-            [
-                "fetch",
-                "jobs",
-                "--cluster_names",
-                "raisin",
-                "--intervals",
-                f"{_dtfmt(2023, 2, 15)}-{_dtfmt(2023, 2, 16)}",
-            ]
-        )
-        == 0
-    )
-
-    time.sleep(1)
-    assert (
-        cli_main(
-            [
-                "-v",
-                "parse",
-                "jobs",
-                "--cluster_names",
-                "raisin",
-                "--since",
-                "2023-02-14T00:00",
-            ]
-        )
-        == 0
-    )
-
-    jobs = list(get_jobs())
-
-    assert len(list(get_jobs())) == 1
-
     file_regression.check(
         f"Found {len(jobs)} job(s):\n"
         + "\n".join(
