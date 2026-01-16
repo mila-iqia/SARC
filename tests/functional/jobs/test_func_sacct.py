@@ -4,6 +4,7 @@ import json
 import subprocess
 from datetime import datetime, timedelta
 from pathlib import Path
+import time
 from unittest.mock import patch
 
 import pytest
@@ -13,7 +14,7 @@ from opentelemetry.trace import StatusCode
 from sarc.client import get_available_clusters
 from sarc.client.job import get_jobs
 from sarc.config import MTL, PST, UTC, config
-from sarc.jobs.sacct import SAcctScraper
+from sarc.core.scraping.jobs_utils import SacctScraper
 
 from ...common.dateutils import _dtfmt
 from .factory import create_sacct_json
@@ -96,7 +97,7 @@ parameters = {
 
 @pytest.fixture
 def scraper():
-    return SAcctScraper(
+    return SacctScraper(
         cluster=config().clusters["raisin"],
         start=datetime(2023, 2, 14, tzinfo=MTL).astimezone(UTC),
         end=datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC),
@@ -157,7 +158,7 @@ def test_parse_malformed_jobs(sacct_json, scraper, captrace):
     ]
     assert len(error_spans) == 1
     (error_span,) = error_spans
-    assert error_span.name == "SAcctScraper.__iter__"
+    assert error_span.name == "SacctScraper.__iter__"
     entry = json.loads(error_span.attributes["entry"])
     assert isinstance(entry, dict)
     assert entry["account"] == "mila"
@@ -262,7 +263,7 @@ def test_scraper_with_malformed_cache(test_config, remote, scraper, caplog):
     "test_config", [{"clusters": {"patate": {"host": "patate"}}}], indirect=True
 )
 def test_sacct_bin_and_accounts(test_config, remote):
-    scraper = SAcctScraper(
+    scraper = SacctScraper(
         cluster=config().clusters["patate"],
         start=datetime(2023, 2, 14, tzinfo=MTL).astimezone(UTC),
         end=datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC),
@@ -291,7 +292,7 @@ def test_localhost(os_system, monkeypatch):
 
     monkeypatch.setattr(subprocess, "run", mock_subprocess_run)
 
-    scraper = SAcctScraper(
+    scraper = SacctScraper(
         cluster=config().clusters["local"],
         start=datetime(2023, 2, 14, tzinfo=MTL).astimezone(UTC),
         end=datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC),
@@ -305,7 +306,7 @@ def test_localhost(os_system, monkeypatch):
     "test_config", [{"clusters": {"raisin": {"host": "raisin"}}}], indirect=True
 )
 @pytest.mark.parametrize("json_jobs", [{}], indirect=True)
-@pytest.mark.usefixtures("empty_read_write_db")
+@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
 def test_stdout_message_before_json(
     test_config, sacct_json, remote, file_regression, cli_main
 ):
@@ -323,12 +324,27 @@ def test_stdout_message_before_json(
     assert (
         cli_main(
             [
-                "acquire",
+                "fetch",
                 "jobs",
-                "--cluster_name",
+                "--cluster_names",
                 "raisin",
                 "--intervals",
                 f"{_dtfmt(2023, 2, 15)}-{_dtfmt(2023, 2, 16)}",
+            ]
+        )
+        == 0
+    )
+
+    assert (
+        cli_main(
+            [
+                "-v",
+                "parse",
+                "jobs",
+                "--cluster_names",
+                "raisin",
+                "--since",
+                "2023-02-14T00:00",
             ]
         )
         == 0
@@ -347,7 +363,100 @@ def test_stdout_message_before_json(
     "test_config", [{"clusters": {"raisin": {"host": "raisin"}}}], indirect=True
 )
 @pytest.mark.parametrize("json_jobs", [{}], indirect=True)
-@pytest.mark.usefixtures("empty_read_write_db")
+@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
+def test_update_job(test_config, sacct_json, remote, file_regression, cli_main):
+    remote.expect(
+        host="raisin",
+        commands=[
+            Command(
+                cmd=f"export TZ=UTC && /opt/slurm/bin/sacct -X -S {_dtfmt(2023, 2, 15)} -E {_dtfmt(2023, 2, 16)} --allusers --json",
+                out=sacct_json.encode("utf-8"),
+            )
+            for _ in range(1)
+        ],
+    )
+
+    # Import here so that config() is setup correctly when CLI is created.
+    import sarc.cli  # noqa: F401
+
+    assert (
+        cli_main(
+            [
+                "fetch",
+                "jobs",
+                "--cluster_names",
+                "raisin",
+                "--intervals",
+                f"{_dtfmt(2023, 2, 15)}-{_dtfmt(2023, 2, 16)}",
+            ]
+        )
+        == 0
+    )
+
+    time.sleep(1)
+    assert (
+        cli_main(
+            [
+                "-v",
+                "parse",
+                "jobs",
+                "--cluster_names",
+                "raisin",
+                "--since",
+                "2023-02-14T00:00",
+            ]
+        )
+        == 0
+    )
+
+    assert len(list(get_jobs())) == 1
+
+    assert (
+        cli_main(
+            [
+                "fetch",
+                "jobs",
+                "--cluster_names",
+                "raisin",
+                "--intervals",
+                f"{_dtfmt(2023, 2, 15)}-{_dtfmt(2023, 2, 16)}",
+            ]
+        )
+        == 0
+    )
+
+    assert (
+        cli_main(
+            [
+                "-v",
+                "parse",
+                "jobs",
+                "--cluster_names",
+                "raisin",
+                "--since",
+                "2023-02-15T00:00",
+            ]
+        )
+        == 0
+    )
+
+    jobs = list(get_jobs())
+
+    assert len(list(get_jobs())) == 1
+
+    file_regression.check(
+        f"Found {len(jobs)} job(s):\n"
+        + "\n".join(
+            [job.model_dump_json(exclude={"id": True}, indent=4) for job in jobs]
+        )
+    )
+
+
+@pytest.mark.parametrize(
+    "test_config", [{"clusters": {"raisin": {"host": "raisin"}}}], indirect=True
+)
+@pytest.mark.parametrize("json_jobs", [{}], indirect=True)
+@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
 def test_save_job(test_config, sacct_json, remote, file_regression, cli_main):
     remote.expect(
         host="raisin",
@@ -361,80 +470,33 @@ def test_save_job(test_config, sacct_json, remote, file_regression, cli_main):
     assert (
         cli_main(
             [
-                "acquire",
+                "fetch",
                 "jobs",
-                "--cluster_name",
+                "--cluster_names",
                 "raisin",
                 "--intervals",
                 f"{_dtfmt(2023, 2, 15)}-{_dtfmt(2023, 2, 16)}",
+            ]
+        )
+        == 0
+    )
+
+    assert (
+        cli_main(
+            [
+                "-v",
+                "parse",
+                "jobs",
+                "--cluster_names",
+                "raisin",
+                "--since",
+                "2023-02-14T00:00",
             ]
         )
         == 0
     )
 
     jobs = list(get_jobs())
-    file_regression.check(
-        f"Found {len(jobs)} job(s):\n"
-        + "\n".join(
-            [job.model_dump_json(exclude={"id": True}, indent=4) for job in jobs]
-        )
-    )
-
-
-@pytest.mark.parametrize(
-    "test_config", [{"clusters": {"raisin": {"host": "raisin"}}}], indirect=True
-)
-@pytest.mark.parametrize("json_jobs", [{}], indirect=True)
-@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache")
-def test_update_job(test_config, sacct_json, remote, file_regression, cli_main):
-    remote.expect(
-        host="raisin",
-        commands=[
-            Command(
-                cmd=f"export TZ=UTC && /opt/slurm/bin/sacct -X -S {_dtfmt(2023, 2, 15)} -E {_dtfmt(2023, 2, 16)} --allusers --json",
-                out=sacct_json.encode("utf-8"),
-            )
-            for _ in range(2)
-        ],
-    )
-
-    # Import here so that config() is setup correctly when CLI is created.
-    import sarc.cli  # noqa: F401
-
-    assert (
-        cli_main(
-            [
-                "acquire",
-                "jobs",
-                "--cluster_name",
-                "raisin",
-                "--intervals",
-                f"{_dtfmt(2023, 2, 15)}-{_dtfmt(2023, 2, 16)}",
-            ]
-        )
-        == 0
-    )
-
-    assert len(list(get_jobs())) == 1
-
-    assert (
-        cli_main(
-            [
-                "acquire",
-                "jobs",
-                "--cluster_name",
-                "raisin",
-                "--intervals",
-                f"{_dtfmt(2023, 2, 15)}-{_dtfmt(2023, 2, 16)}",
-            ]
-        )
-        == 0
-    )
-
-    jobs = list(get_jobs())
-
-    assert len(list(get_jobs())) == 1
-
     file_regression.check(
         f"Found {len(jobs)} job(s):\n"
         + "\n".join(
@@ -461,7 +523,7 @@ def test_update_job(test_config, sacct_json, remote, file_regression, cli_main):
     ],
     indirect=True,
 )
-@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
 def test_save_preempted_job(test_config, sacct_json, remote, file_regression, cli_main):
     remote.expect(
         cmd=f"export TZ=UTC && /opt/slurm/bin/sacct -X -S {_dtfmt(2023, 2, 15)} -E {_dtfmt(2023, 2, 16)} --allusers --json",
@@ -475,12 +537,27 @@ def test_save_preempted_job(test_config, sacct_json, remote, file_regression, cl
     assert (
         cli_main(
             [
-                "acquire",
+                "fetch",
                 "jobs",
-                "--cluster_name",
+                "--cluster_names",
                 "raisin",
                 "--intervals",
                 f"{_dtfmt(2023, 2, 15)}-{_dtfmt(2023, 2, 16)}",
+            ]
+        )
+        == 0
+    )
+
+    assert (
+        cli_main(
+            [
+                "-v",
+                "parse",
+                "jobs",
+                "--cluster_names",
+                "raisin",
+                "--since",
+                "2023-02-14T00:00",
             ]
         )
         == 0
@@ -498,7 +575,7 @@ def test_save_preempted_job(test_config, sacct_json, remote, file_regression, cl
     )
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
 def test_multiple_dates(test_config, remote, file_regression, cli_main):
     datetimes = [
         datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC) + timedelta(days=i)
@@ -535,9 +612,9 @@ def test_multiple_dates(test_config, remote, file_regression, cli_main):
     assert (
         cli_main(
             [
-                "acquire",
+                "fetch",
                 "jobs",
-                "--cluster_name",
+                "--cluster_names",
                 "raisin",
                 "--intervals",
                 f"{_dtfmt(2023, 2, 15)}-{_dtfmt(2023, 2, 16)}",
@@ -545,6 +622,21 @@ def test_multiple_dates(test_config, remote, file_regression, cli_main):
                 f"{_dtfmt(2023, 2, 17)}-{_dtfmt(2023, 2, 18)}",
                 f"{_dtfmt(2023, 2, 18)}-{_dtfmt(2023, 2, 19)}",
                 f"{_dtfmt(2023, 2, 19)}-{_dtfmt(2023, 2, 20)}",
+            ]
+        )
+        == 0
+    )
+
+    assert (
+        cli_main(
+            [
+                "-v",
+                "parse",
+                "jobs",
+                "--cluster_names",
+                "raisin",
+                "--since",
+                "2023-02-14T00:00",
             ]
         )
         == 0
@@ -562,7 +654,7 @@ def test_multiple_dates(test_config, remote, file_regression, cli_main):
     )
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
 def test_multiple_clusters_and_dates(test_config, remote, file_regression, cli_main):
     cluster_names = ["raisin", "patate"]
     datetimes = [
@@ -622,14 +714,30 @@ def test_multiple_clusters_and_dates(test_config, remote, file_regression, cli_m
     assert (
         cli_main(
             [
-                "acquire",
+                "fetch",
                 "jobs",
-                "--cluster_name",
+                "--cluster_names",
                 "raisin",
                 "patate",
                 "--intervals",
                 f"{_dtfmt(2023, 2, 15)}-{_dtfmt(2023, 2, 16)}",
                 f"{_dtfmt(2023, 2, 16)}-{_dtfmt(2023, 2, 17)}",
+            ]
+        )
+        == 0
+    )
+
+    assert (
+        cli_main(
+            [
+                "-v",
+                "parse",
+                "jobs",
+                "--cluster_names",
+                "raisin",
+                "patate",
+                "--since",
+                "2023-02-14T00:00",
             ]
         )
         == 0
@@ -666,7 +774,7 @@ def test_multiple_clusters_and_dates(test_config, remote, file_regression, cli_m
 @pytest.mark.parametrize(
     "test_config", [{"clusters": {"patate": {"host": "patate"}}}], indirect=True
 )
-@pytest.mark.usefixtures("empty_read_write_db")
+@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
 def test_job_tz(test_config, sacct_json, remote, cli_main):
     remote.expect(
         host="patate",
@@ -677,12 +785,27 @@ def test_job_tz(test_config, sacct_json, remote, cli_main):
     assert (
         cli_main(
             [
-                "acquire",
+                "fetch",
                 "jobs",
-                "--cluster_name",
+                "--cluster_names",
                 "patate",
                 "--intervals",
                 "2023-02-15T00:00-2023-02-16T00:00",
+            ]
+        )
+        == 0
+    )
+
+    assert (
+        cli_main(
+            [
+                "-v",
+                "parse",
+                "jobs",
+                "--cluster_names",
+                "patate",
+                "--since",
+                "2023-02-14T00:00",
             ]
         )
         == 0
@@ -713,14 +836,15 @@ def test_parse_sacct_slurm_versions(sacct_outputs, scraper):
     assert len(jobs) == 1
 
 
+@pytest.mark.usefixtures("enabled_cache")
 def test_acquire_jobs_mutually_exclusive_args(cli_main, caplog):
     # Both --intervals and --auto_interval: must fail
     assert (
         cli_main(
             [
-                "acquire",
+                "fetch",
                 "jobs",
-                "--cluster_name",
+                "--cluster_names",
                 "raisin",
                 "--intervals",
                 "2023-02-15T00:00-2023-02-16T00:00",
@@ -731,6 +855,21 @@ def test_acquire_jobs_mutually_exclusive_args(cli_main, caplog):
         == -1
     )
 
+    assert (
+        cli_main(
+            [
+                "-v",
+                "parse",
+                "jobs",
+                "--cluster_names",
+                "raisin",
+                "--since",
+                "2023-02-14T00:00",
+            ]
+        )
+        == 0
+    )
+
     assert not list(get_jobs())
     assert (
         "Parameters mutually exclusive: either --intervals or --auto_interval, not both"
@@ -738,14 +877,15 @@ def test_acquire_jobs_mutually_exclusive_args(cli_main, caplog):
     )
 
 
+@pytest.mark.usefixtures("enabled_cache")
 def test_acquire_jobs_invalid_interval(cli_main, caplog):
     # Malformed interval
     assert (
         cli_main(
             [
-                "acquire",
+                "fetch",
                 "jobs",
-                "--cluster_name",
+                "--cluster_names",
                 "raisin",
                 "--intervals",
                 "2023-02-15x00:00-2023-02-16T00:00",
@@ -753,6 +893,22 @@ def test_acquire_jobs_invalid_interval(cli_main, caplog):
         )
         == 0
     )
+
+    assert (
+        cli_main(
+            [
+                "-v",
+                "parse",
+                "jobs",
+                "--cluster_names",
+                "raisin",
+                "--since",
+                "2023-02-14T00:00",
+            ]
+        )
+        == 0
+    )
+
     assert not list(get_jobs())
     assert (
         "Invalid interval 2023-02-15x00:00-2023-02-16T00:00 ; skipping cluster"
@@ -760,17 +916,33 @@ def test_acquire_jobs_invalid_interval(cli_main, caplog):
     )
 
 
+@pytest.mark.usefixtures("enabled_cache")
 def test_acquire_jobs_interval_start_gt_end(cli_main, caplog):
     # Malformed interval: start > end
     assert (
         cli_main(
             [
-                "acquire",
+                "fetch",
                 "jobs",
-                "--cluster_name",
+                "--cluster_names",
                 "raisin",
                 "--intervals",
                 "2023-02-17T00:00-2023-02-16T00:00",
+            ]
+        )
+        == 0
+    )
+
+    assert (
+        cli_main(
+            [
+                "-v",
+                "parse",
+                "jobs",
+                "--cluster_names",
+                "raisin",
+                "--since",
+                "2023-02-14T00:00",
             ]
         )
         == 0
@@ -782,19 +954,36 @@ def test_acquire_jobs_interval_start_gt_end(cli_main, caplog):
     )
 
 
+@pytest.mark.usefixtures("enabled_cache")
 def test_acquire_jobs_args_no_interval(cli_main, caplog):
     # No interval, nothing to do
     assert (
         cli_main(
             [
-                "acquire",
+                "fetch",
                 "jobs",
-                "--cluster_name",
+                "--cluster_names",
                 "raisin",
             ]
         )
         == 0
     )
+
+    assert (
+        cli_main(
+            [
+                "-v",
+                "parse",
+                "jobs",
+                "--cluster_names",
+                "raisin",
+                "--since",
+                "2023-02-14T00:00",
+            ]
+        )
+        == 0
+    )
+
     assert not list(get_jobs())
     assert "No --intervals or --auto_interval parsed, nothing to do." in caplog.text
 
@@ -817,9 +1006,11 @@ def test_auto_interval(cli_main, monkeypatch, freezer, caplog):
 
     mock_fetch_raw.called = 0
 
-    import sarc.jobs.sacct
+    import sarc.core.scraping.jobs_utils
 
-    monkeypatch.setattr(sarc.jobs.sacct.SAcctScraper, "fetch_raw", mock_fetch_raw)
+    monkeypatch.setattr(
+        sarc.core.scraping.jobs_utils.SacctScraper, "fetch_raw", mock_fetch_raw
+    )
 
     orig_end_time = datetime.strptime(
         _get_cluster_raisin().end_time_sacct, "%Y-%m-%dT%H:%M"
@@ -834,9 +1025,9 @@ def test_auto_interval(cli_main, monkeypatch, freezer, caplog):
         cli_main(
             [
                 "-v",
-                "acquire",
+                "fetch",
                 "jobs",
-                "--cluster_name",
+                "--cluster_names",
                 "raisin",
                 "--auto_interval",
                 "60",
@@ -844,6 +1035,22 @@ def test_auto_interval(cli_main, monkeypatch, freezer, caplog):
         )
         == 0
     )
+
+    assert (
+        cli_main(
+            [
+                "-v",
+                "parse",
+                "jobs",
+                "--cluster_names",
+                "raisin",
+                "--since",
+                "2023-02-14T00:00",
+            ]
+        )
+        == 0
+    )
+
     print(caplog.text)
     # end_time_sacct should have been updated
     assert (
@@ -881,9 +1088,11 @@ def test_auto_interval_0(cli_main, monkeypatch, freezer, caplog):
 
     mock_fetch_raw.called = 0
 
-    import sarc.jobs.sacct
+    import sarc.core.scraping.jobs_utils
 
-    monkeypatch.setattr(sarc.jobs.sacct.SAcctScraper, "fetch_raw", mock_fetch_raw)
+    monkeypatch.setattr(
+        sarc.core.scraping.jobs_utils.SacctScraper, "fetch_raw", mock_fetch_raw
+    )
 
     orig_end_time = datetime.strptime(
         _get_cluster_raisin().end_time_sacct, "%Y-%m-%dT%H:%M"
@@ -894,16 +1103,31 @@ def test_auto_interval_0(cli_main, monkeypatch, freezer, caplog):
     sacct_folder = config().cache / "sacct"
     # Cache should not yet exist
     assert not sacct_folder.exists()
+
     assert (
         cli_main(
             [
                 "-v",
-                "acquire",
+                "fetch",
                 "jobs",
-                "--cluster_name",
+                "--cluster_names",
                 "raisin",
                 "--auto_interval",
                 "0",  # no minutes => take whole time
+            ]
+        )
+        == 0
+    )
+    assert (
+        cli_main(
+            [
+                "-v",
+                "parse",
+                "jobs",
+                "--cluster_names",
+                "raisin",
+                "--since",
+                "2024-01-01T00:00",
             ]
         )
         == 0
