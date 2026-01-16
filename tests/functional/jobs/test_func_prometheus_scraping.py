@@ -4,6 +4,7 @@ import json
 import logging
 import re
 from datetime import datetime, timedelta
+import time
 
 import pytest
 from fabric.testing.base import Command, Session
@@ -167,7 +168,7 @@ def test_get_gpu_type(
     assert job.stored_statistics
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
 def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     test_config,
     remote,
@@ -404,7 +405,7 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
         )
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
 def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
     test_config,
     remote,
@@ -500,6 +501,7 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
 
     assert len(list(get_jobs())) == 0
 
+
     assert (
         cli_main(
             [
@@ -515,6 +517,7 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
         == 0
     )
 
+    time.sleep(1)
     assert (
         cli_main(
             [
@@ -532,6 +535,7 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
 
     assert len(list(get_jobs())) == len(datetimes) * len(cluster_names)
 
+    time.sleep(1)
     assert (
         cli_main(
             [
@@ -547,6 +551,7 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
         == 0
     )
 
+    time.sleep(1)
     assert (
         cli_main(
             [
@@ -564,6 +569,7 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
 
     assert len(list(get_jobs())) == len(datetimes) * len(cluster_names)
 
+    time.sleep(1)
     assert (
         cli_main(
             [
@@ -579,6 +585,7 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
         == 0
     )
 
+    time.sleep(1)
     assert (
         cli_main(
             [

@@ -4,6 +4,7 @@ import json
 import subprocess
 from datetime import datetime, timedelta
 from pathlib import Path
+import time
 from unittest.mock import patch
 
 import pytest
@@ -444,6 +445,8 @@ def test_update_job(test_config, sacct_json, remote, file_regression, cli_main):
         )
         == 0
     )
+
+    time.sleep(1)
     assert (
         cli_main(
             [
@@ -461,6 +464,7 @@ def test_update_job(test_config, sacct_json, remote, file_regression, cli_main):
 
     assert len(list(get_jobs())) == 1
 
+
     assert (
         cli_main(
             [
@@ -475,6 +479,7 @@ def test_update_job(test_config, sacct_json, remote, file_regression, cli_main):
         == 0
     )
 
+    time.sleep(1)
     assert (
         cli_main(
             [
