@@ -101,7 +101,7 @@ def get_sarc_data(args: FilteringOptions) -> pd.DataFrame:
     return df
 
 
-def get_compute_usage_df(df: pd.DataFrame, args: FilteringOptions) -> pd.DataFrame:
+def get_compute_usage_df(df: pd.DataFrame, _args: FilteringOptions) -> pd.DataFrame:
     """Compute the compute usage statistics per user."""
     # Group jobs by user
     grouped_df = df.groupby(["cluster_name", "user"])

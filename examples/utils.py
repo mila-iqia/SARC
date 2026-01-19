@@ -17,9 +17,7 @@ from typing import Any, Callable
 import simple_parsing
 from typing_extensions import Sequence
 
-from examples.waste_stats import logger
 from sarc.config import MTL
-from sarc.core.models.users import UserData
 
 logger = logging.getLogger(__name__)
 
@@ -61,24 +59,24 @@ def _hash(v) -> str:
                     _hash(v.clusters),
                 ]
             )
-        case str():
-            return str(v).removesuffix("@mila.quebec")  # no quotes around strings.
-        case None | int() | float():
-            return repr(v)
         case datetime(hour=0, minute=0, second=0, microsecond=0) as d:
             return d.strftime("%Y-%m-%d")
         case datetime() as v:
             return v.strftime("%Y-%m-%dT%H:%M:%S%z")
-        case [UserData(), *_]:
-            return _hash(sorted([student.email for student in v]))
+        case str():
+            return str(v).removesuffix("@mila.quebec")  # no quotes around strings.
         case [str(), *_] if len(v) > 2:
             # If there are more than 3 strings, hash them together.
             return hashlib.md5("+".join(sorted(v)).encode()).hexdigest()[:12]
         case list() | tuple():
             return "+".join(sorted(map(_hash, v)))
-        case {"$in": list(values)}:
-            # Special case for MongoDB-like queries.
-            return _hash(values)
+        # case None | int() | float():
+        #     return repr(v)
+        # case [UserData(), *_]:
+        #     return _hash(sorted([student.email for student in v]))
+        # case {"$in": list(values)}:
+        #     # Special case for MongoDB-like queries.
+        #     return _hash(values)
         case _:
             raise NotImplementedError(f"Unsupported arg type: {v} of type {type(v)}")
 
