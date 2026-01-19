@@ -501,7 +501,6 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
 
     assert len(list(get_jobs())) == 0
 
-
     assert (
         cli_main(
             [
