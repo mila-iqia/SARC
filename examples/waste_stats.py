@@ -1,11 +1,3 @@
-# /// script
-# requires-python = ">=3.14"
-# dependencies = [
-#     "rich>=14.2.0",
-#     "sarc>=2.0.5",
-#     "simple-parsing>=0.1.7",
-# ]
-# ///
 """Simple example that shows the compute usage and waste statistics per user over a given period."""
 
 import dataclasses

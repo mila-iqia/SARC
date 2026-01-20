@@ -11,18 +11,12 @@ examples = [
 examples.remove("utils.py")
 
 example_marks = {
-    "allocation_usage.py": pytest.mark.xfail(
-        reason="TODO: example is broken!", raises=ImportError, strict=True
-    ),
+    "allocation_usage.py": pytest.mark.xfail(reason="TODO: fix example", strict=True),
     "milatools_usage_report.py": pytest.mark.xfail(
-        reason="TODO: example is broken!", raises=ImportError, strict=True
+        reason="TODO: fix example", strict=True
     ),
-    "trends.py": pytest.mark.xfail(
-        reason="TODO: example is broken!", raises=ImportError, strict=True
-    ),
-    "usage_stats.py": pytest.mark.xfail(
-        reason="TODO: example is broken!", raises=ImportError, strict=True
-    ),
+    "trends.py": pytest.mark.xfail(reason="TODO: fix example", strict=True),
+    "usage_stats.py": pytest.mark.xfail(reason="TODO: fix example", strict=True),
 }
 
 IN_GITHUB_CI = "GITHUB_ACTIONS" in os.environ
@@ -56,7 +50,7 @@ def test_run_example(example: str, capsys: pytest.CaptureFixture[str]):
     #     module.main()
     # Test the example by running it as the user would, from the command-line.
     output = subprocess.check_output(
-        "uv run examples/" + example,
+        "uv run python examples/" + example,
         shell=True,
     )
     assert output
