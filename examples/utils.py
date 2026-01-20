@@ -198,21 +198,23 @@ def setup_sarc_access():
     # Setup access to the SARC dev machine while the SARC API is not yet deployed.
 
     # Check if there is already an ssh tunnel to the dev server at port 8123
-    if "ssh" not in subprocess.getoutput(
+    if "ssh" in subprocess.getoutput(
         # Double-check this `ss` command. Proposed by an LLM.
         "ss --tcp --listening --numeric --processes | grep 8123"
     ):
-        print("Creating ssh tunnel to dev server...")
-        port_from_client_config = 8123  # todo: read and parse from the config file?
-        sarc_hostname = "sarc"  # You need to have a config entry for this hostname.
-        try:
-            subprocess.check_call(
-                f"ssh -L {port_from_client_config}:localhost:27017 {sarc_hostname} echo 'SSH tunnel established'",
-                shell=True,
-            )
-        except subprocess.CalledProcessError as err:
-            logger.error(f"Failed to create SSH tunnel to SARC dev server: {err}")
-            logger.error(
-                f"Make sure you have an SSH config entry for {sarc_hostname!r} configured."
-            )
-            raise
+        logger.info("SSH tunnel to SARC dev server already exists.")
+        return
+    print("Creating ssh tunnel to dev server...")
+    port_from_client_config = 8123  # todo: read and parse from the config file?
+    sarc_hostname = "sarc"  # You need to have a config entry for this hostname.
+    try:
+        subprocess.check_call(
+            f"ssh -L {port_from_client_config}:localhost:27017 {sarc_hostname} echo 'SSH tunnel established'",
+            shell=True,
+        )
+    except subprocess.CalledProcessError as err:
+        logger.error(f"Failed to create SSH tunnel to SARC dev server: {err}")
+        logger.error(
+            f"Make sure you have an SSH config entry for {sarc_hostname!r} configured."
+        )
+        raise
