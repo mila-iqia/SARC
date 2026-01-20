@@ -5,10 +5,8 @@ import functools
 import hashlib
 import inspect
 import logging
-import os
 import pickle
 import subprocess
-import tempfile
 import typing
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -35,8 +33,8 @@ def get_cache_file_name[**P](
     #     json.dumps((fn.__name__, args, kwargs), sort_keys=True, default=str).encode()
     # ).hexdigest()
 
-    hashed_args = "-".join(map(_hash, args)) + "-".join(
-        f"{k}-{_hash(v)}" for k, v in kwargs.items()
+    hashed_args = "-".join(map(_pretty_hash, args)) + "-".join(
+        f"{k}-{_pretty_hash(v)}" for k, v in kwargs.items()
     )
     extension = ".pkl"
     try:
@@ -48,30 +46,34 @@ def get_cache_file_name[**P](
 
 
 @functools.singledispatch
-def _hash(v) -> str:
+def _pretty_hash(v) -> str:
+    """Create a human-friendly hash string for an argument value.
+
+    This is used to create cache file names that are more interpretable than raw hashes.
+    """
     match v:
-        case FilteringOptions():
+        case Filter():
             return "-".join(
                 [
-                    _hash(v.get_users()),
-                    _hash(v.start),
-                    _hash(v.end),
-                    _hash(v.clusters),
+                    _pretty_hash(v.get_users()),
+                    _pretty_hash(v.start),
+                    _pretty_hash(v.end),
+                    _pretty_hash(v.clusters),
                 ]
             )
         case datetime(hour=0, minute=0, second=0, microsecond=0) as d:
             return d.strftime("%Y-%m-%d")
         case datetime() as v:
             return v.strftime("%Y-%m-%dT%H:%M:%S%z")
-        case str():
+        case str() | None:
             return str(v).removesuffix("@mila.quebec")  # no quotes around strings.
         case [str(), *_] if len(v) > 2:
             # If there are more than 3 strings, hash them together.
             return hashlib.md5("+".join(sorted(v)).encode()).hexdigest()[:12]
         case list() | tuple():
-            return "+".join(sorted(map(_hash, v)))
-        # case None | int() | float():
-        #     return repr(v)
+            return "+".join(sorted(map(_pretty_hash, v)))
+        case None | int() | float():
+            return repr(v)
         # case [UserData(), *_]:
         #     return _hash(sorted([student.email for student in v]))
         # case {"$in": list(values)}:
@@ -143,7 +145,7 @@ def cache_results_to_file[**P, OutT](
 
 
 @dataclasses.dataclass(frozen=True, unsafe_hash=True)
-class FilteringOptions:
+class Filter:
     """Configuration options for this script."""
 
     start: datetime = simple_parsing.field(
@@ -163,20 +165,6 @@ class FilteringOptions:
 
     clusters: Sequence[str] = dataclasses.field(default_factory=tuple)
     """ Which clusters to query information for. Leave blank to get data from all clusters."""
-
-    cache_dir: Path = dataclasses.field(
-        default=(
-            Path(os.environ["CF_DATA"])
-            if "CF_DATA" in os.environ
-            else Path(os.environ.get("SCRATCH", tempfile.gettempdir()))
-        ),
-        hash=False,
-        repr=False,
-    )
-    """ Directory where temporary files will be stored."""
-    verbose: int = simple_parsing.field(
-        alias=["-v", "--verbose"], action="count", default=0, hash=False, repr=False
-    )
 
     def get_users(self, assume_mila_email: bool = False) -> list[str]:
         users = self.user
@@ -207,9 +195,10 @@ def setup_sarc_access():
     print("Creating ssh tunnel to dev server...")
     port_from_client_config = 8123  # todo: read and parse from the config file?
     sarc_hostname = "sarc"  # You need to have a config entry for this hostname.
+    (Path.home() / ".cache" / "ssh").mkdir(parents=True, exist_ok=True)
     try:
         subprocess.check_call(
-            f"ssh -L {port_from_client_config}:localhost:27017 {sarc_hostname} echo 'SSH tunnel established'",
+            f"ssh -oControlMaster=auto -oControlPersist=yes -oControlPath=~/.cache/ssh/%r@%h:%p -L {port_from_client_config}:localhost:27017 {sarc_hostname} echo 'SSH tunnel established'",
             shell=True,
         )
     except subprocess.CalledProcessError as err:

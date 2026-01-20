@@ -1,7 +1,18 @@
+# /// script
+# requires-python = ">=3.14"
+# dependencies = [
+#     "rich>=14.2.0",
+#     "sarc>=2.0.5",
+#     "simple-parsing>=0.1.7",
+# ]
+# ///
 """Simple example that shows the compute usage and waste statistics per user over a given period."""
 
+import dataclasses
 import datetime
 import logging
+import os
+import tempfile
 from pathlib import Path
 
 import gifnoc
@@ -12,7 +23,7 @@ import rich.pretty
 import simple_parsing
 
 from examples.utils import (
-    FilteringOptions,
+    Filter,
     cache_results_to_file,
     midnight,
     setup_sarc_access,
@@ -28,46 +39,57 @@ logger = logging.getLogger(__name__)
 SARC_CLIENT_CONFIG = Path(__file__).parent.parent / "config" / "sarc-client.yaml"
 gifnoc.set_sources(SARC_CLIENT_CONFIG)
 
+DEFAULT_CACHE_DIR = Path(
+    os.environ.get("SARC_CACHE", os.environ.get("SCRATCH", tempfile.gettempdir()))
+)
+
+
+@dataclasses.dataclass(frozen=True)
+class Options:
+    """Command-line options for this example script."""
+
+    filter: Filter = Filter(
+        start=midnight(datetime.datetime.now() - datetime.timedelta(days=7)),
+        end=midnight(datetime.datetime.now()),
+        clusters=(),  # all clusters
+        user=(),  # all users
+    )
+
+    cache_dir: Path = dataclasses.field(default=DEFAULT_CACHE_DIR)
+    """ Directory where temporary files will be stored."""
+
+    verbose: int = simple_parsing.field(
+        alias=["-v", "--verbose"], action="count", default=0
+    )
+
+    csv: Path | None = None
+    """Path to output CSV file."""
+
+    topk: int | None = None
+    """Number of top compute users to display."""
+
 
 def main():
-    parser = simple_parsing.ArgumentParser(description=__doc__)
-    parser.add_arguments(
-        FilteringOptions,
-        dest="filter",
-        default=FilteringOptions(
-            start=midnight(datetime.datetime.now() - datetime.timedelta(days=30)),
-            end=midnight(datetime.datetime.now()),
-            verbose=2,
-        ),
-    )
-    parser.add_argument(
-        "--csv", type=Path, default=None, help="Path to output CSV file."
-    )
-    parser.add_argument(
-        "--topk", type=int, default=None, help="Number of top users to display."
-    )
-    args = parser.parse_args()
-    filter: FilteringOptions = args.filter
-    csv: Path | None = args.csv
-    topk: int | None = args.topk
+    args = simple_parsing.parse(Options, description=__doc__)
+    filter: Filter = args.filter
 
-    _setup_logging(filter.verbose)
+    _setup_logging(args.verbose)
     setup_sarc_access()
 
     logger.debug(f"Using filtering options: {filter}")
-    df = get_sarc_data(filter)
+    df = get_sarc_data(filter, cache_dir=args.cache_dir)
 
     compute_usage_df = get_compute_usage_df(df, filter)
 
-    if csv:
-        compute_usage_df.to_csv(csv)
-        rich.print(f"Wrote compute usage stats to CSV file at [bold]{csv}[/bold]")
+    if args.csv:
+        compute_usage_df.to_csv(args.csv)
+        rich.print(f"Wrote compute usage stats to CSV file at [bold]{args.csv}[/bold]")
     else:
         rich.print("Hint: Use --csv to output to a CSV file.")
 
-    if topk:
+    if args.topk:
         rich.pretty.pprint(
-            compute_usage_df.nlargest(topk, "rgu_years")
+            compute_usage_df.nlargest(args.topk, "rgu_years")
             # .sort_values(ascending=False, by="rgu_years")
             # .head(20)
         )
@@ -77,9 +99,9 @@ def main():
     # print(ratios.reset_index().sort_values(ascending=False, by="total_ratio"))
 
 
-def get_sarc_data(args: FilteringOptions) -> pd.DataFrame:
+def get_sarc_data(args: Filter, cache_dir: Path) -> pd.DataFrame:
     """Retrieve the SARC data for that period."""
-    df = cache_results_to_file(args.cache_dir)(load_job_series)(
+    df = cache_results_to_file(cache_dir)(load_job_series)(
         start=args.start,
         end=args.end,
         cluster=args.clusters if args.clusters else None,
@@ -101,7 +123,7 @@ def get_sarc_data(args: FilteringOptions) -> pd.DataFrame:
     return df
 
 
-def get_compute_usage_df(df: pd.DataFrame, _args: FilteringOptions) -> pd.DataFrame:
+def get_compute_usage_df(df: pd.DataFrame, _args: Filter) -> pd.DataFrame:
     """Compute the compute usage statistics per user."""
     # Group jobs by user
     grouped_df = df.groupby(["cluster_name", "user"])
