@@ -1,0 +1,487 @@
+from __future__ import annotations
+
+from datetime import datetime, time
+from typing import Any, Callable
+
+import requests
+from pydantic import UUID4
+from pydantic_mongo import PydanticObjectId
+from requests import Response
+
+from sarc.api.v0 import SlurmJobList, UserList
+from sarc.client.job import SlurmJob, SlurmState
+from sarc.client.series import JobSeriesFactory
+from sarc.config import ConfigurationError, UTC, config
+from sarc.core.models.users import MemberType, UserData
+
+
+class SarcApiClient:
+    def __init__(
+        self,
+        remote_url: str | None = None,
+        timeout: int | None = None,
+        session: Any = None,
+    ) -> None:
+        cfg = config().api
+
+        if remote_url is None:
+            if cfg is None:
+                raise ConfigurationError(
+                    "Remote URL not configured for REST API. "
+                    "Either pass URL to SarcApiClient object, "
+                    "or set `api` section in SARC config file"
+                )
+            remote_url = cfg.url
+
+        if timeout is None:
+            timeout = cfg.timeout if cfg else 120
+
+        # Ensure no trailing slash for consistency
+        self.remote_url = remote_url.rstrip("/")
+        self.timeout = timeout
+        self.session = session or requests
+
+    def _get(self, endpoint: str, params: dict | None = None) -> Response:
+        """Helper to perform a GET request."""
+        # Clean up params: remove None values and convert non-primitive types if needed
+        cleaned_params: dict[str, Any] = {}
+        if params:
+            for k, v in params.items():
+                if v is not None:
+                    if isinstance(v, datetime):
+                        cleaned_params[k] = v.isoformat()
+                    else:
+                        cleaned_params[k] = v
+
+        url = f"{self.remote_url}{endpoint}"
+        response = self.session.get(
+            url,
+            params=cleaned_params,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response
+
+    # --- Job Endpoints ---
+
+    def get_jobs(
+        self,
+        cluster: str | None = None,
+        job_id: int | list[int] | None = None,
+        job_state: SlurmState | None = None,
+        username: str | None = None,
+        start: datetime | None = None,
+        end: datetime | None = None,
+    ) -> list[str]:
+        """
+        Search for jobs matching the criteria.
+        Returns a list of Job IDs (as strings).
+        Deprecated: use list_jobs instead.
+        """
+        params = {
+            "cluster": cluster,
+            "job_id": job_id,
+            "job_state": job_state.value if job_state else None,
+            "username": username,
+            "start": start,
+            "end": end,
+        }
+        response = self._get("/v0/job/query", params=params)
+        # The API returns list[PydanticObjectId], which serializes to list[str] in JSON
+        return response.json()
+
+    def list_jobs(
+        self,
+        cluster: str | None = None,
+        job_id: int | list[int] | None = None,
+        job_state: SlurmState | None = None,
+        username: str | None = None,
+        start: datetime | None = None,
+        end: datetime | None = None,
+        page: int = 1,
+    ) -> SlurmJobList:
+        """
+        List jobs with details and pagination.
+        """
+        params = {
+            "cluster": cluster,
+            "job_id": job_id,
+            "job_state": job_state.value if job_state else None,
+            "username": username,
+            "start": start,
+            "end": end,
+            "page": page,
+        }
+        response = self._get("/v0/job/list", params=params)
+        return SlurmJobList.model_validate(response.json())
+
+    def count_jobs(
+        self,
+        cluster: str | None = None,
+        job_id: int | list[int] | None = None,
+        job_state: SlurmState | None = None,
+        username: str | None = None,
+        start: datetime | None = None,
+        end: datetime | None = None,
+    ) -> int:
+        """
+        Count jobs matching the criteria.
+        """
+        params = {
+            "cluster": cluster,
+            "job_id": job_id,
+            "job_state": job_state.value if job_state else None,
+            "username": username,
+            "start": start,
+            "end": end,
+        }
+        response = self._get("/v0/job/count", params=params)
+        return response.json()
+
+    def get_job(self, oid: str | PydanticObjectId) -> SlurmJob:
+        """
+        Get a specific job by its internal Object ID.
+        """
+        response = self._get(f"/v0/job/id/{oid}")
+        return SlurmJob.model_validate(response.json())
+
+    # --- Cluster Endpoints ---
+
+    def get_cluster_names(self) -> list[str]:
+        """
+        Return the names of available clusters.
+        """
+        response = self._get("/v0/cluster/list")
+        return response.json()
+
+    # --- GPU Endpoints ---
+
+    def get_rgu_value_per_gpu(self) -> dict[str, float]:
+        """
+        Return the mapping GPU->RGU.
+        """
+        response = self._get("/v0/gpu/rgu")
+        return response.json()
+
+    # --- User Endpoints ---
+
+    def query_users(
+        self,
+        display_name: str | None = None,
+        email: str | None = None,
+        member_type: MemberType | None = None,
+        member_start: datetime | None = None,
+        member_end: datetime | None = None,
+        supervisor: UUID4 | None = None,
+        supervisor_start: datetime | None = None,
+        supervisor_end: datetime | None = None,
+        co_supervisor: UUID4 | None = None,
+        co_supervisor_start: datetime | None = None,
+        co_supervisor_end: datetime | None = None,
+    ) -> list[UUID4]:
+        """
+        Search users. Return list of user UUIDs.
+        """
+        params = {
+            "display_name": display_name,
+            "email": email,
+            "member_type": member_type.value if member_type else None,
+            "member_start": member_start,
+            "member_end": member_end,
+            "supervisor": str(supervisor) if supervisor else None,
+            "supervisor_start": supervisor_start,
+            "supervisor_end": supervisor_end,
+            "co_supervisor": str(co_supervisor) if co_supervisor else None,
+            "co_supervisor_start": co_supervisor_start,
+            "co_supervisor_end": co_supervisor_end,
+        }
+        response = self._get("/v0/user/query", params=params)
+        # The API returns list[UUID4], JSON decodes as list[str], we convert back to UUID objects
+        return [UUID4(uuid_str) for uuid_str in response.json()]
+
+    def get_user_by_id(self, uuid: UUID4 | str) -> UserData:
+        """
+        Get user with given UUID.
+        """
+        response = self._get(f"/v0/user/id/{uuid}")
+        return UserData.model_validate(response.json())
+
+    def get_user_by_email(self, email: str) -> UserData:
+        """
+        Get user with given email.
+        """
+        response = self._get(f"/v0/user/email/{email}")
+        return UserData.model_validate(response.json())
+
+    def list_users(
+        self,
+        display_name: str | None = None,
+        email: str | None = None,
+        member_type: MemberType | None = None,
+        member_start: datetime | None = None,
+        member_end: datetime | None = None,
+        supervisor: UUID4 | None = None,
+        supervisor_start: datetime | None = None,
+        supervisor_end: datetime | None = None,
+        co_supervisor: UUID4 | None = None,
+        co_supervisor_start: datetime | None = None,
+        co_supervisor_end: datetime | None = None,
+        page: int = 1,
+    ) -> UserList:
+        """
+        List users with details and pagination.
+        """
+        params = {
+            "display_name": display_name,
+            "email": email,
+            "member_type": member_type.value if member_type else None,
+            "member_start": member_start,
+            "member_end": member_end,
+            "supervisor": str(supervisor) if supervisor else None,
+            "supervisor_start": supervisor_start,
+            "supervisor_end": supervisor_end,
+            "co_supervisor": str(co_supervisor) if co_supervisor else None,
+            "co_supervisor_start": co_supervisor_start,
+            "co_supervisor_end": co_supervisor_end,
+            "page": page,
+        }
+        response = self._get("/v0/user/list", params=params)
+        return UserList.model_validate(response.json())
+
+
+def _parse_common_args(
+    job_id: int | list[int] | None = None,
+    job_state: str | SlurmState | None = None,
+    start: str | datetime | None = None,
+    end: str | datetime | None = None,
+) -> tuple[int | list[int] | None, SlurmState | None, datetime | None, datetime | None]:
+    """Helper to parse arguments common to job functions."""
+    if isinstance(job_id, list):
+        if len(job_id) == 1:
+            job_id = job_id[0]
+
+    if isinstance(job_state, str):
+        try:
+            job_state = SlurmState(job_state)
+        except ValueError:
+            pass
+
+    if isinstance(start, str):
+        start = datetime.combine(
+            datetime.strptime(start, "%Y-%m-%d"), time.min
+        ).replace(tzinfo=UTC)
+
+    if isinstance(end, str):
+        end = datetime.combine(datetime.strptime(end, "%Y-%m-%d"), time.min).replace(
+            tzinfo=UTC
+        )
+
+    return job_id, job_state, start, end
+
+
+def count_jobs(
+    *,
+    cluster: str | None = None,
+    job_id: int | list[int] | None = None,
+    job_state: str | SlurmState | None = None,
+    user: str | None = None,
+    start: str | datetime | None = None,
+    end: str | datetime | None = None,
+) -> int:
+    """
+    Count jobs matching the criteria using the REST API.
+
+    Same signature as in `sarc.client.job.count_jobs`,
+    except parameter `query_options` which is specific to MongoDB.
+    """
+    client = SarcApiClient()
+
+    job_id, job_state, start, end = _parse_common_args(job_id, job_state, start, end)
+
+    return client.count_jobs(
+        cluster=cluster,
+        job_id=job_id,  # type: ignore
+        job_state=job_state,
+        username=user,
+        start=start,
+        end=end,
+    )
+
+
+def get_job(**kwargs) -> SlurmJob | None:
+    """
+    Get a single job that matches the query, or None if nothing is found.
+
+    Same signature as `sarc.client.job.get_job` (except query_options).
+    """
+    client = SarcApiClient()
+
+    # Extract arguments expected by list_jobs
+    cluster = kwargs.get("cluster")
+    user = kwargs.get("user")
+
+    job_id, job_state, start, end = _parse_common_args(
+        kwargs.get("job_id"),
+        kwargs.get("job_state"),
+        kwargs.get("start"),
+        kwargs.get("end"),
+    )
+
+    # We fetch page 1 with default size (which is enough for 1 item)
+    # The API sorts by submit_time desc by default, which matches
+    # the requirement "ensures we get the most recent version".
+    job_list_resp = client.list_jobs(
+        cluster=cluster,
+        job_id=job_id,  # type: ignore
+        job_state=job_state,
+        username=user,
+        start=start,
+        end=end,
+        page=1,
+    )
+
+    if job_list_resp.jobs:
+        return job_list_resp.jobs[0]
+    return None
+
+
+def get_jobs(
+    *,
+    cluster: str | None = None,
+    job_id: int | list[int] | None = None,
+    job_state: str | SlurmState | None = None,
+    user: str | None = None,
+    start: str | datetime | None = None,
+    end: str | datetime | None = None,
+) -> list[SlurmJob]:
+    """
+    Get jobs matching the criteria using the REST API.
+    Fetches all results by iterating over pages.
+
+    Same signature as in `sarc.client.job.get_jobs`,
+    except parameter `query_options` which is specific to MongoDB
+    """
+    client = SarcApiClient()
+
+    job_id, job_state, start, end = _parse_common_args(job_id, job_state, start, end)
+
+    all_jobs = []
+    page = 1
+
+    while True:
+        job_list_resp = client.list_jobs(
+            cluster=cluster,
+            job_id=job_id,  # type: ignore
+            job_state=job_state,  # type: ignore
+            username=user,
+            start=start,
+            end=end,
+            page=page,
+        )
+
+        all_jobs.extend(job_list_resp.jobs)
+
+        # Check if we have fetched everything
+        # We can calculate if there are more pages
+        if len(all_jobs) >= job_list_resp.total:
+            break
+
+        # Or if the current page returned fewer than per_page (last page)
+        if len(job_list_resp.jobs) < job_list_resp.per_page:
+            break
+
+        page += 1
+
+    return all_jobs
+
+
+def get_rgus(rgu_version: str = "1.0") -> dict[str, float]:
+    """
+    Return GPU->RGU mapping.
+
+    Note: rgu_version argument is ignored as the API does not currently support it.
+    """
+    if rgu_version != "1.0":
+        raise NotImplementedError("rgu_version != 1.0 is not supported by REST API")
+    return SarcApiClient().get_rgu_value_per_gpu()
+
+
+def get_users(
+    display_name: str | None = None,
+    email: str | None = None,
+    member_type: MemberType | None = None,
+    member_start: datetime | None = None,
+    member_end: datetime | None = None,
+    supervisor: UUID4 | None = None,
+    supervisor_start: datetime | None = None,
+    supervisor_end: datetime | None = None,
+    co_supervisor: UUID4 | None = None,
+    co_supervisor_start: datetime | None = None,
+    co_supervisor_end: datetime | None = None,
+) -> list[UserData]:
+    """
+    Get users matching the criteria using the REST API.
+    Fetches all results by iterating over pages.
+    """
+    client = SarcApiClient()
+    all_users = []
+    page = 1
+
+    while True:
+        user_list_resp = client.list_users(
+            display_name=display_name,
+            email=email,
+            member_type=member_type,
+            member_start=member_start,
+            member_end=member_end,
+            supervisor=supervisor,
+            supervisor_start=supervisor_start,
+            supervisor_end=supervisor_end,
+            co_supervisor=co_supervisor,
+            co_supervisor_start=co_supervisor_start,
+            co_supervisor_end=co_supervisor_end,
+            page=page,
+        )
+
+        all_users.extend(user_list_resp.users)
+
+        if len(all_users) >= user_list_resp.total:
+            break
+
+        if len(user_list_resp.users) < user_list_resp.per_page:
+            break
+
+        page += 1
+
+    return all_users
+
+
+class RestJobSeriesFactory(JobSeriesFactory):
+    """Implementation for API REST access."""
+
+    def count_jobs(self, *args, **kwargs) -> int:
+        return count_jobs(*args, **kwargs)
+
+    def get_jobs(self, *args, **kwargs) -> Any:
+        return get_jobs(*args, **kwargs)
+
+    def get_users(self) -> list[UserData]:
+        return get_users()
+
+
+def load_job_series(
+    *,
+    fields: None | list[str] | dict[str, str] = None,
+    clip_time: bool = False,
+    callback: None | Callable = None,
+    **jobs_args,
+) -> Any:  # Returns DataFrame, Any to avoid import
+    """
+    Query jobs using the REST API and return them in a DataFrame.
+
+    See sarc.client.series.JobSeriesFactory.load_job_series for details.
+    """
+    factory = RestJobSeriesFactory()
+    return factory.load_job_series(
+        fields=fields, clip_time=clip_time, callback=callback, **jobs_args
+    )

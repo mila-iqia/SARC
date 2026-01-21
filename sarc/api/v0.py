@@ -19,6 +19,15 @@ from sarc.users.db import get_user_collection
 
 router = APIRouter(prefix="/v0")
 
+PAGE_SIZE = 100
+
+
+class SlurmJobList(BaseModel):
+    jobs: list[SlurmJob]
+    page: int
+    per_page: int
+    total: int
+
 
 def valid_cluster(cluster: str):
     cluster_names = list(cl.cluster_name for cl in get_available_clusters())
@@ -33,7 +42,7 @@ def valid_cluster(cluster: str):
 
 class JobQuery(BaseModel):
     cluster: Annotated[str, AfterValidator(valid_cluster)] | None = None
-    job_id: int | None = None
+    job_id: int | list[int] | None = None
     job_state: SlurmState | None = None
     username: str | None = None
     start: datetime | None = None
@@ -43,8 +52,17 @@ class JobQuery(BaseModel):
         query: dict[str, Any] = {}
         if self.cluster is not None:
             query["cluster_name"] = self.cluster
-        if self.job_id is not None:
+        if isinstance(self.job_id, int):
             query["job_id"] = self.job_id
+        elif isinstance(self.job_id, list) and all(
+            isinstance(el, int) for el in self.job_id
+        ):
+            query["job_id"] = {"$in": self.job_id}
+        elif self.job_id is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"job_id must be an int or a list of ints: {self.job_id}",
+            )
         if self.job_state is not None:
             query["job_state"] = self.job_state
         if self.username is not None:
@@ -147,11 +165,45 @@ class UserQuery(BaseModel):
 UserQueryType = Annotated[UserQuery, Depends(UserQuery)]
 
 
+class UserList(BaseModel):
+    users: list[UserData]
+    page: int
+    per_page: int
+    total: int
+
+
 @router.get("/job/query")
 def get_jobs(query_opt: JobQueryType) -> list[PydanticObjectId]:
     coll = _jobs_collection()
     jobs = coll.get_collection().find(query_opt.get_query(), ["_id"])
     return list(j["_id"] for j in jobs)
+
+
+@router.get("/job/list")
+def list_jobs(query_opt: JobQueryType, page: int = 1) -> SlurmJobList:
+    if page < 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Page must be >= 1"
+        )
+
+    coll = _jobs_collection()
+    query = query_opt.get_query()
+    total = coll.get_collection().count_documents(query)
+
+    cursor = (
+        coll.get_collection()
+        .find(query)
+        .sort([("submit_time", -1), ("_id", 1)])
+        .skip((page - 1) * PAGE_SIZE)
+        .limit(PAGE_SIZE)
+    )
+
+    return SlurmJobList(
+        jobs=[SlurmJob.model_validate(doc) for doc in cursor],
+        page=page,
+        per_page=PAGE_SIZE,
+        total=total,
+    )
 
 
 @router.get("/job/count")
@@ -189,6 +241,34 @@ def query_users(query_opt: UserQueryType) -> list[UUID4]:
     coll = get_user_collection()
     users = coll.get_collection().find(query_opt.get_query(), ["uuid"])
     return [user["uuid"] for user in users]
+
+
+@router.get("/user/list")
+def list_users(query_opt: UserQueryType, page: int = 1) -> UserList:
+    """List users with details and pagination."""
+    if page < 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Page must be >= 1"
+        )
+
+    coll = get_user_collection()
+    query = query_opt.get_query()
+    total = coll.get_collection().count_documents(query)
+
+    cursor = (
+        coll.get_collection()
+        .find(query)
+        .sort([("email", 1), ("uuid", 1)])
+        .skip((page - 1) * PAGE_SIZE)
+        .limit(PAGE_SIZE)
+    )
+
+    return UserList(
+        users=[UserData.model_validate(doc) for doc in cursor],
+        page=page,
+        per_page=PAGE_SIZE,
+        total=total,
+    )
 
 
 @router.get("/user/id/{uuid}")

@@ -13,10 +13,11 @@ END_TIME = datetime(year=3000, month=1, day=1, tzinfo=UTC)
 @dataclass(frozen=True)
 class DatetimeUTCValidator:
     def validate_tz_utc(self, value: datetime, handler: Callable):
-        assert value.tzinfo is not None, "date is not tz-aware"
-        assert value.utcoffset() == UTCOFFSET, "date is not in UTC timezone"
+        val = handler(value)
+        assert val.tzinfo is not None, "date is not tz-aware"
+        assert val.utcoffset() == UTCOFFSET, "date is not in UTC timezone"
 
-        return handler(value)
+        return val
 
     def __get_pydantic_core_schema__(
         self, source_type: Any, handler: GetCoreSchemaHandler

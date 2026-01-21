@@ -1,26 +1,8 @@
 from datetime import datetime, timedelta
 
 import pytest
-from fastapi.testclient import TestClient
 
-from sarc.api.v0 import router
 from sarc.config import UTC
-
-
-@pytest.fixture
-def app():
-    """Create a FastAPI test app with the v0 router."""
-    from fastapi import FastAPI
-
-    app = FastAPI()
-    app.include_router(router)
-    return app
-
-
-@pytest.fixture
-def client(app):
-    """Create a test client for the FastAPI app."""
-    return TestClient(app)
 
 
 @pytest.mark.usefixtures("read_only_db", "client_mode")
@@ -641,3 +623,38 @@ def test_get_user_by_email(client):
 def test_get_user_by_email_unknown(client):
     response = client.get("/v0/user/email/unknown")
     assert response.status_code == 404
+
+
+@pytest.mark.usefixtures("read_only_db_with_users")
+def test_user_list(client):
+    """Test user list with pagination."""
+    # Default page 1
+    response = client.get("/v0/user/list")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["page"] == 1
+    assert data["total"] == 10
+    assert len(data["users"]) == 10
+
+    # Check sorting: email asc
+    emails = [u["email"] for u in data["users"]]
+    assert emails == sorted(emails)
+
+    # Test pagination with small page size (simulated by requesting limit via query if endpoint supported it,
+    # but here page size is fixed to 100 in backend... wait, PAGE_SIZE is 100 in v0.py)
+    # Since we only have 10 users, one page is enough.
+    # Let's try page 2 which should be empty
+    response = client.get("/v0/user/list?page=2")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["page"] == 2
+    assert data["total"] == 10
+    assert len(data["users"]) == 0
+
+    # Test filtering with list endpoint
+    response = client.get("/v0/user/list?display_name=janE")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 1
+    assert len(data["users"]) == 1
+    assert data["users"][0]["display_name"] == "Jane Doe"
