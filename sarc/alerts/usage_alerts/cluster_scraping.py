@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 import pandas
 
 from sarc.client.series import compute_time_frames, load_job_series
-from sarc.config import MTL
+from sarc.config import UTC
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +44,7 @@ def check_nb_jobs_per_cluster_per_time(
     # Parse time_interval
     start, end, clip_time = None, None, False
     if time_interval is not None:
-        end = datetime.now(tz=MTL)
+        end = datetime.now(tz=UTC)
         start = end - time_interval
         clip_time = True
 

@@ -12,12 +12,10 @@ from opentelemetry.trace import StatusCode
 
 from sarc.client import get_available_clusters
 from sarc.client.job import get_jobs
-from sarc.config import MTL, PST, UTC, config
+from sarc.config import UTC, config
 from sarc.jobs.sacct import SAcctScraper
-
-from ...common.dateutils import _dtfmt
+from tests.common.dateutils import MTL, PST, _dtfmt
 from .factory import create_sacct_json
-
 
 parameters = {
     "user": {"user": "longbonhomme"},
