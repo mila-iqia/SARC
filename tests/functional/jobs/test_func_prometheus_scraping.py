@@ -10,11 +10,11 @@ from fabric.testing.base import Command, Session
 from opentelemetry.trace import StatusCode
 
 from sarc.client.job import JobStatistics, get_jobs, get_available_clusters
-from sarc.config import MTL, UTC
+from sarc.config import UTC
 from sarc.jobs import prometheus_scraping
+from tests.common.dateutils import _dtfmt, _dtstr, _dtreg, MTL
 from .factory import create_sacct_json
 from ..cli.test_slurmconfig_fetch_parse import _save_slurm_conf
-from ...common.dateutils import _dtfmt, _dtstr, _dtreg
 
 
 @pytest.fixture

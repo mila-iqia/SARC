@@ -40,7 +40,7 @@ def convert_csv_row_to_allocation(
         cluster_name=cluster_name,
         resource_name=resource_name,
         group_name=group_name,
-        timestamp=datetime.now(),
+        timestamp=datetime.now(UTC),
         start=start,
         end=end,
         resources=AllocationRessources(
