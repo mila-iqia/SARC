@@ -159,7 +159,15 @@ class UserRepository(AbstractRepository[UserDB]):
             )
         for name, creds in user.associated_accounts.items():
             if name in db_user.associated_accounts:
-                db_user.associated_accounts[name].merge_with(creds)
+                try:
+                    db_user.associated_accounts[name].merge_with(creds)
+                except DateOverlapError as e:
+                    logger.error(
+                        "Can't update associated_accounts[%s] for user %s, date overlap error: %s",
+                        name,
+                        db_user.uuid,
+                        e,
+                    )
             else:
                 db_user.associated_accounts[name] = creds
         self._update_supervisors(db_user, user)
