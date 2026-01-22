@@ -124,10 +124,10 @@ class LegacyDumpScraper(UserScraper[LegacyDumpConfig]):
 
             # Add associated accounts
             # Mila account
-            if record.get("mila_ldap", {}).get("status") == "enabled":
+            if record.get("mila", {}).get("active", False):
                 mila_creds = Credentials()
                 mila_creds.insert(
-                    record["mila_ldap"]["mila_cluster_username"],
+                    record["mila"]["username"],
                     record_start,
                     record_end,
                 )
