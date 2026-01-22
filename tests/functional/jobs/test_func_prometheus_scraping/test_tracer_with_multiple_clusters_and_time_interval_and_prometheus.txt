@@ -118,7 +118,7 @@ Found 2 job(s):
     }
 }
 
-Found 22 span(s):
+Found 26 span(s):
 [
  {
   "span_name": "acquire_prometheus_metrics_from_time_interval",
@@ -219,6 +219,50 @@ Found 22 span(s):
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
+ },
+ {
+  "span_name": "acquire_cluster_data_from_time_interval",
+  "span_events": [
+   "exception",
+   "exception"
+  ],
+  "span_attributes": {
+   "cluster_name": "patate",
+   "time_from": "2023-03-16 01:00:00+00:00",
+   "time_to": "2023-03-16 01:05:00+00:00"
+  },
+  "span_has_error": true
+ },
+ {
+  "span_name": "SacctScraper.fetch_raw",
+  "span_events": [
+   "exception",
+   "exception"
+  ],
+  "span_attributes": {},
+  "span_has_error": true
+ },
+ {
+  "span_name": "acquire_cluster_data_from_time_interval",
+  "span_events": [
+   "exception",
+   "exception"
+  ],
+  "span_attributes": {
+   "cluster_name": "raisin",
+   "time_from": "2023-03-16 01:00:00+00:00",
+   "time_to": "2023-03-16 01:05:00+00:00"
+  },
+  "span_has_error": true
+ },
+ {
+  "span_name": "SacctScraper.fetch_raw",
+  "span_events": [
+   "exception",
+   "exception"
+  ],
+  "span_attributes": {},
+  "span_has_error": true
  },
  {
   "span_name": "update_allocated_gpu_type_from_nodes",

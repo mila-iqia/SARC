@@ -5,7 +5,7 @@ from tqdm import tqdm
 from typing import Optional
 
 from sarc.cache import Cache
-from sarc.client.job import _jobs_collection
+from sarc.client.job import _jobs_collection, SlurmJob
 from sarc.config import ClusterConfig, UTC
 from sarc.core.scraping.jobs_utils import (
     DATE_FORMAT_HOUR,
@@ -21,7 +21,9 @@ from sarc.traces import using_trace
 logger = logging.getLogger(__name__)
 
 
-def get_jobs(cluster: ClusterConfig, start: datetime, end: datetime) -> list[dict]:
+def get_jobs(
+    cluster: ClusterConfig, start: datetime, end: datetime
+) -> list[SlurmJob | None]:
     scraper = SacctScraper(cluster, start, end)
 
     logger.info(
