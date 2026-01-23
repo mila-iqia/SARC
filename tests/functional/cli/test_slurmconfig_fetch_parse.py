@@ -12,8 +12,9 @@ from hostlist import expand_hostlist
 from sarc.cache import Cache, CacheEntry
 from sarc.cli.parse.slurmconfig import InconsistentGPUBillingError, SlurmConfigParser
 from sarc.client.gpumetrics import GPUBilling, get_cluster_gpu_billings
-from sarc.config import MTL, UTC
+from sarc.config import UTC
 from sarc.jobs.node_gpu_mapping import NodeGPUMapping, get_node_to_gpu
+from tests.common.dateutils import MTL
 
 SLURM_CONF_RAISIN_2020_01_01 = """
 NodeName=mynode[1,2,5-20,30,40-43] UselessParam=UselessValue Gres=gpu1

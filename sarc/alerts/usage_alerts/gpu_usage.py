@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from typing import cast
 
 from sarc.client.series import load_job_series
-from sarc.config import MTL
+from sarc.config import UTC
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ def check_gpu_type_usage_per_node(
     # Parse time_interval
     start, end, clip_time = None, None, False
     if time_interval is not None:
-        end = datetime.now(tz=MTL)
+        end = datetime.now(tz=UTC)
         start = end - time_interval
         clip_time = True
 

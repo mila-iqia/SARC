@@ -4,9 +4,10 @@ from os.path import isfile
 import pytest
 from fabric.testing.base import Command
 
-from sarc.config import config, MTL, UTC
+from sarc.config import config, UTC
 from sarc.core.scraping.jobs_utils import JobConversionError, SacctScraper
-from tests.common.dateutils import _dtfmt
+from tests.common.dateutils import MTL, _dtfmt
+
 
 
 @pytest.mark.parametrize(
