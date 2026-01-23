@@ -9,7 +9,6 @@ from sarc.core.scraping.jobs_utils import JobConversionError, SacctScraper
 from tests.common.dateutils import MTL, _dtfmt
 
 
-
 @pytest.mark.parametrize(
     "test_config", [{"clusters": {"test": {"host": "patate"}}}], indirect=True
 )
