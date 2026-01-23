@@ -6,19 +6,21 @@ from .allocations import FetchAllocations
 from .diskusage import FetchDiskUsage
 from .slurmconfig import FetchSlurmConfig
 from .users import FetchUsers
+from .jobs import FetchJobs
 
 
 @dataclass
 class Fetch:
-    command: FetchUsers | FetchDiskUsage | FetchSlurmConfig | FetchAllocations = (
-        subparsers(
-            {
-                "users": FetchUsers,
-                "diskusage": FetchDiskUsage,
-                "slurmconfig": FetchSlurmConfig,
-                "allocations": FetchAllocations,
-            }
-        )
+    command: (
+        FetchUsers | FetchDiskUsage | FetchSlurmConfig | FetchAllocations | FetchJobs
+    ) = subparsers(
+        {
+            "users": FetchUsers,
+            "diskusage": FetchDiskUsage,
+            "slurmconfig": FetchSlurmConfig,
+            "allocations": FetchAllocations,
+            "jobs": FetchJobs,
+        }
     )
 
     def execute(self) -> int:
