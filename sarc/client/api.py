@@ -261,10 +261,7 @@ def _parse_common_args(
             job_id = job_id[0]
 
     if isinstance(job_state, str):
-        try:
-            job_state = SlurmState(job_state)
-        except ValueError:
-            pass
+        job_state = SlurmState(job_state)
 
     if isinstance(start, str):
         start = datetime.combine(
