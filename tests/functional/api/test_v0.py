@@ -1,16 +1,25 @@
 from datetime import datetime, timedelta
 
 import pytest
+from pydantic_mongo import PydanticObjectId
 
 from sarc.config import UTC
 
 
 @pytest.mark.usefixtures("read_only_db", "client_mode")
 def test_get_job_not_found(client):
-    """Test job not found returns 404."""
+    """Test job not found (string, bad ID format) returns 422."""
     response = client.get("/v0/job/id/not_found")
 
     assert response.status_code == 422
+
+
+@pytest.mark.usefixtures("read_only_db", "client_mode")
+def test_get_job_not_found_pydantic_id(client):
+    """Test job not found (pydantic object ID, good format) returns 404."""
+    oid = PydanticObjectId()
+    response = client.get(f"/v0/job/id/{oid}")
+    assert response.status_code == 404
 
 
 @pytest.mark.usefixtures("read_only_db_with_users")

@@ -117,7 +117,10 @@ class TestSarcApiClient:
         with pytest.raises((requests.HTTPError, httpx.HTTPStatusError)) as excinfo:
             sarc_client.job_list(cluster="invalid_cluster")
         assert excinfo.value.response.status_code == 404
-        assert "No such cluster 'invalid_cluster'" in excinfo.value.response.json()["detail"]
+        assert (
+            "No such cluster 'invalid_cluster'"
+            in excinfo.value.response.json()["detail"]
+        )
 
     @pytest.mark.usefixtures("read_only_db_with_users")
     def test_get_jobs_invalid_job_state(self, sarc_client):
@@ -130,7 +133,7 @@ class TestSarcApiClient:
         # BUT: `job_state.value if job_state else None` line in `list_jobs` will crash if we pass "INVALID" string.
         # So the client protects us. We can test that client raises AttributeError.
         with pytest.raises(AttributeError):
-             sarc_client.job_list(job_state="INVALID")
+            sarc_client.job_list(job_state="INVALID")
 
     def test_get_jobs_with_datetime_filters(self):
         # todo
@@ -141,9 +144,7 @@ class TestSarcApiClient:
         # Corresponds to test_get_jobs_multiple_filters
         start_dt = datetime(2023, 1, 1, tzinfo=UTC)
         jobs_list = sarc_client.job_list(
-            cluster="raisin",
-            job_state=SlurmState.COMPLETED,
-            start=start_dt
+            cluster="raisin", job_state=SlurmState.COMPLETED, start=start_dt
         )
         assert len(jobs_list.jobs) > 0
         for job in jobs_list.jobs:
@@ -271,9 +272,7 @@ class TestSarcApiClient:
         start = datetime(2022, 1, 1, tzinfo=UTC)
         end = datetime(2023, 1, 1, tzinfo=UTC)
         uuids = sarc_client.user_query(
-            co_supervisor=cosupervisor,
-            co_supervisor_start=start,
-            co_supervisor_end=end
+            co_supervisor=cosupervisor, co_supervisor_start=start, co_supervisor_end=end
         )
         assert len(uuids) == 1
         assert str(uuids[0]) == "8b4fef2b-8f47-4eb6-9992-3e7e1133b42a"
@@ -288,7 +287,7 @@ class TestSarcApiClient:
             sarc_client.user_query(
                 co_supervisor="1f9b04e5-0ec4-4577-9196-2b03d254e344",
                 co_supervisor_start=start,
-                co_supervisor_end=end
+                co_supervisor_end=end,
             )
         assert excinfo.value.response.status_code == 400
 
@@ -310,7 +309,7 @@ class TestSarcApiClient:
         uuids = sarc_client.user_query(
             supervisor="1f9b04e5-0ec4-4577-9196-2b03d254e344",
             supervisor_start=datetime(2020, 1, 1, tzinfo=UTC),
-            display_name="sMiTh"
+            display_name="sMiTh",
         )
         assert len(uuids) == 1
         assert str(uuids[0]) == "7ecd3a8a-ab71-499e-b38a-ceacd91a99c4"
@@ -336,7 +335,7 @@ class TestSarcApiClient:
         # Corresponds to test_get_user_by_uuid_unknown in test_v0
         unknown_uuid = "70000000-a000-4000-b000-c00000000000"
         with pytest.raises((requests.HTTPError, httpx.HTTPStatusError)) as excinfo:
-             sarc_client.user_by_id(unknown_uuid)
+            sarc_client.user_by_id(unknown_uuid)
         assert excinfo.value.response.status_code == 404
 
     @pytest.mark.usefixtures("read_only_db_with_users")
@@ -451,16 +450,21 @@ class TestSarcApiClient:
         assert sarc_client.job_count(start=start, end=end) == 8
 
         # multiple
-        assert sarc_client.job_count(cluster="raisin", job_state=SlurmState.COMPLETED, start=start) > 0
+        assert (
+            sarc_client.job_count(
+                cluster="raisin", job_state=SlurmState.COMPLETED, start=start
+            )
+            > 0
+        )
 
         # no filters
         assert sarc_client.job_count() == 24
 
     @pytest.mark.usefixtures("read_only_db_with_users")
     def test_count_jobs_invalid(self, sarc_client):
-         with pytest.raises((requests.HTTPError, httpx.HTTPStatusError)) as excinfo:
+        with pytest.raises((requests.HTTPError, httpx.HTTPStatusError)) as excinfo:
             sarc_client.job_count(cluster="invalid_cluster")
-         assert excinfo.value.response.status_code == 404
+        assert excinfo.value.response.status_code == 404
 
 
 @pytest.fixture

@@ -259,6 +259,10 @@ def _parse_common_args(
     if isinstance(job_id, list):
         if len(job_id) == 1:
             job_id = job_id[0]
+        else:
+            raise NotImplementedError(
+                "List of job indices not yet supported in REST API"
+            )
 
     if isinstance(job_state, str):
         job_state = SlurmState(job_state)

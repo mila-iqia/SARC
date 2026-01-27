@@ -42,7 +42,7 @@ def valid_cluster(cluster: str):
 
 class JobQuery(BaseModel):
     cluster: Annotated[str, AfterValidator(valid_cluster)] | None = None
-    job_id: int | list[int] | None = None
+    job_id: int | None = None
     job_state: SlurmState | None = None
     username: str | None = None
     start: datetime | None = None
@@ -52,17 +52,8 @@ class JobQuery(BaseModel):
         query: dict[str, Any] = {}
         if self.cluster is not None:
             query["cluster_name"] = self.cluster
-        if isinstance(self.job_id, int):
+        if self.job_id is not None:
             query["job_id"] = self.job_id
-        elif isinstance(self.job_id, list) and all(
-            isinstance(el, int) for el in self.job_id
-        ):
-            query["job_id"] = {"$in": self.job_id}
-        elif self.job_id is not None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"job_id must be an int or a list of ints: {self.job_id}",
-            )
         if self.job_state is not None:
             query["job_state"] = self.job_state
         if self.username is not None:
