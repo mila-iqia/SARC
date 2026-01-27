@@ -64,7 +64,7 @@ class SarcApiClient:
 
     # --- Job Endpoints ---
 
-    def get_jobs(
+    def job_query(
         self,
         cluster: str | None = None,
         job_id: int | list[int] | None = None,
@@ -90,7 +90,7 @@ class SarcApiClient:
         # The API returns list[PydanticObjectId], which serializes to list[str] in JSON
         return response.json()
 
-    def list_jobs(
+    def job_list(
         self,
         cluster: str | None = None,
         job_id: int | list[int] | None = None,
@@ -115,7 +115,7 @@ class SarcApiClient:
         response = self._get("/v0/job/list", params=params)
         return SlurmJobList.model_validate(response.json())
 
-    def count_jobs(
+    def job_count(
         self,
         cluster: str | None = None,
         job_id: int | list[int] | None = None,
@@ -138,7 +138,7 @@ class SarcApiClient:
         response = self._get("/v0/job/count", params=params)
         return response.json()
 
-    def get_job(self, oid: str | PydanticObjectId) -> SlurmJob:
+    def job_by_id(self, oid: str | PydanticObjectId) -> SlurmJob:
         """
         Get a specific job by its internal Object ID.
         """
@@ -147,7 +147,7 @@ class SarcApiClient:
 
     # --- Cluster Endpoints ---
 
-    def get_cluster_names(self) -> list[str]:
+    def cluster_list(self) -> list[str]:
         """
         Return the names of available clusters.
         """
@@ -156,7 +156,7 @@ class SarcApiClient:
 
     # --- GPU Endpoints ---
 
-    def get_rgu_value_per_gpu(self) -> dict[str, float]:
+    def gpu_rgu(self) -> dict[str, float]:
         """
         Return the mapping GPU->RGU.
         """
@@ -165,7 +165,7 @@ class SarcApiClient:
 
     # --- User Endpoints ---
 
-    def query_users(
+    def user_query(
         self,
         display_name: str | None = None,
         email: str | None = None,
@@ -199,21 +199,7 @@ class SarcApiClient:
         # The API returns list[UUID4], JSON decodes as list[str], we convert back to UUID objects
         return [UUID4(uuid_str) for uuid_str in response.json()]
 
-    def get_user_by_id(self, uuid: UUID4 | str) -> UserData:
-        """
-        Get user with given UUID.
-        """
-        response = self._get(f"/v0/user/id/{uuid}")
-        return UserData.model_validate(response.json())
-
-    def get_user_by_email(self, email: str) -> UserData:
-        """
-        Get user with given email.
-        """
-        response = self._get(f"/v0/user/email/{email}")
-        return UserData.model_validate(response.json())
-
-    def list_users(
+    def user_list(
         self,
         display_name: str | None = None,
         email: str | None = None,
@@ -247,6 +233,20 @@ class SarcApiClient:
         }
         response = self._get("/v0/user/list", params=params)
         return UserList.model_validate(response.json())
+
+    def user_by_id(self, uuid: UUID4 | str) -> UserData:
+        """
+        Get user with given UUID.
+        """
+        response = self._get(f"/v0/user/id/{uuid}")
+        return UserData.model_validate(response.json())
+
+    def user_by_email(self, email: str) -> UserData:
+        """
+        Get user with given email.
+        """
+        response = self._get(f"/v0/user/email/{email}")
+        return UserData.model_validate(response.json())
 
 
 def _parse_common_args(
@@ -295,7 +295,7 @@ def count_jobs(
 
     job_id, job_state, start, end = _parse_common_args(job_id, job_state, start, end)
 
-    return client.count_jobs(
+    return client.job_count(
         cluster=cluster,
         job_id=job_id,  # type: ignore
         job_state=job_state,
@@ -327,7 +327,7 @@ def get_job(**kwargs) -> SlurmJob | None:
     # We fetch page 1 with default size (which is enough for 1 item)
     # The API sorts by submit_time desc by default, which matches
     # the requirement "ensures we get the most recent version".
-    job_list_resp = client.list_jobs(
+    job_list_resp = client.job_list(
         cluster=cluster,
         job_id=job_id,  # type: ignore
         job_state=job_state,
@@ -366,7 +366,7 @@ def get_jobs(
     page = 1
 
     while True:
-        job_list_resp = client.list_jobs(
+        job_list_resp = client.job_list(
             cluster=cluster,
             job_id=job_id,  # type: ignore
             job_state=job_state,  # type: ignore
@@ -400,7 +400,7 @@ def get_rgus(rgu_version: str = "1.0") -> dict[str, float]:
     """
     if rgu_version != "1.0":
         raise NotImplementedError("rgu_version != 1.0 is not supported by REST API")
-    return SarcApiClient().get_rgu_value_per_gpu()
+    return SarcApiClient().gpu_rgu()
 
 
 def get_users(
@@ -425,7 +425,7 @@ def get_users(
     page = 1
 
     while True:
-        user_list_resp = client.list_users(
+        user_list_resp = client.user_list(
             display_name=display_name,
             email=email,
             member_type=member_type,
