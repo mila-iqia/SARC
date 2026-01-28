@@ -1,12 +1,10 @@
-from __future__ import annotations
-
 from datetime import datetime, time
-from typing import Any, Callable
+from typing import Any, Callable, Iterable
 
-import requests
+import httpx
+from gifnoc.proxy import MissingConfigurationError
 from pydantic import UUID4
 from pydantic_mongo import PydanticObjectId
-from requests import Response
 
 from sarc.api.v0 import SlurmJobList, UserList
 from sarc.client.job import SlurmJob, SlurmState
@@ -20,28 +18,31 @@ class SarcApiClient:
         self,
         remote_url: str | None = None,
         timeout: int | None = None,
-        session: Any = None,
+        session: httpx.Client | None = None,
     ) -> None:
-        cfg = config().api
+        try:
+            api_cfg = config().api
+        except MissingConfigurationError:
+            api_cfg = None
 
         if remote_url is None:
-            if cfg is None:
+            if api_cfg is None:
                 raise ConfigurationError(
                     "Remote URL not configured for REST API. "
                     "Either pass URL to SarcApiClient object, "
                     "or set `api` section in SARC config file"
                 )
-            remote_url = cfg.url
+            remote_url = api_cfg.url
 
         if timeout is None:
-            timeout = cfg.timeout if cfg else 120
+            timeout = api_cfg.timeout if api_cfg else 120
 
         # Ensure no trailing slash for consistency
         self.remote_url = remote_url.rstrip("/")
         self.timeout = timeout
-        self.session = session or requests
+        self.session = session or httpx
 
-    def _get(self, endpoint: str, params: dict | None = None) -> Response:
+    def _get(self, endpoint: str, params: dict | None = None) -> httpx.Response:
         """Helper to perform a GET request."""
         # Clean up params: remove None values and convert non-primitive types if needed
         cleaned_params: dict[str, Any] = {}
@@ -295,18 +296,21 @@ def count_jobs(
     Same signature as in `sarc.client.job.count_jobs`,
     except parameter `query_options` which is specific to MongoDB.
     """
-    client = SarcApiClient()
-
     job_id, job_state, start, end = _parse_common_args(job_id, job_state, start, end)
 
-    return client.job_count(
-        cluster=cluster,
-        job_id=job_id,  # type: ignore
-        job_state=job_state,
-        username=user,
-        start=start,
-        end=end,
-    )
+    try:
+        return SarcApiClient().job_count(
+            cluster=cluster,
+            job_id=job_id,  # type: ignore
+            job_state=job_state,
+            username=user,
+            start=start,
+            end=end,
+        )
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 404:
+            return 0
+        raise exc
 
 
 def get_job(**kwargs) -> SlurmJob | None:
@@ -315,8 +319,6 @@ def get_job(**kwargs) -> SlurmJob | None:
 
     Same signature as `sarc.client.job.get_job` (except query_options).
     """
-    client = SarcApiClient()
-
     # Extract arguments expected by list_jobs
     cluster = kwargs.get("cluster")
     user = kwargs.get("user")
@@ -328,21 +330,27 @@ def get_job(**kwargs) -> SlurmJob | None:
         kwargs.get("end"),
     )
 
-    # We fetch page 1 with default size (which is enough for 1 item)
-    # The API sorts by submit_time desc by default, which matches
-    # the requirement "ensures we get the most recent version".
-    job_list_resp = client.job_list(
-        cluster=cluster,
-        job_id=job_id,  # type: ignore
-        job_state=job_state,
-        username=user,
-        start=start,
-        end=end,
-        page=1,
-    )
+    try:
+        # We fetch page 1 with default size (which is enough for 1 item)
+        # The API sorts by submit_time desc by default, which matches
+        # the requirement "ensures we get the most recent version".
+        job_list_resp = SarcApiClient().job_list(
+            cluster=cluster,
+            job_id=job_id,  # type: ignore
+            job_state=job_state,
+            username=user,
+            start=start,
+            end=end,
+            page=1,
+        )
 
-    if job_list_resp.jobs:
-        return job_list_resp.jobs[0]
+        if job_list_resp.jobs:
+            return job_list_resp.jobs[0]
+
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code != 404:
+            raise exc
+
     return None
 
 
@@ -354,7 +362,7 @@ def get_jobs(
     user: str | None = None,
     start: str | datetime | None = None,
     end: str | datetime | None = None,
-) -> list[SlurmJob]:
+) -> Iterable[SlurmJob]:
     """
     Get jobs matching the criteria using the REST API.
     Fetches all results by iterating over pages.
@@ -362,38 +370,47 @@ def get_jobs(
     Same signature as in `sarc.client.job.get_jobs`,
     except parameter `query_options` which is specific to MongoDB
     """
-    client = SarcApiClient()
+    with httpx.Client() as session:
+        client = SarcApiClient(session=session)
 
-    job_id, job_state, start, end = _parse_common_args(job_id, job_state, start, end)
-
-    all_jobs = []
-    page = 1
-
-    while True:
-        job_list_resp = client.job_list(
-            cluster=cluster,
-            job_id=job_id,  # type: ignore
-            job_state=job_state,  # type: ignore
-            username=user,
-            start=start,
-            end=end,
-            page=page,
+        job_id, job_state, start, end = _parse_common_args(
+            job_id, job_state, start, end
         )
 
-        all_jobs.extend(job_list_resp.jobs)
+        nb_all_jobs = 0
+        page = 1
 
-        # Check if we have fetched everything
-        # We can calculate if there are more pages
-        if len(all_jobs) >= job_list_resp.total:
-            break
+        try:
+            while True:
+                job_list_resp = client.job_list(
+                    cluster=cluster,
+                    job_id=job_id,  # type: ignore
+                    job_state=job_state,  # type: ignore
+                    username=user,
+                    start=start,
+                    end=end,
+                    page=page,
+                )
 
-        # Or if the current page returned fewer than per_page (last page)
-        if len(job_list_resp.jobs) < job_list_resp.per_page:
-            break
+                for job in job_list_resp.jobs:
+                    yield job
 
-        page += 1
+                nb_all_jobs += len(job_list_resp.jobs)
 
-    return all_jobs
+                # Check if we have fetched everything
+                # We can calculate if there are more pages
+                if nb_all_jobs >= job_list_resp.total:
+                    break
+
+                # Or if the current page returned fewer than per_page (last page)
+                if len(job_list_resp.jobs) < job_list_resp.per_page:
+                    break
+
+                page += 1
+
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code != 404:
+                raise exc
 
 
 def get_rgus(rgu_version: str = "1.0") -> dict[str, float]:
@@ -424,37 +441,38 @@ def get_users(
     Get users matching the criteria using the REST API.
     Fetches all results by iterating over pages.
     """
-    client = SarcApiClient()
-    all_users = []
-    page = 1
+    with httpx.Client() as session:
+        client = SarcApiClient(session=session)
+        all_users = []
+        page = 1
 
-    while True:
-        user_list_resp = client.user_list(
-            display_name=display_name,
-            email=email,
-            member_type=member_type,
-            member_start=member_start,
-            member_end=member_end,
-            supervisor=supervisor,
-            supervisor_start=supervisor_start,
-            supervisor_end=supervisor_end,
-            co_supervisor=co_supervisor,
-            co_supervisor_start=co_supervisor_start,
-            co_supervisor_end=co_supervisor_end,
-            page=page,
-        )
+        while True:
+            user_list_resp = client.user_list(
+                display_name=display_name,
+                email=email,
+                member_type=member_type,
+                member_start=member_start,
+                member_end=member_end,
+                supervisor=supervisor,
+                supervisor_start=supervisor_start,
+                supervisor_end=supervisor_end,
+                co_supervisor=co_supervisor,
+                co_supervisor_start=co_supervisor_start,
+                co_supervisor_end=co_supervisor_end,
+                page=page,
+            )
 
-        all_users.extend(user_list_resp.users)
+            all_users.extend(user_list_resp.users)
 
-        if len(all_users) >= user_list_resp.total:
-            break
+            if len(all_users) >= user_list_resp.total:
+                break
 
-        if len(user_list_resp.users) < user_list_resp.per_page:
-            break
+            if len(user_list_resp.users) < user_list_resp.per_page:
+                break
 
-        page += 1
+            page += 1
 
-    return all_users
+        return all_users
 
 
 class RestJobSeriesFactory(JobSeriesFactory):

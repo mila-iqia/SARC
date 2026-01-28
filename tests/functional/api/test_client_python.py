@@ -5,7 +5,6 @@ from unittest.mock import patch
 
 import httpx
 import pytest
-import requests
 from pydantic_mongo import PydanticObjectId
 
 from sarc.client.api import SarcApiClient
@@ -58,10 +57,7 @@ class TestSarcApiClient:
         # Generate a random ObjectId that shouldn't exist
         random_oid = str(PydanticObjectId())
 
-        # SarcApiClient uses requests, but TestClient uses httpx.
-        # In production, requests.HTTPError is raised.
-        # In tests with TestClient, httpx.HTTPStatusError is raised.
-        with pytest.raises((requests.HTTPError, httpx.HTTPStatusError)) as excinfo:
+        with pytest.raises(httpx.HTTPStatusError) as excinfo:
             sarc_client.job_by_id(random_oid)
 
         # Expecting 404 Not Found for a valid formatted ObjectId that is missing
@@ -114,7 +110,7 @@ class TestSarcApiClient:
     @pytest.mark.usefixtures("read_only_db_with_users")
     def test_get_jobs_invalid_cluster(self, sarc_client):
         # Corresponds to test_get_jobs_invalid_cluster in test_v0
-        with pytest.raises((requests.HTTPError, httpx.HTTPStatusError)) as excinfo:
+        with pytest.raises(httpx.HTTPStatusError) as excinfo:
             sarc_client.job_list(cluster="invalid_cluster")
         assert excinfo.value.response.status_code == 404
         assert (
@@ -283,7 +279,7 @@ class TestSarcApiClient:
         start = datetime(2022, 1, 1, tzinfo=UTC)
         end = start - timedelta(days=1)
         # Should raise 400 Bad Request
-        with pytest.raises((requests.HTTPError, httpx.HTTPStatusError)) as excinfo:
+        with pytest.raises(httpx.HTTPStatusError) as excinfo:
             sarc_client.user_query(
                 co_supervisor="1f9b04e5-0ec4-4577-9196-2b03d254e344",
                 co_supervisor_start=start,
@@ -326,7 +322,7 @@ class TestSarcApiClient:
         # If we pass invalid string as UUID to get_user_by_id
         # Client type hint is UUID4 | str.
         # But wait, if we pass "invalid", API returns 422.
-        with pytest.raises((requests.HTTPError, httpx.HTTPStatusError)) as excinfo:
+        with pytest.raises(httpx.HTTPStatusError) as excinfo:
             sarc_client.user_by_id("invalid")
         assert excinfo.value.response.status_code == 422
 
@@ -334,7 +330,7 @@ class TestSarcApiClient:
     def test_get_user_by_uuid_unknown(self, sarc_client):
         # Corresponds to test_get_user_by_uuid_unknown in test_v0
         unknown_uuid = "70000000-a000-4000-b000-c00000000000"
-        with pytest.raises((requests.HTTPError, httpx.HTTPStatusError)) as excinfo:
+        with pytest.raises(httpx.HTTPStatusError) as excinfo:
             sarc_client.user_by_id(unknown_uuid)
         assert excinfo.value.response.status_code == 404
 
@@ -348,7 +344,7 @@ class TestSarcApiClient:
     @pytest.mark.usefixtures("read_only_db_with_users")
     def test_get_user_by_email_unknown(self, sarc_client):
         # Corresponds to test_get_user_by_email_unknown in test_v0
-        with pytest.raises((requests.HTTPError, httpx.HTTPStatusError)) as excinfo:
+        with pytest.raises(httpx.HTTPStatusError) as excinfo:
             sarc_client.user_by_email("unknown")
         assert excinfo.value.response.status_code == 404
 
@@ -462,7 +458,7 @@ class TestSarcApiClient:
 
     @pytest.mark.usefixtures("read_only_db_with_users")
     def test_count_jobs_invalid(self, sarc_client):
-        with pytest.raises((requests.HTTPError, httpx.HTTPStatusError)) as excinfo:
+        with pytest.raises(httpx.HTTPStatusError) as excinfo:
             sarc_client.job_count(cluster="invalid_cluster")
         assert excinfo.value.response.status_code == 404
 
@@ -499,7 +495,7 @@ class TestHighLevelClientFunctions:
         # We can patch SarcApiClient to return a mock or our configured instance.
 
         # Call the helper function
-        all_jobs = get_jobs(cluster="raisin")
+        all_jobs = list(get_jobs(cluster="raisin"))
 
         # Verify we got all 20 jobs despite PAGE_SIZE=5
         assert len(all_jobs) == 20
