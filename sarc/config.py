@@ -209,8 +209,15 @@ class UserScrapingConfig:
 
 
 @dataclass
+class ApiConfig:
+    url: str
+    timeout: int = 120
+
+
+@dataclass
 class ClientConfig:
     mongo: MongoConfig
+    api: ApiConfig | None = None
     cache: Path | None = None
     loki: LokiConfig | None = None
     tempo: TempoConfig | None = None

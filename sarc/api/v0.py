@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from pydantic import AfterValidator, BaseModel, UUID4
 from pydantic_mongo import PydanticObjectId
 
@@ -19,6 +19,15 @@ from sarc.users.db import get_user_collection
 
 router = APIRouter(prefix="/v0")
 
+PAGE_SIZE = 100
+
+
+class SlurmJobList(BaseModel):
+    jobs: list[SlurmJob]
+    page: int
+    per_page: int
+    total: int
+
 
 def valid_cluster(cluster: str):
     cluster_names = list(cl.cluster_name for cl in get_available_clusters())
@@ -33,7 +42,7 @@ def valid_cluster(cluster: str):
 
 class JobQuery(BaseModel):
     cluster: Annotated[str, AfterValidator(valid_cluster)] | None = None
-    job_id: int | None = None
+    job_id: list[int] | None = None
     job_state: SlurmState | None = None
     username: str | None = None
     start: datetime | None = None
@@ -43,8 +52,11 @@ class JobQuery(BaseModel):
         query: dict[str, Any] = {}
         if self.cluster is not None:
             query["cluster_name"] = self.cluster
-        if self.job_id is not None:
-            query["job_id"] = self.job_id
+        if self.job_id:
+            if len(self.job_id) == 1:
+                query["job_id"] = self.job_id[0]
+            else:
+                query["job_id"] = {"$in": self.job_id}
         if self.job_state is not None:
             query["job_state"] = self.job_state
         if self.username is not None:
@@ -61,7 +73,34 @@ class JobQuery(BaseModel):
         return query
 
 
-JobQueryType = Annotated[JobQuery, Depends(JobQuery)]
+def job_query_params(
+    cluster: Annotated[str, AfterValidator(valid_cluster)] | None = None,
+    job_id: Annotated[list[int] | None, Query()] = None,
+    job_state: SlurmState | None = None,
+    username: str | None = None,
+    start: datetime | None = None,
+    end: datetime | None = None,
+) -> JobQuery:
+    """
+    Annotation function for JobQueryType below.
+    Annotates `job_id` with `Query()` annotation,
+    so that Pydantic/FastAPI correctly parses `job_id`
+    as a list of integers.
+
+    We need this workaround to support list of integers for `job_id`,
+    and match signature of `get_jobs` and `count_jobs` in native client code.
+    """
+    return JobQuery(
+        cluster=cluster,
+        job_id=job_id,
+        job_state=job_state,
+        username=username,
+        start=start,
+        end=end,
+    )
+
+
+JobQueryType = Annotated[JobQuery, Depends(job_query_params)]
 
 
 class UserQuery(BaseModel):
@@ -147,11 +186,45 @@ class UserQuery(BaseModel):
 UserQueryType = Annotated[UserQuery, Depends(UserQuery)]
 
 
+class UserList(BaseModel):
+    users: list[UserData]
+    page: int
+    per_page: int
+    total: int
+
+
 @router.get("/job/query")
 def get_jobs(query_opt: JobQueryType) -> list[PydanticObjectId]:
     coll = _jobs_collection()
     jobs = coll.get_collection().find(query_opt.get_query(), ["_id"])
     return list(j["_id"] for j in jobs)
+
+
+@router.get("/job/list")
+def list_jobs(query_opt: JobQueryType, page: int = 1) -> SlurmJobList:
+    if page < 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Page must be >= 1"
+        )
+
+    coll = _jobs_collection()
+    query = query_opt.get_query()
+    total = coll.get_collection().count_documents(query)
+
+    cursor = (
+        coll.get_collection()
+        .find(query)
+        .sort([("submit_time", -1), ("_id", 1)])
+        .skip((page - 1) * PAGE_SIZE)
+        .limit(PAGE_SIZE)
+    )
+
+    return SlurmJobList(
+        jobs=[SlurmJob.model_validate(doc) for doc in cursor],
+        page=page,
+        per_page=PAGE_SIZE,
+        total=total,
+    )
 
 
 @router.get("/job/count")
@@ -189,6 +262,34 @@ def query_users(query_opt: UserQueryType) -> list[UUID4]:
     coll = get_user_collection()
     users = coll.get_collection().find(query_opt.get_query(), ["uuid"])
     return [user["uuid"] for user in users]
+
+
+@router.get("/user/list")
+def list_users(query_opt: UserQueryType, page: int = 1) -> UserList:
+    """List users with details and pagination."""
+    if page < 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Page must be >= 1"
+        )
+
+    coll = get_user_collection()
+    query = query_opt.get_query()
+    total = coll.get_collection().count_documents(query)
+
+    cursor = (
+        coll.get_collection()
+        .find(query)
+        .sort([("email", 1), ("uuid", 1)])
+        .skip((page - 1) * PAGE_SIZE)
+        .limit(PAGE_SIZE)
+    )
+
+    return UserList(
+        users=[UserData.model_validate(doc) for doc in cursor],
+        page=page,
+        per_page=PAGE_SIZE,
+        total=total,
+    )
 
 
 @router.get("/user/id/{uuid}")
