@@ -118,7 +118,7 @@ CSV_COLUMNS = [col for col in ALL_COLUMNS if col not in ["id"]]
 MOCK_TIME = datetime(2023, 11, 22, tzinfo=UTC)
 
 
-class BaseTestLoadJobSeries:
+class BaseTestLoadJobSeriesClientMode:
     @pytest.fixture
     def ops(self):
         raise NotImplementedError("Must implement ops fixture")
@@ -201,6 +201,131 @@ class BaseTestLoadJobSeries:
         assert len(set(frame_1_end_times)) == 1
         assert len(set(frame_2_end_times)) == 1
 
+    @pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
+    @pytest.mark.parametrize(
+        "params", few_parameters.values(), ids=few_parameters.keys()
+    )
+    def test_load_job_series_fields_list(self, params, file_regression, ops):
+        fields = ["gpu_memory", "allocated.mem", "requested.mem", "user", "work_dir"]
+        data_frame = ops.load_job_series(fields=fields, **params)
+        assert isinstance(data_frame, pandas.DataFrame)
+        assert sorted(data_frame.keys().tolist()) == sorted(fields)
+        file_regression.check(
+            f"Found {data_frame.shape[0]} job(s):\n\n{data_frame.to_csv()}"
+        )
+
+    @pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
+    @pytest.mark.parametrize(
+        "params", few_parameters.values(), ids=few_parameters.keys()
+    )
+    def test_load_job_series_fields_dict(self, params, file_regression, ops):
+        fields = {
+            "gpu_memory": "gpu_footprint",
+            "allocated.mem": "memory",
+            "user": "username",
+            "work_dir": "the_user_folder",
+        }
+        expected_fields = ["gpu_footprint", "memory", "username", "the_user_folder"]
+        data_frame = ops.load_job_series(fields=fields, **params)
+        assert isinstance(data_frame, pandas.DataFrame)
+        assert sorted(data_frame.keys().tolist()) == sorted(expected_fields)
+        file_regression.check(
+            f"Found {data_frame.shape[0]} job(s):\n\n{data_frame.to_csv()}"
+        )
+
+    @time_machine.travel(MOCK_TIME, tick=False)
+    @pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
+    @pytest.mark.parametrize(
+        "params", param_start_end.values(), ids=param_start_end.keys()
+    )
+    def test_load_job_series_clip_time_true(self, params, file_regression, ops):
+        assert "start" in params
+        assert "end" in params
+        data_frame = ops.load_job_series(clip_time=True, **params)
+        assert isinstance(data_frame, pandas.DataFrame)
+        assert sorted(data_frame.keys().tolist()) == sorted(
+            ALL_COLUMNS + ["unclipped_start", "unclipped_end"]
+        )
+        file_regression.check(
+            f"Found {data_frame.shape[0]} job(s):\n\n{data_frame.to_csv(columns=CSV_COLUMNS)}"
+        )
+
+    @time_machine.travel(MOCK_TIME, tick=False)
+    @pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
+    @pytest.mark.parametrize(
+        "params", param_start_end.values(), ids=param_start_end.keys()
+    )
+    def test_load_job_series_clip_time_false(self, params, file_regression, ops):
+        assert "start" in params
+        assert "end" in params
+        data_frame = ops.load_job_series(clip_time=False, **params)
+        assert isinstance(data_frame, pandas.DataFrame)
+        assert sorted(data_frame.keys().tolist()) == sorted(ALL_COLUMNS)
+        file_regression.check(
+            f"Found {data_frame.shape[0]} job(s):\n\n{data_frame.to_csv(columns=CSV_COLUMNS)}"
+        )
+
+    @pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
+    @pytest.mark.parametrize(
+        "params", params_no_start_or_end.values(), ids=params_no_start_or_end.keys()
+    )
+    def test_load_job_series_clip_time_true_no_start_or_end(self, params, ops):
+        with pytest.raises(ValueError, match=r"Clip time\: missing (start|end)"):
+            ops.load_job_series(clip_time=True, **params)
+
+    @time_machine.travel(MOCK_TIME, tick=False)
+    @pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
+    @pytest.mark.parametrize(
+        "params", few_parameters.values(), ids=few_parameters.keys()
+    )
+    def test_load_job_series_callback(self, params, file_regression, ops):
+        def callback(rows):
+            rows[-1]["another_column"] = 1234
+
+        data_frame = ops.load_job_series(callback=callback, **params)
+        assert isinstance(data_frame, pandas.DataFrame)
+        assert sorted(data_frame.keys().tolist()) == sorted(
+            ALL_COLUMNS + ["another_column"]
+        )
+        assert data_frame["another_column"].sum() == 1234 * data_frame.shape[0]
+        file_regression.check(
+            f"Found {data_frame.shape[0]} job(s):\n"
+            f"\n{data_frame.to_csv(columns=CSV_COLUMNS + ['another_column'])}"
+        )
+
+    @pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
+    @pytest.mark.parametrize(
+        "params", param_start_end.values(), ids=param_start_end.keys()
+    )
+    def test_load_job_series_all_args(self, params, file_regression, ops):
+        def callback(rows):
+            rows[-1]["another_column"] = 1234
+
+        fields = {
+            "gpu_memory": "gpu_footprint",
+            "allocated.mem": "memory",
+            "user": "username",
+            "work_dir": "the_user_folder",
+        }
+        expected_fields = [
+            "gpu_footprint",
+            "memory",
+            "username",
+            "the_user_folder",
+            "another_column",
+        ]
+        data_frame = ops.load_job_series(
+            fields=fields, clip_time=True, callback=callback, **params
+        )
+        assert isinstance(data_frame, pandas.DataFrame)
+        assert sorted(data_frame.keys().tolist()) == sorted(expected_fields)
+        assert data_frame["another_column"].sum() == 1234 * data_frame.shape[0]
+        file_regression.check(
+            f"Found {data_frame.shape[0]} job(s):\n\n{data_frame.to_csv(columns=expected_fields)}"
+        )
+
+
+class BaseTestLoadJobSeries(BaseTestLoadJobSeriesClientMode):
     @pytest.mark.usefixtures("read_write_db", "tzlocal_is_mtl")
     def test_load_job_series_with_stored_statistics(self, monkeypatch, ops):
         job_indices = [
@@ -312,131 +437,6 @@ class BaseTestLoadJobSeries:
 
         file_regression.check(
             f"gpu_utilization:\n================\n\nJobs:\n{jobs_markdown}\n\nJob series:\n{series_markdown}\n"
-        )
-
-    @pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
-    @pytest.mark.parametrize(
-        "params", few_parameters.values(), ids=few_parameters.keys()
-    )
-    def test_load_job_series_fields_list(self, params, file_regression, ops):
-        fields = ["gpu_memory", "allocated.mem", "requested.mem", "user", "work_dir"]
-        data_frame = ops.load_job_series(fields=fields, **params)
-        assert isinstance(data_frame, pandas.DataFrame)
-        assert sorted(data_frame.keys().tolist()) == sorted(fields)
-        file_regression.check(
-            f"Found {data_frame.shape[0]} job(s):\n\n{data_frame.to_csv()}"
-        )
-
-    @pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
-    @pytest.mark.parametrize(
-        "params", few_parameters.values(), ids=few_parameters.keys()
-    )
-    def test_load_job_series_fields_dict(self, params, file_regression, ops):
-        fields = {
-            "gpu_memory": "gpu_footprint",
-            "allocated.mem": "memory",
-            "user": "username",
-            "work_dir": "the_user_folder",
-        }
-        expected_fields = ["gpu_footprint", "memory", "username", "the_user_folder"]
-        data_frame = ops.load_job_series(fields=fields, **params)
-        assert isinstance(data_frame, pandas.DataFrame)
-        assert sorted(data_frame.keys().tolist()) == sorted(expected_fields)
-        file_regression.check(
-            f"Found {data_frame.shape[0]} job(s):\n\n{data_frame.to_csv()}"
-        )
-
-    @time_machine.travel(MOCK_TIME, tick=False)
-    @pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
-    @pytest.mark.parametrize(
-        "params", param_start_end.values(), ids=param_start_end.keys()
-    )
-    def test_load_job_series_clip_time_true(self, params, file_regression, ops):
-        assert "start" in params
-        assert "end" in params
-        data_frame = ops.load_job_series(clip_time=True, **params)
-        assert isinstance(data_frame, pandas.DataFrame)
-        assert sorted(data_frame.keys().tolist()) == sorted(
-            ALL_COLUMNS + ["unclipped_start", "unclipped_end"]
-        )
-        file_regression.check(
-            f"Found {data_frame.shape[0]} job(s):\n\n{data_frame.to_csv(columns=CSV_COLUMNS)}"
-        )
-
-    @time_machine.travel(MOCK_TIME, tick=False)
-    @pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
-    @pytest.mark.parametrize(
-        "params", param_start_end.values(), ids=param_start_end.keys()
-    )
-    def test_load_job_series_clip_time_false(self, params, file_regression, ops):
-        assert "start" in params
-        assert "end" in params
-        data_frame = ops.load_job_series(clip_time=False, **params)
-        assert isinstance(data_frame, pandas.DataFrame)
-        assert sorted(data_frame.keys().tolist()) == sorted(ALL_COLUMNS)
-        file_regression.check(
-            f"Found {data_frame.shape[0]} job(s):\n\n{data_frame.to_csv(columns=CSV_COLUMNS)}"
-        )
-
-    @pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
-    @pytest.mark.parametrize(
-        "params", params_no_start_or_end.values(), ids=params_no_start_or_end.keys()
-    )
-    def test_load_job_series_clip_time_true_no_start_or_end(
-        self, params, file_regression, ops
-    ):
-        with pytest.raises(ValueError, match=r"Clip time\: missing (start|end)"):
-            ops.load_job_series(clip_time=True, **params)
-
-    @time_machine.travel(MOCK_TIME, tick=False)
-    @pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
-    @pytest.mark.parametrize(
-        "params", few_parameters.values(), ids=few_parameters.keys()
-    )
-    def test_load_job_series_callback(self, params, file_regression, ops):
-        def callback(rows):
-            rows[-1]["another_column"] = 1234
-
-        data_frame = ops.load_job_series(callback=callback, **params)
-        assert isinstance(data_frame, pandas.DataFrame)
-        assert sorted(data_frame.keys().tolist()) == sorted(
-            ALL_COLUMNS + ["another_column"]
-        )
-        assert data_frame["another_column"].sum() == 1234 * data_frame.shape[0]
-        file_regression.check(
-            f"Found {data_frame.shape[0]} job(s):\n"
-            f"\n{data_frame.to_csv(columns=CSV_COLUMNS + ['another_column'])}"
-        )
-
-    @pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
-    @pytest.mark.parametrize(
-        "params", param_start_end.values(), ids=param_start_end.keys()
-    )
-    def test_load_job_series_all_args(self, params, file_regression, ops):
-        def callback(rows):
-            rows[-1]["another_column"] = 1234
-
-        fields = {
-            "gpu_memory": "gpu_footprint",
-            "allocated.mem": "memory",
-            "user": "username",
-            "work_dir": "the_user_folder",
-        }
-        expected_fields = [
-            "gpu_footprint",
-            "memory",
-            "username",
-            "the_user_folder",
-            "another_column",
-        ]
-        data_frame = ops.load_job_series(
-            fields=fields, clip_time=True, callback=callback, **params
-        )
-        assert isinstance(data_frame, pandas.DataFrame)
-        assert sorted(data_frame.keys().tolist()) == sorted(expected_fields)
-        assert data_frame["another_column"].sum() == 1234 * data_frame.shape[0]
-        file_regression.check(
-            f"Found {data_frame.shape[0]} job(s):\n\n{data_frame.to_csv(columns=expected_fields)}"
         )
 
 

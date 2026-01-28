@@ -1,11 +1,11 @@
 import pytest
 
 from tests.functional.jobs.test_func_load_job_series import (
-    BaseTestLoadJobSeries,
+    BaseTestLoadJobSeriesClientMode,
 )
 
 
-class TestRestLoadJobSeries(BaseTestLoadJobSeries):
+class TestRestLoadJobSeries(BaseTestLoadJobSeriesClientMode):
     """
     Runs the standard load_job_series test suite against the REST API implementation.
     """
