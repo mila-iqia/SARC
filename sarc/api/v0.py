@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from pydantic import AfterValidator, BaseModel, UUID4
 from pydantic_mongo import PydanticObjectId
 
@@ -42,7 +42,7 @@ def valid_cluster(cluster: str):
 
 class JobQuery(BaseModel):
     cluster: Annotated[str, AfterValidator(valid_cluster)] | None = None
-    job_id: int | None = None
+    job_id: list[int] | None = None
     job_state: SlurmState | None = None
     username: str | None = None
     start: datetime | None = None
@@ -52,8 +52,11 @@ class JobQuery(BaseModel):
         query: dict[str, Any] = {}
         if self.cluster is not None:
             query["cluster_name"] = self.cluster
-        if self.job_id is not None:
-            query["job_id"] = self.job_id
+        if self.job_id:
+            if len(self.job_id) == 1:
+                query["job_id"] = self.job_id[0]
+            else:
+                query["job_id"] = {"$in": self.job_id}
         if self.job_state is not None:
             query["job_state"] = self.job_state
         if self.username is not None:
@@ -70,7 +73,34 @@ class JobQuery(BaseModel):
         return query
 
 
-JobQueryType = Annotated[JobQuery, Depends(JobQuery)]
+def job_query_params(
+    cluster: Annotated[str, AfterValidator(valid_cluster)] | None = None,
+    job_id: Annotated[list[int] | None, Query()] = None,
+    job_state: SlurmState | None = None,
+    username: str | None = None,
+    start: datetime | None = None,
+    end: datetime | None = None,
+) -> JobQuery:
+    """
+    Annotation function for JobQueryType below.
+    Annotates `job_id` with `Query()` annotation,
+    so that Pydantic/FastAPI correctly parses `job_id`
+    as a list of integers.
+
+    We need this workaround to support list of integers for `job_id`,
+    and match signature of `get_jobs` and `count_jobs` in native client code.
+    """
+    return JobQuery(
+        cluster=cluster,
+        job_id=job_id,
+        job_state=job_state,
+        username=username,
+        start=start,
+        end=end,
+    )
+
+
+JobQueryType = Annotated[JobQuery, Depends(job_query_params)]
 
 
 class UserQuery(BaseModel):

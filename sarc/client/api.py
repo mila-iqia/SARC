@@ -255,15 +255,10 @@ def _parse_common_args(
     job_state: str | SlurmState | None = None,
     start: str | datetime | None = None,
     end: str | datetime | None = None,
-) -> tuple[int | list[int] | None, SlurmState | None, datetime | None, datetime | None]:
+) -> tuple[list[int] | None, SlurmState | None, datetime | None, datetime | None]:
     """Helper to parse arguments common to job functions."""
-    if isinstance(job_id, list):
-        if len(job_id) == 1:
-            job_id = job_id[0]
-        else:
-            raise NotImplementedError(
-                "List of job indices not yet supported in REST API"
-            )
+    if isinstance(job_id, int):
+        job_id = [job_id]
 
     if isinstance(job_state, str):
         job_state = SlurmState(job_state)
