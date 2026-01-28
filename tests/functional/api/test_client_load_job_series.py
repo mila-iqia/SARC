@@ -1,14 +1,8 @@
-from __future__ import annotations
-
-from types import SimpleNamespace
-
 import pytest
 
-from sarc.client.api import SarcApiClient
-from sarc.client.api import get_jobs as client_get_jobs
-from sarc.client.api import get_users as client_get_users
-from sarc.client.api import load_job_series as client_load_job_series
-from tests.functional.jobs.test_func_load_job_series import BaseTestLoadJobSeries
+from tests.functional.jobs.test_func_load_job_series import (
+    BaseTestLoadJobSeries,
+)
 
 
 class TestRestLoadJobSeries(BaseTestLoadJobSeries):
@@ -22,6 +16,13 @@ class TestRestLoadJobSeries(BaseTestLoadJobSeries):
         Provides REST API implementations of the operations, with SarcApiClient patched
         to use the test client session.
         """
+        from types import SimpleNamespace
+        from sarc.client.api import (
+            SarcApiClient,
+            get_jobs as client_get_jobs,
+            get_users as client_get_users,
+            load_job_series as client_load_job_series,
+        )
 
         # Patch SarcApiClient to use our test session (connected to the app/DB fixtures)
         def client_factory(*args, **kwargs):

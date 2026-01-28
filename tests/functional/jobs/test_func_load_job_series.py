@@ -4,10 +4,12 @@ from types import SimpleNamespace
 
 import pandas
 import pytest
+import time_machine
 
 from sarc.client.job import JobStatistics, Statistics
+from sarc.config import UTC
 from tests.common.dateutils import MTL
-from .test_func_job_statistics import generate_fake_timeseries
+from tests.functional.jobs.test_func_job_statistics import generate_fake_timeseries
 
 # ... parameters and constants definition (kept as is) ...
 
@@ -113,7 +115,7 @@ USER_COLUMNS = [
 CSV_COLUMNS = [col for col in ALL_COLUMNS if col not in ["id"]]
 
 
-MOCK_TIME = "2023-11-22"
+MOCK_TIME = datetime(2023, 11, 22, tzinfo=UTC)
 
 
 class BaseTestLoadJobSeries:
@@ -121,7 +123,7 @@ class BaseTestLoadJobSeries:
     def ops(self):
         raise NotImplementedError("Must implement ops fixture")
 
-    @pytest.mark.freeze_time("2025-01-01")
+    @time_machine.travel("2025-01-01", tick=False)
     @pytest.mark.usefixtures("read_only_db_with_users", "client_mode", "tzlocal_is_mtl")
     def test_load_job_series_with_users(self, file_regression, ops):
         """Test job to user mapping."""
@@ -137,7 +139,7 @@ class BaseTestLoadJobSeries:
             f"Found 4 users and {data_frame.shape[0]} job(s):\n\n{str_view}"
         )
 
-    @pytest.mark.freeze_time(MOCK_TIME)
+    @time_machine.travel(MOCK_TIME, tick=False)
     @pytest.mark.usefixtures("read_only_db_with_users", "client_mode", "tzlocal_is_mtl")
     def test_load_job_series_without_user_column(self, file_regression, ops):
         """Test job to user mapping when data frame does not contain `user` column."""
@@ -151,7 +153,7 @@ class BaseTestLoadJobSeries:
             f"Found 4 users and {data_frame.shape[0]} job(s):\n\n{str_view}"
         )
 
-    @pytest.mark.freeze_time(MOCK_TIME)
+    @time_machine.travel(MOCK_TIME, tick=False)
     @pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
     @pytest.mark.parametrize("params", parameters.values(), ids=parameters.keys())
     def test_load_job_series(self, params, file_regression, captrace, ops):
@@ -344,7 +346,7 @@ class BaseTestLoadJobSeries:
             f"Found {data_frame.shape[0]} job(s):\n\n{data_frame.to_csv()}"
         )
 
-    @pytest.mark.freeze_time(MOCK_TIME)
+    @time_machine.travel(MOCK_TIME, tick=False)
     @pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
     @pytest.mark.parametrize(
         "params", param_start_end.values(), ids=param_start_end.keys()
@@ -361,7 +363,7 @@ class BaseTestLoadJobSeries:
             f"Found {data_frame.shape[0]} job(s):\n\n{data_frame.to_csv(columns=CSV_COLUMNS)}"
         )
 
-    @pytest.mark.freeze_time(MOCK_TIME)
+    @time_machine.travel(MOCK_TIME, tick=False)
     @pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
     @pytest.mark.parametrize(
         "params", param_start_end.values(), ids=param_start_end.keys()
@@ -386,7 +388,7 @@ class BaseTestLoadJobSeries:
         with pytest.raises(ValueError, match=r"Clip time\: missing (start|end)"):
             ops.load_job_series(clip_time=True, **params)
 
-    @pytest.mark.freeze_time(MOCK_TIME)
+    @time_machine.travel(MOCK_TIME, tick=False)
     @pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
     @pytest.mark.parametrize(
         "params", few_parameters.values(), ids=few_parameters.keys()

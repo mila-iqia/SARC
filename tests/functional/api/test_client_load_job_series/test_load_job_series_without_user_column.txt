@@ -1,0 +1,28 @@
+Found 4 users and 24 job(s):
+
+|    |    job_id | cluster_name   |
+|---:|----------:|:---------------|
+|  0 | 999999999 | mila           |
+|  1 |        23 | raisin         |
+|  2 |   1000000 | raisin         |
+|  3 |   1000000 | raisin         |
+|  4 |        20 | raisin         |
+|  5 |        19 | mila           |
+|  6 |        18 | raisin         |
+|  7 |        17 | raisin         |
+|  8 |        16 | patate         |
+|  9 |        15 | fromage        |
+| 10 |        14 | raisin         |
+| 11 |        13 | raisin         |
+| 12 |        12 | raisin         |
+| 13 |         9 | raisin         |
+| 14 |        10 | raisin         |
+| 15 |        11 | raisin         |
+| 16 |         8 | raisin         |
+| 17 |         7 | raisin         |
+| 18 |         6 | raisin         |
+| 19 |         5 | raisin         |
+| 20 |         4 | raisin         |
+| 21 |         3 | raisin         |
+| 22 |         2 | raisin         |
+| 23 |         1 | raisin         |
