@@ -19,7 +19,8 @@ from sarc.users.db import get_user_collection
 
 router = APIRouter(prefix="/v0")
 
-PAGE_SIZE = 100
+DEFAULT_PAGE_SIZE = 100
+MAX_PAGE_SIZE = 200
 
 
 class SlurmJobList(BaseModel):
@@ -201,10 +202,21 @@ def get_jobs(query_opt: JobQueryType) -> list[PydanticObjectId]:
 
 
 @router.get("/job/list")
-def list_jobs(query_opt: JobQueryType, page: int = 1) -> SlurmJobList:
+def list_jobs(
+    query_opt: JobQueryType, page: int = 1, per_page: int = DEFAULT_PAGE_SIZE
+) -> SlurmJobList:
     if page < 1:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Page must be >= 1"
+        )
+    if per_page < 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Page size must be >= 1"
+        )
+    if per_page > MAX_PAGE_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Page size must be <= {MAX_PAGE_SIZE}",
         )
 
     coll = _jobs_collection()
@@ -215,14 +227,14 @@ def list_jobs(query_opt: JobQueryType, page: int = 1) -> SlurmJobList:
         coll.get_collection()
         .find(query)
         .sort([("submit_time", -1), ("_id", 1)])
-        .skip((page - 1) * PAGE_SIZE)
-        .limit(PAGE_SIZE)
+        .skip((page - 1) * per_page)
+        .limit(per_page)
     )
 
     return SlurmJobList(
         jobs=[SlurmJob.model_validate(doc) for doc in cursor],
         page=page,
-        per_page=PAGE_SIZE,
+        per_page=per_page,
         total=total,
     )
 
@@ -265,11 +277,22 @@ def query_users(query_opt: UserQueryType) -> list[UUID4]:
 
 
 @router.get("/user/list")
-def list_users(query_opt: UserQueryType, page: int = 1) -> UserList:
+def list_users(
+    query_opt: UserQueryType, page: int = 1, per_page: int = DEFAULT_PAGE_SIZE
+) -> UserList:
     """List users with details and pagination."""
     if page < 1:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Page must be >= 1"
+        )
+    if per_page < 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Page size must be >= 1"
+        )
+    if per_page > MAX_PAGE_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Page size must be <= {MAX_PAGE_SIZE}",
         )
 
     coll = get_user_collection()
@@ -280,14 +303,14 @@ def list_users(query_opt: UserQueryType, page: int = 1) -> UserList:
         coll.get_collection()
         .find(query)
         .sort([("email", 1), ("uuid", 1)])
-        .skip((page - 1) * PAGE_SIZE)
-        .limit(PAGE_SIZE)
+        .skip((page - 1) * per_page)
+        .limit(per_page)
     )
 
     return UserList(
         users=[UserData.model_validate(doc) for doc in cursor],
         page=page,
-        per_page=PAGE_SIZE,
+        per_page=per_page,
         total=total,
     )
 

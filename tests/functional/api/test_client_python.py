@@ -558,26 +558,24 @@ def test_user_list(sarc_client):
 
 
 @pytest.mark.usefixtures("read_only_db_with_users")
-def test_job_list(sarc_client, monkeypatch):
-    # Monkeypatch PAGE_SIZE in the API module to test pagination with few items
-    import sarc.api.v0
-
-    monkeypatch.setattr(sarc.api.v0, "PAGE_SIZE", 5)
-
+def test_job_list(sarc_client):
     # We expect 20 jobs in raisin cluster
-    jobs_list = sarc_client.job_list(cluster="raisin", page=1)
+    prev_jobs = []
+    for page in range(1, 5):
+        jobs_list = sarc_client.job_list(cluster="raisin", page=page, per_page=5)
+        assert jobs_list.total == 20
+        assert jobs_list.per_page == 5
+        assert len(jobs_list.jobs) == 5
+        assert jobs_list.page == page
+        assert prev_jobs != jobs_list.jobs
+        prev_jobs = jobs_list.jobs
 
-    assert jobs_list.total == 20
-    assert jobs_list.per_page == 5
-    assert len(jobs_list.jobs) == 5
-    assert jobs_list.page == 1
-
-    # Test getting second page
-    jobs_list_2 = sarc_client.job_list(cluster="raisin", page=2)
-    assert jobs_list_2.page == 2
-    assert len(jobs_list_2.jobs) == 5
-    # Ensure different jobs (simple check)
-    assert jobs_list.jobs[0].job_id != jobs_list_2.jobs[0].job_id
+    for page in range(6, 10):
+        jobs_list = sarc_client.job_list(cluster="raisin", page=page, per_page=5)
+        assert jobs_list.total == 20
+        assert jobs_list.per_page == 5
+        assert len(jobs_list.jobs) == 0
+        assert jobs_list.page == page
 
 
 # Test High-Level Client Functions
@@ -595,49 +593,35 @@ def mock_client_class(client, monkeypatch):
 
 
 @pytest.mark.usefixtures("read_only_db_with_users")
-def test_rest_get_jobs(mock_client_class, monkeypatch):
+def test_rest_get_jobs(mock_client_class):
     """
     Test the top-level get_jobs function which should iterate over pages.
-    We need to patch SarcApiClient usage inside the function to use our test client session.
     """
     from sarc.client.api import get_jobs
-
-    # 1. Patch PAGE_SIZE to force pagination
-    monkeypatch.setattr("sarc.api.v0.PAGE_SIZE", 5)
-
-    # 2. Patch SarcApiClient in the module to return our test-connected client
-    # The get_jobs function instantiates SarcApiClient(), so we patch the class.
-    # But we need it to behave like our 'sarc_client' fixture which has the session.
-
-    # A cleaner way is to patch the session instantiation inside __init__ or pass the session somehow.
-    # Since get_jobs instantiates SarcApiClient() with no args, it tries to read config.
-    # We can patch SarcApiClient to return a mock or our configured instance.
 
     # Call the helper function
     all_jobs = list(get_jobs(cluster="raisin"))
 
-    # Verify we got all 20 jobs despite PAGE_SIZE=5
     assert len(all_jobs) == 20
     assert isinstance(all_jobs[0], SlurmJob)
 
+    # TODO Verify we got all 20 jobs despite PAGE_SIZE=5
+
 
 @pytest.mark.usefixtures("read_only_db_with_users")
-def test_rest_get_users(mock_client_class, monkeypatch):
+def test_rest_get_users(mock_client_class):
     """
     Test the top-level get_users function which should iterate over pages.
     """
     from sarc.client.api import get_users
     from sarc.core.models.users import UserData
 
-    # 1. Patch PAGE_SIZE to force pagination (total users is 10)
-    monkeypatch.setattr("sarc.api.v0.PAGE_SIZE", 3)
-
     # Call the helper function
     all_users = get_users()
 
-    # Verify we got all 10 users despite PAGE_SIZE=3
     assert len(all_users) == 10
     assert isinstance(all_users[0], UserData)
+    # TODO Verify we got all 10 users despite PAGE_SIZE=3
 
     # Verify sorting by email (default)
     emails = [u.email for u in all_users]

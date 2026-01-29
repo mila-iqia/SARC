@@ -649,10 +649,8 @@ def test_user_list(client):
     emails = [u["email"] for u in data["users"]]
     assert emails == sorted(emails)
 
-    # Test pagination with small page size (simulated by requesting limit via query if endpoint supported it,
-    # but here page size is fixed to 100 in backend... wait, PAGE_SIZE is 100 in v0.py)
-    # Since we only have 10 users, one page is enough.
-    # Let's try page 2 which should be empty
+    # todo test per_page
+
     response = client.get("/v0/user/list?page=2")
     assert response.status_code == 200
     data = response.json()

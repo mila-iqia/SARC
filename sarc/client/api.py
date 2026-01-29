@@ -6,7 +6,7 @@ from gifnoc.proxy import MissingConfigurationError
 from pydantic import UUID4
 from pydantic_mongo import PydanticObjectId
 
-from sarc.api.v0 import SlurmJobList, UserList
+from sarc.api.v0 import SlurmJobList, UserList, DEFAULT_PAGE_SIZE
 from sarc.client.job import SlurmJob, SlurmState
 from sarc.client.series import JobSeriesFactory
 from sarc.config import ConfigurationError, UTC, config
@@ -101,6 +101,7 @@ class SarcApiClient:
         start: datetime | None = None,
         end: datetime | None = None,
         page: int = 1,
+        per_page: int = DEFAULT_PAGE_SIZE,
     ) -> SlurmJobList:
         """
         List jobs with details and pagination.
@@ -113,6 +114,7 @@ class SarcApiClient:
             "start": start,
             "end": end,
             "page": page,
+            "per_page": per_page,
         }
         response = self._get("/v0/job/list", params=params)
         return SlurmJobList.model_validate(response.json())
@@ -215,6 +217,7 @@ class SarcApiClient:
         co_supervisor_start: datetime | None = None,
         co_supervisor_end: datetime | None = None,
         page: int = 1,
+        per_page: int = DEFAULT_PAGE_SIZE,
     ) -> UserList:
         """
         List users with details and pagination.
@@ -232,6 +235,7 @@ class SarcApiClient:
             "co_supervisor_start": co_supervisor_start,
             "co_supervisor_end": co_supervisor_end,
             "page": page,
+            "per_page": per_page,
         }
         response = self._get("/v0/user/list", params=params)
         return UserList.model_validate(response.json())
