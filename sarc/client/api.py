@@ -11,6 +11,7 @@ from sarc.client.job import SlurmJob, SlurmState
 from sarc.client.series import JobSeriesFactory
 from sarc.config import ConfigurationError, UTC, config
 from sarc.core.models.users import MemberType, UserData
+from sarc.traces import trace_decorator
 
 
 class SarcApiClient:
@@ -483,6 +484,7 @@ class RestJobSeriesFactory(JobSeriesFactory):
         return get_users()
 
 
+@trace_decorator()
 def load_job_series(
     *,
     fields: None | list[str] | dict[str, str] = None,

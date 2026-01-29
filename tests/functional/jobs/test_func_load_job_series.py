@@ -11,8 +11,6 @@ from sarc.config import UTC
 from tests.common.dateutils import MTL
 from tests.functional.jobs.test_func_job_statistics import generate_fake_timeseries
 
-# ... parameters and constants definition (kept as is) ...
-
 parameters = {
     "no_cluster": {},
     "cluster_str": {"cluster": "patate"},
@@ -118,7 +116,10 @@ CSV_COLUMNS = [col for col in ALL_COLUMNS if col not in ["id"]]
 MOCK_TIME = datetime(2023, 11, 22, tzinfo=UTC)
 
 
-class BaseTestLoadJobSeriesClientMode:
+class BaseTestLoadJobSeries:
+    # If True, tests with writing operations (e.g: job.save()) will be skipped.
+    client_only = False
+
     @pytest.fixture
     def ops(self):
         raise NotImplementedError("Must implement ops fixture")
@@ -170,13 +171,10 @@ class BaseTestLoadJobSeriesClientMode:
                 f"Found {data_frame.shape[0]} job(s):\n\n{data_frame.to_csv()}"
             )
 
-        # Check trace - Note: Trace check might depend on implementation
-        # For now we assume both implementations produce traces or we might need to override
+        # Check trace
         spans = captrace.get_finished_spans()
-        # Filter spans to find "load_job_series"
-        load_spans = [s for s in spans if s.name == "load_job_series"]
-        if load_spans:
-            assert len(load_spans) == 1
+        assert len(spans) == 1
+        assert spans[0].name == "load_job_series"
 
     @pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
     @pytest.mark.parametrize("params", [parameters["no_cluster"]], ids=["no_cluster"])
@@ -200,6 +198,129 @@ class BaseTestLoadJobSeriesClientMode:
         assert len(frame_2_end_times) > 1
         assert len(set(frame_1_end_times)) == 1
         assert len(set(frame_2_end_times)) == 1
+
+    @pytest.mark.usefixtures("read_write_db", "tzlocal_is_mtl")
+    def test_load_job_series_with_stored_statistics(self, monkeypatch, ops):
+        if self.client_only:
+            pytest.skip(
+                "Test with writing operations not supported in client-only mode."
+            )
+
+        job_indices = [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            23,
+            1000000,
+        ]
+        params = {"job_id": job_indices}
+
+        jobs = list(ops.get_jobs(**params))
+        frame = ops.load_job_series(**params)
+        assert jobs
+        for job in jobs:
+            assert not job.stored_statistics
+        for label in [
+            "gpu_utilization",
+            "cpu_utilization",
+            "gpu_memory",
+            "gpu_power",
+            "system_memory",
+        ]:
+            assert all(math.isnan(value) for value in frame[label])
+
+        monkeypatch.setattr(
+            "sarc.jobs.series.get_job_time_series", generate_fake_timeseries
+        )
+
+        for job in jobs:
+            job.statistics(save=True)
+            assert job.stored_statistics
+
+        re_jobs = list(ops.get_jobs(**params))
+        re_frame = ops.load_job_series(**params)
+        assert re_jobs
+        for i, re_job in enumerate(re_jobs):
+            stats = re_job.stored_statistics.model_dump()
+            assert re_frame["system_memory"][i] == stats["system_memory"]["max"]
+            assert re_frame["gpu_memory"][i] == stats["gpu_memory"]["max"]
+            assert re_frame["gpu_utilization"][i] == stats["gpu_utilization"]["median"]
+            assert re_frame["cpu_utilization"][i] == stats["cpu_utilization"]["median"]
+            assert re_frame["gpu_power"][i] == stats["gpu_power"]["median"]
+
+        for label in [
+            "gpu_utilization",
+            "cpu_utilization",
+            "gpu_memory",
+            "gpu_power",
+            "system_memory",
+        ]:
+            assert all(not math.isnan(value) for value in re_frame[label])
+
+    @pytest.mark.usefixtures("read_write_db", "tzlocal_is_mtl")
+    def test_load_job_series_with_bad_gpu_utilization(self, file_regression, ops):
+        if self.client_only:
+            pytest.skip(
+                "Test with writing operations not supported in client-only mode."
+            )
+
+        jobs = list(ops.get_jobs())
+        frame = ops.load_job_series()
+        assert jobs
+        for job in jobs:
+            assert not job.stored_statistics
+        assert all(math.isnan(value) for value in frame["gpu_utilization"])
+
+        for i, job in enumerate(jobs):
+            job.stored_statistics = JobStatistics(
+                gpu_utilization=Statistics(
+                    median=2 * (i + 1) / len(jobs),
+                    mean=0,
+                    std=0,
+                    q05=0,
+                    q25=0,
+                    q75=0,
+                    max=0,
+                    unused=0,
+                )
+            )
+            job.save()
+
+        re_jobs = list(ops.get_jobs())
+        re_frame = ops.load_job_series()
+
+        jobs_markdown = pandas.DataFrame(
+            {
+                "cluster_name": [job.cluster_name for job in re_jobs],
+                "job_id": [job.job_id for job in re_jobs],
+                "gpu_utilization": [
+                    job.stored_statistics.gpu_utilization.median for job in re_jobs
+                ],
+            }
+        ).to_markdown()
+
+        series_markdown = re_frame[
+            ["cluster_name", "job_id", "gpu_utilization"]
+        ].to_markdown()
+
+        file_regression.check(
+            f"gpu_utilization:\n================\n\nJobs:\n{jobs_markdown}\n\nJob series:\n{series_markdown}\n"
+        )
 
     @pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
     @pytest.mark.parametrize(
@@ -322,121 +443,6 @@ class BaseTestLoadJobSeriesClientMode:
         assert data_frame["another_column"].sum() == 1234 * data_frame.shape[0]
         file_regression.check(
             f"Found {data_frame.shape[0]} job(s):\n\n{data_frame.to_csv(columns=expected_fields)}"
-        )
-
-
-class BaseTestLoadJobSeries(BaseTestLoadJobSeriesClientMode):
-    @pytest.mark.usefixtures("read_write_db", "tzlocal_is_mtl")
-    def test_load_job_series_with_stored_statistics(self, monkeypatch, ops):
-        job_indices = [
-            1,
-            2,
-            3,
-            4,
-            5,
-            6,
-            9,
-            10,
-            11,
-            12,
-            13,
-            14,
-            15,
-            16,
-            17,
-            18,
-            19,
-            20,
-            23,
-            1000000,
-        ]
-        params = {"job_id": job_indices}
-
-        jobs = list(ops.get_jobs(**params))
-        frame = ops.load_job_series(**params)
-        assert jobs
-        for job in jobs:
-            assert not job.stored_statistics
-        for label in [
-            "gpu_utilization",
-            "cpu_utilization",
-            "gpu_memory",
-            "gpu_power",
-            "system_memory",
-        ]:
-            assert all(math.isnan(value) for value in frame[label])
-
-        monkeypatch.setattr(
-            "sarc.jobs.series.get_job_time_series", generate_fake_timeseries
-        )
-
-        for job in jobs:
-            job.statistics(save=True)
-            assert job.stored_statistics
-
-        re_jobs = list(ops.get_jobs(**params))
-        re_frame = ops.load_job_series(**params)
-        assert re_jobs
-        for i, re_job in enumerate(re_jobs):
-            stats = re_job.stored_statistics.model_dump()
-            assert re_frame["system_memory"][i] == stats["system_memory"]["max"]
-            assert re_frame["gpu_memory"][i] == stats["gpu_memory"]["max"]
-            assert re_frame["gpu_utilization"][i] == stats["gpu_utilization"]["median"]
-            assert re_frame["cpu_utilization"][i] == stats["cpu_utilization"]["median"]
-            assert re_frame["gpu_power"][i] == stats["gpu_power"]["median"]
-
-        for label in [
-            "gpu_utilization",
-            "cpu_utilization",
-            "gpu_memory",
-            "gpu_power",
-            "system_memory",
-        ]:
-            assert all(not math.isnan(value) for value in re_frame[label])
-
-    @pytest.mark.usefixtures("read_write_db", "tzlocal_is_mtl")
-    def test_load_job_series_with_bad_gpu_utilization(self, file_regression, ops):
-        jobs = list(ops.get_jobs())
-        frame = ops.load_job_series()
-        assert jobs
-        for job in jobs:
-            assert not job.stored_statistics
-        assert all(math.isnan(value) for value in frame["gpu_utilization"])
-
-        for i, job in enumerate(jobs):
-            job.stored_statistics = JobStatistics(
-                gpu_utilization=Statistics(
-                    median=2 * (i + 1) / len(jobs),
-                    mean=0,
-                    std=0,
-                    q05=0,
-                    q25=0,
-                    q75=0,
-                    max=0,
-                    unused=0,
-                )
-            )
-            job.save()
-
-        re_jobs = list(ops.get_jobs())
-        re_frame = ops.load_job_series()
-
-        jobs_markdown = pandas.DataFrame(
-            {
-                "cluster_name": [job.cluster_name for job in re_jobs],
-                "job_id": [job.job_id for job in re_jobs],
-                "gpu_utilization": [
-                    job.stored_statistics.gpu_utilization.median for job in re_jobs
-                ],
-            }
-        ).to_markdown()
-
-        series_markdown = re_frame[
-            ["cluster_name", "job_id", "gpu_utilization"]
-        ].to_markdown()
-
-        file_regression.check(
-            f"gpu_utilization:\n================\n\nJobs:\n{jobs_markdown}\n\nJob series:\n{series_markdown}\n"
         )
 
 

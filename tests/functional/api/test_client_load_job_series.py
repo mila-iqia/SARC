@@ -1,14 +1,16 @@
 import pytest
 
 from tests.functional.jobs.test_func_load_job_series import (
-    BaseTestLoadJobSeriesClientMode,
+    BaseTestLoadJobSeries,
 )
 
 
-class TestRestLoadJobSeries(BaseTestLoadJobSeriesClientMode):
+class TestRestLoadJobSeries(BaseTestLoadJobSeries):
     """
     Runs the standard load_job_series test suite against the REST API implementation.
     """
+
+    client_only = True
 
     @pytest.fixture
     def ops(self, client, monkeypatch):
