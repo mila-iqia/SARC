@@ -308,9 +308,10 @@ def count_jobs(
             end=end,
         )
     except httpx.HTTPStatusError as exc:
-        if exc.response.status_code == 404:
-            return 0
-        raise exc
+        if exc.response.status_code != 404:
+            raise exc
+
+    return 0
 
 
 def get_job(**kwargs) -> SlurmJob | None:
@@ -362,6 +363,7 @@ def get_jobs(
     user: str | None = None,
     start: str | datetime | None = None,
     end: str | datetime | None = None,
+    per_page: int = DEFAULT_PAGE_SIZE,
 ) -> Iterable[SlurmJob]:
     """
     Get jobs matching the criteria using the REST API.
@@ -390,6 +392,7 @@ def get_jobs(
                     start=start,
                     end=end,
                     page=page,
+                    per_page=per_page,
                 )
 
                 for job in job_list_resp.jobs:
@@ -420,7 +423,7 @@ def get_rgus(rgu_version: str = "1.0") -> dict[str, float]:
     Note: rgu_version argument is ignored as the API does not currently support it.
     """
     if rgu_version != "1.0":
-        raise NotImplementedError("rgu_version != 1.0 is not supported by REST API")
+        raise NotImplementedError("rgu_version != 1.0 is not yet supported by REST API")
     return SarcApiClient().gpu_rgu()
 
 
@@ -436,6 +439,8 @@ def get_users(
     co_supervisor: UUID4 | None = None,
     co_supervisor_start: datetime | None = None,
     co_supervisor_end: datetime | None = None,
+    *,
+    per_page: int = DEFAULT_PAGE_SIZE,
 ) -> list[UserData]:
     """
     Get users matching the criteria using the REST API.
@@ -460,6 +465,7 @@ def get_users(
                 co_supervisor_start=co_supervisor_start,
                 co_supervisor_end=co_supervisor_end,
                 page=page,
+                per_page=per_page,
             )
 
             all_users.extend(user_list_resp.users)
