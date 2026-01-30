@@ -1,3 +1,14 @@
+"""
+Test load_job_series
+
+NB:
+To freeze time, we use time_machine instead of pytest-freezegun
+to prevent complains from pydantic about datetime formats
+in REST API derived tests.
+pytest-freezegun uses a fake datetime class, causing issues,
+while time_machine seems to keep using the real datetime class.
+"""
+
 import math
 from datetime import datetime
 from types import SimpleNamespace
@@ -117,17 +128,39 @@ MOCK_TIME = datetime(2023, 11, 22, tzinfo=UTC)
 
 
 class BaseTestLoadJobSeries:
+    """
+    Base class to test_load_job_series.
+    Use to test both MongoDB and REST API implementations.
+    """
+
     # If True, tests with writing operations (e.g: job.save()) will be skipped.
     client_only = False
 
     @pytest.fixture
     def ops(self):
+        """
+        ABstract fixture.
+
+        Must return an object containing methods
+        get_users, get_jobs, load_job_series
+        """
         raise NotImplementedError("Must implement ops fixture")
 
     @time_machine.travel("2025-01-01", tick=False)
     @pytest.mark.usefixtures("read_only_db_with_users", "client_mode", "tzlocal_is_mtl")
     def test_load_job_series_with_users(self, file_regression, ops):
-        """Test job to user mapping."""
+        """Test job to user mapping.
+
+        NB: With current testing:
+        - jobs from users `petitbonhomme` will always find him in both DRAC and mila clusters
+          (note that his username on mila cluster is `petitbonhome_mila`).
+        - jobs from user `bonhomme` won't find him on a DRAC cluster because he does not have a DRAC account.
+        - jobs from user `grosbonhomme` won't find him anywhere, because he's not registered as a user.
+        - jobs from user `beaubonhomme` will always find him as for `petitbonhomme`,
+          but he has only 1 job, on a DRAC cluster.
+
+        Matching can be checked in ./test_func_load_job_series/test_load_job_series_with_users.txt
+        """
         assert len(ops.get_users()) == 10
         data_frame = ops.load_job_series()
         expected_columns = sorted(ALL_COLUMNS + USER_COLUMNS)
@@ -143,9 +176,16 @@ class BaseTestLoadJobSeries:
     @time_machine.travel(MOCK_TIME, tick=False)
     @pytest.mark.usefixtures("read_only_db_with_users", "client_mode", "tzlocal_is_mtl")
     def test_load_job_series_without_user_column(self, file_regression, ops):
-        """Test job to user mapping when data frame does not contain `user` column."""
+        """Test job to user mapping when data frame does not contain `user` column.
+
+        If `user` column is not available, one can't map job to user,
+        then users column should not be added to frame.
+        """
+        # Check we have users in database
         assert len(ops.get_users()) == 10
+        # But load job series only with columns `job_id` and `cluster_name`, ie. without column `user`
         data_frame = ops.load_job_series(fields=["job_id", "cluster_name"])
+        # So, we won't have users columns in data frame
         expected_columns = sorted(["job_id", "cluster_name"])
         assert sorted(data_frame.keys().tolist()) == expected_columns
 
@@ -160,6 +200,7 @@ class BaseTestLoadJobSeries:
     def test_load_job_series(self, params, file_regression, captrace, ops):
         data_frame = ops.load_job_series(**params)
         assert isinstance(data_frame, pandas.DataFrame)
+        # Check columns
         if data_frame.shape[0]:
             assert sorted(data_frame.keys().tolist()) == ALL_COLUMNS
             file_regression.check(
@@ -179,8 +220,11 @@ class BaseTestLoadJobSeries:
     @pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
     @pytest.mark.parametrize("params", [parameters["no_cluster"]], ids=["no_cluster"])
     def test_load_job_series_check_end_times(self, params, ops):
+        # Get jobs
         jobs = list(ops.get_jobs(**params))
+        # Get a data frame
         frame_1 = ops.load_job_series(**params)
+        # Get a data frame again
         frame_2 = ops.load_job_series(**params)
         frame_1_end_times = []
         frame_2_end_times = []
@@ -188,14 +232,21 @@ class BaseTestLoadJobSeries:
             if job.end_time is None:
                 frame_1_end_times.append(frame_1["end_time"][i])
                 frame_2_end_times.append(frame_2["end_time"][i])
+                # End time won't be None in data frames, because
+                # load_job_series() will have set it to current time.
                 assert frame_1["end_time"][i]
                 assert frame_2["end_time"][i]
+                # As frame_2 is generated after frame_1,
+                # end times in frame 2 will be set to a current time more recent
+                # than in frame 1.
                 assert frame_2["end_time"][i] > frame_1["end_time"][i]
             else:
+                # End time won't be changed.
                 assert job.end_time == frame_1["end_time"][i]
                 assert job.end_time == frame_2["end_time"][i]
         assert len(frame_1_end_times) > 1
         assert len(frame_2_end_times) > 1
+        # All missing end times set by a call to load_job_series() must have same value.
         assert len(set(frame_1_end_times)) == 1
         assert len(set(frame_2_end_times)) == 1
 
@@ -206,6 +257,8 @@ class BaseTestLoadJobSeries:
                 "Test with writing operations not supported in client-only mode."
             )
 
+        # List of job indices with no stored statistics initially,
+        # then with stored statistic after call to job.statistics().
         job_indices = [
             1,
             2,
@@ -248,10 +301,12 @@ class BaseTestLoadJobSeries:
             "sarc.jobs.series.get_job_time_series", generate_fake_timeseries
         )
 
+        # Save job statistics.
         for job in jobs:
             job.statistics(save=True)
             assert job.stored_statistics
 
+        # Generate new data frame. Relevant fields must not contain nan anymore.
         re_jobs = list(ops.get_jobs(**params))
         re_frame = ops.load_job_series(**params)
         assert re_jobs
@@ -274,11 +329,13 @@ class BaseTestLoadJobSeries:
 
     @pytest.mark.usefixtures("read_write_db", "tzlocal_is_mtl")
     def test_load_job_series_with_bad_gpu_utilization(self, file_regression, ops):
+        """Check that gpu_utilization > 1 is replaced with nan in job series."""
         if self.client_only:
             pytest.skip(
                 "Test with writing operations not supported in client-only mode."
             )
 
+        # Check default situation: gpu_utilization is None
         jobs = list(ops.get_jobs())
         frame = ops.load_job_series()
         assert jobs
@@ -286,7 +343,9 @@ class BaseTestLoadJobSeries:
             assert not job.stored_statistics
         assert all(math.isnan(value) for value in frame["gpu_utilization"])
 
+        # Save job statistics with gpu_utilization manually set.
         for i, job in enumerate(jobs):
+            # Half of jobs will have gpu_utilization > 1, and should be set to nan in job series
             job.stored_statistics = JobStatistics(
                 gpu_utilization=Statistics(
                     median=2 * (i + 1) / len(jobs),
@@ -301,9 +360,11 @@ class BaseTestLoadJobSeries:
             )
             job.save()
 
+        # Generate new data frame.
         re_jobs = list(ops.get_jobs())
         re_frame = ops.load_job_series()
 
+        # String representation for jobs
         jobs_markdown = pandas.DataFrame(
             {
                 "cluster_name": [job.cluster_name for job in re_jobs],
@@ -314,12 +375,20 @@ class BaseTestLoadJobSeries:
             }
         ).to_markdown()
 
+        # String representation for job series.
         series_markdown = re_frame[
             ["cluster_name", "job_id", "gpu_utilization"]
         ].to_markdown()
 
+        # For jobs, we expect values in gpu_utilization column.
+        # For job series, we expect nan for any gpu_utilization > 1.
         file_regression.check(
-            f"gpu_utilization:\n================\n\nJobs:\n{jobs_markdown}\n\nJob series:\n{series_markdown}\n"
+            f"gpu_utilization:\n"
+            f"================\n\n"
+            f"Jobs:\n"
+            f"{jobs_markdown}\n\n"
+            f"Job series:\n"
+            f"{series_markdown}\n"
         )
 
     @pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
@@ -447,6 +516,8 @@ class BaseTestLoadJobSeries:
 
 
 class TestMongoLoadJobSeries(BaseTestLoadJobSeries):
+    """Tests for MongoDB load_job_series"""
+
     @pytest.fixture
     def ops(self):
         from sarc.client.job import get_jobs

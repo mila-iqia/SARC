@@ -1,3 +1,21 @@
+"""
+Python client for SARC REST API.
+
+Contains a SarcApiClient class for direct calls to REST API,
+and high-level client functions using REST API as backend,
+with almost same signatures as MongoDB counterparts:
+- count_jobs
+- get_job
+- get_jobs
+- get_rgus
+- get_users
+- load_job_series
+
+To use high-level functions, consider setting `api` section
+in SARC client config file, then calling your script
+in client mode with your config file.
+"""
+
 from datetime import datetime, time
 from typing import Any, Callable, Iterable
 
@@ -8,19 +26,34 @@ from pydantic_mongo import PydanticObjectId
 
 from sarc.api.v0 import SlurmJobList, UserList, DEFAULT_PAGE_SIZE
 from sarc.client.job import SlurmJob, SlurmState
-from sarc.client.series import JobSeriesFactory
+from sarc.client.series import AbstractJobSeriesFactory
 from sarc.config import ConfigurationError, UTC, config
 from sarc.core.models.users import MemberType, UserData
 from sarc.traces import trace_decorator
 
 
 class SarcApiClient:
+    """
+    Python client for SARC REST API.
+
+     If initialized without parameters, will look for
+     section `api` from SARC config file to get API URL.
+    """
+
     def __init__(
         self,
         remote_url: str | None = None,
         timeout: int | None = None,
         session: httpx.Client | None = None,
     ) -> None:
+        """
+        Initialize.
+
+        :param remote_url: API URL
+        :param timeout: requests timeout, in seconds. Default: 120.
+        :param session: internal httpx client to use. Default: httpx module.
+        """
+
         try:
             api_cfg = config().api
         except MissingConfigurationError:
@@ -53,6 +86,9 @@ class SarcApiClient:
                     if isinstance(v, datetime):
                         cleaned_params[k] = v.isoformat()
                     elif isinstance(v, list) and not v:
+                        # Force empty parameter.
+                        # This is to handle particular case of
+                        # empty list passed to `job_id`.
                         cleaned_params[k] = ""
                     else:
                         cleaned_params[k] = v
@@ -78,9 +114,9 @@ class SarcApiClient:
         end: datetime | None = None,
     ) -> list[str]:
         """
-        Search for jobs matching the criteria.
-        Returns a list of Job IDs (as strings).
-        Deprecated: use list_jobs instead.
+        Query jobs.
+        Return a list of job internal object IDs,
+        which can be passed to job/id/{id}
         """
         params = {
             "cluster": cluster,
@@ -106,7 +142,9 @@ class SarcApiClient:
         per_page: int = DEFAULT_PAGE_SIZE,
     ) -> SlurmJobList:
         """
-        List jobs with details and pagination.
+        Query jobs with pagination.
+        Return a SlurmJobList result, containing
+        a paginated list of SlurmJob objects.
         """
         params = {
             "cluster": cluster,
@@ -130,9 +168,7 @@ class SarcApiClient:
         start: datetime | None = None,
         end: datetime | None = None,
     ) -> int:
-        """
-        Count jobs matching the criteria.
-        """
+        """Count jobs."""
         params = {
             "cluster": cluster,
             "job_id": job_id,
@@ -263,7 +299,10 @@ def _parse_common_args(
     start: str | datetime | None = None,
     end: str | datetime | None = None,
 ) -> tuple[list[int] | None, SlurmState | None, datetime | None, datetime | None]:
-    """Helper to parse arguments common to job functions."""
+    """
+    Helper to parse arguments common to job functions.
+    Used in high-level functions below.
+    """
     if isinstance(job_id, int):
         job_id = [job_id]
 
@@ -334,9 +373,9 @@ def get_job(**kwargs) -> SlurmJob | None:
     )
 
     try:
-        # We fetch page 1 with default size (which is enough for 1 item)
-        # The API sorts by submit_time desc by default, which matches
-        # the requirement "ensures we get the most recent version".
+        # We fetch page 1 with page size 1.
+        # NB: the API sorts by submit_time desc by default, which
+        # returns the most recent version.
         job_list_resp = SarcApiClient().job_list(
             cluster=cluster,
             job_id=job_id,  # type: ignore
@@ -345,6 +384,7 @@ def get_job(**kwargs) -> SlurmJob | None:
             start=start,
             end=end,
             page=1,
+            per_page=1,
         )
 
         if job_list_resp.jobs:
@@ -372,8 +412,10 @@ def get_jobs(
     Fetches all results by iterating over pages.
 
     Same signature as in `sarc.client.job.get_jobs`,
-    except parameter `query_options` which is specific to MongoDB
+    except parameter `query_options` which is specific to MongoDB,
+    adding parameter `per_page` to allow control on pagination for `/job/list` calls.
     """
+    # Use a single httpx client for all calls.
     with httpx.Client() as session:
         client = SarcApiClient(session=session)
 
@@ -403,7 +445,6 @@ def get_jobs(
                 nb_all_jobs += len(job_list_resp.jobs)
 
                 # Check if we have fetched everything
-                # We can calculate if there are more pages
                 if nb_all_jobs >= job_list_resp.total:
                     break
 
@@ -447,6 +488,9 @@ def get_users(
     """
     Get users matching the criteria using the REST API.
     Fetches all results by iterating over pages.
+
+    **NB**: Not same signature as sarc.users.db.get_users,
+    which waits for a MongoDB `query` dict.
     """
     with httpx.Client() as session:
         client = SarcApiClient(session=session)
@@ -483,13 +527,16 @@ def get_users(
         return all_users
 
 
-class RestJobSeriesFactory(JobSeriesFactory):
-    """Implementation for API REST access."""
+class RestJobSeriesFactory(AbstractJobSeriesFactory):
+    """
+    Implementation of JobSeriesFactory for REST API.
+    Allow to implement load_job_series for REST API below.
+    """
 
     def count_jobs(self, *args, **kwargs) -> int:
         return count_jobs(*args, **kwargs)
 
-    def get_jobs(self, *args, **kwargs) -> Any:
+    def get_jobs(self, *args, **kwargs) -> Iterable[SlurmJob]:
         return get_jobs(*args, **kwargs)
 
     def get_users(self) -> list[UserData]:

@@ -7,7 +7,7 @@ from sarc.api.main import app
 def generate_openapi_spec():
     """
     Generate OpenAPI spec and save it into `openapi.json` in same folder as this script.
-    **NB**: One must run this script each time REST API changes, before generating the doc.
+    NB: To run each time REST API changes, before generating the doc.
     """
     spec = app.openapi()
     spec_path = Path(__file__).parent / "openapi.json"

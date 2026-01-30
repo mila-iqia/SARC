@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
-from typing import Any, Callable, Literal
+from typing import Any, Callable, Literal, Iterable
 
 import numpy as np
 import pandas
@@ -11,7 +11,13 @@ from pandas import DataFrame
 from tqdm import tqdm
 
 from sarc.client.gpumetrics import GPUBilling, get_cluster_gpu_billings, get_rgus
-from sarc.client.job import SlurmCLuster, count_jobs, get_available_clusters, get_jobs
+from sarc.client.job import (
+    SlurmCLuster,
+    count_jobs,
+    get_available_clusters,
+    get_jobs,
+    SlurmJob,
+)
 from sarc.config import TZLOCAL
 from sarc.core.models.users import UserData
 from sarc.core.models.validators import DateMatchError
@@ -33,12 +39,12 @@ DUMMY_STATS: dict[str, Any] = {
 }
 
 
-class JobSeriesFactory(ABC):
+class AbstractJobSeriesFactory(ABC):
     """
-    Abstract class to compute job series data.
+    Abstract class to compute load_job_series.
     To be sub-classed twice:
     - one for MongoDB client (using functions from sarc.client.job dans sarc.users.db)
-    - one for API REST client (using functions from sarc.client.api)
+    - one for API REST client (using REST client functions)
     """
 
     @abstractmethod
@@ -46,7 +52,7 @@ class JobSeriesFactory(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def get_jobs(self, *args, **kwargs) -> Any:
+    def get_jobs(self, *args, **kwargs) -> Iterable[SlurmJob]:
         raise NotImplementedError()
 
     @abstractmethod
@@ -75,9 +81,39 @@ class JobSeriesFactory(ABC):
         **jobs_args,
     ) -> DataFrame:
         """
-        Query jobs using abstract methods and return them in a DataFrame,
-        including full user info for each job.
+        Query jobs from the database and return them in a DataFrame, including full user info
+        for each job.
+
+        Parameters
+        ----------
+        fields: list or dict
+            Job fields to include in the DataFrame. By default, include all fields.
+            A dictionary may be passed to select fields and rename them in the DataFrame.
+            In such case, the keys are the fields' names and the values are the names
+            they will have in the DataFrame.
+        clip_time: bool
+            Whether the duration time of the jobs should be clipped within `start` and `end`.
+            ValueError will be raised if `clip_time` is True and either of `start` or `end` is None.
+            Defaults to False.
+        callback: Callable
+            Callable taking the list of job dictionaries in the format it would be included in the DataFrame.
+        **jobs_args
+            Arguments to be passed to `get_jobs` to query jobs from the database.
+
+        Returns
+        -------
+        DataFrame
+            Panda's data frame containing jobs, with following columns:
+            - All fields returned by method SlurmJob.dict(), except "requested" and "allocated"
+              which are flattened into `requested.<attribute>` and `allocated.<attribute>` fields.
+            - Job series fields:
+              "gpu_utilization", "cpu_utilization", "gpu_memory", "gpu_power", "system_memory"
+            - Optional job series fields, added if clip_time is True:
+              "unclipped_start" and "unclipped_end"
+            - Optional user info fields if job users found.
+              Fields from `User.model_dump()` in format `user.<flattened dot-separated field>`,
         """
+
         # If fields is a list, convert it to a renaming dict with same old and new names.
         if isinstance(fields, list):
             fields = {key: key for key in fields}
@@ -222,13 +258,13 @@ class JobSeriesFactory(ABC):
             return jobs_frame
 
 
-class MongoJobSeriesFactory(JobSeriesFactory):
+class MongoJobSeriesFactory(AbstractJobSeriesFactory):
     """Implementation for direct MongoDB access."""
 
     def count_jobs(self, *args, **kwargs) -> int:
         return count_jobs(*args, **kwargs)
 
-    def get_jobs(self, *args, **kwargs) -> Any:
+    def get_jobs(self, *args, **kwargs) -> Iterable[SlurmJob]:
         return get_jobs(*args, **kwargs)
 
     def get_users(self) -> list[UserData]:

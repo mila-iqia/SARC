@@ -1,3 +1,14 @@
+"""
+Check that regression files for REST's load_job_series tests
+match regression files for MongoDB's load_job_series tests.
+
+Both regression files must contain same jobs, while
+not necessarly sorted in same order, since REST
+API sort data to correctly manage pagination.
+
+Generated with Gemini AI.
+"""
+
 import io
 import re
 from pathlib import Path

@@ -23,13 +23,6 @@ DEFAULT_PAGE_SIZE = 100
 MAX_PAGE_SIZE = 200
 
 
-class SlurmJobList(BaseModel):
-    jobs: list[SlurmJob]
-    page: int
-    per_page: int
-    total: int
-
-
 def valid_cluster(cluster: str):
     cluster_names = list(cl.cluster_name for cl in get_available_clusters())
     if cluster is not None:
@@ -43,6 +36,7 @@ def valid_cluster(cluster: str):
 
 class JobQuery(BaseModel):
     cluster: Annotated[str, AfterValidator(valid_cluster)] | None = None
+    # job_id supports None, an integer, a list of integers, or an empty list.
     job_id: list[int] | None = None
     job_state: SlurmState | None = None
     username: str | None = None
@@ -196,6 +190,13 @@ class UserQuery(BaseModel):
 UserQueryType = Annotated[UserQuery, Depends(UserQuery)]
 
 
+class SlurmJobList(BaseModel):
+    jobs: list[SlurmJob]
+    page: int
+    per_page: int
+    total: int
+
+
 class UserList(BaseModel):
     users: list[UserData]
     page: int
@@ -289,7 +290,6 @@ def query_users(query_opt: UserQueryType) -> list[UUID4]:
 def list_users(
     query_opt: UserQueryType, page: int = 1, per_page: int = DEFAULT_PAGE_SIZE
 ) -> UserList:
-    """List users with details and pagination."""
     if page < 1:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Page must be >= 1"
