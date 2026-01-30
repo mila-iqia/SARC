@@ -14,6 +14,16 @@ with almost same signatures as MongoDB counterparts:
 To use high-level functions, consider setting `api` section
 in SARC client config file, then calling your script
 in client mode with your config file.
+
+Example:
+    sarc-client.yaml
+        api:
+            url: http://api.sarc.com:1234
+    myscript.py
+        >>> from sarc.client.api import count_jobs
+        >>> print(count_jobs())
+    run:
+        SARC_MODE=client SARC_CONFIG=sarc-client.yaml uv run myscript.py
 """
 
 from datetime import datetime, time
