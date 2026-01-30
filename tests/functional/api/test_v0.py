@@ -87,6 +87,43 @@ def test_get_jobs_by_state(client):
 
 
 @pytest.mark.usefixtures("read_only_db")
+def test_get_jobs_multiple_job_ids(client):
+    """Test jobs query with multiple job IDs."""
+    response = client.get("/v0/job/query?job_id=10&job_id=20")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) == 2
+    for jid in data:
+        r = client.get(f"/v0/job/id/{jid}")
+        assert r.status_code == 200
+        job = r.json()
+        assert job["job_id"] in (10, 20)
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_get_jobs_empty_job_id_list(client):
+    """Test jobs query with an empty job_id list.
+    SarcApiClient sends job_id= for an empty list.
+    """
+    response = client.get("/v0/job/query?job_id=")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) == 0
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_get_jobs_invalid_job_id(client):
+    """Test jobs query with invalid job ID."""
+    response = client.get("/v0/job/query?job_id=not_an_int")
+
+    assert response.status_code == 422
+
+
+@pytest.mark.usefixtures("read_only_db")
 def test_get_jobs_empty_result(client):
     """Test jobs query with no results."""
     # Use a very high job ID that doesn't exist

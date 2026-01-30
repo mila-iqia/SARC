@@ -1,3 +1,4 @@
-Found 0 job(s):
+Found 1 job(s):
 
-""
+,CLEAR_SCHEDULING,STARTED_ON_BACKFILL,STARTED_ON_SCHEDULE,STARTED_ON_SUBMIT,account,allocated.billing,allocated.cpu,allocated.gpu_type,allocated.gres_gpu,allocated.mem,allocated.node,array_job_id,cluster_name,constraints,cpu_utilization,elapsed_time,end_time,exit_code,gpu_memory,gpu_power,gpu_utilization,group,job_id,job_state,latest_scraped_end,latest_scraped_start,name,nodes,partition,priority,qos,requested.billing,requested.cpu,requested.gpu_type,requested.gres_gpu,requested.mem,requested.node,signal,start_time,stored_statistics,submit_time,system_memory,task_id,time_limit,user,work_dir
+0,True,True,False,False,mila,1,4,,1,49152,1,,patate,x86_64&(48gb|80gb),,43200.0,2023-02-18 06:01:00-05:00,0,,,,petitbonhomme,16,CANCELLED,,,main.sh,['cn-c021'],long,7152,normal,1,4,,1,49152,1,,2023-02-17 18:01:00-05:00,,2023-02-17 18:00:00-05:00,,,43200,petitbonhomme,/network/scratch/p/petitbonhomme/experience-demente

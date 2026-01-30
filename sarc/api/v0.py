@@ -53,7 +53,7 @@ class JobQuery(BaseModel):
         query: dict[str, Any] = {}
         if self.cluster is not None:
             query["cluster_name"] = self.cluster
-        if self.job_id:
+        if self.job_id is not None:
             if len(self.job_id) == 1:
                 query["job_id"] = self.job_id[0]
             else:
@@ -76,7 +76,7 @@ class JobQuery(BaseModel):
 
 def job_query_params(
     cluster: Annotated[str, AfterValidator(valid_cluster)] | None = None,
-    job_id: Annotated[list[int] | None, Query()] = None,
+    job_id: Annotated[list[str] | None, Query()] = None,
     job_state: SlurmState | None = None,
     username: str | None = None,
     start: datetime | None = None,
@@ -85,15 +85,24 @@ def job_query_params(
     """
     Annotation function for JobQueryType below.
     Annotates `job_id` with `Query()` annotation,
-    so that Pydantic/FastAPI correctly parses `job_id`
-    as a list of integers.
+    so that Pydantic/FastAPI correctly parses `job_id`.
 
-    We need this workaround to support list of integers for `job_id`,
-    and match signature of `get_jobs` and `count_jobs` in native client code.
+    We use `list[str]` to support empty lists (sent as `job_id=`).
+    We then convert to `list[int]` to match `JobQuery` model.
     """
+    job_id_ints = None
+    if job_id is not None:
+        try:
+            job_id_ints = [int(jid) for jid in job_id if jid]
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="job_id must be a list of integers",
+            )
+
     return JobQuery(
         cluster=cluster,
-        job_id=job_id,
+        job_id=job_id_ints,
         job_state=job_state,
         username=username,
         start=start,

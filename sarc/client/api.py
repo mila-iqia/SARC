@@ -52,6 +52,8 @@ class SarcApiClient:
                 if v is not None:
                     if isinstance(v, datetime):
                         cleaned_params[k] = v.isoformat()
+                    elif isinstance(v, list) and not v:
+                        cleaned_params[k] = ""
                     else:
                         cleaned_params[k] = v
 
