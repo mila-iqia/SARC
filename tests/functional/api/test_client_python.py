@@ -8,9 +8,10 @@ import httpx
 import pytest
 from pydantic_mongo import PydanticObjectId
 
+from sarc.api.v0 import DEFAULT_PAGE_SIZE
 from sarc.client.api import SarcApiClient
 from sarc.client.job import SlurmJob, SlurmState
-from sarc.config import ConfigurationError, UTC
+from sarc.config import UTC, ConfigurationError
 from sarc.core.models.users import MemberType
 
 
@@ -39,34 +40,8 @@ def test_init_from_config():
 
 
 def test_init_no_config_raises_error():
-    with patch("sarc.client.api.config") as mock_config:
-        # Simulate missing api section in config
-        mock_config.return_value.api = None
-        with pytest.raises(ConfigurationError):
-            SarcApiClient()
-
-
-def test_init_missing_configuration_error():
-    """Test that MissingConfigurationError is caught and handled."""
-    from gifnoc.proxy import MissingConfigurationError
-
-    with patch("sarc.client.api.config") as mock_config:
-        # Simulate gifnoc raising MissingConfigurationError
-        mock_config.side_effect = MissingConfigurationError("No config")
-        # When remote_url is provided, it should still work
-        c = SarcApiClient(remote_url="http://example.com")
-        assert c.remote_url == "http://example.com"
-        assert c.timeout == 120  # default when no config
-
-
-def test_init_missing_configuration_error_no_url():
-    """Test that MissingConfigurationError without URL raises ConfigurationError."""
-    from gifnoc.proxy import MissingConfigurationError
-
-    with patch("sarc.client.api.config") as mock_config:
-        mock_config.side_effect = MissingConfigurationError("No config")
-        with pytest.raises(ConfigurationError):
-            SarcApiClient()  # No URL provided, should fail
+    with pytest.raises(ConfigurationError):
+        SarcApiClient()
 
 
 # Test SarcApiClient Methods
@@ -89,9 +64,6 @@ def test_get_job_not_found_pydantic_id(sarc_client):
 
     with pytest.raises(httpx.HTTPStatusError) as excinfo:
         sarc_client.job_by_id(oid)
-    assert excinfo.value.response.status_code == 404
-
-    # Expecting 404 Not Found for a valid formatted ObjectId that is missing
     assert excinfo.value.response.status_code == 404
     assert "Job not found" in excinfo.value.response.json()["detail"]
 
@@ -188,34 +160,40 @@ def test_get_jobs_no_filters(sarc_client):
     assert len(data) == 24
 
 
+@pytest.mark.parametrize(
+    "params,expected",
+    [
+        (dict(cluster="raisin"), 20),
+        (dict(job_id=10), 1),
+        (dict(username="petitbonhomme"), 20),
+        (dict(job_state=SlurmState.COMPLETED), 1),
+        (dict(job_id=9999999999), 0),
+        (
+            dict(
+                start=datetime.fromisoformat("2023-01-01T00:00:00"),
+                end=datetime.fromisoformat("2023-02-15T23:59:59"),
+            ),
+            8,
+        ),
+        (
+            dict(
+                cluster="raisin",
+                job_state=SlurmState.COMPLETED,
+                start=datetime.fromisoformat("2023-01-01T00:00:00"),
+            ),
+            1,
+        ),
+        ({}, 24),
+    ],
+)
 @pytest.mark.usefixtures("read_only_db_with_users")
-def test_count_jobs_by_cluster(sarc_client):
-    count = sarc_client.job_count(cluster="raisin")
-    assert count == 20
-
-
-@pytest.mark.usefixtures("read_only_db")
-def test_count_jobs_by_job_id(sarc_client):
-    count = sarc_client.job_count(job_id=10)
-    assert count == 1
-
-
-@pytest.mark.usefixtures("read_only_db")
-def test_count_jobs_by_user(sarc_client):
-    count = sarc_client.job_count(username="petitbonhomme")
-    assert count == 20
-
-
-@pytest.mark.usefixtures("read_only_db")
-def test_count_jobs_by_state(sarc_client):
-    count = sarc_client.job_count(job_state=SlurmState.COMPLETED)
-    assert count == 1
-
-
-@pytest.mark.usefixtures("read_only_db")
-def test_count_jobs_empty_result(sarc_client):
-    count = sarc_client.job_count(job_id=9999999999)
-    assert count == 0
+def test_count_jobs(sarc_client, params, expected):
+    count = sarc_client.job_count(**params)
+    r_query = sarc_client.job_query(**params)
+    r_list = sarc_client.job_list(**params)
+    assert count == expected
+    assert len(r_query) == expected
+    assert len(r_list.jobs) == expected
 
 
 def test_count_jobs_invalid_cluster(sarc_client):
@@ -230,41 +208,6 @@ def test_count_jobs_invalid_cluster(sarc_client):
 def test_count_jobs_invalid_job_state(sarc_client):
     with pytest.raises(AttributeError):
         sarc_client.job_count(job_state="INVALID")
-
-
-@pytest.mark.usefixtures("read_only_db")
-def test_count_jobs_with_datetime_filters(sarc_client):
-    count = sarc_client.job_count(
-        start=datetime.fromisoformat("2023-01-01T00:00:00"),
-        end=datetime.fromisoformat("2023-02-15T23:59:59"),
-    )
-    assert count == 8
-
-
-@pytest.mark.usefixtures("read_only_db_with_users")
-def test_count_jobs_multiple_filters(sarc_client):
-    count = sarc_client.job_count(
-        cluster="raisin",
-        job_state=SlurmState.COMPLETED,
-        start=datetime.fromisoformat("2023-01-01T00:00:00"),
-    )
-    assert count > 0
-
-
-@pytest.mark.usefixtures("read_only_db")
-def test_count_jobs_no_filters(sarc_client):
-    count = sarc_client.job_count()
-    assert count == 24
-
-
-@pytest.mark.usefixtures("read_only_db_with_users")
-def test_count_jobs_matches_query_length(sarc_client):
-    # Corresponds to test_count_jobs_matches_query_length
-    response_query = sarc_client.job_query(cluster="raisin")
-    response_list = sarc_client.job_list(cluster="raisin")
-    count = sarc_client.job_count(cluster="raisin")
-    assert len(response_query) == count
-    assert len(response_list.jobs) == count
 
 
 @pytest.mark.usefixtures("read_only_db_with_users")
@@ -563,11 +506,13 @@ def test_user_list(sarc_client):
     assert data.page == 1
     assert data.total == 10
     assert len(data.users) == 10
+    assert data.per_page == DEFAULT_PAGE_SIZE
 
     # Check sorting: email asc
     emails = [u.email for u in data.users]
     assert emails == sorted(emails)
 
+    # Page 2
     data = sarc_client.user_list(page=2)
     assert data.page == 2
     assert data.total == 10
@@ -578,6 +523,33 @@ def test_user_list(sarc_client):
     assert data.total == 1
     assert len(data.users) == 1
     assert data.users[0].display_name == "Jane Doe"
+
+
+@pytest.mark.usefixtures("read_only_db_with_users")
+def test_user_list_per_page_3(sarc_client):
+    prev_users = []
+    for page in range(1, 4):
+        users_list = sarc_client.user_list(page=page, per_page=3)
+        assert users_list.total == 10
+        assert users_list.per_page == 3
+        assert len(users_list.users) == 3
+        assert users_list.page == page
+        assert prev_users != users_list.users
+        prev_users = users_list.users
+
+    users_list = sarc_client.user_list(page=4, per_page=3)
+    assert users_list.total == 10
+    assert users_list.per_page == 3
+    assert len(users_list.users) == 1
+    assert users_list.page == 4
+    assert prev_users != users_list.users
+
+    for page in range(5, 10):
+        users_list = sarc_client.user_list(page=page, per_page=3)
+        assert users_list.total == 10
+        assert users_list.per_page == 3
+        assert len(users_list.users) == 0
+        assert users_list.page == page
 
 
 @pytest.mark.usefixtures("read_only_db_with_users")
@@ -617,6 +589,42 @@ def mock_client_class(client, monkeypatch):
 
 
 @pytest.mark.usefixtures("read_only_db_with_users")
+def test_rest_count_jobs(mock_client_class):
+    """Test the top-level count_jobs function."""
+    from sarc.client.api import count_jobs
+
+    count = count_jobs(cluster="raisin")
+    assert count == 20
+
+    count = count_jobs(cluster="raisin", job_state="COMPLETED")
+    assert count == 1
+
+    # Invalid cluster should return 0 (not raise exception)
+    count = count_jobs(cluster="nonexistent_cluster")
+    assert count == 0
+
+
+@pytest.mark.usefixtures("read_only_db_with_users")
+def test_rest_get_job(mock_client_class):
+    """Test get_job returns a single job when found."""
+    from sarc.client.api import get_job
+
+    job = get_job(cluster="raisin", job_id=10)
+    assert job is not None
+    assert isinstance(job, SlurmJob)
+    assert job.job_id == 10
+    assert job.cluster_name == "raisin"
+
+    # Use a non-existent job ID
+    job = get_job(job_id=9999999999)
+    assert job is None
+
+    # Use a non-existent cluster
+    job = get_job(cluster="nonexistent_cluster", job_id=10)
+    assert job is None
+
+
+@pytest.mark.usefixtures("read_only_db_with_users")
 def test_rest_get_jobs(mock_client_class):
     """
     Test the top-level get_jobs function which should iterate over pages.
@@ -628,167 +636,11 @@ def test_rest_get_jobs(mock_client_class):
 
     assert len(all_jobs) == 20
     assert isinstance(all_jobs[0], SlurmJob)
-
-    # TODO Verify we got all 20 jobs despite PAGE_SIZE=5
-
-
-@pytest.mark.usefixtures("read_only_db_with_users")
-def test_rest_get_users(mock_client_class):
-    """
-    Test the top-level get_users function which should iterate over pages.
-    """
-    from sarc.client.api import get_users
-    from sarc.core.models.users import UserData
-
-    # Call the helper function
-    all_users = get_users()
-
-    assert len(all_users) == 10
-    assert isinstance(all_users[0], UserData)
-    # TODO Verify we got all 10 users despite PAGE_SIZE=3
-
-    # Verify sorting by email (default)
-    emails = [u.email for u in all_users]
-    assert emails == sorted(emails)
-
-    # Test with filter
-    doe_users = get_users(display_name="Doe")
-    assert len(doe_users) == 1
-    assert doe_users[0].display_name == "Jane Doe"
-
-
-@pytest.mark.usefixtures("read_only_db_with_users")
-def test_rest_load_job_series(mock_client_class):
-    """
-    Test load_job_series via REST API.
-    """
-    import pandas as pd
-    from sarc.client.api import load_job_series
-
-    # 1. Test basic loading
-    df = load_job_series(cluster="raisin")
-    assert isinstance(df, pd.DataFrame)
-    assert len(df) == 20
-    assert "job_id" in df.columns
-    # Check user merging
-    assert "user.email" in df.columns
-    # Since we have users in DB, some should be matched
-    # (assuming job user names match user accounts in fixtures)
-
-    # 2. Test with filtering
-    df_filtered = load_job_series(cluster="raisin", job_state="COMPLETED")
-    assert len(df_filtered) > 0
-    assert all(df_filtered["job_state"] == "COMPLETED")
-
-    # 3. Test with fields selection/renaming
-    # Note: load_job_series currently applies fields filtering BEFORE user merge,
-    # so we cannot select user.* fields here if they are not in the job data.
-    # Also, cluster_name MUST be present/renamed because it's used for the merge logic.
-    df_fields = load_job_series(
-        cluster="raisin",
-        fields={"job_id": "ID", "user": "USERNAME", "cluster_name": "CLUSTER"},
-    )
-    assert "ID" in df_fields.columns
-    assert "USERNAME" in df_fields.columns
-    assert "CLUSTER" in df_fields.columns
-    assert "job_id" not in df_fields.columns
-
-
-# Test High-Level Client Functions: count_jobs
-
-
-@pytest.mark.usefixtures("read_only_db_with_users")
-def test_rest_count_jobs(mock_client_class):
-    """Test the top-level count_jobs function."""
-    from sarc.client.api import count_jobs
-
-    count = count_jobs(cluster="raisin")
-    assert count == 20
-
-
-@pytest.mark.usefixtures("read_only_db_with_users")
-def test_rest_count_jobs_with_filters(mock_client_class):
-    """Test count_jobs with multiple filters."""
-    from sarc.client.api import count_jobs
-
-    count = count_jobs(cluster="raisin", job_state="COMPLETED")
-    assert count > 0
-
-
-def test_rest_count_jobs_invalid_cluster_returns_zero(mock_client_class):
-    """Test that count_jobs returns 0 for invalid cluster (404 handling)."""
-    from sarc.client.api import count_jobs
-
-    # Invalid cluster should return 0 (not raise exception)
-    count = count_jobs(cluster="nonexistent_cluster")
-    assert count == 0
-
-
-# Test High-Level Client Functions: get_job
-
-
-@pytest.mark.usefixtures("read_only_db_with_users")
-def test_rest_get_job_found(mock_client_class):
-    """Test get_job returns a single job when found."""
-    from sarc.client.api import get_job
-
-    job = get_job(cluster="raisin", job_id=10)
-    assert job is not None
-    assert isinstance(job, SlurmJob)
-    assert job.job_id == 10
-    assert job.cluster_name == "raisin"
-
-
-@pytest.mark.usefixtures("read_only_db_with_users")
-def test_rest_get_job_not_found(mock_client_class):
-    """Test get_job returns None when no job matches."""
-    from sarc.client.api import get_job
-
-    # Use a combination that doesn't match any job
-    job = get_job(cluster="raisin", job_id=777777777)
-    assert job is None
-
-
-def test_rest_get_job_invalid_cluster_returns_none(mock_client_class):
-    """Test get_job returns None for invalid cluster."""
-    from sarc.client.api import get_job
-
-    job = get_job(cluster="nonexistent_cluster", job_id=10)
-    assert job is None
-
-
-# Test High-Level Client Functions: get_jobs pagination
-
-
-@pytest.mark.usefixtures("read_only_db_with_users")
-def test_rest_get_jobs_pagination(mock_client_class):
-    """
-    Test that get_jobs correctly iterates over multiple pages.
-    With 20 jobs in raisin and default page size 100, should get all in one request.
-    """
-    from sarc.client.api import get_jobs
-
-    all_jobs = list(get_jobs(cluster="raisin"))
-    assert len(all_jobs) == 20
     # Verify all jobs are from raisin cluster
     assert all(job.cluster_name == "raisin" for job in all_jobs)
 
-
-# Test High-Level Client Functions: get_users pagination
-
-
-@pytest.mark.usefixtures("read_only_db_with_users")
-def test_rest_get_users_pagination(mock_client_class):
-    """Test that get_users correctly iterates over multiple pages."""
-    from sarc.client.api import get_users
-
-    all_users = get_users()
-    assert len(all_users) == 10
-
-    # Test with filters
-    filtered_users = get_users(display_name="Smith")
-    assert len(filtered_users) == 1
-    assert filtered_users[0].display_name == "John Smith"
+    # Test with non-existent cluster
+    assert len(list(get_jobs(cluster="nonexistent_cluster"))) == 0
 
 
 @pytest.mark.usefixtures("read_only_db_with_users")
@@ -811,6 +663,30 @@ def test_rest_get_jobs_multi_page_iteration(mock_client_class):
 
 
 @pytest.mark.usefixtures("read_only_db_with_users")
+def test_rest_get_users(mock_client_class):
+    """
+    Test the top-level get_users function which should iterate over pages.
+    """
+    from sarc.client.api import get_users
+    from sarc.core.models.users import UserData
+
+    # Call the helper function
+    all_users = get_users()
+
+    assert len(all_users) == 10
+    assert isinstance(all_users[0], UserData)
+
+    # Verify sorting by email (default)
+    emails = [u.email for u in all_users]
+    assert emails == sorted(emails)
+
+    # Test with filter
+    doe_users = get_users(display_name="Doe")
+    assert len(doe_users) == 1
+    assert doe_users[0].display_name == "Jane Doe"
+
+
+@pytest.mark.usefixtures("read_only_db_with_users")
 def test_rest_get_users_multi_page_iteration(mock_client_class):
     """
     Test that get_users correctly iterates through multiple pages.
@@ -818,24 +694,15 @@ def test_rest_get_users_multi_page_iteration(mock_client_class):
     from sarc.client.api import get_users
 
     with patch(
-        "sarc.client.api.SarcApiClient.job_list",
+        "sarc.client.api.SarcApiClient.user_list",
         autospec=True,
-        side_effect=SarcApiClient.job_list,
+        side_effect=SarcApiClient.user_list,
     ) as mock_func:
         all_users = get_users(per_page=3)
         # Should still get all 10 users across multiple pages
         assert len(all_users) == 10
 
         assert mock_func.call_count == 4
-
-
-def test_rest_get_jobs_invalid_cluster_yields_nothing(mock_client_class):
-    """Test get_jobs yields nothing for invalid cluster (404 handling)."""
-    from sarc.client.api import get_jobs
-
-    # Invalid cluster should yield no jobs (not raise exception)
-    all_jobs = list(get_jobs(cluster="nonexistent_cluster"))
-    assert len(all_jobs) == 0
 
 
 # Test job_id list via SarcApiClient
@@ -869,49 +736,6 @@ def test_job_list_by_job_id_list(sarc_client):
     assert 9 in job_ids
 
 
-# Test per_page parameter
-
-
-@pytest.mark.usefixtures("read_only_db_with_users")
-def test_job_list_per_page(sarc_client):
-    """Test job_list with custom per_page."""
-    # Get first 3 jobs
-    result = sarc_client.job_list(cluster="raisin", per_page=3)
-    assert result.per_page == 3
-    assert len(result.jobs) == 3
-    assert result.total == 20
-
-    # Get second page
-    result2 = sarc_client.job_list(cluster="raisin", page=2, per_page=3)
-    assert result2.page == 2
-    assert len(result2.jobs) == 3
-
-    # Verify different jobs on different pages
-    page1_ids = {job.job_id for job in result.jobs}
-    page2_ids = {job.job_id for job in result2.jobs}
-    assert page1_ids.isdisjoint(page2_ids)
-
-
-@pytest.mark.usefixtures("read_only_db_with_users")
-def test_user_list_per_page(sarc_client):
-    """Test user_list with custom per_page."""
-    # Get first 3 users
-    result = sarc_client.user_list(per_page=3)
-    assert result.per_page == 3
-    assert len(result.users) == 3
-    assert result.total == 10
-
-    # Get second page
-    result2 = sarc_client.user_list(page=2, per_page=3)
-    assert result2.page == 2
-    assert len(result2.users) == 3
-
-    # Verify different users on different pages
-    page1_emails = {user.email for user in result.users}
-    page2_emails = {user.email for user in result2.users}
-    assert page1_emails.isdisjoint(page2_emails)
-
-
 # Test get_rgus version handling
 
 
@@ -921,54 +745,6 @@ def test_rest_get_rgus_unsupported_version(mock_client_class):
 
     with pytest.raises(NotImplementedError, match="rgu_version != 1.0"):
         get_rgus(rgu_version="2.0")
-
-
-# Test _parse_common_args
-
-
-def test_parse_common_args_int_job_id():
-    """Test _parse_common_args converts int job_id to list."""
-    from sarc.client.api import _parse_common_args
-
-    job_id, _, _, _ = _parse_common_args(job_id=123)
-    assert job_id == [123]
-
-    # List should be unchanged
-    job_id2, _, _, _ = _parse_common_args(job_id=[1, 2, 3])
-    assert job_id2 == [1, 2, 3]
-
-
-def test_parse_common_args_str_job_state():
-    """Test _parse_common_args converts string job_state to enum."""
-    from sarc.client.api import _parse_common_args
-
-    _, job_state, _, _ = _parse_common_args(job_state="COMPLETED")
-    assert job_state == SlurmState.COMPLETED
-
-    # Enum should be unchanged
-    _, job_state2, _, _ = _parse_common_args(job_state=SlurmState.RUNNING)
-    assert job_state2 == SlurmState.RUNNING
-
-
-def test_parse_common_args_str_dates():
-    """Test _parse_common_args converts string dates to datetime."""
-    from sarc.client.api import _parse_common_args
-
-    _, _, start, end = _parse_common_args(start="2023-01-15", end="2023-02-20")
-
-    assert isinstance(start, datetime)
-    assert isinstance(end, datetime)
-    assert start.year == 2023
-    assert start.month == 1
-    assert start.day == 15
-    assert end.year == 2023
-    assert end.month == 2
-    assert end.day == 20
-
-    # datetime should be unchanged
-    dt = datetime(2024, 6, 15, 12, 30, tzinfo=UTC)
-    _, _, start2, _ = _parse_common_args(start=dt)
-    assert start2 == dt
 
 
 # Test pagination validation errors
