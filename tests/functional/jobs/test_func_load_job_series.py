@@ -10,8 +10,9 @@ while time_machine seems to keep using the real datetime class.
 """
 
 import math
+from dataclasses import dataclass
 from datetime import datetime
-from types import SimpleNamespace
+from typing import Callable
 
 import pandas
 import pytest
@@ -127,6 +128,13 @@ CSV_COLUMNS = [col for col in ALL_COLUMNS if col not in ["id"]]
 MOCK_TIME = datetime(2023, 11, 22, tzinfo=UTC)
 
 
+@dataclass
+class SeriesOps:
+    load_job_series: Callable
+    get_jobs: Callable
+    get_users: Callable
+
+
 class BaseTestLoadJobSeries:
     """
     Base class to test_load_job_series.
@@ -137,9 +145,9 @@ class BaseTestLoadJobSeries:
     client_only = False
 
     @pytest.fixture
-    def ops(self):
+    def ops(self) -> SeriesOps:
         """
-        ABstract fixture.
+        Abstract fixture.
 
         Must return an object containing methods
         get_users, get_jobs, load_job_series
@@ -519,12 +527,12 @@ class TestMongoLoadJobSeries(BaseTestLoadJobSeries):
     """Tests for MongoDB load_job_series"""
 
     @pytest.fixture
-    def ops(self):
+    def ops(self) -> SeriesOps:
         from sarc.client.job import get_jobs
         from sarc.client.series import load_job_series
         from sarc.users.db import get_users
 
-        return SimpleNamespace(
+        return SeriesOps(
             load_job_series=load_job_series,
             get_jobs=get_jobs,
             get_users=get_users,

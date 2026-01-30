@@ -7,10 +7,10 @@ import pytest
 from pydantic_mongo import PydanticObjectId
 
 from sarc.api.v0 import DEFAULT_PAGE_SIZE
-from sarc.client.api import SarcApiClient
 from sarc.client.job import SlurmJob, SlurmState
 from sarc.config import UTC, ConfigurationError
 from sarc.core.models.users import MemberType
+from sarc.rest.client import SarcApiClient
 
 
 # Test SarcApiClient Initialization
@@ -27,8 +27,8 @@ def test_init_with_params():
 
 
 def test_init_from_config():
-    # We patch sarc.client.api.config so we don't mess with the global app config
-    with patch("sarc.client.api.config") as mock_config:
+    # We patch sarc.rest.client.config so we don't mess with the global app config
+    with patch("sarc.rest.client.config") as mock_config:
         mock_config.return_value.api.url = "http://config-url.com/"
         mock_config.return_value.api.timeout = 90
 
@@ -43,16 +43,6 @@ def test_init_no_config_raises_error():
 
 
 # Test SarcApiClient Methods
-
-
-@pytest.fixture
-def sarc_client(client):
-    """
-    Returns a SarcApiClient that uses the FastAPI TestClient session.
-    The 'client' fixture comes from tests/functional/api/conftest.py
-    and is connected to the app with the database fixtures active.
-    """
-    return SarcApiClient(remote_url="http://testserver", session=client)
 
 
 @pytest.mark.usefixtures("read_only_db", "client_mode")
@@ -583,22 +573,10 @@ def test_job_list(sarc_client):
 # Test High-Level Client Functions
 
 
-@pytest.fixture
-def mock_client_class(client, monkeypatch):
-    import sarc.client.api
-
-    # Let's create a factory that returns a client with our test session
-    class MockSarcApiClient(SarcApiClient):
-        def __init__(self, *args, **kwargs):
-            super().__init__(remote_url="http://testserver", session=client)
-
-    monkeypatch.setattr(sarc.client.api, "SarcApiClient", MockSarcApiClient)
-
-
 @pytest.mark.usefixtures("read_only_db_with_users")
 def test_rest_count_jobs(mock_client_class):
     """Test the top-level count_jobs function."""
-    from sarc.client.api import count_jobs
+    from sarc.rest.client import count_jobs
 
     count = count_jobs(cluster="raisin")
     assert count == 20
@@ -614,7 +592,7 @@ def test_rest_count_jobs(mock_client_class):
 @pytest.mark.usefixtures("read_only_db_with_users")
 def test_rest_get_job(mock_client_class):
     """Test get_job returns a single job when found."""
-    from sarc.client.api import get_job
+    from sarc.rest.client import get_job
 
     job = get_job(cluster="raisin", job_id=10)
     assert job is not None
@@ -636,7 +614,7 @@ def test_rest_get_jobs(mock_client_class):
     """
     Test the top-level get_jobs function which should iterate over pages.
     """
-    from sarc.client.api import get_jobs
+    from sarc.rest.client import get_jobs
 
     # Call the helper function
     all_jobs = list(get_jobs(cluster="raisin"))
@@ -655,10 +633,10 @@ def test_rest_get_jobs_multi_page_iteration(mock_client_class):
     """
     Test that get_jobs correctly iterates through multiple pages.
     """
-    from sarc.client.api import get_jobs
+    from sarc.rest.client import get_jobs
 
     with patch(
-        "sarc.client.api.SarcApiClient.job_list",
+        "sarc.rest.client.SarcApiClient.job_list",
         autospec=True,
         side_effect=SarcApiClient.job_list,
     ) as mock_func:
@@ -674,7 +652,7 @@ def test_rest_get_users(mock_client_class):
     """
     Test the top-level get_users function which should iterate over pages.
     """
-    from sarc.client.api import get_users
+    from sarc.rest.client import get_users
     from sarc.core.models.users import UserData
 
     # Call the helper function
@@ -698,10 +676,10 @@ def test_rest_get_users_multi_page_iteration(mock_client_class):
     """
     Test that get_users correctly iterates through multiple pages.
     """
-    from sarc.client.api import get_users
+    from sarc.rest.client import get_users
 
     with patch(
-        "sarc.client.api.SarcApiClient.user_list",
+        "sarc.rest.client.SarcApiClient.user_list",
         autospec=True,
         side_effect=SarcApiClient.user_list,
     ) as mock_func:
@@ -748,7 +726,7 @@ def test_job_list_by_job_id_list(sarc_client):
 
 def test_rest_get_rgus_unsupported_version(mock_client_class):
     """Test get_rgus raises NotImplementedError for unsupported version."""
-    from sarc.client.api import get_rgus
+    from sarc.rest.client import get_rgus
 
     with pytest.raises(NotImplementedError, match="rgu_version != 1.0"):
         get_rgus(rgu_version="2.0")

@@ -20,7 +20,7 @@ Example:
         api:
             url: http://api.sarc.com:1234
     myscript.py
-        >>> from sarc.client.api import count_jobs
+        >>> from sarc.rest.client import count_jobs
         >>> print(count_jobs())
     run:
         SARC_MODE=client SARC_CONFIG=sarc-client.yaml uv run myscript.py

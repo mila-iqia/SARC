@@ -90,7 +90,7 @@ def job_query_params(
             job_id_ints = [int(jid) for jid in job_id if jid]
         except ValueError:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="job_id must be a list of integers",
             )
 
