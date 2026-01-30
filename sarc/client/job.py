@@ -165,7 +165,11 @@ class SlurmJob(BaseModel):
     @classmethod
     def _ensure_timezone(cls, v: datetime | None) -> datetime | None:
         # We'll store in TZLOCAL timezone because why not
-        return v and v.replace(tzinfo=UTC).astimezone(TZLOCAL)
+        if v is None:
+            return None
+        if v.tzinfo is None:
+            v = v.replace(tzinfo=UTC)
+        return v.astimezone(TZLOCAL)
 
     @property
     def duration(self) -> timedelta:
