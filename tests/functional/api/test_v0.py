@@ -201,6 +201,55 @@ def test_get_jobs_no_filters(client):
     assert len(data) == 24
 
 
+@pytest.mark.usefixtures("read_only_db")
+def test_list_jobs_no_filters(client):
+    """Test list jobs without any filters."""
+    response = client.get("/v0/job/list")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 24
+    assert len(data["jobs"]) == 24
+    assert data["page"] == 1
+    assert data["per_page"] == 100
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_list_jobs_pagination(client):
+    """Test list jobs with pagination."""
+    # Page 1, 5 items
+    response = client.get("/v0/job/list?page=1&per_page=5")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 24
+    assert len(data["jobs"]) == 5
+    assert data["page"] == 1
+    assert data["per_page"] == 5
+
+    # Page 5, should have 4 items left (24 - 4*5 = 4)
+    response = client.get("/v0/job/list?page=5&per_page=5")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["jobs"]) == 4
+    assert data["page"] == 5
+
+    # Page 6, should be empty
+    response = client.get("/v0/job/list?page=6&per_page=5")
+    assert response.status_code == 200
+    assert len(response.json()["jobs"]) == 0
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_list_jobs_invalid_pagination(client):
+    """Test list jobs with invalid pagination parameters."""
+    # Page < 1
+    assert client.get("/v0/job/list?page=0").status_code == 400
+    # Per page < 1
+    assert client.get("/v0/job/list?per_page=0").status_code == 400
+    # Per page > MAX (200)
+    assert client.get("/v0/job/list?per_page=201").status_code == 400
+
+
 @pytest.mark.usefixtures("read_only_db_with_users")
 def test_count_jobs_by_cluster(client):
     """Test jobs count by cluster."""
@@ -686,14 +735,34 @@ def test_user_list(client):
     emails = [u["email"] for u in data["users"]]
     assert emails == sorted(emails)
 
-    # todo test per_page
-
-    response = client.get("/v0/user/list?page=2")
+    # Test per_page
+    response = client.get("/v0/user/list?per_page=3")
     assert response.status_code == 200
     data = response.json()
-    assert data["page"] == 2
+    assert len(data["users"]) == 3
     assert data["total"] == 10
-    assert len(data["users"]) == 0
+
+    # Test page 2
+    response = client.get("/v0/user/list?page=2&per_page=3")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["users"]) == 3
+    assert data["page"] == 2
+
+    # Page 4 (3*3 = 9, 1 left)
+    response = client.get("/v0/user/list?page=4&per_page=3")
+    assert response.status_code == 200
+    assert len(response.json()["users"]) == 1
+
+    # Page out of bounds
+    response = client.get("/v0/user/list?page=5&per_page=3")
+    assert response.status_code == 200
+    assert len(response.json()["users"]) == 0
+
+    # Invalid parameters
+    assert client.get("/v0/user/list?page=0").status_code == 400
+    assert client.get("/v0/user/list?per_page=0").status_code == 400
+    assert client.get("/v0/user/list?per_page=201").status_code == 400
 
     # Test filtering with list endpoint
     response = client.get("/v0/user/list?display_name=janE")

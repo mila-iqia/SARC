@@ -553,6 +553,15 @@ def test_user_list_per_page_3(sarc_client):
 
 
 @pytest.mark.usefixtures("read_only_db_with_users")
+def test_job_list_no_filters(sarc_client):
+    jobs_list = sarc_client.job_list()
+    assert jobs_list.page == 1
+    assert jobs_list.total == 24
+    assert len(jobs_list.jobs) == 24
+    assert jobs_list.per_page == DEFAULT_PAGE_SIZE
+
+
+@pytest.mark.usefixtures("read_only_db_with_users")
 def test_job_list(sarc_client):
     # We expect 20 jobs in raisin cluster
     prev_jobs = []
