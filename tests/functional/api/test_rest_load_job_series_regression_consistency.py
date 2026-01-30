@@ -19,7 +19,7 @@ import pytest
 # Absolute paths to regression result directories
 BASE_DIR = Path(__file__).parent.parent.parent.parent
 JOBS_REG_DIR = BASE_DIR / "tests/functional/jobs/test_func_load_job_series"
-API_REG_DIR = BASE_DIR / "tests/functional/api/test_client_load_job_series"
+API_REG_DIR = BASE_DIR / "tests/functional/api/test_rest_load_job_series"
 
 
 def normalize_text(text):
