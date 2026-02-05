@@ -47,6 +47,9 @@ class AbstractJobSeriesFactory(ABC):
     - one for API REST client (using REST client functions)
     """
 
+    def _get_desc(self) -> str:
+        return "load job series"
+
     @abstractmethod
     def count_jobs(self, *args, **kwargs) -> int:
         raise NotImplementedError()
@@ -131,9 +134,7 @@ class AbstractJobSeriesFactory(ABC):
         rows = []
         now = datetime.now(tz=TZLOCAL)
         # Fetch all jobs from the clusters
-        for job in tqdm(
-            self.get_jobs(**jobs_args), total=total, desc="load job series"
-        ):
+        for job in tqdm(self.get_jobs(**jobs_args), total=total, desc=self._get_desc()):
             if job.end_time is None:
                 job.end_time = now
 
@@ -232,6 +233,11 @@ class AbstractJobSeriesFactory(ABC):
             df_mila_mask = jobs_frame[field_cluster_name] == "mila"
             df_drac_mask = jobs_frame[field_cluster_name] != "mila"
 
+            # TODO What if there are many user entries with same user.mila_username ?
+            #   NB: This case should not happen. But anyway, possible workarounds:
+            #   `df_a.merge(df_b, on='ID', validate='many_to_one')` ?
+            #   `users_unique = users_frame.drop_duplicates(subset="user.mila_username", keep="first")` ?
+
             merged_mila = jobs_frame[df_mila_mask].merge(
                 users_frame,
                 left_on=field_job_user,
@@ -260,6 +266,9 @@ class AbstractJobSeriesFactory(ABC):
 
 class MongoJobSeriesFactory(AbstractJobSeriesFactory):
     """Implementation for direct MongoDB access."""
+
+    def _get_desc(self) -> str:
+        return super()._get_desc() + " (mongodb)"
 
     def count_jobs(self, *args, **kwargs) -> int:
         return count_jobs(*args, **kwargs)

@@ -38,6 +38,7 @@ dependencies = [
     "pyodbc>=5.2.0,<6",
     "azure-identity>=1.23.1,<2",
     "rapporteur>=0.1.1",
+    "orjson>=3.11.7",
 ]
 
 [project.scripts]

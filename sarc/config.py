@@ -210,8 +210,18 @@ class UserScrapingConfig:
 
 @dataclass
 class ApiConfig:
-    url: str
+    """
+    Configuration for Python REST API client
+
+    Used if client is initialized without parameters.
+    Currently necessary for high-level Python client functions
+    such as `load_job_series()`, which internally initialize
+    a client without parameters.
+    """
+
+    url: str  # REST API URL (including port)
     timeout: int = 120
+    per_page: int = 100  # Default pagination size
 
 
 @dataclass

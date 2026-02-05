@@ -55,6 +55,7 @@ class SarcApiClient:
         remote_url: str | None = None,
         timeout: int | None = None,
         session: httpx.Client | None = None,
+        per_page: int | None = None,
     ) -> None:
         """
         Initialize.
@@ -62,6 +63,7 @@ class SarcApiClient:
         :param remote_url: API URL
         :param timeout: requests timeout, in seconds. Default: 120.
         :param session: internal httpx client to use. Default: httpx module.
+        :param per_page: default page size for paginated endpoints. Default: 100.
         """
 
         try:
@@ -81,10 +83,14 @@ class SarcApiClient:
         if timeout is None:
             timeout = api_cfg.timeout if api_cfg else 120
 
+        if per_page is None:
+            per_page = api_cfg.per_page if api_cfg else DEFAULT_PAGE_SIZE
+
         # Ensure no trailing slash for consistency
         self.remote_url = remote_url.rstrip("/")
         self.timeout = timeout
         self.session = session or httpx
+        self.per_page = per_page
 
     def _get(self, endpoint: str, params: dict | None = None) -> httpx.Response:
         """Helper to perform a GET request."""
@@ -149,7 +155,7 @@ class SarcApiClient:
         start: datetime | None = None,
         end: datetime | None = None,
         page: int = 1,
-        per_page: int = DEFAULT_PAGE_SIZE,
+        per_page: int | None = None,
     ) -> SlurmJobList:
         """
         Query jobs with pagination.
@@ -164,7 +170,7 @@ class SarcApiClient:
             "start": start,
             "end": end,
             "page": page,
-            "per_page": per_page,
+            "per_page": per_page if per_page is not None else self.per_page,
         }
         response = self._get("/v0/job/list", params=params)
         return SlurmJobList.model_validate(response.json())
@@ -265,7 +271,7 @@ class SarcApiClient:
         co_supervisor_start: datetime | None = None,
         co_supervisor_end: datetime | None = None,
         page: int = 1,
-        per_page: int = DEFAULT_PAGE_SIZE,
+        per_page: int | None = None,
     ) -> UserList:
         """
         List users with details and pagination.
@@ -283,7 +289,7 @@ class SarcApiClient:
             "co_supervisor_start": co_supervisor_start,
             "co_supervisor_end": co_supervisor_end,
             "page": page,
-            "per_page": per_page,
+            "per_page": per_page if per_page is not None else self.per_page,
         }
         response = self._get("/v0/user/list", params=params)
         return UserList.model_validate(response.json())
@@ -415,7 +421,6 @@ def get_jobs(
     user: str | None = None,
     start: str | datetime | None = None,
     end: str | datetime | None = None,
-    per_page: int = DEFAULT_PAGE_SIZE,
 ) -> Iterable[SlurmJob]:
     """
     Get jobs matching the criteria using the REST API.
@@ -423,11 +428,12 @@ def get_jobs(
 
     Same signature as in `sarc.client.job.get_jobs`,
     except parameter `query_options` which is specific to MongoDB,
-    adding parameter `per_page` to allow control on pagination for `/job/list` calls.
     """
     # Use a single httpx client for all calls.
     with httpx.Client() as session:
         client = SarcApiClient(session=session)
+
+        per_page = client.per_page
 
         job_id, job_state, start, end = _parse_common_args(
             job_id, job_state, start, end
@@ -492,8 +498,6 @@ def get_users(
     co_supervisor: UUID4 | None = None,
     co_supervisor_start: datetime | None = None,
     co_supervisor_end: datetime | None = None,
-    *,
-    per_page: int = DEFAULT_PAGE_SIZE,
 ) -> list[UserData]:
     """
     Get users matching the criteria using the REST API.
@@ -504,6 +508,9 @@ def get_users(
     """
     with httpx.Client() as session:
         client = SarcApiClient(session=session)
+
+        per_page = client.per_page
+
         all_users = []
         page = 1
 
@@ -543,6 +550,9 @@ class RestJobSeriesFactory(AbstractJobSeriesFactory):
     Allow to implement load_job_series for REST API below.
     """
 
+    def _get_desc(self) -> str:
+        return super()._get_desc() + " (REST)"
+
     def count_jobs(self, *args, **kwargs) -> int:
         return count_jobs(*args, **kwargs)
 
@@ -567,6 +577,10 @@ def load_job_series(
     See sarc.client.series.JobSeriesFactory.load_job_series for details.
     """
     factory = RestJobSeriesFactory()
-    return factory.load_job_series(
-        fields=fields, clip_time=clip_time, callback=callback, **jobs_args
-    )
+    try:
+        return factory.load_job_series(
+            fields=fields, clip_time=clip_time, callback=callback, **jobs_args
+        )
+    except httpx.HTTPStatusError as exc:
+        resp = exc.response.json()
+        raise RuntimeError(resp) from exc

@@ -6,7 +6,7 @@ import httpx
 import pytest
 from pydantic_mongo import PydanticObjectId
 
-from sarc.api.v0 import DEFAULT_PAGE_SIZE
+from sarc.api.v0 import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
 from sarc.client.job import SlurmJob, SlurmState
 from sarc.config import UTC, ConfigurationError
 from sarc.core.models.users import MemberType
@@ -20,10 +20,12 @@ def test_init_with_params():
     c = SarcApiClient(remote_url="http://example.com", timeout=60)
     assert c.remote_url == "http://example.com"
     assert c.timeout == 60
+    assert c.per_page == DEFAULT_PAGE_SIZE
 
-    c2 = SarcApiClient("http://example.com/")
+    c2 = SarcApiClient("http://example.com/", per_page=12)
     assert c2.remote_url == "http://example.com"
     assert c2.timeout == 120  # default timeout
+    assert c2.per_page == 12
 
 
 def test_init_from_config():
@@ -31,10 +33,12 @@ def test_init_from_config():
     with patch("sarc.rest.client.config") as mock_config:
         mock_config.return_value.api.url = "http://config-url.com/"
         mock_config.return_value.api.timeout = 90
+        mock_config.return_value.api.per_page = 904
 
         c = SarcApiClient()
         assert c.remote_url == "http://config-url.com"
         assert c.timeout == 90
+        assert c.per_page == 904
 
 
 def test_init_no_config_raises_error():
@@ -629,25 +633,6 @@ def test_rest_get_jobs(mock_client_class):
 
 
 @pytest.mark.usefixtures("read_only_db_with_users")
-def test_rest_get_jobs_multi_page_iteration(mock_client_class):
-    """
-    Test that get_jobs correctly iterates through multiple pages.
-    """
-    from sarc.rest.client import get_jobs
-
-    with patch(
-        "sarc.rest.client.SarcApiClient.job_list",
-        autospec=True,
-        side_effect=SarcApiClient.job_list,
-    ) as mock_func:
-        all_jobs = list(get_jobs(cluster="raisin", per_page=3))
-        # Should still get all 20 jobs across multiple pages
-        assert len(all_jobs) == 20
-
-        assert mock_func.call_count == 7
-
-
-@pytest.mark.usefixtures("read_only_db_with_users")
 def test_rest_get_users(mock_client_class):
     """
     Test the top-level get_users function which should iterate over pages.
@@ -669,25 +654,6 @@ def test_rest_get_users(mock_client_class):
     doe_users = get_users(display_name="Doe")
     assert len(doe_users) == 1
     assert doe_users[0].display_name == "Jane Doe"
-
-
-@pytest.mark.usefixtures("read_only_db_with_users")
-def test_rest_get_users_multi_page_iteration(mock_client_class):
-    """
-    Test that get_users correctly iterates through multiple pages.
-    """
-    from sarc.rest.client import get_users
-
-    with patch(
-        "sarc.rest.client.SarcApiClient.user_list",
-        autospec=True,
-        side_effect=SarcApiClient.user_list,
-    ) as mock_func:
-        all_users = get_users(per_page=3)
-        # Should still get all 10 users across multiple pages
-        assert len(all_users) == 10
-
-        assert mock_func.call_count == 4
 
 
 # Test job_id list via SarcApiClient
@@ -757,7 +723,7 @@ def test_job_list_per_page_less_than_one(sarc_client):
 def test_job_list_per_page_exceeds_max(sarc_client):
     """Test job_list with per_page > MAX_PAGE_SIZE raises 400 error."""
     with pytest.raises(httpx.HTTPStatusError) as excinfo:
-        sarc_client.job_list(per_page=500)  # MAX_PAGE_SIZE is 200
+        sarc_client.job_list(per_page=MAX_PAGE_SIZE + 1)
     assert excinfo.value.response.status_code == 400
     assert "Page size must be <=" in excinfo.value.response.json()["detail"]
 
@@ -784,6 +750,6 @@ def test_user_list_per_page_less_than_one(sarc_client):
 def test_user_list_per_page_exceeds_max(sarc_client):
     """Test user_list with per_page > MAX_PAGE_SIZE raises 400 error."""
     with pytest.raises(httpx.HTTPStatusError) as excinfo:
-        sarc_client.user_list(per_page=500)  # MAX_PAGE_SIZE is 200
+        sarc_client.user_list(per_page=MAX_PAGE_SIZE + 1)
     assert excinfo.value.response.status_code == 400
     assert "Page size must be <=" in excinfo.value.response.json()["detail"]

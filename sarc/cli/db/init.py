@@ -150,6 +150,11 @@ def create_users_indices(db: Database) -> None:
     db_collection.create_index([("uuid", pymongo.ASCENDING)], unique=True)
     db_collection.create_index([("matching_ids.$**", pymongo.ASCENDING)])
 
+    # For user sorting in REST API
+    db_collection.create_index(
+        [("email", pymongo.ASCENDING), ("uuid", pymongo.ASCENDING)]
+    )
+
 
 def create_gpu_billing_indices(db: Database) -> None:
     db_collection = db.gpu_billing
@@ -296,4 +301,9 @@ def create_jobs_indices(db: Database) -> None:
         ],
         name="idx_gpu_type_not_none",
         partialFilterExpression={"allocated.gpu_type": {"$type": "string"}},
+    )
+
+    # Index most useful for job sorting in REST API
+    db_collection.create_index(
+        [("submit_time", pymongo.DESCENDING), ("_id", pymongo.ASCENDING)],
     )

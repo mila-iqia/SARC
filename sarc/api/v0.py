@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.responses import ORJSONResponse
 from pydantic import AfterValidator, BaseModel, UUID4
 from pydantic_mongo import PydanticObjectId
 
@@ -17,10 +18,13 @@ from sarc.core.models import validators
 from sarc.core.models.users import MemberType, UserData
 from sarc.users.db import get_user_collection
 
-router = APIRouter(prefix="/v0")
+# Use `orjson` module to handle JSON.
+# `orjson` automatically converts float NaN values to None,
+# and is expected to be faster than builtin `json`.
+router = APIRouter(prefix="/v0", default_response_class=ORJSONResponse)
 
 DEFAULT_PAGE_SIZE = 100
-MAX_PAGE_SIZE = 200
+MAX_PAGE_SIZE = 5_000
 
 
 def valid_cluster(cluster: str):
@@ -235,7 +239,7 @@ def list_jobs(
 
     cursor = (
         coll.get_collection()
-        .find(query)
+        .find(query, allow_disk_use=True)
         .sort([("submit_time", -1), ("_id", 1)])
         .skip((page - 1) * per_page)
         .limit(per_page)
@@ -310,7 +314,7 @@ def list_users(
 
     cursor = (
         coll.get_collection()
-        .find(query)
+        .find(query, allow_disk_use=True)
         .sort([("email", 1), ("uuid", 1)])
         .skip((page - 1) * per_page)
         .limit(per_page)
