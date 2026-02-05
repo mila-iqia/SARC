@@ -1,34 +1,26 @@
 from datetime import datetime, timedelta
 
 import pytest
-from fastapi.testclient import TestClient
+from pydantic_mongo import PydanticObjectId
 
-from sarc.api.v0 import router
+from sarc.api.v0 import MAX_PAGE_SIZE
 from sarc.config import UTC
-
-
-@pytest.fixture
-def app():
-    """Create a FastAPI test app with the v0 router."""
-    from fastapi import FastAPI
-
-    app = FastAPI()
-    app.include_router(router)
-    return app
-
-
-@pytest.fixture
-def client(app):
-    """Create a test client for the FastAPI app."""
-    return TestClient(app)
 
 
 @pytest.mark.usefixtures("read_only_db", "client_mode")
 def test_get_job_not_found(client):
-    """Test job not found returns 404."""
+    """Test job not found (string, bad ID format) returns 422."""
     response = client.get("/v0/job/id/not_found")
 
     assert response.status_code == 422
+
+
+@pytest.mark.usefixtures("read_only_db", "client_mode")
+def test_get_job_not_found_pydantic_id(client):
+    """Test job not found (pydantic object ID, good format) returns 404."""
+    oid = PydanticObjectId()
+    response = client.get(f"/v0/job/id/{oid}")
+    assert response.status_code == 404
 
 
 @pytest.mark.usefixtures("read_only_db_with_users")
@@ -93,6 +85,43 @@ def test_get_jobs_by_state(client):
         assert r.status_code == 200
         job = r.json()
         assert job["job_state"] == "COMPLETED"
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_get_jobs_multiple_job_ids(client):
+    """Test jobs query with multiple job IDs."""
+    response = client.get("/v0/job/query?job_id=10&job_id=20")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) == 2
+    for jid in data:
+        r = client.get(f"/v0/job/id/{jid}")
+        assert r.status_code == 200
+        job = r.json()
+        assert job["job_id"] in (10, 20)
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_get_jobs_empty_job_id_list(client):
+    """Test jobs query with an empty job_id list.
+    SarcApiClient sends job_id= for an empty list.
+    """
+    response = client.get("/v0/job/query?job_id=")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) == 0
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_get_jobs_invalid_job_id(client):
+    """Test jobs query with invalid job ID."""
+    response = client.get("/v0/job/query?job_id=not_an_int")
+
+    assert response.status_code == 422
 
 
 @pytest.mark.usefixtures("read_only_db")
@@ -171,6 +200,55 @@ def test_get_jobs_no_filters(client):
     data = response.json()
     assert isinstance(data, list)
     assert len(data) == 24
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_list_jobs_no_filters(client):
+    """Test list jobs without any filters."""
+    response = client.get("/v0/job/list")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 24
+    assert len(data["jobs"]) == 24
+    assert data["page"] == 1
+    assert data["per_page"] == 100
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_list_jobs_pagination(client):
+    """Test list jobs with pagination."""
+    # Page 1, 5 items
+    response = client.get("/v0/job/list?page=1&per_page=5")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 24
+    assert len(data["jobs"]) == 5
+    assert data["page"] == 1
+    assert data["per_page"] == 5
+
+    # Page 5, should have 4 items left (24 - 4*5 = 4)
+    response = client.get("/v0/job/list?page=5&per_page=5")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["jobs"]) == 4
+    assert data["page"] == 5
+
+    # Page 6, should be empty
+    response = client.get("/v0/job/list?page=6&per_page=5")
+    assert response.status_code == 200
+    assert len(response.json()["jobs"]) == 0
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_list_jobs_invalid_pagination(client):
+    """Test list jobs with invalid pagination parameters."""
+    # Page < 1
+    assert client.get("/v0/job/list?page=0").status_code == 400
+    # Per page < 1
+    assert client.get("/v0/job/list?per_page=0").status_code == 400
+    # Per page > MAX
+    assert client.get(f"/v0/job/list?per_page={MAX_PAGE_SIZE + 1}").status_code == 400
 
 
 @pytest.mark.usefixtures("read_only_db_with_users")
@@ -641,3 +719,56 @@ def test_get_user_by_email(client):
 def test_get_user_by_email_unknown(client):
     response = client.get("/v0/user/email/unknown")
     assert response.status_code == 404
+
+
+@pytest.mark.usefixtures("read_only_db_with_users")
+def test_user_list(client):
+    """Test user list with pagination."""
+    # Default page 1
+    response = client.get("/v0/user/list")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["page"] == 1
+    assert data["total"] == 10
+    assert len(data["users"]) == 10
+
+    # Check sorting: email asc
+    emails = [u["email"] for u in data["users"]]
+    assert emails == sorted(emails)
+
+    # Test per_page
+    response = client.get("/v0/user/list?per_page=3")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["users"]) == 3
+    assert data["total"] == 10
+
+    # Test page 2
+    response = client.get("/v0/user/list?page=2&per_page=3")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["users"]) == 3
+    assert data["page"] == 2
+
+    # Page 4 (3*3 = 9, 1 left)
+    response = client.get("/v0/user/list?page=4&per_page=3")
+    assert response.status_code == 200
+    assert len(response.json()["users"]) == 1
+
+    # Page out of bounds
+    response = client.get("/v0/user/list?page=5&per_page=3")
+    assert response.status_code == 200
+    assert len(response.json()["users"]) == 0
+
+    # Invalid parameters
+    assert client.get("/v0/user/list?page=0").status_code == 400
+    assert client.get("/v0/user/list?per_page=0").status_code == 400
+    assert client.get(f"/v0/user/list?per_page={MAX_PAGE_SIZE + 1}").status_code == 400
+
+    # Test filtering with list endpoint
+    response = client.get("/v0/user/list?display_name=janE")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 1
+    assert len(data["users"]) == 1
+    assert data["users"][0]["display_name"] == "Jane Doe"

@@ -5,10 +5,10 @@ import math
 from collections.abc import Sequence
 from datetime import datetime, time, timedelta
 from enum import Enum
-from typing import Any, Iterable, Literal, overload
+from typing import Any, Iterable, Literal, overload, Annotated
 
 from pandas import DataFrame
-from pydantic import field_validator
+from pydantic import field_validator, BeforeValidator
 from pydantic_mongo import AbstractRepository, PydanticObjectId
 
 from sarc.client.gpumetrics import get_rgus, get_cluster_gpu_billings
@@ -49,17 +49,28 @@ class SlurmState(str, Enum):
     TIMEOUT = "TIMEOUT"
 
 
+def float_nan_fallback(v: Any) -> Any:
+    """Convert None to NaN"""
+    if v is None:
+        return math.nan
+    return v
+
+
+# Annotated float to accept None as value and convert it to NaN
+SmartFloat = Annotated[float, BeforeValidator(float_nan_fallback)]
+
+
 class Statistics(BaseModel):
     """Statistics for a timeseries."""
 
-    mean: float
-    std: float
-    q05: float
-    q25: float
-    median: float
-    q75: float
-    max: float
-    unused: int
+    mean: SmartFloat
+    std: SmartFloat
+    q05: SmartFloat
+    q25: SmartFloat
+    median: SmartFloat
+    q75: SmartFloat
+    max: SmartFloat
+    unused: SmartFloat
 
 
 class JobStatistics(BaseModel):
@@ -165,7 +176,11 @@ class SlurmJob(BaseModel):
     @classmethod
     def _ensure_timezone(cls, v: datetime | None) -> datetime | None:
         # We'll store in TZLOCAL timezone because why not
-        return v and v.replace(tzinfo=UTC).astimezone(TZLOCAL)
+        if v is None:
+            return None
+        if v.tzinfo is None:
+            v = v.replace(tzinfo=UTC)
+        return v.astimezone(TZLOCAL)
 
     @property
     def duration(self) -> timedelta:
