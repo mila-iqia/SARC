@@ -57,6 +57,8 @@ class DbInit:
 
         create_node_gpu_mapping_indices(db)
 
+        create_healthcheck_indices(db)
+
         return 0
 
     def create_acount(self, client: pymongo.MongoClient, db: Database) -> None:
@@ -99,6 +101,7 @@ class DbInit:
             "clusters",
             "gpu_billing",
             "node_gpu_mapping",
+            "healthcheck",
         ]
 
         try:
@@ -176,6 +179,12 @@ def create_node_gpu_mapping_indices(db: Database) -> None:
         ],
         unique=True,
     )
+
+
+def create_healthcheck_indices(db: Database) -> None:
+    """Create indices for the healthcheck collection."""
+    db_collection = db.healthcheck
+    db_collection.create_index([("name", pymongo.ASCENDING)], unique=True)
 
 
 def create_allocations_indices(db: Database) -> None:

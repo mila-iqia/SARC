@@ -112,6 +112,19 @@ class CheckResult:
         dest.write_text(json.dumps(serialized, indent=4), encoding="utf8")
         logger.debug(f"Wrote {dest}")
 
+    def log_result(self) -> None:
+        """Log check result with appropriate level for polling mode."""
+        if self.status == CheckStatus.OK:
+            logger.info(f"[{self.name}] OK")
+        elif self.status == CheckStatus.FAILURE:
+            failures = ", ".join(self.get_failures().keys())
+            logger.warning(f"[{self.name}] FAILURE: {failures}")
+        elif self.status == CheckStatus.ERROR:
+            msg = self.exception.message if self.exception else "Unknown error"
+            logger.error(f"[{self.name}] ERROR: {msg}")
+        else:
+            logger.info(f"[{self.name}] {self.status.name}")
+
 
 @dataclass
 class HealthCheck:
