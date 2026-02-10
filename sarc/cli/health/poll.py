@@ -103,13 +103,15 @@ class HealthPollCommand:
 
                     repo.update_state(
                         name=name,
-                        status=result.status.value,
+                        status=result.status,
                         message=message,
                         run_time=result.issue_date,
                     )
 
                     # Update local state for dependency checks
-                    db_states[name] = repo.get_state(name)
+                    new_state = repo.get_state(name)
+                    assert new_state is not None
+                    db_states[name] = new_state
 
                 except Exception as exc:  # pylint: disable=broad-except
                     logger.error(
@@ -118,7 +120,7 @@ class HealthPollCommand:
                     )
                     repo.update_state(
                         name=name,
-                        status="error",
+                        status=CheckStatus.ERROR,
                         message=str(exc),
                     )
                     checks_run += 1
