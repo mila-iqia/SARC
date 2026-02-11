@@ -31,7 +31,7 @@ class HealthRunCommand:
     """
 
     config: Path | None = None
-    checks: list[str] | None = simple_parsing.field(
+    check: list[str] | None = simple_parsing.field(
         default=None,
         help="Names of health checks to run. Mutually exclusive with --all",
     )
@@ -53,16 +53,16 @@ class HealthRunCommand:
             logger.error("No health_monitor configuration found")
             return -1
 
-        if not self.checks and not self.all:
+        if not self.check and not self.all:
             logger.error("No health checks to run. Use either --all or --checks")
             return -1
-        if self.checks and self.all:
+        if self.check and self.all:
             logger.error("Arguments mutually exclusive: --all | --checks")
             return -1
 
-        if self.checks:
+        if self.check:
             check_names = [
-                check_name for check_name in self.checks if check_name in hcfg.checks
+                check_name for check_name in self.check if check_name in hcfg.checks
             ]
             logger.debug(f"Running {len(check_names)} health checks: {check_names}")
         else:
@@ -80,7 +80,7 @@ class HealthRunCommand:
             if state is None:
                 # Get check from config file and save it in a new state in db
                 state = HealthCheckState(check=hcfg.checks[name])
-                repo.update_state(state)
+                repo.save(state)
             check = state.check
 
             # Skip inactive checks
@@ -108,7 +108,7 @@ class HealthRunCommand:
                 continue
 
             # Execute the check
-            logger.info(f"Running check: '{name}'")
+            logger.debug(f"Running check: '{name}'")
             result = check.wrapped_check()
             checks_run += 1
             # Log the result
@@ -116,7 +116,9 @@ class HealthRunCommand:
             # Update MongoDB state
             state.last_result = result
             state.last_message = message
-            repo.update_state(state)
+            repo.save(state)
 
-        logger.info(f"Poll complete: {checks_run} checks run, {checks_skipped} skipped")
+        logger.info(
+            f"Check complete: {checks_run} checks run, {checks_skipped} skipped"
+        )
         return 0

@@ -54,12 +54,6 @@ class CheckException:
         )
 
 
-# Use `type` keyword to define a type alias.
-# - allow to refer type alias to itself without using quotes.
-# - prevent maximum recursion error in Pydantic.
-type StatusDict = dict[str, CheckStatus | StatusDict]
-
-
 @dataclass
 class CheckResult:
     """Results of a check."""
@@ -71,7 +65,7 @@ class CheckResult:
     status: CheckStatus = CheckStatus.ABSENT
 
     # Statuses of individual checks
-    statuses: StatusDict = field(default_factory=dict)
+    statuses: dict[str, CheckStatus] = field(default_factory=dict)
 
     # Information about the exception, if the check has ERROR status
     exception: CheckException | None = None

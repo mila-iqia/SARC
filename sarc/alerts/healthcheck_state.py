@@ -2,11 +2,52 @@
 
 from __future__ import annotations
 
+from typing import Any, Annotated
+
+from pydantic import PlainSerializer, BeforeValidator
 from pydantic_mongo import AbstractRepository, PydanticObjectId
+from serieux import serialize, deserialize, TaggedSubclass
 
 from sarc.alerts.common import HealthCheck, CheckResult
 from sarc.config import config
 from sarc.model import BaseModel
+
+
+def _serialize_health_check(hc: HealthCheck) -> dict[str, Any]:
+    return serialize(TaggedSubclass[HealthCheck], hc)
+
+
+def _validate_health_check(v: Any) -> HealthCheck:
+    if isinstance(v, HealthCheck):
+        return v
+    assert isinstance(v, dict)
+    return deserialize(TaggedSubclass[HealthCheck], v)
+
+
+HealthCheckPydantic = Annotated[
+    HealthCheck,
+    PlainSerializer(_serialize_health_check, return_type=dict),
+    BeforeValidator(_validate_health_check),
+]
+
+
+def _serialize_check_result(result: CheckResult) -> dict[str, Any]:
+    result.check = None
+    return serialize(TaggedSubclass[CheckResult], result)
+
+
+def _validate_check_result(v: Any) -> CheckResult:
+    if isinstance(v, CheckResult):
+        return v
+    assert isinstance(v, dict)
+    return deserialize(TaggedSubclass[CheckResult], v)
+
+
+CheckResultPydantic = Annotated[
+    CheckResult,
+    PlainSerializer(_serialize_check_result, return_type=dict),
+    BeforeValidator(_validate_check_result),
+]
 
 
 class HealthCheckState(BaseModel):
@@ -21,11 +62,11 @@ class HealthCheckState(BaseModel):
     id: PydanticObjectId | None = None
 
     # Check configuration
-    check: HealthCheck
+    check: HealthCheckPydantic
 
     # Check last result (None if never run)
     # Contains `status` and `issue_date` (last run time)
-    last_result: CheckResult | None = None
+    last_result: CheckResultPydantic | None = None
 
     # Optional summary message (e.g., error description)
     last_message: str | None = None
@@ -40,13 +81,6 @@ class HealthCheckStateRepository(AbstractRepository[HealthCheckState]):
     def get_state(self, name: str) -> HealthCheckState | None:
         """Get the state for a specific check by name."""
         return self.find_one_by({"check.name": name})
-
-    def update_state(self, state: HealthCheckState):
-        assert state.check is not None
-        if state.last_result is not None and state.last_result.check is not None:
-            assert state.last_result.check is state.check
-            state.last_result.check = None
-        self.save(state)
 
 
 def get_healthcheck_state_collection() -> HealthCheckStateRepository:
