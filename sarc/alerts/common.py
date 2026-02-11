@@ -54,7 +54,10 @@ class CheckException:
         )
 
 
-StatusDict = dict[str, "CheckStatus | StatusDict"]
+# Use `type` keyword to define a type alias.
+# - allow to refer type alias to itself without using quotes.
+# - prevent maximum recursion error in Pydantic.
+type StatusDict = dict[str, CheckStatus | StatusDict]
 
 
 @dataclass
@@ -112,18 +115,27 @@ class CheckResult:
         dest.write_text(json.dumps(serialized, indent=4), encoding="utf8")
         logger.debug(f"Wrote {dest}")
 
-    def log_result(self) -> None:
-        """Log check result with appropriate level for polling mode."""
+    def log_result(self) -> str:
+        """Log check result with appropriate level for polling mode. Return logged message."""
+        prefix = f"[{self.name}] {self.status.name}"
+        desc = prefix
         if self.status == CheckStatus.OK:
-            logger.info(f"[{self.name}] OK")
+            logger.info(prefix)
         elif self.status == CheckStatus.FAILURE:
             failures = ", ".join(self.get_failures().keys())
-            logger.warning(f"[{self.name}] FAILURE: {failures}")
+            desc = f"{prefix}: {failures}"
+            logger.warning(desc)
         elif self.status == CheckStatus.ERROR:
-            msg = self.exception.message if self.exception else "Unknown error"
-            logger.error(f"[{self.name}] ERROR: {msg}")
+            msg = (
+                f"{self.exception.type}: {self.exception.message}"
+                if self.exception
+                else "Unknown error"
+            )
+            desc = f"{prefix}: {msg}"
+            logger.error(desc)
         else:
-            logger.info(f"[{self.name}] {self.status.name}")
+            logger.info(prefix)
+        return desc
 
 
 @dataclass

@@ -184,7 +184,7 @@ def create_node_gpu_mapping_indices(db: Database) -> None:
 def create_healthcheck_indices(db: Database) -> None:
     """Create indices for the healthcheck collection."""
     db_collection = db.healthcheck
-    db_collection.create_index([("name", pymongo.ASCENDING)], unique=True)
+    db_collection.create_index([("check.name", pymongo.ASCENDING)], unique=True)
 
 
 def create_allocations_indices(db: Database) -> None:

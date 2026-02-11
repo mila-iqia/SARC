@@ -6,7 +6,7 @@ from simple_parsing import subparsers
 from .check import HealthCheckCommand
 from .history import HealthHistoryCommand
 from .monitor import HealthMonitorCommand
-from .poll import HealthPollCommand
+from .run import HealthRunCommand
 
 
 @dataclass
@@ -15,13 +15,13 @@ class Health:
         HealthMonitorCommand,
         HealthCheckCommand,
         HealthHistoryCommand,
-        HealthPollCommand,
+        HealthRunCommand,
     ] = subparsers(
         {
             "monitor": HealthMonitorCommand,
             "check": HealthCheckCommand,
             "history": HealthHistoryCommand,
-            "poll": HealthPollCommand,
+            "run": HealthRunCommand,
         }
     )
 
