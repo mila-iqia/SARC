@@ -1,0 +1,164 @@
+sarc:
+  mongo:
+    connection_string: ${env:SARC_DB_CONNECTION}
+    database_name: ${env:SARC_DB_NAME}
+  cache: ${env:SARC_CACHE_PATH}
+  # health_monitor: ...
+  # users: ...
+  # sshconfig: "~/.ssh/config"
+  logging:
+    log_level: ${env:SARC_LOGGING_LEVEL}
+    # OTLP_endpoint:
+    # service_name:
+    # slack: ...
+
+  clusters:
+    mila:
+      host: localhost
+      timezone: America/Montreal
+      accounts:
+      sacct_bin: "/opt/slurm/bin/sacct"
+      prometheus_url: http://prometheus01.server.mila.quebec:9090/
+      start_date: '2022-04-01'
+      billing_is_gpu: true
+      gpus_per_nodes:
+        __DEFAULTS__:
+          rtx8000: RTX8000
+          NVIDIA A100 80GB PCIe: A100-PCIe-80GB
+          NVIDIA A100-SXM4-40GB: A100-SXM4-40GB
+          NVIDIA A100-SXM4-80GB: A100-SXM4-80GB
+          NVIDIA H100 80GB HBM3: H100-SXM5-80GB
+          NVIDIA L40S: L40S
+          l40S: L40S
+          NVIDIA RTX A6000: A6000
+          Quadro RTX 8000: RTX8000
+          Tesla V100-SXM2-32GB: V100-SXM2-32GB
+          Tesla V100-SXM2-32GB-LS: V100-SXM2-32GB
+        cn-b[001-005]:
+          v100: V100-SXM2-32GB
+        cn-d[001-002]:
+          a100: A100-SXM4-40GB
+        cn-d[003-004]:
+          a100l: A100-SXM4-80GB
+        cn-e[002-003]:
+          v100: V100-SXM2-32GB
+        cn-g[001-029]:
+          a100l: A100-SXM4-80GB
+          2g.20gb: __MIG_FLAG__a100l
+          3g.40gb: __MIG_FLAG__a100l
+          4g.40gb: __MIG_FLAG__a100l
+        cn-i001:
+          a100l: A100-PCIe-80GB
+        cn-j001:
+          a6000: A6000
+        cn-k[001-004]:
+          a100: A100-SXM4-40GB
+        cn-l[001-091]:
+          l40s: L40S
+        cn-n[001-002]:
+          h100: H100-SXM5-80GB
+    narval:
+      host: robot.narval.alliancecan.ca
+      timezone: America/Montreal
+      accounts:
+      - rrg-bengioy-ad_gpu
+      - rrg-bengioy-ad_cpu
+      - def-bengioy_gpu
+      - def-bengioy_cpu
+      sacct_bin: "/opt/software/slurm/bin/sacct"
+      ignore_tz_utc: true
+      prometheus_url: https://mila-thanos.calculquebec.ca
+      prometheus_headers_file: ../SARC_secrets/secrets/drac_prometheus/headers.json
+      start_date: '2022-04-01'
+      gpus_per_nodes:
+        __DEFAULTS__:
+          a100: A100-SXM4-40GB
+          a100_1g.5gb: __MIG_FLAG__a100
+          1g.5gb: $a100_1g.5gb
+          a100_2g.10gb: __MIG_FLAG__a100
+          2g.10gb: $a100_2g.10gb
+          a100_3g.20gb: __MIG_FLAG__a100
+          3g.20gb: $a100_3g.20gb
+          a100_4g.20gb: __MIG_FLAG__a100
+          4g.20gb: $a100_4g.20gb
+          "A100-SXM4-40GB : 1g.5gb": $a100_1g.5gb
+          "A100-SXM4-40GB : 2g.10gb": $a100_2g.10gb
+          "A100-SXM4-40GB : 3g.20gb": $a100_3g.20gb
+          "A100-SXM4-40GB : 4g.20gb": $a100_4g.20gb
+          NVIDIA A100-SXM4-40GB: A100-SXM4-40GB
+    tamia:
+      host: tamia
+      timezone: America/Montreal
+      accounts:
+      sacct_bin: "/opt/slurm/bin/sacct"
+      prometheus_url:
+      prometheus_headers_file:
+      start_date: '2025-02-01'
+      gpus_per_nodes:
+        __DEFAULTS__:
+          h100: H100-SXM5-80GB
+        tg[10601-10606,10701-10707,10801-10807,10901-10908,11101-11107,11201-11207]:
+          h100: H100-SXM5-80GB
+    fir:
+      host: robot.fir.alliancecan.ca
+      timezone: America/Vancouver
+      accounts:
+      - rrg-bengioy-ad_gpu
+      - rrg-bengioy-ad_cpu
+      - def-bengioy_gpu
+      - def-bengioy_cpu
+      sacct_bin: "/opt/software/slurm/bin/sacct"
+      ignore_tz_utc: true
+      prometheus_url:
+      prometheus_headers_file:
+      start_date: '2025-08-11'          
+    nibi:
+      host: robot.nibi.alliancecan.ca
+      timezone: America/Toronto
+      accounts:
+      - rrg-bengioy-ad_gpu
+      - rrg-bengioy-ad_cpu
+      - def-bengioy_gpu
+      - def-bengioy_cpu
+      sacct_bin: "/opt/software/slurm/bin/sacct"
+      ignore_tz_utc: true
+      prometheus_url:
+      prometheus_headers_file:
+      start_date: '2025-07-31'          
+      gpus_per_nodes:
+        __DEFAULTS__:
+          h100: H100-SXM5-80GB
+          nvidia_h100_80gb_hbm3_1g.10gb: __MIG_FLAG__h100
+          nvidia_h100_80gb_hbm3_2g.20gb: __MIG_FLAG__h100
+          nvidia_h100_80gb_hbm3_3g.40gb: __MIG_FLAG__h100
+    rorqual:
+      host: robot.rorqual.alliancecan.ca
+      timezone: America/Montreal
+      accounts:
+      - rrg-bengioy-ad_gpu
+      - rrg-bengioy-ad_cpu
+      - def-bengioy_gpu
+      - def-bengioy_cpu
+      sacct_bin: "/opt/software/slurm/bin/sacct"
+      ignore_tz_utc: true
+      prometheus_url: https://mila-thanos.calculquebec.ca
+      prometheus_headers_file: ../SARC_secrets/secrets/drac_prometheus/headers.json
+      start_date: '2025-06-19'          
+      gpus_per_nodes:
+        __DEFAULTS__:
+          h100: H100-SXM5-80GB
+          nvidia_h100_80gb_hbm3_1g.10gb: __MIG_FLAG__h100
+          nvidia_h100_80gb_hbm3_2g.20gb: __MIG_FLAG__h100
+          nvidia_h100_80gb_hbm3_3g.40gb: __MIG_FLAG__h100
+    trillium:
+      host: trillium
+      timezone: America/Montreal
+      accounts:
+      - rrg-bengioy-ad_gpu
+      - rrg-bengioy-ad_cpu
+      - def-bengioy_gpu
+      - def-bengioy_cpu
+      sacct_bin: "/opt/slurm/bin/sacct"
+      prometheus_url:
+      prometheus_headers_file:
+      start_date: '2025-06-19'          
