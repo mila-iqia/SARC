@@ -44,6 +44,9 @@ dependencies = [
 sarc = "sarc.cli:main"
 
 [dependency-groups]
+cloud = [
+    "pymongo-auth-aws>=1.3.0,<2",
+]
 dev = [
     "mypy>=1.18.1,<2",
     "pytest>=9.0.1,<10",
