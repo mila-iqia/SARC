@@ -1,7 +1,8 @@
 from datetime import datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.responses import ORJSONResponse
 from pydantic import AfterValidator, BaseModel, UUID4
 from pydantic_mongo import PydanticObjectId
 
@@ -17,7 +18,13 @@ from sarc.core.models import validators
 from sarc.core.models.users import MemberType, UserData
 from sarc.users.db import get_user_collection
 
-router = APIRouter(prefix="/v0")
+# Use `orjson` module to handle JSON.
+# `orjson` automatically converts float NaN values to None,
+# and is expected to be faster than builtin `json`.
+router = APIRouter(prefix="/v0", default_response_class=ORJSONResponse)
+
+DEFAULT_PAGE_SIZE = 100
+MAX_PAGE_SIZE = 5_000
 
 
 def valid_cluster(cluster: str):
@@ -33,7 +40,8 @@ def valid_cluster(cluster: str):
 
 class JobQuery(BaseModel):
     cluster: Annotated[str, AfterValidator(valid_cluster)] | None = None
-    job_id: int | None = None
+    # job_id supports None, an integer, a list of integers, or an empty list.
+    job_id: list[int] | None = None
     job_state: SlurmState | None = None
     username: str | None = None
     start: datetime | None = None
@@ -44,7 +52,10 @@ class JobQuery(BaseModel):
         if self.cluster is not None:
             query["cluster_name"] = self.cluster
         if self.job_id is not None:
-            query["job_id"] = self.job_id
+            if len(self.job_id) == 1:
+                query["job_id"] = self.job_id[0]
+            else:
+                query["job_id"] = {"$in": self.job_id}
         if self.job_state is not None:
             query["job_state"] = self.job_state
         if self.username is not None:
@@ -61,7 +72,43 @@ class JobQuery(BaseModel):
         return query
 
 
-JobQueryType = Annotated[JobQuery, Depends(JobQuery)]
+def job_query_params(
+    cluster: Annotated[str, AfterValidator(valid_cluster)] | None = None,
+    job_id: Annotated[list[str] | None, Query()] = None,
+    job_state: SlurmState | None = None,
+    username: str | None = None,
+    start: datetime | None = None,
+    end: datetime | None = None,
+) -> JobQuery:
+    """
+    Annotation function for JobQueryType below.
+    Annotates `job_id` with `Query()` annotation,
+    so that Pydantic/FastAPI correctly parses `job_id`.
+
+    We use `list[str]` to support empty lists (sent as `job_id=`).
+    We then convert to `list[int]` to match `JobQuery` model.
+    """
+    job_id_ints = None
+    if job_id is not None:
+        try:
+            job_id_ints = [int(jid) for jid in job_id if jid]
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="job_id must be a list of integers",
+            )
+
+    return JobQuery(
+        cluster=cluster,
+        job_id=job_id_ints,
+        job_state=job_state,
+        username=username,
+        start=start,
+        end=end,
+    )
+
+
+JobQueryType = Annotated[JobQuery, Depends(job_query_params)]
 
 
 class UserQuery(BaseModel):
@@ -147,11 +194,63 @@ class UserQuery(BaseModel):
 UserQueryType = Annotated[UserQuery, Depends(UserQuery)]
 
 
+class SlurmJobList(BaseModel):
+    jobs: list[SlurmJob]
+    page: int
+    per_page: int
+    total: int
+
+
+class UserList(BaseModel):
+    users: list[UserData]
+    page: int
+    per_page: int
+    total: int
+
+
 @router.get("/job/query")
 def get_jobs(query_opt: JobQueryType) -> list[PydanticObjectId]:
     coll = _jobs_collection()
     jobs = coll.get_collection().find(query_opt.get_query(), ["_id"])
     return list(j["_id"] for j in jobs)
+
+
+@router.get("/job/list")
+def list_jobs(
+    query_opt: JobQueryType, page: int = 1, per_page: int = DEFAULT_PAGE_SIZE
+) -> SlurmJobList:
+    if page < 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Page must be >= 1"
+        )
+    if per_page < 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Page size must be >= 1"
+        )
+    if per_page > MAX_PAGE_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Page size must be <= {MAX_PAGE_SIZE}",
+        )
+
+    coll = _jobs_collection()
+    query = query_opt.get_query()
+    total = coll.get_collection().count_documents(query)
+
+    cursor = (
+        coll.get_collection()
+        .find(query, allow_disk_use=True)
+        .sort([("submit_time", -1), ("_id", 1)])
+        .skip((page - 1) * per_page)
+        .limit(per_page)
+    )
+
+    return SlurmJobList(
+        jobs=[SlurmJob.model_validate(doc) for doc in cursor],
+        page=page,
+        per_page=per_page,
+        total=total,
+    )
 
 
 @router.get("/job/count")
@@ -189,6 +288,44 @@ def query_users(query_opt: UserQueryType) -> list[UUID4]:
     coll = get_user_collection()
     users = coll.get_collection().find(query_opt.get_query(), ["uuid"])
     return [user["uuid"] for user in users]
+
+
+@router.get("/user/list")
+def list_users(
+    query_opt: UserQueryType, page: int = 1, per_page: int = DEFAULT_PAGE_SIZE
+) -> UserList:
+    if page < 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Page must be >= 1"
+        )
+    if per_page < 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Page size must be >= 1"
+        )
+    if per_page > MAX_PAGE_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Page size must be <= {MAX_PAGE_SIZE}",
+        )
+
+    coll = get_user_collection()
+    query = query_opt.get_query()
+    total = coll.get_collection().count_documents(query)
+
+    cursor = (
+        coll.get_collection()
+        .find(query, allow_disk_use=True)
+        .sort([("email", 1), ("uuid", 1)])
+        .skip((page - 1) * per_page)
+        .limit(per_page)
+    )
+
+    return UserList(
+        users=[UserData.model_validate(doc) for doc in cursor],
+        page=page,
+        per_page=per_page,
+        total=total,
+    )
 
 
 @router.get("/user/id/{uuid}")

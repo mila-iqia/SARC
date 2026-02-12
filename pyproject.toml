@@ -38,6 +38,7 @@ dependencies = [
     "pyodbc>=5.2.0,<6",
     "azure-identity>=1.23.1,<2",
     "rapporteur>=0.1.1",
+    "orjson>=3.11.7",
 ]
 
 [project.scripts]
@@ -67,6 +68,7 @@ dev = [
     "pytest-env>=1.1.5,<2",
     "ruff>=0.14,<0.15",
     "sphinxcontrib-openapi>=0.9.0,<0.10.0",
+    "time-machine>=3.2.0",
 ]
 examples = ["seaborn>=0.13.2,<0.14"]
 
