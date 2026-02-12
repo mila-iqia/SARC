@@ -13,11 +13,9 @@ from unittest.mock import patch
 import pandas as pd
 from tqdm import tqdm
 
-from sarc.config import UTC
-
-
 import sarc.client.series
 import sarc.rest.client
+from sarc.config import UTC, TZLOCAL
 
 mongodb_load_job_series = sarc.client.series.load_job_series
 rest_load_job_series = sarc.rest.client.load_job_series
@@ -78,7 +76,8 @@ def _df_sorted(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # Freeze current time
-NOW = datetime.now(tz=UTC)
+# Use a fixed date to ease debugging
+NOW = datetime(3000, 1, 1, tzinfo=TZLOCAL)
 
 
 class FrozenDatetime(datetime):
@@ -99,7 +98,7 @@ class FrozenDatetime(datetime):
 
 def main():
     # Patch datetime.now()
-    with patch("datetime.datetime", FrozenDatetime):
+    with patch("sarc.client.series.datetime", FrozenDatetime):
         _main()
 
 
@@ -113,8 +112,12 @@ def _main():
             end = start + timedelta(days=num_days)
             print(f"[{start}] to [{end}]")
 
-            df_mongo = mongodb_load_job_series(start=start, end=end)
-            df_rest = rest_load_job_series(start=start, end=end)
+            kwargs = {
+                "start": start,
+                "end": end,
+            }
+            df_mongo = mongodb_load_job_series(**kwargs)
+            df_rest = rest_load_job_series(**kwargs)
 
             assert df_mongo.shape == df_rest.shape, (
                 f"Mongo shape: {df_mongo.shape}, REST shape: {df_rest.shape}"
