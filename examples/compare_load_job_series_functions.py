@@ -16,16 +16,11 @@ from tqdm import tqdm
 from sarc.config import UTC
 
 
-def mongodb_load_job_series(*args, **kwargs) -> pd.DataFrame:
-    from sarc.client.series import load_job_series
+import sarc.client.series
+import sarc.rest.client
 
-    return load_job_series(*args, **kwargs)
-
-
-def rest_load_job_series(*args, **kwargs) -> pd.DataFrame:
-    from sarc.rest.client import load_job_series
-
-    return load_job_series(*args, **kwargs)
+mongodb_load_job_series = sarc.client.series.load_job_series
+rest_load_job_series = sarc.rest.client.load_job_series
 
 
 def _df_to_rows(df: pd.DataFrame) -> list[dict]:
