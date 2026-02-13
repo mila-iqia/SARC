@@ -1,24 +1,9 @@
-import hashlib
 import logging
 import re
 
-import gifnoc
 import pytest
 
-from sarc.config import config
-
-
-@pytest.fixture(scope="function")
-def empty_read_write_db(request):
-    m = hashlib.md5()
-    m.update(request.node.nodeid.encode())
-    db_name = f"test-db-{m.hexdigest()}"
-    with gifnoc.overlay({"sarc.mongo.database_name": db_name}):
-        assert config().mongo.database_instance.name == db_name
-        db = config().mongo.database_instance
-        for collection_name in db.list_collection_names():
-            db[collection_name].drop()
-        yield db_name
+from sarc.alerts.healthcheck_state import get_healthcheck_state_collection
 
 
 @pytest.mark.usefixtures("empty_read_write_db")
@@ -35,17 +20,23 @@ def test_run_all_and_checks_error(beans_config, cli_main, caplog):
 
 @pytest.mark.usefixtures("empty_read_write_db")
 def test_run_specific_check(beans_config, cli_main, caplog):
+    coll = get_healthcheck_state_collection()
     with caplog.at_level(logging.INFO):
+        assert not list(coll.find_by({}))
         assert cli_main(["health", "run", "--check", "many_beans"]) == 0
         assert re.search(r"INFO +.+\[many_beans] OK", caplog.text)
         assert re.search(
             r"INFO +.+Check complete: 1 checks run, 0 skipped", caplog.text
         )
+        (state,) = coll.find_by({})
+        assert state.check.name == "many_beans"
 
 
 @pytest.mark.usefixtures("empty_read_write_db")
 def test_run_all_checks(beans_config, cli_main, caplog):
+    coll = get_healthcheck_state_collection()
     with caplog.at_level(logging.DEBUG):
+        assert not list(coll.find_by({}))
         assert cli_main(["health", "run", "--all"]) == 0
         assert re.search(r"INFO +.+\[many_beans] OK", caplog.text)
         assert re.search(
@@ -59,11 +50,14 @@ def test_run_all_checks(beans_config, cli_main, caplog):
         assert re.search(
             r"INFO +.+Check complete: 3 checks run, 1 skipped", caplog.text
         )
+        assert len(list(coll.find_by({}))) == 4
 
 
 @pytest.mark.usefixtures("empty_read_write_db")
 def test_run_check_with_dep(deps_config, cli_main, caplog):
+    coll = get_healthcheck_state_collection()
     with caplog.at_level(logging.INFO):
+        assert not list(coll.find_by({}))
         assert cli_main(["health", "run", "--check", "many_beans"]) == 0
         assert re.search(
             r"WARNING +.+Skipping 'many_beans': dependency 'evil_beans' not OK",
@@ -72,11 +66,14 @@ def test_run_check_with_dep(deps_config, cli_main, caplog):
         assert re.search(
             r"INFO +.+Check complete: 0 checks run, 1 skipped", caplog.text
         )
+        assert len(list(coll.find_by({}))) == 1
 
 
 @pytest.mark.usefixtures("empty_read_write_db")
 def test_run_check_with_param_and_dep(params_config, cli_main, caplog):
+    coll = get_healthcheck_state_collection()
     with caplog.at_level(logging.INFO):
+        assert not list(coll.find_by({}))
         assert cli_main(["health", "run", "--check", "beanz_beta"]) == 0
         assert re.search(
             r"WARNING +.+Skipping 'beanz_beta': dependency 'isbeta_beta' not OK",
@@ -85,6 +82,7 @@ def test_run_check_with_param_and_dep(params_config, cli_main, caplog):
         assert re.search(
             r"INFO +.+Check complete: 0 checks run, 1 skipped", caplog.text
         )
+        assert len(list(coll.find_by({}))) == 1
 
     with caplog.at_level(logging.INFO):
         assert cli_main(["health", "run", "--check", "isbeta_beta"]) == 0
@@ -92,6 +90,7 @@ def test_run_check_with_param_and_dep(params_config, cli_main, caplog):
         assert re.search(
             r"INFO +.+Check complete: 1 checks run, 0 skipped", caplog.text
         )
+        assert len(list(coll.find_by({}))) == 2
 
     with caplog.at_level(logging.INFO):
         assert cli_main(["health", "run", "--check", "beanz_beta"]) == 0
@@ -99,6 +98,7 @@ def test_run_check_with_param_and_dep(params_config, cli_main, caplog):
         assert re.search(
             r"INFO +.+Check complete: 1 checks run, 0 skipped", caplog.text
         )
+        assert len(list(coll.find_by({}))) == 2
 
 
 @pytest.mark.usefixtures("empty_read_write_db")

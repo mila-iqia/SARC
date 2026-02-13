@@ -10,16 +10,11 @@ from tests.unittests.alerts.definitions import BeanCheck
 
 
 @pytest.fixture
-def testing_repo():
+def testing_repo(empty_read_write_db):
+    assert empty_read_write_db.startswith("test-db-")
     db = config().mongo.database_instance
     repo = HealthCheckStateRepository(db)
-    db.healthcheck.delete_many({})
     return repo
-
-
-@pytest.fixture
-def testing_tmpdir(tmpdir):
-    return Path(str(tmpdir))
 
 
 def test_get_state_none(testing_repo):
@@ -37,13 +32,21 @@ def test_config_read_write_into_db(beans_config, testing_repo):
     assert type(db_state.check) is BeanCheck
     assert db_state == state
 
+    (state_doc,) = config().mongo.database_instance.healthcheck.find(
+        {"check.name": "many_beans"}
+    )
+    assert "$class" in state_doc["check"]
+    assert (
+        state_doc["check"]["$class"] == "tests.unittests.alerts.definitions:BeanCheck"
+    )
 
-def test_HealthCheckStateRepository(testing_repo, testing_tmpdir):
+
+def test_HealthCheckStateRepository(testing_repo, tmpdir):
     hc = HealthCheck(
         name="test_check",
         active=True,
         interval=timedelta(hours=1),
-        directory=testing_tmpdir,
+        directory=Path(tmpdir),
     )
     state = HealthCheckState(check=hc)
 

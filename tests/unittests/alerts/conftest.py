@@ -1,3 +1,4 @@
+import hashlib
 from pathlib import Path
 
 import gifnoc
@@ -38,3 +39,16 @@ def params_config(tmpdir):
     cfgdir = here / "configs"
     with gifnoc.overlay(cfgdir / "base.yaml", cfgdir / "params.yaml", setdir):
         yield config().health_monitor
+
+
+@pytest.fixture(scope="function")
+def empty_read_write_db(request):
+    m = hashlib.md5()
+    m.update(request.node.nodeid.encode())
+    db_name = f"test-db-{m.hexdigest()}"
+    with gifnoc.overlay({"sarc.mongo.database_name": db_name}):
+        assert config().mongo.database_instance.name == db_name
+        db = config().mongo.database_instance
+        for collection_name in db.list_collection_names():
+            db[collection_name].drop()
+        yield db_name

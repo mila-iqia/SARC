@@ -65,6 +65,7 @@ class CheckResult:
     status: CheckStatus = CheckStatus.ABSENT
 
     # Statuses of individual checks
+    # Always a dict in current code
     statuses: dict[str, CheckStatus] = field(default_factory=dict)
 
     # Information about the exception, if the check has ERROR status
@@ -112,10 +113,7 @@ class CheckResult:
     def log_result(self) -> str:
         """Log check result with appropriate level for polling mode. Return logged message."""
         prefix = f"[{self.name}] {self.status.name}"
-        desc = prefix
-        if self.status == CheckStatus.OK:
-            logger.info(prefix)
-        elif self.status == CheckStatus.FAILURE:
+        if self.status == CheckStatus.FAILURE:
             failures = ", ".join(self.get_failures().keys())
             desc = f"{prefix}: {failures}"
             logger.warning(desc)
@@ -128,7 +126,8 @@ class CheckResult:
             desc = f"{prefix}: {msg}"
             logger.error(desc)
         else:
-            logger.info(prefix)
+            desc = prefix
+            logger.info(desc)
         return desc
 
 

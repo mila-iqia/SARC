@@ -14,10 +14,17 @@ from sarc.model import BaseModel
 
 
 def _serialize_health_check(hc: HealthCheck) -> dict[str, Any]:
+    """
+    Special serializer for HealthCheck.
+
+    Use serieux serializer with TaggedSubclass
+    to be sure check class is saved in model
+    """
     return serialize(TaggedSubclass[HealthCheck], hc)
 
 
 def _validate_health_check(v: Any) -> HealthCheck:
+    """Special deserializer for HealthCheck"""
     if isinstance(v, HealthCheck):
         return v
     assert isinstance(v, dict)
@@ -32,11 +39,18 @@ HealthCheckPydantic = Annotated[
 
 
 def _serialize_check_result(result: CheckResult) -> dict[str, Any]:
+    """
+    Special serializer for CheckResult
+
+    Since we already save associated HealthCheck object,
+    we prevent recursion and save space by cleaning `result.check`.
+    """
     result.check = None
     return serialize(TaggedSubclass[CheckResult], result)
 
 
 def _validate_check_result(v: Any) -> CheckResult:
+    """Special deserializer for CheckResult"""
     if isinstance(v, CheckResult):
         return v
     assert isinstance(v, dict)
@@ -56,15 +70,22 @@ class HealthCheckState(BaseModel):
     This is used by the polling system to track when checks were last run
     and what their status was, enabling scheduled execution without a
     permanent daemon process.
+
+    Combine:
+    - a HealthCheck configuration object,
+    - the last check result
+    - the last result message
     """
 
     # Database ID
     id: PydanticObjectId | None = None
 
     # Check configuration
+    # With annotated class for custom serialization
     check: HealthCheckPydantic
 
-    # Check last result (None if never run)
+    # Last check result (None if never run)
+    # With annotated class for custom serialization
     # Contains `status` and `issue_date` (last run time)
     last_result: CheckResultPydantic | None = None
 

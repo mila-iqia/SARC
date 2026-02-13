@@ -1,8 +1,8 @@
 """Poll command for health checks.
 
 This command is designed to be run periodically (e.g., by cron) and will
-execute only the checks whose interval has expired since their last run.
-State is persisted in MongoDB, and results are logged instead of written to files.
+execute either all checks (--all), or only specified checks (--check check1 check2 ...).
+State is persistent in MongoDB, and results are logged instead of written to files.
 """
 
 import logging
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class HealthRunCommand:
-    """Execute health checks that are due based on their configured interval.
+    """Execute health checks.
 
     This is an alternative to the daemon-based `health check` command,
     designed for environments where long-running processes are costly (e.g., GCP).
@@ -37,7 +37,7 @@ class HealthRunCommand:
     )
     all: bool = simple_parsing.field(
         action="store_true",
-        help="Run all health checks. Mutually exclusive with --checks",
+        help="Run all health checks. Mutually exclusive with --check",
     )
 
     def execute(self) -> int:
@@ -54,10 +54,10 @@ class HealthRunCommand:
             return -1
 
         if not self.check and not self.all:
-            logger.error("No health checks to run. Use either --all or --checks")
+            logger.error("No health checks to run. Use either --all or --check")
             return -1
         if self.check and self.all:
-            logger.error("Arguments mutually exclusive: --all | --checks")
+            logger.error("Arguments mutually exclusive: --all | --check")
             return -1
 
         if self.check:
@@ -76,6 +76,7 @@ class HealthRunCommand:
         checks_skipped = 0
 
         for name in check_names:
+            # Get check state from database
             state = repo.get_state(name)
             if state is None:
                 # Get check from config file and save it in a new state in db
