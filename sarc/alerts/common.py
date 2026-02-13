@@ -54,9 +54,6 @@ class CheckException:
         )
 
 
-StatusDict = dict[str, "CheckStatus | StatusDict"]
-
-
 @dataclass
 class CheckResult:
     """Results of a check."""
@@ -68,7 +65,8 @@ class CheckResult:
     status: CheckStatus = CheckStatus.ABSENT
 
     # Statuses of individual checks
-    statuses: StatusDict = field(default_factory=dict)
+    # Always a dict in current code
+    statuses: dict[str, CheckStatus] = field(default_factory=dict)
 
     # Information about the exception, if the check has ERROR status
     exception: CheckException | None = None
@@ -111,6 +109,26 @@ class CheckResult:
         dest = self.get_save_path(directory)
         dest.write_text(json.dumps(serialized, indent=4), encoding="utf8")
         logger.debug(f"Wrote {dest}")
+
+    def log_result(self) -> str:
+        """Log check result with appropriate level for polling mode. Return logged message."""
+        prefix = f"[{self.name}] {self.status.name}"
+        if self.status == CheckStatus.FAILURE:
+            failures = ", ".join(self.get_failures().keys())
+            desc = f"{prefix}: {failures}"
+            logger.warning(desc)
+        elif self.status == CheckStatus.ERROR:
+            msg = (
+                f"{self.exception.type}: {self.exception.message}"
+                if self.exception
+                else "Unknown error"
+            )
+            desc = f"{prefix}: {msg}"
+            logger.error(desc)
+        else:
+            desc = prefix
+            logger.info(desc)
+        return desc
 
 
 @dataclass
