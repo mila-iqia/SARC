@@ -49,6 +49,31 @@ def _get_physical_size(path: Path | str) -> int | None:
         return None
 
 
+def _find_mongodb_path_via_connection(client) -> str | None:
+    # Get host and port from mongodb client
+    host, port = client.address
+
+    # Look for processes connected to this address
+    for conn in psutil.net_connections(kind="inet"):
+        if conn.laddr.port == port and conn.status == "LISTEN":
+            try:
+                proc = psutil.Process(conn.pid)
+                if "mongod" in proc.name().lower():
+                    # get dbpath from command line
+                    cmdline = proc.cmdline()
+                    if "--dbpath" in cmdline:
+                        idx = cmdline.index("--dbpath")
+                        raw_path = cmdline[idx + 1]
+
+                        # Get absolute dbpath
+                        if not os.path.isabs(raw_path):
+                            return os.path.join(proc.cwd(), raw_path)
+                        return raw_path
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+    return None
+
+
 @dataclass(slots=True)
 class MongoDiskUsage:
     data_storage_bytes: int
@@ -107,19 +132,7 @@ class MongoDiskUsage:
         server_config = db.client.admin.command("getCmdLineOpts")
         db_path = server_config["parsed"].get("storage", {}).get("dbPath")
         if db_path is None:
-            for proc in psutil.process_iter(["name", "cmdline"]):
-                if proc.info["name"] == "mongod" or proc.info["name"] == "mongod.exe":
-                    cmdline = proc.info["cmdline"]
-                    if "--dbpath" in cmdline:
-                        idx = cmdline.index("--dbpath")
-                        raw_path = cmdline[idx + 1]
-                        if not os.path.isabs(raw_path):
-                            try:
-                                proc_cwd = proc.cwd()
-                                db_path = os.path.join(proc_cwd, raw_path)
-                            except (psutil.AccessDenied, psutil.NoSuchProcess):
-                                db_path = raw_path
-                        break
+            db_path = _find_mongodb_path_via_connection(db.client)
         if db_path is not None:
             logger.debug(f"[mongodb] db path: {db_path}")
             folder_size_bytes = _get_physical_size(db_path)
@@ -151,7 +164,9 @@ def check_disk_space_for_cache(max_size_bytes: int) -> None:
     logger.debug(f"[sarc-cache] folder: {cache_path}")
     cache_size_bytes = _get_physical_size(cache_path)
     if cache_size_bytes is None:
-        logger.error(f"[sarc-cache] cannot get size for cache folder (inexistent or permission error): {cache_path}")
+        logger.error(
+            f"[sarc-cache] cannot get size for cache folder (inexistent or permission error): {cache_path}"
+        )
         return
     if cache_size_bytes > max_size_bytes:
         logger.warning(
