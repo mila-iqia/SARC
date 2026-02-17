@@ -1,5 +1,4 @@
 from datetime import timedelta
-from pathlib import Path
 
 import pytest
 
@@ -46,7 +45,6 @@ def test_HealthCheckStateRepository(testing_repo, tmpdir):
         name="test_check",
         active=True,
         interval=timedelta(hours=1),
-        directory=Path(tmpdir),
     )
     state = HealthCheckState(check=hc)
 
