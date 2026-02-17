@@ -1,20 +1,24 @@
 import logging
 import math
 import os
+from dataclasses import dataclass
 from pathlib import Path
 
+from sarc.alerts.common import HealthCheck, CheckResult
 from sarc.config import config
 
 logger = logging.getLogger(__name__)
 
 
-def check_disk_space_for_db(max_size_bytes: int) -> None:
+def check_disk_space_for_db(max_size_bytes: int) -> bool:
     usage_bytes = _compute_db_disk_usage()
     if usage_bytes > max_size_bytes:
         logger.warning(
             f"[mongodb] size exceeded: max {_get_human_readable_file_size(max_size_bytes)}, "
             f"current: {_get_human_readable_file_size(usage_bytes)}"
         )
+        return False
+    return True
 
 
 def _compute_db_disk_usage():
@@ -34,20 +38,26 @@ def _compute_db_disk_usage():
     return db_size_bytes
 
 
-def check_disk_space_for_cache(max_size_bytes: int) -> None:
+def check_disk_space_for_cache(max_size_bytes: int) -> bool:
     cache_path = config().cache
+    if cache_path is None:
+        logger.info("[sarc-cache] no cache patch to check")
+        return True
+
     logger.debug(f"[sarc-cache] folder: {cache_path}")
     cache_size_bytes = _get_physical_size(cache_path)
     if cache_size_bytes is None:
         logger.error(
             f"[sarc-cache] cannot get size for cache folder (inexistent or permission error): {cache_path}"
         )
-        return
+        return False
     if cache_size_bytes > max_size_bytes:
         logger.warning(
             f"[sarc-cache] size exceeded: max {_get_human_readable_file_size(max_size_bytes)}, "
             f"current: {_get_human_readable_file_size(cache_size_bytes)}"
         )
+        return False
+    return True
 
 
 def _get_physical_size(path: Path | str) -> int | None:
@@ -85,3 +95,25 @@ def _get_human_readable_file_size(size_bytes: int) -> str:
     if unit != units[0]:
         output += f" ({size_bytes} B)"
     return output
+
+
+@dataclass
+class DatabaseSizeCheck(HealthCheck):
+    limit: int = 0
+
+    def check(self) -> CheckResult:
+        if check_disk_space_for_db(max_size_bytes=self.limit):
+            return self.ok()
+        else:
+            return self.fail()
+
+
+@dataclass
+class CacheSizeCheck(HealthCheck):
+    limit: int = 0
+
+    def check(self) -> CheckResult:
+        if check_disk_space_for_cache(max_size_bytes=self.limit):
+            return self.ok()
+        else:
+            return self.fail()
