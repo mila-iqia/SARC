@@ -18,21 +18,21 @@ def frozen_gifnoc_time():
 
 
 @pytest.fixture
-def beans_config(tmpdir):
+def beans_config():
     cfgdir = here / "configs"
     with gifnoc.overlay(cfgdir / "base.yaml", cfgdir / "beans.yaml"):
         yield config().health_monitor
 
 
 @pytest.fixture
-def deps_config(tmpdir):
+def deps_config():
     cfgdir = here / "configs"
     with gifnoc.overlay(cfgdir / "base.yaml", cfgdir / "deps.yaml"):
         yield config().health_monitor
 
 
 @pytest.fixture
-def params_config(tmpdir):
+def params_config():
     cfgdir = here / "configs"
     with gifnoc.overlay(cfgdir / "base.yaml", cfgdir / "params.yaml"):
         yield config().health_monitor

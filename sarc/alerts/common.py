@@ -6,7 +6,7 @@ import itertools
 import logging
 import re
 from dataclasses import dataclass, field, replace
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
 from graphlib import TopologicalSorter
 from typing import Callable, Self, cast
@@ -71,9 +71,6 @@ class CheckResult:
     # Date at which the check finished
     issue_date: datetime = field(default_factory=lambda: time.now().astimezone())
 
-    # Date at which the check will be considered STALE
-    expiry: datetime | None = None
-
     # Check object
     check: TaggedSubclass[HealthCheck] | None = None
 
@@ -122,9 +119,6 @@ class HealthCheck:
     # Whether the check is active or not
     active: bool
 
-    # Interval at which to activate the check
-    interval: timedelta
-
     # Name of the check
     name: str = "NOTSET"
 
@@ -154,7 +148,6 @@ class HealthCheck:
     def result(self, status: CheckStatus, **kwargs) -> CheckResult:
         """Generate a result with the given status."""
         now = time.now()
-        expiry = now + self.interval + timedelta(hours=1)
         if status not in iter(CheckStatus):
             opts = ", ".join(item.value for item in CheckStatus)
             raise ValueError(f"Invalid status: {status}. Valid statuses are: {opts}")
@@ -162,7 +155,6 @@ class HealthCheck:
             name=self.name,
             status=status,
             issue_date=now,
-            expiry=expiry,
             check=self,
             **kwargs,
         )
@@ -180,13 +172,6 @@ class HealthCheck:
     ) -> CheckResult | CheckStatus | dict[str, bool] | Callable[[], CheckResult]:
         """Perform the check and return a result or status."""
         raise NotImplementedError("Please override in subclass.")
-
-    def next_schedule(self, latest: CheckResult) -> datetime:
-        """Return the latest result for this check."""
-        if latest.status is CheckStatus.ABSENT:
-            return time.now()
-        else:
-            return latest.issue_date + self.interval
 
     def wrapped_check(self) -> CheckResult:
         """Wrap the check function.

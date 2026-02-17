@@ -4,10 +4,8 @@ sarc:
       isbeta_{letter}:
         $class: "tests.unittests.alerts.definitions:LetterCheck"
         active: true
-        interval: 1h
       beanz_{letter}:
         $class: "tests.unittests.alerts.definitions:BeanCheck"
         active: true
-        interval: 1h30m
         beans: 20
         depends: isbeta_{letter}

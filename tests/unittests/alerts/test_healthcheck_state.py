@@ -1,5 +1,3 @@
-from datetime import timedelta
-
 import pytest
 
 from sarc.alerts.common import HealthCheck, CheckStatus
@@ -44,7 +42,6 @@ def test_HealthCheckStateRepository(testing_repo, tmpdir):
     hc = HealthCheck(
         name="test_check",
         active=True,
-        interval=timedelta(hours=1),
     )
     state = HealthCheckState(check=hc)
 
