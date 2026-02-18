@@ -16,8 +16,8 @@ sarc:
   #       active: False
   users:
     scrapers:
-      # legacy_dump:
-      #   json_file_path: ../SARC_secrets/secrets/account_matching/legacy_dump.json
+      legacy_dump:
+        json_file_path: ../SARC_secrets/secrets/account_matching/legacy_dump.json
       mila_ldap:
         private_key_file: ../SARC_secrets/secrets/ldap/Google_2026_01_26_66827.key
         certificate_file: ../SARC_secrets/secrets/ldap/Google_2026_01_26_66827.crt
