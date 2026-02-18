@@ -40,7 +40,7 @@ def test_run_all_checks(beans_config, cli_main, caplog):
         assert cli_main(["health", "run", "--all"]) == 0
         assert re.search(r"INFO +.+\[many_beans] OK", caplog.text)
         assert re.search(
-            r"WARNING +.+\[little_beans] FAILURE: little_beans", caplog.text
+            r"ERROR +.+\[little_beans] FAILURE: little_beans", caplog.text
         )
         assert re.search(
             r"ERROR +.+\[evil_beans] ERROR: ValueError: What a beastly number",
