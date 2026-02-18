@@ -13,7 +13,7 @@ To launch REST server::
 
 Server will be available at ``http://0.0.0.0:<port>``.
 
-Sever documentation, listing all endpoints with parameters and expected output, is available at ``http://0.0.0.0:<port>/docs``.
+Server documentation, listing all endpoints with parameters and expected output, is available at ``http://0.0.0.0:<port>/docs``.
 
 Host can be configured using parameter ``--host``.
 
@@ -21,7 +21,7 @@ To launch server in develop mode (with reload enabled), use ``fastapi dev`` inst
 
 More documentation:
 
-- FasAPI: https://fastapi.tiangolo.com/
+- FastAPI: https://fastapi.tiangolo.com/
 - Command line:
 
   - ``uv run fastapi run -h``

@@ -33,7 +33,10 @@
       "schema": {
        "anyOf": [
         {
-         "type": "integer"
+         "type": "array",
+         "items": {
+          "type": "string"
+         }
         },
         {
          "type": "null"
@@ -137,6 +140,157 @@
     }
    }
   },
+  "/v0/job/list": {
+   "get": {
+    "summary": "List Jobs",
+    "operationId": "list_jobs_v0_job_list_get",
+    "parameters": [
+     {
+      "name": "page",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "default": 1,
+       "title": "Page"
+      }
+     },
+     {
+      "name": "per_page",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "default": 100,
+       "title": "Per Page"
+      }
+     },
+     {
+      "name": "cluster",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Cluster"
+      }
+     },
+     {
+      "name": "job_id",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "array",
+         "items": {
+          "type": "string"
+         }
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Job Id"
+      }
+     },
+     {
+      "name": "job_state",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "$ref": "#/components/schemas/SlurmState"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Job State"
+      }
+     },
+     {
+      "name": "username",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Username"
+      }
+     },
+     {
+      "name": "start",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string",
+         "format": "date-time"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Start"
+      }
+     },
+     {
+      "name": "end",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string",
+         "format": "date-time"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "End"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/SlurmJobList"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/v0/job/count": {
    "get": {
     "summary": "Count Jobs",
@@ -165,7 +319,10 @@
       "schema": {
        "anyOf": [
         {
-         "type": "integer"
+         "type": "array",
+         "items": {
+          "type": "string"
+         }
         },
         {
          "type": "null"
@@ -554,6 +711,240 @@
           "format": "uuid4"
          },
          "title": "Response Query Users V0 User Query Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/v0/user/list": {
+   "get": {
+    "summary": "List Users",
+    "operationId": "list_users_v0_user_list_get",
+    "parameters": [
+     {
+      "name": "page",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "default": 1,
+       "title": "Page"
+      }
+     },
+     {
+      "name": "per_page",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "default": 100,
+       "title": "Per Page"
+      }
+     },
+     {
+      "name": "display_name",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Display Name"
+      }
+     },
+     {
+      "name": "email",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Email"
+      }
+     },
+     {
+      "name": "member_type",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "$ref": "#/components/schemas/MemberType"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Member Type"
+      }
+     },
+     {
+      "name": "member_start",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string",
+         "format": "date-time"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Member Start"
+      }
+     },
+     {
+      "name": "member_end",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string",
+         "format": "date-time"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Member End"
+      }
+     },
+     {
+      "name": "supervisor",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string",
+         "format": "uuid4"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Supervisor"
+      }
+     },
+     {
+      "name": "supervisor_start",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string",
+         "format": "date-time"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Supervisor Start"
+      }
+     },
+     {
+      "name": "supervisor_end",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string",
+         "format": "date-time"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Supervisor End"
+      }
+     },
+     {
+      "name": "co_supervisor",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string",
+         "format": "uuid4"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Co Supervisor"
+      }
+     },
+     {
+      "name": "co_supervisor_start",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string",
+         "format": "date-time"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Co Supervisor Start"
+      }
+     },
+     {
+      "name": "co_supervisor_end",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string",
+         "format": "date-time"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Co Supervisor End"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/UserList"
         }
        }
       }
@@ -1047,6 +1438,37 @@
     "title": "SlurmJob",
     "description": "Holds data for a Slurm job."
    },
+   "SlurmJobList": {
+    "properties": {
+     "jobs": {
+      "items": {
+       "$ref": "#/components/schemas/SlurmJob"
+      },
+      "type": "array",
+      "title": "Jobs"
+     },
+     "page": {
+      "type": "integer",
+      "title": "Page"
+     },
+     "per_page": {
+      "type": "integer",
+      "title": "Per Page"
+     },
+     "total": {
+      "type": "integer",
+      "title": "Total"
+     }
+    },
+    "type": "object",
+    "required": [
+     "jobs",
+     "page",
+     "per_page",
+     "total"
+    ],
+    "title": "SlurmJobList"
+   },
    "SlurmResources": {
     "properties": {
      "cpu": {
@@ -1182,7 +1604,7 @@
       "title": "Max"
      },
      "unused": {
-      "type": "integer",
+      "type": "number",
       "title": "Unused"
      }
     },
@@ -1252,6 +1674,37 @@
      "matching_ids"
     ],
     "title": "UserData"
+   },
+   "UserList": {
+    "properties": {
+     "users": {
+      "items": {
+       "$ref": "#/components/schemas/UserData"
+      },
+      "type": "array",
+      "title": "Users"
+     },
+     "page": {
+      "type": "integer",
+      "title": "Page"
+     },
+     "per_page": {
+      "type": "integer",
+      "title": "Per Page"
+     },
+     "total": {
+      "type": "integer",
+      "title": "Total"
+     }
+    },
+    "type": "object",
+    "required": [
+     "users",
+     "page",
+     "per_page",
+     "total"
+    ],
+    "title": "UserList"
    },
    "ValidField_Annotated_UUID__UuidVersion__": {
     "properties": {
@@ -1417,6 +1870,13 @@
      "type": {
       "type": "string",
       "title": "Error Type"
+     },
+     "input": {
+      "title": "Input"
+     },
+     "ctx": {
+      "type": "object",
+      "title": "Context"
      }
     },
     "type": "object",

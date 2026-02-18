@@ -9,6 +9,11 @@ sarc:
       # token: slack-token-replaceme
       # channel: slack-channel-id-replace-me
   mongo: ../../SARC_secrets/secrets/mongo-prod.yaml
+  # health_monitor:
+  #   checks:
+  #     helloworld_check:
+  #       $class: "sarc.alerts.checks:HelloWorldCheck"
+  #       active: False
   users:
     scrapers:
       # legacy_dump:
