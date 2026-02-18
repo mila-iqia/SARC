@@ -109,7 +109,7 @@ read_write_db_with_users_config_object = create_db_configuration_fixture(
     with_users=True
 )
 
-read_only_db_config_object = create_db_configuration_fixture()
+read_only_db_config_object = create_db_configuration_fixture(with_clusters=True)
 
 read_only_db_with_many_cpu_jobs_config_object = create_db_configuration_fixture(
     job_patch={

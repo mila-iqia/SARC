@@ -5,14 +5,14 @@ import math
 from collections.abc import Sequence
 from datetime import datetime, time, timedelta
 from enum import Enum
-from typing import Any, Iterable, Literal, overload
+from typing import Any, Iterable, Literal, overload, Annotated
 
 from pandas import DataFrame
-from pydantic import field_validator
+from pydantic import field_validator, BeforeValidator
 from pydantic_mongo import AbstractRepository, PydanticObjectId
 
 from sarc.client.gpumetrics import get_rgus, get_cluster_gpu_billings
-from sarc.config import MTL, TZLOCAL, UTC, ClusterConfig, config, scraping_mode_required
+from sarc.config import TZLOCAL, UTC, ClusterConfig, config, scraping_mode_required
 from sarc.model import BaseModel
 from sarc.traces import trace_decorator
 
@@ -49,17 +49,28 @@ class SlurmState(str, Enum):
     TIMEOUT = "TIMEOUT"
 
 
+def float_nan_fallback(v: Any) -> Any:
+    """Convert None to NaN"""
+    if v is None:
+        return math.nan
+    return v
+
+
+# Annotated float to accept None as value and convert it to NaN
+SmartFloat = Annotated[float, BeforeValidator(float_nan_fallback)]
+
+
 class Statistics(BaseModel):
     """Statistics for a timeseries."""
 
-    mean: float
-    std: float
-    q05: float
-    q25: float
-    median: float
-    q75: float
-    max: float
-    unused: int
+    mean: SmartFloat
+    std: SmartFloat
+    q05: SmartFloat
+    q25: SmartFloat
+    median: SmartFloat
+    q75: SmartFloat
+    max: SmartFloat
+    unused: SmartFloat
 
 
 class JobStatistics(BaseModel):
@@ -164,8 +175,12 @@ class SlurmJob(BaseModel):
     )
     @classmethod
     def _ensure_timezone(cls, v: datetime | None) -> datetime | None:
-        # We'll store in MTL timezone because why not
-        return v and v.replace(tzinfo=UTC).astimezone(MTL)
+        # We'll store in TZLOCAL timezone because why not
+        if v is None:
+            return None
+        if v.tzinfo is None:
+            v = v.replace(tzinfo=UTC)
+        return v.astimezone(TZLOCAL)
 
     @property
     def duration(self) -> timedelta:
@@ -284,7 +299,7 @@ class SlurmJob(BaseModel):
         """
         end_time = self.end_time
         if end_time is None:
-            end_time = datetime.now(tz=TZLOCAL)
+            end_time = datetime.now(tz=UTC)
         start_time = end_time - timedelta(seconds=self.elapsed_time)
         gpu_type = self.allocated.gpu_type
         if start_time is None or gpu_type is None:

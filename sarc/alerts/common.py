@@ -3,19 +3,16 @@
 from __future__ import annotations
 
 import itertools
-import json
 import logging
-import os
 import re
 from dataclasses import dataclass, field, replace
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
 from graphlib import TopologicalSorter
-from pathlib import Path
-from typing import Callable, Generator, Self, cast
+from typing import Callable, Self, cast
 
 from gifnoc.std import time
-from serieux import TaggedSubclass, deserialize, serialize
+from serieux import TaggedSubclass
 
 logger = logging.getLogger(__name__)
 
@@ -54,9 +51,6 @@ class CheckException:
         )
 
 
-StatusDict = dict[str, "CheckStatus | StatusDict"]
-
-
 @dataclass
 class CheckResult:
     """Results of a check."""
@@ -68,16 +62,14 @@ class CheckResult:
     status: CheckStatus = CheckStatus.ABSENT
 
     # Statuses of individual checks
-    statuses: StatusDict = field(default_factory=dict)
+    # Always a dict in current code
+    statuses: dict[str, CheckStatus] = field(default_factory=dict)
 
     # Information about the exception, if the check has ERROR status
     exception: CheckException | None = None
 
     # Date at which the check finished
     issue_date: datetime = field(default_factory=lambda: time.now().astimezone())
-
-    # Date at which the check will be considered STALE
-    expiry: datetime | None = None
 
     # Check object
     check: TaggedSubclass[HealthCheck] | None = None
@@ -97,20 +89,25 @@ class CheckResult:
         )
         return results
 
-    def get_save_path(self, directory: Path) -> Path:
-        """Generate save path given the parent directory."""
-        timestring = self.issue_date.strftime("%Y-%m-%d-%H-%M-%S")
-        return directory / f"{timestring}.json"
-
-    def save(self, directory: Path) -> None:
-        """Save this result in a directory."""
-        os.makedirs(directory, exist_ok=True)
-        # TaggedSubclass[CheckResult] allows serializing a subclass of CheckResult
-        # by putting the class name in the 'class' property.
-        serialized = serialize(TaggedSubclass[CheckResult], self)
-        dest = self.get_save_path(directory)
-        dest.write_text(json.dumps(serialized, indent=4), encoding="utf8")
-        logger.debug(f"Wrote {dest}")
+    def log_result(self) -> str:
+        """Log check result with appropriate level for polling mode. Return logged message."""
+        prefix = f"[{self.name}] {self.status.name}"
+        if self.status == CheckStatus.FAILURE:
+            failures = ", ".join(self.get_failures().keys())
+            desc = f"{prefix}: {failures}"
+            logger.error(desc)
+        elif self.status == CheckStatus.ERROR:
+            msg = (
+                f"{self.exception.type}: {self.exception.message}"
+                if self.exception
+                else "Unknown error"
+            )
+            desc = f"{prefix}: {msg}"
+            logger.error(desc)
+        else:
+            desc = prefix
+            logger.info(desc)
+        return desc
 
 
 @dataclass
@@ -122,18 +119,11 @@ class HealthCheck:
     # Whether the check is active or not
     active: bool
 
-    # Interval at which to activate the check
-    interval: timedelta
-
     # Name of the check
     name: str = "NOTSET"
 
     # Parameters of the check
     parameters: dict[str, str] = field(default_factory=dict)
-
-    # Directory in which to serialize results
-    # Note: this is typically set by the parent to be root_check_dir/check.name
-    directory: Path | None = None
 
     # Other checks on which this check depends. If these checks fail, this
     # check will not be run.
@@ -158,7 +148,6 @@ class HealthCheck:
     def result(self, status: CheckStatus, **kwargs) -> CheckResult:
         """Generate a result with the given status."""
         now = time.now()
-        expiry = now + self.interval + timedelta(hours=1)
         if status not in iter(CheckStatus):
             opts = ", ".join(item.value for item in CheckStatus)
             raise ValueError(f"Invalid status: {status}. Valid statuses are: {opts}")
@@ -166,7 +155,6 @@ class HealthCheck:
             name=self.name,
             status=status,
             issue_date=now,
-            expiry=expiry,
             check=self,
             **kwargs,
         )
@@ -184,41 +172,6 @@ class HealthCheck:
     ) -> CheckResult | CheckStatus | dict[str, bool] | Callable[[], CheckResult]:
         """Perform the check and return a result or status."""
         raise NotImplementedError("Please override in subclass.")
-
-    def all_results(self, ascending: bool = False) -> Generator[CheckResult]:
-        """Yield all results, starting from the most recent.
-
-        Arguments:
-            ascending: If True, sort the results in chronological order instead.
-        """
-        assert self.directory, "The check is not associated to a directory."
-        if not self.directory.exists():
-            os.makedirs(self.directory, exist_ok=True)
-        config_files = sorted(
-            self.directory.glob("????-??-??-??-??-??.json"),
-            key=lambda x: x.name,
-            reverse=not ascending,
-        )
-        for file in config_files:
-            yield self.read_result(file)
-
-    def read_result(self, path: Path) -> CheckResult:
-        """Read results from the file at the given path."""
-        data = json.loads(path.read_text())
-        return deserialize(TaggedSubclass[CheckResult], data)
-
-    def latest_result(self) -> CheckResult:
-        """Return the latest result for this check."""
-        for result in self.all_results():
-            return result
-        return self.result(CheckStatus.ABSENT)
-
-    def next_schedule(self, latest: CheckResult) -> datetime:
-        """Return the latest result for this check."""
-        if latest.status is CheckStatus.ABSENT:
-            return time.now()
-        else:
-            return latest.issue_date + self.interval
 
     def wrapped_check(self) -> CheckResult:
         """Wrap the check function.
@@ -247,20 +200,13 @@ class HealthCheck:
             )
         return results
 
-    def __call__(self, write: bool = True) -> CheckResult:
-        """Perform the check and save it (unless save=False)."""
-        results = self.wrapped_check()
-        if write:
-            assert self.directory is not None
-            results.save(self.directory)
-        return results
+    def __call__(self) -> CheckResult:
+        """Perform the check"""
+        return self.wrapped_check()
 
 
 @dataclass
 class HealthMonitorConfig:
-    # Root directory for check results
-    directory: Path
-
     # Parameterizations for the checks
     parameterizations: dict[str, list[str]] = field(default_factory=dict)
 
@@ -287,10 +233,9 @@ class HealthMonitorConfig:
 
         self.checks = all_checks
 
-        # Set each check's directory based on the root directory and the check's name.
+        # Set each check's name.
         for name, check in self.checks.items():
             check.name = name
-            check.directory = self.directory / check.name
 
         # Topological sort of the checks
         graph = {name: check.depends for name, check in self.checks.items()}

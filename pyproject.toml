@@ -17,8 +17,8 @@ dependencies = [
     "tqdm>=4.66,<5",
     "flatten-dict>=0.4.2,<0.5",
     "simple-parsing>=0.1.0,<0.2",
-    "sphinx>=8.2.3,<9",
-    "myst-parser>=4.0.1,<5",
+    "sphinx>=9.1,<10",
+    "myst-parser>=5,<6",
     "sphinx-rtd-theme>=3.0.2,<4",
     "nbsphinx>=0.9.3,<0.10",
     "opentelemetry-api>=1.36.0,<2",
@@ -32,12 +32,13 @@ dependencies = [
     "opentelemetry-exporter-otlp>=1.23.0,<2",
     "iguane",
     "filelock>=3.18.0",
-    "fastapi[standard-no-fastapi-cloud-cli]>=0.128,<0.129",
+    "fastapi[standard-no-fastapi-cloud-cli]>=0.129,<0.130",
     "requests>=2.32.3,<3",
     "google-auth>=2.40.2,<3",
     "pyodbc>=5.2.0,<6",
     "azure-identity>=1.23.1,<2",
     "rapporteur>=0.1.1",
+    "orjson>=3.11.7",
 ]
 
 [project.scripts]
@@ -66,7 +67,8 @@ dev = [
     "types-tqdm>=4.67.0.20250417",
     "pytest-env>=1.1.5,<2",
     "ruff>=0.14,<0.15",
-    "sphinxcontrib-openapi>=0.8.0,<0.9.0",
+    "sphinxcontrib-openapi>=0.9.0,<0.10.0",
+    "time-machine>=3.2.0",
 ]
 examples = ["seaborn>=0.13.2,<0.14"]
 

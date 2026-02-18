@@ -57,6 +57,8 @@ class DbInit:
 
         create_node_gpu_mapping_indices(db)
 
+        create_healthcheck_indices(db)
+
         return 0
 
     def create_acount(self, client: pymongo.MongoClient, db: Database) -> None:
@@ -99,6 +101,7 @@ class DbInit:
             "clusters",
             "gpu_billing",
             "node_gpu_mapping",
+            "healthcheck",
         ]
 
         try:
@@ -150,6 +153,11 @@ def create_users_indices(db: Database) -> None:
     db_collection.create_index([("uuid", pymongo.ASCENDING)], unique=True)
     db_collection.create_index([("matching_ids.$**", pymongo.ASCENDING)])
 
+    # For user sorting in REST API
+    db_collection.create_index(
+        [("email", pymongo.ASCENDING), ("uuid", pymongo.ASCENDING)]
+    )
+
 
 def create_gpu_billing_indices(db: Database) -> None:
     db_collection = db.gpu_billing
@@ -171,6 +179,12 @@ def create_node_gpu_mapping_indices(db: Database) -> None:
         ],
         unique=True,
     )
+
+
+def create_healthcheck_indices(db: Database) -> None:
+    """Create indices for the healthcheck collection."""
+    db_collection = db.healthcheck
+    db_collection.create_index([("check.name", pymongo.ASCENDING)], unique=True)
 
 
 def create_allocations_indices(db: Database) -> None:
@@ -296,4 +310,9 @@ def create_jobs_indices(db: Database) -> None:
         ],
         name="idx_gpu_type_not_none",
         partialFilterExpression={"allocated.gpu_type": {"$type": "string"}},
+    )
+
+    # Index most useful for job sorting in REST API
+    db_collection.create_index(
+        [("submit_time", pymongo.DESCENDING), ("_id", pymongo.ASCENDING)],
     )

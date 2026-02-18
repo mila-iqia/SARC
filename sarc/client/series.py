@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import logging
+from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
-from typing import Any, Callable, Literal
+from typing import Any, Callable, Literal, Iterable
 
 import numpy as np
 import pandas
@@ -10,8 +11,14 @@ from pandas import DataFrame
 from tqdm import tqdm
 
 from sarc.client.gpumetrics import GPUBilling, get_cluster_gpu_billings, get_rgus
-from sarc.client.job import SlurmCLuster, count_jobs, get_available_clusters, get_jobs
-from sarc.config import MTL
+from sarc.client.job import (
+    SlurmCLuster,
+    count_jobs,
+    get_available_clusters,
+    get_jobs,
+    SlurmJob,
+)
+from sarc.config import TZLOCAL
 from sarc.core.models.users import UserData
 from sarc.core.models.validators import DateMatchError
 from sarc.traces import trace_decorator
@@ -32,6 +39,247 @@ DUMMY_STATS: dict[str, Any] = {
 }
 
 
+class AbstractJobSeriesFactory(ABC):
+    """
+    Abstract class to compute load_job_series.
+    To be sub-classed twice:
+    - one for MongoDB client (using functions from sarc.client.job dans sarc.users.db)
+    - one for API REST client (using REST client functions)
+    """
+
+    def _get_desc(self) -> str:
+        return "load job series"
+
+    @abstractmethod
+    def count_jobs(self, *args, **kwargs) -> int:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def get_jobs(self, *args, **kwargs) -> Iterable[SlurmJob]:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def get_users(self) -> list[UserData]:
+        raise NotImplementedError()
+
+    def _get_user_data_frame(self) -> pandas.DataFrame:
+        """
+        Get all available users in a pandas DataFrame.
+
+        Returns
+        -------
+        DataFrame
+            A data frame containing all users
+            with flattened dot-separated columns from User class.
+        """
+        uf = UserFlattener()
+        return pandas.DataFrame([uf.flatten(user) for user in self.get_users()])
+
+    def load_job_series(
+        self,
+        *,
+        fields: None | list[str] | dict[str, str] = None,
+        clip_time: bool = False,
+        callback: None | Callable = None,
+        **jobs_args,
+    ) -> DataFrame:
+        """
+        Query jobs from the database and return them in a DataFrame, including full user info
+        for each job.
+
+        Parameters
+        ----------
+        fields: list or dict
+            Job fields to include in the DataFrame. By default, include all fields.
+            A dictionary may be passed to select fields and rename them in the DataFrame.
+            In such case, the keys are the fields' names and the values are the names
+            they will have in the DataFrame.
+        clip_time: bool
+            Whether the duration time of the jobs should be clipped within `start` and `end`.
+            ValueError will be raised if `clip_time` is True and either of `start` or `end` is None.
+            Defaults to False.
+        callback: Callable
+            Callable taking the list of job dictionaries in the format it would be included in the DataFrame.
+        **jobs_args
+            Arguments to be passed to `get_jobs` to query jobs from the database.
+
+        Returns
+        -------
+        DataFrame
+            Panda's data frame containing jobs, with following columns:
+            - All fields returned by method SlurmJob.dict(), except "requested" and "allocated"
+              which are flattened into `requested.<attribute>` and `allocated.<attribute>` fields.
+            - Job series fields:
+              "gpu_utilization", "cpu_utilization", "gpu_memory", "gpu_power", "system_memory"
+            - Optional job series fields, added if clip_time is True:
+              "unclipped_start" and "unclipped_end"
+            - Optional user info fields if job users found.
+              Fields from `User.model_dump()` in format `user.<flattened dot-separated field>`,
+        """
+
+        # If fields is a list, convert it to a renaming dict with same old and new names.
+        if isinstance(fields, list):
+            fields = {key: key for key in fields}
+        elif fields is None:
+            fields = {}
+
+        start: datetime | str | None = jobs_args.get("start", None)
+        end: datetime | str | None = jobs_args.get("end", None)
+
+        total = self.count_jobs(**jobs_args)
+
+        # Get users data frame.
+        users_frame = self._get_user_data_frame()
+
+        rows = []
+        now = datetime.now(tz=TZLOCAL)
+        # Fetch all jobs from the clusters
+        for job in tqdm(self.get_jobs(**jobs_args), total=total, desc=self._get_desc()):
+            if job.end_time is None:
+                job.end_time = now
+
+            # For some reason start time is not reliable, often equal to submit time,
+            # so we infer it based on end_time and elapsed_time.
+            job.start_time = job.end_time - timedelta(seconds=job.elapsed_time)
+
+            unclipped_start = None
+            unclipped_end = None
+            if clip_time:
+                if start is None:
+                    raise ValueError("Clip time: missing start")
+                if end is None:
+                    raise ValueError("Clip time: missing end")
+                # Clip the job to the time range we are interested in.
+                unclipped_start = job.start_time
+                assert not isinstance(start, str)
+                job.start_time = max(job.start_time, start)
+                unclipped_end = job.end_time
+                assert not isinstance(end, str)
+                job.end_time = min(job.end_time, end)
+                # Could be negative if job started after end. We don't want to filter
+                # them out because they have been submitted before end, and we want to
+                # compute their wait time.
+                job.elapsed_time = max(
+                    (job.end_time - job.start_time).total_seconds(), 0
+                )
+
+            if job.stored_statistics is None:
+                job_series = DUMMY_STATS.copy()
+            else:
+                job_series = job.stored_statistics.model_dump()
+                job_series = {k: _select_stat(k, v) for k, v in job_series.items()}
+
+                # Replace `gpu_utilization > 1` with nan.
+                if (
+                    job.stored_statistics.gpu_utilization
+                    and job_series["gpu_utilization"] > 1
+                ):
+                    job_series["gpu_utilization"] = np.nan
+
+            # Flatten job.requested and job.allocated into job_series
+            job_series.update(
+                {
+                    f"requested.{key}": value
+                    for key, value in job.requested.model_dump().items()
+                }
+            )
+            job_series.update(
+                {
+                    f"allocated.{key}": value
+                    for key, value in job.allocated.model_dump().items()
+                }
+            )
+            # Additional computations for job.allocated flattened fields.
+            # TODO: Why is it possible to have billing smaller than gres_gpu???
+            billing = job.allocated.billing or 0
+            gres_gpu = job.requested.gres_gpu or 0
+            if gres_gpu:
+                job_series["allocated.gres_gpu"] = max(billing, gres_gpu)
+                job_series["allocated.cpu"] = job.allocated.cpu
+            else:
+                job_series["allocated.gres_gpu"] = 0
+                job_series["allocated.cpu"] = (
+                    max(billing, job.allocated.cpu) if job.allocated.cpu else 0
+                )
+
+            if clip_time:
+                job_series["unclipped_start"] = unclipped_start
+                job_series["unclipped_end"] = unclipped_end
+
+            # Merge job series and job,
+            # with job series overriding job fields if necessary.
+            # Do not include raw requested and allocated anymore.
+            final_job_dict = job.model_dump(exclude={"requested", "allocated"})
+            final_job_dict.update(job_series)
+            job_series = final_job_dict
+
+            if fields:
+                job_series = {
+                    new_name: job_series[old_name]
+                    for old_name, new_name in fields.items()
+                }
+            rows.append(job_series)
+            if callback:
+                callback(rows)
+
+        jobs_frame = pandas.DataFrame(rows)
+
+        # Get name of fields used to merge frames.
+        # We must use `fields`, as fields may have been renamed.
+        field_cluster_name = fields.get("cluster_name", "cluster_name")
+        field_job_user = fields.get("user", "user")
+        # Merge jobs with users info, only if both users and user column available.
+        if users_frame.shape[0] and field_job_user in jobs_frame.columns:
+            df_mila_mask = jobs_frame[field_cluster_name] == "mila"
+            df_drac_mask = jobs_frame[field_cluster_name] != "mila"
+
+            # TODO What if there are many user entries with same user.mila_username ?
+            #   NB: This case should not happen. But anyway, possible workarounds:
+            #   `df_a.merge(df_b, on='ID', validate='many_to_one')` ?
+            #   `users_unique = users_frame.drop_duplicates(subset="user.mila_username", keep="first")` ?
+
+            merged_mila = jobs_frame[df_mila_mask].merge(
+                users_frame,
+                left_on=field_job_user,
+                right_on="user.mila_username",
+                how="left",
+            )
+            merged_drac = jobs_frame[df_drac_mask].merge(
+                users_frame,
+                left_on=field_job_user,
+                right_on="user.drac_username",
+                how="left",
+            )
+
+            # Concat merged frames.
+            output = pandas.concat([merged_mila, merged_drac])
+            # Try to sort output to keep initial jobs order, by using first column from jobs frame.
+            # Sort inplace to avoid producing a supplementary frame.
+            output.sort_values(
+                by=jobs_frame.columns[0], inplace=True, ignore_index=True
+            )
+
+            return output
+        else:
+            return jobs_frame
+
+
+class MongoJobSeriesFactory(AbstractJobSeriesFactory):
+    """Implementation for direct MongoDB access."""
+
+    def _get_desc(self) -> str:
+        return super()._get_desc() + " (mongodb)"
+
+    def count_jobs(self, *args, **kwargs) -> int:
+        return count_jobs(*args, **kwargs)
+
+    def get_jobs(self, *args, **kwargs) -> Iterable[SlurmJob]:
+        return get_jobs(*args, **kwargs)
+
+    def get_users(self) -> list[UserData]:
+        return list(get_users())
+
+
 # pylint: disable=too-many-branches,too-many-statements,fixme
 @trace_decorator()
 def load_job_series(
@@ -45,185 +293,12 @@ def load_job_series(
     Query jobs from the database and return them in a DataFrame, including full user info
     for each job.
 
-    Parameters
-    ----------
-    fields: list or dict
-        Job fields to include in the DataFrame. By default, include all fields.
-        A dictionary may be passed to select fields and rename them in the DataFrame.
-        In such case, the keys are the fields' names and the values are the names
-        they will have in the DataFrame.
-    clip_time: bool
-        Whether the duration time of the jobs should be clipped within `start` and `end`.
-        ValueError will be raised if `clip_time` is True and either of `start` or `end` is None.
-        Defaults to False.
-    callback: Callable
-        Callable taking the list of job dictionaries in the format it would be included in the DataFrame.
-    **jobs_args
-        Arguments to be passed to `get_jobs` to query jobs from the database.
-
-    Returns
-    -------
-    DataFrame
-        Panda's data frame containing jobs, with following columns:
-        - All fields returned by method SlurmJob.dict(), except "requested" and "allocated"
-          which are flattened into `requested.<attribute>` and `allocated.<attribute>` fields.
-        - Job series fields:
-          "gpu_utilization", "cpu_utilization", "gpu_memory", "gpu_power", "system_memory"
-        - Optional job series fields, added if clip_time is True:
-          "unclipped_start" and "unclipped_end"
-        - Optional user info fields if job users found.
-          Fields from `User.model_dump()` in format `user.<flattened dot-separated field>`,
+    See JobSeriesFactory.load_job_series for parameters documentation.
     """
-
-    # If fields is a list, convert it to a renaming dict with same old and new names.
-    if isinstance(fields, list):
-        fields = {key: key for key in fields}
-    elif fields is None:
-        fields = {}
-
-    start: datetime | str | None = jobs_args.get("start", None)
-    end: datetime | str | None = jobs_args.get("end", None)
-
-    total = count_jobs(**jobs_args)
-
-    # Get users data frame.
-    users_frame = _get_user_data_frame()
-
-    rows = []
-    now = datetime.now(tz=MTL)
-    # Fetch all jobs from the clusters
-    for job in tqdm(get_jobs(**jobs_args), total=total, desc="load job series"):
-        if job.end_time is None:
-            job.end_time = now
-
-        # For some reason start time is not reliable, often equal to submit time,
-        # so we infer it based on end_time and elapsed_time.
-        job.start_time = job.end_time - timedelta(seconds=job.elapsed_time)
-
-        unclipped_start = None
-        unclipped_end = None
-        if clip_time:
-            if start is None:
-                raise ValueError("Clip time: missing start")
-            if end is None:
-                raise ValueError("Clip time: missing end")
-            # Clip the job to the time range we are interested in.
-            unclipped_start = job.start_time
-            assert not isinstance(start, str)
-            job.start_time = max(job.start_time, start)
-            unclipped_end = job.end_time
-            assert not isinstance(end, str)
-            job.end_time = min(job.end_time, end)
-            # Could be negative if job started after end. We don't want to filter
-            # them out because they have been submitted before end, and we want to
-            # compute their wait time.
-            job.elapsed_time = max((job.end_time - job.start_time).total_seconds(), 0)
-
-        if job.stored_statistics is None:
-            job_series = DUMMY_STATS.copy()
-        else:
-            job_series = job.stored_statistics.model_dump()
-            job_series = {k: _select_stat(k, v) for k, v in job_series.items()}
-
-            # Replace `gpu_utilization > 1` with nan.
-            if (
-                job.stored_statistics.gpu_utilization
-                and job_series["gpu_utilization"] > 1
-            ):
-                job_series["gpu_utilization"] = np.nan
-
-        # Flatten job.requested and job.allocated into job_series
-        job_series.update(
-            {
-                f"requested.{key}": value
-                for key, value in job.requested.model_dump().items()
-            }
-        )
-        job_series.update(
-            {
-                f"allocated.{key}": value
-                for key, value in job.allocated.model_dump().items()
-            }
-        )
-        # Additional computations for job.allocated flattened fields.
-        # TODO: Why is it possible to have billing smaller than gres_gpu???
-        billing = job.allocated.billing or 0
-        gres_gpu = job.requested.gres_gpu or 0
-        if gres_gpu:
-            job_series["allocated.gres_gpu"] = max(billing, gres_gpu)
-            job_series["allocated.cpu"] = job.allocated.cpu
-        else:
-            job_series["allocated.gres_gpu"] = 0
-            job_series["allocated.cpu"] = (
-                max(billing, job.allocated.cpu) if job.allocated.cpu else 0
-            )
-
-        if clip_time:
-            job_series["unclipped_start"] = unclipped_start
-            job_series["unclipped_end"] = unclipped_end
-
-        # Merge job series and job,
-        # with job series overriding job fields if necessary.
-        # Do not include raw requested and allocated anymore.
-        final_job_dict = job.model_dump(exclude={"requested", "allocated"})
-        final_job_dict.update(job_series)
-        job_series = final_job_dict
-
-        if fields:
-            job_series = {
-                new_name: job_series[old_name] for old_name, new_name in fields.items()
-            }
-        rows.append(job_series)
-        if callback:
-            callback(rows)
-
-    jobs_frame = pandas.DataFrame(rows)
-
-    # Get name of fields used to merge frames.
-    # We must use `fields`, as fields may have been renamed.
-    field_cluster_name = fields.get("cluster_name", "cluster_name")
-    field_job_user = fields.get("user", "user")
-    # Merge jobs with users info, only if both users and user column available.
-    if users_frame.shape[0] and field_job_user in jobs_frame.columns:
-        df_mila_mask = jobs_frame[field_cluster_name] == "mila"
-        df_drac_mask = jobs_frame[field_cluster_name] != "mila"
-
-        merged_mila = jobs_frame[df_mila_mask].merge(
-            users_frame,
-            left_on=field_job_user,
-            right_on="user.mila_username",
-            how="left",
-        )
-        merged_drac = jobs_frame[df_drac_mask].merge(
-            users_frame,
-            left_on=field_job_user,
-            right_on="user.drac_username",
-            how="left",
-        )
-
-        # Concat merged frames.
-        output = pandas.concat([merged_mila, merged_drac])
-        # Try to sort output to keep initial jobs order, by using first column from jobs frame.
-        # Sort inplace to avoid producing a supplementary frame.
-        output.sort_values(by=jobs_frame.columns[0], inplace=True, ignore_index=True)
-
-        return output
-    else:
-        return jobs_frame
-
-
-def _get_user_data_frame() -> pandas.DataFrame:
-    """
-    Get all available users in a pandas DataFrame.
-
-    Returns
-    -------
-    DataFrame
-        A data frame containing all users
-        with flattened dot-separated columns from User class.
-    """
-    uf = UserFlattener()
-    return pandas.DataFrame([uf.flatten(user) for user in get_users()])
+    factory = MongoJobSeriesFactory()
+    return factory.load_job_series(
+        fields=fields, clip_time=clip_time, callback=callback, **jobs_args
+    )
 
 
 class UserFlattener:

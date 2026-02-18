@@ -26,8 +26,6 @@ if TYPE_CHECKING:
     from pymongo.database import Database
 
 
-MTL = zoneinfo.ZoneInfo("America/Montreal")
-PST = zoneinfo.ZoneInfo("America/Vancouver")
 UTC = zoneinfo.ZoneInfo("UTC")
 TZLOCAL = zoneinfo.ZoneInfo(tzlocal.get_localzone_name())
 
@@ -211,8 +209,25 @@ class UserScrapingConfig:
 
 
 @dataclass
+class ApiConfig:
+    """
+    Configuration for Python REST API client
+
+    Used if client is initialized without parameters.
+    Currently necessary for high-level Python client functions
+    such as `load_job_series()`, which internally initialize
+    a client without parameters.
+    """
+
+    url: str  # REST API URL (including port)
+    timeout: int = 120
+    per_page: int = 100  # Default pagination size
+
+
+@dataclass
 class ClientConfig:
     mongo: MongoConfig
+    api: ApiConfig | None = None
     cache: Path | None = None
     loki: LokiConfig | None = None
     tempo: TempoConfig | None = None

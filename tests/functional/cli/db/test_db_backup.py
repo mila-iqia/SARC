@@ -39,7 +39,7 @@ def test_db_backup(cli_main, monkeypatch):
             "--gzip",
             f"--uri={cfg.mongo.connection_string}",
             f"--db={cfg.mongo.database_name}",
-            f"--out={cfg.cache}/backup/2023-02-28T00h00m00s",
+            f"--out={cfg.cache}/backup/2023-02-28T00h00m00s+0000",
         ]
         mock_subprocess_run.called += 1
         return subprocess.CompletedProcess(
