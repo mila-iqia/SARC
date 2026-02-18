@@ -95,7 +95,7 @@ class CheckResult:
         if self.status == CheckStatus.FAILURE:
             failures = ", ".join(self.get_failures().keys())
             desc = f"{prefix}: {failures}"
-            logger.warning(desc)
+            logger.error(desc)
         elif self.status == CheckStatus.ERROR:
             msg = (
                 f"{self.exception.type}: {self.exception.message}"
