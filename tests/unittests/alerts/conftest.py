@@ -52,13 +52,14 @@ def empty_read_write_db(request):
     with gifnoc.overlay({"sarc.mongo.database_name": db_name}):
         assert config().mongo.database_instance.name == db_name
         db = config().mongo.database_instance
+        for collection_name in db.list_collection_names():
+            db[collection_name].drop()
         yield db_name
-        db.client.drop_database(db_name)
 
 
 @pytest.fixture(scope="function")
 def read_write_db(empty_read_write_db):
-    """Read-write db with some data inside"""
+    """Read-write db with some data"""
     db = config().mongo.database_instance
     db["a_collection"].insert_one(
         {"a_text": ",".join(str(i) for i in range(40 * 1024))}

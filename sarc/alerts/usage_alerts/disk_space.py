@@ -11,6 +11,10 @@ logger = logging.getLogger(__name__)
 
 
 def check_disk_space_for_db(max_size_bytes: int) -> bool:
+    """
+    Check that database size does not exceed given limit size.
+    Return True if check is a success, False otherwise.
+    """
     usage_bytes = _compute_db_disk_usage()
     if usage_bytes > max_size_bytes:
         logger.warning(
@@ -22,7 +26,6 @@ def check_disk_space_for_db(max_size_bytes: int) -> bool:
 
 
 def _compute_db_disk_usage():
-    # Database storage size
     db = config().mongo.database_instance
     stats = db.command("dbStats")
     storage_size_bytes = stats["storageSize"]
@@ -39,6 +42,10 @@ def _compute_db_disk_usage():
 
 
 def check_disk_space_for_cache(max_size_bytes: int) -> bool:
+    """
+    Check that SARC cache folder size does not exceed given limit.
+    Return True if check is a success, False otherwise.
+    """
     cache_path = config().cache
     if cache_path is None:
         logger.info("[sarc-cache] no cache patch to check")
@@ -74,7 +81,6 @@ def _get_physical_size(path: Path | str) -> int | None:
                     try:
                         total += os.stat(fp).st_size
                     except FileNotFoundError:
-                        # File may have been deleted since call to os.walk
                         pass
         return total
     except PermissionError:
@@ -99,6 +105,8 @@ def _get_human_readable_file_size(size_bytes: int) -> str:
 
 @dataclass
 class DatabaseSizeCheck(HealthCheck):
+    """Health check for database size"""
+
     limit: int = 0
 
     def check(self) -> CheckResult:
@@ -110,6 +118,8 @@ class DatabaseSizeCheck(HealthCheck):
 
 @dataclass
 class CacheSizeCheck(HealthCheck):
+    """Health check for SARC cache size"""
+
     limit: int = 0
 
     def check(self) -> CheckResult:

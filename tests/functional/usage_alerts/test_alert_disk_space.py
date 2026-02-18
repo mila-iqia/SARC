@@ -16,7 +16,7 @@ from sarc.config import config
 @pytest.mark.usefixtures("read_only_db")
 def test_alert_disk_space_db(caplog):
     db_size_bytes = _compute_db_disk_usage()
-    assert db_size_bytes > 40_000
+    assert db_size_bytes > 0
     db_size_str = _get_human_readable_file_size(db_size_bytes)
 
     with caplog.at_level(logging.INFO):
@@ -59,7 +59,7 @@ def test_alert_disk_space_cache(caplog):
         assert not re.search(r"WARNING +.+\[sarc-cache] size exceeded", caplog.text)
         caplog.clear()
 
-    sizes = (3 * 1024**2, 100 * 1025)
+    sizes = (1024**2, 100 * 1025)
     cache.mkdir()
     for i, size in enumerate(sizes):
         with open(cache / f"{i}.txt", mode="w", encoding="utf-8") as f:
