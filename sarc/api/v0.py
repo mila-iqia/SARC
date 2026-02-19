@@ -13,7 +13,7 @@ from sarc.client.job import (
     _jobs_collection,
     get_available_clusters,
 )
-from sarc.config import UTC
+from sarc.config import config, UTC
 from sarc.core.models import validators
 from sarc.core.models.users import MemberType, UserData
 from sarc.users.db import get_user_collection
@@ -25,6 +25,10 @@ router = APIRouter(prefix="/v0", default_response_class=ORJSONResponse)
 
 DEFAULT_PAGE_SIZE = 100
 MAX_PAGE_SIZE = 5_000
+
+hascap = config().api.auth.get_email_capability
+
+router = APIRouter(prefix="/v0")
 
 
 def valid_cluster(cluster: str):
@@ -270,7 +274,7 @@ def get_job(oid: PydanticObjectId) -> SlurmJob:
     return job
 
 
-@router.get("/cluster/list")
+@router.get("/cluster/list", dependencies=[Depends(hascap("user"))])
 def get_cluster_names() -> list[str]:
     """Return the names of available clusters."""
     return sorted(cl.cluster_name for cl in get_available_clusters())
