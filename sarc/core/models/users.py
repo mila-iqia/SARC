@@ -23,7 +23,7 @@ class MemberType(str, Enum):
 class UserData(BaseModel):
     # This is the base data for a user. Except for the uuid, it can change but
     # we are not interested in tracking past values for this.
-    uuid: UUID4 = Field(default_factory=lambda: uuid4(), frozen=True)
+    uuid: UUID4 = Field(default_factory=uuid4, frozen=True)
     display_name: str
     email: str
 
