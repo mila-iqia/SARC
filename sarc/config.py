@@ -11,10 +11,10 @@ from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Literal, cast, overload
 
-from easy_oauth import OAuthManager
 import gifnoc
 import tzlocal
 from bson import CodecOptions, UuidRepresentation
+from easy_oauth import OAuthManager
 from hostlist import expand_hostlist
 
 from .alerts.common import HealthMonitorConfig
@@ -223,11 +223,7 @@ class ApiConfig:
     url: str  # REST API URL (including port)
     timeout: int = 120
     per_page: int = 100  # Default pagination size
-    auth: OAuthManager = field(
-        default_factory=lambda: OAuthManager(
-            server_metadata_url="n/a", graph={"user": []}
-        )
-    )
+    auth: OAuthManager | None = None
 
 
 @dataclass

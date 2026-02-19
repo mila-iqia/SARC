@@ -1,9 +1,9 @@
 from datetime import datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import ORJSONResponse
-from pydantic import AfterValidator, BaseModel, UUID4
+from pydantic import UUID4, AfterValidator, BaseModel
 from pydantic_mongo import PydanticObjectId
 
 from sarc.client import get_rgus
@@ -13,7 +13,7 @@ from sarc.client.job import (
     _jobs_collection,
     get_available_clusters,
 )
-from sarc.config import config, UTC
+from sarc.config import UTC, config
 from sarc.core.models import validators
 from sarc.core.models.users import MemberType, UserData
 from sarc.users.db import get_user_collection
@@ -26,7 +26,12 @@ router = APIRouter(prefix="/v0", default_response_class=ORJSONResponse)
 DEFAULT_PAGE_SIZE = 100
 MAX_PAGE_SIZE = 5_000
 
-hascap = config().api.auth.get_email_capability
+api_config = config().api
+
+assert api_config is not None
+assert api_config.auth is not None
+
+hascap = api_config.auth.get_email_capability
 
 router = APIRouter(prefix="/v0")
 
