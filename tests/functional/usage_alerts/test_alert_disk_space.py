@@ -21,7 +21,7 @@ def test_alert_disk_space_db(caplog):
 
     with caplog.at_level(logging.INFO):
         check_disk_space_for_db(max_size_bytes=0)
-        assert re.search(r"WARNING +.+\[mongodb] size exceeded", caplog.text)
+        assert re.search(r"ERROR +.+\[mongodb] size exceeded", caplog.text)
         assert (
             f"[mongodb] size exceeded: max 0.00 B, current: {db_size_str}"
             in caplog.text
@@ -32,7 +32,7 @@ def test_alert_disk_space_db(caplog):
         limit_bytes = db_size_bytes - 1
         limit_str = _get_human_readable_file_size(limit_bytes)
         check_disk_space_for_db(max_size_bytes=limit_bytes)
-        assert re.search(r"WARNING +.+\[mongodb] size exceeded", caplog.text)
+        assert re.search(r"ERROR +.+\[mongodb] size exceeded", caplog.text)
         assert (
             f"[mongodb] size exceeded: max {limit_str}, current: {db_size_str}"
             in caplog.text
@@ -41,12 +41,12 @@ def test_alert_disk_space_db(caplog):
 
     with caplog.at_level(logging.INFO):
         check_disk_space_for_db(max_size_bytes=db_size_bytes)
-        assert not re.search(r"WARNING +.+\[mongodb] size exceeded", caplog.text)
+        assert not re.search(r"ERROR +.+\[mongodb] size exceeded", caplog.text)
         caplog.clear()
 
     with caplog.at_level(logging.INFO):
         check_disk_space_for_db(max_size_bytes=db_size_bytes + 1)
-        assert not re.search(r"WARNING +.+\[mongodb] size exceeded", caplog.text)
+        assert not re.search(r"ERROR +.+\[mongodb] size exceeded", caplog.text)
 
 
 @pytest.mark.usefixtures("enabled_cache")
@@ -56,7 +56,7 @@ def test_alert_disk_space_cache(caplog):
 
     with caplog.at_level(logging.INFO):
         check_disk_space_for_cache(max_size_bytes=0)
-        assert not re.search(r"WARNING +.+\[sarc-cache] size exceeded", caplog.text)
+        assert not re.search(r"ERROR +.+\[sarc-cache] size exceeded", caplog.text)
         caplog.clear()
 
     sizes = (1024**2, 100 * 1025)
@@ -72,7 +72,7 @@ def test_alert_disk_space_cache(caplog):
 
     with caplog.at_level(logging.INFO):
         check_disk_space_for_cache(max_size_bytes=0)
-        assert re.search(r"WARNING +.+\[sarc-cache] size exceeded", caplog.text)
+        assert re.search(r"ERROR +.+\[sarc-cache] size exceeded", caplog.text)
         assert (
             f"[sarc-cache] size exceeded: max 0.00 B, current: {expected_str}"
             in caplog.text
@@ -83,7 +83,7 @@ def test_alert_disk_space_cache(caplog):
         limit_bytes = cache_size_bytes - 1
         limit_str = _get_human_readable_file_size(limit_bytes)
         check_disk_space_for_cache(max_size_bytes=limit_bytes)
-        assert re.search(r"WARNING +.+\[sarc-cache] size exceeded", caplog.text)
+        assert re.search(r"ERROR +.+\[sarc-cache] size exceeded", caplog.text)
         assert (
             f"[sarc-cache] size exceeded: max {limit_str}, current: {expected_str}"
             in caplog.text
@@ -92,10 +92,10 @@ def test_alert_disk_space_cache(caplog):
 
     with caplog.at_level(logging.INFO):
         check_disk_space_for_cache(max_size_bytes=cache_size_bytes)
-        assert not re.search(r"WARNING +.+\[sarc-cache] size exceeded", caplog.text)
+        assert not re.search(r"ERROR +.+\[sarc-cache] size exceeded", caplog.text)
         caplog.clear()
 
     with caplog.at_level(logging.INFO):
         check_disk_space_for_cache(max_size_bytes=cache_size_bytes + 1)
-        assert not re.search(r"WARNING +.+\[sarc-cache] size exceeded", caplog.text)
+        assert not re.search(r"ERROR +.+\[sarc-cache] size exceeded", caplog.text)
         caplog.clear()

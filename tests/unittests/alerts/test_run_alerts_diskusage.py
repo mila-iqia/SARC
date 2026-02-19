@@ -39,10 +39,10 @@ def test_health_check_disk_space_db(caplog, cli_main, check_name, expected):
         )
         assert check_name in caplog.text
         if expected:
-            assert re.search(r"WARNING +.+\[mongodb] size exceeded", caplog.text)
+            assert re.search(r"ERROR +.+\[mongodb] size exceeded", caplog.text)
             assert expected in caplog.text
         else:
-            assert not re.search(r"WARNING +.+\[mongodb] size exceeded", caplog.text)
+            assert not re.search(r"ERROR +.+\[mongodb] size exceeded", caplog.text)
 
 
 @pytest.mark.parametrize(
@@ -78,7 +78,7 @@ def test_health_check_disk_space_cache(caplog, cli_main, check_name, expected):
         )
         assert check_name in caplog.text
         if expected:
-            assert re.search(r"WARNING +.+\[sarc-cache] size exceeded", caplog.text)
+            assert re.search(r"ERROR +.+\[sarc-cache] size exceeded", caplog.text)
             assert expected in caplog.text
         else:
-            assert not re.search(r"WARNING +.+\[sarc-cache] size exceeded", caplog.text)
+            assert not re.search(r"ERROR +.+\[sarc-cache] size exceeded", caplog.text)

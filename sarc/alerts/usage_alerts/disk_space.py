@@ -17,7 +17,7 @@ def check_disk_space_for_db(max_size_bytes: int) -> bool:
     """
     usage_bytes = _compute_db_disk_usage()
     if usage_bytes > max_size_bytes:
-        logger.warning(
+        logger.error(
             f"[mongodb] size exceeded: max {_get_human_readable_file_size(max_size_bytes)}, "
             f"current: {_get_human_readable_file_size(usage_bytes)}"
         )
@@ -54,12 +54,12 @@ def check_disk_space_for_cache(max_size_bytes: int) -> bool:
     logger.debug(f"[sarc-cache] folder: {cache_path}")
     cache_size_bytes = _get_physical_size(cache_path)
     if cache_size_bytes is None:
-        logger.error(
+        logger.critical(
             f"[sarc-cache] cannot get size for cache folder (inexistent or permission error): {cache_path}"
         )
         return False
     if cache_size_bytes > max_size_bytes:
-        logger.warning(
+        logger.error(
             f"[sarc-cache] size exceeded: max {_get_human_readable_file_size(max_size_bytes)}, "
             f"current: {_get_human_readable_file_size(cache_size_bytes)}"
         )
