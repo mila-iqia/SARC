@@ -363,13 +363,13 @@ class UserFlattener:
             base_user_dict["mila_username"] = user.associated_accounts[
                 "mila"
             ].get_value()
-        except (DateMatchError, KeyError):
+        except DateMatchError, KeyError:
             pass
         try:
             base_user_dict["drac_username"] = user.associated_accounts[
                 "drac"
             ].get_value()
-        except (DateMatchError, KeyError):
+        except DateMatchError, KeyError:
             pass
 
         # Now flatten user dict.
