@@ -8,12 +8,11 @@ from enum import Enum
 from typing import Annotated, Any, Iterable, Literal, overload
 
 from pandas import DataFrame
-from pydantic import BeforeValidator, field_validator
+from pydantic import BaseModel, BeforeValidator, field_validator
 from pydantic_mongo import AbstractRepository, AsyncAbstractRepository, PydanticObjectId
 
 from sarc.client.gpumetrics import get_cluster_gpu_billings, get_rgus
 from sarc.config import TZLOCAL, UTC, ClusterConfig, config, scraping_mode_required
-from sarc.model import BaseModel
 from sarc.traces import trace_decorator
 
 

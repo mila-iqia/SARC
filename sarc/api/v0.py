@@ -1,10 +1,12 @@
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import ORJSONResponse
 from pydantic import UUID4, BaseModel
 from pydantic_mongo import PydanticObjectId
+from serieux import deserialize
 
 from sarc.client import get_rgus
 from sarc.client.job import (
@@ -14,18 +16,61 @@ from sarc.client.job import (
     _async_jobs_collection,
     async_get_available_clusters,
 )
-from sarc.config import UTC
+from sarc.config import UTC, Config, config
 from sarc.core.models import validators
+from sarc.core.models.api import SlurmJobList, UserList
 from sarc.core.models.users import MemberType, UserData
-from sarc.users.db import get_async_user_collection
+from sarc.users.db import UserDB, get_async_user_collection, get_user_collection
 
 # Use `orjson` module to handle JSON.
 # `orjson` automatically converts float NaN values to None,
 # and is expected to be faster than builtin `json`.
 router = APIRouter(prefix="/v0", default_response_class=ORJSONResponse)
 
-DEFAULT_PAGE_SIZE = 100
-MAX_PAGE_SIZE = 5_000
+
+def hascap(cap):
+    async def check(request: Request, cfg: Config = Depends(config)):
+        if not cfg.api.auth:
+            yield "__admin__"
+        else:
+            async for name in cfg.api.auth.get_email_capability(cap)(request):
+                yield name
+
+    return check
+
+
+can_query = hascap("query")
+
+
+router = APIRouter(prefix="/v0")
+
+
+@dataclass
+class Requestor:
+    email: str
+    user: UserDB | None = None
+    is_admin: bool = False
+
+
+def is_admin(
+    user: Annotated[str, Depends(can_query)], cfg: Config = Depends(config)
+) -> bool:
+    auth = cfg.api.auth
+    if not auth:
+        return True
+    admin = deserialize(auth.capabilities.captype, "admin")
+    return auth.capabilities.check(user, admin)
+
+
+def requestor(
+    email: str = Depends(can_query),
+    cfg: Config = Depends(config),
+    admin: bool = Depends(is_admin),
+):
+    userdb = get_user_collection().find_one_by({"matching_ids.mila_ldap": email})
+    if userdb is None and not admin:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    return Requestor(email=email, user=userdb, is_admin=admin)
 
 
 async def validate_cluster(cluster: str):
@@ -36,6 +81,25 @@ async def validate_cluster(cluster: str):
         )
 
 
+def constrain_page_parameters(cfg, page, per_page):
+    if per_page is None:
+        per_page = cfg.api.per_page
+    if page < 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Page must be >= 1"
+        )
+    if per_page < 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Page size must be >= 1"
+        )
+    if per_page > cfg.api.max_page_size:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Page size must be <= {cfg.api.max_page_size}",
+        )
+    return per_page
+
+
 class JobQuery(BaseModel):
     cluster: str | None = None
     # job_id supports None, an integer, a list of integers, or an empty list.
@@ -44,8 +108,13 @@ class JobQuery(BaseModel):
     username: str | None = None
     start: datetime | None = None
     end: datetime | None = None
+    requestor: Requestor
 
     def get_query(self) -> dict[str, Any]:
+        if not self.requestor.is_admin:
+            # TODO: implement query for general users
+            raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED)
+
         query: dict[str, Any] = {}
         if self.cluster is not None:
             query["cluster_name"] = self.cluster
@@ -77,6 +146,7 @@ async def job_query_params(
     username: str | None = None,
     start: datetime | None = None,
     end: datetime | None = None,
+    requestor: Requestor = Depends(requestor),
 ) -> JobQuery:
     """
     Annotation function for JobQueryType below.
@@ -105,6 +175,7 @@ async def job_query_params(
         username=username,
         start=start,
         end=end,
+        requestor=requestor,
     )
 
 
@@ -126,6 +197,8 @@ class UserQuery(BaseModel):
     co_supervisor: UUID4 | None = None
     co_supervisor_start: datetime | None = None
     co_supervisor_end: datetime | None = None
+
+    requestor: Requestor = Depends(requestor)
 
     def _get_valid_tag_query(
         self,
@@ -167,6 +240,10 @@ class UserQuery(BaseModel):
         return {}
 
     def get_query(self) -> dict[str, Any]:
+        if not self.requestor.is_admin:
+            # TODO: implement query for general users
+            raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED)
+
         query: dict[str, Any] = {}
         if self.display_name is not None:
             query["display_name"] = {"$regex": self.display_name, "$options": "i"}
@@ -194,20 +271,6 @@ class UserQuery(BaseModel):
 UserQueryType = Annotated[UserQuery, Depends(UserQuery)]
 
 
-class SlurmJobList(BaseModel):
-    jobs: list[SlurmJob]
-    page: int
-    per_page: int
-    total: int
-
-
-class UserList(BaseModel):
-    users: list[UserData]
-    page: int
-    per_page: int
-    total: int
-
-
 @router.get("/job/query")
 async def get_jobs(query_opt: JobQueryType) -> list[PydanticObjectId]:
     coll = _async_jobs_collection()
@@ -217,22 +280,12 @@ async def get_jobs(query_opt: JobQueryType) -> list[PydanticObjectId]:
 
 @router.get("/job/list")
 async def list_jobs(
-    query_opt: JobQueryType, page: int = 1, per_page: int = DEFAULT_PAGE_SIZE
+    query_opt: JobQueryType,
+    page: int = 1,
+    per_page: int = None,
+    cfg: Config = Depends(config),
 ) -> SlurmJobList:
-    if page < 1:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Page must be >= 1"
-        )
-    if per_page < 1:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Page size must be >= 1"
-        )
-    if per_page > MAX_PAGE_SIZE:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Page size must be <= {MAX_PAGE_SIZE}",
-        )
-
+    per_page = constrain_page_parameters(cfg, page, per_page)
     coll = _async_jobs_collection()
     query = query_opt.get_query()
     total = await coll.get_collection().count_documents(query)
@@ -259,7 +312,7 @@ async def count_jobs(query_opt: JobQueryType) -> int:
     return await coll.get_collection().count_documents(query_opt.get_query())
 
 
-@router.get("/job/id/{oid}")
+@router.get("/job/id/{oid}", dependencies=[Depends(requestor)])
 async def get_job(oid: PydanticObjectId) -> SlurmJob:
     coll = _async_jobs_collection()
     job = await coll.find_one_by_id(oid)
@@ -270,14 +323,14 @@ async def get_job(oid: PydanticObjectId) -> SlurmJob:
     return job
 
 
-@router.get("/cluster/list")
+@router.get("/cluster/list", dependencies=[Depends(requestor)])
 async def get_cluster_names() -> list[str]:
     """Return the names of available clusters."""
     coll = _async_clusters_collection()
     return sorted([cl.cluster_name for cl in await coll.find_by({})])
 
 
-@router.get("/gpu/rgu")
+@router.get("/gpu/rgu", dependencies=[Depends(requestor)])
 async def get_rgu_value_per_gpu() -> dict[str, float]:
     """Return the mapping GPU->RGU."""
     return get_rgus()
@@ -293,22 +346,12 @@ async def query_users(query_opt: UserQueryType) -> list[UUID4]:
 
 @router.get("/user/list")
 async def list_users(
-    query_opt: UserQueryType, page: int = 1, per_page: int = DEFAULT_PAGE_SIZE
+    query_opt: UserQueryType,
+    page: int = 1,
+    per_page: int = None,
+    cfg: Config = Depends(config),
 ) -> UserList:
-    if page < 1:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Page must be >= 1"
-        )
-    if per_page < 1:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Page size must be >= 1"
-        )
-    if per_page > MAX_PAGE_SIZE:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Page size must be <= {MAX_PAGE_SIZE}",
-        )
-
+    per_page = constrain_page_parameters(cfg, page, per_page)
     coll = get_async_user_collection()
     query = query_opt.get_query()
     total = await coll.get_collection().count_documents(query)
@@ -329,7 +372,7 @@ async def list_users(
     )
 
 
-@router.get("/user/id/{uuid}")
+@router.get("/user/id/{uuid}", dependencies=[Depends(requestor)])
 async def get_user_by_id(uuid: UUID4) -> UserData:
     """Get user with given UUID."""
     user = await get_async_user_collection().find_one_by({"uuid": uuid})
@@ -340,7 +383,7 @@ async def get_user_by_id(uuid: UUID4) -> UserData:
     return user
 
 
-@router.get("/user/email/{email}")
+@router.get("/user/email/{email}", dependencies=[Depends(is_admin)])
 async def get_user_by_email(email: str) -> UserData:
     """Get user with given email."""
     user = await get_async_user_collection().find_one_by({"email": email})
