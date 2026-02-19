@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from sarc.alerts.common import HealthCheck, CheckResult
-from sarc.config import config
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +25,8 @@ def check_disk_space_for_db(max_size_bytes: int) -> bool:
 
 
 def _compute_db_disk_usage():
+    from sarc.config import config
+
     db = config().mongo.database_instance
     stats = db.command("dbStats")
     storage_size_bytes = stats["storageSize"]
@@ -46,6 +47,8 @@ def check_disk_space_for_cache(max_size_bytes: int) -> bool:
     Check that SARC cache folder size does not exceed given limit.
     Return True if check is a success, False otherwise.
     """
+    from sarc.config import config
+
     cache_path = config().cache
     if cache_path is None:
         logger.info("[sarc-cache] no cache patch to check")
