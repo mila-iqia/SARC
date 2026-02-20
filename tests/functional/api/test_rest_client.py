@@ -6,23 +6,22 @@ import httpx
 import pytest
 from pydantic_mongo import PydanticObjectId
 
-from sarc.api.v0 import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
 from sarc.client.job import SlurmJob, SlurmState
 from sarc.config import UTC, ConfigurationError
+from sarc.core.models.api import MAX_PAGE_SIZE
 from sarc.core.models.users import MemberType
 from sarc.rest.client import SarcApiClient
-
 
 # Test SarcApiClient Initialization
 
 
 def test_init_with_params():
-    c = SarcApiClient(remote_url="http://example.com", timeout=60)
+    c = SarcApiClient(remote_url="http://example.com", timeout=60, oauth2_token="")
     assert c.remote_url == "http://example.com"
     assert c.timeout == 60
-    assert c.per_page == DEFAULT_PAGE_SIZE
+    assert c.per_page == 100  # default page size
 
-    c2 = SarcApiClient("http://example.com/", per_page=12)
+    c2 = SarcApiClient("http://example.com/", per_page=12, oauth2_token="")
     assert c2.remote_url == "http://example.com"
     assert c2.timeout == 120  # default timeout
     assert c2.per_page == 12
@@ -35,7 +34,7 @@ def test_init_from_config():
         mock_config.return_value.api.timeout = 90
         mock_config.return_value.api.per_page = 904
 
-        c = SarcApiClient()
+        c = SarcApiClient(oauth2_token="")
         assert c.remote_url == "http://config-url.com"
         assert c.timeout == 90
         assert c.per_page == 904
@@ -202,7 +201,7 @@ def test_count_jobs_invalid_job_state(sarc_client):
         sarc_client.job_count(job_state="INVALID")
 
 
-@pytest.mark.usefixtures("read_only_db_with_users")
+@pytest.mark.usefixtures("read_only_db_with_users", "enable_caps")
 def test_cluster_list(sarc_client):
     data = sarc_client.cluster_list()
     for cluster_name in ("raisin", "fromage", "patate"):
@@ -498,7 +497,7 @@ def test_user_list(sarc_client):
     assert data.page == 1
     assert data.total == 10
     assert len(data.users) == 10
-    assert data.per_page == DEFAULT_PAGE_SIZE
+    assert data.per_page == 100
 
     # Check sorting: email asc
     emails = [u.email for u in data.users]
@@ -550,7 +549,7 @@ def test_job_list_no_filters(sarc_client):
     assert jobs_list.page == 1
     assert jobs_list.total == 24
     assert len(jobs_list.jobs) == 24
-    assert jobs_list.per_page == DEFAULT_PAGE_SIZE
+    assert jobs_list.per_page == 100
 
 
 @pytest.mark.usefixtures("read_only_db_with_users")
@@ -637,8 +636,8 @@ def test_rest_get_users(mock_client_class):
     """
     Test the top-level get_users function which should iterate over pages.
     """
-    from sarc.rest.client import get_users
     from sarc.core.models.users import UserData
+    from sarc.rest.client import get_users
 
     # Call the helper function
     all_users = get_users()

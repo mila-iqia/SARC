@@ -3,8 +3,8 @@ from datetime import datetime, timedelta
 import pytest
 from pydantic_mongo import PydanticObjectId
 
-from sarc.api.v0 import MAX_PAGE_SIZE
 from sarc.config import UTC
+from sarc.core.models.api import MAX_PAGE_SIZE
 
 
 @pytest.mark.usefixtures("read_only_db", "client_mode")
@@ -382,7 +382,7 @@ def test_count_jobs_matches_query_length(client):
     assert len(jobs) == count
 
 
-@pytest.mark.usefixtures("read_only_db_with_users")
+@pytest.mark.usefixtures("read_only_db_with_users", "enable_caps")
 def test_cluster_list(client):
     """Test cluster list."""
     response = client.get("/v0/cluster/list")

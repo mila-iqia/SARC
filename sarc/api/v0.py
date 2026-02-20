@@ -15,6 +15,7 @@ from sarc.client.job import (
 )
 from sarc.config import UTC, config
 from sarc.core.models import validators
+from sarc.core.models.api import MAX_PAGE_SIZE, SlurmJobList, UserList
 from sarc.core.models.users import MemberType, UserData
 from sarc.users.db import get_user_collection
 
@@ -23,15 +24,13 @@ from sarc.users.db import get_user_collection
 # and is expected to be faster than builtin `json`.
 router = APIRouter(prefix="/v0", default_response_class=ORJSONResponse)
 
-DEFAULT_PAGE_SIZE = 100
-MAX_PAGE_SIZE = 5_000
 
 api_config = config().api
 
-assert api_config is not None
 assert api_config.auth is not None
 
 hascap = api_config.auth.get_email_capability
+cap_user = hascap("user")
 
 router = APIRouter(prefix="/v0")
 
@@ -203,20 +202,6 @@ class UserQuery(BaseModel):
 UserQueryType = Annotated[UserQuery, Depends(UserQuery)]
 
 
-class SlurmJobList(BaseModel):
-    jobs: list[SlurmJob]
-    page: int
-    per_page: int
-    total: int
-
-
-class UserList(BaseModel):
-    users: list[UserData]
-    page: int
-    per_page: int
-    total: int
-
-
 @router.get("/job/query")
 def get_jobs(query_opt: JobQueryType) -> list[PydanticObjectId]:
     coll = _jobs_collection()
@@ -226,7 +211,7 @@ def get_jobs(query_opt: JobQueryType) -> list[PydanticObjectId]:
 
 @router.get("/job/list")
 def list_jobs(
-    query_opt: JobQueryType, page: int = 1, per_page: int = DEFAULT_PAGE_SIZE
+    query_opt: JobQueryType, page: int = 1, per_page: int = api_config.per_page
 ) -> SlurmJobList:
     if page < 1:
         raise HTTPException(
@@ -279,7 +264,7 @@ def get_job(oid: PydanticObjectId) -> SlurmJob:
     return job
 
 
-@router.get("/cluster/list", dependencies=[Depends(hascap("user"))])
+@router.get("/cluster/list", dependencies=[Depends(cap_user)])
 def get_cluster_names() -> list[str]:
     """Return the names of available clusters."""
     return sorted(cl.cluster_name for cl in get_available_clusters())
@@ -301,7 +286,7 @@ def query_users(query_opt: UserQueryType) -> list[UUID4]:
 
 @router.get("/user/list")
 def list_users(
-    query_opt: UserQueryType, page: int = 1, per_page: int = DEFAULT_PAGE_SIZE
+    query_opt: UserQueryType, page: int = 1, per_page: int = api_config.per_page
 ) -> UserList:
     if page < 1:
         raise HTTPException(

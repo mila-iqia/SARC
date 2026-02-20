@@ -1,14 +1,13 @@
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from sarc.api.v0 import router
 from sarc.rest.client import SarcApiClient
 
 
 @pytest.fixture
 def app():
-    """Create a FastAPI test app with the v0 router."""
-    from fastapi import FastAPI
+    from sarc.api.v0 import router
 
     app = FastAPI()
     app.include_router(router)
@@ -30,7 +29,24 @@ def sarc_client(client):
 
     Used to test low-level SarcApiClient methods.
     """
-    return SarcApiClient(remote_url="http://testserver", session=client)
+    return SarcApiClient(
+        remote_url="http://testapp", session=client, oauth2_token="test"
+    )
+
+
+@pytest.fixture
+def enable_caps(app):
+    from sarc.api.v0 import cap_user
+
+    def yes():
+        pass
+
+    app.dependency_overrides[cap_user] = yes
+
+    try:
+        yield
+    finally:
+        del app.dependency_overrides[cap_user]
 
 
 @pytest.fixture
@@ -44,6 +60,9 @@ def mock_client_class(client, monkeypatch):
 
     class MockSarcApiClient(SarcApiClient):
         def __init__(self, *args, **kwargs):
-            super().__init__(remote_url="http://testserver", session=client)
+            super().__init__(
+                remote_url="http://testserver", session=client, oauth2_token="test"
+            )
 
+    monkeypatch.setattr("sarc.rest.client.SarcApiClient", MockSarcApiClient)
     monkeypatch.setattr("sarc.rest.client.SarcApiClient", MockSarcApiClient)
