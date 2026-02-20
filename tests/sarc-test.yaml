@@ -58,7 +58,7 @@ sarc:
         params:
           config_files:
             default: /etc/beegfs/scratch.d/beegfs-client.conf
-      host: mila
+      host: mila-tests
       name: mila
       prometheus_headers_file: tests/not-so-secrets/patate_prometheus/headers.json
       prometheus_url: https://hyrule-thanos.calcul.ca
