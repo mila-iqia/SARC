@@ -9,11 +9,16 @@ sarc:
       # token: slack-token-replaceme
       # channel: slack-channel-id-replace-me
   mongo: ../../SARC_secrets/secrets/mongo-prod.yaml
-  # health_monitor:
-  #   checks:
-  #     helloworld_check:
-  #       $class: "sarc.alerts.checks:HelloWorldCheck"
-  #       active: False
+  health_monitor:
+    checks:
+      database_size_check:
+        $class: "sarc.alerts.usage_alerts.disk_space:DatabaseSizeCheck"
+        limit: 5000000000
+        active: True
+      cache_size_check:
+        $class: "sarc.alerts.usage_alerts.disk_space:CacheSizeCheck"
+        limit: 150000000000
+        active: True
   users:
     scrapers:
       legacy_dump:
