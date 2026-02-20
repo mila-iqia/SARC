@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any, Annotated
+from typing import Annotated, Any
 
-from pydantic import PlainSerializer, BeforeValidator
+from pydantic import BaseModel, BeforeValidator, PlainSerializer
 from pydantic_mongo import AbstractRepository, PydanticObjectId
-from serieux import serialize, deserialize, TaggedSubclass
+from serieux import TaggedSubclass, deserialize, serialize
 
-from sarc.alerts.common import HealthCheck, CheckResult
+from sarc.alerts.common import CheckResult, HealthCheck
 from sarc.config import config
-from sarc.model import BaseModel
 
 
 def _serialize_health_check(hc: HealthCheck) -> dict[str, Any]:
