@@ -13,6 +13,40 @@ from sarc.config import config
 from sarc.model import BaseModel
 
 
+SERIEUX_CLASS_NAME = "$class"
+MONGODB_CLASS_NAME = "_class_"
+
+
+def _serialize_class_field(data: dict):
+    """
+    Encode serieux field name `$class` after serialization,
+    so that MongoDB won't complain.
+
+    serieux saves class name in a field named "$class",
+    but some versions of MongoDB won't accept field names
+    that start with "$". As a workaround, this class
+    replaces "$class" with "_class_" after serializing,
+    and "_class_" with "$class" before deserializing.
+    """
+    if SERIEUX_CLASS_NAME in data:
+        data[MONGODB_CLASS_NAME] = data.pop(SERIEUX_CLASS_NAME)
+    for value in data.values():
+        if isinstance(value, dict):
+            _serialize_class_field(value)
+
+
+def _deserialize_class_field(data: dict):
+    """
+    Decode serieux field name `$class` before deserialization,
+    so that serieux won't complain.
+    """
+    if MONGODB_CLASS_NAME in data:
+        data[SERIEUX_CLASS_NAME] = data.pop(MONGODB_CLASS_NAME)
+    for value in data.values():
+        if isinstance(value, dict):
+            _deserialize_class_field(value)
+
+
 def _serialize_health_check(hc: HealthCheck) -> dict[str, Any]:
     """
     Special serializer for HealthCheck.
@@ -20,7 +54,9 @@ def _serialize_health_check(hc: HealthCheck) -> dict[str, Any]:
     Use serieux serializer with TaggedSubclass
     to be sure check class is saved in model
     """
-    return serialize(TaggedSubclass[HealthCheck], hc)
+    data = serialize(TaggedSubclass[HealthCheck], hc)
+    _serialize_class_field(data)
+    return data
 
 
 def _validate_health_check(v: Any) -> HealthCheck:
@@ -28,6 +64,7 @@ def _validate_health_check(v: Any) -> HealthCheck:
     if isinstance(v, HealthCheck):
         return v
     assert isinstance(v, dict)
+    _deserialize_class_field(v)
     return deserialize(TaggedSubclass[HealthCheck], v)
 
 
@@ -46,7 +83,9 @@ def _serialize_check_result(result: CheckResult) -> dict[str, Any]:
     we prevent recursion and save space by cleaning `result.check`.
     """
     result.check = None
-    return serialize(TaggedSubclass[CheckResult], result)
+    data = serialize(TaggedSubclass[CheckResult], result)
+    _serialize_class_field(data)
+    return data
 
 
 def _validate_check_result(v: Any) -> CheckResult:
@@ -54,6 +93,7 @@ def _validate_check_result(v: Any) -> CheckResult:
     if isinstance(v, CheckResult):
         return v
     assert isinstance(v, dict)
+    _deserialize_class_field(v)
     return deserialize(TaggedSubclass[CheckResult], v)
 
 
