@@ -108,3 +108,14 @@ sarc:
       uri: "https://localhost/loki"
   tempo:
       uri: "https://localhost/tempo"
+  api:
+    auth:
+      client_id: ""
+      client_secret: ""
+      server_metadata_url: "http://authserver/.well-known/openid-configuration"
+      capabilities:
+        guest_capabilities: []
+        user_overrides: {}
+        user_file: "permissions.yaml"
+        graph:
+          query: []

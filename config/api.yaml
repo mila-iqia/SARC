@@ -1,0 +1,19 @@
+sarc:
+  api:
+    auth:
+      server_metadata_url: https://accounts.google.com/.well-known/openid-configuration
+      secret_key: PLACEHOLDER
+      client_id: PLACEHOLDER
+      client_secret: PLACEHOLDER
+      client_kwargs:
+        scope: openid email
+        prompt: select_account
+      capabilities:
+        guest_capabilities: []
+        default_capabilities: [user]
+        user_overrides:
+          olivier.breuleux@mila.quebec: [admin]
+        user_file: ./permissions.yaml
+        graph:
+          user_management: []
+          user: []

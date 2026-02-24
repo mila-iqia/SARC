@@ -30,14 +30,13 @@ from datetime import datetime, time
 from typing import Any, Callable, Iterable
 
 import httpx
-from gifnoc.proxy import MissingConfigurationError
 from pydantic import UUID4
 from pydantic_mongo import PydanticObjectId
 
-from sarc.api.v0 import SlurmJobList, UserList, DEFAULT_PAGE_SIZE
 from sarc.client.job import SlurmJob, SlurmState
 from sarc.client.series import AbstractJobSeriesFactory
-from sarc.config import ConfigurationError, UTC, config
+from sarc.config import UTC, ConfigurationError, config
+from sarc.core.models.api import SlurmJobList, UserList
 from sarc.core.models.users import MemberType, UserData
 from sarc.traces import trace_decorator
 
@@ -53,6 +52,7 @@ class SarcApiClient:
     def __init__(
         self,
         remote_url: str | None = None,
+        oauth2_token: str | None = None,
         timeout: int | None = None,
         session: httpx.Client | None = None,
         per_page: int | None = None,
@@ -61,18 +61,16 @@ class SarcApiClient:
         Initialize.
 
         :param remote_url: API URL
+        :param oauth2_token: Authentification token obtained from google.  Will do an interactive prompt if not specified
         :param timeout: requests timeout, in seconds. Default: 120.
         :param session: internal httpx client to use. Default: httpx module.
         :param per_page: default page size for paginated endpoints. Default: 100.
         """
 
-        try:
-            api_cfg = config().api
-        except MissingConfigurationError:
-            api_cfg = None
+        api_cfg = config().api
 
         if remote_url is None:
-            if api_cfg is None:
+            if api_cfg.url is None:
                 raise ConfigurationError(
                     "Remote URL not configured for REST API. "
                     "Either pass URL to SarcApiClient object, "
@@ -81,16 +79,19 @@ class SarcApiClient:
             remote_url = api_cfg.url
 
         if timeout is None:
-            timeout = api_cfg.timeout if api_cfg else 120
+            timeout = api_cfg.timeout
 
         if per_page is None:
-            per_page = api_cfg.per_page if api_cfg else DEFAULT_PAGE_SIZE
+            per_page = api_cfg.per_page
+
+        assert oauth2_token is not None
 
         # Ensure no trailing slash for consistency
         self.remote_url = remote_url.rstrip("/")
         self.timeout = timeout
         self.session = session or httpx
         self.per_page = per_page
+        self.oauth2_token = oauth2_token
 
     def _get(self, endpoint: str, params: dict | None = None) -> httpx.Response:
         """Helper to perform a GET request."""
@@ -114,6 +115,7 @@ class SarcApiClient:
             url,
             params=cleaned_params,
             timeout=self.timeout,
+            headers={"Authorization": f"Bearer: {self.oauth2_token}"},
         )
         response.raise_for_status()
         return response
