@@ -38,6 +38,12 @@ def params_config():
         yield config().health_monitor
 
 
+@pytest.fixture
+def health_config():
+    with gifnoc.overlay(here / "configs" / "diskusage.yaml"):
+        yield config().health_monitor
+
+
 @pytest.fixture(scope="function")
 def empty_read_write_db(request):
     m = hashlib.md5()
@@ -49,3 +55,13 @@ def empty_read_write_db(request):
         for collection_name in db.list_collection_names():
             db[collection_name].drop()
         yield db_name
+
+
+@pytest.fixture(scope="function")
+def read_write_db(empty_read_write_db):
+    """Read-write db with some data"""
+    db = config().mongo.database_instance
+    db["a_collection"].insert_one(
+        {"a_text": ",".join(str(i) for i in range(40 * 1024))}
+    )
+    yield empty_read_write_db

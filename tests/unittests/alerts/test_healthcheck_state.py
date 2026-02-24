@@ -32,10 +32,15 @@ def test_config_read_write_into_db(beans_config, testing_repo):
     (state_doc,) = config().mongo.database_instance.healthcheck.find(
         {"check.name": "many_beans"}
     )
-    assert "$class" in state_doc["check"]
+    assert "_class_" in state_doc["check"]
     assert (
-        state_doc["check"]["$class"] == "tests.unittests.alerts.definitions:BeanCheck"
+        state_doc["check"]["_class_"] == "tests.unittests.alerts.definitions:BeanCheck"
     )
+
+    state_doc["id"] = state_doc.pop("_id")
+    state_parsed = HealthCheckState.model_validate(state_doc)
+    state_again = testing_repo.get_state("many_beans")
+    assert state_parsed == state_again
 
 
 def test_HealthCheckStateRepository(testing_repo, tmpdir):
