@@ -19,7 +19,7 @@ def check_nb_jobs_per_cluster_per_time(
 ) -> None:
     """
     Check if we have scraped enough jobs per time unit per cluster on given time interval.
-    Log a warning for each cluster where number of jobs per time unit is lower than a limit
+    Log an alert for each cluster where number of jobs per time unit is lower than a limit
     computed using mean and standard deviation statistics from this cluster.
 
     Parameters
@@ -102,7 +102,7 @@ def check_nb_jobs_per_cluster_per_time(
 
         if threshold == 0:
             # If threshold is zero, no check can be done, as jobs count will be always >= 0.
-            # Instead, we log a general warning.
+            # Instead, we log a general alert.
             msg = f"[{cluster_name}] threshold 0 ({avg} - {nb_stddev} * {stddev})."
             if len(timestamps) == 1:
                 msg += (
@@ -114,13 +114,13 @@ def check_nb_jobs_per_cluster_per_time(
                     f" Either nb_stddev is too high, time_interval ({time_interval}) is too short, "
                     f"or this cluster should not be currently checked"
                 )
-            logger.warning(msg)
+            logger.error(msg)
         else:
             # With a non-null threshold, we can check each timestamp.
             for timestamp in timestamps:
                 nb_jobs = c.loc[timestamp]["count"]
                 if nb_jobs < threshold:
-                    logger.warning(
+                    logger.error(
                         f"[{cluster_name}][{timestamp}] "
                         f"insufficient cluster scraping: {nb_jobs} jobs / cluster / time unit; "
                         f"minimum required for this cluster: {threshold} ({avg} - {nb_stddev} * {stddev}); "

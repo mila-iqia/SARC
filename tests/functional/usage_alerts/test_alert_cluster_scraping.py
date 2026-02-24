@@ -3,7 +3,6 @@ import re
 import pytest
 
 from sarc.alerts.usage_alerts.cluster_scraping import check_nb_jobs_per_cluster_per_time
-
 from ..jobs.test_func_load_job_series import MOCK_TIME
 
 
@@ -44,7 +43,7 @@ def test_check_nb_jobs_per_cluster_per_time(params, capsys, caplog, file_regress
     check_nb_jobs_per_cluster_per_time(**params)
     file_regression.check(
         re.sub(
-            r"WARNING +sarc\.alerts\.usage_alerts\.cluster_scraping:cluster_scraping.py:[0-9]+ +",
+            r"ERROR +sarc\.alerts\.usage_alerts\.cluster_scraping:cluster_scraping.py:[0-9]+ +",
             "",
             f"{capsys.readouterr().err}\n{caplog.text}",
         )

@@ -15,7 +15,7 @@ def check_gpu_util_per_user(
 ) -> None:
     """
     Check if users have enough utilization of GPUs.
-    Log a warning for each user if average GPU-util of user jobs
+    Log an alert for each user if average GPU-util of user jobs
     in time interval is lower than a given threshold.
 
     For a given user job, GPU-util is computed as
@@ -73,7 +73,7 @@ def check_gpu_util_per_user(
         user = row.Index
         gpu_util = cast(float, row.gpu_util)
         if gpu_util < threshold.total_seconds():
-            logger.warning(
+            logger.error(
                 f"[{user}] insufficient average gpu_util: {gpu_util} GPU-seconds; "
                 f"minimum required: {threshold} ({threshold.total_seconds()} GPU-seconds)"
             )

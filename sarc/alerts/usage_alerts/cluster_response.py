@@ -10,13 +10,13 @@ logger = logging.getLogger(__name__)
 def check_cluster_response(time_interval: timedelta = timedelta(days=7)) -> None:
     """
     Check if we scraped clusters recently.
-    Log a warning for each cluster not scraped since `time_interval` from now.
+    Log an alert for each cluster not scraped since `time_interval` from now.
 
     Parameters
     ----------
     time_interval: timedelta
         Interval of time (until current time) in which we want to see cluster scrapings.
-        For each cluster, if the latest scraping occurred before this period, a warning will be logged.
+        For each cluster, if the latest scraping occurred before this period, an alert will be logged.
         Default is 7 days.
     """
     # Get current date
@@ -26,7 +26,7 @@ def check_cluster_response(time_interval: timedelta = timedelta(days=7)) -> None
     # Check each available cluster
     for cluster in get_available_clusters():
         if cluster.end_time_sacct is None:
-            logger.warning(
+            logger.error(
                 f"[{cluster.cluster_name}] no end_time_sacct available, cannot check last scraping"
             )
         else:
@@ -38,7 +38,7 @@ def check_cluster_response(time_interval: timedelta = timedelta(days=7)) -> None
             ).replace(tzinfo=UTC)
             # Now we can check.
             if cluster_end_date < oldest_allowed_date:
-                logger.warning(
+                logger.error(
                     f"[{cluster.cluster_name}] no scraping since {cluster_end_date}, "
                     f"oldest required: {oldest_allowed_date}, "
                     f"current time: {current_date}"

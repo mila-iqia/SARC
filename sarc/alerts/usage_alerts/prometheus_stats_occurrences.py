@@ -35,7 +35,7 @@ def check_prometheus_stats_occurrences(
 ) -> None:
     """
     Check if we have scrapped Prometheus stats for enough jobs per node per cluster per time unit.
-    Log a warning for each node / cluster where ratio of jobs with Prometheus stats is lower than
+    Log an alert for each node / cluster where ratio of jobs with Prometheus stats is lower than
     a threshold computed using mean and standard deviation statistics from all clusters.
 
     Parameters
@@ -57,7 +57,7 @@ def check_prometheus_stats_occurrences(
         On the opposite, we may expect to see jobs in a cluster, but there are actually no jobs in this cluster.
         To cover such cases, one can specify the complete list of expected clusters with `cluster_names`.
         Jobs from clusters not in this list will be ignored both to compute statistics and in checking phase.
-        If a cluster in this list does not appear in jobs, a warning will be logged.
+        If a cluster in this list does not appear in jobs, an alert will be logged.
 
         If empty (or not specified), use all clusters available among jobs retrieved with time_interval.
     group_by_node: Sequence | bool
@@ -110,12 +110,10 @@ def check_prometheus_stats_occurrences(
     # List clusters
     cluster_names = cluster_names or sorted(df["cluster_name"].unique())
 
-    # If df is empty, warn for each cluster that we can't check Prometheus stats.
+    # If df is empty, alert for each cluster that we can't check Prometheus stats.
     if df.empty:
         for cluster_name in cluster_names:
-            logger.warning(
-                f"[{cluster_name}] no Prometheus data available: no job found"
-            )
+            logger.error(f"[{cluster_name}] no Prometheus data available: no job found")
         # As there's nothing to check, we return immediately.
         return
 
@@ -190,7 +188,7 @@ def check_prometheus_stats_occurrences(
             for prom in prom_contexts:
                 local_stat = getattr(row, prom.col_has) / nb_jobs
                 if local_stat < prom.threshold:
-                    logger.warning(
+                    logger.error(
                         f"[{timestamp}]{grouping_name} insufficient Prometheus data for {prom.name}: "
                         f"{round(local_stat * 100, 2)} % of CPU jobs / {grouping_type} / time unit; "
                         f"minimum required: {prom.threshold} ({prom.avg} - {nb_stddev} * {prom.stddev}); "
@@ -201,9 +199,7 @@ def check_prometheus_stats_occurrences(
     for cluster_name in cluster_names:
         if cluster_name not in clusters_seen:
             # No stats found for this cluster. Warning
-            logger.warning(
-                f"[{cluster_name}] no Prometheus data available: no job found"
-            )
+            logger.error(f"[{cluster_name}] no Prometheus data available: no job found")
 
 
 def check_prometheus_stats_for_gpu_jobs(
@@ -218,7 +214,7 @@ def check_prometheus_stats_for_gpu_jobs(
 ):
     """
     Check if we have scrapped Prometheus stats for enough GPU jobs per node per cluster per time unit.
-    Log a warning for each node / cluster where ratio of GPU jobs with Prometheus stats is lower than
+    Log an alert for each node / cluster where ratio of GPU jobs with Prometheus stats is lower than
     a threshold computed using mean and standard deviation statistics from all clusters.
 
     To get more info about parameters, see documentation for `check_prometheus_stats_occurrences`.

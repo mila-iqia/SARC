@@ -17,7 +17,7 @@ def check_same_job_id(
 ) -> None:
     """
     Check if there are many jobs with same job ID in given time interval.
-    Log a warning for each duplicated job ID.
+    Log an alert for each duplicated job ID.
 
     Parameters
     ----------
@@ -70,8 +70,8 @@ def check_same_job_id(
                 time_message += f" until {end}"
         else:
             time_message = "always"
-        # General warning
-        logger.warning(
+        # General alert
+        logger.error(
             f"[duplicated job indices] found {len(duplicates)} duplicated job_id since {time_message}"
         )
         # Warning for each duplicated job ID
@@ -85,4 +85,4 @@ def check_same_job_id(
                 )
                 + f", since {time_message}"
             )
-            logger.warning(message)
+            logger.error(message)

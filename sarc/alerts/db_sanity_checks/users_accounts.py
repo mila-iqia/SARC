@@ -19,7 +19,7 @@ def find_missing_user_to_mila_emails(
         return []
 
     N = df.shape[0]
-    logger.warn(
+    logger.error(
         f"'user.mila.email' is missing in {n_missing} jobs ({n_missing / N:.2%})"
     )
 

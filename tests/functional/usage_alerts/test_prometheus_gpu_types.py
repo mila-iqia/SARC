@@ -72,7 +72,7 @@ def test_check_prometheus_vs_slurmconfig(params, monkeypatch, caplog, file_regre
         params["message"]
         + "\n\n"
         + re.sub(
-            r"WARNING +sarc\.alerts\.usage_alerts\.prometheus_gpu_types:prometheus_gpu_types.py:[0-9]+ +",
+            r"ERROR +sarc\.alerts\.usage_alerts\.prometheus_gpu_types:prometheus_gpu_types.py:[0-9]+ +",
             "",
             caplog.text,
         )
@@ -114,7 +114,7 @@ def test_check_prometheus_vs_slurmconfig_all(monkeypatch, caplog, file_regressio
     check_prometheus_vs_slurmconfig()
     file_regression.check(
         re.sub(
-            r"WARNING +sarc\.alerts\.usage_alerts\.prometheus_gpu_types:prometheus_gpu_types.py:[0-9]+ +",
+            r"ERROR +sarc\.alerts\.usage_alerts\.prometheus_gpu_types:prometheus_gpu_types.py:[0-9]+ +",
             "",
             caplog.text,
         )

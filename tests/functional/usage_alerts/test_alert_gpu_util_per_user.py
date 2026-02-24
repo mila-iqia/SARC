@@ -6,7 +6,6 @@ import pytest
 from sarc.alerts.usage_alerts.gpu_util_per_user import check_gpu_util_per_user
 from sarc.client import get_jobs
 from tests.functional.jobs.test_func_load_job_series import MOCK_TIME
-
 from ..jobs.test_func_job_statistics import generate_fake_timeseries
 
 
@@ -43,7 +42,7 @@ def test_alert_gpu_util_per_user(params, caplog, monkeypatch, file_regression):
     check_gpu_util_per_user(**params)
     file_regression.check(
         re.sub(
-            r"WARNING +sarc\.alerts\.usage_alerts\.gpu_util_per_user:gpu_util_per_user.py:[0-9]+ +",
+            r"ERROR +sarc\.alerts\.usage_alerts\.gpu_util_per_user:gpu_util_per_user.py:[0-9]+ +",
             "",
             caplog.text,
         )

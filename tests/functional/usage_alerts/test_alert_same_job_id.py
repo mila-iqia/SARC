@@ -82,7 +82,7 @@ def test_check_same_job_id(params, caplog, file_regression):
     check_same_job_id(**params)
     file_regression.check(
         re.sub(
-            r"WARNING +sarc\.alerts\.usage_alerts\.same_job_id:same_job_id.py:[0-9]+ +",
+            r"ERROR +sarc\.alerts\.usage_alerts\.same_job_id:same_job_id.py:[0-9]+ +",
             "",
             caplog.text,
         )

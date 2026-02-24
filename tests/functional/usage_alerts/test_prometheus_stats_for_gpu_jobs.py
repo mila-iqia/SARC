@@ -7,7 +7,6 @@ from sarc.alerts.usage_alerts.prometheus_stats_occurrences import (
 )
 from sarc.client import get_jobs
 from tests.functional.jobs.test_func_load_job_series import MOCK_TIME
-
 from ..jobs.test_func_job_statistics import generate_fake_timeseries
 
 PARAMS = {
@@ -79,7 +78,7 @@ def test_check_prometheus_stats_for_gpu_jobs(
     check_prometheus_stats_for_gpu_jobs(**params)
     file_regression.check(
         re.sub(
-            r"WARNING +sarc\.alerts\.usage_alerts\.prometheus_stats_occurrences:prometheus_stats_occurrences.py:[0-9]+ +",
+            r"ERROR +sarc\.alerts\.usage_alerts\.prometheus_stats_occurrences:prometheus_stats_occurrences.py:[0-9]+ +",
             "",
             caplog.text,
         )

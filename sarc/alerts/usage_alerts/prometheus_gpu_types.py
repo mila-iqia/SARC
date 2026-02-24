@@ -53,7 +53,7 @@ def check_prometheus_vs_slurmconfig(cluster_name: str | None = None) -> None:
                     slurmconfig_gpu_types.add(gpu_type)
         if not slurmconfig_gpu_types:
             # Warn if there is no slurm config GPUs available.
-            logger.warning(
+            logger.error(
                 f"[prometheus][{cluster.name}] cannot find GPU types from slurm config file. "
                 f"You may need to fetch and parse slurm.conf files for this cluster."
             )
@@ -66,7 +66,7 @@ def check_prometheus_vs_slurmconfig(cluster_name: str | None = None) -> None:
             # Warn for each prometheus GPU not found in slurm config GPUs.
             only_in_prometheus = prometheus_gpu_types - slurmconfig_gpu_types
             for gpu_type in only_in_prometheus:
-                logger.warning(
+                logger.error(
                     f"[prometheus][{cluster.name}] gpu_type not found in slurm config file: {gpu_type}. "
                     f"Expected: {', '.join(sorted(slurmconfig_gpu_types))}"
                 )
