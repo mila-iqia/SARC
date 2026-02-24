@@ -118,4 +118,4 @@ sarc:
         user_overrides: {}
         user_file: "permissions.yaml"
         graph:
-          user: []
+          query: []

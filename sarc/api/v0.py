@@ -1,10 +1,11 @@
 from datetime import datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import ORJSONResponse
 from pydantic import UUID4, AfterValidator, BaseModel
 from pydantic_mongo import PydanticObjectId
+from serieux import deserialize
 
 from sarc.client import get_rgus
 from sarc.client.job import (
@@ -17,7 +18,7 @@ from sarc.config import UTC, config
 from sarc.core.models import validators
 from sarc.core.models.api import MAX_PAGE_SIZE, SlurmJobList, UserList
 from sarc.core.models.users import MemberType, UserData
-from sarc.users.db import get_user_collection
+from sarc.users.db import UserDB, get_user_collection
 
 # Use `orjson` module to handle JSON.
 # `orjson` automatically converts float NaN values to None,
@@ -25,17 +26,29 @@ from sarc.users.db import get_user_collection
 router = APIRouter(prefix="/v0", default_response_class=ORJSONResponse)
 
 
-api_config = config().api
+auth = config().api.auth
+assert auth is not None
 
-assert api_config.auth is not None
-
-hascap = api_config.auth.get_email_capability
-cap_user = hascap("user")
+hascap = auth.get_email_capability
+can_query = hascap("query")
 
 router = APIRouter(prefix="/v0")
 
 
-def valid_cluster(cluster: str):
+def user(user: Annotated[str, Depends(can_query)]) -> UserDB:
+    userdb = get_user_collection().find_one_by({"matching_ids.mila_ldap": user})
+    if userdb is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    return userdb
+
+
+def is_admin(user: Annotated[str, Depends(can_query)], request: Request) -> bool:
+    app = request.app
+    admin = deserialize(app.auth.capabilities.captype, "admin")
+    return app.auth.check(user, admin)
+
+
+def valid_cluster(cluster: str) -> str:
     cluster_names = list(cl.cluster_name for cl in get_available_clusters())
     if cluster is not None:
         if cluster not in cluster_names:
@@ -203,15 +216,23 @@ UserQueryType = Annotated[UserQuery, Depends(UserQuery)]
 
 
 @router.get("/job/query")
-def get_jobs(query_opt: JobQueryType) -> list[PydanticObjectId]:
+async def get_jobs(
+    query_opt: JobQueryType,
+    user: Annotated[UserDB, Depends(user)],
+    is_admin: Annotated[bool, Depends(is_admin)],
+) -> list[PydanticObjectId]:
     coll = _jobs_collection()
-    jobs = coll.get_collection().find(query_opt.get_query(), ["_id"])
+    if is_admin:
+        jobs = coll.get_collection().find(query_opt.get_query(), ["_id"])
+    else:
+        # TODO
+        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED)
     return list(j["_id"] for j in jobs)
 
 
 @router.get("/job/list")
 def list_jobs(
-    query_opt: JobQueryType, page: int = 1, per_page: int = api_config.per_page
+    query_opt: JobQueryType, page: int = 1, per_page: int = 100
 ) -> SlurmJobList:
     if page < 1:
         raise HTTPException(
@@ -264,7 +285,7 @@ def get_job(oid: PydanticObjectId) -> SlurmJob:
     return job
 
 
-@router.get("/cluster/list", dependencies=[Depends(cap_user)])
+@router.get("/cluster/list", dependencies=[Depends(user)])
 def get_cluster_names() -> list[str]:
     """Return the names of available clusters."""
     return sorted(cl.cluster_name for cl in get_available_clusters())
@@ -286,7 +307,7 @@ def query_users(query_opt: UserQueryType) -> list[UUID4]:
 
 @router.get("/user/list")
 def list_users(
-    query_opt: UserQueryType, page: int = 1, per_page: int = api_config.per_page
+    query_opt: UserQueryType, page: int = 1, per_page: int = 100
 ) -> UserList:
     if page < 1:
         raise HTTPException(
