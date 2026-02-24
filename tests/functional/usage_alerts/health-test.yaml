@@ -1,0 +1,30 @@
+sarc:
+  health_monitor:
+    checks:
+      cluster_response_default:
+        $class: "sarc.alerts.usage_alerts.cluster_response:ClusterResponseCheck"
+        active: true
+      cluster_response_365_days:
+        $class: "sarc.alerts.usage_alerts.cluster_response:ClusterResponseCheck"
+        active: true
+        time_interval: 365d
+      cluster_response_283_days:
+        $class: "sarc.alerts.usage_alerts.cluster_response:ClusterResponseCheck"
+        active: true
+        time_interval: 283d
+      cluster_response_282_days:
+        $class: "sarc.alerts.usage_alerts.cluster_response:ClusterResponseCheck"
+        active: true
+        time_interval: 282d
+      cluster_response_281_days:
+        $class: "sarc.alerts.usage_alerts.cluster_response:ClusterResponseCheck"
+        active: true
+        time_interval: 281d
+      cluster_response_280_days:
+        $class: "sarc.alerts.usage_alerts.cluster_response:ClusterResponseCheck"
+        active: true
+        time_interval: 280d
+      cluster_response_279_days:
+        $class: "sarc.alerts.usage_alerts.cluster_response:ClusterResponseCheck"
+        active: true
+        time_interval: 279d
