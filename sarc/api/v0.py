@@ -227,6 +227,7 @@ async def get_jobs(
     else:
         # TODO
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED)
+        user  # Use user
     return list(j["_id"] for j in jobs)
 
 
