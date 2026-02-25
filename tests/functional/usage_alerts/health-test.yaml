@@ -107,3 +107,29 @@ sarc:
         active: true
         gpu_type: "unknown"
         time_interval: null
+
+      gpu_util_per_user_0:
+        $class: "sarc.alerts.usage_alerts.gpu_util_per_user:GpuUtilPerUserCheck"
+        active: true
+        threshold: 0s
+      gpu_util_per_user_1:
+        $class: "sarc.alerts.usage_alerts.gpu_util_per_user:GpuUtilPerUserCheck"
+        active: true
+        threshold: 7h
+        time_interval: null
+      gpu_util_per_user_2:
+        $class: "sarc.alerts.usage_alerts.gpu_util_per_user:GpuUtilPerUserCheck"
+        active: true
+        threshold: 6h
+        time_interval: null
+      gpu_util_per_user_3:
+        $class: "sarc.alerts.usage_alerts.gpu_util_per_user:GpuUtilPerUserCheck"
+        active: true
+        threshold: 8h
+        time_interval: 276d
+      gpu_util_per_user_4:
+        $class: "sarc.alerts.usage_alerts.gpu_util_per_user:GpuUtilPerUserCheck"
+        active: true
+        threshold: 8h
+        time_interval: 276d
+        minimum_runtime: 39000s
