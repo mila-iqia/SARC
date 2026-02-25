@@ -43,9 +43,11 @@ TESTING_DATA = {
 }
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("empty_read_write_db", "health_config")
 @pytest.mark.parametrize("params", TESTING_DATA.values(), ids=TESTING_DATA.keys())
-def test_check_prometheus_vs_slurmconfig(params, monkeypatch, caplog, file_regression):
+def test_check_prometheus_vs_slurmconfig(
+    params, monkeypatch, caplog, file_regression, cli_main
+):
     """Test each case from TEST_DATA (one test per cluster)."""
 
     from prometheus_api_client import PrometheusConnect
@@ -67,7 +69,12 @@ def test_check_prometheus_vs_slurmconfig(params, monkeypatch, caplog, file_regre
             }
         )
 
-    check_prometheus_vs_slurmconfig(cluster_name=params["cluster"])
+    assert (
+        cli_main(
+            ["health", "run", "--check", f"prometheus_gpu_type_{params['cluster']}"]
+        )
+        == 0
+    )
     file_regression.check(
         params["message"]
         + "\n\n"

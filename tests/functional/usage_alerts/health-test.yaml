@@ -133,3 +133,28 @@ sarc:
         threshold: 8h
         time_interval: 276d
         minimum_runtime: 39000s
+
+      prometheus_gpu_type_hyrule:
+        $class: "sarc.alerts.usage_alerts.prometheus_gpu_types:PrometheusGpuTypeCheck"
+        active: true
+        cluster_name: hyrule
+      prometheus_gpu_type_gerudo:
+        $class: "sarc.alerts.usage_alerts.prometheus_gpu_types:PrometheusGpuTypeCheck"
+        active: true
+        cluster_name: gerudo
+      prometheus_gpu_type_patate:
+        $class: "sarc.alerts.usage_alerts.prometheus_gpu_types:PrometheusGpuTypeCheck"
+        active: true
+        cluster_name: patate
+      prometheus_gpu_type_fromage:
+        $class: "sarc.alerts.usage_alerts.prometheus_gpu_types:PrometheusGpuTypeCheck"
+        active: true
+        cluster_name: fromage
+      prometheus_gpu_type_raisin:
+        $class: "sarc.alerts.usage_alerts.prometheus_gpu_types:PrometheusGpuTypeCheck"
+        active: true
+        cluster_name: raisin
+      prometheus_gpu_type_all:
+        $class: "sarc.alerts.usage_alerts.prometheus_gpu_types:PrometheusGpuTypeCheck"
+        active: true
+        cluster_name: null
