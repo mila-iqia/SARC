@@ -28,3 +28,32 @@ sarc:
         $class: "sarc.alerts.usage_alerts.cluster_response:ClusterResponseCheck"
         active: true
         time_interval: 279d
+
+      cluster_scraping_0:
+        $class: "sarc.alerts.usage_alerts.cluster_scraping:ClusterScrapingCheck"
+        active: true
+        verbose: true
+      cluster_scraping_1:
+        $class: "sarc.alerts.usage_alerts.cluster_scraping:ClusterScrapingCheck"
+        active: true
+        time_interval: null
+        verbose: true
+      cluster_scraping_2:
+        $class: "sarc.alerts.usage_alerts.cluster_scraping:ClusterScrapingCheck"
+        active: true
+        time_interval: null
+        cluster_names:
+          - fromage
+          - mila
+          - patate
+          - raisin
+          - another_cluster
+        verbose: true
+      cluster_scraping_3:
+        $class: "sarc.alerts.usage_alerts.cluster_scraping:ClusterScrapingCheck"
+        active: true
+        time_interval: null
+        cluster_names:
+          - mila
+          - raisin
+          - another_cluster

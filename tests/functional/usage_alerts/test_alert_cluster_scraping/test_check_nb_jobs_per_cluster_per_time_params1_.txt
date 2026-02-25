@@ -55,3 +55,4 @@ avg 2.875, stddev 1.3562026818605375, threshold 0.162594636278925
 [mila] threshold 0 (0.375 - 2 * 0.5175491695067657). Either nb_stddev is too high, time_interval (None) is too short, or this cluster should not be currently checked
 [patate] threshold 0 (0.25 - 2 * 0.4629100498862757). Either nb_stddev is too high, time_interval (None) is too short, or this cluster should not be currently checked
 [raisin][2023-02-20 00:01:00-05:00] insufficient cluster scraping: 0 jobs / cluster / time unit; minimum required for this cluster: 0.162594636278925 (2.875 - 2 * 1.3562026818605375); time unit: 1 day, 0:00:00
+ERROR    sarc.alerts.common:common.py:98 [cluster_scraping_1] FAILURE: cluster_scraping_1

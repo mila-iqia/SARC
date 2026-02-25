@@ -1,11 +1,11 @@
 import logging
 import sys
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 import pandas
 
-from sarc.client.series import compute_time_frames, load_job_series
-from sarc.config import UTC
+from sarc.alerts.common import HealthCheck, CheckResult
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +16,7 @@ def check_nb_jobs_per_cluster_per_time(
     cluster_names: list[str] | None = None,
     nb_stddev: int = 2,
     verbose: bool = False,
-) -> None:
+) -> bool:
     """
     Check if we have scraped enough jobs per time unit per cluster on given time interval.
     Log an alert for each cluster where number of jobs per time unit is lower than a limit
@@ -39,7 +39,14 @@ def check_nb_jobs_per_cluster_per_time(
         max(0, average - nb_stddev * stddev)
     verbose: bool
         If True, print supplementary info about clusters statistics.
+
+    Returns
+    -------
+    bool
+        True if check succeeds, False otherwise
     """
+    from sarc.config import UTC
+    from sarc.client.series import compute_time_frames, load_job_series
 
     # Parse time_interval
     start, end, clip_time = None, None, False
@@ -63,6 +70,8 @@ def check_nb_jobs_per_cluster_per_time(
         cluster_names = sorted(cluster_names)
     else:
         cluster_names = sorted(df["cluster_name"].unique())
+
+    ok = True
 
     # Iter for each cluster.
     for cluster_name in cluster_names:
@@ -115,6 +124,7 @@ def check_nb_jobs_per_cluster_per_time(
                     f"or this cluster should not be currently checked"
                 )
             logger.error(msg)
+            ok = False
         else:
             # With a non-null threshold, we can check each timestamp.
             for timestamp in timestamps:
@@ -126,3 +136,29 @@ def check_nb_jobs_per_cluster_per_time(
                         f"minimum required for this cluster: {threshold} ({avg} - {nb_stddev} * {stddev}); "
                         f"time unit: {time_unit}"
                     )
+                    ok = False
+
+    return ok
+
+
+@dataclass
+class ClusterScrapingCheck(HealthCheck):
+    """Health check for cluster scraping"""
+
+    time_interval: timedelta | None = timedelta(days=7)
+    time_unit: timedelta = timedelta(days=1)
+    cluster_names: list[str] | None = None
+    nb_stddev: int = 2
+    verbose: bool = False
+
+    def check(self) -> CheckResult:
+        if check_nb_jobs_per_cluster_per_time(
+            time_interval=self.time_interval,
+            time_unit=self.time_unit,
+            cluster_names=self.cluster_names,
+            nb_stddev=self.nb_stddev,
+            verbose=self.verbose,
+        ):
+            return self.ok()
+        else:
+            return self.fail()
