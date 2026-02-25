@@ -158,3 +158,153 @@ sarc:
         $class: "sarc.alerts.usage_alerts.prometheus_gpu_types:PrometheusGpuTypeCheck"
         active: true
         cluster_name: null
+
+      # prometheus_cpu_stat_* checks correspond to test params in test_prometheus_scraping_stats.py
+      prometheus_cpu_stat_0:
+        $class: "sarc.alerts.usage_alerts.prometheus_stats_occurrences:PrometheusCpuStatCheck"
+        active: true
+      prometheus_cpu_stat_1:
+        $class: "sarc.alerts.usage_alerts.prometheus_stats_occurrences:PrometheusCpuStatCheck"
+        active: true
+        time_interval: null
+      prometheus_cpu_stat_2:
+        $class: "sarc.alerts.usage_alerts.prometheus_stats_occurrences:PrometheusCpuStatCheck"
+        active: true
+        time_interval: null
+        nb_stddev: 0.25
+      prometheus_cpu_stat_3:
+        $class: "sarc.alerts.usage_alerts.prometheus_stats_occurrences:PrometheusCpuStatCheck"
+        active: true
+        time_interval: null
+        nb_stddev: 0.25
+        cluster_names:
+          - raisin
+          - patate
+          - fromage
+          - mila
+          - invisible-cluster
+      prometheus_cpu_stat_4:
+        $class: "sarc.alerts.usage_alerts.prometheus_stats_occurrences:PrometheusCpuStatCheck"
+        active: true
+        time_interval: null
+        nb_stddev: 0.25
+        cluster_names:
+          - raisin
+          - mila
+      prometheus_cpu_stat_5:
+        $class: "sarc.alerts.usage_alerts.prometheus_stats_occurrences:PrometheusCpuStatCheck"
+        active: true
+        time_interval: null
+        nb_stddev: 0.25
+        group_by_node: []
+      prometheus_cpu_stat_6:
+        $class: "sarc.alerts.usage_alerts.prometheus_stats_occurrences:PrometheusCpuStatCheck"
+        active: true
+        time_interval: null
+        nb_stddev: 0.25
+        group_by_node:
+          - raisin
+          - patate
+          - fromage
+          - mila
+      prometheus_cpu_stat_7:
+        $class: "sarc.alerts.usage_alerts.prometheus_stats_occurrences:PrometheusCpuStatCheck"
+        active: true
+        time_interval: null
+        nb_stddev: 0.25
+        group_by_node:
+          - raisin
+          - patate
+          - fromage
+          - mila
+        min_jobs_per_group: 2
+      prometheus_cpu_stat_8:
+        $class: "sarc.alerts.usage_alerts.prometheus_stats_occurrences:PrometheusCpuStatCheck"
+        active: true
+        time_interval: null
+        nb_stddev: 0.25
+        group_by_node:
+          - raisin
+          - patate
+          - fromage
+          - mila
+        min_jobs_per_group:
+          raisin: 3
+      prometheus_cpu_stat_9:
+        $class: "sarc.alerts.usage_alerts.prometheus_stats_occurrences:PrometheusCpuStatCheck"
+        active: true
+        time_interval: null
+        nb_stddev: 0.25
+        group_by_node: true
+        min_jobs_per_group:
+          raisin: 3
+
+      # prometheus_gpu_stat_* checks correspond to test params in test_prometheus_stats_for_gpu_jobs.py
+      prometheus_gpu_stat_default:
+        $class: "sarc.alerts.usage_alerts.prometheus_stats_occurrences:PrometheusGpuStatCheck"
+        active: true
+      prometheus_gpu_stat_no_time_interval:
+        $class: "sarc.alerts.usage_alerts.prometheus_stats_occurrences:PrometheusGpuStatCheck"
+        active: true
+        time_interval: null
+      prometheus_gpu_stat_std_025:
+        $class: "sarc.alerts.usage_alerts.prometheus_stats_occurrences:PrometheusGpuStatCheck"
+        active: true
+        time_interval: null
+        nb_stddev: 0.25
+      prometheus_gpu_stat_std_025_clusters_extra:
+        $class: "sarc.alerts.usage_alerts.prometheus_stats_occurrences:PrometheusGpuStatCheck"
+        active: true
+        time_interval: null
+        nb_stddev: 0.25
+        cluster_names:
+          - raisin
+          - patate
+          - fromage
+          - mila
+          - invisible-cluster
+      prometheus_gpu_stat_std_025_clusters_2:
+        $class: "sarc.alerts.usage_alerts.prometheus_stats_occurrences:PrometheusGpuStatCheck"
+        active: true
+        time_interval: null
+        nb_stddev: 0.25
+        cluster_names:
+          - raisin
+          - mila
+      prometheus_gpu_stat_std_025_group_none:
+        $class: "sarc.alerts.usage_alerts.prometheus_stats_occurrences:PrometheusGpuStatCheck"
+        active: true
+        time_interval: null
+        nb_stddev: 0.25
+        group_by_node: []
+      prometheus_gpu_stat_std_025_group_false:
+        $class: "sarc.alerts.usage_alerts.prometheus_stats_occurrences:PrometheusGpuStatCheck"
+        active: true
+        time_interval: null
+        nb_stddev: 0.25
+        group_by_node: false
+      prometheus_gpu_stat_std_025_group_full:
+        $class: "sarc.alerts.usage_alerts.prometheus_stats_occurrences:PrometheusGpuStatCheck"
+        active: true
+        time_interval: null
+        nb_stddev: 0.25
+        group_by_node:
+          - raisin
+          - patate
+          - fromage
+          - mila
+      prometheus_gpu_stat_std_025_group_full_min_jobs_2:
+        $class: "sarc.alerts.usage_alerts.prometheus_stats_occurrences:PrometheusGpuStatCheck"
+        active: true
+        time_interval: null
+        nb_stddev: 0.25
+        group_by_node: true
+        min_jobs_per_group: 2
+      prometheus_gpu_stat_std_025_group_full_min_jobs_raisin:
+        $class: "sarc.alerts.usage_alerts.prometheus_stats_occurrences:PrometheusGpuStatCheck"
+        active: true
+        time_interval: null
+        nb_stddev: 0.25
+        group_by_node: true
+        min_jobs_per_group:
+          raisin: 3
