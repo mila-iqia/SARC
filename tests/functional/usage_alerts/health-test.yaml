@@ -57,3 +57,53 @@ sarc:
           - mila
           - raisin
           - another_cluster
+
+      node_gpu_usage_0:
+        $class: "sarc.alerts.usage_alerts.gpu_usage:NodeGpuUsageCheck"
+        active: true
+        gpu_type: "A100"
+        time_interval: null
+        minimum_runtime: null
+      node_gpu_usage_1:
+        $class: "sarc.alerts.usage_alerts.gpu_usage:NodeGpuUsageCheck"
+        active: true
+        gpu_type: "A100"
+        time_interval: null
+        minimum_runtime: 43200s
+      node_gpu_usage_2:
+        $class: "sarc.alerts.usage_alerts.gpu_usage:NodeGpuUsageCheck"
+        active: true
+        gpu_type: "A100"
+        time_interval: null
+        minimum_runtime: 43201s
+      node_gpu_usage_3:
+        $class: "sarc.alerts.usage_alerts.gpu_usage:NodeGpuUsageCheck"
+        active: true
+        gpu_type: "A100"
+        time_interval: null
+        minimum_runtime: null
+        threshold: 0.05
+      node_gpu_usage_4:
+        $class: "sarc.alerts.usage_alerts.gpu_usage:NodeGpuUsageCheck"
+        active: true
+        gpu_type: "A100"
+        time_interval: null
+        minimum_runtime: null
+        threshold: 0
+      node_gpu_usage_5:
+        $class: "sarc.alerts.usage_alerts.gpu_usage:NodeGpuUsageCheck"
+        active: true
+        gpu_type: "A100"
+        time_interval: null
+        minimum_runtime: null
+        threshold: 0.1
+        min_tasks: 2
+      node_gpu_usage_6:
+        $class: "sarc.alerts.usage_alerts.gpu_usage:NodeGpuUsageCheck"
+        active: true
+        gpu_type: "A100"
+      node_gpu_usage_7:
+        $class: "sarc.alerts.usage_alerts.gpu_usage:NodeGpuUsageCheck"
+        active: true
+        gpu_type: "unknown"
+        time_interval: null

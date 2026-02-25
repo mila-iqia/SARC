@@ -30,141 +30,129 @@ Initial jobs in read_only_db (for reference):
 """
 
 import functools
-from datetime import timedelta
 
 import pytest
 
-from sarc.alerts.usage_alerts.gpu_usage import check_gpu_type_usage_per_node
 from tests.functional.jobs.test_func_load_job_series import MOCK_TIME
-
 from .common import _get_warnings
 
 get_warnings = functools.partial(
-    _get_warnings, module="sarc.alerts.usage_alerts.gpu_usage:gpu_usage.py"
+    _get_warnings,
+    module=[
+        "sarc.alerts.usage_alerts.gpu_usage:gpu_usage.py",
+        "sarc.alerts.common:common.py",
+    ],
 )
+
+
+PARAMS = [
+    (
+        # Check GPU A100 with no interval (i.e. all jobs)
+        "node_gpu_usage_0",
+        [
+            "[fromage][cn-c021] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 100.0 %",
+            "[mila][cn-c021] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 100.0 %",
+            "[patate][cn-c021] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 100.0 %",
+            "[raisin][bart] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 100.0 %",
+            "[raisin][cn-b099] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 100.0 %",
+            "[raisin][cn-c017] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 100.0 %",
+            "[raisin][cn-c021] insufficient usage for GPU A100: 5.88 % (1/17), minimum required: 100.0 %",
+            "[raisin][cn-c022] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 100.0 %",
+            "[raisin][cn-d001] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 100.0 %",
+            "[node_gpu_usage_0] FAILURE: node_gpu_usage_0",
+        ],
+    ),
+    (
+        # Check GPU A100 with no interval (i.e. all jobs) and minimum runtime
+        "node_gpu_usage_1",
+        [
+            "[fromage][cn-c021] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 100.0 %",
+            "[mila][cn-c021] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 100.0 %",
+            "[patate][cn-c021] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 100.0 %",
+            "[raisin][bart] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 100.0 %",
+            "[raisin][cn-b099] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 100.0 %",
+            "[raisin][cn-c017] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 100.0 %",
+            "[raisin][cn-c021] insufficient usage for GPU A100: 5.88 % (1/17), minimum required: 100.0 %",
+            "[raisin][cn-c022] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 100.0 %",
+            "[raisin][cn-d001] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 100.0 %",
+            "[node_gpu_usage_1] FAILURE: node_gpu_usage_1",
+        ],
+    ),
+    (
+        # Check GPU A100 with no interval (i.e. all jobs) and minimum runtime too high
+        "node_gpu_usage_2",
+        [],
+    ),
+    (
+        # Check GPU A100 for all jobs with a greater threshold.
+        "node_gpu_usage_3",
+        [
+            "[fromage][cn-c021] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 5.0 %",
+            "[mila][cn-c021] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 5.0 %",
+            "[patate][cn-c021] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 5.0 %",
+            "[raisin][bart] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 5.0 %",
+            "[raisin][cn-b099] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 5.0 %",
+            "[raisin][cn-c017] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 5.0 %",
+            # "[raisin][cn-c021] insufficient usage for GPU A100: 5.88 % (1/17), minimum required: 5.0 %",
+            "[raisin][cn-c022] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 5.0 %",
+            "[raisin][cn-d001] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 5.0 %",
+            "[node_gpu_usage_3] FAILURE: node_gpu_usage_3",
+        ],
+    ),
+    (
+        # Check GPU A100 for all jobs with threshold zero.
+        "node_gpu_usage_4",
+        [],
+    ),
+    (
+        # Check GPU A100 for all jobs, a greater threshold, and minimum number of jobs per drac node set to 2.
+        "node_gpu_usage_5",
+        [
+            # "[fromage][cn-c021] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 10.0 %",
+            "[mila][cn-c021] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 10.0 %",
+            # "[patate][cn-c021] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 10.0 %",
+            # "[raisin][bart] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 10.0 %",
+            # "[raisin][cn-b099] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 10.0 %",
+            # "[raisin][cn-c017] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 10.0 %",
+            "[raisin][cn-c021] insufficient usage for GPU A100: 5.88 % (1/17), minimum required: 10.0 %",
+            # "[raisin][cn-c022] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 10.0 %",
+            # "[raisin][cn-d001] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 10.0 %",
+            "[node_gpu_usage_5] FAILURE: node_gpu_usage_5",
+        ],
+    ),
+    (
+        # Check GPU A100 with default intervals (24 hours).
+        # Only 2 jobs (6 and 7) will match for current frozen mock time.
+        "node_gpu_usage_6",
+        [
+            "[raisin][cn-c021] insufficient usage for GPU A100: 0.0 % (0/2), minimum required: 100.0 %",
+            "[node_gpu_usage_6] FAILURE: node_gpu_usage_6",
+        ],
+    ),
+    (
+        # Check unknown GPU.
+        "node_gpu_usage_7",
+        [
+            "[fromage][cn-c021] insufficient usage for GPU unknown: 0.0 % (0/1), minimum required: 100.0 %",
+            "[mila][cn-c021] insufficient usage for GPU unknown: 0.0 % (0/1), minimum required: 100.0 %",
+            "[patate][cn-c021] insufficient usage for GPU unknown: 0.0 % (0/1), minimum required: 100.0 %",
+            "[raisin][bart] insufficient usage for GPU unknown: 0.0 % (0/1), minimum required: 100.0 %",
+            "[raisin][cn-b099] insufficient usage for GPU unknown: 0.0 % (0/1), minimum required: 100.0 %",
+            "[raisin][cn-c017] insufficient usage for GPU unknown: 0.0 % (0/1), minimum required: 100.0 %",
+            "[raisin][cn-c021] insufficient usage for GPU unknown: 0.0 % (0/17), minimum required: 100.0 %",
+            "[raisin][cn-c022] insufficient usage for GPU unknown: 0.0 % (0/1), minimum required: 100.0 %",
+            "[raisin][cn-d001] insufficient usage for GPU unknown: 0.0 % (0/1), minimum required: 100.0 %",
+            "[node_gpu_usage_7] FAILURE: node_gpu_usage_7",
+        ],
+    ),
+]
 
 
 @pytest.mark.freeze_time(MOCK_TIME)
-@pytest.mark.usefixtures("read_only_db", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("read_only_db", "health_config")
 @pytest.mark.parametrize(
-    "params,expected",
-    [
-        (
-            # Check GPU A100 with no interval (i.e. all jobs)
-            dict(gpu_type="A100", time_interval=None, minimum_runtime=None),
-            [
-                "[fromage][cn-c021] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 100.0 %",
-                "[mila][cn-c021] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 100.0 %",
-                "[patate][cn-c021] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 100.0 %",
-                "[raisin][bart] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 100.0 %",
-                "[raisin][cn-b099] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 100.0 %",
-                "[raisin][cn-c017] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 100.0 %",
-                "[raisin][cn-c021] insufficient usage for GPU A100: 5.88 % (1/17), minimum required: 100.0 %",
-                "[raisin][cn-c022] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 100.0 %",
-                "[raisin][cn-d001] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 100.0 %",
-            ],
-        ),
-        (
-            # Check GPU A100 with no interval (i.e. all jobs) and minimum runtime
-            dict(
-                gpu_type="A100",
-                time_interval=None,
-                minimum_runtime=timedelta(seconds=43200),
-            ),
-            [
-                "[fromage][cn-c021] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 100.0 %",
-                "[mila][cn-c021] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 100.0 %",
-                "[patate][cn-c021] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 100.0 %",
-                "[raisin][bart] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 100.0 %",
-                "[raisin][cn-b099] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 100.0 %",
-                "[raisin][cn-c017] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 100.0 %",
-                "[raisin][cn-c021] insufficient usage for GPU A100: 5.88 % (1/17), minimum required: 100.0 %",
-                "[raisin][cn-c022] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 100.0 %",
-                "[raisin][cn-d001] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 100.0 %",
-            ],
-        ),
-        (
-            # Check GPU A100 with no interval (i.e. all jobs) and minimum runtime too high
-            dict(
-                gpu_type="A100",
-                time_interval=None,
-                minimum_runtime=timedelta(seconds=43200 + 1),
-            ),
-            [],
-        ),
-        (
-            # Check GPU A100 for all jobs with a greater threshold.
-            dict(
-                gpu_type="A100",
-                time_interval=None,
-                minimum_runtime=None,
-                threshold=5 / 100,
-            ),
-            [
-                "[fromage][cn-c021] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 5.0 %",
-                "[mila][cn-c021] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 5.0 %",
-                "[patate][cn-c021] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 5.0 %",
-                "[raisin][bart] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 5.0 %",
-                "[raisin][cn-b099] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 5.0 %",
-                "[raisin][cn-c017] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 5.0 %",
-                # "[raisin][cn-c021] insufficient usage for GPU A100: 5.88 % (1/17), minimum required: 5.0 %",
-                "[raisin][cn-c022] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 5.0 %",
-                "[raisin][cn-d001] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 5.0 %",
-            ],
-        ),
-        (
-            # Check GPU A100 for all jobs with threshold zero.
-            dict(
-                gpu_type="A100", time_interval=None, minimum_runtime=None, threshold=0
-            ),
-            [],
-        ),
-        (
-            # Check GPU A100 for all jobs, a greater threshold, and minimum number of jobs per drac node set to 2.
-            dict(
-                gpu_type="A100",
-                time_interval=None,
-                minimum_runtime=None,
-                threshold=10 / 100,
-                min_tasks=2,
-            ),
-            [
-                # "[fromage][cn-c021] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 10.0 %",
-                "[mila][cn-c021] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 10.0 %",
-                # "[patate][cn-c021] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 10.0 %",
-                # "[raisin][bart] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 10.0 %",
-                # "[raisin][cn-b099] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 10.0 %",
-                # "[raisin][cn-c017] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 10.0 %",
-                "[raisin][cn-c021] insufficient usage for GPU A100: 5.88 % (1/17), minimum required: 10.0 %",
-                # "[raisin][cn-c022] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 10.0 %",
-                # "[raisin][cn-d001] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 10.0 %",
-            ],
-        ),
-        (
-            # Check GPU A100 with default intervals (24 hours).
-            # Only 2 jobs (6 and 7) will match for current frozen mock time.
-            dict(gpu_type="A100"),
-            [
-                "[raisin][cn-c021] insufficient usage for GPU A100: 0.0 % (0/2), minimum required: 100.0 %",
-            ],
-        ),
-        (
-            # Check unknown GPU.
-            dict(gpu_type="unknown", time_interval=None),
-            [
-                "[fromage][cn-c021] insufficient usage for GPU unknown: 0.0 % (0/1), minimum required: 100.0 %",
-                "[mila][cn-c021] insufficient usage for GPU unknown: 0.0 % (0/1), minimum required: 100.0 %",
-                "[patate][cn-c021] insufficient usage for GPU unknown: 0.0 % (0/1), minimum required: 100.0 %",
-                "[raisin][bart] insufficient usage for GPU unknown: 0.0 % (0/1), minimum required: 100.0 %",
-                "[raisin][cn-b099] insufficient usage for GPU unknown: 0.0 % (0/1), minimum required: 100.0 %",
-                "[raisin][cn-c017] insufficient usage for GPU unknown: 0.0 % (0/1), minimum required: 100.0 %",
-                "[raisin][cn-c021] insufficient usage for GPU unknown: 0.0 % (0/17), minimum required: 100.0 %",
-                "[raisin][cn-c022] insufficient usage for GPU unknown: 0.0 % (0/1), minimum required: 100.0 %",
-                "[raisin][cn-d001] insufficient usage for GPU unknown: 0.0 % (0/1), minimum required: 100.0 %",
-            ],
-        ),
-    ],
+    "check_name,expected", PARAMS, ids=[f"params{i}" for i in range(len(PARAMS))]
 )
-def test_check_gpu_type_usage_per_node(params, expected, caplog):
-    check_gpu_type_usage_per_node(**params)
+def test_check_gpu_type_usage_per_node(check_name, expected, caplog, cli_main):
+    assert cli_main(["health", "run", "--check", check_name]) == 0
     assert get_warnings(caplog.text) == expected
