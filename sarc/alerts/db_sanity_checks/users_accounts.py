@@ -1,3 +1,10 @@
+"""
+**NB**:
+This code is not tested.
+It may also need an update, since df["user.mila.email"] won't exist.
+TODO What do we do with this file?
+"""
+
 import logging
 from datetime import datetime, timedelta
 
