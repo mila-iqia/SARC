@@ -53,18 +53,12 @@ class FetchJobs:
         clusters_cfg = config("scraping").clusters
         assert clusters_cfg is not None
 
-        # Define if the cache is used or not
-        with_cache = (config().cache is not None) and (not self.force)
-        if with_cache:
-            logger.info("Using the cache while fetching jobs")
-        else:
-            logger.info("Not using the cache while fetching jobs")
+        assert config().cache is not None
 
         fetch_jobs(
             self.cluster_names,
             clusters_cfg,
             self.intervals,
             self.auto_interval,
-            with_cache,
         )
         return 0

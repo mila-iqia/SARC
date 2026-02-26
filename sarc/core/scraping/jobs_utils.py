@@ -119,6 +119,61 @@ def _date_is_utc(value: datetime) -> bool:
     return value.tzinfo is not None and value.utcoffset() == UTCOFFSET
 
 
+class SacctFetcher:
+    """Fetch info from Slurm using the sacct command."""
+
+    def __init__(
+        self,
+        cluster: ClusterConfig,
+        start: datetime,
+        end: datetime,
+    ):
+        """Initialize a SacctFetcher.
+
+        Arguments:
+            cluster: The cluster on which to fetch the data.
+            start: the UTC datetime from which we wish to fetch.
+                Should be precise up to minute.
+            end: the UTC datetime until which we wish to fetch.
+                Should be precise up to minute.
+        """
+        if not _date_is_utc(start):
+            raise ValueError(f"sacct fetcher: start date not in UTC: {start}")
+        if not _date_is_utc(end):
+            raise ValueError(f"sacct fetcher: end date not in UTC: {end}")
+
+        self.cluster = cluster
+        self.start = start
+        self.end = end
+
+    @trace_decorator()
+    def fetch_raw(self) -> bytes:
+        """Fetch the raw sacct data as a dict via SSH, or run sacct locally."""
+        fmt = "%Y-%m-%dT%H:%M"
+        start = self.start.strftime(fmt)
+        end = self.end.strftime(fmt)
+        accounts = ",".join(self.cluster.accounts) if self.cluster.accounts else None
+        accounts_option = f"-A {accounts} " if accounts else ""
+        cmd = f"{self.cluster.sacct_bin} {accounts_option}-X -S {start} -E {end} --allusers --json"
+        logger.debug(f"{self.cluster.name} $ {cmd}")
+        if self.cluster.host == "localhost":
+            results: subprocess.CompletedProcess[str] | Result = subprocess.run(
+                cmd,
+                shell=True,
+                text=True,
+                capture_output=True,
+                check=False,
+                env={"TZ": "UTC"} if not self.cluster.ignore_tz_utc else {},
+            )
+        else:
+            ssh = self.cluster.ssh
+            ssh.config.run.env = {"TZ": "UTC"} if not self.cluster.ignore_tz_utc else {}
+            results = ssh.run(cmd, hide=True)
+            logger.debug(results.stdout)
+
+        return results.stdout
+
+
 class SacctScraper:
     """Scrape info from Slurm using the sacct command."""
 
@@ -145,47 +200,6 @@ class SacctScraper:
         self.cluster = cluster
         self.start = start
         self.end = end
-
-    @trace_decorator()
-    def fetch_raw(self) -> dict:
-        """Fetch the raw sacct data as a dict via SSH, or run sacct locally."""
-        fmt = "%Y-%m-%dT%H:%M"
-        start = self.start.strftime(fmt)
-        end = self.end.strftime(fmt)
-        accounts = ",".join(self.cluster.accounts) if self.cluster.accounts else None
-        accounts_option = f"-A {accounts} " if accounts else ""
-        cmd = f"{self.cluster.sacct_bin} {accounts_option}-X -S {start} -E {end} --allusers --json"
-        logger.debug(f"{self.cluster.name} $ {cmd}")
-        if self.cluster.host == "localhost":
-            results: subprocess.CompletedProcess[str] | Result = subprocess.run(
-                cmd,
-                shell=True,
-                text=True,
-                capture_output=True,
-                check=False,
-                env={"TZ": "UTC"} if not self.cluster.ignore_tz_utc else {},
-            )
-        else:
-            ssh = self.cluster.ssh
-            ssh.config.run.env = {"TZ": "UTC"} if not self.cluster.ignore_tz_utc else {}
-            results = ssh.run(cmd, hide=True)
-            logger.debug(results.stdout)
-        return json.loads(results.stdout[results.stdout.find("{") :])
-
-    def _cache_key(self) -> str | None:
-        now = datetime.now(tz=UTC)
-        if self.start < self.end <= now:
-            fmt = "%Y-%m-%dT%H:%M"
-            startstr = self.start.strftime(fmt)
-            endstr = self.end.strftime(fmt)
-            return f"{self.cluster.name}.{startstr}.{endstr}.json"
-        else:
-            # Not cachable
-            return None
-
-    @with_cache(subdirectory="sacct", key=_cache_key, live=True)  # type: ignore[arg-type] # mypy has some trouble with methods
-    def get_raw(self) -> dict:
-        return self.fetch_raw()
 
     def __len__(self) -> int:
         return len(self.get_raw()["jobs"])

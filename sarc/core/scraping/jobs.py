@@ -12,7 +12,7 @@ from sarc.core.scraping.jobs_utils import (
     parse_auto_intervals,
     parse_intervals,
     set_auto_end_time,
-    SacctScraper,
+    SacctFetcher,
     update_allocated_gpu_type_from_nodes,
 )
 from sarc.traces import using_trace
@@ -21,20 +21,20 @@ from sarc.traces import using_trace
 logger = logging.getLogger(__name__)
 
 
-def get_jobs(
-    cluster: ClusterConfig, start: datetime, end: datetime
-) -> list[SlurmJob | None]:
-    scraper = SacctScraper(cluster, start, end)
+# def get_jobs(
+#     cluster: ClusterConfig, start: datetime, end: datetime
+# ) -> list[SlurmJob | None]:
+#     fetcher = SacctFetcher(cluster, start, end)
 
-    logger.info(
-        f"Getting the sacct data for cluster {cluster.name}, time {start} to {end}..."
-    )
+#     logger.info(
+#         f"Getting the sacct data for cluster {cluster.name}, time {start} to {end}..."
+#     )
 
-    scraper.get_raw()
+#     scraper.get_raw()
 
-    jobs = [job for job in scraper]
+#     jobs = [job for job in scraper] # NOOOOOOOOOOOO
 
-    return jobs
+#     return jobs
 
 
 def fetch_jobs(
@@ -42,7 +42,6 @@ def fetch_jobs(
     clusters: dict[str, ClusterConfig],
     unparsed_intervals: Optional[list[str]],
     auto_interval: Optional[int],
-    with_cache: Optional[bool],
 ) -> None:
     """
     Fetch jobs and place the results in cache.
@@ -66,13 +65,16 @@ def fetch_jobs(
                                 exclusive with --intervals.
     """
 
-    auto_end_field = "end_time_sacct"  # Used to parse the intervals
+    auto_end_field = "end_time_sacct"  # Used to parse the intervals MODIFIER CECI en end_time_sacct_fetch 
 
     def _fetch_jobs(
         cluster_name: str,
-        clusters: dict[str, ClusterConfig],
+        cluster_configs: dict[str, ClusterConfig],
+        intervals: list[tuple[datetime, datetime]],
         auto_interval: Optional[int],
     ):
+        assert cluster_name in cluster_configs
+        cluster_config = cluster_configs[cluster_name]
         # Fetch the jobs for each time interval
         for time_from, time_to in intervals:
             with using_trace(
@@ -86,20 +88,20 @@ def fetch_jobs(
                 interval_minutes = (time_to - time_from).total_seconds() / 60
                 try:
                     logger.info(
-                        f"Acquire data on {cluster_name} for interval: "
-                        f"{time_from} to {time_to} ({interval_minutes} min)"
+                        f"Fetching the sacct data for cluster {cluster_config.name}, time {time_from} to {time_to}..."
                     )
+                    key = f"{cluster_name}_{time_from.strftime(DATE_FORMAT_HOUR)}_{time_to.strftime(DATE_FORMAT_HOUR)}"
 
-                    key = f"{time_from.strftime(DATE_FORMAT_HOUR)}_{time_to.strftime(DATE_FORMAT_HOUR)}"
-
-                    yield (key, get_jobs(clusters[cluster_name], time_from, time_to))
+                    fetcher = SacctFetcher(cluster_config, time_from, time_to)
+                    raw_data = fetcher.fetch_raw()
+                    yield (key, raw_data)
 
                     if auto_interval is not None:
                         set_auto_end_time(cluster_name, auto_end_field, time_to)
                 # pylint: disable=broad-exception-caught
                 except Exception as e:
                     logger.error(
-                        f"Failed to acquire data on {cluster_name} for interval: "
+                        f"Failed to fetch data on {cluster_name} for interval: "
                         f"{time_from} to {time_to}: {type(e).__name__}: {e}"
                     )
                     raise e
@@ -121,29 +123,27 @@ def fetch_jobs(
                 )
                 continue
 
-            if with_cache:
-                # Define cache directory
-                cache = Cache(subdirectory=f"jobs/{cluster_name}")
+            # Define cache directory
+            cache = Cache(subdirectory=f"jobs/{cluster_name}")
 
-                with cache.create_entry(datetime.now(UTC)) as cache_entry:
-                    for cache_key, jobs in _fetch_jobs(
-                        cluster_name, clusters, auto_interval
-                    ):
-                        cache_entry.add_value(
-                            key=cache_key,
-                            value=pickle.dumps(jobs),
-                        )
-            else:
-                for key, value in _fetch_jobs(cluster_name, clusters, auto_interval):
-                    pass  # yield value?
+            with cache.create_entry(datetime.now(UTC)) as cache_entry:
+                for cache_key, raw_data in _fetch_jobs(
+                    cluster_name, clusters, intervals, auto_interval
+                ):
+                    cache_entry.add_value(
+                        key=cache_key,  # f"{cluster_name}_{time_from.strftime(DATE_FORMAT_HOUR)}_{time_to.strftime(DATE_FORMAT_HOUR)}"
+                        value=raw_data,  # sortie stdout de sacct : bytes
+                    )
 
         # pylint: disable=broad-exception-caught
         except Exception as e:
             logger.error(
-                f"Error while acquiring data on {cluster_name}: {type(e).__name__}: {e} ; skipping cluster."
+                f"Error while fetching data on {cluster_name}: {type(e).__name__}: {e} ; skipping cluster."
             )
         # Continue to next cluster.
         continue
+
+
 
 
 def parse_jobs(
@@ -168,7 +168,7 @@ def parse_jobs(
                     f"Acquire data on {cluster_name} for job identified by: {key}"
                 )
 
-                jobs = pickle.loads(value)
+                jobs = pickle.loads(value) # c'est ici que la conversion précédemment faite par SacctScraper.convert doit être faite
                 nb_jobs += len(jobs)
 
                 # Store the jobs in the database, beginning by the
