@@ -1,21 +1,21 @@
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import cast
 
-from sarc.client.series import compute_cost_and_waste, load_job_series
-from sarc.config import UTC
+from sarc.alerts.common import HealthCheck, CheckResult
 
 logger = logging.getLogger(__name__)
 
 
 def check_gpu_util_per_user(
-    threshold: timedelta,
+    threshold: timedelta | None = None,
     time_interval: timedelta | None = timedelta(days=7),
     minimum_runtime: timedelta | None = timedelta(minutes=5),
-) -> None:
+) -> bool:
     """
     Check if users have enough utilization of GPUs.
-    Log a warning for each user if average GPU-util of user jobs
+    Log an alert for each user if average GPU-util of user jobs
     in time interval is lower than a given threshold.
 
     For a given user job, GPU-util is computed as
@@ -36,7 +36,19 @@ def check_gpu_util_per_user(
         If given, only jobs which ran at least for this minimum runtime will be used for checking.
         Default is 5 minutes.
         If None, set to 0.
+
+    Returns
+    -------
+    bool
+        True if check succeeds, False otherwise.
     """
+    from sarc.client.series import compute_cost_and_waste, load_job_series
+    from sarc.config import UTC
+
+    if threshold is None:
+        logger.error("No threshold specified.")
+        return False
+
     # Parse time_interval
     start: datetime | None = None
     end: datetime | None = None
@@ -68,12 +80,36 @@ def check_gpu_util_per_user(
     # Compute average GPU-util per user
     f_stats = df.groupby(["user"])[["gpu_util"]].mean()
 
+    ok = True
+
     # Now we can check
     for row in f_stats.itertuples():
         user = row.Index
         gpu_util = cast(float, row.gpu_util)
         if gpu_util < threshold.total_seconds():
-            logger.warning(
+            logger.error(
                 f"[{user}] insufficient average gpu_util: {gpu_util} GPU-seconds; "
                 f"minimum required: {threshold} ({threshold.total_seconds()} GPU-seconds)"
             )
+            ok = False
+
+    return ok
+
+
+@dataclass
+class GpuUtilPerUserCheck(HealthCheck):
+    """Health check for GPU-utilization per user."""
+
+    threshold: timedelta | None = None  # ** required **
+    time_interval: timedelta | None = timedelta(days=7)
+    minimum_runtime: timedelta | None = timedelta(minutes=5)
+
+    def check(self) -> CheckResult:
+        if check_gpu_util_per_user(
+            threshold=self.threshold,
+            time_interval=self.time_interval,
+            minimum_runtime=self.minimum_runtime,
+        ):
+            return self.ok()
+        else:
+            return self.fail()

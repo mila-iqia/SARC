@@ -1,13 +1,13 @@
 import logging
 from collections.abc import Iterable
+from dataclasses import dataclass
 
-from sarc.config import ClusterConfig, config
-from sarc.jobs.node_gpu_mapping import get_node_to_gpu
+from sarc.alerts.common import HealthCheck, CheckResult
 
 logger = logging.getLogger(__name__)
 
 
-def check_prometheus_vs_slurmconfig(cluster_name: str | None = None) -> None:
+def check_prometheus_vs_slurmconfig(cluster_name: str | None = None) -> bool:
     """
     Check if GPU types from Prometheus are the same as the ones in slurm config files.
 
@@ -25,11 +25,21 @@ def check_prometheus_vs_slurmconfig(cluster_name: str | None = None) -> None:
     ----------
     cluster_name: str
         Name of cluster to check. If None, all clusters are checked.
+
+    Returns
+    -------
+    bool
+        True if all GPU types are same, False otherwise.
     """
+    from sarc.config import ClusterConfig, config
+    from sarc.jobs.node_gpu_mapping import get_node_to_gpu
+
     if cluster_name is None:
         clusters: Iterable[ClusterConfig] = config("scraping").clusters.values()
     else:
         clusters = [config("scraping").clusters[cluster_name]]
+
+    ok = True
 
     for cluster in clusters:
         # We only check clusters which have a prometheus_url
@@ -53,10 +63,11 @@ def check_prometheus_vs_slurmconfig(cluster_name: str | None = None) -> None:
                     slurmconfig_gpu_types.add(gpu_type)
         if not slurmconfig_gpu_types:
             # Warn if there is no slurm config GPUs available.
-            logger.warning(
+            logger.error(
                 f"[prometheus][{cluster.name}] cannot find GPU types from slurm config file. "
                 f"You may need to fetch and parse slurm.conf files for this cluster."
             )
+            ok = False
         else:
             # Get Prometheus GPU types
             query = f'slurm_job_utilization_gpu_memory{{cluster="{cluster.name}"}}'
@@ -66,7 +77,23 @@ def check_prometheus_vs_slurmconfig(cluster_name: str | None = None) -> None:
             # Warn for each prometheus GPU not found in slurm config GPUs.
             only_in_prometheus = prometheus_gpu_types - slurmconfig_gpu_types
             for gpu_type in only_in_prometheus:
-                logger.warning(
+                logger.error(
                     f"[prometheus][{cluster.name}] gpu_type not found in slurm config file: {gpu_type}. "
                     f"Expected: {', '.join(sorted(slurmconfig_gpu_types))}"
                 )
+                ok = False
+
+    return ok
+
+
+@dataclass
+class PrometheusGpuTypeCheck(HealthCheck):
+    """Health check for Prometheus GPU names vs slurmconfig GPU names"""
+
+    cluster_name: str | None = None
+
+    def check(self) -> CheckResult:
+        if check_prometheus_vs_slurmconfig(cluster_name=self.cluster_name):
+            return self.ok()
+        else:
+            return self.fail()

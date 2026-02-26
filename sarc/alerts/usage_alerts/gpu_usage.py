@@ -1,10 +1,10 @@
 import logging
 from collections.abc import Iterable
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import cast
 
-from sarc.client.series import load_job_series
-from sarc.config import UTC
+from sarc.alerts.common import HealthCheck, CheckResult
 
 logger = logging.getLogger(__name__)
 
@@ -16,10 +16,10 @@ def check_gpu_type_usage_per_node(
     threshold: float = 1.0,
     min_tasks: int = 0,
     ignore_min_tasks_for_clusters: Iterable[str] | None = ("mila",),
-):
+) -> bool:
     """
     Check if a GPU type is sufficiently used on each node.
-    Log a warning for each node where ratio of jobs using GPU type is lesser than given threshold.
+    Log an alert for each node where ratio of jobs using GPU type is lesser than given threshold.
 
     Parameters
     ----------
@@ -35,14 +35,26 @@ def check_gpu_type_usage_per_node(
         If None, set to 0.
     threshold: float
         A value between 0 and 1 to represent the minimum expected ratio of jobs that use given GPU type
-        wr/t running jobs on each node. Log a warning if computed ratio is lesser than this threshold.
+        wr/t running jobs on each node. Log an alert if computed ratio is lesser than this threshold.
     min_tasks: int
         Minimum number of jobs required on a cluster node to make checking.
         Checking is performed on a node only if, either it contains at least `min_tasks` jobs,
         or node cluster is in `ignore_min_tasks_for_clusters`.
     ignore_min_tasks_for_clusters: Sequence
         Clusters to check even if nodes from those clusters don't have `min_tasks` jobs.
+
+    Returns
+    -------
+    bool
+        True if check succeeds, False otherwise.
     """
+    from sarc.client.series import load_job_series
+    from sarc.config import UTC
+
+    if not gpu_type:
+        logger.error("No GPU type specified.")
+        return False
+
     # Parse time_interval
     start, end, clip_time = None, None, False
     if time_interval is not None:
@@ -81,6 +93,7 @@ def check_gpu_type_usage_per_node(
     ff["gpu_usage_"] = ff["gpu_task_"] / ff["task_"]
 
     # We can now check GPU usage.
+    ok = True
     ignore_min_tasks_for_clusters = set(ignore_min_tasks_for_clusters or ())
     for row in ff.itertuples():
         cluster_name, node = row.Index  # type: ignore[misc]
@@ -90,11 +103,41 @@ def check_gpu_type_usage_per_node(
         if gpu_usage < threshold and (
             cluster_name in ignore_min_tasks_for_clusters or nb_tasks >= min_tasks
         ):
-            # We warn if gpu usage < threshold and if
+            # We alert if gpu usage < threshold and if
             # either we are on a cluster listed in `ignore_min_tasks_for_clusters`,
             # or there are enough jobs in node.
-            logger.warning(
+            logger.error(
                 f"[{cluster_name}][{node}] insufficient usage for GPU {gpu_type}: "
                 f"{round(gpu_usage * 100, 2)} % ({nb_gpu_tasks}/{nb_tasks}), "
                 f"minimum required: {round(threshold * 100, 2)} %"
             )
+            ok = False
+
+    return ok
+
+
+@dataclass
+class NodeGpuUsageCheck(HealthCheck):
+    """Health check for GPU usage per node"""
+
+    gpu_type: str = ""  # ** required **
+    time_interval: timedelta | None = timedelta(hours=24)
+    minimum_runtime: timedelta | None = timedelta(minutes=5)
+    threshold: float = 1.0
+    min_tasks: int = 0
+    ignore_min_tasks_for_clusters: list[str] | None = field(
+        default_factory=lambda: ["mila"]
+    )
+
+    def check(self) -> CheckResult:
+        if check_gpu_type_usage_per_node(
+            gpu_type=self.gpu_type,
+            time_interval=self.time_interval,
+            minimum_runtime=self.minimum_runtime,
+            threshold=self.threshold,
+            min_tasks=self.min_tasks,
+            ignore_min_tasks_for_clusters=self.ignore_min_tasks_for_clusters,
+        ):
+            return self.ok()
+        else:
+            return self.fail()

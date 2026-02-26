@@ -1,10 +1,10 @@
 import logging
 from collections.abc import Iterable
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Sequence, cast
 
-from sarc.client.series import compute_time_frames, load_job_series
-from sarc.config import UTC
+from sarc.alerts.common import HealthCheck, CheckResult
 
 logger = logging.getLogger(__name__)
 
@@ -29,13 +29,13 @@ def check_prometheus_stats_occurrences(
     cluster_names: list[str] | None = None,
     group_by_node: bool | Sequence[str] = ("mila",),
     min_jobs_per_group: int | dict[str, int] | None = None,
-    nb_stddev: float = 2,
+    nb_stddev: float = 2.0,
     with_gres_gpu: bool = False,
     prometheus_stats: Iterable[str] = ("cpu_utilization", "system_memory"),
-) -> None:
+) -> bool:
     """
     Check if we have scrapped Prometheus stats for enough jobs per node per cluster per time unit.
-    Log a warning for each node / cluster where ratio of jobs with Prometheus stats is lower than
+    Log an alert for each node / cluster where ratio of jobs with Prometheus stats is lower than
     a threshold computed using mean and standard deviation statistics from all clusters.
 
     Parameters
@@ -57,7 +57,7 @@ def check_prometheus_stats_occurrences(
         On the opposite, we may expect to see jobs in a cluster, but there are actually no jobs in this cluster.
         To cover such cases, one can specify the complete list of expected clusters with `cluster_names`.
         Jobs from clusters not in this list will be ignored both to compute statistics and in checking phase.
-        If a cluster in this list does not appear in jobs, a warning will be logged.
+        If a cluster in this list does not appear in jobs, an alert will be logged.
 
         If empty (or not specified), use all clusters available among jobs retrieved with time_interval.
     group_by_node: Sequence | bool
@@ -82,7 +82,14 @@ def check_prometheus_stats_occurrences(
         If False (default), check only jobs which have allocated.gres_gpu == 0 (CPU jobs).
     prometheus_stats: Sequence[str]
         Prometheus stats to check. Default: "cpu_utilization", "system_memory"
+
+    Returns
+    -------
+    bool
+        True if check succeeds, False otherwise.
     """
+    from sarc.config import UTC
+    from sarc.client.series import compute_time_frames, load_job_series
 
     # Parse time_interval and get data frame
     start: datetime | None = None
@@ -110,14 +117,12 @@ def check_prometheus_stats_occurrences(
     # List clusters
     cluster_names = cluster_names or sorted(df["cluster_name"].unique())
 
-    # If df is empty, warn for each cluster that we can't check Prometheus stats.
+    # If df is empty, alert for each cluster that we can't check Prometheus stats.
     if df.empty:
         for cluster_name in cluster_names:
-            logger.warning(
-                f"[{cluster_name}] no Prometheus data available: no job found"
-            )
+            logger.error(f"[{cluster_name}] no Prometheus data available: no job found")
         # As there's nothing to check, we return immediately.
-        return
+        return False
 
     # Split data frame into time frames using `time_unit`
     df = compute_time_frames(df, frame_size=time_unit)
@@ -163,7 +168,7 @@ def check_prometheus_stats_occurrences(
         f_stats[prom.col_ratio] = f_stats[prom.col_has] / f_stats["task_"]
         prom.avg = f_stats[prom.col_ratio].mean()
         prom.stddev = f_stats[prom.col_ratio].std()
-        prom.threshold = max(0, prom.avg - nb_stddev * prom.stddev)
+        prom.threshold = max(0.0, prom.avg - nb_stddev * prom.stddev)
 
     # Parse min_jobs_per_group
     default_min_jobs = 1
@@ -173,6 +178,9 @@ def check_prometheus_stats_occurrences(
         default_min_jobs = min_jobs_per_group
         min_jobs_per_group = {}
     assert isinstance(min_jobs_per_group, dict)
+
+    ok = True
+    job_type = "GPU" if with_gres_gpu else "CPU"
 
     # Now we can check
     clusters_seen: set[str] = set()
@@ -190,20 +198,55 @@ def check_prometheus_stats_occurrences(
             for prom in prom_contexts:
                 local_stat = getattr(row, prom.col_has) / nb_jobs
                 if local_stat < prom.threshold:
-                    logger.warning(
+                    logger.error(
                         f"[{timestamp}]{grouping_name} insufficient Prometheus data for {prom.name}: "
-                        f"{round(local_stat * 100, 2)} % of CPU jobs / {grouping_type} / time unit; "
+                        f"{round(local_stat * 100, 2)} % of {job_type} jobs / {grouping_type} / time unit; "
                         f"minimum required: {prom.threshold} ({prom.avg} - {nb_stddev} * {prom.stddev}); "
                         f"time unit: {time_unit}"
                     )
+                    ok = False
 
     # Check clusters listed in `cluster_names` but not found in jobs.
     for cluster_name in cluster_names:
         if cluster_name not in clusters_seen:
             # No stats found for this cluster. Warning
-            logger.warning(
-                f"[{cluster_name}] no Prometheus data available: no job found"
-            )
+            logger.error(f"[{cluster_name}] no Prometheus data available: no job found")
+            ok = False
+
+    return ok
+
+
+@dataclass
+class PrometheusCpuStatCheck(HealthCheck):
+    """Health check for Prometheus CPU stats."""
+
+    time_interval: timedelta | None = timedelta(days=7)
+    time_unit: timedelta = timedelta(days=1)
+    minimum_runtime: timedelta | None = timedelta(minutes=5)
+    cluster_names: list[str] | None = None
+    group_by_node: list[str] | bool = field(default_factory=lambda: ["mila"])
+    min_jobs_per_group: dict[str, int] | int | None = None
+    nb_stddev: float = 2.0
+    with_gres_gpu: bool = False
+    prometheus_stats: list[str] = field(
+        default_factory=lambda: ["cpu_utilization", "system_memory"]
+    )
+
+    def check(self) -> CheckResult:
+        if check_prometheus_stats_occurrences(
+            time_interval=self.time_interval,
+            time_unit=self.time_unit,
+            minimum_runtime=self.minimum_runtime,
+            cluster_names=self.cluster_names,
+            group_by_node=self.group_by_node,
+            min_jobs_per_group=self.min_jobs_per_group,
+            nb_stddev=self.nb_stddev,
+            with_gres_gpu=self.with_gres_gpu,
+            prometheus_stats=self.prometheus_stats,
+        ):
+            return self.ok()
+        else:
+            return self.fail()
 
 
 def check_prometheus_stats_for_gpu_jobs(
@@ -211,14 +254,14 @@ def check_prometheus_stats_for_gpu_jobs(
     time_unit: timedelta = timedelta(days=1),
     minimum_runtime: timedelta | None = timedelta(minutes=5),
     cluster_names: list[str] | None = None,
-    # For GPU jobs, default behaviour is to group each cluster by nodes for checking.
+    # For GPU jobs, default behavior is to group each cluster by nodes for checking.
     group_by_node: bool | Sequence[str] = True,
     min_jobs_per_group: int | dict[str, int] | None = None,
-    nb_stddev: int = 2,
-):
+    nb_stddev: float = 2.0,
+) -> bool:
     """
     Check if we have scrapped Prometheus stats for enough GPU jobs per node per cluster per time unit.
-    Log a warning for each node / cluster where ratio of GPU jobs with Prometheus stats is lower than
+    Log an alert for each node / cluster where ratio of GPU jobs with Prometheus stats is lower than
     a threshold computed using mean and standard deviation statistics from all clusters.
 
     To get more info about parameters, see documentation for `check_prometheus_stats_occurrences`.
@@ -244,3 +287,30 @@ def check_prometheus_stats_for_gpu_jobs(
             "gpu_power",
         ),
     )
+
+
+@dataclass
+class PrometheusGpuStatCheck(HealthCheck):
+    """Health check for Prometheus GPU stats."""
+
+    time_interval: timedelta | None = timedelta(days=7)
+    time_unit: timedelta = timedelta(days=1)
+    minimum_runtime: timedelta | None = timedelta(minutes=5)
+    cluster_names: list[str] | None = None
+    group_by_node: list[str] | bool = True
+    min_jobs_per_group: dict[str, int] | int | None = None
+    nb_stddev: float = 2.0
+
+    def check(self) -> CheckResult:
+        if check_prometheus_stats_for_gpu_jobs(
+            time_interval=self.time_interval,
+            time_unit=self.time_unit,
+            minimum_runtime=self.minimum_runtime,
+            cluster_names=self.cluster_names,
+            group_by_node=self.group_by_node,
+            min_jobs_per_group=self.min_jobs_per_group,
+            nb_stddev=self.nb_stddev,
+        ):
+            return self.ok()
+        else:
+            return self.fail()

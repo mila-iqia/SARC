@@ -2,7 +2,8 @@
                            count
 timestamp                       
 2023-11-21 07:00:00-05:00      2
-avg 2.0, stddev nan, threshold 0
+avg 2.0, stddev nan, threshold 0.0
 
 
-[raisin] threshold 0 (2.0 - 2 * nan). Only 1 timestamp found. Either time_interval (7 days, 0:00:00) is too short, or this cluster should not be currently checked
+[raisin] threshold 0 (2.0 - 2.0 * nan). Only 1 timestamp found. Either time_interval (7 days, 0:00:00) is too short, or this cluster should not be currently checked
+ERROR    sarc.alerts.common:common.py:98 [cluster_scraping_0] FAILURE: cluster_scraping_0
