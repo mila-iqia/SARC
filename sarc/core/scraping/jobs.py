@@ -12,7 +12,7 @@ from sarc.core.scraping.jobs_utils import (
     parse_auto_intervals,
     parse_intervals,
     set_auto_end_time,
-    SacctFetcher,
+    fetch_raw,
     update_allocated_gpu_type_from_nodes,
 )
 from sarc.traces import using_trace
@@ -92,8 +92,7 @@ def fetch_jobs(
                     )
                     key = f"{cluster_name}_{time_from.strftime(DATE_FORMAT_HOUR)}_{time_to.strftime(DATE_FORMAT_HOUR)}"
 
-                    fetcher = SacctFetcher(cluster_config, time_from, time_to)
-                    raw_data = fetcher.fetch_raw()
+                    raw_data = fetch_raw(cluster_config, time_from, time_to)
                     yield (key, raw_data)
 
                     if auto_interval is not None:
@@ -124,7 +123,7 @@ def fetch_jobs(
                 continue
 
             # Define cache directory
-            cache = Cache(subdirectory=f"jobs/{cluster_name}")
+            cache = Cache(subdirectory=f"jobs")
 
             with cache.create_entry(datetime.now(UTC)) as cache_entry:
                 for cache_key, raw_data in _fetch_jobs(
@@ -147,38 +146,37 @@ def fetch_jobs(
 
 
 def parse_jobs(
-    cluster_names: list[str], clusters: dict[str, ClusterConfig], since: datetime
+    clusters: dict[str, ClusterConfig], since: datetime
 ) -> None:  # Iterable[SlurmJob]:
     collection = _jobs_collection()
 
-    for cluster_name in cluster_names:
-        logger.info(
-            f"Saving jobs of cluster {cluster_name} into mongodb collection '{collection.Meta.collection_name}'..."
-        )
+    # Retrieve from the cache
+    cache = Cache(subdirectory=f"jobs")
+    for cache_entry in cache.read_from(from_time=since):
+        nb_jobs = 0
+        nb_entries = 0
 
-        # Retrieve from the cache
-        cache = Cache(subdirectory=f"jobs/{cluster_name}")
-        for cache_entry in cache.read_from(from_time=since):
-            nb_jobs = 0
-            nb_entries = 0
+        # Retrieve all jobs associated to the time intervals
+        for key, value in cache_entry.items():
+            logger.info(
+                f"Acquire data on {cluster_name} for job identified by: {key}"
+            )
 
-            # Retrieve all jobs associated to the time intervals
-            for key, value in cache_entry.items():
-                logger.info(
-                    f"Acquire data on {cluster_name} for job identified by: {key}"
-                )
+            cluster_name = key.split("_")[0]
 
-                jobs = pickle.loads(value) # c'est ici que la conversion précédemment faite par SacctScraper.convert doit être faite
-                nb_jobs += len(jobs)
+            parser = SacctParser(cluster_config)
 
-                # Store the jobs in the database, beginning by the
-                # oldest intervals
-                for entry in tqdm(jobs):
-                    if entry is not None:
-                        nb_entries += 1
-                        update_allocated_gpu_type_from_nodes(
-                            clusters[cluster_name], entry
-                        )
-                        collection.save_job(entry)
+            jobs = pickle.loads(value) # c'est ici que la conversion précédemment faite par SacctScraper.convert doit être faite
+            nb_jobs += len(jobs)
 
-            logger.info(f"Saved {nb_entries}/{nb_jobs} entries.")
+            # Store the jobs in the database, beginning by the
+            # oldest intervals
+            for entry in tqdm(jobs):
+                if entry is not None:
+                    nb_entries += 1
+                    update_allocated_gpu_type_from_nodes(
+                        clusters[cluster_name], entry
+                    )
+                    collection.save_job(entry)
+
+        logger.info(f"Saved {nb_entries}/{nb_jobs} entries.")
