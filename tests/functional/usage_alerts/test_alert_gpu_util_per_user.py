@@ -1,6 +1,7 @@
 import re
 
 import pytest
+import time_machine
 
 from sarc.client import get_jobs
 from tests.functional.jobs.test_func_load_job_series import MOCK_TIME
@@ -26,7 +27,7 @@ PARAMS = [
 ]
 
 
-@pytest.mark.freeze_time(MOCK_TIME)
+@time_machine.travel(MOCK_TIME, tick=False)
 @pytest.mark.usefixtures("read_only_db", "health_config")
 @pytest.mark.parametrize(
     "check_name", PARAMS, ids=[f"params{i}" for i in range(len(PARAMS))]

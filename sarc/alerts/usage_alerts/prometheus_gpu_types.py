@@ -3,8 +3,6 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 from sarc.alerts.common import HealthCheck, CheckResult
-from sarc.config import ClusterConfig, config
-from sarc.jobs.node_gpu_mapping import get_node_to_gpu
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +31,9 @@ def check_prometheus_vs_slurmconfig(cluster_name: str | None = None) -> bool:
     bool
         True if all GPU types are same, False otherwise.
     """
+    from sarc.config import ClusterConfig, config
+    from sarc.jobs.node_gpu_mapping import get_node_to_gpu
+
     if cluster_name is None:
         clusters: Iterable[ClusterConfig] = config("scraping").clusters.values()
     else:

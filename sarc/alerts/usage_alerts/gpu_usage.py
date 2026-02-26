@@ -5,8 +5,6 @@ from datetime import datetime, timedelta
 from typing import cast
 
 from sarc.alerts.common import HealthCheck, CheckResult
-from sarc.client.series import load_job_series
-from sarc.config import UTC
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +48,9 @@ def check_gpu_type_usage_per_node(
     bool
         True if check succeeds, False otherwise.
     """
+    from sarc.client.series import load_job_series
+    from sarc.config import UTC
+
     if not gpu_type:
         logger.error("No GPU type specified.")
         return False

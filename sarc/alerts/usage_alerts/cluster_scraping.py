@@ -14,7 +14,7 @@ def check_nb_jobs_per_cluster_per_time(
     time_interval: timedelta | None = timedelta(days=7),
     time_unit: timedelta = timedelta(days=1),
     cluster_names: list[str] | None = None,
-    nb_stddev: int = 2,
+    nb_stddev: float = 2.0,
     verbose: bool = False,
 ) -> bool:
     """
@@ -33,7 +33,7 @@ def check_nb_jobs_per_cluster_per_time(
     cluster_names: list
         Optional list of clusters to check.
         If empty (or not specified), use all clusters available among jobs retrieved with time_interval.
-    nb_stddev: int
+    nb_stddev: float
         Amount of standard deviation to remove from average statistics to compute checking threshold.
         For each cluster, threshold is computed as:
         max(0, average - nb_stddev * stddev)
@@ -101,7 +101,7 @@ def check_nb_jobs_per_cluster_per_time(
         # Compute standard deviation of job count per timestamp for this cluster
         stddev = c["count"].std()
         # Compute threshold to use for warnings: <average> - nb_stddev * <standard deviation>
-        threshold = max(0, avg - nb_stddev * stddev)
+        threshold = max(0.0, avg - nb_stddev * stddev)
 
         if verbose:
             print(f"[{cluster_name}]", file=sys.stderr)  # noqa: T201
@@ -148,7 +148,7 @@ class ClusterScrapingCheck(HealthCheck):
     time_interval: timedelta | None = timedelta(days=7)
     time_unit: timedelta = timedelta(days=1)
     cluster_names: list[str] | None = None
-    nb_stddev: int = 2
+    nb_stddev: float = 2.0
     verbose: bool = False
 
     def check(self) -> CheckResult:

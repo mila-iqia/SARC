@@ -168,7 +168,7 @@ def check_prometheus_stats_occurrences(
         f_stats[prom.col_ratio] = f_stats[prom.col_has] / f_stats["task_"]
         prom.avg = f_stats[prom.col_ratio].mean()
         prom.stddev = f_stats[prom.col_ratio].std()
-        prom.threshold = max(0, prom.avg - nb_stddev * prom.stddev)
+        prom.threshold = max(0.0, prom.avg - nb_stddev * prom.stddev)
 
     # Parse min_jobs_per_group
     default_min_jobs = 1

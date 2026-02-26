@@ -100,6 +100,8 @@ def check_same_job_id(
 
 @dataclass
 class SameJobIdCheck(HealthCheck):
+    """Health check for same job IDs"""
+
     time_interval: timedelta | None = timedelta(days=7)
     since: datetime_utc | None = None
 

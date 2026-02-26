@@ -179,7 +179,7 @@ class AbstractJobSeriesFactory(ABC):
             # Pandas dataframe will infer column type as object instead of datetime
             # if all dates in column are not in same timezone.
             # So, we make sure start and end times are in a specific datetime,
-            # no matter how they have been modified above.
+            # whatever how they have been modified above.
             # NB: Since dates are still stored in TZLOCAL
             # in job object, we use TZLOCAL here, instead of UTC.
             job.start_time = job.start_time.astimezone(TZLOCAL)
