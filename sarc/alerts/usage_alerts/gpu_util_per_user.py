@@ -99,7 +99,7 @@ def check_gpu_util_per_user(
 class GpuUtilPerUserCheck(HealthCheck):
     """Health check for GPU-utilization per user."""
 
-    threshold: timedelta | None = (None,)
+    threshold: timedelta | None = None
     time_interval: timedelta | None = timedelta(days=7)
     minimum_runtime: timedelta | None = timedelta(minutes=5)
 
