@@ -4,9 +4,6 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from sarc.alerts.usage_alerts.prometheus_gpu_types import (
-    check_prometheus_vs_slurmconfig,
-)
 from sarc.config import config
 
 TESTING_DATA = {
@@ -86,8 +83,10 @@ def test_check_prometheus_vs_slurmconfig(
     )
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "tzlocal_is_mtl")
-def test_check_prometheus_vs_slurmconfig_all(monkeypatch, caplog, file_regression):
+@pytest.mark.usefixtures("empty_read_write_db", "health_config")
+def test_check_prometheus_vs_slurmconfig_all(
+    monkeypatch, caplog, file_regression, cli_main
+):
     """Test all data at once (all clusters)."""
 
     from prometheus_api_client import PrometheusConnect
@@ -118,7 +117,7 @@ def test_check_prometheus_vs_slurmconfig_all(monkeypatch, caplog, file_regressio
                 }
             )
 
-    check_prometheus_vs_slurmconfig()
+    assert cli_main(["health", "run", "--check", "prometheus_gpu_type_all"]) == 0
     file_regression.check(
         re.sub(
             r"ERROR +sarc\.alerts\.usage_alerts\.prometheus_gpu_types:prometheus_gpu_types.py:[0-9]+ +",

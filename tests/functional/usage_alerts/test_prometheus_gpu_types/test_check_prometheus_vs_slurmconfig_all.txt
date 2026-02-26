@@ -2,3 +2,4 @@
 [prometheus][gerudo] cannot find GPU types from slurm config file. You may need to fetch and parse slurm.conf files for this cluster.
 [prometheus][hyrule] cannot find GPU types from slurm config file. You may need to fetch and parse slurm.conf files for this cluster.
 [prometheus][mila] cannot find GPU types from slurm config file. You may need to fetch and parse slurm.conf files for this cluster.
+ERROR    sarc.alerts.common:common.py:98 [prometheus_gpu_type_all] FAILURE: prometheus_gpu_type_all
