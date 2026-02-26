@@ -1,20 +1,21 @@
 import logging
 from collections import Counter
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Dict
 
 from tqdm import tqdm
 
-from sarc.client import count_jobs, get_jobs
-from sarc.config import UTC
+from sarc.alerts.common import HealthCheck, CheckResult
+from sarc.core.models.validators import datetime_utc
 
 logger = logging.getLogger(__name__)
 
 
 def check_same_job_id(
     time_interval: timedelta | None = timedelta(days=7),
-    since: datetime | None = None,
-) -> None:
+    since: datetime_utc | None = None,
+) -> bool:
     """
     Check if there are many jobs with same job ID in given time interval.
     Log an alert for each duplicated job ID.
@@ -29,7 +30,14 @@ def check_same_job_id(
         Default is 7 days.
     since: datetime
         If given, only jobs which ran after `since` will be checked.
+
+    Returns
+    -------
+    bool
+        True if there are no duplicated job IDs (check succeeds), False otherwise.
     """
+    from sarc.client import count_jobs, get_jobs
+    from sarc.config import UTC
 
     # Compute parameters `start` and `end` for function `get_jobs()`
     if since is None:
@@ -63,7 +71,7 @@ def check_same_job_id(
         if sum(cluster_to_count.values()) > 1
     }
     if duplicates:
-        # Log warnings
+        # Log alerts
         if start:
             time_message = str(start)
             if end:
@@ -74,7 +82,7 @@ def check_same_job_id(
         logger.error(
             f"[duplicated job indices] found {len(duplicates)} duplicated job_id since {time_message}"
         )
-        # Warning for each duplicated job ID
+        # Alert for each duplicated job ID
         # Display job ID, and number of jobs having this ID on each cluster
         for job_id, cluster_to_count in duplicates.items():
             message = (
@@ -86,3 +94,17 @@ def check_same_job_id(
                 + f", since {time_message}"
             )
             logger.error(message)
+
+    return not duplicates
+
+
+@dataclass
+class SameJobIdCheck(HealthCheck):
+    time_interval: timedelta | None = timedelta(days=7)
+    since: datetime_utc | None = None
+
+    def check(self) -> CheckResult:
+        if check_same_job_id(time_interval=self.time_interval, since=self.since):
+            return self.ok()
+        else:
+            return self.fail()

@@ -51,7 +51,9 @@ PARAMS = {
 @time_machine.travel(MOCK_TIME, tick=False)
 @pytest.mark.usefixtures("read_only_db", "health_config")
 @pytest.mark.parametrize("check_name", PARAMS.values(), ids=PARAMS.keys())
-def test_check_prometheus_stats_for_gpu_jobs(check_name, monkeypatch, caplog, file_regression, cli_main):
+def test_check_prometheus_stats_for_gpu_jobs(
+    check_name, monkeypatch, caplog, file_regression, cli_main
+):
     monkeypatch.setattr(
         "sarc.jobs.series.get_job_time_series", generate_fake_timeseries
     )

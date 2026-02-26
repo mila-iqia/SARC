@@ -308,3 +308,68 @@ sarc:
         group_by_node: true
         min_jobs_per_group:
           raisin: 3
+
+      # same_job_id_* checks correspond to test params in test_alert_same_job_id.py
+      same_job_id_default:
+        $class: "sarc.alerts.usage_alerts.same_job_id:SameJobIdCheck"
+        active: true
+      same_job_id_all:
+        $class: "sarc.alerts.usage_alerts.same_job_id:SameJobIdCheck"
+        active: true
+        since: null
+        time_interval: null
+      same_job_id_since_before:
+        $class: "sarc.alerts.usage_alerts.same_job_id:SameJobIdCheck"
+        active: true
+        since: "2023-02-19T02:00+00:00"
+        time_interval: null
+      same_job_id_since_in:
+        $class: "sarc.alerts.usage_alerts.same_job_id:SameJobIdCheck"
+        active: true
+        since: "2023-02-19T05:00+00:00"
+        time_interval: null
+      same_job_id_since_after_first:
+        $class: "sarc.alerts.usage_alerts.same_job_id:SameJobIdCheck"
+        active: true
+        since: "2023-02-19T18:00+00:00"
+        time_interval: null
+      same_job_id_since_after_both:
+        $class: "sarc.alerts.usage_alerts.same_job_id:SameJobIdCheck"
+        active: true
+        since: "2023-02-19T23:10+00:00"
+        time_interval: null
+      same_job_id_interval_before:
+        $class: "sarc.alerts.usage_alerts.same_job_id:SameJobIdCheck"
+        active: true
+        since: "2023-02-19T02:00+00:00"
+        time_interval: 3h
+      same_job_id_interval_on_first:
+        $class: "sarc.alerts.usage_alerts.same_job_id:SameJobIdCheck"
+        active: true
+        since: "2023-02-19T02:00+00:00"
+        time_interval: 4h
+      same_job_id_interval_on_both:
+        $class: "sarc.alerts.usage_alerts.same_job_id:SameJobIdCheck"
+        active: true
+        since: "2023-02-19T02:00+00:00"
+        time_interval: 10h
+      same_job_id_interval_full:
+        $class: "sarc.alerts.usage_alerts.same_job_id:SameJobIdCheck"
+        active: true
+        since: "2023-02-19T02:00+00:00"
+        time_interval: 22h
+      same_job_id_interval_after:
+        $class: "sarc.alerts.usage_alerts.same_job_id:SameJobIdCheck"
+        active: true
+        since: "2023-02-19T23:10+00:00"
+        time_interval: 22h
+      same_job_id_time_interval_too_short:
+        $class: "sarc.alerts.usage_alerts.same_job_id:SameJobIdCheck"
+        active: true
+        since: null
+        time_interval: 275d
+      same_job_id_time_interval_long_enough:
+        $class: "sarc.alerts.usage_alerts.same_job_id:SameJobIdCheck"
+        active: true
+        since: null
+        time_interval: 276d
