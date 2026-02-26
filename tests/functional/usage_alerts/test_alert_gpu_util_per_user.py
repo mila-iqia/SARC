@@ -9,14 +9,19 @@ from ..jobs.test_func_job_statistics import generate_fake_timeseries
 PARAMS = [
     # Check with default params. In last 7 days from now (mock time: 2023-11-22),
     # there is only 2 jobs, both with no gpu_utilization, so, no warnings.
+    # dict(threshold=timedelta())
     "gpu_util_per_user_0",
     # Check with no time_interval and a threshold to 7 days
+    # dict(threshold=timedelta(hours=7), time_interval=None)
     "gpu_util_per_user_1",
     # Check with no time_interval and threshold to 6 days
+    # dict(threshold=timedelta(hours=6), time_interval=None)
     "gpu_util_per_user_2",
     # Check with a valid time_interval
+    # dict(threshold=timedelta(hours=8), time_interval=timedelta(days=276))
     "gpu_util_per_user_3",
     # Check will all params, including minimum_runtime
+    # dict(threshold=timedelta(hours=8), time_interval=timedelta(days=276), minimum_runtime=timedelta(seconds=39000))
     "gpu_util_per_user_4",
 ]
 

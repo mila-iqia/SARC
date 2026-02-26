@@ -7,12 +7,16 @@ from ..jobs.test_func_load_job_series import MOCK_TIME
 PARAMS = [
     # Check with default params. In last 7 days from now (mock time: 2023-11-22),
     # there is only 2 jobs from 1 cluster in 1 timestamp. So, threshold will be 0.
+    # dict(verbose=True)
     "cluster_scraping_0",
     # Check with no time interval (i.e. all jobs).
+    # dict(time_interval=None, verbose=True)
     "cluster_scraping_1",
     # Check with a supplementary cluster `another_cluster` which is not in data frame.
+    # dict(time_interval=None, cluster_names=["fromage", "mila", "patate", "raisin", "another_cluster"], verbose=True)
     "cluster_scraping_2",
     # Check above case with 2 clusters ignored.
+    # dict(time_interval=None, cluster_names=["mila", "raisin", "another_cluster"])
     "cluster_scraping_3",
 ]
 

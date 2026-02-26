@@ -29,6 +29,7 @@ sarc:
         active: true
         limit: 1_000_000
 
+      # cluster_response_* checks correspond to test params in test_alert_cluster_response.py
       cluster_response_default:
         $class: "sarc.alerts.usage_alerts.cluster_response:ClusterResponseCheck"
         active: true
@@ -57,6 +58,7 @@ sarc:
         active: true
         time_interval: 279d
 
+      # cluster_scraping_* checks correspond to test params in test_alert_cluster_scraping.py
       cluster_scraping_0:
         $class: "sarc.alerts.usage_alerts.cluster_scraping:ClusterScrapingCheck"
         active: true
@@ -86,6 +88,7 @@ sarc:
           - raisin
           - another_cluster
 
+      # node_gpu_usage_* checks correspond to test params in test_alert_gpu_usage.py
       node_gpu_usage_0:
         $class: "sarc.alerts.usage_alerts.gpu_usage:NodeGpuUsageCheck"
         active: true
@@ -136,6 +139,7 @@ sarc:
         gpu_type: "unknown"
         time_interval: null
 
+      # gpu_util_per_user_* checks correspond to test params in test_alert_gpu_util_per_user.py
       gpu_util_per_user_0:
         $class: "sarc.alerts.usage_alerts.gpu_util_per_user:GpuUtilPerUserCheck"
         active: true
@@ -162,6 +166,7 @@ sarc:
         time_interval: 276d
         minimum_runtime: 39000s
 
+      # prometheus_gpu_type_* checks correspond to test params in test_prometheus_gpu_types.py
       prometheus_gpu_type_hyrule:
         $class: "sarc.alerts.usage_alerts.prometheus_gpu_types:PrometheusGpuTypeCheck"
         active: true

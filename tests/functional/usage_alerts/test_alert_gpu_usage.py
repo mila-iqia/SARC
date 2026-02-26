@@ -48,6 +48,7 @@ get_warnings = functools.partial(
 PARAMS = [
     (
         # Check GPU A100 with no interval (i.e. all jobs)
+        # dict(gpu_type="A100", time_interval=None, minimum_runtime=None)
         "node_gpu_usage_0",
         [
             "[fromage][cn-c021] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 100.0 %",
@@ -64,6 +65,7 @@ PARAMS = [
     ),
     (
         # Check GPU A100 with no interval (i.e. all jobs) and minimum runtime
+        # dict(gpu_type="A100", time_interval=None, minimum_runtime=timedelta(seconds=43200))
         "node_gpu_usage_1",
         [
             "[fromage][cn-c021] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 100.0 %",
@@ -80,11 +82,13 @@ PARAMS = [
     ),
     (
         # Check GPU A100 with no interval (i.e. all jobs) and minimum runtime too high
+        # dict(gpu_type="A100", time_interval=None, minimum_runtime=timedelta(seconds=43200 + 1))
         "node_gpu_usage_2",
         [],
     ),
     (
         # Check GPU A100 for all jobs with a greater threshold.
+        # dict(gpu_type="A100", time_interval=None, minimum_runtime=None, threshold=5 / 100)
         "node_gpu_usage_3",
         [
             "[fromage][cn-c021] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 5.0 %",
@@ -101,11 +105,13 @@ PARAMS = [
     ),
     (
         # Check GPU A100 for all jobs with threshold zero.
+        # dict(gpu_type="A100", time_interval=None, minimum_runtime=None, threshold=0)
         "node_gpu_usage_4",
         [],
     ),
     (
         # Check GPU A100 for all jobs, a greater threshold, and minimum number of jobs per drac node set to 2.
+        # dict(gpu_type="A100", time_interval=None, minimum_runtime=None, threshold=10 / 100, min_tasks=2)
         "node_gpu_usage_5",
         [
             # "[fromage][cn-c021] insufficient usage for GPU A100: 0.0 % (0/1), minimum required: 10.0 %",
@@ -123,6 +129,7 @@ PARAMS = [
     (
         # Check GPU A100 with default intervals (24 hours).
         # Only 2 jobs (6 and 7) will match for current frozen mock time.
+        # dict(gpu_type="A100")
         "node_gpu_usage_6",
         [
             "[raisin][cn-c021] insufficient usage for GPU A100: 0.0 % (0/2), minimum required: 100.0 %",
@@ -131,6 +138,7 @@ PARAMS = [
     ),
     (
         # Check unknown GPU.
+        # dict(gpu_type="unknown", time_interval=None)
         "node_gpu_usage_7",
         [
             "[fromage][cn-c021] insufficient usage for GPU unknown: 0.0 % (0/1), minimum required: 100.0 %",
