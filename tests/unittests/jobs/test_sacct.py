@@ -5,15 +5,15 @@ import pytest
 from fabric.testing.base import Command
 
 from sarc.config import config, UTC
-from sarc.jobs.sacct import JobConversionError, SAcctScraper
+from sarc.core.scraping.jobs_utils import JobConversionError, SacctScraper
 from tests.common.dateutils import MTL, _dtfmt
 
 
 @pytest.mark.parametrize(
     "test_config", [{"clusters": {"test": {"host": "patate"}}}], indirect=True
 )
-def test_SAcctScraper_fetch_raw(test_config, remote):
-    scraper = SAcctScraper(
+def test_SacctScraper_fetch_raw(test_config, remote):
+    scraper = SacctScraper(
         cluster=test_config.clusters["test"],
         start=datetime(2023, 2, 28, tzinfo=MTL).astimezone(UTC),
         end=datetime(2023, 3, 1, tzinfo=MTL).astimezone(UTC),
@@ -29,8 +29,8 @@ def test_SAcctScraper_fetch_raw(test_config, remote):
 @pytest.mark.parametrize(
     "test_config", [{"clusters": {"test": {"host": "test"}}}], indirect=True
 )
-def test_SAcctScraper_fetch_raw2(test_config, remote):
-    scraper = SAcctScraper(
+def test_SacctScraper_fetch_raw2(test_config, remote):
+    scraper = SacctScraper(
         cluster=test_config.clusters["test"],
         start=datetime(2023, 2, 28, tzinfo=MTL).astimezone(UTC),
         end=datetime(2023, 3, 1, tzinfo=MTL).astimezone(UTC),
@@ -55,19 +55,19 @@ def test_SAcctScraper_fetch_raw2(test_config, remote):
     "test_config", [{"clusters": {"test": {"host": "patate"}}}], indirect=True
 )
 @pytest.mark.freeze_time(datetime(2023, 2, 28, tzinfo=MTL))
-def test_SAcctScraper_get_cache(test_config, enabled_cache, remote):
+def test_SacctScraper_get_cache(test_config, enabled_cache, remote):
     today = datetime.combine(date.today(), datetime.min.time(), tzinfo=MTL).astimezone(
         UTC
     )
     yesterday = today - timedelta(days=1)
     tomorrow = today + timedelta(days=1)
 
-    scraper_today = SAcctScraper(
+    scraper_today = SacctScraper(
         cluster=test_config.clusters["test"],
         start=today,
         end=tomorrow,
     )
-    scraper_yesterday = SAcctScraper(
+    scraper_yesterday = SacctScraper(
         cluster=test_config.clusters["test"],
         start=yesterday,
         end=today,
@@ -112,8 +112,8 @@ def test_SAcctScraper_get_cache(test_config, enabled_cache, remote):
 @pytest.mark.parametrize(
     "test_config", [{"clusters": {"test": {"host": "test"}}}], indirect=True
 )
-def test_SAcctScraper_convert_version_supported(test_config, monkeypatch, caplog):
-    scraper = SAcctScraper(
+def test_SacctScraper_convert_version_supported(test_config, monkeypatch, caplog):
+    scraper = SacctScraper(
         cluster=test_config.clusters["test"],
         start=datetime(2023, 2, 28, tzinfo=MTL).astimezone(UTC),
         end=datetime(2023, 3, 1, tzinfo=MTL).astimezone(UTC),
