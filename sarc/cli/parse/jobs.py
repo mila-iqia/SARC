@@ -8,19 +8,21 @@ from sarc.core.scraping.jobs import parse_jobs
 
 @dataclass
 class ParseJobs:
-    since: str = field(help="Start parsing the cache from the specified date")
-
-    cluster_names: list[str] = field(alias=["-c"], default_factory=list)
+    since: str = field(help="Start parsing the cache from the specified date, otherwise use the last parsed date from the database")
 
     def execute(self) -> int:
         clusters_cfg = config("scraping").clusters
         assert clusters_cfg is not None
+
+        # TODO: get the last parsed date from the database if self.since is not provided
 
         ts = datetime.fromisoformat(self.since)
         if ts.tzinfo is None:
             ts = ts.replace(tzinfo=UTC)
         ts = ts.astimezone(UTC)
 
-        parse_jobs(self.cluster_names, clusters_cfg, ts)
+        parse_jobs(clusters_cfg, ts)
+
+        # TODO: update the last parsed date in the database if self.since was not provided
 
         return 0

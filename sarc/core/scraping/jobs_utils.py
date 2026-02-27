@@ -146,54 +146,23 @@ def fetch_raw(cluster: ClusterConfig, start: datetime, end: datetime) -> bytes:
 
     return results.stdout
 
+@trace_decorator()
+def parse_raw(raw_data: bytes, cluster: ClusterConfig, scraped_start: datetime, scraped_end: datetime) -> dict:
+    """Parse raw sacct data as a dict.
+    
+    Arguments:
+        cluster: The cluster on which to scrape the data.
+        scraped_start: the UTC datetime from which we scraped.
+            Should be precise up to minute.
+        scraped_end: the UTC datetime until which we scraped.
+            Should be precise up to minute.
+    """
+    if not _date_is_utc(scraped_start):
+        raise ValueError(f"sacct scraper: start date not in UTC: {scraped_start}")
+    if not _date_is_utc(scraped_end):
+        raise ValueError(f"sacct scraper: end date not in UTC: {scraped_end}")
 
-class SacctScraper:
-    """Scrape info from Slurm using the sacct command."""
-
-    def __init__(
-        self,
-        cluster: ClusterConfig,
-        start: datetime,
-        end: datetime,
-    ):
-        """Initialize a SacctScraper.
-
-        Arguments:
-            cluster: The cluster on which to scrape the data.
-            start: the UTC datetime from which we wish to scrape.
-                Should be precise up to minute.
-            end: the UTC datetime until which we wish to scrape.
-                Should be precise up to minute.
-        """
-        if not _date_is_utc(start):
-            raise ValueError(f"sacct scraper: start date not in UTC: {start}")
-        if not _date_is_utc(end):
-            raise ValueError(f"sacct scraper: end date not in UTC: {end}")
-
-        self.cluster = cluster
-        self.start = start
-        self.end = end
-
-    def __len__(self) -> int:
-        return len(self.get_raw()["jobs"])
-
-    def __iter__(self) -> Iterator[SlurmJob | None]:
-        """Fetch and iterate on all jobs as SlurmJob objects."""
-        version: dict = (
-            self.get_raw().get("meta", {}).get("Slurm", None)
-            or self.get_raw().get("meta", {}).get("slurm", {})
-        ).get("version", None)
-        for entry in self.get_raw()["jobs"]:
-            with using_trace(
-                "sarc.core.scraping.jobs_utils",
-                "SacctScraper.__iter__",
-                exception_types=(),
-            ) as span:
-                span.set_attribute("entry", json.dumps(entry))
-                converted = self.convert(entry, version)
-                yield converted
-
-    def convert(self, entry: dict, version: dict | None = None) -> SlurmJob | None:
+    def convert(entry: dict, version: dict | None = None) -> SlurmJob | None:
         """Convert a single job entry from sacct to a SlurmJob."""
         resources: dict[str, dict] = {"requested": {}, "allocated": {}}
         tracked_resources = ["cpu", "mem", "gres", "node", "billing"]
@@ -248,13 +217,13 @@ class SacctScraper:
             # We save these dates with timezone UTC
             # Note: If date is naive (as actually parsed from `acquire jobs`),
             # then astimezone() assumes date is in local timezone.
-            "latest_scraped_start": self.start.astimezone(UTC),
-            "latest_scraped_end": self.end.astimezone(UTC),
+            "latest_scraped_start": start.astimezone(UTC),
+            "latest_scraped_end": end.astimezone(UTC),
         }
 
-        assert self.cluster.name is not None
+        assert cluster.name is not None
 
-        if self.cluster.name != entry["cluster"]:
+        if cluster.name != entry["cluster"]:
             logger.warning(
                 'Job %s from cluster "%s" has a different cluster name: "%s". Using "%s".',
                 entry["job_id"],
@@ -264,7 +233,7 @@ class SacctScraper:
             )
         if version is None or int(version["major"]) < 23:
             return SlurmJob(
-                cluster_name=self.cluster.name,
+                cluster_name=cluster.name,
                 job_id=entry["job_id"],
                 array_job_id=entry["array"]["job_id"] or None,
                 task_id=entry["array"]["task_id"],
@@ -295,7 +264,7 @@ class SacctScraper:
         if int(version["major"]) == 23:
             if int(version["minor"]) == 11:
                 return SlurmJob(
-                    cluster_name=self.cluster.name,
+                    cluster_name=cluster.name,
                     job_id=entry["job_id"],
                     array_job_id=entry["array"]["job_id"] or None,
                     task_id=entry["array"]["task_id"]["number"],
@@ -331,7 +300,7 @@ class SacctScraper:
                 )
 
             return SlurmJob(
-                cluster_name=self.cluster.name,
+                cluster_name=cluster.name,
                 job_id=entry["job_id"],
                 array_job_id=entry["array"]["job_id"] or None,
                 task_id=entry["array"]["task_id"]["number"],
@@ -362,7 +331,7 @@ class SacctScraper:
 
         if int(version["major"]) in [24, 25]:
             return SlurmJob(
-                cluster_name=self.cluster.name,
+                cluster_name=cluster.name,
                 job_id=entry["job_id"],
                 array_job_id=entry["array"]["job_id"] or None,
                 task_id=entry["array"]["task_id"]["number"],
@@ -394,8 +363,18 @@ class SacctScraper:
                 **extra,  # type: ignore[arg-type]
             )
 
-        # if we arrive here, it means that the version is not supported :-(
+        # if we make it here, it means that the version is not supported :-(
         raise JobConversionError(f"Unsupported slurm version: {version}")
+    
+    data = json.loads(raw_data)
+
+    version: dict = (
+        data.get("meta", {}).get("Slurm", None)
+        or data.get("meta", {}).get("slurm", {})
+    ).get("version", None)
+
+    for entry in data["jobs"]:
+        yield convert(entry, version)
 
 
 @trace_decorator()

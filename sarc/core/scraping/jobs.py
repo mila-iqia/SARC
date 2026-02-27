@@ -163,10 +163,11 @@ def parse_jobs(
             )
 
             cluster_name = key.split("_")[0]
+            cluster_config = clusters[cluster_name]
+            scraped_start = datetime.fromisoformat(key.split("_")[1])
+            scraped_end = datetime.fromisoformat(key.split("_")[2])
 
-            parser = SacctParser(cluster_config)
-
-            jobs = pickle.loads(value) # c'est ici que la conversion précédemment faite par SacctScraper.convert doit être faite
+            jobs = parse_raw(value, cluster_config, scraped_start, scraped_end)
             nb_jobs += len(jobs)
 
             # Store the jobs in the database, beginning by the
