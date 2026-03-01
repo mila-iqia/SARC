@@ -2,6 +2,8 @@ import pymongo
 import pytest
 
 from sarc.config import config
+from sarc.core.models.runstate import get_parsed_date
+from sarc.core.models.validators import START_TIME
 
 
 @pytest.mark.usefixtures("empty_read_write_db")
@@ -22,6 +24,7 @@ def test_db_init(cli_main):
         "clusters",
         "gpu_billing",
         "node_gpu_mapping",
+        "runstate",
     ]:
         collection = db[collection_name]
         assert not collection.index_information()
@@ -36,9 +39,15 @@ def test_db_init(cli_main):
         "clusters",
         "gpu_billing",
         "node_gpu_mapping",
+        "runstate",
     ]:
         collection = db[collection_name]
         assert collection.index_information()
+
+    parsed_date_jobs = get_parsed_date(db, "jobs")
+    parsed_date_users = get_parsed_date(db, "users")
+    assert parsed_date_jobs == START_TIME
+    assert parsed_date_users == START_TIME
 
     scraped_time_index = [
         index
