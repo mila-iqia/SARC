@@ -13,8 +13,10 @@ from sarc.core.scraping.jobs_utils import (
     parse_intervals,
     set_auto_end_time,
     fetch_raw,
+    parse_raw,
     update_allocated_gpu_type_from_nodes,
 )
+from sarc.core.models.runstate import get_parsed_date, set_parsed_date
 from sarc.traces import using_trace
 
 
@@ -146,9 +148,11 @@ def fetch_jobs(
 
 
 def parse_jobs(
-    clusters: dict[str, ClusterConfig], since: datetime
-) -> None:  # Iterable[SlurmJob]:
+    clusters: dict[str, ClusterConfig]
+) -> None:
     collection = _jobs_collection()
+
+    since = get_parsed_date("jobs")
 
     # Retrieve from the cache
     cache = Cache(subdirectory=f"jobs")
@@ -159,7 +163,7 @@ def parse_jobs(
         # Retrieve all jobs associated to the time intervals
         for key, value in cache_entry.items():
             logger.info(
-                f"Acquire data on {cluster_name} for job identified by: {key}"
+                f"Acquire data for job identified by: {key}"
             )
 
             cluster_name = key.split("_")[0]
