@@ -808,7 +808,7 @@ def test_cache_entry_add_get_value(tmp_path):
         zf.writestr("key2", b"value2")
 
     with ZipFile(test_file, "r") as zf:
-        entry = CacheEntry(zf)
+        entry = CacheEntry(zf, datetime.now(UTC))
 
         assert list(entry.items()) == [("key1", b"value1"), ("key2", b"value2")]
 
@@ -819,7 +819,7 @@ def test_cache_entry_add_value(tmp_path):
     # Create a new zip file for writing
     test_file = tmp_path / "test_write.zip"
     with ZipFile(test_file, "x", compression=ZIP_LZMA) as zf:
-        entry = CacheEntry(zf)
+        entry = CacheEntry(zf, datetime.now(UTC))
 
         # Add values
         entry.add_value("test_key", b"test_value")
@@ -958,7 +958,7 @@ def test_cache_paths_from_single_day(enabled_cache):
         cache.save("test_key", time, b"test_data")
 
     # Test _paths_from starting from base_time
-    paths = list(cache._paths_from(base_time))
+    paths = list(path for path, _ in cache._paths_from(base_time))
 
     # Should only get files from 10:15 and 11:00 (not 9:30)
     assert len(paths) == 2
@@ -988,7 +988,7 @@ def test_cache_paths_from_multiple_days(enabled_cache):
 
     # Test _paths_from starting from 2024-03-15 10:00
     from_time = datetime(2024, 3, 15, 10, 0, 0, tzinfo=UTC)
-    paths = list(cache._paths_from(from_time))
+    paths = list(path for path, _ in cache._paths_from(from_time))
 
     # Should get files from 15:00 on 3/15, and all files from 3/16 and 3/17
     assert len(paths) == 4
@@ -998,6 +998,50 @@ def test_cache_paths_from_multiple_days(enabled_cache):
     assert "15:00:00" in path_names
     assert "08:00:00" in path_names  # From 3/16
     assert "12:00:00" in path_names  # From 3/17
+
+
+def test_cache_entry_datetime(enabled_cache):
+    """Test Cache _fetch_date method."""
+    cache = Cache("test_cache")
+    # Create test files for different days
+    times = [
+        datetime(2024, 3, 14, 23, 0, 0, tzinfo=UTC),  # Day before
+        datetime(2024, 3, 15, 10, 0, 0, tzinfo=UTC),  # Target day
+        datetime(2024, 3, 15, 15, 0, 0, tzinfo=UTC),  # Same day, later
+        datetime(2024, 3, 16, 8, 0, 0, tzinfo=UTC),  # Next day
+        datetime(2024, 3, 17, 12, 0, 0, tzinfo=UTC),  # Day after next
+    ]
+    for time in times:
+        cache.save("test_key", time, b"test_data")
+
+    # parse cache entries
+    entries = list(cache.read_from(datetime(2024, 3, 15, 10, 0, 0, tzinfo=UTC)))
+    assert len(entries) == 4
+    assert entries[0].get_entry_datetime() == times[1]
+    assert entries[1].get_entry_datetime() == times[2]
+    assert entries[2].get_entry_datetime() == times[3]
+    assert entries[3].get_entry_datetime() == times[4]
+
+
+def test_cache_latest_entry(enabled_cache):
+    """Test Cache latest_entry method."""
+    cache = Cache("test_cache")
+    assert cache.latest_entry() is None
+
+    cache.save("test_key", datetime(2024, 3, 15, 10, 0, 0, tzinfo=UTC), b"test_data")
+    assert cache.latest_entry().get_entry_datetime() == datetime(
+        2024, 3, 15, 10, 0, 0, tzinfo=UTC
+    )
+
+    cache.save("test_key", datetime(2024, 3, 16, 11, 0, 0, tzinfo=UTC), b"test_data")
+    assert cache.latest_entry().get_entry_datetime() == datetime(
+        2024, 3, 16, 11, 0, 0, tzinfo=UTC
+    )
+
+    cache.save("test_key", datetime(2024, 3, 17, 12, 0, 0, tzinfo=UTC), b"test_data")
+    assert cache.latest_entry().get_entry_datetime() == datetime(
+        2024, 3, 17, 12, 0, 0, tzinfo=UTC
+    )
 
 
 def test_cache_read_from(enabled_cache):

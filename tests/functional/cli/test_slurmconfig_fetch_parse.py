@@ -131,7 +131,7 @@ def test_fetch_slurmconfig(cli_main, test_config, remote, caplog, freezer):
     assert file_path_2020_01_01.is_file(), file_path_2020_01_01
     assert not file_path_2020_05_01.is_file(), file_path_2020_05_01
     with ZipFile(file_path_2020_01_01) as zf:
-        ((key, blob),) = CacheEntry(zf).items()
+        ((key, blob),) = CacheEntry(zf, DATE_2020_01_01_MTL).items()
         assert key == DATE_2020_01_01_MTL.astimezone(UTC).isoformat()
         assert blob.decode("utf-8") == SLURM_CONF_RAISIN_2020_01_01
     caplog.clear()
@@ -144,11 +144,11 @@ def test_fetch_slurmconfig(cli_main, test_config, remote, caplog, freezer):
     assert file_path_2020_01_01.is_file(), file_path_2020_01_01
     assert file_path_2020_05_01.is_file(), file_path_2020_05_01
     with ZipFile(file_path_2020_01_01) as zf:
-        ((key, blob),) = CacheEntry(zf).items()
+        ((key, blob),) = CacheEntry(zf, DATE_2020_01_01_MTL).items()
         assert key == DATE_2020_01_01_MTL.astimezone(UTC).isoformat()
         assert blob.decode("utf-8") == SLURM_CONF_RAISIN_2020_01_01
     with ZipFile(file_path_2020_05_01) as zf:
-        ((key, blob),) = CacheEntry(zf).items()
+        ((key, blob),) = CacheEntry(zf, DATE_2020_05_01_MTL).items()
         assert key == DATE_2020_05_01_MTL.astimezone(UTC).isoformat()
         assert blob.decode("utf-8") == SLURM_CONF_RAISIN_2020_05_01
 
