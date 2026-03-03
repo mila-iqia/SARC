@@ -205,8 +205,6 @@ class Cache:
             tzinfo=UTC,
         )
 
-        print(f"file: {path} file time: {file_time} entry_datetime: {entry_datetime}")
-
         return entry_datetime
 
     def _paths_from(self, from_time: datetime) -> Iterable[tuple[Path, datetime_utc]]:
