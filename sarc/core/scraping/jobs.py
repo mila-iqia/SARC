@@ -151,8 +151,9 @@ def parse_jobs(
     clusters: dict[str, ClusterConfig]
 ) -> None:
     collection = _jobs_collection()
+    db = config().mongo.database_instance
 
-    since = get_parsed_date("jobs")
+    since = get_parsed_date(db, "jobs")
 
     # Retrieve from the cache
     cache = Cache(subdirectory=f"jobs")
@@ -183,5 +184,8 @@ def parse_jobs(
                         clusters[cluster_name], entry
                     )
                     collection.save_job(entry)
+            
+            # Update the parsed date
+            set_parsed_date(db, "jobs", cache_entry.get_time())
 
         logger.info(f"Saved {nb_entries}/{nb_jobs} entries.")
