@@ -16,7 +16,6 @@ from typing import IO, Any, Callable, ClassVar, Literal, Protocol, overload
 from zipfile import ZIP_LZMA, ZipFile
 
 from .config import config
-from .core.models.validators import datetime_utc
 
 logger = logging.getLogger(__name__)
 UTCOFFSET = timedelta(0)
@@ -80,9 +79,9 @@ class CacheEntry:
 
     _zf: ZipFile
 
-    def __init__(self, zf: ZipFile, entry_datetime: datetime_utc):
+    def __init__(self, zf: ZipFile, entry_datetime: datetime):
         self._zf = zf
-        self.entry_datetime = entry_datetime
+        self.entry_datetime = ensure_utc(entry_datetime)
 
     def add_value(self, key: str, value: bytes) -> None:
         """Add a key-value pair to the cache entry"""
@@ -93,7 +92,7 @@ class CacheEntry:
         for zi in self._zf.infolist():
             yield zi.filename, self._zf.read(zi)
 
-    def get_entry_datetime(self) -> datetime_utc:
+    def get_entry_datetime(self) -> datetime:
         """Get the time when this cache entry was created."""
         return self.entry_datetime
 
@@ -192,10 +191,10 @@ class Cache:
         with self.create_entry(at_time) as ce:
             ce.add_value(key, value)
 
-    def _datetime_from_path(self, path: Path) -> datetime_utc:
+    def _datetime_from_path(self, path: Path) -> datetime:
         """Get the datetime from a cache entry path."""
         file_time = time.fromisoformat(path.parts[-1])
-        entry_datetime = datetime(
+        return datetime(
             year=int(path.parts[-4]),
             month=int(path.parts[-3]),
             day=int(path.parts[-2]),
@@ -205,9 +204,7 @@ class Cache:
             tzinfo=UTC,
         )
 
-        return entry_datetime
-
-    def _paths_from(self, from_time: datetime) -> Iterable[tuple[Path, datetime_utc]]:
+    def _paths_from(self, from_time: datetime) -> Iterable[tuple[Path, datetime]]:
         """Returns paths starting from a specific datetime.
 
         Returns an iterator over all cached entries that were created at or
@@ -219,7 +216,7 @@ class Cache:
 
         Yields:
             Path: The path for each matching cache entry.
-            datetime_utc: The time this entry was fetched
+            datetime: The time this entry was fetched
         """
         cdir = self.cache_dir
         from_time = ensure_utc(from_time)
@@ -310,7 +307,7 @@ class Cache:
                         )
         return None
 
-    def oldest_year(self) -> datetime_utc:
+    def oldest_year(self) -> datetime:
         """
         Return the oldest year in the cache if exists, otherwise current year.
         return: January 1st of year found, at 00h 00min 00sec 00microseconds in UTC timezone.
