@@ -12,7 +12,7 @@ from tqdm import tqdm
 
 from sarc.client.gpumetrics import GPUBilling, get_cluster_gpu_billings, get_rgus
 from sarc.client.job import (
-    SlurmCLuster,
+    SlurmCluster,
     count_jobs,
     get_available_clusters,
     get_jobs,
@@ -515,7 +515,7 @@ def _compute_rgu_stats_before_date(
 
 
 def _compute_rgu_stats_after_date(
-    cluster: SlurmCLuster,
+    cluster: SlurmCluster,
     df: DataFrame,
     cluster_name: str,
     gpu_to_rgu: dict[str, float],

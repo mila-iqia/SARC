@@ -4,11 +4,14 @@ from typing import Literal
 import pymongo
 from pymongo.database import Database
 from simple_parsing import choice
+from sarc.core.models.validators import START_TIME
+
 
 from sarc.allocations.allocations import AllocationsRepository
 from sarc.client.job import SlurmJobRepository
 from sarc.config import config
 from sarc.storage.diskusage import ClusterDiskUsageRepository
+from sarc.core.models.runstate import set_parsed_date
 
 
 @dataclass
@@ -58,6 +61,8 @@ class DbInit:
         create_node_gpu_mapping_indices(db)
 
         create_healthcheck_indices(db)
+
+        create_runstate(db)
 
         return 0
 
@@ -185,6 +190,18 @@ def create_healthcheck_indices(db: Database) -> None:
     """Create indices for the healthcheck collection."""
     db_collection = db.healthcheck
     db_collection.create_index([("check.name", pymongo.ASCENDING)], unique=True)
+
+
+def create_runstate(db: Database) -> None:
+    """Create the runstate collection."""
+
+    db_collection = db.runstate
+    # RunStateCollection(database=db).get_collection()
+    db_collection.create_index([("name", pymongo.ASCENDING)], unique=True)
+
+    # create the default parsed dates
+    set_parsed_date(db, "jobs", START_TIME)
+    set_parsed_date(db, "users", START_TIME)
 
 
 def create_allocations_indices(db: Database) -> None:
