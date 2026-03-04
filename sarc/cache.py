@@ -68,6 +68,10 @@ class CacheException(Exception):
     pass
 
 
+def no_current(fname: Path) -> bool:
+    return fname.suffix not in [".current", ".DS_Store"]
+
+
 class CacheEntry:
     """Describe a single cache entry at a point in time.
 
@@ -158,13 +162,15 @@ class Cache:
         output_file = self._dir_from_date(cdir, at_time) / at_time.time().isoformat(
             "seconds"
         )
+        working_file = output_file.with_suffix(".current")
         output_file.parent.mkdir(parents=True, exist_ok=True)
-        zf = ZipFile(output_file, mode="x", compression=ZIP_LZMA)
+        zf = ZipFile(working_file, mode="x", compression=ZIP_LZMA)
         ce = CacheEntry(zf, at_time)
         try:
             yield ce
         finally:
             ce.close()
+            working_file.rename(output_file)
 
     def save(self, key: str, at_time: datetime, value: bytes) -> None:
         """Save binary data to the cache for a specific key and timestamp.
@@ -222,11 +228,8 @@ class Cache:
         if first_dir.exists():
             from_time_nodays = from_time.time()
             for file in filter(
-                lambda fname: (
-                    fname.name not in ignore_files
-                    and time.fromisoformat(fname.name) > from_time_nodays
-                ),
-                sorted(first_dir.iterdir()),
+                lambda fname: time.fromisoformat(fname.parts[-1]) >= from_time_nodays,
+                filter(no_current, sorted(first_dir.iterdir())),
             ):
                 yield file, self._datetime_from_path(file)
 
@@ -266,9 +269,7 @@ class Cache:
                         month_dir.iterdir(),
                     )
                 ):
-                    for file in sorted(day_dir.iterdir()):
-                        if file.name in ignore_files:
-                            continue
+                    for file in filter(no_current, sorted(day_dir.iterdir())):
                         yield file, self._datetime_from_path(file)
                 first_month_done = True
             first_year_done = True
@@ -310,7 +311,9 @@ class Cache:
                     month_dir.iterdir(), key=_basename_to_int, reverse=True
                 ):
                     for file in sorted(
-                        day_dir.iterdir(), key=_basename_to_time, reverse=True
+                        filter(no_current, day_dir.iterdir()),
+                        key=_basename_to_time,
+                        reverse=True,
                     ):
                         return CacheEntry(
                             ZipFile(file, mode="r"), self._datetime_from_path(file)
