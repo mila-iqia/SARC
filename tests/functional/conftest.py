@@ -10,7 +10,6 @@ from pytest_regressions.data_regression import RegressionYamlDumper
 
 from sarc.config import config
 from sarc.testing import MongoInstance
-
 from .allocations.factory import create_allocations
 from .diskusage.factory import create_diskusages
 from .jobs.factory import (
@@ -60,6 +59,8 @@ def clear_db(db):
     db.clusters.drop()
     db.gpu_billing.drop()
     db.node_gpu_mapping.drop()
+    db.healthcheck.drop()
+    db.runstate.drop()
 
 
 def fill_db(db, with_users=False, with_clusters=False, job_patch=None):
