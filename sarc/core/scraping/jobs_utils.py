@@ -5,15 +5,14 @@ import json
 import logging
 import re
 import subprocess
-from typing import Iterator, Optional
+from typing import Optional
 
-from sarc.cache import with_cache
 from sarc.client.job import SlurmJob
 from sarc.config import ClusterConfig, config, UTC, TZLOCAL
 from sarc.core.models.validators import UTCOFFSET
 from sarc.errors import ClusterNotFound
 from sarc.jobs.node_gpu_mapping import get_node_to_gpu
-from sarc.traces import trace_decorator, using_trace
+from sarc.traces import trace_decorator
 
 
 logger = logging.getLogger(__name__)
@@ -123,11 +122,11 @@ def _date_is_utc(value: datetime) -> bool:
 def fetch_raw(cluster: ClusterConfig, start: datetime, end: datetime) -> bytes:
     """Fetch the raw sacct data as a dict via SSH, or run sacct locally."""
     fmt = "%Y-%m-%dT%H:%M"
-    start = start.strftime(fmt)
-    end = end.strftime(fmt)
+    start_str = start.strftime(fmt)
+    end_str = end.strftime(fmt)
     accounts = ",".join(cluster.accounts) if cluster.accounts else None
     accounts_option = f"-A {accounts} " if accounts else ""
-    cmd = f"{cluster.sacct_bin} {accounts_option}-X -S {start} -E {end} --allusers --json"
+    cmd = f"{cluster.sacct_bin} {accounts_option}-X -S {start_str} -E {end_str} --allusers --json"
     logger.debug(f"{cluster.name} $ {cmd}")
     if cluster.host == "localhost":
         results: subprocess.CompletedProcess[str] | Result = subprocess.run(
@@ -144,12 +143,19 @@ def fetch_raw(cluster: ClusterConfig, start: datetime, end: datetime) -> bytes:
         results = ssh.run(cmd, hide=True)
         logger.debug(results.stdout)
 
+    #return stdout as bytes
     return results.stdout
 
+
 @trace_decorator()
-def parse_raw(raw_data: bytes, cluster: ClusterConfig, scraped_start: datetime, scraped_end: datetime) -> dict:
+def parse_raw(
+    raw_data: bytes,
+    cluster: ClusterConfig,
+    scraped_start: datetime,
+    scraped_end: datetime,
+) -> dict:
     """Parse raw sacct data as a dict.
-    
+
     Arguments:
         cluster: The cluster on which to scrape the data.
         scraped_start: the UTC datetime from which we scraped.
@@ -217,8 +223,8 @@ def parse_raw(raw_data: bytes, cluster: ClusterConfig, scraped_start: datetime, 
             # We save these dates with timezone UTC
             # Note: If date is naive (as actually parsed from `acquire jobs`),
             # then astimezone() assumes date is in local timezone.
-            "latest_scraped_start": start.astimezone(UTC),
-            "latest_scraped_end": end.astimezone(UTC),
+            "latest_scraped_start": scraped_start.astimezone(UTC),
+            "latest_scraped_end": scraped_end.astimezone(UTC),
         }
 
         assert cluster.name is not None
@@ -365,12 +371,11 @@ def parse_raw(raw_data: bytes, cluster: ClusterConfig, scraped_start: datetime, 
 
         # if we make it here, it means that the version is not supported :-(
         raise JobConversionError(f"Unsupported slurm version: {version}")
-    
+
     data = json.loads(raw_data)
 
     version: dict = (
-        data.get("meta", {}).get("Slurm", None)
-        or data.get("meta", {}).get("slurm", {})
+        data.get("meta", {}).get("Slurm", None) or data.get("meta", {}).get("slurm", {})
     ).get("version", None)
 
     for entry in data["jobs"]:

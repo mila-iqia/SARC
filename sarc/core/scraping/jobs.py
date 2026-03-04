@@ -1,12 +1,11 @@
 from datetime import datetime
 import logging
-import pickle
 from tqdm import tqdm
 from typing import Optional
 
 from sarc.cache import Cache
-from sarc.client.job import _jobs_collection, SlurmJob
-from sarc.config import ClusterConfig, UTC
+from sarc.client.job import _jobs_collection
+from sarc.config import config, ClusterConfig, UTC
 from sarc.core.scraping.jobs_utils import (
     DATE_FORMAT_HOUR,
     parse_auto_intervals,
@@ -67,7 +66,7 @@ def fetch_jobs(
                                 exclusive with --intervals.
     """
 
-    auto_end_field = "end_time_sacct"  # Used to parse the intervals MODIFIER CECI en end_time_sacct_fetch 
+    auto_end_field = "end_time_sacct"  # Used to parse the intervals MODIFIER CECI en end_time_sacct_fetch
 
     def _fetch_jobs(
         cluster_name: str,
@@ -125,7 +124,7 @@ def fetch_jobs(
                 continue
 
             # Define cache directory
-            cache = Cache(subdirectory=f"jobs")
+            cache = Cache(subdirectory="jobs")
 
             with cache.create_entry(datetime.now(UTC)) as cache_entry:
                 for cache_key, raw_data in _fetch_jobs(
@@ -145,27 +144,24 @@ def fetch_jobs(
         continue
 
 
-
-
 def parse_jobs(
-    clusters: dict[str, ClusterConfig]
+    clusters: dict[str, ClusterConfig], since: datetime | None, update_parsed_date: bool
 ) -> None:
     collection = _jobs_collection()
     db = config().mongo.database_instance
 
-    since = get_parsed_date(db, "jobs")
+    if since is None:
+        since = get_parsed_date(db, "jobs")
 
     # Retrieve from the cache
-    cache = Cache(subdirectory=f"jobs")
+    cache = Cache(subdirectory="jobs")
     for cache_entry in cache.read_from(from_time=since):
         nb_jobs = 0
         nb_entries = 0
 
         # Retrieve all jobs associated to the time intervals
         for key, value in cache_entry.items():
-            logger.info(
-                f"Acquire data for job identified by: {key}"
-            )
+            logger.info(f"Acquire data for job identified by: {key}")
 
             cluster_name = key.split("_")[0]
             cluster_config = clusters[cluster_name]
@@ -180,12 +176,11 @@ def parse_jobs(
             for entry in tqdm(jobs):
                 if entry is not None:
                     nb_entries += 1
-                    update_allocated_gpu_type_from_nodes(
-                        clusters[cluster_name], entry
-                    )
+                    update_allocated_gpu_type_from_nodes(clusters[cluster_name], entry)
                     collection.save_job(entry)
-            
+
             # Update the parsed date
-            set_parsed_date(db, "jobs", cache_entry.get_time())
+            if update_parsed_date:
+                set_parsed_date(db, "jobs", cache_entry.get_entry_datetime())
 
         logger.info(f"Saved {nb_entries}/{nb_jobs} entries.")
