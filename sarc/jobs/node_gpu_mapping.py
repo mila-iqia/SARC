@@ -5,11 +5,11 @@ import logging
 from datetime import datetime
 from typing import Optional
 
+from pydantic import BaseModel
 from pydantic_mongo import AbstractRepository, PydanticObjectId
 
 from sarc.config import config, scraping_mode_required
 from sarc.core.models.validators import datetime_utc
-from sarc.model import BaseModel
 
 logger = logging.getLogger(__name__)
 

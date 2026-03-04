@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any, Callable, Literal, cast, overload
 import gifnoc
 import tzlocal
 from bson import CodecOptions, UuidRepresentation
+from easy_oauth import OAuthManager
 from hostlist import expand_hostlist
 
 from .alerts.common import HealthMonitorConfig
@@ -219,15 +220,16 @@ class ApiConfig:
     a client without parameters.
     """
 
-    url: str  # REST API URL (including port)
+    url: str | None = None  # REST API URL (including port)
     timeout: int = 120
     per_page: int = 100  # Default pagination size
+    auth: OAuthManager | None = None
 
 
 @dataclass
 class ClientConfig:
     mongo: MongoConfig
-    api: ApiConfig | None = None
+    api: ApiConfig = field(default_factory=ApiConfig)
     cache: Path | None = None
     loki: LokiConfig | None = None
     tempo: TempoConfig | None = None

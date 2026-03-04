@@ -39,6 +39,7 @@ dependencies = [
     "azure-identity>=1.23.1,<2",
     "rapporteur>=0.1.1",
     "orjson>=3.11.7",
+    "easy-oauth",
 ]
 
 [project.scripts]
@@ -104,6 +105,7 @@ default-groups = [
 
 [tool.uv.sources]
 iguane = { git = "https://github.com/mila-iqia/IGUANE.git", rev = "9cd7b5e1253033c935e39da9c1b8a22cda440112" }
+easy-oauth = { git = "https://github.com/mila-iqia/easy-oauth", rev = "v0.0.2" }
 
 [tool.pytest_env]
 TQDM_DISABLE = "1"
