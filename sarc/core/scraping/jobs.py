@@ -161,19 +161,16 @@ def parse_jobs(
 
         # Retrieve all jobs associated to the time intervals
         for key, value in cache_entry.items():
-            logger.info(f"Acquire data for job identified by: {key}")
+            logger.info(f"Acquire data for jobs identified by: {key}")
 
             cluster_name = key.split("_")[0]
             cluster_config = clusters[cluster_name]
-            scraped_start = datetime.fromisoformat(key.split("_")[1])
-            scraped_end = datetime.fromisoformat(key.split("_")[2])
-
-            jobs = parse_raw(value, cluster_config, scraped_start, scraped_end)
-            nb_jobs += len(jobs)
+            scraped_start = datetime.fromisoformat(key.split("_")[1]).replace(tzinfo=UTC)
+            scraped_end = datetime.fromisoformat(key.split("_")[2]).replace(tzinfo=UTC)
 
             # Store the jobs in the database, beginning by the
             # oldest intervals
-            for entry in tqdm(jobs):
+            for entry in tqdm(parse_raw(value, cluster_config, scraped_start, scraped_end)):
                 if entry is not None:
                     nb_entries += 1
                     update_allocated_gpu_type_from_nodes(clusters[cluster_name], entry)
@@ -183,4 +180,4 @@ def parse_jobs(
             if update_parsed_date:
                 set_parsed_date(db, "jobs", cache_entry.get_entry_datetime())
 
-        logger.info(f"Saved {nb_entries}/{nb_jobs} entries.")
+        logger.info(f"Saved {nb_entries} entries.")
