@@ -223,10 +223,12 @@ class Cache:
 
         first_dir = self._dir_from_date(cdir, from_time)
 
+        ignore_files = [".DS_Store"] # a bit hardcoded but soooo frequent on dev machines it had to be done
+
         if first_dir.exists():
             from_time_nodays = from_time.time()
             for file in filter(
-                lambda fname: time.fromisoformat(fname.parts[-1]) >= from_time_nodays,
+                lambda fname: fname.name not in ignore_files and time.fromisoformat(fname.name) > from_time_nodays,
                 sorted(first_dir.iterdir()),
             ):
                 yield file, self._datetime_from_path(file)
@@ -236,8 +238,6 @@ class Cache:
 
         first_year_done = False
         first_month_done = False
-
-        ignore_files = [".DS_Store"] # a bit hardcoded but soooo frequent on dev machines it had to be done
 
         for year_dir in sorted(
             filter(lambda y: y.name not in ignore_files and int(y.name) >= from_time.year, cdir.iterdir())
