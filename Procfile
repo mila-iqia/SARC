@@ -1,9 +1,8 @@
 web: uvicorn sarc.api.main:app --host 0.0.0.0 --port $PORT
-# We will finalize those commands later
-fetch_hourly: sarc fetch
-parse_hourly: sarc parse
-fetch_daily: sarc fetch
-parse_daily: sarc parse
-fetch_manual: sarc fetch
-parse_manual: sarc parse
-parse_daily: sarc health run
+fetch_hourly: sh /workspace/scripts/gcp/fetch_hourly.sh
+parse_hourly: sh /workspace/scripts/gcp/parse_hourly.sh
+fetch_daily: sh /workspace/scripts/gcp/fetch_daily.sh
+parse_daily: sh /workspace/scripts/gcp/parse_daily.sh
+fetch_manual: sh /workspace/scripts/gcp/fetch_manula.sh
+parse_manual: sh /workspace/scripts/gcp/parse_manual.sh
+health_check: sarc health run --all
