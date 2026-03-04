@@ -15,7 +15,7 @@ from sarc.client import get_available_clusters
 from sarc.client.job import get_jobs
 
 from sarc.config import UTC, config
-from sarc.core.scraping.jobs_utils import SacctScraper
+from sarc.core.scraping.jobs_utils import fetch_raw, parse_raw
 from tests.common.dateutils import MTL, PST, _dtfmt
 from .factory import create_sacct_json
 
