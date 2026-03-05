@@ -15,6 +15,7 @@ from sarc.client import get_available_clusters
 from sarc.client.job import get_jobs
 
 from sarc.config import UTC, config
+from sarc.cache import Cache
 from sarc.core.scraping.jobs_utils import fetch_raw, parse_raw, _convert_json_job
 from tests.common.dateutils import MTL, PST, _dtfmt
 from .factory import create_sacct_json
@@ -139,7 +140,7 @@ def test_parse_json_job(json_jobs, file_regression):
 )
 def test_parse_malformed_jobs(sacct_json, captrace):
     with pytest.raises(KeyError):
-        job = _convert_json_job(json.loads(sacct_json)["jobs"][0],"mila")
+        _convert_json_job(json.loads(sacct_json)["jobs"][0], "mila")
     spans = captrace.get_finished_spans()
     assert len(spans) > 0
     # Just check the span that should have got an error.
@@ -159,11 +160,11 @@ def test_parse_malformed_jobs(sacct_json, captrace):
 )
 def test_parse_no_group_jobs(sacct_json, caplog):
     jobs = parse_raw(
-                sacct_json,
-                "cedar",
-                datetime(2023, 2, 14, tzinfo=MTL).astimezone(UTC),
-                datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC)
-            )["jobs"]
+        sacct_json.encode("utf-8"),
+        "cedar",
+        datetime(2023, 2, 14, tzinfo=MTL).astimezone(UTC),
+        datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC),
+    )
     with caplog.at_level("DEBUG"):
         assert list(jobs) == [None]
     assert 'Skipping job with group "None": 1' in caplog.text
@@ -175,17 +176,17 @@ def test_parse_no_group_jobs(sacct_json, caplog):
     [{"cluster": "patate"}],
     indirect=True,
 )
-def test_scrape_lost_job_on_wrong_cluster(sacct_json, scraper, caplog):
-    scraper.get_raw._save_for_key(
-        key=scraper.get_raw.key(),
-        value=json.loads(sacct_json),
-        at_time=datetime.now(UTC),
+def test_scrape_lost_job_on_wrong_cluster(sacct_json, caplog):
+    parsed_jobs = parse_raw(
+        sacct_json.encode("utf-8"),
+        "raisin",
+        datetime(2023, 2, 14, tzinfo=MTL).astimezone(UTC),
+        datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC),
     )
     with caplog.at_level("WARNING"):
-        jobs = list(scraper)
+        jobs = list(parsed_jobs)
 
     assert len(jobs) == 1
-    assert scraper.cluster.name == "raisin"
     assert jobs[0].cluster_name == "raisin"
 
     assert (
@@ -196,70 +197,55 @@ def test_scrape_lost_job_on_wrong_cluster(sacct_json, scraper, caplog):
 
 @pytest.mark.usefixtures("tzlocal_is_mtl", "enabled_cache")
 @pytest.mark.parametrize("json_jobs", [{}], indirect=True)
-def test_scraper_with_cache(scraper, sacct_json, file_regression):
-    # We'd like to test that this starts with "/tmp/pytest",
-    # but this isn't the case when we run the tests on Mac OS,
-    # ending up in '/private/var/folders/*/pytest-of-gyomalin/pytest-63'.
-    assert "pytest" in str(scraper.get_raw.cache_dir)
+def test_parse_jobs_from_cache(sacct_json, file_regression, test_config):
+    # Store json data in cache
+    cache = Cache(subdirectory="jobs")
+    with cache.create_entry(datetime(2023, 2, 16, tzinfo=UTC)) as cache_entry:
+        cache_entry.add_value(
+            "test_2023-02-14T00:00_2023-02-15T00:00",
+            sacct_json.encode("utf-8"),
+        )
 
-    scraper.get_raw.cache_dir.mkdir(parents=True, exist_ok=True)
+    # parse jobs
+    nb_entries = 0
+    jobs = []
+    for cache_entry in cache.read_from(from_time=datetime(2023, 2, 15, tzinfo=UTC)):
+        nb_entries += 1
 
-    cache_path = scraper.get_raw.cache_dir / scraper.get_raw.key().format(
-        time=datetime.now()
-    )
+        # Retrieve all jobs associated to the time intervals
+        for key, value in cache_entry.items():
+            cluster_name = key.split("_")[0]
+            scraped_start = datetime.fromisoformat(key.split("_")[1]).replace(
+                tzinfo=UTC
+            )
+            scraped_end = datetime.fromisoformat(key.split("_")[2]).replace(tzinfo=UTC)
 
-    with open(cache_path, "w") as f:
-        f.write(sacct_json)
+            # Store the jobs in the database, beginning by the
+            # oldest intervals
+            for entry in parse_raw(value, cluster_name, scraped_start, scraped_end):
+                jobs.append(entry)
 
-    jobs = list(scraper)
+    assert nb_entries == 1  # one cache entry for 2023-02-16
+    assert len(jobs) == 1  # one job in the cache entry
 
     file_regression.check(
         "\n".join([job.model_dump_json(exclude={"id": True}, indent=1) for job in jobs])
     )
 
 
-@pytest.mark.usefixtures("tzlocal_is_mtl", "enabled_cache")
-@pytest.mark.parametrize(
-    "test_config", [{"clusters": {"raisin": {"host": "patate"}}}], indirect=True
-)
-def test_scraper_with_malformed_cache(test_config, remote, scraper, caplog):
-    # see remark in `test_scraper_with_cache` for that "pytest" substring check
-    assert "pytest" in str(scraper.get_raw.cache_dir)
-
-    scraper.get_raw.cache_dir.mkdir(parents=True, exist_ok=True)
-
-    cache_path = scraper.get_raw.cache_dir / scraper.get_raw.key().format(
-        time=datetime.now()
-    )
-
-    with open(cache_path, "w") as f:
-        f.write("I am malformed!! :'(")
-
-    remote.expect(
-        host="patate",
-        cmd=f"export TZ=UTC && /opt/slurm/bin/sacct -X -S {_dtfmt(2023, 2, 14)} -E {_dtfmt(2023, 2, 15)} --allusers --json",
-        out=b"{}",
-    )
-
-    with caplog.at_level("WARNING"):
-        assert len(scraper.get_raw()) == 0
-
-    assert "Could not load malformed cache file" in caplog.text
-
-
 @pytest.mark.parametrize(
     "test_config", [{"clusters": {"patate": {"host": "patate"}}}], indirect=True
 )
 def test_sacct_bin_and_accounts(test_config, remote):
-    fetch_raw(
-        cluster=config().clusters["patate"],
-        start=datetime(2023, 2, 14, tzinfo=MTL).astimezone(UTC),
-        end=datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC),
-    )
     remote.expect(
         host="patate",
         cmd=f"export TZ=UTC && /opt/software/slurm/bin/sacct -A rrg-bonhomme-ad_gpu,rrg-bonhomme-ad_cpu,def-bonhomme_gpu,def-bonhomme_cpu -X -S {_dtfmt(2023, 2, 14)} -E {_dtfmt(2023, 2, 15)} --allusers --json",
         out=b'{"jobs": []}',
+    )
+    fetch_raw(
+        cluster=config().clusters["patate"],
+        start=datetime(2023, 2, 14, tzinfo=MTL).astimezone(UTC),
+        end=datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC),
     )
 
 
@@ -278,7 +264,7 @@ def test_localhost(os_system, monkeypatch):
 
     monkeypatch.setattr(subprocess, "run", mock_subprocess_run)
 
-    raw = fetch_raw(
+    fetch_raw(
         cluster=config().clusters["local"],
         start=datetime(2023, 2, 14, tzinfo=MTL).astimezone(UTC),
         end=datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC),
@@ -355,7 +341,7 @@ def test_update_job(test_config, sacct_json, remote, file_regression, cli_main):
                 cmd=f"export TZ=UTC && /opt/slurm/bin/sacct -X -S {_dtfmt(2023, 2, 15)} -E {_dtfmt(2023, 2, 16)} --allusers --json",
                 out=sacct_json.encode("utf-8"),
             )
-            for _ in range(1)
+            for _ in range(2)
         ],
     )
 
@@ -376,7 +362,6 @@ def test_update_job(test_config, sacct_json, remote, file_regression, cli_main):
         == 0
     )
 
-    time.sleep(1)
     assert (
         cli_main(
             [
@@ -392,6 +377,7 @@ def test_update_job(test_config, sacct_json, remote, file_regression, cli_main):
 
     assert len(list(get_jobs())) == 1
 
+    time.sleep(1)
     assert (
         cli_main(
             [
@@ -980,9 +966,6 @@ def test_auto_interval(cli_main, monkeypatch, freezer, caplog):
     expected_final_end_time = orig_end_time + timedelta(minutes=300)
     freezer.move_to(expected_final_end_time)
 
-    sacct_folder = config().cache / "sacct"
-    # Cache should not yet exist
-    assert not sacct_folder.exists()
     assert (
         cli_main(
             [
@@ -1028,10 +1011,6 @@ def test_auto_interval_0(cli_main, monkeypatch, freezer, caplog):
     expected_final_end_time = orig_end_time + timedelta(minutes=300)
     freezer.move_to(expected_final_end_time)
 
-    sacct_folder = config().cache / "sacct"
-    # Cache should not yet exist
-    assert not sacct_folder.exists()
-
     assert (
         cli_main(
             [
@@ -1058,7 +1037,6 @@ def test_auto_interval_0(cli_main, monkeypatch, freezer, caplog):
         )
         == 0
     )
-    print(caplog.text)
     # end_time_sacct should have been updated
     assert (
         datetime.strptime(_get_cluster_raisin().end_time_sacct, "%Y-%m-%dT%H:%M")

@@ -85,7 +85,6 @@ def fetch_jobs(
                 span.set_attribute("cluster_name", cluster_name)
                 span.set_attribute("time_from", str(time_from))
                 span.set_attribute("time_to", str(time_to))
-                interval_minutes = (time_to - time_from).total_seconds() / 60
                 try:
                     logger.info(
                         f"Fetching the sacct data for cluster {cluster_config.name}, time {time_from} to {time_to}..."
@@ -142,7 +141,11 @@ def fetch_jobs(
             continue
 
 
-def parse_jobs(clusters_cfg: dict[str, ClusterConfig], since: datetime | None, update_parsed_date: bool) -> None:
+def parse_jobs(
+    clusters_cfg: dict[str, ClusterConfig],
+    since: datetime | None,
+    update_parsed_date: bool,
+) -> None:
     collection = _jobs_collection()
     db = config().mongo.database_instance
 
@@ -172,7 +175,9 @@ def parse_jobs(clusters_cfg: dict[str, ClusterConfig], since: datetime | None, u
             for entry in parse_raw(value, cluster_name, scraped_start, scraped_end):
                 if entry is not None:
                     nb_entries += 1
-                    update_allocated_gpu_type_from_nodes(clusters_cfg[cluster_name], entry)
+                    update_allocated_gpu_type_from_nodes(
+                        clusters_cfg[cluster_name], entry
+                    )
                     collection.save_job(entry)
 
         # Update the parsed date

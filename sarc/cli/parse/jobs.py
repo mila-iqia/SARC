@@ -22,5 +22,5 @@ class ParseJobs:
         _since = None
         if self.since is not None:
             _since = datetime.fromisoformat(self.since).astimezone(UTC)
-        parse_jobs(clusters_cfg,_since, self.update_parsed_date)
+        parse_jobs(clusters_cfg, _since, self.update_parsed_date)
         return 0

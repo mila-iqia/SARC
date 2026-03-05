@@ -13,7 +13,7 @@ from opentelemetry.trace import StatusCode
 from sarc.client.job import JobStatistics, get_jobs, get_available_clusters
 from sarc.config import UTC
 from sarc.jobs import prometheus_scraping
-from tests.common.dateutils import _dtfmt, _dtstr, _dtreg, MTL
+from tests.common.dateutils import _dtfmt, _dtreg, MTL
 from .factory import create_sacct_json
 from ..cli.test_slurmconfig_fetch_parse import _save_slurm_conf
 
@@ -63,10 +63,15 @@ def test_get_gpu_type(
 
     remote.expect(
         host="raisin",
-        cmd="export TZ=UTC && /opt/slurm/bin/sacct -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
-        out=f"Welcome on raisin,\nThe sweetest supercomputer in the world!\n{sacct_json}".encode(
-            "utf-8"
-        ),
+        commands=[
+            Command(
+                cmd="export TZ=UTC && /opt/slurm/bin/sacct -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
+                out=f"Welcome on raisin,\nThe sweetest supercomputer in the world!\n{sacct_json}".encode(
+                    "utf-8"
+                ),
+            )
+            for _ in range(2)
+        ],
     )
 
     cmd_sacct_fetch = [
@@ -88,14 +93,12 @@ def test_get_gpu_type(
     # Test `acquire jobs` without node->gpu available
     # -----------------------------------------------
     # Should return GPU name from sacct
-    time.sleep(1)   # to prevent cache collision with previous sacct fetch...
+    time.sleep(1)  # to prevent cache collision with previous sacct fetch...
     assert cli_main(cmd_sacct_fetch) == 0
     assert cli_main(cmd_sacct_parse) == 0
     jobs = list(get_jobs())
     assert len(jobs) == 1
     job = jobs[0]
-    print(job)
-    print(job.nodes)
     assert job.allocated.gpu_type == "gpu_name_from_sacct"
     assert not job.stored_statistics
 
@@ -122,7 +125,7 @@ def test_get_gpu_type(
         == 0
     )
     # acquire jobs
-    time.sleep(1)   # to prevent cache collision with previous sacct fetch...
+    time.sleep(1)  # to prevent cache collision with previous sacct fetch...
     assert cli_main(cmd_sacct_fetch) == 0
     assert cli_main(cmd_sacct_parse) == 0
     jobs = list(get_jobs())
@@ -354,7 +357,7 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
         )
     )
     assert (
-        f"Parsing slurm jobs identified by: raisin_2023-02-15T05:00_2023-02-16T05:00..."
+        "Parsing slurm jobs identified by: raisin_2023-02-15T05:00_2023-02-16T05:00..."
         in caplog.text
     )
     assert "Saving into mongodb collection '" in caplog.text

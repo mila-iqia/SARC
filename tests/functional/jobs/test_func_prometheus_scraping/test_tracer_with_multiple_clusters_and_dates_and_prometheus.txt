@@ -236,7 +236,7 @@ Found 4 job(s):
     }
 }
 
-Found 40 span(s):
+Found 44 span(s):
 [
  {
   "span_name": "acquire_prometheus_metrics_from_time_interval",
@@ -389,13 +389,7 @@ Found 40 span(s):
   "span_has_error": false
  },
  {
-  "span_name": "parse_raw",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "update_allocated_gpu_type_from_nodes",
+  "span_name": "_convert_json_job",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
@@ -413,6 +407,12 @@ Found 40 span(s):
   "span_has_error": false
  },
  {
+  "span_name": "_convert_json_job",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
   "span_name": "parse_raw",
   "span_events": [],
   "span_attributes": {},
@@ -420,6 +420,30 @@ Found 40 span(s):
  },
  {
   "span_name": "update_allocated_gpu_type_from_nodes",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "_convert_json_job",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "parse_raw",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "update_allocated_gpu_type_from_nodes",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "_convert_json_job",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false

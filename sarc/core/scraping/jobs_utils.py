@@ -146,6 +146,7 @@ def fetch_raw(cluster: ClusterConfig, start: datetime, end: datetime) -> bytes:
     # return stdout as bytes
     return results.stdout
 
+
 @trace_decorator()
 def _convert_json_job(
     entry: dict,
@@ -373,7 +374,7 @@ def parse_raw(
 
     # filter out the eventual welcome message
     raw_data_str = raw_data.decode("utf-8")
-    json_str = raw_data_str[raw_data_str.find("{"):]
+    json_str = raw_data_str[raw_data_str.find("{") :]
 
     data = json.loads(json_str)
 
