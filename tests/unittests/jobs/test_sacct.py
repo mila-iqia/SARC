@@ -23,14 +23,11 @@ def test_fetch_raw(test_config, remote):
         cmd=f"export TZ=UTC && sacct -X -S {_dtfmt(2023, 2, 28)} -E {_dtfmt(2023, 3, 1)} --allusers --json",
         out=b"{}",
     )
-    assert (
-        fetch_raw(
-            cluster=test_config.clusters["test"],
-            start=datetime(2023, 2, 28, tzinfo=MTL).astimezone(UTC),
-            end=datetime(2023, 3, 1, tzinfo=MTL).astimezone(UTC),
-        )
-        == "{}"
-    )
+    assert fetch_raw(
+        cluster=test_config.clusters["test"],
+        start=datetime(2023, 2, 28, tzinfo=MTL).astimezone(UTC),
+        end=datetime(2023, 3, 1, tzinfo=MTL).astimezone(UTC),
+    ) == "{}".encode("utf-8")
 
 
 @pytest.mark.parametrize(
@@ -49,22 +46,16 @@ def test_fetch_raw2(test_config, remote):
             ),
         ]
     )
-    assert (
-        fetch_raw(
-            cluster=test_config.clusters["test"],
-            start=datetime(2023, 2, 28, tzinfo=MTL).astimezone(UTC),
-            end=datetime(2023, 3, 1, tzinfo=MTL).astimezone(UTC),
-        )
-        == "{}"
-    )
-    assert (
-        fetch_raw(
-            cluster=test_config.clusters["test"],
-            start=datetime(2023, 2, 28, tzinfo=MTL).astimezone(UTC),
-            end=datetime(2023, 3, 1, tzinfo=MTL).astimezone(UTC),
-        )
-        == '{ "value": 2 }'
-    )
+    assert fetch_raw(
+        cluster=test_config.clusters["test"],
+        start=datetime(2023, 2, 28, tzinfo=MTL).astimezone(UTC),
+        end=datetime(2023, 3, 1, tzinfo=MTL).astimezone(UTC),
+    ) == "{}".encode("utf-8")
+    assert fetch_raw(
+        cluster=test_config.clusters["test"],
+        start=datetime(2023, 2, 28, tzinfo=MTL).astimezone(UTC),
+        end=datetime(2023, 3, 1, tzinfo=MTL).astimezone(UTC),
+    ) == '{ "value": 2 }'.encode("utf-8")
 
 
 @pytest.mark.parametrize(
