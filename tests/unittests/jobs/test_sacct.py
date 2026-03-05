@@ -4,20 +4,42 @@ from os.path import isfile
 import pytest
 from fabric.testing.base import Command
 
-from sarc.config import config, UTC
+from sarc.config import UTC, config
 from sarc.jobs.sacct import JobConversionError, SAcctScraper
 from tests.common.dateutils import MTL, _dtfmt
 
 
 @pytest.mark.parametrize(
-    "test_config", [{"clusters": {"test": {"host": "patate"}}}], indirect=True
+    "test_config",
+    [
+        {
+            "clusters": {
+                "test": {
+                    "host": "patate",
+                    "private_key": {"file": "tests/id_test", "password": "12345"},
+                }
+            }
+        }
+    ],
+    indirect=True,
 )
-def test_SAcctScraper_fetch_raw(test_config, remote):
+def test_SAcctScraper_fetch_raw(test_config, remote, monkeypatch):
     scraper = SAcctScraper(
         cluster=test_config.clusters["test"],
         start=datetime(2023, 2, 28, tzinfo=MTL).astimezone(UTC),
         end=datetime(2023, 3, 1, tzinfo=MTL).astimezone(UTC),
     )
+
+    #### Fix to ignore problems with the pkey argument to connect()
+    import fabric
+    from fabric import Connection
+
+    def Connection_mock(*args, connect_kwargs=None, **kwargs):
+        return Connection(*args, **kwargs)
+
+    monkeypatch.setattr(fabric, "Connection", Connection_mock)
+    ####
+
     remote.expect(
         host="patate",
         cmd=f"export TZ=UTC && sacct -X -S {_dtfmt(2023, 2, 28)} -E {_dtfmt(2023, 3, 1)} --allusers --json",
@@ -27,14 +49,36 @@ def test_SAcctScraper_fetch_raw(test_config, remote):
 
 
 @pytest.mark.parametrize(
-    "test_config", [{"clusters": {"test": {"host": "test"}}}], indirect=True
+    "test_config",
+    [
+        {
+            "clusters": {
+                "test": {
+                    "host": "test",
+                    "private_key": {"file": "tests/id_test", "password": "12345"},
+                }
+            }
+        }
+    ],
+    indirect=True,
 )
-def test_SAcctScraper_fetch_raw2(test_config, remote):
+def test_SAcctScraper_fetch_raw2(test_config, remote, monkeypatch):
     scraper = SAcctScraper(
         cluster=test_config.clusters["test"],
         start=datetime(2023, 2, 28, tzinfo=MTL).astimezone(UTC),
         end=datetime(2023, 3, 1, tzinfo=MTL).astimezone(UTC),
     )
+
+    #### Fix to ignore problems with the pkey argument to connect()
+    import fabric
+    from fabric import Connection
+
+    def Connection_mock(*args, connect_kwargs=None, **kwargs):
+        return Connection(*args, **kwargs)
+
+    monkeypatch.setattr(fabric, "Connection", Connection_mock)
+    ####
+
     remote.expect(
         commands=[
             Command(
@@ -52,10 +96,21 @@ def test_SAcctScraper_fetch_raw2(test_config, remote):
 
 
 @pytest.mark.parametrize(
-    "test_config", [{"clusters": {"test": {"host": "patate"}}}], indirect=True
+    "test_config",
+    [
+        {
+            "clusters": {
+                "test": {
+                    "host": "patate",
+                    "private_key": {"file": "tests/id_test", "password": "12345"},
+                }
+            }
+        }
+    ],
+    indirect=True,
 )
 @pytest.mark.freeze_time(datetime(2023, 2, 28, tzinfo=MTL))
-def test_SAcctScraper_get_cache(test_config, enabled_cache, remote):
+def test_SAcctScraper_get_cache(test_config, enabled_cache, remote, monkeypatch):
     today = datetime.combine(date.today(), datetime.min.time(), tzinfo=MTL).astimezone(
         UTC
     )
@@ -75,6 +130,17 @@ def test_SAcctScraper_get_cache(test_config, enabled_cache, remote):
 
     # we ask for yesterday, today and tomorrow
     fmt = "%Y-%m-%dT%H:%M"
+
+    #### Fix to ignore problems with the pkey argument to connect()
+    import fabric
+    from fabric import Connection
+
+    def Connection_mock(*args, connect_kwargs=None, **kwargs):
+        return Connection(*args, **kwargs)
+
+    monkeypatch.setattr(fabric, "Connection", Connection_mock)
+    ####
+
     remote.expect(
         commands=[
             Command(
@@ -110,7 +176,18 @@ def test_SAcctScraper_get_cache(test_config, enabled_cache, remote):
 
 
 @pytest.mark.parametrize(
-    "test_config", [{"clusters": {"test": {"host": "test"}}}], indirect=True
+    "test_config",
+    [
+        {
+            "clusters": {
+                "test": {
+                    "host": "test",
+                    "private_key": {"file": "tests/id_test", "password": "12345"},
+                }
+            }
+        }
+    ],
+    indirect=True,
 )
 def test_SAcctScraper_convert_version_supported(test_config, monkeypatch, caplog):
     scraper = SAcctScraper(

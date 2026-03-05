@@ -11,13 +11,25 @@ FOLDER = os.path.dirname(os.path.abspath(__file__))
 
 @pytest.mark.usefixtures("empty_read_write_db")
 @pytest.mark.freeze_time("2023-05-12")
-def test_update_drac_diskusage_one(file_regression, cli_main, remote, enabled_cache):
+def test_update_drac_diskusage_one(
+    file_regression, cli_main, remote, enabled_cache, monkeypatch
+):
     assert get_diskusages(cluster_name=["gerudo", "hyrule"]) == []
 
     # Load the expected report content
     report_path = Path(FOLDER) / "drac_reports/report_gerudo.txt"
     with open(report_path, "r", encoding="utf-8") as f:
         raw_report = f.read()
+
+    #### Fix to ignore problems with the pkey argument to connect()
+    import fabric
+    from fabric import Connection
+
+    def Connection_mock(*args, connect_kwargs=None, **kwargs):
+        return Connection(*args, **kwargs)
+
+    monkeypatch.setattr(fabric, "Connection", Connection_mock)
+    ####
 
     # Mock the SSH command using remote fixture
     remote.expect(
@@ -36,7 +48,9 @@ def test_update_drac_diskusage_one(file_regression, cli_main, remote, enabled_ca
 
 @pytest.mark.usefixtures("empty_read_write_db")
 @pytest.mark.freeze_time("2023-05-12", auto_tick_seconds=1)
-def test_update_drac_diskusage_two(file_regression, cli_main, remote, enabled_cache):
+def test_update_drac_diskusage_two(
+    file_regression, cli_main, remote, enabled_cache, monkeypatch
+):
     assert get_diskusages(cluster_name=["gerudo", "hyrule"]) == []
 
     # Load both report contents
@@ -47,6 +61,16 @@ def test_update_drac_diskusage_two(file_regression, cli_main, remote, enabled_ca
         gerudo_report = f.read()
     with open(hyrule_report_path, "r", encoding="utf-8") as f:
         hyrule_report = f.read()
+
+    #### Fix to ignore problems with the pkey argument to connect()
+    import fabric
+    from fabric import Connection
+
+    def Connection_mock(*args, connect_kwargs=None, **kwargs):
+        return Connection(*args, **kwargs)
+
+    monkeypatch.setattr(fabric, "Connection", Connection_mock)
+    ####
 
     # Mock both SSH commands
     remote.expect_sessions(
@@ -79,7 +103,7 @@ def test_update_drac_diskusage_two(file_regression, cli_main, remote, enabled_ca
 @pytest.mark.usefixtures("empty_read_write_db")
 @pytest.mark.freeze_time("2023-05-12", auto_tick_seconds=1)
 def test_update_drac_diskusage_no_duplicate(
-    file_regression, cli_main, remote, enabled_cache
+    file_regression, cli_main, remote, enabled_cache, monkeypatch
 ):
     assert get_diskusages(cluster_name=["gerudo", "hyrule"]) == []
 
@@ -87,6 +111,16 @@ def test_update_drac_diskusage_no_duplicate(
     report_path = Path(FOLDER) / "drac_reports/report_gerudo.txt"
     with open(report_path, "r", encoding="utf-8") as f:
         raw_report = f.read()
+
+    #### Fix to ignore problems with the pkey argument to connect()
+    import fabric
+    from fabric import Connection
+
+    def Connection_mock(*args, connect_kwargs=None, **kwargs):
+        return Connection(*args, **kwargs)
+
+    monkeypatch.setattr(fabric, "Connection", Connection_mock)
+    ####
 
     # Mock both SSH commands
     remote.expect(

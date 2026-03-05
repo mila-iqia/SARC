@@ -9,12 +9,13 @@ import pytest
 from fabric.testing.base import Command, Session
 from opentelemetry.trace import StatusCode
 
-from sarc.client.job import JobStatistics, get_jobs, get_available_clusters
+from sarc.client.job import JobStatistics, get_available_clusters, get_jobs
 from sarc.config import UTC
 from sarc.jobs import prometheus_scraping
-from tests.common.dateutils import _dtfmt, _dtstr, _dtreg, MTL
-from .factory import create_sacct_json
+from tests.common.dateutils import MTL, _dtfmt, _dtreg, _dtstr
+
 from ..cli.test_slurmconfig_fetch_parse import _save_slurm_conf
+from .factory import create_sacct_json
 
 
 @pytest.fixture
@@ -59,6 +60,16 @@ def test_get_gpu_type(
     test_config, sacct_json, remote, cli_main, monkeypatch, mock_compute_job_statistics
 ):
     """Test all 3 sources of GPU type (sacct, node->GPU and prometheus)"""
+
+    #### Fix to ignore problems with the pkey argument to connect()
+    import fabric
+    from fabric import Connection
+
+    def Connection_mock(*args, connect_kwargs=None, **kwargs):
+        return Connection(*args, **kwargs)
+
+    monkeypatch.setattr(fabric, "Connection", Connection_mock)
+    ####
 
     remote.expect(
         host="raisin",
@@ -225,6 +236,16 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
                 )
             ],
         )
+
+    #### Fix to ignore problems with the pkey argument to connect()
+    import fabric
+    from fabric import Connection
+
+    def Connection_mock(*args, connect_kwargs=None, **kwargs):
+        return Connection(*args, **kwargs)
+
+    monkeypatch.setattr(fabric, "Connection", Connection_mock)
+    ####
 
     remote.expect_sessions(
         _create_session(
@@ -444,6 +465,16 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
                 )
             ],
         )
+
+    #### Fix to ignore problems with the pkey argument to connect()
+    import fabric
+    from fabric import Connection
+
+    def Connection_mock(*args, connect_kwargs=None, **kwargs):
+        return Connection(*args, **kwargs)
+
+    monkeypatch.setattr(fabric, "Connection", Connection_mock)
+    ####
 
     remote.expect_sessions(
         _create_session(
