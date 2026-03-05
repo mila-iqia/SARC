@@ -6,7 +6,6 @@ from datetime import datetime, timedelta
 from pathlib import Path
 import time
 from unittest.mock import patch
-import json
 
 import pytest
 from fabric.testing.base import Command, Session
@@ -16,7 +15,7 @@ from sarc.client import get_available_clusters
 from sarc.client.job import get_jobs
 
 from sarc.config import UTC, config
-from sarc.core.scraping.jobs_utils import fetch_raw, parse_raw
+from sarc.core.scraping.jobs_utils import fetch_raw, parse_raw, _convert_json_job
 from tests.common.dateutils import MTL, PST, _dtfmt
 from .factory import create_sacct_json
 
@@ -94,21 +93,30 @@ parameters = {
     },
 }
 
+
 @pytest.fixture
 def fetch_jobs_json():
-    return json.loads(fetch_raw(
-        cluster=config().clusters["raisin"],
-        start=datetime(2023, 2, 14, tzinfo=MTL).astimezone(UTC),
-        end=datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC),
-    ))
+    return json.loads(
+        fetch_raw(
+            cluster=config().clusters["raisin"],
+            start=datetime(2023, 2, 14, tzinfo=MTL).astimezone(UTC),
+            end=datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC),
+        )
+    )
+
 
 @pytest.mark.usefixtures("tzlocal_is_mtl")
 @pytest.mark.parametrize(
     "json_jobs", parameters.values(), ids=parameters.keys(), indirect=True
 )
-def test_parse_json_job(json_jobs, scraper, file_regression):
+def test_parse_json_job(json_jobs, file_regression):
     file_regression.check(
-        scraper.convert(json_jobs[0]).model_dump_json(exclude={"id": True}, indent=4)
+        _convert_json_job(
+            json_jobs[0],
+            "raisin",
+            scraped_start=datetime(2023, 2, 14, tzinfo=MTL).astimezone(UTC),
+            scraped_end=datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC),
+        ).model_dump_json(exclude={"id": True}, indent=4)
     )
 
 
@@ -819,14 +827,18 @@ def test_job_tz(test_config, sacct_json, remote, cli_main):
         "slurm_23_11_5.json",
     ],
 )
-def test_parse_sacct_slurm_versions(sacct_outputs, scraper):
+def test_parse_sacct_slurm_versions(sacct_outputs):
     file = Path(__file__).parent / "sacct_outputs" / sacct_outputs
-    scraper.get_raw._save_for_key(
-        key=scraper.get_raw.key(),
-        value=json.load(open(file, "r", encoding="utf8")),
-        at_time=datetime.now(UTC),
+    # read file content as bytes
+    raw_data = file.read_bytes()
+    jobs = list(
+        parse_raw(
+            raw_data,
+            "cedar",
+            datetime(2023, 2, 14, tzinfo=MTL).astimezone(UTC),
+            datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC),
+        )
     )
-    jobs = list(scraper)
     assert len(jobs) == 1
 
 
@@ -1002,9 +1014,7 @@ def test_auto_interval(cli_main, monkeypatch, freezer, caplog):
 
     import sarc.core.scraping.jobs_utils
 
-    monkeypatch.setattr(
-        sarc.core.scraping.jobs, "fetch_raw", mock_fetch_raw
-    )
+    monkeypatch.setattr(sarc.core.scraping.jobs, "fetch_raw", mock_fetch_raw)
 
     orig_end_time = datetime.strptime(
         _get_cluster_raisin().end_time_sacct, "%Y-%m-%dT%H:%M"
@@ -1037,7 +1047,7 @@ def test_auto_interval(cli_main, monkeypatch, freezer, caplog):
     )
     # 300 minutes every 60 minutes => 5 intervals => 5 cached files
     assert mock_fetch_raw.called == 5
- 
+
 
 @pytest.mark.freeze_time
 @pytest.mark.usefixtures("read_write_db", "enabled_cache")
@@ -1052,9 +1062,7 @@ def test_auto_interval_0(cli_main, monkeypatch, freezer, caplog):
 
     import sarc.core.scraping.jobs_utils
 
-    monkeypatch.setattr(
-        sarc.core.scraping.jobs, "fetch_raw", mock_fetch_raw
-    )
+    monkeypatch.setattr(sarc.core.scraping.jobs, "fetch_raw", mock_fetch_raw)
 
     orig_end_time = datetime.strptime(
         _get_cluster_raisin().end_time_sacct, "%Y-%m-%dT%H:%M"

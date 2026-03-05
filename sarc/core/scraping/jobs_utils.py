@@ -143,201 +143,118 @@ def fetch_raw(cluster: ClusterConfig, start: datetime, end: datetime) -> bytes:
         results = ssh.run(cmd, hide=True)
         logger.debug(results.stdout)
 
-    #return stdout as bytes
+    # return stdout as bytes
     return results.stdout
 
 
-@trace_decorator()
-def parse_raw(
-    raw_data: bytes,
-    cluster: ClusterConfig,
-    scraped_start: datetime,
-    scraped_end: datetime,
-) -> dict:
-    """Parse raw sacct data as a dict.
+def _convert_json_job(
+    entry: dict,
+    cluster: str,
+    version: dict | None = None,
+    scraped_start: datetime | None = None,
+    scraped_end: datetime | None = None,
+) -> SlurmJob | None:
+    """Convert a single job entry from sacct to a SlurmJob."""
+    resources: dict[str, dict] = {"requested": {}, "allocated": {}}
+    tracked_resources = ["cpu", "mem", "gres", "node", "billing"]
 
-    Arguments:
-        cluster: The cluster on which to scrape the data.
-        scraped_start: the UTC datetime from which we scraped.
-            Should be precise up to minute.
-        scraped_end: the UTC datetime until which we scraped.
-            Should be precise up to minute.
-    """
-    if not _date_is_utc(scraped_start):
-        raise ValueError(f"sacct scraper: start date not in UTC: {scraped_start}")
-    if not _date_is_utc(scraped_end):
-        raise ValueError(f"sacct scraper: end date not in UTC: {scraped_end}")
+    if entry["group"] is None:
+        # These seem to correspond to very old jobs that shouldn't still exist,
+        # likely a configuration blunder.
+        logger.debug('Skipping job with group "None": %s', entry["job_id"])
+        return None
 
-    def convert(entry: dict, version: dict | None = None) -> SlurmJob | None:
-        """Convert a single job entry from sacct to a SlurmJob."""
-        resources: dict[str, dict] = {"requested": {}, "allocated": {}}
-        tracked_resources = ["cpu", "mem", "gres", "node", "billing"]
+    for grp, vals in resources.items():
+        for alloc in entry["tres"][grp]:
+            if (key := alloc["type"]) not in tracked_resources:
+                continue
+            if aname := alloc["name"]:
+                key += f"_{aname}"
 
-        if entry["group"] is None:
-            # These seem to correspond to very old jobs that shouldn't still exist,
-            # likely a configuration blunder.
-            logger.debug('Skipping job with group "None": %s', entry["job_id"])
-            return None
+            if key.startswith("gres_gpu:"):
+                value = key.split(":")[1]
+                key = "gpu_type"
+            else:
+                value = alloc["count"]
 
-        for grp, vals in resources.items():
-            for alloc in entry["tres"][grp]:
-                if (key := alloc["type"]) not in tracked_resources:
-                    continue
-                if aname := alloc["name"]:
-                    key += f"_{aname}"
+            vals[key] = value
 
-                if key.startswith("gres_gpu:"):
-                    value = key.split(":")[1]
-                    key = "gpu_type"
-                else:
-                    value = alloc["count"]
+    nodes = entry["nodes"]
 
-                vals[key] = value
+    tracked_flags = [
+        "CLEAR_SCHEDULING",
+        "STARTED_ON_SUBMIT",
+        "STARTED_ON_SCHEDULE",
+        "STARTED_ON_BACKFILL",
+    ]
+    flags = {k: True for k in entry["flags"] if k in tracked_flags}
 
-        nodes = entry["nodes"]
+    submit_time = parse_in_timezone(entry["time"]["submission"])
+    assert submit_time is not None
+    start_time = parse_in_timezone(entry["time"]["start"])
+    end_time = parse_in_timezone(entry["time"]["end"])
+    elapsed_time: int = entry["time"]["elapsed"]
 
-        tracked_flags = [
-            "CLEAR_SCHEDULING",
-            "STARTED_ON_SUBMIT",
-            "STARTED_ON_SCHEDULE",
-            "STARTED_ON_BACKFILL",
-        ]
-        flags = {k: True for k in entry["flags"] if k in tracked_flags}
+    if end_time:
+        # The start_time is not set properly in the json output of sacct, but
+        # it can be calculated from end_time and elapsed_time. We leave the
+        # inaccurate value in for RUNNING jobs.
+        start_time = end_time - timedelta(seconds=elapsed_time)
 
-        submit_time = parse_in_timezone(entry["time"]["submission"])
-        assert submit_time is not None
-        start_time = parse_in_timezone(entry["time"]["start"])
-        end_time = parse_in_timezone(entry["time"]["end"])
-        elapsed_time: int = entry["time"]["elapsed"]
+    # Here we add supplementary SlurmJob attributes
+    # which should be common to all slurm versions.
+    extra = {}
+    # Save scraping period in job
+    # We save these dates with timezone UTC
+    # Note: If date is naive (as actually parsed from `acquire jobs`),
+    # then astimezone() assumes date is in local timezone.
+    if scraped_start is not None:
+        extra["latest_scraped_start"] = scraped_start.astimezone(UTC)
+    if scraped_end is not None:
+        extra["latest_scraped_end"] = scraped_end.astimezone(UTC)
 
-        if end_time:
-            # The start_time is not set properly in the json output of sacct, but
-            # it can be calculated from end_time and elapsed_time. We leave the
-            # inaccurate value in for RUNNING jobs.
-            start_time = end_time - timedelta(seconds=elapsed_time)
+    assert cluster is not None
 
-        # Here we add supplementary SlurmJob attributes
-        # which should be common to all slurm versions.
-        extra = {
-            # Save scraping period in job
-            # We save these dates with timezone UTC
-            # Note: If date is naive (as actually parsed from `acquire jobs`),
-            # then astimezone() assumes date is in local timezone.
-            "latest_scraped_start": scraped_start.astimezone(UTC),
-            "latest_scraped_end": scraped_end.astimezone(UTC),
-        }
-
-        assert cluster.name is not None
-
-        if cluster.name != entry["cluster"]:
-            logger.warning(
-                'Job %s from cluster "%s" has a different cluster name: "%s". Using "%s".',
-                entry["job_id"],
-                self.cluster.name,
-                entry["cluster"],
-                self.cluster.name,
-            )
-        if version is None or int(version["major"]) < 23:
+    if cluster != entry["cluster"]:
+        logger.warning(
+            'Job %s from cluster "%s" has a different cluster name: "%s". Using "%s".',
+            entry["job_id"],
+            cluster,
+            entry["cluster"],
+            cluster,
+        )
+    if version is None or int(version["major"]) < 23:
+        return SlurmJob(
+            cluster_name=cluster,
+            job_id=entry["job_id"],
+            array_job_id=entry["array"]["job_id"] or None,
+            task_id=entry["array"]["task_id"],
+            name=entry["name"],
+            user=entry["user"],
+            group=entry["group"],
+            account=entry["account"],
+            job_state=entry["state"]["current"],
+            exit_code=entry["exit_code"]["return_code"],
+            signal=entry["exit_code"].get("signal", {}).get("signal_id", None),
+            time_limit=(tlimit := entry["time"]["limit"]) and tlimit * 60,
+            submit_time=submit_time,
+            start_time=start_time,
+            end_time=end_time,
+            elapsed_time=elapsed_time,
+            partition=entry["partition"],
+            nodes=(sorted(expand_hostlist(nodes)) if nodes != "None assigned" else []),
+            constraints=entry["constraints"],
+            priority=entry["priority"],
+            qos=entry["qos"],
+            work_dir=entry["working_directory"],
+            **resources,  # type: ignore[arg-type]
+            **flags,  # type: ignore[arg-type]
+            **extra,  # type: ignore[arg-type]
+        )
+    if int(version["major"]) == 23:
+        if int(version["minor"]) == 11:
             return SlurmJob(
-                cluster_name=cluster.name,
-                job_id=entry["job_id"],
-                array_job_id=entry["array"]["job_id"] or None,
-                task_id=entry["array"]["task_id"],
-                name=entry["name"],
-                user=entry["user"],
-                group=entry["group"],
-                account=entry["account"],
-                job_state=entry["state"]["current"],
-                exit_code=entry["exit_code"]["return_code"],
-                signal=entry["exit_code"].get("signal", {}).get("signal_id", None),
-                time_limit=(tlimit := entry["time"]["limit"]) and tlimit * 60,
-                submit_time=submit_time,
-                start_time=start_time,
-                end_time=end_time,
-                elapsed_time=elapsed_time,
-                partition=entry["partition"],
-                nodes=(
-                    sorted(expand_hostlist(nodes)) if nodes != "None assigned" else []
-                ),
-                constraints=entry["constraints"],
-                priority=entry["priority"],
-                qos=entry["qos"],
-                work_dir=entry["working_directory"],
-                **resources,  # type: ignore[arg-type]
-                **flags,  # type: ignore[arg-type]
-                **extra,  # type: ignore[arg-type]
-            )
-        if int(version["major"]) == 23:
-            if int(version["minor"]) == 11:
-                return SlurmJob(
-                    cluster_name=cluster.name,
-                    job_id=entry["job_id"],
-                    array_job_id=entry["array"]["job_id"] or None,
-                    task_id=entry["array"]["task_id"]["number"],
-                    name=entry["name"],
-                    user=entry["user"],
-                    group=entry["group"],
-                    account=entry["account"],
-                    job_state=entry["state"]["current"][0],
-                    exit_code=entry["exit_code"]["return_code"]["number"],
-                    signal=entry["exit_code"]
-                    .get("signal", {})
-                    .get("id", {})
-                    .get("number", None),
-                    time_limit=(tlimit := entry["time"]["limit"]["number"])
-                    and tlimit * 60,
-                    submit_time=submit_time,
-                    start_time=start_time,
-                    end_time=end_time,
-                    elapsed_time=elapsed_time,
-                    partition=entry["partition"],
-                    nodes=(
-                        sorted(expand_hostlist(nodes))
-                        if nodes != "None assigned"
-                        else []
-                    ),
-                    constraints=entry["constraints"],
-                    priority=entry["priority"]["number"],
-                    qos=entry["qos"],
-                    work_dir=entry["working_directory"],
-                    **resources,  # type: ignore[arg-type]
-                    **flags,  # type: ignore[arg-type]
-                    **extra,  # type: ignore[arg-type]
-                )
-
-            return SlurmJob(
-                cluster_name=cluster.name,
-                job_id=entry["job_id"],
-                array_job_id=entry["array"]["job_id"] or None,
-                task_id=entry["array"]["task_id"]["number"],
-                name=entry["name"],
-                user=entry["user"],
-                group=entry["group"],
-                account=entry["account"],
-                job_state=entry["state"]["current"],
-                exit_code=entry["exit_code"]["return_code"],
-                signal=entry["exit_code"].get("signal", {}).get("signal_id", None),
-                time_limit=(tlimit := entry["time"]["limit"]["number"]) and tlimit * 60,
-                submit_time=submit_time,
-                start_time=start_time,
-                end_time=end_time,
-                elapsed_time=elapsed_time,
-                partition=entry["partition"],
-                nodes=(
-                    sorted(expand_hostlist(nodes)) if nodes != "None assigned" else []
-                ),
-                constraints=entry["constraints"],
-                priority=entry["priority"]["number"],
-                qos=entry["qos"],
-                work_dir=entry["working_directory"],
-                **resources,  # type: ignore[arg-type]
-                **flags,  # type: ignore[arg-type]
-                **extra,  # type: ignore[arg-type]
-            )
-
-        if int(version["major"]) in [24, 25]:
-            return SlurmJob(
-                cluster_name=cluster.name,
+                cluster_name=cluster,
                 job_id=entry["job_id"],
                 array_job_id=entry["array"]["job_id"] or None,
                 task_id=entry["array"]["task_id"]["number"],
@@ -369,8 +286,90 @@ def parse_raw(
                 **extra,  # type: ignore[arg-type]
             )
 
-        # if we make it here, it means that the version is not supported :-(
-        raise JobConversionError(f"Unsupported slurm version: {version}")
+        return SlurmJob(
+            cluster_name=cluster,
+            job_id=entry["job_id"],
+            array_job_id=entry["array"]["job_id"] or None,
+            task_id=entry["array"]["task_id"]["number"],
+            name=entry["name"],
+            user=entry["user"],
+            group=entry["group"],
+            account=entry["account"],
+            job_state=entry["state"]["current"],
+            exit_code=entry["exit_code"]["return_code"],
+            signal=entry["exit_code"].get("signal", {}).get("signal_id", None),
+            time_limit=(tlimit := entry["time"]["limit"]["number"]) and tlimit * 60,
+            submit_time=submit_time,
+            start_time=start_time,
+            end_time=end_time,
+            elapsed_time=elapsed_time,
+            partition=entry["partition"],
+            nodes=(sorted(expand_hostlist(nodes)) if nodes != "None assigned" else []),
+            constraints=entry["constraints"],
+            priority=entry["priority"]["number"],
+            qos=entry["qos"],
+            work_dir=entry["working_directory"],
+            **resources,  # type: ignore[arg-type]
+            **flags,  # type: ignore[arg-type]
+            **extra,  # type: ignore[arg-type]
+        )
+
+    if int(version["major"]) in [24, 25]:
+        return SlurmJob(
+            cluster_name=cluster,
+            job_id=entry["job_id"],
+            array_job_id=entry["array"]["job_id"] or None,
+            task_id=entry["array"]["task_id"]["number"],
+            name=entry["name"],
+            user=entry["user"],
+            group=entry["group"],
+            account=entry["account"],
+            job_state=entry["state"]["current"][0],
+            exit_code=entry["exit_code"]["return_code"]["number"],
+            signal=entry["exit_code"]
+            .get("signal", {})
+            .get("id", {})
+            .get("number", None),
+            time_limit=(tlimit := entry["time"]["limit"]["number"]) and tlimit * 60,
+            submit_time=submit_time,
+            start_time=start_time,
+            end_time=end_time,
+            elapsed_time=elapsed_time,
+            partition=entry["partition"],
+            nodes=(sorted(expand_hostlist(nodes)) if nodes != "None assigned" else []),
+            constraints=entry["constraints"],
+            priority=entry["priority"]["number"],
+            qos=entry["qos"],
+            work_dir=entry["working_directory"],
+            **resources,  # type: ignore[arg-type]
+            **flags,  # type: ignore[arg-type]
+            **extra,  # type: ignore[arg-type]
+        )
+
+    # if we make it here, it means that the version is not supported :-(
+    raise JobConversionError(f"Unsupported slurm version: {version}")
+
+
+@trace_decorator()
+def parse_raw(
+    raw_data: bytes,
+    cluster_name: str,
+    scraped_start: datetime,
+    scraped_end: datetime,
+) -> dict:
+    """Parse raw sacct data as a dict.
+
+    Arguments:
+        cluster: The cluster on which to scrape the data.
+        scraped_start: the UTC datetime from which we scraped.
+            Should be precise up to minute.
+        scraped_end: the UTC datetime until which we scraped.
+            Should be precise up to minute.
+    """
+    if not _date_is_utc(scraped_start):
+        raise ValueError(f"sacct scraper: start date not in UTC: {scraped_start}")
+    if not _date_is_utc(scraped_end):
+        raise ValueError(f"sacct scraper: end date not in UTC: {scraped_end}")
 
     data = json.loads(raw_data)
 
@@ -379,7 +378,9 @@ def parse_raw(
     ).get("version", None)
 
     for entry in data["jobs"]:
-        yield convert(entry, version)
+        yield _convert_json_job(
+            entry, cluster_name, version, scraped_start, scraped_end
+        )
 
 
 @trace_decorator()

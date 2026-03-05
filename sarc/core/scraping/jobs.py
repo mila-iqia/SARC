@@ -1,6 +1,5 @@
 from datetime import datetime
 import logging
-from tqdm import tqdm
 from typing import Optional
 
 from sarc.cache import Cache
@@ -143,9 +142,7 @@ def fetch_jobs(
             continue
 
 
-def parse_jobs(
-    clusters: dict[str, ClusterConfig], since: datetime | None, update_parsed_date: bool
-) -> None:
+def parse_jobs(since: datetime | None, update_parsed_date: bool) -> None:
     collection = _jobs_collection()
     db = config().mongo.database_instance
 
@@ -155,7 +152,9 @@ def parse_jobs(
     # Retrieve from the cache
     cache = Cache(subdirectory="jobs")
     for cache_entry in cache.read_from(from_time=since):
-        logger.info(f"Parsing slurm jobs from cache entry: {cache_entry.get_entry_datetime()}")
+        logger.info(
+            f"Parsing slurm jobs from cache entry: {cache_entry.get_entry_datetime()}"
+        )
         nb_entries = 0
 
         # Retrieve all jobs associated to the time intervals
@@ -163,13 +162,14 @@ def parse_jobs(
             logger.info(f"Parsing slurm jobs identified by: {key}...")
 
             cluster_name = key.split("_")[0]
-            cluster_config = clusters[cluster_name]
-            scraped_start = datetime.fromisoformat(key.split("_")[1]).replace(tzinfo=UTC)
+            scraped_start = datetime.fromisoformat(key.split("_")[1]).replace(
+                tzinfo=UTC
+            )
             scraped_end = datetime.fromisoformat(key.split("_")[2]).replace(tzinfo=UTC)
 
             # Store the jobs in the database, beginning by the
             # oldest intervals
-            for entry in parse_raw(value, cluster_config, scraped_start, scraped_end):
+            for entry in parse_raw(value, cluster_name, scraped_start, scraped_end):
                 if entry is not None:
                     nb_entries += 1
                     update_allocated_gpu_type_from_nodes(clusters[cluster_name], entry)
@@ -177,7 +177,9 @@ def parse_jobs(
 
         # Update the parsed date
         if update_parsed_date:
-            logger.info(f"Set parsed_dates for cluster {cluster_name} to {cache_entry.get_entry_datetime()}.")
+            logger.info(
+                f"Set parsed_dates for cluster {cluster_name} to {cache_entry.get_entry_datetime()}."
+            )
             set_parsed_date(db, "jobs", cache_entry.get_entry_datetime())
 
         logger.info(f"Saved {nb_entries} entries.")

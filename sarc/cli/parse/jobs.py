@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from sarc.config import config
 from sarc.core.scraping.jobs import parse_jobs
 from simple_parsing import field
 from datetime import datetime
@@ -17,9 +16,8 @@ class ParseJobs:
     )
 
     def execute(self) -> int:
-        clusters_cfg = config("scraping").clusters
-        assert clusters_cfg is not None
-
-        parse_jobs(clusters_cfg, datetime.fromisoformat(self.since).astimezone(UTC), self.update_parsed_date)
-
+        _since = None
+        if self.since is not None:
+            _since = datetime.fromisoformat(self.since).astimezone(UTC)
+        parse_jobs(_since, self.update_parsed_date)
         return 0
