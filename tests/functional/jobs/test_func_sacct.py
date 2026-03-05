@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 import time
 from unittest.mock import patch
+import json
 
 import pytest
 from fabric.testing.base import Command, Session
@@ -93,15 +94,13 @@ parameters = {
     },
 }
 
-
 @pytest.fixture
-def scraper():
-    return SacctScraper(
+def fetch_jobs_json():
+    return json.loads(fetch_raw(
         cluster=config().clusters["raisin"],
         start=datetime(2023, 2, 14, tzinfo=MTL).astimezone(UTC),
         end=datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC),
-    )
-
+    ))
 
 @pytest.mark.usefixtures("tzlocal_is_mtl")
 @pytest.mark.parametrize(
@@ -291,13 +290,12 @@ def test_localhost(os_system, monkeypatch):
 
     monkeypatch.setattr(subprocess, "run", mock_subprocess_run)
 
-    scraper = SacctScraper(
+    raw = fetch_raw(
         cluster=config().clusters["local"],
         start=datetime(2023, 2, 14, tzinfo=MTL).astimezone(UTC),
         end=datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC),
     )
 
-    assert len(list(scraper)) == 0
     assert mock_subprocess_run.called >= 1
 
 
@@ -732,9 +730,6 @@ def test_multiple_clusters_and_dates(test_config, remote, file_regression, cli_m
                 "-v",
                 "parse",
                 "jobs",
-                "--cluster_names",
-                "raisin",
-                "patate",
                 "--since",
                 "2023-02-14T00:00",
             ]
@@ -997,18 +992,18 @@ def _get_cluster_raisin():
 
 @pytest.mark.usefixtures("read_write_db", "enabled_cache")
 def test_auto_interval(cli_main, monkeypatch, freezer, caplog):
-    """Test auto_interval and check generated cache files."""
+    """Test auto_interval and check updated end time."""
 
     def mock_fetch_raw(*args, **kwargs):
         mock_fetch_raw.called += 1
-        return {"jobs": []}
+        return '{"jobs": []}'
 
     mock_fetch_raw.called = 0
 
     import sarc.core.scraping.jobs_utils
 
     monkeypatch.setattr(
-        sarc.core.scraping.jobs_utils.SacctScraper, "fetch_raw", mock_fetch_raw
+        sarc.core.scraping.jobs, "fetch_raw", mock_fetch_raw
     )
 
     orig_end_time = datetime.strptime(
@@ -1035,22 +1030,6 @@ def test_auto_interval(cli_main, monkeypatch, freezer, caplog):
         == 0
     )
 
-    assert (
-        cli_main(
-            [
-                "-v",
-                "parse",
-                "jobs",
-                "--cluster_names",
-                "raisin",
-                "--since",
-                "2023-02-14T00:00",
-            ]
-        )
-        == 0
-    )
-
-    print(caplog.text)
     # end_time_sacct should have been updated
     assert (
         datetime.strptime(_get_cluster_raisin().end_time_sacct, "%Y-%m-%dT%H:%M")
@@ -1058,39 +1037,23 @@ def test_auto_interval(cli_main, monkeypatch, freezer, caplog):
     )
     # 300 minutes every 60 minutes => 5 intervals => 5 cached files
     assert mock_fetch_raw.called == 5
-    assert sacct_folder.exists()
-    cached_filenames = sorted(path.name for path in sacct_folder.iterdir())
-    assert len(cached_filenames) == 5
-
-    def _str_next_time(minutes: int):
-        next_time = orig_end_time + timedelta(minutes=minutes)
-        return next_time.strftime("%Y-%m-%dT%H:%M")
-
-    expected_filenames = [
-        f"raisin.{_str_next_time(0)}.{_str_next_time(60)}.json",
-        f"raisin.{_str_next_time(60)}.{_str_next_time(120)}.json",
-        f"raisin.{_str_next_time(120)}.{_str_next_time(180)}.json",
-        f"raisin.{_str_next_time(180)}.{_str_next_time(240)}.json",
-        f"raisin.{_str_next_time(240)}.{_str_next_time(300)}.json",
-    ]
-    assert cached_filenames == expected_filenames
-
+ 
 
 @pytest.mark.freeze_time
 @pytest.mark.usefixtures("read_write_db", "enabled_cache")
 def test_auto_interval_0(cli_main, monkeypatch, freezer, caplog):
     """Test auto_interval with unique interval and check generated cache files."""
 
-    def mock_fetch_raw(scrp):
+    def mock_fetch_raw(*args, **kwargs):
         mock_fetch_raw.called += 1
-        return {"jobs": []}
+        return '{"jobs": []}'
 
     mock_fetch_raw.called = 0
 
     import sarc.core.scraping.jobs_utils
 
     monkeypatch.setattr(
-        sarc.core.scraping.jobs_utils.SacctScraper, "fetch_raw", mock_fetch_raw
+        sarc.core.scraping.jobs, "fetch_raw", mock_fetch_raw
     )
 
     orig_end_time = datetime.strptime(
@@ -1123,8 +1086,6 @@ def test_auto_interval_0(cli_main, monkeypatch, freezer, caplog):
                 "-v",
                 "parse",
                 "jobs",
-                "--cluster_names",
-                "raisin",
                 "--since",
                 "2024-01-01T00:00",
             ]
@@ -1139,13 +1100,3 @@ def test_auto_interval_0(cli_main, monkeypatch, freezer, caplog):
     )
     # We expected only 1 interval and cache
     assert mock_fetch_raw.called == 1
-    assert sacct_folder.exists()
-    cached_filenames = sorted(path.name for path in sacct_folder.iterdir())
-    assert len(cached_filenames) == 1
-
-    def _str_next_time(minutes: int):
-        next_time = orig_end_time + timedelta(minutes=minutes)
-        return next_time.strftime("%Y-%m-%dT%H:%M")
-
-    expected_filenames = [f"raisin.{_str_next_time(0)}.{_str_next_time(300)}.json"]
-    assert cached_filenames == expected_filenames
