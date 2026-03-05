@@ -2,6 +2,8 @@ from dataclasses import dataclass
 from sarc.config import config
 from sarc.core.scraping.jobs import parse_jobs
 from simple_parsing import field
+from datetime import datetime
+from sarc.cache import UTC
 
 
 @dataclass
@@ -18,6 +20,6 @@ class ParseJobs:
         clusters_cfg = config("scraping").clusters
         assert clusters_cfg is not None
 
-        parse_jobs(clusters_cfg, self.since, self.update_parsed_date)
+        parse_jobs(clusters_cfg, datetime.fromisoformat(self.since).astimezone(UTC), self.update_parsed_date)
 
         return 0
