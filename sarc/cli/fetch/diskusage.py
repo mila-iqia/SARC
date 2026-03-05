@@ -58,6 +58,7 @@ class FetchDiskUsage:
                             diskusage_config.name,
                             exc_info=e,
                         )
+                        continue
                     ce.add_value(key=f"{diskusage_config.name}", value=data)
 
         return 0

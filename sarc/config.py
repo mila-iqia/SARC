@@ -15,6 +15,7 @@ import gifnoc
 import tzlocal
 from bson import CodecOptions, UuidRepresentation
 from hostlist import expand_hostlist
+from paramiko import PKey
 from serieux.features.encrypt import Secret
 
 from .alerts.common import HealthMonitorConfig
@@ -46,11 +47,17 @@ class DiskUsageConfig:
 
 
 @dataclass
+class PrivateKeyInfo:
+    file: Path
+    password: Secret[str]
+
+
+@dataclass
 class ClusterConfig:
     # pylint: disable=too-many-instance-attributes
 
     host: str
-    private_key: Secret[str]
+    private_key: PrivateKeyInfo
     timezone: zoneinfo.ZoneInfo | None = None
     prometheus_url: str | None = None
     prometheus_headers_file: str | None = None
@@ -135,7 +142,15 @@ class ClusterConfig:
         fconfig = FabricConfig()
         fconfig["run"]["pty"] = False
         fconfig["run"]["in_stream"] = False
-        return Connection(self.host, config=fconfig, kwargs={"pkey": self.private_key})
+        return Connection(
+            self.host,
+            config=fconfig,
+            connect_kwargs={
+                "pkey": PKey.from_path(
+                    self.private_key.file, self.private_key.password.encode("ascii")
+                )
+            },
+        )
 
     @cached_property
     def prometheus(self) -> PrometheusConnect:

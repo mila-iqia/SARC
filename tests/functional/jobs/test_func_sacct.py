@@ -2,22 +2,22 @@ from __future__ import annotations
 
 import json
 import subprocess
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
-import time
 from unittest.mock import patch
 
 import pytest
 from fabric.testing.base import Command, Session
 from opentelemetry.trace import StatusCode
 
+from sarc.cache import Cache
 from sarc.client import get_available_clusters
 from sarc.client.job import get_jobs
-
 from sarc.config import UTC, config
-from sarc.cache import Cache
-from sarc.core.scraping.jobs_utils import fetch_raw, parse_raw, _convert_json_job
+from sarc.core.scraping.jobs_utils import _convert_json_job, fetch_raw, parse_raw
 from tests.common.dateutils import MTL, PST, _dtfmt
+
 from .factory import create_sacct_json
 
 parameters = {
@@ -279,8 +279,18 @@ def test_localhost(os_system, monkeypatch):
 @pytest.mark.parametrize("json_jobs", [{}], indirect=True)
 @pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
 def test_stdout_message_before_json(
-    test_config, sacct_json, remote, file_regression, cli_main
+    test_config, sacct_json, remote, file_regression, cli_main, monkeypatch
 ):
+    #### Fix to ignore problems with the pkey argument to connect()
+    import fabric
+    from fabric import Connection
+
+    def Connection_mock(*args, connect_kwargs=None, **kwargs):
+        return Connection(*args, **kwargs)
+
+    monkeypatch.setattr(fabric, "Connection", Connection_mock)
+    ####
+
     remote.expect(
         host="raisin",
         cmd=f"export TZ=UTC && /opt/slurm/bin/sacct -X -S {_dtfmt(2023, 2, 15)} -E {_dtfmt(2023, 2, 16)} --allusers --json",
@@ -542,6 +552,16 @@ def test_multiple_dates(test_config, remote, file_regression, cli_main):
         datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC) + timedelta(days=i)
         for i in range(5)
     ]
+    #### Fix to ignore problems with the pkey argument to connect()
+    import fabric
+    from fabric import Connection
+
+    def Connection_mock(*args, connect_kwargs=None, **kwargs):
+        return Connection(*args, **kwargs)
+
+    monkeypatch.setattr(fabric, "Connection", Connection_mock)
+    ####
+
     remote.expect(
         host="raisin",
         commands=[
@@ -649,6 +669,16 @@ def test_multiple_clusters_and_dates(test_config, remote, file_regression, cli_m
                 for job_id, job_submit_datetime in enumerate(datetimes)
             ],
         )
+
+    #### Fix to ignore problems with the pkey argument to connect()
+    import fabric
+    from fabric import Connection
+
+    def Connection_mock(*args, connect_kwargs=None, **kwargs):
+        return Connection(*args, **kwargs)
+
+    monkeypatch.setattr(fabric, "Connection", Connection_mock)
+    ####
 
     remote.expect_sessions(
         _create_session(
