@@ -271,6 +271,16 @@ def test_localhost(os_system, monkeypatch):
 def test_stdout_message_before_json(
     test_config, sacct_json, remote, file_regression, cli_main, monkeypatch
 ):
+    #### Fix to ignore problems with the pkey argument to connect()
+    import fabric
+    from fabric import Connection
+
+    def Connection_mock(*args, connect_kwargs=None, **kwargs):
+        return Connection(*args, **kwargs)
+
+    monkeypatch.setattr(fabric, "Connection", Connection_mock)
+    ####
+
     remote.expect(
         host="raisin",
         cmd=f"export TZ=UTC && /opt/slurm/bin/sacct -X -S {_dtfmt(2023, 2, 15)} -E {_dtfmt(2023, 2, 16)} --allusers --json",
@@ -574,6 +584,16 @@ def test_multiple_clusters_and_dates(test_config, remote, file_regression, cli_m
                 for job_id, job_submit_datetime in enumerate(datetimes)
             ],
         )
+
+    #### Fix to ignore problems with the pkey argument to connect()
+    import fabric
+    from fabric import Connection
+
+    def Connection_mock(*args, connect_kwargs=None, **kwargs):
+        return Connection(*args, **kwargs)
+
+    monkeypatch.setattr(fabric, "Connection", Connection_mock)
+    ####
 
     remote.expect_sessions(
         _create_session(

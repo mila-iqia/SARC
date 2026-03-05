@@ -21,6 +21,16 @@ def test_update_drac_diskusage_one(
     with open(report_path, "r", encoding="utf-8") as f:
         raw_report = f.read()
 
+    #### Fix to ignore problems with the pkey argument to connect()
+    import fabric
+    from fabric import Connection
+
+    def Connection_mock(*args, connect_kwargs=None, **kwargs):
+        return Connection(*args, **kwargs)
+
+    monkeypatch.setattr(fabric, "Connection", Connection_mock)
+    ####
+
     # Mock the SSH command using remote fixture
     remote.expect(
         host="gerudo",
@@ -51,6 +61,16 @@ def test_update_drac_diskusage_two(
         gerudo_report = f.read()
     with open(hyrule_report_path, "r", encoding="utf-8") as f:
         hyrule_report = f.read()
+
+    #### Fix to ignore problems with the pkey argument to connect()
+    import fabric
+    from fabric import Connection
+
+    def Connection_mock(*args, connect_kwargs=None, **kwargs):
+        return Connection(*args, **kwargs)
+
+    monkeypatch.setattr(fabric, "Connection", Connection_mock)
+    ####
 
     # Mock both SSH commands
     remote.expect_sessions(
@@ -91,6 +111,16 @@ def test_update_drac_diskusage_no_duplicate(
     report_path = Path(FOLDER) / "drac_reports/report_gerudo.txt"
     with open(report_path, "r", encoding="utf-8") as f:
         raw_report = f.read()
+
+    #### Fix to ignore problems with the pkey argument to connect()
+    import fabric
+    from fabric import Connection
+
+    def Connection_mock(*args, connect_kwargs=None, **kwargs):
+        return Connection(*args, **kwargs)
+
+    monkeypatch.setattr(fabric, "Connection", Connection_mock)
+    ####
 
     # Mock both SSH commands
     remote.expect(

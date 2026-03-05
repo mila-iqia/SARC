@@ -60,6 +60,16 @@ def test_get_gpu_type(
 ):
     """Test all 3 sources of GPU type (sacct, node->GPU and prometheus)"""
 
+    #### Fix to ignore problems with the pkey argument to connect()
+    import fabric
+    from fabric import Connection
+
+    def Connection_mock(*args, connect_kwargs=None, **kwargs):
+        return Connection(*args, **kwargs)
+
+    monkeypatch.setattr(fabric, "Connection", Connection_mock)
+    ####
+
     remote.expect(
         host="raisin",
         commands=[
@@ -224,6 +234,16 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
                 )
             ],
         )
+
+    #### Fix to ignore problems with the pkey argument to connect()
+    import fabric
+    from fabric import Connection
+
+    def Connection_mock(*args, connect_kwargs=None, **kwargs):
+        return Connection(*args, **kwargs)
+
+    monkeypatch.setattr(fabric, "Connection", Connection_mock)
+    ####
 
     remote.expect_sessions(
         _create_session(
@@ -445,6 +465,16 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
                 )
             ],
         )
+
+    #### Fix to ignore problems with the pkey argument to connect()
+    import fabric
+    from fabric import Connection
+
+    def Connection_mock(*args, connect_kwargs=None, **kwargs):
+        return Connection(*args, **kwargs)
+
+    monkeypatch.setattr(fabric, "Connection", Connection_mock)
+    ####
 
     remote.expect_sessions(
         _create_session(
