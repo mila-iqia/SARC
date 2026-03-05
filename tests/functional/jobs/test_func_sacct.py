@@ -94,17 +94,6 @@ parameters = {
 }
 
 
-@pytest.fixture
-def fetch_jobs_json():
-    return json.loads(
-        fetch_raw(
-            cluster=config().clusters["raisin"],
-            start=datetime(2023, 2, 14, tzinfo=MTL).astimezone(UTC),
-            end=datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC),
-        )
-    )
-
-
 @pytest.mark.usefixtures("tzlocal_is_mtl")
 @pytest.mark.parametrize(
     "json_jobs", parameters.values(), ids=parameters.keys(), indirect=True
@@ -148,14 +137,9 @@ def test_parse_json_job(json_jobs, file_regression):
     ],
     indirect=True,
 )
-def test_parse_malformed_jobs(sacct_json, scraper, captrace):
-    scraper.get_raw._save_for_key(
-        key=scraper.get_raw.key(),
-        value=json.loads(sacct_json),
-        at_time=datetime.now(UTC),
-    )
+def test_parse_malformed_jobs(sacct_json, captrace):
     with pytest.raises(KeyError):
-        list(scraper)
+        job = _convert_json_job(json.loads(sacct_json)["jobs"][0],"mila")
     spans = captrace.get_finished_spans()
     assert len(spans) > 0
     # Just check the span that should have got an error.
@@ -164,10 +148,7 @@ def test_parse_malformed_jobs(sacct_json, scraper, captrace):
     ]
     assert len(error_spans) == 1
     (error_span,) = error_spans
-    assert error_span.name == "SacctScraper.__iter__"
-    entry = json.loads(error_span.attributes["entry"])
-    assert isinstance(entry, dict)
-    assert entry["account"] == "mila"
+    assert error_span.name == "_convert_json_job"
 
 
 @pytest.mark.usefixtures("tzlocal_is_mtl")
@@ -176,14 +157,15 @@ def test_parse_malformed_jobs(sacct_json, scraper, captrace):
     [{"group": None}],
     indirect=True,
 )
-def test_parse_no_group_jobs(sacct_json, scraper, caplog):
-    scraper.get_raw._save_for_key(
-        key=scraper.get_raw.key(),
-        value=json.loads(sacct_json),
-        at_time=datetime.now(UTC),
-    )
+def test_parse_no_group_jobs(sacct_json, caplog):
+    jobs = parse_raw(
+                sacct_json,
+                "cedar",
+                datetime(2023, 2, 14, tzinfo=MTL).astimezone(UTC),
+                datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC)
+            )["jobs"]
     with caplog.at_level("DEBUG"):
-        assert list(scraper) == [None]
+        assert list(jobs) == [None]
     assert 'Skipping job with group "None": 1' in caplog.text
 
 
@@ -269,7 +251,7 @@ def test_scraper_with_malformed_cache(test_config, remote, scraper, caplog):
     "test_config", [{"clusters": {"patate": {"host": "patate"}}}], indirect=True
 )
 def test_sacct_bin_and_accounts(test_config, remote):
-    scraper = SacctScraper(
+    fetch_raw(
         cluster=config().clusters["patate"],
         start=datetime(2023, 2, 14, tzinfo=MTL).astimezone(UTC),
         end=datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC),
@@ -279,8 +261,6 @@ def test_sacct_bin_and_accounts(test_config, remote):
         cmd=f"export TZ=UTC && /opt/software/slurm/bin/sacct -A rrg-bonhomme-ad_gpu,rrg-bonhomme-ad_cpu,def-bonhomme_gpu,def-bonhomme_cpu -X -S {_dtfmt(2023, 2, 14)} -E {_dtfmt(2023, 2, 15)} --allusers --json",
         out=b'{"jobs": []}',
     )
-
-    assert len(list(scraper)) == 0
 
 
 @patch("os.system")
@@ -346,8 +326,6 @@ def test_stdout_message_before_json(
                 "-v",
                 "parse",
                 "jobs",
-                "--cluster_names",
-                "raisin",
                 "--since",
                 "2023-02-14T00:00",
             ]
@@ -405,8 +383,6 @@ def test_update_job(test_config, sacct_json, remote, file_regression, cli_main):
                 "-v",
                 "parse",
                 "jobs",
-                "--cluster_names",
-                "raisin",
                 "--since",
                 "2023-02-14T00:00",
             ]
@@ -436,8 +412,6 @@ def test_update_job(test_config, sacct_json, remote, file_regression, cli_main):
                 "-v",
                 "parse",
                 "jobs",
-                "--cluster_names",
-                "raisin",
                 "--since",
                 "2023-02-15T00:00",
             ]
@@ -492,8 +466,6 @@ def test_save_job(test_config, sacct_json, remote, file_regression, cli_main):
                 "-v",
                 "parse",
                 "jobs",
-                "--cluster_names",
-                "raisin",
                 "--since",
                 "2023-02-14T00:00",
             ]
@@ -559,8 +531,6 @@ def test_save_preempted_job(test_config, sacct_json, remote, file_regression, cl
                 "-v",
                 "parse",
                 "jobs",
-                "--cluster_names",
-                "raisin",
                 "--since",
                 "2023-02-14T00:00",
             ]
@@ -638,8 +608,6 @@ def test_multiple_dates(test_config, remote, file_regression, cli_main):
                 "-v",
                 "parse",
                 "jobs",
-                "--cluster_names",
-                "raisin",
                 "--since",
                 "2023-02-14T00:00",
             ]
@@ -804,8 +772,6 @@ def test_job_tz(test_config, sacct_json, remote, cli_main):
                 "-v",
                 "parse",
                 "jobs",
-                "--cluster_names",
-                "patate",
                 "--since",
                 "2023-02-14T00:00",
             ]
@@ -867,8 +833,6 @@ def test_acquire_jobs_mutually_exclusive_args(cli_main, caplog):
                 "-v",
                 "parse",
                 "jobs",
-                "--cluster_names",
-                "raisin",
                 "--since",
                 "2023-02-14T00:00",
             ]
@@ -906,8 +870,6 @@ def test_acquire_jobs_invalid_interval(cli_main, caplog):
                 "-v",
                 "parse",
                 "jobs",
-                "--cluster_names",
-                "raisin",
                 "--since",
                 "2023-02-14T00:00",
             ]
@@ -945,8 +907,6 @@ def test_acquire_jobs_interval_start_gt_end(cli_main, caplog):
                 "-v",
                 "parse",
                 "jobs",
-                "--cluster_names",
-                "raisin",
                 "--since",
                 "2023-02-14T00:00",
             ]
@@ -981,8 +941,6 @@ def test_acquire_jobs_args_no_interval(cli_main, caplog):
                 "-v",
                 "parse",
                 "jobs",
-                "--cluster_names",
-                "raisin",
                 "--since",
                 "2023-02-14T00:00",
             ]

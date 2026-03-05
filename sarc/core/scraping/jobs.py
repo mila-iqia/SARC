@@ -142,7 +142,7 @@ def fetch_jobs(
             continue
 
 
-def parse_jobs(since: datetime | None, update_parsed_date: bool) -> None:
+def parse_jobs(clusters_cfg: dict[str, ClusterConfig], since: datetime | None, update_parsed_date: bool) -> None:
     collection = _jobs_collection()
     db = config().mongo.database_instance
 
@@ -172,13 +172,13 @@ def parse_jobs(since: datetime | None, update_parsed_date: bool) -> None:
             for entry in parse_raw(value, cluster_name, scraped_start, scraped_end):
                 if entry is not None:
                     nb_entries += 1
-                    update_allocated_gpu_type_from_nodes(clusters[cluster_name], entry)
+                    update_allocated_gpu_type_from_nodes(clusters_cfg[cluster_name], entry)
                     collection.save_job(entry)
 
         # Update the parsed date
         if update_parsed_date:
             logger.info(
-                f"Set parsed_dates for cluster {cluster_name} to {cache_entry.get_entry_datetime()}."
+                f"Set parsed_dates for jobs to {cache_entry.get_entry_datetime()}."
             )
             set_parsed_date(db, "jobs", cache_entry.get_entry_datetime())
 

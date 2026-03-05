@@ -146,7 +146,7 @@ def fetch_raw(cluster: ClusterConfig, start: datetime, end: datetime) -> bytes:
     # return stdout as bytes
     return results.stdout
 
-
+@trace_decorator()
 def _convert_json_job(
     entry: dict,
     cluster: str,
@@ -371,7 +371,11 @@ def parse_raw(
     if not _date_is_utc(scraped_end):
         raise ValueError(f"sacct scraper: end date not in UTC: {scraped_end}")
 
-    data = json.loads(raw_data)
+    # filter out the eventual welcome message
+    raw_data_str = raw_data.decode("utf-8")
+    json_str = raw_data_str[raw_data_str.find("{"):]
+
+    data = json.loads(json_str)
 
     version: dict = (
         data.get("meta", {}).get("Slurm", None) or data.get("meta", {}).get("slurm", {})
