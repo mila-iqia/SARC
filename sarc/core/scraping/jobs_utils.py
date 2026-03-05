@@ -5,7 +5,7 @@ import json
 import logging
 import re
 import subprocess
-from typing import Optional
+from typing import Iterator, Optional
 
 from sarc.client.job import SlurmJob
 from sarc.config import ClusterConfig, config, UTC, TZLOCAL
@@ -144,7 +144,7 @@ def fetch_raw(cluster: ClusterConfig, start: datetime, end: datetime) -> bytes:
         logger.debug(results.stdout)
 
     # return stdout as bytes
-    return results.stdout
+    return results.stdout.encode("utf-8")
 
 
 @trace_decorator()
@@ -357,7 +357,7 @@ def parse_raw(
     cluster_name: str,
     scraped_start: datetime,
     scraped_end: datetime,
-) -> dict:
+) -> Iterator[SlurmJob | None]:
     """Parse raw sacct data as a dict.
 
     Arguments:
