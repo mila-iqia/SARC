@@ -991,7 +991,7 @@ def test_cache_paths_from_multiple_days(enabled_cache):
     paths = list(path for path, _ in cache._paths_from(from_time))
 
     # Should get files from 15:00 on 3/15, and all files from 3/16 and 3/17
-    assert len(paths) == 4
+    assert len(paths) == 3
 
     # Verify we get the expected files
     path_names = [p.name for p in paths]
@@ -1016,11 +1016,10 @@ def test_cache_entry_datetime(enabled_cache):
 
     # parse cache entries
     entries = list(cache.read_from(datetime(2024, 3, 15, 10, 0, 0, tzinfo=UTC)))
-    assert len(entries) == 4
-    assert entries[0].get_entry_datetime() == times[1]
-    assert entries[1].get_entry_datetime() == times[2]
-    assert entries[2].get_entry_datetime() == times[3]
-    assert entries[3].get_entry_datetime() == times[4]
+    assert len(entries) == 3
+    assert entries[0].get_entry_datetime() == times[2]
+    assert entries[1].get_entry_datetime() == times[3]
+    assert entries[2].get_entry_datetime() == times[4]
 
 
 def test_cache_latest_entry(enabled_cache):
@@ -1065,12 +1064,11 @@ def test_cache_read_from(enabled_cache):
     from_time = datetime(2024, 3, 15, 10, 0, 0, tzinfo=UTC)
     entries = list(cache.read_from(from_time))
 
-    # Should get 2 entries (10:00 and 11:00, not 9:00)
-    assert len(entries) == 2
+    # Should get 1 entry (11:00)
+    assert len(entries) == 1
 
     # verify the data
-    assert list(entries[0].items()) == [("key2", b"data2")]
-    assert list(entries[1].items()) == [("key3", b"data3")]
+    assert list(entries[0].items()) == [("key3", b"data3")]
 
     # try to read starting the day before
     entries = list(cache.read_from(datetime(2024, 3, 14, 0, 0, 0, tzinfo=UTC)))
@@ -1093,7 +1091,7 @@ def test_cache_read_from_with_multiple_keys_per_entry(enabled_cache):
         entry2.add_value("user3", b"user3_data")
 
     # Read from 10:00 onwards
-    from_time = datetime(2024, 3, 15, 10, 0, 0, tzinfo=UTC)
+    from_time = datetime(2024, 3, 15, 9, 59, 59, tzinfo=UTC)
     entries = list(cache.read_from(from_time))
 
     assert len(entries) == 2

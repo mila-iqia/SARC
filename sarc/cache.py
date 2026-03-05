@@ -223,10 +223,17 @@ class Cache:
 
         first_dir = self._dir_from_date(cdir, from_time)
 
+        ignore_files = [
+            ".DS_Store"
+        ]  # a bit hardcoded but soooo frequent on dev machines it had to be done
+
         if first_dir.exists():
             from_time_nodays = from_time.time()
             for file in filter(
-                lambda fname: time.fromisoformat(fname.parts[-1]) >= from_time_nodays,
+                lambda fname: (
+                    fname.name not in ignore_files
+                    and time.fromisoformat(fname.name) > from_time_nodays
+                ),
                 sorted(first_dir.iterdir()),
             ):
                 yield file, self._datetime_from_path(file)
@@ -238,27 +245,38 @@ class Cache:
         first_month_done = False
 
         for year_dir in sorted(
-            filter(lambda y: int(y.parts[-1]) >= from_time.year, cdir.iterdir())
+            filter(
+                lambda y: y.name not in ignore_files and int(y.name) >= from_time.year,
+                cdir.iterdir(),
+            )
         ):
-            if not first_year_done and int(year_dir.parts[-1]) > from_time.year:
+            if not first_year_done and int(year_dir.name) > from_time.year:
                 first_year_done = True
             for month_dir in sorted(
                 filter(
-                    lambda m: first_year_done or int(m.parts[-1]) >= from_time.month,
+                    lambda m: (
+                        m.name not in ignore_files
+                        and (first_year_done or int(m.name) >= from_time.month)
+                    ),
                     year_dir.iterdir(),
                 )
             ):
                 if not first_month_done and (
-                    int(month_dir.parts[-1]) > from_time.month or first_year_done
+                    int(month_dir.name) > from_time.month or first_year_done
                 ):
                     first_month_done = True
                 for day_dir in sorted(
                     filter(
-                        lambda d: first_month_done or int(d.parts[-1]) >= from_time.day,
+                        lambda d: (
+                            d.name not in ignore_files
+                            and (first_month_done or int(d.name) >= from_time.day)
+                        ),
                         month_dir.iterdir(),
                     )
                 ):
                     for file in sorted(day_dir.iterdir()):
+                        if file.name in ignore_files:
+                            continue
                         yield file, self._datetime_from_path(file)
                 first_month_done = True
             first_year_done = True

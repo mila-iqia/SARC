@@ -4,7 +4,7 @@ from pymongo.database import Database
 
 from sarc.config import UTC
 
-DATE_FORMAT = "%Y-%m-%dT%H:%M"
+DATE_FORMAT = "%Y-%m-%dT%H:%M:%S"
 
 
 # class RunStateCollection(Database):
