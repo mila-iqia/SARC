@@ -6,7 +6,7 @@ from typing import List
 from zipfile import ZipFile
 
 import pytest
-from fabric.testing.base import Session, Command
+from fabric.testing.base import Command, Session
 from hostlist import expand_hostlist
 
 from sarc.cache import Cache, CacheEntry
@@ -87,7 +87,7 @@ DATE_2020_12_01_MTL = datetime(2020, 12, 1, tzinfo=MTL)
 
 
 @pytest.mark.usefixtures("enabled_cache")
-def test_fetch_slurmconfig(cli_main, test_config, remote, caplog, freezer):
+def test_fetch_slurmconfig(cli_main, test_config, remote, caplog, freezer, monkeypatch):
     """Test slurm conf file downloading using `fetch slurmconfig`."""
     caplog.set_level(logging.INFO)
 
@@ -106,6 +106,16 @@ def test_fetch_slurmconfig(cli_main, test_config, remote, caplog, freezer):
 
     assert not file_path_2020_01_01.exists()
     assert not file_path_2020_05_01.exists()
+
+    #### Fix to ignore problems with the pkey argument to connect()
+    import fabric
+    from fabric import Connection
+
+    def Connection_mock(*args, connect_kwargs=None, **kwargs):
+        return Connection(*args, **kwargs)
+
+    monkeypatch.setattr(fabric, "Connection", Connection_mock)
+    ####
 
     remote.expect_sessions(
         Session(
@@ -155,7 +165,9 @@ def test_fetch_slurmconfig(cli_main, test_config, remote, caplog, freezer):
 
 @pytest.mark.freeze_time(DATE_2020_01_01_MTL)
 @pytest.mark.usefixtures("enabled_cache")
-def test_fetch_slurmconfig_no_change(cli_main, test_config, remote, caplog):
+def test_fetch_slurmconfig_no_change(
+    cli_main, test_config, remote, caplog, monkeypatch
+):
     """test fetch slurmconfig when downloaded file is identical to previous cached file"""
     caplog.set_level(logging.INFO)
 
@@ -172,6 +184,16 @@ def test_fetch_slurmconfig_no_change(cli_main, test_config, remote, caplog):
     # Cache same content in a previous date (2019-01-01(
     prev_date = datetime(2019, 1, 1, tzinfo=MTL).astimezone(UTC)
     _save_slurm_conf(cluster_name, "2019-01-01", SLURM_CONF_RAISIN_2020_01_01)
+
+    #### Fix to ignore problems with the pkey argument to connect()
+    import fabric
+    from fabric import Connection
+
+    def Connection_mock(*args, connect_kwargs=None, **kwargs):
+        return Connection(*args, **kwargs)
+
+    monkeypatch.setattr(fabric, "Connection", Connection_mock)
+    ####
 
     remote.expect_sessions(
         Session(
@@ -198,7 +220,7 @@ def test_fetch_slurmconfig_no_change(cli_main, test_config, remote, caplog):
 
 @pytest.mark.freeze_time(DATE_2020_12_01_MTL)
 @pytest.mark.usefixtures("enabled_cache", "tzlocal_is_mtl")
-def test_fetch_slurmconfig_legacy(cli_main, test_config, remote, caplog):
+def test_fetch_slurmconfig_legacy(cli_main, test_config, remote, caplog, monkeypatch):
     """test that fetch slurmconfig correctly handles legacy cached files"""
     caplog.set_level(logging.INFO)
 
@@ -242,6 +264,16 @@ def test_fetch_slurmconfig_legacy(cli_main, test_config, remote, caplog):
 
     # Use cluster raisin for download test
     cluster = test_config.clusters[cluster_name]
+
+    #### Fix to ignore problems with the pkey argument to connect()
+    import fabric
+    from fabric import Connection
+
+    def Connection_mock(*args, connect_kwargs=None, **kwargs):
+        return Connection(*args, **kwargs)
+
+    monkeypatch.setattr(fabric, "Connection", Connection_mock)
+    ####
 
     remote.expect_sessions(
         Session(

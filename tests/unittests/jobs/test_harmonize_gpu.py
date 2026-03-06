@@ -1,6 +1,8 @@
+from pathlib import Path
+
 import pytest
 
-from sarc.config import DEFAULTS_FLAG, MIG_FLAG, ClusterConfig, config
+from sarc.config import DEFAULTS_FLAG, MIG_FLAG, ClusterConfig, PrivateKeyInfo, config
 
 GPUS_PER_NODES = {
     "node[0-9]": {"gpu1": "DESCRIPTIVE GPU 1", "badly_named_gpu1": "$gpu1"},
@@ -80,7 +82,12 @@ GPUS_PER_NODES = {
     ],
 )
 def test_harmonize_gpu(node, gpu_type, expected, gpus_per_nodes):
-    cluster = ClusterConfig(timezone="America/Montreal", gpus_per_nodes=gpus_per_nodes)
+    cluster = ClusterConfig(
+        timezone="America/Montreal",
+        gpus_per_nodes=gpus_per_nodes,
+        host="test",
+        private_key=PrivateKeyInfo(file=Path("tests/id_test"), password="12345"),
+    )
     assert cluster.harmonize_gpu(node, gpu_type) == expected
 
 

@@ -15,6 +15,8 @@ import gifnoc
 import tzlocal
 from bson import CodecOptions, UuidRepresentation
 from hostlist import expand_hostlist
+from paramiko import PKey
+from serieux.features.encrypt import Secret
 
 from .alerts.common import HealthMonitorConfig
 
@@ -45,10 +47,17 @@ class DiskUsageConfig:
 
 
 @dataclass
+class PrivateKeyInfo:
+    file: Path
+    password: Secret[str]
+
+
+@dataclass
 class ClusterConfig:
     # pylint: disable=too-many-instance-attributes
 
-    host: str = "localhost"
+    host: str
+    private_key: PrivateKeyInfo
     timezone: zoneinfo.ZoneInfo | None = None
     prometheus_url: str | None = None
     prometheus_headers_file: str | None = None
@@ -56,7 +65,6 @@ class ClusterConfig:
     sacct_bin: str = "sacct"
     ignore_tz_utc: bool = False
     accounts: list[str] | None = None
-    sshconfig: Path | None = None
     diskusage: list[DiskUsageConfig] | None = None
     start_date: str = "2022-04-01"
     slurm_conf_host_path: Path = Path("/etc/slurm/slurm.conf")
@@ -130,15 +138,19 @@ class ClusterConfig:
     def ssh(self) -> Connection:
         from fabric import Config as FabricConfig
         from fabric import Connection
-        from paramiko import SSHConfig
 
-        if self.sshconfig is None:
-            fconfig = FabricConfig()
-        else:
-            fconfig = FabricConfig(ssh_config=SSHConfig.from_path(self.sshconfig))
+        fconfig = FabricConfig()
         fconfig["run"]["pty"] = False
         fconfig["run"]["in_stream"] = False
-        return Connection(self.host, config=fconfig)
+        return Connection(
+            self.host,
+            config=fconfig,
+            connect_kwargs={
+                "pkey": PKey.from_path(
+                    self.private_key.file, self.private_key.password.encode("ascii")
+                )
+            },
+        )
 
     @cached_property
     def prometheus(self) -> PrometheusConnect:
@@ -191,7 +203,7 @@ class TempoConfig:
 @dataclass
 class SlackConfig:
     description: str
-    token: str
+    token: Secret[str]
     channel: str
 
 
@@ -250,7 +262,6 @@ class ClientConfig:
 @dataclass
 class Config(ClientConfig):
     users: UserScrapingConfig | None = None
-    sshconfig: Path | None = None
     clusters: dict[str, ClusterConfig] = field(default_factory=dict)
     logging: LoggingConfig | None = None
 
@@ -258,8 +269,6 @@ class Config(ClientConfig):
         for name, cluster in self.clusters.items():
             if not cluster.name:
                 cluster.name = name
-            if not cluster.sshconfig:
-                cluster.sshconfig = self.sshconfig
 
 
 class WhitelistProxy:

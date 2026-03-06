@@ -3,33 +3,36 @@ sarc:
   clusters:
     fromage:
       accounts:
-      - rrg-bonhomme-ad_gpu
-      - rrg-bonhomme-ad_cpu
-      - def-bonhomme_gpu
-      - def-bonhomme_cpu
+        - rrg-bonhomme-ad_gpu
+        - rrg-bonhomme-ad_cpu
+        - def-bonhomme_gpu
+        - def-bonhomme_cpu
       host: fromage
+      private_key: test_key.yaml
       prometheus_headers_file: tests/not-so-secrets/fromage_prometheus/headers.json
       prometheus_url: https://fromage-thanos.calcul.ca
       sacct_bin: /opt/software/slurm/bin/sacct
       timezone: Europe/Paris
     gerudo:
       accounts:
-      - rrg-bonhomme-ad_gpu
-      - rrg-bonhomme-ad_cpu
-      - def-bonhomme_gpu
-      - def-bonhomme_cpu
+        - rrg-bonhomme-ad_gpu
+        - rrg-bonhomme-ad_cpu
+        - def-bonhomme_gpu
+        - def-bonhomme_cpu
       host: gerudo
+      private_key: test_key.yaml
       prometheus_headers_file: tests/not-so-secrets/patate_prometheus/headers.json
       prometheus_url: https://gerudo-thanos.calcul.ca
       sacct_bin: /opt/software/slurm/bin/sacct
       timezone: America/Vancouver
     hyrule:
       accounts:
-      - rrg-bonhomme-ad_gpu
-      - rrg-bonhomme-ad_cpu
-      - def-bonhomme_gpu
-      - def-bonhomme_cpu
+        - rrg-bonhomme-ad_gpu
+        - rrg-bonhomme-ad_cpu
+        - def-bonhomme_gpu
+        - def-bonhomme_cpu
       host: hyrule
+      private_key: test_key.yaml
       prometheus_headers_file: tests/not-so-secrets/patate_prometheus/headers.json
       prometheus_url: https://hyrule-thanos.calcul.ca
       sacct_bin: /opt/software/slurm/bin/sacct
@@ -42,12 +45,13 @@ sarc:
       timezone: America/Montreal
     mila:
       accounts:
-      - rrg-bonhomme-ad_gpu
-      - rrg-bonhomme-ad_cpu
-      - def-bonhomme_gpu
-      - def-bonhomme_cpu
+        - rrg-bonhomme-ad_gpu
+        - rrg-bonhomme-ad_cpu
+        - def-bonhomme_gpu
+        - def-bonhomme_cpu
       billing_is_gpu: true
-      host: mila
+      host: mila-tests
+      private_key: test_key.yaml
       name: mila
       prometheus_headers_file: tests/not-so-secrets/patate_prometheus/headers.json
       prometheus_url: https://hyrule-thanos.calcul.ca
@@ -55,11 +59,12 @@ sarc:
       timezone: America/Vancouver
     patate:
       accounts:
-      - rrg-bonhomme-ad_gpu
-      - rrg-bonhomme-ad_cpu
-      - def-bonhomme_gpu
-      - def-bonhomme_cpu
+        - rrg-bonhomme-ad_gpu
+        - rrg-bonhomme-ad_cpu
+        - def-bonhomme_gpu
+        - def-bonhomme_cpu
       host: patate
+      private_key: test_key.yaml
       prometheus_headers_file: tests/not-so-secrets/patate_prometheus/headers.json
       prometheus_url: https://fromage-thanos.calcul.ca
       sacct_bin: /opt/software/slurm/bin/sacct
@@ -68,6 +73,7 @@ sarc:
     raisin:
       accounts: null
       host: raisin
+      private_key: test_key.yaml
       prometheus_url: http://monitoring.server.raisin.quebec:9090/
       sacct_bin: /opt/slurm/bin/sacct
       timezone: America/Montreal
@@ -82,6 +88,7 @@ sarc:
         cn-c[019-030]:
           asupergpu: Nec Plus ULTRA GPU 2000
       host: raisin_no_prometheus
+      private_key: test_key.yaml
       prometheus_url: null
       sacct_bin: /opt/slurm/bin/sacct
       timezone: America/Montreal
@@ -95,6 +102,6 @@ sarc:
   mymila:
     tmp_json_path: secrets/tmp_mymila.json
   loki:
-      uri: "https://localhost/loki"
+    uri: "https://localhost/loki"
   tempo:
-      uri: "https://localhost/tempo"
+    uri: "https://localhost/tempo"
