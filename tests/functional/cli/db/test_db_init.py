@@ -24,6 +24,7 @@ def test_db_init(cli_main):
         "clusters",
         "gpu_billing",
         "node_gpu_mapping",
+        "healthcheck",
         "runstate",
     ]:
         collection = db[collection_name]
@@ -39,6 +40,7 @@ def test_db_init(cli_main):
         "clusters",
         "gpu_billing",
         "node_gpu_mapping",
+        "healthcheck",
         "runstate",
     ]:
         collection = db[collection_name]

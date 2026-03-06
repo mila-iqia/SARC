@@ -12,10 +12,11 @@ from pathlib import Path
 import gifnoc
 import simple_parsing
 
-from sarc.alerts.common import CheckStatus
+from sarc.alerts.common import CheckStatus, HealthMonitorConfig
 from sarc.alerts.healthcheck_state import (
     HealthCheckState,
     get_healthcheck_state_collection,
+    HealthCheckStateRepository,
 )
 from sarc.config import config
 
@@ -76,12 +77,11 @@ class HealthRunCommand:
         checks_skipped = 0
 
         for name in check_names:
-            # Get check state from database
-            state = repo.get_state(name)
-            if state is None:
-                # Get check from config file and save it in a new state in db
-                state = HealthCheckState(check=hcfg.checks[name])
-                repo.save(state)
+            # Get check state
+            state = _get_state(name=name, hcfg=hcfg, repo=repo)
+            assert state is not None
+            # Save it in database anyway
+            repo.save(state)
             check = state.check
 
             # Skip inactive checks
@@ -93,11 +93,10 @@ class HealthRunCommand:
             # Check dependencies
             deps_ok = True
             for dep in check.depends:
-                dep_state = repo.get_state(dep) or HealthCheckState(
-                    check=hcfg.checks[dep]
-                )
+                dep_state = _get_state(name=dep, hcfg=hcfg, repo=repo)
                 if (
-                    dep_state.last_result is None
+                    dep_state is None
+                    or dep_state.last_result is None
                     or dep_state.last_result.status != CheckStatus.OK
                 ):
                     logger.warning(f"Skipping '{name}': dependency '{dep}' not OK")
@@ -123,3 +122,18 @@ class HealthRunCommand:
             f"Check complete: {checks_run} checks run, {checks_skipped} skipped"
         )
         return 0
+
+
+def _get_state(
+    name: str, hcfg: HealthMonitorConfig, repo: HealthCheckStateRepository
+) -> HealthCheckState | None:
+    """Get health check state, or None if not found."""
+    check = hcfg.checks.get(name, None)
+    db_state = repo.get_state(name)
+    if check:
+        if db_state:
+            # Check parameters from config file have priority
+            db_state.check = check
+        else:
+            db_state = HealthCheckState(check=check)
+    return db_state
