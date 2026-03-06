@@ -545,7 +545,7 @@ def get_job(*, query_options: dict = {}, **kwargs) -> SlurmJob | None:
     return None
 
 
-class SlurmCLuster(BaseModel):
+class SlurmCluster(BaseModel):
     """Hold data for a Slurm cluster."""
 
     # Database ID
@@ -558,12 +558,12 @@ class SlurmCLuster(BaseModel):
     billing_is_gpu: bool = False
 
 
-class SlurmClusterRepository(AbstractRepository[SlurmCLuster]):
+class SlurmClusterRepository(AbstractRepository[SlurmCluster]):
     class Meta:
         collection_name = "clusters"
 
 
-def get_available_clusters() -> Iterable[SlurmCLuster]:
+def get_available_clusters() -> Iterable[SlurmCluster]:
     """Get clusters available in database."""
     db = config().mongo.database_instance
     return SlurmClusterRepository(database=db).find_by({})
