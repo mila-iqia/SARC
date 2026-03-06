@@ -1,7 +1,7 @@
 import logging
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from typing import Sequence, cast
 
 from sarc.alerts.common import HealthCheck, CheckResult
@@ -88,7 +88,6 @@ def check_prometheus_stats_occurrences(
     bool
         True if check succeeds, False otherwise.
     """
-    from sarc.config import UTC
     from sarc.client.series import compute_time_frames, load_job_series
 
     # Parse time_interval and get data frame

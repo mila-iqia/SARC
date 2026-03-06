@@ -1,6 +1,6 @@
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from typing import cast
 
 from sarc.alerts.common import HealthCheck, CheckResult
@@ -43,7 +43,6 @@ def check_gpu_util_per_user(
         True if check succeeds, False otherwise.
     """
     from sarc.client.series import compute_cost_and_waste, load_job_series
-    from sarc.config import UTC
 
     if threshold is None:
         logger.error("No threshold specified.")

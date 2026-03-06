@@ -1,7 +1,7 @@
 import logging
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from typing import cast
 
 from sarc.alerts.common import HealthCheck, CheckResult
@@ -49,7 +49,6 @@ def check_gpu_type_usage_per_node(
         True if check succeeds, False otherwise.
     """
     from sarc.client.series import load_job_series
-    from sarc.config import UTC
 
     if not gpu_type:
         logger.error("No GPU type specified.")

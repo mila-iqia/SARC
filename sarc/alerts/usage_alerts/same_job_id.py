@@ -1,7 +1,7 @@
 import logging
 from collections import Counter
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from typing import Dict
 
 from tqdm import tqdm
@@ -37,7 +37,6 @@ def check_same_job_id(
         True if there are no duplicated job IDs (check succeeds), False otherwise.
     """
     from sarc.client import count_jobs, get_jobs
-    from sarc.config import UTC
 
     # Compute parameters `start` and `end` for function `get_jobs()`
     if since is None:

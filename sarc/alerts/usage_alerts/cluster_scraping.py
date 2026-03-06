@@ -1,7 +1,7 @@
 import logging
 import sys
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 
 import pandas
 
@@ -45,7 +45,6 @@ def check_nb_jobs_per_cluster_per_time(
     bool
         True if check succeeds, False otherwise
     """
-    from sarc.config import UTC
     from sarc.client.series import compute_time_frames, load_job_series
 
     # Parse time_interval

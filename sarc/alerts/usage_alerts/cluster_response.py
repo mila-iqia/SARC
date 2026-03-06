@@ -1,6 +1,6 @@
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 
 from sarc.alerts.common import HealthCheck, CheckResult
 
@@ -23,7 +23,6 @@ def check_cluster_response(time_interval: timedelta = timedelta(days=7)) -> bool
     bool
         True if we scraped all clusters recently, False otherwise.
     """
-    from sarc.config import UTC
     from sarc.client.job import get_available_clusters
 
     # Get current date
