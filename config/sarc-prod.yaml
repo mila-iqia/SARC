@@ -4,7 +4,8 @@ sarc:
     OTLP_endpoint: http://loki01.server.mila.quebec:3100/otlp/v1/logs
     service_name: sarc-dev
     # slack: null
-    slack: ../../SARC_secrets/secrets/slack-prod.yaml
+    slack:
+      ../../SARC_secrets/secrets/slack-prod.yaml
       # description: SARC-prod
       # token: slack-token-replaceme
       # channel: slack-channel-id-replace-me
@@ -40,11 +41,12 @@ sarc:
   clusters:
     mila:
       host: localhost
+      private_key: pkey.yaml
       timezone: America/Montreal
       accounts:
       sacct_bin: "/opt/slurm/bin/sacct"
       prometheus_url: http://prometheus01.server.mila.quebec:9090/
-      start_date: '2022-04-01'
+      start_date: "2022-04-01"
       billing_is_gpu: true
       gpus_per_nodes:
         __DEFAULTS__:
@@ -84,17 +86,18 @@ sarc:
           h100: H100-SXM5-80GB
     narval:
       host: robot.narval.alliancecan.ca
+      private_key: pkey.yaml
       timezone: America/Montreal
       accounts:
-      - rrg-bengioy-ad_gpu
-      - rrg-bengioy-ad_cpu
-      - def-bengioy_gpu
-      - def-bengioy_cpu
+        - rrg-bengioy-ad_gpu
+        - rrg-bengioy-ad_cpu
+        - def-bengioy_gpu
+        - def-bengioy_cpu
       sacct_bin: "/opt/software/slurm/bin/sacct"
       ignore_tz_utc: true
       prometheus_url: https://mila-thanos.calculquebec.ca
       prometheus_headers_file: ../SARC_secrets/secrets/drac_prometheus/headers.json
-      start_date: '2022-04-01'
+      start_date: "2022-04-01"
       gpus_per_nodes:
         __DEFAULTS__:
           a100: A100-SXM4-40GB
@@ -113,12 +116,13 @@ sarc:
           NVIDIA A100-SXM4-40GB: A100-SXM4-40GB
     tamia:
       host: tamia
+      private_key: pkey.yaml
       timezone: America/Montreal
       accounts:
       sacct_bin: "/opt/slurm/bin/sacct"
       prometheus_url:
       prometheus_headers_file:
-      start_date: '2025-02-01'
+      start_date: "2025-02-01"
       gpus_per_nodes:
         __DEFAULTS__:
           h100: H100-SXM5-80GB
@@ -126,30 +130,32 @@ sarc:
           h100: H100-SXM5-80GB
     fir:
       host: robot.fir.alliancecan.ca
+      private_key: pkey.yaml
       timezone: America/Vancouver
       accounts:
-      - rrg-bengioy-ad_gpu
-      - rrg-bengioy-ad_cpu
-      - def-bengioy_gpu
-      - def-bengioy_cpu
+        - rrg-bengioy-ad_gpu
+        - rrg-bengioy-ad_cpu
+        - def-bengioy_gpu
+        - def-bengioy_cpu
       sacct_bin: "/opt/software/slurm/bin/sacct"
       ignore_tz_utc: true
       prometheus_url:
       prometheus_headers_file:
-      start_date: '2025-08-11'          
+      start_date: "2025-08-11"
     nibi:
       host: robot.nibi.alliancecan.ca
+      private_key: pkey.yaml
       timezone: America/Toronto
       accounts:
-      - rrg-bengioy-ad_gpu
-      - rrg-bengioy-ad_cpu
-      - def-bengioy_gpu
-      - def-bengioy_cpu
+        - rrg-bengioy-ad_gpu
+        - rrg-bengioy-ad_cpu
+        - def-bengioy_gpu
+        - def-bengioy_cpu
       sacct_bin: "/opt/software/slurm/bin/sacct"
       ignore_tz_utc: true
       prometheus_url:
       prometheus_headers_file:
-      start_date: '2025-07-31'          
+      start_date: "2025-07-31"
       gpus_per_nodes:
         __DEFAULTS__:
           h100: H100-SXM5-80GB
@@ -158,17 +164,18 @@ sarc:
           nvidia_h100_80gb_hbm3_3g.40gb: __MIG_FLAG__h100
     rorqual:
       host: robot.rorqual.alliancecan.ca
+      private_key: pkey.yaml
       timezone: America/Montreal
       accounts:
-      - rrg-bengioy-ad_gpu
-      - rrg-bengioy-ad_cpu
-      - def-bengioy_gpu
-      - def-bengioy_cpu
+        - rrg-bengioy-ad_gpu
+        - rrg-bengioy-ad_cpu
+        - def-bengioy_gpu
+        - def-bengioy_cpu
       sacct_bin: "/opt/software/slurm/bin/sacct"
       ignore_tz_utc: true
       prometheus_url: https://mila-thanos.calculquebec.ca
       prometheus_headers_file: ../SARC_secrets/secrets/drac_prometheus/headers.json
-      start_date: '2025-06-19'          
+      start_date: "2025-06-19"
       gpus_per_nodes:
         __DEFAULTS__:
           h100: H100-SXM5-80GB
@@ -177,13 +184,14 @@ sarc:
           nvidia_h100_80gb_hbm3_3g.40gb: __MIG_FLAG__h100
     trillium:
       host: trillium
+      private_key: pkey.yaml
       timezone: America/Montreal
       accounts:
-      - rrg-bengioy-ad_gpu
-      - rrg-bengioy-ad_cpu
-      - def-bengioy_gpu
-      - def-bengioy_cpu
+        - rrg-bengioy-ad_gpu
+        - rrg-bengioy-ad_cpu
+        - def-bengioy_gpu
+        - def-bengioy_cpu
       sacct_bin: "/opt/slurm/bin/sacct"
       prometheus_url:
       prometheus_headers_file:
-      start_date: '2025-06-19'          
+      start_date: "2025-06-19"
