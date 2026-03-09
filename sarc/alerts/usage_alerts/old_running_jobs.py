@@ -34,7 +34,10 @@ def check_old_running_jobs(since: datetime_utc | None = None) -> bool:
     coll_jobs = _jobs_collection()
     db_jobs = coll_jobs.get_collection()
     # Search RUNNING jobs
-    base_query: dict[str, Any] = {"job_state": SlurmState.RUNNING}
+    base_query: dict[str, Any] = {
+        "job_state": SlurmState.RUNNING,
+        "time_limit": {"$ne": None},
+    }
     if since is not None:
         base_query["submit_time"] = {"$gte": since}
     expected = db_jobs.count_documents(base_query)
