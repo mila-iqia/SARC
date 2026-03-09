@@ -233,6 +233,7 @@ def test_parse_jobs_from_cache(sacct_json, file_regression, test_config):
     )
 
 
+@pytest.mark.usefixtures("no_pkey")
 @pytest.mark.parametrize(
     "test_config", [{"clusters": {"patate": {"host": "patate"}}}], indirect=True
 )
@@ -277,20 +278,10 @@ def test_localhost(os_system, monkeypatch):
     "test_config", [{"clusters": {"raisin": {"host": "raisin"}}}], indirect=True
 )
 @pytest.mark.parametrize("json_jobs", [{}], indirect=True)
-@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache", "no_pkey")
 def test_stdout_message_before_json(
     test_config, sacct_json, remote, file_regression, cli_main, monkeypatch
 ):
-    #### Fix to ignore problems with the pkey argument to connect()
-    import fabric
-    from fabric import Connection
-
-    def Connection_mock(*args, connect_kwargs=None, **kwargs):
-        return Connection(*args, **kwargs)
-
-    monkeypatch.setattr(fabric, "Connection", Connection_mock)
-    ####
-
     remote.expect(
         host="raisin",
         cmd=f"export TZ=UTC && /opt/slurm/bin/sacct -X -S {_dtfmt(2023, 2, 15)} -E {_dtfmt(2023, 2, 16)} --allusers --json",
@@ -342,7 +333,7 @@ def test_stdout_message_before_json(
     "test_config", [{"clusters": {"raisin": {"host": "raisin"}}}], indirect=True
 )
 @pytest.mark.parametrize("json_jobs", [{}], indirect=True)
-@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache", "no_pkey")
 def test_update_job(test_config, sacct_json, remote, file_regression, cli_main):
     remote.expect(
         host="raisin",
@@ -496,7 +487,7 @@ def test_save_job(test_config, sacct_json, remote, file_regression, cli_main):
     ],
     indirect=True,
 )
-@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache", "no_pkey")
 def test_save_preempted_job(test_config, sacct_json, remote, file_regression, cli_main):
     remote.expect(
         cmd=f"export TZ=UTC && /opt/slurm/bin/sacct -X -S {_dtfmt(2023, 2, 15)} -E {_dtfmt(2023, 2, 16)} --allusers --json",
@@ -546,21 +537,12 @@ def test_save_preempted_job(test_config, sacct_json, remote, file_regression, cl
     )
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache", "no_pkey")
 def test_multiple_dates(test_config, remote, file_regression, cli_main):
     datetimes = [
         datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC) + timedelta(days=i)
         for i in range(5)
     ]
-    #### Fix to ignore problems with the pkey argument to connect()
-    import fabric
-    from fabric import Connection
-
-    def Connection_mock(*args, connect_kwargs=None, **kwargs):
-        return Connection(*args, **kwargs)
-
-    monkeypatch.setattr(fabric, "Connection", Connection_mock)
-    ####
 
     remote.expect(
         host="raisin",
@@ -633,7 +615,7 @@ def test_multiple_dates(test_config, remote, file_regression, cli_main):
     )
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache", "no_pkey")
 def test_multiple_clusters_and_dates(test_config, remote, file_regression, cli_main):
     cluster_names = ["raisin", "patate"]
     datetimes = [
@@ -669,16 +651,6 @@ def test_multiple_clusters_and_dates(test_config, remote, file_regression, cli_m
                 for job_id, job_submit_datetime in enumerate(datetimes)
             ],
         )
-
-    #### Fix to ignore problems with the pkey argument to connect()
-    import fabric
-    from fabric import Connection
-
-    def Connection_mock(*args, connect_kwargs=None, **kwargs):
-        return Connection(*args, **kwargs)
-
-    monkeypatch.setattr(fabric, "Connection", Connection_mock)
-    ####
 
     remote.expect_sessions(
         _create_session(
@@ -760,7 +732,7 @@ def test_multiple_clusters_and_dates(test_config, remote, file_regression, cli_m
 @pytest.mark.parametrize(
     "test_config", [{"clusters": {"patate": {"host": "patate"}}}], indirect=True
 )
-@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache", "no_pkey")
 def test_job_tz(test_config, sacct_json, remote, cli_main):
     remote.expect(
         host="patate",

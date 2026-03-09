@@ -74,6 +74,7 @@ def mock_get_users():
     ]
 
 
+@pytest.mark.usefixtures("no_pkey")
 @pytest.mark.freeze_time("2023-07-25")
 def test_beegfs_fetch_report(monkeypatch, remote, file_regression):
     cluster = config("scraping").clusters["mila"]
@@ -102,16 +103,6 @@ def test_beegfs_fetch_report(monkeypatch, remote, file_regression):
 
     assert len(dconfig.config_files) == 1
     cfile = next(iter(dconfig.config_files.values()))
-
-    #### Fix to ignore problems with the pkey argument to connect()
-    import fabric
-    from fabric import Connection
-
-    def Connection_mock(*args, connect_kwargs=None, **kwargs):
-        return Connection(*args, **kwargs)
-
-    monkeypatch.setattr(fabric, "Connection", Connection_mock)
-    ####
 
     remote.expect(
         host=cluster.host,

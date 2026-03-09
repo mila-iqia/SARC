@@ -7,6 +7,7 @@ from sarc.core.scraping.diskusage import get_diskusage_scraper
 from sarc.storage.diskusage import get_diskusages
 
 
+@pytest.mark.usefixtures("no_pkey")
 @pytest.mark.freeze_time("2023-07-25")
 def test_drac_fetch_report(remote, file_regression, monkeypatch):
     cluster = config("scraping").clusters["gerudo"]
@@ -24,16 +25,6 @@ def test_drac_fetch_report(remote, file_regression, monkeypatch):
     ) as f:
         raw_report = f.read()
     assert raw_report
-
-    #### Fix to ignore problems with the pkey argument to connect()
-    import fabric
-    from fabric import Connection
-
-    def Connection_mock(*args, connect_kwargs=None, **kwargs):
-        return Connection(*args, **kwargs)
-
-    monkeypatch.setattr(fabric, "Connection", Connection_mock)
-    ####
 
     remote.expect(
         host=cluster.host,
@@ -58,7 +49,7 @@ def test_drac_parse_report(file_regression):
     file_regression.check(result.model_dump_json(exclude={"timestamp", "id"}, indent=2))
 
 
-@pytest.mark.usefixtures("empty_read_write_db")
+@pytest.mark.usefixtures("empty_read_write_db", "no_pkey")
 @pytest.mark.freeze_time("2023-05-12")
 def test_drac_acquire_storages(
     remote, cli_main, file_regression, enabled_cache, monkeypatch
@@ -78,16 +69,6 @@ def test_drac_acquire_storages(
     ) as f:
         raw_report = f.read()
     assert raw_report
-
-    #### Fix to ignore problems with the pkey argument to connect()
-    import fabric
-    from fabric import Connection
-
-    def Connection_mock(*args, connect_kwargs=None, **kwargs):
-        return Connection(*args, **kwargs)
-
-    monkeypatch.setattr(fabric, "Connection", Connection_mock)
-    ####
 
     remote.expect(
         host=cluster.host,
