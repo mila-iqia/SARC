@@ -4,3 +4,5 @@ fetch_hourly: sarc fetch
 parse_hourly: sarc parse
 fetch_daily: sarc fetch
 parse_daily: sarc parse
+fetch_manual: sarc fetch
+parse_manual: sarc parse
