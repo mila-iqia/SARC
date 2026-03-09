@@ -6,3 +6,4 @@ fetch_daily: sarc fetch
 parse_daily: sarc parse
 fetch_manual: sarc fetch
 parse_manual: sarc parse
+parse_daily: sarc health run
