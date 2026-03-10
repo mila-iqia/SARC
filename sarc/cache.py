@@ -16,6 +16,7 @@ from typing import IO, Any, Callable, ClassVar, Literal, Protocol, overload
 from zipfile import ZIP_LZMA, ZipFile
 
 from .config import config
+from .utils import ensure_utc
 
 logger = logging.getLogger(__name__)
 UTCOFFSET = timedelta(0)
@@ -65,11 +66,6 @@ class BinaryFormatter(FormatterProto[bytes]):
 
 class CacheException(Exception):
     pass
-
-
-def ensure_utc(d: datetime) -> datetime:
-    assert d.tzinfo is not None
-    return d.astimezone(UTC)
 
 
 class CacheEntry:

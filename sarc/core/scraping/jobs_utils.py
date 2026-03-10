@@ -8,11 +8,12 @@ import subprocess
 from typing import Iterator, Optional
 
 from sarc.client.job import SlurmJob
-from sarc.config import ClusterConfig, config, UTC, TZLOCAL
+from sarc.config import ClusterConfig, config, UTC
 from sarc.core.models.validators import UTCOFFSET
 from sarc.errors import ClusterNotFound
 from sarc.jobs.node_gpu_mapping import get_node_to_gpu
 from sarc.traces import trace_decorator
+from sarc.utils import ensure_utc
 
 
 logger = logging.getLogger(__name__)
@@ -77,7 +78,7 @@ def parse_auto_intervals(
 ) -> list[tuple[datetime, datetime]]:
     intervals = []
     start = _time_auto_first_date(cluster_name, end_field)
-    end = end or datetime.now(tz=TZLOCAL).astimezone(UTC)
+    end = end or datetime.now(UTC)
     if start > end:
         raise ValueError(f"auto intervals: start date {start} > end date {end}")
     if minutes <= 0:
@@ -367,10 +368,8 @@ def parse_raw(
         scraped_end: the UTC datetime until which we scraped.
             Should be precise up to minute.
     """
-    if not _date_is_utc(scraped_start):
-        raise ValueError(f"sacct scraper: start date not in UTC: {scraped_start}")
-    if not _date_is_utc(scraped_end):
-        raise ValueError(f"sacct scraper: end date not in UTC: {scraped_end}")
+    ensure_utc(scraped_start)
+    ensure_utc(scraped_end)
 
     # filter out the eventual welcome message
     raw_data_str = raw_data.decode("utf-8")

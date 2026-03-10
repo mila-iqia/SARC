@@ -19,10 +19,11 @@ from sarc.cache import (
     OldCache,
     _cache_policy_from_env,
     cache_policy_var,
-    ensure_utc,
     make_cached_function,
     with_cache,
 )
+
+from sarc.utils import ensure_utc
 
 
 class plaintext(FormatterProto):

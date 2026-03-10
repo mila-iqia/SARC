@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from typing import Any, Mapping
 
 
@@ -16,3 +17,8 @@ def flatten(d: Mapping[str, Any]) -> dict[str, Any]:
 
     _flatten(d)
     return res
+
+
+def ensure_utc(d: datetime) -> datetime:
+    assert d.tzinfo is not None
+    return d.astimezone(UTC)

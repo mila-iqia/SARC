@@ -21,22 +21,6 @@ from sarc.traces import using_trace
 logger = logging.getLogger(__name__)
 
 
-# def get_jobs(
-#     cluster: ClusterConfig, start: datetime, end: datetime
-# ) -> list[SlurmJob | None]:
-#     fetcher = SacctFetcher(cluster, start, end)
-
-#     logger.info(
-#         f"Getting the sacct data for cluster {cluster.name}, time {start} to {end}..."
-#     )
-
-#     scraper.get_raw()
-
-#     jobs = [job for job in scraper] # NOOOOOOOOOOOO
-
-#     return jobs
-
-
 def fetch_jobs(
     cluster_names: list[str],
     clusters: dict[str, ClusterConfig],
@@ -161,6 +145,8 @@ def parse_jobs(
         nb_entries = 0
 
         # Retrieve all jobs associated to the time intervals
+        # The cache entry is designed to yield the jobs intervals
+        # in the same order they were added, i.e. in chronological order.
         for key, value in cache_entry.items():
             logger.info(f"Parsing slurm jobs identified by: {key}...")
 
@@ -170,8 +156,6 @@ def parse_jobs(
             )
             scraped_end = datetime.fromisoformat(key.split("_")[2]).replace(tzinfo=UTC)
 
-            # Store the jobs in the database, beginning by the
-            # oldest intervals
             for entry in parse_raw(value, cluster_name, scraped_start, scraped_end):
                 if entry is not None:
                     nb_entries += 1
