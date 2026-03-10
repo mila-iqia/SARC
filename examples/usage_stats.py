@@ -5,7 +5,7 @@ import pandas as pd
 from tqdm import tqdm
 
 from sarc.client.job import get_jobs
-from sarc.config import config, TZLOCAL, UTC
+from sarc.config import TZLOCAL, UTC, config
 
 # Clusters we want to compare
 clusters = ["mila", "narval", "beluga", "cedar", "graham"]

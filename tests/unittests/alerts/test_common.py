@@ -2,6 +2,7 @@ import pytest
 from gifnoc.std import time
 
 from sarc.alerts.common import CheckException, CheckResult, CheckStatus
+
 from .definitions import BeanCheck, BeanResult
 
 

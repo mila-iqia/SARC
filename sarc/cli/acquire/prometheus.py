@@ -9,13 +9,13 @@ from datetime import datetime
 from simple_parsing import field
 
 from sarc.config import config
-from sarc.jobs.prometheus_scraping import scrap_prometheus
 from sarc.core.scraping.jobs_utils import (
-    parse_intervals,
-    parse_auto_intervals,
-    set_auto_end_time,
     _time_auto_first_date,
+    parse_auto_intervals,
+    parse_intervals,
+    set_auto_end_time,
 )
+from sarc.jobs.prometheus_scraping import scrap_prometheus
 from sarc.traces import using_trace
 
 logger = logging.getLogger(__name__)

@@ -1,9 +1,11 @@
 from dataclasses import dataclass
+from datetime import datetime
+
+from simple_parsing import field
+
+from sarc.cache import UTC
 from sarc.config import config
 from sarc.core.scraping.jobs import parse_jobs
-from simple_parsing import field
-from datetime import datetime
-from sarc.cache import UTC
 
 
 @dataclass

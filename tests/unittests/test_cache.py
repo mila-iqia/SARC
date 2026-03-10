@@ -22,7 +22,6 @@ from sarc.cache import (
     make_cached_function,
     with_cache,
 )
-
 from sarc.utils import ensure_utc
 
 

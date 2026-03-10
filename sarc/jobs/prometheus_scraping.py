@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime
-from typing import Optional, Iterable
+from typing import Iterable, Optional
 
 from tqdm import tqdm
 

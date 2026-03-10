@@ -1,6 +1,6 @@
 import pytest
 
-from sarc.alerts.common import HealthCheck, CheckStatus
+from sarc.alerts.common import CheckStatus, HealthCheck
 from sarc.alerts.healthcheck_state import HealthCheckState, HealthCheckStateRepository
 from sarc.config import config
 from tests.unittests.alerts.definitions import BeanCheck

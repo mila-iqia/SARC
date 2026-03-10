@@ -15,7 +15,7 @@ from tqdm import tqdm
 
 import sarc.client.series
 import sarc.rest.client
-from sarc.config import UTC, TZLOCAL
+from sarc.config import TZLOCAL, UTC
 
 mongodb_load_job_series = sarc.client.series.load_job_series
 rest_load_job_series = sarc.rest.client.load_job_series
