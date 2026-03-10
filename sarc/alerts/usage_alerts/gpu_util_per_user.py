@@ -1,9 +1,9 @@
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime, timedelta
 from typing import cast
 
-from sarc.alerts.common import HealthCheck, CheckResult
+from sarc.alerts.common import CheckResult, HealthCheck
 
 logger = logging.getLogger(__name__)
 

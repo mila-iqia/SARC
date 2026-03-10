@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
-from typing import Any, Callable, Literal, Iterable
+from typing import Any, Callable, Iterable, Literal
 
 import numpy as np
 import pandas
@@ -13,10 +13,10 @@ from tqdm import tqdm
 from sarc.client.gpumetrics import GPUBilling, get_cluster_gpu_billings, get_rgus
 from sarc.client.job import (
     SlurmCluster,
+    SlurmJob,
     count_jobs,
     get_available_clusters,
     get_jobs,
-    SlurmJob,
 )
 from sarc.config import TZLOCAL
 from sarc.core.models.users import UserData

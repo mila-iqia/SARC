@@ -34,10 +34,10 @@ from gifnoc.proxy import MissingConfigurationError
 from pydantic import UUID4
 from pydantic_mongo import PydanticObjectId
 
-from sarc.api.v0 import SlurmJobList, UserList, DEFAULT_PAGE_SIZE
+from sarc.api.v0 import DEFAULT_PAGE_SIZE, SlurmJobList, UserList
 from sarc.client.job import SlurmJob, SlurmState
 from sarc.client.series import AbstractJobSeriesFactory
-from sarc.config import ConfigurationError, UTC, config
+from sarc.config import UTC, ConfigurationError, config
 from sarc.core.models.users import MemberType, UserData
 from sarc.traces import trace_decorator
 
