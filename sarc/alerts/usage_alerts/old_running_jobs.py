@@ -48,6 +48,7 @@ def check_old_running_jobs(since: datetime_utc | None = None) -> bool:
         assert job.job_state == SlurmState.RUNNING, job
         assert job.start_time is not None, job
         assert job.end_time is None, job
+        assert job.time_limit is not None, job
         # A running job should have already finished
         # if maximum allowed end time is before current time.
         max_end_time = job.start_time + timedelta(seconds=job.time_limit)
@@ -61,7 +62,7 @@ def check_old_running_jobs(since: datetime_utc | None = None) -> bool:
         # First, classify job entries by key :cluster name + job ID
         # NB: Database may contain many job entries with same cluster name,
         # same job ID, AND same job state `RUNNING`
-        index_jobs = {}
+        index_jobs: dict[tuple[str, int], list[SlurmJob]] = {}
         for job in jobs_over_limit:
             key = (job.cluster_name, job.job_id)
             index_jobs.setdefault(key, []).append(job)
@@ -87,10 +88,19 @@ def check_old_running_jobs(since: datetime_utc | None = None) -> bool:
                 index_jobs[key].append(job)
 
         # Now we get some stats
-        nb_entries = len(jobs_over_limit)  # nb. initial entries
-        nb_jobs = len(index_jobs)  # nb. initial jobs
-        nb_uniques = 0  # nb. jobs not re-submitted
-        nb_latest_state = Counter()  # nb. latest found states for re-submitted jobs
+
+        # nb. initial entries
+        nb_entries = len(jobs_over_limit)
+
+        # nb. initial jobs
+        nb_jobs = len(index_jobs)
+
+        # nb. jobs not re-submitted
+        nb_uniques = 0
+
+        # nb. latest found states for re-submitted jobs
+        nb_latest_state: Counter[SlurmState] = Counter()
+
         for jobs in index_jobs.values():
             if len(jobs) == 1:
                 nb_uniques += 1
