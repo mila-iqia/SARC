@@ -101,9 +101,10 @@ def check_old_running_jobs(since: datetime_utc | None = None) -> bool:
                 latest_job = jobs[-1]
                 nb_latest_state.update([latest_job.job_state])
         # Now log detailed error
-        message = (
-            f"Found {nb_entries} RUNNING job entries which should have already finished"
-        )
+        message = f"Found {nb_entries} RUNNING job entries"
+        if since is not None:
+            message += f", submitted since {since},"
+        message += " which should have already finished"
         if nb_entries != nb_jobs:
             message += f", distributed in {nb_jobs} jobs (cluster name + job ID)"
         message += f", from which {nb_uniques} not re-submitted"
