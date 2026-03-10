@@ -56,7 +56,6 @@ class PrivateKeyInfo:
 @dataclass
 class ClusterConfig:
     # pylint: disable=too-many-instance-attributes
-
     host: str
     private_key: PrivateKeyInfo
     timezone: zoneinfo.ZoneInfo | None = None
