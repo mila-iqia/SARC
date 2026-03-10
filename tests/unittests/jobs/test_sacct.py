@@ -1,40 +1,39 @@
 from datetime import date, datetime, timedelta
-from os.path import isfile
 
 import pytest
 from fabric.testing.base import Command
 
-from sarc.config import config, UTC
-from sarc.jobs.sacct import JobConversionError, SAcctScraper
+from sarc.config import UTC
+from sarc.core.scraping.jobs import fetch_jobs
+from sarc.core.scraping.jobs_utils import (
+    JobConversionError,
+    fetch_raw,
+    _convert_json_job,
+)
+from sarc.cache import Cache
 from tests.common.dateutils import MTL, _dtfmt
 
 
 @pytest.mark.parametrize(
     "test_config", [{"clusters": {"test": {"host": "patate"}}}], indirect=True
 )
-def test_SAcctScraper_fetch_raw(test_config, remote):
-    scraper = SAcctScraper(
-        cluster=test_config.clusters["test"],
-        start=datetime(2023, 2, 28, tzinfo=MTL).astimezone(UTC),
-        end=datetime(2023, 3, 1, tzinfo=MTL).astimezone(UTC),
-    )
+def test_fetch_raw(test_config, remote):
     remote.expect(
         host="patate",
         cmd=f"export TZ=UTC && sacct -X -S {_dtfmt(2023, 2, 28)} -E {_dtfmt(2023, 3, 1)} --allusers --json",
         out=b"{}",
     )
-    assert scraper.fetch_raw() == {}
+    assert fetch_raw(
+        cluster=test_config.clusters["test"],
+        start=datetime(2023, 2, 28, tzinfo=MTL).astimezone(UTC),
+        end=datetime(2023, 3, 1, tzinfo=MTL).astimezone(UTC),
+    ) == "{}".encode("utf-8")
 
 
 @pytest.mark.parametrize(
     "test_config", [{"clusters": {"test": {"host": "test"}}}], indirect=True
 )
-def test_SAcctScraper_fetch_raw2(test_config, remote):
-    scraper = SAcctScraper(
-        cluster=test_config.clusters["test"],
-        start=datetime(2023, 2, 28, tzinfo=MTL).astimezone(UTC),
-        end=datetime(2023, 3, 1, tzinfo=MTL).astimezone(UTC),
-    )
+def test_fetch_raw2(test_config, remote):
     remote.expect(
         commands=[
             Command(
@@ -47,31 +46,27 @@ def test_SAcctScraper_fetch_raw2(test_config, remote):
             ),
         ]
     )
-    assert scraper.fetch_raw() == {}
-    assert scraper.fetch_raw() == {"value": 2}
+    assert fetch_raw(
+        cluster=test_config.clusters["test"],
+        start=datetime(2023, 2, 28, tzinfo=MTL).astimezone(UTC),
+        end=datetime(2023, 3, 1, tzinfo=MTL).astimezone(UTC),
+    ) == "{}".encode("utf-8")
+    assert fetch_raw(
+        cluster=test_config.clusters["test"],
+        start=datetime(2023, 2, 28, tzinfo=MTL).astimezone(UTC),
+        end=datetime(2023, 3, 1, tzinfo=MTL).astimezone(UTC),
+    ) == '{ "value": 2 }'.encode("utf-8")
 
 
 @pytest.mark.parametrize(
     "test_config", [{"clusters": {"test": {"host": "patate"}}}], indirect=True
 )
 @pytest.mark.freeze_time(datetime(2023, 2, 28, tzinfo=MTL))
-def test_SAcctScraper_get_cache(test_config, enabled_cache, remote):
+def test_fetch_jobs_get_cache(test_config, enabled_cache, remote):
     today = datetime.combine(date.today(), datetime.min.time(), tzinfo=MTL).astimezone(
         UTC
     )
     yesterday = today - timedelta(days=1)
-    tomorrow = today + timedelta(days=1)
-
-    scraper_today = SAcctScraper(
-        cluster=test_config.clusters["test"],
-        start=today,
-        end=tomorrow,
-    )
-    scraper_yesterday = SAcctScraper(
-        cluster=test_config.clusters["test"],
-        start=yesterday,
-        end=today,
-    )
 
     # we ask for yesterday, today and tomorrow
     fmt = "%Y-%m-%dT%H:%M"
@@ -81,43 +76,31 @@ def test_SAcctScraper_get_cache(test_config, enabled_cache, remote):
                 f"export TZ=UTC && sacct -X -S {yesterday.strftime(fmt)} -E {today.strftime(fmt)} --allusers --json",
                 out=b'{"value": 2}',
             ),
-            Command(
-                f"export TZ=UTC && sacct -X -S {today.strftime(fmt)} -E {tomorrow.strftime(fmt)} --allusers --json",
-                out=b'{"value": 2}',
-            ),
         ]
     )
 
-    cachedir = config().cache
-    cachedir = cachedir / "sacct"
-    cachefile = (
-        cachedir
-        / f"test.{yesterday.strftime('%Y-%m-%dT%H:%M')}.{today.strftime('%Y-%m-%dT%H:%M')}.json"
+    fetch_jobs(
+        ["test"],
+        test_config.clusters,
+        [f"{yesterday.strftime(fmt)}-{today.strftime(fmt)}"],
+        None,
     )
-    assert not isfile(cachefile)
-    scraper_yesterday.get_raw()
-    assert isfile(cachefile)
 
-    cachedir = config().cache
-    cachedir = cachedir / "sacct"
-    cachefile = (
-        cachedir
-        / f"test.{today.strftime('%Y-%m-%dT%H:%M')}.{tomorrow.strftime('%Y-%m-%dT%H:%M')}.json"
-    )
-    assert not isfile(cachefile)
-    scraper_today.get_raw()
-    assert not isfile(cachefile)
+    # Retrieve from the cache
+    cache = Cache(subdirectory="jobs")
+    cache_entries = list(cache.read_from(from_time=yesterday))
+    assert len(cache_entries) == 1
+    items = list(cache_entries[0].items())
+    assert len(items) == 1
+    key, value = items[0]
+    assert key == f"test_{yesterday.strftime(fmt)}_{today.strftime(fmt)}"
+    assert value == b'{"value": 2}'
 
 
 @pytest.mark.parametrize(
     "test_config", [{"clusters": {"test": {"host": "test"}}}], indirect=True
 )
-def test_SAcctScraper_convert_version_supported(test_config, monkeypatch, caplog):
-    scraper = SAcctScraper(
-        cluster=test_config.clusters["test"],
-        start=datetime(2023, 2, 28, tzinfo=MTL).astimezone(UTC),
-        end=datetime(2023, 3, 1, tzinfo=MTL).astimezone(UTC),
-    )
+def test_convert_version_supported(test_config, monkeypatch, caplog):
     version_supported = {"major": "24", "micro": "1", "minor": "11"}
     version_unsupported = {"major": "124", "micro": "1", "minor": "11"}
 
@@ -180,7 +163,7 @@ def test_SAcctScraper_convert_version_supported(test_config, monkeypatch, caplog
     }
 
     # test version supported
-    slurmjob = scraper.convert(entry, version_supported)
+    slurmjob = _convert_json_job(entry, "test", version_supported)
 
     assert slurmjob is not None
     assert slurmjob.job_id == 123456
@@ -193,4 +176,4 @@ def test_SAcctScraper_convert_version_supported(test_config, monkeypatch, caplog
 
     # test version unsupported
     with pytest.raises(JobConversionError):
-        slurmjob = scraper.convert(entry, version_unsupported)
+        slurmjob = _convert_json_job(entry, "test", version_unsupported)
