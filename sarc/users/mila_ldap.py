@@ -158,6 +158,7 @@ def _query_ldap(
         local_private_key_password=local_private_key.password,
         local_certificate_file=local_certificate_file,
         validate=ssl.CERT_REQUIRED,
+        version=ssl.PROTOCOL_TLSv1_2,
     )
     # Connect to LDAP
     server = Server(ldap_service_uri, use_ssl=True, tls=tls_conf)
