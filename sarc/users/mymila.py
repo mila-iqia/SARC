@@ -51,6 +51,7 @@ from itertools import chain, repeat
 from typing import Sequence
 
 from azure.identity import ClientSecretCredential
+from serieux.features.encrypt import Secret
 
 from sarc.core.scraping.users import MatchID, UserMatch, UserScraper, _builtin_scrapers
 
@@ -103,7 +104,7 @@ class Headers(IntEnum):
 class MyMilaConfig:
     tenant_id: str
     client_id: str
-    client_secret: str
+    client_secret: Secret[str]
     sql_endpoint: str
     database: str = "wh_sarc"
 
