@@ -3,7 +3,6 @@ import os
 from collections.abc import Iterable
 from datetime import UTC, datetime
 from importlib.metadata import entry_points
-from pathlib import Path
 from typing import Any, Protocol, Type
 
 from pydantic import BaseModel, Field, field_serializer
