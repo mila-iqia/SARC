@@ -303,7 +303,7 @@ full_config = gifnoc.define("sarc", Config)
 
 
 gifnoc.set_sources("${envfile:SARC_CONFIG}")
-
+config_path = Path(os.getenv("SARC_CONFIG", "")).parent
 
 sarc_mode = ContextVar("sarc_mode", default=os.getenv("SARC_MODE", "client"))
 

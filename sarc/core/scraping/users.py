@@ -1,17 +1,21 @@
 import logging
+import os
 from collections.abc import Iterable
 from datetime import UTC, datetime
 from importlib.metadata import entry_points
 from typing import Any, Protocol, Type
 
 from pydantic import BaseModel, Field, field_serializer
-from serieux import deserialize
+from serieux import IncludeFile, Serieux, WorkingDirectory
+from serieux.features.encrypt import EncryptionKey
 
 from sarc.cache import Cache
-from sarc.config import config
+from sarc.config import config, config_path
 from sarc.core.models.runstate import get_parsed_date, set_parsed_date
 from sarc.core.models.users import Credentials, MemberType
 from sarc.core.models.validators import ValidField
+
+deserialize = (Serieux + IncludeFile)().deserialize
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +76,12 @@ class UserScraper[T](Protocol):
     config_type: Type[T]
 
     def validate_config(self, config_data: Any) -> T:
-        return deserialize(self.config_type, config_data)
+        return deserialize(
+            self.config_type,
+            config_data,
+            WorkingDirectory(directory=config_path)  # type: ignore[call-arg]
+            + EncryptionKey(password=os.environ.get("SERIEUX_PASSWORD", None)),  # type: ignore[call-arg]
+        )
 
     def get_user_data(self, config: T) -> bytes: ...  # pragma: nocover
 
