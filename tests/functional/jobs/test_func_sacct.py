@@ -422,7 +422,7 @@ def test_update_job(test_config, sacct_json, remote, file_regression, cli_main):
     "test_config", [{"clusters": {"raisin": {"host": "raisin"}}}], indirect=True
 )
 @pytest.mark.parametrize("json_jobs", [{}], indirect=True)
-@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache", "no_pkey")
 def test_save_job(test_config, sacct_json, remote, file_regression, cli_main):
     remote.expect(
         host="raisin",

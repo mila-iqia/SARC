@@ -29,17 +29,7 @@ from tests.common.dateutils import MTL, _dtfmt
     ],
     indirect=True,
 )
-<<<<<<< HEAD
 def test_fetch_raw(test_config, remote):
-=======
-def test_SAcctScraper_fetch_raw(test_config, remote, monkeypatch):
-    scraper = SAcctScraper(
-        cluster=test_config.clusters["test"],
-        start=datetime(2023, 2, 28, tzinfo=MTL).astimezone(UTC),
-        end=datetime(2023, 3, 1, tzinfo=MTL).astimezone(UTC),
-    )
-
->>>>>>> 2d05a7f (Convert repeated code to a fixture)
     remote.expect(
         host="patate",
         cmd=f"export TZ=UTC && sacct -X -S {_dtfmt(2023, 2, 28)} -E {_dtfmt(2023, 3, 1)} --allusers --json",
@@ -67,17 +57,7 @@ def test_SAcctScraper_fetch_raw(test_config, remote, monkeypatch):
     ],
     indirect=True,
 )
-<<<<<<< HEAD
 def test_fetch_raw2(test_config, remote):
-=======
-def test_SAcctScraper_fetch_raw2(test_config, remote, monkeypatch):
-    scraper = SAcctScraper(
-        cluster=test_config.clusters["test"],
-        start=datetime(2023, 2, 28, tzinfo=MTL).astimezone(UTC),
-        end=datetime(2023, 3, 1, tzinfo=MTL).astimezone(UTC),
-    )
-
->>>>>>> 2d05a7f (Convert repeated code to a fixture)
     remote.expect(
         commands=[
             Command(
