@@ -7,7 +7,6 @@ from typing import Any
 from tqdm import tqdm
 
 from sarc.alerts.common import HealthCheck, CheckResult
-from sarc.client.job import SlurmJob
 from sarc.core.models.validators import datetime_utc
 
 logger = logging.getLogger(__name__)
@@ -28,7 +27,7 @@ def check_old_running_jobs(since: datetime_utc | None = None) -> bool:
     bool
         True if check succeeds (no old RUNNING job in database), False otherwise.
     """
-    from sarc.client.job import _jobs_collection, SlurmState
+    from sarc.client.job import _jobs_collection, SlurmJob, SlurmState
 
     now = datetime.now(tz=UTC)
     coll_jobs = _jobs_collection()
