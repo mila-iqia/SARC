@@ -4,10 +4,7 @@ from datetime import datetime, UTC
 from typing import cast
 
 from sarc.alerts.common import CheckResult, HealthCheck
-from sarc.alerts.healthcheck_state import get_healthcheck_state_collection
-from sarc.core.models.runstate import get_parsed_date
 from sarc.core.models.validators import datetime_utc
-from sarc.users.db import get_user_collection
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +27,10 @@ class UsersCollectionSizeCheck(HealthCheck):
         but should not change neither between two parsing, nor after any other SARC command.
         """
 
+        from sarc.alerts.healthcheck_state import get_healthcheck_state_collection
         from sarc.config import config
+        from sarc.core.models.runstate import get_parsed_date
+        from sarc.users.db import get_user_collection
 
         try:
             latest_parsed_date = get_parsed_date(
