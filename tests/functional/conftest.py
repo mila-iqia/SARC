@@ -9,7 +9,6 @@ import pytest
 from pytest_regressions.data_regression import RegressionYamlDumper
 
 from sarc.config import config
-from sarc.testing import MongoInstance
 
 from .allocations.factory import create_allocations
 from .diskusage.factory import create_diskusages
