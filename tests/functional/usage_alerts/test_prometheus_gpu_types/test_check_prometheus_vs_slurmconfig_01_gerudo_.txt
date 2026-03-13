@@ -1,3 +1,4 @@
 No node_to_gpu, so no slurm config data: should complain.
 
 [prometheus][gerudo] cannot find GPU types from slurm config file. You may need to fetch and parse slurm.conf files for this cluster.
+ERROR    sarc.alerts.common:common.py:98 [prometheus_gpu_type_gerudo] FAILURE: prometheus_gpu_type_gerudo

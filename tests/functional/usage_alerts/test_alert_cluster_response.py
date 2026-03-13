@@ -1,28 +1,27 @@
 import re
-from datetime import timedelta
 
 import pytest
+import time_machine
 
-from sarc.alerts.usage_alerts.cluster_response import check_cluster_response
 from tests.functional.jobs.test_func_load_job_series import MOCK_TIME
 
 PARAMETERS = {
-    "default": dict(),  # default is 7 days
+    "default": "cluster_response_default",  # default is 7 days
     **{
-        f"{days}-days": dict(time_interval=timedelta(days=days))
+        f"{days}-days": f"cluster_response_{days}_days"
         for days in [365, 283, 282, 281, 280, 279]
     },
 }
 
 
-@pytest.mark.freeze_time(MOCK_TIME)
-@pytest.mark.usefixtures("read_only_db_with_users", "tzlocal_is_mtl")
-@pytest.mark.parametrize("params", PARAMETERS.values(), ids=PARAMETERS.keys())
-def test_check_cluster_response(params, caplog, file_regression):
-    check_cluster_response(**params)
+@time_machine.travel(MOCK_TIME, tick=False)
+@pytest.mark.usefixtures("read_only_db_with_users", "health_config")
+@pytest.mark.parametrize("check_name", PARAMETERS.values(), ids=PARAMETERS.keys())
+def test_check_cluster_response(caplog, file_regression, cli_main, check_name):
+    assert cli_main(["health", "run", "--check", check_name]) == 0
     file_regression.check(
         re.sub(
-            r"WARNING +sarc\.alerts\.usage_alerts\.cluster_response:cluster_response.py:[0-9]+ +",
+            r"ERROR +sarc\.alerts\.usage_alerts\.cluster_response:cluster_response.py:[0-9]+ +",
             "",
             caplog.text,
         )
