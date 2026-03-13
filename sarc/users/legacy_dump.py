@@ -14,6 +14,8 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from serieux.features.encrypt import Secret
+
 from sarc.core.models.users import Credentials, MemberType
 from sarc.core.models.validators import END_TIME, START_TIME
 from sarc.core.scraping.users import MatchID, UserMatch, UserScraper, _builtin_scrapers
@@ -58,7 +60,7 @@ def _determine_member_type(drac_members: dict[str, Any] | None) -> MemberType | 
 
 @dataclass
 class LegacyDumpConfig:
-    json_file_path: Path
+    json: Secret[str]
 
 
 class LegacyDumpScraper(UserScraper[LegacyDumpConfig]):
@@ -66,8 +68,7 @@ class LegacyDumpScraper(UserScraper[LegacyDumpConfig]):
 
     def get_user_data(self, config: LegacyDumpConfig) -> bytes:
         """Read the JSON dump file."""
-        with open(config.json_file_path, "r", encoding="utf-8") as f:
-            return f.read().encode("utf-8")
+        return config.json.encode("utf-8")
 
     def parse_user_data(self, data: bytes, _: datetime) -> Iterable[UserMatch]:
         """Parse the legacy user data and convert to UserMatch format."""
