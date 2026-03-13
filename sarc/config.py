@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import functools
-import json
 import os
 import zoneinfo
 from contextlib import contextmanager
@@ -59,7 +58,7 @@ class ClusterConfig:
     private_key: PrivateKeyInfo
     timezone: zoneinfo.ZoneInfo | None = None
     prometheus_url: str | None = None
-    prometheus_headers_file: str | None = None
+    prometheus_headers: dict[str, Secret[str]] = field(default_factory=dict)
     name: str | None = None
     sacct_bin: str = "sacct"
     ignore_tz_utc: bool = False
@@ -155,20 +154,13 @@ class ClusterConfig:
     def prometheus(self) -> PrometheusConnect:
         from prometheus_api_client import PrometheusConnect
 
-        if self.prometheus_headers_file is not None:
-            headers = json.load(
-                open(  # pylint: disable=consider-using-with
-                    self.prometheus_headers_file, "r", encoding="utf-8"
-                )
-            )
-        else:
-            headers = {}
-
         if self.prometheus_url is None:
             raise ConfigurationError(
                 f"No prometheus URL provided for cluster '{self.name}'"
             )
-        return PrometheusConnect(url=self.prometheus_url, headers=headers)
+        return PrometheusConnect(
+            url=self.prometheus_url, headers=self.prometheus_headers
+        )
 
 
 @dataclass
