@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from sarc.config import PrivateKeyInfo
 from sarc.users.mila_ldap import MilaLDAPConfig, MilaLDAPScraper
 from tests.common.sarc_mocks import fake_raw_ldap_data
 from tests.unittests.core.test_users_scraping import UserPluginTester
@@ -15,12 +16,12 @@ class TestMilaLDAPScraper(UserPluginTester):
 
     raw_config = {
         "service_uri": "ldaps://ldap.example.com:636",
-        "private_key_file": "/path/to/private.key",
+        "private_key": {"file": "/path/to/private.key", "password": None},
         "certificate_file": "/path/to/certificate.crt",
     }
     parsed_config = MilaLDAPConfig(
         service_uri="ldaps://ldap.example.com:636",
-        private_key_file=Path("/path/to/private.key"),
+        private_key=PrivateKeyInfo(file=Path("/path/to/private.key"), password=None),
         certificate_file=Path("/path/to/certificate.crt"),
     )
 

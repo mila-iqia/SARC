@@ -11,7 +11,8 @@ sarc:
         - name: drac
       host: fromage
       private_key: test_key.yaml
-      prometheus_headers_file: tests/not-so-secrets/fromage_prometheus/headers.json
+      prometheus_headers:
+        "Authorization": "Basic some-hash"
       prometheus_url: https://fromage-thanos.calcul.ca
       sacct_bin: /opt/software/slurm/bin/sacct
       timezone: Europe/Paris
@@ -25,7 +26,8 @@ sarc:
         - name: drac
       host: gerudo
       private_key: test_key.yaml
-      prometheus_headers_file: tests/not-so-secrets/patate_prometheus/headers.json
+      prometheus_headers:
+        "Authorization": "Basic some-hash"
       prometheus_url: https://gerudo-thanos.calcul.ca
       sacct_bin: /opt/software/slurm/bin/sacct
       timezone: America/Vancouver
@@ -39,7 +41,8 @@ sarc:
         - name: drac
       host: hyrule
       private_key: test_key.yaml
-      prometheus_headers_file: tests/not-so-secrets/patate_prometheus/headers.json
+      prometheus_headers:
+        "Authorization": "Basic some-hash"
       prometheus_url: https://hyrule-thanos.calcul.ca
       sacct_bin: /opt/software/slurm/bin/sacct
       timezone: America/Vancouver
@@ -65,7 +68,8 @@ sarc:
       host: mila-tests
       private_key: test_key.yaml
       name: mila
-      prometheus_headers_file: tests/not-so-secrets/patate_prometheus/headers.json
+      prometheus_headers:
+        "Authorization": "Basic some-hash"
       prometheus_url: https://hyrule-thanos.calcul.ca
       sacct_bin: /opt/software/slurm/bin/sacct
       timezone: America/Vancouver
@@ -79,7 +83,8 @@ sarc:
         - name: drac
       host: patate
       private_key: test_key.yaml
-      prometheus_headers_file: tests/not-so-secrets/patate_prometheus/headers.json
+      prometheus_headers:
+        "Authorization": "Basic some-hash"
       prometheus_url: https://fromage-thanos.calcul.ca
       sacct_bin: /opt/software/slurm/bin/sacct
       slurm_conf_host_path: /the/path/to/slurm.conf
