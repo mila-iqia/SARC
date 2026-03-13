@@ -25,10 +25,6 @@ class DRACRolesScraper(UserScraper[DRACRolesConfig]):
 
     def get_user_data(self, config: DRACRolesConfig) -> bytes:
         return config.csv.encode("utf-8")
-        with open(config.csv_path, "r", encoding="utf-8") as f_in:
-            return json.dumps(
-                [_dict_to_lowercase(d) for d in csv.DictReader(f_in)]
-            ).encode()
 
     def parse_user_data(self, data: bytes) -> Iterable[UserMatch]:
         for d in csv.DictReader(data.decode("utf-8")):
@@ -45,20 +41,18 @@ _builtin_scrapers["drac_role"] = DRACRolesScraper()
 
 @dataclass
 class DRACMemberConfig:
-    csv_path: Path
+    csv: Secret[str]
 
 
 class DRACMemberScraper(UserScraper[DRACMemberConfig]):
     config_type = DRACMemberConfig
 
     def get_user_data(self, config: DRACMemberConfig) -> bytes:
-        with open(config.csv_path, "r", encoding="utf-8") as f_in:
-            return json.dumps(
-                [_dict_to_lowercase(d) for d in csv.DictReader(f_in)]
-            ).encode()
+        return config.csv.encode("utf-8")
 
     def parse_user_data(self, data: bytes) -> Iterable[UserMatch]:
-        for d in json.loads(data.decode()):
+        for d in csv.DictReader(data.decode("utf-8")):
+            d = _dict_to_lowercase(d)
             creds = Credentials()
             creds.insert(
                 d["username"],
