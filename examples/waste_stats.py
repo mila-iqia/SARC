@@ -29,8 +29,7 @@ def load_job_series(filename=None) -> pd.DataFrame:
             continue
 
         job_series = job.series(
-            metric="slurm_job_utilization_gpu",
-            measure="avg_over_time",
+            metric="slurm_job_utilization_gpu", measure="avg_over_time"
         )
         if job_series is not None:
             # TODO: Why is it possible to have billing smaller than gres_gpu???

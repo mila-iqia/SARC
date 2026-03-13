@@ -44,10 +44,7 @@ def test_config_read_write_into_db(beans_config, testing_repo):
 
 
 def test_HealthCheckStateRepository(testing_repo, tmpdir):
-    hc = HealthCheck(
-        name="test_check",
-        active=True,
-    )
+    hc = HealthCheck(name="test_check", active=True)
     state = HealthCheckState(check=hc)
 
     # Test save and retrieving

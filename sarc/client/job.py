@@ -451,10 +451,7 @@ def _compute_jobs_query(
         # since we need to get both jobs that did not finish, and any job that ended after
         # the given time. This appears to require an $or, so we handle it after the others.
         query = {
-            "$or": [
-                {**query, "end_time": None},
-                {**query, "end_time": {"$gt": start}},
-            ]
+            "$or": [{**query, "end_time": None}, {**query, "end_time": {"$gt": start}}]
         }
 
     return query

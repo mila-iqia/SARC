@@ -60,9 +60,7 @@ parameters = {
     },
     "no_end_time": {"time": {"end": None}},
     "nodes": {"nodes": "node1,node[3-5]"},
-    "flags": {
-        "flags": ["CLEAR_SCHEDULING", "STARTED_ON_SUBMIT"],
-    },
+    "flags": {"flags": ["CLEAR_SCHEDULING", "STARTED_ON_SUBMIT"]},
     "tres": {
         "tres": {
             "allocated": [
@@ -153,11 +151,7 @@ def test_parse_malformed_jobs(sacct_json, captrace):
 
 
 @pytest.mark.usefixtures("tzlocal_is_mtl")
-@pytest.mark.parametrize(
-    "json_jobs",
-    [{"group": None}],
-    indirect=True,
-)
+@pytest.mark.parametrize("json_jobs", [{"group": None}], indirect=True)
 def test_parse_no_group_jobs(sacct_json, caplog):
     jobs = parse_raw(
         sacct_json.encode("utf-8"),
@@ -171,11 +165,7 @@ def test_parse_no_group_jobs(sacct_json, caplog):
 
 
 @pytest.mark.usefixtures("tzlocal_is_mtl")
-@pytest.mark.parametrize(
-    "json_jobs",
-    [{"cluster": "patate"}],
-    indirect=True,
-)
+@pytest.mark.parametrize("json_jobs", [{"cluster": "patate"}], indirect=True)
 def test_scrape_lost_job_on_wrong_cluster(sacct_json, caplog):
     parsed_jobs = parse_raw(
         sacct_json.encode("utf-8"),
@@ -202,8 +192,7 @@ def test_parse_jobs_from_cache(sacct_json, file_regression, test_config):
     cache = Cache(subdirectory="jobs")
     with cache.create_entry(datetime(2023, 2, 16, tzinfo=UTC)) as cache_entry:
         cache_entry.add_value(
-            "test_2023-02-14T00:00_2023-02-15T00:00",
-            sacct_json.encode("utf-8"),
+            "test_2023-02-14T00:00_2023-02-15T00:00", sacct_json.encode("utf-8")
         )
 
     # parse jobs
@@ -307,18 +296,7 @@ def test_stdout_message_before_json(
         == 0
     )
 
-    assert (
-        cli_main(
-            [
-                "-v",
-                "parse",
-                "jobs",
-                "--since",
-                "2023-02-14T00:00",
-            ]
-        )
-        == 0
-    )
+    assert cli_main(["-v", "parse", "jobs", "--since", "2023-02-14T00:00"]) == 0
 
     jobs = list(get_jobs())
     file_regression.check(
@@ -363,18 +341,7 @@ def test_update_job(test_config, sacct_json, remote, file_regression, cli_main):
         == 0
     )
 
-    assert (
-        cli_main(
-            [
-                "-v",
-                "parse",
-                "jobs",
-                "--since",
-                "2023-02-14T00:00",
-            ]
-        )
-        == 0
-    )
+    assert cli_main(["-v", "parse", "jobs", "--since", "2023-02-14T00:00"]) == 0
 
     assert len(list(get_jobs())) == 1
 
@@ -393,18 +360,7 @@ def test_update_job(test_config, sacct_json, remote, file_regression, cli_main):
         == 0
     )
 
-    assert (
-        cli_main(
-            [
-                "-v",
-                "parse",
-                "jobs",
-                "--since",
-                "2023-02-15T00:00",
-            ]
-        )
-        == 0
-    )
+    assert cli_main(["-v", "parse", "jobs", "--since", "2023-02-15T00:00"]) == 0
 
     jobs = list(get_jobs())
 
@@ -447,18 +403,7 @@ def test_save_job(test_config, sacct_json, remote, file_regression, cli_main):
         == 0
     )
 
-    assert (
-        cli_main(
-            [
-                "-v",
-                "parse",
-                "jobs",
-                "--since",
-                "2023-02-14T00:00",
-            ]
-        )
-        == 0
-    )
+    assert cli_main(["-v", "parse", "jobs", "--since", "2023-02-14T00:00"]) == 0
 
     jobs = list(get_jobs())
     file_regression.check(
@@ -512,18 +457,7 @@ def test_save_preempted_job(test_config, sacct_json, remote, file_regression, cl
         == 0
     )
 
-    assert (
-        cli_main(
-            [
-                "-v",
-                "parse",
-                "jobs",
-                "--since",
-                "2023-02-14T00:00",
-            ]
-        )
-        == 0
-    )
+    assert cli_main(["-v", "parse", "jobs", "--since", "2023-02-14T00:00"]) == 0
 
     jobs = list(get_jobs())
 
@@ -590,18 +524,7 @@ def test_multiple_dates(test_config, remote, file_regression, cli_main):
         == 0
     )
 
-    assert (
-        cli_main(
-            [
-                "-v",
-                "parse",
-                "jobs",
-                "--since",
-                "2023-02-14T00:00",
-            ]
-        )
-        == 0
-    )
+    assert cli_main(["-v", "parse", "jobs", "--since", "2023-02-14T00:00"]) == 0
 
     jobs = list(get_jobs())
 
@@ -688,18 +611,7 @@ def test_multiple_clusters_and_dates(test_config, remote, file_regression, cli_m
         == 0
     )
 
-    assert (
-        cli_main(
-            [
-                "-v",
-                "parse",
-                "jobs",
-                "--since",
-                "2023-02-14T00:00",
-            ]
-        )
-        == 0
-    )
+    assert cli_main(["-v", "parse", "jobs", "--since", "2023-02-14T00:00"]) == 0
 
     jobs = list(get_jobs())
 
@@ -723,7 +635,7 @@ def test_multiple_clusters_and_dates(test_config, remote, file_regression, cli_m
                     datetime(2023, 2, 15, 12, 0, 0, tzinfo=PST)
                     .astimezone(UTC)
                     .timestamp()
-                ),
+                )
             }
         }
     ],
@@ -754,18 +666,7 @@ def test_job_tz(test_config, sacct_json, remote, cli_main):
         == 0
     )
 
-    assert (
-        cli_main(
-            [
-                "-v",
-                "parse",
-                "jobs",
-                "--since",
-                "2023-02-14T00:00",
-            ]
-        )
-        == 0
-    )
+    assert cli_main(["-v", "parse", "jobs", "--since", "2023-02-14T00:00"]) == 0
 
     jobs = list(get_jobs())
     assert len(jobs) == 1
@@ -815,18 +716,7 @@ def test_acquire_jobs_mutually_exclusive_args(cli_main, caplog):
         == -1
     )
 
-    assert (
-        cli_main(
-            [
-                "-v",
-                "parse",
-                "jobs",
-                "--since",
-                "2023-02-14T00:00",
-            ]
-        )
-        == 0
-    )
+    assert cli_main(["-v", "parse", "jobs", "--since", "2023-02-14T00:00"]) == 0
 
     assert not list(get_jobs())
     assert (
@@ -852,18 +742,7 @@ def test_acquire_jobs_invalid_interval(cli_main, caplog):
         == 0
     )
 
-    assert (
-        cli_main(
-            [
-                "-v",
-                "parse",
-                "jobs",
-                "--since",
-                "2023-02-14T00:00",
-            ]
-        )
-        == 0
-    )
+    assert cli_main(["-v", "parse", "jobs", "--since", "2023-02-14T00:00"]) == 0
 
     assert not list(get_jobs())
     assert (
@@ -889,18 +768,7 @@ def test_acquire_jobs_interval_start_gt_end(cli_main, caplog):
         == 0
     )
 
-    assert (
-        cli_main(
-            [
-                "-v",
-                "parse",
-                "jobs",
-                "--since",
-                "2023-02-14T00:00",
-            ]
-        )
-        == 0
-    )
+    assert cli_main(["-v", "parse", "jobs", "--since", "2023-02-14T00:00"]) == 0
     assert not list(get_jobs())
     assert (
         "Interval: 2023-02-17 00:00:00+00:00 > 2023-02-16 00:00:00+00:00 ; skipping cluster"
@@ -911,30 +779,9 @@ def test_acquire_jobs_interval_start_gt_end(cli_main, caplog):
 @pytest.mark.usefixtures("enabled_cache")
 def test_acquire_jobs_args_no_interval(cli_main, caplog):
     # No interval, nothing to do
-    assert (
-        cli_main(
-            [
-                "fetch",
-                "jobs",
-                "--cluster_names",
-                "raisin",
-            ]
-        )
-        == 0
-    )
+    assert cli_main(["fetch", "jobs", "--cluster_names", "raisin"]) == 0
 
-    assert (
-        cli_main(
-            [
-                "-v",
-                "parse",
-                "jobs",
-                "--since",
-                "2023-02-14T00:00",
-            ]
-        )
-        == 0
-    )
+    assert cli_main(["-v", "parse", "jobs", "--since", "2023-02-14T00:00"]) == 0
 
     assert not list(get_jobs())
     assert "No --intervals or --auto_interval parsed, nothing to do." in caplog.text
@@ -1027,18 +874,7 @@ def test_auto_interval_0(cli_main, monkeypatch, freezer, caplog):
         )
         == 0
     )
-    assert (
-        cli_main(
-            [
-                "-v",
-                "parse",
-                "jobs",
-                "--since",
-                "2024-01-01T00:00",
-            ]
-        )
-        == 0
-    )
+    assert cli_main(["-v", "parse", "jobs", "--since", "2024-01-01T00:00"]) == 0
     # end_time_sacct should have been updated
     assert (
         datetime.strptime(_get_cluster_raisin().end_time_sacct, "%Y-%m-%dT%H:%M")

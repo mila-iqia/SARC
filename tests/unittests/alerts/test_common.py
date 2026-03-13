@@ -9,11 +9,7 @@ from .definitions import BeanCheck, BeanResult
 @pytest.fixture
 def beancheck(tmpdir):
     def fn(beans):
-        return BeanCheck(
-            name="beano",
-            beans=beans,
-            active=True,
-        )
+        return BeanCheck(name="beano", beans=beans, active=True)
 
     yield fn
 
@@ -67,10 +63,7 @@ def test_HealthCheck_error(beancheck, frozen_gifnoc_time):
     assert result == BeanResult(
         name="beano",
         status=CheckStatus.ERROR,
-        exception=CheckException(
-            type="ValueError",
-            message="What a beastly number",
-        ),
+        exception=CheckException(type="ValueError", message="What a beastly number"),
         statuses={},
         issue_date=time.now(),
         check=hc,

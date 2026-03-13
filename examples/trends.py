@@ -11,13 +11,7 @@ from sarc.config import config
 clusters = ["mila", "narval", "beluga", "cedar", "graham"]
 
 # Subset of slurm fields we need to compute the trends
-include_fields = {
-    "cluster_name",
-    "user",
-    "start_time",
-    "end_time",
-    "elapsed_time",
-}
+include_fields = {"cluster_name", "user", "start_time", "end_time", "elapsed_time"}
 
 
 def get_jobs_dataframe(filename=None) -> pd.DataFrame:

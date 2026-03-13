@@ -25,7 +25,7 @@ def getOpenTelemetryLoggingHandler(log_conf: LoggingConfig):
                 "service.name": log_conf.service_name,
                 "service.instance.id": os.uname().nodename,
             }
-        ),
+        )
     )
     set_logger_provider(logger_provider)
 

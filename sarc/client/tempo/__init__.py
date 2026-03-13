@@ -49,10 +49,7 @@ def query(traceid: str, start: str | None = None, end: str | None = None):
                                 "startTimeUnixNano": "1684778327735077898",
                                 "durationNanos": "446979497",
                                 "attributes": [
-                                    {
-                                        "key": "status",
-                                        "value": {"stringValue": "error"},
-                                    }
+                                    {"key": "status", "value": {"stringValue": "error"}}
                                 ],
                             }
                         ],

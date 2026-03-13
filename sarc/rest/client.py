@@ -110,11 +110,7 @@ class SarcApiClient:
                         cleaned_params[k] = v
 
         url = f"{self.remote_url}{endpoint}"
-        response = self.session.get(
-            url,
-            params=cleaned_params,
-            timeout=self.timeout,
-        )
+        response = self.session.get(url, params=cleaned_params, timeout=self.timeout)
         response.raise_for_status()
         return response
 

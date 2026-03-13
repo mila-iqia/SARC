@@ -155,10 +155,7 @@ def test_get_jobs_invalid_job_state(client):
 @pytest.mark.usefixtures("read_only_db")
 def test_get_jobs_with_datetime_filters(client):
     """Test jobs query with start and end datetime filters."""
-    params = {
-        "start": "2023-01-01T00:00:00",
-        "end": "2023-12-31T23:59:59",
-    }
+    params = {"start": "2023-01-01T00:00:00", "end": "2023-12-31T23:59:59"}
 
     response = client.get("/v0/job/query", params=params)
 
@@ -325,10 +322,7 @@ def test_count_jobs_invalid_job_state(client):
 @pytest.mark.usefixtures("read_only_db")
 def test_count_jobs_with_datetime_filters(client):
     """Test jobs count with start and end datetime filters."""
-    params = {
-        "start": "2023-01-01T00:00:00",
-        "end": "2023-02-15T23:59:59",
-    }
+    params = {"start": "2023-01-01T00:00:00", "end": "2023-02-15T23:59:59"}
 
     response = client.get("/v0/job/count", params=params)
 
@@ -396,12 +390,7 @@ def test_cluster_list(client):
 
 def _gen_fake_rgus():
     """Mock for sarc.client.gpumetrics.get_rgus()"""
-    return {
-        "A100": 3.21,
-        "gpu1": 1.5,
-        "gpu_2": 4.5,
-        "GPU 3": 4 * 7,
-    }
+    return {"A100": 3.21, "gpu1": 1.5, "gpu_2": 4.5, "GPU 3": 4 * 7}
 
 
 @pytest.mark.usefixtures("read_only_db_with_users")

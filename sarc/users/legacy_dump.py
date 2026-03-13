@@ -91,9 +91,7 @@ class LegacyDumpScraper(UserScraper[LegacyDumpConfig]):
 
             # Create UserMatch
             user_match = UserMatch(
-                display_name=name,
-                email=email,
-                matching_id=matching_id,
+                display_name=name, email=email, matching_id=matching_id
             )
 
             # Add known matches from different sources

@@ -166,22 +166,14 @@ def create_users_indices(db: Database) -> None:
 def create_gpu_billing_indices(db: Database) -> None:
     db_collection = db.gpu_billing
     db_collection.create_index(
-        [
-            ("cluster_name", pymongo.ASCENDING),
-            ("since", pymongo.ASCENDING),
-        ],
-        unique=True,
+        [("cluster_name", pymongo.ASCENDING), ("since", pymongo.ASCENDING)], unique=True
     )
 
 
 def create_node_gpu_mapping_indices(db: Database) -> None:
     db_collection = db.node_gpu_mapping
     db_collection.create_index(
-        [
-            ("cluster_name", pymongo.ASCENDING),
-            ("since", pymongo.ASCENDING),
-        ],
-        unique=True,
+        [("cluster_name", pymongo.ASCENDING), ("since", pymongo.ASCENDING)], unique=True
     )
 
 
@@ -212,15 +204,12 @@ def create_allocations_indices(db: Database) -> None:
             ("cluster_name", pymongo.ASCENDING),
             ("start", pymongo.ASCENDING),
             ("end", pymongo.ASCENDING),
-        ],
+        ]
     )
 
     # Index most useful for querying allocations for any cluster
     db_collection.create_index(
-        [
-            ("start", pymongo.ASCENDING),
-            ("end", pymongo.ASCENDING),
-        ],
+        [("start", pymongo.ASCENDING), ("end", pymongo.ASCENDING)]
     )
 
 
@@ -233,23 +222,16 @@ def create_storages_indices(db: Database) -> None:
             ("cluster_name", pymongo.ASCENDING),
             ("groups.group_name", pymongo.ASCENDING),
             ("timestamp", pymongo.ASCENDING),
-        ],
+        ]
     )
 
     # Index most useful for querying diskusages for a given cluster and any group
     db_collection.create_index(
-        [
-            ("cluster_name", pymongo.ASCENDING),
-            ("timestamp", pymongo.ASCENDING),
-        ],
+        [("cluster_name", pymongo.ASCENDING), ("timestamp", pymongo.ASCENDING)]
     )
 
     # Index most useful for querying diskusages for any cluster and any group
-    db_collection.create_index(
-        [
-            ("timestamp", pymongo.ASCENDING),
-        ],
-    )
+    db_collection.create_index([("timestamp", pymongo.ASCENDING)])
 
 
 def create_jobs_indices(db: Database) -> None:
@@ -272,7 +254,7 @@ def create_jobs_indices(db: Database) -> None:
             ("job_state", pymongo.ASCENDING),
             ("submit_time", pymongo.ASCENDING),
             ("end_time", pymongo.ASCENDING),
-        ],
+        ]
     )
 
     # Index most useful for querying jobs for a given cluster and any state
@@ -281,7 +263,7 @@ def create_jobs_indices(db: Database) -> None:
             ("cluster_name", pymongo.ASCENDING),
             ("submit_time", pymongo.ASCENDING),
             ("end_time", pymongo.ASCENDING),
-        ],
+        ]
     )
 
     # Index most useful for querying jobs on all clusters for a given state
@@ -290,15 +272,12 @@ def create_jobs_indices(db: Database) -> None:
             ("job_state", pymongo.ASCENDING),
             ("submit_time", pymongo.ASCENDING),
             ("end_time", pymongo.ASCENDING),
-        ],
+        ]
     )
 
     # Index most useful for querying jobs of any state on any cluster
     db_collection.create_index(
-        [
-            ("submit_time", pymongo.ASCENDING),
-            ("end_time", pymongo.ASCENDING),
-        ],
+        [("submit_time", pymongo.ASCENDING), ("end_time", pymongo.ASCENDING)]
     )
 
     # Index most useful for querying jobs for a given cluster and scraping period
@@ -307,7 +286,7 @@ def create_jobs_indices(db: Database) -> None:
             ("cluster_name", pymongo.ASCENDING),
             ("latest_scraped_start", pymongo.ASCENDING),
             ("latest_scraped_end", pymongo.ASCENDING),
-        ],
+        ]
     )
 
     # Indexes most useful for querying jobs with potential prometheus data
@@ -330,5 +309,5 @@ def create_jobs_indices(db: Database) -> None:
 
     # Index most useful for job sorting in REST API
     db_collection.create_index(
-        [("submit_time", pymongo.DESCENDING), ("_id", pymongo.ASCENDING)],
+        [("submit_time", pymongo.DESCENDING), ("_id", pymongo.ASCENDING)]
     )

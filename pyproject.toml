@@ -76,6 +76,11 @@ examples = ["seaborn>=0.13.2,<0.14"]
 #  - DTZ: datetimes without timezones (not right now)
 #  - TC: type checking style
 
+[tool.ruff.format]
+skip-magic-trailing-comma = true
+
+[tool.ruff.lint.isort]
+split-on-trailing-comma = false
 
 [tool.ruff.lint]
 select = ["ARG", "E", "F", "FA", "LOG", "PERF", "PIE", "PL", "T20", "W", "I"]

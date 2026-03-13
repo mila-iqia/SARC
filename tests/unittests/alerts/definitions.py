@@ -18,11 +18,7 @@ class BeanCheck(HealthCheck):
         if self.beans == 666:
             raise ValueError("What a beastly number")
         elif self.beans < 0:
-            return {
-                "positive": False,
-                "negative": True,
-                "fillbelly": False,
-            }
+            return {"positive": False, "negative": True, "fillbelly": False}
         elif self.beans < 10:
             return self.fail(more=10 - self.beans)
         else:

@@ -159,11 +159,7 @@ class Cache:
             "seconds"
         )
         output_file.parent.mkdir(parents=True, exist_ok=True)
-        zf = ZipFile(
-            output_file,
-            mode="x",
-            compression=ZIP_LZMA,
-        )
+        zf = ZipFile(output_file, mode="x", compression=ZIP_LZMA)
         ce = CacheEntry(zf, at_time)
         try:
             yield ce
@@ -421,8 +417,7 @@ class OldCache[T]:
         """Save a value in cache for the given key."""
         if self.live:
             self.live_cache[(self.cache_dir, key)] = CachedResult(
-                issued=at_time,
-                value=value,
+                issued=at_time, value=value
             )
         cdir = self.cache_dir
         if self.on_disk and cdir is not None:
@@ -449,8 +444,7 @@ class OldCache[T]:
         cdir = self.cache_dir
         if self.on_disk and cdir is not None:
             candidates = sorted(
-                cdir.glob(key_value.format(time=_time_glob_pattern)),
-                reverse=True,
+                cdir.glob(key_value.format(time=_time_glob_pattern)), reverse=True
             )
             maximum = key_value.format(time=timestring)
             possible = [c for c in candidates if c.name <= maximum]
@@ -490,8 +484,7 @@ class OldCache[T]:
                             continue
                     if self.live:
                         self.live_cache[live_key] = CachedResult(
-                            issued=candidate_time,
-                            value=value,
+                            issued=candidate_time, value=value
                         )
                     logger.debug("read from cache file '%s'", candidate)
                     return value

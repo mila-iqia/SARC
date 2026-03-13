@@ -149,10 +149,7 @@ class UserFactory:
         if match_ids is None:
             match_ids = {}
         u = UserDB(
-            uuid=uuid,
-            display_name=display_name,
-            email=email,
-            matching_ids=match_ids,
+            uuid=uuid, display_name=display_name, email=email, matching_ids=match_ids
         )
         for mtype in member_type:
             u.member_type.insert(MemberType(mtype[0]), *mtype[1:])
@@ -427,13 +424,7 @@ def create_jobs(job_factory: JobFactory | None = None, job_patch: dict | None = 
             "mem": 39152,
             "node": 1,
         },
-        requested={
-            "billing": 2,
-            "cpu": 12,
-            "gres_gpu": 1,
-            "mem": 59152,
-            "node": 1,
-        },
+        requested={"billing": 2, "cpu": 12, "gres_gpu": 1, "mem": 59152, "node": 1},
     )
 
     # Add a job with requested and allocated GPU to 0.
