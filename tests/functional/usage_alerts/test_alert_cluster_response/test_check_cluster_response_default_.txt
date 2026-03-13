@@ -6,3 +6,4 @@
 [patate] no scraping since 2023-02-09 23:48:00+00:00, oldest required: 2023-11-15 00:00:00+00:00, current time: 2023-11-22 00:00:00+00:00
 [raisin] no scraping since 2023-02-09 09:48:00+00:00, oldest required: 2023-11-15 00:00:00+00:00, current time: 2023-11-22 00:00:00+00:00
 [raisin_no_prometheus] no scraping since 2023-02-08 09:48:00+00:00, oldest required: 2023-11-15 00:00:00+00:00, current time: 2023-11-22 00:00:00+00:00
+ERROR    sarc.alerts.common:common.py:98 [cluster_response_default] FAILURE: cluster_response_default

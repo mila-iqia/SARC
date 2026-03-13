@@ -1,1 +1,2 @@
-[2023-11-21 00:01:00-05:00][raisin] insufficient Prometheus data for cpu_utilization: 0.0 % of CPU jobs / cluster / time unit; minimum required: 0.368376726851694 (0.9230769230769231 - 2 * 0.2773500981126146); time unit: 1 day, 0:00:00
+[2023-11-21 00:01:00-05:00][raisin] insufficient Prometheus data for cpu_utilization: 0.0 % of CPU jobs / cluster / time unit; minimum required: 0.368376726851694 (0.9230769230769231 - 2.0 * 0.2773500981126146); time unit: 1 day, 0:00:00
+ERROR    sarc.alerts.common:common.py:98 [prometheus_cpu_stat_1] FAILURE: prometheus_cpu_stat_1
