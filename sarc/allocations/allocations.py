@@ -90,9 +90,7 @@ def get_allocations_collection():
 
 
 def get_allocations(
-    cluster_name: str | list[str],
-    start: None | date = None,
-    end: None | date = None,
+    cluster_name: str | list[str], start: None | date = None, end: None | date = None
 ) -> list[Allocation]:
     collection = get_allocations_collection()
 
@@ -122,9 +120,7 @@ def increment(a: int | None, b: int | None) -> int:
 
 
 def get_allocation_summaries(
-    cluster_name: str | list[str],
-    start: None | date = None,
-    end: None | date = None,
+    cluster_name: str | list[str], start: None | date = None, end: None | date = None
 ) -> pd.DataFrame:
     allocations = get_allocations(cluster_name, start=start, end=end)
 
@@ -169,14 +165,7 @@ def get_allocation_summaries(
 
     return pd.DataFrame(
         [
-            flatten(
-                summary.model_dump(
-                    exclude={
-                        "id",
-                        "resource_name",
-                    }
-                )
-            )
+            flatten(summary.model_dump(exclude={"id", "resource_name"}))
             for summary in summaries_l
         ]
     )

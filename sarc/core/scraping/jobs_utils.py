@@ -354,10 +354,7 @@ def _convert_json_job(
 
 @trace_decorator()
 def parse_raw(
-    raw_data: bytes,
-    cluster_name: str,
-    scraped_start: datetime,
-    scraped_end: datetime,
+    raw_data: bytes, cluster_name: str, scraped_start: datetime, scraped_end: datetime
 ) -> Iterator[SlurmJob | None]:
     """Parse raw sacct data as a dict.
 

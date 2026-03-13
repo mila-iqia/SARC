@@ -30,10 +30,7 @@ class GPUBillingRepository(AbstractRepository[GPUBilling]):
 
     @scraping_mode_required
     def save_gpu_billing(
-        self,
-        cluster_name: str,
-        since: datetime_utc,
-        gpu_to_billing: dict[str, float],
+        self, cluster_name: str, since: datetime_utc, gpu_to_billing: dict[str, float]
     ) -> None:
         """Save GPU->billing mapping into database."""
 
@@ -45,22 +42,14 @@ class GPUBillingRepository(AbstractRepository[GPUBilling]):
         # Check if a GPU->billing mapping was already registered
         # for given cluster and date.
         exists = list(
-            self.find_by(
-                {
-                    "cluster_name": billing.cluster_name,
-                    "since": billing.since,
-                }
-            )
+            self.find_by({"cluster_name": billing.cluster_name, "since": billing.since})
         )
         if exists:
             # If a record was found, update it if changed.
             (prev_billing,) = exists
             if prev_billing.gpu_to_billing != billing.gpu_to_billing:
                 self.get_collection().update_one(
-                    {
-                        "cluster_name": billing.cluster_name,
-                        "since": billing.since,
-                    },
+                    {"cluster_name": billing.cluster_name, "since": billing.since},
                     {"$set": self.to_document(billing)},
                 )
                 logger.info(

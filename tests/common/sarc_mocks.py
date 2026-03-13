@@ -44,15 +44,9 @@ MYMILA_HEADERS = (
 
 _membership_types: list[list[str]] = [
     # Student
-    [
-        "Permanent HQP",
-        "Collaborating Researcher",
-    ],
+    ["Permanent HQP", "Collaborating Researcher"],
     # Prof
-    [
-        "Associate academic member",
-        "Core Academic Member",
-    ],
+    ["Associate academic member", "Core Academic Member"],
 ]
 _affiliation_types: list[list[Any]] = [
     # Student
@@ -66,10 +60,7 @@ _affiliation_types: list[list[Any]] = [
         None,
     ],
     # Prof
-    [
-        "Core Academic Member",
-        "Associate academic member",
-    ],
+    ["Core Academic Member", "Associate academic member"],
 ]
 
 
@@ -121,12 +112,7 @@ def mymila_entry_builder(
         "Informatique et de recherche opérationnelle",
         "Mathématique",
     ]
-    affiliated_university = [
-        "McGill",
-        "UdeM",
-        "Samsung SAIT",
-        None,
-    ]
+    affiliated_university = ["McGill", "UdeM", "Samsung SAIT", None]
 
     # first 'nbr_profs' names will be professors and the rest students
     def mymila_entry(i: int) -> tuple:

@@ -27,12 +27,8 @@ def get_jobs_in_scraped_period(
     """
     query = {
         "cluster_name": cluster_name,
-        "latest_scraped_start": {
-            "$lt": end,
-        },
-        "latest_scraped_end": {
-            "$gt": start,
-        },
+        "latest_scraped_start": {"$lt": end},
+        "latest_scraped_end": {"$gt": start},
     }
     coll_jobs = config().mongo.database_instance.jobs
     nb_jobs = coll_jobs.count_documents(query)
@@ -42,11 +38,7 @@ def get_jobs_in_scraped_period(
 
 
 @trace_decorator()
-def scrap_prometheus(
-    cluster: ClusterConfig,
-    start: datetime,
-    end: datetime,
-) -> None:
+def scrap_prometheus(cluster: ClusterConfig, start: datetime, end: datetime) -> None:
     """Scrap Prometheus metrics for jobs fromm start to end and save it to database.
 
     NB: Current code scrapes metrics for jobs where
