@@ -16,11 +16,9 @@ class TestRestLoadJobSeries(BaseTestLoadJobSeries):
     @pytest.fixture
     def ops(self, mock_client_class) -> SeriesOps:
         """Provides REST API implementations of the operations."""
-        from sarc.rest.client import (
-            get_jobs as client_get_jobs,
-            get_users as client_get_users,
-            load_job_series as client_load_job_series,
-        )
+        from sarc.rest.client import get_jobs as client_get_jobs
+        from sarc.rest.client import get_users as client_get_users
+        from sarc.rest.client import load_job_series as client_load_job_series
 
         return SeriesOps(
             load_job_series=client_load_job_series,

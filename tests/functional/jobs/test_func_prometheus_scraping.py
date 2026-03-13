@@ -34,9 +34,7 @@ def mock_compute_job_statistics(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "test_config",
-    [{"clusters": {"raisin": {"host": "raisin"}}}],
-    indirect=True,
+    "test_config", [{"clusters": {"raisin": {"host": "raisin"}}}], indirect=True
 )
 @pytest.mark.parametrize(
     "json_jobs",
@@ -49,8 +47,8 @@ def mock_compute_job_statistics(monkeypatch):
                         "id": 1002,
                         "name": "gpu:gpu_name_from_sacct",
                         "type": "gres",
-                    },
-                ],
+                    }
+                ]
             }
         }
     ],
@@ -84,12 +82,7 @@ def test_get_gpu_type(
         "2023-02-15T00:00-2023-02-16T00:00",
     ]
 
-    cmd_sacct_parse = [
-        "parse",
-        "jobs",
-        "--since",
-        "2023-02-14T00:00",
-    ]
+    cmd_sacct_parse = ["parse", "jobs", "--since", "2023-02-14T00:00"]
 
     # Test `acquire jobs` without node->gpu available
     # -----------------------------------------------
@@ -114,17 +107,7 @@ def test_get_gpu_type(
         "NodeName=cn-c0[18-30] Param1=Anything1 Param2=Anything2 Gres=gpu:gpu2:4 Param3=Anything3",
     )
     # Acquire slurm config.
-    assert (
-        cli_main(
-            [
-                "parse",
-                "slurmconfig",
-                "--cluster_name",
-                "raisin",
-            ]
-        )
-        == 0
-    )
+    assert cli_main(["parse", "slurmconfig", "--cluster_name", "raisin"]) == 0
     # acquire jobs
     time.sleep(1)  # to prevent cache collision with previous sacct fetch...
     assert cli_main(cmd_sacct_fetch) == 0
@@ -289,17 +272,7 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
         == 0
     )
 
-    assert (
-        cli_main(
-            [
-                "parse",
-                "jobs",
-                "--since",
-                "2023-02-14T00:00",
-            ]
-        )
-        == 0
-    )
+    assert cli_main(["parse", "jobs", "--since", "2023-02-14T00:00"]) == 0
 
     assert (
         cli_main(
@@ -518,17 +491,7 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
     )
 
     time.sleep(1)
-    assert (
-        cli_main(
-            [
-                "parse",
-                "jobs",
-                "--since",
-                "2023-02-14T00:00",
-            ]
-        )
-        == 0
-    )
+    assert cli_main(["parse", "jobs", "--since", "2023-02-14T00:00"]) == 0
 
     assert len(list(get_jobs())) == len(datetimes) * len(cluster_names)
 
@@ -549,17 +512,7 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
     )
 
     time.sleep(1)
-    assert (
-        cli_main(
-            [
-                "parse",
-                "jobs",
-                "--since",
-                "2023-02-14T00:00",
-            ]
-        )
-        == 0
-    )
+    assert cli_main(["parse", "jobs", "--since", "2023-02-14T00:00"]) == 0
 
     assert len(list(get_jobs())) == len(datetimes) * len(cluster_names)
 
@@ -670,9 +623,7 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
 
 @pytest.mark.usefixtures("empty_read_write_db", "disabled_cache")
 def test_acquire_prometheus_for_cluster_without_prometheus(
-    test_config,
-    cli_main,
-    caplog,
+    test_config, cli_main, caplog
 ):
     """
     Test that we can't scrape Prometheus metrics for a cluster
@@ -775,17 +726,7 @@ def test_acquire_prometheus_interval_start_gt_end(cli_main, caplog):
 
 def test_acquire_prometheus_args_no_interval(cli_main, caplog):
     # No interval, nothing to do
-    assert (
-        cli_main(
-            [
-                "acquire",
-                "prometheus",
-                "--cluster_name",
-                "raisin",
-            ]
-        )
-        == 0
-    )
+    assert cli_main(["acquire", "prometheus", "--cluster_name", "raisin"]) == 0
     assert "No --intervals or --auto_interval parsed, nothing to do." in caplog.text
 
 

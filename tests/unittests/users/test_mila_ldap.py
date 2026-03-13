@@ -29,7 +29,7 @@ class TestMilaLDAPScraper(UserPluginTester):
             {
                 "sarc.users.mila_ldap._query_ldap": fake_raw_ldap_data(
                     10, hardcoded_values_by_user={3: {"suspended": ["true"]}}
-                ),
+                )
             }
         )
         data = self.plugin.get_user_data(self.parsed_config)

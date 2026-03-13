@@ -2,7 +2,7 @@ import logging
 from collections.abc import Iterable
 from dataclasses import dataclass
 
-from sarc.alerts.common import HealthCheck, CheckResult
+from sarc.alerts.common import CheckResult, HealthCheck
 
 logger = logging.getLogger(__name__)
 

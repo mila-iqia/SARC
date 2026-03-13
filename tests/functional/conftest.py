@@ -77,10 +77,7 @@ def fill_db(db, with_users=False, with_clusters=False, job_patch=None):
 
 
 def create_db_configuration_fixture(
-    empty=False,
-    with_users=False,
-    with_clusters=False,
-    job_patch=None,
+    empty=False, with_users=False, with_clusters=False, job_patch=None
 ):
     @pytest.fixture(scope="function")
     def fixture(request):
@@ -120,8 +117,7 @@ read_only_db_with_many_cpu_jobs_config_object = create_db_configuration_fixture(
 )
 
 read_only_db_with_users_config_object = create_db_configuration_fixture(
-    with_users=True,
-    with_clusters=True,
+    with_users=True, with_clusters=True
 )
 
 

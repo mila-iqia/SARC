@@ -1,10 +1,10 @@
-from dataclasses import dataclass
 import logging
+from dataclasses import dataclass
+
 from simple_parsing import field
 
 from sarc.config import config
 from sarc.core.scraping.jobs import fetch_jobs
-
 
 logger = logging.getLogger(__name__)
 
@@ -55,10 +55,5 @@ class FetchJobs:
 
         assert config().cache is not None
 
-        fetch_jobs(
-            self.cluster_names,
-            clusters_cfg,
-            self.intervals,
-            self.auto_interval,
-        )
+        fetch_jobs(self.cluster_names, clusters_cfg, self.intervals, self.auto_interval)
         return 0

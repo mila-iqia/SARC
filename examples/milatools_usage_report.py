@@ -277,9 +277,7 @@ def _annotate_start_and_end(
     #     fontsize="12",
     # )
     ax.annotate(
-        _format(df[row].iloc[-1]),
-        (df.index[-1], df[row].iloc[-1]),
-        fontsize="12",
+        _format(df[row].iloc[-1]), (df.index[-1], df[row].iloc[-1]), fontsize="12"
     )
 
 
@@ -359,9 +357,7 @@ def _setup_logging(verbose: int):
     import rich.logging
 
     logging.basicConfig(
-        handlers=[rich.logging.RichHandler()],
-        format="%(message)s",
-        level=logging.ERROR,
+        handlers=[rich.logging.RichHandler()], format="%(message)s", level=logging.ERROR
     )
 
     match verbose:
@@ -385,9 +381,7 @@ def _get_filter(
     cluster_name: str | Query | None,
     name: str | Query | None,
 ):
-    query: dict = {
-        "submit_time": {"$gte": start_date, "$lt": end_date},
-    }
+    query: dict = {"submit_time": {"$gte": start_date, "$lt": end_date}}
     if cluster_name is not None:
         query["cluster_name"] = cluster_name
 

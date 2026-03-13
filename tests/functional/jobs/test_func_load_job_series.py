@@ -533,7 +533,5 @@ class TestMongoLoadJobSeries(BaseTestLoadJobSeries):
         from sarc.users.db import get_users
 
         return SeriesOps(
-            load_job_series=load_job_series,
-            get_jobs=get_jobs,
-            get_users=get_users,
+            load_job_series=load_job_series, get_jobs=get_jobs, get_users=get_users
         )

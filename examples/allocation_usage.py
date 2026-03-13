@@ -106,8 +106,7 @@ cost_per_month = cost_per_day.resample(start_time="1M").sum()
 
 # Fetching allocations to compare with the usage.
 allocations = get_allocation_summaries(
-    cluster_name=clusters,
-    start=date(year=2022, month=4, day=1),
+    cluster_name=clusters, start=date(year=2022, month=4, day=1)
 )
 
 # Select subset of allocation fields.
