@@ -1,22 +1,21 @@
-from datetime import datetime
 import logging
+from datetime import datetime
 from typing import Optional
 
 from sarc.cache import Cache
 from sarc.client.job import _jobs_collection
-from sarc.config import config, ClusterConfig, UTC
+from sarc.config import UTC, ClusterConfig, config
+from sarc.core.models.runstate import get_parsed_date, set_parsed_date
 from sarc.core.scraping.jobs_utils import (
     DATE_FORMAT_HOUR,
+    fetch_raw,
     parse_auto_intervals,
     parse_intervals,
-    set_auto_end_time,
-    fetch_raw,
     parse_raw,
+    set_auto_end_time,
     update_allocated_gpu_type_from_nodes,
 )
-from sarc.core.models.runstate import get_parsed_date, set_parsed_date
 from sarc.traces import using_trace
-
 
 logger = logging.getLogger(__name__)
 

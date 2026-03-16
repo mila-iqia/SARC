@@ -5,6 +5,7 @@ import time_machine
 
 from sarc.client import get_jobs
 from tests.functional.jobs.test_func_load_job_series import MOCK_TIME
+
 from ..jobs.test_func_job_statistics import generate_fake_timeseries
 
 PARAMS = {

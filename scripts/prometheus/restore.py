@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from simple_parsing import ArgumentParser, field
 from tqdm import tqdm
 
-from sarc.client.job import _jobs_collection, JobStatistics, Statistics
+from sarc.client.job import JobStatistics, Statistics, _jobs_collection
 from sarc.core.models.validators import datetime_utc
 
 logger = logging.getLogger("prometheus_dump.restore")

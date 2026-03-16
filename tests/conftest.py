@@ -125,11 +125,7 @@ def prom_custom_query_mock(monkeypatch):
     to `custom_query` using `prom_custom_query_mock.call_args[0][0]`."""
     from prometheus_api_client import PrometheusConnect
 
-    monkeypatch.setattr(
-        PrometheusConnect,
-        "custom_query",
-        MagicMock(return_value=[]),
-    )
+    monkeypatch.setattr(PrometheusConnect, "custom_query", MagicMock(return_value=[]))
 
     yield PrometheusConnect.custom_query
 

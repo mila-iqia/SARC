@@ -170,9 +170,7 @@ class ValidField[V](BaseModel):
             # that goes after ltag, and try again for the part that goes
             # before.
             tag2 = ValidTag(
-                value=tag.value,
-                valid_start=tag.valid_start,
-                valid_end=ltag.valid_start,
+                value=tag.value, valid_start=tag.valid_start, valid_end=ltag.valid_start
             )
             tag.valid_start = ltag.valid_end
             self.values.insert(i, tag)

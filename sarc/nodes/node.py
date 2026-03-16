@@ -27,8 +27,7 @@ def curate_label_argument(
 
 
 def generate_label_configs(
-    node_id: None | str | list[str],
-    cluster: None | str | list[str],
+    node_id: None | str | list[str], cluster: None | str | list[str]
 ) -> Generator[dict[str, str], None, None]:
     node_configs = curate_label_argument("instance", node_id)
     cluster_configs = curate_label_argument("cluster", cluster)

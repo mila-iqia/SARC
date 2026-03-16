@@ -1,6 +1,6 @@
 import pytest
 
-from sarc.alerts.common import HealthCheck, CheckStatus
+from sarc.alerts.common import CheckStatus, HealthCheck
 from sarc.alerts.healthcheck_state import HealthCheckState, HealthCheckStateRepository
 from sarc.config import config
 from tests.unittests.alerts.definitions import BeanCheck
@@ -44,10 +44,7 @@ def test_config_read_write_into_db(beans_config, testing_repo):
 
 
 def test_HealthCheckStateRepository(testing_repo, tmpdir):
-    hc = HealthCheck(
-        name="test_check",
-        active=True,
-    )
+    hc = HealthCheck(name="test_check", active=True)
     state = HealthCheckState(check=hc)
 
     # Test save and retrieving

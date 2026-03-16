@@ -112,7 +112,7 @@ def test_fetch_jobs_get_cache(test_config, enabled_cache, remote):
             Command(
                 f"export TZ=UTC && sacct -X -S {yesterday.strftime(fmt)} -E {today.strftime(fmt)} --allusers --json",
                 out=b'{"value": 2}',
-            ),
+            )
         ]
     )
 

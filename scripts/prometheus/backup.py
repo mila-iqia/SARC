@@ -6,16 +6,16 @@ from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel
-from tqdm import tqdm
 from simple_parsing import ArgumentParser
+from tqdm import tqdm
 
-from sarc.client.job import _jobs_collection, JobStatistics, SlurmJob
-from sarc.config import config, UTC
+from sarc.client.job import JobStatistics, SlurmJob, _jobs_collection
+from sarc.config import UTC, config
 from sarc.core.models.validators import datetime_utc
 from sarc.core.scraping.jobs_utils import update_allocated_gpu_type_from_nodes
 from sarc.jobs.series import (
-    _get_job_time_series_data_cache_key,
     JOB_STATISTICS_METRIC_NAMES,
+    _get_job_time_series_data_cache_key,
 )
 
 logger = logging.getLogger("prometheus_dump.backup")
@@ -64,7 +64,7 @@ def main() -> int:
         "$or": [
             {"allocated.gpu_type": {"$type": "string"}},
             {"stored_statistics": {"$type": "object"}},
-        ],
+        ]
     }
     logger.info("Counting jobs ...")
     expected = cfg.mongo.database_instance.jobs.count_documents(base_query)
@@ -196,9 +196,7 @@ def has_prometheus_cache_for_gpu_type(cache: Path, entry: SlurmJob) -> bool:
     # We check if a cache file exists for the call to get_job_time_series()
     # which should be used to get GPU type from Prometheus.
     cache_key = _get_job_time_series_data_cache_key(
-        job=entry,
-        metric="slurm_job_utilization_gpu_memory",
-        max_points=1,
+        job=entry, metric="slurm_job_utilization_gpu_memory", max_points=1
     )
     return cache_key is not None and (cache / "prometheus" / cache_key).exists()
 

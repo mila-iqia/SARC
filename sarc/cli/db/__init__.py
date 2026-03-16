@@ -12,11 +12,7 @@ class Db:
     """this is help"""
 
     command: DbInit | DbBackup | DbRestore = subparsers(
-        {
-            "init": DbInit,
-            "backup": DbBackup,
-            "restore": DbRestore,
-        }
+        {"init": DbInit, "backup": DbBackup, "restore": DbRestore}
     )
 
     def execute(self) -> int:

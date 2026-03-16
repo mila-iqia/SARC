@@ -15,8 +15,8 @@ import simple_parsing
 from sarc.alerts.common import CheckStatus, HealthMonitorConfig
 from sarc.alerts.healthcheck_state import (
     HealthCheckState,
-    get_healthcheck_state_collection,
     HealthCheckStateRepository,
+    get_healthcheck_state_collection,
 )
 from sarc.config import config
 

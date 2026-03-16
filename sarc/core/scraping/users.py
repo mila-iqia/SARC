@@ -160,10 +160,7 @@ def fetch_users(scrapers: list[tuple[str, Any]]) -> None:
                 )
                 continue
             try:
-                ce.add_value(
-                    key=scraper_name,
-                    value=scraper.get_user_data(config),
-                )
+                ce.add_value(key=scraper_name, value=scraper.get_user_data(config))
             except Exception as e:
                 logger.error(
                     "Error fetching data for scraper: %s", scraper_name, exc_info=e

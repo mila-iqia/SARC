@@ -85,20 +85,11 @@ def test_beegfs_fetch_report(monkeypatch, remote, file_regression):
     assert diskusage.name == "beegfs"
     scraper = get_diskusage_scraper(diskusage.name)
     dconfig = scraper.validate_config(diskusage.params)
-    with open(
-        Path(__file__).parent / "mila_reports/report_user1.txt",
-        "rb",
-    ) as f:
+    with open(Path(__file__).parent / "mila_reports/report_user1.txt", "rb") as f:
         report1 = f.read()
-    with open(
-        Path(__file__).parent / "mila_reports/report_user2.txt",
-        "rb",
-    ) as f:
+    with open(Path(__file__).parent / "mila_reports/report_user2.txt", "rb") as f:
         report2 = f.read()
-    with open(
-        Path(__file__).parent / "mila_reports/report_user3.txt",
-        "rb",
-    ) as f:
+    with open(Path(__file__).parent / "mila_reports/report_user3.txt", "rb") as f:
         report3 = f.read()
 
     assert len(dconfig.config_files) == 1

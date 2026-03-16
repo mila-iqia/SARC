@@ -100,11 +100,7 @@ class BeeGFSDiskUsage(DiskUsageScraper[BeeGFSDiskUsageConfig]):
             for name, lines in data.items()
         ]
 
-        return DiskUsage(
-            cluster_name=cluster_name,
-            groups=groups,
-            timestamp=timestamp,
-        )
+        return DiskUsage(cluster_name=cluster_name, groups=groups, timestamp=timestamp)
 
 
 # Register the scraper to make it available

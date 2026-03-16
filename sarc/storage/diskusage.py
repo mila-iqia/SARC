@@ -51,9 +51,7 @@ def _convert_date_to_iso(date_value: date) -> datetime:
 
 # pylint: disable=duplicate-code
 def get_diskusages(
-    cluster_name: str | list[str],
-    start: None | date = None,
-    end: None | date = None,
+    cluster_name: str | list[str], start: None | date = None, end: None | date = None
 ) -> list[DiskUsage]:
     collection = get_diskusage_collection()
 
