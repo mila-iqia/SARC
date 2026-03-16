@@ -1,9 +1,45 @@
+import json
 import logging
 import re
 
 import pytest
 
 from sarc.alerts.healthcheck_state import get_healthcheck_state_collection
+
+
+@pytest.mark.usefixtures("empty_read_write_db")
+def test_list_empty(beans_config, cli_main, capsys, caplog):
+    with caplog.at_level(logging.INFO):
+        assert cli_main(["health", "list"]) == 0
+        assert "There are 0 health check states" in caplog.text
+    assert capsys.readouterr().out == ""
+
+
+@pytest.mark.usefixtures("empty_read_write_db")
+def test_list_after_run(beans_config, cli_main, capsys, caplog):
+    cli_main(["health", "run", "--all"])
+    capsys.readouterr()  # discard run output
+    caplog.clear()
+
+    with caplog.at_level(logging.INFO):
+        assert cli_main(["health", "list"]) == 0
+        assert "There are 4 health check states" in caplog.text
+
+    # Parse JSON output
+    stdout = capsys.readouterr().out
+    raw_json = re.sub(r"\}[\r\n]+\{", "},{", stdout)
+    states = json.loads(f"[{raw_json}]")
+
+    assert len(states) == 4
+    names = [s["check"]["name"] for s in states]
+    assert names == sorted(names)
+    for state in states:
+        assert "check" in state
+        assert (
+            state["check"]["_class_"] == "tests.unittests.alerts.definitions:BeanCheck"
+        )
+        assert "beans" in state["check"]
+        assert "last_result" in state
 
 
 @pytest.mark.usefixtures("empty_read_write_db")

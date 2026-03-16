@@ -2,14 +2,45 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Annotated, Any, Iterable
 
-from pydantic import BaseModel, BeforeValidator, PlainSerializer
+import pymongo
+from pydantic import (
+    BaseModel,
+    BeforeValidator,
+    PlainSerializer,
+    TypeAdapter,
+    WithJsonSchema,
+)
 from pydantic_mongo import AbstractRepository, PydanticObjectId
 from serieux import TaggedSubclass, deserialize, serialize
 
 from sarc.alerts.common import CheckResult, HealthCheck
 from sarc.config import config
+
+
+def _inline_defs(schema: dict) -> dict:
+    """Resolve all local $defs references by inlining them.
+
+    TypeAdapter.json_schema() generates $ref pointing to local $defs,
+    but this may lead to resolve errors, e.g. in /docs API endpoint.
+    """
+    defs = schema.pop("$defs", {})
+
+    def resolve(obj):
+        if isinstance(obj, dict):
+            if "$ref" in obj:
+                ref = obj["$ref"]
+                if ref.startswith("#/$defs/"):
+                    return resolve(dict(defs[ref.removeprefix("#/$defs/")]))
+                return obj
+            return {k: resolve(v) for k, v in obj.items()}
+        if isinstance(obj, list):
+            return [resolve(item) for item in obj]
+        return obj
+
+    return resolve(schema)
+
 
 SERIEUX_CLASS_NAME = "$class"
 MONGODB_CLASS_NAME = "_class_"
@@ -70,6 +101,11 @@ HealthCheckPydantic = Annotated[
     HealthCheck,
     PlainSerializer(_serialize_health_check, return_type=dict),
     BeforeValidator(_validate_health_check),
+    # Add explicit schema for HealthCheck dataclass.
+    # Necessary to make sure HealthCheck schema is included into OpenAPI JSON schema.
+    WithJsonSchema(
+        _inline_defs(TypeAdapter(HealthCheck).json_schema(mode="serialization"))
+    ),
 ]
 
 
@@ -99,6 +135,11 @@ CheckResultPydantic = Annotated[
     CheckResult,
     PlainSerializer(_serialize_check_result, return_type=dict),
     BeforeValidator(_validate_check_result),
+    # Add explicit schema for CheckResult dataclass.
+    # Necessary to make sure CheckResult schema is included into OpenAPI JSON schema.
+    WithJsonSchema(
+        _inline_defs(TypeAdapter(CheckResult).json_schema(mode="serialization"))
+    ),
 ]
 
 
@@ -140,6 +181,10 @@ class HealthCheckStateRepository(AbstractRepository[HealthCheckState]):
     def get_state(self, name: str) -> HealthCheckState | None:
         """Get the state for a specific check by name."""
         return self.find_one_by({"check.name": name})
+
+    def get_states(self) -> Iterable[HealthCheckState]:
+        """Get an iterable of all states saved in database."""
+        return self.find_by({}, sort=[("check.name", pymongo.ASCENDING)])
 
 
 def get_healthcheck_state_collection() -> HealthCheckStateRepository:
