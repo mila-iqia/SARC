@@ -16,6 +16,7 @@ from sarc.client.series import (
     update_job_series_rgu,
 )
 from tests.common.dateutils import MTL
+
 from .test_func_load_job_series import MOCK_TIME
 
 
@@ -642,7 +643,10 @@ def test_update_job_series_rgu_with_read_only_db(
         assert row.cluster_name == job.cluster_name
         assert row.job_id == job.job_id
         assert row.submit_time == job.submit_time
-        assert row[5] == job.allocated.gpu_type
+        if job.allocated.gpu_type is None:
+            assert pandas.isna(row[5])
+        else:
+            assert row[5] == job.allocated.gpu_type
         for given, expected in (
             (row[6], job.gpu_type_rgu),
             (row[7], job.rgu),
