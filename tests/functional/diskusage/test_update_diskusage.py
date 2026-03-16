@@ -9,9 +9,11 @@ from sarc.storage.diskusage import get_diskusages
 FOLDER = os.path.dirname(os.path.abspath(__file__))
 
 
-@pytest.mark.usefixtures("empty_read_write_db")
+@pytest.mark.usefixtures("empty_read_write_db", "no_pkey")
 @pytest.mark.freeze_time("2023-05-12")
-def test_update_drac_diskusage_one(file_regression, cli_main, remote, enabled_cache):
+def test_update_drac_diskusage_one(
+    file_regression, cli_main, remote, enabled_cache, monkeypatch
+):
     assert get_diskusages(cluster_name=["gerudo", "hyrule"]) == []
 
     # Load the expected report content
@@ -34,9 +36,11 @@ def test_update_drac_diskusage_one(file_regression, cli_main, remote, enabled_ca
     file_regression.check(data[0].model_dump_json(exclude={"id": True}, indent=4))
 
 
-@pytest.mark.usefixtures("empty_read_write_db")
+@pytest.mark.usefixtures("empty_read_write_db", "no_pkey")
 @pytest.mark.freeze_time("2023-05-12", auto_tick_seconds=1)
-def test_update_drac_diskusage_two(file_regression, cli_main, remote, enabled_cache):
+def test_update_drac_diskusage_two(
+    file_regression, cli_main, remote, enabled_cache, monkeypatch
+):
     assert get_diskusages(cluster_name=["gerudo", "hyrule"]) == []
 
     # Load both report contents
@@ -76,10 +80,10 @@ def test_update_drac_diskusage_two(file_regression, cli_main, remote, enabled_ca
     file_regression.check(data_json)
 
 
-@pytest.mark.usefixtures("empty_read_write_db")
+@pytest.mark.usefixtures("empty_read_write_db", "no_pkey")
 @pytest.mark.freeze_time("2023-05-12", auto_tick_seconds=1)
 def test_update_drac_diskusage_no_duplicate(
-    file_regression, cli_main, remote, enabled_cache
+    file_regression, cli_main, remote, enabled_cache, monkeypatch
 ):
     assert get_diskusages(cluster_name=["gerudo", "hyrule"]) == []
 

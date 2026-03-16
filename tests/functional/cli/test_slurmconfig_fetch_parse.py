@@ -6,7 +6,7 @@ from typing import List
 from zipfile import ZipFile
 
 import pytest
-from fabric.testing.base import Session, Command
+from fabric.testing.base import Command, Session
 from hostlist import expand_hostlist
 
 from sarc.cache import Cache, CacheEntry
@@ -86,8 +86,8 @@ DATE_2020_10_01_MTL = datetime(2020, 10, 1, tzinfo=MTL)
 DATE_2020_12_01_MTL = datetime(2020, 12, 1, tzinfo=MTL)
 
 
-@pytest.mark.usefixtures("enabled_cache")
-def test_fetch_slurmconfig(cli_main, test_config, remote, caplog, freezer):
+@pytest.mark.usefixtures("enabled_cache", "no_pkey")
+def test_fetch_slurmconfig(cli_main, test_config, remote, caplog, freezer, monkeypatch):
     """Test slurm conf file downloading using `fetch slurmconfig`."""
     caplog.set_level(logging.INFO)
 
@@ -154,8 +154,10 @@ def test_fetch_slurmconfig(cli_main, test_config, remote, caplog, freezer):
 
 
 @pytest.mark.freeze_time(DATE_2020_01_01_MTL)
-@pytest.mark.usefixtures("enabled_cache")
-def test_fetch_slurmconfig_no_change(cli_main, test_config, remote, caplog):
+@pytest.mark.usefixtures("enabled_cache", "no_pkey")
+def test_fetch_slurmconfig_no_change(
+    cli_main, test_config, remote, caplog, monkeypatch
+):
     """test fetch slurmconfig when downloaded file is identical to previous cached file"""
     caplog.set_level(logging.INFO)
 
@@ -197,8 +199,8 @@ def test_fetch_slurmconfig_no_change(cli_main, test_config, remote, caplog):
 
 
 @pytest.mark.freeze_time(DATE_2020_12_01_MTL)
-@pytest.mark.usefixtures("enabled_cache", "tzlocal_is_mtl")
-def test_fetch_slurmconfig_legacy(cli_main, test_config, remote, caplog):
+@pytest.mark.usefixtures("enabled_cache", "tzlocal_is_mtl", "no_pkey")
+def test_fetch_slurmconfig_legacy(cli_main, test_config, remote, caplog, monkeypatch):
     """test that fetch slurmconfig correctly handles legacy cached files"""
     caplog.set_level(logging.INFO)
 

@@ -144,3 +144,15 @@ def patch_return_values(monkeypatch):
             monkeypatch.setattr(k, returner(v))
 
     yield patch
+
+
+@pytest.fixture
+def no_pkey(monkeypatch):
+    """Fix to ignore problems with the pkey argument to connect()"""
+    import fabric
+    from fabric import Connection
+
+    def Connection_mock(*args, connect_kwargs=None, **kwargs):
+        return Connection(*args, **kwargs)
+
+    monkeypatch.setattr(fabric, "Connection", Connection_mock)
