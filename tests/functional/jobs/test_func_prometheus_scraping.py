@@ -3,19 +3,20 @@ from __future__ import annotations
 import json
 import logging
 import re
-from datetime import datetime, timedelta
 import time
+from datetime import datetime, timedelta
 
 import pytest
 from fabric.testing.base import Command, Session
 from opentelemetry.trace import StatusCode
 
-from sarc.client.job import JobStatistics, get_jobs, get_available_clusters
+from sarc.client.job import JobStatistics, get_available_clusters, get_jobs
 from sarc.config import UTC
 from sarc.jobs import prometheus_scraping
-from tests.common.dateutils import _dtfmt, _dtreg, MTL
-from .factory import create_sacct_json
+from tests.common.dateutils import MTL, _dtfmt, _dtreg
+
 from ..cli.test_slurmconfig_fetch_parse import _save_slurm_conf
+from .factory import create_sacct_json
 
 
 @pytest.fixture
@@ -55,7 +56,7 @@ def mock_compute_job_statistics(monkeypatch):
     ],
     indirect=True,
 )
-@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache", "no_pkey")
 def test_get_gpu_type(
     test_config, sacct_json, remote, cli_main, monkeypatch, mock_compute_job_statistics
 ):
@@ -171,7 +172,7 @@ def test_get_gpu_type(
     assert job.stored_statistics
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache", "no_pkey")
 def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     test_config,
     remote,
@@ -405,7 +406,7 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
         )
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache", "no_pkey")
 def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
     test_config,
     remote,

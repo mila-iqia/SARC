@@ -1,2 +1,3 @@
 [beaubonhomme] insufficient average gpu_util: 19816.229166666668 GPU-seconds; minimum required: 8:00:00 (28800.0 GPU-seconds)
 [petitbonhomme] insufficient average gpu_util: 28780.0 GPU-seconds; minimum required: 8:00:00 (28800.0 GPU-seconds)
+ERROR    sarc.alerts.common:common.py:98 [gpu_util_per_user_4] FAILURE: gpu_util_per_user_4

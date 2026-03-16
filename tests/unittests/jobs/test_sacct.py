@@ -3,19 +3,31 @@ from datetime import date, datetime, timedelta
 import pytest
 from fabric.testing.base import Command
 
+from sarc.cache import Cache
 from sarc.config import UTC
 from sarc.core.scraping.jobs import fetch_jobs
 from sarc.core.scraping.jobs_utils import (
     JobConversionError,
-    fetch_raw,
     _convert_json_job,
+    fetch_raw,
 )
-from sarc.cache import Cache
 from tests.common.dateutils import MTL, _dtfmt
 
 
+@pytest.mark.usefixtures("no_pkey")
 @pytest.mark.parametrize(
-    "test_config", [{"clusters": {"test": {"host": "patate"}}}], indirect=True
+    "test_config",
+    [
+        {
+            "clusters": {
+                "test": {
+                    "host": "patate",
+                    "private_key": {"file": "tests/id_test", "password": "12345"},
+                }
+            }
+        }
+    ],
+    indirect=True,
 )
 def test_fetch_raw(test_config, remote):
     remote.expect(
@@ -30,8 +42,20 @@ def test_fetch_raw(test_config, remote):
     ) == "{}".encode("utf-8")
 
 
+@pytest.mark.usefixtures("no_pkey")
 @pytest.mark.parametrize(
-    "test_config", [{"clusters": {"test": {"host": "test"}}}], indirect=True
+    "test_config",
+    [
+        {
+            "clusters": {
+                "test": {
+                    "host": "test",
+                    "private_key": {"file": "tests/id_test", "password": "12345"},
+                }
+            }
+        }
+    ],
+    indirect=True,
 )
 def test_fetch_raw2(test_config, remote):
     remote.expect(
@@ -58,8 +82,20 @@ def test_fetch_raw2(test_config, remote):
     ) == '{ "value": 2 }'.encode("utf-8")
 
 
+@pytest.mark.usefixtures("no_pkey")
 @pytest.mark.parametrize(
-    "test_config", [{"clusters": {"test": {"host": "patate"}}}], indirect=True
+    "test_config",
+    [
+        {
+            "clusters": {
+                "test": {
+                    "host": "patate",
+                    "private_key": {"file": "tests/id_test", "password": "12345"},
+                }
+            }
+        }
+    ],
+    indirect=True,
 )
 @pytest.mark.freeze_time(datetime(2023, 2, 28, tzinfo=MTL))
 def test_fetch_jobs_get_cache(test_config, enabled_cache, remote):
@@ -70,6 +106,7 @@ def test_fetch_jobs_get_cache(test_config, enabled_cache, remote):
 
     # we ask for yesterday, today and tomorrow
     fmt = "%Y-%m-%dT%H:%M"
+
     remote.expect(
         commands=[
             Command(
@@ -98,7 +135,18 @@ def test_fetch_jobs_get_cache(test_config, enabled_cache, remote):
 
 
 @pytest.mark.parametrize(
-    "test_config", [{"clusters": {"test": {"host": "test"}}}], indirect=True
+    "test_config",
+    [
+        {
+            "clusters": {
+                "test": {
+                    "host": "test",
+                    "private_key": {"file": "tests/id_test", "password": "12345"},
+                }
+            }
+        }
+    ],
+    indirect=True,
 )
 def test_convert_version_supported(test_config, monkeypatch, caplog):
     version_supported = {"major": "24", "micro": "1", "minor": "11"}

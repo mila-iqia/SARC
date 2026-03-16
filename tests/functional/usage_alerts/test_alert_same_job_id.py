@@ -16,9 +16,9 @@ import re
 from datetime import datetime, timedelta
 
 import pytest
+import time_machine
 
-from sarc.alerts.usage_alerts.same_job_id import check_same_job_id
-from sarc.config import UTC
+from sarc.config import UTC, config
 from tests.functional.jobs.test_func_load_job_series import MOCK_TIME
 
 PARAMETERS = {
@@ -75,14 +75,21 @@ PARAMETERS = {
 }
 
 
-@pytest.mark.freeze_time(MOCK_TIME)
-@pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
-@pytest.mark.parametrize("params", PARAMETERS.values(), ids=PARAMETERS.keys())
-def test_check_same_job_id(params, caplog, file_regression):
-    check_same_job_id(**params)
+@time_machine.travel(MOCK_TIME, tick=False)
+@pytest.mark.usefixtures("read_only_db", "health_config")
+@pytest.mark.parametrize("name_and_params", PARAMETERS.items(), ids=PARAMETERS.keys())
+def test_check_same_job_id(name_and_params, caplog, file_regression, cli_main):
+    name, params = name_and_params
+    check_name = f"same_job_id_{name}"
+    check = config().health_monitor.checks[check_name]
+    if "since" in params:
+        assert check.since == params["since"]
+    if "time_interval" in params:
+        assert check.time_interval == params["time_interval"]
+    assert cli_main(["health", "run", "--check", check_name]) == 0
     file_regression.check(
         re.sub(
-            r"WARNING +sarc\.alerts\.usage_alerts\.same_job_id:same_job_id.py:[0-9]+ +",
+            r"ERROR +sarc\.alerts\.usage_alerts\.same_job_id:same_job_id.py:[0-9]+ +",
             "",
             caplog.text,
         )

@@ -4,9 +4,6 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from sarc.alerts.usage_alerts.prometheus_gpu_types import (
-    check_prometheus_vs_slurmconfig,
-)
 from sarc.config import config
 
 TESTING_DATA = {
@@ -43,9 +40,11 @@ TESTING_DATA = {
 }
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("empty_read_write_db", "health_config")
 @pytest.mark.parametrize("params", TESTING_DATA.values(), ids=TESTING_DATA.keys())
-def test_check_prometheus_vs_slurmconfig(params, monkeypatch, caplog, file_regression):
+def test_check_prometheus_vs_slurmconfig(
+    params, monkeypatch, caplog, file_regression, cli_main
+):
     """Test each case from TEST_DATA (one test per cluster)."""
 
     from prometheus_api_client import PrometheusConnect
@@ -67,20 +66,27 @@ def test_check_prometheus_vs_slurmconfig(params, monkeypatch, caplog, file_regre
             }
         )
 
-    check_prometheus_vs_slurmconfig(cluster_name=params["cluster"])
+    assert (
+        cli_main(
+            ["health", "run", "--check", f"prometheus_gpu_type_{params['cluster']}"]
+        )
+        == 0
+    )
     file_regression.check(
         params["message"]
         + "\n\n"
         + re.sub(
-            r"WARNING +sarc\.alerts\.usage_alerts\.prometheus_gpu_types:prometheus_gpu_types.py:[0-9]+ +",
+            r"ERROR +sarc\.alerts\.usage_alerts\.prometheus_gpu_types:prometheus_gpu_types.py:[0-9]+ +",
             "",
             caplog.text,
         )
     )
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "tzlocal_is_mtl")
-def test_check_prometheus_vs_slurmconfig_all(monkeypatch, caplog, file_regression):
+@pytest.mark.usefixtures("empty_read_write_db", "health_config")
+def test_check_prometheus_vs_slurmconfig_all(
+    monkeypatch, caplog, file_regression, cli_main
+):
     """Test all data at once (all clusters)."""
 
     from prometheus_api_client import PrometheusConnect
@@ -111,10 +117,10 @@ def test_check_prometheus_vs_slurmconfig_all(monkeypatch, caplog, file_regressio
                 }
             )
 
-    check_prometheus_vs_slurmconfig()
+    assert cli_main(["health", "run", "--check", "prometheus_gpu_type_all"]) == 0
     file_regression.check(
         re.sub(
-            r"WARNING +sarc\.alerts\.usage_alerts\.prometheus_gpu_types:prometheus_gpu_types.py:[0-9]+ +",
+            r"ERROR +sarc\.alerts\.usage_alerts\.prometheus_gpu_types:prometheus_gpu_types.py:[0-9]+ +",
             "",
             caplog.text,
         )

@@ -1,3 +1,4 @@
 Both slurm config data and prometheus data available, but prometheus GPU not in slurm config: warning.
 
 [prometheus][fromage] gpu_type not found in slurm config file: phantom_gpu. Expected: gpu0
+ERROR    sarc.alerts.common:common.py:98 [prometheus_gpu_type_fromage] FAILURE: prometheus_gpu_type_fromage

@@ -9,7 +9,7 @@ import pytest
 from pytest_regressions.data_regression import RegressionYamlDumper
 
 from sarc.config import config
-from sarc.testing import MongoInstance
+
 from .allocations.factory import create_allocations
 from .diskusage.factory import create_diskusages
 from .jobs.factory import (
@@ -159,74 +159,3 @@ def read_only_db_with_many_cpu_jobs(read_only_db_with_many_cpu_jobs_config_objec
 def read_only_db_with_users(read_only_db_with_users_config_object):
     with custom_db_config(read_only_db_with_users_config_object):
         yield config().mongo.database_instance
-
-
-@pytest.fixture
-def freeport():
-    import socket
-
-    sock = socket.socket()
-    sock.bind(("", 0))
-    port = sock.getsockname()[1]
-    sock.close()
-    return port
-
-
-def admin_client(freeport):
-    from pymongo import MongoClient
-
-    return MongoClient(f"mongodb://admin:admin_pass@localhost:{freeport}")
-
-
-@pytest.fixture
-def mongodb(tmp_path, freeport, test_config_path):
-    """Initialize a running mongodb instance.
-    Can run in parallel
-    """
-
-    with MongoInstance(
-        str(tmp_path / "db"), freeport, sarc_config=str(test_config_path.absolute())
-    ) as dbproc:
-        # Populate the database with data
-
-        db = admin_client(freeport).sarc
-
-        fill_db(db)
-
-        db.sercrest.insert_one({"mypassword": 123})
-
-        # return the process
-        yield dbproc
-
-
-@contextmanager
-def using_mongo_uri(uri):
-    with gifnoc.overlay(
-        {"sarc.mongo.connection_string": uri, "sarc.mongo.database_name": "sarc"}
-    ):
-        yield
-
-
-@pytest.fixture
-def admin_setup(mongodb, scraping_mode, freeport):
-    """MongoDB admin user, can do anything."""
-    with using_mongo_uri(f"mongodb://admin:admin_pass@localhost:{freeport}"):
-        yield
-
-
-@pytest.fixture
-def write_setup(mongodb, scraping_mode, freeport):
-    """SARC write user, can only write to sarc database.
-    Have access to secrets
-    """
-    with using_mongo_uri(f"mongodb://write_name:write_pass@localhost:{freeport}/sarc"):
-        yield
-
-
-@pytest.fixture
-def read_setup(mongodb, scraping_mode, freeport):
-    """SARC read user, can only read to sarc database.
-    Does not have access to secrets
-    """
-    with using_mongo_uri(f"mongodb://user_name:user_pass@localhost:{freeport}/sarc"):
-        yield
