@@ -16,60 +16,12 @@ No re-submitted entry exists for job_id=7.
 import re
 from datetime import datetime, timedelta
 
-import gifnoc
 import pytest
 import time_machine
-import yaml
 
 from sarc.client import get_jobs
 from sarc.client.job import SlurmState
-from sarc.config import config
 from tests.functional.jobs.test_func_load_job_series import MOCK_TIME
-
-HEALTH_CONFIG_YAML = """
-sarc:
-  health_monitor:
-    checks:
-      # old_running_jobs_* checks correspond to test params in test_alert_old_running_jobs.py
-      #
-      # In testing DB, there is 1 RUNNING job:
-      #   job_id: 7
-      #   cluster_name: raisin
-      #   submit_time: ~2023-02-15T17:00:00+00:00
-      #   start_time:  ~2023-02-15T17:01:00+00:00
-      #   time_limit: 43200 (12 hours)
-      #   max_end_time: ~2023-02-16T05:01:00+00:00
-      # MOCK_TIME is 2023-11-22T00:00:00+00:00, so this job is over limit.
-
-      # Check all RUNNING jobs (no `since` filter).
-      # Should find the old RUNNING job => FAILURE.
-      old_running_jobs_all:
-        $class: "sarc.alerts.usage_alerts.old_running_jobs:OldRunningJobCheck"
-        active: true
-        since: null
-
-      # `since` before the RUNNING job's submit_time.
-      # Should find the old RUNNING job => FAILURE.
-      old_running_jobs_since_before:
-        $class: "sarc.alerts.usage_alerts.old_running_jobs:OldRunningJobCheck"
-        active: true
-        since: "2023-02-15T00:00+00:00"
-
-      # `since` after the RUNNING job's submit_time.
-      # Should NOT find the old RUNNING job => OK.
-      old_running_jobs_since_after:
-        $class: "sarc.alerts.usage_alerts.old_running_jobs:OldRunningJobCheck"
-        active: true
-        since: "2023-02-16T00:00+00:00"
-"""
-
-
-@pytest.fixture
-def health_config():
-    """Special sarc config with health checks for testing"""
-    with gifnoc.overlay(yaml.safe_load(HEALTH_CONFIG_YAML)):
-        yield config().health_monitor
-
 
 PARAMETERS: dict[str, tuple[str, list[str]]] = {
     # No `since` filter: checks all RUNNING jobs => finds old RUNNING job
