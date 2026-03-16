@@ -71,13 +71,7 @@ def test_check_prometheus_vs_slurmconfig(
         == 0
     )
     file_regression.check(
-        params["message"]
-        + "\n\n"
-        + re.sub(
-            r"ERROR +sarc\.alerts\.usage_alerts\.prometheus_gpu_types:prometheus_gpu_types.py:[0-9]+ +",
-            "",
-            caplog.text,
-        )
+        params["message"] + "\n\n" + re.sub(r"ERROR +.+\.py:[0-9]+ +", "", caplog.text)
     )
 
 
@@ -112,10 +106,4 @@ def test_check_prometheus_vs_slurmconfig_all(
             )
 
     assert cli_main(["health", "run", "--check", "prometheus_gpu_type_all"]) == 0
-    file_regression.check(
-        re.sub(
-            r"ERROR +sarc\.alerts\.usage_alerts\.prometheus_gpu_types:prometheus_gpu_types.py:[0-9]+ +",
-            "",
-            caplog.text,
-        )
-    )
+    file_regression.check(re.sub(r"ERROR +.+\.py:[0-9]+ +", "", caplog.text))

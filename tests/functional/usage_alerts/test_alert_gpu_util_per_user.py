@@ -44,10 +44,4 @@ def test_alert_gpu_util_per_user(
         job.statistics(save=True)
 
     assert cli_main(["health", "run", "--check", check_name]) == 0
-    file_regression.check(
-        re.sub(
-            r"ERROR +sarc\.alerts\.usage_alerts\.gpu_util_per_user:gpu_util_per_user.py:[0-9]+ +",
-            "",
-            caplog.text,
-        )
-    )
+    file_regression.check(re.sub(r"ERROR +.+\.py:[0-9]+ +", "", caplog.text))
