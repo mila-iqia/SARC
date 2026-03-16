@@ -138,9 +138,7 @@ class TestValidField:
         field = ValidField[str]()
 
         field.insert(
-            "value1",
-            datetime(2023, 1, 1, tzinfo=UTC),
-            datetime(2023, 6, 1, tzinfo=UTC),
+            "value1", datetime(2023, 1, 1, tzinfo=UTC), datetime(2023, 6, 1, tzinfo=UTC)
         )
         field.insert(
             "value2",
@@ -399,14 +397,10 @@ class TestValidField:
 
         # Create a scenario where recursive merging is needed
         field.insert(
-            "value1",
-            datetime(2023, 3, 1, tzinfo=UTC),
-            datetime(2023, 6, 1, tzinfo=UTC),
+            "value1", datetime(2023, 3, 1, tzinfo=UTC), datetime(2023, 6, 1, tzinfo=UTC)
         )
         field.insert(
-            "value2",
-            datetime(2023, 7, 1, tzinfo=UTC),
-            datetime(2023, 9, 1, tzinfo=UTC),
+            "value2", datetime(2023, 7, 1, tzinfo=UTC), datetime(2023, 9, 1, tzinfo=UTC)
         )
 
         with pytest.raises(DateOverlapError):
@@ -843,9 +837,7 @@ class TestValidField:
     def test_values_in_range_boundary_at_end(self):
         field = ValidField[str]()
         field.insert(
-            "value1",
-            datetime(2023, 4, 1, tzinfo=UTC),
-            datetime(2023, 5, 1, tzinfo=UTC),
+            "value1", datetime(2023, 4, 1, tzinfo=UTC), datetime(2023, 5, 1, tzinfo=UTC)
         )
 
         start = datetime(2023, 5, 1, tzinfo=UTC)
@@ -857,9 +849,7 @@ class TestValidField:
     def test_values_in_range_adjacent_values_no_overlap(self):
         field = ValidField[str]()
         field.insert(
-            "value1",
-            datetime(2023, 1, 1, tzinfo=UTC),
-            datetime(2023, 4, 1, tzinfo=UTC),
+            "value1", datetime(2023, 1, 1, tzinfo=UTC), datetime(2023, 4, 1, tzinfo=UTC)
         )
         field.insert(
             "value2",

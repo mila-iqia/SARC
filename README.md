@@ -1,8 +1,6 @@
-
 # SARC
 
 SARC stands for "Supervision et Analyde des Resources de Calcul". It's a Mila in-house tool to monitor the usage of computational resources by Mila users. It is not meant to be deployed on the users workstations.
-
 
 ## Installation and setup
 
@@ -15,7 +13,7 @@ $ git clone git@github.com:mila-iqia/SARC.git
 $ cd SARC
 ```
 
-`sarc` will be looking into the current working directory to find the dev config file. To work with prod config or 
+`sarc` will be looking into the current working directory to find the dev config file. To work with prod config or
 from any directory set the environment variable as follow.
 
 ```bash
@@ -27,14 +25,13 @@ tunnel. If you never accessed the VM, see documention here first https://mila-iq
 
 To create the ssh tunnel:
 
-
 ```bash
 $ ssh -L 27017:localhost:27017 sarc
 ```
 
 You can now test on your machine a simple example to see if `sarc` is able to access the database:
 
-```bash 
+```bash
 $ uv run python example/waste_stats.py
 ```
 
@@ -43,7 +40,9 @@ $ uv run python example/waste_stats.py
 ### Before commits
 
 Those commands are for the proper formatting.
+
 ```
+uv run ruff check --select I --fix
 uv run ruff format
 uv run tox -e ruff
 ```
@@ -51,11 +50,13 @@ uv run tox -e ruff
 ### How to add dependencies
 
 For dependecies that are core to the package:
+
 ```
 uv add <package-name>
 ```
 
 For dependencies that are only useful for developping:
+
 ```
 uv add --dev <package-name>
 ```
@@ -63,12 +64,14 @@ uv add --dev <package-name>
 ### How to run the tests suite
 
 This runs the tests.
+
 ```
 uv run tox -e test
 ```
 
 If you're running on Mac OS, you can install `podman` with `brew install podman`.
 Later you can start the virtual machine with
+
 ```
 podman machine init
 podman machine start

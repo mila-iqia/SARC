@@ -8,7 +8,7 @@ from pathlib import Path
 from filelock import SoftFileLock, Timeout
 from simple_parsing import field
 
-from sarc.config import config, UTC
+from sarc.config import UTC, config
 
 logger = logging.getLogger(__name__)
 

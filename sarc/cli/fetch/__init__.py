@@ -4,9 +4,9 @@ from simple_parsing import subparsers
 
 from .allocations import FetchAllocations
 from .diskusage import FetchDiskUsage
+from .jobs import FetchJobs
 from .slurmconfig import FetchSlurmConfig
 from .users import FetchUsers
-from .jobs import FetchJobs
 
 
 @dataclass

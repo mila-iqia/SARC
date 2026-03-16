@@ -113,14 +113,12 @@ class TestPlugin(UserScraper[TestConfig]):
         domain = data.decode("utf-8")
         users.append(
             UserMatch(
-                email=f"john@{domain}",
-                matching_id=MatchID(name="test", mid="john"),
+                email=f"john@{domain}", matching_id=MatchID(name="test", mid="john")
             )
         )
         users.append(
             UserMatch(
-                email=f"jane@{domain}",
-                matching_id=MatchID(name="test", mid="jane"),
+                email=f"jane@{domain}", matching_id=MatchID(name="test", mid="jane")
             )
         )
         return users
@@ -176,9 +174,7 @@ def test_user_match_equality():
 
 def test_update_user_match_fill_missing_data():
     base_user = UserMatch(
-        display_name=None,
-        email=None,
-        matching_id=MatchID(name="plugin1", mid="user1"),
+        display_name=None, email=None, matching_id=MatchID(name="plugin1", mid="user1")
     )
 
     update_user = UserMatch(
@@ -234,13 +230,9 @@ def test_update_user_match_merge_known_matches():
 
 
 def test_update_user_match_merge_valid_fields():
-    base_user = UserMatch(
-        matching_id=MatchID(name="plugin1", mid="user1"),
-    )
+    base_user = UserMatch(matching_id=MatchID(name="plugin1", mid="user1"))
 
-    update_user = UserMatch(
-        matching_id=MatchID(name="plugin2", mid="user1"),
-    )
+    update_user = UserMatch(matching_id=MatchID(name="plugin2", mid="user1"))
 
     # Add some data to the update user
     update_user.github_username.insert("newuser")
@@ -389,17 +381,13 @@ def test_update_user_match_merge_credentials_new_domain():
     """Test merging credentials when the update user has a new domain."""
     base_user = UserMatch(
         matching_id=MatchID(name="plugin1", mid="user1"),
-        associated_accounts={
-            "drac": Credentials(),
-        },
+        associated_accounts={"drac": Credentials()},
     )
     base_user.associated_accounts["drac"].insert("user1_drac")
 
     update_user = UserMatch(
         matching_id=MatchID(name="plugin2", mid="user1"),
-        associated_accounts={
-            "mila": Credentials(),
-        },
+        associated_accounts={"mila": Credentials()},
     )
     update_user.associated_accounts["mila"].insert("user1_mila")
 
@@ -416,17 +404,13 @@ def test_update_user_match_merge_credentials_existing_domain():
     """Test merging credentials when both users have the same domain."""
     base_user = UserMatch(
         matching_id=MatchID(name="plugin1", mid="user1"),
-        associated_accounts={
-            "drac": Credentials(),
-        },
+        associated_accounts={"drac": Credentials()},
     )
     base_user.associated_accounts["drac"].insert("user1_drac")
 
     update_user = UserMatch(
         matching_id=MatchID(name="plugin2", mid="user1"),
-        associated_accounts={
-            "drac": Credentials(),
-        },
+        associated_accounts={"drac": Credentials()},
     )
     update_user.associated_accounts["drac"].insert("user1_drac_updated")
 
@@ -519,7 +503,7 @@ def test_parse_users_supervisor_ordering_before_fix(mock_get_scraper, enabled_ca
         (
             "bad_order_plugin",
             {"api_url": "https://bad_order.example.com", "api_key": "secret"},
-        ),
+        )
     ]
 
     fetch_users(scrapers)

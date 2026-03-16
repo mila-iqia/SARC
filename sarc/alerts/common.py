@@ -45,10 +45,7 @@ class CheckException:
 
     @staticmethod
     def from_exception(exc: Exception) -> CheckException:
-        return CheckException(
-            type=type(exc).__qualname__,
-            message=str(exc),
-        )
+        return CheckException(type=type(exc).__qualname__, message=str(exc))
 
 
 @dataclass
@@ -152,11 +149,7 @@ class HealthCheck:
             opts = ", ".join(item.value for item in CheckStatus)
             raise ValueError(f"Invalid status: {status}. Valid statuses are: {opts}")
         return self.__result_class__(
-            name=self.name,
-            status=status,
-            issue_date=now,
-            check=self,
-            **kwargs,
+            name=self.name, status=status, issue_date=now, check=self, **kwargs
         )
 
     def ok(self, **kwargs) -> CheckResult:

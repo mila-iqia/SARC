@@ -224,10 +224,7 @@ def test_get_nodes_time_series_default_end(freezer, monkeypatch):
         assert end != datetime.now(UTC)
         return [
             {
-                "metric": {
-                    "__name__": metric_name,
-                    **label_config,
-                },
+                "metric": {"__name__": metric_name, **label_config},
                 "values": [
                     [1675109742, "0.0330033"],
                     [1675109772, "0.0333333"],

@@ -58,7 +58,7 @@ def main():
         # ["narval", 43539060],
         # ["narval", 43539421],
         # ["narval", 43540479],
-        ["narval", 43541060],
+        ["narval", 43541060]
     ]
 
     # Metrics to check (same as the one computed in job.statistics()).

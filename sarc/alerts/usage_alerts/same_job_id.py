@@ -1,12 +1,12 @@
 import logging
 from collections import Counter
 from dataclasses import dataclass
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime, timedelta
 from typing import Dict
 
 from tqdm import tqdm
 
-from sarc.alerts.common import HealthCheck, CheckResult
+from sarc.alerts.common import CheckResult, HealthCheck
 from sarc.core.models.validators import datetime_utc
 
 logger = logging.getLogger(__name__)

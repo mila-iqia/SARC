@@ -26,17 +26,7 @@ def test_read_write_size():
 @pytest.mark.usefixtures("health_config", "read_write_db")
 def test_health_check_disk_space_db(caplog, cli_main, check_name, expected):
     with caplog.at_level(logging.INFO):
-        assert (
-            cli_main(
-                [
-                    "health",
-                    "run",
-                    "--check",
-                    check_name,
-                ]
-            )
-            == 0
-        )
+        assert cli_main(["health", "run", "--check", check_name]) == 0
         assert check_name in caplog.text
         if expected:
             assert re.search(r"ERROR +.+\[mongodb] size exceeded", caplog.text)
@@ -65,17 +55,7 @@ def test_health_check_disk_space_cache(caplog, cli_main, check_name, expected):
         assert (cache / f"{i}.txt").is_file()
 
     with caplog.at_level(logging.INFO):
-        assert (
-            cli_main(
-                [
-                    "health",
-                    "run",
-                    "--check",
-                    check_name,
-                ]
-            )
-            == 0
-        )
+        assert cli_main(["health", "run", "--check", check_name]) == 0
         assert check_name in caplog.text
         if expected:
             assert re.search(r"ERROR +.+\[sarc-cache] size exceeded", caplog.text)
