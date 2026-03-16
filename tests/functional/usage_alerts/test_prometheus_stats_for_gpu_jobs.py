@@ -62,10 +62,4 @@ def test_check_prometheus_stats_for_gpu_jobs(
     for job in get_jobs():
         job.statistics(save=True)
     assert cli_main(["health", "run", "--check", check_name]) == 0
-    file_regression.check(
-        re.sub(
-            r"ERROR +sarc\.alerts\.usage_alerts\.prometheus_stats_occurrences:prometheus_stats_occurrences.py:[0-9]+ +",
-            "",
-            caplog.text,
-        )
-    )
+    file_regression.check(re.sub(r"ERROR +.+\.py:[0-9]+ +", "", caplog.text))
