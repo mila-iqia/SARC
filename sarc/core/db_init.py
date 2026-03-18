@@ -38,7 +38,6 @@ def db_upgrade(db: Database) -> None:
     create_runstate(db)
 
     db.version.replace_one({}, {"value": CURRENT_SCHEMA_VERSION}, upsert=True)
-    breakpoint()
 
 
 def create_clusters(db: Database) -> None:
