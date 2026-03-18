@@ -1,6 +1,5 @@
 """Tests for DRAC user scrapers."""
 
-import json
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -25,8 +24,10 @@ class TestDRACRolesScraper(UserPluginTester):
     def test_fetch_data(self, data_regression):
         config = DRACMemberConfig(csv=self.data)
         data = self.plugin.get_user_data(config)
-
-        data_regression.check(json.loads(data.decode()), basename="test_fetch_roles")
+        # Uncomment to update the input data for the parse test
+        # with open(Path(__file__).parent / "inputs" / "drac_role1.cache", "wb") as f:
+        #    f.write(data)
+        data_regression.check(data.decode(), basename="test_fetch_roles")
 
     @pytest.mark.parametrize("raw_file", ["drac_role1.cache"])
     def test_parse_data(self, raw_file, data_regression):
@@ -51,8 +52,10 @@ class TestDRACMemberScraper(UserPluginTester):
     def test_fetch_data(self, data_regression):
         config = DRACMemberConfig(csv=self.data)
         data = self.plugin.get_user_data(config)
-
-        data_regression.check(json.loads(data.decode()), basename="test_fetch_members")
+        # Uncomment to update the input data for the parse test
+        # with open(Path(__file__).parent / "inputs" / "drac_member1.cache", "wb") as f:
+        #    f.write(data)
+        data_regression.check(data.decode(), basename="test_fetch_members")
 
     @pytest.mark.parametrize("raw_file", ["drac_member1.cache"])
     def test_parse_data(self, raw_file, data_regression):
