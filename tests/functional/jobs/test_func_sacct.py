@@ -271,15 +271,6 @@ def test_localhost(os_system, monkeypatch):
 def test_stdout_message_before_json(
     test_config, sacct_json, remote, file_regression, cli_main, monkeypatch
 ):
-    #### Fix to ignore problems with the pkey argument to connect()
-    import fabric
-    from fabric import Connection
-
-    def Connection_mock(*args, connect_kwargs=None, **kwargs):
-        return Connection(*args, **kwargs)
-
-    monkeypatch.setattr(fabric, "Connection", Connection_mock)
-    ####
 
     remote.expect(
         host="raisin",

@@ -23,16 +23,6 @@ def test_drac_fetch_report(remote, file_regression, monkeypatch):
         raw_report = f.read()
     assert raw_report
 
-    #### Fix to ignore problems with the pkey argument to connect()
-    import fabric
-    from fabric import Connection
-
-    def Connection_mock(*args, connect_kwargs=None, **kwargs):
-        return Connection(*args, **kwargs)
-
-    monkeypatch.setattr(fabric, "Connection", Connection_mock)
-    ####
-
     remote.expect(
         host=cluster.host,
         cmd=f"{dconfig.diskusage_path} --project --all_users",
@@ -73,16 +63,6 @@ def test_drac_acquire_storages(
     with open(Path(__file__).parent / "drac_reports/report_hyrule.txt", "rb") as f:
         raw_report = f.read()
     assert raw_report
-
-    #### Fix to ignore problems with the pkey argument to connect()
-    import fabric
-    from fabric import Connection
-
-    def Connection_mock(*args, connect_kwargs=None, **kwargs):
-        return Connection(*args, **kwargs)
-
-    monkeypatch.setattr(fabric, "Connection", Connection_mock)
-    ####
 
     remote.expect(
         host=cluster.host,

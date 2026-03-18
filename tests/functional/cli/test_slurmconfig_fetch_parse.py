@@ -107,16 +107,6 @@ def test_fetch_slurmconfig(cli_main, test_config, remote, caplog, freezer, monke
     assert not file_path_2020_01_01.exists()
     assert not file_path_2020_05_01.exists()
 
-    #### Fix to ignore problems with the pkey argument to connect()
-    import fabric
-    from fabric import Connection
-
-    def Connection_mock(*args, connect_kwargs=None, **kwargs):
-        return Connection(*args, **kwargs)
-
-    monkeypatch.setattr(fabric, "Connection", Connection_mock)
-    ####
-
     remote.expect_sessions(
         Session(
             host=cluster.host,
@@ -184,16 +174,6 @@ def test_fetch_slurmconfig_no_change(
     # Cache same content in a previous date (2019-01-01(
     prev_date = datetime(2019, 1, 1, tzinfo=MTL).astimezone(UTC)
     _save_slurm_conf(cluster_name, "2019-01-01", SLURM_CONF_RAISIN_2020_01_01)
-
-    #### Fix to ignore problems with the pkey argument to connect()
-    import fabric
-    from fabric import Connection
-
-    def Connection_mock(*args, connect_kwargs=None, **kwargs):
-        return Connection(*args, **kwargs)
-
-    monkeypatch.setattr(fabric, "Connection", Connection_mock)
-    ####
 
     remote.expect_sessions(
         Session(
@@ -264,16 +244,6 @@ def test_fetch_slurmconfig_legacy(cli_main, test_config, remote, caplog, monkeyp
 
     # Use cluster raisin for download test
     cluster = test_config.clusters[cluster_name]
-
-    #### Fix to ignore problems with the pkey argument to connect()
-    import fabric
-    from fabric import Connection
-
-    def Connection_mock(*args, connect_kwargs=None, **kwargs):
-        return Connection(*args, **kwargs)
-
-    monkeypatch.setattr(fabric, "Connection", Connection_mock)
-    ####
 
     remote.expect_sessions(
         Session(
