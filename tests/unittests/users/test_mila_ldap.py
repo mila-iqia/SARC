@@ -17,12 +17,12 @@ class TestMilaLDAPScraper(UserPluginTester):
 
     raw_config = {
         "service_uri": "ldaps://ldap.example.com:636",
-        "private_key": {"file": "/path/to/private.key", "password": None},
+        "private_key": {"file": "/path/to/private.key", "password": ""},
         "certificate_file": "/path/to/certificate.crt",
     }
     parsed_config = MilaLDAPConfig(
         service_uri="ldaps://ldap.example.com:636",
-        private_key=PrivateKeyInfo(file=Path("/path/to/private.key"), password=None),
+        private_key=PrivateKeyInfo(file=Path("/path/to/private.key"), password=""),
         certificate_file=Path("/path/to/certificate.crt"),
     )
 
