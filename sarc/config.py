@@ -181,13 +181,19 @@ class MongoConfig:
     def database_instance(self) -> Database:
         from pymongo import MongoClient
 
+        from sarc.core.db_init import db_upgrade
+
         client: MongoClient = MongoClient(self.connection_string)
-        return client.get_database(
+        db = client.get_database(
             self.database_name,
             codec_options=CodecOptions(
                 uuid_representation=UuidRepresentation.STANDARD, tz_aware=True
             ),
         )
+
+        db_upgrade(db)
+
+        return db
 
 
 @dataclass
