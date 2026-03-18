@@ -585,16 +585,6 @@ def test_multiple_clusters_and_dates(test_config, remote, file_regression, cli_m
             ],
         )
 
-    #### Fix to ignore problems with the pkey argument to connect()
-    import fabric
-    from fabric import Connection
-
-    def Connection_mock(*args, connect_kwargs=None, **kwargs):
-        return Connection(*args, **kwargs)
-
-    monkeypatch.setattr(fabric, "Connection", Connection_mock)
-    ####
-
     remote.expect_sessions(
         _create_session(
             "raisin",
