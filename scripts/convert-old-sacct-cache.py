@@ -56,7 +56,7 @@ def main() -> None:
     output_dir = base_dir / "converted" / "jobs"
 
     if not source_dir.exists():
-        print(f"Source directory not found: {source_dir}", file=sys.stderr)
+        print(f"Source directory not found: {source_dir}", file=sys.stderr)  # noqa: T201
         sys.exit(1)
 
     # Group files by start date: each window spans one day starting at e.g. 05:00
@@ -67,7 +67,7 @@ def main() -> None:
             continue
         parsed = parse_filename(path.name)
         if parsed is None:
-            print(f"Skipping unrecognized file: {path.name}", file=sys.stderr)
+            print(f"Skipping unrecognized file: {path.name}", file=sys.stderr)  # noqa: T201
             continue
         cluster, start_dt, end_dt = parsed
         day_key = start_dt.strftime("%Y-%m-%d")
@@ -102,7 +102,7 @@ def main() -> None:
 
             converted += 1
 
-    print(f"\nDone: {converted} day(s) converted, {skipped} skipped → {output_dir}")
+    print(f"\nDone: {converted} day(s) converted, {skipped} skipped → {output_dir}")  # noqa: T201
 
 
 if __name__ == "__main__":
