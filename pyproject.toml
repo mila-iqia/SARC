@@ -71,7 +71,6 @@ dev = [
     "time-machine>=3.2.0",
 ]
 examples = ["seaborn>=0.13.2,<0.14"]
-gui = ["PyQt6>=6.9,<7"]
 
 # to consider
 #  - DTZ: datetimes without timezones (not right now)
@@ -106,7 +105,6 @@ ignore = [
 default-groups = [
     "dev",
     "examples",
-    "gui",
 ]
 
 [tool.uv.sources]

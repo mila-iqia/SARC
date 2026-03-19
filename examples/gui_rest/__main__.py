@@ -1,8 +1,11 @@
+# /// script
+# dependencies = ["PyQt6>=6.9,<7"]
+# ///
 """
 SARC Database Browser - PyQt6 GUI for browsing SARC via REST API.
 
 Usage:
-    python examples/gui-rest/__main__.py
+    uv run examples/gui_rest/__main__.py
 """
 from __future__ import annotations
 
