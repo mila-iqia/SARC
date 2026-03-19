@@ -9,7 +9,6 @@ import pytest
 from pytest_regressions.data_regression import RegressionYamlDumper
 
 from sarc.config import MongoConfig, config
-from sarc.core.db_init import CURRENT_SCHEMA_VERSION
 
 from .allocations.factory import create_allocations
 from .diskusage.factory import create_diskusages
