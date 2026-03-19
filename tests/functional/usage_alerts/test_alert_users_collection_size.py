@@ -12,7 +12,7 @@ It should:
 
 import logging
 import re
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 
 import gifnoc
 import pytest
