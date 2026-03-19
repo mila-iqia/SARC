@@ -120,7 +120,7 @@ def test_fetch_slurmconfig(cli_main, test_config, remote, caplog, freezer, monke
                     out=SLURM_CONF_RAISIN_2020_05_01.encode(),
                 ),
             ],
-        ),
+        )
     )
 
     # Should download from current day
@@ -182,9 +182,9 @@ def test_fetch_slurmconfig_no_change(
                 Command(
                     cmd=f"cat {cluster.slurm_conf_host_path}",
                     out=SLURM_CONF_RAISIN_2020_01_01.encode(),
-                ),
+                )
             ],
-        ),
+        )
     )
 
     # Should download from current day
@@ -252,9 +252,9 @@ def test_fetch_slurmconfig_legacy(cli_main, test_config, remote, caplog, monkeyp
                 Command(
                     cmd=f"cat {cluster.slurm_conf_host_path}",
                     out=SLURM_CONF_RAISIN_2020_05_01.encode(),  # same content as in latest legacy cache
-                ),
+                )
             ],
-        ),
+        )
     )
 
     # Should download from current day
@@ -334,10 +334,7 @@ def test_parse_slurmconfig(cli_main, caplog):
     expected_gpu_billing_1 = GPUBilling(
         cluster_name="raisin",
         since=datetime(2020, 1, 1, tzinfo=MTL).astimezone(UTC),
-        gpu_to_billing={
-            "gpu1": 5000,
-            "THE GPU II": 7500,
-        },
+        gpu_to_billing={"gpu1": 5000, "THE GPU II": 7500},
     )
     assert_same_billings(get_cluster_gpu_billings("raisin"), [expected_gpu_billing_1])
 
@@ -373,10 +370,7 @@ def test_parse_slurmconfig(cli_main, caplog):
     expected_gpu_billing_2 = GPUBilling(
         cluster_name="raisin",
         since=datetime(2020, 5, 1, tzinfo=MTL).astimezone(UTC),
-        gpu_to_billing={
-            "gpu1": 4000,
-            "THE GPU II": 9000,
-        },
+        gpu_to_billing={"gpu1": 4000, "THE GPU II": 9000},
     )
     assert_same_billings(
         get_cluster_gpu_billings("raisin"),
@@ -445,10 +439,7 @@ def test_parse_slurmconfig_since(cli_main, caplog):
     expected_gpu_billing_2 = GPUBilling(
         cluster_name="raisin",
         since=datetime(2020, 5, 1, tzinfo=MTL).astimezone(UTC),
-        gpu_to_billing={
-            "gpu1": 4000,
-            "THE GPU II": 9000,
-        },
+        gpu_to_billing={"gpu1": 4000, "THE GPU II": 9000},
     )
     assert_same_billings(get_cluster_gpu_billings("raisin"), [expected_gpu_billing_2])
 
@@ -621,9 +612,7 @@ PartitionName=partition2 Nodes=mynode[2,8-11,42] TRESBillingWeights=x=1,GRES/gpu
 @pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
 def test_parse_slurmconfig_inconsistent_billing(cli_main, threshold):
     _save_slurm_conf(
-        "raisin",
-        "2020-01-01",
-        SLURM_CONF_RAISIN_2020_01_01_INCONSISTENT_BILLING,
+        "raisin", "2020-01-01", SLURM_CONF_RAISIN_2020_01_01_INCONSISTENT_BILLING
     )
 
     command = ["parse", "slurmconfig", "-c", "raisin"]
@@ -651,23 +640,9 @@ PartitionName=partition2 Nodes=mynode[2,8-11,42] TRESBillingWeights=x=1,GRES/gpu
 def test_parse_slurmconfig_inconsistent_billing_success(cli_main, threshold):
     """Test that parsing succeeds with greater threshold"""
     _save_slurm_conf(
-        "raisin",
-        "2020-01-01",
-        SLURM_CONF_RAISIN_2020_01_01_INCONSISTENT_BILLING,
+        "raisin", "2020-01-01", SLURM_CONF_RAISIN_2020_01_01_INCONSISTENT_BILLING
     )
-    assert (
-        cli_main(
-            [
-                "parse",
-                "slurmconfig",
-                "-c",
-                "raisin",
-                "-t",
-                str(threshold),
-            ]
-        )
-        == 0
-    )
+    assert cli_main(["parse", "slurmconfig", "-c", "raisin", "-t", str(threshold)]) == 0
     (gpu_billing,) = get_cluster_gpu_billings("raisin")
     assert gpu_billing.gpu_to_billing == {"gpu1": (5000 + 6000) / 2}
 

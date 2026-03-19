@@ -19,10 +19,4 @@ PARAMETERS = {
 @pytest.mark.parametrize("check_name", PARAMETERS.values(), ids=PARAMETERS.keys())
 def test_check_cluster_response(caplog, file_regression, cli_main, check_name):
     assert cli_main(["health", "run", "--check", check_name]) == 0
-    file_regression.check(
-        re.sub(
-            r"ERROR +sarc\.alerts\.usage_alerts\.cluster_response:cluster_response.py:[0-9]+ +",
-            "",
-            caplog.text,
-        )
-    )
+    file_regression.check(re.sub(r"ERROR +.+\.py:[0-9]+ +", "", caplog.text))

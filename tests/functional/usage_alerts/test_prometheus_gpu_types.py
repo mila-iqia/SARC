@@ -51,9 +51,7 @@ def test_check_prometheus_vs_slurmconfig(
 
     # Mock PrometheusConnect.custom_query() to prevent a real call to Prometheus
     monkeypatch.setattr(
-        PrometheusConnect,
-        "custom_query",
-        MagicMock(return_value=params["prometheus"]),
+        PrometheusConnect, "custom_query", MagicMock(return_value=params["prometheus"])
     )
     # Add node_to_gpu entry in db if necessary
     if params["node_to_gpu"]:
@@ -73,13 +71,7 @@ def test_check_prometheus_vs_slurmconfig(
         == 0
     )
     file_regression.check(
-        params["message"]
-        + "\n\n"
-        + re.sub(
-            r"ERROR +sarc\.alerts\.usage_alerts\.prometheus_gpu_types:prometheus_gpu_types.py:[0-9]+ +",
-            "",
-            caplog.text,
-        )
+        params["message"] + "\n\n" + re.sub(r"ERROR +.+\.py:[0-9]+ +", "", caplog.text)
     )
 
 
@@ -99,11 +91,7 @@ def test_check_prometheus_vs_slurmconfig_all(
             for prom_data in params["prometheus"]
         ]
 
-    monkeypatch.setattr(
-        PrometheusConnect,
-        "custom_query",
-        _gen_fake_custom_query,
-    )
+    monkeypatch.setattr(PrometheusConnect, "custom_query", _gen_fake_custom_query)
 
     db = config().mongo.database_instance
     collection = db.node_gpu_mapping
@@ -118,10 +106,4 @@ def test_check_prometheus_vs_slurmconfig_all(
             )
 
     assert cli_main(["health", "run", "--check", "prometheus_gpu_type_all"]) == 0
-    file_regression.check(
-        re.sub(
-            r"ERROR +sarc\.alerts\.usage_alerts\.prometheus_gpu_types:prometheus_gpu_types.py:[0-9]+ +",
-            "",
-            caplog.text,
-        )
-    )
+    file_regression.check(re.sub(r"ERROR +.+\.py:[0-9]+ +", "", caplog.text))
