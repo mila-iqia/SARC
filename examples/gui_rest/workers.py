@@ -1,4 +1,5 @@
 """QThread worker classes for async SARC API calls."""
+
 from __future__ import annotations
 
 from PyQt6.QtCore import QThread, pyqtSignal
@@ -7,7 +8,7 @@ from sarc.rest.client import SarcApiClient
 
 
 class ConnectWorker(QThread):
-    success = pyqtSignal(list)   # list of cluster names
+    success = pyqtSignal(list)  # list of cluster names
     error = pyqtSignal(str)
 
     def __init__(self, client: SarcApiClient):
@@ -23,7 +24,7 @@ class ConnectWorker(QThread):
 
 
 class SummaryWorker(QThread):
-    success = pyqtSignal(int, int, list)   # job_count, user_count, clusters
+    success = pyqtSignal(int, int, list)  # job_count, user_count, clusters
     error = pyqtSignal(str)
 
     def __init__(self, client: SarcApiClient):
@@ -41,7 +42,7 @@ class SummaryWorker(QThread):
 
 
 class ClustersWorker(QThread):
-    success = pyqtSignal(list)   # list of (cluster_name, count)
+    success = pyqtSignal(list)  # list of (cluster_name, count)
     error = pyqtSignal(str)
 
     def __init__(self, client: SarcApiClient):
@@ -65,6 +66,7 @@ class ClustersWorker(QThread):
 
 class ClusterListWorker(QThread):
     """Fetches cluster list only (for populating dropdowns)."""
+
     success = pyqtSignal(list)
     error = pyqtSignal(str)
 
@@ -106,7 +108,7 @@ class UsersWorker(QThread):
 
 
 class UserDetailsWorker(QThread):
-    success = pyqtSignal(object, dict)   # user, job_counts
+    success = pyqtSignal(object, dict)  # user, job_counts
     error = pyqtSignal(str)
 
     def __init__(self, client: SarcApiClient, uuid_str: str):
@@ -136,7 +138,17 @@ class JobsWorker(QThread):
     success = pyqtSignal(object)
     error = pyqtSignal(str)
 
-    def __init__(self, client: SarcApiClient, cluster, username, job_state, start, end, page, per_page):
+    def __init__(
+        self,
+        client: SarcApiClient,
+        cluster,
+        username,
+        job_state,
+        start,
+        end,
+        page,
+        per_page,
+    ):
         super().__init__()
         self.client = client
         self.cluster = cluster

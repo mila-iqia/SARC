@@ -1,9 +1,19 @@
 """Summary tab for the SARC GUI."""
+
 from __future__ import annotations
 
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QLabel, QPushButton,
-    QTableWidget, QTableWidgetItem, QHeaderView, QApplication, QMessageBox,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QGroupBox,
+    QLabel,
+    QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
+    QHeaderView,
+    QApplication,
+    QMessageBox,
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont
@@ -78,8 +88,12 @@ class SummaryTab(QWidget):
         clusters_layout = QVBoxLayout(clusters_group)
         self._clusters_table = QTableWidget(0, 1)
         self._clusters_table.setHorizontalHeaderLabels(["Cluster Name"])
-        self._clusters_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        self._clusters_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._clusters_table.horizontalHeader().setSectionResizeMode(
+            0, QHeaderView.ResizeMode.Stretch
+        )
+        self._clusters_table.setSelectionBehavior(
+            QTableWidget.SelectionBehavior.SelectRows
+        )
         self._clusters_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._clusters_table.doubleClicked.connect(self._on_cluster_double_click)
         clusters_layout.addWidget(self._clusters_table)

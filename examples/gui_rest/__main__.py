@@ -7,6 +7,7 @@ SARC Database Browser - PyQt6 GUI for browsing SARC via REST API.
 Usage:
     uv run examples/gui_rest/__main__.py
 """
+
 from __future__ import annotations
 
 import sys
@@ -19,8 +20,17 @@ if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
 from PyQt6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QTabWidget, QLineEdit, QPushButton, QLabel, QFrame, QMessageBox,
+    QApplication,
+    QMainWindow,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QTabWidget,
+    QLineEdit,
+    QPushButton,
+    QLabel,
+    QFrame,
+    QMessageBox,
 )
 from PyQt6.QtCore import Qt
 

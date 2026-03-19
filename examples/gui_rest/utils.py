@@ -1,4 +1,5 @@
 """Formatting helpers and misc utilities for the SARC GUI."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -19,7 +20,7 @@ def fmt_elapsed(seconds: float | None) -> str:
         m = (secs % 3600) // 60
         s = secs % 60
         return f"{h}h {m}m {s}s"
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return "N/A"
 
 
@@ -38,7 +39,7 @@ def fmt_float(v: float | None) -> str:
         if v != v:  # NaN check
             return "N/A"
         return f"{v:.2f}"
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return "N/A"
 
 

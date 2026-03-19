@@ -1,12 +1,24 @@
 """Jobs tab for the SARC GUI."""
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QLabel, QPushButton,
-    QLineEdit, QComboBox, QTableWidget, QTableWidgetItem, QHeaderView,
-    QApplication, QMessageBox, QDateEdit,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QGroupBox,
+    QLabel,
+    QPushButton,
+    QLineEdit,
+    QComboBox,
+    QTableWidget,
+    QTableWidgetItem,
+    QHeaderView,
+    QApplication,
+    QMessageBox,
+    QDateEdit,
 )
 from PyQt6.QtCore import Qt, QDate
 
@@ -89,7 +101,7 @@ class JobsTab(QWidget):
         row2.addWidget(self._end_date)
 
         self._start_label = row2.itemAt(2).widget()  # "From:" label
-        self._end_label = row2.itemAt(4).widget()    # "To:" label
+        self._end_label = row2.itemAt(4).widget()  # "To:" label
         self._start_label.setVisible(False)
         self._end_label.setVisible(False)
 
@@ -104,16 +116,41 @@ class JobsTab(QWidget):
         # Jobs table
         self._table = QTableWidget(0, 8)
         self._table.setHorizontalHeaderLabels(
-            ["Job ID", "Name", "User", "Cluster", "State", "Submit Time", "Elapsed", "GPUs"]
+            [
+                "Job ID",
+                "Name",
+                "User",
+                "Cluster",
+                "State",
+                "Submit Time",
+                "Elapsed",
+                "GPUs",
+            ]
         )
-        self._table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-        self._table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self._table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        self._table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
-        self._table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
-        self._table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
-        self._table.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
-        self._table.horizontalHeader().setSectionResizeMode(7, QHeaderView.ResizeMode.ResizeToContents)
+        self._table.horizontalHeader().setSectionResizeMode(
+            0, QHeaderView.ResizeMode.ResizeToContents
+        )
+        self._table.horizontalHeader().setSectionResizeMode(
+            1, QHeaderView.ResizeMode.Stretch
+        )
+        self._table.horizontalHeader().setSectionResizeMode(
+            2, QHeaderView.ResizeMode.ResizeToContents
+        )
+        self._table.horizontalHeader().setSectionResizeMode(
+            3, QHeaderView.ResizeMode.ResizeToContents
+        )
+        self._table.horizontalHeader().setSectionResizeMode(
+            4, QHeaderView.ResizeMode.ResizeToContents
+        )
+        self._table.horizontalHeader().setSectionResizeMode(
+            5, QHeaderView.ResizeMode.ResizeToContents
+        )
+        self._table.horizontalHeader().setSectionResizeMode(
+            6, QHeaderView.ResizeMode.ResizeToContents
+        )
+        self._table.horizontalHeader().setSectionResizeMode(
+            7, QHeaderView.ResizeMode.ResizeToContents
+        )
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._table.doubleClicked.connect(self._on_job_double_click)
@@ -138,7 +175,7 @@ class JobsTab(QWidget):
         layout.addLayout(page_layout)
 
     def _on_period_change(self, text: str):
-        is_custom = (text == "Custom")
+        is_custom = text == "Custom"
         self._start_label.setVisible(is_custom)
         self._start_date.setVisible(is_custom)
         self._end_label.setVisible(is_custom)
@@ -189,13 +226,17 @@ class JobsTab(QWidget):
         else:  # Custom
             qstart = self._start_date.date()
             qend = self._end_date.date()
-            start = datetime(qstart.year(), qstart.month(), qstart.day(), tzinfo=timezone.utc)
+            start = datetime(
+                qstart.year(), qstart.month(), qstart.day(), tzinfo=timezone.utc
+            )
             end = datetime(qend.year(), qend.month(), qend.day(), tzinfo=timezone.utc)
             return start, end
 
     def _do_search(self, page: int = 1):
         if self.client is None:
-            QMessageBox.warning(self, "Not Connected", "Please connect to a SARC API server first.")
+            QMessageBox.warning(
+                self, "Not Connected", "Please connect to a SARC API server first."
+            )
             return
 
         self._page = page
@@ -233,8 +274,7 @@ class JobsTab(QWidget):
                 pass
 
         self._worker = JobsWorker(
-            self.client, cluster, username, job_state,
-            start, end, page, self._per_page
+            self.client, cluster, username, job_state, start, end, page, self._per_page
         )
         self._worker.success.connect(self._on_jobs_loaded)
         self._worker.error.connect(self._on_error)

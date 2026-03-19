@@ -1,10 +1,24 @@
 """Users tab and user details panel for the SARC GUI."""
+
 from __future__ import annotations
 
 from PyQt6.QtWidgets import (
-    QWidget, QFrame, QVBoxLayout, QHBoxLayout, QFormLayout, QScrollArea,
-    QLabel, QPushButton, QLineEdit, QComboBox, QTableWidget, QTableWidgetItem,
-    QHeaderView, QSplitter, QApplication, QMessageBox,
+    QWidget,
+    QFrame,
+    QVBoxLayout,
+    QHBoxLayout,
+    QFormLayout,
+    QScrollArea,
+    QLabel,
+    QPushButton,
+    QLineEdit,
+    QComboBox,
+    QTableWidget,
+    QTableWidgetItem,
+    QHeaderView,
+    QSplitter,
+    QApplication,
+    QMessageBox,
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
@@ -75,7 +89,9 @@ class UserDetailsPanel(QFrame):
 
         def add_row(label: str, value: str):
             val_lbl = QLabel(value)
-            val_lbl.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            val_lbl.setTextInteractionFlags(
+                Qt.TextInteractionFlag.TextSelectableByMouse
+            )
             layout.addRow(label + ":", val_lbl)
 
         add_row("Name", user.display_name)
@@ -150,9 +166,15 @@ class UsersTab(QWidget):
 
         self._table = QTableWidget(0, 3)
         self._table.setHorizontalHeaderLabels(["Name", "Email", "Member Type"])
-        self._table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        self._table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self._table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        self._table.horizontalHeader().setSectionResizeMode(
+            0, QHeaderView.ResizeMode.Stretch
+        )
+        self._table.horizontalHeader().setSectionResizeMode(
+            1, QHeaderView.ResizeMode.Stretch
+        )
+        self._table.horizontalHeader().setSectionResizeMode(
+            2, QHeaderView.ResizeMode.ResizeToContents
+        )
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._table.itemSelectionChanged.connect(self._on_selection_changed)
@@ -187,7 +209,9 @@ class UsersTab(QWidget):
 
     def _do_search(self, page: int = 1):
         if self.client is None:
-            QMessageBox.warning(self, "Not Connected", "Please connect to a SARC API server first.")
+            QMessageBox.warning(
+                self, "Not Connected", "Please connect to a SARC API server first."
+            )
             return
         self._details_panel.client = self.client
         self._page = page

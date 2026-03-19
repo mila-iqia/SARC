@@ -1,9 +1,18 @@
 """Clusters tab for the SARC GUI."""
+
 from __future__ import annotations
 
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QTableWidget, QTableWidgetItem, QHeaderView, QApplication, QMessageBox,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
+    QHeaderView,
+    QApplication,
+    QMessageBox,
 )
 from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtGui import QFont
@@ -44,8 +53,12 @@ class ClustersTab(QWidget):
 
         self._table = QTableWidget(0, 2)
         self._table.setHorizontalHeaderLabels(["Cluster Name", "Total Jobs"])
-        self._table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        self._table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        self._table.horizontalHeader().setSectionResizeMode(
+            0, QHeaderView.ResizeMode.Stretch
+        )
+        self._table.horizontalHeader().setSectionResizeMode(
+            1, QHeaderView.ResizeMode.ResizeToContents
+        )
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._table.doubleClicked.connect(self._on_double_click)
@@ -53,7 +66,9 @@ class ClustersTab(QWidget):
 
     def load_clusters(self):
         if self.client is None:
-            QMessageBox.warning(self, "Not Connected", "Please connect to a SARC API server first.")
+            QMessageBox.warning(
+                self, "Not Connected", "Please connect to a SARC API server first."
+            )
             return
         self._table.setRowCount(0)
 
