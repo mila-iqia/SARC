@@ -108,7 +108,7 @@ sarc:
       sacct_bin: /opt/slurm/bin/sacct
       timezone: America/Montreal
   mongo:
-    connection_string: localhost:27017
+    connection_string: MUST_OVERRIDE_IN_TESTS:999999
     database_name: sarc-test
     auto_upgrade: false
   mymila:
