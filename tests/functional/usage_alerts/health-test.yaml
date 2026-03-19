@@ -438,3 +438,8 @@ sarc:
         $class: "sarc.alerts.usage_alerts.old_running_jobs:OldRunningJobCheck"
         active: true
         since: "2023-02-16T00:00+00:00"
+
+      # users_collection check corresponds to test params in test_alert_users_collection.py
+      users_collection:
+        $class: "sarc.alerts.usage_alerts.users_collection:UsersCollectionCheck"
+        active: true
