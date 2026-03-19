@@ -160,7 +160,7 @@ def _convert_json_job(
     resources: dict[str, dict] = {"requested": {}, "allocated": {}}
     tracked_resources = ["cpu", "mem", "gres", "node", "billing"]
 
-    if entry.get("group", None) == None:
+    if entry.get("group", None) is None:
         # These seem to correspond to very old jobs that shouldn't still exist,
         # likely a configuration blunder.
         logger.debug('Skipping job with group "None": %s', entry.get("job_id", None))
