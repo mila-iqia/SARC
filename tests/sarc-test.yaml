@@ -110,6 +110,7 @@ sarc:
   mongo:
     connection_string: localhost:27017
     database_name: sarc-test
+    auto_upgrade: false
   mymila:
     tmp_json_path: secrets/tmp_mymila.json
   loki:

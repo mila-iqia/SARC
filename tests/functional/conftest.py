@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import hashlib
 from contextlib import contextmanager
+from dataclasses import dataclass
+from typing import Any
 
 import freezegun
 import gifnoc
 import pytest
 from pytest_regressions.data_regression import RegressionYamlDumper
 
-from sarc.config import MongoConfig, config
+from sarc.config import config
 
 from .allocations.factory import create_allocations
 from .diskusage.factory import create_diskusages
@@ -51,81 +53,88 @@ def custom_db_config(db_name):
         yield
 
 
-def clear_db(db):
-    db.allocations.drop()
-    db.jobs.drop()
-    db.diskusage.drop()
-    db.users.drop()
-    db.clusters.drop()
-    db.gpu_billing.drop()
-    db.node_gpu_mapping.drop()
-    db.healthcheck.drop()
-    db.runstate.drop()
-    db.version.drop()
+@dataclass
+class DbConfiguration:
+    base_name: str
+    empty: bool = False
+    with_users: bool = False
+    with_clusters: bool = False
+    job_patch: Any = None
+    read_only: bool = False
 
+    def db_name(self, request=None):
+        if request is None:
+            return f"test-db-{self.base_name}"
+        else:
+            m = hashlib.md5()
+            m.update(request.node.nodeid.encode())
+            return f"test-db-{self.base_name}-{m.hexdigest()}"
 
-def fill_db(db, with_users=False, with_clusters=False, job_patch=None):
-    db.allocations.insert_many(create_allocations())
-    db.jobs.insert_many(create_jobs(job_patch=job_patch))
-    db.diskusage.insert_many(create_diskusages())
-    db.gpu_billing.insert_many(create_gpu_billings())
-    if with_users:
-        db.users.insert_many(create_users())
+    def _clear(self, db):
+        db.allocations.drop()
+        db.jobs.drop()
+        db.diskusage.drop()
+        db.users.drop()
+        db.clusters.drop()
+        db.gpu_billing.drop()
+        db.node_gpu_mapping.drop()
+        db.healthcheck.drop()
+        db.runstate.drop()
+        db.version.drop()
 
-    if with_clusters:
-        # Fill collection `clusters`.
-        db.clusters.insert_many(create_cluster_entries())
+    def _fill(self, db):
+        db.allocations.insert_many(create_allocations())
+        db.jobs.insert_many(create_jobs(job_patch=self.job_patch))
+        db.diskusage.insert_many(create_diskusages())
+        db.gpu_billing.insert_many(create_gpu_billings())
+        if self.with_users:
+            db.users.insert_many(create_users())
 
+        if self.with_clusters:
+            # Fill collection `clusters`.
+            db.clusters.insert_many(create_cluster_entries())
 
-def create_db_configuration_fixture(
-    empty=False, with_users=False, with_clusters=False, job_patch=None
-):
-    @pytest.fixture(scope="function")
-    def fixture(request, monkeypatch):
-        m = hashlib.md5()
-        m.update(request.node.nodeid.encode())
-        db_name = f"test-db-{m.hexdigest()}"
-        orig = MongoConfig._database_instance
-        monkeypatch.setattr(
-            MongoConfig,
-            "_database_instance",
-            lambda self, upgrade=False: orig(self, upgrade=False),
-        )
+    def __call__(self, request):
+        db_name = self.db_name(None if self.read_only else request)
         with custom_db_config(db_name):
-            db = config().mongo._database_instance(upgrade=False)
-            clear_db(db)
-            if not empty:
-                fill_db(
-                    db,
-                    with_users=with_users,
-                    with_clusters=with_clusters,
-                    job_patch=job_patch,
-                )
+            db = config().mongo.database_instance
+            self._clear(db)
+        if not self.empty:
+            self._fill(db)
+        try:
             yield db_name
+        finally:
+            db.client.drop_database(db)
 
-    return fixture
+    def fixture(self):
+        scope = "session" if self.read_only else "function"
+        return pytest.fixture(scope=scope)(self.__call__)
 
 
-empty_read_write_db_config_object = create_db_configuration_fixture(empty=True)
+empty_read_write_db_config_object = DbConfiguration("empty-rw", empty=True).fixture()
 
-read_write_db_config_object = create_db_configuration_fixture(with_clusters=True)
+read_write_db_config_object = DbConfiguration("rw", with_clusters=True).fixture()
 
-read_write_db_with_users_config_object = create_db_configuration_fixture(
-    with_users=True
-)
+read_write_db_with_users_config_object = DbConfiguration(
+    "rwu", with_users=True
+).fixture()
 
-read_only_db_config_object = create_db_configuration_fixture(with_clusters=True)
+read_only_db_config_object = DbConfiguration(
+    "r", with_clusters=True, read_only=True
+).fixture()
 
-read_only_db_with_many_cpu_jobs_config_object = create_db_configuration_fixture(
+read_only_db_with_many_cpu_jobs_config_object = DbConfiguration(
+    "r-jobs",
     job_patch={
         "allocated": {"billing": 0, "cpu": 0, "gres_gpu": 0, "mem": 0, "node": 0},
         "requested": {"billing": 0, "cpu": 0, "gres_gpu": 0, "mem": 0, "node": 0},
-    }
-)
+    },
+    read_only=True,
+).fixture()
 
-read_only_db_with_users_config_object = create_db_configuration_fixture(
-    with_users=True, with_clusters=True
-)
+read_only_db_with_users_config_object = DbConfiguration(
+    "ru", with_users=True, with_clusters=True, read_only=True
+).fixture()
 
 
 @pytest.fixture
