@@ -1,6 +1,7 @@
 """Tests for DRAC user scrapers."""
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -32,7 +33,12 @@ class TestDRACRolesScraper(UserPluginTester):
     def test_parse_data(self, raw_file, data_regression):
         with open(Path(__file__).parent / "inputs" / raw_file, "rb") as f:
             raw_data = f.read()
-        data = list(d.model_dump() for d in self.plugin.parse_user_data(raw_data))
+        data = list(
+            d.model_dump()
+            for d in self.plugin.parse_user_data(
+                raw_data, datetime(year=2024, month=1, day=1, tzinfo=UTC)
+            )
+        )
         data_regression.check(data, basename="test_parse_roles")
 
 
@@ -54,5 +60,10 @@ class TestDRACMemberScraper(UserPluginTester):
     def test_parse_data(self, raw_file, data_regression):
         with open(Path(__file__).parent / "inputs" / raw_file, "rb") as f:
             raw_data = f.read()
-        data = list(d.model_dump() for d in self.plugin.parse_user_data(raw_data))
+        data = list(
+            d.model_dump()
+            for d in self.plugin.parse_user_data(
+                raw_data, datetime(year=2024, month=1, day=1, tzinfo=UTC)
+            )
+        )
         data_regression.check(data, basename="test_parse_members")

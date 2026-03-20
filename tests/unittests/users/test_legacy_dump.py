@@ -1,6 +1,7 @@
 """Tests for LegacyDump user scraper."""
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 from sarc.users.legacy_dump import LegacyDumpConfig, LegacyDumpScraper
@@ -27,6 +28,9 @@ class TestLegacyDumpScraper(UserPluginTester):
         with open(json_path, "r", encoding="utf-8") as f:
             json_data = f.read().encode("utf-8")
         data = list(
-            d.model_dump(mode="json") for d in self.plugin.parse_user_data(json_data)
+            d.model_dump(mode="json")
+            for d in self.plugin.parse_user_data(
+                json_data, datetime(year=2024, month=1, day=1, tzinfo=UTC)
+            )
         )
         data_regression.check(data)

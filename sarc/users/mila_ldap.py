@@ -74,13 +74,13 @@ they are structured as follows:
 
 """
 
-import datetime
 import json
 import logging
 import os
 import ssl
 from collections.abc import Iterable
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 from ldap3 import ALL_ATTRIBUTES, SUBTREE, Connection, Server, Tls
@@ -109,7 +109,7 @@ class MilaLDAPScraper(UserScraper[MilaLDAPConfig]):
             )
         ).encode()
 
-    def parse_user_data(self, data: bytes) -> Iterable[UserMatch]:
+    def parse_user_data(self, data: bytes, cache_time: datetime) -> Iterable[UserMatch]:
         """
         mail[0]        -> mila_email_username  (includes the "@mila.quebec")
         posixUid[0]    -> mila_cluster_username
@@ -121,10 +121,8 @@ class MilaLDAPScraper(UserScraper[MilaLDAPConfig]):
 
         for user_raw in json.loads(data.decode()):
             creds = Credentials()
-            end = END_TIME
-            if user_raw["suspended"][0] != "false":
-                end = datetime.datetime.now(datetime.UTC)
-            creds.insert(user_raw["posixUid"][0], end=end)
+            if user_raw["suspended"][0] != "true":
+                creds.insert(user_raw["posixUid"][0], start=cache_time)
             yield UserMatch(
                 display_name=user_raw["displayName"][0],
                 email=user_raw["mail"][0],

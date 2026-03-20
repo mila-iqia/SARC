@@ -1,6 +1,7 @@
 import json
 from collections.abc import Iterable
 from dataclasses import dataclass
+from datetime import datetime
 
 from serieux import deserialize, serialize
 
@@ -31,7 +32,7 @@ class ManualUserScraper(UserScraper[ManualUserConfig]):
     def get_user_data(self, config: ManualUserConfig) -> bytes:
         return json.dumps(serialize(ManualUserConfig, config)).encode("utf-8")
 
-    def parse_user_data(self, data: bytes) -> Iterable[UserMatch]:
+    def parse_user_data(self, data: bytes, cache_time: datetime) -> Iterable[UserMatch]:
         # TODO: get the list of matches from the DB instead of the config file?
         #  - Maybe but in theory plugins should not require access to the DB
         #  - It could be another db on the side, like a SQLite or something.

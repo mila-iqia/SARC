@@ -61,7 +61,9 @@ class MockUserScraper(UserScraper[MockConfig]):
     def get_user_data(self, config: MockConfig) -> bytes:
         return config.api_url.encode()
 
-    def parse_user_data(self, _data: bytes) -> Iterable[UserMatch]:
+    def parse_user_data(
+        self, _data: bytes, cache_time: datetime
+    ) -> Iterable[UserMatch]:
         users = []
 
         user1 = UserMatch(
@@ -108,7 +110,7 @@ class TestPlugin(UserScraper[TestConfig]):
     def get_user_data(self, config: TestConfig) -> bytes:
         return config.domain.encode("utf-8")
 
-    def parse_user_data(self, data: bytes) -> Iterable[UserMatch]:
+    def parse_user_data(self, data: bytes, cache_time: datetime) -> Iterable[UserMatch]:
         users = []
         domain = data.decode("utf-8")
         users.append(
@@ -333,7 +335,9 @@ def test_fetch_and_parse_users_user_matching(mock_get_scraper, enabled_cache):
 
     # Create a mock scraper that returns users with known matches
     class MatchingMockScraper(MockUserScraper):
-        def parse_user_data(self, data: bytes) -> Iterable[UserMatch]:
+        def parse_user_data(
+            self, data: bytes, cache_time: datetime
+        ) -> Iterable[UserMatch]:
             api_url = data.decode("utf-8")
             # Return different users based on the config (which plugin)
             if "api1" in api_url:
@@ -477,7 +481,9 @@ def test_parse_users_supervisor_ordering_before_fix(mock_get_scraper, enabled_ca
     """
 
     class SupervisorOrderingMockScraper(MockUserScraper):
-        def parse_user_data(self, data: bytes) -> Iterable[UserMatch]:
+        def parse_user_data(
+            self, data: bytes, cache_time: datetime
+        ) -> Iterable[UserMatch]:
             student = UserMatch(
                 display_name="Alice Student",
                 email="alice@example.com",

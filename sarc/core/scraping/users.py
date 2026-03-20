@@ -78,7 +78,7 @@ class UserScraper[T](Protocol):
     def get_user_data(self, config: T) -> bytes: ...  # pragma: nocover
 
     def parse_user_data(
-        self, data: bytes
+        self, data: bytes, cache_time: datetime
     ) -> Iterable[UserMatch]: ...  # pragma: nocover
 
 
@@ -199,7 +199,7 @@ def parse_users(
                 scraper = get_user_scraper(item[0])
             except KeyError as e:
                 raise ValueError("Invalid user scraper") from e
-            for userm in scraper.parse_user_data(item[1]):
+            for userm in scraper.parse_user_data(item[1], ce.entry_datetime):
                 userm.matching_id.name = item[0]
                 # First, get all the userm that match with this one.
                 prev_userms: list[UserMatch] = [userm]
