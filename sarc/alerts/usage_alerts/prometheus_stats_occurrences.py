@@ -1,10 +1,10 @@
 import logging
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime, timedelta
 from typing import Sequence, cast
 
-from sarc.alerts.common import HealthCheck, CheckResult
+from sarc.alerts.common import CheckResult, HealthCheck
 
 logger = logging.getLogger(__name__)
 

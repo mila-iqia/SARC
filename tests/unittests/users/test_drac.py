@@ -28,12 +28,7 @@ class TestDRACRolesScraper(UserPluginTester):
 
         data_regression.check(json.loads(data.decode()), basename="test_fetch_roles")
 
-    @pytest.mark.parametrize(
-        "raw_file",
-        [
-            "drac_role1.cache",
-        ],
-    )
+    @pytest.mark.parametrize("raw_file", ["drac_role1.cache"])
     def test_parse_data(self, raw_file, data_regression):
         with open(Path(__file__).parent / "inputs" / raw_file, "rb") as f:
             raw_data = f.read()
@@ -55,12 +50,7 @@ class TestDRACMemberScraper(UserPluginTester):
 
         data_regression.check(json.loads(data.decode()), basename="test_fetch_members")
 
-    @pytest.mark.parametrize(
-        "raw_file",
-        [
-            "drac_member1.cache",
-        ],
-    )
+    @pytest.mark.parametrize("raw_file", ["drac_member1.cache"])
     def test_parse_data(self, raw_file, data_regression):
         with open(Path(__file__).parent / "inputs" / raw_file, "rb") as f:
             raw_data = f.read()

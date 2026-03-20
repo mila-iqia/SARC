@@ -12,7 +12,6 @@ from sarc.config import UTC, ConfigurationError
 from sarc.core.models.users import MemberType
 from sarc.rest.client import SarcApiClient
 
-
 # Test SarcApiClient Initialization
 
 
@@ -637,8 +636,8 @@ def test_rest_get_users(mock_client_class):
     """
     Test the top-level get_users function which should iterate over pages.
     """
-    from sarc.rest.client import get_users
     from sarc.core.models.users import UserData
+    from sarc.rest.client import get_users
 
     # Call the helper function
     all_users = get_users()

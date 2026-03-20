@@ -10,11 +10,7 @@ def test_query():
     id = "2f3e0cee77ae5dc9c17ade3689eb2e54"
     start = datetime.datetime(2023, 5, 1, tzinfo=datetime.timezone.utc)
     end = datetime.datetime(2023, 6, 1, tzinfo=datetime.timezone.utc)
-    response = query(
-        id,
-        start=start,
-        end=end,
-    )
+    response = query(id, start=start, end=end)
 
     assert response
     assert response["traceID"] == id

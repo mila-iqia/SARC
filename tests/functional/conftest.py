@@ -8,7 +8,7 @@ import gifnoc
 import pytest
 from pytest_regressions.data_regression import RegressionYamlDumper
 
-from sarc.config import config
+from sarc.config import MongoConfig, config
 
 from .allocations.factory import create_allocations
 from .diskusage.factory import create_diskusages
@@ -61,6 +61,7 @@ def clear_db(db):
     db.node_gpu_mapping.drop()
     db.healthcheck.drop()
     db.runstate.drop()
+    db.version.drop()
 
 
 def fill_db(db, with_users=False, with_clusters=False, job_patch=None):
@@ -77,18 +78,21 @@ def fill_db(db, with_users=False, with_clusters=False, job_patch=None):
 
 
 def create_db_configuration_fixture(
-    empty=False,
-    with_users=False,
-    with_clusters=False,
-    job_patch=None,
+    empty=False, with_users=False, with_clusters=False, job_patch=None
 ):
     @pytest.fixture(scope="function")
-    def fixture(request):
+    def fixture(request, monkeypatch):
         m = hashlib.md5()
         m.update(request.node.nodeid.encode())
         db_name = f"test-db-{m.hexdigest()}"
+        orig = MongoConfig._database_instance
+        monkeypatch.setattr(
+            MongoConfig,
+            "_database_instance",
+            lambda self, upgrade=False: orig(self, upgrade=False),
+        )
         with custom_db_config(db_name):
-            db = config().mongo.database_instance
+            db = config().mongo._database_instance(upgrade=False)
             clear_db(db)
             if not empty:
                 fill_db(
@@ -120,8 +124,7 @@ read_only_db_with_many_cpu_jobs_config_object = create_db_configuration_fixture(
 )
 
 read_only_db_with_users_config_object = create_db_configuration_fixture(
-    with_users=True,
-    with_clusters=True,
+    with_users=True, with_clusters=True
 )
 
 

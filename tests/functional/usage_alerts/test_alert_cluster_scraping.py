@@ -33,8 +33,6 @@ def test_check_nb_jobs_per_cluster_per_time(
     assert cli_main(["health", "run", "--check", check_name]) == 0
     file_regression.check(
         re.sub(
-            r"ERROR +sarc\.alerts\.usage_alerts\.cluster_scraping:cluster_scraping.py:[0-9]+ +",
-            "",
-            f"{capsys.readouterr().err}\n{caplog.text}",
+            r"ERROR +.+\.py:[0-9]+ +", "", f"{capsys.readouterr().err}\n{caplog.text}"
         )
     )

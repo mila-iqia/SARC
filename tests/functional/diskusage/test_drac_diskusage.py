@@ -19,10 +19,7 @@ def test_drac_fetch_report(remote, file_regression, monkeypatch):
     scraper = get_diskusage_scraper(diskusage.name)
     dconfig = scraper.validate_config(diskusage.params)
     raw_report = None
-    with open(
-        Path(__file__).parent / "drac_reports/report_gerudo.txt",
-        "rb",
-    ) as f:
+    with open(Path(__file__).parent / "drac_reports/report_gerudo.txt", "rb") as f:
         raw_report = f.read()
     assert raw_report
 
@@ -63,10 +60,7 @@ def test_drac_acquire_storages(
     scraper = get_diskusage_scraper(diskusage.name)
     dconfig = scraper.validate_config(diskusage.params)
     raw_report = None
-    with open(
-        Path(__file__).parent / "drac_reports/report_hyrule.txt",
-        "rb",
-    ) as f:
+    with open(Path(__file__).parent / "drac_reports/report_hyrule.txt", "rb") as f:
         raw_report = f.read()
     assert raw_report
 

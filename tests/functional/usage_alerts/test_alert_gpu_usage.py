@@ -35,6 +35,7 @@ import pytest
 import time_machine
 
 from tests.functional.jobs.test_func_load_job_series import MOCK_TIME
+
 from .common import _get_warnings
 
 get_warnings = functools.partial(

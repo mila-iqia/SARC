@@ -22,7 +22,6 @@ from sarc.cache import (
     make_cached_function,
     with_cache,
 )
-
 from sarc.utils import ensure_utc
 
 
@@ -58,10 +57,7 @@ def la_validite(x, y, version):
 def test_simple_cache(tmp_path):
     reference = datetime(year=2024, month=1, day=1)
 
-    decorator = with_cache(
-        subdirectory="xy",
-        cache_root=tmp_path,
-    )
+    decorator = with_cache(subdirectory="xy", cache_root=tmp_path)
     fn = decorator(la_fonction)
     assert (result1 := fn(1, 2, version=0, at_time=reference)) == "1 * 2 = 2 [v0]"
     assert fn(1, 2, version=1, at_time=reference) == result1
@@ -74,11 +70,7 @@ def test_simple_cache(tmp_path):
 
 
 def test_cache_key(tmp_path):
-    decorator = with_cache(
-        key=la_cle,
-        subdirectory="xy",
-        cache_root=tmp_path,
-    )
+    decorator = with_cache(key=la_cle, subdirectory="xy", cache_root=tmp_path)
     fn = decorator(la_fonction)
     assert (result1 := fn(1, 2, version=0)) == "1 * 2 = 2 [v0]"
     assert fn(1, 2, version=1) == result1
@@ -95,11 +87,7 @@ def test_cache_key(tmp_path):
 
 
 def test_use_cache(tmp_path):
-    decorator = with_cache(
-        key=la_cle,
-        subdirectory="xy",
-        cache_root=tmp_path,
-    )
+    decorator = with_cache(key=la_cle, subdirectory="xy", cache_root=tmp_path)
     fn = decorator(la_fonction)
     # Compute and save
     assert fn(1, 2, version=0) == "1 * 2 = 2 [v0]"
@@ -122,9 +110,7 @@ def test_require_cache(tmp_path):
     reference = datetime(year=2024, month=1, day=1)
 
     decorator = with_cache(
-        subdirectory="xy",
-        validity=timedelta(days=1),
-        cache_root=tmp_path,
+        subdirectory="xy", validity=timedelta(days=1), cache_root=tmp_path
     )
     fn = decorator(la_fonction)
     with pytest.raises(Exception, match="There is no cached result"):
@@ -235,10 +221,7 @@ def test_live_cache(tmp_path):
 
 def test_live_cache_from_disk(tmp_path):
     decorator = with_cache(
-        key=la_cle,
-        subdirectory="xy",
-        cache_root=tmp_path,
-        live=True,
+        key=la_cle, subdirectory="xy", cache_root=tmp_path, live=True
     )
     fn = decorator(la_fonction)
 
@@ -317,11 +300,7 @@ def test_custom_format(tmp_path):
         return f"{x}.{y}.quack"
 
     fn = with_cache(
-        la_fonction,
-        formatter=duck,
-        key=cle,
-        subdirectory="xy",
-        cache_root=tmp_path,
+        la_fonction, formatter=duck, key=cle, subdirectory="xy", cache_root=tmp_path
     )
 
     assert fn(7, 8, version=0) == "7 * 8 = 56 [v0]"
@@ -329,9 +308,7 @@ def test_custom_format(tmp_path):
 
 
 def test_no_cachedir(disabled_cache):
-    decorator = with_cache(
-        subdirectory="xy",
-    )
+    decorator = with_cache(subdirectory="xy")
     fn = decorator(la_fonction)
     assert fn(2, 3, version=0) == "2 * 3 = 6 [v0]"
     assert fn(2, 3, version=1) == "2 * 3 = 6 [v1]"
@@ -416,11 +393,7 @@ def test_cache_malformed_file(tmp_path):
 
 
 def test_cache_policy_check_same_value(tmp_path):
-    decorator = with_cache(
-        key=la_cle,
-        subdirectory="xy",
-        cache_root=tmp_path,
-    )
+    decorator = with_cache(key=la_cle, subdirectory="xy", cache_root=tmp_path)
     fn = decorator(la_fonction)
 
     # First call to create cache
@@ -432,11 +405,7 @@ def test_cache_policy_check_same_value(tmp_path):
 
 
 def test_cache_policy_check_different_value(tmp_path):
-    decorator = with_cache(
-        key=la_cle,
-        subdirectory="xy",
-        cache_root=tmp_path,
-    )
+    decorator = with_cache(key=la_cle, subdirectory="xy", cache_root=tmp_path)
     fn = decorator(la_fonction)
 
     # First call to create cache
@@ -449,10 +418,7 @@ def test_cache_policy_check_different_value(tmp_path):
 
 def test_cache_policy_check_non_json_diff(tmp_path):
     decorator = with_cache(
-        key=la_cle,
-        subdirectory="xy",
-        cache_root=tmp_path,
-        formatter=plaintext,
+        key=la_cle, subdirectory="xy", cache_root=tmp_path, formatter=plaintext
     )
     fn = decorator(la_fonction)
 
@@ -581,10 +547,7 @@ def test_make_cached_function_no_disk(tmp_path):
 
 def test_with_cache_decorator_no_function():
     # Test decorator mode
-    decorator = with_cache(
-        formatter=JSONFormatter,
-        subdirectory="test_decorator",
-    )
+    decorator = with_cache(formatter=JSONFormatter, subdirectory="test_decorator")
 
     @decorator
     def test_function(x, y):
@@ -601,9 +564,7 @@ def test_with_cache_decorator_with_function():
 
     # Test direct function decoration
     decorated_fn = with_cache(
-        test_function,
-        formatter=JSONFormatter,
-        subdirectory="test_direct",
+        test_function, formatter=JSONFormatter, subdirectory="test_direct"
     )
 
     # Test the decorated function
@@ -671,11 +632,7 @@ def test_cache_policy_none_uses_env(tmp_path, monkeypatch):
     cache_policy_var.set(None)
     monkeypatch.setenv("SARC_CACHE", "always")
 
-    decorator = with_cache(
-        key=la_cle,
-        subdirectory="xy",
-        cache_root=tmp_path,
-    )
+    decorator = with_cache(key=la_cle, subdirectory="xy", cache_root=tmp_path)
     fn = decorator(la_fonction)
 
     # Call with cache_policy=None - should use env var (always)
@@ -687,11 +644,7 @@ def test_cache_policy_none_uses_env_default(tmp_path, monkeypatch):
     cache_policy_var.set(None)
     monkeypatch.delenv("SARC_CACHE", raising=False)
 
-    decorator = with_cache(
-        key=la_cle,
-        subdirectory="xy",
-        cache_root=tmp_path,
-    )
+    decorator = with_cache(key=la_cle, subdirectory="xy", cache_root=tmp_path)
     fn = decorator(la_fonction)
 
     # Call with cache_policy=None - should use default (use)
@@ -769,11 +722,7 @@ def test_key_function_returns_none(tmp_path):
     def test_function(x, y, version=0):
         return f"{x} * {y} = {x * y} [v{version}]"
 
-    decorator = with_cache(
-        key=key_returns_none,
-        subdirectory="xy",
-        cache_root=tmp_path,
-    )
+    decorator = with_cache(key=key_returns_none, subdirectory="xy", cache_root=tmp_path)
     fn = decorator(test_function)
 
     # First call - should compute and not cache

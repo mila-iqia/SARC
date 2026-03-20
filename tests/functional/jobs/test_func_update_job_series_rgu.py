@@ -16,7 +16,6 @@ from sarc.client.series import (
     update_job_series_rgu,
 )
 from tests.common.dateutils import MTL
-
 from .test_func_load_job_series import MOCK_TIME
 
 
@@ -97,11 +96,7 @@ class Row:
 class ExampleData:
     """Helper class to generate a testing dataframe."""
 
-    def __init__(
-        self,
-        cluster: str,
-        cluster_without_billing: str = "hyrule",
-    ):
+    def __init__(self, cluster: str, cluster_without_billing: str = "hyrule"):
         """
         Initialize.
 
@@ -417,11 +412,7 @@ def test_update_job_series_rgu_one_date(
     assert "allocated.gres_rgu" in frame.columns
     assert "allocated.gpu_type_rgu" in frame.columns
 
-    (
-        expected_gres_gpu,
-        expected_gres_rgu,
-        expected_gpu_type_rgu,
-    ) = data.get_expected()
+    (expected_gres_gpu, expected_gres_rgu, expected_gpu_type_rgu) = data.get_expected()
     assert frame["allocated.gres_gpu"].equals(
         pandas.Series(expected_gres_gpu, dtype=float)
     )
@@ -486,11 +477,7 @@ def test_update_job_series_rgu_with_many_dates(
     assert "allocated.gres_rgu" in frame.columns
     assert "allocated.gpu_type_rgu" in frame.columns
 
-    (
-        expected_gres_gpu,
-        expected_gres_rgu,
-        expected_gpu_type_rgu,
-    ) = data.get_expected()
+    (expected_gres_gpu, expected_gres_rgu, expected_gpu_type_rgu) = data.get_expected()
     assert frame["allocated.gres_gpu"].equals(
         pandas.Series(expected_gres_gpu, dtype=float)
     )
@@ -556,11 +543,7 @@ def test_update_job_series_rgu_billing_is_gpu(
     assert "allocated.gres_rgu" in frame.columns
     assert "allocated.gpu_type_rgu" in frame.columns
 
-    (
-        expected_gres_gpu,
-        expected_gres_rgu,
-        expected_gpu_type_rgu,
-    ) = data.get_expected()
+    (expected_gres_gpu, expected_gres_rgu, expected_gpu_type_rgu) = data.get_expected()
     assert frame["allocated.gres_gpu"].equals(
         pandas.Series(expected_gres_gpu, dtype=float)
     )

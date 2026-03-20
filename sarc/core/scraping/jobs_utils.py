@@ -1,20 +1,20 @@
-from datetime import datetime, timedelta
-from hostlist import expand_hostlist
-from invoke.runners import Result
 import json
 import logging
 import re
 import subprocess
+from datetime import datetime, timedelta
 from typing import Iterator, Optional
 
+from hostlist import expand_hostlist
+from invoke.runners import Result
+
 from sarc.client.job import SlurmJob
-from sarc.config import ClusterConfig, config, UTC
+from sarc.config import UTC, ClusterConfig, config
 from sarc.core.models.validators import UTCOFFSET
 from sarc.errors import ClusterNotFound
 from sarc.jobs.node_gpu_mapping import get_node_to_gpu
 from sarc.traces import trace_decorator
 from sarc.utils import ensure_utc
-
 
 logger = logging.getLogger(__name__)
 
@@ -160,10 +160,10 @@ def _convert_json_job(
     resources: dict[str, dict] = {"requested": {}, "allocated": {}}
     tracked_resources = ["cpu", "mem", "gres", "node", "billing"]
 
-    if entry["group"] is None:
+    if entry.get("group", None) is None:
         # These seem to correspond to very old jobs that shouldn't still exist,
         # likely a configuration blunder.
-        logger.debug('Skipping job with group "None": %s', entry["job_id"])
+        logger.debug('Skipping job with group "None": %s', entry.get("job_id", None))
         return None
 
     for grp, vals in resources.items():
@@ -354,10 +354,7 @@ def _convert_json_job(
 
 @trace_decorator()
 def parse_raw(
-    raw_data: bytes,
-    cluster_name: str,
-    scraped_start: datetime,
-    scraped_end: datetime,
+    raw_data: bytes, cluster_name: str, scraped_start: datetime, scraped_end: datetime
 ) -> Iterator[SlurmJob | None]:
     """Parse raw sacct data as a dict.
 

@@ -147,9 +147,7 @@ def test_update_supervisors(read_only_db_with_users, caplog, uuid, um, expected)
                 display_name="Test 123",
                 email="test123@example.com",
                 matching_id=MatchID(name="test", mid="123"),
-                known_matches={
-                    MatchID(name="test", mid="abc"),
-                },
+                known_matches={MatchID(name="test", mid="abc")},
             ),
             True,
         ),
@@ -254,12 +252,10 @@ def test_insert_new(read_write_db_with_users, caplog, data_regression, um, expec
             UUID("8d5b2b67-d35b-4cc3-acaa-ec56c9c6f253"),
             UserMatch(
                 matching_id=MatchID(name="mila_ldap", mid="petitbonhomme@mila.quebec"),
-                known_matches={
-                    MatchID(name="drac_role", mid="abc-123"),
-                },
+                known_matches={MatchID(name="drac_role", mid="abc-123")},
             ),
             [
-                "User 8d5b2b67-d35b-4cc3-acaa-ec56c9c6f253 has matching id (drac_role:aaa-001) but update has (drac_role:abc-123), using update",
+                "User 8d5b2b67-d35b-4cc3-acaa-ec56c9c6f253 has matching id (drac_role:aaa-001) but update has (drac_role:abc-123), using update"
             ],
         ),
         (

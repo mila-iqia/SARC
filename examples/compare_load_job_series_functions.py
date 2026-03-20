@@ -15,7 +15,7 @@ from tqdm import tqdm
 
 import sarc.client.series
 import sarc.rest.client
-from sarc.config import UTC, TZLOCAL
+from sarc.config import TZLOCAL, UTC
 
 mongodb_load_job_series = sarc.client.series.load_job_series
 rest_load_job_series = sarc.rest.client.load_job_series
@@ -112,10 +112,7 @@ def _main():
             end = start + timedelta(days=num_days)
             print(f"[{start}] to [{end}]")
 
-            kwargs = {
-                "start": start,
-                "end": end,
-            }
+            kwargs = {"start": start, "end": end}
             df_mongo = mongodb_load_job_series(**kwargs)
             df_rest = rest_load_job_series(**kwargs)
 

@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from .factory import json_raw, create_json_jobs
+from .factory import create_json_jobs, json_raw
 
 
 @pytest.fixture

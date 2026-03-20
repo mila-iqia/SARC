@@ -5,7 +5,7 @@ import pandas as pd
 from tqdm import tqdm
 
 from sarc.client.job import get_jobs
-from sarc.config import config, TZLOCAL, UTC
+from sarc.config import TZLOCAL, UTC, config
 
 # Clusters we want to compare
 clusters = ["mila", "narval", "beluga", "cedar", "graham"]
@@ -92,11 +92,7 @@ def get_jobs_dataframe(filename, start, end) -> pd.DataFrame:
 
 start = datetime(year=2022, month=1, day=1).astimezone(UTC)
 end = datetime(year=2023, month=1, day=1).astimezone(UTC)
-df = get_jobs_dataframe(
-    "total_usage_demo_jobs.pkl",
-    start=start,
-    end=end,
-)
+df = get_jobs_dataframe("total_usage_demo_jobs.pkl", start=start, end=end)
 
 # Compute the billed and used resource time in seconds
 df["billed"] = df["elapsed_time"] * df["billing"]

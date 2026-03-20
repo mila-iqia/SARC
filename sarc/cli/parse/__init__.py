@@ -4,8 +4,8 @@ from simple_parsing import subparsers
 
 from .allocations import ParseAllocations
 from .diskusage import ParseDiskUsage
-from .slurmconfig import ParseSlurmConfig
 from .jobs import ParseJobs
+from .slurmconfig import ParseSlurmConfig
 from .users import ParseUsers
 
 

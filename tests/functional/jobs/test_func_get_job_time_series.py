@@ -9,6 +9,7 @@ from sarc.client.job import SlurmJob
 from sarc.config import UTC
 from sarc.jobs.series import _get_job_time_series_data_cache_key, get_job_time_series
 from tests.common.dateutils import MTL
+
 from .factory import JobFactory
 
 mtl_test_time = datetime(2023, 3, 5, 6, 0, tzinfo=MTL)
@@ -49,10 +50,7 @@ def test_non_existing_metric(job):
 
 parameters = {
     "job_id": {"job_id": 10},
-    "no_end_time": {
-        "job_state": "RUNNING",
-        "end_time": None,
-    },
+    "no_end_time": {"job_state": "RUNNING", "end_time": None},
     "end_time_in_past": {
         "job_state": "COMPLETED",
         "end_time": utc_test_time - timedelta(hours=1),
@@ -127,10 +125,7 @@ def test_measure_and_aggregation(
 
 @pytest.mark.usefixtures("base_config")
 def test_invalid_aggregation(job):
-    with pytest.raises(
-        ValueError,
-        match="^Aggregation must be one of ",
-    ):
+    with pytest.raises(ValueError, match="^Aggregation must be one of "):
         get_job_time_series(
             job, metric="slurm_job_fp16_gpu", aggregation="invalid", dataframe=True
         )
@@ -167,18 +162,11 @@ def test_intervals(
 
 
 @pytest.mark.parametrize(
-    "job",
-    [{"job_id": -1}, {}],
-    ids=["no_results", "with_results"],
-    indirect=True,
+    "job", [{"job_id": -1}, {}], ids=["no_results", "with_results"], indirect=True
 )
 @pytest.mark.parametrize("dataframe", [True, False])
 def test_to_be_or_not_to_be_a_dataframe(job, prom_custom_query_mock, dataframe):
-    rval = get_job_time_series(
-        job,
-        metric="slurm_job_fp16_gpu",
-        dataframe=dataframe,
-    )
+    rval = get_job_time_series(job, metric="slurm_job_fp16_gpu", dataframe=dataframe)
 
     if dataframe:
         assert rval is None
@@ -216,10 +204,7 @@ def test_get_job_time_series_cache(job, test_config, monkeypatch, capsys):
         "sarc.jobs.series._get_job_time_series_data", _fake_job_time_series_data
     )
 
-    params = {
-        "job": job,
-        "metric": "slurm_job_core_usage",
-    }
+    params = {"job": job, "metric": "slurm_job_core_usage"}
     key = _get_job_time_series_data_cache_key(**params)
     assert key is not None
 
@@ -276,10 +261,7 @@ def test_get_job_time_series_cache_check(job, test_config, monkeypatch):
             "sarc.jobs.series._get_job_time_series_data", _fake_job_time_series_data
         )
 
-        params = {
-            "job": job,
-            "metric": "slurm_job_core_usage",
-        }
+        params = {"job": job, "metric": "slurm_job_core_usage"}
 
         # Call the function and check returned value
         assert get_job_time_series(dataframe=False, **params) == fake_series_data_orig

@@ -87,10 +87,4 @@ def test_check_same_job_id(name_and_params, caplog, file_regression, cli_main):
     if "time_interval" in params:
         assert check.time_interval == params["time_interval"]
     assert cli_main(["health", "run", "--check", check_name]) == 0
-    file_regression.check(
-        re.sub(
-            r"ERROR +sarc\.alerts\.usage_alerts\.same_job_id:same_job_id.py:[0-9]+ +",
-            "",
-            caplog.text,
-        )
-    )
+    file_regression.check(re.sub(r"ERROR +.+\.py:[0-9]+ +", "", caplog.text))

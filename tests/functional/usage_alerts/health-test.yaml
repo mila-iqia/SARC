@@ -406,3 +406,35 @@ sarc:
         active: true
         since: null
         time_interval: 276d
+
+      # old_running_jobs_* checks correspond to test params in test_alert_old_running_jobs.py
+      #
+      # In testing DB, there is 1 RUNNING job:
+      #   job_id: 7
+      #   cluster_name: raisin
+      #   submit_time: ~2023-02-15T17:00:00+00:00
+      #   start_time:  ~2023-02-15T17:01:00+00:00
+      #   time_limit: 43200 (12 hours)
+      #   max_end_time: ~2023-02-16T05:01:00+00:00
+      # MOCK_TIME is 2023-11-22T00:00:00+00:00, so this job is over limit.
+
+      # Check all RUNNING jobs (no `since` filter).
+      # Should find the old RUNNING job => FAILURE.
+      old_running_jobs_all:
+        $class: "sarc.alerts.usage_alerts.old_running_jobs:OldRunningJobCheck"
+        active: true
+        since: null
+
+      # `since` before the RUNNING job's submit_time.
+      # Should find the old RUNNING job => FAILURE.
+      old_running_jobs_since_before:
+        $class: "sarc.alerts.usage_alerts.old_running_jobs:OldRunningJobCheck"
+        active: true
+        since: "2023-02-15T00:00+00:00"
+
+      # `since` after the RUNNING job's submit_time.
+      # Should NOT find the old RUNNING job => OK.
+      old_running_jobs_since_after:
+        $class: "sarc.alerts.usage_alerts.old_running_jobs:OldRunningJobCheck"
+        active: true
+        since: "2023-02-16T00:00+00:00"

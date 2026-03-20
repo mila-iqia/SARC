@@ -1,9 +1,9 @@
 from datetime import datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import ORJSONResponse
-from pydantic import AfterValidator, BaseModel, UUID4
+from pydantic import UUID4, AfterValidator, BaseModel
 from pydantic_mongo import PydanticObjectId
 
 from sarc.client import get_rgus

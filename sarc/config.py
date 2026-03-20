@@ -179,15 +179,25 @@ class MongoConfig:
 
     @cached_property
     def database_instance(self) -> Database:
+        return self._database_instance()
+
+    def _database_instance(self, upgrade: bool = True) -> Database:
         from pymongo import MongoClient
 
+        from sarc.core.db_init import db_upgrade
+
         client: MongoClient = MongoClient(self.connection_string)
-        return client.get_database(
+        db = client.get_database(
             self.database_name,
             codec_options=CodecOptions(
                 uuid_representation=UuidRepresentation.STANDARD, tz_aware=True
             ),
         )
+
+        if upgrade:
+            db_upgrade(db)
+
+        return db
 
 
 @dataclass
