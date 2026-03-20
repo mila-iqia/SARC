@@ -69,7 +69,7 @@ def create_users_indices(db: Database) -> None:
     db_collection = db.users
 
     db_collection.create_index([("uuid", pymongo.ASCENDING)], unique=True)
-    db_collection.create_index([("matching_ids.$**", pymongo.ASCENDING)])
+    db_collection.create_index([("matching_ids", pymongo.ASCENDING)])
 
     # For user sorting in REST API
     db_collection.create_index(
