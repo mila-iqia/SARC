@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-import hashlib
 import os
 import sys
 import zoneinfo
 from contextlib import contextmanager
 from dataclasses import dataclass
+from functools import cached_property
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
+from uuid import uuid4
 
 import freezegun
 import gifnoc
@@ -210,10 +211,9 @@ class DbConfiguration:
     job_patch: Any = None
     read_only: bool = False
 
-    def db_name(self, request=None):
-        m = hashlib.md5()
-        m.update(request.node.nodeid.encode())
-        return f"test-db-{self.base_name}-{m.hexdigest()}"
+    @cached_property
+    def db_name(self):
+        return f"test-db-{self.base_name}-{uuid4().hex}"
 
     def _clear(self, db):
         db.allocations.drop()
@@ -225,6 +225,7 @@ class DbConfiguration:
         db.node_gpu_mapping.drop()
         db.healthcheck.drop()
         db.runstate.drop()
+        db.version.drop()
 
     def _fill(self, db):
         from .functional.allocations.factory import create_allocations
@@ -248,14 +249,13 @@ class DbConfiguration:
             db.clusters.insert_many(create_cluster_entries())
 
     def __call__(self, request):
-        db_name = self.db_name(request)
-        with custom_db_config(db_name):
+        with custom_db_config(self.db_name):
             db = config().mongo.database_instance
             self._clear(db)
         if not self.empty:
             self._fill(db)
         try:
-            yield db_name
+            yield self.db_name
         finally:
             db.client.drop_database(db)
 
