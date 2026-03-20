@@ -3,20 +3,21 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import ORJSONResponse
-from pydantic import UUID4, AfterValidator, BaseModel
+from pydantic import UUID4, BaseModel
 from pydantic_mongo import PydanticObjectId
 
 from sarc.client import get_rgus
 from sarc.client.job import (
     SlurmJob,
     SlurmState,
-    _jobs_collection,
-    get_available_clusters,
+    _async_clusters_collection,
+    _async_jobs_collection,
+    async_get_available_clusters,
 )
 from sarc.config import UTC
 from sarc.core.models import validators
 from sarc.core.models.users import MemberType, UserData
-from sarc.users.db import get_user_collection
+from sarc.users.db import get_async_user_collection
 
 # Use `orjson` module to handle JSON.
 # `orjson` automatically converts float NaN values to None,
@@ -27,19 +28,16 @@ DEFAULT_PAGE_SIZE = 100
 MAX_PAGE_SIZE = 5_000
 
 
-def valid_cluster(cluster: str):
-    cluster_names = list(cl.cluster_name for cl in get_available_clusters())
-    if cluster is not None:
-        if cluster not in cluster_names:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"No such cluster '{cluster}'",
-            )
-    return cluster
+async def validate_cluster(cluster: str):
+    cluster_names = list(cl.cluster_name for cl in await async_get_available_clusters())
+    if cluster is not None and cluster not in cluster_names:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"No such cluster '{cluster}'"
+        )
 
 
 class JobQuery(BaseModel):
-    cluster: Annotated[str, AfterValidator(valid_cluster)] | None = None
+    cluster: str | None = None
     # job_id supports None, an integer, a list of integers, or an empty list.
     job_id: list[int] | None = None
     job_state: SlurmState | None = None
@@ -72,8 +70,8 @@ class JobQuery(BaseModel):
         return query
 
 
-def job_query_params(
-    cluster: Annotated[str, AfterValidator(valid_cluster)] | None = None,
+async def job_query_params(
+    cluster: str | None = None,
     job_id: Annotated[list[str] | None, Query()] = None,
     job_state: SlurmState | None = None,
     username: str | None = None,
@@ -88,6 +86,8 @@ def job_query_params(
     We use `list[str]` to support empty lists (sent as `job_id=`).
     We then convert to `list[int]` to match `JobQuery` model.
     """
+    await validate_cluster(cluster)
+
     job_id_ints = None
     if job_id is not None:
         try:
@@ -209,14 +209,14 @@ class UserList(BaseModel):
 
 
 @router.get("/job/query")
-def get_jobs(query_opt: JobQueryType) -> list[PydanticObjectId]:
-    coll = _jobs_collection()
+async def get_jobs(query_opt: JobQueryType) -> list[PydanticObjectId]:
+    coll = _async_jobs_collection()
     jobs = coll.get_collection().find(query_opt.get_query(), ["_id"])
-    return list(j["_id"] for j in jobs)
+    return [j["_id"] async for j in jobs]
 
 
 @router.get("/job/list")
-def list_jobs(
+async def list_jobs(
     query_opt: JobQueryType, page: int = 1, per_page: int = DEFAULT_PAGE_SIZE
 ) -> SlurmJobList:
     if page < 1:
@@ -233,9 +233,9 @@ def list_jobs(
             detail=f"Page size must be <= {MAX_PAGE_SIZE}",
         )
 
-    coll = _jobs_collection()
+    coll = _async_jobs_collection()
     query = query_opt.get_query()
-    total = coll.get_collection().count_documents(query)
+    total = await coll.get_collection().count_documents(query)
 
     cursor = (
         coll.get_collection()
@@ -246,7 +246,7 @@ def list_jobs(
     )
 
     return SlurmJobList(
-        jobs=[SlurmJob.model_validate(doc) for doc in cursor],
+        jobs=[SlurmJob.model_validate(doc) async for doc in cursor],
         page=page,
         per_page=per_page,
         total=total,
@@ -254,15 +254,15 @@ def list_jobs(
 
 
 @router.get("/job/count")
-def count_jobs(query_opt: JobQueryType) -> int:
-    coll = _jobs_collection()
-    return coll.get_collection().count_documents(query_opt.get_query())
+async def count_jobs(query_opt: JobQueryType) -> int:
+    coll = _async_jobs_collection()
+    return await coll.get_collection().count_documents(query_opt.get_query())
 
 
 @router.get("/job/id/{oid}")
-def get_job(oid: PydanticObjectId) -> SlurmJob:
-    coll = _jobs_collection()
-    job = coll.find_one_by_id(oid)
+async def get_job(oid: PydanticObjectId) -> SlurmJob:
+    coll = _async_jobs_collection()
+    job = await coll.find_one_by_id(oid)
     if job is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Job not found"
@@ -271,27 +271,28 @@ def get_job(oid: PydanticObjectId) -> SlurmJob:
 
 
 @router.get("/cluster/list")
-def get_cluster_names() -> list[str]:
+async def get_cluster_names() -> list[str]:
     """Return the names of available clusters."""
-    return sorted(cl.cluster_name for cl in get_available_clusters())
+    coll = _async_clusters_collection()
+    return sorted([cl.cluster_name for cl in await coll.find_by({})])
 
 
 @router.get("/gpu/rgu")
-def get_rgu_value_per_gpu() -> dict[str, float]:
+async def get_rgu_value_per_gpu() -> dict[str, float]:
     """Return the mapping GPU->RGU."""
     return get_rgus()
 
 
 @router.get("/user/query")
-def query_users(query_opt: UserQueryType) -> list[UUID4]:
+async def query_users(query_opt: UserQueryType) -> list[UUID4]:
     """Search users. Return user UUIDs."""
-    coll = get_user_collection()
+    coll = get_async_user_collection()
     users = coll.get_collection().find(query_opt.get_query(), ["uuid"])
-    return [user["uuid"] for user in users]
+    return [user["uuid"] async for user in users]
 
 
 @router.get("/user/list")
-def list_users(
+async def list_users(
     query_opt: UserQueryType, page: int = 1, per_page: int = DEFAULT_PAGE_SIZE
 ) -> UserList:
     if page < 1:
@@ -308,9 +309,9 @@ def list_users(
             detail=f"Page size must be <= {MAX_PAGE_SIZE}",
         )
 
-    coll = get_user_collection()
+    coll = get_async_user_collection()
     query = query_opt.get_query()
-    total = coll.get_collection().count_documents(query)
+    total = await coll.get_collection().count_documents(query)
 
     cursor = (
         coll.get_collection()
@@ -321,7 +322,7 @@ def list_users(
     )
 
     return UserList(
-        users=[UserData.model_validate(doc) for doc in cursor],
+        users=[UserData.model_validate(doc) async for doc in cursor],
         page=page,
         per_page=per_page,
         total=total,
@@ -329,9 +330,9 @@ def list_users(
 
 
 @router.get("/user/id/{uuid}")
-def get_user_by_id(uuid: UUID4) -> UserData:
+async def get_user_by_id(uuid: UUID4) -> UserData:
     """Get user with given UUID."""
-    user = get_user_collection().find_one_by({"uuid": uuid})
+    user = await get_async_user_collection().find_one_by({"uuid": uuid})
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
@@ -340,9 +341,9 @@ def get_user_by_id(uuid: UUID4) -> UserData:
 
 
 @router.get("/user/email/{email}")
-def get_user_by_email(email: str) -> UserData:
+async def get_user_by_email(email: str) -> UserData:
     """Get user with given email."""
-    user = get_user_collection().find_one_by({"email": email})
+    user = await get_async_user_collection().find_one_by({"email": email})
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"

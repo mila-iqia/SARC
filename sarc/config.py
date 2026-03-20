@@ -197,6 +197,18 @@ class MongoConfig:
 
         return db
 
+    @property
+    def async_database_instance(self) -> Database:
+        from pymongo import AsyncMongoClient
+
+        client: AsyncMongoClient = AsyncMongoClient(self.connection_string)
+        return client.get_database(
+            self.database_name,
+            codec_options=CodecOptions(
+                uuid_representation=UuidRepresentation.STANDARD, tz_aware=True
+            ),
+        )
+
 
 @dataclass
 class LokiConfig:
