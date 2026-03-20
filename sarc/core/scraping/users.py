@@ -7,7 +7,6 @@ from typing import Any, Protocol, Type
 from pydantic import BaseModel, Field, field_serializer
 from serieux import deserialize
 
-from sarc import config
 from sarc.cache import Cache
 from sarc.config import config
 from sarc.core.models.runstate import get_parsed_date, set_parsed_date

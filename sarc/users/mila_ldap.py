@@ -86,7 +86,6 @@ from pathlib import Path
 from ldap3 import ALL_ATTRIBUTES, SUBTREE, Connection, Server, Tls
 
 from sarc.core.models.users import Credentials
-from sarc.core.models.validators import END_TIME
 from sarc.core.scraping.users import MatchID, UserMatch, UserScraper, _builtin_scrapers
 
 logger = logging.getLogger(__name__)
