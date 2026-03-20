@@ -7,7 +7,10 @@ from typing import Any, Protocol, Type
 from pydantic import BaseModel, Field, field_serializer
 from serieux import deserialize
 
+from sarc import config
 from sarc.cache import Cache
+from sarc.config import config
+from sarc.core.models.runstate import get_parsed_date, set_parsed_date
 from sarc.core.models.users import Credentials, MemberType
 from sarc.core.models.validators import ValidField
 
@@ -167,15 +170,23 @@ def fetch_users(scrapers: list[tuple[str, Any]]) -> None:
                 )
 
 
-def parse_users(from_: datetime) -> Iterable[UserMatch]:
+def parse_users(
+    from_: datetime | None, update_parsed_date: bool
+) -> Iterable[UserMatch]:
     """Parse user data from the cache.
 
     This returns one UserMatch structure per scraped user, across all plugins.
     The collected information is aggregated amongst plugins, but not with the
     information in the database.
 
-    from_: start parsing cached date from that date.
+    from_: start parsing cached date from that date. If None, uses runstate value from database
+    update_parsed_date : to update runstate last parsed date value
     """
+    db = config().mongo.database_instance
+
+    if from_ is None:
+        from_ = get_parsed_date(db, "users")
+
     cache = Cache(subdirectory="users")
 
     for ce in cache.read_from(from_time=from_):
@@ -238,3 +249,8 @@ def parse_users(from_: datetime) -> Iterable[UserMatch]:
             if len(roots) == 0:
                 for k in refs:
                     yield user_refs[k]
+
+        # Update the parsed date
+        if update_parsed_date:
+            logger.info(f"Set parsed_dates for users to {ce.get_entry_datetime()}.")
+            set_parsed_date(db, "users", ce.get_entry_datetime())

@@ -274,7 +274,7 @@ def test_fetch_and_parse_users_single_plugin(mock_scraper, enabled_cache):
     fetch_users(scrapers)
 
     # Then, parse the cached data
-    users = list(parse_users(datetime.now(UTC) - one_hour))
+    users = list(parse_users(datetime.now(UTC) - one_hour, False))
 
     assert len(users) == 3
     assert all(isinstance(user, UserMatch) for user in users)
@@ -299,7 +299,7 @@ def test_fetch_and_parse_users_multiple_plugins(monkeypatch, enabled_cache):
     fetch_users(scrapers)
 
     # Then, parse the cached data
-    users = list(parse_users(datetime.now(UTC) - one_hour))
+    users = list(parse_users(datetime.now(UTC) - one_hour, False))
 
     assert len(users) == 5  # 3 from plugin1 + 2 from plugin2 (user3 is merged)
 
@@ -324,7 +324,7 @@ def test_invalid_scraper(enabled_cache, caplog):
         ce.add_value("invalid_scraper", b"")
 
     with pytest.raises(ValueError, match="Invalid user scraper"):
-        list(parse_users(datetime(2025, 6, 1, tzinfo=UTC)))
+        list(parse_users(datetime(2025, 6, 1, tzinfo=UTC), False))
 
 
 @patch("sarc.core.scraping.users.get_user_scraper")
@@ -364,7 +364,7 @@ def test_fetch_and_parse_users_user_matching(mock_get_scraper, enabled_cache):
     fetch_users(scrapers)
 
     # Then, parse the cached data
-    users = list(parse_users(datetime.now(UTC) - one_hour))
+    users = list(parse_users(datetime.now(UTC) - one_hour, False))
 
     # Should have only one user after merging
     assert len(users) == 1
@@ -438,7 +438,7 @@ def test_fetch_and_parse_multiple_different_scrapers(monkeypatch, enabled_cache)
     fetch_users(scrapers)
 
     # Then, parse the cached data
-    users = list(parse_users(datetime.now(UTC) - one_hour))
+    users = list(parse_users(datetime.now(UTC) - one_hour, False))
 
     # MockUserScraper returns 3 users, TestPlugin returns 2 users
     # Total should be 5 users (no merging expected since they have different matching IDs)
@@ -510,7 +510,7 @@ def test_parse_users_supervisor_ordering_before_fix(mock_get_scraper, enabled_ca
     fetch_users(scrapers)
 
     coll = get_user_collection()
-    for um in parse_users(datetime.now(UTC) - one_hour):
+    for um in parse_users(datetime.now(UTC) - one_hour, False):
         coll.update_user(um)
 
     u = get_user("alice@example.com")
@@ -518,7 +518,7 @@ def test_parse_users_supervisor_ordering_before_fix(mock_get_scraper, enabled_ca
     assert len(u.co_supervisors.values) == 1
     assert len(u.co_supervisors.values[0].value) == 1
 
-    for um in parse_users(datetime.now(UTC) - one_hour):
+    for um in parse_users(datetime.now(UTC) - one_hour, False):
         coll.update_user(um)
 
     u = get_user("alice@example.com")
