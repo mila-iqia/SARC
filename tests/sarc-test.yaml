@@ -119,12 +119,15 @@ sarc:
     uri: "https://localhost/tempo"
   api:
     auth:
-      client_id: ""
-      client_secret: ""
-      server_metadata_url: "http://authserver/.well-known/openid-configuration"
+      client_id: "mock_client_id"
+      client_secret: "dHPf4JQhK9VutnlJlcln"
+      server_metadata_url: MUST_OVERRIDE_IN_TESTS
+      secret_key: "5K20tAALrsnxBrCKXbot"
       capabilities:
         guest_capabilities: []
-        user_overrides: {}
+        default_capabilities: [query]
+        user_overrides:
+          admin@admin.admin: [admin]
         user_file: "permissions.yaml"
         graph:
           query: []

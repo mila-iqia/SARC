@@ -3,8 +3,7 @@ from datetime import datetime, timedelta
 import pytest
 from pydantic_mongo import PydanticObjectId
 
-from sarc.config import UTC
-from sarc.core.models.api import MAX_PAGE_SIZE
+from sarc.config import UTC, config
 
 
 @pytest.mark.usefixtures("read_only_db", "client_mode")
@@ -247,7 +246,12 @@ def test_list_jobs_invalid_pagination(client):
     # Per page < 1
     assert client.get("/v0/job/list?per_page=0").status_code == 400
     # Per page > MAX
-    assert client.get(f"/v0/job/list?per_page={MAX_PAGE_SIZE + 1}").status_code == 400
+    assert (
+        client.get(
+            f"/v0/job/list?per_page={config().api.max_page_size + 1}"
+        ).status_code
+        == 400
+    )
 
 
 @pytest.mark.usefixtures("read_only_db_with_users")
@@ -755,7 +759,12 @@ def test_user_list(client):
     # Invalid parameters
     assert client.get("/v0/user/list?page=0").status_code == 400
     assert client.get("/v0/user/list?per_page=0").status_code == 400
-    assert client.get(f"/v0/user/list?per_page={MAX_PAGE_SIZE + 1}").status_code == 400
+    assert (
+        client.get(
+            f"/v0/user/list?per_page={config().api.max_page_size + 1}"
+        ).status_code
+        == 400
+    )
 
     # Test filtering with list endpoint
     response = client.get("/v0/user/list?display_name=janE")

@@ -7,8 +7,7 @@ import pytest
 from pydantic_mongo import PydanticObjectId
 
 from sarc.client.job import SlurmJob, SlurmState
-from sarc.config import UTC, ConfigurationError
-from sarc.core.models.api import MAX_PAGE_SIZE
+from sarc.config import UTC, ConfigurationError, config
 from sarc.core.models.users import MemberType
 from sarc.rest.client import SarcApiClient
 
@@ -725,7 +724,7 @@ def test_job_list_per_page_less_than_one(sarc_client):
 def test_job_list_per_page_exceeds_max(sarc_client):
     """Test job_list with per_page > MAX_PAGE_SIZE raises 400 error."""
     with pytest.raises(httpx.HTTPStatusError) as excinfo:
-        sarc_client.job_list(per_page=MAX_PAGE_SIZE + 1)
+        sarc_client.job_list(per_page=config().api.max_page_size + 1)
     assert excinfo.value.response.status_code == 400
     assert "Page size must be <=" in excinfo.value.response.json()["detail"]
 
@@ -752,6 +751,6 @@ def test_user_list_per_page_less_than_one(sarc_client):
 def test_user_list_per_page_exceeds_max(sarc_client):
     """Test user_list with per_page > MAX_PAGE_SIZE raises 400 error."""
     with pytest.raises(httpx.HTTPStatusError) as excinfo:
-        sarc_client.user_list(per_page=MAX_PAGE_SIZE + 1)
+        sarc_client.user_list(per_page=config().api.max_page_size + 1)
     assert excinfo.value.response.status_code == 400
     assert "Page size must be <=" in excinfo.value.response.json()["detail"]

@@ -189,12 +189,13 @@ def db_jobs():
 
 
 @contextmanager
-def custom_db_config(db_name):
+def custom_db_config(db_name, additional_overrides={}):
     assert db_name.startswith("test-db-")
     with gifnoc.overlay(
         {
             "sarc.mongo.database_name": db_name,
             "sarc.mongo.connection_string": "localhost:27017",
+            **additional_overrides,
         }
     ):
         # Ensure we do not use and thus wipe the production database
