@@ -6,20 +6,17 @@ from pydantic_mongo import PydanticObjectId
 from sarc.config import UTC, config
 
 
-@pytest.mark.usefixtures("read_only_db", "client_mode")
 def test_get_job_not_found(client):
     """Test job not found (string, bad ID format) returns 422."""
     client.get("/v0/job/id/not_found", expect_status=422)
 
 
-@pytest.mark.usefixtures("read_only_db", "client_mode")
 def test_get_job_not_found_pydantic_id(client):
     """Test job not found (pydantic object ID, good format) returns 404."""
     oid = PydanticObjectId()
     client.get(f"/v0/job/id/{oid}", expect_status=404)
 
 
-@pytest.mark.usefixtures("read_only_db_with_users", "enable_caps")
 def test_get_jobs_by_cluster(client):
     """Test successful jobs query by cluster."""
     response = client.get("/v0/job/query?cluster=raisin", expect_status=200)
@@ -33,7 +30,6 @@ def test_get_jobs_by_cluster(client):
         assert job["cluster_name"] == "raisin"
 
 
-@pytest.mark.usefixtures("read_only_db_with_users", "enable_caps")
 def test_get_jobs_by_job_id(client):
     """Test jobs query by job ID."""
     response = client.get("/v0/job/query?job_id=10", expect_status=200)
@@ -47,7 +43,6 @@ def test_get_jobs_by_job_id(client):
         assert job["job_id"] == 10
 
 
-@pytest.mark.usefixtures("read_only_db_with_users", "enable_caps")
 def test_get_jobs_by_user(client):
     """Test jobs query by username."""
     response = client.get("/v0/job/query?username=petitbonhomme", expect_status=200)
@@ -61,7 +56,6 @@ def test_get_jobs_by_user(client):
         assert job["user"] == "petitbonhomme"
 
 
-@pytest.mark.usefixtures("read_only_db_with_users", "enable_caps")
 def test_get_jobs_by_state(client):
     """Test jobs query by job state."""
     response = client.get("/v0/job/query?job_state=COMPLETED", expect_status=200)
@@ -75,7 +69,6 @@ def test_get_jobs_by_state(client):
         assert job["job_state"] == "COMPLETED"
 
 
-@pytest.mark.usefixtures("read_only_db_with_users", "enable_caps")
 def test_get_jobs_multiple_job_ids(client):
     """Test jobs query with multiple job IDs."""
     response = client.get("/v0/job/query?job_id=10&job_id=20", expect_status=200)
@@ -89,7 +82,6 @@ def test_get_jobs_multiple_job_ids(client):
         assert job["job_id"] in (10, 20)
 
 
-@pytest.mark.usefixtures("read_only_db_with_users", "enable_caps")
 def test_get_jobs_empty_job_id_list(client):
     """Test jobs query with an empty job_id list.
     SarcApiClient sends job_id= for an empty list.
@@ -101,13 +93,11 @@ def test_get_jobs_empty_job_id_list(client):
     assert len(data) == 0
 
 
-@pytest.mark.usefixtures("read_only_db")
 def test_get_jobs_invalid_job_id(client):
     """Test jobs query with invalid job ID."""
     client.get("/v0/job/query?job_id=not_an_int", expect_status=422)
 
 
-@pytest.mark.usefixtures("read_only_db_with_users", "enable_caps")
 def test_get_jobs_empty_result(client):
     """Test jobs query with no results."""
     # Use a very high job ID that doesn't exist
@@ -117,7 +107,6 @@ def test_get_jobs_empty_result(client):
     assert len(data) == 0
 
 
-@pytest.mark.usefixtures("read_only_db")
 def test_get_jobs_invalid_cluster(client):
     """Test jobs query with invalid cluster."""
     response = client.get("/v0/job/query?cluster=invalid_cluster", expect_status=404)
@@ -126,13 +115,11 @@ def test_get_jobs_invalid_cluster(client):
     assert "No such cluster 'invalid_cluster'" in data["detail"]
 
 
-@pytest.mark.usefixtures("read_only_db_with_users", "enable_caps")
 def test_get_jobs_invalid_job_state(client):
     """Test jobs query with invalid job state."""
     client.get("/v0/job/query?job_state=INVALID", expect_status=422)
 
 
-@pytest.mark.usefixtures("read_only_db_with_users", "enable_caps")
 def test_get_jobs_with_datetime_filters(client):
     """Test jobs query with start and end datetime filters."""
     params = {"start": "2023-01-01T00:00:00", "end": "2023-12-31T23:59:59"}
@@ -144,7 +131,6 @@ def test_get_jobs_with_datetime_filters(client):
     assert len(data) > 0
 
 
-@pytest.mark.usefixtures("read_only_db_with_users", "enable_caps")
 def test_get_jobs_multiple_filters(client):
     """Test jobs query with multiple filters."""
     params = {
@@ -165,7 +151,6 @@ def test_get_jobs_multiple_filters(client):
         assert job["job_state"] == "COMPLETED"
 
 
-@pytest.mark.usefixtures("read_only_db_with_users", "enable_caps")
 def test_get_jobs_no_filters(client):
     """Test jobs query without any filters."""
     response = client.get("/v0/job/query", expect_status=200)
@@ -175,7 +160,6 @@ def test_get_jobs_no_filters(client):
     assert len(data) == 24
 
 
-@pytest.mark.usefixtures("read_only_db")
 def test_list_jobs_no_filters(client):
     """Test list jobs without any filters."""
     response = client.get("/v0/job/list", expect_status=200)
@@ -187,7 +171,6 @@ def test_list_jobs_no_filters(client):
     assert data["per_page"] == 100
 
 
-@pytest.mark.usefixtures("read_only_db")
 def test_list_jobs_pagination(client):
     """Test list jobs with pagination."""
     # Page 1, 5 items
@@ -209,7 +192,6 @@ def test_list_jobs_pagination(client):
     assert len(response.json()["jobs"]) == 0
 
 
-@pytest.mark.usefixtures("read_only_db")
 def test_list_jobs_invalid_pagination(client):
     """Test list jobs with invalid pagination parameters."""
     # Page < 1
@@ -222,7 +204,6 @@ def test_list_jobs_invalid_pagination(client):
     )
 
 
-@pytest.mark.usefixtures("read_only_db_with_users")
 def test_count_jobs_by_cluster(client):
     """Test jobs count by cluster."""
     response = client.get("/v0/job/count?cluster=raisin", expect_status=200)
@@ -232,7 +213,6 @@ def test_count_jobs_by_cluster(client):
     assert count == 20
 
 
-@pytest.mark.usefixtures("read_only_db")
 def test_count_jobs_by_job_id(client):
     """Test jobs count by job ID."""
     response = client.get("/v0/job/count?job_id=10", expect_status=200)
@@ -242,7 +222,6 @@ def test_count_jobs_by_job_id(client):
     assert count == 1
 
 
-@pytest.mark.usefixtures("read_only_db")
 def test_count_jobs_by_user(client):
     """Test jobs count by username."""
     response = client.get("/v0/job/count?username=petitbonhomme", expect_status=200)
@@ -252,7 +231,6 @@ def test_count_jobs_by_user(client):
     assert count == 20
 
 
-@pytest.mark.usefixtures("read_only_db")
 def test_count_jobs_by_state(client):
     """Test jobs count by job state."""
     response = client.get("/v0/job/count?job_state=COMPLETED", expect_status=200)
@@ -262,7 +240,6 @@ def test_count_jobs_by_state(client):
     assert count == 1
 
 
-@pytest.mark.usefixtures("read_only_db")
 def test_count_jobs_empty_result(client):
     """Test jobs count with no results."""
     # Use a very high job ID that doesn't exist
@@ -272,7 +249,6 @@ def test_count_jobs_empty_result(client):
     assert count == 0
 
 
-@pytest.mark.usefixtures("read_only_db")
 def test_count_jobs_invalid_cluster(client):
     """Test jobs count with invalid cluster."""
     response = client.get("/v0/job/count?cluster=invalid_cluster", expect_status=404)
@@ -286,7 +262,6 @@ def test_count_jobs_invalid_job_state(client):
     client.get("/v0/job/count?job_state=INVALID", expect_status=422)
 
 
-@pytest.mark.usefixtures("read_only_db")
 def test_count_jobs_with_datetime_filters(client):
     """Test jobs count with start and end datetime filters."""
     params = {"start": "2023-01-01T00:00:00", "end": "2023-02-15T23:59:59"}
@@ -298,7 +273,6 @@ def test_count_jobs_with_datetime_filters(client):
     assert count == 8
 
 
-@pytest.mark.usefixtures("read_only_db_with_users")
 def test_count_jobs_multiple_filters(client):
     """Test jobs count with multiple filters."""
     params = {
@@ -314,7 +288,6 @@ def test_count_jobs_multiple_filters(client):
     assert count > 0
 
 
-@pytest.mark.usefixtures("read_only_db")
 def test_count_jobs_no_filters(client):
     """Test jobs count without any filters."""
     response = client.get("/v0/job/count", expect_status=200)
@@ -324,7 +297,6 @@ def test_count_jobs_no_filters(client):
     assert count == 24
 
 
-@pytest.mark.usefixtures("read_only_db_with_users", "enable_caps")
 def test_count_jobs_matches_query_length(client):
     """Test that jobs count matches the length of jobs query results."""
     # Test with a specific filter
@@ -337,7 +309,6 @@ def test_count_jobs_matches_query_length(client):
     assert len(jobs) == count
 
 
-@pytest.mark.usefixtures("read_only_db_with_users", "enable_caps")
 def test_cluster_list(client):
     """Test cluster list."""
     response = client.get("/v0/cluster/list", expect_status=200)
@@ -354,7 +325,6 @@ def _gen_fake_rgus():
     return {"A100": 3.21, "gpu1": 1.5, "gpu_2": 4.5, "GPU 3": 4 * 7}
 
 
-@pytest.mark.usefixtures("read_only_db_with_users")
 def test_gpu_rgu(client, monkeypatch):
     monkeypatch.setattr("sarc.api.v0.get_rgus", _gen_fake_rgus)
 
@@ -364,7 +334,6 @@ def test_gpu_rgu(client, monkeypatch):
     assert data == _gen_fake_rgus()
 
 
-@pytest.mark.usefixtures("read_only_db_with_users")
 def test_user_query_by_display_name(client):
     response = client.get("/v0/user/query?display_name=janE", expect_status=200)
     data = response.json()
@@ -380,7 +349,6 @@ def test_user_query_by_display_name(client):
     assert user["email"] == "jdoe@example.com"
 
 
-@pytest.mark.usefixtures("read_only_db_with_users")
 def test_user_query_by_email(client):
     response = client.get(
         "/v0/user/query?email=bonhomme@mila.quebec", expect_status=200
@@ -415,7 +383,6 @@ def test_user_query_by_email(client):
         (datetime(2044, 7, 1, tzinfo=UTC), False),
     ],
 )
-@pytest.mark.usefixtures("read_only_db_with_users")
 def test_user_query_by_member_type_professor_now(client, freezer, date, expected):
     freezer.move_to(date)
     response = client.get("/v0/user/query?member_type=professor", expect_status=200)
@@ -443,7 +410,6 @@ def test_user_query_by_member_type_professor_now(client, freezer, date, expected
         ),
     ],
 )
-@pytest.mark.usefixtures("read_only_db_with_users")
 def test_user_query_by_member_type_other_now(
     client, freezer, member_type, date, identifiers
 ):
@@ -476,7 +442,6 @@ def test_user_query_by_member_type_other_now(
         (datetime(2035, 1, 1, tzinfo=UTC), 0),
     ],
 )
-@pytest.mark.usefixtures("read_only_db_with_users")
 def test_user_query_by_supervisor_start(client, start, nb_expected):
     supervisor = "1f9b04e5-0ec4-4577-9196-2b03d254e344"
     response = client.get(
@@ -518,7 +483,6 @@ def test_user_query_by_supervisor_start(client, start, nb_expected):
         (datetime(2005, 1, 1, tzinfo=UTC), 0),
     ],
 )
-@pytest.mark.usefixtures("read_only_db_with_users")
 def test_user_query_by_supervisor_end(client, end, nb_expected):
     supervisor = "1f9b04e5-0ec4-4577-9196-2b03d254e344"
     response = client.get(
@@ -554,7 +518,6 @@ def test_user_query_by_supervisor_end(client, end, nb_expected):
         (datetime(2023, 1, 2, tzinfo=UTC), datetime(2025, 1, 1, tzinfo=UTC), False),
     ],
 )
-@pytest.mark.usefixtures("read_only_db_with_users")
 def test_user_query_by_cosupervisor_start_end(client, start, end, expected):
     cosupervisor = "1f9b04e5-0ec4-4577-9196-2b03d254e344"
     response = client.get(
@@ -575,7 +538,6 @@ def test_user_query_by_cosupervisor_start_end(client, start, end, expected):
         assert not data
 
 
-@pytest.mark.usefixtures("read_only_db_with_users")
 def test_user_query_by_cosupervisor_bad_start_end(client):
     start = datetime(2022, 1, 1, tzinfo=UTC)
     end = start - timedelta(days=1)
@@ -590,7 +552,6 @@ def test_user_query_by_cosupervisor_bad_start_end(client):
     )
 
 
-@pytest.mark.usefixtures("read_only_db_with_users")
 def test_user_query_empty_result(client):
     response = client.get(
         "/v0/user/query?email=nothing@nothing.nothing", expect_status=200
@@ -600,7 +561,6 @@ def test_user_query_empty_result(client):
     assert len(data) == 0
 
 
-@pytest.mark.usefixtures("read_only_db_with_users")
 def test_user_query_no_filters(client):
     response = client.get("/v0/user/query", expect_status=200)
     data = response.json()
@@ -608,7 +568,6 @@ def test_user_query_no_filters(client):
     assert len(data) == 10
 
 
-@pytest.mark.usefixtures("read_only_db_with_users")
 def test_user_query_multiple_filters(client):
     response = client.get(
         "/v0/user/query",
@@ -631,7 +590,6 @@ def test_user_query_multiple_filters(client):
     assert user["uuid"] == data[0]
 
 
-@pytest.mark.usefixtures("read_only_db_with_users")
 def test_get_user_by_uuid(client):
     response = client.get(
         "/v0/user/id/7ecd3a8a-ab71-499e-b38a-ceacd91a99c4", expect_status=200
@@ -641,17 +599,14 @@ def test_get_user_by_uuid(client):
     assert data["email"] == "jsmith@example.com"
 
 
-@pytest.mark.usefixtures("read_only_db_with_users")
 def test_get_user_by_uuid_invalid(client):
     client.get("/v0/user/id/invalid", expect_status=422)
 
 
-@pytest.mark.usefixtures("read_only_db_with_users")
 def test_get_user_by_uuid_unknown(client):
     client.get("/v0/user/id/70000000-a000-4000-b000-c00000000000", expect_status=404)
 
 
-@pytest.mark.usefixtures("read_only_db_with_users")
 def test_get_user_by_email(client):
     response = client.get("/v0/user/email/jsmith@example.com", expect_status=200)
     data = response.json()
@@ -659,12 +614,10 @@ def test_get_user_by_email(client):
     assert data["uuid"] == "7ecd3a8a-ab71-499e-b38a-ceacd91a99c4"
 
 
-@pytest.mark.usefixtures("read_only_db_with_users")
 def test_get_user_by_email_unknown(client):
     client.get("/v0/user/email/unknown", expect_status=404)
 
 
-@pytest.mark.usefixtures("read_only_db_with_users")
 def test_user_list(client):
     """Test user list with pagination."""
     # Default page 1
