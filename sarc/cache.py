@@ -228,7 +228,7 @@ class Cache:
         if first_dir.exists():
             from_time_nodays = from_time.time()
             for file in filter(
-                lambda fname: time.fromisoformat(fname.parts[-1]) >= from_time_nodays,
+                lambda fname: time.fromisoformat(fname.parts[-1]) > from_time_nodays,
                 filter(no_current, sorted(first_dir.iterdir())),
             ):
                 yield file, self._datetime_from_path(file)
