@@ -27,7 +27,7 @@ def oauth_mock(oauth_port):
 
 
 @pytest.fixture(scope="function")
-def app(oauth_mock):
+def app(oauth_mock, oauth_port):
     from sarc.api.v0 import router
 
     def client(email=None):
@@ -134,26 +134,6 @@ def sarc_client(app, oauth_mock):
     return SarcApiClient(
         remote_url="", session=mc, oauth2_token=mc.get_token("admin@admin.admin")
     )
-
-
-@pytest.fixture
-def enable_caps(app):
-    from sarc.api.v0 import can_query, is_admin
-
-    def yes():
-        return True
-
-    def fake_user():
-        return "doej@mila.quebec"
-
-    app.dependency_overrides[is_admin] = yes
-    app.dependency_overrides[can_query] = fake_user
-
-    try:
-        yield
-    finally:
-        del app.dependency_overrides[can_query]
-        del app.dependency_overrides[is_admin]
 
 
 @pytest.fixture

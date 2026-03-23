@@ -58,7 +58,7 @@ def test_get_job_not_found_pydantic_id(sarc_client):
     assert "Job not found" in excinfo.value.response.json()["detail"]
 
 
-@pytest.mark.usefixtures("read_only_db_with_users", "enable_caps")
+@pytest.mark.usefixtures("read_only_db_with_users")
 def test_get_jobs_by_cluster(sarc_client):
     data = sarc_client.job_query(cluster="raisin")
     assert len(data) > 0
@@ -67,7 +67,7 @@ def test_get_jobs_by_cluster(sarc_client):
         assert job.cluster_name == "raisin"
 
 
-@pytest.mark.usefixtures("read_only_db_with_users", "enable_caps")
+@pytest.mark.usefixtures("read_only_db_with_users")
 def test_get_jobs_by_job_id(sarc_client):
     data = sarc_client.job_query(job_id=10)
     assert len(data) > 0
@@ -76,7 +76,7 @@ def test_get_jobs_by_job_id(sarc_client):
         assert job.job_id == 10
 
 
-@pytest.mark.usefixtures("read_only_db_with_users", "enable_caps")
+@pytest.mark.usefixtures("read_only_db_with_users")
 def test_get_jobs_by_user(sarc_client):
     # Corresponds to test_get_jobs_by_user in test_v0
     data = sarc_client.job_query(username="petitbonhomme")
@@ -86,7 +86,7 @@ def test_get_jobs_by_user(sarc_client):
         assert job.user == "petitbonhomme"
 
 
-@pytest.mark.usefixtures("read_only_db_with_users", "enable_caps")
+@pytest.mark.usefixtures("read_only_db_with_users")
 def test_get_jobs_by_state(sarc_client):
     # Corresponds to test_get_jobs_by_state in test_v0
     data = sarc_client.job_query(job_state=SlurmState.COMPLETED)
@@ -96,7 +96,7 @@ def test_get_jobs_by_state(sarc_client):
         assert job.job_state == SlurmState.COMPLETED
 
 
-@pytest.mark.usefixtures("read_only_db_with_users", "enable_caps")
+@pytest.mark.usefixtures("read_only_db_with_users")
 def test_get_jobs_empty_result(sarc_client):
     # Corresponds to test_get_jobs_empty_result in test_v0
     # Use a very high job ID that doesn't exist
@@ -104,7 +104,7 @@ def test_get_jobs_empty_result(sarc_client):
     assert len(data) == 0
 
 
-@pytest.mark.usefixtures("read_only_db_with_users", "enable_caps")
+@pytest.mark.usefixtures("read_only_db_with_users")
 def test_get_jobs_invalid_cluster(sarc_client):
     # Corresponds to test_get_jobs_invalid_cluster in test_v0
     with pytest.raises(httpx.HTTPStatusError) as excinfo:
@@ -120,7 +120,7 @@ def test_get_jobs_invalid_job_state(sarc_client):
         sarc_client.job_query(job_state="INVALID")
 
 
-@pytest.mark.usefixtures("read_only_db_with_users", "enable_caps")
+@pytest.mark.usefixtures("read_only_db_with_users")
 def test_get_jobs_with_datetime_filters(sarc_client):
     data = sarc_client.job_query(
         start=datetime.fromisoformat("2023-01-01T00:00:00"),
@@ -129,7 +129,7 @@ def test_get_jobs_with_datetime_filters(sarc_client):
     assert len(data) > 0
 
 
-@pytest.mark.usefixtures("read_only_db_with_users", "enable_caps")
+@pytest.mark.usefixtures("read_only_db_with_users")
 def test_get_jobs_multiple_filters(sarc_client):
     # Corresponds to test_get_jobs_multiple_filters
     data = sarc_client.job_query(
@@ -144,7 +144,7 @@ def test_get_jobs_multiple_filters(sarc_client):
         assert job.job_state == SlurmState.COMPLETED
 
 
-@pytest.mark.usefixtures("read_only_db_with_users", "enable_caps")
+@pytest.mark.usefixtures("read_only_db_with_users")
 def test_get_jobs_no_filters(sarc_client):
     # Corresponds to test_get_jobs_no_filters
     data = sarc_client.job_query()
@@ -177,7 +177,7 @@ def test_get_jobs_no_filters(sarc_client):
         ({}, 24),
     ],
 )
-@pytest.mark.usefixtures("read_only_db_with_users", "enable_caps")
+@pytest.mark.usefixtures("read_only_db_with_users")
 def test_count_jobs(sarc_client, params, expected):
     count = sarc_client.job_count(**params)
     r_query = sarc_client.job_query(**params)
@@ -203,7 +203,7 @@ def test_count_jobs_invalid_job_state(sarc_client):
         sarc_client.job_count(job_state="INVALID")
 
 
-@pytest.mark.usefixtures("read_only_db_with_users", "enable_caps")
+@pytest.mark.usefixtures("read_only_db_with_users")
 def test_cluster_list(sarc_client):
     data = sarc_client.cluster_list()
     for cluster_name in ("raisin", "fromage", "patate"):
@@ -660,7 +660,7 @@ def test_rest_get_users(mock_client_class):
 # Test job_id list via SarcApiClient
 
 
-@pytest.mark.usefixtures("read_only_db_with_users", "enable_caps")
+@pytest.mark.usefixtures("read_only_db_with_users")
 def test_get_jobs_by_job_id_list(sarc_client):
     """Test job_query with a list of job IDs."""
     data = sarc_client.job_query(job_id=[8, 9])
