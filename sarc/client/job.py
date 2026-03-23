@@ -9,7 +9,7 @@ from typing import Annotated, Any, Iterable, Literal, overload
 
 from pandas import DataFrame
 from pydantic import BaseModel, BeforeValidator, field_validator
-from pydantic_mongo import AbstractRepository, AsyncAbstractRepository, PydanticObjectId
+from pydantic_mongo import AbstractRepository, PydanticObjectId
 
 from sarc.client.gpumetrics import get_cluster_gpu_billings, get_rgus
 from sarc.config import TZLOCAL, UTC, ClusterConfig, config, scraping_mode_required
@@ -356,7 +356,10 @@ class SlurmJob(BaseModel):
         return gres_rgu
 
 
-class BaseSlurmJobRepository:
+class SlurmJobRepository(AbstractRepository[SlurmJob]):
+    class Meta:
+        collection_name = "jobs"
+
     @scraping_mode_required
     def save_job(self, model: SlurmJob) -> None:
         """Save a SlurmJob into the database.
@@ -378,28 +381,10 @@ class BaseSlurmJobRepository:
         )
 
 
-class SlurmJobRepository(AbstractRepository[SlurmJob], BaseSlurmJobRepository):
-    class Meta:
-        collection_name = "jobs"
-
-
-class SlurmJobAsyncRepository(
-    AsyncAbstractRepository[SlurmJob], BaseSlurmJobRepository
-):
-    class Meta:
-        collection_name = "jobs"
-
-
 def _jobs_collection() -> SlurmJobRepository:
     """Return the jobs collection in the current MongoDB."""
     db = config().mongo.database_instance
     return SlurmJobRepository(database=db)
-
-
-def _async_jobs_collection() -> SlurmJobRepository:
-    """Return the jobs collection in the current MongoDB."""
-    db = config().mongo.async_database_instance
-    return SlurmJobAsyncRepository(database=db)
 
 
 # pylint: disable=too-many-branches,dangerous-default-value
@@ -574,24 +559,7 @@ class SlurmClusterRepository(AbstractRepository[SlurmCluster]):
         collection_name = "clusters"
 
 
-class AsyncSlurmClusterRepository(AsyncAbstractRepository[SlurmCluster]):
-    class Meta:
-        collection_name = "clusters"
-
-
 def get_available_clusters() -> Iterable[SlurmCluster]:
     """Get clusters available in database."""
     db = config().mongo.database_instance
     return SlurmClusterRepository(database=db).find_by({})
-
-
-async def async_get_available_clusters() -> Iterable[SlurmCluster]:
-    """Get clusters available in database."""
-    db = config().mongo.async_database_instance
-    return await AsyncSlurmClusterRepository(database=db).find_by({})
-
-
-def _async_clusters_collection() -> AsyncSlurmClusterRepository:
-    """Return the clusters collection in the current MongoDB (async)."""
-    db = config().mongo.async_database_instance
-    return AsyncSlurmClusterRepository(database=db)

@@ -1,7 +1,7 @@
 import logging
 
 from pydantic import UUID4, field_serializer
-from pydantic_mongo import AbstractRepository, AsyncAbstractRepository, PydanticObjectId
+from pydantic_mongo import AbstractRepository, PydanticObjectId
 
 from sarc.config import config
 from sarc.core.models.users import MemberType, UserData
@@ -48,7 +48,10 @@ class UserDB(UserData):
         )
 
 
-class BaseUserRepository:
+class UserRepository(AbstractRepository[UserDB]):
+    class Meta:
+        collection_name = "users"
+
     def update_user(self, user: UserMatch) -> None:
         results = list(
             self.find_by(
@@ -272,24 +275,9 @@ class BaseUserRepository:
         return db_user1
 
 
-class UserRepository(AbstractRepository[UserDB], BaseUserRepository):
-    class Meta:
-        collection_name = "users"
-
-
-class AsyncUserRepository(AsyncAbstractRepository[UserDB], BaseUserRepository):
-    class Meta:
-        collection_name = "users"
-
-
 def get_user_collection() -> UserRepository:
     db = config().mongo.database_instance
     return UserRepository(database=db)
-
-
-def get_async_user_collection() -> AsyncUserRepository:
-    db = config().mongo.async_database_instance
-    return AsyncUserRepository(database=db)
 
 
 def get_users(
