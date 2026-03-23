@@ -279,13 +279,6 @@ def get_jobs(query_opt: JobQueryType) -> list[PydanticObjectId]:
     return [j["_id"] for j in jobs]
 
 
-# @router.get("/job/query")
-# async def get_jobs(query_opt: JobQueryType) -> list[PydanticObjectId]:
-#     coll = _async_jobs_collection()
-#     jobs = coll.get_collection().find(query_opt.get_query(), ["_id"])
-#     return [j["_id"] async for j in jobs]
-
-
 @router.get("/job/list")
 def list_jobs(
     query_opt: JobQueryType,

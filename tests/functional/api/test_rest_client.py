@@ -18,7 +18,7 @@ def test_init_with_params():
     c = SarcApiClient(remote_url="http://example.com", timeout=60, oauth2_token="")
     assert c.remote_url == "http://example.com"
     assert c.timeout == 60
-    assert c.per_page == 100  # default page size
+    assert c.per_page == config().api.per_page
 
     c2 = SarcApiClient("http://example.com/", per_page=12, oauth2_token="")
     assert c2.remote_url == "http://example.com"
@@ -67,7 +67,7 @@ def test_get_jobs_by_cluster(sarc_client):
         assert job.cluster_name == "raisin"
 
 
-@pytest.mark.usefixtures("read_only_db_with_users")
+@pytest.mark.usefixtures("read_only_db")
 def test_get_jobs_by_job_id(sarc_client):
     data = sarc_client.job_query(job_id=10)
     assert len(data) > 0
@@ -76,7 +76,7 @@ def test_get_jobs_by_job_id(sarc_client):
         assert job.job_id == 10
 
 
-@pytest.mark.usefixtures("read_only_db_with_users")
+@pytest.mark.usefixtures("read_only_db")
 def test_get_jobs_by_user(sarc_client):
     # Corresponds to test_get_jobs_by_user in test_v0
     data = sarc_client.job_query(username="petitbonhomme")
@@ -96,7 +96,7 @@ def test_get_jobs_by_state(sarc_client):
         assert job.job_state == SlurmState.COMPLETED
 
 
-@pytest.mark.usefixtures("read_only_db_with_users")
+@pytest.mark.usefixtures("read_only_db")
 def test_get_jobs_empty_result(sarc_client):
     # Corresponds to test_get_jobs_empty_result in test_v0
     # Use a very high job ID that doesn't exist
@@ -104,7 +104,7 @@ def test_get_jobs_empty_result(sarc_client):
     assert len(data) == 0
 
 
-@pytest.mark.usefixtures("read_only_db_with_users")
+@pytest.mark.usefixtures("read_only_db")
 def test_get_jobs_invalid_cluster(sarc_client):
     # Corresponds to test_get_jobs_invalid_cluster in test_v0
     with pytest.raises(httpx.HTTPStatusError) as excinfo:
@@ -120,7 +120,7 @@ def test_get_jobs_invalid_job_state(sarc_client):
         sarc_client.job_query(job_state="INVALID")
 
 
-@pytest.mark.usefixtures("read_only_db_with_users")
+@pytest.mark.usefixtures("read_only_db")
 def test_get_jobs_with_datetime_filters(sarc_client):
     data = sarc_client.job_query(
         start=datetime.fromisoformat("2023-01-01T00:00:00"),
@@ -144,7 +144,7 @@ def test_get_jobs_multiple_filters(sarc_client):
         assert job.job_state == SlurmState.COMPLETED
 
 
-@pytest.mark.usefixtures("read_only_db_with_users")
+@pytest.mark.usefixtures("read_only_db")
 def test_get_jobs_no_filters(sarc_client):
     # Corresponds to test_get_jobs_no_filters
     data = sarc_client.job_query()
@@ -499,7 +499,7 @@ def test_user_list(sarc_client):
     assert data.page == 1
     assert data.total == 10
     assert len(data.users) == 10
-    assert data.per_page == 100
+    assert data.per_page == config().api.per_page
 
     # Check sorting: email asc
     emails = [u.email for u in data.users]
@@ -551,7 +551,7 @@ def test_job_list_no_filters(sarc_client):
     assert jobs_list.page == 1
     assert jobs_list.total == 24
     assert len(jobs_list.jobs) == 24
-    assert jobs_list.per_page == 100
+    assert jobs_list.per_page == config().api.per_page
 
 
 @pytest.mark.usefixtures("read_only_db_with_users")
@@ -660,7 +660,7 @@ def test_rest_get_users(mock_client_class):
 # Test job_id list via SarcApiClient
 
 
-@pytest.mark.usefixtures("read_only_db_with_users")
+@pytest.mark.usefixtures("read_only_db")
 def test_get_jobs_by_job_id_list(sarc_client):
     """Test job_query with a list of job IDs."""
     data = sarc_client.job_query(job_id=[8, 9])
