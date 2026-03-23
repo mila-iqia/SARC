@@ -33,7 +33,6 @@ import httpx
 from pydantic import UUID4
 from pydantic_mongo import PydanticObjectId
 
-from sarc.api.v0 import SlurmJobList, UserList
 from sarc.client.job import SlurmJob, SlurmState
 from sarc.client.series import AbstractJobSeriesFactory
 from sarc.config import UTC, ConfigurationError, config
