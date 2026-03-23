@@ -466,6 +466,7 @@ def test_fetch_and_parse_multiple_different_scrapers(monkeypatch, enabled_cache)
         assert user.matching_id.name in ["mock_scraper", "test_plugin"]
 
 
+@pytest.mark.usefixtures("read_only_db")
 @patch("sarc.core.scraping.users.get_user_scraper")
 def test_parse_users_supervisor_ordering_before_fix(mock_get_scraper, enabled_cache):
     """Test that plugins returning users before supervisors are correctly ordered.

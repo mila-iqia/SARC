@@ -135,6 +135,7 @@ def test_get_jobs_empty_result(client):
     assert len(data) == 0
 
 
+@pytest.mark.usefixtures("read_only_db")
 def test_get_jobs_invalid_cluster(client):
     """Test jobs query with invalid cluster."""
 
@@ -303,6 +304,7 @@ def test_count_jobs_empty_result(client):
     assert count == 0
 
 
+@pytest.mark.usefixtures("read_only_db")
 def test_count_jobs_invalid_cluster(client):
     """Test jobs count with invalid cluster."""
     response = client.get("/v0/job/count?cluster=invalid_cluster")

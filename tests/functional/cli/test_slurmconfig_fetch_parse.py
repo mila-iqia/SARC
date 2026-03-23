@@ -86,7 +86,7 @@ DATE_2020_10_01_MTL = datetime(2020, 10, 1, tzinfo=MTL)
 DATE_2020_12_01_MTL = datetime(2020, 12, 1, tzinfo=MTL)
 
 
-@pytest.mark.usefixtures("enabled_cache", "no_pkey")
+@pytest.mark.usefixtures("read_only_db", "enabled_cache", "no_pkey")
 def test_fetch_slurmconfig(cli_main, test_config, remote, caplog, freezer, monkeypatch):
     """Test slurm conf file downloading using `fetch slurmconfig`."""
     caplog.set_level(logging.INFO)

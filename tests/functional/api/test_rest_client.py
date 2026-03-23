@@ -105,6 +105,7 @@ def test_get_jobs_empty_result(sarc_client):
     assert len(data) == 0
 
 
+@pytest.mark.usefixtures("read_only_db")
 def test_get_jobs_invalid_cluster(sarc_client):
     # Corresponds to test_get_jobs_invalid_cluster in test_v0
     with pytest.raises(httpx.HTTPStatusError) as excinfo:
@@ -187,6 +188,7 @@ def test_count_jobs(sarc_client, params, expected):
     assert len(r_list.jobs) == expected
 
 
+@pytest.mark.usefixtures("read_only_db")
 def test_count_jobs_invalid_cluster(sarc_client):
     with pytest.raises(httpx.HTTPStatusError) as excinfo:
         sarc_client.job_count(cluster="invalid_cluster")
@@ -196,6 +198,7 @@ def test_count_jobs_invalid_cluster(sarc_client):
     )
 
 
+@pytest.mark.usefixtures("read_only_db")
 def test_count_jobs_invalid_job_state(sarc_client):
     with pytest.raises(AttributeError):
         sarc_client.job_count(job_state="INVALID")

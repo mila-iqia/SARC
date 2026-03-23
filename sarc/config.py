@@ -176,15 +176,11 @@ class ClusterConfig:
 class MongoConfig:
     connection_string: str
     database_name: str
+    auto_upgrade: bool = True
 
     @cached_property
     def database_instance(self) -> Database:
-        return self._database_instance()
-
-    def _database_instance(self, upgrade: bool = True) -> Database:
         from pymongo import MongoClient
-
-        from sarc.core.db_init import db_upgrade
 
         client: MongoClient = MongoClient(self.connection_string)
         db = client.get_database(
@@ -194,7 +190,9 @@ class MongoConfig:
             ),
         )
 
-        if upgrade:
+        if self.auto_upgrade:
+            from sarc.core.db_init import db_upgrade
+
             db_upgrade(db)
 
         return db

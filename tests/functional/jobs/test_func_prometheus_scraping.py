@@ -657,6 +657,7 @@ def test_acquire_prometheus_for_cluster_without_prometheus(
     )
 
 
+@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache")
 def test_acquire_prometheus_mutually_exclusive_args(cli_main, caplog):
     # Both --intervals and --auto_interval: must fail
     assert (
