@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Annotated, Any
 
+from easy_oauth.cap import Capability
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import ORJSONResponse
 from pydantic import UUID4, BaseModel
@@ -57,7 +58,7 @@ def is_admin(
     auth = cfg.api.auth
     if not auth:
         return True
-    admin = deserialize(auth.capabilities.captype, "admin")
+    admin: Capability = deserialize(auth.capabilities.captype, "admin")
     return auth.capabilities.check(user, admin)
 
 
@@ -73,7 +74,7 @@ def requestor(email: str = Depends(can_query), admin: bool = Depends(is_admin)):
     return Requestor(email=email, user=userdb, is_admin=admin)
 
 
-def validate_cluster(cluster: str):
+def validate_cluster(cluster: str | None):
     cluster_names = list(cl.cluster_name for cl in get_available_clusters())
     if cluster is not None and cluster not in cluster_names:
         raise HTTPException(
@@ -289,7 +290,7 @@ def get_jobs(query_opt: JobQueryType) -> list[PydanticObjectId]:
 def list_jobs(
     query_opt: JobQueryType,
     page: int = 1,
-    per_page: int = None,
+    per_page: int | None = None,
     cfg: Config = Depends(config),
 ) -> SlurmJobList:
     per_page = constrain_page_parameters(cfg, page, per_page)
@@ -354,7 +355,7 @@ def query_users(query_opt: UserQueryType) -> list[UUID4]:
 def list_users(
     query_opt: UserQueryType,
     page: int = 1,
-    per_page: int = None,
+    per_page: int | None = None,
     cfg: Config = Depends(config),
 ) -> UserList:
     per_page = constrain_page_parameters(cfg, page, per_page)
