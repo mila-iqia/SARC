@@ -697,7 +697,7 @@ def test_parse_sacct_slurm_versions(sacct_outputs):
     assert len(jobs) == 1
 
 
-@pytest.mark.usefixtures("enabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
 def test_acquire_jobs_mutually_exclusive_args(cli_main, caplog):
     # Both --intervals and --auto_interval: must fail
     assert (
@@ -725,7 +725,7 @@ def test_acquire_jobs_mutually_exclusive_args(cli_main, caplog):
     )
 
 
-@pytest.mark.usefixtures("enabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
 def test_acquire_jobs_invalid_interval(cli_main, caplog):
     # Malformed interval
     assert (
@@ -751,7 +751,7 @@ def test_acquire_jobs_invalid_interval(cli_main, caplog):
     )
 
 
-@pytest.mark.usefixtures("enabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
 def test_acquire_jobs_interval_start_gt_end(cli_main, caplog):
     # Malformed interval: start > end
     assert (
@@ -776,7 +776,7 @@ def test_acquire_jobs_interval_start_gt_end(cli_main, caplog):
     )
 
 
-@pytest.mark.usefixtures("enabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
 def test_acquire_jobs_args_no_interval(cli_main, caplog):
     # No interval, nothing to do
     assert cli_main(["fetch", "jobs", "--cluster_names", "raisin"]) == 0
