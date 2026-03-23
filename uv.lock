@@ -630,7 +630,7 @@ wheels = [
 
 [[package]]
 name = "easy-oauth"
-version = "0.0.4"
+version = "0.0.5"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "authlib" },
@@ -640,9 +640,9 @@ dependencies = [
     { name = "serieux" },
     { name = "starlette" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/81/17/73ed9c92107c27a96d6c60388746efc91d8bf61ea99be261b78a5b939628/easy_oauth-0.0.4.tar.gz", hash = "sha256:adcbbe3ec026abcc3c02ec63e52cb8ee38261af835a7b3914909a89a0b610342", size = 12451, upload-time = "2026-03-16T21:09:15.801Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/86/b7/3870be2cff439612ebbe91c1c9471bc884df2a3f135ad166ed3b46a58c1e/easy_oauth-0.0.5.tar.gz", hash = "sha256:c32f698bb0d26ab3efc3eae1da7d10d4d256041bb224205a0bb570d6816745e1", size = 12491, upload-time = "2026-03-23T21:55:18.707Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/09/2e/1fadf16529c5252fcf2655357053beb8964f3885782d92b8ef460559d872/easy_oauth-0.0.4-py3-none-any.whl", hash = "sha256:a7deba529e4cc1172fa52142f1ac9648efbcb2fa5888c5792c613c11c9ee185d", size = 15142, upload-time = "2026-03-16T21:09:14.503Z" },
+    { url = "https://files.pythonhosted.org/packages/19/e8/f6874b31e360cf93bece378ab1e1541dc6dc31fe37fcb9df0dfdad143509/easy_oauth-0.0.5-py3-none-any.whl", hash = "sha256:468f7e52ea351761eb39332212e4ec59a35c4ea49639f26f5c5f65ea2c958101", size = 15174, upload-time = "2026-03-23T21:55:17.258Z" },
 ]
 
 [[package]]
@@ -3000,7 +3000,7 @@ examples = [
 [package.metadata]
 requires-dist = [
     { name = "azure-identity", specifier = ">=1.23.1,<2" },
-    { name = "easy-oauth", specifier = ">=0.0.4" },
+    { name = "easy-oauth", specifier = ">=0.0.5" },
     { name = "fabric", specifier = ">=3.0.0,<4" },
     { name = "fastapi", extras = ["standard-no-fastapi-cloud-cli"], specifier = ">=0.135,<0.136" },
     { name = "filelock", specifier = ">=3.18.0" },
