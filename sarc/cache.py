@@ -160,7 +160,7 @@ class Cache:
         at_time = ensure_utc(at_time)
 
         output_file = self._dir_from_date(cdir, at_time) / at_time.time().isoformat(
-            "seconds"
+            "milliseconds"
         )
         working_file = output_file.with_suffix(".current")
         output_file.parent.mkdir(parents=True, exist_ok=True)
@@ -199,6 +199,7 @@ class Cache:
             hour=file_time.hour,
             minute=file_time.minute,
             second=file_time.second,
+            microsecond=file_time.microsecond,
             tzinfo=UTC,
         )
 
