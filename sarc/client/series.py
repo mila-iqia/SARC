@@ -263,10 +263,7 @@ class AbstractJobSeriesFactory(ABC):
             # Concat merged frames.
             output = pandas.concat([merged_mila, merged_drac])
             # Try to sort output to keep initial jobs order, by using first column from jobs frame.
-            # Sort inplace to avoid producing a supplementary frame.
-            output.sort_values(
-                by=jobs_frame.columns[0], inplace=True, ignore_index=True
-            )
+            output = output.sort_values(by=jobs_frame.columns[0], ignore_index=True)
 
             return output
         else:
@@ -772,7 +769,7 @@ def compute_time_frames(
     for frame_start in pandas.date_range(start, end, freq=frame_size):
         frame_end = frame_start + frame_size
 
-        mask = (jobs[col_start] < frame_end) * (jobs[col_end] > frame_start)
+        mask = (jobs[col_start] < frame_end) & (jobs[col_end] > frame_start)
         frame = jobs[mask].copy()
         total_durations_in_frame = total_durations[mask]
         frame[col_start] = frame[col_start].clip(frame_start, frame_end)  # type: ignore[call-overload]

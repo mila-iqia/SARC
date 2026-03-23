@@ -263,9 +263,11 @@ def compute_job_statistics_from_dataframe(
     if is_time_counter:
         # This is a time-based counter like the cpu counters in /proc/stat, with
         # a resolution of 1 nanosecond.
-        df["timediffs"] = gdf["timestamp"].diff().map(lambda x: x.total_seconds())
-        df["value"] = gdf["value"].diff() / df["timediffs"] / 1e9
+        timediffs = gdf["timestamp"].diff().map(lambda x: x.total_seconds())
+        df["value"] = gdf["value"].diff() / timediffs / 1e9
         df = df.drop(index=0)
+        # Recompute groupby after modifying df
+        gdf = df.groupby(groupby)
 
     if unused_threshold is not None:
         means = gdf["value"].mean()

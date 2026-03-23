@@ -54,7 +54,7 @@ def deep_normalize(obj: Any) -> Any:
 def prepare_df_for_comparison(df: pd.DataFrame) -> pd.DataFrame:
     """Normalize data frame before comparison"""
     for col in df.columns:
-        if df[col].dtype == "O":
+        if df[col].dtype == "O" or pd.api.types.is_string_dtype(df[col]):
             # Normalize object columns
             df[col] = df[col].apply(deep_normalize)
         elif pd.api.types.is_numeric_dtype(df[col]):
