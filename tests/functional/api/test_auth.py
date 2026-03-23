@@ -46,6 +46,7 @@ def queries(**endpoints):
 #
 # Endpoints using only `dependencies=[Depends(require_admin)]`
 #   admin=200/404, user=403, not_in_db=403, guest=401
+@pytest.mark.usefixtures("read_only_db_with_users")
 @queries(
     cluster_list=Endpoint(
         "/v0/cluster/list", {"admin": 200, "user": 200, "not_in_db": 403, "guest": 401}

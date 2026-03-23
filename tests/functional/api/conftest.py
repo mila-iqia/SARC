@@ -1,5 +1,6 @@
 import socket
 
+import gifnoc
 import httpx
 import pytest
 from easy_oauth.testing.utils import OAuthMock
@@ -8,8 +9,6 @@ from fastapi.testclient import TestClient
 
 from sarc.config import config
 from sarc.rest.client import SarcApiClient
-
-from ...conftest import custom_db_config
 
 
 @pytest.fixture(scope="session")
@@ -27,15 +26,8 @@ def oauth_mock(oauth_port):
         yield oauth
 
 
-@pytest.fixture(scope="session")
-def oauth_overrides(oauth_port):
-    return {
-        "sarc.api.auth.server_metadata_url": f"http://127.0.0.1:{oauth_port}/.well-known/openid-configuration"
-    }
-
-
-@pytest.fixture(scope="session")
-def session_app(read_only_db_with_users_config_object, oauth_mock, oauth_overrides):
+@pytest.fixture(scope="function")
+def app(oauth_mock):
     from sarc.api.v0 import router
 
     def client(email=None):
@@ -45,7 +37,11 @@ def session_app(read_only_db_with_users_config_object, oauth_mock, oauth_overrid
             mc.set_email(email)
         return mc
 
-    with custom_db_config(read_only_db_with_users_config_object, oauth_overrides):
+    oauth_overrides = {
+        "sarc.api.auth.server_metadata_url": f"http://127.0.0.1:{oauth_port}/.well-known/openid-configuration"
+    }
+
+    with gifnoc.overlay(oauth_overrides):
         app = FastAPI()
         app.client = client
         app.include_router(router)
@@ -57,12 +53,6 @@ def session_app(read_only_db_with_users_config_object, oauth_mock, oauth_overrid
         yield app
 
 
-@pytest.fixture(scope="function")
-def app(session_app, read_only_db_with_users_config_object, oauth_overrides):
-    with custom_db_config(read_only_db_with_users_config_object, oauth_overrides):
-        yield session_app
-
-
 class ModifiedTestClient(TestClient):
     def __init__(self, app, oauth_mock):
         self.normal = httpx.Client()
@@ -70,11 +60,14 @@ class ModifiedTestClient(TestClient):
         self.token = None
         super().__init__(app, follow_redirects=False)
 
-    def set_email(self, email: str):
+    def get_token(self, email: str):
         self.oauth_mock.set_email(email)
         response = self.get("/token")
         assert response.status_code == 200
-        self.token = response.json()["refresh_token"]
+        return response.json()["refresh_token"]
+
+    def set_email(self, email: str):
+        self.token = self.get_token(email)
         self.headers["Authorization"] = f"Bearer {self.token}"
 
     def request(self, method: str, url: httpx.URL | str, **kwargs):
@@ -120,16 +113,16 @@ class ModifiedTestClient(TestClient):
         return self.expect(response, expect_status)
 
 
-@pytest.fixture(scope="session")
-def client(session_app, oauth_mock):
+@pytest.fixture
+def client(app, oauth_mock):
     """Create a test client for the FastAPI app."""
-    mc = ModifiedTestClient(session_app, oauth_mock)
+    mc = ModifiedTestClient(app, oauth_mock)
     mc.set_email("admin@admin.admin")
     return mc
 
 
 @pytest.fixture
-def sarc_client(client):
+def sarc_client(app, oauth_mock):
     """
     Returns a SarcApiClient that uses the FastAPI TestClient session.
     The 'client' fixture comes from tests/functional/api/conftest.py
@@ -137,8 +130,9 @@ def sarc_client(client):
 
     Used to test low-level SarcApiClient methods.
     """
+    mc = ModifiedTestClient(app, oauth_mock)
     return SarcApiClient(
-        remote_url="http://testapp", session=client, oauth2_token="test"
+        remote_url="", session=mc, oauth2_token=mc.get_token("admin@admin.admin")
     )
 
 
@@ -163,18 +157,21 @@ def enable_caps(app):
 
 
 @pytest.fixture
-def mock_client_class(client, monkeypatch):
+def mock_client_class(app, oauth_mock, monkeypatch):
     """
     Replace SarcApiClient class with a mock class
     that uses the FastAPI TestClient session.
 
     Used to test high-level REST client functions.
     """
+    mc = ModifiedTestClient(app, oauth_mock)
 
     class MockSarcApiClient(SarcApiClient):
         def __init__(self, *args, **kwargs):
             super().__init__(
-                remote_url="http://testserver", session=client, oauth2_token="test"
+                remote_url="",
+                session=mc,
+                oauth2_token=mc.get_token("admin@admin.admin"),
             )
 
     monkeypatch.setattr("sarc.rest.client.SarcApiClient", MockSarcApiClient)
