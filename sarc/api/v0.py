@@ -62,14 +62,15 @@ def is_admin(
     return auth.capabilities.check(user, admin)
 
 
-def requestor(
-    email: str = Depends(can_query),
-    cfg: Config = Depends(config),
-    admin: bool = Depends(is_admin),
-):
+def require_admin(admin: bool = Depends(is_admin)):
+    if not admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+
+
+def requestor(email: str = Depends(can_query), admin: bool = Depends(is_admin)):
     userdb = get_user_collection().find_one_by({"matching_ids.mila_ldap": email})
     if userdb is None and not admin:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
     return Requestor(email=email, user=userdb, is_admin=admin)
 
 
@@ -383,7 +384,7 @@ async def get_user_by_id(uuid: UUID4) -> UserData:
     return user
 
 
-@router.get("/user/email/{email}", dependencies=[Depends(is_admin)])
+@router.get("/user/email/{email}", dependencies=[Depends(require_admin)])
 async def get_user_by_email(email: str) -> UserData:
     """Get user with given email."""
     user = await get_async_user_collection().find_one_by({"email": email})

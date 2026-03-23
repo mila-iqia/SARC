@@ -116,7 +116,7 @@ class SarcApiClient:
             url,
             params=cleaned_params,
             timeout=self.timeout,
-            headers={"Authorization": f"Bearer: {self.oauth2_token}"},
+            headers={"Authorization": f"Bearer {self.oauth2_token}"},
         )
         response.raise_for_status()
         return response
