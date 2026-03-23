@@ -38,10 +38,11 @@ def oauth_overrides(oauth_port):
 def session_app(read_only_db_with_users_config_object, oauth_mock, oauth_overrides):
     from sarc.api.v0 import router
 
-    def client(email):
+    def client(email=None):
         """Create a test client for the FastAPI app."""
         mc = ModifiedTestClient(app, oauth_mock)
-        mc.set_email(email)
+        if email is not None:
+            mc.set_email(email)
         return mc
 
     with custom_db_config(read_only_db_with_users_config_object, oauth_overrides):
