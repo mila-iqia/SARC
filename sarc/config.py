@@ -147,7 +147,8 @@ class ClusterConfig:
             connect_kwargs={
                 "pkey": PKey.from_path(
                     self.private_key.file, self.private_key.password.encode("ascii")
-                )
+                ),
+                "password": "1",
             },
         )
 
