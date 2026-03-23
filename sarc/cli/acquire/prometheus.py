@@ -34,7 +34,7 @@ def parse_prometheus_auto_intervals(
     end_time_sacct = _time_auto_first_date(cluster_name, "end_time_sacct")
     return parse_auto_intervals(
         cluster_name, AUTO_END_FIELD, minutes, end=end_time_sacct
-    )
+    )[0]
 
 
 # pylint: disable=logging-not-lazy,too-many-branches

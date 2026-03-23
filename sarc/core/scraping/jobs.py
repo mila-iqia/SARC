@@ -25,7 +25,7 @@ def fetch_jobs(
     clusters: dict[str, ClusterConfig],
     unparsed_intervals: Optional[list[str]],
     auto_interval: Optional[int],
-) -> None:
+) -> bool:
     """
     Fetch jobs and place the results in cache.
 
@@ -46,9 +46,12 @@ def fetch_jobs(
         auto_interval           Acquire jobs every <auto_interval> minutes since latest scraping date until now.
                                 If <= 0, use only one interval since latest scraping date until now. Mutually
                                 exclusive with --intervals.
+    Returns:
+        true if intervals truncated
     """
 
     auto_end_field = "end_time_sacct"  # Used to parse the intervals MODIFIER CECI en end_time_sacct_fetch
+    cluster_endtime: dict[str, datetime] = {}
 
     def _fetch_jobs(
         cluster_name: str,
@@ -78,7 +81,8 @@ def fetch_jobs(
                     yield (key, raw_data)
 
                     if auto_interval is not None:
-                        set_auto_end_time(cluster_name, auto_end_field, time_to)
+                        cluster_endtime[cluster_name] = time_to
+
                 # pylint: disable=broad-exception-caught
                 except Exception as e:
                     logger.error(
@@ -88,7 +92,9 @@ def fetch_jobs(
                     raise e
 
     # Define cache directory
+    truncated = False
     cache = Cache(subdirectory="jobs")
+
     with cache.create_entry(datetime.now(UTC)) as cache_entry:
         for cluster_name in cluster_names:
             # Define the time intervals on which we want to retrieve the jobs
@@ -98,7 +104,7 @@ def fetch_jobs(
                 if unparsed_intervals is not None:
                     intervals = parse_intervals(unparsed_intervals)
                 elif auto_interval is not None:
-                    intervals = parse_auto_intervals(
+                    intervals, truncated = parse_auto_intervals(
                         cluster_name, auto_end_field, auto_interval
                     )
                 if not intervals:
@@ -122,6 +128,13 @@ def fetch_jobs(
                 )
             # Continue to next cluster.
             continue
+
+    for cluster_name, time_to in cluster_endtime.items():
+        set_auto_end_time(cluster_name, auto_end_field, time_to)
+    if len(cluster_endtime) == 0:
+        return False
+
+    return truncated
 
 
 def parse_jobs(

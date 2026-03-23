@@ -75,24 +75,26 @@ def parse_intervals(intervals: list[str]) -> list[tuple[datetime, datetime]]:
 
 def parse_auto_intervals(
     cluster_name: str, end_field: str, minutes: int, end: datetime | None = None
-) -> list[tuple[datetime, datetime]]:
+) -> tuple[list[tuple[datetime, datetime]], bool]:
     intervals = []
     start = _time_auto_first_date(cluster_name, end_field)
     end = end or datetime.now(UTC)
+    count = 0
     if start > end:
         raise ValueError(f"auto intervals: start date {start} > end date {end}")
     if minutes <= 0:
         # Invalid minutes. Let's just create a unique interval.
         intervals.append((start, end))
     else:
-        # Valid minutes. Generate many intervals to cover [start, end].
+        # Valid minutes. Generate many intervals to cover [start, end[.
         delta = timedelta(minutes=minutes)
         curr = start
-        while curr < end:
+        while curr < end and count < 10:
             next_time = curr + delta
+            count += 1
             intervals.append((curr, next_time))
             curr = next_time
-    return intervals
+    return intervals, count == 10
 
 
 def set_auto_end_time(cluster_name: str, end_field: str, date: datetime) -> None:

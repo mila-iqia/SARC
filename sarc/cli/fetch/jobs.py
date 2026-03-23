@@ -55,5 +55,13 @@ class FetchJobs:
 
         assert config().cache is not None
 
-        fetch_jobs(self.cluster_names, clusters_cfg, self.intervals, self.auto_interval)
+        if self.auto_interval:
+            while fetch_jobs(
+                self.cluster_names, clusters_cfg, self.intervals, self.auto_interval
+            ):
+                pass
+        else:
+            fetch_jobs(
+                self.cluster_names, clusters_cfg, self.intervals, self.auto_interval
+            )
         return 0
