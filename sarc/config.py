@@ -176,18 +176,26 @@ class ClusterConfig:
 class MongoConfig:
     connection_string: str
     database_name: str
+    auto_upgrade: bool = True
 
     @cached_property
     def database_instance(self) -> Database:
         from pymongo import MongoClient
 
         client: MongoClient = MongoClient(self.connection_string)
-        return client.get_database(
+        db = client.get_database(
             self.database_name,
             codec_options=CodecOptions(
                 uuid_representation=UuidRepresentation.STANDARD, tz_aware=True
             ),
         )
+
+        if self.auto_upgrade:
+            from sarc.core.db_init import db_upgrade
+
+            db_upgrade(db)
+
+        return db
 
 
 @dataclass

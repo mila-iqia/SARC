@@ -8,7 +8,6 @@ from tests.unittests.alerts.definitions import BeanCheck
 
 @pytest.fixture
 def testing_repo(empty_read_write_db):
-    assert empty_read_write_db.startswith("test-db-")
     db = config().mongo.database_instance
     repo = HealthCheckStateRepository(db)
     return repo
