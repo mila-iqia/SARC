@@ -203,10 +203,10 @@ class AbstractJobSeriesFactory(ABC):
             billing = job.allocated.billing or 0
             gres_gpu = job.requested.gres_gpu or 0
             if gres_gpu:
-                job_series["allocated.gres_gpu"] = max(billing, gres_gpu)
+                job_series["allocated.gres_gpu"] = float(max(billing, gres_gpu))
                 job_series["allocated.cpu"] = job.allocated.cpu
             else:
-                job_series["allocated.gres_gpu"] = 0
+                job_series["allocated.gres_gpu"] = 0.0
                 job_series["allocated.cpu"] = (
                     max(billing, job.allocated.cpu) if job.allocated.cpu else 0
                 )
@@ -263,10 +263,7 @@ class AbstractJobSeriesFactory(ABC):
             # Concat merged frames.
             output = pandas.concat([merged_mila, merged_drac])
             # Try to sort output to keep initial jobs order, by using first column from jobs frame.
-            # Sort inplace to avoid producing a supplementary frame.
-            output.sort_values(
-                by=jobs_frame.columns[0], inplace=True, ignore_index=True
-            )
+            output = output.sort_values(by=jobs_frame.columns[0], ignore_index=True)
 
             return output
         else:
@@ -649,7 +646,9 @@ def _gpu_type_to_rgu_mapper(
     """
     # NB: we assume RGU value for a MIG == RGU value from whole GPU.
     return lambda gpu_type: (
-        gpu_to_rgu.get(gpu_type.split(":")[0].rstrip()) if gpu_type else None
+        gpu_to_rgu.get(gpu_type.split(":")[0].rstrip())
+        if not pandas.isna(gpu_type)
+        else None
     )
 
 
@@ -770,7 +769,7 @@ def compute_time_frames(
     for frame_start in pandas.date_range(start, end, freq=frame_size):
         frame_end = frame_start + frame_size
 
-        mask = (jobs[col_start] < frame_end) * (jobs[col_end] > frame_start)
+        mask = (jobs[col_start] < frame_end) & (jobs[col_end] > frame_start)
         frame = jobs[mask].copy()
         total_durations_in_frame = total_durations[mask]
         frame[col_start] = frame[col_start].clip(frame_start, frame_end)  # type: ignore[call-overload]
