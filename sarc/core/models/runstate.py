@@ -19,6 +19,6 @@ def set_parsed_date(db: Database, value_name: str, value: datetime) -> None:
     """Set the parsed date for a given value name (jobs or users, for example)."""
     db.runstate.update_one(
         {"name": "parsed_date"},
-        {"$set": {value_name: value.isoformat("milliseconds")}},
+        {"$set": {value_name: value.isoformat(timespec="milliseconds")}},
         upsert=True,
     )
