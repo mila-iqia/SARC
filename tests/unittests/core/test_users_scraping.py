@@ -267,7 +267,9 @@ def test_get_user_scraper_not_found():
         get_user_scraper("non_existent_scraper")
 
 
-def test_fetch_and_parse_users_single_plugin(mock_scraper, enabled_cache):
+def test_fetch_and_parse_users_single_plugin(
+    mock_scraper, enabled_cache, read_write_db
+):
     scrapers = [
         ("test_scraper", {"api_url": "https://api.example.com", "api_key": "secret"})
     ]
@@ -286,7 +288,9 @@ def test_fetch_and_parse_users_single_plugin(mock_scraper, enabled_cache):
         assert user.matching_id.name == "test_scraper"
 
 
-def test_fetch_and_parse_users_multiple_plugins(monkeypatch, enabled_cache):
+def test_fetch_and_parse_users_multiple_plugins(
+    monkeypatch, enabled_cache, read_write_db
+):
     """Test fetching and parsing users with multiple plugins."""
     mock_scraper = MockUserScraper()
     monkeypatch.setitem(_builtin_scrapers, "plugin1", mock_scraper)
@@ -311,7 +315,7 @@ def test_fetch_and_parse_users_multiple_plugins(monkeypatch, enabled_cache):
     assert len(plugin2_users) == 2
 
 
-def test_invalid_scraper(enabled_cache, caplog):
+def test_invalid_scraper(enabled_cache, caplog, read_write_db):
     scrapers = [("invalid_scraper", {"api_url": "https://api.example.com"})]
 
     fetch_users(scrapers)
@@ -330,7 +334,9 @@ def test_invalid_scraper(enabled_cache, caplog):
 
 
 @patch("sarc.core.scraping.users.get_user_scraper")
-def test_fetch_and_parse_users_user_matching(mock_get_scraper, enabled_cache):
+def test_fetch_and_parse_users_user_matching(
+    mock_get_scraper, enabled_cache, read_write_db
+):
     """Test that users with matching IDs are properly merged."""
 
     # Create a mock scraper that returns users with known matches
@@ -425,7 +431,9 @@ def test_update_user_match_merge_credentials_existing_domain():
     assert base_user.associated_accounts["drac"].get_value() == "user1_drac"
 
 
-def test_fetch_and_parse_multiple_different_scrapers(monkeypatch, enabled_cache):
+def test_fetch_and_parse_multiple_different_scrapers(
+    monkeypatch, enabled_cache, read_write_db
+):
     """Test fetching and parsing users with multiple different scrapers and verify merging behavior."""
     # Set up both scrapers in the builtin scrapers
     mock_scraper = MockUserScraper()
