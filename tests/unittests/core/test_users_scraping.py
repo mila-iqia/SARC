@@ -428,7 +428,6 @@ def test_update_user_match_merge_credentials_existing_domain():
 
     assert "drac" in base_user.associated_accounts
     assert base_user.associated_accounts["drac"].get_value() == "user1_drac"
-    assert base_user.associated_accounts["drac"].get_value() == "user1_drac"
 
 
 def test_fetch_and_parse_multiple_different_scrapers(
