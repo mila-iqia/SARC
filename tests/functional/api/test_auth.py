@@ -55,7 +55,7 @@ def queries(**endpoints):
         "/v0/gpu/rgu", {"admin": 200, "user": 200, "not_in_db": 403, "guest": 401}
     ),
     job_query=Endpoint(
-        "/v0/job/query", {"admin": 200, "user": 501, "not_in_db": 403, "guest": 401}
+        "/v0/job/query", {"admin": 200, "user": 403, "not_in_db": 403, "guest": 401}
     ),
     job_list=Endpoint(
         "/v0/job/list", {"admin": 200, "user": 501, "not_in_db": 403, "guest": 401}
@@ -67,15 +67,10 @@ def queries(**endpoints):
         # Use a valid-format but nonexistent ObjectId to distinguish auth failures
         # (401/403) from successful auth + data-not-found (404).
         "/v0/job/id/000000000000000000000001",
-        {
-            "admin": 404,
-            "user": 404,  # smithj is in DB, passes requestor, but job not found
-            "not_in_db": 403,
-            "guest": 401,
-        },
+        {"admin": 404, "user": 403, "not_in_db": 403, "guest": 401},
     ),
     user_query=Endpoint(
-        "/v0/user/query", {"admin": 200, "user": 501, "not_in_db": 403, "guest": 401}
+        "/v0/user/query", {"admin": 200, "user": 403, "not_in_db": 403, "guest": 401}
     ),
     user_list=Endpoint(
         "/v0/user/list", {"admin": 200, "user": 501, "not_in_db": 403, "guest": 401}
@@ -83,12 +78,7 @@ def queries(**endpoints):
     user_id=Endpoint(
         # Valid UUID format, nonexistent user.
         "/v0/user/id/00000000-0000-4000-8000-000000000001",
-        {
-            "admin": 404,
-            "user": 404,  # smithj is in DB, passes requestor, but user not found
-            "not_in_db": 403,
-            "guest": 401,
-        },
+        {"admin": 404, "user": 403, "not_in_db": 403, "guest": 401},
     ),
     user_email=Endpoint(
         "/v0/user/email/jsmith@example.com",

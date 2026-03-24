@@ -271,8 +271,9 @@ class UserQuery(BaseModel):
 UserQueryType = Annotated[UserQuery, Depends(UserQuery)]
 
 
-@router.get("/job/query")
+@router.get("/job/query", dependencies=[Depends(require_admin)])
 def get_jobs(query_opt: JobQueryType) -> list[PydanticObjectId]:
+    # Requires admin access because /job/id/oid is admin-restricted
     coll = _jobs_collection()
     jobs = coll.get_collection().find(query_opt.get_query(), ["_id"])
     return [j["_id"] for j in jobs]
@@ -312,7 +313,7 @@ def count_jobs(query_opt: JobQueryType) -> int:
     return coll.get_collection().count_documents(query_opt.get_query())
 
 
-@router.get("/job/id/{oid}", dependencies=[Depends(requestor)])
+@router.get("/job/id/{oid}", dependencies=[Depends(require_admin)])
 def get_job(oid: PydanticObjectId) -> SlurmJob:
     coll = _jobs_collection()
     job = coll.find_one_by_id(oid)
@@ -335,7 +336,7 @@ def get_rgu_value_per_gpu() -> dict[str, float]:
     return get_rgus()
 
 
-@router.get("/user/query")
+@router.get("/user/query", dependencies=[Depends(require_admin)])
 def query_users(query_opt: UserQueryType) -> list[UUID4]:
     """Search users. Return user UUIDs."""
     coll = get_user_collection()
@@ -371,7 +372,7 @@ def list_users(
     )
 
 
-@router.get("/user/id/{uuid}", dependencies=[Depends(requestor)])
+@router.get("/user/id/{uuid}", dependencies=[Depends(require_admin)])
 def get_user_by_id(uuid: UUID4) -> UserData:
     """Get user with given UUID."""
     user = get_user_collection().find_one_by({"uuid": uuid})
