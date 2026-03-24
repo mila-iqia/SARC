@@ -43,6 +43,12 @@ class FetchJobs:
         help="Force recalculating the data rather than use the cache",
     )
 
+    max_intervals: int | None = field(
+        type=int,
+        default=None,
+        help="Only fetch this many intervals worth of jobs at maximum",
+    )
+
     def execute(self) -> int:
         if self.intervals is not None and self.auto_interval is not None:
             logger.error(
@@ -55,13 +61,11 @@ class FetchJobs:
 
         assert config().cache is not None
 
-        if self.auto_interval:
-            while fetch_jobs(
-                self.cluster_names, clusters_cfg, self.intervals, self.auto_interval
-            ):
-                pass
-        else:
-            fetch_jobs(
-                self.cluster_names, clusters_cfg, self.intervals, self.auto_interval
-            )
+        fetch_jobs(
+            self.cluster_names,
+            clusters_cfg,
+            self.intervals,
+            self.auto_interval,
+            self.max_intervals,
+        )
         return 0

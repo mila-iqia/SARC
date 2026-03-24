@@ -1,6 +1,5 @@
 import logging
 from datetime import datetime
-from typing import Optional
 
 from sarc.cache import Cache
 from sarc.client.job import _jobs_collection
@@ -23,9 +22,10 @@ logger = logging.getLogger(__name__)
 def fetch_jobs(
     cluster_names: list[str],
     clusters: dict[str, ClusterConfig],
-    unparsed_intervals: Optional[list[str]],
-    auto_interval: Optional[int],
-) -> bool:
+    unparsed_intervals: list[str] | None,
+    auto_interval: int | None,
+    max_intervals: int | None,
+) -> None:
     """
     Fetch jobs and place the results in cache.
 
@@ -46,8 +46,10 @@ def fetch_jobs(
         auto_interval           Acquire jobs every <auto_interval> minutes since latest scraping date until now.
                                 If <= 0, use only one interval since latest scraping date until now. Mutually
                                 exclusive with --intervals.
-    Returns:
-        true if intervals truncated
+
+        max_intervals
+                               Only fetch that many intervals at maximum when using auto_intervals.
+                               The number fetched can be lower.
     """
 
     auto_end_field = "end_time_sacct"  # Used to parse the intervals MODIFIER CECI en end_time_sacct_fetch
@@ -57,7 +59,7 @@ def fetch_jobs(
         cluster_name: str,
         cluster_configs: dict[str, ClusterConfig],
         intervals: list[tuple[datetime, datetime]],
-        auto_interval: Optional[int],
+        auto_interval: int | None,
     ):
         assert cluster_name in cluster_configs
         cluster_config = cluster_configs[cluster_name]
@@ -92,7 +94,6 @@ def fetch_jobs(
                     raise e
 
     # Define cache directory
-    truncated = False
     cache = Cache(subdirectory="jobs")
 
     with cache.create_entry(datetime.now(UTC)) as cache_entry:
@@ -104,8 +105,8 @@ def fetch_jobs(
                 if unparsed_intervals is not None:
                     intervals = parse_intervals(unparsed_intervals)
                 elif auto_interval is not None:
-                    intervals, truncated = parse_auto_intervals(
-                        cluster_name, auto_end_field, auto_interval
+                    intervals = parse_auto_intervals(
+                        cluster_name, auto_end_field, auto_interval, max_intervals
                     )
                 if not intervals:
                     logger.warning(
@@ -131,10 +132,6 @@ def fetch_jobs(
 
     for cluster_name, time_to in cluster_endtime.items():
         set_auto_end_time(cluster_name, auto_end_field, time_to)
-    if len(cluster_endtime) == 0:
-        return False
-
-    return truncated
 
 
 def parse_jobs(
