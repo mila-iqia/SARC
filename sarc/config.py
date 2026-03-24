@@ -148,6 +148,8 @@ class ClusterConfig:
                 "pkey": PKey.from_path(
                     self.private_key.file, self.private_key.password.encode("ascii")
                 ),
+                # This is a hack to select "Duo" from DRAC
+                # TODO: make this less hacky.
                 "password": "1",
             },
         )

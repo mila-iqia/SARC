@@ -45,7 +45,6 @@ dependencies = [
 sarc = "sarc.cli:main"
 
 [dependency-groups]
-cloud = []
 dev = [
     "mypy>=1.18.1,<2",
     "pytest>=9.0.1,<10",
