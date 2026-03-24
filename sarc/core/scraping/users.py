@@ -123,7 +123,7 @@ def update_user_match(*, value: UserMatch, update: UserMatch) -> None:
     )
     value.known_matches.add(update.matching_id)
     for mid in update.known_matches:
-        assert name_dict.get(mid.name, mid) == mid
+        assert name_dict.get(mid.name, mid) == mid, f"{name_dict}: {mid}"
         value.known_matches.add(mid)
 
     value.member_type.merge_with(update.member_type, truncate=True)
