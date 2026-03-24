@@ -2,7 +2,7 @@
     mila:
       values:
       - valid_end: '3000-01-01T00:00:00Z'
-        valid_start: '2000-01-01T00:00:00Z'
+        valid_start: '2024-01-01T00:00:00Z'
         value: smithj000
   co_supervisors:
     values: []
@@ -24,7 +24,7 @@
     mila:
       values:
       - valid_end: '3000-01-01T00:00:00Z'
-        valid_start: '2000-01-01T00:00:00Z'
+        valid_start: '2024-01-01T00:00:00Z'
         value: smithj001
   co_supervisors:
     values: []
@@ -46,7 +46,7 @@
     mila:
       values:
       - valid_end: '3000-01-01T00:00:00Z'
-        valid_start: '2000-01-01T00:00:00Z'
+        valid_start: '2024-01-01T00:00:00Z'
         value: smithj002
   co_supervisors:
     values: []
@@ -66,10 +66,7 @@
     values: []
 - associated_accounts:
     mila:
-      values:
-      - valid_end: '2023-01-01T00:00:00Z'
-        valid_start: '2000-01-01T00:00:00Z'
-        value: smithj003
+      values: []
   co_supervisors:
     values: []
   display_name: John Smith the 003rd
@@ -90,7 +87,7 @@
     mila:
       values:
       - valid_end: '3000-01-01T00:00:00Z'
-        valid_start: '2000-01-01T00:00:00Z'
+        valid_start: '2024-01-01T00:00:00Z'
         value: smithj004
   co_supervisors:
     values: []
@@ -112,7 +109,7 @@
     mila:
       values:
       - valid_end: '3000-01-01T00:00:00Z'
-        valid_start: '2000-01-01T00:00:00Z'
+        valid_start: '2024-01-01T00:00:00Z'
         value: smithj005
   co_supervisors:
     values: []
@@ -134,7 +131,7 @@
     mila:
       values:
       - valid_end: '3000-01-01T00:00:00Z'
-        valid_start: '2000-01-01T00:00:00Z'
+        valid_start: '2024-01-01T00:00:00Z'
         value: smithj006
   co_supervisors:
     values: []
@@ -156,7 +153,7 @@
     mila:
       values:
       - valid_end: '3000-01-01T00:00:00Z'
-        valid_start: '2000-01-01T00:00:00Z'
+        valid_start: '2024-01-01T00:00:00Z'
         value: smithj007
   co_supervisors:
     values: []
@@ -178,7 +175,7 @@
     mila:
       values:
       - valid_end: '3000-01-01T00:00:00Z'
-        valid_start: '2000-01-01T00:00:00Z'
+        valid_start: '2024-01-01T00:00:00Z'
         value: smithj008
   co_supervisors:
     values: []
@@ -200,7 +197,7 @@
     mila:
       values:
       - valid_end: '3000-01-01T00:00:00Z'
-        valid_start: '2000-01-01T00:00:00Z'
+        valid_start: '2024-01-01T00:00:00Z'
         value: smithj009
   co_supervisors:
     values: []
