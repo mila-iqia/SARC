@@ -4,7 +4,7 @@ from pymongo.database import Database
 from sarc.allocations.allocations import AllocationsRepository
 from sarc.client.job import SlurmJobRepository
 from sarc.config import config
-from sarc.core.models.runstate import set_parsed_date
+from sarc.core.models.runstate import get_parsed_date, set_parsed_date
 from sarc.core.models.validators import START_TIME
 from sarc.storage.diskusage import ClusterDiskUsageRepository
 
@@ -105,8 +105,14 @@ def create_runstate(db: Database) -> None:
     db_collection.create_index([("name", pymongo.ASCENDING)], unique=True)
 
     # create the default parsed dates
-    set_parsed_date(db, "jobs", START_TIME)
-    set_parsed_date(db, "users", START_TIME)
+    try:
+        get_parsed_date(db, "jobs")
+    except AssertionError:
+        set_parsed_date(db, "jobs", START_TIME)
+    try:
+        get_parsed_date(db, "users")
+    except AssertionError:
+        set_parsed_date(db, "users", START_TIME)
 
 
 def create_allocations_indices(db: Database) -> None:

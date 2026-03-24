@@ -1,6 +1,7 @@
 """Tests for Manual user scrapers."""
 
 import json
+from datetime import UTC, datetime
 
 import pytest
 from serieux import serialize
@@ -70,7 +71,8 @@ class TestManualUserScraper(UserPluginTester):
     def test_parse_data(self, config, expected):
         data = list(
             self.plugin.parse_user_data(
-                json.dumps(serialize(ManualUserConfig, config)).encode("utf-8")
+                json.dumps(serialize(ManualUserConfig, config)).encode("utf-8"),
+                datetime(year=2024, month=1, day=1, tzinfo=UTC),
             )
         )
         assert data == expected

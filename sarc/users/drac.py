@@ -1,8 +1,8 @@
 import csv
-import datetime
 import json
 from collections.abc import Iterable
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 from sarc.core.models.users import Credentials
@@ -27,7 +27,7 @@ class DRACRolesScraper(UserScraper[DRACRolesConfig]):
                 [_dict_to_lowercase(d) for d in csv.DictReader(f_in)]
             ).encode()
 
-    def parse_user_data(self, data: bytes) -> Iterable[UserMatch]:
+    def parse_user_data(self, data: bytes, _: datetime) -> Iterable[UserMatch]:
         for d in json.loads(data.decode()):
             yield UserMatch(
                 display_name=d["nom"],
@@ -53,14 +53,13 @@ class DRACMemberScraper(UserScraper[DRACMemberConfig]):
                 [_dict_to_lowercase(d) for d in csv.DictReader(f_in)]
             ).encode()
 
-    def parse_user_data(self, data: bytes) -> Iterable[UserMatch]:
+    def parse_user_data(self, data: bytes, cache_time: datetime) -> Iterable[UserMatch]:
         for d in json.loads(data.decode()):
             creds = Credentials()
             creds.insert(
                 d["username"],
-                start=datetime.datetime.strptime(
-                    d["member_since"], "%Y-%m-%d %H:%M:%S %z"
-                ),
+                start=datetime.strptime(d["member_since"], "%Y-%m-%d %H:%M:%S %z"),
+                end=cache_time,
             )
             yield UserMatch(
                 display_name=d["name"],
