@@ -4,13 +4,12 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from pydantic import BeforeValidator, PlainSerializer
+from pydantic import BaseModel, BeforeValidator, PlainSerializer
 from pydantic_mongo import AbstractRepository, PydanticObjectId
 from serieux import TaggedSubclass, deserialize, serialize
 
 from sarc.alerts.common import CheckResult, HealthCheck
 from sarc.config import config
-from sarc.model import BaseModel
 
 SERIEUX_CLASS_NAME = "$class"
 MONGODB_CLASS_NAME = "_class_"
