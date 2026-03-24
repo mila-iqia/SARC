@@ -4,7 +4,6 @@ from typing import Annotated, Any
 
 from easy_oauth.cap import Capability
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from fastapi.responses import ORJSONResponse
 from pydantic import UUID4, BaseModel
 from pydantic_mongo import PydanticObjectId
 from serieux import deserialize
@@ -22,10 +21,7 @@ from sarc.core.models.api import SlurmJobList, UserList
 from sarc.core.models.users import MemberType, UserData
 from sarc.users.db import UserDB, get_user_collection
 
-# Use `orjson` module to handle JSON.
-# `orjson` automatically converts float NaN values to None,
-# and is expected to be faster than builtin `json`.
-router = APIRouter(prefix="/v0", default_response_class=ORJSONResponse)
+router = APIRouter(prefix="/v0")
 
 
 def config_dep():
@@ -46,9 +42,6 @@ def hascap(cap):
 
 
 can_query = hascap("query")
-
-
-router = APIRouter(prefix="/v0")
 
 
 @dataclass
