@@ -15,7 +15,7 @@ from sarc.core.models.runstate import get_parsed_date, set_parsed_date
 from sarc.core.models.users import Credentials, MemberType
 from sarc.core.models.validators import ValidField
 
-deserialize = (Serieux + IncludeFile)().deserialize
+deserialize = (Serieux + IncludeFile)().deserialize  # type: ignore[operator]
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +79,7 @@ class UserScraper[T](Protocol):
         return deserialize(
             self.config_type,
             config_data,
-            WorkingDirectory(directory=config_path)  # type: ignore[call-arg]
+            WorkingDirectory(directory=config_path)  # type: ignore[call-arg, operator]
             + EncryptionKey(password=os.environ.get("SERIEUX_PASSWORD", None)),  # type: ignore[call-arg]
         )
 

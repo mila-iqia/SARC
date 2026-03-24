@@ -24,7 +24,7 @@ def fetch_jobs(
     clusters: dict[str, ClusterConfig],
     unparsed_intervals: list[str] | None,
     auto_interval: int | None,
-    max_intervals: int | None,
+    max_intervals: int | None = None,
 ) -> None:
     """
     Fetch jobs and place the results in cache.
