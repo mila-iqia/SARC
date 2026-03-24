@@ -16,7 +16,7 @@ from __future__ import annotations
 import re
 import sys
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from zipfile import ZIP_LZMA, ZipFile
 
@@ -82,7 +82,7 @@ def main() -> None:
         for day_key, files in progress:
             progress.set_description(day_key)
 
-            entry_time = files[0][1]
+            entry_time = files[0][1] + timedelta(days=1)
             out_dir = dir_from_date(output_dir, entry_time)
             out_dir.mkdir(parents=True, exist_ok=True)
             out_file = out_dir / entry_time.time().isoformat("seconds")
