@@ -443,3 +443,8 @@ sarc:
       temporary_cache_file:
         $class: "sarc.alerts.usage_alerts.temporary_cache_file:TemporaryCacheFileCheck"
         active: true
+
+      # users_collection check corresponds to test params in test_alert_users_collection.py
+      users_collection:
+        $class: "sarc.alerts.usage_alerts.users_collection:UsersCollectionCheck"
+        active: true
