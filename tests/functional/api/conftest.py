@@ -155,4 +155,3 @@ def mock_client_class(app, oauth_mock, monkeypatch):
             )
 
     monkeypatch.setattr("sarc.rest.client.SarcApiClient", MockSarcApiClient)
-    monkeypatch.setattr("sarc.rest.client.SarcApiClient", MockSarcApiClient)
