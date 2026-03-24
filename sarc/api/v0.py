@@ -28,8 +28,14 @@ from sarc.users.db import UserDB, get_user_collection
 router = APIRouter(prefix="/v0", default_response_class=ORJSONResponse)
 
 
+def config_dep():
+    # We don't use Depends(config) directly because then the 'mode' argument to
+    # config would be added to the API signature, and we don't want that
+    return config()
+
+
 def hascap(cap):
-    async def check(request: Request, cfg: Config = Depends(config)):
+    async def check(request: Request, cfg: Config = Depends(config_dep)):
         if not cfg.api.auth:
             yield "__admin__"
         else:
@@ -53,7 +59,7 @@ class Requestor:
 
 
 def is_admin(
-    user: Annotated[str, Depends(can_query)], cfg: Config = Depends(config)
+    user: Annotated[str, Depends(can_query)], cfg: Config = Depends(config_dep)
 ) -> bool:
     auth = cfg.api.auth
     if not auth:
@@ -284,7 +290,7 @@ def list_jobs(
     query_opt: JobQueryType,
     page: int = 1,
     per_page: int | None = None,
-    cfg: Config = Depends(config),
+    cfg: Config = Depends(config_dep),
 ) -> SlurmJobList:
     per_page = constrain_page_parameters(cfg, page, per_page)
     coll = _jobs_collection()
@@ -349,7 +355,7 @@ def list_users(
     query_opt: UserQueryType,
     page: int = 1,
     per_page: int | None = None,
-    cfg: Config = Depends(config),
+    cfg: Config = Depends(config_dep),
 ) -> UserList:
     per_page = constrain_page_parameters(cfg, page, per_page)
     coll = get_user_collection()
