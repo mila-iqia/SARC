@@ -1,15 +1,38 @@
+import json
 import logging
-from datetime import datetime
-from typing import Iterable, Optional
+from datetime import UTC, datetime
+from typing import Iterable
 
 from tqdm import tqdm
 
+from sarc.cache import Cache
 from sarc.client.job import SlurmJob, _jobs_collection
 from sarc.config import ClusterConfig, config
-from sarc.jobs.series import get_job_time_series
+from sarc.core.models.runstate import get_parsed_date, set_parsed_date
+from sarc.core.scraping.jobs_utils import _time_auto_first_date, parse_auto_intervals
+from sarc.jobs.series import (
+    JOB_STATISTICS_METRIC_NAMES,
+    compute_job_statistics,
+    get_job_time_series_data,
+)
 from sarc.traces import trace_decorator
 
 logger = logging.getLogger(__name__)
+
+AUTO_END_FIELD = "end_time_prometheus"
+
+
+def parse_prometheus_auto_intervals(
+    cluster_name: str, minutes: int, max_intervals: int | None
+) -> list[tuple[datetime, datetime]]:
+    """
+    When scraping with auto intervals, we don't want to scrape Prometheus metrics
+    after end_time_sacct.
+    """
+    end_time_sacct = _time_auto_first_date(cluster_name, "end_time_sacct")
+    return parse_auto_intervals(
+        cluster_name, AUTO_END_FIELD, minutes, max_intervals, end=end_time_sacct
+    )
 
 
 def get_jobs_in_scraped_period(
@@ -38,75 +61,76 @@ def get_jobs_in_scraped_period(
 
 
 @trace_decorator()
-def scrap_prometheus(cluster: ClusterConfig, start: datetime, end: datetime) -> None:
-    """Scrap Prometheus metrics for jobs fromm start to end and save it to database.
-
-    NB: Current code scrapes metrics for jobs where
-    latest sacct scraped period intersects
-    with given [start, end].
-
-    Parameters
-    ----------
-    cluster: ClusterConfig
-        The configuration of the cluster on which to fetch the jobs.
-    start: datetime
-        The datetime from which to fetch the jobs. Time matters.
-    end: datetime
-        The datetime up to which we fetch the jobs. Time matters.
+def fetch_prometheus(cluster: ClusterConfig, start: datetime, end: datetime) -> None:
     """
-    collection = _jobs_collection()
-    logger.info(
-        f"Saving into mongodb collection '{collection.Meta.collection_name}'..."
-    )
-    assert cluster.name is not None
+    Fetch Prometheus metrics for jobs from start to end on the specified cluster.
+    """
+    if cluster.name is None:
+        logger.error("cluster name not set, can't fetch")
+        return
     nb_jobs = 0
-    for entry in get_jobs_in_scraped_period(cluster.name, start, end):
-        nb_jobs += 1
-        update_allocated_gpu_type_from_prometheus(cluster, entry)
-        saved = entry.statistics(recompute=True, save=True) is not None
-        if not saved:
-            collection.save_job(entry)
-    logger.info(
-        f"Saved Prometheus metrics for {nb_jobs} jobs on {cluster.name} from {start} to {end}."
-    )
+    cache = Cache("prometheus")
+    with cache.create_entry(datetime.now(UTC)) as ce:
+        for entry in get_jobs_in_scraped_period(cluster.name, start, end):
+            nb_jobs += 1
+            raw_prom_data = get_job_time_series_data(
+                job=entry, metric=JOB_STATISTICS_METRIC_NAMES, max_points=10_000
+            )
+            ce.add_value(
+                f"{entry.cluster_name}${entry.job_id}${entry.submit_time.isoformat('seconds')}",
+                json.dumps(raw_prom_data).encode("utf-8"),
+            )
+    logger.info(f"Fetched Prometheus metrics for {nb_jobs} jobs.")
 
 
 @trace_decorator()
-def update_allocated_gpu_type_from_prometheus(
-    cluster: ClusterConfig, entry: SlurmJob
-) -> Optional[str]:
-    """
-    Try to infer job GPU type from Prometheus
-    if cluster have configured a Prometheus connection.
+def parse_prometheus(since: datetime | None, update_parsed_date: bool) -> None:
+    cache = Cache("prometheus")
+    collection = _jobs_collection()
+    db = config().mongo.database_instance
+    if since is None:
+        since = get_parsed_date(db, "prometheus")
 
-    Parameters
-    ----------
-    cluster: ClusterConfig
-        Cluster configuration for the current job.
-    entry: SlurmJob
-        Slurm job for which to infer the gpu type.
-
-    Returns
-    -------
-    str
-        String representing the gpu type.
-    None
-        Unable to infer gpu type.
-    """
-    if cluster.prometheus_url:
-        # Cluster does have prometheus config.
-        output = get_job_time_series(
-            job=entry,
-            metric="slurm_job_utilization_gpu_memory",
-            max_points=1,
-            dataframe=False,
+    nb_jobs = 0
+    for ce in cache.read_from(from_time=since):
+        error = False
+        logger.info(
+            f"Parsing prometheus data from cache entry: {ce.get_entry_datetime().isoformat('milliseconds')}"
         )
-        if output:
-            gpu_type = output[0]["metric"]["gpu_type"]
-            # If we found a GPU type, try to infer descriptive GPU name
+        for key, value in ce.items():
+            nb_jobs += 1
+            cluster_name, job_id_str, submit_time_str = key.split("$")
+            cluster = config("scraping").clusters.get(cluster_name, None)
+            if cluster is None:
+                logger.error("Could not find cluster '%s' in config", cluster_name)
+                error = True
+                continue
+            job_id = int(job_id_str)
+            submit_time = datetime.fromisoformat(submit_time_str)
+            entry = collection.find_one_by(
+                {
+                    "cluster_name": cluster_name,
+                    "job_id": job_id,
+                    "submit_time": submit_time,
+                }
+            )
+            if entry is None:
+                logger.error("Could not find job for %s", key)
+                error = True
+                continue
+            data = json.loads(value.decode("utf-8"))
+            gpu_type = data[0]["metric"]["gpu_type"]
             if gpu_type is not None:
                 entry.allocated.gpu_type = (
                     cluster.harmonize_gpu_from_nodes(entry.nodes, gpu_type) or gpu_type
                 )
+            statistics = compute_job_statistics(entry, data)
+            if not statistics.empty():
+                entry.stored_statistics = statistics
+                entry.save()
 
-    return entry.allocated.gpu_type
+        logger.info(f"Saved Prometheus metrics for {nb_jobs} jobs.")
+
+        if update_parsed_date and not error:
+            logger.info(f"Set parsed_dates for jobs to {ce.get_entry_datetime()}.")
+            set_parsed_date(db, "prometheus", ce.get_entry_datetime())

@@ -13,7 +13,6 @@ from pydantic_mongo import AbstractRepository, PydanticObjectId
 
 from sarc.client.gpumetrics import get_cluster_gpu_billings, get_rgus
 from sarc.config import TZLOCAL, UTC, ClusterConfig, config, scraping_mode_required
-from sarc.traces import trace_decorator
 
 
 class SlurmState(str, Enum):
@@ -189,77 +188,10 @@ class SlurmJob(BaseModel):
 
         return timedelta(seconds=0)
 
-    @overload
-    def series(
-        self,
-        metric: str | Sequence[str],
-        min_interval: int = 30,
-        max_points: int = 100,
-        measure: str | None = None,
-        aggregation: Literal["total", "interval"] | None = "total",
-        dataframe: Literal[True] = True,
-    ) -> DataFrame | None: ...
-
-    @overload
-    def series(
-        self,
-        metric: str | Sequence[str],
-        min_interval: int = 30,
-        max_points: int = 100,
-        measure: str | None = None,
-        aggregation: Literal["total", "interval"] | None = "total",
-        dataframe: Literal[False] = False,
-    ) -> list | None: ...
-
-    @scraping_mode_required
-    def series(
-        self,
-        metric: str | Sequence[str],
-        min_interval: int = 30,
-        max_points: int = 100,
-        measure: str | None = None,
-        aggregation: Literal["total", "interval"] | None = "total",
-        dataframe: bool = True,
-    ) -> DataFrame | list | None:
-        from sarc.jobs.series import get_job_time_series
-
-        return get_job_time_series(
-            job=self,
-            metric=metric,
-            min_interval=min_interval,
-            max_points=max_points,
-            measure=measure,
-            aggregation=aggregation,
-            dataframe=dataframe,
-        )  # type: ignore[call-overload]
-
-    @trace_decorator()
-    @scraping_mode_required
-    def statistics(
-        self,
-        recompute: bool = False,
-        save: bool = True,
-        overwrite_when_empty: bool = False,
-    ) -> JobStatistics | None:
-        from sarc.jobs.series import compute_job_statistics
-
-        if self.stored_statistics is not None and not recompute:
-            return self.stored_statistics
-        elif (
-            self.end_time is not None
-            and self.fetch_cluster_config().prometheus_url is not None
-        ):
-            statistics = compute_job_statistics(self)
-            if save and (
-                overwrite_when_empty
-                or not self.stored_statistics
-                or not statistics.empty()
-            ):
-                self.stored_statistics = statistics
-                self.save()
-            return statistics
-
-        return None
+    # TODO: just rename stored_statistics to statistics
+    # We keep it that way for backward compat for now
+    def statistics(self) -> JobStatistics | None:
+        return self.stored_statistics
 
     @scraping_mode_required
     def save(self):
