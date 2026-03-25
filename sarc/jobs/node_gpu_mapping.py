@@ -5,11 +5,11 @@ import logging
 from datetime import datetime
 from typing import Optional
 
+from pydantic import BaseModel
 from pydantic_mongo import AbstractRepository, PydanticObjectId
 
 from sarc.config import config, scraping_mode_required
 from sarc.core.models.validators import datetime_utc
-from sarc.model import BaseModel
 
 logger = logging.getLogger(__name__)
 
@@ -34,10 +34,7 @@ class NodeGPUMappingRepository(AbstractRepository[NodeGPUMapping]):
 
     @scraping_mode_required
     def save_node_gpu_mapping(
-        self,
-        cluster_name: str,
-        since: datetime_utc,
-        node_to_gpu: dict[str, list[str]],
+        self, cluster_name: str, since: datetime_utc, node_to_gpu: dict[str, list[str]]
     ):
         mapping = NodeGPUMapping(
             cluster_name=cluster_name, since=since, node_to_gpu=node_to_gpu
@@ -45,22 +42,14 @@ class NodeGPUMappingRepository(AbstractRepository[NodeGPUMapping]):
         # Check if a node->GPU mapping was already registered
         # for given cluster and date.
         exists = list(
-            self.find_by(
-                {
-                    "cluster_name": mapping.cluster_name,
-                    "since": mapping.since,
-                }
-            )
+            self.find_by({"cluster_name": mapping.cluster_name, "since": mapping.since})
         )
         if exists:
             # If a record was found, update it if changed.
             (prev_mapping,) = exists
             if prev_mapping.node_to_gpu != mapping.node_to_gpu:
                 self.get_collection().update_one(
-                    {
-                        "cluster_name": mapping.cluster_name,
-                        "since": mapping.since,
-                    },
+                    {"cluster_name": mapping.cluster_name, "since": mapping.since},
                     {"$set": self.to_document(mapping)},
                 )
                 logger.info(

@@ -4,7 +4,7 @@ import io
 import logging
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Iterator, IO, cast
+from typing import IO, Iterator, cast
 
 from hostlist import expand_hostlist
 from pydantic import BaseModel
@@ -12,8 +12,8 @@ from simple_parsing import field
 
 from sarc.cache import Cache
 from sarc.client.gpumetrics import _gpu_billing_collection
-from sarc.config import config, ClusterConfig, UTC
-from sarc.core.models.validators import datetime_utc, UTCOFFSET
+from sarc.config import UTC, ClusterConfig, config
+from sarc.core.models.validators import UTCOFFSET, datetime_utc
 from sarc.jobs.node_gpu_mapping import _node_gpu_mapping_collection
 
 logger = logging.getLogger(__name__)

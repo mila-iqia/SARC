@@ -61,7 +61,9 @@ class MockUserScraper(UserScraper[MockConfig]):
     def get_user_data(self, config: MockConfig) -> bytes:
         return config.api_url.encode()
 
-    def parse_user_data(self, _data: bytes) -> Iterable[UserMatch]:
+    def parse_user_data(
+        self, _data: bytes, cache_time: datetime
+    ) -> Iterable[UserMatch]:
         users = []
 
         user1 = UserMatch(
@@ -108,19 +110,17 @@ class TestPlugin(UserScraper[TestConfig]):
     def get_user_data(self, config: TestConfig) -> bytes:
         return config.domain.encode("utf-8")
 
-    def parse_user_data(self, data: bytes) -> Iterable[UserMatch]:
+    def parse_user_data(self, data: bytes, cache_time: datetime) -> Iterable[UserMatch]:
         users = []
         domain = data.decode("utf-8")
         users.append(
             UserMatch(
-                email=f"john@{domain}",
-                matching_id=MatchID(name="test", mid="john"),
+                email=f"john@{domain}", matching_id=MatchID(name="test", mid="john")
             )
         )
         users.append(
             UserMatch(
-                email=f"jane@{domain}",
-                matching_id=MatchID(name="test", mid="jane"),
+                email=f"jane@{domain}", matching_id=MatchID(name="test", mid="jane")
             )
         )
         return users
@@ -176,9 +176,7 @@ def test_user_match_equality():
 
 def test_update_user_match_fill_missing_data():
     base_user = UserMatch(
-        display_name=None,
-        email=None,
-        matching_id=MatchID(name="plugin1", mid="user1"),
+        display_name=None, email=None, matching_id=MatchID(name="plugin1", mid="user1")
     )
 
     update_user = UserMatch(
@@ -234,13 +232,9 @@ def test_update_user_match_merge_known_matches():
 
 
 def test_update_user_match_merge_valid_fields():
-    base_user = UserMatch(
-        matching_id=MatchID(name="plugin1", mid="user1"),
-    )
+    base_user = UserMatch(matching_id=MatchID(name="plugin1", mid="user1"))
 
-    update_user = UserMatch(
-        matching_id=MatchID(name="plugin2", mid="user1"),
-    )
+    update_user = UserMatch(matching_id=MatchID(name="plugin2", mid="user1"))
 
     # Add some data to the update user
     update_user.github_username.insert("newuser")
@@ -273,7 +267,9 @@ def test_get_user_scraper_not_found():
         get_user_scraper("non_existent_scraper")
 
 
-def test_fetch_and_parse_users_single_plugin(mock_scraper, enabled_cache):
+def test_fetch_and_parse_users_single_plugin(
+    mock_scraper, enabled_cache, read_write_db
+):
     scrapers = [
         ("test_scraper", {"api_url": "https://api.example.com", "api_key": "secret"})
     ]
@@ -282,7 +278,7 @@ def test_fetch_and_parse_users_single_plugin(mock_scraper, enabled_cache):
     fetch_users(scrapers)
 
     # Then, parse the cached data
-    users = list(parse_users(datetime.now(UTC) - one_hour))
+    users = list(parse_users(datetime.now(UTC) - one_hour, False))
 
     assert len(users) == 3
     assert all(isinstance(user, UserMatch) for user in users)
@@ -292,7 +288,9 @@ def test_fetch_and_parse_users_single_plugin(mock_scraper, enabled_cache):
         assert user.matching_id.name == "test_scraper"
 
 
-def test_fetch_and_parse_users_multiple_plugins(monkeypatch, enabled_cache):
+def test_fetch_and_parse_users_multiple_plugins(
+    monkeypatch, enabled_cache, read_write_db
+):
     """Test fetching and parsing users with multiple plugins."""
     mock_scraper = MockUserScraper()
     monkeypatch.setitem(_builtin_scrapers, "plugin1", mock_scraper)
@@ -307,7 +305,7 @@ def test_fetch_and_parse_users_multiple_plugins(monkeypatch, enabled_cache):
     fetch_users(scrapers)
 
     # Then, parse the cached data
-    users = list(parse_users(datetime.now(UTC) - one_hour))
+    users = list(parse_users(datetime.now(UTC) - one_hour, False))
 
     assert len(users) == 5  # 3 from plugin1 + 2 from plugin2 (user3 is merged)
 
@@ -317,7 +315,7 @@ def test_fetch_and_parse_users_multiple_plugins(monkeypatch, enabled_cache):
     assert len(plugin2_users) == 2
 
 
-def test_invalid_scraper(enabled_cache, caplog):
+def test_invalid_scraper(enabled_cache, caplog, read_write_db):
     scrapers = [("invalid_scraper", {"api_url": "https://api.example.com"})]
 
     fetch_users(scrapers)
@@ -332,16 +330,20 @@ def test_invalid_scraper(enabled_cache, caplog):
         ce.add_value("invalid_scraper", b"")
 
     with pytest.raises(ValueError, match="Invalid user scraper"):
-        list(parse_users(datetime(2025, 6, 1, tzinfo=UTC)))
+        list(parse_users(datetime(2025, 6, 1, tzinfo=UTC), False))
 
 
 @patch("sarc.core.scraping.users.get_user_scraper")
-def test_fetch_and_parse_users_user_matching(mock_get_scraper, enabled_cache):
+def test_fetch_and_parse_users_user_matching(
+    mock_get_scraper, enabled_cache, read_write_db
+):
     """Test that users with matching IDs are properly merged."""
 
     # Create a mock scraper that returns users with known matches
     class MatchingMockScraper(MockUserScraper):
-        def parse_user_data(self, data: bytes) -> Iterable[UserMatch]:
+        def parse_user_data(
+            self, data: bytes, cache_time: datetime
+        ) -> Iterable[UserMatch]:
             api_url = data.decode("utf-8")
             # Return different users based on the config (which plugin)
             if "api1" in api_url:
@@ -372,7 +374,7 @@ def test_fetch_and_parse_users_user_matching(mock_get_scraper, enabled_cache):
     fetch_users(scrapers)
 
     # Then, parse the cached data
-    users = list(parse_users(datetime.now(UTC) - one_hour))
+    users = list(parse_users(datetime.now(UTC) - one_hour, False))
 
     # Should have only one user after merging
     assert len(users) == 1
@@ -389,17 +391,13 @@ def test_update_user_match_merge_credentials_new_domain():
     """Test merging credentials when the update user has a new domain."""
     base_user = UserMatch(
         matching_id=MatchID(name="plugin1", mid="user1"),
-        associated_accounts={
-            "drac": Credentials(),
-        },
+        associated_accounts={"drac": Credentials()},
     )
     base_user.associated_accounts["drac"].insert("user1_drac")
 
     update_user = UserMatch(
         matching_id=MatchID(name="plugin2", mid="user1"),
-        associated_accounts={
-            "mila": Credentials(),
-        },
+        associated_accounts={"mila": Credentials()},
     )
     update_user.associated_accounts["mila"].insert("user1_mila")
 
@@ -416,17 +414,13 @@ def test_update_user_match_merge_credentials_existing_domain():
     """Test merging credentials when both users have the same domain."""
     base_user = UserMatch(
         matching_id=MatchID(name="plugin1", mid="user1"),
-        associated_accounts={
-            "drac": Credentials(),
-        },
+        associated_accounts={"drac": Credentials()},
     )
     base_user.associated_accounts["drac"].insert("user1_drac")
 
     update_user = UserMatch(
         matching_id=MatchID(name="plugin2", mid="user1"),
-        associated_accounts={
-            "drac": Credentials(),
-        },
+        associated_accounts={"drac": Credentials()},
     )
     update_user.associated_accounts["drac"].insert("user1_drac_updated")
 
@@ -434,10 +428,11 @@ def test_update_user_match_merge_credentials_existing_domain():
 
     assert "drac" in base_user.associated_accounts
     assert base_user.associated_accounts["drac"].get_value() == "user1_drac"
-    assert base_user.associated_accounts["drac"].get_value() == "user1_drac"
 
 
-def test_fetch_and_parse_multiple_different_scrapers(monkeypatch, enabled_cache):
+def test_fetch_and_parse_multiple_different_scrapers(
+    monkeypatch, enabled_cache, read_write_db
+):
     """Test fetching and parsing users with multiple different scrapers and verify merging behavior."""
     # Set up both scrapers in the builtin scrapers
     mock_scraper = MockUserScraper()
@@ -454,7 +449,7 @@ def test_fetch_and_parse_multiple_different_scrapers(monkeypatch, enabled_cache)
     fetch_users(scrapers)
 
     # Then, parse the cached data
-    users = list(parse_users(datetime.now(UTC) - one_hour))
+    users = list(parse_users(datetime.now(UTC) - one_hour, False))
 
     # MockUserScraper returns 3 users, TestPlugin returns 2 users
     # Total should be 5 users (no merging expected since they have different matching IDs)
@@ -482,6 +477,7 @@ def test_fetch_and_parse_multiple_different_scrapers(monkeypatch, enabled_cache)
         assert user.matching_id.name in ["mock_scraper", "test_plugin"]
 
 
+@pytest.mark.usefixtures("read_only_db")
 @patch("sarc.core.scraping.users.get_user_scraper")
 def test_parse_users_supervisor_ordering_before_fix(mock_get_scraper, enabled_cache):
     """Test that plugins returning users before supervisors are correctly ordered.
@@ -492,7 +488,9 @@ def test_parse_users_supervisor_ordering_before_fix(mock_get_scraper, enabled_ca
     """
 
     class SupervisorOrderingMockScraper(MockUserScraper):
-        def parse_user_data(self, data: bytes) -> Iterable[UserMatch]:
+        def parse_user_data(
+            self, data: bytes, cache_time: datetime
+        ) -> Iterable[UserMatch]:
             student = UserMatch(
                 display_name="Alice Student",
                 email="alice@example.com",
@@ -519,13 +517,13 @@ def test_parse_users_supervisor_ordering_before_fix(mock_get_scraper, enabled_ca
         (
             "bad_order_plugin",
             {"api_url": "https://bad_order.example.com", "api_key": "secret"},
-        ),
+        )
     ]
 
     fetch_users(scrapers)
 
     coll = get_user_collection()
-    for um in parse_users(datetime.now(UTC) - one_hour):
+    for um in parse_users(datetime.now(UTC) - one_hour, False):
         coll.update_user(um)
 
     u = get_user("alice@example.com")
@@ -533,7 +531,7 @@ def test_parse_users_supervisor_ordering_before_fix(mock_get_scraper, enabled_ca
     assert len(u.co_supervisors.values) == 1
     assert len(u.co_supervisors.values[0].value) == 1
 
-    for um in parse_users(datetime.now(UTC) - one_hour):
+    for um in parse_users(datetime.now(UTC) - one_hour, False):
         coll.update_user(um)
 
     u = get_user("alice@example.com")

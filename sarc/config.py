@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import functools
-import json
 import os
 import zoneinfo
 from contextlib import contextmanager
@@ -14,7 +13,10 @@ from typing import TYPE_CHECKING, Any, Callable, Literal, cast, overload
 import gifnoc
 import tzlocal
 from bson import CodecOptions, UuidRepresentation
+from easy_oauth import OAuthManager
 from hostlist import expand_hostlist
+from paramiko import PKey
+from serieux.features.encrypt import Secret
 
 from .alerts.common import HealthMonitorConfig
 
@@ -45,18 +47,23 @@ class DiskUsageConfig:
 
 
 @dataclass
+class PrivateKeyInfo:
+    file: Path
+    password: Secret[str]
+
+
+@dataclass
 class ClusterConfig:
     # pylint: disable=too-many-instance-attributes
-
-    host: str = "localhost"
+    host: str
+    private_key: PrivateKeyInfo
     timezone: zoneinfo.ZoneInfo | None = None
     prometheus_url: str | None = None
-    prometheus_headers_file: str | None = None
+    prometheus_headers: dict[str, Secret[str]] = field(default_factory=dict)
     name: str | None = None
     sacct_bin: str = "sacct"
     ignore_tz_utc: bool = False
     accounts: list[str] | None = None
-    sshconfig: Path | None = None
     diskusage: list[DiskUsageConfig] | None = None
     start_date: str = "2022-04-01"
     slurm_conf_host_path: Path = Path("/etc/slurm/slurm.conf")
@@ -130,52 +137,60 @@ class ClusterConfig:
     def ssh(self) -> Connection:
         from fabric import Config as FabricConfig
         from fabric import Connection
-        from paramiko import SSHConfig
 
-        if self.sshconfig is None:
-            fconfig = FabricConfig()
-        else:
-            fconfig = FabricConfig(ssh_config=SSHConfig.from_path(self.sshconfig))
+        fconfig = FabricConfig()
         fconfig["run"]["pty"] = False
         fconfig["run"]["in_stream"] = False
-        return Connection(self.host, config=fconfig)
+        return Connection(
+            self.host,
+            config=fconfig,
+            connect_kwargs={
+                "pkey": PKey.from_path(
+                    self.private_key.file, self.private_key.password.encode("ascii")
+                ),
+                # This is a hack to select "Duo" from DRAC
+                # TODO: make this less hacky.
+                "password": "1",
+            },
+        )
 
     @cached_property
     def prometheus(self) -> PrometheusConnect:
         from prometheus_api_client import PrometheusConnect
 
-        if self.prometheus_headers_file is not None:
-            headers = json.load(
-                open(  # pylint: disable=consider-using-with
-                    self.prometheus_headers_file, "r", encoding="utf-8"
-                )
-            )
-        else:
-            headers = {}
-
         if self.prometheus_url is None:
             raise ConfigurationError(
                 f"No prometheus URL provided for cluster '{self.name}'"
             )
-        return PrometheusConnect(url=self.prometheus_url, headers=headers)
+        return PrometheusConnect(
+            url=self.prometheus_url, headers=self.prometheus_headers
+        )
 
 
 @dataclass
 class MongoConfig:
     connection_string: str
     database_name: str
+    auto_upgrade: bool = True
 
     @cached_property
     def database_instance(self) -> Database:
         from pymongo import MongoClient
 
         client: MongoClient = MongoClient(self.connection_string)
-        return client.get_database(
+        db = client.get_database(
             self.database_name,
             codec_options=CodecOptions(
                 uuid_representation=UuidRepresentation.STANDARD, tz_aware=True
             ),
         )
+
+        if self.auto_upgrade:
+            from sarc.core.db_init import db_upgrade
+
+            db_upgrade(db)
+
+        return db
 
 
 @dataclass
@@ -191,7 +206,7 @@ class TempoConfig:
 @dataclass
 class SlackConfig:
     description: str
-    token: str
+    token: Secret[str]
     channel: str
 
 
@@ -219,15 +234,19 @@ class ApiConfig:
     a client without parameters.
     """
 
-    url: str  # REST API URL (including port)
+    url: str | None = None  # REST API URL (including port)
     timeout: int = 120
-    per_page: int = 100  # Default pagination size
+    # Default pagination size
+    per_page: int = 100
+    # Maximum page size
+    max_page_size: int = 5000
+    auth: OAuthManager | None = None
 
 
 @dataclass
 class ClientConfig:
     mongo: MongoConfig
-    api: ApiConfig | None = None
+    api: ApiConfig = field(default_factory=ApiConfig)
     cache: Path | None = None
     loki: LokiConfig | None = None
     tempo: TempoConfig | None = None
@@ -250,7 +269,6 @@ class ClientConfig:
 @dataclass
 class Config(ClientConfig):
     users: UserScrapingConfig | None = None
-    sshconfig: Path | None = None
     clusters: dict[str, ClusterConfig] = field(default_factory=dict)
     logging: LoggingConfig | None = None
 
@@ -258,8 +276,6 @@ class Config(ClientConfig):
         for name, cluster in self.clusters.items():
             if not cluster.name:
                 cluster.name = name
-            if not cluster.sshconfig:
-                cluster.sshconfig = self.sshconfig
 
 
 class WhitelistProxy:
@@ -282,7 +298,7 @@ full_config = gifnoc.define("sarc", Config)
 
 
 gifnoc.set_sources("${envfile:SARC_CONFIG}")
-
+config_path = Path(os.getenv("SARC_CONFIG", "")).parent
 
 sarc_mode = ContextVar("sarc_mode", default=os.getenv("SARC_MODE", "client"))
 

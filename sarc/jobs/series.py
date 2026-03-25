@@ -66,10 +66,11 @@ def get_job_time_series(
         dataframe: If True, return a DataFrame. Otherwise, return the list of
             dicts returned by Prometheus's API.
     """
+    subdir = _get_job_time_series_data_cache_subdir(job)
     results = with_cache(
         _get_job_time_series_data,
         key=_get_job_time_series_data_cache_key,
-        subdirectory="prometheus",
+        subdirectory=subdir,
     )(
         job=job,
         metric=metric,
@@ -180,6 +181,13 @@ def _get_job_time_series_data(
     return job.fetch_cluster_config().prometheus.custom_query(query)
 
 
+def _get_job_time_series_data_cache_subdir(job: SlurmJob) -> str:
+    job_start_time = job.start_time
+    assert job_start_time is not None
+    fmt = "%Y/%m/%d"
+    return f"prometheus/{job_start_time.strftime(fmt)}"
+
+
 def _get_job_time_series_data_cache_key(
     job: SlurmJob,
     metric: str | Sequence[str],
@@ -263,9 +271,11 @@ def compute_job_statistics_from_dataframe(
     if is_time_counter:
         # This is a time-based counter like the cpu counters in /proc/stat, with
         # a resolution of 1 nanosecond.
-        df["timediffs"] = gdf["timestamp"].diff().map(lambda x: x.total_seconds())
-        df["value"] = gdf["value"].diff() / df["timediffs"] / 1e9
+        timediffs = gdf["timestamp"].diff().map(lambda x: x.total_seconds())
+        df["value"] = gdf["value"].diff() / timediffs / 1e9
         df = df.drop(index=0)
+        # Recompute groupby after modifying df
+        gdf = df.groupby(groupby)
 
     if unused_threshold is not None:
         means = gdf["value"].mean()

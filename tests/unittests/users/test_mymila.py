@@ -1,6 +1,7 @@
 """Tests for MyMila user scrapers."""
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -30,11 +31,7 @@ class TestMyMilaScraper(UserPluginTester):
 
     @pytest.mark.freeze_time("2024-10-01")
     def test_fetch_data(self, data_regression, patch_return_values):
-        patch_return_values(
-            {
-                "sarc.users.mymila._query_mymila": fake_mymila_data(10),
-            }
-        )
+        patch_return_values({"sarc.users.mymila._query_mymila": fake_mymila_data(10)})
         data = self.plugin.get_user_data(self.parsed_config)
         # Uncomment to update the input data for the parse test
         # with open(Path(__file__).parent / "inputs" / "mymila1.cache", "wb") as f:
@@ -48,6 +45,9 @@ class TestMyMilaScraper(UserPluginTester):
             raw_data = f.read()
 
         data = list(
-            d.model_dump(mode="json") for d in self.plugin.parse_user_data(raw_data)
+            d.model_dump(mode="json")
+            for d in self.plugin.parse_user_data(
+                raw_data, datetime(year=2024, month=1, day=1, tzinfo=UTC)
+            )
         )
         data_regression.check(data)

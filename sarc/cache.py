@@ -16,7 +16,7 @@ from typing import IO, Any, Callable, ClassVar, Literal, Protocol, overload
 from zipfile import ZIP_LZMA, ZipFile
 
 from .config import config
-from .core.models.validators import datetime_utc
+from .utils import ensure_utc
 
 logger = logging.getLogger(__name__)
 UTCOFFSET = timedelta(0)
@@ -68,9 +68,8 @@ class CacheException(Exception):
     pass
 
 
-def ensure_utc(d: datetime) -> datetime:
-    assert d.tzinfo is not None
-    return d.astimezone(UTC)
+def no_current(fname: Path) -> bool:
+    return fname.suffix not in [".current", ".DS_Store"]
 
 
 class CacheEntry:
@@ -80,8 +79,9 @@ class CacheEntry:
 
     _zf: ZipFile
 
-    def __init__(self, zf: ZipFile):
+    def __init__(self, zf: ZipFile, entry_datetime: datetime):
         self._zf = zf
+        self.entry_datetime = ensure_utc(entry_datetime)
 
     def add_value(self, key: str, value: bytes) -> None:
         """Add a key-value pair to the cache entry"""
@@ -91,6 +91,10 @@ class CacheEntry:
         """Get all the key, value pairs in the order they were added."""
         for zi in self._zf.infolist():
             yield zi.filename, self._zf.read(zi)
+
+    def get_entry_datetime(self) -> datetime:
+        """Get the time when this cache entry was created."""
+        return self.entry_datetime
 
     def close(self) -> None:
         """Close the cache entry. MUST be called for new entries."""
@@ -156,19 +160,17 @@ class Cache:
         at_time = ensure_utc(at_time)
 
         output_file = self._dir_from_date(cdir, at_time) / at_time.time().isoformat(
-            "seconds"
+            "milliseconds"
         )
+        working_file = output_file.with_suffix(".current")
         output_file.parent.mkdir(parents=True, exist_ok=True)
-        zf = ZipFile(
-            output_file,
-            mode="x",
-            compression=ZIP_LZMA,
-        )
-        ce = CacheEntry(zf)
+        zf = ZipFile(working_file, mode="x", compression=ZIP_LZMA)
+        ce = CacheEntry(zf, at_time)
         try:
             yield ce
         finally:
             ce.close()
+            working_file.rename(output_file)
 
     def save(self, key: str, at_time: datetime, value: bytes) -> None:
         """Save binary data to the cache for a specific key and timestamp.
@@ -187,7 +189,21 @@ class Cache:
         with self.create_entry(at_time) as ce:
             ce.add_value(key, value)
 
-    def _paths_from(self, from_time: datetime) -> Iterable[Path]:
+    def _datetime_from_path(self, path: Path) -> datetime:
+        """Get the datetime from a cache entry path."""
+        file_time = time.fromisoformat(path.parts[-1])
+        return datetime(
+            year=int(path.parts[-4]),
+            month=int(path.parts[-3]),
+            day=int(path.parts[-2]),
+            hour=file_time.hour,
+            minute=file_time.minute,
+            second=file_time.second,
+            microsecond=file_time.microsecond,
+            tzinfo=UTC,
+        )
+
+    def _paths_from(self, from_time: datetime) -> Iterable[tuple[Path, datetime]]:
         """Returns paths starting from a specific datetime.
 
         Returns an iterator over all cached entries that were created at or
@@ -199,19 +215,24 @@ class Cache:
 
         Yields:
             Path: The path for each matching cache entry.
+            datetime: The time this entry was fetched
         """
         cdir = self.cache_dir
         from_time = ensure_utc(from_time)
 
         first_dir = self._dir_from_date(cdir, from_time)
 
+        ignore_files = [
+            ".DS_Store"
+        ]  # a bit hardcoded but soooo frequent on dev machines it had to be done
+
         if first_dir.exists():
             from_time_nodays = from_time.time()
             for file in filter(
-                lambda fname: time.fromisoformat(fname.parts[-1]) >= from_time_nodays,
-                sorted(first_dir.iterdir()),
+                lambda fname: time.fromisoformat(fname.parts[-1]) > from_time_nodays,
+                filter(no_current, sorted(first_dir.iterdir())),
             ):
-                yield file
+                yield file, self._datetime_from_path(file)
 
         from_time = from_time.replace(hour=0, minute=0, second=0, microsecond=0)
         from_time += timedelta(days=1)
@@ -220,28 +241,37 @@ class Cache:
         first_month_done = False
 
         for year_dir in sorted(
-            filter(lambda y: int(y.parts[-1]) >= from_time.year, cdir.iterdir())
+            filter(
+                lambda y: y.name not in ignore_files and int(y.name) >= from_time.year,
+                cdir.iterdir(),
+            )
         ):
-            if not first_year_done and int(year_dir.parts[-1]) > from_time.year:
+            if not first_year_done and int(year_dir.name) > from_time.year:
                 first_year_done = True
             for month_dir in sorted(
                 filter(
-                    lambda m: first_year_done or int(m.parts[-1]) >= from_time.month,
+                    lambda m: (
+                        m.name not in ignore_files
+                        and (first_year_done or int(m.name) >= from_time.month)
+                    ),
                     year_dir.iterdir(),
                 )
             ):
                 if not first_month_done and (
-                    int(month_dir.parts[-1]) > from_time.month or first_year_done
+                    int(month_dir.name) > from_time.month or first_year_done
                 ):
                     first_month_done = True
                 for day_dir in sorted(
                     filter(
-                        lambda d: first_month_done or int(d.parts[-1]) >= from_time.day,
+                        lambda d: (
+                            d.name not in ignore_files
+                            and (first_month_done or int(d.name) >= from_time.day)
+                        ),
                         month_dir.iterdir(),
                     )
                 ):
-                    for file in sorted(day_dir.iterdir()):
-                        yield file
+                    for file in filter(no_current, sorted(day_dir.iterdir())):
+                        yield file, self._datetime_from_path(file)
                 first_month_done = True
             first_year_done = True
 
@@ -268,8 +298,8 @@ class Cache:
             >>>     for key, data in ce.items():
             ...         print(f"Key: {key}, Data size: {len(data)} bytes")
         """
-        for file in self._paths_from(from_time):
-            yield CacheEntry(ZipFile(file, mode="r"))
+        for file, fetch_time in self._paths_from(from_time):
+            yield CacheEntry(ZipFile(file, mode="r"), fetch_time)
 
     def latest_entry(self) -> CacheEntry | None:
         """Returns the most recent cache entry if exists, otherwise None."""
@@ -282,12 +312,16 @@ class Cache:
                     month_dir.iterdir(), key=_basename_to_int, reverse=True
                 ):
                     for file in sorted(
-                        day_dir.iterdir(), key=_basename_to_time, reverse=True
+                        filter(no_current, day_dir.iterdir()),
+                        key=_basename_to_time,
+                        reverse=True,
                     ):
-                        return CacheEntry(ZipFile(file, mode="r"))
+                        return CacheEntry(
+                            ZipFile(file, mode="r"), self._datetime_from_path(file)
+                        )
         return None
 
-    def oldest_year(self) -> datetime_utc:
+    def oldest_year(self) -> datetime:
         """
         Return the oldest year in the cache if exists, otherwise current year.
         return: January 1st of year found, at 00h 00min 00sec 00microseconds in UTC timezone.
@@ -387,8 +421,7 @@ class OldCache[T]:
         """Save a value in cache for the given key."""
         if self.live:
             self.live_cache[(self.cache_dir, key)] = CachedResult(
-                issued=at_time,
-                value=value,
+                issued=at_time, value=value
             )
         cdir = self.cache_dir
         if self.on_disk and cdir is not None:
@@ -415,8 +448,7 @@ class OldCache[T]:
         cdir = self.cache_dir
         if self.on_disk and cdir is not None:
             candidates = sorted(
-                cdir.glob(key_value.format(time=_time_glob_pattern)),
-                reverse=True,
+                cdir.glob(key_value.format(time=_time_glob_pattern)), reverse=True
             )
             maximum = key_value.format(time=timestring)
             possible = [c for c in candidates if c.name <= maximum]
@@ -456,8 +488,7 @@ class OldCache[T]:
                             continue
                     if self.live:
                         self.live_cache[live_key] = CachedResult(
-                            issued=candidate_time,
-                            value=value,
+                            issued=candidate_time, value=value
                         )
                     logger.debug("read from cache file '%s'", candidate)
                     return value

@@ -3,77 +3,88 @@ sarc:
   clusters:
     fromage:
       accounts:
-      - rrg-bonhomme-ad_gpu
-      - rrg-bonhomme-ad_cpu
-      - def-bonhomme_gpu
-      - def-bonhomme_cpu
+        - rrg-bonhomme-ad_gpu
+        - rrg-bonhomme-ad_cpu
+        - def-bonhomme_gpu
+        - def-bonhomme_cpu
       diskusage:
-      - name: drac
+        - name: drac
       host: fromage
-      prometheus_headers_file: tests/not-so-secrets/fromage_prometheus/headers.json
+      private_key: test_key.yaml
+      prometheus_headers:
+        "Authorization": "Basic some-hash"
       prometheus_url: https://fromage-thanos.calcul.ca
       sacct_bin: /opt/software/slurm/bin/sacct
       timezone: Europe/Paris
     gerudo:
       accounts:
-      - rrg-bonhomme-ad_gpu
-      - rrg-bonhomme-ad_cpu
-      - def-bonhomme_gpu
-      - def-bonhomme_cpu
+        - rrg-bonhomme-ad_gpu
+        - rrg-bonhomme-ad_cpu
+        - def-bonhomme_gpu
+        - def-bonhomme_cpu
       diskusage:
-      - name: drac
+        - name: drac
       host: gerudo
-      prometheus_headers_file: tests/not-so-secrets/patate_prometheus/headers.json
+      private_key: test_key.yaml
+      prometheus_headers:
+        "Authorization": "Basic some-hash"
       prometheus_url: https://gerudo-thanos.calcul.ca
       sacct_bin: /opt/software/slurm/bin/sacct
       timezone: America/Vancouver
     hyrule:
       accounts:
-      - rrg-bonhomme-ad_gpu
-      - rrg-bonhomme-ad_cpu
-      - def-bonhomme_gpu
-      - def-bonhomme_cpu
+        - rrg-bonhomme-ad_gpu
+        - rrg-bonhomme-ad_cpu
+        - def-bonhomme_gpu
+        - def-bonhomme_cpu
       diskusage:
-      - name: drac
+        - name: drac
       host: hyrule
-      prometheus_headers_file: tests/not-so-secrets/patate_prometheus/headers.json
+      private_key: test_key.yaml
+      prometheus_headers:
+        "Authorization": "Basic some-hash"
       prometheus_url: https://hyrule-thanos.calcul.ca
       sacct_bin: /opt/software/slurm/bin/sacct
       timezone: America/Vancouver
     local:
       accounts: null
       host: localhost
+      private_key: test_key.yaml
       prometheus_url: null
       sacct_bin: /opt/slurm/bin/sacct
       timezone: America/Montreal
     mila:
       accounts:
-      - rrg-bonhomme-ad_gpu
-      - rrg-bonhomme-ad_cpu
-      - def-bonhomme_gpu
-      - def-bonhomme_cpu
+        - rrg-bonhomme-ad_gpu
+        - rrg-bonhomme-ad_cpu
+        - def-bonhomme_gpu
+        - def-bonhomme_cpu
       billing_is_gpu: true
       diskusage:
-      - name: beegfs
-        params:
-          config_files:
-            default: /etc/beegfs/scratch.d/beegfs-client.conf
+        - name: beegfs
+          params:
+            config_files:
+              default: /etc/beegfs/scratch.d/beegfs-client.conf
       host: mila-tests
+      private_key: test_key.yaml
       name: mila
-      prometheus_headers_file: tests/not-so-secrets/patate_prometheus/headers.json
+      prometheus_headers:
+        "Authorization": "Basic some-hash"
       prometheus_url: https://hyrule-thanos.calcul.ca
       sacct_bin: /opt/software/slurm/bin/sacct
       timezone: America/Vancouver
     patate:
       accounts:
-      - rrg-bonhomme-ad_gpu
-      - rrg-bonhomme-ad_cpu
-      - def-bonhomme_gpu
-      - def-bonhomme_cpu
+        - rrg-bonhomme-ad_gpu
+        - rrg-bonhomme-ad_cpu
+        - def-bonhomme_gpu
+        - def-bonhomme_cpu
       diskusage:
-      - name: drac
+        - name: drac
       host: patate
-      prometheus_headers_file: tests/not-so-secrets/patate_prometheus/headers.json
+      private_key: test_key.yaml
+      prometheus_headers:
+        "Authorization": "Basic some-hash"
       prometheus_url: https://fromage-thanos.calcul.ca
       sacct_bin: /opt/software/slurm/bin/sacct
       slurm_conf_host_path: /the/path/to/slurm.conf
@@ -81,6 +92,7 @@ sarc:
     raisin:
       accounts: null
       host: raisin
+      private_key: test_key.yaml
       prometheus_url: http://monitoring.server.raisin.quebec:9090/
       sacct_bin: /opt/slurm/bin/sacct
       timezone: America/Montreal
@@ -96,15 +108,31 @@ sarc:
         cn-c[019-030]:
           asupergpu: Nec Plus ULTRA GPU 2000
       host: raisin_no_prometheus
+      private_key: test_key.yaml
       prometheus_url: null
       sacct_bin: /opt/slurm/bin/sacct
       timezone: America/Montreal
   mongo:
-    connection_string: localhost:27017
+    connection_string: MUST_OVERRIDE_IN_TESTS:999999
     database_name: sarc-test
+    auto_upgrade: false
   mymila:
     tmp_json_path: secrets/tmp_mymila.json
   loki:
-      uri: "https://localhost/loki"
+    uri: "https://localhost/loki"
   tempo:
-      uri: "https://localhost/tempo"
+    uri: "https://localhost/tempo"
+  api:
+    auth:
+      client_id: "mock_client_id"
+      client_secret: "dHPf4JQhK9VutnlJlcln"
+      server_metadata_url: MUST_OVERRIDE_IN_TESTS
+      secret_key: "5K20tAALrsnxBrCKXbot"
+      capabilities:
+        guest_capabilities: []
+        default_capabilities: [query]
+        user_overrides:
+          admin@admin.admin: [admin]
+        user_file: "permissions.yaml"
+        graph:
+          query: []

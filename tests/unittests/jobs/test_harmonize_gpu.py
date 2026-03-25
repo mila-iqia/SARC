@@ -1,6 +1,8 @@
+from pathlib import Path
+
 import pytest
 
-from sarc.config import DEFAULTS_FLAG, MIG_FLAG, ClusterConfig, config
+from sarc.config import DEFAULTS_FLAG, MIG_FLAG, ClusterConfig, PrivateKeyInfo, config
 
 GPUS_PER_NODES = {
     "node[0-9]": {"gpu1": "DESCRIPTIVE GPU 1", "badly_named_gpu1": "$gpu1"},
@@ -17,60 +19,15 @@ GPUS_PER_NODES = {
 @pytest.mark.parametrize(
     "node,gpu_type,expected,gpus_per_nodes",
     [
-        [
-            "DoesNotExist",
-            "DoesNotExist",
-            None,
-            {},
-        ],
-        [
-            "node1",
-            "GPU1",
-            "DESCRIPTIVE GPU 1",
-            GPUS_PER_NODES,
-        ],
-        [
-            "node1",
-            "badly_named_gpu1",
-            "DESCRIPTIVE GPU 1",
-            GPUS_PER_NODES,
-        ],
-        [
-            "node11",
-            "GPU2",
-            "DESCRIPTIVE GPU 2",
-            GPUS_PER_NODES,
-        ],
-        [
-            "node11",
-            "gpu:GPU2",
-            "DESCRIPTIVE GPU 2",
-            GPUS_PER_NODES,
-        ],
-        [
-            "node11",
-            "gpu:gpu2:1:2:3:4:5",
-            "DESCRIPTIVE GPU 2",
-            GPUS_PER_NODES,
-        ],
-        [
-            "DoesNotExist",
-            "GPU_DEFAULT",
-            "DESCRIPTIVE GPU DEFAULT",
-            GPUS_PER_NODES,
-        ],
-        [
-            "node1",
-            "DoesNotExist",
-            None,
-            GPUS_PER_NODES,
-        ],
-        [
-            "node_mig20",
-            "4g.40gb",
-            "DESCRIPTIVE GPU 3 : 4g.40gb",
-            GPUS_PER_NODES,
-        ],
+        ["DoesNotExist", "DoesNotExist", None, {}],
+        ["node1", "GPU1", "DESCRIPTIVE GPU 1", GPUS_PER_NODES],
+        ["node1", "badly_named_gpu1", "DESCRIPTIVE GPU 1", GPUS_PER_NODES],
+        ["node11", "GPU2", "DESCRIPTIVE GPU 2", GPUS_PER_NODES],
+        ["node11", "gpu:GPU2", "DESCRIPTIVE GPU 2", GPUS_PER_NODES],
+        ["node11", "gpu:gpu2:1:2:3:4:5", "DESCRIPTIVE GPU 2", GPUS_PER_NODES],
+        ["DoesNotExist", "GPU_DEFAULT", "DESCRIPTIVE GPU DEFAULT", GPUS_PER_NODES],
+        ["node1", "DoesNotExist", None, GPUS_PER_NODES],
+        ["node_mig20", "4g.40gb", "DESCRIPTIVE GPU 3 : 4g.40gb", GPUS_PER_NODES],
         [
             "node_mig20",
             "STRANGE 4g 40gigabytes",
@@ -80,7 +37,12 @@ GPUS_PER_NODES = {
     ],
 )
 def test_harmonize_gpu(node, gpu_type, expected, gpus_per_nodes):
-    cluster = ClusterConfig(timezone="America/Montreal", gpus_per_nodes=gpus_per_nodes)
+    cluster = ClusterConfig(
+        timezone="America/Montreal",
+        gpus_per_nodes=gpus_per_nodes,
+        host="test",
+        private_key=PrivateKeyInfo(file=Path("tests/id_test"), password="12345"),
+    )
     assert cluster.harmonize_gpu(node, gpu_type) == expected
 
 

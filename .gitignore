@@ -24,3 +24,5 @@ token.json
 .vscode
 .mypy_cache
 GEMINI.md
+CLAUDE.md
+.pytype

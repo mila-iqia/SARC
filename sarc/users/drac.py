@@ -1,9 +1,9 @@
 import csv
-import datetime
-import json
 from collections.abc import Iterable
 from dataclasses import dataclass
-from pathlib import Path
+from datetime import datetime
+
+from serieux.features.encrypt import Secret
 
 from sarc.core.models.users import Credentials
 from sarc.core.scraping.users import MatchID, UserMatch, UserScraper, _builtin_scrapers
@@ -11,7 +11,7 @@ from sarc.core.scraping.users import MatchID, UserMatch, UserScraper, _builtin_s
 
 @dataclass
 class DRACRolesConfig:
-    csv_path: Path
+    csv: Secret[str]
 
 
 def _dict_to_lowercase[T](D: dict[str, T]) -> dict[str, T]:
@@ -22,13 +22,11 @@ class DRACRolesScraper(UserScraper[DRACRolesConfig]):
     config_type = DRACRolesConfig
 
     def get_user_data(self, config: DRACRolesConfig) -> bytes:
-        with open(config.csv_path, "r", encoding="utf-8") as f_in:
-            return json.dumps(
-                [_dict_to_lowercase(d) for d in csv.DictReader(f_in)]
-            ).encode()
+        return config.csv.encode("utf-8")
 
-    def parse_user_data(self, data: bytes) -> Iterable[UserMatch]:
-        for d in json.loads(data.decode()):
+    def parse_user_data(self, data: bytes, _: datetime) -> Iterable[UserMatch]:
+        for d in csv.DictReader(data.decode("utf-8").split("\n")):
+            d = _dict_to_lowercase(d)
             yield UserMatch(
                 display_name=d["nom"],
                 email=d["email"],
@@ -41,26 +39,23 @@ _builtin_scrapers["drac_role"] = DRACRolesScraper()
 
 @dataclass
 class DRACMemberConfig:
-    csv_path: Path
+    csv: Secret[str]
 
 
 class DRACMemberScraper(UserScraper[DRACMemberConfig]):
     config_type = DRACMemberConfig
 
     def get_user_data(self, config: DRACMemberConfig) -> bytes:
-        with open(config.csv_path, "r", encoding="utf-8") as f_in:
-            return json.dumps(
-                [_dict_to_lowercase(d) for d in csv.DictReader(f_in)]
-            ).encode()
+        return config.csv.encode("utf-8")
 
-    def parse_user_data(self, data: bytes) -> Iterable[UserMatch]:
-        for d in json.loads(data.decode()):
+    def parse_user_data(self, data: bytes, cache_time: datetime) -> Iterable[UserMatch]:
+        for d in csv.DictReader(data.decode("utf-8").split("\n")):
+            d = _dict_to_lowercase(d)
             creds = Credentials()
             creds.insert(
                 d["username"],
-                start=datetime.datetime.strptime(
-                    d["member_since"], "%Y-%m-%d %H:%M:%S %z"
-                ),
+                start=datetime.strptime(d["member_since"], "%Y-%m-%d %H:%M:%S %z"),
+                end=cache_time,
             )
             yield UserMatch(
                 display_name=d["name"],

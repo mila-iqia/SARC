@@ -3,114 +3,99 @@ from datetime import datetime, timedelta
 import pytest
 from pydantic_mongo import PydanticObjectId
 
-from sarc.api.v0 import MAX_PAGE_SIZE
-from sarc.config import UTC
+from sarc.config import UTC, config
 
 
 @pytest.mark.usefixtures("read_only_db", "client_mode")
 def test_get_job_not_found(client):
     """Test job not found (string, bad ID format) returns 422."""
-    response = client.get("/v0/job/id/not_found")
-
-    assert response.status_code == 422
+    client.get("/v0/job/id/not_found", expect_status=422)
 
 
 @pytest.mark.usefixtures("read_only_db", "client_mode")
 def test_get_job_not_found_pydantic_id(client):
     """Test job not found (pydantic object ID, good format) returns 404."""
     oid = PydanticObjectId()
-    response = client.get(f"/v0/job/id/{oid}")
-    assert response.status_code == 404
+    client.get(f"/v0/job/id/{oid}", expect_status=404)
 
 
 @pytest.mark.usefixtures("read_only_db_with_users")
 def test_get_jobs_by_cluster(client):
     """Test successful jobs query by cluster."""
-    response = client.get("/v0/job/query?cluster=raisin")
+    response = client.get("/v0/job/query?cluster=raisin", expect_status=200)
 
-    assert response.status_code == 200
     data = response.json()
     assert isinstance(data, list)
     assert len(data) > 0
     for jid in data:
-        r = client.get(f"/v0/job/id/{jid}")
-        assert r.status_code == 200
+        r = client.get(f"/v0/job/id/{jid}", expect_status=200)
         job = r.json()
         assert job["cluster_name"] == "raisin"
 
 
-@pytest.mark.usefixtures("read_only_db")
+@pytest.mark.usefixtures("read_only_db_with_users")
 def test_get_jobs_by_job_id(client):
     """Test jobs query by job ID."""
-    response = client.get("/v0/job/query?job_id=10")
+    response = client.get("/v0/job/query?job_id=10", expect_status=200)
 
-    assert response.status_code == 200
     data = response.json()
     assert isinstance(data, list)
     assert len(data) > 0
     for jid in data:
-        r = client.get(f"/v0/job/id/{jid}")
-        assert r.status_code == 200
+        r = client.get(f"/v0/job/id/{jid}", expect_status=200)
         job = r.json()
         assert job["job_id"] == 10
 
 
-@pytest.mark.usefixtures("read_only_db")
+@pytest.mark.usefixtures("read_only_db_with_users")
 def test_get_jobs_by_user(client):
     """Test jobs query by username."""
-    response = client.get("/v0/job/query?username=petitbonhomme")
+    response = client.get("/v0/job/query?username=petitbonhomme", expect_status=200)
 
-    assert response.status_code == 200
     data = response.json()
     assert isinstance(data, list)
     assert len(data) > 0
     for jid in data:
-        r = client.get(f"/v0/job/id/{jid}")
-        assert r.status_code == 200
+        r = client.get(f"/v0/job/id/{jid}", expect_status=200)
         job = r.json()
         assert job["user"] == "petitbonhomme"
 
 
-@pytest.mark.usefixtures("read_only_db")
+@pytest.mark.usefixtures("read_only_db_with_users")
 def test_get_jobs_by_state(client):
     """Test jobs query by job state."""
-    response = client.get("/v0/job/query?job_state=COMPLETED")
+    response = client.get("/v0/job/query?job_state=COMPLETED", expect_status=200)
 
-    assert response.status_code == 200
     data = response.json()
     assert isinstance(data, list)
     assert len(data) > 0
     for jid in data:
-        r = client.get(f"/v0/job/id/{jid}")
-        assert r.status_code == 200
+        r = client.get(f"/v0/job/id/{jid}", expect_status=200)
         job = r.json()
         assert job["job_state"] == "COMPLETED"
 
 
-@pytest.mark.usefixtures("read_only_db")
+@pytest.mark.usefixtures("read_only_db_with_users")
 def test_get_jobs_multiple_job_ids(client):
     """Test jobs query with multiple job IDs."""
-    response = client.get("/v0/job/query?job_id=10&job_id=20")
+    response = client.get("/v0/job/query?job_id=10&job_id=20", expect_status=200)
 
-    assert response.status_code == 200
     data = response.json()
     assert isinstance(data, list)
     assert len(data) == 2
     for jid in data:
-        r = client.get(f"/v0/job/id/{jid}")
-        assert r.status_code == 200
+        r = client.get(f"/v0/job/id/{jid}", expect_status=200)
         job = r.json()
         assert job["job_id"] in (10, 20)
 
 
-@pytest.mark.usefixtures("read_only_db")
+@pytest.mark.usefixtures("read_only_db_with_users")
 def test_get_jobs_empty_job_id_list(client):
     """Test jobs query with an empty job_id list.
     SarcApiClient sends job_id= for an empty list.
     """
-    response = client.get("/v0/job/query?job_id=")
+    response = client.get("/v0/job/query?job_id=", expect_status=200)
 
-    assert response.status_code == 200
     data = response.json()
     assert isinstance(data, list)
     assert len(data) == 0
@@ -119,50 +104,41 @@ def test_get_jobs_empty_job_id_list(client):
 @pytest.mark.usefixtures("read_only_db")
 def test_get_jobs_invalid_job_id(client):
     """Test jobs query with invalid job ID."""
-    response = client.get("/v0/job/query?job_id=not_an_int")
-
-    assert response.status_code == 422
+    client.get("/v0/job/query?job_id=not_an_int", expect_status=422)
 
 
-@pytest.mark.usefixtures("read_only_db")
+@pytest.mark.usefixtures("read_only_db_with_users")
 def test_get_jobs_empty_result(client):
     """Test jobs query with no results."""
     # Use a very high job ID that doesn't exist
-    response = client.get("/v0/job/query?job_id=9999999999")
+    response = client.get("/v0/job/query?job_id=9999999999", expect_status=200)
 
-    assert response.status_code == 200
     data = response.json()
     assert len(data) == 0
 
 
+@pytest.mark.usefixtures("read_only_db")
 def test_get_jobs_invalid_cluster(client):
     """Test jobs query with invalid cluster."""
+    response = client.get("/v0/job/query?cluster=invalid_cluster", expect_status=404)
 
-    response = client.get("/v0/job/query?cluster=invalid_cluster")
-
-    assert response.status_code == 404
     data = response.json()
     assert "No such cluster 'invalid_cluster'" in data["detail"]
 
 
+@pytest.mark.usefixtures("read_only_db_with_users")
 def test_get_jobs_invalid_job_state(client):
     """Test jobs query with invalid job state."""
-    response = client.get("/v0/job/query?job_state=INVALID")
-
-    assert response.status_code == 422
+    client.get("/v0/job/query?job_state=INVALID", expect_status=422)
 
 
-@pytest.mark.usefixtures("read_only_db")
+@pytest.mark.usefixtures("read_only_db_with_users")
 def test_get_jobs_with_datetime_filters(client):
     """Test jobs query with start and end datetime filters."""
-    params = {
-        "start": "2023-01-01T00:00:00",
-        "end": "2023-12-31T23:59:59",
-    }
+    params = {"start": "2023-01-01T00:00:00", "end": "2023-12-31T23:59:59"}
 
-    response = client.get("/v0/job/query", params=params)
+    response = client.get("/v0/job/query", params=params, expect_status=200)
 
-    assert response.status_code == 200
     data = response.json()
     assert isinstance(data, list)
     assert len(data) > 0
@@ -177,26 +153,23 @@ def test_get_jobs_multiple_filters(client):
         "start": "2023-01-01T00:00:00",
     }
 
-    response = client.get("/v0/job/query", params=params)
+    response = client.get("/v0/job/query", params=params, expect_status=200)
 
-    assert response.status_code == 200
     data = response.json()
     assert isinstance(data, list)
     assert len(data) > 0
     for jid in data:
-        r = client.get(f"/v0/job/id/{jid}")
-        assert r.status_code == 200
+        r = client.get(f"/v0/job/id/{jid}", expect_status=200)
         job = r.json()
         assert job["cluster_name"] == "raisin"
         assert job["job_state"] == "COMPLETED"
 
 
-@pytest.mark.usefixtures("read_only_db")
+@pytest.mark.usefixtures("read_only_db_with_users")
 def test_get_jobs_no_filters(client):
     """Test jobs query without any filters."""
-    response = client.get("/v0/job/query")
+    response = client.get("/v0/job/query", expect_status=200)
 
-    assert response.status_code == 200
     data = response.json()
     assert isinstance(data, list)
     assert len(data) == 24
@@ -205,9 +178,8 @@ def test_get_jobs_no_filters(client):
 @pytest.mark.usefixtures("read_only_db")
 def test_list_jobs_no_filters(client):
     """Test list jobs without any filters."""
-    response = client.get("/v0/job/list")
+    response = client.get("/v0/job/list", expect_status=200)
 
-    assert response.status_code == 200
     data = response.json()
     assert data["total"] == 24
     assert len(data["jobs"]) == 24
@@ -219,8 +191,7 @@ def test_list_jobs_no_filters(client):
 def test_list_jobs_pagination(client):
     """Test list jobs with pagination."""
     # Page 1, 5 items
-    response = client.get("/v0/job/list?page=1&per_page=5")
-    assert response.status_code == 200
+    response = client.get("/v0/job/list?page=1&per_page=5", expect_status=200)
     data = response.json()
     assert data["total"] == 24
     assert len(data["jobs"]) == 5
@@ -228,15 +199,13 @@ def test_list_jobs_pagination(client):
     assert data["per_page"] == 5
 
     # Page 5, should have 4 items left (24 - 4*5 = 4)
-    response = client.get("/v0/job/list?page=5&per_page=5")
-    assert response.status_code == 200
+    response = client.get("/v0/job/list?page=5&per_page=5", expect_status=200)
     data = response.json()
     assert len(data["jobs"]) == 4
     assert data["page"] == 5
 
     # Page 6, should be empty
-    response = client.get("/v0/job/list?page=6&per_page=5")
-    assert response.status_code == 200
+    response = client.get("/v0/job/list?page=6&per_page=5", expect_status=200)
     assert len(response.json()["jobs"]) == 0
 
 
@@ -244,19 +213,20 @@ def test_list_jobs_pagination(client):
 def test_list_jobs_invalid_pagination(client):
     """Test list jobs with invalid pagination parameters."""
     # Page < 1
-    assert client.get("/v0/job/list?page=0").status_code == 400
+    client.get("/v0/job/list?page=0", expect_status=400)
     # Per page < 1
-    assert client.get("/v0/job/list?per_page=0").status_code == 400
+    client.get("/v0/job/list?per_page=0", expect_status=400)
     # Per page > MAX
-    assert client.get(f"/v0/job/list?per_page={MAX_PAGE_SIZE + 1}").status_code == 400
+    client.get(
+        f"/v0/job/list?per_page={config().api.max_page_size + 1}", expect_status=400
+    )
 
 
 @pytest.mark.usefixtures("read_only_db_with_users")
 def test_count_jobs_by_cluster(client):
     """Test jobs count by cluster."""
-    response = client.get("/v0/job/count?cluster=raisin")
+    response = client.get("/v0/job/count?cluster=raisin", expect_status=200)
 
-    assert response.status_code == 200
     count = response.json()
     assert isinstance(count, int)
     assert count == 20
@@ -265,9 +235,8 @@ def test_count_jobs_by_cluster(client):
 @pytest.mark.usefixtures("read_only_db")
 def test_count_jobs_by_job_id(client):
     """Test jobs count by job ID."""
-    response = client.get("/v0/job/count?job_id=10")
+    response = client.get("/v0/job/count?job_id=10", expect_status=200)
 
-    assert response.status_code == 200
     count = response.json()
     assert isinstance(count, int)
     assert count == 1
@@ -276,9 +245,8 @@ def test_count_jobs_by_job_id(client):
 @pytest.mark.usefixtures("read_only_db")
 def test_count_jobs_by_user(client):
     """Test jobs count by username."""
-    response = client.get("/v0/job/count?username=petitbonhomme")
+    response = client.get("/v0/job/count?username=petitbonhomme", expect_status=200)
 
-    assert response.status_code == 200
     count = response.json()
     assert isinstance(count, int)
     assert count == 20
@@ -287,9 +255,8 @@ def test_count_jobs_by_user(client):
 @pytest.mark.usefixtures("read_only_db")
 def test_count_jobs_by_state(client):
     """Test jobs count by job state."""
-    response = client.get("/v0/job/count?job_state=COMPLETED")
+    response = client.get("/v0/job/count?job_state=COMPLETED", expect_status=200)
 
-    assert response.status_code == 200
     count = response.json()
     assert isinstance(count, int)
     assert count == 1
@@ -299,40 +266,34 @@ def test_count_jobs_by_state(client):
 def test_count_jobs_empty_result(client):
     """Test jobs count with no results."""
     # Use a very high job ID that doesn't exist
-    response = client.get("/v0/job/count?job_id=9999999999")
+    response = client.get("/v0/job/count?job_id=9999999999", expect_status=200)
 
-    assert response.status_code == 200
     count = response.json()
     assert count == 0
 
 
+@pytest.mark.usefixtures("read_only_db")
 def test_count_jobs_invalid_cluster(client):
     """Test jobs count with invalid cluster."""
-    response = client.get("/v0/job/count?cluster=invalid_cluster")
+    response = client.get("/v0/job/count?cluster=invalid_cluster", expect_status=404)
 
-    assert response.status_code == 404
     data = response.json()
     assert "No such cluster 'invalid_cluster'" in data["detail"]
 
 
+@pytest.mark.usefixtures("read_only_db")
 def test_count_jobs_invalid_job_state(client):
     """Test jobs count with invalid job state."""
-    response = client.get("/v0/job/count?job_state=INVALID")
-
-    assert response.status_code == 422
+    client.get("/v0/job/count?job_state=INVALID", expect_status=422)
 
 
 @pytest.mark.usefixtures("read_only_db")
 def test_count_jobs_with_datetime_filters(client):
     """Test jobs count with start and end datetime filters."""
-    params = {
-        "start": "2023-01-01T00:00:00",
-        "end": "2023-02-15T23:59:59",
-    }
+    params = {"start": "2023-01-01T00:00:00", "end": "2023-02-15T23:59:59"}
 
-    response = client.get("/v0/job/count", params=params)
+    response = client.get("/v0/job/count", params=params, expect_status=200)
 
-    assert response.status_code == 200
     count = response.json()
     assert isinstance(count, int)
     assert count == 8
@@ -347,9 +308,8 @@ def test_count_jobs_multiple_filters(client):
         "start": "2023-01-01T00:00:00",
     }
 
-    response = client.get("/v0/job/count", params=params)
+    response = client.get("/v0/job/count", params=params, expect_status=200)
 
-    assert response.status_code == 200
     count = response.json()
     assert isinstance(count, int)
     assert count > 0
@@ -358,9 +318,8 @@ def test_count_jobs_multiple_filters(client):
 @pytest.mark.usefixtures("read_only_db")
 def test_count_jobs_no_filters(client):
     """Test jobs count without any filters."""
-    response = client.get("/v0/job/count")
+    response = client.get("/v0/job/count", expect_status=200)
 
-    assert response.status_code == 200
     count = response.json()
     assert isinstance(count, int)
     assert count == 24
@@ -370,11 +329,8 @@ def test_count_jobs_no_filters(client):
 def test_count_jobs_matches_query_length(client):
     """Test that jobs count matches the length of jobs query results."""
     # Test with a specific filter
-    response_query = client.get("/v0/job/query?cluster=raisin")
-    response_count = client.get("/v0/job/count?cluster=raisin")
-
-    assert response_query.status_code == 200
-    assert response_count.status_code == 200
+    response_query = client.get("/v0/job/query?cluster=raisin", expect_status=200)
+    response_count = client.get("/v0/job/count?cluster=raisin", expect_status=200)
 
     jobs = response_query.json()
     count = response_count.json()
@@ -385,8 +341,8 @@ def test_count_jobs_matches_query_length(client):
 @pytest.mark.usefixtures("read_only_db_with_users")
 def test_cluster_list(client):
     """Test cluster list."""
-    response = client.get("/v0/cluster/list")
-    assert response.status_code == 200
+    response = client.get("/v0/cluster/list", expect_status=200)
+
     data = response.json()
     assert isinstance(data, list)
     assert len(data) > 0
@@ -396,20 +352,14 @@ def test_cluster_list(client):
 
 def _gen_fake_rgus():
     """Mock for sarc.client.gpumetrics.get_rgus()"""
-    return {
-        "A100": 3.21,
-        "gpu1": 1.5,
-        "gpu_2": 4.5,
-        "GPU 3": 4 * 7,
-    }
+    return {"A100": 3.21, "gpu1": 1.5, "gpu_2": 4.5, "GPU 3": 4 * 7}
 
 
 @pytest.mark.usefixtures("read_only_db_with_users")
 def test_gpu_rgu(client, monkeypatch):
     monkeypatch.setattr("sarc.api.v0.get_rgus", _gen_fake_rgus)
 
-    response = client.get("/v0/gpu/rgu")
-    assert response.status_code == 200
+    response = client.get("/v0/gpu/rgu", expect_status=200)
     data = response.json()
     assert isinstance(data, dict)
     assert data == _gen_fake_rgus()
@@ -417,15 +367,13 @@ def test_gpu_rgu(client, monkeypatch):
 
 @pytest.mark.usefixtures("read_only_db_with_users")
 def test_user_query_by_display_name(client):
-    response = client.get("/v0/user/query?display_name=janE")
-    assert response.status_code == 200
+    response = client.get("/v0/user/query?display_name=janE", expect_status=200)
     data = response.json()
     assert isinstance(data, list)
     assert len(data) == 1
     assert data[0] == "1f9b04e5-0ec4-4577-9196-2b03d254e344"
 
-    r = client.get(f"/v0/user/id/{data[0]}")
-    assert r.status_code == 200
+    r = client.get(f"/v0/user/id/{data[0]}", expect_status=200)
     user = r.json()
     assert isinstance(user, dict)
     assert user["display_name"] == "Jane Doe"
@@ -435,15 +383,15 @@ def test_user_query_by_display_name(client):
 
 @pytest.mark.usefixtures("read_only_db_with_users")
 def test_user_query_by_email(client):
-    response = client.get("/v0/user/query?email=bonhomme@mila.quebec")
-    assert response.status_code == 200
+    response = client.get(
+        "/v0/user/query?email=bonhomme@mila.quebec", expect_status=200
+    )
     data = response.json()
     assert isinstance(data, list)
     assert len(data) == 1
     assert data[0] == "5a8b9e7f-afcc-4ced-b596-44fcdb3a0cff"
 
-    r = client.get(f"/v0/user/id/{data[0]}")
-    assert r.status_code == 200
+    r = client.get(f"/v0/user/id/{data[0]}", expect_status=200)
     user = r.json()
     assert isinstance(user, dict)
     assert user["display_name"] == "M/Ms Bonhomme"
@@ -471,8 +419,7 @@ def test_user_query_by_email(client):
 @pytest.mark.usefixtures("read_only_db_with_users")
 def test_user_query_by_member_type_professor_now(client, freezer, date, expected):
     freezer.move_to(date)
-    response = client.get("/v0/user/query?member_type=professor")
-    assert response.status_code == 200
+    response = client.get("/v0/user/query?member_type=professor", expect_status=200)
     data = response.json()
     assert isinstance(data, list)
     if expected:
@@ -502,8 +449,9 @@ def test_user_query_by_member_type_other_now(
     client, freezer, member_type, date, identifiers
 ):
     freezer.move_to(date)
-    response = client.get(f"/v0/user/query?member_type={member_type}")
-    assert response.status_code == 200
+    response = client.get(
+        f"/v0/user/query?member_type={member_type}", expect_status=200
+    )
     data = response.json()
     assert isinstance(data, list)
     assert sorted(data) == sorted(identifiers)
@@ -535,8 +483,8 @@ def test_user_query_by_supervisor_start(client, start, nb_expected):
     response = client.get(
         "/v0/user/query",
         params={"supervisor": supervisor, "supervisor_start": start.isoformat()},
+        expect_status=200,
     )
-    assert response.status_code == 200
     data = response.json()
     assert isinstance(data, list)
     assert len(data) == nb_expected
@@ -577,8 +525,8 @@ def test_user_query_by_supervisor_end(client, end, nb_expected):
     response = client.get(
         "/v0/user/query",
         params={"supervisor": supervisor, "supervisor_end": end.isoformat()},
+        expect_status=200,
     )
-    assert response.status_code == 200
     data = response.json()
     assert isinstance(data, list)
     assert len(data) == nb_expected
@@ -617,8 +565,8 @@ def test_user_query_by_cosupervisor_start_end(client, start, end, expected):
             "co_supervisor_start": start.isoformat(),
             "co_supervisor_end": end.isoformat(),
         },
+        expect_status=200,
     )
-    assert response.status_code == 200
     data = response.json()
     assert isinstance(data, list)
     if expected:
@@ -632,21 +580,22 @@ def test_user_query_by_cosupervisor_start_end(client, start, end, expected):
 def test_user_query_by_cosupervisor_bad_start_end(client):
     start = datetime(2022, 1, 1, tzinfo=UTC)
     end = start - timedelta(days=1)
-    response = client.get(
+    client.get(
         "/v0/user/query",
         params={
             "co_supervisor": "1f9b04e5-0ec4-4577-9196-2b03d254e344",
             "co_supervisor_start": start.isoformat(),
             "co_supervisor_end": end.isoformat(),
         },
+        expect_status=400,
     )
-    assert response.status_code == 400
 
 
 @pytest.mark.usefixtures("read_only_db_with_users")
 def test_user_query_empty_result(client):
-    response = client.get("/v0/user/query?email=nothing@nothing.nothing")
-    assert response.status_code == 200
+    response = client.get(
+        "/v0/user/query?email=nothing@nothing.nothing", expect_status=200
+    )
     data = response.json()
     assert isinstance(data, list)
     assert len(data) == 0
@@ -654,8 +603,7 @@ def test_user_query_empty_result(client):
 
 @pytest.mark.usefixtures("read_only_db_with_users")
 def test_user_query_no_filters(client):
-    response = client.get("/v0/user/query")
-    assert response.status_code == 200
+    response = client.get("/v0/user/query", expect_status=200)
     data = response.json()
     assert isinstance(data, list)
     assert len(data) == 10
@@ -670,15 +618,14 @@ def test_user_query_multiple_filters(client):
             "supervisor_start": datetime(2020, 1, 1, tzinfo=UTC),
             "display_name": "sMiTh",
         },
+        expect_status=200,
     )
-    assert response.status_code == 200
     data = response.json()
     assert isinstance(data, list)
     assert len(data) == 1
     assert data[0] == "7ecd3a8a-ab71-499e-b38a-ceacd91a99c4"
 
-    r = client.get(f"/v0/user/id/{data[0]}")
-    assert r.status_code == 200
+    r = client.get(f"/v0/user/id/{data[0]}", expect_status=200)
     user = r.json()
     assert isinstance(user, dict)
     assert user["display_name"] == "John Smith"
@@ -687,8 +634,9 @@ def test_user_query_multiple_filters(client):
 
 @pytest.mark.usefixtures("read_only_db_with_users")
 def test_get_user_by_uuid(client):
-    response = client.get("/v0/user/id/7ecd3a8a-ab71-499e-b38a-ceacd91a99c4")
-    assert response.status_code == 200
+    response = client.get(
+        "/v0/user/id/7ecd3a8a-ab71-499e-b38a-ceacd91a99c4", expect_status=200
+    )
     data = response.json()
     assert isinstance(data, dict)
     assert data["email"] == "jsmith@example.com"
@@ -696,20 +644,17 @@ def test_get_user_by_uuid(client):
 
 @pytest.mark.usefixtures("read_only_db_with_users")
 def test_get_user_by_uuid_invalid(client):
-    response = client.get("/v0/user/id/invalid")
-    assert response.status_code == 422
+    client.get("/v0/user/id/invalid", expect_status=422)
 
 
 @pytest.mark.usefixtures("read_only_db_with_users")
 def test_get_user_by_uuid_unknown(client):
-    response = client.get("/v0/user/id/70000000-a000-4000-b000-c00000000000")
-    assert response.status_code == 404
+    client.get("/v0/user/id/70000000-a000-4000-b000-c00000000000", expect_status=404)
 
 
 @pytest.mark.usefixtures("read_only_db_with_users")
 def test_get_user_by_email(client):
-    response = client.get("/v0/user/email/jsmith@example.com")
-    assert response.status_code == 200
+    response = client.get("/v0/user/email/jsmith@example.com", expect_status=200)
     data = response.json()
     assert isinstance(data, dict)
     assert data["uuid"] == "7ecd3a8a-ab71-499e-b38a-ceacd91a99c4"
@@ -717,16 +662,14 @@ def test_get_user_by_email(client):
 
 @pytest.mark.usefixtures("read_only_db_with_users")
 def test_get_user_by_email_unknown(client):
-    response = client.get("/v0/user/email/unknown")
-    assert response.status_code == 404
+    client.get("/v0/user/email/unknown", expect_status=404)
 
 
 @pytest.mark.usefixtures("read_only_db_with_users")
 def test_user_list(client):
     """Test user list with pagination."""
     # Default page 1
-    response = client.get("/v0/user/list")
-    assert response.status_code == 200
+    response = client.get("/v0/user/list", expect_status=200)
     data = response.json()
     assert data["page"] == 1
     assert data["total"] == 10
@@ -737,37 +680,34 @@ def test_user_list(client):
     assert emails == sorted(emails)
 
     # Test per_page
-    response = client.get("/v0/user/list?per_page=3")
-    assert response.status_code == 200
+    response = client.get("/v0/user/list?per_page=3", expect_status=200)
     data = response.json()
     assert len(data["users"]) == 3
     assert data["total"] == 10
 
     # Test page 2
-    response = client.get("/v0/user/list?page=2&per_page=3")
-    assert response.status_code == 200
+    response = client.get("/v0/user/list?page=2&per_page=3", expect_status=200)
     data = response.json()
     assert len(data["users"]) == 3
     assert data["page"] == 2
 
     # Page 4 (3*3 = 9, 1 left)
-    response = client.get("/v0/user/list?page=4&per_page=3")
-    assert response.status_code == 200
+    response = client.get("/v0/user/list?page=4&per_page=3", expect_status=200)
     assert len(response.json()["users"]) == 1
 
     # Page out of bounds
-    response = client.get("/v0/user/list?page=5&per_page=3")
-    assert response.status_code == 200
+    response = client.get("/v0/user/list?page=5&per_page=3", expect_status=200)
     assert len(response.json()["users"]) == 0
 
     # Invalid parameters
-    assert client.get("/v0/user/list?page=0").status_code == 400
-    assert client.get("/v0/user/list?per_page=0").status_code == 400
-    assert client.get(f"/v0/user/list?per_page={MAX_PAGE_SIZE + 1}").status_code == 400
+    client.get("/v0/user/list?page=0", expect_status=400)
+    client.get("/v0/user/list?per_page=0", expect_status=400)
+    client.get(
+        f"/v0/user/list?per_page={config().api.max_page_size + 1}", expect_status=400
+    )
 
     # Test filtering with list endpoint
-    response = client.get("/v0/user/list?display_name=janE")
-    assert response.status_code == 200
+    response = client.get("/v0/user/list?display_name=janE", expect_status=200)
     data = response.json()
     assert data["total"] == 1
     assert len(data["users"]) == 1

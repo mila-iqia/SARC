@@ -1,10 +1,12 @@
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from fastapi.responses import ORJSONResponse
-from pydantic import AfterValidator, BaseModel, UUID4
+from easy_oauth.cap import Capability
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from pydantic import UUID4, BaseModel
 from pydantic_mongo import PydanticObjectId
+from serieux import deserialize
 
 from sarc.client import get_rgus
 from sarc.client.job import (
@@ -13,41 +15,106 @@ from sarc.client.job import (
     _jobs_collection,
     get_available_clusters,
 )
-from sarc.config import UTC
+from sarc.config import UTC, Config, config
 from sarc.core.models import validators
+from sarc.core.models.api import SlurmJobList, UserList
 from sarc.core.models.users import MemberType, UserData
-from sarc.users.db import get_user_collection
+from sarc.users.db import UserDB, get_user_collection
 
-# Use `orjson` module to handle JSON.
-# `orjson` automatically converts float NaN values to None,
-# and is expected to be faster than builtin `json`.
-router = APIRouter(prefix="/v0", default_response_class=ORJSONResponse)
-
-DEFAULT_PAGE_SIZE = 100
-MAX_PAGE_SIZE = 5_000
+router = APIRouter(prefix="/v0")
 
 
-def valid_cluster(cluster: str):
+def config_dep():
+    # We don't use Depends(config) directly because then the 'mode' argument to
+    # config would be added to the API signature, and we don't want that
+    return config()
+
+
+def hascap(cap):
+    async def check(request: Request, cfg: Config = Depends(config_dep)):
+        if not cfg.api.auth:
+            yield "__admin__"
+        else:
+            async for name in cfg.api.auth.get_email_capability(cap)(request):
+                yield name
+
+    return check
+
+
+can_query = hascap("query")
+
+
+@dataclass
+class Requestor:
+    email: str
+    user: UserDB | None = None
+    is_admin: bool = False
+
+
+def is_admin(
+    user: Annotated[str, Depends(can_query)], cfg: Config = Depends(config_dep)
+) -> bool:
+    auth = cfg.api.auth
+    if not auth:
+        return True
+    admin: Capability = deserialize(auth.capabilities.captype, "admin")
+    return auth.capabilities.check(user, admin)
+
+
+def require_admin(admin: bool = Depends(is_admin)):
+    if not admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+
+
+def requestor(email: str = Depends(can_query), admin: bool = Depends(is_admin)):
+    userdb = get_user_collection().find_one_by({"matching_ids.mila_ldap": email})
+    if userdb is None and not admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    return Requestor(email=email, user=userdb, is_admin=admin)
+
+
+def validate_cluster(cluster: str | None):
     cluster_names = list(cl.cluster_name for cl in get_available_clusters())
-    if cluster is not None:
-        if cluster not in cluster_names:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"No such cluster '{cluster}'",
-            )
-    return cluster
+    if cluster is not None and cluster not in cluster_names:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"No such cluster '{cluster}'"
+        )
+
+
+def constrain_page_parameters(cfg, page, per_page):
+    if per_page is None:
+        per_page = cfg.api.per_page
+    if page < 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Page must be >= 1"
+        )
+    if per_page < 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Page size must be >= 1"
+        )
+    if per_page > cfg.api.max_page_size:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Page size must be <= {cfg.api.max_page_size}",
+        )
+    return per_page
 
 
 class JobQuery(BaseModel):
-    cluster: Annotated[str, AfterValidator(valid_cluster)] | None = None
+    cluster: str | None = None
     # job_id supports None, an integer, a list of integers, or an empty list.
     job_id: list[int] | None = None
     job_state: SlurmState | None = None
     username: str | None = None
     start: datetime | None = None
     end: datetime | None = None
+    requestor: Requestor
 
     def get_query(self) -> dict[str, Any]:
+        if not self.requestor.is_admin:
+            # TODO: implement query for general users
+            raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED)
+
         query: dict[str, Any] = {}
         if self.cluster is not None:
             query["cluster_name"] = self.cluster
@@ -73,12 +140,13 @@ class JobQuery(BaseModel):
 
 
 def job_query_params(
-    cluster: Annotated[str, AfterValidator(valid_cluster)] | None = None,
+    cluster: str | None = None,
     job_id: Annotated[list[str] | None, Query()] = None,
     job_state: SlurmState | None = None,
     username: str | None = None,
     start: datetime | None = None,
     end: datetime | None = None,
+    requestor: Requestor = Depends(requestor),
 ) -> JobQuery:
     """
     Annotation function for JobQueryType below.
@@ -88,6 +156,8 @@ def job_query_params(
     We use `list[str]` to support empty lists (sent as `job_id=`).
     We then convert to `list[int]` to match `JobQuery` model.
     """
+    validate_cluster(cluster)
+
     job_id_ints = None
     if job_id is not None:
         try:
@@ -105,6 +175,7 @@ def job_query_params(
         username=username,
         start=start,
         end=end,
+        requestor=requestor,
     )
 
 
@@ -126,6 +197,8 @@ class UserQuery(BaseModel):
     co_supervisor: UUID4 | None = None
     co_supervisor_start: datetime | None = None
     co_supervisor_end: datetime | None = None
+
+    requestor: Requestor = Depends(requestor)
 
     def _get_valid_tag_query(
         self,
@@ -167,6 +240,10 @@ class UserQuery(BaseModel):
         return {}
 
     def get_query(self) -> dict[str, Any]:
+        if not self.requestor.is_admin:
+            # TODO: implement query for general users
+            raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED)
+
         query: dict[str, Any] = {}
         if self.display_name is not None:
             query["display_name"] = {"$regex": self.display_name, "$options": "i"}
@@ -194,45 +271,22 @@ class UserQuery(BaseModel):
 UserQueryType = Annotated[UserQuery, Depends(UserQuery)]
 
 
-class SlurmJobList(BaseModel):
-    jobs: list[SlurmJob]
-    page: int
-    per_page: int
-    total: int
-
-
-class UserList(BaseModel):
-    users: list[UserData]
-    page: int
-    per_page: int
-    total: int
-
-
-@router.get("/job/query")
+@router.get("/job/query", dependencies=[Depends(require_admin)])
 def get_jobs(query_opt: JobQueryType) -> list[PydanticObjectId]:
+    # Requires admin access because /job/id/oid is admin-restricted
     coll = _jobs_collection()
     jobs = coll.get_collection().find(query_opt.get_query(), ["_id"])
-    return list(j["_id"] for j in jobs)
+    return [j["_id"] for j in jobs]
 
 
 @router.get("/job/list")
 def list_jobs(
-    query_opt: JobQueryType, page: int = 1, per_page: int = DEFAULT_PAGE_SIZE
+    query_opt: JobQueryType,
+    page: int = 1,
+    per_page: int | None = None,
+    cfg: Config = Depends(config_dep),
 ) -> SlurmJobList:
-    if page < 1:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Page must be >= 1"
-        )
-    if per_page < 1:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Page size must be >= 1"
-        )
-    if per_page > MAX_PAGE_SIZE:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Page size must be <= {MAX_PAGE_SIZE}",
-        )
-
+    per_page = constrain_page_parameters(cfg, page, per_page)
     coll = _jobs_collection()
     query = query_opt.get_query()
     total = coll.get_collection().count_documents(query)
@@ -259,7 +313,7 @@ def count_jobs(query_opt: JobQueryType) -> int:
     return coll.get_collection().count_documents(query_opt.get_query())
 
 
-@router.get("/job/id/{oid}")
+@router.get("/job/id/{oid}", dependencies=[Depends(require_admin)])
 def get_job(oid: PydanticObjectId) -> SlurmJob:
     coll = _jobs_collection()
     job = coll.find_one_by_id(oid)
@@ -270,19 +324,19 @@ def get_job(oid: PydanticObjectId) -> SlurmJob:
     return job
 
 
-@router.get("/cluster/list")
+@router.get("/cluster/list", dependencies=[Depends(requestor)])
 def get_cluster_names() -> list[str]:
     """Return the names of available clusters."""
-    return sorted(cl.cluster_name for cl in get_available_clusters())
+    return sorted([cl.cluster_name for cl in get_available_clusters()])
 
 
-@router.get("/gpu/rgu")
+@router.get("/gpu/rgu", dependencies=[Depends(requestor)])
 def get_rgu_value_per_gpu() -> dict[str, float]:
     """Return the mapping GPU->RGU."""
     return get_rgus()
 
 
-@router.get("/user/query")
+@router.get("/user/query", dependencies=[Depends(require_admin)])
 def query_users(query_opt: UserQueryType) -> list[UUID4]:
     """Search users. Return user UUIDs."""
     coll = get_user_collection()
@@ -292,22 +346,12 @@ def query_users(query_opt: UserQueryType) -> list[UUID4]:
 
 @router.get("/user/list")
 def list_users(
-    query_opt: UserQueryType, page: int = 1, per_page: int = DEFAULT_PAGE_SIZE
+    query_opt: UserQueryType,
+    page: int = 1,
+    per_page: int | None = None,
+    cfg: Config = Depends(config_dep),
 ) -> UserList:
-    if page < 1:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Page must be >= 1"
-        )
-    if per_page < 1:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Page size must be >= 1"
-        )
-    if per_page > MAX_PAGE_SIZE:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Page size must be <= {MAX_PAGE_SIZE}",
-        )
-
+    per_page = constrain_page_parameters(cfg, page, per_page)
     coll = get_user_collection()
     query = query_opt.get_query()
     total = coll.get_collection().count_documents(query)
@@ -328,7 +372,7 @@ def list_users(
     )
 
 
-@router.get("/user/id/{uuid}")
+@router.get("/user/id/{uuid}", dependencies=[Depends(require_admin)])
 def get_user_by_id(uuid: UUID4) -> UserData:
     """Get user with given UUID."""
     user = get_user_collection().find_one_by({"uuid": uuid})
@@ -339,7 +383,7 @@ def get_user_by_id(uuid: UUID4) -> UserData:
     return user
 
 
-@router.get("/user/email/{email}")
+@router.get("/user/email/{email}", dependencies=[Depends(require_admin)])
 def get_user_by_email(email: str) -> UserData:
     """Get user with given email."""
     user = get_user_collection().find_one_by({"email": email})

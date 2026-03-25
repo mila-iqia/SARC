@@ -15,7 +15,7 @@ from tqdm import tqdm
 
 import sarc.client.series
 import sarc.rest.client
-from sarc.config import UTC, TZLOCAL
+from sarc.config import TZLOCAL, UTC
 
 mongodb_load_job_series = sarc.client.series.load_job_series
 rest_load_job_series = sarc.rest.client.load_job_series
@@ -54,7 +54,7 @@ def deep_normalize(obj: Any) -> Any:
 def prepare_df_for_comparison(df: pd.DataFrame) -> pd.DataFrame:
     """Normalize data frame before comparison"""
     for col in df.columns:
-        if df[col].dtype == "O":
+        if df[col].dtype == "O" or pd.api.types.is_string_dtype(df[col]):
             # Normalize object columns
             df[col] = df[col].apply(deep_normalize)
         elif pd.api.types.is_numeric_dtype(df[col]):
@@ -112,10 +112,7 @@ def _main():
             end = start + timedelta(days=num_days)
             print(f"[{start}] to [{end}]")
 
-            kwargs = {
-                "start": start,
-                "end": end,
-            }
+            kwargs = {"start": start, "end": end}
             df_mongo = mongodb_load_job_series(**kwargs)
             df_rest = rest_load_job_series(**kwargs)
 

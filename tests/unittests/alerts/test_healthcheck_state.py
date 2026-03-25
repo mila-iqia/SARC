@@ -1,6 +1,6 @@
 import pytest
 
-from sarc.alerts.common import HealthCheck, CheckStatus
+from sarc.alerts.common import CheckStatus, HealthCheck
 from sarc.alerts.healthcheck_state import HealthCheckState, HealthCheckStateRepository
 from sarc.config import config
 from tests.unittests.alerts.definitions import BeanCheck
@@ -8,7 +8,6 @@ from tests.unittests.alerts.definitions import BeanCheck
 
 @pytest.fixture
 def testing_repo(empty_read_write_db):
-    assert empty_read_write_db.startswith("test-db-")
     db = config().mongo.database_instance
     repo = HealthCheckStateRepository(db)
     return repo
@@ -44,10 +43,7 @@ def test_config_read_write_into_db(beans_config, testing_repo):
 
 
 def test_HealthCheckStateRepository(testing_repo, tmpdir):
-    hc = HealthCheck(
-        name="test_check",
-        active=True,
-    )
+    hc = HealthCheck(name="test_check", active=True)
     state = HealthCheckState(check=hc)
 
     # Test save and retrieving

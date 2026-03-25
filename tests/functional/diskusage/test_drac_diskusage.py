@@ -7,8 +7,9 @@ from sarc.core.scraping.diskusage import get_diskusage_scraper
 from sarc.storage.diskusage import get_diskusages
 
 
+@pytest.mark.usefixtures("no_pkey")
 @pytest.mark.freeze_time("2023-07-25")
-def test_drac_fetch_report(remote, file_regression):
+def test_drac_fetch_report(remote, file_regression, monkeypatch):
     cluster = config("scraping").clusters["gerudo"]
     diskusages = cluster.diskusage
     assert diskusages is not None
@@ -18,10 +19,7 @@ def test_drac_fetch_report(remote, file_regression):
     scraper = get_diskusage_scraper(diskusage.name)
     dconfig = scraper.validate_config(diskusage.params)
     raw_report = None
-    with open(
-        Path(__file__).parent / "drac_reports/report_gerudo.txt",
-        "rb",
-    ) as f:
+    with open(Path(__file__).parent / "drac_reports/report_gerudo.txt", "rb") as f:
         raw_report = f.read()
     assert raw_report
 
@@ -48,9 +46,11 @@ def test_drac_parse_report(file_regression):
     file_regression.check(result.model_dump_json(exclude={"timestamp", "id"}, indent=2))
 
 
-@pytest.mark.usefixtures("empty_read_write_db")
+@pytest.mark.usefixtures("empty_read_write_db", "no_pkey")
 @pytest.mark.freeze_time("2023-05-12")
-def test_drac_acquire_storages(remote, cli_main, file_regression, enabled_cache):
+def test_drac_acquire_storages(
+    remote, cli_main, file_regression, enabled_cache, monkeypatch
+):
     cluster = config("scraping").clusters["hyrule"]
     diskusages = cluster.diskusage
     assert diskusages is not None
@@ -60,10 +60,7 @@ def test_drac_acquire_storages(remote, cli_main, file_regression, enabled_cache)
     scraper = get_diskusage_scraper(diskusage.name)
     dconfig = scraper.validate_config(diskusage.params)
     raw_report = None
-    with open(
-        Path(__file__).parent / "drac_reports/report_hyrule.txt",
-        "rb",
-    ) as f:
+    with open(Path(__file__).parent / "drac_reports/report_hyrule.txt", "rb") as f:
         raw_report = f.read()
     assert raw_report
 

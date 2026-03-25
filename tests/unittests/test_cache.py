@@ -19,10 +19,10 @@ from sarc.cache import (
     OldCache,
     _cache_policy_from_env,
     cache_policy_var,
-    ensure_utc,
     make_cached_function,
     with_cache,
 )
+from sarc.utils import ensure_utc
 
 
 class plaintext(FormatterProto):
@@ -57,10 +57,7 @@ def la_validite(x, y, version):
 def test_simple_cache(tmp_path):
     reference = datetime(year=2024, month=1, day=1)
 
-    decorator = with_cache(
-        subdirectory="xy",
-        cache_root=tmp_path,
-    )
+    decorator = with_cache(subdirectory="xy", cache_root=tmp_path)
     fn = decorator(la_fonction)
     assert (result1 := fn(1, 2, version=0, at_time=reference)) == "1 * 2 = 2 [v0]"
     assert fn(1, 2, version=1, at_time=reference) == result1
@@ -73,11 +70,7 @@ def test_simple_cache(tmp_path):
 
 
 def test_cache_key(tmp_path):
-    decorator = with_cache(
-        key=la_cle,
-        subdirectory="xy",
-        cache_root=tmp_path,
-    )
+    decorator = with_cache(key=la_cle, subdirectory="xy", cache_root=tmp_path)
     fn = decorator(la_fonction)
     assert (result1 := fn(1, 2, version=0)) == "1 * 2 = 2 [v0]"
     assert fn(1, 2, version=1) == result1
@@ -94,11 +87,7 @@ def test_cache_key(tmp_path):
 
 
 def test_use_cache(tmp_path):
-    decorator = with_cache(
-        key=la_cle,
-        subdirectory="xy",
-        cache_root=tmp_path,
-    )
+    decorator = with_cache(key=la_cle, subdirectory="xy", cache_root=tmp_path)
     fn = decorator(la_fonction)
     # Compute and save
     assert fn(1, 2, version=0) == "1 * 2 = 2 [v0]"
@@ -121,9 +110,7 @@ def test_require_cache(tmp_path):
     reference = datetime(year=2024, month=1, day=1)
 
     decorator = with_cache(
-        subdirectory="xy",
-        validity=timedelta(days=1),
-        cache_root=tmp_path,
+        subdirectory="xy", validity=timedelta(days=1), cache_root=tmp_path
     )
     fn = decorator(la_fonction)
     with pytest.raises(Exception, match="There is no cached result"):
@@ -234,10 +221,7 @@ def test_live_cache(tmp_path):
 
 def test_live_cache_from_disk(tmp_path):
     decorator = with_cache(
-        key=la_cle,
-        subdirectory="xy",
-        cache_root=tmp_path,
-        live=True,
+        key=la_cle, subdirectory="xy", cache_root=tmp_path, live=True
     )
     fn = decorator(la_fonction)
 
@@ -316,11 +300,7 @@ def test_custom_format(tmp_path):
         return f"{x}.{y}.quack"
 
     fn = with_cache(
-        la_fonction,
-        formatter=duck,
-        key=cle,
-        subdirectory="xy",
-        cache_root=tmp_path,
+        la_fonction, formatter=duck, key=cle, subdirectory="xy", cache_root=tmp_path
     )
 
     assert fn(7, 8, version=0) == "7 * 8 = 56 [v0]"
@@ -328,9 +308,7 @@ def test_custom_format(tmp_path):
 
 
 def test_no_cachedir(disabled_cache):
-    decorator = with_cache(
-        subdirectory="xy",
-    )
+    decorator = with_cache(subdirectory="xy")
     fn = decorator(la_fonction)
     assert fn(2, 3, version=0) == "2 * 3 = 6 [v0]"
     assert fn(2, 3, version=1) == "2 * 3 = 6 [v1]"
@@ -415,11 +393,7 @@ def test_cache_malformed_file(tmp_path):
 
 
 def test_cache_policy_check_same_value(tmp_path):
-    decorator = with_cache(
-        key=la_cle,
-        subdirectory="xy",
-        cache_root=tmp_path,
-    )
+    decorator = with_cache(key=la_cle, subdirectory="xy", cache_root=tmp_path)
     fn = decorator(la_fonction)
 
     # First call to create cache
@@ -431,11 +405,7 @@ def test_cache_policy_check_same_value(tmp_path):
 
 
 def test_cache_policy_check_different_value(tmp_path):
-    decorator = with_cache(
-        key=la_cle,
-        subdirectory="xy",
-        cache_root=tmp_path,
-    )
+    decorator = with_cache(key=la_cle, subdirectory="xy", cache_root=tmp_path)
     fn = decorator(la_fonction)
 
     # First call to create cache
@@ -448,10 +418,7 @@ def test_cache_policy_check_different_value(tmp_path):
 
 def test_cache_policy_check_non_json_diff(tmp_path):
     decorator = with_cache(
-        key=la_cle,
-        subdirectory="xy",
-        cache_root=tmp_path,
-        formatter=plaintext,
+        key=la_cle, subdirectory="xy", cache_root=tmp_path, formatter=plaintext
     )
     fn = decorator(la_fonction)
 
@@ -580,10 +547,7 @@ def test_make_cached_function_no_disk(tmp_path):
 
 def test_with_cache_decorator_no_function():
     # Test decorator mode
-    decorator = with_cache(
-        formatter=JSONFormatter,
-        subdirectory="test_decorator",
-    )
+    decorator = with_cache(formatter=JSONFormatter, subdirectory="test_decorator")
 
     @decorator
     def test_function(x, y):
@@ -600,9 +564,7 @@ def test_with_cache_decorator_with_function():
 
     # Test direct function decoration
     decorated_fn = with_cache(
-        test_function,
-        formatter=JSONFormatter,
-        subdirectory="test_direct",
+        test_function, formatter=JSONFormatter, subdirectory="test_direct"
     )
 
     # Test the decorated function
@@ -670,11 +632,7 @@ def test_cache_policy_none_uses_env(tmp_path, monkeypatch):
     cache_policy_var.set(None)
     monkeypatch.setenv("SARC_CACHE", "always")
 
-    decorator = with_cache(
-        key=la_cle,
-        subdirectory="xy",
-        cache_root=tmp_path,
-    )
+    decorator = with_cache(key=la_cle, subdirectory="xy", cache_root=tmp_path)
     fn = decorator(la_fonction)
 
     # Call with cache_policy=None - should use env var (always)
@@ -686,11 +644,7 @@ def test_cache_policy_none_uses_env_default(tmp_path, monkeypatch):
     cache_policy_var.set(None)
     monkeypatch.delenv("SARC_CACHE", raising=False)
 
-    decorator = with_cache(
-        key=la_cle,
-        subdirectory="xy",
-        cache_root=tmp_path,
-    )
+    decorator = with_cache(key=la_cle, subdirectory="xy", cache_root=tmp_path)
     fn = decorator(la_fonction)
 
     # Call with cache_policy=None - should use default (use)
@@ -768,11 +722,7 @@ def test_key_function_returns_none(tmp_path):
     def test_function(x, y, version=0):
         return f"{x} * {y} = {x * y} [v{version}]"
 
-    decorator = with_cache(
-        key=key_returns_none,
-        subdirectory="xy",
-        cache_root=tmp_path,
-    )
+    decorator = with_cache(key=key_returns_none, subdirectory="xy", cache_root=tmp_path)
     fn = decorator(test_function)
 
     # First call - should compute and not cache
@@ -808,7 +758,7 @@ def test_cache_entry_add_get_value(tmp_path):
         zf.writestr("key2", b"value2")
 
     with ZipFile(test_file, "r") as zf:
-        entry = CacheEntry(zf)
+        entry = CacheEntry(zf, datetime.now(UTC))
 
         assert list(entry.items()) == [("key1", b"value1"), ("key2", b"value2")]
 
@@ -819,7 +769,7 @@ def test_cache_entry_add_value(tmp_path):
     # Create a new zip file for writing
     test_file = tmp_path / "test_write.zip"
     with ZipFile(test_file, "x", compression=ZIP_LZMA) as zf:
-        entry = CacheEntry(zf)
+        entry = CacheEntry(zf, datetime.now(UTC))
 
         # Add values
         entry.add_value("test_key", b"test_value")
@@ -879,7 +829,7 @@ def test_cache_create_entry(tmp_path):
             entry.add_value("test_key", b"test_data")
 
         # Verify the file was created in the expected location
-        expected_file = tmp_path / "test_cache" / "2024" / "03" / "15" / "10:30:45"
+        expected_file = tmp_path / "test_cache" / "2024" / "03" / "15" / "10:30:45.000"
         assert expected_file.exists()
 
 
@@ -905,7 +855,7 @@ def test_cache_save(tmp_path):
         cache.save("test_key", test_time, test_data)
 
         # Verify the file was created
-        expected_file = tmp_path / "test_cache" / "2024" / "03" / "15" / "10:30:45"
+        expected_file = tmp_path / "test_cache" / "2024" / "03" / "15" / "10:30:45.000"
         assert expected_file.exists()
 
         # Verify the data can be read back
@@ -928,7 +878,7 @@ def test_cache_save_multiple_keys(tmp_path):
             entry.add_value("key3", b"data3")
 
         # Verify the file was created
-        expected_file = tmp_path / "test_cache" / "2024" / "03" / "15" / "10:30:45"
+        expected_file = tmp_path / "test_cache" / "2024" / "03" / "15" / "10:30:45.000"
         assert expected_file.exists()
 
         # Verify all data can be read back
@@ -958,15 +908,15 @@ def test_cache_paths_from_single_day(enabled_cache):
         cache.save("test_key", time, b"test_data")
 
     # Test _paths_from starting from base_time
-    paths = list(cache._paths_from(base_time))
+    paths = list(path for path, _ in cache._paths_from(base_time))
 
     # Should only get files from 10:15 and 11:00 (not 9:30)
     assert len(paths) == 2
 
     # Verify the paths are sorted correctly
     path_names = [p.name for p in paths]
-    assert "10:15:00" in path_names
-    assert "11:00:00" in path_names
+    assert "10:15:00.000" in path_names
+    assert "11:00:00.000" in path_names
 
 
 def test_cache_paths_from_multiple_days(enabled_cache):
@@ -988,16 +938,59 @@ def test_cache_paths_from_multiple_days(enabled_cache):
 
     # Test _paths_from starting from 2024-03-15 10:00
     from_time = datetime(2024, 3, 15, 10, 0, 0, tzinfo=UTC)
-    paths = list(cache._paths_from(from_time))
+    paths = list(path for path, _ in cache._paths_from(from_time))
 
     # Should get files from 15:00 on 3/15, and all files from 3/16 and 3/17
-    assert len(paths) == 4
+    assert len(paths) == 3
 
     # Verify we get the expected files
     path_names = [p.name for p in paths]
-    assert "15:00:00" in path_names
-    assert "08:00:00" in path_names  # From 3/16
-    assert "12:00:00" in path_names  # From 3/17
+    assert "15:00:00.000" in path_names
+    assert "08:00:00.000" in path_names  # From 3/16
+    assert "12:00:00.000" in path_names  # From 3/17
+
+
+def test_cache_entry_datetime(enabled_cache):
+    """Test Cache _fetch_date method."""
+    cache = Cache("test_cache")
+    # Create test files for different days
+    times = [
+        datetime(2024, 3, 14, 23, 0, 0, tzinfo=UTC),  # Day before
+        datetime(2024, 3, 15, 10, 0, 0, tzinfo=UTC),  # Target day
+        datetime(2024, 3, 15, 15, 0, 0, tzinfo=UTC),  # Same day, later
+        datetime(2024, 3, 16, 8, 0, 0, tzinfo=UTC),  # Next day
+        datetime(2024, 3, 17, 12, 0, 0, tzinfo=UTC),  # Day after next
+    ]
+    for time in times:
+        cache.save("test_key", time, b"test_data")
+
+    # parse cache entries
+    entries = list(cache.read_from(datetime(2024, 3, 15, 10, 0, 0, tzinfo=UTC)))
+    assert len(entries) == 3
+    assert entries[0].get_entry_datetime() == times[2]
+    assert entries[1].get_entry_datetime() == times[3]
+    assert entries[2].get_entry_datetime() == times[4]
+
+
+def test_cache_latest_entry(enabled_cache):
+    """Test Cache latest_entry method."""
+    cache = Cache("test_cache")
+    assert cache.latest_entry() is None
+
+    cache.save("test_key", datetime(2024, 3, 15, 10, 0, 0, tzinfo=UTC), b"test_data")
+    assert cache.latest_entry().get_entry_datetime() == datetime(
+        2024, 3, 15, 10, 0, 0, tzinfo=UTC
+    )
+
+    cache.save("test_key", datetime(2024, 3, 16, 11, 0, 0, tzinfo=UTC), b"test_data")
+    assert cache.latest_entry().get_entry_datetime() == datetime(
+        2024, 3, 16, 11, 0, 0, tzinfo=UTC
+    )
+
+    cache.save("test_key", datetime(2024, 3, 17, 12, 0, 0, tzinfo=UTC), b"test_data")
+    assert cache.latest_entry().get_entry_datetime() == datetime(
+        2024, 3, 17, 12, 0, 0, tzinfo=UTC
+    )
 
 
 def test_cache_read_from(enabled_cache):
@@ -1021,12 +1014,11 @@ def test_cache_read_from(enabled_cache):
     from_time = datetime(2024, 3, 15, 10, 0, 0, tzinfo=UTC)
     entries = list(cache.read_from(from_time))
 
-    # Should get 2 entries (10:00 and 11:00, not 9:00)
-    assert len(entries) == 2
+    # Should get 1 entry (11:00)
+    assert len(entries) == 1
 
     # verify the data
-    assert list(entries[0].items()) == [("key2", b"data2")]
-    assert list(entries[1].items()) == [("key3", b"data3")]
+    assert list(entries[0].items()) == [("key3", b"data3")]
 
     # try to read starting the day before
     entries = list(cache.read_from(datetime(2024, 3, 14, 0, 0, 0, tzinfo=UTC)))
@@ -1049,7 +1041,7 @@ def test_cache_read_from_with_multiple_keys_per_entry(enabled_cache):
         entry2.add_value("user3", b"user3_data")
 
     # Read from 10:00 onwards
-    from_time = datetime(2024, 3, 15, 10, 0, 0, tzinfo=UTC)
+    from_time = datetime(2024, 3, 15, 9, 59, 59, tzinfo=UTC)
     entries = list(cache.read_from(from_time))
 
     assert len(entries) == 2
@@ -1093,8 +1085,8 @@ def test_cache_with_different_subdirectories(tmp_path):
         cache2.save("key2", test_time, b"data2")
 
         # Verify files are in different subdirectories
-        file1 = tmp_path / "subdir1" / "2024" / "03" / "15" / "10:00:00"
-        file2 = tmp_path / "subdir2" / "2024" / "03" / "15" / "10:00:00"
+        file1 = tmp_path / "subdir1" / "2024" / "03" / "15" / "10:00:00.000"
+        file2 = tmp_path / "subdir2" / "2024" / "03" / "15" / "10:00:00.000"
 
         assert file1.exists()
         assert file2.exists()

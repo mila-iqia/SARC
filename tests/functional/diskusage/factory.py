@@ -32,7 +32,7 @@ def create_diskusages():
                                     "user": "revali",
                                     "nbr_files": 47085,
                                     "size": 4509715660,
-                                },
+                                }
                             ],
                         },
                     ],

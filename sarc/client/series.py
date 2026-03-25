@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
-from typing import Any, Callable, Literal, Iterable
+from typing import Any, Callable, Iterable, Literal
 
 import numpy as np
 import pandas
@@ -12,11 +12,11 @@ from tqdm import tqdm
 
 from sarc.client.gpumetrics import GPUBilling, get_cluster_gpu_billings, get_rgus
 from sarc.client.job import (
-    SlurmCLuster,
+    SlurmCluster,
+    SlurmJob,
     count_jobs,
     get_available_clusters,
     get_jobs,
-    SlurmJob,
 )
 from sarc.config import TZLOCAL
 from sarc.core.models.users import UserData
@@ -176,6 +176,15 @@ class AbstractJobSeriesFactory(ABC):
                 ):
                     job_series["gpu_utilization"] = np.nan
 
+            # Pandas dataframe will infer column type as object instead of datetime
+            # if all dates in column are not in same timezone.
+            # So, we make sure start and end times are in a specific datetime,
+            # whatever how they have been modified above.
+            # NB: Since dates are still stored in TZLOCAL
+            # in job object, we use TZLOCAL here, instead of UTC.
+            job.start_time = job.start_time.astimezone(TZLOCAL)
+            job.end_time = job.end_time.astimezone(TZLOCAL)
+
             # Flatten job.requested and job.allocated into job_series
             job_series.update(
                 {
@@ -194,10 +203,10 @@ class AbstractJobSeriesFactory(ABC):
             billing = job.allocated.billing or 0
             gres_gpu = job.requested.gres_gpu or 0
             if gres_gpu:
-                job_series["allocated.gres_gpu"] = max(billing, gres_gpu)
+                job_series["allocated.gres_gpu"] = float(max(billing, gres_gpu))
                 job_series["allocated.cpu"] = job.allocated.cpu
             else:
-                job_series["allocated.gres_gpu"] = 0
+                job_series["allocated.gres_gpu"] = 0.0
                 job_series["allocated.cpu"] = (
                     max(billing, job.allocated.cpu) if job.allocated.cpu else 0
                 )
@@ -254,10 +263,7 @@ class AbstractJobSeriesFactory(ABC):
             # Concat merged frames.
             output = pandas.concat([merged_mila, merged_drac])
             # Try to sort output to keep initial jobs order, by using first column from jobs frame.
-            # Sort inplace to avoid producing a supplementary frame.
-            output.sort_values(
-                by=jobs_frame.columns[0], inplace=True, ignore_index=True
-            )
+            output = output.sort_values(by=jobs_frame.columns[0], ignore_index=True)
 
             return output
         else:
@@ -515,7 +521,7 @@ def _compute_rgu_stats_before_date(
 
 
 def _compute_rgu_stats_after_date(
-    cluster: SlurmCLuster,
+    cluster: SlurmCluster,
     df: DataFrame,
     cluster_name: str,
     gpu_to_rgu: dict[str, float],
@@ -640,7 +646,9 @@ def _gpu_type_to_rgu_mapper(
     """
     # NB: we assume RGU value for a MIG == RGU value from whole GPU.
     return lambda gpu_type: (
-        gpu_to_rgu.get(gpu_type.split(":")[0].rstrip()) if gpu_type else None
+        gpu_to_rgu.get(gpu_type.split(":")[0].rstrip())
+        if not pandas.isna(gpu_type)
+        else None
     )
 
 
@@ -761,7 +769,7 @@ def compute_time_frames(
     for frame_start in pandas.date_range(start, end, freq=frame_size):
         frame_end = frame_start + frame_size
 
-        mask = (jobs[col_start] < frame_end) * (jobs[col_end] > frame_start)
+        mask = (jobs[col_start] < frame_end) & (jobs[col_end] > frame_start)
         frame = jobs[mask].copy()
         total_durations_in_frame = total_durations[mask]
         frame[col_start] = frame[col_start].clip(frame_start, frame_end)  # type: ignore[call-overload]

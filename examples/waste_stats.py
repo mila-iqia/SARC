@@ -21,7 +21,7 @@ def load_job_series(filename=None) -> pd.DataFrame:
         }
     )
 
-    df = None
+    all_dfs = []
 
     # Fetch all jobs from the clusters
     for job in tqdm(get_jobs(cluster=cluster, start="2023-02-10"), total=total):
@@ -29,8 +29,7 @@ def load_job_series(filename=None) -> pd.DataFrame:
             continue
 
         job_series = job.series(
-            metric="slurm_job_utilization_gpu",
-            measure="avg_over_time",
+            metric="slurm_job_utilization_gpu", measure="avg_over_time"
         )
         if job_series is not None:
             # TODO: Why is it possible to have billing smaller than gres_gpu???
@@ -39,11 +38,12 @@ def load_job_series(filename=None) -> pd.DataFrame:
             job_series["allocated"] = max(billing, gres_gpu)
             job_series["requested"] = gres_gpu
             job_series["duration"] = job.duration
-            df = pd.concat([df, job_series], axis=0)
+            all_dfs.append(job_series)
 
-        if df is not None:
-            df.to_pickle(filename)
+        if all_dfs:
+            pd.concat(all_dfs, axis=0).to_pickle(filename)
 
+    df = pd.concat(all_dfs, axis=0)
     assert isinstance(df, pd.DataFrame)
 
     return df

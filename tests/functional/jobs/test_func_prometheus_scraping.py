@@ -3,18 +3,20 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time
 from datetime import datetime, timedelta
 
 import pytest
 from fabric.testing.base import Command, Session
 from opentelemetry.trace import StatusCode
 
-from sarc.client.job import JobStatistics, get_jobs, get_available_clusters
+from sarc.client.job import JobStatistics, get_available_clusters, get_jobs
 from sarc.config import UTC
 from sarc.jobs import prometheus_scraping
-from tests.common.dateutils import _dtfmt, _dtstr, _dtreg, MTL
-from .factory import create_sacct_json
+from tests.common.dateutils import MTL, _dtfmt, _dtreg
+
 from ..cli.test_slurmconfig_fetch_parse import _save_slurm_conf
+from .factory import create_sacct_json
 
 
 @pytest.fixture
@@ -32,9 +34,7 @@ def mock_compute_job_statistics(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "test_config",
-    [{"clusters": {"raisin": {"host": "raisin"}}}],
-    indirect=True,
+    "test_config", [{"clusters": {"raisin": {"host": "raisin"}}}], indirect=True
 )
 @pytest.mark.parametrize(
     "json_jobs",
@@ -47,14 +47,14 @@ def mock_compute_job_statistics(monkeypatch):
                         "id": 1002,
                         "name": "gpu:gpu_name_from_sacct",
                         "type": "gres",
-                    },
-                ],
+                    }
+                ]
             }
         }
     ],
     indirect=True,
 )
-@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache", "no_pkey")
 def test_get_gpu_type(
     test_config, sacct_json, remote, cli_main, monkeypatch, mock_compute_job_statistics
 ):
@@ -62,34 +62,41 @@ def test_get_gpu_type(
 
     remote.expect(
         host="raisin",
-        cmd="export TZ=UTC && /opt/slurm/bin/sacct -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
-        out=f"Welcome on raisin,\nThe sweetest supercomputer in the world!\n{sacct_json}".encode(
-            "utf-8"
-        ),
+        commands=[
+            Command(
+                cmd="export TZ=UTC && /opt/slurm/bin/sacct -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
+                out=f"Welcome on raisin,\nThe sweetest supercomputer in the world!\n{sacct_json}".encode(
+                    "utf-8"
+                ),
+            )
+            for _ in range(2)
+        ],
     )
 
-    cmd_sacct = [
-        "acquire",
+    cmd_sacct_fetch = [
+        "fetch",
         "jobs",
-        "--cluster_name",
+        "--cluster_names",
         "raisin",
         "--intervals",
         "2023-02-15T00:00-2023-02-16T00:00",
     ]
 
+    cmd_sacct_parse = ["parse", "jobs", "--since", "2023-02-14T00:00"]
+
     # Test `acquire jobs` without node->gpu available
     # -----------------------------------------------
     # Should return GPU name from sacct
-    assert cli_main(cmd_sacct) == 0
+    time.sleep(1)  # to prevent cache collision with previous sacct fetch...
+    assert cli_main(cmd_sacct_fetch) == 0
+    assert cli_main(cmd_sacct_parse) == 0
     jobs = list(get_jobs())
     assert len(jobs) == 1
     job = jobs[0]
-    print(job)
-    print(job.nodes)
     assert job.allocated.gpu_type == "gpu_name_from_sacct"
     assert not job.stored_statistics
 
-    # Test `acquire jobs` with node->gpu available
+    # Test `fetch jobs` and `parse_jobs` with node->gpu available
     # --------------------------------------------
     # node->gpu is prior to sacct data
 
@@ -100,19 +107,11 @@ def test_get_gpu_type(
         "NodeName=cn-c0[18-30] Param1=Anything1 Param2=Anything2 Gres=gpu:gpu2:4 Param3=Anything3",
     )
     # Acquire slurm config.
-    assert (
-        cli_main(
-            [
-                "parse",
-                "slurmconfig",
-                "--cluster_name",
-                "raisin",
-            ]
-        )
-        == 0
-    )
+    assert cli_main(["parse", "slurmconfig", "--cluster_name", "raisin"]) == 0
     # acquire jobs
-    assert cli_main(cmd_sacct) == 0
+    time.sleep(1)  # to prevent cache collision with previous sacct fetch...
+    assert cli_main(cmd_sacct_fetch) == 0
+    assert cli_main(cmd_sacct_parse) == 0
     jobs = list(get_jobs())
     assert len(jobs) == 1
     job = jobs[0]
@@ -156,7 +155,7 @@ def test_get_gpu_type(
     assert job.stored_statistics
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache", "no_pkey")
 def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     test_config,
     remote,
@@ -259,9 +258,9 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     assert (
         cli_main(
             [
-                "acquire",
+                "fetch",
                 "jobs",
-                "--cluster_name",
+                "--cluster_names",
                 "raisin",
                 "patate",
                 "--intervals",
@@ -272,6 +271,8 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
         )
         == 0
     )
+
+    assert cli_main(["parse", "jobs", "--since", "2023-02-14T00:00"]) == 0
 
     assert (
         cli_main(
@@ -319,24 +320,24 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     print(caplog.text)
     assert bool(
         re.search(
-            rf"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Acquire data on raisin for interval: {_dtreg(2023, 2, 15)} to {_dtreg(2023, 2, 16)} \(1440.0 min\)",
+            rf"sarc.core.scraping.jobs:jobs\.py:[0-9]+ Fetching the sacct data for cluster raisin, time {_dtreg(2023, 2, 15)} to {_dtreg(2023, 2, 16)}",
             caplog.text,
         )
     )
     assert bool(
         re.search(
-            rf"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Acquire data on patate for interval: {_dtreg(2023, 2, 15)} to {_dtreg(2023, 2, 16)} \(1440.0 min\)",
+            rf"sarc.core.scraping.jobs:jobs\.py:[0-9]+ Fetching the sacct data for cluster patate, time {_dtreg(2023, 2, 15)} to {_dtreg(2023, 2, 16)}",
             caplog.text,
         )
     )
     assert (
-        f"Getting the sacct data for cluster raisin, time {_dtstr(2023, 2, 15)} to {_dtstr(2023, 2, 16)}..."
+        "Parsing slurm jobs identified by: raisin_2023-02-15T05:00_2023-02-16T05:00..."
         in caplog.text
     )
     assert "Saving into mongodb collection '" in caplog.text
     assert bool(
         re.search(
-            r"sarc\.jobs\.sacct:sacct\.py:[0-9]+ Saved [0-9]+/[0-9]+ entries\.",
+            r"sarc\.core\.scraping\.jobs:jobs\.py:[0-9]+ Saved [0-9]+ entries\.",
             caplog.text,
         )
     )
@@ -344,13 +345,13 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     # There should be 2 acquisition errors for unexpected data 2023-03-16, one per cluster.
     assert bool(
         re.search(
-            rf"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Failed to acquire data on raisin for interval: {_dtreg(2023, 3, 16)} to {_dtreg(2023, 3, 17)}:",
+            rf"sarc.core.scraping.jobs:jobs\.py:[0-9]+ Failed to fetch data on raisin for interval: {_dtreg(2023, 3, 16)} to {_dtreg(2023, 3, 17)}:",
             caplog.text,
         )
     )
     assert bool(
         re.search(
-            rf"sarc.cli.acquire.jobs:jobs\.py:[0-9]+ Failed to acquire data on patate for interval: {_dtreg(2023, 3, 16)} to {_dtreg(2023, 3, 17)}:",
+            rf"sarc.core.scraping.jobs:jobs\.py:[0-9]+ Failed to fetch data on patate for interval: {_dtreg(2023, 3, 16)} to {_dtreg(2023, 3, 17)}:",
             caplog.text,
         )
     )
@@ -378,7 +379,7 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
         )
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache", "no_pkey")
 def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
     test_config,
     remote,
@@ -477,9 +478,9 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
     assert (
         cli_main(
             [
-                "acquire",
+                "fetch",
                 "jobs",
-                "--cluster_name",
+                "--cluster_names",
                 "raisin",
                 "patate",
                 "--intervals",
@@ -489,14 +490,18 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
         == 0
     )
 
+    time.sleep(1)
+    assert cli_main(["parse", "jobs", "--since", "2023-02-14T00:00"]) == 0
+
     assert len(list(get_jobs())) == len(datetimes) * len(cluster_names)
 
+    time.sleep(1)
     assert (
         cli_main(
             [
-                "acquire",
+                "fetch",
                 "jobs",
-                "--cluster_name",
+                "--cluster_names",
                 "raisin",
                 "patate",
                 "--intervals",
@@ -506,8 +511,12 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
         == 0
     )
 
+    time.sleep(1)
+    assert cli_main(["parse", "jobs", "--since", "2023-02-14T00:00"]) == 0
+
     assert len(list(get_jobs())) == len(datetimes) * len(cluster_names)
 
+    time.sleep(1)
     assert (
         cli_main(
             [
@@ -523,6 +532,7 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
         == 0
     )
 
+    time.sleep(1)
     assert (
         cli_main(
             [
@@ -568,19 +578,19 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
     for cluster_name in cluster_names:
         assert bool(
             re.search(
-                rf"sarc\.cli\.acquire\.jobs:jobs\.py:[0-9]+ Acquire data on {cluster_name} for interval: 2023-02-15 01:00:00\+00:00 to 2023-02-15 01:05:00\+00:00 \(5.0 min\)",
+                rf"sarc\.core\.scraping\.jobs:jobs\.py:[0-9]+ Fetching the sacct data for cluster {cluster_name}, time 2023-02-15 01:00:00\+00:00 to 2023-02-15 01:05:00\+00:00",
                 caplog.text,
             )
         )
         assert (
-            f"Getting the sacct data for cluster {cluster_name}, time 2023-02-15 01:00:00+00:00 to 2023-02-15 01:05:00+00:00..."
+            f"Parsing slurm jobs identified by: {cluster_name}_2023-02-15T01:00_2023-02-15T01:05..."
             in caplog.text
         )
 
     assert "Saving into mongodb collection '" in caplog.text
     assert bool(
         re.search(
-            r"sarc\.jobs\.sacct:sacct\.py:[0-9]+ Saved [0-9]+/[0-9]+ entries\.",
+            r"sarc\.core\.scraping\.jobs:jobs\.py:[0-9]+ Saved [0-9]+ entries\.",
             caplog.text,
         )
     )
@@ -589,7 +599,7 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
     for cluster_name in cluster_names:
         assert bool(
             re.search(
-                rf"sarc\.cli\.acquire\.jobs:jobs\.py:[0-9]+ Failed to acquire data on {cluster_name} for interval: 2023-03-16 01:00:00\+00:00 to 2023-03-16 01:05:00\+00:00:",
+                rf"sarc\.core\.scraping\.jobs:jobs\.py:[0-9]+ Failed to fetch data on {cluster_name} for interval: 2023-03-16 01:00:00\+00:00 to 2023-03-16 01:05:00\+00:00:",
                 caplog.text,
             )
         )
@@ -613,9 +623,7 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
 
 @pytest.mark.usefixtures("empty_read_write_db", "disabled_cache")
 def test_acquire_prometheus_for_cluster_without_prometheus(
-    test_config,
-    cli_main,
-    caplog,
+    test_config, cli_main, caplog
 ):
     """
     Test that we can't scrape Prometheus metrics for a cluster
@@ -649,6 +657,7 @@ def test_acquire_prometheus_for_cluster_without_prometheus(
     )
 
 
+@pytest.mark.usefixtures("empty_read_write_db", "disabled_cache")
 def test_acquire_prometheus_mutually_exclusive_args(cli_main, caplog):
     # Both --intervals and --auto_interval: must fail
     assert (
@@ -718,17 +727,7 @@ def test_acquire_prometheus_interval_start_gt_end(cli_main, caplog):
 
 def test_acquire_prometheus_args_no_interval(cli_main, caplog):
     # No interval, nothing to do
-    assert (
-        cli_main(
-            [
-                "acquire",
-                "prometheus",
-                "--cluster_name",
-                "raisin",
-            ]
-        )
-        == 0
-    )
+    assert cli_main(["acquire", "prometheus", "--cluster_name", "raisin"]) == 0
     assert "No --intervals or --auto_interval parsed, nothing to do." in caplog.text
 
 
