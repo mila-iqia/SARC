@@ -75,21 +75,20 @@ def main() -> None:
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    converted = 0
-    skipped = 0
+    converted_days = 0
+    converted_files = 0
 
     with tqdm(sorted(by_day.items()), unit="day") as progress:
         for day_key, files in progress:
             progress.set_description(day_key)
 
-            entry_time = files[0][1] + timedelta(days=1)
+            entry_time = files[0][1]
             out_dir = dir_from_date(output_dir, entry_time)
             out_dir.mkdir(parents=True, exist_ok=True)
             out_file = out_dir / entry_time.time().isoformat("seconds")
 
             if out_file.exists():
-                skipped += 1
-                continue
+                raise RuntimeError(f"{out_file} already exists")
 
             with ZipFile(out_file, mode="x", compression=ZIP_LZMA) as zf:
                 for cluster, start_dt, end_dt, path in sorted(files):
@@ -99,10 +98,13 @@ def main() -> None:
                         f"_{end_dt.strftime(DATE_FORMAT)}"
                     )
                     zf.writestr(key, path.read_bytes())
+                    converted_files += 1
 
-            converted += 1
+            converted_days += 1
 
-    print(f"\nDone: {converted} day(s) converted, {skipped} skipped → {output_dir}")  # noqa: T201
+    print(
+        f"\nDone: {converted_days} day(s), {converted_files} file(s) converted → {output_dir}"
+    )
 
 
 if __name__ == "__main__":
