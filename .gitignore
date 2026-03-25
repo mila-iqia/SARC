@@ -25,3 +25,4 @@ token.json
 .mypy_cache
 GEMINI.md
 CLAUDE.md
+.pytype

@@ -69,7 +69,7 @@ def create_users_indices(db: Database) -> None:
     db_collection = db.users
 
     db_collection.create_index([("uuid", pymongo.ASCENDING)], unique=True)
-    db_collection.create_index([("matching_ids.$**", pymongo.ASCENDING)])
+    db_collection.create_index([("matching_ids", pymongo.ASCENDING)])
 
     # For user sorting in REST API
     db_collection.create_index(
@@ -214,17 +214,11 @@ def create_jobs_indices(db: Database) -> None:
         [
             ("cluster_name", pymongo.ASCENDING),
             ("allocated.gpu_type", pymongo.ASCENDING),
-        ],
-        name="idx_stats_not_none",
-        partialFilterExpression={"stored_statistics": {"$type": "object"}},
+            ("stored_statistics", pymongo.ASCENDING),
+        ]
     )
     db_collection.create_index(
-        [
-            ("cluster_name", pymongo.ASCENDING),
-            ("allocated.gpu_type", pymongo.ASCENDING),
-        ],
-        name="idx_gpu_type_not_none",
-        partialFilterExpression={"allocated.gpu_type": {"$type": "string"}},
+        [("cluster_name", pymongo.ASCENDING), ("allocated.gpu_type", pymongo.ASCENDING)]
     )
 
     # Index most useful for job sorting in REST API

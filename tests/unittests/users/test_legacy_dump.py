@@ -11,14 +11,13 @@ from tests.unittests.core.test_users_scraping import UserPluginTester
 class TestLegacyDumpScraper(UserPluginTester):
     plugin = LegacyDumpScraper()
 
-    raw_config = {"json_file_path": "/path/to/userdump.json"}
-    parsed_config = LegacyDumpConfig(json_file_path=Path("/path/to/userdump.json"))
+    data = (Path(__file__).parent / "inputs" / "userdump_test.json").read_text()
+    raw_config = {"json": data}
+    parsed_config = LegacyDumpConfig(json=data)
 
     def test_fetch_data(self, data_regression):
         """Test that get_user_data returns empty bytes as expected."""
-        config = LegacyDumpConfig(
-            json_file_path=Path(__file__).parent / "inputs" / "userdump_test.json"
-        )
+        config = LegacyDumpConfig(json=self.data)
         data = self.plugin.get_user_data(config)
         records = json.loads(data.decode("utf-8"))
         assert len(records) > 0

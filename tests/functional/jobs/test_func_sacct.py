@@ -271,6 +271,7 @@ def test_localhost(os_system, monkeypatch):
 def test_stdout_message_before_json(
     test_config, sacct_json, remote, file_regression, cli_main, monkeypatch
 ):
+
     remote.expect(
         host="raisin",
         cmd=f"export TZ=UTC && /opt/slurm/bin/sacct -X -S {_dtfmt(2023, 2, 15)} -E {_dtfmt(2023, 2, 16)} --allusers --json",

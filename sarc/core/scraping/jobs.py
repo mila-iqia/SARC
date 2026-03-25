@@ -1,6 +1,5 @@
 import logging
 from datetime import datetime
-from typing import Optional
 
 from sarc.cache import Cache
 from sarc.client.job import _jobs_collection
@@ -23,8 +22,9 @@ logger = logging.getLogger(__name__)
 def fetch_jobs(
     cluster_names: list[str],
     clusters: dict[str, ClusterConfig],
-    unparsed_intervals: Optional[list[str]],
-    auto_interval: Optional[int],
+    unparsed_intervals: list[str] | None,
+    auto_interval: int | None,
+    max_intervals: int | None = None,
 ) -> None:
     """
     Fetch jobs and place the results in cache.
@@ -46,15 +46,20 @@ def fetch_jobs(
         auto_interval           Acquire jobs every <auto_interval> minutes since latest scraping date until now.
                                 If <= 0, use only one interval since latest scraping date until now. Mutually
                                 exclusive with --intervals.
+
+        max_intervals
+                               Only fetch that many intervals at maximum when using auto_intervals.
+                               The number fetched can be lower.
     """
 
     auto_end_field = "end_time_sacct"  # Used to parse the intervals MODIFIER CECI en end_time_sacct_fetch
+    cluster_endtime: dict[str, datetime] = {}
 
     def _fetch_jobs(
         cluster_name: str,
         cluster_configs: dict[str, ClusterConfig],
         intervals: list[tuple[datetime, datetime]],
-        auto_interval: Optional[int],
+        auto_interval: int | None,
     ):
         assert cluster_name in cluster_configs
         cluster_config = cluster_configs[cluster_name]
@@ -78,7 +83,8 @@ def fetch_jobs(
                     yield (key, raw_data)
 
                     if auto_interval is not None:
-                        set_auto_end_time(cluster_name, auto_end_field, time_to)
+                        cluster_endtime[cluster_name] = time_to
+
                 # pylint: disable=broad-exception-caught
                 except Exception as e:
                     logger.error(
@@ -89,39 +95,44 @@ def fetch_jobs(
 
     # Define cache directory
     cache = Cache(subdirectory="jobs")
-    with cache.create_entry(datetime.now(UTC)) as cache_entry:
-        for cluster_name in cluster_names:
-            # Define the time intervals on which we want to retrieve the jobs
-            intervals: list[tuple[datetime, datetime]] = []
 
-            try:
-                if unparsed_intervals is not None:
-                    intervals = parse_intervals(unparsed_intervals)
-                elif auto_interval is not None:
-                    intervals = parse_auto_intervals(
-                        cluster_name, auto_end_field, auto_interval
-                    )
-                if not intervals:
-                    logger.warning(
-                        "No --intervals or --auto_interval parsed, nothing to do."
-                    )
-                    continue
+    try:
+        with cache.create_entry(datetime.now(UTC)) as cache_entry:
+            for cluster_name in cluster_names:
+                # Define the time intervals on which we want to retrieve the jobs
+                intervals: list[tuple[datetime, datetime]] = []
 
-                for cache_key, raw_data in _fetch_jobs(
-                    cluster_name, clusters, intervals, auto_interval
-                ):
-                    cache_entry.add_value(
-                        key=cache_key,  # f"{cluster_name}_{time_from.strftime(DATE_FORMAT_HOUR)}_{time_to.strftime(DATE_FORMAT_HOUR)}"
-                        value=raw_data,  # sortie stdout de sacct : bytes
-                    )
+                try:
+                    if unparsed_intervals is not None:
+                        intervals = parse_intervals(unparsed_intervals)
+                    elif auto_interval is not None:
+                        intervals = parse_auto_intervals(
+                            cluster_name, auto_end_field, auto_interval, max_intervals
+                        )
+                    if not intervals:
+                        logger.warning(
+                            "No --intervals or --auto_interval parsed, nothing to do."
+                        )
+                        continue
 
-            # pylint: disable=broad-exception-caught
-            except Exception as e:
-                logger.error(
-                    f"Error while fetching data on {cluster_name}: {type(e).__name__}: {e} ; skipping cluster."
-                )
-            # Continue to next cluster.
-            continue
+                    for cache_key, raw_data in _fetch_jobs(
+                        cluster_name, clusters, intervals, auto_interval
+                    ):
+                        cache_entry.add_value(
+                            key=cache_key,  # f"{cluster_name}_{time_from.strftime(DATE_FORMAT_HOUR)}_{time_to.strftime(DATE_FORMAT_HOUR)}"
+                            value=raw_data,  # sortie stdout de sacct : bytes
+                        )
+
+                # pylint: disable=broad-exception-caught
+                except Exception as e:
+                    logger.error(
+                        f"Error while fetching data on {cluster_name}: {type(e).__name__}: {e} ; skipping cluster."
+                    )
+                # Continue to next cluster.
+                continue
+    finally:
+        for cluster_name, time_to in cluster_endtime.items():
+            set_auto_end_time(cluster_name, auto_end_field, time_to)
 
 
 def parse_jobs(

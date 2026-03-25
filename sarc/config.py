@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import functools
-import json
 import os
 import zoneinfo
 from contextlib import contextmanager
@@ -56,12 +55,11 @@ class PrivateKeyInfo:
 @dataclass
 class ClusterConfig:
     # pylint: disable=too-many-instance-attributes
-
     host: str
     private_key: PrivateKeyInfo
     timezone: zoneinfo.ZoneInfo | None = None
     prometheus_url: str | None = None
-    prometheus_headers_file: str | None = None
+    prometheus_headers: dict[str, Secret[str]] = field(default_factory=dict)
     name: str | None = None
     sacct_bin: str = "sacct"
     ignore_tz_utc: bool = False
@@ -149,7 +147,10 @@ class ClusterConfig:
             connect_kwargs={
                 "pkey": PKey.from_path(
                     self.private_key.file, self.private_key.password.encode("ascii")
-                )
+                ),
+                # This is a hack to select "Duo" from DRAC
+                # TODO: make this less hacky.
+                "password": "1",
             },
         )
 
@@ -157,20 +158,13 @@ class ClusterConfig:
     def prometheus(self) -> PrometheusConnect:
         from prometheus_api_client import PrometheusConnect
 
-        if self.prometheus_headers_file is not None:
-            headers = json.load(
-                open(  # pylint: disable=consider-using-with
-                    self.prometheus_headers_file, "r", encoding="utf-8"
-                )
-            )
-        else:
-            headers = {}
-
         if self.prometheus_url is None:
             raise ConfigurationError(
                 f"No prometheus URL provided for cluster '{self.name}'"
             )
-        return PrometheusConnect(url=self.prometheus_url, headers=headers)
+        return PrometheusConnect(
+            url=self.prometheus_url, headers=self.prometheus_headers
+        )
 
 
 @dataclass
@@ -304,7 +298,7 @@ full_config = gifnoc.define("sarc", Config)
 
 
 gifnoc.set_sources("${envfile:SARC_CONFIG}")
-
+config_path = Path(os.getenv("SARC_CONFIG", "")).parent
 
 sarc_mode = ContextVar("sarc_mode", default=os.getenv("SARC_MODE", "client"))
 

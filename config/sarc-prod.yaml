@@ -96,7 +96,7 @@ sarc:
       sacct_bin: "/opt/software/slurm/bin/sacct"
       ignore_tz_utc: true
       prometheus_url: https://mila-thanos.calculquebec.ca
-      prometheus_headers_file: ../SARC_secrets/secrets/drac_prometheus/headers.json
+      #prometheus_headers: ../SARC_secrets/secrets/drac_prometheus/headers.json
       start_date: "2022-04-01"
       gpus_per_nodes:
         __DEFAULTS__:
@@ -121,7 +121,6 @@ sarc:
       accounts:
       sacct_bin: "/opt/slurm/bin/sacct"
       prometheus_url:
-      prometheus_headers_file:
       start_date: "2025-02-01"
       gpus_per_nodes:
         __DEFAULTS__:
@@ -140,7 +139,6 @@ sarc:
       sacct_bin: "/opt/software/slurm/bin/sacct"
       ignore_tz_utc: true
       prometheus_url:
-      prometheus_headers_file:
       start_date: "2025-08-11"
     nibi:
       host: robot.nibi.alliancecan.ca
@@ -154,7 +152,6 @@ sarc:
       sacct_bin: "/opt/software/slurm/bin/sacct"
       ignore_tz_utc: true
       prometheus_url:
-      prometheus_headers_file:
       start_date: "2025-07-31"
       gpus_per_nodes:
         __DEFAULTS__:
@@ -174,7 +171,7 @@ sarc:
       sacct_bin: "/opt/software/slurm/bin/sacct"
       ignore_tz_utc: true
       prometheus_url: https://mila-thanos.calculquebec.ca
-      prometheus_headers_file: ../SARC_secrets/secrets/drac_prometheus/headers.json
+      #prometheus_headers: ../SARC_secrets/secrets/drac_prometheus/headers.json
       start_date: "2025-06-19"
       gpus_per_nodes:
         __DEFAULTS__:
@@ -193,5 +190,4 @@ sarc:
         - def-bengioy_cpu
       sacct_bin: "/opt/slurm/bin/sacct"
       prometheus_url:
-      prometheus_headers_file:
       start_date: "2025-06-19"

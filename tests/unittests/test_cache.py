@@ -829,7 +829,7 @@ def test_cache_create_entry(tmp_path):
             entry.add_value("test_key", b"test_data")
 
         # Verify the file was created in the expected location
-        expected_file = tmp_path / "test_cache" / "2024" / "03" / "15" / "10:30:45"
+        expected_file = tmp_path / "test_cache" / "2024" / "03" / "15" / "10:30:45.000"
         assert expected_file.exists()
 
 
@@ -855,7 +855,7 @@ def test_cache_save(tmp_path):
         cache.save("test_key", test_time, test_data)
 
         # Verify the file was created
-        expected_file = tmp_path / "test_cache" / "2024" / "03" / "15" / "10:30:45"
+        expected_file = tmp_path / "test_cache" / "2024" / "03" / "15" / "10:30:45.000"
         assert expected_file.exists()
 
         # Verify the data can be read back
@@ -878,7 +878,7 @@ def test_cache_save_multiple_keys(tmp_path):
             entry.add_value("key3", b"data3")
 
         # Verify the file was created
-        expected_file = tmp_path / "test_cache" / "2024" / "03" / "15" / "10:30:45"
+        expected_file = tmp_path / "test_cache" / "2024" / "03" / "15" / "10:30:45.000"
         assert expected_file.exists()
 
         # Verify all data can be read back
@@ -915,8 +915,8 @@ def test_cache_paths_from_single_day(enabled_cache):
 
     # Verify the paths are sorted correctly
     path_names = [p.name for p in paths]
-    assert "10:15:00" in path_names
-    assert "11:00:00" in path_names
+    assert "10:15:00.000" in path_names
+    assert "11:00:00.000" in path_names
 
 
 def test_cache_paths_from_multiple_days(enabled_cache):
@@ -945,9 +945,9 @@ def test_cache_paths_from_multiple_days(enabled_cache):
 
     # Verify we get the expected files
     path_names = [p.name for p in paths]
-    assert "15:00:00" in path_names
-    assert "08:00:00" in path_names  # From 3/16
-    assert "12:00:00" in path_names  # From 3/17
+    assert "15:00:00.000" in path_names
+    assert "08:00:00.000" in path_names  # From 3/16
+    assert "12:00:00.000" in path_names  # From 3/17
 
 
 def test_cache_entry_datetime(enabled_cache):
@@ -1085,8 +1085,8 @@ def test_cache_with_different_subdirectories(tmp_path):
         cache2.save("key2", test_time, b"data2")
 
         # Verify files are in different subdirectories
-        file1 = tmp_path / "subdir1" / "2024" / "03" / "15" / "10:00:00"
-        file2 = tmp_path / "subdir2" / "2024" / "03" / "15" / "10:00:00"
+        file1 = tmp_path / "subdir1" / "2024" / "03" / "15" / "10:00:00.000"
+        file2 = tmp_path / "subdir2" / "2024" / "03" / "15" / "10:00:00.000"
 
         assert file1.exists()
         assert file2.exists()

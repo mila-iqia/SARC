@@ -25,7 +25,7 @@ AUTO_END_FIELD = "end_time_prometheus"
 
 
 def parse_prometheus_auto_intervals(
-    cluster_name: str, minutes: int
+    cluster_name: str, minutes: int, max_intervals: int | None
 ) -> list[tuple[datetime, datetime]]:
     """
     When scraping with auto intervals, we don't want to scrape Prometheus metrics
@@ -33,7 +33,7 @@ def parse_prometheus_auto_intervals(
     """
     end_time_sacct = _time_auto_first_date(cluster_name, "end_time_sacct")
     return parse_auto_intervals(
-        cluster_name, AUTO_END_FIELD, minutes, end=end_time_sacct
+        cluster_name, AUTO_END_FIELD, minutes, max_intervals, end=end_time_sacct
     )
 
 
@@ -67,6 +67,10 @@ class AcquirePrometheus:
         ),
     )
 
+    max_intervals: int | None = field(
+        type=int, default=None, help="Max number of intervals to fetch"
+    )
+
     def execute(self) -> int:
         if self.intervals is not None and self.auto_interval is not None:
             logger.error(
@@ -90,7 +94,7 @@ class AcquirePrometheus:
                     intervals = parse_intervals(self.intervals)
                 elif self.auto_interval is not None:
                     intervals = parse_prometheus_auto_intervals(
-                        cluster_name, self.auto_interval
+                        cluster_name, self.auto_interval, self.max_intervals
                     )
                 if not intervals:
                     logger.warning(
