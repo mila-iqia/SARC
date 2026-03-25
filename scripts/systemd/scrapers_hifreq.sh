@@ -1,6 +1,6 @@
 #!/bin/sh
-SCRIPT=$(readlink -f "$0")
-SCRIPTPATH=$(dirname "$SCRIPT")
-cd $SCRIPTPATH/../../
+source envvars.sh
+export SARC_CONFIG="/home/sarc/SARC/config/sarc-config/fetch_hourly.yaml"
 # fetch jobs
-sudo -u sarc SARC_MODE=scraping SARC_CONFIG=$SCRIPTPATH/../../config/sarc-prod.yaml ../.local/bin/uv run sarc acquire jobs -c narval fir nibi rorqual mila -a 60
+../.local/bin/uv run sarc fetch jobs -c narval fir nibi rorqual mila -a 60
+../.local/bin/uv run sarc parse jobs
