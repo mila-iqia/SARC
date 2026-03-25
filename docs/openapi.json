@@ -160,8 +160,14 @@
       "in": "query",
       "required": false,
       "schema": {
-       "type": "integer",
-       "default": 100,
+       "anyOf": [
+        {
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
        "title": "Per Page"
       }
      },
@@ -748,8 +754,14 @@
       "in": "query",
       "required": false,
       "schema": {
-       "type": "integer",
-       "default": 100,
+       "anyOf": [
+        {
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
        "title": "Per Page"
       }
      },
@@ -1276,14 +1288,15 @@
       "title": "Id"
      },
      "check": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
        "active": {
         "type": "boolean",
-        "title": "Active"
+        "description": "Whether the check is active or not"
        },
        "name": {
         "type": "string",
-        "title": "Name",
+        "description": "Name of the check",
         "default": "NOTSET"
        },
        "parameters": {
@@ -1291,10 +1304,10 @@
          "type": "string"
         },
         "type": "object",
-        "title": "Parameters"
+        "description": "Parameters of the check"
        },
        "depends": {
-        "anyOf": [
+        "oneOf": [
          {
           "items": {
            "type": "string"
@@ -1305,25 +1318,25 @@
           "type": "string"
          }
         ],
-        "title": "Depends"
+        "description": "Other checks on which this check depends. If these checks fail, this\ncheck will not be run."
        }
       },
+      "additionalProperties": false,
       "type": "object",
       "required": [
        "active"
-      ],
-      "title": "HealthCheck"
+      ]
      },
      "last_result": {
       "anyOf": [
        {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "properties": {
          "name": {
           "type": "string",
-          "title": "Name"
+          "description": "Name of the health check that has this result"
          },
          "status": {
-          "type": "string",
           "enum": [
            "ok",
            "failure",
@@ -1331,112 +1344,103 @@
            "absent",
            "stale"
           ],
-          "title": "CheckStatus",
-          "description": "Possible statuses for a health check."
+          "description": "Global status of the check",
+          "default": "absent"
          },
          "statuses": {
           "additionalProperties": {
-           "type": "string",
            "enum": [
             "ok",
             "failure",
             "error",
             "absent",
             "stale"
-           ],
-           "title": "CheckStatus",
-           "description": "Possible statuses for a health check."
+           ]
           },
           "type": "object",
-          "title": "Statuses"
+          "description": "Statuses of individual checks\nAlways a dict in current code"
          },
          "exception": {
-          "anyOf": [
+          "oneOf": [
            {
             "properties": {
              "type": {
-              "type": "string",
-              "title": "Type"
+              "type": "string"
              },
              "message": {
-              "type": "string",
-              "title": "Message"
+              "type": "string"
              },
              "trace": {
               "items": {
                "properties": {
                 "filename": {
-                 "type": "string",
-                 "title": "Filename"
+                 "type": "string"
                 },
                 "line": {
-                 "anyOf": [
+                 "oneOf": [
                   {
                    "type": "integer"
                   },
                   {
                    "type": "null"
                   }
-                 ],
-                 "title": "Line"
+                 ]
                 },
                 "name": {
-                 "type": "string",
-                 "title": "Name"
+                 "type": "string"
                 },
                 "code": {
-                 "anyOf": [
+                 "oneOf": [
                   {
                    "type": "string"
                   },
                   {
                    "type": "null"
                   }
-                 ],
-                 "title": "Code"
+                 ]
                 }
                },
+               "additionalProperties": false,
                "type": "object",
                "required": [
                 "filename",
                 "line",
                 "name",
                 "code"
-               ],
-               "title": "CheckExceptionFrame"
+               ]
               },
-              "type": "array",
-              "title": "Trace"
+              "type": "array"
              }
             },
+            "additionalProperties": false,
             "type": "object",
             "required": [
              "type",
              "message"
-            ],
-            "title": "CheckException"
+            ]
            },
            {
             "type": "null"
            }
-          ]
+          ],
+          "description": "Information about the exception, if the check has ERROR status"
          },
          "issue_date": {
           "type": "string",
           "format": "date-time",
-          "title": "Issue Date"
+          "description": "Date at which the check finished"
          },
          "check": {
-          "anyOf": [
+          "oneOf": [
            {
             "properties": {
              "active": {
               "type": "boolean",
-              "title": "Active"
+              "description": "Whether the check is active or not"
              },
              "name": {
               "type": "string",
-              "title": "Name",
+              "description": "Name of the check",
               "default": "NOTSET"
              },
              "parameters": {
@@ -1444,10 +1448,10 @@
                "type": "string"
               },
               "type": "object",
-              "title": "Parameters"
+              "description": "Parameters of the check"
              },
              "depends": {
-              "anyOf": [
+              "oneOf": [
                {
                 "items": {
                  "type": "string"
@@ -1458,26 +1462,27 @@
                 "type": "string"
                }
               ],
-              "title": "Depends"
+              "description": "Other checks on which this check depends. If these checks fail, this\ncheck will not be run."
              }
             },
+            "additionalProperties": false,
             "type": "object",
             "required": [
              "active"
-            ],
-            "title": "HealthCheck"
+            ]
            },
            {
             "type": "null"
            }
-          ]
+          ],
+          "description": "Check object"
          }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
          "name"
-        ],
-        "title": "CheckResult"
+        ]
        },
        {
         "type": "null"
