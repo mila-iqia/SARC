@@ -7,7 +7,11 @@ import pytest
 
 from sarc.client.job import SlurmJob
 from sarc.config import UTC
-from sarc.jobs.series import _get_job_time_series_data_cache_key, get_job_time_series
+from sarc.jobs.series import (
+    _get_job_time_series_data_cache_key,
+    _get_job_time_series_data_cache_subdir,
+    get_job_time_series,
+)
 from tests.common.dateutils import MTL
 
 from .factory import JobFactory
@@ -206,9 +210,10 @@ def test_get_job_time_series_cache(job, test_config, monkeypatch, capsys):
 
     params = {"job": job, "metric": "slurm_job_core_usage"}
     key = _get_job_time_series_data_cache_key(**params)
+    subdir = _get_job_time_series_data_cache_subdir(job)
     assert key is not None
 
-    prometheus_cache_dir: Path = test_config.cache / "prometheus"
+    prometheus_cache_dir: Path = test_config.cache / subdir
     cache_path = prometheus_cache_dir / key
 
     # Cache folder should not exist
