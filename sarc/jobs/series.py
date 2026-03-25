@@ -66,10 +66,11 @@ def get_job_time_series(
         dataframe: If True, return a DataFrame. Otherwise, return the list of
             dicts returned by Prometheus's API.
     """
+    subdir = _get_job_time_series_data_cache_subdir(job)
     results = with_cache(
         _get_job_time_series_data,
         key=_get_job_time_series_data_cache_key,
-        subdirectory="prometheus",
+        subdirectory=subdir,
     )(
         job=job,
         metric=metric,
@@ -178,6 +179,13 @@ def _get_job_time_series_data(
 
     logger.debug(f"prometheus query with offset: {query}")
     return job.fetch_cluster_config().prometheus.custom_query(query)
+
+
+def _get_job_time_series_data_cache_subdir(job: SlurmJob) -> str:
+    job_start_time = job.start_time
+    assert job_start_time is not None
+    fmt = "%Y/%m/%d"
+    return f"prometheus/{job_start_time.strftime(fmt)}"
 
 
 def _get_job_time_series_data_cache_key(

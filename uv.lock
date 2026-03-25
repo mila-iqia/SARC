@@ -3011,7 +3011,6 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
-cloud = []
 dev = [
     { name = "fabric", extras = ["testing"], specifier = ">=3.0.0,<4" },
     { name = "jupyter", specifier = ">=1.0.0,<2" },
