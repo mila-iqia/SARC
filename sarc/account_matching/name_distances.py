@@ -48,7 +48,7 @@ def find_best_word_matches(
     LP_results: list[tuple[str, list[tuple[int, str]]]] = []
     for a, bow_A in LP_names_A:
         comparisons = sorted(
-            ((bow_distance(bow_A, bow_B), b) for b, bow_B in LP_names_B),
+            ((bow_distance(bow_A, bow_B), b) for b, bow_B in LP_names_B)
         )
         LP_results.append((a, comparisons[:nb_best_matches]))
     return LP_results
