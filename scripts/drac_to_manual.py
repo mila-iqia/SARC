@@ -1,4 +1,5 @@
-"""Generate manual plugin YAML config by matching Mila LDAP users to DRAC
+"""
+Generate manual plugin YAML config by matching Mila LDAP users to DRAC
 accounts using a name-distance heuristic.
 
 Output (stdout):
