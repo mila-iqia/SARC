@@ -1,4 +1,3 @@
-import json
 import logging
 import re
 
@@ -25,21 +24,34 @@ def test_list_after_run(beans_config, cli_main, capsys, caplog):
         assert cli_main(["health", "list"]) == 0
         assert "There are 4 health check states" in caplog.text
 
-    # Parse JSON output
     stdout = capsys.readouterr().out
-    raw_json = re.sub(r"\}[\r\n]+\{", "},{", stdout)
-    states = json.loads(f"[{raw_json}]")
 
-    assert len(states) == 4
-    names = [s["check"]["name"] for s in states]
-    assert names == sorted(names)
-    for state in states:
-        assert "check" in state
-        assert (
-            state["check"]["_class_"] == "tests.unittests.alerts.definitions:BeanCheck"
-        )
-        assert "beans" in state["check"]
-        assert "last_result" in state
+    # All 4 checks are listed, sorted by name
+    check_names = re.findall(r"Check: (\w+)", stdout)
+    assert check_names == sorted(check_names)
+    assert len(check_names) == 4
+
+    # Each check shows its class
+    assert stdout.count("tests.unittests.alerts.definitions:BeanCheck") == 4
+
+    # Each check shows beans field
+    assert "beans:" in stdout
+
+
+@pytest.mark.usefixtures("empty_read_write_db")
+def test_list_pretty_print(beans_config, cli_main, capsys, file_regression):
+    cli_main(["health", "run", "--all"])
+    capsys.readouterr()  # discard run output
+
+    assert cli_main(["health", "list"]) == 0
+    output = capsys.readouterr().out
+
+    # Normalize absolute paths and line numbers in exception traces,
+    # as they depend on the install directory and may shift on code changes.
+    output = re.sub(r"File '.*?([^/]+\.py)'", r"File '\1'", output)
+    output = re.sub(r", line \d+,", ", line N,", output)
+
+    file_regression.check(output)
 
 
 @pytest.mark.usefixtures("empty_read_write_db")
