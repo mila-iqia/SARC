@@ -77,7 +77,7 @@ def fetch_prometheus(cluster: ClusterConfig, start: datetime, end: datetime) -> 
                 job=entry, metric=JOB_STATISTICS_METRIC_NAMES, max_points=10_000
             )
             ce.add_value(
-                f"{entry.cluster_name}${entry.job_id}${entry.submit_time.isoformat('seconds')}",
+                f"{entry.cluster_name}${entry.job_id}${entry.submit_time.isoformat(timespec='seconds')}",
                 json.dumps(raw_prom_data).encode("utf-8"),
             )
     logger.info(f"Fetched Prometheus metrics for {nb_jobs} jobs.")
@@ -95,7 +95,7 @@ def parse_prometheus(since: datetime | None, update_parsed_date: bool) -> None:
     for ce in cache.read_from(from_time=since):
         error = False
         logger.info(
-            f"Parsing prometheus data from cache entry: {ce.get_entry_datetime().isoformat('milliseconds')}"
+            f"Parsing prometheus data from cache entry: {ce.get_entry_datetime().isoformat(timespec='milliseconds')}"
         )
         for key, value in ce.items():
             nb_jobs += 1
