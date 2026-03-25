@@ -197,7 +197,7 @@ def has_prometheus_cache_for_gpu_type(cache: Path, entry: SlurmJob) -> bool:
     """Return True if there is Prometheus raw cache for job.allocated.gpu_type."""
     # We check if a cache file exists for the call to get_job_time_series()
     # which should be used to get GPU type from Prometheus.
-    cache_subdir = _get_job_time_series_data_cache_subdir(job)
+    cache_subdir = _get_job_time_series_data_cache_subdir(entry)
     cache_key = _get_job_time_series_data_cache_key(
         job=entry, metric="slurm_job_utilization_gpu_memory", max_points=1
     )
