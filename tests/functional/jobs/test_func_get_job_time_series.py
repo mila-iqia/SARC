@@ -7,11 +7,7 @@ import pytest
 
 from sarc.client.job import SlurmJob
 from sarc.config import UTC
-from sarc.jobs.series import (
-    _get_job_time_series_data_cache_key,
-    _get_job_time_series_data_cache_subdir,
-    get_job_time_series,
-)
+from sarc.jobs.series import get_job_time_series_data
 from tests.common.dateutils import MTL
 
 from .factory import JobFactory
@@ -41,15 +37,10 @@ def job(request):
     return job
 
 
-@pytest.mark.skip("Need to mock prometheus")
-def test_no_job_with_this_id(job):
-    assert get_job_time_series(job, "slurm_job_core_usage", dataframe=True) is None
-
-
 @pytest.mark.usefixtures("base_config")
 def test_non_existing_metric(job):
     with pytest.raises(ValueError, match="^Unknown metric name: non_existing_metric"):
-        get_job_time_series(job, "non_existing_metric", dataframe=True)
+        get_job_time_series_data(job, "non_existing_metric")
 
 
 parameters = {
@@ -70,8 +61,8 @@ parameters = {
 @pytest.mark.parametrize(
     "job", parameters.values(), ids=parameters.keys(), indirect=True
 )
-def test_get_job_time_series(job, prom_custom_query_mock, file_regression):
-    assert get_job_time_series(job, "slurm_job_core_usage", dataframe=False) == [], (
+def test_get_job_time_series_data(job, prom_custom_query_mock, file_regression):
+    assert get_job_time_series_data(job, "slurm_job_core_usage") == [], (
         "custom_query was not mocked properly"
     )
 
@@ -103,7 +94,7 @@ no_duration_parameters = {
     indirect=True,
 )
 def test_jobs_with_no_duration(job):
-    assert get_job_time_series(job, "slurm_job_core_usage", dataframe=False) == []
+    assert get_job_time_series_data(job, "slurm_job_core_usage") == []
 
 
 @pytest.mark.freeze_time(test_time_str)
@@ -116,12 +107,8 @@ def test_jobs_with_no_duration(job):
 def test_measure_and_aggregation(
     job, measure, aggregation, prom_custom_query_mock, file_regression
 ):
-    assert not get_job_time_series(
-        job,
-        metric="slurm_job_fp16_gpu",
-        measure=measure,
-        aggregation=aggregation,
-        dataframe=True,
+    assert not get_job_time_series_data(
+        job, metric="slurm_job_fp16_gpu", measure=measure, aggregation=aggregation
     ), "custom_query was not mocked properly"
 
     file_regression.check(prom_custom_query_mock.call_args[0][0])
@@ -130,8 +117,8 @@ def test_measure_and_aggregation(
 @pytest.mark.usefixtures("base_config")
 def test_invalid_aggregation(job):
     with pytest.raises(ValueError, match="^Aggregation must be one of "):
-        get_job_time_series(
-            job, metric="slurm_job_fp16_gpu", aggregation="invalid", dataframe=True
+        get_job_time_series_data(
+            job, metric="slurm_job_fp16_gpu", aggregation="invalid"
         )
 
 
@@ -147,10 +134,9 @@ def test_invalid_aggregation(job):
 def test_intervals(
     job, min_interval, max_points, prom_custom_query_mock, file_regression
 ):
-    assert not get_job_time_series(
+    assert not get_job_time_series_data(
         job,
         "slurm_job_fp16_gpu",
-        dataframe=True,
         measure="avg_over_time",
         aggregation="interval",
         min_interval=min_interval,
@@ -165,19 +151,6 @@ def test_intervals(
     # assert df.shape[0] <= max_points
 
 
-@pytest.mark.parametrize(
-    "job", [{"job_id": -1}, {}], ids=["no_results", "with_results"], indirect=True
-)
-@pytest.mark.parametrize("dataframe", [True, False])
-def test_to_be_or_not_to_be_a_dataframe(job, prom_custom_query_mock, dataframe):
-    rval = get_job_time_series(job, metric="slurm_job_fp16_gpu", dataframe=dataframe)
-
-    if dataframe:
-        assert rval is None
-    else:
-        assert rval == []
-
-
 @pytest.mark.skip("TODO: Test when prometheus is mocked")
 def test_preempted_and_resumed():
     job_factory = JobFactory()
@@ -188,111 +161,3 @@ def test_preempted_and_resumed():
     assert preempted_job.end_time < resumed_job.start_time
     assert preempted_job.series["time"].max() < resumed_job.series["time"].min()
     assert preempted_job.job_id == resumed_job.job_id
-
-
-@pytest.mark.usefixtures("enabled_cache")
-def test_get_job_time_series_cache(job, test_config, monkeypatch, capsys):
-    """Test cache for get_job_time_series"""
-
-    fake_series_data = [1234, 5678]
-
-    # Mock for job time series results.
-    # Print a message, so that we can check
-    # if this function is called (i.e. cache was not used)
-    # or not (i.e. cache was used)
-    def _fake_job_time_series_data(*args, **kwargs):
-        print("live_fake_series")
-        return fake_series_data
-
-    monkeypatch.setattr(
-        "sarc.jobs.series._get_job_time_series_data", _fake_job_time_series_data
-    )
-
-    params = {"job": job, "metric": "slurm_job_core_usage"}
-    key = _get_job_time_series_data_cache_key(**params)
-    subdir = _get_job_time_series_data_cache_subdir(job)
-    assert key is not None
-
-    prometheus_cache_dir: Path = test_config.cache / subdir
-    cache_path = prometheus_cache_dir / key
-
-    # Cache folder should not exist
-    assert not prometheus_cache_dir.exists()
-
-    # Call the function and check returned value
-    assert get_job_time_series(dataframe=False, **params) == fake_series_data
-
-    # Cache should have NOT been used
-    captured = capsys.readouterr()
-    assert captured.out.strip() == "live_fake_series"
-
-    # Cache should now exist
-    assert prometheus_cache_dir.is_dir()
-    assert cache_path.is_file()
-
-    # Cache should have expected data
-    with open(cache_path) as file:
-        cached_data = json.load(file)
-    assert cached_data == fake_series_data
-
-    # Call the function again
-    assert get_job_time_series(dataframe=False, **params) == fake_series_data
-    # Cache should have been used
-    captured = capsys.readouterr()
-    assert captured.out.strip() == ""
-
-
-@pytest.mark.usefixtures("enabled_cache")
-def test_get_job_time_series_cache_check(job, test_config, monkeypatch):
-    """Test cache checking for get_job_time_series using SARC_CACHE=check"""
-
-    # Manually reset cache_policy_var
-    from sarc.cache import CacheException, cache_policy_var
-
-    token = cache_policy_var.set(None)
-    try:
-        monkeypatch.setenv("SARC_CACHE", "check")
-
-        fake_series_data_orig = [1234, 5678]
-        fake_series_data = [1234, 5678]
-
-        def _fake_job_time_series_data(*args, **kwargs):
-            # Change returned data on each call
-            ret = list(fake_series_data)
-            fake_series_data[0] += 1
-            return ret
-
-        monkeypatch.setattr(
-            "sarc.jobs.series._get_job_time_series_data", _fake_job_time_series_data
-        )
-
-        params = {"job": job, "metric": "slurm_job_core_usage"}
-
-        # Call the function and check returned value
-        assert get_job_time_series(dataframe=False, **params) == fake_series_data_orig
-
-        # Call the function again
-        # Should fail because newly returned data
-        # will be compared to previous returned data
-        # which is stored in the cache
-        with pytest.raises(CacheException) as exc_info:
-            get_job_time_series(dataframe=False, **params)
-        assert (
-            str(exc_info.value)
-            == """
-Cached result != live result:
-Key: raisin.1.2023-03-05T03h00m00s_to_2023-03-05T06h00m00s.cu.min-itv-30s.max-pts-100.no_measure.json
-
---- cached
-+++ value
-@@ -1,4 +1,4 @@
- [
-- 1234,
-+ 1235,
-  5678
- ]
-"""
-        )
-
-    finally:
-        cache_policy_var.reset(token)

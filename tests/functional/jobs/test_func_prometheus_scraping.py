@@ -87,7 +87,6 @@ def test_get_gpu_type(
     # Test `acquire jobs` without node->gpu available
     # -----------------------------------------------
     # Should return GPU name from sacct
-    time.sleep(1)  # to prevent cache collision with previous sacct fetch...
     assert cli_main(cmd_sacct_fetch) == 0
     assert cli_main(cmd_sacct_parse) == 0
     jobs = list(get_jobs())
@@ -109,7 +108,6 @@ def test_get_gpu_type(
     # Acquire slurm config.
     assert cli_main(["parse", "slurmconfig", "--cluster_name", "raisin"]) == 0
     # acquire jobs
-    time.sleep(1)  # to prevent cache collision with previous sacct fetch...
     assert cli_main(cmd_sacct_fetch) == 0
     assert cli_main(cmd_sacct_parse) == 0
     jobs = list(get_jobs())
@@ -130,13 +128,13 @@ def test_get_gpu_type(
 
     mock_get_job_time_series.called = 0
     monkeypatch.setattr(
-        prometheus_scraping, "get_job_time_series", mock_get_job_time_series
+        prometheus_scraping, "get_job_time_series_data", mock_get_job_time_series
     )
 
     assert (
         cli_main(
             [
-                "acquire",
+                "fetch",
                 "prometheus",
                 "--cluster_name",
                 "raisin",
@@ -146,6 +144,7 @@ def test_get_gpu_type(
         )
         == 0
     )
+    assert cli_main(["parse", "prometheus", "--since", "2023-02-14T00:00"]) == 0
     assert mock_compute_job_statistics.called == 1
     assert mock_get_job_time_series.called == 1
     jobs = list(get_jobs())
@@ -252,7 +251,7 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
         ]
 
     monkeypatch.setattr(
-        prometheus_scraping, "get_job_time_series", mock_get_job_time_series
+        prometheus_scraping, "get_job_time_series_data", mock_get_job_time_series
     )
 
     assert (
@@ -277,7 +276,7 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     assert (
         cli_main(
             [
-                "acquire",
+                "fetch",
                 "prometheus",
                 "--cluster_name",
                 "raisin",
@@ -290,6 +289,7 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
         )
         == 0
     )
+    assert cli_main(["parse", "prometheus", "--since", "2023-02-14T00:00"]) == 0
 
     jobs = list(get_jobs())
 
@@ -470,7 +470,7 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
         ]
 
     monkeypatch.setattr(
-        prometheus_scraping, "get_job_time_series", mock_get_job_time_series
+        prometheus_scraping, "get_job_time_series_data", mock_get_job_time_series
     )
 
     assert len(list(get_jobs())) == 0
