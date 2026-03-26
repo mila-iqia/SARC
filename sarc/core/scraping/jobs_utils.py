@@ -94,7 +94,7 @@ def parse_auto_intervals(
         # Valid minutes. Generate many intervals to cover [start, end[.
         delta = timedelta(minutes=minutes)
         curr = start
-        while curr + delta < end and (max_intervals is None or count < max_intervals):
+        while curr + delta <= end and (max_intervals is None or count < max_intervals):
             next_time = curr + delta
             count += 1
             intervals.append((curr, next_time))
