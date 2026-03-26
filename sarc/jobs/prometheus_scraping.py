@@ -120,13 +120,17 @@ def parse_prometheus(since: datetime | None, update_parsed_date: bool) -> None:
                 continue
             data = json.loads(value.decode("utf-8"))
             gpu_type = data[0]["metric"]["gpu_type"]
+            need_save = False
             if gpu_type is not None:
                 entry.allocated.gpu_type = (
                     cluster.harmonize_gpu_from_nodes(entry.nodes, gpu_type) or gpu_type
                 )
+                need_save = True
             statistics = compute_job_statistics(entry, data)
             if not statistics.empty():
                 entry.stored_statistics = statistics
+                need_save = True
+            if need_save:
                 entry.save()
 
         logger.info(f"Saved Prometheus metrics for {nb_jobs} jobs.")
