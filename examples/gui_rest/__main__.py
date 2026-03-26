@@ -1,5 +1,8 @@
 # /// script
-# dependencies = ["PyQt6>=6.9,<7"]
+# dependencies = ["PyQt6>=6.9,<7", "sarc"]
+#
+# [tool.uv.sources]
+# sarc = { path = "../.." }
 # ///
 """
 SARC Database Browser - PyQt6 GUI for browsing SARC via REST API.
