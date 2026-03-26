@@ -5,10 +5,12 @@ from __future__ import annotations
 import itertools
 import logging
 import re
+import traceback
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from enum import Enum
 from graphlib import TopologicalSorter
+from traceback import FrameSummary
 from typing import Callable, Self, cast
 
 from gifnoc.std import time
@@ -37,15 +39,37 @@ class CheckStatus(str, Enum):
 
 
 @dataclass(frozen=True)
+class CheckExceptionFrame:
+    filename: str
+    line: int | None
+    name: str
+    code: str | None
+
+    @staticmethod
+    def from_frame(frame: FrameSummary) -> CheckExceptionFrame:
+        return CheckExceptionFrame(
+            filename=frame.filename, line=frame.lineno, name=frame.name, code=frame.line
+        )
+
+
+@dataclass(frozen=True)
 class CheckException:
     """Exception data for checks with ERROR status."""
 
     type: str
     message: str
+    trace: list[CheckExceptionFrame] = field(default_factory=list)
 
     @staticmethod
     def from_exception(exc: Exception) -> CheckException:
-        return CheckException(type=type(exc).__qualname__, message=str(exc))
+        return CheckException(
+            type=type(exc).__qualname__,
+            message=str(exc),
+            trace=[
+                CheckExceptionFrame.from_frame(frame)
+                for frame in traceback.extract_tb(exc.__traceback__)
+            ],
+        )
 
 
 @dataclass

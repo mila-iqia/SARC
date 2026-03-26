@@ -160,8 +160,14 @@
       "in": "query",
       "required": false,
       "schema": {
-       "type": "integer",
-       "default": 100,
+       "anyOf": [
+        {
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
        "title": "Per Page"
       }
      },
@@ -748,8 +754,14 @@
       "in": "query",
       "required": false,
       "schema": {
-       "type": "integer",
-       "default": 100,
+       "anyOf": [
+        {
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
        "title": "Per Page"
       }
      },
@@ -1042,10 +1054,161 @@
      }
     }
    }
+  },
+  "/v0/health/list": {
+   "get": {
+    "summary": "Health List",
+    "description": "Get current health check states (check definition and last result) saved in database.",
+    "operationId": "health_list_v0_health_list_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "items": {
+          "$ref": "#/components/schemas/HealthCheckState"
+         },
+         "type": "array",
+         "title": "Response Health List V0 Health List Get"
+        }
+       }
+      }
+     }
+    }
+   }
   }
  },
  "components": {
   "schemas": {
+   "CheckException": {
+    "properties": {
+     "type": {
+      "type": "string",
+      "title": "Type"
+     },
+     "message": {
+      "type": "string",
+      "title": "Message"
+     },
+     "trace": {
+      "items": {
+       "$ref": "#/components/schemas/CheckExceptionFrame"
+      },
+      "type": "array",
+      "title": "Trace"
+     }
+    },
+    "type": "object",
+    "required": [
+     "type",
+     "message"
+    ],
+    "title": "CheckException"
+   },
+   "CheckExceptionFrame": {
+    "properties": {
+     "filename": {
+      "type": "string",
+      "title": "Filename"
+     },
+     "line": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Line"
+     },
+     "name": {
+      "type": "string",
+      "title": "Name"
+     },
+     "code": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Code"
+     }
+    },
+    "type": "object",
+    "required": [
+     "filename",
+     "line",
+     "name",
+     "code"
+    ],
+    "title": "CheckExceptionFrame"
+   },
+   "CheckResult": {
+    "properties": {
+     "name": {
+      "type": "string",
+      "title": "Name"
+     },
+     "status": {
+      "$ref": "#/components/schemas/CheckStatus",
+      "default": "absent"
+     },
+     "statuses": {
+      "additionalProperties": {
+       "$ref": "#/components/schemas/CheckStatus"
+      },
+      "type": "object",
+      "title": "Statuses"
+     },
+     "exception": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/CheckException"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "issue_date": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Issue Date"
+     },
+     "check": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/HealthCheck"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     }
+    },
+    "type": "object",
+    "required": [
+     "name"
+    ],
+    "title": "CheckResult"
+   },
+   "CheckStatus": {
+    "type": "string",
+    "enum": [
+     "ok",
+     "failure",
+     "error",
+     "absent",
+     "stale"
+    ],
+    "title": "CheckStatus",
+    "description": "Possible statuses for a health check."
+   },
    "Credentials": {
     "properties": {
      "values": {
@@ -1071,6 +1234,279 @@
     },
     "type": "object",
     "title": "HTTPValidationError"
+   },
+   "HealthCheck": {
+    "properties": {
+     "active": {
+      "type": "boolean",
+      "title": "Active"
+     },
+     "name": {
+      "type": "string",
+      "title": "Name",
+      "default": "NOTSET"
+     },
+     "parameters": {
+      "additionalProperties": {
+       "type": "string"
+      },
+      "type": "object",
+      "title": "Parameters"
+     },
+     "depends": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "string"
+       }
+      ],
+      "title": "Depends"
+     }
+    },
+    "type": "object",
+    "required": [
+     "active"
+    ],
+    "title": "HealthCheck"
+   },
+   "HealthCheckState": {
+    "properties": {
+     "id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Id"
+     },
+     "check": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+       "active": {
+        "type": "boolean",
+        "description": "Whether the check is active or not"
+       },
+       "name": {
+        "type": "string",
+        "description": "Name of the check",
+        "default": "NOTSET"
+       },
+       "parameters": {
+        "additionalProperties": {
+         "type": "string"
+        },
+        "type": "object",
+        "description": "Parameters of the check"
+       },
+       "depends": {
+        "oneOf": [
+         {
+          "items": {
+           "type": "string"
+          },
+          "type": "array"
+         },
+         {
+          "type": "string"
+         }
+        ],
+        "description": "Other checks on which this check depends. If these checks fail, this\ncheck will not be run."
+       }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+       "active"
+      ]
+     },
+     "last_result": {
+      "anyOf": [
+       {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+         "name": {
+          "type": "string",
+          "description": "Name of the health check that has this result"
+         },
+         "status": {
+          "enum": [
+           "ok",
+           "failure",
+           "error",
+           "absent",
+           "stale"
+          ],
+          "description": "Global status of the check",
+          "default": "absent"
+         },
+         "statuses": {
+          "additionalProperties": {
+           "enum": [
+            "ok",
+            "failure",
+            "error",
+            "absent",
+            "stale"
+           ]
+          },
+          "type": "object",
+          "description": "Statuses of individual checks\nAlways a dict in current code"
+         },
+         "exception": {
+          "oneOf": [
+           {
+            "properties": {
+             "type": {
+              "type": "string"
+             },
+             "message": {
+              "type": "string"
+             },
+             "trace": {
+              "items": {
+               "properties": {
+                "filename": {
+                 "type": "string"
+                },
+                "line": {
+                 "oneOf": [
+                  {
+                   "type": "integer"
+                  },
+                  {
+                   "type": "null"
+                  }
+                 ]
+                },
+                "name": {
+                 "type": "string"
+                },
+                "code": {
+                 "oneOf": [
+                  {
+                   "type": "string"
+                  },
+                  {
+                   "type": "null"
+                  }
+                 ]
+                }
+               },
+               "additionalProperties": false,
+               "type": "object",
+               "required": [
+                "filename",
+                "line",
+                "name",
+                "code"
+               ]
+              },
+              "type": "array"
+             }
+            },
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+             "type",
+             "message"
+            ]
+           },
+           {
+            "type": "null"
+           }
+          ],
+          "description": "Information about the exception, if the check has ERROR status"
+         },
+         "issue_date": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Date at which the check finished"
+         },
+         "check": {
+          "oneOf": [
+           {
+            "properties": {
+             "active": {
+              "type": "boolean",
+              "description": "Whether the check is active or not"
+             },
+             "name": {
+              "type": "string",
+              "description": "Name of the check",
+              "default": "NOTSET"
+             },
+             "parameters": {
+              "additionalProperties": {
+               "type": "string"
+              },
+              "type": "object",
+              "description": "Parameters of the check"
+             },
+             "depends": {
+              "oneOf": [
+               {
+                "items": {
+                 "type": "string"
+                },
+                "type": "array"
+               },
+               {
+                "type": "string"
+               }
+              ],
+              "description": "Other checks on which this check depends. If these checks fail, this\ncheck will not be run."
+             }
+            },
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+             "active"
+            ]
+           },
+           {
+            "type": "null"
+           }
+          ],
+          "description": "Check object"
+         }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+         "name"
+        ]
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "last_message": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Last Message"
+     }
+    },
+    "type": "object",
+    "required": [
+     "check"
+    ],
+    "title": "HealthCheckState",
+    "description": "State of a health check stored in MongoDB.\n\nThis is used by the polling system to track when checks were last run\nand what their status was, enabling scheduled execution without a\npermanent daemon process.\n\nCombine:\n- a HealthCheck configuration object,\n- the last check result\n- the last result message"
    },
    "JobStatistics": {
     "properties": {

@@ -8,6 +8,10 @@ from pydantic import UUID4, BaseModel
 from pydantic_mongo import PydanticObjectId
 from serieux import deserialize
 
+from sarc.alerts.healthcheck_state import (
+    HealthCheckState,
+    get_healthcheck_state_collection,
+)
 from sarc.client import get_rgus
 from sarc.client.job import (
     SlurmJob,
@@ -392,3 +396,10 @@ def get_user_by_email(email: str) -> UserData:
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
     return user
+
+
+@router.get("/health/list")
+def health_list() -> list[HealthCheckState]:
+    """Get current health check states (check definition and last result) saved in database."""
+    states = list(get_healthcheck_state_collection().get_states())
+    return states

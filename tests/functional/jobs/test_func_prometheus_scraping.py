@@ -764,7 +764,7 @@ def test_auto_interval(cli_main, monkeypatch, freezer, caplog):
         _get_cluster_raisin().end_time_prometheus, "%Y-%m-%dT%H:%M"
     )
     expected_final_end_time = orig_end_time + timedelta(minutes=300)
-    freezer.move_to(expected_final_end_time)
+    freezer.move_to(orig_end_time + timedelta(minutes=301))
 
     assert (
         cli_main(
