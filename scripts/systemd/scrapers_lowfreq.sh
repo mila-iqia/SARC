@@ -6,6 +6,6 @@ export SARC_CONFIG="/home/sarc/SARC/config/sarc-config/fetch_daily_sarc01-dev.ya
 # fetch users
 ../.local/bin/uv run sarc fetch users
 # parse users
-../.local/bin/uv run sarc parse users --since 2025-11-28
+../.local/bin/uv run sarc parse users
 # health run
 SARC_CONFIG="/home/sarc/SARC/config/sarc-config/health_check.yaml" ../.local/bin/uv run sarc health run --all
