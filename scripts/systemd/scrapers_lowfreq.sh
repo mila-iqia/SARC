@@ -1,5 +1,5 @@
 #!/bin/sh
-source envvars.sh
+source scripts/systemd/envvars.sh
 export SARC_CONFIG="/home/sarc/SARC/config/sarc-config/fetch_daily_sarc01-dev.yaml"
 # fetch prometheus
 ../.local/bin/uv run sarc acquire prometheus -c narval mila rorqual -a 1440
