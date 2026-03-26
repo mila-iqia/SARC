@@ -1,2 +1,2 @@
-web: uvicorn sarc.api.main:app --host 0.0.0.0 --port $PORT --proxy_headers --forwarded_allow_ips '*'
+web: uvicorn sarc.api.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips '*'
 command: sh -c "$COMMAND"
