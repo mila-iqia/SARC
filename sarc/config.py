@@ -53,10 +53,21 @@ class PrivateKeyInfo:
 
 
 @dataclass
+class OTPInfo:
+    otp_secret: Secret[str]
+
+
+@dataclass
+class StaticInfo:
+    selector: str
+
+
+@dataclass
 class ClusterConfig:
     # pylint: disable=too-many-instance-attributes
     host: str
     private_key: PrivateKeyInfo
+    password: OTPInfo | StaticInfo | None = None
     timezone: zoneinfo.ZoneInfo | None = None
     prometheus_url: str | None = None
     prometheus_headers: dict[str, Secret[str]] = field(default_factory=dict)
@@ -141,6 +152,16 @@ class ClusterConfig:
         fconfig = FabricConfig()
         fconfig["run"]["pty"] = False
         fconfig["run"]["in_stream"] = False
+        extra_args = {}
+        if isinstance(self.password, StaticInfo):
+            extra_args["password"] = self.password.selector
+        elif isinstance(self.password, OTPInfo):
+            import pyotp
+
+            totp = pyotp.TOTP(self.password.otp_secret)
+            extra_args["password"] = totp.now()
+        else:
+            assert self.password is None
         return Connection(
             self.host,
             config=fconfig,
@@ -148,9 +169,7 @@ class ClusterConfig:
                 "pkey": PKey.from_path(
                     self.private_key.file, self.private_key.password.encode("ascii")
                 ),
-                # This is a hack to select "Duo" from DRAC
-                # TODO: make this less hacky.
-                "password": "1",
+                **extra_args,
             },
         )
 
