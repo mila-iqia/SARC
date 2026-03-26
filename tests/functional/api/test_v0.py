@@ -3,7 +3,10 @@ from datetime import datetime, timedelta
 import pytest
 from pydantic_mongo import PydanticObjectId
 
+from sarc.alerts.common import HealthCheck
+from sarc.alerts.healthcheck_state import HealthCheckState, HealthCheckStateRepository
 from sarc.config import UTC, config
+from tests.unittests.alerts.definitions import BeanCheck
 
 
 @pytest.mark.usefixtures("read_only_db", "client_mode")
@@ -712,3 +715,60 @@ def test_user_list(client):
     assert data["total"] == 1
     assert len(data["users"]) == 1
     assert data["users"][0]["display_name"] == "Jane Doe"
+
+
+@pytest.mark.usefixtures("empty_read_write_db")
+def test_health_list_empty(client):
+    response = client.get("/v0/health/list")
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+@pytest.mark.usefixtures("empty_read_write_db")
+def test_health_list_with_states(client):
+    db = config().mongo.database_instance
+    repo = HealthCheckStateRepository(db)
+
+    hc_a = HealthCheck(name="alpha_check", active=True)
+    hc_b = BeanCheck(name="bravo_check", active=True, beans=14)
+
+    repo.save(HealthCheckState(check=hc_b, last_result=hc_b.ok(), last_message="OK"))
+    repo.save(HealthCheckState(check=hc_a, last_result=hc_a.fail()))
+
+    response = client.get("/v0/health/list")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 2
+    # Sorted by check name
+    assert data[0]["check"]["name"] == "alpha_check"
+    assert data[1]["check"]["name"] == "bravo_check"
+    assert "beans" in data[1]["check"]
+    assert data[1]["check"]["beans"] == 14
+    # Verify result details
+    assert data[0]["last_result"]["status"] == "failure"
+    assert data[0]["last_message"] is None
+    assert data[1]["last_result"]["status"] == "ok"
+    assert data[1]["last_message"] == "OK"
+
+
+@pytest.mark.usefixtures("empty_read_write_db")
+def test_health_list_with_error_trace(client):
+    db = config().mongo.database_instance
+    repo = HealthCheckStateRepository(db)
+
+    hc = BeanCheck(name="evil_check", active=True, beans=666)
+    result = hc()
+    repo.save(HealthCheckState(check=hc, last_result=result, last_message="error"))
+
+    response = client.get("/v0/health/list")
+    assert response.status_code == 200
+    (state,) = response.json()
+    assert state["last_result"]["status"] == "error"
+    exc = state["last_result"]["exception"]
+    assert exc["type"] == "ValueError"
+    assert exc["message"] == "What a beastly number"
+    assert len(exc["trace"]) > 0
+    frame = exc["trace"][-1]
+    assert frame["filename"].endswith("definitions.py")
+    assert frame["code"] == 'raise ValueError("What a beastly number")'
+    assert isinstance(frame["line"], int)

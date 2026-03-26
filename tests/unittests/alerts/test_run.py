@@ -7,6 +7,54 @@ from sarc.alerts.healthcheck_state import get_healthcheck_state_collection
 
 
 @pytest.mark.usefixtures("empty_read_write_db")
+def test_list_empty(beans_config, cli_main, capsys, caplog):
+    with caplog.at_level(logging.INFO):
+        assert cli_main(["health", "list"]) == 0
+        assert "There are 0 health check states" in caplog.text
+    assert capsys.readouterr().out == ""
+
+
+@pytest.mark.usefixtures("empty_read_write_db")
+def test_list_after_run(beans_config, cli_main, capsys, caplog):
+    cli_main(["health", "run", "--all"])
+    capsys.readouterr()  # discard run output
+    caplog.clear()
+
+    with caplog.at_level(logging.INFO):
+        assert cli_main(["health", "list"]) == 0
+        assert "There are 4 health check states" in caplog.text
+
+    stdout = capsys.readouterr().out
+
+    # All 4 checks are listed, sorted by name
+    check_names = re.findall(r"Check: (\w+)", stdout)
+    assert check_names == sorted(check_names)
+    assert len(check_names) == 4
+
+    # Each check shows its class
+    assert stdout.count("tests.unittests.alerts.definitions:BeanCheck") == 4
+
+    # Each check shows beans field
+    assert "beans:" in stdout
+
+
+@pytest.mark.usefixtures("empty_read_write_db")
+def test_list_pretty_print(beans_config, cli_main, capsys, file_regression):
+    cli_main(["health", "run", "--all"])
+    capsys.readouterr()  # discard run output
+
+    assert cli_main(["health", "list"]) == 0
+    output = capsys.readouterr().out
+
+    # Normalize absolute paths and line numbers in exception traces,
+    # as they depend on the install directory and may shift on code changes.
+    output = re.sub(r"File '.*?([^/]+\.py)'", r"File '\1'", output)
+    output = re.sub(r", line \d+,", ", line N,", output)
+
+    file_regression.check(output)
+
+
+@pytest.mark.usefixtures("empty_read_write_db")
 def test_run_no_args_error(beans_config, cli_main, caplog):
     assert cli_main(["health", "run"]) == -1
     assert "No health checks to run" in caplog.text
