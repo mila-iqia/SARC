@@ -20,6 +20,7 @@ import time_machine
 
 from sarc.client.job import JobStatistics, Statistics
 from sarc.config import UTC
+from sarc.jobs.series import compute_job_statistics
 from tests.common.dateutils import MTL
 from tests.functional.jobs.test_func_job_statistics import generate_fake_timeseries
 
@@ -259,7 +260,7 @@ class BaseTestLoadJobSeries:
         assert len(set(frame_2_end_times)) == 1
 
     @pytest.mark.usefixtures("read_write_db", "tzlocal_is_mtl")
-    def test_load_job_series_with_stored_statistics(self, monkeypatch, ops):
+    def test_load_job_series_with_stored_statistics(self, ops):
         if self.client_only:
             pytest.skip(
                 "Test with writing operations not supported in client-only mode."
@@ -305,13 +306,12 @@ class BaseTestLoadJobSeries:
         ]:
             assert all(math.isnan(value) for value in frame[label])
 
-        monkeypatch.setattr(
-            "sarc.jobs.series.get_job_time_series", generate_fake_timeseries
-        )
-
         # Save job statistics.
         for job in jobs:
-            job.statistics(save=True)
+            job.stored_statistics = compute_job_statistics(
+                job, generate_fake_timeseries(job)
+            )
+            job.save()
             assert job.stored_statistics
 
         # Generate new data frame. Relevant fields must not contain nan anymore.

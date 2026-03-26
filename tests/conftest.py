@@ -269,17 +269,16 @@ read_write_db_with_users_config_object = DbConfiguration(
     "rwu", with_users=True
 ).fixture()
 
-read_only_db_config_object = DbConfiguration(
-    "r", with_clusters=True, read_only=True
-).fixture()
-
-read_only_db_with_many_cpu_jobs_config_object = DbConfiguration(
+read_write_db_with_many_cpu_jobs_config_object = DbConfiguration(
     "r-jobs",
     job_patch={
         "allocated": {"billing": 0, "cpu": 0, "gres_gpu": 0, "mem": 0, "node": 0},
         "requested": {"billing": 0, "cpu": 0, "gres_gpu": 0, "mem": 0, "node": 0},
     },
-    read_only=True,
+).fixture()
+
+read_only_db_config_object = DbConfiguration(
+    "r", with_clusters=True, read_only=True
 ).fixture()
 
 read_only_db_with_users_config_object = DbConfiguration(
@@ -306,14 +305,14 @@ def read_write_db_with_users(read_write_db_with_users_config_object):
 
 
 @pytest.fixture
-def read_only_db(read_only_db_config_object):
-    with custom_db_config(read_only_db_config_object):
+def read_write_db_with_many_cpu_jobs(read_write_db_with_many_cpu_jobs_config_object):
+    with custom_db_config(read_write_db_with_many_cpu_jobs_config_object):
         yield config().mongo.database_instance
 
 
 @pytest.fixture
-def read_only_db_with_many_cpu_jobs(read_only_db_with_many_cpu_jobs_config_object):
-    with custom_db_config(read_only_db_with_many_cpu_jobs_config_object):
+def read_only_db(read_only_db_config_object):
+    with custom_db_config(read_only_db_config_object):
         yield config().mongo.database_instance
 
 

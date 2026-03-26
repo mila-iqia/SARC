@@ -3,6 +3,7 @@ import pytest
 
 from sarc.client.job import get_jobs
 from sarc.client.series import compute_cost_and_waste, load_job_series
+from sarc.jobs.series import compute_job_statistics
 
 from .test_func_job_statistics import generate_fake_timeseries
 from .test_func_load_job_series import MOCK_TIME
@@ -98,14 +99,11 @@ def test_compute_cost_and_waste_with_stored_statistics(file_regression, monkeypa
     assert frame["gpu_waste"].isnull().all()
     assert frame["gpu_equivalent_waste"].isnull().all()
 
-    # Save job statistics.
-    monkeypatch.setattr(
-        "sarc.jobs.series.get_job_time_series", generate_fake_timeseries
-    )
     for job in jobs:
-        assert not job.stored_statistics
-        job.statistics(save=True)
-        assert job.stored_statistics
+        job.stored_statistics = compute_job_statistics(
+            job, generate_fake_timeseries(job)
+        )
+        job.save()
 
     # With statistics computed, utilization fields are not nan, so waste fields are not nan neither.
     frame = load_job_series(**params)
