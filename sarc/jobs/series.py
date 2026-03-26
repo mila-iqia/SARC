@@ -183,7 +183,8 @@ def _get_job_time_series_data(
 
 def _get_job_time_series_data_cache_subdir(job: SlurmJob) -> str:
     job_start_time = job.start_time
-    assert job_start_time is not None, "3"
+    if not job_start_time:
+        return "INVALID"
     fmt = "%Y/%m/%d"
     return f"prometheus/{job_start_time.strftime(fmt)}"
 
@@ -214,7 +215,7 @@ def _get_job_time_series_data_cache_key(
         return None
 
     job_start_time = job.start_time
-    assert job_start_time is not None, "2"
+    assert job_start_time is not None
     fmt = "%Y-%m-%dT%Hh%Mm%Ss"
     return (
         f"{job.cluster_name}"
@@ -478,4 +479,4 @@ slurm_job_metric_names = {
     "slurm_job_utilization_gpu_memory": "ugm",
 }
 # We check that short names are unique and cover all metrics.
-assert len(set(slurm_job_metric_names.values())) == len(slurm_job_metric_names), "1"
+assert len(set(slurm_job_metric_names.values())) == len(slurm_job_metric_names)
