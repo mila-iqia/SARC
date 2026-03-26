@@ -183,7 +183,8 @@ def _get_job_time_series_data(
 
 def _get_job_time_series_data_cache_subdir(job: SlurmJob) -> str:
     job_start_time = job.start_time
-    assert job_start_time is not None
+    if not job_start_time:
+        return "INVALID"
     fmt = "%Y/%m/%d"
     return f"prometheus/{job_start_time.strftime(fmt)}"
 
