@@ -1,5 +1,4 @@
 import pytest
-from prometheus_api_client import MetricRangeDataFrame
 
 from sarc.client.job import SlurmJob, get_job
 from sarc.jobs.series import JOB_STATISTICS_METRIC_NAMES, compute_job_statistics
