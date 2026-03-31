@@ -201,12 +201,20 @@ class UserMap:
     def __init__(self) -> None:
         # Map cluster name to account domain
         # (e.g. "mila" => "mila", "narval" => "drac")
-        self._cluster_domain = {
-            cluster_config.name: cluster_config.user_domain
-            for cluster_config in config("scraping").clusters.values()
-        }
+        self._cluster_domain: dict[str, str] = {}
         # Map user credential (domain, username) to user object
         self._users: dict[tuple[str, str], UserData] = {}
+
+        for cluster_config in config("scraping").clusters.values():
+            assert cluster_config.name is not None
+            user_domain = cluster_config.user_domain
+            if user_domain is None:
+                logger.warning(
+                    f"No user domain for cluster {cluster_config.name}: "
+                    f"we won't be able to link job to user on this cluster."
+                )
+            else:
+                self._cluster_domain[cluster_config.name] = user_domain
 
         users = get_users()
         nb_inactive_creds = 0
@@ -248,7 +256,18 @@ class UserMap:
     def solve_user(self, entry: SlurmJob) -> bool:
         """
         Main method to link a job to a user.
-        Return True if user linked, False otherwise.
+        Update SlurmJob.user_uuid if not already set.
+        Return True if user_uuid updated, False otherwise.
+
+        NB: We match credentials by (domain, username) only, without checking
+        if the credential was valid at the job's submit time. This is because
+        user scraping plugins do not provide reliable validity dates:
+        - MILA LDAP sets start=scrape_time with no end date,
+          so credentials don't exist before first scrape and never expire.
+        - DRAC sets start=member_since and end=scrape_time,
+          which is approximate but not authoritative.
+        To enable temporal matching (e.g. creds.get_value(date=entry.submit_time)),
+        scraping plugins would need to provide accurate start/end validity periods.
         """
         if entry.user_uuid is None:
             domain = self._cluster_domain.get(entry.cluster_name)
