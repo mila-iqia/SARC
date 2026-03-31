@@ -6,7 +6,7 @@ from datetime import datetime, time, timedelta
 from enum import Enum
 from typing import Annotated, Any, Iterable
 
-from pydantic import BaseModel, BeforeValidator, field_validator
+from pydantic import UUID4, BaseModel, BeforeValidator, field_validator
 from pydantic_mongo import AbstractRepository, PydanticObjectId
 
 from sarc.client.gpumetrics import get_cluster_gpu_billings, get_rgus
@@ -161,6 +161,9 @@ class SlurmJob(BaseModel):
 
     # statistics
     stored_statistics: JobStatistics | None = None
+
+    # User ID
+    user_uuid: UUID4 | None = None
 
     @field_validator(
         "submit_time",

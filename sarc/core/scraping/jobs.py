@@ -2,9 +2,11 @@ import logging
 from datetime import datetime
 
 from sarc.cache import Cache
-from sarc.client.job import _jobs_collection
+from sarc.client.job import _jobs_collection, SlurmJob
 from sarc.config import UTC, ClusterConfig, config
 from sarc.core.models.runstate import get_parsed_date, set_parsed_date
+from sarc.core.models.users import UserData
+from sarc.core.models.validators import DateMatchError
 from sarc.core.scraping.jobs_utils import (
     DATE_FORMAT_HOUR,
     fetch_raw,
@@ -15,6 +17,7 @@ from sarc.core.scraping.jobs_utils import (
     update_allocated_gpu_type_from_nodes,
 )
 from sarc.traces import using_trace
+from sarc.users.db import get_users
 
 logger = logging.getLogger(__name__)
 
@@ -140,6 +143,7 @@ def parse_jobs(
     since: datetime | None,
     update_parsed_date: bool,
 ) -> None:
+    user_map = UserMap()
     collection = _jobs_collection()
     db = config().mongo.database_instance
 
@@ -172,6 +176,7 @@ def parse_jobs(
                     update_allocated_gpu_type_from_nodes(
                         clusters_cfg[cluster_name], entry
                     )
+                    user_map.solve_user(entry)
                     collection.save_job(entry)
 
         # Update the parsed date
@@ -182,3 +187,40 @@ def parse_jobs(
             set_parsed_date(db, "jobs", cache_entry.get_entry_datetime())
 
         logger.info(f"Saved {nb_entries} entries.")
+
+
+class UserMap:
+    __slots__ = ("mila_users", "drac_users")
+
+    def __init__(self):
+        mila_users: dict[str, UserData] = {}
+        drac_users: dict[str, UserData] = {}
+
+        users = get_users()
+        for user in users:
+            try:
+                mila_username = user.associated_accounts["mila"].get_value()
+                assert mila_username not in mila_users
+                mila_users[mila_username] = user
+            except (DateMatchError, KeyError):
+                pass
+            try:
+                drac_username = user.associated_accounts["drac"].get_value()
+                assert drac_username not in drac_users
+                drac_users[drac_username] = user
+            except (DateMatchError, KeyError):
+                pass
+
+        self.mila_users = mila_users
+        self.drac_users = drac_users
+
+    def solve_user(self, entry: SlurmJob):
+        if entry.user_uuid is None:
+
+            if entry.cluster_name == "mila":
+                user = self.mila_users.get(entry.user)
+            else:
+                user = self.drac_users.get(entry.user)
+
+            if user is not None:
+                entry.user_uuid = user.uuid
