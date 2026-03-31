@@ -158,6 +158,7 @@ def parse_jobs(
             f"Parsing slurm jobs from cache entry: {cache_entry.get_entry_datetime()}"
         )
         nb_entries = 0
+        nb_linked_to_users = 0
 
         # Retrieve all jobs associated to the time intervals
         # The cache entry is designed to yield the jobs intervals
@@ -177,7 +178,7 @@ def parse_jobs(
                     update_allocated_gpu_type_from_nodes(
                         clusters_cfg[cluster_name], entry
                     )
-                    user_map.solve_user(entry)
+                    nb_linked_to_users += user_map.solve_user(entry)
                     collection.save_job(entry)
 
         # Update the parsed date
@@ -188,18 +189,30 @@ def parse_jobs(
             set_parsed_date(db, "jobs", cache_entry.get_entry_datetime())
 
         logger.info(f"Saved {nb_entries} entries.")
+        logger.info(f"Linked {nb_linked_to_users} / {nb_entries} entries to users.")
 
 
 class UserMap:
-    def __init__(self):
+    """
+    Helper class mapping users to credentials.
+    Used to find UserData object associated to a job.
+    """
+
+    def __init__(self) -> None:
+        # Map cluster name to account domain
+        # (e.g. "mila" => "mila", "narval" => "drac")
         self._cluster_domain = {
             cluster_config.name: cluster_config.user_domain
-            for cluster_config in config().clusters.values()
+            for cluster_config in config("scraping").clusters.values()
         }
+        # Map user credential (domain, username) to user object
         self._users: dict[tuple[str, str], UserData] = {}
 
         users = get_users()
+        nb_inactive_creds = 0
+        nb_duplicated_creds = 0
 
+        # Map all users including duplicates
         indexed_users = defaultdict(list)
         for user in users:
             for domain, cred in user.associated_accounts.items():
@@ -208,8 +221,9 @@ class UserMap:
                     user_key = (domain, username)
                     indexed_users[user_key].append(user)
                 except DateMatchError:
-                    pass
+                    nb_inactive_creds += 1
 
+        # Exclude and log duplicates
         for user_key, key_users in indexed_users.items():
             if len(key_users) > 1:
                 domain, username = user_key
@@ -221,16 +235,26 @@ class UserMap:
                     )
                     + "\n"
                 )
+                nb_duplicated_creds += 1
             else:
                 (user,) = key_users
                 self._users[user_key] = user
 
-        logger.info(f"{len(users)} user(s), {len(self._users)} accounts")
+        logger.info(
+            f"{len(users)} user(s), credentials: "
+            f"{nb_inactive_creds} inactive, {nb_duplicated_creds} duplicated, {len(self._users)} valid"
+        )
 
-    def solve_user(self, entry: SlurmJob):
+    def solve_user(self, entry: SlurmJob) -> bool:
+        """
+        Main method to link a job to a user.
+        Return True if user linked, False otherwise.
+        """
         if entry.user_uuid is None:
             domain = self._cluster_domain.get(entry.cluster_name)
             if domain is not None:
                 user_key = (domain, entry.user)
                 if user_key in self._users:
                     entry.user_uuid = self._users[user_key].uuid
+                    return True
+        return False
