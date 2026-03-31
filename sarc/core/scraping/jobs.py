@@ -199,16 +199,15 @@ class UserMap:
         self._users: dict[tuple[str, str], UserData] = {}
 
         users = get_users()
+        nb_no_cred = 0
 
         indexed_users = defaultdict(list)
         for user in users:
             for domain, cred in user.associated_accounts.items():
-                try:
-                    username = cred.get_value()
+                usernames = {tag.value for tag in cred.values}
+                for username in usernames:
                     user_key = (domain, username)
                     indexed_users[user_key].append(user)
-                except DateMatchError:
-                    pass
 
         for user_key, key_users in indexed_users.items():
             if len(key_users) > 1:
@@ -225,7 +224,9 @@ class UserMap:
                 (user,) = key_users
                 self._users[user_key] = user
 
-        logger.info(f"{len(users)} user(s), {len(self._users)} accounts")
+        logger.info(
+            f"{len(users)} user(s), {nb_no_cred} accounts inactive at current time, {len(self._users)} accounts"
+        )
 
     def solve_user(self, entry: SlurmJob):
         if entry.user_uuid is None:
@@ -233,4 +234,14 @@ class UserMap:
             if domain is not None:
                 user_key = (domain, entry.user)
                 if user_key in self._users:
-                    entry.user_uuid = self._users[user_key].uuid
+                    user = self._users[user_key]
+                    try:
+                        if entry.user == user.associated_accounts[domain].get_value(
+                            entry.submit_time
+                        ):
+                            entry.user_uuid = user.uuid
+                    except DateMatchError:
+                        print("FAIL", domain, entry.user, entry.submit_time)
+                        for tag in user.associated_accounts[domain].values:
+                            print(f"\t{tag.value} {tag.valid_start} {tag.valid_end}")
+                        print()
