@@ -78,6 +78,9 @@ class ClusterConfig:
     diskusage: list[DiskUsageConfig] | None = None
     start_date: str = "2022-04-01"
     slurm_conf_host_path: Path = Path("/etc/slurm/slurm.conf")
+    # Name of user account domain (e.g: "mila", "drac")
+    # Used to find user associated account for the cluster in UserData.associated_accounts field
+    user_domain: str | None = None
 
     # Tell if billing (in job's requested|allocated field) is number of GPUs (True) or RGU (False)
     billing_is_gpu: bool = False

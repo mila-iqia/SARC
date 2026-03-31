@@ -1,8 +1,9 @@
 import logging
+from collections import defaultdict
 from datetime import datetime
 
 from sarc.cache import Cache
-from sarc.client.job import _jobs_collection, SlurmJob
+from sarc.client.job import SlurmJob, _jobs_collection
 from sarc.config import UTC, ClusterConfig, config
 from sarc.core.models.runstate import get_parsed_date, set_parsed_date
 from sarc.core.models.users import UserData
@@ -190,37 +191,46 @@ def parse_jobs(
 
 
 class UserMap:
-    __slots__ = ("mila_users", "drac_users")
-
     def __init__(self):
-        mila_users: dict[str, UserData] = {}
-        drac_users: dict[str, UserData] = {}
+        self._cluster_domain = {
+            cluster_config.name: cluster_config.user_domain
+            for cluster_config in config().clusters.values()
+        }
+        self._users: dict[tuple[str, str], UserData] = {}
 
         users = get_users()
-        for user in users:
-            try:
-                mila_username = user.associated_accounts["mila"].get_value()
-                assert mila_username not in mila_users
-                mila_users[mila_username] = user
-            except (DateMatchError, KeyError):
-                pass
-            try:
-                drac_username = user.associated_accounts["drac"].get_value()
-                assert drac_username not in drac_users
-                drac_users[drac_username] = user
-            except (DateMatchError, KeyError):
-                pass
 
-        self.mila_users = mila_users
-        self.drac_users = drac_users
+        indexed_users = defaultdict(list)
+        for user in users:
+            for domain, cred in user.associated_accounts.items():
+                try:
+                    username = cred.get_value()
+                    user_key = (domain, username)
+                    indexed_users[user_key].append(user)
+                except DateMatchError:
+                    pass
+
+        for user_key, key_users in indexed_users.items():
+            if len(key_users) > 1:
+                domain, username = user_key
+                logger.error(
+                    f"Duplicated user for credential {domain} / {username}:\n"
+                    + "\n".join(
+                        f"{us.uuid} {us.email} {us.display_name!r} {us.associated_accounts}"
+                        for us in key_users
+                    )
+                    + "\n"
+                )
+            else:
+                (user,) = key_users
+                self._users[user_key] = user
+
+        logger.info(f"{len(users)} user(s), {len(self._users)} accounts")
 
     def solve_user(self, entry: SlurmJob):
         if entry.user_uuid is None:
-
-            if entry.cluster_name == "mila":
-                user = self.mila_users.get(entry.user)
-            else:
-                user = self.drac_users.get(entry.user)
-
-            if user is not None:
-                entry.user_uuid = user.uuid
+            domain = self._cluster_domain.get(entry.cluster_name)
+            if domain is not None:
+                user_key = (domain, entry.user)
+                if user_key in self._users:
+                    entry.user_uuid = self._users[user_key].uuid
