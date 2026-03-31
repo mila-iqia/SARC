@@ -46,7 +46,8 @@ Found 2 job(s):
         "gres_gpu": 1,
         "gpu_type": null
     },
-    "stored_statistics": null
+    "stored_statistics": null,
+    "user_uuid": null
 }
 {
     "cluster_name": "raisin",
@@ -95,5 +96,6 @@ Found 2 job(s):
         "gres_gpu": 1,
         "gpu_type": null
     },
-    "stored_statistics": null
+    "stored_statistics": null,
+    "user_uuid": null
 }

@@ -48,5 +48,6 @@
         "gres_gpu": 1,
         "gpu_type": null
     },
-    "stored_statistics": null
+    "stored_statistics": null,
+    "user_uuid": null
 }

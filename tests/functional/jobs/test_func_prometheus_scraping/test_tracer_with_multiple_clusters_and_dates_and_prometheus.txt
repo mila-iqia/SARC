@@ -65,7 +65,8 @@ Found 4 job(s):
         "gpu_power": null,
         "cpu_utilization": null,
         "system_memory": null
-    }
+    },
+    "user_uuid": null
 }
 {
     "cluster_name": "raisin",
@@ -133,7 +134,8 @@ Found 4 job(s):
         "gpu_power": null,
         "cpu_utilization": null,
         "system_memory": null
-    }
+    },
+    "user_uuid": null
 }
 {
     "cluster_name": "patate",
@@ -201,7 +203,8 @@ Found 4 job(s):
         "gpu_power": null,
         "cpu_utilization": null,
         "system_memory": null
-    }
+    },
+    "user_uuid": null
 }
 {
     "cluster_name": "patate",
@@ -269,7 +272,8 @@ Found 4 job(s):
         "gpu_power": null,
         "cpu_utilization": null,
         "system_memory": null
-    }
+    },
+    "user_uuid": null
 }
 
 Found 37 span(s):

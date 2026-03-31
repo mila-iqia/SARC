@@ -98,6 +98,7 @@ ALL_COLUMNS = [
     "task_id",
     "time_limit",
     "user",
+    "user_uuid",
     "work_dir",
 ]
 
