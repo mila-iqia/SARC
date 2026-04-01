@@ -81,7 +81,7 @@ def _make_job(cluster_name: str = "mila", user: str = "testuser", **kwargs) -> S
 @dataclass
 class FakeClusterConfig:
     name: str
-    user_domain: str | None
+    user_domain: str
 
 
 @dataclass
@@ -89,10 +89,10 @@ class FakeConfig:
     clusters: dict[str, FakeClusterConfig]
 
 
-def _patch_config_and_users(clusters: dict[str, str | None], users: list[UserData]):
+def _patch_config_and_users(clusters: dict[str, str], users: list[UserData]):
     """Return stacked patches for config() and get_users().
 
-    clusters: dict mapping cluster_name -> user_domain (or None)
+    clusters: dict mapping cluster_name -> user_domain
     """
     fake_clusters = {
         name: FakeClusterConfig(name=name, user_domain=domain)
@@ -110,14 +110,6 @@ def _patch_config_and_users(clusters: dict[str, str | None], users: list[UserDat
 
 
 class TestUserMapInit:
-    def test_no_user_domain_logs_warning(self, caplog):
-        p_cfg, p_users = _patch_config_and_users({"raisin": None}, [])
-        with p_cfg, p_users, caplog.at_level(logging.WARNING):
-            UserMap()
-        assert any(
-            "No user domain for cluster raisin" in r.message for r in caplog.records
-        )
-
     def test_no_users_logs_info(self, caplog):
         p_cfg, p_users = _patch_config_and_users({"mila": "mila"}, [])
         with p_cfg, p_users, caplog.at_level(logging.INFO):
@@ -152,15 +144,6 @@ class TestSolveUser:
     def test_unknown_cluster(self, user_map):
         job = _make_job(cluster_name="unknown_cluster", user="jdoe")
         assert user_map.solve_user(job) is False
-        assert job.user_uuid is None
-
-    def test_cluster_without_domain(self):
-        user = _make_user("1f9b04e5-0ec4-4577-9196-2b03d254e344", {"mila": "jdoe"})
-        p_cfg, p_users = _patch_config_and_users({"raisin": None}, [user])
-        with p_cfg, p_users:
-            um = UserMap()
-        job = _make_job(cluster_name="raisin", user="jdoe")
-        assert um.solve_user(job) is False
         assert job.user_uuid is None
 
     def test_unknown_user(self, user_map):

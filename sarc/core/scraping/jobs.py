@@ -207,14 +207,7 @@ class UserMap:
 
         for cluster_config in config("scraping").clusters.values():
             assert cluster_config.name is not None
-            user_domain = cluster_config.user_domain
-            if user_domain is None:
-                logger.warning(
-                    f"No user domain for cluster {cluster_config.name}: "
-                    f"we won't be able to link job to user on this cluster."
-                )
-            else:
-                self._cluster_domain[cluster_config.name] = user_domain
+            self._cluster_domain[cluster_config.name] = cluster_config.user_domain
 
         users = get_users()
 
