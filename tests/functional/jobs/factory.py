@@ -4,6 +4,7 @@ import copy
 import datetime as dt
 import json
 from collections.abc import Iterable
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from uuid import UUID
 
@@ -14,6 +15,32 @@ from sarc.core.models.users import Credentials, MemberType
 from sarc.core.scraping.jobs_utils import parse_in_timezone
 from sarc.users.db import UserDB
 from tests.common.dateutils import MTL
+
+
+@dataclass
+class FakeUser:
+    uuid: UUID
+    username: str
+    drac_account: str | None
+
+
+base_users = {
+    fu.username: fu
+    for fu in (
+        # Do not set a DRAC account for "bonhomme".
+        # Thus, job from user `bonhomme` on a non-mila cluster
+        # won't find associated user info.
+        FakeUser(UUID("5a8b9e7f-afcc-4ced-b596-44fcdb3a0cff"), "bonhomme", None),
+        FakeUser(
+            UUID("8d5b2b67-d35b-4cc3-acaa-ec56c9c6f253"), "petitbonhomme", "aaa-001"
+        ),
+        # ("grosbonhomme", True),  # not added, so related jobs cannot find him.
+        FakeUser(
+            UUID("edf47681-5cd1-4be5-876d-1b8b3c6f6b71"), "beaubonhomme", "aaa-002"
+        ),
+    )
+}
+
 
 elapsed_time = 60 * 60 * 12
 end_time = datetime(2023, 2, 14, 23, 48, 54, tzinfo=MTL).astimezone(UTC)
@@ -45,6 +72,7 @@ base_job = {
     "task_id": None,
     "time_limit": 43200,
     "user": "petitbonhomme",
+    "user_uuid": base_users["petitbonhomme"].uuid,
     "work_dir": "/network/scratch/p/petitbonhomme/experience-demente",
 }
 
@@ -342,15 +370,12 @@ def create_users(user_factory=None) -> Iterable[dict]:
             )
         ],
     )
-    for uuid, username, drac_account in [
-        # Do not set a DRAC account for "bonhomme".
-        # Thus, job from user `bonhomme` on a non-mila cluster
-        # won't find associated user info.
-        (UUID("5a8b9e7f-afcc-4ced-b596-44fcdb3a0cff"), "bonhomme", None),
-        (UUID("8d5b2b67-d35b-4cc3-acaa-ec56c9c6f253"), "petitbonhomme", "aaa-001"),
-        # ("grosbonhomme", True),  # not added, so related jobs cannot find him.
-        (UUID("edf47681-5cd1-4be5-876d-1b8b3c6f6b71"), "beaubonhomme", "aaa-002"),
-    ]:
+    for fake_user in base_users.values():
+        uuid, username, drac_account = (
+            fake_user.uuid,
+            fake_user.username,
+            fake_user.drac_account,
+        )
         accts = [
             (
                 "mila",
@@ -400,17 +425,15 @@ def create_jobs(job_factory: JobFactory | None = None, job_patch: dict | None = 
     for cluster_name in ["raisin", "fromage", "patate"]:
         job_factory.add_job(cluster_name=cluster_name)
 
-    for user in ["bonhomme", "petitbonhomme"]:
-        job_factory.add_job(user=user)
+    # bonhomme has no drac account, so no user_uuid on a drac-domain cluster.
+    job_factory.add_job(user="bonhomme", user_uuid=None)
+    job_factory.add_job(user="petitbonhomme")
 
-    # Add this job separately to set a specific cluster name.
     # Note that user `grosbonhomme` won't be added to testing database.
     # Thus, this job belongs to a non-existent user.
-    for user in ["grosbonhomme"]:
-        job_factory.add_job(user=user, cluster_name="mila")
+    job_factory.add_job(user="grosbonhomme", cluster_name="mila", user_uuid=None)
 
-    for user in ["beaubonhomme"]:
-        job_factory.add_job(user=user)
+    job_factory.add_job(user="beaubonhomme", user_uuid=base_users["beaubonhomme"].uuid)
 
     job_factory.add_job(job_id=1_000_000, nodes=["cn-c017"], job_state="PREEMPTED")
     job_factory.add_job(job_id=1_000_000, nodes=["cn-b099"], job_state="OUT_OF_MEMORY")

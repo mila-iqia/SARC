@@ -47,7 +47,7 @@ Found 8 job(s):
         "gpu_type": null
     },
     "stored_statistics": null,
-    "user_uuid": null
+    "user_uuid": "8d5b2b67-d35b-4cc3-acaa-ec56c9c6f253"
 }
 {
     "cluster_name": "raisin",
@@ -97,7 +97,7 @@ Found 8 job(s):
         "gpu_type": null
     },
     "stored_statistics": null,
-    "user_uuid": null
+    "user_uuid": "8d5b2b67-d35b-4cc3-acaa-ec56c9c6f253"
 }
 {
     "cluster_name": "mila",
@@ -197,7 +197,7 @@ Found 8 job(s):
         "gpu_type": null
     },
     "stored_statistics": null,
-    "user_uuid": null
+    "user_uuid": "edf47681-5cd1-4be5-876d-1b8b3c6f6b71"
 }
 {
     "cluster_name": "raisin",
@@ -247,7 +247,7 @@ Found 8 job(s):
         "gpu_type": null
     },
     "stored_statistics": null,
-    "user_uuid": null
+    "user_uuid": "8d5b2b67-d35b-4cc3-acaa-ec56c9c6f253"
 }
 {
     "cluster_name": "raisin",
@@ -297,7 +297,7 @@ Found 8 job(s):
         "gpu_type": null
     },
     "stored_statistics": null,
-    "user_uuid": null
+    "user_uuid": "8d5b2b67-d35b-4cc3-acaa-ec56c9c6f253"
 }
 {
     "cluster_name": "raisin",
@@ -347,7 +347,7 @@ Found 8 job(s):
         "gpu_type": "A100"
     },
     "stored_statistics": null,
-    "user_uuid": null
+    "user_uuid": "8d5b2b67-d35b-4cc3-acaa-ec56c9c6f253"
 }
 {
     "cluster_name": "mila",
@@ -397,5 +397,5 @@ Found 8 job(s):
         "gpu_type": null
     },
     "stored_statistics": null,
-    "user_uuid": null
+    "user_uuid": "8d5b2b67-d35b-4cc3-acaa-ec56c9c6f253"
 }

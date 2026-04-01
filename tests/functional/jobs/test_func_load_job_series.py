@@ -117,8 +117,6 @@ USER_COLUMNS = [
     "user.github_username.values",
     "user.google_scholar_profile.values",
     "user.member_type.values",
-    "user.mila_username",
-    "user.drac_username",
 ]
 
 # For file regression tests, we will save data frame into a CSV.

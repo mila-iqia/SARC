@@ -47,7 +47,7 @@ Found 14 job(s):
         "gpu_type": null
     },
     "stored_statistics": null,
-    "user_uuid": null
+    "user_uuid": "8d5b2b67-d35b-4cc3-acaa-ec56c9c6f253"
 }
 {
     "cluster_name": "raisin",
@@ -97,7 +97,7 @@ Found 14 job(s):
         "gpu_type": null
     },
     "stored_statistics": null,
-    "user_uuid": null
+    "user_uuid": "8d5b2b67-d35b-4cc3-acaa-ec56c9c6f253"
 }
 {
     "cluster_name": "raisin",
@@ -147,7 +147,7 @@ Found 14 job(s):
         "gpu_type": null
     },
     "stored_statistics": null,
-    "user_uuid": null
+    "user_uuid": "8d5b2b67-d35b-4cc3-acaa-ec56c9c6f253"
 }
 {
     "cluster_name": "raisin",
@@ -197,7 +197,7 @@ Found 14 job(s):
         "gpu_type": null
     },
     "stored_statistics": null,
-    "user_uuid": null
+    "user_uuid": "8d5b2b67-d35b-4cc3-acaa-ec56c9c6f253"
 }
 {
     "cluster_name": "raisin",
@@ -247,7 +247,7 @@ Found 14 job(s):
         "gpu_type": null
     },
     "stored_statistics": null,
-    "user_uuid": null
+    "user_uuid": "8d5b2b67-d35b-4cc3-acaa-ec56c9c6f253"
 }
 {
     "cluster_name": "raisin",
@@ -297,7 +297,7 @@ Found 14 job(s):
         "gpu_type": null
     },
     "stored_statistics": null,
-    "user_uuid": null
+    "user_uuid": "8d5b2b67-d35b-4cc3-acaa-ec56c9c6f253"
 }
 {
     "cluster_name": "raisin",
@@ -347,7 +347,7 @@ Found 14 job(s):
         "gpu_type": null
     },
     "stored_statistics": null,
-    "user_uuid": null
+    "user_uuid": "8d5b2b67-d35b-4cc3-acaa-ec56c9c6f253"
 }
 {
     "cluster_name": "raisin",
@@ -397,7 +397,7 @@ Found 14 job(s):
         "gpu_type": null
     },
     "stored_statistics": null,
-    "user_uuid": null
+    "user_uuid": "8d5b2b67-d35b-4cc3-acaa-ec56c9c6f253"
 }
 {
     "cluster_name": "raisin",
@@ -447,7 +447,7 @@ Found 14 job(s):
         "gpu_type": null
     },
     "stored_statistics": null,
-    "user_uuid": null
+    "user_uuid": "8d5b2b67-d35b-4cc3-acaa-ec56c9c6f253"
 }
 {
     "cluster_name": "raisin",
@@ -497,7 +497,7 @@ Found 14 job(s):
         "gpu_type": null
     },
     "stored_statistics": null,
-    "user_uuid": null
+    "user_uuid": "8d5b2b67-d35b-4cc3-acaa-ec56c9c6f253"
 }
 {
     "cluster_name": "raisin",
@@ -549,7 +549,7 @@ Found 14 job(s):
         "gpu_type": null
     },
     "stored_statistics": null,
-    "user_uuid": null
+    "user_uuid": "8d5b2b67-d35b-4cc3-acaa-ec56c9c6f253"
 }
 {
     "cluster_name": "raisin",
@@ -599,7 +599,7 @@ Found 14 job(s):
         "gpu_type": null
     },
     "stored_statistics": null,
-    "user_uuid": null
+    "user_uuid": "8d5b2b67-d35b-4cc3-acaa-ec56c9c6f253"
 }
 {
     "cluster_name": "fromage",
@@ -649,7 +649,7 @@ Found 14 job(s):
         "gpu_type": null
     },
     "stored_statistics": null,
-    "user_uuid": null
+    "user_uuid": "8d5b2b67-d35b-4cc3-acaa-ec56c9c6f253"
 }
 {
     "cluster_name": "patate",
@@ -699,5 +699,5 @@ Found 14 job(s):
         "gpu_type": null
     },
     "stored_statistics": null,
-    "user_uuid": null
+    "user_uuid": "8d5b2b67-d35b-4cc3-acaa-ec56c9c6f253"
 }

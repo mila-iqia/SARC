@@ -47,5 +47,5 @@ Found 1 job(s):
         "gpu_type": null
     },
     "stored_statistics": null,
-    "user_uuid": null
+    "user_uuid": "edf47681-5cd1-4be5-876d-1b8b3c6f6b71"
 }
