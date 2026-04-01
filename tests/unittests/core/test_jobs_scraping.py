@@ -106,81 +106,23 @@ def _patch_config_and_users(clusters: dict[str, str | None], users: list[UserDat
     )
 
 
-# ── Basic matching ──────────────────────────────────────────────────
+# ── Logging ────────────────────────────────────────────────────────
 
 
 class TestUserMapInit:
-    def test_basic_mapping(self):
-        user = _make_user("1f9b04e5-0ec4-4577-9196-2b03d254e344", {"mila": "jdoe"})
-        p_cfg, p_users = _patch_config_and_users({"mila": "mila"}, [user])
-        with p_cfg, p_users:
-            um = UserMap()
-        assert ("mila", "jdoe") in um._users
-        assert um._cluster_domain == {"mila": "mila"}
-
-    def test_multiple_domains(self):
-        user = _make_user(
-            "1f9b04e5-0ec4-4577-9196-2b03d254e344",
-            {"mila": "jdoe_mila", "drac": "jdoe_drac"},
-        )
-        p_cfg, p_users = _patch_config_and_users(
-            {"mila": "mila", "narval": "drac"}, [user]
-        )
-        with p_cfg, p_users:
-            um = UserMap()
-        assert ("mila", "jdoe_mila") in um._users
-        assert ("drac", "jdoe_drac") in um._users
-        assert um._cluster_domain == {"mila": "mila", "narval": "drac"}
-
     def test_no_user_domain_logs_warning(self, caplog):
         p_cfg, p_users = _patch_config_and_users({"raisin": None}, [])
         with p_cfg, p_users, caplog.at_level(logging.WARNING):
-            um = UserMap()
-        assert "raisin" not in um._cluster_domain
+            UserMap()
         assert any(
             "No user domain for cluster raisin" in r.message for r in caplog.records
         )
 
-    def test_expired_credentials_still_indexed(self):
-        """Expired credentials are indexed in UserMap (temporal check is in solve_user)."""
-        user = _make_user_with_expired_creds(
-            "1f9b04e5-0ec4-4577-9196-2b03d254e344", "mila", "expired_user"
-        )
-        p_cfg, p_users = _patch_config_and_users({"mila": "mila"}, [user])
-        with p_cfg, p_users:
-            um = UserMap()
-        assert ("mila", "expired_user") in um._users
-
-    def test_duplicate_credentials_excluded(self, caplog):
-        user1 = _make_user(
-            "1f9b04e5-0ec4-4577-9196-2b03d254e344", {"mila": "same_user"}
-        )
-        user2 = _make_user(
-            "7ecd3a8a-ab71-499e-b38a-ceacd91a99c4", {"mila": "same_user"}
-        )
-        p_cfg, p_users = _patch_config_and_users({"mila": "mila"}, [user1, user2])
-        with p_cfg, p_users, caplog.at_level(logging.INFO):
-            um = UserMap()
-        assert ("mila", "same_user") not in um._users
-        assert any(
-            "Duplicated user for credential mila / same_user" in r.message
-            for r in caplog.records
-        )
-        assert any("1 duplicated" in r.message for r in caplog.records)
-
-    def test_no_users(self, caplog):
+    def test_no_users_logs_info(self, caplog):
         p_cfg, p_users = _patch_config_and_users({"mila": "mila"}, [])
         with p_cfg, p_users, caplog.at_level(logging.INFO):
-            um = UserMap()
-        assert len(um._users) == 0
+            UserMap()
         assert any("0 user(s)" in r.message for r in caplog.records)
-
-    def test_user_without_accounts(self):
-        user = _make_user("1f9b04e5-0ec4-4577-9196-2b03d254e344", accounts=None)
-        p_cfg, p_users = _patch_config_and_users({"mila": "mila"}, [user])
-        with p_cfg, p_users:
-            um = UserMap()
-        assert len(um._users) == 0
 
 
 # ── solve_user ──────────────────────────────────────────────────────
@@ -232,6 +174,23 @@ class TestSolveUser:
         assert user_map.solve_user(job) is False
         assert job.user_uuid is None
 
+    def test_no_users_no_match(self):
+        p_cfg, p_users = _patch_config_and_users({"mila": "mila"}, [])
+        with p_cfg, p_users:
+            um = UserMap()
+        job = _make_job(cluster_name="mila", user="anyone")
+        assert um.solve_user(job) is False
+        assert job.user_uuid is None
+
+    def test_user_without_accounts_no_match(self):
+        user = _make_user("1f9b04e5-0ec4-4577-9196-2b03d254e344", accounts=None)
+        p_cfg, p_users = _patch_config_and_users({"mila": "mila"}, [user])
+        with p_cfg, p_users:
+            um = UserMap()
+        job = _make_job(cluster_name="mila", user="testuser")
+        assert um.solve_user(job) is False
+        assert job.user_uuid is None
+
     def test_expired_credential_not_matched(self):
         """Job submitted outside credential validity period is not matched."""
         user = _make_user_with_expired_creds(
@@ -244,6 +203,25 @@ class TestSolveUser:
         job = _make_job(cluster_name="mila", user="expired_user")
         assert um.solve_user(job) is False
         assert job.user_uuid is None
+
+    def test_duplicate_users_warns_and_no_match(self, caplog):
+        """When multiple users match temporally, a warning is logged and no match is made."""
+        user1 = _make_user(
+            "1f9b04e5-0ec4-4577-9196-2b03d254e344", {"mila": "same_user"}
+        )
+        user2 = _make_user(
+            "7ecd3a8a-ab71-499e-b38a-ceacd91a99c4", {"mila": "same_user"}
+        )
+        p_cfg, p_users = _patch_config_and_users({"mila": "mila"}, [user1, user2])
+        with p_cfg, p_users:
+            um = UserMap()
+        job = _make_job(cluster_name="mila", user="same_user")
+        with caplog.at_level(logging.WARNING):
+            assert um.solve_user(job) is False
+        assert job.user_uuid is None
+        assert any(
+            "expected 1 matching user, found 2" in r.message for r in caplog.records
+        )
 
     def test_multiple_jobs(self):
         user_mila = _make_user(

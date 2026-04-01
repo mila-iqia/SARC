@@ -203,7 +203,7 @@ class UserMap:
         # (e.g. "mila" => "mila", "narval" => "drac")
         self._cluster_domain: dict[str, str] = {}
         # Map user credential (domain, username) to user object
-        self._users: dict[tuple[str, str], UserData] = {}
+        self.__users: dict[tuple[str, str], list[UserData]] = {}
 
         for cluster_config in config("scraping").clusters.values():
             assert cluster_config.name is not None
@@ -217,37 +217,19 @@ class UserMap:
                 self._cluster_domain[cluster_config.name] = user_domain
 
         users = get_users()
-        nb_duplicated_creds = 0
 
         # Map all users including duplicates, using all historical usernames
         indexed_users = defaultdict(list)
         for user in users:
             for domain, cred in user.associated_accounts.items():
-                for username in {tag.value for tag in cred.values}:
+                for tag in cred.values:
+                    username = tag.value
                     user_key = (domain, username)
                     indexed_users[user_key].append(user)
 
-        # Exclude and log duplicates
-        for user_key, key_users in indexed_users.items():
-            if len(key_users) > 1:
-                domain, username = user_key
-                logger.error(
-                    f"Duplicated user for credential {domain} / {username}:\n"
-                    + "\n".join(
-                        f"{us.uuid} {us.email} {us.display_name!r} {us.associated_accounts}"
-                        for us in key_users
-                    )
-                    + "\n"
-                )
-                nb_duplicated_creds += 1
-            else:
-                (user,) = key_users
-                self._users[user_key] = user
+        self.__users = indexed_users
 
-        logger.info(
-            f"{len(users)} user(s), credentials: "
-            f"{nb_duplicated_creds} duplicated, {len(self._users)} valid"
-        )
+        logger.info(f"{len(users)} user(s), {len(self.__users)} credential(s)")
 
     def solve_user(self, entry: SlurmJob) -> bool:
         """
@@ -275,15 +257,28 @@ class UserMap:
             domain = self._cluster_domain.get(entry.cluster_name)
             if domain is not None:
                 user_key = (domain, entry.user)
-                if user_key in self._users:
-                    user = self._users[user_key]
-                    try:
-                        username_at_submit = user.associated_accounts[
-                            domain
-                        ].get_value(entry.submit_time)
-                        if entry.user == username_at_submit:
+                if user_key in self.__users:
+                    valid_users = []
+                    for candidate_user in self.__users[user_key]:
+                        try:
+                            username_at_submit = candidate_user.associated_accounts[
+                                domain
+                            ].get_value(entry.submit_time)
+                            if entry.user == username_at_submit:
+                                valid_users.append(candidate_user)
+                        except DateMatchError:
+                            pass
+                    if valid_users:
+                        if len(valid_users) > 1:
+                            logger.warning(
+                                f"Job {entry.cluster_name}/{entry.job_id}/{entry.submit_time}: "
+                                f"expected 1 matching user, found {len(valid_users)}: "
+                                + ", ".join(
+                                    f"{u.email} ({u.uuid})" for u in valid_users
+                                )
+                            )
+                        else:
+                            (user,) = valid_users
                             entry.user_uuid = user.uuid
                             return True
-                    except DateMatchError:
-                        pass
         return False
