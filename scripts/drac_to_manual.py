@@ -10,6 +10,7 @@ import argparse
 import csv
 import json
 from collections import defaultdict
+from datetime import UTC, datetime
 from typing import Iterable
 
 
@@ -37,6 +38,12 @@ def main():
         "--include-inactive",
         action="store_true",
         help="Include inactive/deactivated DRAC accounts (default: only activated)",
+    )
+    parser.add_argument(
+        "--prefix",
+        type=str,
+        default=None,
+        help="Prefix for manual match entries in output YAML (default: prefix based on current time)",
     )
     args = parser.parse_args()
 
@@ -71,6 +78,9 @@ def main():
             ]
         drac_sources.append(("drac_member", "name", members))
 
+    prefix = args.prefix or datetime.now().astimezone(UTC).strftime(
+        "mila_to_drac_%Y%m%d%H%M%S_"
+    )
     idx = 0
     print("id_pairs:")  # noqa: T201
     for source_name, name_field, drac_entries in drac_sources:
@@ -92,7 +102,7 @@ def main():
 
             drac_email = drac_entry.get("email", "")
             print(  # noqa: T201
-                f"  a{idx}:  # [mila] {mila_name} <-> [drac] {drac_name} ({drac_email})\n"
+                f"  {prefix}{idx}:  # [mila] {mila_name} <-> [drac] {drac_name} ({drac_email})\n"
                 f"    - name: mila_ldap\n"
                 f"      mid: {mila_user['email']}\n"
                 f"    - name: {source_name}\n"
