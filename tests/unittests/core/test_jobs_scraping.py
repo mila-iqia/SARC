@@ -141,15 +141,15 @@ class TestUserMapInit:
             "No user domain for cluster raisin" in r.message for r in caplog.records
         )
 
-    def test_inactive_credentials_counted(self, caplog):
+    def test_expired_credentials_still_indexed(self):
+        """Expired credentials are indexed in UserMap (temporal check is in solve_user)."""
         user = _make_user_with_expired_creds(
             "1f9b04e5-0ec4-4577-9196-2b03d254e344", "mila", "expired_user"
         )
         p_cfg, p_users = _patch_config_and_users({"mila": "mila"}, [user])
-        with p_cfg, p_users, caplog.at_level(logging.INFO):
+        with p_cfg, p_users:
             um = UserMap()
-        assert len(um._users) == 0
-        assert any("1 inactive" in r.message for r in caplog.records)
+        assert ("mila", "expired_user") in um._users
 
     def test_duplicate_credentials_excluded(self, caplog):
         user1 = _make_user(
@@ -230,6 +230,19 @@ class TestSolveUser:
         # User has mila credential, but job is on narval (drac domain)
         job = _make_job(cluster_name="narval", user="jdoe")
         assert user_map.solve_user(job) is False
+        assert job.user_uuid is None
+
+    def test_expired_credential_not_matched(self):
+        """Job submitted outside credential validity period is not matched."""
+        user = _make_user_with_expired_creds(
+            "1f9b04e5-0ec4-4577-9196-2b03d254e344", "mila", "expired_user"
+        )
+        p_cfg, p_users = _patch_config_and_users({"mila": "mila"}, [user])
+        with p_cfg, p_users:
+            um = UserMap()
+        # Job submitted in 2023, but credential expired in 2021
+        job = _make_job(cluster_name="mila", user="expired_user")
+        assert um.solve_user(job) is False
         assert job.user_uuid is None
 
     def test_multiple_jobs(self):

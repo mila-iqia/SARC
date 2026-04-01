@@ -217,19 +217,15 @@ class UserMap:
                 self._cluster_domain[cluster_config.name] = user_domain
 
         users = get_users()
-        nb_inactive_creds = 0
         nb_duplicated_creds = 0
 
-        # Map all users including duplicates
+        # Map all users including duplicates, using all historical usernames
         indexed_users = defaultdict(list)
         for user in users:
             for domain, cred in user.associated_accounts.items():
-                try:
-                    username = cred.get_value()
+                for username in {tag.value for tag in cred.values}:
                     user_key = (domain, username)
                     indexed_users[user_key].append(user)
-                except DateMatchError:
-                    nb_inactive_creds += 1
 
         # Exclude and log duplicates
         for user_key, key_users in indexed_users.items():
@@ -250,7 +246,7 @@ class UserMap:
 
         logger.info(
             f"{len(users)} user(s), credentials: "
-            f"{nb_inactive_creds} inactive, {nb_duplicated_creds} duplicated, {len(self._users)} valid"
+            f"{nb_duplicated_creds} duplicated, {len(self._users)} valid"
         )
 
     def solve_user(self, entry: SlurmJob) -> bool:
@@ -259,21 +255,35 @@ class UserMap:
         Update SlurmJob.user_uuid if not already set.
         Return True if user_uuid updated, False otherwise.
 
-        NB: We match credentials by (domain, username) only, without checking
-        if the credential was valid at the job's submit time. This is because
-        user scraping plugins do not provide reliable validity dates:
-        - MILA LDAP sets start=scrape_time, so a job submitted before the first scraping time
-          won't be matched to the user, even if user credential was already valid.
-        - DRAC sets start=member_since and end=scrape_time, so a job submitted after the last scraping time
-          (and before next scraping time) won't be matched to the user, even if user credential was still valid.
-        To enable temporal matching (e.g. creds.get_value(date=entry.submit_time)),
-        scraping plugins would need to provide accurate start/end validity periods.
+        We match credentials by (domain, username) and verify that the
+        credential was valid at the job's submit time. This temporal check
+        is conceptually correct but currently produces false negatives
+        because user scraping plugins do not provide reliable validity dates:
+
+        - MILA LDAP (sarc/users/mila_ldap.py) sets start=scrape_time,
+          so a job submitted before the first scraping time won't be matched
+          to the user, even if the user credential was already valid.
+          Fix: use the account creation date as start instead of scrape_time.
+
+        - DRAC (sarc/users/drac.py) sets start=member_since and end=scrape_time,
+          so a job submitted after the last scraping time (and before next
+          scraping time) won't be matched to the user, even if the user
+          credential was still valid.
+          Fix: leave end open (None) or use an explicit expiration date.
         """
         if entry.user_uuid is None:
             domain = self._cluster_domain.get(entry.cluster_name)
             if domain is not None:
                 user_key = (domain, entry.user)
                 if user_key in self._users:
-                    entry.user_uuid = self._users[user_key].uuid
-                    return True
+                    user = self._users[user_key]
+                    try:
+                        username_at_submit = user.associated_accounts[
+                            domain
+                        ].get_value(entry.submit_time)
+                        if entry.user == username_at_submit:
+                            entry.user_uuid = user.uuid
+                            return True
+                    except DateMatchError:
+                        pass
         return False
