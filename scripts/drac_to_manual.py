@@ -28,9 +28,6 @@ def main():
         help="DRAC members CSV (columns: Name, Email, Username, CCRI, ...)",
     )
     parser.add_argument(
-        "--drac-roles", help="DRAC roles CSV (columns: Nom, Email, CCRI, ...)"
-    )
-    parser.add_argument(
         "--threshold",
         type=int,
         default=2,
@@ -73,13 +70,6 @@ def main():
                 if d.get("activation_status", "").lower() == "activated"
             ]
         drac_sources.append(("drac_member", "name", members))
-
-    if args.drac_roles:
-        with open(args.drac_roles) as f:
-            roles = [{k.lower(): v for k, v in d.items()} for d in csv.DictReader(f)]
-            if not args.include_inactive:
-                roles = [d for d in roles if d.get("status", "").lower() == "activated"]
-            drac_sources.append(("drac_role", "nom", roles))
 
     idx = 0
     print("id_pairs:")  # noqa: T201
