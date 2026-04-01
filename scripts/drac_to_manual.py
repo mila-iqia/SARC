@@ -84,9 +84,38 @@ def main():
     idx = 0
     print("id_pairs:")  # noqa: T201
     for source_name, name_field, drac_entries in drac_sources:
+        # Step 1: Match by email (more reliable)
+        mila_email_to_user = {u["email"].lower(): u for u in mila_users}
+        matched_mila_emails: set[str] = set()
+        matched_drac_indices: set[int] = set()
+
+        for i, drac_entry in enumerate(drac_entries):
+            drac_email = drac_entry.get("email", "").lower()
+            if drac_email in mila_email_to_user:
+                mila_user = mila_email_to_user[drac_email]
+                cci = drac_entry["ccri"][:-3]
+                matched_mila_emails.add(drac_email)
+                matched_drac_indices.add(i)
+                print(  # noqa: T201
+                    f"  {prefix}{idx}:  # [mila] {mila_user['display_name']} <-> [drac] {drac_entry[name_field]} ({drac_email}) (email match)\n"
+                    f"    - name: mila_ldap\n"
+                    f"      mid: {mila_user['email']}\n"
+                    f"    - name: {source_name}\n"
+                    f"      mid: {cci}\n"
+                )
+                idx += 1
+
+        # Step 2: Match remaining by name distance (bag-of-words heuristic)
+        remaining_mila = [
+            u for u in mila_users if u["email"].lower() not in matched_mila_emails
+        ]
+        remaining_drac = [
+            e for i, e in enumerate(drac_entries) if i not in matched_drac_indices
+        ]
+
         best_matches = find_best_word_matches(
-            [u["display_name"] for u in mila_users],
-            [e[name_field] for e in drac_entries],
+            [u["display_name"] for u in remaining_mila],
+            [e[name_field] for e in remaining_drac],
             nb_best_matches=10,
         )
 
@@ -96,8 +125,10 @@ def main():
                 continue
 
             drac_name = under_threshold[0][1]
-            mila_user = next(u for u in mila_users if u["display_name"] == mila_name)
-            drac_entry = next(e for e in drac_entries if e[name_field] == drac_name)
+            mila_user = next(
+                u for u in remaining_mila if u["display_name"] == mila_name
+            )
+            drac_entry = next(e for e in remaining_drac if e[name_field] == drac_name)
             cci = drac_entry["ccri"][:-3]
 
             drac_email = drac_entry.get("email", "")
