@@ -16,11 +16,14 @@ from __future__ import annotations
 import sys
 import os
 
-# Make sarc importable when running directly from the project root
+# Make sarc and gui_rest importable when running directly from the project root
 _script_dir = os.path.dirname(os.path.abspath(__file__))
-_project_root = os.path.dirname(os.path.dirname(_script_dir))
+_examples_dir = os.path.dirname(_script_dir)
+_project_root = os.path.dirname(_examples_dir)
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
+if _examples_dir not in sys.path:
+    sys.path.insert(0, _examples_dir)
 
 from PyQt6.QtWidgets import (
     QApplication,
@@ -39,11 +42,11 @@ from PyQt6.QtCore import Qt
 
 from sarc.rest.client import SarcApiClient
 
-from .workers import ConnectWorker
-from .tabs.summary import SummaryTab
-from .tabs.users import UsersTab
-from .tabs.clusters import ClustersTab
-from .tabs.jobs import JobsTab
+from gui_rest.workers import ConnectWorker
+from gui_rest.tabs.summary import SummaryTab
+from gui_rest.tabs.users import UsersTab
+from gui_rest.tabs.clusters import ClustersTab
+from gui_rest.tabs.jobs import JobsTab
 
 
 class MainWindow(QMainWindow):
