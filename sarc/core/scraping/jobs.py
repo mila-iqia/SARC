@@ -262,10 +262,10 @@ class UserMap:
         NB: We match credentials by (domain, username) only, without checking
         if the credential was valid at the job's submit time. This is because
         user scraping plugins do not provide reliable validity dates:
-        - MILA LDAP sets start=scrape_time with no end date,
-          so credentials don't exist before first scrape and never expire.
-        - DRAC sets start=member_since and end=scrape_time,
-          which is approximate but not authoritative.
+        - MILA LDAP sets start=scrape_time, so a job submitted before the first scraping time
+          won't be matched to the user, even if user credential was already valid.
+        - DRAC sets start=member_since and end=scrape_time, so a job submitted after the last scraping time
+          (and before next scraping time) won't be matched to the user, even if user credential was still valid.
         To enable temporal matching (e.g. creds.get_value(date=entry.submit_time)),
         scraping plugins would need to provide accurate start/end validity periods.
         """
