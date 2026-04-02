@@ -1,32 +1,36 @@
 import sys
 from collections.abc import Generator
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from sarc.cache import Cache
 from sarc.client.job import _jobs_collection
+from sarc.config import TZLOCAL
 
 
 def usage():
     print("Usage:")
-    print(f"  {sys.argv[0]} SOURCE_DIR TARGET_DIR")
+    print(f"  {sys.argv[0]} SOURCE_DIR")
 
 
-if len(sys.argv) != 3:
+if len(sys.argv) != 2:
     usage()
     sys.exit(1)
 
 source = Path(sys.argv[1])
-target = Path(sys.argv[2])
 
 assert source.exists()
 assert source.is_dir()
 
 
+def no_ds_store(f):
+    return f.name != ".DS_Store"
+
+
 def walk_cache(p: Path) -> Generator[Path]:
-    for year in sorted(p.iterdir()):
-        for month in sorted(year.iterdir()):
-            yield from sorted(month.iterdir())
+    for year in sorted(filter(no_ds_store, p.iterdir())):
+        for month in sorted(filter(no_ds_store, year.iterdir())):
+            yield from sorted(filter(no_ds_store, month.iterdir()))
 
 
 DATE_FORMAT = "%Y-%m-%dT%Hh%Mm%Ss"
@@ -40,18 +44,15 @@ for day in walk_cache(source):
     timepoint = (
         datetime(year=int(year.name), month=int(month.name), day=int(day.name))
         + almost_one_day
-    )
+    ).replace(tzinfo=UTC)
     with cache.create_entry(at_time=timepoint) as ce:
         for f in day.iterdir():
-            print(f.name)
             cluster_name, job_id_str, start_to_end, metrics, *_ = f.name.split(".")
-            if (
-                metrics != "cu+f16g+f32g+f64g+mus+pwg+sog+ug+ugm"
-            ):  # TODO: check if ok with older entries
+            if metrics != "cu+f16g+f32g+f64g+mus+pwg+sog+ug+ugm":
                 continue
             job_id = int(job_id_str)
             start_str, _ = start_to_end.split("_to_")
-            start = datetime.strptime(start_str, DATE_FORMAT)
+            start = datetime.strptime(start_str, DATE_FORMAT).replace(tzinfo=TZLOCAL)
             # This searches for a job that has the same cluster and id as the
             # cache entry and has the submit time that is closest, but still
             # lower than the start time. This is because we need the submit
@@ -63,7 +64,7 @@ for day in walk_cache(source):
                     {
                         "cluster_name": cluster_name,
                         "job_id": job_id,
-                        "submit_time": {"$lte": {start}},
+                        "submit_time": {"$lte": start},
                     }
                 )
                 .sort("submit_time", -1)
@@ -78,3 +79,4 @@ for day in walk_cache(source):
                 f"{entry.cluster_name}${entry.job_id}${entry.submit_time.isoformat(timespec='seconds')}",
                 f.read_bytes(),
             )
+            print(f.name)
