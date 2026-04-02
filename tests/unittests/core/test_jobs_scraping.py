@@ -206,6 +206,32 @@ class TestSolveUser:
             "expected 1 matching user, found 2" in r.message for r in caplog.records
         )
 
+    def test_renamed_user_old_username_not_matched(self):
+        """Job uses old username, but at submit time the user had a new username."""
+        user = UserData(
+            uuid=UUID("1f9b04e5-0ec4-4577-9196-2b03d254e344"),
+            display_name="Renamed User",
+            email="renamed@example.com",
+            matching_ids={},
+        )
+        creds = Credentials()
+        creds.insert(
+            "old_name",
+            start=datetime(2020, 1, 1, tzinfo=UTC),
+            end=datetime(2022, 1, 1, tzinfo=UTC),
+        )
+        creds.insert("new_name", start=datetime(2022, 1, 1, tzinfo=UTC))
+        user.associated_accounts["mila"] = creds
+
+        p_cfg, p_users = _patch_config_and_users({"mila": "mila"}, [user])
+        with p_cfg, p_users:
+            um = UserMap()
+        # Job submitted in 2023 with old username.
+        # get_value(2023) returns "new_name", so "old_name" != "new_name" → no match.
+        job = _make_job(cluster_name="mila", user="old_name")
+        um.solve_user(job)
+        assert job.user_uuid is None
+
     def test_multiple_jobs(self):
         user_mila = _make_user(
             "1f9b04e5-0ec4-4577-9196-2b03d254e344",
