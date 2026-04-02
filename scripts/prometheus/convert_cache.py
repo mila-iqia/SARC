@@ -5,6 +5,7 @@ from pathlib import Path
 
 from sarc.cache import Cache
 from sarc.client.job import _jobs_collection
+from sarc.config import TZLOCAL
 
 
 def usage():
@@ -43,7 +44,7 @@ for day in walk_cache(source):
     timepoint = (
         datetime(year=int(year.name), month=int(month.name), day=int(day.name))
         + almost_one_day
-    )
+    ).replace(tzinfo=TZLOCAL)
     with cache.create_entry(at_time=timepoint) as ce:
         for f in day.iterdir():
             cluster_name, job_id_str, start_to_end, metrics, *_ = f.name.split(".")
