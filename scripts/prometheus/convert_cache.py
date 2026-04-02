@@ -1,6 +1,6 @@
 import sys
 from collections.abc import Generator
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from sarc.cache import Cache
@@ -44,17 +44,15 @@ for day in walk_cache(source):
     timepoint = (
         datetime(year=int(year.name), month=int(month.name), day=int(day.name))
         + almost_one_day
-    ).replace(tzinfo=TZLOCAL)
+    ).replace(tzinfo=UTC)
     with cache.create_entry(at_time=timepoint) as ce:
         for f in day.iterdir():
             cluster_name, job_id_str, start_to_end, metrics, *_ = f.name.split(".")
-            if (
-                metrics != "cu+f16g+f32g+f64g+mus+pwg+sog+ug+ugm"
-            ):  # TODO: check if ok with older entries
+            if metrics != "cu+f16g+f32g+f64g+mus+pwg+sog+ug+ugm":
                 continue
             job_id = int(job_id_str)
             start_str, _ = start_to_end.split("_to_")
-            start = datetime.strptime(start_str, DATE_FORMAT)
+            start = datetime.strptime(start_str, DATE_FORMAT).replace(tzinfo=TZLOCAL)
             # This searches for a job that has the same cluster and id as the
             # cache entry and has the submit time that is closest, but still
             # lower than the start time. This is because we need the submit
@@ -66,7 +64,7 @@ for day in walk_cache(source):
                     {
                         "cluster_name": cluster_name,
                         "job_id": job_id,
-                        "submit_time": {"$lte": {start}},
+                        "submit_time": {"$lte": start},
                     }
                 )
                 .sort("submit_time", -1)
