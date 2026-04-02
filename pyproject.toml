@@ -100,7 +100,7 @@ ignore = [
 "sarc/testing/**" = ["T20"]
 "examples/**" = ["T20"]
 "docs/**" = ["T20"]
-"sarc/cli/health/list.py" = ["T20"]
+"scripts/**" = ["T201"]
 
 
 [tool.uv]
