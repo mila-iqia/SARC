@@ -252,15 +252,13 @@ class TestSolveUser:
         job_narval_unknown = _make_job(cluster_name="narval", user="nobody", job_id=4)
 
         um.solve_user(job_mila)
-        assert job_mila.user_uuid == UUID("1f9b04e5-0ec4-4577-9196-2b03d254e344")
+        assert job_mila.user_uuid == user_mila.uuid
 
         um.solve_user(job_narval_alice)
-        assert job_narval_alice.user_uuid == UUID(
-            "1f9b04e5-0ec4-4577-9196-2b03d254e344"
-        )
+        assert job_narval_alice.user_uuid == user_mila.uuid
 
         um.solve_user(job_narval_bob)
-        assert job_narval_bob.user_uuid == UUID("7ecd3a8a-ab71-499e-b38a-ceacd91a99c4")
+        assert job_narval_bob.user_uuid == user_drac.uuid
 
         um.solve_user(job_narval_unknown)
         assert job_narval_unknown.user_uuid is None

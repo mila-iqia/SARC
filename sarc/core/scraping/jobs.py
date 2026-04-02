@@ -207,7 +207,7 @@ class UserMap:
         # Map cluster name to account domain
         # (e.g. "mila" => "mila", "narval" => "drac")
         self._cluster_domain: dict[str, str] = {}
-        # Map user credential (domain, username) to user object
+        # Map user credential (domain, username) to user objects
         self.__users: dict[tuple[str, str], list[UserData]] = {}
 
         for cluster_config in config("scraping").clusters.values():
@@ -236,7 +236,7 @@ class UserMap:
 
         We match credentials by (domain, username) and verify that the
         credential was valid at the job's submit time. This temporal check
-        is conceptually correct but currently produces false negatives
+        is conceptually correct but currently misses some job-user matches
         because user scraping plugins do not provide reliable validity dates:
 
         - MILA LDAP (sarc/users/mila_ldap.py) sets start=scrape_time,
@@ -248,7 +248,7 @@ class UserMap:
           so a job submitted after the last scraping time (and before next
           scraping time) won't be matched to the user, even if the user
           credential was still valid.
-          Fix: leave end open (None) or use an explicit expiration date.
+          Fix: leave end open or use an explicit expiration date.
         """
 
         # Since entry is parsed from cache, and not checked against db,
