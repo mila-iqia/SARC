@@ -143,6 +143,7 @@ def parse_jobs(
     clusters_cfg: dict[str, ClusterConfig],
     since: datetime | None,
     update_parsed_date: bool,
+    require_user_link: bool = False,
 ) -> None:
     user_map = UserMap()
     collection = _jobs_collection()
@@ -158,7 +159,7 @@ def parse_jobs(
             f"Parsing slurm jobs from cache entry: {cache_entry.get_entry_datetime()}"
         )
         nb_entries = 0
-        nb_linked_to_users = 0
+        nb_saved = 0
 
         # Retrieve all jobs associated to the time intervals
         # The cache entry is designed to yield the jobs intervals
@@ -178,8 +179,10 @@ def parse_jobs(
                     update_allocated_gpu_type_from_nodes(
                         clusters_cfg[cluster_name], entry
                     )
-                    nb_linked_to_users += user_map.solve_user(entry)
-                    collection.save_job(entry)
+                    user_map.solve_user(entry)
+                    if not require_user_link or entry.user_uuid is not None:
+                        nb_saved += 1
+                        collection.save_job(entry)
 
         # Update the parsed date
         if update_parsed_date:
@@ -188,8 +191,7 @@ def parse_jobs(
             )
             set_parsed_date(db, "jobs", cache_entry.get_entry_datetime())
 
-        logger.info(f"Saved {nb_entries} entries.")
-        logger.info(f"Linked {nb_linked_to_users} / {nb_entries} entries to users.")
+        logger.info(f"Saved {nb_saved} entries / {nb_entries} available.")
 
 
 class UserMap:
@@ -224,11 +226,10 @@ class UserMap:
 
         logger.info(f"{len(users)} user(s), {len(self.__users)} credential(s)")
 
-    def solve_user(self, entry: SlurmJob) -> bool:
+    def solve_user(self, entry: SlurmJob) -> None:
         """
         Main method to link a job to a user.
-        Update SlurmJob.user_uuid if not already set.
-        Return True if user_uuid updated, False otherwise.
+        Update SlurmJob.user_uuid if job user is found in users collection.
 
         We match credentials by (domain, username) and verify that the
         credential was valid at the job's submit time. This temporal check
@@ -246,32 +247,32 @@ class UserMap:
           credential was still valid.
           Fix: leave end open (None) or use an explicit expiration date.
         """
-        if entry.user_uuid is None:
-            domain = self._cluster_domain.get(entry.cluster_name)
-            if domain is not None:
-                user_key = (domain, entry.user)
-                if user_key in self.__users:
-                    valid_users = []
-                    for candidate_user in self.__users[user_key]:
-                        try:
-                            username_at_submit = candidate_user.associated_accounts[
-                                domain
-                            ].get_value(entry.submit_time)
-                            if entry.user == username_at_submit:
-                                valid_users.append(candidate_user)
-                        except DateMatchError:
-                            pass
-                    if valid_users:
-                        if len(valid_users) > 1:
-                            logger.warning(
-                                f"Job {entry.cluster_name}/{entry.job_id}/{entry.submit_time}: "
-                                f"expected 1 matching user, found {len(valid_users)}: "
-                                + ", ".join(
-                                    f"{u.email} ({u.uuid})" for u in valid_users
-                                )
-                            )
-                        else:
-                            (user,) = valid_users
-                            entry.user_uuid = user.uuid
-                            return True
-        return False
+
+        # Since entry is parsed from cache, and not checked against db,
+        # then it should not have a user_uuid already defined.
+        assert entry.user_uuid is None
+
+        domain = self._cluster_domain.get(entry.cluster_name)
+        if domain is not None:
+            user_key = (domain, entry.user)
+            if user_key in self.__users:
+                valid_users = []
+                for candidate_user in self.__users[user_key]:
+                    try:
+                        username_at_submit = candidate_user.associated_accounts[
+                            domain
+                        ].get_value(entry.submit_time)
+                        if entry.user == username_at_submit:
+                            valid_users.append(candidate_user)
+                    except DateMatchError:
+                        pass
+                if valid_users:
+                    if len(valid_users) > 1:
+                        logger.warning(
+                            f"Job {entry.cluster_name}/{entry.job_id}/{entry.submit_time}: "
+                            f"expected 1 matching user, found {len(valid_users)}: "
+                            + ", ".join(f"{u.email} ({u.uuid})" for u in valid_users)
+                        )
+                    else:
+                        (user,) = valid_users
+                        entry.user_uuid = user.uuid

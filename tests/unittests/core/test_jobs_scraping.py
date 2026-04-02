@@ -132,29 +132,29 @@ class TestSolveUser:
 
     def test_links_matching_job(self, user_map):
         job = _make_job(cluster_name="mila", user="jdoe")
-        assert user_map.solve_user(job) is True
+        user_map.solve_user(job)
         assert job.user_uuid == UUID("1f9b04e5-0ec4-4577-9196-2b03d254e344")
 
-    def test_already_set_uuid_not_overwritten(self, user_map):
+    def test_already_set_uuid_raises(self, user_map):
         existing_uuid = UUID("5a8b9e7f-afcc-4ced-b596-44fcdb3a0cff")
         job = _make_job(cluster_name="mila", user="jdoe", user_uuid=existing_uuid)
-        assert user_map.solve_user(job) is False
-        assert job.user_uuid == existing_uuid
+        with pytest.raises(AssertionError):
+            user_map.solve_user(job)
 
     def test_unknown_cluster(self, user_map):
         job = _make_job(cluster_name="unknown_cluster", user="jdoe")
-        assert user_map.solve_user(job) is False
+        user_map.solve_user(job)
         assert job.user_uuid is None
 
     def test_unknown_user(self, user_map):
         job = _make_job(cluster_name="mila", user="unknown_user")
-        assert user_map.solve_user(job) is False
+        user_map.solve_user(job)
         assert job.user_uuid is None
 
     def test_wrong_domain(self, user_map):
         # User has mila credential, but job is on narval (drac domain)
         job = _make_job(cluster_name="narval", user="jdoe")
-        assert user_map.solve_user(job) is False
+        user_map.solve_user(job)
         assert job.user_uuid is None
 
     def test_no_users_no_match(self):
@@ -162,7 +162,7 @@ class TestSolveUser:
         with p_cfg, p_users:
             um = UserMap()
         job = _make_job(cluster_name="mila", user="anyone")
-        assert um.solve_user(job) is False
+        um.solve_user(job)
         assert job.user_uuid is None
 
     def test_user_without_accounts_no_match(self):
@@ -171,7 +171,7 @@ class TestSolveUser:
         with p_cfg, p_users:
             um = UserMap()
         job = _make_job(cluster_name="mila", user="testuser")
-        assert um.solve_user(job) is False
+        um.solve_user(job)
         assert job.user_uuid is None
 
     def test_expired_credential_not_matched(self):
@@ -184,7 +184,7 @@ class TestSolveUser:
             um = UserMap()
         # Job submitted in 2023, but credential expired in 2021
         job = _make_job(cluster_name="mila", user="expired_user")
-        assert um.solve_user(job) is False
+        um.solve_user(job)
         assert job.user_uuid is None
 
     def test_duplicate_users_warns_and_no_match(self, caplog):
@@ -200,7 +200,7 @@ class TestSolveUser:
             um = UserMap()
         job = _make_job(cluster_name="mila", user="same_user")
         with caplog.at_level(logging.WARNING):
-            assert um.solve_user(job) is False
+            um.solve_user(job)
         assert job.user_uuid is None
         assert any(
             "expected 1 matching user, found 2" in r.message for r in caplog.records
@@ -225,16 +225,16 @@ class TestSolveUser:
         job_narval_bob = _make_job(cluster_name="narval", user="bob_drac", job_id=3)
         job_narval_unknown = _make_job(cluster_name="narval", user="nobody", job_id=4)
 
-        assert um.solve_user(job_mila) is True
+        um.solve_user(job_mila)
         assert job_mila.user_uuid == UUID("1f9b04e5-0ec4-4577-9196-2b03d254e344")
 
-        assert um.solve_user(job_narval_alice) is True
+        um.solve_user(job_narval_alice)
         assert job_narval_alice.user_uuid == UUID(
             "1f9b04e5-0ec4-4577-9196-2b03d254e344"
         )
 
-        assert um.solve_user(job_narval_bob) is True
+        um.solve_user(job_narval_bob)
         assert job_narval_bob.user_uuid == UUID("7ecd3a8a-ab71-499e-b38a-ceacd91a99c4")
 
-        assert um.solve_user(job_narval_unknown) is False
+        um.solve_user(job_narval_unknown)
         assert job_narval_unknown.user_uuid is None
