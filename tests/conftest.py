@@ -91,9 +91,6 @@ def tzlocal_is_mtl(monkeypatch):
     monkeypatch.setattr(
         "sarc.client.series.TZLOCAL", zoneinfo.ZoneInfo("America/Montreal")
     )
-    monkeypatch.setattr(
-        "sarc.cli.fetch.slurmconfig.TZLOCAL", zoneinfo.ZoneInfo("America/Montreal")
-    )
 
 
 @pytest.fixture
