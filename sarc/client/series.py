@@ -18,7 +18,7 @@ from sarc.client.job import (
     get_available_clusters,
     get_jobs,
 )
-from sarc.config import TZLOCAL
+from sarc.config import UTC
 from sarc.core.models.users import UserData
 from sarc.traces import trace_decorator
 from sarc.users.db import get_users
@@ -135,7 +135,7 @@ class AbstractJobSeriesFactory(ABC):
         users_frame = self._get_user_data_frame()
 
         rows = []
-        now = datetime.now(tz=TZLOCAL)
+        now = datetime.now(tz=UTC)
         # Fetch all jobs from the clusters
         for job in tqdm(self.get_jobs(**jobs_args), total=total, desc=self._get_desc()):
             if job.end_time is None:
@@ -178,15 +178,6 @@ class AbstractJobSeriesFactory(ABC):
                     and job_series["gpu_utilization"] > 1
                 ):
                     job_series["gpu_utilization"] = np.nan
-
-            # Pandas dataframe will infer column type as object instead of datetime
-            # if all dates in column are not in same timezone.
-            # So, we make sure start and end times are in a specific datetime,
-            # whatever how they have been modified above.
-            # NB: Since dates are still stored in TZLOCAL
-            # in job object, we use TZLOCAL here, instead of UTC.
-            job.start_time = job.start_time.astimezone(TZLOCAL)
-            job.end_time = job.end_time.astimezone(TZLOCAL)
 
             # Flatten job.requested and job.allocated into job_series
             job_series.update(
@@ -656,9 +647,13 @@ def compute_time_frames(
 
     if start is None:
         start = jobs[col_start].min()
+    else:
+        start = start.astimezone(UTC)
 
     if end is None:
         end = jobs[col_end].max()
+    else:
+        end = end.astimezone(UTC)
 
     data_frames: list[pandas.DataFrame] = []
 
