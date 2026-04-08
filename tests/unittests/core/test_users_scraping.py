@@ -97,17 +97,17 @@ class MockUserScraper(UserScraper[MockConfig]):
 
 
 @dataclass
-class TestConfig:
+class ConfigTest:
     domain: str
 
 
-class TestPlugin(UserScraper[TestConfig]):
-    config_type = TestConfig
+class PluginTest(UserScraper[ConfigTest]):
+    config_type = ConfigTest
 
-    def validate_config(self, config_data: Any) -> TestConfig:
-        return TestConfig(domain=config_data)
+    def validate_config(self, config_data: Any) -> ConfigTest:
+        return ConfigTest(domain=config_data)
 
-    def get_user_data(self, config: TestConfig) -> bytes:
+    def get_user_data(self, config: ConfigTest) -> bytes:
         return config.domain.encode("utf-8")
 
     def parse_user_data(self, data: bytes, cache_time: datetime) -> Iterable[UserMatch]:
@@ -436,7 +436,7 @@ def test_fetch_and_parse_multiple_different_scrapers(
     """Test fetching and parsing users with multiple different scrapers and verify merging behavior."""
     # Set up both scrapers in the builtin scrapers
     mock_scraper = MockUserScraper()
-    test_plugin = TestPlugin()
+    test_plugin = PluginTest()
     monkeypatch.setitem(_builtin_scrapers, "mock_scraper", mock_scraper)
     monkeypatch.setitem(_builtin_scrapers, "test_plugin", test_plugin)
 
@@ -451,7 +451,7 @@ def test_fetch_and_parse_multiple_different_scrapers(
     # Then, parse the cached data
     users = list(parse_users(datetime.now(UTC) - one_hour, False))
 
-    # MockUserScraper returns 3 users, TestPlugin returns 2 users
+    # MockUserScraper returns 3 users, PluginTest returns 2 users
     # Total should be 5 users (no merging expected since they have different matching IDs)
     assert len(users) == 5
 
@@ -467,7 +467,7 @@ def test_fetch_and_parse_multiple_different_scrapers(
     expected_mock_emails = {"john.doe@example.com", "bob.wilson@example.com"}
     assert mock_user_emails == expected_mock_emails
 
-    # Verify TestPlugin users have the expected domain-based emails
+    # Verify PluginTest users have the expected domain-based emails
     test_user_emails = {u.email for u in test_users if u.email}
     expected_test_emails = {"john@example.com", "jane@example.com"}
     assert test_user_emails == expected_test_emails

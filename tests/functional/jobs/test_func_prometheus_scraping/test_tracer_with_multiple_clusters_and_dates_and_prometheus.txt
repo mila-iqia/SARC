@@ -47,7 +47,16 @@ Found 4 job(s):
         "gpu_type": "phantom_gpu_raisin_0"
     },
     "stored_statistics": {
-        "gpu_utilization": null,
+        "gpu_utilization": {
+            "mean": 1.0,
+            "std": 0.0,
+            "q05": 0.0,
+            "q25": 0.0,
+            "median": 1.0,
+            "q75": 1.0,
+            "max": 1.0,
+            "unused": 0.0
+        },
         "gpu_utilization_fp16": null,
         "gpu_utilization_fp32": null,
         "gpu_utilization_fp64": null,
@@ -106,7 +115,16 @@ Found 4 job(s):
         "gpu_type": "phantom_gpu_raisin_1"
     },
     "stored_statistics": {
-        "gpu_utilization": null,
+        "gpu_utilization": {
+            "mean": 1.0,
+            "std": 0.0,
+            "q05": 0.0,
+            "q25": 0.0,
+            "median": 1.0,
+            "q75": 1.0,
+            "max": 1.0,
+            "unused": 0.0
+        },
         "gpu_utilization_fp16": null,
         "gpu_utilization_fp32": null,
         "gpu_utilization_fp64": null,
@@ -165,7 +183,16 @@ Found 4 job(s):
         "gpu_type": "phantom_gpu_patate_0"
     },
     "stored_statistics": {
-        "gpu_utilization": null,
+        "gpu_utilization": {
+            "mean": 1.0,
+            "std": 0.0,
+            "q05": 0.0,
+            "q25": 0.0,
+            "median": 1.0,
+            "q75": 1.0,
+            "max": 1.0,
+            "unused": 0.0
+        },
         "gpu_utilization_fp16": null,
         "gpu_utilization_fp32": null,
         "gpu_utilization_fp64": null,
@@ -224,7 +251,16 @@ Found 4 job(s):
         "gpu_type": "phantom_gpu_patate_1"
     },
     "stored_statistics": {
-        "gpu_utilization": null,
+        "gpu_utilization": {
+            "mean": 1.0,
+            "std": 0.0,
+            "q05": 0.0,
+            "q25": 0.0,
+            "median": 1.0,
+            "q75": 1.0,
+            "max": 1.0,
+            "unused": 0.0
+        },
         "gpu_utilization_fp16": null,
         "gpu_utilization_fp32": null,
         "gpu_utilization_fp64": null,
@@ -236,10 +272,16 @@ Found 4 job(s):
     }
 }
 
-Found 44 span(s):
+Found 37 span(s):
 [
  {
-  "span_name": "acquire_prometheus_metrics_from_time_interval",
+  "span_name": "parse_prometheus",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "fetch_prometheus_metrics_from_time_interval",
   "span_events": [],
   "span_attributes": {
    "cluster_name": "patate",
@@ -249,13 +291,13 @@ Found 44 span(s):
   "span_has_error": false
  },
  {
-  "span_name": "scrap_prometheus",
+  "span_name": "fetch_prometheus",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
  },
  {
-  "span_name": "acquire_prometheus_metrics_from_time_interval",
+  "span_name": "fetch_prometheus_metrics_from_time_interval",
   "span_events": [],
   "span_attributes": {
    "cluster_name": "patate",
@@ -265,25 +307,13 @@ Found 44 span(s):
   "span_has_error": false
  },
  {
-  "span_name": "scrap_prometheus",
+  "span_name": "fetch_prometheus",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
  },
  {
-  "span_name": "SlurmJob.statistics",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "update_allocated_gpu_type_from_prometheus",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "acquire_prometheus_metrics_from_time_interval",
+  "span_name": "fetch_prometheus_metrics_from_time_interval",
   "span_events": [],
   "span_attributes": {
    "cluster_name": "patate",
@@ -293,25 +323,13 @@ Found 44 span(s):
   "span_has_error": false
  },
  {
-  "span_name": "scrap_prometheus",
+  "span_name": "fetch_prometheus",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
  },
  {
-  "span_name": "SlurmJob.statistics",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "update_allocated_gpu_type_from_prometheus",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "acquire_prometheus_metrics_from_time_interval",
+  "span_name": "fetch_prometheus_metrics_from_time_interval",
   "span_events": [],
   "span_attributes": {
    "cluster_name": "raisin",
@@ -321,13 +339,13 @@ Found 44 span(s):
   "span_has_error": false
  },
  {
-  "span_name": "scrap_prometheus",
+  "span_name": "fetch_prometheus",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
  },
  {
-  "span_name": "acquire_prometheus_metrics_from_time_interval",
+  "span_name": "fetch_prometheus_metrics_from_time_interval",
   "span_events": [],
   "span_attributes": {
    "cluster_name": "raisin",
@@ -337,25 +355,13 @@ Found 44 span(s):
   "span_has_error": false
  },
  {
-  "span_name": "scrap_prometheus",
+  "span_name": "fetch_prometheus",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
  },
  {
-  "span_name": "SlurmJob.statistics",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "update_allocated_gpu_type_from_prometheus",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "acquire_prometheus_metrics_from_time_interval",
+  "span_name": "fetch_prometheus_metrics_from_time_interval",
   "span_events": [],
   "span_attributes": {
    "cluster_name": "raisin",
@@ -365,19 +371,7 @@ Found 44 span(s):
   "span_has_error": false
  },
  {
-  "span_name": "scrap_prometheus",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "SlurmJob.statistics",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "update_allocated_gpu_type_from_prometheus",
+  "span_name": "fetch_prometheus",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false

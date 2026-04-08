@@ -5,6 +5,7 @@ from simple_parsing import subparsers
 from .allocations import FetchAllocations
 from .diskusage import FetchDiskUsage
 from .jobs import FetchJobs
+from .prometheus import FetchPrometheus
 from .slurmconfig import FetchSlurmConfig
 from .users import FetchUsers
 
@@ -12,7 +13,12 @@ from .users import FetchUsers
 @dataclass
 class Fetch:
     command: (
-        FetchUsers | FetchDiskUsage | FetchSlurmConfig | FetchAllocations | FetchJobs
+        FetchUsers
+        | FetchDiskUsage
+        | FetchSlurmConfig
+        | FetchAllocations
+        | FetchJobs
+        | FetchPrometheus
     ) = subparsers(
         {
             "users": FetchUsers,
@@ -20,6 +26,7 @@ class Fetch:
             "slurmconfig": FetchSlurmConfig,
             "allocations": FetchAllocations,
             "jobs": FetchJobs,
+            "prometheus": FetchPrometheus,
         }
     )
 

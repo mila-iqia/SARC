@@ -4,6 +4,7 @@ import pytest
 import time_machine
 
 from sarc.client import get_jobs
+from sarc.jobs.series import compute_job_statistics
 from tests.functional.jobs.test_func_load_job_series import MOCK_TIME
 
 from ..jobs.test_func_job_statistics import generate_fake_timeseries
@@ -50,16 +51,16 @@ PARAMS = {
 
 
 @time_machine.travel(MOCK_TIME, tick=False)
-@pytest.mark.usefixtures("read_only_db", "health_config")
+@pytest.mark.usefixtures("read_write_db", "health_config")
 @pytest.mark.parametrize("check_name", PARAMS.values(), ids=PARAMS.keys())
 def test_check_prometheus_stats_for_gpu_jobs(
-    check_name, monkeypatch, caplog, file_regression, cli_main
+    check_name, caplog, file_regression, cli_main
 ):
-    monkeypatch.setattr(
-        "sarc.jobs.series.get_job_time_series", generate_fake_timeseries
-    )
-
     for job in get_jobs():
-        job.statistics(save=True)
+        if job.end_time is not None:
+            stats = compute_job_statistics(job, generate_fake_timeseries(job))
+            if not stats.empty():
+                job.stored_statistics = stats
+                job.save()
     assert cli_main(["health", "run", "--check", check_name]) == 0
     file_regression.check(re.sub(r"ERROR +.+\.py:[0-9]+ +", "", caplog.text))
