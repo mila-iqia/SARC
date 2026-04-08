@@ -1,11 +1,15 @@
 import sys
+import zoneinfo
 from collections.abc import Generator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import tzlocal
+
 from sarc.cache import Cache
 from sarc.client.job import _jobs_collection
-from sarc.config import TZLOCAL
+
+TZLOCAL = zoneinfo.ZoneInfo(tzlocal.get_localzone_name())
 
 
 def usage():

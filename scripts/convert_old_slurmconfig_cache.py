@@ -1,12 +1,17 @@
 import glob
 import logging
 import re
+import zoneinfo
 from datetime import datetime
+
+import tzlocal
 
 from sarc.cache import Cache
 from sarc.cli.fetch.slurmconfig import _save_into_cache
-from sarc.config import TZLOCAL, UTC, Config, config
+from sarc.config import UTC, Config, config
 from sarc.core.models.validators import UTCOFFSET, datetime_utc
+
+TZLOCAL = zoneinfo.ZoneInfo(tzlocal.get_localzone_name())
 
 logger = logging.getLogger(__name__)
 
