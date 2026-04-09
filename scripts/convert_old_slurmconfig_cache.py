@@ -1,17 +1,12 @@
 import glob
 import logging
 import re
-import zoneinfo
 from datetime import datetime
-
-import tzlocal
 
 from sarc.cache import Cache
 from sarc.cli.fetch.slurmconfig import _save_into_cache
 from sarc.config import UTC, Config, config
 from sarc.core.models.validators import UTCOFFSET, datetime_utc
-
-TZLOCAL = zoneinfo.ZoneInfo(tzlocal.get_localzone_name())
 
 logger = logging.getLogger(__name__)
 
@@ -48,11 +43,7 @@ def _fetch_legacy_cache_files(cfg: Config, cluster_name: str, cache: Cache):
         assert basename.endswith(suffix)
         date_string = basename[len(prefix) : -len(suffix)]
         if regex_day.match(date_string):
-            cache_date = (
-                datetime.strptime(date_string, "%Y-%m-%d")
-                .replace(tzinfo=TZLOCAL)
-                .astimezone(UTC)
-            )
+            cache_date = datetime.strptime(date_string, "%Y-%m-%d").astimezone(UTC)
         else:
             cache_date = datetime.fromisoformat(date_string)
         assert cache_date.tzinfo is not None, "date is not tz-aware"

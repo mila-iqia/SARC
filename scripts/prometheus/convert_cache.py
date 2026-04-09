@@ -1,15 +1,10 @@
 import sys
-import zoneinfo
 from collections.abc import Generator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-import tzlocal
-
 from sarc.cache import Cache
 from sarc.client.job import _jobs_collection
-
-TZLOCAL = zoneinfo.ZoneInfo(tzlocal.get_localzone_name())
 
 
 def usage():
@@ -56,7 +51,7 @@ for day in walk_cache(source):
                 continue
             job_id = int(job_id_str)
             start_str, _ = start_to_end.split("_to_")
-            start = datetime.strptime(start_str, DATE_FORMAT).replace(tzinfo=TZLOCAL)
+            start = datetime.strptime(start_str, DATE_FORMAT).astimezone()
             # This searches for a job that has the same cluster and id as the
             # cache entry and has the submit time that is closest, but still
             # lower than the start time. This is because we need the submit
