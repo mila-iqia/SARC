@@ -119,6 +119,11 @@ def parse_prometheus(since: datetime | None, update_parsed_date: bool) -> None:
                 error = True
                 continue
             data = json.loads(value.decode("utf-8"))
+            if data == []:
+                logger.warning(
+                    f"Empty data found for job {job_id} on cluster {cluster_name} (submit_time {submit_time}), skipping cache entry"
+                )
+                continue
             gpu_type = data[0]["metric"]["gpu_type"]
             need_save = False
             if gpu_type is not None:
