@@ -175,6 +175,110 @@ class JobsWorker(QThread):
             self.error.emit(str(exc))
 
 
+class MetricsWorker(QThread):
+    """Fetches 24-hour aggregated metrics (avg wait time, job count) per cluster."""
+
+    success = pyqtSignal(dict)  # dict[cluster, {"avg_wait": float|None, "job_count": int}]
+    error = pyqtSignal(str)
+
+    def __init__(self, client: SarcApiClient, clusters: list[str]):
+        super().__init__()
+        self.client = client
+        self.clusters = clusters
+
+    def run(self):
+        try:
+            from datetime import datetime, timedelta, timezone
+
+            now = datetime.now(tz=timezone.utc)
+            since = now - timedelta(hours=24)
+            result = {}
+            for cluster in self.clusters:
+                wait_times: list[float] = []
+                job_count = 0
+                page = 1
+                per_page = 500
+                while True:
+                    data = self.client.job_list(
+                        cluster=cluster, start=since, end=now, page=page, per_page=per_page
+                    )
+                    for job in data.jobs:
+                        if job.submit_time < since:
+                            continue
+                        job_count += 1
+                        if job.start_time is not None:
+                            wait = (job.start_time - job.submit_time).total_seconds()
+                            if wait >= 0:
+                                wait_times.append(wait)
+                    total_pages = -(-data.total // per_page)  # ceiling division
+                    if page >= total_pages:
+                        break
+                    page += 1
+                result[cluster] = {
+                    "avg_wait": sum(wait_times) / len(wait_times) if wait_times else None,
+                    "job_count": job_count,
+                }
+            self.success.emit(result)
+        except Exception as exc:
+            self.error.emit(str(exc))
+
+
+class MetricsHistoryWorker(QThread):
+    """Fetches 30-day daily history for a metric across all clusters."""
+
+    success = pyqtSignal(dict)  # dict[cluster, list[tuple[date, float]]]
+    error = pyqtSignal(str)
+    progress = pyqtSignal(str)
+
+    def __init__(self, client: SarcApiClient, clusters: list[str], metric: str):
+        super().__init__()
+        self.client = client
+        self.clusters = clusters
+        self.metric = metric  # "avg_wait" or "job_count"
+
+    def run(self):
+        try:
+            from collections import defaultdict
+            from datetime import datetime, timedelta, timezone
+
+            now = datetime.now(tz=timezone.utc)
+            since = now - timedelta(days=30)
+            result = {}
+            per_page = 500
+            for cluster in self.clusters:
+                self.progress.emit(f"Loading {cluster}…")
+                daily_waits: dict = defaultdict(list)
+                daily_counts: dict = defaultdict(int)
+                page = 1
+                while True:
+                    data = self.client.job_list(
+                        cluster=cluster, start=since, end=now, page=page, per_page=per_page
+                    )
+                    for job in data.jobs:
+                        if job.submit_time < since:
+                            continue
+                        day = job.submit_time.date()
+                        daily_counts[day] += 1
+                        if job.start_time is not None:
+                            wait = (job.start_time - job.submit_time).total_seconds()
+                            if wait >= 0:
+                                daily_waits[day].append(wait)
+                    total_pages = -(-data.total // per_page)
+                    if page >= total_pages:
+                        break
+                    page += 1
+                if self.metric == "avg_wait":
+                    series = sorted(
+                        (d, sum(w) / len(w)) for d, w in daily_waits.items() if w
+                    )
+                else:
+                    series = sorted(daily_counts.items())
+                result[cluster] = series
+            self.success.emit(result)
+        except Exception as exc:
+            self.error.emit(str(exc))
+
+
 class JobDetailsWorker(QThread):
     success = pyqtSignal(object)
     error = pyqtSignal(str)

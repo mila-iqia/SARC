@@ -1,5 +1,5 @@
 # /// script
-# dependencies = ["PyQt6>=6.9,<7", "sarc"]
+# dependencies = ["PyQt6>=6.9,<7", "sarc", "matplotlib"]
 #
 # [tool.uv.sources]
 # sarc = { path = "../.." }
@@ -172,6 +172,7 @@ class MainWindow(QMainWindow):
         # Propagate client to all tabs
         self._users_tab.client = self.client
         self._clusters_tab.client = self.client
+        self._metrics_tab.client = self.client
         self._jobs_tab.client = self.client
         self._summary_tab.set_client(self.client)
 
