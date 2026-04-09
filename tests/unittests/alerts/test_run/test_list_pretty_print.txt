@@ -1,0 +1,27 @@
+Check: evil_beans [active] | tests.unittests.alerts.definitions:BeanCheck
+	beans: 666
+Last result: ERROR, at: 2024-01-01 15:00:00+00:00
+	more: 0
+	Exception: ValueError
+		File 'common.py', line N, in wrapped_check
+			raw_results = self.check()
+		File 'definitions.py', line N, in check
+			raise ValueError("What a beastly number")
+		ValueError: What a beastly number
+Last message: [evil_beans] ERROR: ValueError: What a beastly number
+
+Check: little_beans [active] | tests.unittests.alerts.definitions:BeanCheck
+	beans: 7
+Last result: FAILURE, at: 2024-01-01 15:00:00+00:00
+	more: 3
+Last message: [little_beans] FAILURE: little_beans
+
+Check: many_beans [active] | tests.unittests.alerts.definitions:BeanCheck
+	beans: 31
+Last result: OK, at: 2024-01-01 15:00:00+00:00
+	more: 0
+Last message: [many_beans] OK
+
+Check: sleepy_beans [NOT active] | tests.unittests.alerts.definitions:BeanCheck
+	beans: 50
+

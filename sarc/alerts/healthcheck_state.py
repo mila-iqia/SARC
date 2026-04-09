@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Annotated, Any, Iterable
 
-from pydantic import BeforeValidator, PlainSerializer
+import pymongo
+from pydantic import BaseModel, BeforeValidator, PlainSerializer, WithJsonSchema
 from pydantic_mongo import AbstractRepository, PydanticObjectId
-from serieux import TaggedSubclass, deserialize, serialize
+from serieux import RefPolicy, TaggedSubclass, deserialize, schema, serialize
 
 from sarc.alerts.common import CheckResult, HealthCheck
 from sarc.config import config
-from sarc.model import BaseModel
 
 SERIEUX_CLASS_NAME = "$class"
 MONGODB_CLASS_NAME = "_class_"
@@ -71,6 +71,9 @@ HealthCheckPydantic = Annotated[
     HealthCheck,
     PlainSerializer(_serialize_health_check, return_type=dict),
     BeforeValidator(_validate_health_check),
+    # Add explicit schema for HealthCheck dataclass, using serieux schema compiler.
+    # Necessary to make sure HealthCheck schema is included into OpenAPI JSON schema.
+    WithJsonSchema(schema(HealthCheck).compile(ref_policy=RefPolicy.NEVER)),
 ]
 
 
@@ -100,6 +103,9 @@ CheckResultPydantic = Annotated[
     CheckResult,
     PlainSerializer(_serialize_check_result, return_type=dict),
     BeforeValidator(_validate_check_result),
+    # Add explicit schema for CheckResult dataclass, using serieux schema compiler.
+    # Necessary to make sure CheckResult schema is included into OpenAPI JSON schema.
+    WithJsonSchema(schema(CheckResult).compile(ref_policy=RefPolicy.NEVER)),
 ]
 
 
@@ -141,6 +147,10 @@ class HealthCheckStateRepository(AbstractRepository[HealthCheckState]):
     def get_state(self, name: str) -> HealthCheckState | None:
         """Get the state for a specific check by name."""
         return self.find_one_by({"check.name": name})
+
+    def get_states(self) -> Iterable[HealthCheckState]:
+        """Get an iterable of all states saved in database."""
+        return self.find_by({}, sort=[("check.name", pymongo.ASCENDING)])
 
 
 def get_healthcheck_state_collection() -> HealthCheckStateRepository:

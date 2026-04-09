@@ -271,6 +271,7 @@ def test_localhost(os_system, monkeypatch):
 def test_stdout_message_before_json(
     test_config, sacct_json, remote, file_regression, cli_main, monkeypatch
 ):
+
     remote.expect(
         host="raisin",
         cmd=f"export TZ=UTC && /opt/slurm/bin/sacct -X -S {_dtfmt(2023, 2, 15)} -E {_dtfmt(2023, 2, 16)} --allusers --json",
@@ -697,7 +698,7 @@ def test_parse_sacct_slurm_versions(sacct_outputs):
     assert len(jobs) == 1
 
 
-@pytest.mark.usefixtures("enabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
 def test_acquire_jobs_mutually_exclusive_args(cli_main, caplog):
     # Both --intervals and --auto_interval: must fail
     assert (
@@ -725,7 +726,7 @@ def test_acquire_jobs_mutually_exclusive_args(cli_main, caplog):
     )
 
 
-@pytest.mark.usefixtures("enabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
 def test_acquire_jobs_invalid_interval(cli_main, caplog):
     # Malformed interval
     assert (
@@ -751,7 +752,7 @@ def test_acquire_jobs_invalid_interval(cli_main, caplog):
     )
 
 
-@pytest.mark.usefixtures("enabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
 def test_acquire_jobs_interval_start_gt_end(cli_main, caplog):
     # Malformed interval: start > end
     assert (
@@ -776,7 +777,7 @@ def test_acquire_jobs_interval_start_gt_end(cli_main, caplog):
     )
 
 
-@pytest.mark.usefixtures("enabled_cache")
+@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
 def test_acquire_jobs_args_no_interval(cli_main, caplog):
     # No interval, nothing to do
     assert cli_main(["fetch", "jobs", "--cluster_names", "raisin"]) == 0
@@ -813,7 +814,7 @@ def test_auto_interval(cli_main, monkeypatch, freezer, caplog):
         _get_cluster_raisin().end_time_sacct, "%Y-%m-%dT%H:%M"
     )
     expected_final_end_time = orig_end_time + timedelta(minutes=300)
-    freezer.move_to(expected_final_end_time)
+    freezer.move_to(orig_end_time + timedelta(minutes=301))
 
     assert (
         cli_main(

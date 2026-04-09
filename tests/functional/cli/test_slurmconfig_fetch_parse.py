@@ -86,7 +86,7 @@ DATE_2020_10_01_MTL = datetime(2020, 10, 1, tzinfo=MTL)
 DATE_2020_12_01_MTL = datetime(2020, 12, 1, tzinfo=MTL)
 
 
-@pytest.mark.usefixtures("enabled_cache", "no_pkey")
+@pytest.mark.usefixtures("read_only_db", "enabled_cache", "no_pkey")
 def test_fetch_slurmconfig(cli_main, test_config, remote, caplog, freezer, monkeypatch):
     """Test slurm conf file downloading using `fetch slurmconfig`."""
     caplog.set_level(logging.INFO)
@@ -99,10 +99,10 @@ def test_fetch_slurmconfig(cli_main, test_config, remote, caplog, freezer, monke
     cache = Cache(subdirectory=f"slurm_conf/{cluster_name}")
     file_path_2020_01_01 = cache._dir_from_date(
         cache.cache_dir, DATE_2020_01_01_MTL
-    ) / DATE_2020_01_01_MTL.astimezone(UTC).time().isoformat("seconds")
+    ) / DATE_2020_01_01_MTL.astimezone(UTC).time().isoformat("milliseconds")
     file_path_2020_05_01 = cache._dir_from_date(
         cache.cache_dir, DATE_2020_05_01_MTL
-    ) / DATE_2020_05_01_MTL.astimezone(UTC).time().isoformat("seconds")
+    ) / DATE_2020_05_01_MTL.astimezone(UTC).time().isoformat("milliseconds")
 
     assert not file_path_2020_01_01.exists()
     assert not file_path_2020_05_01.exists()
@@ -231,16 +231,16 @@ def test_fetch_slurmconfig_legacy(cli_main, test_config, remote, caplog, monkeyp
     cache = Cache(subdirectory=f"slurm_conf/{cluster_name}")
     file_path_2020_01_01 = cache._dir_from_date(
         cache.cache_dir, DATE_2020_01_01_MTL
-    ) / DATE_2020_01_01_MTL.astimezone(UTC).time().isoformat("seconds")
+    ) / DATE_2020_01_01_MTL.astimezone(UTC).time().isoformat("milliseconds")
     file_path_2020_05_01 = cache._dir_from_date(
         cache.cache_dir, DATE_2020_05_01_MTL
-    ) / DATE_2020_05_01_MTL.astimezone(UTC).time().isoformat("seconds")
+    ) / DATE_2020_05_01_MTL.astimezone(UTC).time().isoformat("milliseconds")
     file_path_2020_10_01 = cache._dir_from_date(
         cache.cache_dir, DATE_2020_10_01_MTL
-    ) / DATE_2020_10_01_MTL.astimezone(UTC).time().isoformat("seconds")
+    ) / DATE_2020_10_01_MTL.astimezone(UTC).time().isoformat("milliseconds")
     file_path_2020_12_01 = cache._dir_from_date(
         cache.cache_dir, DATE_2020_12_01_MTL
-    ) / DATE_2020_12_01_MTL.astimezone(UTC).time().isoformat("seconds")
+    ) / DATE_2020_12_01_MTL.astimezone(UTC).time().isoformat("milliseconds")
 
     # Use cluster raisin for download test
     cluster = test_config.clusters[cluster_name]

@@ -1,7 +1,3 @@
-"""Script to acquire prometheus metrics."""
-
-from __future__ import annotations
-
 import logging
 from dataclasses import dataclass
 from datetime import datetime
@@ -9,37 +5,19 @@ from datetime import datetime
 from simple_parsing import field
 
 from sarc.config import config
-from sarc.core.scraping.jobs_utils import (
-    _time_auto_first_date,
-    parse_auto_intervals,
-    parse_intervals,
-    set_auto_end_time,
+from sarc.core.scraping.jobs_utils import parse_intervals, set_auto_end_time
+from sarc.jobs.prometheus_scraping import (
+    AUTO_END_FIELD,
+    fetch_prometheus,
+    parse_prometheus_auto_intervals,
 )
-from sarc.jobs.prometheus_scraping import scrap_prometheus
 from sarc.traces import using_trace
 
 logger = logging.getLogger(__name__)
 
 
-AUTO_END_FIELD = "end_time_prometheus"
-
-
-def parse_prometheus_auto_intervals(
-    cluster_name: str, minutes: int
-) -> list[tuple[datetime, datetime]]:
-    """
-    When scraping with auto intervals, we don't want to scrape Prometheus metrics
-    after end_time_sacct.
-    """
-    end_time_sacct = _time_auto_first_date(cluster_name, "end_time_sacct")
-    return parse_auto_intervals(
-        cluster_name, AUTO_END_FIELD, minutes, end=end_time_sacct
-    )
-
-
-# pylint: disable=logging-not-lazy,too-many-branches
 @dataclass
-class AcquirePrometheus:
+class FetchPrometheus:
     cluster_names: list[str] = field(alias=["-c"], default_factory=list)
 
     intervals: list[str] | None = field(
@@ -67,6 +45,10 @@ class AcquirePrometheus:
         ),
     )
 
+    max_intervals: int | None = field(
+        type=int, default=None, help="Max number of intervals to fetch"
+    )
+
     def execute(self) -> int:
         if self.intervals is not None and self.auto_interval is not None:
             logger.error(
@@ -90,7 +72,7 @@ class AcquirePrometheus:
                     intervals = parse_intervals(self.intervals)
                 elif self.auto_interval is not None:
                     intervals = parse_prometheus_auto_intervals(
-                        cluster_name, self.auto_interval
+                        cluster_name, self.auto_interval, self.max_intervals
                     )
                 if not intervals:
                     logger.warning(
@@ -100,8 +82,8 @@ class AcquirePrometheus:
 
                 for time_from, time_to in intervals:
                     with using_trace(
-                        "AcquirePrometheus",
-                        "acquire_prometheus_metrics_from_time_interval",
+                        "FetchPrometheus",
+                        "fetch_prometheus_metrics_from_time_interval",
                         exception_types=(),
                     ) as span:
                         span.set_attribute("cluster_name", cluster_name)
@@ -114,18 +96,17 @@ class AcquirePrometheus:
                                 f"{time_from} to {time_to} ({interval_minutes} min)"
                             )
 
-                            scrap_prometheus(cluster, time_from, time_to)
+                            fetch_prometheus(cluster, time_from, time_to)
 
                             if self.auto_interval is not None:
                                 set_auto_end_time(cluster_name, AUTO_END_FIELD, time_to)
                         # pylint: disable=broad-exception-caught
                         except Exception as e:
                             logger.error(
-                                f"Failed to acquire Prometheus metrics on {cluster_name} for interval: "
+                                f"Failed to fetch Prometheus metrics on {cluster_name} for interval: "
                                 f"{time_from} to {time_to} ({interval_minutes} min): {type(e).__name__}: {e}"
                             )
                             raise e
-            # pylint: disable=broad-exception-caught
             except Exception as e:
                 logger.error(
                     f"Error while acquiring Prometheus metrics on {cluster_name}: "

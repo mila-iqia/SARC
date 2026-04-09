@@ -1,7 +1,7 @@
 import pytest
-from prometheus_api_client import MetricRangeDataFrame
 
 from sarc.client.job import SlurmJob, get_job
+from sarc.jobs.series import JOB_STATISTICS_METRIC_NAMES, compute_job_statistics
 from tests.functional.jobs.factory import elapsed_time as BASE_ELAPSED_TIME
 
 
@@ -16,13 +16,15 @@ def format_fake_timeseries(metric, values, t0, delta):
     }
 
 
-def generate_fake_timeseries(job: SlurmJob, metric, max_points=100, dataframe=True):
+def generate_fake_timeseries(
+    job: SlurmJob, metric=JOB_STATISTICS_METRIC_NAMES, max_points=100
+):
     assert job.nodes
 
     n = int(job.elapsed_time // 30)
 
     if n == 0:
-        return None
+        return []
 
     metric_ranges = {
         "slurm_job_utilization_gpu": (0, 100, {"gpu": 3}),
@@ -61,82 +63,14 @@ def generate_fake_timeseries(job: SlurmJob, metric, max_points=100, dataframe=Tr
             )
         )
 
-    if dataframe:
-        return MetricRangeDataFrame(results) if results else None
-    else:
-        return results
+    return results
 
 
 @pytest.mark.usefixtures("read_only_db")
-def test_job_statistics(monkeypatch, data_regression):
+def test_compute_job_statistics(data_regression):
     job = get_job(job_id=1)
+    assert job is not None
 
-    monkeypatch.setattr(
-        "sarc.jobs.series.get_job_time_series", generate_fake_timeseries
-    )
-
-    assert not job.stored_statistics
-    statistics = job.statistics(save=False)
-    assert not job.stored_statistics
+    statistics = compute_job_statistics(job, generate_fake_timeseries(job))
 
     data_regression.check(statistics.model_dump())
-
-
-@pytest.mark.usefixtures("read_only_db")
-def test_job_statistics_no_save_without_end_time(monkeypatch, data_regression):
-    job = get_job(job_state="RUNNING")
-    assert not job.end_time
-
-    monkeypatch.setattr(
-        "sarc.jobs.series.get_job_time_series", generate_fake_timeseries
-    )
-
-    assert not job.stored_statistics
-    job.statistics(save=True)
-    assert not job.stored_statistics
-
-    rejob = get_job(job_state="RUNNING")
-    assert job == rejob
-    assert not rejob.stored_statistics
-
-
-@pytest.mark.usefixtures("read_only_db")
-def test_job_statistics_nothing(monkeypatch):
-    job = get_job(job_id=1)
-
-    def _fake_job_time_series(*args, **kwargs):
-        return None if kwargs.get("dataframe", True) else []
-
-    monkeypatch.setattr("sarc.jobs.series.get_job_time_series", _fake_job_time_series)
-
-    assert not job.stored_statistics
-    statistics = job.statistics(save=False)
-    assert not statistics.cpu_utilization
-    assert not statistics.gpu_utilization
-    assert not statistics.gpu_utilization_fp16
-    assert not statistics.gpu_utilization_fp32
-    assert not statistics.gpu_utilization_fp64
-    assert not statistics.gpu_sm_occupancy
-    assert not statistics.gpu_memory
-    assert not statistics.gpu_power
-    assert not statistics.system_memory
-
-
-@pytest.mark.usefixtures("read_write_db")
-def test_job_statistics_save(monkeypatch, data_regression):
-    job = get_job(job_id=1)
-
-    monkeypatch.setattr(
-        "sarc.jobs.series.get_job_time_series", generate_fake_timeseries
-    )
-
-    assert not job.stored_statistics
-    job.statistics()
-    assert job.stored_statistics
-
-    rejob = get_job(job_id=1)
-    assert rejob.stored_statistics
-    assert rejob.statistics() is rejob.stored_statistics
-    recomputed = rejob.statistics(recompute=True, save=False)
-    assert recomputed == rejob.stored_statistics
-    assert recomputed is not rejob.stored_statistics

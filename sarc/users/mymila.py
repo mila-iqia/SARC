@@ -45,12 +45,13 @@ import re
 import struct
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from enum import IntEnum, unique
 from itertools import chain, repeat
 from typing import Sequence
 
 from azure.identity import ClientSecretCredential
+from serieux.features.encrypt import Secret
 
 from sarc.core.scraping.users import MatchID, UserMatch, UserScraper, _builtin_scrapers
 
@@ -103,7 +104,7 @@ class Headers(IntEnum):
 class MyMilaConfig:
     tenant_id: str
     client_id: str
-    client_secret: str
+    client_secret: Secret[str]
     sql_endpoint: str
     database: str = "wh_sarc"
 
@@ -120,7 +121,7 @@ class MyMilaScraper(UserScraper[MyMilaConfig]):
     def get_user_data(self, config: MyMilaConfig) -> bytes:
         return json.dumps(_query_mymila(config), default=_json_serial).encode()
 
-    def parse_user_data(self, data: bytes) -> Iterable[UserMatch]:
+    def parse_user_data(self, data: bytes, _: datetime) -> Iterable[UserMatch]:
         records, headers = json.loads(data.decode())
         headers = [h.replace("-", "_") for h in headers]
         assert headers[-1] == "_MEMBER_NUM_"

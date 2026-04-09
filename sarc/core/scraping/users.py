@@ -1,15 +1,21 @@
 import logging
+import os
 from collections.abc import Iterable
 from datetime import UTC, datetime
 from importlib.metadata import entry_points
 from typing import Any, Protocol, Type
 
 from pydantic import BaseModel, Field, field_serializer
-from serieux import deserialize
+from serieux import IncludeFile, Serieux, WorkingDirectory
+from serieux.features.encrypt import EncryptionKey
 
 from sarc.cache import Cache
+from sarc.config import config, config_path
+from sarc.core.models.runstate import get_parsed_date, set_parsed_date
 from sarc.core.models.users import Credentials, MemberType
 from sarc.core.models.validators import ValidField
+
+deserialize = (Serieux + IncludeFile)().deserialize  # type: ignore[operator]
 
 logger = logging.getLogger(__name__)
 
@@ -70,12 +76,17 @@ class UserScraper[T](Protocol):
     config_type: Type[T]
 
     def validate_config(self, config_data: Any) -> T:
-        return deserialize(self.config_type, config_data)
+        return deserialize(
+            self.config_type,
+            config_data,
+            WorkingDirectory(directory=config_path)  # type: ignore[call-arg, operator]
+            + EncryptionKey(password=os.environ.get("SERIEUX_PASSWORD", None)),  # type: ignore[call-arg]
+        )
 
     def get_user_data(self, config: T) -> bytes: ...  # pragma: nocover
 
     def parse_user_data(
-        self, data: bytes
+        self, data: bytes, cache_time: datetime
     ) -> Iterable[UserMatch]: ...  # pragma: nocover
 
 
@@ -112,7 +123,7 @@ def update_user_match(*, value: UserMatch, update: UserMatch) -> None:
     )
     value.known_matches.add(update.matching_id)
     for mid in update.known_matches:
-        assert name_dict.get(mid.name, mid) == mid
+        assert name_dict.get(mid.name, mid) == mid, f"{name_dict}: {mid}"
         value.known_matches.add(mid)
 
     value.member_type.merge_with(update.member_type, truncate=True)
@@ -167,15 +178,23 @@ def fetch_users(scrapers: list[tuple[str, Any]]) -> None:
                 )
 
 
-def parse_users(from_: datetime) -> Iterable[UserMatch]:
+def parse_users(
+    from_: datetime | None, update_parsed_date: bool
+) -> Iterable[UserMatch]:
     """Parse user data from the cache.
 
     This returns one UserMatch structure per scraped user, across all plugins.
     The collected information is aggregated amongst plugins, but not with the
     information in the database.
 
-    from_: start parsing cached date from that date.
+    from_: start parsing cached date from that date. If None, uses runstate value from database
+    update_parsed_date : to update runstate last parsed date value
     """
+    db = config().mongo.database_instance
+
+    if from_ is None:
+        from_ = get_parsed_date(db, "users")
+
     cache = Cache(subdirectory="users")
 
     for ce in cache.read_from(from_time=from_):
@@ -188,7 +207,7 @@ def parse_users(from_: datetime) -> Iterable[UserMatch]:
                 scraper = get_user_scraper(item[0])
             except KeyError as e:
                 raise ValueError("Invalid user scraper") from e
-            for userm in scraper.parse_user_data(item[1]):
+            for userm in scraper.parse_user_data(item[1], ce.entry_datetime):
                 userm.matching_id.name = item[0]
                 # First, get all the userm that match with this one.
                 prev_userms: list[UserMatch] = [userm]
@@ -238,3 +257,8 @@ def parse_users(from_: datetime) -> Iterable[UserMatch]:
             if len(roots) == 0:
                 for k in refs:
                     yield user_refs[k]
+
+        # Update the parsed date
+        if update_parsed_date:
+            logger.info(f"Set parsed_dates for users to {ce.get_entry_datetime()}.")
+            set_parsed_date(db, "users", ce.get_entry_datetime())

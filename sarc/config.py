@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import functools
-import json
 import os
 import zoneinfo
 from contextlib import contextmanager
@@ -14,6 +13,7 @@ from typing import TYPE_CHECKING, Any, Callable, Literal, cast, overload
 import gifnoc
 import tzlocal
 from bson import CodecOptions, UuidRepresentation
+from easy_oauth import OAuthManager
 from hostlist import expand_hostlist
 from paramiko import PKey
 from serieux.features.encrypt import Secret
@@ -53,14 +53,24 @@ class PrivateKeyInfo:
 
 
 @dataclass
+class OTPInfo:
+    otp_secret: Secret[str]
+
+
+@dataclass
+class StaticInfo:
+    selector: str
+
+
+@dataclass
 class ClusterConfig:
     # pylint: disable=too-many-instance-attributes
-
     host: str
     private_key: PrivateKeyInfo
+    password: OTPInfo | StaticInfo | None = None
     timezone: zoneinfo.ZoneInfo | None = None
     prometheus_url: str | None = None
-    prometheus_headers_file: str | None = None
+    prometheus_headers: dict[str, Secret[str]] = field(default_factory=dict)
     name: str | None = None
     sacct_bin: str = "sacct"
     ignore_tz_utc: bool = False
@@ -142,13 +152,24 @@ class ClusterConfig:
         fconfig = FabricConfig()
         fconfig["run"]["pty"] = False
         fconfig["run"]["in_stream"] = False
+        extra_args = {}
+        if isinstance(self.password, StaticInfo):
+            extra_args["password"] = self.password.selector
+        elif isinstance(self.password, OTPInfo):
+            import pyotp
+
+            totp = pyotp.TOTP(self.password.otp_secret)
+            extra_args["password"] = totp.now()
+        else:
+            assert self.password is None
         return Connection(
             self.host,
             config=fconfig,
             connect_kwargs={
                 "pkey": PKey.from_path(
                     self.private_key.file, self.private_key.password.encode("ascii")
-                )
+                ),
+                **extra_args,
             },
         )
 
@@ -156,38 +177,39 @@ class ClusterConfig:
     def prometheus(self) -> PrometheusConnect:
         from prometheus_api_client import PrometheusConnect
 
-        if self.prometheus_headers_file is not None:
-            headers = json.load(
-                open(  # pylint: disable=consider-using-with
-                    self.prometheus_headers_file, "r", encoding="utf-8"
-                )
-            )
-        else:
-            headers = {}
-
         if self.prometheus_url is None:
             raise ConfigurationError(
                 f"No prometheus URL provided for cluster '{self.name}'"
             )
-        return PrometheusConnect(url=self.prometheus_url, headers=headers)
+        return PrometheusConnect(
+            url=self.prometheus_url, headers=self.prometheus_headers
+        )
 
 
 @dataclass
 class MongoConfig:
     connection_string: str
     database_name: str
+    auto_upgrade: bool = True
 
     @cached_property
     def database_instance(self) -> Database:
         from pymongo import MongoClient
 
         client: MongoClient = MongoClient(self.connection_string)
-        return client.get_database(
+        db = client.get_database(
             self.database_name,
             codec_options=CodecOptions(
                 uuid_representation=UuidRepresentation.STANDARD, tz_aware=True
             ),
         )
+
+        if self.auto_upgrade:
+            from sarc.core.db_init import db_upgrade
+
+            db_upgrade(db)
+
+        return db
 
 
 @dataclass
@@ -231,15 +253,19 @@ class ApiConfig:
     a client without parameters.
     """
 
-    url: str  # REST API URL (including port)
+    url: str | None = None  # REST API URL (including port)
     timeout: int = 120
-    per_page: int = 100  # Default pagination size
+    # Default pagination size
+    per_page: int = 100
+    # Maximum page size
+    max_page_size: int = 5000
+    auth: OAuthManager | None = None
 
 
 @dataclass
 class ClientConfig:
     mongo: MongoConfig
-    api: ApiConfig | None = None
+    api: ApiConfig = field(default_factory=ApiConfig)
     cache: Path | None = None
     loki: LokiConfig | None = None
     tempo: TempoConfig | None = None
@@ -291,7 +317,7 @@ full_config = gifnoc.define("sarc", Config)
 
 
 gifnoc.set_sources("${envfile:SARC_CONFIG}")
-
+config_path = Path(os.getenv("SARC_CONFIG", "")).parent
 
 sarc_mode = ContextVar("sarc_mode", default=os.getenv("SARC_MODE", "client"))
 

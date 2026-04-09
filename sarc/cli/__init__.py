@@ -9,7 +9,6 @@ from simple_parsing import ArgumentParser, field, subparsers
 
 from sarc.logging import getSlackReport, setupLogging
 
-from .acquire import Acquire
 from .db import Db
 from .fetch import Fetch
 from .health import Health
@@ -51,8 +50,8 @@ class NiceHandler(logging.StreamHandler):
 
 @dataclass
 class CLI:
-    command: Acquire | Db | Health | Fetch | Parse = subparsers(
-        {"acquire": Acquire, "db": Db, "health": Health, "fetch": Fetch, "parse": Parse}
+    command: Db | Health | Fetch | Parse = subparsers(
+        {"db": Db, "health": Health, "fetch": Fetch, "parse": Parse}
     )
 
     color: bool = False

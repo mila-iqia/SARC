@@ -1,7 +1,7 @@
 import pytest
 from gifnoc.std import time
 
-from sarc.alerts.common import CheckException, CheckResult, CheckStatus
+from sarc.alerts.common import CheckResult, CheckStatus
 
 from .definitions import BeanCheck, BeanResult
 
@@ -60,15 +60,12 @@ def test_HealthCheck_failure(beancheck, frozen_gifnoc_time):
 def test_HealthCheck_error(beancheck, frozen_gifnoc_time):
     hc = beancheck(beans=666)
     result = hc()
-    assert result == BeanResult(
-        name="beano",
-        status=CheckStatus.ERROR,
-        exception=CheckException(type="ValueError", message="What a beastly number"),
-        statuses={},
-        issue_date=time.now(),
-        check=hc,
-        more=0,
-    )
+    assert result.status == CheckStatus.ERROR
+    assert result.exception.type == "ValueError"
+    assert result.exception.message == "What a beastly number"
+    assert len(result.exception.trace) > 0
+    assert result.issue_date == time.now()
+    assert result.check == hc
 
 
 def test_HealthCheck_multiple_statuses(beancheck, frozen_gifnoc_time):

@@ -6,9 +6,8 @@ import httpx
 import pytest
 from pydantic_mongo import PydanticObjectId
 
-from sarc.api.v0 import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
 from sarc.client.job import SlurmJob, SlurmState
-from sarc.config import UTC, ConfigurationError
+from sarc.config import UTC, ConfigurationError, config
 from sarc.core.models.users import MemberType
 from sarc.rest.client import SarcApiClient
 
@@ -16,12 +15,12 @@ from sarc.rest.client import SarcApiClient
 
 
 def test_init_with_params():
-    c = SarcApiClient(remote_url="http://example.com", timeout=60)
+    c = SarcApiClient(remote_url="http://example.com", timeout=60, oauth2_token="")
     assert c.remote_url == "http://example.com"
     assert c.timeout == 60
-    assert c.per_page == DEFAULT_PAGE_SIZE
+    assert c.per_page == config().api.per_page
 
-    c2 = SarcApiClient("http://example.com/", per_page=12)
+    c2 = SarcApiClient("http://example.com/", per_page=12, oauth2_token="")
     assert c2.remote_url == "http://example.com"
     assert c2.timeout == 120  # default timeout
     assert c2.per_page == 12
@@ -34,7 +33,7 @@ def test_init_from_config():
         mock_config.return_value.api.timeout = 90
         mock_config.return_value.api.per_page = 904
 
-        c = SarcApiClient()
+        c = SarcApiClient(oauth2_token="")
         assert c.remote_url == "http://config-url.com"
         assert c.timeout == 90
         assert c.per_page == 904
@@ -105,6 +104,7 @@ def test_get_jobs_empty_result(sarc_client):
     assert len(data) == 0
 
 
+@pytest.mark.usefixtures("read_only_db")
 def test_get_jobs_invalid_cluster(sarc_client):
     # Corresponds to test_get_jobs_invalid_cluster in test_v0
     with pytest.raises(httpx.HTTPStatusError) as excinfo:
@@ -187,6 +187,7 @@ def test_count_jobs(sarc_client, params, expected):
     assert len(r_list.jobs) == expected
 
 
+@pytest.mark.usefixtures("read_only_db")
 def test_count_jobs_invalid_cluster(sarc_client):
     with pytest.raises(httpx.HTTPStatusError) as excinfo:
         sarc_client.job_count(cluster="invalid_cluster")
@@ -196,6 +197,7 @@ def test_count_jobs_invalid_cluster(sarc_client):
     )
 
 
+@pytest.mark.usefixtures("read_only_db")
 def test_count_jobs_invalid_job_state(sarc_client):
     with pytest.raises(AttributeError):
         sarc_client.job_count(job_state="INVALID")
@@ -497,7 +499,7 @@ def test_user_list(sarc_client):
     assert data.page == 1
     assert data.total == 10
     assert len(data.users) == 10
-    assert data.per_page == DEFAULT_PAGE_SIZE
+    assert data.per_page == config().api.per_page
 
     # Check sorting: email asc
     emails = [u.email for u in data.users]
@@ -549,7 +551,7 @@ def test_job_list_no_filters(sarc_client):
     assert jobs_list.page == 1
     assert jobs_list.total == 24
     assert len(jobs_list.jobs) == 24
-    assert jobs_list.per_page == DEFAULT_PAGE_SIZE
+    assert jobs_list.per_page == config().api.per_page
 
 
 @pytest.mark.usefixtures("read_only_db_with_users")
@@ -722,7 +724,7 @@ def test_job_list_per_page_less_than_one(sarc_client):
 def test_job_list_per_page_exceeds_max(sarc_client):
     """Test job_list with per_page > MAX_PAGE_SIZE raises 400 error."""
     with pytest.raises(httpx.HTTPStatusError) as excinfo:
-        sarc_client.job_list(per_page=MAX_PAGE_SIZE + 1)
+        sarc_client.job_list(per_page=config().api.max_page_size + 1)
     assert excinfo.value.response.status_code == 400
     assert "Page size must be <=" in excinfo.value.response.json()["detail"]
 
@@ -749,6 +751,6 @@ def test_user_list_per_page_less_than_one(sarc_client):
 def test_user_list_per_page_exceeds_max(sarc_client):
     """Test user_list with per_page > MAX_PAGE_SIZE raises 400 error."""
     with pytest.raises(httpx.HTTPStatusError) as excinfo:
-        sarc_client.user_list(per_page=MAX_PAGE_SIZE + 1)
+        sarc_client.user_list(per_page=config().api.max_page_size + 1)
     assert excinfo.value.response.status_code == 400
     assert "Page size must be <=" in excinfo.value.response.json()["detail"]

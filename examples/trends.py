@@ -18,7 +18,7 @@ def get_jobs_dataframe(filename=None) -> pd.DataFrame:
     if filename and os.path.exists(filename):
         return pd.read_pickle(filename)
 
-    df = None
+    all_dfs = []
     # Fetch all jobs from the clusters
     for cluster in tqdm(clusters, desc="clusters", position=0):
         dicts = []
@@ -49,11 +49,12 @@ def get_jobs_dataframe(filename=None) -> pd.DataFrame:
 
         # Replace all NaNs by 0.
         cluster_df = pd.DataFrame(dicts).fillna(0)
-        df = pd.concat([df, cluster_df])
+        all_dfs.append(cluster_df)
 
         if filename:
-            df.to_pickle(filename)
+            pd.concat(all_dfs).to_pickle(filename)
 
+    df = pd.concat(all_dfs)
     assert isinstance(df, pd.DataFrame)
 
     return df

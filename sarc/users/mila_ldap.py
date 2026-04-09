@@ -74,19 +74,19 @@ they are structured as follows:
 
 """
 
-import datetime
 import json
 import logging
 import os
 import ssl
 from collections.abc import Iterable
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 from ldap3 import ALL_ATTRIBUTES, SUBTREE, Connection, Server, Tls
 
+from sarc.config import PrivateKeyInfo
 from sarc.core.models.users import Credentials
-from sarc.core.models.validators import END_TIME
 from sarc.core.scraping.users import MatchID, UserMatch, UserScraper, _builtin_scrapers
 
 logger = logging.getLogger(__name__)
@@ -95,7 +95,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class MilaLDAPConfig:
     service_uri: str
-    private_key_file: Path
+    private_key: PrivateKeyInfo
     certificate_file: Path
 
 
@@ -104,12 +104,10 @@ class MilaLDAPScraper(UserScraper[MilaLDAPConfig]):
 
     def get_user_data(self, config: MilaLDAPConfig) -> bytes:
         return json.dumps(
-            _query_ldap(
-                config.private_key_file, config.certificate_file, config.service_uri
-            )
+            _query_ldap(config.private_key, config.certificate_file, config.service_uri)
         ).encode()
 
-    def parse_user_data(self, data: bytes) -> Iterable[UserMatch]:
+    def parse_user_data(self, data: bytes, cache_time: datetime) -> Iterable[UserMatch]:
         """
         mail[0]        -> mila_email_username  (includes the "@mila.quebec")
         posixUid[0]    -> mila_cluster_username
@@ -121,10 +119,8 @@ class MilaLDAPScraper(UserScraper[MilaLDAPConfig]):
 
         for user_raw in json.loads(data.decode()):
             creds = Credentials()
-            end = END_TIME
-            if user_raw["suspended"][0] != "false":
-                end = datetime.datetime.now(datetime.UTC)
-            creds.insert(user_raw["posixUid"][0], end=end)
+            if user_raw["suspended"][0] != "true":
+                creds.insert(user_raw["posixUid"][0], start=cache_time)
             yield UserMatch(
                 display_name=user_raw["displayName"][0],
                 email=user_raw["mail"][0],
@@ -137,15 +133,17 @@ _builtin_scrapers["mila_ldap"] = MilaLDAPScraper()
 
 
 def _query_ldap(
-    local_private_key_file: Path, local_certificate_file: Path, ldap_service_uri: str
+    local_private_key: PrivateKeyInfo,
+    local_certificate_file: Path,
+    ldap_service_uri: str,
 ) -> list[dict[str, list[str]]]:
     """
     Since we don't always query the LDAP (i.e. omitted when --input_json_file is given),
     we'll make this a separate function.
     """
 
-    assert os.path.exists(local_private_key_file), (
-        f"Missing local_private_key_file {local_private_key_file}."
+    assert os.path.exists(local_private_key.file), (
+        f"Missing local_private_key_file {local_private_key.file}."
     )
     assert os.path.exists(local_certificate_file), (
         f"Missing local_certificate_file {local_certificate_file}."
@@ -153,7 +151,8 @@ def _query_ldap(
 
     # Prepare TLS Settings
     tls_conf = Tls(
-        local_private_key_file=local_private_key_file,
+        local_private_key_file=local_private_key.file,
+        local_private_key_password=local_private_key.password,
         local_certificate_file=local_certificate_file,
         validate=ssl.CERT_REQUIRED,
         version=ssl.PROTOCOL_TLSv1_2,
