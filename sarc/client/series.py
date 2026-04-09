@@ -613,9 +613,9 @@ def compute_time_frames(
     columns: list of str
         Columns to adjust based on time frames.
     start: datetime, optional
-        Start of the time frame. If None, use the first job start time.
+        Start of the time frame. If naive, as in local timezone. If None, use the first job start time.
     end: datetime, optional
-        End of the time frame. If None, use the last job end time.
+        End of the time frame. If naive, as in local timezone. If None, use the last job end time.
     frame_size: timedelta, optional
         Size of the time frames used to compute histograms. Default to 7 days.
 
