@@ -58,6 +58,7 @@ from gui_rest.tabs.summary import SummaryTab
 from gui_rest.tabs.users import UsersTab
 from gui_rest.tabs.clusters import ClustersTab
 from gui_rest.tabs.jobs import JobsTab
+from gui_rest.tabs.metrics import MetricsTab
 
 
 class MainWindow(QMainWindow):
@@ -129,6 +130,9 @@ class MainWindow(QMainWindow):
 
         self._jobs_tab = JobsTab()
         self._tabs.addTab(self._jobs_tab, "Jobs")
+
+        self._metrics_tab = MetricsTab()
+        self._tabs.addTab(self._metrics_tab, "Metrics")
 
     def _connect(self):
         host_port = self._host_input.text().strip()
