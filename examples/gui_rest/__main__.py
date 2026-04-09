@@ -15,6 +15,17 @@ from __future__ import annotations
 
 import sys
 import os
+import tempfile
+
+# If no SARC config is set, inject a minimal one so SarcApiClient can be
+# instantiated with explicit parameters (mongo is unused by the GUI).
+if not os.environ.get("SARC_CONFIG"):
+    _cfg = tempfile.NamedTemporaryFile(
+        mode="w", suffix=".yaml", delete=False
+    )
+    _cfg.write("sarc:\n  mongo:\n    connection_string: mongodb://localhost:27017\n    database_name: sarc\n")
+    _cfg.close()
+    os.environ["SARC_CONFIG"] = _cfg.name
 
 # Make sarc and gui_rest importable when running directly from the project root
 _script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -38,7 +49,7 @@ from PyQt6.QtWidgets import (
     QFrame,
     QMessageBox,
 )
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QSettings
 
 from sarc.rest.client import SarcApiClient
 
@@ -57,6 +68,7 @@ class MainWindow(QMainWindow):
 
         self.client: SarcApiClient | None = None
         self._connect_worker: ConnectWorker | None = None
+        self._settings = QSettings("SARC", "DatabaseBrowser")
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -67,13 +79,22 @@ class MainWindow(QMainWindow):
         conn_frame = QFrame()
         conn_frame.setFrameShape(QFrame.Shape.StyledPanel)
         conn_layout = QHBoxLayout(conn_frame)
-        conn_layout.addWidget(QLabel("Host:Port:"))
+        conn_layout.addWidget(QLabel("URL:"))
         self._host_input = QLineEdit()
-        self._host_input.setPlaceholderText("localhost:1234")
-        self._host_input.setText("localhost:1234")
+        self._host_input.setPlaceholderText("https://hostname or localhost:1234")
+        self._host_input.setText(self._settings.value("connection/host", "localhost:1234"))
         self._host_input.setMaximumWidth(220)
         self._host_input.returnPressed.connect(self._connect)
         conn_layout.addWidget(self._host_input)
+
+        conn_layout.addWidget(QLabel("Token:"))
+        self._token_input = QLineEdit()
+        self._token_input.setPlaceholderText("OAuth2 bearer token (optional)")
+        self._token_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self._token_input.setText(self._settings.value("connection/token", ""))
+        self._token_input.setMaximumWidth(240)
+        self._token_input.returnPressed.connect(self._connect)
+        conn_layout.addWidget(self._token_input)
 
         self._connect_btn = QPushButton("Connect")
         self._connect_btn.clicked.connect(self._connect)
@@ -114,9 +135,16 @@ class MainWindow(QMainWindow):
         if not host_port:
             QMessageBox.critical(self, "Error", "Please enter a host:port value.")
             return
-        url = f"http://{host_port}"
+        if host_port.startswith("http://") or host_port.startswith("https://"):
+            url = host_port
+        else:
+            url = f"https://{host_port}"
+        token = self._token_input.text().strip() or None
         try:
-            self.client = SarcApiClient(remote_url=url)
+            kwargs = {"remote_url": url}
+            if token is not None:
+                kwargs["oauth2_token"] = token
+            self.client = SarcApiClient(**kwargs)
         except Exception as exc:
             QMessageBox.critical(self, "Connection Error", str(exc))
             return
@@ -132,6 +160,8 @@ class MainWindow(QMainWindow):
     def _on_connected(self, clusters: list):
         self._set_loading(False)
         self._connect_btn.setEnabled(True)
+        self._settings.setValue("connection/host", self._host_input.text().strip())
+        self._settings.setValue("connection/token", self._token_input.text().strip())
         self._status_label.setText(f"Connected ({len(clusters)} clusters)")
         self._status_label.setStyleSheet("color: green;")
 
