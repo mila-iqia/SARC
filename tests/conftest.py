@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import sys
-import zoneinfo
+import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from functools import cached_property
@@ -82,12 +82,17 @@ def disabled_cache():
         yield
 
 
-@pytest.fixture(scope="function", autouse=True)
+@pytest.fixture
 def tzlocal_is_mtl(monkeypatch):
-    monkeypatch.setattr("sarc.config.TZLOCAL", zoneinfo.ZoneInfo("America/Montreal"))
-    monkeypatch.setattr(
-        "sarc.client.job.TZLOCAL", zoneinfo.ZoneInfo("America/Montreal")
-    )
+    old_tz = os.environ.get("TZ")
+    os.environ["TZ"] = "America/Montreal"
+    time.tzset()
+    yield
+    if old_tz is None:
+        os.environ.pop("TZ", None)
+    else:
+        os.environ["TZ"] = old_tz
+    time.tzset()
 
 
 @pytest.fixture
