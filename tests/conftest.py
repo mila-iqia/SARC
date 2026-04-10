@@ -83,7 +83,7 @@ def disabled_cache():
 
 
 @pytest.fixture
-def tzlocal_is_mtl(monkeypatch):
+def tzlocal_is_mtl():
     old_tz = os.environ.get("TZ")
     os.environ["TZ"] = "America/Montreal"
     time.tzset()
