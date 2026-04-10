@@ -1,8 +1,8 @@
 """Tests for UserMap in sarc.core.scraping.jobs."""
 
 import logging
-from dataclasses import dataclass
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from unittest.mock import patch
 from uuid import UUID
 
@@ -78,32 +78,18 @@ def _make_job(cluster_name: str = "mila", user: str = "testuser", **kwargs) -> S
     return SlurmJob(**defaults)
 
 
-@dataclass
-class FakeClusterConfig:
-    name: str
-    user_domain: str
-
-
-@dataclass
-class FakeConfig:
-    clusters: dict[str, FakeClusterConfig]
-
-
-def _patch_config_and_users(clusters: dict[str, str], users: list[UserData]):
+def _gen_user_map(clusters: dict[str, str], users: list[UserData]) -> UserMap:
     """Return stacked patches for config() and get_users().
 
     clusters: dict mapping cluster_name -> user_domain
     """
     fake_clusters = {
-        name: FakeClusterConfig(name=name, user_domain=domain)
+        name: SimpleNamespace(name=name, user_domain=domain)
         for name, domain in clusters.items()
     }
-    fake_cfg = FakeConfig(clusters=fake_clusters)
 
-    return (
-        patch("sarc.core.scraping.jobs.config", return_value=fake_cfg),
-        patch("sarc.core.scraping.jobs.get_users", return_value=users),
-    )
+    with patch("sarc.core.scraping.jobs.get_users", return_value=users):
+        return UserMap(fake_clusters)
 
 
 # ── Logging ────────────────────────────────────────────────────────
@@ -111,9 +97,8 @@ def _patch_config_and_users(clusters: dict[str, str], users: list[UserData]):
 
 class TestUserMapInit:
     def test_no_users_logs_info(self, caplog):
-        p_cfg, p_users = _patch_config_and_users({"mila": "mila"}, [])
-        with p_cfg, p_users, caplog.at_level(logging.INFO):
-            UserMap()
+        with caplog.at_level(logging.INFO):
+            _gen_user_map({"mila": "mila"}, [])
         assert any("0 user(s)" in r.message for r in caplog.records)
 
 
@@ -124,11 +109,7 @@ class TestSolveUser:
     @pytest.fixture
     def user_map(self):
         user = _make_user("1f9b04e5-0ec4-4577-9196-2b03d254e344", {"mila": "jdoe"})
-        p_cfg, p_users = _patch_config_and_users(
-            {"mila": "mila", "narval": "drac"}, [user]
-        )
-        with p_cfg, p_users:
-            return UserMap()
+        return _gen_user_map({"mila": "mila", "narval": "drac"}, [user])
 
     def test_links_matching_job(self, user_map):
         job = _make_job(cluster_name="mila", user="jdoe")
@@ -158,18 +139,14 @@ class TestSolveUser:
         assert job.user_uuid is None
 
     def test_no_users_no_match(self):
-        p_cfg, p_users = _patch_config_and_users({"mila": "mila"}, [])
-        with p_cfg, p_users:
-            um = UserMap()
+        um = _gen_user_map({"mila": "mila"}, [])
         job = _make_job(cluster_name="mila", user="anyone")
         um.solve_user(job)
         assert job.user_uuid is None
 
     def test_user_without_accounts_no_match(self):
         user = _make_user("1f9b04e5-0ec4-4577-9196-2b03d254e344", accounts=None)
-        p_cfg, p_users = _patch_config_and_users({"mila": "mila"}, [user])
-        with p_cfg, p_users:
-            um = UserMap()
+        um = _gen_user_map({"mila": "mila"}, [user])
         job = _make_job(cluster_name="mila", user="testuser")
         um.solve_user(job)
         assert job.user_uuid is None
@@ -179,9 +156,7 @@ class TestSolveUser:
         user = _make_user_with_expired_creds(
             "1f9b04e5-0ec4-4577-9196-2b03d254e344", "mila", "expired_user"
         )
-        p_cfg, p_users = _patch_config_and_users({"mila": "mila"}, [user])
-        with p_cfg, p_users:
-            um = UserMap()
+        um = _gen_user_map({"mila": "mila"}, [user])
         # Job submitted in 2023, but credential expired in 2021
         job = _make_job(cluster_name="mila", user="expired_user")
         um.solve_user(job)
@@ -195,9 +170,7 @@ class TestSolveUser:
         user2 = _make_user(
             "7ecd3a8a-ab71-499e-b38a-ceacd91a99c4", {"mila": "same_user"}
         )
-        p_cfg, p_users = _patch_config_and_users({"mila": "mila"}, [user1, user2])
-        with p_cfg, p_users:
-            um = UserMap()
+        um = _gen_user_map({"mila": "mila"}, [user1, user2])
         job = _make_job(cluster_name="mila", user="same_user")
         with caplog.at_level(logging.WARNING):
             um.solve_user(job)
@@ -223,9 +196,7 @@ class TestSolveUser:
         creds.insert("new_name", start=datetime(2022, 1, 1, tzinfo=UTC))
         user.associated_accounts["mila"] = creds
 
-        p_cfg, p_users = _patch_config_and_users({"mila": "mila"}, [user])
-        with p_cfg, p_users:
-            um = UserMap()
+        um = _gen_user_map({"mila": "mila"}, [user])
         # Job submitted in 2023 with old username.
         # get_value(2023) returns "new_name", so "old_name" != "new_name" → no match.
         job = _make_job(cluster_name="mila", user="old_name")
@@ -240,11 +211,7 @@ class TestSolveUser:
         user_drac = _make_user(
             "7ecd3a8a-ab71-499e-b38a-ceacd91a99c4", {"drac": "bob_drac"}
         )
-        p_cfg, p_users = _patch_config_and_users(
-            {"mila": "mila", "narval": "drac"}, [user_mila, user_drac]
-        )
-        with p_cfg, p_users:
-            um = UserMap()
+        um = _gen_user_map({"mila": "mila", "narval": "drac"}, [user_mila, user_drac])
 
         job_mila = _make_job(cluster_name="mila", user="alice", job_id=1)
         job_narval_alice = _make_job(cluster_name="narval", user="alice_drac", job_id=2)

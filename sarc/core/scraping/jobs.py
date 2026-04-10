@@ -145,7 +145,7 @@ def parse_jobs(
     update_parsed_date: bool,
     require_user_link: bool = False,
 ) -> None:
-    user_map = UserMap()
+    user_map = UserMap(clusters_cfg)
     collection = _jobs_collection()
     db = config().mongo.database_instance
 
@@ -200,16 +200,16 @@ class UserMap:
     Used to find UserData object associated to a job.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, cluster_cfg: dict[str, ClusterConfig]) -> None:
         # Map cluster name to account domain
         # (e.g. "mila" => "mila", "narval" => "drac")
-        self._cluster_domain: dict[str, str] = {}
+        self.__cluster_domain: dict[str, str] = {}
         # Map user credential (domain, username) to user objects
         self.__users: dict[tuple[str, str], list[UserData]] = {}
 
-        for cluster_config in config("scraping").clusters.values():
+        for cluster_config in cluster_cfg.values():
             assert cluster_config.name is not None
-            self._cluster_domain[cluster_config.name] = cluster_config.user_domain
+            self.__cluster_domain[cluster_config.name] = cluster_config.user_domain
 
         users = get_users()
 
@@ -252,7 +252,7 @@ class UserMap:
         # then it should not have a user_uuid already defined.
         assert entry.user_uuid is None
 
-        domain = self._cluster_domain.get(entry.cluster_name)
+        domain = self.__cluster_domain.get(entry.cluster_name)
         if domain is not None:
             user_key = (domain, entry.user)
             if user_key in self.__users:
