@@ -191,10 +191,7 @@ def parse_jobs(
             )
             set_parsed_date(db, "jobs", cache_entry.get_entry_datetime())
 
-        if nb_saved == nb_entries:
-            logger.info(f"Saved {nb_saved} entries.")
-        else:
-            logger.info(f"Saved {nb_saved} entries / {nb_entries} available.")
+        logger.info(f"Saved {nb_saved} entries / {nb_entries} available.")
 
 
 class UserMap:
