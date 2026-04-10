@@ -179,7 +179,15 @@ def parse_jobs(
                     update_allocated_gpu_type_from_nodes(
                         clusters_cfg[cluster_name], entry
                     )
-                    user_map.solve_user(entry)
+
+                    try:
+                        user_map.solve_user(entry)
+                    except RuntimeError as e:
+                        if require_user_link:
+                            raise
+                        else:
+                            logger.warning(str(e))
+
                     if not require_user_link or entry.user_uuid is not None:
                         nb_saved += 1
                         collection.save_job(entry)
