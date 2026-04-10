@@ -177,10 +177,12 @@ class SlurmJob(BaseModel):
         """
         Store datetime in UTC
 
-        **NB**: Naive dates are interpreted as in local timezone.
+        **NB**: Naive dates are interpreted as in UTC.
         """
         if v is None:
             return None
+        if v.tzinfo is None:
+            v = v.replace(tzinfo=UTC)
         return v.astimezone(UTC)
 
     @property

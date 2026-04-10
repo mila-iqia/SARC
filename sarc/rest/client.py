@@ -328,13 +328,13 @@ def _parse_common_args(
         job_state = SlurmState(job_state)
 
     if isinstance(start, str):
-        start = datetime.strptime(start, "%Y-%m-%d").astimezone(UTC)
-    elif isinstance(start, datetime):
-        start = start.astimezone(UTC)
-
+        start = datetime.strptime(start, "%Y-%m-%d").astimezone()
     if isinstance(end, str):
-        end = datetime.strptime(end, "%Y-%m-%d").astimezone(UTC)
-    elif isinstance(end, datetime):
+        end = datetime.strptime(end, "%Y-%m-%d").astimezone()
+
+    if start is not None:
+        start = start.astimezone(UTC)
+    if end is not None:
         end = end.astimezone(UTC)
 
     return job_id, job_state, start, end

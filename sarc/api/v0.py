@@ -26,14 +26,25 @@ from sarc.core.models.users import MemberType, UserData
 from sarc.users.db import UserDB, get_user_collection
 
 
-def _naive_to_utc(v: datetime) -> datetime:
-    """Interpret naive datetime as UTC, convert aware datetime to UTC."""
+def _ensure_datetime_utc(v: datetime) -> datetime:
+    """
+    Convert a datetime object to UTC timezone.
+    Raise an exception if date is naive.
+
+    NB: MongoDB and REST client high-level functions (count_jobs, get_jobs, get_job)
+    both interpret naive datetimes as in local timezone.
+    But, here in server side, if a user directly sends a naive datetime, we cannot decide
+    if we must interpret as in either server local timezone, or user local timezone.
+    So, by default, we reject naive dates.
+    """
     if v.tzinfo is None:
-        return v.replace(tzinfo=UTC)
+        raise ValueError(
+            "Time-aware datetime required. E.g: 2025-01-01T10:00Z (UTC), 2025-01-01T05:00-05:00 (UTC-5 hours)"
+        )
     return v.astimezone(UTC)
 
 
-datetime_api = Annotated[datetime, AfterValidator(_naive_to_utc)]
+datetime_api = Annotated[datetime, AfterValidator(_ensure_datetime_utc)]
 
 router = APIRouter(prefix="/v0")
 
