@@ -162,7 +162,7 @@ class TestSolveUser:
         um.solve_user(job)
         assert job.user_uuid is None
 
-    def test_duplicate_users_warns_and_no_match(self, caplog):
+    def test_duplicate_users_raise_and_no_match(self, caplog):
         """When multiple users match temporally, a warning is logged and no match is made."""
         user1 = _make_user(
             "1f9b04e5-0ec4-4577-9196-2b03d254e344", {"mila": "same_user"}
@@ -172,12 +172,9 @@ class TestSolveUser:
         )
         um = _gen_user_map({"mila": "mila"}, [user1, user2])
         job = _make_job(cluster_name="mila", user="same_user")
-        with caplog.at_level(logging.WARNING):
+        with pytest.raises(Exception, match="expected 1 matching user, found 2"):
             um.solve_user(job)
         assert job.user_uuid is None
-        assert any(
-            "expected 1 matching user, found 2" in r.message for r in caplog.records
-        )
 
     def test_renamed_user_old_username_not_matched(self):
         """Job uses old username, but at submit time the user had a new username."""

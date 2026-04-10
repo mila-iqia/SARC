@@ -268,7 +268,7 @@ class UserMap:
                         pass
                 if valid_users:
                     if len(valid_users) > 1:
-                        logger.warning(
+                        raise RuntimeError(
                             f"Job {entry.cluster_name}/{entry.job_id}/{entry.submit_time}: "
                             f"expected 1 matching user, found {len(valid_users)}: "
                             + ", ".join(f"{u.email} ({u.uuid})" for u in valid_users)
