@@ -67,6 +67,10 @@ class ClusterConfig:
     # pylint: disable=too-many-instance-attributes
     host: str
     private_key: PrivateKeyInfo
+    # Name of user account domain (e.g: "mila", "drac")
+    # Used to find user associated account for the cluster in
+    # UserData.associated_accounts field
+    user_domain: str
     password: OTPInfo | StaticInfo | None = None
     timezone: zoneinfo.ZoneInfo | None = None
     prometheus_url: str | None = None

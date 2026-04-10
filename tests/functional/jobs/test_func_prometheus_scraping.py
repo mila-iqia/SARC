@@ -339,7 +339,7 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     )
     assert bool(
         re.search(
-            r"sarc\.core\.scraping\.jobs:jobs\.py:[0-9]+ Saved [0-9]+ entries\.",
+            r"sarc\.core\.scraping\.jobs:jobs\.py:[0-9]+ Saved [0-9]+ entries / [0-9]+ available\.",
             caplog.text,
         )
     )
@@ -579,7 +579,7 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
 
     assert bool(
         re.search(
-            r"sarc\.core\.scraping\.jobs:jobs\.py:[0-9]+ Saved [0-9]+ entries\.",
+            r"sarc\.core\.scraping\.jobs:jobs\.py:[0-9]+ Saved [0-9]+ entries / [0-9]+ available\.",
             caplog.text,
         )
     )

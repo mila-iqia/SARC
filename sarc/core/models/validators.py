@@ -179,7 +179,7 @@ class ValidField[V](BaseModel):
     def get_value(self, date: datetime | None = None) -> V:
         """Get the valid value at specified time.
 
-        If date is None, we the the current time as the date.
+        If date is None, we use the current time as the date.
         If there was no value as the specified date, raises DateMatchError.
         """
         assert date is None or date.tzinfo is not None

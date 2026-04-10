@@ -23,6 +23,7 @@ from tests.common.dateutils import MTL, _dtfmt
                 "test": {
                     "host": "patate",
                     "private_key": {"file": "tests/id_test", "password": "12345"},
+                    "user_domain": "drac",
                 }
             }
         }
@@ -51,6 +52,7 @@ def test_fetch_raw(test_config, remote):
                 "test": {
                     "host": "test",
                     "private_key": {"file": "tests/id_test", "password": "12345"},
+                    "user_domain": "drac",
                 }
             }
         }
@@ -91,6 +93,7 @@ def test_fetch_raw2(test_config, remote):
                 "test": {
                     "host": "patate",
                     "private_key": {"file": "tests/id_test", "password": "12345"},
+                    "user_domain": "drac",
                 }
             }
         }
@@ -142,6 +145,7 @@ def test_fetch_jobs_get_cache(test_config, enabled_cache, remote):
                 "test": {
                     "host": "test",
                     "private_key": {"file": "tests/id_test", "password": "12345"},
+                    "user_domain": "drac",
                 }
             }
         }

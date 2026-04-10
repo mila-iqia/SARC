@@ -46,7 +46,8 @@ Found 8 job(s):
         "gres_gpu": 1,
         "gpu_type": null
     },
-    "stored_statistics": null
+    "stored_statistics": null,
+    "user_uuid": "8d5b2b67-d35b-4cc3-acaa-ec56c9c6f253"
 }
 {
     "cluster_name": "raisin",
@@ -95,7 +96,8 @@ Found 8 job(s):
         "gres_gpu": 1,
         "gpu_type": null
     },
-    "stored_statistics": null
+    "stored_statistics": null,
+    "user_uuid": "8d5b2b67-d35b-4cc3-acaa-ec56c9c6f253"
 }
 {
     "cluster_name": "raisin",
@@ -144,7 +146,8 @@ Found 8 job(s):
         "gres_gpu": 1,
         "gpu_type": null
     },
-    "stored_statistics": null
+    "stored_statistics": null,
+    "user_uuid": "8d5b2b67-d35b-4cc3-acaa-ec56c9c6f253"
 }
 {
     "cluster_name": "raisin",
@@ -193,7 +196,8 @@ Found 8 job(s):
         "gres_gpu": 1,
         "gpu_type": null
     },
-    "stored_statistics": null
+    "stored_statistics": null,
+    "user_uuid": "8d5b2b67-d35b-4cc3-acaa-ec56c9c6f253"
 }
 {
     "cluster_name": "raisin",
@@ -242,7 +246,8 @@ Found 8 job(s):
         "gres_gpu": 1,
         "gpu_type": null
     },
-    "stored_statistics": null
+    "stored_statistics": null,
+    "user_uuid": "8d5b2b67-d35b-4cc3-acaa-ec56c9c6f253"
 }
 {
     "cluster_name": "raisin",
@@ -291,7 +296,8 @@ Found 8 job(s):
         "gres_gpu": 1,
         "gpu_type": null
     },
-    "stored_statistics": null
+    "stored_statistics": null,
+    "user_uuid": "8d5b2b67-d35b-4cc3-acaa-ec56c9c6f253"
 }
 {
     "cluster_name": "raisin",
@@ -340,7 +346,8 @@ Found 8 job(s):
         "gres_gpu": 1,
         "gpu_type": null
     },
-    "stored_statistics": null
+    "stored_statistics": null,
+    "user_uuid": "8d5b2b67-d35b-4cc3-acaa-ec56c9c6f253"
 }
 {
     "cluster_name": "raisin",
@@ -389,5 +396,6 @@ Found 8 job(s):
         "gres_gpu": 1,
         "gpu_type": null
     },
-    "stored_statistics": null
+    "stored_statistics": null,
+    "user_uuid": "8d5b2b67-d35b-4cc3-acaa-ec56c9c6f253"
 }
