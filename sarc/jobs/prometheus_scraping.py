@@ -72,10 +72,12 @@ def fetch_prometheus(cluster: ClusterConfig, start: datetime, end: datetime) -> 
     cache = Cache("prometheus")
     with cache.create_entry(datetime.now(UTC)) as ce:
         for entry in get_jobs_in_scraped_period(cluster.name, start, end):
-            nb_jobs += 1
             raw_prom_data = get_job_time_series_data(
                 job=entry, metric=JOB_STATISTICS_METRIC_NAMES, max_points=10_000
             )
+            if raw_prom_data == []:
+                continue
+            nb_jobs += 1
             ce.add_value(
                 f"{entry.cluster_name}${entry.job_id}${entry.submit_time.isoformat(timespec='seconds')}",
                 json.dumps(raw_prom_data).encode("utf-8"),
@@ -107,6 +109,12 @@ def parse_prometheus(since: datetime | None, update_parsed_date: bool) -> None:
                 continue
             job_id = int(job_id_str)
             submit_time = datetime.fromisoformat(submit_time_str)
+            data = json.loads(value.decode("utf-8"))
+            if data == []:
+                logger.warning(
+                    f"Empty data found for job {job_id} on cluster {cluster_name} (submit_time {submit_time}), skipping cache entry"
+                )
+                continue
             entry = collection.find_one_by(
                 {
                     "cluster_name": cluster_name,
@@ -118,8 +126,7 @@ def parse_prometheus(since: datetime | None, update_parsed_date: bool) -> None:
                 logger.error("Could not find job for %s", key)
                 error = True
                 continue
-            data = json.loads(value.decode("utf-8"))
-            gpu_type = data[0]["metric"]["gpu_type"]
+            gpu_type = data[0]["metric"].get("gpu_type", None)
             need_save = False
             if gpu_type is not None:
                 entry.allocated.gpu_type = (
