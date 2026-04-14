@@ -82,8 +82,6 @@ PartitionName=partition4 Nodes=alone_node
 
 DATE_2020_01_01_MTL = datetime(2020, 1, 1, tzinfo=MTL)
 DATE_2020_05_01_MTL = datetime(2020, 5, 1, tzinfo=MTL)
-DATE_2020_10_01_MTL = datetime(2020, 10, 1, tzinfo=MTL)
-DATE_2020_12_01_MTL = datetime(2020, 12, 1, tzinfo=MTL)
 
 
 @pytest.mark.usefixtures("read_only_db", "enabled_cache", "no_pkey")
@@ -198,112 +196,7 @@ def test_fetch_slurmconfig_no_change(
     )
 
 
-@pytest.mark.freeze_time(DATE_2020_12_01_MTL)
-@pytest.mark.usefixtures("enabled_cache", "tzlocal_is_mtl", "no_pkey")
-def test_fetch_slurmconfig_legacy(cli_main, test_config, remote, caplog, monkeypatch):
-    """test that fetch slurmconfig correctly handles legacy cached files"""
-    caplog.set_level(logging.INFO)
-
-    cluster_name = "raisin"
-
-    slurm_conf_dir = test_config.cache / "slurm_conf"
-    slurm_conf_dir.mkdir(parents=True, exist_ok=True)
-
-    legacy = [
-        (
-            slurm_conf_dir / f"slurm.{cluster_name}.2020-01-01.conf",
-            SLURM_CONF_RAISIN_2020_01_01,
-        ),
-        (
-            slurm_conf_dir / f"slurm.{cluster_name}.2020-05-01.conf",
-            SLURM_CONF_RAISIN_2020_05_01,
-        ),
-        (
-            slurm_conf_dir
-            / f"slurm.{cluster_name}.{DATE_2020_10_01_MTL.astimezone(UTC)}.conf",
-            SLURM_CONF_RAISIN_2020_05_01,  # same content as previous legacy cache
-        ),
-    ]
-    for legacy_path, legacy_content in legacy:
-        with open(legacy_path, "w") as f:
-            f.write(legacy_content)
-
-    cache = Cache(subdirectory=f"slurm_conf/{cluster_name}")
-    file_path_2020_01_01 = cache._dir_from_date(
-        cache.cache_dir, DATE_2020_01_01_MTL
-    ) / DATE_2020_01_01_MTL.astimezone(UTC).time().isoformat("milliseconds")
-    file_path_2020_05_01 = cache._dir_from_date(
-        cache.cache_dir, DATE_2020_05_01_MTL
-    ) / DATE_2020_05_01_MTL.astimezone(UTC).time().isoformat("milliseconds")
-    file_path_2020_10_01 = cache._dir_from_date(
-        cache.cache_dir, DATE_2020_10_01_MTL
-    ) / DATE_2020_10_01_MTL.astimezone(UTC).time().isoformat("milliseconds")
-    file_path_2020_12_01 = cache._dir_from_date(
-        cache.cache_dir, DATE_2020_12_01_MTL
-    ) / DATE_2020_12_01_MTL.astimezone(UTC).time().isoformat("milliseconds")
-
-    # Use cluster raisin for download test
-    cluster = test_config.clusters[cluster_name]
-
-    remote.expect_sessions(
-        Session(
-            host=cluster.host,
-            commands=[
-                Command(
-                    cmd=f"cat {cluster.slurm_conf_host_path}",
-                    out=SLURM_CONF_RAISIN_2020_05_01.encode(),  # same content as in latest legacy cache
-                )
-            ],
-        )
-    )
-
-    # Should download from current day
-    assert not file_path_2020_01_01.exists()
-    assert not file_path_2020_05_01.exists()
-    assert not file_path_2020_10_01.exists()
-    assert not file_path_2020_12_01.exists()
-    assert cli_main(["fetch", "slurmconfig", "-c", "raisin"]) == 0
-    assert file_path_2020_01_01.exists()
-    assert file_path_2020_05_01.exists()
-    assert not file_path_2020_10_01.exists()  # should be skipped
-    assert not file_path_2020_12_01.exists()  # should be skipped
-
-    # Each legacy file should have been seen
-    assert (
-        f"Legacy cache at {DATE_2020_01_01_MTL.astimezone(UTC)}: slurm.raisin.2020-01-01.conf"
-        in caplog.text
-    )
-    assert (
-        f"Legacy cache at {DATE_2020_05_01_MTL.astimezone(UTC)}: slurm.raisin.2020-05-01.conf"
-        in caplog.text
-    )
-    assert (
-        f"Legacy cache at {DATE_2020_10_01_MTL.astimezone(UTC)}: "
-        f"slurm.raisin.{DATE_2020_10_01_MTL.astimezone(UTC)}.conf" in caplog.text
-    )
-
-    # Each legacy file should have been deactivated
-    for legacy_path, _ in legacy:
-        deactivated_path = legacy_path.parent / f".{legacy_path.parts[-1]}"
-        assert not legacy_path.exists()
-        assert deactivated_path.is_file()
-
-    # Latest legacy file should have been skipped
-    assert (
-        f"slurm.conf file at {DATE_2020_10_01_MTL.astimezone(UTC)} "
-        f"have not changed since: {DATE_2020_05_01_MTL.astimezone(UTC)}, skipping."
-        in caplog.text
-    )
-
-    # Newly downloaded file should have been skipped
-    assert (
-        f"slurm.conf file at {DATE_2020_12_01_MTL.astimezone(UTC)} "
-        f"have not changed since: {DATE_2020_05_01_MTL.astimezone(UTC)}, skipping."
-        in caplog.text
-    )
-
-
-@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
 def test_parse_slurmconfig(cli_main, caplog):
     caplog.set_level(logging.INFO)
 
@@ -411,7 +304,7 @@ def test_parse_slurmconfig(cli_main, caplog):
     )
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
 def test_parse_slurmconfig_since(cli_main, caplog):
     """test parse with argument --since"""
     caplog.set_level(logging.INFO)
@@ -495,7 +388,7 @@ def test_parse_slurmconfig_since(cli_main, caplog):
         )
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache", "tzlocal_is_mtl")
+@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
 def test_parse_slurmconfig_mila(cli_main, caplog):
     """Test parse_slurmconfig on cluster mila, where billing_is_gpu is True."""
     cluster_name_mila = "mila"

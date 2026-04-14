@@ -4,7 +4,7 @@ from typing import Annotated, Any
 
 from easy_oauth.cap import Capability
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from pydantic import UUID4, BaseModel
+from pydantic import UUID4, AfterValidator, BaseModel
 from pydantic_mongo import PydanticObjectId
 from serieux import deserialize
 
@@ -24,6 +24,27 @@ from sarc.core.models import validators
 from sarc.core.models.api import SlurmJobList, UserList
 from sarc.core.models.users import MemberType, UserData
 from sarc.users.db import UserDB, get_user_collection
+
+
+def _ensure_datetime_utc(v: datetime) -> datetime:
+    """
+    Convert a datetime object to UTC timezone.
+    Raise an exception if date is naive.
+
+    NB: MongoDB and REST client high-level functions (count_jobs, get_jobs, get_job)
+    both interpret naive datetimes as in local timezone.
+    But, here in server side, if a user directly sends a naive datetime, we cannot decide
+    if we must interpret as in either server local timezone, or user local timezone.
+    So, by default, we reject naive dates.
+    """
+    if v.tzinfo is None:
+        raise ValueError(
+            "Time-aware datetime required. E.g: 2025-01-01T10:00Z (UTC), 2025-01-01T05:00-05:00 (UTC-5 hours)"
+        )
+    return v.astimezone(UTC)
+
+
+datetime_api = Annotated[datetime, AfterValidator(_ensure_datetime_utc)]
 
 router = APIRouter(prefix="/v0")
 
@@ -110,8 +131,8 @@ class JobQuery(BaseModel):
     job_id: list[int] | None = None
     job_state: SlurmState | None = None
     username: str | None = None
-    start: datetime | None = None
-    end: datetime | None = None
+    start: datetime_api | None = None
+    end: datetime_api | None = None
     requestor: Requestor
 
     def get_query(self) -> dict[str, Any]:
@@ -148,8 +169,8 @@ def job_query_params(
     job_id: Annotated[list[str] | None, Query()] = None,
     job_state: SlurmState | None = None,
     username: str | None = None,
-    start: datetime | None = None,
-    end: datetime | None = None,
+    start: datetime_api | None = None,
+    end: datetime_api | None = None,
     requestor: Requestor = Depends(requestor),
 ) -> JobQuery:
     """
@@ -191,16 +212,16 @@ class UserQuery(BaseModel):
     email: str | None = None
 
     member_type: MemberType | None = None
-    member_start: datetime | None = None
-    member_end: datetime | None = None
+    member_start: datetime_api | None = None
+    member_end: datetime_api | None = None
 
     supervisor: UUID4 | None = None
-    supervisor_start: datetime | None = None
-    supervisor_end: datetime | None = None
+    supervisor_start: datetime_api | None = None
+    supervisor_end: datetime_api | None = None
 
     co_supervisor: UUID4 | None = None
-    co_supervisor_start: datetime | None = None
-    co_supervisor_end: datetime | None = None
+    co_supervisor_start: datetime_api | None = None
+    co_supervisor_end: datetime_api | None = None
 
     requestor: Requestor = Depends(requestor)
 

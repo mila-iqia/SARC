@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Literal, cast, overload
 
 import gifnoc
-import tzlocal
 from bson import CodecOptions, UuidRepresentation
 from easy_oauth import OAuthManager
 from hostlist import expand_hostlist
@@ -29,7 +28,6 @@ if TYPE_CHECKING:
 
 
 UTC = zoneinfo.ZoneInfo("UTC")
-TZLOCAL = zoneinfo.ZoneInfo(tzlocal.get_localzone_name())
 
 
 MIG_FLAG = "__MIG_FLAG__"

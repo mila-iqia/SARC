@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import bisect
 import math
-from datetime import datetime, time, timedelta
+from datetime import datetime, timedelta
 from enum import Enum
 from typing import Annotated, Any, Iterable
 
@@ -10,7 +10,7 @@ from pydantic import UUID4, BaseModel, BeforeValidator, field_validator
 from pydantic_mongo import AbstractRepository, PydanticObjectId
 
 from sarc.client.gpumetrics import get_cluster_gpu_billings, get_rgus
-from sarc.config import TZLOCAL, UTC, ClusterConfig, config, scraping_mode_required
+from sarc.config import UTC, ClusterConfig, config, scraping_mode_required
 
 
 class SlurmState(str, Enum):
@@ -174,12 +174,16 @@ class SlurmJob(BaseModel):
     )
     @classmethod
     def _ensure_timezone(cls, v: datetime | None) -> datetime | None:
-        # We'll store in TZLOCAL timezone because why not
+        """
+        Store datetime in UTC
+
+        **NB**: Naive dates are interpreted as in UTC.
+        """
         if v is None:
             return None
         if v.tzinfo is None:
             v = v.replace(tzinfo=UTC)
-        return v.astimezone(TZLOCAL)
+        return v.astimezone(UTC)
 
     @property
     def duration(self) -> timedelta:
@@ -335,22 +339,21 @@ def _compute_jobs_query(
     Arguments:
         cluster: The cluster on which to search for jobs.
         job_id: The id or a list of ids to select.
+        job_state: Job state to filter on.
+        user: User to filter on.
         start: Get all jobs that have a status after that time.
+            If str, parsed as a day (YYYY-MM-DD) at 00:00 local timezone.
         end: Get all jobs that have a status before that time.
-        query_options: Additional options to pass to MongoDB (limit, etc.)
+            If str, parsed as a day (YYYY-MM-DD) at 00:00 local timezone.
     """
     cluster_name = cluster
     if isinstance(cluster, ClusterConfig):
         cluster_name = cluster.name
 
     if isinstance(start, str):
-        start = datetime.combine(
-            datetime.strptime(start, "%Y-%m-%d"), time.min
-        ).replace(tzinfo=TZLOCAL)
+        start = datetime.strptime(start, "%Y-%m-%d").astimezone()
     if isinstance(end, str):
-        end = (datetime.combine(datetime.strptime(end, "%Y-%m-%d"), time.min)).replace(
-            tzinfo=TZLOCAL
-        )
+        end = datetime.strptime(end, "%Y-%m-%d").astimezone()
 
     if start is not None:
         start = start.astimezone(UTC)
@@ -404,8 +407,12 @@ def count_jobs(
     Arguments:
         cluster: The cluster on which to search for jobs.
         job_id: The id or a list of ids to select.
+        job_state: Job state to filter on.
+        user: User to filter on.
         start: Get all jobs that have a status after that time.
+            If str, parsed as a day (YYYY-MM-DD) at 00:00 local timezone.
         end: Get all jobs that have a status before that time.
+            If str, parsed as a day (YYYY-MM-DD) at 00:00 local timezone.
         query_options: Additional options to pass to MongoDB (limit, etc.)
     """
     query = _compute_jobs_query(
@@ -436,8 +443,12 @@ def get_jobs(
     Arguments:
         cluster: The cluster on which to search for jobs.
         job_id: The id or a list of ids to select.
+        job_state: Job state to filter on.
+        user: User to filter on.
         start: Get all jobs that have a status after that time.
+            If str, parsed as a day (YYYY-MM-DD) at 00:00 local timezone.
         end: Get all jobs that have a status before that time.
+            If str, parsed as a day (YYYY-MM-DD) at 00:00 local timezone.
         query_options: Additional options to pass to MongoDB (limit, etc.)
     """
     if query_options is None:
