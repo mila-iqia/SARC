@@ -24,7 +24,7 @@ type JSON = list[JSON] | dict[str, JSON] | int | str | float | bool | None
 
 if TYPE_CHECKING:
     from fabric import Connection
-    from prometheus_api_client import PrometheusConnect
+    from prometheus_api_client.prometheus_connect import PrometheusConnect
     from pymongo.database import Database
 
 
@@ -175,7 +175,7 @@ class ClusterConfig:
 
     @cached_property
     def prometheus(self) -> PrometheusConnect:
-        from prometheus_api_client import PrometheusConnect
+        from prometheus_api_client.prometheus_connect import PrometheusConnect
 
         if self.prometheus_url is None:
             raise ConfigurationError(
