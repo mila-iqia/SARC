@@ -1104,7 +1104,8 @@
      "type",
      "message"
     ],
-    "title": "CheckException"
+    "title": "CheckException",
+    "description": "Exception data for checks with ERROR status."
    },
    "CheckExceptionFrame": {
     "properties": {
@@ -1195,7 +1196,8 @@
     "required": [
      "name"
     ],
-    "title": "CheckResult"
+    "title": "CheckResult",
+    "description": "Results of a check."
    },
    "CheckStatus": {
     "type": "string",
@@ -1272,7 +1274,8 @@
     "required": [
      "active"
     ],
-    "title": "HealthCheck"
+    "title": "HealthCheck",
+    "description": "Base class for health checks."
    },
    "HealthCheckState": {
     "properties": {
