@@ -14,7 +14,9 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ParseDiskUsage:
     from_: str = field(
-        alias="--from", help="Start parsing the cache from the specified date"
+        alias="--from",
+        help="Start parsing the cache from the specified date. "
+        "NB: Naive date will be interpreted as UTC.",
     )
 
     def execute(self) -> int:

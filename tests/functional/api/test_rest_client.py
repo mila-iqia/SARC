@@ -10,6 +10,7 @@ from sarc.client.job import SlurmJob, SlurmState
 from sarc.config import UTC, ConfigurationError, config
 from sarc.core.models.users import MemberType
 from sarc.rest.client import SarcApiClient
+from tests.common.dateutils import _iso_mtl_dt
 
 # Test SarcApiClient Initialization
 
@@ -121,10 +122,23 @@ def test_get_jobs_invalid_job_state(sarc_client):
 
 
 @pytest.mark.usefixtures("read_only_db")
+def test_get_jobs_with_naive_datetime_filters(sarc_client):
+    with pytest.raises(httpx.HTTPStatusError) as excinfo:
+        sarc_client.job_query(
+            start=datetime.fromisoformat("2023-01-01T00:00:00"),
+            end=datetime.fromisoformat("2023-12-31T23:59:59"),
+        )
+    assert excinfo.value.response.status_code == 422
+    assert (
+        "Time-aware datetime required. E.g: 2025-01-01T10:00Z (UTC), 2025-01-01T05:00-05:00 (UTC-5 hours)"
+        in excinfo.value.response.text
+    )
+
+
+@pytest.mark.usefixtures("read_only_db")
 def test_get_jobs_with_datetime_filters(sarc_client):
     data = sarc_client.job_query(
-        start=datetime.fromisoformat("2023-01-01T00:00:00"),
-        end=datetime.fromisoformat("2023-12-31T23:59:59"),
+        start=_iso_mtl_dt("2023-01-01T00:00:00"), end=_iso_mtl_dt("2023-12-31T23:59:59")
     )
     assert len(data) > 0
 
@@ -161,8 +175,8 @@ def test_get_jobs_no_filters(sarc_client):
         (dict(job_id=9999999999), 0),
         (
             dict(
-                start=datetime.fromisoformat("2023-01-01T00:00:00"),
-                end=datetime.fromisoformat("2023-02-15T23:59:59"),
+                start=_iso_mtl_dt("2023-01-01T00:00:00"),
+                end=_iso_mtl_dt("2023-02-15T23:59:59"),
             ),
             8,
         ),
@@ -170,7 +184,7 @@ def test_get_jobs_no_filters(sarc_client):
             dict(
                 cluster="raisin",
                 job_state=SlurmState.COMPLETED,
-                start=datetime.fromisoformat("2023-01-01T00:00:00"),
+                start=_iso_mtl_dt("2023-01-01T00:00:00"),
             ),
             1,
         ),

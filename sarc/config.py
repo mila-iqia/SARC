@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Literal, cast, overload
 
 import gifnoc
-import tzlocal
 from bson import CodecOptions, UuidRepresentation
 from easy_oauth import OAuthManager
 from hostlist import expand_hostlist
@@ -29,7 +28,6 @@ if TYPE_CHECKING:
 
 
 UTC = zoneinfo.ZoneInfo("UTC")
-TZLOCAL = zoneinfo.ZoneInfo(tzlocal.get_localzone_name())
 
 
 MIG_FLAG = "__MIG_FLAG__"
@@ -67,6 +65,10 @@ class ClusterConfig:
     # pylint: disable=too-many-instance-attributes
     host: str
     private_key: PrivateKeyInfo
+    # Name of user account domain (e.g: "mila", "drac")
+    # Used to find user associated account for the cluster in
+    # UserData.associated_accounts field
+    user_domain: str
     password: OTPInfo | StaticInfo | None = None
     timezone: zoneinfo.ZoneInfo | None = None
     prometheus_url: str | None = None

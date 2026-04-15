@@ -883,3 +883,126 @@ def test_auto_interval_0(cli_main, monkeypatch, freezer, caplog):
     )
     # We expected only 1 interval and cache
     assert mock_fetch_raw.called == 1
+
+
+# ── require_user_link tests ─────────────────────────────────────────
+
+
+def _fetch_one_job_on_raisin(cli_main, remote, sacct_json):
+    """Helper: fetch a single default job on cluster raisin into the cache."""
+    remote.expect(
+        host="raisin",
+        cmd=f"export TZ=UTC && /opt/slurm/bin/sacct -X -S {_dtfmt(2023, 2, 15)} -E {_dtfmt(2023, 2, 16)} --allusers --json",
+        out=sacct_json.encode("utf-8"),
+    )
+
+    import sarc.cli  # noqa: F401
+
+    assert (
+        cli_main(
+            [
+                "fetch",
+                "jobs",
+                "--cluster_names",
+                "raisin",
+                "--intervals",
+                f"{_dtfmt(2023, 2, 15)}-{_dtfmt(2023, 2, 16)}",
+            ]
+        )
+        == 0
+    )
+
+
+@pytest.mark.parametrize(
+    "test_config", [{"clusters": {"raisin": {"host": "raisin"}}}], indirect=True
+)
+@pytest.mark.parametrize("json_jobs", [{}], indirect=True)
+@pytest.mark.usefixtures("enabled_cache", "no_pkey")
+def test_parse_jobs_saves_without_require_user_link(
+    test_config, sacct_json, remote, cli_main, empty_read_write_db
+):
+    """Without --require_user_link, jobs are saved even without matching users."""
+    _fetch_one_job_on_raisin(cli_main, remote, sacct_json)
+
+    assert cli_main(["-v", "parse", "jobs", "--since", "2023-02-14T00:00"]) == 0
+
+    jobs = list(get_jobs())
+    assert len(jobs) == 1
+    assert jobs[0].user_uuid is None
+
+
+@pytest.mark.parametrize(
+    "test_config", [{"clusters": {"raisin": {"host": "raisin"}}}], indirect=True
+)
+@pytest.mark.parametrize("json_jobs", [{}], indirect=True)
+@pytest.mark.usefixtures("enabled_cache", "no_pkey")
+def test_parse_jobs_require_user_link_no_match(
+    test_config, sacct_json, remote, cli_main, empty_read_write_db
+):
+    """With --require_user_link and no matching users, no jobs are saved."""
+    _fetch_one_job_on_raisin(cli_main, remote, sacct_json)
+
+    assert (
+        cli_main(
+            [
+                "-v",
+                "parse",
+                "jobs",
+                "--since",
+                "2023-02-14T00:00",
+                "--require_user_link",
+            ]
+        )
+        == 0
+    )
+
+    assert len(list(get_jobs())) == 0
+
+
+@pytest.mark.parametrize(
+    "test_config", [{"clusters": {"raisin": {"host": "raisin"}}}], indirect=True
+)
+@pytest.mark.parametrize("json_jobs", [{}], indirect=True)
+@pytest.mark.usefixtures("enabled_cache", "no_pkey")
+def test_parse_jobs_require_user_link_with_match(
+    test_config, sacct_json, remote, cli_main, empty_read_write_db
+):
+    """With --require_user_link and a matching user, job is saved with user_uuid."""
+    from uuid import UUID
+
+    from tests.functional.jobs.factory import UserFactory
+
+    # Default job: user="petitbonhomme", cluster="raisin" (user_domain="drac"),
+    # submit_time ~ 2023-02-14.
+    # Insert a user with a matching drac credential valid at that time.
+    user_uuid = UUID("5a8b9e7f-afcc-4ced-b596-44fcdb3a0cff")
+    uf = UserFactory()
+    uf.add_user(
+        uuid=user_uuid,
+        display_name="Petit Bonhomme",
+        email="petitbonhomme@mila.quebec",
+        accounts=[("drac", "petitbonhomme", datetime(2022, 1, 1, tzinfo=UTC), None)],
+    )
+    empty_read_write_db.users.insert_many(
+        [u.model_dump(exclude={"id"}) for u in uf.users]
+    )
+
+    _fetch_one_job_on_raisin(cli_main, remote, sacct_json)
+
+    assert (
+        cli_main(
+            [
+                "-v",
+                "parse",
+                "jobs",
+                "--since",
+                "2023-02-14T00:00",
+                "--require_user_link",
+            ]
+        )
+        == 0
+    )
+
+    jobs = list(get_jobs())
+    assert len(jobs) == 1
+    assert jobs[0].user_uuid == user_uuid

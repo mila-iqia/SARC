@@ -18,9 +18,8 @@ from sarc.client.job import (
     get_available_clusters,
     get_jobs,
 )
-from sarc.config import TZLOCAL
+from sarc.config import UTC
 from sarc.core.models.users import UserData
-from sarc.core.models.validators import DateMatchError
 from sarc.traces import trace_decorator
 from sarc.users.db import get_users
 from sarc.utils import flatten
@@ -72,8 +71,12 @@ class AbstractJobSeriesFactory(ABC):
             A data frame containing all users
             with flattened dot-separated columns from User class.
         """
-        uf = UserFlattener()
-        return pandas.DataFrame([uf.flatten(user) for user in self.get_users()])
+        return pandas.DataFrame(
+            [
+                flatten({"user": user.model_dump(exclude={"id", "matching_ids"})})
+                for user in self.get_users()
+            ]
+        )
 
     def load_job_series(
         self,
@@ -132,7 +135,7 @@ class AbstractJobSeriesFactory(ABC):
         users_frame = self._get_user_data_frame()
 
         rows = []
-        now = datetime.now(tz=TZLOCAL)
+        now = datetime.now(tz=UTC)
         # Fetch all jobs from the clusters
         for job in tqdm(self.get_jobs(**jobs_args), total=total, desc=self._get_desc()):
             if job.end_time is None:
@@ -175,15 +178,6 @@ class AbstractJobSeriesFactory(ABC):
                     and job_series["gpu_utilization"] > 1
                 ):
                     job_series["gpu_utilization"] = np.nan
-
-            # Pandas dataframe will infer column type as object instead of datetime
-            # if all dates in column are not in same timezone.
-            # So, we make sure start and end times are in a specific datetime,
-            # whatever how they have been modified above.
-            # NB: Since dates are still stored in TZLOCAL
-            # in job object, we use TZLOCAL here, instead of UTC.
-            job.start_time = job.start_time.astimezone(TZLOCAL)
-            job.end_time = job.end_time.astimezone(TZLOCAL)
 
             # Flatten job.requested and job.allocated into job_series
             job_series.update(
@@ -233,39 +227,12 @@ class AbstractJobSeriesFactory(ABC):
 
         jobs_frame = pandas.DataFrame(rows)
 
-        # Get name of fields used to merge frames.
-        # We must use `fields`, as fields may have been renamed.
-        field_cluster_name = fields.get("cluster_name", "cluster_name")
-        field_job_user = fields.get("user", "user")
-        # Merge jobs with users info, only if both users and user column available.
-        if users_frame.shape[0] and field_job_user in jobs_frame.columns:
-            df_mila_mask = jobs_frame[field_cluster_name] == "mila"
-            df_drac_mask = jobs_frame[field_cluster_name] != "mila"
-
-            # TODO What if there are many user entries with same user.mila_username ?
-            #   NB: This case should not happen. But anyway, possible workarounds:
-            #   `df_a.merge(df_b, on='ID', validate='many_to_one')` ?
-            #   `users_unique = users_frame.drop_duplicates(subset="user.mila_username", keep="first")` ?
-
-            merged_mila = jobs_frame[df_mila_mask].merge(
-                users_frame,
-                left_on=field_job_user,
-                right_on="user.mila_username",
-                how="left",
+        # Merge jobs with users info using user_uuid.
+        field_user_uuid = fields.get("user_uuid", "user_uuid")
+        if users_frame.shape[0] and field_user_uuid in jobs_frame.columns:
+            return jobs_frame.merge(
+                users_frame, left_on=field_user_uuid, right_on="user.uuid", how="left"
             )
-            merged_drac = jobs_frame[df_drac_mask].merge(
-                users_frame,
-                left_on=field_job_user,
-                right_on="user.drac_username",
-                how="left",
-            )
-
-            # Concat merged frames.
-            output = pandas.concat([merged_mila, merged_drac])
-            # Try to sort output to keep initial jobs order, by using first column from jobs frame.
-            output = output.sort_values(by=jobs_frame.columns[0], ignore_index=True)
-
-            return output
         else:
             return jobs_frame
 
@@ -305,83 +272,6 @@ def load_job_series(
     return factory.load_job_series(
         fields=fields, clip_time=clip_time, callback=callback, **jobs_args
     )
-
-
-class UserFlattener:
-    """
-    Helper class to flatten a user.
-
-    The goal of this class is to make sure that
-    User's complex attributes are not flattened if set to None,
-    to prevent having both attribute columns and attribute nested columns
-    in final data frame.
-
-    For example, current User class has optional attribute `drac` to be flattened as
-    `user.drac.username`, `user.drac.email` and `user.drac.active`.
-    If a user does not have a DRAC account, default behaviour will produce a key
-    `user.drac` with value None.
-    Instead, we want to avoid having `user.drac` key, to make sure
-    output data frame only contains the 3 `user.drac.*` expanded columns
-    and simply set them to NaN for users who don't have a drac account.
-    """
-
-    def __init__(self):
-        # List "plain" attributes, i.e. attributes that are not objects.
-        # This will exclude both nested Model objects as well a nested dicts.
-        # Note that a `date` is described as a 'string' in schemas.
-        schema = UserData.model_json_schema()
-        schema_props = schema["properties"]
-
-        def filt(prop_desc: dict[str, Any]) -> bool:
-            """
-            In the schema type can be a simple 'type' marker if
-            the field has a single type or "'anyOf': [{'type': '...'},
-            {'type': '...'}, ...}]" for types like Optional[str] or
-            Union[str, int] which have more than one possible type.
-
-            This attempts to match the simple case and the Optional[...] case.
-            """
-            if prop_desc.get("type", "object") != "object":
-                return True
-            any_d = prop_desc.get("anyOf", None)
-            if any_d:
-                return not any(item.get("type", "object") == "object" for item in any_d)
-            return False
-
-        self.plain_attributes = {
-            key for key, prop_desc in schema_props.items() if filt(prop_desc)
-        }
-
-    def flatten(self, user: UserData) -> dict[str, Any]:
-        """Flatten given user."""
-        # Get user dict.
-        base_user_dict = user.model_dump(exclude={"id", "matching_ids"})
-        # Keep only plain attributes, or complex attributes that are not None.
-        base_user_dict = {
-            key: value
-            for key, value in base_user_dict.items()
-            if key in self.plain_attributes or value is not None
-        }
-        # We add these two fields for backward compat for now. When the job
-        # struct is modified to have a UUID reference to the user, we can get
-        # rid of this.
-        try:
-            base_user_dict["mila_username"] = user.associated_accounts[
-                "mila"
-            ].get_value()
-        except DateMatchError, KeyError:
-            pass
-        try:
-            base_user_dict["drac_username"] = user.associated_accounts[
-                "drac"
-            ].get_value()
-        except DateMatchError, KeyError:
-            pass
-
-        # Now flatten user dict.
-        user_dict = flatten({"user": base_user_dict})
-
-        return user_dict
 
 
 def _select_stat(name: str, dist: dict[str, float]) -> float:
@@ -723,9 +613,9 @@ def compute_time_frames(
     columns: list of str
         Columns to adjust based on time frames.
     start: datetime, optional
-        Start of the time frame. If None, use the first job start time.
+        Start of the time frame. If naive, as in local timezone. If None, use the first job start time.
     end: datetime, optional
-        End of the time frame. If None, use the last job end time.
+        End of the time frame. If naive, as in local timezone. If None, use the last job end time.
     frame_size: timedelta, optional
         Size of the time frames used to compute histograms. Default to 7 days.
 
@@ -757,9 +647,13 @@ def compute_time_frames(
 
     if start is None:
         start = jobs[col_start].min()
+    else:
+        start = start.astimezone(UTC)
 
     if end is None:
         end = jobs[col_end].max()
+    else:
+        end = end.astimezone(UTC)
 
     data_frames: list[pandas.DataFrame] = []
 

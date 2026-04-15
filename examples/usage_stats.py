@@ -5,7 +5,7 @@ import pandas as pd
 from tqdm import tqdm
 
 from sarc.client.job import get_jobs
-from sarc.config import TZLOCAL, UTC, config
+from sarc.config import UTC, config
 
 # Clusters we want to compare
 clusters = ["mila", "narval", "beluga", "cedar", "graham"]
@@ -56,7 +56,7 @@ def get_jobs_dataframe(filename, start, end) -> pd.DataFrame:
                 continue
 
             if job.end_time is None:
-                job.end_time = datetime.now(tz=TZLOCAL)
+                job.end_time = datetime.now().astimezone()
 
             # For some reason start time is not reliable, often equal to submit time,
             # so we infer it based on end_time and elapsed_time.

@@ -95,7 +95,7 @@ def check_gpu_type_usage_per_node(
     ok = True
     ignore_min_tasks_for_clusters = set(ignore_min_tasks_for_clusters or ())
     for row in ff.itertuples():
-        cluster_name, node = row.Index  # type: ignore[misc]
+        cluster_name, node = row.Index  # type: ignore[misc, str-unpack]
         nb_gpu_tasks = row.gpu_task_
         nb_tasks = cast(int, row.task_)
         gpu_usage = cast(float, row.gpu_usage_)

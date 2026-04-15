@@ -1,17 +1,46 @@
 sarc:
   logging:
-    log_level: WARNING
+    log_level: INFO
     OTLP_endpoint: http://loki01.server.mila.quebec:3100/otlp/v1/logs
     service_name: sarc-dev
-    slack: null
-  mongo:
-    connection_string: mongodb://localhost:27017/sarc-dev
-    database_name: sarc-dev
+    # slack: null
+    slack:
+      ../../SARC_secrets/secrets/slack-prod.yaml
+      # description: SARC-prod
+      # token: slack-token-replaceme
+      # channel: slack-channel-id-replace-me
+  mongo: ../../SARC_secrets/secrets/mongo-prod.yaml
+  health_monitor:
+    checks:
+      database_size_check:
+        $class: "sarc.alerts.usage_alerts.disk_space:DatabaseSizeCheck"
+        limit: 5000000000
+        active: True
+      cache_size_check:
+        $class: "sarc.alerts.usage_alerts.disk_space:CacheSizeCheck"
+        limit: 150000000000
+        active: True
+  users:
+    scrapers:
+      # legacy_dump:
+      #   json_file_path: ../SARC_secrets/secrets/account_matching/legacy_dump.json
+      mila_ldap:
+        private_key_file: ../SARC_secrets/secrets/ldap/Google_2026_01_26_66827.key
+        certificate_file: ../SARC_secrets/secrets/ldap/Google_2026_01_26_66827.crt
+        service_uri: ldaps://ldap.google.com
+      drac_role:
+        csv_path: ../SARC_secrets/secrets/account_matching/sponsored_roles_for_Yoshua_Bengio_(CCI_jvb-000).csv
+      drac_member:
+        csv_path: ../SARC_secrets/secrets/account_matching/members-rrg-bengioy-ad-2025-10-29.csv
+      # mymila:
+      #   TODO
+      # manual:
+      #   TODO
   cache: "../sarc-cache"
   sshconfig: "~/.ssh/config"
   clusters:
     mila:
-      host: mila
+      host: localhost
       private_key: pkey.yaml
       timezone: America/Montreal
       accounts:
@@ -57,7 +86,7 @@ sarc:
         cn-n[001-002]:
           h100: H100-SXM5-80GB
     narval:
-      host: narval.computecanada.ca
+      host: robot.narval.alliancecan.ca
       private_key: pkey.yaml
       timezone: America/Montreal
       accounts:
@@ -66,10 +95,9 @@ sarc:
         - def-bengioy_gpu
         - def-bengioy_cpu
       sacct_bin: "/opt/software/slurm/bin/sacct"
-      diskusage:
-        - name: drac
+      ignore_tz_utc: true
       prometheus_url: https://mila-thanos.calculquebec.ca
-      #prometheus_headers: ../../SARC_secrets/secrets/drac_prometheus/headers.json
+      #prometheus_headers: ../SARC_secrets/secrets/drac_prometheus/headers.json
       start_date: "2022-04-01"
       user_domain: drac
       gpus_per_nodes:
@@ -89,7 +117,7 @@ sarc:
           "A100-SXM4-40GB : 4g.20gb": $a100_4g.20gb
           NVIDIA A100-SXM4-40GB: A100-SXM4-40GB
     tamia:
-      host: tamia.alliancecan.ca
+      host: tamia
       private_key: pkey.yaml
       timezone: America/Montreal
       accounts:
@@ -103,7 +131,7 @@ sarc:
         tg[10601-10606,10701-10707,10801-10807,10901-10908,11101-11107,11201-11207]:
           h100: H100-SXM5-80GB
     fir:
-      host: fir.alliancecan.ca
+      host: robot.fir.alliancecan.ca
       private_key: pkey.yaml
       timezone: America/Vancouver
       accounts:
@@ -117,7 +145,7 @@ sarc:
       start_date: "2025-08-11"
       user_domain: drac
     nibi:
-      host: nibi.alliancecan.ca
+      host: robot.nibi.alliancecan.ca
       private_key: pkey.yaml
       timezone: America/Toronto
       accounts:
@@ -126,6 +154,7 @@ sarc:
         - def-bengioy_gpu
         - def-bengioy_cpu
       sacct_bin: "/opt/software/slurm/bin/sacct"
+      ignore_tz_utc: true
       prometheus_url:
       start_date: "2025-07-31"
       user_domain: drac
@@ -136,7 +165,7 @@ sarc:
           nvidia_h100_80gb_hbm3_2g.20gb: __MIG_FLAG__h100
           nvidia_h100_80gb_hbm3_3g.40gb: __MIG_FLAG__h100
     rorqual:
-      host: rorqual.alliancecan.ca
+      host: robot.rorqual.alliancecan.ca
       private_key: pkey.yaml
       timezone: America/Montreal
       accounts:
@@ -145,6 +174,7 @@ sarc:
         - def-bengioy_gpu
         - def-bengioy_cpu
       sacct_bin: "/opt/software/slurm/bin/sacct"
+      ignore_tz_utc: true
       prometheus_url: https://mila-thanos.calculquebec.ca
       #prometheus_headers: ../SARC_secrets/secrets/drac_prometheus/headers.json
       start_date: "2025-06-19"
@@ -156,7 +186,7 @@ sarc:
           nvidia_h100_80gb_hbm3_2g.20gb: __MIG_FLAG__h100
           nvidia_h100_80gb_hbm3_3g.40gb: __MIG_FLAG__h100
     trillium:
-      host: trillium.alliancecan.ca
+      host: trillium
       private_key: pkey.yaml
       timezone: America/Montreal
       accounts:
