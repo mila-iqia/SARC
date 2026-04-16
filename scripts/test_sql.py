@@ -22,6 +22,7 @@ import argparse
 import json
 import math
 import time
+from urllib.parse import urlparse
 
 import pg8000
 from google.cloud.sql.connector import Connector
@@ -325,18 +326,130 @@ def insert_statistics(cur: pg8000.Cursor, job: SlurmJob) -> None:
         )
 
 
+def connect_plain(sql_url: str) -> pg8000.Connection:
+    """Open a direct pg8000 connection from a postgresql:// URL."""
+    parsed = urlparse(sql_url)
+    return pg8000.connect(
+        host=parsed.hostname,
+        port=parsed.port or 5432,
+        user=parsed.username,
+        password=parsed.password,
+        database=parsed.path.lstrip("/"),
+    )
+
+
+def connect_cloud_sql(connector: Connector, instance: str, user: str, password: str, db: str) -> pg8000.Connection:
+    """Open a pg8000 connection via the Cloud SQL Python Connector."""
+    return connector.connect(instance, "pg8000", user=user, password=password, db=db)
+
+
+def run_import(conn: pg8000.Connection, args) -> int:
+    """Create tables, resume from checkpoint if present, and transfer all jobs.
+
+    Returns the total number of jobs transferred.
+    """
+    cur = conn.cursor()
+    try:
+        if args.drop:
+            print("Dropping existing tables...", flush=True)
+            cur.execute("DROP TABLE IF EXISTS job_statistics")
+            cur.execute("DROP TABLE IF EXISTS jobs")
+            cur.execute("DROP TABLE IF EXISTS _import_checkpoint")
+            conn.commit()
+
+        print("Creating tables...", flush=True)
+        cur.execute(CREATE_JOBS_TABLE)
+        cur.execute(CREATE_JOB_STATISTICS_TABLE)
+        cur.execute(CREATE_CHECKPOINT_TABLE)
+        conn.commit()
+
+        # Read existing checkpoint so we can resume a previous run
+        checkpoint_time, total = read_checkpoint(cur)
+        if checkpoint_time is not None:
+            print(
+                f"Resuming from checkpoint: {checkpoint_time} ({total} jobs already done)",
+                flush=True,
+            )
+
+        # Retry loop: restart the MongoDB cursor on failure
+        while True:
+            remaining = (args.limit - total) if args.limit is not None else None
+            if remaining is not None and remaining <= 0:
+                break
+
+            try:
+                jobs = fetch_jobs_from(args.cluster, checkpoint_time, remaining)
+                batch = 0
+                last_job = None
+
+                for job in jobs:
+                    insert_job(cur, job)
+                    insert_statistics(cur, job)
+                    total += 1
+                    batch += 1
+                    last_job = job
+
+                    if batch >= args.batch_size:
+                        conn.commit()
+                        write_checkpoint(cur, job.submit_time, total)
+                        conn.commit()
+                        checkpoint_time = job.submit_time
+                        batch = 0
+                        print(
+                            f"  Committed {total} jobs, checkpoint: {checkpoint_time}",
+                            flush=True,
+                        )
+
+                # Commit any remaining jobs in the last partial batch
+                if last_job is not None and batch > 0:
+                    conn.commit()
+                    write_checkpoint(cur, last_job.submit_time, total)
+                    conn.commit()
+
+                break  # All jobs processed successfully
+
+            except Exception as e:
+                print(f"\nMongoDB error: {e}", flush=True)
+                print(
+                    f"Rolling back and retrying in {RETRY_DELAY}s...",
+                    flush=True,
+                )
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+                time.sleep(RETRY_DELAY)
+                # Reload checkpoint from PostgreSQL — it reflects the last
+                # successfully committed state regardless of the crash
+                checkpoint_time, total = read_checkpoint(cur)
+                print(
+                    f"Resuming from checkpoint: {checkpoint_time} ({total} jobs done)",
+                    flush=True,
+                )
+    finally:
+        cur.close()
+
+    return total
+
+
 def main():
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument(
+
+    conn_group = parser.add_mutually_exclusive_group(required=True)
+    conn_group.add_argument(
+        "--sql-url",
+        help="Plain PostgreSQL URL for local use, e.g. postgresql://user:pass@host:5432/dbname",
+    )
+    conn_group.add_argument(
         "--instance",
-        required=True,
         help="Cloud SQL instance connection name, e.g. project:region:instance",
     )
-    parser.add_argument("--db-user", required=False, help="Database user")
-    parser.add_argument("--db-password", required=False, help="Database password")
-    parser.add_argument("--db-name", required=False, help="Database name")
+
+    parser.add_argument("--db-user", help="Database user (Cloud SQL only)")
+    parser.add_argument("--db-password", help="Database password (Cloud SQL only)")
+    parser.add_argument("--db-name", help="Database name (Cloud SQL only)")
     parser.add_argument(
         "--limit",
         type=int,
@@ -358,102 +471,23 @@ def main():
     args = parser.parse_args()
 
     with using_sarc_mode("scraping"):
-        print("Connecting to Cloud SQL...", flush=True)
-        with Connector() as connector:
-
-            def getconn() -> pg8000.Connection:
-                return connector.connect(
-                    args.instance,
-                    "pg8000",
-                    user=args.db_user,
-                    password=args.db_password,
-                    db=args.db_name,
-                )
-
-            conn = getconn()
+        if args.sql_url:
+            print(f"Connecting to PostgreSQL at {args.sql_url}...", flush=True)
+            conn = connect_plain(args.sql_url)
             try:
-                cur = conn.cursor()
-
-                if args.drop:
-                    print("Dropping existing tables...", flush=True)
-                    cur.execute("DROP TABLE IF EXISTS job_statistics")
-                    cur.execute("DROP TABLE IF EXISTS jobs")
-                    cur.execute("DROP TABLE IF EXISTS _import_checkpoint")
-                    conn.commit()
-
-                print("Creating tables...", flush=True)
-                cur.execute(CREATE_JOBS_TABLE)
-                cur.execute(CREATE_JOB_STATISTICS_TABLE)
-                cur.execute(CREATE_CHECKPOINT_TABLE)
-                conn.commit()
-
-                # Read existing checkpoint so we can resume a previous run
-                checkpoint_time, total = read_checkpoint(cur)
-                if checkpoint_time is not None:
-                    print(
-                        f"Resuming from checkpoint: {checkpoint_time} ({total} jobs already done)",
-                        flush=True,
-                    )
-
-                # Retry loop: restart the MongoDB cursor on failure
-                while True:
-                    remaining = (args.limit - total) if args.limit is not None else None
-                    if remaining is not None and remaining <= 0:
-                        break
-
-                    try:
-                        jobs = fetch_jobs_from(args.cluster, checkpoint_time, remaining)
-                        batch = 0
-                        last_job = None
-
-                        for job in jobs:
-                            insert_job(cur, job)
-                            insert_statistics(cur, job)
-                            total += 1
-                            batch += 1
-                            last_job = job
-
-                            if batch >= args.batch_size:
-                                conn.commit()
-                                write_checkpoint(cur, job.submit_time, total)
-                                conn.commit()
-                                checkpoint_time = job.submit_time
-                                batch = 0
-                                print(
-                                    f"  Committed {total} jobs, checkpoint: {checkpoint_time}",
-                                    flush=True,
-                                )
-
-                        # Commit any remaining jobs in the last partial batch
-                        if last_job is not None and batch > 0:
-                            conn.commit()
-                            write_checkpoint(cur, last_job.submit_time, total)
-                            conn.commit()
-
-                        break  # All jobs processed successfully
-
-                    except Exception as e:
-                        print(f"\nMongoDB error: {e}", flush=True)
-                        print(
-                            f"Rolling back and retrying in {RETRY_DELAY}s...",
-                            flush=True,
-                        )
-                        try:
-                            conn.rollback()
-                        except Exception:
-                            pass
-                        time.sleep(RETRY_DELAY)
-                        # Reload checkpoint from PostgreSQL — it reflects the last
-                        # successfully committed state regardless of the crash
-                        checkpoint_time, total = read_checkpoint(cur)
-                        print(
-                            f"Resuming from checkpoint: {checkpoint_time} ({total} jobs done)",
-                            flush=True,
-                        )
-
+                total = run_import(conn, args)
             finally:
-                cur.close()
                 conn.close()
+        else:
+            print(f"Connecting to Cloud SQL instance {args.instance}...", flush=True)
+            with Connector() as connector:
+                conn = connect_cloud_sql(
+                    connector, args.instance, args.db_user, args.db_password, args.db_name
+                )
+                try:
+                    total = run_import(conn, args)
+                finally:
+                    conn.close()
 
     print(f"Done. Transferred {total} jobs to PostgreSQL.")
 
