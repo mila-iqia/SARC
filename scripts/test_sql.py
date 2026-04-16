@@ -1,22 +1,30 @@
 # ruff: noqa: T201
 """
-Read all jobs from the SARC MongoDB jobs collection and upload them to a PostgreSQL database.
+Read all jobs from the SARC MongoDB jobs collection and upload them to a Cloud SQL
+PostgreSQL database via the Cloud SQL Python Connector.
 
 Usage:
-    uv run scripts/test_sql.py --sql-url postgresql://user:pass@host:5432/dbname
+    uv run scripts/test_sql.py \\
+        --instance project:region:instance \\
+        --db-user myuser \\
+        --db-password mypassword \\
+        --db-name mydb
 
 The SARC config is loaded from the SARC_CONFIG environment variable as usual.
 Use --limit to restrict the number of jobs loaded (useful for testing).
 """
 
 import argparse
+import json
 import math
 
-import psycopg
+import pg8000
+from google.cloud.sql.connector import Connector
 
 from sarc.client.job import SlurmJob, Statistics, get_jobs
 from sarc.config import using_sarc_mode
 
+# nodes is stored as JSON text since pg8000 doesn't auto-cast Python lists to TEXT[]
 CREATE_JOBS_TABLE = """
 CREATE TABLE IF NOT EXISTS jobs (
     -- MongoDB ID
@@ -39,7 +47,7 @@ CREATE TABLE IF NOT EXISTS jobs (
 
     -- Allocation information
     partition           TEXT        NOT NULL,
-    nodes               TEXT[]      NOT NULL,
+    nodes               TEXT        NOT NULL,
     work_dir            TEXT        NOT NULL,
 
     -- Miscellaneous
@@ -124,7 +132,7 @@ def nan_to_none(v: float) -> float | None:
     return v
 
 
-def insert_job(cur: psycopg.Cursor, job: SlurmJob) -> None:
+def insert_job(cur: pg8000.Cursor, job: SlurmJob) -> None:
     cur.execute(
         """
         INSERT INTO jobs (
@@ -196,7 +204,7 @@ def insert_job(cur: psycopg.Cursor, job: SlurmJob) -> None:
             job.exit_code,
             job.signal,
             job.partition,
-            job.nodes,
+            json.dumps(job.nodes),
             job.work_dir,
             job.constraints,
             job.priority,
@@ -226,7 +234,7 @@ def insert_job(cur: psycopg.Cursor, job: SlurmJob) -> None:
     )
 
 
-def insert_statistics(cur: psycopg.Cursor, job: SlurmJob) -> None:
+def insert_statistics(cur: pg8000.Cursor, job: SlurmJob) -> None:
     if job.stored_statistics is None:
         return
 
@@ -247,7 +255,7 @@ def insert_statistics(cur: psycopg.Cursor, job: SlurmJob) -> None:
                 q25    = EXCLUDED.q25,
                 median = EXCLUDED.median,
                 q75    = EXCLUDED.q75,
-                max    = EXCLUDED.max,
+                max    = EXCLUDED.max
             """,
             (
                 job.cluster_name,
@@ -270,9 +278,9 @@ def main():
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument(
-        "--sql-url",
+        "--instance",
         required=True,
-        help="PostgreSQL connection URL, e.g. postgresql://user:pass@host:5432/dbname",
+        help="Cloud SQL instance connection name, e.g. project:region:instance",
     )
     parser.add_argument(
         "--limit",
@@ -294,11 +302,17 @@ def main():
     )
     args = parser.parse_args()
 
-    # Set SARC_MODE to scraping so we can read from the database
     with using_sarc_mode("scraping"):
-        print("Connecting to PostgreSQL...", flush=True)
-        with psycopg.connect(args.sql_url) as conn:
-            with conn.cursor() as cur:
+        print("Connecting to Cloud SQL...", flush=True)
+        with Connector() as connector:
+
+            def getconn() -> pg8000.Connection:
+                return connector.connect(args.instance, "pg8000")
+
+            conn = getconn()
+            try:
+                cur = conn.cursor()
+
                 if args.drop:
                     print("Dropping existing tables...", flush=True)
                     cur.execute("DROP TABLE IF EXISTS job_statistics")
@@ -310,16 +324,17 @@ def main():
                 cur.execute(CREATE_JOB_STATISTICS_TABLE)
                 conn.commit()
 
-            print("Fetching jobs from MongoDB...", flush=True)
-            query_options = {}
-            if args.limit:
-                query_options["limit"] = args.limit
+                print("Fetching jobs from MongoDB...", flush=True)
+                query_options = {}
+                if args.limit:
+                    query_options["limit"] = args.limit
 
-            jobs = get_jobs(cluster=args.cluster, query_options=query_options or None)
+                jobs = get_jobs(
+                    cluster=args.cluster, query_options=query_options or None
+                )
 
-            total = 0
-            batch = 0
-            with conn.cursor() as cur:
+                total = 0
+                batch = 0
                 for job in jobs:
                     insert_job(cur, job)
                     insert_statistics(cur, job)
@@ -332,6 +347,9 @@ def main():
                         batch = 0
 
                 conn.commit()
+            finally:
+                cur.close()
+                conn.close()
 
     print(f"Done. Transferred {total} jobs to PostgreSQL.")
 
