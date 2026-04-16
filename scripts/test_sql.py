@@ -12,17 +12,24 @@ Usage:
 
 The SARC config is loaded from the SARC_CONFIG environment variable as usual.
 Use --limit to restrict the number of jobs loaded (useful for testing).
+
+Progress is checkpointed after every --batch-size jobs. If the script crashes,
+re-running it with the same arguments will resume from the last checkpoint.
+Use --drop to start over from scratch.
 """
 
 import argparse
 import json
 import math
+import time
 
 import pg8000
 from google.cloud.sql.connector import Connector
 
-from sarc.client.job import SlurmJob, Statistics, get_jobs
+from sarc.client.job import SlurmJob, Statistics, _jobs_collection
 from sarc.config import using_sarc_mode
+
+RETRY_DELAY = 5  # seconds between MongoDB reconnection attempts
 
 # nodes is stored as JSON text since pg8000 doesn't auto-cast Python lists to TEXT[]
 CREATE_JOBS_TABLE = """
@@ -112,6 +119,14 @@ CREATE TABLE IF NOT EXISTS job_statistics (
 )
 """
 
+CREATE_CHECKPOINT_TABLE = """
+CREATE TABLE IF NOT EXISTS _import_checkpoint (
+    id               INTEGER     PRIMARY KEY DEFAULT 1,
+    last_submit_time TIMESTAMPTZ,
+    total_inserted   INTEGER     NOT NULL DEFAULT 0
+)
+"""
+
 STAT_FIELDS = [
     "gpu_utilization",
     "gpu_utilization_fp16",
@@ -130,6 +145,43 @@ def nan_to_none(v: float) -> float | None:
     if isinstance(v, float) and math.isnan(v):
         return None
     return v
+
+
+def read_checkpoint(cur: pg8000.Cursor) -> tuple:
+    cur.execute(
+        "SELECT last_submit_time, total_inserted FROM _import_checkpoint WHERE id = 1"
+    )
+    row = cur.fetchone()
+    if row is None:
+        return None, 0
+    return row[0], row[1]
+
+
+def write_checkpoint(cur: pg8000.Cursor, last_submit_time, total: int) -> None:
+    cur.execute(
+        """
+        INSERT INTO _import_checkpoint (id, last_submit_time, total_inserted)
+        VALUES (1, %s, %s)
+        ON CONFLICT (id) DO UPDATE SET
+            last_submit_time = EXCLUDED.last_submit_time,
+            total_inserted   = EXCLUDED.total_inserted
+        """,
+        (last_submit_time, total),
+    )
+
+
+def fetch_jobs_from(cluster_name: str | None, checkpoint_time, limit: int | None):
+    """Query MongoDB sorted by submit_time, optionally resuming from checkpoint_time."""
+    coll = _jobs_collection()
+    query = {}
+    if cluster_name:
+        query["cluster_name"] = cluster_name
+    if checkpoint_time is not None:
+        query["submit_time"] = {"$gte": checkpoint_time}
+    kwargs: dict = {"sort": [("submit_time", 1)]}
+    if limit is not None:
+        kwargs["limit"] = limit
+    return coll.find_by(query, **kwargs)
 
 
 def insert_job(cur: pg8000.Cursor, job: SlurmJob) -> None:
@@ -326,36 +378,79 @@ def main():
                     print("Dropping existing tables...", flush=True)
                     cur.execute("DROP TABLE IF EXISTS job_statistics")
                     cur.execute("DROP TABLE IF EXISTS jobs")
+                    cur.execute("DROP TABLE IF EXISTS _import_checkpoint")
                     conn.commit()
 
                 print("Creating tables...", flush=True)
                 cur.execute(CREATE_JOBS_TABLE)
                 cur.execute(CREATE_JOB_STATISTICS_TABLE)
+                cur.execute(CREATE_CHECKPOINT_TABLE)
                 conn.commit()
 
-                print("Fetching jobs from MongoDB...", flush=True)
-                query_options = {}
-                if args.limit:
-                    query_options["limit"] = args.limit
+                # Read existing checkpoint so we can resume a previous run
+                checkpoint_time, total = read_checkpoint(cur)
+                if checkpoint_time is not None:
+                    print(
+                        f"Resuming from checkpoint: {checkpoint_time} ({total} jobs already done)",
+                        flush=True,
+                    )
 
-                jobs = get_jobs(
-                    cluster=args.cluster, query_options=query_options or None
-                )
+                # Retry loop: restart the MongoDB cursor on failure
+                while True:
+                    remaining = (args.limit - total) if args.limit is not None else None
+                    if remaining is not None and remaining <= 0:
+                        break
 
-                total = 0
-                batch = 0
-                for job in jobs:
-                    insert_job(cur, job)
-                    insert_statistics(cur, job)
-                    total += 1
-                    batch += 1
-
-                    if batch >= args.batch_size:
-                        conn.commit()
-                        print(f"  Committed {total} jobs so far...", flush=True)
+                    try:
+                        jobs = fetch_jobs_from(args.cluster, checkpoint_time, remaining)
                         batch = 0
+                        last_job = None
 
-                conn.commit()
+                        for job in jobs:
+                            insert_job(cur, job)
+                            insert_statistics(cur, job)
+                            total += 1
+                            batch += 1
+                            last_job = job
+
+                            if batch >= args.batch_size:
+                                conn.commit()
+                                write_checkpoint(cur, job.submit_time, total)
+                                conn.commit()
+                                checkpoint_time = job.submit_time
+                                batch = 0
+                                print(
+                                    f"  Committed {total} jobs, checkpoint: {checkpoint_time}",
+                                    flush=True,
+                                )
+
+                        # Commit any remaining jobs in the last partial batch
+                        if last_job is not None and batch > 0:
+                            conn.commit()
+                            write_checkpoint(cur, last_job.submit_time, total)
+                            conn.commit()
+
+                        break  # All jobs processed successfully
+
+                    except Exception as e:
+                        print(f"\nMongoDB error: {e}", flush=True)
+                        print(
+                            f"Rolling back and retrying in {RETRY_DELAY}s...",
+                            flush=True,
+                        )
+                        try:
+                            conn.rollback()
+                        except Exception:
+                            pass
+                        time.sleep(RETRY_DELAY)
+                        # Reload checkpoint from PostgreSQL — it reflects the last
+                        # successfully committed state regardless of the crash
+                        checkpoint_time, total = read_checkpoint(cur)
+                        print(
+                            f"Resuming from checkpoint: {checkpoint_time} ({total} jobs done)",
+                            flush=True,
+                        )
+
             finally:
                 cur.close()
                 conn.close()
