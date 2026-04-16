@@ -77,19 +77,19 @@ CREATE TABLE IF NOT EXISTS jobs (
     elapsed_time            DOUBLE PRECISION NOT NULL,
 
     -- Requested resources
-    req_cpu             INTEGER,
-    req_mem             INTEGER,
-    req_node            INTEGER,
-    req_billing         INTEGER,
-    req_gres_gpu        INTEGER,
+    req_cpu             BIGINT,
+    req_mem             BIGINT,
+    req_node            BIGINT,
+    req_billing         BIGINT,
+    req_gres_gpu        BIGINT,
     req_gpu_type        TEXT,
 
     -- Allocated resources
-    alloc_cpu           INTEGER,
-    alloc_mem           INTEGER,
-    alloc_node          INTEGER,
-    alloc_billing       INTEGER,
-    alloc_gres_gpu      INTEGER,
+    alloc_cpu           BIGINT,
+    alloc_mem           BIGINT,
+    alloc_node          BIGINT,
+    alloc_billing       BIGINT,
+    alloc_gres_gpu      BIGINT,
     alloc_gpu_type      TEXT,
 
     PRIMARY KEY (cluster_name, job_id, submit_time)
@@ -338,7 +338,9 @@ def connect_plain(sql_url: str) -> pg8000.Connection:
     )
 
 
-def connect_cloud_sql(connector: Connector, instance: str, user: str, password: str, db: str) -> pg8000.Connection:
+def connect_cloud_sql(
+    connector: Connector, instance: str, user: str, password: str, db: str
+) -> pg8000.Connection:
     """Open a pg8000 connection via the Cloud SQL Python Connector."""
     return connector.connect(instance, "pg8000", user=user, password=password, db=db)
 
@@ -410,10 +412,7 @@ def run_import(conn: pg8000.Connection, args) -> int:
 
             except Exception as e:
                 print(f"\nMongoDB error: {e}", flush=True)
-                print(
-                    f"Rolling back and retrying in {RETRY_DELAY}s...",
-                    flush=True,
-                )
+                print(f"Rolling back and retrying in {RETRY_DELAY}s...", flush=True)
                 try:
                     conn.rollback()
                 except Exception:
@@ -482,7 +481,11 @@ def main():
             print(f"Connecting to Cloud SQL instance {args.instance}...", flush=True)
             with Connector() as connector:
                 conn = connect_cloud_sql(
-                    connector, args.instance, args.db_user, args.db_password, args.db_name
+                    connector,
+                    args.instance,
+                    args.db_user,
+                    args.db_password,
+                    args.db_name,
                 )
                 try:
                     total = run_import(conn, args)
