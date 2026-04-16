@@ -282,6 +282,9 @@ def main():
         required=True,
         help="Cloud SQL instance connection name, e.g. project:region:instance",
     )
+    parser.add_argument("--db-user", required=False, help="Database user")
+    parser.add_argument("--db-password", required=False, help="Database password")
+    parser.add_argument("--db-name", required=False, help="Database name")
     parser.add_argument(
         "--limit",
         type=int,
@@ -307,7 +310,13 @@ def main():
         with Connector() as connector:
 
             def getconn() -> pg8000.Connection:
-                return connector.connect(args.instance, "pg8000")
+                return connector.connect(
+                    args.instance,
+                    "pg8000",
+                    user=args.db_user,
+                    password=args.db_password,
+                    db=args.db_name,
+                )
 
             conn = getconn()
             try:
