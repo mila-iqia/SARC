@@ -25,7 +25,7 @@ def parse_args():
         ("source_mongo", args.source_mongo),
         ("target_mongo", args.target_mongo),
     ]:
-        if not (value.startswith("mongodb://") or value.startswith("mongodb+srv://")):
+        if not value.startswith(("mongodb://", "mongodb+srv://")):
             print(
                 f"Error: {name} is not a valid MongoDB connection string: {value}",
                 file=sys.stderr,
@@ -60,7 +60,7 @@ def main() -> int:
         str(LOCAL_PATH) + "/",
     ]
     print(f"Running: {' '.join(cmd)}")
-    result = subprocess.run(cmd)
+    result = subprocess.run(cmd)  # noqa: PLW1510
     if result.returncode != 0:
         return result.returncode
 
@@ -77,7 +77,7 @@ def main() -> int:
         "--exclude=.DS_Store",
     ]
     print(f"Running: {' '.join(gcloud_cmd)}")
-    result = subprocess.run(gcloud_cmd, cwd=LOCAL_PATH.parent)
+    result = subprocess.run(gcloud_cmd, cwd=LOCAL_PATH.parent)  # noqa: PLW1510
     if result.returncode != 0:
         return result.returncode
 
@@ -86,11 +86,13 @@ def main() -> int:
     target_clusters = target_db["clusters"]
     for cluster_name, end_time in source_clusters.items():
         result = target_clusters.update_one(
-            {"cluster_name": cluster_name},
-            {"$set": {"end_time_prometheus": end_time}},
+            {"cluster_name": cluster_name}, {"$set": {"end_time_prometheus": end_time}}
         )
         if result.matched_count == 0:
-            print(f"Warning: cluster '{cluster_name}' not found in target database, skipping.", file=sys.stderr)
+            print(
+                f"Warning: cluster '{cluster_name}' not found in target database, skipping.",
+                file=sys.stderr,
+            )
 
     return 0
 
