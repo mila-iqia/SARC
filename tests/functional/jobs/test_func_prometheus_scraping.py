@@ -69,7 +69,7 @@ def test_get_gpu_type(
         host="raisin",
         commands=[
             Command(
-                cmd="export TZ=UTC && /opt/slurm/bin/sacct -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
+                cmd="export TZ=UTC && /opt/slurm/bin/sacct -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json --duplicates",
                 out=f"Welcome on raisin,\nThe sweetest supercomputer in the world!\n{sacct_json}".encode(
                     "utf-8"
                 ),
@@ -231,7 +231,7 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     remote.expect_sessions(
         _create_session(
             "raisin",
-            "export TZ=UTC && /opt/slurm/bin/sacct -X -S {start} -E {end} --allusers --json",
+            "export TZ=UTC && /opt/slurm/bin/sacct -X -S {start} -E {end} --allusers --json --duplicates",
             datetimes=datetimes,
         ),
         _create_session(
@@ -239,7 +239,7 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
             (
                 "export TZ=UTC && /opt/software/slurm/bin/sacct "
                 "-A rrg-bonhomme-ad_gpu,rrg-bonhomme-ad_cpu,def-bonhomme_gpu,def-bonhomme_cpu "
-                "-X -S {start} -E {end} --allusers --json"
+                "-X -S {start} -E {end} --allusers --json --duplicates"
             ),
             datetimes=datetimes,
         ),
@@ -443,7 +443,7 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
     remote.expect_sessions(
         _create_session(
             "raisin",
-            "export TZ=UTC && /opt/slurm/bin/sacct -X -S {start} -E {end} --allusers --json",
+            "export TZ=UTC && /opt/slurm/bin/sacct -X -S {start} -E {end} --allusers --json --duplicates",
             datetimes=datetimes,
         ),
         _create_session(
@@ -451,7 +451,7 @@ def test_tracer_with_multiple_clusters_and_time_interval_and_prometheus(
             (
                 "export TZ=UTC && /opt/software/slurm/bin/sacct "
                 "-A rrg-bonhomme-ad_gpu,rrg-bonhomme-ad_cpu,def-bonhomme_gpu,def-bonhomme_cpu "
-                "-X -S {start} -E {end} --allusers --json"
+                "-X -S {start} -E {end} --allusers --json --duplicates"
             ),
             datetimes=datetimes,
         ),
