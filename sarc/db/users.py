@@ -319,7 +319,7 @@ class UserDB(SQLModel, table=True):
 
     _match_ids: dict[str, MatchingID] = Relationship(
         sa_relationship=relationship(
-            "MatchingID", collection_class=attribute_keyed_dict("plugin_name")
+            MatchingID, collection_class=attribute_keyed_dict("plugin_name")
         )
     )
     _match_ids_dict: AssociationProxy[dict[str, str]] = association_proxy(
