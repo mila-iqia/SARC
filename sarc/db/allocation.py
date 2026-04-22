@@ -9,7 +9,7 @@ class Allocation(SQLModel, table=True):
     # Database ID
     id: int | None = Field(default=None, primary_key=True)
 
-    cluster_name: str
+    cluster_id: int = Field(foreign_key="clusters.id")
     resource_name: str
     group_name: str
     timestamp: datetime

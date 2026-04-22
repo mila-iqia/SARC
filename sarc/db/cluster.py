@@ -36,8 +36,8 @@ class SlurmCluster(SQLModel, table=True):
     # Database ID
     id: int | None = Field(default=None, primary_key=True)
 
-    cluster_name: str
-    start_date: str | None = None
-    end_time_sacct: str | None = None
-    end_time_prometheus: str | None = None
+    cluster_name: str = Field(unique=True)
+    start_date: datetime_utc
+    end_time_sacct: datetime_utc | None = None
+    end_time_prometheus: datetime_utc | None = None
     billing_is_gpu: bool = False
