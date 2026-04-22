@@ -1,11 +1,13 @@
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlmodel import Field, SQLModel
+from sqlmodel import Field, Index, Relationship, SQLModel
 
 from sarc.core.models.validators import datetime_utc
 
 
 class GPUBillingDB(SQLModel, table=True):
     """Holds data for a GPU Billing."""
+
+    __table_args__ = (Index("idx_cluster_since_gpu_billing", "cluster_id", "since"),)
 
     id: int | None = Field(default=None, primary_key=True)
 
@@ -17,18 +19,19 @@ class GPUBillingDB(SQLModel, table=True):
 class NodeGPUMappingDB(SQLModel, table=True):
     """Holds data for a mapping <node name> -> <GPU type>."""
 
+    __table_args__ = (
+        Index("idx_cluster_since_node_gpu_mapping", "cluster_id", "since"),
+    )
+
     # # Database ID
-    id: int | None = None
+    id: int | None = Field(default=None, primary_key=True)
 
     cluster_id: int = Field(foreign_key="clusters.id")
     since: datetime_utc
     node_to_gpu: dict[str, list[str]] = Field(sa_type=JSONB)
 
-    def __lt__(self, other):
-        return self.since < other.since
 
-
-class SlurmCluster(SQLModel, table=True):
+class SlurmClusterDB(SQLModel, table=True):
     """Hold data for a Slurm cluster."""
 
     __tablename__ = "clusters"
@@ -41,3 +44,5 @@ class SlurmCluster(SQLModel, table=True):
     end_time_sacct: datetime_utc | None = None
     end_time_prometheus: datetime_utc | None = None
     billing_is_gpu: bool = False
+
+    gpu_billing: list[GPUBillingDB] = Relationship()
