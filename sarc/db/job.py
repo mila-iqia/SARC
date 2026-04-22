@@ -3,7 +3,7 @@ from datetime import datetime
 from pydantic import UUID4, PrivateAttr
 from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
 from sqlalchemy.orm import attribute_keyed_dict, relationship
-from sqlmodel import Field, SQLModel
+from sqlmodel import Field, SQLModel, UniqueConstraint
 from sqlmodel.main import Relationship
 
 from sarc.core.models.job import SlurmState
@@ -34,6 +34,7 @@ class JobStatisticDB(SQLModel, table=True):
 
 class SlurmJobDB(SQLModel, table=True):
     __tablename__ = "slurm_jobs"
+    __table_args__ = (UniqueConstraint("cluster_name", "job_id", "submit_time"),)
 
     id: int | None = Field(default=None, primary_key=True)
     # job identification
