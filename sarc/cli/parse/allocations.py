@@ -7,14 +7,13 @@ from typing import cast
 from pydantic import ByteSize
 from simple_parsing import field
 
-from sarc.allocations.allocations import (
-    Allocation,
+from sarc.allocations.allocations import Allocation, get_allocations_collection
+from sarc.cache import Cache
+from sarc.core.models.allocation import (
     AllocationCompute,
     AllocationRessources,
     AllocationStorage,
-    get_allocations_collection,
 )
-from sarc.cache import Cache
 from sarc.traces import trace_decorator
 
 logger = logging.getLogger(__name__)

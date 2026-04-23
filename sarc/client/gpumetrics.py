@@ -4,24 +4,20 @@ import logging
 from types import SimpleNamespace
 
 from iguane.fom import RAWDATA, fom_ugr
-from pydantic import BaseModel
 from pydantic_mongo import AbstractRepository, PydanticObjectId
 
 from sarc.config import config, scraping_mode_required
+from sarc.core.models.cluster import GPUBilling as GPUBillingBase
 from sarc.core.models.validators import datetime_utc
 
 logger = logging.getLogger(__name__)
 
 
-class GPUBilling(BaseModel):
+class GPUBilling(GPUBillingBase):
     """Holds data for a GPU Billing."""
 
     # # Database ID
     id: PydanticObjectId | None = None
-
-    cluster_name: str
-    since: datetime_utc
-    gpu_to_billing: dict[str, float]
 
 
 class GPUBillingRepository(AbstractRepository[GPUBilling]):

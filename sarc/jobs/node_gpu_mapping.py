@@ -5,27 +5,20 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel
 from pydantic_mongo import AbstractRepository, PydanticObjectId
 
 from sarc.config import config, scraping_mode_required
+from sarc.core.models.cluster import NodeGPUMapping as NodeGPUMappingBase
 from sarc.core.models.validators import datetime_utc
 
 logger = logging.getLogger(__name__)
 
 
-class NodeGPUMapping(BaseModel):
+class NodeGPUMapping(NodeGPUMappingBase):
     """Holds data for a mapping <node name> -> <GPU type>."""
 
-    # # Database ID
+    # Database ID
     id: PydanticObjectId | None = None
-
-    cluster_name: str
-    since: datetime_utc
-    node_to_gpu: dict[str, list[str]]
-
-    def __lt__(self, other):
-        return self.since < other.since
 
 
 class NodeGPUMappingRepository(AbstractRepository[NodeGPUMapping]):

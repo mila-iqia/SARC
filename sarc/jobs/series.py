@@ -8,8 +8,9 @@ import pandas
 from pandas import DataFrame, Series
 from prometheus_api_client.metric_range_df import MetricRangeDataFrame
 
-from sarc.client.job import JobStatistics, SlurmJob, Statistics
+from sarc.client.job import SlurmJob
 from sarc.config import UTC
+from sarc.core.models.job import JobStatistics, Statistics
 from sarc.traces import trace_decorator
 
 logger = logging.getLogger(__name__)

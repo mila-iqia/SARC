@@ -5,70 +5,26 @@ NB: this module currently uses naive dates (days), not full time-aware datetimes
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Annotated, Any, Optional, Union, cast
+from typing import Any
 
 import pandas as pd
-from pydantic import BaseModel, BeforeValidator, ByteSize, field_serializer
+from pydantic import field_serializer
 from pydantic_mongo import AbstractRepository, PydanticObjectId
 
 from sarc.config import config
+from sarc.core.models.allocation import Allocation as AllocationBase
 from sarc.traces import trace_decorator
 from sarc.utils import flatten
-
-
-def validate_date(value: Union[str, date, datetime]) -> date:
-    if isinstance(value, str):
-        if "T" in value:
-            return datetime.strptime(value, "%Y-%m-%dT%H:%M:%S").date()
-
-        return datetime.strptime(value, "%Y-%m-%d").date()
-
-    if isinstance(value, datetime):
-        return value.date()
-
-    return value
-
-
-class AllocationCompute(BaseModel):
-    gpu_year: Optional[int] = 0
-    cpu_year: Optional[int] = 0
-    rgu_year: Optional[int] = 0
-    vcpu_year: Optional[int] = 0
-    vgpu_year: Optional[int] = 0
-
-
-class AllocationStorage(BaseModel):
-    project_size: Optional[ByteSize] = cast(ByteSize, 0)
-    project_inodes: Optional[float] = 0
-    nearline: Optional[ByteSize] = cast(ByteSize, 0)
-    dCache: Optional[ByteSize] = cast(ByteSize, 0)
-    object: Optional[ByteSize] = cast(ByteSize, 0)
-    cloud_volume: Optional[ByteSize] = cast(ByteSize, 0)
-    cloud_shared: Optional[ByteSize] = cast(ByteSize, 0)
-
-
-class AllocationRessources(BaseModel):
-    compute: AllocationCompute
-    storage: AllocationStorage
 
 
 def _convert_date_to_iso(date_value: date) -> datetime:
     return datetime(date_value.year, date_value.month, date_value.day)
 
 
-class Allocation(BaseModel):
+class Allocation(AllocationBase):
     # Database ID
     id: PydanticObjectId | None = None
 
-    cluster_name: str
-    resource_name: str
-    group_name: str
-    timestamp: datetime
-    start: Annotated[date, BeforeValidator(validate_date)]
-    end: Annotated[date, BeforeValidator(validate_date)]
-    resources: AllocationRessources
-
-    # pylint: disable=unused-argument
     @field_serializer("start", "end")
     def save_as_datetime(self, value: date) -> datetime:
         return datetime(year=value.year, month=value.month, day=value.day)
