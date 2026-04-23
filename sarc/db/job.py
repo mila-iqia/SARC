@@ -1,7 +1,7 @@
 from datetime import datetime
 
-from pydantic import UUID4, PrivateAttr
-from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
+from pydantic import UUID4
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import attribute_keyed_dict, relationship
 from sqlmodel import Field, SQLModel, UniqueConstraint
 from sqlmodel.main import Relationship
@@ -9,12 +9,6 @@ from sqlmodel.main import Relationship
 from sarc.core.models.job import SlurmState
 
 from .users import UserDB
-
-
-class JobNodesDB(SQLModel, table=True):
-    id: int | None = Field(default=None, primary_key=True)
-    node_name: str
-    job_id: int = Field(foreign_key="slurm_jobs.id", index=True)
 
 
 class JobStatisticDB(SQLModel, table=True):
@@ -34,11 +28,11 @@ class JobStatisticDB(SQLModel, table=True):
 
 class SlurmJobDB(SQLModel, table=True):
     __tablename__ = "slurm_jobs"
-    __table_args__ = (UniqueConstraint("cluster_name", "job_id", "submit_time"),)
+    __table_args__ = (UniqueConstraint("cluster_id", "job_id", "submit_time"),)
 
     id: int | None = Field(default=None, primary_key=True)
     # job identification
-    cluster_name: str
+    cluster_id: int = Field(foreign_key="clusters.id")
     account: str
     job_id: int
     array_job_id: int | None = None
@@ -54,16 +48,7 @@ class SlurmJobDB(SQLModel, table=True):
 
     # allocation information
     partition: str
-    _nodesdb: list[JobNodesDB] = Relationship()
-    _node_list: AssociationProxy[list[str]] = PrivateAttr(
-        association_proxy(
-            "_nodesdb", "node_name", creator=lambda n: JobNodesDB(node_name=n)
-        )
-    )
-
-    @property
-    def nodes(self) -> list[str]:
-        return self._node_list
+    nodes: list[str] = Field(sa_type=JSONB)
 
     work_dir: str
 
