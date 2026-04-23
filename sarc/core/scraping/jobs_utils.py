@@ -134,7 +134,7 @@ def fetch_raw(cluster: ClusterConfig, start: datetime, end: datetime) -> bytes:
     end_str = end.strftime(fmt)
     accounts = ",".join(cluster.accounts) if cluster.accounts else None
     accounts_option = f"-A {accounts} " if accounts else ""
-    cmd = f"{cluster.sacct_bin} {accounts_option}-X -S {start_str} -E {end_str} --allusers --json"
+    cmd = f"{cluster.sacct_bin} {accounts_option}-X -S {start_str} -E {end_str} --allusers --json --duplicates"
     logger.debug(f"{cluster.name} $ {cmd}")
     if cluster.host == "localhost":
         results: subprocess.CompletedProcess[str] | Result = subprocess.run(

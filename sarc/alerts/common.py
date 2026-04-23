@@ -7,7 +7,7 @@ import logging
 import re
 import traceback
 from dataclasses import dataclass, field, replace
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from graphlib import TopologicalSorter
 from traceback import FrameSummary
@@ -90,7 +90,7 @@ class CheckResult:
     exception: CheckException | None = None
 
     # Date at which the check finished
-    issue_date: datetime = field(default_factory=lambda: time.now().astimezone())
+    issue_date: datetime = field(default_factory=lambda: time.now().astimezone(UTC))
 
     # Check object
     check: TaggedSubclass[HealthCheck] | None = None
@@ -168,7 +168,7 @@ class HealthCheck:
 
     def result(self, status: CheckStatus, **kwargs) -> CheckResult:
         """Generate a result with the given status."""
-        now = time.now()
+        now = time.now().astimezone(UTC)
         if status not in iter(CheckStatus):
             opts = ", ".join(item.value for item in CheckStatus)
             raise ValueError(f"Invalid status: {status}. Valid statuses are: {opts}")

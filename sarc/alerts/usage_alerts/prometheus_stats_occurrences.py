@@ -184,7 +184,7 @@ def check_prometheus_stats_occurrences(
     # Now we can check
     clusters_seen: set[str] = set()
     for row in f_stats.itertuples():
-        timestamp, cluster_name, node = row.Index  # type: ignore[misc, assignment]
+        timestamp, cluster_name, node = row.Index  # type: ignore[misc, assignment, str-unpack]
         clusters_seen.add(cluster_name)
         nb_jobs = cast(int, row.task_)
         if nb_jobs >= min_jobs_per_group.get(cluster_name, default_min_jobs):

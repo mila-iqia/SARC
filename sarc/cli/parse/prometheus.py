@@ -10,7 +10,8 @@ from sarc.jobs.prometheus_scraping import parse_prometheus
 class ParsePrometheus:
     since: str | None = field(
         default=None,
-        help="Start parsing the cache from the specified date, otherwise use the last parsed date from the database",
+        help="Start parsing the cache from the specified date, otherwise use the last parsed date from the database. "
+        "NB: Naive date will be interpreted as in local timezone.",
     )
     update_parsed_date: bool = field(
         default=True, help="Update the last parsed date in the database"

@@ -24,12 +24,12 @@ Found 5 job(s):
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_BACKFILL": true,
     "time_limit": 43200,
-    "submit_time": "2023-02-15T00:00:00-05:00",
-    "start_time": "2023-02-15T00:01:00-05:00",
-    "end_time": "2023-02-15T12:01:00-05:00",
+    "submit_time": "2023-02-15T05:00:00Z",
+    "start_time": "2023-02-15T05:01:00Z",
+    "end_time": "2023-02-15T17:01:00Z",
     "elapsed_time": 43200.0,
-    "latest_scraped_start": "2023-02-15T00:00:00-05:00",
-    "latest_scraped_end": "2023-02-16T00:00:00-05:00",
+    "latest_scraped_start": "2023-02-15T05:00:00Z",
+    "latest_scraped_end": "2023-02-16T05:00:00Z",
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -46,7 +46,8 @@ Found 5 job(s):
         "gres_gpu": 1,
         "gpu_type": null
     },
-    "stored_statistics": null
+    "stored_statistics": null,
+    "user_uuid": null
 }
 {
     "cluster_name": "raisin",
@@ -73,12 +74,12 @@ Found 5 job(s):
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_BACKFILL": true,
     "time_limit": 43200,
-    "submit_time": "2023-02-16T00:00:00-05:00",
-    "start_time": "2023-02-16T00:01:00-05:00",
-    "end_time": "2023-02-16T12:01:00-05:00",
+    "submit_time": "2023-02-16T05:00:00Z",
+    "start_time": "2023-02-16T05:01:00Z",
+    "end_time": "2023-02-16T17:01:00Z",
     "elapsed_time": 43200.0,
-    "latest_scraped_start": "2023-02-16T00:00:00-05:00",
-    "latest_scraped_end": "2023-02-17T00:00:00-05:00",
+    "latest_scraped_start": "2023-02-16T05:00:00Z",
+    "latest_scraped_end": "2023-02-17T05:00:00Z",
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -95,7 +96,8 @@ Found 5 job(s):
         "gres_gpu": 1,
         "gpu_type": null
     },
-    "stored_statistics": null
+    "stored_statistics": null,
+    "user_uuid": null
 }
 {
     "cluster_name": "raisin",
@@ -122,12 +124,12 @@ Found 5 job(s):
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_BACKFILL": true,
     "time_limit": 43200,
-    "submit_time": "2023-02-17T00:00:00-05:00",
-    "start_time": "2023-02-17T00:01:00-05:00",
-    "end_time": "2023-02-17T12:01:00-05:00",
+    "submit_time": "2023-02-17T05:00:00Z",
+    "start_time": "2023-02-17T05:01:00Z",
+    "end_time": "2023-02-17T17:01:00Z",
     "elapsed_time": 43200.0,
-    "latest_scraped_start": "2023-02-17T00:00:00-05:00",
-    "latest_scraped_end": "2023-02-18T00:00:00-05:00",
+    "latest_scraped_start": "2023-02-17T05:00:00Z",
+    "latest_scraped_end": "2023-02-18T05:00:00Z",
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -144,7 +146,8 @@ Found 5 job(s):
         "gres_gpu": 1,
         "gpu_type": null
     },
-    "stored_statistics": null
+    "stored_statistics": null,
+    "user_uuid": null
 }
 {
     "cluster_name": "raisin",
@@ -171,12 +174,12 @@ Found 5 job(s):
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_BACKFILL": true,
     "time_limit": 43200,
-    "submit_time": "2023-02-18T00:00:00-05:00",
-    "start_time": "2023-02-18T00:01:00-05:00",
-    "end_time": "2023-02-18T12:01:00-05:00",
+    "submit_time": "2023-02-18T05:00:00Z",
+    "start_time": "2023-02-18T05:01:00Z",
+    "end_time": "2023-02-18T17:01:00Z",
     "elapsed_time": 43200.0,
-    "latest_scraped_start": "2023-02-18T00:00:00-05:00",
-    "latest_scraped_end": "2023-02-19T00:00:00-05:00",
+    "latest_scraped_start": "2023-02-18T05:00:00Z",
+    "latest_scraped_end": "2023-02-19T05:00:00Z",
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -193,7 +196,8 @@ Found 5 job(s):
         "gres_gpu": 1,
         "gpu_type": null
     },
-    "stored_statistics": null
+    "stored_statistics": null,
+    "user_uuid": null
 }
 {
     "cluster_name": "raisin",
@@ -220,12 +224,12 @@ Found 5 job(s):
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_BACKFILL": true,
     "time_limit": 43200,
-    "submit_time": "2023-02-19T00:00:00-05:00",
-    "start_time": "2023-02-19T00:01:00-05:00",
-    "end_time": "2023-02-19T12:01:00-05:00",
+    "submit_time": "2023-02-19T05:00:00Z",
+    "start_time": "2023-02-19T05:01:00Z",
+    "end_time": "2023-02-19T17:01:00Z",
     "elapsed_time": 43200.0,
-    "latest_scraped_start": "2023-02-19T00:00:00-05:00",
-    "latest_scraped_end": "2023-02-20T00:00:00-05:00",
+    "latest_scraped_start": "2023-02-19T05:00:00Z",
+    "latest_scraped_end": "2023-02-20T05:00:00Z",
     "requested": {
         "cpu": 4,
         "mem": 49152,
@@ -242,5 +246,6 @@ Found 5 job(s):
         "gres_gpu": 1,
         "gpu_type": null
     },
-    "stored_statistics": null
+    "stored_statistics": null,
+    "user_uuid": null
 }

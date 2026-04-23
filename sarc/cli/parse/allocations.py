@@ -66,7 +66,10 @@ def convert_csv_row_to_allocation(
 
 @dataclass
 class ParseAllocations:
-    since: str = field(help="Start parsing the cache from the specified date")
+    since: str = field(
+        help="Start parsing the cache from the specified date. "
+        "NB: Naive date will be interpreted as UTC."
+    )
 
     def execute(self) -> int:
         collection = get_allocations_collection()

@@ -1852,6 +1852,18 @@
         "type": "null"
        }
       ]
+     },
+     "user_uuid": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "uuid4"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "User Uuid"
      }
     },
     "type": "object",

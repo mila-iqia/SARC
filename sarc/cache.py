@@ -130,7 +130,7 @@ class Cache:
 
         Example:
             >>> cache = Cache()
-            >>> cache.save("data", datetime.now(), b"binary data")
+            >>> cache.save("data", datetime.now(UTC), b"binary data")
         """
         with self.create_entry(at_time) as ce:
             ce.add_value(key, value)

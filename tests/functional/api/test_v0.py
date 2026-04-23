@@ -6,6 +6,7 @@ from pydantic_mongo import PydanticObjectId
 from sarc.alerts.common import HealthCheck
 from sarc.alerts.healthcheck_state import HealthCheckState, HealthCheckStateRepository
 from sarc.config import UTC, config
+from tests.common.dateutils import _iso_mtl
 from tests.unittests.alerts.definitions import BeanCheck
 
 
@@ -136,9 +137,24 @@ def test_get_jobs_invalid_job_state(client):
 
 
 @pytest.mark.usefixtures("read_only_db_with_users")
-def test_get_jobs_with_datetime_filters(client):
+def test_get_jobs_with_naive_datetime_filters(client):
     """Test jobs query with start and end datetime filters."""
     params = {"start": "2023-01-01T00:00:00", "end": "2023-12-31T23:59:59"}
+
+    response = client.get("/v0/job/query", params=params, expect_status=422)
+    assert (
+        "Time-aware datetime required. E.g: 2025-01-01T10:00Z (UTC), 2025-01-01T05:00-05:00 (UTC-5 hours)"
+        in response.text
+    )
+
+
+@pytest.mark.usefixtures("read_only_db_with_users")
+def test_get_jobs_with_datetime_filters(client):
+    """Test jobs query with start and end datetime filters."""
+    params = {
+        "start": _iso_mtl("2023-01-01T00:00:00"),
+        "end": _iso_mtl("2023-12-31T23:59:59"),
+    }
 
     response = client.get("/v0/job/query", params=params, expect_status=200)
 
@@ -153,7 +169,7 @@ def test_get_jobs_multiple_filters(client):
     params = {
         "cluster": "raisin",
         "job_state": "COMPLETED",
-        "start": "2023-01-01T00:00:00",
+        "start": _iso_mtl("2023-01-01T00:00:00"),
     }
 
     response = client.get("/v0/job/query", params=params, expect_status=200)
@@ -293,7 +309,10 @@ def test_count_jobs_invalid_job_state(client):
 @pytest.mark.usefixtures("read_only_db")
 def test_count_jobs_with_datetime_filters(client):
     """Test jobs count with start and end datetime filters."""
-    params = {"start": "2023-01-01T00:00:00", "end": "2023-02-15T23:59:59"}
+    params = {
+        "start": _iso_mtl("2023-01-01T00:00:00"),
+        "end": _iso_mtl("2023-02-15T23:59:59"),
+    }
 
     response = client.get("/v0/job/count", params=params, expect_status=200)
 
@@ -308,7 +327,7 @@ def test_count_jobs_multiple_filters(client):
     params = {
         "cluster": "raisin",
         "job_state": "COMPLETED",
-        "start": "2023-01-01T00:00:00",
+        "start": _iso_mtl("2023-01-01T00:00:00"),
     }
 
     response = client.get("/v0/job/count", params=params, expect_status=200)

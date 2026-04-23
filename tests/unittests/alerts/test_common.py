@@ -1,3 +1,5 @@
+from datetime import UTC
+
 import pytest
 from gifnoc.std import time
 
@@ -38,7 +40,7 @@ def test_HealthCheck(beancheck, frozen_gifnoc_time):
         name="beano",
         status=CheckStatus.OK,
         statuses={},
-        issue_date=time.now(),
+        issue_date=time.now().astimezone(UTC),
         check=hc,
         more=0,
     )
@@ -51,7 +53,7 @@ def test_HealthCheck_failure(beancheck, frozen_gifnoc_time):
         name="beano",
         status=CheckStatus.FAILURE,
         statuses={},
-        issue_date=time.now(),
+        issue_date=time.now().astimezone(UTC),
         check=hc,
         more=7,
     )
@@ -64,7 +66,7 @@ def test_HealthCheck_error(beancheck, frozen_gifnoc_time):
     assert result.exception.type == "ValueError"
     assert result.exception.message == "What a beastly number"
     assert len(result.exception.trace) > 0
-    assert result.issue_date == time.now()
+    assert result.issue_date == time.now().astimezone(UTC)
     assert result.check == hc
 
 
@@ -79,7 +81,7 @@ def test_HealthCheck_multiple_statuses(beancheck, frozen_gifnoc_time):
             "negative": CheckStatus.OK,
             "fillbelly": CheckStatus.FAILURE,
         },
-        issue_date=time.now(),
+        issue_date=time.now().astimezone(UTC),
         check=hc,
         more=0,
     )

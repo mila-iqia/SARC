@@ -1,3 +1,7 @@
+"""
+NB: this module currently uses naive dates (days), not full time-aware datetimes.
+"""
+
 from __future__ import annotations
 
 from datetime import date, datetime

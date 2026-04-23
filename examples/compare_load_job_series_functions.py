@@ -15,7 +15,7 @@ from tqdm import tqdm
 
 import sarc.client.series
 import sarc.rest.client
-from sarc.config import TZLOCAL, UTC
+from sarc.config import UTC
 
 mongodb_load_job_series = sarc.client.series.load_job_series
 rest_load_job_series = sarc.rest.client.load_job_series
@@ -77,7 +77,7 @@ def _df_sorted(df: pd.DataFrame) -> pd.DataFrame:
 
 # Freeze current time
 # Use a fixed date to ease debugging
-NOW = datetime(3000, 1, 1, tzinfo=TZLOCAL)
+NOW = datetime(3000, 1, 1).astimezone()
 
 
 class FrozenDatetime(datetime):

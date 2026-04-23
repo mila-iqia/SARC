@@ -48,6 +48,7 @@ sarc:
       prometheus_url: http://prometheus01.server.mila.quebec:9090/
       start_date: "2022-04-01"
       billing_is_gpu: true
+      user_domain: mila
       gpus_per_nodes:
         __DEFAULTS__:
           rtx8000: RTX8000
@@ -98,6 +99,7 @@ sarc:
       prometheus_url: https://mila-thanos.calculquebec.ca
       #prometheus_headers: ../SARC_secrets/secrets/drac_prometheus/headers.json
       start_date: "2022-04-01"
+      user_domain: drac
       gpus_per_nodes:
         __DEFAULTS__:
           a100: A100-SXM4-40GB
@@ -122,6 +124,7 @@ sarc:
       sacct_bin: "/opt/slurm/bin/sacct"
       prometheus_url:
       start_date: "2025-02-01"
+      user_domain: drac
       gpus_per_nodes:
         __DEFAULTS__:
           h100: H100-SXM5-80GB
@@ -140,6 +143,7 @@ sarc:
       ignore_tz_utc: true
       prometheus_url:
       start_date: "2025-08-11"
+      user_domain: drac
     nibi:
       host: robot.nibi.alliancecan.ca
       private_key: pkey.yaml
@@ -153,6 +157,7 @@ sarc:
       ignore_tz_utc: true
       prometheus_url:
       start_date: "2025-07-31"
+      user_domain: drac
       gpus_per_nodes:
         __DEFAULTS__:
           h100: H100-SXM5-80GB
@@ -173,6 +178,7 @@ sarc:
       prometheus_url: https://mila-thanos.calculquebec.ca
       #prometheus_headers: ../SARC_secrets/secrets/drac_prometheus/headers.json
       start_date: "2025-06-19"
+      user_domain: drac
       gpus_per_nodes:
         __DEFAULTS__:
           h100: H100-SXM5-80GB
@@ -191,3 +197,4 @@ sarc:
       sacct_bin: "/opt/slurm/bin/sacct"
       prometheus_url:
       start_date: "2025-06-19"
+      user_domain: drac

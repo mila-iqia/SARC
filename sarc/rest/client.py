@@ -26,7 +26,7 @@ Example:
         SARC_MODE=client SARC_CONFIG=sarc-client.yaml uv run myscript.py
 """
 
-from datetime import datetime, time
+from datetime import datetime
 from typing import Any, Callable, Iterable
 
 import httpx
@@ -328,14 +328,14 @@ def _parse_common_args(
         job_state = SlurmState(job_state)
 
     if isinstance(start, str):
-        start = datetime.combine(
-            datetime.strptime(start, "%Y-%m-%d"), time.min
-        ).replace(tzinfo=UTC)
-
+        start = datetime.strptime(start, "%Y-%m-%d").astimezone()
     if isinstance(end, str):
-        end = datetime.combine(datetime.strptime(end, "%Y-%m-%d"), time.min).replace(
-            tzinfo=UTC
-        )
+        end = datetime.strptime(end, "%Y-%m-%d").astimezone()
+
+    if start is not None:
+        start = start.astimezone(UTC)
+    if end is not None:
+        end = end.astimezone(UTC)
 
     return job_id, job_state, start, end
 

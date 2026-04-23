@@ -11,6 +11,14 @@ MTL = zoneinfo.ZoneInfo("America/Montreal")
 PST = zoneinfo.ZoneInfo("America/Vancouver")
 
 
+def _iso_mtl_dt(datestring: str) -> datetime:
+    return datetime.fromisoformat(datestring).replace(tzinfo=MTL)
+
+
+def _iso_mtl(datestring: str) -> str:
+    return _iso_mtl_dt(datestring).isoformat()
+
+
 def _dtfmt(
     year: int, month: int, day: int, hour: int = 0, minute: int = 0, tzinfo=MTL
 ) -> str:

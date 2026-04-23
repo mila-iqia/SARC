@@ -42,6 +42,7 @@ def test_harmonize_gpu(node, gpu_type, expected, gpus_per_nodes):
         gpus_per_nodes=gpus_per_nodes,
         host="test",
         private_key=PrivateKeyInfo(file=Path("tests/id_test"), password="12345"),
+        user_domain="mydomain",
     )
     assert cluster.harmonize_gpu(node, gpu_type) == expected
 

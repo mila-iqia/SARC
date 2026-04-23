@@ -2,6 +2,7 @@ sarc:
   cache: null
   clusters:
     fromage:
+      user_domain: drac
       accounts:
         - rrg-bonhomme-ad_gpu
         - rrg-bonhomme-ad_cpu
@@ -15,6 +16,7 @@ sarc:
       sacct_bin: /opt/software/slurm/bin/sacct
       timezone: Europe/Paris
     gerudo:
+      user_domain: drac
       accounts:
         - rrg-bonhomme-ad_gpu
         - rrg-bonhomme-ad_cpu
@@ -28,6 +30,7 @@ sarc:
       sacct_bin: /opt/software/slurm/bin/sacct
       timezone: America/Vancouver
     hyrule:
+      user_domain: drac
       accounts:
         - rrg-bonhomme-ad_gpu
         - rrg-bonhomme-ad_cpu
@@ -41,12 +44,14 @@ sarc:
       sacct_bin: /opt/software/slurm/bin/sacct
       timezone: America/Vancouver
     local:
+      user_domain: mila
       accounts: null
       host: localhost
       prometheus_url: null
       sacct_bin: /opt/slurm/bin/sacct
       timezone: America/Montreal
     mila:
+      user_domain: mila
       accounts:
         - rrg-bonhomme-ad_gpu
         - rrg-bonhomme-ad_cpu
@@ -62,6 +67,7 @@ sarc:
       sacct_bin: /opt/software/slurm/bin/sacct
       timezone: America/Vancouver
     patate:
+      user_domain: drac
       accounts:
         - rrg-bonhomme-ad_gpu
         - rrg-bonhomme-ad_cpu
@@ -76,6 +82,7 @@ sarc:
       slurm_conf_host_path: /the/path/to/slurm.conf
       timezone: America/Vancouver
     raisin:
+      user_domain: drac
       accounts: null
       host: raisin
       private_key: test_key.yaml
@@ -86,6 +93,7 @@ sarc:
         __DEFAULTS__:
           gpu2: THE GPU II
     raisin_no_prometheus:
+      user_domain: drac
       accounts: null
       gpus_per_nodes:
         cn-c018:
