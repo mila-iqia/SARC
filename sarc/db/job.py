@@ -1,6 +1,5 @@
 from datetime import datetime
 
-from pydantic import UUID4
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import attribute_keyed_dict, relationship
 from sqlmodel import Field, SQLModel, UniqueConstraint
@@ -96,5 +95,5 @@ class SlurmJobDB(SQLModel, table=True):
     )
 
     # User ID
-    user_uuid: UUID4 = Field(foreign_key="users.uuid")
+    user_id: int = Field(foreign_key="users.id")
     sarc_user: UserDB = Relationship()

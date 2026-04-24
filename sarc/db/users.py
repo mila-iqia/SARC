@@ -1,9 +1,7 @@
 import logging
 from datetime import UTC, datetime
 from typing import Any, Self, Type
-from uuid import uuid4
 
-from pydantic import UUID4
 from sqlalchemy.dialects.postgresql import TSTZRANGE, ExcludeConstraint, Range
 from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
 from sqlalchemy.orm import Session as SASession
@@ -53,29 +51,25 @@ class ValidDB(SQLModel):
         ExcludeConstraint(("user_id", "="), ("valid", "&&"), using="gist"),
     )
     id: int | None = Field(default=None, primary_key=True)
-    user_id: UUID4 = Field(foreign_key="users.uuid", ondelete="CASCADE")
+    user_id: int = Field(foreign_key="users.id", ondelete="CASCADE")
     valid: Range[datetime_utc] = Field(sa_type=TSTZRANGE)
 
 
 class ValidField[V]:
     def __init__(
-        self,
-        session: SASession | None,
-        model_ref: Type[ValidDB],
-        col_ref: str,
-        uuid: UUID4,
+        self, session: SASession | None, model_ref: Type[ValidDB], col_ref: str, id: int
     ):
         self.session = session
         self.model_ref = model_ref
         self.col_ref = col_ref
-        self.uuid = uuid
+        self.id = id
 
     def _select_base(self):
-        return select(self.model_ref).where(self.model_ref.user_id == self.uuid)
+        return select(self.model_ref).where(self.model_ref.user_id == self.id)
 
     def _create_record(self, valid: Range[datetime], value: V):
         data_arg = {self.col_ref: value}
-        return self.model_ref(user_id=self.uuid, valid=valid, **data_arg)
+        return self.model_ref(user_id=self.id, valid=valid, **data_arg)
 
     def insert(
         self,
@@ -244,8 +238,8 @@ class CredentialsDB(ValidDB, table=True):
 
 
 class CredentialsValid(ValidField[str]):
-    def __init__(self, session: SASession | None, uuid: UUID4, domain: str):
-        super().__init__(session, CredentialsDB, "username", uuid)
+    def __init__(self, session: SASession | None, id: int, domain: str):
+        super().__init__(session, CredentialsDB, "username", id)
         self.domain = domain
 
     def _select_base(self):
@@ -253,18 +247,18 @@ class CredentialsValid(ValidField[str]):
 
     def _create_record(self, valid: Range[datetime], value: str):
         return CredentialsDB(
-            user_id=self.uuid, valid=valid, domain=self.domain, username=value
+            user_id=self.id, valid=valid, domain=self.domain, username=value
         )
 
 
 class CredentialsDict:
-    def __init__(self, session: SASession | None, uuid: UUID4):
+    def __init__(self, session: SASession | None, id: int):
         self.session = session
-        self.user_id = uuid
+        self.user_id = id
 
     def __getitem__(self, key: str):
         assert isinstance(key, str)
-        return CredentialsValid(session=self.session, uuid=self.user_id, domain=key)
+        return CredentialsValid(session=self.session, id=self.user_id, domain=key)
 
 
 class MemberTypeDB(ValidDB, table=True):
@@ -272,7 +266,7 @@ class MemberTypeDB(ValidDB, table=True):
 
 
 class SupervisorDB(ValidDB, table=True):
-    supervisor: UUID4 = Field(foreign_key="users.uuid", ondelete="RESTRICT")
+    supervisor: int = Field(foreign_key="users.id", ondelete="RESTRICT")
 
 
 class CoSupervisorsHelper(SQLModel, table=True):
@@ -280,7 +274,7 @@ class CoSupervisorsHelper(SQLModel, table=True):
     list_id: int = Field(
         foreign_key="user_co_supervisors.id", index=True, ondelete="CASCADE"
     )
-    co_supervisor: UUID4 = Field(foreign_key="users.uuid", ondelete="RESTRICT")
+    co_supervisor: int = Field(foreign_key="users.id", ondelete="RESTRICT")
 
 
 class CoSupervisorDB(ValidDB, table=True):
@@ -303,8 +297,9 @@ class MatchingID(SQLModel, table=True):
         Index("user_match_id_idx", "user_id", "plugin_name", unique=True),
     )
     id: int | None = Field(default=None, primary_key=True)
-    user_id: UUID4 | None = Field(
-        default=None, foreign_key="users.uuid", ondelete="CASCADE", nullable=False
+    # This can't really be None, but it needs to be for a small period of time due to SQLAlchemy magic
+    user_id: int | None = Field(
+        default=None, foreign_key="users.id", ondelete="CASCADE", nullable=False
     )
     plugin_name: str
     match_id: str
@@ -313,7 +308,7 @@ class MatchingID(SQLModel, table=True):
 class UserDB(SQLModel, table=True):
     __tablename__ = "users"
 
-    uuid: UUID4 = Field(default_factory=uuid4, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     display_name: str
     email: str
 
@@ -342,36 +337,36 @@ class UserDB(SQLModel, table=True):
     # this is per domain (i.e. "drac"), not per cluster
     @property
     def associated_accounts(self) -> CredentialsDict:
-        return CredentialsDict(Session.object_session(self), self.uuid)
+        return CredentialsDict(Session.object_session(self), self.id)
 
     @property
     def member_type(self) -> ValidField[MemberType]:
         return ValidField(
-            Session.object_session(self), MemberTypeDB, "member_type", self.uuid
+            Session.object_session(self), MemberTypeDB, "member_type", self.id
         )
 
     @property
-    def supervisor(self) -> ValidField[UUID4]:
+    def supervisor(self) -> ValidField[int]:
         return ValidField(
-            Session.object_session(self), SupervisorDB, "supervisor", self.uuid
+            Session.object_session(self), SupervisorDB, "supervisor", self.id
         )
 
     @property
-    def co_supervisor(self) -> ValidField[list[UUID4]]:
+    def co_supervisor(self) -> ValidField[list[int]]:
         return ValidField(
-            Session.object_session(self), CoSupervisorDB, "co_supervisors", self.uuid
+            Session.object_session(self), CoSupervisorDB, "co_supervisors", self.id
         )
 
     @property
     def github_username(self) -> ValidField[str]:
         return ValidField(
-            Session.object_session(self), GithubUsernameDB, "username", self.uuid
+            Session.object_session(self), GithubUsernameDB, "username", self.id
         )
 
     @property
     def google_scholar_profile(self) -> ValidField[str]:
         return ValidField(
-            Session.object_session(self), GoogleScholarDB, "profile_id", self.uuid
+            Session.object_session(self), GoogleScholarDB, "profile_id", self.id
         )
 
 
