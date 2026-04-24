@@ -217,7 +217,8 @@ class MongoConfig:
 
 @dataclass
 class DbConfig:
-    connection_string: str
+    host: str
+    name: str
     auto_upgrade: bool = True
 
     @cached_property
@@ -225,7 +226,7 @@ class DbConfig:
         from sqlmodel import create_engine
 
         # TODO enable ssl for connection
-        engine = create_engine(self.connection_string)
+        engine = create_engine(f"postgresql+psycopg://{self.host}/{self.name}")
 
         if self.auto_upgrade:
             from sarc.db import db_upgrade
