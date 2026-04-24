@@ -51,7 +51,7 @@ class SlurmJobDB(SQLModel, table=True):
     nodes: list[str] = Field(sa_type=JSONB)
 
     work_dir: str
-    submit_line: str  # new
+    submit_line: str | None  # new
 
     # Miscellaneous
     constraints: str | None = None
