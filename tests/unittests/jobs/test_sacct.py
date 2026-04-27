@@ -33,7 +33,7 @@ from tests.common.dateutils import MTL, _dtfmt
 def test_fetch_raw(test_config, remote):
     remote.expect(
         host="patate",
-        cmd=f"export TZ=UTC && sacct -X -S {_dtfmt(2023, 2, 28)} -E {_dtfmt(2023, 3, 1)} --allusers --json",
+        cmd=f"export TZ=UTC && sacct -X -S {_dtfmt(2023, 2, 28)} -E {_dtfmt(2023, 3, 1)} --allusers --json --duplicates",
         out=b"{}",
     )
     assert fetch_raw(
@@ -63,11 +63,11 @@ def test_fetch_raw2(test_config, remote):
     remote.expect(
         commands=[
             Command(
-                f"export TZ=UTC && sacct -X -S {_dtfmt(2023, 2, 28)} -E {_dtfmt(2023, 3, 1)} --allusers --json",
+                f"export TZ=UTC && sacct -X -S {_dtfmt(2023, 2, 28)} -E {_dtfmt(2023, 3, 1)} --allusers --json --duplicates",
                 out=b"{}",
             ),
             Command(
-                f"export TZ=UTC && sacct -X -S {_dtfmt(2023, 2, 28)} -E {_dtfmt(2023, 3, 1)} --allusers --json",
+                f"export TZ=UTC && sacct -X -S {_dtfmt(2023, 2, 28)} -E {_dtfmt(2023, 3, 1)} --allusers --json --duplicates",
                 out=b'{ "value": 2 }',
             ),
         ]
@@ -113,7 +113,7 @@ def test_fetch_jobs_get_cache(test_config, enabled_cache, remote):
     remote.expect(
         commands=[
             Command(
-                f"export TZ=UTC && sacct -X -S {yesterday.strftime(fmt)} -E {today.strftime(fmt)} --allusers --json",
+                f"export TZ=UTC && sacct -X -S {yesterday.strftime(fmt)} -E {today.strftime(fmt)} --allusers --json --duplicates",
                 out=b'{"value": 2}',
             )
         ]
