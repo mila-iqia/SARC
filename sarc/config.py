@@ -25,6 +25,7 @@ if TYPE_CHECKING:
     from fabric import Connection
     from prometheus_api_client.prometheus_connect import PrometheusConnect
     from pymongo.database import Database
+    from sqlalchemy import Engine
 
 
 UTC = zoneinfo.ZoneInfo("UTC")
@@ -215,6 +216,27 @@ class MongoConfig:
 
 
 @dataclass
+class DbConfig:
+    host: str
+    name: str
+    auto_upgrade: bool = True
+
+    @cached_property
+    def engine(self) -> Engine:
+        from sqlmodel import create_engine
+
+        # TODO enable ssl for connection
+        engine = create_engine(f"postgresql+psycopg://{self.host}/{self.name}")
+
+        if self.auto_upgrade:
+            from sarc.db import db_upgrade
+
+            db_upgrade(engine)
+
+        return engine
+
+
+@dataclass
 class LokiConfig:
     uri: str
 
@@ -266,12 +288,16 @@ class ApiConfig:
 
 @dataclass
 class ClientConfig:
-    mongo: MongoConfig
+    mongo: MongoConfig | None
+    db: DbConfig | None
     api: ApiConfig = field(default_factory=ApiConfig)
     cache: Path | None = None
     loki: LokiConfig | None = None
     tempo: TempoConfig | None = None
     health_monitor: HealthMonitorConfig | None = None
+
+    def __post_init__(self):
+        assert self.mongo is not None or self.db is not None
 
     @property
     def lock_path(self) -> Path:
