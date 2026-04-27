@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import functools
 import os
 import zoneinfo
@@ -11,11 +9,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Literal, cast, overload
 
 import gifnoc
-from bson import CodecOptions, UuidRepresentation
 from easy_oauth import OAuthManager
 from hostlist import expand_hostlist
 from paramiko import PKey
 from serieux.features.encrypt import Secret
+from sqlmodel import Session
 
 from .alerts.common import HealthMonitorConfig
 
@@ -24,7 +22,6 @@ type JSON = list[JSON] | dict[str, JSON] | int | str | float | bool | None
 if TYPE_CHECKING:
     from fabric import Connection
     from prometheus_api_client.prometheus_connect import PrometheusConnect
-    from pymongo.database import Database
     from sqlalchemy import Engine
 
 
@@ -190,32 +187,6 @@ class ClusterConfig:
 
 
 @dataclass
-class MongoConfig:
-    connection_string: str
-    database_name: str
-    auto_upgrade: bool = True
-
-    @cached_property
-    def database_instance(self) -> Database:
-        from pymongo import MongoClient
-
-        client: MongoClient = MongoClient(self.connection_string)
-        db = client.get_database(
-            self.database_name,
-            codec_options=CodecOptions(
-                uuid_representation=UuidRepresentation.STANDARD, tz_aware=True
-            ),
-        )
-
-        if self.auto_upgrade:
-            from sarc.core.db_init import db_upgrade
-
-            db_upgrade(db)
-
-        return db
-
-
-@dataclass
 class DbConfig:
     host: str
     name: str
@@ -234,6 +205,9 @@ class DbConfig:
             db_upgrade(engine)
 
         return engine
+
+    def session(self) -> Session:
+        return Session(self.engine)
 
 
 @dataclass
@@ -288,8 +262,7 @@ class ApiConfig:
 
 @dataclass
 class ClientConfig:
-    mongo: MongoConfig | None
-    db: DbConfig | None
+    db: DbConfig
     api: ApiConfig = field(default_factory=ApiConfig)
     cache: Path | None = None
     loki: LokiConfig | None = None

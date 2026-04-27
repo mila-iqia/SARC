@@ -1,3 +1,6 @@
+import bisect
+from datetime import datetime
+
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, Index, Relationship, SQLModel
 
@@ -45,4 +48,24 @@ class SlurmClusterDB(SQLModel, table=True):
     end_time_prometheus: datetime_utc | None = None
     billing_is_gpu: bool = False
 
-    gpu_billing: list[GPUBillingDB] = Relationship()
+    gpu_billing: list[GPUBillingDB] = Relationship(
+        sa_relationship_kwargs={"order_by": GPUBillingDB.since}
+    )
+    node_gpu_mapping: list[NodeGPUMappingDB] = Relationship(
+        sa_relationship_kwargs={"order_by": NodeGPUMappingDB.since}
+    )
+
+    def get_node_to_gpu(
+        self, required_date: datetime | None = None
+    ) -> NodeGPUMappingDB | None:
+        if required_date is None:
+            return self.node_gpu_mapping[-1]
+
+        index_mapping = max(
+            0,
+            bisect.bisect_right(
+                [mapping.since for mapping in self.node_gpu_mapping], required_date
+            )
+            - 1,
+        )
+        return self.node_gpu_mapping[index_mapping]

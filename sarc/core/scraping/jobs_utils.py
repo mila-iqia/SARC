@@ -12,7 +12,6 @@ from sarc.client.job import SlurmJob
 from sarc.config import UTC, ClusterConfig, config
 from sarc.core.models.validators import UTCOFFSET
 from sarc.errors import ClusterNotFound
-from sarc.jobs.node_gpu_mapping import get_node_to_gpu
 from sarc.traces import trace_decorator
 from sarc.utils import ensure_utc
 
@@ -416,6 +415,7 @@ def update_allocated_gpu_type_from_nodes(
 
     # Try to get GPU type from entry nodes.
     assert cluster.name is not None
+    # TODO: use db_cluster.get_node_to_gpu()
     node_gpu_mapping = get_node_to_gpu(cluster.name, entry.start_time)
     if node_gpu_mapping:
         node_to_gpu = node_gpu_mapping.node_to_gpu

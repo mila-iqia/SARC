@@ -30,7 +30,7 @@ class ParseUsers:
         if self.since is not None:
             _since = datetime.fromisoformat(self.since).astimezone(UTC)
 
-        with Session(config("scraping").db.engine) as sess:
+        with config("scraping").db.session() as sess:
             if _since is None:
                 _since = get_parsed_date(sess, "users")
                 sess.commit()
@@ -38,11 +38,13 @@ class ParseUsers:
                 with sess.begin():
                     for um in parse_ce(ce):
                         update_user(sess, um)
+                        sess.flush()
                     if self.update_parsed_date:
                         logger.info(
                             f"Set parsed_dates for users to {ce.get_entry_datetime()}."
                         )
                         set_parsed_date(sess, "users", ce.get_entry_datetime())
+                        sess.flush()
                     deduplicate_users(sess)
                     sess.commit()
 

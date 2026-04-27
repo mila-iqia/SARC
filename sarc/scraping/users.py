@@ -279,7 +279,7 @@ def update_user(sess: Session, user: UserMatch) -> None:
             insert_new(sess, user)
             sess.commit()
     elif len(results) >= 1:
-        db_user = sess.exec(select(UserDB).where(UserDB.id == results[0].user_id)).one()
+        db_user = sess.get(UserDB, results[0].user_id)
         if user.display_name is not None:
             db_user.display_name = user.display_name
         if user.email is not None:
