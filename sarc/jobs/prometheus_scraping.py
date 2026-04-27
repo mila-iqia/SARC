@@ -8,8 +8,8 @@ from tqdm import tqdm
 from sarc.cache import Cache
 from sarc.client.job import SlurmJob, _jobs_collection
 from sarc.config import ClusterConfig, config
-from sarc.core.models.runstate import get_parsed_date, set_parsed_date
 from sarc.core.scraping.jobs_utils import _time_auto_first_date, parse_auto_intervals
+from sarc.db.runstate import get_parsed_date, set_parsed_date
 from sarc.jobs.series import (
     JOB_STATISTICS_METRIC_NAMES,
     compute_job_statistics,

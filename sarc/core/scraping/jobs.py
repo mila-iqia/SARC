@@ -5,7 +5,6 @@ from datetime import datetime
 from sarc.cache import Cache
 from sarc.client.job import SlurmJob, _jobs_collection
 from sarc.config import UTC, ClusterConfig, config
-from sarc.core.models.runstate import get_parsed_date, set_parsed_date
 from sarc.core.models.users import UserData
 from sarc.core.models.validators import DateMatchError
 from sarc.core.scraping.jobs_utils import (
@@ -17,6 +16,7 @@ from sarc.core.scraping.jobs_utils import (
     set_auto_end_time,
     update_allocated_gpu_type_from_nodes,
 )
+from sarc.db.runstate import get_parsed_date, set_parsed_date
 from sarc.traces import using_trace
 from sarc.users.db import get_users
 

@@ -1,10 +1,16 @@
+import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from simple_parsing import field
+from sqlmodel import Session
 
-from sarc.core.scraping.users import parse_users
-from sarc.users.db import get_user_collection
+from sarc.config import config
+from sarc.db.runstate import get_parsed_date, set_parsed_date
+from sarc.db.users import deduplicate_users
+from sarc.scraping.users import parse_ce, parse_users, update_user
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -24,8 +30,20 @@ class ParseUsers:
         if self.since is not None:
             _since = datetime.fromisoformat(self.since).astimezone(UTC)
 
-        coll = get_user_collection()
-        for um in parse_users(from_=_since, update_parsed_date=self.update_parsed_date):
-            coll.update_user(um)
+        with Session(config("scraping").db.engine) as sess:
+            if _since is None:
+                _since = get_parsed_date(sess, "users")
+                sess.commit()
+            for ce in parse_users(from_=_since):
+                with sess.begin():
+                    for um in parse_ce(ce):
+                        update_user(sess, um)
+                    if self.update_parsed_date:
+                        logger.info(
+                            f"Set parsed_dates for users to {ce.get_entry_datetime()}."
+                        )
+                        set_parsed_date(sess, "users", ce.get_entry_datetime())
+                    deduplicate_users(sess)
+                    sess.commit()
 
         return 0

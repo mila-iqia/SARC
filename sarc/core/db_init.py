@@ -4,8 +4,8 @@ from pymongo.database import Database
 from sarc.allocations.allocations import AllocationsRepository
 from sarc.client.job import SlurmJobRepository
 from sarc.config import config
-from sarc.core.models.runstate import get_parsed_date, set_parsed_date
 from sarc.core.models.validators import START_TIME
+from sarc.db.runstate import get_parsed_date, set_parsed_date
 from sarc.storage.diskusage import ClusterDiskUsageRepository
 
 CURRENT_SCHEMA_VERSION = 1

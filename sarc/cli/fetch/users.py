@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 from sarc.config import config
-from sarc.core.scraping.users import fetch_users
+from sarc.scraping.users import fetch_users
 
 
 @dataclass

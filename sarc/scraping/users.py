@@ -3,17 +3,19 @@ import os
 from collections.abc import Iterable
 from datetime import UTC, datetime
 from importlib.metadata import entry_points
-from typing import Any, Protocol, Type
+from typing import Any, Callable, Protocol, Type
 
 from pydantic import BaseModel, Field, field_serializer
 from serieux import IncludeFile, Serieux, WorkingDirectory
 from serieux.features.encrypt import EncryptionKey
+from sqlmodel import Session, select
 
-from sarc.cache import Cache
-from sarc.config import config, config_path
-from sarc.core.models.runstate import get_parsed_date, set_parsed_date
+from sarc.cache import Cache, CacheEntry
+from sarc.config import config_path
 from sarc.core.models.users import Credentials, MemberType
 from sarc.core.models.validators import ValidField
+from sarc.db.users import MatchingID, UserDB
+from sarc.db.users import ValidField as ValidFieldDB
 
 deserialize = (Serieux + IncludeFile)().deserialize  # type: ignore[operator]
 
@@ -178,9 +180,7 @@ def fetch_users(scrapers: list[tuple[str, Any]]) -> None:
                 )
 
 
-def parse_users(
-    from_: datetime | None, update_parsed_date: bool
-) -> Iterable[UserMatch]:
+def parse_users(from_: datetime) -> Iterable[CacheEntry]:
     """Parse user data from the cache.
 
     This returns one UserMatch structure per scraped user, across all plugins.
@@ -190,75 +190,160 @@ def parse_users(
     from_: start parsing cached date from that date. If None, uses runstate value from database
     update_parsed_date : to update runstate last parsed date value
     """
-    db = config().mongo.database_instance
-
-    if from_ is None:
-        from_ = get_parsed_date(db, "users")
-
     cache = Cache(subdirectory="users")
 
-    for ce in cache.read_from(from_time=from_):
-        # UserMatches, referenced by matching id
-        user_refs: dict[MatchID, UserMatch] = {}
-        # Used for getting results precedence.
-        scraper_names = [it[0] for it in ce.items()]
-        for item in ce.items():
-            try:
-                scraper = get_user_scraper(item[0])
-            except KeyError as e:
-                raise ValueError("Invalid user scraper") from e
-            for userm in scraper.parse_user_data(item[1], ce.entry_datetime):
-                userm.matching_id.name = item[0]
-                # First, get all the userm that match with this one.
-                prev_userms: list[UserMatch] = [userm]
-                prev = user_refs.get(userm.matching_id, None)
+    return cache.read_from(from_time=from_)
+
+
+def parse_ce(ce: CacheEntry) -> Iterable[UserMatch]:
+    # UserMatches, referenced by matching id
+    user_refs: dict[MatchID, UserMatch] = {}
+    # Used for getting results precedence.
+    scraper_names = [it[0] for it in ce.items()]
+    for item in ce.items():
+        try:
+            scraper = get_user_scraper(item[0])
+        except KeyError as e:
+            raise ValueError("Invalid user scraper") from e
+        for userm in scraper.parse_user_data(item[1], ce.entry_datetime):
+            userm.matching_id.name = item[0]
+            # First, get all the userm that match with this one.
+            prev_userms: list[UserMatch] = [userm]
+            prev = user_refs.get(userm.matching_id, None)
+            if prev is not None:
+                prev_userms.append(prev)
+            for mid in userm.known_matches:
+                prev = user_refs.get(mid, None)
                 if prev is not None:
                     prev_userms.append(prev)
-                for mid in userm.known_matches:
-                    prev = user_refs.get(mid, None)
-                    if prev is not None:
-                        prev_userms.append(prev)
-                # Second, filter out duplicates and sort the rest according to plugin rank
-                matching_userms = sorted(
-                    set(prev_userms),
-                    key=lambda um: scraper_names.index(um.matching_id.name),
+            # Second, filter out duplicates and sort the rest according to plugin rank
+            matching_userms = sorted(
+                set(prev_userms),
+                key=lambda um: scraper_names.index(um.matching_id.name),
+            )
+            # Third, merge everything into the oldest entry
+            oldest_userm = matching_userms.pop(0)
+            for newer_userm in matching_userms:
+                update_user_match(value=oldest_userm, update=newer_userm)
+            # Finally, update all references to point to the new merged UserMatch
+            user_refs[oldest_userm.matching_id] = oldest_userm
+            for mid in oldest_userm.known_matches:
+                user_refs[mid] = oldest_userm
+
+    def _get_refs(um: UserMatch) -> set[MatchID]:
+        res = set[MatchID]()
+        for tag in um.supervisor.values:
+            res.add(tag.value)
+        for tags in um.co_supervisors.values:
+            res.update(tags.value)
+        return res
+
+    # Filter for "primary" UserMatches (those whose reference name match the
+    # original plugin name).
+    refs = {k: _get_refs(v) for k, v in user_refs.items() if v.matching_id == k}
+
+    # Here we do a topological sort of the usermatches to ensure that the
+    # supervisors are yielded first and make it to the database before their
+    # students.
+    while len(refs) != 0:
+        roots = set()
+        for k, v in refs.items():
+            if len(v) == 0:
+                yield user_refs[k]
+                roots.add(k)
+        refs = {k: v - roots for k, v in refs.items() if k not in roots}
+        if len(roots) == 0:
+            for k in refs:
+                yield user_refs[k]
+
+
+def lookup_match_id(sess: Session, match_id: MatchID) -> UserDB | None:
+    return sess.exec(
+        select(UserDB)
+        .join(MatchingID)
+        .where(
+            MatchingID.plugin_name == match_id.name, MatchingID.match_id == match_id.mid
+        )
+    ).all()
+
+
+def update_user(sess: Session, user: UserMatch) -> None:
+    results = sess.exec(
+        select(MatchingID).where(
+            MatchingID.plugin_name == user.matching_id.name,
+            MatchingID.match_id == user.matching_id.mid,
+        )
+    ).all()
+    if len(results) == 0:
+        with sess.begin():
+            insert_new(sess, user)
+            sess.commit()
+    elif len(results) >= 1:
+        db_user = sess.exec(select(UserDB).where(UserDB.id == results[0].user_id)).one()
+        if user.display_name is not None:
+            db_user.display_name = user.display_name
+        if user.email is not None:
+            db_user.email = user.email
+        for mid in user.known_matches:
+            if mid.name not in db_user.matching_ids:
+                db_user.matching_ids[mid.name] = mid.mid
+            elif db_user.matching_ids[mid.name] != mid.mid:
+                logger.error(
+                    "User %s has matching id (%s:%s) but update has (%s:%s), using update",
+                    db_user.uuid,
+                    mid.name,
+                    db_user.matching_ids[mid.name],
+                    mid.name,
+                    mid.mid,
                 )
-                # Third, merge everything into the oldest entry
-                oldest_userm = matching_userms.pop(0)
-                for newer_userm in matching_userms:
-                    update_user_match(value=oldest_userm, update=newer_userm)
-                # Finally, update all references to point to the new merged UserMatch
-                user_refs[oldest_userm.matching_id] = oldest_userm
-                for mid in oldest_userm.known_matches:
-                    user_refs[mid] = oldest_userm
+                db_user.matching_ids[mid.name] = mid.mid
+        update_user_db(user, db_user)
 
-        def _get_refs(um: UserMatch) -> set[MatchID]:
-            res = set[MatchID]()
-            for tag in um.supervisor.values:
-                res.add(tag.value)
-            for tags in um.co_supervisors.values:
-                res.update(tags.value)
-            return res
 
-        # Filter for "primary" UserMatches (those whose reference name match the
-        # original plugin name).
-        refs = {k: _get_refs(v) for k, v in user_refs.items() if v.matching_id == k}
+def valid_merge[T, U](
+    valid: ValidField[T],
+    db_valid: ValidFieldDB[T],
+    *,
+    map: Callable[[T], U] = lambda v: v,
+) -> None:
+    for tag in valid.values:
+        db_valid.insert(map(tag.value), tag.valid_start, tag.valid_end)
 
-        # Here we do a topological sort of the usermatches to ensure that the
-        # supervisors are yielded first and make it to the database before their
-        # students.
-        while len(refs) != 0:
-            roots = set()
-            for k, v in refs.items():
-                if len(v) == 0:
-                    yield user_refs[k]
-                    roots.add(k)
-            refs = {k: v - roots for k, v in refs.items() if k not in roots}
-            if len(roots) == 0:
-                for k in refs:
-                    yield user_refs[k]
 
-        # Update the parsed date
-        if update_parsed_date:
-            logger.info(f"Set parsed_dates for users to {ce.get_entry_datetime()}.")
-            set_parsed_date(db, "users", ce.get_entry_datetime())
+def update_user_db(user: UserMatch, db_user: UserDB) -> None:
+    for domain, creds in user.associated_accounts.item():
+        valid_merge(creds, db_user.associated_accounts[domain])
+    valid_merge(user.member_type, db_user.member_type)
+    valid_merge(user.github_username, db_user.github_username)
+    valid_merge(user.google_scholar_profile, db_user.google_scholar_profile)
+
+    def map_super(match_id: MatchID) -> int:
+        res = lookup_match_id(match_id)
+        if len(res) == 0:
+            raise ValueError("Supervisor (%s) not found in database")
+        else:
+            if len(res) > 1:
+                logger.error(
+                    "Multiple matching users in DB for match id (%s), selecting the first one",
+                    match_id,
+                )
+            return res[0]
+
+    valid_merge(user.supervisor, db_user.supervisor, map=map_super)
+    valid_merge(
+        user.co_supervisors,
+        db_user.co_supervisor,
+        map=lambda v: sorted(map_super(m) for m in v),
+    )
+
+
+def insert_new(sess: Session, user: UserMatch) -> None:
+    if user.display_name is None or user.email is None:
+        logger.error("Attempting to add a new user with missing attributes: %s", user)
+        return
+    db_user = UserDB(display_name=user.display_name, email=user.email)
+    sess.add(db_user)
+    for match_id in user.known_matches:
+        db_user.matching_ids[match_id.name] = match_id.mid
+    db_user.matching_ids[user.matching_id.name] = user.matching_id.mid
+    update_user_db(user, db_user)

@@ -6,7 +6,7 @@ from sqlalchemy.dialects.postgresql import TSTZRANGE, ExcludeConstraint, Range
 from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
 from sqlalchemy.orm import Session as SASession
 from sqlalchemy.orm import attribute_keyed_dict, relationship
-from sqlmodel import Field, Index, Relationship, Session, SQLModel, or_, select
+from sqlmodel import Field, Index, Relationship, Session, SQLModel, func, or_, select
 
 from sarc.core.models.users import MemberType
 from sarc.core.models.validators import datetime_utc
@@ -368,3 +368,72 @@ class UserDB(SQLModel, table=True):
         return ValidField(
             Session.object_session(self), GoogleScholarDB, "profile_id", self.id
         )
+
+
+def combine_users(db_user1: UserDB, db_user2: UserDB) -> UserDB:
+    # Merge db_user2 into db_user1
+
+    # we prefer the name from db_user1
+    if db_user2.display_name != db_user1.display_name:
+        logger.warning(
+            "Merging user %s into user %s and their display_name differs (%s vs %s), %s is picked",
+            db_user2.id,
+            db_user1.id,
+            db_user2.display_name,
+            db_user1.display_name,
+            db_user1.display_name,
+        )
+    db_user1.member_type.merge_with(db_user2.member_type)
+    db_user1.github_username.merge_with(db_user2.github_username)
+    db_user1.google_scholar_profile.merge_with(db_user2.google_scholar_profile)
+    for name, creds in db_user2.associated_accounts.items():
+        if name in db_user1.associated_accounts:
+            db_user1.associated_accounts[name].merge_with(creds)
+        else:
+            db_user1.associated_accounts[name] = creds
+    db_user1.supervisor.merge_with(db_user2.supervisor)
+    db_user1.co_supervisors.merge_with(db_user2.co_supervisors)
+
+    for name, mid in db_user2.matching_ids.items():
+        if name not in db_user1.matching_ids:
+            db_user1.matching_ids[name] = mid
+        elif db_user1.matching_ids[name] != mid:
+            logger.warning(
+                "User %s has matching id (%s:%s) but db_user2 has %s, using db_user1 value",
+                db_user1.id,
+                name,
+                db_user1.matching_ids[name],
+                mid,
+            )
+
+    return db_user1
+
+
+def deduplicate_users(sess: Session):
+    subquery = (
+        select(MatchingID.plugin_name, MatchingID.match_id)
+        .group_by(MatchingID.plugin_name, MatchingID.match_id)
+        .having(func.count(MatchingID.id) > 1)
+        .subquery()
+    )
+    dupes = sess.exec(
+        select(MatchingID)
+        .where(
+            MatchingID.plugin_name == subquery.c.plugin_name,
+            MatchingID.match_id == subquery.c.match_id,
+        )
+        .group_by(MatchingID.plugin_name, MatchingID.match_id)
+    ).all()
+
+    groups: dict[tuple[str, str], int] = dict()
+    for dupe in dupes:
+        groups.setdefault((dupe.plugin_name, dupe.match_id), []).append(dupe.user_id)
+
+    for group in groups.values():
+        db_merged = sess.exec(select(UserDB).where(UserDB.id == group[0])).one()
+        for db_extra_id in group[1:]:
+            db_extra = sess.exec(select(UserDB).where(UserDB.id == db_extra_id)).one()
+            combine_users(db_merged, db_extra)
+            # Even if the merge fails for some attributes, we have the data
+            # to recover missing info in the cache files.
+            sess.delete(db_extra)
