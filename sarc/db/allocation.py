@@ -9,6 +9,20 @@ class AllocationDB(Allocation, table=True):
     # Database ID
     id: int | None = Field(default=None, primary_key=True)
 
+    @classmethod
+    def get_or_create(cls, sess: Session, **kwargs) -> AllocationDB:
+        res = AllocationDB.model_validate(kwargs)
+        res.id = sess.exec(
+            select(AllocationDB.id).where(
+                AllocationDB.cluster_id == res.cluster_id,
+                AllocationDB.resource_name == res.resource_name,
+                AllocationDB.group_name == res.group_name,
+                AllocationDB.start == res.start,
+                AllocationDB.end == res.end,
+            )
+        ).one_or_none()
+        return sess.merge(res)
+
 
 def get_allocations(
     sess: Session,

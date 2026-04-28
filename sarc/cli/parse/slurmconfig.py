@@ -9,7 +9,6 @@ from typing import IO, Iterator, cast
 from hostlist import expand_hostlist
 from pydantic import BaseModel
 from simple_parsing import field
-from sqlmodel import select
 
 from sarc.cache import Cache
 from sarc.config import UTC, ClusterConfig, config
@@ -73,25 +72,20 @@ class ParseSlurmConfig:
             parser = SlurmConfigParser(cluster=cluster_config, threshold=self.threshold)
             slurm_conf = parser.load(io.StringIO(content))
             with config().db.session() as sess:
-                cluster_id = sess.exec(
-                    select(SlurmClusterDB.id).where(
-                        SlurmClusterDB.cluster_name == self.cluster_name
-                    )
-                ).one()
+                cluster_id = SlurmClusterDB.id_by_name(self.cluster_name, sess)
+                assert cluster_id is not None
                 if slurm_conf.gpu_to_billing is not None:
-                    sess.add(
-                        GPUBillingDB(
-                            cluster_id=cluster_id,
-                            since=cache_date,
-                            gpu_to_billing=slurm_conf.gpu_to_billing,
-                        )
-                    )
-                sess.add(
-                    NodeGPUMappingDB(
+                    GPUBillingDB.get_or_create(
+                        sess=sess,
                         cluster_id=cluster_id,
                         since=cache_date,
-                        node_to_gpu=slurm_conf.node_to_gpus,
+                        gpu_to_billing=slurm_conf.gpu_to_billing,
                     )
+                NodeGPUMappingDB.get_or_create(
+                    sess=sess,
+                    cluster_id=cluster_id,
+                    since=cache_date,
+                    node_to_gpu=slurm_conf.node_to_gpus,
                 )
                 sess.commit()
         return 0

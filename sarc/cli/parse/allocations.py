@@ -55,13 +55,12 @@ class ParseAllocations:
                         row["timestamp"] = datetime.now(UTC)
                         row["cluster_id"] = cluster_id
                         try:
-                            allocation = AllocationDB.model_validate(row)  # type: ignore[arg-type]
+                            allocation = AllocationDB.get_or_create(sess, **row)
+                            logger.info(f"Adding allocation: {allocation}")
                         except Exception as e:
                             logger.exception(f"Skipping row: {row}", exc_info=e)
                             continue
 
-                        logger.info(f"Adding allocation: {allocation}")
-                        sess.add(allocation)
                     sess.flush()
                 sess.commit()
 

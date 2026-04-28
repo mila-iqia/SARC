@@ -33,11 +33,13 @@ def insert_clusters(sess: Session) -> None:
         if db_cluster is None:
             db_cluster = cluster.SlurmClusterDB(
                 cluster_name=cluster_name,
+                domain=clust.user_domain,
                 start_date=clust.start_date,
                 billing_is_gpu=clust.billing_is_gpu,
             )
             sess.add(db_cluster)
         else:
+            db_cluster.domain = clust.user_domain
             db_cluster.start_date = clust.start_date
             db_cluster.billing_is_gpu = clust.billing_is_gpu
         sess.flush()

@@ -275,11 +275,10 @@ def update_user(sess: Session, user: UserMatch) -> None:
         )
     ).all()
     if len(results) == 0:
-        with sess.begin():
-            insert_new(sess, user)
-            sess.commit()
-    elif len(results) >= 1:
+        insert_new(sess, user)
+    else:
         db_user = sess.get(UserDB, results[0].user_id)
+        assert db_user is not None
         if user.display_name is not None:
             db_user.display_name = user.display_name
         if user.email is not None:
@@ -343,6 +342,7 @@ def insert_new(sess: Session, user: UserMatch) -> None:
         return
     db_user = UserDB(display_name=user.display_name, email=user.email)
     sess.add(db_user)
+    sess.flush()
     for match_id in user.known_matches:
         db_user.matching_ids[match_id.name] = match_id.mid
     db_user.matching_ids[user.matching_id.name] = user.matching_id.mid

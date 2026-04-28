@@ -6,7 +6,17 @@ from sqlalchemy.dialects.postgresql import TSTZRANGE, ExcludeConstraint, Range
 from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
 from sqlalchemy.orm import Session as SASession
 from sqlalchemy.orm import attribute_keyed_dict, relationship
-from sqlmodel import Field, Index, Relationship, Session, SQLModel, func, or_, select
+from sqlmodel import (
+    Field,
+    Index,
+    Relationship,
+    Session,
+    SQLModel,
+    func,
+    or_,
+    select,
+    update,
+)
 
 from sarc.core.models.users import MemberType
 from sarc.core.models.validators import datetime_utc
@@ -374,6 +384,23 @@ class UserDB(SQLModel, table=True):
         return sess.exec(select(cls).where(cls.email == email)).one_or_none()
 
 
+def get_user_id_for_cluster_user(
+    sess: Session, cluster_id: int, user: str, submit_time: datetime
+) -> int | None:
+    from .cluster import SlurmClusterDB
+
+    cluster = sess.get(SlurmClusterDB, cluster_id)
+    return sess.exec(
+        select(CredentialsDB.user_id)
+        .where(
+            CredentialsDB.domain == cluster.domain,
+            CredentialsDB.username == user,
+            CredentialsDB.valid.contains(submit_time),
+        )
+        .one_or_none()
+    )
+
+
 def combine_users(db_user1: UserDB, db_user2: UserDB) -> UserDB:
     # Merge db_user2 into db_user1
 
@@ -414,6 +441,8 @@ def combine_users(db_user1: UserDB, db_user2: UserDB) -> UserDB:
 
 
 def deduplicate_users(sess: Session):
+    from .job import SlurmJobDB
+
     subquery = (
         select(MatchingID.plugin_name, MatchingID.match_id)
         .group_by(MatchingID.plugin_name, MatchingID.match_id)
@@ -440,4 +469,20 @@ def deduplicate_users(sess: Session):
             combine_users(db_merged, db_extra)
             # Even if the merge fails for some attributes, we have the data
             # to recover missing info in the cache files.
+            sess.exec(
+                update(SupervisorDB)
+                .where(SupervisorDB.supervisor == db_extra.id)
+                .values(supervisor=db_merged.id)
+            )
+            sess.exec(
+                update(CoSupervisorsHelper)
+                .where(CoSupervisorsHelper.co_supervisor == db_extra.id)
+                .values(co_supervisor=db_merged.id)
+            )
+            sess.exec(
+                update(SlurmJobDB)
+                .where(SlurmJobDB.user_id == db_extra.id)
+                .values(user_id=db_merged.id)
+            )
+
             sess.delete(db_extra)

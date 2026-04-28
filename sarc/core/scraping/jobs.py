@@ -1,12 +1,10 @@
 import logging
-from collections import defaultdict
 from datetime import datetime
 
-from sarc.cache import Cache
-from sarc.client.job import SlurmJob, _jobs_collection
+from sqlmodel import Session
+
+from sarc.cache import Cache, CacheEntry
 from sarc.config import UTC, ClusterConfig, config
-from sarc.core.models.users import UserData
-from sarc.core.models.validators import DateMatchError
 from sarc.core.scraping.jobs_utils import (
     DATE_FORMAT_HOUR,
     fetch_raw,
@@ -16,9 +14,11 @@ from sarc.core.scraping.jobs_utils import (
     set_auto_end_time,
     update_allocated_gpu_type_from_nodes,
 )
+from sarc.db.cluster import SlurmClusterDB
+from sarc.db.job import SlurmJobDB
 from sarc.db.runstate import get_parsed_date, set_parsed_date
+from sarc.db.users import get_user_id_for_cluster_user
 from sarc.traces import using_trace
-from sarc.users.db import get_users
 
 logger = logging.getLogger(__name__)
 
@@ -143,144 +143,70 @@ def parse_jobs(
     clusters_cfg: dict[str, ClusterConfig],
     since: datetime | None,
     update_parsed_date: bool,
-    require_user_link: bool = False,
 ) -> None:
-    user_map = UserMap(clusters_cfg)
-    collection = _jobs_collection()
-    db = config().mongo.database_instance
 
-    if since is None:
-        since = get_parsed_date(db, "jobs")
+    with config("scraping").db.session() as sess:
+        if since is None:
+            since = get_parsed_date(sess, "jobs")
 
-    # Retrieve from the cache
-    cache = Cache(subdirectory="jobs")
-    for cache_entry in cache.read_from(from_time=since):
-        logger.info(
-            f"Parsing slurm jobs from cache entry: {cache_entry.get_entry_datetime()}"
-        )
-        nb_entries = 0
-        nb_saved = 0
+        # Retrieve from the cache
+        cache = Cache(subdirectory="jobs")
+        for cache_entry in cache.read_from(from_time=since):
+            parse_cache_entry(sess, cache_entry, clusters_cfg)
+            # Update the parsed date
+            if update_parsed_date:
+                logger.info(
+                    f"Set parsed_dates for jobs to {cache_entry.get_entry_datetime()}."
+                )
+                set_parsed_date(sess, "jobs", cache_entry.get_entry_datetime())
+            sess.commit()
 
-        # Retrieve all jobs associated to the time intervals
-        # The cache entry is designed to yield the jobs intervals
-        # in the same order they were added, i.e. in chronological order.
-        for key, value in cache_entry.items():
-            logger.info(f"Parsing slurm jobs identified by: {key}...")
 
-            cluster_name = key.split("_")[0]
-            scraped_start = datetime.fromisoformat(key.split("_")[1]).replace(
-                tzinfo=UTC
+def parse_date(val: str) -> datetime:
+    res = datetime.fromisoformat(val)
+    if res.tzinfo is None:
+        res = res.replace(tzinfo=UTC)
+    else:
+        res = res.astimezone(UTC)
+    return res
+
+
+def parse_cache_entry(
+    sess: Session, cache_entry: CacheEntry, clusters_cfg: dict[str, ClusterConfig]
+):
+    logger.info(
+        f"Parsing slurm jobs from cache entry: {cache_entry.get_entry_datetime()}"
+    )
+
+    # Retrieve all jobs associated to the time intervals
+    # The cache entry is designed to yield the jobs intervals
+    # in the same order they were added, i.e. in chronological order.
+    for key, value in cache_entry.items():
+        logger.info(f"Parsing slurm jobs identified by: {key}...")
+
+        cluster_name = key.split("_")[0]
+        cluster_id = SlurmClusterDB.id_by_name(sess, cluster_name)
+        if cluster_id is None:
+            logger.error("Unknown cluster %s, skipping cache entry", cluster_name)
+            continue
+        scraped_start = parse_date(key.split("_")[1])
+        scraped_end = parse_date(key.split("_")[2])
+
+        for entry in parse_raw(value, cluster_name, scraped_start, scraped_end):
+            if entry is None:
+                continue
+
+            cluster_name = entry.pop("cluster_name")
+            entry["cluster_id"] = SlurmClusterDB.id_by_name(sess, cluster_name)
+            if entry["cluster_id"] is None:
+                raise ValueError(
+                    "Unknown cluster name % for job id %s",
+                    cluster_name,
+                    entry["job_id"],
+                )
+            entry["user_id"] = get_user_id_for_cluster_user(
+                sess, entry["cluster_id"], entry["user"], entry["submit_time"]
             )
-            scraped_end = datetime.fromisoformat(key.split("_")[2]).replace(tzinfo=UTC)
-
-            for entry in parse_raw(value, cluster_name, scraped_start, scraped_end):
-                if entry is not None:
-                    nb_entries += 1
-                    update_allocated_gpu_type_from_nodes(
-                        clusters_cfg[cluster_name], entry
-                    )
-
-                    try:
-                        user_map.solve_user(entry)
-                    except RuntimeError as e:
-                        if require_user_link:
-                            raise
-                        else:
-                            logger.warning(str(e))
-
-                    if not require_user_link or entry.user_uuid is not None:
-                        nb_saved += 1
-                        collection.save_job(entry)
-
-        # Update the parsed date
-        if update_parsed_date:
-            logger.info(
-                f"Set parsed_dates for jobs to {cache_entry.get_entry_datetime()}."
-            )
-            set_parsed_date(db, "jobs", cache_entry.get_entry_datetime())
-
-        logger.info(f"Saved {nb_saved} entries / {nb_entries} available.")
-
-
-class UserMap:
-    """
-    Helper class mapping users to credentials.
-    Used to find UserData object associated to a job.
-    """
-
-    def __init__(self, cluster_cfg: dict[str, ClusterConfig]) -> None:
-        # Map cluster name to account domain
-        # (e.g. "mila" => "mila", "narval" => "drac")
-        self.__cluster_domain: dict[str, str] = {}
-        # Map user credential (domain, username) to user objects
-        self.__users: dict[tuple[str, str], list[UserData]] = {}
-
-        for cluster_config in cluster_cfg.values():
-            assert cluster_config.name is not None
-            self.__cluster_domain[cluster_config.name] = cluster_config.user_domain
-
-        users = get_users()
-
-        # Map all users including duplicates, using all historical usernames
-        indexed_users = defaultdict(list)
-        for user in users:
-            for domain, cred in user.associated_accounts.items():
-                for tag in cred.values:
-                    username = tag.value
-                    user_key = (domain, username)
-                    indexed_users[user_key].append(user)
-
-        self.__users = indexed_users
-
-        logger.info(f"{len(users)} user(s), {len(self.__users)} credential(s)")
-
-    def solve_user(self, entry: SlurmJob) -> None:
-        """
-        Main method to link a job to a user.
-        Update SlurmJob.user_uuid if job user is found in users collection.
-
-        We match credentials by (domain, username) and verify that the
-        credential was valid at the job's submit time. This temporal check
-        is conceptually correct but currently misses some job-user matches
-        because user scraping plugins do not provide reliable validity dates:
-
-        - MILA LDAP (sarc/users/mila_ldap.py) sets start=scrape_time,
-          so a job submitted before the first scraping time won't be matched
-          to the user, even if the user credential was already valid.
-          Fix: use the account creation date as start instead of scrape_time.
-
-        - DRAC (sarc/users/drac.py) sets start=member_since and end=scrape_time,
-          so a job submitted after the last scraping time (and before next
-          scraping time) won't be matched to the user, even if the user
-          credential was still valid.
-          Fix: leave end open or use an explicit expiration date.
-        """
-
-        # Since entry is parsed from cache, and not checked against db,
-        # then it should not have a user_uuid already defined.
-        assert entry.user_uuid is None
-
-        domain = self.__cluster_domain.get(entry.cluster_name)
-        if domain is not None:
-            user_key = (domain, entry.user)
-            if user_key in self.__users:
-                valid_users = []
-                for candidate_user in self.__users[user_key]:
-                    try:
-                        username_at_submit = candidate_user.associated_accounts[
-                            domain
-                        ].get_value(entry.submit_time)
-                        if entry.user == username_at_submit:
-                            valid_users.append(candidate_user)
-                    except DateMatchError:
-                        pass
-                if valid_users:
-                    if len(valid_users) > 1:
-                        raise RuntimeError(
-                            f"Job {entry.cluster_name}/{entry.job_id}/{entry.submit_time}: "
-                            f"expected 1 matching user, found {len(valid_users)}: "
-                            + ", ".join(f"{u.email} ({u.uuid})" for u in valid_users)
-                        )
-                    else:
-                        (user,) = valid_users
-                        entry.user_uuid = user.uuid
+            job = SlurmJobDB.get_or_create(sess, **entry)
+            update_allocated_gpu_type_from_nodes(clusters_cfg[cluster_name], job)
+            sess.flush()
