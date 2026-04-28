@@ -7,7 +7,7 @@ from simple_parsing import field
 
 from sarc.cache import Cache
 from sarc.config import config
-from sarc.db.allocation import Allocation
+from sarc.db.allocation import AllocationDB
 from sarc.db.cluster import SlurmClusterDB
 
 logger = logging.getLogger(__name__)
@@ -55,7 +55,7 @@ class ParseAllocations:
                         row["timestamp"] = datetime.now(UTC)
                         row["cluster_id"] = cluster_id
                         try:
-                            allocation = Allocation.model_validate(row)  # type: ignore[arg-type]
+                            allocation = AllocationDB.model_validate(row)  # type: ignore[arg-type]
                         except Exception as e:
                             logger.exception(f"Skipping row: {row}", exc_info=e)
                             continue
