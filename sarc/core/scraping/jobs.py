@@ -207,6 +207,13 @@ def parse_cache_entry(
             entry["user_id"] = get_user_id_for_cluster_user(
                 sess, entry["cluster_id"], entry["user"], entry["submit_time"]
             )
+            if entry["user_id"] is None:
+                logger.warning(
+                    "Skipping job %s on cluster %s because we can't find a user for it",
+                    entry["job_id"],
+                    cluster_name,
+                )
+                continue
             job = SlurmJobDB.get_or_create(sess, **entry)
             update_allocated_gpu_type_from_nodes(clusters_cfg[cluster_name], job)
             sess.flush()

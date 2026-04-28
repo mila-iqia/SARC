@@ -31,7 +31,10 @@ class JobStatisticDB(SQLModel, table=True):
     """Statistics for a timeseries."""
 
     id: int | None = Field(default=None, primary_key=True)
-    name: str
+    job_id: int | None = Field(
+        default=None, foreign_key="slurm_jobs.id", nullable=False, ondelete="CASCADE"
+    )
+    name: str | None = Field(default=None, nullable=False)
     mean: float | None
     std: float | None
     q05: float | None
@@ -131,6 +134,18 @@ class SlurmJobDB(SQLModel, table=True):
             )
         ).one_or_none()
         return sess.merge(res)
+
+    @classmethod
+    def by_ref(
+        cls, sess: Session, cluster_id: int, job_id: int, submit_time: datetime
+    ) -> Self | None:
+        return sess.exec(
+            select(cls).where(
+                cls.cluster_id == cluster_id,
+                cls.job_id == job_id,
+                cls.submit_time == submit_time,
+            )
+        ).one_or_none()
 
     @property
     def gpu_type_rgu(self) -> float:

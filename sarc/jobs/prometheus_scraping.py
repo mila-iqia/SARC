@@ -1,14 +1,14 @@
 import json
 import logging
 from datetime import UTC, datetime
-from typing import Iterable
 
-from tqdm import tqdm
+from sqlmodel import Session, select
 
-from sarc.cache import Cache
-from sarc.client.job import SlurmJob, _jobs_collection
+from sarc.cache import Cache, CacheEntry
 from sarc.config import ClusterConfig, config
-from sarc.core.scraping.jobs_utils import _time_auto_first_date, parse_auto_intervals
+from sarc.core.models.job import SlurmState
+from sarc.db.cluster import SlurmClusterDB
+from sarc.db.job import JobStatisticDB, SlurmJobDB
 from sarc.db.runstate import get_parsed_date, set_parsed_date
 from sarc.jobs.series import (
     JOB_STATISTICS_METRIC_NAMES,
@@ -19,59 +19,39 @@ from sarc.traces import trace_decorator
 
 logger = logging.getLogger(__name__)
 
-AUTO_END_FIELD = "end_time_prometheus"
-
-
-def parse_prometheus_auto_intervals(
-    cluster_name: str, minutes: int, max_intervals: int | None
-) -> list[tuple[datetime, datetime]]:
-    """
-    When scraping with auto intervals, we don't want to scrape Prometheus metrics
-    after end_time_sacct.
-    """
-    end_time_sacct = _time_auto_first_date(cluster_name, "end_time_sacct")
-    return parse_auto_intervals(
-        cluster_name, AUTO_END_FIELD, minutes, max_intervals, end=end_time_sacct
-    )
-
-
-def get_jobs_in_scraped_period(
-    cluster_name: str, start: datetime, end: datetime
-) -> Iterable[SlurmJob]:
-    """
-    Get jobs whom latest scraped period instersects with given [start, end].
-
-    There is an intersection if:
-    start < latest_scraped_end and latest_scraped_start < end
-
-    NB: We check "<" instead of "<=" because
-    we want intervals to have an overlap,
-    not just 1 common border date.
-    """
-    query = {
-        "cluster_name": cluster_name,
-        "latest_scraped_start": {"$lt": end},
-        "latest_scraped_end": {"$gt": start},
-    }
-    coll_jobs = config().mongo.database_instance.jobs
-    nb_jobs = coll_jobs.count_documents(query)
-    yield from tqdm(
-        _jobs_collection().find_by(query), total=nb_jobs, desc="Prometheus metrics"
-    )
-
 
 @trace_decorator()
-def fetch_prometheus(cluster: ClusterConfig, start: datetime, end: datetime) -> None:
+def fetch_prometheus(
+    sess: Session, cluster: ClusterConfig, after: datetime | None, max_jobs: int | None
+) -> None:
     """
-    Fetch Prometheus metrics for jobs from start to end on the specified cluster.
+    Fetch Prometheus metrics for jobs on the specified cluster.
     """
     if cluster.name is None:
         logger.error("cluster name not set, can't fetch")
         return
+    cluster_id = SlurmClusterDB.id_by_name(sess, cluster.name)
+    if cluster_id is None:
+        logger.error("Unknown cluster %, skipping cluster", cluster.name)
+    subquery = (
+        select(JobStatisticDB.job_id)
+        .where(JobStatisticDB.job_id == SlurmJobDB.id)
+        .exists()
+    )
+    query = select(SlurmJobDB).where(
+        SlurmJobDB.cluster_id == cluster_id,
+        SlurmJobDB.elapsed_time != 0,
+        SlurmJobDB.job_state != SlurmState.RUNNING,
+        ~subquery,  # not users that have statistics
+    )
+    if after is not None:
+        query = query.where(SlurmJobDB.submit_time >= after)
+    if max_jobs is not None:
+        query = query.order_by(SlurmJobDB.submit_time).limit(max_jobs)
     nb_jobs = 0
     cache = Cache("prometheus")
     with cache.create_entry(datetime.now(UTC)) as ce:
-        for entry in get_jobs_in_scraped_period(cluster.name, start, end):
+        for entry in sess.exec(query):
             raw_prom_data = get_job_time_series_data(
                 job=entry, metric=JOB_STATISTICS_METRIC_NAMES, max_points=10_000
             )
@@ -79,7 +59,7 @@ def fetch_prometheus(cluster: ClusterConfig, start: datetime, end: datetime) -> 
                 continue
             nb_jobs += 1
             ce.add_value(
-                f"{entry.cluster_name}${entry.job_id}${entry.submit_time.isoformat(timespec='seconds')}",
+                f"{entry.cluster.cluster_name}${entry.job_id}${entry.submit_time.isoformat(timespec='seconds')}",
                 json.dumps(raw_prom_data).encode("utf-8"),
             )
     logger.info(f"Fetched Prometheus metrics for {nb_jobs} jobs.")
@@ -88,60 +68,59 @@ def fetch_prometheus(cluster: ClusterConfig, start: datetime, end: datetime) -> 
 @trace_decorator()
 def parse_prometheus(since: datetime | None, update_parsed_date: bool) -> None:
     cache = Cache("prometheus")
-    collection = _jobs_collection()
-    db = config().mongo.database_instance
-    if since is None:
-        since = get_parsed_date(db, "prometheus")
+    with config("scraping").db.session() as sess:
+        if since is None:
+            since = get_parsed_date(sess, "prometheus")
 
+        for ce in cache.read_from(from_time=since):
+            error = parse_prometheus_ce(sess, ce)
+            if update_parsed_date and not error:
+                logger.info(f"Set parsed_dates for jobs to {ce.get_entry_datetime()}.")
+                set_parsed_date(sess, "prometheus", ce.get_entry_datetime())
+            sess.commit()
+
+
+def parse_prometheus_ce(sess: Session, ce: CacheEntry) -> bool:
+    error = False
     nb_jobs = 0
-    for ce in cache.read_from(from_time=since):
-        error = False
-        logger.info(
-            f"Parsing prometheus data from cache entry: {ce.get_entry_datetime().isoformat(timespec='milliseconds')}"
-        )
-        for key, value in ce.items():
-            nb_jobs += 1
-            cluster_name, job_id_str, submit_time_str = key.split("$")
-            cluster = config("scraping").clusters.get(cluster_name, None)
-            if cluster is None:
-                logger.error("Could not find cluster '%s' in config", cluster_name)
-                error = True
-                continue
-            job_id = int(job_id_str)
-            submit_time = datetime.fromisoformat(submit_time_str)
-            data = json.loads(value.decode("utf-8"))
-            if data == []:
-                logger.warning(
-                    f"Empty data found for job {job_id} on cluster {cluster_name} (submit_time {submit_time}), skipping cache entry"
-                )
-                continue
-            entry = collection.find_one_by(
-                {
-                    "cluster_name": cluster_name,
-                    "job_id": job_id,
-                    "submit_time": submit_time,
-                }
+
+    logger.info(
+        f"Parsing prometheus data from cache entry: {ce.get_entry_datetime().isoformat(timespec='milliseconds')}"
+    )
+    for key, value in ce.items():
+        nb_jobs += 1
+        cluster_name, job_id_str, submit_time_str = key.split("$")
+        cluster = config("scraping").clusters.get(cluster_name, None)
+        if cluster is None:
+            logger.error("Could not find cluster '%s' in config", cluster_name)
+            error = True
+            continue
+        job_id = int(job_id_str)
+        submit_time = datetime.fromisoformat(submit_time_str)
+        data = json.loads(value.decode("utf-8"))
+        if data == []:
+            logger.warning(
+                f"Empty data found for job {job_id} on cluster {cluster_name} (submit_time {submit_time}), skipping cache entry"
             )
-            if entry is None:
-                logger.error("Could not find job for %s", key)
-                error = True
-                continue
-            gpu_type = data[0]["metric"].get("gpu_type", None)
-            need_save = False
-            if gpu_type is not None:
-                entry.allocated.gpu_type = (
-                    cluster.harmonize_gpu_from_nodes(entry.nodes, gpu_type) or gpu_type
-                )
-                need_save = True
-            statistics = compute_job_statistics(entry, data)
-            if not statistics.empty():
-                entry.stored_statistics = statistics
-                need_save = True
-            if need_save:
-                entry.save()
+            continue
+        cluster_id = SlurmClusterDB.id_by_name(cluster_name, sess)
+        if cluster_id is None:
+            logger.error("Unknown cluster name %s in entry key %s", cluster_name, key)
+            error = True
+            continue
+        entry = SlurmJobDB.by_ref(sess, cluster_id, job_id, submit_time)
+        if entry is None:
+            logger.error("Could not find job for %s", key)
+            error = True
+            continue
+        gpu_type = data[0]["metric"].get("gpu_type", None)
+        if gpu_type is not None:
+            entry.allocated_gpu_type = (
+                cluster.harmonize_gpu_from_nodes(entry.nodes, gpu_type) or gpu_type
+            )
+        statistics = compute_job_statistics(entry, data)
+        if not statistics.empty():
+            entry.statistics = statistics
 
-        logger.info(f"Saved Prometheus metrics for {nb_jobs} jobs.")
-
-        if update_parsed_date and not error:
-            logger.info(f"Set parsed_dates for jobs to {ce.get_entry_datetime()}.")
-            set_parsed_date(db, "prometheus", ce.get_entry_datetime())
+    logger.info(f"Saved Prometheus metrics for {nb_jobs} jobs.")
+    return error
