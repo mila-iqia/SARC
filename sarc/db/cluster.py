@@ -2,7 +2,7 @@ import bisect
 from datetime import datetime
 
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlmodel import Field, Index, Relationship, SQLModel
+from sqlmodel import Field, Index, Relationship, Session, SQLModel, select
 
 from sarc.core.models.validators import datetime_utc
 
@@ -69,3 +69,9 @@ class SlurmClusterDB(SQLModel, table=True):
             - 1,
         )
         return self.node_gpu_mapping[index_mapping]
+
+    @classmethod
+    def id_by_name(cls, cluster_name: str, sess: Session) -> int | None:
+        return sess.exec(
+            select(cls.id).where(cls.cluster_name == cluster_name)
+        ).one_or_none()

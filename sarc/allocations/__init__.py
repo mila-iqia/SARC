@@ -1,3 +1,3 @@
-from .allocations import get_allocation_summaries, get_allocations
+from .allocations import get_allocation_summaries
 
-__all__ = ["get_allocation_summaries", "get_allocations"]
+__all__ = ["get_allocation_summaries"]

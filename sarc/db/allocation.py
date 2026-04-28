@@ -1,30 +1,37 @@
-from datetime import date, datetime
-from typing import cast
+from datetime import date
 
-from pydantic import ByteSize
-from sqlmodel import Field, SQLModel
+from sqlmodel import Field, Session, select
+
+from sarc.core.models.allocation import Allocation
 
 
-class Allocation(SQLModel, table=True):
+class AllocationDB(Allocation, table=True):
     # Database ID
     id: int | None = Field(default=None, primary_key=True)
 
-    cluster_id: int = Field(foreign_key="clusters.id")
-    resource_name: str
-    group_name: str
-    timestamp: datetime
-    start: date
-    end: date
 
-    gpu_year: int | None = 0
-    cpu_year: int | None = 0
-    rgu_year: int | None = 0
-    vcpu_year: int | None = 0
-    vgpu_year: int | None = 0
-    project_size: ByteSize | None = cast(ByteSize, 0)
-    project_inodes: float | None = 0
-    nearline: ByteSize | None = cast(ByteSize, 0)
-    dCache: ByteSize | None = cast(ByteSize, 0)
-    object: ByteSize | None = cast(ByteSize, 0)
-    cloud_volume: ByteSize | None = cast(ByteSize, 0)
-    cloud_shared: ByteSize | None = cast(ByteSize, 0)
+def get_allocations(
+    sess: Session,
+    cluster_name: str | list[str],
+    start: None | date = None,
+    end: None | date = None,
+) -> list[AllocationDB]:
+    from .cluster import SlurmClusterDB
+
+    query = select(AllocationDB)
+
+    if isinstance(cluster_name, str):
+        query = query.where(
+            AllocationDB.cluster_id == SlurmClusterDB.id_by_name(cluster_name, sess)
+        )
+    else:
+        cluster_ids = [SlurmClusterDB.id_by_name(name, sess) for name in cluster_name]
+        query = query.where(AllocationDB.cluster_id.in_(cluster_ids))
+
+    if start is not None:
+        query = query.where(AllocationDB.start >= start)
+
+    if end is not None:
+        query = query.where(AllocationDB.end <= end)
+
+    return sess.exec(query.order_by(AllocationDB.start)).all()

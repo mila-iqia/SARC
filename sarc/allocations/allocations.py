@@ -1,71 +1,9 @@
-"""
-NB: this module currently uses naive dates (days), not full time-aware datetimes.
-"""
-
-from __future__ import annotations
-
-from datetime import date, datetime
-from typing import Any
+from datetime import date
 
 import pandas as pd
-from pydantic import field_serializer
-from pydantic_mongo import AbstractRepository, PydanticObjectId
 
 from sarc.config import config
-from sarc.core.models.allocation import Allocation as AllocationBase
-from sarc.traces import trace_decorator
-from sarc.utils import flatten
-
-
-def _convert_date_to_iso(date_value: date) -> datetime:
-    return datetime(date_value.year, date_value.month, date_value.day)
-
-
-class Allocation(AllocationBase):
-    # Database ID
-    id: PydanticObjectId | None = None
-
-    @field_serializer("start", "end")
-    def save_as_datetime(self, value: date) -> datetime:
-        return datetime(year=value.year, month=value.month, day=value.day)
-
-
-class AllocationsRepository(AbstractRepository[Allocation]):
-    class Meta:
-        collection_name = "allocations"
-
-    @trace_decorator()
-    def add(self, allocation: Allocation):
-        document = self.to_document(allocation)
-        query_attrs = ["cluster_name", "resource_name", "group_name", "start", "end"]
-        query = {key: document[key] for key in query_attrs}
-        self.get_collection().update_one(query, {"$set": document}, upsert=True)
-
-
-def get_allocations_collection():
-    db = config().mongo.database_instance
-
-    return AllocationsRepository(database=db)
-
-
-def get_allocations(
-    cluster_name: str | list[str], start: None | date = None, end: None | date = None
-) -> list[Allocation]:
-    collection = get_allocations_collection()
-
-    query: dict[str, Any] = {}
-    if isinstance(cluster_name, str):
-        query["cluster_name"] = cluster_name
-    else:
-        query["cluster_name"] = {"$in": cluster_name}
-
-    if start is not None:
-        query["start"] = {"$gte": _convert_date_to_iso(start)}
-
-    if end is not None:
-        query["end"] = {"$lte": _convert_date_to_iso(end)}
-
-    return list(collection.find_by(query, sort=[("start", 1)]))
+from sarc.db.allocation import AllocationDB, get_allocations
 
 
 def increment(a: int | None, b: int | None) -> int:
@@ -81,22 +19,22 @@ def increment(a: int | None, b: int | None) -> int:
 def get_allocation_summaries(
     cluster_name: str | list[str], start: None | date = None, end: None | date = None
 ) -> pd.DataFrame:
-    allocations = get_allocations(cluster_name, start=start, end=end)
+    with config().db.session() as sess:
+        allocations = get_allocations(sess, cluster_name, start=start, end=end)
 
-    def allocation_key(allocation: Allocation) -> tuple[str, date, date]:
+    def allocation_key(allocation: AllocationDB) -> tuple[str, date, date]:
         return (allocation.cluster_name, allocation.start, allocation.end)
 
-    summaries: dict[tuple[str, date, date], Allocation] = {}
+    summaries: dict[tuple[str, date, date], AllocationDB] = {}
     for allocation in allocations:
         key = allocation_key(allocation)
         if key in summaries:
             for field in ["cpu_year", "gpu_year", "rgu_year", "vcpu_year", "vgpu_year"]:
                 setattr(
-                    summaries[key].resources.compute,
+                    summaries[key],
                     field,
                     increment(
-                        getattr(summaries[key].resources.compute, field),
-                        getattr(allocation.resources.compute, field),
+                        getattr(summaries[key], field), getattr(allocation, field)
                     ),
                 )
 
@@ -110,11 +48,10 @@ def get_allocation_summaries(
                 "cloud_shared",
             ]:
                 setattr(
-                    summaries[key].resources.storage,
+                    summaries[key],
                     field,
                     increment(
-                        getattr(summaries[key].resources.storage, field),
-                        getattr(allocation.resources.storage, field),
+                        getattr(summaries[key], field), getattr(allocation, field)
                     ),
                 )
         else:
@@ -123,8 +60,5 @@ def get_allocation_summaries(
     summaries_l = list(summaries.values())
 
     return pd.DataFrame(
-        [
-            flatten(summary.model_dump(exclude={"id", "resource_name"}))
-            for summary in summaries_l
-        ]
+        [summary.model_dump(exclude={"id", "resource_name"}) for summary in summaries_l]
     )
