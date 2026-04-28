@@ -369,6 +369,10 @@ class UserDB(SQLModel, table=True):
             Session.object_session(self), GoogleScholarDB, "profile_id", self.id
         )
 
+    @classmethod
+    def by_email(cls, sess: Session, email: str) -> Self | None:
+        return sess.exec(select(cls).where(cls.email == email)).one_or_none()
+
 
 def combine_users(db_user1: UserDB, db_user2: UserDB) -> UserDB:
     # Merge db_user2 into db_user1

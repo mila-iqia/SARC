@@ -3,6 +3,7 @@ from sqlmodel import Session, SQLModel, select, text
 
 from sarc.config import config
 
+# We need to import those to register the tables
 from . import allocation, cluster, diskusage, job, users  # noqa: F401
 
 
