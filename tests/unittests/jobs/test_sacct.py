@@ -204,7 +204,7 @@ def test_convert_version_supported():
 
     assert slurmjob is not None
     assert slurmjob["job_id"] == 123456
-    assert slurmjob["user"] == "toto"
+    assert slurmjob["cluster_user"] == "toto"
     assert slurmjob["group"] == "toto_group"
     assert slurmjob["account"] == "toto_account"
     assert slurmjob["partition"] == "partition123"
