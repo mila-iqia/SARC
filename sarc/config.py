@@ -245,29 +245,19 @@ class UserScrapingConfig:
 
 
 @dataclass
-class ApiConfig:
+class ServerConfig:
     """
-    Configuration for Python REST API client
-
-    Used if client is initialized without parameters.
-    Currently necessary for high-level Python client functions
-    such as `load_job_series()`, which internally initialize
-    a client without parameters.
+    Configuration for Python REST server
     """
 
-    url: str | None = None  # REST API URL (including port)
-    timeout: int = 120
-    # Default pagination size
-    per_page: int = 100
-    # Maximum page size
-    max_page_size: int = 5000
+    # Authentication manager
     auth: OAuthManager | None = None
 
 
 @dataclass
 class ClientConfig:
     db: DbConfig
-    api: ApiConfig = field(default_factory=ApiConfig)
+    server: ServerConfig = field(default_factory=ServerConfig)
     cache: Path | None = None
     loki: LokiConfig | None = None
     tempo: TempoConfig | None = None

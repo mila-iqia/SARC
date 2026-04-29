@@ -130,7 +130,7 @@ sarc:
     uri: "https://localhost/loki"
   tempo:
     uri: "https://localhost/tempo"
-  api:
+  server:
     auth:
       client_id: "mock_client_id"
       client_secret: "dHPf4JQhK9VutnlJlcln"

@@ -62,10 +62,10 @@ def session_dep() -> Generator[Session]:
 
 def hascap(cap):
     async def check(request: Request, cfg: Config = Depends(config_dep)):
-        if not cfg.api.auth:
+        if not cfg.server.auth:
             yield "__admin__"
         else:
-            async for name in cfg.api.auth.get_email_capability(cap)(request):
+            async for name in cfg.server.auth.get_email_capability(cap)(request):
                 yield name
 
     return check
@@ -84,7 +84,7 @@ class Requestor:
 def is_admin(
     user: Annotated[str, Depends(can_query)], cfg: Config = Depends(config_dep)
 ) -> bool:
-    auth = cfg.api.auth
+    auth = cfg.server.auth
     if not auth:
         return True
     admin: Capability = deserialize(auth.capabilities.captype, "admin")
@@ -368,7 +368,7 @@ def get_job(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Job not found"
         )
-    return job_convert(job, extra_fields)
+    return job_convert(job, set(extra_fields.split(",")) if extra_fields else set())
 
 
 @router.get("/cluster/list", dependencies=[Depends(requestor)])
