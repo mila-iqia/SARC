@@ -28,7 +28,7 @@ def test_get_job_not_found_id(client):
 
 @pytest.fixture
 def paginator(client):
-    def query(endpoint, limit, field, sort_field, **params):
+    def query(endpoint, limit, sort_field, **params):
         entries = []
         cursor = None
         for i in range(50):
@@ -77,8 +77,8 @@ def query_fixture(t, type_name, endpoint):
     return pytest.fixture(fixture)
 
 
-jobq = query_fixture(t=SlurmJobList, type_name="job", endpoint="/v0/job/list")
-userq = query_fixture(t=UserList, type_name="user", endpoint="/v0/user/list")
+jobq = query_fixture(t=SlurmJobList, type_name="job", endpoint="/v0/job/query")
+userq = query_fixture(t=UserList, type_name="user", endpoint="/v0/user/query")
 
 
 def _ids(jobs):
@@ -160,7 +160,7 @@ def test_get_jobs_with_naive_datetime_filters(client):
     """Test jobs query with start and end datetime filters."""
     params = {"start": "2023-01-01T00:00:00", "end": "2023-12-31T23:59:59"}
 
-    response = client.get("/v0/job/list", params=params, expect_status=422)
+    response = client.get("/v0/job/query", params=params, expect_status=422)
     assert (
         "Time-aware datetime required. E.g: 2025-01-01T10:00Z (UTC), 2025-01-01T05:00-05:00 (UTC-5 hours)"
         in response.text
@@ -195,7 +195,7 @@ def test_get_jobs_no_filters(jobq):
 @pytest.mark.usefixtures("read_only_db")
 def test_get_jobs_pagination(paginator):
     """Test jobs query with pagination."""
-    results = paginator("/v0/job/list", limit=2, sort_field="submit_time")
+    results = paginator("/v0/job/query", limit=2, sort_field="submit_time")
     assert len(results) == 22
 
 
@@ -204,10 +204,10 @@ def test_get_jobs_invalid_pagination(client):
     """Test jobs query with invalid pagination parameters."""
     # Limit < 1
     with pytest.raises(ValidationError):
-        client.get("/v0/job/list?limit=0")
+        client.get("/v0/job/query?limit=0")
     # Limit > MAX
     with pytest.raises(ValidationError):
-        client.get(f"/v0/job/list?limit={config().api.max_page_size + 1}")
+        client.get(f"/v0/job/query?limit={config().api.max_page_size + 1}")
 
 
 @pytest.mark.usefixtures("read_only_db")
@@ -452,7 +452,7 @@ def test_get_user_by_email_unknown(client):
 @pytest.mark.usefixtures("read_only_db")
 def test_user_pagination(paginator):
     """Test user list with pagination."""
-    results = paginator("/v0/user/list", limit=2, sort_field="id")
+    results = paginator("/v0/user/query", limit=2, sort_field="id")
     assert len(results) == 10
 
 

@@ -288,8 +288,8 @@ class UserQuery(BaseModel):
 UserQueryType = Annotated[UserQuery, Depends(UserQuery)]
 
 
-@router.get("/job/list")
-def list_jobs(
+@router.get("/job/query")
+def query_jobs(
     query_opt: JobQueryType,
     list_opt: ListOptionsType,
     sess: Session = Depends(session_dep),
@@ -344,8 +344,8 @@ def get_rgu_value_per_gpu() -> dict[str, float]:
     return get_rgus()
 
 
-@router.get("/user/list")
-def list_users(
+@router.get("/user/query")
+def query_users(
     query_opt: UserQueryType,
     list_opt: ListOptionsType,
     sess: Session = Depends(session_dep),
