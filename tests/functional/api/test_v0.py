@@ -138,8 +138,14 @@ def test_get_jobs_invalid_job_id(jobq):
 @pytest.mark.usefixtures("read_only_db")
 def test_get_jobs_empty_result(jobq):
     """Test jobs query with no results."""
-    # Use a very high job ID that doesn't exist
+    # Use a job ID that doesn't exist
     jobq(job_id="999999", n=0)
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_get_jobs_resubmitted(jobq):
+    """Test resubmitted job."""
+    jobq(job_id="1_000_000", n=2)
 
 
 @pytest.mark.usefixtures("read_only_db")
