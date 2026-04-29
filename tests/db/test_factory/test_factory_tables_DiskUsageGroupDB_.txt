@@ -1,0 +1,42 @@
+Found 8 result(s):
+
+Result #1
+{
+    "group_name": "gerudo",
+    "report_id": 1
+}
+Result #2
+{
+    "group_name": "piaf",
+    "report_id": 1
+}
+Result #3
+{
+    "group_name": "gerudo",
+    "report_id": 2
+}
+Result #4
+{
+    "group_name": "piaf",
+    "report_id": 2
+}
+Result #5
+{
+    "group_name": "gerudo",
+    "report_id": 3
+}
+Result #6
+{
+    "group_name": "piaf",
+    "report_id": 3
+}
+Result #7
+{
+    "group_name": "gerudo",
+    "report_id": 4
+}
+Result #8
+{
+    "group_name": "piaf",
+    "report_id": 4
+}

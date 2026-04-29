@@ -1,0 +1,233 @@
+Found 11 result(s):
+
+Result #1
+{
+    "cloud_shared": 0,
+    "cloud_volume": 0,
+    "cluster_id": 1,
+    "cpu_year": 0,
+    "dCache": 0,
+    "end": "2018-04-01",
+    "gpu_year": 100,
+    "group_name": "rrg-bonhomme-ad",
+    "nearline": 0,
+    "object": 0,
+    "project_inodes": 0.0,
+    "project_size": 0,
+    "resource_name": "fromage-gpu",
+    "rgu_year": 400,
+    "start": "2017-04-01",
+    "timestamp": "2023-02-01T00:00:00",
+    "vcpu_year": 0,
+    "vgpu_year": 0
+}
+Result #2
+{
+    "cloud_shared": 0,
+    "cloud_volume": 0,
+    "cluster_id": 1,
+    "cpu_year": 0,
+    "dCache": 0,
+    "end": "2018-04-01",
+    "gpu_year": 0,
+    "group_name": "rrg-bonhomme-ad",
+    "nearline": 15000000000000,
+    "object": 0,
+    "project_inodes": 5000000.0,
+    "project_size": 50000000000000,
+    "resource_name": "fromage-storage",
+    "rgu_year": 0,
+    "start": "2017-04-01",
+    "timestamp": "2023-02-01T00:00:00",
+    "vcpu_year": 0,
+    "vgpu_year": 0
+}
+Result #3
+{
+    "cloud_shared": 0,
+    "cloud_volume": 0,
+    "cluster_id": 1,
+    "cpu_year": 0,
+    "dCache": 0,
+    "end": "2019-04-01",
+    "gpu_year": 100,
+    "group_name": "rrg-bonhomme-ad",
+    "nearline": 0,
+    "object": 0,
+    "project_inodes": 0.0,
+    "project_size": 0,
+    "resource_name": "fromage-gpu",
+    "rgu_year": 0,
+    "start": "2018-04-01",
+    "timestamp": "2023-02-01T00:00:00",
+    "vcpu_year": 0,
+    "vgpu_year": 0
+}
+Result #4
+{
+    "cloud_shared": 0,
+    "cloud_volume": 0,
+    "cluster_id": 1,
+    "cpu_year": 0,
+    "dCache": 0,
+    "end": "2019-04-01",
+    "gpu_year": 0,
+    "group_name": "rrg-bonhomme-ad",
+    "nearline": 0,
+    "object": 0,
+    "project_inodes": 0.0,
+    "project_size": 70000000000000,
+    "resource_name": "fromage-storage",
+    "rgu_year": 0,
+    "start": "2018-04-01",
+    "timestamp": "2023-02-01T00:00:00",
+    "vcpu_year": 0,
+    "vgpu_year": 0
+}
+Result #5
+{
+    "cloud_shared": 0,
+    "cloud_volume": 0,
+    "cluster_id": 6,
+    "cpu_year": 0,
+    "dCache": 0,
+    "end": "2020-04-01",
+    "gpu_year": 190,
+    "group_name": "rrg-bonhomme-ad",
+    "nearline": 0,
+    "object": 0,
+    "project_inodes": 0.0,
+    "project_size": 0,
+    "resource_name": "patate-gpu",
+    "rgu_year": 190,
+    "start": "2019-04-01",
+    "timestamp": "2023-02-01T00:00:00",
+    "vcpu_year": 0,
+    "vgpu_year": 0
+}
+Result #6
+{
+    "cloud_shared": 0,
+    "cloud_volume": 0,
+    "cluster_id": 6,
+    "cpu_year": 0,
+    "dCache": 0,
+    "end": "2020-04-01",
+    "gpu_year": 0,
+    "group_name": "rrg-bonhomme-ad",
+    "nearline": 90000000000000,
+    "object": 0,
+    "project_inodes": 5000000.0,
+    "project_size": 90000000000000,
+    "resource_name": "patate-storage",
+    "rgu_year": 0,
+    "start": "2019-04-01",
+    "timestamp": "2023-02-01T00:00:00",
+    "vcpu_year": 0,
+    "vgpu_year": 0
+}
+Result #7
+{
+    "cloud_shared": 0,
+    "cloud_volume": 0,
+    "cluster_id": 1,
+    "cpu_year": 0,
+    "dCache": 0,
+    "end": "2021-04-01",
+    "gpu_year": 130,
+    "group_name": "rrg-bonhomme-ad",
+    "nearline": 0,
+    "object": 0,
+    "project_inodes": 0.0,
+    "project_size": 0,
+    "resource_name": "fromage-gpu",
+    "rgu_year": 450,
+    "start": "2020-04-01",
+    "timestamp": "2023-02-01T00:00:00",
+    "vcpu_year": 0,
+    "vgpu_year": 0
+}
+Result #8
+{
+    "cloud_shared": 0,
+    "cloud_volume": 0,
+    "cluster_id": 1,
+    "cpu_year": 0,
+    "dCache": 0,
+    "end": "2021-04-01",
+    "gpu_year": 0,
+    "group_name": "rrg-bonhomme-ad",
+    "nearline": 0,
+    "object": 0,
+    "project_inodes": 5000000.0,
+    "project_size": 30000000000000,
+    "resource_name": "fromage-storage",
+    "rgu_year": 0,
+    "start": "2020-04-01",
+    "timestamp": "2023-02-01T00:00:00",
+    "vcpu_year": 0,
+    "vgpu_year": 0
+}
+Result #9
+{
+    "cloud_shared": 0,
+    "cloud_volume": 0,
+    "cluster_id": 6,
+    "cpu_year": 219,
+    "dCache": 0,
+    "end": "2021-04-01",
+    "gpu_year": 0,
+    "group_name": "rrg-bonhomme-ad",
+    "nearline": 0,
+    "object": 0,
+    "project_inodes": 0.0,
+    "project_size": 0,
+    "resource_name": "patate-compute",
+    "rgu_year": 0,
+    "start": "2020-04-01",
+    "timestamp": "2023-02-01T00:00:00",
+    "vcpu_year": 0,
+    "vgpu_year": 0
+}
+Result #10
+{
+    "cloud_shared": 0,
+    "cloud_volume": 0,
+    "cluster_id": 6,
+    "cpu_year": 0,
+    "dCache": 0,
+    "end": "2021-04-01",
+    "gpu_year": 200,
+    "group_name": "rrg-bonhomme-ad",
+    "nearline": 0,
+    "object": 0,
+    "project_inodes": 0.0,
+    "project_size": 0,
+    "resource_name": "patate-gpu",
+    "rgu_year": 500,
+    "start": "2020-04-01",
+    "timestamp": "2023-02-01T00:00:00",
+    "vcpu_year": 0,
+    "vgpu_year": 0
+}
+Result #11
+{
+    "cloud_shared": 0,
+    "cloud_volume": 0,
+    "cluster_id": 6,
+    "cpu_year": 0,
+    "dCache": 0,
+    "end": "2021-04-01",
+    "gpu_year": 0,
+    "group_name": "rrg-bonhomme-ad",
+    "nearline": 80000000000000,
+    "object": 0,
+    "project_inodes": 5000000.0,
+    "project_size": 70000000000000,
+    "resource_name": "patate-storage",
+    "rgu_year": 0,
+    "start": "2020-04-01",
+    "timestamp": "2023-02-01T00:00:00",
+    "vcpu_year": 0,
+    "vgpu_year": 0
+}

@@ -1,0 +1,52 @@
+Found 10 result(s):
+
+Result #1
+{
+    "display_name": "Jane Doe",
+    "email": "jdoe@example.com"
+}
+Result #2
+{
+    "display_name": "John Smith",
+    "email": "jsmith@example.com"
+}
+Result #3
+{
+    "display_name": "Test User",
+    "email": "test@example.com"
+}
+Result #4
+{
+    "display_name": "Test User",
+    "email": "test@example.com"
+}
+Result #5
+{
+    "display_name": "Test User",
+    "email": "test@example.com"
+}
+Result #6
+{
+    "display_name": "Test User",
+    "email": "test@example.com"
+}
+Result #7
+{
+    "display_name": "Othername",
+    "email": "test@example.com"
+}
+Result #8
+{
+    "display_name": "M/Ms Bonhomme",
+    "email": "bonhomme@mila.quebec"
+}
+Result #9
+{
+    "display_name": "M/Ms Petitbonhomme",
+    "email": "petitbonhomme@mila.quebec"
+}
+Result #10
+{
+    "display_name": "M/Ms Beaubonhomme",
+    "email": "beaubonhomme@mila.quebec"
+}
