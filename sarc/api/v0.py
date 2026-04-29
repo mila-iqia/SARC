@@ -370,11 +370,6 @@ def list_jobs(
     sess: Session = Depends(session_dep),
 ) -> SlurmJobList:
     query_c = query_opt.get_query(select(func.count(col(SlurmJobDB.id))))
-    query_c = page_opt.add_page_options(
-        query_c,
-        col(SlurmJobDB.id),  # type: ignore [arg-type]
-        col(SlurmJobDB.submit_time),
-    )
     total = sess.exec(query_c).one()
 
     query = query_opt.get_query(select(SlurmJobDB))
@@ -384,7 +379,7 @@ def list_jobs(
         col(SlurmJobDB.submit_time),
     )
 
-    jobs = [SlurmJob.model_validate(doc) for doc in sess.exec(query)]
+    jobs = [SlurmJob.model_validate(doc.model_dump()) for doc in sess.exec(query)]
 
     return SlurmJobList(
         jobs=jobs,
@@ -408,7 +403,7 @@ def get_job(id: int, sess: Session = Depends(session_dep)) -> SlurmJob:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Job not found"
         )
-    return SlurmJob.model_validate(job)
+    return SlurmJob.model_validate(job.model_dump())
 
 
 @router.get("/cluster/list", dependencies=[Depends(requestor)])
@@ -439,13 +434,12 @@ def list_users(
     sess: Session = Depends(session_dep),
 ) -> UserList:
     query_c = query_opt.get_query(select(func.count(col(UserDB.id))))
-    query_c = page_opt.add_page_options(query_c, col(UserDB.id))  # type: ignore [arg-type]
     total = sess.exec(query_c).one()
 
     query = query_opt.get_query(select(UserDB))
     query = page_opt.add_page_options(query, col(UserDB.id))  # type: ignore [arg-type]
 
-    users = [User.model_validate(doc) for doc in sess.exec(query)]
+    users = [User.model_validate(doc.model_dump()) for doc in sess.exec(query)]
 
     return UserList(
         users=users,
@@ -464,7 +458,7 @@ def get_user_by_id(id: int, sess: Session = Depends(session_dep)) -> User:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
-    return User.model_validate(user)
+    return User.model_validate(user.model_dump())
 
 
 @router.get("/user/email/{email}", dependencies=[Depends(require_admin)])
@@ -475,7 +469,7 @@ def get_user_by_email(email: str, sess: Session = Depends(session_dep)) -> User:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
-    return User.model_validate(user)
+    return User.model_validate(user.model_dump())
 
 
 @router.get("/health/list")

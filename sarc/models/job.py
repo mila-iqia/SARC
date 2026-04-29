@@ -66,7 +66,7 @@ class SlurmJobBase(BaseModel):
     """Holds data for a Slurm job."""
 
     # job identification
-    cluster_name: str
+    cluster_id: int
     account: str
     job_id: int
     array_job_id: int | None = None
@@ -123,6 +123,9 @@ class SlurmJobBase(BaseModel):
 
     # statistics
     statistics: dict[str, Statistics] = Field(default_factory=dict)
+
+    # user
+    user_id: int
 
     @field_validator(
         "submit_time",
