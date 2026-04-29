@@ -26,18 +26,18 @@ def db_upgrade(engine: Engine):
         tables = [
             t
             for n, t in SQLModel.metadata.tables.items()
-            if n != job_series.JobSeries.__tablename__
+            if n != job_series.JobSeriesDB.__tablename__
         ]
         SQLModel.metadata.create_all(conn, tables, checkfirst=True)
 
-        compiled_query = job_series.JobSeries.__sql_view__.compile(
+        compiled_query = job_series.JobSeriesDB.__sql_view__.compile(
             dialect=engine.dialect, compile_kwargs={"literal_binds": True}
         )
 
         # This is kinda bad for performance, so we will have to take care of it with migrations
         conn.execute(
             text(
-                f"CREATE OR REPLACE VIEW {job_series.JobSeries.__tablename__} AS {compiled_query};"
+                f"CREATE OR REPLACE VIEW {job_series.JobSeriesDB.__tablename__} AS {compiled_query};"
             )
         )
 

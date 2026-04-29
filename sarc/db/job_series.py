@@ -81,7 +81,7 @@ rgu_expr = case(
 ).label("rgu_per_time")
 
 
-class JobSeries(SQLModel, table=True):
+class JobSeriesDB(SQLModel, table=True):
     __tablename__ = "job_series_view"  # This is filtered out in table creation
     __sql_view__ = (
         select(
