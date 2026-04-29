@@ -45,7 +45,7 @@ class ParseAllocations:
                                 row.pop(key)
 
                         cluster_name = row.pop("cluster_name")
-                        cluster_id = SlurmClusterDB.id_by_name(cluster_name, sess)
+                        cluster_id = SlurmClusterDB.id_by_name(sess, cluster_name)
                         if cluster_id is None:
                             logger.error(
                                 "Can't find cluster % for allocation, skipping row",

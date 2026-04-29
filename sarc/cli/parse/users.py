@@ -33,6 +33,7 @@ class ParseUsers:
             if _since is None:
                 _since = get_parsed_date(sess, "users")
                 sess.commit()
+            assert _since is not None
             for ce in parse_users(from_=_since):
                 with sess.begin():
                     for um in parse_ce(ce):

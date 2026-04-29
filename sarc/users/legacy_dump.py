@@ -15,9 +15,15 @@ from zoneinfo import ZoneInfo
 
 from serieux.features.encrypt import Secret
 
-from sarc.core.models.users import Credentials, MemberType
 from sarc.core.models.validators import END_TIME, START_TIME
-from sarc.core.scraping.users import MatchID, UserMatch, UserScraper, _builtin_scrapers
+from sarc.db.users import MemberType
+from sarc.scraping.users import (
+    Credentials,
+    MatchID,
+    UserMatch,
+    UserScraper,
+    _builtin_scrapers,
+)
 
 MTL = ZoneInfo("America/Montreal")
 

@@ -150,6 +150,7 @@ def parse_jobs(
             since = get_parsed_date(sess, "jobs")
 
         # Retrieve from the cache
+        assert since is not None
         cache = Cache(subdirectory="jobs")
         for cache_entry in cache.read_from(from_time=since):
             parse_cache_entry(sess, cache_entry, clusters_cfg)

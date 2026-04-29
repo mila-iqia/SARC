@@ -72,7 +72,7 @@ class ParseSlurmConfig:
             parser = SlurmConfigParser(cluster=cluster_config, threshold=self.threshold)
             slurm_conf = parser.load(io.StringIO(content))
             with config().db.session() as sess:
-                cluster_id = SlurmClusterDB.id_by_name(self.cluster_name, sess)
+                cluster_id = SlurmClusterDB.id_by_name(sess, self.cluster_name)
                 assert cluster_id is not None
                 if slurm_conf.gpu_to_billing is not None:
                     GPUBillingDB.get_or_create(

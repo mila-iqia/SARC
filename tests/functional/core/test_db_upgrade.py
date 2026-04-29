@@ -1,8 +1,8 @@
 import pymongo
 import pytest
+from sarc.core.db_init import CURRENT_SCHEMA_VERSION, db_upgrade
 
 from sarc.core import db_init
-from sarc.core.db_init import CURRENT_SCHEMA_VERSION, db_upgrade
 from sarc.core.models.validators import START_TIME
 from sarc.db.runstate import get_parsed_date
 

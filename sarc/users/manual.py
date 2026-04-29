@@ -5,7 +5,7 @@ from datetime import datetime
 
 from serieux import deserialize, serialize
 
-from sarc.core.scraping.users import MatchID, UserMatch, UserScraper, _builtin_scrapers
+from sarc.scraping.users import MatchID, UserMatch, UserScraper, _builtin_scrapers
 
 
 @dataclass

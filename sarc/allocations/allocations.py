@@ -23,7 +23,7 @@ def get_allocation_summaries(
         allocations = get_allocations(sess, cluster_name, start=start, end=end)
 
     def allocation_key(allocation: AllocationDB) -> tuple[str, date, date]:
-        return (allocation.cluster_name, allocation.start, allocation.end)
+        return (allocation.cluster.cluster_name, allocation.start, allocation.end)
 
     summaries: dict[tuple[str, date, date], AllocationDB] = {}
     for allocation in allocations:

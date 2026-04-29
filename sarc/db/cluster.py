@@ -1,6 +1,6 @@
 import bisect
 from collections.abc import Sequence
-from datetime import datetime
+from datetime import date, datetime
 from typing import Self
 
 from sqlalchemy.dialects.postgresql import JSONB
@@ -66,7 +66,7 @@ class SlurmClusterDB(SQLModel, table=True):
 
     cluster_name: str = Field(unique=True)
     domain: str
-    start_date: datetime_utc
+    start_date: date
     end_time_sacct: datetime_utc | None = None
     end_time_prometheus: datetime_utc | None = None
     billing_is_gpu: bool = False
@@ -88,7 +88,7 @@ class SlurmClusterDB(SQLModel, table=True):
             bisect.bisect_right(
                 [mapping.since for mapping in self.node_gpu_mapping], required_date
             )
-            - 1,
+            - 1
         )
         if index_mapping < 0:
             return None
@@ -102,19 +102,25 @@ class SlurmClusterDB(SQLModel, table=True):
             return self.gpu_billing[-1]
         index_mapping = (
             bisect.bisect_right(
-                [mapping.since for mapping in self.node_gpu_mapping], required_date
+                [mapping.since for mapping in self.gpu_billing], required_date
             )
-            - 1,
+            - 1
         )
         if index_mapping < 0:
             return None
         else:
-            return self.node_gpu_mapping[index_mapping]
+            return self.gpu_billing[index_mapping]
 
     @classmethod
-    def id_by_name(cls, cluster_name: str, sess: Session) -> int | None:
+    def id_by_name(cls, sess: Session, cluster_name: str) -> int | None:
         return sess.exec(
             select(cls.id).where(cls.cluster_name == cluster_name)
+        ).one_or_none()
+
+    @classmethod
+    def by_name(cls, sess: Session, cluster_name: str) -> Self | None:
+        return sess.exec(
+            select(cls).where(cls.cluster_name == cluster_name)
         ).one_or_none()
 
 

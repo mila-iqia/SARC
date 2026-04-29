@@ -6,10 +6,10 @@ from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel
+from sarc.client.job import JobStatistics, SlurmJob, _jobs_collection
 from simple_parsing import ArgumentParser
 from tqdm import tqdm
 
-from sarc.client.job import JobStatistics, SlurmJob, _jobs_collection
 from sarc.config import UTC, config
 from sarc.core.models.validators import datetime_utc
 from sarc.core.scraping.jobs_utils import update_allocated_gpu_type_from_nodes

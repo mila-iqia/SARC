@@ -13,6 +13,7 @@ from sqlmodel import (
     Session,
     SQLModel,
     UniqueConstraint,
+    col,
     func,
     or_,
     select,
@@ -272,7 +273,7 @@ def _compute_jobs_query(
     if isinstance(job_id, int):
         query = query.where(SlurmJobDB.job_id == job_id)
     elif isinstance(job_id, list):
-        query = query.where(SlurmJobDB.job_id.in_(job_id))
+        query = query.where(col(SlurmJobDB.job_id).in_(job_id))
 
     if user is not None:
         query = query.where(SlurmJobDB.user_id == user)
@@ -285,7 +286,7 @@ def _compute_jobs_query(
         # since we need to get both jobs that did not finish, and any job that ended after
         # the given time.
         query = query.where(
-            or_(SlurmJobDB.end_time == None, SlurmJobDB.end_time > start)  # noqa: E711
+            or_(SlurmJobDB.end_time == None, col(SlurmJobDB.end_time) > start)  # noqa: E711
         )
     if end:
         # Select any job that had a status before the given end time.
@@ -300,7 +301,7 @@ def count_jobs(
     cluster: str | ClusterConfig | None = None,
     job_id: int | list[int] | None = None,
     job_state: str | SlurmState | None = None,
-    user: str | None = None,
+    user: int | UserDB | None = None,
     start: str | datetime | None = None,
     end: str | datetime | None = None,
 ) -> int:
@@ -319,7 +320,7 @@ def count_jobs(
     """
 
     query = _compute_jobs_query(
-        select(func.count(SlurmJobDB)),
+        select(func.count(col(SlurmJobDB.id))),
         sess,
         cluster=cluster,
         job_id=job_id,
@@ -337,7 +338,7 @@ def get_jobs(
     cluster: str | ClusterConfig | None = None,
     job_id: int | list[int] | None = None,
     job_state: str | SlurmState | None = None,
-    user: str | None = None,
+    user: int | UserDB | None = None,
     start: str | datetime | None = None,
     end: str | datetime | None = None,
 ) -> Iterable[SlurmJobDB]:
@@ -378,7 +379,7 @@ def get_job(sess: Session, **kwargs) -> SlurmJobDB | None:
     # of the job.
     query = (
         _compute_jobs_query(select(SlurmJobDB), sess, **kwargs)
-        .order_by(SlurmJobDB.submit_time.desc())
+        .order_by(col(SlurmJobDB.submit_time).desc())
         .limit(1)
     )
     return sess.exec(query).one_or_none()

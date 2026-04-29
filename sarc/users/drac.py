@@ -5,8 +5,13 @@ from datetime import datetime
 
 from serieux.features.encrypt import Secret
 
-from sarc.core.models.users import Credentials
-from sarc.core.scraping.users import MatchID, UserMatch, UserScraper, _builtin_scrapers
+from sarc.scraping.users import (
+    Credentials,
+    MatchID,
+    UserMatch,
+    UserScraper,
+    _builtin_scrapers,
+)
 
 
 @dataclass

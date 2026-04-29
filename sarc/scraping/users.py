@@ -1,9 +1,9 @@
 import logging
 import os
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from datetime import UTC, datetime
 from importlib.metadata import entry_points
-from typing import Any, Callable, Protocol, Type
+from typing import Any, Callable, Protocol, Type, overload
 
 from pydantic import BaseModel, Field, field_serializer
 from serieux import IncludeFile, Serieux, WorkingDirectory
@@ -12,14 +12,17 @@ from sqlmodel import Session, select
 
 from sarc.cache import Cache, CacheEntry
 from sarc.config import config_path
-from sarc.core.models.users import Credentials, MemberType
 from sarc.core.models.validators import ValidField
-from sarc.db.users import MatchingID, UserDB
+from sarc.db.users import MatchingID, MemberType, UserDB
 from sarc.db.users import ValidField as ValidFieldDB
 
 deserialize = (Serieux + IncludeFile)().deserialize  # type: ignore[operator]
 
 logger = logging.getLogger(__name__)
+
+
+class Credentials(ValidField[str]):
+    pass
 
 
 class MatchID(BaseModel):
@@ -257,7 +260,7 @@ def parse_ce(ce: CacheEntry) -> Iterable[UserMatch]:
                 yield user_refs[k]
 
 
-def lookup_match_id(sess: Session, match_id: MatchID) -> UserDB | None:
+def lookup_match_id(sess: Session, match_id: MatchID) -> Sequence[UserDB]:
     return sess.exec(
         select(UserDB)
         .join(MatchingID)
@@ -289,35 +292,52 @@ def update_user(sess: Session, user: UserMatch) -> None:
             elif db_user.matching_ids[mid.name] != mid.mid:
                 logger.error(
                     "User %s has matching id (%s:%s) but update has (%s:%s), using update",
-                    db_user.uuid,
+                    db_user.id,
                     mid.name,
                     db_user.matching_ids[mid.name],
                     mid.name,
                     mid.mid,
                 )
                 db_user.matching_ids[mid.name] = mid.mid
-        update_user_db(user, db_user)
+        update_user_db(sess, user, db_user)
+
+
+@overload
+def valid_merge[T](
+    valid: ValidField[T], db_valid: ValidFieldDB[T], *, map: None = None
+) -> None: ...
+
+
+@overload
+def valid_merge[T, U](
+    valid: ValidField[T], db_valid: ValidFieldDB[U], *, map: Callable[[T], U]
+) -> None: ...
 
 
 def valid_merge[T, U](
     valid: ValidField[T],
-    db_valid: ValidFieldDB[T],
+    db_valid: ValidFieldDB[U],
     *,
-    map: Callable[[T], U] = lambda v: v,
+    map: Callable[[T], U] | None = None,
 ) -> None:
+    if map is None:
+
+        def map(v):
+            return v
+
     for tag in valid.values:
         db_valid.insert(map(tag.value), tag.valid_start, tag.valid_end)
 
 
-def update_user_db(user: UserMatch, db_user: UserDB) -> None:
-    for domain, creds in user.associated_accounts.item():
+def update_user_db(sess: Session, user: UserMatch, db_user: UserDB) -> None:
+    for domain, creds in user.associated_accounts.items():
         valid_merge(creds, db_user.associated_accounts[domain])
     valid_merge(user.member_type, db_user.member_type)
     valid_merge(user.github_username, db_user.github_username)
     valid_merge(user.google_scholar_profile, db_user.google_scholar_profile)
 
     def map_super(match_id: MatchID) -> int:
-        res = lookup_match_id(match_id)
+        res = lookup_match_id(sess, match_id)
         if len(res) == 0:
             raise ValueError("Supervisor (%s) not found in database")
         else:
@@ -326,12 +346,13 @@ def update_user_db(user: UserMatch, db_user: UserDB) -> None:
                     "Multiple matching users in DB for match id (%s), selecting the first one",
                     match_id,
                 )
-            return res[0]
+            assert res[0].id is not None
+            return res[0].id
 
     valid_merge(user.supervisor, db_user.supervisor, map=map_super)
     valid_merge(
         user.co_supervisors,
-        db_user.co_supervisor,
+        db_user.co_supervisors,
         map=lambda v: sorted(map_super(m) for m in v),
     )
 
@@ -346,4 +367,4 @@ def insert_new(sess: Session, user: UserMatch) -> None:
     for match_id in user.known_matches:
         db_user.matching_ids[match_id.name] = match_id.mid
     db_user.matching_ids[user.matching_id.name] = user.matching_id.mid
-    update_user_db(user, db_user)
+    update_user_db(sess, user, db_user)

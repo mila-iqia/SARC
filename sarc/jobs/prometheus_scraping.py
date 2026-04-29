@@ -2,7 +2,7 @@ import json
 import logging
 from datetime import UTC, datetime
 
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from sarc.cache import Cache, CacheEntry
 from sarc.config import ClusterConfig, config
@@ -47,7 +47,7 @@ def fetch_prometheus(
     if after is not None:
         query = query.where(SlurmJobDB.submit_time >= after)
     if max_jobs is not None:
-        query = query.order_by(SlurmJobDB.submit_time).limit(max_jobs)
+        query = query.order_by(col(SlurmJobDB.submit_time)).limit(max_jobs)
     nb_jobs = 0
     cache = Cache("prometheus")
     with cache.create_entry(datetime.now(UTC)) as ce:
@@ -72,6 +72,7 @@ def parse_prometheus(since: datetime | None, update_parsed_date: bool) -> None:
         if since is None:
             since = get_parsed_date(sess, "prometheus")
 
+        assert since is not None
         for ce in cache.read_from(from_time=since):
             error = parse_prometheus_ce(sess, ce)
             if update_parsed_date and not error:
@@ -103,7 +104,7 @@ def parse_prometheus_ce(sess: Session, ce: CacheEntry) -> bool:
                 f"Empty data found for job {job_id} on cluster {cluster_name} (submit_time {submit_time}), skipping cache entry"
             )
             continue
-        cluster_id = SlurmClusterDB.id_by_name(cluster_name, sess)
+        cluster_id = SlurmClusterDB.id_by_name(sess, cluster_name)
         if cluster_id is None:
             logger.error("Unknown cluster name %s in entry key %s", cluster_name, key)
             error = True
@@ -119,7 +120,7 @@ def parse_prometheus_ce(sess: Session, ce: CacheEntry) -> bool:
                 cluster.harmonize_gpu_from_nodes(entry.nodes, gpu_type) or gpu_type
             )
         statistics = compute_job_statistics(entry, data)
-        if not statistics.empty():
+        if len(statistics) != 0:
             entry.statistics = statistics
 
     logger.info(f"Saved Prometheus metrics for {nb_jobs} jobs.")

@@ -1,5 +1,7 @@
 import logging
+from collections.abc import Iterable, Sequence
 from datetime import UTC, datetime
+from enum import Enum
 from typing import Any, Self, Type
 
 from sqlalchemy.dialects.postgresql import TSTZRANGE, ExcludeConstraint, Range
@@ -12,16 +14,27 @@ from sqlmodel import (
     Relationship,
     Session,
     SQLModel,
+    col,
+    exists,
     func,
     or_,
     select,
     update,
 )
 
-from sarc.core.models.users import MemberType
 from sarc.core.models.validators import datetime_utc
 
 logger = logging.getLogger(__name__)
+
+
+class MemberType(str, Enum):
+    MASTER_STUDENT = "master"
+    PHD_STUDENT = "phd"
+    POSTDOC = "postdoc"
+    PROFESSOR = "professor"
+    STAFF = "staff"
+    INTERN = "intern"
+    # There are probably some missing types so feel free to add them
 
 
 def subtract_ranges(r1: Range[datetime], r2: Range[datetime]) -> list[Range[datetime]]:
@@ -262,13 +275,37 @@ class CredentialsValid(ValidField[str]):
 
 
 class CredentialsDict:
-    def __init__(self, session: SASession | None, id: int):
+    def __init__(self, session: SASession, id: int):
         self.session = session
         self.user_id = id
 
-    def __getitem__(self, key: str):
+    def __getitem__(self, key: str) -> CredentialsValid:
         assert isinstance(key, str)
         return CredentialsValid(session=self.session, id=self.user_id, domain=key)
+
+    def items(self) -> Iterable[tuple[str, CredentialsValid]]:
+        domains = self.session.execute(
+            select(CredentialsDB.domain)
+            .where(CredentialsDB.user_id == self.user_id)
+            .distinct()
+        )
+        for domain in domains:
+            yield (
+                domain[0],
+                CredentialsValid(
+                    session=self.session, id=self.user_id, domain=domain[0]
+                ),
+            )
+
+    def __contains__(self, key: str) -> bool:
+        return self.session.execute(
+            select(
+                exists().where(
+                    col(CredentialsDB.user_id) == self.user_id,
+                    col(CredentialsDB.domain) == key,
+                )
+            )
+        ).one()[0]
 
 
 class MemberTypeDB(ValidDB, table=True):
@@ -338,6 +375,12 @@ class UserDB(SQLModel, table=True):
     def matching_ids(self) -> dict[str, str]:
         return self._match_ids_dict
 
+    @property
+    def _session(self) -> SASession:
+        sess = Session.object_session(self)
+        assert sess is not None
+        return sess
+
     # Below is the tracked data for a user. Each field or value tracks changes
     # and validity periods. Insert new values with field.insert(value, [start,
     # end]) and get the values with .get_value([date]). Do not modify the values
@@ -347,34 +390,40 @@ class UserDB(SQLModel, table=True):
     # this is per domain (i.e. "drac"), not per cluster
     @property
     def associated_accounts(self) -> CredentialsDict:
-        return CredentialsDict(Session.object_session(self), self.id)
+        assert self.id is not None
+        return CredentialsDict(self._session, self.id)
 
     @property
     def member_type(self) -> ValidField[MemberType]:
+        assert self.id is not None
         return ValidField(
             Session.object_session(self), MemberTypeDB, "member_type", self.id
         )
 
     @property
     def supervisor(self) -> ValidField[int]:
+        assert self.id is not None
         return ValidField(
             Session.object_session(self), SupervisorDB, "supervisor", self.id
         )
 
     @property
-    def co_supervisor(self) -> ValidField[list[int]]:
+    def co_supervisors(self) -> ValidField[list[int]]:
+        assert self.id is not None
         return ValidField(
             Session.object_session(self), CoSupervisorDB, "co_supervisors", self.id
         )
 
     @property
     def github_username(self) -> ValidField[str]:
+        assert self.id is not None
         return ValidField(
             Session.object_session(self), GithubUsernameDB, "username", self.id
         )
 
     @property
     def google_scholar_profile(self) -> ValidField[str]:
+        assert self.id is not None
         return ValidField(
             Session.object_session(self), GoogleScholarDB, "profile_id", self.id
         )
@@ -390,15 +439,19 @@ def get_user_id_for_cluster_user(
     from .cluster import SlurmClusterDB
 
     cluster = sess.get(SlurmClusterDB, cluster_id)
+    assert cluster is not None
     return sess.exec(
-        select(CredentialsDB.user_id)
-        .where(
+        select(CredentialsDB.user_id).where(
             CredentialsDB.domain == cluster.domain,
             CredentialsDB.username == user,
             CredentialsDB.valid.contains(submit_time),
         )
-        .one_or_none()
-    )
+    ).one_or_none()
+
+
+# TODO: find out how it is used and if we can push the filtering down to the DB
+def get_users(sess: Session) -> Sequence[UserDB]:
+    return sess.exec(select(UserDB)).all()
 
 
 def combine_users(db_user1: UserDB, db_user2: UserDB) -> UserDB:
@@ -418,10 +471,7 @@ def combine_users(db_user1: UserDB, db_user2: UserDB) -> UserDB:
     db_user1.github_username.merge_with(db_user2.github_username)
     db_user1.google_scholar_profile.merge_with(db_user2.google_scholar_profile)
     for name, creds in db_user2.associated_accounts.items():
-        if name in db_user1.associated_accounts:
-            db_user1.associated_accounts[name].merge_with(creds)
-        else:
-            db_user1.associated_accounts[name] = creds
+        db_user1.associated_accounts[name].merge_with(creds)
     db_user1.supervisor.merge_with(db_user2.supervisor)
     db_user1.co_supervisors.merge_with(db_user2.co_supervisors)
 
@@ -446,7 +496,7 @@ def deduplicate_users(sess: Session):
     subquery = (
         select(MatchingID.plugin_name, MatchingID.match_id)
         .group_by(MatchingID.plugin_name, MatchingID.match_id)
-        .having(func.count(MatchingID.id) > 1)
+        .having(func.count(col(MatchingID.id)) > 1)
         .subquery()
     )
     dupes = sess.exec(
@@ -458,8 +508,9 @@ def deduplicate_users(sess: Session):
         .group_by(MatchingID.plugin_name, MatchingID.match_id)
     ).all()
 
-    groups: dict[tuple[str, str], int] = dict()
+    groups: dict[tuple[str, str], list[int]] = dict()
     for dupe in dupes:
+        assert dupe.user_id is not None
         groups.setdefault((dupe.plugin_name, dupe.match_id), []).append(dupe.user_id)
 
     for group in groups.values():
@@ -471,17 +522,17 @@ def deduplicate_users(sess: Session):
             # to recover missing info in the cache files.
             sess.exec(
                 update(SupervisorDB)
-                .where(SupervisorDB.supervisor == db_extra.id)
+                .where(col(SupervisorDB.supervisor) == db_extra.id)
                 .values(supervisor=db_merged.id)
             )
             sess.exec(
                 update(CoSupervisorsHelper)
-                .where(CoSupervisorsHelper.co_supervisor == db_extra.id)
+                .where(col(CoSupervisorsHelper.co_supervisor) == db_extra.id)
                 .values(co_supervisor=db_merged.id)
             )
             sess.exec(
                 update(SlurmJobDB)
-                .where(SlurmJobDB.user_id == db_extra.id)
+                .where(col(SlurmJobDB.user_id) == db_extra.id)
                 .values(user_id=db_merged.id)
             )
 

@@ -4,6 +4,7 @@ import zoneinfo
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field, fields
+from datetime import date
 from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Literal, cast, overload
@@ -76,7 +77,7 @@ class ClusterConfig:
     ignore_tz_utc: bool = False
     accounts: list[str] | None = None
     diskusage: list[DiskUsageConfig] | None = None
-    start_date: str = "2022-04-01"
+    start_date: date = date(2022, 4, 1)
     slurm_conf_host_path: Path = Path("/etc/slurm/slurm.conf")
 
     # Tell if billing (in job's requested|allocated field) is number of GPUs (True) or RGU (False)

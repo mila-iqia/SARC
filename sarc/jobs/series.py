@@ -8,7 +8,7 @@ import pandas
 from pandas import DataFrame, Series
 from prometheus_api_client.metric_range_df import MetricRangeDataFrame
 
-from sarc.config import UTC
+from sarc.config import UTC, config
 from sarc.db.job import JobStatisticDB, SlurmJobDB
 from sarc.traces import trace_decorator
 
@@ -104,7 +104,11 @@ def get_job_time_series_data(
         query = f"{query}[{duration_seconds}s:{interval}s] {offset_string}"
 
     logger.debug(f"prometheus query with offset: {query}")
-    return job.fetch_cluster_config().prometheus.custom_query(query)
+    return (
+        config("scraping")
+        .clusters[job.cluster.cluster_name]
+        .prometheus.custom_query(query)
+    )
 
 
 def get_job_time_series_metric_names() -> dict[str, str]:
@@ -268,11 +272,11 @@ def compute_job_statistics(
     )
 
     system_memory = None
-    if job.allocated.mem is not None:
+    if job.allocated_mem is not None:
         system_memory = compute_job_statistics_from_dataframe(
             metrics["slurm_job_memory_usage"],
             statistics=statistics_dict,
-            normalization=lambda x: float(x / 1e6 / cast(int, job.allocated.mem)),
+            normalization=lambda x: float(x / 1e6 / cast(int, job.allocated_mem)),
             unused_threshold=False,
         )
     elif metrics["slurm_job_memory_usage"] is not None:

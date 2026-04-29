@@ -150,7 +150,7 @@ class SlurmJob(BaseModel):
     allocated: SlurmResources
 
     # statistics
-    stored_statistics: JobStatistics | None = None
+    statistics: JobStatistics | None = None
 
     # User ID
     user_uuid: UUID4 | None = None
@@ -182,8 +182,3 @@ class SlurmJob(BaseModel):
             return self.end_time - self.start_time
 
         return timedelta(seconds=0)
-
-    # TODO: just rename stored_statistics to statistics
-    # We keep it that way for backward compat for now
-    def statistics(self) -> JobStatistics | None:
-        return self.stored_statistics

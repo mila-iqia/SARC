@@ -7,9 +7,11 @@ from typing import Iterator
 
 from hostlist import expand_hostlist
 from invoke.runners import Result
+from sqlmodel import col, update
 
 from sarc.config import UTC, ClusterConfig, config
 from sarc.core.models.validators import UTCOFFSET
+from sarc.db.cluster import SlurmClusterDB
 from sarc.db.job import SlurmJobDB
 from sarc.errors import ClusterNotFound
 from sarc.traces import trace_decorator
@@ -37,22 +39,21 @@ def _str_to_extended_dt(dt_str: str) -> datetime:
 def _time_auto_first_date(cluster_name: str, end_field: str) -> datetime:
     # get the last valid date in the database for the cluster
     # pylint: disable=broad-exception-raised
-    db = config().mongo.database_instance
-    db_collection = db.clusters
-    cluster = db_collection.find_one({"cluster_name": cluster_name})
-    if cluster is None:
-        raise ClusterNotFound(f"Cluster {cluster_name} not found in database")
-    start_date = cluster["start_date"]
-    logger.info(f"start_date={start_date}")
-    end_time = cluster[end_field]
-    logger.info(f"{end_field}={end_time}")
-    if end_time is None:
-        # Use cluster start date
-        # NB: Cluster start date is a day, like YYYY-MM-DD
-        return _str_to_dt(start_date)
-    # Use cluster end time for sacct
-    # Cluster end time is an hour, like YYYY-MM-DDTHH:mm
-    return _str_to_extended_dt(end_time)
+    #
+    with config().db.session() as sess:
+        cluster = SlurmClusterDB.by_name(sess, cluster_name)
+        if cluster is None:
+            raise ClusterNotFound(f"Cluster {cluster_name} not found in database")
+        start_date = cluster.start_date
+        logger.info(f"start_date={start_date}")
+        end_time = getattr(cluster, end_field)
+        logger.info(f"{end_field}={end_time}")
+        if end_time is None:
+            # Use cluster start date
+            # NB: Cluster start date is a day, like YYYY-MM-DD
+            return datetime.combine(start_date, datetime.min.time(), tzinfo=UTC)
+        # Use cluster end time for sacct
+        return end_time
 
 
 def parse_intervals(intervals: list[str]) -> list[tuple[datetime, datetime]]:
@@ -104,13 +105,12 @@ def parse_auto_intervals(
 def set_auto_end_time(cluster_name: str, end_field: str, date: datetime) -> None:
     # set the last valid date in the database for the cluster
     logger.info(f"set last successful date for cluster {cluster_name} to {date}")
-    db = config().mongo.database_instance
-    db_collection = db.clusters
-    db_collection.update_one(
-        {"cluster_name": cluster_name},
-        {"$set": {end_field: date.strftime(DATE_FORMAT_HOUR)}},
-        upsert=True,
-    )
+    with config().db.session() as sess:
+        sess.exec(
+            update(SlurmClusterDB)
+            .where(col(SlurmClusterDB.cluster_name) == cluster_name)
+            .values(**{end_field: date.strftime(DATE_FORMAT_HOUR)})
+        )
 
 
 def parse_in_timezone(timestamp: int | None) -> datetime | None:
@@ -202,10 +202,6 @@ def _convert_json_job(
     end_time = parse_in_timezone(entry["time"]["end"])
     elapsed_time: int = entry["time"]["elapsed"]
 
-    if end_time is not None:
-        # This is just to make sure
-        assert (end_time - start_time).seconds == elapsed_time
-
     # Here we add supplementary SlurmJob attributes
     # which should be common to all slurm versions.
     extra = {}
@@ -229,11 +225,16 @@ def _convert_json_job(
             cluster,
         )
 
-    v_before_23 = version is None or int(version["major"]) < 23
-    v_23_to_23_11 = int(version["major"]) == 23 and int(version["minor"]) < 11
-    v_before_23_11 = v_before_23 or v_23_to_23_11
-    if int(version["major"]) > 25:
-        raise JobConversionError(f"Unsupported slurm version: {version}")
+    if version is None:
+        v_before_23 = True
+        v_23_to_23_11 = False
+        v_before_23_11 = True
+    else:
+        v_before_23 = int(version["major"]) < 23
+        v_23_to_23_11 = int(version["major"]) == 23 and int(version["minor"]) < 11
+        v_before_23_11 = v_before_23 or v_23_to_23_11
+        if int(version["major"]) > 25:
+            raise JobConversionError(f"Unsupported slurm version: {version}")
 
     return dict(
         cluster_name=cluster,
