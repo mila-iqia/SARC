@@ -373,12 +373,13 @@ def list_jobs(
     )
 
     jobs = [SlurmJob.model_validate(doc.model_dump()) for doc in sess.exec(query)]
+    last_job = jobs[-1] if jobs else None
 
     return SlurmJobList(
         jobs=jobs,
         page=page_opt.page,
-        last_id=jobs[-1].id,
-        last_time=jobs[-1].submit_time,
+        last_id=last_job and last_job.id,
+        last_time=last_job and last_job.submit_time,
         per_page=page_opt.per_page,
         total=total,
     )
@@ -425,11 +426,12 @@ def list_users(
     query = page_opt.add_page_options(query, col(UserDB.id))  # type: ignore [arg-type]
 
     users = [User.model_validate(doc.model_dump()) for doc in sess.exec(query)]
+    last_user = users[-1] if users else None
 
     return UserList(
         users=users,
         page=page_opt.page,
-        last_id=users[-1].id,
+        last_id=last_user and last_user.id,
         per_page=page_opt.per_page,
         total=total,
     )
