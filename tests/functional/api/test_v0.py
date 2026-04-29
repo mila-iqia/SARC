@@ -1,16 +1,18 @@
 from datetime import datetime, timedelta
 
 import pytest
-from pydantic_mongo import PydanticObjectId
+from pydantic import ValidationError
+from sqlalchemy.exc import DataError
 
 from sarc.alerts.common import HealthCheck
 from sarc.alerts.healthcheck_state import HealthCheckState, HealthCheckStateRepository
 from sarc.config import UTC, config
+from sarc.models.api import SlurmJobList, UserList
+from sarc.models.cluster import SlurmCluster
 from tests.common.dateutils import _iso_mtl
 from tests.unittests.alerts.definitions import BeanCheck
 
 
-@pytest.mark.usefixtures("read_only_db", "client_mode")
 @pytest.mark.usefixtures("read_only_db")
 def test_get_job_not_found(client):
     """Test job not found (string, bad ID format) returns 422."""
@@ -35,9 +37,27 @@ def jobq(client):
         data = SlurmJobList.model_validate(response.json())
         if n is True:
             assert len(data.jobs) > 0, "Expected at least one job"
-        else:
+        elif n is not False:
             assert len(data.jobs) == n, f"Expected exactly {n} jobs"
         return data.jobs
+
+    return query
+
+
+@pytest.fixture
+def userq(client):
+    def query(*, n=True, query="", expect_status=200, **params):
+        response = client.get(
+            f"/v0/user/list{query}", expect_status=expect_status, params=params or None
+        )
+        if expect_status != 200:
+            return response.json()
+        data = UserList.model_validate(response.json())
+        if n is True:
+            assert len(data.users) > 0, "Expected at least one user"
+        elif n is not False:
+            assert len(data.users) == n, f"Expected exactly {n} users"
+        return data.users
 
     return query
 
@@ -132,8 +152,7 @@ def test_get_jobs_with_naive_datetime_filters(client):
 def test_get_jobs_with_datetime_filters(jobq):
     """Test jobs query with start and end datetime filters."""
     assert jobq(
-        start=_iso_mtl("2023-01-01T00:00:00"),
-        end=_iso_mtl("2023-12-31T23:59:59"),
+        start=_iso_mtl("2023-01-01T00:00:00"), end=_iso_mtl("2023-12-31T23:59:59")
     )
 
 
@@ -143,9 +162,7 @@ def test_get_jobs_multiple_filters(jobq):
     start = _iso_mtl("2023-01-01T00:00:00")
     jobs = jobq(cluster="raisin", job_state="COMPLETED", start=start)
     assert all(
-        j.cluster_id == 7
-        and j.job_state == "COMPLETED"
-        and str(j.start_time) >= start
+        j.cluster_id == 7 and j.job_state == "COMPLETED" and str(j.start_time) >= start
         for j in jobs
     )
 
@@ -168,21 +185,22 @@ def test_list_jobs_pagination(jobq):
     assert len(jobs) == 2
 
     # Page 6, should be empty
-    response = client.get("/v0/job/list?page=6&per_page=5", expect_status=200)
-    assert len(response.json()["jobs"]) == 0
+    jobs = jobq(page=6, per_page=5, n=0)
+    assert len(jobs) == 0
 
 
 @pytest.mark.usefixtures("read_only_db")
 def test_list_jobs_invalid_pagination(client):
     """Test list jobs with invalid pagination parameters."""
     # Page < 1
-    client.get("/v0/job/list?page=0", expect_status=400)
+    with pytest.raises(ValidationError):
+        client.get("/v0/job/list?page=0")
     # Per page < 1
-    client.get("/v0/job/list?per_page=0", expect_status=400)
+    with pytest.raises(ValidationError):
+        client.get("/v0/job/list?per_page=0")
     # Per page > MAX
-    client.get(
-        f"/v0/job/list?per_page={config().api.max_page_size + 1}", expect_status=400
-    )
+    with pytest.raises(ValidationError):
+        client.get(f"/v0/job/list?per_page={config().api.max_page_size + 1}")
 
 
 @pytest.mark.usefixtures("read_only_db")
@@ -267,353 +285,185 @@ def test_gpu_rgu(client, monkeypatch):
     assert data == _gen_fake_rgus()
 
 
-@pytest.mark.usefixtures("read_only_db_with_users")
-def test_user_query_by_display_name(client):
-    response = client.get("/v0/user/query?display_name=janE", expect_status=200)
-    data = response.json()
-    assert isinstance(data, list)
-    assert len(data) == 1
-    assert data[0] == "1f9b04e5-0ec4-4577-9196-2b03d254e344"
-
-    r = client.get(f"/v0/user/id/{data[0]}", expect_status=200)
-    user = r.json()
-    assert isinstance(user, dict)
-    assert user["display_name"] == "Jane Doe"
-    assert user["uuid"] == data[0]
-    assert user["email"] == "jdoe@example.com"
+@pytest.mark.usefixtures("read_only_db")
+def test_user_query_by_display_name(userq):
+    users = userq(display_name="janE")
+    assert _ids(users) == [1]
+    (user,) = users
+    assert user.display_name == "Jane Doe"
+    assert user.email == "jdoe@example.com"
 
 
-@pytest.mark.usefixtures("read_only_db_with_users")
-def test_user_query_by_email(client):
-    response = client.get(
-        "/v0/user/query?email=bonhomme@mila.quebec", expect_status=200
-    )
-    data = response.json()
-    assert isinstance(data, list)
-    assert len(data) == 1
-    assert data[0] == "5a8b9e7f-afcc-4ced-b596-44fcdb3a0cff"
-
-    r = client.get(f"/v0/user/id/{data[0]}", expect_status=200)
-    user = r.json()
-    assert isinstance(user, dict)
-    assert user["display_name"] == "M/Ms Bonhomme"
-    assert user["uuid"] == data[0]
-    assert user["email"] == "bonhomme@mila.quebec"
+@pytest.mark.usefixtures("read_only_db")
+def test_user_query_by_email(userq):
+    users = userq(email="bonhomme@mila.quebec")
+    assert _ids(users) == [8]
+    (user,) = users
+    assert user.display_name == "M/Ms Bonhomme"
+    assert user.email == "bonhomme@mila.quebec"
 
 
 @pytest.mark.parametrize(
-    "date,expected",
+    "member_type,date,expected",
     [
         # After 2026/05/01 and until 2027/09/01, there should be only 1 match
-        (datetime(2027, 9, 1, tzinfo=UTC), True),
-        (datetime(2027, 8, 20, tzinfo=UTC), True),
-        (datetime(2026, 5, 2, tzinfo=UTC), True),
+        ("professor", datetime(2027, 8, 31, tzinfo=UTC), [1]),
+        ("professor", datetime(2027, 8, 20, tzinfo=UTC), [1]),
+        ("professor", datetime(2026, 5, 2, tzinfo=UTC), [1]),
         # Before 2020/09/01 and after 2027/09/01, there should be not match
-        (datetime(2005, 8, 31, tzinfo=UTC), False),
-        (datetime(2010, 8, 31, tzinfo=UTC), False),
-        (datetime(2018, 8, 31, tzinfo=UTC), False),
-        (datetime(2020, 8, 31, 23, 59, 59, 999999, tzinfo=UTC), False),
-        (datetime(2027, 9, 1, 0, 0, 1, tzinfo=UTC), False),
-        (datetime(2027, 12, 1, tzinfo=UTC), False),
-        (datetime(2044, 7, 1, tzinfo=UTC), False),
+        ("professor", datetime(2005, 8, 31, tzinfo=UTC), []),
+        ("professor", datetime(2010, 8, 31, tzinfo=UTC), []),
+        ("professor", datetime(2018, 8, 31, tzinfo=UTC), []),
+        ("professor", datetime(2020, 8, 31, 23, 59, 59, tzinfo=UTC), []),
+        ("professor", datetime(2027, 9, 1, 0, 0, 1, tzinfo=UTC), []),
+        ("professor", datetime(2027, 12, 1, tzinfo=UTC), []),
+        ("professor", datetime(2044, 7, 1, tzinfo=UTC), []),
+        # Others
+        ("phd", datetime(2020, 8, 31, 23, 59, 59, 999999, tzinfo=UTC), [2]),
+        ("staff", datetime(2022, 5, 1, tzinfo=UTC), [7]),
     ],
 )
-@pytest.mark.usefixtures("read_only_db_with_users")
-def test_user_query_by_member_type_professor_now(client, freezer, date, expected):
+@pytest.mark.usefixtures("read_only_db")
+def test_user_query_by_member_type_now(userq, freezer, member_type, date, expected):
     freezer.move_to(date)
-    response = client.get("/v0/user/query?member_type=professor", expect_status=200)
-    data = response.json()
-    assert isinstance(data, list)
-    if expected:
-        assert len(data) == 1
-        assert sorted(data) == ["1f9b04e5-0ec4-4577-9196-2b03d254e344"]
-    else:
-        assert len(data) == 0
+    users = userq(member_type=member_type, n=False)
+    assert _ids(users) == expected
 
 
 @pytest.mark.parametrize(
-    "member_type,date,identifiers",
+    "start,supervisor,expected",
     [
-        (
-            "phd",
-            datetime(2020, 8, 31, 23, 59, 59, 999999, tzinfo=UTC),
-            ["7ecd3a8a-ab71-499e-b38a-ceacd91a99c4"],
-        ),
-        (
-            "staff",
-            datetime(2022, 5, 1, tzinfo=UTC),
-            ["8b4fef2b-8f47-4eb6-9992-3e7e1133b42a"],
-        ),
-    ],
-)
-@pytest.mark.usefixtures("read_only_db_with_users")
-def test_user_query_by_member_type_other_now(
-    client, freezer, member_type, date, identifiers
-):
-    freezer.move_to(date)
-    response = client.get(
-        f"/v0/user/query?member_type={member_type}", expect_status=200
-    )
-    data = response.json()
-    assert isinstance(data, list)
-    assert sorted(data) == sorted(identifiers)
-
-
-@pytest.mark.parametrize(
-    "start,nb_expected",
-    [
-        # Start old enough to get all supervised users (2 users)
-        (datetime(2005, 1, 1, tzinfo=UTC), 2),
-        (datetime(2018, 8, 31, 23, 59, 59, 999999, tzinfo=UTC), 2),
-        (datetime(2018, 9, 1, tzinfo=UTC), 2),
-        (datetime(2019, 9, 1, tzinfo=UTC), 2),
-        (datetime(2020, 9, 1, tzinfo=UTC), 2),
-        # From these start dates, we get only 1 supervised user
-        (datetime(2021, 5, 2, 0, 0, 0, 1, tzinfo=UTC), 1),
-        (datetime(2022, 1, 1, tzinfo=UTC), 1),
-        (datetime(2022, 10, 1, tzinfo=UTC), 1),
-        (datetime(2022, 5, 1, tzinfo=UTC), 1),
+        # Start old enough to get all supervised users (3 users)
+        (datetime(2005, 1, 1, tzinfo=UTC), 1, [2, 5, 7]),
+        (datetime(2018, 8, 31, 23, 59, 59, 999999, tzinfo=UTC), 1, [2, 5, 7]),
+        (datetime(2018, 9, 1, tzinfo=UTC), 1, [2, 5, 7]),
+        (datetime(2019, 9, 1, tzinfo=UTC), 1, [2, 5, 7]),
+        (datetime(2020, 9, 1, tzinfo=UTC), 1, [2, 5, 7]),
+        # From these start dates, we get only 2 supervised users
+        (datetime(2021, 5, 2, 0, 0, 0, 1, tzinfo=UTC), 1, [5, 7]),
+        (datetime(2022, 1, 1, tzinfo=UTC), 1, [5, 7]),
+        (datetime(2022, 10, 1, tzinfo=UTC), 1, [5, 7]),
+        (datetime(2022, 5, 1, tzinfo=UTC), 1, [5, 7]),
         # From these start dates, there is no more user supervised by this prof.
-        (datetime(2023, 1, 1, 0, 0, 1, tzinfo=UTC), 0),
-        (datetime(2025, 1, 1, tzinfo=UTC), 0),
-        (datetime(2035, 1, 1, tzinfo=UTC), 0),
+        (datetime(2023, 1, 1, 0, 0, 1, tzinfo=UTC), 1, []),
+        (datetime(2025, 1, 1, tzinfo=UTC), 1, []),
+        (datetime(2035, 1, 1, tzinfo=UTC), 1, []),
     ],
 )
-@pytest.mark.usefixtures("read_only_db_with_users")
-def test_user_query_by_supervisor_start(client, start, nb_expected):
-    supervisor = "1f9b04e5-0ec4-4577-9196-2b03d254e344"
-    response = client.get(
-        "/v0/user/query",
-        params={"supervisor": supervisor, "supervisor_start": start.isoformat()},
-        expect_status=200,
-    )
-    data = response.json()
-    assert isinstance(data, list)
-    assert len(data) == nb_expected
-    if nb_expected == 2:
-        assert sorted(data) == [
-            "7ecd3a8a-ab71-499e-b38a-ceacd91a99c4",
-            "7ee5849c-241e-4d84-a4d2-1f73e22784f9",
-        ]
-    elif nb_expected == 1:
-        assert data == ["7ee5849c-241e-4d84-a4d2-1f73e22784f9"]
-    else:
-        assert not data
+@pytest.mark.usefixtures("read_only_db")
+def test_user_query_by_supervisor_start(userq, start, supervisor, expected):
+    users = userq(supervisor=supervisor, start=start.isoformat(), n=False)
+    assert _ids(users) == expected
 
 
 @pytest.mark.parametrize(
-    "end,nb_expected",
+    "end,supervisor,expected",
     [
         # End new enough to get all supervised users (2 users)
-        (datetime(2035, 1, 1, tzinfo=UTC), 2),
-        (datetime(2025, 1, 1, tzinfo=UTC), 2),
-        (datetime(2023, 1, 1, tzinfo=UTC), 2),
-        (datetime(2022, 5, 1, tzinfo=UTC), 2),
-        (datetime(2022, 1, 1, tzinfo=UTC), 2),
+        (datetime(2035, 1, 1, tzinfo=UTC), 1, [2, 5, 7]),
+        (datetime(2025, 1, 1, tzinfo=UTC), 1, [2, 5, 7]),
+        (datetime(2023, 1, 1, tzinfo=UTC), 1, [2, 5, 7]),
+        (datetime(2022, 5, 1, tzinfo=UTC), 1, [2, 5, 7]),
+        (datetime(2022, 1, 2, tzinfo=UTC), 1, [2, 5, 7]),
         # Until these end dates, we get only 1 supervised user
-        (datetime(2021, 5, 1, tzinfo=UTC), 1),
-        (datetime(2020, 1, 1, tzinfo=UTC), 1),
-        (datetime(2019, 1, 1, tzinfo=UTC), 1),
-        (datetime(2018, 9, 1, tzinfo=UTC), 1),
+        (datetime(2021, 4, 1, tzinfo=UTC), 1, [2]),
+        (datetime(2020, 1, 1, tzinfo=UTC), 1, [2]),
+        (datetime(2019, 1, 1, tzinfo=UTC), 1, [2]),
+        (datetime(2018, 9, 2, tzinfo=UTC), 1, [2]),
         # Until these end dates, there is no more user supervised by this prof.
-        (datetime(2018, 8, 31, 23, 59, 59, 9999, tzinfo=UTC), 0),
-        (datetime(2017, 1, 1, tzinfo=UTC), 0),
-        (datetime(2005, 1, 1, tzinfo=UTC), 0),
+        (datetime(2018, 8, 31, 23, 59, 59, 9999, tzinfo=UTC), 1, []),
+        (datetime(2017, 1, 1, tzinfo=UTC), 1, []),
+        (datetime(2005, 1, 1, tzinfo=UTC), 1, []),
     ],
 )
-@pytest.mark.usefixtures("read_only_db_with_users")
-def test_user_query_by_supervisor_end(client, end, nb_expected):
-    supervisor = "1f9b04e5-0ec4-4577-9196-2b03d254e344"
-    response = client.get(
-        "/v0/user/query",
-        params={"supervisor": supervisor, "supervisor_end": end.isoformat()},
-        expect_status=200,
-    )
-    data = response.json()
-    assert isinstance(data, list)
-    assert len(data) == nb_expected
-    if nb_expected == 2:
-        assert sorted(data) == [
-            "7ecd3a8a-ab71-499e-b38a-ceacd91a99c4",
-            "7ee5849c-241e-4d84-a4d2-1f73e22784f9",
-        ]
-    elif nb_expected == 1:
-        assert data == ["7ecd3a8a-ab71-499e-b38a-ceacd91a99c4"]
-    else:
-        assert not data
+@pytest.mark.usefixtures("read_only_db")
+def test_user_query_by_supervisor_end(userq, end, supervisor, expected):
+    users = userq(supervisor=supervisor, end=end.isoformat(), n=False)
+    assert _ids(users) == expected
 
 
-@pytest.mark.parametrize(
-    "start,end,expected",
-    [
-        (datetime(2022, 1, 1, tzinfo=UTC), datetime(2023, 1, 1, tzinfo=UTC), True),
-        (datetime(2022, 1, 1, tzinfo=UTC), datetime(2022, 5, 1, tzinfo=UTC), True),
-        (datetime(2022, 5, 1, tzinfo=UTC), datetime(2023, 1, 1, tzinfo=UTC), True),
-        (datetime(2022, 5, 1, tzinfo=UTC), datetime(2022, 8, 1, tzinfo=UTC), True),
-        (datetime(2021, 1, 1, tzinfo=UTC), datetime(2022, 1, 1, tzinfo=UTC), True),
-        (datetime(2023, 1, 1, tzinfo=UTC), datetime(2025, 1, 1, tzinfo=UTC), True),
-        # outside
-        (datetime(2021, 1, 1, tzinfo=UTC), datetime(2021, 9, 1, tzinfo=UTC), False),
-        (datetime(2023, 1, 2, tzinfo=UTC), datetime(2025, 1, 1, tzinfo=UTC), False),
-    ],
-)
-@pytest.mark.usefixtures("read_only_db_with_users")
-def test_user_query_by_cosupervisor_start_end(client, start, end, expected):
-    cosupervisor = "1f9b04e5-0ec4-4577-9196-2b03d254e344"
-    response = client.get(
-        "/v0/user/query",
-        params={
-            "co_supervisor": cosupervisor,
-            "co_supervisor_start": start.isoformat(),
-            "co_supervisor_end": end.isoformat(),
-        },
-        expect_status=200,
-    )
-    data = response.json()
-    assert isinstance(data, list)
-    if expected:
-        assert len(data) == 1
-        assert data == ["8b4fef2b-8f47-4eb6-9992-3e7e1133b42a"]
-    else:
-        assert not data
-
-
-@pytest.mark.usefixtures("read_only_db_with_users")
-def test_user_query_by_cosupervisor_bad_start_end(client):
+@pytest.mark.usefixtures("read_only_db")
+def test_user_query_by_supervisor_bad_start_end(userq):
     start = datetime(2022, 1, 1, tzinfo=UTC)
     end = start - timedelta(days=1)
-    client.get(
-        "/v0/user/query",
-        params={
-            "co_supervisor": "1f9b04e5-0ec4-4577-9196-2b03d254e344",
-            "co_supervisor_start": start.isoformat(),
-            "co_supervisor_end": end.isoformat(),
-        },
-        expect_status=400,
+    with pytest.raises(DataError):
+        userq(supervisor=1, start=start.isoformat(), end=end.isoformat())
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_user_query_empty_result(userq):
+    userq(email="nothing@nothing.nothing", n=0)
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_user_query_no_filters(userq):
+    users = userq()
+    assert len(users) == 10
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_user_query_multiple_filters(userq):
+    users = userq(
+        supervisor=1, start=datetime(2020, 1, 1, tzinfo=UTC), display_name="sMiTh"
     )
+    assert _ids(users) == [2]
+    (user,) = users
+    assert user.display_name == "John Smith"
 
 
-@pytest.mark.usefixtures("read_only_db_with_users")
-def test_user_query_empty_result(client):
-    response = client.get(
-        "/v0/user/query?email=nothing@nothing.nothing", expect_status=200
-    )
-    data = response.json()
-    assert isinstance(data, list)
-    assert len(data) == 0
-
-
-@pytest.mark.usefixtures("read_only_db_with_users")
-def test_user_query_no_filters(client):
-    response = client.get("/v0/user/query", expect_status=200)
-    data = response.json()
-    assert isinstance(data, list)
-    assert len(data) == 10
-
-
-@pytest.mark.usefixtures("read_only_db_with_users")
-def test_user_query_multiple_filters(client):
-    response = client.get(
-        "/v0/user/query",
-        params={
-            "supervisor": "1f9b04e5-0ec4-4577-9196-2b03d254e344",
-            "supervisor_start": datetime(2020, 1, 1, tzinfo=UTC),
-            "display_name": "sMiTh",
-        },
-        expect_status=200,
-    )
-    data = response.json()
-    assert isinstance(data, list)
-    assert len(data) == 1
-    assert data[0] == "7ecd3a8a-ab71-499e-b38a-ceacd91a99c4"
-
-    r = client.get(f"/v0/user/id/{data[0]}", expect_status=200)
-    user = r.json()
-    assert isinstance(user, dict)
-    assert user["display_name"] == "John Smith"
-    assert user["uuid"] == data[0]
-
-
-@pytest.mark.usefixtures("read_only_db_with_users")
+@pytest.mark.usefixtures("read_only_db")
 def test_get_user_by_uuid(client):
-    response = client.get(
-        "/v0/user/id/7ecd3a8a-ab71-499e-b38a-ceacd91a99c4", expect_status=200
-    )
+    response = client.get("/v0/user/id/2", expect_status=200)
     data = response.json()
     assert isinstance(data, dict)
     assert data["email"] == "jsmith@example.com"
 
 
-@pytest.mark.usefixtures("read_only_db_with_users")
+@pytest.mark.usefixtures("read_only_db")
 def test_get_user_by_uuid_invalid(client):
     client.get("/v0/user/id/invalid", expect_status=422)
 
 
-@pytest.mark.usefixtures("read_only_db_with_users")
+@pytest.mark.usefixtures("read_only_db")
 def test_get_user_by_uuid_unknown(client):
-    client.get("/v0/user/id/70000000-a000-4000-b000-c00000000000", expect_status=404)
+    client.get("/v0/user/id/999999", expect_status=404)
 
 
-@pytest.mark.usefixtures("read_only_db_with_users")
+@pytest.mark.usefixtures("read_only_db")
 def test_get_user_by_email(client):
     response = client.get("/v0/user/email/jsmith@example.com", expect_status=200)
     data = response.json()
     assert isinstance(data, dict)
-    assert data["uuid"] == "7ecd3a8a-ab71-499e-b38a-ceacd91a99c4"
+    assert data["id"] == 2
 
 
-@pytest.mark.usefixtures("read_only_db_with_users")
+@pytest.mark.usefixtures("read_only_db")
 def test_get_user_by_email_unknown(client):
     client.get("/v0/user/email/unknown", expect_status=404)
 
 
-@pytest.mark.usefixtures("read_only_db_with_users")
-def test_user_list(client):
+@pytest.mark.usefixtures("read_only_db")
+def test_user_pagination(userq):
     """Test user list with pagination."""
-    # Default page 1
-    response = client.get("/v0/user/list", expect_status=200)
-    data = response.json()
-    assert data["page"] == 1
-    assert data["total"] == 10
-    assert len(data["users"]) == 10
+    users = userq(page=1, per_page=5)
+    assert len(users) == 5
 
-    # Check sorting: email asc
-    emails = [u["email"] for u in data["users"]]
-    assert emails == sorted(emails)
-
-    # Test per_page
-    response = client.get("/v0/user/list?per_page=3", expect_status=200)
-    data = response.json()
-    assert len(data["users"]) == 3
-    assert data["total"] == 10
-
-    # Test page 2
-    response = client.get("/v0/user/list?page=2&per_page=3", expect_status=200)
-    data = response.json()
-    assert len(data["users"]) == 3
-    assert data["page"] == 2
+    users = userq(page=3, per_page=3)
+    assert len(users) == 3
 
     # Page 4 (3*3 = 9, 1 left)
-    response = client.get("/v0/user/list?page=4&per_page=3", expect_status=200)
-    assert len(response.json()["users"]) == 1
+    users = userq(page=4, per_page=3)
+    assert len(users) == 1
 
-    # Page out of bounds
-    response = client.get("/v0/user/list?page=5&per_page=3", expect_status=200)
-    assert len(response.json()["users"]) == 0
+    # Page out of bound
+    users = userq(page=10, per_page=3, n=False)
+    assert len(users) == 0
 
     # Invalid parameters
-    client.get("/v0/user/list?page=0", expect_status=400)
-    client.get("/v0/user/list?per_page=0", expect_status=400)
-    client.get(
-        f"/v0/user/list?per_page={config().api.max_page_size + 1}", expect_status=400
-    )
-
-    # Test filtering with list endpoint
-    response = client.get("/v0/user/list?display_name=janE", expect_status=200)
-    data = response.json()
-    assert data["total"] == 1
-    assert len(data["users"]) == 1
-    assert data["users"][0]["display_name"] == "Jane Doe"
+    with pytest.raises(ValidationError):
+        userq(page=0, per_page=3)
+    with pytest.raises(ValidationError):
+        userq(page=1, per_page=0)
 
 
 @pytest.mark.usefixtures("empty_read_write_db")

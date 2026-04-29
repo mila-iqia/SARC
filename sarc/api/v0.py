@@ -1,11 +1,11 @@
 from collections.abc import Generator
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Annotated, Self
 
 from easy_oauth.cap import Capability
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from pydantic import UUID4, AfterValidator, BaseModel, Field
+from pydantic import AfterValidator, BaseModel, Field
 from pydantic.functional_validators import model_validator
 from serieux import deserialize
 from sqlalchemy.dialects.postgresql import Range
@@ -21,12 +21,11 @@ from sarc.config import UTC, Config, config
 from sarc.db.cluster import SlurmClusterDB, get_available_clusters
 from sarc.db.job import SlurmJobDB, SlurmState, get_rgus
 from sarc.db.users import (
-    CoSupervisorDB,
-    CoSupervisorsHelper,
     MatchingID,
     MemberType,
     MemberTypeDB,
-    SupervisorDB,
+    SupervisorsDB,
+    SupervisorsHelper,
     UserDB,
 )
 from sarc.models.api import SlurmJob, SlurmJobList, User, UserList
@@ -123,7 +122,7 @@ def validate_cluster(sess: Session, cluster: str | None):
 class PageOptions(BaseModel):
     page: int | None = Field(default=None, ge=1)
     last_id: int | None = None
-    per_page: int = Field(default=100, le=100)
+    per_page: int = Field(default=100, le=100, ge=1)
 
     @model_validator(mode="after")
     def only_one(self) -> Self:
@@ -151,7 +150,7 @@ class PageOptionsWithTime(BaseModel):
     page: int | None = Field(default=None, ge=1)
     last_id: int | None = None
     last_time: datetime | None = None
-    per_page: int = Field(default=100, le=100)
+    per_page: int = Field(default=100, le=100, ge=1)
 
     @model_validator(mode="after")
     def only_one(self) -> Self:
@@ -301,54 +300,43 @@ class UserQuery(BaseModel):
     display_name: str | None = None
     email: str | None = None
 
+    start: datetime_api | None = None
+    end: datetime_api | None = None
+
     member_type: MemberType | None = None
-    member_start: datetime_api | None = None
-    member_end: datetime_api | None = None
-
-    supervisor: UUID4 | None = None
-    supervisor_start: datetime_api | None = None
-    supervisor_end: datetime_api | None = None
-
-    co_supervisor: UUID4 | None = None
-    co_supervisor_start: datetime_api | None = None
-    co_supervisor_end: datetime_api | None = None
+    supervisor: int | None = None
 
     requestor: Requestor = Depends(requestor)
 
     def get_query[T: SelectOfScalar](self, query: T) -> T:
+        start = self.start
+        end = self.end
+        if start is None and end is None:
+            start = datetime.now(tz=UTC)
+            end = start + timedelta(microseconds=1)
+
         if not self.requestor.is_admin:
             # TODO: implement query for general users
             raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED)
 
         if self.display_name is not None:
-            query = query.where(col(UserDB.display_name).ilike(self.display_name))
+            query = query.where(
+                col(UserDB.display_name).ilike(f"%{self.display_name}%")
+            )
         if self.email is not None:
             query = query.where(UserDB.email == self.email)
         if self.member_type is not None:
             query = query.join(MemberTypeDB).where(
                 MemberTypeDB.member_type == self.member_type,
-                MemberTypeDB.valid.overlaps(
-                    Range(lower=self.member_start, upper=self.member_end)
-                ),
+                MemberTypeDB.valid.overlaps(Range(lower=start, upper=end)),
             )
         if self.supervisor is not None:
-            query = query.join(SupervisorDB).where(
-                SupervisorDB.supervisor == self.supervisor,
-                SupervisorDB.valid.overlaps(
-                    Range(lower=self.supervisor_start, upper=self.supervisor_end)
-                ),
-            )
-        if self.co_supervisor is not None:
             query = (
-                query.join(CoSupervisorsHelper)
-                .join(CoSupervisorDB)
+                query.join(SupervisorsDB, SupervisorsDB.user_id == UserDB.id)
+                .join(SupervisorsHelper, SupervisorsHelper.list_id == SupervisorsDB.id)
                 .where(
-                    CoSupervisorsHelper.co_supervisor == self.co_supervisor,
-                    CoSupervisorDB.valid.overlaps(
-                        Range(
-                            lower=self.co_supervisor_start, upper=self.co_supervisor_end
-                        )
-                    ),
+                    SupervisorsHelper.supervisor == self.supervisor,
+                    SupervisorsDB.valid.overlaps(Range(lower=start, upper=end)),
                 )
             )
         return query
@@ -429,7 +417,8 @@ def list_users(
     query = query_opt.get_query(select(UserDB))
     query = page_opt.add_page_options(query, col(UserDB.id))  # type: ignore [arg-type]
 
-    users = [User.model_validate(doc.model_dump()) for doc in sess.exec(query)]
+    results = list(sess.exec(query))
+    users = [User.model_validate(doc.model_dump()) for doc in results]
     last_user = users[-1] if users else None
 
     return UserList(
