@@ -371,6 +371,7 @@ def create_users(sess: Session, user_factory=None) -> Iterable[UserDB]:
         ("bonhomme", None),
         ("petitbonhomme", "aaa-001"),
         ("beaubonhomme", "aaa-002"),
+        ("bramin", "aaa-003"),
     ]
 
     for username, drac_account in fake_users:
@@ -384,7 +385,7 @@ def create_users(sess: Session, user_factory=None) -> Iterable[UserDB]:
         ]
         if drac_account:
             accts.append(
-                ("drac", username, datetime(2024, 4, 11, 0, 0, tzinfo=dt.UTC), None)
+                ("drac", username, datetime(2023, 1, 1, 0, 0, tzinfo=dt.UTC), None)
             )
         u = user_factory.add_user(
             display_name=f"M/Ms {username[0].upper()}{username[1:]}",
