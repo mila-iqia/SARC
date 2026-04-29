@@ -246,7 +246,7 @@ def _convert_json_job(
             else entry["array"]["task_id"]["number"]
         ),
         name=entry["name"],
-        user=entry["user"],
+        cluster_user=entry["user"],
         group=entry["group"],
         account=entry["account"],
         job_state=(
@@ -267,7 +267,7 @@ def _convert_json_job(
         time_limit=(
             tlimit := (
                 entry["time"]["limit"]
-                if v_before_23_11
+                if v_before_23
                 else entry["time"]["limit"]["number"]
             )
         )
@@ -282,6 +282,7 @@ def _convert_json_job(
         priority=(entry["priority"] if v_before_23 else entry["priority"]["number"]),
         qos=entry["qos"],
         work_dir=entry["working_directory"],
+        submit_line=entry.get("submit_line", ""),
         **resources,
         **flags,
         **extra,
