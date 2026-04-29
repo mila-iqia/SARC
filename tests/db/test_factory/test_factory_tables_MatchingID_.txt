@@ -1,0 +1,92 @@
+Found 15 result(s):
+
+Result #1
+{
+    "match_id": "doej@mila.quebec",
+    "plugin_name": "mila_ldap",
+    "user_id": 1
+}
+Result #2
+{
+    "match_id": "111",
+    "plugin_name": "mymila",
+    "user_id": 1
+}
+Result #3
+{
+    "match_id": "smithj@mila.quebec",
+    "plugin_name": "mila_ldap",
+    "user_id": 2
+}
+Result #4
+{
+    "match_id": "222",
+    "plugin_name": "mymila",
+    "user_id": 2
+}
+Result #5
+{
+    "match_id": "cinq",
+    "plugin_name": "test_match",
+    "user_id": 5
+}
+Result #6
+{
+    "match_id": "aaa",
+    "plugin_name": "test1",
+    "user_id": 5
+}
+Result #7
+{
+    "match_id": "quack",
+    "plugin_name": "test_match",
+    "user_id": 6
+}
+Result #8
+{
+    "match_id": "abc",
+    "plugin_name": "test_match",
+    "user_id": 7
+}
+Result #9
+{
+    "match_id": "bbb",
+    "plugin_name": "test1",
+    "user_id": 7
+}
+Result #10
+{
+    "match_id": "123",
+    "plugin_name": "test2",
+    "user_id": 7
+}
+Result #11
+{
+    "match_id": "bonhomme@mila.quebec",
+    "plugin_name": "mila_ldap",
+    "user_id": 8
+}
+Result #12
+{
+    "match_id": "petitbonhomme@mila.quebec",
+    "plugin_name": "mila_ldap",
+    "user_id": 9
+}
+Result #13
+{
+    "match_id": "aaa-001",
+    "plugin_name": "drac_role",
+    "user_id": 9
+}
+Result #14
+{
+    "match_id": "beaubonhomme@mila.quebec",
+    "plugin_name": "mila_ldap",
+    "user_id": 10
+}
+Result #15
+{
+    "match_id": "aaa-002",
+    "plugin_name": "drac_role",
+    "user_id": 10
+}

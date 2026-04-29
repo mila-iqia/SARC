@@ -5,7 +5,7 @@ from sarc.db.allocation import AllocationDB
 from sarc.db.cluster import GPUBillingDB, SlurmClusterDB
 from sarc.db.diskusage import DiskUsageDB, DiskUsageGroupDB, DiskUsageUserDB
 from sarc.db.job import SlurmJobDB
-from sarc.db.users import UserDB
+from sarc.db.users import MatchingID, UserDB
 
 from .factory import create_diskusages
 
@@ -21,6 +21,13 @@ from .factory import create_diskusages
         DiskUsageUserDB,
         DiskUsageGroupDB,
         DiskUsageDB,
+        # TODO: make sure that some of these are created through the factory?
+        # MemberTypeDB,
+        # SupervisorDB,
+        # CoSupervisorDB,
+        # GithubUsernameDB,
+        # GoogleScholarDB,
+        MatchingID,
     ],
 )
 def test_factory_tables(read_only_db, results_regression, datatype):
