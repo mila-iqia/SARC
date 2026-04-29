@@ -22,7 +22,7 @@ datadir = here.parent.parent / "data"
 
 @pytest.fixture(scope="session")
 def base_jobs():
-    return json.loads((datadir / "sacct" / "raisin_1714003200.json").read_text())
+    return json.loads((datadir / "sacct" / "raisin_base_job.json").read_text())
 
 
 @pytest.fixture(scope="session")

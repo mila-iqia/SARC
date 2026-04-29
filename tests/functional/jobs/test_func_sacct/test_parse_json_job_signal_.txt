@@ -3,7 +3,7 @@
 @@ -9,8 +9,8 @@
      "cluster_user": "bramin",
      "group": "bramin",
-     "job_state": "PENDING",
+     "job_state": "COMPLETED",
 -    "exit_code": 0,
 -    "signal": 0,
 +    "exit_code": null,

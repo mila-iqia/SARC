@@ -1,0 +1,225 @@
+{
+  "jobs": [
+    {
+      "account": "raisin",
+      "allocation_nodes": 1,
+      "array": {
+        "job_id": 1,
+        "limits": {
+          "max": {
+            "running": {
+              "tasks": 0
+            }
+          }
+        },
+        "task_id": {
+          "set": false,
+          "infinite": false,
+          "number": 0
+        },
+        "task": ""
+      },
+      "association": {
+        "account": "raisin",
+        "cluster": "raisin",
+        "partition": "largemem",
+        "user": "bramin",
+        "id": 0
+      },
+      "block": "",
+      "cluster": "raisin",
+      "comment": {
+        "administrator": "",
+        "job": "",
+        "system": ""
+      },
+      "constraints": "",
+      "container": "",
+      "derived_exit_code": {
+        "status": [
+          "SUCCESS"
+        ],
+        "return_code": {
+          "set": true,
+          "infinite": false,
+          "number": 0
+        },
+        "signal": {
+          "id": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          },
+          "name": ""
+        }
+      },
+      "exit_code": {
+        "status": [
+          "SUCCESS"
+        ],
+        "return_code": {
+          "set": true,
+          "infinite": false,
+          "number": 0
+        },
+        "signal": {
+          "id": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          },
+          "name": ""
+        }
+      },
+      "extra": "",
+      "failed_node": "",
+      "flags": [
+        "STARTED_ON_SCHEDULE"
+      ],
+      "group": "bramin",
+      "het": {
+        "job_id": 0,
+        "job_offset": {
+          "set": false,
+          "infinite": false,
+          "number": 0
+        }
+      },
+      "hold": false,
+      "job_id": 1,
+      "kill_request_user": "",
+      "licenses": "",
+      "mcs": {
+        "label": ""
+      },
+      "name": "bench",
+      "nodes": "None assigned",
+      "partition": "largemem",
+      "priority": {
+        "set": true,
+        "infinite": false,
+        "number": 46003
+      },
+      "qos": "normal",
+      "qosreq": "",
+      "required": {
+        "CPUs": 8,
+        "memory_per_cpu": {
+          "set": false,
+          "infinite": false,
+          "number": 0
+        },
+        "memory_per_node": {
+          "set": true,
+          "infinite": false,
+          "number": 32768
+        }
+      },
+      "reservation": {
+        "id": 0,
+        "name": "",
+        "requested": ""
+      },
+      "restart_cnt": 0,
+      "script": "",
+      "segment_size": 0,
+      "state": {
+        "current": [
+          "COMPLETED"
+        ],
+        "reason": ""
+      },
+      "stderr": "",
+      "stderr_expanded": "",
+      "stdin": "",
+      "stdin_expanded": "",
+      "stdout": "",
+      "stdout_expanded": "",
+      "steps": [],
+      "submit_line": "",
+      "tres": {
+        "allocated": [],
+        "requested": [
+          {
+            "type": "cpu",
+            "name": "",
+            "id": 1,
+            "count": 8,
+            "task": null,
+            "node": null
+          },
+          {
+            "type": "mem",
+            "name": "",
+            "id": 2,
+            "count": 32768,
+            "task": null,
+            "node": null
+          },
+          {
+            "type": "node",
+            "name": "",
+            "id": 4,
+            "count": 1,
+            "task": null,
+            "node": null
+          },
+          {
+            "type": "billing",
+            "name": "",
+            "id": 5,
+            "count": 8,
+            "task": null,
+            "node": null
+          }
+        ]
+      },
+      "time": {
+        "elapsed": 3600,
+        "eligible": 1676332800,
+        "end": 1676372400,
+        "start": 1676368800,
+        "submission": 1676332800,
+        "suspended": 0,
+        "system": {
+          "seconds": 0,
+          "microseconds": 0
+        },
+        "total": {
+          "seconds": 3600,
+          "microseconds": 0
+        },
+        "user": {
+          "seconds": 0,
+          "microseconds": 0
+        },
+        "limit": {
+          "set": true,
+          "infinite": false,
+          "number": 720
+        },
+        "planned": {
+          "set": true,
+          "infinite": false,
+          "number": 0
+        }
+      },
+      "used_gres": "",
+      "user": "bramin",
+      "wckey": {
+        "wckey": "",
+        "flags": []
+      },
+      "working_directory": "/home/drac/b/bramin/scratch"
+    }
+  ],
+  "meta": {
+    "slurm": {
+      "version": {"major": "25", "minor": "05", "micro": "2"},
+      "release": "25.05.2",
+      "cluster": "raisin"
+    }
+  },
+  "errors": [],
+  "warnings": []
+}
