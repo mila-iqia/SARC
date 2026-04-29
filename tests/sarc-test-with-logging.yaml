@@ -109,9 +109,10 @@ sarc:
     OTLP_endpoint: http://127.0.0.1/otlp/v1/logs
     log_level: WARNING
     service_name: sarc-test
-  mongo:
-    connection_string: localhost:27017
-    database_name: sarc-test
+  db:
+    host: localhost
+    name: "!OVERRIDE!"
+    auto_upgrade: false
   mymila:
     tmp_json_path: secrets/tmp_mymila.json
   loki:
