@@ -216,5 +216,5 @@ def parse_cache_entry(
                 )
                 continue
             job = SlurmJobDB.get_or_create(sess, **entry)
-            update_allocated_gpu_type_from_nodes(clusters_cfg[cluster_name], job)
             sess.flush()
+            update_allocated_gpu_type_from_nodes(clusters_cfg[cluster_name], job)

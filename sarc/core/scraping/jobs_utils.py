@@ -27,10 +27,6 @@ class JobConversionError(Exception):
     """Exception raised when there's an error converting a job entry from sacct."""
 
 
-def _str_to_dt(dt_str: str) -> datetime:
-    return datetime.strptime(dt_str, "%Y-%m-%d").replace(tzinfo=UTC)
-
-
 def _str_to_extended_dt(dt_str: str) -> datetime:
     """Parse date up to minute, with format %Y-%m-%dT%H:%M"""
     return datetime.strptime(dt_str, DATE_FORMAT_HOUR).replace(tzinfo=UTC)
@@ -109,8 +105,9 @@ def set_auto_end_time(cluster_name: str, end_field: str, date: datetime) -> None
         sess.exec(
             update(SlurmClusterDB)
             .where(col(SlurmClusterDB.name) == cluster_name)
-            .values(**{end_field: date.strftime(DATE_FORMAT_HOUR)})
+            .values(**{end_field: date})
         )
+        sess.commit()
 
 
 def parse_in_timezone(timestamp: int | None) -> datetime | None:
