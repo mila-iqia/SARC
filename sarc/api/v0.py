@@ -30,6 +30,7 @@ from sarc.db.users import (
     UserDB,
 )
 from sarc.models.api import SlurmJob, SlurmJobList, User, UserList
+from sarc.models.cluster import SlurmCluster
 
 
 def _ensure_datetime_utc(v: datetime) -> datetime:
@@ -401,10 +402,13 @@ def get_job(id: int, sess: Session = Depends(session_dep)) -> SlurmJob:
 
 
 @router.get("/cluster/list", dependencies=[Depends(requestor)])
-def get_cluster_names(sess: Session = Depends(session_dep)) -> list[str]:
+def get_cluster_names(sess: Session = Depends(session_dep)) -> list[SlurmCluster]:
     """Return the names of available clusters."""
     # TODO: should this return cluster objects instead of just names?
-    return sorted([cl.name for cl in get_available_clusters(sess)])
+    return [
+        SlurmCluster.model_validate(cl.model_dump())
+        for cl in get_available_clusters(sess)
+    ]
 
 
 @router.get("/gpu/rgu", dependencies=[Depends(requestor)])
