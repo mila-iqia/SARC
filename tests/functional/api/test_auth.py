@@ -55,7 +55,7 @@ def queries(**endpoints):
         "/v0/gpu/rgu", {"admin": 200, "user": 200, "not_in_db": 403, "guest": 401}
     ),
     job_list=Endpoint(
-        "/v0/job/list", {"admin": 200, "user": 501, "not_in_db": 403, "guest": 401}
+        "/v0/job/query", {"admin": 200, "user": 501, "not_in_db": 403, "guest": 401}
     ),
     job_count=Endpoint(
         "/v0/job/count", {"admin": 200, "user": 501, "not_in_db": 403, "guest": 401}
@@ -67,7 +67,7 @@ def queries(**endpoints):
         {"admin": 404, "user": 403, "not_in_db": 403, "guest": 401},
     ),
     user_list=Endpoint(
-        "/v0/user/list", {"admin": 200, "user": 501, "not_in_db": 403, "guest": 401}
+        "/v0/user/query", {"admin": 200, "user": 501, "not_in_db": 403, "guest": 401}
     ),
     user_id=Endpoint(
         # Valid format, nonexistent user.
