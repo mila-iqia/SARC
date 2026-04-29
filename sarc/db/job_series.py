@@ -1,5 +1,6 @@
 from datetime import datetime
 
+from sqlalchemy import true
 from sqlalchemy.dialects.postgresql import JSONB, aggregate_order_by
 from sqlmodel import FLOAT, JSON, Field, and_, case, col, desc, func, select
 
@@ -78,7 +79,12 @@ rgu_expr = case(
     (gpu_unit_billing == None, gpu_count_raw * GpuRguDB.rgu),  # noqa: E711
     # Case C: Unit billing exists (job_billing / gpu_billing) * type_rgu
     else_=(gpu_count_raw / gpu_unit_billing) * GpuRguDB.rgu,
-).label("rgu_per_time")
+).label("rgu")
+
+
+JOB_SERIES_EXCLUDED_JOB_COLS = frozenset(
+    {"id", "sarc_user_id", "latest_scraped_start", "latest_scraped_end"}
+)
 
 
 class JobSeriesDB(SQLModel, table=True):
@@ -86,11 +92,11 @@ class JobSeriesDB(SQLModel, table=True):
     __sql_view__ = (
         select(
             SlurmJobDB.id.label("job_db_id"),
-            UserDB.id.label("user_db_id"),
+            UserDB.id.label("sarc_user_id"),
             *[
                 c
                 for c in SlurmJobDB.__table__.columns
-                if c.name in ("id", "latest_scraped_start", "latest_scraped_end")
+                if c.name not in JOB_SERIES_EXCLUDED_JOB_COLS
             ],
             *[c for c in UserDB.__table__.columns if c.name != "id"],
             SlurmClusterDB.name.label("cluster_name"),
@@ -111,6 +117,7 @@ class JobSeriesDB(SQLModel, table=True):
             isouter=True,
         )
         .join(GpuRguDB, GpuRguDB.name == SlurmJobDB.allocated_gpu_type, isouter=True)
+        .outerjoin(billing_subq, true())
     )
     job_db_id: int = Field(primary_key=True)
     # job identification
@@ -120,7 +127,7 @@ class JobSeriesDB(SQLModel, table=True):
     array_job_id: int | None
     task_id: int | None
     name: str
-    user: str
+    cluster_user: str
     group: str
 
     # status
@@ -168,14 +175,15 @@ class JobSeriesDB(SQLModel, table=True):
     allocated_gres_gpu: int | None
     allocated_gpu_type: str | None
 
+    cluster_name: str | None = None
     statistics: dict[str, dict[str, float]] | None = Field(sa_type=JSON)
 
     gpu_type_rgu: float | None
     rgu: float | None
 
     # User ID
-    user_db_id: int
+    sarc_user_id: int
     display_name: str
     email: str
-    member_type: MemberType
+    member_type: MemberType | None = None
     supervisors: list[int] | None = Field(sa_type=JSON)
