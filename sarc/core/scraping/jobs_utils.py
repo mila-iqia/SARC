@@ -223,9 +223,9 @@ def _convert_json_job(
         )
 
     if version is None:
-        v_before_23 = True
+        v_before_23 = False
         v_23_to_23_11 = False
-        v_before_23_11 = True
+        v_before_23_11 = False
     else:
         v_before_23 = int(version["major"]) < 23
         v_23_to_23_11 = int(version["major"]) == 23 and int(version["minor"]) < 11
