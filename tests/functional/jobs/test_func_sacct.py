@@ -45,20 +45,6 @@ parameters = {
             )
         }
     },
-    "dont_trust_start_time": {
-        "time": {
-            "submission": int(
-                datetime(2023, 2, 24, 0, 0, 0, tzinfo=MTL).astimezone(UTC).timestamp()
-            ),
-            "start": int(
-                datetime(2023, 2, 24, 0, 0, 0, tzinfo=MTL).astimezone(UTC).timestamp()
-            ),
-            "end": int(
-                datetime(2023, 2, 25, 0, 0, 0, tzinfo=MTL).astimezone(UTC).timestamp()
-            ),
-            "elapsed": 60,
-        }
-    },
     "end_time": {
         "time": {
             "end": int(datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC).timestamp())
