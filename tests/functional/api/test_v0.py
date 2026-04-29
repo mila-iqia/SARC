@@ -27,39 +27,58 @@ def test_get_job_not_found_id(client):
 
 
 @pytest.fixture
-def jobq(client):
-    def query(*, n=True, query="", expect_status=200, **params):
-        response = client.get(
-            f"/v0/job/list{query}", expect_status=expect_status, params=params or None
-        )
-        if expect_status != 200:
-            return response.json()
-        data = SlurmJobList.model_validate(response.json())
-        if n is True:
-            assert len(data.jobs) > 0, "Expected at least one job"
-        elif n is not False:
-            assert len(data.jobs) == n, f"Expected exactly {n} jobs"
-        return data.jobs
+def paginator(client):
+    def query(endpoint, limit, field, sort_field, **params):
+        entries = []
+        cursor = None
+        for i in range(50):
+            print(cursor)
+            q = {**params, "limit": limit, "cursor": cursor}
+            response = client.get(endpoint, params=q, expect_status=200)
+            data = response.json()
+            cursor = data["cursor"]
+            if cursor is False:
+                break
+            results = data["results"]
+            assert len(results) <= limit
+            entries.extend(results)
+        else:
+            raise Exception(
+                "There's a problem, tests should not try to fetch more than 50 pages"
+            )
+
+        reverse = sort_field.startswith("-")
+        sort_field = sort_field.lstrip("-")
+        assert sorted(entries, key=lambda x: x[sort_field], reverse=reverse) == entries
+        ids = [x["id"] for x in entries]
+        assert len(set(ids)) == len(ids), "Duplicated results in paginated queries"
+        return ids
 
     return query
 
 
-@pytest.fixture
-def userq(client):
-    def query(*, n=True, query="", expect_status=200, **params):
-        response = client.get(
-            f"/v0/user/list{query}", expect_status=expect_status, params=params or None
-        )
-        if expect_status != 200:
-            return response.json()
-        data = UserList.model_validate(response.json())
-        if n is True:
-            assert len(data.users) > 0, "Expected at least one user"
-        elif n is not False:
-            assert len(data.users) == n, f"Expected exactly {n} users"
-        return data.users
+def query_fixture(t, type_name, endpoint):
+    def fixture(client):
+        def query(*, n=True, query="", expect_status=200, **params):
+            response = client.get(
+                f"{endpoint}{query}", expect_status=expect_status, params=params or None
+            )
+            if expect_status != 200:
+                return response.json()
+            data = t.model_validate(response.json())
+            if n is True:
+                assert len(data.results) > 0, f"Expected at least one {type_name}"
+            elif n is not False:
+                assert len(data.results) == n, f"Expected exactly {n} {type_name}s"
+            return data.results
 
-    return query
+        return query
+
+    return pytest.fixture(fixture)
+
+
+jobq = query_fixture(t=SlurmJobList, type_name="job", endpoint="/v0/job/list")
+userq = query_fixture(t=UserList, type_name="user", endpoint="/v0/user/list")
 
 
 def _ids(jobs):
@@ -174,33 +193,21 @@ def test_get_jobs_no_filters(jobq):
 
 
 @pytest.mark.usefixtures("read_only_db")
-def test_list_jobs_pagination(jobq):
-    """Test list jobs with pagination."""
-    # Page 1, 5 items
-    jobs = jobq(page=1, per_page=5)
-    assert len(jobs) == 5
-
-    # Page 5, should have 2 items left (22 - 4*5 = 2)
-    jobs = jobq(page=5, per_page=5)
-    assert len(jobs) == 2
-
-    # Page 6, should be empty
-    jobs = jobq(page=6, per_page=5, n=0)
-    assert len(jobs) == 0
+def test_get_jobs_pagination(paginator):
+    """Test jobs query with pagination."""
+    results = paginator("/v0/job/list", limit=2, sort_field="submit_time")
+    assert len(results) == 22
 
 
 @pytest.mark.usefixtures("read_only_db")
-def test_list_jobs_invalid_pagination(client):
-    """Test list jobs with invalid pagination parameters."""
-    # Page < 1
+def test_get_jobs_invalid_pagination(client):
+    """Test jobs query with invalid pagination parameters."""
+    # Limit < 1
     with pytest.raises(ValidationError):
-        client.get("/v0/job/list?page=0")
-    # Per page < 1
+        client.get("/v0/job/list?limit=0")
+    # Limit > MAX
     with pytest.raises(ValidationError):
-        client.get("/v0/job/list?per_page=0")
-    # Per page > MAX
-    with pytest.raises(ValidationError):
-        client.get(f"/v0/job/list?per_page={config().api.max_page_size + 1}")
+        client.get(f"/v0/job/list?limit={config().api.max_page_size + 1}")
 
 
 @pytest.mark.usefixtures("read_only_db")
@@ -443,27 +450,30 @@ def test_get_user_by_email_unknown(client):
 
 
 @pytest.mark.usefixtures("read_only_db")
-def test_user_pagination(userq):
+def test_user_pagination(paginator):
     """Test user list with pagination."""
-    users = userq(page=1, per_page=5)
+    results = paginator("/v0/user/list", limit=2, sort_field="id")
+    assert len(results) == 10
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_user_pagination_offset(userq):
+    """Test user list with pagination."""
+    users = userq(limit=5)
     assert len(users) == 5
 
-    users = userq(page=3, per_page=3)
+    users = userq(limit=3, cursor=3)
     assert len(users) == 3
 
-    # Page 4 (3*3 = 9, 1 left)
-    users = userq(page=4, per_page=3)
+    users = userq(limit=3, cursor=9)
     assert len(users) == 1
 
-    # Page out of bound
-    users = userq(page=10, per_page=3, n=False)
+    users = userq(limit=10, cursor=1000, n=False)
     assert len(users) == 0
 
     # Invalid parameters
     with pytest.raises(ValidationError):
-        userq(page=0, per_page=3)
-    with pytest.raises(ValidationError):
-        userq(page=1, per_page=0)
+        userq(limit=0)
 
 
 @pytest.mark.usefixtures("empty_read_write_db")
