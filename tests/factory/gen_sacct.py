@@ -66,6 +66,15 @@ from tests.factory.common import (
 
 # Transition weights per tick.  Only non-terminal states have rows.
 _TRANSITIONS: dict[str, list[tuple[str, int]]] = {
+    "__INIT__": [
+        ("COMPLETED", 50),
+        ("PENDING", 10),
+        ("RUNNING", 10),
+        ("FAILED", 5),
+        ("TIMEOUT", 1),
+        ("CANCELLED", 3),
+        ("OUT_OF_MEMORY", 1),
+    ],
     "PENDING": [("RUNNING", 80), ("PENDING", 15), ("CANCELLED", 5)],
     "RUNNING": [
         ("COMPLETED", 65),
@@ -427,16 +436,27 @@ def _to_raw(j: _Job) -> RawSlurmJob:
 # ---------------------------------------------------------------------------
 
 
-def _transition(
-    rng: random.Random, j: _Job, tick_ts: int, tick_sec: int, nodes: list[str]
-) -> bool:
-    """Advance j to its next state in place.  Returns True if state changed."""
-    options = _TRANSITIONS.get(j.state)
+def _state_transit(rng: random.Random, state: str):
+    options = _TRANSITIONS.get(state)
     if options is None:  # already terminal, should not be in-flight
         return False
 
     states, weights = zip(*options)
-    new_state = rng.choices(states, weights=weights)[0]
+    return rng.choices(states, weights=weights)[0]
+
+
+def _transition(
+    rng: random.Random, j: _Job, tick_ts: int, tick_sec: int, nodes: list[str]
+) -> bool:
+    """Advance j to its next state in place.  Returns True if state changed."""
+    # options = _TRANSITIONS.get(j.state)
+    # if options is None:  # already terminal, should not be in-flight
+    #     return False
+
+    # states, weights = zip(*options)
+    # new_state = rng.choices(states, weights=weights)[0]
+    if not (new_state := _state_transit(rng, j.state)):
+        return False
 
     if new_state == j.state:
         # Staying in same state; update elapsed for RUNNING jobs
@@ -478,7 +498,7 @@ def generate_sacct(self: DataFactory, data: Data) -> None:
     # PENDING and RUNNING jobs carried forward between ticks, keyed by cluster name
     in_flight: dict[str, list[_Job]] = {name: [] for name in self.clusters}
 
-    job_id = 1
+    job_ids: dict[str, int] = {name: 1 for name in self.clusters}
     t = self.t_start
 
     while t < self.t_end:
@@ -549,8 +569,9 @@ def generate_sacct(self: DataFactory, data: Data) -> None:
                     rng.choice(cluster.accounts) if cluster.accounts else cluster_name
                 )
 
+                state = _state_transit(rng, "__INIT__")
                 job = _Job(
-                    job_id=job_id,
+                    job_id=job_ids[cluster_name],
                     cluster_name=cluster_name,
                     domain=domain,
                     username=username,
@@ -568,16 +589,33 @@ def generate_sacct(self: DataFactory, data: Data) -> None:
                     billing_is_gpu=cluster.billing_is_gpu,
                     time_limit_min=time_limit_min,
                     node=node,  # reserved; becomes real on RUNNING transition
-                    state="PENDING",
+                    state=state,
                     flags=[],
-                    submission_ts=tick_ts - rng.randint(60, min(3600, tick_sec)),
+                    submission_ts=tick_ts - rng.randint(7200, min(86400, tick_sec)),
                     start_ts=0,
                     end_ts=0,
                     elapsed=0,
                 )
-                job_id += 1
+                job_ids[cluster_name] += 1
+                if state != "PENDING":
+                    job.start_ts = rng.randint(job.submission_ts, tick_ts - 1)
+                    job.flags = [
+                        rng.choice(["STARTED_ON_BACKFILL", "STARTED_ON_SCHEDULE"])
+                    ]
+                    if state in _TERMINAL_STATES:
+                        max_elapsed = time_limit_min * 60
+                        job.elapsed = (
+                            max_elapsed
+                            if state == "TIMEOUT"
+                            else rng.randint(60, max_elapsed)
+                        )
+                        job.end_ts = min(job.start_ts + job.elapsed, tick_ts)
+                        job.elapsed = job.end_ts - job.start_ts
+                    else:
+                        job.elapsed = tick_ts - job.start_ts
                 scrape_jobs.append(_to_raw(job))
-                in_flight[cluster_name].append(job)
+                if state not in _TERMINAL_STATES:
+                    in_flight[cluster_name].append(job)
 
             data.scrapes[f"{cluster_name}_{tick_ts}"] = RawSlurmOutput(
                 jobs=scrape_jobs, meta=_make_meta(cluster_name)

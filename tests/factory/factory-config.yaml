@@ -7,22 +7,22 @@ users:
   full_professors: 3
 slurm:
   mila:
-    njobs_mean: 4
-    njobs_std: 2
+    njobs_mean: 6
+    njobs_std: 3
     start: 2024-01-01
     end: 2024-06-01
   fromage:
-    njobs_mean: 4
-    njobs_std: 2
+    njobs_mean: 6
+    njobs_std: 3
     start: 2024-01-01
     end: 2024-06-01
   raisin:
-    njobs_mean: 4
-    njobs_std: 2
-    start: 2024-01-01
-    end: 2024-06-01
+    njobs_mean: 6
+    njobs_std: 3
+    start: 2024-04-01
+    end: 2024-08-01
   raisin_no_prometheus:
-    njobs_mean: 4
-    njobs_std: 2
+    njobs_mean: 6
+    njobs_std: 3
     start: 2024-03-01
     end: 2024-06-01
