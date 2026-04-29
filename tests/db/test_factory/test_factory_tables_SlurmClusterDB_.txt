@@ -3,72 +3,72 @@ Found 8 result(s):
 Result #1
 {
     "billing_is_gpu": false,
-    "cluster_name": "fromage",
     "domain": "drac",
     "end_time_prometheus": null,
     "end_time_sacct": null,
+    "name": "fromage",
     "start_date": "2022-04-01"
 }
 Result #2
 {
     "billing_is_gpu": false,
-    "cluster_name": "gerudo",
     "domain": "drac",
     "end_time_prometheus": null,
     "end_time_sacct": null,
+    "name": "gerudo",
     "start_date": "2022-04-01"
 }
 Result #3
 {
     "billing_is_gpu": false,
-    "cluster_name": "hyrule",
     "domain": "drac",
     "end_time_prometheus": null,
     "end_time_sacct": null,
+    "name": "hyrule",
     "start_date": "2022-04-01"
 }
 Result #4
 {
     "billing_is_gpu": false,
-    "cluster_name": "local",
     "domain": "mila",
     "end_time_prometheus": null,
     "end_time_sacct": null,
+    "name": "local",
     "start_date": "2022-04-01"
 }
 Result #5
 {
     "billing_is_gpu": true,
-    "cluster_name": "mila",
     "domain": "mila",
     "end_time_prometheus": null,
     "end_time_sacct": null,
+    "name": "mila",
     "start_date": "2022-04-01"
 }
 Result #6
 {
     "billing_is_gpu": false,
-    "cluster_name": "patate",
     "domain": "drac",
     "end_time_prometheus": null,
     "end_time_sacct": null,
+    "name": "patate",
     "start_date": "2022-04-01"
 }
 Result #7
 {
     "billing_is_gpu": false,
-    "cluster_name": "raisin",
     "domain": "drac",
     "end_time_prometheus": null,
     "end_time_sacct": null,
+    "name": "raisin",
     "start_date": "2022-04-01"
 }
 Result #8
 {
     "billing_is_gpu": false,
-    "cluster_name": "raisin_no_prometheus",
     "domain": "drac",
     "end_time_prometheus": null,
     "end_time_sacct": null,
+    "name": "raisin_no_prometheus",
     "start_date": "2022-04-01"
 }

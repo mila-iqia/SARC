@@ -84,7 +84,7 @@ class JobFactory:
         ).astimezone(UTC)
         self._first_job_id = first_job_id
         self.job_patch = job_patch or {}
-        self.clusters = {c.cluster_name: c for c in clusters}
+        self.clusters = {c.name: c for c in clusters}
         self.users = {u.email.split("@")[0]: u for u in users}
 
     @property
@@ -276,7 +276,7 @@ def create_users(user_factory=None) -> Iterable[UserDB]:
     user_factory.add_user(id=4, supervisor=[(prof2.id, None, None)])
     user_factory.add_user(
         id=5,
-        match_ids={"test_match": "abc", "test1": "aaa"},
+        match_ids={"test_match": "cinq", "test1": "aaa"},
         member_type=[
             (
                 "professor",
@@ -321,7 +321,7 @@ def create_users(user_factory=None) -> Iterable[UserDB]:
             )
         ],
     )
-    user_factory.add_user(id=6, match_ids={"test_match": "abc"})
+    user_factory.add_user(id=6, match_ids={"test_match": "quack"})
     user_factory.add_user(
         id=7,
         match_ids={"test_match": "abc", "test1": "bbb", "test2": "123"},
@@ -521,7 +521,7 @@ def create_jobs(
 
 
 def create_gpu_billings(clusters: list[SlurmClusterDB]) -> list[GPUBillingDB]:
-    cluster_by_name = {c.cluster_name: c for c in clusters}
+    cluster_by_name = {c.name: c for c in clusters}
     return [
         GPUBillingDB(
             cluster_id=cluster_by_name["patate"].id,
@@ -590,7 +590,7 @@ def create_diskusages() -> list[DiskUsageDB]:
 
 
 def create_allocations(clusters: list[SlurmClusterDB]) -> list[AllocationDB]:
-    cluster_by_name = {c.cluster_name: c for c in clusters}
+    cluster_by_name = {c.name: c for c in clusters}
     ts = datetime(year=2023, month=2, day=1)
     fromage = cluster_by_name["fromage"].id
     patate = cluster_by_name["patate"].id
