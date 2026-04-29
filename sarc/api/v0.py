@@ -356,13 +356,6 @@ class UserQuery(BaseModel):
 UserQueryType = Annotated[UserQuery, Depends(UserQuery)]
 
 
-@router.get("/job/query", dependencies=[Depends(require_admin)])
-def get_jobs(
-    query_opt: JobQueryType, sess: Session = Depends(session_dep)
-) -> list[int]:
-    return list(sess.exec(query_opt.get_query(select(UserDB.id))).all())  # type: ignore [arg-type]
-
-
 @router.get("/job/list")
 def list_jobs(
     query_opt: JobQueryType,
@@ -417,14 +410,6 @@ def get_cluster_names(sess: Session = Depends(session_dep)) -> list[str]:
 def get_rgu_value_per_gpu() -> dict[str, float]:
     """Return the mapping GPU->RGU."""
     return get_rgus()
-
-
-@router.get("/user/query", dependencies=[Depends(require_admin)])
-def query_users(
-    query_opt: UserQueryType, sess: Session = Depends(session_dep)
-) -> list[int]:
-    """Search users. Return user IDs."""
-    return list(sess.exec(query_opt.get_query(select(UserDB.id))).all())  # type: ignore [arg-type]
 
 
 @router.get("/user/list")

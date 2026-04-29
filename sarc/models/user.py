@@ -13,7 +13,9 @@ class MemberType(str, Enum):
     # There are probably some missing types so feel free to add them
 
 
-class UserBase(BaseModel):
+class User(BaseModel):
+    id: int | None = None
+
     display_name: str
     email: str
 

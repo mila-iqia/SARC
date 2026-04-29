@@ -2,16 +2,8 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
-from .job import SlurmJobBase
-from .user import UserBase
-
-
-class SlurmJob(SlurmJobBase):
-    id: int
-
-
-class User(UserBase):
-    id: int
+from .job import SlurmJob
+from .user import User
 
 
 class SlurmJobList(BaseModel):
