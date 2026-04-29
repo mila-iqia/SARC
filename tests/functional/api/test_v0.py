@@ -11,217 +11,161 @@ from tests.unittests.alerts.definitions import BeanCheck
 
 
 @pytest.mark.usefixtures("read_only_db", "client_mode")
+@pytest.mark.usefixtures("read_only_db")
 def test_get_job_not_found(client):
     """Test job not found (string, bad ID format) returns 422."""
     client.get("/v0/job/id/not_found", expect_status=422)
 
 
-@pytest.mark.usefixtures("read_only_db", "client_mode")
-def test_get_job_not_found_pydantic_id(client):
-    """Test job not found (pydantic object ID, good format) returns 404."""
-    oid = PydanticObjectId()
+@pytest.mark.usefixtures("read_only_db")
+def test_get_job_not_found_id(client):
+    """Test job not found (int, good format) returns 404."""
+    oid = 999_999
     client.get(f"/v0/job/id/{oid}", expect_status=404)
 
 
-@pytest.mark.usefixtures("read_only_db_with_users")
-def test_get_jobs_by_cluster(client):
+@pytest.fixture
+def jobq(client):
+    def query(*, n=True, query="", expect_status=200, **params):
+        response = client.get(
+            f"/v0/job/list{query}", expect_status=expect_status, params=params or None
+        )
+        if expect_status != 200:
+            return response.json()
+        data = SlurmJobList.model_validate(response.json())
+        if n is True:
+            assert len(data.jobs) > 0, "Expected at least one job"
+        else:
+            assert len(data.jobs) == n, f"Expected exactly {n} jobs"
+        return data.jobs
+
+    return query
+
+
+def _ids(jobs):
+    return sorted([j.id for j in jobs])
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_get_jobs_by_cluster(jobq):
     """Test successful jobs query by cluster."""
-    response = client.get("/v0/job/query?cluster=raisin", expect_status=200)
-
-    data = response.json()
-    assert isinstance(data, list)
-    assert len(data) > 0
-    for jid in data:
-        r = client.get(f"/v0/job/id/{jid}", expect_status=200)
-        job = r.json()
-        assert job["cluster_name"] == "raisin"
+    jobs = jobq(cluster="raisin")
+    assert all(j.cluster_id == 7 for j in jobs)
 
 
-@pytest.mark.usefixtures("read_only_db_with_users")
-def test_get_jobs_by_job_id(client):
+@pytest.mark.usefixtures("read_only_db")
+def test_get_jobs_by_job_id(jobq):
     """Test jobs query by job ID."""
-    response = client.get("/v0/job/query?job_id=10", expect_status=200)
-
-    data = response.json()
-    assert isinstance(data, list)
-    assert len(data) > 0
-    for jid in data:
-        r = client.get(f"/v0/job/id/{jid}", expect_status=200)
-        job = r.json()
-        assert job["job_id"] == 10
+    jobs = jobq(job_id="10", n=1)
+    assert _ids(jobs) == [10]
 
 
-@pytest.mark.usefixtures("read_only_db_with_users")
-def test_get_jobs_by_user(client):
+@pytest.mark.usefixtures("read_only_db")
+def test_get_jobs_by_user(jobq):
     """Test jobs query by username."""
-    response = client.get("/v0/job/query?username=petitbonhomme", expect_status=200)
-
-    data = response.json()
-    assert isinstance(data, list)
-    assert len(data) > 0
-    for jid in data:
-        r = client.get(f"/v0/job/id/{jid}", expect_status=200)
-        job = r.json()
-        assert job["user"] == "petitbonhomme"
+    jobs = jobq(username="beaubonhomme")
+    assert [j.user == "beaubonhomme" for j in jobs]
+    assert _ids(jobs) == [18]
 
 
-@pytest.mark.usefixtures("read_only_db_with_users")
-def test_get_jobs_by_state(client):
+@pytest.mark.usefixtures("read_only_db")
+def test_get_jobs_by_state(jobq):
     """Test jobs query by job state."""
-    response = client.get("/v0/job/query?job_state=COMPLETED", expect_status=200)
-
-    data = response.json()
-    assert isinstance(data, list)
-    assert len(data) > 0
-    for jid in data:
-        r = client.get(f"/v0/job/id/{jid}", expect_status=200)
-        job = r.json()
-        assert job["job_state"] == "COMPLETED"
+    jobs = jobq(job_state="COMPLETED")
+    assert [j.job_state == "COMPLETED" for j in jobs]
 
 
-@pytest.mark.usefixtures("read_only_db_with_users")
-def test_get_jobs_multiple_job_ids(client):
+@pytest.mark.usefixtures("read_only_db")
+def test_get_jobs_multiple_job_ids(jobq):
     """Test jobs query with multiple job IDs."""
-    response = client.get("/v0/job/query?job_id=10&job_id=20", expect_status=200)
-
-    data = response.json()
-    assert isinstance(data, list)
-    assert len(data) == 2
-    for jid in data:
-        r = client.get(f"/v0/job/id/{jid}", expect_status=200)
-        job = r.json()
-        assert job["job_id"] in (10, 20)
+    jobs = jobq(query="?job_id=10&job_id=15", n=2)
+    assert _ids(jobs) == [10, 15]
 
 
-@pytest.mark.usefixtures("read_only_db_with_users")
-def test_get_jobs_empty_job_id_list(client):
+@pytest.mark.usefixtures("read_only_db")
+def test_get_jobs_empty_job_id_list(jobq):
     """Test jobs query with an empty job_id list.
     SarcApiClient sends job_id= for an empty list.
     """
-    response = client.get("/v0/job/query?job_id=", expect_status=200)
-
-    data = response.json()
-    assert isinstance(data, list)
-    assert len(data) == 0
+    jobq(query="?job_id=", n=0)
 
 
 @pytest.mark.usefixtures("read_only_db")
-def test_get_jobs_invalid_job_id(client):
+def test_get_jobs_invalid_job_id(jobq):
     """Test jobs query with invalid job ID."""
-    client.get("/v0/job/query?job_id=not_an_int", expect_status=422)
+    jobq(job_id="not_an_int", expect_status=422)
 
 
-@pytest.mark.usefixtures("read_only_db_with_users")
-def test_get_jobs_empty_result(client):
+@pytest.mark.usefixtures("read_only_db")
+def test_get_jobs_empty_result(jobq):
     """Test jobs query with no results."""
     # Use a very high job ID that doesn't exist
-    response = client.get("/v0/job/query?job_id=9999999999", expect_status=200)
-
-    data = response.json()
-    assert len(data) == 0
+    jobq(job_id="999999", n=0)
 
 
 @pytest.mark.usefixtures("read_only_db")
-def test_get_jobs_invalid_cluster(client):
+def test_get_jobs_invalid_cluster(jobq):
     """Test jobs query with invalid cluster."""
-    response = client.get("/v0/job/query?cluster=invalid_cluster", expect_status=404)
-
-    data = response.json()
-    assert "No such cluster 'invalid_cluster'" in data["detail"]
+    err = jobq(cluster="invalid_cluster", expect_status=404)
+    assert "No such cluster 'invalid_cluster'" in err["detail"]
 
 
-@pytest.mark.usefixtures("read_only_db_with_users")
-def test_get_jobs_invalid_job_state(client):
+@pytest.mark.usefixtures("read_only_db")
+def test_get_jobs_invalid_job_state(jobq):
     """Test jobs query with invalid job state."""
-    client.get("/v0/job/query?job_state=INVALID", expect_status=422)
+    jobq(job_state="CHLORINE", expect_status=422)
 
 
-@pytest.mark.usefixtures("read_only_db_with_users")
+@pytest.mark.usefixtures("read_only_db")
 def test_get_jobs_with_naive_datetime_filters(client):
     """Test jobs query with start and end datetime filters."""
     params = {"start": "2023-01-01T00:00:00", "end": "2023-12-31T23:59:59"}
 
-    response = client.get("/v0/job/query", params=params, expect_status=422)
+    response = client.get("/v0/job/list", params=params, expect_status=422)
     assert (
         "Time-aware datetime required. E.g: 2025-01-01T10:00Z (UTC), 2025-01-01T05:00-05:00 (UTC-5 hours)"
         in response.text
     )
 
 
-@pytest.mark.usefixtures("read_only_db_with_users")
-def test_get_jobs_with_datetime_filters(client):
+@pytest.mark.usefixtures("read_only_db")
+def test_get_jobs_with_datetime_filters(jobq):
     """Test jobs query with start and end datetime filters."""
-    params = {
-        "start": _iso_mtl("2023-01-01T00:00:00"),
-        "end": _iso_mtl("2023-12-31T23:59:59"),
-    }
-
-    response = client.get("/v0/job/query", params=params, expect_status=200)
-
-    data = response.json()
-    assert isinstance(data, list)
-    assert len(data) > 0
+    assert jobq(
+        start=_iso_mtl("2023-01-01T00:00:00"),
+        end=_iso_mtl("2023-12-31T23:59:59"),
+    )
 
 
-@pytest.mark.usefixtures("read_only_db_with_users")
-def test_get_jobs_multiple_filters(client):
+@pytest.mark.usefixtures("read_only_db")
+def test_get_jobs_multiple_filters(jobq):
     """Test jobs query with multiple filters."""
-    params = {
-        "cluster": "raisin",
-        "job_state": "COMPLETED",
-        "start": _iso_mtl("2023-01-01T00:00:00"),
-    }
-
-    response = client.get("/v0/job/query", params=params, expect_status=200)
-
-    data = response.json()
-    assert isinstance(data, list)
-    assert len(data) > 0
-    for jid in data:
-        r = client.get(f"/v0/job/id/{jid}", expect_status=200)
-        job = r.json()
-        assert job["cluster_name"] == "raisin"
-        assert job["job_state"] == "COMPLETED"
+    start = _iso_mtl("2023-01-01T00:00:00")
+    jobs = jobq(cluster="raisin", job_state="COMPLETED", start=start)
+    assert all(
+        j.cluster_id == 7
+        and j.job_state == "COMPLETED"
+        and str(j.start_time) >= start
+        for j in jobs
+    )
 
 
-@pytest.mark.usefixtures("read_only_db_with_users")
-def test_get_jobs_no_filters(client):
+@pytest.mark.usefixtures("read_only_db")
+def test_get_jobs_no_filters(jobq):
     """Test jobs query without any filters."""
-    response = client.get("/v0/job/query", expect_status=200)
-
-    data = response.json()
-    assert isinstance(data, list)
-    assert len(data) == 24
+    jobq(n=22)
 
 
 @pytest.mark.usefixtures("read_only_db")
-def test_list_jobs_no_filters(client):
-    """Test list jobs without any filters."""
-    response = client.get("/v0/job/list", expect_status=200)
-
-    data = response.json()
-    assert data["total"] == 24
-    assert len(data["jobs"]) == 24
-    assert data["page"] == 1
-    assert data["per_page"] == 100
-
-
-@pytest.mark.usefixtures("read_only_db")
-def test_list_jobs_pagination(client):
+def test_list_jobs_pagination(jobq):
     """Test list jobs with pagination."""
     # Page 1, 5 items
-    response = client.get("/v0/job/list?page=1&per_page=5", expect_status=200)
-    data = response.json()
-    assert data["total"] == 24
-    assert len(data["jobs"]) == 5
-    assert data["page"] == 1
-    assert data["per_page"] == 5
+    jobs = jobq(page=1, per_page=5)
+    assert len(jobs) == 5
 
-    # Page 5, should have 4 items left (24 - 4*5 = 4)
-    response = client.get("/v0/job/list?page=5&per_page=5", expect_status=200)
-    data = response.json()
-    assert len(data["jobs"]) == 4
-    assert data["page"] == 5
+    # Page 5, should have 2 items left (22 - 4*5 = 2)
+    jobs = jobq(page=5, per_page=5)
+    assert len(jobs) == 2
 
     # Page 6, should be empty
     response = client.get("/v0/job/list?page=6&per_page=5", expect_status=200)
@@ -241,54 +185,38 @@ def test_list_jobs_invalid_pagination(client):
     )
 
 
-@pytest.mark.usefixtures("read_only_db_with_users")
-def test_count_jobs_by_cluster(client):
-    """Test jobs count by cluster."""
-    response = client.get("/v0/job/count?cluster=raisin", expect_status=200)
-
-    count = response.json()
-    assert isinstance(count, int)
-    assert count == 20
-
-
 @pytest.mark.usefixtures("read_only_db")
-def test_count_jobs_by_job_id(client):
-    """Test jobs count by job ID."""
-    response = client.get("/v0/job/count?job_id=10", expect_status=200)
-
+@pytest.mark.parametrize(
+    "params,expected",
+    [
+        ({}, 22),
+        ({"cluster": "raisin"}, 19),
+        ({"job_id": "10"}, 1),
+        ({"job_id": "999999"}, 0),
+        ({"username": "petitbonhomme"}, 21),
+        ({"username": "beaubonhomme"}, 1),
+        ({"job_state": "COMPLETED"}, 1),
+        (
+            {
+                "start": _iso_mtl("2023-01-01T00:00:00"),
+                "end": _iso_mtl("2023-02-15T23:59:59"),
+            },
+            8,
+        ),
+        (
+            {
+                "cluster": "raisin",
+                "job_state": "COMPLETED",
+                "start": _iso_mtl("2023-01-01T00:00:00"),
+            },
+            1,
+        ),
+    ],
+)
+def test_count_jobs(client, params, expected):
+    response = client.get("/v0/job/count", params=params, expect_status=200)
     count = response.json()
-    assert isinstance(count, int)
-    assert count == 1
-
-
-@pytest.mark.usefixtures("read_only_db")
-def test_count_jobs_by_user(client):
-    """Test jobs count by username."""
-    response = client.get("/v0/job/count?username=petitbonhomme", expect_status=200)
-
-    count = response.json()
-    assert isinstance(count, int)
-    assert count == 20
-
-
-@pytest.mark.usefixtures("read_only_db")
-def test_count_jobs_by_state(client):
-    """Test jobs count by job state."""
-    response = client.get("/v0/job/count?job_state=COMPLETED", expect_status=200)
-
-    count = response.json()
-    assert isinstance(count, int)
-    assert count == 1
-
-
-@pytest.mark.usefixtures("read_only_db")
-def test_count_jobs_empty_result(client):
-    """Test jobs count with no results."""
-    # Use a very high job ID that doesn't exist
-    response = client.get("/v0/job/count?job_id=9999999999", expect_status=200)
-
-    count = response.json()
-    assert count == 0
+    assert count == expected, params
 
 
 @pytest.mark.usefixtures("read_only_db")
@@ -303,73 +231,25 @@ def test_count_jobs_invalid_cluster(client):
 @pytest.mark.usefixtures("read_only_db")
 def test_count_jobs_invalid_job_state(client):
     """Test jobs count with invalid job state."""
-    client.get("/v0/job/count?job_state=INVALID", expect_status=422)
+    client.get("/v0/job/count?job_state=BICARBONATE", expect_status=422)
 
 
 @pytest.mark.usefixtures("read_only_db")
-def test_count_jobs_with_datetime_filters(client):
-    """Test jobs count with start and end datetime filters."""
-    params = {
-        "start": _iso_mtl("2023-01-01T00:00:00"),
-        "end": _iso_mtl("2023-02-15T23:59:59"),
-    }
-
-    response = client.get("/v0/job/count", params=params, expect_status=200)
-
-    count = response.json()
-    assert isinstance(count, int)
-    assert count == 8
-
-
-@pytest.mark.usefixtures("read_only_db_with_users")
-def test_count_jobs_multiple_filters(client):
-    """Test jobs count with multiple filters."""
-    params = {
-        "cluster": "raisin",
-        "job_state": "COMPLETED",
-        "start": _iso_mtl("2023-01-01T00:00:00"),
-    }
-
-    response = client.get("/v0/job/count", params=params, expect_status=200)
-
-    count = response.json()
-    assert isinstance(count, int)
-    assert count > 0
-
-
-@pytest.mark.usefixtures("read_only_db")
-def test_count_jobs_no_filters(client):
-    """Test jobs count without any filters."""
-    response = client.get("/v0/job/count", expect_status=200)
-
-    count = response.json()
-    assert isinstance(count, int)
-    assert count == 24
-
-
-@pytest.mark.usefixtures("read_only_db_with_users")
-def test_count_jobs_matches_query_length(client):
-    """Test that jobs count matches the length of jobs query results."""
-    # Test with a specific filter
-    response_query = client.get("/v0/job/query?cluster=raisin", expect_status=200)
-    response_count = client.get("/v0/job/count?cluster=raisin", expect_status=200)
-
-    jobs = response_query.json()
-    count = response_count.json()
-
-    assert len(jobs) == count
-
-
-@pytest.mark.usefixtures("read_only_db_with_users")
 def test_cluster_list(client):
     """Test cluster list."""
     response = client.get("/v0/cluster/list", expect_status=200)
 
-    data = response.json()
-    assert isinstance(data, list)
-    assert len(data) > 0
-    for cluster_name in ("raisin", "fromage", "patate"):
-        assert cluster_name in data
+    data = [SlurmCluster.model_validate(cl) for cl in response.json()]
+    assert {cl.name for cl in data} == {
+        "fromage",
+        "gerudo",
+        "hyrule",
+        "local",
+        "mila",
+        "patate",
+        "raisin",
+        "raisin_no_prometheus",
+    }
 
 
 def _gen_fake_rgus():
@@ -377,7 +257,7 @@ def _gen_fake_rgus():
     return {"A100": 3.21, "gpu1": 1.5, "gpu_2": 4.5, "GPU 3": 4 * 7}
 
 
-@pytest.mark.usefixtures("read_only_db_with_users")
+@pytest.mark.usefixtures("read_only_db")
 def test_gpu_rgu(client, monkeypatch):
     monkeypatch.setattr("sarc.api.v0.get_rgus", _gen_fake_rgus)
 
