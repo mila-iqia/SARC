@@ -154,12 +154,8 @@ class ValidField[V]:
 
                 if truncate:
                     new_insert.extend(subtract_ranges(r_incoming, record.valid))
-                elif record.valid.upper_inf and valid.not_extend_right_of(
-                    record.valid
-                ):
-                    record.valid = Range(
-                        record.valid.lower, valid.lower, bounds="[)"
-                    )
+                elif record.valid.upper_inf and valid.not_extend_right_of(record.valid):
+                    record.valid = Range(record.valid.lower, valid.lower, bounds="[)")
                     session.add(record)
                     new_insert.append(valid)
                 else:

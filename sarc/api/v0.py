@@ -29,6 +29,7 @@ from sarc.db.users import (
 )
 from sarc.models.api import SlurmJob, SlurmJobList, User, UserList
 from sarc.models.cluster import SlurmCluster
+from sarc.models.job import Statistics
 
 
 def _ensure_datetime_utc(v: datetime) -> datetime:
@@ -190,8 +191,7 @@ class JobQuery(BaseModel):
             query = query.where(SlurmJobDB.sarc_user_id == self.sarc_user_id)
         if self.email is not None:
             query = query.where(
-                SlurmJobDB.sarc_user_id == UserDB.id,
-                UserDB.email == self.email,
+                SlurmJobDB.sarc_user_id == UserDB.id, UserDB.email == self.email
             )
         if self.end is not None:
             query = query.where(col(SlurmJobDB.submit_time) < self.end)
@@ -302,12 +302,39 @@ class UserQuery(BaseModel):
 UserQueryType = Annotated[UserQuery, Depends(UserQuery)]
 
 
+def job_convert(doc: SlurmJobDB, extra_fields):
+    job = SlurmJob.model_validate(doc.model_dump())
+    for field in extra_fields:
+        match field:
+            case "cluster_name":
+                job.cluster_name = doc.cluster.name
+            case "sarc_user":
+                job.sarc_user = User.model_validate(doc.sarc_user.model_dump())
+            case "statistics":
+                job.statistics = {
+                    k: Statistics.model_validate(v.model_dump())
+                    for k, v in doc.statistics.items()
+                }
+            case unknown:
+                raise HTTPException(
+                    status_code=422, detail=f"Invalid extra_field: '{unknown}'"
+                )
+    return job
+
+
 @router.get("/job/query")
 def query_jobs(
     query_opt: JobQueryType,
     list_opt: ListOptionsType,
+    extra_fields: str | None = None,
     sess: Session = Depends(session_dep),
 ) -> SlurmJobList:
+    extra_fields = set(extra_fields.split(",")) if extra_fields else set()
+    if query_opt.cluster:
+        extra_fields.add("cluster_name")
+    if query_opt.sarc_user_id or query_opt.email:
+        extra_fields.add("sarc_user")
+
     query = query_opt.get_query(select(SlurmJobDB))
     query = list_opt.add_list_options(
         query,
@@ -315,7 +342,7 @@ def query_jobs(
         col(SlurmJobDB.submit_time),
     )
 
-    jobs = [SlurmJob.model_validate(doc.model_dump()) for doc in sess.exec(query)]
+    jobs = [job_convert(doc, extra_fields) for doc in sess.exec(query)]
 
     if len(jobs) < list_opt.limit:
         # There are no more results (note: limit > 0)
@@ -333,13 +360,15 @@ def count_jobs(query_opt: JobQueryType, sess: Session = Depends(session_dep)) ->
 
 
 @router.get("/job/id/{id}", dependencies=[Depends(require_admin)])
-def get_job(id: int, sess: Session = Depends(session_dep)) -> SlurmJob:
+def get_job(
+    id: int, extra_fields: str | None = None, sess: Session = Depends(session_dep)
+) -> SlurmJob:
     job = sess.get(SlurmJobDB, id)
     if job is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Job not found"
         )
-    return SlurmJob.model_validate(job.model_dump())
+    return job_convert(job, extra_fields)
 
 
 @router.get("/cluster/list", dependencies=[Depends(requestor)])

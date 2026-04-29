@@ -5,6 +5,8 @@ from typing import Annotated, Any
 
 from pydantic import BaseModel, BeforeValidator, Field, field_validator
 
+from .user import User
+
 
 class SlurmState(str, Enum):
     """Possible Slurm job states.
@@ -69,6 +71,7 @@ class SlurmJob(BaseModel):
 
     # job identification
     cluster_id: int
+    cluster_name: str | None = None
     account: str
     job_id: int
     array_job_id: int | None = None
@@ -128,6 +131,7 @@ class SlurmJob(BaseModel):
 
     # user
     sarc_user_id: int
+    sarc_user: User | None = None
 
     @field_validator(
         "submit_time",

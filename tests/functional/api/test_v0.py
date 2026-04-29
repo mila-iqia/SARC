@@ -124,6 +124,20 @@ def test_get_jobs_by_sarc_user_id(jobq):
 
 
 @pytest.mark.usefixtures("read_only_db")
+def test_get_jobs_extra_fields(jobq):
+    """Test jobs query returns all requested extra fields."""
+    (job,) = jobq(
+        cluster_user="beaubonhomme", extra_fields="cluster_name,sarc_user,statistics"
+    )
+    assert job.cluster_name == "raisin"
+    assert job.sarc_user is not None
+    assert job.sarc_user.id == 10
+    assert job.sarc_user.email == "beaubonhomme@mila.quebec"
+    # TODO: factory should generate some statistics
+    assert isinstance(job.statistics, dict)
+
+
+@pytest.mark.usefixtures("read_only_db")
 def test_get_jobs_by_state(jobq):
     """Test jobs query by job state."""
     jobs = jobq(job_state="COMPLETED")
