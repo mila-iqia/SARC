@@ -161,7 +161,7 @@ class JobQuery(BaseModel):
     # job_id supports None, an integer, a list of integers, or an empty list.
     job_id: list[int] | None = None
     job_state: SlurmState | None = None
-    username: str | None = None
+    cluster_user: str | None = None
     start: datetime_api | None = None
     end: datetime_api | None = None
     requestor: Requestor
@@ -182,9 +182,8 @@ class JobQuery(BaseModel):
                 query = query.where(col(SlurmJobDB.job_id).in_(self.job_id))
         if self.job_state is not None:
             query = query.where(SlurmJobDB.job_state == self.job_state)
-        if self.username is not None:
-            # TODO: Do we want to make this query the sarc user associated with the job?
-            query = query.where(SlurmJobDB.user == self.username)
+        if self.cluster_user is not None:
+            query = query.where(SlurmJobDB.cluster_user == self.cluster_user)
         if self.end is not None:
             query = query.where(col(SlurmJobDB.submit_time) < self.end)
         if self.start is not None:
@@ -201,7 +200,7 @@ def job_query_params(
     cluster: str | None = None,
     job_id: Annotated[list[str] | None, Query()] = None,
     job_state: SlurmState | None = None,
-    username: str | None = None,
+    cluster_user: str | None = None,
     start: datetime_api | None = None,
     end: datetime_api | None = None,
     requestor: Requestor = Depends(requestor),
@@ -231,7 +230,7 @@ def job_query_params(
         cluster=cluster,
         job_id=job_id_ints,
         job_state=job_state,
-        username=username,
+        cluster_user=cluster_user,
         start=start,
         end=end,
         requestor=requestor,

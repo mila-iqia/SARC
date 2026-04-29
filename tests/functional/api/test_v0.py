@@ -101,9 +101,9 @@ def test_get_jobs_by_job_id(jobq):
 
 @pytest.mark.usefixtures("read_only_db")
 def test_get_jobs_by_user(jobq):
-    """Test jobs query by username."""
-    jobs = jobq(username="beaubonhomme")
-    assert [j.user == "beaubonhomme" for j in jobs]
+    """Test jobs query by cluster_user."""
+    jobs = jobq(cluster_user="beaubonhomme")
+    assert [j.cluster_user == "beaubonhomme" for j in jobs]
     assert _ids(jobs) == [18]
 
 
@@ -224,8 +224,8 @@ def test_get_jobs_invalid_pagination(client):
         ({"cluster": "raisin"}, 19),
         ({"job_id": "10"}, 1),
         ({"job_id": "999999"}, 0),
-        ({"username": "petitbonhomme"}, 21),
-        ({"username": "beaubonhomme"}, 1),
+        ({"cluster_user": "petitbonhomme"}, 21),
+        ({"cluster_user": "beaubonhomme"}, 1),
         ({"job_state": "COMPLETED"}, 1),
         (
             {

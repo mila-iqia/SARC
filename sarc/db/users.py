@@ -515,7 +515,7 @@ def deduplicate_users(sess: Session):
             )
             sess.exec(
                 update(SlurmJobDB)
-                .where(col(SlurmJobDB.user_id) == db_extra.id)
+                .where(col(SlurmJobDB.sarc_user_id) == db_extra.id)
                 .values(user_id=db_merged.id)
             )
 

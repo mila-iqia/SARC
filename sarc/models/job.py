@@ -74,7 +74,7 @@ class SlurmJob(BaseModel):
     array_job_id: int | None = None
     task_id: int | None = None
     name: str
-    user: str
+    cluster_user: str
     group: str
 
     # status
@@ -127,7 +127,7 @@ class SlurmJob(BaseModel):
     statistics: dict[str, Statistics] = Field(default_factory=dict)
 
     # user
-    user_id: int
+    sarc_user_id: int
 
     @field_validator(
         "submit_time",

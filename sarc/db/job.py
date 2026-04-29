@@ -51,7 +51,7 @@ class SlurmJobDB(SQLModel, table=True):
     array_job_id: int | None = None
     task_id: int | None = None
     name: str
-    user: str
+    cluster_user: str
     group: str
 
     # status
@@ -109,7 +109,7 @@ class SlurmJobDB(SQLModel, table=True):
     )
 
     # User ID
-    user_id: int = Field(foreign_key="users.id", ondelete="RESTRICT")
+    sarc_user_id: int = Field(foreign_key="users.id", ondelete="RESTRICT")
     sarc_user: UserDB = Relationship()
 
     @classmethod
