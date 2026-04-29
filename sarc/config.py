@@ -270,9 +270,6 @@ class ClientConfig:
     tempo: TempoConfig | None = None
     health_monitor: HealthMonitorConfig | None = None
 
-    def __post_init__(self):
-        assert self.mongo is not None or self.db is not None
-
     @property
     def lock_path(self) -> Path:
         """
