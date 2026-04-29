@@ -88,7 +88,7 @@ def _ids(jobs):
 @pytest.mark.usefixtures("read_only_db")
 def test_get_jobs_by_cluster(jobq):
     """Test successful jobs query by cluster."""
-    jobs = jobq(cluster="raisin")
+    jobs = jobq(cluster_name="raisin")
     assert all(j.cluster_id == 7 for j in jobs)
 
 
@@ -181,7 +181,7 @@ def test_get_jobs_resubmitted(jobq):
 @pytest.mark.usefixtures("read_only_db")
 def test_get_jobs_invalid_cluster(jobq):
     """Test jobs query with invalid cluster."""
-    err = jobq(cluster="invalid_cluster", expect_status=404)
+    err = jobq(cluster_name="invalid_cluster", expect_status=404)
     assert "No such cluster 'invalid_cluster'" in err["detail"]
 
 
@@ -215,7 +215,7 @@ def test_get_jobs_with_datetime_filters(jobq):
 def test_get_jobs_multiple_filters(jobq):
     """Test jobs query with multiple filters."""
     start = _iso_mtl("2023-01-01T00:00:00")
-    jobs = jobq(cluster="raisin", job_state="COMPLETED", start=start)
+    jobs = jobq(cluster_name="raisin", job_state="COMPLETED", start=start)
     assert all(
         j.cluster_id == 7 and j.job_state == "COMPLETED" and str(j.start_time) >= start
         for j in jobs
@@ -251,7 +251,7 @@ def test_get_jobs_invalid_pagination(client):
     "params,expected",
     [
         ({}, 22),
-        ({"cluster": "raisin"}, 19),
+        ({"cluster_name": "raisin"}, 19),
         ({"job_id": "10"}, 1),
         ({"job_id": "999999"}, 0),
         ({"cluster_user": "petitbonhomme"}, 21),
@@ -266,7 +266,7 @@ def test_get_jobs_invalid_pagination(client):
         ),
         (
             {
-                "cluster": "raisin",
+                "cluster_name": "raisin",
                 "job_state": "COMPLETED",
                 "start": _iso_mtl("2023-01-01T00:00:00"),
             },
@@ -283,7 +283,7 @@ def test_count_jobs(client, params, expected):
 @pytest.mark.usefixtures("read_only_db")
 def test_count_jobs_invalid_cluster(client):
     """Test jobs count with invalid cluster."""
-    response = client.get("/v0/job/count?cluster=invalid_cluster", expect_status=404)
+    response = client.get("/v0/job/count?cluster_name=invalid_cluster", expect_status=404)
 
     data = response.json()
     assert "No such cluster 'invalid_cluster'" in data["detail"]

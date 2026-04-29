@@ -158,7 +158,7 @@ ListOptionsType = Annotated[ListOptions, Depends(list_options)]
 
 
 class JobQuery(BaseModel):
-    cluster: str | None = None
+    cluster_name: str | None = None
     # job_id supports None, an integer, a list of integers, or an empty list.
     job_id: list[int] | None = None
     job_state: SlurmState | None = None
@@ -174,9 +174,9 @@ class JobQuery(BaseModel):
             # TODO: implement query for general users
             raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED)
 
-        if self.cluster is not None:
+        if self.cluster_name is not None:
             query = query.join(SlurmClusterDB).where(
-                SlurmClusterDB.name == self.cluster
+                SlurmClusterDB.name == self.cluster_name
             )
         if self.job_id is not None:
             if len(self.job_id) == 1:
@@ -206,7 +206,7 @@ class JobQuery(BaseModel):
 
 
 def job_query_params(
-    cluster: str | None = None,
+    cluster_name: str | None = None,
     job_id: Annotated[list[str] | None, Query()] = None,
     job_state: SlurmState | None = None,
     email: str | None = None,
@@ -225,7 +225,7 @@ def job_query_params(
     We use `list[str]` to support empty lists (sent as `job_id=`).
     We then convert to `list[int]` to match `JobQuery` model.
     """
-    validate_cluster(sess, cluster)
+    validate_cluster(sess, cluster_name)
 
     job_id_ints = None
     if job_id is not None:
@@ -238,7 +238,7 @@ def job_query_params(
             )
 
     return JobQuery(
-        cluster=cluster,
+        cluster_name=cluster_name,
         job_id=job_id_ints,
         job_state=job_state,
         email=email,
@@ -330,7 +330,7 @@ def query_jobs(
     sess: Session = Depends(session_dep),
 ) -> SlurmJobList:
     extra_fields = set(extra_fields.split(",")) if extra_fields else set()
-    if query_opt.cluster:
+    if query_opt.cluster_name:
         extra_fields.add("cluster_name")
     if query_opt.sarc_user_id or query_opt.email:
         extra_fields.add("sarc_user")
