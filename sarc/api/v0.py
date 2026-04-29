@@ -161,6 +161,8 @@ class JobQuery(BaseModel):
     # job_id supports None, an integer, a list of integers, or an empty list.
     job_id: list[int] | None = None
     job_state: SlurmState | None = None
+    email: str | None = None
+    sarc_user_id: int | None = None
     cluster_user: str | None = None
     start: datetime_api | None = None
     end: datetime_api | None = None
@@ -184,6 +186,13 @@ class JobQuery(BaseModel):
             query = query.where(SlurmJobDB.job_state == self.job_state)
         if self.cluster_user is not None:
             query = query.where(SlurmJobDB.cluster_user == self.cluster_user)
+        if self.sarc_user_id is not None:
+            query = query.where(SlurmJobDB.sarc_user_id == self.sarc_user_id)
+        if self.email is not None:
+            query = query.where(
+                SlurmJobDB.sarc_user_id == UserDB.id,
+                UserDB.email == self.email,
+            )
         if self.end is not None:
             query = query.where(col(SlurmJobDB.submit_time) < self.end)
         if self.start is not None:
@@ -200,6 +209,8 @@ def job_query_params(
     cluster: str | None = None,
     job_id: Annotated[list[str] | None, Query()] = None,
     job_state: SlurmState | None = None,
+    email: str | None = None,
+    sarc_user_id: int | None = None,
     cluster_user: str | None = None,
     start: datetime_api | None = None,
     end: datetime_api | None = None,
@@ -230,6 +241,8 @@ def job_query_params(
         cluster=cluster,
         job_id=job_id_ints,
         job_state=job_state,
+        email=email,
+        sarc_user_id=sarc_user_id,
         cluster_user=cluster_user,
         start=start,
         end=end,

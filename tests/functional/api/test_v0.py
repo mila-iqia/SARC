@@ -108,6 +108,22 @@ def test_get_jobs_by_user(jobq):
 
 
 @pytest.mark.usefixtures("read_only_db")
+def test_get_jobs_by_email(jobq):
+    """Test jobs query by user email."""
+    jobs = jobq(email="petitbonhomme@mila.quebec")
+    assert len(jobs) == 21
+    assert all(j.cluster_user == "petitbonhomme" for j in jobs)
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_get_jobs_by_sarc_user_id(jobq):
+    """Test jobs query by sarc_user_id."""
+    jobs = jobq(sarc_user_id="9")
+    assert len(jobs) == 21
+    assert all(j.cluster_user == "petitbonhomme" for j in jobs)
+
+
+@pytest.mark.usefixtures("read_only_db")
 def test_get_jobs_by_state(jobq):
     """Test jobs query by job state."""
     jobs = jobq(job_state="COMPLETED")
