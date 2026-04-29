@@ -3,6 +3,7 @@ from typing import Literal
 from pydantic import BaseModel
 
 from .job import SlurmJob
+from .series import JobSeries
 from .user import User
 
 
@@ -13,3 +14,4 @@ class ResultsList[T](BaseModel):
 
 SlurmJobList = ResultsList[SlurmJob]
 UserList = ResultsList[User]
+JobSeriesList = ResultsList[JobSeries]
