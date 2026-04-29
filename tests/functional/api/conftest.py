@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from sarc.config import config
-from sarc.rest.client import SarcApiClient
+from sarc.rest.client import SarcClient
 
 
 @pytest.fixture(scope="session")
@@ -123,35 +123,7 @@ def client(app, oauth_mock):
 
 @pytest.fixture
 def sarc_client(app, oauth_mock):
-    """
-    Returns a SarcApiClient that uses the FastAPI TestClient session.
-    The 'client' fixture comes from tests/functional/api/conftest.py
-    and is connected to the app with the database fixtures active.
-
-    Used to test low-level SarcApiClient methods.
-    """
+    """Returns a SarcClient backed by the FastAPI TestClient."""
     mc = ModifiedTestClient(app, oauth_mock)
-    return SarcApiClient(
-        remote_url="", session=mc, oauth2_token=mc.get_token("admin@admin.admin")
-    )
-
-
-@pytest.fixture
-def mock_client_class(app, oauth_mock, monkeypatch):
-    """
-    Replace SarcApiClient class with a mock class
-    that uses the FastAPI TestClient session.
-
-    Used to test high-level REST client functions.
-    """
-    mc = ModifiedTestClient(app, oauth_mock)
-
-    class MockSarcApiClient(SarcApiClient):
-        def __init__(self, *args, **kwargs):
-            super().__init__(
-                remote_url="",
-                session=mc,
-                oauth2_token=mc.get_token("admin@admin.admin"),
-            )
-
-    monkeypatch.setattr("sarc.rest.client.SarcApiClient", MockSarcApiClient)
+    mc.set_email("admin@admin.admin")
+    return SarcClient(base_url="/v0", session=mc, token=mc.token)

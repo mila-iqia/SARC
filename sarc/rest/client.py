@@ -1,592 +1,247 @@
-"""
-Python client for SARC REST API.
+from __future__ import annotations
 
-Contains a SarcApiClient class for direct calls to REST API,
-and high-level client functions using REST API as backend,
-with almost same signatures as MongoDB counterparts:
-- count_jobs
-- get_job
-- get_jobs
-- get_rgus
-- get_users
-- load_job_series
-
-To use high-level functions, consider setting `api` section
-in SARC client config file, then calling your script
-in client mode with your config file.
-
-Example:
-    sarc-client.yaml
-        api:
-            url: http://api.sarc.com:1234
-    myscript.py
-        >>> from sarc.rest.client import count_jobs
-        >>> print(count_jobs())
-    run:
-        SARC_MODE=client SARC_CONFIG=sarc-client.yaml uv run myscript.py
-"""
-
+import os
+from collections.abc import Iterator
+from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Callable, Iterable
+from pathlib import Path
+from typing import Any, Literal
 
 import httpx
+from serieux import deserialize
+from serieux.features.encrypt import EncryptionKey, Secret
+from serieux.formats import FileSource
 
-# This should be a proper neutral interface, currently it is dependent on DB types
-from sarc.client.series import AbstractJobSeriesFactory
-from sarc.config import UTC, ConfigurationError, config
-from sarc.models.api import SlurmJob, SlurmJobList, User, UserList
-from sarc.models.job import SlurmState
-from sarc.models.user import MemberType
-from sarc.traces import trace_decorator
-
-# TODO add methods here and to the API to fetch the missing user data
-# or figure out a way to send it that isn't too convoluted
-# Perhaps a UserProxy class of some sort would be the way
+from sarc.models.api import SlurmJobList, UserList
+from sarc.models.cluster import SlurmCluster
+from sarc.models.job import SlurmJob, SlurmState
+from sarc.models.user import MemberType, User
 
 
-class SarcApiClient:
-    """
-    Python client for SARC REST API.
+@dataclass(kw_only=True)
+class SarcClient:
+    # Base URL for SARC's API
+    base_url: str = "https://sarc.mila.quebec/v0"
 
-     If initialized without parameters, will look for
-     section `api` from SARC config file to get API URL.
-    """
+    # API token
+    token: Secret[str] | None = None
 
-    def __init__(
-        self,
-        remote_url: str | None = None,
-        oauth2_token: str | None = None,
-        timeout: int | None = None,
-        session: httpx.Client | None = None,
-        per_page: int | None = None,
-    ) -> None:
+    # Connection timeout in seconds
+    timeout: int = 120
+
+    # Optional httpx.Client instance to use for requests
+    session: httpx.Client | None = None
+
+    # How many results to get in one go
+    block_size: int = 100
+
+    # Extra fields to fetch on jobs
+    job_extra_fields: list[Literal["cluster_name", "sarc_user", "statistics"]] = field(
+        default_factory=list
+    )
+
+    @classmethod
+    def load(cls, config_file: str | Path | None = None):
+        """Load a client from a configuration file.
+
+        * No argument: load from sarc.client in the main configuration file
+        * load("file.yaml") => load from that file
+        * load("pyproject.toml:sarc") => load from that file's sarc field
         """
-        Initialize.
+        if config_file is None:
+            from . import default_client
 
-        :param remote_url: API URL
-        :param oauth2_token: Authentification token obtained from google.  Will do an interactive prompt if not specified
-        :param timeout: requests timeout, in seconds. Default: 120.
-        :param session: internal httpx client to use. Default: httpx module.
-        :param per_page: default page size for paginated endpoints. Default: 100.
-        """
+            return default_client._obj()
+        else:
+            if isinstance(config_file, str):
+                config_file = deserialize(FileSource, config_file)
+            return deserialize(
+                cls, config_file, EncryptionKey(os.getenv("SERIEUX_PASSWORD"))
+            )
 
-        api_cfg = config().api
+    def _extra_fields(self, extra_fields: list[str] | None) -> list[str] | None:
+        merged = list({*self.job_extra_fields, *(extra_fields or [])})
+        return merged or None
 
-        if remote_url is None:
-            if api_cfg.url is None:
-                raise ConfigurationError(
-                    "Remote URL not configured for REST API. "
-                    "Either pass URL to SarcApiClient object, "
-                    "or set `api` section in SARC config file"
-                )
-            remote_url = api_cfg.url
-
-        if timeout is None:
-            timeout = api_cfg.timeout
-
-        if per_page is None:
-            per_page = api_cfg.per_page
-
-        assert oauth2_token is not None
-
-        # Ensure no trailing slash for consistency
-        self.remote_url = remote_url.rstrip("/")
-        self.timeout = timeout
-        self.session = session or httpx
-        self.per_page = per_page
-        self.oauth2_token = oauth2_token
-
-    def _get(self, endpoint: str, params: dict | None = None) -> httpx.Response:
-        """Helper to perform a GET request."""
-        # Clean up params: remove None values and convert non-primitive types if needed
-        cleaned_params: dict[str, Any] = {}
-        if params:
-            for k, v in params.items():
-                if v is not None:
-                    if isinstance(v, datetime):
-                        cleaned_params[k] = v.isoformat()
-                    elif isinstance(v, list) and not v:
-                        # Force empty parameter.
-                        # This is to handle particular case of
-                        # empty list passed to `job_id`.
-                        cleaned_params[k] = ""
-                    else:
-                        cleaned_params[k] = v
-
-        url = f"{self.remote_url}{endpoint}"
-        response = self.session.get(
-            url,
-            params=cleaned_params,
-            timeout=self.timeout,
-            headers={"Authorization": f"Bearer {self.oauth2_token}"},
-        )
+    def _get(self, path: str, params: list[tuple[str, Any]] | None = None) -> Any:
+        headers = {}
+        if self.token is not None:
+            headers["Authorization"] = f"Bearer {self.token}"
+        url = self.base_url.rstrip("/") + "/" + path.lstrip("/")
+        getter = self.session.get if self.session is not None else httpx.get
+        response = getter(url, params=params, headers=headers, timeout=self.timeout)
         response.raise_for_status()
-        return response
-
-    # --- Job Endpoints ---
-
-    def job_query(
-        self,
-        cluster: str | None = None,
-        job_id: int | list[int] | None = None,
-        job_state: SlurmState | None = None,
-        username: str | None = None,
-        start: datetime | None = None,
-        end: datetime | None = None,
-    ) -> list[str]:
-        """
-        Query jobs.
-        Return a list of job internal object IDs,
-        which can be passed to job/id/{id}
-        """
-        params = {
-            "cluster": cluster,
-            "job_id": job_id,
-            "job_state": job_state.value if job_state else None,
-            "username": username,
-            "start": start,
-            "end": end,
-        }
-        response = self._get("/v0/job/query", params=params)
-        # The API returns list[PydanticObjectId], which serializes to list[str] in JSON
         return response.json()
 
-    def job_list(
+    def _job_params(
         self,
-        cluster: str | None = None,
-        job_id: int | list[int] | None = None,
-        job_state: SlurmState | None = None,
-        username: str | None = None,
+        cluster_name: str | None = None,
+        job_id: list[int] | None = None,
+        job_state: SlurmState | str | None = None,
+        email: str | None = None,
+        sarc_user_id: int | None = None,
+        cluster_user: str | None = None,
         start: datetime | None = None,
         end: datetime | None = None,
-        page: int = 1,
-        per_page: int | None = None,
-    ) -> SlurmJobList:
-        """
-        Query jobs with pagination.
-        Return a SlurmJobList result, containing
-        a paginated list of SlurmJob objects.
-        """
-        params = {
-            "cluster": cluster,
-            "job_id": job_id,
-            "job_state": job_state.value if job_state else None,
-            "username": username,
-            "start": start,
-            "end": end,
-            "page": page,
-            "per_page": per_page if per_page is not None else self.per_page,
-        }
-        response = self._get("/v0/job/list", params=params)
-        return SlurmJobList.model_validate(response.json())
+        extra_fields: list[str] | None = None,
+    ) -> list[tuple[str, Any]]:
+        params: list[tuple[str, Any]] = []
+        if cluster_name is not None:
+            params.append(("cluster_name", cluster_name))
+        if job_id is not None:
+            if len(job_id) == 0:
+                params.append(("job_id", ""))
+            else:
+                params.extend(("job_id", jid) for jid in job_id)
+        if job_state is not None:
+            params.append(
+                (
+                    "job_state",
+                    job_state if isinstance(job_state, str) else job_state.value,
+                )
+            )
+        if email is not None:
+            params.append(("email", email))
+        if sarc_user_id is not None:
+            params.append(("sarc_user_id", sarc_user_id))
+        if cluster_user is not None:
+            params.append(("cluster_user", cluster_user))
+        if start is not None:
+            params.append(("start", start.isoformat()))
+        if end is not None:
+            params.append(("end", end.isoformat()))
+        if extra_fields:
+            params.append(("extra_fields", ",".join(extra_fields)))
+        return params
 
-    def job_count(
+    def get_jobs(
         self,
-        cluster: str | None = None,
-        job_id: int | list[int] | None = None,
-        job_state: SlurmState | None = None,
-        username: str | None = None,
+        *,
+        cluster_name: str | None = None,
+        job_id: list[int] | None = None,
+        job_state: SlurmState | str | None = None,
+        email: str | None = None,
+        sarc_user_id: int | None = None,
+        cluster_user: str | None = None,
+        start: datetime | None = None,
+        end: datetime | None = None,
+        extra_fields: list[str] | None = None,
+    ) -> Iterator[SlurmJob]:
+        base_params = self._job_params(
+            cluster_name=cluster_name,
+            job_id=job_id,
+            job_state=job_state,
+            email=email,
+            sarc_user_id=sarc_user_id,
+            cluster_user=cluster_user,
+            start=start,
+            end=end,
+            extra_fields=self._extra_fields(extra_fields),
+        )
+        cursor = None
+        while cursor is not False:
+            params = base_params + [("limit", self.block_size)]
+            if cursor is not None:
+                params.append(("cursor", cursor))
+            page = SlurmJobList.model_validate(self._get("/job/query", params))
+            yield from page.results
+            cursor = page.cursor
+
+    def count_jobs(
+        self,
+        *,
+        cluster_name: str | None = None,
+        job_id: list[int] | None = None,
+        job_state: SlurmState | str | None = None,
+        email: str | None = None,
+        sarc_user_id: int | None = None,
+        cluster_user: str | None = None,
         start: datetime | None = None,
         end: datetime | None = None,
     ) -> int:
-        """Count jobs."""
-        params = {
-            "cluster": cluster,
-            "job_id": job_id,
-            "job_state": job_state.value if job_state else None,
-            "username": username,
-            "start": start,
-            "end": end,
-        }
-        response = self._get("/v0/job/count", params=params)
-        return response.json()
-
-    def job_by_id(self, id: int) -> SlurmJob:
-        """
-        Get a specific job by its internal ID.
-        """
-        response = self._get(f"/v0/job/id/{id}")
-        return SlurmJob.model_validate(response.json())
-
-    # --- Cluster Endpoints ---
-
-    def cluster_list(self) -> list[str]:
-        """
-        Return the names of available clusters.
-        """
-        response = self._get("/v0/cluster/list")
-        return response.json()
-
-    # --- GPU Endpoints ---
-
-    def gpu_rgu(self) -> dict[str, float]:
-        """
-        Return the mapping GPU->RGU.
-        """
-        response = self._get("/v0/gpu/rgu")
-        return response.json()
-
-    # --- User Endpoints ---
-
-    def user_query(
-        self,
-        display_name: str | None = None,
-        email: str | None = None,
-        member_type: MemberType | None = None,
-        member_start: datetime | None = None,
-        member_end: datetime | None = None,
-        supervisor: int | None = None,
-        supervisor_start: datetime | None = None,
-        supervisor_end: datetime | None = None,
-        co_supervisor: int | None = None,
-        co_supervisor_start: datetime | None = None,
-        co_supervisor_end: datetime | None = None,
-    ) -> list[int]:
-        """
-        Search users. Return list of user UUIDs.
-        """
-        params = {
-            "display_name": display_name,
-            "email": email,
-            "member_type": member_type.value if member_type else None,
-            "member_start": member_start,
-            "member_end": member_end,
-            "supervisor": str(supervisor) if supervisor else None,
-            "supervisor_start": supervisor_start,
-            "supervisor_end": supervisor_end,
-            "co_supervisor": str(co_supervisor) if co_supervisor else None,
-            "co_supervisor_start": co_supervisor_start,
-            "co_supervisor_end": co_supervisor_end,
-        }
-        response = self._get("/v0/user/query", params=params)
-        return [response.json()]
-
-    def user_list(
-        self,
-        display_name: str | None = None,
-        email: str | None = None,
-        member_type: MemberType | None = None,
-        member_start: datetime | None = None,
-        member_end: datetime | None = None,
-        supervisor: int | None = None,
-        supervisor_start: datetime | None = None,
-        supervisor_end: datetime | None = None,
-        co_supervisor: int | None = None,
-        co_supervisor_start: datetime | None = None,
-        co_supervisor_end: datetime | None = None,
-        page: int = 1,
-        per_page: int | None = None,
-    ) -> UserList:
-        """
-        List users with details and pagination.
-        """
-        params = {
-            "display_name": display_name,
-            "email": email,
-            "member_type": member_type.value if member_type else None,
-            "member_start": member_start,
-            "member_end": member_end,
-            "supervisor": str(supervisor) if supervisor else None,
-            "supervisor_start": supervisor_start,
-            "supervisor_end": supervisor_end,
-            "co_supervisor": str(co_supervisor) if co_supervisor else None,
-            "co_supervisor_start": co_supervisor_start,
-            "co_supervisor_end": co_supervisor_end,
-            "page": page,
-            "per_page": per_page if per_page is not None else self.per_page,
-        }
-        response = self._get("/v0/user/list", params=params)
-        return UserList.model_validate(response.json())
-
-    def user_by_id(self, id: int) -> User:
-        """
-        Get user with given ID.
-        """
-        response = self._get(f"/v0/user/id/{id}")
-        return User.model_validate(response.json())
-
-    def user_by_email(self, email: str) -> User:
-        """
-        Get user with given email.
-        """
-        response = self._get(f"/v0/user/email/{email}")
-        return User.model_validate(response.json())
-
-
-def _parse_common_args(
-    job_id: int | list[int] | None = None,
-    job_state: str | SlurmState | None = None,
-    start: str | datetime | None = None,
-    end: str | datetime | None = None,
-) -> tuple[list[int] | None, SlurmState | None, datetime | None, datetime | None]:
-    """
-    Helper to parse arguments common to job functions.
-    Used in high-level functions below.
-    """
-    if isinstance(job_id, int):
-        job_id = [job_id]
-
-    if isinstance(job_state, str):
-        job_state = SlurmState(job_state)
-
-    if isinstance(start, str):
-        start = datetime.strptime(start, "%Y-%m-%d").astimezone()
-    if isinstance(end, str):
-        end = datetime.strptime(end, "%Y-%m-%d").astimezone()
-
-    if start is not None:
-        start = start.astimezone(UTC)
-    if end is not None:
-        end = end.astimezone(UTC)
-
-    return job_id, job_state, start, end
-
-
-def count_jobs(
-    *,
-    cluster: str | None = None,
-    job_id: int | list[int] | None = None,
-    job_state: str | SlurmState | None = None,
-    user: str | None = None,
-    start: str | datetime | None = None,
-    end: str | datetime | None = None,
-) -> int:
-    """
-    Count jobs matching the criteria using the REST API.
-
-    Same signature as in `sarc.client.job.count_jobs`,
-    except parameter `query_options` which is specific to MongoDB.
-    """
-    job_id, job_state, start, end = _parse_common_args(job_id, job_state, start, end)
-
-    try:
-        return SarcApiClient().job_count(
-            cluster=cluster,
-            job_id=job_id,  # type: ignore
-            job_state=job_state,
-            username=user,
-            start=start,
-            end=end,
-        )
-    except httpx.HTTPStatusError as exc:
-        if exc.response.status_code != 404:
-            raise exc
-
-    return 0
-
-
-def get_job(**kwargs) -> SlurmJob | None:
-    """
-    Get a single job that matches the query, or None if nothing is found.
-
-    Same signature as `sarc.client.job.get_job` (except query_options).
-    """
-    # Extract arguments expected by list_jobs
-    cluster = kwargs.get("cluster")
-    user = kwargs.get("user")
-
-    job_id, job_state, start, end = _parse_common_args(
-        kwargs.get("job_id"),
-        kwargs.get("job_state"),
-        kwargs.get("start"),
-        kwargs.get("end"),
-    )
-
-    try:
-        # We fetch page 1 with page size 1.
-        # NB: the API sorts by submit_time desc by default, which
-        # returns the most recent version.
-        job_list_resp = SarcApiClient().job_list(
-            cluster=cluster,
-            job_id=job_id,  # type: ignore
-            job_state=job_state,
-            username=user,
-            start=start,
-            end=end,
-            page=1,
-            per_page=1,
-        )
-
-        if job_list_resp.jobs:
-            return job_list_resp.jobs[0]
-
-    except httpx.HTTPStatusError as exc:
-        if exc.response.status_code != 404:
-            raise exc
-
-    return None
-
-
-def get_jobs(
-    *,
-    cluster: str | None = None,
-    job_id: int | list[int] | None = None,
-    job_state: str | SlurmState | None = None,
-    user: str | None = None,
-    start: str | datetime | None = None,
-    end: str | datetime | None = None,
-) -> Iterable[SlurmJob]:
-    """
-    Get jobs matching the criteria using the REST API.
-    Fetches all results by iterating over pages.
-
-    Same signature as in `sarc.client.job.get_jobs`,
-    except parameter `query_options` which is specific to MongoDB,
-    """
-    # Use a single httpx client for all calls.
-    with httpx.Client() as session:
-        client = SarcApiClient(session=session)
-
-        per_page = client.per_page
-
-        job_id, job_state, start, end = _parse_common_args(
-            job_id, job_state, start, end
-        )
-
-        nb_all_jobs = 0
-        page = 1
-
-        try:
-            while True:
-                job_list_resp = client.job_list(
-                    cluster=cluster,
-                    job_id=job_id,  # type: ignore
-                    job_state=job_state,  # type: ignore
-                    username=user,
-                    start=start,
-                    end=end,
-                    page=page,
-                    per_page=per_page,
-                )
-
-                for job in job_list_resp.jobs:
-                    yield job
-
-                nb_all_jobs += len(job_list_resp.jobs)
-
-                # Check if we have fetched everything
-                if nb_all_jobs >= job_list_resp.total:
-                    break
-
-                # Or if the current page returned fewer than per_page (last page)
-                if len(job_list_resp.jobs) < job_list_resp.per_page:
-                    break
-
-                page += 1
-
-        except httpx.HTTPStatusError as exc:
-            if exc.response.status_code != 404:
-                raise exc
-
-
-def get_rgus(rgu_version: str = "1.0") -> dict[str, float]:
-    """
-    Return GPU->RGU mapping.
-
-    Note: rgu_version argument is ignored as the API does not currently support it.
-    """
-    if rgu_version != "1.0":
-        raise NotImplementedError("rgu_version != 1.0 is not yet supported by REST API")
-    return SarcApiClient().gpu_rgu()
-
-
-def get_users(
-    display_name: str | None = None,
-    email: str | None = None,
-    member_type: MemberType | None = None,
-    member_start: datetime | None = None,
-    member_end: datetime | None = None,
-    supervisor: int | None = None,
-    supervisor_start: datetime | None = None,
-    supervisor_end: datetime | None = None,
-    co_supervisor: int | None = None,
-    co_supervisor_start: datetime | None = None,
-    co_supervisor_end: datetime | None = None,
-) -> list[User]:
-    """
-    Get users matching the criteria using the REST API.
-    Fetches all results by iterating over pages.
-
-    **NB**: Not same signature as sarc.users.db.get_users,
-    which waits for a MongoDB `query` dict.
-    """
-    with httpx.Client() as session:
-        client = SarcApiClient(session=session)
-
-        per_page = client.per_page
-
-        all_users = []
-        page = 1
-
-        while True:
-            user_list_resp = client.user_list(
-                display_name=display_name,
+        return self._get(
+            "/job/count",
+            self._job_params(
+                cluster_name=cluster_name,
+                job_id=job_id,
+                job_state=job_state,
                 email=email,
-                member_type=member_type,
-                member_start=member_start,
-                member_end=member_end,
-                supervisor=supervisor,
-                supervisor_start=supervisor_start,
-                supervisor_end=supervisor_end,
-                co_supervisor=co_supervisor,
-                co_supervisor_start=co_supervisor_start,
-                co_supervisor_end=co_supervisor_end,
-                page=page,
-                per_page=per_page,
-            )
-
-            all_users.extend(user_list_resp.users)
-
-            if len(all_users) >= user_list_resp.total:
-                break
-
-            if len(user_list_resp.users) < user_list_resp.per_page:
-                break
-
-            page += 1
-
-        return all_users
-
-
-class RestJobSeriesFactory(AbstractJobSeriesFactory):
-    """
-    Implementation of JobSeriesFactory for REST API.
-    Allow to implement load_job_series for REST API below.
-    """
-
-    def _get_desc(self) -> str:
-        return super()._get_desc() + " (REST)"
-
-    def count_jobs(self, *args, **kwargs) -> int:
-        return count_jobs(*args, **kwargs)
-
-    # TODO: Figure out a way to make this interface for maybe.  Or maybe add a dedicated method for load_job_series
-    def get_jobs(self, *args, **kwargs) -> Iterable[SlurmJob]:
-        return get_jobs(*args, **kwargs)
-
-    # TODO: this will not work because User doesn't have all the ValidFields
-    def get_users(self) -> list[User]:
-        return get_users()
-
-
-@trace_decorator()
-def load_job_series(
-    *,
-    fields: None | list[str] | dict[str, str] = None,
-    clip_time: bool = False,
-    callback: None | Callable = None,
-    **jobs_args,
-) -> Any:  # Returns DataFrame, Any to avoid import
-    """
-    Query jobs using the REST API and return them in a DataFrame.
-
-    See sarc.client.series.JobSeriesFactory.load_job_series for details.
-    """
-    factory = RestJobSeriesFactory()
-    try:
-        return factory.load_job_series(
-            fields=fields, clip_time=clip_time, callback=callback, **jobs_args
+                sarc_user_id=sarc_user_id,
+                cluster_user=cluster_user,
+                start=start,
+                end=end,
+            ),
         )
-    except httpx.HTTPStatusError as exc:
-        resp = exc.response.json()
-        raise RuntimeError(resp) from exc
+
+    def get_job(self, id: int, extra_fields: list[str] | None = None) -> SlurmJob:
+        merged = self._extra_fields(extra_fields)
+        params = [("extra_fields", ",".join(merged))] if merged else None
+        return SlurmJob.model_validate(self._get(f"/job/id/{id}", params))
+
+    def _user_params(
+        self,
+        display_name: str | None = None,
+        email: str | None = None,
+        start: datetime | None = None,
+        end: datetime | None = None,
+        member_type: MemberType | str | None = None,
+        supervisor: int | None = None,
+    ) -> list[tuple[str, Any]]:
+        params: list[tuple[str, Any]] = []
+        if display_name is not None:
+            params.append(("display_name", display_name))
+        if email is not None:
+            params.append(("email", email))
+        if start is not None:
+            params.append(("start", start.isoformat()))
+        if end is not None:
+            params.append(("end", end.isoformat()))
+        if member_type is not None:
+            params.append(
+                (
+                    "member_type",
+                    member_type if isinstance(member_type, str) else member_type.value,
+                )
+            )
+        if supervisor is not None:
+            params.append(("supervisor", supervisor))
+        return params
+
+    def get_users(
+        self,
+        *,
+        display_name: str | None = None,
+        email: str | None = None,
+        start: datetime | None = None,
+        end: datetime | None = None,
+        member_type: MemberType | str | None = None,
+        supervisor: int | None = None,
+    ) -> Iterator[User]:
+        base_params = self._user_params(
+            display_name=display_name,
+            email=email,
+            start=start,
+            end=end,
+            member_type=member_type,
+            supervisor=supervisor,
+        )
+        cursor = None
+        while cursor is not False:
+            params = base_params + [("limit", self.block_size)]
+            if cursor is not None:
+                params.append(("cursor", cursor))
+            page = UserList.model_validate(self._get("/user/query", params))
+            yield from page.results
+            cursor = page.cursor
+
+    def get_user_by_id(self, id: int) -> User:
+        return User.model_validate(self._get(f"/user/id/{id}"))
+
+    def get_user_by_email(self, email: str) -> User:
+        return User.model_validate(self._get(f"/user/email/{email}"))
+
+    def get_clusters(self) -> list[SlurmCluster]:
+        return [SlurmCluster.model_validate(c) for c in self._get("/cluster/list")]
+
+    def get_rgus(self) -> dict[str, float]:
+        return self._get("/gpu/rgu")
