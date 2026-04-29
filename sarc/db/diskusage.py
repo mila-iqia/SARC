@@ -1,6 +1,7 @@
 from datetime import date
 
 from pydantic import ByteSize
+from sqlalchemy import BigInteger
 from sqlmodel import Field, Index, Relationship
 
 from .sqlmodel import SQLModel
@@ -12,7 +13,7 @@ class DiskUsageUserDB(SQLModel, table=True):
     group_id: int = Field(foreign_key="diskusage_groups.id", index=True)
     user: str
     nbr_files: int
-    size: ByteSize
+    size: ByteSize = Field(sa_type=BigInteger)
 
 
 class DiskUsageGroupDB(SQLModel, table=True):

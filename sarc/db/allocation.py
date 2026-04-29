@@ -1,6 +1,9 @@
 from collections.abc import Sequence
 from datetime import date
+from typing import cast
 
+from pydantic import ByteSize
+from sqlalchemy import BigInteger
 from sqlmodel import Field, Relationship, Session, col, select
 
 from sarc.core.models.allocation import Allocation
@@ -12,6 +15,13 @@ class AllocationDB(Allocation, table=True):
     id: int | None = Field(default=None, primary_key=True)
 
     cluster: SlurmClusterDB = Relationship()
+
+    project_size: ByteSize | None = Field(default=cast(ByteSize, 0), sa_type=BigInteger)
+    nearline: ByteSize | None = Field(default=cast(ByteSize, 0), sa_type=BigInteger)
+    dCache: ByteSize | None = Field(default=cast(ByteSize, 0), sa_type=BigInteger)
+    object: ByteSize | None = Field(default=cast(ByteSize, 0), sa_type=BigInteger)
+    cloud_volume: ByteSize | None = Field(default=cast(ByteSize, 0), sa_type=BigInteger)
+    cloud_shared: ByteSize | None = Field(default=cast(ByteSize, 0), sa_type=BigInteger)
 
     @classmethod
     def get_or_create(cls, sess: Session, **kwargs) -> AllocationDB:
