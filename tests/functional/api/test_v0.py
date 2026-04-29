@@ -195,7 +195,7 @@ def test_get_jobs_no_filters(jobq):
 @pytest.mark.usefixtures("read_only_db")
 def test_get_jobs_pagination(paginator):
     """Test jobs query with pagination."""
-    results = paginator("/v0/job/query", limit=2, sort_field="submit_time")
+    results = paginator("/v0/job/query", limit=2, sort_field="-submit_time")
     assert len(results) == 22
 
 

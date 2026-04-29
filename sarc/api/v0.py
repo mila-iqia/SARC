@@ -128,8 +128,10 @@ class ListOptions(BaseModel):
         id_col: Mapped[int],
         time_col: Mapped[datetime] | None,
     ) -> SelectOfScalar[T]:
-        cols = [c for c in [id_col, time_col] if c]
-        query = query.order_by(*cols).limit(self.limit)
+        query = query.limit(self.limit)
+        if time_col:
+            query = query.order_by(time_col.desc())
+        query = query.order_by(id_col)
         if isinstance(self.cursor, int):
             query = query.offset(self.cursor)
         elif self.cursor:
@@ -139,7 +141,7 @@ class ListOptions(BaseModel):
                 time_val = datetime.fromisoformat(time_val)
                 query = query.where(
                     or_(
-                        time_col > time_val, and_(time_col == time_val, id_col > id_val)
+                        time_col < time_val, and_(time_col == time_val, id_col > id_val)
                     )
                 )
             else:
