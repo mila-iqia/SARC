@@ -225,6 +225,10 @@ class DbConfiguration:
 
             users = create_users()
             sess.add_all(users)
+            sess.flush()
+
+            for user in users:
+                user._finalize()
 
             jobs = create_jobs(clusters=clusters, users=users)
             sess.add_all(jobs)

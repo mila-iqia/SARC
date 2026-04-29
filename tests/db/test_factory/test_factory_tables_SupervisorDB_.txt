@@ -1,0 +1,46 @@
+Found 4 result(s):
+
+Result #1
+{
+    "supervisor": 1,
+    "user_id": 2,
+    "valid": {
+        "lower": "2018-08-31T20:00:00-04:00",
+        "upper": "2021-04-30T20:00:00-04:00",
+        "bounds": "[)",
+        "empty": false
+    }
+}
+Result #2
+{
+    "supervisor": 2,
+    "user_id": 4,
+    "valid": {
+        "lower": null,
+        "upper": null,
+        "bounds": "()",
+        "empty": false
+    }
+}
+Result #3
+{
+    "supervisor": 1,
+    "user_id": 5,
+    "valid": {
+        "lower": "2021-12-31T19:00:00-05:00",
+        "upper": "2022-12-31T19:00:00-05:00",
+        "bounds": "[)",
+        "empty": false
+    }
+}
+Result #4
+{
+    "supervisor": 2,
+    "user_id": 7,
+    "valid": {
+        "lower": "2021-12-31T19:00:00-05:00",
+        "upper": "2022-12-31T19:00:00-05:00",
+        "bounds": "[)",
+        "empty": false
+    }
+}

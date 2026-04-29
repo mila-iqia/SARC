@@ -5,7 +5,8 @@ from typing import Any, Self, Type
 
 from sqlalchemy.dialects.postgresql import TSTZRANGE, ExcludeConstraint, Range
 from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
-from sqlalchemy.orm import Session as SASession, attribute_keyed_dict, relationship
+from sqlalchemy.orm import Session as SASession
+from sqlalchemy.orm import attribute_keyed_dict, relationship
 from sqlalchemy.sql.schema import UniqueConstraint
 from sqlmodel import (
     Field,
@@ -22,6 +23,7 @@ from sqlmodel import (
 
 from sarc.core.models.validators import datetime_utc
 from sarc.models.user import MemberType
+
 from .sqlmodel import SQLModel
 
 logger = logging.getLogger(__name__)
@@ -121,55 +123,54 @@ class ValidField[V]:
         valid: Range[datetime],
         truncate: bool = False,
     ) -> None:
-        with session.begin():
-            records = session.execute(
-                self._select_base().where(
-                    or_(
-                        self.model_ref.valid.overlaps(valid),
-                        self.model_ref.valid.adjacent_to(valid),
-                    )
+        records = session.execute(
+            self._select_base().where(
+                or_(
+                    self.model_ref.valid.overlaps(valid),
+                    self.model_ref.valid.adjacent_to(valid),
                 )
-            ).all()
-            to_merge = [r for r in records if getattr(r, self.col_ref) == value]
-            to_conflict = [
-                r
-                for r in records
-                if getattr(r, self.col_ref) != value and r.valid.overlaps(valid)
-            ]
+            )
+        ).all()
+        to_merge = [r for r in records if getattr(r, self.col_ref) == value]
+        to_conflict = [
+            r
+            for r in records
+            if getattr(r, self.col_ref) != value and r.valid.overlaps(valid)
+        ]
 
-            final_range = valid
-            for record in to_merge:
-                final_range = record.valid.union(final_range)
-                session.delete(record)
+        final_range = valid
+        for record in to_merge:
+            final_range = record.valid.union(final_range)
+            session.delete(record)
 
-            to_insert = [final_range]
+        to_insert = [final_range]
 
-            for record in to_conflict:
-                new_insert = []
-                for r_incoming in to_insert:
-                    if not r_incoming.overlaps(record.valid):
-                        new_insert.append(r_incoming)
-                        continue
+        for record in to_conflict:
+            new_insert = []
+            for r_incoming in to_insert:
+                if not r_incoming.overlaps(record.valid):
+                    new_insert.append(r_incoming)
+                    continue
 
-                    if truncate:
-                        new_insert.extend(subtract_ranges(r_incoming, record.valid))
-                    elif record.valid.upper_inf and valid.not_extend_right_of(
-                        record.valid
-                    ):
-                        record.valid = Range(
-                            record.valid.lower, valid.lower, bounds="[)"
-                        )
-                        session.add(record)
-                        new_insert.append(valid)
-                    else:
-                        raise DateOverlapError(
-                            value, valid, getattr(record, self.col_ref), record.valid
-                        )
+                if truncate:
+                    new_insert.extend(subtract_ranges(r_incoming, record.valid))
+                elif record.valid.upper_inf and valid.not_extend_right_of(
+                    record.valid
+                ):
+                    record.valid = Range(
+                        record.valid.lower, valid.lower, bounds="[)"
+                    )
+                    session.add(record)
+                    new_insert.append(valid)
+                else:
+                    raise DateOverlapError(
+                        value, valid, getattr(record, self.col_ref), record.valid
+                    )
 
-                to_insert = new_insert
+            to_insert = new_insert
 
-            for final_valid in to_insert:
-                session.add(self._create_record(valid=final_valid, value=value))
+        for final_valid in to_insert:
+            session.add(self._create_record(valid=final_valid, value=value))
 
     def get_value(
         self, date: datetime | None = None, session: SASession | None = None
@@ -304,9 +305,13 @@ class MemberTypeDB(ValidDB, table=True):
 
 class SupervisorsHelper(SQLModel, table=True):
     __table_args__ = (UniqueConstraint("list_id", "pos"),)
-    id: int = Field(primary_key=True)
-    list_id: int = Field(
-        foreign_key="user_supervisors.id", index=True, ondelete="CASCADE"
+    id: int | None = Field(primary_key=True, default=None)
+    list_id: int | None = Field(
+        foreign_key="user_supervisors.id",
+        index=True,
+        ondelete="CASCADE",
+        default=None,
+        nullable=False,
     )
     pos: int = Field(ge=0)
     supervisor: int = Field(foreign_key="users.id", ondelete="RESTRICT")

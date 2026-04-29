@@ -5,7 +5,15 @@ from sarc.db.allocation import AllocationDB
 from sarc.db.cluster import GPUBillingDB, SlurmClusterDB
 from sarc.db.diskusage import DiskUsageDB, DiskUsageGroupDB, DiskUsageUserDB
 from sarc.db.job import SlurmJobDB
-from sarc.db.users import MatchingID, UserDB
+from sarc.db.users import (
+    CredentialsDB,
+    GithubUsernameDB,
+    GoogleScholarDB,
+    MatchingID,
+    MemberTypeDB,
+    SupervisorsDB,
+    UserDB,
+)
 
 from .factory import create_diskusages
 
@@ -21,12 +29,11 @@ from .factory import create_diskusages
         DiskUsageUserDB,
         DiskUsageGroupDB,
         DiskUsageDB,
-        # TODO: make sure that some of these are created through the factory?
-        # MemberTypeDB,
-        # SupervisorDB,
-        # CoSupervisorDB,
-        # GithubUsernameDB,
-        # GoogleScholarDB,
+        CredentialsDB,
+        MemberTypeDB,
+        SupervisorsDB,
+        GithubUsernameDB,
+        GoogleScholarDB,
         MatchingID,
     ],
 )
