@@ -68,3 +68,8 @@ def get_jobs(jobless_read_write_db):
         return jobless_read_write_db.exec(q).all()
 
     return get
+
+
+@pytest.fixture
+def slurm_version(base_jobs):
+    return base_jobs["meta"]["slurm"]["version"]

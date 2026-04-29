@@ -103,12 +103,12 @@ parameters = {
 @pytest.mark.parametrize(
     "patched_job", parameters.values(), ids=parameters.keys(), indirect=True
 )
-def test_parse_json_job(patched_job, base_job, file_regression):
+def test_parse_json_job(patched_job, base_job, slurm_version, file_regression):
     sstart = datetime(2024, 3, 25, tzinfo=MTL).astimezone(UTC)
     send = datetime(2024, 3, 26, tzinfo=MTL).astimezone(UTC)
 
-    orig = _convert_json_job(base_job, "raisin", None, sstart, send)
-    patched = _convert_json_job(patched_job, "raisin", None, sstart, send)
+    orig = _convert_json_job(base_job, "raisin", slurm_version, sstart, send)
+    patched = _convert_json_job(patched_job, "raisin", slurm_version, sstart, send)
 
     diff = "".join(
         unified_diff(
@@ -149,9 +149,9 @@ def test_parse_json_job(patched_job, base_job, file_regression):
     ],
     indirect=True,
 )
-def test_parse_malformed_jobs(sacct_json, captrace):
+def test_parse_malformed_jobs(sacct_json, slurm_version, captrace):
     with pytest.raises(KeyError):
-        _convert_json_job(json.loads(sacct_json)["jobs"][0], "mila")
+        _convert_json_job(json.loads(sacct_json)["jobs"][0], "mila", slurm_version)
     spans = captrace.get_finished_spans()
     assert len(spans) > 0
     # Just check the span that should have got an error.

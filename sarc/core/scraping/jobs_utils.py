@@ -155,7 +155,7 @@ def fetch_raw(cluster: ClusterConfig, start: datetime, end: datetime) -> bytes:
 def _convert_json_job(
     entry: dict,
     cluster: str,
-    version: dict | None = None,
+    version: dict = None,
     scraped_start: datetime | None = None,
     scraped_end: datetime | None = None,
 ) -> dict | None:
@@ -223,9 +223,9 @@ def _convert_json_job(
         )
 
     if version is None:
-        v_before_23 = False
+        v_before_23 = True
         v_23_to_23_11 = False
-        v_before_23_11 = False
+        v_before_23_11 = True
     else:
         v_before_23 = int(version["major"]) < 23
         v_23_to_23_11 = int(version["major"]) == 23 and int(version["minor"]) < 11
