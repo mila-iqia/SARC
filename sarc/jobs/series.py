@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import logging
 from datetime import datetime
 from typing import Callable, Sequence, TypedDict, cast
@@ -104,11 +102,7 @@ def get_job_time_series_data(
         query = f"{query}[{duration_seconds}s:{interval}s] {offset_string}"
 
     logger.debug(f"prometheus query with offset: {query}")
-    return (
-        config("scraping")
-        .clusters[job.cluster.cluster_name]
-        .prometheus.custom_query(query)
-    )
+    return config("scraping").clusters[job.cluster.name].prometheus.custom_query(query)
 
 
 def get_job_time_series_metric_names() -> dict[str, str]:

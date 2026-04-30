@@ -8,6 +8,7 @@ from sqlalchemy.dialects.postgresql import TSTZRANGE, ExcludeConstraint, Range
 from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
 from sqlalchemy.orm import Session as SASession
 from sqlalchemy.orm import attribute_keyed_dict, relationship
+from sqlalchemy.sql.schema import UniqueConstraint
 from sqlmodel import (
     Field,
     Index,
@@ -343,6 +344,7 @@ class GoogleScholarDB(ValidDB, table=True):
 class MatchingID(SQLModel, table=True):
     __table_args__ = (
         Index("user_match_id_idx", "user_id", "plugin_name", unique=True),
+        UniqueConstraint("plugin_name", "match_id"),
     )
     id: int | None = Field(default=None, primary_key=True)
     # This can't really be None, but it needs to be for a small period of time due to SQLAlchemy magic
