@@ -1,10 +1,11 @@
 from sqlalchemy import Engine
-from sqlmodel import Session, SQLModel, select, text
+from sqlmodel import Session, select, text
 
 from sarc.config import config
 
 # We need to import those to register the tables
 from . import allocation, cluster, diskusage, job, users  # noqa: F401
+from .sqlmodel import SQLModel
 
 
 def db_upgrade(engine: Engine):

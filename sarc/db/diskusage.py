@@ -1,7 +1,9 @@
 from datetime import date
 
 from pydantic import ByteSize
-from sqlmodel import Field, Index, Relationship, SQLModel
+from sqlmodel import Field, Index, Relationship
+
+from .sqlmodel import SQLModel
 
 
 class DiskUsageUserDB(SQLModel, table=True):

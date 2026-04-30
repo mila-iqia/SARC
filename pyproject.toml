@@ -85,7 +85,7 @@ skip-magic-trailing-comma = true
 split-on-trailing-comma = false
 
 [tool.ruff.lint]
-select = ["ARG", "E", "F", "FA", "LOG", "PERF", "PIE", "PL", "T20", "W", "I"]
+select = ["ARG", "E", "F", "FA", "LOG", "PERF", "PIE", "PL", "T20", "W", "I", "TID251"]
 ignore = [
   "E501",     # line too long (ruff format will handle it)
   "PLW2901",  # loop variable overwritten by assignment
@@ -103,6 +103,8 @@ ignore = [
 "docs/**" = ["T20"]
 "scripts/**" = ["T201"]
 
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"sqlmodel.SQLModel".msg = "Use 'from sarc.db.sqlmodel import SQLModel' (only for the SQLModel class itself)"
 
 [tool.uv]
 default-groups = [

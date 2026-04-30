@@ -1,8 +1,7 @@
 from collections.abc import Sequence
 from datetime import date
 
-from sqlmodel import Field, Session, col, select
-from sqlmodel.main import Relationship
+from sqlmodel import Field, Relationship, Session, col, select
 
 from sarc.core.models.allocation import Allocation
 from sarc.db.cluster import SlurmClusterDB
