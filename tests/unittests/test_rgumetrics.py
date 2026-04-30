@@ -1,6 +1,6 @@
 import pytest
 
-from sarc.client.rgumetrics import get_gpu_type_rgu
+from sarc.client.rgumetrics import GpuError, get_gpu_type_rgu
 
 THRESHOLD = 1e-10
 
@@ -65,3 +65,13 @@ def test_get_gpu_type_rgu_drac(gpu_type, rgu):
 )
 def test_get_gpu_type_rgu_mila(gpu_type, rgu):
     assert abs(get_gpu_type_rgu(gpu_type, mig_ref="mila") - rgu) < THRESHOLD
+
+
+def test_get_gpu_type_rgu_unknown_gpu():
+    with pytest.raises(GpuError, match="No RGU for FAKE-GPU"):
+        get_gpu_type_rgu("FAKE-GPU")
+
+
+def test_get_gpu_type_rgu_unknown_mig_main_type():
+    with pytest.raises(GpuError, match="Unknown GPU type for MIGs: FAKE-GPU"):
+        get_gpu_type_rgu("FAKE-GPU: 1g.10gb")
