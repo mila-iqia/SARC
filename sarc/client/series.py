@@ -8,20 +8,14 @@ from typing import Any, Callable, Iterable, Literal
 import numpy as np
 import pandas
 from pandas import DataFrame
+from sqlmodel import Session
 from tqdm import tqdm
 
-from sarc.client.gpumetrics import GPUBilling, get_cluster_gpu_billings, get_rgus
-from sarc.client.job import (
-    SlurmCluster,
-    SlurmJob,
-    count_jobs,
-    get_available_clusters,
-    get_jobs,
-)
-from sarc.config import UTC
-from sarc.core.models.users import UserData
+from sarc.config import UTC, config
+from sarc.db.cluster import GPUBillingDB, SlurmClusterDB, get_available_clusters
+from sarc.db.job import SlurmJobDB, count_jobs, get_jobs, get_rgus
+from sarc.db.users import UserDB, get_users
 from sarc.traces import trace_decorator
-from sarc.users.db import get_users
 from sarc.utils import flatten
 
 logger = logging.getLogger(__name__)
@@ -54,11 +48,11 @@ class AbstractJobSeriesFactory(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def get_jobs(self, *args, **kwargs) -> Iterable[SlurmJob]:
+    def get_jobs(self, *args, **kwargs) -> Iterable[SlurmJobDB]:
         raise NotImplementedError()
 
     @abstractmethod
-    def get_users(self) -> list[UserData]:
+    def get_users(self) -> list[UserDB]:
         raise NotImplementedError()
 
     def _get_user_data_frame(self) -> pandas.DataFrame:
@@ -166,15 +160,18 @@ class AbstractJobSeriesFactory(ABC):
                     (job.end_time - job.start_time).total_seconds(), 0
                 )
 
-            if job.stored_statistics is None:
-                job_series = DUMMY_STATS.copy()
+            if job.statistics is None:
+                job_series: dict[str, Any] = DUMMY_STATS.copy()
             else:
-                job_series = job.stored_statistics.model_dump()
-                job_series = {k: _select_stat(k, v) for k, v in job_series.items()}
+                stats_tmp = {
+                    key: val.model_dump(exclude={"id", "job_id"})
+                    for key, val in job.statistics.items()
+                }
+                job_series = {k: _select_stat(k, v) for k, v in stats_tmp.items()}
 
                 # Replace `gpu_utilization > 1` with nan.
                 if (
-                    job.stored_statistics.gpu_utilization
+                    job.statistics["gpu_utilization"]
                     and job_series["gpu_utilization"] > 1
                 ):
                     job_series["gpu_utilization"] = np.nan
@@ -182,27 +179,22 @@ class AbstractJobSeriesFactory(ABC):
             # Flatten job.requested and job.allocated into job_series
             job_series.update(
                 {
-                    f"requested.{key}": value
-                    for key, value in job.requested.model_dump().items()
-                }
-            )
-            job_series.update(
-                {
-                    f"allocated.{key}": value
-                    for key, value in job.allocated.model_dump().items()
+                    key: val
+                    for key, val in job.model_dump().items()
+                    if key.startswith(("allocated_", "requested_"))
                 }
             )
             # Additional computations for job.allocated flattened fields.
             # TODO: Why is it possible to have billing smaller than gres_gpu???
-            billing = job.allocated.billing or 0
-            gres_gpu = job.requested.gres_gpu or 0
+            billing = job.allocated_billing or 0
+            gres_gpu = job.requested_gres_gpu or 0
             if gres_gpu:
-                job_series["allocated.gres_gpu"] = float(max(billing, gres_gpu))
-                job_series["allocated.cpu"] = job.allocated.cpu
+                job_series["allocated_gres_gpu"] = float(max(billing, gres_gpu))
+                job_series["allocated_cpu"] = job.allocated_cpu
             else:
-                job_series["allocated.gres_gpu"] = 0.0
-                job_series["allocated.cpu"] = (
-                    max(billing, job.allocated.cpu) if job.allocated.cpu else 0
+                job_series["allocated_gres_gpu"] = 0.0
+                job_series["allocated_cpu"] = (
+                    max(billing, job.allocated_cpu) if job.allocated_cpu else 0
                 )
 
             if clip_time:
@@ -237,20 +229,23 @@ class AbstractJobSeriesFactory(ABC):
             return jobs_frame
 
 
-class MongoJobSeriesFactory(AbstractJobSeriesFactory):
+class SQLJobSeriesFactory(AbstractJobSeriesFactory):
     """Implementation for direct MongoDB access."""
+
+    def __init__(self, sess: Session):
+        self.sess = sess
 
     def _get_desc(self) -> str:
         return super()._get_desc() + " (mongodb)"
 
-    def count_jobs(self, *args, **kwargs) -> int:
-        return count_jobs(*args, **kwargs)
+    def count_jobs(self, **kwargs) -> int:
+        return count_jobs(self.sess, **kwargs)
 
-    def get_jobs(self, *args, **kwargs) -> Iterable[SlurmJob]:
-        return get_jobs(*args, **kwargs)
+    def get_jobs(self, **kwargs) -> Iterable[SlurmJobDB]:
+        return get_jobs(self.sess, **kwargs)
 
-    def get_users(self) -> list[UserData]:
-        return list(get_users())
+    def get_users(self) -> list[UserDB]:
+        return list(get_users(self.sess))
 
 
 # pylint: disable=too-many-branches,too-many-statements,fixme
@@ -268,10 +263,11 @@ def load_job_series(
 
     See JobSeriesFactory.load_job_series for parameters documentation.
     """
-    factory = MongoJobSeriesFactory()
-    return factory.load_job_series(
-        fields=fields, clip_time=clip_time, callback=callback, **jobs_args
-    )
+    with config().db.session() as sess:
+        factory = SQLJobSeriesFactory(sess)
+        return factory.load_job_series(
+            fields=fields, clip_time=clip_time, callback=callback, **jobs_args
+        )
 
 
 def _select_stat(name: str, dist: dict[str, float]) -> float:
@@ -308,12 +304,13 @@ def update_job_series_rgu(df: DataFrame) -> DataFrame:
     # Change type of allocated.gres_gpu to float
     df["allocated.gres_gpu"] = df["allocated.gres_gpu"].astype("float")
 
-    for cluster in get_available_clusters():
-        update_cluster_job_series_rgu(df, cluster.cluster_name)
+    with config().db.session() as sess:
+        for cluster in get_available_clusters(sess):
+            update_cluster_job_series_rgu(df, cluster)
     return df
 
 
-def update_cluster_job_series_rgu(df: DataFrame, cluster_name: str) -> DataFrame:
+def update_cluster_job_series_rgu(df: DataFrame, cluster: SlurmClusterDB) -> DataFrame:
     """
     Compute RGU information for jobs related to given cluster in a data frame.
 
@@ -342,17 +339,13 @@ def update_cluster_job_series_rgu(df: DataFrame, cluster_name: str) -> DataFrame
     if "allocated.gpu_type_rgu" not in df.columns:
         df["allocated.gpu_type_rgu"] = np.nan
 
-    # Get cluster info
-    clusters = {cluster.cluster_name: cluster for cluster in get_available_clusters()}
-    cluster = clusters[cluster_name]
-
     # Get GPU->RGU mapping
     gpu_to_rgu = get_rgus()
 
     if cluster.billing_is_gpu:
         # If billing is GPU count on this cluster, then we just need
         # gpu_to_rgu to compute jobs RGU billing.
-        slice_rows = df["cluster_name"] == cluster_name
+        slice_rows = df["cluster_name"] == cluster.cluster_name
         _compute_rgu_stats_from_gpu_count(df, slice_rows, gpu_to_rgu)
         return df
 
@@ -360,30 +353,30 @@ def update_cluster_job_series_rgu(df: DataFrame, cluster_name: str) -> DataFrame
     # to infer GPU count then RGU billing for each job.
 
     # Get GPU->billing mappings, sorted by billing start date in ascending order.
-    dated_gpu_billings = get_cluster_gpu_billings(cluster_name=cluster_name)
+    dated_gpu_billings = cluster.gpu_billing
     if not dated_gpu_billings:
         logger.warning(
-            f"RGU update: no GPU billing available for cluster {cluster_name}"
+            f"RGU update: no GPU billing available for cluster {cluster.cluster_name}"
         )
         return df
 
     # Now we have RGU and billing values. We can compute RGU information.
 
     # First, we update columns for jobs that started before the oldest available RGU mapping.
-    _compute_rgu_stats_before_date(df, cluster_name, gpu_to_rgu, dated_gpu_billings[0])
+    _compute_rgu_stats_before_date(
+        df, cluster.cluster_name, gpu_to_rgu, dated_gpu_billings[0]
+    )
 
     # Then, we update columns for each RGU mapping except the latest one.
     for i in range(1, len(dated_gpu_billings)):
         curr_mapping = dated_gpu_billings[i - 1]
         next_mapping = dated_gpu_billings[i]
         _compute_rgu_stats_after_date(
-            cluster, df, cluster_name, gpu_to_rgu, curr_mapping, next_mapping.since
+            cluster, df, gpu_to_rgu, curr_mapping, next_mapping.since
         )
 
     # Finally, we update columns for latest RGU mapping.
-    _compute_rgu_stats_after_date(
-        cluster, df, cluster_name, gpu_to_rgu, dated_gpu_billings[-1]
-    )
+    _compute_rgu_stats_after_date(cluster, df, gpu_to_rgu, dated_gpu_billings[-1])
 
     return df
 
@@ -392,7 +385,7 @@ def _compute_rgu_stats_before_date(
     df: DataFrame,
     cluster_name: str,
     gpu_to_rgu: dict[str, float],
-    gpu_billing: GPUBilling,
+    gpu_billing: GPUBillingDB,
 ) -> None:
     """
     Compute RGU information for jobs which ran before
@@ -411,11 +404,10 @@ def _compute_rgu_stats_before_date(
 
 
 def _compute_rgu_stats_after_date(
-    cluster: SlurmCluster,
+    cluster: SlurmClusterDB,
     df: DataFrame,
-    cluster_name: str,
     gpu_to_rgu: dict[str, float],
-    curr_gpu_billing: GPUBilling,
+    curr_gpu_billing: GPUBillingDB,
     next_billing_date: datetime | None = None,
 ) -> None:
     """
@@ -427,12 +419,12 @@ def _compute_rgu_stats_after_date(
     # We work on curr_mapping
     # Compute slice: curr mapping date <= start time < next mapping date (if next is available)
     if next_billing_date is None:
-        slice_rows = (df["cluster_name"] == cluster_name) & (
+        slice_rows = (df["cluster_name"] == cluster.cluster_name) & (
             df["start_time"] >= curr_gpu_billing.since
         )
     else:
         slice_rows = (
-            (df["cluster_name"] == cluster_name)
+            (df["cluster_name"] == cluster.cluster_name)
             & (df["start_time"] >= curr_gpu_billing.since)
             & (df["start_time"] < next_billing_date)
         )
@@ -481,7 +473,7 @@ def _compute_rgu_stats_from_scaled_rgu(
     df: DataFrame,
     slice_rows,
     gpu_to_rgu: dict[str, float],
-    curr_gpu_billing: GPUBilling,
+    curr_gpu_billing: GPUBillingDB,
 ) -> None:
     """
     Compute RGU stats on slice where billing is scaled RGU

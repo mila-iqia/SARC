@@ -32,7 +32,6 @@ def check_prometheus_vs_slurmconfig(cluster_name: str | None = None) -> bool:
         True if all GPU types are same, False otherwise.
     """
     from sarc.config import ClusterConfig, config
-    from sarc.jobs.node_gpu_mapping import get_node_to_gpu
 
     if cluster_name is None:
         clusters: Iterable[ClusterConfig] = config("scraping").clusters.values()
@@ -50,6 +49,7 @@ def check_prometheus_vs_slurmconfig(cluster_name: str | None = None) -> bool:
         # node => GPU mappings stored in database
         slurmconfig_gpu_types = set()
         assert cluster.name is not None
+        # TODO: user db_cluster.get_node_to_gpu()
         mapping = get_node_to_gpu(cluster.name)
         if mapping:
             for gpu_types in mapping.node_to_gpu.values():

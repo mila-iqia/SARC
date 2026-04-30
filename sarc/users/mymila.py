@@ -53,7 +53,7 @@ from typing import Sequence
 from azure.identity import ClientSecretCredential
 from serieux.features.encrypt import Secret
 
-from sarc.core.scraping.users import MatchID, UserMatch, UserScraper, _builtin_scrapers
+from sarc.scraping.users import MatchID, UserMatch, UserScraper, _builtin_scrapers
 
 logger = logging.getLogger(__name__)
 

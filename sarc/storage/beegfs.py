@@ -15,9 +15,9 @@ from pydantic import ByteSize
 
 from sarc.core.models.diskusage import DiskUsage, DiskUsageGroup, DiskUsageUser
 from sarc.core.models.validators import DateMatchError
-from sarc.core.scraping.diskusage import DiskUsageScraper, _builtin_scrapers
 from sarc.core.utils import run_command
-from sarc.users.db import get_users
+from sarc.db.users import UserDB
+from sarc.scraping.diskusage import DiskUsageScraper, _builtin_scrapers
 
 logger = logging.getLogger(__name__)
 beegfs_header = "name,id,size,hard,files,hard"
@@ -36,7 +36,8 @@ class BeeGFSDiskUsage(DiskUsageScraper[BeeGFSDiskUsageConfig]):
     def get_diskusage_report(
         self, ssh: Connection, cluster_name: str, config: BeeGFSDiskUsageConfig
     ) -> bytes:
-        users = get_users()
+        # This is very ugly, but diskusage is currently unused and beegfs will go away soon, so...
+        users: list[UserDB] = []
         output: dict[str, list[str]] = {}
 
         for name, file in config.config_files.items():
@@ -62,7 +63,7 @@ class BeeGFSDiskUsage(DiskUsageScraper[BeeGFSDiskUsageConfig]):
                     logger.error(
                         "Failed to get disk usage data for user %s(%s)",
                         username,
-                        user.uuid,
+                        user.id,
                     )
                 else:
                     usage.append(result)

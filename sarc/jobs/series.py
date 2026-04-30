@@ -8,9 +8,8 @@ import pandas
 from pandas import DataFrame, Series
 from prometheus_api_client.metric_range_df import MetricRangeDataFrame
 
-from sarc.client.job import SlurmJob
-from sarc.config import UTC
-from sarc.core.models.job import JobStatistics, Statistics
+from sarc.config import UTC, config
+from sarc.db.job import JobStatisticDB, SlurmJobDB
 from sarc.traces import trace_decorator
 
 logger = logging.getLogger(__name__)
@@ -19,7 +18,7 @@ logger = logging.getLogger(__name__)
 # pylint: disable=too-many-branches
 @trace_decorator()
 def get_job_time_series_data(
-    job: SlurmJob,
+    job: SlurmJobDB,
     metric: str | Sequence[str],
     min_interval: int = 30,
     max_points: int = 100,
@@ -105,7 +104,11 @@ def get_job_time_series_data(
         query = f"{query}[{duration_seconds}s:{interval}s] {offset_string}"
 
     logger.debug(f"prometheus query with offset: {query}")
-    return job.fetch_cluster_config().prometheus.custom_query(query)
+    return (
+        config("scraping")
+        .clusters[job.cluster.cluster_name]
+        .prometheus.custom_query(query)
+    )
 
 
 def get_job_time_series_metric_names() -> dict[str, str]:
@@ -185,7 +188,9 @@ JOB_STATISTICS_METRIC_NAMES = (
 
 
 @trace_decorator()
-def compute_job_statistics(job: SlurmJob, prom_stats: list[dict]) -> JobStatistics:
+def compute_job_statistics(
+    job: SlurmJobDB, prom_stats: list[dict]
+) -> dict[str, JobStatisticDB]:
     statistics_dict = {
         "mean": lambda self: self.mean(),
         "std": lambda self: self.std(),
@@ -267,11 +272,11 @@ def compute_job_statistics(job: SlurmJob, prom_stats: list[dict]) -> JobStatisti
     )
 
     system_memory = None
-    if job.allocated.mem is not None:
+    if job.allocated_mem is not None:
         system_memory = compute_job_statistics_from_dataframe(
             metrics["slurm_job_memory_usage"],
             statistics=statistics_dict,
-            normalization=lambda x: float(x / 1e6 / cast(int, job.allocated.mem)),
+            normalization=lambda x: float(x / 1e6 / cast(int, job.allocated_mem)),
             unused_threshold=False,
         )
     elif metrics["slurm_job_memory_usage"] is not None:
@@ -279,23 +284,26 @@ def compute_job_statistics(job: SlurmJob, prom_stats: list[dict]) -> JobStatisti
             f"job.allocated.mem is None for job {job.job_id} (job status: {job.job_state.value})"
         )
 
-    return JobStatistics(
-        gpu_utilization=Statistics(**gpu_utilization) if gpu_utilization else None,
-        gpu_utilization_fp16=(
-            Statistics(**gpu_utilization_fp16) if gpu_utilization_fp16 else None
-        ),
-        gpu_utilization_fp32=(
-            Statistics(**gpu_utilization_fp32) if gpu_utilization_fp32 else None
-        ),
-        gpu_utilization_fp64=(
-            Statistics(**gpu_utilization_fp64) if gpu_utilization_fp64 else None
-        ),
-        gpu_sm_occupancy=Statistics(**gpu_sm_occupancy) if gpu_sm_occupancy else None,
-        gpu_memory=Statistics(**gpu_memory) if gpu_memory else None,
-        gpu_power=Statistics(**gpu_power) if gpu_power else None,
-        cpu_utilization=Statistics(**cpu_utilization) if cpu_utilization else None,
-        system_memory=Statistics(**system_memory) if system_memory else None,
-    )
+    res = dict()
+    if gpu_utilization:
+        res["gpu_utilization"] = JobStatisticDB(**gpu_utilization)
+    if gpu_utilization_fp16:
+        res["gpu_utilization_fp16"] = JobStatisticDB(**gpu_utilization_fp16)
+    if gpu_utilization_fp32:
+        res["gpu_utilization_fp32"] = JobStatisticDB(**gpu_utilization_fp32)
+    if gpu_utilization_fp64:
+        res["gpu_utilization_fp64"] = JobStatisticDB(**gpu_utilization_fp64)
+    if gpu_sm_occupancy:
+        res["gpu_sm_occupancy"] = JobStatisticDB(**gpu_sm_occupancy)
+    if gpu_memory:
+        res["gpu_memory"] = JobStatisticDB(**gpu_memory)
+    if gpu_power:
+        res["gpu_power"] = JobStatisticDB(**gpu_power)
+    if cpu_utilization:
+        res["cpu_utilization"] = JobStatisticDB(**cpu_utilization)
+    if system_memory:
+        res["system_memory"] = JobStatisticDB(**system_memory)
+    return res
 
 
 # Dictionary of slurm metric names:

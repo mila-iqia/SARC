@@ -11,10 +11,9 @@ from pydantic import BaseModel
 from simple_parsing import field
 
 from sarc.cache import Cache
-from sarc.client.gpumetrics import _gpu_billing_collection
 from sarc.config import UTC, ClusterConfig, config
-from sarc.core.models.validators import UTCOFFSET, datetime_utc
-from sarc.jobs.node_gpu_mapping import _node_gpu_mapping_collection
+from sarc.core.models.validators import datetime_utc
+from sarc.db.cluster import GPUBillingDB, NodeGPUMappingDB, SlurmClusterDB
 
 logger = logging.getLogger(__name__)
 
@@ -66,20 +65,29 @@ class ParseSlurmConfig:
 
             cache_date: datetime_utc = datetime.fromisoformat(key)
             assert cache_date.tzinfo is not None, "date is not tz-aware"
-            assert cache_date.utcoffset() == UTCOFFSET, "date is not in UTC timezone"
 
             content = blob.decode(encoding="utf-8")
 
             logger.info(f"Parsing at {cache_date}")
             parser = SlurmConfigParser(cluster=cluster_config, threshold=self.threshold)
             slurm_conf = parser.load(io.StringIO(content))
-            if slurm_conf.gpu_to_billing is not None:
-                _gpu_billing_collection().save_gpu_billing(
-                    self.cluster_name, cache_date, slurm_conf.gpu_to_billing
+            with config().db.session() as sess:
+                cluster_id = SlurmClusterDB.id_by_name(sess, self.cluster_name)
+                assert cluster_id is not None
+                if slurm_conf.gpu_to_billing is not None:
+                    GPUBillingDB.get_or_create(
+                        sess=sess,
+                        cluster_id=cluster_id,
+                        since=cache_date,
+                        gpu_to_billing=slurm_conf.gpu_to_billing,
+                    )
+                NodeGPUMappingDB.get_or_create(
+                    sess=sess,
+                    cluster_id=cluster_id,
+                    since=cache_date,
+                    node_to_gpu=slurm_conf.node_to_gpus,
                 )
-            _node_gpu_mapping_collection().save_node_gpu_mapping(
-                self.cluster_name, cache_date, slurm_conf.node_to_gpus
-            )
+                sess.commit()
         return 0
 
 
