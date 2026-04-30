@@ -1,6 +1,7 @@
 import math
 from collections.abc import Iterable
 from datetime import UTC, datetime, timedelta
+from enum import Enum
 from types import SimpleNamespace
 from typing import Self
 
@@ -11,7 +12,6 @@ from sqlmodel import (
     CheckConstraint,
     Field,
     Session,
-    SQLModel,
     UniqueConstraint,
     col,
     func,
@@ -22,10 +22,42 @@ from sqlmodel.main import Relationship
 from sqlmodel.sql.expression import SelectOfScalar
 
 from sarc.config import ClusterConfig
-from sarc.core.models.job import SlurmState
 from sarc.db.cluster import SlurmClusterDB
 
+from .sqlmodel import SQLModel
 from .users import UserDB
+
+
+class SlurmState(str, Enum):
+    """Possible Slurm job states.
+
+    Reference: https://slurm.schedmd.com/squeue.html#SECTION_JOB-STATE-CODES
+    """
+
+    BOOT_FAIL = "BOOT_FAIL"
+    CANCELLED = "CANCELLED"
+    COMPLETED = "COMPLETED"
+    CONFIGURING = "CONFIGURING"
+    COMPLETING = "COMPLETING"
+    DEADLINE = "DEADLINE"
+    FAILED = "FAILED"
+    NODE_FAIL = "NODE_FAIL"
+    OUT_OF_MEMORY = "OUT_OF_MEMORY"
+    PENDING = "PENDING"
+    PREEMPTED = "PREEMPTED"
+    RUNNING = "RUNNING"
+    RESV_DEL_HOLD = "RESV_DEL_HOLD"
+    REQUEUE_FED = "REQUEUE_FED"
+    REQUEUE_HOLD = "REQUEUE_HOLD"
+    REQUEUED = "REQUEUED"
+    RESIZING = "RESIZING"
+    REVOKED = "REVOKED"
+    SIGNALING = "SIGNALING"
+    SPECIAL_EXIT = "SPECIAL_EXIT"
+    STAGE_OUT = "STAGE_OUT"
+    STOPPED = "STOPPED"
+    SUSPENDED = "SUSPENDED"
+    TIMEOUT = "TIMEOUT"
 
 
 class JobStatisticDB(SQLModel, table=True):

@@ -2,7 +2,9 @@ from datetime import date, datetime
 from typing import Annotated, cast
 
 from pydantic import BeforeValidator, ByteSize
-from sqlmodel import Field, SQLModel
+from sqlmodel import Field
+
+from sarc.db.sqlmodel import SQLModel
 
 
 def validate_date(value: str | date | datetime) -> date:

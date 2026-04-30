@@ -4,9 +4,11 @@ from datetime import date, datetime
 from typing import Self
 
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlmodel import Field, Index, Relationship, Session, SQLModel, select
+from sqlmodel import Field, Index, Relationship, Session, select
 
 from sarc.core.models.validators import datetime_utc
+
+from .sqlmodel import SQLModel
 
 
 class GPUBillingDB(SQLModel, table=True):

@@ -13,7 +13,6 @@ from sqlmodel import (
     Index,
     Relationship,
     Session,
-    SQLModel,
     col,
     exists,
     func,
@@ -23,6 +22,8 @@ from sqlmodel import (
 )
 
 from sarc.core.models.validators import datetime_utc
+
+from .sqlmodel import SQLModel
 
 logger = logging.getLogger(__name__)
 
