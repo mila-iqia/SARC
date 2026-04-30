@@ -108,7 +108,7 @@ def set_auto_end_time(cluster_name: str, end_field: str, date: datetime) -> None
     with config().db.session() as sess:
         sess.exec(
             update(SlurmClusterDB)
-            .where(col(SlurmClusterDB.cluster_name) == cluster_name)
+            .where(col(SlurmClusterDB.name) == cluster_name)
             .values(**{end_field: date.strftime(DATE_FORMAT_HOUR)})
         )
 

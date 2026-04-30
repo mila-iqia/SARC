@@ -28,12 +28,12 @@ def insert_clusters(sess: Session) -> None:
     for cluster_name, clust in clusters.items():
         db_cluster = sess.exec(
             select(cluster.SlurmClusterDB).where(
-                cluster.SlurmClusterDB.cluster_name == cluster_name
+                cluster.SlurmClusterDB.name == cluster_name
             )
         ).one_or_none()
         if db_cluster is None:
             db_cluster = cluster.SlurmClusterDB(
-                cluster_name=cluster_name,
+                name=cluster_name,
                 domain=clust.user_domain,
                 start_date=clust.start_date,
                 billing_is_gpu=clust.billing_is_gpu,

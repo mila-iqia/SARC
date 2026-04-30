@@ -66,7 +66,7 @@ class SlurmClusterDB(SQLModel, table=True):
     # Database ID
     id: int | None = Field(default=None, primary_key=True)
 
-    cluster_name: str = Field(unique=True)
+    name: str = Field(unique=True)
     domain: str
     start_date: date
     end_time_sacct: datetime_utc | None = None
@@ -115,15 +115,11 @@ class SlurmClusterDB(SQLModel, table=True):
 
     @classmethod
     def id_by_name(cls, sess: Session, cluster_name: str) -> int | None:
-        return sess.exec(
-            select(cls.id).where(cls.cluster_name == cluster_name)
-        ).one_or_none()
+        return sess.exec(select(cls.id).where(cls.name == cluster_name)).one_or_none()
 
     @classmethod
     def by_name(cls, sess: Session, cluster_name: str) -> Self | None:
-        return sess.exec(
-            select(cls).where(cls.cluster_name == cluster_name)
-        ).one_or_none()
+        return sess.exec(select(cls).where(cls.name == cluster_name)).one_or_none()
 
 
 def get_available_clusters(sess: Session) -> Sequence[SlurmClusterDB]:

@@ -345,7 +345,7 @@ def update_cluster_job_series_rgu(df: DataFrame, cluster: SlurmClusterDB) -> Dat
     if cluster.billing_is_gpu:
         # If billing is GPU count on this cluster, then we just need
         # gpu_to_rgu to compute jobs RGU billing.
-        slice_rows = df["cluster_name"] == cluster.cluster_name
+        slice_rows = df["cluster_name"] == cluster.name
         _compute_rgu_stats_from_gpu_count(df, slice_rows, gpu_to_rgu)
         return df
 
@@ -356,16 +356,14 @@ def update_cluster_job_series_rgu(df: DataFrame, cluster: SlurmClusterDB) -> Dat
     dated_gpu_billings = cluster.gpu_billing
     if not dated_gpu_billings:
         logger.warning(
-            f"RGU update: no GPU billing available for cluster {cluster.cluster_name}"
+            f"RGU update: no GPU billing available for cluster {cluster.name}"
         )
         return df
 
     # Now we have RGU and billing values. We can compute RGU information.
 
     # First, we update columns for jobs that started before the oldest available RGU mapping.
-    _compute_rgu_stats_before_date(
-        df, cluster.cluster_name, gpu_to_rgu, dated_gpu_billings[0]
-    )
+    _compute_rgu_stats_before_date(df, cluster.name, gpu_to_rgu, dated_gpu_billings[0])
 
     # Then, we update columns for each RGU mapping except the latest one.
     for i in range(1, len(dated_gpu_billings)):
@@ -419,12 +417,12 @@ def _compute_rgu_stats_after_date(
     # We work on curr_mapping
     # Compute slice: curr mapping date <= start time < next mapping date (if next is available)
     if next_billing_date is None:
-        slice_rows = (df["cluster_name"] == cluster.cluster_name) & (
+        slice_rows = (df["cluster_name"] == cluster.name) & (
             df["start_time"] >= curr_gpu_billing.since
         )
     else:
         slice_rows = (
-            (df["cluster_name"] == cluster.cluster_name)
+            (df["cluster_name"] == cluster.name)
             & (df["start_time"] >= curr_gpu_billing.since)
             & (df["start_time"] < next_billing_date)
         )

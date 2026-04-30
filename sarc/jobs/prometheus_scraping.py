@@ -59,7 +59,7 @@ def fetch_prometheus(
                 continue
             nb_jobs += 1
             ce.add_value(
-                f"{entry.cluster.cluster_name}${entry.job_id}${entry.submit_time.isoformat(timespec='seconds')}",
+                f"{entry.cluster.name}${entry.job_id}${entry.submit_time.isoformat(timespec='seconds')}",
                 json.dumps(raw_prom_data).encode("utf-8"),
             )
     logger.info(f"Fetched Prometheus metrics for {nb_jobs} jobs.")
