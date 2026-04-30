@@ -23,6 +23,7 @@ from sqlmodel.sql.expression import SelectOfScalar
 
 from sarc.config import ClusterConfig
 from sarc.db.cluster import SlurmClusterDB
+from sarc.models.job import SlurmState
 
 from .sqlmodel import SQLModel
 from .users import UserDB
