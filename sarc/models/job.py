@@ -1,8 +1,8 @@
 import math
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Annotated, Any
 
-from pydantic import UUID4, BaseModel, BeforeValidator, field_validator
+from pydantic import BaseModel, BeforeValidator, Field, field_validator
 
 from sarc.db.job import SlurmState
 
@@ -59,17 +59,6 @@ class JobStatistics(BaseModel):
         )
 
 
-class SlurmResources(BaseModel):
-    """Counts for various resources."""
-
-    cpu: int | None = None
-    mem: int | None = None
-    node: int | None = None
-    billing: int | None = None
-    gres_gpu: int | None = None
-    gpu_type: str | None = None
-
-
 class SlurmJob(BaseModel):
     """Holds data for a Slurm job."""
 
@@ -115,14 +104,22 @@ class SlurmJob(BaseModel):
     latest_scraped_end: datetime | None = None
 
     # tres
-    requested: SlurmResources
-    allocated: SlurmResources
+    requested_cpu: int | None = None
+    requested_mem: int | None = None
+    requested_node: int | None = None
+    requested_billing: int | None = None
+    requested_gres_gpu: int | None = None
+    requested_gpu_type: str | None = None
+
+    allocated_cpu: int | None = None
+    allocated_mem: int | None = None
+    allocated_node: int | None = None
+    allocated_billing: int | None = None
+    allocated_gres_gpu: int | None = None
+    allocated_gpu_type: str | None = None
 
     # statistics
-    statistics: JobStatistics | None = None
-
-    # User ID
-    user_uuid: UUID4 | None = None
+    statistics: dict[str, Statistics] = Field(default_factory=dict)
 
     @field_validator(
         "submit_time",
@@ -143,11 +140,3 @@ class SlurmJob(BaseModel):
         if v.tzinfo is None:
             v = v.replace(tzinfo=UTC)
         return v.astimezone(UTC)
-
-    @property
-    def duration(self) -> timedelta:
-        if self.end_time is not None:
-            assert self.start_time is not None
-            return self.end_time - self.start_time
-
-        return timedelta(seconds=0)

@@ -6,7 +6,6 @@ from sqlmodel import Session, col, select
 
 from sarc.cache import Cache, CacheEntry
 from sarc.config import ClusterConfig, config
-from sarc.core.models.job import SlurmState
 from sarc.db.cluster import SlurmClusterDB
 from sarc.db.job import JobStatisticDB, SlurmJobDB
 from sarc.db.runstate import get_parsed_date, set_parsed_date
@@ -15,6 +14,7 @@ from sarc.jobs.series import (
     compute_job_statistics,
     get_job_time_series_data,
 )
+from sarc.models.job import SlurmState
 from sarc.traces import trace_decorator
 
 logger = logging.getLogger(__name__)

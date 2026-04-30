@@ -30,14 +30,10 @@ from datetime import datetime
 from typing import Any, Callable, Iterable
 
 import httpx
-from pydantic import UUID4
-from pydantic_mongo import PydanticObjectId
 
-from sarc.client.job import SlurmJob, SlurmState
 from sarc.client.series import AbstractJobSeriesFactory
 from sarc.config import UTC, ConfigurationError, config
-from sarc.core.models.api import SlurmJobList, UserList
-from sarc.core.models.users import MemberType, UserData
+from sarc.models.api import SlurmJobList, SlurmJobOutput, UserList
 from sarc.traces import trace_decorator
 
 
