@@ -560,6 +560,7 @@ class RestJobSeriesFactory(AbstractJobSeriesFactory):
     def count_jobs(self, *args, **kwargs) -> int:
         return count_jobs(*args, **kwargs)
 
+    # TODO: Figure out a way to make this interface for maybe.  Or maybe add a dedicated method for load_job_series
     def get_jobs(self, *args, **kwargs) -> Iterable[SlurmJob]:
         return get_jobs(*args, **kwargs)
 
