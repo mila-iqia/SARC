@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Literal
 
-from sarc.client import get_rgus
+from sarc.db.job import get_rgus
 
 
 class GpuError(Exception):
