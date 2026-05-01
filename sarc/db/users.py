@@ -1,7 +1,6 @@
 import logging
 from collections.abc import Iterable, Sequence
 from datetime import UTC, datetime
-from enum import Enum
 from typing import Any, Self, Type
 
 from sqlalchemy.dialects.postgresql import TSTZRANGE, ExcludeConstraint, Range
@@ -23,20 +22,11 @@ from sqlmodel import (
 )
 
 from sarc.core.models.validators import datetime_utc
+from sarc.models.user import MemberType
 
 from .sqlmodel import SQLModel
 
 logger = logging.getLogger(__name__)
-
-
-class MemberType(str, Enum):
-    MASTER_STUDENT = "master"
-    PHD_STUDENT = "phd"
-    POSTDOC = "postdoc"
-    PROFESSOR = "professor"
-    STAFF = "staff"
-    INTERN = "intern"
-    # There are probably some missing types so feel free to add them
 
 
 def subtract_ranges(r1: Range[datetime], r2: Range[datetime]) -> list[Range[datetime]]:

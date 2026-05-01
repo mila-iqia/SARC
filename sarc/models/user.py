@@ -1,7 +1,19 @@
+from enum import Enum
+
 from pydantic import BaseModel
 
 
-class User(BaseModel):
+class MemberType(str, Enum):
+    MASTER_STUDENT = "master"
+    PHD_STUDENT = "phd"
+    POSTDOC = "postdoc"
+    PROFESSOR = "professor"
+    STAFF = "staff"
+    INTERN = "intern"
+    # There are probably some missing types so feel free to add them
+
+
+class UserBase(BaseModel):
     display_name: str
     email: str
 

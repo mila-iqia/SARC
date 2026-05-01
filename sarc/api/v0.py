@@ -29,7 +29,7 @@ from sarc.db.users import (
     SupervisorDB,
     UserDB,
 )
-from sarc.models.api import SlurmJobList, SlurmJobOutput, UserList, UserOutput
+from sarc.models.api import SlurmJob, SlurmJobList, User, UserList
 
 
 def _ensure_datetime_utc(v: datetime) -> datetime:
@@ -384,7 +384,7 @@ def list_jobs(
         col(SlurmJobDB.submit_time),
     )
 
-    jobs = [SlurmJobOutput.model_validate(doc) for doc in sess.exec(query)]
+    jobs = [SlurmJob.model_validate(doc) for doc in sess.exec(query)]
 
     return SlurmJobList(
         jobs=jobs,
@@ -402,13 +402,13 @@ def count_jobs(query_opt: JobQueryType, sess: Session = Depends(session_dep)) ->
 
 
 @router.get("/job/id/{id}", dependencies=[Depends(require_admin)])
-def get_job(id: int, sess: Session = Depends(session_dep)) -> SlurmJobOutput:
+def get_job(id: int, sess: Session = Depends(session_dep)) -> SlurmJob:
     job = sess.get(SlurmJobDB, id)
     if job is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Job not found"
         )
-    return SlurmJobOutput.model_validate(job)
+    return SlurmJob.model_validate(job)
 
 
 @router.get("/cluster/list", dependencies=[Depends(requestor)])
@@ -445,7 +445,7 @@ def list_users(
     query = query_opt.get_query(select(UserDB))
     query = page_opt.add_page_options(query, col(UserDB.id))  # type: ignore [arg-type]
 
-    users = [UserOutput.model_validate(doc) for doc in sess.exec(query)]
+    users = [User.model_validate(doc) for doc in sess.exec(query)]
 
     return UserList(
         users=users,
@@ -457,25 +457,25 @@ def list_users(
 
 
 @router.get("/user/id/{id}", dependencies=[Depends(require_admin)])
-def get_user_by_id(id: int, sess: Session = Depends(session_dep)) -> UserOutput:
+def get_user_by_id(id: int, sess: Session = Depends(session_dep)) -> User:
     """Get user with given ID."""
     user = sess.get(UserDB, id)
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
-    return UserOutput.model_validate(user)
+    return User.model_validate(user)
 
 
 @router.get("/user/email/{email}", dependencies=[Depends(require_admin)])
-def get_user_by_email(email: str, sess: Session = Depends(session_dep)) -> UserOutput:
+def get_user_by_email(email: str, sess: Session = Depends(session_dep)) -> User:
     """Get user with given email."""
     user = sess.exec(select(UserDB).where(UserDB.email == email)).one_or_none()
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
-    return UserOutput.model_validate(user)
+    return User.model_validate(user)
 
 
 @router.get("/health/list")
