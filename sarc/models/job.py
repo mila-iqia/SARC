@@ -59,7 +59,7 @@ class JobStatistics(BaseModel):
         )
 
 
-class SlurmJob(BaseModel):
+class SlurmJobBase(BaseModel):
     """Holds data for a Slurm job."""
 
     # job identification

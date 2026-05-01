@@ -31,10 +31,17 @@ from typing import Any, Callable, Iterable
 
 import httpx
 
+# This should be a proper neutral interface, currently it is dependent on DB types
 from sarc.client.series import AbstractJobSeriesFactory
 from sarc.config import UTC, ConfigurationError, config
-from sarc.models.api import SlurmJobList, SlurmJobOutput, UserList
+from sarc.models.api import SlurmJob, SlurmJobList, User, UserList
+from sarc.models.job import SlurmState
+from sarc.models.user import MemberType
 from sarc.traces import trace_decorator
+
+# TODO add methods here and to the API to fetch the missing user data
+# or figure out a way to send it that isn't too convoluted
+# Perhaps a UserProxy class of some sort would be the way
 
 
 class SarcApiClient:
@@ -194,11 +201,11 @@ class SarcApiClient:
         response = self._get("/v0/job/count", params=params)
         return response.json()
 
-    def job_by_id(self, oid: str | PydanticObjectId) -> SlurmJob:
+    def job_by_id(self, id: int) -> SlurmJob:
         """
-        Get a specific job by its internal Object ID.
+        Get a specific job by its internal ID.
         """
-        response = self._get(f"/v0/job/id/{oid}")
+        response = self._get(f"/v0/job/id/{id}")
         return SlurmJob.model_validate(response.json())
 
     # --- Cluster Endpoints ---
@@ -228,13 +235,13 @@ class SarcApiClient:
         member_type: MemberType | None = None,
         member_start: datetime | None = None,
         member_end: datetime | None = None,
-        supervisor: UUID4 | None = None,
+        supervisor: int | None = None,
         supervisor_start: datetime | None = None,
         supervisor_end: datetime | None = None,
-        co_supervisor: UUID4 | None = None,
+        co_supervisor: int | None = None,
         co_supervisor_start: datetime | None = None,
         co_supervisor_end: datetime | None = None,
-    ) -> list[UUID4]:
+    ) -> list[int]:
         """
         Search users. Return list of user UUIDs.
         """
@@ -252,8 +259,7 @@ class SarcApiClient:
             "co_supervisor_end": co_supervisor_end,
         }
         response = self._get("/v0/user/query", params=params)
-        # The API returns list[UUID4], JSON decodes as list[str], we convert back to UUID objects
-        return [UUID4(uuid_str) for uuid_str in response.json()]
+        return [response.json()]
 
     def user_list(
         self,
@@ -262,10 +268,10 @@ class SarcApiClient:
         member_type: MemberType | None = None,
         member_start: datetime | None = None,
         member_end: datetime | None = None,
-        supervisor: UUID4 | None = None,
+        supervisor: int | None = None,
         supervisor_start: datetime | None = None,
         supervisor_end: datetime | None = None,
-        co_supervisor: UUID4 | None = None,
+        co_supervisor: int | None = None,
         co_supervisor_start: datetime | None = None,
         co_supervisor_end: datetime | None = None,
         page: int = 1,
@@ -292,19 +298,19 @@ class SarcApiClient:
         response = self._get("/v0/user/list", params=params)
         return UserList.model_validate(response.json())
 
-    def user_by_id(self, uuid: UUID4 | str) -> UserData:
+    def user_by_id(self, id: int) -> User:
         """
-        Get user with given UUID.
+        Get user with given ID.
         """
-        response = self._get(f"/v0/user/id/{uuid}")
-        return UserData.model_validate(response.json())
+        response = self._get(f"/v0/user/id/{id}")
+        return User.model_validate(response.json())
 
-    def user_by_email(self, email: str) -> UserData:
+    def user_by_email(self, email: str) -> User:
         """
         Get user with given email.
         """
         response = self._get(f"/v0/user/email/{email}")
-        return UserData.model_validate(response.json())
+        return User.model_validate(response.json())
 
 
 def _parse_common_args(
@@ -490,13 +496,13 @@ def get_users(
     member_type: MemberType | None = None,
     member_start: datetime | None = None,
     member_end: datetime | None = None,
-    supervisor: UUID4 | None = None,
+    supervisor: int | None = None,
     supervisor_start: datetime | None = None,
     supervisor_end: datetime | None = None,
-    co_supervisor: UUID4 | None = None,
+    co_supervisor: int | None = None,
     co_supervisor_start: datetime | None = None,
     co_supervisor_end: datetime | None = None,
-) -> list[UserData]:
+) -> list[User]:
     """
     Get users matching the criteria using the REST API.
     Fetches all results by iterating over pages.
@@ -557,7 +563,8 @@ class RestJobSeriesFactory(AbstractJobSeriesFactory):
     def get_jobs(self, *args, **kwargs) -> Iterable[SlurmJob]:
         return get_jobs(*args, **kwargs)
 
-    def get_users(self) -> list[UserData]:
+    # TODO: this will not work because User doesn't have all the ValidFields
+    def get_users(self) -> list[User]:
         return get_users()
 
 

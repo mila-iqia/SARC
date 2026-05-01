@@ -2,20 +2,20 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
-from .job import SlurmJob
-from .user import User
+from .job import SlurmJobBase
+from .user import UserBase
 
 
-class SlurmJobOutput(SlurmJob):
+class SlurmJob(SlurmJobBase):
     id: int
 
 
-class UserOutput(User):
+class User(UserBase):
     id: int
 
 
 class SlurmJobList(BaseModel):
-    jobs: list[SlurmJobOutput]
+    jobs: list[SlurmJob]
     page: int | None
     last_id: int
     last_time: datetime
@@ -24,7 +24,7 @@ class SlurmJobList(BaseModel):
 
 
 class UserList(BaseModel):
-    users: list[UserOutput]
+    users: list[User]
     page: int | None
     last_id: int
     per_page: int
