@@ -1,6 +1,7 @@
 from datetime import date
 
 from pydantic import ByteSize
+from sqlalchemy import BigInteger
 from sqlmodel import Field, Index, Relationship
 
 from .sqlmodel import SQLModel
@@ -9,16 +10,20 @@ from .sqlmodel import SQLModel
 class DiskUsageUserDB(SQLModel, table=True):
     __tablename__ = "diskusage_users"
     id: int | None = Field(default=None, primary_key=True)
-    group_id: int = Field(foreign_key="diskusage_groups.id", index=True)
+    group_id: int | None = Field(
+        foreign_key="diskusage_groups.id", index=True, default=None, nullable=False
+    )
     user: str
     nbr_files: int
-    size: ByteSize
+    size: ByteSize = Field(sa_type=BigInteger)
 
 
 class DiskUsageGroupDB(SQLModel, table=True):
     __tablename__ = "diskusage_groups"
     id: int | None = Field(default=None, primary_key=True)
-    report_id: int = Field(foreign_key="diskusage_reports.id", index=True)
+    report_id: int | None = Field(
+        foreign_key="diskusage_reports.id", index=True, default=None, nullable=False
+    )
     group_name: str
     users: list[DiskUsageUserDB] = Relationship()
 

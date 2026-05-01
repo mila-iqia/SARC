@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import sys
 import time
@@ -20,8 +21,11 @@ from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from opentelemetry.trace import set_tracer_provider
 from pytest_regressions.data_regression import RegressionYamlDumper
+from sqlalchemy import text
+from sqlmodel import create_engine, select
 
 from sarc.config import config, using_sarc_mode
+from sarc.db.cluster import SlurmClusterDB
 
 _tracer_provider = TracerProvider()
 _exporter = InMemorySpanExporter()
@@ -169,32 +173,20 @@ RegressionYamlDumper.add_custom_yaml_representer(
 )
 
 
-@pytest.fixture
-def db_allocations():
-    from .functional.allocations.factory import create_allocations
-
-    return create_allocations()
-
-
-@pytest.fixture
-def db_jobs():
-    from .functional.jobs.factory import create_jobs
-
-    return create_jobs()
-
-
 @contextmanager
 def custom_db_config(db_name, additional_overrides={}):
+
     assert db_name.startswith("test-db-")
+
     with gifnoc.overlay(
         {
-            "sarc.mongo.database_name": db_name,
-            "sarc.mongo.connection_string": "localhost:27017",
+            "sarc.db.name": db_name,
+            "sarc.db.host": "localhost",
+            "sarc.db.auto_upgrade": True,
             **additional_overrides,
         }
     ):
-        # Ensure we do not use and thus wipe the production database
-        assert config().mongo.database_instance.name == db_name
+        assert config().db.name == db_name
         yield
 
 
@@ -202,8 +194,6 @@ def custom_db_config(db_name, additional_overrides={}):
 class DbConfiguration:
     base_name: str
     empty: bool = False
-    with_users: bool = False
-    with_clusters: bool = False
     job_patch: Any = None
     read_only: bool = False
 
@@ -211,49 +201,53 @@ class DbConfiguration:
     def db_name(self):
         return f"test-db-{self.base_name}-{uuid4().hex}"
 
-    def _clear(self, db):
-        db.allocations.drop()
-        db.jobs.drop()
-        db.diskusage.drop()
-        db.users.drop()
-        db.clusters.drop()
-        db.gpu_billing.drop()
-        db.node_gpu_mapping.drop()
-        db.healthcheck.drop()
-        db.runstate.drop()
-        db.version.drop()
-
     def _fill(self, db):
-        from .functional.allocations.factory import create_allocations
-        from .functional.diskusage.factory import create_diskusages
-        from .functional.jobs.factory import (
-            create_cluster_entries,
+        from .db.factory import (
+            create_allocations,
+            create_diskusages,
             create_gpu_billings,
             create_jobs,
             create_users,
         )
 
-        db.allocations.insert_many(create_allocations())
-        db.jobs.insert_many(create_jobs(job_patch=self.job_patch))
-        db.diskusage.insert_many(create_diskusages())
-        db.gpu_billing.insert_many(create_gpu_billings())
-        if self.with_users:
-            db.users.insert_many(create_users())
+        with db.session() as sess:
+            # Clusters are populated through db_upgrade given our configuration
+            clusters = sess.exec(select(SlurmClusterDB)).all()
 
-        if self.with_clusters:
-            # Fill collection `clusters`.
-            db.clusters.insert_many(create_cluster_entries())
+            billings = create_gpu_billings(clusters=clusters)
+            sess.add_all(billings)
+
+            allocations = create_allocations(clusters=clusters)
+            sess.add_all(allocations)
+
+            diskusages = create_diskusages()
+            sess.add_all(diskusages)
+
+            users = create_users()
+            sess.add_all(users)
+
+            jobs = create_jobs(clusters=clusters, users=users)
+            sess.add_all(jobs)
+
+            sess.commit()
+
+    def executive(self, req):
+        admin_engine = create_engine(
+            "postgresql+psycopg://localhost/postgres", isolation_level="AUTOCOMMIT"
+        )
+        with admin_engine.connect() as conn:
+            conn.execute(text(req))
+        admin_engine.dispose()
 
     def __call__(self, request):
         with custom_db_config(self.db_name):
-            db = config().mongo.database_instance
-            self._clear(db)
-        if not self.empty:
-            self._fill(db)
-        try:
-            yield self.db_name
-        finally:
-            db.client.drop_database(db)
+            self.executive(f'CREATE DATABASE "{self.db_name}"')
+            try:
+                if not self.empty:
+                    self._fill(config().db)
+                yield self.db_name
+            finally:
+                self.executive(f'DROP DATABASE "{self.db_name}" WITH (FORCE)')
 
     def fixture(self):
         scope = "session" if self.read_only else "function"
@@ -262,11 +256,7 @@ class DbConfiguration:
 
 empty_read_write_db_config_object = DbConfiguration("empty-rw", empty=True).fixture()
 
-read_write_db_config_object = DbConfiguration("rw", with_clusters=True).fixture()
-
-read_write_db_with_users_config_object = DbConfiguration(
-    "rwu", with_users=True
-).fixture()
+read_write_db_config_object = DbConfiguration("rw").fixture()
 
 read_write_db_with_many_cpu_jobs_config_object = DbConfiguration(
     "r-jobs",
@@ -276,46 +266,46 @@ read_write_db_with_many_cpu_jobs_config_object = DbConfiguration(
     },
 ).fixture()
 
-read_only_db_config_object = DbConfiguration(
-    "r", with_clusters=True, read_only=True
-).fixture()
-
-read_only_db_with_users_config_object = DbConfiguration(
-    "ru", with_users=True, with_clusters=True, read_only=True
-).fixture()
+read_only_db_config_object = DbConfiguration("r", read_only=True).fixture()
 
 
 @pytest.fixture
 def empty_read_write_db(empty_read_write_db_config_object):
     with custom_db_config(empty_read_write_db_config_object):
-        yield config().mongo.database_instance
+        with config().db.session() as session:
+            yield session
 
 
 @pytest.fixture
 def read_write_db(read_write_db_config_object):
     with custom_db_config(read_write_db_config_object):
-        yield config().mongo.database_instance
-
-
-@pytest.fixture
-def read_write_db_with_users(read_write_db_with_users_config_object):
-    with custom_db_config(read_write_db_with_users_config_object):
-        yield config().mongo.database_instance
+        with config().db.session() as session:
+            yield session
 
 
 @pytest.fixture
 def read_write_db_with_many_cpu_jobs(read_write_db_with_many_cpu_jobs_config_object):
     with custom_db_config(read_write_db_with_many_cpu_jobs_config_object):
-        yield config().mongo.database_instance
+        with config().db.session() as session:
+            yield session
 
 
 @pytest.fixture
 def read_only_db(read_only_db_config_object):
     with custom_db_config(read_only_db_config_object):
-        yield config().mongo.database_instance
+        with config().db.session() as session:
+            yield session
 
 
 @pytest.fixture
-def read_only_db_with_users(read_only_db_with_users_config_object):
-    with custom_db_config(read_only_db_with_users_config_object):
-        yield config().mongo.database_instance
+def results_regression(file_regression):
+    def check(results):
+        txt = f"Found {len(results)} result(s):\n"
+        for i, x in enumerate(sorted(results, key=lambda x: x.id)):
+            txt += f"\nResult #{i + 1}\n"
+            md = json.loads(x.model_dump_json(exclude={"id": True}, indent=4))
+            md = {k: v for k, v in sorted(md.items())}
+            txt += json.dumps(md, indent=4)
+        file_regression.check(txt)
+
+    return check

@@ -27,7 +27,7 @@ class DatetimeUTCValidator:
         )
 
 
-type datetime_utc = Annotated[datetime, DatetimeUTCValidator()]
+datetime_utc = Annotated[datetime, DatetimeUTCValidator()]
 
 
 class ValidTag[V](BaseModel):

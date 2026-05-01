@@ -1,0 +1,114 @@
+Found 16 result(s):
+
+Result #1
+{
+    "group_id": 1,
+    "nbr_files": 2,
+    "size": 0,
+    "user": "urbosa"
+}
+Result #2
+{
+    "group_id": 1,
+    "nbr_files": 50,
+    "size": 14484777205,
+    "user": "riju"
+}
+Result #3
+{
+    "group_id": 1,
+    "nbr_files": 2,
+    "size": 0,
+    "user": "mipha"
+}
+Result #4
+{
+    "group_id": 2,
+    "nbr_files": 47085,
+    "size": 4509715660,
+    "user": "revali"
+}
+Result #5
+{
+    "group_id": 3,
+    "nbr_files": 2,
+    "size": 0,
+    "user": "urbosa"
+}
+Result #6
+{
+    "group_id": 3,
+    "nbr_files": 50,
+    "size": 14484777205,
+    "user": "riju"
+}
+Result #7
+{
+    "group_id": 3,
+    "nbr_files": 2,
+    "size": 0,
+    "user": "mipha"
+}
+Result #8
+{
+    "group_id": 4,
+    "nbr_files": 47085,
+    "size": 4509715660,
+    "user": "revali"
+}
+Result #9
+{
+    "group_id": 5,
+    "nbr_files": 2,
+    "size": 0,
+    "user": "urbosa"
+}
+Result #10
+{
+    "group_id": 5,
+    "nbr_files": 50,
+    "size": 14484777205,
+    "user": "riju"
+}
+Result #11
+{
+    "group_id": 5,
+    "nbr_files": 2,
+    "size": 0,
+    "user": "mipha"
+}
+Result #12
+{
+    "group_id": 6,
+    "nbr_files": 47085,
+    "size": 4509715660,
+    "user": "revali"
+}
+Result #13
+{
+    "group_id": 7,
+    "nbr_files": 2,
+    "size": 0,
+    "user": "urbosa"
+}
+Result #14
+{
+    "group_id": 7,
+    "nbr_files": 50,
+    "size": 14484777205,
+    "user": "riju"
+}
+Result #15
+{
+    "group_id": 7,
+    "nbr_files": 2,
+    "size": 0,
+    "user": "mipha"
+}
+Result #16
+{
+    "group_id": 8,
+    "nbr_files": 47085,
+    "size": 4509715660,
+    "user": "revali"
+}
