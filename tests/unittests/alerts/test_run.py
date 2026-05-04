@@ -3,7 +3,7 @@ import re
 
 import pytest
 
-from sarc.alerts.healthcheck_state import get_healthcheck_state_collection
+from sarc.db.heatlhcheck import HealthCheckStateDB
 
 
 @pytest.mark.usefixtures("empty_read_write_db")
@@ -66,25 +66,21 @@ def test_run_all_and_checks_error(beans_config, cli_main, caplog):
     assert "Arguments mutually exclusive" in caplog.text
 
 
-@pytest.mark.usefixtures("empty_read_write_db")
-def test_run_specific_check(beans_config, cli_main, caplog):
-    coll = get_healthcheck_state_collection()
+def test_run_specific_check(empty_read_write_db, beans_config, cli_main, caplog):
     with caplog.at_level(logging.INFO):
-        assert not list(coll.find_by({}))
+        assert not list(HealthCheckStateDB.get_states(empty_read_write_db))
         assert cli_main(["health", "run", "--check", "many_beans"]) == 0
         assert re.search(r"INFO +.+\[many_beans] OK", caplog.text)
         assert re.search(
             r"INFO +.+Check complete: 1 checks run, 0 skipped", caplog.text
         )
-        (state,) = coll.find_by({})
+        (state,) = HealthCheckStateDB.get_states(empty_read_write_db)
         assert state.check.name == "many_beans"
 
 
-@pytest.mark.usefixtures("empty_read_write_db")
-def test_run_all_checks(beans_config, cli_main, caplog):
-    coll = get_healthcheck_state_collection()
+def test_run_all_checks(empty_read_write_db, beans_config, cli_main, caplog):
     with caplog.at_level(logging.DEBUG):
-        assert not list(coll.find_by({}))
+        assert not list(HealthCheckStateDB.get_states(empty_read_write_db))
         assert cli_main(["health", "run", "--all"]) == 0
         assert re.search(r"INFO +.+\[many_beans] OK", caplog.text)
         assert re.search(r"ERROR +.+\[little_beans] FAILURE: little_beans", caplog.text)
@@ -96,14 +92,12 @@ def test_run_all_checks(beans_config, cli_main, caplog):
         assert re.search(
             r"INFO +.+Check complete: 3 checks run, 1 skipped", caplog.text
         )
-        assert len(list(coll.find_by({}))) == 4
+        assert len(HealthCheckStateDB.get_states(empty_read_write_db)) == 4
 
 
-@pytest.mark.usefixtures("empty_read_write_db")
-def test_run_check_with_dep(deps_config, cli_main, caplog):
-    coll = get_healthcheck_state_collection()
+def test_run_check_with_dep(empty_read_write_db, deps_config, cli_main, caplog):
     with caplog.at_level(logging.INFO):
-        assert not list(coll.find_by({}))
+        assert not list(HealthCheckStateDB.get_states(empty_read_write_db))
         assert cli_main(["health", "run", "--check", "many_beans"]) == 0
         assert re.search(
             r"WARNING +.+Skipping 'many_beans': dependency 'evil_beans' not OK",
@@ -112,14 +106,14 @@ def test_run_check_with_dep(deps_config, cli_main, caplog):
         assert re.search(
             r"INFO +.+Check complete: 0 checks run, 1 skipped", caplog.text
         )
-        assert len(list(coll.find_by({}))) == 1
+        assert len(HealthCheckStateDB.get_states(empty_read_write_db)) == 1
 
 
-@pytest.mark.usefixtures("empty_read_write_db")
-def test_run_check_with_param_and_dep(params_config, cli_main, caplog):
-    coll = get_healthcheck_state_collection()
+def test_run_check_with_param_and_dep(
+    empty_read_write_db, params_config, cli_main, caplog
+):
     with caplog.at_level(logging.INFO):
-        assert not list(coll.find_by({}))
+        assert not list(HealthCheckStateDB.get_states(empty_read_write_db))
         assert cli_main(["health", "run", "--check", "beanz_beta"]) == 0
         assert re.search(
             r"WARNING +.+Skipping 'beanz_beta': dependency 'isbeta_beta' not OK",
@@ -128,7 +122,7 @@ def test_run_check_with_param_and_dep(params_config, cli_main, caplog):
         assert re.search(
             r"INFO +.+Check complete: 0 checks run, 1 skipped", caplog.text
         )
-        assert len(list(coll.find_by({}))) == 1
+        assert len(HealthCheckStateDB.get_states(empty_read_write_db)) == 1
 
     with caplog.at_level(logging.INFO):
         assert cli_main(["health", "run", "--check", "isbeta_beta"]) == 0
@@ -136,7 +130,7 @@ def test_run_check_with_param_and_dep(params_config, cli_main, caplog):
         assert re.search(
             r"INFO +.+Check complete: 1 checks run, 0 skipped", caplog.text
         )
-        assert len(list(coll.find_by({}))) == 2
+        assert len(HealthCheckStateDB.get_states(empty_read_write_db)) == 2
 
     with caplog.at_level(logging.INFO):
         assert cli_main(["health", "run", "--check", "beanz_beta"]) == 0
@@ -144,11 +138,12 @@ def test_run_check_with_param_and_dep(params_config, cli_main, caplog):
         assert re.search(
             r"INFO +.+Check complete: 1 checks run, 0 skipped", caplog.text
         )
-        assert len(list(coll.find_by({}))) == 2
+        assert len(HealthCheckStateDB.get_states(empty_read_write_db)) == 2
 
 
-@pytest.mark.usefixtures("empty_read_write_db")
-def test_run_check_with_param_and_dep_wrong_order(params_config, cli_main, caplog):
+def test_run_check_with_param_and_dep_wrong_order(
+    empty_read_write_db, params_config, cli_main, caplog
+):
     with caplog.at_level(logging.INFO):
         assert cli_main(["health", "run", "--check", "beanz_beta", "isbeta_beta"]) == 0
         assert re.search(

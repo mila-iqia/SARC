@@ -26,6 +26,7 @@ from sqlmodel import create_engine, select
 
 from sarc.config import config, using_sarc_mode
 from sarc.db.cluster import SlurmClusterDB
+from tests.db.factory import extend_clusters
 
 _tracer_provider = TracerProvider()
 _exporter = InMemorySpanExporter()
@@ -213,6 +214,10 @@ class DbConfiguration:
         with db.session() as sess:
             # Clusters are populated through db_upgrade given our configuration
             clusters = sess.exec(select(SlurmClusterDB)).all()
+
+            # Update clusters with testing data
+            extend_clusters(clusters)
+            sess.flush()
 
             billings = create_gpu_billings(clusters=clusters)
             sess.add_all(billings)

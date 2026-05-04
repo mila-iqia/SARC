@@ -3,6 +3,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 from sarc.alerts.common import CheckResult, HealthCheck
+from sarc.config import config
+from sarc.db.cluster import get_available_clusters
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +25,6 @@ def check_cluster_response(time_interval: timedelta = timedelta(days=7)) -> bool
     bool
         True if we scraped all clusters recently, False otherwise.
     """
-    from sarc.client.job import get_available_clusters
 
     # Get current date
     current_date = datetime.now(tz=UTC)
@@ -31,23 +32,16 @@ def check_cluster_response(time_interval: timedelta = timedelta(days=7)) -> bool
     oldest_allowed_date = current_date - time_interval
     # Check each available cluster
     ok = True
-    for cluster in get_available_clusters():
-        if cluster.end_time_sacct is None:
-            logger.error(
-                f"[{cluster.cluster_name}] no end_time_sacct available, cannot check last scraping"
-            )
-            ok = False
-        else:
-            # Cluster's latest scraping date should be in `cluster.end_time_sacct`.
-            # NB: We assume cluster's `end_time_sacct` is stored as a date string,
-            # so we must first convert it to a datetime object.
-            cluster_end_date = datetime.strptime(
-                cluster.end_time_sacct, "%Y-%m-%dT%H:%M"
-            ).replace(tzinfo=UTC)
-            # Now we can check.
-            if cluster_end_date < oldest_allowed_date:
+    with config().db.session() as sess:
+        for cluster in get_available_clusters(sess):
+            if cluster.end_time_sacct is None:
                 logger.error(
-                    f"[{cluster.cluster_name}] no scraping since {cluster_end_date}, "
+                    f"[{cluster.name}] no end_time_sacct available, cannot check last scraping"
+                )
+                ok = False
+            elif cluster.end_time_sacct < oldest_allowed_date:
+                logger.error(
+                    f"[{cluster.name}] no scraping since {cluster.end_time_sacct}, "
                     f"oldest required: {oldest_allowed_date}, "
                     f"current time: {current_date}"
                 )

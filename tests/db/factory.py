@@ -663,3 +663,19 @@ def create_allocations(clusters: list[SlurmClusterDB]) -> list[AllocationDB]:
             nearline="80TB",
         ),
     ]
+
+def extend_clusters(clusters: list[SlurmClusterDB]) -> None:
+    for i, cluster in enumerate(sorted(clusters, key=lambda c: c.name)):
+        cluster_end_time = end_time.replace(second=0) - timedelta(days=i)
+        cluster_start_time = cluster_end_time - timedelta(days=1)
+        if cluster.name == "patate":
+            # Make end_time_sacct older than end_time_prometheus
+            end_time_sacct = cluster_end_time - timedelta(minutes=300)
+        else:
+            # By default, end_time_sacct is more recent than end_time_prometheus,
+            # so that prometheus metrics will be scraped up to this date
+            # for auto-interval scraping.
+            end_time_sacct = cluster_end_time + timedelta(minutes=300)
+        cluster.start_date = cluster_start_time.date()
+        cluster.end_time_sacct = end_time_sacct
+        cluster.end_time_prometheus = cluster_end_time

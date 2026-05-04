@@ -11,14 +11,12 @@ from pathlib import Path
 
 import gifnoc
 import simple_parsing
+from sqlmodel import Session
 
 from sarc.alerts.common import CheckStatus, HealthMonitorConfig
-from sarc.alerts.healthcheck_state import (
-    HealthCheckState,
-    HealthCheckStateRepository,
-    get_healthcheck_state_collection,
-)
+from sarc.alerts.healthcheck_state import HealthCheckState
 from sarc.config import config
+from sarc.db.heatlhcheck import HealthCheckStateDB
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +46,8 @@ class HealthRunCommand:
             return self._exec()
 
     def _exec(self) -> int:
-        hcfg = config().health_monitor
+        cfg = config()
+        hcfg = cfg.health_monitor
 
         if hcfg is None:
             logger.error("No health_monitor configuration found")
@@ -70,53 +69,51 @@ class HealthRunCommand:
             check_names = list(hcfg.checks.keys())
             logger.debug(f"Running all {len(check_names)} health checks")
 
-        # Get database and repository
-        repo = get_healthcheck_state_collection()
-
         checks_run = 0
         checks_skipped = 0
 
-        for name in check_names:
-            # Get check state
-            state = _get_state(name=name, hcfg=hcfg, repo=repo)
-            assert state is not None
-            # Save it in database anyway
-            repo.save(state)
-            check = state.check
+        with cfg.db.session() as sess:
+            for name in check_names:
+                # Get check state
+                state = _get_state(name=name, hcfg=hcfg, sess=sess)
+                assert state is not None
+                check = state.check
 
-            # Skip inactive checks
-            if not check.active:
-                logger.debug(f"Skipping '{name}': inactive")
-                checks_skipped += 1
-                continue
+                # Skip inactive checks
+                if not check.active:
+                    logger.debug(f"Skipping '{name}': inactive")
+                    checks_skipped += 1
+                    continue
 
-            # Check dependencies
-            deps_ok = True
-            for dep in check.depends:
-                dep_state = _get_state(name=dep, hcfg=hcfg, repo=repo)
-                if (
-                    dep_state is None
-                    or dep_state.last_result is None
-                    or dep_state.last_result.status != CheckStatus.OK
-                ):
-                    logger.warning(f"Skipping '{name}': dependency '{dep}' not OK")
-                    deps_ok = False
-                    break
+                # Check dependencies
+                deps_ok = True
+                for dep in check.depends:
+                    dep_state = _get_state(name=dep, hcfg=hcfg, sess=sess)
+                    if (
+                        dep_state is None
+                        or dep_state.last_result is None
+                        or dep_state.last_result.status != CheckStatus.OK
+                    ):
+                        logger.warning(f"Skipping '{name}': dependency '{dep}' not OK")
+                        deps_ok = False
+                        break
 
-            if not deps_ok:
-                checks_skipped += 1
-                continue
+                if not deps_ok:
+                    checks_skipped += 1
+                    continue
 
-            # Execute the check
-            logger.debug(f"Running check: '{name}'")
-            result = check.wrapped_check()
-            checks_run += 1
-            # Log the result
-            message = result.log_result()
-            # Update MongoDB state
-            state.last_result = result
-            state.last_message = message
-            repo.save(state)
+                # Execute the check
+                logger.debug(f"Running check: '{name}'")
+                result = check.wrapped_check()
+                checks_run += 1
+                # Log the result
+                message = result.log_result()
+                # Update MongoDB state
+                state.last_result = result
+                state.last_message = message
+                sess.merge(state)
+
+                sess.commit()
 
         logger.info(
             f"Check complete: {checks_run} checks run, {checks_skipped} skipped"
@@ -125,15 +122,23 @@ class HealthRunCommand:
 
 
 def _get_state(
-    name: str, hcfg: HealthMonitorConfig, repo: HealthCheckStateRepository
-) -> HealthCheckState | None:
-    """Get health check state, or None if not found."""
+    name: str, hcfg: HealthMonitorConfig, sess: Session
+) -> HealthCheckStateDB | None:
+    """
+    Get health check state, or None if not found.
+
+    NB: If config check exists, a state will be created in database if not exists,
+    and state check will be set with config check.
+    """
     check = hcfg.checks.get(name, None)
-    db_state = repo.get_state(name)
+    db_state = HealthCheckStateDB.get_state(sess, name)
     if check:
         if db_state:
             # Check parameters from config file have priority
             db_state.check = check
+            sess.merge(db_state)
         else:
-            db_state = HealthCheckState(check=check)
+            db_state = HealthCheckStateDB.get_or_create(
+                sess, HealthCheckState(check=check)
+            )
     return db_state

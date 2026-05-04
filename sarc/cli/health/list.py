@@ -1,13 +1,10 @@
 # ruff: noqa: T201
 import logging
-from dataclasses import dataclass
-from dataclasses import fields as dataclass_fields
+from dataclasses import dataclass, fields as dataclass_fields
 
 from sarc.alerts.common import CheckResult, HealthCheck
-from sarc.alerts.healthcheck_state import (
-    HealthCheckState,
-    get_healthcheck_state_collection,
-)
+from sarc.config import config
+from sarc.db.heatlhcheck import HealthCheckStateDB
 
 logger = logging.getLogger(__name__)
 
@@ -17,11 +14,12 @@ class HealthListCommand:
     """Show health check states saved in database."""
 
     def execute(self) -> int:
-        repo = get_healthcheck_state_collection()
-        nb_states = repo.get_collection().count_documents({})
-        logger.info(f"There are {nb_states} health check states saved in database.")
-        for state in repo.get_states():
-            _pretty_print_state(state)
+        with config().db.session() as sess:
+            states = HealthCheckStateDB.get_states(sess)
+            nb_states = len(states)
+            logger.info(f"There are {nb_states} health check states saved in database.")
+            for state in states:
+                _pretty_print_state(state)
         return 0
 
 
@@ -29,7 +27,7 @@ _base_check_fields = {field.name for field in dataclass_fields(HealthCheck)}
 _base_result_fields = {field.name for field in dataclass_fields(CheckResult)}
 
 
-def _pretty_print_state(state: HealthCheckState):
+def _pretty_print_state(state: HealthCheckStateDB):
     check = state.check
     cls = type(check)
     cls_name = f"{cls.__module__}:{cls.__qualname__}"

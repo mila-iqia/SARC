@@ -39,7 +39,7 @@ dependencies = [
     "rapporteur>=0.1.1",
     "easy-oauth>=0.0.5",
     "pyotp>=2.9.0",
-    "psycopg>=3.3.3",
+    "psycopg[binary]>=3.3.3",
 ]
 
 [project.scripts]
