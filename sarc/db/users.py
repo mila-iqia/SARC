@@ -304,22 +304,20 @@ class MemberTypeDB(ValidDB, table=True):
     member_type: MemberType
 
 
-class SupervisorDB(ValidDB, table=True):
+class SupervisorsHelper(SQLModel, table=True):
+    __table_args__ = (UniqueConstraint("list_id", "pos"),)
+    id: int = Field(primary_key=True)
+    list_id: int = Field(
+        foreign_key="user_supervisors.id", index=True, ondelete="CASCADE"
+    )
+    pos: int = Field(ge=0)
     supervisor: int = Field(foreign_key="users.id", ondelete="RESTRICT")
 
 
-class CoSupervisorsHelper(SQLModel, table=True):
-    id: int = Field(primary_key=True)
-    list_id: int = Field(
-        foreign_key="user_co_supervisors.id", index=True, ondelete="CASCADE"
-    )
-    co_supervisor: int = Field(foreign_key="users.id", ondelete="RESTRICT")
-
-
-class CoSupervisorDB(ValidDB, table=True):
-    __tablename__ = "user_co_supervisors"
-    co_supervisors: set[CoSupervisorsHelper] = Relationship(
-        sa_relationship=relationship(CoSupervisorsHelper, collection_class=set)
+class SupervisorsDB(ValidDB, table=True):
+    __tablename__ = "user_supervisors"
+    supervisors: list[SupervisorsHelper] = Relationship(
+        sa_relationship_kwargs={"orderby": SupervisorsHelper.pos}
     )
 
 
@@ -394,17 +392,10 @@ class UserDB(SQLModel, table=True):
         )
 
     @property
-    def supervisor(self) -> ValidField[int]:
+    def supervisors(self) -> ValidField[list[int]]:
         assert self.id is not None
         return ValidField(
-            Session.object_session(self), SupervisorDB, "supervisor", self.id
-        )
-
-    @property
-    def co_supervisors(self) -> ValidField[list[int]]:
-        assert self.id is not None
-        return ValidField(
-            Session.object_session(self), CoSupervisorDB, "co_supervisors", self.id
+            Session.object_session(self), SupervisorsDB, "supervisors", self.id
         )
 
     @property
@@ -514,13 +505,8 @@ def deduplicate_users(sess: Session):
             # Even if the merge fails for some attributes, we have the data
             # to recover missing info in the cache files.
             sess.exec(
-                update(SupervisorDB)
-                .where(col(SupervisorDB.supervisor) == db_extra.id)
-                .values(supervisor=db_merged.id)
-            )
-            sess.exec(
-                update(CoSupervisorsHelper)
-                .where(col(CoSupervisorsHelper.co_supervisor) == db_extra.id)
+                update(SupervisorsHelper)
+                .where(col(SupervisorsHelper.supervisor) == db_extra.id)
                 .values(co_supervisor=db_merged.id)
             )
             sess.exec(
