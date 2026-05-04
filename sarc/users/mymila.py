@@ -139,20 +139,16 @@ class MyMilaScraper(UserScraper[MyMilaConfig]):
                     MatchID(name="mila_ldap", mid=record[Headers.MILA_Email])
                 },
             )
+            supervisors = []
             supervisor = record[Headers.Supervisor_Principal__MEMBER_NUM_]
             if supervisor is not None:
                 # TODO: figure out which dates apply
-                um.supervisor.insert(
-                    MatchID(name="mymila", mid=str(supervisor)), start=None, end=None
-                )
+                supervisors.append(MatchID(name="mymila", mid=str(supervisor)))
+
             co_supervisor = record[Headers.Co_Supervisor__MEMBER_NUM_]
             if co_supervisor is not None:
                 # TODO: figure out the dates
-                um.co_supervisors.insert(
-                    {MatchID(name="mymila", mid=str(co_supervisor))},
-                    start=None,
-                    end=None,
-                )
+                supervisors.append(MatchID(name="mymila", mid=str(co_supervisor)))
             drac_account: str | None = record[Headers.Alliance_DRAC_account]
             if drac_account:
                 drac_account = drac_account.strip()
