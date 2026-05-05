@@ -42,7 +42,7 @@ class ParseAllocations:
 
                         for key in list(row.keys()):
                             if row[key].strip(" ") == "":
-                                row.pop(key)
+                                row[key] = None
 
                         cluster_name = row.pop("cluster_name")
                         cluster_id = SlurmClusterDB.id_by_name(sess, cluster_name)

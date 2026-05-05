@@ -1,42 +1,36 @@
-- cluster_name: fromage
-  end: 2018-04-01 00:00:00
+- cloud_shared: null
+  cloud_volume: null
+  cluster_id: 1
+  cpu_year: null
+  dCache: null
+  end: 2018-04-01
+  gpu_year: 100
   group_name: rrg-bonhomme-ad
+  nearline_size: null
+  object: null
+  project_inodes: null
+  project_size: null
   resource_name: devrait-gpu
-  resources:
-    compute:
-      cpu_year: null
-      gpu_year: 100
-      rgu_year: null
-      vcpu_year: null
-      vgpu_year: null
-    storage:
-      cloud_shared: null
-      cloud_volume: null
-      dCache: null
-      nearline: null
-      object: null
-      project_inodes: null
-      project_size: null
-  start: 2017-04-01 00:00:00
+  rgu_year: null
+  start: 2017-04-01
   timestamp: 2023-02-15 00:00:00+00:00
-- cluster_name: patate
-  end: 2018-04-01 00:00:00
+  vcpu_year: null
+  vgpu_year: null
+- cloud_shared: null
+  cloud_volume: null
+  cluster_id: 6
+  cpu_year: null
+  dCache: null
+  end: 2018-04-01
+  gpu_year: null
   group_name: rrg-bonhomme-ad
+  nearline_size: 15000000000000
+  object: null
+  project_inodes: 5000000.0
+  project_size: 50000000000000
   resource_name: passer-storage
-  resources:
-    compute:
-      cpu_year: null
-      gpu_year: null
-      rgu_year: null
-      vcpu_year: null
-      vgpu_year: null
-    storage:
-      cloud_shared: null
-      cloud_volume: null
-      dCache: null
-      nearline: 15000000000000
-      object: null
-      project_inodes: 5000000.0
-      project_size: 50000000000000
-  start: 2017-04-01 00:00:00
+  rgu_year: null
+  start: 2017-04-01
   timestamp: 2023-02-15 00:00:00+00:00
+  vcpu_year: null
+  vgpu_year: null

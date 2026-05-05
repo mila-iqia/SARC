@@ -5,7 +5,8 @@ from pydantic_core import PydanticUndefined as Undefined
 from sqlalchemy import DateTime
 from sqlalchemy.types import TypeDecorator
 from sqlmodel import Field
-from sqlmodel.main import SQLModel as SQLModelBase, finish_init, is_table_model_class
+from sqlmodel.main import SQLModel as SQLModelBase
+from sqlmodel.main import finish_init, is_table_model_class
 
 from sarc.core.models.validators import UTCOFFSET
 
@@ -50,6 +51,7 @@ def datetime_utc_field(**kwargs: Any) -> Any:
     column is created as ``TIMESTAMPTZ`` and tz-aware values survive reads.
     """
     return Field(sa_type=UTCDateTime, **kwargs)
+
 
 # This code is lifted from this PR: https://github.com/fastapi/sqlmodel/pull/1823
 # If that is eventually merged, we can revert to just using the base class.

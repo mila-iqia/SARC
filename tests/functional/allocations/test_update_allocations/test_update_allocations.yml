@@ -1,231 +1,198 @@
-- cluster_name: fromage
-  end: 2018-04-01 00:00:00
+- cloud_shared: null
+  cloud_volume: null
+  cluster_id: 1
+  cpu_year: null
+  dCache: null
+  end: 2018-04-01
+  gpu_year: 100
   group_name: rrg-bonhomme-ad
+  nearline_size: null
+  object: null
+  project_inodes: null
+  project_size: null
   resource_name: fromage-gpu
-  resources:
-    compute:
-      cpu_year: null
-      gpu_year: 100
-      rgu_year: 300
-      vcpu_year: null
-      vgpu_year: null
-    storage:
-      cloud_shared: null
-      cloud_volume: null
-      dCache: null
-      nearline: null
-      object: null
-      project_inodes: null
-      project_size: null
-  start: 2017-04-01 00:00:00
+  rgu_year: 300
+  start: 2017-04-01
   timestamp: 2023-02-15 00:00:00+00:00
-- cluster_name: fromage
-  end: 2018-04-01 00:00:00
+  vcpu_year: null
+  vgpu_year: null
+- cloud_shared: null
+  cloud_volume: null
+  cluster_id: 1
+  cpu_year: null
+  dCache: null
+  end: 2018-04-01
+  gpu_year: null
   group_name: rrg-bonhomme-ad
+  nearline_size: 15000000000000
+  object: null
+  project_inodes: 5000000.0
+  project_size: 50000000000000
   resource_name: fromage-storage
-  resources:
-    compute:
-      cpu_year: null
-      gpu_year: null
-      rgu_year: null
-      vcpu_year: null
-      vgpu_year: null
-    storage:
-      cloud_shared: null
-      cloud_volume: null
-      dCache: null
-      nearline: 15000000000000
-      object: null
-      project_inodes: 5000000.0
-      project_size: 50000000000000
-  start: 2017-04-01 00:00:00
+  rgu_year: null
+  start: 2017-04-01
   timestamp: 2023-02-15 00:00:00+00:00
-- cluster_name: fromage
-  end: 2019-04-01 00:00:00
+  vcpu_year: null
+  vgpu_year: null
+- cloud_shared: null
+  cloud_volume: null
+  cluster_id: 1
+  cpu_year: null
+  dCache: null
+  end: 2019-04-01
+  gpu_year: 100
   group_name: rrg-bonhomme-ad
+  nearline_size: null
+  object: null
+  project_inodes: null
+  project_size: null
   resource_name: fromage-gpu
-  resources:
-    compute:
-      cpu_year: null
-      gpu_year: 100
-      rgu_year: 300
-      vcpu_year: null
-      vgpu_year: null
-    storage:
-      cloud_shared: null
-      cloud_volume: null
-      dCache: null
-      nearline: null
-      object: null
-      project_inodes: null
-      project_size: null
-  start: 2018-04-01 00:00:00
+  rgu_year: 300
+  start: 2018-04-01
   timestamp: 2023-02-15 00:00:00+00:00
-- cluster_name: fromage
-  end: 2019-04-01 00:00:00
+  vcpu_year: null
+  vgpu_year: null
+- cloud_shared: null
+  cloud_volume: null
+  cluster_id: 1
+  cpu_year: null
+  dCache: null
+  end: 2019-04-01
+  gpu_year: null
   group_name: rrg-bonhomme-ad
+  nearline_size: null
+  object: null
+  project_inodes: null
+  project_size: 70000000000000
   resource_name: fromage-storage
-  resources:
-    compute:
-      cpu_year: null
-      gpu_year: null
-      rgu_year: null
-      vcpu_year: null
-      vgpu_year: null
-    storage:
-      cloud_shared: null
-      cloud_volume: null
-      dCache: null
-      nearline: null
-      object: null
-      project_inodes: null
-      project_size: 70000000000000
-  start: 2018-04-01 00:00:00
+  rgu_year: null
+  start: 2018-04-01
   timestamp: 2023-02-15 00:00:00+00:00
-- cluster_name: patate
-  end: 2020-04-01 00:00:00
+  vcpu_year: null
+  vgpu_year: null
+- cloud_shared: null
+  cloud_volume: null
+  cluster_id: 6
+  cpu_year: null
+  dCache: null
+  end: 2020-04-01
+  gpu_year: 190
   group_name: rrg-bonhomme-ad
+  nearline_size: null
+  object: null
+  project_inodes: null
+  project_size: null
   resource_name: patate-gpu
-  resources:
-    compute:
-      cpu_year: null
-      gpu_year: 190
-      rgu_year: 400
-      vcpu_year: null
-      vgpu_year: null
-    storage:
-      cloud_shared: null
-      cloud_volume: null
-      dCache: null
-      nearline: null
-      object: null
-      project_inodes: null
-      project_size: null
-  start: 2019-04-01 00:00:00
+  rgu_year: 400
+  start: 2019-04-01
   timestamp: 2023-02-15 00:00:00+00:00
-- cluster_name: patate
-  end: 2020-04-01 00:00:00
+  vcpu_year: null
+  vgpu_year: null
+- cloud_shared: null
+  cloud_volume: null
+  cluster_id: 6
+  cpu_year: null
+  dCache: null
+  end: 2020-04-01
+  gpu_year: null
   group_name: rrg-bonhomme-ad
+  nearline_size: 90000000000000
+  object: null
+  project_inodes: 5000000.0
+  project_size: 90000000000000
   resource_name: patate-storage
-  resources:
-    compute:
-      cpu_year: null
-      gpu_year: null
-      rgu_year: null
-      vcpu_year: null
-      vgpu_year: null
-    storage:
-      cloud_shared: null
-      cloud_volume: null
-      dCache: null
-      nearline: 90000000000000
-      object: null
-      project_inodes: 5000000.0
-      project_size: 90000000000000
-  start: 2019-04-01 00:00:00
+  rgu_year: null
+  start: 2019-04-01
   timestamp: 2023-02-15 00:00:00+00:00
-- cluster_name: fromage
-  end: 2021-04-01 00:00:00
+  vcpu_year: null
+  vgpu_year: null
+- cloud_shared: null
+  cloud_volume: null
+  cluster_id: 1
+  cpu_year: null
+  dCache: null
+  end: 2021-04-01
+  gpu_year: 130
   group_name: rrg-bonhomme-ad
+  nearline_size: null
+  object: null
+  project_inodes: null
+  project_size: null
   resource_name: fromage-gpu
-  resources:
-    compute:
-      cpu_year: null
-      gpu_year: 130
-      rgu_year: 350
-      vcpu_year: null
-      vgpu_year: null
-    storage:
-      cloud_shared: null
-      cloud_volume: null
-      dCache: null
-      nearline: null
-      object: null
-      project_inodes: null
-      project_size: null
-  start: 2020-04-01 00:00:00
+  rgu_year: 350
+  start: 2020-04-01
   timestamp: 2023-02-15 00:00:00+00:00
-- cluster_name: fromage
-  end: 2021-04-01 00:00:00
+  vcpu_year: null
+  vgpu_year: null
+- cloud_shared: null
+  cloud_volume: null
+  cluster_id: 1
+  cpu_year: null
+  dCache: null
+  end: 2021-04-01
+  gpu_year: null
   group_name: rrg-bonhomme-ad
+  nearline_size: null
+  object: null
+  project_inodes: 5000000.0
+  project_size: 30000000000000
   resource_name: fromage-storage
-  resources:
-    compute:
-      cpu_year: null
-      gpu_year: null
-      rgu_year: null
-      vcpu_year: null
-      vgpu_year: null
-    storage:
-      cloud_shared: null
-      cloud_volume: null
-      dCache: null
-      nearline: null
-      object: null
-      project_inodes: 5000000.0
-      project_size: 30000000000000
-  start: 2020-04-01 00:00:00
+  rgu_year: null
+  start: 2020-04-01
   timestamp: 2023-02-15 00:00:00+00:00
-- cluster_name: patate
-  end: 2021-04-01 00:00:00
+  vcpu_year: null
+  vgpu_year: null
+- cloud_shared: null
+  cloud_volume: null
+  cluster_id: 6
+  cpu_year: 219
+  dCache: null
+  end: 2021-04-01
+  gpu_year: null
   group_name: rrg-bonhomme-ad
+  nearline_size: null
+  object: null
+  project_inodes: null
+  project_size: null
   resource_name: patate-compute
-  resources:
-    compute:
-      cpu_year: 219
-      gpu_year: null
-      rgu_year: null
-      vcpu_year: null
-      vgpu_year: null
-    storage:
-      cloud_shared: null
-      cloud_volume: null
-      dCache: null
-      nearline: null
-      object: null
-      project_inodes: null
-      project_size: null
-  start: 2020-04-01 00:00:00
+  rgu_year: null
+  start: 2020-04-01
   timestamp: 2023-02-15 00:00:00+00:00
-- cluster_name: patate
-  end: 2021-04-01 00:00:00
+  vcpu_year: null
+  vgpu_year: null
+- cloud_shared: null
+  cloud_volume: null
+  cluster_id: 6
+  cpu_year: null
+  dCache: null
+  end: 2021-04-01
+  gpu_year: 200
   group_name: rrg-bonhomme-ad
+  nearline_size: null
+  object: null
+  project_inodes: null
+  project_size: null
   resource_name: patate-gpu
-  resources:
-    compute:
-      cpu_year: null
-      gpu_year: 200
-      rgu_year: 450
-      vcpu_year: null
-      vgpu_year: null
-    storage:
-      cloud_shared: null
-      cloud_volume: null
-      dCache: null
-      nearline: null
-      object: null
-      project_inodes: null
-      project_size: null
-  start: 2020-04-01 00:00:00
+  rgu_year: 450
+  start: 2020-04-01
   timestamp: 2023-02-15 00:00:00+00:00
-- cluster_name: patate
-  end: 2021-04-01 00:00:00
+  vcpu_year: null
+  vgpu_year: null
+- cloud_shared: null
+  cloud_volume: null
+  cluster_id: 6
+  cpu_year: null
+  dCache: null
+  end: 2021-04-01
+  gpu_year: null
   group_name: rrg-bonhomme-ad
+  nearline_size: 80000000000000
+  object: null
+  project_inodes: 5000000.0
+  project_size: 70000000000000
   resource_name: patate-storage
-  resources:
-    compute:
-      cpu_year: null
-      gpu_year: null
-      rgu_year: null
-      vcpu_year: null
-      vgpu_year: null
-    storage:
-      cloud_shared: null
-      cloud_volume: null
-      dCache: null
-      nearline: 80000000000000
-      object: null
-      project_inodes: 5000000.0
-      project_size: 70000000000000
-  start: 2020-04-01 00:00:00
+  rgu_year: null
+  start: 2020-04-01
   timestamp: 2023-02-15 00:00:00+00:00
+  vcpu_year: null
+  vgpu_year: null

@@ -40,7 +40,9 @@ stats_subq = (
 #### supervisors
 supervisors_subq = (
     select(
-        func.json_agg(aggregate_order_by(SupervisorsHelper.supervisor, SupervisorsHelper.pos))
+        func.json_agg(
+            aggregate_order_by(SupervisorsHelper.supervisor, SupervisorsHelper.pos)
+        )
     )
     .select_from(SupervisorsDB)
     .join(SupervisorsHelper, SupervisorsDB.id == SupervisorsHelper.list_id)

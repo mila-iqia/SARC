@@ -15,7 +15,7 @@ from uuid import uuid4
 import freezegun
 import gifnoc
 import pytest
-from freezegun.api import FakeDatetime
+from freezegun.api import FakeDate, FakeDatetime
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
@@ -39,6 +39,10 @@ pytest_plugins = "fabric.testing.fixtures"
 
 RegressionYamlDumper.add_custom_yaml_representer(
     FakeDatetime, lambda dumper, data: dumper.represent_datetime(data)
+)
+
+RegressionYamlDumper.add_custom_yaml_representer(
+    FakeDate, lambda dumper, data: dumper.represent_date(data)
 )
 
 
