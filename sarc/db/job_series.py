@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlmodel import FLOAT, JSON, Field, and_, case, col, desc, func, select, text
+from sqlmodel import FLOAT, JSON, Field, and_, case, col, desc, func, select
 
 from sarc.models.user import MemberType
 
