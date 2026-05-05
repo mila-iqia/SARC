@@ -10,10 +10,10 @@ sarc:
         $class: "sarc.alerts.usage_alerts.disk_space:DatabaseSizeCheck"
         active: true
         limit: 10_000
-      db_size_check_1m:
+      db_size_check_20m:
         $class: "sarc.alerts.usage_alerts.disk_space:DatabaseSizeCheck"
         active: true
-        limit: 1_000_000
+        limit: 20_000_000
 
       # Cache disk check examples
       cache_size_check_0:

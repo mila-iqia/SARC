@@ -4,6 +4,8 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from sqlalchemy import text
+
 from sarc.alerts.common import CheckResult, HealthCheck
 
 logger = logging.getLogger(__name__)
@@ -17,29 +19,26 @@ def check_disk_space_for_db(max_size_bytes: int) -> bool:
     usage_bytes = _compute_db_disk_usage()
     if usage_bytes > max_size_bytes:
         logger.error(
-            f"[mongodb] size exceeded: max {_get_human_readable_file_size(max_size_bytes)}, "
+            f"[sarc-db] size exceeded: max {_get_human_readable_file_size(max_size_bytes)}, "
             f"current: {_get_human_readable_file_size(usage_bytes)}"
         )
         return False
     return True
 
 
-def _compute_db_disk_usage():
+def _compute_db_disk_usage() -> int:
+    """Return the on-disk size of the current PostgreSQL database in bytes.
+
+    ``pg_database_size`` includes heap, indexes and TOAST storage — the
+    Postgres analogue of MongoDB's ``storageSize + indexSize``.
+    """
     from sarc.config import config
 
-    db = config().mongo.database_instance
-    stats = db.command("dbStats")
-    storage_size_bytes = stats["storageSize"]
-    index_size_bytes = stats["indexSize"]
-    db_size_bytes = storage_size_bytes + index_size_bytes
-    total_size_expected = stats.get("totalSize", None)
-    if total_size_expected is not None and total_size_expected != db_size_bytes:
-        logger.debug(
-            f"Database size mismatch: "
-            f"expected {total_size_expected} bytes, "
-            f"inferred {db_size_bytes} bytes"
-        )
-    return db_size_bytes
+    with config().db.session() as sess:
+        size = sess.exec(
+            text("SELECT pg_database_size(current_database())")
+        ).scalar_one()
+    return int(size)
 
 
 def check_disk_space_for_cache(max_size_bytes: int) -> bool:
