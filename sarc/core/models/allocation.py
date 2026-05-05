@@ -4,8 +4,7 @@ from typing import Annotated, cast
 from pydantic import BeforeValidator, ByteSize
 from sqlmodel import Field
 
-from sarc.core.models.validators import datetime_utc
-from sarc.db.sqlmodel import SQLModel, datetime_utc_field
+from sarc.db.sqlmodel import SQLModel
 
 
 def validate_date(value: str | date | datetime) -> date:
@@ -25,7 +24,7 @@ class Allocation(SQLModel):
     cluster_id: int = Field(foreign_key="clusters.id")
     resource_name: str
     group_name: str
-    timestamp: datetime_utc = datetime_utc_field()
+    timestamp: datetime
     start: Annotated[date, BeforeValidator(validate_date)]
     end: Annotated[date, BeforeValidator(validate_date)]
     gpu_year: int | None = 0
