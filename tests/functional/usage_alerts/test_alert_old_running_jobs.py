@@ -12,16 +12,19 @@ With MOCK_TIME = 2023-11-22T00:00:00+00:00, this job is well past its
 maximum allowed end time (~2023-02-16T05:01:00+00:00).
 No re-submitted entry exists for job_id=7.
 """
-
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 
 import pytest
 import time_machine
+from sqlmodel import select
 
-from sarc.client import get_jobs
-from sarc.client.job import SlurmState
-from tests.functional.jobs.test_func_load_job_series import MOCK_TIME
+from sarc.config import config
+from sarc.db.job import SlurmJobDB
+from sarc.models.job import SlurmState
+
+MOCK_TIME = datetime(2023, 11, 22, tzinfo=UTC)
+
 
 PARAMETERS: dict[str, tuple[str, list[str]]] = {
     # No `since` filter: checks all RUNNING jobs => finds old RUNNING job
@@ -105,12 +108,20 @@ def test_check_old_running_jobs_with_resubmitted(
     caplog, cli_main, check_name, expected
 ):
     # Create a re-submitted entry of RUNNING job
-    (job,) = get_jobs(job_state=SlurmState.RUNNING)
-    job.submit_time += timedelta(hours=1)
-    job.job_state = SlurmState.COMPLETED
-    job.end_time = datetime.now()
-    job.id = None
-    job.save()
+    with config().db.session() as sess:
+        base_job: SlurmJobDB
+        (base_job,) = sess.exec(
+            select(SlurmJobDB).where(SlurmJobDB.job_state == SlurmState.RUNNING)
+        ).all()
+        assert base_job.start_time is not None
+        job_data = base_job.model_dump()
+        job_data["id"] = None
+        job_data["submit_time"] = base_job.submit_time + timedelta(hours=1)
+        job_data["start_time"] = base_job.start_time + timedelta(hours=1)
+        job_data["job_state"] = SlurmState.COMPLETED
+        job_data["end_time"] = datetime.now(UTC)
+        sess.add(SlurmJobDB.model_validate(job_data))
+        sess.commit()
 
     assert cli_main(["health", "run", "--check", check_name]) == 0
     assert _get_error_logs(caplog.text) == expected

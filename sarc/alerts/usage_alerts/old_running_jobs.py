@@ -2,8 +2,8 @@ import logging
 from collections import Counter
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any
 
+from sqlmodel import col, select
 from tqdm import tqdm
 
 from sarc.alerts.common import CheckResult, HealthCheck
@@ -27,64 +27,54 @@ def check_old_running_jobs(since: datetime_utc | None = None) -> bool:
     bool
         True if check succeeds (no old RUNNING job in database), False otherwise.
     """
-    from sarc.client.job import SlurmJob, SlurmState, _jobs_collection
+    from sarc.config import config
+    from sarc.db.job import SlurmJobDB
+    from sarc.models.job import SlurmState
 
     now = datetime.now(tz=UTC)
-    coll_jobs = _jobs_collection()
-    db_jobs = coll_jobs.get_collection()
-    # Search RUNNING jobs
-    base_query: dict[str, Any] = {
-        "job_state": SlurmState.RUNNING,
-        "time_limit": {"$ne": None},
-    }
-    if since is not None:
-        base_query["submit_time"] = {"$gte": since}
-    expected = db_jobs.count_documents(base_query)
-    jobs_over_limit: list[SlurmJob] = []
-    for job in tqdm(
-        coll_jobs.find_by(base_query), total=expected, desc="running job(s)"
-    ):
-        assert job.job_state == SlurmState.RUNNING, job
-        assert job.start_time is not None, job
-        assert job.end_time is None, job
-        assert job.time_limit is not None, job
-        # A running job should have already finished
-        # if maximum allowed end time is before current time.
-        max_end_time = job.start_time + timedelta(seconds=job.time_limit)
-        if max_end_time < now:
-            jobs_over_limit.append(job)
+    jobs_over_limit: list[SlurmJobDB] = []
+    with config().db.session() as sess:
+        query = select(SlurmJobDB).where(
+            SlurmJobDB.job_state == SlurmState.RUNNING,
+            col(SlurmJobDB.time_limit).is_not(None),
+        )
+        if since is not None:
+            query = query.where(SlurmJobDB.submit_time >= since)
+        for job in sess.exec(query):
+            assert job.job_state == SlurmState.RUNNING, job
+            assert job.start_time is not None, job
+            assert job.end_time is None, job
+            assert job.time_limit is not None, job
+            # A running job should have already finished
+            # if maximum allowed end time is before current time.
+            max_end_time = job.start_time + timedelta(seconds=job.time_limit)
+            if max_end_time < now:
+                jobs_over_limit.append(job)
 
     if jobs_over_limit:
         # We have old RUNNING jobs
         # Check if this job was re-submitted with a more recent status
 
-        # First, classify job entries by key :cluster name + job ID
+        # First, get job keys :cluster name + job ID
         # NB: Database may contain many job entries with same cluster name,
         # same job ID, AND same job state `RUNNING`
-        index_jobs: dict[tuple[str, int], list[SlurmJob]] = {}
-        for job in jobs_over_limit:
-            key = (job.cluster_name, job.job_id)
-            index_jobs.setdefault(key, []).append(job)
-
-        # Now search potential re-submitted entries.
-        # Look for all collected job indices,
-        # and only non-RUNNING jobs
-        resubmitted_query: dict[str, Any] = {
-            "job_id": {"$in": [job.job_id for job in jobs_over_limit]},
-            "job_state": {"$ne": SlurmState.RUNNING},
+        index_jobs: set[tuple[int, int]] = {
+            (job.cluster_id, job.job_id) for job in jobs_over_limit
         }
-        if since is not None:
-            resubmitted_query["submit_time"] = {"$gte": since}
-        resubmitted_expected = db_jobs.count_documents(resubmitted_query)
-        for job in tqdm(
-            coll_jobs.find_by(resubmitted_query),
-            total=resubmitted_expected,
-            desc="requeued job(s)",
+        job_story: dict[tuple[int, int], list[SlurmJobDB]] = {}
+        for cluster_id, job_id in tqdm(
+            index_jobs, total=len(index_jobs), desc="running job states"
         ):
-            # Keep only resubmitted jobs with an already found key: cluster name + job ID
-            key = (job.cluster_name, job.job_id)
-            if key in index_jobs:
-                index_jobs[key].append(job)
+            local_query = select(SlurmJobDB).where(
+                SlurmJobDB.cluster_id == cluster_id, SlurmJobDB.job_id == job_id
+            )
+            if since is not None:
+                local_query = local_query.where(SlurmJobDB.submit_time >= since)
+            local_jobs = sorted(
+                sess.exec(local_query).all(), key=lambda jdb: jdb.submit_time
+            )
+            assert local_jobs
+            job_story[(cluster_id, job_id)] = local_jobs
 
         # Now we get some stats
 
@@ -92,6 +82,7 @@ def check_old_running_jobs(since: datetime_utc | None = None) -> bool:
         nb_entries = len(jobs_over_limit)
 
         # nb. initial jobs
+        assert len(index_jobs) == len(job_story)
         nb_jobs = len(index_jobs)
 
         # nb. jobs not re-submitted
@@ -100,12 +91,11 @@ def check_old_running_jobs(since: datetime_utc | None = None) -> bool:
         # nb. latest found states for re-submitted jobs
         nb_latest_state: Counter[SlurmState] = Counter()
 
-        for jobs in index_jobs.values():
+        for jobs in job_story.values():
             if len(jobs) == 1:
                 nb_uniques += 1
             else:
-                # Sort jobs by submit time
-                jobs = sorted(jobs, key=lambda job: job.submit_time)
+                # Jobs are already sorted by submit time
                 # Get and count latest job state
                 latest_job = jobs[-1]
                 nb_latest_state.update([latest_job.job_state])
