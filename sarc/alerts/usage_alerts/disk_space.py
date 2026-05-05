@@ -4,7 +4,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from sqlalchemy import text
+from sqlalchemy import func, select
 
 from sarc.alerts.common import CheckResult, HealthCheck
 
@@ -36,7 +36,7 @@ def _compute_db_disk_usage() -> int:
 
     with config().db.session() as sess:
         size = sess.exec(
-            text("SELECT pg_database_size(current_database())")
+            select(func.pg_database_size(func.current_database()))
         ).scalar_one()
     return int(size)
 
