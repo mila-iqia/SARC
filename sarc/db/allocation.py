@@ -1,27 +1,52 @@
-from collections.abc import Sequence
-from datetime import date
-from typing import cast
+from datetime import date, datetime
+from typing import Annotated
 
-from pydantic import ByteSize
+from pydantic import BeforeValidator, ByteSize
 from sqlalchemy import BigInteger
-from sqlmodel import Field, Relationship, Session, col, select
+from sqlmodel import Field, Relationship, Session, select
 
-from sarc.core.models.allocation import Allocation
-from sarc.db.cluster import SlurmClusterDB
+from sarc.core.models.validators import datetime_utc
+
+from .cluster import SlurmClusterDB
+from .sqlmodel import SQLModel, datetime_utc_field
 
 
-class AllocationDB(Allocation, table=True):
+def validate_date(value: str | date | datetime) -> date:
+    if isinstance(value, str):
+        if "T" in value:
+            return datetime.strptime(value, "%Y-%m-%dT%H:%M:%S").date()
+
+        return datetime.strptime(value, "%Y-%m-%d").date()
+
+    if isinstance(value, datetime):
+        return value.date()
+
+    return value
+
+
+class AllocationDB(SQLModel, table=True):
     # Database ID
     id: int | None = Field(default=None, primary_key=True)
-
+    cluster_id: int = Field(foreign_key="clusters.id")
     cluster: SlurmClusterDB = Relationship()
 
-    project_size: ByteSize | None = Field(default=cast(ByteSize, 0), sa_type=BigInteger)
-    nearline: ByteSize | None = Field(default=cast(ByteSize, 0), sa_type=BigInteger)
-    dCache: ByteSize | None = Field(default=cast(ByteSize, 0), sa_type=BigInteger)
-    object: ByteSize | None = Field(default=cast(ByteSize, 0), sa_type=BigInteger)
-    cloud_volume: ByteSize | None = Field(default=cast(ByteSize, 0), sa_type=BigInteger)
-    cloud_shared: ByteSize | None = Field(default=cast(ByteSize, 0), sa_type=BigInteger)
+    resource_name: str
+    group_name: str
+    timestamp: datetime_utc = datetime_utc_field()
+    start: Annotated[date, BeforeValidator(validate_date)]
+    end: Annotated[date, BeforeValidator(validate_date)]
+    gpu_year: int | None = None
+    cpu_year: int | None = None
+    rgu_year: int | None = None
+    vcpu_year: int | None = None
+    vgpu_year: int | None = None
+    project_inodes: float | None = None
+    cloud_volume: ByteSize | None = Field(default=None, sa_type=BigInteger)
+    cloud_shared: ByteSize | None = Field(default=None, sa_type=BigInteger)
+    project_size: ByteSize | None = Field(default=None, sa_type=BigInteger)
+    nearline_size: ByteSize | None = Field(default=None, sa_type=BigInteger)
+    dCache: ByteSize | None = Field(default=None, sa_type=BigInteger)
+    object: ByteSize | None = Field(default=None, sa_type=BigInteger)
 
     @classmethod
     def get_or_create(cls, sess: Session, **kwargs) -> AllocationDB:
@@ -36,30 +61,3 @@ class AllocationDB(Allocation, table=True):
             )
         ).one_or_none()
         return sess.merge(res)
-
-
-def get_allocations(
-    sess: Session,
-    cluster_name: str | list[str],
-    start: None | date = None,
-    end: None | date = None,
-) -> Sequence[AllocationDB]:
-    from .cluster import SlurmClusterDB
-
-    query = select(AllocationDB)
-
-    if isinstance(cluster_name, str):
-        query = query.where(
-            AllocationDB.cluster_id == SlurmClusterDB.id_by_name(sess, cluster_name)
-        )
-    else:
-        cluster_ids = [SlurmClusterDB.id_by_name(sess, name) for name in cluster_name]
-        query = query.where(col(AllocationDB.cluster_id).in_(cluster_ids))
-
-    if start is not None:
-        query = query.where(AllocationDB.start >= start)
-
-    if end is not None:
-        query = query.where(AllocationDB.end <= end)
-
-    return sess.exec(query.order_by(col(AllocationDB.start))).all()
