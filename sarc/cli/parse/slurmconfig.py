@@ -12,7 +12,6 @@ from simple_parsing import field
 
 from sarc.cache import Cache
 from sarc.config import UTC, ClusterConfig, config
-from sarc.core.models.validators import datetime_utc
 from sarc.db.cluster import GPUBillingDB, NodeGPUMappingDB, SlurmClusterDB
 
 logger = logging.getLogger(__name__)
@@ -63,7 +62,7 @@ class ParseSlurmConfig:
         for cache_entry in cache.read_from(ts):
             ((key, blob),) = cache_entry.items()
 
-            cache_date: datetime_utc = datetime.fromisoformat(key)
+            cache_date: datetime = datetime.fromisoformat(key)
             assert cache_date.tzinfo is not None, "date is not tz-aware"
 
             content = blob.decode(encoding="utf-8")

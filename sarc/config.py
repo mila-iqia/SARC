@@ -198,7 +198,10 @@ class DbConfig:
         from sqlmodel import create_engine
 
         # TODO enable ssl for connection
-        engine = create_engine(f"postgresql+psycopg://{self.host}/{self.name}")
+        engine = create_engine(
+            f"postgresql+psycopg://{self.host}/{self.name}",
+            connect_args={"options": "-c timezone=utc"},
+        )
 
         if self.auto_upgrade:
             from sarc.db import db_upgrade
