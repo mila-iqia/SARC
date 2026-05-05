@@ -8,7 +8,7 @@ from sqlmodel import Field, Index, Relationship, Session, select
 
 from sarc.core.models.validators import datetime_utc
 
-from .sqlmodel import SQLModel
+from .sqlmodel import SQLModel, datetime_utc_field
 
 
 class GPUBillingDB(SQLModel, table=True):
@@ -19,7 +19,7 @@ class GPUBillingDB(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
 
     cluster_id: int = Field(foreign_key="clusters.id")
-    since: datetime_utc
+    since: datetime_utc = datetime_utc_field()
     gpu_to_billing: dict[str, float] = Field(sa_type=JSONB)
 
     @classmethod
@@ -44,7 +44,7 @@ class NodeGPUMappingDB(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
 
     cluster_id: int = Field(foreign_key="clusters.id")
-    since: datetime_utc
+    since: datetime_utc = datetime_utc_field()
     node_to_gpu: dict[str, list[str]] = Field(sa_type=JSONB)
 
     @classmethod
@@ -69,8 +69,8 @@ class SlurmClusterDB(SQLModel, table=True):
     name: str = Field(unique=True)
     domain: str
     start_date: date
-    end_time_sacct: datetime_utc | None = None
-    end_time_prometheus: datetime_utc | None = None
+    end_time_sacct: datetime_utc | None = datetime_utc_field(default=None)
+    end_time_prometheus: datetime_utc | None = datetime_utc_field(default=None)
     billing_is_gpu: bool = False
 
     gpu_billing: list[GPUBillingDB] = Relationship(
