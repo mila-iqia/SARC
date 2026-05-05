@@ -391,6 +391,7 @@ class UserDB(SQLModel, table=True):
             Session.object_session(self), MemberTypeDB, "member_type", self.id
         )
 
+    # The first element of the list is the principal supervisor, the rest are co-supervisors.
     @property
     def supervisors(self) -> ValidField[list[int]]:
         assert self.id is not None
