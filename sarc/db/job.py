@@ -21,11 +21,11 @@ from sqlmodel.main import Relationship
 from sqlmodel.sql.expression import SelectOfScalar
 
 from sarc.config import ClusterConfig
+from sarc.core.models.validators import datetime_utc
 from sarc.db.cluster import SlurmClusterDB
+from sarc.db.sqlmodel import SQLModel, datetime_utc_field
+from sarc.db.users import UserDB
 from sarc.models.job import SlurmState
-
-from .sqlmodel import SQLModel
-from .users import UserDB
 
 
 class JobStatisticDB(SQLModel, table=True):
@@ -91,13 +91,13 @@ class SlurmJobDB(SQLModel, table=True):
 
     # temporal fields
     time_limit: int | None = None
-    submit_time: datetime
-    start_time: datetime | None = None
-    end_time: datetime | None = None
+    submit_time: datetime_utc = datetime_utc_field()
+    start_time: datetime_utc | None = datetime_utc_field(default=None)
+    end_time: datetime_utc | None = datetime_utc_field(default=None)
     elapsed_time: float
     # Latest period the job was scraped with sacct
-    latest_scraped_start: datetime | None = None
-    latest_scraped_end: datetime | None = None
+    latest_scraped_start: datetime_utc | None = datetime_utc_field(default=None)
+    latest_scraped_end: datetime_utc | None = datetime_utc_field(default=None)
 
     # tres
     requested_cpu: int | None = None

@@ -4,12 +4,12 @@ from sqlmodel import Field, Session, col, select, update
 
 from sarc.core.models.validators import datetime_utc
 
-from .sqlmodel import SQLModel
+from .sqlmodel import SQLModel, datetime_utc_field
 
 
 class ParseDates(SQLModel, table=True):
     name: str = Field(primary_key=True)
-    date: datetime_utc
+    date: datetime_utc = datetime_utc_field()
 
 
 def get_parsed_date(sess: Session, value_name: str) -> datetime | None:

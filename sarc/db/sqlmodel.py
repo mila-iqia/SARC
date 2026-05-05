@@ -1,8 +1,55 @@
+from datetime import datetime
 from typing import Any
 
 from pydantic_core import PydanticUndefined as Undefined
-from sqlmodel.main import SQLModel as SQLModelBase
-from sqlmodel.main import finish_init, is_table_model_class
+from sqlalchemy import DateTime
+from sqlalchemy.types import TypeDecorator
+from sqlmodel import Field
+from sqlmodel.main import SQLModel as SQLModelBase, finish_init, is_table_model_class
+
+from sarc.core.models.validators import UTCOFFSET
+
+
+class UTCDateTime(TypeDecorator):
+    """TIMESTAMPTZ that rejects naive or non-UTC datetimes.
+
+    Defense in depth over the ``datetime_utc`` Pydantic validator: catches
+    paths that bypass Pydantic, e.g. raw ``insert()``/``update()`` calls
+    or attribute mutation after construction.
+    """
+
+    impl = DateTime(timezone=True)
+    cache_ok = True
+
+    def _expect_utc(self, value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            raise ValueError(f"naive datetime not allowed: {value!r}")
+        if value.utcoffset() != UTCOFFSET:
+            raise ValueError(f"datetime must be in UTC timezone: {value!r}")
+        return value
+
+    def process_bind_param(
+        self, value: datetime | None, dialect: Any
+    ) -> datetime | None:
+        return self._expect_utc(value)
+
+    def process_result_value(
+        self, value: datetime | None, dialect: Any
+    ) -> datetime | None:
+        # We also expect UTC when reading from database.
+        return self._expect_utc(value)
+
+
+def datetime_utc_field(**kwargs: Any) -> Any:
+    """SQLModel field for tz-aware UTC datetimes stored as TIMESTAMPTZ.
+
+    Plain ``datetime`` annotations map to ``TIMESTAMP WITHOUT TIME ZONE`` in
+    PostgreSQL, which drops the tzinfo on round-trip. Use this helper so the
+    column is created as ``TIMESTAMPTZ`` and tz-aware values survive reads.
+    """
+    return Field(sa_type=UTCDateTime, **kwargs)
 
 # This code is lifted from this PR: https://github.com/fastapi/sqlmodel/pull/1823
 # If that is eventually merged, we can revert to just using the base class.
