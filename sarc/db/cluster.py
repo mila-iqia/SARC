@@ -93,7 +93,9 @@ class SlurmClusterDB(SQLModel, table=True):
             - 1
         )
         if index_mapping < 0:
-            return None
+            # If the date is before all available mappings, we assume that
+            # the oldest mapping is correct since we can't do better.
+            return self.node_gpu_mapping[0]
         else:
             return self.node_gpu_mapping[index_mapping]
 

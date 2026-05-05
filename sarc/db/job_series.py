@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, aggregate_order_by
 from sqlmodel import FLOAT, JSON, Field, and_, case, col, desc, func, select
 
 from sarc.models.user import MemberType
@@ -39,15 +39,15 @@ stats_subq = (
 
 #### supervisors
 supervisors_subq = (
-    select(func.json_agg(SupervisorsHelper.supervisor))
+    select(
+        func.json_agg(aggregate_order_by(SupervisorsHelper.supervisor, SupervisorsHelper.pos))
+    )
     .select_from(SupervisorsDB)
     .join(SupervisorsHelper, SupervisorsDB.id == SupervisorsHelper.list_id)
     .where(
         SupervisorsDB.user_id == SlurmJobDB.user_id,
         SupervisorsDB.valid.contains(SlurmJobDB.submit_time),
     )
-    # Ensure the JSON array maintains the correct order
-    .order_by(SupervisorsHelper.pos)
     .scalar_subquery()
 ).label("supervisors")
 
@@ -103,7 +103,7 @@ class JobSeries(SQLModel, table=True):
         .join(
             MemberTypeDB,
             and_(
-                MemberTypeDB.user_id == SlurmJobDB.user_idl,
+                MemberTypeDB.user_id == SlurmJobDB.user_id,
                 MemberTypeDB.valid.contains(SlurmJobDB.submit_time),
             ),
             isouter=True,

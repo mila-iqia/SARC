@@ -11,9 +11,8 @@ from hostlist import expand_hostlist
 
 from sarc.cache import Cache, CacheEntry
 from sarc.cli.parse.slurmconfig import InconsistentGPUBillingError, SlurmConfigParser
-from sarc.client.gpumetrics import GPUBilling, get_cluster_gpu_billings
 from sarc.config import UTC
-from sarc.jobs.node_gpu_mapping import NodeGPUMapping, get_node_to_gpu
+from sarc.db.cluster import GPUBillingDB, NodeGPUMappingDB, SlurmClusterDB
 from tests.common.dateutils import MTL
 
 SLURM_CONF_RAISIN_2020_01_01 = """
@@ -196,17 +195,19 @@ def test_fetch_slurmconfig_no_change(
     )
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
-def test_parse_slurmconfig(cli_main, caplog):
+@pytest.mark.usefixtures("enabled_cache")
+def test_parse_slurmconfig(cli_main, caplog, empty_read_write_db):
     caplog.set_level(logging.INFO)
-
-    assert get_cluster_gpu_billings("raisin") == []
-    assert get_node_to_gpu("raisin") == None
+    raisin = SlurmClusterDB.by_name(empty_read_write_db, "raisin")
+    assert raisin is not None
+    assert raisin.gpu_billing == []
+    assert raisin.node_gpu_mapping == []
 
     #  when cache is empty
     assert cli_main(["parse", "slurmconfig", "-c", "raisin"]) == 0
-    assert get_cluster_gpu_billings("raisin") == []
-    assert get_node_to_gpu("raisin") == None
+    empty_read_write_db.refresh(raisin)
+    assert raisin.gpu_billing == []
+    assert raisin.node_gpu_mapping == []
     caplog.clear()
 
     _save_slurm_conf("raisin", "2020-01-01", SLURM_CONF_RAISIN_2020_01_01)
@@ -216,6 +217,7 @@ def test_parse_slurmconfig(cli_main, caplog):
         assert str(exc_info.value) == "unknown_raisin"
 
     assert cli_main(["-v", "parse", "slurmconfig", "-c", "raisin"]) == 0
+    empty_read_write_db.refresh(raisin)
 
     # No harmonization available for gpu1
     assert re.search(
@@ -224,15 +226,15 @@ def test_parse_slurmconfig(cli_main, caplog):
         caplog.text,
     )
 
-    expected_gpu_billing_1 = GPUBilling(
-        cluster_name="raisin",
+    expected_gpu_billing_1 = GPUBillingDB(
+        cluster_id=raisin.id,
         since=datetime(2020, 1, 1, tzinfo=MTL).astimezone(UTC),
         gpu_to_billing={"gpu1": 5000, "THE GPU II": 7500},
     )
-    assert_same_billings(get_cluster_gpu_billings("raisin"), [expected_gpu_billing_1])
+    assert_same_billings(raisin.gpu_billing, [expected_gpu_billing_1])
 
-    expected_node_to_gpu_1 = NodeGPUMapping(
-        cluster_name="raisin",
+    expected_node_to_gpu_1 = NodeGPUMappingDB(
+        cluster_id=raisin.id,
         since=datetime(2020, 1, 1, tzinfo=MTL).astimezone(UTC),
         node_to_gpu={
             **{
@@ -255,28 +257,29 @@ def test_parse_slurmconfig(cli_main, caplog):
             "alone_node": ["gpu:gpu2:1", "gpu:gpu1:9"],
         },
     )
-    assert_same_node_gpu_mapping(get_node_to_gpu("raisin"), expected_node_to_gpu_1)
+    assert_same_node_gpu_mapping(raisin.get_node_to_gpu(), expected_node_to_gpu_1)
 
     # Save next conf file
     _save_slurm_conf("raisin", "2020-05-01", SLURM_CONF_RAISIN_2020_05_01)
     assert cli_main(["-v", "parse", "slurmconfig", "-c", "raisin"]) == 0
-    expected_gpu_billing_2 = GPUBilling(
-        cluster_name="raisin",
+    empty_read_write_db.refresh(raisin)
+
+    expected_gpu_billing_2 = GPUBillingDB(
+        cluster_id=raisin.id,
         since=datetime(2020, 5, 1, tzinfo=MTL).astimezone(UTC),
         gpu_to_billing={"gpu1": 4000, "THE GPU II": 9000},
     )
     assert_same_billings(
-        get_cluster_gpu_billings("raisin"),
-        [expected_gpu_billing_1, expected_gpu_billing_2],
+        raisin.gpu_billing, [expected_gpu_billing_1, expected_gpu_billing_2]
     )
 
-    expected_node_to_gpu_2 = NodeGPUMapping(
-        cluster_name="raisin",
+    expected_node_to_gpu_2 = NodeGPUMappingDB(
+        cluster_id=raisin.id,
         since=datetime(2020, 5, 1, tzinfo=MTL).astimezone(UTC),
         node_to_gpu=expected_node_to_gpu_1.node_to_gpu.copy(),
     )
     del expected_node_to_gpu_2.node_to_gpu["alone_node"]
-    assert_same_node_gpu_mapping(get_node_to_gpu("raisin"), expected_node_to_gpu_2)
+    assert_same_node_gpu_mapping(raisin.get_node_to_gpu(), expected_node_to_gpu_2)
 
     # Check that we get the right node_to_gpu for a given date
     def _parse_date(value: str):
@@ -285,32 +288,35 @@ def test_parse_slurmconfig(cli_main, caplog):
         )
 
     assert_same_node_gpu_mapping(
-        get_node_to_gpu("raisin", _parse_date("2019-12-01")), expected_node_to_gpu_1
+        # XXX: Should that work? Presumably the mapping is not valid before since so why are we using it?
+        raisin.get_node_to_gpu(_parse_date("2019-12-01")),
+        expected_node_to_gpu_1,
     )
     assert_same_node_gpu_mapping(
-        get_node_to_gpu("raisin", _parse_date("2020-01-01")), expected_node_to_gpu_1
+        raisin.get_node_to_gpu(_parse_date("2020-01-01")), expected_node_to_gpu_1
     )
     assert_same_node_gpu_mapping(
-        get_node_to_gpu("raisin", _parse_date("2020-03-07")), expected_node_to_gpu_1
+        raisin.get_node_to_gpu(_parse_date("2020-03-07")), expected_node_to_gpu_1
     )
     assert_same_node_gpu_mapping(
-        get_node_to_gpu("raisin", _parse_date("2020-05-01")), expected_node_to_gpu_2
+        raisin.get_node_to_gpu(_parse_date("2020-05-01")), expected_node_to_gpu_2
     )
     assert_same_node_gpu_mapping(
-        get_node_to_gpu("raisin", _parse_date("2020-05-20")), expected_node_to_gpu_2
+        raisin.get_node_to_gpu(_parse_date("2020-05-20")), expected_node_to_gpu_2
     )
     assert_same_node_gpu_mapping(
-        get_node_to_gpu("raisin", _parse_date("2020-10-10")), expected_node_to_gpu_2
+        raisin.get_node_to_gpu(_parse_date("2020-10-10")), expected_node_to_gpu_2
     )
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
-def test_parse_slurmconfig_since(cli_main, caplog):
+@pytest.mark.usefixtures("enabled_cache")
+def test_parse_slurmconfig_since(cli_main, caplog, empty_read_write_db):
     """test parse with argument --since"""
     caplog.set_level(logging.INFO)
+    raisin = SlurmClusterDB.by_name(empty_read_write_db, "raisin")
 
-    assert get_cluster_gpu_billings("raisin") == []
-    assert get_node_to_gpu("raisin") == None
+    assert raisin.gpu_billing == []
+    assert raisin.node_gpu_mapping == []
 
     _save_slurm_conf("raisin", "2020-01-01", SLURM_CONF_RAISIN_2020_01_01)
     _save_slurm_conf("raisin", "2020-05-01", SLURM_CONF_RAISIN_2020_05_01)
@@ -321,6 +327,7 @@ def test_parse_slurmconfig_since(cli_main, caplog):
         )
         == 0
     )
+    empty_read_write_db.refresh(raisin)
 
     # No harmonization available for gpu1
     assert re.search(
@@ -329,15 +336,15 @@ def test_parse_slurmconfig_since(cli_main, caplog):
         caplog.text,
     )
 
-    expected_gpu_billing_2 = GPUBilling(
-        cluster_name="raisin",
+    expected_gpu_billing_2 = GPUBillingDB(
+        cluster_id=raisin.id,
         since=datetime(2020, 5, 1, tzinfo=MTL).astimezone(UTC),
         gpu_to_billing={"gpu1": 4000, "THE GPU II": 9000},
     )
-    assert_same_billings(get_cluster_gpu_billings("raisin"), [expected_gpu_billing_2])
+    assert_same_billings(raisin.gpu_billing, [expected_gpu_billing_2])
 
-    expected_node_to_gpu_1 = NodeGPUMapping(
-        cluster_name="raisin",
+    expected_node_to_gpu_1 = NodeGPUMappingDB(
+        cluster_id=raisin.id,
         since=datetime(2020, 1, 1, tzinfo=MTL).astimezone(UTC),
         node_to_gpu={
             **{
@@ -360,13 +367,13 @@ def test_parse_slurmconfig_since(cli_main, caplog):
             "alone_node": ["gpu:gpu2:1", "gpu:gpu1:9"],
         },
     )
-    expected_node_to_gpu_2 = NodeGPUMapping(
-        cluster_name="raisin",
+    expected_node_to_gpu_2 = NodeGPUMappingDB(
+        cluster_id=raisin.id,
         since=datetime(2020, 5, 1, tzinfo=MTL).astimezone(UTC),
         node_to_gpu=expected_node_to_gpu_1.node_to_gpu.copy(),
     )
     del expected_node_to_gpu_2.node_to_gpu["alone_node"]
-    assert_same_node_gpu_mapping(get_node_to_gpu("raisin"), expected_node_to_gpu_2)
+    assert_same_node_gpu_mapping(raisin.get_node_to_gpu(), expected_node_to_gpu_2)
 
     # Check that we get the same node_to_gpu for any date,
     # since there is only 1 node->gpu mapping available.
@@ -384,34 +391,35 @@ def test_parse_slurmconfig_since(cli_main, caplog):
         "2020-10-10",
     ]:
         assert_same_node_gpu_mapping(
-            get_node_to_gpu("raisin", _parse_date(date_str)), expected_node_to_gpu_2
+            raisin.get_node_to_gpu(_parse_date(date_str)), expected_node_to_gpu_2
         )
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
-def test_parse_slurmconfig_mila(cli_main, caplog):
+@pytest.mark.usefixtures("enabled_cache")
+def test_parse_slurmconfig_mila(cli_main, caplog, empty_read_write_db):
     """Test parse_slurmconfig on cluster mila, where billing_is_gpu is True."""
-    cluster_name_mila = "mila"
+    mila = SlurmClusterDB.by_name(empty_read_write_db, "mila")
 
     caplog.set_level(logging.INFO)
 
-    assert get_cluster_gpu_billings(cluster_name_mila) == []
-    assert get_node_to_gpu(cluster_name_mila) == None
+    assert mila.gpu_billing == []
+    assert mila.node_gpu_mapping == []
 
-    _save_slurm_conf(cluster_name_mila, "2020-01-01", SLURM_CONF_RAISIN_2020_01_01)
+    _save_slurm_conf(mila.name, "2020-01-01", SLURM_CONF_RAISIN_2020_01_01)
 
-    assert cli_main(["-v", "parse", "slurmconfig", "-c", cluster_name_mila]) == 0
+    assert cli_main(["-v", "parse", "slurmconfig", "-c", mila.name]) == 0
+    empty_read_write_db.refresh(mila)
     assert (
-        f"GPU billing won't be parsed on cluster `{cluster_name_mila}`, "
+        f"GPU billing won't be parsed on cluster `{mila.name}`, "
         f"since billing is directly expressed as number of GPUs on this cluster."
     ) in caplog.text
     caplog.clear()
     # No GPU->billing must be parsed
-    assert get_cluster_gpu_billings(cluster_name_mila) == []
+    mila.gpu_billing == []
 
     # GPU->node must be parsed
-    expected_node_to_gpu_1 = NodeGPUMapping(
-        cluster_name=cluster_name_mila,
+    expected_node_to_gpu_1 = NodeGPUMappingDB(
+        cluster_id=mila.id,
         since=datetime(2020, 1, 1, tzinfo=MTL).astimezone(UTC),
         node_to_gpu={
             **{
@@ -434,32 +442,29 @@ def test_parse_slurmconfig_mila(cli_main, caplog):
             "alone_node": ["gpu:gpu2:1", "gpu:gpu1:9"],
         },
     )
-    assert_same_node_gpu_mapping(
-        get_node_to_gpu(cluster_name_mila), expected_node_to_gpu_1
-    )
+    assert_same_node_gpu_mapping(mila.get_node_to_gpu(), expected_node_to_gpu_1)
 
     # Save next conf file
     _save_slurm_conf("mila", "2020-05-01", SLURM_CONF_RAISIN_2020_05_01)
-    assert cli_main(["-v", "parse", "slurmconfig", "-c", cluster_name_mila]) == 0
+    assert cli_main(["-v", "parse", "slurmconfig", "-c", mila.name]) == 0
+    empty_read_write_db.refresh(mila)
     assert (
-        f"GPU billing won't be parsed on cluster `{cluster_name_mila}`, "
+        f"GPU billing won't be parsed on cluster `{mila.name}`, "
         f"since billing is directly expressed as number of GPUs on this cluster."
     ) in caplog.text
     caplog.clear()
 
     # No GPU->billing must be parsed
-    assert get_cluster_gpu_billings("mila") == []
+    mila.gpu_billing == []
 
     # GPU->node must be parsed
-    expected_node_to_gpu_2 = NodeGPUMapping(
-        cluster_name=cluster_name_mila,
+    expected_node_to_gpu_2 = NodeGPUMappingDB(
+        cluster_id=mila.id,
         since=datetime(2020, 5, 1, tzinfo=MTL).astimezone(UTC),
         node_to_gpu=expected_node_to_gpu_1.node_to_gpu.copy(),
     )
     del expected_node_to_gpu_2.node_to_gpu["alone_node"]
-    assert_same_node_gpu_mapping(
-        get_node_to_gpu(cluster_name_mila), expected_node_to_gpu_2
-    )
+    assert_same_node_gpu_mapping(mila.get_node_to_gpu(), expected_node_to_gpu_2)
 
     # Check that we get the right node_to_gpu for a given date
     def _parse_date(value: str):
@@ -468,28 +473,22 @@ def test_parse_slurmconfig_mila(cli_main, caplog):
         )
 
     assert_same_node_gpu_mapping(
-        get_node_to_gpu(cluster_name_mila, _parse_date("2019-12-01")),
-        expected_node_to_gpu_1,
+        mila.get_node_to_gpu(_parse_date("2019-12-01")), expected_node_to_gpu_1
     )
     assert_same_node_gpu_mapping(
-        get_node_to_gpu(cluster_name_mila, _parse_date("2020-01-01")),
-        expected_node_to_gpu_1,
+        mila.get_node_to_gpu(_parse_date("2020-01-01")), expected_node_to_gpu_1
     )
     assert_same_node_gpu_mapping(
-        get_node_to_gpu(cluster_name_mila, _parse_date("2020-03-07")),
-        expected_node_to_gpu_1,
+        mila.get_node_to_gpu(_parse_date("2020-03-07")), expected_node_to_gpu_1
     )
     assert_same_node_gpu_mapping(
-        get_node_to_gpu(cluster_name_mila, _parse_date("2020-05-01")),
-        expected_node_to_gpu_2,
+        mila.get_node_to_gpu(_parse_date("2020-05-01")), expected_node_to_gpu_2
     )
     assert_same_node_gpu_mapping(
-        get_node_to_gpu(cluster_name_mila, _parse_date("2020-05-20")),
-        expected_node_to_gpu_2,
+        mila.get_node_to_gpu(_parse_date("2020-05-20")), expected_node_to_gpu_2
     )
     assert_same_node_gpu_mapping(
-        get_node_to_gpu(cluster_name_mila, _parse_date("2020-10-10")),
-        expected_node_to_gpu_2,
+        mila.get_node_to_gpu(_parse_date("2020-10-10")), expected_node_to_gpu_2
     )
 
 
@@ -529,25 +528,28 @@ PartitionName=partition2 Nodes=mynode[2,8-11,42] TRESBillingWeights=x=1,GRES/gpu
 
 
 @pytest.mark.parametrize("threshold", [20, 20.1, 30])
-@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
-def test_parse_slurmconfig_inconsistent_billing_success(cli_main, threshold):
+@pytest.mark.usefixtures("enabled_cache")
+def test_parse_slurmconfig_inconsistent_billing_success(
+    cli_main, threshold, empty_read_write_db
+):
     """Test that parsing succeeds with greater threshold"""
     _save_slurm_conf(
         "raisin", "2020-01-01", SLURM_CONF_RAISIN_2020_01_01_INCONSISTENT_BILLING
     )
     assert cli_main(["parse", "slurmconfig", "-c", "raisin", "-t", str(threshold)]) == 0
-    (gpu_billing,) = get_cluster_gpu_billings("raisin")
+    raisin = SlurmClusterDB.by_name(empty_read_write_db, "raisin")
+    (gpu_billing,) = raisin.gpu_billing
     assert gpu_billing.gpu_to_billing == {"gpu1": (5000 + 6000) / 2}
 
 
-def assert_same_billings(given: List[GPUBilling], expected: List[GPUBilling]):
+def assert_same_billings(given: List[GPUBillingDB], expected: List[GPUBillingDB]):
     assert len(given) == len(expected)
     for given_billing, expected_billing in zip(given, expected):
         assert given_billing.since == expected_billing.since
         assert given_billing.gpu_to_billing == expected_billing.gpu_to_billing
 
 
-def assert_same_node_gpu_mapping(given: NodeGPUMapping, expected: NodeGPUMapping):
+def assert_same_node_gpu_mapping(given: NodeGPUMappingDB, expected: NodeGPUMappingDB):
     assert given.since == expected.since
     assert given.node_to_gpu == expected.node_to_gpu
 

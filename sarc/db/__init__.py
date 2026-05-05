@@ -1,5 +1,4 @@
 from sqlalchemy import Engine
-from sqlalchemy.dialects import postgresql
 from sqlmodel import Session, select, text
 
 from sarc.config import config
@@ -26,13 +25,13 @@ def db_upgrade(engine: Engine):
         # This will work for now, but should use proper migrations eventually
         tables = [
             t
-            for n, t in SQLModel.metadata.tables
+            for n, t in SQLModel.metadata.tables.items()
             if n != job_series.JobSeries.__tablename__
         ]
         SQLModel.metadata.create_all(conn, tables, checkfirst=True)
 
         compiled_query = job_series.JobSeries.__sql_view__.compile(
-            dialect=postgresql.dialect, compile_kwargs={"literal_binds": True}
+            dialect=engine.dialect, compile_kwargs={"literal_binds": True}
         )
 
         # This is kinda bad for performance, so we will have to take care of it with migrations
