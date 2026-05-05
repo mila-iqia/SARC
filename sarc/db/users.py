@@ -5,13 +5,14 @@ from typing import Any, Self, Type
 
 from sqlalchemy.dialects.postgresql import TSTZRANGE, ExcludeConstraint, Range
 from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
-from sqlalchemy.orm import Session as SASession, attribute_keyed_dict, relationship
-from sqlalchemy.sql.schema import UniqueConstraint
+from sqlalchemy.orm import Session as SASession
+from sqlalchemy.orm import attribute_keyed_dict, relationship
 from sqlmodel import (
     Field,
     Index,
     Relationship,
     Session,
+    UniqueConstraint,
     col,
     exists,
     func,
@@ -22,6 +23,7 @@ from sqlmodel import (
 
 from sarc.core.models.validators import datetime_utc
 from sarc.models.user import MemberType
+
 from .sqlmodel import SQLModel
 
 logger = logging.getLogger(__name__)
@@ -304,9 +306,13 @@ class MemberTypeDB(ValidDB, table=True):
 
 class SupervisorsHelper(SQLModel, table=True):
     __table_args__ = (UniqueConstraint("list_id", "pos"),)
-    id: int = Field(primary_key=True)
-    list_id: int = Field(
-        foreign_key="user_supervisors.id", index=True, ondelete="CASCADE"
+    id: int | None = Field(default=None, primary_key=True)
+    list_id: int | None = Field(
+        default=None,
+        nullable=False,
+        foreign_key="user_supervisors.id",
+        index=True,
+        ondelete="CASCADE",
     )
     pos: int = Field(ge=0)
     supervisor: int = Field(foreign_key="users.id", ondelete="RESTRICT")
@@ -317,6 +323,41 @@ class SupervisorsDB(ValidDB, table=True):
     supervisors: list[SupervisorsHelper] = Relationship(
         sa_relationship_kwargs={"order_by": SupervisorsHelper.pos}
     )
+
+
+class SupervisorIDsField:
+    """Adapter over ValidField[list[SupervisorsHelper]] that exposes list[int] (supervisor IDs ordered by pos)."""
+
+    def __init__(self, field: ValidField[list[SupervisorsHelper]]):
+        self._field = field
+
+    @staticmethod
+    def _extract(helpers: list[SupervisorsHelper]) -> list[int]:
+        return [h.supervisor for h in helpers]
+
+    def get_value(
+        self, date: datetime | None = None, session: SASession | None = None
+    ) -> list[int]:
+        return self._extract(self._field.get_value(date, session))
+
+    def values_in_range(
+        self, start: datetime_utc, end: datetime_utc, session: SASession | None = None
+    ) -> list[list[int]]:
+        return [
+            self._extract(hs) for hs in self._field.values_in_range(start, end, session)
+        ]
+
+    def insert(
+        self,
+        value: list[int],
+        start: datetime | None = None,
+        end: datetime | None = None,
+        session: SASession | None = None,
+    ) -> None:
+        helpers = [
+            SupervisorsHelper(pos=i, supervisor=sid) for i, sid in enumerate(value)
+        ]
+        self._field.insert(helpers, start, end, session)
 
 
 class GithubUsernameDB(ValidDB, table=True):
@@ -389,13 +430,18 @@ class UserDB(SQLModel, table=True):
             Session.object_session(self), MemberTypeDB, "member_type", self.id
         )
 
-    # The first element of the list is the principal supervisor, the rest are co-supervisors.
     @property
-    def supervisors(self) -> ValidField[list[int]]:
+    def _supervisors(self) -> ValidField[list[SupervisorsHelper]]:
         assert self.id is not None
         return ValidField(
             Session.object_session(self), SupervisorsDB, "supervisors", self.id
         )
+
+    # The first element of the list is the principal supervisor, the rest are co-supervisors.
+    # Also this is essentially ValidField[list[int]], but with consistent ordering
+    @property
+    def supervisors(self) -> SupervisorIDsField:
+        return SupervisorIDsField(self.supervisors)
 
     @property
     def github_username(self) -> ValidField[str]:
