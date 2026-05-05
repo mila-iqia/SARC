@@ -54,9 +54,8 @@ class UserMatch(BaseModel):
     associated_accounts: dict[str, Credentials] = Field(default_factory=dict)
 
     # The strings must be matching_ids from the plugin
-    supervisor: ValidField[MatchID] = Field(default_factory=ValidField[MatchID])
-    co_supervisors: ValidField[set[MatchID]] = Field(
-        default_factory=ValidField[set[MatchID]]
+    supervisors: ValidField[list[MatchID]] = Field(
+        default_factory=ValidField[list[MatchID]]
     )
 
     github_username: ValidField[str] = Field(default_factory=ValidField[str])
@@ -349,10 +348,9 @@ def update_user_db(sess: Session, user: UserMatch, db_user: UserDB) -> None:
             assert res[0].id is not None
             return res[0].id
 
-    valid_merge(user.supervisor, db_user.supervisor, map=map_super)
     valid_merge(
-        user.co_supervisors,
-        db_user.co_supervisors,
+        user.supervisors,
+        db_user.supervisors,
         map=lambda v: sorted(map_super(m) for m in v),
     )
 
