@@ -26,7 +26,7 @@ from PyQt6.QtGui import QFont
 from sarc.rest.client import SarcApiClient
 from sarc.core.models.users import MemberType
 
-from ..utils import get_member_type
+from ..utils import get_member_type, set_wait_cursor, restore_cursor
 from ..workers import UsersWorker, UserDetailsWorker
 
 
@@ -51,6 +51,11 @@ class UserDetailsPanel(QFrame):
         self._status_label = QLabel("Select a user to see details.")
         layout.addWidget(self._status_label)
 
+        self._timing_label = QLabel("")
+        self._timing_label.setStyleSheet("color: gray; font-size: 11px;")
+        self._timing_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+        layout.addWidget(self._timing_label)
+
         # Scroll area for user info
         self._scroll = QScrollArea()
         self._scroll.setWidgetResizable(True)
@@ -62,6 +67,7 @@ class UserDetailsPanel(QFrame):
         self._status_label.setVisible(True)
         self._status_label.setStyleSheet("")
         self._status_label.setText("Loading...")
+        self._timing_label.setText("")
 
         if self._worker is not None:
             self._worker.success.disconnect()
@@ -69,17 +75,22 @@ class UserDetailsPanel(QFrame):
 
         self._worker = UserDetailsWorker(self.client, uuid_str)
         self._worker.success.connect(self._show_user)
+        self._worker.elapsed.connect(self._show_elapsed)
         self._worker.error.connect(self._show_error)
-        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        set_wait_cursor()
         self._worker.start()
 
+    def _show_elapsed(self, seconds: float):
+        self._timing_label.setText(f"{seconds:.2f} s")
+
     def _show_error(self, msg: str):
-        QApplication.restoreOverrideCursor()
+        restore_cursor()
+        self._timing_label.setText("")
         self._status_label.setText(f"Error: {msg}")
         self._status_label.setStyleSheet("color: red;")
 
     def _show_user(self, user, job_counts: dict[str, int]):
-        QApplication.restoreOverrideCursor()
+        restore_cursor()
         self._status_label.setVisible(False)
         self._scroll.setVisible(True)
 
@@ -193,6 +204,9 @@ class UsersTab(QWidget):
         self._total_label = QLabel("")
         page_layout.addWidget(self._total_label)
         page_layout.addStretch()
+        self._timing_label = QLabel("")
+        self._timing_label.setStyleSheet("color: gray; font-size: 11px;")
+        page_layout.addWidget(self._timing_label)
         left_layout.addLayout(page_layout)
 
         splitter.addWidget(left_widget)
@@ -231,14 +245,16 @@ class UsersTab(QWidget):
             self._worker.success.disconnect()
             self._worker.error.disconnect()
 
+        self._timing_label.setText("")
         self._worker = UsersWorker(self.client, query, mtype, page, self._per_page)
         self._worker.success.connect(self._on_users_loaded)
+        self._worker.elapsed.connect(lambda s: self._timing_label.setText(f"{s:.2f} s"))
         self._worker.error.connect(self._on_error)
-        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        set_wait_cursor()
         self._worker.start()
 
     def _on_users_loaded(self, result):
-        QApplication.restoreOverrideCursor()
+        restore_cursor()
         self._total = result.total
         self._table.setRowCount(0)
         self._uuid_map.clear()
@@ -258,7 +274,7 @@ class UsersTab(QWidget):
         self._total_label.setText(f"Total: {result.total} users")
 
     def _on_error(self, msg: str):
-        QApplication.restoreOverrideCursor()
+        restore_cursor()
         QMessageBox.critical(self, "Error", f"Failed to load users:\n{msg}")
 
     def _on_selection_changed(self):

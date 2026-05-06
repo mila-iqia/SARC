@@ -23,6 +23,7 @@ from PyQt6.QtGui import QFont, QCursor
 from sarc.rest.client import SarcApiClient
 
 from gui_rest.workers import MetricsWorker, MetricsHistoryWorker
+from gui_rest.utils import set_wait_cursor, restore_cursor
 
 
 def _fmt_wait(seconds: float | None) -> str:
@@ -76,17 +77,18 @@ class MetricsHistoryWindow(QDialog):
     def _fetch(self):
         self._worker = MetricsHistoryWorker(self._client, self._clusters, self._metric_key)
         self._worker.success.connect(self._on_data)
+        self._worker.elapsed.connect(lambda s: self._status.setText(f"{s:.2f} s"))
         self._worker.error.connect(self._on_error)
         self._worker.progress.connect(lambda msg: self._status.setText(msg))
-        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        set_wait_cursor()
         self._worker.start()
 
     def _on_error(self, msg: str):
-        QApplication.restoreOverrideCursor()
+        restore_cursor()
         self._status.setText(f"Error: {msg}")
 
     def _on_data(self, data: dict):
-        QApplication.restoreOverrideCursor()
+        restore_cursor()
         self._status.setText("")
         self._render(data)
 
@@ -171,7 +173,7 @@ class MetricsTab(QWidget):
 
         # Table
         self._table = QTableWidget(0, 3)
-        self._table.setHorizontalHeaderLabels(["Cluster", "Avg Wait Time ▸", "Submitted Jobs ▸"])
+        self._table.setHorizontalHeaderLabels(["Cluster", "Avg Wait Time (sample) ▸", "Submitted Jobs ▸"])
         self._table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self._table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         self._table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
@@ -212,12 +214,13 @@ class MetricsTab(QWidget):
         self._clusters = clusters
         self._worker = MetricsWorker(self.client, clusters)
         self._worker.success.connect(self._on_metrics)
+        self._worker.elapsed.connect(lambda s: self._status.setText(f"{s:.2f} s"))
         self._worker.error.connect(self._on_error)
-        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        set_wait_cursor()
         self._worker.start()
 
     def _on_metrics(self, data: dict):
-        QApplication.restoreOverrideCursor()
+        restore_cursor()
         self._refresh_btn.setEnabled(True)
         self._status.setText("")
         self._table.setRowCount(len(data))
@@ -229,7 +232,7 @@ class MetricsTab(QWidget):
             self._table.setItem(row, 2, count_item)
 
     def _on_error(self, msg: str):
-        QApplication.restoreOverrideCursor()
+        restore_cursor()
         self._refresh_btn.setEnabled(True)
         self._status.setText(f"Error: {msg}")
         QMessageBox.critical(self, "Metrics Error", msg)

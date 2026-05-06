@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from sarc.rest.client import SarcApiClient
@@ -25,6 +27,7 @@ class ConnectWorker(QThread):
 
 class SummaryWorker(QThread):
     success = pyqtSignal(int, int, list)  # job_count, user_count, clusters
+    elapsed = pyqtSignal(float)
     error = pyqtSignal(str)
 
     def __init__(self, client: SarcApiClient):
@@ -32,17 +35,20 @@ class SummaryWorker(QThread):
         self.client = client
 
     def run(self):
+        t0 = time.perf_counter()
         try:
             job_count = self.client.job_count()
             user_list = self.client.user_list(per_page=1)
             clusters = self.client.cluster_list()
             self.success.emit(job_count, user_list.total, clusters)
+            self.elapsed.emit(time.perf_counter() - t0)
         except Exception as exc:
             self.error.emit(str(exc))
 
 
 class ClustersWorker(QThread):
     success = pyqtSignal(list)  # list of (cluster_name, count)
+    elapsed = pyqtSignal(float)
     error = pyqtSignal(str)
 
     def __init__(self, client: SarcApiClient):
@@ -50,6 +56,7 @@ class ClustersWorker(QThread):
         self.client = client
 
     def run(self):
+        t0 = time.perf_counter()
         try:
             clusters = self.client.cluster_list()
             counts: list[tuple[str, int]] = []
@@ -60,6 +67,7 @@ class ClustersWorker(QThread):
                 except Exception:
                     counts.append((cl, -1))
             self.success.emit(counts)
+            self.elapsed.emit(time.perf_counter() - t0)
         except Exception as exc:
             self.error.emit(str(exc))
 
@@ -84,6 +92,7 @@ class ClusterListWorker(QThread):
 
 class UsersWorker(QThread):
     success = pyqtSignal(object)
+    elapsed = pyqtSignal(float)
     error = pyqtSignal(str)
 
     def __init__(self, client: SarcApiClient, query, mtype, page, per_page):
@@ -95,6 +104,7 @@ class UsersWorker(QThread):
         self.per_page = per_page
 
     def run(self):
+        t0 = time.perf_counter()
         try:
             result = self.client.user_list(
                 display_name=self.query,
@@ -103,12 +113,14 @@ class UsersWorker(QThread):
                 per_page=self.per_page,
             )
             self.success.emit(result)
+            self.elapsed.emit(time.perf_counter() - t0)
         except Exception as exc:
             self.error.emit(str(exc))
 
 
 class UserDetailsWorker(QThread):
     success = pyqtSignal(object, dict)  # user, job_counts
+    elapsed = pyqtSignal(float)
     error = pyqtSignal(str)
 
     def __init__(self, client: SarcApiClient, uuid_str: str):
@@ -117,6 +129,7 @@ class UserDetailsWorker(QThread):
         self.uuid_str = uuid_str
 
     def run(self):
+        t0 = time.perf_counter()
         try:
             user = self.client.user_by_id(self.uuid_str)
             clusters = self.client.cluster_list()
@@ -130,12 +143,14 @@ class UserDetailsWorker(QThread):
                 except Exception:
                     job_counts[cl] = -1
             self.success.emit(user, job_counts)
+            self.elapsed.emit(time.perf_counter() - t0)
         except Exception as exc:
             self.error.emit(str(exc))
 
 
 class JobsWorker(QThread):
     success = pyqtSignal(object)
+    elapsed = pyqtSignal(float)
     error = pyqtSignal(str)
 
     def __init__(
@@ -160,6 +175,7 @@ class JobsWorker(QThread):
         self.per_page = per_page
 
     def run(self):
+        t0 = time.perf_counter()
         try:
             result = self.client.job_list(
                 cluster=self.cluster,
@@ -171,6 +187,7 @@ class JobsWorker(QThread):
                 per_page=self.per_page,
             )
             self.success.emit(result)
+            self.elapsed.emit(time.perf_counter() - t0)
         except Exception as exc:
             self.error.emit(str(exc))
 
@@ -179,6 +196,7 @@ class MetricsWorker(QThread):
     """Fetches 24-hour aggregated metrics (avg wait time, job count) per cluster."""
 
     success = pyqtSignal(dict)  # dict[cluster, {"avg_wait": float|None, "job_count": int}]
+    elapsed = pyqtSignal(float)
     error = pyqtSignal(str)
 
     def __init__(self, client: SarcApiClient, clusters: list[str]):
@@ -187,38 +205,32 @@ class MetricsWorker(QThread):
         self.clusters = clusters
 
     def run(self):
+        t0 = time.perf_counter()
         try:
             from datetime import datetime, timedelta, timezone
 
             now = datetime.now(tz=timezone.utc)
             since = now - timedelta(hours=24)
             result = {}
+            per_page = 500
             for cluster in self.clusters:
+                # One request: total comes from response metadata, wait time sampled
+                # from first page (up to 500 jobs) — avoids N pages of requests.
+                data = self.client.job_list(
+                    cluster=cluster, start=since, end=now, page=1, per_page=per_page
+                )
                 wait_times: list[float] = []
-                job_count = 0
-                page = 1
-                per_page = 500
-                while True:
-                    data = self.client.job_list(
-                        cluster=cluster, start=since, end=now, page=page, per_page=per_page
-                    )
-                    for job in data.jobs:
-                        if job.submit_time < since:
-                            continue
-                        job_count += 1
-                        if job.start_time is not None:
-                            wait = (job.start_time - job.submit_time).total_seconds()
-                            if wait >= 0:
-                                wait_times.append(wait)
-                    total_pages = -(-data.total // per_page)  # ceiling division
-                    if page >= total_pages:
-                        break
-                    page += 1
+                for job in data.jobs:
+                    if job.start_time is not None:
+                        wait = (job.start_time - job.submit_time).total_seconds()
+                        if wait >= 0:
+                            wait_times.append(wait)
                 result[cluster] = {
                     "avg_wait": sum(wait_times) / len(wait_times) if wait_times else None,
-                    "job_count": job_count,
+                    "job_count": data.total,
                 }
             self.success.emit(result)
+            self.elapsed.emit(time.perf_counter() - t0)
         except Exception as exc:
             self.error.emit(str(exc))
 
@@ -227,6 +239,7 @@ class MetricsHistoryWorker(QThread):
     """Fetches 30-day daily history for a metric across all clusters."""
 
     success = pyqtSignal(dict)  # dict[cluster, list[tuple[date, float]]]
+    elapsed = pyqtSignal(float)
     error = pyqtSignal(str)
     progress = pyqtSignal(str)
 
@@ -237,6 +250,7 @@ class MetricsHistoryWorker(QThread):
         self.metric = metric  # "avg_wait" or "job_count"
 
     def run(self):
+        t0 = time.perf_counter()
         try:
             from collections import defaultdict
             from datetime import datetime, timedelta, timezone
@@ -275,6 +289,7 @@ class MetricsHistoryWorker(QThread):
                     series = sorted(daily_counts.items())
                 result[cluster] = series
             self.success.emit(result)
+            self.elapsed.emit(time.perf_counter() - t0)
         except Exception as exc:
             self.error.emit(str(exc))
 

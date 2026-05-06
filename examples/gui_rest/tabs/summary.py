@@ -20,6 +20,7 @@ from PyQt6.QtGui import QFont
 
 from sarc.rest.client import SarcApiClient
 
+from ..utils import set_wait_cursor, restore_cursor
 from ..workers import SummaryWorker
 
 
@@ -45,6 +46,9 @@ class SummaryTab(QWidget):
         title.setFont(font)
         header.addWidget(title)
         header.addStretch()
+        self._timing_label = QLabel("")
+        self._timing_label.setStyleSheet("color: gray; font-size: 11px;")
+        header.addWidget(self._timing_label)
         refresh_btn = QPushButton("Refresh")
         refresh_btn.clicked.connect(lambda: self.refresh())
         header.addWidget(refresh_btn)
@@ -109,17 +113,19 @@ class SummaryTab(QWidget):
             return
         self._jobs_label.setText("...")
         self._users_label.setText("...")
+        self._timing_label.setText("")
         self._worker = SummaryWorker(self._client)
         self._worker.success.connect(self._on_success)
+        self._worker.elapsed.connect(lambda s: self._timing_label.setText(f"{s:.2f} s"))
         self._worker.error.connect(self._on_error)
-        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        set_wait_cursor()
         self._worker.start()
 
     def set_client(self, client: SarcApiClient):
         self._client = client
 
     def _on_success(self, job_count: int, user_count: int, clusters: list):
-        QApplication.restoreOverrideCursor()
+        restore_cursor()
         self._jobs_label.setText(str(job_count))
         self._users_label.setText(str(user_count))
         self._clusters_table.setRowCount(0)
@@ -131,7 +137,7 @@ class SummaryTab(QWidget):
             self._clusters_table.setItem(row, 0, item)
 
     def _on_error(self, msg: str):
-        QApplication.restoreOverrideCursor()
+        restore_cursor()
         self._jobs_label.setText("error")
         self._users_label.setText("error")
         QMessageBox.critical(self, "Error", f"Failed to load summary:\n{msg}")

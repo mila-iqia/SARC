@@ -25,7 +25,7 @@ from PyQt6.QtCore import Qt, QDate
 from sarc.rest.client import SarcApiClient
 from sarc.client.job import SlurmState
 
-from ..utils import fmt_datetime, fmt_elapsed
+from ..utils import fmt_datetime, fmt_elapsed, set_wait_cursor, restore_cursor
 from ..workers import JobsWorker, ClusterListWorker
 from ..dialogs import JobDetailsDialog
 
@@ -169,6 +169,9 @@ class JobsTab(QWidget):
         self._total_label = QLabel("")
         page_layout.addWidget(self._total_label)
         page_layout.addStretch()
+        self._timing_label = QLabel("")
+        self._timing_label.setStyleSheet("color: gray; font-size: 11px;")
+        page_layout.addWidget(self._timing_label)
         hint = QLabel("Double-click a row to see job details.")
         hint.setStyleSheet("color: gray;")
         page_layout.addWidget(hint)
@@ -197,11 +200,11 @@ class JobsTab(QWidget):
 
         self._cluster_worker = ClusterListWorker(self.client)
         self._cluster_worker.success.connect(self._on_clusters_loaded)
-        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        set_wait_cursor()
         self._cluster_worker.start()
 
     def _on_clusters_loaded(self, clusters: list):
-        QApplication.restoreOverrideCursor()
+        restore_cursor()
         self._cluster_combo.clear()
         self._cluster_combo.addItem("(all)")
         for cl in clusters:
@@ -273,16 +276,18 @@ class JobsTab(QWidget):
             except Exception:
                 pass
 
+        self._timing_label.setText("")
         self._worker = JobsWorker(
             self.client, cluster, username, job_state, start, end, page, self._per_page
         )
         self._worker.success.connect(self._on_jobs_loaded)
+        self._worker.elapsed.connect(lambda s: self._timing_label.setText(f"{s:.2f} s"))
         self._worker.error.connect(self._on_error)
-        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        set_wait_cursor()
         self._worker.start()
 
     def _on_jobs_loaded(self, result):
-        QApplication.restoreOverrideCursor()
+        restore_cursor()
         self._total = result.total
         self._table.setRowCount(0)
         self._job_map.clear()
@@ -318,7 +323,7 @@ class JobsTab(QWidget):
         self._total_label.setText(f"Total: {result.total} jobs")
 
     def _on_error(self, msg: str):
-        QApplication.restoreOverrideCursor()
+        restore_cursor()
         QMessageBox.critical(self, "Error", f"Failed to load jobs:\n{msg}")
 
     def _on_job_double_click(self, index):

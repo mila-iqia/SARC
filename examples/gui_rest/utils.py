@@ -5,6 +5,31 @@ from __future__ import annotations
 from datetime import datetime
 
 
+def set_wait_cursor() -> None:
+    """Set the wait cursor.
+
+    Wrapped in try/except because PyQt6 on macOS crashes in QImage::toCGImage()
+    with a null colorspace when rendering the WaitCursor (QTBUG on macOS 26+).
+    """
+    try:
+        from PyQt6.QtWidgets import QApplication
+        from PyQt6.QtCore import Qt
+
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+    except Exception:
+        pass
+
+
+def restore_cursor() -> None:
+    """Restore the cursor set by set_wait_cursor()."""
+    try:
+        from PyQt6.QtWidgets import QApplication
+
+        QApplication.restoreOverrideCursor()
+    except Exception:
+        pass
+
+
 def fmt_datetime(dt: datetime | None) -> str:
     if dt is None:
         return "N/A"
@@ -20,7 +45,7 @@ def fmt_elapsed(seconds: float | None) -> str:
         m = (secs % 3600) // 60
         s = secs % 60
         return f"{h}h {m}m {s}s"
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         return "N/A"
 
 
@@ -39,7 +64,7 @@ def fmt_float(v: float | None) -> str:
         if v != v:  # NaN check
             return "N/A"
         return f"{v:.2f}"
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         return "N/A"
 
 

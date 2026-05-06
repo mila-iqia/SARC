@@ -19,6 +19,7 @@ from PyQt6.QtGui import QFont
 
 from sarc.rest.client import SarcApiClient
 
+from ..utils import set_wait_cursor, restore_cursor
 from ..workers import ClustersWorker
 
 
@@ -64,6 +65,11 @@ class ClustersTab(QWidget):
         self._table.doubleClicked.connect(self._on_double_click)
         layout.addWidget(self._table)
 
+        self._timing_label = QLabel("")
+        self._timing_label.setStyleSheet("color: gray; font-size: 11px;")
+        self._timing_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+        layout.addWidget(self._timing_label)
+
     def load_clusters(self):
         if self.client is None:
             QMessageBox.warning(
@@ -76,14 +82,16 @@ class ClustersTab(QWidget):
             self._worker.success.disconnect()
             self._worker.error.disconnect()
 
+        self._timing_label.setText("")
         self._worker = ClustersWorker(self.client)
         self._worker.success.connect(self._on_loaded)
+        self._worker.elapsed.connect(lambda s: self._timing_label.setText(f"{s:.2f} s"))
         self._worker.error.connect(self._on_error)
-        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        set_wait_cursor()
         self._worker.start()
 
     def _on_loaded(self, counts: list):
-        QApplication.restoreOverrideCursor()
+        restore_cursor()
         self._table.setRowCount(0)
         for cl, cnt in counts:
             row = self._table.rowCount()
@@ -95,7 +103,7 @@ class ClustersTab(QWidget):
                 self._table.setItem(row, col, item)
 
     def _on_error(self, msg: str):
-        QApplication.restoreOverrideCursor()
+        restore_cursor()
         QMessageBox.critical(self, "Error", f"Failed to load clusters:\n{msg}")
 
     def _on_double_click(self, index):
