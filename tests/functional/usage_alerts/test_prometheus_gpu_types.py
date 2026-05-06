@@ -1,10 +1,11 @@
 import re
-from datetime import datetime
+from datetime import datetime, UTC
 from unittest.mock import MagicMock
 
 import pytest
 
 from sarc.config import config
+from sarc.db.cluster import NodeGPUMappingDB, SlurmClusterDB
 
 TESTING_DATA = {
     "00_hyrule": {
@@ -55,14 +56,14 @@ def test_check_prometheus_vs_slurmconfig(
     )
     # Add node_to_gpu entry in db if necessary
     if params["node_to_gpu"]:
-        db = config().mongo.database_instance
-        db.node_gpu_mapping.insert_one(
-            {
-                "cluster_name": params["cluster"],
-                "since": datetime.now(),
-                "node_to_gpu": params["node_to_gpu"],
-            }
-        )
+        with config().db.session() as sess:
+            NodeGPUMappingDB.get_or_create(
+                sess,
+                cluster_id=SlurmClusterDB.by_name(sess, params["cluster"]).id,
+                since=datetime.now(UTC),
+                node_to_gpu=params["node_to_gpu"],
+            )
+            sess.commit()
 
     assert (
         cli_main(
@@ -93,17 +94,16 @@ def test_check_prometheus_vs_slurmconfig_all(
 
     monkeypatch.setattr(PrometheusConnect, "custom_query", _gen_fake_custom_query)
 
-    db = config().mongo.database_instance
-    collection = db.node_gpu_mapping
     for params in TESTING_DATA.values():
         if params["node_to_gpu"]:
-            collection.insert_one(
-                {
-                    "cluster_name": params["cluster"],
-                    "since": datetime.now(),
-                    "node_to_gpu": params["node_to_gpu"],
-                }
-            )
+            with config().db.session() as sess:
+                NodeGPUMappingDB.get_or_create(
+                    sess,
+                    cluster_id=SlurmClusterDB.by_name(sess, params["cluster"]).id,
+                    since=datetime.now(UTC),
+                    node_to_gpu=params["node_to_gpu"],
+                )
+                sess.commit()
 
     assert cli_main(["health", "run", "--check", "prometheus_gpu_type_all"]) == 0
     file_regression.check(re.sub(r"ERROR +.+\.py:[0-9]+ +", "", caplog.text))
