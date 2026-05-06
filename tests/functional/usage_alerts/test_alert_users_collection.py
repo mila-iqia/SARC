@@ -9,9 +9,10 @@ import logging
 import re
 
 import pytest
+from sqlmodel import Session
 
 from sarc.config import config
-from sarc.users.db import UserDB
+from sarc.db.users import UserDB
 
 CHECK_NAME = "users_collection"
 
@@ -31,29 +32,28 @@ def _get_error_logs(text: str) -> list[str]:
     return errors
 
 
-def _insert_users(db, users: list[dict]):
+def _insert_users(sess: Session, users: list[dict]):
     """Insert user documents into the users collection."""
-    docs = [
-        UserDB(
-            display_name=u["display_name"], email=u["email"], matching_ids={}
-        ).model_dump()
-        for u in users
-    ]
-    db.users.insert_many(docs)
+    for u in users:
+        user = UserDB(
+            display_name=u["display_name"], email=u["email"]
+        )
+        sess.add(user)
+    sess.commit()
 
 
 @pytest.mark.usefixtures("health_config")
 def test_no_duplicates(caplog, cli_main, empty_read_write_db):
     """Unique emails and display_names should return OK."""
-    db = config().mongo.database_instance
-    _insert_users(
-        db,
-        [
-            {"display_name": "Alice", "email": "alice@example.com"},
-            {"display_name": "Bob", "email": "bob@example.com"},
-            {"display_name": "Charlie", "email": "charlie@example.com"},
-        ],
-    )
+    with config().db.session() as sess:
+        _insert_users(
+            sess,
+            [
+                {"display_name": "Alice", "email": "alice@example.com"},
+                {"display_name": "Bob", "email": "bob@example.com"},
+                {"display_name": "Charlie", "email": "charlie@example.com"},
+            ],
+        )
     with caplog.at_level(logging.INFO):
         assert _run_check(cli_main) == 0
         assert not _get_error_logs(caplog.text)
@@ -62,15 +62,15 @@ def test_no_duplicates(caplog, cli_main, empty_read_write_db):
 @pytest.mark.usefixtures("health_config")
 def test_duplicate_emails(caplog, cli_main, empty_read_write_db):
     """Two users sharing the same email should return FAIL."""
-    db = config().mongo.database_instance
-    _insert_users(
-        db,
-        [
-            {"display_name": "Alice", "email": "shared@example.com"},
-            {"display_name": "Bob", "email": "shared@example.com"},
-            {"display_name": "Charlie", "email": "charlie@example.com"},
-        ],
-    )
+    with config().db.session() as sess:
+        _insert_users(
+            sess,
+            [
+                {"display_name": "Alice", "email": "shared@example.com"},
+                {"display_name": "Bob", "email": "shared@example.com"},
+                {"display_name": "Charlie", "email": "charlie@example.com"},
+            ],
+        )
     with caplog.at_level(logging.INFO):
         assert _run_check(cli_main) == 0
         errors = _get_error_logs(caplog.text)
@@ -81,15 +81,15 @@ def test_duplicate_emails(caplog, cli_main, empty_read_write_db):
 @pytest.mark.usefixtures("health_config")
 def test_duplicate_display_names(caplog, cli_main, empty_read_write_db):
     """Two users sharing the same display_name should return FAIL."""
-    db = config().mongo.database_instance
-    _insert_users(
-        db,
-        [
-            {"display_name": "Alice", "email": "alice1@example.com"},
-            {"display_name": "Alice", "email": "alice2@example.com"},
-            {"display_name": "Bob", "email": "bob@example.com"},
-        ],
-    )
+    with config().db.session() as sess:
+        _insert_users(
+            sess,
+            [
+                {"display_name": "Alice", "email": "alice1@example.com"},
+                {"display_name": "Alice", "email": "alice2@example.com"},
+                {"display_name": "Bob", "email": "bob@example.com"},
+            ],
+        )
     with caplog.at_level(logging.INFO):
         assert _run_check(cli_main) == 0
         errors = _get_error_logs(caplog.text)
@@ -100,15 +100,15 @@ def test_duplicate_display_names(caplog, cli_main, empty_read_write_db):
 @pytest.mark.usefixtures("health_config")
 def test_duplicate_emails_and_display_names(caplog, cli_main, empty_read_write_db):
     """Duplicates in both email and display_name should both be reported."""
-    db = config().mongo.database_instance
-    _insert_users(
-        db,
-        [
-            {"display_name": "Alice", "email": "shared@example.com"},
-            {"display_name": "Alice", "email": "shared@example.com"},
-            {"display_name": "Bob", "email": "bob@example.com"},
-        ],
-    )
+    with config().db.session() as sess:
+        _insert_users(
+            sess,
+            [
+                {"display_name": "Alice", "email": "shared@example.com"},
+                {"display_name": "Alice", "email": "shared@example.com"},
+                {"display_name": "Bob", "email": "bob@example.com"},
+            ],
+        )
     with caplog.at_level(logging.INFO):
         assert _run_check(cli_main) == 0
         errors = _get_error_logs(caplog.text)
@@ -125,7 +125,7 @@ def test_empty_db(caplog, cli_main, empty_read_write_db):
 
 
 @pytest.mark.usefixtures("health_config")
-def test_factory_data_has_duplicates(caplog, cli_main, read_write_db_with_users):
+def test_factory_data_has_duplicates(caplog, cli_main, read_write_db):
     """The default test factory data contains duplicates and should FAIL.
 
     The factory creates multiple users with email='test@example.com'
