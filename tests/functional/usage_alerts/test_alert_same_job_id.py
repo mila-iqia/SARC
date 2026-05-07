@@ -4,12 +4,12 @@ Test alert function `check_same_job_id`.
 NB:
 In testing DB, there are currently 2 jobs with same job ID 1000000
 First job:
-submit_time: 2023-02-19 05:00:00+00:00
-end_time:    2023-02-19 17:01:00+00:00
+submit_time: 2023-02-18 17:00:00+00:00
+end_time:    2023-02-19 05:01:00+00:00
 
 Second job:
-submit_time: 2023-02-19 11:00:00+00:00
-end_time:    2023-02-19 23:01:00+00:00
+submit_time: 2023-02-18 23:00:00+00:00
+end_time:    2023-02-19 11:01:00+00:00
 """
 
 import re
@@ -19,7 +19,8 @@ import pytest
 import time_machine
 
 from sarc.config import UTC, config
-from tests.functional.jobs.test_func_load_job_series import MOCK_TIME
+
+MOCK_TIME = datetime(2023, 11, 22, tzinfo=UTC)
 
 PARAMETERS = {
     # only 7 days before now (which is MOCK_TIME), cannot see duplicates
@@ -28,44 +29,44 @@ PARAMETERS = {
     "all": {"since": None, "time_interval": None},
     # `since` covers both jobs
     "since_before": {
-        "since": datetime(2023, 2, 19, 2, tzinfo=UTC),
+        "since": datetime(2023, 2, 18, 14, tzinfo=UTC),
         "time_interval": None,
     },
     # `since` covers both jobs
-    "since_in": {"since": datetime(2023, 2, 19, 5, tzinfo=UTC), "time_interval": None},
+    "since_in": {"since": datetime(2023, 2, 18, 17, tzinfo=UTC), "time_interval": None},
     # `since` covers only 2nd job, cannot detect duplicate
     "since_after_first": {
-        "since": datetime(2023, 2, 19, 18, tzinfo=UTC),
+        "since": datetime(2023, 2, 19, 6, tzinfo=UTC),
         "time_interval": None,
     },
     # `since` after both jobs, cannot detect duplicates
     "since_after_both": {
-        "since": datetime(2023, 2, 19, 23, 10, tzinfo=UTC),
+        "since": datetime(2023, 2, 19, 12, tzinfo=UTC),
         "time_interval": None,
     },
     # [since, since + time_interval] before jobs, cannot detect duplicates
     "interval_before": {
-        "since": datetime(2023, 2, 19, 2, tzinfo=UTC),
+        "since": datetime(2023, 2, 18, 2, tzinfo=UTC),
         "time_interval": timedelta(hours=3),
     },
     # [since, since + time_interval] covers only 1st job, cannot detect duplicate
     "interval_on_first": {
-        "since": datetime(2023, 2, 19, 2, tzinfo=UTC),
+        "since": datetime(2023, 2, 18, 14, tzinfo=UTC),
         "time_interval": timedelta(hours=4),
     },
     # [since, since + time_interval] covers both jobs
     "interval_on_both": {
-        "since": datetime(2023, 2, 19, 2, tzinfo=UTC),
+        "since": datetime(2023, 2, 18, 14, tzinfo=UTC),
         "time_interval": timedelta(hours=10),
     },
     # [since, since + time_interval] covers both jobs beyond end of 2nd job
     "interval_full": {
-        "since": datetime(2023, 2, 19, 2, tzinfo=UTC),
+        "since": datetime(2023, 2, 18, 14, tzinfo=UTC),
         "time_interval": timedelta(hours=22),
     },
     # [since, since + time_interval] after jobs, cannot detect duplicates
     "interval_after": {
-        "since": datetime(2023, 2, 19, 23, 10, tzinfo=UTC),
+        "since": datetime(2023, 2, 19, 12, tzinfo=UTC),
         "time_interval": timedelta(hours=22),
     },
     # time_interval not wide enough from now (which is MOCK_TIME), cannot detect duplicates

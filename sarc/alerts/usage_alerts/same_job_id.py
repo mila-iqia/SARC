@@ -4,10 +4,12 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Dict
 
-from tqdm import tqdm
+import sqlmodel
 
 from sarc.alerts.common import CheckResult, HealthCheck
 from sarc.core.models.validators import datetime_utc
+from sarc.db.cluster import SlurmClusterDB
+from sarc.db.job import SlurmJobDB
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +38,7 @@ def check_same_job_id(
     bool
         True if there are no duplicated job IDs (check succeeds), False otherwise.
     """
-    from sarc.client import count_jobs, get_jobs
+    from sarc.config import config
 
     # Compute parameters `start` and `end` for function `get_jobs()`
     if since is None:
@@ -53,22 +55,32 @@ def check_same_job_id(
         start = since
         end = start + time_interval
 
-    nb_jobs = count_jobs(start=start, end=end)
-
     # Collect job indices, and count occurrences of clusters
     # among jobs which have same job ID.
-    job_id_to_cluster_to_count: Dict[int, Counter] = {}
-    for job in tqdm(get_jobs(start=start, end=end), total=nb_jobs, desc="get jobs"):
-        job_id_to_cluster_to_count.setdefault(job.job_id, Counter()).update(
-            [job.cluster_name]
-        )
+    duplicates: Dict[int, Counter] = {}
+
+    with config().db.session() as sess:
+        query = sqlmodel.select(
+            SlurmJobDB.job_id, sqlmodel.func.array_agg(SlurmClusterDB.name)
+        ).join(SlurmClusterDB, SlurmJobDB.cluster_id == SlurmClusterDB.id)
+        if end is not None:
+            query = query.where(sqlmodel.col(SlurmJobDB.submit_time) < end)
+        if start is not None:
+            query = query.where(
+                sqlmodel.or_(
+                    SlurmJobDB.end_time == None,  # noqa: E711
+                    sqlmodel.col(SlurmJobDB.end_time) > start,
+                )
+            )
+
+        for job_id, cluster_names in sess.exec(
+            query.group_by(SlurmJobDB.job_id)
+            .having(sqlmodel.func.count() > 1)
+            .order_by(SlurmJobDB.job_id)
+        ):
+            duplicates[job_id] = Counter(cluster_names)
 
     # Find duplicates.
-    duplicates = {
-        job_id: cluster_to_count
-        for job_id, cluster_to_count in job_id_to_cluster_to_count.items()
-        if sum(cluster_to_count.values()) > 1
-    }
     if duplicates:
         # Log alerts
         if start:
