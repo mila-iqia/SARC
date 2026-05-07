@@ -10,8 +10,8 @@ from sarc.db.allocation import AllocationDB
 from sarc.db.cluster import GPUBillingDB, SlurmClusterDB
 from sarc.db.diskusage import DiskUsageDB, DiskUsageGroupDB, DiskUsageUserDB
 from sarc.db.job import SlurmJobDB
-from sarc.db.users import UserDB
-from sarc.scraping.users import Credentials, MemberType
+from sarc.db.users import SupervisorsHelper, UserDB
+from sarc.scraping.users import MemberType
 from tests.common.dateutils import MTL
 
 elapsed_time = 60 * 60 * 12
@@ -174,32 +174,30 @@ class UserFactory:
         match_ids=None,
         member_type=(),
         accounts=(("mila", "test"),),
-        supervisor=(),
-        cosupervisors=(),
+        supervisors=(),
         github_username=(),
         google_scholar_profile=(),
-        session=None,
     ) -> UserDB:
+        def _finalize():
+            for mtype in member_type:
+                u.member_type.insert(MemberType(mtype[0]), *mtype[1:])
+            for acct in accounts:
+                u.associated_accounts[acct[0]].insert(*acct[1:])
+            for sup in supervisors:
+                u.supervisors.insert(*sup)
+            for uname in github_username:
+                u.github_username.insert(*uname)
+            for profile in google_scholar_profile:
+                u.google_scholar_profile.insert(*profile)
+
         if match_ids is None:
             match_ids = {}
         u = UserDB(id=id, display_name=display_name, email=email)
         for k, v in match_ids.items():
             u.matching_ids[k] = v
-        if session is not None:
-            for mtype in member_type:
-                u.member_type.insert(MemberType(mtype[0]), *mtype[1:])
-            for acct in accounts:
-                creds = u.associated_accounts.get(acct[0], Credentials())
-                creds.insert(*acct[1:])
-                u.associated_accounts[acct[0]] = creds
-            for sup in supervisor:
-                u.supervisor.insert(*sup)
-            for cosup in cosupervisors:
-                u.co_supervisors.insert(*cosup)
-            for uname in github_username:
-                u.github_username.insert(*uname)
-            for profile in google_scholar_profile:
-                u.google_scholar_profile.insert(*profile)
+
+        u._finalize = _finalize
+
         return u
 
     def add_user(self, **kwargs) -> UserDB:
@@ -211,6 +209,12 @@ class UserFactory:
 def create_users(user_factory=None) -> Iterable[UserDB]:
     if user_factory is None:
         user_factory = UserFactory()
+
+    def _sups(*supervisors):
+        return [
+            SupervisorsHelper(pos=i + 1, supervisor=s)
+            for i, s in enumerate(supervisors)
+        ]
 
     prof1 = user_factory.add_user(
         id=1,
@@ -245,9 +249,9 @@ def create_users(user_factory=None) -> Iterable[UserDB]:
             ),
         ],
         accounts=[("mila", "smithj", datetime(2018, 9, 1, tzinfo=dt.UTC))],
-        supervisor=[
+        supervisors=[
             (
-                prof1.id,
+                _sups(prof1.id),
                 datetime(2018, 9, 1, tzinfo=dt.UTC),
                 datetime(2021, 5, 1, tzinfo=dt.UTC),
             )
@@ -273,7 +277,7 @@ def create_users(user_factory=None) -> Iterable[UserDB]:
             )
         ],
     )
-    user_factory.add_user(id=4, supervisor=[(prof2.id, None, None)])
+    user_factory.add_user(id=4, supervisors=[(_sups(prof2.id), None, None)])
     user_factory.add_user(
         id=5,
         match_ids={"test_match": "cinq", "test1": "aaa"},
@@ -306,16 +310,9 @@ def create_users(user_factory=None) -> Iterable[UserDB]:
                 datetime(2023, 1, 1, tzinfo=dt.UTC),
             )
         ],
-        supervisor=[
+        supervisors=[
             (
-                prof1.id,
-                datetime(2022, 1, 1, tzinfo=dt.UTC),
-                datetime(2023, 1, 1, tzinfo=dt.UTC),
-            )
-        ],
-        cosupervisors=[
-            (
-                {prof2.id},
+                _sups(prof1.id, prof2.id),
                 datetime(2022, 1, 1, tzinfo=dt.UTC),
                 datetime(2023, 1, 1, tzinfo=dt.UTC),
             )
@@ -356,16 +353,9 @@ def create_users(user_factory=None) -> Iterable[UserDB]:
             ),
             ("cluster", "user"),
         ],
-        supervisor=[
+        supervisors=[
             (
-                prof2.id,
-                datetime(2022, 1, 1, tzinfo=dt.UTC),
-                datetime(2023, 1, 1, tzinfo=dt.UTC),
-            )
-        ],
-        cosupervisors=[
-            (
-                {prof1.id},
+                _sups(prof2.id, prof1.id),
                 datetime(2022, 1, 1, tzinfo=dt.UTC),
                 datetime(2023, 1, 1, tzinfo=dt.UTC),
             )
@@ -485,39 +475,6 @@ def create_jobs(
     )
 
     return job_factory.jobs
-
-
-# def create_cluster_entries():
-#     """Generate cluster entries to fill collection `clusters`."""
-
-#     # Get all cluster names from scraping config test file
-#     cluster_names = sorted(config("scraping").clusters.keys())
-
-#     cluster_entries = []
-
-#     for i, cluster_name in enumerate(cluster_names):
-#         cluster_end_time = end_time - timedelta(days=i)
-#         cluster_start_time = cluster_end_time - timedelta(days=1)
-#         if cluster_name == "patate":
-#             # Make end_time_sacct older than end_time_prometheus
-#             end_time_sacct = cluster_end_time - timedelta(minutes=300)
-#         else:
-#             # By default, end_time_sacct is more recent than end_time_prometheus,
-#             # so that prometheus metrics will be scraped up to this date
-#             # for auto-interval scraping.
-#             end_time_sacct = cluster_end_time + timedelta(minutes=300)
-#         cluster_entries.append(
-#             SlurmClusterDB(
-#                 id=i,
-#                 domain=cluster_name,
-#                 cluster_name=cluster_name,
-#                 start_date=cluster_start_time.date(),
-#                 end_time_sacct=end_time_sacct,
-#                 end_time_prometheus=cluster_end_time,
-#                 billing_is_gpu=True if cluster_name == "mila" else False,
-#             )
-#         )
-#     return cluster_entries
 
 
 def create_gpu_billings(clusters: list[SlurmClusterDB]) -> list[GPUBillingDB]:
