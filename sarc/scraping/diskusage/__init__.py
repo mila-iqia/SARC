@@ -2,9 +2,31 @@ from importlib.metadata import entry_points
 from typing import Any, Protocol, Type
 
 from fabric import Connection
+from pydantic import BaseModel, ByteSize
 from serieux import deserialize
 
-from sarc.core.models.diskusage import DiskUsage
+from sarc.core.models.validators import datetime_utc
+
+
+class DiskUsageUser(BaseModel):
+    user: str
+    nbr_files: int
+    size: ByteSize
+
+
+class DiskUsageGroup(BaseModel):
+    group_name: str
+    users: list[DiskUsageUser]
+
+
+class DiskUsage(BaseModel):
+    """
+    Disk usage on a given cluster
+    """
+
+    cluster_name: str
+    groups: list[DiskUsageGroup]
+    timestamp: datetime_utc
 
 
 class DiskUsageScraper[T](Protocol):
@@ -37,3 +59,6 @@ def get_diskusage_scraper(name: str) -> DiskUsageScraper:
         pass
     val = _diskusage_scrapers[name]
     return val.load()
+
+
+from . import drac  # noqa: E402, F401

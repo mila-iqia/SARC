@@ -2,8 +2,8 @@ import itertools
 from datetime import datetime, timedelta
 
 import pytest
-
 from sarc.client.job import SlurmJob
+
 from sarc.config import UTC
 from sarc.jobs.series import get_job_time_series_data
 from tests.common.dateutils import MTL
@@ -12,8 +12,6 @@ from .factory import JobFactory
 
 mtl_test_time = datetime(2023, 3, 5, 6, 0, tzinfo=MTL)
 utc_test_time = mtl_test_time.astimezone(UTC)
-
-test_time_str = utc_test_time.strftime("%Y-%m-%dT%H:%M %Z")
 
 
 @pytest.fixture
@@ -55,7 +53,7 @@ parameters = {
 }
 
 
-@pytest.mark.freeze_time(test_time_str)
+@pytest.mark.time_machine(utc_test_time, tick=False)
 @pytest.mark.parametrize(
     "job", parameters.values(), ids=parameters.keys(), indirect=True
 )
@@ -83,7 +81,7 @@ no_duration_parameters = {
 }
 
 
-@pytest.mark.freeze_time(test_time_str)
+@pytest.mark.time_machine(utc_test_time, tick=False)
 @pytest.mark.usefixtures("base_config")
 @pytest.mark.parametrize(
     "job",
@@ -95,7 +93,7 @@ def test_jobs_with_no_duration(job):
     assert get_job_time_series_data(job, "slurm_job_core_usage") == []
 
 
-@pytest.mark.freeze_time(test_time_str)
+@pytest.mark.time_machine(utc_test_time, tick=False)
 @pytest.mark.parametrize(
     "measure,aggregation",
     itertools.product(
@@ -120,7 +118,7 @@ def test_invalid_aggregation(job):
         )
 
 
-@pytest.mark.freeze_time(test_time_str)
+@pytest.mark.time_machine(utc_test_time, tick=False)
 @pytest.mark.parametrize(
     "min_interval,max_points",
     [

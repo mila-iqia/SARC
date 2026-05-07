@@ -52,7 +52,6 @@ dev = [
     "pytest-cov>=7,<8",
     "pytest-regressions>=2.7.0,<3,!=2.8.1",
     "tox>=4.25.0,<5",
-    "pytest-freezegun>=0.4.2,<0.5",
     "fabric[testing]>=3.0.0,<4",
     "pytest-timeout>=2.1.0,<3",
     "pytest-custom-exit-code>=0.3.0,<0.4",

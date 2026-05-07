@@ -29,7 +29,7 @@ class TestMyMilaScraper(UserPluginTester):
         database="test-database",
     )
 
-    @pytest.mark.freeze_time("2024-10-01")
+    @pytest.mark.time_machine("2024-10-01T00:00+00:00", tick=False)
     def test_fetch_data(self, data_regression, patch_return_values):
         patch_return_values({"sarc.users.mymila._query_mymila": fake_mymila_data(10)})
         data = self.plugin.get_user_data(self.parsed_config)
@@ -38,7 +38,7 @@ class TestMyMilaScraper(UserPluginTester):
         #    f.write(data)
         data_regression.check(json.loads(data.decode()))
 
-    @pytest.mark.freeze_time("2024-10-01")
+    @pytest.mark.time_machine("2024-10-01T00:00+00:00", tick=False)
     @pytest.mark.parametrize("raw_file", ["mymila1.cache"])
     def test_parse_data(self, raw_file, data_regression):
         with open(Path(__file__).parent / "inputs" / raw_file, "rb") as f:

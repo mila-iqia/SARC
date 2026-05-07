@@ -1,14 +1,14 @@
 from pathlib import Path
 
 import pytest
-
-from sarc.config import config
 from sarc.core.scraping.diskusage import get_diskusage_scraper
 from sarc.storage.diskusage import get_diskusages
 
+from sarc.config import config
+
 
 @pytest.mark.usefixtures("no_pkey")
-@pytest.mark.freeze_time("2023-07-25")
+@pytest.mark.time_machine("2023-07-25T00:00+00:00", tick=False)
 def test_drac_fetch_report(remote, file_regression, monkeypatch):
     cluster = config("scraping").clusters["gerudo"]
     diskusages = cluster.diskusage
@@ -47,7 +47,7 @@ def test_drac_parse_report(file_regression):
 
 
 @pytest.mark.usefixtures("empty_read_write_db", "no_pkey")
-@pytest.mark.freeze_time("2023-05-12")
+@pytest.mark.time_machine("2023-05-12T00:00+00:00", tick=False)
 def test_drac_acquire_storages(
     remote, cli_main, file_regression, enabled_cache, monkeypatch
 ):

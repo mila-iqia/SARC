@@ -12,9 +12,15 @@ from typing import cast
 from fabric import Connection
 from pydantic import ByteSize
 
-from sarc.core.models.diskusage import DiskUsage, DiskUsageGroup, DiskUsageUser
 from sarc.core.utils import run_command
-from sarc.scraping.diskusage import DiskUsageScraper, _builtin_scrapers
+
+from . import (
+    DiskUsage,
+    DiskUsageGroup,
+    DiskUsageScraper,
+    DiskUsageUser,
+    _builtin_scrapers,
+)
 
 logger = logging.getLogger(__name__)
 

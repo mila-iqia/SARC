@@ -797,7 +797,7 @@ def _get_cluster_raisin():
 
 
 @pytest.mark.usefixtures("read_write_db", "enabled_cache")
-def test_auto_interval(cli_main, monkeypatch, freezer, caplog):
+def test_auto_interval(cli_main, monkeypatch, time_machine, caplog):
     """Test auto_interval and check updated end time."""
 
     def mock_fetch_raw(*args, **kwargs):
@@ -814,7 +814,7 @@ def test_auto_interval(cli_main, monkeypatch, freezer, caplog):
         _get_cluster_raisin().end_time_sacct, "%Y-%m-%dT%H:%M"
     )
     expected_final_end_time = orig_end_time + timedelta(minutes=300)
-    freezer.move_to(orig_end_time + timedelta(minutes=301))
+    time_machine.move_to(orig_end_time + timedelta(minutes=301), tick=False)
 
     assert (
         cli_main(
@@ -840,9 +840,8 @@ def test_auto_interval(cli_main, monkeypatch, freezer, caplog):
     assert mock_fetch_raw.called == 5
 
 
-@pytest.mark.freeze_time
 @pytest.mark.usefixtures("read_write_db", "enabled_cache")
-def test_auto_interval_0(cli_main, monkeypatch, freezer, caplog):
+def test_auto_interval_0(cli_main, monkeypatch, time_machine, caplog):
     """Test auto_interval with unique interval and check generated cache files."""
 
     def mock_fetch_raw(*args, **kwargs):
@@ -859,7 +858,7 @@ def test_auto_interval_0(cli_main, monkeypatch, freezer, caplog):
         _get_cluster_raisin().end_time_sacct, "%Y-%m-%dT%H:%M"
     )
     expected_final_end_time = orig_end_time + timedelta(minutes=300)
-    freezer.move_to(expected_final_end_time)
+    time_machine.move_to(expected_final_end_time, tick=False)
 
     assert (
         cli_main(

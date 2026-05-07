@@ -5,16 +5,18 @@ import pytest
 from fabric.testing.base import Command
 from sqlmodel import Session, select
 
+from sarc.cli import main
 from sarc.db.cluster import SlurmClusterDB
 from sarc.db.diskusage import DiskUsageDB
+from sarc.scraping.diskusage import DiskUsage
 
 FOLDER = os.path.dirname(os.path.abspath(__file__))
 
 
 @pytest.mark.usefixtures("enabled_cache", "no_pkey")
-@pytest.mark.freeze_time("2023-05-12")
+@pytest.mark.time_machine("2023-05-12T00:00+00:00", tick=False)
 def test_update_drac_diskusage_one(
-    file_regression, cli_main, remote, empty_read_write_db: Session
+    file_regression, remote, empty_read_write_db: Session
 ):
     assert (
         len(
@@ -38,9 +40,8 @@ def test_update_drac_diskusage_one(
         cmd="diskusage_report --project --all_users",
         out=str.encode(raw_report),
     )
-
-    cli_main(["fetch", "diskusage", "-c", "gerudo"])
-    cli_main(["parse", "diskusage", "--from", "2023-05-11"])
+    main(["fetch", "diskusage", "-c", "gerudo"])
+    main(["parse", "diskusage", "--from", "2023-05-11"])
 
     data = empty_read_write_db.exec(
         select(DiskUsageDB)
@@ -48,14 +49,12 @@ def test_update_drac_diskusage_one(
         .where(SlurmClusterDB.name.in_(["gerudo", "hyrule"]))
     ).all()
     assert len(data) == 1
-    file_regression.check(data[0].model_dump_json(exclude={"id": True}, indent=4))
+    file_regression.check(data[0].model_dump_json(exclude={"id"}, indent=4))
 
 
 @pytest.mark.usefixtures("enabled_cache", "no_pkey")
-@pytest.mark.freeze_time("2023-05-12", auto_tick_seconds=1)
-def test_update_drac_diskusage_two(
-    file_regression, cli_main, remote, empty_read_write_db
-):
+@pytest.mark.time_machine("2023-05-12T00:00+00:00")
+def test_update_drac_diskusage_two(file_regression, remote, empty_read_write_db):
     assert (
         len(
             empty_read_write_db.exec(
@@ -90,9 +89,9 @@ def test_update_drac_diskusage_two(
         ),
     )
 
-    cli_main(["fetch", "diskusage", "-c", "gerudo"])
-    cli_main(["fetch", "diskusage", "-c", "hyrule"])
-    cli_main(["parse", "diskusage", "--from", "2023-05-11"])
+    main(["fetch", "diskusage", "-c", "gerudo"])
+    main(["fetch", "diskusage", "-c", "hyrule"])
+    main(["parse", "diskusage", "--from", "2023-05-11"])
     data = empty_read_write_db.exec(
         select(DiskUsageDB)
         .join(SlurmClusterDB, SlurmClusterDB.id == DiskUsageDB.cluster_id)
@@ -109,9 +108,9 @@ def test_update_drac_diskusage_two(
 
 
 @pytest.mark.usefixtures("enabled_cache", "no_pkey")
-@pytest.mark.freeze_time("2023-05-12", auto_tick_seconds=1)
+@pytest.mark.time_machine("2023-05-12T00:00+00:00")
 def test_update_drac_diskusage_no_duplicate(
-    file_regression, cli_main, remote, empty_read_write_db
+    file_regression, remote, empty_read_write_db
 ):
     assert (
         len(
@@ -142,9 +141,9 @@ def test_update_drac_diskusage_no_duplicate(
         ],
     )
 
-    cli_main(["fetch", "diskusage", "-c", "gerudo"])
-    cli_main(["fetch", "diskusage", "-c", "gerudo"])
-    cli_main(["parse", "diskusage", "--from", "2023-05-11"])
+    main(["fetch", "diskusage", "-c", "gerudo"])
+    main(["fetch", "diskusage", "-c", "gerudo"])
+    main(["parse", "diskusage", "--from", "2023-05-11"])
 
     data = empty_read_write_db.exec(
         select(DiskUsageDB)

@@ -11,7 +11,7 @@ from sarc.db.cluster import SlurmClusterDB
 FOLDER = os.path.dirname(os.path.abspath(__file__))
 
 
-@pytest.mark.freeze_time("2023-02-15")
+@pytest.mark.time_machine("2023-02-15T00:00+00:00", tick=False)
 @pytest.mark.usefixtures("enabled_cache")
 def test_update_allocations(data_regression, empty_read_write_db: Session):
     assert (
@@ -37,7 +37,7 @@ def test_update_allocations(data_regression, empty_read_write_db: Session):
     )
 
 
-@pytest.mark.freeze_time("2023-02-15")
+@pytest.mark.time_machine("2023-02-15T00:00+00:00", tick=False)
 @pytest.mark.usefixtures("enabled_cache")
 def test_update_allocations_no_duplicates(
     data_regression, empty_read_write_db: Session
@@ -72,7 +72,7 @@ def test_update_allocations_no_duplicates(
     )
 
 
-@pytest.mark.freeze_time("2023-02-15")
+@pytest.mark.time_machine("2023-02-15T00:00+00:00", tick=False)
 @pytest.mark.usefixtures("enabled_cache")
 def test_update_allocations_invalid_with_some_valid(
     data_regression, empty_read_write_db
@@ -107,7 +107,7 @@ def test_update_allocations_invalid_with_some_valid(
     )
 
 
-@pytest.mark.freeze_time("2023-02-14")
+@pytest.mark.time_machine("2023-02-14T00:00+00:00", tick=False)
 @pytest.mark.usefixtures("enabled_cache")
 def test_update_allocations_invalid_error_msg(caplog, empty_read_write_db):
     assert (

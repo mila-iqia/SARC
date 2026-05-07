@@ -1,28 +1,29 @@
 {
-    "cluster_name": "gerudo",
+    "cluster_id": 2,
+    "timestamp": "2023-05-12T00:00:00Z",
     "groups": [
         {
             "group_name": "rrg-bengioy-ad",
             "users": [
                 {
                     "user": "revali",
-                    "nbr_files": 2,
-                    "size": 0
+                    "size": 0,
+                    "nbr_files": 2
                 },
                 {
                     "user": "urbosa",
-                    "nbr_files": 2,
-                    "size": 0
+                    "size": 0,
+                    "nbr_files": 2
                 },
                 {
                     "user": "daruk",
-                    "nbr_files": 50,
-                    "size": 14484777205
+                    "size": 14484777205,
+                    "nbr_files": 50
                 },
                 {
                     "user": "mipha",
-                    "nbr_files": 2,
-                    "size": 0
+                    "size": 0,
+                    "nbr_files": 2
                 }
             ]
         },
@@ -31,31 +32,30 @@
             "users": [
                 {
                     "user": "riju",
-                    "nbr_files": 47085,
-                    "size": 4509715660
+                    "size": 4509715660,
+                    "nbr_files": 47085
                 },
                 {
                     "user": "grosaillieh",
-                    "nbr_files": 2,
-                    "size": 0
+                    "size": 0,
+                    "nbr_files": 2
                 },
                 {
                     "user": "bourgette",
-                    "nbr_files": 2,
-                    "size": 0
+                    "size": 0,
+                    "nbr_files": 2
                 },
                 {
                     "user": "kohga",
-                    "nbr_files": 2,
-                    "size": 0
+                    "size": 0,
+                    "nbr_files": 2
                 },
                 {
                     "user": "rhoam",
-                    "nbr_files": 2,
-                    "size": 0
+                    "size": 0,
+                    "nbr_files": 2
                 }
             ]
         }
-    ],
-    "timestamp": "2023-05-12T00:00:00Z"
+    ]
 }

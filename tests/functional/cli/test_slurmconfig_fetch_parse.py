@@ -84,7 +84,9 @@ DATE_2020_05_01_MTL = datetime(2020, 5, 1, tzinfo=MTL)
 
 
 @pytest.mark.usefixtures("read_only_db", "enabled_cache", "no_pkey")
-def test_fetch_slurmconfig(cli_main, test_config, remote, caplog, freezer, monkeypatch):
+def test_fetch_slurmconfig(
+    cli_main, test_config, remote, caplog, time_machine, monkeypatch
+):
     """Test slurm conf file downloading using `fetch slurmconfig`."""
     caplog.set_level(logging.INFO)
 
@@ -121,7 +123,7 @@ def test_fetch_slurmconfig(cli_main, test_config, remote, caplog, freezer, monke
     )
 
     # Should download from current day
-    freezer.move_to(DATE_2020_01_01_MTL)
+    time_machine.move_to(DATE_2020_01_01_MTL, tick=False)
     assert cli_main(["fetch", "slurmconfig", "-c", "raisin"]) == 0
 
     # Only file matching current day should exist
@@ -134,7 +136,7 @@ def test_fetch_slurmconfig(cli_main, test_config, remote, caplog, freezer, monke
     caplog.clear()
 
     # Now move to another day and download again
-    freezer.move_to(DATE_2020_05_01_MTL)
+    time_machine.move_to(DATE_2020_05_01_MTL, tick=False)
     assert cli_main(["fetch", "slurmconfig", "-c", "raisin"]) == 0
 
     # Now we must have both files for the two tested days
@@ -150,7 +152,7 @@ def test_fetch_slurmconfig(cli_main, test_config, remote, caplog, freezer, monke
         assert blob.decode("utf-8") == SLURM_CONF_RAISIN_2020_05_01
 
 
-@pytest.mark.freeze_time(DATE_2020_01_01_MTL)
+@pytest.mark.time_machine(DATE_2020_01_01_MTL, tick=False)
 @pytest.mark.usefixtures("enabled_cache", "no_pkey")
 def test_fetch_slurmconfig_no_change(
     cli_main, test_config, remote, caplog, monkeypatch

@@ -6,7 +6,8 @@ from simple_parsing import field
 
 from sarc.cache import Cache
 from sarc.config import config
-from sarc.db.diskusage import DiskUsageDB
+from sarc.db.cluster import SlurmClusterDB
+from sarc.db.diskusage import DiskUsageDB, DiskUsageGroupDB, DiskUsageUserDB
 from sarc.scraping.diskusage import get_diskusage_scraper
 
 logger = logging.getLogger(__name__)
@@ -31,11 +32,28 @@ class ParseDiskUsage:
             for ce in cache.read_from(ts):
                 for item in ce.items():
                     scraper = get_diskusage_scraper(item[0])
-                    sess.add(
-                        DiskUsageDB.model_validate(
-                            scraper.parse_diskusage_report(item[1])
-                        )
+                    obj = scraper.parse_diskusage_report(item[1])
+                    cluster_name = obj.cluster_name
+                    db_obj = DiskUsageDB(
+                        cluster_id=SlurmClusterDB.id_by_name(sess, cluster_name),
+                        timestamp=obj.timestamp,
                     )
+
+                    groups = []
+                    for group in obj.groups:
+                        db_group = DiskUsageGroupDB(group_name=group.group_name)
+                        users = []
+                        for user in group.users:
+                            db_user = DiskUsageUserDB(
+                                user=user.user, nbr_files=user.nbr_files, size=user.size
+                            )
+                            users.append(db_user)
+                        db_group.users = users
+                        groups.append(db_group)
+                    db_obj.groups = groups
+
+                    sess.add(db_obj)
+
                 sess.flush()
             sess.commit()
 
