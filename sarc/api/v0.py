@@ -1,12 +1,11 @@
 from collections.abc import Generator
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Annotated, Self
+from typing import Annotated
 
 from easy_oauth.cap import Capability
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import AfterValidator, BaseModel, Field
-from pydantic.functional_validators import model_validator
 from serieux import deserialize
 from sqlalchemy.dialects.postgresql import Range
 from sqlalchemy.orm import Mapped
@@ -119,96 +118,42 @@ def validate_cluster(sess: Session, cluster: str | None):
         )
 
 
-class PageOptions(BaseModel):
-    page: int | None = Field(default=None, ge=1)
-    last_id: int | None = None
-    per_page: int = Field(default=100, le=100, ge=1)
+class ListOptions(BaseModel):
+    limit: int = Field(default=100, ge=1, le=100)
+    cursor: int | str | None = None
 
-    @model_validator(mode="after")
-    def only_one(self) -> Self:
-        if self.page is not None and self.last_id is not None:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail="Use only one of last_id and page",
-            )
-        return self
-
-    def add_page_options[T](
-        self, query: SelectOfScalar[T], id_col: Mapped[int]
+    def add_list_options[T](
+        self,
+        query: SelectOfScalar[T],
+        id_col: Mapped[int],
+        time_col: Mapped[datetime] | None,
     ) -> SelectOfScalar[T]:
-        query = query.order_by(id_col).limit(self.per_page)
-        if self.page is not None:
-            if self.page > 1:
-                query = query.offset((self.page - 1) * self.per_page)
-        elif self.last_id is not None:
-            query = query.where(id_col > self.last_id)
-        # Otherwise we are on the first page, so no need for additional things
-        return query
-
-
-class PageOptionsWithTime(BaseModel):
-    page: int | None = Field(default=None, ge=1)
-    last_id: int | None = None
-    last_time: datetime | None = None
-    per_page: int = Field(default=100, le=100, ge=1)
-
-    @model_validator(mode="after")
-    def only_one(self) -> Self:
-        if self.page is not None and self.last_id is not None:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail="Use only one of last_id and page",
-            )
-        return self
-
-    @model_validator(mode="after")
-    def check_id_time(self) -> Self:
-        if (self.last_id is not None) ^ (self.last_time is not None):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="You must specify both last_id and last_time or none of them",
-            )
-        return self
-
-    def add_page_options[T](
-        self, query: SelectOfScalar[T], id_col: Mapped[int], time_col: Mapped[datetime]
-    ) -> SelectOfScalar[T]:
-        query = query.order_by(time_col, id_col).limit(self.per_page)
-        if self.page is not None:
-            if self.page > 1:
-                query = query.offset((self.page - 1) * self.per_page)
-        elif self.last_id is not None:
-            query = query.where(
-                or_(
-                    time_col > self.last_time,
-                    and_(time_col == self.last_time, id_col > self.last_id),
+        query = query.limit(self.limit)
+        if time_col:
+            query = query.order_by(time_col.desc())
+        query = query.order_by(id_col)
+        if isinstance(self.cursor, int):
+            query = query.offset(self.cursor)
+        elif self.cursor:
+            if time_col:
+                id_val, _, time_val = self.cursor.partition(";")
+                id_val = int(id_val)
+                time_val = datetime.fromisoformat(time_val)
+                query = query.where(
+                    or_(
+                        time_col < time_val, and_(time_col == time_val, id_col > id_val)
+                    )
                 )
-            )
-        # Otherwise we are on the first page, so no need for additional things
+            else:
+                query = query.where(id_col > int(self.cursor))
         return query
 
 
-def page_options(
-    page: int | None = None, last_id: int | None = None, per_page: int = 100
-) -> PageOptions:
-    return PageOptions(page=page, last_id=last_id, per_page=per_page)
+def list_options(limit: int = 100, cursor: int | str | None = None) -> ListOptions:
+    return ListOptions(limit=limit, cursor=cursor)
 
 
-def page_options_with_time(
-    page: int | None = None,
-    last_id: int | None = None,
-    last_time: datetime | None = None,
-    per_page: int = 100,
-) -> PageOptionsWithTime:
-    return PageOptionsWithTime(
-        page=page, last_id=last_id, last_time=last_time, per_page=per_page
-    )
-
-
-PageOptionsType = Annotated[PageOptions, Depends(page_options)]
-PageOptionsWithTimeType = Annotated[
-    PageOptionsWithTime, Depends(page_options_with_time)
-]
+ListOptionsType = Annotated[ListOptions, Depends(list_options)]
 
 
 class JobQuery(BaseModel):
@@ -345,33 +290,29 @@ class UserQuery(BaseModel):
 UserQueryType = Annotated[UserQuery, Depends(UserQuery)]
 
 
-@router.get("/job/list")
-def list_jobs(
+@router.get("/job/query")
+def query_jobs(
     query_opt: JobQueryType,
-    page_opt: PageOptionsWithTimeType,
+    list_opt: ListOptionsType,
     sess: Session = Depends(session_dep),
 ) -> SlurmJobList:
-    query_c = query_opt.get_query(select(func.count(col(SlurmJobDB.id))))
-    total = sess.exec(query_c).one()
-
     query = query_opt.get_query(select(SlurmJobDB))
-    query = page_opt.add_page_options(
+    query = list_opt.add_list_options(
         query,
         col(SlurmJobDB.id),  # type: ignore [arg-type]
         col(SlurmJobDB.submit_time),
     )
 
     jobs = [SlurmJob.model_validate(doc.model_dump()) for doc in sess.exec(query)]
-    last_job = jobs[-1] if jobs else None
 
-    return SlurmJobList(
-        jobs=jobs,
-        page=page_opt.page,
-        last_id=last_job and last_job.id,
-        last_time=last_job and last_job.submit_time,
-        per_page=page_opt.per_page,
-        total=total,
-    )
+    if len(jobs) < list_opt.limit:
+        # There are no more results (note: limit > 0)
+        cursor = False
+    else:
+        last = jobs[-1]
+        cursor = f"{last.id};{last.submit_time.isoformat()}"
+
+    return SlurmJobList(results=jobs, cursor=cursor)
 
 
 @router.get("/job/count")
@@ -405,29 +346,25 @@ def get_rgu_value_per_gpu() -> dict[str, float]:
     return get_rgus()
 
 
-@router.get("/user/list")
-def list_users(
+@router.get("/user/query")
+def query_users(
     query_opt: UserQueryType,
-    page_opt: PageOptionsType,
+    list_opt: ListOptionsType,
     sess: Session = Depends(session_dep),
 ) -> UserList:
-    query_c = query_opt.get_query(select(func.count(col(UserDB.id))))
-    total = sess.exec(query_c).one()
-
     query = query_opt.get_query(select(UserDB))
-    query = page_opt.add_page_options(query, col(UserDB.id))  # type: ignore [arg-type]
+    query = list_opt.add_list_options(query, col(UserDB.id), None)  # type: ignore [arg-type]
 
     results = list(sess.exec(query))
     users = [User.model_validate(doc.model_dump()) for doc in results]
-    last_user = users[-1] if users else None
 
-    return UserList(
-        users=users,
-        page=page_opt.page,
-        last_id=last_user and last_user.id,
-        per_page=page_opt.per_page,
-        total=total,
-    )
+    if len(users) < list_opt.limit:
+        # There are no more results (note: limit > 0)
+        cursor = False
+    else:
+        cursor = str(users[-1].id)
+
+    return UserList(results=users, cursor=cursor)
 
 
 @router.get("/user/id/{id}", dependencies=[Depends(require_admin)])
