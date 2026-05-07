@@ -1,9 +1,7 @@
-from __future__ import annotations
-
 import copy
 import datetime as dt
 from collections.abc import Iterable
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from sarc.config import UTC
 from sarc.db.allocation import AllocationDB
@@ -548,7 +546,7 @@ def create_diskusages() -> list[DiskUsageDB]:
 
 def create_allocations(clusters: list[SlurmClusterDB]) -> list[AllocationDB]:
     cluster_by_name = {c.name: c for c in clusters}
-    ts = datetime(year=2023, month=2, day=1)
+    ts = datetime(year=2023, month=2, day=1, tzinfo=UTC)
     fromage = cluster_by_name["fromage"].id
     patate = cluster_by_name["patate"].id
     return [
@@ -557,8 +555,8 @@ def create_allocations(clusters: list[SlurmClusterDB]) -> list[AllocationDB]:
             resource_name="fromage-gpu",
             group_name="rrg-bonhomme-ad",
             timestamp=ts,
-            start=datetime(year=2017, month=4, day=1),
-            end=datetime(year=2018, month=4, day=1),
+            start=date(year=2017, month=4, day=1),
+            end=date(year=2018, month=4, day=1),
             gpu_year=100,
             rgu_year=400,
         ),
