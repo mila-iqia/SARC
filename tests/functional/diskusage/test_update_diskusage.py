@@ -2,19 +2,30 @@ import os
 from pathlib import Path
 
 import pytest
-from fabric.testing.base import Command, Session
+from fabric.testing.base import Command
+from sqlmodel import Session, select
 
-from sarc.storage.diskusage import get_diskusages
+from sarc.db.cluster import SlurmClusterDB
+from sarc.db.diskusage import DiskUsageDB
 
 FOLDER = os.path.dirname(os.path.abspath(__file__))
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "no_pkey")
+@pytest.mark.usefixtures("enabled_cache", "no_pkey")
 @pytest.mark.freeze_time("2023-05-12")
 def test_update_drac_diskusage_one(
-    file_regression, cli_main, remote, enabled_cache, monkeypatch
+    file_regression, cli_main, remote, empty_read_write_db: Session
 ):
-    assert get_diskusages(cluster_name=["gerudo", "hyrule"]) == []
+    assert (
+        len(
+            empty_read_write_db.exec(
+                select(DiskUsageDB)
+                .join(SlurmClusterDB, SlurmClusterDB.id == DiskUsageDB.cluster_id)
+                .where(SlurmClusterDB.name.in_(["gerudo", "hyrule"]))
+            ).all()
+        )
+        == 0
+    )
 
     # Load the expected report content
     report_path = Path(FOLDER) / "drac_reports/report_gerudo.txt"
@@ -31,17 +42,30 @@ def test_update_drac_diskusage_one(
     cli_main(["fetch", "diskusage", "-c", "gerudo"])
     cli_main(["parse", "diskusage", "--from", "2023-05-11"])
 
-    data = get_diskusages(cluster_name=["gerudo", "hyrule"])
+    data = empty_read_write_db.exec(
+        select(DiskUsageDB)
+        .join(SlurmClusterDB, SlurmClusterDB.id == DiskUsageDB.cluster_id)
+        .where(SlurmClusterDB.name.in_(["gerudo", "hyrule"]))
+    ).all()
     assert len(data) == 1
     file_regression.check(data[0].model_dump_json(exclude={"id": True}, indent=4))
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "no_pkey")
+@pytest.mark.usefixtures("enabled_cache", "no_pkey")
 @pytest.mark.freeze_time("2023-05-12", auto_tick_seconds=1)
 def test_update_drac_diskusage_two(
-    file_regression, cli_main, remote, enabled_cache, monkeypatch
+    file_regression, cli_main, remote, empty_read_write_db
 ):
-    assert get_diskusages(cluster_name=["gerudo", "hyrule"]) == []
+    assert (
+        len(
+            empty_read_write_db.exec(
+                select(DiskUsageDB)
+                .join(SlurmClusterDB, SlurmClusterDB.id == DiskUsageDB.cluster_id)
+                .where(SlurmClusterDB.name.in_(["gerudo", "hyrule"]))
+            ).all()
+        )
+        == 0
+    )
 
     # Load both report contents
     gerudo_report_path = Path(FOLDER) / "drac_reports/report_gerudo.txt"
@@ -69,7 +93,11 @@ def test_update_drac_diskusage_two(
     cli_main(["fetch", "diskusage", "-c", "gerudo"])
     cli_main(["fetch", "diskusage", "-c", "hyrule"])
     cli_main(["parse", "diskusage", "--from", "2023-05-11"])
-    data = get_diskusages(cluster_name=["gerudo", "hyrule"])
+    data = empty_read_write_db.exec(
+        select(DiskUsageDB)
+        .join(SlurmClusterDB, SlurmClusterDB.id == DiskUsageDB.cluster_id)
+        .where(SlurmClusterDB.name.in_(["gerudo", "hyrule"]))
+    ).all()
     assert len(data) == 2
     data_json = "\n".join(
         [
@@ -80,12 +108,21 @@ def test_update_drac_diskusage_two(
     file_regression.check(data_json)
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "no_pkey")
+@pytest.mark.usefixtures("enabled_cache", "no_pkey")
 @pytest.mark.freeze_time("2023-05-12", auto_tick_seconds=1)
 def test_update_drac_diskusage_no_duplicate(
-    file_regression, cli_main, remote, enabled_cache, monkeypatch
+    file_regression, cli_main, remote, empty_read_write_db
 ):
-    assert get_diskusages(cluster_name=["gerudo", "hyrule"]) == []
+    assert (
+        len(
+            empty_read_write_db.exec(
+                select(DiskUsageDB)
+                .join(SlurmClusterDB, SlurmClusterDB.id == DiskUsageDB.cluster_id)
+                .where(SlurmClusterDB.name.in_(["gerudo", "hyrule"]))
+            ).all()
+        )
+        == 0
+    )
 
     # Load the expected report content
     report_path = Path(FOLDER) / "drac_reports/report_gerudo.txt"
@@ -109,6 +146,10 @@ def test_update_drac_diskusage_no_duplicate(
     cli_main(["fetch", "diskusage", "-c", "gerudo"])
     cli_main(["parse", "diskusage", "--from", "2023-05-11"])
 
-    data = get_diskusages(cluster_name=["gerudo", "hyrule"])
+    data = empty_read_write_db.exec(
+        select(DiskUsageDB)
+        .join(SlurmClusterDB, SlurmClusterDB.id == DiskUsageDB.cluster_id)
+        .where(SlurmClusterDB.name.in_(["gerudo", "hyrule"]))
+    ).all()
     assert len(data) == 1
     file_regression.check(data[0].model_dump_json(exclude={"id": True}, indent=4))

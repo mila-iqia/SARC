@@ -1,1 +1,1 @@
-from . import beegfs, drac  # noqa: F401 (these import are to register the modules)
+from . import drac  # noqa: F401 (these import are to register the modules)

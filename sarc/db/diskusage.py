@@ -30,9 +30,9 @@ class DiskUsageGroupDB(SQLModel, table=True):
 
 class DiskUsageDB(SQLModel, table=True):
     __tablename__ = "diskusage_reports"
-    __table_args__ = (Index("idx_cluster_time", "cluster_name", "timestamp"),)
+    __table_args__ = (Index("idx_cluster_time", "cluster_id", "timestamp"),)
 
     id: int | None = Field(default=None, primary_key=True)
-    cluster_name: str
+    cluster_id: int = Field(foreign_key="clusters.id")
     groups: list[DiskUsageGroupDB] = Relationship()
     timestamp: date
