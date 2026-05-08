@@ -48,9 +48,9 @@ class ParseDiskUsage:
                                 user=user.user, nbr_files=user.nbr_files, size=user.size
                             )
                             users.append(db_user)
-                        db_group.users = users
+                        db_group._users = users
                         groups.append(db_group)
-                    db_obj.groups = groups
+                    db_obj._groups = groups
 
                     sess.add(db_obj)
 

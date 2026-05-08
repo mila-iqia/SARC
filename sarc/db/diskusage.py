@@ -1,20 +1,22 @@
-from collections.abc import Callable
-from typing import Any
-
-from pydantic import ByteSize, model_serializer
+from pydantic import ByteSize, computed_field
 from sqlalchemy import BigInteger
 from sqlmodel import Field, Index, Relationship
 
 from sarc.core.models.validators import datetime_utc
+from sarc.db.cluster import SlurmClusterDB
 
 from .sqlmodel import SQLModel, datetime_utc_field
 
 
 class DiskUsageUserDB(SQLModel, table=True):
     __tablename__ = "diskusage_users"
-    id: int | None = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True, exclude=True)
     group_id: int | None = Field(
-        foreign_key="diskusage_groups.id", index=True, default=None, nullable=False
+        foreign_key="diskusage_groups.id",
+        index=True,
+        default=None,
+        nullable=False,
+        exclude=True,
     )
     user: str
     nbr_files: int
@@ -23,20 +25,21 @@ class DiskUsageUserDB(SQLModel, table=True):
 
 class DiskUsageGroupDB(SQLModel, table=True):
     __tablename__ = "diskusage_groups"
-    id: int | None = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True, exclude=True)
     report_id: int | None = Field(
-        foreign_key="diskusage_reports.id", index=True, default=None, nullable=False
+        foreign_key="diskusage_reports.id",
+        index=True,
+        default=None,
+        nullable=False,
+        exclude=True,
     )
     group_name: str
-    users: list[DiskUsageUserDB] = Relationship()
+    _users: list[DiskUsageUserDB] = Relationship()
 
-    @model_serializer(mode="wrap")
-    def serialize_model(self, handler: Callable[[Any], dict]):
-        data = handler(self)
-        data["users"] = [
-            user.model_dump(exclude={"id", "group_id"}) for user in self.users
-        ]
-        return data
+    @computed_field
+    @property
+    def users(self) -> list[DiskUsageUserDB]:
+        return self._users
 
 
 class DiskUsageDB(SQLModel, table=True):
@@ -45,13 +48,11 @@ class DiskUsageDB(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     cluster_id: int = Field(foreign_key="clusters.id")
-    groups: list[DiskUsageGroupDB] = Relationship()
+    cluster: SlurmClusterDB = Relationship()
     timestamp: datetime_utc = datetime_utc_field()
+    _groups: list[DiskUsageGroupDB] = Relationship()
 
-    @model_serializer(mode="wrap")
-    def serialize_model(self, handler: Callable[[Any], dict]):
-        data = handler(self)
-        data["groups"] = [
-            group.model_dump(exclude={"id", "report_id"}) for group in self.groups
-        ]
-        return data
+    @computed_field
+    @property
+    def groups(self) -> list[DiskUsageGroupDB]:
+        return self._groups
