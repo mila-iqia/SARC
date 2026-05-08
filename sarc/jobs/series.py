@@ -280,23 +280,33 @@ def compute_job_statistics(
 
     res = dict()
     if gpu_utilization:
-        res["gpu_utilization"] = JobStatisticDB(**gpu_utilization)
+        res["gpu_utilization"] = JobStatisticDB(name="gpu_utilization", **gpu_utilization)
     if gpu_utilization_fp16:
-        res["gpu_utilization_fp16"] = JobStatisticDB(**gpu_utilization_fp16)
+        res["gpu_utilization_fp16"] = JobStatisticDB(
+            name="gpu_utilization_fp16", **gpu_utilization_fp16
+        )
     if gpu_utilization_fp32:
-        res["gpu_utilization_fp32"] = JobStatisticDB(**gpu_utilization_fp32)
+        res["gpu_utilization_fp32"] = JobStatisticDB(
+            name="gpu_utilization_fp32", **gpu_utilization_fp32
+        )
     if gpu_utilization_fp64:
-        res["gpu_utilization_fp64"] = JobStatisticDB(**gpu_utilization_fp64)
+        res["gpu_utilization_fp64"] = JobStatisticDB(
+            name="gpu_utilization_fp64", **gpu_utilization_fp64
+        )
     if gpu_sm_occupancy:
-        res["gpu_sm_occupancy"] = JobStatisticDB(**gpu_sm_occupancy)
+        res["gpu_sm_occupancy"] = JobStatisticDB(
+            name="gpu_sm_occupancy", **gpu_sm_occupancy
+        )
     if gpu_memory:
-        res["gpu_memory"] = JobStatisticDB(**gpu_memory)
+        res["gpu_memory"] = JobStatisticDB(name="gpu_memory", **gpu_memory)
     if gpu_power:
-        res["gpu_power"] = JobStatisticDB(**gpu_power)
+        res["gpu_power"] = JobStatisticDB(name="gpu_power", **gpu_power)
     if cpu_utilization:
-        res["cpu_utilization"] = JobStatisticDB(**cpu_utilization)
+        res["cpu_utilization"] = JobStatisticDB(
+            name="cpu_utilization", **cpu_utilization
+        )
     if system_memory:
-        res["system_memory"] = JobStatisticDB(**system_memory)
+        res["system_memory"] = JobStatisticDB(name="system_memory", **system_memory)
     return res
 
 

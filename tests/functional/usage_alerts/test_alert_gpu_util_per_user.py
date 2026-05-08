@@ -1,13 +1,16 @@
 import re
+from datetime import UTC, datetime
 
 import pytest
+import sqlmodel
 import time_machine
 
-from sarc.client import get_jobs
+from sarc.config import config
+from sarc.db.job import SlurmJobDB
 from sarc.jobs.series import compute_job_statistics
-from tests.functional.jobs.test_func_load_job_series import MOCK_TIME
+from tests.functional.usage_alerts.common import generate_fake_timeseries
 
-from ..jobs.test_func_job_statistics import generate_fake_timeseries
+MOCK_TIME = datetime(2023, 11, 22, tzinfo=UTC)
 
 PARAMS = [
     # Check with default params. In last 7 days from now (mock time: 2023-11-22),
@@ -35,12 +38,38 @@ PARAMS = [
     "check_name", PARAMS, ids=[f"params{i}" for i in range(len(PARAMS))]
 )
 def test_alert_gpu_util_per_user(check_name, caplog, file_regression, cli_main):
-    for job in get_jobs():
-        if job.end_time is not None:
-            stats = compute_job_statistics(job, generate_fake_timeseries(job))
-            if not stats.empty():
-                job.stored_statistics = stats
-                job.save()
+    with config().db.session() as sess:
+        for job in sess.exec(sqlmodel.select(SlurmJobDB)).all():
+            if job.end_time is not None and job.nodes:
+                stats = compute_job_statistics(job, generate_fake_timeseries(job))
+                if len(stats) != 0:
+                    job.statistics = stats
+                    sess.merge(job)
+        sess.commit()
 
     assert cli_main(["health", "run", "--check", check_name]) == 0
     file_regression.check(re.sub(r"ERROR +.+\.py:[0-9]+ +", "", caplog.text))
+
+
+@time_machine.travel(MOCK_TIME, tick=False)
+@pytest.mark.usefixtures("read_write_db", "health_config")
+def test_alert_gpu_util_per_user_no_stats(caplog, cli_main):
+    # Setup: No statistics generated for any job.
+    # The check should fail for all users who have GPU jobs.
+    assert cli_main(["health", "run", "--check", "gpu_util_per_user_1"]) == 0
+    with config().db.session() as sess:
+        users = sess.exec(sqlmodel.select(sqlmodel.distinct(SlurmJobDB.user))).all()
+        assert len(users) > 0
+        for user in users:
+            assert (
+                f"[{user}] average gpu_util cannot be computed (no statistics found for matching jobs)."
+                in caplog.text
+            )
+    assert "[gpu_util_per_user_1] FAILURE: gpu_util_per_user_1" in caplog.text
+
+
+@pytest.mark.usefixtures("empty_read_write_db", "health_config")
+def test_alert_gpu_util_per_user_empty_db(caplog, cli_main):
+    assert cli_main(["health", "run", "--check", "gpu_util_per_user_0"]) == 0
+    assert "No jobs in database" in caplog.text
+    assert "[gpu_util_per_user_0] FAILURE: gpu_util_per_user_0" in caplog.text
