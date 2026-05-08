@@ -235,7 +235,7 @@ class DbConfiguration:
             for user in users:
                 user._finalize()
 
-            jobs = create_jobs(clusters=clusters, users=users)
+            jobs = create_jobs(clusters=clusters, users=users, job_patch=self.job_patch)
             sess.add_all(jobs)
 
             sess.commit()

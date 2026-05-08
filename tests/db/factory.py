@@ -140,9 +140,16 @@ class JobFactory:
         if "sarc_user_id" not in job:
             job["sarc_user_id"] = self.users[user_name].id
 
-        instance = SlurmJobDB(**job)
         if self.job_patch:
-            instance = instance.model_copy(update=self.job_patch)
+            # Match kwargs handling: flatten nested allocated/requested into the
+            # `allocated_*`/`requested_*` fields the model actually has, and apply
+            # to `job` BEFORE constructing the instance (model_copy after the fact
+            # shares SQLAlchemy InstanceState with the original, which breaks
+            # `sess.add_all`).
+            patch = copy.deepcopy(self.job_patch)
+            patch.update(_flatten_tres(patch))
+            job.update(patch)
+        instance = SlurmJobDB(**job)
         return instance
 
     def add_job(self, **kwargs):
@@ -663,6 +670,7 @@ def create_allocations(clusters: list[SlurmClusterDB]) -> list[AllocationDB]:
             nearline="80TB",
         ),
     ]
+
 
 def extend_clusters(clusters: list[SlurmClusterDB]) -> None:
     for i, cluster in enumerate(sorted(clusters, key=lambda c: c.name)):

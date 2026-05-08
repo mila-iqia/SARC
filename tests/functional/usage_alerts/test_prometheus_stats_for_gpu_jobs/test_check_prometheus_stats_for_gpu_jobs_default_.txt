@@ -1,0 +1,2 @@
+No Prometheus data available: no job found
+[prometheus_gpu_stat_default] FAILURE: prometheus_gpu_stat_default

@@ -91,7 +91,7 @@ def check_gpu_util_per_user(
         else:
             end = datetime.now(tz=UTC)
             start = end - time_interval
-            clipped_elapsed_time = func.least(eff_end, end) - func.least(
+            clipped_elapsed_time = func.least(eff_end, end) - func.greatest(
                 eff_start, start
             )
 

@@ -97,7 +97,7 @@ def check_gpu_type_usage_per_node(
         else:
             end = datetime.now(tz=UTC)
             start = end - time_interval
-            clipped_elapsed_time = func.least(eff_end, end) - func.least(
+            clipped_elapsed_time = func.least(eff_end, end) - func.greatest(
                 eff_start, start
             )
 
