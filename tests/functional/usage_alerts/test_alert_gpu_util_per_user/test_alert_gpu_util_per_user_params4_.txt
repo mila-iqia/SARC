@@ -1,2 +1,2 @@
-[petitbonhomme] insufficient average gpu_util: 24592.909722222223 GPU-seconds; minimum required: 8:00:00 (28800.0 GPU-seconds)
+[petitbonhomme] insufficient average gpu_util: 20700.614583333336 GPU-seconds; minimum required: 8:00:00 (28800.0 GPU-seconds)
 [gpu_util_per_user_4] FAILURE: gpu_util_per_user_4

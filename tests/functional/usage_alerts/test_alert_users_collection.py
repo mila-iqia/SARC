@@ -35,9 +35,7 @@ def _get_error_logs(text: str) -> list[str]:
 def _insert_users(sess: Session, users: list[dict]):
     """Insert user documents into the users collection."""
     for u in users:
-        user = UserDB(
-            display_name=u["display_name"], email=u["email"]
-        )
+        user = UserDB(display_name=u["display_name"], email=u["email"])
         sess.add(user)
     sess.commit()
 

@@ -1,6 +1,7 @@
 # ruff: noqa: T201
 import logging
-from dataclasses import dataclass, fields as dataclass_fields
+from dataclasses import dataclass
+from dataclasses import fields as dataclass_fields
 
 from sarc.alerts.common import CheckResult, HealthCheck
 from sarc.config import config

@@ -1,10 +1,9 @@
 import re
-from datetime import datetime, UTC
 
 import pytest
 import time_machine
 
-MOCK_TIME = datetime(2023, 11, 22, tzinfo=UTC)
+from tests.functional.usage_alerts.common import MOCK_TIME
 
 PARAMETERS = {
     "default": "cluster_response_default",  # default is 7 days

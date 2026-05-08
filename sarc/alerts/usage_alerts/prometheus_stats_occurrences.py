@@ -103,14 +103,13 @@ def check_prometheus_stats_occurrences(
 
     with config().db.session() as sess:
         if not sess.exec(select(func.count(SlurmJobDB.id))).one():
-            logger.error(f"No Prometheus data available: no job found")
+            logger.error("No Prometheus data available: no job found")
             return False
 
         # Determine [start, end] and clipped elapsed time for frame iteration and comparison.
         start, end, clipped_elapsed_time = (
             SqlSymbols.convert_job_time_interval_to_sql_bounds(sess, time_interval)
         )
-
         eff_start = SqlSymbols.eff_start
         eff_end = SqlSymbols.eff_end
 
@@ -222,7 +221,7 @@ def check_prometheus_stats_occurrences(
                     f"[{cluster_name}] no Prometheus data available: no job found"
                 )
         else:
-            logger.error(f"No Prometheus data available: no job found")
+            logger.error("No Prometheus data available: no job found")
         # As there's nothing to check, we return immediately.
         return False
 

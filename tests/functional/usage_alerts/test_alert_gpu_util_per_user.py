@@ -1,5 +1,4 @@
 import re
-from datetime import UTC, datetime
 
 import pytest
 import sqlmodel
@@ -8,9 +7,7 @@ import time_machine
 from sarc.config import config
 from sarc.db.job import SlurmJobDB
 from sarc.jobs.series import compute_job_statistics
-from tests.functional.usage_alerts.common import generate_fake_timeseries
-
-MOCK_TIME = datetime(2023, 11, 22, tzinfo=UTC)
+from tests.functional.usage_alerts.common import MOCK_TIME, generate_fake_timeseries
 
 PARAMS = [
     # Check with default params. In last 7 days from now (mock time: 2023-11-22),

@@ -12,8 +12,9 @@ With MOCK_TIME = 2023-11-22T00:00:00+00:00, this job is well past its
 maximum allowed end time (~2023-02-16T05:01:00+00:00).
 No re-submitted entry exists for job_id=7.
 """
+
 import re
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime, timedelta
 
 import pytest
 import time_machine
@@ -22,9 +23,7 @@ from sqlmodel import select
 from sarc.config import config
 from sarc.db.job import SlurmJobDB
 from sarc.models.job import SlurmState
-
-MOCK_TIME = datetime(2023, 11, 22, tzinfo=UTC)
-
+from tests.functional.usage_alerts.common import MOCK_TIME
 
 PARAMETERS: dict[str, tuple[str, list[str]]] = {
     # No `since` filter: checks all RUNNING jobs => finds old RUNNING job

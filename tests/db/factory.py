@@ -141,14 +141,7 @@ class JobFactory:
             job["sarc_user_id"] = self.users[user_name].id
 
         if self.job_patch:
-            # Match kwargs handling: flatten nested allocated/requested into the
-            # `allocated_*`/`requested_*` fields the model actually has, and apply
-            # to `job` BEFORE constructing the instance (model_copy after the fact
-            # shares SQLAlchemy InstanceState with the original, which breaks
-            # `sess.add_all`).
-            patch = copy.deepcopy(self.job_patch)
-            patch.update(_flatten_tres(patch))
-            job.update(patch)
+            job.update(_flatten_tres(copy.deepcopy(self.job_patch)))
         instance = SlurmJobDB(**job)
         return instance
 

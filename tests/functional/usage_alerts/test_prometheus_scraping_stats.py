@@ -1,5 +1,4 @@
-import re
-from datetime import UTC, datetime
+import functools
 
 import pytest
 import sqlmodel
@@ -8,9 +7,20 @@ import time_machine
 from sarc.config import config
 from sarc.db.job import SlurmJobDB
 from sarc.jobs.series import compute_job_statistics
-from tests.functional.usage_alerts.common import generate_fake_timeseries
+from tests.functional.usage_alerts.common import (
+    MOCK_TIME,
+    _get_warnings,
+    generate_fake_timeseries,
+)
 
-MOCK_TIME = datetime(2023, 11, 22, tzinfo=UTC)
+get_warnings = functools.partial(
+    _get_warnings,
+    modules=[
+        "sarc.alerts.usage_alerts.prometheus_stats_occurrences:prometheus_stats_occurrences.py",
+        "sarc.alerts.common:common.py",
+    ],
+)
+
 
 PARAMS = [
     # Check with default params. In last 7 days from now (mock time: 2023-11-22),
@@ -67,4 +77,4 @@ def test_check_prometheus_scraping_stats(check_name, caplog, file_regression, cl
         sess.commit()
 
     assert cli_main(["health", "run", "--check", check_name]) == 0
-    file_regression.check(re.sub(r"ERROR +.+\.py:[0-9]+ +", "", caplog.text))
+    file_regression.check("\n".join(get_warnings(caplog.text)))

@@ -19,8 +19,7 @@ import pytest
 import time_machine
 
 from sarc.config import UTC, config
-
-MOCK_TIME = datetime(2023, 11, 22, tzinfo=UTC)
+from tests.functional.usage_alerts.common import MOCK_TIME
 
 PARAMETERS = {
     # only 7 days before now (which is MOCK_TIME), cannot see duplicates

@@ -1,11 +1,12 @@
 import logging
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 
 import sqlalchemy
-from sqlmodel import case, col, func, select
+from sqlmodel import case, func, select
 
 from sarc.alerts.common import CheckResult, HealthCheck
+from sarc.alerts.usage_alerts.alert_sql_utils import SqlSymbols
 from sarc.db.job import SlurmJobDB
 
 logger = logging.getLogger(__name__)
@@ -56,44 +57,18 @@ def check_gpu_util_per_user(
     if minimum_runtime is None:
         minimum_runtime = timedelta(seconds=0)
 
-    # Effective start_time: fall back to submit_time when the job never started.
-    eff_start = func.coalesce(SlurmJobDB.start_time, SlurmJobDB.submit_time)
-    # Effective end_time: end_time if recorded; else `start_time + elapsed_time` for jobs that started
-    # (still running or transitioning); else submit_time, so jobs that never ran
-    # (e.g. PENDING) collapse to a point at submission.
-    eff_end = case(
-        (col(SlurmJobDB.end_time).is_not(None), SlurmJobDB.end_time),
-        (
-            col(SlurmJobDB.start_time).is_not(None),
-            SlurmJobDB.start_time
-            + SlurmJobDB.elapsed_time
-            * sqlalchemy.literal(timedelta(seconds=1), type_=sqlalchemy.Interval),
-        ),
-        else_=SlurmJobDB.submit_time,
-    )
-
     ok = True
     with config().db.session() as sess:
         if not sess.exec(select(func.count(SlurmJobDB.id))).one():
             logger.error("No jobs in database.")
             return False
 
-        # Determine [start, end] bounds for frame iteration.
-        # We compute clip elapsed time if start and end are available,
-        # so that minimum_runtime is compared to job running time in given interval.
-        if time_interval is None:
-            start, end = sess.exec(
-                select(func.min(eff_start), func.max(eff_end))
-            ).one_or_none()
-            clipped_elapsed_time = SlurmJobDB.elapsed_time * sqlalchemy.literal(
-                timedelta(seconds=1), type_=sqlalchemy.Interval
-            )
-        else:
-            end = datetime.now(tz=UTC)
-            start = end - time_interval
-            clipped_elapsed_time = func.least(eff_end, end) - func.greatest(
-                eff_start, start
-            )
+        # Determine [start, end] and clipped elapsed time for frame iteration and comparison.
+        start, end, clipped_elapsed_time = (
+            SqlSymbols.convert_job_time_interval_to_sql_bounds(sess, time_interval)
+        )
+        eff_start = SqlSymbols.eff_start
+        eff_end = SqlSymbols.eff_end
 
         # SQL query to compute average GPU-util per user.
         # GPU-util for a job = gpu_utilization * clipped_elapsed_time * allocated_gres_gpu.

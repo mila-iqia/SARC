@@ -88,7 +88,7 @@ class HealthRunCommand:
                 # Check dependencies
                 deps_ok = True
                 for dep in check.depends:
-                    dep_state = _get_state(name=dep, hcfg=hcfg, sess=sess)
+                    dep_state = HealthCheckStateDB.get_state(sess, dep)
                     if (
                         dep_state is None
                         or dep_state.last_result is None
@@ -112,7 +112,6 @@ class HealthRunCommand:
                 state.last_result = result
                 state.last_message = message
                 sess.merge(state)
-
                 sess.commit()
 
         logger.info(
@@ -141,4 +140,5 @@ def _get_state(
             db_state = HealthCheckStateDB.get_or_create(
                 sess, HealthCheckState(check=check)
             )
+        sess.commit()
     return db_state

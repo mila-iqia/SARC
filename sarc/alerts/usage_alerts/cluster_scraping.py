@@ -3,12 +3,13 @@ import math
 import statistics
 import sys
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 
 import sqlalchemy
-from sqlmodel import case, col, func, select
+from sqlmodel import func, select
 
 from sarc.alerts.common import CheckResult, HealthCheck
+from sarc.alerts.usage_alerts.alert_sql_utils import SqlSymbols
 from sarc.db.cluster import SlurmClusterDB
 from sarc.db.job import SlurmJobDB
 
@@ -63,35 +64,17 @@ def check_nb_jobs_per_cluster_per_time(
         )
         return False
 
-    # Effective start_time: fall back to submit_time when the job never started.
-    eff_start = func.coalesce(SlurmJobDB.start_time, SlurmJobDB.submit_time)
-    # Effective end_time: end_time if recorded; else `start_time + elapsed_time` for jobs that started
-    # (still running or transitioning); else submit_time, so jobs that never ran
-    # (e.g. PENDING) collapse to a point at submission.
-    eff_end = case(
-        (col(SlurmJobDB.end_time).is_not(None), SlurmJobDB.end_time),
-        (
-            col(SlurmJobDB.start_time).is_not(None),
-            SlurmJobDB.start_time
-            + SlurmJobDB.elapsed_time
-            * sqlalchemy.literal(timedelta(seconds=1), type_=sqlalchemy.Interval),
-        ),
-        else_=SlurmJobDB.submit_time,
-    )
-
     with config().db.session() as sess:
         if not sess.exec(select(func.count(SlurmJobDB.id))).one():
             logger.error("No jobs in database.")
             return False
 
         # Determine [start, end] bounds for frame iteration.
-        if time_interval is None:
-            start, end = sess.exec(
-                select(func.min(eff_start), func.max(eff_end))
-            ).one_or_none()
-        else:
-            end = datetime.now(tz=UTC)
-            start = end - time_interval
+        start, end, _ = SqlSymbols.convert_job_time_interval_to_sql_bounds(
+            sess, time_interval
+        )
+        eff_start = SqlSymbols.eff_start
+        eff_end = SqlSymbols.eff_end
 
         # Pre-compute all timestamps in Python,
         # to avoid missing any frames with no jobs

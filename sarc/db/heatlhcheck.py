@@ -1,13 +1,13 @@
 from collections.abc import Sequence
 from typing import Any, Self
 
-from serieux import deserialize, TaggedSubclass, serialize
+from serieux import TaggedSubclass, deserialize, serialize
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, Index, Session, select
 
-from .sqlmodel import SQLModel
-from ..alerts.common import HealthCheck, CheckResult
+from ..alerts.common import CheckResult, HealthCheck
 from ..alerts.healthcheck_state import HealthCheckState
+from .sqlmodel import SQLModel
 
 
 class HealthCheckStateDB(SQLModel, table=True):
@@ -70,7 +70,7 @@ class HealthCheckStateDB(SQLModel, table=True):
     @classmethod
     def get_states(cls, sess: Session) -> Sequence[HealthCheckStateDB]:
         """Get an iterable of all states saved in database."""
-        return sess.exec(select(cls)).all()
+        return sess.exec(select(cls).order_by(cls.name)).all()
 
     @classmethod
     def get_or_create(cls, sess: Session, state: HealthCheckState) -> Self:

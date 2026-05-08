@@ -1,7 +1,7 @@
-from datetime import timedelta, datetime, UTC
+from datetime import UTC, datetime, timedelta
 
 import sqlalchemy
-from sqlmodel import func, case, col, Session, select
+from sqlmodel import Session, case, col, func, select
 
 from sarc.db.job import SlurmJobDB
 
@@ -35,9 +35,7 @@ class SqlSymbols:
         # We compute clip elapsed time if start and end are available,
         # so that minimum_runtime is compared to job running time in given interval.
         if time_interval is None:
-            start, end = sess.exec(
-                select(func.min(eff_start), func.max(eff_end))
-            ).one_or_none()
+            start, end = sess.exec(select(func.min(eff_start), func.max(eff_end))).one()
             clipped_elapsed_time = SlurmJobDB.elapsed_time * sqlalchemy.literal(
                 timedelta(seconds=1), type_=sqlalchemy.Interval
             )

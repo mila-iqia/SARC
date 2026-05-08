@@ -1,21 +1,18 @@
 import functools
-from datetime import datetime, UTC
 
 import pytest
 import time_machine
 
-from .common import _get_warnings
+from tests.functional.usage_alerts.common import MOCK_TIME, _get_warnings
 
 get_warnings = functools.partial(
     _get_warnings,
-    module=[
+    modules=[
         "sarc.alerts.usage_alerts.gpu_usage:gpu_usage.py",
         "sarc.alerts.common:common.py",
     ],
 )
 
-
-MOCK_TIME = datetime(2023, 11, 22, tzinfo=UTC)
 
 PARAMS = [
     (
