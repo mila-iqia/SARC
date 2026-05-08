@@ -138,6 +138,17 @@ sarc:
         active: true
         gpu_type: "unknown"
         time_interval: null
+      node_gpu_usage_8:
+        $class: "sarc.alerts.usage_alerts.gpu_usage:NodeGpuUsageCheck"
+        active: true
+        gpu_type: "A100"
+        time_interval: null
+        minimum_runtime: 43200s
+      node_gpu_usage_9:
+        $class: "sarc.alerts.usage_alerts.gpu_usage:NodeGpuUsageCheck"
+        active: true
+        gpu_type: "A100"
+        time_interval: 1h
 
       # gpu_util_per_user_* checks correspond to test params in test_alert_gpu_util_per_user.py
       gpu_util_per_user_0:

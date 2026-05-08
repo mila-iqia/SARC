@@ -2,9 +2,13 @@ import logging
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from typing import cast
+
+import sqlalchemy
+from sqlmodel import case, col, func, select
 
 from sarc.alerts.common import CheckResult, HealthCheck
+from sarc.db.cluster import SlurmClusterDB
+from sarc.db.job import SlurmJobDB
 
 logger = logging.getLogger(__name__)
 
@@ -48,69 +52,91 @@ def check_gpu_type_usage_per_node(
     bool
         True if check succeeds, False otherwise.
     """
-    from sarc.client.series import load_job_series
+    from sarc.config import config
 
     if not gpu_type:
         logger.error("No GPU type specified.")
         return False
 
-    # Parse time_interval
-    start, end, clip_time = None, None, False
-    if time_interval is not None:
-        end = datetime.now(tz=UTC)
-        start = end - time_interval
-        clip_time = True
-
     # Parse minimum_runtime
     if minimum_runtime is None:
         minimum_runtime = timedelta(seconds=0)
 
-    # Get data frame. We clip time if start and end are available,
-    # so that minimum_runtime is compared to job running time in given interval.
-    df = load_job_series(start=start, end=end, clip_time=clip_time)
-
-    # Add a column `gpu_task_` with value 1 for each job running on given GPU type.
-    df.loc[:, "gpu_task_"] = df["allocated.gpu_type"] == gpu_type
-    # Add a column `task_` with value 1 for each job. Used later to count jobs in a groupby().
-    df.loc[:, "task_"] = 1
-
-    # Group jobs.
-    ff = (
-        # Select only jobs where elapsed time >= minimum runtime and gres_gpu > 0
-        df[
-            (df["elapsed_time"] >= minimum_runtime.total_seconds())
-            & (df["allocated.gres_gpu"] > 0)
-        ]
-        # `nodes` is a list of nodes. We explode this column to count each job for each node where it is running
-        .explode("nodes")
-        # Then we group by cluster name and nodes,
-        .groupby(["cluster_name", "nodes"])[["gpu_task_", "task_"]]
-        # and we sum on gpu_task_ and task_
-        .sum()
+    # Effective start_time: fall back to submit_time when the job never started.
+    eff_start = func.coalesce(SlurmJobDB.start_time, SlurmJobDB.submit_time)
+    # Effective end_time: end_time if recorded; else `start_time + elapsed_time` for jobs that started
+    # (still running or transitioning); else submit_time, so jobs that never ran
+    # (e.g. PENDING) collapse to a point at submission.
+    eff_end = case(
+        (col(SlurmJobDB.end_time).is_not(None), SlurmJobDB.end_time),
+        (
+            col(SlurmJobDB.start_time).is_not(None),
+            SlurmJobDB.start_time
+            + SlurmJobDB.elapsed_time
+            * sqlalchemy.literal(timedelta(seconds=1), type_=sqlalchemy.Interval),
+        ),
+        else_=SlurmJobDB.submit_time,
     )
-    # Finally, we compute GPU usage.
-    ff["gpu_usage_"] = ff["gpu_task_"] / ff["task_"]
 
-    # We can now check GPU usage.
     ok = True
-    ignore_min_tasks_for_clusters = set(ignore_min_tasks_for_clusters or ())
-    for row in ff.itertuples():
-        cluster_name, node = row.Index  # type: ignore[misc, str-unpack]
-        nb_gpu_tasks = row.gpu_task_
-        nb_tasks = cast(int, row.task_)
-        gpu_usage = cast(float, row.gpu_usage_)
-        if gpu_usage < threshold and (
-            cluster_name in ignore_min_tasks_for_clusters or nb_tasks >= min_tasks
-        ):
-            # We alert if gpu usage < threshold and if
-            # either we are on a cluster listed in `ignore_min_tasks_for_clusters`,
-            # or there are enough jobs in node.
-            logger.error(
-                f"[{cluster_name}][{node}] insufficient usage for GPU {gpu_type}: "
-                f"{round(gpu_usage * 100, 2)} % ({nb_gpu_tasks}/{nb_tasks}), "
-                f"minimum required: {round(threshold * 100, 2)} %"
+    with config().db.session() as sess:
+        if not sess.exec(select(func.count(SlurmJobDB.id))).one():
+            logger.warning("No jobs in database.")
+            return False
+
+        # Determine [start, end] bounds for frame iteration.
+        # We compute clip elapsed time if start and end are available,
+        # so that minimum_runtime is compared to job running time in given interval.
+        if time_interval is None:
+            start, end = sess.exec(
+                select(func.min(eff_start), func.max(eff_end))
+            ).one_or_none()
+            clipped_elapsed_time = SlurmJobDB.elapsed_time * sqlalchemy.literal(
+                timedelta(seconds=1), type_=sqlalchemy.Interval
             )
-            ok = False
+        else:
+            end = datetime.now(tz=UTC)
+            start = end - time_interval
+            clipped_elapsed_time = func.least(eff_end, end) - func.least(
+                eff_start, start
+            )
+
+        ignore_min_tasks_for_clusters = set(ignore_min_tasks_for_clusters or ())
+        # Select only jobs in (start, end) where elapsed time >= minimum runtime and gres_gpu > 0.
+        # `nodes` is a list of nodes. We explode this column to count each job for each of its node.
+        for cluster_name, node, nb_gpu_tasks, nb_tasks in sess.exec(
+            select(
+                SlurmClusterDB.name,
+                func.jsonb_array_elements_text(SlurmJobDB.nodes).label("node"),
+                func.sum(
+                    case((SlurmJobDB.allocated_gpu_type == gpu_type, 1), else_=0)
+                ).label("nb_gpu_tasks"),
+                func.count(SlurmJobDB.id).label("nb_tasks"),
+            )
+            .select_from(SlurmJobDB)
+            .join(SlurmClusterDB, SlurmJobDB.cluster_id == SlurmClusterDB.id)
+            .where(
+                eff_start < end,
+                eff_end > start,
+                clipped_elapsed_time
+                >= sqlalchemy.literal(minimum_runtime, type_=sqlalchemy.Interval),
+                SlurmJobDB.allocated_gres_gpu > 0,
+            )
+            .group_by(SlurmClusterDB.name, sqlalchemy.text("node"))
+        ):
+            gpu_usage = nb_gpu_tasks / nb_tasks
+            if gpu_usage < threshold and (
+                cluster_name in ignore_min_tasks_for_clusters or nb_tasks >= min_tasks
+            ):
+                # We alert if gpu usage < threshold and if
+                # either we are on a cluster listed in `ignore_min_tasks_for_clusters`,
+                # or there are enough jobs in node.
+                logger.error(
+                    f"[{cluster_name}][{node}] insufficient usage for GPU {gpu_type}: "
+                    f"{round(gpu_usage * 100, 2)} % ({nb_gpu_tasks}/{nb_tasks}), "
+                    f"minimum required: {round(threshold * 100, 2)} %"
+                )
+                ok = False
 
     return ok
 
