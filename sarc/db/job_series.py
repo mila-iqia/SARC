@@ -47,7 +47,7 @@ supervisors_subq = (
     .select_from(SupervisorsDB)
     .join(SupervisorsHelper, SupervisorsDB.id == SupervisorsHelper.list_id)
     .where(
-        SupervisorsDB.user_id == SlurmJobDB.user_id,
+        SupervisorsDB.user_id == SlurmJobDB.sarc_user_id,
         SupervisorsDB.valid.contains(SlurmJobDB.submit_time),
     )
     .scalar_subquery()
@@ -100,12 +100,12 @@ class JobSeries(SQLModel, table=True):
             GpuRguDB.rgu.label("gpu_type_rgu"),
             rgu_expr,
         )
-        .join(UserDB, SlurmJobDB.user_id == UserDB.id)
+        .join(UserDB, SlurmJobDB.sarc_user_id == UserDB.id)
         .join(SlurmClusterDB, SlurmJobDB.cluster_id == SlurmClusterDB.id)
         .join(
             MemberTypeDB,
             and_(
-                MemberTypeDB.user_id == SlurmJobDB.user_id,
+                MemberTypeDB.user_id == SlurmJobDB.sarc_user_id,
                 MemberTypeDB.valid.contains(SlurmJobDB.submit_time),
             ),
             isouter=True,

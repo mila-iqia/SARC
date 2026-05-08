@@ -88,7 +88,7 @@ def _ids(jobs):
 @pytest.mark.usefixtures("read_only_db")
 def test_get_jobs_by_cluster(jobq):
     """Test successful jobs query by cluster."""
-    jobs = jobq(cluster="raisin")
+    jobs = jobq(cluster_name="raisin")
     assert all(j.cluster_id == 7 for j in jobs)
 
 
@@ -101,10 +101,40 @@ def test_get_jobs_by_job_id(jobq):
 
 @pytest.mark.usefixtures("read_only_db")
 def test_get_jobs_by_user(jobq):
-    """Test jobs query by username."""
-    jobs = jobq(username="beaubonhomme")
-    assert [j.user == "beaubonhomme" for j in jobs]
+    """Test jobs query by cluster_user."""
+    jobs = jobq(cluster_user="beaubonhomme")
+    assert [j.cluster_user == "beaubonhomme" for j in jobs]
     assert _ids(jobs) == [18]
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_get_jobs_by_email(jobq):
+    """Test jobs query by user email."""
+    jobs = jobq(email="petitbonhomme@mila.quebec")
+    assert len(jobs) == 21
+    assert all(j.cluster_user == "petitbonhomme" for j in jobs)
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_get_jobs_by_sarc_user_id(jobq):
+    """Test jobs query by sarc_user_id."""
+    jobs = jobq(sarc_user_id="9")
+    assert len(jobs) == 21
+    assert all(j.cluster_user == "petitbonhomme" for j in jobs)
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_get_jobs_extra_fields(jobq):
+    """Test jobs query returns all requested extra fields."""
+    (job,) = jobq(
+        cluster_user="beaubonhomme", extra_fields="cluster_name,sarc_user,statistics"
+    )
+    assert job.cluster_name == "raisin"
+    assert job.sarc_user is not None
+    assert job.sarc_user.id == 10
+    assert job.sarc_user.email == "beaubonhomme@mila.quebec"
+    # TODO: factory should generate some statistics
+    assert isinstance(job.statistics, dict)
 
 
 @pytest.mark.usefixtures("read_only_db")
@@ -138,14 +168,20 @@ def test_get_jobs_invalid_job_id(jobq):
 @pytest.mark.usefixtures("read_only_db")
 def test_get_jobs_empty_result(jobq):
     """Test jobs query with no results."""
-    # Use a very high job ID that doesn't exist
+    # Use a job ID that doesn't exist
     jobq(job_id="999999", n=0)
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_get_jobs_resubmitted(jobq):
+    """Test resubmitted job."""
+    jobq(job_id="1_000_000", n=2)
 
 
 @pytest.mark.usefixtures("read_only_db")
 def test_get_jobs_invalid_cluster(jobq):
     """Test jobs query with invalid cluster."""
-    err = jobq(cluster="invalid_cluster", expect_status=404)
+    err = jobq(cluster_name="invalid_cluster", expect_status=404)
     assert "No such cluster 'invalid_cluster'" in err["detail"]
 
 
@@ -179,7 +215,7 @@ def test_get_jobs_with_datetime_filters(jobq):
 def test_get_jobs_multiple_filters(jobq):
     """Test jobs query with multiple filters."""
     start = _iso_mtl("2023-01-01T00:00:00")
-    jobs = jobq(cluster="raisin", job_state="COMPLETED", start=start)
+    jobs = jobq(cluster_name="raisin", job_state="COMPLETED", start=start)
     assert all(
         j.cluster_id == 7 and j.job_state == "COMPLETED" and str(j.start_time) >= start
         for j in jobs
@@ -215,11 +251,11 @@ def test_get_jobs_invalid_pagination(client):
     "params,expected",
     [
         ({}, 22),
-        ({"cluster": "raisin"}, 19),
+        ({"cluster_name": "raisin"}, 19),
         ({"job_id": "10"}, 1),
         ({"job_id": "999999"}, 0),
-        ({"username": "petitbonhomme"}, 21),
-        ({"username": "beaubonhomme"}, 1),
+        ({"cluster_user": "petitbonhomme"}, 21),
+        ({"cluster_user": "beaubonhomme"}, 1),
         ({"job_state": "COMPLETED"}, 1),
         (
             {
@@ -230,7 +266,7 @@ def test_get_jobs_invalid_pagination(client):
         ),
         (
             {
-                "cluster": "raisin",
+                "cluster_name": "raisin",
                 "job_state": "COMPLETED",
                 "start": _iso_mtl("2023-01-01T00:00:00"),
             },
@@ -247,7 +283,7 @@ def test_count_jobs(client, params, expected):
 @pytest.mark.usefixtures("read_only_db")
 def test_count_jobs_invalid_cluster(client):
     """Test jobs count with invalid cluster."""
-    response = client.get("/v0/job/count?cluster=invalid_cluster", expect_status=404)
+    response = client.get("/v0/job/count?cluster_name=invalid_cluster", expect_status=404)
 
     data = response.json()
     assert "No such cluster 'invalid_cluster'" in data["detail"]

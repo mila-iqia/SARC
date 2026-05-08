@@ -42,7 +42,7 @@ base_job = {
     "submit_line": None,
     "task_id": None,
     "time_limit": 43200,
-    "user": "petitbonhomme",
+    "cluster_user": "petitbonhomme",
     "work_dir": "/network/scratch/p/petitbonhomme/experience-demente",
     "allocated_billing": 1,
     "allocated_cpu": 4,
@@ -136,9 +136,9 @@ class JobFactory:
         cluster_name = job.pop("cluster_name")
         if "cluster_id" not in job:
             job["cluster_id"] = self.clusters[cluster_name].id
-        user_name = job["user"]
-        if "user_id" not in job:
-            job["user_id"] = self.users[user_name].id
+        user_name = job["cluster_user"]
+        if "sarc_user_id" not in job:
+            job["sarc_user_id"] = self.users[user_name].id
 
         instance = SlurmJobDB(**job)
         if self.job_patch:
@@ -425,15 +425,15 @@ def create_jobs(
         job_factory.add_job(cluster_name=cluster_name)
 
     # # bonhomme has no drac account, so no user_id on a drac-domain cluster.
-    # job_factory.add_job(user="bonhomme", user_id=None)
+    # job_factory.add_job(cluster_user="bonhomme", user_id=None)
 
-    job_factory.add_job(user="petitbonhomme")
+    job_factory.add_job(cluster_user="petitbonhomme")
 
     # # Note that user `grosbonhomme` won't be added to testing database.
     # # Thus, this job belongs to a non-existent user.
-    # job_factory.add_job(user="grosbonhomme", cluster_name="mila", user_id=None)
+    # job_factory.add_job(cluster_user="grosbonhomme", cluster_name="mila", user_id=None)
 
-    job_factory.add_job(user="beaubonhomme")
+    job_factory.add_job(cluster_user="beaubonhomme")
 
     job_factory.add_job(job_id=1_000_000, nodes=["cn-c017"], job_state="PREEMPTED")
     job_factory.add_job(job_id=1_000_000, nodes=["cn-b099"], job_state="OUT_OF_MEMORY")
@@ -455,7 +455,7 @@ def create_jobs(
         job_id=999_999_999,
         elapsed_time=elapsed_time * 1.5,
         cluster_name="mila",
-        user="petitbonhomme",
+        cluster_user="petitbonhomme",
         allocated={
             "billing": 14,
             "cpu": 12,

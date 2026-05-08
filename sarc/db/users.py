@@ -154,12 +154,8 @@ class ValidField[V]:
 
                 if truncate:
                     new_insert.extend(subtract_ranges(r_incoming, record.valid))
-                elif record.valid.upper_inf and valid.not_extend_right_of(
-                    record.valid
-                ):
-                    record.valid = Range(
-                        record.valid.lower, valid.lower, bounds="[)"
-                    )
+                elif record.valid.upper_inf and valid.not_extend_right_of(record.valid):
+                    record.valid = Range(record.valid.lower, valid.lower, bounds="[)")
                     session.add(record)
                     new_insert.append(valid)
                 else:
@@ -515,7 +511,7 @@ def deduplicate_users(sess: Session):
             )
             sess.exec(
                 update(SlurmJobDB)
-                .where(col(SlurmJobDB.user_id) == db_extra.id)
+                .where(col(SlurmJobDB.sarc_user_id) == db_extra.id)
                 .values(user_id=db_merged.id)
             )
 

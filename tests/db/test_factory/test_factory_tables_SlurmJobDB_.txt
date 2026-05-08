@@ -15,6 +15,7 @@ Result #1
     "allocated_node": 1,
     "array_job_id": null,
     "cluster_id": 7,
+    "cluster_user": "petitbonhomme",
     "constraints": "x86_64&(48gb|80gb)",
     "elapsed_time": 43200.0,
     "end_time": "2023-02-14T17:01:00Z",
@@ -37,14 +38,13 @@ Result #1
     "requested_gres_gpu": 1,
     "requested_mem": 49152,
     "requested_node": 1,
+    "sarc_user_id": 9,
     "signal": null,
     "start_time": "2023-02-14T05:01:00Z",
     "submit_line": null,
     "submit_time": "2023-02-14T05:00:00Z",
     "task_id": null,
     "time_limit": 43200,
-    "user": "petitbonhomme",
-    "user_id": 9,
     "work_dir": "/network/scratch/p/petitbonhomme/experience-demente"
 }
 Result #2
@@ -62,6 +62,7 @@ Result #2
     "allocated_node": 1,
     "array_job_id": null,
     "cluster_id": 7,
+    "cluster_user": "petitbonhomme",
     "constraints": "x86_64&(48gb|80gb)",
     "elapsed_time": 43200.0,
     "end_time": "2023-02-14T23:01:00Z",
@@ -84,14 +85,13 @@ Result #2
     "requested_gres_gpu": 1,
     "requested_mem": 49152,
     "requested_node": 1,
+    "sarc_user_id": 9,
     "signal": null,
     "start_time": "2023-02-14T11:01:00Z",
     "submit_line": null,
     "submit_time": "2023-02-14T11:00:00Z",
     "task_id": null,
     "time_limit": 43200,
-    "user": "petitbonhomme",
-    "user_id": 9,
     "work_dir": "/network/scratch/p/petitbonhomme/experience-demente"
 }
 Result #3
@@ -109,6 +109,7 @@ Result #3
     "allocated_node": 1,
     "array_job_id": null,
     "cluster_id": 7,
+    "cluster_user": "petitbonhomme",
     "constraints": "x86_64&(48gb|80gb)",
     "elapsed_time": 43200.0,
     "end_time": "2023-02-15T05:01:00Z",
@@ -131,14 +132,13 @@ Result #3
     "requested_gres_gpu": 1,
     "requested_mem": 49152,
     "requested_node": 1,
+    "sarc_user_id": 9,
     "signal": null,
     "start_time": "2023-02-14T17:01:00Z",
     "submit_line": null,
     "submit_time": "2023-02-14T17:00:00Z",
     "task_id": null,
     "time_limit": 43200,
-    "user": "petitbonhomme",
-    "user_id": 9,
     "work_dir": "/network/scratch/p/petitbonhomme/experience-demente"
 }
 Result #4
@@ -156,6 +156,7 @@ Result #4
     "allocated_node": 1,
     "array_job_id": null,
     "cluster_id": 7,
+    "cluster_user": "petitbonhomme",
     "constraints": "x86_64&(48gb|80gb)",
     "elapsed_time": 43200.0,
     "end_time": "2023-02-15T11:01:00Z",
@@ -178,14 +179,13 @@ Result #4
     "requested_gres_gpu": 1,
     "requested_mem": 49152,
     "requested_node": 1,
+    "sarc_user_id": 9,
     "signal": null,
     "start_time": "2023-02-14T23:01:00Z",
     "submit_line": null,
     "submit_time": "2023-02-14T23:00:00Z",
     "task_id": null,
     "time_limit": 43200,
-    "user": "petitbonhomme",
-    "user_id": 9,
     "work_dir": "/network/scratch/p/petitbonhomme/experience-demente"
 }
 Result #5
@@ -203,6 +203,7 @@ Result #5
     "allocated_node": 1,
     "array_job_id": null,
     "cluster_id": 7,
+    "cluster_user": "petitbonhomme",
     "constraints": "x86_64&(48gb|80gb)",
     "elapsed_time": 43200.0,
     "end_time": "2023-02-15T17:01:00Z",
@@ -225,14 +226,13 @@ Result #5
     "requested_gres_gpu": 1,
     "requested_mem": 49152,
     "requested_node": 1,
+    "sarc_user_id": 9,
     "signal": null,
     "start_time": "2023-02-15T05:01:00Z",
     "submit_line": null,
     "submit_time": "2023-02-15T05:00:00Z",
     "task_id": null,
     "time_limit": 43200,
-    "user": "petitbonhomme",
-    "user_id": 9,
     "work_dir": "/network/scratch/p/petitbonhomme/experience-demente"
 }
 Result #6
@@ -250,6 +250,7 @@ Result #6
     "allocated_node": 1,
     "array_job_id": null,
     "cluster_id": 7,
+    "cluster_user": "petitbonhomme",
     "constraints": "x86_64&(48gb|80gb)",
     "elapsed_time": 43200.0,
     "end_time": "2023-02-15T23:01:00Z",
@@ -272,14 +273,13 @@ Result #6
     "requested_gres_gpu": 1,
     "requested_mem": 49152,
     "requested_node": 1,
+    "sarc_user_id": 9,
     "signal": null,
     "start_time": "2023-02-15T11:01:00Z",
     "submit_line": null,
     "submit_time": "2023-02-15T11:00:00Z",
     "task_id": null,
     "time_limit": 43200,
-    "user": "petitbonhomme",
-    "user_id": 9,
     "work_dir": "/network/scratch/p/petitbonhomme/experience-demente"
 }
 Result #7
@@ -297,6 +297,7 @@ Result #7
     "allocated_node": 1,
     "array_job_id": null,
     "cluster_id": 7,
+    "cluster_user": "petitbonhomme",
     "constraints": "x86_64&(48gb|80gb)",
     "elapsed_time": 43200.0,
     "end_time": null,
@@ -319,14 +320,13 @@ Result #7
     "requested_gres_gpu": 1,
     "requested_mem": 49152,
     "requested_node": 1,
+    "sarc_user_id": 9,
     "signal": null,
     "start_time": "2023-02-15T17:01:00Z",
     "submit_line": null,
     "submit_time": "2023-02-15T17:00:00Z",
     "task_id": null,
     "time_limit": 43200,
-    "user": "petitbonhomme",
-    "user_id": 9,
     "work_dir": "/network/scratch/p/petitbonhomme/experience-demente"
 }
 Result #8
@@ -344,6 +344,7 @@ Result #8
     "allocated_node": 1,
     "array_job_id": null,
     "cluster_id": 7,
+    "cluster_user": "petitbonhomme",
     "constraints": "x86_64&(48gb|80gb)",
     "elapsed_time": 43200.0,
     "end_time": null,
@@ -366,14 +367,13 @@ Result #8
     "requested_gres_gpu": 1,
     "requested_mem": 49152,
     "requested_node": 1,
+    "sarc_user_id": 9,
     "signal": null,
     "start_time": "2023-02-15T23:01:00Z",
     "submit_line": null,
     "submit_time": "2023-02-15T23:00:00Z",
     "task_id": null,
     "time_limit": 43200,
-    "user": "petitbonhomme",
-    "user_id": 9,
     "work_dir": "/network/scratch/p/petitbonhomme/experience-demente"
 }
 Result #9
@@ -391,6 +391,7 @@ Result #9
     "allocated_node": 1,
     "array_job_id": 9,
     "cluster_id": 7,
+    "cluster_user": "petitbonhomme",
     "constraints": "x86_64&(48gb|80gb)",
     "elapsed_time": 43200.0,
     "end_time": "2023-02-16T17:01:00Z",
@@ -413,14 +414,13 @@ Result #9
     "requested_gres_gpu": 1,
     "requested_mem": 49152,
     "requested_node": 1,
+    "sarc_user_id": 9,
     "signal": null,
     "start_time": "2023-02-16T05:01:00Z",
     "submit_line": null,
     "submit_time": "2023-02-16T05:00:00Z",
     "task_id": 1,
     "time_limit": 43200,
-    "user": "petitbonhomme",
-    "user_id": 9,
     "work_dir": "/network/scratch/p/petitbonhomme/experience-demente"
 }
 Result #10
@@ -438,6 +438,7 @@ Result #10
     "allocated_node": 1,
     "array_job_id": 9,
     "cluster_id": 7,
+    "cluster_user": "petitbonhomme",
     "constraints": "x86_64&(48gb|80gb)",
     "elapsed_time": 43200.0,
     "end_time": "2023-02-16T17:01:00Z",
@@ -460,14 +461,13 @@ Result #10
     "requested_gres_gpu": 1,
     "requested_mem": 49152,
     "requested_node": 1,
+    "sarc_user_id": 9,
     "signal": null,
     "start_time": "2023-02-16T05:01:00Z",
     "submit_line": null,
     "submit_time": "2023-02-16T05:00:00Z",
     "task_id": 10,
     "time_limit": 43200,
-    "user": "petitbonhomme",
-    "user_id": 9,
     "work_dir": "/network/scratch/p/petitbonhomme/experience-demente"
 }
 Result #11
@@ -485,6 +485,7 @@ Result #11
     "allocated_node": 1,
     "array_job_id": 9,
     "cluster_id": 7,
+    "cluster_user": "petitbonhomme",
     "constraints": "x86_64&(48gb|80gb)",
     "elapsed_time": 43200.0,
     "end_time": "2023-02-16T17:01:00Z",
@@ -507,14 +508,13 @@ Result #11
     "requested_gres_gpu": 1,
     "requested_mem": 49152,
     "requested_node": 1,
+    "sarc_user_id": 9,
     "signal": null,
     "start_time": "2023-02-16T05:01:00Z",
     "submit_line": null,
     "submit_time": "2023-02-16T05:00:00Z",
     "task_id": 13,
     "time_limit": 43200,
-    "user": "petitbonhomme",
-    "user_id": 9,
     "work_dir": "/network/scratch/p/petitbonhomme/experience-demente"
 }
 Result #12
@@ -532,6 +532,7 @@ Result #12
     "allocated_node": 1,
     "array_job_id": null,
     "cluster_id": 7,
+    "cluster_user": "petitbonhomme",
     "constraints": "x86_64&(48gb|80gb)",
     "elapsed_time": 43200.0,
     "end_time": "2023-02-17T11:01:00Z",
@@ -554,14 +555,13 @@ Result #12
     "requested_gres_gpu": 1,
     "requested_mem": 49152,
     "requested_node": 1,
+    "sarc_user_id": 9,
     "signal": null,
     "start_time": "2023-02-16T23:01:00Z",
     "submit_line": null,
     "submit_time": "2023-02-16T23:00:00Z",
     "task_id": null,
     "time_limit": 43200,
-    "user": "petitbonhomme",
-    "user_id": 9,
     "work_dir": "/network/scratch/p/petitbonhomme/experience-demente"
 }
 Result #13
@@ -579,6 +579,7 @@ Result #13
     "allocated_node": 1,
     "array_job_id": null,
     "cluster_id": 7,
+    "cluster_user": "petitbonhomme",
     "constraints": "x86_64&(48gb|80gb)",
     "elapsed_time": 43200.0,
     "end_time": "2023-02-17T17:01:00Z",
@@ -603,14 +604,13 @@ Result #13
     "requested_gres_gpu": 1,
     "requested_mem": 49152,
     "requested_node": 1,
+    "sarc_user_id": 9,
     "signal": null,
     "start_time": "2023-02-17T05:01:00Z",
     "submit_line": null,
     "submit_time": "2023-02-17T05:00:00Z",
     "task_id": null,
     "time_limit": 43200,
-    "user": "petitbonhomme",
-    "user_id": 9,
     "work_dir": "/network/scratch/p/petitbonhomme/experience-demente"
 }
 Result #14
@@ -628,6 +628,7 @@ Result #14
     "allocated_node": 1,
     "array_job_id": null,
     "cluster_id": 7,
+    "cluster_user": "petitbonhomme",
     "constraints": "x86_64&(48gb|80gb)",
     "elapsed_time": 43200.0,
     "end_time": "2023-02-17T23:01:00Z",
@@ -650,14 +651,13 @@ Result #14
     "requested_gres_gpu": 1,
     "requested_mem": 49152,
     "requested_node": 1,
+    "sarc_user_id": 9,
     "signal": null,
     "start_time": "2023-02-17T11:01:00Z",
     "submit_line": null,
     "submit_time": "2023-02-17T11:00:00Z",
     "task_id": null,
     "time_limit": 43200,
-    "user": "petitbonhomme",
-    "user_id": 9,
     "work_dir": "/network/scratch/p/petitbonhomme/experience-demente"
 }
 Result #15
@@ -675,6 +675,7 @@ Result #15
     "allocated_node": 1,
     "array_job_id": null,
     "cluster_id": 1,
+    "cluster_user": "petitbonhomme",
     "constraints": "x86_64&(48gb|80gb)",
     "elapsed_time": 43200.0,
     "end_time": "2023-02-18T05:01:00Z",
@@ -697,14 +698,13 @@ Result #15
     "requested_gres_gpu": 1,
     "requested_mem": 49152,
     "requested_node": 1,
+    "sarc_user_id": 9,
     "signal": null,
     "start_time": "2023-02-17T17:01:00Z",
     "submit_line": null,
     "submit_time": "2023-02-17T17:00:00Z",
     "task_id": null,
     "time_limit": 43200,
-    "user": "petitbonhomme",
-    "user_id": 9,
     "work_dir": "/network/scratch/p/petitbonhomme/experience-demente"
 }
 Result #16
@@ -722,6 +722,7 @@ Result #16
     "allocated_node": 1,
     "array_job_id": null,
     "cluster_id": 6,
+    "cluster_user": "petitbonhomme",
     "constraints": "x86_64&(48gb|80gb)",
     "elapsed_time": 43200.0,
     "end_time": "2023-02-18T11:01:00Z",
@@ -744,14 +745,13 @@ Result #16
     "requested_gres_gpu": 1,
     "requested_mem": 49152,
     "requested_node": 1,
+    "sarc_user_id": 9,
     "signal": null,
     "start_time": "2023-02-17T23:01:00Z",
     "submit_line": null,
     "submit_time": "2023-02-17T23:00:00Z",
     "task_id": null,
     "time_limit": 43200,
-    "user": "petitbonhomme",
-    "user_id": 9,
     "work_dir": "/network/scratch/p/petitbonhomme/experience-demente"
 }
 Result #17
@@ -769,6 +769,7 @@ Result #17
     "allocated_node": 1,
     "array_job_id": null,
     "cluster_id": 7,
+    "cluster_user": "petitbonhomme",
     "constraints": "x86_64&(48gb|80gb)",
     "elapsed_time": 43200.0,
     "end_time": "2023-02-18T17:01:00Z",
@@ -791,14 +792,13 @@ Result #17
     "requested_gres_gpu": 1,
     "requested_mem": 49152,
     "requested_node": 1,
+    "sarc_user_id": 9,
     "signal": null,
     "start_time": "2023-02-18T05:01:00Z",
     "submit_line": null,
     "submit_time": "2023-02-18T05:00:00Z",
     "task_id": null,
     "time_limit": 43200,
-    "user": "petitbonhomme",
-    "user_id": 9,
     "work_dir": "/network/scratch/p/petitbonhomme/experience-demente"
 }
 Result #18
@@ -816,6 +816,7 @@ Result #18
     "allocated_node": 1,
     "array_job_id": null,
     "cluster_id": 7,
+    "cluster_user": "beaubonhomme",
     "constraints": "x86_64&(48gb|80gb)",
     "elapsed_time": 43200.0,
     "end_time": "2023-02-18T23:01:00Z",
@@ -838,14 +839,13 @@ Result #18
     "requested_gres_gpu": 1,
     "requested_mem": 49152,
     "requested_node": 1,
+    "sarc_user_id": 10,
     "signal": null,
     "start_time": "2023-02-18T11:01:00Z",
     "submit_line": null,
     "submit_time": "2023-02-18T11:00:00Z",
     "task_id": null,
     "time_limit": 43200,
-    "user": "beaubonhomme",
-    "user_id": 10,
     "work_dir": "/network/scratch/p/petitbonhomme/experience-demente"
 }
 Result #19
@@ -863,6 +863,7 @@ Result #19
     "allocated_node": 1,
     "array_job_id": null,
     "cluster_id": 7,
+    "cluster_user": "petitbonhomme",
     "constraints": "x86_64&(48gb|80gb)",
     "elapsed_time": 43200.0,
     "end_time": "2023-02-19T05:01:00Z",
@@ -885,14 +886,13 @@ Result #19
     "requested_gres_gpu": 1,
     "requested_mem": 49152,
     "requested_node": 1,
+    "sarc_user_id": 9,
     "signal": null,
     "start_time": "2023-02-18T17:01:00Z",
     "submit_line": null,
     "submit_time": "2023-02-18T17:00:00Z",
     "task_id": null,
     "time_limit": 43200,
-    "user": "petitbonhomme",
-    "user_id": 9,
     "work_dir": "/network/scratch/p/petitbonhomme/experience-demente"
 }
 Result #20
@@ -910,6 +910,7 @@ Result #20
     "allocated_node": 1,
     "array_job_id": null,
     "cluster_id": 7,
+    "cluster_user": "petitbonhomme",
     "constraints": "x86_64&(48gb|80gb)",
     "elapsed_time": 43200.0,
     "end_time": "2023-02-19T11:01:00Z",
@@ -932,14 +933,13 @@ Result #20
     "requested_gres_gpu": 1,
     "requested_mem": 49152,
     "requested_node": 1,
+    "sarc_user_id": 9,
     "signal": null,
     "start_time": "2023-02-18T23:01:00Z",
     "submit_line": null,
     "submit_time": "2023-02-18T23:00:00Z",
     "task_id": null,
     "time_limit": 43200,
-    "user": "petitbonhomme",
-    "user_id": 9,
     "work_dir": "/network/scratch/p/petitbonhomme/experience-demente"
 }
 Result #21
@@ -957,6 +957,7 @@ Result #21
     "allocated_node": 1,
     "array_job_id": null,
     "cluster_id": 7,
+    "cluster_user": "petitbonhomme",
     "constraints": "x86_64&(48gb|80gb)",
     "elapsed_time": 43200.0,
     "end_time": "2023-02-19T17:01:00Z",
@@ -979,14 +980,13 @@ Result #21
     "requested_gres_gpu": 1,
     "requested_mem": 59152,
     "requested_node": 1,
+    "sarc_user_id": 9,
     "signal": null,
     "start_time": "2023-02-19T05:01:00Z",
     "submit_line": null,
     "submit_time": "2023-02-19T05:00:00Z",
     "task_id": null,
     "time_limit": 43200,
-    "user": "petitbonhomme",
-    "user_id": 9,
     "work_dir": "/network/scratch/p/petitbonhomme/experience-demente"
 }
 Result #22
@@ -1004,6 +1004,7 @@ Result #22
     "allocated_node": 1,
     "array_job_id": null,
     "cluster_id": 5,
+    "cluster_user": "petitbonhomme",
     "constraints": "x86_64&(48gb|80gb)",
     "elapsed_time": 64800.0,
     "end_time": "2023-02-20T05:01:00Z",
@@ -1026,13 +1027,12 @@ Result #22
     "requested_gres_gpu": 0,
     "requested_mem": 59152,
     "requested_node": 1,
+    "sarc_user_id": 9,
     "signal": null,
     "start_time": "2023-02-19T11:01:00Z",
     "submit_line": null,
     "submit_time": "2023-02-19T11:00:00Z",
     "task_id": null,
     "time_limit": 43200,
-    "user": "petitbonhomme",
-    "user_id": 9,
     "work_dir": "/network/scratch/p/petitbonhomme/experience-demente"
 }
