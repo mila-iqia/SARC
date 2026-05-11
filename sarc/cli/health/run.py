@@ -14,9 +14,9 @@ import simple_parsing
 from sqlmodel import Session
 
 from sarc.alerts.common import CheckStatus, HealthMonitorConfig
-from sarc.alerts.healthcheck_state import HealthCheckState
 from sarc.config import config
 from sarc.db.healthcheck import HealthCheckStateDB
+from sarc.models.healthcheck_state import HealthCheckState
 
 logger = logging.getLogger(__name__)
 

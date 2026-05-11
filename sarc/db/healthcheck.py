@@ -5,9 +5,9 @@ from serieux import TaggedSubclass, deserialize, serialize
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, Index, Session, select
 
-from ..alerts.common import CheckResult, HealthCheck
-from ..alerts.healthcheck_state import HealthCheckState
-from .sqlmodel import SQLModel
+from sarc.alerts.common import CheckResult, HealthCheck
+from sarc.db.sqlmodel import SQLModel
+from sarc.models.healthcheck_state import HealthCheckState
 
 
 class HealthCheckStateDB(SQLModel, table=True):

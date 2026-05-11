@@ -5,11 +5,11 @@ from pydantic import ValidationError
 from sqlalchemy.exc import DataError
 
 from sarc.alerts.common import HealthCheck
-from sarc.alerts.healthcheck_state import HealthCheckState
 from sarc.config import UTC
 from sarc.db.healthcheck import HealthCheckStateDB
 from sarc.models.api import SlurmJobList, UserList
 from sarc.models.cluster import SlurmCluster
+from sarc.models.healthcheck_state import HealthCheckState
 from tests.common.dateutils import _iso_mtl
 from tests.unittests.alerts.definitions import BeanCheck
 

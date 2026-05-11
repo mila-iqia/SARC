@@ -14,7 +14,6 @@ from sqlalchemy.orm import Mapped
 from sqlmodel import Session, and_, col, func, or_, select
 from sqlmodel.sql.expression import SelectOfScalar
 
-from sarc.alerts.healthcheck_state import HealthCheckState
 from sarc.config import UTC, Config, config
 from sarc.db.cluster import SlurmClusterDB, get_available_clusters
 from sarc.db.healthcheck import HealthCheckStateDB
@@ -30,6 +29,7 @@ from sarc.db.users import (
 )
 from sarc.models.api import JobSeriesList, SlurmJob, SlurmJobList, User, UserList
 from sarc.models.cluster import SlurmCluster
+from sarc.models.healthcheck_state import HealthCheckState
 from sarc.models.job import Statistics
 from sarc.models.series import JobSeries
 
