@@ -149,6 +149,9 @@ class MyMilaScraper(UserScraper[MyMilaConfig]):
             if co_supervisor is not None:
                 # TODO: figure out the dates
                 supervisors.append(MatchID(name="mymila", mid=str(co_supervisor)))
+            if len(supervisors) != 0:
+                # TODO: figure out the dates
+                um.supervisors.insert(supervisors)
             drac_account: str | None = record[Headers.Alliance_DRAC_account]
             if drac_account:
                 drac_account = drac_account.strip()

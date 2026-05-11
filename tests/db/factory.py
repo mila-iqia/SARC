@@ -3,6 +3,8 @@ import datetime as dt
 from collections.abc import Iterable
 from datetime import date, datetime, timedelta
 
+from sqlmodel import Session
+
 from sarc.config import UTC
 from sarc.db.allocation import AllocationDB
 from sarc.db.cluster import GPUBillingDB, SlurmClusterDB
@@ -166,7 +168,6 @@ class UserFactory:
 
     def _create_user(
         self,
-        id,
         display_name="Test User",
         email="test@example.com",
         match_ids=None,
@@ -182,7 +183,7 @@ class UserFactory:
             for acct in accounts:
                 u.associated_accounts[acct[0]].insert(*acct[1:])
             for sup in supervisors:
-                u.supervisors.insert(*sup)
+                u._supervisors.insert(*sup)
             for uname in github_username:
                 u.github_username.insert(*uname)
             for profile in google_scholar_profile:
@@ -190,7 +191,7 @@ class UserFactory:
 
         if match_ids is None:
             match_ids = {}
-        u = UserDB(id=id, display_name=display_name, email=email)
+        u = UserDB(display_name=display_name, email=email)
         for k, v in match_ids.items():
             u.matching_ids[k] = v
 
@@ -204,7 +205,7 @@ class UserFactory:
         return u
 
 
-def create_users(user_factory=None) -> Iterable[UserDB]:
+def create_users(sess: Session, user_factory=None) -> Iterable[UserDB]:
     if user_factory is None:
         user_factory = UserFactory()
 
@@ -215,7 +216,6 @@ def create_users(user_factory=None) -> Iterable[UserDB]:
         ]
 
     prof1 = user_factory.add_user(
-        id=1,
         member_type=[
             (
                 "professor",
@@ -228,9 +228,10 @@ def create_users(user_factory=None) -> Iterable[UserDB]:
         match_ids={"mila_ldap": "doej@mila.quebec", "mymila": "111"},
         accounts=[("mila", "jdoe", None, None), ("drac", "doej001", None, None)],
     )
+    sess.add(prof1)
+    sess.flush()
 
     prof2 = user_factory.add_user(
-        id=2,
         display_name="John Smith",
         email="jsmith@example.com",
         match_ids={"mila_ldap": "smithj@mila.quebec", "mymila": "222"},
@@ -258,115 +259,121 @@ def create_users(user_factory=None) -> Iterable[UserDB]:
             ("https://scholar.google.com/citations?user=PataTe_000AJ&hl=en",)
         ],
     )
-    user_factory.add_user(
-        id=3,
-        github_username=[
-            (
-                "testuser",
-                datetime(2023, 3, 3, tzinfo=dt.UTC),
-                datetime(2030, 12, 30, tzinfo=dt.UTC),
-            )
-        ],
-        google_scholar_profile=[
-            (
-                "https://scholar.google.com/citations?user=PataTe_111AJ&hl=en",
-                datetime(2019, 10, 11, tzinfo=dt.UTC),
-                datetime(2030, 12, 30, tzinfo=dt.UTC),
-            )
-        ],
+    sess.add(prof2)
+    sess.flush()
+    sess.add(
+        user_factory.add_user(
+            github_username=[
+                (
+                    "testuser",
+                    datetime(2023, 3, 3, tzinfo=dt.UTC),
+                    datetime(2030, 12, 30, tzinfo=dt.UTC),
+                )
+            ],
+            google_scholar_profile=[
+                (
+                    "https://scholar.google.com/citations?user=PataTe_111AJ&hl=en",
+                    datetime(2019, 10, 11, tzinfo=dt.UTC),
+                    datetime(2030, 12, 30, tzinfo=dt.UTC),
+                )
+            ],
+        )
     )
-    user_factory.add_user(id=4, supervisors=[(_sups(prof2.id), None, None)])
-    user_factory.add_user(
-        id=5,
-        match_ids={"test_match": "cinq", "test1": "aaa"},
-        member_type=[
-            (
-                "professor",
-                datetime(2022, 1, 1, tzinfo=dt.UTC),
-                datetime(2023, 1, 1, tzinfo=dt.UTC),
-            )
-        ],
-        github_username=[
-            (
-                "test123",
-                datetime(2022, 1, 1, tzinfo=dt.UTC),
-                datetime(2023, 1, 1, tzinfo=dt.UTC),
-            )
-        ],
-        google_scholar_profile=[
-            (
-                "profileA",
-                datetime(2022, 1, 1, tzinfo=dt.UTC),
-                datetime(2023, 1, 1, tzinfo=dt.UTC),
-            )
-        ],
-        accounts=[
-            (
-                "test",
-                "user",
-                datetime(2022, 1, 1, tzinfo=dt.UTC),
-                datetime(2023, 1, 1, tzinfo=dt.UTC),
-            )
-        ],
-        supervisors=[
-            (
-                _sups(prof1.id, prof2.id),
-                datetime(2022, 1, 1, tzinfo=dt.UTC),
-                datetime(2023, 1, 1, tzinfo=dt.UTC),
-            )
-        ],
+    sess.add(user_factory.add_user(supervisors=[(_sups(prof2.id), None, None)]))
+    sess.add(
+        user_factory.add_user(
+            match_ids={"test_match": "cinq", "test1": "aaa"},
+            member_type=[
+                (
+                    "professor",
+                    datetime(2022, 1, 1, tzinfo=dt.UTC),
+                    datetime(2023, 1, 1, tzinfo=dt.UTC),
+                )
+            ],
+            github_username=[
+                (
+                    "test123",
+                    datetime(2022, 1, 1, tzinfo=dt.UTC),
+                    datetime(2023, 1, 1, tzinfo=dt.UTC),
+                )
+            ],
+            google_scholar_profile=[
+                (
+                    "profileA",
+                    datetime(2022, 1, 1, tzinfo=dt.UTC),
+                    datetime(2023, 1, 1, tzinfo=dt.UTC),
+                )
+            ],
+            accounts=[
+                (
+                    "test",
+                    "user",
+                    datetime(2022, 1, 1, tzinfo=dt.UTC),
+                    datetime(2023, 1, 1, tzinfo=dt.UTC),
+                )
+            ],
+            supervisors=[
+                (
+                    _sups(prof1.id, prof2.id),
+                    datetime(2022, 1, 1, tzinfo=dt.UTC),
+                    datetime(2023, 1, 1, tzinfo=dt.UTC),
+                )
+            ],
+        )
     )
-    user_factory.add_user(id=6, match_ids={"test_match": "quack"})
-    user_factory.add_user(
-        id=7,
-        match_ids={"test_match": "abc", "test1": "bbb", "test2": "123"},
-        display_name="Othername",
-        member_type=[
-            (
-                "staff",
-                datetime(2022, 1, 1, tzinfo=dt.UTC),
-                datetime(2023, 1, 1, tzinfo=dt.UTC),
-            )
-        ],
-        github_username=[
-            (
-                "test_abc",
-                datetime(2022, 1, 1, tzinfo=dt.UTC),
-                datetime(2023, 1, 1, tzinfo=dt.UTC),
-            )
-        ],
-        google_scholar_profile=[
-            (
-                "profileB",
-                datetime(2022, 1, 1, tzinfo=dt.UTC),
-                datetime(2023, 1, 1, tzinfo=dt.UTC),
-            )
-        ],
-        accounts=[
-            (
-                "test",
-                "resu",
-                datetime(2022, 1, 1, tzinfo=dt.UTC),
-                datetime(2023, 1, 1, tzinfo=dt.UTC),
-            ),
-            ("cluster", "user"),
-        ],
-        supervisors=[
-            (
-                _sups(prof2.id, prof1.id),
-                datetime(2022, 1, 1, tzinfo=dt.UTC),
-                datetime(2023, 1, 1, tzinfo=dt.UTC),
-            )
-        ],
+    sess.add(user_factory.add_user(match_ids={"test_match": "quack"}))
+    sess.add(
+        user_factory.add_user(
+            match_ids={"test_match": "abc", "test1": "bbb", "test2": "123"},
+            display_name="Othername",
+            member_type=[
+                (
+                    "staff",
+                    datetime(2022, 1, 1, tzinfo=dt.UTC),
+                    datetime(2023, 1, 1, tzinfo=dt.UTC),
+                )
+            ],
+            github_username=[
+                (
+                    "test_abc",
+                    datetime(2022, 1, 1, tzinfo=dt.UTC),
+                    datetime(2023, 1, 1, tzinfo=dt.UTC),
+                )
+            ],
+            google_scholar_profile=[
+                (
+                    "profileB",
+                    datetime(2022, 1, 1, tzinfo=dt.UTC),
+                    datetime(2023, 1, 1, tzinfo=dt.UTC),
+                )
+            ],
+            accounts=[
+                (
+                    "test",
+                    "resu",
+                    datetime(2022, 1, 1, tzinfo=dt.UTC),
+                    datetime(2023, 1, 1, tzinfo=dt.UTC),
+                ),
+                ("cluster", "user"),
+            ],
+            supervisors=[
+                (
+                    _sups(prof2.id, prof1.id),
+                    datetime(2022, 1, 1, tzinfo=dt.UTC),
+                    datetime(2023, 1, 1, tzinfo=dt.UTC),
+                )
+            ],
+        )
     )
+    sess.flush()
 
     fake_users = [
-        (8, "bonhomme", None),
-        (9, "petitbonhomme", "aaa-001"),
-        (10, "beaubonhomme", "aaa-002"),
+        ("bonhomme", None),
+        ("petitbonhomme", "aaa-001"),
+        ("beaubonhomme", "aaa-002"),
     ]
 
-    for id, username, drac_account in fake_users:
+    for username, drac_account in fake_users:
         accts = [
             (
                 "mila",
@@ -380,12 +387,13 @@ def create_users(user_factory=None) -> Iterable[UserDB]:
                 ("drac", username, datetime(2024, 4, 11, 0, 0, tzinfo=dt.UTC), None)
             )
         u = user_factory.add_user(
-            id=id,
             display_name=f"M/Ms {username[0].upper()}{username[1:]}",
             email=f"{username}@mila.quebec",
             accounts=accts,
             match_ids={"mila_ldap": f"{username}@mila.quebec"},
         )
+        sess.add(u)
+        sess.flush()
         if drac_account:
             u.matching_ids["drac_role"] = drac_account
 
@@ -508,16 +516,19 @@ def create_gpu_billings(clusters: list[SlurmClusterDB]) -> list[GPUBillingDB]:
     ]
 
 
-def create_diskusages() -> list[DiskUsageDB]:
+def create_diskusages(clusters: list[SlurmClusterDB]) -> list[DiskUsageDB]:
+    disk_clusters = [
+        cluster for cluster in clusters if cluster.name in ["mila", "hyrule"]
+    ]
     diskusages = []
-    for cluster_name in ["botw", "totk"]:
+    for cluster in disk_clusters:
         for timestamp in [
             datetime(2023, 2, 14, 0, 0, 0, tzinfo=UTC),
             datetime(2021, 12, 1, 0, 0, 0, tzinfo=UTC),
         ]:
             diskusages.append(
                 DiskUsageDB(
-                    cluster_name=cluster_name,
+                    cluster_id=cluster.id,
                     timestamp=timestamp,
                     groups=[
                         DiskUsageGroupDB(

@@ -15,7 +15,6 @@ from zoneinfo import ZoneInfo
 
 from serieux.features.encrypt import Secret
 
-from sarc.core.models.validators import END_TIME, START_TIME
 from sarc.db.users import MemberType
 from sarc.scraping.users import (
     Credentials,
@@ -85,12 +84,6 @@ class LegacyDumpScraper(UserScraper[LegacyDumpConfig]):
             # Parse timestamps
             record_start = _parse_mtl_datetime(record.get("record_start"))
             record_end = _parse_mtl_datetime(record.get("record_end"))
-
-            # Use START_TIME if no record_start, END_TIME if no record_end
-            if record_start is None:
-                record_start = START_TIME
-            if record_end is None:
-                record_end = END_TIME
 
             email = record["mila_ldap"]["mila_email_username"]
             matching_id = MatchID(name="legacy_dump", mid=email)

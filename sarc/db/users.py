@@ -115,6 +115,7 @@ class ValidField[V]:
             end = end.astimezone(UTC)
 
         self._insert_tag(session, value, Range(start, end, bounds="[)"))
+        session.flush()
 
     def _insert_tag(
         self,
@@ -131,42 +132,52 @@ class ValidField[V]:
                 )
             )
         ).all()
-        to_merge = [r for r in records if getattr(r, self.col_ref) == value]
+        to_merge = [r for r in records if getattr(r[0], self.col_ref) == value]
         to_conflict = [
             r
             for r in records
-            if getattr(r, self.col_ref) != value and r.valid.overlaps(valid)
+            if getattr(r[0], self.col_ref) != value and r[0].valid.overlaps(valid)
         ]
+
+        if any(record[0].valid.contains(valid) for record in to_merge):
+            # There is already a record in the DB that covers this valid range with this value, so nothing to do
+            return
 
         final_range = valid
         for record in to_merge:
-            final_range = record.valid.union(final_range)
-            session.delete(record)
+            final_range = record[0].valid.union(final_range)
+            session.delete(record[0])
+        session.flush()
 
         to_insert = [final_range]
 
         for record in to_conflict:
             new_insert = []
             for r_incoming in to_insert:
-                if not r_incoming.overlaps(record.valid):
+                if not r_incoming.overlaps(record[0].valid):
                     new_insert.append(r_incoming)
                     continue
 
                 if truncate:
-                    new_insert.extend(subtract_ranges(r_incoming, record.valid))
-                elif record.valid.upper_inf and valid.not_extend_right_of(record.valid):
-                    record.valid = Range(record.valid.lower, valid.lower, bounds="[)")
-                    session.add(record)
+                    new_insert.extend(subtract_ranges(r_incoming, record[0].valid))
+                elif record[0].valid.upper_inf and valid.not_extend_right_of(
+                    record[0].valid
+                ):
+                    record[0].valid = Range(
+                        record[0].valid.lower, valid.lower, bounds="[)"
+                    )
+                    session.flush()
                     new_insert.append(valid)
                 else:
                     raise DateOverlapError(
-                        value, valid, getattr(record, self.col_ref), record.valid
+                        value, valid, getattr(record[0], self.col_ref), record[0].valid
                     )
 
             to_insert = new_insert
 
         for final_valid in to_insert:
             session.add(self._create_record(valid=final_valid, value=value))
+        session.flush()
 
     def get_value(
         self, date: datetime | None = None, session: SASession | None = None
@@ -195,7 +206,7 @@ class ValidField[V]:
         if result is None:
             raise DateMatchError(date)
         else:
-            return getattr(result, self.col_ref)
+            return getattr(result[0], self.col_ref)
 
     def values_in_range(
         self, start: datetime_utc, end: datetime_utc, session: SASession | None = None
@@ -210,7 +221,7 @@ class ValidField[V]:
 
         assert session is not None
         return [
-            getattr(r, self.col_ref)
+            getattr(r[0], self.col_ref)
             for r in session.execute(
                 self._select_base().where(
                     self.model_ref.valid.overlaps(Range(start, end, bounds="[)"))
@@ -312,11 +323,19 @@ class SupervisorsHelper(SQLModel, table=True):
     pos: int = Field(ge=0)
     supervisor: int = Field(foreign_key="users.id", ondelete="RESTRICT")
 
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, SupervisorsHelper):
+            return False
+        return self.pos == other.pos and self.supervisor == other.supervisor
+
+    def __hash__(self) -> int:
+        return hash((self.pos, self.supervisor))
+
 
 class SupervisorsDB(ValidDB, table=True):
     __tablename__ = "user_supervisors"
     supervisors: list[SupervisorsHelper] = Relationship(
-        sa_relationship_kwargs={"order_by": SupervisorsHelper.pos}
+        cascade_delete=True, sa_relationship_kwargs={"order_by": SupervisorsHelper.pos}
     )
 
 
@@ -436,7 +455,7 @@ class UserDB(SQLModel, table=True):
     # Also this is essentially ValidField[list[int]], but with consistent ordering
     @property
     def supervisors(self) -> SupervisorIDsField:
-        return SupervisorIDsField(self.supervisors)
+        return SupervisorIDsField(self._supervisors)
 
     @property
     def github_username(self) -> ValidField[str]:

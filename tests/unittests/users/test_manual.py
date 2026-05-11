@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 import pytest
 from serieux import serialize
 
-from sarc.core.scraping.users import MatchID, UserMatch
+from sarc.scraping.users import MatchID, UserMatch
 from sarc.users.manual import ConfigMatchID, ManualUserConfig, ManualUserScraper
 from tests.unittests.core.test_users_scraping import UserPluginTester
 
