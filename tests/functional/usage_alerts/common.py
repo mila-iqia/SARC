@@ -62,7 +62,7 @@ def generate_fake_timeseries(
             "instance": job.nodes[0],
             "job": "slurm_jobs",
             "slurmjobid": str(job.job_id),
-            "user": job.user,
+            "user": job.cluster_user,
             **extra,
         }
 

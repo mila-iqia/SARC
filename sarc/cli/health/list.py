@@ -5,7 +5,7 @@ from dataclasses import fields as dataclass_fields
 
 from sarc.alerts.common import CheckResult, HealthCheck
 from sarc.config import config
-from sarc.db.heatlhcheck import HealthCheckStateDB
+from sarc.db.healthcheck import HealthCheckStateDB
 
 logger = logging.getLogger(__name__)
 

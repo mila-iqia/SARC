@@ -2,6 +2,7 @@ from sqlalchemy import Engine
 from sqlmodel import Session, select, text
 
 from sarc.config import config
+
 from . import cluster
 from .sqlmodel import SQLModel
 
@@ -12,7 +13,7 @@ def db_upgrade(engine: Engine):
         allocation,
         cluster,
         diskusage,
-        heatlhcheck,
+        healthcheck,
         job,
         job_series,
         support,

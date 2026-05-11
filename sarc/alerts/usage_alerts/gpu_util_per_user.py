@@ -83,7 +83,7 @@ def check_gpu_util_per_user(
         gpu_util = gpu_utilization * gpu_equivalent_cost
 
         query = (
-            select(SlurmJobDB.user, func.avg(gpu_util).label("avg_gpu_util"))
+            select(SlurmJobDB.cluster_user, func.avg(gpu_util).label("avg_gpu_util"))
             .join(
                 JobStatisticDB,
                 (JobStatisticDB.job_id == SlurmJobDB.id)
@@ -97,7 +97,7 @@ def check_gpu_util_per_user(
                 >= sqlalchemy.literal(minimum_runtime, type_=sqlalchemy.Interval),
                 SlurmJobDB.allocated_gres_gpu > 0,
             )
-            .group_by(SlurmJobDB.user)
+            .group_by(SlurmJobDB.cluster_user)
         )
 
         for user, avg_gpu_util in sess.exec(query):

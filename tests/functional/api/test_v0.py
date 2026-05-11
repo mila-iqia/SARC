@@ -7,7 +7,7 @@ from sqlalchemy.exc import DataError
 from sarc.alerts.common import HealthCheck
 from sarc.alerts.healthcheck_state import HealthCheckState
 from sarc.config import UTC
-from sarc.db.heatlhcheck import HealthCheckStateDB
+from sarc.db.healthcheck import HealthCheckStateDB
 from sarc.models.api import SlurmJobList, UserList
 from sarc.models.cluster import SlurmCluster
 from tests.common.dateutils import _iso_mtl
@@ -682,8 +682,13 @@ def test_health_list_with_states(empty_read_write_db, client):
     hc_a = HealthCheck(name="alpha_check", active=True)
     hc_b = BeanCheck(name="bravo_check", active=True, beans=14)
 
-    HealthCheckStateDB.get_or_create(empty_read_write_db, HealthCheckState(check=hc_b, last_result=hc_b.ok(), last_message="OK"))
-    HealthCheckStateDB.get_or_create(empty_read_write_db, HealthCheckState(check=hc_a, last_result=hc_a.fail()))
+    HealthCheckStateDB.get_or_create(
+        empty_read_write_db,
+        HealthCheckState(check=hc_b, last_result=hc_b.ok(), last_message="OK"),
+    )
+    HealthCheckStateDB.get_or_create(
+        empty_read_write_db, HealthCheckState(check=hc_a, last_result=hc_a.fail())
+    )
     empty_read_write_db.commit()
 
     response = client.get("/v0/health/list")
@@ -705,7 +710,10 @@ def test_health_list_with_states(empty_read_write_db, client):
 def test_health_list_with_error_trace(empty_read_write_db, client):
     hc = BeanCheck(name="evil_check", active=True, beans=666)
     result = hc()
-    HealthCheckStateDB.get_or_create(empty_read_write_db, HealthCheckState(check=hc, last_result=result, last_message="error"))
+    HealthCheckStateDB.get_or_create(
+        empty_read_write_db,
+        HealthCheckState(check=hc, last_result=result, last_message="error"),
+    )
     empty_read_write_db.commit()
 
     response = client.get("/v0/health/list")

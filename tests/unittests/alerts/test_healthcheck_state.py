@@ -1,7 +1,7 @@
 from sarc.alerts.common import CheckStatus, HealthCheck
 from sarc.alerts.healthcheck_state import HealthCheckState
 from sarc.config import config
-from sarc.db.heatlhcheck import HealthCheckStateDB
+from sarc.db.healthcheck import HealthCheckStateDB
 from tests.unittests.alerts.definitions import BeanCheck
 
 

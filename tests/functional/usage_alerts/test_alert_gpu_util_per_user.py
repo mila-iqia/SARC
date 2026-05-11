@@ -55,7 +55,7 @@ def test_alert_gpu_util_per_user_no_stats(caplog, cli_main):
     # The check should fail for all users who have GPU jobs.
     assert cli_main(["health", "run", "--check", "gpu_util_per_user_1"]) == 0
     with config().db.session() as sess:
-        users = sess.exec(sqlmodel.select(sqlmodel.distinct(SlurmJobDB.user))).all()
+        users = sess.exec(sqlmodel.select(sqlmodel.distinct(SlurmJobDB.cluster_user))).all()
         assert len(users) > 0
         for user in users:
             assert (

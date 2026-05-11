@@ -3,7 +3,7 @@ import re
 
 import pytest
 
-from sarc.db.heatlhcheck import HealthCheckStateDB
+from sarc.db.healthcheck import HealthCheckStateDB
 
 
 @pytest.mark.usefixtures("empty_read_write_db")
