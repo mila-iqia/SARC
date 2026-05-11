@@ -322,7 +322,7 @@ def valid_merge[T, U](
             return v
 
     for tag in valid.values:
-        db_valid.insert(map(tag.value), tag.valid_start, tag.valid_end)
+        db_valid.insert(map(tag.value), tag.valid.lower, tag.valid.upper)
 
 
 def update_user_db(sess: Session, user: UserMatch, db_user: UserDB) -> None:

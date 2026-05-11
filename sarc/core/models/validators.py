@@ -3,11 +3,10 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, Callable, Self
 
 from pydantic import BaseModel, Field, GetCoreSchemaHandler
+from pydantic.functional_validators import model_validator
 from pydantic_core import CoreSchema, core_schema
 
 UTCOFFSET = timedelta(0)
-START_TIME = datetime(year=2000, month=1, day=1, tzinfo=UTC)
-END_TIME = datetime(year=3000, month=1, day=1, tzinfo=UTC)
 
 
 @dataclass(frozen=True)
@@ -30,18 +29,100 @@ class DatetimeUTCValidator:
 datetime_utc = Annotated[datetime, DatetimeUTCValidator()]
 
 
+def _max_upper(a: datetime | None, b: datetime | None) -> datetime | None:
+    """Max of two upper bounds where None represents +infinity."""
+    return None if (a is None or b is None) else max(a, b)
+
+
+def _lower_gt_upper(lower: datetime | None, upper: datetime | None) -> bool:
+    """lower (None=-∞) > upper (None=+∞). Always False if either is None."""
+    return lower is not None and upper is not None and lower > upper
+
+
+def _lower_eq_upper(lower: datetime | None, upper: datetime | None) -> bool:
+    """lower == upper as a touching-point check. False if either is None."""
+    return lower is not None and upper is not None and lower == upper
+
+
+def _lower_ge(a: datetime | None, b: datetime | None) -> bool:
+    """a >= b for lower bounds (None = -∞)."""
+    return b is None or (a is not None and a >= b)
+
+
+def _lower_gt(a: datetime | None, b: datetime | None) -> bool:
+    """a > b for lower bounds (None = -∞)."""
+    return a is not None and (b is None or a > b)
+
+
+def _upper_lt(a: datetime | None, b: datetime | None) -> bool:
+    """a < b for upper bounds (None = +∞)."""
+    return a is not None and (b is None or a < b)
+
+
+class DateRange(BaseModel):
+    lower: datetime_utc | None
+    upper: datetime_utc | None
+
+    @model_validator(mode="after")
+    def range_order(self) -> Self:
+        if self.lower is not None and self.upper is not None:
+            assert self.lower <= self.upper
+        return self
+
+    @property
+    def bounds(self) -> str:
+        return "[)"
+
+    def contains(self, date: datetime) -> bool:
+        """True if date is in [lower, upper), with None bounds meaning unbounded."""
+        if self.lower is not None and date < self.lower:
+            return False
+        if self.upper is not None and date >= self.upper:
+            return False
+        return True
+
+    def overlaps(self, other: DateRange) -> bool:
+        """True if two [lower, upper) ranges share any point."""
+        if (
+            self.upper is not None
+            and other.lower is not None
+            and self.upper <= other.lower
+        ):
+            return False
+        if (
+            other.upper is not None
+            and self.lower is not None
+            and other.upper <= self.lower
+        ):
+            return False
+        return True
+
+    def ends_before_start_of(self, other: DateRange) -> bool:
+        """True if self ends at or before other starts (self.upper <= other.lower)."""
+        return (
+            self.upper is not None
+            and other.lower is not None
+            and self.upper <= other.lower
+        )
+
+    def with_lower(self, lower: datetime | None) -> DateRange:
+        return DateRange(lower=lower, upper=self.upper)
+
+    def with_upper(self, upper: datetime | None) -> DateRange:
+        return DateRange(lower=self.lower, upper=upper)
+
+
 class ValidTag[V](BaseModel):
     value: V
-    valid_start: datetime_utc
-    valid_end: datetime_utc
+    valid: DateRange
 
 
 class DateOverlapError(Exception):
     def __init__(self, tag1: ValidTag, tag2: ValidTag):
         super().__init__(
             f"""Overlapping validity with different values:
-{tag1.value}: {tag1.valid_start} - {tag1.valid_end}
-{tag2.value}: {tag2.valid_start} - {tag2.valid_end}"""
+{tag1.value}: {tag1.valid.lower} - {tag1.valid.upper}
+{tag2.value}: {tag2.valid.lower} - {tag2.valid.upper}"""
         )
 
 
@@ -58,7 +139,7 @@ class ValidField[V](BaseModel):
     instead.
 
     The list is kept ordered in order of validity with the most recent entry
-    last. We do not expect frequent changes to the values or to have a humongous
+    first. We do not expect frequent changes to the values or to have a humongous
     number of values.
     """
 
@@ -74,22 +155,16 @@ class ValidField[V](BaseModel):
         entries will be merged otherwise a DateOverlapError is raised.
 
         As a special case, if you add a value that starts later than all
-        exisiting values and the end bound of the most recent value is END_TIME,
+        exisiting values and the end bound of the most recent value is unbounded,
         instead of an overlapping error, the bound of the most recent value will
         be adjusted to end at the start of the new value.
         """
         assert start is None or start.tzinfo is not None
         assert end is None or end.tzinfo is not None
 
-        if start is not None and end is not None:
-            assert start < end
-        if start is None or start < START_TIME:
-            start = START_TIME
-        if end is None or end > END_TIME:
-            end = END_TIME
-        start = start.astimezone(UTC)
-        end = end.astimezone(UTC)
-        tag = ValidTag(value=value, valid_start=start, valid_end=end)
+        start = start.astimezone(UTC) if start is not None else None
+        end = end.astimezone(UTC) if end is not None else None
+        tag = ValidTag(value=value, valid=DateRange(lower=start, upper=end))
         self._insert_tag(tag, truncate=False)
 
     def _insert_tag(self, tag: ValidTag[V], truncate) -> None:
@@ -101,7 +176,7 @@ class ValidField[V](BaseModel):
         viter = iter(enumerate(self.values))
         i, ltag = next(viter)
         try:
-            while tag.valid_end <= ltag.valid_start:
+            while tag.valid.ends_before_start_of(ltag.valid):
                 i, ltag = next(viter)
         except StopIteration:
             # The new tag ends before the last tag starts so just add it at the end
@@ -111,29 +186,33 @@ class ValidField[V](BaseModel):
         # possible overlap with tag. Since the list is kept in "most recent
         # first" order that means that any tag that is after ltag is fully
         # after tag too ("after" in time, not in list order).
-        if tag.valid_start > ltag.valid_end:
+        if _lower_gt_upper(tag.valid.lower, ltag.valid.upper):
             # The new tag is fully before ltag so we just insert it
             self.values.insert(i, tag)
-        elif tag.valid_start == ltag.valid_end:
+        elif _lower_eq_upper(tag.valid.lower, ltag.valid.upper):
             # The new tag starts just after ltag so we merge/insert depending if
             # the value is the same
             if tag.value == ltag.value:
-                ltag.valid_end = tag.valid_end
+                ltag.valid = ltag.valid.with_upper(tag.valid.upper)
             else:
                 self.values.insert(i, tag)
         elif tag.value == ltag.value:
             # The new tag overlaps ltag
-            if tag.valid_start >= ltag.valid_start:
+            if _lower_ge(tag.valid.lower, ltag.valid.lower):
                 # Since the values are the same and tag starts after ltag,
                 # we can just merge into ltag and be done
-                ltag.valid_end = max(ltag.valid_end, tag.valid_end)
+                ltag.valid = ltag.valid.with_upper(
+                    _max_upper(ltag.valid.upper, tag.valid.upper)
+                )
             else:
                 # tag starts before ltag so we need to check previous
                 # tag(s). to do it, we merge ltag into tag, remove ltag from
                 # the list and try to insert again. This can happen
                 # recursively, but since we do not expect the list to grow
                 # large, it is fine for now
-                tag.valid_end = max(ltag.valid_end, tag.valid_end)
+                tag.valid = tag.valid.with_upper(
+                    _max_upper(ltag.valid.upper, tag.valid.upper)
+                )
                 self.values.pop(i)
                 try:
                     return self._insert_tag(tag, truncate=truncate)
@@ -145,36 +224,44 @@ class ValidField[V](BaseModel):
 
         # exception for new "current" value as described in insert()
         elif (
-            i == 0 and ltag.valid_end == END_TIME and tag.valid_start > ltag.valid_start
+            i == 0
+            and ltag.valid.upper is None
+            and _lower_gt(tag.valid.lower, ltag.valid.lower)
         ):
-            ltag.valid_end = tag.valid_start
+            ltag.valid = ltag.valid.with_upper(tag.valid.lower)
             self.values.insert(i, tag)
         elif not truncate:
             # We have an overlap and the values differ
             raise DateOverlapError(tag, ltag)
-        elif tag.valid_start >= ltag.valid_start:
-            # If the tag starts after ltag, we can just clip its starting point
-            tag.valid_start = ltag.valid_end
-            # if that makes the tag start after its end, it means that it
-            # fully overlaps with ltag and so we just drop it otherwise we
-            # add the trucated tag.
-            if tag.valid_start < tag.valid_end:
+        elif _lower_ge(tag.valid.lower, ltag.valid.lower):
+            # Clip tag to start where ltag ends; only insert if the result is non-empty.
+            # Non-empty means ltag has a finite end that is strictly before tag's end.
+            if ltag.valid.upper is not None and (
+                tag.valid.upper is None or ltag.valid.upper < tag.valid.upper
+            ):
+                tag.valid = tag.valid.with_lower(ltag.valid.upper)
                 self.values.insert(i, tag)
             ### from here we know that tag starts before ltag ###
-        elif tag.valid_end < ltag.valid_end:
-            # If tag ends within ltag, clip the end and retry
-            tag.valid_end = ltag.valid_start
-            self._insert_tag(tag, truncate=truncate)
+        elif _upper_lt(tag.valid.upper, ltag.valid.upper):
+            # If tag ends within ltag, clip the end and retry.
+            # If ltag has no lower bound, tag is fully swallowed so we drop it.
+            if ltag.valid.lower is not None:
+                tag.valid = tag.valid.with_upper(ltag.valid.lower)
+                self._insert_tag(tag, truncate=truncate)
         else:
             # tag fully overlaps ltag, so we split tag in two, add the part
             # that goes after ltag, and try again for the part that goes
             # before.
-            tag2 = ValidTag(
-                value=tag.value, valid_start=tag.valid_start, valid_end=ltag.valid_start
-            )
-            tag.valid_start = ltag.valid_end
-            self.values.insert(i, tag)
-            self._insert_tag(tag2, truncate=truncate)
+            orig_lower = tag.valid.lower
+            if ltag.valid.upper is not None:
+                tag.valid = tag.valid.with_lower(ltag.valid.upper)
+                self.values.insert(i, tag)
+            if ltag.valid.lower is not None:
+                tag2 = ValidTag(
+                    value=tag.value,
+                    valid=DateRange(lower=orig_lower, upper=ltag.valid.lower),
+                )
+                self._insert_tag(tag2, truncate=truncate)
 
     def get_value(self, date: datetime | None = None) -> V:
         """Get the valid value at specified time.
@@ -190,7 +277,7 @@ class ValidField[V](BaseModel):
         date = date.astimezone(UTC)
 
         for tag in self.values:
-            if date >= tag.valid_start and date < tag.valid_end:
+            if tag.valid.contains(date):
                 return tag.value
         raise DateMatchError(date)
 
@@ -200,15 +287,8 @@ class ValidField[V](BaseModel):
         The range starts at `start` and ends just before `end`.  This means that
         start is included, but end is not.
         """
-        res = list[V]()
-        start = start.astimezone(UTC)
-        end = end.astimezone(UTC)
-
-        for tag in self.values:
-            if not (end <= tag.valid_start or start >= tag.valid_end):
-                res.append(tag.value)
-
-        return res
+        query = DateRange(lower=start.astimezone(UTC), upper=end.astimezone(UTC))
+        return [tag.value for tag in self.values if tag.valid.overlaps(query)]
 
     def merge_with(self, other: Self, truncate=False) -> None:
         """Insert all the values in other in self.
