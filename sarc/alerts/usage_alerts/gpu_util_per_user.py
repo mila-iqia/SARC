@@ -1,9 +1,13 @@
 import logging
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
-from typing import cast
+from datetime import timedelta
+
+import sqlalchemy
+from sqlmodel import case, func, select
 
 from sarc.alerts.common import CheckResult, HealthCheck
+from sarc.alerts.usage_alerts.alert_sql_utils import SqlSymbols
+from sarc.db.job import SlurmJobDB
 
 logger = logging.getLogger(__name__)
 
@@ -42,55 +46,72 @@ def check_gpu_util_per_user(
     bool
         True if check succeeds, False otherwise.
     """
-    from sarc.client.series import compute_cost_and_waste, load_job_series
+    from sarc.config import config
+    from sarc.db.job import JobStatisticDB
 
     if threshold is None:
         logger.error("No threshold specified.")
         return False
 
-    # Parse time_interval
-    start: datetime | None = None
-    end: datetime | None = None
-    clip_time = False
-    if time_interval is not None:
-        end = datetime.now(tz=UTC)
-        start = end - time_interval
-        clip_time = True
-
-    # Get data frame. We clip time if start and end are available,
-    # so that minimum_runtime is compared to job running time in given interval.
-    df = load_job_series(start=start, end=end, clip_time=clip_time)
-
-    # Parse minimum_runtime, and select only jobs where
-    # elapsed time >= minimum runtime and allocated.gres_gpu > 0
+    # Parse minimum_runtime
     if minimum_runtime is None:
         minimum_runtime = timedelta(seconds=0)
-    df = df[
-        (df["elapsed_time"] >= minimum_runtime.total_seconds())
-        & (df["allocated.gres_gpu"] > 0)
-    ]
-
-    # Compute cost
-    df = compute_cost_and_waste(df)
-
-    # Compute GPU-util for each job
-    df["gpu_util"] = df["gpu_utilization"] * df["gpu_equivalent_cost"]
-
-    # Compute average GPU-util per user
-    f_stats = df.groupby(["user"])[["gpu_util"]].mean()
 
     ok = True
+    with config().db.session() as sess:
+        if not sess.exec(select(func.count(SlurmJobDB.id))).one():
+            logger.error("No jobs in database.")
+            return False
 
-    # Now we can check
-    for row in f_stats.itertuples():
-        user = row.Index
-        gpu_util = cast(float, row.gpu_util)
-        if gpu_util < threshold.total_seconds():
-            logger.error(
-                f"[{user}] insufficient average gpu_util: {gpu_util} GPU-seconds; "
-                f"minimum required: {threshold} ({threshold.total_seconds()} GPU-seconds)"
+        # Determine [start, end] and clipped elapsed time for frame iteration and comparison.
+        start, end, clipped_elapsed_time = (
+            SqlSymbols.convert_job_time_interval_to_sql_bounds(sess, time_interval)
+        )
+        eff_start = SqlSymbols.eff_start
+        eff_end = SqlSymbols.eff_end
+
+        # SQL query to compute average GPU-util per user.
+        # GPU-util for a job = gpu_utilization * clipped_elapsed_time * allocated_gres_gpu.
+        # Note: SlurmJobDB.statistics is a relation to JobStatisticDB.
+
+        gpu_utilization = JobStatisticDB.median
+        # Replace gpu_utilization > 1 with NULL (consistent with load_job_series replacing with NaN)
+        gpu_utilization = case((gpu_utilization > 1.0, None), else_=gpu_utilization)
+
+        clipped_elapsed_seconds = func.extract("epoch", clipped_elapsed_time)
+        gpu_equivalent_cost = clipped_elapsed_seconds * SlurmJobDB.allocated_gres_gpu
+        gpu_util = gpu_utilization * gpu_equivalent_cost
+
+        query = (
+            select(SlurmJobDB.cluster_user, func.avg(gpu_util).label("avg_gpu_util"))
+            .join(
+                JobStatisticDB,
+                (JobStatisticDB.job_id == SlurmJobDB.id)
+                & (JobStatisticDB.name == "gpu_utilization"),
+                isouter=True,
             )
-            ok = False
+            .where(
+                eff_start < end,
+                eff_end > start,
+                clipped_elapsed_time
+                >= sqlalchemy.literal(minimum_runtime, type_=sqlalchemy.Interval),
+                SlurmJobDB.allocated_gres_gpu > 0,
+            )
+            .group_by(SlurmJobDB.cluster_user)
+        )
+
+        for user, avg_gpu_util in sess.exec(query):
+            if avg_gpu_util is None:
+                logger.error(
+                    f"[{user}] average gpu_util cannot be computed (no statistics found for matching jobs)."
+                )
+                ok = False
+            elif avg_gpu_util < threshold.total_seconds():
+                logger.error(
+                    f"[{user}] insufficient average gpu_util: {avg_gpu_util} GPU-seconds; "
+                    f"minimum required: {threshold} ({threshold.total_seconds()} GPU-seconds)"
+                )
+                ok = False
 
     return ok
 

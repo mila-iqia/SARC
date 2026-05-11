@@ -83,6 +83,9 @@ class SlurmClusterDB(SQLModel, table=True):
     def get_node_to_gpu(
         self, required_date: datetime | None = None
     ) -> NodeGPUMappingDB | None:
+        if not self.node_gpu_mapping:
+            return None
+
         if required_date is None:
             return self.node_gpu_mapping[-1]
 

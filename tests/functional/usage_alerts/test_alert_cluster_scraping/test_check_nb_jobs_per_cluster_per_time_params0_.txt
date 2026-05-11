@@ -1,9 +1,1 @@
-[raisin]
-                           count
-timestamp                       
-2023-11-21 12:00:00+00:00      2
-avg 2.0, stddev nan, threshold 0.0
 
-
-[raisin] threshold 0 (2.0 - 2.0 * nan). Only 1 timestamp found. Either time_interval (7 days, 0:00:00) is too short, or this cluster should not be currently checked
-[cluster_scraping_0] FAILURE: cluster_scraping_0

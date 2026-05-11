@@ -13,6 +13,7 @@ def db_upgrade(engine: Engine):
         allocation,
         cluster,
         diskusage,
+        healthcheck,
         job,
         job_series,
         support,

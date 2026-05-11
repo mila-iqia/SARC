@@ -14,12 +14,9 @@ from sqlalchemy.orm import Mapped
 from sqlmodel import Session, and_, col, func, or_, select
 from sqlmodel.sql.expression import SelectOfScalar
 
-from sarc.alerts.healthcheck_state import (
-    HealthCheckState,
-    get_healthcheck_state_collection,
-)
 from sarc.config import UTC, Config, config
 from sarc.db.cluster import SlurmClusterDB, get_available_clusters
+from sarc.db.healthcheck import HealthCheckStateDB
 from sarc.db.job import SlurmJobDB, SlurmState, get_rgus
 from sarc.db.job_series import JobSeriesDB
 from sarc.db.users import (
@@ -32,6 +29,7 @@ from sarc.db.users import (
 )
 from sarc.models.api import JobSeriesList, SlurmJob, SlurmJobList, User, UserList
 from sarc.models.cluster import SlurmCluster
+from sarc.models.healthcheck_state import HealthCheckState
 from sarc.models.job import Statistics
 from sarc.models.series import JobSeries
 
@@ -579,8 +577,13 @@ def get_user_by_email(email: str, sess: Session = Depends(session_dep)) -> User:
 
 
 @router.get("/health/list")
-def health_list() -> list[HealthCheckState]:
+def health_list(sess: Session = Depends(session_dep)) -> list[HealthCheckState]:
     """Get current health check states (check definition and last result) saved in database."""
-    # TODO: apparently I forgot this table, so this will be done during the health check pass
-    states = list(get_healthcheck_state_collection().get_states())
-    return states
+    return [
+        HealthCheckState(
+            check=state.check,
+            last_result=state.last_result,
+            last_message=state.last_message,
+        )
+        for state in HealthCheckStateDB.get_states(sess)
+    ]

@@ -1,13 +1,13 @@
 import re
 
 import pytest
+import sqlmodel
 import time_machine
 
-from sarc.client import get_jobs
+from sarc.config import config
+from sarc.db.job import SlurmJobDB
 from sarc.jobs.series import compute_job_statistics
-from tests.functional.jobs.test_func_load_job_series import MOCK_TIME
-
-from ..jobs.test_func_job_statistics import generate_fake_timeseries
+from tests.functional.usage_alerts.common import MOCK_TIME, generate_fake_timeseries
 
 PARAMS = {
     # Check with default params. In last 7 days from now (mock time: 2023-11-22),
@@ -56,11 +56,13 @@ PARAMS = {
 def test_check_prometheus_stats_for_gpu_jobs(
     check_name, caplog, file_regression, cli_main
 ):
-    for job in get_jobs():
-        if job.end_time is not None:
-            stats = compute_job_statistics(job, generate_fake_timeseries(job))
-            if not stats.empty():
-                job.stored_statistics = stats
-                job.save()
+    with config().db.session() as sess:
+        for job in sess.exec(sqlmodel.select(SlurmJobDB)).all():
+            if job.end_time is not None and job.nodes:
+                stats = compute_job_statistics(job, generate_fake_timeseries(job))
+                if stats:
+                    job.statistics = stats
+                    sess.merge(job)
+        sess.commit()
     assert cli_main(["health", "run", "--check", check_name]) == 0
     file_regression.check(re.sub(r"ERROR +.+\.py:[0-9]+ +", "", caplog.text))

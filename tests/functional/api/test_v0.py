@@ -5,10 +5,11 @@ from pydantic import ValidationError
 from sqlalchemy.exc import DataError
 
 from sarc.alerts.common import HealthCheck
-from sarc.alerts.healthcheck_state import HealthCheckState, HealthCheckStateRepository
-from sarc.config import UTC, config
-from sarc.models.api import JobSeriesList, SlurmJobList, UserList
+from sarc.config import UTC
+from sarc.db.healthcheck import HealthCheckStateDB
+from sarc.models.api import SlurmJobList, UserList
 from sarc.models.cluster import SlurmCluster
+from sarc.models.healthcheck_state import HealthCheckState
 from tests.common.dateutils import _iso_mtl
 from tests.unittests.alerts.definitions import BeanCheck
 
@@ -676,16 +677,19 @@ def test_health_list_empty(client):
     assert response.json() == []
 
 
-@pytest.mark.usefixtures("empty_read_write_db")
-def test_health_list_with_states(client):
-    db = config().mongo.database_instance
-    repo = HealthCheckStateRepository(db)
+def test_health_list_with_states(empty_read_write_db, client):
 
     hc_a = HealthCheck(name="alpha_check", active=True)
     hc_b = BeanCheck(name="bravo_check", active=True, beans=14)
 
-    repo.save(HealthCheckState(check=hc_b, last_result=hc_b.ok(), last_message="OK"))
-    repo.save(HealthCheckState(check=hc_a, last_result=hc_a.fail()))
+    HealthCheckStateDB.get_or_create(
+        empty_read_write_db,
+        HealthCheckState(check=hc_b, last_result=hc_b.ok(), last_message="OK"),
+    )
+    HealthCheckStateDB.get_or_create(
+        empty_read_write_db, HealthCheckState(check=hc_a, last_result=hc_a.fail())
+    )
+    empty_read_write_db.commit()
 
     response = client.get("/v0/health/list")
     assert response.status_code == 200
@@ -703,14 +707,14 @@ def test_health_list_with_states(client):
     assert data[1]["last_message"] == "OK"
 
 
-@pytest.mark.usefixtures("empty_read_write_db")
-def test_health_list_with_error_trace(client):
-    db = config().mongo.database_instance
-    repo = HealthCheckStateRepository(db)
-
+def test_health_list_with_error_trace(empty_read_write_db, client):
     hc = BeanCheck(name="evil_check", active=True, beans=666)
     result = hc()
-    repo.save(HealthCheckState(check=hc, last_result=result, last_message="error"))
+    HealthCheckStateDB.get_or_create(
+        empty_read_write_db,
+        HealthCheckState(check=hc, last_result=result, last_message="error"),
+    )
+    empty_read_write_db.commit()
 
     response = client.get("/v0/health/list")
     assert response.status_code == 200

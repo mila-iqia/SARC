@@ -10,10 +10,10 @@ sarc:
         $class: "sarc.alerts.usage_alerts.disk_space:DatabaseSizeCheck"
         active: true
         limit: 10_000
-      db_size_check_1m:
+      db_size_check_20m:
         $class: "sarc.alerts.usage_alerts.disk_space:DatabaseSizeCheck"
         active: true
-        limit: 1_000_000
+        limit: 20_000_000
 
       # Cache disk check examples
       cache_size_check_0:
@@ -138,6 +138,17 @@ sarc:
         active: true
         gpu_type: "unknown"
         time_interval: null
+      node_gpu_usage_8:
+        $class: "sarc.alerts.usage_alerts.gpu_usage:NodeGpuUsageCheck"
+        active: true
+        gpu_type: "A100"
+        time_interval: null
+        minimum_runtime: 43200s
+      node_gpu_usage_9:
+        $class: "sarc.alerts.usage_alerts.gpu_usage:NodeGpuUsageCheck"
+        active: true
+        gpu_type: "A100"
+        time_interval: 1h
 
       # gpu_util_per_user_* checks correspond to test params in test_alert_gpu_util_per_user.py
       gpu_util_per_user_0:
@@ -354,47 +365,47 @@ sarc:
       same_job_id_since_before:
         $class: "sarc.alerts.usage_alerts.same_job_id:SameJobIdCheck"
         active: true
-        since: "2023-02-19T02:00+00:00"
+        since: "2023-02-18T14:00+00:00"
         time_interval: null
       same_job_id_since_in:
         $class: "sarc.alerts.usage_alerts.same_job_id:SameJobIdCheck"
         active: true
-        since: "2023-02-19T05:00+00:00"
+        since: "2023-02-18T17:00+00:00"
         time_interval: null
       same_job_id_since_after_first:
         $class: "sarc.alerts.usage_alerts.same_job_id:SameJobIdCheck"
         active: true
-        since: "2023-02-19T18:00+00:00"
+        since: "2023-02-19T06:00+00:00"
         time_interval: null
       same_job_id_since_after_both:
         $class: "sarc.alerts.usage_alerts.same_job_id:SameJobIdCheck"
         active: true
-        since: "2023-02-19T23:10+00:00"
+        since: "2023-02-19T12:00+00:00"
         time_interval: null
       same_job_id_interval_before:
         $class: "sarc.alerts.usage_alerts.same_job_id:SameJobIdCheck"
         active: true
-        since: "2023-02-19T02:00+00:00"
+        since: "2023-02-18T02:00+00:00"
         time_interval: 3h
       same_job_id_interval_on_first:
         $class: "sarc.alerts.usage_alerts.same_job_id:SameJobIdCheck"
         active: true
-        since: "2023-02-19T02:00+00:00"
+        since: "2023-02-18T14:00+00:00"
         time_interval: 4h
       same_job_id_interval_on_both:
         $class: "sarc.alerts.usage_alerts.same_job_id:SameJobIdCheck"
         active: true
-        since: "2023-02-19T02:00+00:00"
+        since: "2023-02-18T14:00+00:00"
         time_interval: 10h
       same_job_id_interval_full:
         $class: "sarc.alerts.usage_alerts.same_job_id:SameJobIdCheck"
         active: true
-        since: "2023-02-19T02:00+00:00"
+        since: "2023-02-18T14:00+00:00"
         time_interval: 22h
       same_job_id_interval_after:
         $class: "sarc.alerts.usage_alerts.same_job_id:SameJobIdCheck"
         active: true
-        since: "2023-02-19T23:10+00:00"
+        since: "2023-02-19T12:00+00:00"
         time_interval: 22h
       same_job_id_time_interval_too_short:
         $class: "sarc.alerts.usage_alerts.same_job_id:SameJobIdCheck"

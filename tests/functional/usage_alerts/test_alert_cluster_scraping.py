@@ -1,9 +1,10 @@
 import re
 
+import gifnoc
 import pytest
 import time_machine
 
-from ..jobs.test_func_load_job_series import MOCK_TIME
+from tests.functional.usage_alerts.common import MOCK_TIME
 
 PARAMS = [
     # Check with default params. In last 7 days from now (mock time: 2023-11-22),
@@ -36,3 +37,83 @@ def test_check_nb_jobs_per_cluster_per_time(
             r"ERROR +.+\.py:[0-9]+ +", "", f"{capsys.readouterr().err}\n{caplog.text}"
         )
     )
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_invalid_time_unit(cli_main, caplog):
+    with gifnoc.overlay(
+        {
+            "sarc.health_monitor.checks": {
+                "cluster_scraping": {
+                    "$class": "sarc.alerts.usage_alerts.cluster_scraping:ClusterScrapingCheck",
+                    "active": True,
+                    "time_unit": "0s",
+                }
+            }
+        }
+    ):
+        assert cli_main(["health", "run", "--check", "cluster_scraping"]) == 0
+        assert bool(
+            re.search(
+                r"ERROR +.+\.py:[0-9]+ +Invalid time unit \(must be > 0\) for cluster usage checking: 0:00:00",
+                caplog.text,
+            )
+        )
+        assert bool(
+            re.search(
+                r"ERROR +.+\.py:[0-9]+ +\[cluster_scraping] FAILURE: cluster_scraping",
+                caplog.text,
+            )
+        )
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_invalid_nb_stddev(cli_main, caplog):
+    with gifnoc.overlay(
+        {
+            "sarc.health_monitor.checks": {
+                "cluster_scraping": {
+                    "$class": "sarc.alerts.usage_alerts.cluster_scraping:ClusterScrapingCheck",
+                    "active": True,
+                    "nb_stddev": -21,
+                }
+            }
+        }
+    ):
+        assert cli_main(["health", "run", "--check", "cluster_scraping"]) == 0
+        assert bool(
+            re.search(
+                r"ERROR +.+\.py:[0-9]+ +Invalid nb_stddev \(must be >= 0\) for cluster usage checking: -21",
+                caplog.text,
+            )
+        )
+        assert bool(
+            re.search(
+                r"ERROR +.+\.py:[0-9]+ +\[cluster_scraping] FAILURE: cluster_scraping",
+                caplog.text,
+            )
+        )
+
+
+@pytest.mark.usefixtures("empty_read_write_db")
+def test_empty_database(cli_main, caplog):
+    with gifnoc.overlay(
+        {
+            "sarc.health_monitor.checks": {
+                "cluster_scraping": {
+                    "$class": "sarc.alerts.usage_alerts.cluster_scraping:ClusterScrapingCheck",
+                    "active": True,
+                }
+            }
+        }
+    ):
+        assert cli_main(["health", "run", "--check", "cluster_scraping"]) == 0
+        assert bool(
+            re.search(r"ERROR +.+\.py:[0-9]+ +No jobs in database", caplog.text)
+        )
+        assert bool(
+            re.search(
+                r"ERROR +.+\.py:[0-9]+ +\[cluster_scraping] FAILURE: cluster_scraping",
+                caplog.text,
+            )
+        )
