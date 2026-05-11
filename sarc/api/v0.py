@@ -1,6 +1,8 @@
+import operator
 from collections.abc import Generator
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from functools import reduce
 from typing import Annotated
 
 from easy_oauth.cap import Capability
@@ -19,6 +21,7 @@ from sarc.alerts.healthcheck_state import (
 from sarc.config import UTC, Config, config
 from sarc.db.cluster import SlurmClusterDB, get_available_clusters
 from sarc.db.job import SlurmJobDB, SlurmState, get_rgus
+from sarc.db.job_series import JobSeriesDB
 from sarc.db.users import (
     MatchingID,
     MemberType,
@@ -27,9 +30,10 @@ from sarc.db.users import (
     SupervisorsHelper,
     UserDB,
 )
-from sarc.models.api import SlurmJob, SlurmJobList, User, UserList
+from sarc.models.api import JobSeriesList, SlurmJob, SlurmJobList, User, UserList
 from sarc.models.cluster import SlurmCluster
 from sarc.models.job import Statistics
+from sarc.models.series import JobSeries
 
 
 def _ensure_datetime_utc(v: datetime) -> datetime:
@@ -253,6 +257,94 @@ def job_query_params(
 JobQueryType = Annotated[JobQuery, Depends(job_query_params)]
 
 
+class JobSeriesQuery(BaseModel):
+    cluster_name: str | None = None
+    job_id: list[int] | None = None
+    job_state: SlurmState | None = None
+    email: str | None = None
+    sarc_user_id: int | None = None
+    cluster_user: str | None = None
+    start: datetime_api | None = None
+    end: datetime_api | None = None
+    requestor: Requestor
+
+    def apply_filters[T: SelectOfScalar](self, query: T) -> T:
+        if not self.requestor.is_admin:
+            raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED)
+
+        if self.cluster_name is not None:
+            query = query.where(JobSeriesDB.cluster_name == self.cluster_name)
+        if self.job_id is not None:
+            if len(self.job_id) == 1:
+                query = query.where(JobSeriesDB.job_id == self.job_id[0])
+            else:
+                query = query.where(col(JobSeriesDB.job_id).in_(self.job_id))
+        if self.job_state is not None:
+            query = query.where(JobSeriesDB.job_state == self.job_state)
+        if self.cluster_user is not None:
+            query = query.where(JobSeriesDB.cluster_user == self.cluster_user)
+        if self.sarc_user_id is not None:
+            query = query.where(JobSeriesDB.sarc_user_id == self.sarc_user_id)
+        if self.email is not None:
+            query = query.where(JobSeriesDB.email == self.email)
+        if self.end is not None:
+            query = query.where(col(JobSeriesDB.submit_time) < self.end)
+        if self.start is not None:
+            query = query.where(
+                or_(
+                    JobSeriesDB.end_time == None,  # noqa: E711
+                    col(JobSeriesDB.end_time) > self.start,
+                )
+            )
+        return query
+
+
+def job_series_query_params(
+    cluster_name: str | None = None,
+    job_id: Annotated[list[str] | None, Query()] = None,
+    job_state: SlurmState | None = None,
+    email: str | None = None,
+    sarc_user_id: int | None = None,
+    cluster_user: str | None = None,
+    start: datetime_api | None = None,
+    end: datetime_api | None = None,
+    requestor: Requestor = Depends(requestor),
+    sess: Session = Depends(session_dep),
+) -> JobSeriesQuery:
+    validate_cluster(sess, cluster_name)
+
+    job_id_ints = None
+    if job_id is not None:
+        try:
+            job_id_ints = [int(jid) for jid in job_id if jid]
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="job_id must be a list of integers",
+            )
+
+    return JobSeriesQuery(
+        cluster_name=cluster_name,
+        job_id=job_id_ints,
+        job_state=job_state,
+        email=email,
+        sarc_user_id=sarc_user_id,
+        cluster_user=cluster_user,
+        start=start,
+        end=end,
+        requestor=requestor,
+    )
+
+
+JobSeriesQueryType = Annotated[JobSeriesQuery, Depends(job_series_query_params)]
+
+
+def _series_convert(row) -> JobSeries:
+    row_dict = dict(row._mapping)
+    valid = JobSeries.__dataclass_fields__.keys()
+    return JobSeries(**{k: v for k, v in row_dict.items() if k in valid})
+
+
 class UserQuery(BaseModel):
     display_name: str | None = None
     email: str | None = None
@@ -369,6 +461,62 @@ def get_job(
             status_code=status.HTTP_404_NOT_FOUND, detail="Job not found"
         )
     return job_convert(job, set(extra_fields.split(",")) if extra_fields else set())
+
+
+# Format: {extra_field_name: {columns_to_select ...}}
+_EXTRA_FIELDS = {
+    "cluster_name": {"cluster_name"},
+    "sarc_user": {"display_name", "member_type", "email"},
+    "supervisors": {"supervisors"},
+    "statistics": {"statistics"},
+    "rgu": {"gpu_type_rgu", "rgu"},
+}
+
+_SERIES_OPTIONAL_COLS = reduce(operator.or_, _EXTRA_FIELDS.values())
+
+
+@router.get("/job/series")
+def job_series(
+    query_opt: JobSeriesQueryType,
+    list_opt: ListOptionsType,
+    extra_fields: str | None = None,
+    sess: Session = Depends(session_dep),
+) -> JobSeriesList:
+    extra_fields = set(extra_fields.split(",")) if extra_fields else set()
+    unknown = extra_fields - set(_EXTRA_FIELDS)
+    if unknown:
+        raise HTTPException(
+            status_code=422, detail=f"Invalid extra_field(s): {sorted(unknown)}"
+        )
+
+    # Determine the set of columns to select
+    names = {
+        c.name
+        for c in JobSeriesDB.__table__.columns
+        if c.name not in _SERIES_OPTIONAL_COLS
+    }
+    for extra in extra_fields:
+        names |= _EXTRA_FIELDS[extra]
+    cols = [JobSeriesDB.__table__.c[name] for name in names]
+
+    query = select(*cols)
+    query = query_opt.apply_filters(query)
+    query = list_opt.add_list_options(
+        query,
+        col(JobSeriesDB.job_db_id),  # type: ignore[arg-type]
+        col(JobSeriesDB.submit_time),
+    )
+
+    rows = list(sess.exec(query))
+    series = [_series_convert(row) for row in rows]
+
+    if len(series) < list_opt.limit:
+        cursor = False
+    else:
+        last = series[-1]
+        cursor = f"{last.job_db_id};{last.submit_time.isoformat()}"
+
+    return JobSeriesList(results=series, cursor=cursor)
 
 
 @router.get("/cluster/list", dependencies=[Depends(requestor)])

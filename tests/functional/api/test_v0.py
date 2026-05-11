@@ -7,7 +7,7 @@ from sqlalchemy.exc import DataError
 from sarc.alerts.common import HealthCheck
 from sarc.alerts.healthcheck_state import HealthCheckState, HealthCheckStateRepository
 from sarc.config import UTC, config
-from sarc.models.api import SlurmJobList, UserList
+from sarc.models.api import JobSeriesList, SlurmJobList, UserList
 from sarc.models.cluster import SlurmCluster
 from tests.common.dateutils import _iso_mtl
 from tests.unittests.alerts.definitions import BeanCheck
@@ -295,6 +295,161 @@ def test_count_jobs_invalid_cluster(client):
 def test_count_jobs_invalid_job_state(client):
     """Test jobs count with invalid job state."""
     client.get("/v0/job/count?job_state=BICARBONATE", expect_status=422)
+
+
+# ── /job/series tests ─────────────────────────────────────────────────────────
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_get_series_no_filters(seriesq):
+    seriesq(n=22)
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_get_series_by_cluster(seriesq):
+    series = seriesq(cluster_name="raisin")
+    assert all(s.cluster_id == 7 for s in series)
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_get_series_by_cluster_user(seriesq):
+    series = seriesq(cluster_user="beaubonhomme", n=1)
+    assert series[0].cluster_user == "beaubonhomme"
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_get_series_by_email(seriesq):
+    series = seriesq(email="petitbonhomme@mila.quebec", n=21)
+    assert all(s.cluster_user == "petitbonhomme" for s in series)
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_get_series_by_sarc_user_id(seriesq):
+    series = seriesq(sarc_user_id=9, n=21)
+    assert all(s.sarc_user_id == 9 for s in series)
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_get_series_by_state(seriesq):
+    series = seriesq(job_state="COMPLETED", n=1)
+    assert series[0].job_state == "COMPLETED"
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_get_series_by_datetime_filters(seriesq):
+    series = seriesq(
+        start=_iso_mtl("2023-01-01T00:00:00"), end=_iso_mtl("2023-02-15T23:59:59")
+    )
+    assert len(series) == 8
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_get_series_invalid_cluster(seriesq):
+    err = seriesq(cluster_name="nonexistent", expect_status=404)
+    assert "No such cluster 'nonexistent'" in err["detail"]
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_get_series_empty_result(seriesq):
+    seriesq(job_id="999999", n=0)
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_get_series_default_extra_fields_are_none(seriesq):
+    """Without extra_fields, enriched fields default to None."""
+    (series,) = seriesq(cluster_user="beaubonhomme")
+    assert series.cluster_name is None
+    assert series.display_name is None
+    assert series.email is None
+    assert series.member_type is None
+    assert series.supervisors is None
+    assert series.statistics is None
+    assert series.gpu_type_rgu is None
+    assert series.rgu is None
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_get_series_extra_cluster_name(seriesq):
+    (series,) = seriesq(cluster_user="beaubonhomme", extra_fields="cluster_name")
+    assert series.cluster_name == "raisin"
+    # Other extra fields still None
+    assert series.display_name is None
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_get_series_extra_sarc_user(seriesq):
+    (series,) = seriesq(cluster_user="beaubonhomme", extra_fields="sarc_user")
+    assert series.display_name == "M/Ms Beaubonhomme"
+    assert series.email == "beaubonhomme@mila.quebec"
+    assert series.sarc_user_id == 10
+    # TODO: expand factory to make test more meaningful
+    # petitbonhomme/beaubonhomme have no member_type in test data
+    assert series.member_type is None
+
+
+# TODO: expand factory to make test meaningful
+# @pytest.mark.usefixtures("read_only_db")
+# def test_get_series_extra_statistics(seriesq):
+#     (series,) = seriesq(cluster_user="beaubonhomme", extra_fields="statistics")
+#     assert isinstance(series.statistics, dict)
+
+
+# TODO: expand factory to make test meaningful
+# @pytest.mark.usefixtures("read_only_db")
+# def test_get_series_extra_supervisors(seriesq):
+#     (series,) = seriesq(cluster_user="beaubonhomme", extra_fields="supervisors")
+#     # beaubonhomme has no supervisors in test data
+#     assert series.supervisors is None
+
+
+# TODO: expand factory to make test meaningful
+# @pytest.mark.usefixtures("read_only_db")
+# def test_get_series_extra_rgu(seriesq):
+#     (series,) = seriesq(cluster_user="beaubonhomme", extra_fields="rgu")
+#     # beaubonhomme's job has no allocated GPU type → gpu_type_rgu and rgu are None
+#     assert series.gpu_type_rgu is None
+#     assert series.rgu is None
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_get_series_extra_all(seriesq):
+    """Request all extra fields at once."""
+    (series,) = seriesq(
+        cluster_user="beaubonhomme",
+        extra_fields="cluster_name,sarc_user,supervisors,statistics,rgu",
+    )
+    assert series.cluster_name == "raisin"
+    assert series.display_name == "M/Ms Beaubonhomme"
+    assert series.email == "beaubonhomme@mila.quebec"
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_get_series_invalid_extra_field(client):
+    response = client.get(
+        "/v0/job/series", params={"extra_fields": "bad_field"}, expect_status=422
+    )
+    assert "bad_field" in response.json()["detail"]
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_get_series_pagination(client):
+    """Series results paginate correctly."""
+    all_ids = []
+    cursor = None
+    for _ in range(50):
+        params = {"limit": 5}
+        if cursor is not None:
+            params["cursor"] = cursor
+        data = client.get("/v0/job/series", params=params, expect_status=200).json()
+        cursor = data["cursor"]
+        all_ids.extend(s["job_db_id"] for s in data["results"])
+        if cursor is False:
+            break
+    else:
+        raise AssertionError("Too many pages")
+
+    assert len(all_ids) == 22
+    assert len(set(all_ids)) == 22, "Duplicate results in pagination"
 
 
 @pytest.mark.usefixtures("read_only_db")
