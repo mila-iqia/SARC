@@ -204,15 +204,14 @@ class DbConfiguration:
             allocations = create_allocations(clusters=clusters)
             sess.add_all(allocations)
 
-            diskusages = create_diskusages()
+            diskusages = create_diskusages(clusters=clusters)
             sess.add_all(diskusages)
 
-            users = create_users()
-            sess.add_all(users)
-            sess.flush()
+            users = create_users(sess)
 
             for user in users:
                 user._finalize()
+            sess.flush()
 
             jobs = create_jobs(clusters=clusters, users=users, job_patch=self.job_patch)
             sess.add_all(jobs)

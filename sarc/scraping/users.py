@@ -138,8 +138,7 @@ def update_user_match(*, value: UserMatch, update: UserMatch) -> None:
         else:
             value.associated_accounts[domain].merge_with(credentials, truncate=True)
 
-    value.supervisor.merge_with(update.supervisor, truncate=True)
-    value.co_supervisors.merge_with(update.co_supervisors, truncate=True)
+    value.supervisors.merge_with(update.supervisors, truncate=True)
 
     value.github_username.merge_with(update.github_username, truncate=True)
     value.google_scholar_profile.merge_with(
@@ -234,10 +233,8 @@ def parse_ce(ce: CacheEntry) -> Iterable[UserMatch]:
 
     def _get_refs(um: UserMatch) -> set[MatchID]:
         res = set[MatchID]()
-        for tag in um.supervisor.values:
-            res.add(tag.value)
-        for tags in um.co_supervisors.values:
-            res.update(tags.value)
+        for tag in um.supervisors.values:
+            res.update(tag.value)
         return res
 
     # Filter for "primary" UserMatches (those whose reference name match the

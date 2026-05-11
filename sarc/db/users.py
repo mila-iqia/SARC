@@ -131,16 +131,16 @@ class ValidField[V]:
                 )
             )
         ).all()
-        to_merge = [r for r in records if getattr(r, self.col_ref) == value]
+        to_merge = [r for r in records if getattr(r[0], self.col_ref) == value]
         to_conflict = [
             r
             for r in records
-            if getattr(r, self.col_ref) != value and r.valid.overlaps(valid)
+            if getattr(r[0], self.col_ref) != value and r[0].valid.overlaps(valid)
         ]
 
         final_range = valid
         for record in to_merge:
-            final_range = record.valid.union(final_range)
+            final_range = record[0].valid.union(final_range)
             session.delete(record)
 
         to_insert = [final_range]
@@ -148,19 +148,23 @@ class ValidField[V]:
         for record in to_conflict:
             new_insert = []
             for r_incoming in to_insert:
-                if not r_incoming.overlaps(record.valid):
+                if not r_incoming.overlaps(record[0].valid):
                     new_insert.append(r_incoming)
                     continue
 
                 if truncate:
-                    new_insert.extend(subtract_ranges(r_incoming, record.valid))
-                elif record.valid.upper_inf and valid.not_extend_right_of(record.valid):
-                    record.valid = Range(record.valid.lower, valid.lower, bounds="[)")
-                    session.add(record)
+                    new_insert.extend(subtract_ranges(r_incoming, record[0].valid))
+                elif record[0].valid.upper_inf and valid.not_extend_right_of(
+                    record[0].valid
+                ):
+                    record[0].valid = Range(
+                        record[0].valid.lower, valid.lower, bounds="[)"
+                    )
+                    session.flush()
                     new_insert.append(valid)
                 else:
                     raise DateOverlapError(
-                        value, valid, getattr(record, self.col_ref), record.valid
+                        value, valid, getattr(record[0], self.col_ref), record[0].valid
                     )
 
             to_insert = new_insert
@@ -195,7 +199,7 @@ class ValidField[V]:
         if result is None:
             raise DateMatchError(date)
         else:
-            return getattr(result, self.col_ref)
+            return getattr(result[0], self.col_ref)
 
     def values_in_range(
         self, start: datetime_utc, end: datetime_utc, session: SASession | None = None
@@ -210,7 +214,7 @@ class ValidField[V]:
 
         assert session is not None
         return [
-            getattr(r, self.col_ref)
+            getattr(r[0], self.col_ref)
             for r in session.execute(
                 self._select_base().where(
                     self.model_ref.valid.overlaps(Range(start, end, bounds="[)"))
@@ -436,7 +440,7 @@ class UserDB(SQLModel, table=True):
     # Also this is essentially ValidField[list[int]], but with consistent ordering
     @property
     def supervisors(self) -> SupervisorIDsField:
-        return SupervisorIDsField(self.supervisors)
+        return SupervisorIDsField(self._supervisors)
 
     @property
     def github_username(self) -> ValidField[str]:
