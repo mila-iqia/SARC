@@ -29,7 +29,7 @@ def _df_to_pretty_str(df: pandas.DataFrame, fields: list) -> str:
     return df[fields].to_markdown()
 
 
-@pytest.mark.freeze_time(MOCK_TIME)
+@pytest.mark.time_machine(MOCK_TIME, tick=False)
 @pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
 def test_compute_time_frames(file_regression):
     jobs = load_job_series()
@@ -46,7 +46,7 @@ def test_compute_time_frames(file_regression):
     )
 
 
-@pytest.mark.freeze_time(MOCK_TIME)
+@pytest.mark.time_machine(MOCK_TIME, tick=False)
 @pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
 def test_compute_time_frames_default_frame_size(file_regression):
     # Default frame size is 7 days and should cover all tested jobs,
@@ -63,7 +63,7 @@ def test_compute_time_frames_default_frame_size(file_regression):
     )
 
 
-@pytest.mark.freeze_time(MOCK_TIME)
+@pytest.mark.time_machine(MOCK_TIME, tick=False)
 @pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
 def test_compute_time_frames_explicit_start(file_regression):
     jobs = load_job_series()
@@ -83,7 +83,7 @@ def test_compute_time_frames_explicit_start(file_regression):
     )
 
 
-@pytest.mark.freeze_time(MOCK_TIME)
+@pytest.mark.time_machine(MOCK_TIME, tick=False)
 @pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
 def test_compute_time_frames_explicit_end(file_regression):
     jobs = load_job_series()
@@ -103,7 +103,7 @@ def test_compute_time_frames_explicit_end(file_regression):
     )
 
 
-@pytest.mark.freeze_time(MOCK_TIME)
+@pytest.mark.time_machine(MOCK_TIME, tick=False)
 @pytest.mark.usefixtures("read_only_db", "client_mode", "tzlocal_is_mtl")
 def test_compute_time_frames_explicit_start_and_end(file_regression):
     jobs = load_job_series()

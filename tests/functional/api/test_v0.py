@@ -525,8 +525,10 @@ def test_user_query_by_email(userq):
     ],
 )
 @pytest.mark.usefixtures("read_only_db")
-def test_user_query_by_member_type_now(userq, freezer, member_type, date, expected):
-    freezer.move_to(date)
+def test_user_query_by_member_type_now(
+    userq, time_machine, member_type, date, expected
+):
+    time_machine.move_to(date)
     users = userq(member_type=member_type, n=False)
     assert _ids(users) == expected
 

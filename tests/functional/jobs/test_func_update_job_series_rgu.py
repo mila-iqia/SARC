@@ -572,7 +572,7 @@ def test_update_job_series_rgu_billing_is_gpu(
     )
 
 
-@pytest.mark.freeze_time(MOCK_TIME)
+@pytest.mark.time_machine(MOCK_TIME, tick=False)
 @pytest.mark.usefixtures("read_only_db_with_users", "client_mode", "tzlocal_is_mtl")
 def test_update_job_series_rgu_with_read_only_db(
     cluster_gpu_billing_one_date, file_regression, monkeypatch

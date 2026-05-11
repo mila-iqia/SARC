@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import json
 import os
 import sys
@@ -12,15 +10,12 @@ from typing import Any
 from unittest.mock import MagicMock
 from uuid import uuid4
 
-import freezegun
 import gifnoc
 import pytest
-from freezegun.api import FakeDatetime
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from opentelemetry.trace import set_tracer_provider
-from pytest_regressions.data_regression import RegressionYamlDumper
 from sqlalchemy import text
 from sqlmodel import create_engine, select
 
@@ -37,10 +32,6 @@ del _tracer_provider
 sys.path.append(os.path.join(os.path.dirname(__file__), "common"))
 
 pytest_plugins = "fabric.testing.fixtures"
-
-RegressionYamlDumper.add_custom_yaml_representer(
-    FakeDatetime, lambda dumper, data: dumper.represent_datetime(data)
-)
 
 
 @pytest.fixture
@@ -160,18 +151,6 @@ def no_pkey(monkeypatch):
         return Connection(*args, **kwargs)
 
     monkeypatch.setattr(fabric, "Connection", Connection_mock)
-
-
-# this is to make the pytest-freezegun types serializable by pyyaml
-# (for use in pytest-regression)
-def repr_fakedatetime(dumper, data):
-    value = data.isoformat(" ")
-    return dumper.represent_scalar("tag:yaml.org,2002:timestamp", value)
-
-
-RegressionYamlDumper.add_custom_yaml_representer(
-    freezegun.api.FakeDatetime, repr_fakedatetime
-)
 
 
 @contextmanager

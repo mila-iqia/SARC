@@ -100,7 +100,7 @@ def test_fetch_raw2(test_config, remote):
     ],
     indirect=True,
 )
-@pytest.mark.freeze_time(datetime(2023, 2, 28, tzinfo=MTL))
+@pytest.mark.time_machine(datetime(2023, 2, 28, tzinfo=MTL), tick=False)
 def test_fetch_jobs_get_cache(test_config, enabled_cache, remote):
     today = datetime.combine(date.today(), datetime.min.time(), tzinfo=MTL).astimezone(
         UTC

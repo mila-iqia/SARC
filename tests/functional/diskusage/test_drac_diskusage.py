@@ -1,15 +1,18 @@
+import json
 from pathlib import Path
 
 import pytest
+from sqlmodel import select
 
 from sarc.config import config
-from sarc.core.scraping.diskusage import get_diskusage_scraper
-from sarc.storage.diskusage import get_diskusages
+from sarc.db.cluster import SlurmClusterDB
+from sarc.db.diskusage import DiskUsageDB
+from sarc.scraping.diskusage import get_diskusage_scraper
 
 
 @pytest.mark.usefixtures("no_pkey")
-@pytest.mark.freeze_time("2023-07-25")
-def test_drac_fetch_report(remote, file_regression, monkeypatch):
+@pytest.mark.time_machine("2023-07-25T00:00+00:00", tick=False)
+def test_drac_fetch_report(remote, file_regression):
     cluster = config("scraping").clusters["gerudo"]
     diskusages = cluster.diskusage
     assert diskusages is not None
@@ -46,11 +49,9 @@ def test_drac_parse_report(file_regression):
     file_regression.check(result.model_dump_json(exclude={"timestamp", "id"}, indent=2))
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "no_pkey")
-@pytest.mark.freeze_time("2023-05-12")
-def test_drac_acquire_storages(
-    remote, cli_main, file_regression, enabled_cache, monkeypatch
-):
+@pytest.mark.usefixtures("enabled_cache", "no_pkey")
+@pytest.mark.time_machine("2023-05-12T00:00+00:00", tick=False)
+def test_drac_acquire_storages(remote, cli_main, file_regression, empty_read_write_db):
     cluster = config("scraping").clusters["hyrule"]
     diskusages = cluster.diskusage
     assert diskusages is not None
@@ -73,6 +74,14 @@ def test_drac_acquire_storages(
     cli_main(["fetch", "diskusage", "-c", "hyrule"])
     cli_main(["parse", "diskusage", "--from", "2023-05-11"])
 
-    data = get_diskusages(cluster_name=["hyrule"])
+    data = empty_read_write_db.exec(
+        select(DiskUsageDB)
+        .join(SlurmClusterDB, SlurmClusterDB.id == DiskUsageDB.cluster_id)
+        .where(SlurmClusterDB.name == "hyrule")
+    ).all()
     assert len(data) == 1
-    file_regression.check(data[0].model_dump_json(exclude={"id": True}, indent=4))
+    file_regression.check(
+        json.dumps(
+            data[0].model_dump(mode="json", exclude={"id"}), indent=4, sort_keys=True
+        )
+    )
