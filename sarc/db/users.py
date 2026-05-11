@@ -115,6 +115,7 @@ class ValidField[V]:
             end = end.astimezone(UTC)
 
         self._insert_tag(session, value, Range(start, end, bounds="[)"))
+        session.flush()
 
     def _insert_tag(
         self,
@@ -138,10 +139,15 @@ class ValidField[V]:
             if getattr(r[0], self.col_ref) != value and r[0].valid.overlaps(valid)
         ]
 
+        if any(record[0].valid.contains(valid) for record in to_merge):
+            # There is already a record in the DB that covers this valid range with this value, so nothing to do
+            return
+
         final_range = valid
         for record in to_merge:
             final_range = record[0].valid.union(final_range)
-            session.delete(record)
+            session.delete(record[0])
+        session.flush()
 
         to_insert = [final_range]
 
@@ -171,6 +177,7 @@ class ValidField[V]:
 
         for final_valid in to_insert:
             session.add(self._create_record(valid=final_valid, value=value))
+        session.flush()
 
     def get_value(
         self, date: datetime | None = None, session: SASession | None = None
@@ -316,11 +323,19 @@ class SupervisorsHelper(SQLModel, table=True):
     pos: int = Field(ge=0)
     supervisor: int = Field(foreign_key="users.id", ondelete="RESTRICT")
 
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, SupervisorsHelper):
+            return False
+        return self.pos == other.pos and self.supervisor == other.supervisor
+
+    def __hash__(self) -> int:
+        return hash((self.pos, self.supervisor))
+
 
 class SupervisorsDB(ValidDB, table=True):
     __tablename__ = "user_supervisors"
     supervisors: list[SupervisorsHelper] = Relationship(
-        sa_relationship_kwargs={"order_by": SupervisorsHelper.pos}
+        cascade_delete=True, sa_relationship_kwargs={"order_by": SupervisorsHelper.pos}
     )
 
 
