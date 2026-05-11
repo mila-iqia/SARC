@@ -243,7 +243,7 @@ def test_get_jobs_invalid_pagination(client):
         client.get("/v0/job/query?limit=0")
     # Limit > MAX
     with pytest.raises(ValidationError):
-        client.get(f"/v0/job/query?limit={config().api.max_page_size + 1}")
+        client.get("/v0/job/query?limit=101")
 
 
 @pytest.mark.usefixtures("read_only_db")
@@ -283,7 +283,9 @@ def test_count_jobs(client, params, expected):
 @pytest.mark.usefixtures("read_only_db")
 def test_count_jobs_invalid_cluster(client):
     """Test jobs count with invalid cluster."""
-    response = client.get("/v0/job/count?cluster_name=invalid_cluster", expect_status=404)
+    response = client.get(
+        "/v0/job/count?cluster_name=invalid_cluster", expect_status=404
+    )
 
     data = response.json()
     assert "No such cluster 'invalid_cluster'" in data["detail"]
