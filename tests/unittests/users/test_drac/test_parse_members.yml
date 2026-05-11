@@ -1,11 +1,10 @@
 - associated_accounts:
     drac:
       values:
-      - valid_end: 2024-01-01 00:00:00+00:00
-        valid_start: 2023-01-01 18:54:23+00:00
+      - valid:
+          lower: 2023-01-01 18:54:23+00:00
+          upper: 2024-01-01 00:00:00+00:00
         value: johndoe
-  co_supervisors:
-    values: []
   display_name: John Doe
   email: john.doe@example.com
   github_username:
@@ -18,16 +17,15 @@
     name: drac_member
   member_type:
     values: []
-  supervisor:
+  supervisors:
     values: []
 - associated_accounts:
     drac:
       values:
-      - valid_end: 2024-01-01 00:00:00+00:00
-        valid_start: 2023-02-01 22:34:48+00:00
+      - valid:
+          lower: 2023-02-01 22:34:48+00:00
+          upper: 2024-01-01 00:00:00+00:00
         value: janesmith
-  co_supervisors:
-    values: []
   display_name: Jane Smith
   email: jane.smith@example.com
   github_username:
@@ -40,5 +38,5 @@
     name: drac_member
   member_type:
     values: []
-  supervisor:
+  supervisors:
     values: []

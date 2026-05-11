@@ -1,11 +1,10 @@
 - associated_accounts:
     mila:
       values:
-      - valid_end: '3000-01-01T00:00:00Z'
-        valid_start: '2024-01-01T00:00:00Z'
+      - valid:
+          lower: '2024-01-01T00:00:00Z'
+          upper: null
         value: smithj000
-  co_supervisors:
-    values: []
   display_name: John Smith the 000rd
   email: john.smith000@mila.quebec
   github_username:
@@ -18,16 +17,15 @@
     name: mila_ldap
   member_type:
     values: []
-  supervisor:
+  supervisors:
     values: []
 - associated_accounts:
     mila:
       values:
-      - valid_end: '3000-01-01T00:00:00Z'
-        valid_start: '2024-01-01T00:00:00Z'
+      - valid:
+          lower: '2024-01-01T00:00:00Z'
+          upper: null
         value: smithj001
-  co_supervisors:
-    values: []
   display_name: John Smith the 001rd
   email: john.smith001@mila.quebec
   github_username:
@@ -40,16 +38,15 @@
     name: mila_ldap
   member_type:
     values: []
-  supervisor:
+  supervisors:
     values: []
 - associated_accounts:
     mila:
       values:
-      - valid_end: '3000-01-01T00:00:00Z'
-        valid_start: '2024-01-01T00:00:00Z'
+      - valid:
+          lower: '2024-01-01T00:00:00Z'
+          upper: null
         value: smithj002
-  co_supervisors:
-    values: []
   display_name: John Smith the 002rd
   email: john.smith002@mila.quebec
   github_username:
@@ -62,13 +59,11 @@
     name: mila_ldap
   member_type:
     values: []
-  supervisor:
+  supervisors:
     values: []
 - associated_accounts:
     mila:
       values: []
-  co_supervisors:
-    values: []
   display_name: John Smith the 003rd
   email: john.smith003@mila.quebec
   github_username:
@@ -81,16 +76,15 @@
     name: mila_ldap
   member_type:
     values: []
-  supervisor:
+  supervisors:
     values: []
 - associated_accounts:
     mila:
       values:
-      - valid_end: '3000-01-01T00:00:00Z'
-        valid_start: '2024-01-01T00:00:00Z'
+      - valid:
+          lower: '2024-01-01T00:00:00Z'
+          upper: null
         value: smithj004
-  co_supervisors:
-    values: []
   display_name: John Smith the 004rd
   email: john.smith004@mila.quebec
   github_username:
@@ -103,16 +97,15 @@
     name: mila_ldap
   member_type:
     values: []
-  supervisor:
+  supervisors:
     values: []
 - associated_accounts:
     mila:
       values:
-      - valid_end: '3000-01-01T00:00:00Z'
-        valid_start: '2024-01-01T00:00:00Z'
+      - valid:
+          lower: '2024-01-01T00:00:00Z'
+          upper: null
         value: smithj005
-  co_supervisors:
-    values: []
   display_name: John Smith the 005rd
   email: john.smith005@mila.quebec
   github_username:
@@ -125,16 +118,15 @@
     name: mila_ldap
   member_type:
     values: []
-  supervisor:
+  supervisors:
     values: []
 - associated_accounts:
     mila:
       values:
-      - valid_end: '3000-01-01T00:00:00Z'
-        valid_start: '2024-01-01T00:00:00Z'
+      - valid:
+          lower: '2024-01-01T00:00:00Z'
+          upper: null
         value: smithj006
-  co_supervisors:
-    values: []
   display_name: John Smith the 006rd
   email: john.smith006@mila.quebec
   github_username:
@@ -147,16 +139,15 @@
     name: mila_ldap
   member_type:
     values: []
-  supervisor:
+  supervisors:
     values: []
 - associated_accounts:
     mila:
       values:
-      - valid_end: '3000-01-01T00:00:00Z'
-        valid_start: '2024-01-01T00:00:00Z'
+      - valid:
+          lower: '2024-01-01T00:00:00Z'
+          upper: null
         value: smithj007
-  co_supervisors:
-    values: []
   display_name: John Smith the 007rd
   email: john.smith007@mila.quebec
   github_username:
@@ -169,16 +160,15 @@
     name: mila_ldap
   member_type:
     values: []
-  supervisor:
+  supervisors:
     values: []
 - associated_accounts:
     mila:
       values:
-      - valid_end: '3000-01-01T00:00:00Z'
-        valid_start: '2024-01-01T00:00:00Z'
+      - valid:
+          lower: '2024-01-01T00:00:00Z'
+          upper: null
         value: smithj008
-  co_supervisors:
-    values: []
   display_name: John Smith the 008rd
   email: john.smith008@mila.quebec
   github_username:
@@ -191,16 +181,15 @@
     name: mila_ldap
   member_type:
     values: []
-  supervisor:
+  supervisors:
     values: []
 - associated_accounts:
     mila:
       values:
-      - valid_end: '3000-01-01T00:00:00Z'
-        valid_start: '2024-01-01T00:00:00Z'
+      - valid:
+          lower: '2024-01-01T00:00:00Z'
+          upper: null
         value: smithj009
-  co_supervisors:
-    values: []
   display_name: John Smith the 009rd
   email: john.smith009@mila.quebec
   github_username:
@@ -213,5 +202,5 @@
     name: mila_ldap
   member_type:
     values: []
-  supervisor:
+  supervisors:
     values: []

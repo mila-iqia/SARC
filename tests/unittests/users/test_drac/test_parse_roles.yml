@@ -1,6 +1,4 @@
 - associated_accounts: {}
-  co_supervisors:
-    values: []
   display_name: John Doe
   email: john.doe@example.com
   github_username:
@@ -13,11 +11,9 @@
     name: drac_role
   member_type:
     values: []
-  supervisor:
+  supervisors:
     values: []
 - associated_accounts: {}
-  co_supervisors:
-    values: []
   display_name: Jane Smith
   email: jane.smith@example.com
   github_username:
@@ -30,5 +26,5 @@
     name: drac_role
   member_type:
     values: []
-  supervisor:
+  supervisors:
     values: []
