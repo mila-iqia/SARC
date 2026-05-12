@@ -137,22 +137,7 @@ def test_fetch_jobs_get_cache(test_config, enabled_cache, remote):
     assert value == b'{"value": 2}'
 
 
-@pytest.mark.parametrize(
-    "test_config",
-    [
-        {
-            "clusters": {
-                "test": {
-                    "host": "test",
-                    "private_key": {"file": "tests/id_test", "password": "12345"},
-                    "user_domain": "drac",
-                }
-            }
-        }
-    ],
-    indirect=True,
-)
-def test_convert_version_supported(test_config, monkeypatch, caplog):
+def test_convert_version_supported():
     version_supported = {"major": "24", "micro": "1", "minor": "11"}
     version_unsupported = {"major": "124", "micro": "1", "minor": "11"}
 
@@ -218,13 +203,13 @@ def test_convert_version_supported(test_config, monkeypatch, caplog):
     slurmjob = _convert_json_job(entry, "test", version_supported)
 
     assert slurmjob is not None
-    assert slurmjob.job_id == 123456
-    assert slurmjob.user == "toto"
-    assert slurmjob.group == "toto_group"
-    assert slurmjob.account == "toto_account"
-    assert slurmjob.partition == "partition123"
-    assert slurmjob.job_state == "TIMEOUT"
-    assert slurmjob.work_dir == "/home/toto/my_job_name"
+    assert slurmjob["job_id"] == 123456
+    assert slurmjob["user"] == "toto"
+    assert slurmjob["group"] == "toto_group"
+    assert slurmjob["account"] == "toto_account"
+    assert slurmjob["partition"] == "partition123"
+    assert slurmjob["job_state"] == "TIMEOUT"
+    assert slurmjob["work_dir"] == "/home/toto/my_job_name"
 
     # test version unsupported
     with pytest.raises(JobConversionError):

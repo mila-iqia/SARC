@@ -7,7 +7,7 @@ from sqlalchemy.exc import DataError
 from sarc.alerts.common import HealthCheck
 from sarc.config import UTC
 from sarc.db.healthcheck import HealthCheckStateDB
-from sarc.models.api import SlurmJobList, UserList
+from sarc.models.api import JobSeriesList, SlurmJobList, UserList
 from sarc.models.cluster import SlurmCluster
 from sarc.models.healthcheck_state import HealthCheckState
 from tests.common.dateutils import _iso_mtl
@@ -80,6 +80,7 @@ def query_fixture(t, type_name, endpoint):
 
 jobq = query_fixture(t=SlurmJobList, type_name="job", endpoint="/v0/job/query")
 userq = query_fixture(t=UserList, type_name="user", endpoint="/v0/user/query")
+seriesq = query_fixture(t=JobSeriesList, type_name="series", endpoint="/v0/job/series")
 
 
 def _ids(jobs):

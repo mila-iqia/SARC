@@ -5,10 +5,10 @@ Result #1
     "profile_id": "https://scholar.google.com/citations?user=PataTe_000AJ&hl=en",
     "user_id": 2,
     "valid": {
-        "lower": null,
-        "upper": null,
         "bounds": "()",
-        "empty": false
+        "empty": false,
+        "lower": null,
+        "upper": null
     }
 }
 Result #2
@@ -16,10 +16,10 @@ Result #2
     "profile_id": "https://scholar.google.com/citations?user=PataTe_111AJ&hl=en",
     "user_id": 3,
     "valid": {
-        "lower": "2019-10-11T00:00:00Z",
-        "upper": "2030-12-30T00:00:00Z",
         "bounds": "[)",
-        "empty": false
+        "empty": false,
+        "lower": "2019-10-11T00:00:00Z",
+        "upper": "2030-12-30T00:00:00Z"
     }
 }
 Result #3
@@ -27,10 +27,10 @@ Result #3
     "profile_id": "profileA",
     "user_id": 5,
     "valid": {
-        "lower": "2022-01-01T00:00:00Z",
-        "upper": "2023-01-01T00:00:00Z",
         "bounds": "[)",
-        "empty": false
+        "empty": false,
+        "lower": "2022-01-01T00:00:00Z",
+        "upper": "2023-01-01T00:00:00Z"
     }
 }
 Result #4
@@ -38,9 +38,9 @@ Result #4
     "profile_id": "profileB",
     "user_id": 7,
     "valid": {
-        "lower": "2022-01-01T00:00:00Z",
-        "upper": "2023-01-01T00:00:00Z",
         "bounds": "[)",
-        "empty": false
+        "empty": false,
+        "lower": "2022-01-01T00:00:00Z",
+        "upper": "2023-01-01T00:00:00Z"
     }
 }

@@ -91,10 +91,8 @@ cpu_utilization = (
 )
 cpu_equivalent_cost = SlurmJobDB.elapsed_time * SlurmJobDB.allocated_cpu
 cpu_overbilling_cost = (
-    (
-        SlurmJobDB.elapsed_time * (SlurmJobDB.allocated_cpu - SlurmJobDB.requested_cpu)
-    ).label("cpu_overbilling_cost"),
-)
+    SlurmJobDB.elapsed_time * (SlurmJobDB.allocated_cpu - SlurmJobDB.requested_cpu)
+).label("cpu_overbilling_cost")
 
 gpu_cost = SlurmJobDB.elapsed_time * SlurmJobDB.requested_gres_gpu
 gpu_utilization = (
@@ -105,11 +103,9 @@ gpu_utilization = (
 )
 gpu_equivalent_cost = SlurmJobDB.elapsed_time * SlurmJobDB.allocated_gres_gpu
 gpu_overbilling_cost = (
-    (
-        SlurmJobDB.elapsed_time
-        * (SlurmJobDB.allocated_gres_gpu - SlurmJobDB.requested_gres_gpu)
-    ).label("gpu_overbilling_cost"),
-)
+    SlurmJobDB.elapsed_time
+    * (SlurmJobDB.allocated_gres_gpu - SlurmJobDB.requested_gres_gpu)
+).label("gpu_overbilling_cost")
 
 JOB_SERIES_EXCLUDED_JOB_COLS = frozenset(
     {"id", "sarc_user_id", "latest_scraped_start", "latest_scraped_end"}

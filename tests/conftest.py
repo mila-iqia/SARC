@@ -204,8 +204,7 @@ class DbConfiguration:
             allocations = create_allocations(clusters=clusters)
             sess.add_all(allocations)
 
-            diskusages = create_diskusages(clusters=clusters)
-            sess.add_all(diskusages)
+            create_diskusages(sess=sess, clusters=clusters)
 
             users = create_users(sess)
 
@@ -290,9 +289,11 @@ def results_regression(file_regression):
         txt = f"Found {len(results)} result(s):\n"
         for i, x in enumerate(sorted(results, key=lambda x: x.id)):
             txt += f"\nResult #{i + 1}\n"
-            md = json.loads(x.model_dump_json(exclude={"id": True}, indent=4))
-            md = {k: v for k, v in sorted(md.items())}
-            txt += json.dumps(md, indent=4)
+            txt += json.dumps(
+                x.model_dump(mode="json", exclude={"id": True}),
+                indent=4,
+                sort_keys=True,
+            )
         file_regression.check(txt)
 
     return check
