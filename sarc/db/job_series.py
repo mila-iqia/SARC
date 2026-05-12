@@ -81,6 +81,35 @@ rgu_expr = case(
     else_=(gpu_count_raw / gpu_unit_billing) * GpuRguDB.rgu,
 ).label("rgu")
 
+# Cost and waste
+cpu_cost = SlurmJobDB.elapsed_time * SlurmJobDB.requested_cpu
+cpu_utilization = (
+    select(JobStatisticDB.mean)
+    .where(JobStatisticDB.job_id == SlurmJobDB.id)
+    .where(JobStatisticDB.name == "cpu_utilization")
+    .scalar_subquery()
+)
+cpu_equivalent_cost = SlurmJobDB.elapsed_time * SlurmJobDB.allocated_cpu
+cpu_overbilling_cost = (
+    (
+        SlurmJobDB.elapsed_time * (SlurmJobDB.allocated_cpu - SlurmJobDB.requested_cpu)
+    ).label("cpu_overbilling_cost"),
+)
+
+gpu_cost = SlurmJobDB.elapsed_time * SlurmJobDB.requested_gres_gpu
+gpu_utilization = (
+    select(JobStatisticDB.mean)
+    .where(JobStatisticDB.job_id == SlurmJobDB.id)
+    .where(JobStatisticDB.name == "gpu_utilization")
+    .scalar_subquery()
+)
+gpu_equivalent_cost = SlurmJobDB.elapsed_time * SlurmJobDB.allocated_gres_gpu
+gpu_overbilling_cost = (
+    (
+        SlurmJobDB.elapsed_time
+        * (SlurmJobDB.allocated_gres_gpu - SlurmJobDB.requested_gres_gpu)
+    ).label("gpu_overbilling_cost"),
+)
 
 JOB_SERIES_EXCLUDED_JOB_COLS = frozenset(
     {"id", "sarc_user_id", "latest_scraped_start", "latest_scraped_end"}
@@ -105,6 +134,16 @@ class JobSeriesDB(SQLModel, table=True):
             supervisors_subq,
             GpuRguDB.rgu.label("gpu_type_rgu"),
             rgu_expr,
+            cpu_cost.label("cpu_cost"),
+            ((1 - cpu_utilization) * cpu_cost).label("cpu_waste"),
+            cpu_equivalent_cost.label("cpu_equivalent_cost"),
+            ((1 - cpu_utilization) * cpu_equivalent_cost).label("cpu_equivalent_waste"),
+            cpu_overbilling_cost,
+            gpu_cost.label("gpu_cost"),
+            ((1 - gpu_utilization) * gpu_cost).label("gpu_waste"),
+            gpu_equivalent_cost.label("gpu_equivalent_cost"),
+            ((1 - gpu_utilization) * gpu_equivalent_cost).label("gpu_equivalent_waste"),
+            gpu_overbilling_cost,
         )
         .join(UserDB, SlurmJobDB.sarc_user_id == UserDB.id)
         .join(SlurmClusterDB, SlurmJobDB.cluster_id == SlurmClusterDB.id)
@@ -180,6 +219,17 @@ class JobSeriesDB(SQLModel, table=True):
 
     gpu_type_rgu: float | None
     rgu: float | None
+
+    cpu_cost: float | None
+    cpu_waste: float | None
+    cpu_equivalent_cost: float | None
+    cpu_equivalent_waste: float | None
+    cpu_overbilling_cost: float | None
+    gpu_cost: float | None
+    gpu_waste: float | None
+    gpu_equivalent_cost: float | None
+    gpu_equivalent_waste: float | None
+    gpu_overbilling_cost: float | None
 
     # User ID
     sarc_user_id: int

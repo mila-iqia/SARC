@@ -5,8 +5,6 @@ and alternative MIG value reference, either "drac" (default) or "mila".
 TODO Integrate into SlurmJob and update_job_series_rgu.
 """
 
-from __future__ import annotations
-
 import re
 from dataclasses import dataclass
 from enum import StrEnum
