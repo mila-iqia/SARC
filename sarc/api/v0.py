@@ -17,8 +17,9 @@ from sqlmodel.sql.expression import SelectOfScalar
 from sarc.config import UTC, Config, config
 from sarc.db.cluster import SlurmClusterDB, get_available_clusters
 from sarc.db.healthcheck import HealthCheckStateDB
-from sarc.db.job import SlurmJobDB, SlurmState, get_rgus
+from sarc.db.job import SlurmJobDB, SlurmState
 from sarc.db.job_series import JobSeriesDB
+from sarc.db.support import GpuRguDB
 from sarc.db.users import (
     MatchingID,
     MemberType,
@@ -528,9 +529,20 @@ def get_cluster_names(sess: Session = Depends(session_dep)) -> list[SlurmCluster
 
 
 @router.get("/gpu/rgu", dependencies=[Depends(requestor)])
-def get_rgu_value_per_gpu() -> dict[str, float]:
+def get_rgu_value_per_gpu(sess: Session = Depends(session_dep)) -> dict[str, float]:
     """Return the mapping GPU->RGU."""
-    return get_rgus()
+    res: dict[str, float] = {}
+    for entry in sess.exec(select(GpuRguDB)):
+        res[entry.name] = entry.rgu
+    return res
+
+
+@router.post("/gpu/rgu", dependencies=[Depends(require_admin)])
+def update_rgu(update: dict[str, float], sess: Session = Depends(session_dep)) -> bool:
+    for name, val in update.items():
+        sess.merge(GpuRguDB(name=name, rgu=val))
+    sess.commit()
+    return True
 
 
 @router.get("/user/query")

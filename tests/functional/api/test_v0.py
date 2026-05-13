@@ -472,19 +472,24 @@ def test_cluster_list(client):
     }
 
 
-def _gen_fake_rgus():
-    """Mock for sarc.client.gpumetrics.get_rgus()"""
-    return {"A100": 3.21, "gpu1": 1.5, "gpu_2": 4.5, "GPU 3": 4 * 7}
-
-
-@pytest.mark.usefixtures("read_only_db")
-def test_gpu_rgu(client, monkeypatch):
-    monkeypatch.setattr("sarc.api.v0.get_rgus", _gen_fake_rgus)
+@pytest.mark.usefixtures("read_write_db")
+def test_gpu_rgu(client):
 
     response = client.get("/v0/gpu/rgu", expect_status=200)
     data = response.json()
     assert isinstance(data, dict)
-    assert data == _gen_fake_rgus()
+    assert data["A100-SXM4-40GB"] == 4.0
+    assert data["A100-PCIe-40GB"] == 4.0
+    assert data["L40S"] == 10.35952718676123
+
+    response = client.post("/v0/gpu/rgu", expect_status=200, json={"gpu 1": 33.33})
+    assert response.json() is True
+
+    response = client.get("/v0/gpu/rgu", expect_status=200)
+    data = response.json()
+    assert isinstance(data, dict)
+    assert data["gpu 1"] == 33.33
+    assert len(data) > 1
 
 
 @pytest.mark.usefixtures("read_only_db")

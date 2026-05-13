@@ -1,3 +1,6 @@
+from types import SimpleNamespace
+
+from iguane.fom import RAWDATA, fom_ugr
 from sqlalchemy import Engine
 from sqlmodel import Session, select, text
 
@@ -23,7 +26,7 @@ def db_upgrade(engine: Engine):
     with engine.connect() as conn:
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS btree_gist"))
 
-        # This will work for now, but should use proper migrations eventually
+        # This will work for now, but we should use proper migrations eventually
         tables = [
             t
             for n, t in SQLModel.metadata.tables.items()
@@ -46,6 +49,7 @@ def db_upgrade(engine: Engine):
 
         with Session(conn) as sess:
             insert_clusters(sess)
+            insert_rgu(sess)
             sess.commit()
 
 
@@ -71,3 +75,12 @@ def insert_clusters(sess: Session) -> None:
             db_cluster.start_date = clust.start_date
             db_cluster.billing_is_gpu = clust.billing_is_gpu
         sess.flush()
+
+
+def insert_rgu(sess: Session) -> None:
+    # populate the db with initial rgu data from iguane
+    from .support import GpuRguDB
+
+    args = SimpleNamespace(fom_version="1.0", custom_weights=None, norm=False)
+    for key in RAWDATA.keys():
+        sess.merge(GpuRguDB(name=key, rgu=fom_ugr(key, args=args)))
