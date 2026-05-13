@@ -1,4 +1,4 @@
-Found 15 result(s):
+Found 17 result(s):
 
 Result #1
 {
@@ -89,4 +89,16 @@ Result #15
     "match_id": "aaa-002",
     "plugin_name": "drac_role",
     "user_id": 10
+}
+Result #16
+{
+    "match_id": "bramin@mila.quebec",
+    "plugin_name": "mila_ldap",
+    "user_id": 11
+}
+Result #17
+{
+    "match_id": "aaa-003",
+    "plugin_name": "drac_role",
+    "user_id": 11
 }

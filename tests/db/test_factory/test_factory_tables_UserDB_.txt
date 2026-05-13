@@ -1,4 +1,4 @@
-Found 10 result(s):
+Found 11 result(s):
 
 Result #1
 {
@@ -49,4 +49,9 @@ Result #10
 {
     "display_name": "M/Ms Beaubonhomme",
     "email": "beaubonhomme@mila.quebec"
+}
+Result #11
+{
+    "display_name": "M/Ms Bramin",
+    "email": "bramin@mila.quebec"
 }

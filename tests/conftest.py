@@ -174,6 +174,7 @@ def custom_db_config(db_name, additional_overrides={}):
 class DbConfiguration:
     base_name: str
     empty: bool = False
+    has_jobs: bool = True
     job_patch: Any = None
     read_only: bool = False
 
@@ -212,8 +213,9 @@ class DbConfiguration:
                 user._finalize()
             sess.flush()
 
-            jobs = create_jobs(clusters=clusters, users=users, job_patch=self.job_patch)
-            sess.add_all(jobs)
+            if self.has_jobs:
+                jobs = create_jobs(clusters=clusters, users=users, job_patch=self.job_patch)
+                sess.add_all(jobs)
 
             sess.commit()
 
@@ -242,6 +244,8 @@ class DbConfiguration:
 
 empty_read_write_db_config_object = DbConfiguration("empty-rw", empty=True).fixture()
 
+jobless_read_write_db_config_object = DbConfiguration("jobless-rw", has_jobs=False).fixture()
+
 read_write_db_config_object = DbConfiguration("rw").fixture()
 
 read_write_db_with_many_cpu_jobs_config_object = DbConfiguration(
@@ -258,6 +262,13 @@ read_only_db_config_object = DbConfiguration("r", read_only=True).fixture()
 @pytest.fixture
 def empty_read_write_db(empty_read_write_db_config_object):
     with custom_db_config(empty_read_write_db_config_object):
+        with config().db.session() as session:
+            yield session
+
+
+@pytest.fixture
+def jobless_read_write_db(jobless_read_write_db_config_object):
+    with custom_db_config(jobless_read_write_db_config_object):
         with config().db.session() as session:
             yield session
 

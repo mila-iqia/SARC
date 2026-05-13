@@ -27,10 +27,6 @@ class JobConversionError(Exception):
     """Exception raised when there's an error converting a job entry from sacct."""
 
 
-def _str_to_dt(dt_str: str) -> datetime:
-    return datetime.strptime(dt_str, "%Y-%m-%d").replace(tzinfo=UTC)
-
-
 def _str_to_extended_dt(dt_str: str) -> datetime:
     """Parse date up to minute, with format %Y-%m-%dT%H:%M"""
     return datetime.strptime(dt_str, DATE_FORMAT_HOUR).replace(tzinfo=UTC)
@@ -109,8 +105,9 @@ def set_auto_end_time(cluster_name: str, end_field: str, date: datetime) -> None
         sess.exec(
             update(SlurmClusterDB)
             .where(col(SlurmClusterDB.name) == cluster_name)
-            .values(**{end_field: date.strftime(DATE_FORMAT_HOUR)})
+            .values(**{end_field: date})
         )
+        sess.commit()
 
 
 def parse_in_timezone(timestamp: int | None) -> datetime | None:
@@ -158,7 +155,7 @@ def fetch_raw(cluster: ClusterConfig, start: datetime, end: datetime) -> bytes:
 def _convert_json_job(
     entry: dict,
     cluster: str,
-    version: dict | None = None,
+    version: dict = None,
     scraped_start: datetime | None = None,
     scraped_end: datetime | None = None,
 ) -> dict | None:
@@ -246,7 +243,7 @@ def _convert_json_job(
             else entry["array"]["task_id"]["number"]
         ),
         name=entry["name"],
-        user=entry["user"],
+        cluster_user=entry["user"],
         group=entry["group"],
         account=entry["account"],
         job_state=(
@@ -267,7 +264,7 @@ def _convert_json_job(
         time_limit=(
             tlimit := (
                 entry["time"]["limit"]
-                if v_before_23_11
+                if v_before_23
                 else entry["time"]["limit"]["number"]
             )
         )
@@ -282,6 +279,7 @@ def _convert_json_job(
         priority=(entry["priority"] if v_before_23 else entry["priority"]["number"]),
         qos=entry["qos"],
         work_dir=entry["working_directory"],
+        submit_line=entry.get("submit_line", ""),
         **resources,
         **flags,
         **extra,

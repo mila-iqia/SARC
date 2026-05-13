@@ -4,53 +4,45 @@ import json
 import subprocess
 import time
 from datetime import datetime, timedelta
+from difflib import unified_diff
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 from fabric.testing.base import Command, Session
 from opentelemetry.trace import StatusCode
+from sqlmodel import select
 
 from sarc.cache import Cache
-from sarc.client import get_available_clusters
-from sarc.client.job import get_jobs
 from sarc.config import UTC, config
 from sarc.core.scraping.jobs_utils import _convert_json_job, fetch_raw, parse_raw
+from sarc.db.cluster import SlurmClusterDB
+from sarc.db.job import SlurmJobDB
+from sarc.models.job import SlurmState
 from tests.common.dateutils import MTL, PST, _dtfmt
 
-from .factory import create_sacct_json
+
+def _dump(job):
+    return SlurmJobDB(**job, cluster_id=-1, sarc_user_id=-1).model_dump_json(indent=4)
+
 
 parameters = {
     "user": {"user": "longbonhomme"},
-    "job_state": {"state": {"current": "OUT_OF_MEMORY", "reason": "None"}},
+    "job_state": {"state": {"current": ["OUT_OF_MEMORY"], "reason": "None"}},
     "signal": {
         "exit_code": {
             "status": "SIGNALED",
-            "return_code": None,
-            "signal": {"signal_id": 9, "name": "Killed"},
+            "return_code": {"number": None},
+            "signal": {"id": {"number": 9}, "name": "Killed"},
         }
     },
-    "exit_code": {"exit_code": {"return_code": 1, "status": "FAILED"}},
-    "time_limit": {"time": {"limit": 12345}},  # 12345 * 60 = 740700 secs
+    "exit_code": {"exit_code": {"return_code": {"number": 1}, "status": "FAILED"}},
+    "time_limit": {"time": {"limit": {"number": 12345}}},  # 12345 * 60 = 740700 secs
     "submit_time": {
         "time": {
             "submission": int(
                 datetime(2023, 2, 24, tzinfo=MTL).astimezone(UTC).timestamp()
             )
-        }
-    },
-    "dont_trust_start_time": {
-        "time": {
-            "submission": int(
-                datetime(2023, 2, 24, 0, 0, 0, tzinfo=MTL).astimezone(UTC).timestamp()
-            ),
-            "start": int(
-                datetime(2023, 2, 24, 0, 0, 0, tzinfo=MTL).astimezone(UTC).timestamp()
-            ),
-            "end": int(
-                datetime(2023, 2, 25, 0, 0, 0, tzinfo=MTL).astimezone(UTC).timestamp()
-            ),
-            "elapsed": 60,
         }
     },
     "end_time": {
@@ -86,7 +78,7 @@ parameters = {
             "job_id": 29036715,
             "limits": {"max": {"running": {"tasks": 0}}},
             "task": None,
-            "task_id": 10,
+            "task_id": {"number": 10},
         },
         "job_id": 29036725,
     },
@@ -95,17 +87,24 @@ parameters = {
 
 @pytest.mark.usefixtures("tzlocal_is_mtl")
 @pytest.mark.parametrize(
-    "json_jobs", parameters.values(), ids=parameters.keys(), indirect=True
+    "patched_job", parameters.values(), ids=parameters.keys(), indirect=True
 )
-def test_parse_json_job(json_jobs, file_regression):
-    file_regression.check(
-        _convert_json_job(
-            json_jobs[0],
-            "raisin",
-            scraped_start=datetime(2023, 2, 14, tzinfo=MTL).astimezone(UTC),
-            scraped_end=datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC),
-        ).model_dump_json(exclude={"id": True}, indent=4)
+def test_parse_json_job(patched_job, base_job, slurm_version, file_regression):
+    sstart = datetime(2024, 3, 25, tzinfo=MTL).astimezone(UTC)
+    send = datetime(2024, 3, 26, tzinfo=MTL).astimezone(UTC)
+
+    orig = _convert_json_job(base_job, "raisin", slurm_version, sstart, send)
+    patched = _convert_json_job(patched_job, "raisin", slurm_version, sstart, send)
+
+    diff = "".join(
+        unified_diff(
+            _dump(orig).splitlines(True),
+            _dump(patched).splitlines(True),
+            fromfile="base job",
+            tofile="patched job",
+        )
     )
+    file_regression.check(diff)
 
 
 @pytest.mark.usefixtures("tzlocal_is_mtl")
@@ -136,9 +135,9 @@ def test_parse_json_job(json_jobs, file_regression):
     ],
     indirect=True,
 )
-def test_parse_malformed_jobs(sacct_json, captrace):
+def test_parse_malformed_jobs(sacct_json, slurm_version, captrace):
     with pytest.raises(KeyError):
-        _convert_json_job(json.loads(sacct_json)["jobs"][0], "mila")
+        _convert_json_job(json.loads(sacct_json)["jobs"][0], "mila", slurm_version)
     spans = captrace.get_finished_spans()
     assert len(spans) > 0
     # Just check the span that should have got an error.
@@ -177,7 +176,7 @@ def test_scrape_lost_job_on_wrong_cluster(sacct_json, caplog):
         jobs = list(parsed_jobs)
 
     assert len(jobs) == 1
-    assert jobs[0].cluster_name == "raisin"
+    assert jobs[0]["cluster_name"] == "raisin"
 
     assert (
         'Job 1 from cluster "raisin" has a different cluster name: "patate". Using "raisin"'
@@ -217,9 +216,7 @@ def test_parse_jobs_from_cache(sacct_json, file_regression, test_config):
     assert nb_entries == 1  # one cache entry for 2023-02-16
     assert len(jobs) == 1  # one job in the cache entry
 
-    file_regression.check(
-        "\n".join([job.model_dump_json(exclude={"id": True}, indent=1) for job in jobs])
-    )
+    file_regression.check("\n".join([_dump(job) for job in jobs]))
 
 
 @pytest.mark.usefixtures("no_pkey")
@@ -240,7 +237,7 @@ def test_sacct_bin_and_accounts(test_config, remote):
 
 
 @patch("os.system")
-@pytest.mark.usefixtures("empty_read_write_db")
+@pytest.mark.usefixtures("jobless_read_write_db")
 def test_localhost(os_system, monkeypatch):
     # This test requires write_setup.cache to be empty else it will never call
     # mock_subprocess_run
@@ -267,9 +264,9 @@ def test_localhost(os_system, monkeypatch):
     "test_config", [{"clusters": {"raisin": {"host": "raisin"}}}], indirect=True
 )
 @pytest.mark.parametrize("json_jobs", [{}], indirect=True)
-@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache", "no_pkey")
+@pytest.mark.usefixtures("jobless_read_write_db", "enabled_cache", "no_pkey")
 def test_stdout_message_before_json(
-    test_config, sacct_json, remote, file_regression, cli_main, monkeypatch
+    get_jobs, test_config, sacct_json, remote, file_regression, cli_main, monkeypatch
 ):
 
     remote.expect(
@@ -300,6 +297,8 @@ def test_stdout_message_before_json(
     assert cli_main(["-v", "parse", "jobs", "--since", "2023-02-14T00:00"]) == 0
 
     jobs = list(get_jobs())
+    assert jobs
+
     file_regression.check(
         f"Found {len(jobs)} job(s):\n"
         + "\n".join(
@@ -312,8 +311,10 @@ def test_stdout_message_before_json(
     "test_config", [{"clusters": {"raisin": {"host": "raisin"}}}], indirect=True
 )
 @pytest.mark.parametrize("json_jobs", [{}], indirect=True)
-@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache", "no_pkey")
-def test_update_job(test_config, sacct_json, remote, file_regression, cli_main):
+@pytest.mark.usefixtures("jobless_read_write_db", "enabled_cache", "no_pkey")
+def test_update_job(
+    get_jobs, test_config, sacct_json, remote, file_regression, cli_main
+):
     remote.expect(
         host="raisin",
         commands=[
@@ -364,8 +365,7 @@ def test_update_job(test_config, sacct_json, remote, file_regression, cli_main):
     assert cli_main(["-v", "parse", "jobs", "--since", "2023-02-15T00:00"]) == 0
 
     jobs = list(get_jobs())
-
-    assert len(list(get_jobs())) == 1
+    assert len(jobs) == 1
 
     file_regression.check(
         f"Found {len(jobs)} job(s):\n"
@@ -379,8 +379,8 @@ def test_update_job(test_config, sacct_json, remote, file_regression, cli_main):
     "test_config", [{"clusters": {"raisin": {"host": "raisin"}}}], indirect=True
 )
 @pytest.mark.parametrize("json_jobs", [{}], indirect=True)
-@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache", "no_pkey")
-def test_save_job(test_config, sacct_json, remote, file_regression, cli_main):
+@pytest.mark.usefixtures("jobless_read_write_db", "enabled_cache", "no_pkey")
+def test_save_job(get_jobs, test_config, sacct_json, remote, file_regression, cli_main):
     remote.expect(
         host="raisin",
         cmd=f"export TZ=UTC && /opt/slurm/bin/sacct -X -S {_dtfmt(2023, 2, 15)} -E {_dtfmt(2023, 2, 16)} --allusers --json",
@@ -407,6 +407,8 @@ def test_save_job(test_config, sacct_json, remote, file_regression, cli_main):
     assert cli_main(["-v", "parse", "jobs", "--since", "2023-02-14T00:00"]) == 0
 
     jobs = list(get_jobs())
+    assert len(jobs) == 1
+
     file_regression.check(
         f"Found {len(jobs)} job(s):\n"
         + "\n".join(
@@ -422,19 +424,35 @@ def test_save_job(test_config, sacct_json, remote, file_regression, cli_main):
             {
                 "job_id": 1_000_000,
                 "node": "cn-c017",
-                "state": {"current": "PREEMPTED", "reason": "None"},
+                "time": {
+                    "submission": int(
+                        datetime(2023, 2, 14, 0, 0, 0, tzinfo=MTL)
+                        .astimezone(UTC)
+                        .timestamp()
+                    )
+                },
+                "state": {"current": ["PREEMPTED"], "reason": "None"},
             },
             {
                 "job_id": 1_000_000,
                 "node": "cn-b099",
-                "state": {"current": "COMPLETED", "reason": "None"},
+                "time": {
+                    "submission": int(
+                        datetime(2023, 2, 15, 0, 0, 0, tzinfo=MTL)
+                        .astimezone(UTC)
+                        .timestamp()
+                    )
+                },
+                "state": {"current": ["COMPLETED"], "reason": "None"},
             },
         ]
     ],
     indirect=True,
 )
-@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache", "no_pkey")
-def test_save_preempted_job(test_config, sacct_json, remote, file_regression, cli_main):
+@pytest.mark.usefixtures("jobless_read_write_db", "enabled_cache", "no_pkey")
+def test_save_preempted_job(
+    get_jobs, test_config, sacct_json, remote, file_regression, cli_main
+):
     remote.expect(
         cmd=f"export TZ=UTC && /opt/slurm/bin/sacct -X -S {_dtfmt(2023, 2, 15)} -E {_dtfmt(2023, 2, 16)} --allusers --json",
         host="raisin",
@@ -461,8 +479,8 @@ def test_save_preempted_job(test_config, sacct_json, remote, file_regression, cl
     assert cli_main(["-v", "parse", "jobs", "--since", "2023-02-14T00:00"]) == 0
 
     jobs = list(get_jobs())
-
-    assert len(list(get_jobs())) == 2
+    assert len(jobs) == 2
+    assert {j.job_state for j in jobs} == {SlurmState.PREEMPTED, SlurmState.COMPLETED}
 
     file_regression.check(
         f"Found {len(jobs)} job(s):\n"
@@ -472,8 +490,10 @@ def test_save_preempted_job(test_config, sacct_json, remote, file_regression, cl
     )
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache", "no_pkey")
-def test_multiple_dates(test_config, remote, file_regression, cli_main):
+@pytest.mark.usefixtures("jobless_read_write_db", "enabled_cache", "no_pkey")
+def test_multiple_dates(
+    create_sacct_json, get_jobs, test_config, remote, file_regression, cli_main
+):
     datetimes = [
         datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC) + timedelta(days=i)
         for i in range(5)
@@ -528,8 +548,7 @@ def test_multiple_dates(test_config, remote, file_regression, cli_main):
     assert cli_main(["-v", "parse", "jobs", "--since", "2023-02-14T00:00"]) == 0
 
     jobs = list(get_jobs())
-
-    assert len(list(get_jobs())) == len(datetimes)
+    assert len(jobs) == len(datetimes)
 
     file_regression.check(
         f"Found {len(jobs)} job(s):\n"
@@ -539,8 +558,10 @@ def test_multiple_dates(test_config, remote, file_regression, cli_main):
     )
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache", "no_pkey")
-def test_multiple_clusters_and_dates(test_config, remote, file_regression, cli_main):
+@pytest.mark.usefixtures("jobless_read_write_db", "enabled_cache", "no_pkey")
+def test_multiple_clusters_and_dates(
+    get_jobs, create_sacct_json, test_config, remote, file_regression, cli_main
+):
     cluster_names = ["raisin", "patate"]
     datetimes = [
         datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC) + timedelta(days=i)
@@ -615,8 +636,7 @@ def test_multiple_clusters_and_dates(test_config, remote, file_regression, cli_m
     assert cli_main(["-v", "parse", "jobs", "--since", "2023-02-14T00:00"]) == 0
 
     jobs = list(get_jobs())
-
-    assert len(list(get_jobs())) == len(datetimes) * len(cluster_names)
+    assert len(jobs) == len(datetimes) * len(cluster_names)
 
     file_regression.check(
         f"Found {len(jobs)} job(s):\n"
@@ -645,8 +665,8 @@ def test_multiple_clusters_and_dates(test_config, remote, file_regression, cli_m
 @pytest.mark.parametrize(
     "test_config", [{"clusters": {"patate": {"host": "patate"}}}], indirect=True
 )
-@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache", "no_pkey")
-def test_job_tz(test_config, sacct_json, remote, cli_main):
+@pytest.mark.usefixtures("jobless_read_write_db", "enabled_cache", "no_pkey")
+def test_job_tz(get_jobs, test_config, sacct_json, remote, cli_main):
     remote.expect(
         host="patate",
         cmd="export TZ=UTC && /opt/software/slurm/bin/sacct -A rrg-bonhomme-ad_gpu,rrg-bonhomme-ad_cpu,def-bonhomme_gpu,def-bonhomme_cpu -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
@@ -698,8 +718,8 @@ def test_parse_sacct_slurm_versions(sacct_outputs):
     assert len(jobs) == 1
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
-def test_acquire_jobs_mutually_exclusive_args(cli_main, caplog):
+@pytest.mark.usefixtures("jobless_read_write_db", "enabled_cache")
+def test_acquire_jobs_mutually_exclusive_args(get_jobs, cli_main, caplog):
     # Both --intervals and --auto_interval: must fail
     assert (
         cli_main(
@@ -726,8 +746,8 @@ def test_acquire_jobs_mutually_exclusive_args(cli_main, caplog):
     )
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
-def test_acquire_jobs_invalid_interval(cli_main, caplog):
+@pytest.mark.usefixtures("jobless_read_write_db", "enabled_cache")
+def test_acquire_jobs_invalid_interval(get_jobs, cli_main, caplog):
     # Malformed interval
     assert (
         cli_main(
@@ -752,8 +772,8 @@ def test_acquire_jobs_invalid_interval(cli_main, caplog):
     )
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
-def test_acquire_jobs_interval_start_gt_end(cli_main, caplog):
+@pytest.mark.usefixtures("jobless_read_write_db", "enabled_cache")
+def test_acquire_jobs_interval_start_gt_end(get_jobs, cli_main, caplog):
     # Malformed interval: start > end
     assert (
         cli_main(
@@ -777,8 +797,8 @@ def test_acquire_jobs_interval_start_gt_end(cli_main, caplog):
     )
 
 
-@pytest.mark.usefixtures("empty_read_write_db", "enabled_cache")
-def test_acquire_jobs_args_no_interval(cli_main, caplog):
+@pytest.mark.usefixtures("jobless_read_write_db", "enabled_cache")
+def test_acquire_jobs_args_no_interval(get_jobs, cli_main, caplog):
     # No interval, nothing to do
     assert cli_main(["fetch", "jobs", "--cluster_names", "raisin"]) == 0
 
@@ -788,12 +808,11 @@ def test_acquire_jobs_args_no_interval(cli_main, caplog):
     assert "No --intervals or --auto_interval parsed, nothing to do." in caplog.text
 
 
-def _get_cluster_raisin():
-    return [
-        cluster
-        for cluster in get_available_clusters()
-        if cluster.cluster_name == "raisin"
-    ][0]
+def get_raisin():
+    with config().db.session() as sess:
+        return sess.exec(
+            select(SlurmClusterDB).where(SlurmClusterDB.name == "raisin")
+        ).one_or_none()
 
 
 @pytest.mark.usefixtures("read_write_db", "enabled_cache")
@@ -810,9 +829,8 @@ def test_auto_interval(cli_main, monkeypatch, time_machine, caplog):
 
     monkeypatch.setattr(sarc.core.scraping.jobs, "fetch_raw", mock_fetch_raw)
 
-    orig_end_time = datetime.strptime(
-        _get_cluster_raisin().end_time_sacct, "%Y-%m-%dT%H:%M"
-    )
+    orig_end_time = get_raisin().end_time_sacct
+
     expected_final_end_time = orig_end_time + timedelta(minutes=300)
     time_machine.move_to(orig_end_time + timedelta(minutes=301), tick=False)
 
@@ -832,10 +850,8 @@ def test_auto_interval(cli_main, monkeypatch, time_machine, caplog):
     )
 
     # end_time_sacct should have been updated
-    assert (
-        datetime.strptime(_get_cluster_raisin().end_time_sacct, "%Y-%m-%dT%H:%M")
-        == expected_final_end_time
-    )
+    assert get_raisin().end_time_sacct == expected_final_end_time
+
     # 300 minutes every 60 minutes => 5 intervals => 5 cached files
     assert mock_fetch_raw.called == 5
 
@@ -854,9 +870,7 @@ def test_auto_interval_0(cli_main, monkeypatch, time_machine, caplog):
 
     monkeypatch.setattr(sarc.core.scraping.jobs, "fetch_raw", mock_fetch_raw)
 
-    orig_end_time = datetime.strptime(
-        _get_cluster_raisin().end_time_sacct, "%Y-%m-%dT%H:%M"
-    )
+    orig_end_time = get_raisin().end_time_sacct
     expected_final_end_time = orig_end_time + timedelta(minutes=300)
     time_machine.move_to(expected_final_end_time, tick=False)
 
@@ -876,15 +890,13 @@ def test_auto_interval_0(cli_main, monkeypatch, time_machine, caplog):
     )
     assert cli_main(["-v", "parse", "jobs", "--since", "2024-01-01T00:00"]) == 0
     # end_time_sacct should have been updated
-    assert (
-        datetime.strptime(_get_cluster_raisin().end_time_sacct, "%Y-%m-%dT%H:%M")
-        == expected_final_end_time
-    )
+    assert get_raisin().end_time_sacct == expected_final_end_time
+
     # We expected only 1 interval and cache
     assert mock_fetch_raw.called == 1
 
 
-# ── require_user_link tests ─────────────────────────────────────────
+# # ── require_user_link tests ─────────────────────────────────────────
 
 
 def _fetch_one_job_on_raisin(cli_main, remote, sacct_json):
@@ -915,45 +927,15 @@ def _fetch_one_job_on_raisin(cli_main, remote, sacct_json):
 @pytest.mark.parametrize(
     "test_config", [{"clusters": {"raisin": {"host": "raisin"}}}], indirect=True
 )
-@pytest.mark.parametrize("json_jobs", [{}], indirect=True)
+@pytest.mark.parametrize("json_jobs", [{"user": "super-secret"}], indirect=True)
 @pytest.mark.usefixtures("enabled_cache", "no_pkey")
-def test_parse_jobs_saves_without_require_user_link(
-    test_config, sacct_json, remote, cli_main, empty_read_write_db
+def test_parse_jobs_user_link_no_match(
+    get_jobs, test_config, sacct_json, remote, cli_main, jobless_read_write_db
 ):
-    """Without --require_user_link, jobs are saved even without matching users."""
+    """With no matching users, no jobs are saved."""
     _fetch_one_job_on_raisin(cli_main, remote, sacct_json)
 
     assert cli_main(["-v", "parse", "jobs", "--since", "2023-02-14T00:00"]) == 0
-
-    jobs = list(get_jobs())
-    assert len(jobs) == 1
-    assert jobs[0].user_uuid is None
-
-
-@pytest.mark.parametrize(
-    "test_config", [{"clusters": {"raisin": {"host": "raisin"}}}], indirect=True
-)
-@pytest.mark.parametrize("json_jobs", [{}], indirect=True)
-@pytest.mark.usefixtures("enabled_cache", "no_pkey")
-def test_parse_jobs_require_user_link_no_match(
-    test_config, sacct_json, remote, cli_main, empty_read_write_db
-):
-    """With --require_user_link and no matching users, no jobs are saved."""
-    _fetch_one_job_on_raisin(cli_main, remote, sacct_json)
-
-    assert (
-        cli_main(
-            [
-                "-v",
-                "parse",
-                "jobs",
-                "--since",
-                "2023-02-14T00:00",
-                "--require_user_link",
-            ]
-        )
-        == 0
-    )
 
     assert len(list(get_jobs())) == 0
 
@@ -963,45 +945,14 @@ def test_parse_jobs_require_user_link_no_match(
 )
 @pytest.mark.parametrize("json_jobs", [{}], indirect=True)
 @pytest.mark.usefixtures("enabled_cache", "no_pkey")
-def test_parse_jobs_require_user_link_with_match(
-    test_config, sacct_json, remote, cli_main, empty_read_write_db
+def test_parse_jobs_user_link_with_match(
+    get_jobs, test_config, sacct_json, remote, cli_main, jobless_read_write_db
 ):
-    """With --require_user_link and a matching user, job is saved with user_uuid."""
-    from uuid import UUID
-
-    from tests.functional.jobs.factory import UserFactory
-
-    # Default job: user="petitbonhomme", cluster="raisin" (user_domain="drac"),
-    # submit_time ~ 2023-02-14.
-    # Insert a user with a matching drac credential valid at that time.
-    user_uuid = UUID("5a8b9e7f-afcc-4ced-b596-44fcdb3a0cff")
-    uf = UserFactory()
-    uf.add_user(
-        uuid=user_uuid,
-        display_name="Petit Bonhomme",
-        email="petitbonhomme@mila.quebec",
-        accounts=[("drac", "petitbonhomme", datetime(2022, 1, 1, tzinfo=UTC), None)],
-    )
-    empty_read_write_db.users.insert_many(
-        [u.model_dump(exclude={"id"}) for u in uf.users]
-    )
-
+    """With a matching user, job is saved with user_uuid."""
     _fetch_one_job_on_raisin(cli_main, remote, sacct_json)
 
-    assert (
-        cli_main(
-            [
-                "-v",
-                "parse",
-                "jobs",
-                "--since",
-                "2023-02-14T00:00",
-                "--require_user_link",
-            ]
-        )
-        == 0
-    )
+    assert cli_main(["-v", "parse", "jobs", "--since", "2023-02-14T00:00"]) == 0
 
     jobs = list(get_jobs())
     assert len(jobs) == 1
-    assert jobs[0].user_uuid == user_uuid
+    assert jobs[0].sarc_user_id == 11
