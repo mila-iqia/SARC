@@ -80,4 +80,4 @@ def insert_rgu(sess: Session) -> None:
     from .support import GpuRguDB
 
     for key in RAWDATA.keys():
-        sess.add(GpuRguDB(key, fom_ugr(key)))
+        sess.merge(GpuRguDB(name=key, rgu=fom_ugr(key)))
