@@ -19,6 +19,7 @@ from sarc.db.cluster import SlurmClusterDB, get_available_clusters
 from sarc.db.healthcheck import HealthCheckStateDB
 from sarc.db.job import SlurmJobDB, SlurmState, get_rgus
 from sarc.db.job_series import JobSeriesDB
+from sarc.db.support import GpuRguDB
 from sarc.db.users import (
     MatchingID,
     MemberType,
@@ -531,6 +532,13 @@ def get_cluster_names(sess: Session = Depends(session_dep)) -> list[SlurmCluster
 def get_rgu_value_per_gpu() -> dict[str, float]:
     """Return the mapping GPU->RGU."""
     return get_rgus()
+
+
+@router.post("/gpu/rgu", dependencies=[Depends(require_admin)])
+def update_rgu(update: dict[str, float], sess: Session = Depends(session_dep)) -> bool:
+    for name, val in update.items():
+        sess.merge(GpuRguDB(name, val))
+    return True
 
 
 @router.get("/user/query")
