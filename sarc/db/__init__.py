@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 from iguane.fom import RAWDATA, fom_ugr
 from sqlalchemy import Engine
 from sqlmodel import Session, select, text
@@ -79,5 +81,6 @@ def insert_rgu(sess: Session) -> None:
     # populate the db with initial rgu data from iguane
     from .support import GpuRguDB
 
+    args = SimpleNamespace(fom_version="1.0", custom_weights=None, norm=False)
     for key in RAWDATA.keys():
-        sess.merge(GpuRguDB(name=key, rgu=fom_ugr(key)))
+        sess.merge(GpuRguDB(name=key, rgu=fom_ugr(key, args=args)))
