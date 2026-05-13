@@ -5,10 +5,10 @@ Result #1
     "member_type": "professor",
     "user_id": 1,
     "valid": {
-        "lower": "2020-09-01T00:00:00Z",
-        "upper": "2027-09-01T00:00:00Z",
         "bounds": "[)",
-        "empty": false
+        "empty": false,
+        "lower": "2020-09-01T00:00:00Z",
+        "upper": "2027-09-01T00:00:00Z"
     }
 }
 Result #2
@@ -16,10 +16,10 @@ Result #2
     "member_type": "professor",
     "user_id": 2,
     "valid": {
-        "lower": "2022-09-01T00:00:00Z",
-        "upper": "2026-05-01T00:00:00Z",
         "bounds": "[)",
-        "empty": false
+        "empty": false,
+        "lower": "2022-09-01T00:00:00Z",
+        "upper": "2026-05-01T00:00:00Z"
     }
 }
 Result #3
@@ -27,10 +27,10 @@ Result #3
     "member_type": "phd",
     "user_id": 2,
     "valid": {
-        "lower": "2018-09-01T00:00:00Z",
-        "upper": "2021-05-01T00:00:00Z",
         "bounds": "[)",
-        "empty": false
+        "empty": false,
+        "lower": "2018-09-01T00:00:00Z",
+        "upper": "2021-05-01T00:00:00Z"
     }
 }
 Result #4
@@ -38,10 +38,10 @@ Result #4
     "member_type": "professor",
     "user_id": 5,
     "valid": {
-        "lower": "2022-01-01T00:00:00Z",
-        "upper": "2023-01-01T00:00:00Z",
         "bounds": "[)",
-        "empty": false
+        "empty": false,
+        "lower": "2022-01-01T00:00:00Z",
+        "upper": "2023-01-01T00:00:00Z"
     }
 }
 Result #5
@@ -49,9 +49,9 @@ Result #5
     "member_type": "staff",
     "user_id": 7,
     "valid": {
-        "lower": "2022-01-01T00:00:00Z",
-        "upper": "2023-01-01T00:00:00Z",
         "bounds": "[)",
-        "empty": false
+        "empty": false,
+        "lower": "2022-01-01T00:00:00Z",
+        "upper": "2023-01-01T00:00:00Z"
     }
 }

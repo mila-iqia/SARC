@@ -516,7 +516,9 @@ def create_gpu_billings(clusters: list[SlurmClusterDB]) -> list[GPUBillingDB]:
     ]
 
 
-def create_diskusages(clusters: list[SlurmClusterDB]) -> list[DiskUsageDB]:
+def create_diskusages(
+    sess: Session, clusters: list[SlurmClusterDB]
+) -> list[DiskUsageDB]:
     disk_clusters = [
         cluster for cluster in clusters if cluster.name in ["mila", "hyrule"]
     ]
@@ -526,32 +528,23 @@ def create_diskusages(clusters: list[SlurmClusterDB]) -> list[DiskUsageDB]:
             datetime(2023, 2, 14, 0, 0, 0, tzinfo=UTC),
             datetime(2021, 12, 1, 0, 0, 0, tzinfo=UTC),
         ]:
-            diskusages.append(
-                DiskUsageDB(
-                    cluster_id=cluster.id,
-                    timestamp=timestamp,
-                    groups=[
-                        DiskUsageGroupDB(
-                            group_name="gerudo",
-                            users=[
-                                DiskUsageUserDB(user="urbosa", nbr_files=2, size=0),
-                                DiskUsageUserDB(
-                                    user="riju", nbr_files=50, size=14484777205
-                                ),
-                                DiskUsageUserDB(user="mipha", nbr_files=2, size=0),
-                            ],
-                        ),
-                        DiskUsageGroupDB(
-                            group_name="piaf",
-                            users=[
-                                DiskUsageUserDB(
-                                    user="revali", nbr_files=47085, size=4509715660
-                                )
-                            ],
-                        ),
-                    ],
-                )
-            )
+            du = DiskUsageDB(cluster_id=cluster.id, timestamp=timestamp)
+            sess.add(du)
+            sess.flush()
+            dug1 = DiskUsageGroupDB(group_name="gerudo")
+            du._groups.append(dug1)
+            sess.flush()
+            dug1._users = [
+                DiskUsageUserDB(user="urbosa", nbr_files=2, size=0),
+                DiskUsageUserDB(user="riju", nbr_files=50, size=14484777205),
+                DiskUsageUserDB(user="mipha", nbr_files=2, size=0),
+            ]
+            dug2 = DiskUsageGroupDB(group_name="piaf")
+            du._groups.append(dug2)
+            sess.flush()
+            dug2._users = [
+                DiskUsageUserDB(user="revali", nbr_files=47085, size=4509715660)
+            ]
     return diskusages
 
 
