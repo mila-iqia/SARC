@@ -561,11 +561,15 @@ def helper_load_job_series(sess: Session, **kwargs) -> DataFrame:
     records = []
     for row in rows:
         d = row.model_dump()
+        # end_time to now if None
         if d.get("end_time") is None:
             d["end_time"] = now
+        # For each stat, add a flattened column, using same logic as in old load_job_series
+        # Individual stats (mean, median, etc.) are still in data
         stats = d.get("statistics") or {}
         for label in _STAT_LABELS:
             d[label] = _flatten_stat(label, stats)
+        # If gpu_utilization > 1, set it to NaN (same logic as in old load_job_series)
         gpu_util = d["gpu_utilization"]
         if gpu_util is not None and not math.isnan(gpu_util) and gpu_util > 1:
             d["gpu_utilization"] = math.nan
