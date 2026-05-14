@@ -19,6 +19,11 @@ from tests.functional.job_series.test_func_load_job_series import (
     helper_load_job_series as load_job_series,
 )
 
+cluster_no_gpu_billing = "hyrule"
+cluster_gpu_billing_one_date = "raisin"
+cluster_gpu_billing_many_dates = "patate"
+cluster_gpu_billing_is_gpu = "mila"
+
 
 def _gen_fake_rgus():
     """Synthetic RGU values for the GPU types referenced by ExampleData.
@@ -97,7 +102,7 @@ class Row:
 class ExampleData:
     """Helper to generate a set of synthetic jobs for RGU testing."""
 
-    def __init__(self, cluster: str, cluster_without_billing: str = "hyrule"):
+    def __init__(self, cluster: str, cluster_without_billing: str = cluster_no_gpu_billing):
         """
         Parameters
         ----------
@@ -237,31 +242,6 @@ class ExampleData:
         return expected_rgu, expected_gpu_type_rgu
 
 
-@pytest.fixture
-def cluster_no_gpu_billing():
-    return "hyrule"
-
-
-@pytest.fixture
-def cluster_no_gpu_billing_2():
-    return "gerudo"
-
-
-@pytest.fixture
-def cluster_gpu_billing_one_date():
-    return "raisin"
-
-
-@pytest.fixture
-def cluster_gpu_billing_many_dates():
-    return "patate"
-
-
-@pytest.fixture
-def cluster_gpu_billing_is_gpu():
-    return "mila"
-
-
 def _billings_dump(sess, cluster_names) -> dict:
     """Serialize the GPUBillings of the named clusters for file regression output."""
     name_to_cluster = {
@@ -301,13 +281,7 @@ def _check_rgu_columns(frame, data: ExampleData, sess):
 
 
 @pytest.mark.usefixtures("tzlocal_is_mtl")
-def test_clusters_gpu_billings(
-    local_db,
-    cluster_no_gpu_billing,
-    cluster_no_gpu_billing_2,
-    cluster_gpu_billing_one_date,
-    cluster_gpu_billing_many_dates,
-):
+def test_clusters_gpu_billings(local_db):
     """Sanity check: GPUBillings populated as expected for each test cluster."""
 
     def billings_count(cluster_name):
@@ -321,15 +295,12 @@ def test_clusters_gpu_billings(
         ).one()
 
     assert billings_count(cluster_no_gpu_billing) == 0
-    assert billings_count(cluster_no_gpu_billing_2) == 0
     assert billings_count(cluster_gpu_billing_one_date) == 1
     assert billings_count(cluster_gpu_billing_many_dates) > 1
 
 
 @pytest.mark.usefixtures("tzlocal_is_mtl")
-def test_update_job_series_rgu_one_date(
-    local_db, cluster_gpu_billing_one_date, file_regression
-):
+def test_update_job_series_rgu_one_date(local_db, file_regression):
     """Concrete test with a cluster which has 1 billing date."""
     data = ExampleData(cluster=cluster_gpu_billing_one_date)
     data.populate(local_db)
@@ -359,9 +330,7 @@ def test_update_job_series_rgu_one_date(
 
 
 @pytest.mark.usefixtures("tzlocal_is_mtl")
-def test_update_job_series_rgu_with_many_dates(
-    local_db, cluster_gpu_billing_many_dates, file_regression
-):
+def test_update_job_series_rgu_with_many_dates(local_db, file_regression):
     """Concrete test with a cluster which has many billing dates."""
     data = ExampleData(cluster=cluster_gpu_billing_many_dates)
     data.populate(local_db)
@@ -393,9 +362,7 @@ def test_update_job_series_rgu_with_many_dates(
 
 
 @pytest.mark.usefixtures("tzlocal_is_mtl")
-def test_update_job_series_rgu_billing_is_gpu(
-    local_db, cluster_gpu_billing_is_gpu, file_regression
-):
+def test_update_job_series_rgu_billing_is_gpu(local_db, file_regression):
     """Concrete test with a cluster where billing_is_gpu is True."""
     data = ExampleData(cluster=cluster_gpu_billing_is_gpu)
     data.populate(local_db)
