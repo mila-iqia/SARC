@@ -317,7 +317,14 @@ def test_stdout_message_before_json(
     file_regression.check(
         f"Found {len(jobs)} job(s):\n"
         + "\n".join(
-            [job.model_dump_json(exclude={"id": True}, indent=4) for job in jobs]
+            [
+                json.dumps(
+                    job.model_dump(mode="json", exclude={"id": True}),
+                    indent=4,
+                    sort_keys=True,
+                )
+                for job in jobs
+            ]
         )
     )
 
@@ -385,7 +392,14 @@ def test_update_job(
     file_regression.check(
         f"Found {len(jobs)} job(s):\n"
         + "\n".join(
-            [job.model_dump_json(exclude={"id": True}, indent=4) for job in jobs]
+            [
+                json.dumps(
+                    job.model_dump(mode="json", exclude={"id": True}),
+                    indent=4,
+                    sort_keys=True,
+                )
+                for job in jobs
+            ]
         )
     )
 
@@ -427,7 +441,14 @@ def test_save_job(get_jobs, test_config, sacct_json, remote, file_regression, cl
     file_regression.check(
         f"Found {len(jobs)} job(s):\n"
         + "\n".join(
-            [job.model_dump_json(exclude={"id": True}, indent=4) for job in jobs]
+            [
+                json.dumps(
+                    job.model_dump(mode="json", exclude={"id": True}),
+                    indent=4,
+                    sort_keys=True,
+                )
+                for job in jobs
+            ]
         )
     )
 
@@ -488,7 +509,14 @@ def test_save_preempted_job(
     file_regression.check(
         f"Found {len(jobs)} job(s):\n"
         + "\n".join(
-            [job.model_dump_json(exclude={"id": True}, indent=4) for job in jobs]
+            [
+                json.dumps(
+                    job.model_dump(mode="json", exclude={"id": True}),
+                    indent=4,
+                    sort_keys=True,
+                )
+                for job in jobs
+            ]
         )
     )
 
@@ -555,7 +583,14 @@ def test_multiple_dates(
     file_regression.check(
         f"Found {len(jobs)} job(s):\n"
         + "\n".join(
-            [job.model_dump_json(exclude={"id": True}, indent=4) for job in jobs]
+            [
+                json.dumps(
+                    job.model_dump(mode="json", exclude={"id": True}),
+                    indent=4,
+                    sort_keys=True,
+                )
+                for job in jobs
+            ]
         )
     )
 
@@ -641,7 +676,14 @@ def test_multiple_clusters_and_dates(
     file_regression.check(
         f"Found {len(jobs)} job(s):\n"
         + "\n".join(
-            [job.model_dump_json(exclude={"id": True}, indent=4) for job in jobs]
+            [
+                json.dumps(
+                    job.model_dump(mode="json", exclude={"id": True}),
+                    indent=4,
+                    sort_keys=True,
+                )
+                for job in jobs
+            ]
         )
     )
 

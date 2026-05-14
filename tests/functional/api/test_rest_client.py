@@ -167,7 +167,7 @@ def test_job_extra_fields_merged(sarc_client):
 @pytest.mark.usefixtures("read_only_db")
 def test_get_users_no_filters(sarc_client):
     users = list(sarc_client.get_users())
-    assert len(users) == 10
+    assert len(users) == 11
 
 
 @pytest.mark.usefixtures("read_only_db")
@@ -195,7 +195,7 @@ def test_get_users_pagination(sarc_client):
     """Verify pagination: block_size=3 should still return all users."""
     sarc_client.block_size = 3
     users = list(sarc_client.get_users())
-    assert len(users) == 10
+    assert len(users) == 11
 
 
 @pytest.mark.usefixtures("read_only_db")
@@ -234,7 +234,6 @@ def test_get_clusters(sarc_client):
 
 
 @pytest.mark.usefixtures("read_only_db")
-def test_get_rgus(sarc_client, monkeypatch):
-    monkeypatch.setattr("sarc.api.v0.get_rgus", lambda: {"A100": 3.21})
+def test_get_rgus(sarc_client):
     rgus = sarc_client.get_rgus()
-    assert rgus == {"A100": 3.21}
+    assert rgus["A100-SXM4-40GB"] == 4.0

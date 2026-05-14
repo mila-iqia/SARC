@@ -607,7 +607,7 @@ def test_user_query_empty_result(userq):
 @pytest.mark.usefixtures("read_only_db")
 def test_user_query_no_filters(userq):
     users = userq()
-    assert len(users) == 10
+    assert len(users) == 11
 
 
 @pytest.mark.usefixtures("read_only_db")
@@ -668,7 +668,7 @@ def test_user_pagination_offset(userq):
     assert len(users) == 3
 
     users = userq(limit=3, cursor=9)
-    assert len(users) == 1
+    assert len(users) == 2
 
     users = userq(limit=10, cursor=1000, n=False)
     assert len(users) == 0

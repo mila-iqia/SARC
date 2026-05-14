@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import json
 import logging
 import re
@@ -313,7 +311,14 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     file_regression.check(
         f"Found {len(jobs)} job(s):\n"
         + "\n".join(
-            [job.model_dump_json(exclude={"id": True}, indent=4) for job in jobs]
+            [
+                json.dumps(
+                    job.model_dump(mode="json", exclude={"id": True}),
+                    indent=4,
+                    sort_keys=True,
+                )
+                for job in jobs
+            ]
         )
         + f"\n\nFound {len(spans)} span(s):\n"
         + json.dumps(spans_data, indent=1)
