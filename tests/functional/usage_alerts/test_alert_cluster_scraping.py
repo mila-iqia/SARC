@@ -4,7 +4,7 @@ import gifnoc
 import pytest
 import time_machine
 
-from tests.functional.usage_alerts.common import MOCK_TIME
+from tests.functional.common import MOCK_TIME
 
 PARAMS = [
     # Check with default params. In last 7 days from now (mock time: 2023-11-22),

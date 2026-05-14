@@ -12,9 +12,10 @@ from serieux import deserialize
 from serieux.features.encrypt import EncryptionKey, Secret
 from serieux.formats import FileSource
 
-from sarc.models.api import SlurmJobList, UserList
+from sarc.models.api import JobSeriesList, SlurmJobList, UserList
 from sarc.models.cluster import SlurmCluster
 from sarc.models.job import SlurmJob, SlurmState
+from sarc.models.series import JobSeries
 from sarc.models.user import MemberType, User
 
 
@@ -245,3 +246,36 @@ class SarcClient:
 
     def get_rgus(self) -> dict[str, float]:
         return self._get("/gpu/rgu")
+
+    def get_job_series(
+        self,
+        *,
+        cluster_name: str | None = None,
+        job_id: list[int] | None = None,
+        job_state: SlurmState | str | None = None,
+        email: str | None = None,
+        sarc_user_id: int | None = None,
+        cluster_user: str | None = None,
+        start: datetime | None = None,
+        end: datetime | None = None,
+        extra_fields: list[str] | None = None,
+    ) -> Iterator[JobSeries]:
+        base_params = self._job_params(
+            cluster_name=cluster_name,
+            job_id=job_id,
+            job_state=job_state,
+            email=email,
+            sarc_user_id=sarc_user_id,
+            cluster_user=cluster_user,
+            start=start,
+            end=end,
+            extra_fields=extra_fields,
+        )
+        cursor = None
+        while cursor is not False:
+            params = base_params + [("limit", self.block_size)]
+            if cursor is not None:
+                params.append(("cursor", cursor))
+            page = JobSeriesList.model_validate(self._get("/job/series", params))
+            yield from page.results
+            cursor = page.cursor

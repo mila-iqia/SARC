@@ -67,6 +67,18 @@ class JobSeries:
     # User ID
     sarc_user_id: int
 
+    # Cost / waste (computed by the JobSeriesDB view)
+    cpu_cost: float | None
+    cpu_waste: float | None
+    cpu_equivalent_cost: float | None
+    cpu_equivalent_waste: float | None
+    cpu_overbilling_cost: float | None
+    gpu_cost: float | None
+    gpu_waste: float | None
+    gpu_equivalent_cost: float | None
+    gpu_equivalent_waste: float | None
+    gpu_overbilling_cost: float | None
+
     # Optional extra fields
     cluster_name: str | None = None
     statistics: dict[str, dict[str, float]] | None = None
