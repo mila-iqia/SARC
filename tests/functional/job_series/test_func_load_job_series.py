@@ -27,27 +27,6 @@ from sarc.jobs.series import compute_job_statistics
 from tests.common.dateutils import MTL
 from tests.functional.common import MOCK_TIME, generate_fake_timeseries
 
-parameters = {
-    "no_params": {},
-    "cluster_str": {"cluster": "patate"},
-    "job_state": {"job_state": "COMPLETED"},
-    "one_job": {"job_id": 10},
-    "one_job_wrong_cluster": {"job_id": 10, "cluster": "patate"},
-    "many_jobs": {"job_id": [8, 9]},
-    "no_jobs": {"job_id": []},
-    "start_only": {"start": datetime(2023, 2, 19, tzinfo=MTL)},
-    "end_only": {"end": datetime(2023, 2, 16, tzinfo=MTL)},
-    "start_str_only": {"start": "2023-02-19"},
-    "end_str_only": {"end": "2023-02-16"},
-    "start_and_end": {
-        "start": datetime(2023, 2, 15, tzinfo=MTL),
-        "end": datetime(2023, 2, 18, tzinfo=MTL),
-    },
-    "user": {"user": "beaubonhomme"},
-    "resubmitted": {"job_id": 1_000_000},
-}
-
-
 ALL_COLUMNS = sorted(
     [
         "CLEAR_SCHEDULING",
@@ -169,6 +148,20 @@ class LoadJobSeriesFn(Protocol):
     def __call__(self, sess: Session, **kwargs) -> pandas.DataFrame: ...
 
 
+def _check_load_job_series_frame(data_frame, file_regression):
+    assert isinstance(data_frame, pandas.DataFrame)
+    if data_frame.shape[0]:
+        assert sorted(data_frame.keys().tolist()) == sorted(ALL_COLUMNS + USER_COLUMNS)
+        file_regression.check(
+            f"Found {data_frame.shape[0]} job(s):\n"
+            f"\n{data_frame.to_csv(columns=CSV_COLUMNS)}"
+        )
+    else:
+        file_regression.check(
+            f"Found {data_frame.shape[0]} job(s):\n\n{data_frame.to_csv()}"
+        )
+
+
 class BaseTestLoadJobSeries:
     """
     Base class to test_load_job_series.
@@ -189,37 +182,146 @@ class BaseTestLoadJobSeries:
 
     @time_machine.travel(MOCK_TIME, tick=False)
     @pytest.mark.usefixtures("tzlocal_is_mtl")
-    @pytest.mark.parametrize("params", parameters.values(), ids=parameters.keys())
-    def test_load_job_series(
-        self, read_only_db, params, file_regression, fn_load_job_series
+    def test_load_job_series_no_params(
+        self, read_only_db, file_regression, fn_load_job_series
     ):
-        data_frame = fn_load_job_series(read_only_db, **params)
-        assert isinstance(data_frame, pandas.DataFrame)
-        # Check columns
-        if data_frame.shape[0]:
-            assert sorted(data_frame.keys().tolist()) == sorted(
-                ALL_COLUMNS + USER_COLUMNS
-            )
-            file_regression.check(
-                f"Found {data_frame.shape[0]} job(s):\n"
-                f"\n{data_frame.to_csv(columns=CSV_COLUMNS)}"
-            )
-        else:
-            file_regression.check(
-                f"Found {data_frame.shape[0]} job(s):\n\n{data_frame.to_csv()}"
-            )
+        data_frame = fn_load_job_series(read_only_db)
+        _check_load_job_series_frame(data_frame, file_regression)
+        # TODO: add specific assertions here
+
+    @time_machine.travel(MOCK_TIME, tick=False)
+    @pytest.mark.usefixtures("tzlocal_is_mtl")
+    def test_load_job_series_cluster_str(
+        self, read_only_db, file_regression, fn_load_job_series
+    ):
+        data_frame = fn_load_job_series(read_only_db, cluster="patate")
+        _check_load_job_series_frame(data_frame, file_regression)
+        # TODO: add specific assertions here
+
+    @time_machine.travel(MOCK_TIME, tick=False)
+    @pytest.mark.usefixtures("tzlocal_is_mtl")
+    def test_load_job_series_job_state(
+        self, read_only_db, file_regression, fn_load_job_series
+    ):
+        data_frame = fn_load_job_series(read_only_db, job_state="COMPLETED")
+        _check_load_job_series_frame(data_frame, file_regression)
+        # TODO: add specific assertions here
+
+    @time_machine.travel(MOCK_TIME, tick=False)
+    @pytest.mark.usefixtures("tzlocal_is_mtl")
+    def test_load_job_series_one_job(
+        self, read_only_db, file_regression, fn_load_job_series
+    ):
+        data_frame = fn_load_job_series(read_only_db, job_id=10)
+        _check_load_job_series_frame(data_frame, file_regression)
+        # TODO: add specific assertions here
+
+    @time_machine.travel(MOCK_TIME, tick=False)
+    @pytest.mark.usefixtures("tzlocal_is_mtl")
+    def test_load_job_series_one_job_wrong_cluster(
+        self, read_only_db, file_regression, fn_load_job_series
+    ):
+        data_frame = fn_load_job_series(read_only_db, job_id=10, cluster="patate")
+        _check_load_job_series_frame(data_frame, file_regression)
+        # TODO: add specific assertions here
+
+    @time_machine.travel(MOCK_TIME, tick=False)
+    @pytest.mark.usefixtures("tzlocal_is_mtl")
+    def test_load_job_series_many_jobs(
+        self, read_only_db, file_regression, fn_load_job_series
+    ):
+        data_frame = fn_load_job_series(read_only_db, job_id=[8, 9])
+        _check_load_job_series_frame(data_frame, file_regression)
+        # TODO: add specific assertions here
+
+    @time_machine.travel(MOCK_TIME, tick=False)
+    @pytest.mark.usefixtures("tzlocal_is_mtl")
+    def test_load_job_series_no_jobs(
+        self, read_only_db, file_regression, fn_load_job_series
+    ):
+        data_frame = fn_load_job_series(read_only_db, job_id=[])
+        _check_load_job_series_frame(data_frame, file_regression)
+        # TODO: add specific assertions here
+
+    @time_machine.travel(MOCK_TIME, tick=False)
+    @pytest.mark.usefixtures("tzlocal_is_mtl")
+    def test_load_job_series_start_only(
+        self, read_only_db, file_regression, fn_load_job_series
+    ):
+        data_frame = fn_load_job_series(
+            read_only_db, start=datetime(2023, 2, 19, tzinfo=MTL)
+        )
+        _check_load_job_series_frame(data_frame, file_regression)
+        # TODO: add specific assertions here
+
+    @time_machine.travel(MOCK_TIME, tick=False)
+    @pytest.mark.usefixtures("tzlocal_is_mtl")
+    def test_load_job_series_end_only(
+        self, read_only_db, file_regression, fn_load_job_series
+    ):
+        data_frame = fn_load_job_series(
+            read_only_db, end=datetime(2023, 2, 16, tzinfo=MTL)
+        )
+        _check_load_job_series_frame(data_frame, file_regression)
+        # TODO: add specific assertions here
+
+    @time_machine.travel(MOCK_TIME, tick=False)
+    @pytest.mark.usefixtures("tzlocal_is_mtl")
+    def test_load_job_series_start_str_only(
+        self, read_only_db, file_regression, fn_load_job_series
+    ):
+        data_frame = fn_load_job_series(read_only_db, start="2023-02-19")
+        _check_load_job_series_frame(data_frame, file_regression)
+        # TODO: add specific assertions here
+
+    @time_machine.travel(MOCK_TIME, tick=False)
+    @pytest.mark.usefixtures("tzlocal_is_mtl")
+    def test_load_job_series_end_str_only(
+        self, read_only_db, file_regression, fn_load_job_series
+    ):
+        data_frame = fn_load_job_series(read_only_db, end="2023-02-16")
+        _check_load_job_series_frame(data_frame, file_regression)
+        # TODO: add specific assertions here
+
+    @time_machine.travel(MOCK_TIME, tick=False)
+    @pytest.mark.usefixtures("tzlocal_is_mtl")
+    def test_load_job_series_start_and_end(
+        self, read_only_db, file_regression, fn_load_job_series
+    ):
+        data_frame = fn_load_job_series(
+            read_only_db,
+            start=datetime(2023, 2, 15, tzinfo=MTL),
+            end=datetime(2023, 2, 18, tzinfo=MTL),
+        )
+        _check_load_job_series_frame(data_frame, file_regression)
+        # TODO: add specific assertions here
+
+    @time_machine.travel(MOCK_TIME, tick=False)
+    @pytest.mark.usefixtures("tzlocal_is_mtl")
+    def test_load_job_series_user(
+        self, read_only_db, file_regression, fn_load_job_series
+    ):
+        data_frame = fn_load_job_series(read_only_db, user="beaubonhomme")
+        _check_load_job_series_frame(data_frame, file_regression)
+        # TODO: add specific assertions here
+
+    @time_machine.travel(MOCK_TIME, tick=False)
+    @pytest.mark.usefixtures("tzlocal_is_mtl")
+    def test_load_job_series_resubmitted(
+        self, read_only_db, file_regression, fn_load_job_series
+    ):
+        data_frame = fn_load_job_series(read_only_db, job_id=1_000_000)
+        _check_load_job_series_frame(data_frame, file_regression)
+        # TODO: add specific assertions here
 
     @pytest.mark.usefixtures("tzlocal_is_mtl")
-    @pytest.mark.parametrize("params", [parameters["no_params"]], ids=["no_params"])
-    def test_load_job_series_check_end_times(
-        self, read_only_db, params, fn_load_job_series
-    ):
+    def test_load_job_series_check_end_times(self, read_only_db, fn_load_job_series):
         # Get jobs
-        jobs = list(helper_get_jobs(read_only_db, **params))
+        jobs = list(helper_get_jobs(read_only_db))
         # Get a data frame
-        frame_1 = fn_load_job_series(read_only_db, **params)
+        frame_1 = fn_load_job_series(read_only_db)
         # Get a data frame again
-        frame_2 = fn_load_job_series(read_only_db, **params)
+        frame_2 = fn_load_job_series(read_only_db)
         frame_1_end_times = []
         frame_2_end_times = []
         for i, job in enumerate(jobs):
