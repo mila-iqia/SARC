@@ -1,3 +1,4 @@
+import gifnoc
 import pytest
 import sqlmodel
 
@@ -13,6 +14,12 @@ def rgu_db(empty_read_write_db):
     Dedicated testing database, based on empty_read_write_db to check RGUs.
     Add GPU billings, fake RGUs and one user.
     Each test will still have to add custom jobs.
+
+    Disables `sarc.db.auto_upgrade` while yielding: when a downstream consumer
+    (e.g. the REST app fixture) reconstructs the config tree, a fresh DbConfig
+    is created and its `engine` cached_property would otherwise re-run
+    `db_upgrade` → `insert_rgu`, undoing the clear+insert below by re-merging
+    IGUANE entries.
     """
     clusters = empty_read_write_db.exec(sqlmodel.select(SlurmClusterDB)).all()
     empty_read_write_db.add_all(create_gpu_billings(clusters=clusters))
@@ -41,4 +48,5 @@ def rgu_db(empty_read_write_db):
     # Insert a test user, required as foreign key target for any SlurmJobDB.sarc_user_id.
     empty_read_write_db.add(UserDB(display_name="test", email="test@mila.quebec"))
     empty_read_write_db.commit()
-    return empty_read_write_db
+    with gifnoc.overlay({"sarc.db.auto_upgrade": False}):
+        yield empty_read_write_db
