@@ -186,8 +186,9 @@ class BaseTestLoadJobSeries:
         self, read_only_db, file_regression, fn_load_job_series
     ):
         data_frame = fn_load_job_series(read_only_db)
+        assert data_frame.shape[0] > 0
+        assert data_frame.shape[0] == len(helper_get_jobs(read_only_db))
         _check_load_job_series_frame(data_frame, file_regression)
-        # TODO: add specific assertions here
 
     @time_machine.travel(MOCK_TIME, tick=False)
     @pytest.mark.usefixtures("tzlocal_is_mtl")
@@ -195,8 +196,9 @@ class BaseTestLoadJobSeries:
         self, read_only_db, file_regression, fn_load_job_series
     ):
         data_frame = fn_load_job_series(read_only_db, cluster="patate")
+        assert data_frame.shape[0] > 0
+        assert data_frame["cluster_name"].unique().tolist() == ["patate"]
         _check_load_job_series_frame(data_frame, file_regression)
-        # TODO: add specific assertions here
 
     @time_machine.travel(MOCK_TIME, tick=False)
     @pytest.mark.usefixtures("tzlocal_is_mtl")
@@ -204,8 +206,9 @@ class BaseTestLoadJobSeries:
         self, read_only_db, file_regression, fn_load_job_series
     ):
         data_frame = fn_load_job_series(read_only_db, job_state="COMPLETED")
+        assert data_frame.shape[0] > 0
+        assert data_frame["job_state"].unique().tolist() == ["COMPLETED"]
         _check_load_job_series_frame(data_frame, file_regression)
-        # TODO: add specific assertions here
 
     @time_machine.travel(MOCK_TIME, tick=False)
     @pytest.mark.usefixtures("tzlocal_is_mtl")
@@ -213,8 +216,9 @@ class BaseTestLoadJobSeries:
         self, read_only_db, file_regression, fn_load_job_series
     ):
         data_frame = fn_load_job_series(read_only_db, job_id=10)
+        assert data_frame.shape[0] == 1
+        assert data_frame["job_id"].tolist() == [10]
         _check_load_job_series_frame(data_frame, file_regression)
-        # TODO: add specific assertions here
 
     @time_machine.travel(MOCK_TIME, tick=False)
     @pytest.mark.usefixtures("tzlocal_is_mtl")
@@ -222,8 +226,8 @@ class BaseTestLoadJobSeries:
         self, read_only_db, file_regression, fn_load_job_series
     ):
         data_frame = fn_load_job_series(read_only_db, job_id=10, cluster="patate")
+        assert data_frame.shape[0] == 0
         _check_load_job_series_frame(data_frame, file_regression)
-        # TODO: add specific assertions here
 
     @time_machine.travel(MOCK_TIME, tick=False)
     @pytest.mark.usefixtures("tzlocal_is_mtl")
@@ -231,8 +235,9 @@ class BaseTestLoadJobSeries:
         self, read_only_db, file_regression, fn_load_job_series
     ):
         data_frame = fn_load_job_series(read_only_db, job_id=[8, 9])
+        assert data_frame.shape[0] == 2
+        assert sorted(data_frame["job_id"].tolist()) == [8, 9]
         _check_load_job_series_frame(data_frame, file_regression)
-        # TODO: add specific assertions here
 
     @time_machine.travel(MOCK_TIME, tick=False)
     @pytest.mark.usefixtures("tzlocal_is_mtl")
@@ -240,61 +245,65 @@ class BaseTestLoadJobSeries:
         self, read_only_db, file_regression, fn_load_job_series
     ):
         data_frame = fn_load_job_series(read_only_db, job_id=[])
+        assert data_frame.shape[0] == 0
         _check_load_job_series_frame(data_frame, file_regression)
-        # TODO: add specific assertions here
 
     @time_machine.travel(MOCK_TIME, tick=False)
     @pytest.mark.usefixtures("tzlocal_is_mtl")
     def test_load_job_series_start_only(
         self, read_only_db, file_regression, fn_load_job_series
     ):
-        data_frame = fn_load_job_series(
-            read_only_db, start=datetime(2023, 2, 19, tzinfo=MTL)
-        )
+        start = datetime(2023, 2, 19, tzinfo=MTL)
+        data_frame = fn_load_job_series(read_only_db, start=start)
+        assert data_frame.shape[0] > 0
+        assert (data_frame["end_time"] > start).all()
         _check_load_job_series_frame(data_frame, file_regression)
-        # TODO: add specific assertions here
 
     @time_machine.travel(MOCK_TIME, tick=False)
     @pytest.mark.usefixtures("tzlocal_is_mtl")
     def test_load_job_series_end_only(
         self, read_only_db, file_regression, fn_load_job_series
     ):
-        data_frame = fn_load_job_series(
-            read_only_db, end=datetime(2023, 2, 16, tzinfo=MTL)
-        )
+        end = datetime(2023, 2, 16, tzinfo=MTL)
+        data_frame = fn_load_job_series(read_only_db, end=end)
+        assert data_frame.shape[0] > 0
+        assert (data_frame["submit_time"] < end).all()
         _check_load_job_series_frame(data_frame, file_regression)
-        # TODO: add specific assertions here
 
     @time_machine.travel(MOCK_TIME, tick=False)
     @pytest.mark.usefixtures("tzlocal_is_mtl")
     def test_load_job_series_start_str_only(
         self, read_only_db, file_regression, fn_load_job_series
     ):
+        # str input must be interpreted as a local-MTL date at 00:00.
         data_frame = fn_load_job_series(read_only_db, start="2023-02-19")
+        assert data_frame.shape[0] > 0
+        assert (data_frame["end_time"] > datetime(2023, 2, 19, tzinfo=MTL)).all()
         _check_load_job_series_frame(data_frame, file_regression)
-        # TODO: add specific assertions here
 
     @time_machine.travel(MOCK_TIME, tick=False)
     @pytest.mark.usefixtures("tzlocal_is_mtl")
     def test_load_job_series_end_str_only(
         self, read_only_db, file_regression, fn_load_job_series
     ):
+        # str input must be interpreted as a local-MTL date at 00:00.
         data_frame = fn_load_job_series(read_only_db, end="2023-02-16")
+        assert data_frame.shape[0] > 0
+        assert (data_frame["submit_time"] < datetime(2023, 2, 16, tzinfo=MTL)).all()
         _check_load_job_series_frame(data_frame, file_regression)
-        # TODO: add specific assertions here
 
     @time_machine.travel(MOCK_TIME, tick=False)
     @pytest.mark.usefixtures("tzlocal_is_mtl")
     def test_load_job_series_start_and_end(
         self, read_only_db, file_regression, fn_load_job_series
     ):
-        data_frame = fn_load_job_series(
-            read_only_db,
-            start=datetime(2023, 2, 15, tzinfo=MTL),
-            end=datetime(2023, 2, 18, tzinfo=MTL),
-        )
+        start = datetime(2023, 2, 15, tzinfo=MTL)
+        end = datetime(2023, 2, 18, tzinfo=MTL)
+        data_frame = fn_load_job_series(read_only_db, start=start, end=end)
+        assert data_frame.shape[0] > 0
+        assert (data_frame["end_time"] > start).all()
+        assert (data_frame["submit_time"] < end).all()
         _check_load_job_series_frame(data_frame, file_regression)
-        # TODO: add specific assertions here
 
     @time_machine.travel(MOCK_TIME, tick=False)
     @pytest.mark.usefixtures("tzlocal_is_mtl")
@@ -302,8 +311,9 @@ class BaseTestLoadJobSeries:
         self, read_only_db, file_regression, fn_load_job_series
     ):
         data_frame = fn_load_job_series(read_only_db, user="beaubonhomme")
+        assert data_frame.shape[0] > 0
+        assert data_frame["email"].unique().tolist() == ["beaubonhomme@mila.quebec"]
         _check_load_job_series_frame(data_frame, file_regression)
-        # TODO: add specific assertions here
 
     @time_machine.travel(MOCK_TIME, tick=False)
     @pytest.mark.usefixtures("tzlocal_is_mtl")
@@ -311,8 +321,9 @@ class BaseTestLoadJobSeries:
         self, read_only_db, file_regression, fn_load_job_series
     ):
         data_frame = fn_load_job_series(read_only_db, job_id=1_000_000)
+        assert data_frame.shape[0] == 2
+        assert data_frame["job_id"].tolist() == [1_000_000, 1_000_000]
         _check_load_job_series_frame(data_frame, file_regression)
-        # TODO: add specific assertions here
 
     @pytest.mark.usefixtures("tzlocal_is_mtl")
     def test_load_job_series_check_end_times(self, read_only_db, fn_load_job_series):
