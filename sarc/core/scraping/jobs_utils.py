@@ -151,6 +151,10 @@ def fetch_raw(cluster: ClusterConfig, start: datetime, end: datetime) -> bytes:
         results = ssh.run(cmd, hide=True)
         logger.debug(results.stdout)
 
+    if results.failed:
+        raise RuntimeError("Remote command failed")
+    # This is just to check that the output is json-formatted
+    json.loads(results.stdout)
     # return stdout as bytes
     return results.stdout.encode("utf-8")
 
