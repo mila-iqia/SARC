@@ -96,10 +96,8 @@ ALL_COLUMNS = sorted(
 # If attributes in User class change, we may need to update this list.
 USER_COLUMNS = sorted(["email", "display_name", "supervisors", "member_type"])
 
-# For file regression tests, we will save data frame into a CSV.
-# We won't include job `id` because it changes from a call to another
-# (note that `job_id`, on the contrary, does not change).
-CSV_COLUMNS = ALL_COLUMNS + USER_COLUMNS
+# Columns included in file regression snapshots (rendered as Markdown).
+REGRESSION_COLUMNS = ALL_COLUMNS + USER_COLUMNS
 
 
 def _parse_dt(value: datetime | str) -> datetime:
@@ -153,12 +151,12 @@ def _check_load_job_series_frame(data_frame, file_regression):
     if data_frame.shape[0]:
         assert sorted(data_frame.keys().tolist()) == sorted(ALL_COLUMNS + USER_COLUMNS)
         file_regression.check(
-            f"Found {data_frame.shape[0]} job(s):\n"
-            f"\n{data_frame.to_csv(columns=CSV_COLUMNS)}"
+            f"Found {data_frame.shape[0]} job(s):\n\n"
+            f"{data_frame[REGRESSION_COLUMNS].to_markdown()}\n"
         )
     else:
         file_regression.check(
-            f"Found {data_frame.shape[0]} job(s):\n\n{data_frame.to_csv()}"
+            f"Found {data_frame.shape[0]} job(s):\n\n{data_frame.to_markdown()}\n"
         )
 
 
@@ -565,7 +563,7 @@ def helper_load_job_series(sess: Session, **kwargs) -> DataFrame:
         if d.get("end_time") is None:
             d["end_time"] = now
         # For each stat, add a flattened column, using same logic as in old load_job_series
-        # Individual stats (mean, median, etc.) are still in data
+        # Initial statistics dict (with mean, median, etc. for each stat) is still in data
         stats = d.get("statistics") or {}
         for label in _STAT_LABELS:
             d[label] = _flatten_stat(label, stats)
