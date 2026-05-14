@@ -160,6 +160,30 @@ def _check_load_job_series_frame(data_frame, file_regression):
         )
 
 
+def _cost_and_waste_markdown(df: pandas.DataFrame) -> str:
+    return df[
+        [
+            "elapsed_time",
+            "requested_cpu",
+            "requested_gres_gpu",
+            "allocated_cpu",
+            "allocated_gres_gpu",
+            "cpu_utilization",
+            "gpu_utilization",
+            "cpu_cost",
+            "cpu_waste",
+            "cpu_equivalent_cost",
+            "cpu_equivalent_waste",
+            "cpu_overbilling_cost",
+            "gpu_cost",
+            "gpu_waste",
+            "gpu_equivalent_cost",
+            "gpu_equivalent_waste",
+            "gpu_overbilling_cost",
+        ]
+    ].to_markdown()
+
+
 class BaseTestLoadJobSeries:
     """
     Base class to test_load_job_series.
@@ -497,14 +521,89 @@ class BaseTestLoadJobSeries:
             f"{series_markdown}\n"
         )
 
+    @time_machine.travel(MOCK_TIME, tick=False)
+    @pytest.mark.usefixtures("tzlocal_is_mtl")
+    def test_compute_cost_and_waste(
+        self, read_only_db, file_regression, fn_load_job_series
+    ):
+        frame = fn_load_job_series(read_only_db)
 
-_STAT_LABELS = (
-    "gpu_utilization",
-    "cpu_utilization",
-    "gpu_memory",
-    "gpu_power",
-    "system_memory",
-)
+        # Jobs do not have statistics, so, (gpu/cpu)_utilization is nan, and waste is nan too.
+        assert frame["cpu_utilization"].isnull().all()
+        assert frame["cpu_waste"].isnull().all()
+        assert frame["cpu_equivalent_waste"].isnull().all()
+        assert frame["gpu_utilization"].isnull().all()
+        assert frame["gpu_waste"].isnull().all()
+        assert frame["gpu_equivalent_waste"].isnull().all()
+
+        file_regression.check(
+            f"Compute cost and waste for {frame.shape[0]} job(s):\n\n{_cost_and_waste_markdown(frame)}"
+        )
+
+    @pytest.mark.usefixtures("tzlocal_is_mtl")
+    def test_compute_cost_and_waste_with_stored_statistics(
+        self, read_write_db, file_regression, fn_load_job_series
+    ):
+        if self.client_only:
+            pytest.skip(
+                "Test with writing operations not supported in client-only mode."
+            )
+
+        # List of job indices with no statistics initially,
+        # then with statistics computed and saved.
+        job_indices = [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            23,
+            1000000,
+            999_999_999,
+        ]
+        params = {"job_id": job_indices}
+
+        jobs = list(helper_get_jobs(read_write_db, **params))
+
+        # Utilization fields are nan, so waste fields are nan too.
+        frame = fn_load_job_series(read_write_db, **params)
+        assert frame["cpu_utilization"].isnull().all()
+        assert frame["gpu_utilization"].isnull().all()
+        assert frame["cpu_waste"].isnull().all()
+        assert frame["cpu_equivalent_waste"].isnull().all()
+        assert frame["gpu_waste"].isnull().all()
+        assert frame["gpu_equivalent_waste"].isnull().all()
+
+        for job in jobs:
+            job.statistics = compute_job_statistics(job, generate_fake_timeseries(job))
+            read_write_db.merge(job)
+            read_write_db.commit()
+
+        # With statistics computed, utilization fields are not nan, so waste fields are not nan neither.
+        frame = fn_load_job_series(read_write_db, **params)
+        assert frame["cpu_utilization"].notnull().all()
+        assert frame["gpu_utilization"].notnull().all()
+        assert frame["cpu_waste"].notnull().all()
+        assert frame["cpu_equivalent_waste"].notnull().all()
+        assert frame["gpu_waste"].notnull().all()
+        assert frame["gpu_equivalent_waste"].notnull().all()
+
+        file_regression.check(
+            f"Compute cost and waste for {frame.shape[0]} job(s):\n\n{_cost_and_waste_markdown(frame)}"
+        )
 
 
 def _apply_view_filters(
@@ -565,7 +664,13 @@ def helper_load_job_series(sess: Session, **kwargs) -> DataFrame:
         # For each stat, add a flattened column, using same logic as in old load_job_series
         # Initial statistics dict (with mean, median, etc. for each stat) is still in data
         stats = d.get("statistics") or {}
-        for label in _STAT_LABELS:
+        for label in (
+            "gpu_utilization",
+            "cpu_utilization",
+            "gpu_memory",
+            "gpu_power",
+            "system_memory",
+        ):
             d[label] = _flatten_stat(label, stats)
         # If gpu_utilization > 1, set it to NaN (same logic as in old load_job_series)
         gpu_util = d["gpu_utilization"]
