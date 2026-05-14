@@ -5,7 +5,6 @@ from sqlalchemy.dialects.postgresql import JSONB, aggregate_order_by
 from sqlmodel import FLOAT, JSON, Field, and_, case, col, desc, func, select
 
 from sarc.models.user import MemberType
-
 from .cluster import GPUBillingDB, SlurmClusterDB
 from .job import JobStatisticDB, SlurmJobDB, SlurmState
 from .sqlmodel import SQLModel
@@ -72,13 +71,25 @@ billing_subq = (
 gpu_unit_billing = func.cast(
     billing_subq.c.gpu_to_billing.op("->>")(SlurmJobDB.allocated_gpu_type), FLOAT
 )
+cluster_billing_count = (
+    select(func.count(GPUBillingDB.id))
+    .where(GPUBillingDB.cluster_id == SlurmClusterDB.id)
+    .scalar_subquery()
+)
 rgu_expr = case(
-    # Case A: Billing IS GPU (Simple multiply)
+    # A: billing_is_gpu -> multiply.
     (col(SlurmClusterDB.billing_is_gpu) == True, gpu_count_raw * GpuRguDB.rgu),  # noqa: E712
-    # Case B: Unit billing exists (job_billing / gpu_billing) * type_rgu.
-    # When gpu_unit_billing is NULL (no GPUBilling record, or gpu_type missing
-    # from the mapping) the division naturally yields NULL, which we treat as
-    # "data incomplete" rather than silently multiplying by gpu_count.
+    # B: pre-billing era (cluster has billings but none applicable yet) -> multiply.
+    (
+        and_(
+            col(billing_subq.c.gpu_to_billing).is_(None),
+            cluster_billing_count > 0,
+        ),
+        gpu_count_raw * GpuRguDB.rgu,
+    ),
+    # C: scale by per-type billing. NULL division yields NULL (NaN) when
+    # gpu_unit_billing is missing (cluster has no billing record at all, or
+    # gpu_type missing from the mapping).
     else_=(gpu_count_raw / gpu_unit_billing) * GpuRguDB.rgu,
 ).label("rgu")
 

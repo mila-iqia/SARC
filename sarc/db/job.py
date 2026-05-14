@@ -187,8 +187,12 @@ class SlurmJobDB(SQLModel, table=True):
             # before computing RGU
             cluster_billing = self.cluster.get_gpu_billing(start_time)
             if cluster_billing is None:
-                # Before the oldest gpu->billing mapping available
-                # We assume gres_gpu is gpu count
+                if not self.cluster.gpu_billing:
+                    # Cluster has no GPUBilling at all: can't interpret
+                    # allocated_billing -> NaN.
+                    return math.nan
+                # Cluster has billings but none applicable yet (pre-billing
+                # era): assume gres_gpu is gpu count.
                 gpu_count = gres_gpu
                 gres_rgu = gpu_count * gpu_type_rgu
             else:

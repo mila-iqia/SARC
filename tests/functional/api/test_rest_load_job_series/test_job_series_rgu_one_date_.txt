@@ -65,7 +65,7 @@ Data
   "job_billing": 3,
   "gpu_type": "raisin_gpu_with_rgu_no_billing",
   "expected": {
-   "gres_rgu": NaN,
+   "gres_rgu": 4.5,
    "gpu_type_rgu": 1.5,
    "gpu_billing_found": null
   }
@@ -76,7 +76,7 @@ Data
   "job_billing": 4,
   "gpu_type": "raisin_gpu_with_rgu_with_billing",
   "expected": {
-   "gres_rgu": NaN,
+   "gres_rgu": 10.0,
    "gpu_type_rgu": 2.5,
    "gpu_billing_found": null
   }
@@ -87,7 +87,7 @@ Data
   "job_billing": 5,
   "gpu_type": "A100",
   "expected": {
-   "gres_rgu": NaN,
+   "gres_rgu": 16.05,
    "gpu_type_rgu": 3.21,
    "gpu_billing_found": null
   }

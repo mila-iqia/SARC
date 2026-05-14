@@ -157,14 +157,14 @@ class ExampleData:
     def get_expected(self, sess):
         """Compute expected RGU values matching the JobSeriesDB view's rgu_expr.
 
-        Mirrors the two branches of the CASE expression in sarc/db/job_series.py:
-          A. cluster.billing_is_gpu          -> gpu_count_raw * rgu
-          B. otherwise                       -> (gpu_count_raw / unit_billing) * rgu
+        Mirrors the three branches of the CASE expression in sarc/db/job_series.py:
+          A. cluster.billing_is_gpu                -> gpu_count_raw * rgu
+          B. cluster has billings but none yet applicable (pre-billing era)
+                                                   -> gpu_count_raw * rgu
+          C. otherwise                             -> (gpu_count_raw / unit_billing) * rgu
 
-        When `gpu_unit_billing` is NULL (no applicable GPUBilling record, OR
-        gpu_type missing from the mapping), the division yields NaN, signalling
-        incomplete data. This is intentional: only `billing_is_gpu=True` is an
-        explicit opt-in to interpret `allocated_billing` as a GPU count.
+        In C, when unit_billing is missing (cluster has no billings at all OR
+        gpu_type missing from the applicable mapping), the result is NaN.
         """
         cluster_by_name = {
             c.name: c for c in sess.exec(sqlmodel.select(SlurmClusterDB)).all()
@@ -175,8 +175,12 @@ class ExampleData:
 
         for row in self.data:
             cluster = cluster_by_name[row.cluster_name]
-            # Find applicable billing: most recent with since <= row.start_time
-            # (datetime_utc columns require UTC-aware comparison values).
+            cluster_billing_count = sess.exec(
+                sqlmodel.select(sqlmodel.func.count(GPUBillingDB.id)).where(
+                    GPUBillingDB.cluster_id == cluster.id
+                )
+            ).one()
+            # Most recent billing applicable to this row's start_time, if any.
             billing = sess.exec(
                 sqlmodel.select(GPUBillingDB)
                 .where(GPUBillingDB.cluster_id == cluster.id)
@@ -193,8 +197,17 @@ class ExampleData:
             gpu_billing_found = None
             if cluster.billing_is_gpu:
                 rgu_value = gpu_count_raw * rgu
-            elif billing is None or row.gpu_type not in billing.gpu_to_billing:
-                # No information to interpret the billing -> NaN.
+            elif cluster_billing_count == 0:
+                # No billing found on cluster
+                # Since billing_is_gpu is False, we can't tell if
+                # either we are in pre-billing era, or billing is missing.
+                # Generate a NaN as alert.
+                rgu_value = math.nan
+            elif billing is None:
+                # Pre-billing era: cluster has billings but none applicable yet.
+                rgu_value = gpu_count_raw * rgu
+            elif row.gpu_type not in billing.gpu_to_billing:
+                # gpu_type missing from mapping -> NaN.
                 rgu_value = math.nan
             else:
                 unit_billing = billing.gpu_to_billing[row.gpu_type]
