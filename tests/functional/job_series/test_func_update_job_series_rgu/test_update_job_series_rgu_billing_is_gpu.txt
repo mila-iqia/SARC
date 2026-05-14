@@ -28,7 +28,8 @@ Data
   "gpu_type": "mila_gpu_no_rgu_no_billing",
   "expected": {
    "gres_rgu": 7,
-   "gpu_type_rgu": 7
+   "gpu_type_rgu": 7,
+   "gpu_billing_found": null
   }
  },
  {
@@ -38,7 +39,8 @@ Data
   "gpu_type": "mila_gpu_no_rgu_with_billing",
   "expected": {
    "gres_rgu": 28,
-   "gpu_type_rgu": 14
+   "gpu_type_rgu": 14,
+   "gpu_billing_found": null
   }
  },
  {
@@ -48,7 +50,8 @@ Data
   "gpu_type": "mila_gpu_with_rgu_no_billing",
   "expected": {
    "gres_rgu": 63,
-   "gpu_type_rgu": 21
+   "gpu_type_rgu": 21,
+   "gpu_billing_found": null
   }
  },
  {
@@ -58,7 +61,8 @@ Data
   "gpu_type": "mila_gpu_with_rgu_with_billing",
   "expected": {
    "gres_rgu": 112,
-   "gpu_type_rgu": 28
+   "gpu_type_rgu": 28,
+   "gpu_billing_found": null
   }
  },
  {
@@ -68,7 +72,8 @@ Data
   "gpu_type": "A100",
   "expected": {
    "gres_rgu": 16.05,
-   "gpu_type_rgu": 3.21
+   "gpu_type_rgu": 3.21,
+   "gpu_billing_found": null
   }
  },
  {
@@ -78,7 +83,8 @@ Data
   "gpu_type": "mila_gpu_no_rgu_no_billing",
   "expected": {
    "gres_rgu": 7000,
-   "gpu_type_rgu": 7
+   "gpu_type_rgu": 7,
+   "gpu_billing_found": null
   }
  },
  {
@@ -88,7 +94,8 @@ Data
   "gpu_type": "mila_gpu_no_rgu_with_billing",
   "expected": {
    "gres_rgu": 252000,
-   "gpu_type_rgu": 14
+   "gpu_type_rgu": 14,
+   "gpu_billing_found": null
   }
  },
  {
@@ -98,7 +105,8 @@ Data
   "gpu_type": "mila_gpu_with_rgu_no_billing",
   "expected": {
    "gres_rgu": 21000,
-   "gpu_type_rgu": 21
+   "gpu_type_rgu": 21,
+   "gpu_billing_found": null
   }
  },
  {
@@ -108,7 +116,8 @@ Data
   "gpu_type": "mila_gpu_with_rgu_with_billing",
   "expected": {
    "gres_rgu": 126000,
-   "gpu_type_rgu": 28
+   "gpu_type_rgu": 28,
+   "gpu_billing_found": null
   }
  },
  {
@@ -118,7 +127,8 @@ Data
   "gpu_type": "A100",
   "expected": {
    "gres_rgu": 1284.0,
-   "gpu_type_rgu": 3.21
+   "gpu_type_rgu": 3.21,
+   "gpu_billing_found": null
   }
  },
  {
@@ -128,7 +138,8 @@ Data
   "gpu_type": "mila_gpu_no_rgu_no_billing",
   "expected": {
    "gres_rgu": 7000,
-   "gpu_type_rgu": 7
+   "gpu_type_rgu": 7,
+   "gpu_billing_found": null
   }
  },
  {
@@ -138,7 +149,8 @@ Data
   "gpu_type": "mila_gpu_no_rgu_with_billing",
   "expected": {
    "gres_rgu": 252000,
-   "gpu_type_rgu": 14
+   "gpu_type_rgu": 14,
+   "gpu_billing_found": null
   }
  },
  {
@@ -148,7 +160,8 @@ Data
   "gpu_type": "mila_gpu_with_rgu_no_billing",
   "expected": {
    "gres_rgu": 21000,
-   "gpu_type_rgu": 21
+   "gpu_type_rgu": 21,
+   "gpu_billing_found": null
   }
  },
  {
@@ -158,7 +171,8 @@ Data
   "gpu_type": "mila_gpu_with_rgu_with_billing",
   "expected": {
    "gres_rgu": 126000,
-   "gpu_type_rgu": 28
+   "gpu_type_rgu": 28,
+   "gpu_billing_found": null
   }
  },
  {
@@ -168,7 +182,8 @@ Data
   "gpu_type": "A100",
   "expected": {
    "gres_rgu": 1284.0,
-   "gpu_type_rgu": 3.21
+   "gpu_type_rgu": 3.21,
+   "gpu_billing_found": null
   }
  },
  {
@@ -178,7 +193,8 @@ Data
   "gpu_type": "hyrule_gpu_9",
   "expected": {
    "gres_rgu": NaN,
-   "gpu_type_rgu": NaN
+   "gpu_type_rgu": NaN,
+   "gpu_billing_found": null
   }
  }
 ]

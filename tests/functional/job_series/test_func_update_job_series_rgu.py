@@ -58,6 +58,7 @@ class Expected:
 
     gres_rgu: float
     gpu_type_rgu: float
+    gpu_billing_found: float | None
 
 
 class Row:
@@ -87,6 +88,7 @@ class Row:
                 else {
                     "gres_rgu": self.expected.gres_rgu,
                     "gpu_type_rgu": self.expected.gpu_type_rgu,
+                    "gpu_billing_found": self.expected.gpu_billing_found,
                 }
             ),
         }
@@ -145,9 +147,7 @@ class ExampleData:
         billing lookup (which uses submit_time) selects the appropriate
         GPUBilling for the period each row represents.
         """
-        clusters = {
-            c.name: c for c in sess.exec(sqlmodel.select(SlurmClusterDB)).all()
-        }
+        clusters = {c.name: c for c in sess.exec(sqlmodel.select(SlurmClusterDB)).all()}
         user = sess.exec(sqlmodel.select(UserDB)).one()
         elapsed_seconds = 10
         elapsed_timedelta = timedelta(seconds=elapsed_seconds)
@@ -216,6 +216,7 @@ class ExampleData:
             # are set to row.job_billing, so it simplifies.
             gpu_count_raw = row.job_billing
 
+            gpu_billing_found = None
             if cluster.billing_is_gpu:
                 rgu_value = gpu_count_raw * rgu
             elif billing is None or row.gpu_type not in billing.gpu_to_billing:
@@ -223,8 +224,13 @@ class ExampleData:
             else:
                 unit_billing = billing.gpu_to_billing[row.gpu_type]
                 rgu_value = (gpu_count_raw / unit_billing) * rgu
+                gpu_billing_found = unit_billing
 
-            row.expected = Expected(gres_rgu=rgu_value, gpu_type_rgu=rgu)
+            row.expected = Expected(
+                gres_rgu=rgu_value,
+                gpu_type_rgu=rgu,
+                gpu_billing_found=gpu_billing_found,
+            )
             expected_rgu.append(rgu_value)
             expected_gpu_type_rgu.append(rgu)
 
