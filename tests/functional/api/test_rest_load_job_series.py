@@ -2,7 +2,7 @@ from typing import Callable
 
 import pytest
 
-from tests.functional.job_series.test_func_load_job_series import BaseTestLoadJobSeries
+from tests.functional.job_series.base import BaseTestLoadJobSeries
 
 
 class TestRestLoadJobSeries(BaseTestLoadJobSeries):
