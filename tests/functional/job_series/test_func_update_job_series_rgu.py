@@ -285,13 +285,10 @@ def test_clusters_gpu_billings(local_db):
     """Sanity check: GPUBillings populated as expected for each test cluster."""
 
     def billings_count(cluster_name):
-        cluster = local_db.exec(
-            sqlmodel.select(SlurmClusterDB).where(SlurmClusterDB.name == cluster_name)
-        ).one()
         return local_db.exec(
-            sqlmodel.select(sqlmodel.func.count(GPUBillingDB.id)).where(
-                GPUBillingDB.cluster_id == cluster.id
-            )
+            sqlmodel.select(sqlmodel.func.count(GPUBillingDB.id))
+            .join(SlurmClusterDB)
+            .where(SlurmClusterDB.name == cluster_name)
         ).one()
 
     assert billings_count(cluster_no_gpu_billing) == 0
