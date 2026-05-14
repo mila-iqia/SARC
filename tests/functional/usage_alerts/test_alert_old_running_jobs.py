@@ -23,7 +23,7 @@ from sqlmodel import select
 from sarc.config import config
 from sarc.db.job import SlurmJobDB
 from sarc.models.job import SlurmState
-from tests.functional.usage_alerts.common import MOCK_TIME
+from tests.functional.common import MOCK_TIME
 
 PARAMETERS: dict[str, tuple[str, list[str]]] = {
     # No `since` filter: checks all RUNNING jobs => finds old RUNNING job

@@ -1,12 +1,10 @@
 import pandas
 import pytest
-
 from sarc.client.job import get_jobs
+
 from sarc.client.series import compute_cost_and_waste, load_job_series
 from sarc.jobs.series import compute_job_statistics
-
-from .test_func_job_statistics import generate_fake_timeseries
-from .test_func_load_job_series import MOCK_TIME
+from tests.functional.common import generate_fake_timeseries, MOCK_TIME
 
 # columns used to compute cost and waste
 USED_FIELDS = [

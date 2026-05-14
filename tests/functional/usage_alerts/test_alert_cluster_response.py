@@ -3,7 +3,7 @@ import re
 import pytest
 import time_machine
 
-from tests.functional.usage_alerts.common import MOCK_TIME
+from tests.functional.common import MOCK_TIME
 
 PARAMETERS = {
     "default": "cluster_response_default",  # default is 7 days

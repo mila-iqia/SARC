@@ -3,7 +3,7 @@ import functools
 import pytest
 import time_machine
 
-from tests.functional.usage_alerts.common import MOCK_TIME, _get_warnings
+from tests.functional.common import MOCK_TIME, _get_warnings
 
 get_warnings = functools.partial(
     _get_warnings,

@@ -7,7 +7,7 @@ import time_machine
 from sarc.config import config
 from sarc.db.job import SlurmJobDB
 from sarc.jobs.series import compute_job_statistics
-from tests.functional.usage_alerts.common import (
+from tests.functional.common import (
     MOCK_TIME,
     _get_warnings,
     generate_fake_timeseries,
