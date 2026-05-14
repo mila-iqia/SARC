@@ -297,7 +297,7 @@ def test_clusters_gpu_billings(local_db):
 
 
 @pytest.mark.usefixtures("tzlocal_is_mtl")
-def test_update_job_series_rgu_one_date(local_db, file_regression):
+def test_job_series_rgu_one_date(local_db, file_regression):
     """Concrete test with a cluster which has 1 billing date."""
     data = ExampleData(cluster=cluster_gpu_billing_one_date)
     data.populate(local_db)
@@ -327,7 +327,7 @@ def test_update_job_series_rgu_one_date(local_db, file_regression):
 
 
 @pytest.mark.usefixtures("tzlocal_is_mtl")
-def test_update_job_series_rgu_with_many_dates(local_db, file_regression):
+def test_job_series_rgu_with_many_dates(local_db, file_regression):
     """Concrete test with a cluster which has many billing dates."""
     data = ExampleData(cluster=cluster_gpu_billing_many_dates)
     data.populate(local_db)
@@ -359,7 +359,7 @@ def test_update_job_series_rgu_with_many_dates(local_db, file_regression):
 
 
 @pytest.mark.usefixtures("tzlocal_is_mtl")
-def test_update_job_series_rgu_billing_is_gpu(local_db, file_regression):
+def test_job_series_rgu_billing_is_gpu(local_db, file_regression):
     """Concrete test with a cluster where billing_is_gpu is True."""
     data = ExampleData(cluster=cluster_gpu_billing_is_gpu)
     data.populate(local_db)
