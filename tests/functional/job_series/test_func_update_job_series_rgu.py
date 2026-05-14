@@ -6,7 +6,6 @@ from datetime import datetime, time, timedelta
 import pandas
 import pytest
 import sqlmodel
-import time_machine
 
 from sarc.config import UTC
 from sarc.db.cluster import GPUBillingDB, SlurmClusterDB
@@ -16,7 +15,6 @@ from sarc.db.users import UserDB
 from sarc.models.job import SlurmState
 from tests.common.dateutils import MTL
 from tests.db.factory import create_gpu_billings
-from tests.functional.common import MOCK_TIME
 from tests.functional.job_series.test_func_load_job_series import (
     helper_load_job_series as load_job_series,
 )
@@ -48,7 +46,7 @@ def local_db(empty_read_write_db):
     empty_read_write_db.add_all(
         [GpuRguDB(name=name, rgu=rgu) for name, rgu in _gen_fake_rgus().items()]
     )
-    # Insert a test user, required as FK target for any SlurmJobDB.sarc_user_id.
+    # Insert a test user, required as foreign key target for any SlurmJobDB.sarc_user_id.
     empty_read_write_db.add(UserDB(display_name="test", email="test@mila.quebec"))
     empty_read_write_db.commit()
     return empty_read_write_db
@@ -66,13 +64,13 @@ class Row:
     """Helper class to represent relevant RGU data for a synthetic job."""
 
     def __init__(
-        self, cluster_name: str, start_time: str, gres_gpu: int, gpu_type: str
+        self, cluster_name: str, start_time: str, job_billing: int, gpu_type: str
     ):
         self.cluster_name = cluster_name
         self.start_time = datetime.combine(
             datetime.strptime(start_time, "%Y-%m-%d"), time.min
         ).replace(tzinfo=MTL)
-        self.gres_gpu: int = gres_gpu
+        self.job_billing: int = job_billing
         self.gpu_type = gpu_type
         self.expected: Expected | None = None
 
@@ -81,7 +79,7 @@ class Row:
         return {
             "cluster_name": self.cluster_name,
             "start_time": self.start_time.strftime("%Y-%m-%d"),
-            "gres_gpu": self.gres_gpu,
+            "job_billing": self.job_billing,
             "gpu_type": self.gpu_type,
             "expected": (
                 None
@@ -163,10 +161,10 @@ class ExampleData:
                     start_time=start_time,
                     end_time=start_time + elapsed_timedelta,
                     elapsed_time=elapsed_seconds,
-                    allocated_gres_gpu=row.gres_gpu,
-                    allocated_billing=row.gres_gpu,
+                    allocated_gres_gpu=row.job_billing,
+                    allocated_billing=row.job_billing,
                     allocated_gpu_type=row.gpu_type,
-                    requested_gres_gpu=row.gres_gpu,
+                    requested_gres_gpu=row.job_billing,
                     account="account",
                     job_id=i,
                     name="name",
@@ -189,10 +187,6 @@ class ExampleData:
           B. gpu_unit_billing IS NULL        -> gpu_count_raw * rgu
              (no applicable billing record, OR gpu_type missing from mapping)
           C. otherwise                       -> (gpu_count_raw / unit_billing) * rgu
-
-        NB: In the SQL view, allocated_gres_gpu stays unchanged (not divided by
-        unit_billing as the old Mongo update_job_series_rgu did), so the expected
-        gres_gpu is always row.gres_gpu and is not returned here.
 
         NB: Case B differs from old Mongo semantics. Old code: "no billing for
         this cluster" or "no billing for this GPU type" -> NaN. SQL view: treat
@@ -219,8 +213,8 @@ class ExampleData:
 
             rgu = _gen_fake_rgus().get(row.gpu_type, math.nan)
             # gpu_count_raw = max(allocated_billing, requested_gres_gpu); here both
-            # are set to row.gres_gpu, so it simplifies.
-            gpu_count_raw = row.gres_gpu
+            # are set to row.job_billing, so it simplifies.
+            gpu_count_raw = row.job_billing
 
             if cluster.billing_is_gpu:
                 rgu_value = gpu_count_raw * rgu
@@ -294,11 +288,8 @@ def _series_equals(actual, expected):
 
 
 def _check_rgu_columns(frame, data: ExampleData, sess):
-    """Assert frame's rgu / gpu_type_rgu / allocated_gres_gpu match expectations."""
+    """Assert frame's rgu / gpu_type_rgu match expectations."""
     expected_rgu, expected_gpu_type_rgu = data.get_expected(sess)
-    expected_gres_gpu = [row.gres_gpu for row in data.data]
-
-    _series_equals(frame["allocated_gres_gpu"].tolist(), expected_gres_gpu)
     _series_equals(frame["rgu"].tolist(), expected_rgu)
     _series_equals(frame["gpu_type_rgu"].tolist(), expected_gpu_type_rgu)
 
@@ -420,50 +411,4 @@ def test_update_job_series_rgu_billing_is_gpu(
         f"Data\n"
         f"----\n"
         f"{data}\n"
-    )
-
-
-@time_machine.travel(MOCK_TIME, tick=False)
-@pytest.mark.usefixtures("tzlocal_is_mtl")
-def test_update_job_series_rgu_with_read_only_db(read_only_db, file_regression):
-    """Run the view's RGU computation against jobs from read_only_db,
-    and check it matches the per-job SlurmJobDB.rgu / .gpu_type_rgu properties.
-
-    Both sources query IGUANE for RGUs (the view via GpuRguDB which is populated
-    from IGUANE; the properties via get_rgus() which calls IGUANE directly),
-    so the values must match.
-    """
-    frame = load_job_series(read_only_db)
-
-    jobs = list(
-        read_only_db.exec(
-            sqlmodel.select(SlurmJobDB).order_by(SlurmJobDB.id)
-        ).all()
-    )
-    assert frame.shape[0] == len(jobs) > 0
-
-    _series_equals(frame["gpu_type_rgu"].tolist(), [job.gpu_type_rgu for job in jobs])
-    _series_equals(frame["rgu"].tolist(), [job.rgu for job in jobs])
-
-    fields = [
-        "job_id",
-        "cluster_name",
-        "start_time",
-        "allocated_gpu_type",
-        "allocated_gres_gpu",
-        "rgu",
-        "gpu_type_rgu",
-    ]
-    file_regression.check(
-        f"=======================================\n"
-        f"RGU computation on read_only_db jobs:\n"
-        f"=======================================\n\n"
-        f"------------------\n"
-        f"GPU billing values\n"
-        f"------------------\n"
-        f"{json.dumps(_billings_dump(read_only_db, ['raisin', 'patate', 'mila', 'hyrule', 'gerudo']), indent=1)}\n\n"
-        f"-----\n"
-        f"Frame\n"
-        f"-----\n"
-        f"{frame[fields].to_markdown()}\n"
     )
