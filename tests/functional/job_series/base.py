@@ -134,10 +134,6 @@ def helper_get_jobs(sess: Session, **kwargs) -> list[SlurmJobDB]:
     return list(sess.exec(query).all())
 
 
-class LoadJobSeriesFn(Protocol):
-    def __call__(self, sess: Session, **kwargs) -> pandas.DataFrame: ...
-
-
 def _check_load_job_series_frame(data_frame, file_regression):
     assert isinstance(data_frame, pandas.DataFrame)
     if data_frame.shape[0]:
@@ -174,6 +170,10 @@ def _cost_and_waste_markdown(df: pandas.DataFrame) -> str:
             "gpu_overbilling_cost",
         ]
     ].to_markdown()
+
+
+class LoadJobSeriesFn(Protocol):
+    def __call__(self, sess: Session, **kwargs) -> pandas.DataFrame: ...
 
 
 class BaseTestLoadJobSeries:
