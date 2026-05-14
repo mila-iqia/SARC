@@ -1,5 +1,6 @@
 import bisect
 import math
+import re
 from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, HTTPException, Query
@@ -11,6 +12,9 @@ from sarc.client.job import _jobs_collection, get_available_clusters
 router = APIRouter(prefix="/dash")
 
 UTC = timezone.utc
+
+_DEFAULT_WINDOW_DAYS = 1
+_DEFAULT_PERIOD = "1h"
 
 _COMPLETED = {"job_state": "COMPLETED"}
 
@@ -26,12 +30,24 @@ _METRICS_0_1: dict[str, str] = {
 }
 
 
+_PERIOD_RE = re.compile(r"^(\d+(?:\.\d+)?)\s*([hdwm]?)$", re.IGNORECASE)
+_PERIOD_MULTIPLIERS = {"h": 1 / 24, "d": 1, "w": 7, "m": 30}
+
+
+def _parse_period(s: str) -> timedelta:
+    m = _PERIOD_RE.match(s.strip())
+    if not m:
+        raise HTTPException(status_code=400, detail=f"Invalid period {s!r}. Use N[h/d/w/m] (e.g. 12h, 1d, 2w, 1m).")
+    n, unit = float(m.group(1)), (m.group(2) or "d").lower()
+    return timedelta(days=n * _PERIOD_MULTIPLIERS[unit])
+
+
 def _date_range(start, end):
     today = datetime.now(UTC).date()
     if start is None:
         start = today
     if end is None:
-        end = today - timedelta(days=7)
+        end = today - timedelta(days=_DEFAULT_WINDOW_DAYS)
     begin = min(start, end)
     finish = max(start, end)
     begin_dt = datetime(begin.year, begin.month, begin.day, tzinfo=UTC)
@@ -113,12 +129,13 @@ def metrics_clusters() -> list[str]:
 def metrics_global_data(
     start: date = Query(default=None),
     end: date = Query(default=None),
-    range_days: float = Query(default=1.0, gt=0),
+    period: str = Query(default=_DEFAULT_PERIOD),
     cluster: str | None = Query(default=None),
     cluster_user: str | None = Query(default=None),
 ):
     begin_dt, finish_dt = _date_range(start, end)
-    step = timedelta(days=range_days)
+    step = _parse_period(period)
+    fmt = "%Y-%m-%d %H:%M" if step < timedelta(days=1) else "%Y-%m-%d"
     coll = _jobs_collection().get_collection()
 
     periods = []
@@ -128,7 +145,7 @@ def metrics_global_data(
         count = coll.count_documents(
             {**_COMPLETED, **_cluster_filter(cluster), **_user_filter(cluster_user), "submit_time": {"$gte": current, "$lt": period_end}}
         )
-        periods.append({"period_start": current.date().isoformat(), "count": count})
+        periods.append({"period_start": current.strftime(fmt), "count": count})
         current = period_end
 
     return periods
@@ -248,13 +265,14 @@ def metrics_global_density(
 def metrics_global_histogram(
     start: date = Query(default=None),
     end: date = Query(default=None),
-    range_days: float = Query(default=1.0, gt=0),
+    period: str = Query(default=_DEFAULT_PERIOD),
     cluster: str | None = Query(default=None),
     cluster_user: str | None = Query(default=None),
     metric: str = Query(default="gpu_sm_occupancy"),
 ):
     begin_dt, finish_dt = _date_range(start, end)
-    step = timedelta(days=range_days)
+    step = _parse_period(period)
+    fmt = "%Y-%m-%d %H:%M" if step < timedelta(days=1) else "%Y-%m-%d"
     coll = _jobs_collection().get_collection()
     rgu_ctx = _RguContext()
 
@@ -263,7 +281,7 @@ def metrics_global_histogram(
     current = begin_dt
     while current < finish_dt:
         period_starts.append(current)
-        period_data.append({"period_start": current.date().isoformat(), "rgu_requested": 0.0, "rgu_used": 0.0})
+        period_data.append({"period_start": current.strftime(fmt), "rgu_requested": 0.0, "rgu_used": 0.0})
         current += step
 
     query = {
@@ -401,8 +419,9 @@ _HTML = """<!DOCTYPE html>
       <input type="date" id="end" />
     </div>
     <div class="ctrl">
-      <label for="range_days">Period (days)</label>
-      <input type="number" id="range_days" value="1" min="0.1" step="0.1" />
+      <label for="period">Period</label>
+      <input type="text" id="period" value="__DEFAULT_PERIOD__" style="width:80px"
+             placeholder="e.g. 1d, 12h, 2w" />
     </div>
     <div class="ctrl">
       <label for="cluster-select">Cluster</label>
@@ -412,6 +431,10 @@ _HTML = """<!DOCTYPE html>
       <label for="cluster_user">User</label>
       <input type="text" id="cluster_user" placeholder="all users"
              autocomplete="off" data-lpignore="true" data-form-type="other" />
+    </div>
+    <div class="ctrl">
+      <label for="top_n_users">Top N users</label>
+      <input type="number" id="top_n_users" value="10" min="1" step="1" />
     </div>
     <div class="ctrl">
       <label for="metric-select">Primary metric</label>
@@ -457,6 +480,8 @@ _HTML = """<!DOCTYPE html>
       ['bar', 'scatter', 'wait', 'histogram', 'density', 'metricscatter', 'userrgu'].forEach(id => {
         document.getElementById('chart-' + id).classList.toggle('hidden', id !== which);
       });
+      const el = document.getElementById('chart-' + which);
+      if (el._fullLayout) Plotly.Plots.resize(el);
     }
 
     const METRICS = {
@@ -499,14 +524,14 @@ _HTML = """<!DOCTYPE html>
 
     const today = new Date();
     const sevenAgo = new Date(today);
-    sevenAgo.setDate(sevenAgo.getDate() - 7);
+    sevenAgo.setDate(sevenAgo.getDate() - __DEFAULT_WINDOW_DAYS__);
     document.getElementById('start').value = isoDate(sevenAgo);
     document.getElementById('end').value = isoDate(today);
 
     async function loadCharts() {
       const start   = document.getElementById('start').value;
       const end     = document.getElementById('end').value;
-      const rangeDays = document.getElementById('range_days').value;
+      const period     = document.getElementById('period').value.trim();
       const cluster  = document.getElementById('cluster-select').value;
       const cluster_user = document.getElementById('cluster_user').value.trim();
       const metric       = document.getElementById('metric-select').value;
@@ -520,9 +545,9 @@ _HTML = """<!DOCTYPE html>
         const base = { start, end, cluster, ...(cluster_user ? { cluster_user } : {}) };
         const densityParams = { ...base, metric, ...(metric2 ? { metric2 } : {}) };
         const [barResp, scatterResp, histResp, densityResp, userRguResp] = await Promise.all([
-          fetch('/dash/metrics/data?'      + new URLSearchParams({ ...base, range_days: rangeDays })),
+          fetch('/dash/metrics/data?'      + new URLSearchParams({ ...base, period })),
           fetch('/dash/metrics/scatter?'   + new URLSearchParams(base)),
-          fetch('/dash/metrics/histogram?' + new URLSearchParams({ ...base, range_days: rangeDays, metric })),
+          fetch('/dash/metrics/histogram?' + new URLSearchParams({ ...base, period, metric })),
           fetch('/dash/metrics/density?'   + new URLSearchParams(densityParams)),
           fetch('/dash/metrics/user_rgu?'  + new URLSearchParams({ ...base, metric })),
         ]);
@@ -660,8 +685,9 @@ _HTML = """<!DOCTYPE html>
 
         // RGU by user (stacked bar, same waterline style)
         if (userRguData.length) {
-          // Sorted descending by requested — reverse for horizontal bars so top = most
-          const rows      = [...userRguData].reverse();
+          const topN      = Math.max(1, parseInt(document.getElementById('top_n_users').value, 10) || 10);
+          // Sorted descending by requested — slice top N, then reverse for horizontal bars so top = most
+          const rows      = userRguData.slice(0, topN).reverse();
           const users     = rows.map(d => d.user);
           const rguUsed   = rows.map(d => d.rgu_used);
           const rguUnused = rows.map(d => d.rgu_requested - d.rgu_used);
@@ -704,4 +730,6 @@ _HTML = """<!DOCTYPE html>
     loadCharts();
   </script>
 </body>
-</html>"""
+</html>""".replace("__DEFAULT_WINDOW_DAYS__", str(_DEFAULT_WINDOW_DAYS)).replace(
+    "__DEFAULT_PERIOD__", _DEFAULT_PERIOD
+)
