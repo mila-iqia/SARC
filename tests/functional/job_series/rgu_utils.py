@@ -227,9 +227,6 @@ class ExampleData:
 
 def _billings_dump(sess, cluster_names) -> dict:
     """Serialize the GPUBillings of the named clusters for file regression output."""
-    name_to_cluster = {
-        c.name: c for c in sess.exec(sqlmodel.select(SlurmClusterDB)).all()
-    }
     return {
         cluster_name: [
             {
@@ -238,7 +235,8 @@ def _billings_dump(sess, cluster_names) -> dict:
             }
             for billing in sess.exec(
                 sqlmodel.select(GPUBillingDB)
-                .where(GPUBillingDB.cluster_id == name_to_cluster[cluster_name].id)
+                .join(SlurmClusterDB)
+                .where(SlurmClusterDB.name == cluster_name)
                 .order_by(GPUBillingDB.since)
             ).all()
         ]

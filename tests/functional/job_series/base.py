@@ -9,20 +9,32 @@ pytest-freezegun uses a fake datetime class, causing issues,
 while time_machine seems to keep using the real datetime class.
 """
 
+import json
 import math
 from datetime import datetime
 from typing import Protocol
 
 import pandas
 import pytest
+import sqlmodel
 import time_machine
 from sqlmodel import Session, col, or_, select
 
-from sarc.db.cluster import SlurmClusterDB
+from sarc.db.cluster import GPUBillingDB, SlurmClusterDB
 from sarc.db.job import JobStatisticDB, SlurmJobDB
 from sarc.jobs.series import compute_job_statistics
 from tests.common.dateutils import MTL
 from tests.functional.common import MOCK_TIME, generate_fake_timeseries
+from tests.functional.job_series.rgu_utils import (
+    ExampleData,
+    _billings_dump,
+    _check_rgu_columns,
+    _gen_fake_rgus,
+    cluster_gpu_billing_is_gpu,
+    cluster_gpu_billing_many_dates,
+    cluster_gpu_billing_one_date,
+    cluster_no_gpu_billing,
+)
 
 ALL_COLUMNS = sorted(
     [
@@ -542,4 +554,111 @@ class BaseTestLoadJobSeries:
 
         file_regression.check(
             f"Compute cost and waste for {frame.shape[0]} job(s):\n\n{_cost_and_waste_markdown(frame)}"
+        )
+
+    @pytest.mark.usefixtures("tzlocal_is_mtl")
+    @pytest.mark.parametrize(
+        "cluster_name,nb_billings",
+        [
+            (cluster_no_gpu_billing, 0),
+            (cluster_gpu_billing_one_date, 1),
+            (cluster_gpu_billing_many_dates, 2),
+        ],
+    )
+    def test_clusters_gpu_billings(self, rgu_db, cluster_name, nb_billings):
+        """Sanity check: GPUBillings populated as expected for each test cluster."""
+        count = rgu_db.exec(
+            sqlmodel.select(sqlmodel.func.count(GPUBillingDB.id))
+            .join(SlurmClusterDB)
+            .where(SlurmClusterDB.name == cluster_name)
+        ).one()
+        assert count == nb_billings
+
+    @pytest.mark.usefixtures("tzlocal_is_mtl")
+    def test_job_series_rgu_one_date(self, rgu_db, file_regression, fn_load_job_series):
+        """Concrete test with a cluster which has 1 billing date."""
+        data = ExampleData(cluster=cluster_gpu_billing_one_date)
+        data.populate(rgu_db)
+
+        frame = fn_load_job_series(rgu_db)
+        assert frame.shape[0] == len(data.data)
+
+        _check_rgu_columns(frame, data, rgu_db)
+
+        file_regression.check(
+            f"===================================================================================\n"
+            f"Example data with expected RGU information [main cluster: {cluster_gpu_billing_one_date} (1 billing date)]:\n"
+            f"===================================================================================\n\n"
+            f"----------\n"
+            f"RGU values\n"
+            f"----------\n"
+            f"{json.dumps(_gen_fake_rgus(), indent=1)}\n\n"
+            f"------------------\n"
+            f"GPU billing values\n"
+            f"------------------\n"
+            f"{json.dumps(_billings_dump(rgu_db, [cluster_gpu_billing_one_date]), indent=1)}\n\n"
+            f"----\n"
+            f"Data\n"
+            f"----\n"
+            f"{data}\n"
+        )
+
+    @pytest.mark.usefixtures("tzlocal_is_mtl")
+    def test_job_series_rgu_with_many_dates(
+        self, rgu_db, file_regression, fn_load_job_series
+    ):
+        """Concrete test with a cluster which has many billing dates."""
+        data = ExampleData(cluster=cluster_gpu_billing_many_dates)
+        data.populate(rgu_db)
+
+        frame = fn_load_job_series(rgu_db)
+        assert frame.shape[0] == len(data.data)
+
+        _check_rgu_columns(frame, data, rgu_db)
+
+        billings_dump = _billings_dump(rgu_db, [cluster_gpu_billing_many_dates])
+        nb_billings = len(billings_dump[cluster_gpu_billing_many_dates])
+        file_regression.check(
+            f"===================================================================================\n"
+            f"Example data with expected RGU information [main cluster: {cluster_gpu_billing_many_dates} ({nb_billings} billing dates)]:\n"
+            f"===================================================================================\n\n"
+            f"----------\n"
+            f"RGU values\n"
+            f"----------\n"
+            f"{json.dumps(_gen_fake_rgus(), indent=1)}\n\n"
+            f"------------------\n"
+            f"GPU billing values\n"
+            f"------------------\n"
+            f"{json.dumps(billings_dump, indent=1)}\n\n"
+            f"----\n"
+            f"Data\n"
+            f"----\n"
+            f"{data}\n"
+        )
+
+    @pytest.mark.usefixtures("tzlocal_is_mtl")
+    def test_job_series_rgu_billing_is_gpu(
+        self, rgu_db, file_regression, fn_load_job_series
+    ):
+        """Concrete test with a cluster where billing_is_gpu is True."""
+        data = ExampleData(cluster=cluster_gpu_billing_is_gpu)
+        data.populate(rgu_db)
+
+        frame = fn_load_job_series(rgu_db)
+        assert frame.shape[0] == len(data.data)
+
+        _check_rgu_columns(frame, data, rgu_db)
+
+        file_regression.check(
+            f"==================================================================================\n"
+            f"Example data with expected RGU information [main cluster: {cluster_gpu_billing_is_gpu} (no billing date)]:\n"
+            f"==================================================================================\n\n"
+            f"----------\n"
+            f"RGU values\n"
+            f"----------\n"
+            f"{json.dumps(_gen_fake_rgus(), indent=1)}\n\n"
+            f"----\n"
+            f"Data\n"
+            f"----\n"
+            f"{data}\n"
         )
