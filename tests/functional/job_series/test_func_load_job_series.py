@@ -386,34 +386,8 @@ class BaseTestLoadJobSeries:
                 "Test with writing operations not supported in client-only mode."
             )
 
-        # List of job indices with no statistics initially,
-        # then with statistic after call to job.statistics().
-        job_indices = [
-            1,
-            2,
-            3,
-            4,
-            5,
-            6,
-            9,
-            10,
-            11,
-            12,
-            13,
-            14,
-            15,
-            16,
-            17,
-            18,
-            19,
-            20,
-            23,
-            1000000,
-        ]
-        params = {"job_id": job_indices}
-
-        jobs = list(helper_get_jobs(read_write_db, **params))
-        frame = fn_load_job_series(read_write_db, **params)
+        jobs = list(helper_get_jobs(read_write_db))
+        frame = fn_load_job_series(read_write_db)
         assert jobs
         for job in jobs:
             assert not job.statistics
@@ -434,8 +408,8 @@ class BaseTestLoadJobSeries:
             assert job.statistics
 
         # Generate new data frame. Relevant fields must not contain nan anymore.
-        re_jobs = list(helper_get_jobs(read_write_db, **params))
-        re_frame = fn_load_job_series(read_write_db, **params)
+        re_jobs = list(helper_get_jobs(read_write_db))
+        re_frame = fn_load_job_series(read_write_db)
         assert re_jobs
         for i, re_job in enumerate(re_jobs):
             stats = re_job.statistics
@@ -541,7 +515,7 @@ class BaseTestLoadJobSeries:
         )
 
     @pytest.mark.usefixtures("tzlocal_is_mtl")
-    def test_compute_cost_and_waste_with_stored_statistics(
+    def test_compute_cost_and_waste_with_statistics(
         self, read_write_db, file_regression, fn_load_job_series
     ):
         if self.client_only:
@@ -549,37 +523,10 @@ class BaseTestLoadJobSeries:
                 "Test with writing operations not supported in client-only mode."
             )
 
-        # List of job indices with no statistics initially,
-        # then with statistics computed and saved.
-        job_indices = [
-            1,
-            2,
-            3,
-            4,
-            5,
-            6,
-            9,
-            10,
-            11,
-            12,
-            13,
-            14,
-            15,
-            16,
-            17,
-            18,
-            19,
-            20,
-            23,
-            1000000,
-            999_999_999,
-        ]
-        params = {"job_id": job_indices}
-
-        jobs = list(helper_get_jobs(read_write_db, **params))
+        jobs = list(helper_get_jobs(read_write_db))
 
         # Utilization fields are nan, so waste fields are nan too.
-        frame = fn_load_job_series(read_write_db, **params)
+        frame = fn_load_job_series(read_write_db)
         assert frame["cpu_utilization"].isnull().all()
         assert frame["gpu_utilization"].isnull().all()
         assert frame["cpu_waste"].isnull().all()
@@ -593,7 +540,7 @@ class BaseTestLoadJobSeries:
             read_write_db.commit()
 
         # With statistics computed, utilization fields are not nan, so waste fields are not nan neither.
-        frame = fn_load_job_series(read_write_db, **params)
+        frame = fn_load_job_series(read_write_db)
         assert frame["cpu_utilization"].notnull().all()
         assert frame["gpu_utilization"].notnull().all()
         assert frame["cpu_waste"].notnull().all()
