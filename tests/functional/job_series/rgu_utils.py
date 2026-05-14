@@ -5,10 +5,12 @@ from datetime import datetime, time, timedelta
 
 import pandas
 import sqlmodel
+from sqlmodel import Session
 
 from sarc.config import UTC
 from sarc.db.cluster import GPUBillingDB, SlurmClusterDB
 from sarc.db.job import SlurmJobDB
+from sarc.db.support import GpuRguDB
 from sarc.db.users import UserDB
 from sarc.models.job import SlurmState
 from tests.common.dateutils import MTL
@@ -19,23 +21,8 @@ cluster_gpu_billing_many_dates = "patate"
 cluster_gpu_billing_is_gpu = "mila"
 
 
-def _gen_fake_rgus():
-    """Synthetic RGU values for the GPU types referenced by ExampleData.
-
-    These names are not in IGUANE; tests insert them into GpuRguDB via the
-    `rgu_db` fixture so the JobSeriesDB view can join on them.
-    """
-    return {
-        "A100": 3.21,
-        "raisin_gpu_with_rgu_no_billing": 1.5,
-        "raisin_gpu_with_rgu_with_billing": 2.5,
-        "patate_gpu_with_rgu_no_billing": 3.5,
-        "patate_gpu_with_rgu_with_billing": 4.5,
-        "mila_gpu_no_rgu_no_billing": 7,
-        "mila_gpu_no_rgu_with_billing": 2 * 7,
-        "mila_gpu_with_rgu_no_billing": 3 * 7,
-        "mila_gpu_with_rgu_with_billing": 4 * 7,
-    }
+def _get_rgus(sess: Session) -> dict[str, float]:
+    return {gpu.name: gpu.rgu for gpu in sess.exec(sqlmodel.select(GpuRguDB)).all()}
 
 
 @dataclass
@@ -199,7 +186,7 @@ class ExampleData:
                 .limit(1)
             ).first()
 
-            rgu = _gen_fake_rgus().get(row.gpu_type, math.nan)
+            rgu = _get_rgus(sess).get(row.gpu_type, math.nan)
             # gpu_count_raw = max(allocated_billing, requested_gres_gpu); here both
             # are set to row.job_billing, so it simplifies.
             gpu_count_raw = row.job_billing

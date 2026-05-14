@@ -1,4 +1,3 @@
-import math
 from datetime import datetime
 
 import pytest
@@ -10,6 +9,7 @@ from sarc.db.job_series import JobSeriesDB
 from tests.functional.job_series.base import (
     BaseTestLoadJobSeries,
     LoadJobSeriesFn,
+    _finalize_records,
     _parse_dt,
 )
 
@@ -45,46 +45,13 @@ def _apply_view_filters(
     return query
 
 
-def _flatten_stat(label: str, stats: dict | None) -> float:
-    if not stats:
-        return math.nan
-    stat = stats.get(label)
-    if not stat:
-        return math.nan
-    if label in ("system_memory", "gpu_memory"):
-        return stat["max"]
-    return stat["median"]
-
-
 def sql_load_job_series(sess: Session, **kwargs) -> DataFrame:
     """Query JobSeriesDB view and return a dataframe."""
     query = _apply_view_filters(
         select(JobSeriesDB).order_by(JobSeriesDB.job_db_id), **kwargs
     )
-    rows = sess.exec(query).all()
-    now = datetime.now(tz=UTC)
-    records = []
-    for row in rows:
-        d = row.model_dump()
-        # end_time to now if None
-        if d.get("end_time") is None:
-            d["end_time"] = now
-        # For each stat, add a flattened column, using same logic as in old load_job_series
-        # Initial statistics dict (with mean, median, etc. for each stat) is still in data
-        stats = d.get("statistics") or {}
-        for label in (
-            "gpu_utilization",
-            "cpu_utilization",
-            "gpu_memory",
-            "gpu_power",
-            "system_memory",
-        ):
-            d[label] = _flatten_stat(label, stats)
-        # If gpu_utilization > 1, set it to NaN (same logic as in old load_job_series)
-        gpu_util = d["gpu_utilization"]
-        if gpu_util is not None and not math.isnan(gpu_util) and gpu_util > 1:
-            d["gpu_utilization"] = math.nan
-        records.append(d)
+    records = [row.model_dump() for row in sess.exec(query).all()]
+    _finalize_records(records, datetime.now(tz=UTC))
     return DataFrame(records)
 
 

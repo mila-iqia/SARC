@@ -29,7 +29,7 @@ from tests.functional.job_series.rgu_utils import (
     ExampleData,
     _billings_dump,
     _check_rgu_columns,
-    _gen_fake_rgus,
+    _get_rgus,
     cluster_gpu_billing_is_gpu,
     cluster_gpu_billing_many_dates,
     cluster_gpu_billing_one_date,
@@ -146,6 +146,47 @@ def helper_get_jobs(sess: Session, **kwargs) -> list[SlurmJobDB]:
     return list(sess.exec(query).all())
 
 
+_STAT_LABELS = (
+    "gpu_utilization",
+    "cpu_utilization",
+    "gpu_memory",
+    "gpu_power",
+    "system_memory",
+)
+
+
+def _flatten_stat(label: str, stats: dict | None) -> float:
+    if not stats:
+        return math.nan
+    stat = stats.get(label)
+    if not stat:
+        return math.nan
+    if label in ("system_memory", "gpu_memory"):
+        return stat["max"]
+    return stat["median"]
+
+
+def _finalize_records(records: list[dict], now: datetime) -> None:
+    """Apply common post-processing to job-series records, in place.
+
+    - end_time = now if None
+    - flatten statistics into 5 scalar columns (median for util/power, max for memory)
+      (NB: statistics column is still present in records, along with new scalar columns)
+    - clip gpu_utilization > 1 to NaN
+    Used by both the SQL and REST implementations of fn_load_job_series so that
+    the resulting DataFrames are identical in shape and values.
+    """
+    for d in records:
+        if d.get("end_time") is None:
+            d["end_time"] = now
+        stats = d.get("statistics") or {}
+        for label in _STAT_LABELS:
+            d[label] = _flatten_stat(label, stats)
+        gpu_util = d["gpu_utilization"]
+        if gpu_util is not None and not math.isnan(gpu_util) and gpu_util > 1:
+            d["gpu_utilization"] = math.nan
+
+
 def _check_load_job_series_frame(data_frame, file_regression):
     assert isinstance(data_frame, pandas.DataFrame)
     if data_frame.shape[0]:
@@ -193,9 +234,6 @@ class BaseTestLoadJobSeries:
     Base class to test_load_job_series.
     Use to test both MongoDB and REST API implementations.
     """
-
-    # If True, tests with writing operations (e.g: writing job statistics) will be skipped.
-    client_only = False
 
     @pytest.fixture
     def fn_load_job_series(self) -> LoadJobSeriesFn:
@@ -385,11 +423,6 @@ class BaseTestLoadJobSeries:
 
     @pytest.mark.usefixtures("tzlocal_is_mtl")
     def test_load_job_series_with_statistics(self, read_write_db, fn_load_job_series):
-        if self.client_only:
-            pytest.skip(
-                "Test with writing operations not supported in client-only mode."
-            )
-
         jobs = list(helper_get_jobs(read_write_db))
         frame = fn_load_job_series(read_write_db)
         assert jobs
@@ -437,10 +470,6 @@ class BaseTestLoadJobSeries:
         self, read_write_db, file_regression, fn_load_job_series
     ):
         """Check that gpu_utilization > 1 is replaced with nan in job series."""
-        if self.client_only:
-            pytest.skip(
-                "Test with writing operations not supported in client-only mode."
-            )
 
         # Check default situation: gpu_utilization is None
         jobs = list(helper_get_jobs(read_write_db))
@@ -522,10 +551,6 @@ class BaseTestLoadJobSeries:
     def test_compute_cost_and_waste_with_statistics(
         self, read_write_db, file_regression, fn_load_job_series
     ):
-        if self.client_only:
-            pytest.skip(
-                "Test with writing operations not supported in client-only mode."
-            )
 
         jobs = list(helper_get_jobs(read_write_db))
 
@@ -592,7 +617,7 @@ class BaseTestLoadJobSeries:
             f"----------\n"
             f"RGU values\n"
             f"----------\n"
-            f"{json.dumps(_gen_fake_rgus(), indent=1)}\n\n"
+            f"{json.dumps(_get_rgus(rgu_db), indent=1)}\n\n"
             f"------------------\n"
             f"GPU billing values\n"
             f"------------------\n"
@@ -625,7 +650,7 @@ class BaseTestLoadJobSeries:
             f"----------\n"
             f"RGU values\n"
             f"----------\n"
-            f"{json.dumps(_gen_fake_rgus(), indent=1)}\n\n"
+            f"{json.dumps(_get_rgus(rgu_db), indent=1)}\n\n"
             f"------------------\n"
             f"GPU billing values\n"
             f"------------------\n"
@@ -656,7 +681,7 @@ class BaseTestLoadJobSeries:
             f"----------\n"
             f"RGU values\n"
             f"----------\n"
-            f"{json.dumps(_gen_fake_rgus(), indent=1)}\n\n"
+            f"{json.dumps(_get_rgus(rgu_db), indent=1)}\n\n"
             f"----\n"
             f"Data\n"
             f"----\n"
