@@ -1,5 +1,5 @@
 ===================================================================================
-Example data with expected RGU information [main cluster: raisin (1 billing date)]:
+Example data with expected RGU information [main cluster: patate (2 billing date(s))]:
 ===================================================================================
 
 ----------
@@ -21,13 +21,20 @@ RGU values
 GPU billing values
 ------------------
 {
- "raisin": [
+ "patate": [
   {
    "since": "2023-02-15",
    "gpu_to_billing": {
-    "A100": 100.0,
-    "raisin_gpu_no_rgu_with_billing": 150.0,
-    "raisin_gpu_with_rgu_with_billing": 50.0
+    "A100": 200.0,
+    "patate_gpu_no_rgu_with_billing": 120.0,
+    "patate_gpu_with_rgu_with_billing": 90.0
+   }
+  },
+  {
+   "since": "2023-02-18",
+   "gpu_to_billing": {
+    "patate_gpu_no_rgu_with_billing": 240.0,
+    "patate_gpu_with_rgu_with_billing": 180.0
    }
   }
  ]
@@ -38,10 +45,10 @@ Data
 ----
 [
  {
-  "cluster_name": "raisin",
+  "cluster_name": "patate",
   "start_time": "2023-02-12",
   "job_billing": 1,
-  "gpu_type": "raisin_gpu_no_rgu_no_billing",
+  "gpu_type": "patate_gpu_no_rgu_no_billing",
   "expected": {
    "gres_rgu": NaN,
    "gpu_type_rgu": NaN,
@@ -49,10 +56,10 @@ Data
   }
  },
  {
-  "cluster_name": "raisin",
+  "cluster_name": "patate",
   "start_time": "2023-02-12",
   "job_billing": 2,
-  "gpu_type": "raisin_gpu_no_rgu_with_billing",
+  "gpu_type": "patate_gpu_no_rgu_with_billing",
   "expected": {
    "gres_rgu": NaN,
    "gpu_type_rgu": NaN,
@@ -60,29 +67,29 @@ Data
   }
  },
  {
-  "cluster_name": "raisin",
+  "cluster_name": "patate",
   "start_time": "2023-02-13",
   "job_billing": 3,
-  "gpu_type": "raisin_gpu_with_rgu_no_billing",
+  "gpu_type": "patate_gpu_with_rgu_no_billing",
   "expected": {
    "gres_rgu": NaN,
-   "gpu_type_rgu": 1.5,
+   "gpu_type_rgu": 3.5,
    "gpu_billing_found": null
   }
  },
  {
-  "cluster_name": "raisin",
+  "cluster_name": "patate",
   "start_time": "2023-02-14",
   "job_billing": 4,
-  "gpu_type": "raisin_gpu_with_rgu_with_billing",
+  "gpu_type": "patate_gpu_with_rgu_with_billing",
   "expected": {
    "gres_rgu": NaN,
-   "gpu_type_rgu": 2.5,
+   "gpu_type_rgu": 4.5,
    "gpu_billing_found": null
   }
  },
  {
-  "cluster_name": "raisin",
+  "cluster_name": "patate",
   "start_time": "2023-02-14",
   "job_billing": 5,
   "gpu_type": "A100",
@@ -93,10 +100,10 @@ Data
   }
  },
  {
-  "cluster_name": "raisin",
+  "cluster_name": "patate",
   "start_time": "2023-02-15",
   "job_billing": 1000,
-  "gpu_type": "raisin_gpu_no_rgu_no_billing",
+  "gpu_type": "patate_gpu_no_rgu_no_billing",
   "expected": {
    "gres_rgu": NaN,
    "gpu_type_rgu": NaN,
@@ -104,54 +111,54 @@ Data
   }
  },
  {
-  "cluster_name": "raisin",
+  "cluster_name": "patate",
   "start_time": "2023-02-15",
   "job_billing": 18000,
-  "gpu_type": "raisin_gpu_no_rgu_with_billing",
+  "gpu_type": "patate_gpu_no_rgu_with_billing",
   "expected": {
    "gres_rgu": NaN,
    "gpu_type_rgu": NaN,
-   "gpu_billing_found": 150.0
+   "gpu_billing_found": 120.0
   }
  },
  {
-  "cluster_name": "raisin",
+  "cluster_name": "patate",
   "start_time": "2023-02-16",
   "job_billing": 1000,
-  "gpu_type": "raisin_gpu_with_rgu_no_billing",
+  "gpu_type": "patate_gpu_with_rgu_no_billing",
   "expected": {
    "gres_rgu": NaN,
-   "gpu_type_rgu": 1.5,
+   "gpu_type_rgu": 3.5,
    "gpu_billing_found": null
   }
  },
  {
-  "cluster_name": "raisin",
+  "cluster_name": "patate",
   "start_time": "2023-02-17",
   "job_billing": 4500,
-  "gpu_type": "raisin_gpu_with_rgu_with_billing",
+  "gpu_type": "patate_gpu_with_rgu_with_billing",
   "expected": {
    "gres_rgu": 225.0,
-   "gpu_type_rgu": 2.5,
-   "gpu_billing_found": 50.0
+   "gpu_type_rgu": 4.5,
+   "gpu_billing_found": 90.0
   }
  },
  {
-  "cluster_name": "raisin",
+  "cluster_name": "patate",
   "start_time": "2023-02-17",
   "job_billing": 400,
   "gpu_type": "A100",
   "expected": {
-   "gres_rgu": 12.84,
+   "gres_rgu": 6.42,
    "gpu_type_rgu": 3.21,
-   "gpu_billing_found": 100.0
+   "gpu_billing_found": 200.0
   }
  },
  {
-  "cluster_name": "raisin",
+  "cluster_name": "patate",
   "start_time": "2023-02-18",
   "job_billing": 1000,
-  "gpu_type": "raisin_gpu_no_rgu_no_billing",
+  "gpu_type": "patate_gpu_no_rgu_no_billing",
   "expected": {
    "gres_rgu": NaN,
    "gpu_type_rgu": NaN,
@@ -159,47 +166,47 @@ Data
   }
  },
  {
-  "cluster_name": "raisin",
+  "cluster_name": "patate",
   "start_time": "2023-02-19",
   "job_billing": 18000,
-  "gpu_type": "raisin_gpu_no_rgu_with_billing",
+  "gpu_type": "patate_gpu_no_rgu_with_billing",
   "expected": {
    "gres_rgu": NaN,
    "gpu_type_rgu": NaN,
-   "gpu_billing_found": 150.0
+   "gpu_billing_found": 240.0
   }
  },
  {
-  "cluster_name": "raisin",
+  "cluster_name": "patate",
   "start_time": "2023-02-20",
   "job_billing": 1000,
-  "gpu_type": "raisin_gpu_with_rgu_no_billing",
+  "gpu_type": "patate_gpu_with_rgu_no_billing",
   "expected": {
    "gres_rgu": NaN,
-   "gpu_type_rgu": 1.5,
+   "gpu_type_rgu": 3.5,
    "gpu_billing_found": null
   }
  },
  {
-  "cluster_name": "raisin",
+  "cluster_name": "patate",
   "start_time": "2023-02-21",
   "job_billing": 4500,
-  "gpu_type": "raisin_gpu_with_rgu_with_billing",
+  "gpu_type": "patate_gpu_with_rgu_with_billing",
   "expected": {
-   "gres_rgu": 225.0,
-   "gpu_type_rgu": 2.5,
-   "gpu_billing_found": 50.0
+   "gres_rgu": 112.5,
+   "gpu_type_rgu": 4.5,
+   "gpu_billing_found": 180.0
   }
  },
  {
-  "cluster_name": "raisin",
+  "cluster_name": "patate",
   "start_time": "2023-02-22",
   "job_billing": 400,
   "gpu_type": "A100",
   "expected": {
-   "gres_rgu": 12.84,
+   "gres_rgu": NaN,
    "gpu_type_rgu": 3.21,
-   "gpu_billing_found": 100.0
+   "gpu_billing_found": null
   }
  },
  {

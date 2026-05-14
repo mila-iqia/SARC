@@ -1,6 +1,6 @@
-==================================================================================
-Example data with expected RGU information [main cluster: mila (no billing date)]:
-==================================================================================
+===================================================================================
+Example data with expected RGU information [main cluster: mila (0 billing date(s))]:
+===================================================================================
 
 ----------
 RGU values
@@ -15,6 +15,13 @@ RGU values
  "mila_gpu_no_rgu_with_billing": 14.0,
  "mila_gpu_with_rgu_no_billing": 21.0,
  "mila_gpu_with_rgu_with_billing": 28.0
+}
+
+------------------
+GPU billing values
+------------------
+{
+ "mila": []
 }
 
 ----

@@ -600,40 +600,20 @@ class BaseTestLoadJobSeries:
         assert count == nb_billings
 
     @pytest.mark.usefixtures("tzlocal_is_mtl")
-    def test_job_series_rgu_one_date(self, rgu_db, file_regression, fn_load_job_series):
-        """Concrete test with a cluster which has 1 billing date."""
-        data = ExampleData(cluster=cluster_gpu_billing_one_date)
-        data.populate(rgu_db)
-
-        frame = fn_load_job_series(rgu_db)
-        assert frame.shape[0] == len(data.data)
-
-        _check_rgu_columns(frame, data, rgu_db)
-
-        file_regression.check(
-            f"===================================================================================\n"
-            f"Example data with expected RGU information [main cluster: {cluster_gpu_billing_one_date} (1 billing date)]:\n"
-            f"===================================================================================\n\n"
-            f"----------\n"
-            f"RGU values\n"
-            f"----------\n"
-            f"{json.dumps(_get_rgus(rgu_db), indent=1)}\n\n"
-            f"------------------\n"
-            f"GPU billing values\n"
-            f"------------------\n"
-            f"{json.dumps(_billings_dump(rgu_db, [cluster_gpu_billing_one_date]), indent=1)}\n\n"
-            f"----\n"
-            f"Data\n"
-            f"----\n"
-            f"{data}\n"
-        )
-
-    @pytest.mark.usefixtures("tzlocal_is_mtl")
-    def test_job_series_rgu_with_many_dates(
-        self, rgu_db, file_regression, fn_load_job_series
+    @pytest.mark.parametrize(
+        "cluster_name",
+        [
+            cluster_gpu_billing_one_date,
+            cluster_gpu_billing_many_dates,
+            cluster_gpu_billing_is_gpu,
+        ],
+        ids=["one_date", "with_many_dates", "billing_is_gpu"],
+    )
+    def test_job_series_rgu(
+        self, rgu_db, file_regression, fn_load_job_series, cluster_name
     ):
-        """Concrete test with a cluster which has many billing dates."""
-        data = ExampleData(cluster=cluster_gpu_billing_many_dates)
+        """RGU computation across various cluster configurations."""
+        data = ExampleData(cluster=cluster_name)
         data.populate(rgu_db)
 
         frame = fn_load_job_series(rgu_db)
@@ -641,11 +621,12 @@ class BaseTestLoadJobSeries:
 
         _check_rgu_columns(frame, data, rgu_db)
 
-        billings_dump = _billings_dump(rgu_db, [cluster_gpu_billing_many_dates])
-        nb_billings = len(billings_dump[cluster_gpu_billing_many_dates])
+        billings_dump = _billings_dump(rgu_db, [cluster_name])
+        nb_billings = len(billings_dump[cluster_name])
         file_regression.check(
             f"===================================================================================\n"
-            f"Example data with expected RGU information [main cluster: {cluster_gpu_billing_many_dates} ({nb_billings} billing dates)]:\n"
+            f"Example data with expected RGU information "
+            f"[main cluster: {cluster_name} ({nb_billings} billing date(s))]:\n"
             f"===================================================================================\n\n"
             f"----------\n"
             f"RGU values\n"
@@ -655,33 +636,6 @@ class BaseTestLoadJobSeries:
             f"GPU billing values\n"
             f"------------------\n"
             f"{json.dumps(billings_dump, indent=1)}\n\n"
-            f"----\n"
-            f"Data\n"
-            f"----\n"
-            f"{data}\n"
-        )
-
-    @pytest.mark.usefixtures("tzlocal_is_mtl")
-    def test_job_series_rgu_billing_is_gpu(
-        self, rgu_db, file_regression, fn_load_job_series
-    ):
-        """Concrete test with a cluster where billing_is_gpu is True."""
-        data = ExampleData(cluster=cluster_gpu_billing_is_gpu)
-        data.populate(rgu_db)
-
-        frame = fn_load_job_series(rgu_db)
-        assert frame.shape[0] == len(data.data)
-
-        _check_rgu_columns(frame, data, rgu_db)
-
-        file_regression.check(
-            f"==================================================================================\n"
-            f"Example data with expected RGU information [main cluster: {cluster_gpu_billing_is_gpu} (no billing date)]:\n"
-            f"==================================================================================\n\n"
-            f"----------\n"
-            f"RGU values\n"
-            f"----------\n"
-            f"{json.dumps(_get_rgus(rgu_db), indent=1)}\n\n"
             f"----\n"
             f"Data\n"
             f"----\n"

@@ -17,8 +17,6 @@ REST_REG_DIR = BASE_DIR / "tests/functional/api/test_rest_load_job_series"
 
 
 def _regression_filenames() -> list[str]:
-    if not SQL_REG_DIR.exists():
-        return []
     return sorted(f.name for f in SQL_REG_DIR.glob("*.txt"))
 
 
