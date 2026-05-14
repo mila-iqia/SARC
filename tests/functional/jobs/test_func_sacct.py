@@ -26,6 +26,21 @@ def _dump(job):
     return SlurmJobDB(**job, cluster_id=-1, sarc_user_id=-1).model_dump_json(indent=4)
 
 
+def _times_for(*args, **kwargs):
+    return {
+        "submission": (
+            ts := int(
+                (datetime(*args, **kwargs) if isinstance(args[0], int) else args[0])
+                .astimezone(UTC)
+                .timestamp()
+            )
+        ),
+        "eligible": ts,
+        "start": ts + 3600,
+        "end": ts + 7200,
+    }
+
+
 parameters = {
     "user": {"user": "longbonhomme"},
     "job_state": {"state": {"current": ["OUT_OF_MEMORY"], "reason": "None"}},
@@ -424,25 +439,13 @@ def test_save_job(get_jobs, test_config, sacct_json, remote, file_regression, cl
             {
                 "job_id": 1_000_000,
                 "node": "cn-c017",
-                "time": {
-                    "submission": int(
-                        datetime(2023, 2, 14, 0, 0, 0, tzinfo=MTL)
-                        .astimezone(UTC)
-                        .timestamp()
-                    )
-                },
+                "time": _times_for(2023, 2, 14, 0, 0, 0, tzinfo=MTL),
                 "state": {"current": ["PREEMPTED"], "reason": "None"},
             },
             {
                 "job_id": 1_000_000,
                 "node": "cn-b099",
-                "time": {
-                    "submission": int(
-                        datetime(2023, 2, 15, 0, 0, 0, tzinfo=MTL)
-                        .astimezone(UTC)
-                        .timestamp()
-                    )
-                },
+                "time": _times_for(2023, 2, 15, 0, 0, 0, tzinfo=MTL),
                 "state": {"current": ["COMPLETED"], "reason": "None"},
             },
         ]
@@ -513,9 +516,8 @@ def test_multiple_dates(
                     [
                         {
                             "job_id": job_id,
-                            "time": {
-                                "submission": int(job_submit_datetime.timestamp())
-                            },
+                            "time": _times_for(job_submit_datetime),
+                            "elapsed": 3600,
                         }
                     ]
                 ).encode("utf-8"),
@@ -586,9 +588,7 @@ def test_multiple_clusters_and_dates(
                             {
                                 "job_id": job_id,
                                 "cluster": cluster_name,
-                                "time": {
-                                    "submission": int(job_submit_datetime.timestamp())
-                                },
+                                "time": _times_for(job_submit_datetime),
                             }
                         ]
                     ).encode("utf-8"),
@@ -649,17 +649,7 @@ def test_multiple_clusters_and_dates(
 @pytest.mark.usefixtures("tzlocal_is_mtl")
 @pytest.mark.parametrize(
     "json_jobs",
-    [
-        {
-            "time": {
-                "submission": int(
-                    datetime(2023, 2, 15, 12, 0, 0, tzinfo=PST)
-                    .astimezone(UTC)
-                    .timestamp()
-                )
-            }
-        }
-    ],
+    [{"time": _times_for(2023, 2, 15, 12, 0, 0, tzinfo=PST)}],
     indirect=True,
 )
 @pytest.mark.parametrize(

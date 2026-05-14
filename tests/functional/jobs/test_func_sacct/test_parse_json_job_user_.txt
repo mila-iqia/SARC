@@ -7,5 +7,5 @@
 -    "cluster_user": "bramin",
 +    "cluster_user": "longbonhomme",
      "group": "bramin",
-     "job_state": "PENDING",
+     "job_state": "COMPLETED",
      "exit_code": 0,

@@ -9,11 +9,8 @@ from sarc.config import ClusterConfig, config
 from sarc.db.cluster import SlurmClusterDB
 from sarc.db.job import JobStatisticDB, SlurmJobDB
 from sarc.db.runstate import get_parsed_date, set_parsed_date
-from sarc.jobs.series import (
-    JOB_STATISTICS_METRIC_NAMES,
-    compute_job_statistics,
-    get_job_time_series_data,
-)
+from sarc.jobs import series
+from sarc.jobs.series import JOB_STATISTICS_METRIC_NAMES
 from sarc.models.job import SlurmState
 from sarc.traces import trace_decorator
 
@@ -52,7 +49,7 @@ def fetch_prometheus(
     cache = Cache("prometheus")
     with cache.create_entry(datetime.now(UTC)) as ce:
         for entry in sess.exec(query):
-            raw_prom_data = get_job_time_series_data(
+            raw_prom_data = series.get_job_time_series_data(
                 job=entry, metric=JOB_STATISTICS_METRIC_NAMES, max_points=10_000
             )
             if raw_prom_data == []:
@@ -62,6 +59,7 @@ def fetch_prometheus(
                 f"{entry.cluster.name}${entry.job_id}${entry.submit_time.isoformat(timespec='seconds')}",
                 json.dumps(raw_prom_data).encode("utf-8"),
             )
+    sess.commit()
     logger.info(f"Fetched Prometheus metrics for {nb_jobs} jobs.")
 
 
@@ -119,7 +117,7 @@ def parse_prometheus_ce(sess: Session, ce: CacheEntry) -> bool:
             entry.allocated_gpu_type = (
                 cluster.harmonize_gpu_from_nodes(entry.nodes, gpu_type) or gpu_type
             )
-        statistics = compute_job_statistics(entry, data)
+        statistics = series.compute_job_statistics(entry, data)
         if len(statistics) != 0:
             entry.statistics = statistics
 

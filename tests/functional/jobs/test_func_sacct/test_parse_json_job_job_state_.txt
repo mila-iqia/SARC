@@ -4,7 +4,7 @@
      "name": "bench",
      "cluster_user": "bramin",
      "group": "bramin",
--    "job_state": "PENDING",
+-    "job_state": "COMPLETED",
 +    "job_state": "OUT_OF_MEMORY",
      "exit_code": 0,
      "signal": 0,
