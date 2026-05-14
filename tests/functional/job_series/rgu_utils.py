@@ -233,12 +233,7 @@ def _billings_dump(sess, cluster_names) -> dict:
                 "since": billing.since.astimezone(MTL).strftime("%Y-%m-%d"),
                 "gpu_to_billing": billing.gpu_to_billing,
             }
-            for billing in sess.exec(
-                sqlmodel.select(GPUBillingDB)
-                .join(SlurmClusterDB)
-                .where(SlurmClusterDB.name == cluster_name)
-                .order_by(GPUBillingDB.since)
-            ).all()
+            for billing in SlurmClusterDB.by_name(sess, cluster_name).gpu_billing
         ]
         for cluster_name in cluster_names
     }
