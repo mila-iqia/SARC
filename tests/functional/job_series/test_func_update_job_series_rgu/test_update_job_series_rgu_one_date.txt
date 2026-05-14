@@ -25,9 +25,9 @@ GPU billing values
   {
    "since": "2023-02-15",
    "gpu_to_billing": {
+    "A100": 100.0,
     "raisin_gpu_no_rgu_with_billing": 150.0,
-    "raisin_gpu_with_rgu_with_billing": 50.0,
-    "A100": 100.0
+    "raisin_gpu_with_rgu_with_billing": 50.0
    }
   }
  ]
@@ -43,7 +43,6 @@ Data
   "gres_gpu": 1,
   "gpu_type": "raisin_gpu_no_rgu_no_billing",
   "expected": {
-   "gres_gpu": 1,
    "gres_rgu": NaN,
    "gpu_type_rgu": NaN
   }
@@ -54,7 +53,6 @@ Data
   "gres_gpu": 2,
   "gpu_type": "raisin_gpu_no_rgu_with_billing",
   "expected": {
-   "gres_gpu": 2,
    "gres_rgu": NaN,
    "gpu_type_rgu": NaN
   }
@@ -65,7 +63,6 @@ Data
   "gres_gpu": 3,
   "gpu_type": "raisin_gpu_with_rgu_no_billing",
   "expected": {
-   "gres_gpu": 3,
    "gres_rgu": 4.5,
    "gpu_type_rgu": 1.5
   }
@@ -76,7 +73,6 @@ Data
   "gres_gpu": 4,
   "gpu_type": "raisin_gpu_with_rgu_with_billing",
   "expected": {
-   "gres_gpu": 4,
    "gres_rgu": 10.0,
    "gpu_type_rgu": 2.5
   }
@@ -87,7 +83,6 @@ Data
   "gres_gpu": 5,
   "gpu_type": "A100",
   "expected": {
-   "gres_gpu": 5,
    "gres_rgu": 16.05,
    "gpu_type_rgu": 3.21
   }
@@ -98,7 +93,6 @@ Data
   "gres_gpu": 1000,
   "gpu_type": "raisin_gpu_no_rgu_no_billing",
   "expected": {
-   "gres_gpu": NaN,
    "gres_rgu": NaN,
    "gpu_type_rgu": NaN
   }
@@ -109,7 +103,6 @@ Data
   "gres_gpu": 18000,
   "gpu_type": "raisin_gpu_no_rgu_with_billing",
   "expected": {
-   "gres_gpu": 120.0,
    "gres_rgu": NaN,
    "gpu_type_rgu": NaN
   }
@@ -120,8 +113,7 @@ Data
   "gres_gpu": 1000,
   "gpu_type": "raisin_gpu_with_rgu_no_billing",
   "expected": {
-   "gres_gpu": NaN,
-   "gres_rgu": NaN,
+   "gres_rgu": 1500.0,
    "gpu_type_rgu": 1.5
   }
  },
@@ -131,7 +123,6 @@ Data
   "gres_gpu": 4500,
   "gpu_type": "raisin_gpu_with_rgu_with_billing",
   "expected": {
-   "gres_gpu": 90.0,
    "gres_rgu": 225.0,
    "gpu_type_rgu": 2.5
   }
@@ -142,7 +133,6 @@ Data
   "gres_gpu": 400,
   "gpu_type": "A100",
   "expected": {
-   "gres_gpu": 4.0,
    "gres_rgu": 12.84,
    "gpu_type_rgu": 3.21
   }
@@ -153,7 +143,6 @@ Data
   "gres_gpu": 1000,
   "gpu_type": "raisin_gpu_no_rgu_no_billing",
   "expected": {
-   "gres_gpu": NaN,
    "gres_rgu": NaN,
    "gpu_type_rgu": NaN
   }
@@ -164,7 +153,6 @@ Data
   "gres_gpu": 18000,
   "gpu_type": "raisin_gpu_no_rgu_with_billing",
   "expected": {
-   "gres_gpu": 120.0,
    "gres_rgu": NaN,
    "gpu_type_rgu": NaN
   }
@@ -175,8 +163,7 @@ Data
   "gres_gpu": 1000,
   "gpu_type": "raisin_gpu_with_rgu_no_billing",
   "expected": {
-   "gres_gpu": NaN,
-   "gres_rgu": NaN,
+   "gres_rgu": 1500.0,
    "gpu_type_rgu": 1.5
   }
  },
@@ -186,7 +173,6 @@ Data
   "gres_gpu": 4500,
   "gpu_type": "raisin_gpu_with_rgu_with_billing",
   "expected": {
-   "gres_gpu": 90.0,
    "gres_rgu": 225.0,
    "gpu_type_rgu": 2.5
   }
@@ -197,7 +183,6 @@ Data
   "gres_gpu": 400,
   "gpu_type": "A100",
   "expected": {
-   "gres_gpu": 4.0,
    "gres_rgu": 12.84,
    "gpu_type_rgu": 3.21
   }
@@ -208,7 +193,6 @@ Data
   "gres_gpu": 5678,
   "gpu_type": "hyrule_gpu_9",
   "expected": {
-   "gres_gpu": 5678,
    "gres_rgu": NaN,
    "gpu_type_rgu": NaN
   }

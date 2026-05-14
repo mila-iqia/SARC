@@ -27,7 +27,6 @@ Data
   "gres_gpu": 1,
   "gpu_type": "mila_gpu_no_rgu_no_billing",
   "expected": {
-   "gres_gpu": 1,
    "gres_rgu": 7,
    "gpu_type_rgu": 7
   }
@@ -38,7 +37,6 @@ Data
   "gres_gpu": 2,
   "gpu_type": "mila_gpu_no_rgu_with_billing",
   "expected": {
-   "gres_gpu": 2,
    "gres_rgu": 28,
    "gpu_type_rgu": 14
   }
@@ -49,7 +47,6 @@ Data
   "gres_gpu": 3,
   "gpu_type": "mila_gpu_with_rgu_no_billing",
   "expected": {
-   "gres_gpu": 3,
    "gres_rgu": 63,
    "gpu_type_rgu": 21
   }
@@ -60,7 +57,6 @@ Data
   "gres_gpu": 4,
   "gpu_type": "mila_gpu_with_rgu_with_billing",
   "expected": {
-   "gres_gpu": 4,
    "gres_rgu": 112,
    "gpu_type_rgu": 28
   }
@@ -71,7 +67,6 @@ Data
   "gres_gpu": 5,
   "gpu_type": "A100",
   "expected": {
-   "gres_gpu": 5,
    "gres_rgu": 16.05,
    "gpu_type_rgu": 3.21
   }
@@ -82,7 +77,6 @@ Data
   "gres_gpu": 1000,
   "gpu_type": "mila_gpu_no_rgu_no_billing",
   "expected": {
-   "gres_gpu": 1000,
    "gres_rgu": 7000,
    "gpu_type_rgu": 7
   }
@@ -93,7 +87,6 @@ Data
   "gres_gpu": 18000,
   "gpu_type": "mila_gpu_no_rgu_with_billing",
   "expected": {
-   "gres_gpu": 18000,
    "gres_rgu": 252000,
    "gpu_type_rgu": 14
   }
@@ -104,7 +97,6 @@ Data
   "gres_gpu": 1000,
   "gpu_type": "mila_gpu_with_rgu_no_billing",
   "expected": {
-   "gres_gpu": 1000,
    "gres_rgu": 21000,
    "gpu_type_rgu": 21
   }
@@ -115,7 +107,6 @@ Data
   "gres_gpu": 4500,
   "gpu_type": "mila_gpu_with_rgu_with_billing",
   "expected": {
-   "gres_gpu": 4500,
    "gres_rgu": 126000,
    "gpu_type_rgu": 28
   }
@@ -126,7 +117,6 @@ Data
   "gres_gpu": 400,
   "gpu_type": "A100",
   "expected": {
-   "gres_gpu": 400,
    "gres_rgu": 1284.0,
    "gpu_type_rgu": 3.21
   }
@@ -137,7 +127,6 @@ Data
   "gres_gpu": 1000,
   "gpu_type": "mila_gpu_no_rgu_no_billing",
   "expected": {
-   "gres_gpu": 1000,
    "gres_rgu": 7000,
    "gpu_type_rgu": 7
   }
@@ -148,7 +137,6 @@ Data
   "gres_gpu": 18000,
   "gpu_type": "mila_gpu_no_rgu_with_billing",
   "expected": {
-   "gres_gpu": 18000,
    "gres_rgu": 252000,
    "gpu_type_rgu": 14
   }
@@ -159,7 +147,6 @@ Data
   "gres_gpu": 1000,
   "gpu_type": "mila_gpu_with_rgu_no_billing",
   "expected": {
-   "gres_gpu": 1000,
    "gres_rgu": 21000,
    "gpu_type_rgu": 21
   }
@@ -170,7 +157,6 @@ Data
   "gres_gpu": 4500,
   "gpu_type": "mila_gpu_with_rgu_with_billing",
   "expected": {
-   "gres_gpu": 4500,
    "gres_rgu": 126000,
    "gpu_type_rgu": 28
   }
@@ -181,7 +167,6 @@ Data
   "gres_gpu": 400,
   "gpu_type": "A100",
   "expected": {
-   "gres_gpu": 400,
    "gres_rgu": 1284.0,
    "gpu_type_rgu": 3.21
   }
@@ -192,7 +177,6 @@ Data
   "gres_gpu": 5678,
   "gpu_type": "hyrule_gpu_9",
   "expected": {
-   "gres_gpu": 5678,
    "gres_rgu": NaN,
    "gpu_type_rgu": NaN
   }
