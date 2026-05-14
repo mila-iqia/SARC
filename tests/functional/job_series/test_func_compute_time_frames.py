@@ -1,3 +1,8 @@
+"""
+Tests for compute_time_frames function.
+Use a load_job_series wrapper around JobSeriesDB.
+"""
+
 import zoneinfo
 from datetime import datetime, timedelta
 

@@ -72,7 +72,7 @@ Data
   "job_billing": 3,
   "gpu_type": "patate_gpu_with_rgu_no_billing",
   "expected": {
-   "gres_rgu": 10.5,
+   "gres_rgu": NaN,
    "gpu_type_rgu": 3.5,
    "gpu_billing_found": null
   }
@@ -83,7 +83,7 @@ Data
   "job_billing": 4,
   "gpu_type": "patate_gpu_with_rgu_with_billing",
   "expected": {
-   "gres_rgu": 18.0,
+   "gres_rgu": NaN,
    "gpu_type_rgu": 4.5,
    "gpu_billing_found": null
   }
@@ -94,7 +94,7 @@ Data
   "job_billing": 5,
   "gpu_type": "A100",
   "expected": {
-   "gres_rgu": 16.05,
+   "gres_rgu": NaN,
    "gpu_type_rgu": 3.21,
    "gpu_billing_found": null
   }
@@ -127,7 +127,7 @@ Data
   "job_billing": 1000,
   "gpu_type": "patate_gpu_with_rgu_no_billing",
   "expected": {
-   "gres_rgu": 3500.0,
+   "gres_rgu": NaN,
    "gpu_type_rgu": 3.5,
    "gpu_billing_found": null
   }
@@ -182,7 +182,7 @@ Data
   "job_billing": 1000,
   "gpu_type": "patate_gpu_with_rgu_no_billing",
   "expected": {
-   "gres_rgu": 3500.0,
+   "gres_rgu": NaN,
    "gpu_type_rgu": 3.5,
    "gpu_billing_found": null
   }
@@ -204,7 +204,7 @@ Data
   "job_billing": 400,
   "gpu_type": "A100",
   "expected": {
-   "gres_rgu": 1284.0,
+   "gres_rgu": NaN,
    "gpu_type_rgu": 3.21,
    "gpu_billing_found": null
   }

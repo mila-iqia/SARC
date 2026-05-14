@@ -157,15 +157,14 @@ class ExampleData:
     def get_expected(self, sess):
         """Compute expected RGU values matching the JobSeriesDB view's rgu_expr.
 
-        Mirrors the three branches of the CASE expression in sarc/db/job_series.py:
+        Mirrors the two branches of the CASE expression in sarc/db/job_series.py:
           A. cluster.billing_is_gpu          -> gpu_count_raw * rgu
-          B. gpu_unit_billing IS NULL        -> gpu_count_raw * rgu
-             (no applicable billing record, OR gpu_type missing from mapping)
-          C. otherwise                       -> (gpu_count_raw / unit_billing) * rgu
+          B. otherwise                       -> (gpu_count_raw / unit_billing) * rgu
 
-        NB: Case B differs from old Mongo semantics. Old code: "no billing for
-        this cluster" or "no billing for this GPU type" -> NaN. SQL view: treat
-        as if billing == GPU count, so rgu_value = gpu_count * rgu.
+        When `gpu_unit_billing` is NULL (no applicable GPUBilling record, OR
+        gpu_type missing from the mapping), the division yields NaN, signalling
+        incomplete data. This is intentional: only `billing_is_gpu=True` is an
+        explicit opt-in to interpret `allocated_billing` as a GPU count.
         """
         cluster_by_name = {
             c.name: c for c in sess.exec(sqlmodel.select(SlurmClusterDB)).all()
@@ -195,7 +194,8 @@ class ExampleData:
             if cluster.billing_is_gpu:
                 rgu_value = gpu_count_raw * rgu
             elif billing is None or row.gpu_type not in billing.gpu_to_billing:
-                rgu_value = gpu_count_raw * rgu
+                # No information to interpret the billing -> NaN.
+                rgu_value = math.nan
             else:
                 unit_billing = billing.gpu_to_billing[row.gpu_type]
                 rgu_value = (gpu_count_raw / unit_billing) * rgu

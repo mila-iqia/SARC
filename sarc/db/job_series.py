@@ -75,9 +75,10 @@ gpu_unit_billing = func.cast(
 rgu_expr = case(
     # Case A: Billing IS GPU (Simple multiply)
     (col(SlurmClusterDB.billing_is_gpu) == True, gpu_count_raw * GpuRguDB.rgu),  # noqa: E712
-    # Case B: No billing record found (Fallback)
-    (gpu_unit_billing == None, gpu_count_raw * GpuRguDB.rgu),  # noqa: E711
-    # Case C: Unit billing exists (job_billing / gpu_billing) * type_rgu
+    # Case B: Unit billing exists (job_billing / gpu_billing) * type_rgu.
+    # When gpu_unit_billing is NULL (no GPUBilling record, or gpu_type missing
+    # from the mapping) the division naturally yields NULL, which we treat as
+    # "data incomplete" rather than silently multiplying by gpu_count.
     else_=(gpu_count_raw / gpu_unit_billing) * GpuRguDB.rgu,
 ).label("rgu")
 
