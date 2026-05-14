@@ -56,7 +56,7 @@ def _flatten_stat(label: str, stats: dict | None) -> float:
     return stat["median"]
 
 
-def helper_load_job_series(sess: Session, **kwargs) -> DataFrame:
+def sql_load_job_series(sess: Session, **kwargs) -> DataFrame:
     """Query JobSeriesDB view and return a dataframe."""
     query = _apply_view_filters(
         select(JobSeriesDB).order_by(JobSeriesDB.job_db_id), **kwargs
@@ -93,4 +93,4 @@ class TestSqlLoadJobSeries(BaseTestLoadJobSeries):
 
     @pytest.fixture
     def fn_load_job_series(self) -> LoadJobSeriesFn:
-        return helper_load_job_series
+        return sql_load_job_series

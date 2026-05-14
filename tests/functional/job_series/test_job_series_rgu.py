@@ -16,7 +16,7 @@ from sarc.models.job import SlurmState
 from tests.common.dateutils import MTL
 from tests.db.factory import create_gpu_billings
 from tests.functional.job_series.test_func_load_job_series import (
-    helper_load_job_series as load_job_series,
+    sql_load_job_series as load_job_series,
 )
 
 cluster_no_gpu_billing = "hyrule"
