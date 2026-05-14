@@ -106,7 +106,7 @@ class JobFactory:
         else:
             kwargs.setdefault(
                 "end_time",
-                kwargs["start_time"]
+                (kwargs.get("start_time") or kwargs["submit_time"])
                 + timedelta(
                     seconds=kwargs.get("elapsed_time", base_job["elapsed_time"])
                 ),
