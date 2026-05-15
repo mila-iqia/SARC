@@ -88,9 +88,9 @@ def compute_time_frames(
         mask = (jobs[col_start] < frame_end) & (jobs[col_end] > frame_start)
         frame = jobs[mask].copy()
         total_durations_in_frame = total_durations[mask]
-        frame[col_start] = frame[col_start].clip(frame_start, frame_end)  # type: ignore[call-overload]
-        frame[col_end] = frame[col_end].clip(frame_start, frame_end)  # type: ignore[call-overload]
-        frame["duration"] = (frame[col_end] - frame[col_start]).dt.total_seconds()  # type: ignore[attr-defined]
+        frame[col_start] = frame[col_start].clip(frame_start, frame_end)  # ty:ignore[no-matching-overload]
+        frame[col_end] = frame[col_end].clip(frame_start, frame_end)  # ty:ignore[no-matching-overload]
+        frame["duration"] = (frame[col_end] - frame[col_start]).dt.total_seconds()
 
         # Adjust columns to fit the time frame.
         for column in columns:

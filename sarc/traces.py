@@ -72,8 +72,8 @@ def trace_decorator[**P, R](
         @functools.wraps(fn)
         def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
             with using_trace(
-                tracer_name or inspect.getmodule(fn).__name__,  # type: ignore[union-attr]
-                span_name or fn.__qualname__,
+                tracer_name or inspect.getmodule(fn).__name__,  # ty:ignore[unresolved-attribute]
+                span_name or fn.__qualname__,  # ty:ignore[unresolved-attribute]
                 exception_types,
             ):
                 return fn(*args, **kwargs)

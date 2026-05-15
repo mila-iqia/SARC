@@ -52,7 +52,7 @@ def check_prometheus_vs_slurmconfig(cluster_name: str | None = None) -> bool:
             # node => GPU mappings stored in database
             slurmconfig_gpu_types = set()
             assert cluster.name is not None
-            mapping = SlurmClusterDB.by_name(sess, cluster.name).get_node_to_gpu()
+            mapping = SlurmClusterDB.by_name(sess, cluster.name).get_node_to_gpu()  # ty:ignore[unresolved-attribute]
             if mapping:
                 for gpu_types in mapping.node_to_gpu.values():
                     # If gpu_types is a string, split it on commas

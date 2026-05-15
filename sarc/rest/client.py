@@ -52,12 +52,14 @@ class SarcClient:
         if config_file is None:
             from . import default_client
 
-            return default_client._obj()
+            return default_client._obj()  # ty:ignore[unresolved-attribute]
         else:
             if isinstance(config_file, str):
                 config_file = deserialize(FileSource, config_file)
             return deserialize(
-                cls, config_file, EncryptionKey(os.getenv("SERIEUX_PASSWORD"))
+                cls,
+                config_file,
+                EncryptionKey(os.getenv("SERIEUX_PASSWORD")),  # ty:ignore[too-many-positional-arguments]
             )
 
     def _extra_fields(self, extra_fields: list[str] | None) -> list[str] | None:

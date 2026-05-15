@@ -155,7 +155,7 @@ def fetch_raw(cluster: ClusterConfig, start: datetime, end: datetime) -> bytes:
 def _convert_json_job(
     entry: dict,
     cluster: str,
-    version: dict = None,
+    version: dict | None = None,
     scraped_start: datetime | None = None,
     scraped_end: datetime | None = None,
 ) -> dict | None:

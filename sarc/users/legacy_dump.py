@@ -74,7 +74,7 @@ class LegacyDumpScraper(UserScraper[LegacyDumpConfig]):
         """Read the JSON dump file."""
         return config.json.encode("utf-8")
 
-    def parse_user_data(self, data: bytes, _: datetime) -> Iterable[UserMatch]:
+    def parse_user_data(self, data: bytes, cache_time: datetime) -> Iterable[UserMatch]:  # noqa: ARG002
         """Parse the legacy user data and convert to UserMatch format."""
         records = json.loads(data.decode("utf-8"))
         for record in records:

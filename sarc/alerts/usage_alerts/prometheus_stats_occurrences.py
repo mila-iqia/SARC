@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
 import sqlalchemy
-from sqlmodel import case, func, select
+from sqlmodel import case, col, func, select
 
 from sarc.alerts.common import CheckResult, HealthCheck
 from sarc.alerts.usage_alerts.alert_sql_utils import SqlSymbols
@@ -102,7 +102,7 @@ def check_prometheus_stats_occurrences(
         minimum_runtime = timedelta(seconds=0)
 
     with config().db.session() as sess:
-        if not sess.exec(select(func.count(SlurmJobDB.id))).one():
+        if not sess.exec(select(func.count(col(SlurmJobDB.id)))).one():
             logger.error("No Prometheus data available: no job found")
             return False
 
@@ -126,20 +126,20 @@ def check_prometheus_stats_occurrences(
 
         exploded_query = (
             select(
-                SlurmJobDB.id.label("job_id"),
-                SlurmClusterDB.name.label("cluster_name"),
+                col(SlurmJobDB.id).label("job_id"),
+                col(SlurmClusterDB.name).label("cluster_name"),
                 # Explode jobs per node and join with matching frames.
                 func.jsonb_array_elements_text(SlurmJobDB.nodes).label("node"),
                 frame_start.label("frame_start"),
             )
             .select_from(SlurmJobDB)
-            .join(SlurmClusterDB, SlurmJobDB.cluster_id == SlurmClusterDB.id)
+            .join(SlurmClusterDB, col(SlurmJobDB.cluster_id) == col(SlurmClusterDB.id))
             .join(frames, (eff_start < frame_end) & (eff_end >= frame_start))
             .where(
                 # Select only jobs where elapsed time >= minimum runtime,
                 # and jobs are GPU or CPU jobs, depending on `with_gres_gpu`
                 (
-                    (SlurmJobDB.allocated_gres_gpu > 0)
+                    (col(SlurmJobDB.allocated_gres_gpu) > 0)
                     if with_gres_gpu
                     else (SlurmJobDB.allocated_gres_gpu == 0)
                 ),
@@ -149,7 +149,7 @@ def check_prometheus_stats_occurrences(
         )
         if cluster_names:
             exploded_query = exploded_query.where(
-                SlurmClusterDB.name.in_(cluster_names)
+                col(SlurmClusterDB.name).in_(cluster_names)
             )
         # Materializing as a CTE turns `exploded.c.node` into a plain column ref,
         # so the case() below references a column rather than an SRF.
@@ -189,8 +189,8 @@ def check_prometheus_stats_occurrences(
                     for name in prometheus_stats
                 ),
             )
-            .where(JobStatisticDB.name.in_(list(prometheus_stats)))
-            .group_by(JobStatisticDB.job_id)
+            .where(col(JobStatisticDB.name).in_(list(prometheus_stats)))
+            .group_by(col(JobStatisticDB.job_id))
             .cte("job_stats")
         )
 
@@ -269,7 +269,7 @@ def check_prometheus_stats_occurrences(
             )
             for prom in prom_contexts:
                 local_stat = ratios[prom.name]
-                if local_stat < prom.threshold:
+                if local_stat < prom.threshold:  # ty:ignore[unsupported-operator]
                     logger.error(
                         f"[{timestamp}]{grouping_name} insufficient Prometheus data for {prom.name}: "
                         f"{round(local_stat * 100, 2)} % of {job_type} jobs / {grouping_type} / time unit; "

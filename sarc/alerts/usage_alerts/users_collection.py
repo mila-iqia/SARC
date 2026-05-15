@@ -26,7 +26,7 @@ class UsersCollectionCheck(HealthCheck):
             email_duplicates = (
                 sqlmodel.select(
                     UserDB.email,
-                    sqlmodel.func.count(UserDB.email),
+                    sqlmodel.func.count(sqlmodel.col(UserDB.email)),
                     sqlmodel.func.array_agg(UserDB.id),
                 )
                 .where(UserDB.email != "")
@@ -44,7 +44,7 @@ class UsersCollectionCheck(HealthCheck):
             name_duplicates = (
                 sqlmodel.select(
                     UserDB.display_name,
-                    sqlmodel.func.count(UserDB.display_name),
+                    sqlmodel.func.count(sqlmodel.col(UserDB.display_name)),
                     sqlmodel.func.array_agg(UserDB.id),
                 )
                 .where(UserDB.display_name != "")

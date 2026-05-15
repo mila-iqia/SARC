@@ -83,8 +83,8 @@ class DRACDiskUsage(DiskUsageScraper[DRACDiskUsageConfig]):
             }
         ).encode()
 
-    def parse_diskusage_report(self, raw_data: bytes) -> DiskUsage:
-        cached_data = json.loads(raw_data.decode())
+    def parse_diskusage_report(self, data: bytes) -> DiskUsage:
+        cached_data = json.loads(data.decode())
         cluster_name = cached_data["cluster_name"]
         timestamp = datetime.fromisoformat(cached_data["timestamp"])
         report = cached_data["output"].split("\n")

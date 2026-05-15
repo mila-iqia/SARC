@@ -165,7 +165,7 @@ def compute_job_statistics_from_dataframe(
         n_unused = 0
 
     rval = {name: normalization(fn(df["value"])) for name, fn in statistics.items()}
-    return {**rval, "unused": n_unused}  # type: ignore[return-value, typeddict-item]
+    return {**rval, "unused": n_unused}  # ty:ignore[missing-typed-dict-key, invalid-return-type]
 
 
 JOB_STATISTICS_METRIC_NAMES = (
@@ -185,7 +185,7 @@ JOB_STATISTICS_METRIC_NAMES = (
 def compute_job_statistics(
     job: SlurmJobDB, prom_stats: list[dict]
 ) -> dict[str, JobStatisticDB]:
-    statistics_dict = {
+    statistics_dict: dict[str, Callable[[Series], float]] = {
         "mean": lambda self: self.mean(),
         "std": lambda self: self.std(),
         "max": lambda self: self.max(),

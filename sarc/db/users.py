@@ -36,11 +36,11 @@ def subtract_ranges(r1: Range[datetime], r2: Range[datetime]) -> list[Range[date
 
     res = []
     # 1. Check if there's a part of r1 before r2 starts
-    if r1.lower_inf or (not r2.lower_inf and r1.lower < r2.lower):  # type: ignore[operator]
+    if not r1.not_extend_left_of(r2) and r1.lower != r2.lower:
         res.append(Range(r1.lower, r2.lower, bounds="[)"))
 
     # 2. Check if there's a part of r1 after r2 ends
-    if r1.upper_inf or (not r2.upper_inf and r1.upper > r2.upper):  # type: ignore[operator]
+    if not r1.not_extend_right_of(r2) and r2.upper != r1.upper:
         res.append(Range(r2.upper, r1.upper, bounds="[)"))
 
     # Filter out any accidentally created empty ranges
@@ -84,7 +84,7 @@ class ValidField[V]:
 
     def _create_record(self, valid: Range[datetime], value: V):
         data_arg = {self.col_ref: value}
-        return self.model_ref(user_id=self.id, valid=valid, **data_arg)
+        return self.model_ref(user_id=self.id, valid=valid, **data_arg)  # ty:ignore[invalid-argument-type]
 
     def insert(
         self,
@@ -515,8 +515,7 @@ def combine_users(db_user1: UserDB, db_user2: UserDB) -> UserDB:
     db_user1.google_scholar_profile.merge_with(db_user2.google_scholar_profile)
     for name, creds in db_user2.associated_accounts.items():
         db_user1.associated_accounts[name].merge_with(creds)
-    db_user1.supervisor.merge_with(db_user2.supervisor)
-    db_user1.co_supervisors.merge_with(db_user2.co_supervisors)
+    db_user1._supervisors.merge_with(db_user2._supervisors)
 
     for name, mid in db_user2.matching_ids.items():
         if name not in db_user1.matching_ids:

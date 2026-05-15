@@ -10,7 +10,7 @@ from .run import HealthRunCommand
 @dataclass
 class Health:
     command: Union[HealthRunCommand, HealthListCommand] = subparsers(
-        {"run": HealthRunCommand, "list": HealthListCommand}
+        {"run": HealthRunCommand, "list": HealthListCommand}  # ty:ignore[invalid-argument-type]
     )
 
     def execute(self) -> int:

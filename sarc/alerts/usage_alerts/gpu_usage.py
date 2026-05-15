@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 
 import sqlalchemy
-from sqlmodel import case, func, select
+from sqlmodel import case, col, func, select
 
 from sarc.alerts.common import CheckResult, HealthCheck
 from sarc.alerts.usage_alerts.alert_sql_utils import SqlSymbols
@@ -65,7 +65,7 @@ def check_gpu_type_usage_per_node(
 
     ok = True
     with config().db.session() as sess:
-        if not sess.exec(select(func.count(SlurmJobDB.id))).one():
+        if not sess.exec(select(func.count(col(SlurmJobDB.id)))).one():
             logger.warning("No jobs in database.")
             return False
 
@@ -86,16 +86,16 @@ def check_gpu_type_usage_per_node(
                 func.sum(
                     case((SlurmJobDB.allocated_gpu_type == gpu_type, 1), else_=0)
                 ).label("nb_gpu_tasks"),
-                func.count(SlurmJobDB.id).label("nb_tasks"),
+                func.count(col(SlurmJobDB.id)).label("nb_tasks"),
             )
             .select_from(SlurmJobDB)
-            .join(SlurmClusterDB, SlurmJobDB.cluster_id == SlurmClusterDB.id)
+            .join(SlurmClusterDB, col(SlurmJobDB.cluster_id) == col(SlurmClusterDB.id))
             .where(
                 eff_start < end,
                 eff_end > start,
                 clipped_elapsed_time
                 >= sqlalchemy.literal(minimum_runtime, type_=sqlalchemy.Interval),
-                SlurmJobDB.allocated_gres_gpu > 0,
+                col(SlurmJobDB.allocated_gres_gpu) > 0,
             )
             .group_by(SlurmClusterDB.name, sqlalchemy.text("node"))
         ):

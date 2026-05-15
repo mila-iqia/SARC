@@ -27,7 +27,7 @@ class Parse:
             "allocations": ParseAllocations,
             "jobs": ParseJobs,
             "prometheus": ParsePrometheus,
-        }
+        }  # ty:ignore[invalid-argument-type]
     )
 
     def execute(self) -> int:

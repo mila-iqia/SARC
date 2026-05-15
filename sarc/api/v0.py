@@ -380,8 +380,11 @@ class UserQuery(BaseModel):
             )
         if self.supervisor is not None:
             query = (
-                query.join(SupervisorsDB, SupervisorsDB.user_id == UserDB.id)
-                .join(SupervisorsHelper, SupervisorsHelper.list_id == SupervisorsDB.id)
+                query.join(SupervisorsDB, col(SupervisorsDB.user_id) == col(UserDB.id))
+                .join(
+                    SupervisorsHelper,
+                    col(SupervisorsHelper.list_id) == col(SupervisorsDB.id),
+                )
                 .where(
                     SupervisorsHelper.supervisor == self.supervisor,
                     SupervisorsDB.valid.overlaps(Range(lower=start, upper=end)),
@@ -420,16 +423,16 @@ def query_jobs(
     extra_fields: str | None = None,
     sess: Session = Depends(session_dep),
 ) -> SlurmJobList:
-    extra_fields = set(extra_fields.split(",")) if extra_fields else set()
+    extra_fields_set = set(extra_fields.split(",")) if extra_fields else set()
     if query_opt.cluster_name:
-        extra_fields.add("cluster_name")
+        extra_fields_set.add("cluster_name")
     if query_opt.sarc_user_id or query_opt.email:
-        extra_fields.add("sarc_user")
+        extra_fields_set.add("sarc_user")
 
     query = query_opt.get_query(select(SlurmJobDB))
     query = list_opt.add_list_options(
         query,
-        col(SlurmJobDB.id),  # type: ignore [arg-type]
+        col(SlurmJobDB.id),  # ty:ignore[invalid-argument-type]
         col(SlurmJobDB.submit_time),
     )
 
@@ -481,8 +484,8 @@ def job_series(
     extra_fields: str | None = None,
     sess: Session = Depends(session_dep),
 ) -> JobSeriesList:
-    extra_fields = set(extra_fields.split(",")) if extra_fields else set()
-    unknown = extra_fields - set(_EXTRA_FIELDS)
+    extra_fields_set = set(extra_fields.split(",")) if extra_fields else set()
+    unknown = extra_fields_set - set(_EXTRA_FIELDS)
     if unknown:
         raise HTTPException(
             status_code=422, detail=f"Invalid extra_field(s): {sorted(unknown)}"
@@ -491,12 +494,12 @@ def job_series(
     # Determine the set of columns to select
     names = {
         c.name
-        for c in JobSeriesDB.__table__.columns
+        for c in JobSeriesDB.__table__.columns  # ty:ignore[unresolved-attribute]
         if c.name not in _SERIES_OPTIONAL_COLS
     }
-    for extra in extra_fields:
+    for extra in extra_fields_set:
         names |= _EXTRA_FIELDS[extra]
-    cols = [JobSeriesDB.__table__.c[name] for name in names]
+    cols = [JobSeriesDB.__table__.c[name] for name in names]  # ty:ignore[unresolved-attribute]
 
     query = select(*cols)
     query = query_opt.apply_filters(query)
@@ -552,7 +555,7 @@ def query_users(
     sess: Session = Depends(session_dep),
 ) -> UserList:
     query = query_opt.get_query(select(UserDB))
-    query = list_opt.add_list_options(query, col(UserDB.id), None)  # type: ignore [arg-type]
+    query = list_opt.add_list_options(query, col(UserDB.id), None)  # ty:ignore[invalid-argument-type]
 
     results = list(sess.exec(query))
     users = [User.model_validate(doc.model_dump()) for doc in results]

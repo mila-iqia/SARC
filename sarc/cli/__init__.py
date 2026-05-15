@@ -50,7 +50,7 @@ class NiceHandler(logging.StreamHandler):
 @dataclass
 class CLI:
     command: Health | Fetch | Parse = subparsers(
-        {"health": Health, "fetch": Fetch, "parse": Parse}
+        {"health": Health, "fetch": Fetch, "parse": Parse}  # ty:ignore[invalid-argument-type]
     )
 
     color: bool = False

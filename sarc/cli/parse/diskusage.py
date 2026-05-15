@@ -35,7 +35,7 @@ class ParseDiskUsage:
                     obj = scraper.parse_diskusage_report(item[1])
                     cluster_name = obj.cluster_name
                     db_obj = DiskUsageDB(
-                        cluster_id=SlurmClusterDB.id_by_name(sess, cluster_name),
+                        cluster_id=SlurmClusterDB.id_by_name(sess, cluster_name),  # ty:ignore[invalid-argument-type]
                         timestamp=obj.timestamp,
                     )
 

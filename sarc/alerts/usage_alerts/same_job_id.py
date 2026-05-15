@@ -62,7 +62,10 @@ def check_same_job_id(
     with config().db.session() as sess:
         query = sqlmodel.select(
             SlurmJobDB.job_id, sqlmodel.func.array_agg(SlurmClusterDB.name)
-        ).join(SlurmClusterDB, SlurmJobDB.cluster_id == SlurmClusterDB.id)
+        ).join(
+            SlurmClusterDB,
+            sqlmodel.col(SlurmJobDB.cluster_id) == sqlmodel.col(SlurmClusterDB.id),
+        )
         if end is not None:
             query = query.where(sqlmodel.col(SlurmJobDB.submit_time) < end)
         if start is not None:
@@ -74,9 +77,9 @@ def check_same_job_id(
             )
 
         for job_id, cluster_names in sess.exec(
-            query.group_by(SlurmJobDB.job_id)
+            query.group_by(sqlmodel.col(SlurmJobDB.job_id))
             .having(sqlmodel.func.count() > 1)
-            .order_by(SlurmJobDB.job_id)
+            .order_by(sqlmodel.col(SlurmJobDB.job_id))
         ):
             duplicates[job_id] = Counter(cluster_names)
 

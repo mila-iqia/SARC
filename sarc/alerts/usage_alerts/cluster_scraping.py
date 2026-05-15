@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 import sqlalchemy
-from sqlmodel import func, select
+from sqlmodel import col, func, select
 
 from sarc.alerts.common import CheckResult, HealthCheck
 from sarc.alerts.usage_alerts.alert_sql_utils import SqlSymbols
@@ -65,7 +65,7 @@ def check_nb_jobs_per_cluster_per_time(
         return False
 
     with config().db.session() as sess:
-        if not sess.exec(select(func.count(SlurmJobDB.id))).one():
+        if not sess.exec(select(func.count(col(SlurmJobDB.id)))).one():
             logger.error("No jobs in database.")
             return False
 
@@ -95,14 +95,18 @@ def check_nb_jobs_per_cluster_per_time(
         # e.g. PENDING jobs which run in [submit_time, submit_time]. So, we grab everything in
         # [frame_start included, frame_end excluded), instead of (frame_start excluded, frame_end excluded)
         query = (
-            select(SlurmClusterDB.name, frames.c.frame_start, func.count(SlurmJobDB.id))
+            select(
+                SlurmClusterDB.name,
+                frames.c.frame_start,
+                func.count(col(SlurmJobDB.id)),
+            )
             .select_from(frames)
             .join(
                 SlurmJobDB,
                 (eff_start < (frames.c.frame_start + time_unit_sql))
                 & (eff_end >= frames.c.frame_start),
             )
-            .join(SlurmClusterDB, SlurmJobDB.cluster_id == SlurmClusterDB.id)
+            .join(SlurmClusterDB, col(SlurmJobDB.cluster_id) == col(SlurmClusterDB.id))
             .group_by(SlurmClusterDB.name, frames.c.frame_start)
         )
 

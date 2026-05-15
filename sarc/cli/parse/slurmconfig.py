@@ -132,7 +132,7 @@ class SlurmConfigParser(BaseModel):
             if line.startswith("PartitionName="):
                 partitions.append(
                     Partition(
-                        cluster_name=self.cluster.name,  # type: ignore[arg-type]
+                        cluster_name=self.cluster.name,  # ty:ignore[invalid-argument-type]
                         line_number=line_number + 1,
                         line=line,
                         info=dict(

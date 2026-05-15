@@ -4,7 +4,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from sqlalchemy import func, select
+from sqlmodel import func, select
 
 from sarc.alerts.common import CheckResult, HealthCheck
 
@@ -35,9 +35,7 @@ def _compute_db_disk_usage() -> int:
     from sarc.config import config
 
     with config().db.session() as sess:
-        size = sess.exec(
-            select(func.pg_database_size(func.current_database()))
-        ).scalar_one()
+        size = sess.exec(select(func.pg_database_size(func.current_database()))).one()
     return int(size)
 
 

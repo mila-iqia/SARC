@@ -83,8 +83,8 @@ class UserScraper[T](Protocol):
         return deserialize(
             self.config_type,
             config_data,
-            WorkingDirectory(directory=config_path)  # type: ignore[call-arg, operator]
-            + EncryptionKey(password=os.environ.get("SERIEUX_PASSWORD", None)),  # type: ignore[call-arg]
+            WorkingDirectory(directory=config_path)  # ty:ignore[unknown-argument]
+            + EncryptionKey(password=os.environ.get("SERIEUX_PASSWORD", None)),  # ty:ignore[unknown-argument]
         )
 
     def get_user_data(self, config: T) -> bytes: ...  # pragma: nocover
@@ -318,8 +318,10 @@ def valid_merge[T, U](
 ) -> None:
     if map is None:
 
-        def map(v):
-            return v
+        def mapf(v: T) -> U:
+            return v  # ty:ignore[invalid-return-type]
+
+        map = mapf
 
     for tag in valid.values:
         db_valid.insert(map(tag.value), tag.valid.lower, tag.valid.upper)
@@ -349,7 +351,7 @@ def update_user_db(sess: Session, user: UserMatch, db_user: UserDB) -> None:
         user.supervisors,
         db_user.supervisors,
         map=lambda v: sorted(map_super(m) for m in v),
-    )
+    )  # ty:ignore[no-matching-overload]
 
 
 def insert_new(sess: Session, user: UserMatch) -> None:

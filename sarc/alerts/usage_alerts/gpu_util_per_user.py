@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 
 import sqlalchemy
-from sqlmodel import case, func, select
+from sqlmodel import case, col, func, select
 
 from sarc.alerts.common import CheckResult, HealthCheck
 from sarc.alerts.usage_alerts.alert_sql_utils import SqlSymbols
@@ -59,7 +59,7 @@ def check_gpu_util_per_user(
 
     ok = True
     with config().db.session() as sess:
-        if not sess.exec(select(func.count(SlurmJobDB.id))).one():
+        if not sess.exec(select(func.count(col(SlurmJobDB.id)))).one():
             logger.error("No jobs in database.")
             return False
 
@@ -76,7 +76,7 @@ def check_gpu_util_per_user(
 
         gpu_utilization = JobStatisticDB.median
         # Replace gpu_utilization > 1 with NULL (consistent with load_job_series replacing with NaN)
-        gpu_utilization = case((gpu_utilization > 1.0, None), else_=gpu_utilization)
+        gpu_utilization = case((gpu_utilization > 1.0, None), else_=gpu_utilization)  # ty:ignore[unsupported-operator]
 
         clipped_elapsed_seconds = func.extract("epoch", clipped_elapsed_time)
         gpu_equivalent_cost = clipped_elapsed_seconds * SlurmJobDB.allocated_gres_gpu
@@ -86,7 +86,7 @@ def check_gpu_util_per_user(
             select(SlurmJobDB.cluster_user, func.avg(gpu_util).label("avg_gpu_util"))
             .join(
                 JobStatisticDB,
-                (JobStatisticDB.job_id == SlurmJobDB.id)
+                (col(JobStatisticDB.job_id) == col(SlurmJobDB.id))
                 & (JobStatisticDB.name == "gpu_utilization"),
                 isouter=True,
             )
@@ -95,7 +95,7 @@ def check_gpu_util_per_user(
                 eff_end > start,
                 clipped_elapsed_time
                 >= sqlalchemy.literal(minimum_runtime, type_=sqlalchemy.Interval),
-                SlurmJobDB.allocated_gres_gpu > 0,
+                col(SlurmJobDB.allocated_gres_gpu) > 0,
             )
             .group_by(SlurmJobDB.cluster_user)
         )
