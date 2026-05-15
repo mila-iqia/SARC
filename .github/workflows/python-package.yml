@@ -40,7 +40,7 @@ jobs:
       - name: Test with tox
         env:
           PGUSER: postgres
-        run: uv run tox -e test -- -x
+        run: uv run tox -e test -- -n 2
 
   lint:
     runs-on: ubuntu-latest
