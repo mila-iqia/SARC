@@ -39,6 +39,8 @@ jobs:
           version: "0.11.14"
 
       - name: Test with tox
+        env:
+          PGUSER: postgres
         run: uv run tox -e test -- -x
 
   lint:
