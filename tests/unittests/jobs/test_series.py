@@ -5,7 +5,7 @@ import pandas
 import pytest
 from pandas import DataFrame
 
-from sarc.jobs.series import compute_job_statistics_from_dataframe
+from sarc.core.scraping.series import compute_job_statistics_from_dataframe
 
 
 def _generate_df(rows, delta=30):

@@ -5,7 +5,7 @@ from datetime import datetime
 from simple_parsing import field
 
 from sarc.config import config
-from sarc.jobs.prometheus_scraping import fetch_prometheus
+from sarc.core.scraping.prometheus import fetch_prometheus
 from sarc.traces import using_trace
 
 logger = logging.getLogger(__name__)

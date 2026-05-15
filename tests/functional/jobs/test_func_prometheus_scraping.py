@@ -9,9 +9,8 @@ from opentelemetry.trace import StatusCode
 
 from sarc.config import UTC
 from sarc.db.job import JobStatisticDB
-
-from ...common.dateutils import MTL, _dtfmt, _dtreg
 from ..cli.test_slurmconfig_fetch_parse import _save_slurm_conf
+from ...common.dateutils import MTL, _dtfmt, _dtreg
 
 
 @pytest.fixture
@@ -33,7 +32,7 @@ def mock_compute_job_statistics(monkeypatch):
         return {"gpu_utilization": _stats}
 
     mock_func.called = 0
-    monkeypatch.setattr("sarc.jobs.series.compute_job_statistics", mock_func)
+    monkeypatch.setattr("sarc.core.scraping.series.compute_job_statistics", mock_func)
 
     yield mock_func
 
@@ -147,7 +146,7 @@ def test_get_gpu_type(
 
     mock_get_job_time_series.called = 0
     monkeypatch.setattr(
-        "sarc.jobs.series.get_job_time_series_data", mock_get_job_time_series
+        "sarc.core.scraping.series.get_job_time_series_data", mock_get_job_time_series
     )
 
     assert cli_main(["fetch", "prometheus", "--cluster_name", "raisin"]) == 0
@@ -266,7 +265,7 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
         return [{"metric": {"gpu_type": f"phantom_gpu_{job.cluster_id}_{job.job_id}"}}]
 
     monkeypatch.setattr(
-        "sarc.jobs.series.get_job_time_series_data", mock_get_job_time_series
+        "sarc.core.scraping.series.get_job_time_series_data", mock_get_job_time_series
     )
 
     assert (
@@ -344,7 +343,7 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     )
     assert bool(
         re.search(
-            r"sarc\.jobs\.prometheus_scraping:prometheus_scraping\.py:[0-9]+ Saved Prometheus metrics for [0-9]+ jobs\.",
+            r"sarc\.core\.scraping\.prometheus:prometheus\.py:[0-9]+ Saved Prometheus metrics for [0-9]+ jobs\.",
             caplog.text,
         )
     )
@@ -366,7 +365,7 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     # For Prometheus metrics, check that fetching happened
     assert bool(
         re.search(
-            r"sarc\.jobs\.prometheus_scraping:prometheus_scraping\.py:[0-9]+ Fetched Prometheus metrics for 2 jobs\.",
+            r"sarc\.core\.scraping\.prometheus:prometheus\.py:[0-9]+ Fetched Prometheus metrics for 2 jobs\.",
             caplog.text,
         )
     )

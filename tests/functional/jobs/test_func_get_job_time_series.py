@@ -4,9 +4,7 @@ from datetime import datetime, timedelta
 import pytest
 
 from sarc.config import UTC
-from sarc.db.cluster import SlurmClusterDB
-from sarc.db.job import SlurmJobDB
-from sarc.jobs.series import get_job_time_series_data
+from sarc.core.scraping.series import get_job_time_series_data
 from tests.common.dateutils import MTL
 from tests.db.factory import JobFactory
 
