@@ -11,13 +11,13 @@ from simple_parsing import ArgumentParser
 from tqdm import tqdm
 
 from sarc.config import UTC, config
-from sarc.core.models.validators import datetime_utc
-from sarc.core.scraping.jobs_utils import update_allocated_gpu_type_from_nodes
-from sarc.jobs.series import (
+from sarc.scraping.jobs_utils import update_allocated_gpu_type_from_nodes
+from sarc.scraping.series import (
     JOB_STATISTICS_METRIC_NAMES,
     _get_job_time_series_data_cache_key,
     _get_job_time_series_data_cache_subdir,
 )
+from sarc.validators import datetime_utc
 
 logger = logging.getLogger("prometheus_dump.backup")
 

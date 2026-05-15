@@ -5,10 +5,9 @@ from pydantic_core import PydanticUndefined as Undefined
 from sqlalchemy import DateTime
 from sqlalchemy.types import TypeDecorator
 from sqlmodel import Field
-from sqlmodel.main import SQLModel as SQLModelBase
-from sqlmodel.main import finish_init, is_table_model_class
+from sqlmodel.main import SQLModel as SQLModelBase, finish_init, is_table_model_class
 
-from sarc.core.models.validators import UTCOFFSET
+from sarc.validators import UTCOFFSET
 
 
 class UTCDateTime(TypeDecorator):

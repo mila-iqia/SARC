@@ -7,9 +7,9 @@ from typing import Dict
 import sqlmodel
 
 from sarc.alerts.common import CheckResult, HealthCheck
-from sarc.core.models.validators import datetime_utc
 from sarc.db.cluster import SlurmClusterDB
 from sarc.db.job import SlurmJobDB
+from sarc.validators import datetime_utc
 
 logger = logging.getLogger(__name__)
 

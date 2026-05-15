@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError
 
-from sarc.core.models.validators import DateMatchError, DateOverlapError, ValidField
+from sarc.validators import DateMatchError, DateOverlapError, ValidField
 
 
 class TestValidField:

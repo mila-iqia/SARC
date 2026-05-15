@@ -5,7 +5,11 @@ from sqlmodel import Session
 
 from sarc.cache import Cache, CacheEntry
 from sarc.config import UTC, ClusterConfig, config
-from sarc.core.scraping.jobs_utils import (
+from sarc.db.cluster import SlurmClusterDB
+from sarc.db.job import SlurmJobDB
+from sarc.db.runstate import get_parsed_date, set_parsed_date
+from sarc.db.users import get_user_id_for_cluster_user
+from sarc.scraping.jobs_utils import (
     DATE_FORMAT_HOUR,
     fetch_raw,
     parse_auto_intervals,
@@ -14,10 +18,6 @@ from sarc.core.scraping.jobs_utils import (
     set_auto_end_time,
     update_allocated_gpu_type_from_nodes,
 )
-from sarc.db.cluster import SlurmClusterDB
-from sarc.db.job import SlurmJobDB
-from sarc.db.runstate import get_parsed_date, set_parsed_date
-from sarc.db.users import get_user_id_for_cluster_user
 from sarc.traces import using_trace
 
 logger = logging.getLogger(__name__)

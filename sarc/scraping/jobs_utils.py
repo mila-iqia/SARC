@@ -10,12 +10,12 @@ from invoke.runners import Result
 from sqlmodel import col, update
 
 from sarc.config import UTC, ClusterConfig, config
-from sarc.core.models.validators import UTCOFFSET
 from sarc.db.cluster import SlurmClusterDB
 from sarc.db.job import SlurmJobDB
 from sarc.errors import ClusterNotFound
 from sarc.traces import trace_decorator
 from sarc.utils import ensure_utc
+from sarc.validators import UTCOFFSET
 
 logger = logging.getLogger(__name__)
 

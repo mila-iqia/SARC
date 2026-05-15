@@ -2,8 +2,7 @@ from datetime import datetime
 
 from sqlmodel import Field, Session, col, select, update
 
-from sarc.core.models.validators import datetime_utc
-
+from sarc.validators import datetime_utc
 from .sqlmodel import SQLModel, datetime_utc_field
 
 

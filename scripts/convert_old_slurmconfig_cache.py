@@ -6,7 +6,7 @@ from datetime import datetime
 from sarc.cache import Cache
 from sarc.cli.fetch.slurmconfig import _save_into_cache
 from sarc.config import UTC, Config, config
-from sarc.core.models.validators import UTCOFFSET, datetime_utc
+from sarc.validators import UTCOFFSET, datetime_utc
 
 logger = logging.getLogger(__name__)
 

@@ -5,8 +5,7 @@ from typing import Any, Self, Type
 
 from sqlalchemy.dialects.postgresql import TSTZRANGE, ExcludeConstraint, Range
 from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
-from sqlalchemy.orm import Session as SASession
-from sqlalchemy.orm import attribute_keyed_dict, relationship
+from sqlalchemy.orm import Session as SASession, attribute_keyed_dict, relationship
 from sqlmodel import (
     Field,
     Index,
@@ -21,9 +20,8 @@ from sqlmodel import (
     update,
 )
 
-from sarc.core.models.validators import datetime_utc
 from sarc.models.user import MemberType
-
+from sarc.validators import datetime_utc
 from .sqlmodel import SQLModel
 
 logger = logging.getLogger(__name__)

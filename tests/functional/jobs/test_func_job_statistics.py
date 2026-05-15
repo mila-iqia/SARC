@@ -3,7 +3,7 @@ from sqlmodel import select
 
 # from sarc.client.job import SlurmJob, get_job
 from sarc.db.job import SlurmJobDB
-from sarc.jobs.series import JOB_STATISTICS_METRIC_NAMES, compute_job_statistics
+from sarc.scraping.series import JOB_STATISTICS_METRIC_NAMES, compute_job_statistics
 
 BASE_ELAPSED_TIME = 60 * 60 * 12
 

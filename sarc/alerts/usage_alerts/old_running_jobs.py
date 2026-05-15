@@ -7,7 +7,7 @@ from sqlmodel import col, select
 from tqdm import tqdm
 
 from sarc.alerts.common import CheckResult, HealthCheck
-from sarc.core.models.validators import datetime_utc
+from sarc.validators import datetime_utc
 
 logger = logging.getLogger(__name__)
 

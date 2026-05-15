@@ -5,8 +5,7 @@ from pydantic import BeforeValidator, ByteSize
 from sqlalchemy import BigInteger
 from sqlmodel import Field, Relationship, Session, select
 
-from sarc.core.models.validators import datetime_utc
-
+from sarc.validators import datetime_utc
 from .cluster import SlurmClusterDB
 from .sqlmodel import SQLModel, datetime_utc_field
 

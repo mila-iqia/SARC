@@ -6,8 +6,7 @@ from typing import Self
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, Index, Relationship, Session, select
 
-from sarc.core.models.validators import datetime_utc
-
+from sarc.validators import datetime_utc
 from .sqlmodel import SQLModel, datetime_utc_field
 
 

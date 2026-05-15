@@ -5,7 +5,7 @@ from simple_parsing import field
 
 from sarc.cache import UTC
 from sarc.config import config
-from sarc.core.scraping.jobs import parse_jobs
+from sarc.scraping.jobs import parse_jobs
 
 
 @dataclass
