@@ -241,7 +241,7 @@ def test_parse_jobs_from_cache(sacct_json, file_regression, test_config):
 def test_sacct_bin_and_accounts(test_config, remote):
     remote.expect(
         host="patate",
-        cmd=f"export TZ=UTC && /opt/software/slurm/bin/sacct -A rrg-bonhomme-ad_gpu,rrg-bonhomme-ad_cpu,def-bonhomme_gpu,def-bonhomme_cpu -X -S {_dtfmt(2023, 2, 14)} -E {_dtfmt(2023, 2, 15)} --allusers --json",
+        cmd=f"export TZ=UTC && /opt/software/slurm/bin/sacct -A rrg-bonhomme-ad_gpu,rrg-bonhomme-ad_cpu,def-bonhomme_gpu,def-bonhomme_cpu -X -S {_dtfmt(2023, 2, 14)} -E {_dtfmt(2023, 2, 15)} --allusers --json --duplicates",
         out=b'{"jobs": []}',
     )
     fetch_raw(
@@ -286,7 +286,7 @@ def test_stdout_message_before_json(
 
     remote.expect(
         host="raisin",
-        cmd=f"export TZ=UTC && /opt/slurm/bin/sacct -X -S {_dtfmt(2023, 2, 15)} -E {_dtfmt(2023, 2, 16)} --allusers --json",
+        cmd=f"export TZ=UTC && /opt/slurm/bin/sacct -X -S {_dtfmt(2023, 2, 15)} -E {_dtfmt(2023, 2, 16)} --allusers --json --duplicates",
         out=f"Welcome on raisin,\nThe sweetest supercomputer in the world!\n{sacct_json}".encode(
             "utf-8"
         ),
@@ -341,7 +341,7 @@ def test_update_job(
         host="raisin",
         commands=[
             Command(
-                cmd=f"export TZ=UTC && /opt/slurm/bin/sacct -X -S {_dtfmt(2023, 2, 15)} -E {_dtfmt(2023, 2, 16)} --allusers --json",
+                cmd=f"export TZ=UTC && /opt/slurm/bin/sacct -X -S {_dtfmt(2023, 2, 15)} -E {_dtfmt(2023, 2, 16)} --allusers --json --duplicates",
                 out=sacct_json.encode("utf-8"),
             )
             for _ in range(2)
@@ -412,7 +412,7 @@ def test_update_job(
 def test_save_job(get_jobs, test_config, sacct_json, remote, file_regression, cli_main):
     remote.expect(
         host="raisin",
-        cmd=f"export TZ=UTC && /opt/slurm/bin/sacct -X -S {_dtfmt(2023, 2, 15)} -E {_dtfmt(2023, 2, 16)} --allusers --json",
+        cmd=f"export TZ=UTC && /opt/slurm/bin/sacct -X -S {_dtfmt(2023, 2, 15)} -E {_dtfmt(2023, 2, 16)} --allusers --json --duplicates",
         out=sacct_json.encode("utf-8"),
     )
 
@@ -478,7 +478,7 @@ def test_save_preempted_job(
     get_jobs, test_config, sacct_json, remote, file_regression, cli_main
 ):
     remote.expect(
-        cmd=f"export TZ=UTC && /opt/slurm/bin/sacct -X -S {_dtfmt(2023, 2, 15)} -E {_dtfmt(2023, 2, 16)} --allusers --json",
+        cmd=f"export TZ=UTC && /opt/slurm/bin/sacct -X -S {_dtfmt(2023, 2, 15)} -E {_dtfmt(2023, 2, 16)} --allusers --json --duplicates",
         host="raisin",
         out=sacct_json.encode("utf-8"),
     )
@@ -538,7 +538,7 @@ def test_multiple_dates(
                     "export TZ=UTC && /opt/slurm/bin/sacct -X "
                     f"-S {job_submit_datetime.strftime('%Y-%m-%dT%H:%M')} "
                     f"-E {(job_submit_datetime + timedelta(days=1)).strftime('%Y-%m-%dT%H:%M')} "
-                    "--allusers --json"
+                    "--allusers --json --duplicates"
                 ),
                 out=create_sacct_json(
                     [
@@ -635,7 +635,7 @@ def test_multiple_clusters_and_dates(
     remote.expect_sessions(
         _create_session(
             "raisin",
-            "export TZ=UTC && /opt/slurm/bin/sacct -X -S {start} -E {end} --allusers --json",
+            "export TZ=UTC && /opt/slurm/bin/sacct -X -S {start} -E {end} --allusers --json --duplicates",
             datetimes=datetimes,
         ),
         _create_session(
@@ -643,7 +643,7 @@ def test_multiple_clusters_and_dates(
             (
                 "export TZ=UTC && /opt/software/slurm/bin/sacct "
                 "-A rrg-bonhomme-ad_gpu,rrg-bonhomme-ad_cpu,def-bonhomme_gpu,def-bonhomme_cpu "
-                "-X -S {start} -E {end} --allusers --json"
+                "-X -S {start} -E {end} --allusers --json --duplicates"
             ),
             datetimes=datetimes,
         ),
@@ -701,7 +701,7 @@ def test_multiple_clusters_and_dates(
 def test_job_tz(get_jobs, test_config, sacct_json, remote, cli_main):
     remote.expect(
         host="patate",
-        cmd="export TZ=UTC && /opt/software/slurm/bin/sacct -A rrg-bonhomme-ad_gpu,rrg-bonhomme-ad_cpu,def-bonhomme_gpu,def-bonhomme_cpu -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json",
+        cmd="export TZ=UTC && /opt/software/slurm/bin/sacct -A rrg-bonhomme-ad_gpu,rrg-bonhomme-ad_cpu,def-bonhomme_gpu,def-bonhomme_cpu -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json --duplicates",
         out=sacct_json.encode("utf-8"),
     )
 
@@ -935,7 +935,7 @@ def _fetch_one_job_on_raisin(cli_main, remote, sacct_json):
     """Helper: fetch a single default job on cluster raisin into the cache."""
     remote.expect(
         host="raisin",
-        cmd=f"export TZ=UTC && /opt/slurm/bin/sacct -X -S {_dtfmt(2023, 2, 15)} -E {_dtfmt(2023, 2, 16)} --allusers --json",
+        cmd=f"export TZ=UTC && /opt/slurm/bin/sacct -X -S {_dtfmt(2023, 2, 15)} -E {_dtfmt(2023, 2, 16)} --allusers --json --duplicates",
         out=sacct_json.encode("utf-8"),
     )
 

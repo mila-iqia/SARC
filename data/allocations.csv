@@ -53,6 +53,7 @@ start,       end,         cluster_name, resource_name,  group_name,     cpu_year
 2024-04-03,  2025-04-03,  narval,       narval-compute, rrg-bengioy-ad, 580,
 2024-04-03,  2025-04-03,  narval,       narval-gpu,     rrg-bengioy-ad, ,         110,      440,
 2024-04-03,  2025-04-03,  narval,       narval-storage, rrg-bengioy-ad, ,         ,         ,         ,          ,          150TB,        5e6,             75TB,
+
 2025-07-01,  2026-04-01,  fir,          fir-compute,    rrg-bengioy-ad, 193,
 2025-07-01,  2026-04-01,  fir,          fir-gpu,        rrg-bengioy-ad, ,         164,      2000,
 2025-07-01,  2026-04-01,  fir,          fir-storage,    rrg-bengioy-ad, ,         ,         ,         ,          ,          150TB,        ,                75TB,
@@ -61,3 +62,14 @@ start,       end,         cluster_name, resource_name,  group_name,     cpu_year
 2025-07-01,  2026-04-01,  rorqual,      rorqual-compute,rrg-bengioy-ad, 873,
 2025-07-01,  2026-04-01,  rorqual,      rorqual-gpu,    rrg-bengioy-ad, ,         123,      1500,
 2025-07-01,  2026-04-01,  rorqual,      rorqual-storage,rrg-bengioy-ad, ,         ,         ,         ,          ,          450TB,        ,                50TB,
+
+2026-04-07,  2027-04-01,  fir,          fir-gpu,        rrg-bengioy-ad, ,         ,         2089.73,  ,          ,          ,             ,               ,
+2026-04-07,  2027-04-01,  fir,          fir-storage,    rrg-bengioy-ad, ,         ,         ,         ,          ,          450TB,        ,               225TB,
+2026-04-07,  2027-04-01,  nibi,         nibi-gpu,       rrg-bengioy-ad, ,         ,         362.91,   ,          ,          ,             ,               ,
+2026-04-07,  2027-04-01,  nibi,         nibi-storage,   rrg-bengioy-ad, ,         ,         ,         ,          ,          250TB,        5e6,            125TB,
+2026-04-07,  2027-04-01,  rorqual,      rorqual-compute,rrg-bengioy-ad, 263,      ,         ,         ,          ,          ,             ,               ,
+2026-04-07,  2027-04-01,  rorqual,      rorqual-gpu,    rrg-bengioy-ad, ,         ,         1172.48,  ,          ,          ,             ,               ,
+2026-04-07,  2027-04-01,  rorqual,      rorqual-storage,rrg-bengioy-ad, ,         ,         ,         ,          ,          275TB,        5e6,            100TB,
+2026-04-07,  2027-04-01,  trillium,     trillium-compute,rrg-bengioy-ad, 788,     ,         ,         ,          ,          ,             ,               ,
+2026-04-07,  2027-04-01,  trillium,     trillium-gpu,   rrg-bengioy-ad, ,         ,         374.88,   ,          ,          ,             ,               ,
+2026-04-07,  2027-04-01,  trillium,     trillium-storage,rrg-bengioy-ad, ,        ,         ,         ,          ,          100TB,        ,               ,

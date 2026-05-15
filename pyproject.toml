@@ -14,7 +14,7 @@ dependencies = [
     "ldap3>=2.9.1,<3",
     "python-hostlist>=2.2.1,<3",
     "tqdm>=4.66,<5",
-    "flatten-dict>=0.4.2,<0.5",
+    "flatten-dict>=0.5,<0.6",
     "simple-parsing>=0.1.0,<0.2",
     "sphinx>=9.1,<10",
     "myst-parser>=5,<6",
@@ -47,7 +47,7 @@ sarc = "sarc.cli:main"
 
 [dependency-groups]
 dev = [
-    "mypy>=1.18.1,<2",
+    "mypy>=2,<3",
     "pytest>=9.0.1,<10",
     "pytest-cov>=7,<8",
     "pytest-regressions>=2.7.0,<3,!=2.8.1",
