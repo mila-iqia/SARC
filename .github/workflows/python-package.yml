@@ -19,7 +19,10 @@ jobs:
         # Provide the password for postgres
         env:
           POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: test_db
           POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
         # Set health checks to wait until postgres has started
         options: >-
           --health-cmd pg_isready
@@ -36,7 +39,7 @@ jobs:
           version: "0.11.14"
 
       - name: Test with tox
-        run: uv run tox -e test -- -n 4
+        run: uv run tox -e test -- -n 2
 
   lint:
     runs-on: ubuntu-latest
