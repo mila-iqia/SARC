@@ -39,7 +39,7 @@ jobs:
           version: "0.11.14"
 
       - name: Test with tox
-        run: uv run tox -e test -- -n 2
+        run: uv run tox -e test -- -x
 
   lint:
     runs-on: ubuntu-latest
