@@ -396,7 +396,7 @@ class UserQuery(BaseModel):
 UserQueryType = Annotated[UserQuery, Depends(UserQuery)]
 
 
-def job_convert(doc: SlurmJobDB, extra_fields):
+def job_convert(doc: SlurmJobDB, extra_fields: set[str]) -> SlurmJob:
     job = SlurmJob.model_validate(doc.model_dump())
     for field in extra_fields:
         match field:
@@ -436,7 +436,7 @@ def query_jobs(
         col(SlurmJobDB.submit_time),
     )
 
-    jobs = [job_convert(doc, extra_fields) for doc in sess.exec(query)]
+    jobs = [job_convert(doc, extra_fields_set) for doc in sess.exec(query)]
 
     if len(jobs) < list_opt.limit:
         # There are no more results (note: limit > 0)
