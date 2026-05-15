@@ -14,8 +14,6 @@
 # [tool.uv.sources]
 # sarc = { git = "https://github.com/mila-iqia/SARC.git" }
 # ///
-from __future__ import annotations
-
 import dataclasses
 import logging
 import os
@@ -37,9 +35,9 @@ import pymongo
 import pymongo.collection
 import simple_parsing
 from pandas import DatetimeIndex
+from sarc.client.job import _jobs_collection
 from typing_extensions import TypeGuard
 
-from sarc.client.job import _jobs_collection
 from sarc.config import UTC
 
 logger = get_logger(__name__)

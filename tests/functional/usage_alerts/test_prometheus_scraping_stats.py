@@ -7,11 +7,7 @@ import time_machine
 from sarc.config import config
 from sarc.db.job import SlurmJobDB
 from sarc.scraping.series import compute_job_statistics
-from tests.functional.common import (
-    MOCK_TIME,
-    _get_warnings,
-    generate_fake_timeseries,
-)
+from tests.functional.common import MOCK_TIME, _get_warnings, generate_fake_timeseries
 
 get_warnings = functools.partial(
     _get_warnings,

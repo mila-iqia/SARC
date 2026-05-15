@@ -3,8 +3,9 @@ from collections.abc import Generator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from sarc.cache import Cache
 from sarc.client.job import _jobs_collection
+
+from sarc.cache import Cache
 
 
 def usage():

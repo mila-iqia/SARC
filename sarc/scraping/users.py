@@ -12,7 +12,8 @@ from sqlmodel import Session, select
 
 from sarc.cache import Cache, CacheEntry
 from sarc.config import config_path
-from sarc.db.users import MatchingID, MemberType, UserDB, ValidField as ValidFieldDB
+from sarc.db.users import MatchingID, MemberType, UserDB
+from sarc.db.users import ValidField as ValidFieldDB
 from sarc.validators import ValidField
 
 deserialize = (Serieux + IncludeFile)().deserialize  # type: ignore[operator]

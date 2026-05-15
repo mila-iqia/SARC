@@ -5,6 +5,7 @@ from sqlalchemy.dialects.postgresql import JSONB, aggregate_order_by
 from sqlmodel import FLOAT, JSON, Field, and_, case, col, desc, func, select
 
 from sarc.models.user import MemberType
+
 from .cluster import GPUBillingDB, SlurmClusterDB
 from .job import JobStatisticDB, SlurmJobDB, SlurmState
 from .sqlmodel import SQLModel
@@ -81,10 +82,7 @@ rgu_expr = case(
     (col(SlurmClusterDB.billing_is_gpu) == True, gpu_count_raw * GpuRguDB.rgu),  # noqa: E712
     # B: pre-billing era (cluster has billings but none applicable yet) -> multiply.
     (
-        and_(
-            col(billing_subq.c.gpu_to_billing).is_(None),
-            cluster_billing_count > 0,
-        ),
+        and_(col(billing_subq.c.gpu_to_billing).is_(None), cluster_billing_count > 0),
         gpu_count_raw * GpuRguDB.rgu,
     ),
     # C: scale by per-type billing. NULL division yields NULL (NaN) when

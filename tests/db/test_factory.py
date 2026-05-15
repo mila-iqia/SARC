@@ -17,8 +17,6 @@ from sarc.db.users import (
     UserDB,
 )
 
-from .factory import create_diskusages
-
 
 @pytest.mark.parametrize(
     "datatype",

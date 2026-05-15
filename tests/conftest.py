@@ -214,7 +214,9 @@ class DbConfiguration:
             sess.flush()
 
             if self.has_jobs:
-                jobs = create_jobs(clusters=clusters, users=users, job_patch=self.job_patch)
+                jobs = create_jobs(
+                    clusters=clusters, users=users, job_patch=self.job_patch
+                )
                 sess.add_all(jobs)
 
             sess.commit()
@@ -244,7 +246,9 @@ class DbConfiguration:
 
 empty_read_write_db_config_object = DbConfiguration("empty-rw", empty=True).fixture()
 
-jobless_read_write_db_config_object = DbConfiguration("jobless-rw", has_jobs=False).fixture()
+jobless_read_write_db_config_object = DbConfiguration(
+    "jobless-rw", has_jobs=False
+).fixture()
 
 read_write_db_config_object = DbConfiguration("rw").fixture()
 

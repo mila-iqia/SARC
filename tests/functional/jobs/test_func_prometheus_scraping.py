@@ -9,8 +9,9 @@ from opentelemetry.trace import StatusCode
 
 from sarc.config import UTC
 from sarc.db.job import JobStatisticDB
-from ..cli.test_slurmconfig_fetch_parse import _save_slurm_conf
+
 from ...common.dateutils import MTL, _dtfmt, _dtreg
+from ..cli.test_slurmconfig_fetch_parse import _save_slurm_conf
 
 
 @pytest.fixture

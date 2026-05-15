@@ -6,6 +6,7 @@ from sqlalchemy import BigInteger
 from sqlmodel import Field, Relationship, Session, select
 
 from sarc.validators import datetime_utc
+
 from .cluster import SlurmClusterDB
 from .sqlmodel import SQLModel, datetime_utc_field
 

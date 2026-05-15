@@ -5,7 +5,8 @@ from pydantic_core import PydanticUndefined as Undefined
 from sqlalchemy import DateTime
 from sqlalchemy.types import TypeDecorator
 from sqlmodel import Field
-from sqlmodel.main import SQLModel as SQLModelBase, finish_init, is_table_model_class
+from sqlmodel.main import SQLModel as SQLModelBase
+from sqlmodel.main import finish_init, is_table_model_class
 
 from sarc.validators import UTCOFFSET
 
@@ -31,12 +32,16 @@ class UTCDateTime(TypeDecorator):
         return value
 
     def process_bind_param(
-        self, value: datetime | None, dialect: Any
+        self,
+        value: datetime | None,
+        dialect: Any,  # noqa: ARG002
     ) -> datetime | None:
         return self._expect_utc(value)
 
     def process_result_value(
-        self, value: datetime | None, dialect: Any
+        self,
+        value: datetime | None,
+        dialect: Any,  # noqa: ARG002
     ) -> datetime | None:
         # We also expect UTC when reading from database.
         return self._expect_utc(value)

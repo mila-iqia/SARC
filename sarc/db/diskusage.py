@@ -4,6 +4,7 @@ from sqlmodel import Field, Index, Relationship
 
 from sarc.db.cluster import SlurmClusterDB
 from sarc.validators import datetime_utc
+
 from .sqlmodel import SQLModel, datetime_utc_field
 
 

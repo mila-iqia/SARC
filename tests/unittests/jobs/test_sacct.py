@@ -6,11 +6,7 @@ from fabric.testing.base import Command
 from sarc.cache import Cache
 from sarc.config import UTC
 from sarc.scraping.jobs import fetch_jobs
-from sarc.scraping.jobs_utils import (
-    JobConversionError,
-    _convert_json_job,
-    fetch_raw,
-)
+from sarc.scraping.jobs_utils import JobConversionError, _convert_json_job, fetch_raw
 from tests.common.dateutils import MTL, _dtfmt
 
 

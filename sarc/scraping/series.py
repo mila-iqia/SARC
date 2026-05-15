@@ -280,7 +280,9 @@ def compute_job_statistics(
 
     res = dict()
     if gpu_utilization:
-        res["gpu_utilization"] = JobStatisticDB(name="gpu_utilization", **gpu_utilization)
+        res["gpu_utilization"] = JobStatisticDB(
+            name="gpu_utilization", **gpu_utilization
+        )
     if gpu_utilization_fp16:
         res["gpu_utilization_fp16"] = JobStatisticDB(
             name="gpu_utilization_fp16", **gpu_utilization_fp16
