@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 
-from sarc.core.scraping.series import JOB_STATISTICS_METRIC_NAMES
 from sarc.db.job import SlurmJobDB
+from sarc.scraping.series import JOB_STATISTICS_METRIC_NAMES
 from tests.db.factory import elapsed_time as BASE_ELAPSED_TIME
 
 

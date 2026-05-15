@@ -5,8 +5,8 @@ from fabric.testing.base import Command
 
 from sarc.cache import Cache
 from sarc.config import UTC
-from sarc.core.scraping.jobs import fetch_jobs
-from sarc.core.scraping.jobs_utils import (
+from sarc.scraping.jobs import fetch_jobs
+from sarc.scraping.jobs_utils import (
     JobConversionError,
     _convert_json_job,
     fetch_raw,

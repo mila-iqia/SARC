@@ -19,7 +19,7 @@ from typing import List
 from sarc.client.job import get_job
 
 from sarc.config import scraping_mode_required
-from sarc.core.scraping.series import get_job_time_series
+from sarc.scraping.series import get_job_time_series
 
 logger = logging.getLogger(__name__)
 

@@ -1,6 +1,8 @@
 from datetime import UTC, datetime
 from typing import Any, Mapping
 
+from fabric import Connection
+
 
 def flatten(d: Mapping[str, Any]) -> dict[str, Any]:
     res = {}
@@ -22,3 +24,20 @@ def flatten(d: Mapping[str, Any]) -> dict[str, Any]:
 def ensure_utc(d: datetime) -> datetime:
     assert d.tzinfo is not None
     return d.astimezone(UTC)
+
+
+def run_command(
+    connection: Connection, command: str, retries: int
+) -> tuple[str | None, list[Exception]]:
+    errors: list[Exception] = []
+
+    for _ in range(retries):
+        try:
+            result = connection.run(command, hide=True)
+            return result.stdout, errors
+
+        # pylint: disable=broad-exception-caught
+        except Exception as err:
+            errors.append(err)
+
+    return None, errors

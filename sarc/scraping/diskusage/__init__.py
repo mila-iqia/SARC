@@ -5,7 +5,7 @@ from fabric import Connection
 from pydantic import BaseModel, ByteSize
 from serieux import deserialize
 
-from sarc.core.models.validators import datetime_utc
+from sarc.validators import datetime_utc
 
 
 class DiskUsageUser(BaseModel):

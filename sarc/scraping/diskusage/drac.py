@@ -12,8 +12,7 @@ from typing import cast
 from fabric import Connection
 from pydantic import ByteSize
 
-from sarc.core.utils import run_command
-
+from sarc.utils import run_command
 from . import (
     DiskUsage,
     DiskUsageGroup,

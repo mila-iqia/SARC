@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 import pytest
 
 from sarc.config import UTC
-from sarc.core.scraping.series import get_job_time_series_data
+from sarc.scraping.series import get_job_time_series_data
 from tests.common.dateutils import MTL
 from tests.db.factory import JobFactory
 

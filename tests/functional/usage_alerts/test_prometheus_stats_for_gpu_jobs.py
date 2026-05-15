@@ -5,8 +5,8 @@ import sqlmodel
 import time_machine
 
 from sarc.config import config
-from sarc.core.scraping.series import compute_job_statistics
 from sarc.db.job import SlurmJobDB
+from sarc.scraping.series import compute_job_statistics
 from tests.functional.common import MOCK_TIME, generate_fake_timeseries
 
 PARAMS = {

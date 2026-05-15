@@ -32,7 +32,7 @@ def mock_compute_job_statistics(monkeypatch):
         return {"gpu_utilization": _stats}
 
     mock_func.called = 0
-    monkeypatch.setattr("sarc.core.scraping.series.compute_job_statistics", mock_func)
+    monkeypatch.setattr("sarc.scraping.series.compute_job_statistics", mock_func)
 
     yield mock_func
 
@@ -146,7 +146,7 @@ def test_get_gpu_type(
 
     mock_get_job_time_series.called = 0
     monkeypatch.setattr(
-        "sarc.core.scraping.series.get_job_time_series_data", mock_get_job_time_series
+        "sarc.scraping.series.get_job_time_series_data", mock_get_job_time_series
     )
 
     assert cli_main(["fetch", "prometheus", "--cluster_name", "raisin"]) == 0
@@ -265,7 +265,7 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
         return [{"metric": {"gpu_type": f"phantom_gpu_{job.cluster_id}_{job.job_id}"}}]
 
     monkeypatch.setattr(
-        "sarc.core.scraping.series.get_job_time_series_data", mock_get_job_time_series
+        "sarc.scraping.series.get_job_time_series_data", mock_get_job_time_series
     )
 
     assert (
@@ -327,13 +327,13 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     print(caplog.text)
     assert bool(
         re.search(
-            rf"sarc.core.scraping.jobs:jobs\.py:[0-9]+ Fetching the sacct data for cluster raisin, time {_dtreg(2023, 2, 15)} to {_dtreg(2023, 2, 16)}",
+            rf"sarc.scraping.jobs:jobs\.py:[0-9]+ Fetching the sacct data for cluster raisin, time {_dtreg(2023, 2, 15)} to {_dtreg(2023, 2, 16)}",
             caplog.text,
         )
     )
     assert bool(
         re.search(
-            rf"sarc.core.scraping.jobs:jobs\.py:[0-9]+ Fetching the sacct data for cluster patate, time {_dtreg(2023, 2, 15)} to {_dtreg(2023, 2, 16)}",
+            rf"sarc.scraping.jobs:jobs\.py:[0-9]+ Fetching the sacct data for cluster patate, time {_dtreg(2023, 2, 15)} to {_dtreg(2023, 2, 16)}",
             caplog.text,
         )
     )
@@ -343,7 +343,7 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     )
     assert bool(
         re.search(
-            r"sarc\.core\.scraping\.prometheus:prometheus\.py:[0-9]+ Saved Prometheus metrics for [0-9]+ jobs\.",
+            r"sarc\.scraping\.prometheus:prometheus\.py:[0-9]+ Saved Prometheus metrics for [0-9]+ jobs\.",
             caplog.text,
         )
     )
@@ -351,13 +351,13 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     # There should be 2 acquisition errors for unexpected data 2023-03-16, one per cluster.
     assert bool(
         re.search(
-            rf"sarc.core.scraping.jobs:jobs\.py:[0-9]+ Failed to fetch data on raisin for interval: {_dtreg(2023, 3, 16)} to {_dtreg(2023, 3, 17)}:",
+            rf"sarc.scraping.jobs:jobs\.py:[0-9]+ Failed to fetch data on raisin for interval: {_dtreg(2023, 3, 16)} to {_dtreg(2023, 3, 17)}:",
             caplog.text,
         )
     )
     assert bool(
         re.search(
-            rf"sarc.core.scraping.jobs:jobs\.py:[0-9]+ Failed to fetch data on patate for interval: {_dtreg(2023, 3, 16)} to {_dtreg(2023, 3, 17)}:",
+            rf"sarc.scraping.jobs:jobs\.py:[0-9]+ Failed to fetch data on patate for interval: {_dtreg(2023, 3, 16)} to {_dtreg(2023, 3, 17)}:",
             caplog.text,
         )
     )
@@ -365,7 +365,7 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     # For Prometheus metrics, check that fetching happened
     assert bool(
         re.search(
-            r"sarc\.core\.scraping\.prometheus:prometheus\.py:[0-9]+ Fetched Prometheus metrics for 2 jobs\.",
+            r"sarc\.scraping\.prometheus:prometheus\.py:[0-9]+ Fetched Prometheus metrics for 2 jobs\.",
             caplog.text,
         )
     )

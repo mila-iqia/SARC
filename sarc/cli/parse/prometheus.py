@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 
 from simple_parsing import field
 
-from sarc.core.scraping.prometheus import parse_prometheus
+from sarc.scraping.prometheus import parse_prometheus
 
 
 @dataclass

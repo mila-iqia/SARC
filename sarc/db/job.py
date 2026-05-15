@@ -9,11 +9,11 @@ from sqlalchemy.orm import attribute_keyed_dict, relationship
 from sqlmodel import CheckConstraint, Field, Session, UniqueConstraint, select
 from sqlmodel.main import Relationship
 
-from sarc.core.models.validators import datetime_utc
 from sarc.db.cluster import SlurmClusterDB
 from sarc.db.sqlmodel import SQLModel, datetime_utc_field
 from sarc.db.users import UserDB
 from sarc.models.job import SlurmState
+from sarc.validators import datetime_utc
 
 
 class JobStatisticDB(SQLModel, table=True):

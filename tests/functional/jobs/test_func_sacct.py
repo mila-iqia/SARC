@@ -15,10 +15,10 @@ from sqlmodel import select
 
 from sarc.cache import Cache
 from sarc.config import UTC, config
-from sarc.core.scraping.jobs_utils import _convert_json_job, fetch_raw, parse_raw
 from sarc.db.cluster import SlurmClusterDB
 from sarc.db.job import SlurmJobDB
 from sarc.models.job import SlurmState
+from sarc.scraping.jobs_utils import _convert_json_job, fetch_raw, parse_raw
 from tests.common.dateutils import MTL, PST, _dtfmt
 
 
@@ -857,9 +857,9 @@ def test_auto_interval(cli_main, monkeypatch, time_machine, caplog):
 
     mock_fetch_raw.called = 0
 
-    import sarc.core.scraping.jobs_utils
+    import sarc.scraping.jobs_utils
 
-    monkeypatch.setattr(sarc.core.scraping.jobs, "fetch_raw", mock_fetch_raw)
+    monkeypatch.setattr(sarc.scraping.jobs, "fetch_raw", mock_fetch_raw)
 
     orig_end_time = get_raisin().end_time_sacct
 
@@ -898,9 +898,9 @@ def test_auto_interval_0(cli_main, monkeypatch, time_machine, caplog):
 
     mock_fetch_raw.called = 0
 
-    import sarc.core.scraping.jobs_utils
+    import sarc.scraping.jobs_utils
 
-    monkeypatch.setattr(sarc.core.scraping.jobs, "fetch_raw", mock_fetch_raw)
+    monkeypatch.setattr(sarc.scraping.jobs, "fetch_raw", mock_fetch_raw)
 
     orig_end_time = get_raisin().end_time_sacct
     expected_final_end_time = orig_end_time + timedelta(minutes=300)

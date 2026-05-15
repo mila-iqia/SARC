@@ -20,9 +20,9 @@ import sqlmodel
 import time_machine
 from sqlmodel import Session, col, or_, select
 
-from sarc.core.scraping.series import compute_job_statistics
 from sarc.db.cluster import GPUBillingDB, SlurmClusterDB
 from sarc.db.job import JobStatisticDB, SlurmJobDB
+from sarc.scraping.series import compute_job_statistics
 from tests.common.dateutils import MTL
 from tests.functional.common import MOCK_TIME, generate_fake_timeseries
 from tests.functional.job_series.rgu_utils import (

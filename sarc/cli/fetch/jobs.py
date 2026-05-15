@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from simple_parsing import field
 
 from sarc.config import config
-from sarc.core.scraping.jobs import fetch_jobs
+from sarc.scraping.jobs import fetch_jobs
 
 logger = logging.getLogger(__name__)
 

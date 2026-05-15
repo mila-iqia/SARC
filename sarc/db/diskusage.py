@@ -2,9 +2,8 @@ from pydantic import ByteSize, computed_field
 from sqlalchemy import BigInteger
 from sqlmodel import Field, Index, Relationship
 
-from sarc.core.models.validators import datetime_utc
 from sarc.db.cluster import SlurmClusterDB
-
+from sarc.validators import datetime_utc
 from .sqlmodel import SQLModel, datetime_utc_field
 
 
