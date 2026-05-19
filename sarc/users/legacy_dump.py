@@ -108,9 +108,6 @@ class LegacyDumpScraper(UserScraper[LegacyDumpConfig]):
                 known_matches.add(
                     MatchID(name="drac_member", mid=drac_members_data["ccri"][:-3])
                 )
-                known_matches.add(
-                    MatchID(name="drac_role", mid=drac_members_data["ccri"][:-3])
-                )
 
             user_match.known_matches = known_matches
 

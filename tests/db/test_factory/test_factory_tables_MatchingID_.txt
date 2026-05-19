@@ -75,7 +75,7 @@ Result #12
 Result #13
 {
     "match_id": "aaa-001",
-    "plugin_name": "drac_role",
+    "plugin_name": "drac_member",
     "user_id": 9
 }
 Result #14
@@ -87,7 +87,7 @@ Result #14
 Result #15
 {
     "match_id": "aaa-002",
-    "plugin_name": "drac_role",
+    "plugin_name": "drac_member",
     "user_id": 10
 }
 Result #16
@@ -99,6 +99,6 @@ Result #16
 Result #17
 {
     "match_id": "aaa-003",
-    "plugin_name": "drac_role",
+    "plugin_name": "drac_member",
     "user_id": 11
 }
