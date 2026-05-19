@@ -396,7 +396,7 @@ def create_users(sess: Session, user_factory=None) -> Iterable[UserDB]:
         sess.add(u)
         sess.flush()
         if drac_account:
-            u.matching_ids["drac_role"] = drac_account
+            u.matching_ids["drac_member"] = drac_account
 
     return user_factory.users
 
