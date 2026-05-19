@@ -3,7 +3,7 @@
       values:
       - valid:
           lower: 2023-01-01 18:54:23+00:00
-          upper: 2024-01-01 00:00:00+00:00
+          upper: null
         value: johndoe
   display_name: John Doe
   email: john.doe@example.com
@@ -24,7 +24,7 @@
       values:
       - valid:
           lower: 2023-02-01 22:34:48+00:00
-          upper: 2024-01-01 00:00:00+00:00
+          upper: null
         value: janesmith
   display_name: Jane Smith
   email: jane.smith@example.com

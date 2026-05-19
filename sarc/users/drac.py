@@ -2,7 +2,7 @@ import csv
 import json
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, date, datetime, time
 
 from serieux.features.encrypt import Secret
 from sqlmodel import func, select
@@ -25,7 +25,7 @@ def _dict_to_lowercase[T](D: dict[str, T]) -> dict[str, T]:
 @dataclass
 class DRACMemberConfig:
     csv: Secret[str]
-    csv_date: datetime
+    csv_date: date
 
 
 class DRACMemberScraper(UserScraper[DRACMemberConfig]):
@@ -40,14 +40,14 @@ class DRACMemberScraper(UserScraper[DRACMemberConfig]):
         try:
             j = json.loads(data.decode("utf-8"))
             # new cache format, data is a JSON containing a dict {csv, csv_date}
-            yield from parse_csv(j["csv"], j["csv_date"])
+            yield from parse_csv(j["csv"], date.fromisoformat(j["csv_date"]))
 
         except json.JSONDecodeError:
             # old cache, data is the CSV
             yield from parse_csv(data.decode("utf-8"), None)
 
 
-def parse_csv(csv_file: str, csv_date: datetime | None) -> Iterable[UserMatch]:
+def parse_csv(csv_file: str, csv_date: date | None) -> Iterable[UserMatch]:
 
     with config().db.session() as sess:
         for d in csv.DictReader(csv_file.split("\n")):
@@ -75,7 +75,7 @@ def parse_csv(csv_file: str, csv_date: datetime | None) -> Iterable[UserMatch]:
                 creds.insert(
                     d["username"],
                     start=datetime.strptime(d["member_since"], "%Y-%m-%d %H:%M:%S %z"),
-                    end=csv_date,
+                    end=datetime.combine(csv_date, time.min, tzinfo=UTC),
                 )
             if creds.values != []:
                 yield UserMatch(
