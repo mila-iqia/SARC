@@ -1,50 +1,11 @@
-{
-    "cluster_name": "raisin",
-    "account": "mila",
-    "job_id": 1,
-    "array_job_id": null,
-    "task_id": null,
-    "name": "main.sh",
-    "user": "petitbonhomme",
-    "group": "petitbonhomme",
-    "job_state": "OUT_OF_MEMORY",
-    "exit_code": 0,
-    "signal": null,
-    "partition": "long",
-    "nodes": [
-        "cn-c021"
-    ],
-    "work_dir": "/network/scratch/p/petitbonhomme/experience-demente",
-    "constraints": "x86_64&(48gb|80gb)",
-    "priority": 7152,
-    "qos": "normal",
-    "CLEAR_SCHEDULING": true,
-    "STARTED_ON_SUBMIT": false,
-    "STARTED_ON_SCHEDULE": false,
-    "STARTED_ON_BACKFILL": true,
-    "time_limit": 43200,
-    "submit_time": "2023-02-14T05:00:00Z",
-    "start_time": "2023-02-14T05:01:00Z",
-    "end_time": "2023-02-14T17:01:00Z",
-    "elapsed_time": 43200.0,
-    "latest_scraped_start": "2023-02-14T05:00:00Z",
-    "latest_scraped_end": "2023-02-15T05:00:00Z",
-    "requested": {
-        "cpu": 4,
-        "mem": 49152,
-        "node": 1,
-        "billing": 1,
-        "gres_gpu": 1,
-        "gpu_type": null
-    },
-    "allocated": {
-        "cpu": 4,
-        "mem": 49152,
-        "node": 1,
-        "billing": 1,
-        "gres_gpu": 1,
-        "gpu_type": null
-    },
-    "stored_statistics": null,
-    "user_uuid": null
-}
+--- base job
++++ patched job
+@@ -8,7 +8,7 @@
+     "name": "bench",
+     "cluster_user": "bramin",
+     "group": "bramin",
+-    "job_state": "COMPLETED",
++    "job_state": "OUT_OF_MEMORY",
+     "exit_code": 0,
+     "signal": 0,
+     "partition": "largemem",

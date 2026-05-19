@@ -1,0 +1,2 @@
+No Prometheus data available: no job found
+[prometheus_cpu_stat_0] FAILURE: prometheus_cpu_stat_0

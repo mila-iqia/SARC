@@ -1,10 +1,17 @@
 import logging
-from collections.abc import Iterable
+import math
+import statistics
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
-from typing import Sequence, cast
+from datetime import datetime, timedelta
+
+import sqlalchemy
+from sqlmodel import case, col, func, select
 
 from sarc.alerts.common import CheckResult, HealthCheck
+from sarc.alerts.usage_alerts.alert_sql_utils import SqlSymbols
+from sarc.db.cluster import SlurmClusterDB
+from sarc.db.job import JobStatisticDB, SlurmJobDB
 
 logger = logging.getLogger(__name__)
 
@@ -14,8 +21,6 @@ class PrometheusStatInfo:
 
     def __init__(self, name: str):
         self.name = name
-        self.col_has = f"has_{name}"
-        self.col_ratio = f"ratio_{name}"
         self.avg: float | None = None
         self.stddev: float | None = None
         self.threshold: float | None = None
@@ -88,85 +93,158 @@ def check_prometheus_stats_occurrences(
     bool
         True if check succeeds, False otherwise.
     """
-    from sarc.client.series import compute_time_frames, load_job_series
+    from sarc.config import config
 
-    # Parse time_interval and get data frame
-    start: datetime | None = None
-    end: datetime | None = None
-    clip_time = False
-    if time_interval is not None:
-        end = datetime.now(tz=UTC)
-        start = end - time_interval
-        clip_time = True
-    df = load_job_series(start=start, end=end, clip_time=clip_time)
+    if cluster_names is None:
+        cluster_names = []
 
-    # Parse minimum_runtime
     if minimum_runtime is None:
         minimum_runtime = timedelta(seconds=0)
-    # Select only jobs where elapsed time >= minimum runtime and
-    # jobs are GPU or CPU jobs, depending on `with_gres_gpu`
-    selection_elapsed_time = df["elapsed_time"] >= minimum_runtime.total_seconds()
-    selection_gres_gpu = (
-        (df["allocated.gres_gpu"] > 0)
-        if with_gres_gpu
-        else (df["allocated.gres_gpu"] == 0)
-    )
-    df = df[selection_elapsed_time & selection_gres_gpu]
 
-    # List clusters
-    cluster_names = cluster_names or sorted(df["cluster_name"].unique())
+    with config().db.session() as sess:
+        if not sess.exec(select(func.count(col(SlurmJobDB.id)))).one():
+            logger.error("No Prometheus data available: no job found")
+            return False
 
-    # If df is empty, alert for each cluster that we can't check Prometheus stats.
-    if df.empty:
-        for cluster_name in cluster_names:
-            logger.error(f"[{cluster_name}] no Prometheus data available: no job found")
+        # Determine [start, end] and clipped elapsed time for frame iteration and comparison.
+        start, end, clipped_elapsed_time = (
+            SqlSymbols.convert_job_time_interval_to_sql_bounds(sess, time_interval)
+        )
+        eff_start = SqlSymbols.eff_start
+        eff_end = SqlSymbols.eff_end
+
+        # Use a Postgresql query: time frange + join
+        # NB: Since we iterate over frames, we want to capture point jobs located at frame bounds,
+        # e.g. PENDING jobs which run in [submit_time, submit_time]. So, we grab everything in
+        # [frame_start included, frame_end excluded), instead of (frame_start excluded, frame_end excluded)
+        time_unit_sql = sqlalchemy.literal(time_unit, type_=sqlalchemy.Interval)
+        frames = select(
+            func.generate_series(start, end, time_unit_sql).label("frame_start")
+        ).cte("frames")
+        frame_start = frames.c.frame_start
+        frame_end = frame_start + time_unit_sql
+
+        exploded_query = (
+            select(
+                col(SlurmJobDB.id).label("job_id"),
+                col(SlurmClusterDB.name).label("cluster_name"),
+                # Explode jobs per node and join with matching frames.
+                func.jsonb_array_elements_text(SlurmJobDB.nodes).label("node"),
+                frame_start.label("frame_start"),
+            )
+            .select_from(SlurmJobDB)
+            .join(SlurmClusterDB, col(SlurmJobDB.cluster_id) == col(SlurmClusterDB.id))
+            .join(frames, (eff_start < frame_end) & (eff_end >= frame_start))
+            .where(
+                # Select only jobs where elapsed time >= minimum runtime,
+                # and jobs are GPU or CPU jobs, depending on `with_gres_gpu`
+                (
+                    (col(SlurmJobDB.allocated_gres_gpu) > 0)
+                    if with_gres_gpu
+                    else (SlurmJobDB.allocated_gres_gpu == 0)
+                ),
+                clipped_elapsed_time
+                >= sqlalchemy.literal(minimum_runtime, type_=sqlalchemy.Interval),
+            )
+        )
+        if cluster_names:
+            exploded_query = exploded_query.where(
+                col(SlurmClusterDB.name).in_(cluster_names)
+            )
+        # Materializing as a CTE turns `exploded.c.node` into a plain column ref,
+        # so the case() below references a column rather than an SRF.
+        exploded = exploded_query.cte("exploded")
+
+        # Resolve `group_by_node`: drives whether each cluster's jobs are grouped per
+        # node or collapsed under "(all)".
+        if isinstance(group_by_node, bool):
+            group_all = group_by_node
+            clusters_to_group: list[str] = []
+        else:
+            group_all = False
+            clusters_to_group = list(group_by_node)
+        # `group_node`: real node for grouped clusters, "(all)" otherwise.
+        if group_all:
+            group_node_expr = exploded.c.node
+        elif clusters_to_group:
+            group_node_expr = case(
+                (exploded.c.cluster_name.in_(clusters_to_group), exploded.c.node),
+                else_=sqlalchemy.literal("(all)"),
+            )
+        else:
+            group_node_expr = sqlalchemy.literal("(all)")
+
+        # Pre-aggregate per-job stat presence as a CTE: one row per job_id with
+        # a boolean column per requested stat. Lets the main query do a single
+        # LEFT JOIN instead of N correlated EXISTS subqueries (one per stat per
+        # exploded row).
+        job_stats = (
+            select(
+                JobStatisticDB.job_id,
+                *(
+                    # Inside group (by job_id),
+                    # bool_or aggregates job stat entries and tell if at least
+                    # one row matches given stat name
+                    func.bool_or(JobStatisticDB.name == name).label(f"has_{name}")
+                    for name in prometheus_stats
+                ),
+            )
+            .where(col(JobStatisticDB.name).in_(list(prometheus_stats)))
+            .group_by(col(JobStatisticDB.job_id))
+            .cte("job_stats")
+        )
+
+        agg_query = (
+            select(
+                exploded.c.frame_start.label("timestamp"),
+                exploded.c.cluster_name,
+                group_node_expr.label("group_node"),
+                func.count(exploded.c.job_id).label("nb_jobs"),
+                *[
+                    func.sum(case((job_stats.c[f"has_{name}"], 1), else_=0)).label(
+                        f"nb_jobs_with_{name}"
+                    )
+                    for name in prometheus_stats
+                ],
+            )
+            .select_from(exploded)
+            .outerjoin(job_stats, exploded.c.job_id == job_stats.c.job_id)
+            .group_by(exploded.c.frame_start, exploded.c.cluster_name, group_node_expr)
+            .order_by(exploded.c.frame_start, exploded.c.cluster_name, group_node_expr)
+        )
+        results = sess.exec(agg_query).all()
+
+    if not results:
+        if cluster_names:
+            for cluster_name in cluster_names:
+                logger.error(
+                    f"[{cluster_name}] no Prometheus data available: no job found"
+                )
+        else:
+            logger.error("No Prometheus data available: no job found")
         # As there's nothing to check, we return immediately.
         return False
 
-    # Split data frame into time frames using `time_unit`
-    df = compute_time_frames(df, frame_size=time_unit)
+    prom_contexts = [PrometheusStatInfo(name=name) for name in prometheus_stats]
+    rows: list[tuple[datetime, str, str, int, dict[str, float]]] = []
+    clusters_seen: set[str] = set()
+    for row in results:
+        timestamp, cluster_name, group_node, nb_jobs = row[:4]
+        clusters_seen.add(cluster_name)
+        ratios = {
+            prom.name: row[4 + i] / nb_jobs for i, prom in enumerate(prom_contexts)
+        }
+        rows.append((timestamp, cluster_name, group_node, nb_jobs, ratios))
 
-    # Duplicates lines per node to count each job for each node where it runs
-    df = df.explode("nodes")
-
-    # parse group_by_node
-    if isinstance(group_by_node, bool):
-        group_by_node = list(df["cluster_name"].unique()) if group_by_node else ()
-
-    # If cluster not in group_by_node,
-    # then we must count jobs for the entire cluster, not per node.
-    # To simplify the code, let's just define 1 common node for all cluster jobs
-    cluster_node_name = "(all)"
-    df.loc[~df["cluster_name"].isin(group_by_node), "nodes"] = cluster_node_name
-
-    # Add a column to ease job count
-    df.loc[:, "task_"] = 1
-
-    # Generate Prometheus context for each Prometheus stat we want to check.
-    prom_contexts = [PrometheusStatInfo(name=prom_col) for prom_col in prometheus_stats]
-
-    # Add columns to check if job has prometheus stats
+    # Compute mean/stddev/threshold for each stat across all groups. Mirror the
+    # Pandas behavior: `Series.std()` returns NaN on a single sample, which makes
+    # `max(0.0, NaN)` collapse to 0.0 — no row triggers an alert for that stat.
     for prom in prom_contexts:
-        # NB: Use DataFrame.reindex() to add column with NaN values if missing:
-        # (2024/09/26) https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.reindex.html
-        df.loc[:, prom.col_has] = ~(df.reindex(columns=[prom.name])[prom.name].isnull())
-
-    # Group per timestamp per cluster per node, and count jobs and prometheus stats.
-    # If "cluster_names" are given, use only jobs in these clusters.
-    f_stats = (
-        df[df["cluster_name"].isin(cluster_names)]
-        .groupby(["timestamp", "cluster_name", "nodes"])[
-            [prom_info.col_has for prom_info in prom_contexts] + ["task_"]
-        ]
-        .sum()
-    )
-
-    # Compute ratio of job with Prometheus stat for each group,
-    # then compute threshold for each Prometheus stat.
-    for prom in prom_contexts:
-        f_stats[prom.col_ratio] = f_stats[prom.col_has] / f_stats["task_"]
-        prom.avg = f_stats[prom.col_ratio].mean()
-        prom.stddev = f_stats[prom.col_ratio].std()
+        stat_ratios = [r[4][prom.name] for r in rows]
+        prom.avg = statistics.mean(stat_ratios)
+        prom.stddev = (
+            statistics.stdev(stat_ratios) if len(stat_ratios) > 1 else math.nan
+        )
         prom.threshold = max(0.0, prom.avg - nb_stddev * prom.stddev)
 
     # Parse min_jobs_per_group
@@ -178,15 +256,10 @@ def check_prometheus_stats_occurrences(
         min_jobs_per_group = {}
     assert isinstance(min_jobs_per_group, dict)
 
-    ok = True
+    cluster_node_name = "(all)"
     job_type = "GPU" if with_gres_gpu else "CPU"
-
-    # Now we can check
-    clusters_seen: set[str] = set()
-    for row in f_stats.itertuples():
-        timestamp, cluster_name, node = row.Index  # type: ignore[misc, assignment, str-unpack]
-        clusters_seen.add(cluster_name)
-        nb_jobs = cast(int, row.task_)
+    ok = True
+    for timestamp, cluster_name, node, nb_jobs, ratios in rows:
         if nb_jobs >= min_jobs_per_group.get(cluster_name, default_min_jobs):
             grouping_type = "cluster" if node == cluster_node_name else "node / cluster"
             grouping_name = (
@@ -195,8 +268,8 @@ def check_prometheus_stats_occurrences(
                 else f"[{cluster_name}][{node}]"
             )
             for prom in prom_contexts:
-                local_stat = getattr(row, prom.col_has) / nb_jobs
-                if local_stat < prom.threshold:
+                local_stat = ratios[prom.name]
+                if local_stat < prom.threshold:  # ty:ignore[unsupported-operator]
                     logger.error(
                         f"[{timestamp}]{grouping_name} insufficient Prometheus data for {prom.name}: "
                         f"{round(local_stat * 100, 2)} % of {job_type} jobs / {grouping_type} / time unit; "

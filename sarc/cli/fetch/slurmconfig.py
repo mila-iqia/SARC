@@ -6,7 +6,6 @@ from simple_parsing import field
 
 from sarc.cache import Cache
 from sarc.config import UTC, ClusterConfig, config
-from sarc.core.models.validators import datetime_utc
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +31,7 @@ class FetchSlurmConfig:
         return 0
 
 
-def _save_into_cache(cache: Cache, content: str, date: datetime_utc) -> bool:
+def _save_into_cache(cache: Cache, content: str, date: datetime) -> bool:
     """Save slurm.conf file content into cache at given date."""
 
     # We won't save content if identical to latest cached content.

@@ -1,21 +1,20 @@
-from __future__ import annotations
-
 import functools
 import os
 import zoneinfo
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field, fields
+from datetime import date
 from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Literal, cast, overload
 
 import gifnoc
-from bson import CodecOptions, UuidRepresentation
 from easy_oauth import OAuthManager
 from hostlist import expand_hostlist
 from paramiko import PKey
 from serieux.features.encrypt import Secret
+from sqlmodel import Session
 
 from .alerts.common import HealthMonitorConfig
 
@@ -24,7 +23,7 @@ type JSON = list[JSON] | dict[str, JSON] | int | str | float | bool | None
 if TYPE_CHECKING:
     from fabric import Connection
     from prometheus_api_client.prometheus_connect import PrometheusConnect
-    from pymongo.database import Database
+    from sqlalchemy import Engine
 
 
 UTC = zoneinfo.ZoneInfo("UTC")
@@ -78,7 +77,7 @@ class ClusterConfig:
     ignore_tz_utc: bool = False
     accounts: list[str] | None = None
     diskusage: list[DiskUsageConfig] | None = None
-    start_date: str = "2022-04-01"
+    start_date: date = date(2022, 4, 1)
     slurm_conf_host_path: Path = Path("/etc/slurm/slurm.conf")
 
     # Tell if billing (in job's requested|allocated field) is number of GPUs (True) or RGU (False)
@@ -189,29 +188,30 @@ class ClusterConfig:
 
 
 @dataclass
-class MongoConfig:
-    connection_string: str
-    database_name: str
+class DbConfig:
+    host: str
+    name: str
     auto_upgrade: bool = True
 
     @cached_property
-    def database_instance(self) -> Database:
-        from pymongo import MongoClient
+    def engine(self) -> Engine:
+        from sqlmodel import create_engine
 
-        client: MongoClient = MongoClient(self.connection_string)
-        db = client.get_database(
-            self.database_name,
-            codec_options=CodecOptions(
-                uuid_representation=UuidRepresentation.STANDARD, tz_aware=True
-            ),
+        # TODO enable ssl for connection
+        engine = create_engine(
+            f"postgresql+psycopg://{self.host}/{self.name}",
+            connect_args={"options": "-c timezone=utc"},
         )
 
         if self.auto_upgrade:
-            from sarc.core.db_init import db_upgrade
+            from sarc.db import db_upgrade
 
-            db_upgrade(db)
+            db_upgrade(engine)
 
-        return db
+        return engine
+
+    def session(self) -> Session:
+        return Session(self.engine)
 
 
 @dataclass
@@ -245,29 +245,19 @@ class UserScrapingConfig:
 
 
 @dataclass
-class ApiConfig:
+class ServerConfig:
     """
-    Configuration for Python REST API client
-
-    Used if client is initialized without parameters.
-    Currently necessary for high-level Python client functions
-    such as `load_job_series()`, which internally initialize
-    a client without parameters.
+    Configuration for Python REST server
     """
 
-    url: str | None = None  # REST API URL (including port)
-    timeout: int = 120
-    # Default pagination size
-    per_page: int = 100
-    # Maximum page size
-    max_page_size: int = 5000
+    # Authentication manager
     auth: OAuthManager | None = None
 
 
 @dataclass
 class ClientConfig:
-    mongo: MongoConfig
-    api: ApiConfig = field(default_factory=ApiConfig)
+    db: DbConfig
+    server: ServerConfig = field(default_factory=ServerConfig)
     cache: Path | None = None
     loki: LokiConfig | None = None
     tempo: TempoConfig | None = None

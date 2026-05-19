@@ -1,0 +1,86 @@
+from types import SimpleNamespace
+
+from iguane.fom import RAWDATA, fom_ugr
+from sqlalchemy import Engine
+from sqlmodel import Session, select, text
+
+from sarc.config import config
+
+from . import cluster
+from .sqlmodel import SQLModel
+
+
+def db_upgrade(engine: Engine):
+    # We need to import those to register the tables
+    from . import (  # noqa: F401
+        allocation,
+        cluster,
+        diskusage,
+        healthcheck,
+        job,
+        job_series,
+        support,
+        users,
+    )
+
+    with engine.connect() as conn:
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS btree_gist"))
+
+        # This will work for now, but we should use proper migrations eventually
+        tables = [
+            t
+            for n, t in SQLModel.metadata.tables.items()
+            if n != job_series.JobSeriesDB.__tablename__
+        ]
+        SQLModel.metadata.create_all(conn, tables, checkfirst=True)
+
+        compiled_query = job_series.JobSeriesDB.__sql_view__.compile(
+            dialect=engine.dialect, compile_kwargs={"literal_binds": True}
+        )
+
+        # This is kinda bad for performance, so we will have to take care of it with migrations
+        conn.execute(
+            text(
+                f"CREATE OR REPLACE VIEW {job_series.JobSeriesDB.__tablename__} AS {compiled_query};"
+            )
+        )
+
+        conn.commit()
+
+        with Session(conn) as sess:
+            insert_clusters(sess)
+            insert_rgu(sess)
+            sess.commit()
+
+
+def insert_clusters(sess: Session) -> None:
+    # populate the db with default starting dates for each cluster
+    clusters = config("scraping").clusters
+    for cluster_name, clust in clusters.items():
+        db_cluster = sess.exec(
+            select(cluster.SlurmClusterDB).where(
+                cluster.SlurmClusterDB.name == cluster_name
+            )
+        ).one_or_none()
+        if db_cluster is None:
+            db_cluster = cluster.SlurmClusterDB(
+                name=cluster_name,
+                domain=clust.user_domain,
+                start_date=clust.start_date,
+                billing_is_gpu=clust.billing_is_gpu,
+            )
+            sess.add(db_cluster)
+        else:
+            db_cluster.domain = clust.user_domain
+            db_cluster.start_date = clust.start_date
+            db_cluster.billing_is_gpu = clust.billing_is_gpu
+        sess.flush()
+
+
+def insert_rgu(sess: Session) -> None:
+    # populate the db with initial rgu data from iguane
+    from .support import GpuRguDB
+
+    args = SimpleNamespace(fom_version="1.0", custom_weights=None, norm=False)
+    for key in RAWDATA.keys():
+        sess.merge(GpuRguDB(name=key, rgu=fom_ugr(key, args=args)))

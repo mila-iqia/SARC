@@ -12,15 +12,15 @@ def test_read_write_size():
     db_size_bytes = _compute_db_disk_usage()
     print("db_size_bytes", db_size_bytes)
     assert db_size_bytes > 0
-    assert db_size_bytes <= 1_000_000
+    assert db_size_bytes <= 20_000_000
 
 
 @pytest.mark.parametrize(
     "check_name,expected",
     [
-        ("db_size_check_0", "[mongodb] size exceeded: max 0.00 B"),
-        ("db_size_check_10k", "[mongodb] size exceeded: max 9.77 KiB (10000 B)"),
-        ("db_size_check_1m", ""),
+        ("db_size_check_0", "[sarc-db] size exceeded: max 0.00 B"),
+        ("db_size_check_10k", "[sarc-db] size exceeded: max 9.77 KiB (10000 B)"),
+        ("db_size_check_20m", ""),
     ],
 )
 @pytest.mark.usefixtures("health_config", "read_write_db")
@@ -29,10 +29,10 @@ def test_health_check_disk_space_db(caplog, cli_main, check_name, expected):
         assert cli_main(["health", "run", "--check", check_name]) == 0
         assert check_name in caplog.text
         if expected:
-            assert re.search(r"ERROR +.+\[mongodb] size exceeded", caplog.text)
+            assert re.search(r"ERROR +.+\[sarc-db] size exceeded", caplog.text)
             assert expected in caplog.text
         else:
-            assert not re.search(r"ERROR +.+\[mongodb] size exceeded", caplog.text)
+            assert not re.search(r"ERROR +.+\[sarc-db] size exceeded", caplog.text)
 
 
 @pytest.mark.parametrize(

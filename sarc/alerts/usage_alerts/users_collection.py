@@ -1,33 +1,11 @@
 import logging
 from dataclasses import dataclass
 
+import sqlmodel
+
 from sarc.alerts.common import CheckResult, HealthCheck
 
 logger = logging.getLogger(__name__)
-
-
-def _find_duplicates(collection, field: str) -> list[dict]:
-    """Find documents sharing the same value for given field.
-
-    Returns a list of dicts with keys: _id (the duplicated value),
-    count, and uuids (list of UUIDs sharing that value).
-    """
-    return list(
-        collection.aggregate(
-            [
-                {"$match": {field: {"$ne": ""}}},
-                {
-                    "$group": {
-                        "_id": f"${field}",
-                        "count": {"$sum": 1},
-                        "uuids": {"$push": "$uuid"},
-                    }
-                },
-                {"$match": {"count": {"$gt": 1}}},
-                {"$sort": {"_id": 1}},
-            ]
-        )
-    )
 
 
 @dataclass
@@ -40,24 +18,45 @@ class UsersCollectionCheck(HealthCheck):
         email or display_name.
         """
 
-        from sarc.users.db import get_user_collection
+        from sarc.config import config
+        from sarc.db.users import UserDB
 
-        collection = get_user_collection().get_collection()
-
-        email_duplicates = _find_duplicates(collection, "email")
-        name_duplicates = _find_duplicates(collection, "display_name")
-
-        for dup in email_duplicates:
-            logger.error(
-                f"Duplicate email '{dup['_id']}' "
-                f"shared by {dup['count']} users: {dup['uuids']}"
+        has_duplicates = False
+        with config().db.session() as sess:
+            email_duplicates = (
+                sqlmodel.select(
+                    UserDB.email,
+                    sqlmodel.func.count(sqlmodel.col(UserDB.email)),
+                    sqlmodel.func.array_agg(UserDB.id),
+                )
+                .where(UserDB.email != "")
+                .group_by(UserDB.email)
+                .having(sqlmodel.func.count(sqlmodel.col(UserDB.email)) > 1)
+                .order_by(UserDB.email)
             )
-        for dup in name_duplicates:
-            logger.error(
-                f"Duplicate display_name '{dup['_id']}' "
-                f"shared by {dup['count']} users: {dup['uuids']}"
-            )
+            for email, count, user_indices in sess.exec(email_duplicates):
+                logger.error(
+                    f"Duplicate email '{email}' "
+                    f"shared by {count} users: {sorted(user_indices)}"
+                )
+                has_duplicates = True
 
-        if email_duplicates or name_duplicates:
-            return self.fail()
-        return self.ok()
+            name_duplicates = (
+                sqlmodel.select(
+                    UserDB.display_name,
+                    sqlmodel.func.count(sqlmodel.col(UserDB.display_name)),
+                    sqlmodel.func.array_agg(UserDB.id),
+                )
+                .where(UserDB.display_name != "")
+                .group_by(UserDB.display_name)
+                .having(sqlmodel.func.count(sqlmodel.col(UserDB.display_name)) > 1)
+                .order_by(UserDB.display_name)
+            )
+            for display_name, count, user_indices in sess.exec(name_duplicates):
+                logger.error(
+                    f"Duplicate display_name '{display_name}' "
+                    f"shared by {count} users: {sorted(user_indices)}"
+                )
+                has_duplicates = True
+
+        return self.fail() if has_duplicates else self.ok()

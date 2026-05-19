@@ -27,7 +27,7 @@ class Fetch:
             "allocations": FetchAllocations,
             "jobs": FetchJobs,
             "prometheus": FetchPrometheus,
-        }
+        }  # ty:ignore[invalid-argument-type]
     )
 
     def execute(self) -> int:

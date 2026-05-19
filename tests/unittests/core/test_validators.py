@@ -1,8 +1,9 @@
 from datetime import UTC, datetime
 
 import pytest
+from pydantic import ValidationError
 
-from sarc.core.models.validators import DateMatchError, DateOverlapError, ValidField
+from sarc.validators import DateMatchError, DateOverlapError, ValidField
 
 
 class TestValidField:
@@ -21,7 +22,7 @@ class TestValidField:
         field = ValidField[str]()
         field.insert("test_value")
 
-        # Should be valid for any date between START_TIME and END_TIME
+        # Should be valid for any date
         test_date = datetime(2023, 1, 1, tzinfo=UTC)
         assert field.get_value(test_date) == "test_value"
         assert field.get_value() == "test_value"  # Current time
@@ -162,7 +163,7 @@ class TestValidField:
         field.insert("new_value", new_start)
 
         # Current value should now end at new_start
-        assert field.values[1].valid_end == new_start
+        assert field.values[1].valid.upper == new_start
         assert field.get_value(datetime(2023, 6, 1, tzinfo=UTC)) == "current_value"
         assert field.get_value(datetime(2024, 6, 1, tzinfo=UTC)) == "new_value"
 
@@ -297,7 +298,7 @@ class TestValidField:
         start = datetime(2023, 6, 1, tzinfo=UTC)
         end = datetime(2023, 1, 1, tzinfo=UTC)  # Before start
 
-        with pytest.raises(AssertionError):
+        with pytest.raises(ValidationError):
             field.insert("value", start, end)
 
     def test_complex_merge(self):
@@ -412,8 +413,8 @@ class TestValidField:
 
         assert len(field.values) == 2
         assert field.values[0].value == "value2"
-        assert field.values[0].valid_start == datetime(2023, 7, 1, tzinfo=UTC)
-        assert field.values[0].valid_end == datetime(2023, 9, 1, tzinfo=UTC)
+        assert field.values[0].valid.lower == datetime(2023, 7, 1, tzinfo=UTC)
+        assert field.values[0].valid.upper == datetime(2023, 9, 1, tzinfo=UTC)
 
     def test_recursive_merge_failure_with_restore(self):
         """Test recursive merge that fails and restores the removed tag."""
@@ -519,7 +520,7 @@ class TestValidField:
 
         # Check that value2 was clipped at the start
         assert field1.values[0].value == "value2"
-        assert field1.values[0].valid_start == datetime(2023, 6, 30, tzinfo=UTC)
+        assert field1.values[0].valid.lower == datetime(2023, 6, 30, tzinfo=UTC)
 
     def test_merge_with_truncate_clips_end(self):
         """Test merge with truncate=True clips overlapping values at end."""
@@ -551,7 +552,7 @@ class TestValidField:
 
         # Check that value2 was clipped at the end
         assert field1.values[1].value == "value2"
-        assert field1.values[1].valid_end == datetime(2023, 7, 1, tzinfo=UTC)
+        assert field1.values[1].valid.upper == datetime(2023, 7, 1, tzinfo=UTC)
 
     def test_merge_with_truncate_splits_overlapping_value(self):
         """Test merge with truncate=True splits a value that fully overlaps existing one."""
@@ -583,8 +584,8 @@ class TestValidField:
         assert field1.get_value(datetime(2023, 10, 1, tzinfo=UTC)) == "value2"
 
         # One part should end at Apr 1, other should start at Aug 31
-        assert field1.values[2].valid_end == datetime(2023, 4, 1, tzinfo=UTC)
-        assert field1.values[0].valid_start == datetime(2023, 8, 31, tzinfo=UTC)
+        assert field1.values[2].valid.upper == datetime(2023, 4, 1, tzinfo=UTC)
+        assert field1.values[0].valid.lower == datetime(2023, 8, 31, tzinfo=UTC)
 
     def test_merge_with_truncate_completely_overlapped_value_dropped(self):
         """Test that a completely overlapped value gets dropped when truncated."""

@@ -1,41 +1,44 @@
+import operator
+from collections.abc import Generator
 from dataclasses import dataclass
-from datetime import datetime
-from typing import Annotated, Any
+from datetime import datetime, timedelta
+from functools import reduce
+from typing import Annotated
 
 from easy_oauth.cap import Capability
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from pydantic import UUID4, AfterValidator, BaseModel
-from pydantic_mongo import PydanticObjectId
+from pydantic import AfterValidator, BaseModel, Field
 from serieux import deserialize
+from sqlalchemy.dialects.postgresql import Range
+from sqlalchemy.orm import Mapped
+from sqlmodel import Session, and_, col, func, or_, select
+from sqlmodel.sql.expression import SelectOfScalar
 
-from sarc.alerts.healthcheck_state import (
-    HealthCheckState,
-    get_healthcheck_state_collection,
-)
-from sarc.client import get_rgus
-from sarc.client.job import (
-    SlurmJob,
-    SlurmState,
-    _jobs_collection,
-    get_available_clusters,
-)
 from sarc.config import UTC, Config, config
-from sarc.core.models import validators
-from sarc.core.models.api import SlurmJobList, UserList
-from sarc.core.models.users import MemberType, UserData
-from sarc.users.db import UserDB, get_user_collection
+from sarc.db.cluster import SlurmClusterDB, get_available_clusters
+from sarc.db.healthcheck import HealthCheckStateDB
+from sarc.db.job import SlurmJobDB, SlurmState
+from sarc.db.job_series import JobSeriesDB
+from sarc.db.support import GpuRguDB
+from sarc.db.users import (
+    MatchingID,
+    MemberType,
+    MemberTypeDB,
+    SupervisorsDB,
+    SupervisorsHelper,
+    UserDB,
+)
+from sarc.models.api import JobSeriesList, SlurmJob, SlurmJobList, User, UserList
+from sarc.models.cluster import SlurmCluster
+from sarc.models.healthcheck_state import HealthCheckState
+from sarc.models.job import Statistics
+from sarc.models.series import JobSeries
 
 
 def _ensure_datetime_utc(v: datetime) -> datetime:
     """
     Convert a datetime object to UTC timezone.
     Raise an exception if date is naive.
-
-    NB: MongoDB and REST client high-level functions (count_jobs, get_jobs, get_job)
-    both interpret naive datetimes as in local timezone.
-    But, here in server side, if a user directly sends a naive datetime, we cannot decide
-    if we must interpret as in either server local timezone, or user local timezone.
-    So, by default, we reject naive dates.
     """
     if v.tzinfo is None:
         raise ValueError(
@@ -49,18 +52,23 @@ datetime_api = Annotated[datetime, AfterValidator(_ensure_datetime_utc)]
 router = APIRouter(prefix="/v0")
 
 
-def config_dep():
+def config_dep() -> Config:
     # We don't use Depends(config) directly because then the 'mode' argument to
     # config would be added to the API signature, and we don't want that
-    return config()
+    return config("scraping")
+
+
+def session_dep() -> Generator[Session]:
+    with config().db.session() as sess:
+        yield sess
 
 
 def hascap(cap):
     async def check(request: Request, cfg: Config = Depends(config_dep)):
-        if not cfg.api.auth:
+        if not cfg.server.auth:
             yield "__admin__"
         else:
-            async for name in cfg.api.auth.get_email_capability(cap)(request):
+            async for name in cfg.server.auth.get_email_capability(cap)(request):
                 yield name
 
     return check
@@ -79,7 +87,7 @@ class Requestor:
 def is_admin(
     user: Annotated[str, Depends(can_query)], cfg: Config = Depends(config_dep)
 ) -> bool:
-    auth = cfg.api.auth
+    auth = cfg.server.auth
     if not auth:
         return True
     admin: Capability = deserialize(auth.capabilities.captype, "admin")
@@ -91,87 +99,126 @@ def require_admin(admin: bool = Depends(is_admin)):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
 
 
-def requestor(email: str = Depends(can_query), admin: bool = Depends(is_admin)):
-    userdb = get_user_collection().find_one_by({"matching_ids.mila_ldap": email})
+def requestor(
+    email: str = Depends(can_query),
+    admin: bool = Depends(is_admin),
+    sess: Session = Depends(session_dep),
+):
+    userdb = sess.exec(
+        select(UserDB)
+        .join(MatchingID)
+        .where(MatchingID.plugin_name == "mila_ldap", MatchingID.match_id == email)
+    ).one_or_none()
     if userdb is None and not admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
     return Requestor(email=email, user=userdb, is_admin=admin)
 
 
-def validate_cluster(cluster: str | None):
-    cluster_names = list(cl.cluster_name for cl in get_available_clusters())
+def validate_cluster(sess: Session, cluster: str | None):
+    cluster_names = sess.exec(select(SlurmClusterDB.name)).all()
     if cluster is not None and cluster not in cluster_names:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=f"No such cluster '{cluster}'"
         )
 
 
-def constrain_page_parameters(cfg, page, per_page):
-    if per_page is None:
-        per_page = cfg.api.per_page
-    if page < 1:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Page must be >= 1"
-        )
-    if per_page < 1:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Page size must be >= 1"
-        )
-    if per_page > cfg.api.max_page_size:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Page size must be <= {cfg.api.max_page_size}",
-        )
-    return per_page
+class ListOptions(BaseModel):
+    limit: int = Field(default=100, ge=1, le=100)
+    cursor: int | str | None = None
+
+    def add_list_options[T](
+        self,
+        query: SelectOfScalar[T],
+        id_col: Mapped[int],
+        time_col: Mapped[datetime] | None,
+    ) -> SelectOfScalar[T]:
+        query = query.limit(self.limit)
+        if time_col:
+            query = query.order_by(time_col.desc())
+        query = query.order_by(id_col)
+        if isinstance(self.cursor, int):
+            query = query.offset(self.cursor)
+        elif self.cursor:
+            if time_col:
+                id_val, _, time_val = self.cursor.partition(";")
+                id_val = int(id_val)
+                time_val = datetime.fromisoformat(time_val)
+                query = query.where(
+                    or_(
+                        time_col < time_val, and_(time_col == time_val, id_col > id_val)
+                    )
+                )
+            else:
+                query = query.where(id_col > int(self.cursor))
+        return query
+
+
+def list_options(limit: int = 100, cursor: int | str | None = None) -> ListOptions:
+    return ListOptions(limit=limit, cursor=cursor)
+
+
+ListOptionsType = Annotated[ListOptions, Depends(list_options)]
 
 
 class JobQuery(BaseModel):
-    cluster: str | None = None
+    cluster_name: str | None = None
     # job_id supports None, an integer, a list of integers, or an empty list.
     job_id: list[int] | None = None
     job_state: SlurmState | None = None
-    username: str | None = None
+    email: str | None = None
+    sarc_user_id: int | None = None
+    cluster_user: str | None = None
     start: datetime_api | None = None
     end: datetime_api | None = None
     requestor: Requestor
 
-    def get_query(self) -> dict[str, Any]:
+    def get_query[T: SelectOfScalar](self, query: T) -> T:
         if not self.requestor.is_admin:
             # TODO: implement query for general users
             raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED)
 
-        query: dict[str, Any] = {}
-        if self.cluster is not None:
-            query["cluster_name"] = self.cluster
+        if self.cluster_name is not None:
+            query = query.join(SlurmClusterDB).where(
+                SlurmClusterDB.name == self.cluster_name
+            )
         if self.job_id is not None:
             if len(self.job_id) == 1:
-                query["job_id"] = self.job_id[0]
+                query = query.where(SlurmJobDB.job_id == self.job_id[0])
             else:
-                query["job_id"] = {"$in": self.job_id}
+                query = query.where(col(SlurmJobDB.job_id).in_(self.job_id))
         if self.job_state is not None:
-            query["job_state"] = self.job_state
-        if self.username is not None:
-            query["user"] = self.username
+            query = query.where(SlurmJobDB.job_state == self.job_state)
+        if self.cluster_user is not None:
+            query = query.where(SlurmJobDB.cluster_user == self.cluster_user)
+        if self.sarc_user_id is not None:
+            query = query.where(SlurmJobDB.sarc_user_id == self.sarc_user_id)
+        if self.email is not None:
+            query = query.where(
+                SlurmJobDB.sarc_user_id == UserDB.id, UserDB.email == self.email
+            )
         if self.end is not None:
-            query["submit_time"] = {"$lt": self.end}
+            query = query.where(col(SlurmJobDB.submit_time) < self.end)
         if self.start is not None:
-            query = {
-                "$or": [
-                    {**query, "end_time": None},
-                    {**query, "end_time": {"$gt": self.start}},
-                ]
-            }
+            query = query.where(
+                or_(
+                    SlurmJobDB.end_time == None,  # noqa: E711
+                    col(SlurmJobDB.end_time) > self.start,
+                )
+            )
         return query
 
 
 def job_query_params(
-    cluster: str | None = None,
+    cluster_name: str | None = None,
     job_id: Annotated[list[str] | None, Query()] = None,
     job_state: SlurmState | None = None,
-    username: str | None = None,
+    email: str | None = None,
+    sarc_user_id: int | None = None,
+    cluster_user: str | None = None,
     start: datetime_api | None = None,
     end: datetime_api | None = None,
     requestor: Requestor = Depends(requestor),
+    sess: Session = Depends(session_dep),
 ) -> JobQuery:
     """
     Annotation function for JobQueryType below.
@@ -181,7 +228,7 @@ def job_query_params(
     We use `list[str]` to support empty lists (sent as `job_id=`).
     We then convert to `list[int]` to match `JobQuery` model.
     """
-    validate_cluster(cluster)
+    validate_cluster(sess, cluster_name)
 
     job_id_ints = None
     if job_id is not None:
@@ -194,10 +241,12 @@ def job_query_params(
             )
 
     return JobQuery(
-        cluster=cluster,
+        cluster_name=cluster_name,
         job_id=job_id_ints,
         job_state=job_state,
-        username=username,
+        email=email,
+        sarc_user_id=sarc_user_id,
+        cluster_user=cluster_user,
         start=start,
         end=end,
         requestor=requestor,
@@ -207,220 +256,349 @@ def job_query_params(
 JobQueryType = Annotated[JobQuery, Depends(job_query_params)]
 
 
+class JobSeriesQuery(BaseModel):
+    cluster_name: str | None = None
+    job_id: list[int] | None = None
+    job_state: SlurmState | None = None
+    email: str | None = None
+    sarc_user_id: int | None = None
+    cluster_user: str | None = None
+    start: datetime_api | None = None
+    end: datetime_api | None = None
+    requestor: Requestor
+
+    def apply_filters[T: SelectOfScalar](self, query: T) -> T:
+        if not self.requestor.is_admin:
+            raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED)
+
+        if self.cluster_name is not None:
+            query = query.where(JobSeriesDB.cluster_name == self.cluster_name)
+        if self.job_id is not None:
+            if len(self.job_id) == 1:
+                query = query.where(JobSeriesDB.job_id == self.job_id[0])
+            else:
+                query = query.where(col(JobSeriesDB.job_id).in_(self.job_id))
+        if self.job_state is not None:
+            query = query.where(JobSeriesDB.job_state == self.job_state)
+        if self.cluster_user is not None:
+            query = query.where(JobSeriesDB.cluster_user == self.cluster_user)
+        if self.sarc_user_id is not None:
+            query = query.where(JobSeriesDB.sarc_user_id == self.sarc_user_id)
+        if self.email is not None:
+            query = query.where(JobSeriesDB.email == self.email)
+        if self.end is not None:
+            query = query.where(col(JobSeriesDB.submit_time) < self.end)
+        if self.start is not None:
+            query = query.where(
+                or_(
+                    JobSeriesDB.end_time == None,  # noqa: E711
+                    col(JobSeriesDB.end_time) > self.start,
+                )
+            )
+        return query
+
+
+def job_series_query_params(
+    cluster_name: str | None = None,
+    job_id: Annotated[list[str] | None, Query()] = None,
+    job_state: SlurmState | None = None,
+    email: str | None = None,
+    sarc_user_id: int | None = None,
+    cluster_user: str | None = None,
+    start: datetime_api | None = None,
+    end: datetime_api | None = None,
+    requestor: Requestor = Depends(requestor),
+    sess: Session = Depends(session_dep),
+) -> JobSeriesQuery:
+    validate_cluster(sess, cluster_name)
+
+    job_id_ints = None
+    if job_id is not None:
+        try:
+            job_id_ints = [int(jid) for jid in job_id if jid]
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="job_id must be a list of integers",
+            )
+
+    return JobSeriesQuery(
+        cluster_name=cluster_name,
+        job_id=job_id_ints,
+        job_state=job_state,
+        email=email,
+        sarc_user_id=sarc_user_id,
+        cluster_user=cluster_user,
+        start=start,
+        end=end,
+        requestor=requestor,
+    )
+
+
+JobSeriesQueryType = Annotated[JobSeriesQuery, Depends(job_series_query_params)]
+
+
+def _series_convert(row) -> JobSeries:
+    row_dict = dict(row._mapping)
+    valid = JobSeries.__dataclass_fields__.keys()
+    return JobSeries(**{k: v for k, v in row_dict.items() if k in valid})
+
+
 class UserQuery(BaseModel):
     display_name: str | None = None
     email: str | None = None
 
+    start: datetime_api | None = None
+    end: datetime_api | None = None
+
     member_type: MemberType | None = None
-    member_start: datetime_api | None = None
-    member_end: datetime_api | None = None
-
-    supervisor: UUID4 | None = None
-    supervisor_start: datetime_api | None = None
-    supervisor_end: datetime_api | None = None
-
-    co_supervisor: UUID4 | None = None
-    co_supervisor_start: datetime_api | None = None
-    co_supervisor_end: datetime_api | None = None
+    supervisor: int | None = None
 
     requestor: Requestor = Depends(requestor)
 
-    def _get_valid_tag_query(
-        self,
-        value_field: str,
-        start_field: str,
-        end_field: str,
-        field: str | None = None,
-    ) -> dict[str, Any]:
-        value = getattr(self, value_field)
-        start = getattr(self, start_field)
-        end = getattr(self, end_field)
-        if value is not None:
-            now = datetime.now(UTC)
-            if start is None and end is None:
-                # Look for tag matching current time [now, now]
-                start = now
-                end = now
-            elif end is None:
-                # Look for tags that overlap [start, +inf)
-                end = validators.END_TIME
-            elif start is None:
-                # Look for tags that overlap (-inf, end]
-                start = validators.START_TIME
-            if start > end:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Expected {start_field} <= {end_field}",
-                )
-            field = field or value_field
-            return {
-                f"{field}.values": {
-                    "$elemMatch": {
-                        "value": value,
-                        "valid_start": {"$lte": end},
-                        "valid_end": {"$gte": start},
-                    }
-                }
-            }
-        return {}
+    def get_query[T: SelectOfScalar](self, query: T) -> T:
+        start = self.start
+        end = self.end
+        if start is None and end is None:
+            start = datetime.now(tz=UTC)
+            end = start + timedelta(microseconds=1)
 
-    def get_query(self) -> dict[str, Any]:
         if not self.requestor.is_admin:
             # TODO: implement query for general users
             raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED)
 
-        query: dict[str, Any] = {}
         if self.display_name is not None:
-            query["display_name"] = {"$regex": self.display_name, "$options": "i"}
+            query = query.where(
+                col(UserDB.display_name).ilike(f"%{self.display_name}%")
+            )
         if self.email is not None:
-            query["email"] = self.email
-        query.update(
-            self._get_valid_tag_query("member_type", "member_start", "member_end")
-        )
-        query.update(
-            self._get_valid_tag_query(
-                "supervisor", "supervisor_start", "supervisor_end"
+            query = query.where(UserDB.email == self.email)
+        if self.member_type is not None:
+            query = query.join(MemberTypeDB).where(
+                MemberTypeDB.member_type == self.member_type,
+                MemberTypeDB.valid.overlaps(Range(lower=start, upper=end)),
             )
-        )
-        query.update(
-            self._get_valid_tag_query(
-                "co_supervisor",
-                "co_supervisor_start",
-                "co_supervisor_end",
-                field="co_supervisors",
+        if self.supervisor is not None:
+            query = (
+                query.join(SupervisorsDB, col(SupervisorsDB.user_id) == col(UserDB.id))
+                .join(
+                    SupervisorsHelper,
+                    col(SupervisorsHelper.list_id) == col(SupervisorsDB.id),
+                )
+                .where(
+                    SupervisorsHelper.supervisor == self.supervisor,
+                    SupervisorsDB.valid.overlaps(Range(lower=start, upper=end)),
+                )
             )
-        )
         return query
 
 
 UserQueryType = Annotated[UserQuery, Depends(UserQuery)]
 
 
-@router.get("/job/query", dependencies=[Depends(require_admin)])
-def get_jobs(query_opt: JobQueryType) -> list[PydanticObjectId]:
-    # Requires admin access because /job/id/oid is admin-restricted
-    coll = _jobs_collection()
-    jobs = coll.get_collection().find(query_opt.get_query(), ["_id"])
-    return [j["_id"] for j in jobs]
+def job_convert(doc: SlurmJobDB, extra_fields: set[str]) -> SlurmJob:
+    job = SlurmJob.model_validate(doc.model_dump())
+    for field in extra_fields:
+        match field:
+            case "cluster_name":
+                job.cluster_name = doc.cluster.name
+            case "sarc_user":
+                job.sarc_user = User.model_validate(doc.sarc_user.model_dump())
+            case "statistics":
+                job.statistics = {
+                    k: Statistics.model_validate(v.model_dump())
+                    for k, v in doc.statistics.items()
+                }
+            case unknown:
+                raise HTTPException(
+                    status_code=422, detail=f"Invalid extra_field: '{unknown}'"
+                )
+    return job
 
 
-@router.get("/job/list")
-def list_jobs(
+@router.get("/job/query")
+def query_jobs(
     query_opt: JobQueryType,
-    page: int = 1,
-    per_page: int | None = None,
-    cfg: Config = Depends(config_dep),
+    list_opt: ListOptionsType,
+    extra_fields: str | None = None,
+    sess: Session = Depends(session_dep),
 ) -> SlurmJobList:
-    per_page = constrain_page_parameters(cfg, page, per_page)
-    coll = _jobs_collection()
-    query = query_opt.get_query()
-    total = coll.get_collection().count_documents(query)
+    extra_fields_set = set(extra_fields.split(",")) if extra_fields else set()
+    if query_opt.cluster_name:
+        extra_fields_set.add("cluster_name")
+    if query_opt.sarc_user_id or query_opt.email:
+        extra_fields_set.add("sarc_user")
 
-    cursor = (
-        coll.get_collection()
-        .find(query, allow_disk_use=True)
-        .sort([("submit_time", -1), ("_id", 1)])
-        .skip((page - 1) * per_page)
-        .limit(per_page)
+    query = query_opt.get_query(select(SlurmJobDB))
+    query = list_opt.add_list_options(
+        query,
+        col(SlurmJobDB.id),  # ty:ignore[invalid-argument-type]
+        col(SlurmJobDB.submit_time),
     )
 
-    return SlurmJobList(
-        jobs=[SlurmJob.model_validate(doc) for doc in cursor],
-        page=page,
-        per_page=per_page,
-        total=total,
-    )
+    jobs = [job_convert(doc, extra_fields_set) for doc in sess.exec(query)]
+
+    if len(jobs) < list_opt.limit:
+        # There are no more results (note: limit > 0)
+        cursor = False
+    else:
+        last = jobs[-1]
+        cursor = f"{last.id};{last.submit_time.isoformat()}"
+
+    return SlurmJobList(results=jobs, cursor=cursor)
 
 
 @router.get("/job/count")
-def count_jobs(query_opt: JobQueryType) -> int:
-    coll = _jobs_collection()
-    return coll.get_collection().count_documents(query_opt.get_query())
+def count_jobs(query_opt: JobQueryType, sess: Session = Depends(session_dep)) -> int:
+    return sess.exec(query_opt.get_query(select(func.count(col(SlurmJobDB.id))))).one()
 
 
-@router.get("/job/id/{oid}", dependencies=[Depends(require_admin)])
-def get_job(oid: PydanticObjectId) -> SlurmJob:
-    coll = _jobs_collection()
-    job = coll.find_one_by_id(oid)
+@router.get("/job/id/{id}", dependencies=[Depends(require_admin)])
+def get_job(
+    id: int, extra_fields: str | None = None, sess: Session = Depends(session_dep)
+) -> SlurmJob:
+    job = sess.get(SlurmJobDB, id)
     if job is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Job not found"
         )
-    return job
+    return job_convert(job, set(extra_fields.split(",")) if extra_fields else set())
+
+
+# Format: {extra_field_name: {columns_to_select ...}}
+_EXTRA_FIELDS = {
+    "cluster_name": {"cluster_name"},
+    "sarc_user": {"display_name", "member_type", "email"},
+    "supervisors": {"supervisors"},
+    "statistics": {"statistics"},
+    "rgu": {"gpu_type_rgu", "rgu"},
+}
+
+_SERIES_OPTIONAL_COLS = reduce(operator.or_, _EXTRA_FIELDS.values())
+
+
+@router.get("/job/series")
+def job_series(
+    query_opt: JobSeriesQueryType,
+    list_opt: ListOptionsType,
+    extra_fields: str | None = None,
+    sess: Session = Depends(session_dep),
+) -> JobSeriesList:
+    extra_fields_set = set(extra_fields.split(",")) if extra_fields else set()
+    unknown = extra_fields_set - set(_EXTRA_FIELDS)
+    if unknown:
+        raise HTTPException(
+            status_code=422, detail=f"Invalid extra_field(s): {sorted(unknown)}"
+        )
+
+    # Determine the set of columns to select
+    names = {
+        c.name
+        for c in JobSeriesDB.__table__.columns  # ty:ignore[unresolved-attribute]
+        if c.name not in _SERIES_OPTIONAL_COLS
+    }
+    for extra in extra_fields_set:
+        names |= _EXTRA_FIELDS[extra]
+    cols = [JobSeriesDB.__table__.c[name] for name in names]  # ty:ignore[unresolved-attribute]
+
+    query = select(*cols)
+    query = query_opt.apply_filters(query)
+    query = list_opt.add_list_options(
+        query,
+        col(JobSeriesDB.job_db_id),  # type: ignore[arg-type]
+        col(JobSeriesDB.submit_time),
+    )
+
+    rows = list(sess.exec(query))
+    series = [_series_convert(row) for row in rows]
+
+    if len(series) < list_opt.limit:
+        cursor = False
+    else:
+        last = series[-1]
+        cursor = f"{last.job_db_id};{last.submit_time.isoformat()}"
+
+    return JobSeriesList(results=series, cursor=cursor)
 
 
 @router.get("/cluster/list", dependencies=[Depends(requestor)])
-def get_cluster_names() -> list[str]:
+def get_cluster_names(sess: Session = Depends(session_dep)) -> list[SlurmCluster]:
     """Return the names of available clusters."""
-    return sorted([cl.cluster_name for cl in get_available_clusters()])
+    # TODO: should this return cluster objects instead of just names?
+    return [
+        SlurmCluster.model_validate(cl.model_dump())
+        for cl in get_available_clusters(sess)
+    ]
 
 
 @router.get("/gpu/rgu", dependencies=[Depends(requestor)])
-def get_rgu_value_per_gpu() -> dict[str, float]:
+def get_rgu_value_per_gpu(sess: Session = Depends(session_dep)) -> dict[str, float]:
     """Return the mapping GPU->RGU."""
-    return get_rgus()
+    res: dict[str, float] = {}
+    for entry in sess.exec(select(GpuRguDB)):
+        res[entry.name] = entry.rgu
+    return res
 
 
-@router.get("/user/query", dependencies=[Depends(require_admin)])
-def query_users(query_opt: UserQueryType) -> list[UUID4]:
-    """Search users. Return user UUIDs."""
-    coll = get_user_collection()
-    users = coll.get_collection().find(query_opt.get_query(), ["uuid"])
-    return [user["uuid"] for user in users]
+@router.post("/gpu/rgu", dependencies=[Depends(require_admin)])
+def update_rgu(update: dict[str, float], sess: Session = Depends(session_dep)) -> bool:
+    for name, val in update.items():
+        sess.merge(GpuRguDB(name=name, rgu=val))
+    sess.commit()
+    return True
 
 
-@router.get("/user/list")
-def list_users(
+@router.get("/user/query")
+def query_users(
     query_opt: UserQueryType,
-    page: int = 1,
-    per_page: int | None = None,
-    cfg: Config = Depends(config_dep),
+    list_opt: ListOptionsType,
+    sess: Session = Depends(session_dep),
 ) -> UserList:
-    per_page = constrain_page_parameters(cfg, page, per_page)
-    coll = get_user_collection()
-    query = query_opt.get_query()
-    total = coll.get_collection().count_documents(query)
+    query = query_opt.get_query(select(UserDB))
+    query = list_opt.add_list_options(query, col(UserDB.id), None)  # ty:ignore[invalid-argument-type]
 
-    cursor = (
-        coll.get_collection()
-        .find(query, allow_disk_use=True)
-        .sort([("email", 1), ("uuid", 1)])
-        .skip((page - 1) * per_page)
-        .limit(per_page)
-    )
+    results = list(sess.exec(query))
+    users = [User.model_validate(doc.model_dump()) for doc in results]
 
-    return UserList(
-        users=[UserData.model_validate(doc) for doc in cursor],
-        page=page,
-        per_page=per_page,
-        total=total,
-    )
+    if len(users) < list_opt.limit:
+        # There are no more results (note: limit > 0)
+        cursor = False
+    else:
+        cursor = str(users[-1].id)
+
+    return UserList(results=users, cursor=cursor)
 
 
-@router.get("/user/id/{uuid}", dependencies=[Depends(require_admin)])
-def get_user_by_id(uuid: UUID4) -> UserData:
-    """Get user with given UUID."""
-    user = get_user_collection().find_one_by({"uuid": uuid})
+@router.get("/user/id/{id}", dependencies=[Depends(require_admin)])
+def get_user_by_id(id: int, sess: Session = Depends(session_dep)) -> User:
+    """Get user with given ID."""
+    user = sess.get(UserDB, id)
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
-    return user
+    return User.model_validate(user.model_dump())
 
 
 @router.get("/user/email/{email}", dependencies=[Depends(require_admin)])
-def get_user_by_email(email: str) -> UserData:
+def get_user_by_email(email: str, sess: Session = Depends(session_dep)) -> User:
     """Get user with given email."""
-    user = get_user_collection().find_one_by({"email": email})
+    user = sess.exec(select(UserDB).where(UserDB.email == email)).one_or_none()
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
-    return user
+    return User.model_validate(user.model_dump())
 
 
 @router.get("/health/list")
-def health_list() -> list[HealthCheckState]:
+def health_list(sess: Session = Depends(session_dep)) -> list[HealthCheckState]:
     """Get current health check states (check definition and last result) saved in database."""
-    states = list(get_healthcheck_state_collection().get_states())
-    return states
+    return [
+        HealthCheckState(
+            check=state.check,
+            last_result=state.last_result,
+            last_message=state.last_message,
+        )
+        for state in HealthCheckStateDB.get_states(sess)
+    ]

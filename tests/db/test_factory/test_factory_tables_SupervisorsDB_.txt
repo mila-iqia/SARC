@@ -1,0 +1,42 @@
+Found 4 result(s):
+
+Result #1
+{
+    "user_id": 2,
+    "valid": {
+        "bounds": "[)",
+        "empty": false,
+        "lower": "2018-09-01T00:00:00Z",
+        "upper": "2021-05-01T00:00:00Z"
+    }
+}
+Result #2
+{
+    "user_id": 4,
+    "valid": {
+        "bounds": "()",
+        "empty": false,
+        "lower": null,
+        "upper": null
+    }
+}
+Result #3
+{
+    "user_id": 5,
+    "valid": {
+        "bounds": "[)",
+        "empty": false,
+        "lower": "2022-01-01T00:00:00Z",
+        "upper": "2023-01-01T00:00:00Z"
+    }
+}
+Result #4
+{
+    "user_id": 7,
+    "valid": {
+        "bounds": "[)",
+        "empty": false,
+        "lower": "2022-01-01T00:00:00Z",
+        "upper": "2023-01-01T00:00:00Z"
+    }
+}

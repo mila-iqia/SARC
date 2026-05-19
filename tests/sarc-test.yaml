@@ -17,6 +17,10 @@ sarc:
       prometheus_url: https://fromage-thanos.calcul.ca
       sacct_bin: /opt/software/slurm/bin/sacct
       timezone: Europe/Paris
+      gpus_per_nodes:
+        __DEFAULTS__: {}
+        fg-v[001-024]:
+          v100: NVidia Tesla V100 SXM2
     gerudo:
       user_domain: drac
       accounts:
@@ -33,6 +37,12 @@ sarc:
       prometheus_url: https://gerudo-thanos.calcul.ca
       sacct_bin: /opt/software/slurm/bin/sacct
       timezone: America/Vancouver
+      gpus_per_nodes:
+        __DEFAULTS__: {}
+        gd-p[001-012]:
+          p100: NVidia Tesla P100 SXM2
+        gd-a[001-008]:
+          a40: NVidia A40
     hyrule:
       user_domain: drac
       accounts:
@@ -49,6 +59,10 @@ sarc:
       prometheus_url: https://hyrule-thanos.calcul.ca
       sacct_bin: /opt/software/slurm/bin/sacct
       timezone: America/Vancouver
+      gpus_per_nodes:
+        __DEFAULTS__: {}
+        hy-h[001-016]:
+          h100: NVidia H100 SXM5 80GB
     local:
       user_domain: mila
       accounts: null
@@ -57,6 +71,10 @@ sarc:
       prometheus_url: null
       sacct_bin: /opt/slurm/bin/sacct
       timezone: America/Montreal
+      gpus_per_nodes:
+        __DEFAULTS__:
+          a100: NVidia A100 SXM4 80GB
+        lo-a[001-004]: {}
     mila:
       user_domain: mila
       accounts:
@@ -78,6 +96,12 @@ sarc:
       prometheus_url: https://hyrule-thanos.calcul.ca
       sacct_bin: /opt/software/slurm/bin/sacct
       timezone: America/Vancouver
+      gpus_per_nodes:
+        __DEFAULTS__: {}
+        cn-a[001-032]:
+          a100: NVidia A100 SXM4 80GB
+        cn-r[001-016]:
+          rtx8000: NVidia Quadro RTX 8000
     patate:
       user_domain: drac
       accounts:
@@ -95,6 +119,12 @@ sarc:
       sacct_bin: /opt/software/slurm/bin/sacct
       slurm_conf_host_path: /the/path/to/slurm.conf
       timezone: America/Vancouver
+      gpus_per_nodes:
+        __DEFAULTS__: {}
+        pt-v[001-032]:
+          v100: NVidia Tesla V100 SXM2
+        pt-m[001-004]:
+          mi250x: AMD Instinct MI250X
     raisin:
       user_domain: drac
       accounts: null
@@ -107,22 +137,27 @@ sarc:
         __DEFAULTS__:
           gpu2: THE GPU II
           phantom_gpu: PHANTOM GPU MENACE
+          v100: NVidia Tesla V100 SXM2
+        rn-l[001-008]:
+          l40s: NVidia L40S
     raisin_no_prometheus:
       user_domain: drac
       accounts: null
       gpus_per_nodes:
         cn-c018:
           asupergpu: Nec Plus Plus ULTRA GPU 2000
+          h100: NVidia H100 SXM5 80GB
         cn-c[019-030]:
           asupergpu: Nec Plus ULTRA GPU 2000
+          a100: NVidia A100 SXM4 80GB
       host: raisin_no_prometheus
       private_key: test_key.yaml
       prometheus_url: null
       sacct_bin: /opt/slurm/bin/sacct
       timezone: America/Montreal
-  mongo:
-    connection_string: MUST_OVERRIDE_IN_TESTS:999999
-    database_name: sarc-test
+  db:
+    host: localhost
+    name: "!OVERRIDE!"
     auto_upgrade: false
   mymila:
     tmp_json_path: secrets/tmp_mymila.json
@@ -130,7 +165,7 @@ sarc:
     uri: "https://localhost/loki"
   tempo:
     uri: "https://localhost/tempo"
-  api:
+  server:
     auth:
       client_id: "mock_client_id"
       client_secret: "dHPf4JQhK9VutnlJlcln"

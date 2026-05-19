@@ -1,8 +1,11 @@
 import pytest
+from sqlmodel import select
 
-from sarc.client.job import SlurmJob, get_job
-from sarc.jobs.series import JOB_STATISTICS_METRIC_NAMES, compute_job_statistics
-from tests.functional.jobs.factory import elapsed_time as BASE_ELAPSED_TIME
+# from sarc.client.job import SlurmJob, get_job
+from sarc.db.job import SlurmJobDB
+from sarc.scraping.series import JOB_STATISTICS_METRIC_NAMES, compute_job_statistics
+
+BASE_ELAPSED_TIME = 60 * 60 * 12
 
 
 def generate_point_range(n, min, max):
@@ -17,7 +20,7 @@ def format_fake_timeseries(metric, values, t0, delta):
 
 
 def generate_fake_timeseries(
-    job: SlurmJob, metric=JOB_STATISTICS_METRIC_NAMES, max_points=100
+    job: SlurmJobDB, metric=JOB_STATISTICS_METRIC_NAMES, max_points=100
 ):
     assert job.nodes
 
@@ -34,7 +37,7 @@ def generate_fake_timeseries(
         "slurm_job_sm_occupancy_gpu": (0, 100, {"gpu": 3}),
         "slurm_job_utilization_gpu_memory": (0, 100, {"gpu": 3}),
         "slurm_job_core_usage": (1e9, 1e9 * job.elapsed_time, {"core": 7}),
-        "slurm_job_memory_usage": (0, job.allocated.mem * 1e6, {}),
+        "slurm_job_memory_usage": (0, job.allocated_mem * 1e6, {}),
         "slurm_job_power_gpu": (50_000, 150_000, {}),
     }
 
@@ -49,7 +52,7 @@ def generate_fake_timeseries(
             "instance": job.nodes[0],
             "job": "slurm_jobs",
             "slurmjobid": str(job.job_id),
-            "user": job.user,
+            "user": job.cluster_user,
             **extra,
         }
 
@@ -67,10 +70,12 @@ def generate_fake_timeseries(
 
 
 @pytest.mark.usefixtures("read_only_db")
-def test_compute_job_statistics(data_regression):
-    job = get_job(job_id=1)
+def test_compute_job_statistics(data_regression, read_only_db):
+    job = read_only_db.exec(
+        select(SlurmJobDB).where(SlurmJobDB.job_id == 1)
+    ).one_or_none()
     assert job is not None
 
     statistics = compute_job_statistics(job, generate_fake_timeseries(job))
 
-    data_regression.check(statistics.model_dump())
+    data_regression.check({k: s.model_dump() for k, s in statistics.items()})

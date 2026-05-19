@@ -5,8 +5,13 @@ from datetime import datetime
 
 from serieux.features.encrypt import Secret
 
-from sarc.core.models.users import Credentials
-from sarc.core.scraping.users import MatchID, UserMatch, UserScraper, _builtin_scrapers
+from sarc.scraping.users import (
+    Credentials,
+    MatchID,
+    UserMatch,
+    UserScraper,
+    _builtin_scrapers,
+)
 
 
 @dataclass
@@ -24,7 +29,7 @@ class DRACRolesScraper(UserScraper[DRACRolesConfig]):
     def get_user_data(self, config: DRACRolesConfig) -> bytes:
         return config.csv.encode("utf-8")
 
-    def parse_user_data(self, data: bytes, _: datetime) -> Iterable[UserMatch]:
+    def parse_user_data(self, data: bytes, cache_time: datetime) -> Iterable[UserMatch]:  # noqa: ARG002
         for d in csv.DictReader(data.decode("utf-8").split("\n")):
             d = _dict_to_lowercase(d)
             yield UserMatch(

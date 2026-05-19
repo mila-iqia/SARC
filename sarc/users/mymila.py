@@ -53,7 +53,7 @@ from typing import Sequence
 from azure.identity import ClientSecretCredential
 from serieux.features.encrypt import Secret
 
-from sarc.core.scraping.users import MatchID, UserMatch, UserScraper, _builtin_scrapers
+from sarc.scraping.users import MatchID, UserMatch, UserScraper, _builtin_scrapers
 
 logger = logging.getLogger(__name__)
 
@@ -121,7 +121,7 @@ class MyMilaScraper(UserScraper[MyMilaConfig]):
     def get_user_data(self, config: MyMilaConfig) -> bytes:
         return json.dumps(_query_mymila(config), default=_json_serial).encode()
 
-    def parse_user_data(self, data: bytes, _: datetime) -> Iterable[UserMatch]:
+    def parse_user_data(self, data: bytes, cache_time: datetime) -> Iterable[UserMatch]:  # noqa: ARG002
         records, headers = json.loads(data.decode())
         headers = [h.replace("-", "_") for h in headers]
         assert headers[-1] == "_MEMBER_NUM_"
@@ -139,20 +139,19 @@ class MyMilaScraper(UserScraper[MyMilaConfig]):
                     MatchID(name="mila_ldap", mid=record[Headers.MILA_Email])
                 },
             )
+            supervisors = []
             supervisor = record[Headers.Supervisor_Principal__MEMBER_NUM_]
             if supervisor is not None:
                 # TODO: figure out which dates apply
-                um.supervisor.insert(
-                    MatchID(name="mymila", mid=str(supervisor)), start=None, end=None
-                )
+                supervisors.append(MatchID(name="mymila", mid=str(supervisor)))
+
             co_supervisor = record[Headers.Co_Supervisor__MEMBER_NUM_]
             if co_supervisor is not None:
                 # TODO: figure out the dates
-                um.co_supervisors.insert(
-                    {MatchID(name="mymila", mid=str(co_supervisor))},
-                    start=None,
-                    end=None,
-                )
+                supervisors.append(MatchID(name="mymila", mid=str(co_supervisor)))
+            if len(supervisors) != 0:
+                # TODO: figure out the dates
+                um.supervisors.insert(supervisors)
             drac_account: str | None = record[Headers.Alliance_DRAC_account]
             if drac_account:
                 drac_account = drac_account.strip()

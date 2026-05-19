@@ -40,7 +40,7 @@ class TestMilaLDAPScraper(UserPluginTester):
         #    f.write(data)
         data_regression.check(json.loads(data.decode()))
 
-    @pytest.mark.freeze_time("2023-01-01")
+    @pytest.mark.time_machine("2023-01-01T00:00+00:00", tick=False)
     @pytest.mark.parametrize("raw_file", ["mila_ldap1.cache"])
     def test_parse_data(self, raw_file, data_regression):
         with open(Path(__file__).parent / "inputs" / raw_file, "rb") as f:

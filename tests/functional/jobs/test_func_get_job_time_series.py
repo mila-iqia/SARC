@@ -3,33 +3,33 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from sarc.client.job import SlurmJob
 from sarc.config import UTC
-from sarc.jobs.series import get_job_time_series_data
+from sarc.scraping.series import get_job_time_series_data
 from tests.common.dateutils import MTL
-
-from .factory import JobFactory
+from tests.db.factory import JobFactory
 
 mtl_test_time = datetime(2023, 3, 5, 6, 0, tzinfo=MTL)
 utc_test_time = mtl_test_time.astimezone(UTC)
 
-test_time_str = utc_test_time.strftime("%Y-%m-%dT%H:%M %Z")
-
 
 @pytest.fixture
-def job(request):
+def job(request, read_write_db):
     params = getattr(request, "param", {})
 
     params.setdefault("submit_time", utc_test_time - timedelta(hours=3, minutes=30))
     params.setdefault("start_time", params["submit_time"] + timedelta(minutes=30))
     params.setdefault("end_time", utc_test_time)
+    params.setdefault("cluster_id", 1)
+    params.setdefault("sarc_user_id", 1)
     # TODO: Add a JobTimeSeriesFactory when we have a prometheus setup where we can send fake data.
     # job_factory = JobTimeSeriesFactory()
-    job_factory = JobFactory()
+    job_factory = JobFactory(clusters=[], users=[])
     job_factory.add_job(**params)
     # Will need a save method to push data to prometheus
     # job_factory.save()
-    job = SlurmJob(**job_factory.jobs[0])
+    job = job_factory.jobs[0]
+    read_write_db.add(job)
+    read_write_db.flush()
     # pytest.set_trace()
 
     return job
@@ -55,7 +55,7 @@ parameters = {
 }
 
 
-@pytest.mark.freeze_time(test_time_str)
+@pytest.mark.time_machine(utc_test_time, tick=False)
 @pytest.mark.parametrize(
     "job", parameters.values(), ids=parameters.keys(), indirect=True
 )
@@ -68,9 +68,11 @@ def test_get_job_time_series_data(job, prom_custom_query_mock, file_regression):
 
 
 no_duration_parameters = {
-    "end_time_before_start_time": {
-        "start_time": datetime(2023, 3, 4, tzinfo=MTL).astimezone(UTC),
+    "end_time_with_start_none": {
+        "job_state": "CANCELLED",
+        "start_time": None,
         "end_time": datetime(2023, 3, 1, tzinfo=MTL).astimezone(UTC),
+        "elapsed_time": 0,
     },
     # is it possible? Otherwise look for jobs that did start and should hae duration == 0
     "not_started": {
@@ -83,7 +85,7 @@ no_duration_parameters = {
 }
 
 
-@pytest.mark.freeze_time(test_time_str)
+@pytest.mark.time_machine(utc_test_time, tick=False)
 @pytest.mark.usefixtures("base_config")
 @pytest.mark.parametrize(
     "job",
@@ -95,7 +97,7 @@ def test_jobs_with_no_duration(job):
     assert get_job_time_series_data(job, "slurm_job_core_usage") == []
 
 
-@pytest.mark.freeze_time(test_time_str)
+@pytest.mark.time_machine(utc_test_time, tick=False)
 @pytest.mark.parametrize(
     "measure,aggregation",
     itertools.product(
@@ -120,7 +122,7 @@ def test_invalid_aggregation(job):
         )
 
 
-@pytest.mark.freeze_time(test_time_str)
+@pytest.mark.time_machine(utc_test_time, tick=False)
 @pytest.mark.parametrize(
     "min_interval,max_points",
     [

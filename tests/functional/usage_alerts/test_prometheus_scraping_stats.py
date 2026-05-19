@@ -1,13 +1,22 @@
-import re
+import functools
 
 import pytest
+import sqlmodel
 import time_machine
 
-from sarc.client import get_jobs
-from sarc.jobs.series import compute_job_statistics
-from tests.functional.jobs.test_func_load_job_series import MOCK_TIME
+from sarc.config import config
+from sarc.db.job import SlurmJobDB
+from sarc.scraping.series import compute_job_statistics
+from tests.functional.common import MOCK_TIME, _get_warnings, generate_fake_timeseries
 
-from ..jobs.test_func_job_statistics import generate_fake_timeseries
+get_warnings = functools.partial(
+    _get_warnings,
+    modules=[
+        "sarc.alerts.usage_alerts.prometheus_stats_occurrences:prometheus_stats_occurrences.py",
+        "sarc.alerts.common:common.py",
+    ],
+)
+
 
 PARAMS = [
     # Check with default params. In last 7 days from now (mock time: 2023-11-22),
@@ -54,12 +63,14 @@ PARAMS = [
     "check_name", PARAMS, ids=[f"params{i}" for i in range(len(PARAMS))]
 )
 def test_check_prometheus_scraping_stats(check_name, caplog, file_regression, cli_main):
-    for job in get_jobs():
-        if job.end_time is not None:
-            stats = compute_job_statistics(job, generate_fake_timeseries(job))
-            if not stats.empty():
-                job.stored_statistics = stats
-                job.save()
+    with config().db.session() as sess:
+        for job in sess.exec(sqlmodel.select(SlurmJobDB)).all():
+            if job.end_time is not None and job.nodes:
+                stats = compute_job_statistics(job, generate_fake_timeseries(job))
+                if stats:
+                    job.statistics = stats
+                    sess.merge(job)
+        sess.commit()
 
     assert cli_main(["health", "run", "--check", check_name]) == 0
-    file_regression.check(re.sub(r"ERROR +.+\.py:[0-9]+ +", "", caplog.text))
+    file_regression.check("\n".join(get_warnings(caplog.text)))

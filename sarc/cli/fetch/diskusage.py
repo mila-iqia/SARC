@@ -6,7 +6,7 @@ from simple_parsing import field
 
 from sarc.cache import Cache
 from sarc.config import config
-from sarc.core.scraping.diskusage import get_diskusage_scraper
+from sarc.scraping.diskusage import get_diskusage_scraper
 
 logger = logging.getLogger(__name__)
 

@@ -15,9 +15,14 @@ from zoneinfo import ZoneInfo
 
 from serieux.features.encrypt import Secret
 
-from sarc.core.models.users import Credentials, MemberType
-from sarc.core.models.validators import END_TIME, START_TIME
-from sarc.core.scraping.users import MatchID, UserMatch, UserScraper, _builtin_scrapers
+from sarc.db.users import MemberType
+from sarc.scraping.users import (
+    Credentials,
+    MatchID,
+    UserMatch,
+    UserScraper,
+    _builtin_scrapers,
+)
 
 MTL = ZoneInfo("America/Montreal")
 
@@ -69,7 +74,7 @@ class LegacyDumpScraper(UserScraper[LegacyDumpConfig]):
         """Read the JSON dump file."""
         return config.json.encode("utf-8")
 
-    def parse_user_data(self, data: bytes, _: datetime) -> Iterable[UserMatch]:
+    def parse_user_data(self, data: bytes, cache_time: datetime) -> Iterable[UserMatch]:  # noqa: ARG002
         """Parse the legacy user data and convert to UserMatch format."""
         records = json.loads(data.decode("utf-8"))
         for record in records:
@@ -79,12 +84,6 @@ class LegacyDumpScraper(UserScraper[LegacyDumpConfig]):
             # Parse timestamps
             record_start = _parse_mtl_datetime(record.get("record_start"))
             record_end = _parse_mtl_datetime(record.get("record_end"))
-
-            # Use START_TIME if no record_start, END_TIME if no record_end
-            if record_start is None:
-                record_start = START_TIME
-            if record_end is None:
-                record_end = END_TIME
 
             email = record["mila_ldap"]["mila_email_username"]
             matching_id = MatchID(name="legacy_dump", mid=email)
@@ -139,20 +138,18 @@ class LegacyDumpScraper(UserScraper[LegacyDumpConfig]):
                 user_match.associated_accounts["drac"] = drac_creds
 
             # Supervisor information
+            supervisors = []
             supervisor_email = record.get("mila_ldap", {}).get("supervisor")
             if supervisor_email:
-                supervisor_match = MatchID(name="legacy_dump", mid=supervisor_email)
-                user_match.supervisor.insert(supervisor_match, record_start, record_end)
+                supervisors.append(MatchID(name="legacy_dump", mid=supervisor_email))
 
             # Co-supervisor information
             co_supervisor_email = record.get("mila_ldap", {}).get("co_supervisor")
             if co_supervisor_email:
-                co_supervisor_match = MatchID(
-                    name="legacy_dump", mid=co_supervisor_email
-                )
-                user_match.co_supervisors.insert(
-                    {co_supervisor_match}, record_start, record_end
-                )
+                supervisors.append(MatchID(name="legacy_dump", mid=co_supervisor_email))
+
+            if len(supervisors) != 0:
+                user_match.supervisors.insert(supervisors, record_start, record_end)
 
             yield user_match
 

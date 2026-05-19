@@ -1,11 +1,17 @@
 import logging
+import math
+import statistics
 import sys
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 
-import pandas
+import sqlalchemy
+from sqlmodel import col, func, select
 
 from sarc.alerts.common import CheckResult, HealthCheck
+from sarc.alerts.usage_alerts.alert_sql_utils import SqlSymbols
+from sarc.db.cluster import SlurmClusterDB
+from sarc.db.job import SlurmJobDB
 
 logger = logging.getLogger(__name__)
 
@@ -45,66 +51,87 @@ def check_nb_jobs_per_cluster_per_time(
     bool
         True if check succeeds, False otherwise
     """
-    from sarc.client.series import compute_time_frames, load_job_series
+    from sarc.config import config
 
-    # Parse time_interval
-    start, end, clip_time = None, None, False
-    if time_interval is not None:
-        end = datetime.now(tz=UTC)
-        start = end - time_interval
-        clip_time = True
+    if time_unit.total_seconds() <= 0:
+        logger.error(
+            f"Invalid time unit (must be > 0) for cluster usage checking: {time_unit}"
+        )
+        return False
+    if nb_stddev < 0:
+        logger.error(
+            f"Invalid nb_stddev (must be >= 0) for cluster usage checking: {nb_stddev}"
+        )
+        return False
 
-    # Get data frame
-    df = load_job_series(start=start, end=end, clip_time=clip_time)
+    with config().db.session() as sess:
+        if not sess.exec(select(func.count(col(SlurmJobDB.id)))).one():
+            logger.error("No jobs in database.")
+            return False
 
-    # Split data frame into time frames using `time_unit`
-    tf = compute_time_frames(df, frame_size=time_unit)
+        # Determine [start, end] bounds for frame iteration.
+        start, end, _ = SqlSymbols.convert_job_time_interval_to_sql_bounds(
+            sess, time_interval
+        )
+        eff_start = SqlSymbols.eff_start
+        eff_end = SqlSymbols.eff_end
 
-    # List all available timestamps.
-    # We will check each timestamp for each cluster.
-    timestamps = sorted(tf["timestamp"].unique())
+        # Pre-compute all timestamps in Python,
+        # to avoid missing any frames with no jobs
+        timestamps: list[datetime] = []
+        frame_start_py = start
+        while frame_start_py < end:
+            timestamps.append(frame_start_py)
+            frame_start_py += time_unit
 
-    # List clusters
+        # Use a Postgresql query: time frange + join
+        time_unit_sql = sqlalchemy.literal(time_unit, type_=sqlalchemy.Interval)
+
+        frames = select(
+            func.generate_series(start, end, time_unit_sql).label("frame_start")
+        ).subquery()
+
+        # NB: Since we iterate over frames, we want to capture point jobs located at frame bounds,
+        # e.g. PENDING jobs which run in [submit_time, submit_time]. So, we grab everything in
+        # [frame_start included, frame_end excluded), instead of (frame_start excluded, frame_end excluded)
+        query = (
+            select(
+                SlurmClusterDB.name,
+                frames.c.frame_start,
+                func.count(col(SlurmJobDB.id)),
+            )
+            .select_from(frames)
+            .join(
+                SlurmJobDB,
+                (eff_start < (frames.c.frame_start + time_unit_sql))
+                & (eff_end >= frames.c.frame_start),
+            )
+            .join(SlurmClusterDB, col(SlurmJobDB.cluster_id) == col(SlurmClusterDB.id))
+            .group_by(SlurmClusterDB.name, frames.c.frame_start)
+        )
+
+        cluster_counts: dict[str, dict[datetime, int]] = {}
+        # For each frame, count jobs per cluster.
+        for cluster_name, frame_start_db, count in sess.exec(query):
+            cluster_counts.setdefault(cluster_name, {})[frame_start_db] = count
+
+    # Determine which clusters to report on.
     if cluster_names:
-        cluster_names = sorted(cluster_names)
+        sorted_clusters = sorted(cluster_names)
     else:
-        cluster_names = sorted(df["cluster_name"].unique())
+        sorted_clusters = sorted(cluster_counts.keys())
 
     ok = True
-
-    # Iter for each cluster.
-    for cluster_name in cluster_names:
-        # Select only jobs for current cluster,
-        # group jobs by timestamp, and count jobs for each timestamp.
-        f_stats = (
-            tf[tf["cluster_name"] == cluster_name]
-            .groupby(["timestamp"])[["job_id"]]
-            .count()
-        )
-
-        # Create a dataframe with all available timestamps
-        # and associate each timestamp to 0 jobs by default.
-        c = (
-            pandas.DataFrame({"timestamp": timestamps, "count": [0] * len(timestamps)})
-            .groupby(["timestamp"])[["count"]]
-            .sum()
-        )
-        # Set each timestamp valid for this cluster with real number of jobs scraped in this timestamp.
-        c.loc[f_stats.index, "count"] = f_stats["job_id"]
-
-        # We now have number of jobs for each timestamp for this cluster,
-        # with count 0 for timestamps where no jobs run on cluster,
-
-        # Compute average number of jobs per timestamp for this cluster
-        avg = c["count"].mean()
-        # Compute standard deviation of job count per timestamp for this cluster
-        stddev = c["count"].std()
-        # Compute threshold to use for warnings: <average> - nb_stddev * <standard deviation>
-        threshold = max(0.0, avg - nb_stddev * stddev)
+    for cluster_name in sorted_clusters:
+        counts = [cluster_counts.get(cluster_name, {}).get(ts, 0) for ts in timestamps]
+        avg = statistics.mean(counts)
+        stddev = statistics.stdev(counts) if len(counts) > 1 else math.nan
+        threshold = 0.0 if math.isnan(stddev) else max(0.0, avg - nb_stddev * stddev)
 
         if verbose:
             print(f"[{cluster_name}]", file=sys.stderr)  # noqa: T201
-            print(c, file=sys.stderr)  # noqa: T201
+            for ts, c in zip(timestamps, counts):
+                print(f"  {ts}  {c}", file=sys.stderr)  # noqa: T201
             print(f"avg {avg}, stddev {stddev}, threshold {threshold}", file=sys.stderr)  # noqa: T201
             print(file=sys.stderr)  # noqa: T201
 
@@ -125,13 +152,11 @@ def check_nb_jobs_per_cluster_per_time(
             logger.error(msg)
             ok = False
         else:
-            # With a non-null threshold, we can check each timestamp.
-            for timestamp in timestamps:
-                nb_jobs = c.loc[timestamp]["count"]
-                if nb_jobs < threshold:
+            for ts, c in zip(timestamps, counts):
+                if c < threshold:
                     logger.error(
-                        f"[{cluster_name}][{timestamp}] "
-                        f"insufficient cluster scraping: {nb_jobs} jobs / cluster / time unit; "
+                        f"[{cluster_name}][{ts}] "
+                        f"insufficient cluster scraping: {c} jobs / cluster / time unit; "
                         f"minimum required for this cluster: {threshold} ({avg} - {nb_stddev} * {stddev}); "
                         f"time unit: {time_unit}"
                     )

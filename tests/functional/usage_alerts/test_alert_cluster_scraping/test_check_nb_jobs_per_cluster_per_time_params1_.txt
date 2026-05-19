@@ -1,58 +1,41 @@
 [fromage]
-                           count
-timestamp                       
-2023-02-14 05:01:00+00:00      0
-2023-02-15 05:01:00+00:00      0
-2023-02-16 05:01:00+00:00      0
-2023-02-17 05:01:00+00:00      1
-2023-02-18 05:01:00+00:00      0
-2023-02-19 05:01:00+00:00      0
-2023-02-20 05:01:00+00:00      0
-2023-11-21 05:01:00+00:00      0
-avg 0.125, stddev 0.3535533905932738, threshold 0.0
+  2023-02-14 05:01:00+00:00  0
+  2023-02-15 05:01:00+00:00  0
+  2023-02-16 05:01:00+00:00  0
+  2023-02-17 05:01:00+00:00  1
+  2023-02-18 05:01:00+00:00  1
+  2023-02-19 05:01:00+00:00  0
+avg 0.3333333333333333, stddev 0.5163977794943223, threshold 0.0
 
 [mila]
-                           count
-timestamp                       
-2023-02-14 05:01:00+00:00      0
-2023-02-15 05:01:00+00:00      0
-2023-02-16 05:01:00+00:00      0
-2023-02-17 05:01:00+00:00      0
-2023-02-18 05:01:00+00:00      1
-2023-02-19 05:01:00+00:00      1
-2023-02-20 05:01:00+00:00      1
-2023-11-21 05:01:00+00:00      0
-avg 0.375, stddev 0.5175491695067657, threshold 0.0
+  2023-02-14 05:01:00+00:00  0
+  2023-02-15 05:01:00+00:00  0
+  2023-02-16 05:01:00+00:00  0
+  2023-02-17 05:01:00+00:00  0
+  2023-02-18 05:01:00+00:00  0
+  2023-02-19 05:01:00+00:00  1
+avg 0.16666666666666666, stddev 0.408248290463863, threshold 0.0
 
 [patate]
-                           count
-timestamp                       
-2023-02-14 05:01:00+00:00      0
-2023-02-15 05:01:00+00:00      0
-2023-02-16 05:01:00+00:00      0
-2023-02-17 05:01:00+00:00      1
-2023-02-18 05:01:00+00:00      1
-2023-02-19 05:01:00+00:00      0
-2023-02-20 05:01:00+00:00      0
-2023-11-21 05:01:00+00:00      0
-avg 0.25, stddev 0.4629100498862757, threshold 0.0
+  2023-02-14 05:01:00+00:00  0
+  2023-02-15 05:01:00+00:00  0
+  2023-02-16 05:01:00+00:00  0
+  2023-02-17 05:01:00+00:00  1
+  2023-02-18 05:01:00+00:00  1
+  2023-02-19 05:01:00+00:00  0
+avg 0.3333333333333333, stddev 0.5163977794943223, threshold 0.0
 
 [raisin]
-                           count
-timestamp                       
-2023-02-14 05:01:00+00:00      4
-2023-02-15 05:01:00+00:00      3
-2023-02-16 05:01:00+00:00      4
-2023-02-17 05:01:00+00:00      3
-2023-02-18 05:01:00+00:00      3
-2023-02-19 05:01:00+00:00      4
-2023-02-20 05:01:00+00:00      0
-2023-11-21 05:01:00+00:00      2
-avg 2.875, stddev 1.3562026818605375, threshold 0.162594636278925
+  2023-02-14 05:01:00+00:00  4
+  2023-02-15 05:01:00+00:00  6
+  2023-02-16 05:01:00+00:00  6
+  2023-02-17 05:01:00+00:00  3
+  2023-02-18 05:01:00+00:00  4
+  2023-02-19 05:01:00+00:00  3
+avg 4.333333333333333, stddev 1.3662601021279464, threshold 1.6008131290774403
 
 
-[fromage] threshold 0 (0.125 - 2.0 * 0.3535533905932738). Either nb_stddev is too high, time_interval (None) is too short, or this cluster should not be currently checked
-[mila] threshold 0 (0.375 - 2.0 * 0.5175491695067657). Either nb_stddev is too high, time_interval (None) is too short, or this cluster should not be currently checked
-[patate] threshold 0 (0.25 - 2.0 * 0.4629100498862757). Either nb_stddev is too high, time_interval (None) is too short, or this cluster should not be currently checked
-[raisin][2023-02-20 05:01:00+00:00] insufficient cluster scraping: 0 jobs / cluster / time unit; minimum required for this cluster: 0.162594636278925 (2.875 - 2.0 * 1.3562026818605375); time unit: 1 day, 0:00:00
+[fromage] threshold 0 (0.3333333333333333 - 2.0 * 0.5163977794943223). Either nb_stddev is too high, time_interval (None) is too short, or this cluster should not be currently checked
+[mila] threshold 0 (0.16666666666666666 - 2.0 * 0.408248290463863). Either nb_stddev is too high, time_interval (None) is too short, or this cluster should not be currently checked
+[patate] threshold 0 (0.3333333333333333 - 2.0 * 0.5163977794943223). Either nb_stddev is too high, time_interval (None) is too short, or this cluster should not be currently checked
 [cluster_scraping_1] FAILURE: cluster_scraping_1

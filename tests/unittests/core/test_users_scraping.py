@@ -11,18 +11,20 @@ from unittest.mock import patch
 import pytest
 
 from sarc.cache import Cache
-from sarc.core.models.users import Credentials
-from sarc.core.scraping.users import (
+from sarc.db.users import UserDB
+from sarc.scraping.users import (
+    Credentials,
     MatchID,
     UserMatch,
     UserScraper,
     _builtin_scrapers,
     fetch_users,
     get_user_scraper,
+    parse_ce,
     parse_users,
+    update_user,
     update_user_match,
 )
-from sarc.users.db import get_user, get_user_collection
 
 one_hour = timedelta(hours=1)
 
@@ -129,7 +131,7 @@ class PluginTest(UserScraper[ConfigTest]):
 @pytest.fixture
 def user_plugin(monkeypatch):
     yield monkeypatch.setattr(
-        "sarc.core.scraping.users._user_scrapers",
+        "sarc.scraping.users._user_scrapers",
         EntryPoints(
             [
                 EntryPoint(
@@ -278,7 +280,9 @@ def test_fetch_and_parse_users_single_plugin(
     fetch_users(scrapers)
 
     # Then, parse the cached data
-    users = list(parse_users(datetime.now(UTC) - one_hour, False))
+    users = []
+    for ce in parse_users(datetime.now(UTC) - one_hour):
+        users.extend(parse_ce(ce))
 
     assert len(users) == 3
     assert all(isinstance(user, UserMatch) for user in users)
@@ -305,7 +309,9 @@ def test_fetch_and_parse_users_multiple_plugins(
     fetch_users(scrapers)
 
     # Then, parse the cached data
-    users = list(parse_users(datetime.now(UTC) - one_hour, False))
+    users = []
+    for ce in parse_users(datetime.now(UTC) - one_hour):
+        users.extend(parse_ce(ce))
 
     assert len(users) == 5  # 3 from plugin1 + 2 from plugin2 (user3 is merged)
 
@@ -320,7 +326,7 @@ def test_invalid_scraper(enabled_cache, caplog, read_write_db):
 
     fetch_users(scrapers)
     assert caplog.record_tuples[0] == (
-        "sarc.core.scraping.users",
+        "sarc.scraping.users",
         logging.ERROR,
         "Could not fetch user scraper: invalid_scraper",
     )
@@ -330,10 +336,11 @@ def test_invalid_scraper(enabled_cache, caplog, read_write_db):
         ce.add_value("invalid_scraper", b"")
 
     with pytest.raises(ValueError, match="Invalid user scraper"):
-        list(parse_users(datetime(2025, 6, 1, tzinfo=UTC), False))
+        for ce in parse_users(datetime(2025, 6, 1, tzinfo=UTC)):
+            list(parse_ce(ce))
 
 
-@patch("sarc.core.scraping.users.get_user_scraper")
+@patch("sarc.scraping.users.get_user_scraper")
 def test_fetch_and_parse_users_user_matching(
     mock_get_scraper, enabled_cache, read_write_db
 ):
@@ -374,7 +381,9 @@ def test_fetch_and_parse_users_user_matching(
     fetch_users(scrapers)
 
     # Then, parse the cached data
-    users = list(parse_users(datetime.now(UTC) - one_hour, False))
+    users = []
+    for ce in parse_users(datetime.now(UTC) - one_hour):
+        users.extend(parse_ce(ce))
 
     # Should have only one user after merging
     assert len(users) == 1
@@ -449,7 +458,9 @@ def test_fetch_and_parse_multiple_different_scrapers(
     fetch_users(scrapers)
 
     # Then, parse the cached data
-    users = list(parse_users(datetime.now(UTC) - one_hour, False))
+    users = []
+    for ce in parse_users(datetime.now(UTC) - one_hour):
+        users.extend(parse_ce(ce))
 
     # MockUserScraper returns 3 users, PluginTest returns 2 users
     # Total should be 5 users (no merging expected since they have different matching IDs)
@@ -477,9 +488,9 @@ def test_fetch_and_parse_multiple_different_scrapers(
         assert user.matching_id.name in ["mock_scraper", "test_plugin"]
 
 
-@pytest.mark.usefixtures("read_only_db")
-@patch("sarc.core.scraping.users.get_user_scraper")
-def test_parse_users_supervisor_ordering_before_fix(mock_get_scraper, enabled_cache):
+@pytest.mark.usefixtures("enabled_cache")
+@patch("sarc.scraping.users.get_user_scraper")
+def test_parse_users_supervisor_ordering_before_fix(mock_get_scraper, read_write_db):
     """Test that plugins returning users before supervisors are correctly ordered.
 
     This test reproduces the issue where a plugin returns user entries before
@@ -496,8 +507,8 @@ def test_parse_users_supervisor_ordering_before_fix(mock_get_scraper, enabled_ca
                 email="alice@example.com",
                 matching_id=MatchID(name="bad_order_plugin", mid="student1"),
             )
-            student.co_supervisors.insert(
-                {MatchID(name="bad_order_plugin", mid="supervisor1")},
+            student.supervisors.insert(
+                [MatchID(name="bad_order_plugin", mid="supervisor1")],
                 start=None,
                 end=None,
             )
@@ -522,19 +533,22 @@ def test_parse_users_supervisor_ordering_before_fix(mock_get_scraper, enabled_ca
 
     fetch_users(scrapers)
 
-    coll = get_user_collection()
-    for um in parse_users(datetime.now(UTC) - one_hour, False):
-        coll.update_user(um)
+    for ce in parse_users(datetime.now(UTC) - one_hour):
+        for um in parse_ce(ce):
+            update_user(read_write_db, um)
 
-    u = get_user("alice@example.com")
+    u = UserDB.by_email(read_write_db, "alice@example.com")
     assert u is not None
-    assert len(u.co_supervisors.values) == 1
-    assert len(u.co_supervisors.values[0].value) == 1
+    sups = u.supervisors.values_in_range(None, None)
+    assert len(sups) == 1
+    assert len(sups[0]) == 1
 
-    for um in parse_users(datetime.now(UTC) - one_hour, False):
-        coll.update_user(um)
+    for ce in parse_users(datetime.now(UTC) - one_hour):
+        for um in parse_ce(ce):
+            update_user(read_write_db, um)
 
-    u = get_user("alice@example.com")
+    u = UserDB.by_email(read_write_db, "alice@example.com")
     assert u is not None
-    assert len(u.co_supervisors.values) == 1
-    assert len(u.co_supervisors.values[0].value) == 1
+    sups = u.supervisors.values_in_range(None, None)
+    assert len(sups) == 1
+    assert len(sups[0]) == 1

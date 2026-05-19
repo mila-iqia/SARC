@@ -1,0 +1,28 @@
+seed: 1234
+clusters: ../sarc-test.yaml:sarc.clusters
+t_start: 2023-01-01
+t_end: 2025-01-01
+users:
+  total: 25
+  full_professors: 3
+slurm:
+  mila:
+    njobs_mean: 6
+    njobs_std: 3
+    start: 2024-01-01
+    end: 2024-06-01
+  fromage:
+    njobs_mean: 6
+    njobs_std: 3
+    start: 2024-01-01
+    end: 2024-06-01
+  raisin:
+    njobs_mean: 6
+    njobs_std: 3
+    start: 2024-04-01
+    end: 2024-08-01
+  raisin_no_prometheus:
+    njobs_mean: 6
+    njobs_std: 3
+    start: 2024-03-01
+    end: 2024-06-01
