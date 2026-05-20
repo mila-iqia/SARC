@@ -2,8 +2,6 @@
   display_name: Jane Smith000
   email: john.smith000@mila.quebec
   known_matches:
-  - mid: abc-000
-    name: drac
   - mid: john.smith000@mila.quebec
     name: mila_ldap
   matching_id:
@@ -17,8 +15,6 @@
   display_name: John Smith001
   email: john.smith001@mila.quebec
   known_matches:
-  - mid: abc-001
-    name: drac
   - mid: john.smith001@mila.quebec
     name: mila_ldap
   matching_id:
@@ -58,8 +54,6 @@
   display_name: Jane Smith004
   email: john.smith004@mila.quebec
   known_matches:
-  - mid: abc-004
-    name: drac
   - mid: john.smith004@mila.quebec
     name: mila_ldap
   matching_id:
@@ -126,8 +120,6 @@
   display_name: Jane Smith008
   email: john.smith008@mila.quebec
   known_matches:
-  - mid: abc-008
-    name: drac
   - mid: john.smith008@mila.quebec
     name: mila_ldap
   matching_id:
@@ -147,8 +139,6 @@
   display_name: John Smith009
   email: john.smith009@mila.quebec
   known_matches:
-  - mid: abc-009
-    name: drac
   - mid: john.smith009@mila.quebec
     name: mila_ldap
   matching_id:
