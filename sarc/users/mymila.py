@@ -45,7 +45,7 @@ import re
 import struct
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import UTC, date, datetime, time
 from enum import IntEnum, unique
 from itertools import chain, repeat
 from typing import Sequence
@@ -53,6 +53,7 @@ from typing import Sequence
 from azure.identity import ClientSecretCredential
 from serieux.features.encrypt import Secret
 
+from sarc.models.user import MemberType
 from sarc.scraping.users import MatchID, UserMatch, UserScraper, _builtin_scrapers
 
 logger = logging.getLogger(__name__)
@@ -100,6 +101,24 @@ class Headers(IntEnum):
     MEMBER_NUM = 33
 
 
+Invalid_MEMBER_NUM = [
+    2,
+    3,
+    109,
+    129,
+    529,
+    533,
+    539,
+    547,
+    558,
+    1713,
+    5479,
+    5482,
+    5484,
+    12494,
+]
+
+
 @dataclass
 class MyMilaConfig:
     tenant_id: str
@@ -128,6 +147,8 @@ class MyMilaScraper(UserScraper[MyMilaConfig]):
         headers[-1] = "MEMBER_NUM"
         assert headers == [h.name for h in Headers]
         for record in records:
+            if record[Headers.MEMBER_NUM] in Invalid_MEMBER_NUM:
+                continue
             first_name = record[Headers.Preferred_First_Name]
             if first_name is None:
                 first_name = record[Headers.First_Name]
@@ -139,19 +160,43 @@ class MyMilaScraper(UserScraper[MyMilaConfig]):
                     MatchID(name="mila_ldap", mid=record[Headers.MILA_Email])
                 },
             )
+            start_date = (
+                datetime.combine(date.fromisoformat(d), time.min, tzinfo=UTC)
+                if (d := record[Headers.Start_Date_with_MILA]) is not None
+                else d
+            )
+            end_date = (
+                datetime.combine(date.fromisoformat(d), time.min, tzinfo=UTC)
+                if (d := record[Headers.End_Date_with_MILA]) is not None
+                else d
+            )
+            member_type = None
+            if record[Headers.Profile_Type] == "Professor":
+                member_type = MemberType.PROFESSOR
+            elif record[Headers.Profile_Type] == "Student":
+                at = record[Headers.Affiliation_type]
+                if at == "HQP - Master's Research":
+                    member_type = MemberType.MASTER_RESEARCH
+                elif at == "HQP - Professional Master's":
+                    member_type = MemberType.MASTER_PRO
+                elif at == "HQP - PhD":
+                    member_type = MemberType.PHD_STUDENT
+                elif at == "HQP - Postdoctorate":
+                    member_type = MemberType.POSTDOC
+                elif at == "Research Intern":
+                    member_type = MemberType.INTERN
+            if member_type is not None:
+                um.member_type.insert(member_type, start=start_date, end=end_date)
             supervisors = []
             supervisor = record[Headers.Supervisor_Principal__MEMBER_NUM_]
-            if supervisor is not None:
-                # TODO: figure out which dates apply
+            if supervisor is not None and supervisor not in Invalid_MEMBER_NUM:
                 supervisors.append(MatchID(name="mymila", mid=str(supervisor)))
 
             co_supervisor = record[Headers.Co_Supervisor__MEMBER_NUM_]
-            if co_supervisor is not None:
-                # TODO: figure out the dates
+            if co_supervisor is not None and co_supervisor not in Invalid_MEMBER_NUM:
                 supervisors.append(MatchID(name="mymila", mid=str(co_supervisor)))
             if len(supervisors) != 0:
-                # TODO: figure out the dates
-                um.supervisors.insert(supervisors)
+                um.supervisors.insert(supervisors, start=start_date, end=end_date)
             yield um
 
 
@@ -182,7 +227,9 @@ def _query_mymila(cfg: MyMilaConfig) -> tuple[list, list[str]]:
 
     connection = pyodbc.connect(connection_string, attrs_before=attrs_before)
     cursor = connection.cursor()
-    cursor.execute("SELECT * FROM MyMila_Extract_Etudiants_2")
+    cursor.execute(
+        "SELECT * FROM MyMila_Extract_Etudiants_2 WHERE Status != 'Applicant' AND Profile_Type IN ('Student', 'Professor')"
+    )
     records = [tuple(row) for row in cursor.fetchall()]
     headers = [i[0] for i in cursor.description]
 
