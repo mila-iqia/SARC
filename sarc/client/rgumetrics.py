@@ -1,8 +1,6 @@
 """
 Dedicated module to compute RGU for a given GPU, with MIG support
 and alternative MIG value reference, either "drac" (default) or "mila".
-
-TODO Integrate into SlurmJob and update_job_series_rgu.
 """
 
 import re
@@ -105,6 +103,9 @@ def _parse_gpu(gpu_type: str) -> Gpu:
     """Parse a GPU harmonized name and return a GPU object."""
     if ":" not in gpu_type:
         return Gpu(gpu_type)
+
+    if gpu_type.count(":") != 1:
+        raise GpuError(f"Too many `:` in GPU type {gpu_type}")
 
     main_gpu, mig_desc = gpu_type.split(":")
     main_gpu = main_gpu.strip()
