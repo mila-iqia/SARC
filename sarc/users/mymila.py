@@ -152,17 +152,6 @@ class MyMilaScraper(UserScraper[MyMilaConfig]):
             if len(supervisors) != 0:
                 # TODO: figure out the dates
                 um.supervisors.insert(supervisors)
-            drac_account: str | None = record[Headers.Alliance_DRAC_account]
-            if drac_account:
-                drac_account = drac_account.strip()
-                if CCI_RE.fullmatch(drac_account):
-                    um.known_matches.add(MatchID(name="drac", mid=drac_account))
-                if CCRI_RE.fullmatch(drac_account):
-                    um.known_matches.add(MatchID(name="drac", mid=drac_account[:-3]))
-                logger.warning(
-                    "Invalid data in 'Alliance-DRAC_account' field (not a CCI or CCRI): %s",
-                    drac_account,
-                )
             yield um
 
 
