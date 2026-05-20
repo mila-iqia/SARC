@@ -252,6 +252,7 @@ def create_users(sess: Session, user_factory=None) -> Iterable[UserDB]:
     )
     sess.add(prof2)
     sess.flush()
+    sess.add(user_factory.add_user())
     sess.add(user_factory.add_user(supervisors=[(_sups(prof2.id), None, None)]))
     sess.add(
         user_factory.add_user(
