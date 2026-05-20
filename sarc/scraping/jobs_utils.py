@@ -177,10 +177,10 @@ def _convert_json_job(
                 key += f"_{aname}"
 
             if key.startswith("gres_gpu:"):
-                value = key.split(":")[1]
-                key = "gpu_type"
-            else:
-                value = alloc["count"]
+                resources[f"{grp}_gpu_type"] = key.split(":")[1]
+                key = "gres_gpu"
+
+            value = alloc["count"]
             resources[f"{grp}_{key}"] = value
 
     nodes = entry["nodes"]
