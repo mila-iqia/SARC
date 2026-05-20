@@ -1,5 +1,6 @@
 import functools
 import os
+import re
 import zoneinfo
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -119,6 +120,10 @@ class ClusterConfig:
 
         # For MIG GPUs, use this method recursively and append MIG name.
         if harmonized_gpu and harmonized_gpu.startswith(MIG_FLAG):
+            # We expect a specific MIG name format, like "1g.5gb"
+            if not re.fullmatch(r"^(([0-9]+)g\.([0-9]+)gb)$", gpu_type):
+                raise ValueError(f"Unrecognized harmonized GPU type: {gpu_type}")
+
             harmonized_gpu = self.harmonize_gpu(
                 nodename, harmonized_gpu[len(MIG_FLAG) :]
             )
