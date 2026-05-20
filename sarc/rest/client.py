@@ -16,6 +16,7 @@ from sarc.models.api import JobSeriesList, SlurmJobList, UserList
 from sarc.models.cluster import SlurmCluster
 from sarc.models.job import SlurmJob, SlurmState
 from sarc.models.series import JobSeries
+from sarc.models.support import GpuRgu
 from sarc.models.user import MemberType, User
 
 
@@ -246,8 +247,8 @@ class SarcClient:
     def get_clusters(self) -> list[SlurmCluster]:
         return [SlurmCluster.model_validate(c) for c in self._get("/cluster/list")]
 
-    def get_rgus(self) -> dict[str, float]:
-        return self._get("/gpu/rgu")
+    def get_rgus(self) -> list[GpuRgu]:
+        return [GpuRgu.model_validate(ret) for ret in self._get("/gpu/rgu")]
 
     def get_job_series(
         self,

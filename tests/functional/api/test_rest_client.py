@@ -236,4 +236,6 @@ def test_get_clusters(sarc_client):
 @pytest.mark.usefixtures("read_only_db")
 def test_get_rgus(sarc_client):
     rgus = sarc_client.get_rgus()
-    assert rgus["A100-SXM4-40GB"] == 4.0
+    (rgu_a100,) = [rgu for rgu in rgus if rgu.name == "A100-SXM4-40GB"]
+    assert rgu_a100.rgu == 4.0
+    assert rgu_a100.drac_rgu == 4.0

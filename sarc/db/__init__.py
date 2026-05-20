@@ -6,6 +6,7 @@ from sqlmodel import Session, select, text
 
 from sarc.client.rgumetrics import get_gpu_type_rgu
 from sarc.config import config
+
 from .sqlmodel import SQLModel
 
 
@@ -92,10 +93,7 @@ def insert_rgu(sess: Session) -> None:
                 # Harmonize each GPU name found in gpus_per_nodes.
                 # Use harmonize_gpu() to handle recursive harmonization and avoid duplicated code.
                 std_gpu_name = cluster_config.harmonize_gpu(nodename, gpu_type)
-                if ":" not in std_gpu_name:
-                    # If harmonized name is not a MIG, it's expected to be in IGUANE RGU map
-                    assert std_gpu_name in rgu_map
-                else:
+                if ":" in std_gpu_name:
                     # If harmonized name is a MIG, we compute default and DRAC RGU.
                     mig_rgu_default = get_gpu_type_rgu(std_gpu_name, mig_ref="mila")
                     mig_rgu_drac = get_gpu_type_rgu(std_gpu_name, mig_ref="drac")

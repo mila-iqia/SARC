@@ -476,19 +476,28 @@ def test_cluster_list(client):
 def test_gpu_rgu(client):
 
     response = client.get("/v0/gpu/rgu", expect_status=200)
-    data = response.json()
-    assert isinstance(data, dict)
+    raw_data = response.json()
+    assert isinstance(raw_data, list)
+    data = {el["name"]: el["rgu"] for el in raw_data}
+    assert len(data) == len(raw_data)
     assert data["A100-SXM4-40GB"] == 4.0
     assert data["A100-PCIe-40GB"] == 4.0
     assert data["L40S"] == 10.35952718676123
 
-    response = client.post("/v0/gpu/rgu", expect_status=200, json={"gpu 1": 33.33})
+    response = client.post(
+        "/v0/gpu/rgu",
+        expect_status=200,
+        json=[{"name": "gpu 1", "rgu": 33.33, "drac_rgu": 22.22}],
+    )
     assert response.json() is True
 
     response = client.get("/v0/gpu/rgu", expect_status=200)
-    data = response.json()
-    assert isinstance(data, dict)
-    assert data["gpu 1"] == 33.33
+    raw_data = response.json()
+    assert isinstance(raw_data, list)
+    data = {el["name"]: el for el in raw_data}
+    assert len(data) == len(raw_data)
+    assert data["gpu 1"]["rgu"] == 33.33
+    assert data["gpu 1"]["drac_rgu"] == 22.22
     assert len(data) > 1
 
 

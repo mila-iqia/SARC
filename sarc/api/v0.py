@@ -33,6 +33,7 @@ from sarc.models.cluster import SlurmCluster
 from sarc.models.healthcheck_state import HealthCheckState
 from sarc.models.job import Statistics
 from sarc.models.series import JobSeries
+from sarc.models.support import GpuRgu
 
 
 def _ensure_datetime_utc(v: datetime) -> datetime:
@@ -532,18 +533,20 @@ def get_cluster_names(sess: Session = Depends(session_dep)) -> list[SlurmCluster
 
 
 @router.get("/gpu/rgu", dependencies=[Depends(requestor)])
-def get_rgu_value_per_gpu(sess: Session = Depends(session_dep)) -> dict[str, float]:
+def get_rgu_value_per_gpu(sess: Session = Depends(session_dep)) -> list[GpuRgu]:
     """Return the mapping GPU->RGU."""
-    res: dict[str, float] = {}
-    for entry in sess.exec(select(GpuRguDB)):
-        res[entry.name] = entry.rgu
-    return res
+    return [
+        GpuRgu.model_validate(entry.model_dump())
+        for entry in sess.exec(select(GpuRguDB))
+    ]
 
 
 @router.post("/gpu/rgu", dependencies=[Depends(require_admin)])
-def update_rgu(update: dict[str, float], sess: Session = Depends(session_dep)) -> bool:
-    for name, val in update.items():
-        sess.merge(GpuRguDB(name=name, rgu=val))
+def update_rgu(update: list[GpuRgu], sess: Session = Depends(session_dep)) -> bool:
+    for gpu_rgu in update:
+        sess.merge(
+            GpuRguDB(name=gpu_rgu.name, rgu=gpu_rgu.rgu, drac_rgu=gpu_rgu.drac_rgu)
+        )
     sess.commit()
     return True
 
