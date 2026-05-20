@@ -7,6 +7,7 @@ from sqlmodel import Session, select, text
 from sarc.client.rgumetrics import get_gpu_type_rgu
 from sarc.config import config
 
+from ..models.support import GpuRgu
 from .sqlmodel import SQLModel
 
 
@@ -84,8 +85,7 @@ def insert_rgu(sess: Session) -> None:
     args = SimpleNamespace(fom_version="1.0", custom_weights=None, norm=False)
     rgu_map: dict[str, float] = {key: fom_ugr(key, args=args) for key in RAWDATA.keys()}
 
-    mig_rgu_map_default: dict[str, float] = {}
-    mig_rgu_map_drac: dict[str, float] = {}
+    mig_rgu_map: dict[str, GpuRgu] = {}
 
     for cluster_config in config("scraping").clusters.values():
         for nodename, gpus_per_nodes in cluster_config.gpus_per_nodes.items():
@@ -93,22 +93,18 @@ def insert_rgu(sess: Session) -> None:
                 # Harmonize each GPU name found in gpus_per_nodes.
                 # Use harmonize_gpu() to handle recursive harmonization and avoid duplicated code.
                 std_gpu_name = cluster_config.harmonize_gpu(nodename, gpu_type)
+                assert std_gpu_name is not None
                 if ":" in std_gpu_name:
                     # If harmonized name is a MIG, we compute default and DRAC RGU.
                     mig_rgu_default = get_gpu_type_rgu(std_gpu_name, mig_ref="mila")
                     mig_rgu_drac = get_gpu_type_rgu(std_gpu_name, mig_ref="drac")
-
-                    # Save default RGU for this MIG
-                    if std_gpu_name in mig_rgu_map_default:
-                        assert mig_rgu_map_default[std_gpu_name] == mig_rgu_default
+                    gpu_rgu = GpuRgu(
+                        name=std_gpu_name, rgu=mig_rgu_default, drac_rgu=mig_rgu_drac
+                    )
+                    if std_gpu_name in mig_rgu_map:
+                        assert mig_rgu_map[std_gpu_name] == gpu_rgu
                     else:
-                        mig_rgu_map_default[std_gpu_name] = mig_rgu_default
-
-                    # Save DRAC RGU for this MIG
-                    if std_gpu_name in mig_rgu_map_drac:
-                        assert mig_rgu_map_drac[std_gpu_name] == mig_rgu_drac
-                    else:
-                        mig_rgu_map_drac[std_gpu_name] = mig_rgu_drac
+                        mig_rgu_map[std_gpu_name] = gpu_rgu
 
     # Save IGUANE RGU map into database
     # Currently, DRAC provides RGU only for MIG, so we set drac_rgu to rgu for main GPUs.
@@ -116,9 +112,5 @@ def insert_rgu(sess: Session) -> None:
         sess.merge(GpuRguDB(name=key, rgu=rgu, drac_rgu=rgu))
 
     # Saved MIG RGU map into database
-    for mig_key, mig_rgu_default in mig_rgu_map_default.items():
-        sess.merge(
-            GpuRguDB(
-                name=mig_key, rgu=mig_rgu_default, drac_rgu=mig_rgu_map_drac[mig_key]
-            )
-        )
+    for mig_gpu_rgu in mig_rgu_map.values():
+        sess.merge(GpuRguDB.model_validate(mig_gpu_rgu.model_dump()))
