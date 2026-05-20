@@ -84,8 +84,10 @@ from datetime import datetime
 from pathlib import Path
 
 from ldap3 import ALL_ATTRIBUTES, SUBTREE, Connection, Server, Tls
+from sqlmodel import func, select
 
-from sarc.config import PrivateKeyInfo
+from sarc.config import PrivateKeyInfo, config
+from sarc.db.users import CredentialsDB
 from sarc.scraping.users import (
     Credentials,
     MatchID,
@@ -121,17 +123,34 @@ class MilaLDAPScraper(UserScraper[MilaLDAPConfig]):
         displayName[0] -> display_name
         suspended[0]   -> status  (as string "enabled" or "disabled")
         """
-
-        for user_raw in json.loads(data.decode()):
-            creds = Credentials()
-            if user_raw["suspended"][0] != "true":
-                creds.insert(user_raw["posixUid"][0], start=cache_time)
-            yield UserMatch(
-                display_name=user_raw["displayName"][0],
-                email=user_raw["mail"][0],
-                matching_id=MatchID(name="mila_ldap", mid=user_raw["mail"][0]),
-                associated_accounts={"mila": creds},
-            )
+        with config().db.session() as s:
+            for user_raw in json.loads(data.decode()):
+                creds = Credentials()
+                if user_raw["suspended"][0] != "true":
+                    creds.insert(user_raw["posixUid"][0], start=cache_time)
+                # different behavior depending on current state in the db
+                elif s.exec(
+                    select(
+                        select(CredentialsDB)
+                        .where(
+                            CredentialsDB.domain == "mila",
+                            CredentialsDB.username == user_raw["posixUid"][0],
+                            func.upper_inf(CredentialsDB.valid),
+                        )
+                        .exists()
+                    )
+                ).one():
+                    # if the user already exists, it ends now
+                    creds.insert(
+                        user_raw["posixUid"][0], start=cache_time, end=cache_time
+                    )
+                if creds.values != []:
+                    yield UserMatch(
+                        display_name=user_raw["displayName"][0],
+                        email=user_raw["mail"][0],
+                        matching_id=MatchID(name="mila_ldap", mid=user_raw["mail"][0]),
+                        associated_accounts={"mila": creds},
+                    )
 
 
 _builtin_scrapers["mila_ldap"] = MilaLDAPScraper()

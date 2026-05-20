@@ -28,8 +28,6 @@ sarc:
         private_key_file: ../SARC_secrets/secrets/ldap/Google_2026_01_26_66827.key
         certificate_file: ../SARC_secrets/secrets/ldap/Google_2026_01_26_66827.crt
         service_uri: ldaps://ldap.google.com
-      drac_role:
-        csv_path: ../SARC_secrets/secrets/account_matching/sponsored_roles_for_Yoshua_Bengio_(CCI_jvb-000).csv
       drac_member:
         csv_path: ../SARC_secrets/secrets/account_matching/members-rrg-bengioy-ad-2025-10-29.csv
       # mymila:

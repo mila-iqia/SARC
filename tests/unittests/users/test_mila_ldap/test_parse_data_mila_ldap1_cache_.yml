@@ -63,23 +63,6 @@
     values: []
 - associated_accounts:
     mila:
-      values: []
-  display_name: John Smith the 003rd
-  email: john.smith003@mila.quebec
-  github_username:
-    values: []
-  google_scholar_profile:
-    values: []
-  known_matches: []
-  matching_id:
-    mid: john.smith003@mila.quebec
-    name: mila_ldap
-  member_type:
-    values: []
-  supervisors:
-    values: []
-- associated_accounts:
-    mila:
       values:
       - valid:
           lower: '2024-01-01T00:00:00Z'
