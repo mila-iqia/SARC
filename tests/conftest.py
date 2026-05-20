@@ -300,9 +300,9 @@ def read_only_db(read_only_db_config_object):
 
 @pytest.fixture
 def results_regression(file_regression):
-    def check(results):
+    def check(results, sort_by: str = "id"):
         txt = f"Found {len(results)} result(s):\n"
-        for i, x in enumerate(sorted(results, key=lambda x: x.id)):
+        for i, x in enumerate(sorted(results, key=lambda x: getattr(x, sort_by))):
             txt += f"\nResult #{i + 1}\n"
             txt += json.dumps(
                 x.model_dump(mode="json", exclude={"id": True}),

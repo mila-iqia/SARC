@@ -7,6 +7,7 @@ from sarc.db.allocation import AllocationDB
 from sarc.db.cluster import GPUBillingDB, SlurmClusterDB
 from sarc.db.diskusage import DiskUsageDB
 from sarc.db.job import SlurmJobDB
+from sarc.db.support import GpuRguDB
 from sarc.db.users import (
     CredentialsDB,
     GithubUsernameDB,
@@ -43,6 +44,13 @@ def test_factory_tables(read_only_db, results_regression, datatype):
     results = read_only_db.exec(q).all()
     assert len(results) > 0
     results_regression(results)
+
+
+def test_factory_table_gpu_rgu_db(read_only_db, results_regression):
+    q = select(GpuRguDB)
+    results = read_only_db.exec(q).all()
+    assert len(results) > 0
+    results_regression(results, sort_by="name")
 
 
 @pytest.mark.parametrize("trial", [1, 2])
