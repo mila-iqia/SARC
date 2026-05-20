@@ -4,7 +4,6 @@ from iguane.fom import RAWDATA, fom_ugr
 from sqlalchemy import Engine
 from sqlmodel import Session, select, text
 
-from sarc.client.rgumetrics import get_gpu_type_rgu
 from sarc.config import config
 
 from ..models.support import GpuRgu
@@ -80,6 +79,8 @@ def insert_clusters(sess: Session) -> None:
 
 def insert_rgu(sess: Session) -> None:
     # populate the db with initial rgu data from iguane
+    from sarc.client.rgumetrics import get_gpu_type_rgu
+
     from .support import GpuRguDB
 
     args = SimpleNamespace(fom_version="1.0", custom_weights=None, norm=False)
