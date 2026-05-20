@@ -8,15 +8,7 @@ from sarc.db.cluster import GPUBillingDB, SlurmClusterDB
 from sarc.db.diskusage import DiskUsageDB
 from sarc.db.job import SlurmJobDB
 from sarc.db.support import GpuRguDB
-from sarc.db.users import (
-    CredentialsDB,
-    GithubUsernameDB,
-    GoogleScholarDB,
-    MatchingID,
-    MemberTypeDB,
-    SupervisorsDB,
-    UserDB,
-)
+from sarc.db.users import CredentialsDB, MatchingID, MemberTypeDB, SupervisorsDB, UserDB
 
 
 @pytest.mark.parametrize(
@@ -34,8 +26,6 @@ from sarc.db.users import (
         CredentialsDB,
         MemberTypeDB,
         SupervisorsDB,
-        GithubUsernameDB,
-        GoogleScholarDB,
         MatchingID,
     ],
 )
