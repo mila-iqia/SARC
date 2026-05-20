@@ -9,7 +9,7 @@ from opentelemetry.sdk.resources import Resource
 from rapporteur.report import Report
 from rapporteur.slack import SlackReporter
 
-from sarc.config import Config, LoggingConfig, SlackConfig, config
+from sarc.config import LoggingConfig, SlackConfig, config
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +64,7 @@ def setupLogging(verbose_level: int = 0, command_name: str | None = None):
     conf = config()
     # Apparently this can be called in client mode which doesn't have logging
     if hasattr(conf, "logging") and conf.logging is not None:
-        assert isinstance(conf, Config)
+        assert isinstance(conf.logging, LoggingConfig)
         if conf.logging.slack:
             setupSlackReport(conf.logging.slack, command_name)
 
