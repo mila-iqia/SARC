@@ -60,8 +60,6 @@
   known_matches:
   - mid: abd-123
     name: drac_member
-  - mid: abd-123
-    name: drac_role
   - mid: jane.doe@mila.quebec
     name: mila_ldap
   matching_id:
@@ -97,8 +95,6 @@
   known_matches:
   - mid: abc-123
     name: drac_member
-  - mid: abc-123
-    name: drac_role
   - mid: jane.doe@mila.quebec
     name: mila_ldap
   matching_id:
@@ -140,8 +136,6 @@
   known_matches:
   - mid: edge-999
     name: drac_member
-  - mid: edge-999
-    name: drac_role
   - mid: edge.case@mila.quebec
     name: mila_ldap
   matching_id:
@@ -202,8 +196,6 @@
   known_matches:
   - mid: same-777
     name: drac_member
-  - mid: same-777
-    name: drac_role
   - mid: same.start.end@mila.quebec
     name: mila_ldap
   matching_id:
@@ -478,8 +470,6 @@
   known_matches:
   - mid: test-001
     name: drac_member
-  - mid: test-001
-    name: drac_role
   - mid: test@mila.quebec
     name: mila_ldap
   matching_id:
@@ -515,8 +505,6 @@
   known_matches:
   - mid: abc-123
     name: drac_member
-  - mid: abc-123
-    name: drac_role
   - mid: test@mila.quebec
     name: mila_ldap
   matching_id:
