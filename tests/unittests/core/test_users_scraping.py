@@ -12,6 +12,7 @@ import pytest
 
 from sarc.cache import Cache
 from sarc.db.users import UserDB
+from sarc.models.user import MemberType
 from sarc.scraping.users import (
     Credentials,
     MatchID,
@@ -73,8 +74,6 @@ class MockUserScraper(UserScraper[MockConfig]):
             email="john.doe@example.com",
             matching_id=MatchID(name="mock_plugin", mid="user1"),
         )
-        user1.github_username.insert("johndoe")
-        user1.google_scholar_profile.insert("scholar.google.com/citations?user=abc123")
         users.append(user1)
 
         user2 = UserMatch(
@@ -239,19 +238,12 @@ def test_update_user_match_merge_valid_fields():
     update_user = UserMatch(matching_id=MatchID(name="plugin2", mid="user1"))
 
     # Add some data to the update user
-    update_user.github_username.insert("newuser")
-    update_user.google_scholar_profile.insert(
-        "scholar.google.com/citations?user=newuser"
-    )
+    update_user.member_type.insert(MemberType.PROFESSOR)
 
     update_user_match(value=base_user, update=update_user)
 
     # Check that the data was merged
-    assert base_user.github_username.get_value() == "newuser"
-    assert (
-        base_user.google_scholar_profile.get_value()
-        == "scholar.google.com/citations?user=newuser"
-    )
+    assert base_user.member_type.get_value() == MemberType.PROFESSOR
 
 
 def test_get_user_scraper_builtin(mock_scraper):

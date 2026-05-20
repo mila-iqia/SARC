@@ -163,19 +163,13 @@ class MyMilaScraper(UserScraper[MyMilaConfig]):
                     "Invalid data in 'Alliance-DRAC_account' field (not a CCI or CCRI): %s",
                     drac_account,
                 )
-            gh_user = record[Headers.GitHub_username]
-            if gh_user:
-                um.github_username.insert(gh_user)
-            gs_profile = record[Headers.Google_Scholar_profile]
-            if gs_profile:
-                um.google_scholar_profile.insert(gs_profile)
             yield um
 
 
 _builtin_scrapers["mymila"] = MyMilaScraper()
 
 
-def _query_mymila(cfg: MyMilaConfig):
+def _query_mymila(cfg: MyMilaConfig) -> tuple[list, list[str]]:
     """
     Contact MyMila in order to retrieve users data,
     then return these data as MyMilaUser elements.

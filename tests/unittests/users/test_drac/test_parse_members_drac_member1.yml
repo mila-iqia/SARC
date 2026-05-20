@@ -7,10 +7,6 @@
         value: johndoe
   display_name: John Doe
   email: john.doe@example.com
-  github_username:
-    values: []
-  google_scholar_profile:
-    values: []
   known_matches: !!set {}
   matching_id:
     mid: abc-123
@@ -28,10 +24,6 @@
         value: janesmith
   display_name: Jane Smith
   email: jane.smith@example.com
-  github_username:
-    values: []
-  google_scholar_profile:
-    values: []
   known_matches: !!set {}
   matching_id:
     mid: def-456

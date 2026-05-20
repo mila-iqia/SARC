@@ -463,8 +463,6 @@ class Data:
     users: list[User] = field(default_factory=list)
     memberships: list[Valid[MemberType]] = field(default_factory=list)
     supervisions: list[Valid[Supervision]] = field(default_factory=list)
-    github_usernames: list[Valid[str]] = field(default_factory=list)
-    google_scholar_profile: list[Valid[str]] = field(default_factory=list)
     credentials: list[Valid[Credential]] = field(default_factory=list)
     scrapes: dict[str, RawSlurmOutput] = field(default_factory=dict)
 

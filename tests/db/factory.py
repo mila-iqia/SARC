@@ -174,8 +174,6 @@ class UserFactory:
         member_type=(),
         accounts=(("mila", "test"),),
         supervisors=(),
-        github_username=(),
-        google_scholar_profile=(),
     ) -> UserDB:
         def _finalize():
             for mtype in member_type:
@@ -184,10 +182,6 @@ class UserFactory:
                 u.associated_accounts[acct[0]].insert(*acct[1:])
             for sup in supervisors:
                 u._supervisors.insert(*sup)
-            for uname in github_username:
-                u.github_username.insert(*uname)
-            for profile in google_scholar_profile:
-                u.google_scholar_profile.insert(*profile)
 
         if match_ids is None:
             match_ids = {}
@@ -255,30 +249,9 @@ def create_users(sess: Session, user_factory=None) -> Iterable[UserDB]:
                 datetime(2021, 5, 1, tzinfo=dt.UTC),
             )
         ],
-        google_scholar_profile=[
-            ("https://scholar.google.com/citations?user=PataTe_000AJ&hl=en",)
-        ],
     )
     sess.add(prof2)
     sess.flush()
-    sess.add(
-        user_factory.add_user(
-            github_username=[
-                (
-                    "testuser",
-                    datetime(2023, 3, 3, tzinfo=dt.UTC),
-                    datetime(2030, 12, 30, tzinfo=dt.UTC),
-                )
-            ],
-            google_scholar_profile=[
-                (
-                    "https://scholar.google.com/citations?user=PataTe_111AJ&hl=en",
-                    datetime(2019, 10, 11, tzinfo=dt.UTC),
-                    datetime(2030, 12, 30, tzinfo=dt.UTC),
-                )
-            ],
-        )
-    )
     sess.add(user_factory.add_user(supervisors=[(_sups(prof2.id), None, None)]))
     sess.add(
         user_factory.add_user(
@@ -286,20 +259,6 @@ def create_users(sess: Session, user_factory=None) -> Iterable[UserDB]:
             member_type=[
                 (
                     "professor",
-                    datetime(2022, 1, 1, tzinfo=dt.UTC),
-                    datetime(2023, 1, 1, tzinfo=dt.UTC),
-                )
-            ],
-            github_username=[
-                (
-                    "test123",
-                    datetime(2022, 1, 1, tzinfo=dt.UTC),
-                    datetime(2023, 1, 1, tzinfo=dt.UTC),
-                )
-            ],
-            google_scholar_profile=[
-                (
-                    "profileA",
                     datetime(2022, 1, 1, tzinfo=dt.UTC),
                     datetime(2023, 1, 1, tzinfo=dt.UTC),
                 )
@@ -329,20 +288,6 @@ def create_users(sess: Session, user_factory=None) -> Iterable[UserDB]:
             member_type=[
                 (
                     "staff",
-                    datetime(2022, 1, 1, tzinfo=dt.UTC),
-                    datetime(2023, 1, 1, tzinfo=dt.UTC),
-                )
-            ],
-            github_username=[
-                (
-                    "test_abc",
-                    datetime(2022, 1, 1, tzinfo=dt.UTC),
-                    datetime(2023, 1, 1, tzinfo=dt.UTC),
-                )
-            ],
-            google_scholar_profile=[
-                (
-                    "profileB",
                     datetime(2022, 1, 1, tzinfo=dt.UTC),
                     datetime(2023, 1, 1, tzinfo=dt.UTC),
                 )

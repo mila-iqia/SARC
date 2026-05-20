@@ -101,8 +101,6 @@ def generate_users(self: DataFactory, data: Data):
     rng_names = self.get_rng("users:names")
     rng_sim = self.get_rng("users:simulation")
     rng_sup = self.get_rng("users:supervisors")
-    rng_github = self.get_rng("users:github")
-    rng_scholar = self.get_rng("users:scholar")
 
     pairs = [(adj, job) for adj in ADJECTIVES for job in JOBS]
     rng_names.shuffle(pairs)
@@ -227,32 +225,6 @@ def generate_users(self: DataFactory, data: Data):
     for uid in range(1, n_total + 1):
         close_membership(uid, t_end_dt)
         close_supervision(uid, t_end_dt)
-
-    # GitHub usernames (~60% of active users)
-    for uid in range(1, n_total + 1):
-        if uid not in first_active:
-            continue
-        if rng_github.random() < 0.6:
-            adj, job = pairs[uid - 1]
-            handle = f"{adj}{job}"
-            if rng_github.random() < 0.3:
-                handle += str(rng_github.randint(1, 99))
-            data.github_usernames.append(
-                Valid(user_id=uid, relationship=handle, start=t_start_dt, end=None)
-            )
-
-    # Google Scholar profiles (~70% of professors, ~15% of others)
-    for uid in range(1, n_total + 1):
-        if uid not in first_active:
-            continue
-        is_prof = states[uid] == MemberType.PROFESSOR or uid <= n_profs
-        if rng_scholar.random() < (0.7 if is_prof else 0.15):
-            profile_id = "".join(
-                rng_scholar.choices("abcdefghijklmnopqrstuvwxyz0123456789", k=10)
-            )
-            data.google_scholar_profile.append(
-                Valid(user_id=uid, relationship=profile_id, start=t_start_dt, end=None)
-            )
 
     # Credentials: one entry per (user, domain) for users who were ever active.
     # Username format depends on domain: flast for mila, firlas for drac, first.last otherwise.

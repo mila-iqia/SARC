@@ -42,6 +42,7 @@ class TestMilaLDAPScraper(UserPluginTester):
 
     @pytest.mark.time_machine("2023-01-01T00:00+00:00", tick=False)
     @pytest.mark.parametrize("raw_file", ["mila_ldap1.cache"])
+    @pytest.mark.usefixtures("read_only_db")
     def test_parse_data(self, raw_file, data_regression):
         with open(Path(__file__).parent / "inputs" / raw_file, "rb") as f:
             raw_data = f.read()
