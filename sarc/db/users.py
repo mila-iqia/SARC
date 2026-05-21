@@ -374,14 +374,6 @@ class SupervisorIDsField:
         self._field.insert(helpers, start, end, session)
 
 
-class GithubUsernameDB(ValidDB, table=True):
-    username: str
-
-
-class GoogleScholarDB(ValidDB, table=True):
-    profile_id: str
-
-
 class MatchingID(SQLModel, table=True):
     __table_args__ = (
         Index("user_match_id_idx", "user_id", "plugin_name", unique=True),
@@ -457,20 +449,6 @@ class UserDB(SQLModel, table=True):
     def supervisors(self) -> SupervisorIDsField:
         return SupervisorIDsField(self._supervisors)
 
-    @property
-    def github_username(self) -> ValidField[str]:
-        assert self.id is not None
-        return ValidField(
-            Session.object_session(self), GithubUsernameDB, "username", self.id
-        )
-
-    @property
-    def google_scholar_profile(self) -> ValidField[str]:
-        assert self.id is not None
-        return ValidField(
-            Session.object_session(self), GoogleScholarDB, "profile_id", self.id
-        )
-
     @classmethod
     def by_email(cls, sess: Session, email: str) -> Self | None:
         return sess.exec(select(cls).where(cls.email == email)).one_or_none()
@@ -511,8 +489,6 @@ def combine_users(db_user1: UserDB, db_user2: UserDB) -> UserDB:
             db_user1.display_name,
         )
     db_user1.member_type.merge_with(db_user2.member_type)
-    db_user1.github_username.merge_with(db_user2.github_username)
-    db_user1.google_scholar_profile.merge_with(db_user2.google_scholar_profile)
     for name, creds in db_user2.associated_accounts.items():
         db_user1.associated_accounts[name].merge_with(creds)
     db_user1._supervisors.merge_with(db_user2._supervisors)

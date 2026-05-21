@@ -59,7 +59,8 @@ JOBS = [
 TRANSITION_MATRIX: dict[MemberType | None, list[tuple[MemberType | None, float]]] = {
     None: [
         (None, 80),
-        (MemberType.MASTER_STUDENT, 5),
+        (MemberType.MASTER_RESEARCH, 5),
+        (MemberType.MASTER_PRO, 1),
         (MemberType.PHD_STUDENT, 3),
         (MemberType.INTERN, 2),
         (MemberType.STAFF, 3),
@@ -67,11 +68,12 @@ TRANSITION_MATRIX: dict[MemberType | None, list[tuple[MemberType | None, float]]
     ],
     MemberType.INTERN: [
         (MemberType.INTERN, 4),
-        (MemberType.MASTER_STUDENT, 4),
+        (MemberType.MASTER_RESEARCH, 4),
+        (MemberType.MASTER_PRO, 1),
         (None, 2),
     ],
-    MemberType.MASTER_STUDENT: [
-        (MemberType.MASTER_STUDENT, 80),
+    MemberType.MASTER_RESEARCH: [
+        (MemberType.MASTER_RESEARCH, 80),
         (MemberType.PHD_STUDENT, 18),
         (None, 2),
     ],
@@ -91,7 +93,11 @@ TRANSITION_MATRIX: dict[MemberType | None, list[tuple[MemberType | None, float]]
     MemberType.PROFESSOR: [(MemberType.PROFESSOR, 99), (None, 1)],
 }
 
-STUDENT_TYPES = {MemberType.MASTER_STUDENT, MemberType.PHD_STUDENT}
+STUDENT_TYPES = {
+    MemberType.MASTER_RESEARCH,
+    MemberType.MASTER_PRO,
+    MemberType.PHD_STUDENT,
+}
 
 # Probability of picking 1, 2, or 3 supervisors
 SUPERVISOR_COUNT_WEIGHTS = [0.80, 0.15, 0.05]
@@ -101,8 +107,6 @@ def generate_users(self: DataFactory, data: Data):
     rng_names = self.get_rng("users:names")
     rng_sim = self.get_rng("users:simulation")
     rng_sup = self.get_rng("users:supervisors")
-    rng_github = self.get_rng("users:github")
-    rng_scholar = self.get_rng("users:scholar")
 
     pairs = [(adj, job) for adj in ADJECTIVES for job in JOBS]
     rng_names.shuffle(pairs)
@@ -228,32 +232,6 @@ def generate_users(self: DataFactory, data: Data):
         close_membership(uid, t_end_dt)
         close_supervision(uid, t_end_dt)
 
-    # GitHub usernames (~60% of active users)
-    for uid in range(1, n_total + 1):
-        if uid not in first_active:
-            continue
-        if rng_github.random() < 0.6:
-            adj, job = pairs[uid - 1]
-            handle = f"{adj}{job}"
-            if rng_github.random() < 0.3:
-                handle += str(rng_github.randint(1, 99))
-            data.github_usernames.append(
-                Valid(user_id=uid, relationship=handle, start=t_start_dt, end=None)
-            )
-
-    # Google Scholar profiles (~70% of professors, ~15% of others)
-    for uid in range(1, n_total + 1):
-        if uid not in first_active:
-            continue
-        is_prof = states[uid] == MemberType.PROFESSOR or uid <= n_profs
-        if rng_scholar.random() < (0.7 if is_prof else 0.15):
-            profile_id = "".join(
-                rng_scholar.choices("abcdefghijklmnopqrstuvwxyz0123456789", k=10)
-            )
-            data.google_scholar_profile.append(
-                Valid(user_id=uid, relationship=profile_id, start=t_start_dt, end=None)
-            )
-
     # Credentials: one entry per (user, domain) for users who were ever active.
     # Username format depends on domain: flast for mila, firlas for drac, first.last otherwise.
     # Domain probabilities: mila 0.9, drac 0.65, other 0.5.
@@ -292,7 +270,8 @@ def generate_users(self: DataFactory, data: Data):
 MEMBER_STYLE: dict[MemberType | None, tuple[str, str]] = {
     None: ("\033[90m", "."),  # dark gray
     MemberType.INTERN: ("\033[97m", "I"),  # white
-    MemberType.MASTER_STUDENT: ("\033[94m", "M"),  # blue
+    MemberType.MASTER_RESEARCH: ("\033[94m", "M"),  # blue
+    MemberType.MASTER_PRO: ("\033[94m", "M"),  # blue
     MemberType.PHD_STUDENT: ("\033[96m", "P"),  # cyan
     MemberType.POSTDOC: ("\033[92m", "D"),  # green
     MemberType.PROFESSOR: ("\033[93m", "F"),  # yellow

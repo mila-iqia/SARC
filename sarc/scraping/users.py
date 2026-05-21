@@ -58,9 +58,6 @@ class UserMatch(BaseModel):
         default_factory=ValidField[list[MatchID]]
     )
 
-    github_username: ValidField[str] = Field(default_factory=ValidField[str])
-    google_scholar_profile: ValidField[str] = Field(default_factory=ValidField[str])
-
     # This is not really required for serialization, but it makes the order or
     # known_matches random if not present and complicates testing. If it becomes
     # a problem outside of tests we can find another solution.
@@ -139,11 +136,6 @@ def update_user_match(*, value: UserMatch, update: UserMatch) -> None:
             value.associated_accounts[domain].merge_with(credentials, truncate=True)
 
     value.supervisors.merge_with(update.supervisors, truncate=True)
-
-    value.github_username.merge_with(update.github_username, truncate=True)
-    value.google_scholar_profile.merge_with(
-        update.google_scholar_profile, truncate=True
-    )
 
 
 def fetch_users(scrapers: list[tuple[str, Any]]) -> None:
@@ -331,8 +323,6 @@ def update_user_db(sess: Session, user: UserMatch, db_user: UserDB) -> None:
     for domain, creds in user.associated_accounts.items():
         valid_merge(creds, db_user.associated_accounts[domain])
     valid_merge(user.member_type, db_user.member_type)
-    valid_merge(user.github_username, db_user.github_username)
-    valid_merge(user.google_scholar_profile, db_user.google_scholar_profile)
 
     def map_super(match_id: MatchID) -> int:
         res = lookup_match_id(sess, match_id)

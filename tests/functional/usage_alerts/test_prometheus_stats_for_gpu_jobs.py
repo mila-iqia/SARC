@@ -64,5 +64,6 @@ def test_check_prometheus_stats_for_gpu_jobs(
                     job.statistics = stats
                     sess.merge(job)
         sess.commit()
+    caplog.clear()
     assert cli_main(["health", "run", "--check", check_name]) == 0
     file_regression.check(re.sub(r"ERROR +.+\.py:[0-9]+ +", "", caplog.text))
