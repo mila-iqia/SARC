@@ -97,6 +97,8 @@ _user_scrapers = entry_points(group="sarc.user_scraper")
 
 def get_user_scraper(name: str) -> UserScraper:
     """Raises KeyError if the name is not found"""
+    import sarc.users  # noqa: F401
+
     try:
         return _builtin_scrapers[name]
     except KeyError:
@@ -197,6 +199,8 @@ def parse_ce(ce: CacheEntry) -> Iterable[UserMatch]:
         try:
             scraper = get_user_scraper(item[0])
         except KeyError as e:
+            if item[0] == "drac_role":
+                continue
             raise ValueError("Invalid user scraper") from e
         for userm in scraper.parse_user_data(item[1], ce.entry_datetime):
             userm.matching_id.name = item[0]

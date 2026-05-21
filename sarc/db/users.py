@@ -518,12 +518,10 @@ def deduplicate_users(sess: Session):
         .subquery()
     )
     dupes = sess.exec(
-        select(MatchingID)
-        .where(
+        select(MatchingID).where(
             MatchingID.plugin_name == subquery.c.plugin_name,
             MatchingID.match_id == subquery.c.match_id,
         )
-        .group_by(MatchingID.plugin_name, MatchingID.match_id)
     ).all()
 
     groups: dict[tuple[str, str], list[int]] = dict()
