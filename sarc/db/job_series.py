@@ -5,7 +5,6 @@ from sqlalchemy.dialects.postgresql import JSONB, aggregate_order_by
 from sqlmodel import FLOAT, JSON, Field, and_, case, col, desc, func, select
 
 from sarc.models.user import MemberType
-
 from .cluster import GPUBillingDB, SlurmClusterDB
 from .job import JobStatisticDB, SlurmJobDB, SlurmState
 from .sqlmodel import SQLModel
@@ -91,7 +90,7 @@ gpu_count_normalized_expr = case(
     # gpu_unit_billing is missing (cluster has no billing record at all, or
     # gpu_type missing from the mapping).
     else_=(gpu_count_raw / gpu_unit_billing),
-).label("rgu")
+)
 
 rgu_expr = (gpu_count_normalized_expr * GpuRguDB.rgu).label("rgu")
 rgu_drac_expr = (gpu_count_normalized_expr * GpuRguDB.drac_rgu).label("rgu_drac")
