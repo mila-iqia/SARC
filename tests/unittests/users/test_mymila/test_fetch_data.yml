@@ -1,5 +1,5 @@
-- - - null
-    - null
+- - - McGill
+    - Core Academic Member
     - abc-000
     - null
     - null
@@ -14,23 +14,23 @@
     - https://scholar.google.com/citations?user=PataTe_000AJ&hl=en
     - Smith000
     - john.smith000@mila.quebec
-    - null
-    - null
+    - Associate academic member
+    - PR-0000
     - Jane
     - Professor
-    - null
+    - '2023-09-01'
     - '2022-04-20'
     - null
     - null
-    - null
-    - Applicant
+    - '2025-09-01'
+    - Active
     - null
     - null
     - null
     - '0'
     - null
     - null
-    - null
+    - 'Yes'
     - 0
   - - UdeM
     - Associate academic member
@@ -101,14 +101,14 @@
     - 'Yes'
     - 2
   - - null
-    - Associate academic member
+    - HQP - Professional Master's
     - null
-    - null
-    - null
-    - null
+    - Core Academic Member
+    - Smith001 John
+    - 1
     - Mathématique
     - null
-    - null
+    - '2026-05-31'
     - null
     - Physics
     - John
@@ -116,26 +116,26 @@
     - null
     - Smith003
     - john.smith003@mila.quebec
-    - Core Academic Member
-    - PR-0003
+    - Collaborating Researcher
+    - ST-0003
     - null
-    - Professor
+    - Student
     - '2023-09-01'
-    - '2022-04-20'
     - null
+    - '2023-08-01'
     - null
     - '2025-09-01'
     - Active
-    - null
-    - null
-    - null
+    - Associate academic member
+    - Smith000 Jane
+    - 0
     - '3'
-    - null
-    - null
     - 'No'
+    - 'Yes'
+    - null
     - 3
   - - null
-    - Core Academic Member
+    - HQP - Undergraduate
     - abc-004
     - null
     - null
@@ -150,64 +150,64 @@
     - https://scholar.google.com/citations?user=PataTe_004AJ&hl=en
     - Smith004
     - john.smith004@mila.quebec
-    - Associate academic member
-    - PR-0004
+    - Permanent HQP
+    - ST-0004
     - Jane
-    - Professor
+    - Student
     - '2023-09-01'
     - null
     - null
     - null
     - '2024-09-01'
     - Inactive
-    - null
-    - null
-    - null
+    - Core Academic Member
+    - Smith001 John
+    - 1
     - '4'
     - null
+    - 'No'
     - null
-    - 'Yes'
     - 4
-  - - null
+  - - UdeM
+    - Research Intern
+    - abc-005-01
     - null
     - null
     - null
+    - Mathématique
     - null
     - null
     - null
-    - null
-    - null
-    - null
-    - null
+    - Electrical and Computer Engineering
     - John
     - null
-    - null
+    - https://portal.mila.quebec/site/forms/prof-candidate
     - Smith005
     - john.smith005@mila.quebec
+    - Collaborating Researcher
+    - ST-0005
+    - null
+    - Student
+    - '2023-09-01'
     - null
     - null
     - null
-    - Employee
-    - null
-    - null
-    - null
-    - null
-    - null
+    - '2025-09-01'
     - Active
-    - null
-    - null
-    - null
+    - Associate academic member
+    - Smith002 Jane
+    - 2
     - '5'
     - null
-    - null
+    - 'Yes'
     - null
     - 5
   - - Samsung SAIT
     - null
     - test123
-    - Associate academic member
-    - Smith002 Jane
-    - 2
+    - Core Academic Member
+    - Smith001 John
+    - 1
     - Informatique et de recherche opérationnelle
     - null
     - '2026-05-31'
@@ -228,12 +228,12 @@
     - null
     - '2025-09-01'
     - Active
-    - Core Academic Member
-    - Smith001 John
-    - 1
+    - Associate academic member
+    - Smith000 Jane
+    - 0
     - '6'
-    - 'Yes'
     - 'No'
+    - 'Yes'
     - null
     - 6
   - - null
@@ -262,12 +262,12 @@
     - null
     - '2025-09-01'
     - Active
-    - Associate academic member
-    - Smith002 Jane
-    - 2
+    - Core Academic Member
+    - Smith001 John
+    - 1
     - '7'
     - null
-    - 'Yes'
+    - 'No'
     - null
     - 7
   - - McGill
@@ -296,20 +296,20 @@
     - null
     - '2025-09-01'
     - Active
-    - Core Academic Member
-    - Smith003 John
-    - 3
+    - Associate academic member
+    - Smith002 Jane
+    - 2
     - '8'
     - null
-    - 'No'
+    - 'Yes'
     - null
     - 8
   - - null
     - HQP - PhD
     - abc-009-01
-    - null
-    - Smith000 Jane
-    - 0
+    - Core Academic Member
+    - Smith001 John
+    - 1
     - Mathématique
     - null
     - '2026-05-31'
@@ -331,10 +331,10 @@
     - '2024-09-01'
     - Inactive
     - Associate academic member
-    - Smith004 Jane
-    - 4
+    - Smith000 Jane
+    - 0
     - '9'
-    - null
+    - 'No'
     - 'Yes'
     - null
     - 9

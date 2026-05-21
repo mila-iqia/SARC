@@ -7,10 +7,6 @@
         value: prof2
   display_name: Prof 2
   email: prof2@mila.quebec
-  github_username:
-    values: []
-  google_scholar_profile:
-    values: []
   known_matches:
   - mid: prof2@mila.quebec
     name: mila_ldap
@@ -30,10 +26,6 @@
         value: smithj
   display_name: John Smith
   email: john.smith@mila.quebec
-  github_username:
-    values: []
-  google_scholar_profile:
-    values: []
   known_matches:
   - mid: john.smith@mila.quebec
     name: mila_ldap
@@ -53,10 +45,6 @@
         value: jdoe99
   display_name: Jane Doe
   email: jane.doe@mila.quebec
-  github_username:
-    values: []
-  google_scholar_profile:
-    values: []
   known_matches:
   - mid: abd-123
     name: drac_member
@@ -88,10 +76,6 @@
         value: jane.doe
   display_name: Jane Doe
   email: jane.doe@mila.quebec
-  github_username:
-    values: []
-  google_scholar_profile:
-    values: []
   known_matches:
   - mid: abc-123
     name: drac_member
@@ -129,10 +113,6 @@
         value: edgecase
   display_name: Edge Case User
   email: edge.case@mila.quebec
-  github_username:
-    values: []
-  google_scholar_profile:
-    values: []
   known_matches:
   - mid: edge-999
     name: drac_member
@@ -160,10 +140,6 @@
 - associated_accounts: {}
   display_name: No Timestamps User
   email: no.timestamps@mila.quebec
-  github_username:
-    values: []
-  google_scholar_profile:
-    values: []
   known_matches:
   - mid: no.timestamps@mila.quebec
     name: mila_ldap
@@ -189,10 +165,6 @@
         value: samestartend
   display_name: Same Start End User
   email: same.start.end@mila.quebec
-  github_username:
-    values: []
-  google_scholar_profile:
-    values: []
   known_matches:
   - mid: same-777
     name: drac_member
@@ -218,10 +190,6 @@
         value: minimal
   display_name: Minimal User
   email: minimal@mila.quebec
-  github_username:
-    values: []
-  google_scholar_profile:
-    values: []
   known_matches:
   - mid: minimal@mila.quebec
     name: mila_ldap
@@ -241,10 +209,6 @@
         value: professor
   display_name: Professor User
   email: professor@mila.quebec
-  github_username:
-    values: []
-  google_scholar_profile:
-    values: []
   known_matches:
   - mid: professor@mila.quebec
     name: mila_ldap
@@ -268,10 +232,6 @@
         value: master
   display_name: Master Student
   email: master@mila.quebec
-  github_username:
-    values: []
-  google_scholar_profile:
-    values: []
   known_matches:
   - mid: master@mila.quebec
     name: mila_ldap
@@ -295,10 +255,6 @@
         value: phd
   display_name: PhD Student
   email: phd@mila.quebec
-  github_username:
-    values: []
-  google_scholar_profile:
-    values: []
   known_matches:
   - mid: phd@mila.quebec
     name: mila_ldap
@@ -322,10 +278,6 @@
         value: postdoc
   display_name: Postdoc User
   email: postdoc@mila.quebec
-  github_username:
-    values: []
-  google_scholar_profile:
-    values: []
   known_matches:
   - mid: postdoc@mila.quebec
     name: mila_ldap
@@ -349,10 +301,6 @@
         value: intern
   display_name: Intern User
   email: intern@mila.quebec
-  github_username:
-    values: []
-  google_scholar_profile:
-    values: []
   known_matches:
   - mid: intern@mila.quebec
     name: mila_ldap
@@ -376,10 +324,6 @@
         value: staff
   display_name: Staff User
   email: staff@mila.quebec
-  github_username:
-    values: []
-  google_scholar_profile:
-    values: []
   known_matches:
   - mid: staff@mila.quebec
     name: mila_ldap
@@ -403,10 +347,6 @@
         value: supervisor
   display_name: Supervisor User
   email: supervisor@mila.quebec
-  github_username:
-    values: []
-  google_scholar_profile:
-    values: []
   known_matches:
   - mid: supervisor@mila.quebec
     name: mila_ldap
@@ -426,10 +366,6 @@
         value: student
   display_name: Student User
   email: student@mila.quebec
-  github_username:
-    values: []
-  google_scholar_profile:
-    values: []
   known_matches:
   - mid: student@mila.quebec
     name: mila_ldap
@@ -463,10 +399,6 @@
         value: testuser
   display_name: Test User
   email: test@mila.quebec
-  github_username:
-    values: []
-  google_scholar_profile:
-    values: []
   known_matches:
   - mid: test-001
     name: drac_member
@@ -498,10 +430,6 @@
         value: testuser
   display_name: Test User
   email: test@mila.quebec
-  github_username:
-    values: []
-  google_scholar_profile:
-    values: []
   known_matches:
   - mid: abc-123
     name: drac_member

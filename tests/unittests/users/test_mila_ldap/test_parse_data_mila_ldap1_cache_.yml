@@ -7,10 +7,6 @@
         value: smithj000
   display_name: John Smith the 000rd
   email: john.smith000@mila.quebec
-  github_username:
-    values: []
-  google_scholar_profile:
-    values: []
   known_matches: []
   matching_id:
     mid: john.smith000@mila.quebec
@@ -28,10 +24,6 @@
         value: smithj001
   display_name: John Smith the 001rd
   email: john.smith001@mila.quebec
-  github_username:
-    values: []
-  google_scholar_profile:
-    values: []
   known_matches: []
   matching_id:
     mid: john.smith001@mila.quebec
@@ -49,10 +41,6 @@
         value: smithj002
   display_name: John Smith the 002rd
   email: john.smith002@mila.quebec
-  github_username:
-    values: []
-  google_scholar_profile:
-    values: []
   known_matches: []
   matching_id:
     mid: john.smith002@mila.quebec
@@ -70,10 +58,6 @@
         value: smithj004
   display_name: John Smith the 004rd
   email: john.smith004@mila.quebec
-  github_username:
-    values: []
-  google_scholar_profile:
-    values: []
   known_matches: []
   matching_id:
     mid: john.smith004@mila.quebec
@@ -91,10 +75,6 @@
         value: smithj005
   display_name: John Smith the 005rd
   email: john.smith005@mila.quebec
-  github_username:
-    values: []
-  google_scholar_profile:
-    values: []
   known_matches: []
   matching_id:
     mid: john.smith005@mila.quebec
@@ -112,10 +92,6 @@
         value: smithj006
   display_name: John Smith the 006rd
   email: john.smith006@mila.quebec
-  github_username:
-    values: []
-  google_scholar_profile:
-    values: []
   known_matches: []
   matching_id:
     mid: john.smith006@mila.quebec
@@ -133,10 +109,6 @@
         value: smithj007
   display_name: John Smith the 007rd
   email: john.smith007@mila.quebec
-  github_username:
-    values: []
-  google_scholar_profile:
-    values: []
   known_matches: []
   matching_id:
     mid: john.smith007@mila.quebec
@@ -154,10 +126,6 @@
         value: smithj008
   display_name: John Smith the 008rd
   email: john.smith008@mila.quebec
-  github_username:
-    values: []
-  google_scholar_profile:
-    values: []
   known_matches: []
   matching_id:
     mid: john.smith008@mila.quebec
@@ -175,10 +143,6 @@
         value: smithj009
   display_name: John Smith the 009rd
   email: john.smith009@mila.quebec
-  github_username:
-    values: []
-  google_scholar_profile:
-    values: []
   known_matches: []
   matching_id:
     mid: john.smith009@mila.quebec

@@ -81,7 +81,7 @@ def dictset(dictionnary: dict, operation: dict) -> dict:
 
 def fake_mymila_data(
     nbr_users: int = 10,
-    nbr_profs: int = 5,
+    nbr_profs: int = 3,
     hardcoded_values_by_user: dict[int, dict[str, Any]] = {},
 ) -> tuple[list[tuple], tuple]:
     records: list[tuple] = []
@@ -117,13 +117,11 @@ def mymila_entry_builder(
     # first 'nbr_profs' names will be professors and the rest students
     def mymila_entry(i: int) -> tuple:
         is_prof = i < nbr_profs
-        is_employee = i == nbr_profs
-        is_applicant = i % 5 == 0 and not is_employee
         is_inactive = i % 5 == 4
         drac_account = [f"abc-{i:03d}", f"abc-{i:03d}-01", "test123", None][i % 4]
 
-        supervisor = None if is_prof or is_employee else i % nbr_profs
-        co_supervisor = None if is_prof or is_employee or i % 3 else (i + 1) % nbr_profs
+        supervisor = None if is_prof else i % nbr_profs
+        co_supervisor = None if is_prof or i % 3 else (i + 1) % nbr_profs
 
         membership_types = _membership_types[int(is_prof)]
         affiliation_types = _affiliation_types[int(is_prof)]
@@ -165,19 +163,13 @@ def mymila_entry_builder(
                 i,
                 "Affiliated_university",
                 None
-                if is_applicant or is_inactive or is_employee
+                if is_inactive
                 else affiliated_university[i % len(affiliated_university)],
             ),
             _define_value(
-                i,
-                "Affiliation_type",
-                None
-                if is_applicant or is_employee
-                else affiliation_types[i % len(affiliation_types)],
+                i, "Affiliation_type", affiliation_types[i % len(affiliation_types)]
             ),
-            _define_value(
-                i, "Alliance-DRAC_account", None if is_employee else drac_account
-            ),
+            _define_value(i, "Alliance-DRAC_account", drac_account),
             # These are not _define_values because they depend on the id
             (
                 None
@@ -200,89 +192,57 @@ def mymila_entry_builder(
             _define_value(
                 i,
                 "Department_affiliated",
-                None
-                if is_employee or (is_applicant and not is_prof)
-                else departement_affiliated[i % len(departement_affiliated)],
+                departement_affiliated[i % len(departement_affiliated)],
             ),
             _define_value(i, "End_date_of_academic_nomination", None),
             _define_value(
                 i,
                 "End_date_of_studies",
-                None if is_employee or is_prof or i % 3 != 0 else date(2026, 5, 31),
+                None if is_prof or i % 3 != 0 else date(2026, 5, 31),
             ),
             _define_value(i, "End_date_of_visit-internship", None),
             _define_value(
                 i,
                 "Faculty_affiliated",
                 None
-                if is_employee or (is_applicant and not is_prof) or is_inactive
+                if is_inactive
                 else faculty_affiliated[i % len(faculty_affiliated)],
             ),
             _define_value(i, "First_Name", first_name),
             _define_value(
-                i,
-                "GitHub_username",
-                None if is_employee else github_usernames[i % len(github_usernames)],
+                i, "GitHub_username", github_usernames[i % len(github_usernames)]
             ),
             _define_value(
-                i,
-                "Google_Scholar_profile",
-                None if is_employee else scholar_profiles[i % len(scholar_profiles)],
+                i, "Google_Scholar_profile", scholar_profiles[i % len(scholar_profiles)]
             ),
             _define_value(i, "Last_Name", last_name),
             _define_value(i, "MILA_Email", email),
             _define_value(
-                i,
-                "Membership_Type",
-                None
-                if is_employee or is_applicant
-                else membership_types[i % len(membership_types)],
+                i, "Membership_Type", membership_types[i % len(membership_types)]
             ),
             _define_value(
-                i,
-                "Mila_Number",
-                None
-                if is_employee or is_applicant
-                else (f"PR-{i:04d}" if is_prof else f"ST-{i:04d}"),
+                i, "Mila_Number", (f"PR-{i:04d}" if is_prof else f"ST-{i:04d}")
             ),
             _define_value(i, "Preferred_First_Name", None if i % 2 else "Jane"),
-            _define_value(
-                i,
-                "Profile_Type",
-                "Professor" if is_prof else ("Employee" if is_employee else "Student"),
-            ),
-            _define_value(
-                i,
-                "Start_Date_with_MILA",
-                None if is_employee or is_applicant else date(2023, 9, 1),
-            ),
+            _define_value(i, "Profile_Type", "Professor" if is_prof else "Student"),
+            _define_value(i, "Start_Date_with_MILA", date(2023, 9, 1)),
             _define_value(
                 i,
                 "Start_date_of_academic_nomination",
-                None
-                if not is_prof or is_employee or is_inactive
-                else date(2022, 4, 20),
+                None if not is_prof or is_inactive else date(2022, 4, 20),
             ),
             _define_value(
                 i,
                 "Start_date_of_studies",
-                None if is_employee or is_prof or i % 3 != 0 else date(2023, 8, 1),
+                None if is_prof or i % 3 != 0 else date(2023, 8, 1),
             ),
             _define_value(i, "Start_date_of_visit-internship", None),
             _define_value(
                 i,
                 "End_Date_with_MILA",
-                None
-                if is_employee or is_applicant
-                else (date(2024, 9, 1) if is_inactive else date(2025, 9, 1)),
+                (date(2024, 9, 1) if is_inactive else date(2025, 9, 1)),
             ),
-            _define_value(
-                i,
-                "Status",
-                "Applicant"
-                if is_applicant
-                else ("Inactive" if is_inactive else "Active"),
-            ),
+            _define_value(i, "Status", ("Inactive" if is_inactive else "Active")),
             (
                 None
                 if supervisor is None
@@ -313,9 +273,7 @@ def mymila_entry_builder(
                 else records[supervisor][Headers.CCAI_Chair_CIFAR]
             ),  # "Supervisor_Principal_CCAI_Chair_CIFAR"
             _define_value(
-                i,
-                "CCAI_Chair_CIFAR",
-                None if (not is_prof) or is_applicant else ["Yes", "No"][i % 2],
+                i, "CCAI_Chair_CIFAR", None if not is_prof else ["Yes", "No"][i % 2]
             ),
             _define_value(i, "_MEMBER_NUM_", i),
         )

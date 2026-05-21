@@ -45,7 +45,7 @@ def _determine_member_type(drac_members: dict[str, Any] | None) -> MemberType | 
     if "professeur" in position or "professor" in position:
         return MemberType.PROFESSOR
     elif "étudiant à la maîtrise" in position or "master" in position:
-        return MemberType.MASTER_STUDENT
+        return MemberType.MASTER_RESEARCH
     elif (
         "étudiant au doctorat" in position
         or "phd" in position

@@ -4,7 +4,6 @@ import sys
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass
-from functools import cached_property
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
@@ -178,10 +177,6 @@ class DbConfiguration:
     job_patch: Any = None
     read_only: bool = False
 
-    @cached_property
-    def db_name(self):
-        return f"test-db-{self.base_name}-{uuid4().hex}"
-
     def _fill(self, db):
         from .db.factory import (
             create_allocations,
@@ -230,14 +225,15 @@ class DbConfiguration:
         admin_engine.dispose()
 
     def __call__(self, request):
-        with custom_db_config(self.db_name):
-            self.executive(f'CREATE DATABASE "{self.db_name}"')
+        db_name = f"test-db-{self.base_name}-{uuid4().hex}"
+        with custom_db_config(db_name):
+            self.executive(f'CREATE DATABASE "{db_name}"')
             try:
                 if not self.empty:
                     self._fill(config().db)
-                yield self.db_name
+                yield db_name
             finally:
-                self.executive(f'DROP DATABASE "{self.db_name}" WITH (FORCE)')
+                self.executive(f'DROP DATABASE "{db_name}" WITH (FORCE)')
 
     def fixture(self):
         scope = "session" if self.read_only else "function"

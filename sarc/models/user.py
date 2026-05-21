@@ -4,7 +4,8 @@ from pydantic import BaseModel
 
 
 class MemberType(str, Enum):
-    MASTER_STUDENT = "master"
+    MASTER_RESEARCH = "master"
+    MASTER_PRO = "master pro"
     PHD_STUDENT = "phd"
     POSTDOC = "postdoc"
     PROFESSOR = "professor"
