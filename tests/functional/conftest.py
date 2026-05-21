@@ -30,7 +30,7 @@ def rgu_db(empty_read_write_db):
     # Fake GPUs with RGU values
     empty_read_write_db.add_all(
         [
-            GpuRguDB(name=name, rgu=rgu)
+            GpuRguDB(name=name, rgu=rgu, drac_rgu=rgu)
             for name, rgu in {
                 "A100": 3.21,
                 "raisin_gpu_with_rgu_no_billing": 1.5,
