@@ -8,7 +8,11 @@
     mid: '0'
     name: mymila
   member_type:
-    values: []
+    values:
+    - valid:
+        lower: '2023-09-01T00:00:00Z'
+        upper: '2025-09-01T00:00:00Z'
+      value: professor
   supervisors:
     values: []
 - associated_accounts: {}
@@ -21,33 +25,11 @@
     mid: '1'
     name: mymila
   member_type:
-    values: []
-  supervisors:
-    values: []
-- associated_accounts: {}
-  display_name: Jane Smith002
-  email: john.smith002@mila.quebec
-  known_matches:
-  - mid: john.smith002@mila.quebec
-    name: mila_ldap
-  matching_id:
-    mid: '2'
-    name: mymila
-  member_type:
-    values: []
-  supervisors:
-    values: []
-- associated_accounts: {}
-  display_name: John Smith003
-  email: john.smith003@mila.quebec
-  known_matches:
-  - mid: john.smith003@mila.quebec
-    name: mila_ldap
-  matching_id:
-    mid: '3'
-    name: mymila
-  member_type:
-    values: []
+    values:
+    - valid:
+        lower: '2023-09-01T00:00:00Z'
+        upper: '2025-09-01T00:00:00Z'
+      value: professor
   supervisors:
     values: []
 - associated_accounts: {}
@@ -62,7 +44,13 @@
   member_type:
     values: []
   supervisors:
-    values: []
+    values:
+    - valid:
+        lower: '2023-09-01T00:00:00Z'
+        upper: '2024-09-01T00:00:00Z'
+      value:
+      - mid: '1'
+        name: mymila
 - associated_accounts: {}
   display_name: John Smith005
   email: john.smith005@mila.quebec
@@ -73,7 +61,11 @@
     mid: '5'
     name: mymila
   member_type:
-    values: []
+    values:
+    - valid:
+        lower: '2023-09-01T00:00:00Z'
+        upper: '2025-09-01T00:00:00Z'
+      value: intern
   supervisors:
     values: []
 - associated_accounts: {}
@@ -90,12 +82,12 @@
   supervisors:
     values:
     - valid:
-        lower: null
-        upper: null
+        lower: '2023-09-01T00:00:00Z'
+        upper: '2025-09-01T00:00:00Z'
       value:
-      - mid: '1'
+      - mid: '0'
         name: mymila
-      - mid: '2'
+      - mid: '1'
         name: mymila
 - associated_accounts: {}
   display_name: John Smith007
@@ -111,10 +103,10 @@
   supervisors:
     values:
     - valid:
-        lower: null
-        upper: null
+        lower: '2023-09-01T00:00:00Z'
+        upper: '2025-09-01T00:00:00Z'
       value:
-      - mid: '2'
+      - mid: '1'
         name: mymila
 - associated_accounts: {}
   display_name: Jane Smith008
@@ -126,15 +118,13 @@
     mid: '8'
     name: mymila
   member_type:
-    values: []
-  supervisors:
     values:
     - valid:
-        lower: null
-        upper: null
-      value:
-      - mid: '3'
-        name: mymila
+        lower: '2023-09-01T00:00:00Z'
+        upper: '2025-09-01T00:00:00Z'
+      value: master
+  supervisors:
+    values: []
 - associated_accounts: {}
   display_name: John Smith009
   email: john.smith009@mila.quebec
@@ -145,14 +135,18 @@
     mid: '9'
     name: mymila
   member_type:
-    values: []
+    values:
+    - valid:
+        lower: '2023-09-01T00:00:00Z'
+        upper: '2024-09-01T00:00:00Z'
+      value: phd
   supervisors:
     values:
     - valid:
-        lower: null
-        upper: null
+        lower: '2023-09-01T00:00:00Z'
+        upper: '2024-09-01T00:00:00Z'
       value:
-      - mid: '4'
-        name: mymila
       - mid: '0'
+        name: mymila
+      - mid: '1'
         name: mymila

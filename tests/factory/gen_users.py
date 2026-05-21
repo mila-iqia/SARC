@@ -59,7 +59,8 @@ JOBS = [
 TRANSITION_MATRIX: dict[MemberType | None, list[tuple[MemberType | None, float]]] = {
     None: [
         (None, 80),
-        (MemberType.MASTER_STUDENT, 5),
+        (MemberType.MASTER_RESEARCH, 5),
+        (MemberType.MASTER_PRO, 1),
         (MemberType.PHD_STUDENT, 3),
         (MemberType.INTERN, 2),
         (MemberType.STAFF, 3),
@@ -67,11 +68,12 @@ TRANSITION_MATRIX: dict[MemberType | None, list[tuple[MemberType | None, float]]
     ],
     MemberType.INTERN: [
         (MemberType.INTERN, 4),
-        (MemberType.MASTER_STUDENT, 4),
+        (MemberType.MASTER_RESEARCH, 4),
+        (MemberType.MASTER_PRO, 1),
         (None, 2),
     ],
-    MemberType.MASTER_STUDENT: [
-        (MemberType.MASTER_STUDENT, 80),
+    MemberType.MASTER_RESEARCH: [
+        (MemberType.MASTER_RESEARCH, 80),
         (MemberType.PHD_STUDENT, 18),
         (None, 2),
     ],
@@ -91,7 +93,11 @@ TRANSITION_MATRIX: dict[MemberType | None, list[tuple[MemberType | None, float]]
     MemberType.PROFESSOR: [(MemberType.PROFESSOR, 99), (None, 1)],
 }
 
-STUDENT_TYPES = {MemberType.MASTER_STUDENT, MemberType.PHD_STUDENT}
+STUDENT_TYPES = {
+    MemberType.MASTER_RESEARCH,
+    MemberType.MASTER_PRO,
+    MemberType.PHD_STUDENT,
+}
 
 # Probability of picking 1, 2, or 3 supervisors
 SUPERVISOR_COUNT_WEIGHTS = [0.80, 0.15, 0.05]
@@ -264,7 +270,8 @@ def generate_users(self: DataFactory, data: Data):
 MEMBER_STYLE: dict[MemberType | None, tuple[str, str]] = {
     None: ("\033[90m", "."),  # dark gray
     MemberType.INTERN: ("\033[97m", "I"),  # white
-    MemberType.MASTER_STUDENT: ("\033[94m", "M"),  # blue
+    MemberType.MASTER_RESEARCH: ("\033[94m", "M"),  # blue
+    MemberType.MASTER_PRO: ("\033[94m", "M"),  # blue
     MemberType.PHD_STUDENT: ("\033[96m", "P"),  # cyan
     MemberType.POSTDOC: ("\033[92m", "D"),  # green
     MemberType.PROFESSOR: ("\033[93m", "F"),  # yellow
