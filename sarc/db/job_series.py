@@ -79,19 +79,22 @@ cluster_billing_count = (
     .where(GPUBillingDB.cluster_id == SlurmClusterDB.id)
     .scalar_subquery()
 )
-rgu_expr = case(
+gpu_count_normalized_expr = case(
     # A: billing_is_gpu -> multiply.
-    (col(SlurmClusterDB.billing_is_gpu) == True, gpu_count_raw * GpuRguDB.rgu),  # noqa: E712
+    (col(SlurmClusterDB.billing_is_gpu) == True, gpu_count_raw),  # noqa: E712
     # B: pre-billing era (cluster has billings but none applicable yet) -> multiply.
     (
         and_(col(billing_subq.c.gpu_to_billing).is_(None), cluster_billing_count > 0),
-        gpu_count_raw * GpuRguDB.rgu,
+        gpu_count_raw,
     ),
     # C: scale by per-type billing. NULL division yields NULL (NaN) when
     # gpu_unit_billing is missing (cluster has no billing record at all, or
     # gpu_type missing from the mapping).
-    else_=(gpu_count_raw / gpu_unit_billing) * GpuRguDB.rgu,
+    else_=(gpu_count_raw / gpu_unit_billing),
 ).label("rgu")
+
+rgu_expr = (gpu_count_normalized_expr * GpuRguDB.rgu).label("rgu")
+rgu_drac_expr = (gpu_count_normalized_expr * GpuRguDB.drac_rgu).label("rgu_drac")
 
 # Cost and waste
 cpu_cost = col(SlurmJobDB.elapsed_time) * col(SlurmJobDB.requested_cpu)
@@ -142,7 +145,9 @@ class JobSeriesDB(SQLModel, table=True):
             stats_subq,
             supervisors_subq,
             col(GpuRguDB.rgu).label("gpu_type_rgu"),
+            col(GpuRguDB.drac_rgu).label("gpu_type_rgu_drac"),
             rgu_expr,
+            rgu_drac_expr,
             cpu_cost.label("cpu_cost"),
             ((1 - cpu_utilization) * cpu_cost).label("cpu_waste"),
             cpu_equivalent_cost.label("cpu_equivalent_cost"),
@@ -227,7 +232,9 @@ class JobSeriesDB(SQLModel, table=True):
     statistics: dict[str, dict[str, float]] | None = Field(sa_type=JSON)
 
     gpu_type_rgu: float | None
+    gpu_type_rgu_drac: float | None
     rgu: float | None
+    rgu_drac: float | None
 
     cpu_cost: float | None
     cpu_waste: float | None

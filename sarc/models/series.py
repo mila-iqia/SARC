@@ -83,7 +83,9 @@ class JobSeries:
     cluster_name: str | None = None
     statistics: dict[str, dict[str, float]] | None = None
     gpu_type_rgu: float | None = None
+    gpu_type_rgu_drac: float | None = None
     rgu: float | None = None
+    rgu_drac: float | None = None
     display_name: str | None = None
     email: str | None = None
     member_type: MemberType | None = None
