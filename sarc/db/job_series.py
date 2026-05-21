@@ -5,6 +5,7 @@ from sqlalchemy.dialects.postgresql import JSONB, aggregate_order_by
 from sqlmodel import FLOAT, JSON, Field, and_, case, col, desc, func, select
 
 from sarc.models.user import MemberType
+
 from .cluster import GPUBillingDB, SlurmClusterDB
 from .job import JobStatisticDB, SlurmJobDB, SlurmState
 from .sqlmodel import SQLModel
