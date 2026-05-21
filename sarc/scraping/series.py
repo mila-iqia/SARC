@@ -8,6 +8,7 @@ from prometheus_api_client.metric_range_df import MetricRangeDataFrame
 
 from sarc.config import UTC, config
 from sarc.db.job import JobStatisticDB, SlurmJobDB
+from sarc.scraping.dcgm import DCGM_FP64_BLANK
 from sarc.traces import trace_decorator
 
 logger = logging.getLogger(__name__)
@@ -138,6 +139,13 @@ def compute_job_statistics_from_dataframe(
 
     df = df.reset_index()
 
+    # Drop DCGM BLANK sentinels (2**47 and the NOT_FOUND/NOT_SUPPORTED/
+    # NOT_PERMISSIONED variants) that the GPU exporter forwards untouched
+    # when a metric is unavailable; otherwise they pollute mean/max/quantiles.
+    df = df[df["value"] < DCGM_FP64_BLANK]
+    if df.empty:
+        return None
+
     groupby = ["instance", "core", "gpu"]
     groupby = [col for col in groupby if col in df]
 
@@ -267,10 +275,12 @@ def compute_job_statistics(
 
     system_memory = None
     if job.allocated_mem is not None:
+        # NB: slurm_job_memory_usage is expressed in bytes
+        # job.allocated_mem is in megabytes (multiple of 2**20 bytes)
         system_memory = compute_job_statistics_from_dataframe(
             metrics["slurm_job_memory_usage"],
             statistics=statistics_dict,
-            normalization=lambda x: float(x / 1e6 / cast(int, job.allocated_mem)),
+            normalization=lambda x: float(x / (2**20) / cast(int, job.allocated_mem)),
             unused_threshold=False,
         )
     elif metrics["slurm_job_memory_usage"] is not None:
