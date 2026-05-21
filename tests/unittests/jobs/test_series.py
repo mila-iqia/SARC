@@ -5,6 +5,12 @@ import pandas
 import pytest
 from pandas import DataFrame
 
+from sarc.scraping.dcgm import (
+    DCGM_FP64_BLANK,
+    DCGM_FP64_NOT_FOUND,
+    DCGM_FP64_NOT_PERMISSIONED,
+    DCGM_FP64_NOT_SUPPORTED,
+)
 from sarc.scraping.series import compute_job_statistics_from_dataframe
 
 
@@ -56,6 +62,35 @@ def test_compute_job_statistics_from_dataframe_time_counter(delta):
         df, {"mean": lambda self: self.mean()}, is_time_counter=True
     )
     assert stats == {"mean": (75 / delta + 15 / delta) / 2, "unused": 0}
+
+
+def test_compute_job_statistics_from_dataframe_filters_dcgm_blank():
+    # Mix of valid values and DCGM sentinels (BLANK + the three error
+    # variants). All sentinels must be discarded so that stats reflect only
+    # the valid samples.
+    sentinels = [
+        DCGM_FP64_BLANK,
+        DCGM_FP64_NOT_FOUND,
+        DCGM_FP64_NOT_SUPPORTED,
+        DCGM_FP64_NOT_PERMISSIONED,
+    ]
+    rows = [{"instance": "cn-c002", "value": v} for v in [1.0, 2.0, 3.0, *sentinels]]
+    df = _generate_df(rows)
+    stats = compute_job_statistics_from_dataframe(
+        df,
+        {"mean": lambda self: self.mean(), "max": lambda self: self.max()},
+        unused_threshold=None,
+    )
+    assert stats == {"mean": 2.0, "max": 3.0, "unused": 0}
+
+
+def test_compute_job_statistics_from_dataframe_all_blank_returns_none():
+    rows = [{"instance": "cn-c002", "value": DCGM_FP64_BLANK} for _ in range(5)]
+    df = _generate_df(rows)
+    stats = compute_job_statistics_from_dataframe(
+        df, {"mean": lambda self: self.mean()}
+    )
+    assert stats is None
 
 
 @pytest.mark.parametrize(
