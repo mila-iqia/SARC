@@ -133,6 +133,61 @@ def test_fetch_jobs_get_cache(test_config, enabled_cache, remote):
     assert value == b'{"value": 2}'
 
 
+def test_convert_gres_gpu():
+    # This might not be a full entry, just enough to pass the _convert_job_json function.
+    entry = {
+        "job_id": 123,
+        "nodes": "node123",
+        "name": "test_job",
+        "user": "toto",
+        "group": "toto_group",
+        "account": "toto_account",
+        "state": {"current": ["COMPLETED"], "reason": "None"},
+        "tres": {
+            "allocated": [{"type": "gres", "name": "gpu", "id": 1001, "count": 2}],
+            "requested": [{"type": "gres", "name": "gpu:v100", "id": 1001, "count": 2}],
+        },
+        "exit_code": {
+            "status": ["SUCCESS"],
+            "return_code": {"set": True, "infinite": False, "number": 0},
+            "signal": {
+                "id": {"set": False, "infinite": False, "number": 0},
+                "name": "",
+            },
+        },
+        "array": {
+            "job_id": 0,
+            "task_id": {"set": False, "infinite": False, "number": 0},
+        },
+        "partition": "partition123",
+        "constraints": "[cascade|milan]",
+        "priority": {"set": True, "infinite": False, "number": 489206},
+        "qos": "normal",
+        "working_directory": "/home/toto/my_job_name",
+        "time": {
+            "elapsed": 259223,
+            "eligible": 1747064484,
+            "end": 1751866893,
+            "planned": {"set": True, "infinite": False, "number": 4543186},
+            "start": 1751607670,
+            "submission": 1747064484,
+            "suspended": 0,
+            "system": {"seconds": 0, "microseconds": 0},
+            "limit": {"set": True, "infinite": False, "number": 4320},
+            "total": {"seconds": 0, "microseconds": 0},
+            "user": {"seconds": 0, "microseconds": 0},
+        },
+        "cluster": "test",
+        "flags": [],
+    }
+
+    job = _convert_json_job(entry, "test", {"major": "24", "micro": "1", "minor": "11"})
+    assert job is not None
+    assert job["allocated_gres_gpu"] == 2
+    assert job["requested_gres_gpu"] == 2
+    assert job["requested_gpu_type"] == "v100"
+
+
 def test_convert_version_supported():
     version_supported = {"major": "24", "micro": "1", "minor": "11"}
     version_unsupported = {"major": "124", "micro": "1", "minor": "11"}
