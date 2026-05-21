@@ -275,10 +275,12 @@ def compute_job_statistics(
 
     system_memory = None
     if job.allocated_mem is not None:
+        # NB: slurm_job_memory_usage is expressed in bytes
+        # job.allocated_mem is in megabytes (multiple of 2**20 bytes)
         system_memory = compute_job_statistics_from_dataframe(
             metrics["slurm_job_memory_usage"],
             statistics=statistics_dict,
-            normalization=lambda x: float(x / 1e6 / cast(int, job.allocated_mem)),
+            normalization=lambda x: float(x / (2**20) / cast(int, job.allocated_mem)),
             unused_threshold=False,
         )
     elif metrics["slurm_job_memory_usage"] is not None:
