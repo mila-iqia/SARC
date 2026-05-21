@@ -112,6 +112,6 @@ def insert_rgu(sess: Session) -> None:
     for key, rgu in rgu_map.items():
         sess.merge(GpuRguDB(name=key, rgu=rgu, drac_rgu=rgu))
 
-    # Saved MIG RGU map into database
+    # Save MIG RGU map into database
     for mig_gpu_rgu in mig_rgu_map.values():
-        sess.merge(GpuRguDB.model_validate(mig_gpu_rgu.model_dump()))
+        sess.merge(GpuRguDB.model_validate(mig_gpu_rgu, from_attributes=True))
