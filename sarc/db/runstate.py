@@ -21,6 +21,4 @@ def get_parsed_date(sess: Session, value_name: str) -> datetime | None:
 
 def set_parsed_date(sess: Session, value_name: str, value: datetime) -> None:
     """Set the parsed date for a given value name (jobs or users, for example)."""
-    sess.exec(
-        update(ParseDates).where(col(ParseDates.name) == value_name).values(date=value)
-    )
+    sess.merge(ParseDates(name=value_name, date=value))
