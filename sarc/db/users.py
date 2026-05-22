@@ -15,7 +15,6 @@ from sqlmodel import (
     UniqueConstraint,
     col,
     exists,
-    func,
     or_,
     select,
     update,
@@ -252,7 +251,10 @@ class ValidField[V]:
 
         for record in session.execute(other._select_base()):
             self._insert_tag(
-                session, getattr(record, self.col_ref), record.valid, truncate=truncate
+                session,
+                getattr(record[0], self.col_ref),
+                record[0].valid,
+                truncate=truncate,
             )
 
 
@@ -260,6 +262,9 @@ class CredentialsDB(ValidDB, table=True):
     __table_args__ = (
         ExcludeConstraint(
             ("user_id", "="), ("domain", "="), ("valid", "&&"), using="gist"
+        ),
+        ExcludeConstraint(
+            ("domain", "="), ("username", "="), ("valid", "&&"), using="gist"
         ),
     )
     domain: str
@@ -405,7 +410,9 @@ class UserDB(SQLModel, table=True):
 
     _match_ids: dict[str, MatchingID] = Relationship(
         sa_relationship=relationship(
-            MatchingID, collection_class=attribute_keyed_dict("plugin_name")
+            MatchingID,
+            collection_class=attribute_keyed_dict("plugin_name"),
+            passive_deletes="all",
         )
     )
     _match_ids_dict: AssociationProxy[dict[str, str]] = association_proxy(
@@ -483,10 +490,11 @@ def get_users(sess: Session) -> Sequence[UserDB]:
     return sess.exec(select(UserDB)).all()
 
 
-def combine_users(db_user1: UserDB, db_user2: UserDB) -> UserDB:
+def merge_users(sess: Session, db_user1: UserDB, db_user2: UserDB) -> None:
+    from .job import SlurmJobDB
     # Merge db_user2 into db_user1
 
-    # we prefer the name from db_user1
+    # we prefer attributes from db_user1
     if db_user2.display_name != db_user1.display_name:
         logger.warning(
             "Merging user %s into user %s and their display_name differs (%s vs %s), %s is picked",
@@ -501,58 +509,32 @@ def combine_users(db_user1: UserDB, db_user2: UserDB) -> UserDB:
         db_user1.associated_accounts[name].merge_with(creds)
     db_user1._supervisors.merge_with(db_user2._supervisors)
 
-    for name, mid in db_user2.matching_ids.items():
+    db2_matching_ids = db_user2.matching_ids.copy()
+
+    with sess.no_autoflush:
+        sess.exec(
+            update(SupervisorsHelper)
+            .where(col(SupervisorsHelper.supervisor) == db_user2.id)
+            .values(supervisor=db_user1.id)
+        )
+        sess.exec(
+            update(SlurmJobDB)
+            .where(col(SlurmJobDB.sarc_user_id) == db_user2.id)
+            .values(sarc_user_id=db_user1.id)
+        )
+        sess.delete(db_user2)
+    sess.flush()
+
+    # This is done after the delete since otherwise there can be DB conflicts
+    for name, mid in db2_matching_ids.items():
         if name not in db_user1.matching_ids:
             db_user1.matching_ids[name] = mid
         elif db_user1.matching_ids[name] != mid:
             logger.warning(
-                "User %s has matching id (%s:%s) but db_user2 has %s, using db_user1 value",
+                "db_user1 %s has matching id (%s:%s) but db_user2 has %s, using db_user1 value",
                 db_user1.id,
                 name,
                 db_user1.matching_ids[name],
                 mid,
             )
-
-    return db_user1
-
-
-def deduplicate_users(sess: Session):
-    from .job import SlurmJobDB
-
-    subquery = (
-        select(MatchingID.plugin_name, MatchingID.match_id)
-        .group_by(MatchingID.plugin_name, MatchingID.match_id)
-        .having(func.count(col(MatchingID.id)) > 1)
-        .subquery()
-    )
-    dupes = sess.exec(
-        select(MatchingID).where(
-            MatchingID.plugin_name == subquery.c.plugin_name,
-            MatchingID.match_id == subquery.c.match_id,
-        )
-    ).all()
-
-    groups: dict[tuple[str, str], list[int]] = dict()
-    for dupe in dupes:
-        assert dupe.user_id is not None
-        groups.setdefault((dupe.plugin_name, dupe.match_id), []).append(dupe.user_id)
-
-    for group in groups.values():
-        db_merged = sess.exec(select(UserDB).where(UserDB.id == group[0])).one()
-        for db_extra_id in group[1:]:
-            db_extra = sess.exec(select(UserDB).where(UserDB.id == db_extra_id)).one()
-            combine_users(db_merged, db_extra)
-            # Even if the merge fails for some attributes, we have the data
-            # to recover missing info in the cache files.
-            sess.exec(
-                update(SupervisorsHelper)
-                .where(col(SupervisorsHelper.supervisor) == db_extra.id)
-                .values(co_supervisor=db_merged.id)
-            )
-            sess.exec(
-                update(SlurmJobDB)
-                .where(col(SlurmJobDB.sarc_user_id) == db_extra.id)
-                .values(user_id=db_merged.id)
-            )
-
-            sess.delete(db_extra)
+    sess.flush()
