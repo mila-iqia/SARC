@@ -139,6 +139,14 @@ class ValidField[V]:
             if getattr(r[0], self.col_ref) != value and r[0].valid.overlaps(valid)
         ]
 
+        if valid.upper_inf and len(to_conflict) > 0:
+            # We clid valid if it's upper infinite
+            valid = Range(
+                valid.lower,
+                min(record[0].valid.lower for record in to_conflict),
+                bounds="[)",
+            )
+
         if any(record[0].valid.contains(valid) for record in to_merge):
             # There is already a record in the DB that covers this valid range with this value, so nothing to do
             return
@@ -160,14 +168,14 @@ class ValidField[V]:
 
                 if truncate:
                     new_insert.extend(subtract_ranges(r_incoming, record[0].valid))
-                elif record[0].valid.upper_inf and valid.not_extend_right_of(
+                elif record[0].valid.upper_inf and r_incoming.not_extend_left_of(
                     record[0].valid
                 ):
                     record[0].valid = Range(
-                        record[0].valid.lower, valid.lower, bounds="[)"
+                        record[0].valid.lower, r_incoming.lower, bounds="[)"
                     )
                     session.flush()
-                    new_insert.append(valid)
+                    new_insert.append(r_incoming)
                 else:
                     raise DateOverlapError(
                         value, valid, getattr(record[0], self.col_ref), record[0].valid
