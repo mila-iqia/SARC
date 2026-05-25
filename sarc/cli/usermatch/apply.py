@@ -28,13 +28,10 @@ class UsermatchApply:
                         len(entries),
                         user_match.matching_id.name,
                         user_match.matching_id.mid,
-                        *next(
-                            (m.name, m.mid)
-                            for m in user_match.known_matches
-                        ),
+                        *next((m.name, m.mid) for m in user_match.known_matches),
                     )
                     update_user(sess, user_match)
                 sess.commit()
 
-        print(f"Applied {len(entries)} user match{'es' if len(entries) != 1 else ''}.")
+        print(f"Applied {len(entries)} user match{'es' if len(entries) != 1 else ''}.")  # noqa: T201
         return 0

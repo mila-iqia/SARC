@@ -8,6 +8,7 @@ Loads all users from the SARC database and serves a local web page with two view
 Usage:
     SARC_CONFIG=config/sarc-prod.yaml SARC_MODE=scraping uv run python scripts/usermatch/main.py
 """
+
 import argparse
 import json
 import socket
@@ -614,6 +615,7 @@ function badge(p, mid) {
 # Database helpers
 # ---------------------------------------------------------------------------
 
+
 def load_users() -> list[dict]:
     """Fetch all users from the database with their matching IDs."""
     with using_sarc_mode("scraping"):
@@ -633,6 +635,7 @@ def load_users() -> list[dict]:
 # ---------------------------------------------------------------------------
 # HTTP server
 # ---------------------------------------------------------------------------
+
 
 def _find_free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -663,13 +666,19 @@ def _make_handler(html_bytes: bytes):
 # Entry point
 # ---------------------------------------------------------------------------
 
+
 def main():
     parser = argparse.ArgumentParser(
-        description=__doc__,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("--port", type=int, default=0, help="Port to listen on (0 = pick a free port)")
-    parser.add_argument("--no-browser", action="store_true", help="Do not open the browser automatically")
+    parser.add_argument(
+        "--port", type=int, default=0, help="Port to listen on (0 = pick a free port)"
+    )
+    parser.add_argument(
+        "--no-browser",
+        action="store_true",
+        help="Do not open the browser automatically",
+    )
     args = parser.parse_args()
 
     print("Loading users from database…")
