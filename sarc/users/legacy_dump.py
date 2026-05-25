@@ -85,7 +85,7 @@ class LegacyDumpScraper(UserScraper[LegacyDumpConfig]):
             record_start = _parse_mtl_datetime(record.get("record_start"))
             record_end = _parse_mtl_datetime(record.get("record_end"))
 
-            email = record["mila_ldap"]["mila_email_username"].lower()
+            email = record["mila"]["email"].lower()
             matching_id = MatchID(name="legacy_dump", mid=email)
 
             # Create UserMatch
@@ -97,11 +97,7 @@ class LegacyDumpScraper(UserScraper[LegacyDumpConfig]):
             known_matches = set()
 
             # Mila LDAP match
-            known_matches.add(
-                MatchID(
-                    name="mila_ldap", mid=record["mila_ldap"]["mila_email_username"]
-                )
-            )
+            known_matches.add(MatchID(name="mila_ldap", mid=record["mila"]["email"]))
             # DRAC members match
             drac_members_data = record.get("drac_members")
             if drac_members_data and drac_members_data.get("ccri"):
@@ -118,13 +114,9 @@ class LegacyDumpScraper(UserScraper[LegacyDumpConfig]):
 
             # Add associated accounts
             # Mila account
-            if record.get("mila_ldap", {}).get("status") == "enabled":
+            if record.get("mila", {}).get("active", False):
                 mila_creds = Credentials()
-                mila_creds.insert(
-                    record["mila_ldap"]["mila_cluster_username"],
-                    record_start,
-                    record_end,
-                )
+                mila_creds.insert(record["mila"]["username"], record_start, record_end)
                 user_match.associated_accounts["mila"] = mila_creds
 
             # DRAC account
