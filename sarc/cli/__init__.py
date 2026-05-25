@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from simple_parsing import ArgumentParser, field, subparsers
 
 from sarc.logging import getSlackReport, setupLogging
+from sarc.patch import load
 
 from .fetch import Fetch
 from .health import Health
@@ -82,6 +83,9 @@ class CLI:
 
 def main(argv: list[str] | None = None) -> int:
     """Main commandline for SARC"""
+    from sarc.config import config
+
+    load(config().patches)
 
     parser = ArgumentParser()
     parser.add_arguments(CLI, dest="command")

@@ -262,6 +262,7 @@ class ServerConfig:
 @dataclass
 class ClientConfig:
     db: DbConfig
+    patches: Path
     server: ServerConfig = field(default_factory=ServerConfig)
     cache: Path | None = None
     loki: LokiConfig | None = None
