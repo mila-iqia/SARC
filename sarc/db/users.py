@@ -138,13 +138,16 @@ class ValidField[V]:
             if getattr(r[0], self.col_ref) != value and r[0].valid.overlaps(valid)
         ]
 
-        if valid.upper_inf and len(to_conflict) > 0:
-            # We clid valid if it's upper infinite
-            valid = Range(
-                valid.lower,
-                min(record[0].valid.lower for record in to_conflict),
-                bounds="[)",
-            )
+        if valid.upper_inf:
+            # Only clip against conflicts that start strictly after the input's start;
+            # conflicts starting before are handled in the loop below by clipping the DB record.
+            later_conflicts = [r for r in to_conflict if r[0].valid.lower > valid.lower]
+            if later_conflicts:
+                valid = Range(
+                    valid.lower,
+                    min(record[0].valid.lower for record in later_conflicts),
+                    bounds="[)",
+                )
 
         if any(record[0].valid.contains(valid) for record in to_merge):
             # There is already a record in the DB that covers this valid range with this value, so nothing to do
@@ -167,8 +170,15 @@ class ValidField[V]:
 
                 if truncate:
                     new_insert.extend(subtract_ranges(r_incoming, record[0].valid))
-                elif record[0].valid.upper_inf and r_incoming.not_extend_left_of(
-                    record[0].valid
+                elif (
+                    record[0].valid.upper_inf
+                    and r_incoming._compare_edges(
+                        r_incoming.lower,
+                        r_incoming.bounds[0],
+                        record[0].valid.lower,
+                        record[0].valid.bounds[0],
+                    )
+                    > 0
                 ):
                     record[0].valid = Range(
                         record[0].valid.lower, r_incoming.lower, bounds="[)"

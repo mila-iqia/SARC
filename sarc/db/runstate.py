@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlmodel import Field, Session, col, select, update
+from sqlmodel import Field, Session, select
 
 from sarc.validators import datetime_utc
 
