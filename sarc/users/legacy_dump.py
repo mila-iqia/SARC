@@ -85,7 +85,7 @@ class LegacyDumpScraper(UserScraper[LegacyDumpConfig]):
             record_start = _parse_mtl_datetime(record.get("record_start"))
             record_end = _parse_mtl_datetime(record.get("record_end"))
 
-            email = record["mila_ldap"]["mila_email_username"]
+            email = record["mila_ldap"]["mila_email_username"].lower()
             matching_id = MatchID(name="legacy_dump", mid=email)
 
             # Create UserMatch
@@ -138,12 +138,16 @@ class LegacyDumpScraper(UserScraper[LegacyDumpConfig]):
             supervisors = []
             supervisor_email = record.get("mila_ldap", {}).get("supervisor")
             if supervisor_email:
-                supervisors.append(MatchID(name="legacy_dump", mid=supervisor_email))
+                supervisors.append(
+                    MatchID(name="legacy_dump", mid=supervisor_email.lower())
+                )
 
             # Co-supervisor information
             co_supervisor_email = record.get("mila_ldap", {}).get("co_supervisor")
             if co_supervisor_email:
-                supervisors.append(MatchID(name="legacy_dump", mid=co_supervisor_email))
+                supervisors.append(
+                    MatchID(name="legacy_dump", mid=co_supervisor_email.lower())
+                )
 
             if len(supervisors) != 0:
                 user_match.supervisors.insert(supervisors, record_start, record_end)
