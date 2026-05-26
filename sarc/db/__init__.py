@@ -4,8 +4,6 @@ from iguane.fom import RAWDATA, fom_ugr
 from sqlalchemy import Engine
 from sqlmodel import Session, select, text
 
-from sarc.config import config
-
 from ..models.support import GpuRgu
 from .sqlmodel import SQLModel
 
@@ -55,6 +53,8 @@ def db_upgrade(engine: Engine):
 
 def insert_clusters(sess: Session) -> None:
     # populate the db with default starting dates for each cluster
+    from sarc.config import config
+
     from .cluster import SlurmClusterDB
 
     clusters = config("scraping").clusters
@@ -80,6 +80,7 @@ def insert_clusters(sess: Session) -> None:
 def insert_rgu(sess: Session) -> None:
     # populate the db with initial rgu data from iguane
     from sarc.client.rgumetrics import get_gpu_type_rgu
+    from sarc.config import config
 
     from .support import GpuRguDB
 
