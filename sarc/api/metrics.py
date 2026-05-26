@@ -1,24 +1,32 @@
-import bisect
 import math
 import re
+from collections.abc import Generator
 from datetime import date, datetime, timedelta, timezone
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse
+from sqlmodel import Session, col, func, select
 
-from sarc.client.gpumetrics import get_cluster_gpu_billings, get_rgus
-from sarc.client.job import _jobs_collection, get_available_clusters
+from sarc.config import config
+from sarc.db.cluster import get_available_clusters
+from sarc.db.job_series import JobSeriesDB
+from sarc.models.job import SlurmState
 
 router = APIRouter(prefix="/dash")
+
+
+def session_dep() -> Generator[Session]:
+    with config().db.session() as sess:
+        yield sess
+
 
 UTC = timezone.utc
 
 _DEFAULT_WINDOW_DAYS = 1
 _DEFAULT_PERIOD = "1h"
 
-_COMPLETED = {"job_state": "COMPLETED"}
 
-# Metrics stored in stored_statistics that are normalised to [0, 1]
+# Metrics stored in JobSeriesDB.statistics that are normalised to [0, 1]
 _METRICS_0_1: dict[str, str] = {
     "gpu_sm_occupancy": "SM occupancy",
     "gpu_utilization": "GPU utilization",
@@ -79,66 +87,27 @@ def _nan_to_none(v: float | None) -> float | None:
     return None if (isinstance(v, float) and math.isnan(v)) else v
 
 
-def _cluster_filter(cluster: str | None) -> dict:
-    return {"cluster_name": cluster} if cluster else {}
+def _apply_common_filters(query, cluster: str | None, cluster_user: str | None):
+    """Apply COMPLETED + cluster/user filters to a JobSeriesDB query."""
+    query = query.where(JobSeriesDB.job_state == SlurmState.COMPLETED)
+    if cluster:
+        query = query.where(JobSeriesDB.cluster_name == cluster)
+    if cluster_user:
+        query = query.where(JobSeriesDB.cluster_user == cluster_user)
+    return query
 
 
-def _user_filter(cluster_user: str | None) -> dict:
-    return {"user": cluster_user} if cluster_user else {}
-
-
-class _RguContext:
-    """Pre-loaded data needed to compute RGU for a batch of jobs."""
-
-    def __init__(self):
-        self.clusters = {c.cluster_name: c for c in get_available_clusters()}
-        self.gpu_to_rgu = get_rgus()
-        self._billing_cache: dict[str, list] = {}
-
-    def compute(self, doc: dict) -> float:  # noqa: PLR0911
-        """Return RGU for one MongoDB job document, or NaN if not computable."""
-        cluster_name = doc.get("cluster_name", "")
-        cluster_cfg = self.clusters.get(cluster_name)
-        if cluster_cfg is None:
-            return math.nan
-
-        alloc = doc.get("allocated", {})
-        req = doc.get("requested", {})
-        gpu_type = alloc.get("gpu_type")
-        if not gpu_type:
-            return math.nan
-
-        billing = alloc.get("billing") or 0
-        gres_gpu = req.get("gres_gpu") or 0
-        if gres_gpu:
-            gres_gpu = max(billing, gres_gpu)
-
-        gpu_type_rgu = self.gpu_to_rgu.get(gpu_type.split(":")[0].rstrip(), math.nan)
-        if math.isnan(gpu_type_rgu):
-            return math.nan
-
-        if cluster_cfg.billing_is_gpu:
-            return gres_gpu * gpu_type_rgu
-
-        if cluster_name not in self._billing_cache:
-            self._billing_cache[cluster_name] = get_cluster_gpu_billings(cluster_name)
-        all_billings = self._billing_cache[cluster_name]
-        if not all_billings:
-            return math.nan
-
-        end_time = doc.get("end_time") or datetime.now(UTC)
-        start_time = end_time - timedelta(seconds=doc.get("elapsed_time", 0))
-
-        if start_time < all_billings[0].since:
-            return gres_gpu * gpu_type_rgu
-
-        idx = max(
-            0, bisect.bisect_right([b.since for b in all_billings], start_time) - 1
-        )
-        gpu_billing = all_billings[idx].gpu_to_billing.get(gpu_type, math.nan)
-        if math.isnan(gpu_billing):
-            return math.nan
-        return (gres_gpu / gpu_billing) * gpu_type_rgu
+def _stat_mean(stats: dict | None, metric: str) -> float | None:
+    """Read statistics[metric]['mean'] from a JobSeriesDB.statistics JSON value."""
+    if not stats:
+        return None
+    entry = stats.get(metric)
+    if not entry:
+        return None
+    v = entry.get("mean")
+    if v is None or (isinstance(v, float) and math.isnan(v)):
+        return None
+    return v
 
 
 @router.get("/metrics", response_class=HTMLResponse)
@@ -147,8 +116,8 @@ def metrics_global_page():
 
 
 @router.get("/clusters")
-def metrics_clusters() -> list[str]:
-    return sorted(c.cluster_name for c in get_available_clusters())
+def metrics_clusters(sess: Session = Depends(session_dep)) -> list[str]:
+    return sorted(c.name for c in get_available_clusters(sess))
 
 
 @router.get("/metrics/data")
@@ -158,26 +127,37 @@ def metrics_global_data(
     period: str = Query(default=_DEFAULT_PERIOD),
     cluster: str | None = Query(default=None),
     cluster_user: str | None = Query(default=None),
+    sess: Session = Depends(session_dep),
 ):
     begin_dt, finish_dt = _date_range(start, end)
     step = _parse_period(period)
     fmt = "%Y-%m-%d %H:%M" if step < timedelta(days=1) else "%Y-%m-%d"
-    coll = _jobs_collection().get_collection()
+
+    # Bucket each job by floor((submit_time - begin) / step) and group in SQL
+    # instead of issuing one COUNT per bucket.
+    step_seconds = step.total_seconds()
+    bucket_expr = func.floor(
+        func.extract("epoch", JobSeriesDB.submit_time - begin_dt) / step_seconds
+    ).label("bucket")
+
+    query = select(bucket_expr, func.count().label("count")).where(
+        col(JobSeriesDB.submit_time) >= begin_dt,
+        col(JobSeriesDB.submit_time) < finish_dt,
+    )
+    query = _apply_common_filters(query, cluster, cluster_user)
+    query = query.group_by(bucket_expr).order_by(bucket_expr)
+
+    counts = {int(row.bucket): int(row.count) for row in sess.exec(query)}
 
     periods = []
     current = begin_dt
+    idx = 0
     while current < finish_dt:
-        period_end = current + step
-        count = coll.count_documents(
-            {
-                **_COMPLETED,
-                **_cluster_filter(cluster),
-                **_user_filter(cluster_user),
-                "submit_time": {"$gte": current, "$lt": period_end},
-            }
+        periods.append(
+            {"period_start": current.strftime(fmt), "count": counts.get(idx, 0)}
         )
-        periods.append({"period_start": current.strftime(fmt), "count": count})
-        current = period_end
+        current += step
+        idx += 1
 
     return periods
 
@@ -190,37 +170,30 @@ def metrics_global_scatter(
     cluster_user: str | None = Query(default=None),
     focus_start: datetime | None = Query(default=None),
     focus_end: datetime | None = Query(default=None),
+    sess: Session = Depends(session_dep),
 ):
     begin_dt, finish_dt = _apply_focus(*_date_range(start, end), focus_start, focus_end)
-    coll = _jobs_collection().get_collection()
 
-    query = {
-        **_COMPLETED,
-        **_cluster_filter(cluster),
-        **_user_filter(cluster_user),
-        "submit_time": {"$gte": begin_dt, "$lt": finish_dt},
-        "elapsed_time": {"$exists": True},
-        "time_limit": {"$ne": None},
-        "start_time": {"$ne": None},
-    }
-    cursor = coll.find(
-        query,
-        {
-            "elapsed_time": 1,
-            "time_limit": 1,
-            "start_time": 1,
-            "submit_time": 1,
-            "_id": 0,
-        },
+    query = select(
+        JobSeriesDB.elapsed_time,
+        JobSeriesDB.time_limit,
+        JobSeriesDB.start_time,
+        JobSeriesDB.submit_time,
+    ).where(
+        col(JobSeriesDB.submit_time) >= begin_dt,
+        col(JobSeriesDB.submit_time) < finish_dt,
+        col(JobSeriesDB.time_limit).is_not(None),
+        col(JobSeriesDB.start_time).is_not(None),
     )
+    query = _apply_common_filters(query, cluster, cluster_user)
 
     return [
         {
-            "elapsed": doc["elapsed_time"],
-            "limit": doc["time_limit"],
-            "wait": (doc["start_time"] - doc["submit_time"]).total_seconds(),
+            "elapsed": elapsed_time,
+            "limit": time_limit,
+            "wait": (start_time - submit_time).total_seconds(),
         }
-        for doc in cursor
+        for elapsed_time, time_limit, start_time, submit_time in sess.exec(query)
     ]
 
 
@@ -234,6 +207,7 @@ def metrics_global_density(
     metric2: str | None = Query(default=None),
     focus_start: datetime | None = Query(default=None),
     focus_end: datetime | None = Query(default=None),
+    sess: Session = Depends(session_dep),
 ):
     if metric not in _METRICS_0_1:
         raise HTTPException(status_code=400, detail=f"Unknown metric: {metric!r}")
@@ -241,34 +215,16 @@ def metrics_global_density(
         raise HTTPException(status_code=400, detail=f"Unknown metric: {metric2!r}")
 
     begin_dt, finish_dt = _apply_focus(*_date_range(start, end), focus_start, focus_end)
-    coll = _jobs_collection().get_collection()
-    rgu_ctx = _RguContext()
 
-    # Require primary metric; also require secondary when specified so both
-    # density traces and the paired scatter share the same job population.
-    query: dict = {
-        **_COMPLETED,
-        **_cluster_filter(cluster),
-        **_user_filter(cluster_user),
-        "submit_time": {"$gte": begin_dt, "$lt": finish_dt},
-        "allocated.gpu_type": {"$ne": None},
-        f"stored_statistics.{metric}.mean": {"$exists": True, "$gte": 0},
-    }
-    if metric2:
-        query[f"stored_statistics.{metric2}.mean"] = {"$exists": True, "$gte": 0}
-
-    projection = {
-        "cluster_name": 1,
-        "allocated.billing": 1,
-        "allocated.gpu_type": 1,
-        "requested.gres_gpu": 1,
-        "end_time": 1,
-        "elapsed_time": 1,
-        f"stored_statistics.{metric}.mean": 1,
-        "_id": 0,
-    }
-    if metric2:
-        projection[f"stored_statistics.{metric2}.mean"] = 1
+    query = select(
+        JobSeriesDB.statistics, JobSeriesDB.elapsed_time, JobSeriesDB.rgu
+    ).where(
+        col(JobSeriesDB.submit_time) >= begin_dt,
+        col(JobSeriesDB.submit_time) < finish_dt,
+        col(JobSeriesDB.allocated_gpu_type).is_not(None),
+        col(JobSeriesDB.rgu).is_not(None),
+    )
+    query = _apply_common_filters(query, cluster, cluster_user)
 
     p_values: list[float] = []
     p_weights: list[float] = []
@@ -277,24 +233,25 @@ def metrics_global_density(
     paired_x: list[float] = []
     paired_y: list[float] = []
 
-    for doc in coll.find(query, projection):
-        stats = doc.get("stored_statistics") or {}
-        v1 = (stats.get(metric) or {}).get("mean")
-        if v1 is None or math.isnan(v1):
+    # Require primary metric; also require secondary when specified so both
+    # density traces and the paired scatter share the same job population.
+    for stats, elapsed_time, rgu in sess.exec(query):
+        v1 = _stat_mean(stats, metric)
+        if v1 is None or v1 < 0:
             continue
-        gres_rgu = rgu_ctx.compute(doc)
-        if math.isnan(gres_rgu):
+        if rgu is None or math.isnan(rgu):
             continue
-        weight = gres_rgu * (doc.get("elapsed_time") or 0)
+        weight = rgu * (elapsed_time or 0)
+        if metric2:
+            v2 = _stat_mean(stats, metric2)
+            if v2 is None or v2 < 0:
+                continue
+            s_values.append(v2)
+            s_weights.append(weight)
+            paired_x.append(v1)
+            paired_y.append(v2)
         p_values.append(v1)
         p_weights.append(weight)
-        if metric2:
-            v2 = (stats.get(metric2) or {}).get("mean")
-            if v2 is not None and not math.isnan(v2):
-                s_values.append(v2)
-                s_weights.append(weight)
-                paired_x.append(v1)
-                paired_y.append(v2)
 
     return {
         "primary": {"values": p_values, "weights": p_weights},
@@ -311,18 +268,16 @@ def metrics_global_histogram(
     cluster: str | None = Query(default=None),
     cluster_user: str | None = Query(default=None),
     metric: str = Query(default="gpu_sm_occupancy"),
+    sess: Session = Depends(session_dep),
 ):
     begin_dt, finish_dt = _date_range(start, end)
     step = _parse_period(period)
     fmt = "%Y-%m-%d %H:%M" if step < timedelta(days=1) else "%Y-%m-%d"
-    coll = _jobs_collection().get_collection()
-    rgu_ctx = _RguContext()
+    step_seconds = step.total_seconds()
 
-    period_starts: list[datetime] = []
     period_data: list[dict] = []
     current = begin_dt
     while current < finish_dt:
-        period_starts.append(current)
         period_data.append(
             {
                 "period_start": current.strftime(fmt),
@@ -332,43 +287,32 @@ def metrics_global_histogram(
         )
         current += step
 
-    query = {
-        **_COMPLETED,
-        **_cluster_filter(cluster),
-        **_user_filter(cluster_user),
-        "submit_time": {"$gte": begin_dt, "$lt": finish_dt},
-        "allocated.gpu_type": {"$ne": None},
-    }
-    projection = {
-        "cluster_name": 1,
-        "allocated.billing": 1,
-        "allocated.gpu_type": 1,
-        "requested.gres_gpu": 1,
-        "submit_time": 1,
-        "end_time": 1,
-        "elapsed_time": 1,
-        f"stored_statistics.{metric}.mean": 1,
-        "_id": 0,
-    }
+    query = select(
+        JobSeriesDB.statistics,
+        JobSeriesDB.elapsed_time,
+        JobSeriesDB.rgu,
+        JobSeriesDB.submit_time,
+    ).where(
+        col(JobSeriesDB.submit_time) >= begin_dt,
+        col(JobSeriesDB.submit_time) < finish_dt,
+        col(JobSeriesDB.allocated_gpu_type).is_not(None),
+        col(JobSeriesDB.rgu).is_not(None),
+    )
+    query = _apply_common_filters(query, cluster, cluster_user)
 
-    for doc in coll.find(query, projection):
-        gres_rgu = rgu_ctx.compute(doc)
-        if math.isnan(gres_rgu):
+    for stats, elapsed_time, rgu, submit_time in sess.exec(query):
+        if rgu is None or math.isnan(rgu):
             continue
-
-        submit_time = doc.get("submit_time")
-        if submit_time is None:
-            continue
-        bucket = bisect.bisect_right(period_starts, submit_time) - 1
+        bucket = int((submit_time - begin_dt).total_seconds() // step_seconds)
         if bucket < 0 or bucket >= len(period_data):
             continue
 
-        elapsed_h = (doc.get("elapsed_time") or 0) / 3600
-        period_data[bucket]["rgu_requested"] += gres_rgu * elapsed_h
+        elapsed_h = (elapsed_time or 0) / 3600
+        period_data[bucket]["rgu_requested"] += rgu * elapsed_h
 
-        m_mean = (doc.get("stored_statistics") or {}).get(metric, {}).get("mean")
-        if m_mean is not None and not math.isnan(m_mean):
-            period_data[bucket]["rgu_used"] += gres_rgu * elapsed_h * m_mean
+        m_mean = _stat_mean(stats, metric)
+        if m_mean is not None:
+            period_data[bucket]["rgu_used"] += rgu * elapsed_h * m_mean
 
     return period_data
 
@@ -382,45 +326,37 @@ def metrics_global_user_rgu(
     metric: str = Query(default="gpu_sm_occupancy"),
     focus_start: datetime | None = Query(default=None),
     focus_end: datetime | None = Query(default=None),
+    sess: Session = Depends(session_dep),
 ):
     begin_dt, finish_dt = _apply_focus(*_date_range(start, end), focus_start, focus_end)
-    coll = _jobs_collection().get_collection()
-    rgu_ctx = _RguContext()
 
-    query = {
-        **_COMPLETED,
-        **_cluster_filter(cluster),
-        **_user_filter(cluster_user),
-        "submit_time": {"$gte": begin_dt, "$lt": finish_dt},
-        "allocated.gpu_type": {"$ne": None},
-    }
-    projection = {
-        "cluster_name": 1,
-        "user": 1,
-        "allocated.billing": 1,
-        "allocated.gpu_type": 1,
-        "requested.gres_gpu": 1,
-        "end_time": 1,
-        "elapsed_time": 1,
-        f"stored_statistics.{metric}.mean": 1,
-        "_id": 0,
-    }
+    query = select(
+        JobSeriesDB.cluster_user,
+        JobSeriesDB.statistics,
+        JobSeriesDB.elapsed_time,
+        JobSeriesDB.rgu,
+    ).where(
+        col(JobSeriesDB.submit_time) >= begin_dt,
+        col(JobSeriesDB.submit_time) < finish_dt,
+        col(JobSeriesDB.allocated_gpu_type).is_not(None),
+        col(JobSeriesDB.rgu).is_not(None),
+    )
+    query = _apply_common_filters(query, cluster, cluster_user)
 
     by_user: dict[str, dict] = {}
-    for doc in coll.find(query, projection):
-        gres_rgu = rgu_ctx.compute(doc)
-        if math.isnan(gres_rgu):
+    for user, stats, elapsed_time, rgu in sess.exec(query):
+        if rgu is None or math.isnan(rgu):
             continue
 
-        user = doc.get("user") or "unknown"
+        user = user or "unknown"
         if user not in by_user:
             by_user[user] = {"user": user, "rgu_requested": 0.0, "rgu_used": 0.0}
-        elapsed_h = (doc.get("elapsed_time") or 0) / 3600
-        by_user[user]["rgu_requested"] += gres_rgu * elapsed_h
+        elapsed_h = (elapsed_time or 0) / 3600
+        by_user[user]["rgu_requested"] += rgu * elapsed_h
 
-        m_mean = (doc.get("stored_statistics") or {}).get(metric, {}).get("mean")
-        if m_mean is not None and not math.isnan(m_mean):
-            by_user[user]["rgu_used"] += gres_rgu * elapsed_h * m_mean
+        m_mean = _stat_mean(stats, metric)
+        if m_mean is not None:
+            by_user[user]["rgu_used"] += rgu * elapsed_h * m_mean
 
     return sorted(by_user.values(), key=lambda r: r["rgu_requested"], reverse=True)
 
@@ -435,68 +371,61 @@ def metrics_jobs(
     metric: str = Query(default="gpu_sm_occupancy"),
     focus_start: datetime | None = Query(default=None),
     focus_end: datetime | None = Query(default=None),
+    sess: Session = Depends(session_dep),
 ):
     begin_dt, finish_dt = _apply_focus(*_date_range(start, end), focus_start, focus_end)
-    coll = _jobs_collection().get_collection()
-    rgu_ctx = _RguContext()
 
-    query = {
-        **_COMPLETED,
-        **_cluster_filter(cluster),
-        **_user_filter(cluster_user),
-        "submit_time": {"$gte": begin_dt, "$lt": finish_dt},
-        "allocated.gpu_type": {"$ne": None},
-    }
-    projection = {
-        "user": 1,
-        "job_state": 1,
-        "elapsed_time": 1,
-        "cluster_name": 1,
-        "allocated.billing": 1,
-        "allocated.gpu_type": 1,
-        "requested.gres_gpu": 1,
-        "nodes": 1,
-        "end_time": 1,
-        "stored_statistics.gpu_utilization.mean": 1,
-        "stored_statistics.gpu_sm_occupancy.mean": 1,
-        "stored_statistics.gpu_memory.max": 1,
-        f"stored_statistics.{metric}.mean": 1,
-        "_id": 0,
-    }
+    query = select(  # ty:ignore[no-matching-overload]
+        JobSeriesDB.cluster_name,
+        JobSeriesDB.cluster_user,
+        JobSeriesDB.job_state,
+        JobSeriesDB.elapsed_time,
+        JobSeriesDB.nodes,
+        JobSeriesDB.allocated_gpu_type,
+        JobSeriesDB.rgu,
+        JobSeriesDB.statistics,
+    ).where(
+        col(JobSeriesDB.submit_time) >= begin_dt,
+        col(JobSeriesDB.submit_time) < finish_dt,
+        col(JobSeriesDB.allocated_gpu_type).is_not(None),
+        col(JobSeriesDB.rgu).is_not(None),
+    )
+    query = _apply_common_filters(query, cluster, cluster_user)
+
+    def _stat(stats: dict | None, name: str, field: str) -> float | None:
+        if not stats:
+            return None
+        entry = stats.get(name)
+        if not entry:
+            return None
+        return _nan_to_none(entry.get(field))
 
     jobs = []
-    for doc in coll.find(query, projection):
-        rgu = rgu_ctx.compute(doc)
-        if math.isnan(rgu):
+    for cluster_name, cu, job_state, elapsed, nodes, gpu_type, rgu, stats in sess.exec(
+        query
+    ):
+        if rgu is None or math.isnan(rgu):
             continue
-        stats = doc.get("stored_statistics") or {}
-        alloc = doc.get("allocated") or {}
-        elapsed = doc.get("elapsed_time") or 0
+        elapsed = elapsed or 0
         rgu_hours = round(rgu * elapsed / 3600, 2)
-        metric_mean = _nan_to_none((stats.get(metric) or {}).get("mean"))
+        metric_mean = _stat(stats, metric, "mean")
         waste = (
             round(rgu_hours * (1 - metric_mean), 2) if metric_mean is not None else None
         )
         jobs.append(
             {
-                "cluster": doc.get("cluster_name") or "",
-                "user": doc.get("user") or "",
-                "job_state": doc.get("job_state") or "",
+                "cluster": cluster_name or "",
+                "user": cu or "",
+                "job_state": job_state.value if job_state is not None else "",
                 "elapsed": elapsed,
-                "nodes": ", ".join(doc.get("nodes") or []) or None,
-                "gpu_type": alloc.get("gpu_type") or "",
+                "nodes": ", ".join(nodes or []) or None,
+                "gpu_type": gpu_type or "",
                 "rgu": round(rgu, 2),
                 "rgu_hours": rgu_hours,
                 "waste": waste,
-                "gpu_utilization_mean": _nan_to_none(
-                    (stats.get("gpu_utilization") or {}).get("mean")
-                ),
-                "gpu_sm_occupancy_mean": _nan_to_none(
-                    (stats.get("gpu_sm_occupancy") or {}).get("mean")
-                ),
-                "gpu_memory_max": _nan_to_none(
-                    (stats.get("gpu_memory") or {}).get("max")
-                ),
+                "gpu_utilization_mean": _stat(stats, "gpu_utilization", "mean"),
+                "gpu_sm_occupancy_mean": _stat(stats, "gpu_sm_occupancy", "mean"),
+                "gpu_memory_max": _stat(stats, "gpu_memory", "max"),
             }
         )
 
