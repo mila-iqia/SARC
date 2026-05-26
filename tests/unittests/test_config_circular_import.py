@@ -29,6 +29,7 @@ def test_import_sarc_config_does_not_trigger_circular_import(tmp_path):
             name: sarc-test
             auto_upgrade: false
           clusters: {}
+          patches: patches
           health_monitor:
             checks:
               cluster_scraping:
