@@ -226,7 +226,10 @@ class ValidField[V]:
             return getattr(result[0], self.col_ref)
 
     def values_in_range(
-        self, start: datetime_utc, end: datetime_utc, session: SASession | None = None
+        self,
+        start: datetime_utc | None,
+        end: datetime_utc | None,
+        session: SASession | None = None,
     ) -> list[V]:
         """Get values in a range
 
@@ -515,11 +518,16 @@ def merge_users(sess: Session, db_user1: UserDB, db_user2: UserDB) -> None:
             db_user1.display_name,
         )
     db_user1.member_type.merge_with(db_user2.member_type)
-    for name, creds in db_user2.associated_accounts.items():
-        db_user1.associated_accounts[name].merge_with(creds)
     db_user1._supervisors.merge_with(db_user2._supervisors)
 
     db2_matching_ids = db_user2.matching_ids.copy()
+
+    credentials = dict()
+    for name, creds in db_user2.associated_accounts.items():
+        credentials[name] = [
+            (entry.username, entry.valid.lower, entry.valid.upper)
+            for entry in sess.exec(creds._select_base()).all()
+        ]
 
     with sess.no_autoflush:
         sess.exec(
@@ -547,4 +555,7 @@ def merge_users(sess: Session, db_user1: UserDB, db_user2: UserDB) -> None:
                 db_user1.matching_ids[name],
                 mid,
             )
+    for domain, entries in credentials.items():
+        for entry in entries:
+            db_user1.associated_accounts[domain].insert(*entry)
     sess.flush()
