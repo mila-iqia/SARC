@@ -6,7 +6,6 @@ from simple_parsing import field
 
 from sarc.config import config
 from sarc.db.runstate import get_parsed_date, set_parsed_date
-from sarc.db.users import deduplicate_users
 from sarc.scraping.users import parse_ce, parse_users, update_user
 
 logger = logging.getLogger(__name__)
@@ -45,7 +44,6 @@ class ParseUsers:
                         )
                         set_parsed_date(sess, "users", ce.get_entry_datetime())
                         sess.flush()
-                    deduplicate_users(sess)
                     sess.commit()
 
         return 0

@@ -8,11 +8,11 @@ from typing import Any, Callable, Protocol, Type, overload
 from pydantic import BaseModel, Field, field_serializer
 from serieux import IncludeFile, Serieux, WorkingDirectory
 from serieux.features.encrypt import EncryptionKey
-from sqlmodel import Session, select
+from sqlmodel import Session, and_, or_, select
 
 from sarc.cache import Cache, CacheEntry
 from sarc.config import config_path
-from sarc.db.users import MatchingID, MemberType, UserDB
+from sarc.db.users import MatchingID, MemberType, UserDB, merge_users
 from sarc.db.users import ValidField as ValidFieldDB
 from sarc.validators import ValidField
 
@@ -263,17 +263,32 @@ def lookup_match_id(sess: Session, match_id: MatchID) -> Sequence[UserDB]:
 
 
 def update_user(sess: Session, user: UserMatch) -> None:
-    results = sess.exec(
-        select(MatchingID).where(
+    clauses = [
+        and_(
             MatchingID.plugin_name == user.matching_id.name,
             MatchingID.match_id == user.matching_id.mid,
         )
+    ]
+    clauses.extend(
+        and_(
+            MatchingID.plugin_name == match_id.name, MatchingID.match_id == match_id.mid
+        )
+        for match_id in user.known_matches
+    )
+    results = sess.exec(
+        select(MatchingID.user_id).where(or_(*clauses)).distinct()
     ).all()
     if len(results) == 0:
         insert_new(sess, user)
     else:
-        db_user = sess.get(UserDB, results[0].user_id)
+        db_user = sess.get(UserDB, results[0])
         assert db_user is not None
+        for user_id in results[1:]:
+            db_extra = sess.get(UserDB, user_id)
+            assert db_extra is not None
+            merge_users(sess, db_user, db_extra)
+        sess.flush()
+
         if user.display_name is not None:
             db_user.display_name = user.display_name
         if user.email is not None:

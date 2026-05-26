@@ -172,7 +172,7 @@ class UserFactory:
         email="test@example.com",
         match_ids=None,
         member_type=(),
-        accounts=(("mila", "test"),),
+        accounts=(),
         supervisors=(),
     ) -> UserDB:
         def _finalize():
