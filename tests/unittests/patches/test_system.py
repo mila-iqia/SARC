@@ -148,5 +148,4 @@ def test_load_sets_file_variable(tmp_path, fresh_system):
         "import sarc.patch.system as m\nm.system.register('ep', lambda: __file__)\n"
     )
     load(tmp_path)
-    # callback was registered — __file__ was available in exec context
     fresh_system.call("ep", (), {})
