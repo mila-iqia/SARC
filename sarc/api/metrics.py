@@ -8,7 +8,8 @@ from fastapi.responses import HTMLResponse
 from sqlmodel import Session, col, func, select
 
 from sarc.config import config
-from sarc.db.cluster import get_available_clusters
+from sarc.db.cluster import SlurmClusterDB, get_available_clusters
+from sarc.db.job import SlurmJobDB
 from sarc.db.job_series import JobSeriesDB
 from sarc.models.job import SlurmState
 
@@ -97,6 +98,30 @@ def _apply_common_filters(query, cluster: str | None, cluster_user: str | None):
     return query
 
 
+def _resolve_cluster_id(sess: Session, cluster: str | None) -> int | None:
+    """Look up the cluster id once; returns None if cluster filter is unset."""
+    if not cluster:
+        return None
+    cid = SlurmClusterDB.id_by_name(sess, cluster)
+    if cid is None:
+        raise HTTPException(status_code=404, detail=f"Unknown cluster {cluster!r}")
+    return cid
+
+
+def _apply_slurm_job_filters(query, cluster_id: int | None, cluster_user: str | None):
+    """Apply COMPLETED + cluster_id/user filters to a SlurmJobDB query.
+
+    Filters by cluster_id (resolved upfront) to avoid the SlurmClusterDB join
+    that JobSeriesDB needs for cluster_name.
+    """
+    query = query.where(SlurmJobDB.job_state == SlurmState.COMPLETED)
+    if cluster_id is not None:
+        query = query.where(SlurmJobDB.cluster_id == cluster_id)
+    if cluster_user:
+        query = query.where(SlurmJobDB.cluster_user == cluster_user)
+    return query
+
+
 def _stat_mean(stats: dict | None, metric: str) -> float | None:
     """Read statistics[metric]['mean'] from a JobSeriesDB.statistics JSON value."""
     if not stats:
@@ -132,19 +157,20 @@ def metrics_global_data(
     begin_dt, finish_dt = _date_range(start, end)
     step = _parse_period(period)
     fmt = "%Y-%m-%d %H:%M" if step < timedelta(days=1) else "%Y-%m-%d"
+    cluster_id = _resolve_cluster_id(sess, cluster)
 
     # Bucket each job by floor((submit_time - begin) / step) and group in SQL
-    # instead of issuing one COUNT per bucket.
+    # instead of issuing one COUNT per bucket. Queries SlurmJobDB directly to
+    # skip the JobSeriesDB view (RGU/statistics aggregations are not needed).
     step_seconds = step.total_seconds()
     bucket_expr = func.floor(
-        func.extract("epoch", JobSeriesDB.submit_time - begin_dt) / step_seconds
+        func.extract("epoch", SlurmJobDB.submit_time - begin_dt) / step_seconds
     ).label("bucket")
 
     query = select(bucket_expr, func.count().label("count")).where(
-        col(JobSeriesDB.submit_time) >= begin_dt,
-        col(JobSeriesDB.submit_time) < finish_dt,
+        col(SlurmJobDB.submit_time) >= begin_dt, col(SlurmJobDB.submit_time) < finish_dt
     )
-    query = _apply_common_filters(query, cluster, cluster_user)
+    query = _apply_slurm_job_filters(query, cluster_id, cluster_user)
     query = query.group_by(bucket_expr).order_by(bucket_expr)
 
     counts = {int(row.bucket): int(row.count) for row in sess.exec(query)}
@@ -173,19 +199,20 @@ def metrics_global_scatter(
     sess: Session = Depends(session_dep),
 ):
     begin_dt, finish_dt = _apply_focus(*_date_range(start, end), focus_start, focus_end)
+    cluster_id = _resolve_cluster_id(sess, cluster)
 
     query = select(
-        JobSeriesDB.elapsed_time,
-        JobSeriesDB.time_limit,
-        JobSeriesDB.start_time,
-        JobSeriesDB.submit_time,
+        SlurmJobDB.elapsed_time,
+        SlurmJobDB.time_limit,
+        SlurmJobDB.start_time,
+        SlurmJobDB.submit_time,
     ).where(
-        col(JobSeriesDB.submit_time) >= begin_dt,
-        col(JobSeriesDB.submit_time) < finish_dt,
-        col(JobSeriesDB.time_limit).is_not(None),
-        col(JobSeriesDB.start_time).is_not(None),
+        col(SlurmJobDB.submit_time) >= begin_dt,
+        col(SlurmJobDB.submit_time) < finish_dt,
+        col(SlurmJobDB.time_limit).is_not(None),
+        col(SlurmJobDB.start_time).is_not(None),
     )
-    query = _apply_common_filters(query, cluster, cluster_user)
+    query = _apply_slurm_job_filters(query, cluster_id, cluster_user)
 
     return [
         {
