@@ -1,8 +1,8 @@
 from fastapi import FastAPI
 
+from ..config import config
 from .metrics import router as metrics_router
 from .v0 import router as v0_router
-from ..config import config
 
 app = FastAPI()
 
