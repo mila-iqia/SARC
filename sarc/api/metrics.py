@@ -250,29 +250,28 @@ _HEATMAP_BINS = 100
 
 
 def _build_heatmap_payload(
-    sess: Session,
-    base_filters: list,
-    x_expr,
-    y_expr,
-    x_min: float,
-    x_max: float,
-    y_min: float,
-    y_max: float,
+    sess: Session, base_filters: list, x_expr, y_expr, x_max: float, y_max: float
 ):
-    """Aggregate count(*) per (bin_x, bin_y) cell over NBINS×NBINS bins.
+    """Aggregate count(*) per (bin_x, bin_y) over NBINS×NBINS log-spaced bins.
 
-    Returns a dense NBINS×NBINS matrix (zero-filled) plus the bin-centre arrays
-    used as Plotly heatmap axes. Bounds (min/max) are passed in so callers can
-    share a single MIN/MAX pass across multiple heatmaps.
+    Bins are uniform in log10(value+1) space so highly-skewed distributions
+    (durations spanning many orders of magnitude) get even resolution rather
+    than collapsing into the first linear bin. No data is dropped: every job
+    is counted in exactly one cell. The min is fixed at 0 and the +1 offset
+    avoids log10(0).
     """
-    x_range = max(x_max - x_min, 1e-9)
-    y_range = max(y_max - y_min, 1e-9)
+    log_x_max = max(math.log10(x_max + 1.0), 1e-9)
+    log_y_max = max(math.log10(y_max + 1.0), 1e-9)
+
+    # PostgreSQL: log(numeric) with one arg is base-10.
+    log_x = func.log(x_expr + 1.0)
+    log_y = func.log(y_expr + 1.0)
     bin_x = func.least(
-        func.greatest(func.floor((x_expr - x_min) * _HEATMAP_BINS / x_range), 0),
+        func.greatest(func.floor(log_x * _HEATMAP_BINS / log_x_max), 0),
         _HEATMAP_BINS - 1,
     ).label("bx")
     bin_y = func.least(
-        func.greatest(func.floor((y_expr - y_min) * _HEATMAP_BINS / y_range), 0),
+        func.greatest(func.floor(log_y * _HEATMAP_BINS / log_y_max), 0),
         _HEATMAP_BINS - 1,
     ).label("by")
     q = (
@@ -281,14 +280,18 @@ def _build_heatmap_payload(
         .group_by(bin_x, bin_y)
     )
     z = [[0] * _HEATMAP_BINS for _ in range(_HEATMAP_BINS)]
+    total = 0
     for r in sess.exec(q):
-        z[int(r.by)][int(r.bx)] = int(r.c)
+        c = int(r.c)
+        z[int(r.by)][int(r.bx)] = c
+        total += c
 
-    x_step = x_range / _HEATMAP_BINS
-    y_step = y_range / _HEATMAP_BINS
-    xs = [x_min + (i + 0.5) * x_step for i in range(_HEATMAP_BINS)]
-    ys = [y_min + (i + 0.5) * y_step for i in range(_HEATMAP_BINS)]
-    return {"x": xs, "y": ys, "z": z}
+    # Bin centres in log space then converted back to linear value (seconds).
+    log_x_step = log_x_max / _HEATMAP_BINS
+    log_y_step = log_y_max / _HEATMAP_BINS
+    xs = [10 ** ((i + 0.5) * log_x_step) - 1.0 for i in range(_HEATMAP_BINS)]
+    ys = [10 ** ((i + 0.5) * log_y_step) - 1.0 for i in range(_HEATMAP_BINS)]
+    return {"x": xs, "y": ys, "z": z, "total": total}
 
 
 @router.get("/metrics/heatmap")
@@ -319,27 +322,22 @@ def metrics_global_heatmap(
 
     bounds = sess.exec(
         select(
-            func.min(SlurmJobDB.time_limit).label("min_l"),
             func.max(SlurmJobDB.time_limit).label("max_l"),
-            func.min(SlurmJobDB.elapsed_time).label("min_e"),
             func.max(SlurmJobDB.elapsed_time).label("max_e"),
-            func.min(wait_expr).label("min_w"),
             func.max(wait_expr).label("max_w"),
         ).where(*base_filters)
     ).one()
 
-    if bounds.min_l is None:
+    if bounds.max_l is None:
         # No matching rows
-        return {"elapsed_vs_limit": None, "wait_vs_limit": None}
+        return {"elapsed_vs_limit": None, "wait_vs_limit": None, "total_jobs": 0}
 
     elapsed_hmap = _build_heatmap_payload(
         sess,
         base_filters,
         SlurmJobDB.time_limit,
         SlurmJobDB.elapsed_time,
-        float(bounds.min_l),
         float(bounds.max_l),
-        float(bounds.min_e),
         float(bounds.max_e),
     )
     wait_hmap = _build_heatmap_payload(
@@ -347,13 +345,15 @@ def metrics_global_heatmap(
         base_filters,
         SlurmJobDB.time_limit,
         wait_expr,
-        float(bounds.min_l),
         float(bounds.max_l),
-        float(bounds.min_w),
         float(bounds.max_w),
     )
 
-    return {"elapsed_vs_limit": elapsed_hmap, "wait_vs_limit": wait_hmap}
+    return {
+        "elapsed_vs_limit": elapsed_hmap,
+        "wait_vs_limit": wait_hmap,
+        "total_jobs": int(elapsed_hmap["total"]),
+    }
 
 
 _DENSITY_BINS = 50  # matches Plotly nbinsx in the frontend
@@ -1060,11 +1060,6 @@ _HTML = (
       // Server returns x/y in seconds; convert axes to hours for display.
       const xs = payload.x.map(v => v * SEC_TO_H);
       const ys = payload.y.map(v => v * SEC_TO_H);
-      const maxX = payload.x_max_overall != null ? payload.x_max_overall * SEC_TO_H : null;
-      const maxY = payload.y_max_overall != null ? payload.y_max_overall * SEC_TO_H : null;
-      const subtitle = (maxX != null && maxY != null)
-        ? ` (extents: limit ≤ ${maxX.toFixed(1)}h, ${yLabel} ≤ ${maxY.toFixed(1)}h)`
-        : '';
 
       // Log10 transform for colour mapping: counts span many orders of
       // magnitude (1 outlier vs ~1M-job cluster), so a linear scale would
@@ -1085,21 +1080,39 @@ _HTML = (
         return String(n);
       });
 
+      // Diagonal y = x line: with log-log axes it's still mathematically y=x,
+      // which plots as a straight 45° line. Use the smallest positive centre
+      // as start to keep both endpoints within the log axis range.
+      const diagMin = Math.max(xs[0], ys[0], 1e-6);
+      const diagMax = Math.max(xs[xs.length - 1], ys[ys.length - 1]);
+      const diagTrace = {
+        type: 'scatter', mode: 'lines',
+        x: [diagMin, diagMax], y: [diagMin, diagMax],
+        line: { color: '#e07020', width: 1.5, dash: 'dash' },
+        name: yLabel + ' = Limit',
+        showlegend: false,
+        hoverinfo: 'skip',
+      };
+
       Plotly.react(id, [{
         type: 'heatmap',
         x: xs, y: ys, z: zLog, customdata: zRaw,
-        colorscale: 'Greys',      // white = 0, black = max
+        // Explicit white→dark-blue ramp: the named 'Blues' palette can be
+        // displayed reversed by Plotly depending on version. Spelling it out
+        // guarantees dense cells stay dark.
+        colorscale: [[0, '#f7fbff'], [1, '#08306b']],
         showscale: true,
         colorbar: {
-          title: { text: 'Jobs', side: 'right' },
+          title: { text: 'Jobs (log₁₀)', side: 'right' },
+          tickmode: 'array',
           tickvals: tickPows, ticktext: tickLabels,
         },
         hovertemplate: 'Limit: %{x:.2f}h<br>' + yLabel +
                        ': %{y:.2f}h<br>Jobs: %{customdata}<extra></extra>',
-      }], pLayout({
-        title: { text: title + subtitle, font: { size: 16 } },
-        xaxis: { title: 'Time limit (hours)' },
-        yaxis: { title: yLabel + ' (hours)' },
+      }, diagTrace], pLayout({
+        title: { text: title, font: { size: 16 } },
+        xaxis: { title: 'Time limit (hours, log)', type: 'log' },
+        yaxis: { title: yLabel + ' (hours, log)', type: 'log' },
       }), { responsive: true });
     }
 
