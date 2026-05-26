@@ -18,6 +18,10 @@ from sarc.validators import datetime_utc
 class JobStatisticDB(SQLModel, table=True):
     """Statistics for a timeseries."""
 
+    # Without this index, the json_object_agg subquery in job_series_view
+    # falls back to a sequential scan on every job lookup.
+    __table_args__ = (Index("idx_jobstats_job_id", "job_id"),)
+
     id: int | None = Field(default=None, primary_key=True)
     job_id: int | None = Field(
         default=None,
