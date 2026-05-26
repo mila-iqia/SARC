@@ -161,13 +161,13 @@ def import_gpu_billings(
     return inserted, skipped
 
 
-def harmonise_allocated_gpu(
+def harmonize_allocated_gpu(
     cluster_name: str,
     gpu_type: str | None,
     nodes: list[str],
     known_gpus: set[str],
     cluster_cfgs: dict[str, ClusterConfig],
-    harmonised: Counter,
+    harmonized: Counter,
     unharmonisable: Counter,
 ) -> str | None:
     """Map a raw Slurm ``allocated_gpu_type`` to a name known to GpuRguDB.
@@ -188,10 +188,20 @@ def harmonise_allocated_gpu(
     if cluster_cfg is None:
         unharmonisable[cluster_name] += 1
         return gpu_type
-    harmonised_name = cluster_cfg.harmonize_gpu_from_nodes(nodes, gpu_type)
-    if harmonised_name is not None and harmonised_name in known_gpus:
-        harmonised[cluster_name] += 1
-        return harmonised_name
+
+    full_name = None
+    if " : " in gpu_type:
+        full_name, gpu_type = gpu_type.split(" : ")
+
+    harmonized_name = cluster_cfg.harmonize_gpu_from_nodes(nodes, gpu_type)
+    if harmonized_name is not None and harmonized_name in known_gpus:
+        harmonized[cluster_name] += 1
+
+        if full_name is not None:
+            assert harmonized_name.startswith(full_name + " : ")
+
+        return harmonized_name
+
     unharmonisable[cluster_name] += 1
     return gpu_type
 
@@ -467,7 +477,7 @@ def run(csv_path: str, gpu_billing_path: Path, batch_size: int) -> None:
             )
 
             nodes = _parse_nodes(row["nodes"])
-            allocated_gpu_type = harmonise_allocated_gpu(
+            allocated_gpu_type = harmonize_allocated_gpu(
                 cluster_name,
                 row["allocated.gpu_type"] or None,
                 nodes,
