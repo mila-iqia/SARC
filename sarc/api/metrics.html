@@ -36,6 +36,12 @@
       font-size: 13px; font-weight: 600; color: #555; padding: 2px 0 6px;
     }
     .tile-chart  { width: 100%; height: 480px; }
+    .tile-loading, .tile-error {
+      display: flex; align-items: center; justify-content: center;
+      width: 100%; height: 100%; font-size: 14px;
+    }
+    .tile-loading { color: #888; }
+    .tile-error   { color: #c00; }
     .tile-remove {
       background: none; border: none; cursor: pointer; color: #bbb;
       font-size: 18px; padding: 0 2px; line-height: 1; font-weight: 400;
@@ -181,6 +187,29 @@
     };
     const PLOT_KEYS = Object.keys(PLOT_NAMES);
 
+    // Map each plot type to the backend endpoint it consumes. Several plot
+    // types share an endpoint (scatter/wait reuse /scatter; metricscatter
+    // reuses /density.paired; etc.) so caching by endpoint dedups fetches.
+    const PLOT_TO_ENDPOINT = {
+      bar:             'data',
+      scatter:         'scatter',
+      wait:            'scatter',
+      heatmap_elapsed: 'heatmap',
+      heatmap_wait:    'heatmap',
+      histogram:       'histogram',
+      density:         'density',
+      metricscatter:   'density',
+      userrgu:         'user_rgu',
+      jobtable:        'jobs',
+    };
+    // The renderers expect data under historical keys (e.g. d.bar, d.userrgu);
+    // this maps the endpoint back to the renderer's key so we can hand off a
+    // single-entry object: { [ENDPOINT_TO_KEY[ep]]: data }.
+    const ENDPOINT_TO_KEY = {
+      data: 'bar', scatter: 'scatter', heatmap: 'heatmap',
+      histogram: 'histogram', density: 'density', user_rgu: 'userrgu', jobs: 'jobs',
+    };
+
     // Populate metric dropdowns
     const metSel  = document.getElementById('metric-select');
     const met2Sel = document.getElementById('metric2-select');
@@ -220,7 +249,17 @@
     // URL param:  plots=bar,scatter;histogram
 
     let tileLayout = [];
-    let lastData   = null;
+    // Cache + state for the per-endpoint loader.
+    //   currentParams: snapshot of the form's parameters at the last Update.
+    //                  null until the first loadCharts() has been called.
+    //   endpointCache: { ep -> Promise<data> } — same promise can be awaited
+    //                  by several tiles. Cleared entirely when params change.
+    //   endpointStatus: { ep -> 'loading' | 'ready' | 'error' }, synced with
+    //                  the cache so updateStatus() can summarise progress
+    //                  without inspecting unsettled promises.
+    let currentParams = null;
+    let endpointCache = {};
+    let endpointStatus = {};
 
     function layoutToParam(l) {
       return l.map(row => row.join(',')).join(';');
@@ -334,6 +373,9 @@
           const chartDiv = document.createElement('div');
           chartDiv.className = 'tile-chart';
           chartDiv.id = `tile-${rowIdx}-${colIdx}`;
+          // dataset.plotType lets renderTile detect "the tile has been swapped
+          // to another type while my fetch was in flight" before drawing.
+          chartDiv.dataset.plotType = plotType;
 
           tile.appendChild(header);
           tile.appendChild(chartDiv);
@@ -365,10 +407,16 @@
       }));
       grid.appendChild(wrap);
 
-      // Render charts into the freshly created divs
-      if (lastData) {
+      // Kick off a render for each tile. Each one independently awaits the
+      // cached endpoint promise (or triggers a fetch), so a fast endpoint
+      // appears immediately while slower ones still show "Loading…".
+      // No-op if currentParams is null (initial state before first Update).
+      if (currentParams) {
         tileLayout.forEach((row, ri) => {
-          row.forEach((plotType, ci) => renderPlot(`tile-${ri}-${ci}`, plotType, lastData));
+          row.forEach((plotType, ci) => {
+            const chartDiv = document.getElementById(`tile-${ri}-${ci}`);
+            if (chartDiv) renderTile(chartDiv, plotType);
+          });
         });
       }
     }
@@ -771,68 +819,134 @@
 
     // ── Data loading ─────────────────────────────────────────────────────────
 
-    async function loadCharts() {
-      const start        = document.getElementById('start').value;
-      const end          = document.getElementById('end').value;
-      const period       = document.getElementById('period').value.trim();
-      const cluster      = document.getElementById('cluster-select').value;
-      const cluster_user = document.getElementById('cluster_user').value.trim();
-      const metric       = document.getElementById('metric-select').value;
-      const metric2      = document.getElementById('metric2-select').value;
-      const focus_start  = document.getElementById('focus_start').value;
-      const focus_end    = document.getElementById('focus_end').value;
-      const status       = document.getElementById('status');
-
-      if (!start || !end) { status.textContent = 'Please select start and end dates.'; return; }
-
-      const focusParams = {
-        ...(focus_start ? { focus_start } : {}),
-        ...(focus_end   ? { focus_end }   : {}),
+    // Snapshot the form's parameters into a plain object. Returns null if
+    // mandatory fields (start/end) are missing.
+    function captureParams() {
+      const start = document.getElementById('start').value;
+      const end   = document.getElementById('end').value;
+      if (!start || !end) return null;
+      return {
+        start, end,
+        period:        document.getElementById('period').value.trim(),
+        cluster:       document.getElementById('cluster-select').value,
+        cluster_user:  document.getElementById('cluster_user').value.trim(),
+        metric:        document.getElementById('metric-select').value,
+        metric2:       document.getElementById('metric2-select').value,
+        focus_start:   document.getElementById('focus_start').value,
+        focus_end:     document.getElementById('focus_end').value,
       };
+    }
 
-      status.textContent = 'Loading…';
-      try {
-        const base          = { start, end, cluster, ...(cluster_user ? { cluster_user } : {}) };
-        const densityParams = { ...base, metric, ...(metric2 ? { metric2 } : {}) };
-        // /metrics/scatter is skipped entirely when ALLOW_SCATTER is false
-        // (set server-side via _ALLOW_SCATTER).
-        const scatterPromise = ALLOW_SCATTER
-          ? fetch('/dash/metrics/scatter?' + new URLSearchParams({ ...base, ...focusParams }))
-          : Promise.resolve(null);
-        const [barResp, scatterResp, heatmapResp, histResp, densityResp, userRguResp, jobsResp] = await Promise.all([
-          fetch('/dash/metrics/data?'      + new URLSearchParams({ ...base, period })),
-          scatterPromise,
-          fetch('/dash/metrics/heatmap?'   + new URLSearchParams({ ...base, ...focusParams })),
-          fetch('/dash/metrics/histogram?' + new URLSearchParams({ ...base, period, metric })),
-          fetch('/dash/metrics/density?'   + new URLSearchParams({ ...densityParams, ...focusParams })),
-          fetch('/dash/metrics/user_rgu?'  + new URLSearchParams({ start, end, cluster, metric, ...focusParams })),
-          fetch('/dash/metrics/jobs?'      + new URLSearchParams({ ...base, metric, ...focusParams })),
-        ]);
-
-        if (!barResp.ok || (scatterResp && !scatterResp.ok) || !heatmapResp.ok || !histResp.ok || !densityResp.ok || !userRguResp.ok || !jobsResp.ok) {
-          status.textContent = 'Error fetching data.'; return;
-        }
-
-        const [barData, scatterData, heatmapData, histData, densityData, userRguData, jobsData] = await Promise.all([
-          barResp.json(),
-          scatterResp ? scatterResp.json() : Promise.resolve([]),
-          heatmapResp.json(), histResp.json(), densityResp.json(), userRguResp.json(), jobsResp.json(),
-        ]);
-
-        lastData = { bar: barData, scatter: scatterData, heatmap: heatmapData, histogram: histData,
-                     density: densityData, userrgu: userRguData, jobs: jobsData };
-        renderLayout();
-
-        const heatmapTotal = heatmapData && heatmapData.total_jobs ? heatmapData.total_jobs : 0;
-        const scatterPart = ALLOW_SCATTER ? (scatterData.length + ' scatter job(s), ') : '';
-        status.textContent =
-          barData.length + ' period(s), ' + scatterPart +
-          heatmapTotal + ' heatmap job(s), ' +
-          histData.length + ' RGU period(s), ' + densityData.primary.values.length +
-          ' density job(s), ' + userRguData.length + ' user(s), ' + jobsData.length + ' jobs loaded.';
-      } catch (e) {
-        status.textContent = 'Request failed: ' + e.message;
+    function endpointURL(ep, p) {
+      const base = { start: p.start, end: p.end, cluster: p.cluster,
+                     ...(p.cluster_user ? { cluster_user: p.cluster_user } : {}) };
+      const focusParams = {
+        ...(p.focus_start ? { focus_start: p.focus_start } : {}),
+        ...(p.focus_end   ? { focus_end:   p.focus_end   } : {}),
+      };
+      const densityParams = { ...base, metric: p.metric,
+                              ...(p.metric2 ? { metric2: p.metric2 } : {}) };
+      switch (ep) {
+        case 'data':      return '/dash/metrics/data?'      + new URLSearchParams({ ...base, period: p.period });
+        case 'scatter':   return '/dash/metrics/scatter?'   + new URLSearchParams({ ...base, ...focusParams });
+        case 'heatmap':   return '/dash/metrics/heatmap?'   + new URLSearchParams({ ...base, ...focusParams });
+        case 'histogram': return '/dash/metrics/histogram?' + new URLSearchParams({ ...base, period: p.period, metric: p.metric });
+        case 'density':   return '/dash/metrics/density?'   + new URLSearchParams({ ...densityParams, ...focusParams });
+        case 'user_rgu':  return '/dash/metrics/user_rgu?'  + new URLSearchParams({ start: p.start, end: p.end, cluster: p.cluster, metric: p.metric, ...focusParams });
+        case 'jobs':      return '/dash/metrics/jobs?'      + new URLSearchParams({ ...base, metric: p.metric, ...focusParams });
       }
+      throw new Error('Unknown endpoint: ' + ep);
+    }
+
+    // Return a promise for the data of `ep`, fetching it once and caching it.
+    // Multiple tiles can call this concurrently; they all share the same in-
+    // flight promise.
+    function ensureEndpoint(ep) {
+      if (endpointCache[ep]) return endpointCache[ep];
+      // /metrics/scatter is intentionally short-circuited when ALLOW_SCATTER
+      // is false: the corresponding tiles aren't even in PLOT_NAMES, but the
+      // guard keeps things safe if someone forces it via URL params.
+      if (ep === 'scatter' && !ALLOW_SCATTER) {
+        endpointStatus[ep] = 'ready';
+        endpointCache[ep] = Promise.resolve([]);
+        return endpointCache[ep];
+      }
+      endpointStatus[ep] = 'loading';
+      endpointCache[ep] = (async () => {
+        try {
+          const r = await fetch(endpointURL(ep, currentParams));
+          if (!r.ok) throw new Error(`HTTP ${r.status} on /${ep}`);
+          const data = await r.json();
+          endpointStatus[ep] = 'ready';
+          updateStatus();
+          return data;
+        } catch (e) {
+          endpointStatus[ep] = 'error';
+          updateStatus();
+          throw e;
+        }
+      })();
+      updateStatus();
+      return endpointCache[ep];
+    }
+
+    function updateStatus() {
+      const statusEl = document.getElementById('status');
+      const states = Object.values(endpointStatus);
+      const loading = states.filter(s => s === 'loading').length;
+      const ready   = states.filter(s => s === 'ready').length;
+      const errored = states.filter(s => s === 'error').length;
+      if (loading > 0) {
+        statusEl.textContent =
+          `Loading ${loading} endpoint(s)… (${ready} ready` +
+          (errored ? `, ${errored} error` : '') + ')';
+      } else if (errored > 0) {
+        statusEl.textContent = `${ready} endpoint(s) loaded, ${errored} error(s).`;
+      } else if (ready > 0) {
+        statusEl.textContent = `${ready} endpoint(s) loaded.`;
+      } else {
+        statusEl.textContent = '';
+      }
+    }
+
+    // Draw a single tile: show "Loading…", await its endpoint, then either
+    // render the plot or show an error. We must re-validate the chartDiv is
+    // still in the DOM and still bound to the same plot type after the
+    // await — the user may have removed or swapped the tile in the meantime.
+    async function renderTile(chartDiv, plotType) {
+      const ep = PLOT_TO_ENDPOINT[plotType];
+      if (!ep) {
+        chartDiv.innerHTML = `<div class="tile-error">Unknown plot type: ${plotType}</div>`;
+        return;
+      }
+      chartDiv.innerHTML = '<div class="tile-loading">Loading…</div>';
+      try {
+        const data = await ensureEndpoint(ep);
+        if (!document.body.contains(chartDiv)) return;
+        if (chartDiv.dataset.plotType !== plotType) return;
+        chartDiv.innerHTML = '';
+        renderPlot(chartDiv.id, plotType, { [ENDPOINT_TO_KEY[ep]]: data });
+      } catch (e) {
+        if (!document.body.contains(chartDiv)) return;
+        chartDiv.innerHTML = `<div class="tile-error">Error: ${e.message}</div>`;
+      }
+    }
+
+    // Update button + click handlers (focus, user filter) call this. Captures
+    // the current form values, invalidates the endpoint cache, and re-renders
+    // every tile. Each tile then independently fetches what it needs.
+    async function loadCharts() {
+      const params = captureParams();
+      if (params === null) {
+        document.getElementById('status').textContent =
+          'Please select start and end dates.';
+        return;
+      }
+      currentParams  = params;
+      endpointCache  = {};
+      endpointStatus = {};
+      updateStatus();
+      renderLayout();
     }
 
     // ── Init ─────────────────────────────────────────────────────────────────
