@@ -819,14 +819,16 @@ _HTML = r"""<!DOCTYPE html>
     };
 
     const PLOT_NAMES = {
-      bar:           'Jobs per period',
-      scatter:       'Elapsed vs time limit',
-      wait:          'Wait time',
-      histogram:     'RGU requested vs used',
-      density:       'Metric density',
-      metricscatter: 'Metric scatter',
-      userrgu:       'RGU by user',
-      jobtable:      'Job table',
+      bar:             'Jobs per period',
+      scatter:         'Elapsed vs time limit',
+      wait:            'Wait time',
+      heatmap_elapsed: 'Elapsed vs limit (heatmap)',
+      heatmap_wait:    'Wait vs limit (heatmap)',
+      histogram:       'RGU requested vs used',
+      density:         'Metric density',
+      metricscatter:   'Metric scatter',
+      userrgu:         'RGU by user',
+      jobtable:        'Job table',
     };
     const PLOT_KEYS = Object.keys(PLOT_NAMES);
 
@@ -1034,10 +1036,44 @@ _HTML = r"""<!DOCTYPE html>
 
     function renderPlot(id, type, d) {
       const fn = { bar: renderBar, scatter: renderScatter, wait: renderWait,
+                   heatmap_elapsed: renderHeatmapElapsed,
+                   heatmap_wait: renderHeatmapWait,
                    histogram: renderHistogram, density: renderDensity,
                    metricscatter: renderMetricScatter, userrgu: renderUserRgu,
                    jobtable: renderJobTable }[type];
       if (fn) fn(id, d);
+    }
+
+    function renderHeatmapCell(id, payload, title, yLabel) {
+      if (!payload || !payload.z || !payload.z.length) return;
+      // Server returns x/y in seconds; convert axes to hours for display.
+      const xs = payload.x.map(v => v * SEC_TO_H);
+      const ys = payload.y.map(v => v * SEC_TO_H);
+      const maxX = payload.x_max_overall != null ? payload.x_max_overall * SEC_TO_H : null;
+      const maxY = payload.y_max_overall != null ? payload.y_max_overall * SEC_TO_H : null;
+      const subtitle = (maxX != null && maxY != null)
+        ? ` (extents: limit ≤ ${maxX.toFixed(1)}h, ${yLabel} ≤ ${maxY.toFixed(1)}h)`
+        : '';
+      Plotly.react(id, [{
+        type: 'heatmap',
+        x: xs, y: ys, z: payload.z,
+        colorscale: 'Viridis',
+        hovertemplate: 'Limit: %{x:.2f}h<br>' + yLabel + ': %{y:.2f}h<br>Jobs: %{z}<extra></extra>',
+      }], pLayout({
+        title: { text: title + subtitle, font: { size: 16 } },
+        xaxis: { title: 'Time limit (hours)' },
+        yaxis: { title: yLabel + ' (hours)' },
+      }), { responsive: true });
+    }
+
+    function renderHeatmapElapsed(id, d) {
+      renderHeatmapCell(id, d.heatmap && d.heatmap.elapsed_vs_limit,
+                        'Elapsed vs Time Limit (count per cell)', 'Elapsed');
+    }
+
+    function renderHeatmapWait(id, d) {
+      renderHeatmapCell(id, d.heatmap && d.heatmap.wait_vs_limit,
+                        'Wait vs Time Limit (count per cell)', 'Wait');
     }
 
     function renderBar(id, d) {
@@ -1370,29 +1406,32 @@ _HTML = r"""<!DOCTYPE html>
       try {
         const base          = { start, end, cluster, ...(cluster_user ? { cluster_user } : {}) };
         const densityParams = { ...base, metric, ...(metric2 ? { metric2 } : {}) };
-        const [barResp, scatterResp, histResp, densityResp, userRguResp, jobsResp] = await Promise.all([
+        const [barResp, scatterResp, heatmapResp, histResp, densityResp, userRguResp, jobsResp] = await Promise.all([
           fetch('/dash/metrics/data?'      + new URLSearchParams({ ...base, period })),
           fetch('/dash/metrics/scatter?'   + new URLSearchParams({ ...base, ...focusParams })),
+          fetch('/dash/metrics/heatmap?'   + new URLSearchParams({ ...base, ...focusParams })),
           fetch('/dash/metrics/histogram?' + new URLSearchParams({ ...base, period, metric })),
           fetch('/dash/metrics/density?'   + new URLSearchParams({ ...densityParams, ...focusParams })),
           fetch('/dash/metrics/user_rgu?'  + new URLSearchParams({ start, end, cluster, metric, ...focusParams })),
           fetch('/dash/metrics/jobs?'      + new URLSearchParams({ ...base, metric, ...focusParams })),
         ]);
 
-        if (!barResp.ok || !scatterResp.ok || !histResp.ok || !densityResp.ok || !userRguResp.ok || !jobsResp.ok) {
+        if (!barResp.ok || !scatterResp.ok || !heatmapResp.ok || !histResp.ok || !densityResp.ok || !userRguResp.ok || !jobsResp.ok) {
           status.textContent = 'Error fetching data.'; return;
         }
 
-        const [barData, scatterData, histData, densityData, userRguData, jobsData] = await Promise.all([
-          barResp.json(), scatterResp.json(), histResp.json(), densityResp.json(), userRguResp.json(), jobsResp.json(),
+        const [barData, scatterData, heatmapData, histData, densityData, userRguData, jobsData] = await Promise.all([
+          barResp.json(), scatterResp.json(), heatmapResp.json(), histResp.json(), densityResp.json(), userRguResp.json(), jobsResp.json(),
         ]);
 
-        lastData = { bar: barData, scatter: scatterData, histogram: histData,
+        lastData = { bar: barData, scatter: scatterData, heatmap: heatmapData, histogram: histData,
                      density: densityData, userrgu: userRguData, jobs: jobsData };
         renderLayout();
 
+        const heatmapTotal = heatmapData && heatmapData.total_jobs ? heatmapData.total_jobs : 0;
         status.textContent =
           barData.length + ' period(s), ' + scatterData.length + ' scatter job(s), ' +
+          heatmapTotal + ' heatmap job(s), ' +
           histData.length + ' RGU period(s), ' + densityData.primary.values.length +
           ' density job(s), ' + userRguData.length + ' user(s), ' + jobsData.length + ' jobs loaded.';
       } catch (e) {
