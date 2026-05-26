@@ -250,7 +250,9 @@ def parse_ce(ce: CacheEntry) -> Iterable[UserMatch]:
         roots = set()
         for k, v in refs.items():
             if len(v) == 0:
-                yield user_refs[k]
+                um = user_refs[k]
+                patch_usermatch(um)
+                yield um
                 roots.add(k)
         refs = {k: v - roots for k, v in refs.items() if k not in roots}
         if len(roots) == 0:
