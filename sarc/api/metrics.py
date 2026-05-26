@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse
-from sqlmodel import Session, col, func, select
+from sqlmodel import FLOAT, Session, and_, case, col, func, select
 
 from sarc.config import config
 from sarc.db.cluster import SlurmClusterDB, get_available_clusters
@@ -135,6 +135,22 @@ def _stat_mean(stats: dict | None, metric: str) -> float | None:
     return v
 
 
+def _stat_mean_sql(metric: str):
+    """SQL expression for statistics[metric]['mean'] cast as FLOAT.
+
+    Returns NULL when the path is missing; NaN passes through and must be
+    filtered by the caller (via `expr == expr`, since NaN != NaN).
+    """
+    return _stat_field_sql(metric, "mean")
+
+
+def _stat_field_sql(metric: str, field: str):
+    """SQL expression for statistics[metric][field] cast as FLOAT."""
+    return func.cast(
+        func.json_extract_path_text(JobSeriesDB.statistics, metric, field), FLOAT
+    )
+
+
 @router.get("/metrics", response_class=HTMLResponse)
 def metrics_global_page():
     return _HTML
@@ -224,6 +240,136 @@ def metrics_global_scatter(
     ]
 
 
+_HEATMAP_BINS = 100
+
+
+def _build_heatmap_payload(
+    sess: Session,
+    base_filters: list,
+    x_expr,
+    y_expr,
+    x_min: float,
+    x_max: float,
+    y_min: float,
+    y_max: float,
+):
+    """Aggregate count(*) per (bin_x, bin_y) cell over NBINS×NBINS bins.
+
+    Returns a dense NBINS×NBINS matrix (zero-filled) plus the bin-centre arrays
+    used as Plotly heatmap axes. Bounds (min/max) are passed in so callers can
+    share a single MIN/MAX pass across multiple heatmaps.
+    """
+    x_range = max(x_max - x_min, 1e-9)
+    y_range = max(y_max - y_min, 1e-9)
+    bin_x = func.least(
+        func.greatest(func.floor((x_expr - x_min) * _HEATMAP_BINS / x_range), 0),
+        _HEATMAP_BINS - 1,
+    ).label("bx")
+    bin_y = func.least(
+        func.greatest(func.floor((y_expr - y_min) * _HEATMAP_BINS / y_range), 0),
+        _HEATMAP_BINS - 1,
+    ).label("by")
+    q = (
+        select(bin_x, bin_y, func.count().label("c"))
+        .where(*base_filters)
+        .group_by(bin_x, bin_y)
+    )
+    z = [[0] * _HEATMAP_BINS for _ in range(_HEATMAP_BINS)]
+    for r in sess.exec(q):
+        z[int(r.by)][int(r.bx)] = int(r.c)
+
+    x_step = x_range / _HEATMAP_BINS
+    y_step = y_range / _HEATMAP_BINS
+    xs = [x_min + (i + 0.5) * x_step for i in range(_HEATMAP_BINS)]
+    ys = [y_min + (i + 0.5) * y_step for i in range(_HEATMAP_BINS)]
+    return {"x": xs, "y": ys, "z": z}
+
+
+@router.get("/metrics/heatmap")
+def metrics_global_heatmap(
+    start: date = Query(default=None),
+    end: date = Query(default=None),
+    cluster: str | None = Query(default=None),
+    cluster_user: str | None = Query(default=None),
+    focus_start: datetime | None = Query(default=None),
+    focus_end: datetime | None = Query(default=None),
+    sess: Session = Depends(session_dep),
+):
+    begin_dt, finish_dt = _apply_focus(*_date_range(start, end), focus_start, focus_end)
+    cluster_id = _resolve_cluster_id(sess, cluster)
+
+    wait_expr = func.extract("epoch", SlurmJobDB.start_time - SlurmJobDB.submit_time)
+    base_filters = [
+        col(SlurmJobDB.submit_time) >= begin_dt,
+        col(SlurmJobDB.submit_time) < finish_dt,
+        col(SlurmJobDB.time_limit).is_not(None),
+        col(SlurmJobDB.start_time).is_not(None),
+        SlurmJobDB.job_state == SlurmState.COMPLETED,
+    ]
+    if cluster_id is not None:
+        base_filters.append(SlurmJobDB.cluster_id == cluster_id)
+    if cluster_user:
+        base_filters.append(SlurmJobDB.cluster_user == cluster_user)
+
+    bounds = sess.exec(
+        select(
+            func.min(SlurmJobDB.time_limit).label("min_l"),
+            func.max(SlurmJobDB.time_limit).label("max_l"),
+            func.min(SlurmJobDB.elapsed_time).label("min_e"),
+            func.max(SlurmJobDB.elapsed_time).label("max_e"),
+            func.min(wait_expr).label("min_w"),
+            func.max(wait_expr).label("max_w"),
+        ).where(*base_filters)
+    ).one()
+
+    if bounds.min_l is None:
+        # No matching rows
+        return {"elapsed_vs_limit": None, "wait_vs_limit": None}
+
+    elapsed_hmap = _build_heatmap_payload(
+        sess,
+        base_filters,
+        SlurmJobDB.time_limit,
+        SlurmJobDB.elapsed_time,
+        float(bounds.min_l),
+        float(bounds.max_l),
+        float(bounds.min_e),
+        float(bounds.max_e),
+    )
+    wait_hmap = _build_heatmap_payload(
+        sess,
+        base_filters,
+        SlurmJobDB.time_limit,
+        wait_expr,
+        float(bounds.min_l),
+        float(bounds.max_l),
+        float(bounds.min_w),
+        float(bounds.max_w),
+    )
+
+    return {"elapsed_vs_limit": elapsed_hmap, "wait_vs_limit": wait_hmap}
+
+
+_DENSITY_BINS = 50  # matches Plotly nbinsx in the frontend
+_PAIRED_SAMPLE_LIMIT = 5000
+
+
+def _density_bin_expr(metric_expr):
+    """SQL expression for floor(metric_expr * NBINS), clipped to [0, NBINS-1]."""
+    return func.least(
+        func.greatest(func.floor(metric_expr * _DENSITY_BINS), 0), _DENSITY_BINS - 1
+    )
+
+
+def _valid_metric_filter(metric_expr):
+    """SQL predicate: metric expr is not NULL, >= 0, and not NaN (NaN != NaN)."""
+    return and_(
+        metric_expr.is_not(None),
+        metric_expr >= 0,
+        metric_expr == metric_expr,  # noqa: PLR0124
+    )
+
+
 @router.get("/metrics/density")
 def metrics_global_density(
     start: date = Query(default=None),
@@ -243,47 +389,78 @@ def metrics_global_density(
 
     begin_dt, finish_dt = _apply_focus(*_date_range(start, end), focus_start, focus_end)
 
-    query = select(
-        JobSeriesDB.statistics, JobSeriesDB.elapsed_time, JobSeriesDB.rgu
-    ).where(
+    m1 = _stat_mean_sql(metric)
+    weight = JobSeriesDB.rgu * JobSeriesDB.elapsed_time
+    bin_width = 1.0 / _DENSITY_BINS
+
+    # Common job-population filter shared by primary, secondary and paired.
+    # When metric2 is specified, both metric and metric2 must be valid (matches
+    # original Python loop: secondary failure skips the primary too).
+    base_filters = [
         col(JobSeriesDB.submit_time) >= begin_dt,
         col(JobSeriesDB.submit_time) < finish_dt,
         col(JobSeriesDB.allocated_gpu_type).is_not(None),
         col(JobSeriesDB.rgu).is_not(None),
-    )
-    query = _apply_common_filters(query, cluster, cluster_user)
+        _valid_metric_filter(m1),
+    ]
+    if metric2:
+        m2 = _stat_mean_sql(metric2)
+        base_filters.append(_valid_metric_filter(m2))
+    else:
+        m2 = None
 
-    p_values: list[float] = []
-    p_weights: list[float] = []
-    s_values: list[float] = []
-    s_weights: list[float] = []
+    def _binned_query(metric_expr):
+        bin_expr = _density_bin_expr(metric_expr).label("bin")
+        q = (
+            select(bin_expr, func.sum(weight).label("w"))
+            .where(*base_filters)
+            .group_by(bin_expr)
+            .order_by(bin_expr)
+        )
+        return _apply_common_filters(q, cluster, cluster_user)
+
+    def _bin_to_payload(rows):
+        # Convert (bin_index, weight_sum) rows to centred-value/weight lists
+        # consumable by Plotly's histogram. Each bin yields a single (x, y)
+        # pair at the bin centre, which Plotly's nbinsx=50 will resolve back
+        # to a 50-bar density plot.
+        values, weights = [], []
+        for r in rows:
+            centre = (int(r.bin) + 0.5) * bin_width
+            values.append(centre)
+            weights.append(float(r.w or 0.0))
+        return values, weights
+
+    p_values, p_weights = _bin_to_payload(sess.exec(_binned_query(m1)))
+
+    if not metric2 or m2 is None:
+        return {
+            "primary": {"values": p_values, "weights": p_weights},
+            "secondary": None,
+            "paired": None,
+        }
+
+    s_values, s_weights = _bin_to_payload(sess.exec(_binned_query(m2)))
+
+    # Paired scatter (metric x vs metric2 y): cap to a uniform random sample
+    # so the response stays browser-friendly even on multi-million-row windows.
+    paired_q = (
+        select(m1.label("x"), m2.label("y"))
+        .where(*base_filters)
+        .order_by(func.random())
+        .limit(_PAIRED_SAMPLE_LIMIT)
+    )
+    paired_q = _apply_common_filters(paired_q, cluster, cluster_user)
     paired_x: list[float] = []
     paired_y: list[float] = []
-
-    # Require primary metric; also require secondary when specified so both
-    # density traces and the paired scatter share the same job population.
-    for stats, elapsed_time, rgu in sess.exec(query):
-        v1 = _stat_mean(stats, metric)
-        if v1 is None or v1 < 0:
-            continue
-        if rgu is None or math.isnan(rgu):
-            continue
-        weight = rgu * (elapsed_time or 0)
-        if metric2:
-            v2 = _stat_mean(stats, metric2)
-            if v2 is None or v2 < 0:
-                continue
-            s_values.append(v2)
-            s_weights.append(weight)
-            paired_x.append(v1)
-            paired_y.append(v2)
-        p_values.append(v1)
-        p_weights.append(weight)
+    for row in sess.exec(paired_q):
+        paired_x.append(float(row.x))
+        paired_y.append(float(row.y))
 
     return {
         "primary": {"values": p_values, "weights": p_weights},
-        "secondary": {"values": s_values, "weights": s_weights} if metric2 else None,
-        "paired": {"x": paired_x, "y": paired_y} if metric2 else None,
+        "secondary": {"values": s_values, "weights": s_weights},
+        "paired": {"x": paired_x, "y": paired_y},
     }
 
 
@@ -302,44 +479,56 @@ def metrics_global_histogram(
     fmt = "%Y-%m-%d %H:%M" if step < timedelta(days=1) else "%Y-%m-%d"
     step_seconds = step.total_seconds()
 
-    period_data: list[dict] = []
-    current = begin_dt
-    while current < finish_dt:
-        period_data.append(
-            {
-                "period_start": current.strftime(fmt),
-                "rgu_requested": 0.0,
-                "rgu_used": 0.0,
-            }
-        )
-        current += step
+    # Aggregate per bucket directly in SQL: SUM(rgu * elapsed / 3600) for
+    # requested, and the same multiplied by the metric mean for used. The
+    # `m == m` test filters NaN (NaN != NaN), substituting 0 in that branch.
+    bucket_expr = func.floor(
+        func.extract("epoch", JobSeriesDB.submit_time - begin_dt) / step_seconds
+    ).label("bucket")
+    rgu_hours = JobSeriesDB.rgu * JobSeriesDB.elapsed_time / 3600.0
+    m_mean = _stat_mean_sql(metric)
+    # NaN is its only non-equal value; `m_mean == m_mean` is the SQL idiom.
+    rgu_used_term = case(
+        (m_mean == m_mean, rgu_hours * m_mean),  # noqa: PLR0124
+        else_=0.0,
+    )
 
-    query = select(
-        JobSeriesDB.statistics,
-        JobSeriesDB.elapsed_time,
-        JobSeriesDB.rgu,
-        JobSeriesDB.submit_time,
-    ).where(
-        col(JobSeriesDB.submit_time) >= begin_dt,
-        col(JobSeriesDB.submit_time) < finish_dt,
-        col(JobSeriesDB.allocated_gpu_type).is_not(None),
-        col(JobSeriesDB.rgu).is_not(None),
+    query = (
+        select(
+            bucket_expr,
+            func.sum(rgu_hours).label("rgu_requested"),
+            func.sum(rgu_used_term).label("rgu_used"),
+        )
+        .where(
+            col(JobSeriesDB.submit_time) >= begin_dt,
+            col(JobSeriesDB.submit_time) < finish_dt,
+            col(JobSeriesDB.allocated_gpu_type).is_not(None),
+            col(JobSeriesDB.rgu).is_not(None),
+        )
+        .group_by(bucket_expr)
+        .order_by(bucket_expr)
     )
     query = _apply_common_filters(query, cluster, cluster_user)
 
-    for stats, elapsed_time, rgu, submit_time in sess.exec(query):
-        if rgu is None or math.isnan(rgu):
-            continue
-        bucket = int((submit_time - begin_dt).total_seconds() // step_seconds)
-        if bucket < 0 or bucket >= len(period_data):
-            continue
+    sums = {
+        int(row.bucket): (float(row.rgu_requested or 0.0), float(row.rgu_used or 0.0))
+        for row in sess.exec(query)
+    }
 
-        elapsed_h = (elapsed_time or 0) / 3600
-        period_data[bucket]["rgu_requested"] += rgu * elapsed_h
-
-        m_mean = _stat_mean(stats, metric)
-        if m_mean is not None:
-            period_data[bucket]["rgu_used"] += rgu * elapsed_h * m_mean
+    period_data = []
+    current = begin_dt
+    idx = 0
+    while current < finish_dt:
+        req, used = sums.get(idx, (0.0, 0.0))
+        period_data.append(
+            {
+                "period_start": current.strftime(fmt),
+                "rgu_requested": req,
+                "rgu_used": used,
+            }
+        )
+        current += step
+        idx += 1
 
     return period_data
 
@@ -357,35 +546,37 @@ def metrics_global_user_rgu(
 ):
     begin_dt, finish_dt = _apply_focus(*_date_range(start, end), focus_start, focus_end)
 
-    query = select(
-        JobSeriesDB.cluster_user,
-        JobSeriesDB.statistics,
-        JobSeriesDB.elapsed_time,
-        JobSeriesDB.rgu,
-    ).where(
-        col(JobSeriesDB.submit_time) >= begin_dt,
-        col(JobSeriesDB.submit_time) < finish_dt,
-        col(JobSeriesDB.allocated_gpu_type).is_not(None),
-        col(JobSeriesDB.rgu).is_not(None),
+    # Aggregate by user directly in SQL: SUM(rgu * elapsed / 3600) per user.
+    rgu_hours = JobSeriesDB.rgu * JobSeriesDB.elapsed_time / 3600.0
+    m_mean = _stat_mean_sql(metric)
+    rgu_used_term = case(
+        (m_mean == m_mean, rgu_hours * m_mean),  # noqa: PLR0124
+        else_=0.0,
+    )
+    user_expr = func.coalesce(JobSeriesDB.cluster_user, "unknown").label("user")
+    rgu_requested_sum = func.sum(rgu_hours).label("rgu_requested")
+
+    query = (
+        select(user_expr, rgu_requested_sum, func.sum(rgu_used_term).label("rgu_used"))
+        .where(
+            col(JobSeriesDB.submit_time) >= begin_dt,
+            col(JobSeriesDB.submit_time) < finish_dt,
+            col(JobSeriesDB.allocated_gpu_type).is_not(None),
+            col(JobSeriesDB.rgu).is_not(None),
+        )
+        .group_by(user_expr)
+        .order_by(rgu_requested_sum.desc(), user_expr)
     )
     query = _apply_common_filters(query, cluster, cluster_user)
 
-    by_user: dict[str, dict] = {}
-    for user, stats, elapsed_time, rgu in sess.exec(query):
-        if rgu is None or math.isnan(rgu):
-            continue
-
-        user = user or "unknown"
-        if user not in by_user:
-            by_user[user] = {"user": user, "rgu_requested": 0.0, "rgu_used": 0.0}
-        elapsed_h = (elapsed_time or 0) / 3600
-        by_user[user]["rgu_requested"] += rgu * elapsed_h
-
-        m_mean = _stat_mean(stats, metric)
-        if m_mean is not None:
-            by_user[user]["rgu_used"] += rgu * elapsed_h * m_mean
-
-    return sorted(by_user.values(), key=lambda r: r["rgu_requested"], reverse=True)
+    return [
+        {
+            "user": row.user,
+            "rgu_requested": float(row.rgu_requested or 0.0),
+            "rgu_used": float(row.rgu_used or 0.0),
+        }
+        for row in sess.exec(query)
+    ]
 
 
 @router.get("/metrics/jobs")
@@ -402,62 +593,64 @@ def metrics_jobs(
 ):
     begin_dt, finish_dt = _apply_focus(*_date_range(start, end), focus_start, focus_end)
 
-    query = select(  # ty:ignore[no-matching-overload]
-        JobSeriesDB.cluster_name,
-        JobSeriesDB.cluster_user,
-        JobSeriesDB.job_state,
-        JobSeriesDB.elapsed_time,
-        JobSeriesDB.nodes,
-        JobSeriesDB.allocated_gpu_type,
-        JobSeriesDB.rgu,
-        JobSeriesDB.statistics,
-    ).where(
-        col(JobSeriesDB.submit_time) >= begin_dt,
-        col(JobSeriesDB.submit_time) < finish_dt,
-        col(JobSeriesDB.allocated_gpu_type).is_not(None),
-        col(JobSeriesDB.rgu).is_not(None),
+    # Sort key (rgu * elapsed) and the stat extractions are pushed into SQL so
+    # we only materialise `limit` rows, not the full result set.
+    rgu_hours = (JobSeriesDB.rgu * JobSeriesDB.elapsed_time / 3600.0).label("rgu_hours")
+    metric_mean = _stat_mean_sql(metric).label("metric_mean")
+    gpu_util_mean = _stat_mean_sql("gpu_utilization").label("gpu_utilization_mean")
+    gpu_sm_mean = _stat_mean_sql("gpu_sm_occupancy").label("gpu_sm_occupancy_mean")
+    gpu_mem_max = _stat_field_sql("gpu_memory", "max").label("gpu_memory_max")
+
+    query = (
+        select(  # ty:ignore[no-matching-overload]
+            JobSeriesDB.cluster_name,
+            JobSeriesDB.cluster_user,
+            JobSeriesDB.job_state,
+            JobSeriesDB.elapsed_time,
+            JobSeriesDB.nodes,
+            JobSeriesDB.allocated_gpu_type,
+            JobSeriesDB.rgu,
+            rgu_hours,
+            metric_mean,
+            gpu_util_mean,
+            gpu_sm_mean,
+            gpu_mem_max,
+        )
+        .where(
+            col(JobSeriesDB.submit_time) >= begin_dt,
+            col(JobSeriesDB.submit_time) < finish_dt,
+            col(JobSeriesDB.allocated_gpu_type).is_not(None),
+            col(JobSeriesDB.rgu).is_not(None),
+            JobSeriesDB.rgu == JobSeriesDB.rgu,  # NaN guard   # noqa: PLR0124
+        )
+        .order_by(rgu_hours.desc(), col(JobSeriesDB.cluster_user))
+        .limit(limit)
     )
     query = _apply_common_filters(query, cluster, cluster_user)
 
-    def _stat(stats: dict | None, name: str, field: str) -> float | None:
-        if not stats:
-            return None
-        entry = stats.get(name)
-        if not entry:
-            return None
-        return _nan_to_none(entry.get(field))
-
     jobs = []
-    for cluster_name, cu, job_state, elapsed, nodes, gpu_type, rgu, stats in sess.exec(
-        query
-    ):
-        if rgu is None or math.isnan(rgu):
-            continue
-        elapsed = elapsed or 0
-        rgu_hours = round(rgu * elapsed / 3600, 2)
-        metric_mean = _stat(stats, metric, "mean")
-        waste = (
-            round(rgu_hours * (1 - metric_mean), 2) if metric_mean is not None else None
-        )
+    for row in sess.exec(query):
+        mm = _nan_to_none(row.metric_mean)
+        rh = float(row.rgu_hours)
+        waste = round(rh * (1 - mm), 2) if mm is not None else None
         jobs.append(
             {
-                "cluster": cluster_name or "",
-                "user": cu or "",
-                "job_state": job_state.value if job_state is not None else "",
-                "elapsed": elapsed,
-                "nodes": ", ".join(nodes or []) or None,
-                "gpu_type": gpu_type or "",
-                "rgu": round(rgu, 2),
-                "rgu_hours": rgu_hours,
+                "cluster": row.cluster_name or "",
+                "user": row.cluster_user or "",
+                "job_state": row.job_state.value if row.job_state is not None else "",
+                "elapsed": row.elapsed_time or 0,
+                "nodes": ", ".join(row.nodes or []) or None,
+                "gpu_type": row.allocated_gpu_type or "",
+                "rgu": round(float(row.rgu), 2),
+                "rgu_hours": round(rh, 2),
                 "waste": waste,
-                "gpu_utilization_mean": _stat(stats, "gpu_utilization", "mean"),
-                "gpu_sm_occupancy_mean": _stat(stats, "gpu_sm_occupancy", "mean"),
-                "gpu_memory_max": _stat(stats, "gpu_memory", "max"),
+                "gpu_utilization_mean": _nan_to_none(row.gpu_utilization_mean),
+                "gpu_sm_occupancy_mean": _nan_to_none(row.gpu_sm_occupancy_mean),
+                "gpu_memory_max": _nan_to_none(row.gpu_memory_max),
             }
         )
 
-    jobs.sort(key=lambda j: j["rgu_hours"], reverse=True)
-    return jobs[:limit]
+    return jobs
 
 
 _HTML = r"""<!DOCTYPE html>
@@ -936,12 +1129,15 @@ _HTML = r"""<!DOCTYPE html>
       const ml  = METRICS[metric]  || metric;
       const ml2 = metric2 ? (METRICS[metric2] || metric2) : null;
       const traces = [];
+      // Server pre-bins into 50 equal bins over [0, 1] (matches xbins below).
+      const XBINS = { start: 0, end: 1, size: 1 / 50 };
       if (d.density.primary.values.length) {
         traces.push({
           type: 'histogram', name: ml,
           x: d.density.primary.values, y: d.density.primary.weights,
           histfunc: 'sum', histnorm: 'probability density',
-          opacity: metric2 ? 0.7 : 1, marker: { color: '#1a6fd4' }, nbinsx: 50,
+          opacity: metric2 ? 0.7 : 1, marker: { color: '#1a6fd4' },
+          xbins: XBINS, autobinx: false,
           hovertemplate: ml + ': %{x:.2f}<br>Density: %{y:.4f}<extra></extra>',
         });
       }
@@ -950,7 +1146,8 @@ _HTML = r"""<!DOCTYPE html>
           type: 'histogram', name: ml2,
           x: d.density.secondary.values, y: d.density.secondary.weights,
           histfunc: 'sum', histnorm: 'probability density',
-          opacity: 0.7, marker: { color: '#e05c2a' }, nbinsx: 50,
+          opacity: 0.7, marker: { color: '#e05c2a' },
+          xbins: XBINS, autobinx: false,
           hovertemplate: ml2 + ': %{x:.2f}<br>Density: %{y:.4f}<extra></extra>',
         });
       }
