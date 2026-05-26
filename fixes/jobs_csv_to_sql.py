@@ -2,12 +2,16 @@
 
 The CSV is a flat dump of MongoDB-era jobs. We:
 - wipe all jobs, statistics, and users in the target SQL DB (clusters/RGU kept);
+- import GPU billings from a JSON file (produced by gpu_billing_from_mongodb.py)
+  so RGU values can be computed for clusters where billing_is_gpu is False;
 - assume clusters listed in the CSV are already declared in the SARC config so
   that db_upgrade() seeds them;
 - resolve users by ``user_uuid`` (MongoDB-era UUID) when present, falling back
   to ``(cluster_name, cluster_user)`` otherwise — see ``get_or_create_user``;
 - insert one SlurmJobDB per CSV row, plus one JobStatisticDB per non-empty
-  metric.
+  metric. Each row's ``allocated_gpu_type`` is harmonised against the GPU
+  names known to GpuRguDB (so jobs scraped with raw Slurm names like
+  ``gpu:h100:4`` map to ``H100-SXM5-80GB`` and find their RGU/billing).
 
 The target DB is assumed to be a throwaway test DB.
 """
@@ -17,15 +21,18 @@ import ast
 import csv
 import json
 import logging
+from collections import Counter
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 from psycopg.types.json import Jsonb
 from sqlmodel import Session, select, text
 from tqdm import tqdm
 
-from sarc.config import config
-from sarc.db.cluster import SlurmClusterDB
+from sarc.config import ClusterConfig, config
+from sarc.db.cluster import GPUBillingDB, SlurmClusterDB
+from sarc.db.support import GpuRguDB
 from sarc.db.users import UserDB
 from sarc.models.job import SlurmState
 
@@ -121,6 +128,74 @@ def _parse_nodes(v: str) -> list[str]:
     return [str(x) for x in parsed]
 
 
+def import_gpu_billings(
+    sess: Session, json_path: Path, cluster_ids: dict[str, int]
+) -> tuple[int, Counter]:
+    """Load GPU billings from the JSON dump produced by gpu_billing_from_mongodb.py.
+
+    Returns (inserted_count, skipped_per_cluster). Skipped entries correspond
+    to cluster names absent from the SQL DB.
+    """
+    docs = json.loads(json_path.read_text())
+    if not isinstance(docs, list):
+        raise ValueError(f"Expected a JSON array in {json_path}.")
+    inserted = 0
+    skipped: Counter = Counter()
+    for doc in docs:
+        cluster_name = doc["cluster_name"]
+        cluster_id = cluster_ids.get(cluster_name)
+        if cluster_id is None:
+            skipped[cluster_name] += 1
+            continue
+        since = datetime.fromisoformat(doc["since"])
+        if since.tzinfo is None:
+            since = since.replace(tzinfo=UTC)
+        GPUBillingDB.get_or_create(
+            sess,
+            cluster_id=cluster_id,
+            since=since,
+            gpu_to_billing=doc["gpu_to_billing"],
+        )
+        inserted += 1
+    sess.commit()
+    return inserted, skipped
+
+
+def harmonise_allocated_gpu(
+    cluster_name: str,
+    gpu_type: str | None,
+    nodes: list[str],
+    known_gpus: set[str],
+    cluster_cfgs: dict[str, ClusterConfig],
+    harmonised: Counter,
+    unharmonisable: Counter,
+) -> str | None:
+    """Map a raw Slurm ``allocated_gpu_type`` to a name known to GpuRguDB.
+
+    Jobs scraped before the harmonisation step (or on clusters where
+    ``gpus_per_nodes`` is not declared) carry raw names like ``gpu:h100:4``.
+    GpuRguDB / GPUBillingDB key on harmonised names (``H100-SXM5-80GB``), so
+    the raw name needs to be translated for RGU and billing lookups to hit.
+
+    Counters are mutated in place:
+        * ``harmonised[cluster]`` += 1 when we replaced the name.
+        * ``unharmonisable[cluster]`` += 1 when no mapping was found.
+    Unharmonisable values are returned as-is, leaving rgu NULL downstream.
+    """
+    if gpu_type is None or gpu_type in known_gpus:
+        return gpu_type
+    cluster_cfg = cluster_cfgs.get(cluster_name)
+    if cluster_cfg is None:
+        unharmonisable[cluster_name] += 1
+        return gpu_type
+    harmonised_name = cluster_cfg.harmonize_gpu_from_nodes(nodes, gpu_type)
+    if harmonised_name is not None and harmonised_name in known_gpus:
+        harmonised[cluster_name] += 1
+        return harmonised_name
+    unharmonisable[cluster_name] += 1
+    return gpu_type
+
+
 def wipe_data(sess: Session) -> None:
     """Truncate jobs, stats, users, and all user-related tables in O(1).
 
@@ -194,7 +269,11 @@ def get_or_create_user(
 
 
 def build_job_kwargs(
-    row: dict[str, str], cluster_id: int, sarc_user_id: int
+    row: dict[str, str],
+    cluster_id: int,
+    sarc_user_id: int,
+    nodes: list[str],
+    allocated_gpu_type: str | None,
 ) -> dict[str, Any]:
     return dict(
         cluster_id=cluster_id,
@@ -209,7 +288,7 @@ def build_job_kwargs(
         exit_code=_parse_int(row["exit_code"]),
         signal=_parse_int(row["signal"]),
         partition=row["partition"],
-        nodes=Jsonb(_parse_nodes(row["nodes"])),
+        nodes=Jsonb(nodes),
         work_dir=row["work_dir"],
         submit_line=None,
         constraints=row["constraints"] or None,
@@ -237,7 +316,7 @@ def build_job_kwargs(
         allocated_node=_parse_int(row["allocated.node"]),
         allocated_billing=_parse_int(row["allocated.billing"]),
         allocated_gres_gpu=_parse_int(row["allocated.gres_gpu"]),
-        allocated_gpu_type=row["allocated.gpu_type"] or None,
+        allocated_gpu_type=allocated_gpu_type,
         sarc_user_id=sarc_user_id,
     )
 
@@ -311,7 +390,7 @@ def flush_batch(
                         )
 
 
-def run(csv_path: str, batch_size: int) -> None:
+def run(csv_path: str, gpu_billing_path: Path, batch_size: int) -> None:
     cfg = config("scraping")
     # Triggers db_upgrade(): creates tables, seeds clusters from config + RGU.
     engine = cfg.db.engine
@@ -320,14 +399,33 @@ def run(csv_path: str, batch_size: int) -> None:
         logger.info("Wiping jobs, stats, and users...")
         wipe_data(sess)
 
-    # Snapshot cluster name -> id mapping.
+    # Snapshot cluster name -> id mapping and the set of GPU names known to
+    # GpuRguDB (used to short-circuit the harmonisation lookup below).
     with Session(engine) as sess:
         cluster_ids: dict[str, int] = {
             c.name: c.id  # ty:ignore[invalid-key-type]
             for c in sess.exec(select(SlurmClusterDB)).all()
             if c.id is not None and c.name is not None
         }
+        known_gpus: set[str] = set(sess.exec(select(GpuRguDB.name)).all())
     logger.info("Found %d clusters in DB: %s", len(cluster_ids), sorted(cluster_ids))
+    logger.info("Found %d GPU names in GpuRguDB.", len(known_gpus))
+
+    # Load GPU billings before importing jobs so that JobSeriesDB.rgu can be
+    # computed for clusters where billing_is_gpu is False.
+    with Session(engine) as sess:
+        inserted, skipped_billings = import_gpu_billings(
+            sess, gpu_billing_path, cluster_ids
+        )
+    logger.info("Imported %d gpu_billing entries.", inserted)
+    if skipped_billings:
+        logger.warning(
+            "Skipped billings for unknown clusters: %s", dict(skipped_billings)
+        )
+
+    cluster_cfgs: dict[str, ClusterConfig] = cfg.clusters
+    harmonised: Counter = Counter()
+    unharmonisable: Counter = Counter()
 
     uuid_cache: dict[str, int] = {}
     cu_cache: dict[tuple[str, str], int] = {}
@@ -368,7 +466,22 @@ def run(csv_path: str, batch_size: int) -> None:
                 sess, cluster_name, row["user"], user_uuid, uuid_cache, cu_cache
             )
 
-            job_dicts.append(build_job_kwargs(row, cluster_id, sarc_user_id))
+            nodes = _parse_nodes(row["nodes"])
+            allocated_gpu_type = harmonise_allocated_gpu(
+                cluster_name,
+                row["allocated.gpu_type"] or None,
+                nodes,
+                known_gpus,
+                cluster_cfgs,
+                harmonised,
+                unharmonisable,
+            )
+
+            job_dicts.append(
+                build_job_kwargs(
+                    row, cluster_id, sarc_user_id, nodes, allocated_gpu_type
+                )
+            )
             stats_per_job.append(build_stats_kwargs(row))
             count += 1
 
@@ -394,6 +507,14 @@ def run(csv_path: str, batch_size: int) -> None:
             "Skipped %d row(s) violating submit_time <= start_time <= end_time.",
             _time_check_skip_count[0],
         )
+    if harmonised:
+        logger.info("Harmonised allocated_gpu_type per cluster: %s", dict(harmonised))
+    if unharmonisable:
+        logger.warning(
+            "Could not harmonise allocated_gpu_type per cluster (kept raw, "
+            "rgu will be NULL): %s",
+            dict(unharmonisable),
+        )
 
 
 def main() -> None:
@@ -404,11 +525,18 @@ def main() -> None:
     )
     parser.add_argument("csv_path", help="Path to the CSV file.")
     parser.add_argument(
+        "--gpu-billing",
+        required=True,
+        type=Path,
+        help="JSON file produced by gpu_billing_from_mongodb.py "
+        "(loaded into gpubillingdb before importing jobs).",
+    )
+    parser.add_argument(
         "--batch-size", type=int, default=20_000, help="Commit every N jobs."
     )
     args = parser.parse_args()
 
-    run(args.csv_path, args.batch_size)
+    run(args.csv_path, args.gpu_billing, args.batch_size)
 
 
 if __name__ == "__main__":
