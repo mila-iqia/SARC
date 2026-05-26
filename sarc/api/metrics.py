@@ -26,6 +26,12 @@ UTC = timezone.utc
 _DEFAULT_WINDOW_DAYS = 1
 _DEFAULT_PERIOD = "1h"
 
+# Hides the raw scatter plots (elapsed-vs-limit, wait) from the dashboard UI
+# and skips the /metrics/scatter HTTP call entirely. The endpoint itself stays
+# available for direct queries. Re-enable only on small windows: 1 year of
+# completed jobs is enough to lock up the browser.
+_ALLOW_SCATTER: bool = False
+
 
 # Metrics stored in JobSeriesDB.statistics that are normalised to [0, 1]
 _METRICS_0_1: dict[str, str] = {
@@ -653,7 +659,8 @@ def metrics_jobs(
     return jobs
 
 
-_HTML = r"""<!DOCTYPE html>
+_HTML = (
+    r"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -818,10 +825,14 @@ _HTML = r"""<!DOCTYPE html>
       system_memory:        'System memory',
     };
 
+    const ALLOW_SCATTER = __ALLOW_SCATTER__;
+
     const PLOT_NAMES = {
       bar:             'Jobs per period',
-      scatter:         'Elapsed vs time limit',
-      wait:            'Wait time',
+      ...(ALLOW_SCATTER ? {
+        scatter:       'Elapsed vs time limit',
+        wait:          'Wait time',
+      } : {}),
       heatmap_elapsed: 'Elapsed vs limit (heatmap)',
       heatmap_wait:    'Wait vs limit (heatmap)',
       histogram:       'RGU requested vs used',
@@ -1054,11 +1065,37 @@ _HTML = r"""<!DOCTYPE html>
       const subtitle = (maxX != null && maxY != null)
         ? ` (extents: limit ≤ ${maxX.toFixed(1)}h, ${yLabel} ≤ ${maxY.toFixed(1)}h)`
         : '';
+
+      // Log10 transform for colour mapping: counts span many orders of
+      // magnitude (1 outlier vs ~1M-job cluster), so a linear scale would
+      // make every cell except the densest one look white. customdata
+      // keeps the original counts visible in the hover tooltip.
+      const zRaw = payload.z;
+      const zLog = zRaw.map(row => row.map(v => v > 0 ? Math.log10(v) : null));
+
+      // Pick colorbar tick density based on the actual data range.
+      let zMaxLog = 0;
+      for (const row of zLog) for (const v of row) if (v != null && v > zMaxLog) zMaxLog = v;
+      const tickPows = [];
+      for (let p = 0; p <= Math.ceil(zMaxLog); p++) tickPows.push(p);
+      const tickLabels = tickPows.map(p => {
+        const n = Math.pow(10, p);
+        if (n >= 1e6) return (n / 1e6) + 'M';
+        if (n >= 1e3) return (n / 1e3) + 'K';
+        return String(n);
+      });
+
       Plotly.react(id, [{
         type: 'heatmap',
-        x: xs, y: ys, z: payload.z,
-        colorscale: 'Viridis',
-        hovertemplate: 'Limit: %{x:.2f}h<br>' + yLabel + ': %{y:.2f}h<br>Jobs: %{z}<extra></extra>',
+        x: xs, y: ys, z: zLog, customdata: zRaw,
+        colorscale: 'Greys',      // white = 0, black = max
+        showscale: true,
+        colorbar: {
+          title: { text: 'Jobs', side: 'right' },
+          tickvals: tickPows, ticktext: tickLabels,
+        },
+        hovertemplate: 'Limit: %{x:.2f}h<br>' + yLabel +
+                       ': %{y:.2f}h<br>Jobs: %{customdata}<extra></extra>',
       }], pLayout({
         title: { text: title + subtitle, font: { size: 16 } },
         xaxis: { title: 'Time limit (hours)' },
@@ -1406,9 +1443,14 @@ _HTML = r"""<!DOCTYPE html>
       try {
         const base          = { start, end, cluster, ...(cluster_user ? { cluster_user } : {}) };
         const densityParams = { ...base, metric, ...(metric2 ? { metric2 } : {}) };
+        // /metrics/scatter is skipped entirely when ALLOW_SCATTER is false
+        // (set server-side via _ALLOW_SCATTER).
+        const scatterPromise = ALLOW_SCATTER
+          ? fetch('/dash/metrics/scatter?' + new URLSearchParams({ ...base, ...focusParams }))
+          : Promise.resolve(null);
         const [barResp, scatterResp, heatmapResp, histResp, densityResp, userRguResp, jobsResp] = await Promise.all([
           fetch('/dash/metrics/data?'      + new URLSearchParams({ ...base, period })),
-          fetch('/dash/metrics/scatter?'   + new URLSearchParams({ ...base, ...focusParams })),
+          scatterPromise,
           fetch('/dash/metrics/heatmap?'   + new URLSearchParams({ ...base, ...focusParams })),
           fetch('/dash/metrics/histogram?' + new URLSearchParams({ ...base, period, metric })),
           fetch('/dash/metrics/density?'   + new URLSearchParams({ ...densityParams, ...focusParams })),
@@ -1416,12 +1458,14 @@ _HTML = r"""<!DOCTYPE html>
           fetch('/dash/metrics/jobs?'      + new URLSearchParams({ ...base, metric, ...focusParams })),
         ]);
 
-        if (!barResp.ok || !scatterResp.ok || !heatmapResp.ok || !histResp.ok || !densityResp.ok || !userRguResp.ok || !jobsResp.ok) {
+        if (!barResp.ok || (scatterResp && !scatterResp.ok) || !heatmapResp.ok || !histResp.ok || !densityResp.ok || !userRguResp.ok || !jobsResp.ok) {
           status.textContent = 'Error fetching data.'; return;
         }
 
         const [barData, scatterData, heatmapData, histData, densityData, userRguData, jobsData] = await Promise.all([
-          barResp.json(), scatterResp.json(), heatmapResp.json(), histResp.json(), densityResp.json(), userRguResp.json(), jobsResp.json(),
+          barResp.json(),
+          scatterResp ? scatterResp.json() : Promise.resolve([]),
+          heatmapResp.json(), histResp.json(), densityResp.json(), userRguResp.json(), jobsResp.json(),
         ]);
 
         lastData = { bar: barData, scatter: scatterData, heatmap: heatmapData, histogram: histData,
@@ -1429,8 +1473,9 @@ _HTML = r"""<!DOCTYPE html>
         renderLayout();
 
         const heatmapTotal = heatmapData && heatmapData.total_jobs ? heatmapData.total_jobs : 0;
+        const scatterPart = ALLOW_SCATTER ? (scatterData.length + ' scatter job(s), ') : '';
         status.textContent =
-          barData.length + ' period(s), ' + scatterData.length + ' scatter job(s), ' +
+          barData.length + ' period(s), ' + scatterPart +
           heatmapTotal + ' heatmap job(s), ' +
           histData.length + ' RGU period(s), ' + densityData.primary.values.length +
           ' density job(s), ' + userRguData.length + ' user(s), ' + jobsData.length + ' jobs loaded.';
@@ -1445,6 +1490,7 @@ _HTML = r"""<!DOCTYPE html>
     renderLayout();
   </script>
 </body>
-</html>""".replace("__DEFAULT_WINDOW_DAYS__", str(_DEFAULT_WINDOW_DAYS)).replace(
-    "__DEFAULT_PERIOD__", _DEFAULT_PERIOD
+</html>""".replace("__DEFAULT_WINDOW_DAYS__", str(_DEFAULT_WINDOW_DAYS))
+    .replace("__DEFAULT_PERIOD__", _DEFAULT_PERIOD)
+    .replace("__ALLOW_SCATTER__", "true" if _ALLOW_SCATTER else "false")
 )
