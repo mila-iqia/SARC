@@ -258,6 +258,7 @@ sarc:
     name: sarc-demo
     user: postgres
     password: "${env:SARC_DB_PASSWORD}"
+    sslmode: require
     auto_upgrade: true
   clusters: {}
   cache: /tmp/cache
@@ -265,9 +266,18 @@ sarc:
     auth: null
 ```
 
-> **Note importante sur la syntaxe** : c'est `${env:VAR}`, pas
-> `${envvar:VAR}`. Serieux (le moteur de désérialisation utilisé par
-> gifnoc) supporte les resolvers `""`, `env`, `envfile`.
+> **`sslmode: require` recommandé** : libpq utilise `prefer` par défaut
+> (tente SSL puis tombe en clair si le serveur le refuse), donc en pratique
+> sur une DB qui accepte SSL (Cloud SQL, Postgres récent par défaut), les
+> connexions sont déjà chiffrées sans cette ligne. `require` ajoute une
+> garantie côté client : libpq refuse la connexion si le serveur n'offre
+> pas SSL, évitant un downgrade silencieux en cas de DB mal configurée ou
+> de MITM qui supprime l'offre SSL du handshake. Pour de la prod plus
+> stricte, viser `verify-full` avec un `sslrootcert` embarqué.
+
+> **Note sur la syntaxe** : c'est `${env:VAR}`, pas `${envvar:VAR}`.
+> Serieux (le moteur de désérialisation utilisé par gifnoc) supporte les
+> resolvers `""`, `env`, `envfile`.
 
 > **Note sur `clusters: {}`** : un dict vide. `insert_clusters()` et
 > `insert_rgu()` (appelés par `db_upgrade()`) itèrent dessus → no-op. Pas
@@ -747,6 +757,36 @@ Causes possibles :
 
 C'est normal si la DB est vide : il faut lancer
 `fixes/jobs_csv_to_sql.py` (étape 8).
+
+### 10.8 Vérifier que la connexion Cloud Run ↔ DB est en SSL
+
+Sans `sslmode` explicite dans `config-cloud-run.yaml`, libpq utilise
+`prefer` : il **tente** SSL puis retombe en clair si le serveur refuse.
+En pratique sur Cloud SQL ou un Postgres récent qui accepte SSL, la
+connexion est chiffrée même sans configuration côté client. Mais c'est
+une politique opportuniste, pas une garantie.
+
+Avec `sslmode: require` dans le YAML, libpq **exige** SSL et lève une
+erreur de connexion si le serveur ne l'offre pas, ce qui évite un
+downgrade silencieux.
+
+Pour confirmer empiriquement que la session Cloud Run est bien en SSL
+(quelle que soit la valeur de `sslmode`) :
+
+```sql
+-- À exécuter depuis psql connecté à la DB en question
+SELECT sa.pid, sa.usename, sa.client_addr, sa.application_name,
+       ssl.ssl, ssl.version, ssl.cipher
+FROM pg_stat_activity sa
+LEFT JOIN pg_stat_ssl ssl ON ssl.pid = sa.pid
+WHERE sa.usename IS NOT NULL
+ORDER BY sa.backend_start DESC;
+```
+
+Pour la session venant de Cloud Run (IP Google externe, pas 127.0.0.1),
+tu dois voir `ssl = t` et une version TLSv1.2/1.3. Si tu vois `ssl = f`
+pour une session Cloud Run, alors le client est tombé en mode clair —
+ajouter ou vérifier `sslmode: require`.
 
 ---
 

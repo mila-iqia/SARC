@@ -7,6 +7,7 @@ sarc:
     name: sarc-demo
     user: postgres
     password: "${env:SARC_DB_PASSWORD}"
+    sslmode: require
     auto_upgrade: true
   clusters: {}
   cache: /tmp/cache
