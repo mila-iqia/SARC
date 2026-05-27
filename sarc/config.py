@@ -246,6 +246,7 @@ class DbConfig:
             engine = create_engine("postgresql+pg8000://", creator=getconn)
 
         else:
+
             db_user = self.user
             if db_user is None:
                 db_user = get_db_user()

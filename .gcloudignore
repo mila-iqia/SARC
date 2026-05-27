@@ -1,0 +1,43 @@
+# Exclude from Cloud Build context (gcloud run deploy --source .).
+# Keeps the build fast and avoids leaking secrets.
+
+.git/
+.gitignore
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.tox/
+.cache/
+.coverage
+.claude/
+
+# Local SARC scraping cache (often huge, GBs).
+sarc-cache/
+
+# Local secrets, never upload.
+secrets/
+
+# Throwaway data + helper scripts not needed at runtime.
+fixes/
+tests/
+docs/
+data/
+examples/
+scripts/
+config/
+
+# Large local dumps.
+*.csv
+*.json
+
+# Common editor / OS noise.
+.idea/
+.vscode/
+.DS_Store
+
+# Garbage filenames sometimes created by shell mistakes.
+dbconfig.txt
+Procfile
