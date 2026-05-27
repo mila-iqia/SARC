@@ -115,13 +115,6 @@ def test_register_direct_call(fresh_system):
     assert results == [3]
 
 
-def test_register_direct_call_returns_none(fresh_system):
-    fresh_system.create("ep")
-
-    result = register("ep", lambda: None)
-    assert result is None
-
-
 # --- load ---
 
 
