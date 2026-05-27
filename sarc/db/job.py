@@ -18,11 +18,9 @@ from sarc.validators import datetime_utc
 class JobStatisticDB(SQLModel, table=True):
     """Statistics for a timeseries."""
 
-    # Without this index, the json_object_agg subquery in job_series_view
-    # falls back to a sequential scan on every job lookup.
-    __table_args__ = (Index("idx_jobstats_job_id", "job_id"),)
-
     id: int | None = Field(default=None, primary_key=True)
+    # index=True: without it the json_object_agg subquery in job_series_view
+    # falls back to a sequential scan of jobstatisticdb on every job lookup.
     job_id: int | None = Field(
         default=None,
         foreign_key="slurm_jobs.id",
@@ -102,7 +100,12 @@ class SlurmJobDB(SQLModel, table=True):
 
     # temporal fields
     time_limit: int | None = None
-    submit_time: datetime_utc = datetime_utc_field()
+    # index=True: standalone btree for range filters on submit_time alone.
+    # The composite unique above (cluster_id, job_id, submit_time) can't be
+    # range-seeked by submit_time since it's the 3rd column. See PostgreSQL
+    # docs §11.3 Multicolumn Indexes:
+    # https://www.postgresql.org/docs/current/indexes-multicolumn.html
+    submit_time: datetime_utc = datetime_utc_field(index=True)
     start_time: datetime_utc | None = datetime_utc_field(default=None)
     end_time: datetime_utc | None = datetime_utc_field(default=None)
     elapsed_time: float
