@@ -245,7 +245,7 @@ def test_sacct_bin_and_accounts(test_config, remote):
         out=b'{"jobs": []}',
     )
     fetch_raw(
-        cluster=config().clusters["patate"],
+        cluster=config.clusters["patate"],
         start=datetime(2023, 2, 14, tzinfo=MTL).astimezone(UTC),
         end=datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC),
     )
@@ -267,7 +267,7 @@ def test_localhost(os_system, monkeypatch):
     monkeypatch.setattr(subprocess, "run", mock_subprocess_run)
 
     fetch_raw(
-        cluster=config().clusters["local"],
+        cluster=config.clusters["local"],
         start=datetime(2023, 2, 14, tzinfo=MTL).astimezone(UTC),
         end=datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC),
     )
@@ -292,7 +292,7 @@ def test_stdout_message_before_json(
         ),
     )
 
-    # Import here so that config() is setup correctly when CLI is created.
+    # Import here so that config is setup correctly when CLI is created.
     import sarc.cli  # noqa: F401
 
     assert (
@@ -348,7 +348,7 @@ def test_update_job(
         ],
     )
 
-    # Import here so that config() is setup correctly when CLI is created.
+    # Import here so that config is setup correctly when CLI is created.
     import sarc.cli  # noqa: F401
 
     assert (
@@ -416,7 +416,7 @@ def test_save_job(get_jobs, test_config, sacct_json, remote, file_regression, cl
         out=sacct_json.encode("utf-8"),
     )
 
-    # Import here so that config() is setup correctly when CLI is created.
+    # Import here so that config is setup correctly when CLI is created.
     import sarc.cli  # noqa: F401
 
     assert (
@@ -483,7 +483,7 @@ def test_save_preempted_job(
         out=sacct_json.encode("utf-8"),
     )
 
-    # Import here so that config() is setup correctly when CLI is created.
+    # Import here so that config is setup correctly when CLI is created.
     import sarc.cli  # noqa: F401
 
     assert (
@@ -554,7 +554,7 @@ def test_multiple_dates(
         ],
     )
 
-    # Import here so that config() is setup correctly when CLI is created.
+    # Import here so that config is setup correctly when CLI is created.
     import sarc.cli  # noqa: F401
 
     assert (
@@ -649,7 +649,7 @@ def test_multiple_clusters_and_dates(
         ),
     )
 
-    # Import here so that config() is setup correctly when CLI is created.
+    # Import here so that config is setup correctly when CLI is created.
     import sarc.cli  # noqa: F401
 
     assert (
@@ -841,7 +841,7 @@ def test_acquire_jobs_args_no_interval(get_jobs, cli_main, caplog):
 
 
 def get_raisin():
-    with config().db.session() as sess:
+    with config.db.session() as sess:
         return sess.exec(
             select(SlurmClusterDB).where(SlurmClusterDB.name == "raisin")
         ).one_or_none()

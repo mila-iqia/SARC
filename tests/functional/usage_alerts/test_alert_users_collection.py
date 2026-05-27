@@ -43,7 +43,7 @@ def _insert_users(sess: Session, users: list[dict]):
 @pytest.mark.usefixtures("health_config")
 def test_no_duplicates(caplog, cli_main, empty_read_write_db):
     """Unique emails and display_names should return OK."""
-    with config().db.session() as sess:
+    with config.db.session() as sess:
         _insert_users(
             sess,
             [
@@ -60,7 +60,7 @@ def test_no_duplicates(caplog, cli_main, empty_read_write_db):
 @pytest.mark.usefixtures("health_config")
 def test_duplicate_emails(caplog, cli_main, empty_read_write_db):
     """Two users sharing the same email should return FAIL."""
-    with config().db.session() as sess:
+    with config.db.session() as sess:
         _insert_users(
             sess,
             [
@@ -79,7 +79,7 @@ def test_duplicate_emails(caplog, cli_main, empty_read_write_db):
 @pytest.mark.usefixtures("health_config")
 def test_duplicate_display_names(caplog, cli_main, empty_read_write_db):
     """Two users sharing the same display_name should return FAIL."""
-    with config().db.session() as sess:
+    with config.db.session() as sess:
         _insert_users(
             sess,
             [
@@ -98,7 +98,7 @@ def test_duplicate_display_names(caplog, cli_main, empty_read_write_db):
 @pytest.mark.usefixtures("health_config")
 def test_duplicate_emails_and_display_names(caplog, cli_main, empty_read_write_db):
     """Duplicates in both email and display_name should both be reported."""
-    with config().db.session() as sess:
+    with config.db.session() as sess:
         _insert_users(
             sess,
             [

@@ -81,7 +81,7 @@ PARAMETERS = {
 def test_check_same_job_id(name_and_params, caplog, file_regression, cli_main):
     name, params = name_and_params
     check_name = f"same_job_id_{name}"
-    check = config().health_monitor.checks[check_name]
+    check = config.health_monitor.checks[check_name]
     if "since" in params:
         assert check.since == params["since"]
     if "time_interval" in params:

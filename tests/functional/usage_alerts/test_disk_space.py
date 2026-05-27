@@ -45,7 +45,7 @@ def test_health_check_disk_space_db(caplog, cli_main, check_name, expected):
 )
 @pytest.mark.usefixtures("health_config", "enabled_cache", "read_write_db")
 def test_health_check_disk_space_cache(caplog, cli_main, check_name, expected):
-    cache = config().cache
+    cache = config.cache
     assert cache
     sizes = (499_999, 500_000)
     cache.mkdir()

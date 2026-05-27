@@ -9,7 +9,7 @@ REST API server
 There is currently a minimal REST API available in module ``sarc/api``.
 To launch REST server::
 
-    SARC_MODE=<sarc-mode> SARC_CONFIG=<sarc-config> uv run fastapi run sarc/api/main.py --port <port>
+    SARC_CONFIG=<sarc-config> uv run fastapi run sarc/api/main.py --port <port>
 
 Server will be available at ``http://0.0.0.0:<port>``.
 

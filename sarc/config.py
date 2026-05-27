@@ -1,14 +1,11 @@
-import functools
 import os
 import re
 import zoneinfo
-from contextlib import contextmanager
-from contextvars import ContextVar
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, field
 from datetime import date
 from functools import cached_property
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Literal, cast, overload
+from typing import TYPE_CHECKING, cast
 
 import gifnoc
 from easy_oauth import OAuthManager
@@ -304,7 +301,7 @@ class ServerConfig:
 
 
 @dataclass
-class ClientConfig:
+class Config:
     db: DbConfig
     patches: Path
     server: ServerConfig = field(default_factory=ServerConfig)
@@ -312,6 +309,14 @@ class ClientConfig:
     loki: LokiConfig | None = None
     tempo: TempoConfig | None = None
     health_monitor: HealthMonitorConfig | None = None
+    users: UserScrapingConfig | None = None
+    clusters: dict[str, ClusterConfig] = field(default_factory=dict)
+    logging: LoggingConfig | None = None
+
+    def __post_init__(self):
+        for name, cluster in self.clusters.items():
+            if not cluster.name:
+                cluster.name = name
 
     @property
     def lock_path(self) -> Path:
@@ -327,94 +332,8 @@ class ClientConfig:
         allow_extras = True
 
 
-@dataclass
-class Config(ClientConfig):
-    users: UserScrapingConfig | None = None
-    clusters: dict[str, ClusterConfig] = field(default_factory=dict)
-    logging: LoggingConfig | None = None
-
-    def __post_init__(self):
-        for name, cluster in self.clusters.items():
-            if not cluster.name:
-                cluster.name = name
-
-
-class WhitelistProxy:
-    def __init__(self, obj: Any, *whitelist: str):
-        self._obj = obj
-        self._whitelist = whitelist
-
-    def __getattr__(self, attr: str) -> Any:
-        if attr in self._whitelist:
-            return getattr(self._obj, attr)
-        elif hasattr(self._obj, attr):
-            raise AttributeError(
-                f"Attribute '{attr}' is only accessible with SARC_MODE=scraping"
-            )
-        else:
-            raise AttributeError(attr)
-
-
-full_config = gifnoc.define("sarc", Config)
+config = gifnoc.define("sarc", Config)
 
 
 gifnoc.set_sources("${envfile:SARC_CONFIG}")
 config_path = Path(os.getenv("SARC_CONFIG", "")).parent
-
-sarc_mode = ContextVar("sarc_mode", default=os.getenv("SARC_MODE", "client"))
-
-Modes = Literal["scraping", "client"]
-
-
-@contextmanager
-def using_sarc_mode(mode: Modes):
-    token = sarc_mode.set(mode)
-    try:
-        yield
-    finally:
-        sarc_mode.reset(token)
-
-
-@overload
-def config(mode: Literal["scraping"]) -> Config: ...
-
-
-@overload
-def config(mode: Literal["client"]) -> ClientConfig: ...
-
-
-@overload
-def config(mode: None = None) -> Config | ClientConfig: ...
-
-
-def config(mode: Modes | None = None) -> Config | ClientConfig:
-    cur_mode = sarc_mode.get()
-    # If we request client mode and we are in scraping mode, that is fine.
-    if mode == "scraping" and cur_mode != "scraping":
-        raise ScrapingModeRequired()
-    if cur_mode == "scraping":
-        return full_config
-    else:
-        accept = [f.name for f in fields(ClientConfig)]
-        return cast(ClientConfig, WhitelistProxy(full_config, *accept, "lock_path"))
-
-
-class ScrapingModeRequired(Exception):
-    """Exception raised if a code requiring scraping mode is executed in client mode."""
-
-
-def scraping_mode_required[**P, R](fn: Callable[P, R]) -> Callable[P, R]:
-    """
-    Decorator to wrap a function that requires scraping mode to be executed.
-
-    Returns a wrapped function which raises a ScrapingModeRequired exception
-    if config is not a ScrapingConfig instance.
-    """
-
-    @functools.wraps(fn)
-    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
-        if sarc_mode.get() != "scraping":
-            raise ScrapingModeRequired()
-        return fn(*args, **kwargs)
-
-    return wrapper

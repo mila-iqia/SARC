@@ -147,7 +147,7 @@ def parse_jobs(
 ) -> None:
 
     cache = Cache(subdirectory="jobs")
-    with config("scraping").db.session() as sess:
+    with config.db.session() as sess:
         if since is None:
             since = get_parsed_date(sess, "jobs")
             if since is None:

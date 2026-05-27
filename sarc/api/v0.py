@@ -56,11 +56,11 @@ router = APIRouter(prefix="/v0")
 def config_dep() -> Config:
     # We don't use Depends(config) directly because then the 'mode' argument to
     # config would be added to the API signature, and we don't want that
-    return config("scraping")
+    return config
 
 
 def session_dep() -> Generator[Session]:
-    with config().db.session() as sess:
+    with config.db.session() as sess:
         yield sess
 
 

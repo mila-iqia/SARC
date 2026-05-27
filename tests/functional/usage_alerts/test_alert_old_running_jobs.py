@@ -107,7 +107,7 @@ def test_check_old_running_jobs_with_resubmitted(
     caplog, cli_main, check_name, expected
 ):
     # Create a re-submitted entry of RUNNING job
-    with config().db.session() as sess:
+    with config.db.session() as sess:
         base_job: SlurmJobDB
         (base_job,) = sess.exec(
             select(SlurmJobDB).where(SlurmJobDB.job_state == SlurmState.RUNNING)

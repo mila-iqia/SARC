@@ -63,7 +63,7 @@ PARAMS = [
     "check_name", PARAMS, ids=[f"params{i}" for i in range(len(PARAMS))]
 )
 def test_check_prometheus_scraping_stats(check_name, caplog, file_regression, cli_main):
-    with config().db.session() as sess:
+    with config.db.session() as sess:
         for job in sess.exec(sqlmodel.select(SlurmJobDB)).all():
             if job.end_time is not None and job.nodes:
                 stats = compute_job_statistics(job, generate_fake_timeseries(job))

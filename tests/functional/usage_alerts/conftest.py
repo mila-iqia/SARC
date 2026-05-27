@@ -12,4 +12,4 @@ def health_config():
     path = Path(__file__).parent / "health-test.yaml"
     assert path.is_file()
     with gifnoc.overlay(path):
-        yield config().health_monitor
+        yield config.health_monitor

@@ -15,7 +15,7 @@ class HealthListCommand:
     """Show health check states saved in database."""
 
     def execute(self) -> int:
-        with config().db.session() as sess:
+        with config.db.session() as sess:
             states = HealthCheckStateDB.get_states(sess)
             nb_states = len(states)
             logger.info(f"There are {nb_states} health check states saved in database.")

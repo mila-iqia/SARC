@@ -47,7 +47,7 @@ class ParseSlurmConfig:
             if ts.tzinfo is None:
                 ts = ts.replace(tzinfo=UTC)
             ts = ts.astimezone(UTC)
-        with config("scraping").db.session() as sess:
+        with config.db.session() as sess:
             return parse_slurmconfig(sess, ts, self.threshold)
 
 
@@ -65,7 +65,7 @@ def parse_slurmconfig(
     for cache_entry in cache.read_from(ts):
         logger.info(f"Parsing at {cache_entry.entry_datetime.isoformat()}")
         for cluster_name, blob in cache_entry.items():
-            cluster_config = config("scraping").clusters[cluster_name]
+            cluster_config = config.clusters[cluster_name]
             if cluster_config.billing_is_gpu:
                 logger.warning(
                     f"GPU billing won't be parsed on cluster `{cluster_config.name}`, "

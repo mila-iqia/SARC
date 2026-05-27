@@ -46,8 +46,7 @@ class HealthRunCommand:
             return self._exec()
 
     def _exec(self) -> int:
-        cfg = config()
-        hcfg = cfg.health_monitor
+        hcfg = config.health_monitor
 
         if hcfg is None:
             logger.error("No health_monitor configuration found")

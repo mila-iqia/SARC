@@ -59,7 +59,7 @@ def check_same_job_id(
     # among jobs which have same job ID.
     duplicates: Dict[int, Counter] = {}
 
-    with config().db.session() as sess:
+    with config.db.session() as sess:
         query = sqlmodel.select(
             SlurmJobDB.job_id, sqlmodel.func.array_agg(SlurmClusterDB.name)
         ).join(

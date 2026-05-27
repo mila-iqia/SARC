@@ -20,7 +20,7 @@ class ParseJobs:
     )
 
     def execute(self) -> int:
-        clusters_cfg = config("scraping").clusters
+        clusters_cfg = config.clusters
         assert clusters_cfg is not None
         _since = None
         if self.since is not None:

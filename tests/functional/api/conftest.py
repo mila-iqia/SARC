@@ -45,7 +45,7 @@ def app(oauth_mock, oauth_port):
         app = FastAPI()
         app.client = client
         app.include_router(router)
-        server_config = config().server
+        server_config = config.server
         assert server_config is not None
         if server_config.auth is not None:
             server_config.auth.install(app)

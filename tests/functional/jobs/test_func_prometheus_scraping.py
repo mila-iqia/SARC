@@ -272,7 +272,7 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
         ),
     )
 
-    # Import here so that config() is setup correctly when CLI is created.
+    # Import here so that config is setup correctly when CLI is created.
     import sarc.cli  # noqa: F401
 
     def mock_get_job_time_series(job, metric, **kwargs):

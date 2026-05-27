@@ -29,7 +29,7 @@ class ParseUsers:
         if self.since is not None:
             _since = datetime.fromisoformat(self.since).astimezone(UTC)
 
-        with config("scraping").db.session() as sess:
+        with config.db.session() as sess:
             if _since is None:
                 _since = get_parsed_date(sess, "users")
                 if _since is None:

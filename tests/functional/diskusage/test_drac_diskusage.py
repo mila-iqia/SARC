@@ -13,7 +13,7 @@ from sarc.scraping.diskusage import get_diskusage_scraper
 @pytest.mark.usefixtures("no_pkey")
 @pytest.mark.time_machine("2023-07-25T00:00+00:00", tick=False)
 def test_drac_fetch_report(remote, file_regression):
-    cluster = config("scraping").clusters["gerudo"]
+    cluster = config.clusters["gerudo"]
     diskusages = cluster.diskusage
     assert diskusages is not None
     assert len(diskusages) == 1
@@ -52,7 +52,7 @@ def test_drac_parse_report(file_regression):
 @pytest.mark.usefixtures("enabled_cache", "no_pkey")
 @pytest.mark.time_machine("2023-05-12T00:00+00:00", tick=False)
 def test_drac_acquire_storages(remote, cli_main, file_regression, empty_read_write_db):
-    cluster = config("scraping").clusters["hyrule"]
+    cluster = config.clusters["hyrule"]
     diskusages = cluster.diskusage
     assert diskusages is not None
     assert len(diskusages) == 1

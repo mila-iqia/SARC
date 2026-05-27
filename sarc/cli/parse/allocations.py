@@ -28,7 +28,7 @@ class ParseAllocations:
             ts = ts.replace(tzinfo=UTC)
         ts = ts.astimezone(UTC)
 
-        with config().db.session() as sess:
+        with config.db.session() as sess:
             for ce in cache.read_from(ts):
                 for _, value in ce.items():  # noqa: PERF102
                     reader = csv.DictReader(

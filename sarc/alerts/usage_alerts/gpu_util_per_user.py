@@ -58,7 +58,7 @@ def check_gpu_util_per_user(
         minimum_runtime = timedelta(seconds=0)
 
     ok = True
-    with config().db.session() as sess:
+    with config.db.session() as sess:
         if not sess.exec(select(func.count(col(SlurmJobDB.id)))).one():
             logger.error("No jobs in database.")
             return False
