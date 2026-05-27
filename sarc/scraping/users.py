@@ -14,6 +14,7 @@ from sarc.cache import Cache, CacheEntry
 from sarc.config import config_path
 from sarc.db.users import MatchingID, MemberType, UserDB, merge_users
 from sarc.db.users import ValidField as ValidFieldDB
+from sarc.patch import declare_patch
 from sarc.validators import ValidField
 
 deserialize = (Serieux + IncludeFile)().deserialize  # type: ignore[operator]
@@ -175,6 +176,11 @@ def fetch_users(scrapers: list[tuple[str, Any]]) -> None:
                 )
 
 
+@declare_patch
+def patch_usermatch(um: UserMatch) -> None:
+    pass
+
+
 def parse_users(from_: datetime) -> Iterable[CacheEntry]:
     """Parse user data from the cache.
 
@@ -244,12 +250,16 @@ def parse_ce(ce: CacheEntry) -> Iterable[UserMatch]:
         roots = set()
         for k, v in refs.items():
             if len(v) == 0:
-                yield user_refs[k]
+                um = user_refs[k]
+                patch_usermatch(um)
+                yield um
                 roots.add(k)
         refs = {k: v - roots for k, v in refs.items() if k not in roots}
         if len(roots) == 0:
             for k in refs:
-                yield user_refs[k]
+                um = user_refs[k]
+                patch_usermatch(um)
+                yield um
 
 
 def lookup_match_id(sess: Session, match_id: MatchID) -> Sequence[UserDB]:

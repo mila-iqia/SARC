@@ -1,5 +1,6 @@
 sarc:
   cache: null
+  patches: patches
   clusters:
     fromage:
       user_domain: drac

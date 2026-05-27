@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import Union
 
 from simple_parsing import subparsers
 
@@ -9,7 +8,7 @@ from .run import HealthRunCommand
 
 @dataclass
 class Health:
-    command: Union[HealthRunCommand, HealthListCommand] = subparsers(
+    command: HealthRunCommand | HealthListCommand = subparsers(
         {"run": HealthRunCommand, "list": HealthListCommand}  # ty:ignore[invalid-argument-type]
     )
 
