@@ -8,13 +8,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse
 from sqlmodel import FLOAT, Session, and_, case, col, func, select
 
+from sarc.api.auth import require_basic_auth
 from sarc.config import config
 from sarc.db.cluster import SlurmClusterDB, get_available_clusters
 from sarc.db.job import SlurmJobDB
 from sarc.db.job_series import JobSeriesDB
 from sarc.models.job import SlurmState
 
-router = APIRouter(prefix="/dash")
+router = APIRouter(prefix="/dash", dependencies=[Depends(require_basic_auth)])
 
 
 def session_dep() -> Generator[Session]:
@@ -663,7 +664,8 @@ def metrics_jobs(
 _html_path = Path(__file__).parent / "metrics.html"
 
 _HTML = (
-    _html_path.read_text(encoding="utf-8").replace("__DEFAULT_WINDOW_DAYS__", str(_DEFAULT_WINDOW_DAYS))
+    _html_path.read_text(encoding="utf-8")
+    .replace("__DEFAULT_WINDOW_DAYS__", str(_DEFAULT_WINDOW_DAYS))
     .replace("__DEFAULT_PERIOD__", _DEFAULT_PERIOD)
     .replace("__ALLOW_SCATTER__", "true" if _ALLOW_SCATTER else "false")
 )

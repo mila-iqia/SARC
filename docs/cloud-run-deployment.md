@@ -361,22 +361,76 @@ CREATE DATABASE "sarc-demo";
 
 ---
 
-## 6. Stocker le password dans Secret Manager
+## 6. Stocker les passwords dans Secret Manager
+
+Deux secrets indépendants :
+- **`sarc-db-password`** : password Postgres pour la connexion à la DB
+- **`dash-password`** : password HTTP Basic Auth pour protéger le dashboard
+  et l'API REST (cf. §6 bis ci-dessous)
 
 ```bash
-# Crée le secret
+# Secret 1 — password Postgres
 echo -n "TON_PASSWORD_POSTGRES" | gcloud secrets create sarc-db-password --data-file=-
 
-# Donne accès au service account par défaut de Cloud Run
+# Secret 2 — password Basic Auth dashboard (différent du précédent)
+echo -n "MOT_DE_PASSE_DASHBOARD_FORT" | gcloud secrets create dash-password --data-file=-
+
+# Donne accès au service account par défaut de Cloud Run aux deux secrets
 PROJECT_NUMBER=$(gcloud projects describe $(gcloud config get-value project) --format='value(projectNumber)')
-gcloud secrets add-iam-policy-binding sarc-db-password \
-    --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
-    --role="roles/secretmanager.secretAccessor"
+for s in sarc-db-password dash-password; do
+    gcloud secrets add-iam-policy-binding "$s" \
+        --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
+        --role="roles/secretmanager.secretAccessor"
+done
 ```
 
 > `${PROJECT_NUMBER}-compute@developer.gserviceaccount.com` est le service
 > account par défaut généré pour le projet ; c'est lui qui exécute le
-> container Cloud Run et qui a besoin d'accéder au secret.
+> container Cloud Run et qui a besoin d'accéder aux secrets.
+
+---
+
+## 6 bis. Protéger l'API derrière un Basic Auth
+
+`sarc/api/auth.py` fournit une dependency `require_basic_auth` activée
+quand les env vars `DASH_BASIC_AUTH_USER` et `DASH_BASIC_AUTH_PASSWORD`
+sont toutes deux définies. Sans ces vars, l'API est ouverte (compatibilité
+dev local / podman).
+
+La dependency est appliquée au niveau **router** dans deux fichiers :
+
+- `sarc/api/metrics.py` :
+  ```python
+  router = APIRouter(prefix="/dash", dependencies=[Depends(require_basic_auth)])
+  ```
+- `sarc/api/v0.py` :
+  ```python
+  router = APIRouter(prefix="/v0", dependencies=[Depends(require_basic_auth)])
+  ```
+
+Effet en prod (Cloud Run avec les env vars) :
+- Toute requête vers `/dash/*` ou `/v0/*` sans `Authorization: Basic ...`
+  → HTTP 401 avec un header `WWW-Authenticate: Basic`
+- Le navigateur affiche son dialog natif "Sign in" avec
+  username/password
+- Une fois saisi, le navigateur cache les creds et les renvoie
+  automatiquement sur les requêtes suivantes
+
+**Sécurité** :
+- Cloud Run sert toujours en HTTPS, donc le password (encodé en
+  Base64 dans l'header) ne passe jamais en clair sur le réseau
+- `secrets.compare_digest` est utilisé pour la comparaison
+  constant-time (pas de leak par timing attack)
+
+**Limites du Basic Auth** :
+- Un seul user/password, partagé. Pour de la vraie auth multi-user, il
+  faut OAuth (Cloud IAP, ou easy_oauth dans `server.auth`)
+- Pas de logout HTTP-level — pour se "déconnecter", il faut fermer
+  toutes les fenêtres du navigateur sur ce domaine
+- /docs et /openapi.json (générés par FastAPI au niveau racine) ne sont
+  pas protégés par cette mécanique car ils ne sont pas dans un router.
+  Suffisant pour démo (la liste des endpoints n'est pas un secret), mais
+  à considérer pour de la prod.
 
 ---
 
@@ -386,7 +440,8 @@ gcloud secrets add-iam-policy-binding sarc-db-password \
 gcloud run deploy sarc-dashboard \
     --source . \
     --region northamerica-northeast1 \
-    --set-secrets SARC_DB_PASSWORD=sarc-db-password:latest \
+    --set-secrets SARC_DB_PASSWORD=sarc-db-password:latest,DASH_BASIC_AUTH_PASSWORD=dash-password:latest \
+    --set-env-vars DASH_BASIC_AUTH_USER=demo \
     --allow-unauthenticated \
     --max-instances 1 \
     --memory 1Gi \
@@ -397,11 +452,18 @@ gcloud run deploy sarc-dashboard \
 - `--source .` : Cloud Build tar le répertoire courant (en respectant
   `.gcloudignore`), build l'image via le `Dockerfile`, la pousse dans
   Artifact Registry, puis déploie sur Cloud Run. Tout en une commande.
-- `--set-secrets SARC_DB_PASSWORD=sarc-db-password:latest` : injecte le
-  contenu du secret `sarc-db-password` comme la variable d'env
-  `SARC_DB_PASSWORD` dans le container.
-- `--allow-unauthenticated` : accès public sans login. À retirer si tu
-  veux ajouter une auth Google.
+- `--set-secrets ...` : déclare deux env vars injectées depuis Secret
+  Manager. **Attention** : ce flag *remplace* toute la liste des secrets
+  configurés sur le service. Toujours mentionner les deux, sinon le
+  secret omis est retiré.
+- `--set-env-vars DASH_BASIC_AUTH_USER=demo` : le username en clair (ce
+  n'est pas un secret). C'est l'identifiant que tu communiqueras aux
+  utilisateurs autorisés, avec le password de `dash-password`.
+- `--allow-unauthenticated` : accepte les requêtes anonymes **au niveau
+  Cloud Run**. L'auth est gérée dans le code applicatif (Basic Auth).
+  Si tu retires ce flag, Cloud Run lui-même refuse tout sauf les
+  identités Google IAM autorisées — ça empêche le Basic Auth d'être
+  testable par un user externe.
 - `--max-instances 1` : limite le scaling automatique à 1 instance.
   Sécurité de coût pour démo (sinon une avalanche de requêtes peut faire
   exploser la facture).
@@ -508,21 +570,57 @@ gcloud run services logs tail sarc-dashboard \
 
 <https://console.cloud.google.com/run/detail/northamerica-northeast1/sarc-dashboard/logs>
 
-### 9.3 Mettre à jour le secret (rotation password)
+### 9.3 Mettre à jour un secret (rotation password)
 
+Deux secrets distincts à connaître :
+
+**Password Postgres** :
 ```bash
-echo -n "NOUVEAU_PASSWORD" | gcloud secrets versions add sarc-db-password --data-file=-
+echo -n "NOUVEAU_PASSWORD_PG" | gcloud secrets versions add sarc-db-password --data-file=-
 ```
 
-Cela ajoute une nouvelle version. Cloud Run pointe vers `:latest`, donc le
-prochain cold start utilisera le nouveau password. Pour forcer
-l'actualisation immédiate :
+**Password Basic Auth dashboard** :
+```bash
+echo -n "NOUVEAU_PASSWORD_DASH" | gcloud secrets versions add dash-password --data-file=-
+```
+
+Cloud Run pointe vers `:latest` pour les deux, donc le prochain cold start
+utilisera la nouvelle valeur automatiquement. Pour forcer l'actualisation
+immédiate sans modifier le code :
 
 ```bash
 gcloud run services update sarc-dashboard \
     --region=northamerica-northeast1 \
-    --set-secrets SARC_DB_PASSWORD=sarc-db-password:latest
+    --set-secrets SARC_DB_PASSWORD=sarc-db-password:latest,DASH_BASIC_AUTH_PASSWORD=dash-password:latest
 ```
+
+> Toujours réécrire les deux mappings dans `--set-secrets`, sinon celui
+> omis est retiré du service.
+
+### 9.3 bis Changer l'utilisateur Basic Auth (pas le password)
+
+`DASH_BASIC_AUTH_USER` est en clair via `--set-env-vars`, pas un secret.
+Pour le changer :
+
+```bash
+gcloud run services update sarc-dashboard \
+    --region=northamerica-northeast1 \
+    --set-env-vars DASH_BASIC_AUTH_USER=nouveau_user
+```
+
+### 9.3 ter Désactiver complètement l'auth (rendre le dashboard public)
+
+Supprime les env vars/secrets liés à Basic Auth :
+
+```bash
+gcloud run services update sarc-dashboard \
+    --region=northamerica-northeast1 \
+    --remove-env-vars DASH_BASIC_AUTH_USER \
+    --remove-secrets DASH_BASIC_AUTH_PASSWORD
+```
+
+Le code détecte l'absence des deux et passe en mode "no auth" sans
+redéploiement de l'image.
 
 ### 9.4 Voir la version courante / l'historique des revisions
 
@@ -583,10 +681,15 @@ gcloud artifacts repositories delete cloud-run-source-deploy \
 ```bash
 docker build -t sarc-dashboard-local .
 docker run --rm -p 8080:8080 \
-    -e SARC_DB_PASSWORD="le-password" \
+    -e SARC_DB_PASSWORD="le-password-pg" \
+    -e DASH_BASIC_AUTH_USER="demo" \
+    -e DASH_BASIC_AUTH_PASSWORD="le-password-dash" \
     sarc-dashboard-local
-# Puis http://localhost:8080/dash/metrics
+# Puis http://localhost:8080/dash/metrics (le navigateur demande user/password)
 ```
+
+Sans les variables `DASH_BASIC_AUTH_*`, l'app tourne ouverte (utile pour
+itérer localement sans avoir à saisir les creds à chaque rechargement).
 
 ---
 
@@ -703,19 +806,23 @@ gcloud config set run/region northamerica-northeast1
 gcloud services enable run.googleapis.com cloudbuild.googleapis.com \
     artifactregistry.googleapis.com secretmanager.googleapis.com
 
-# 2. Secret (password Postgres)
-echo -n "PASSWORD" | gcloud secrets create sarc-db-password --data-file=-
+# 2. Secrets (password Postgres + password Basic Auth dashboard)
+echo -n "PASSWORD_PG"   | gcloud secrets create sarc-db-password --data-file=-
+echo -n "PASSWORD_DASH" | gcloud secrets create dash-password    --data-file=-
 PROJECT_NUMBER=$(gcloud projects describe $(gcloud config get-value project) --format='value(projectNumber)')
-gcloud secrets add-iam-policy-binding sarc-db-password \
-    --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
-    --role="roles/secretmanager.secretAccessor"
+for s in sarc-db-password dash-password; do
+    gcloud secrets add-iam-policy-binding "$s" \
+        --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
+        --role="roles/secretmanager.secretAccessor"
+done
 
 # 3. Adapter config-cloud-run.yaml (host, name, user)
 # 4. Build + deploy
 gcloud run deploy sarc-dashboard \
     --source . \
     --region northamerica-northeast1 \
-    --set-secrets SARC_DB_PASSWORD=sarc-db-password:latest \
+    --set-secrets SARC_DB_PASSWORD=sarc-db-password:latest,DASH_BASIC_AUTH_PASSWORD=dash-password:latest \
+    --set-env-vars DASH_BASIC_AUTH_USER=demo \
     --allow-unauthenticated \
     --max-instances 1 \
     --memory 1Gi \
