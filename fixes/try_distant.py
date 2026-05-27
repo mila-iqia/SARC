@@ -1,4 +1,5 @@
 import sqlmodel
+
 from sarc.config import config
 from sarc.db.job import SlurmJobDB
 
@@ -9,5 +10,5 @@ def main():
         print(count)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

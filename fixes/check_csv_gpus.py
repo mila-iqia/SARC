@@ -64,5 +64,5 @@ def main():
         pprint.pprint(nb_cannot_harmonize)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
