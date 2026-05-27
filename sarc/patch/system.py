@@ -75,11 +75,12 @@ def register(
         return name_or_fn  # ty:ignore[invalid-return-type]
     elif fn is not None:
         system.register(name_or_fn, fn)
+        return fn
     else:
 
-        def decorator(fn: Callable[..., None]) -> Callable[..., None]:
-            system.register(name_or_fn, fn)
-            return fn
+        def decorator(f: Callable[..., None]) -> Callable[..., None]:
+            system.register(name_or_fn, f)
+            return f
 
         return decorator
 
