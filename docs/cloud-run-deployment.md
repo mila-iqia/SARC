@@ -543,14 +543,19 @@ watch -n 30 'psql "postgresql://postgres@34.152.3.253:5432/sarc-demo" -c "SELECT
 
 ### 9.1 Redéployer après modification du code
 
-Une fois le setup initial fait, tu peux re-déployer aussi souvent que
-nécessaire avec la même commande qu'à l'étape 7 :
+Utilise toujours la commande **complète** de l'étape 7 (ne pas la
+simplifier). `gcloud run deploy` n'est pas additif : `--set-secrets` et
+`--set-env-vars` **remplacent** entièrement les listes existantes sur
+le service. Si tu omets `DASH_BASIC_AUTH_PASSWORD` ou
+`DASH_BASIC_AUTH_USER` dans une commande de redéploiement, le Basic
+Auth est silencieusement désactivé et ton dashboard redevient public.
 
 ```bash
 gcloud run deploy sarc-dashboard \
     --source . \
     --region northamerica-northeast1 \
-    --set-secrets SARC_DB_PASSWORD=sarc-db-password:latest \
+    --set-secrets SARC_DB_PASSWORD=sarc-db-password:latest,DASH_BASIC_AUTH_PASSWORD=dash-password:latest \
+    --set-env-vars DASH_BASIC_AUTH_USER=demo \
     --allow-unauthenticated \
     --max-instances 1 \
     --memory 1Gi \
