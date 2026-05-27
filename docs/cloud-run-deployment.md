@@ -580,6 +580,53 @@ gcloud run services logs tail sarc-dashboard \
 
 <https://console.cloud.google.com/run/detail/northamerica-northeast1/sarc-dashboard/logs>
 
+### 9.2 bis Voir qui a visité le dashboard
+
+Cloud Run logue automatiquement chaque requête HTTP avec IP source,
+path, status, et user agent. Logs conservés 30 jours par défaut.
+
+**Toutes les requêtes des dernières 24h** :
+
+```bash
+gcloud logging read '
+  resource.type="cloud_run_revision"
+  AND resource.labels.service_name="sarc-dashboard"
+  AND httpRequest.requestMethod!=""' \
+    --freshness=24h \
+    --limit=500 \
+    --format='table(
+      timestamp.date(format="%Y-%m-%d %H:%M:%S"),
+      httpRequest.remoteIp,
+      httpRequest.requestMethod,
+      httpRequest.status,
+      httpRequest.requestUrl
+    )'
+```
+
+**Compter les visiteurs distincts** (uniquement les hits sur `/dash`,
+en excluant son IP pour voir les autres) :
+
+```bash
+gcloud logging read '
+  resource.type="cloud_run_revision"
+  AND resource.labels.service_name="sarc-dashboard"
+  AND httpRequest.requestUrl=~"/dash"
+  AND NOT httpRequest.remoteIp:"TON_IP"' \
+    --freshness=24h \
+    --format='value(httpRequest.remoteIp)' \
+    | sort | uniq -c | sort -rn
+```
+
+Pour identifier l'origine d'une IP inconnue : `whois <IP> | grep -iE
+"orgname|country|netname"`. Les blocs `20.x.x.x` sont souvent des bots
+Microsoft Azure qui scannent les domaines `*.run.app` via Certificate
+Transparency — sans intérêt, ils ne dépassent jamais `/` (HTTP 404).
+
+**Limites** : on a l'IP et le user agent, mais pas l'identité réelle du
+visiteur. Basic Auth n'enregistre pas le username dans les logs Cloud
+Run. Pour tracer qui se connecte sous quel user, il faudrait modifier
+`sarc/api/auth.py` pour logger via Python.
+
 ### 9.3 Mettre à jour un secret (rotation password)
 
 Deux secrets distincts à connaître :
