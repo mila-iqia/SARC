@@ -9,7 +9,7 @@ from sarc.db.cluster import SlurmClusterDB
 from sarc.db.job import SlurmJobDB
 from sarc.db.runstate import get_parsed_date, set_parsed_date
 from sarc.db.users import get_user_id_for_cluster_user
-from sarc.patch.placeholders import patch_gpu_types
+from sarc.patch import declare_patch
 from sarc.scraping.jobs_utils import (
     DATE_FORMAT_HOUR,
     fetch_raw,
@@ -138,6 +138,19 @@ def fetch_jobs(
     finally:
         for cluster_name, time_to in cluster_endtime.items():
             set_auto_end_time(cluster_name, auto_end_field, time_to)
+
+
+@declare_patch
+def patch_gpu_types(sess: Session):
+    """
+    Patch jobs to harmonize GPU names.
+
+    Make sure each GPU name in SlurmJobDB table is a standard (harmonized) name
+    (either IGUANE name or "<iguane> : <mig>" name) also present in GpuRguDB table.
+
+    Won't modify job if GPU name cannot be harmonized. This may still happen,
+    for e.g. if a job requested a GPU that doesn't exist on cluster.
+    """
 
 
 def parse_jobs(
