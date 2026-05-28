@@ -9,6 +9,7 @@ from sarc.db.cluster import SlurmClusterDB
 from sarc.db.job import SlurmJobDB
 from sarc.db.runstate import get_parsed_date, set_parsed_date
 from sarc.db.users import get_user_id_for_cluster_user
+from sarc.patch import declare_patch
 from sarc.scraping.jobs_utils import (
     DATE_FORMAT_HOUR,
     fetch_raw,
@@ -21,6 +22,16 @@ from sarc.scraping.jobs_utils import (
 from sarc.traces import using_trace
 
 logger = logging.getLogger(__name__)
+
+
+@declare_patch
+def patch_gpu_types(sess: Session):
+    """
+    Patch job GPU types.
+
+    Make sure each job has a standard GPU type,
+    matching GPU names in IGUANE and in GpuRguDB table.
+    """
 
 
 def fetch_jobs(
@@ -161,6 +172,8 @@ def parse_jobs(
                 )
                 set_parsed_date(sess, "jobs", cache_entry.get_entry_datetime())
             sess.commit()
+
+        patch_gpu_types(sess)
 
 
 def parse_date(val: str) -> datetime:
