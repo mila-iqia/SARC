@@ -213,7 +213,7 @@ def parse_cache_entry(
                 sess, entry["cluster_id"], entry["cluster_user"], entry["submit_time"]
             )
             if entry["sarc_user_id"] is None:
-                logger.info(
+                logger.debug(
                     "Skipping job %s on cluster %s because we can't find a user %s for it",
                     entry["job_id"],
                     cluster_name,

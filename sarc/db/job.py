@@ -6,7 +6,7 @@ from typing import Self
 from iguane.fom import RAWDATA, fom_ugr
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import attribute_keyed_dict, relationship
-from sqlmodel import CheckConstraint, Field, Session, UniqueConstraint, select
+from sqlmodel import BIGINT, CheckConstraint, Field, Session, UniqueConstraint, select
 from sqlmodel.main import Relationship
 
 from sarc.db.cluster import SlurmClusterDB
@@ -88,18 +88,18 @@ class SlurmJobDB(SQLModel, table=True):
     latest_scraped_end: datetime_utc | None = datetime_utc_field(default=None)
 
     # tres
-    requested_cpu: int | None = None
-    requested_mem: int | None = None
-    requested_node: int | None = None
-    requested_billing: int | None = None
-    requested_gres_gpu: int | None = None
+    requested_cpu: int | None = Field(default=None, sa_type=BIGINT)
+    requested_mem: int | None = Field(default=None, sa_type=BIGINT)
+    requested_node: int | None = Field(default=None, sa_type=BIGINT)
+    requested_billing: int | None = Field(default=None, sa_type=BIGINT)
+    requested_gres_gpu: int | None = Field(default=None, sa_type=BIGINT)
     requested_gpu_type: str | None = None
 
-    allocated_cpu: int | None = None
-    allocated_mem: int | None = None
-    allocated_node: int | None = None
-    allocated_billing: int | None = None
-    allocated_gres_gpu: int | None = None
+    allocated_cpu: int | None = Field(default=None, sa_type=BIGINT)
+    allocated_mem: int | None = Field(default=None, sa_type=BIGINT)
+    allocated_node: int | None = Field(default=None, sa_type=BIGINT)
+    allocated_billing: int | None = Field(default=None, sa_type=BIGINT)
+    allocated_gres_gpu: int | None = Field(default=None, sa_type=BIGINT)
     allocated_gpu_type: str | None = None
 
     statistics: dict[str, JobStatisticDB] = Relationship(
