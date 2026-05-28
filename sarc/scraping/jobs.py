@@ -193,9 +193,13 @@ def parse_cache_entry(
         scraped_start = parse_date(key.split("_")[1])
         scraped_end = parse_date(key.split("_")[2])
 
+        nb_skipped = 0
+        nb_total = 0
         for entry in parse_raw(value, cluster_name, scraped_start, scraped_end):
             if entry is None:
                 continue
+
+            nb_total += 1
 
             cluster_name = entry.pop("cluster_name")
             entry["cluster_id"] = SlurmClusterDB.id_by_name(sess, cluster_name)
@@ -209,12 +213,19 @@ def parse_cache_entry(
                 sess, entry["cluster_id"], entry["cluster_user"], entry["submit_time"]
             )
             if entry["sarc_user_id"] is None:
-                logger.warning(
-                    "Skipping job %s on cluster %s because we can't find a user for it",
+                logger.info(
+                    "Skipping job %s on cluster %s because we can't find a user %s for it",
                     entry["job_id"],
                     cluster_name,
+                    entry["cluster_user"],
                 )
+                nb_skipped += 1
                 continue
             job = SlurmJobDB.get_or_create(sess, **entry)
             sess.flush()
             update_allocated_gpu_type_from_nodes(clusters_cfg[cluster_name], job)
+
+        if nb_skipped > 0:
+            logger.warning(
+                f"skipped {nb_skipped}/{nb_total} ({int(100 * nb_skipped / nb_total)}%) jobs on {cluster_name} because we can't find a user for it"
+            )

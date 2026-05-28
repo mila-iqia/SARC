@@ -61,6 +61,8 @@ def parse_csv(csv_file: str, csv_date: date | None) -> Iterable[UserMatch]:
 
 def parse_csv_line(d: dict, sess: Session, csv_date: date | None):
     d = _dict_to_lowercase(d)
+    if d["ccri"] == "":
+        return
     creds = Credentials()
     if d["activation_status"] in ["activated", "recently_renewed"]:
         creds.insert(
