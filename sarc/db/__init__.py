@@ -27,7 +27,7 @@ def get_meta():
 def init_insert() -> None:
     from sarc.config import config
 
-    with config().db.session() as sess:
+    with config.db.session() as sess:
         insert_clusters(sess)
         insert_rgu(sess)
         sess.commit()

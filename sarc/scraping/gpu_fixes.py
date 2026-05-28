@@ -60,7 +60,7 @@ def fix_gpu_types(sess: Session):
     nb_no_cluster = Counter()
 
     # Get cluster configurations
-    cluster_configs = config("scraping").clusters
+    cluster_configs = config.clusters
     # Get GPU->RGU mapping from GpuRguDB
     gpu_to_rgu = _get_gpu_to_rgu(sess)
     # Find GPU jobs with missing harmonized names

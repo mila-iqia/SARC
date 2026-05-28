@@ -71,7 +71,7 @@ class HealthRunCommand:
         checks_run = 0
         checks_skipped = 0
 
-        with cfg.db.session() as sess:
+        with config.db.session() as sess:
             for name in check_names:
                 # Get check state
                 state = _get_state(name=name, hcfg=hcfg, sess=sess)
