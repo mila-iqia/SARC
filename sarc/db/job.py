@@ -39,7 +39,7 @@ class SlurmJobDB(SQLModel, table=True):
     __table_args__ = (
         UniqueConstraint("cluster_id", "job_id", "submit_time"),
         CheckConstraint("submit_time <= start_time"),
-        CheckConstraint("start_time <= end_time"),
+        # CheckConstraint("start_time <= end_time"), # dropped the constraint since real sacct output sometimes gives this kind of strangeness
     )
 
     id: int | None = Field(default=None, primary_key=True)
