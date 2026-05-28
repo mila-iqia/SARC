@@ -127,7 +127,7 @@ class MilaLDAPScraper(UserScraper[MilaLDAPConfig]):
             for user_raw in json.loads(data.decode()):
                 creds = Credentials()
                 if user_raw["suspended"][0] != "true":
-                    creds.insert(user_raw["posixUid"][0], start=cache_time)
+                    creds.insert(user_raw["posixUid"][0])
                 # different behavior depending on current state in the db
                 elif s.exec(
                     select(

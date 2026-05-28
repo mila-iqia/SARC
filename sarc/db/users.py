@@ -141,7 +141,14 @@ class ValidField[V]:
         if valid.upper_inf:
             # Only clip against conflicts that start strictly after the input's start;
             # conflicts starting before are handled in the loop below by clipping the DB record.
-            later_conflicts = [r for r in to_conflict if r[0].valid.lower > valid.lower]
+            later_conflicts = [
+                r
+                for r in to_conflict
+                if valid._compare_edges(
+                    r[0].valid.lower, r[0].valid.bounds[0], valid.lower, valid.bounds[0]
+                )
+                == 1
+            ]
             if later_conflicts:
                 valid = Range(
                     valid.lower,
