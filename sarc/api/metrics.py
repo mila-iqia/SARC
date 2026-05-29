@@ -6,12 +6,13 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse
-from sqlmodel import FLOAT, Session, and_, case, col, func, select
+from sqlalchemy.orm import aliased
+from sqlmodel import Session, and_, case, col, func, select, text
 
 from sarc.api.auth import require_basic_auth
 from sarc.config import config
 from sarc.db.cluster import SlurmClusterDB, get_available_clusters
-from sarc.db.job import SlurmJobDB
+from sarc.db.job import JobStatisticDB, SlurmJobDB
 from sarc.db.job_series import JobSeriesDB
 from sarc.models.job import SlurmState
 
@@ -20,6 +21,11 @@ router = APIRouter(prefix="/dash", dependencies=[Depends(require_basic_auth)])
 
 def session_dep() -> Generator[Session]:
     with config().db.session() as sess:
+        # Disable parallel query for dashboard sessions: parallel workers
+        # allocate dynamic shared-memory segments in /dev/shm, which is tiny in
+        # a default container (~64 MB) and overflows on big joins/aggregations
+        # ("could not resize shared memory segment"). No measurable speedup here.
+        sess.connection().execute(text("SET max_parallel_workers_per_gather = 0"))
         yield sess
 
 
@@ -128,35 +134,6 @@ def _apply_slurm_job_filters(query, cluster_id: int | None, cluster_user: str | 
     if cluster_user:
         query = query.where(SlurmJobDB.cluster_user == cluster_user)
     return query
-
-
-def _stat_mean(stats: dict | None, metric: str) -> float | None:
-    """Read statistics[metric]['mean'] from a JobSeriesDB.statistics JSON value."""
-    if not stats:
-        return None
-    entry = stats.get(metric)
-    if not entry:
-        return None
-    v = entry.get("mean")
-    if v is None or (isinstance(v, float) and math.isnan(v)):
-        return None
-    return v
-
-
-def _stat_mean_sql(metric: str):
-    """SQL expression for statistics[metric]['mean'] cast as FLOAT.
-
-    Returns NULL when the path is missing; NaN passes through and must be
-    filtered by the caller (via `expr == expr`, since NaN != NaN).
-    """
-    return _stat_field_sql(metric, "mean")
-
-
-def _stat_field_sql(metric: str, field: str):
-    """SQL expression for statistics[metric][field] cast as FLOAT."""
-    return func.cast(
-        func.json_extract_path_text(JobSeriesDB.statistics, metric, field), FLOAT
-    )
 
 
 @router.get("/metrics", response_class=HTMLResponse)
@@ -397,7 +374,11 @@ def metrics_global_density(
 
     begin_dt, finish_dt = _apply_focus(*_date_range(start, end), focus_start, focus_end)
 
-    m1 = _stat_mean_sql(metric)
+    # Read each metric mean via a targeted LEFT JOIN on jobstatisticdb (one
+    # aliased row per metric) instead of JobSeriesDB.statistics, which forces a
+    # per-row json_object_agg of all stats. See histogram for the rationale.
+    js1 = aliased(JobStatisticDB)
+    m1 = col(js1.mean)
     weight = JobSeriesDB.rgu * JobSeriesDB.elapsed_time
     bin_width = 1.0 / _DENSITY_BINS
 
@@ -412,19 +393,36 @@ def metrics_global_density(
         _valid_metric_filter(m1),
     ]
     if metric2:
-        m2 = _stat_mean_sql(metric2)
+        js2 = aliased(JobStatisticDB)
+        m2 = col(js2.mean)
         base_filters.append(_valid_metric_filter(m2))
     else:
+        js2 = None
         m2 = None
+
+    def _add_metric_joins(q):
+        q = q.select_from(JobSeriesDB).join(
+            js1,
+            and_(
+                col(js1.job_id) == col(JobSeriesDB.job_db_id), col(js1.name) == metric
+            ),
+            isouter=True,
+        )
+        if js2 is not None:
+            q = q.join(
+                js2,
+                and_(
+                    col(js2.job_id) == col(JobSeriesDB.job_db_id),
+                    col(js2.name) == metric2,
+                ),
+                isouter=True,
+            )
+        return q
 
     def _binned_query(metric_expr):
         bin_expr = _density_bin_expr(metric_expr).label("bin")
-        q = (
-            select(bin_expr, func.sum(weight).label("w"))
-            .where(*base_filters)
-            .group_by(bin_expr)
-            .order_by(bin_expr)
-        )
+        q = _add_metric_joins(select(bin_expr, func.sum(weight).label("w")))
+        q = q.where(*base_filters).group_by(bin_expr).order_by(bin_expr)
         return _apply_common_filters(q, cluster, cluster_user)
 
     def _bin_to_payload(rows):
@@ -452,9 +450,9 @@ def metrics_global_density(
 
     # Paired scatter (metric x vs metric2 y): cap to a uniform random sample
     # so the response stays browser-friendly even on multi-million-row windows.
+    paired_q = _add_metric_joins(select(m1.label("x"), m2.label("y")))
     paired_q = (
-        select(m1.label("x"), m2.label("y"))
-        .where(*base_filters)
+        paired_q.where(*base_filters)
         .order_by(func.random())
         .limit(_PAIRED_SAMPLE_LIMIT)
     )
@@ -494,7 +492,12 @@ def metrics_global_histogram(
         func.extract("epoch", JobSeriesDB.submit_time - begin_dt) / step_seconds
     ).label("bucket")
     rgu_hours = JobSeriesDB.rgu * JobSeriesDB.elapsed_time / 3600.0
-    m_mean = _stat_mean_sql(metric)
+    # Read the metric mean via a targeted LEFT JOIN on jobstatisticdb rather than
+    # JobSeriesDB.statistics: the latter is a per-row json_object_agg of *all*
+    # stats and dominates the query (40+ min on a year of jobs). The join hits
+    # the jobstatisticdb(job_id) index, filtered to the single metric we need;
+    # statistics then goes unreferenced and Postgres prunes its subquery.
+    m_mean = col(JobStatisticDB.mean)
     # NaN is its only non-equal value; `m_mean == m_mean` is the SQL idiom.
     rgu_used_term = case(
         (m_mean == m_mean, rgu_hours * m_mean),  # noqa: PLR0124
@@ -506,6 +509,14 @@ def metrics_global_histogram(
             bucket_expr,
             func.sum(rgu_hours).label("rgu_requested"),
             func.sum(rgu_used_term).label("rgu_used"),
+        )
+        .join(
+            JobStatisticDB,
+            and_(
+                col(JobStatisticDB.job_id) == col(JobSeriesDB.job_db_id),
+                col(JobStatisticDB.name) == metric,
+            ),
+            isouter=True,
         )
         .where(
             col(JobSeriesDB.submit_time) >= begin_dt,
@@ -556,7 +567,9 @@ def metrics_global_user_rgu(
 
     # Aggregate by user directly in SQL: SUM(rgu * elapsed / 3600) per user.
     rgu_hours = JobSeriesDB.rgu * JobSeriesDB.elapsed_time / 3600.0
-    m_mean = _stat_mean_sql(metric)
+    # Targeted LEFT JOIN on jobstatisticdb instead of JobSeriesDB.statistics
+    # (per-row json_object_agg). See histogram for the rationale.
+    m_mean = col(JobStatisticDB.mean)
     rgu_used_term = case(
         (m_mean == m_mean, rgu_hours * m_mean),  # noqa: PLR0124
         else_=0.0,
@@ -566,6 +579,14 @@ def metrics_global_user_rgu(
 
     query = (
         select(user_expr, rgu_requested_sum, func.sum(rgu_used_term).label("rgu_used"))
+        .join(
+            JobStatisticDB,
+            and_(
+                col(JobStatisticDB.job_id) == col(JobSeriesDB.job_db_id),
+                col(JobStatisticDB.name) == metric,
+            ),
+            isouter=True,
+        )
         .where(
             col(JobSeriesDB.submit_time) >= begin_dt,
             col(JobSeriesDB.submit_time) < finish_dt,
@@ -604,27 +625,40 @@ def metrics_jobs(
     # Sort key (rgu * elapsed) and the stat extractions are pushed into SQL so
     # we only materialise `limit` rows, not the full result set.
     rgu_hours = (JobSeriesDB.rgu * JobSeriesDB.elapsed_time / 3600.0).label("rgu_hours")
-    metric_mean = _stat_mean_sql(metric).label("metric_mean")
-    gpu_util_mean = _stat_mean_sql("gpu_utilization").label("gpu_utilization_mean")
-    gpu_sm_mean = _stat_mean_sql("gpu_sm_occupancy").label("gpu_sm_occupancy_mean")
-    gpu_mem_max = _stat_field_sql("gpu_memory", "max").label("gpu_memory_max")
+    # Targeted LEFT JOINs on jobstatisticdb (one aliased row per distinct stat
+    # name) instead of JobSeriesDB.statistics, which forces a per-row
+    # json_object_agg of all stats. See histogram for the rationale.
+    stat_names = {metric, "gpu_utilization", "gpu_sm_occupancy", "gpu_memory"}
+    js = {name: aliased(JobStatisticDB) for name in sorted(stat_names)}
+    metric_mean = col(js[metric].mean).label("metric_mean")
+    gpu_util_mean = col(js["gpu_utilization"].mean).label("gpu_utilization_mean")
+    gpu_sm_mean = col(js["gpu_sm_occupancy"].mean).label("gpu_sm_occupancy_mean")
+    gpu_mem_max = col(js["gpu_memory"].max).label("gpu_memory_max")
 
-    query = (
-        select(  # ty:ignore[no-matching-overload]
-            JobSeriesDB.cluster_name,
-            JobSeriesDB.cluster_user,
-            JobSeriesDB.job_state,
-            JobSeriesDB.elapsed_time,
-            JobSeriesDB.nodes,
-            JobSeriesDB.allocated_gpu_type,
-            JobSeriesDB.rgu,
-            rgu_hours,
-            metric_mean,
-            gpu_util_mean,
-            gpu_sm_mean,
-            gpu_mem_max,
+    query = select(  # ty:ignore[no-matching-overload]
+        JobSeriesDB.cluster_name,
+        JobSeriesDB.cluster_user,
+        JobSeriesDB.job_state,
+        JobSeriesDB.elapsed_time,
+        JobSeriesDB.nodes,
+        JobSeriesDB.allocated_gpu_type,
+        JobSeriesDB.rgu,
+        rgu_hours,
+        metric_mean,
+        gpu_util_mean,
+        gpu_sm_mean,
+        gpu_mem_max,
+    ).select_from(JobSeriesDB)
+    for name, alias in js.items():
+        query = query.join(
+            alias,
+            and_(
+                col(alias.job_id) == col(JobSeriesDB.job_db_id), col(alias.name) == name
+            ),
+            isouter=True,
         )
-        .where(
+    query = (
+        query.where(
             col(JobSeriesDB.submit_time) >= begin_dt,
             col(JobSeriesDB.submit_time) < finish_dt,
             col(JobSeriesDB.allocated_gpu_type).is_not(None),
