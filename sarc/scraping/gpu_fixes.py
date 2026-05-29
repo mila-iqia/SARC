@@ -1,5 +1,5 @@
 """
-Patch jobs to harmonize GPU names.
+Check jobs to harmonize GPU names.
 
 Make sure each GPU name in SlurmJobDB table is a standard (harmonized) name
 (either IGUANE name or "<iguane> : <mig>" name) also present in GpuRguDB table.
@@ -15,7 +15,7 @@ Here, a100l is A100-PCIe-80GB on node cn-i001, and A100-SXM4-80GB on node cn-g00
 Different names, but both have RGU 4.8.
 
 Standard harmonization will fail because 2 different names are found.
-This patch will instead use a workaround, so that we could still compute metrics
+This fix will instead use a workaround, so that we could still compute metrics
 for such jobs, since RGU is the same:
 - Set job GPU name to a compound name: for the example: 'A100-PCIe-80GB, A100-SXM4-80GB'
 - Save RGU value associated to this compound name in GpuRguDB: for the example:
@@ -24,7 +24,7 @@ for such jobs, since RGU is the same:
 
 import logging
 from collections import Counter
-from typing import Sequence
+from collections.abc import Sequence
 
 import sqlmodel
 from sqlmodel import Session
@@ -33,7 +33,15 @@ from sarc.config import config
 from sarc.db.job import SlurmJobDB
 from sarc.db.support import GpuRguDB
 
-logger = logging.getLogger("gpu_patch")
+logger = logging.getLogger(__name__)
+
+
+class HarmonizedNameNotInRguError(Exception):
+    def __init__(self, job: SlurmJobDB, name: str):
+        super().__init__(
+            f"{job.cluster.name}/{job.job_id}:{job.allocated_gpu_type}: "
+            f"Harmonized name not in GpuRguDB: {name}"
+        )
 
 
 def fix_gpu_types(sess: Session):
@@ -60,7 +68,7 @@ def fix_gpu_types(sess: Session):
     if jobs:
         logger.warning(f"Found {len(jobs)} jobs with no harmonized names")
 
-    # Patch
+    # Fix
     for job in jobs:
         cluster_name = job.cluster.name
         cluster_cfg = cluster_configs.get(cluster_name)
@@ -83,12 +91,18 @@ def fix_gpu_types(sess: Session):
         elif len(harmonized_names) == 1:
             # Harmonized name found. Ok.
             harmonized_name = harmonized_names.pop()
-            assert harmonized_name in gpu_to_rgu
+            if harmonized_name not in gpu_to_rgu:
+                raise HarmonizedNameNotInRguError(job, harmonized_name)
         else:
             # Multiple harmonized names found.
             # This can happen a few time. Example: mila 6343581 gpu:a100l:4 nodes=['cn-g007', 'cn-i001']
             # Let's check if all harmonized names have same RGU value.
-            h_rgu_values = {gpu_to_rgu[h_name] for h_name in harmonized_names}
+            h_rgu_values: set[tuple[float, float]] = set()
+            for h_name in harmonized_names:
+                if h_name not in gpu_to_rgu:
+                    raise HarmonizedNameNotInRguError(job, h_name)
+                h_rgu_values.add(gpu_to_rgu[h_name])
+
             if len(h_rgu_values) == 1:
                 # All harmonized names have same RGU value.
                 # Since RGU is the main value we need in SARC, we will save
@@ -110,7 +124,8 @@ def fix_gpu_types(sess: Session):
 
         if harmonized_name is not None:
             job.allocated_gpu_type = harmonized_name
-        sess.commit()
+
+    sess.commit()
 
     if nb_no_cluster:
         logger.warning(f"GPU jobs with unknown clusters: {nb_no_cluster}")
@@ -146,7 +161,7 @@ def get_gpu_jobs_without_harmonized_gpu_types(sess: Session) -> Sequence[SlurmJo
         .where(
             # We don't want CPU jobs
             sqlmodel.col(SlurmJobDB.allocated_gpu_type).is_not(None),
-            # We look for GPU names not harminized, ie. not present in GpuRguDB
+            # We look for GPU names not harmonized, ie. not present in GpuRguDB
             sqlmodel.col(GpuRguDB.name).is_(None),
         )
     )
@@ -155,7 +170,7 @@ def get_gpu_jobs_without_harmonized_gpu_types(sess: Session) -> Sequence[SlurmJo
 
 def _get_gpu_to_rgu(sess: Session) -> dict[str, tuple[float, float]]:
     """
-    Laod GPU->RGU mapping from GpuRguDB.
+    Load GPU->RGU mapping from GpuRguDB.
     Since we currently keep 2 RGU values per GPU (default and DRAC),
     we return both as a tuple.
     """
