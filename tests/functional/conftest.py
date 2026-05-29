@@ -1,4 +1,3 @@
-import gifnoc
 import pytest
 import sqlmodel
 
