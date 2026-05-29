@@ -40,6 +40,8 @@ dependencies = [
     "easy-oauth>=0.0.5",
     "pyotp>=2.9.0",
     "psycopg>=3.3.3",
+    "alembic>=1.18.4",
+    "alembic-utils>=0.8.8",
 ]
 
 [project.scripts]
@@ -125,3 +127,17 @@ include = ["sarc"]
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+
+[tool.alembic]
+script_location = "%(here)s/alembic"
+timezone = "UTC"
+#prepend_sys_path = [
+#    "."
+#]
+
+[[tool.alembic.post_write_hooks]]
+name = "ruff"
+type = "exec"
+executable = "ruff"
+options = "check --fix REVISION_SCRIPT_FILENAME"
