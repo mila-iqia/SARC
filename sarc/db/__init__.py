@@ -24,6 +24,15 @@ def get_meta():
     return SQLModel.metadata
 
 
+def init_insert() -> None:
+    from sarc.config import config
+
+    with config().db.session() as sess:
+        insert_clusters(sess)
+        insert_rgu(sess)
+        sess.commit()
+
+
 def insert_clusters(sess: Session) -> None:
     # populate the db with default starting dates for each cluster
     from sarc.config import config

@@ -21,7 +21,7 @@ from sqlmodel import create_engine, select
 
 from alembic import command
 from sarc.config import config, using_sarc_mode
-from sarc.db import insert_clusters, insert_rgu
+from sarc.db import init_insert
 from sarc.db.cluster import SlurmClusterDB
 from tests.db.factory import extend_clusters
 
@@ -227,10 +227,7 @@ class DbConfiguration:
         with custom_db_config(db_name):
             self.executive(f'CREATE DATABASE "{db_name}"')
             command.upgrade(Config(toml_file="pyproject.toml"), "head")
-            with config().db.session() as sess:
-                insert_clusters(sess)
-                insert_rgu(sess)
-                sess.commit()
+            init_insert()
             try:
                 if not self.empty:
                     self._fill(config().db)
