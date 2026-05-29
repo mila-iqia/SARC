@@ -201,11 +201,36 @@ class DbConfig:
     def engine(self) -> Engine:
         from sqlmodel import create_engine
 
-        # TODO enable ssl for connection
-        engine = create_engine(
-            f"postgresql+psycopg://{self.host}/{self.name}",
-            connect_args={"options": "-c timezone=utc"},
-        )
+        if ":" in self.host:
+            import google.auth
+            from google.cloud.sql.connector import Connector, IPTypes
+
+            credentials, _ = google.auth.default()
+            sa_email: str = credentials.service_account_email
+            db_user = sa_email.removesuffix(".gserviceaccount.com")
+            connector = Connector()
+
+            def getconn():
+                connector.connect(
+                    self.host,
+                    "psycopg",
+                    db=self.name,
+                    user=db_user,
+                    enable_iam_auth=True,
+                    ip_type=IPTypes.PRIVATE,
+                )
+
+            engine = create_engine(
+                "postgresql+psycopg://",
+                creator=getconn,
+                connect_args={"options": "-c timezone=utc"},
+            )
+
+        else:
+            engine = create_engine(
+                f"postgresql+psycopg://{self.host}/{self.name}",
+                connect_args={"options": "-c timezone=utc"},
+            )
 
         return engine
 
