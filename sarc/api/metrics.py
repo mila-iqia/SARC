@@ -34,7 +34,7 @@ def session_dep() -> Generator[Session]:
 UTC = timezone.utc
 
 _DEFAULT_WINDOW_DAYS = 1
-_DEFAULT_PERIOD = "1h"
+_DEFAULT_PERIOD = "w"
 
 # Hides the raw scatter plots (elapsed-vs-limit, wait) from the dashboard UI
 # and skips the /metrics/scatter HTTP call entirely. The endpoint itself stays
@@ -55,19 +55,105 @@ _METRICS_0_1: dict[str, str] = {
 }
 
 
-_PERIOD_RE = re.compile(r"^(\d+(?:\.\d+)?)\s*([hdwm]?)$", re.IGNORECASE)
+_PERIOD_RE = re.compile(r"^(\d+(?:\.\d+)?)?\s*([hdwm]?)$", re.IGNORECASE)
 _PERIOD_MULTIPLIERS = {"h": 1 / 24, "d": 1, "w": 7, "m": 30}
+# Single-letter period -> PostgreSQL date_trunc field, for calendar bucketing.
+_CALENDAR_TRUNC = {"h": "hour", "d": "day", "w": "week", "m": "month"}
+_BUCKET_KEYFMT = "%Y-%m-%d %H:%M:%S"
 
 
-def _parse_period(s: str) -> timedelta:
+def _parse_period(s: str) -> timedelta | str:
+    """Parse a period into a fixed step or a calendar unit.
+
+    - ``N`` / ``N<unit>`` (e.g. ``5``, ``2w``, ``1m``): fixed window -> timedelta
+      (``1m`` = 30 days, unchanged). Buckets step uniformly from ``begin``.
+    - ``<unit>`` alone (``h``/``d``/``w``/``m``): calendar window -> the
+      ``date_trunc`` field name. Buckets follow calendar boundaries (week =
+      Monday, month = 1st), clipped to the requested range.
+    """
     m = _PERIOD_RE.match(s.strip())
-    if not m:
+    if not m or not (m.group(1) or m.group(2)):
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid period {s!r}. Use N[h/d/w/m] (e.g. 12h, 1d, 2w, 1m).",
+            detail=(
+                f"Invalid period {s!r}. Use N[h/d/w/m] for a fixed window "
+                f"(e.g. 12h, 1d, 2w, 1m) or h/d/w/m alone for calendar buckets."
+            ),
         )
-    n, unit = float(m.group(1)), (m.group(2) or "d").lower()
-    return timedelta(days=n * _PERIOD_MULTIPLIERS[unit])
+    num, unit = m.group(1), (m.group(2) or "d").lower()
+    if num is None:
+        return _CALENDAR_TRUNC[unit]
+    return timedelta(days=float(num) * _PERIOD_MULTIPLIERS[unit])
+
+
+def _label_fmt(period: timedelta | str) -> str:
+    sub_daily = period == "hour" or (
+        isinstance(period, timedelta) and period < timedelta(days=1)
+    )
+    return "%Y-%m-%d %H:%M" if sub_daily else "%Y-%m-%d"
+
+
+def _calendar_trunc(dt: datetime, field: str) -> datetime:
+    """Floor dt to a calendar boundary, mirroring PostgreSQL date_trunc."""
+    if field == "hour":
+        return dt.replace(minute=0, second=0, microsecond=0)
+    dt = dt.replace(hour=0, minute=0, second=0, microsecond=0)
+    if field == "week":
+        dt -= timedelta(days=dt.weekday())  # back to Monday
+    elif field == "month":
+        dt = dt.replace(day=1)
+    return dt
+
+
+def _calendar_next(dt: datetime, field: str) -> datetime:
+    """Next calendar boundary after a truncated dt."""
+    if field == "hour":
+        return dt + timedelta(hours=1)
+    if field == "day":
+        return dt + timedelta(days=1)
+    if field == "week":
+        return dt + timedelta(weeks=1)
+    return (
+        dt.replace(year=dt.year + 1, month=1)
+        if dt.month == 12
+        else dt.replace(month=dt.month + 1)
+    )
+
+
+def _bucket_expr(period: timedelta | str, time_col, begin_dt: datetime):
+    """SQL bucket expression: floor((t - begin)/step) for a fixed period,
+    date_trunc(unit, t) for a calendar period."""
+    if isinstance(period, timedelta):
+        return func.floor(
+            func.extract("epoch", time_col - begin_dt) / period.total_seconds()
+        ).label("bucket")
+    return func.date_trunc(period, time_col).label("bucket")
+
+
+def _sql_bucket_key(period: timedelta | str, raw):
+    """Normalise a SQL bucket value into a key matching _iter_buckets()."""
+    return int(raw) if isinstance(period, timedelta) else raw.strftime(_BUCKET_KEYFMT)
+
+
+def _iter_buckets(begin_dt: datetime, finish_dt: datetime, period: timedelta | str):
+    """Yield (key, period_start, period_end) for every bucket in [begin, finish),
+    with period_start/end clipped to the range. key matches _sql_bucket_key()."""
+    if isinstance(period, timedelta):
+        cur, idx = begin_dt, 0
+        while cur < finish_dt:
+            nxt = cur + period
+            yield idx, cur, min(nxt, finish_dt)
+            cur, idx = nxt, idx + 1
+    else:
+        frontier = _calendar_trunc(begin_dt, period)
+        while frontier < finish_dt:
+            nxt = _calendar_next(frontier, period)
+            yield (
+                frontier.strftime(_BUCKET_KEYFMT),
+                max(frontier, begin_dt),
+                min(nxt, finish_dt),
+            )
+            frontier = nxt
 
 
 def _date_range(start, end):
@@ -158,17 +244,14 @@ def metrics_global_data(
     sess: Session = Depends(session_dep),
 ):
     begin_dt, finish_dt = _date_range(start, end)
-    step = _parse_period(period)
-    fmt = "%Y-%m-%d %H:%M" if step < timedelta(days=1) else "%Y-%m-%d"
+    parsed = _parse_period(period)
+    fmt = _label_fmt(parsed)
     cluster_id = _resolve_cluster_id(sess, cluster)
 
-    # Bucket each job by floor((submit_time - begin) / step) and group in SQL
-    # instead of issuing one COUNT per bucket. Queries SlurmJobDB directly to
+    # Bucket each job in SQL (floor for fixed periods, date_trunc for calendar)
+    # and group, instead of one COUNT per bucket. Queries SlurmJobDB directly to
     # skip the JobSeriesDB view (RGU/statistics aggregations are not needed).
-    step_seconds = step.total_seconds()
-    bucket_expr = func.floor(
-        func.extract("epoch", SlurmJobDB.submit_time - begin_dt) / step_seconds
-    ).label("bucket")
+    bucket_expr = _bucket_expr(parsed, SlurmJobDB.submit_time, begin_dt)
 
     query = select(bucket_expr, func.count().label("count")).where(
         col(SlurmJobDB.submit_time) >= begin_dt, col(SlurmJobDB.submit_time) < finish_dt
@@ -176,19 +259,18 @@ def metrics_global_data(
     query = _apply_slurm_job_filters(query, cluster_id, cluster_user)
     query = query.group_by(bucket_expr).order_by(bucket_expr)
 
-    counts = {int(row.bucket): int(row.count) for row in sess.exec(query)}
+    counts = {
+        _sql_bucket_key(parsed, row.bucket): int(row.count) for row in sess.exec(query)
+    }
 
-    periods = []
-    current = begin_dt
-    idx = 0
-    while current < finish_dt:
-        periods.append(
-            {"period_start": current.strftime(fmt), "count": counts.get(idx, 0)}
-        )
-        current += step
-        idx += 1
-
-    return periods
+    return [
+        {
+            "period_start": ps.strftime(fmt),
+            "period_end": pe.strftime(fmt),
+            "count": counts.get(key, 0),
+        }
+        for key, ps, pe in _iter_buckets(begin_dt, finish_dt, parsed)
+    ]
 
 
 @router.get("/metrics/scatter")
@@ -483,16 +565,13 @@ def metrics_global_histogram(
     sess: Session = Depends(session_dep),
 ):
     begin_dt, finish_dt = _date_range(start, end)
-    step = _parse_period(period)
-    fmt = "%Y-%m-%d %H:%M" if step < timedelta(days=1) else "%Y-%m-%d"
-    step_seconds = step.total_seconds()
+    parsed = _parse_period(period)
+    fmt = _label_fmt(parsed)
 
     # Aggregate per bucket directly in SQL: SUM(rgu * elapsed / 3600) for
     # requested, and the same multiplied by the metric mean for used. The
     # `m == m` test filters NaN (NaN != NaN), substituting 0 in that branch.
-    bucket_expr = func.floor(
-        func.extract("epoch", JobSeriesDB.submit_time - begin_dt) / step_seconds
-    ).label("bucket")
+    bucket_expr = _bucket_expr(parsed, JobSeriesDB.submit_time, begin_dt)
     rgu_hours = JobSeriesDB.rgu * JobSeriesDB.elapsed_time / 3600.0
     # Read the metric mean via a targeted LEFT JOIN on jobstatisticdb rather than
     # JobSeriesDB.statistics: the latter is a per-row json_object_agg of *all*
@@ -532,24 +611,24 @@ def metrics_global_histogram(
     query = _apply_common_filters(query, cluster, cluster_user)
 
     sums = {
-        int(row.bucket): (float(row.rgu_requested or 0.0), float(row.rgu_used or 0.0))
+        _sql_bucket_key(parsed, row.bucket): (
+            float(row.rgu_requested or 0.0),
+            float(row.rgu_used or 0.0),
+        )
         for row in sess.exec(query)
     }
 
     period_data = []
-    current = begin_dt
-    idx = 0
-    while current < finish_dt:
-        req, used = sums.get(idx, (0.0, 0.0))
+    for key, ps, pe in _iter_buckets(begin_dt, finish_dt, parsed):
+        req, used = sums.get(key, (0.0, 0.0))
         period_data.append(
             {
-                "period_start": current.strftime(fmt),
+                "period_start": ps.strftime(fmt),
+                "period_end": pe.strftime(fmt),
                 "rgu_requested": req,
                 "rgu_used": used,
             }
         )
-        current += step
-        idx += 1
 
     return period_data
 
@@ -701,7 +780,6 @@ _html_path = Path(__file__).parent / "metrics.html"
 
 _HTML = (
     _html_path.read_text(encoding="utf-8")
-    .replace("__DEFAULT_WINDOW_DAYS__", str(_DEFAULT_WINDOW_DAYS))
     .replace("__DEFAULT_PERIOD__", _DEFAULT_PERIOD)
     .replace("__ALLOW_SCATTER__", "true" if _ALLOW_SCATTER else "false")
 )

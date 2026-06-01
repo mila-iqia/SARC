@@ -114,7 +114,8 @@
     <div class="ctrl">
       <label for="period">Period</label>
       <input type="text" id="period" value="__DEFAULT_PERIOD__" style="width:80px"
-             placeholder="e.g. 1d, 12h, 2w" />
+             placeholder="e.g. 1d, 12h, 2w, m"
+             title="N+unit = fixed window (1m = 30 days). A single letter (h/d/w/m) = calendar buckets: hour / day / week (from Monday) / month, clipped to the range." />
     </div>
     <div class="ctrl">
       <label for="focus_start">Focus from</label>
@@ -239,10 +240,13 @@
     });
 
     const today = new Date();
-    const windowAgo = new Date(today);
-    windowAgo.setDate(windowAgo.getDate() - __DEFAULT_WINDOW_DAYS__);
-    document.getElementById('start').value = isoDate(windowAgo);
-    document.getElementById('end').value   = isoDate(today);
+    // Defaults: start = Jan 1 of the current year, end = Monday of the current
+    // week (calendar-aligned with the default 'w' period).
+    const yearStart = new Date(today.getFullYear(), 0, 1);
+    const monday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+    document.getElementById('start').value = isoDate(yearStart);
+    document.getElementById('end').value   = isoDate(monday);
 
     // ── Tile layout ──────────────────────────────────────────────────────────
     // tileLayout: string[][]  e.g. [['bar','scatter'],['histogram']]
@@ -521,6 +525,7 @@
       Plotly.react(id, [{
         type: 'bar',
         x: d.bar.map(r => r.period_start), y: d.bar.map(r => r.count),
+        customdata: d.bar.map(r => r.period_end),
         marker: { color: colors },
         hovertemplate: 'Period: %{x}<br>Jobs: %{y}<extra></extra>',
       }], pLayout({
@@ -531,7 +536,7 @@
       }), { responsive: true }).then(gd => {
         gd.removeAllListeners('plotly_click');
         gd.on('plotly_click', evt => {
-          if (evt.points && evt.points.length) clickSetFocus(evt.points[0].x);
+          if (evt.points && evt.points.length) clickSetFocus(evt.points[0].x, evt.points[0].customdata);
         });
       });
     }
@@ -569,15 +574,16 @@
     function renderHistogram(id, d) {
       if (!d.histogram.length) return;
       const periods    = d.histogram.map(r => r.period_start);
+      const periodEnds = d.histogram.map(r => r.period_end);
       const rguUsed    = d.histogram.map(r => r.rgu_used);
       const rguUnused  = d.histogram.map(r => r.rgu_requested - r.rgu_used);
       const colorUsed  = periods.map(p => { const f = periodInFocus(p); return f === null ? '#1a6fd4' : f ? '#e07020' : '#c8d8f0'; });
       const colorUnused= periods.map(p => { const f = periodInFocus(p); return f === null ? '#a8c8f0' : f ? '#f0c090' : '#e4eef8'; });
       Plotly.react(id, [
-        { type: 'bar', name: 'Used',   x: periods, y: rguUsed,
+        { type: 'bar', name: 'Used',   x: periods, y: rguUsed, customdata: periodEnds,
           marker: { color: colorUsed },
           hovertemplate: 'Period: %{x}<br>RGU used: %{y:.1f}<extra></extra>' },
-        { type: 'bar', name: 'Unused', x: periods, y: rguUnused,
+        { type: 'bar', name: 'Unused', x: periods, y: rguUnused, customdata: periodEnds,
           marker: { color: colorUnused },
           hovertemplate: 'Period: %{x}<br>RGU unused: %{y:.1f}<extra></extra>' },
       ], pLayout({
@@ -590,7 +596,7 @@
       }), { responsive: true }).then(gd => {
         gd.removeAllListeners('plotly_click');
         gd.on('plotly_click', evt => {
-          if (evt.points && evt.points.length) clickSetFocus(evt.points[0].x);
+          if (evt.points && evt.points.length) clickSetFocus(evt.points[0].x, evt.points[0].customdata);
         });
       });
     }
@@ -776,14 +782,6 @@
 
     // ── Focus helpers ────────────────────────────────────────────────────────
 
-    function periodToMs() {
-      const s = document.getElementById('period').value.trim();
-      const m = s.match(/^(\d+(?:\.\d+)?)\s*([hdwm]?)$/i);
-      if (!m) return 86400000;
-      const n = parseFloat(m[1]), u = (m[2] || 'd').toLowerCase();
-      return n * { h: 3600000, d: 86400000, w: 604800000, m: 2592000000 }[u];
-    }
-
     function periodStartToMs(s) {
       return new Date(s.length === 10 ? s + 'T00:00:00Z' : s.replace(' ', 'T') + ':00Z').getTime();
     }
@@ -799,11 +797,10 @@
       return pMs >= fsMs && pMs < feMs;
     }
 
-    function clickSetFocus(periodStartStr) {
-      const startMs   = periodStartToMs(periodStartStr);
+    function clickSetFocus(periodStartStr, periodEndStr) {
       const toInput   = ms => new Date(ms).toISOString().slice(0, 16);
-      const newStart  = toInput(startMs);
-      const newEnd    = toInput(startMs + periodToMs());
+      const newStart  = toInput(periodStartToMs(periodStartStr));
+      const newEnd    = toInput(periodStartToMs(periodEndStr));
       const curStart  = document.getElementById('focus_start').value;
       const curEnd    = document.getElementById('focus_end').value;
       // Toggle off if clicking the already-focused period
