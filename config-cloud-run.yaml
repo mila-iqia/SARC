@@ -9,6 +9,7 @@ sarc:
     password: "${env:SARC_DB_PASSWORD}"
     sslmode: require
     auto_upgrade: true
+  patches: /tmp/patches
   clusters: {}
   cache: /tmp/cache
   server:
