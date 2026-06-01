@@ -198,38 +198,50 @@ def _apply_job_states(query, state_col, job_states: list[str]):
 
 
 def _apply_common_filters(
-    query, cluster: str | None, cluster_user: str | None, job_states: list[str]
+    query, clusters: list[str], cluster_user: str | None, job_states: list[str]
 ):
-    """Apply job-state + cluster/user filters to a JobSeriesDB query."""
+    """Apply job-state + cluster/user filters to a JobSeriesDB query.
+
+    An empty ``clusters`` list means no cluster filter (all clusters).
+    """
     query = _apply_job_states(query, JobSeriesDB.job_state, job_states)
-    if cluster:
-        query = query.where(JobSeriesDB.cluster_name == cluster)
+    if clusters:
+        query = query.where(col(JobSeriesDB.cluster_name).in_(clusters))
     if cluster_user:
         query = query.where(JobSeriesDB.cluster_user == cluster_user)
     return query
 
 
-def _resolve_cluster_id(sess: Session, cluster: str | None) -> int | None:
-    """Look up the cluster id once; returns None if cluster filter is unset."""
-    if not cluster:
+def _resolve_cluster_ids(sess: Session, clusters: list[str]) -> list[int] | None:
+    """Look up cluster ids; returns None if the cluster filter is unset (empty).
+
+    Raises 404 on the first unknown cluster name.
+    """
+    if not clusters:
         return None
-    cid = SlurmClusterDB.id_by_name(sess, cluster)
-    if cid is None:
-        raise HTTPException(status_code=404, detail=f"Unknown cluster {cluster!r}")
-    return cid
+    ids: list[int] = []
+    for name in clusters:
+        cid = SlurmClusterDB.id_by_name(sess, name)
+        if cid is None:
+            raise HTTPException(status_code=404, detail=f"Unknown cluster {name!r}")
+        ids.append(cid)
+    return ids
 
 
 def _apply_slurm_job_filters(
-    query, cluster_id: int | None, cluster_user: str | None, job_states: list[str]
+    query,
+    cluster_ids: list[int] | None,
+    cluster_user: str | None,
+    job_states: list[str],
 ):
     """Apply job-state + cluster_id/user filters to a SlurmJobDB query.
 
-    Filters by cluster_id (resolved upfront) to avoid the SlurmClusterDB join
-    that JobSeriesDB needs for cluster_name.
+    Filters by cluster_ids (resolved upfront) to avoid the SlurmClusterDB join
+    that JobSeriesDB needs for cluster_name. None/empty means no cluster filter.
     """
     query = _apply_job_states(query, SlurmJobDB.job_state, job_states)
-    if cluster_id is not None:
-        query = query.where(SlurmJobDB.cluster_id == cluster_id)
+    if cluster_ids:
+        query = query.where(col(SlurmJobDB.cluster_id).in_(cluster_ids))
     if cluster_user:
         query = query.where(SlurmJobDB.cluster_user == cluster_user)
     return query
@@ -256,7 +268,7 @@ def metrics_global_data(
     start: date = Query(default=None),
     end: date = Query(default=None),
     period: str = Query(default=_DEFAULT_PERIOD),
-    cluster: str | None = Query(default=None),
+    clusters: list[str] = Query(default=[]),
     cluster_user: str | None = Query(default=None),
     job_states: list[str] = Query(default=[]),
     sess: Session = Depends(session_dep),
@@ -264,7 +276,7 @@ def metrics_global_data(
     begin_dt, finish_dt = _date_range(start, end)
     parsed = _parse_period(period)
     fmt = _label_fmt(parsed)
-    cluster_id = _resolve_cluster_id(sess, cluster)
+    cluster_ids = _resolve_cluster_ids(sess, clusters)
 
     # Bucket each job in SQL (floor for fixed periods, date_trunc for calendar)
     # and group, instead of one COUNT per bucket. Queries SlurmJobDB directly to
@@ -274,7 +286,7 @@ def metrics_global_data(
     query = select(bucket_expr, func.count().label("count")).where(
         col(SlurmJobDB.submit_time) >= begin_dt, col(SlurmJobDB.submit_time) < finish_dt
     )
-    query = _apply_slurm_job_filters(query, cluster_id, cluster_user, job_states)
+    query = _apply_slurm_job_filters(query, cluster_ids, cluster_user, job_states)
     query = query.group_by(bucket_expr).order_by(bucket_expr)
 
     counts = {
@@ -295,7 +307,7 @@ def metrics_global_data(
 def metrics_global_scatter(
     start: date = Query(default=None),
     end: date = Query(default=None),
-    cluster: str | None = Query(default=None),
+    clusters: list[str] = Query(default=[]),
     cluster_user: str | None = Query(default=None),
     job_states: list[str] = Query(default=[]),
     focus_start: datetime | None = Query(default=None),
@@ -303,7 +315,7 @@ def metrics_global_scatter(
     sess: Session = Depends(session_dep),
 ):
     begin_dt, finish_dt = _apply_focus(*_date_range(start, end), focus_start, focus_end)
-    cluster_id = _resolve_cluster_id(sess, cluster)
+    cluster_ids = _resolve_cluster_ids(sess, clusters)
 
     query = select(
         SlurmJobDB.elapsed_time,
@@ -316,7 +328,7 @@ def metrics_global_scatter(
         col(SlurmJobDB.time_limit).is_not(None),
         col(SlurmJobDB.start_time).is_not(None),
     )
-    query = _apply_slurm_job_filters(query, cluster_id, cluster_user, job_states)
+    query = _apply_slurm_job_filters(query, cluster_ids, cluster_user, job_states)
 
     return [
         {
@@ -380,7 +392,7 @@ def _build_heatmap_payload(
 def metrics_global_heatmap(
     start: date = Query(default=None),
     end: date = Query(default=None),
-    cluster: str | None = Query(default=None),
+    clusters: list[str] = Query(default=[]),
     cluster_user: str | None = Query(default=None),
     job_states: list[str] = Query(default=[]),
     focus_start: datetime | None = Query(default=None),
@@ -388,7 +400,7 @@ def metrics_global_heatmap(
     sess: Session = Depends(session_dep),
 ):
     begin_dt, finish_dt = _apply_focus(*_date_range(start, end), focus_start, focus_end)
-    cluster_id = _resolve_cluster_id(sess, cluster)
+    cluster_ids = _resolve_cluster_ids(sess, clusters)
 
     wait_expr = func.extract("epoch", SlurmJobDB.start_time - SlurmJobDB.submit_time)
     base_filters = [
@@ -397,8 +409,8 @@ def metrics_global_heatmap(
         col(SlurmJobDB.time_limit).is_not(None),
         col(SlurmJobDB.start_time).is_not(None),
     ]
-    if cluster_id is not None:
-        base_filters.append(col(SlurmJobDB.cluster_id) == cluster_id)
+    if cluster_ids:
+        base_filters.append(col(SlurmJobDB.cluster_id).in_(cluster_ids))
     if cluster_user:
         base_filters.append(col(SlurmJobDB.cluster_user) == cluster_user)
     if job_states:
@@ -464,7 +476,7 @@ def _valid_metric_filter(metric_expr):
 def metrics_global_density(
     start: date = Query(default=None),
     end: date = Query(default=None),
-    cluster: str | None = Query(default=None),
+    clusters: list[str] = Query(default=[]),
     cluster_user: str | None = Query(default=None),
     job_states: list[str] = Query(default=[]),
     metric: str = Query(default="gpu_sm_occupancy"),
@@ -529,7 +541,7 @@ def metrics_global_density(
         bin_expr = _density_bin_expr(metric_expr).label("bin")
         q = _add_metric_joins(select(bin_expr, func.sum(weight).label("w")))
         q = q.where(*base_filters).group_by(bin_expr).order_by(bin_expr)
-        return _apply_common_filters(q, cluster, cluster_user, job_states)
+        return _apply_common_filters(q, clusters, cluster_user, job_states)
 
     def _bin_to_payload(rows):
         # Convert (bin_index, weight_sum) rows to centred-value/weight lists
@@ -562,7 +574,7 @@ def metrics_global_density(
         .order_by(func.random())
         .limit(_PAIRED_SAMPLE_LIMIT)
     )
-    paired_q = _apply_common_filters(paired_q, cluster, cluster_user, job_states)
+    paired_q = _apply_common_filters(paired_q, clusters, cluster_user, job_states)
     paired_x: list[float] = []
     paired_y: list[float] = []
     for row in sess.exec(paired_q):
@@ -581,7 +593,7 @@ def metrics_global_histogram(
     start: date = Query(default=None),
     end: date = Query(default=None),
     period: str = Query(default=_DEFAULT_PERIOD),
-    cluster: str | None = Query(default=None),
+    clusters: list[str] = Query(default=[]),
     cluster_user: str | None = Query(default=None),
     job_states: list[str] = Query(default=[]),
     metric: str = Query(default="gpu_sm_occupancy"),
@@ -631,7 +643,7 @@ def metrics_global_histogram(
         .group_by(bucket_expr)
         .order_by(bucket_expr)
     )
-    query = _apply_common_filters(query, cluster, cluster_user, job_states)
+    query = _apply_common_filters(query, clusters, cluster_user, job_states)
 
     sums = {
         _sql_bucket_key(parsed, row.bucket): (
@@ -661,6 +673,7 @@ def metrics_rgu_by_cluster(
     start: date = Query(default=None),
     end: date = Query(default=None),
     period: str = Query(default=_DEFAULT_PERIOD),
+    clusters: list[str] = Query(default=[]),
     cluster_user: str | None = Query(default=None),
     job_states: list[str] = Query(default=[]),
     sess: Session = Depends(session_dep),
@@ -668,9 +681,10 @@ def metrics_rgu_by_cluster(
     """Total RGU.h per period, stacked by cluster.
 
     Aggregates the same RGU metric as /histogram (SUM(rgu * elapsed / 3600))
-    but groups by cluster_name across *all* clusters (the cluster selector is
-    intentionally ignored). Returns one series per cluster, aligned on a shared
-    period axis; clusters with no RGU at all (e.g. no billing) are dropped.
+    and groups by cluster_name. When ``clusters`` is given, only those clusters
+    are kept (empty = all clusters). Returns one series per cluster, aligned on
+    a shared period axis; clusters with no RGU at all (e.g. no billing) are
+    dropped.
     """
     begin_dt, finish_dt = _date_range(start, end)
     parsed = _parse_period(period)
@@ -689,9 +703,7 @@ def metrics_rgu_by_cluster(
         .group_by(bucket_expr, col(JobSeriesDB.cluster_name))
         .order_by(bucket_expr)
     )
-    if cluster_user:
-        query = query.where(JobSeriesDB.cluster_user == cluster_user)
-    query = _apply_job_states(query, JobSeriesDB.job_state, job_states)
+    query = _apply_common_filters(query, clusters, cluster_user, job_states)
 
     sums = {}
     totals = {}
@@ -704,7 +716,7 @@ def metrics_rgu_by_cluster(
 
     # Largest total first -> drawn at the bottom of the stack (Plotly stacks the
     # first trace at the base). Ties broken by name for a stable order.
-    clusters = sorted(
+    stacked_clusters = sorted(
         (c for c, t in totals.items() if t > 0), key=lambda c: (-totals[c], c)
     )
     buckets = list(_iter_buckets(begin_dt, finish_dt, parsed))
@@ -716,7 +728,7 @@ def metrics_rgu_by_cluster(
         ],
         "series": [
             {"cluster": c, "rgu": [sums.get((k, c), 0.0) for k, _, _ in buckets]}
-            for c in clusters
+            for c in stacked_clusters
         ],
     }
 
@@ -725,7 +737,7 @@ def metrics_rgu_by_cluster(
 def metrics_global_user_rgu(
     start: date = Query(default=None),
     end: date = Query(default=None),
-    cluster: str | None = Query(default=None),
+    clusters: list[str] = Query(default=[]),
     cluster_user: str | None = Query(default=None),
     job_states: list[str] = Query(default=[]),
     metric: str = Query(default="gpu_sm_occupancy"),
@@ -766,7 +778,7 @@ def metrics_global_user_rgu(
         .group_by(user_expr)
         .order_by(rgu_requested_sum.desc(), user_expr)
     )
-    query = _apply_common_filters(query, cluster, cluster_user, job_states)
+    query = _apply_common_filters(query, clusters, cluster_user, job_states)
 
     return [
         {
@@ -782,7 +794,7 @@ def metrics_global_user_rgu(
 def metrics_jobs(
     start: date = Query(default=None),
     end: date = Query(default=None),
-    cluster: str | None = Query(default=None),
+    clusters: list[str] = Query(default=[]),
     cluster_user: str | None = Query(default=None),
     job_states: list[str] = Query(default=[]),
     limit: int = Query(default=50, gt=0, le=500),
@@ -839,7 +851,7 @@ def metrics_jobs(
         .order_by(rgu_hours.desc(), col(JobSeriesDB.cluster_user))
         .limit(limit)
     )
-    query = _apply_common_filters(query, cluster, cluster_user, job_states)
+    query = _apply_common_filters(query, clusters, cluster_user, job_states)
 
     jobs = []
     for row in sess.exec(query):

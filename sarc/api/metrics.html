@@ -145,8 +145,12 @@
       <input type="datetime-local" id="focus_end" />
     </div>
     <div class="ctrl">
-      <label for="cluster-select">Cluster</label>
-      <select id="cluster-select"></select>
+      <label>Cluster</label>
+      <div class="js-dropdown">
+        <button type="button" id="cluster-btn" class="add-select"
+                style="text-align:left;min-width:110px">All clusters ▾</button>
+        <div id="cluster-panel" class="job-states-panel" style="display:none"></div>
+      </div>
     </div>
     <div class="ctrl">
       <label for="cluster_user">User</label>
@@ -270,15 +274,44 @@
     metSel.value = 'gpu_sm_occupancy';
     met2Sel.value = '';
 
-    // Populate cluster dropdown, then kick off the initial load
+    // ── Cluster selector (multi-select, mirrors the job-states widget) ─────────
+    const clBtn = document.getElementById('cluster-btn');
+    const clPanel = document.getElementById('cluster-panel');
+    let CLUSTERS = [];
+
+    function clSelected() {
+      return [...clPanel.querySelectorAll('input:checked')].map(c => c.value);
+    }
+    function clUpdateLabel() {
+      const n = clSelected().length;
+      clBtn.textContent =
+        (n === CLUSTERS.length ? 'All clusters' : n + ' selected') + ' ▾';
+    }
+    clBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      clPanel.style.display = clPanel.style.display === 'none' ? 'block' : 'none';
+    });
+    document.addEventListener('click', e => {
+      if (clPanel.style.display !== 'none' && !clPanel.contains(e.target) && e.target !== clBtn)
+        clPanel.style.display = 'none';
+    });
+
+    // Populate cluster panel (all checked by default), then kick off the
+    // initial load once the full cluster list is known.
     fetch('/dash/clusters').then(r => r.json()).then(clusters => {
-      const sel = document.getElementById('cluster-select');
-      clusters.forEach(c => {
-        const opt = document.createElement('option');
-        opt.value = c; opt.textContent = c;
-        if (c === 'mila') opt.selected = true;
-        sel.appendChild(opt);
-      });
+      CLUSTERS = clusters;
+      clPanel.innerHTML =
+        '<div class="js-actions"><button type="button" id="cl-all">All</button>' +
+        '<button type="button" id="cl-none">None</button></div>' +
+        clusters.map(c => `<label><input type="checkbox" value="${c}" checked> ${c}</label>`).join('');
+      clPanel.querySelectorAll('input').forEach(c => c.addEventListener('change', clUpdateLabel));
+      const setAll = v => () => {
+        clPanel.querySelectorAll('input').forEach(c => { c.checked = v; });
+        clUpdateLabel();
+      };
+      document.getElementById('cl-all').addEventListener('click', setAll(true));
+      document.getElementById('cl-none').addEventListener('click', setAll(false));
+      clUpdateLabel();
       loadCharts();
     });
 
@@ -931,7 +964,7 @@
       return {
         start, end,
         period:        document.getElementById('period').value.trim(),
-        cluster:       document.getElementById('cluster-select').value,
+        clusters:      clSelected(),
         cluster_user:  document.getElementById('cluster_user').value.trim(),
         metric:        document.getElementById('metric-select').value,
         metric2:       document.getElementById('metric2-select').value,
@@ -943,6 +976,12 @@
 
     function endpointURL(ep, p) {
       let url = endpointURLBase(ep, p);
+      // Append selected clusters, unless all (or none) selected (= no filter),
+      // mirroring the job-states rule below.
+      if (p.clusters && p.clusters.length && p.clusters.length < CLUSTERS.length) {
+        const sep = url.includes('?') ? '&' : '?';
+        url += sep + p.clusters.map(c => 'clusters=' + encodeURIComponent(c)).join('&');
+      }
       // Append selected job states, unless all (or none) selected (= no filter).
       if (p.job_states && p.job_states.length && p.job_states.length < JOB_STATES.length) {
         const sep = url.includes('?') ? '&' : '?';
@@ -952,7 +991,7 @@
     }
 
     function endpointURLBase(ep, p) {
-      const base = { start: p.start, end: p.end, cluster: p.cluster,
+      const base = { start: p.start, end: p.end,
                      ...(p.cluster_user ? { cluster_user: p.cluster_user } : {}) };
       const focusParams = {
         ...(p.focus_start ? { focus_start: p.focus_start } : {}),
@@ -966,7 +1005,7 @@
         case 'heatmap':   return '/dash/metrics/heatmap?'   + new URLSearchParams({ ...base, ...focusParams });
         case 'histogram': return '/dash/metrics/histogram?' + new URLSearchParams({ ...base, period: p.period, metric: p.metric });
         case 'density':   return '/dash/metrics/density?'   + new URLSearchParams({ ...densityParams, ...focusParams });
-        case 'user_rgu':  return '/dash/metrics/user_rgu?'  + new URLSearchParams({ start: p.start, end: p.end, cluster: p.cluster, metric: p.metric, ...focusParams });
+        case 'user_rgu':  return '/dash/metrics/user_rgu?'  + new URLSearchParams({ start: p.start, end: p.end, metric: p.metric, ...focusParams });
         case 'jobs':      return '/dash/metrics/jobs?'      + new URLSearchParams({ ...base, metric: p.metric, ...focusParams });
         case 'rgu_by_cluster': return '/dash/metrics/rgu_by_cluster?' + new URLSearchParams({ start: p.start, end: p.end, period: p.period, ...(p.cluster_user ? { cluster_user: p.cluster_user } : {}) });
       }
