@@ -21,11 +21,13 @@ router = APIRouter(prefix="/dash", dependencies=[Depends(require_basic_auth)])
 
 def session_dep() -> Generator[Session]:
     with config().db.session() as sess:
-        # Disable parallel query for dashboard sessions: parallel workers
+        # Disable parallel query for dashboard requests: parallel workers
         # allocate dynamic shared-memory segments in /dev/shm, which is tiny in
         # a default container (~64 MB) and overflows on big joins/aggregations
         # ("could not resize shared memory segment"). No measurable speedup here.
-        sess.connection().execute(text("SET max_parallel_workers_per_gather = 0"))
+        # SET LOCAL (not SET) scopes it to this request's transaction, so it
+        # never leaks to later sessions reusing the pooled connection.
+        sess.connection().execute(text("SET LOCAL max_parallel_workers_per_gather = 0"))
         yield sess
 
 
