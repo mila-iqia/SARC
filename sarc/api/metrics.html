@@ -98,6 +98,25 @@
       max-width: 100px; overflow: hidden; text-overflow: ellipsis;
       white-space: nowrap; font-family: monospace; font-size: 11px; color: #555;
     }
+    /* Job-states multi-select dropdown */
+    .js-dropdown { position: relative; }
+    .job-states-panel {
+      position: absolute; z-index: 9999; background: #fff; border: 1px solid #ccc;
+      border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      max-height: 320px; overflow-y: auto; padding: 4px 0; min-width: 190px;
+    }
+    .job-states-panel .js-actions {
+      display: flex; gap: 6px; padding: 4px 12px 6px;
+      border-bottom: 1px solid #eee; margin-bottom: 4px;
+    }
+    .job-states-panel .js-actions button {
+      padding: 3px 8px; font-size: 12px; background: #eee; color: #333;
+    }
+    .job-states-panel label {
+      display: block; padding: 3px 12px; font-size: 13px; font-weight: 400;
+      color: #333; cursor: pointer; white-space: nowrap;
+    }
+    .job-states-panel label:hover { background: #f0f4ff; }
   </style>
 </head>
 <body>
@@ -145,6 +164,14 @@
     <div class="ctrl">
       <label for="metric2-select">Secondary metric</label>
       <select id="metric2-select"></select>
+    </div>
+    <div class="ctrl">
+      <label>Job states</label>
+      <div class="js-dropdown">
+        <button type="button" id="js-btn" class="add-select"
+                style="text-align:left;min-width:110px">All states ▾</button>
+        <div id="js-panel" class="job-states-panel" style="display:none"></div>
+      </div>
     </div>
     <button onclick="loadCharts()">Update</button>
   </div>
@@ -860,6 +887,43 @@
 
     // Snapshot the form's parameters into a plain object. Returns null if
     // mandatory fields (start/end) are missing.
+    // ── Job states selector ──────────────────────────────────────────────────
+    const jsBtn = document.getElementById('js-btn');
+    const jsPanel = document.getElementById('js-panel');
+    let JOB_STATES = [];
+
+    function jsSelected() {
+      return [...jsPanel.querySelectorAll('input:checked')].map(c => c.value);
+    }
+    function jsUpdateLabel() {
+      const n = jsSelected().length;
+      jsBtn.textContent =
+        (n === JOB_STATES.length ? 'All states' : n + ' selected') + ' ▾';
+    }
+    fetch('/dash/job_states').then(r => r.json()).then(states => {
+      JOB_STATES = states;
+      jsPanel.innerHTML =
+        '<div class="js-actions"><button type="button" id="js-all">All</button>' +
+        '<button type="button" id="js-none">None</button></div>' +
+        states.map(s => `<label><input type="checkbox" value="${s}" checked> ${s}</label>`).join('');
+      jsPanel.querySelectorAll('input').forEach(c => c.addEventListener('change', jsUpdateLabel));
+      const setAll = v => () => {
+        jsPanel.querySelectorAll('input').forEach(c => { c.checked = v; });
+        jsUpdateLabel();
+      };
+      document.getElementById('js-all').addEventListener('click', setAll(true));
+      document.getElementById('js-none').addEventListener('click', setAll(false));
+      jsUpdateLabel();
+    });
+    jsBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      jsPanel.style.display = jsPanel.style.display === 'none' ? 'block' : 'none';
+    });
+    document.addEventListener('click', e => {
+      if (jsPanel.style.display !== 'none' && !jsPanel.contains(e.target) && e.target !== jsBtn)
+        jsPanel.style.display = 'none';
+    });
+
     function captureParams() {
       const start = document.getElementById('start').value;
       const end   = document.getElementById('end').value;
@@ -873,10 +937,21 @@
         metric2:       document.getElementById('metric2-select').value,
         focus_start:   document.getElementById('focus_start').value,
         focus_end:     document.getElementById('focus_end').value,
+        job_states:    jsSelected(),
       };
     }
 
     function endpointURL(ep, p) {
+      let url = endpointURLBase(ep, p);
+      // Append selected job states, unless all (or none) selected (= no filter).
+      if (p.job_states && p.job_states.length && p.job_states.length < JOB_STATES.length) {
+        const sep = url.includes('?') ? '&' : '?';
+        url += sep + p.job_states.map(s => 'job_states=' + encodeURIComponent(s)).join('&');
+      }
+      return url;
+    }
+
+    function endpointURLBase(ep, p) {
       const base = { start: p.start, end: p.end, cluster: p.cluster,
                      ...(p.cluster_user ? { cluster_user: p.cluster_user } : {}) };
       const focusParams = {
