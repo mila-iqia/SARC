@@ -172,6 +172,19 @@
 
     const ALLOW_SCATTER = __ALLOW_SCATTER__;
 
+    // Stable colour per cluster (assigned by sorted index).
+    // Palette assigned by stacking order (largest cluster first). Ordered to
+    // match the current clusters-by-size; purely positional (not keyed on names),
+    // so it may no longer match the reference if the size ranking changes.
+    const CLUSTER_COLORS = ['#29a3f5', '#2e3192', '#e0479e', '#6d2d91', '#e8852a', '#2ca02c', '#17becf', '#8c564b'];
+    // Distinct colour for cluster i of n: fixed palette when it fits, else
+    // evenly-spaced HSL hues so any number of clusters stays distinguishable.
+    function clusterColor(i, n) {
+      return n <= CLUSTER_COLORS.length
+        ? CLUSTER_COLORS[i]
+        : `hsl(${Math.round(360 * i / n)}, 65%, 52%)`;
+    }
+
     const PLOT_NAMES = {
       bar:             'Jobs per period',
       ...(ALLOW_SCATTER ? {
@@ -181,6 +194,7 @@
       heatmap_elapsed: 'Elapsed vs limit (heatmap)',
       heatmap_wait:    'Wait vs limit (heatmap)',
       histogram:       'RGU requested vs used',
+      clusterrgu:      'RGU by cluster',
       density:         'Metric density',
       metricscatter:   'Metric scatter',
       userrgu:         'RGU by user',
@@ -198,6 +212,7 @@
       heatmap_elapsed: 'heatmap',
       heatmap_wait:    'heatmap',
       histogram:       'histogram',
+      clusterrgu:      'rgu_by_cluster',
       density:         'density',
       metricscatter:   'density',
       userrgu:         'user_rgu',
@@ -209,6 +224,7 @@
     const ENDPOINT_TO_KEY = {
       data: 'bar', scatter: 'scatter', heatmap: 'heatmap',
       histogram: 'histogram', density: 'density', user_rgu: 'userrgu', jobs: 'jobs',
+      rgu_by_cluster: 'clusterrgu',
     };
 
     // Populate metric dropdowns
@@ -270,11 +286,11 @@
     }
 
     function paramToLayout(s) {
-      if (!s) return [['bar']];
+      if (!s) return [['clusterrgu']];
       const rows = s.split(';')
         .map(row => row.split(',').filter(p => PLOT_NAMES[p]))
         .filter(r => r.length > 0);
-      return rows.length ? rows : [['bar']];
+      return rows.length ? rows : [['clusterrgu']];
     }
 
     function syncUrl() {
@@ -428,7 +444,7 @@
     function removeTile(rowIdx, colIdx) {
       tileLayout[rowIdx].splice(colIdx, 1);
       if (tileLayout[rowIdx].length === 0) tileLayout.splice(rowIdx, 1);
-      if (tileLayout.length === 0) tileLayout = [['bar']];
+      if (tileLayout.length === 0) tileLayout = [['clusterrgu']];
       syncUrl();
       renderLayout();
     }
@@ -441,7 +457,7 @@
                    heatmap_wait: renderHeatmapWait,
                    histogram: renderHistogram, density: renderDensity,
                    metricscatter: renderMetricScatter, userrgu: renderUserRgu,
-                   jobtable: renderJobTable }[type];
+                   jobtable: renderJobTable, clusterrgu: renderClusterRgu }[type];
       if (fn) fn(id, d);
     }
 
@@ -592,6 +608,32 @@
         xaxis: { title: 'Period start', type: 'category', tickangle: -45 },
         yaxis: { title: 'Total RGU·h' },
         legend: { x: 0.8, y: 0.95 },
+        margin: { l: 60, r: 20, t: 40, b: 100 },
+      }), { responsive: true }).then(gd => {
+        gd.removeAllListeners('plotly_click');
+        gd.on('plotly_click', evt => {
+          if (evt.points && evt.points.length) clickSetFocus(evt.points[0].x, evt.points[0].customdata);
+        });
+      });
+    }
+
+    function renderClusterRgu(id, d) {
+      const data = d.clusterrgu;
+      if (!data || !data.periods.length || !data.series.length) return;
+      const x    = data.periods.map(p => p.period_start);
+      const ends = data.periods.map(p => p.period_end);
+      const traces = data.series.map((s, i) => ({
+        type: 'bar', name: s.cluster,
+        x: x, y: s.rgu, customdata: ends,
+        marker: { color: clusterColor(i, data.series.length) },
+        hovertemplate: s.cluster + '<br>Period: %{x}<br>RGU·h: %{y:.1f}<extra></extra>',
+      }));
+      Plotly.react(id, traces, pLayout({
+        title: { text: 'Total RGU·h by Cluster (click to focus)', font: { size: 16 } },
+        barmode: 'stack',
+        xaxis: { title: 'Period start', type: 'category', tickangle: -45 },
+        yaxis: { title: 'Total RGU·h' },
+        legend: { x: 1.0, y: 1.0 },
         margin: { l: 60, r: 20, t: 40, b: 100 },
       }), { responsive: true }).then(gd => {
         gd.removeAllListeners('plotly_click');
@@ -851,6 +893,7 @@
         case 'density':   return '/dash/metrics/density?'   + new URLSearchParams({ ...densityParams, ...focusParams });
         case 'user_rgu':  return '/dash/metrics/user_rgu?'  + new URLSearchParams({ start: p.start, end: p.end, cluster: p.cluster, metric: p.metric, ...focusParams });
         case 'jobs':      return '/dash/metrics/jobs?'      + new URLSearchParams({ ...base, metric: p.metric, ...focusParams });
+        case 'rgu_by_cluster': return '/dash/metrics/rgu_by_cluster?' + new URLSearchParams({ start: p.start, end: p.end, period: p.period, ...(p.cluster_user ? { cluster_user: p.cluster_user } : {}) });
       }
       throw new Error('Unknown endpoint: ' + ep);
     }

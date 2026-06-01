@@ -633,6 +633,70 @@ def metrics_global_histogram(
     return period_data
 
 
+@router.get("/metrics/rgu_by_cluster")
+def metrics_rgu_by_cluster(
+    start: date = Query(default=None),
+    end: date = Query(default=None),
+    period: str = Query(default=_DEFAULT_PERIOD),
+    cluster_user: str | None = Query(default=None),
+    sess: Session = Depends(session_dep),
+):
+    """Total RGU.h per period, stacked by cluster.
+
+    Aggregates the same RGU metric as /histogram (SUM(rgu * elapsed / 3600))
+    but groups by cluster_name across *all* clusters (the cluster selector is
+    intentionally ignored). Returns one series per cluster, aligned on a shared
+    period axis; clusters with no RGU at all (e.g. no billing) are dropped.
+    """
+    begin_dt, finish_dt = _date_range(start, end)
+    parsed = _parse_period(period)
+    fmt = _label_fmt(parsed)
+
+    bucket_expr = _bucket_expr(parsed, JobSeriesDB.submit_time, begin_dt)
+    rgu_hours = col(JobSeriesDB.rgu) * col(JobSeriesDB.elapsed_time) / 3600.0
+    query = (
+        select(bucket_expr, JobSeriesDB.cluster_name, func.sum(rgu_hours).label("rgu"))
+        .where(
+            col(JobSeriesDB.submit_time) >= begin_dt,
+            col(JobSeriesDB.submit_time) < finish_dt,
+            col(JobSeriesDB.allocated_gpu_type).is_not(None),
+            col(JobSeriesDB.rgu).is_not(None),
+            JobSeriesDB.job_state == SlurmState.COMPLETED,
+        )
+        .group_by(bucket_expr, col(JobSeriesDB.cluster_name))
+        .order_by(bucket_expr)
+    )
+    if cluster_user:
+        query = query.where(JobSeriesDB.cluster_user == cluster_user)
+
+    sums = {}
+    totals = {}
+    for r in sess.exec(query):
+        if not r.cluster_name:
+            continue
+        v = float(r.rgu or 0.0)
+        sums[(_sql_bucket_key(parsed, r.bucket), r.cluster_name)] = v
+        totals[r.cluster_name] = totals.get(r.cluster_name, 0.0) + v
+
+    # Largest total first -> drawn at the bottom of the stack (Plotly stacks the
+    # first trace at the base). Ties broken by name for a stable order.
+    clusters = sorted(
+        (c for c, t in totals.items() if t > 0), key=lambda c: (-totals[c], c)
+    )
+    buckets = list(_iter_buckets(begin_dt, finish_dt, parsed))
+
+    return {
+        "periods": [
+            {"period_start": ps.strftime(fmt), "period_end": pe.strftime(fmt)}
+            for _, ps, pe in buckets
+        ],
+        "series": [
+            {"cluster": c, "rgu": [sums.get((k, c), 0.0) for k, _, _ in buckets]}
+            for c in clusters
+        ],
+    }
+
+
 @router.get("/metrics/user_rgu")
 def metrics_global_user_rgu(
     start: date = Query(default=None),
