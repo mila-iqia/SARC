@@ -215,8 +215,11 @@ class DbConfiguration:
             sess.commit()
 
     def executive(self, req):
+        import getpass
+
         admin_engine = create_engine(
-            "postgresql+psycopg://localhost/postgres", isolation_level="AUTOCOMMIT"
+            f"postgresql+pg8000://{getpass.getuser()}@localhost/postgres",
+            isolation_level="AUTOCOMMIT",
         )
         with admin_engine.connect() as conn:
             conn.execute(text(req))

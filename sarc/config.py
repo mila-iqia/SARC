@@ -199,6 +199,7 @@ class DbConfig:
 
     @cached_property
     def engine(self) -> Engine:
+
         from sqlmodel import create_engine
 
         if ":" in self.host:
@@ -208,28 +209,20 @@ class DbConfig:
             credentials, _ = google.auth.default()
             sa_email: str = credentials.service_account_email
             db_user = sa_email.removesuffix(".gserviceaccount.com")
-            connector = Connector()
-
-            def getconn():
-                connector.connect(
-                    self.host,
-                    "psycopg",
-                    db=self.name,
-                    user=db_user,
-                    enable_iam_auth=True,
-                    ip_type=IPTypes.PRIVATE,
-                )
-
-            engine = create_engine(
-                "postgresql+psycopg://",
-                creator=getconn,
-                connect_args={"options": "-c timezone=utc"},
+            connector = Connector(
+                ip_type=IPTypes.PRIVATE, refresh_strategy="LAZY", enable_iam_auth=True
             )
 
+            def getconn():
+                connector.connect(self.host, "pg8000", db=self.name, user=db_user)
+
+            engine = create_engine("postgresql+pg8000://", creator=getconn)
+
         else:
+            import getpass
+
             engine = create_engine(
-                f"postgresql+psycopg://{self.host}/{self.name}",
-                connect_args={"options": "-c timezone=utc"},
+                f"postgresql+pg8000://{getpass.getuser()}@{self.host}/{self.name}"
             )
 
         return engine
