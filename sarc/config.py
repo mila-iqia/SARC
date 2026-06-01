@@ -204,9 +204,12 @@ class DbConfig:
 
         if ":" in self.host:
             import google.auth
+            import google.auth.transport.requests
             from google.cloud.sql.connector import Connector, IPTypes
 
             credentials, _ = google.auth.default()
+            request = google.auth.transport.requests.Request()
+            credentials.refresh(request)
             sa_email: str = credentials.service_account_email
             db_user = sa_email.removesuffix(".gserviceaccount.com")
             connector = Connector(
@@ -214,7 +217,9 @@ class DbConfig:
             )
 
             def getconn():
-                connector.connect(self.host, "pg8000", db=self.name, user=db_user)
+                return connector.connect(
+                    self.host, "pg8000", db=self.name, user=db_user
+                )
 
             engine = create_engine("postgresql+pg8000://", creator=getconn)
 
