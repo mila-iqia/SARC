@@ -11,6 +11,7 @@ from uuid import uuid4
 
 import gifnoc
 import pytest
+from alembic.config import Config
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
@@ -18,7 +19,9 @@ from opentelemetry.trace import set_tracer_provider
 from sqlalchemy import text
 from sqlmodel import create_engine, select
 
+from alembic import command
 from sarc.config import config, using_sarc_mode
+from sarc.db import init_insert
 from sarc.db.cluster import SlurmClusterDB
 from tests.db.factory import extend_clusters
 
@@ -158,12 +161,7 @@ def custom_db_config(db_name, additional_overrides={}):
     assert db_name.startswith("test-db-")
 
     with gifnoc.overlay(
-        {
-            "sarc.db.name": db_name,
-            "sarc.db.host": "localhost",
-            "sarc.db.auto_upgrade": True,
-            **additional_overrides,
-        }
+        {"sarc.db.name": db_name, "sarc.db.host": "localhost", **additional_overrides}
     ):
         assert config().db.name == db_name
         yield
@@ -228,6 +226,8 @@ class DbConfiguration:
         db_name = f"test-db-{self.base_name}-{uuid4().hex}"
         with custom_db_config(db_name):
             self.executive(f'CREATE DATABASE "{db_name}"')
+            command.upgrade(Config(toml_file="pyproject.toml"), "head")
+            init_insert()
             try:
                 if not self.empty:
                     self._fill(config().db)
