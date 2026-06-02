@@ -36,10 +36,7 @@ class JobStatisticDB(SQLModel, table=True):
 
 class SlurmJobDB(SQLModel, table=True):
     __tablename__ = "slurm_jobs"
-    __table_args__ = (
-        UniqueConstraint("cluster_id", "job_id", "submit_time"),
-        CheckConstraint("submit_time <= start_time"),
-    )
+    __table_args__ = (UniqueConstraint("cluster_id", "job_id", "submit_time"),)
 
     id: int | None = Field(default=None, primary_key=True)
     # job identification
