@@ -201,12 +201,12 @@ def parse_cache_entry(
 
             nb_total += 1
 
-            cluster_name = entry.pop("cluster_name")
-            entry["cluster_id"] = SlurmClusterDB.id_by_name(sess, cluster_name)
+            entry_cluster_name = entry.pop("cluster_name")
+            entry["cluster_id"] = SlurmClusterDB.id_by_name(sess, entry_cluster_name)
             if entry["cluster_id"] is None:
                 raise ValueError(
                     "Unknown cluster name % for job id %s",
-                    cluster_name,
+                    entry_cluster_name,
                     entry["job_id"],
                 )
             entry["sarc_user_id"] = get_user_id_for_cluster_user(
@@ -216,14 +216,14 @@ def parse_cache_entry(
                 logger.debug(
                     "Skipping job %s on cluster %s because we can't find a user %s for it",
                     entry["job_id"],
-                    cluster_name,
+                    entry_cluster_name,
                     entry["cluster_user"],
                 )
                 nb_skipped += 1
                 continue
             job = SlurmJobDB.get_or_create(sess, **entry)
             sess.flush()
-            update_allocated_gpu_type_from_nodes(clusters_cfg[cluster_name], job)
+            update_allocated_gpu_type_from_nodes(clusters_cfg[entry_cluster_name], job)
 
         if nb_skipped > 0:
             logger.warning(
