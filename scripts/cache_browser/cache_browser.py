@@ -3,7 +3,6 @@
 
 import argparse
 import curses
-import sys
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -18,7 +17,7 @@ def _fmt_size(n: int) -> str:
     for unit in ("B", "KB", "MB", "GB"):
         if n < 1024:
             return f"{n:.0f} {unit}"
-        n /= 1024
+        n /= 1024  # ty:ignore[invalid-assignment]
     return f"{n:.1f} TB"
 
 
@@ -109,7 +108,9 @@ class Node:
 # Browser UI
 # ---------------------------------------------------------------------------
 
-_HEADER = " SARC Cache Browser   ↑↓/PgUp/PgDn:move   ←→/Enter:expand   e:extract   q:quit "
+_HEADER = (
+    " SARC Cache Browser   ↑↓/PgUp/PgDn:move   ←→/Enter:expand   e:extract   q:quit "
+)
 
 # Color pair indices
 _CLR_DIR = 1
@@ -272,7 +273,7 @@ class CacheBrowser:
             return curses.color_pair(_CLR_ENTRY)
         return curses.color_pair(_CLR_DIR)
 
-    def _fmt_status(self, w: int) -> str:
+    def _fmt_status(self, w: int) -> str:  # noqa: ARG002
         if not self.visible:
             return ""
         node = self.visible[self.cursor]
