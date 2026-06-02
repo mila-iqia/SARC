@@ -109,7 +109,7 @@ class Node:
 # Browser UI
 # ---------------------------------------------------------------------------
 
-_HEADER = " SARC Cache Browser   ↑↓:move   ←→/Enter:expand   e:extract   q:quit "
+_HEADER = " SARC Cache Browser   ↑↓/PgUp/PgDn:move   ←→/Enter:expand   e:extract   q:quit "
 
 # Color pair indices
 _CLR_DIR = 1
@@ -168,6 +168,12 @@ class CacheBrowser:
             elif key == curses.KEY_DOWN:
                 if self.cursor < len(self.visible) - 1:
                     self.cursor += 1
+            elif key == curses.KEY_NPAGE:
+                h, _ = self.stdscr.getmaxyx()
+                self.cursor = min(self.cursor + h - 2, len(self.visible) - 1)
+            elif key == curses.KEY_PPAGE:
+                h, _ = self.stdscr.getmaxyx()
+                self.cursor = max(self.cursor - (h - 2), 0)
             elif key in (curses.KEY_RIGHT, ord("\n"), 10, 13):
                 self._toggle_expand()
             elif key == curses.KEY_LEFT:
