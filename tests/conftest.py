@@ -20,7 +20,7 @@ from sqlalchemy import text
 from sqlmodel import create_engine, select
 
 from alembic import command
-from sarc.config import config, using_sarc_mode
+from sarc.config import config, get_db_user, using_sarc_mode
 from sarc.db import init_insert
 from sarc.db.cluster import SlurmClusterDB
 from tests.db.factory import extend_clusters
@@ -215,10 +215,8 @@ class DbConfiguration:
             sess.commit()
 
     def executive(self, req):
-        import getpass
-
         admin_engine = create_engine(
-            f"postgresql+pg8000://{getpass.getuser()}@localhost/postgres",
+            f"postgresql+pg8000://{get_db_user()}@localhost/postgres",
             isolation_level="AUTOCOMMIT",
         )
         with admin_engine.connect() as conn:
