@@ -1,5 +1,4 @@
-import math
-from datetime import UTC, datetime, timedelta
+from datetime import datetime
 from types import SimpleNamespace
 from typing import Self
 
@@ -101,6 +100,8 @@ class SlurmJobDB(SQLModel, table=True):
     allocated_billing: int | None = None
     allocated_gres_gpu: int | None = None
     allocated_gpu_type: str | None = None
+    # Harmonized version or allocated_gpu_type. If not None, should exist in GpuRguDB.
+    harmonized_gpu_type: str | None = Field(foreign_key="gpurgudb.name", default=None, ondelete="SET NULL")
 
     statistics: dict[str, JobStatisticDB] = Relationship(
         sa_relationship=relationship(
@@ -135,74 +136,6 @@ class SlurmJobDB(SQLModel, table=True):
                 cls.submit_time == submit_time,
             )
         ).one_or_none()
-
-    @property
-    def gpu_type_rgu(self) -> float:
-        """Get RGU value for the GPU type of this job, or NaN if not applicable."""
-        gpu_type = self.allocated_gpu_type
-        if gpu_type is None:
-            return math.nan
-        else:
-            gpu_to_rgu = get_rgus()
-            # NB: If GPU type is a MIG
-            # (e.g: "A100-SXM4-40GB : a100_1g.5gb"),
-            # we currently return RGU for the main GPU type
-            # (in this example: "A100-SXM4-40GB")
-            return gpu_to_rgu.get(gpu_type.split(":")[0].rstrip(), math.nan)
-
-    @property
-    def rgu(self) -> float:
-        """
-        Get RGU billing for this job, or NaN if not applicable.
-        Same algorithm as in series functions
-        load_job_series() and update_job_series_rgu().
-
-        RGU billing for a job is equivalent to:
-        Number of GPUs used by this job
-        x
-        RGU value for a single GPU (self.gpu_type_rgu)
-        """
-
-        end_time = self.end_time
-        if end_time is None:
-            end_time = datetime.now(tz=UTC)
-        start_time = end_time - timedelta(seconds=self.elapsed_time)
-        gpu_type = self.allocated_gpu_type
-        if start_time is None or gpu_type is None:
-            return math.nan
-
-        billing = self.allocated_billing or 0
-        gres_gpu = self.requested_gres_gpu or 0
-        if gres_gpu:
-            gres_gpu = max(billing, gres_gpu)
-
-        gpu_type_rgu = self.gpu_type_rgu
-        if self.cluster.billing_is_gpu:
-            # Compute RGU from gpu count
-            gpu_count = gres_gpu
-            gres_rgu = gpu_count * gpu_type_rgu
-        else:
-            # Job billing is in its own unit.
-            # We must first infer gpu count
-            # before computing RGU
-            cluster_billing = self.cluster.get_gpu_billing(start_time)
-            if cluster_billing is None:
-                if not self.cluster.gpu_billing:
-                    # Cluster has no GPUBilling at all: can't interpret
-                    # allocated_billing -> NaN.
-                    return math.nan
-                # Cluster has billings but none applicable yet (pre-billing
-                # era): assume gres_gpu is gpu count.
-                gpu_count = gres_gpu
-                gres_rgu = gpu_count * gpu_type_rgu
-            else:
-                # Then find billing for this job GPU type
-                gpu_billing = cluster_billing.gpu_to_billing.get(gpu_type, math.nan)
-                # gres_gpu is job billing
-                job_billing = gres_gpu
-                # So, gpu count == job billing / gpu billing
-                gres_rgu = (job_billing / gpu_billing) * gpu_type_rgu
-        return gres_rgu
 
 
 def get_rgus(rgu_version: str = "1.0") -> dict[str, float]:
