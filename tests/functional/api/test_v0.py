@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 
 import pytest
 from pydantic import ValidationError
-from sqlalchemy.exc import DataError
+from sqlalchemy.exc import ProgrammingError
 
 from sarc.alerts.common import HealthCheck
 from sarc.config import UTC
@@ -604,7 +604,7 @@ def test_user_query_by_supervisor_end(userq, end, supervisor, expected):
 def test_user_query_by_supervisor_bad_start_end(userq):
     start = datetime(2022, 1, 1, tzinfo=UTC)
     end = start - timedelta(days=1)
-    with pytest.raises(DataError):
+    with pytest.raises(ProgrammingError):
         userq(supervisor=1, start=start.isoformat(), end=end.isoformat())
 
 
