@@ -137,6 +137,16 @@
              title="N+unit = fixed window (1m = 30 days). A single letter (h/d/w/m) = calendar buckets: hour / day / week (from Monday) / month, clipped to the range." />
     </div>
     <div class="ctrl">
+      <label for="rgu-unit">RGU unit</label>
+      <select id="rgu-unit" title="Y-axis unit for the 'RGU by cluster' plot. Purely a display rescale of the cumulative RGU·time (RGU·m uses a fixed 30-day month).">
+        <option value="s">RGU·s</option>
+        <option value="h" selected>RGU·h</option>
+        <option value="d">RGU·d</option>
+        <option value="w">RGU·w</option>
+        <option value="m">RGU·m (30d)</option>
+      </select>
+    </div>
+    <div class="ctrl">
       <label for="focus_start">Focus from</label>
       <input type="datetime-local" id="focus_start" />
     </div>
@@ -199,6 +209,18 @@
       gpu_utilization_fp64: 'GPU util. FP64',
       gpu_memory:           'GPU memory',
       system_memory:        'System memory',
+    };
+
+    // Display units for the cumulative RGU·time quantity. The backend always
+    // returns RGU·h; `factor` rescales RGU·h -> the chosen unit (purely a
+    // Y-axis cosmetic, independent of the period bucket). RGU·m uses a fixed
+    // 30-day month, matching _PERIOD_MULTIPLIERS["m"] on the backend.
+    const RGU_UNITS = {
+      s: { label: 'RGU·s', factor: 3600 },
+      h: { label: 'RGU·h', factor: 1 },
+      d: { label: 'RGU·d', factor: 1 / 24 },
+      w: { label: 'RGU·w', factor: 1 / 168 },
+      m: { label: 'RGU·m', factor: 1 / 720 },
     };
 
     const ALLOW_SCATTER = __ALLOW_SCATTER__;
@@ -273,6 +295,34 @@
     });
     metSel.value = 'gpu_sm_occupancy';
     met2Sel.value = '';
+
+    // The RGU unit is a pure display rescale of the 'RGU by cluster' plot, so it
+    // never re-fetches: on change we redraw the clusterrgu tiles in place with the
+    // cached endpoint data. We call renderPlot() directly (Plotly.react updates in
+    // place) rather than renderTile(), which clears the div's innerHTML and would
+    // desync Plotly's existing graph-div state -> blank plot. No-op before the
+    // first load or when no clusterrgu tile is shown (avoids a stray fetch).
+    async function rerenderClusterRgu() {
+      if (!currentParams) return;
+      const tiles = [];
+      tileLayout.forEach((row, ri) => row.forEach((plotType, ci) => {
+        if (plotType !== 'clusterrgu') return;
+        const chartDiv = document.getElementById(`tile-${ri}-${ci}`);
+        if (chartDiv) tiles.push(chartDiv);
+      }));
+      if (!tiles.length) return;
+      let data;
+      try {
+        data = await ensureEndpoint('rgu_by_cluster');
+      } catch {
+        return;  // endpoint errored; the tile already shows its error state
+      }
+      for (const chartDiv of tiles) {
+        if (document.body.contains(chartDiv))
+          renderPlot(chartDiv.id, 'clusterrgu', { clusterrgu: data });
+      }
+    }
+    document.getElementById('rgu-unit').addEventListener('change', rerenderClusterRgu);
 
     // ── Cluster selector (multi-select, mirrors the job-states widget) ─────────
     const clBtn = document.getElementById('cluster-btn');
@@ -680,19 +730,21 @@
     function renderClusterRgu(id, d) {
       const data = d.clusterrgu;
       if (!data || !data.periods.length || !data.series.length) return;
+      // Rescale the cumulative RGU·h to the unit selected in the toolbar.
+      const unit = RGU_UNITS[document.getElementById('rgu-unit').value] || RGU_UNITS.h;
       const x    = data.periods.map(p => p.period_start);
       const ends = data.periods.map(p => p.period_end);
       const traces = data.series.map((s, i) => ({
         type: 'bar', name: s.cluster,
-        x: x, y: s.rgu, customdata: ends,
+        x: x, y: s.rgu.map(v => v * unit.factor), customdata: ends,
         marker: { color: clusterColor(i, data.series.length) },
-        hovertemplate: s.cluster + '<br>Period: %{x}<br>RGU·h: %{y:.1f}<extra></extra>',
+        hovertemplate: s.cluster + '<br>Period: %{x}<br>' + unit.label + ': %{y:,.2f}<extra></extra>',
       }));
       Plotly.react(id, traces, pLayout({
-        title: { text: 'Total RGU·h by Cluster (click to focus)', font: { size: 16 } },
+        title: { text: 'Total ' + unit.label + ' by Cluster (click to focus)', font: { size: 16 } },
         barmode: 'stack',
         xaxis: { title: 'Period start', type: 'category', tickangle: -45 },
-        yaxis: { title: 'Total RGU·h' },
+        yaxis: { title: 'Total ' + unit.label },
         legend: { x: 1.0, y: 1.0 },
         margin: { l: 60, r: 20, t: 40, b: 100 },
       }), { responsive: true }).then(gd => {
