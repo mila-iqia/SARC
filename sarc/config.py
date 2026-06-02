@@ -192,10 +192,21 @@ class ClusterConfig:
         )
 
 
+def get_db_user() -> str:
+    import getpass
+    import os
+
+    db_user = os.getenv("PGUSER")
+    if db_user is None:
+        db_user = getpass.getuser()
+    return db_user
+
+
 @dataclass
 class DbConfig:
     host: str
     name: str
+    user: str | None = None
 
     @cached_property
     def engine(self) -> Engine:
@@ -207,11 +218,14 @@ class DbConfig:
             import google.auth.transport.requests
             from google.cloud.sql.connector import Connector, IPTypes
 
-            credentials, _ = google.auth.default()
-            request = google.auth.transport.requests.Request()
-            credentials.refresh(request)
-            sa_email: str = credentials.service_account_email
-            db_user = sa_email.removesuffix(".gserviceaccount.com")
+            if self.user is None:
+                credentials, _ = google.auth.default()
+                request = google.auth.transport.requests.Request()
+                credentials.refresh(request)
+                sa_email: str = credentials.service_account_email
+                db_user = sa_email.removesuffix(".gserviceaccount.com")
+            else:
+                db_user = self.user
             connector = Connector(
                 ip_type=IPTypes.PRIVATE, refresh_strategy="LAZY", enable_iam_auth=True
             )
@@ -224,10 +238,11 @@ class DbConfig:
             engine = create_engine("postgresql+pg8000://", creator=getconn)
 
         else:
-            import getpass
-
+            db_user = self.user
+            if db_user is None:
+                db_user = get_db_user()
             engine = create_engine(
-                f"postgresql+pg8000://{getpass.getuser()}@{self.host}/{self.name}"
+                f"postgresql+pg8000://{db_user}@{self.host}/{self.name}"
             )
 
         return engine
