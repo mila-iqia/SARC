@@ -139,6 +139,7 @@ class ExampleData:
                     allocated_gres_gpu=row.job_billing,
                     allocated_billing=row.job_billing,
                     allocated_gpu_type=row.gpu_type,
+                    harmonized_gpu_type=row.gpu_type,
                     requested_gres_gpu=row.job_billing,
                     account="account",
                     job_id=i,

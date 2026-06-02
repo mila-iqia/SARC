@@ -61,7 +61,9 @@ def _count_rgu(sess):
     return len(sess.exec(select(GpuRguDB)).all())
 
 
-def _add_gpu_job(sess, cluster, user, *, gpu_type, nodes, job_id):
+def _add_gpu_job(
+    sess, cluster, user, *, gpu_type, nodes, job_id, harmonized_gpu_type=None
+):
     job = SlurmJobDB(
         cluster_id=cluster.id,
         sarc_user_id=user.id,
@@ -81,6 +83,7 @@ def _add_gpu_job(sess, cluster, user, *, gpu_type, nodes, job_id):
         end_time=_TS,
         allocated_gres_gpu=1,
         allocated_gpu_type=gpu_type,
+        harmonized_gpu_type=harmonized_gpu_type,
         requested_gres_gpu=1,
     )
     sess.add(job)
@@ -101,7 +104,7 @@ def test_single_harmonized_name(jobless_read_write_db):
 
     fix_gpu_types(sess)
 
-    assert sess.get(SlurmJobDB, jid).allocated_gpu_type == GPU_C018
+    assert sess.get(SlurmJobDB, jid).harmonized_gpu_type == GPU_C018
     # A single existing harmonized name must not add any GpuRguDB row.
     assert _count_rgu(sess) == nb_rgu_before
 
@@ -126,7 +129,7 @@ def test_compound_name_when_same_rgu(jobless_read_write_db):
     fix_gpu_types(sess)
 
     expected = ", ".join(sorted([GPU_C018, GPU_C019]))
-    assert sess.get(SlurmJobDB, jid).allocated_gpu_type == expected
+    assert sess.get(SlurmJobDB, jid).harmonized_gpu_type == expected
     # The compound name must have been registered in GpuRguDB with the shared RGU.
     row = sess.get(GpuRguDB, expected)
     assert row is not None
@@ -156,7 +159,7 @@ def test_many_matchings_when_different_rgu(jobless_read_write_db, caplog):
         fix_gpu_types(sess)
 
     # Job is not modified, and no compound name is created.
-    assert sess.get(SlurmJobDB, jid).allocated_gpu_type == "asupergpu"
+    assert sess.get(SlurmJobDB, jid).harmonized_gpu_type is None
     assert _count_rgu(sess) == nb_rgu_before
     assert "many harmonized names with different RGU values" in caplog.text
 
@@ -174,7 +177,7 @@ def test_no_matching_gpu_name(jobless_read_write_db, caplog):
     with caplog.at_level(logging.WARNING, logger="sarc.scraping.gpu_fixes"):
         fix_gpu_types(sess)
 
-    assert sess.get(SlurmJobDB, jid).allocated_gpu_type == "nonexistent_gpu"
+    assert sess.get(SlurmJobDB, jid).harmonized_gpu_type is None
     assert "cannot be harmonized" in caplog.text
 
 
@@ -190,7 +193,7 @@ def test_fix_gpu_types_is_idempotent(jobless_read_write_db, caplog):
     jid = job.id
 
     fix_gpu_types(sess)
-    assert sess.get(SlurmJobDB, jid).allocated_gpu_type == GPU_C018
+    assert sess.get(SlurmJobDB, jid).harmonized_gpu_type == GPU_C018
     nb_rgu_after_first = _count_rgu(sess)
 
     # Second pass: nothing left to harmonize.
@@ -199,7 +202,7 @@ def test_fix_gpu_types_is_idempotent(jobless_read_write_db, caplog):
         fix_gpu_types(sess)
 
     assert len(get_gpu_jobs_without_harmonized_gpu_types(sess)) == 0
-    assert sess.get(SlurmJobDB, jid).allocated_gpu_type == GPU_C018
+    assert sess.get(SlurmJobDB, jid).harmonized_gpu_type == GPU_C018
     assert _count_rgu(sess) == nb_rgu_after_first
     assert "jobs with no harmonized names" not in caplog.text
 
@@ -212,7 +215,13 @@ def test_query_ignores_cpu_and_already_harmonized_jobs(jobless_read_write_db):
     _add_gpu_job(sess, cluster, user, gpu_type=None, nodes=["cn-c018"], job_id=1)
     # Already-harmonized job: "A100-SXM4-80GB" is an IGUANE name already in GpuRguDB.
     _add_gpu_job(
-        sess, cluster, user, gpu_type="A100-SXM4-80GB", nodes=["cn-c018"], job_id=2
+        sess,
+        cluster,
+        user,
+        gpu_type="A100-SXM4-80GB",
+        harmonized_gpu_type="A100-SXM4-80GB",
+        nodes=["cn-c018"],
+        job_id=2,
     )
     # Unharmonized GPU job: the only expected candidate.
     _add_gpu_job(sess, cluster, user, gpu_type="asupergpu", nodes=["cn-c018"], job_id=3)

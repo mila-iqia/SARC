@@ -321,7 +321,7 @@ def parse_raw(
 @trace_decorator()
 def update_allocated_gpu_type_from_nodes(
     cluster: ClusterConfig, entry: SlurmJobDB
-) -> str | None:
+) -> None:
     """
     Try to infer job GPU type from entry nodes
 
@@ -331,13 +331,6 @@ def update_allocated_gpu_type_from_nodes(
         Cluster configuration for the current job.
     entry: SlurmJob
         Slurm job for which to infer the gpu type.
-
-    Returns
-    -------
-    str
-        String representing the gpu type.
-    None
-        Unable to infer gpu type.
     """
     gpu_type = None
 
@@ -357,10 +350,10 @@ def update_allocated_gpu_type_from_nodes(
         # If value is not None, it could be harmonized below.
         gpu_type = entry.allocated_gpu_type
 
-    # If we found a GPU type, try to infer descriptive GPU name
+    # Save GPU type found
     if gpu_type is not None:
-        entry.allocated_gpu_type = (
-            cluster.harmonize_gpu_from_nodes(entry.nodes, gpu_type) or gpu_type
+        entry.allocated_gpu_type = gpu_type
+        # And try to harmonize GPU type
+        entry.harmonized_gpu_type = cluster.harmonize_gpu_from_nodes(
+            entry.nodes, gpu_type
         )
-
-    return entry.allocated_gpu_type

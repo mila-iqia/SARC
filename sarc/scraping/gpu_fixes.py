@@ -123,7 +123,7 @@ def fix_gpu_types(sess: Session):
                 many_matchings.append((job, sorted(harmonized_names)))
 
         if harmonized_name is not None:
-            job.allocated_gpu_type = harmonized_name
+            job.harmonized_gpu_type = harmonized_name
 
     sess.commit()
 
@@ -156,12 +156,12 @@ def get_gpu_jobs_without_harmonized_gpu_types(sess: Session) -> Sequence[SlurmJo
     query = (
         sqlmodel.select(SlurmJobDB)
         .outerjoin(
-            GpuRguDB, sqlmodel.col(SlurmJobDB.allocated_gpu_type) == GpuRguDB.name
+            GpuRguDB, sqlmodel.col(SlurmJobDB.harmonized_gpu_type) == GpuRguDB.name
         )
         .where(
             # We don't want CPU jobs
             sqlmodel.col(SlurmJobDB.allocated_gpu_type).is_not(None),
-            # We look for GPU names not harmonized, ie. not present in GpuRguDB
+            # We look for GPU names not harmonized, i.e. not present in GpuRguDB
             sqlmodel.col(GpuRguDB.name).is_(None),
         )
     )
