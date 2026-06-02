@@ -187,8 +187,25 @@ class ValidField[V]:
                     )
                     > 0
                 ):
+                    # insert new record AFTER existing one
                     record[0].valid = Range(
                         record[0].valid.lower, r_incoming.lower, bounds="[)"
+                    )
+                    session.flush()
+                    new_insert.append(r_incoming)
+                elif (
+                    record[0].valid.lower_inf
+                    and r_incoming._compare_edges(
+                        r_incoming.upper,
+                        r_incoming.bounds[1],
+                        record[0].valid.upper,
+                        record[0].valid.bounds[1],
+                    )
+                    < 0
+                ):
+                    # insert new record BEFORE existing one
+                    record[0].valid = Range(
+                        r_incoming.upper, record[0].valid.upper, bounds="[)"
                     )
                     session.flush()
                     new_insert.append(r_incoming)
