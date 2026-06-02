@@ -27,7 +27,7 @@ def validate_date(value: str | date | datetime) -> date:
 class AllocationDB(SQLModel, table=True):
     # Database ID
     id: int | None = Field(default=None, primary_key=True)
-    cluster_id: int = Field(foreign_key="clusters.id")
+    cluster_id: int = Field(foreign_key="clusters.id", index=True)
     cluster: SlurmClusterDB = Relationship()
 
     resource_name: str

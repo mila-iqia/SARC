@@ -196,7 +196,6 @@ class ClusterConfig:
 class DbConfig:
     host: str
     name: str
-    auto_upgrade: bool = True
 
     @cached_property
     def engine(self) -> Engine:
@@ -207,11 +206,6 @@ class DbConfig:
             f"postgresql+psycopg://{self.host}/{self.name}",
             connect_args={"options": "-c timezone=utc"},
         )
-
-        if self.auto_upgrade:
-            from sarc.db import db_upgrade
-
-            db_upgrade(engine)
 
         return engine
 

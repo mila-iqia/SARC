@@ -113,7 +113,6 @@ sarc:
   db:
     host: localhost
     name: "!OVERRIDE!"
-    auto_upgrade: false
   mymila:
     tmp_json_path: secrets/tmp_mymila.json
   loki:

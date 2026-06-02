@@ -1,14 +1,13 @@
 from types import SimpleNamespace
 
 from iguane.fom import RAWDATA, fom_ugr
-from sqlalchemy import Engine
-from sqlmodel import Session, select, text
+from sqlmodel import Session, select
 
 from ..models.support import GpuRgu
 from .sqlmodel import SQLModel
 
 
-def db_upgrade(engine: Engine):
+def get_meta():
     # We need to import those to register the tables
     from . import (  # noqa: F401
         allocation,
@@ -17,38 +16,21 @@ def db_upgrade(engine: Engine):
         healthcheck,
         job,
         job_series,
+        runstate,
         support,
         users,
     )
 
-    with engine.connect() as conn:
-        conn.execute(text("CREATE EXTENSION IF NOT EXISTS btree_gist"))
+    return SQLModel.metadata
 
-        # This will work for now, but we should use proper migrations eventually
-        tables = [
-            t
-            for n, t in SQLModel.metadata.tables.items()
-            if n != job_series.JobSeriesDB.__tablename__
-        ]
-        SQLModel.metadata.create_all(conn, tables, checkfirst=True)
 
-        compiled_query = job_series.JobSeriesDB.__sql_view__.compile(
-            dialect=engine.dialect, compile_kwargs={"literal_binds": True}
-        )
+def init_insert() -> None:
+    from sarc.config import config
 
-        # This is kinda bad for performance, so we will have to take care of it with migrations
-        conn.execute(
-            text(
-                f"CREATE OR REPLACE VIEW {job_series.JobSeriesDB.__tablename__} AS {compiled_query};"
-            )
-        )
-
-        conn.commit()
-
-        with Session(conn) as sess:
-            insert_clusters(sess)
-            insert_rgu(sess)
-            sess.commit()
+    with config().db.session() as sess:
+        insert_clusters(sess)
+        insert_rgu(sess)
+        sess.commit()
 
 
 def insert_clusters(sess: Session) -> None:
