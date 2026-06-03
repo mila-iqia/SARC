@@ -6,7 +6,7 @@ from typing import Self
 from iguane.fom import RAWDATA, fom_ugr
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import attribute_keyed_dict, relationship
-from sqlmodel import BIGINT, CheckConstraint, Field, Session, UniqueConstraint, select
+from sqlmodel import BIGINT, Field, Session, UniqueConstraint, select
 from sqlmodel.main import Relationship
 
 from sarc.db.cluster import SlurmClusterDB
