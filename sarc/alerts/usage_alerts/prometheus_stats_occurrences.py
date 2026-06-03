@@ -209,8 +209,19 @@ def check_prometheus_stats_occurrences(
             )
             .select_from(exploded)
             .outerjoin(job_stats, exploded.c.job_id == job_stats.c.job_id)
-            .group_by(exploded.c.frame_start, exploded.c.cluster_name, group_node_expr)
-            .order_by(exploded.c.frame_start, exploded.c.cluster_name, group_node_expr)
+            # These refer to the result in position 1, 2, 3 in the select.
+            # We need to use that because pg8000 compiles the query in a way that makes
+            # compound results appear different to postgres and it errors out.
+            .group_by(
+                sqlalchemy.literal_column("1"),
+                sqlalchemy.literal_column("2"),
+                sqlalchemy.literal_column("3"),
+            )
+            .order_by(
+                sqlalchemy.literal_column("1"),
+                sqlalchemy.literal_column("2"),
+                sqlalchemy.literal_column("3"),
+            )
         )
         results = sess.exec(agg_query).all()
 
