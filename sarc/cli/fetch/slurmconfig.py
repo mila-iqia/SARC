@@ -14,43 +14,22 @@ logger = logging.getLogger(__name__)
 class FetchSlurmConfig:
     """Download slurm.conf file for given cluster at current time."""
 
-    cluster_name: str = field(alias=["-c"])
+    cluster_names: list[str] = field(alias=["-c"], default_factory=list)
 
     def execute(self) -> int:
         cfg = config("scraping")
 
-        # Cache slurm.conf files in folder <sarc-cache>/slurm_conf/<cluster_name>
-        cache = Cache(subdirectory=f"slurm_conf/{self.cluster_name}")
+        cache = Cache(subdirectory="slurm_conf")
 
-        # Now download slurm.conf file for current time
-        file_content = _download_slurm_conf_file(cfg.clusters[self.cluster_name])
-        now = datetime.now(UTC)
+        with cache.create_entry(datetime.now(UTC)) as ce:
+            for cluster_name in self.cluster_names:
+                try:
+                    file_content = _download_slurm_conf_file(cfg.clusters[cluster_name])
+                    ce.add_value(cluster_name, file_content.encode("utf-8"))
+                except Exception as e:
+                    logger.exception("Skipping cluster %s", cluster_name, exc_info=e)
 
-        # And save it into cache
-        _save_into_cache(cache, file_content, now)
         return 0
-
-
-def _save_into_cache(cache: Cache, content: str, date: datetime) -> bool:
-    """Save slurm.conf file content into cache at given date."""
-
-    # We won't save content if identical to latest cached content.
-    latest_cache_entry = cache.latest_entry()
-    if latest_cache_entry is not None:
-        ((key, blob),) = latest_cache_entry.items()
-        prev_content = blob.decode(encoding="utf-8")
-        if content == prev_content:
-            logger.info(
-                f"slurm.conf file at {date} have not changed since: {datetime.fromisoformat(key)}, skipping."
-            )
-            return False
-
-    # Otherwise, save it into cache
-    with cache.create_entry(date) as cache_entry:
-        # key is date in isoformat
-        # value is slurm.conf file content
-        cache_entry.add_value(date.isoformat(), content.encode("utf-8"))
-    return True
 
 
 def _download_slurm_conf_file(cluster: ClusterConfig) -> str:

@@ -22,7 +22,6 @@ from sarc.scraping.users import (
     fetch_users,
     get_user_scraper,
     parse_ce,
-    parse_users,
     update_user,
     update_user_match,
 )
@@ -273,7 +272,8 @@ def test_fetch_and_parse_users_single_plugin(
 
     # Then, parse the cached data
     users = []
-    for ce in parse_users(datetime.now(UTC) - one_hour):
+    cache = Cache("users")
+    for ce in cache.read_from(datetime.now(UTC) - one_hour):
         users.extend(parse_ce(ce))
 
     assert len(users) == 3
@@ -302,7 +302,8 @@ def test_fetch_and_parse_users_multiple_plugins(
 
     # Then, parse the cached data
     users = []
-    for ce in parse_users(datetime.now(UTC) - one_hour):
+    cache = Cache("users")
+    for ce in cache.read_from(datetime.now(UTC) - one_hour):
         users.extend(parse_ce(ce))
 
     assert len(users) == 5  # 3 from plugin1 + 2 from plugin2 (user3 is merged)
@@ -328,7 +329,7 @@ def test_invalid_scraper(enabled_cache, caplog, read_write_db):
         ce.add_value("invalid_scraper", b"")
 
     with pytest.raises(ValueError, match="Invalid user scraper"):
-        for ce in parse_users(datetime(2025, 6, 1, tzinfo=UTC)):
+        for ce in cache.read_from(datetime(2025, 6, 1, tzinfo=UTC)):
             list(parse_ce(ce))
 
 
@@ -374,7 +375,8 @@ def test_fetch_and_parse_users_user_matching(
 
     # Then, parse the cached data
     users = []
-    for ce in parse_users(datetime.now(UTC) - one_hour):
+    cache = Cache("users")
+    for ce in cache.read_from(datetime.now(UTC) - one_hour):
         users.extend(parse_ce(ce))
 
     # Should have only one user after merging
@@ -451,7 +453,8 @@ def test_fetch_and_parse_multiple_different_scrapers(
 
     # Then, parse the cached data
     users = []
-    for ce in parse_users(datetime.now(UTC) - one_hour):
+    cache = Cache("users")
+    for ce in cache.read_from(datetime.now(UTC) - one_hour):
         users.extend(parse_ce(ce))
 
     # MockUserScraper returns 3 users, PluginTest returns 2 users
@@ -524,8 +527,8 @@ def test_parse_users_supervisor_ordering_before_fix(mock_get_scraper, read_write
     ]
 
     fetch_users(scrapers)
-
-    for ce in parse_users(datetime.now(UTC) - one_hour):
+    cache = Cache("users")
+    for ce in cache.read_from(datetime.now(UTC) - one_hour):
         for um in parse_ce(ce):
             update_user(read_write_db, um)
 
@@ -535,7 +538,8 @@ def test_parse_users_supervisor_ordering_before_fix(mock_get_scraper, read_write
     assert len(sups) == 1
     assert len(sups[0]) == 1
 
-    for ce in parse_users(datetime.now(UTC) - one_hour):
+    cache = Cache("users")
+    for ce in cache.read_from(datetime.now(UTC) - one_hour):
         for um in parse_ce(ce):
             update_user(read_write_db, um)
 

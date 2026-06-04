@@ -2,7 +2,7 @@ from datetime import datetime
 
 from sqlalchemy import true
 from sqlalchemy.dialects.postgresql import JSONB, aggregate_order_by
-from sqlmodel import FLOAT, JSON, Field, and_, case, col, desc, func, select
+from sqlmodel import BIGINT, FLOAT, JSON, Field, and_, case, col, desc, func, select
 
 from sarc.models.user import MemberType
 
@@ -214,18 +214,18 @@ class JobSeriesDB(SQLModel, table=True):
     elapsed_time: float
 
     # tres
-    requested_cpu: int | None
-    requested_mem: int | None
-    requested_node: int | None
-    requested_billing: int | None
-    requested_gres_gpu: int | None
+    requested_cpu: int | None = Field(default=None, sa_type=BIGINT)
+    requested_mem: int | None = Field(default=None, sa_type=BIGINT)
+    requested_node: int | None = Field(default=None, sa_type=BIGINT)
+    requested_billing: int | None = Field(default=None, sa_type=BIGINT)
+    requested_gres_gpu: int | None = Field(default=None, sa_type=BIGINT)
     requested_gpu_type: str | None
 
-    allocated_cpu: int | None
-    allocated_mem: int | None
-    allocated_node: int | None
-    allocated_billing: int | None
-    allocated_gres_gpu: int | None
+    allocated_cpu: int | None = Field(default=None, sa_type=BIGINT)
+    allocated_mem: int | None = Field(default=None, sa_type=BIGINT)
+    allocated_node: int | None = Field(default=None, sa_type=BIGINT)
+    allocated_billing: int | None = Field(default=None, sa_type=BIGINT)
+    allocated_gres_gpu: int | None = Field(default=None, sa_type=BIGINT)
     allocated_gpu_type: str | None
     harmonized_gpu_type: str | None
 

@@ -15,7 +15,7 @@ UTCOFFSET = timedelta(0)
 
 
 def no_current(fname: Path) -> bool:
-    return fname.suffix not in [".current", ".DS_Store"]
+    return fname.suffix != ".current" and fname.name != ".DS_Store"
 
 
 class CacheEntry:
