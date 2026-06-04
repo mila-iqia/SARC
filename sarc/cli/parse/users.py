@@ -36,16 +36,15 @@ class ParseUsers:
                     _since = cache.oldest_year()
 
             for ce in cache.read_from(from_time=_since):
-                with sess.begin():
-                    for um in parse_ce(ce):
-                        update_user(sess, um)
-                        sess.flush()
-                    if self.update_parsed_date:
-                        logger.info(
-                            f"Set parsed_dates for users to {ce.get_entry_datetime()}."
-                        )
-                        set_parsed_date(sess, "users", ce.get_entry_datetime())
-                        sess.flush()
-                    sess.commit()
+                for um in parse_ce(ce):
+                    update_user(sess, um)
+                    sess.flush()
+                if self.update_parsed_date:
+                    logger.info(
+                        f"Set parsed_dates for users to {ce.get_entry_datetime()}."
+                    )
+                    set_parsed_date(sess, "users", ce.get_entry_datetime())
+                    sess.flush()
+                sess.commit()
 
         return 0
