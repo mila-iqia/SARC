@@ -269,6 +269,20 @@ class SlackConfig:
 
 
 @dataclass
+class UnderusageNotifyConfig:
+    slack_token: Secret[str]
+    admin_channel: str
+    enabled: bool = True
+    send_dms: bool = False
+    min_ratio: float = 0.50
+    min_gpu_hours: float = 672.0  # 4 GPU x 7d
+    window_days: int = 14
+    digest_top_n: int = 16
+    digest_grouping: str = "overall"
+    primary_clusters_in_dm: int = 2
+
+
+@dataclass
 class LoggingConfig:
     log_level: str
     OTLP_endpoint: str | None = None
@@ -300,6 +314,7 @@ class ClientConfig:
     loki: LokiConfig | None = None
     tempo: TempoConfig | None = None
     health_monitor: HealthMonitorConfig | None = None
+    notifications: UnderusageNotifyConfig | None = None
 
     @property
     def lock_path(self) -> Path:
