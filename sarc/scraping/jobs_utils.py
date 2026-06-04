@@ -353,7 +353,7 @@ def update_allocated_gpu_type_from_nodes(
     # Save GPU type found
     if gpu_type is not None:
         entry.allocated_gpu_type = gpu_type
-        # And try to harmonize GPU type
+        # And try to harmonize GPU type. Set to None if cannot harmonize.
         entry.harmonized_gpu_type = cluster.harmonize_gpu_from_nodes(
             entry.nodes, gpu_type
         )

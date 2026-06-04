@@ -329,6 +329,7 @@ class ParsedPartition:
                 harmonized_gpu_names_raw.discard(None)
                 harmonized_gpu_names = cast(set[str], harmonized_gpu_names_raw)
                 if not harmonized_gpu_names:
+                    # NB: GPU billing may keep non-harmonized names if it cannot harmonize.
                     logger.warning(
                         self.partition.message(
                             f"Cannot harmonize: {gpu} (keep this name as-is) : {self.partition.nodes}"
@@ -371,6 +372,7 @@ class ParsedPartition:
                     )
                     harmonized_gpu_to_billing[h_name] = billing
                 else:
+                    # NB: GPU billing may keep non-harmonized names if it cannot harmonize.
                     logger.warning(
                         self.partition.message(
                             f"Cannot harmonize: {gpu} (keep this name as-is) : {self.partition.nodes}"
