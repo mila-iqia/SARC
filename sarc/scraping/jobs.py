@@ -145,13 +145,14 @@ def parse_jobs(
     update_parsed_date: bool,
 ) -> None:
 
+    cache = Cache(subdirectory="jobs")
     with config("scraping").db.session() as sess:
         if since is None:
             since = get_parsed_date(sess, "jobs")
+            if since is None:
+                since = cache.oldest_year()
 
         # Retrieve from the cache
-        assert since is not None
-        cache = Cache(subdirectory="jobs")
         for cache_entry in cache.read_from(from_time=since):
             parse_cache_entry(sess, cache_entry, clusters_cfg)
             # Update the parsed date

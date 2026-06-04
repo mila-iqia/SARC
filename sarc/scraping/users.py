@@ -181,21 +181,6 @@ def patch_usermatch(um: UserMatch) -> None:
     pass
 
 
-def parse_users(from_: datetime) -> Iterable[CacheEntry]:
-    """Parse user data from the cache.
-
-    This returns one UserMatch structure per scraped user, across all plugins.
-    The collected information is aggregated amongst plugins, but not with the
-    information in the database.
-
-    from_: start parsing cached date from that date. If None, uses runstate value from database
-    update_parsed_date : to update runstate last parsed date value
-    """
-    cache = Cache(subdirectory="users")
-
-    return cache.read_from(from_time=from_)
-
-
 def parse_ce(ce: CacheEntry) -> Iterable[UserMatch]:
     # UserMatches, referenced by matching id
     user_refs: dict[MatchID, UserMatch] = {}

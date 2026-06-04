@@ -68,8 +68,9 @@ def parse_prometheus(since: datetime | None, update_parsed_date: bool) -> None:
     with config("scraping").db.session() as sess:
         if since is None:
             since = get_parsed_date(sess, "prometheus")
+            if since is None:
+                since = cache.oldest_year()
 
-        assert since is not None
         for ce in cache.read_from(from_time=since):
             error = parse_prometheus_ce(sess, ce)
             if update_parsed_date and not error:
