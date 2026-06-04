@@ -124,6 +124,20 @@
       color: #333; cursor: pointer; white-space: nowrap;
     }
     .job-states-panel label:hover { background: #f0f4ff; }
+    /* Period radio dropdown (same chrome as the job-states panel) */
+    .period-panel { min-width: 235px; }
+    .period-panel .period-title {
+      padding: 4px 12px 2px; font-size: 11px; text-transform: uppercase;
+      letter-spacing: 0.4px; color: #888;
+    }
+    .period-panel .period-sep { border-top: 1px solid #eee; margin: 4px 0; }
+    .period-panel .period-hint { color: #999; font-size: 11px; }
+    .period-panel .period-custom {
+      display: flex; gap: 6px; align-items: center;
+      padding: 3px 12px 6px; font-size: 13px; color: #333;
+    }
+    .period-panel .period-custom label { padding: 0; }
+    .period-panel .period-custom input[type="number"] { width: 60px; }
   </style>
 </head>
 <body>
@@ -138,10 +152,31 @@
       <input type="date" id="end" />
     </div>
     <div class="ctrl">
-      <label for="period">Period</label>
-      <input type="text" id="period" value="__DEFAULT_PERIOD__" style="width:80px"
-             placeholder="e.g. 1d, 12h, 2w, m"
-             title="N+unit = fixed window (1m = 30 days). A single letter (h/d/w/m) = calendar buckets: hour / day / week (from Monday) / month, clipped to the range." />
+      <label>Period</label>
+      <div class="js-dropdown">
+        <button type="button" id="period-btn" class="add-select"
+                style="text-align:left;min-width:110px"
+                title="Calendar buckets align to calendar boundaries (week starts Monday, month on the 1st), clipped to the range. A fixed window steps uniformly from Start.">By week ▾</button>
+        <div id="period-panel" class="job-states-panel period-panel" style="display:none"
+             data-default="__DEFAULT_PERIOD__">
+          <div class="period-title">Calendar buckets</div>
+          <label><input type="radio" name="period-mode" value="h"> By hour</label>
+          <label><input type="radio" name="period-mode" value="d"> By day</label>
+          <label><input type="radio" name="period-mode" value="w" checked> By week <span class="period-hint">(starts Monday)</span></label>
+          <label><input type="radio" name="period-mode" value="m"> By month <span class="period-hint">(starts the 1st)</span></label>
+          <div class="period-sep"></div>
+          <div class="period-custom"
+               title="Buckets of exactly this length, counted from the Start date (not aligned to the calendar).">
+            <label><input type="radio" name="period-mode" value="custom"> Every</label>
+            <input type="number" id="period-n" min="1" step="1" value="14">
+            <select id="period-unit">
+              <option value="h">hours</option>
+              <option value="d" selected>days</option>
+            </select>
+            <span class="period-hint">from Start</span>
+          </div>
+        </div>
+      </div>
     </div>
     <div class="ctrl">
       <label for="rgu-type">RGU type</label>
@@ -1105,13 +1140,79 @@
         jsPanel.style.display = 'none';
     });
 
+    // ── Period selector (radio dropdown, mirrors the job-states widget) ──────
+    // Produces the API grammar: a bare letter (h/d/w/m) for calendar buckets,
+    // or N+unit (e.g. 14d, 72h) for a fixed window stepping from Start.
+    const periodBtn = document.getElementById('period-btn');
+    const periodPanel = document.getElementById('period-panel');
+    const periodN = document.getElementById('period-n');
+    const periodUnit = document.getElementById('period-unit');
+    const PERIOD_LABELS = { h: 'By hour', d: 'By day', w: 'By week', m: 'By month' };
+
+    function periodMode() {
+      return periodPanel.querySelector('input[name="period-mode"]:checked').value;
+    }
+    function periodCustomN() {
+      return Math.max(1, Math.floor(Number(periodN.value) || 1));
+    }
+    function periodValue() {
+      const mode = periodMode();
+      return mode === 'custom' ? periodCustomN() + periodUnit.value : mode;
+    }
+    function periodUpdateLabel() {
+      let txt = PERIOD_LABELS[periodMode()];
+      if (!txt) {
+        const n = periodCustomN();
+        txt = 'Every ' + n + ' ' + (periodUnit.value === 'h' ? 'hour' : 'day') + (n > 1 ? 's' : '');
+      }
+      periodBtn.textContent = txt + ' ▾';
+    }
+    function setPeriod(s) {
+      // Accepts the API grammar (used for the server-injected default).
+      const m = /^(\d+(?:\.\d+)?)?\s*([hdwm]?)$/i.exec((s || '').trim()) || [];
+      let num = m[1] ? parseFloat(m[1]) : null;
+      let unit = (m[2] || (num !== null ? 'd' : 'w')).toLowerCase();
+      if (num === null) {
+        periodPanel.querySelector(`input[value="${unit}"]`).checked = true;
+      } else {
+        // The custom form only offers hours/days: rewrite w/m (and sub-day
+        // day fractions) to keep the value representable.
+        if (unit === 'w') { num *= 7; unit = 'd'; }
+        if (unit === 'm') { num *= 30; unit = 'd'; }
+        if (unit === 'd' && num < 1) { num *= 24; unit = 'h'; }
+        periodPanel.querySelector('input[value="custom"]').checked = true;
+        periodN.value = Math.max(1, Math.round(num));
+        periodUnit.value = unit;
+      }
+      periodUpdateLabel();
+    }
+    periodBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      periodPanel.style.display = periodPanel.style.display === 'none' ? 'block' : 'none';
+    });
+    document.addEventListener('click', e => {
+      if (periodPanel.style.display !== 'none' && !periodPanel.contains(e.target) && e.target !== periodBtn)
+        periodPanel.style.display = 'none';
+    });
+    periodPanel.querySelectorAll('input[name="period-mode"]')
+      .forEach(r => r.addEventListener('change', periodUpdateLabel));
+    // Touching the custom fields implies the custom mode.
+    [periodN, periodUnit].forEach(el => {
+      el.addEventListener('focus', () => {
+        periodPanel.querySelector('input[value="custom"]').checked = true;
+        periodUpdateLabel();
+      });
+      el.addEventListener('change', periodUpdateLabel);
+    });
+    setPeriod(periodPanel.dataset.default);
+
     function captureParams() {
       const start = document.getElementById('start').value;
       const end   = document.getElementById('end').value;
       if (!start || !end) return null;
       return {
         start, end,
-        period:        document.getElementById('period').value.trim(),
+        period:        periodValue(),
         clusters:      clSelected(),
         cluster_user:  document.getElementById('cluster_user').value.trim(),
         metric:        document.getElementById('metric-select').value,
