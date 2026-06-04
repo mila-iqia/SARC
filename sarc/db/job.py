@@ -101,7 +101,9 @@ class SlurmJobDB(SQLModel, table=True):
     allocated_gres_gpu: int | None = None
     allocated_gpu_type: str | None = None
     # Harmonized version or allocated_gpu_type. If not None, should exist in GpuRguDB.
-    harmonized_gpu_type: str | None = Field(foreign_key="gpurgudb.name", default=None, ondelete="SET NULL")
+    harmonized_gpu_type: str | None = Field(
+        foreign_key="gpurgudb.name", default=None, ondelete="SET NULL"
+    )
 
     statistics: dict[str, JobStatisticDB] = Relationship(
         sa_relationship=relationship(
