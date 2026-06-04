@@ -93,8 +93,14 @@ gpu_count_normalized_expr = case(
     else_=(gpu_count_raw / gpu_unit_billing),
 )
 
-rgu_expr = (gpu_count_normalized_expr * GpuRguDB.rgu).label("rgu")
-rgu_drac_expr = (gpu_count_normalized_expr * GpuRguDB.drac_rgu).label("rgu_drac")
+billing_rgu_expr = (gpu_count_normalized_expr * GpuRguDB.rgu).label("rgu")
+billing_rgu_drac_expr = (gpu_count_normalized_expr * GpuRguDB.drac_rgu).label(
+    "rgu_drac"
+)
+
+gres_gpu = func.coalesce(SlurmJobDB.allocated_gres_gpu, 0)
+physical_rgu_expr = (gres_gpu * GpuRguDB.rgu).label("physical_rgu")
+physical_rgu_drac_expr = (gres_gpu * GpuRguDB.drac_rgu).label("physical_rgu_drac")
 
 # Cost and waste
 cpu_cost = col(SlurmJobDB.elapsed_time) * col(SlurmJobDB.requested_cpu)
@@ -146,8 +152,10 @@ class JobSeriesDB(SQLModel, table=True):
             supervisors_subq,
             col(GpuRguDB.rgu).label("gpu_type_rgu"),
             col(GpuRguDB.drac_rgu).label("gpu_type_rgu_drac"),
-            rgu_expr,
-            rgu_drac_expr,
+            billing_rgu_expr,
+            billing_rgu_drac_expr,
+            physical_rgu_expr,
+            physical_rgu_drac_expr,
             cpu_cost.label("cpu_cost"),
             ((1 - cpu_utilization) * cpu_cost).label("cpu_waste"),
             cpu_equivalent_cost.label("cpu_equivalent_cost"),
@@ -236,6 +244,8 @@ class JobSeriesDB(SQLModel, table=True):
     gpu_type_rgu_drac: float | None
     rgu: float | None
     rgu_drac: float | None
+    physical_rgu: float | None  # RGU computed using gres_gpu
+    physical_rgu_drac: float | None  # RGU computed using gres_gpu and DRAC RGU values
 
     cpu_cost: float | None
     cpu_waste: float | None

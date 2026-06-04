@@ -212,6 +212,16 @@ def _apply_common_filters(
     return query
 
 
+def _rgu_col(rgu_type: str):
+    """RGU column to aggregate across the dashboard's RGU plots.
+
+    ``physical`` uses the GPUs actually allocated (``physical_rgu``); any other
+    value falls back to the billing-normalized RGU (``rgu``), which runs ~1.5x
+    higher than the physical count for Mila.
+    """
+    return col(JobSeriesDB.physical_rgu if rgu_type == "physical" else JobSeriesDB.rgu)
+
+
 def _resolve_cluster_ids(sess: Session, clusters: list[str]) -> list[int] | None:
     """Look up cluster ids; returns None if the cluster filter is unset (empty).
 
@@ -483,6 +493,7 @@ def metrics_global_density(
     metric2: str | None = Query(default=None),
     focus_start: datetime | None = Query(default=None),
     focus_end: datetime | None = Query(default=None),
+    rgu_type: str = Query(default="physical"),
     sess: Session = Depends(session_dep),
 ):
     if metric not in _METRICS_0_1:
@@ -497,7 +508,8 @@ def metrics_global_density(
     # per-row json_object_agg of all stats. See histogram for the rationale.
     js1 = aliased(JobStatisticDB)
     m1 = col(js1.mean)
-    weight = JobSeriesDB.rgu * JobSeriesDB.elapsed_time
+    rgu_col = _rgu_col(rgu_type)
+    weight = rgu_col * JobSeriesDB.elapsed_time
     bin_width = 1.0 / _DENSITY_BINS
 
     # Common job-population filter shared by primary, secondary and paired.
@@ -507,7 +519,7 @@ def metrics_global_density(
         col(JobSeriesDB.submit_time) >= begin_dt,
         col(JobSeriesDB.submit_time) < finish_dt,
         col(JobSeriesDB.allocated_gpu_type).is_not(None),
-        col(JobSeriesDB.rgu).is_not(None),
+        rgu_col.is_not(None),
         _valid_metric_filter(m1),
     ]
     if metric2:
@@ -597,6 +609,7 @@ def metrics_global_histogram(
     cluster_user: str | None = Query(default=None),
     job_states: list[str] = Query(default=[]),
     metric: str = Query(default="gpu_sm_occupancy"),
+    rgu_type: str = Query(default="physical"),
     sess: Session = Depends(session_dep),
 ):
     begin_dt, finish_dt = _date_range(start, end)
@@ -607,7 +620,8 @@ def metrics_global_histogram(
     # requested, and the same multiplied by the metric mean for used. The
     # `m == m` test filters NaN (NaN != NaN), substituting 0 in that branch.
     bucket_expr = _bucket_expr(parsed, JobSeriesDB.submit_time, begin_dt)
-    rgu_hours = JobSeriesDB.rgu * JobSeriesDB.elapsed_time / 3600.0
+    rgu_col = _rgu_col(rgu_type)
+    rgu_hours = rgu_col * JobSeriesDB.elapsed_time / 3600.0
     # Read the metric mean via a targeted LEFT JOIN on jobstatisticdb rather than
     # JobSeriesDB.statistics: the latter is a per-row json_object_agg of *all*
     # stats and dominates the query (40+ min on a year of jobs). The join hits
@@ -638,7 +652,7 @@ def metrics_global_histogram(
             col(JobSeriesDB.submit_time) >= begin_dt,
             col(JobSeriesDB.submit_time) < finish_dt,
             col(JobSeriesDB.allocated_gpu_type).is_not(None),
-            col(JobSeriesDB.rgu).is_not(None),
+            rgu_col.is_not(None),
         )
         .group_by(bucket_expr)
         .order_by(bucket_expr)
@@ -676,6 +690,7 @@ def metrics_rgu_by_cluster(
     clusters: list[str] = Query(default=[]),
     cluster_user: str | None = Query(default=None),
     job_states: list[str] = Query(default=[]),
+    rgu_type: str = Query(default="physical"),
     sess: Session = Depends(session_dep),
 ):
     """Total RGU.h per period, stacked by cluster.
@@ -691,14 +706,15 @@ def metrics_rgu_by_cluster(
     fmt = _label_fmt(parsed)
 
     bucket_expr = _bucket_expr(parsed, JobSeriesDB.submit_time, begin_dt)
-    rgu_hours = col(JobSeriesDB.rgu) * col(JobSeriesDB.elapsed_time) / 3600.0
+    rgu_col = _rgu_col(rgu_type)
+    rgu_hours = rgu_col * col(JobSeriesDB.elapsed_time) / 3600.0
     query = (
         select(bucket_expr, JobSeriesDB.cluster_name, func.sum(rgu_hours).label("rgu"))
         .where(
             col(JobSeriesDB.submit_time) >= begin_dt,
             col(JobSeriesDB.submit_time) < finish_dt,
             col(JobSeriesDB.allocated_gpu_type).is_not(None),
-            col(JobSeriesDB.rgu).is_not(None),
+            rgu_col.is_not(None),
         )
         .group_by(bucket_expr, col(JobSeriesDB.cluster_name))
         .order_by(bucket_expr)
@@ -743,12 +759,14 @@ def metrics_global_user_rgu(
     metric: str = Query(default="gpu_sm_occupancy"),
     focus_start: datetime | None = Query(default=None),
     focus_end: datetime | None = Query(default=None),
+    rgu_type: str = Query(default="physical"),
     sess: Session = Depends(session_dep),
 ):
     begin_dt, finish_dt = _apply_focus(*_date_range(start, end), focus_start, focus_end)
 
     # Aggregate by user directly in SQL: SUM(rgu * elapsed / 3600) per user.
-    rgu_hours = JobSeriesDB.rgu * JobSeriesDB.elapsed_time / 3600.0
+    rgu_col = _rgu_col(rgu_type)
+    rgu_hours = rgu_col * JobSeriesDB.elapsed_time / 3600.0
     # Targeted LEFT JOIN on jobstatisticdb instead of JobSeriesDB.statistics
     # (per-row json_object_agg). See histogram for the rationale.
     m_mean = col(JobStatisticDB.mean)
@@ -773,7 +791,7 @@ def metrics_global_user_rgu(
             col(JobSeriesDB.submit_time) >= begin_dt,
             col(JobSeriesDB.submit_time) < finish_dt,
             col(JobSeriesDB.allocated_gpu_type).is_not(None),
-            col(JobSeriesDB.rgu).is_not(None),
+            rgu_col.is_not(None),
         )
         .group_by(user_expr)
         .order_by(rgu_requested_sum.desc(), user_expr)
@@ -801,13 +819,15 @@ def metrics_jobs(
     metric: str = Query(default="gpu_sm_occupancy"),
     focus_start: datetime | None = Query(default=None),
     focus_end: datetime | None = Query(default=None),
+    rgu_type: str = Query(default="physical"),
     sess: Session = Depends(session_dep),
 ):
     begin_dt, finish_dt = _apply_focus(*_date_range(start, end), focus_start, focus_end)
 
     # Sort key (rgu * elapsed) and the stat extractions are pushed into SQL so
     # we only materialise `limit` rows, not the full result set.
-    rgu_hours = (JobSeriesDB.rgu * JobSeriesDB.elapsed_time / 3600.0).label("rgu_hours")
+    rgu_col = _rgu_col(rgu_type)
+    rgu_hours = (rgu_col * JobSeriesDB.elapsed_time / 3600.0).label("rgu_hours")
     # Targeted LEFT JOINs on jobstatisticdb (one aliased row per distinct stat
     # name) instead of JobSeriesDB.statistics, which forces a per-row
     # json_object_agg of all stats. See histogram for the rationale.
@@ -825,7 +845,7 @@ def metrics_jobs(
         JobSeriesDB.elapsed_time,
         JobSeriesDB.nodes,
         JobSeriesDB.allocated_gpu_type,
-        JobSeriesDB.rgu,
+        rgu_col.label("rgu"),
         rgu_hours,
         metric_mean,
         gpu_util_mean,
@@ -845,8 +865,8 @@ def metrics_jobs(
             col(JobSeriesDB.submit_time) >= begin_dt,
             col(JobSeriesDB.submit_time) < finish_dt,
             col(JobSeriesDB.allocated_gpu_type).is_not(None),
-            col(JobSeriesDB.rgu).is_not(None),
-            JobSeriesDB.rgu == JobSeriesDB.rgu,  # NaN guard   # noqa: PLR0124
+            rgu_col.is_not(None),
+            rgu_col == rgu_col,  # NaN guard   # noqa: PLR0124
         )
         .order_by(rgu_hours.desc(), col(JobSeriesDB.cluster_user))
         .limit(limit)

@@ -147,6 +147,13 @@
       </select>
     </div>
     <div class="ctrl">
+      <label for="rgu-type">RGU type</label>
+      <select id="rgu-type" title="Which RGU all RGU plots aggregate: Physical = GPUs actually allocated; Billing = billing-normalized RGU (~1.5x higher for Mila). Takes effect on Update.">
+        <option value="physical" selected>Physical RGU</option>
+        <option value="billing">Billing RGU</option>
+      </select>
+    </div>
+    <div class="ctrl">
       <label for="focus_start">Focus from</label>
       <input type="datetime-local" id="focus_start" />
     </div>
@@ -1023,6 +1030,7 @@
         focus_start:   document.getElementById('focus_start').value,
         focus_end:     document.getElementById('focus_end').value,
         job_states:    jsSelected(),
+        rgu_type:      document.getElementById('rgu-type').value,
       };
     }
 
@@ -1055,11 +1063,11 @@
         case 'data':      return '/dash/metrics/data?'      + new URLSearchParams({ ...base, period: p.period });
         case 'scatter':   return '/dash/metrics/scatter?'   + new URLSearchParams({ ...base, ...focusParams });
         case 'heatmap':   return '/dash/metrics/heatmap?'   + new URLSearchParams({ ...base, ...focusParams });
-        case 'histogram': return '/dash/metrics/histogram?' + new URLSearchParams({ ...base, period: p.period, metric: p.metric });
-        case 'density':   return '/dash/metrics/density?'   + new URLSearchParams({ ...densityParams, ...focusParams });
-        case 'user_rgu':  return '/dash/metrics/user_rgu?'  + new URLSearchParams({ start: p.start, end: p.end, metric: p.metric, ...focusParams });
-        case 'jobs':      return '/dash/metrics/jobs?'      + new URLSearchParams({ ...base, metric: p.metric, ...focusParams });
-        case 'rgu_by_cluster': return '/dash/metrics/rgu_by_cluster?' + new URLSearchParams({ start: p.start, end: p.end, period: p.period, ...(p.cluster_user ? { cluster_user: p.cluster_user } : {}) });
+        case 'histogram': return '/dash/metrics/histogram?' + new URLSearchParams({ ...base, period: p.period, metric: p.metric, rgu_type: p.rgu_type });
+        case 'density':   return '/dash/metrics/density?'   + new URLSearchParams({ ...densityParams, ...focusParams, rgu_type: p.rgu_type });
+        case 'user_rgu':  return '/dash/metrics/user_rgu?'  + new URLSearchParams({ start: p.start, end: p.end, metric: p.metric, ...focusParams, rgu_type: p.rgu_type });
+        case 'jobs':      return '/dash/metrics/jobs?'      + new URLSearchParams({ ...base, metric: p.metric, ...focusParams, rgu_type: p.rgu_type });
+        case 'rgu_by_cluster': return '/dash/metrics/rgu_by_cluster?' + new URLSearchParams({ start: p.start, end: p.end, period: p.period, ...(p.cluster_user ? { cluster_user: p.cluster_user } : {}), rgu_type: p.rgu_type });
       }
       throw new Error('Unknown endpoint: ' + ep);
     }
