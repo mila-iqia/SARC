@@ -122,7 +122,7 @@ def test_get_gpu_type(
         "NodeName=X00[1-9] Param1=Anything1 Param2=Anything2 Gres=gpu:gpu2:4 Param3=Anything3",
     )
     # Acquire slurm config.
-    assert cli_main(["parse", "slurmconfig", "--cluster_name", "raisin"]) == 0
+    assert cli_main(["parse", "slurmconfig"]) == 0
     # acquire jobs
     assert cli_main(cmd_sacct_fetch) == 0
     assert cli_main(cmd_sacct_parse) == 0
