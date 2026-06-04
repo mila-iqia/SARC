@@ -749,6 +749,94 @@ def metrics_rgu_by_cluster(
     }
 
 
+@router.get("/metrics/metric_trend")
+def metrics_metric_trend(
+    start: date = Query(default=None),
+    end: date = Query(default=None),
+    period: str = Query(default=_DEFAULT_PERIOD),
+    clusters: list[str] = Query(default=[]),
+    cluster_user: str | None = Query(default=None),
+    job_states: list[str] = Query(default=[]),
+    metric: str = Query(default="gpu_sm_occupancy"),
+    metric2: str | None = Query(default=None),
+    sess: Session = Depends(session_dep),
+):
+    """Per-period averages of a metric's per-job ``mean`` and ``max``.
+
+    For each period bucket, averages the per-job statistic values over the
+    jobs submitted in that bucket (plain per-job average, not duration
+    weighted). Jobs lacking the statistic are simply absent from the average
+    (inner join) and no GPU/RGU filter is applied, so system metrics also
+    cover CPU-only jobs. Returns one series per requested metric, aligned on
+    a shared period axis; buckets with no data yield null (a curve gap), not 0.
+    """
+    if metric not in _METRICS_0_1:
+        raise HTTPException(status_code=400, detail=f"Unknown metric: {metric!r}")
+    if metric2 is not None and metric2 not in _METRICS_0_1:
+        raise HTTPException(status_code=400, detail=f"Unknown metric: {metric2!r}")
+    wanted = [metric] + ([metric2] if metric2 and metric2 != metric else [])
+
+    begin_dt, finish_dt = _date_range(start, end)
+    parsed = _parse_period(period)
+    fmt = _label_fmt(parsed)
+
+    bucket_expr = _bucket_expr(parsed, JobSeriesDB.submit_time, begin_dt)
+    m_mean = col(JobStatisticDB.mean)
+    m_max = col(JobStatisticDB.max)
+    # NaN-proof averages: NaN != NaN, and a single NaN would contaminate the
+    # whole AVG, so each value is independently nulled out when NaN.
+    avg_mean = func.avg(case((m_mean == m_mean, m_mean))).label("avg_mean")  # noqa: PLR0124
+    avg_max = func.avg(case((m_max == m_max, m_max))).label("avg_max")  # noqa: PLR0124
+
+    query = (
+        select(
+            bucket_expr,
+            col(JobStatisticDB.name).label("metric_name"),
+            avg_mean,
+            avg_max,
+        )
+        .select_from(JobSeriesDB)
+        .join(
+            JobStatisticDB,
+            and_(
+                col(JobStatisticDB.job_id) == col(JobSeriesDB.job_db_id),
+                col(JobStatisticDB.name).in_(wanted),
+            ),
+        )
+        .where(
+            col(JobSeriesDB.submit_time) >= begin_dt,
+            col(JobSeriesDB.submit_time) < finish_dt,
+        )
+        .group_by(bucket_expr, col(JobStatisticDB.name))
+        .order_by(bucket_expr)
+    )
+    query = _apply_common_filters(query, clusters, cluster_user, job_states)
+
+    cells = {}
+    for r in sess.exec(query):
+        key = _sql_bucket_key(parsed, r.bucket)
+        cells[(key, r.metric_name)] = (
+            _nan_to_none(r.avg_mean),
+            _nan_to_none(r.avg_max),
+        )
+
+    buckets = list(_iter_buckets(begin_dt, finish_dt, parsed))
+    return {
+        "periods": [
+            {"period_start": ps.strftime(fmt), "period_end": pe.strftime(fmt)}
+            for _, ps, pe in buckets
+        ],
+        "series": [
+            {
+                "metric": m,
+                "mean": [cells.get((k, m), (None, None))[0] for k, _, _ in buckets],
+                "max": [cells.get((k, m), (None, None))[1] for k, _, _ in buckets],
+            }
+            for m in wanted
+        ],
+    }
+
+
 @router.get("/metrics/user_rgu")
 def metrics_global_user_rgu(
     start: date = Query(default=None),

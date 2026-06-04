@@ -260,6 +260,7 @@
       clusterrgu:      'RGU by cluster',
       density:         'Metric density',
       metricscatter:   'Metric scatter',
+      metrictrend:     'Metric trend (mean/max)',
       userrgu:         'RGU by user',
       jobtable:        'Job table',
     };
@@ -278,6 +279,7 @@
       clusterrgu:      'rgu_by_cluster',
       density:         'density',
       metricscatter:   'density',
+      metrictrend:     'metric_trend',
       userrgu:         'user_rgu',
       jobtable:        'jobs',
     };
@@ -287,7 +289,7 @@
     const ENDPOINT_TO_KEY = {
       data: 'bar', scatter: 'scatter', heatmap: 'heatmap',
       histogram: 'histogram', density: 'density', user_rgu: 'userrgu', jobs: 'jobs',
-      rgu_by_cluster: 'clusterrgu',
+      rgu_by_cluster: 'clusterrgu', metric_trend: 'metrictrend',
     };
 
     // Populate metric dropdowns
@@ -577,7 +579,8 @@
                    heatmap_wait: renderHeatmapWait,
                    histogram: renderHistogram, density: renderDensity,
                    metricscatter: renderMetricScatter, userrgu: renderUserRgu,
-                   jobtable: renderJobTable, clusterrgu: renderClusterRgu }[type];
+                   jobtable: renderJobTable, clusterrgu: renderClusterRgu,
+                   metrictrend: renderMetricTrend }[type];
       if (fn) fn(id, d);
     }
 
@@ -760,6 +763,56 @@
         xaxis: { title: 'Period start', type: 'category', tickangle: -45 },
         yaxis: { title: 'Total ' + unit.label },
         legend: { x: 1.0, y: 1.0 },
+        margin: { l: 60, r: 20, t: 40, b: 100 },
+      }), { responsive: true }).then(gd => {
+        gd.removeAllListeners('plotly_click');
+        gd.on('plotly_click', evt => {
+          if (evt.points && evt.points.length) clickSetFocus(evt.points[0].x, evt.points[0].customdata);
+        });
+      });
+    }
+
+    function renderMetricTrend(id, d) {
+      const data = d.metrictrend;
+      if (!data || !data.periods.length || !data.series.length) return;
+      const x    = data.periods.map(p => p.period_start);
+      const ends = data.periods.map(p => p.period_end);
+      // Colour encodes the metric, dash style the statistic (mean solid,
+      // max dashed). Null buckets (no job carries the stat) leave a gap.
+      const MET_COLORS = ['#1a6fd4', '#6d2d91'];
+      const traces = [];
+      data.series.forEach((s, i) => {
+        const label = METRICS[s.metric] || s.metric;
+        const color = MET_COLORS[i % MET_COLORS.length];
+        traces.push({
+          type: 'scatter', mode: 'lines+markers', name: label + ' — mean',
+          x: x, y: s.mean, customdata: ends,
+          line: { color: color, width: 2 }, marker: { size: 5 },
+          hovertemplate: label + ' mean<br>Period: %{x}<br>Value: %{y:.3f}<extra></extra>',
+        });
+        traces.push({
+          type: 'scatter', mode: 'lines+markers', name: label + ' — max',
+          x: x, y: s.max, customdata: ends,
+          line: { color: color, width: 2, dash: 'dash' }, marker: { size: 5 },
+          hovertemplate: label + ' max<br>Period: %{x}<br>Value: %{y:.3f}<extra></extra>',
+        });
+      });
+      // Highlight the focused period; on a category axis, shape coordinates
+      // are the category indices.
+      const shapes = [];
+      x.forEach((p, idx) => {
+        if (periodInFocus(p)) shapes.push({
+          type: 'rect', xref: 'x', yref: 'paper',
+          x0: idx - 0.5, x1: idx + 0.5, y0: 0, y1: 1,
+          fillcolor: 'rgba(224, 112, 32, 0.12)', line: { width: 0 },
+        });
+      });
+      Plotly.react(id, traces, pLayout({
+        title: { text: 'Metric Trend per Period — mean & max (click to focus)', font: { size: 16 } },
+        xaxis: { title: 'Period start', type: 'category', tickangle: -45 },
+        yaxis: { title: 'Metric value' },
+        legend: { x: 1.0, y: 1.0 },
+        shapes: shapes,
         margin: { l: 60, r: 20, t: 40, b: 100 },
       }), { responsive: true }).then(gd => {
         gd.removeAllListeners('plotly_click');
@@ -1104,6 +1157,7 @@
         case 'user_rgu':  return '/dash/metrics/user_rgu?'  + new URLSearchParams({ start: p.start, end: p.end, metric: p.metric, ...focusParams, rgu_type: p.rgu_type });
         case 'jobs':      return '/dash/metrics/jobs?'      + new URLSearchParams({ ...base, metric: p.metric, ...focusParams, rgu_type: p.rgu_type });
         case 'rgu_by_cluster': return '/dash/metrics/rgu_by_cluster?' + new URLSearchParams({ start: p.start, end: p.end, period: p.period, ...(p.cluster_user ? { cluster_user: p.cluster_user } : {}), rgu_type: p.rgu_type });
+        case 'metric_trend': return '/dash/metrics/metric_trend?' + new URLSearchParams({ ...base, period: p.period, metric: p.metric, ...(p.metric2 ? { metric2: p.metric2 } : {}) });
       }
       throw new Error('Unknown endpoint: ' + ep);
     }
