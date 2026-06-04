@@ -72,7 +72,7 @@ class ClusterConfig:
     password: OTPInfo | StaticInfo | None = None
     timezone: zoneinfo.ZoneInfo | None = None
     prometheus_url: str | None = None
-    prometheus_headers: dict[str, Secret[str]] = field(default_factory=dict)
+    prometheus_headers: dict[str, Secret[str]] | str = field(default_factory=dict)
     name: str | None = None
     sacct_bin: str = "sacct"
     ignore_tz_utc: bool = False
@@ -185,27 +185,77 @@ class ClusterConfig:
 
         if self.prometheus_url is None:
             raise ConfigurationError(
-                f"No prometheus URL provided for cluster '{self.name}'"
+                f"No prometheus config provided for cluster '{self.name}'"
             )
-        return PrometheusConnect(
-            url=self.prometheus_url, headers=self.prometheus_headers
-        )
+        headers = {}
+        if isinstance(self.prometheus_headers, str):
+            assert self.prometheus_headers == "gcp"
+            import google.auth
+            import google.auth.transport.requests
+
+            credentials, _ = google.auth.default(
+                scopes=["https://www.googleapis.com/auth/monitoring.read"]
+            )
+            auth_request = google.auth.transport.requests.Request()
+            credentials.refresh(auth_request)
+            headers["Authorization"] = f"Bearer {credentials.token}"
+        elif isinstance(self.prometheus_headers, dict):
+            headers = self.prometheus_headers
+        return PrometheusConnect(url=self.prometheus_url, headers=headers)
+
+
+def get_db_user() -> str:
+    import getpass
+    import os
+
+    db_user = os.getenv("PGUSER")
+    if db_user is None:
+        db_user = getpass.getuser()
+    return db_user
 
 
 @dataclass
 class DbConfig:
     host: str
     name: str
+    user: str | None = None
 
     @cached_property
     def engine(self) -> Engine:
+
         from sqlmodel import create_engine
 
-        # TODO enable ssl for connection
-        engine = create_engine(
-            f"postgresql+psycopg://{self.host}/{self.name}",
-            connect_args={"options": "-c timezone=utc"},
-        )
+        if ":" in self.host:
+            import google.auth
+            import google.auth.transport.requests
+            from google.cloud.sql.connector import Connector, IPTypes
+
+            if self.user is None:
+                credentials, _ = google.auth.default()
+                request = google.auth.transport.requests.Request()
+                credentials.refresh(request)
+                sa_email: str = credentials.service_account_email
+                db_user = sa_email.removesuffix(".gserviceaccount.com")
+            else:
+                db_user = self.user
+            connector = Connector(
+                ip_type=IPTypes.PRIVATE, refresh_strategy="LAZY", enable_iam_auth=True
+            )
+
+            def getconn():
+                return connector.connect(
+                    self.host, "pg8000", db=self.name, user=db_user
+                )
+
+            engine = create_engine("postgresql+pg8000://", creator=getconn)
+
+        else:
+            db_user = self.user
+            if db_user is None:
+                db_user = get_db_user()
+            engine = create_engine(
+                f"postgresql+pg8000://{db_user}@{self.host}/{self.name}"
+            )
 
         return engine
 
