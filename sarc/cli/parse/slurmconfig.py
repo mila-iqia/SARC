@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import io
 import logging
 from dataclasses import dataclass
@@ -9,17 +7,18 @@ from typing import IO, Iterator, cast
 from hostlist import expand_hostlist
 from pydantic import BaseModel
 from simple_parsing import field
+from sqlmodel import Session
 
 from sarc.cache import Cache
 from sarc.config import UTC, ClusterConfig, config
 from sarc.db.cluster import GPUBillingDB, NodeGPUMappingDB, SlurmClusterDB
+from sarc.db.runstate import get_parsed_date, set_parsed_date
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
 class ParseSlurmConfig:
-    cluster_name: str = field(alias=["-c"])
     threshold: float = field(
         alias=["-t"],
         required=False,
@@ -41,53 +40,60 @@ class ParseSlurmConfig:
     )
 
     def execute(self) -> int:
-        cache = Cache(subdirectory=f"slurm_conf/{self.cluster_name}")
-
         if self.since is None:
-            ts = cache.oldest_year()
+            ts = None
         else:
             ts = datetime.fromisoformat(self.since)
             if ts.tzinfo is None:
                 ts = ts.replace(tzinfo=UTC)
             ts = ts.astimezone(UTC)
-        logger.info(f"Parsing since: {ts}")
+        with config("scraping").db.session() as sess:
+            return parse_slurmconfig(sess, ts, self.threshold)
 
-        cluster_config = config("scraping").clusters[self.cluster_name]
-        if cluster_config.billing_is_gpu:
-            logger.warning(
-                f"GPU billing won't be parsed on cluster `{cluster_config.name}`, "
-                "since billing is directly expressed as number of GPUs on this cluster."
-            )
 
-        for cache_entry in cache.read_from(ts):
-            ((key, blob),) = cache_entry.items()
+def parse_slurmconfig(
+    sess: Session, ts: datetime | None, threshold: int | float
+) -> int:
+    cache = Cache(subdirectory="slurm_conf")
 
-            cache_date: datetime = datetime.fromisoformat(key)
-            assert cache_date.tzinfo is not None, "date is not tz-aware"
+    if ts is None:
+        ts = get_parsed_date(sess, "slurmconf")
+        if ts is None:
+            ts = cache.oldest_year()
+    logger.info(f"Parsing since: {ts}")
+
+    for cache_entry in cache.read_from(ts):
+        logger.info(f"Parsing at {cache_entry.entry_datetime.isoformat()}")
+        for cluster_name, blob in cache_entry.items():
+            cluster_config = config("scraping").clusters[cluster_name]
+            if cluster_config.billing_is_gpu:
+                logger.warning(
+                    f"GPU billing won't be parsed on cluster `{cluster_config.name}`, "
+                    "since billing is directly expressed as number of GPUs on this cluster."
+                )
 
             content = blob.decode(encoding="utf-8")
 
-            logger.info(f"Parsing at {cache_date}")
-            parser = SlurmConfigParser(cluster=cluster_config, threshold=self.threshold)
+            parser = SlurmConfigParser(cluster=cluster_config, threshold=threshold)
             slurm_conf = parser.load(io.StringIO(content))
-            with config().db.session() as sess:
-                cluster_id = SlurmClusterDB.id_by_name(sess, self.cluster_name)
-                assert cluster_id is not None
-                if slurm_conf.gpu_to_billing is not None:
-                    GPUBillingDB.get_or_create(
-                        sess=sess,
-                        cluster_id=cluster_id,
-                        since=cache_date,
-                        gpu_to_billing=slurm_conf.gpu_to_billing,
-                    )
-                NodeGPUMappingDB.get_or_create(
+            cluster_id = SlurmClusterDB.id_by_name(sess, cluster_name)
+            assert cluster_id is not None
+            if slurm_conf.gpu_to_billing is not None:
+                GPUBillingDB.get_or_create(
                     sess=sess,
                     cluster_id=cluster_id,
-                    since=cache_date,
-                    node_to_gpu=slurm_conf.node_to_gpus,
+                    since=cache_entry.entry_datetime,
+                    gpu_to_billing=slurm_conf.gpu_to_billing,
                 )
-                sess.commit()
-        return 0
+            NodeGPUMappingDB.get_or_create(
+                sess=sess,
+                cluster_id=cluster_id,
+                since=cache_entry.entry_datetime,
+                node_to_gpu=slurm_conf.node_to_gpus,
+            )
+        set_parsed_date(sess, "slurmconf", cache_entry.entry_datetime)
+        sess.commit()
+    return 0
 
 
 class SlurmConfigParser(BaseModel):
