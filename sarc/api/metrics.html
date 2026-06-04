@@ -25,6 +25,13 @@
       background: #1a6fd4; color: #fff; border: none; border-radius: 4px; cursor: pointer;
     }
     button:hover { background: #155cb5; }
+    #focus-label {
+      flex-basis: 100%; display: flex; align-items: center; gap: 8px;
+      font-size: 13px; font-weight: 600; color: #555; min-height: 26px;
+    }
+    #focus-label.no-focus { color: #999; font-weight: 400; }
+    #clear-focus { padding: 3px 10px; font-size: 12px; background: #c00; }
+    #clear-focus:hover { background: #a00; }
     #status { font-size: 13px; color: #888; margin-bottom: 12px; min-height: 18px; }
 
     /* Tile grid */
@@ -137,6 +144,13 @@
              title="N+unit = fixed window (1m = 30 days). A single letter (h/d/w/m) = calendar buckets: hour / day / week (from Monday) / month, clipped to the range." />
     </div>
     <div class="ctrl">
+      <label for="rgu-type">RGU type</label>
+      <select id="rgu-type" title="Which RGU all RGU plots aggregate: Physical = GPUs actually allocated; Billing = billing-normalized RGU (~1.5x higher for Mila). Takes effect on Update.">
+        <option value="physical" selected>Physical RGU</option>
+        <option value="billing">Billing RGU</option>
+      </select>
+    </div>
+    <div class="ctrl">
       <label for="rgu-unit">RGU unit</label>
       <select id="rgu-unit" title="Y-axis unit for the 'RGU by cluster' plot. Purely a display rescale of the cumulative RGU·time (RGU·m uses a fixed 30-day month).">
         <option value="s">RGU·s</option>
@@ -147,26 +161,19 @@
       </select>
     </div>
     <div class="ctrl">
-      <label for="rgu-type">RGU type</label>
-      <select id="rgu-type" title="Which RGU all RGU plots aggregate: Physical = GPUs actually allocated; Billing = billing-normalized RGU (~1.5x higher for Mila). Takes effect on Update.">
-        <option value="physical" selected>Physical RGU</option>
-        <option value="billing">Billing RGU</option>
-      </select>
-    </div>
-    <div class="ctrl">
-      <label for="focus_start">Focus from</label>
-      <input type="datetime-local" id="focus_start" />
-    </div>
-    <div class="ctrl">
-      <label for="focus_end">Focus to</label>
-      <input type="datetime-local" id="focus_end" />
-    </div>
-    <div class="ctrl">
       <label>Cluster</label>
       <div class="js-dropdown">
         <button type="button" id="cluster-btn" class="add-select"
                 style="text-align:left;min-width:110px">All clusters ▾</button>
         <div id="cluster-panel" class="job-states-panel" style="display:none"></div>
+      </div>
+    </div>
+    <div class="ctrl">
+      <label>Job states</label>
+      <div class="js-dropdown">
+        <button type="button" id="js-btn" class="add-select"
+                style="text-align:left;min-width:110px">All states ▾</button>
+        <div id="js-panel" class="job-states-panel" style="display:none"></div>
       </div>
     </div>
     <div class="ctrl">
@@ -186,15 +193,11 @@
       <label for="metric2-select">Secondary metric</label>
       <select id="metric2-select"></select>
     </div>
-    <div class="ctrl">
-      <label>Job states</label>
-      <div class="js-dropdown">
-        <button type="button" id="js-btn" class="add-select"
-                style="text-align:left;min-width:110px">All states ▾</button>
-        <div id="js-panel" class="job-states-panel" style="display:none"></div>
-      </div>
-    </div>
     <button onclick="loadCharts()">Update</button>
+    <div id="focus-label" class="no-focus">
+      <span id="focus-label-text">No focus — click a bar in a period plot to set one</span>
+      <button type="button" id="clear-focus" style="display:none" onclick="clearFocus()">Clear focus</button>
+    </div>
   </div>
   <div id="status"></div>
   <div id="tile-grid"></div>
@@ -741,10 +744,14 @@
       const unit = RGU_UNITS[document.getElementById('rgu-unit').value] || RGU_UNITS.h;
       const x    = data.periods.map(p => p.period_start);
       const ends = data.periods.map(p => p.period_end);
+      // Focus feedback like the other period plots, but via per-point opacity
+      // instead of an orange recolour: here colour encodes the cluster, so the
+      // focused period keeps full cluster colours while the rest are dimmed.
+      const opac = x.map(p => { const f = periodInFocus(p); return f === null ? 1 : f ? 1 : 0.35; });
       const traces = data.series.map((s, i) => ({
         type: 'bar', name: s.cluster,
         x: x, y: s.rgu.map(v => v * unit.factor), customdata: ends,
-        marker: { color: clusterColor(i, data.series.length) },
+        marker: { color: clusterColor(i, data.series.length), opacity: opac },
         hovertemplate: s.cluster + '<br>Period: %{x}<br>' + unit.label + ': %{y:,.2f}<extra></extra>',
       }));
       Plotly.react(id, traces, pLayout({
@@ -943,35 +950,64 @@
 
     // ── Focus helpers ────────────────────────────────────────────────────────
 
+    // Active focus sub-range ('YYYY-MM-DDTHH:MM' UTC; '' = no focus). Set by
+    // clicking a bar in the period plots, cleared by re-clicking the same bar
+    // or via the Clear-focus button at the bottom of the toolbar.
+    let focusStart = '';
+    let focusEnd   = '';
+
     function periodStartToMs(s) {
       return new Date(s.length === 10 ? s + 'T00:00:00Z' : s.replace(' ', 'T') + ':00Z').getTime();
     }
 
     // Returns true/false if focus is active, null if no focus set (all bars same)
     function periodInFocus(periodStartStr) {
-      const fs = document.getElementById('focus_start').value;
-      const fe = document.getElementById('focus_end').value;
-      if (!fs && !fe) return null;
+      if (!focusStart && !focusEnd) return null;
       const pMs = periodStartToMs(periodStartStr);
-      const fsMs = fs ? new Date(fs + ':00Z').getTime() : -Infinity;
-      const feMs = fe ? new Date(fe + ':00Z').getTime() :  Infinity;
+      const fsMs = focusStart ? new Date(focusStart + ':00Z').getTime() : -Infinity;
+      const feMs = focusEnd   ? new Date(focusEnd   + ':00Z').getTime() :  Infinity;
       return pMs >= fsMs && pMs < feMs;
+    }
+
+    // Permanently-visible toolbar line (constant height via min-height, so
+    // toggling focus never reflows the page): either the active focus range
+    // plus the Clear-focus button, or a dimmed "No focus" hint.
+    function updateFocusLabel() {
+      const box = document.getElementById('focus-label');
+      const btn = document.getElementById('clear-focus');
+      const txt = document.getElementById('focus-label-text');
+      if (!focusStart && !focusEnd) {
+        box.classList.add('no-focus');
+        txt.textContent = 'No focus — click a bar in a period plot to set one';
+        btn.style.display = 'none';
+      } else {
+        box.classList.remove('no-focus');
+        txt.textContent =
+          'Focused on ' + focusStart.replace('T', ' ') + ' ; ' + focusEnd.replace('T', ' ');
+        btn.style.display = '';
+      }
+    }
+
+    function clearFocus() {
+      focusStart = '';
+      focusEnd   = '';
+      updateFocusLabel();
+      loadCharts();
     }
 
     function clickSetFocus(periodStartStr, periodEndStr) {
       const toInput   = ms => new Date(ms).toISOString().slice(0, 16);
       const newStart  = toInput(periodStartToMs(periodStartStr));
       const newEnd    = toInput(periodStartToMs(periodEndStr));
-      const curStart  = document.getElementById('focus_start').value;
-      const curEnd    = document.getElementById('focus_end').value;
       // Toggle off if clicking the already-focused period
-      if (curStart === newStart && curEnd === newEnd) {
-        document.getElementById('focus_start').value = '';
-        document.getElementById('focus_end').value   = '';
+      if (focusStart === newStart && focusEnd === newEnd) {
+        focusStart = '';
+        focusEnd   = '';
       } else {
-        document.getElementById('focus_start').value = newStart;
-        document.getElementById('focus_end').value   = newEnd;
+        focusStart = newStart;
+        focusEnd   = newEnd;
       }
+      updateFocusLabel();
       loadCharts();
     }
 
@@ -1027,8 +1063,8 @@
         cluster_user:  document.getElementById('cluster_user').value.trim(),
         metric:        document.getElementById('metric-select').value,
         metric2:       document.getElementById('metric2-select').value,
-        focus_start:   document.getElementById('focus_start').value,
-        focus_end:     document.getElementById('focus_end').value,
+        focus_start:   focusStart,
+        focus_end:     focusEnd,
         job_states:    jsSelected(),
         rgu_type:      document.getElementById('rgu-type').value,
       };
