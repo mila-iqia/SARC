@@ -111,7 +111,8 @@ def set_auto_end_time(cluster_name: str, end_field: str, date: datetime) -> None
 
 
 def parse_in_timezone(timestamp: int | None) -> datetime | None:
-    if timestamp is None or timestamp == 0:
+    # -1 and -2 are flags returned by sacct
+    if timestamp in (None, 0, 4294967294, 4294967295):
         return None
     # Slurm returns timestamps in UTC
     return datetime.fromtimestamp(timestamp, UTC)
