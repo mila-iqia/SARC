@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 class FetchSlurmConfig:
     """Download slurm.conf file for given cluster at current time."""
 
-    cluster_names: str = field(alias=["-c"])
+    cluster_names: list[str] = field(alias=["-c"], default_factory=list)
 
     def execute(self) -> int:
         cfg = config("scraping")
@@ -22,7 +22,7 @@ class FetchSlurmConfig:
         cache = Cache(subdirectory="slurm_conf")
 
         with cache.create_entry(datetime.now(UTC)) as ce:
-            for cluster_name in self.cluster_names.split(","):
+            for cluster_name in self.cluster_names:
                 try:
                     file_content = _download_slurm_conf_file(cfg.clusters[cluster_name])
                     ce.add_value(cluster_name, file_content.encode("utf-8"))
