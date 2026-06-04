@@ -9,6 +9,7 @@ from sarc.db.cluster import SlurmClusterDB
 from sarc.db.job import SlurmJobDB
 from sarc.db.runstate import get_parsed_date, set_parsed_date
 from sarc.db.users import get_user_id_for_cluster_user
+from sarc.scraping.gpu_fixes import fix_gpu_types
 from sarc.scraping.jobs_utils import (
     DATE_FORMAT_HOUR,
     fetch_raw,
@@ -162,6 +163,8 @@ def parse_jobs(
                 )
                 set_parsed_date(sess, "jobs", cache_entry.get_entry_datetime())
             sess.commit()
+
+        fix_gpu_types(sess)
 
 
 def parse_date(val: str) -> datetime:

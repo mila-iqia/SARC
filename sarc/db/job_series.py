@@ -72,7 +72,7 @@ billing_subq = (
     .lateral()
 )
 gpu_unit_billing = func.cast(
-    billing_subq.c.gpu_to_billing.op("->>")(SlurmJobDB.allocated_gpu_type), FLOAT
+    billing_subq.c.gpu_to_billing.op("->>")(SlurmJobDB.harmonized_gpu_type), FLOAT
 )
 cluster_billing_count = (
     select(func.count(col(GPUBillingDB.id)))
@@ -169,7 +169,7 @@ class JobSeriesDB(SQLModel, table=True):
             ),
             isouter=True,
         )
-        .join(GpuRguDB, GpuRguDB.name == SlurmJobDB.allocated_gpu_type, isouter=True)
+        .join(GpuRguDB, GpuRguDB.name == SlurmJobDB.harmonized_gpu_type, isouter=True)
         .outerjoin(billing_subq, true())
     )
     job_db_id: int = Field(primary_key=True)
@@ -227,6 +227,7 @@ class JobSeriesDB(SQLModel, table=True):
     allocated_billing: int | None = Field(default=None, sa_type=BIGINT)
     allocated_gres_gpu: int | None = Field(default=None, sa_type=BIGINT)
     allocated_gpu_type: str | None
+    harmonized_gpu_type: str | None
 
     cluster_name: str | None = None
     statistics: dict[str, dict[str, float]] | None = Field(sa_type=JSON)

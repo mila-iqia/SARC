@@ -125,6 +125,7 @@ class SlurmJob(BaseModel):
     allocated_billing: int | None = None
     allocated_gres_gpu: int | None = None
     allocated_gpu_type: str | None = None
+    harmonized_gpu_type: str | None = None
 
     # statistics
     statistics: dict[str, Statistics] = Field(default_factory=dict)

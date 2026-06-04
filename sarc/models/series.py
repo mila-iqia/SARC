@@ -63,6 +63,7 @@ class JobSeries:
     allocated_billing: int | None
     allocated_gres_gpu: int | None
     allocated_gpu_type: str | None
+    harmonized_gpu_type: str | None
 
     # User ID
     sarc_user_id: int

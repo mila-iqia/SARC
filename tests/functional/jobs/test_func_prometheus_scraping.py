@@ -8,7 +8,8 @@ from fabric.testing.base import Command, Session
 from opentelemetry.trace import StatusCode
 
 from sarc.config import UTC
-from sarc.db.job import JobStatisticDB
+from sarc.db.job import JobStatisticDB, SlurmJobDB
+from sarc.db.support import GpuRguDB
 
 from ...common.dateutils import MTL, _dtfmt, _dtreg
 from ..cli.test_slurmconfig_fetch_parse import _save_slurm_conf
@@ -74,6 +75,15 @@ def test_get_gpu_type(
     mock_compute_job_statistics,
 ):
     """Test all 3 sources of GPU type (sacct, node->GPU and prometheus)"""
+    job: SlurmJobDB
+
+    # "THE GPU II" / "PHANTOM GPU MENACE" are test-only harmonized names (see the
+    # raisin cluster in tests/sarc-test.yaml), absent from GpuRguDB. Seed them so
+    # fix_gpu_types -- which requires every harmonized name to have an RGU value --
+    # does not raise HarmonizedNameNotInRguError.
+    for name in ("THE GPU II", "PHANTOM GPU MENACE"):
+        jobless_read_write_db.add(GpuRguDB(name=name, rgu=1.0, drac_rgu=1.0))
+    jobless_read_write_db.commit()
 
     remote.expect(
         host="raisin",
@@ -109,6 +119,7 @@ def test_get_gpu_type(
     assert len(jobs) == 1
     job = jobs[0]
     assert job.allocated_gpu_type == "gpu_name_from_sacct"
+    assert job.harmonized_gpu_type is None
     assert not job.statistics
 
     # Test `fetch jobs` and `parse_jobs` with node->gpu available
@@ -131,7 +142,8 @@ def test_get_gpu_type(
     jobs = list(get_jobs())
     assert len(jobs) == 1
     job = jobs[0]
-    assert job.allocated_gpu_type == "THE GPU II"
+    assert job.allocated_gpu_type == "gpu:gpu2:4"
+    assert job.harmonized_gpu_type == "THE GPU II"
     assert not job.statistics
 
     # Test `acquire prometheus`
@@ -159,7 +171,8 @@ def test_get_gpu_type(
     jobs = list(get_jobs())
     assert len(jobs) == 1
     job = jobs[0]
-    assert job.allocated_gpu_type == "PHANTOM GPU MENACE"
+    assert job.allocated_gpu_type == "phantom_gpu"
+    assert job.harmonized_gpu_type == "PHANTOM GPU MENACE"
     assert job.statistics
 
 
