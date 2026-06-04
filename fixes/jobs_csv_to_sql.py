@@ -4,8 +4,9 @@ The CSV is a flat dump of MongoDB-era jobs. We:
 - wipe all jobs, statistics, and users in the target SQL DB (clusters/RGU kept);
 - import GPU billings from a JSON file (produced by gpu_billing_from_mongodb.py)
   so RGU values can be computed for clusters where billing_is_gpu is False;
-- assume clusters listed in the CSV are already declared in the SARC config so
-  that db_upgrade() seeds them;
+- assume the schema already exists (``alembic upgrade head``) and clusters/RGU
+  are already seeded (``init_insert()``) — see
+  secrets/sql-alembic-migration-from-reset.md for the full reset procedure;
 - resolve users by ``user_uuid`` (MongoDB-era UUID) when present, falling back
   to ``(cluster_name, cluster_user)`` otherwise — see ``get_or_create_user``;
 - insert one SlurmJobDB per CSV row, plus one JobStatisticDB per non-empty
@@ -27,10 +28,11 @@ from pathlib import Path
 from typing import Any
 
 from psycopg.types.json import Jsonb
-from sqlmodel import Session, select, text
+from sqlalchemy.engine import URL, Engine
+from sqlmodel import Session, create_engine, select, text
 from tqdm import tqdm
 
-from sarc.config import ClusterConfig, config
+from sarc.config import ClusterConfig, DbConfig, config, get_db_user
 from sarc.db.cluster import GPUBillingDB, SlurmClusterDB
 from sarc.db.support import GpuRguDB
 from sarc.db.users import UserDB
@@ -400,10 +402,38 @@ def flush_batch(
                         )
 
 
+def psycopg_engine(db: DbConfig) -> Engine:
+    """Build a psycopg engine from the DbConfig fields.
+
+    ``DbConfig.engine`` uses pg8000, whose cursors lack the psycopg3 ``copy``
+    API that ``flush_batch`` relies on. psycopg speaks libpq natively, so
+    ``sslmode`` and ``options`` pass straight through as connect args.
+    """
+    if db.user is None:
+        db_user, db_password = get_db_user(), None
+    else:
+        # db.user is either "user" or "user:password"
+        db_user, _, password_part = db.user.partition(":")
+        db_password = password_part or None
+
+    url = URL.create(
+        "postgresql+psycopg",
+        username=db_user,
+        password=db_password,
+        host=db.host,
+        database=db.name,
+    )
+    connect_args: dict[str, str] = {"options": "-c timezone=utc"}
+    if db.sslmode:
+        connect_args["sslmode"] = db.sslmode
+    return create_engine(url, connect_args=connect_args)
+
+
 def run(csv_path: str, gpu_billing_path: Path, batch_size: int) -> None:
     cfg = config("scraping")
-    # Triggers db_upgrade(): creates tables, seeds clusters from config + RGU.
-    engine = cfg.db.engine
+    # The schema must already exist (alembic upgrade head) and clusters + RGU
+    # must already be seeded (init_insert()) — engine creation does neither.
+    engine = psycopg_engine(cfg.db)
 
     with Session(engine) as sess:
         logger.info("Wiping jobs, stats, and users...")

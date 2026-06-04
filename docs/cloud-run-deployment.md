@@ -256,24 +256,27 @@ sarc:
   db:
     host: 34.152.3.253
     name: sarc-demo
-    user: postgres
-    password: "${env:SARC_DB_PASSWORD}"
+    user: "postgres:${env:SARC_DB_PASSWORD}"
     sslmode: require
-    auto_upgrade: true
   clusters: {}
   cache: /tmp/cache
   server:
     auth: null
 ```
 
-> **`sslmode: require` recommandé** : libpq utilise `prefer` par défaut
-> (tente SSL puis tombe en clair si le serveur le refuse), donc en pratique
-> sur une DB qui accepte SSL (Cloud SQL, Postgres récent par défaut), les
-> connexions sont déjà chiffrées sans cette ligne. `require` ajoute une
-> garantie côté client : libpq refuse la connexion si le serveur n'offre
-> pas SSL, évitant un downgrade silencieux en cas de DB mal configurée ou
-> de MITM qui supprime l'offre SSL du handshake. Pour de la prod plus
-> stricte, viser `verify-full` avec un `sslrootcert` embarqué.
+> **`user`** : soit `"user"`, soit `"user:password"`. Le champ est marqué
+> `Secret` côté code, donc la partie password n'apparaît pas dans les dumps
+> de config.
+
+> **`sslmode`** : valeurs supportées — `disable`, `require`, `verify-ca`,
+> `verify-full`. Le driver est pg8000, qui ne comprend pas le paramètre
+> libpq `sslmode` : SARC le traduit en `ssl_context` (voir
+> `_ssl_context_for` dans `sarc/config.py`). Les modes de négociation
+> libpq `allow`/`prefer` (tenter SSL puis retomber en clair) ne sont pas
+> supportés par pg8000 et sont donc rejetés. `require` garantit le
+> chiffrement sans vérifier le certificat ; pour de la prod plus stricte,
+> viser `verify-full` (certificat + hostname vérifiés contre les CA
+> système).
 
 > **Note sur la syntaxe** : c'est `${env:VAR}`, pas `${envvar:VAR}`.
 > Serieux (le moteur de désérialisation utilisé par gifnoc) supporte les
@@ -285,50 +288,32 @@ sarc:
 > celle-ci est utilisée pour la population (script jobs_csv_to_sql.py),
 > pas pour la lecture.
 
-### 4.4 Patcher `sarc/config.py` pour supporter user/password/SSL
+### 4.4 Support user/password/SSL dans `sarc/config.py`
 
-Le `DbConfig` original ne supporte pas la connection authentifiée. Patch :
+`DbConfig` supporte la connexion authentifiée via deux champs :
 
 ```python
-# sarc/config.py
+# sarc/config.py (extrait)
 @dataclass
 class DbConfig:
     host: str
     name: str
-    auto_upgrade: bool = True
-    user: str | None = None
-    password: Secret[str] | None = None
+    # Either "user" or "user:password".
+    user: Secret[str] | None = None
+    # One of: disable, require, verify-ca, verify-full.
     sslmode: str | None = None
-
-    @cached_property
-    def engine(self) -> Engine:
-        from urllib.parse import quote
-
-        from sqlmodel import create_engine
-
-        userinfo = ""
-        if self.user:
-            userinfo = quote(self.user, safe="")
-            if self.password:
-                userinfo += ":" + quote(str(self.password), safe="")
-            userinfo += "@"
-        url = f"postgresql+psycopg://{userinfo}{self.host}/{self.name}"
-
-        connect_args: dict[str, str] = {"options": "-c timezone=utc"}
-        if self.sslmode:
-            connect_args["sslmode"] = self.sslmode
-
-        engine = create_engine(url, connect_args=connect_args)
-
-        if self.auto_upgrade:
-            from sarc.db import db_upgrade
-            db_upgrade(engine)
-
-        return engine
-
-    def session(self) -> Session:
-        return Session(self.engine)
 ```
+
+Points d'implémentation (voir `DbConfig.engine` et `_ssl_context_for`) :
+
+- le driver est **pg8000**, qui n'accepte pas les paramètres libpq
+  `sslmode` ni `options` — les équivalents pg8000 sont `ssl_context`
+  et `startup_params` (utilisé pour forcer `timezone=utc`) ;
+- `user` est découpé sur le premier `:` ; l'URL de connexion est
+  construite avec `sqlalchemy.engine.URL.create`, qui gère lui-même
+  l'échappement des caractères spéciaux ;
+- si `user` est absent, fallback sur `PGUSER` puis sur l'utilisateur
+  système (`get_db_user()`).
 
 ---
 
@@ -504,9 +489,7 @@ sarc:
   db:
     host: 34.152.3.253
     name: sarc-demo
-    user: postgres
-    password: "${env:SARC_DB_PASSWORD}"
-    auto_upgrade: true
+    user: "postgres:${env:SARC_DB_PASSWORD}"
   # Copier la section `clusters: ...` depuis sarc-dev-local-sql.yaml — c'est
   # ce qui permet à insert_clusters / insert_rgu / l'harmonisation GPU de
   # fonctionner.
@@ -812,15 +795,11 @@ C'est normal si la DB est vide : il faut lancer
 
 ### 10.8 Vérifier que la connexion Cloud Run ↔ DB est en SSL
 
-Sans `sslmode` explicite dans `config-cloud-run.yaml`, libpq utilise
-`prefer` : il **tente** SSL puis retombe en clair si le serveur refuse.
-En pratique sur Cloud SQL ou un Postgres récent qui accepte SSL, la
-connexion est chiffrée même sans configuration côté client. Mais c'est
-une politique opportuniste, pas une garantie.
-
-Avec `sslmode: require` dans le YAML, libpq **exige** SSL et lève une
-erreur de connexion si le serveur ne l'offre pas, ce qui évite un
-downgrade silencieux.
+Le driver pg8000 n'a pas de mode opportuniste (`prefer`) : sans
+`sslmode` explicite dans `config-cloud-run.yaml` (ou avec `disable`),
+la connexion est **en clair** ; avec `sslmode: require` (ou
+`verify-ca`/`verify-full`), SSL est exigé et la connexion échoue si le
+serveur ne l'offre pas — pas de downgrade silencieux possible.
 
 Pour confirmer empiriquement que la session Cloud Run est bien en SSL
 (quelle que soit la valeur de `sslmode`) :

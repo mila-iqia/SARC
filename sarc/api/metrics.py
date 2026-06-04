@@ -297,7 +297,10 @@ def metrics_global_data(
         col(SlurmJobDB.submit_time) >= begin_dt, col(SlurmJobDB.submit_time) < finish_dt
     )
     query = _apply_slurm_job_filters(query, cluster_ids, cluster_user, job_states)
-    query = query.group_by(bucket_expr).order_by(bucket_expr)
+    # group_by by label name: pg8000 binds parameters server-side, so repeating
+    # the expression would yield distinct $N placeholders in SELECT vs GROUP BY
+    # and PostgreSQL could not match them (42803). Same pattern below.
+    query = query.group_by("bucket").order_by("bucket")
 
     counts = {
         _sql_bucket_key(parsed, row.bucket): int(row.count) for row in sess.exec(query)
@@ -381,7 +384,7 @@ def _build_heatmap_payload(
     q = (
         select(bin_x, bin_y, func.count().label("c"))
         .where(*base_filters)
-        .group_by(bin_x, bin_y)
+        .group_by("bx", "by")
     )
     z = [[0] * _HEATMAP_BINS for _ in range(_HEATMAP_BINS)]
     total = 0
@@ -552,7 +555,7 @@ def metrics_global_density(
     def _binned_query(metric_expr):
         bin_expr = _density_bin_expr(metric_expr).label("bin")
         q = _add_metric_joins(select(bin_expr, func.sum(weight).label("w")))
-        q = q.where(*base_filters).group_by(bin_expr).order_by(bin_expr)
+        q = q.where(*base_filters).group_by("bin").order_by("bin")
         return _apply_common_filters(q, clusters, cluster_user, job_states)
 
     def _bin_to_payload(rows):
@@ -654,8 +657,8 @@ def metrics_global_histogram(
             col(JobSeriesDB.allocated_gpu_type).is_not(None),
             rgu_col.is_not(None),
         )
-        .group_by(bucket_expr)
-        .order_by(bucket_expr)
+        .group_by("bucket")
+        .order_by("bucket")
     )
     query = _apply_common_filters(query, clusters, cluster_user, job_states)
 
@@ -716,8 +719,8 @@ def metrics_rgu_by_cluster(
             col(JobSeriesDB.allocated_gpu_type).is_not(None),
             rgu_col.is_not(None),
         )
-        .group_by(bucket_expr, col(JobSeriesDB.cluster_name))
-        .order_by(bucket_expr)
+        .group_by("bucket", col(JobSeriesDB.cluster_name))
+        .order_by("bucket")
     )
     query = _apply_common_filters(query, clusters, cluster_user, job_states)
 
@@ -807,8 +810,8 @@ def metrics_metric_trend(
             col(JobSeriesDB.submit_time) >= begin_dt,
             col(JobSeriesDB.submit_time) < finish_dt,
         )
-        .group_by(bucket_expr, col(JobStatisticDB.name))
-        .order_by(bucket_expr)
+        .group_by("bucket", col(JobStatisticDB.name))
+        .order_by("bucket")
     )
     query = _apply_common_filters(query, clusters, cluster_user, job_states)
 
@@ -881,7 +884,7 @@ def metrics_global_user_rgu(
             col(JobSeriesDB.allocated_gpu_type).is_not(None),
             rgu_col.is_not(None),
         )
-        .group_by(user_expr)
+        .group_by("user")
         .order_by(rgu_requested_sum.desc(), user_expr)
     )
     query = _apply_common_filters(query, clusters, cluster_user, job_states)
