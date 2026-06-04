@@ -88,7 +88,9 @@
     .add-row-label { font-size: 13px; color: #888; }
 
     /* Job table */
-    .job-table-wrap { width: 100%; height: 100%; overflow: auto; }
+    .job-table-box { display: flex; flex-direction: column; width: 100%; height: 100%; }
+    .job-table-caption { flex-shrink: 0; font-size: 12px; color: #888; padding: 2px 0 6px; }
+    .job-table-wrap { width: 100%; flex: 1; min-height: 0; overflow: auto; }
     .job-table { width: 100%; border-collapse: collapse; font-size: 13px; }
     .job-table th {
       position: sticky; top: 0; background: #f0f0f0; padding: 6px 8px;
@@ -962,8 +964,16 @@
     function renderJobTable(id, d) {
       const el = document.getElementById(id);
       if (!el) return;
-      if (!d.jobs || !d.jobs.length) { el.textContent = 'No jobs found.'; return; }
+      // The endpoint returns { total, jobs }: `jobs` holds at most `limit`
+      // rows (top RGU·h), `total` counts every job matching the filters.
+      const payload = d.jobs || {};
+      const jobList = payload.jobs || [];
+      const total = payload.total || 0;
+      if (!jobList.length) { el.textContent = 'No jobs found.'; return; }
 
+      // The Waste column depends on the primary metric picked at last Update.
+      const metricName = (currentParams && currentParams.metric) || 'selected metric';
+      const metricPretty = METRICS[metricName] || metricName;
       const COLS = [
         { key: 'cluster',               label: 'Cluster' },
         { key: 'user',                  label: 'User' },
@@ -975,9 +985,15 @@
           }},
         { key: 'nodes',                 label: 'Nodes',     cls: 'col-cmd' },
         { key: 'gpu_type',              label: 'GPU type' },
-        { key: 'rgu',                   label: 'RGU',       fmt: v => v != null ? v.toFixed(2) : '—' },
-        { key: 'rgu_hours',             label: 'RGU·h',     fmt: v => v != null ? v.toFixed(2) : '—' },
-        { key: 'waste',                 label: 'Waste·h',   fmt: v => v != null ? v.toFixed(2) : '—' },
+        { key: 'rgu',                   label: 'RGU',
+          title: 'RGU weight of the job\'s allocated GPUs',
+          fmt: v => v != null ? v.toFixed(2) : '—' },
+        { key: 'rgu_hours',             label: 'RGU·h',
+          title: 'RGU × elapsed hours',
+          fmt: v => v != null ? v.toFixed(2) : '—' },
+        { key: 'waste',                 label: `${metricPretty} waste (RGU·h)`,
+          title: `RGU·h × (1 − mean ${metricPretty}): estimated unused RGU-hours, taking the selected primary metric as the "useful" fraction`,
+          fmt: v => v != null ? v.toFixed(2) : '—' },
         { key: 'gpu_utilization_mean',  label: 'GPU util',  fmt: v => v != null ? (v*100).toFixed(1)+'%' : '—' },
         { key: 'gpu_sm_occupancy_mean', label: 'SM occ',    fmt: v => v != null ? (v*100).toFixed(1)+'%' : '—' },
         { key: 'gpu_memory_max',        label: 'Mem max',   fmt: v => v != null ? (v*100).toFixed(1)+'%' : '—' },
@@ -990,7 +1006,7 @@
       function draw() {
         el._jtSortKey = sortKey;
         el._jtSortDir = sortDir;
-        const rows = [...d.jobs].sort((a, b) => {
+        const rows = [...jobList].sort((a, b) => {
           const av = a[sortKey], bv = b[sortKey];
           if (av == null && bv == null) return 0;
           if (av == null) return 1;
@@ -999,6 +1015,18 @@
         });
 
         el.innerHTML = '';
+        const box = document.createElement('div');
+        box.className = 'job-table-box';
+        const caption = document.createElement('div');
+        caption.className = 'job-table-caption';
+        // "GPU jobs": the endpoint only lists jobs with an allocated GPU and a
+        // known RGU, so this total is lower than the all-jobs counts shown by
+        // the per-period bar plot.
+        caption.textContent = total > rows.length
+          ? `Showing the top ${rows.length} GPU jobs by RGU·h out of ${total.toLocaleString('en-US')} matching GPU jobs`
+          : `${total.toLocaleString('en-US')} matching GPU job${total === 1 ? '' : 's'}`;
+        caption.title = 'Only GPU jobs (allocated GPU with a known RGU) are listed; '
+          + 'CPU-only jobs are counted in the per-period bar plot but not here.';
         const wrap = document.createElement('div');
         wrap.className = 'job-table-wrap';
         const tbl = document.createElement('table');
@@ -1009,6 +1037,7 @@
         COLS.forEach(col => {
           const th = document.createElement('th');
           th.textContent = col.label;
+          if (col.title) th.title = col.title;
           if (col.key === sortKey) th.className = sortDir === 1 ? 'sort-asc' : 'sort-desc';
           th.addEventListener('click', () => {
             if (sortKey === col.key) sortDir = -sortDir;
@@ -1030,7 +1059,9 @@
         });
 
         wrap.appendChild(tbl);
-        el.appendChild(wrap);
+        box.appendChild(caption);
+        box.appendChild(wrap);
+        el.appendChild(box);
       }
 
       draw();

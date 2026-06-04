@@ -929,6 +929,10 @@ def metrics_jobs(
     gpu_sm_mean = col(js["gpu_sm_occupancy"].mean).label("gpu_sm_occupancy_mean")
     gpu_mem_max = col(js["gpu_memory"].max).label("gpu_memory_max")
 
+    # count(*) OVER () = total matching jobs before LIMIT kicks in; ~free
+    # since the ORDER BY already walks the full filtered set.
+    total_col = func.count().over().label("total")
+
     query = select(  # ty:ignore[no-matching-overload]
         JobSeriesDB.cluster_name,
         JobSeriesDB.cluster_user,
@@ -942,6 +946,7 @@ def metrics_jobs(
         gpu_util_mean,
         gpu_sm_mean,
         gpu_mem_max,
+        total_col,
     ).select_from(JobSeriesDB)
     for name, alias in js.items():
         query = query.join(
@@ -965,7 +970,9 @@ def metrics_jobs(
     query = _apply_common_filters(query, clusters, cluster_user, job_states)
 
     jobs = []
+    total = 0
     for row in sess.exec(query):
+        total = int(row.total)
         mm = _nan_to_none(row.metric_mean)
         rh = float(row.rgu_hours)
         waste = round(rh * (1 - mm), 2) if mm is not None else None
@@ -986,7 +993,7 @@ def metrics_jobs(
             }
         )
 
-    return jobs
+    return {"total": total, "jobs": jobs}
 
 
 _html_path = Path(__file__).parent / "metrics.html"
