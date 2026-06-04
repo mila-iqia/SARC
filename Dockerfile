@@ -1,11 +1,10 @@
 FROM python:3.14-slim
 
 # `iguane` is pulled from a git repo via uv → we need git in the build image.
-# `libpq5` is the PostgreSQL client runtime library; psycopg in "python"
-# mode (pure-Python wrapper) loads libpq at import time and crashes
-# without it.
+# (No libpq needed: the DB driver is pg8000, pure Python; psycopg is a
+# dev-only dependency for fixes/ scripts and is excluded by --no-dev.)
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends git libpq5 \
+    && apt-get install -y --no-install-recommends git \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv (project's dep manager).
@@ -24,10 +23,9 @@ COPY sarc/ ./sarc/
 COPY config-cloud-run.yaml ./config-cloud-run.yaml
 RUN uv sync --frozen --no-dev
 
-# Scraping mode so db_upgrade() runs at startup: it creates tables, indexes
-# (idx_jobstats_job_id, idx_slurm_jobs_submit_time), and the job_series_view.
-# With clusters: {} in the config, insert_clusters/insert_rgu are no-ops, so
-# this is safe even though the service only reads.
+# NOTE: the app does NOT create the schema at startup — tables, indexes and
+# job_series_view must already exist in the target DB (alembic upgrade head
+# + init_insert(), see secrets/sql-alembic-migration-from-reset.md).
 ENV SARC_MODE=scraping \
     SARC_CONFIG=/app/config-cloud-run.yaml
 
