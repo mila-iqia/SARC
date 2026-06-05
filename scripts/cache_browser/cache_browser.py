@@ -3,6 +3,8 @@
 
 import argparse
 import curses
+import shutil
+import tempfile
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -109,7 +111,7 @@ class Node:
 # ---------------------------------------------------------------------------
 
 _HEADER = (
-    " SARC Cache Browser   ↑↓/PgUp/PgDn:move   ←→/Enter:expand   e:extract   q:quit "
+    " SARC Cache Browser   ↑↓/PgUp/PgDn:move   ←→/Enter:expand   e:extract   d:delete   q:quit "
 )
 
 # Color pair indices
@@ -181,6 +183,8 @@ class CacheBrowser:
                 self._collapse()
             elif key in (ord("e"), ord("E")):
                 self._extract()
+            elif key in (ord("d"), ord("D")):
+                self._delete()
 
             self._fix_scroll()
 
@@ -279,7 +283,7 @@ class CacheBrowser:
         node = self.visible[self.cursor]
         pos = f"{self.cursor + 1}/{len(self.visible)}"
         if node.is_key:
-            hint = f"  {node.key_name}  [{_fmt_size(node.key_size)}]  |  e: extract"
+            hint = f"  {node.key_name}  [{_fmt_size(node.key_size)}]  |  e: extract   d: delete"
         elif node.is_entry:
             hint = f"  {node.label}  |  Enter: expand"
         else:
@@ -322,6 +326,57 @@ class CacheBrowser:
                 f" Extracted {_fmt_size(len(data))} → {out_file}  (press any key)"
             )
         except Exception as exc:
+            self._message(f" Error: {exc}  (press any key)")
+
+    def _delete(self) -> None:
+        node = self.visible[self.cursor]
+        if not node.is_key:
+            self._message(" Select a key (green) to delete.  Press any key.")
+            return
+
+        answer = self._prompt(f" Delete '{node.key_name}'? [y/N]: ", "")
+        if answer is None or answer.strip().lower() not in ("y", "yes"):
+            return
+
+        zip_path = node.path
+        key_name = node.key_name
+        tmp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                dir=zip_path.parent, suffix=".tmp", delete=False
+            ) as tmp_f:
+                tmp_path = Path(tmp_f.name)
+
+            kept = []
+            with (
+                zipfile.ZipFile(zip_path, "r") as src,
+                zipfile.ZipFile(tmp_path, "w", compression=zipfile.ZIP_LZMA) as dst,
+            ):
+                for info in src.infolist():
+                    if info.filename != key_name:
+                        dst.writestr(info, src.read(info.filename))
+                        kept.append(info.filename)
+
+            entry_node = node.parent
+            if kept:
+                shutil.move(str(tmp_path), str(zip_path))
+                tmp_path = None
+                entry_node.children.remove(node)
+                entry_node.child_count = len(kept)
+            else:
+                tmp_path.unlink()
+                tmp_path = None
+                zip_path.unlink()
+                if entry_node is not None and entry_node.parent is not None:
+                    entry_node.parent.children.remove(entry_node)
+
+            self._rebuild()
+            self.cursor = min(self.cursor, len(self.visible) - 1)
+            self._fix_scroll()
+            self._message(f" Deleted '{key_name}'.  Press any key.")
+        except Exception as exc:
+            if tmp_path is not None:
+                tmp_path.unlink(missing_ok=True)
             self._message(f" Error: {exc}  (press any key)")
 
     # ------------------------------------------------------------------
