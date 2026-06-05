@@ -1,6 +1,6 @@
 from collections import defaultdict
 
-from sarc.notifications.underusage import UnderuserJob, UnderuserRow
+from sarc.notifications.underusage import HistoricalStats, UnderuserJob, UnderuserRow
 
 
 def _first_name(display_name: str) -> str:
@@ -90,11 +90,35 @@ def build_user_dm(
     return "\n".join(parts)
 
 
+# def _clamp01(value: float) -> float:
+#     return max(0.0, min(1.0, value))
+
+
+def _historical_section(stats: HistoricalStats) -> str:
+    lines = ["", "── 6-Month Trend ──"]
+    lines.append(f"{'Month':<9}  {'Avg waste ratio':>17}  {'Above threshold':>15}")
+    for m in stats.months:
+        lines.append(
+            f"  {m.label}   {_pct(m.avg_waste_ratio):>17}  {m.above_threshold_count:>12} user(s)"
+        )
+
+    if stats.yoy_months is not None:
+        lines.append("")
+        lines.append("── Year-over-Year (same 6 months, prior year) ──")
+        lines.append(f"{'Month':<9}  {'Avg waste ratio':>17}  {'Above threshold':>15}")
+        for m in stats.yoy_months:
+            lines.append(
+                f"  {m.label}   {_pct(m.avg_waste_ratio):>17}  {m.above_threshold_count:>12} user(s)"
+            )
+    return "\n".join(lines)
+
+
 def build_admin_digest(
     rows: list[UnderuserRow],
     *,
     period: str,
     top_n: int = 16,
+    historical: HistoricalStats | None = None,
 ) -> str:
     """Build a Module C plain-text admin digest.
 
@@ -117,5 +141,8 @@ def build_admin_digest(
             f"  |  {_fmt_h(row.wasted)} GPU-h wasted"
             f"  |  waste ratio: {_pct(row.waste_ratio)}"
         )
+
+    if historical is not None:
+        lines.append(_historical_section(historical))
 
     return "\n".join(lines)

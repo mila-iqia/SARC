@@ -2,9 +2,9 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from sqlalchemy.orm import aliased
-from sqlmodel import and_, case, col, func, select
+from sqlmodel import Session, and_, case, col, func, select
 
-from sarc.config import config
+from sarc.config import UTC, config
 from sarc.db.job import JobStatisticDB
 from sarc.db.job_series import JobSeriesDB
 
@@ -238,3 +238,147 @@ def get_underusers(
         )
 
     return result
+
+
+# ── 6-month historical stats (Module C digest) ────────────────────────────────
+
+
+@dataclass
+class MonthlyStats:
+    label: str  # "YYYY-MM"
+    avg_waste_ratio: float
+    above_threshold_count: int
+
+
+@dataclass
+class HistoricalStats:
+    # 6 monthly data-points, oldest first.
+    months: list[MonthlyStats]
+    # Same 6 months one year prior. None when that period has no data at all.
+    yoy_months: list[MonthlyStats] | None
+
+
+def _iter_months(end: datetime, n: int) -> list[tuple[datetime, datetime]]:
+    """Return n complete calendar months immediately before *end*, oldest first."""
+    year, month = end.year, end.month
+    buckets: list[tuple[datetime, datetime]] = []
+    for _ in range(n):
+        month -= 1
+        if month == 0:
+            month = 12
+            year -= 1
+        m_start = datetime(year, month, 1, tzinfo=UTC)
+        next_month = month + 1
+        next_year = year
+        if next_month == 13:
+            next_month = 1
+            next_year += 1
+        m_end = datetime(next_year, next_month, 1, tzinfo=UTC)
+        buckets.append((m_start, m_end))
+    return list(reversed(buckets))
+
+
+def _query_month_agg(
+    session: Session,
+    start: datetime,
+    end: datetime,
+    *,
+    min_ratio: float,
+    min_gpu_hours: float,
+) -> MonthlyStats:
+    """Aggregate fleet-level waste stats for a single calendar month window."""
+    gpu_util_stat = aliased(JobStatisticDB)
+    m_mean = col(gpu_util_stat.mean)
+    rgu_h_expr = col(JobSeriesDB.rgu) * col(JobSeriesDB.elapsed_time) / 3600.0
+    rgu_used_expr = case(
+        (m_mean == m_mean, rgu_h_expr * m_mean),  # noqa: PLR0124
+        else_=0.0,
+    )
+
+    agg_rows = session.exec(
+        select(
+            JobSeriesDB.sarc_user_id,
+            func.coalesce(func.sum(rgu_h_expr), 0).label("sum_rgu_hours"),
+            func.coalesce(func.sum(rgu_used_expr), 0).label("sum_rgu_used"),
+        )
+        .join(
+            gpu_util_stat,
+            and_(
+                col(gpu_util_stat.job_id) == col(JobSeriesDB.job_db_id),
+                col(gpu_util_stat.name) == "gpu_utilization",
+            ),
+            isouter=True,
+        )
+        .where(
+            col(JobSeriesDB.submit_time) >= start,
+            col(JobSeriesDB.submit_time) < end,
+            col(JobSeriesDB.allocated_gpu_type).is_not(None),
+            col(JobSeriesDB.rgu).is_not(None),
+        )
+        .group_by(JobSeriesDB.sarc_user_id)
+    ).all()
+
+    total_rgu_h = 0.0
+    total_wasted = 0.0
+    above_count = 0
+    for row in agg_rows:
+        rgu_h = float(row.sum_rgu_hours or 0.0)
+        rgu_used_h = float(row.sum_rgu_used or 0.0)
+        wasted_h = rgu_h - rgu_used_h
+        total_rgu_h += rgu_h
+        total_wasted += wasted_h
+        if rgu_h > 0:
+            ratio = wasted_h / rgu_h
+            if ratio >= min_ratio and rgu_h >= min_gpu_hours:
+                above_count += 1
+
+    avg_ratio = total_wasted / total_rgu_h if total_rgu_h > 0 else 0.0
+    label = start.strftime("%Y-%m")
+    return MonthlyStats(
+        label=label,
+        avg_waste_ratio=avg_ratio,
+        above_threshold_count=above_count,
+    )
+
+
+def get_historical_stats(
+    end: datetime,
+    *,
+    min_ratio: float,
+    min_gpu_hours: float,
+    resource: str = "gpu",
+    months: int = 6,
+) -> HistoricalStats:
+    """Compute 6-month fleet-level waste trend and year-over-year comparison.
+
+    *end* is typically the current run date (datetime.now(UTC)).
+    Returns monthly stats for the *months* complete calendar months before *end*,
+    plus the same window one year prior (yoy_months=None when no data exists).
+    """
+    if resource != "gpu":
+        raise ValueError(f"Unsupported resource: {resource!r}")
+
+    current_buckets = _iter_months(end, months)
+    yoy_buckets = [
+        (
+            datetime(s.year - 1, s.month, s.day, tzinfo=UTC),
+            datetime(e.year - 1, e.month, e.day, tzinfo=UTC),
+        )
+        for s, e in current_buckets
+    ]
+
+    with config().db.session() as session:
+        current_stats = [
+            _query_month_agg(session, s, e, min_ratio=min_ratio, min_gpu_hours=min_gpu_hours)
+            for s, e in current_buckets
+        ]
+        yoy_raw = [
+            _query_month_agg(session, s, e, min_ratio=min_ratio, min_gpu_hours=min_gpu_hours)
+            for s, e in yoy_buckets
+        ]
+
+    has_yoy_data = any(m.avg_waste_ratio > 0 or m.above_threshold_count > 0 for m in yoy_raw)
+    return HistoricalStats(
+        months=current_stats,
+        yoy_months=yoy_raw if has_yoy_data else None,
+    )
