@@ -280,6 +280,9 @@ class UnderusageNotifyConfig:
     digest_top_n: int = 16
     digest_grouping: str = "overall"
     primary_clusters_in_dm: int = 2
+    dashboard_url: str | None = None
+    # Verbatim text appended at the end of every user DM (support links, hours, etc.)
+    help_section: str | None = None
 
 
 @dataclass
