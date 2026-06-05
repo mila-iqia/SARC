@@ -189,7 +189,7 @@
     </div>
     <div class="ctrl">
       <label for="rgu-unit">RGU unit</label>
-      <select id="rgu-unit" title="Y-axis unit for the 'RGU by cluster' plot. Purely a display rescale of the cumulative RGU·time (RGU·m uses a fixed 30-day month).">
+      <select id="rgu-unit" title="Display unit for every plot showing cumulative RGU·time (RGU by cluster / RGU requested vs used / RGU by user / job table). Purely a display rescale — no re-fetch (RGU·m uses a fixed 30-day month).">
         <option value="s">RGU·s</option>
         <option value="h" selected>RGU·h</option>
         <option value="d">RGU·d</option>
@@ -269,6 +269,10 @@
       w: { label: 'RGU·w', factor: 1 / 168 },
       m: { label: 'RGU·m', factor: 1 / 720 },
     };
+    // Currently selected display unit, shared by every RGU·time renderer.
+    function rguUnit() {
+      return RGU_UNITS[document.getElementById('rgu-unit').value] || RGU_UNITS.h;
+    }
 
     const ALLOW_SCATTER = __ALLOW_SCATTER__;
 
@@ -345,33 +349,39 @@
     metSel.value = 'gpu_sm_occupancy';
     met2Sel.value = '';
 
-    // The RGU unit is a pure display rescale of the 'RGU by cluster' plot, so it
-    // never re-fetches: on change we redraw the clusterrgu tiles in place with the
-    // cached endpoint data. We call renderPlot() directly (Plotly.react updates in
-    // place) rather than renderTile(), which clears the div's innerHTML and would
-    // desync Plotly's existing graph-div state -> blank plot. No-op before the
-    // first load or when no clusterrgu tile is shown (avoids a stray fetch).
-    async function rerenderClusterRgu() {
+    // The RGU unit is a pure display rescale (the backend always returns
+    // RGU·h), so changing it never re-fetches: on change we redraw every tile
+    // showing cumulative RGU·time in place with the cached endpoint data. We
+    // call renderPlot() directly (Plotly.react updates in place) rather than
+    // renderTile(), which clears the div's innerHTML and would desync Plotly's
+    // existing graph-div state -> blank plot. No-op before the first load or
+    // when no RGU tile is shown (avoids a stray fetch). Density is *not* here:
+    // its weights feed a normalized density, which is invariant under a
+    // uniform rescale.
+    const RGU_UNIT_TILES = new Set(['clusterrgu', 'histogram', 'userrgu', 'jobtable']);
+    async function rerenderRguTiles() {
       if (!currentParams) return;
       const tiles = [];
       tileLayout.forEach((row, ri) => row.forEach((plotType, ci) => {
-        if (plotType !== 'clusterrgu') return;
+        if (!RGU_UNIT_TILES.has(plotType)) return;
         const chartDiv = document.getElementById(`tile-${ri}-${ci}`);
-        if (chartDiv) tiles.push(chartDiv);
+        if (chartDiv) tiles.push({ chartDiv, plotType });
       }));
-      if (!tiles.length) return;
-      let data;
-      try {
-        data = await ensureEndpoint('rgu_by_cluster');
-      } catch {
-        return;  // endpoint errored; the tile already shows its error state
-      }
-      for (const chartDiv of tiles) {
-        if (document.body.contains(chartDiv))
-          renderPlot(chartDiv.id, 'clusterrgu', { clusterrgu: data });
-      }
+      // Per-tile await: endpoints already in the cache resolve instantly, and
+      // a tile whose endpoint errored just keeps its error state.
+      await Promise.all(tiles.map(async ({ chartDiv, plotType }) => {
+        const ep = PLOT_TO_ENDPOINT[plotType];
+        let data;
+        try {
+          data = await ensureEndpoint(ep);
+        } catch {
+          return;
+        }
+        if (document.body.contains(chartDiv) && chartDiv.dataset.plotType === plotType)
+          renderPlot(chartDiv.id, plotType, { [ENDPOINT_TO_KEY[ep]]: data });
+      }));
     }
-    document.getElementById('rgu-unit').addEventListener('change', rerenderClusterRgu);
+    document.getElementById('rgu-unit').addEventListener('change', rerenderRguTiles);
 
     // ── Cluster selector (multi-select, mirrors the job-states widget) ─────────
     const clBtn = document.getElementById('cluster-btn');
@@ -749,24 +759,26 @@
 
     function renderHistogram(id, d) {
       if (!d.histogram.length) return;
+      // Rescale the cumulative RGU·h to the unit selected in the toolbar.
+      const unit = rguUnit();
       const periods    = d.histogram.map(r => r.period_start);
       const periodEnds = d.histogram.map(r => r.period_end);
-      const rguUsed    = d.histogram.map(r => r.rgu_used);
-      const rguUnused  = d.histogram.map(r => r.rgu_requested - r.rgu_used);
+      const rguUsed    = d.histogram.map(r => r.rgu_used * unit.factor);
+      const rguUnused  = d.histogram.map(r => (r.rgu_requested - r.rgu_used) * unit.factor);
       const colorUsed  = periods.map(p => { const f = periodInFocus(p); return f === null ? '#1a6fd4' : f ? '#e07020' : '#c8d8f0'; });
       const colorUnused= periods.map(p => { const f = periodInFocus(p); return f === null ? '#a8c8f0' : f ? '#f0c090' : '#e4eef8'; });
       Plotly.react(id, [
         { type: 'bar', name: 'Used',   x: periods, y: rguUsed, customdata: periodEnds,
           marker: { color: colorUsed },
-          hovertemplate: 'Period: %{x}<br>RGU used: %{y:.1f}<extra></extra>' },
+          hovertemplate: 'Period: %{x}<br>' + unit.label + ' used: %{y:,.1f}<extra></extra>' },
         { type: 'bar', name: 'Unused', x: periods, y: rguUnused, customdata: periodEnds,
           marker: { color: colorUnused },
-          hovertemplate: 'Period: %{x}<br>RGU unused: %{y:.1f}<extra></extra>' },
+          hovertemplate: 'Period: %{x}<br>' + unit.label + ' unused: %{y:,.1f}<extra></extra>' },
       ], pLayout({
-        title: { text: 'Total RGU per Period — Used vs Unused (click to focus)', font: { size: 16 } },
+        title: { text: 'Total ' + unit.label + ' per Period — Used vs Unused (click to focus)', font: { size: 16 } },
         barmode: 'stack',
         xaxis: { title: 'Period start', type: 'category', tickangle: -45 },
-        yaxis: { title: 'Total RGU·h' },
+        yaxis: { title: 'Total ' + unit.label },
         legend: { x: 0.8, y: 0.95 },
         margin: { l: 60, r: 20, t: 40, b: 100 },
       }), { responsive: true }).then(gd => {
@@ -781,7 +793,7 @@
       const data = d.clusterrgu;
       if (!data || !data.periods.length || !data.series.length) return;
       // Rescale the cumulative RGU·h to the unit selected in the toolbar.
-      const unit = RGU_UNITS[document.getElementById('rgu-unit').value] || RGU_UNITS.h;
+      const unit = rguUnit();
       const x    = data.periods.map(p => p.period_start);
       const ends = data.periods.map(p => p.period_end);
       // Focus feedback like the other period plots, but via per-point opacity
@@ -916,6 +928,8 @@
 
     function renderUserRgu(id, d) {
       if (!d.userrgu.length) return;
+      // Rescale the cumulative RGU·h to the unit selected in the toolbar.
+      const unit = rguUnit();
       const topN         = Math.max(1, parseInt(document.getElementById('top_n_users').value, 10) || 10);
       const selectedUser = document.getElementById('cluster_user').value.trim();
 
@@ -928,8 +942,8 @@
       // Reverse so highest-RGU user appears at the top of the horizontal chart
       const rows      = topRows.reverse();
       const users     = rows.map(r => r.user);
-      const rguUsed   = rows.map(r => r.rgu_used);
-      const rguUnused = rows.map(r => r.rgu_requested - r.rgu_used);
+      const rguUsed   = rows.map(r => r.rgu_used * unit.factor);
+      const rguUnused = rows.map(r => (r.rgu_requested - r.rgu_used) * unit.factor);
       const colorUsed   = rows.map(r => r.user === selectedUser ? '#e07020' : '#1a6fd4');
       const colorUnused = rows.map(r => r.user === selectedUser ? '#f0c090' : '#a8c8f0');
       const chartH    = Math.max(300, users.length * 24 + 80);
@@ -938,14 +952,14 @@
       Plotly.react(id, [
         { type: 'bar', name: 'Used',   orientation: 'h', y: users, x: rguUsed,
           marker: { color: colorUsed },
-          hovertemplate: '%{y}<br>RGU used: %{x:.1f}<extra></extra>' },
+          hovertemplate: '%{y}<br>' + unit.label + ' used: %{x:,.1f}<extra></extra>' },
         { type: 'bar', name: 'Unused', orientation: 'h', y: users, x: rguUnused,
           marker: { color: colorUnused },
-          hovertemplate: '%{y}<br>RGU unused: %{x:.1f}<extra></extra>' },
+          hovertemplate: '%{y}<br>' + unit.label + ' unused: %{x:,.1f}<extra></extra>' },
       ], pLayout({
-        title: { text: 'Total RGU by User — Used vs Unused (click to filter)', font: { size: 16 } },
+        title: { text: 'Total ' + unit.label + ' by User — Used vs Unused (click to filter)', font: { size: 16 } },
         barmode: 'stack', height: chartH,
-        xaxis: { title: 'Total RGU' },
+        xaxis: { title: 'Total ' + unit.label },
         yaxis: { title: '', automargin: true },
         legend: { x: 0.8, y: 1.05, orientation: 'h' },
         margin: { l: 20, r: 20, t: 40, b: 50 },
@@ -974,6 +988,14 @@
       // The Waste column depends on the primary metric picked at last Update.
       const metricName = (currentParams && currentParams.metric) || 'selected metric';
       const metricPretty = METRICS[metricName] || metricName;
+      // Cumulative RGU·time columns honour the toolbar unit (display rescale
+      // of the RGU·h returned by the backend; sorting uses the raw values, so
+      // the order is unit-independent). The per-job 'RGU' weight is *not* a
+      // time-cumulative quantity and stays as-is.
+      const unit = rguUnit();
+      const fmtRguTime = v => v != null
+        ? (v * unit.factor).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+        : '—';
       const COLS = [
         { key: 'cluster',               label: 'Cluster' },
         { key: 'user',                  label: 'User' },
@@ -988,12 +1010,12 @@
         { key: 'rgu',                   label: 'RGU',
           title: 'RGU weight of the job\'s allocated GPUs',
           fmt: v => v != null ? v.toFixed(2) : '—' },
-        { key: 'rgu_hours',             label: 'RGU·h',
-          title: 'RGU × elapsed hours',
-          fmt: v => v != null ? v.toFixed(2) : '—' },
-        { key: 'waste',                 label: `${metricPretty} waste (RGU·h)`,
-          title: `RGU·h × (1 − mean ${metricPretty}): estimated unused RGU-hours, taking the selected primary metric as the "useful" fraction`,
-          fmt: v => v != null ? v.toFixed(2) : '—' },
+        { key: 'rgu_hours',             label: unit.label,
+          title: `RGU × elapsed time, shown in ${unit.label}`,
+          fmt: fmtRguTime },
+        { key: 'waste',                 label: `${metricPretty} waste (${unit.label})`,
+          title: `RGU·time × (1 − mean ${metricPretty}): estimated unused RGU·time, taking the selected primary metric as the "useful" fraction`,
+          fmt: fmtRguTime },
         { key: 'gpu_utilization_mean',  label: 'GPU util',  fmt: v => v != null ? (v*100).toFixed(1)+'%' : '—' },
         { key: 'gpu_sm_occupancy_mean', label: 'SM occ',    fmt: v => v != null ? (v*100).toFixed(1)+'%' : '—' },
         { key: 'gpu_memory_max',        label: 'Mem max',   fmt: v => v != null ? (v*100).toFixed(1)+'%' : '—' },
@@ -1023,7 +1045,7 @@
         // known RGU, so this total is lower than the all-jobs counts shown by
         // the per-period bar plot.
         caption.textContent = total > rows.length
-          ? `Showing the top ${rows.length} GPU jobs by RGU·h out of ${total.toLocaleString('en-US')} matching GPU jobs`
+          ? `Showing the top ${rows.length} GPU jobs by ${unit.label} out of ${total.toLocaleString('en-US')} matching GPU jobs`
           : `${total.toLocaleString('en-US')} matching GPU job${total === 1 ? '' : 's'}`;
         caption.title = 'Only GPU jobs (allocated GPU with a known RGU) are listed; '
           + 'CPU-only jobs are counted in the per-period bar plot but not here.';
