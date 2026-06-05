@@ -179,17 +179,21 @@ def harmonize_allocated_gpu(
     GpuRguDB / GPUBillingDB key on harmonised names (``H100-SXM5-80GB``), so
     the raw name needs to be translated for RGU and billing lookups to hit.
 
+    Returns the harmonised name to store in ``harmonized_gpu_type`` — the
+    column the job_series_view RGU/billing joins key on — or None when no
+    mapping was found, leaving rgu NULL downstream. The raw name stays in
+    ``allocated_gpu_type`` either way.
+
     Counters are mutated in place:
-        * ``harmonised[cluster]`` += 1 when we replaced the name.
+        * ``harmonised[cluster]`` += 1 when we translated the name.
         * ``unharmonisable[cluster]`` += 1 when no mapping was found.
-    Unharmonisable values are returned as-is, leaving rgu NULL downstream.
     """
     if gpu_type is None or gpu_type in known_gpus:
         return gpu_type
     cluster_cfg = cluster_cfgs.get(cluster_name)
     if cluster_cfg is None:
         unharmonisable[cluster_name] += 1
-        return gpu_type
+        return None
 
     full_name = None
     if " : " in gpu_type:
@@ -205,7 +209,7 @@ def harmonize_allocated_gpu(
         return harmonized_name
 
     unharmonisable[cluster_name] += 1
-    return gpu_type
+    return None
 
 
 def wipe_data(sess: Session) -> None:
@@ -285,7 +289,7 @@ def build_job_kwargs(
     cluster_id: int,
     sarc_user_id: int,
     nodes: list[str],
-    allocated_gpu_type: str | None,
+    harmonized_gpu_type: str | None,
 ) -> dict[str, Any]:
     return dict(
         cluster_id=cluster_id,
@@ -328,7 +332,8 @@ def build_job_kwargs(
         allocated_node=_parse_int(row["allocated.node"]),
         allocated_billing=_parse_int(row["allocated.billing"]),
         allocated_gres_gpu=_parse_int(row["allocated.gres_gpu"]),
-        allocated_gpu_type=allocated_gpu_type,
+        allocated_gpu_type=row["allocated.gpu_type"] or None,
+        harmonized_gpu_type=harmonized_gpu_type,
         sarc_user_id=sarc_user_id,
     )
 
@@ -507,7 +512,7 @@ def run(csv_path: str, gpu_billing_path: Path, batch_size: int) -> None:
             )
 
             nodes = _parse_nodes(row["nodes"])
-            allocated_gpu_type = harmonize_allocated_gpu(
+            harmonized_gpu_type = harmonize_allocated_gpu(
                 cluster_name,
                 row["allocated.gpu_type"] or None,
                 nodes,
@@ -519,7 +524,7 @@ def run(csv_path: str, gpu_billing_path: Path, batch_size: int) -> None:
 
             job_dicts.append(
                 build_job_kwargs(
-                    row, cluster_id, sarc_user_id, nodes, allocated_gpu_type
+                    row, cluster_id, sarc_user_id, nodes, harmonized_gpu_type
                 )
             )
             stats_per_job.append(build_stats_kwargs(row))

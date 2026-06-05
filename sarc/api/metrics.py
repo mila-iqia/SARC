@@ -940,6 +940,7 @@ def metrics_jobs(
         JobSeriesDB.elapsed_time,
         JobSeriesDB.nodes,
         JobSeriesDB.allocated_gpu_type,
+        JobSeriesDB.harmonized_gpu_type,
         rgu_col.label("rgu"),
         rgu_hours,
         metric_mean,
@@ -983,7 +984,9 @@ def metrics_jobs(
                 "job_state": row.job_state.value if row.job_state is not None else "",
                 "elapsed": row.elapsed_time or 0,
                 "nodes": ", ".join(row.nodes or []) or None,
-                "gpu_type": row.allocated_gpu_type or "",
+                # Harmonised name (the one RGU is computed from) when known;
+                # raw Slurm name otherwise.
+                "gpu_type": row.harmonized_gpu_type or row.allocated_gpu_type or "",
                 "rgu": round(float(row.rgu), 2),
                 "rgu_hours": round(rh, 2),
                 "waste": waste,
