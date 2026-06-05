@@ -1,9 +1,11 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from sqlmodel import col, func, select
+from sqlalchemy.orm import aliased
+from sqlmodel import and_, case, col, func, select
 
 from sarc.config import config
+from sarc.db.job import JobStatisticDB
 from sarc.db.job_series import JobSeriesDB
 
 _TOP_JOBS_N = 5
@@ -12,9 +14,13 @@ _TOP_JOBS_N = 5
 @dataclass
 class ClusterBreakdown:
     cluster: str
+    # RGU-hours requested for this cluster in the window.
     gpu_hours: float
+    # RGU-hours wasted (gpu_hours - rgu_used).  Jobs without a gpu_utilization
+    # stat contribute their full RGU-hours to wasted (utilization assumed 0),
+    # matching the histogram's conservative treatment of missing stats.
     wasted: float
-    overbilled: float
+    # Alias retained so the REST-swap is a one-function change.
     requested: float
 
 
@@ -23,8 +29,9 @@ class UnderuserJob:
     job_id: int
     cluster: str
     submit_time: datetime
+    # RGU-hours unused for this job.  0 when utilization is missing.
     gpu_hours_unused: float
-    # None when no gpu_utilization stat was recorded for this job
+    # None when no gpu_utilization stat was recorded for this job.
     gpu_utilization: float | None
 
 
@@ -33,22 +40,21 @@ class UnderuserRow:
     email: str
     display_name: str
     user_id: int
-    # Total GPU-hours requested (denominator of waste_ratio; used for activity floor).
-    # The floor is based on *requested* GPU-hours, not consumed, so that users who
-    # request a lot but utilise very little are still captured by the alert.
+    # Total RGU-hours requested over the window.  Used for the activity floor:
+    # the floor is compared against *requested* RGU-hours, not consumed, so that
+    # high-requester/low-utilisation users (the target population) are not
+    # filtered out by the floor check.
     gpu_hours: float
     wasted: float
-    overbilled: float
     requested: float
+    # waste_ratio = wasted / requested  (= 1 - rgu_used / rgu_requested)
     waste_ratio: float
-    # Average GPU utilisation fraction over the window.
-    # Computed as 1 - wasted/requested using COALESCE-to-0 aggregates, so jobs
-    # without a gpu_utilization stat are treated as 100% utilised (conservative).
+    # avg_utilization = 1 - waste_ratio  (= rgu_used / rgu_requested)
     avg_utilization: float
-    # GPU-hours unused due to low utilisation (= wasted; included as a human label).
+    # Human-readable label for wasted (same value, different name for messages).
     gpu_hours_unused: float
     by_cluster: list[ClusterBreakdown] = field(default_factory=list)
-    # Top-5 GPU jobs by GPU-hours unused; sorted descending.
+    # Top-N GPU jobs by RGU-hours unused, descending.
     top_jobs: list[UnderuserJob] = field(default_factory=list)
 
 
@@ -64,22 +70,46 @@ def get_underusers(
         raise ValueError(f"Unsupported resource: {resource!r}")
 
     with config().db.session() as session:
+        # Aggregate RGU-hours requested and used per (user, cluster).
+        #
+        # Mirrors metrics_global_histogram()'s rgu_requested / rgu_used pattern:
+        #   rgu_requested = SUM(rgu * elapsed / 3600)
+        #   rgu_used      = SUM(rgu * elapsed / 3600 * gpu_utilization_mean)
+        #
+        # LEFT JOIN on JobStatisticDB so jobs without a gpu_utilization stat
+        # contribute 0 to rgu_used (conservative: unknown = 0 % utilisation).
+        # The `m == m` idiom (from the histogram) filters NaN without losing
+        # the NULL-from-outer-join → else_=0.0 fallback.
+        gpu_util_stat = aliased(JobStatisticDB)
+        m_mean = col(gpu_util_stat.mean)
+        rgu_h_expr = col(JobSeriesDB.rgu) * col(JobSeriesDB.elapsed_time) / 3600.0
+        rgu_used_expr = case(
+            (m_mean == m_mean, rgu_h_expr * m_mean),  # noqa: PLR0124
+            else_=0.0,
+        )
+
         agg_rows = session.exec(
             select(
                 JobSeriesDB.sarc_user_id,
                 JobSeriesDB.email,
                 JobSeriesDB.display_name,
                 JobSeriesDB.cluster_name,
-                func.coalesce(func.sum(JobSeriesDB.gpu_cost), 0).label("sum_requested"),
-                func.coalesce(func.sum(JobSeriesDB.gpu_waste), 0).label("sum_wasted"),
-                func.coalesce(func.sum(JobSeriesDB.gpu_overbilling_cost), 0).label(
-                    "sum_overbilled"
+                func.coalesce(func.sum(rgu_h_expr), 0).label("sum_rgu_hours"),
+                func.coalesce(func.sum(rgu_used_expr), 0).label("sum_rgu_used"),
+            )
+            .join(
+                gpu_util_stat,
+                and_(
+                    col(gpu_util_stat.job_id) == col(JobSeriesDB.job_db_id),
+                    col(gpu_util_stat.name) == "gpu_utilization",
                 ),
+                isouter=True,
             )
             .where(
                 col(JobSeriesDB.submit_time) >= start,
                 col(JobSeriesDB.submit_time) < end,
-                col(JobSeriesDB.requested_gres_gpu) > 0,
+                col(JobSeriesDB.allocated_gpu_type).is_not(None),
+                col(JobSeriesDB.rgu).is_not(None),
             )
             .group_by(
                 JobSeriesDB.sarc_user_id,
@@ -89,7 +119,6 @@ def get_underusers(
             )
         ).all()
 
-        # Build per-user aggregates and apply thresholds to find underusers.
         user_data: dict[int, dict] = {}
         for row in agg_rows:
             uid = row.sarc_user_id
@@ -99,68 +128,80 @@ def get_underusers(
                     "display_name": row.display_name,
                     "clusters": [],
                 }
-            requested_h = (row.sum_requested or 0.0) / 3600.0
-            wasted_h = (row.sum_wasted or 0.0) / 3600.0
-            overbilled_h = (row.sum_overbilled or 0.0) / 3600.0
+            rgu_h = float(row.sum_rgu_hours or 0.0)
+            rgu_used_h = float(row.sum_rgu_used or 0.0)
+            wasted_h = rgu_h - rgu_used_h
             user_data[uid]["clusters"].append(
                 ClusterBreakdown(
                     cluster=row.cluster_name or "unknown",
-                    gpu_hours=requested_h,
+                    gpu_hours=rgu_h,
                     wasted=wasted_h,
-                    overbilled=overbilled_h,
-                    requested=requested_h,
+                    requested=rgu_h,
                 )
             )
 
         underuser_ids: list[int] = []
         for uid, u in user_data.items():
             clusters = u["clusters"]
-            total_requested = sum(c.requested for c in clusters)
+            total_rgu_h = sum(c.gpu_hours for c in clusters)
             total_wasted = sum(c.wasted for c in clusters)
-            total_overbilled = sum(c.overbilled for c in clusters)
-            u["total_requested"] = total_requested
+            u["total_rgu_h"] = total_rgu_h
             u["total_wasted"] = total_wasted
-            u["total_overbilled"] = total_overbilled
-            if total_requested <= 0:
+            if total_rgu_h <= 0:
                 continue
-            waste_ratio = (total_wasted + total_overbilled) / total_requested
+            waste_ratio = total_wasted / total_rgu_h
             u["waste_ratio"] = waste_ratio
-            if waste_ratio >= min_ratio and total_requested >= min_gpu_hours:
+            if waste_ratio >= min_ratio and total_rgu_h >= min_gpu_hours:
                 underuser_ids.append(uid)
 
-        # Fetch per-job data for underusers to build the top-5 worst jobs list.
+        # Per-job data for the identified underusers — same RGU × utilisation pattern.
         jobs_by_user: dict[int, list[UnderuserJob]] = {uid: [] for uid in underuser_ids}
         if underuser_ids:
+            job_util_stat = aliased(JobStatisticDB)
+            jm = col(job_util_stat.mean)
+            j_rgu_h_expr = col(JobSeriesDB.rgu) * col(JobSeriesDB.elapsed_time) / 3600.0
+            j_rgu_used_expr = case(
+                (jm == jm, j_rgu_h_expr * jm),  # noqa: PLR0124
+                else_=0.0,
+            )
+
             job_rows = session.exec(
                 select(
                     JobSeriesDB.job_db_id,
                     JobSeriesDB.sarc_user_id,
                     JobSeriesDB.cluster_name,
                     JobSeriesDB.submit_time,
-                    JobSeriesDB.gpu_waste,
-                    JobSeriesDB.gpu_cost,
+                    j_rgu_h_expr.label("rgu_hours"),
+                    j_rgu_used_expr.label("rgu_used"),
+                    jm.label("util_mean"),
+                )
+                .join(
+                    job_util_stat,
+                    and_(
+                        col(job_util_stat.job_id) == col(JobSeriesDB.job_db_id),
+                        col(job_util_stat.name) == "gpu_utilization",
+                    ),
+                    isouter=True,
                 )
                 .where(
                     col(JobSeriesDB.submit_time) >= start,
                     col(JobSeriesDB.submit_time) < end,
-                    col(JobSeriesDB.requested_gres_gpu) > 0,
+                    col(JobSeriesDB.allocated_gpu_type).is_not(None),
+                    col(JobSeriesDB.rgu).is_not(None),
                     col(JobSeriesDB.sarc_user_id).in_(underuser_ids),
                 )
             ).all()
 
             for jr in job_rows:
-                gpu_waste_h = (jr.gpu_waste or 0.0) / 3600.0
-                gpu_cost_h = (jr.gpu_cost or 0.0) / 3600.0
-                if jr.gpu_waste is not None and gpu_cost_h > 0:
-                    util = 1.0 - jr.gpu_waste / jr.gpu_cost
-                else:
-                    util = None
+                rgu_h = float(jr.rgu_hours or 0.0)
+                rgu_used_h = float(jr.rgu_used or 0.0)
+                util = float(jr.util_mean) if jr.util_mean is not None else None
                 jobs_by_user[jr.sarc_user_id].append(
                     UnderuserJob(
                         job_id=jr.job_db_id,
                         cluster=jr.cluster_name or "unknown",
                         submit_time=jr.submit_time,
-                        gpu_hours_unused=gpu_waste_h,
+                        gpu_hours_unused=rgu_h - rgu_used_h,
                         gpu_utilization=util,
                     )
                 )
@@ -168,19 +209,11 @@ def get_underusers(
     result = []
     for uid in underuser_ids:
         u = user_data[uid]
-        clusters = u["clusters"]
-        total_requested = u["total_requested"]
+        total_rgu_h = u["total_rgu_h"]
         total_wasted = u["total_wasted"]
-        total_overbilled = u["total_overbilled"]
         waste_ratio = u["waste_ratio"]
 
-        avg_utilization = 1.0 - total_wasted / total_requested if total_requested > 0 else 1.0
-
-        by_cluster = sorted(
-            clusters,
-            key=lambda c: c.wasted + c.overbilled,
-            reverse=True,
-        )
+        by_cluster = sorted(u["clusters"], key=lambda c: c.wasted, reverse=True)
 
         top_jobs = sorted(
             jobs_by_user[uid],
@@ -193,12 +226,11 @@ def get_underusers(
                 email=u["email"],
                 display_name=u["display_name"],
                 user_id=uid,
-                gpu_hours=total_requested,
+                gpu_hours=total_rgu_h,
                 wasted=total_wasted,
-                overbilled=total_overbilled,
-                requested=total_requested,
+                requested=total_rgu_h,
                 waste_ratio=waste_ratio,
-                avg_utilization=avg_utilization,
+                avg_utilization=1.0 - waste_ratio,
                 gpu_hours_unused=total_wasted,
                 by_cluster=by_cluster,
                 top_jobs=top_jobs,

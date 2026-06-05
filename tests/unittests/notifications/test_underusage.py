@@ -1,3 +1,13 @@
+"""Tests for get_underusers().
+
+RGU values used:
+  mila  cluster: billing_is_gpu=True  →  rgu = 1 * GpuRguDB.rgu
+                 gpu_type "A100-SXM4-80GB"  →  rgu = 4.8
+  raisin cluster: billing rate for "A100" = 100
+                 allocated_billing=100 → gpu_count_normalized = 100/100 = 1
+                 gpu_type "A100"  →  rgu = 1 * 4.0 = 4.0   (inserted in fixture)
+"""
+
 import copy
 from datetime import UTC, datetime, timedelta
 
@@ -6,6 +16,7 @@ from sqlmodel import select
 
 from sarc.db.cluster import SlurmClusterDB
 from sarc.db.job import JobStatisticDB, SlurmJobDB
+from sarc.db.support import GpuRguDB
 from sarc.db.users import UserDB
 from sarc.notifications.underusage import get_underusers
 from tests.db.factory import base_job
@@ -13,7 +24,16 @@ from tests.db.factory import base_job
 _WINDOW_START = datetime(2024, 6, 1, tzinfo=UTC)
 _WINDOW_END = datetime(2024, 6, 30, tzinfo=UTC)
 _MIN_RATIO = 0.50
-_MIN_GPU_HOURS = 672.0  # 4 GPUs × 7 days
+_MIN_GPU_HOURS = 672.0  # RGU-hours floor
+
+# mila: billing_is_gpu=True, gpu_type A100-SXM4-80GB → rgu = 4.8
+_MILA_GPU_TYPE = "A100-SXM4-80GB"
+_MILA_RGU = 4.8
+
+# raisin: billing "A100"=100, allocated_billing=100 → gpu_count_norm=1 → rgu=4.0
+_RAISIN_GPU_TYPE = "A100"
+_RAISIN_RGU = 4.0
+_RAISIN_BILLING = 100
 
 
 def _add_gpu_job(
@@ -24,9 +44,11 @@ def _add_gpu_job(
     elapsed_h: float,
     requested_gres: int,
     allocated_gres: int,
+    gpu_type: str,
     utilization: float | None = None,
     job_id: int,
     submit_offset_h: int = 0,
+    allocated_billing: int | None = None,
 ) -> SlurmJobDB:
     submit = _WINDOW_START + timedelta(hours=submit_offset_h)
     job_data = copy.deepcopy(base_job)
@@ -42,9 +64,12 @@ def _add_gpu_job(
             "job_id": job_id,
             "requested_gres_gpu": requested_gres,
             "allocated_gres_gpu": allocated_gres,
+            "allocated_gpu_type": gpu_type,
             "job_state": "COMPLETED",
         }
     )
+    if allocated_billing is not None:
+        job_data["allocated_billing"] = allocated_billing
     job = SlurmJobDB(**job_data)
     session.add(job)
     session.flush()
@@ -79,8 +104,13 @@ def underusage_db(read_write_db):
     beaubonhomme_id = users["beaubonhomme"].id
     bramin_id = users["bramin"].id
 
-    # High waster: 700 GPU-hours on mila, 10% utilization
-    # waste_ratio = 0.90 ≥ 0.50, gpu_hours = 700 ≥ 672 → included
+    # Add RGU entry for raisin's "A100" GPU type (not in the default migration data).
+    session.add(GpuRguDB(name=_RAISIN_GPU_TYPE, rgu=_RAISIN_RGU, drac_rgu=_RAISIN_RGU))
+    session.flush()
+
+    # High waster: 700 GPU-hours on mila, 10 % utilisation
+    # rgu_hours = 4.8 * 700 = 3360,  waste_ratio = 0.90 ≥ 0.50
+    # total rgu_hours ≥ 672 (floor) ✓
     _add_gpu_job(
         session,
         user_id=petitbonhomme_id,
@@ -88,13 +118,14 @@ def underusage_db(read_write_db):
         elapsed_h=700,
         requested_gres=1,
         allocated_gres=1,
+        gpu_type=_MILA_GPU_TYPE,
         utilization=0.10,
         job_id=80001,
         submit_offset_h=0,
     )
 
-    # Low waster: 700 GPU-hours on mila, 80% utilization
-    # waste_ratio = 0.20 < 0.50 → excluded
+    # Low waster: 700 GPU-hours on mila, 80 % utilisation
+    # rgu_hours = 4.8 * 700 = 3360,  waste_ratio = 0.20 < 0.50 → excluded
     _add_gpu_job(
         session,
         user_id=beaubonhomme_id,
@@ -102,13 +133,14 @@ def underusage_db(read_write_db):
         elapsed_h=700,
         requested_gres=1,
         allocated_gres=1,
+        gpu_type=_MILA_GPU_TYPE,
         utilization=0.80,
         job_id=80002,
         submit_offset_h=1,
     )
 
-    # Below floor: 100 GPU-hours, 0% utilization
-    # waste_ratio = 1.0 ≥ 0.50, but gpu_hours = 100 < 672 → excluded
+    # Below floor: 100 GPU-hours, 0 % utilisation
+    # rgu_hours = 4.8 * 100 = 480 < 672 → excluded
     _add_gpu_job(
         session,
         user_id=bramin_id,
@@ -116,26 +148,31 @@ def underusage_db(read_write_db):
         elapsed_h=100,
         requested_gres=1,
         allocated_gres=1,
+        gpu_type=_MILA_GPU_TYPE,
         utilization=0.0,
         job_id=80003,
         submit_offset_h=2,
     )
 
-    # Multi-cluster: petitbonhomme also has a job on raisin with larger waste
-    # raisin: 1000 GPU-hours wasted at 0% → by_cluster should list raisin first
+    # Multi-cluster: petitbonhomme on raisin — large job at 0 % util to be the
+    # top-waste cluster (raisin wasted = 4.0 * 2000 = 8000 > mila ~4152).
+    # allocated_billing=100 so gpu_count_normalized = 100/100 = 1.
     _add_gpu_job(
         session,
         user_id=petitbonhomme_id,
         cluster_id=raisin_id,
-        elapsed_h=1000,
+        elapsed_h=2000,
         requested_gres=1,
         allocated_gres=1,
+        gpu_type=_RAISIN_GPU_TYPE,
         utilization=0.0,
         job_id=80004,
         submit_offset_h=10,
+        allocated_billing=_RAISIN_BILLING,
     )
 
-    # Extra jobs for top-5 test: 6 more jobs for petitbonhomme on mila to exceed top-5
+    # 6 extra mila jobs for petitbonhomme — used to verify top-5 capping.
+    # Together with the two mila jobs above, that is 8 total GPU jobs for this user.
     for i, util in enumerate([0.05, 0.15, 0.20, 0.25, 0.30, 0.35], start=5):
         _add_gpu_job(
             session,
@@ -144,90 +181,88 @@ def underusage_db(read_write_db):
             elapsed_h=50,
             requested_gres=1,
             allocated_gres=1,
+            gpu_type=_MILA_GPU_TYPE,
             utilization=util,
             job_id=80000 + i,
             submit_offset_h=20 + i,
         )
 
     session.commit()
-    return session
+    yield session
+
+
+# ── Threshold filtering ───────────────────────────────────────────────────────
 
 
 def test_high_waster_is_returned(underusage_db):
     results = get_underusers(
-        _WINDOW_START,
-        _WINDOW_END,
-        min_ratio=_MIN_RATIO,
-        min_gpu_hours=_MIN_GPU_HOURS,
+        _WINDOW_START, _WINDOW_END, min_ratio=_MIN_RATIO, min_gpu_hours=_MIN_GPU_HOURS
     )
-    emails = {r.email for r in results}
-    assert "petitbonhomme@mila.quebec" in emails
+    assert "petitbonhomme@mila.quebec" in {r.email for r in results}
 
 
 def test_low_waster_is_excluded(underusage_db):
     results = get_underusers(
-        _WINDOW_START,
-        _WINDOW_END,
-        min_ratio=_MIN_RATIO,
-        min_gpu_hours=_MIN_GPU_HOURS,
+        _WINDOW_START, _WINDOW_END, min_ratio=_MIN_RATIO, min_gpu_hours=_MIN_GPU_HOURS
     )
-    emails = {r.email for r in results}
-    assert "beaubonhomme@mila.quebec" not in emails
+    assert "beaubonhomme@mila.quebec" not in {r.email for r in results}
 
 
 def test_below_floor_is_excluded(underusage_db):
     results = get_underusers(
-        _WINDOW_START,
-        _WINDOW_END,
-        min_ratio=_MIN_RATIO,
-        min_gpu_hours=_MIN_GPU_HOURS,
+        _WINDOW_START, _WINDOW_END, min_ratio=_MIN_RATIO, min_gpu_hours=_MIN_GPU_HOURS
     )
-    emails = {r.email for r in results}
-    assert "bramin@mila.quebec" not in emails
+    assert "bramin@mila.quebec" not in {r.email for r in results}
+
+
+# ── Cluster ordering ──────────────────────────────────────────────────────────
 
 
 def test_by_cluster_ordered_desc_by_waste(underusage_db):
     results = get_underusers(
-        _WINDOW_START,
-        _WINDOW_END,
-        min_ratio=_MIN_RATIO,
-        min_gpu_hours=_MIN_GPU_HOURS,
+        _WINDOW_START, _WINDOW_END, min_ratio=_MIN_RATIO, min_gpu_hours=_MIN_GPU_HOURS
     )
     row = next(r for r in results if r.email == "petitbonhomme@mila.quebec")
-    # raisin: 1000 GPU-hours wasted; mila: 700*(1-0.10) + 6*50*(1-util) GPU-hours
+    # raisin: 4.0 * 2000 * 1.0 = 80 RGU-h wasted
+    # mila:   4.8 * 700 * 0.9 + extras ≈ 4152 RGU-h wasted
     assert row.by_cluster[0].cluster == "raisin"
+
+
+# ── Overview fields ───────────────────────────────────────────────────────────
 
 
 def test_overview_avg_utilization(underusage_db):
     results = get_underusers(
-        _WINDOW_START,
-        _WINDOW_END,
-        min_ratio=0.0,
-        min_gpu_hours=0.0,
+        _WINDOW_START, _WINDOW_END, min_ratio=0.0, min_gpu_hours=0.0
     )
     row = next(r for r in results if r.email == "beaubonhomme@mila.quebec")
-    # 700h requested, 0.80 utilization → avg_utilization = 0.80
+    # rgu_used / rgu_requested = 0.80
     assert abs(row.avg_utilization - 0.80) < 1e-6
 
 
 def test_overview_gpu_hours_unused(underusage_db):
     results = get_underusers(
-        _WINDOW_START,
-        _WINDOW_END,
-        min_ratio=0.0,
-        min_gpu_hours=0.0,
+        _WINDOW_START, _WINDOW_END, min_ratio=0.0, min_gpu_hours=0.0
     )
     row = next(r for r in results if r.email == "beaubonhomme@mila.quebec")
-    # 700h × (1 - 0.80) = 140 GPU-hours unused
-    assert abs(row.gpu_hours_unused - 140.0) < 1e-3
+    # 4.8 * 700 * (1 - 0.80) = 672.0 RGU-h unused
+    assert abs(row.gpu_hours_unused - 672.0) < 0.1
+
+
+def test_waste_ratio_value(underusage_db):
+    results = get_underusers(
+        _WINDOW_START, _WINDOW_END, min_ratio=0.0, min_gpu_hours=0.0
+    )
+    row = next(r for r in results if r.email == "beaubonhomme@mila.quebec")
+    assert abs(row.waste_ratio - 0.20) < 1e-6
+
+
+# ── Top-5 jobs ────────────────────────────────────────────────────────────────
 
 
 def test_top_jobs_capped_at_five(underusage_db):
     results = get_underusers(
-        _WINDOW_START,
-        _WINDOW_END,
-        min_ratio=_MIN_RATIO,
-        min_gpu_hours=_MIN_GPU_HOURS,
+        _WINDOW_START, _WINDOW_END, min_ratio=_MIN_RATIO, min_gpu_hours=_MIN_GPU_HOURS
     )
     row = next(r for r in results if r.email == "petitbonhomme@mila.quebec")
     assert len(row.top_jobs) == 5
@@ -235,10 +270,7 @@ def test_top_jobs_capped_at_five(underusage_db):
 
 def test_top_jobs_ordered_desc_by_gpu_hours_unused(underusage_db):
     results = get_underusers(
-        _WINDOW_START,
-        _WINDOW_END,
-        min_ratio=_MIN_RATIO,
-        min_gpu_hours=_MIN_GPU_HOURS,
+        _WINDOW_START, _WINDOW_END, min_ratio=_MIN_RATIO, min_gpu_hours=_MIN_GPU_HOURS
     )
     row = next(r for r in results if r.email == "petitbonhomme@mila.quebec")
     unused = [j.gpu_hours_unused for j in row.top_jobs]
@@ -247,32 +279,19 @@ def test_top_jobs_ordered_desc_by_gpu_hours_unused(underusage_db):
 
 def test_top_jobs_have_utilization(underusage_db):
     results = get_underusers(
-        _WINDOW_START,
-        _WINDOW_END,
-        min_ratio=_MIN_RATIO,
-        min_gpu_hours=_MIN_GPU_HOURS,
+        _WINDOW_START, _WINDOW_END, min_ratio=_MIN_RATIO, min_gpu_hours=_MIN_GPU_HOURS
     )
     row = next(r for r in results if r.email == "petitbonhomme@mila.quebec")
-    # All test jobs have stats so all should have non-None utilization
     assert all(j.gpu_utilization is not None for j in row.top_jobs)
+
+
+# ── Edge cases ────────────────────────────────────────────────────────────────
 
 
 def test_outside_window_excluded(underusage_db):
     before = datetime(2020, 1, 1, tzinfo=UTC)
     after = datetime(2020, 12, 31, tzinfo=UTC)
-    results = get_underusers(before, after, min_ratio=0.0, min_gpu_hours=0.0)
-    assert results == []
-
-
-def test_waste_ratio_value(underusage_db):
-    results = get_underusers(
-        _WINDOW_START,
-        _WINDOW_END,
-        min_ratio=0.0,
-        min_gpu_hours=0.0,
-    )
-    row = next(r for r in results if r.email == "beaubonhomme@mila.quebec")
-    assert abs(row.waste_ratio - 0.20) < 1e-6
+    assert get_underusers(before, after, min_ratio=0.0, min_gpu_hours=0.0) == []
 
 
 def test_unsupported_resource_raises(underusage_db):

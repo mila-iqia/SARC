@@ -32,15 +32,14 @@ _ROW_ALICE = UnderuserRow(
     display_name="Alice Liddell",
     user_id=1,
     gpu_hours=1000.0,
-    wasted=245.0,
-    overbilled=10.0,
+    wasted=255.0,
     requested=1000.0,
     waste_ratio=0.255,
-    avg_utilization=0.755,
-    gpu_hours_unused=245.0,
+    avg_utilization=0.745,
+    gpu_hours_unused=255.0,
     by_cluster=[
-        ClusterBreakdown("narval", 700.0, 200.0, 10.0, 700.0),
-        ClusterBreakdown("fir", 300.0, 45.0, 0.0, 300.0),
+        ClusterBreakdown("narval", 700.0, 210.0, 700.0),
+        ClusterBreakdown("fir", 300.0, 45.0, 300.0),
     ],
     top_jobs=[_JOB_NARVAL_1, _JOB_NARVAL_2, _JOB_FIR],
 )
@@ -51,13 +50,12 @@ _ROW_BOB = UnderuserRow(
     user_id=2,
     gpu_hours=800.0,
     wasted=600.0,
-    overbilled=0.0,
     requested=800.0,
     waste_ratio=0.75,
     avg_utilization=0.25,
     gpu_hours_unused=600.0,
     by_cluster=[
-        ClusterBreakdown("fir", 800.0, 600.0, 0.0, 800.0),
+        ClusterBreakdown("fir", 800.0, 600.0, 800.0),
     ],
     top_jobs=[],
 )
@@ -68,12 +66,11 @@ _ROW_CAROL = UnderuserRow(
     user_id=3,
     gpu_hours=700.0,
     wasted=420.0,
-    overbilled=0.0,
     requested=700.0,
     waste_ratio=0.60,
     avg_utilization=0.40,
     gpu_hours_unused=420.0,
-    by_cluster=[ClusterBreakdown("mila", 700.0, 420.0, 0.0, 700.0)],
+    by_cluster=[ClusterBreakdown("mila", 700.0, 420.0, 700.0)],
     top_jobs=[],
 )
 
@@ -88,12 +85,12 @@ def test_dm_greeting_uses_first_name():
 
 def test_dm_overview_line_contains_utilization():
     text = build_user_dm(_ROW_ALICE, window_days=14)
-    assert "75.5 %" in text
+    assert "74.5 %" in text
 
 
 def test_dm_overview_line_contains_unused_hours():
     text = build_user_dm(_ROW_ALICE, window_days=14)
-    assert "245.0 GPU-hours unused" in text
+    assert "255.0 GPU-hours unused" in text
 
 
 def test_dm_overview_line_contains_window_days():
