@@ -300,7 +300,7 @@
       histogram:       'RGU requested vs used',
       clusterrgu:      'RGU by cluster',
       density:         'Metric density',
-      metricscatter:   'Metric scatter',
+      metricscatter:   'Metric heatmap',
       metrictrend:     'Metric trend (mean/max)',
       userrgu:         'RGU by user',
       jobtable:        'Job table',
@@ -631,30 +631,35 @@
       if (fn) fn(id, d);
     }
 
+    // Log10 colour mapping shared by the heatmap renderers: counts span many
+    // orders of magnitude (1 outlier cell vs a ~1M-job one), so a linear
+    // scale would make every cell except the densest one look white. Returns
+    // the log-transformed matrix (zeros -> null = blank cell) plus colorbar
+    // ticks at the decade marks; callers keep the raw matrix as customdata so
+    // hovers show real counts.
+    function logHeatmapScale(zRaw) {
+      const zLog = zRaw.map(row => row.map(v => v > 0 ? Math.log10(v) : null));
+      let zMaxLog = 0;
+      for (const row of zLog) for (const v of row) if (v != null && v > zMaxLog) zMaxLog = v;
+      const tickVals = [];
+      for (let p = 0; p <= Math.ceil(zMaxLog); p++) tickVals.push(p);
+      const tickText = tickVals.map(p => {
+        const n = Math.pow(10, p);
+        if (n >= 1e6) return (n / 1e6) + 'M';
+        if (n >= 1e3) return (n / 1e3) + 'K';
+        return String(n);
+      });
+      return { zLog, tickVals, tickText };
+    }
+
     function renderHeatmapCell(id, payload, title, yLabel) {
       if (!payload || !payload.z || !payload.z.length) return;
       // Server returns x/y in seconds; convert axes to hours for display.
       const xs = payload.x.map(v => v * SEC_TO_H);
       const ys = payload.y.map(v => v * SEC_TO_H);
 
-      // Log10 transform for colour mapping: counts span many orders of
-      // magnitude (1 outlier vs ~1M-job cluster), so a linear scale would
-      // make every cell except the densest one look white. customdata
-      // keeps the original counts visible in the hover tooltip.
       const zRaw = payload.z;
-      const zLog = zRaw.map(row => row.map(v => v > 0 ? Math.log10(v) : null));
-
-      // Pick colorbar tick density based on the actual data range.
-      let zMaxLog = 0;
-      for (const row of zLog) for (const v of row) if (v != null && v > zMaxLog) zMaxLog = v;
-      const tickPows = [];
-      for (let p = 0; p <= Math.ceil(zMaxLog); p++) tickPows.push(p);
-      const tickLabels = tickPows.map(p => {
-        const n = Math.pow(10, p);
-        if (n >= 1e6) return (n / 1e6) + 'M';
-        if (n >= 1e3) return (n / 1e3) + 'K';
-        return String(n);
-      });
+      const { zLog, tickVals: tickPows, tickText: tickLabels } = logHeatmapScale(zRaw);
 
       // Diagonal y = x line: with log-log axes it's still mathematically y=x,
       // which plots as a straight 45° line. Use the smallest positive centre
@@ -912,17 +917,35 @@
     function renderMetricScatter(id, d) {
       const metric  = document.getElementById('metric-select').value;
       const metric2 = document.getElementById('metric2-select').value;
-      if (!metric2 || !d.density.paired || !d.density.paired.x.length) return;
+      if (!metric2) {
+        // Only reached from renderTile (this tile is unit-independent), so
+        // the div was just cleared — no live Plotly state to desync.
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = '<div class="tile-loading">Select a second metric (Metric 2) to compare.</div>';
+        return;
+      }
+      const p = d.density.paired;
+      if (!p || !p.z || !p.z.length) return;
       const ml  = METRICS[metric]  || metric;
       const ml2 = METRICS[metric2] || metric2;
+      // 100x100 server-binned job counts over the full filtered population
+      // (the former scatter drew a 5000-point random sample). Log colour
+      // scale like the elapsed/wait heatmaps.
+      const { zLog, tickVals, tickText } = logHeatmapScale(p.z);
       Plotly.react(id, [{
-        type: 'scatter', mode: 'markers',
-        x: d.density.paired.x, y: d.density.paired.y,
-        marker: { color: '#1a6fd4', opacity: 0.4, size: 5 },
-        hovertemplate: ml + ': %{x:.3f}<br>' + ml2 + ': %{y:.3f}<extra></extra>',
+        type: 'heatmap',
+        x: p.x, y: p.y, z: zLog, customdata: p.z,
+        colorscale: [[0, '#f7fbff'], [1, '#08306b']],
+        showscale: true,
+        colorbar: {
+          title: { text: 'Jobs (log₁₀)', side: 'right' },
+          tickmode: 'array', tickvals: tickVals, ticktext: tickText,
+        },
+        hovertemplate: ml + ': %{x:.3f}<br>' + ml2 + ': %{y:.3f}<br>Jobs: %{customdata}<extra></extra>',
       }], pLayout({
-        title: { text: ml + ' vs ' + ml2, font: { size: 16 } },
-        xaxis: { title: ml }, yaxis: { title: ml2 },
+        title: { text: ml + ' vs ' + ml2 + ' (jobs per cell)', font: { size: 16 } },
+        xaxis: { title: ml, range: [0, 1] },
+        yaxis: { title: ml2, range: [0, 1] },
       }), { responsive: true });
     }
 
