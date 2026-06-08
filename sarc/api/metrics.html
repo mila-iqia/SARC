@@ -7,32 +7,32 @@
   <style>
     * { box-sizing: border-box; }
     body { font-family: system-ui, sans-serif; margin: 32px; color: #222; }
-    h1 { margin-bottom: 24px; }
+    h1, h3 { margin: 0 0 12px; }
     .controls {
-      display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end;
-      margin-bottom: 24px; padding: 16px; background: #f5f5f5; border-radius: 8px;
+      display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: flex-end;
+      margin-bottom: 12px; padding: 10px 12px; background: #f5f5f5; border-radius: 8px;
     }
-    .ctrl { display: flex; flex-direction: column; gap: 4px; }
-    label { font-size: 13px; font-weight: 600; color: #555; }
+    .ctrl { display: flex; flex-direction: column; gap: 2px; }
+    label { font-size: 12px; font-weight: 600; color: #555; }
     input[type="date"], input[type="number"], input[type="text"], select {
-      padding: 6px 10px; font-size: 14px;
+      padding: 4px 8px; font-size: 13px;
       border: 1px solid #ccc; border-radius: 4px; background: #fff;
     }
     input[type="number"] { width: 90px; }
     input[type="text"]   { width: 120px; }
     button {
-      padding: 8px 20px; font-size: 14px; font-weight: 600;
+      padding: 6px 16px; font-size: 13px; font-weight: 600;
       background: #1a6fd4; color: #fff; border: none; border-radius: 4px; cursor: pointer;
     }
     button:hover { background: #155cb5; }
     #focus-label {
       flex-basis: 100%; display: flex; align-items: center; gap: 8px;
-      font-size: 13px; font-weight: 600; color: #555; min-height: 26px;
+      font-size: 12px; font-weight: 600; color: #555; min-height: 20px;
     }
     #focus-label.no-focus { color: #999; font-weight: 400; }
     #clear-focus { padding: 3px 10px; font-size: 12px; background: #c00; }
     #clear-focus:hover { background: #a00; }
-    #status { font-size: 13px; color: #888; margin-bottom: 12px; min-height: 18px; }
+    #status { font-size: 12px; color: #888; margin-bottom: 8px; min-height: 16px; }
 
     /* Tile grid */
     #tile-grid { display: flex; flex-direction: column; gap: 20px; }
@@ -201,7 +201,7 @@
   </style>
 </head>
 <body>
-  <h1>Global Job Metrics (Completed Jobs)</h1>
+  <h3>Global Job Metrics</h3>
   <div class="controls">
     <div class="ctrl">
       <label for="start">Start</label>
@@ -404,7 +404,7 @@
       });
     });
     metSel.value = 'gpu_sm_occupancy';
-    met2Sel.value = '';
+    met2Sel.value = 'gpu_utilization';
 
     // The RGU unit is a pure display rescale (the backend always returns
     // RGU·h), so changing it never re-fetches: on change we redraw every tile
@@ -523,12 +523,16 @@
       return l.map(row => row.join(',')).join(';');
     }
 
+    // Tiles shown on a fresh load (no ?plots= param): RGU-by-cluster and metric
+    // trend side by side on the first row, the job table on its own row below.
+    // Copied per call so mutating tileLayout never corrupts this template.
+    const DEFAULT_LAYOUT = [['clusterrgu', 'metrictrend'], ['jobtable']];
     function paramToLayout(s) {
-      if (!s) return [['clusterrgu']];
+      if (!s) return DEFAULT_LAYOUT.map(r => [...r]);
       const rows = s.split(';')
         .map(row => row.split(',').filter(p => PLOT_NAMES[p]))
         .filter(r => r.length > 0);
-      return rows.length ? rows : [['clusterrgu']];
+      return rows.length ? rows : DEFAULT_LAYOUT.map(r => [...r]);
     }
 
     function syncUrl() {
@@ -870,9 +874,10 @@
       if (!data || !data.periods.length || !data.series.length) return;
       const x    = data.periods.map(p => p.period_start);
       const ends = data.periods.map(p => p.period_end);
-      // Colour encodes the metric, dash style the statistic (mean solid,
-      // max dashed). Null buckets (no job carries the stat) leave a gap.
-      const MET_COLORS = ['#1a6fd4', '#6d2d91'];
+      // Colour encodes the metric (blue = primary, red = secondary), dash style
+      // the statistic: max solid, mean dashed. Null buckets (no job carries the
+      // stat) leave a gap.
+      const MET_COLORS = ['#1a6fd4', '#d62728'];
       const traces = [];
       data.series.forEach((s, i) => {
         const label = METRICS[s.metric] || s.metric;
@@ -880,13 +885,13 @@
         traces.push({
           type: 'scatter', mode: 'lines+markers', name: label + ' — mean',
           x: x, y: s.mean, customdata: ends,
-          line: { color: color, width: 2 }, marker: { size: 5 },
+          line: { color: color, width: 2, dash: 'dash' }, marker: { size: 5 },
           hovertemplate: label + ' mean<br>Period: %{x}<br>Value: %{y:.3f}<extra></extra>',
         });
         traces.push({
           type: 'scatter', mode: 'lines+markers', name: label + ' — max',
           x: x, y: s.max, customdata: ends,
-          line: { color: color, width: 2, dash: 'dash' }, marker: { size: 5 },
+          line: { color: color, width: 2 }, marker: { size: 5 },
           hovertemplate: label + ' max<br>Period: %{x}<br>Value: %{y:.3f}<extra></extra>',
         });
       });
