@@ -274,8 +274,6 @@
       return RGU_UNITS[document.getElementById('rgu-unit').value] || RGU_UNITS.h;
     }
 
-    const ALLOW_SCATTER = __ALLOW_SCATTER__;
-
     // Stable colour per cluster (assigned by sorted index).
     // Palette assigned by stacking order (largest cluster first). Ordered to
     // match the current clusters-by-size; purely positional (not keyed on names),
@@ -291,10 +289,6 @@
 
     const PLOT_NAMES = {
       bar:             'Jobs per period',
-      ...(ALLOW_SCATTER ? {
-        scatter:       'Elapsed vs time limit',
-        wait:          'Wait time',
-      } : {}),
       heatmap_elapsed: 'Elapsed vs limit (heatmap)',
       heatmap_wait:    'Wait vs limit (heatmap)',
       histogram:       'RGU requested vs used',
@@ -308,12 +302,11 @@
     const PLOT_KEYS = Object.keys(PLOT_NAMES);
 
     // Map each plot type to the backend endpoint it consumes. Several plot
-    // types share an endpoint (scatter/wait reuse /scatter; metricscatter
-    // reuses /density.paired; etc.) so caching by endpoint dedups fetches.
+    // types share an endpoint (heatmap_elapsed/heatmap_wait reuse /heatmap;
+    // metricscatter reuses /density.paired) so caching by endpoint dedups
+    // fetches.
     const PLOT_TO_ENDPOINT = {
       bar:             'data',
-      scatter:         'scatter',
-      wait:            'scatter',
       heatmap_elapsed: 'heatmap',
       heatmap_wait:    'heatmap',
       histogram:       'histogram',
@@ -328,7 +321,7 @@
     // this maps the endpoint back to the renderer's key so we can hand off a
     // single-entry object: { [ENDPOINT_TO_KEY[ep]]: data }.
     const ENDPOINT_TO_KEY = {
-      data: 'bar', scatter: 'scatter', heatmap: 'heatmap',
+      data: 'bar', heatmap: 'heatmap',
       histogram: 'histogram', density: 'density', user_rgu: 'userrgu', jobs: 'jobs',
       rgu_by_cluster: 'clusterrgu', metric_trend: 'metrictrend',
     };
@@ -434,8 +427,8 @@
     document.getElementById('end').value   = isoDate(monday);
 
     // ── Tile layout ──────────────────────────────────────────────────────────
-    // tileLayout: string[][]  e.g. [['bar','scatter'],['histogram']]
-    // URL param:  plots=bar,scatter;histogram
+    // tileLayout: string[][]  e.g. [['bar','clusterrgu'],['histogram']]
+    // URL param:  plots=bar,clusterrgu;histogram
 
     let tileLayout = [];
     // Cache + state for the per-endpoint loader.
@@ -621,7 +614,7 @@
     // ── Per-plot renderers ───────────────────────────────────────────────────
 
     function renderPlot(id, type, d) {
-      const fn = { bar: renderBar, scatter: renderScatter, wait: renderWait,
+      const fn = { bar: renderBar,
                    heatmap_elapsed: renderHeatmapElapsed,
                    heatmap_wait: renderHeatmapWait,
                    histogram: renderHistogram, density: renderDensity,
@@ -730,36 +723,6 @@
           if (evt.points && evt.points.length) clickSetFocus(evt.points[0].x, evt.points[0].customdata);
         });
       });
-    }
-
-    function renderScatter(id, d) {
-      if (!d.scatter.length) return;
-      Plotly.react(id, [{
-        type: 'scatter', mode: 'markers',
-        x: d.scatter.map(r => +(r.limit   * SEC_TO_H).toFixed(3)),
-        y: d.scatter.map(r => +(r.elapsed * SEC_TO_H).toFixed(3)),
-        marker: { color: '#1a6fd4', opacity: 0.4, size: 5 },
-        hovertemplate: 'Limit: %{x}h<br>Elapsed: %{y}h<extra></extra>',
-      }], pLayout({
-        title: { text: 'Elapsed vs Time Limit', font: { size: 16 } },
-        xaxis: { title: 'Time limit (hours)' },
-        yaxis: { title: 'Elapsed time (hours)' },
-      }), { responsive: true });
-    }
-
-    function renderWait(id, d) {
-      if (!d.scatter.length) return;
-      Plotly.react(id, [{
-        type: 'scatter', mode: 'markers',
-        x: d.scatter.map(r => +(r.limit * SEC_TO_H).toFixed(3)),
-        y: d.scatter.map(r => +(r.wait  * SEC_TO_H).toFixed(3)),
-        marker: { color: '#1a6fd4', opacity: 0.4, size: 5 },
-        hovertemplate: 'Limit: %{x}h<br>Wait: %{y}h<extra></extra>',
-      }], pLayout({
-        title: { text: 'Wait Time vs Time Limit', font: { size: 16 } },
-        xaxis: { title: 'Time limit (hours)' },
-        yaxis: { title: 'Wait time (hours)' },
-      }), { responsive: true });
     }
 
     function renderHistogram(id, d) {
@@ -1327,7 +1290,6 @@
                               ...(p.metric2 ? { metric2: p.metric2 } : {}) };
       switch (ep) {
         case 'data':      return '/dash/metrics/data?'      + new URLSearchParams({ ...base, period: p.period });
-        case 'scatter':   return '/dash/metrics/scatter?'   + new URLSearchParams({ ...base, ...focusParams });
         case 'heatmap':   return '/dash/metrics/heatmap?'   + new URLSearchParams({ ...base, ...focusParams });
         case 'histogram': return '/dash/metrics/histogram?' + new URLSearchParams({ ...base, period: p.period, metric: p.metric, rgu_type: p.rgu_type });
         case 'density':   return '/dash/metrics/density?'   + new URLSearchParams({ ...densityParams, ...focusParams, rgu_type: p.rgu_type });
@@ -1344,14 +1306,6 @@
     // flight promise.
     function ensureEndpoint(ep) {
       if (endpointCache[ep]) return endpointCache[ep];
-      // /metrics/scatter is intentionally short-circuited when ALLOW_SCATTER
-      // is false: the corresponding tiles aren't even in PLOT_NAMES, but the
-      // guard keeps things safe if someone forces it via URL params.
-      if (ep === 'scatter' && !ALLOW_SCATTER) {
-        endpointStatus[ep] = 'ready';
-        endpointCache[ep] = Promise.resolve([]);
-        return endpointCache[ep];
-      }
       endpointStatus[ep] = 'loading';
       endpointCache[ep] = (async () => {
         try {

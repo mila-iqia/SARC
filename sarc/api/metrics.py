@@ -36,13 +36,6 @@ UTC = timezone.utc
 _DEFAULT_WINDOW_DAYS = 1
 _DEFAULT_PERIOD = "w"
 
-# Hides the raw scatter plots (elapsed-vs-limit, wait) from the dashboard UI
-# and skips the /metrics/scatter HTTP call entirely. The endpoint itself stays
-# available for direct queries. Re-enable only on small windows: 1 year of
-# completed jobs is enough to lock up the browser.
-_ALLOW_SCATTER: bool = False
-
-
 # Metrics stored in JobSeriesDB.statistics that are normalised to [0, 1]
 _METRICS_0_1: dict[str, str] = {
     "gpu_sm_occupancy": "SM occupancy",
@@ -313,43 +306,6 @@ def metrics_global_data(
             "count": counts.get(key, 0),
         }
         for key, ps, pe in _iter_buckets(begin_dt, finish_dt, parsed)
-    ]
-
-
-@router.get("/metrics/scatter")
-def metrics_global_scatter(
-    start: date = Query(default=None),
-    end: date = Query(default=None),
-    clusters: list[str] = Query(default=[]),
-    cluster_user: str | None = Query(default=None),
-    job_states: list[str] = Query(default=[]),
-    focus_start: datetime | None = Query(default=None),
-    focus_end: datetime | None = Query(default=None),
-    sess: Session = Depends(session_dep),
-):
-    begin_dt, finish_dt = _apply_focus(*_date_range(start, end), focus_start, focus_end)
-    cluster_ids = _resolve_cluster_ids(sess, clusters)
-
-    query = select(
-        SlurmJobDB.elapsed_time,
-        SlurmJobDB.time_limit,
-        SlurmJobDB.start_time,
-        SlurmJobDB.submit_time,
-    ).where(
-        col(SlurmJobDB.submit_time) >= begin_dt,
-        col(SlurmJobDB.submit_time) < finish_dt,
-        col(SlurmJobDB.time_limit).is_not(None),
-        col(SlurmJobDB.start_time).is_not(None),
-    )
-    query = _apply_slurm_job_filters(query, cluster_ids, cluster_user, job_states)
-
-    return [
-        {
-            "elapsed": elapsed_time,
-            "limit": time_limit,
-            "wait": (start_time - submit_time).total_seconds(),
-        }
-        for elapsed_time, time_limit, start_time, submit_time in sess.exec(query)
     ]
 
 
@@ -1034,8 +990,6 @@ def metrics_jobs(
 
 _html_path = Path(__file__).parent / "metrics.html"
 
-_HTML = (
-    _html_path.read_text(encoding="utf-8")
-    .replace("__DEFAULT_PERIOD__", _DEFAULT_PERIOD)
-    .replace("__ALLOW_SCATTER__", "true" if _ALLOW_SCATTER else "false")
+_HTML = _html_path.read_text(encoding="utf-8").replace(
+    "__DEFAULT_PERIOD__", _DEFAULT_PERIOD
 )
