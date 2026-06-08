@@ -1012,9 +1012,12 @@ def metrics_jobs(
 ):
     begin_dt, finish_dt = _apply_focus(*_date_range(start, end), focus_start, focus_end)
 
-    # Sorting and the stat extractions are pushed into SQL (see `sortable`
-    # below) so we only materialise the requested `limit` rows at `offset`, not
-    # the full result set. The default sort is rgu_hours (rgu * elapsed) desc.
+    # Limit-first pagination. A `page` subquery ranks, paginates and counts the
+    # full filtered set from the source alone (plus the single stat the sort needs,
+    # if any); the outer query then joins the 3 display stats back onto just that
+    # page of rows. Without this split, the 3 stat joins + count(*) would run over
+    # the whole window (millions of rows) just to return 50. See the perf note in
+    # docs / the /metrics/jobs investigation.
     # physical (default) reads SlurmJobDB directly (+ clusters/gpurgudb); billing
     # the view. `jobs_src` is the source model for the raw columns both share.
     src = _rgu_source(
@@ -1022,56 +1025,26 @@ def metrics_jobs(
     )
     jobs_src = src.base
     rgu_hours_raw = src.rgu_drac * src.elapsed_time / 3600.0
-    rgu_hours = rgu_hours_raw.label("rgu_hours")
-    # Targeted LEFT JOINs on jobstatisticdb (one aliased row per distinct stat
-    # name) instead of JobSeriesDB.statistics, which forces a per-row
-    # json_object_agg of all stats. See histogram for the rationale.
+
+    # One aliased jobstatisticdb row per distinct stat name, LEFT-joined on job_pk
+    # (never JobSeriesDB.statistics, a per-row json_object_agg — see histogram).
     stat_names = {metric, "gpu_utilization", "gpu_sm_occupancy", "gpu_memory"}
     js = {name: aliased(JobStatisticDB) for name in sorted(stat_names)}
     metric_mean_raw = col(js[metric].mean)
-    metric_mean = metric_mean_raw.label("metric_mean")
-    gpu_util_mean = col(js["gpu_utilization"].mean).label("gpu_utilization_mean")
-    gpu_sm_mean = col(js["gpu_sm_occupancy"].mean).label("gpu_sm_occupancy_mean")
-    gpu_mem_max = col(js["gpu_memory"].max).label("gpu_memory_max")
 
-    # count(*) OVER () = total matching jobs before LIMIT kicks in; ~free
-    # since the ORDER BY already walks the full filtered set.
-    total_col = func.count().over().label("total")
-
-    query = src.apply(
-        select(  # ty:ignore[no-matching-overload]
-            src.cluster_name.label("cluster_name"),
-            col(jobs_src.job_id),
-            src.submit_time.label("submit_time"),
-            col(jobs_src.cluster_user),
-            col(jobs_src.job_state),
-            src.elapsed_time.label("elapsed_time"),
-            col(jobs_src.nodes),
-            col(jobs_src.requested_gres_gpu),
-            col(jobs_src.allocated_gres_gpu),
-            col(jobs_src.allocated_billing),
-            src.allocated_gpu_type.label("allocated_gpu_type"),
-            col(jobs_src.harmonized_gpu_type),
-            src.gpu_type_rgu_drac.label("gpu_type_rgu_drac"),
-            src.rgu_drac.label("rgu"),
-            rgu_hours,
-            metric_mean,
-            gpu_util_mean,
-            gpu_sm_mean,
-            gpu_mem_max,
-            total_col,
-        )
-    )
-    for name, alias in js.items():
-        query = query.join(
+    def _join_stat(query, name: str):
+        alias = js[name]
+        return query.join(
             alias,
             and_(col(alias.job_id) == src.job_pk, col(alias.name) == name),
             isouter=True,
         )
-    # Sortable columns: maps the column key the frontend sends to the SQL
-    # expression to order by. Raw (unlabelled) expressions so they compose with
-    # nulls_last/asc/desc cleanly. `nodes` is an array and is not sortable, so
-    # it is intentionally absent. `waste` mirrors the per-row formula below.
+
+    # Sortable columns -> ORDER BY expression. Raw (unlabelled) so they compose
+    # with nulls_last/asc/desc cleanly. `nodes` is an array and is not sortable,
+    # so it is intentionally absent. The keys in `sort_needs_stat` are computed
+    # from a stat alias, so the page must join that one alias to rank correctly;
+    # every other key ranks on slurm_jobs(+gpurgudb/clusters) alone.
     sortable = {
         "cluster": src.cluster_name,
         "job_id": col(jobs_src.job_id),
@@ -1093,24 +1066,68 @@ def metrics_jobs(
         "gpu_sm_occupancy_mean": col(js["gpu_sm_occupancy"].mean),
         "gpu_memory_max": col(js["gpu_memory"].max),
     }
+    sort_needs_stat = {
+        "waste": metric,
+        "gpu_utilization_mean": "gpu_utilization",
+        "gpu_sm_occupancy_mean": "gpu_sm_occupancy",
+        "gpu_memory_max": "gpu_memory",
+    }
     sort_expr = sortable.get(sort_by, rgu_hours_raw)
     ordered = sort_expr.asc() if sort_dir == "asc" else sort_expr.desc()
-    query = (
-        query.where(
-            src.submit_time >= begin_dt,
-            src.submit_time < finish_dt,
-            src.allocated_gpu_type.is_not(None),
-            src.rgu_drac.is_not(None),
-            src.rgu_drac == src.rgu_drac,  # NaN guard   # noqa: PLR0124
-        )
-        # NULLs (e.g. a job missing this metric) always sort last regardless of
-        # direction. job_db_id is a unique tiebreaker that makes the total order
-        # deterministic even when the primary sort column has ties — required so
-        # offset pagination never skips or repeats a row between pages.
-        .order_by(nulls_last(ordered), src.job_pk)
-        .offset(offset)
-        .limit(limit)
+    # NULLs (e.g. a job missing this metric) always sort last; job_pk is a unique
+    # tiebreaker that makes the order total, so offset pagination never skips or
+    # repeats a row between pages. Reused verbatim by the page and final queries
+    # so both produce the same order.
+    order_by = (nulls_last(ordered), src.job_pk)
+
+    base_filters = (
+        src.submit_time >= begin_dt,
+        src.submit_time < finish_dt,
+        src.allocated_gpu_type.is_not(None),
+        src.rgu_drac.is_not(None),
+        src.rgu_drac == src.rgu_drac,  # NaN guard   # noqa: PLR0124
     )
+
+    # PAGE: the page's job_pks + the pre-LIMIT total. The expensive scan/sort/
+    # count runs here, on the source only (+ the sort's stat alias when needed).
+    page_q = src.apply(
+        select(src.job_pk.label("jid"), func.count().over().label("total"))
+    )
+    if sort_by in sort_needs_stat:
+        page_q = _join_stat(page_q, sort_needs_stat[sort_by])
+    page = (
+        page_q.where(*base_filters).order_by(*order_by).offset(offset).limit(limit)
+    ).subquery()
+
+    # FINAL: display columns + the 3 stats, fetched only for the page's rows
+    # (joined back on job_pk). `total` is carried over from the page.
+    query = src.apply(
+        select(  # ty:ignore[no-matching-overload]
+            src.cluster_name.label("cluster_name"),
+            col(jobs_src.job_id),
+            src.submit_time.label("submit_time"),
+            col(jobs_src.cluster_user),
+            col(jobs_src.job_state),
+            src.elapsed_time.label("elapsed_time"),
+            col(jobs_src.nodes),
+            col(jobs_src.requested_gres_gpu),
+            col(jobs_src.allocated_gres_gpu),
+            col(jobs_src.allocated_billing),
+            src.allocated_gpu_type.label("allocated_gpu_type"),
+            col(jobs_src.harmonized_gpu_type),
+            src.gpu_type_rgu_drac.label("gpu_type_rgu_drac"),
+            src.rgu_drac.label("rgu"),
+            rgu_hours_raw.label("rgu_hours"),
+            metric_mean_raw.label("metric_mean"),
+            col(js["gpu_utilization"].mean).label("gpu_utilization_mean"),
+            col(js["gpu_sm_occupancy"].mean).label("gpu_sm_occupancy_mean"),
+            col(js["gpu_memory"].max).label("gpu_memory_max"),
+            page.c.total,
+        )
+    ).join(page, page.c.jid == src.job_pk)
+    for name in js:
+        query = _join_stat(query, name)
+    query = query.order_by(*order_by)
 
     jobs = []
     total = 0
