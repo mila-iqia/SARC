@@ -848,23 +848,47 @@
       // instead of an orange recolour: here colour encodes the cluster, so the
       // focused period keeps full cluster colours while the rest are dimmed.
       const opac = x.map(p => { const f = periodInFocus(p); return f === null ? 1 : f ? 1 : 0.35; });
-      const traces = data.series.map((s, i) => ({
+      const series = data.series;
+      const yvals = series.map(s => s.rgu.map(v => v * unit.factor));
+      // Per-period stacking order: within each period, sort clusters by THAT
+      // period's value and assign cumulative `base` offsets so the largest
+      // segment sits at the bottom — independently per period. A plain
+      // barmode:'stack' can only use one global trace order (here: by total),
+      // which leaves individual periods unsorted; manual base + overlay lets
+      // each column be sorted on its own values while every cluster keeps one
+      // stable colour and legend entry.
+      const bases = series.map(() => new Array(x.length).fill(0));
+      for (let p = 0; p < x.length; p++) {
+        const order = series.map((_, i) => i)
+          .sort((a, b) => (yvals[b][p] - yvals[a][p]) || (a - b));
+        let cum = 0;
+        for (const i of order) { bases[i][p] = cum; cum += yvals[i][p]; }
+      }
+      const traces = series.map((s, i) => ({
         type: 'bar', name: s.cluster,
-        x: x, y: s.rgu.map(v => v * unit.factor), customdata: ends,
-        marker: { color: clusterColor(i, data.series.length), opacity: opac },
-        hovertemplate: s.cluster + '<br>Period: %{x}<br>' + unit.label + ': %{y:,.2f}<extra></extra>',
+        // customdata = [period_end (for click-focus), this cluster's value]. We
+        // read the value from customdata for the hover because, with `base` set,
+        // %{y} renders the cumulative top (base + value), not the segment value.
+        x: x, y: yvals[i], base: bases[i],
+        customdata: ends.map((e, p) => [e, yvals[i][p]]),
+        marker: { color: clusterColor(i, series.length), opacity: opac },
+        hovertemplate: s.cluster + '<br>Period: %{x}<br>' + unit.label + ': %{customdata[1]:,.2f}<extra></extra>',
       }));
       Plotly.react(id, traces, pLayout({
         title: { text: 'Total ' + unit.label + ' by Cluster (click to focus)', font: { size: 16 } },
-        barmode: 'stack',
+        // Manual per-period `base` offsets do the stacking, so overlay — not
+        // 'stack', which ignores base and re-stacks in (global) trace order.
+        barmode: 'overlay',
         xaxis: { title: 'Period start', type: 'category', tickangle: -45 },
         yaxis: { title: 'Total ' + unit.label },
-        legend: { x: 1.0, y: 1.0 },
+        // 'reversed' keeps the same legend order as the old stacked view (Plotly
+        // auto-reverses a stack legend, but not an overlay one).
+        legend: { x: 1.0, y: 1.0, traceorder: 'reversed' },
         margin: { l: 60, r: 20, t: 40, b: 100 },
       }), { responsive: true }).then(gd => {
         gd.removeAllListeners('plotly_click');
         gd.on('plotly_click', evt => {
-          if (evt.points && evt.points.length) clickSetFocus(evt.points[0].x, evt.points[0].customdata);
+          if (evt.points && evt.points.length) clickSetFocus(evt.points[0].x, evt.points[0].customdata[0]);
         });
       });
     }
