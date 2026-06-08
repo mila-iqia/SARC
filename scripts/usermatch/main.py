@@ -554,8 +554,6 @@ function badge(p, mid) {
     const data = pairs.map(p => ({
       matching_id: { name: "drac_member", mid: p.drac.matching_ids.drac_member },
       known_matches: [{ name: "mila_ldap", mid: p.ldap.matching_ids.mila_ldap }],
-      display_name: p.ldap.display_name || p.drac.display_name || null,
-      email: p.ldap.email || p.drac.email || null,
     }));
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
