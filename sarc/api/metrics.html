@@ -107,6 +107,58 @@
       max-width: 100px; overflow: hidden; text-overflow: ellipsis;
       white-space: nowrap; font-family: monospace; font-size: 11px; color: #555;
     }
+    .job-table th.no-sort { cursor: default; }
+    .job-table th.no-sort:hover { background: #f0f0f0; }
+    /* Job-table pagination footer */
+    .job-table-foot {
+      flex-shrink: 0; display: flex; align-items: center; gap: 10px;
+      padding: 6px 2px 0; font-size: 12px; color: #555;
+      border-top: 1px solid #eee; flex-wrap: wrap;
+    }
+    .job-table-foot button {
+      padding: 2px 10px; font-size: 12px; cursor: pointer; color: #333;
+      border: 1px solid #ccc; border-radius: 4px; background: #fafafa;
+    }
+    .job-table-foot button:hover:not(:disabled) { background: #eee; }
+    .job-table-foot button:disabled { opacity: 0.4; cursor: default; }
+    .job-table-foot select { font-size: 12px; padding: 1px 4px; }
+    .job-table-foot .jt-page-input {
+      width: 5em; font-size: 12px; padding: 1px 4px; text-align: center;
+    }
+    .job-table-foot .jt-pageinfo { position: relative; }
+    .job-table-foot .jt-page-link {
+      color: #1a6fd4; cursor: pointer; text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+    .job-table-foot .jt-page-link:hover { color: #155cb5; }
+    /* Page-jump popover, anchored above the page link (opens upward so it is
+       never clipped at the tile's bottom edge). */
+    .jt-page-pop {
+      position: absolute; bottom: 135%; left: 50%; transform: translateX(-50%);
+      z-index: 9999; background: #fff; border: 1px solid #ccc; border-radius: 4px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.18); padding: 8px;
+      display: flex; flex-direction: column; gap: 6px; align-items: stretch;
+    }
+    .jt-page-pop button { padding: 2px 0; }
+    .job-table-foot .jt-spacer { flex: 1; }
+    /* "Loading" cue shown in the caption while a page is being (re)fetched:
+       bold + italic + accent colour, a gentle opacity pulse, and animated
+       trailing dots via ::after. The class is added in reload() and cleared
+       automatically when renderJobTable rebuilds the caption. */
+    .job-table-caption.jt-loading {
+      color: #1a6fd4; font-weight: 700; font-style: italic;
+      animation: jt-pulse 1.1s ease-in-out infinite;
+    }
+    .job-table-caption.jt-loading::after {
+      content: '...'; display: inline-block; width: 0; overflow: hidden;
+      vertical-align: bottom; animation: jt-ellipsis 1.2s steps(4, end) infinite;
+    }
+    @keyframes jt-pulse    { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+    @keyframes jt-ellipsis { to { width: 1.25em; } }
+    /* While a page is loading the still-visible table is dimmed and inert
+       (headers not clickable); renderJobTable() rebuilds a fresh, active table. */
+    .job-table.jt-busy { opacity: 0.55; }
+    .job-table.jt-busy th { pointer-events: none; cursor: default; }
     /* Job-states multi-select dropdown */
     .js-dropdown { position: relative; }
     .job-states-panel {
@@ -249,8 +301,8 @@
     }
 
     const METRICS = {
-      gpu_sm_occupancy:     'SM occupancy',
-      gpu_utilization:      'GPU utilization',
+      gpu_sm_occupancy:     'SM occ',
+      gpu_utilization:      'GPU util',
       gpu_utilization_fp16: 'GPU util. FP16',
       gpu_utilization_fp32: 'GPU util. FP32',
       gpu_utilization_fp64: 'GPU util. FP64',
@@ -326,6 +378,12 @@
       rgu_by_cluster: 'clusterrgu', metric_trend: 'metrictrend',
     };
 
+    // Job-table pagination/sort. Used both for the initial shared fetch
+    // (endpointURLBase) and as the per-tile starting state in renderJobTable, so
+    // a freshly (re)built tile and its first fetched page always agree.
+    const JOBTABLE_DEFAULTS = { offset: 0, limit: 50, sortBy: 'rgu_hours', sortDir: 'desc' };
+    const JOBTABLE_PAGE_SIZES = [50, 100, 200, 500];
+
     // Populate metric dropdowns
     const metSel  = document.getElementById('metric-select');
     const met2Sel = document.getElementById('metric2-select');
@@ -364,6 +422,14 @@
       // a tile whose endpoint errored just keeps its error state.
       await Promise.all(tiles.map(async ({ chartDiv, plotType }) => {
         const ep = PLOT_TO_ENDPOINT[plotType];
+        // The job table paginates itself, so re-render it from the page it is
+        // currently showing (a unit change is a pure display rescale) rather
+        // than the shared endpoint cache, which holds only page 0 and would
+        // snap the tile back to the first page.
+        if (plotType === 'jobtable') {
+          if (chartDiv._jtData) renderPlot(chartDiv.id, plotType, { jobs: chartDiv._jtData });
+          return;
+        }
         let data;
         try {
           data = await ensureEndpoint(ep);
@@ -964,20 +1030,70 @@
     function renderJobTable(id, d) {
       const el = document.getElementById(id);
       if (!el) return;
-      // The endpoint returns { total, jobs }: `jobs` holds at most `limit`
-      // rows (top RGU·h), `total` counts every job matching the filters.
+      // Tear down any page-jump popover left open by a previous render (and its
+      // document listener) before rebuilding this tile's DOM.
+      if (el._jtClosePop) el._jtClosePop();
+      // The endpoint returns one page: { total, jobs } where `total` is the full
+      // filtered GPU-job count and `jobs` are the rows for the current
+      // offset/limit/sort. Header clicks and the prev/next/page-size controls
+      // mutate the per-tile state stored on `el` and re-fetch only this tile via
+      // reload(); other tiles are untouched. A global Update rebuilds the tile
+      // div, which resets the state to JOBTABLE_DEFAULTS.
       const payload = d.jobs || {};
       const jobList = payload.jobs || [];
       const total = payload.total || 0;
-      if (!jobList.length) { el.textContent = 'No jobs found.'; return; }
+      el._jtData = payload;  // kept so an RGU-unit change can rescale in place
+
+      // Per-tile pagination + sort state, persisted on the element. Defaults
+      // mirror JOBTABLE_DEFAULTS so the first page (fetched via the shared cache
+      // with those defaults) lines up with this state.
+      const limit   = el._jtLimit   ?? JOBTABLE_DEFAULTS.limit;
+      const offset  = el._jtOffset  ?? JOBTABLE_DEFAULTS.offset;
+      const sortKey = el._jtSortKey ?? JOBTABLE_DEFAULTS.sortBy;
+      const sortDir = el._jtSortDir != null ? el._jtSortDir : -1;  // -1 = desc
+      el._jtLimit = limit; el._jtOffset = offset;
+      el._jtSortKey = sortKey; el._jtSortDir = sortDir;
+
+      // Re-fetch this tile for its current element state and re-render in place.
+      // Bypasses the shared endpoint cache (which only holds the page-0/default-
+      // sort payload), so paging/sorting never disturbs the other tiles.
+      async function reload() {
+        if (!currentParams) return;
+        const cap = el.querySelector('.job-table-caption');
+        if (cap) { cap.textContent = 'Loading'; cap.classList.add('jt-loading'); }
+        el.querySelectorAll('.job-table-foot button, .job-table-foot input, .job-table-foot select')
+          .forEach(c => { c.disabled = true; });
+        // Make the still-visible table inert while the next page loads. The
+        // sortable headers would otherwise stay clickable, and a click fires a
+        // handler that mutates the sort state and calls reload() again — a
+        // second, racing fetch. pointer-events:none stops the click at the
+        // source; the fresh table from renderJobTable() drops the class.
+        const busyTbl = el.querySelector('.job-table');
+        if (busyTbl) busyTbl.classList.add('jt-busy');
+        const url = withClustersAndStates(jobsURL(currentParams, {
+          offset: el._jtOffset, limit: el._jtLimit,
+          sortBy: el._jtSortKey, sortDir: el._jtSortDir === 1 ? 'asc' : 'desc',
+        }), currentParams);
+        try {
+          const r = await fetch(url);
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          const data = await r.json();
+          if (!document.body.contains(el) || el.dataset.plotType !== 'jobtable') return;
+          renderJobTable(id, { jobs: data });
+        } catch (e) {
+          if (document.body.contains(el))
+            el.innerHTML = `<div class="tile-error">Error: ${e.message}</div>`;
+        }
+      }
+
+      if (!total) { el.textContent = 'No jobs found.'; return; }
 
       // The Waste column depends on the primary metric picked at last Update.
       const metricName = (currentParams && currentParams.metric) || 'selected metric';
       const metricPretty = METRICS[metricName] || metricName;
-      // Cumulative RGU·time columns honour the toolbar unit (display rescale
-      // of the RGU·h returned by the backend; sorting uses the raw values, so
-      // the order is unit-independent). The per-job 'RGU' weight is *not* a
-      // time-cumulative quantity and stays as-is.
+      // RGU·time columns honour the toolbar unit (display rescale of the RGU·h
+      // returned by the backend; the server sort uses raw values, so the order
+      // is unit-independent). The per-job 'RGU' weight is not time-cumulative.
       const unit = rguUnit();
       const fmtRguTime = v => v != null
         ? (v * unit.factor).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -1006,73 +1122,184 @@
         { key: 'gpu_sm_occupancy_mean', label: 'SM occ',    fmt: v => v != null ? (v*100).toFixed(1)+'%' : '—' },
         { key: 'gpu_memory_max',        label: 'Mem max',   fmt: v => v != null ? (v*100).toFixed(1)+'%' : '—' },
       ];
+      // Columns the server can sort on; the array-valued 'nodes' column can't.
+      const SORTABLE = new Set(COLS.map(c => c.key).filter(k => k !== 'nodes'));
 
-      // Persist sort state on the element across re-renders
-      let sortKey = el._jtSortKey || 'rgu_hours';
-      let sortDir = el._jtSortDir != null ? el._jtSortDir : -1;  // -1 = desc
+      el.innerHTML = '';
+      const box = document.createElement('div');
+      box.className = 'job-table-box';
 
-      function draw() {
-        el._jtSortKey = sortKey;
-        el._jtSortDir = sortDir;
-        const rows = [...jobList].sort((a, b) => {
-          const av = a[sortKey], bv = b[sortKey];
-          if (av == null && bv == null) return 0;
-          if (av == null) return 1;
-          if (bv == null) return -1;
-          return sortDir * (typeof av === 'string' ? av.localeCompare(bv) : av - bv);
-        });
+      const caption = document.createElement('div');
+      caption.className = 'job-table-caption';
+      // "GPU jobs": only jobs with an allocated GPU and a known RGU are listed,
+      // so this total is lower than the all-jobs counts in the per-period plot.
+      const from = offset + 1, to = offset + jobList.length;
+      caption.textContent =
+        `GPU jobs ${from.toLocaleString('en-US')}–${to.toLocaleString('en-US')} `
+        + `of ${total.toLocaleString('en-US')}`;
+      caption.title = 'Only GPU jobs (allocated GPU with a known RGU) are listed; '
+        + 'CPU-only jobs are counted in the per-period bar plot but not here.';
 
-        el.innerHTML = '';
-        const box = document.createElement('div');
-        box.className = 'job-table-box';
-        const caption = document.createElement('div');
-        caption.className = 'job-table-caption';
-        // "GPU jobs": the endpoint only lists jobs with an allocated GPU and a
-        // known RGU, so this total is lower than the all-jobs counts shown by
-        // the per-period bar plot.
-        caption.textContent = total > rows.length
-          ? `Showing the top ${rows.length} GPU jobs by ${unit.label} out of ${total.toLocaleString('en-US')} matching GPU jobs`
-          : `${total.toLocaleString('en-US')} matching GPU job${total === 1 ? '' : 's'}`;
-        caption.title = 'Only GPU jobs (allocated GPU with a known RGU) are listed; '
-          + 'CPU-only jobs are counted in the per-period bar plot but not here.';
-        const wrap = document.createElement('div');
-        wrap.className = 'job-table-wrap';
-        const tbl = document.createElement('table');
-        tbl.className = 'job-table';
+      const wrap = document.createElement('div');
+      wrap.className = 'job-table-wrap';
+      const tbl = document.createElement('table');
+      tbl.className = 'job-table';
 
-        const thead = tbl.createTHead();
-        const hr = thead.insertRow();
-        COLS.forEach(col => {
-          const th = document.createElement('th');
-          th.textContent = col.label;
-          if (col.title) th.title = col.title;
-          if (col.key === sortKey) th.className = sortDir === 1 ? 'sort-asc' : 'sort-desc';
+      const thead = tbl.createTHead();
+      const hr = thead.insertRow();
+      COLS.forEach(c => {
+        const th = document.createElement('th');
+        th.textContent = c.label;
+        if (c.title) th.title = c.title;
+        if (!SORTABLE.has(c.key)) {
+          th.className = 'no-sort';
+        } else {
+          if (c.key === sortKey) th.className = sortDir === 1 ? 'sort-asc' : 'sort-desc';
+          // A new sort order spans every page, so reset to the first page and
+          // re-fetch (the server does the ordering).
           th.addEventListener('click', () => {
-            if (sortKey === col.key) sortDir = -sortDir;
-            else { sortKey = col.key; sortDir = -1; }
-            draw();
+            if (el._jtSortKey === c.key) el._jtSortDir = -el._jtSortDir;
+            else { el._jtSortKey = c.key; el._jtSortDir = -1; }
+            el._jtOffset = 0;
+            reload();
           });
-          hr.appendChild(th);
-        });
+        }
+        hr.appendChild(th);
+      });
 
-        const tbody = tbl.createTBody();
-        rows.forEach(job => {
-          const tr = tbody.insertRow();
-          COLS.forEach(col => {
-            const td = tr.insertCell();
-            const raw = job[col.key];
-            td.textContent = col.fmt ? col.fmt(raw) : (raw ?? '—');
-            if (col.cls) { td.className = col.cls; td.title = raw || ''; }
-          });
+      const tbody = tbl.createTBody();
+      jobList.forEach(job => {
+        const tr = tbody.insertRow();
+        COLS.forEach(c => {
+          const td = tr.insertCell();
+          const raw = job[c.key];
+          td.textContent = c.fmt ? c.fmt(raw) : (raw ?? '—');
+          if (c.cls) { td.className = c.cls; td.title = raw || ''; }
         });
+      });
+      wrap.appendChild(tbl);
 
-        wrap.appendChild(tbl);
-        box.appendChild(caption);
-        box.appendChild(wrap);
-        el.appendChild(box);
+      // ── Pagination footer ─────────────────────────────────────────────────
+      const foot = document.createElement('div');
+      foot.className = 'job-table-foot';
+      const pages = Math.max(1, Math.ceil(total / limit));
+      const page  = Math.floor(offset / limit) + 1;
+      const lastOffset = (pages - 1) * limit;  // offset of the final page
+
+      const first = document.createElement('button');
+      first.textContent = '« First';
+      first.disabled = offset <= 0;
+      first.addEventListener('click', () => { el._jtOffset = 0; reload(); });
+
+      const prev = document.createElement('button');
+      prev.textContent = '‹ Prev';
+      prev.disabled = offset <= 0;
+      prev.addEventListener('click', () => {
+        el._jtOffset = Math.max(0, el._jtOffset - el._jtLimit);
+        reload();
+      });
+      const next = document.createElement('button');
+      next.textContent = 'Next ›';
+      next.disabled = offset + limit >= total;
+      next.addEventListener('click', () => {
+        el._jtOffset = el._jtOffset + el._jtLimit;
+        reload();
+      });
+      const last = document.createElement('button');
+      last.textContent = 'Last »';
+      last.disabled = offset + limit >= total;
+      last.addEventListener('click', () => { el._jtOffset = lastOffset; reload(); });
+
+      // Current page shown as a clickable link. Clicking it opens a small
+      // popover (number input + OK below) anchored to the link. The jump fires
+      // ONLY on OK (or Enter in the input); clicking outside or pressing Esc
+      // closes it with no action — so a stray blur/change never reloads.
+      const pageInfo = document.createElement('span');
+      pageInfo.className = 'jt-pageinfo';
+
+      let pop = null;
+      function closePop() {
+        document.removeEventListener('mousedown', onDocDown, true);
+        if (pop) { pop.remove(); pop = null; }
+        el._jtClosePop = null;
+      }
+      function onDocDown(e) {
+        // Close when the click lands outside the popover (the link itself is
+        // excluded so re-clicking it doesn't close-then-reopen).
+        if (pop && !pop.contains(e.target) && e.target !== pageLink) closePop();
+      }
+      function openPop() {
+        if (pop || pages <= 1) return;
+        pop = document.createElement('div');
+        pop.className = 'jt-page-pop';
+        const inp = document.createElement('input');
+        inp.type = 'number';
+        inp.className = 'jt-page-input';
+        inp.min = '1'; inp.max = String(pages);
+        inp.value = String(page);
+        const ok = document.createElement('button');
+        ok.type = 'button';
+        ok.textContent = 'OK';
+        const submit = () => {
+          let p = parseInt(inp.value, 10);
+          closePop();
+          if (!Number.isFinite(p)) return;
+          p = Math.min(pages, Math.max(1, p));
+          const newOffset = (p - 1) * limit;
+          if (newOffset !== el._jtOffset) { el._jtOffset = newOffset; reload(); }
+        };
+        ok.addEventListener('click', submit);
+        inp.addEventListener('keydown', e => {
+          if (e.key === 'Enter')  { e.preventDefault(); submit(); }
+          if (e.key === 'Escape') { e.preventDefault(); closePop(); pageLink.focus(); }
+        });
+        pop.append(inp, ok);
+        pageInfo.appendChild(pop);
+        inp.focus(); inp.select();
+        el._jtClosePop = closePop;
+        // Defer so the click that opened the popover isn't caught as "outside".
+        setTimeout(() => document.addEventListener('mousedown', onDocDown, true), 0);
       }
 
-      draw();
+      const pageLink = document.createElement('span');
+      pageLink.textContent = page.toLocaleString('en-US');
+      if (pages > 1) {
+        pageLink.className = 'jt-page-link';
+        pageLink.tabIndex = 0;
+        pageLink.title = `Click to jump to a page (1–${pages.toLocaleString('en-US')})`;
+        pageLink.addEventListener('click', openPop);
+        pageLink.addEventListener('keydown', e => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPop(); }
+        });
+      }
+      pageInfo.append('Page ', pageLink, ` / ${pages.toLocaleString('en-US')}`);
+
+      const spacer = document.createElement('span');
+      spacer.className = 'jt-spacer';
+
+      const szLabel = document.createElement('label');
+      szLabel.textContent = 'Rows ';
+      const sz = document.createElement('select');
+      JOBTABLE_PAGE_SIZES.forEach(n => {
+        const opt = document.createElement('option');
+        opt.value = String(n); opt.textContent = String(n);
+        if (n === limit) opt.selected = true;
+        sz.appendChild(opt);
+      });
+      // A new page size shifts page boundaries, so jump back to the first page.
+      sz.addEventListener('change', () => {
+        el._jtLimit = parseInt(sz.value, 10);
+        el._jtOffset = 0;
+        reload();
+      });
+      szLabel.appendChild(sz);
+
+      foot.append(first, prev, pageInfo, next, last, spacer, szLabel);
+
+      box.appendChild(caption);
+      box.appendChild(wrap);
+      box.appendChild(foot);
+      el.appendChild(box);
     }
 
     // ── Focus helpers ────────────────────────────────────────────────────────
@@ -1263,20 +1490,38 @@
       };
     }
 
-    function endpointURL(ep, p) {
-      let url = endpointURLBase(ep, p);
-      // Append selected clusters, unless all (or none) selected (= no filter),
-      // mirroring the job-states rule below.
+    // Append the cluster + job-state multi-filters that every endpoint shares.
+    // Each is omitted when all (or none) are selected (= no filter).
+    function withClustersAndStates(url, p) {
       if (p.clusters && p.clusters.length && p.clusters.length < CLUSTERS.length) {
         const sep = url.includes('?') ? '&' : '?';
         url += sep + p.clusters.map(c => 'clusters=' + encodeURIComponent(c)).join('&');
       }
-      // Append selected job states, unless all (or none) selected (= no filter).
       if (p.job_states && p.job_states.length && p.job_states.length < JOB_STATES.length) {
         const sep = url.includes('?') ? '&' : '?';
         url += sep + p.job_states.map(s => 'job_states=' + encodeURIComponent(s)).join('&');
       }
       return url;
+    }
+
+    function endpointURL(ep, p) {
+      return withClustersAndStates(endpointURLBase(ep, p), p);
+    }
+
+    // /jobs base URL with explicit pagination + sort. Kept separate from
+    // endpointURLBase so the job-table tile can re-fetch a different
+    // page/sort — withClustersAndStates(jobsURL(...)) — without disturbing the
+    // shared endpoint cache used by the other tiles.
+    function jobsURL(p, { offset, limit, sortBy, sortDir }) {
+      const base = { start: p.start, end: p.end,
+                     ...(p.cluster_user ? { cluster_user: p.cluster_user } : {}) };
+      const focusParams = {
+        ...(p.focus_start ? { focus_start: p.focus_start } : {}),
+        ...(p.focus_end   ? { focus_end:   p.focus_end   } : {}),
+      };
+      return '/dash/metrics/jobs?' + new URLSearchParams({
+        ...base, metric: p.metric, ...focusParams, rgu_type: p.rgu_type,
+        offset, limit, sort_by: sortBy, sort_dir: sortDir });
     }
 
     function endpointURLBase(ep, p) {
@@ -1294,7 +1539,7 @@
         case 'histogram': return '/dash/metrics/histogram?' + new URLSearchParams({ ...base, period: p.period, metric: p.metric, rgu_type: p.rgu_type });
         case 'density':   return '/dash/metrics/density?'   + new URLSearchParams({ ...densityParams, ...focusParams, rgu_type: p.rgu_type });
         case 'user_rgu':  return '/dash/metrics/user_rgu?'  + new URLSearchParams({ start: p.start, end: p.end, metric: p.metric, ...focusParams, rgu_type: p.rgu_type });
-        case 'jobs':      return '/dash/metrics/jobs?'      + new URLSearchParams({ ...base, metric: p.metric, ...focusParams, rgu_type: p.rgu_type });
+        case 'jobs':      return jobsURL(p, JOBTABLE_DEFAULTS);
         case 'rgu_by_cluster': return '/dash/metrics/rgu_by_cluster?' + new URLSearchParams({ start: p.start, end: p.end, period: p.period, ...(p.cluster_user ? { cluster_user: p.cluster_user } : {}), rgu_type: p.rgu_type });
         case 'metric_trend': return '/dash/metrics/metric_trend?' + new URLSearchParams({ ...base, period: p.period, metric: p.metric, ...(p.metric2 ? { metric2: p.metric2 } : {}) });
       }

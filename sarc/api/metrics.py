@@ -6,6 +6,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse
+from sqlalchemy import nulls_last
 from sqlalchemy.orm import aliased
 from sqlmodel import Session, and_, case, col, func, select, text
 
@@ -896,6 +897,9 @@ def metrics_jobs(
     cluster_user: str | None = Query(default=None),
     job_states: list[str] = Query(default=[]),
     limit: int = Query(default=50, gt=0, le=500),
+    offset: int = Query(default=0, ge=0),
+    sort_by: str = Query(default="rgu_hours"),
+    sort_dir: str = Query(default="desc"),
     metric: str = Query(default="gpu_sm_occupancy"),
     focus_start: datetime | None = Query(default=None),
     focus_end: datetime | None = Query(default=None),
@@ -904,16 +908,19 @@ def metrics_jobs(
 ):
     begin_dt, finish_dt = _apply_focus(*_date_range(start, end), focus_start, focus_end)
 
-    # Sort key (rgu * elapsed) and the stat extractions are pushed into SQL so
-    # we only materialise `limit` rows, not the full result set.
+    # Sorting and the stat extractions are pushed into SQL (see `sortable`
+    # below) so we only materialise the requested `limit` rows at `offset`, not
+    # the full result set. The default sort is rgu_hours (rgu * elapsed) desc.
     rgu_col = _rgu_col(rgu_type)
-    rgu_hours = (rgu_col * JobSeriesDB.elapsed_time / 3600.0).label("rgu_hours")
+    rgu_hours_raw = rgu_col * JobSeriesDB.elapsed_time / 3600.0
+    rgu_hours = rgu_hours_raw.label("rgu_hours")
     # Targeted LEFT JOINs on jobstatisticdb (one aliased row per distinct stat
     # name) instead of JobSeriesDB.statistics, which forces a per-row
     # json_object_agg of all stats. See histogram for the rationale.
     stat_names = {metric, "gpu_utilization", "gpu_sm_occupancy", "gpu_memory"}
     js = {name: aliased(JobStatisticDB) for name in sorted(stat_names)}
-    metric_mean = col(js[metric].mean).label("metric_mean")
+    metric_mean_raw = col(js[metric].mean)
+    metric_mean = metric_mean_raw.label("metric_mean")
     gpu_util_mean = col(js["gpu_utilization"].mean).label("gpu_utilization_mean")
     gpu_sm_mean = col(js["gpu_sm_occupancy"].mean).label("gpu_sm_occupancy_mean")
     gpu_mem_max = col(js["gpu_memory"].max).label("gpu_memory_max")
@@ -946,6 +953,27 @@ def metrics_jobs(
             ),
             isouter=True,
         )
+    # Sortable columns: maps the column key the frontend sends to the SQL
+    # expression to order by. Raw (unlabelled) expressions so they compose with
+    # nulls_last/asc/desc cleanly. `nodes` is an array and is not sortable, so
+    # it is intentionally absent. `waste` mirrors the per-row formula below.
+    sortable = {
+        "cluster": col(JobSeriesDB.cluster_name),
+        "user": col(JobSeriesDB.cluster_user),
+        "job_state": col(JobSeriesDB.job_state),
+        "elapsed": col(JobSeriesDB.elapsed_time),
+        "gpu_type": func.coalesce(
+            col(JobSeriesDB.harmonized_gpu_type), col(JobSeriesDB.allocated_gpu_type)
+        ),
+        "rgu": rgu_col,
+        "rgu_hours": rgu_hours_raw,
+        "waste": rgu_hours_raw * (1 - metric_mean_raw),
+        "gpu_utilization_mean": col(js["gpu_utilization"].mean),
+        "gpu_sm_occupancy_mean": col(js["gpu_sm_occupancy"].mean),
+        "gpu_memory_max": col(js["gpu_memory"].max),
+    }
+    sort_expr = sortable.get(sort_by, rgu_hours_raw)
+    ordered = sort_expr.asc() if sort_dir == "asc" else sort_expr.desc()
     query = (
         query.where(
             col(JobSeriesDB.submit_time) >= begin_dt,
@@ -954,7 +982,12 @@ def metrics_jobs(
             rgu_col.is_not(None),
             rgu_col == rgu_col,  # NaN guard   # noqa: PLR0124
         )
-        .order_by(rgu_hours.desc(), col(JobSeriesDB.cluster_user))
+        # NULLs (e.g. a job missing this metric) always sort last regardless of
+        # direction. job_db_id is a unique tiebreaker that makes the total order
+        # deterministic even when the primary sort column has ties — required so
+        # offset pagination never skips or repeats a row between pages.
+        .order_by(nulls_last(ordered), col(JobSeriesDB.job_db_id))
+        .offset(offset)
         .limit(limit)
     )
     query = _apply_common_filters(query, clusters, cluster_user, job_states)
