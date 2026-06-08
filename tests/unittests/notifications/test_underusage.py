@@ -24,7 +24,7 @@ from tests.db.factory import base_job
 _WINDOW_START = datetime(2024, 6, 1, tzinfo=UTC)
 _WINDOW_END = datetime(2024, 6, 30, tzinfo=UTC)
 _MIN_RATIO = 0.50
-_MIN_GPU_HOURS = 672.0  # RGU-hours floor
+_MIN_RGU_HOURS = 672.0  # RGU-hours floor
 
 # mila: billing_is_gpu=True, gpu_type A100-SXM4-80GB → rgu = 4.8
 _MILA_GPU_TYPE = "A100-SXM4-80GB"
@@ -196,21 +196,21 @@ def underusage_db(read_write_db):
 
 def test_high_waster_is_returned(underusage_db):
     results = get_underusers(
-        _WINDOW_START, _WINDOW_END, min_ratio=_MIN_RATIO, min_gpu_hours=_MIN_GPU_HOURS
+        _WINDOW_START, _WINDOW_END, min_ratio=_MIN_RATIO, min_rgu_hours=_MIN_RGU_HOURS
     )
     assert "petitbonhomme@mila.quebec" in {r.email for r in results}
 
 
 def test_low_waster_is_excluded(underusage_db):
     results = get_underusers(
-        _WINDOW_START, _WINDOW_END, min_ratio=_MIN_RATIO, min_gpu_hours=_MIN_GPU_HOURS
+        _WINDOW_START, _WINDOW_END, min_ratio=_MIN_RATIO, min_rgu_hours=_MIN_RGU_HOURS
     )
     assert "beaubonhomme@mila.quebec" not in {r.email for r in results}
 
 
 def test_below_floor_is_excluded(underusage_db):
     results = get_underusers(
-        _WINDOW_START, _WINDOW_END, min_ratio=_MIN_RATIO, min_gpu_hours=_MIN_GPU_HOURS
+        _WINDOW_START, _WINDOW_END, min_ratio=_MIN_RATIO, min_rgu_hours=_MIN_RGU_HOURS
     )
     assert "bramin@mila.quebec" not in {r.email for r in results}
 
@@ -220,7 +220,7 @@ def test_below_floor_is_excluded(underusage_db):
 
 def test_by_cluster_ordered_desc_by_waste(underusage_db):
     results = get_underusers(
-        _WINDOW_START, _WINDOW_END, min_ratio=_MIN_RATIO, min_gpu_hours=_MIN_GPU_HOURS
+        _WINDOW_START, _WINDOW_END, min_ratio=_MIN_RATIO, min_rgu_hours=_MIN_RGU_HOURS
     )
     row = next(r for r in results if r.email == "petitbonhomme@mila.quebec")
     # raisin: 4.0 * 2000 * 1.0 = 80 RGU-h wasted
@@ -233,25 +233,25 @@ def test_by_cluster_ordered_desc_by_waste(underusage_db):
 
 def test_overview_avg_utilization(underusage_db):
     results = get_underusers(
-        _WINDOW_START, _WINDOW_END, min_ratio=0.0, min_gpu_hours=0.0
+        _WINDOW_START, _WINDOW_END, min_ratio=0.0, min_rgu_hours=0.0
     )
     row = next(r for r in results if r.email == "beaubonhomme@mila.quebec")
     # rgu_used / rgu_requested = 0.80
     assert abs(row.avg_utilization - 0.80) < 1e-6
 
 
-def test_overview_gpu_hours_unused(underusage_db):
+def test_overview_rgu_hours_unused(underusage_db):
     results = get_underusers(
-        _WINDOW_START, _WINDOW_END, min_ratio=0.0, min_gpu_hours=0.0
+        _WINDOW_START, _WINDOW_END, min_ratio=0.0, min_rgu_hours=0.0
     )
     row = next(r for r in results if r.email == "beaubonhomme@mila.quebec")
     # 4.8 * 700 * (1 - 0.80) = 672.0 RGU-h unused
-    assert abs(row.gpu_hours_unused - 672.0) < 0.1
+    assert abs(row.rgu_hours_unused - 672.0) < 0.1
 
 
 def test_waste_ratio_value(underusage_db):
     results = get_underusers(
-        _WINDOW_START, _WINDOW_END, min_ratio=0.0, min_gpu_hours=0.0
+        _WINDOW_START, _WINDOW_END, min_ratio=0.0, min_rgu_hours=0.0
     )
     row = next(r for r in results if r.email == "beaubonhomme@mila.quebec")
     assert abs(row.waste_ratio - 0.20) < 1e-6
@@ -262,24 +262,24 @@ def test_waste_ratio_value(underusage_db):
 
 def test_top_jobs_capped_at_five(underusage_db):
     results = get_underusers(
-        _WINDOW_START, _WINDOW_END, min_ratio=_MIN_RATIO, min_gpu_hours=_MIN_GPU_HOURS
+        _WINDOW_START, _WINDOW_END, min_ratio=_MIN_RATIO, min_rgu_hours=_MIN_RGU_HOURS
     )
     row = next(r for r in results if r.email == "petitbonhomme@mila.quebec")
     assert len(row.top_jobs) == 5
 
 
-def test_top_jobs_ordered_desc_by_gpu_hours_unused(underusage_db):
+def test_top_jobs_ordered_desc_by_rgu_hours_unused(underusage_db):
     results = get_underusers(
-        _WINDOW_START, _WINDOW_END, min_ratio=_MIN_RATIO, min_gpu_hours=_MIN_GPU_HOURS
+        _WINDOW_START, _WINDOW_END, min_ratio=_MIN_RATIO, min_rgu_hours=_MIN_RGU_HOURS
     )
     row = next(r for r in results if r.email == "petitbonhomme@mila.quebec")
-    unused = [j.gpu_hours_unused for j in row.top_jobs]
+    unused = [j.rgu_hours_unused for j in row.top_jobs]
     assert unused == sorted(unused, reverse=True)
 
 
 def test_top_jobs_have_utilization(underusage_db):
     results = get_underusers(
-        _WINDOW_START, _WINDOW_END, min_ratio=_MIN_RATIO, min_gpu_hours=_MIN_GPU_HOURS
+        _WINDOW_START, _WINDOW_END, min_ratio=_MIN_RATIO, min_rgu_hours=_MIN_RGU_HOURS
     )
     row = next(r for r in results if r.email == "petitbonhomme@mila.quebec")
     assert all(j.gpu_utilization is not None for j in row.top_jobs)
@@ -291,7 +291,7 @@ def test_top_jobs_have_utilization(underusage_db):
 def test_outside_window_excluded(underusage_db):
     before = datetime(2020, 1, 1, tzinfo=UTC)
     after = datetime(2020, 12, 31, tzinfo=UTC)
-    assert get_underusers(before, after, min_ratio=0.0, min_gpu_hours=0.0) == []
+    assert get_underusers(before, after, min_ratio=0.0, min_rgu_hours=0.0) == []
 
 
 def test_unsupported_resource_raises(underusage_db):
@@ -300,6 +300,6 @@ def test_unsupported_resource_raises(underusage_db):
             _WINDOW_START,
             _WINDOW_END,
             min_ratio=_MIN_RATIO,
-            min_gpu_hours=_MIN_GPU_HOURS,
+            min_rgu_hours=_MIN_RGU_HOURS,
             resource="cpu",
         )

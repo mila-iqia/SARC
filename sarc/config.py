@@ -275,7 +275,7 @@ class UnderusageNotifyConfig:
     enabled: bool = True
     send_dms: bool = False
     min_ratio: float = 0.50
-    min_gpu_hours: float = 672.0  # 4 GPU x 7d
+    min_rgu_hours: float = 3225.6  # 4x A100-80GB RGU x 7d
     window_days: int = 14
     digest_top_n: int = 16
     digest_grouping: str = "overall"

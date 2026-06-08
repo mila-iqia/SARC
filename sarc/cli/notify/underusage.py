@@ -32,15 +32,14 @@ class UnderusageNotifyCommand:
         alias=["--min-ratio"],
         help="Minimum waste ratio threshold (overrides config).",
     )
-    min_gpu_hours: float | None = simple_parsing.field(
+    min_rgu_hours: float | None = simple_parsing.field(
         default=None,
-        alias=["--min-gpu-hours"],
-        help="Minimum GPU-hours floor (overrides config).",
+        alias=["--min-rgu-hours"],
+        help="Minimum RGU-hours floor (overrides config).",
     )
     resource: str = "gpu"
     send: bool = simple_parsing.field(
-        action="store_true",
-        help="Send notifications (default: dry-run, prints only).",
+        action="store_true", help="Send notifications (default: dry-run, prints only)."
     )
     no_dms: bool = simple_parsing.field(
         action="store_true",
@@ -60,9 +59,13 @@ class UnderusageNotifyCommand:
             logger.error("No notifications configuration found in config")
             return -1
 
-        window_days = self.window_days if self.window_days is not None else ncfg.window_days
+        window_days = (
+            self.window_days if self.window_days is not None else ncfg.window_days
+        )
         min_ratio = self.min_ratio if self.min_ratio is not None else ncfg.min_ratio
-        min_gpu_hours = self.min_gpu_hours if self.min_gpu_hours is not None else ncfg.min_gpu_hours
+        min_rgu_hours = (
+            self.min_rgu_hours if self.min_rgu_hours is not None else ncfg.min_rgu_hours
+        )
 
         end = _now_utc()
         start = end - timedelta(days=window_days)
@@ -76,14 +79,16 @@ class UnderusageNotifyCommand:
             start,
             end,
             min_ratio=min_ratio,
-            min_gpu_hours=min_gpu_hours,
+            min_rgu_hours=min_rgu_hours,
             resource=self.resource,
+            exclude_zero_usage=True,
         )
         historical = get_historical_stats(
             end,
             min_ratio=min_ratio,
-            min_gpu_hours=min_gpu_hours,
+            min_rgu_hours=min_rgu_hours,
             resource=self.resource,
+            exclude_zero_usage=True,
         )
 
         print(f"Recipients ({len(rows)} user(s) flagged):")
@@ -92,10 +97,7 @@ class UnderusageNotifyCommand:
         print()
 
         digest = build_admin_digest(
-            rows,
-            period=period,
-            top_n=ncfg.digest_top_n,
-            historical=historical,
+            rows, period=period, top_n=ncfg.digest_top_n, historical=historical
         )
         print("=== Admin Digest ===")
         print(digest)

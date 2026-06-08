@@ -9,21 +9,21 @@ _JOB_NARVAL_1 = UnderuserJob(
     job_id=111111,
     cluster="narval",
     submit_time=datetime(2026, 5, 28, tzinfo=UTC),
-    gpu_hours_unused=80.0,
+    rgu_hours_unused=80.0,
     gpu_utilization=0.05,
 )
 _JOB_NARVAL_2 = UnderuserJob(
     job_id=111112,
     cluster="narval",
     submit_time=datetime(2026, 5, 30, tzinfo=UTC),
-    gpu_hours_unused=60.0,
+    rgu_hours_unused=60.0,
     gpu_utilization=0.12,
 )
 _JOB_FIR = UnderuserJob(
     job_id=222222,
     cluster="fir",
     submit_time=datetime(2026, 5, 31, tzinfo=UTC),
-    gpu_hours_unused=40.0,
+    rgu_hours_unused=40.0,
     gpu_utilization=None,
 )
 
@@ -31,12 +31,12 @@ _ROW_ALICE = UnderuserRow(
     email="alice@mila.quebec",
     display_name="Alice Liddell",
     user_id=1,
-    gpu_hours=1000.0,
+    rgu_hours=1000.0,
     wasted=255.0,
     requested=1000.0,
     waste_ratio=0.255,
     avg_utilization=0.745,
-    gpu_hours_unused=255.0,
+    rgu_hours_unused=255.0,
     by_cluster=[
         ClusterBreakdown("narval", 700.0, 210.0, 700.0),
         ClusterBreakdown("fir", 300.0, 45.0, 300.0),
@@ -48,12 +48,12 @@ _ROW_BOB = UnderuserRow(
     email="bob@mila.quebec",
     display_name="Bob Marley",
     user_id=2,
-    gpu_hours=800.0,
+    rgu_hours=800.0,
     wasted=600.0,
     requested=800.0,
     waste_ratio=0.75,
     avg_utilization=0.25,
-    gpu_hours_unused=600.0,
+    rgu_hours_unused=600.0,
     by_cluster=[
         ClusterBreakdown("fir", 800.0, 600.0, 800.0),
     ],
@@ -64,12 +64,12 @@ _ROW_CAROL = UnderuserRow(
     email="carol@mila.quebec",
     display_name="Carol Danvers",
     user_id=3,
-    gpu_hours=700.0,
+    rgu_hours=700.0,
     wasted=420.0,
     requested=700.0,
     waste_ratio=0.60,
     avg_utilization=0.40,
-    gpu_hours_unused=420.0,
+    rgu_hours_unused=420.0,
     by_cluster=[ClusterBreakdown("mila", 700.0, 420.0, 700.0)],
     top_jobs=[],
 )
@@ -90,7 +90,7 @@ def test_dm_overview_line_contains_utilization():
 
 def test_dm_overview_line_contains_unused_hours():
     text = build_user_dm(_ROW_ALICE, window_days=14)
-    assert "255.0 GPU-hours unused" in text
+    assert "255.0 RGU-hours unused" in text
 
 
 def test_dm_overview_line_contains_window_days():
@@ -112,7 +112,7 @@ def test_dm_top_jobs_grouped_by_cluster():
 def test_dm_top_jobs_narval_first_job():
     text = build_user_dm(_ROW_ALICE, window_days=14)
     assert "job_111111 (2026-05-28)" in text
-    assert "80.0 GPU-h unused" in text
+    assert "80.0 RGU-h unused" in text
     assert "GPU utilization: 5 %" in text
 
 
@@ -201,7 +201,7 @@ def test_digest_contains_primary_cluster():
 
 def test_digest_contains_wasted_hours():
     text = build_admin_digest([_ROW_BOB], period="…")
-    assert "600.0 GPU-h wasted" in text
+    assert "600.0 RGU-h wasted" in text
 
 
 def test_digest_contains_waste_ratio():

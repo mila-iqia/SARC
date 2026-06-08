@@ -21,7 +21,7 @@ _NOTIFY_CFG = {
     "slack_token": "xoxb-test-token",
     "admin_channel": "#test-channel",
     "min_ratio": 0.50,
-    "min_gpu_hours": 672.0,
+    "min_rgu_hours": 672.0,
     "window_days": 30,
     "digest_top_n": 16,
 }
@@ -173,7 +173,7 @@ def test_missing_notifications_config_returns_error(cli_main, caplog):
 def test_cli_flags_override_config_thresholds(notify_db, cli_main, monkeypatch, capsys):
     """Config has impossibly strict thresholds; CLI flags relax them back."""
     monkeypatch.setattr("sarc.cli.notify.underusage._now_utc", lambda: _CLI_TEST_END)
-    strict_cfg = {**_NOTIFY_CFG, "min_ratio": 0.99, "min_gpu_hours": 999_999.0}
+    strict_cfg = {**_NOTIFY_CFG, "min_ratio": 0.99, "min_rgu_hours": 999_999.0}
     with gifnoc.overlay({"sarc.notifications": strict_cfg}):
         rc = cli_main(
             [
@@ -183,7 +183,7 @@ def test_cli_flags_override_config_thresholds(notify_db, cli_main, monkeypatch, 
                 "30",
                 "--min-ratio",
                 "0.50",
-                "--min-gpu-hours",
+                "--min-rgu-hours",
                 "672.0",
             ]
         )

@@ -23,7 +23,7 @@ def _jobs_section(top_jobs: list[UnderuserJob]) -> str:
 
     cluster_order = sorted(
         by_cluster,
-        key=lambda c: sum(j.gpu_hours_unused for j in by_cluster[c]),
+        key=lambda c: sum(j.rgu_hours_unused for j in by_cluster[c]),
         reverse=True,
     )
 
@@ -48,7 +48,7 @@ def _jobs_section(top_jobs: list[UnderuserJob]) -> str:
             )
             lines.append(
                 f"{prefix} job_{job.job_id} ({date_str})"
-                f" — {_fmt_h(job.gpu_hours_unused)} GPU-h unused"
+                f" — {_fmt_h(job.rgu_hours_unused)} RGU-h unused"
                 f"  (GPU utilization: {util_str})"
             )
     return "\n".join(lines)
@@ -70,7 +70,7 @@ def build_user_dm(
         "",
         f"Over the last {window_days} days, your jobs utilized on average"
         f" {_pct(row.avg_utilization)} of requested GPUs,"
-        f" leaving {_fmt_h(row.gpu_hours_unused)} GPU-hours unused.",
+        f" leaving {_fmt_h(row.rgu_hours_unused)} RGU-hours unused.",
     ]
 
     if row.top_jobs:
@@ -122,7 +122,7 @@ def build_admin_digest(
 ) -> str:
     """Build a Module C plain-text admin digest.
 
-    Ranks underusers by GPU-hours wasted (descending), capped at top_n.
+    Ranks underusers by RGU-hours wasted (descending), capped at top_n.
     Pure function — no I/O, deterministic for fixed input.
     """
     ranked = sorted(rows, key=lambda r: r.wasted, reverse=True)[:top_n]
@@ -138,7 +138,7 @@ def build_admin_digest(
         lines.append(
             f" {i:2d}. {row.display_name} ({row.email})"
             f"  —  {primary}"
-            f"  |  {_fmt_h(row.wasted)} GPU-h wasted"
+            f"  |  {_fmt_h(row.wasted)} RGU-h wasted"
             f"  |  waste ratio: {_pct(row.waste_ratio)}"
         )
 

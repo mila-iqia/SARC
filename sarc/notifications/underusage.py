@@ -15,12 +15,12 @@ _TOP_JOBS_N = 5
 class ClusterBreakdown:
     cluster: str
     # RGU-hours requested for this cluster in the window.
-    gpu_hours: float
-    # RGU-hours wasted (gpu_hours - rgu_used).  Jobs without a gpu_utilization
-    # stat contribute their full RGU-hours to wasted (utilization assumed 0),
-    # matching the histogram's conservative treatment of missing stats.
+    rgu_hours: float
+    # RGU-hours wasted (rgu_hours - rgu_used).  Jobs without a gpu_utilization
+    # stat contribute their full RGU-hours to wasted (utilization assumed 0).
     wasted: float
-    # Alias retained so the REST-swap is a one-function change.
+    # Same as rgu_hours; kept as a separate field for clarity in waste_ratio
+    # computations (wasted / requested).
     requested: float
 
 
@@ -29,8 +29,9 @@ class UnderuserJob:
     job_id: int
     cluster: str
     submit_time: datetime
-    # RGU-hours unused for this job.  0 when utilization is missing.
-    gpu_hours_unused: float
+    # RGU-hours unused for this job.  Equals full RGU-hours when utilization
+    # is missing (utilization assumed 0).
+    rgu_hours_unused: float
     # None when no gpu_utilization stat was recorded for this job.
     gpu_utilization: float | None
 
@@ -40,11 +41,12 @@ class UnderuserRow:
     email: str
     display_name: str
     user_id: int
-    # Total RGU-hours requested over the window.  Used for the activity floor:
-    # the floor is compared against *requested* RGU-hours, not consumed, so that
-    # high-requester/low-utilisation users (the target population) are not
-    # filtered out by the floor check.
-    gpu_hours: float
+    # Total RGU-hours requested over the window.
+    rgu_hours: float
+    # RGU-hours wasted over the window (= rgu_hours - rgu_used).  Used for the
+    # activity floor: the floor is compared against *wasted* RGU-hours, not
+    # requested, so that users who waste a significant absolute amount are
+    # flagged regardless of their total allocation size.
     wasted: float
     requested: float
     # waste_ratio = wasted / requested  (= 1 - rgu_used / rgu_requested)
@@ -52,7 +54,7 @@ class UnderuserRow:
     # avg_utilization = 1 - waste_ratio  (= rgu_used / rgu_requested)
     avg_utilization: float
     # Human-readable label for wasted (same value, different name for messages).
-    gpu_hours_unused: float
+    rgu_hours_unused: float
     by_cluster: list[ClusterBreakdown] = field(default_factory=list)
     # Top-N GPU jobs by RGU-hours unused, descending.
     top_jobs: list[UnderuserJob] = field(default_factory=list)
@@ -63,8 +65,9 @@ def get_underusers(
     end: datetime,
     *,
     min_ratio: float,
-    min_gpu_hours: float,
+    min_rgu_hours: float,
     resource: str = "gpu",
+    exclude_zero_usage: bool = False,
 ) -> list[UnderuserRow]:
     if resource != "gpu":
         raise ValueError(f"Unsupported resource: {resource!r}")
@@ -72,13 +75,12 @@ def get_underusers(
     with config().db.session() as session:
         # Aggregate RGU-hours requested and used per (user, cluster).
         #
-        # Mirrors metrics_global_histogram()'s rgu_requested / rgu_used pattern:
         #   rgu_requested = SUM(rgu * elapsed / 3600)
         #   rgu_used      = SUM(rgu * elapsed / 3600 * gpu_utilization_mean)
         #
         # LEFT JOIN on JobStatisticDB so jobs without a gpu_utilization stat
         # contribute 0 to rgu_used (conservative: unknown = 0 % utilisation).
-        # The `m == m` idiom (from the histogram) filters NaN without losing
+        # The `m == m` idiom filters NaN (NaN != NaN in SQL) without losing
         # the NULL-from-outer-join → else_=0.0 fallback.
         gpu_util_stat = aliased(JobStatisticDB)
         m_mean = col(gpu_util_stat.mean)
@@ -88,7 +90,7 @@ def get_underusers(
             else_=0.0,
         )
 
-        agg_rows = session.exec(
+        stmt = (
             select(
                 JobSeriesDB.sarc_user_id,
                 JobSeriesDB.email,
@@ -117,7 +119,10 @@ def get_underusers(
                 JobSeriesDB.display_name,
                 JobSeriesDB.cluster_name,
             )
-        ).all()
+        )
+        if exclude_zero_usage:
+            stmt = stmt.having(func.coalesce(func.sum(rgu_used_expr), 0) > 0)
+        agg_rows = session.exec(stmt).all()
 
         user_data: dict[int, dict] = {}
         for row in agg_rows:
@@ -134,7 +139,7 @@ def get_underusers(
             user_data[uid]["clusters"].append(
                 ClusterBreakdown(
                     cluster=row.cluster_name or "unknown",
-                    gpu_hours=rgu_h,
+                    rgu_hours=rgu_h,
                     wasted=wasted_h,
                     requested=rgu_h,
                 )
@@ -143,7 +148,7 @@ def get_underusers(
         underuser_ids: list[int] = []
         for uid, u in user_data.items():
             clusters = u["clusters"]
-            total_rgu_h = sum(c.gpu_hours for c in clusters)
+            total_rgu_h = sum(c.rgu_hours for c in clusters)
             total_wasted = sum(c.wasted for c in clusters)
             u["total_rgu_h"] = total_rgu_h
             u["total_wasted"] = total_wasted
@@ -151,7 +156,7 @@ def get_underusers(
                 continue
             waste_ratio = total_wasted / total_rgu_h
             u["waste_ratio"] = waste_ratio
-            if waste_ratio >= min_ratio and total_rgu_h >= min_gpu_hours:
+            if waste_ratio >= min_ratio and total_wasted >= min_rgu_hours:
                 underuser_ids.append(uid)
 
         # Per-job data for the identified underusers — same RGU × utilisation pattern.
@@ -201,7 +206,7 @@ def get_underusers(
                         job_id=jr.job_db_id,
                         cluster=jr.cluster_name or "unknown",
                         submit_time=jr.submit_time,
-                        gpu_hours_unused=rgu_h - rgu_used_h,
+                        rgu_hours_unused=rgu_h - rgu_used_h,
                         gpu_utilization=util,
                     )
                 )
@@ -216,9 +221,7 @@ def get_underusers(
         by_cluster = sorted(u["clusters"], key=lambda c: c.wasted, reverse=True)
 
         top_jobs = sorted(
-            jobs_by_user[uid],
-            key=lambda j: j.gpu_hours_unused,
-            reverse=True,
+            jobs_by_user[uid], key=lambda j: j.rgu_hours_unused, reverse=True
         )[:_TOP_JOBS_N]
 
         result.append(
@@ -226,12 +229,12 @@ def get_underusers(
                 email=u["email"],
                 display_name=u["display_name"],
                 user_id=uid,
-                gpu_hours=total_rgu_h,
+                rgu_hours=total_rgu_h,
                 wasted=total_wasted,
                 requested=total_rgu_h,
                 waste_ratio=waste_ratio,
                 avg_utilization=1.0 - waste_ratio,
-                gpu_hours_unused=total_wasted,
+                rgu_hours_unused=total_wasted,
                 by_cluster=by_cluster,
                 top_jobs=top_jobs,
             )
@@ -284,7 +287,8 @@ def _query_month_agg(
     end: datetime,
     *,
     min_ratio: float,
-    min_gpu_hours: float,
+    min_rgu_hours: float,
+    exclude_zero_usage: bool = False,
 ) -> MonthlyStats:
     """Aggregate fleet-level waste stats for a single calendar month window."""
     gpu_util_stat = aliased(JobStatisticDB)
@@ -295,7 +299,7 @@ def _query_month_agg(
         else_=0.0,
     )
 
-    agg_rows = session.exec(
+    stmt = (
         select(
             JobSeriesDB.sarc_user_id,
             func.coalesce(func.sum(rgu_h_expr), 0).label("sum_rgu_hours"),
@@ -316,7 +320,10 @@ def _query_month_agg(
             col(JobSeriesDB.rgu).is_not(None),
         )
         .group_by(JobSeriesDB.sarc_user_id)
-    ).all()
+    )
+    if exclude_zero_usage:
+        stmt = stmt.having(func.coalesce(func.sum(rgu_used_expr), 0) > 0)
+    agg_rows = session.exec(stmt).all()
 
     total_rgu_h = 0.0
     total_wasted = 0.0
@@ -329,15 +336,13 @@ def _query_month_agg(
         total_wasted += wasted_h
         if rgu_h > 0:
             ratio = wasted_h / rgu_h
-            if ratio >= min_ratio and rgu_h >= min_gpu_hours:
+            if ratio >= min_ratio and wasted_h >= min_rgu_hours:
                 above_count += 1
 
     avg_ratio = total_wasted / total_rgu_h if total_rgu_h > 0 else 0.0
     label = start.strftime("%Y-%m")
     return MonthlyStats(
-        label=label,
-        avg_waste_ratio=avg_ratio,
-        above_threshold_count=above_count,
+        label=label, avg_waste_ratio=avg_ratio, above_threshold_count=above_count
     )
 
 
@@ -345,9 +350,10 @@ def get_historical_stats(
     end: datetime,
     *,
     min_ratio: float,
-    min_gpu_hours: float,
+    min_rgu_hours: float,
     resource: str = "gpu",
     months: int = 6,
+    exclude_zero_usage: bool = False,
 ) -> HistoricalStats:
     """Compute 6-month fleet-level waste trend and year-over-year comparison.
 
@@ -369,16 +375,31 @@ def get_historical_stats(
 
     with config().db.session() as session:
         current_stats = [
-            _query_month_agg(session, s, e, min_ratio=min_ratio, min_gpu_hours=min_gpu_hours)
+            _query_month_agg(
+                session,
+                s,
+                e,
+                min_ratio=min_ratio,
+                min_rgu_hours=min_rgu_hours,
+                exclude_zero_usage=exclude_zero_usage,
+            )
             for s, e in current_buckets
         ]
         yoy_raw = [
-            _query_month_agg(session, s, e, min_ratio=min_ratio, min_gpu_hours=min_gpu_hours)
+            _query_month_agg(
+                session,
+                s,
+                e,
+                min_ratio=min_ratio,
+                min_rgu_hours=min_rgu_hours,
+                exclude_zero_usage=exclude_zero_usage,
+            )
             for s, e in yoy_buckets
         ]
 
-    has_yoy_data = any(m.avg_waste_ratio > 0 or m.above_threshold_count > 0 for m in yoy_raw)
+    has_yoy_data = any(
+        m.avg_waste_ratio > 0 or m.above_threshold_count > 0 for m in yoy_raw
+    )
     return HistoricalStats(
-        months=current_stats,
-        yoy_months=yoy_raw if has_yoy_data else None,
+        months=current_stats, yoy_months=yoy_raw if has_yoy_data else None
     )
