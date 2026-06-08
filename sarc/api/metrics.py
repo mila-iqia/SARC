@@ -213,7 +213,11 @@ def _rgu_col(rgu_type: str):
     value falls back to the billing-normalized RGU (``rgu``), which runs ~1.5x
     higher than the physical count for Mila.
     """
-    return col(JobSeriesDB.physical_rgu if rgu_type == "physical" else JobSeriesDB.rgu)
+    return col(
+        JobSeriesDB.physical_rgu_drac
+        if rgu_type == "physical"
+        else JobSeriesDB.rgu_drac
+    )
 
 
 def _resolve_cluster_ids(sess: Session, clusters: list[str]) -> list[int] | None:
@@ -931,12 +935,18 @@ def metrics_jobs(
 
     query = select(  # ty:ignore[no-matching-overload]
         JobSeriesDB.cluster_name,
+        JobSeriesDB.job_id,
+        JobSeriesDB.submit_time,
         JobSeriesDB.cluster_user,
         JobSeriesDB.job_state,
         JobSeriesDB.elapsed_time,
         JobSeriesDB.nodes,
+        JobSeriesDB.requested_gres_gpu,
+        JobSeriesDB.allocated_gres_gpu,
+        JobSeriesDB.allocated_billing,
         JobSeriesDB.allocated_gpu_type,
         JobSeriesDB.harmonized_gpu_type,
+        JobSeriesDB.gpu_type_rgu_drac,
         rgu_col.label("rgu"),
         rgu_hours,
         metric_mean,
@@ -959,12 +969,18 @@ def metrics_jobs(
     # it is intentionally absent. `waste` mirrors the per-row formula below.
     sortable = {
         "cluster": col(JobSeriesDB.cluster_name),
+        "job_id": col(JobSeriesDB.job_id),
+        "submit_time": col(JobSeriesDB.submit_time),
         "user": col(JobSeriesDB.cluster_user),
         "job_state": col(JobSeriesDB.job_state),
         "elapsed": col(JobSeriesDB.elapsed_time),
+        "requested_gpu": col(JobSeriesDB.requested_gres_gpu),
+        "allocated_gpu": col(JobSeriesDB.allocated_gres_gpu),
+        "billing": col(JobSeriesDB.allocated_billing),
         "gpu_type": func.coalesce(
             col(JobSeriesDB.harmonized_gpu_type), col(JobSeriesDB.allocated_gpu_type)
         ),
+        "gpu_type_rgu": col(JobSeriesDB.gpu_type_rgu_drac),
         "rgu": rgu_col,
         "rgu_hours": rgu_hours_raw,
         "waste": rgu_hours_raw * (1 - metric_mean_raw),
@@ -1002,13 +1018,19 @@ def metrics_jobs(
         jobs.append(
             {
                 "cluster": row.cluster_name or "",
+                "job_id": row.job_id,
+                "submit_time": row.submit_time.isoformat() if row.submit_time else None,
                 "user": row.cluster_user or "",
                 "job_state": row.job_state.value if row.job_state is not None else "",
                 "elapsed": row.elapsed_time or 0,
                 "nodes": ", ".join(row.nodes or []) or None,
+                "requested_gpu": row.requested_gres_gpu,
+                "allocated_gpu": row.allocated_gres_gpu,
+                "billing": row.allocated_billing,
                 # Harmonised name (the one RGU is computed from) when known;
                 # raw Slurm name otherwise.
                 "gpu_type": row.harmonized_gpu_type or row.allocated_gpu_type or "",
+                "gpu_type_rgu": _nan_to_none(row.gpu_type_rgu_drac),
                 "rgu": round(float(row.rgu), 2),
                 "rgu_hours": round(rh, 2),
                 "waste": waste,
