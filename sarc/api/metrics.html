@@ -404,7 +404,7 @@
       });
     });
     metSel.value = 'gpu_sm_occupancy';
-    met2Sel.value = 'gpu_utilization';
+    met2Sel.value = '';
 
     // The RGU unit is a pure display rescale (the backend always returns
     // RGU·h), so changing it never re-fetches: on change we redraw every tile
@@ -526,7 +526,7 @@
     // Tiles shown on a fresh load (no ?plots= param): RGU-by-cluster and metric
     // trend side by side on the first row, the job table on its own row below.
     // Copied per call so mutating tileLayout never corrupts this template.
-    const DEFAULT_LAYOUT = [['clusterrgu', 'metrictrend'], ['jobtable']];
+    const DEFAULT_LAYOUT = [['clusterrgu', 'jobtable'], ['metrictrend', 'userrgu']];
     function paramToLayout(s) {
       if (!s) return DEFAULT_LAYOUT.map(r => [...r]);
       const rows = s.split(';')
