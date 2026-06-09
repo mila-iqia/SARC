@@ -34,6 +34,11 @@ class CacheEntry:
         """Add a key-value pair to the cache entry"""
         self._zf.writestr(key, value)
 
+    def keys(self) -> Iterator[str]:
+        """Get all key names without loading the values."""
+        for zi in self._zf.infolist():
+            yield zi.filename
+
     def items(self) -> Iterator[tuple[str, bytes]]:
         """Get all the key, value pairs in the order they were added."""
         for zi in self._zf.infolist():
@@ -271,6 +276,34 @@ class Cache:
                             ZipFile(file, mode="r"), self._datetime_from_path(file)
                         )
         return None
+
+    def read_backward(self) -> Iterator[CacheEntry]:
+        """Yield all cache entries in reverse chronological order."""
+        cdir = self.cache_dir
+        ignore = {".DS_Store"}
+        for year_dir in sorted(
+            filter(lambda p: p.name not in ignore, cdir.iterdir()),
+            key=_basename_to_int,
+            reverse=True,
+        ):
+            for month_dir in sorted(
+                filter(lambda p: p.name not in ignore, year_dir.iterdir()),
+                key=_basename_to_int,
+                reverse=True,
+            ):
+                for day_dir in sorted(
+                    filter(lambda p: p.name not in ignore, month_dir.iterdir()),
+                    key=_basename_to_int,
+                    reverse=True,
+                ):
+                    for file in sorted(
+                        filter(no_current, day_dir.iterdir()),
+                        key=_basename_to_time,
+                        reverse=True,
+                    ):
+                        yield CacheEntry(
+                            ZipFile(file, mode="r"), self._datetime_from_path(file)
+                        )
 
     def oldest_year(self) -> datetime:
         """
