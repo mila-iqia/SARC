@@ -342,7 +342,7 @@ def _rgu_source(
 
 
 @router.get("/metrics", response_class=HTMLResponse)
-def metrics_global_page():
+def metrics_homepage():
     """Serve the dashboard's single-page HTML UI; its charts call the JSON endpoints below."""
     return _HTML
 
@@ -359,8 +359,8 @@ def metrics_job_states() -> list[str]:
     return [s.value for s in SlurmState]
 
 
-@router.get("/metrics/data")
-def metrics_global_data(
+@router.get("/metrics/job_counts")
+def metrics_job_counts(
     start: date = Query(default=None),
     end: date = Query(default=None),
     period: str = Query(default=_DEFAULT_PERIOD),
@@ -456,8 +456,8 @@ def _build_heatmap_payload(
     return {"x": xs, "y": ys, "z": z, "total": total}
 
 
-@router.get("/metrics/heatmap")
-def metrics_global_heatmap(
+@router.get("/metrics/job_times_vs_limit")
+def metrics_job_times_vs_limit(
     start: date = Query(default=None),
     end: date = Query(default=None),
     clusters: list[str] = Query(default=[]),
@@ -546,8 +546,8 @@ def _valid_metric_filter(metric_expr):
     )
 
 
-@router.get("/metrics/density")
-def metrics_global_density(
+@router.get("/metrics/metric_distribution")
+def metrics_metric_distribution(
     start: date = Query(default=None),
     end: date = Query(default=None),
     clusters: list[str] = Query(default=[]),
@@ -701,8 +701,8 @@ def metrics_global_density(
     }
 
 
-@router.get("/metrics/histogram")
-def metrics_global_histogram(
+@router.get("/metrics/rgu_usage")
+def metrics_rgu_usage(
     start: date = Query(default=None),
     end: date = Query(default=None),
     period: str = Query(default=_DEFAULT_PERIOD),
@@ -803,7 +803,7 @@ def metrics_rgu_by_cluster(
 ):
     """Total RGU.h per period, stacked by cluster.
 
-    Aggregates the same RGU metric as /histogram (SUM(rgu * elapsed / 3600))
+    Aggregates the same RGU metric as /rgu_usage (SUM(rgu * elapsed / 3600))
     and groups by cluster_name. When ``clusters`` is given, only those clusters
     are kept (empty = all clusters). Returns one series per cluster, aligned on
     a shared period axis; clusters with no RGU at all (e.g. no billing) are
@@ -901,7 +901,7 @@ def metrics_metric_trend(
     # No RGU/statistics-view columns are needed, so query SlurmJobDB directly
     # rather than the JobSeriesDB view (whose per-row billing lateral and
     # user/membertype joins dominate). The view's inner joins never drop a job,
-    # so the result is identical. Same pattern as /metrics/data.
+    # so the result is identical. Same pattern as /metrics/job_counts.
     bucket_expr = _bucket_expr(parsed, SlurmJobDB.submit_time, begin_dt)
     m_mean = col(JobStatisticDB.mean)
     m_max = col(JobStatisticDB.max)
@@ -959,8 +959,8 @@ def metrics_metric_trend(
     }
 
 
-@router.get("/metrics/user_rgu")
-def metrics_global_user_rgu(
+@router.get("/metrics/rgu_by_user")
+def metrics_rgu_by_user(
     start: date = Query(default=None),
     end: date = Query(default=None),
     clusters: list[str] = Query(default=[]),
@@ -974,7 +974,7 @@ def metrics_global_user_rgu(
 ):
     """Requested vs used RGU.h aggregated per user (not over time).
 
-    Same RGU.h measure as /histogram, summed per cluster_user over GPU jobs in the
+    Same RGU.h measure as /rgu_usage, summed per cluster_user over GPU jobs in the
     window (requested = SUM(rgu * elapsed / 3600); used = scaled by the mean
     ``metric``). Returns a list sorted by descending requested RGU.h.
     """
@@ -982,7 +982,7 @@ def metrics_global_user_rgu(
 
     # Aggregate by user: SUM(rgu * elapsed / 3600) per user. physical reads
     # SlurmJobDB directly; billing the view. Metric mean via a targeted LEFT JOIN
-    # on jobstatisticdb (one metric, job_id index) — see histogram.
+    # on jobstatisticdb (one metric, job_id index) — see rgu_usage.
     src = _rgu_source(
         sess, rgu_type, clusters, cluster_user, job_states, need_cluster_name=False
     )
@@ -1069,7 +1069,7 @@ def metrics_jobs(
     rgu_hours_raw = src.rgu_drac * src.elapsed_time / 3600.0
 
     # One aliased jobstatisticdb row per distinct stat name, LEFT-joined on job_pk
-    # (never JobSeriesDB.statistics, a per-row json_object_agg — see histogram).
+    # (never JobSeriesDB.statistics, a per-row json_object_agg — see rgu_usage).
     stat_names = {metric, "gpu_utilization", "gpu_sm_occupancy", "gpu_memory"}
     js = {name: aliased(JobStatisticDB) for name in sorted(stat_names)}
     metric_mean_raw = col(js[metric].mean)

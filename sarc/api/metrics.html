@@ -1672,11 +1672,11 @@
       const densityParams = { ...base, metric: p.metric,
                               ...(p.metric2 ? { metric2: p.metric2 } : {}) };
       switch (ep) {
-        case 'data':      return '/dash/metrics/data?'      + new URLSearchParams({ ...base, period: p.period });
-        case 'heatmap':   return '/dash/metrics/heatmap?'   + new URLSearchParams({ ...base, ...focusParams });
-        case 'histogram': return '/dash/metrics/histogram?' + new URLSearchParams({ ...base, period: p.period, metric: p.metric, rgu_type: p.rgu_type });
-        case 'density':   return '/dash/metrics/density?'   + new URLSearchParams({ ...densityParams, ...focusParams, rgu_type: p.rgu_type });
-        case 'user_rgu':  return '/dash/metrics/user_rgu?'  + new URLSearchParams({ start: p.start, end: p.end, metric: p.metric, ...focusParams, rgu_type: p.rgu_type });
+        case 'data':      return '/dash/metrics/job_counts?' + new URLSearchParams({ ...base, period: p.period });
+        case 'heatmap':   return '/dash/metrics/job_times_vs_limit?' + new URLSearchParams({ ...base, ...focusParams });
+        case 'histogram': return '/dash/metrics/rgu_usage?' + new URLSearchParams({ ...base, period: p.period, metric: p.metric, rgu_type: p.rgu_type });
+        case 'density':   return '/dash/metrics/metric_distribution?' + new URLSearchParams({ ...densityParams, ...focusParams, rgu_type: p.rgu_type });
+        case 'user_rgu':  return '/dash/metrics/rgu_by_user?' + new URLSearchParams({ start: p.start, end: p.end, metric: p.metric, ...focusParams, rgu_type: p.rgu_type });
         case 'jobs':      return jobsURL(p, JOBTABLE_DEFAULTS);
         case 'rgu_by_cluster': return '/dash/metrics/rgu_by_cluster?' + new URLSearchParams({ start: p.start, end: p.end, period: p.period, ...(p.cluster_user ? { cluster_user: p.cluster_user } : {}), rgu_type: p.rgu_type });
         case 'metric_trend': return '/dash/metrics/metric_trend?' + new URLSearchParams({ ...base, period: p.period, metric: p.metric, ...(p.metric2 ? { metric2: p.metric2 } : {}) });
