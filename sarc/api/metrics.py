@@ -343,11 +343,13 @@ def _rgu_source(
 
 @router.get("/metrics", response_class=HTMLResponse)
 def metrics_global_page():
+    """Serve the dashboard's single-page HTML UI; its charts call the JSON endpoints below."""
     return _HTML
 
 
 @router.get("/clusters")
 def metrics_clusters(sess: Session = Depends(session_dep)) -> list[str]:
+    """Names of all known clusters, for the dashboard's cluster filter."""
     return sorted(c.name for c in get_available_clusters(sess))
 
 
@@ -367,6 +369,12 @@ def metrics_global_data(
     job_states: list[str] = Query(default=[]),
     sess: Session = Depends(session_dep),
 ):
+    """Job count per time bucket.
+
+    Counts jobs whose submit_time falls in each ``period`` bucket of the window,
+    after the cluster/user/state filters. Returns one {period_start, period_end,
+    count} per bucket, with empty buckets reported as 0.
+    """
     begin_dt, finish_dt = _date_range(start, end)
     parsed = _parse_period(period)
     fmt = _label_fmt(parsed)
@@ -459,6 +467,14 @@ def metrics_global_heatmap(
     focus_end: datetime | None = Query(default=None),
     sess: Session = Depends(session_dep),
 ):
+    """Two job-count heatmaps relating each job's runtime to its requested time limit.
+
+    Over jobs submitted in the window that have a time_limit and have started:
+    ``elapsed_vs_limit`` plots elapsed_time (y) against time_limit (x), and
+    ``wait_vs_limit`` plots the queue wait, start - submit (y), against time_limit
+    (x). Each is a 100x100 log-binned grid of job counts. Returns both grids plus
+    total_jobs. ``focus_start/end`` narrows the window.
+    """
     begin_dt, finish_dt = _apply_focus(*_date_range(start, end), focus_start, focus_end)
     cluster_ids = _resolve_cluster_ids(sess, clusters)
 
@@ -544,6 +560,14 @@ def metrics_global_density(
     rgu_type: str = Query(default="physical"),
     sess: Session = Depends(session_dep),
 ):
+    """Duration-weighted distribution of a normalized GPU metric.
+
+    ``metric`` is a [0, 1] GPU/system stat (e.g. gpu_sm_occupancy). Over GPU jobs
+    in the window, bins each job's mean value into 50 bins weighted by
+    rgu * elapsed (so long/big jobs count more). With ``metric2``, also returns its
+    distribution and a 100x100 paired heatmap (metric vs metric2). Returns
+    {primary, secondary, paired}.
+    """
     if metric not in _METRICS_0_1:
         raise HTTPException(status_code=400, detail=f"Unknown metric: {metric!r}")
     if metric2 is not None and metric2 not in _METRICS_0_1:
@@ -689,6 +713,13 @@ def metrics_global_histogram(
     rgu_type: str = Query(default="physical"),
     sess: Session = Depends(session_dep),
 ):
+    """Requested vs effectively-used RGU.h per time bucket.
+
+    Over GPU jobs submitted in each ``period`` bucket: ``rgu_requested`` =
+    SUM(rgu * elapsed / 3600); ``rgu_used`` = the same scaled by each job's mean
+    ``metric`` (e.g. gpu_sm_occupancy). Their gap is wasted GPU capacity. Returns
+    one row per bucket.
+    """
     begin_dt, finish_dt = _date_range(start, end)
     parsed = _parse_period(period)
     fmt = _label_fmt(parsed)
@@ -941,6 +972,12 @@ def metrics_global_user_rgu(
     rgu_type: str = Query(default="physical"),
     sess: Session = Depends(session_dep),
 ):
+    """Requested vs used RGU.h aggregated per user (not over time).
+
+    Same RGU.h measure as /histogram, summed per cluster_user over GPU jobs in the
+    window (requested = SUM(rgu * elapsed / 3600); used = scaled by the mean
+    ``metric``). Returns a list sorted by descending requested RGU.h.
+    """
     begin_dt, finish_dt = _apply_focus(*_date_range(start, end), focus_start, focus_end)
 
     # Aggregate by user: SUM(rgu * elapsed / 3600) per user. physical reads
@@ -1007,6 +1044,14 @@ def metrics_jobs(
     rgu_type: str = Query(default="physical"),
     sess: Session = Depends(session_dep),
 ):
+    """Paginated, sortable table of individual jobs.
+
+    Lists GPU jobs submitted in the window (cluster/user/state filtered), one row
+    per job: cluster, user, state, elapsed, GPU counts, billing, gpu_type, rgu,
+    rgu_hours, per-job metric means and ``waste`` (rgu_hours * (1 - mean)). Sorted
+    by ``sort_by``/``sort_dir`` and paginated by ``limit``/``offset``. Returns
+    {total, jobs}, where ``total`` is the full filtered count.
+    """
     begin_dt, finish_dt = _apply_focus(*_date_range(start, end), focus_start, focus_end)
 
     # Limit-first pagination. A `page` subquery ranks, paginates and counts the
