@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import io
 import logging
 from collections.abc import Iterable, Iterator
 from datetime import UTC, datetime, time, timedelta
@@ -245,7 +246,11 @@ class Cache:
             ...         print(f"Key: {key}, Data size: {len(data)} bytes")
         """
         for file, fetch_time in self._paths_from(from_time):
-            yield CacheEntry(ZipFile(file, mode="r"), fetch_time)
+            # read the entire raw zip file in memory to speed up a little the CacheEntry reads
+            with open(file, "rb") as f:
+                zip_bytes = f.read()
+                zip_buffer = io.BytesIO(zip_bytes)
+                yield CacheEntry(ZipFile(zip_buffer, mode="r"), fetch_time)
 
     def latest_entry(self) -> CacheEntry | None:
         """Returns the most recent cache entry if exists, otherwise None."""
