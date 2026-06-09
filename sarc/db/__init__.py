@@ -90,14 +90,19 @@ def sync_cluster_end_times(sess: Session) -> None:
 
     # -- apply to DB --
     for cluster_name, db_cluster in db_clusters.items():
-        start_dt = datetime.combine(db_cluster.start_date, datetime.min.time(), tzinfo=UTC)
+        start_dt = datetime.combine(
+            db_cluster.start_date, datetime.min.time(), tzinfo=UTC
+        )
 
         new_sacct = sacct_times.get(cluster_name, start_dt)
         if db_cluster.end_time_sacct is None or new_sacct > db_cluster.end_time_sacct:
             db_cluster.end_time_sacct = new_sacct
 
         new_prom = prom_times.get(cluster_name, start_dt)
-        if db_cluster.end_time_prometheus is None or new_prom > db_cluster.end_time_prometheus:
+        if (
+            db_cluster.end_time_prometheus is None
+            or new_prom > db_cluster.end_time_prometheus
+        ):
             db_cluster.end_time_prometheus = new_prom
 
 
