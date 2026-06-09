@@ -1085,7 +1085,6 @@ def metrics_jobs(
         src.submit_time < finish_dt,
         src.allocated_gpu_type.is_not(None),
         src.rgu_drac.is_not(None),
-        src.rgu_drac == src.rgu_drac,  # NaN guard   # noqa: PLR0124
     )
 
     # PAGE: the page's job_pks + the pre-LIMIT total. The expensive scan/sort/

@@ -87,9 +87,10 @@ gpu_count_normalized_expr = case(
         and_(col(billing_subq.c.gpu_to_billing).is_(None), cluster_billing_count > 0),
         gpu_count_raw,
     ),
-    # C: scale by per-type billing. NULL division yields NULL (NaN) when
-    # gpu_unit_billing is missing (cluster has no billing record at all, or
-    # gpu_type missing from the mapping).
+    # C: scale by per-type billing. A missing gpu_unit_billing (cluster has no
+    # billing record at all, or gpu_type absent from the mapping) makes the
+    # division yield NULL — not NaN: in SQL `x / NULL` is NULL, and `x / 0`
+    # raises rather than producing NaN.
     else_=(gpu_count_raw / gpu_unit_billing),
 )
 
