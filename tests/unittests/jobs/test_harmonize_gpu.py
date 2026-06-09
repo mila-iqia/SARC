@@ -56,5 +56,5 @@ def test_harmonize_gpu(node, gpu_type, expected, gpus_per_nodes):
     ],
 )
 def test_clusterconfig_harmonize_gpu(node, gpu_type, expected):
-    cluster = config().clusters["raisin_no_prometheus"]
+    cluster = config.clusters["raisin_no_prometheus"]
     assert cluster.harmonize_gpu(node, gpu_type) == expected

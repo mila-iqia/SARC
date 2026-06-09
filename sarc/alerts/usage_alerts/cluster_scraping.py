@@ -64,7 +64,7 @@ def check_nb_jobs_per_cluster_per_time(
         )
         return False
 
-    with config().db.session() as sess:
+    with config.db.session() as sess:
         if not sess.exec(select(func.count(col(SlurmJobDB.id)))).one():
             logger.error("No jobs in database.")
             return False

@@ -38,7 +38,7 @@ def run_migrations_offline() -> None:
     script output.
 
     """
-    with config("scraping").db.engine.connect() as conn:
+    with config.db.engine.connect() as conn:
         context.configure(
             connection=conn,
             target_metadata=target_metadata,
@@ -59,7 +59,7 @@ def run_migrations_online() -> None:
 
     """
 
-    with config("scraping").db.engine.connect() as connection:
+    with config.db.engine.connect() as connection:
         context.configure(
             connection=connection,
             target_metadata=target_metadata,

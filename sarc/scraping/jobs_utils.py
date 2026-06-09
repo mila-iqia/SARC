@@ -36,7 +36,7 @@ def _time_auto_first_date(cluster_name: str, end_field: str) -> datetime:
     # get the last valid date in the database for the cluster
     # pylint: disable=broad-exception-raised
     #
-    with config().db.session() as sess:
+    with config.db.session() as sess:
         cluster = SlurmClusterDB.by_name(sess, cluster_name)
         if cluster is None:
             raise ClusterNotFound(f"Cluster {cluster_name} not found in database")
@@ -101,7 +101,7 @@ def parse_auto_intervals(
 def set_auto_end_time(cluster_name: str, end_field: str, date: datetime) -> None:
     # set the last valid date in the database for the cluster
     logger.info(f"set last successful date for cluster {cluster_name} to {date}")
-    with config().db.session() as sess:
+    with config.db.session() as sess:
         sess.exec(
             update(SlurmClusterDB)
             .where(col(SlurmClusterDB.name) == cluster_name)

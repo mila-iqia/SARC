@@ -10,7 +10,7 @@ def test_get_state_none(empty_read_write_db):
 
 
 def test_config_read_write_into_db(empty_read_write_db, beans_config):
-    check_many_beans = config().health_monitor.checks["many_beans"]
+    check_many_beans = config.health_monitor.checks["many_beans"]
     assert type(check_many_beans) is BeanCheck
 
     state = HealthCheckState(check=check_many_beans)

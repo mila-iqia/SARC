@@ -34,15 +34,14 @@ def check_prometheus_vs_slurmconfig(cluster_name: str | None = None) -> bool:
     from sarc.config import ClusterConfig, config
     from sarc.db.cluster import SlurmClusterDB
 
-    cfg = config("scraping")
     if cluster_name is None:
-        clusters: Iterable[ClusterConfig] = cfg.clusters.values()
+        clusters: Iterable[ClusterConfig] = config.clusters.values()
     else:
-        clusters = [cfg.clusters[cluster_name]]
+        clusters = [config.clusters[cluster_name]]
 
     ok = True
 
-    with cfg.db.session() as sess:
+    with config.db.session() as sess:
         for cluster in clusters:
             # We only check clusters which have a prometheus_url
             if not cluster.prometheus_url:

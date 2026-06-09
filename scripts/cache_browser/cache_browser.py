@@ -397,12 +397,11 @@ def main() -> None:
         cache_dir = Path(args.cache_dir)
     else:
         try:
-            from sarc.config import config  # type: ignore
+            from sarc.config import config
 
-            cfg = config()
-            if cfg.cache is None:
+            if config.cache is None:
                 parser.error("SARC config has no cache path configured.")
-            cache_dir = Path(cfg.cache)
+            cache_dir = Path(config.cache)
         except ImportError:
             parser.error("sarc package not found; pass cache_dir as argument.")
         except Exception as exc:

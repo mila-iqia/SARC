@@ -17,14 +17,15 @@ class FetchSlurmConfig:
     cluster_names: list[str] = field(alias=["-c"], default_factory=list)
 
     def execute(self) -> int:
-        cfg = config("scraping")
 
         cache = Cache(subdirectory="slurm_conf")
 
         with cache.create_entry(datetime.now(UTC)) as ce:
             for cluster_name in self.cluster_names:
                 try:
-                    file_content = _download_slurm_conf_file(cfg.clusters[cluster_name])
+                    file_content = _download_slurm_conf_file(
+                        config.clusters[cluster_name]
+                    )
                     ce.add_value(cluster_name, file_content.encode("utf-8"))
                 except Exception as e:
                     logger.exception("Skipping cluster %s", cluster_name, exc_info=e)

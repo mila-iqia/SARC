@@ -61,21 +61,19 @@ def setupLogging(verbose_level: int = 0, command_name: str | None = None):
         "CRITICAL": logging.CRITICAL,
     }
 
-    conf = config()
-    # Apparently this can be called in client mode which doesn't have logging
-    if hasattr(conf, "logging") and conf.logging is not None:
-        assert isinstance(conf.logging, LoggingConfig)
-        if conf.logging.slack:
-            setupSlackReport(conf.logging.slack, command_name)
+    if config.logging is not None:
+        assert isinstance(config.logging, LoggingConfig)
+        if config.logging.slack:
+            setupSlackReport(config.logging.slack, command_name)
 
-        config_log_level = logging_levels.get(conf.logging.log_level, logging.WARNING)
+        config_log_level = logging_levels.get(config.logging.log_level, logging.WARNING)
         # verbose priority:
         # in 0 (not specified in command line) then config log level is used
         # otherwise, command-line verbose level is used
         log_level = verbose_levels.get(verbose_level, config_log_level)
 
         # Create the OpenTelemetry handler with NOTSET level
-        ot_handler = getOpenTelemetryLoggingHandler(conf.logging)
+        ot_handler = getOpenTelemetryLoggingHandler(config.logging)
 
         # Create a single formatter that will be used by both handlers
         formatter = logging.Formatter(

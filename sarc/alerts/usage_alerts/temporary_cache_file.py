@@ -18,7 +18,7 @@ class TemporaryCacheFileCheck(HealthCheck):
     def check(self) -> CheckResult:
         from sarc.config import config
 
-        cache = config().cache
+        cache = config.cache
         if cache is None:
             return self.ok()
 

@@ -33,7 +33,7 @@ def check_old_running_jobs(since: datetime_utc | None = None) -> bool:
 
     now = datetime.now(tz=UTC)
     jobs_over_limit: list[SlurmJobDB] = []
-    with config().db.session() as sess:
+    with config.db.session() as sess:
         query = select(SlurmJobDB).where(
             SlurmJobDB.job_state == SlurmState.RUNNING,
             col(SlurmJobDB.time_limit).is_not(None),

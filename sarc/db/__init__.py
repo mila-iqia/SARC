@@ -27,7 +27,7 @@ def get_meta():
 def init_insert() -> None:
     from sarc.config import config
 
-    with config().db.session() as sess:
+    with config.db.session() as sess:
         insert_clusters(sess)
         insert_rgu(sess)
         sess.commit()
@@ -39,7 +39,7 @@ def insert_clusters(sess: Session) -> None:
 
     from .cluster import SlurmClusterDB
 
-    clusters = config("scraping").clusters
+    clusters = config.clusters
     for cluster_name, clust in clusters.items():
         db_cluster = sess.exec(
             select(SlurmClusterDB).where(SlurmClusterDB.name == cluster_name)
@@ -71,7 +71,7 @@ def insert_rgu(sess: Session) -> None:
 
     mig_rgu_map: dict[str, GpuRgu] = {}
 
-    for cluster_config in config("scraping").clusters.values():
+    for cluster_config in config.clusters.values():
         for nodename, gpus_per_nodes in cluster_config.gpus_per_nodes.items():
             for gpu_type in gpus_per_nodes.keys():
                 # Harmonize each GPU name found in gpus_per_nodes.

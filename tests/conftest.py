@@ -20,7 +20,7 @@ from sqlalchemy import text
 from sqlmodel import create_engine, select
 
 from alembic import command
-from sarc.config import config, get_db_user, using_sarc_mode
+from sarc.config import config, get_db_user
 from sarc.db import init_insert
 from sarc.db.cluster import SlurmClusterDB
 from tests.db.factory import extend_clusters
@@ -36,18 +36,6 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "common"))
 pytest_plugins = "fabric.testing.fixtures"
 
 
-@pytest.fixture
-def client_mode():
-    with using_sarc_mode("client"):
-        yield
-
-
-@pytest.fixture
-def scraping_mode():
-    with using_sarc_mode("scraping"):
-        yield
-
-
 @pytest.fixture(scope="session")
 def test_config_path():
     yield Path(__file__).parent / "sarc-test.yaml"
@@ -56,16 +44,14 @@ def test_config_path():
 @pytest.fixture(scope="session", autouse=True)
 def base_config(test_config_path):
     with gifnoc.use(test_config_path):
-        with using_sarc_mode("scraping"):
-            yield
+        yield
 
 
 @pytest.fixture(scope="session")
 def base_config_with_logging():
     """To be used where config.logging is required"""
     with gifnoc.use(Path(__file__).parent / "sarc-test-with-logging.yaml"):
-        with using_sarc_mode("scraping"):
-            yield
+        yield
 
 
 @pytest.fixture
@@ -96,7 +82,7 @@ def tzlocal_is_mtl():
 @pytest.fixture
 def test_config(request):
     with gifnoc.overlay({"sarc": getattr(request, "param", dict())}):
-        yield config()
+        yield config
 
 
 @pytest.fixture
@@ -163,7 +149,7 @@ def custom_db_config(db_name, additional_overrides={}):
     with gifnoc.overlay(
         {"sarc.db.name": db_name, "sarc.db.host": "localhost", **additional_overrides}
     ):
-        assert config().db.name == db_name
+        assert config.db.name == db_name
         yield
 
 
@@ -231,7 +217,7 @@ class DbConfiguration:
             init_insert()
             try:
                 if not self.empty:
-                    self._fill(config().db)
+                    self._fill(config.db)
                 yield db_name
             finally:
                 self.executive(f'DROP DATABASE "{db_name}" WITH (FORCE)')
@@ -263,35 +249,35 @@ read_only_db_config_object = DbConfiguration("r", read_only=True).fixture()
 @pytest.fixture
 def empty_read_write_db(empty_read_write_db_config_object):
     with custom_db_config(empty_read_write_db_config_object):
-        with config().db.session() as session:
+        with config.db.session() as session:
             yield session
 
 
 @pytest.fixture
 def jobless_read_write_db(jobless_read_write_db_config_object):
     with custom_db_config(jobless_read_write_db_config_object):
-        with config().db.session() as session:
+        with config.db.session() as session:
             yield session
 
 
 @pytest.fixture
 def read_write_db(read_write_db_config_object):
     with custom_db_config(read_write_db_config_object):
-        with config().db.session() as session:
+        with config.db.session() as session:
             yield session
 
 
 @pytest.fixture
 def read_write_db_with_many_cpu_jobs(read_write_db_with_many_cpu_jobs_config_object):
     with custom_db_config(read_write_db_with_many_cpu_jobs_config_object):
-        with config().db.session() as session:
+        with config.db.session() as session:
             yield session
 
 
 @pytest.fixture
 def read_only_db(read_only_db_config_object):
     with custom_db_config(read_only_db_config_object):
-        with config().db.session() as session:
+        with config.db.session() as session:
             yield session
 
 

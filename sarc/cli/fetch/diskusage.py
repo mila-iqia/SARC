@@ -16,14 +16,13 @@ class FetchDiskUsage:
     cluster_names: list[str] = field(alias=["-c"], default_factory=list)
 
     def execute(self) -> int:
-        cfg = config("scraping")
         cache = Cache("disk_usage")
 
         with cache.create_entry(datetime.now(UTC)) as ce:
             for cluster_name in self.cluster_names:
                 logger.info(f"Acquiring {cluster_name} storages report...")
 
-                cluster = cfg.clusters[cluster_name]
+                cluster = config.clusters[cluster_name]
                 diskusage_configs = cluster.diskusage
                 if diskusage_configs is None:
                     continue

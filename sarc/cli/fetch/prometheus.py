@@ -26,8 +26,7 @@ class FetchPrometheus:
         if self.after is not None:
             after = datetime.fromisoformat(self.after)
 
-        cfg = config("scraping")
-        clusters_configs = cfg.clusters
+        clusters_configs = config.clusters
 
         for cluster_name in self.cluster_names:
             cluster = clusters_configs[cluster_name]
@@ -44,7 +43,7 @@ class FetchPrometheus:
                     logger.info(
                         f"Acquire Prometheus metrics on {cluster_name} for jobs after {after}"
                     )
-                    with config().db.session() as sess:
+                    with config.db.session() as sess:
                         fetch_prometheus(sess, cluster, after, self.max_jobs)
 
             except Exception as e:

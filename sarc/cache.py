@@ -73,7 +73,7 @@ class Cache:
         Returns:
             Path: The absolute path to the cache directory.
         """
-        root = config().cache
+        root = config.cache
         assert root is not None
         res = root / self.subdirectory
         res.mkdir(parents=True, exist_ok=True)

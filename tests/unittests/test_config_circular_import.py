@@ -37,8 +37,8 @@ def test_import_sarc_config_does_not_trigger_circular_import(tmp_path):
     """)
     )
     result = subprocess.run(
-        [sys.executable, "-c", "from sarc.config import config; config().db"],
-        env={**os.environ, "SARC_MODE": "scraping", "SARC_CONFIG": str(cfg)},
+        [sys.executable, "-c", "from sarc.config import config; config.db"],
+        env={**os.environ, "SARC_CONFIG": str(cfg)},
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,

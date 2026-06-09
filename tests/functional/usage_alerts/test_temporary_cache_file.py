@@ -10,7 +10,7 @@ CHECK_NAME = "temporary_cache_file"
 
 @pytest.mark.usefixtures("health_config", "enabled_cache", "read_write_db")
 def test_ok_when_no_current_files(caplog, cli_main):
-    cache = config().cache
+    cache = config.cache
     cache.mkdir(parents=True)
 
     with caplog.at_level(logging.INFO):
@@ -21,7 +21,7 @@ def test_ok_when_no_current_files(caplog, cli_main):
 
 @pytest.mark.usefixtures("health_config", "enabled_cache", "read_write_db")
 def test_fail_when_current_file_exists(caplog, cli_main):
-    cache = config().cache
+    cache = config.cache
     cache.mkdir(parents=True)
     (cache / "something.current").touch()
 
@@ -34,7 +34,7 @@ def test_fail_when_current_file_exists(caplog, cli_main):
 
 @pytest.mark.usefixtures("health_config", "enabled_cache", "read_write_db")
 def test_fail_when_current_file_in_subdirectory(caplog, cli_main):
-    cache = config().cache
+    cache = config.cache
     subdir = cache / "2024" / "01" / "01"
     subdir.mkdir(parents=True)
     (subdir / "data.current").touch()
@@ -48,7 +48,7 @@ def test_fail_when_current_file_in_subdirectory(caplog, cli_main):
 
 @pytest.mark.usefixtures("health_config", "enabled_cache", "read_write_db")
 def test_fail_logs_each_file(caplog, cli_main):
-    cache = config().cache
+    cache = config.cache
     cache.mkdir(parents=True)
     (cache / "a.current").touch()
     (cache / "b.current").touch()
@@ -62,7 +62,7 @@ def test_fail_logs_each_file(caplog, cli_main):
 
 @pytest.mark.usefixtures("health_config", "enabled_cache", "read_write_db")
 def test_ok_ignores_non_current_files(caplog, cli_main):
-    cache = config().cache
+    cache = config.cache
     cache.mkdir(parents=True)
     (cache / "data.json").touch()
     (cache / "data.zip").touch()

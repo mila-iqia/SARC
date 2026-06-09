@@ -101,7 +101,7 @@ def check_prometheus_stats_occurrences(
     if minimum_runtime is None:
         minimum_runtime = timedelta(seconds=0)
 
-    with config().db.session() as sess:
+    with config.db.session() as sess:
         if not sess.exec(select(func.count(col(SlurmJobDB.id)))).one():
             logger.error("No Prometheus data available: no job found")
             return False

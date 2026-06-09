@@ -34,7 +34,7 @@ def _compute_db_disk_usage() -> int:
     """
     from sarc.config import config
 
-    with config().db.session() as sess:
+    with config.db.session() as sess:
         size = sess.exec(select(func.pg_database_size(func.current_database()))).one()
     return int(size)
 
@@ -46,7 +46,7 @@ def check_disk_space_for_cache(max_size_bytes: int) -> bool:
     """
     from sarc.config import config
 
-    cache_path = config().cache
+    cache_path = config.cache
     if cache_path is None:
         logger.info("[sarc-cache] no cache patch to check")
         return True
