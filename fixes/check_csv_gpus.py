@@ -1,7 +1,7 @@
 import ast
 import csv
 import json
-import pprint
+import logging
 import sys
 from collections import Counter
 
@@ -10,6 +10,8 @@ from tqdm import tqdm
 
 from sarc.config import config
 from sarc.db.support import GpuRguDB
+
+logger = logging.getLogger(__name__)
 
 
 def _parse_nodes(v: str) -> list[str]:
@@ -31,9 +33,8 @@ def main():
     nb_cannot_harmonize = Counter()
 
     csv_path = sys.argv[1]
-    cfg = config("scraping")
-    cluster_cfgs = config("scraping").clusters
-    with cfg.db.session() as sess:
+    cluster_cfgs = config.clusters
+    with config.db.session() as sess:
         known_gpus: set[str] = set(sess.exec(sqlmodel.select(GpuRguDB.name)).all())
     with open(csv_path, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
@@ -58,10 +59,9 @@ def main():
                 assert h_name.startswith(full_name)
 
     if unknown_clusters:
-        print("Unknown clusters", unknown_clusters)
+        logger.warning("Unknown clusters: %s", unknown_clusters)
     if nb_cannot_harmonize:
-        print("Cannot harmonize")
-        pprint.pprint(nb_cannot_harmonize)
+        logger.warning("Cannot harmonize: %", nb_cannot_harmonize)
 
 
 if __name__ == "__main__":

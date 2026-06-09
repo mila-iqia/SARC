@@ -122,6 +122,7 @@ def _parse_nodes(v: str) -> list[str]:
     # Stored as Python repr: ['cn-c031', 'cn-a005']. Slurm node names have no
     # quotes/special chars, so json.loads(...) after ' -> " is ~5x faster than
     # ast.literal_eval. Fall back if a name surprises us.
+    v = v.replace("    ", ",")
     try:
         parsed = json.loads(v.replace("'", '"'))
     except json.JSONDecodeError:
@@ -435,10 +436,9 @@ def psycopg_engine(db: DbConfig) -> Engine:
 
 
 def run(csv_path: str, gpu_billing_path: Path, batch_size: int) -> None:
-    cfg = config("scraping")
     # The schema must already exist (alembic upgrade head) and clusters + RGU
     # must already be seeded (init_insert()) — engine creation does neither.
-    engine = psycopg_engine(cfg.db)
+    engine = psycopg_engine(config.db)
 
     with Session(engine) as sess:
         logger.info("Wiping jobs, stats, and users...")
@@ -468,7 +468,7 @@ def run(csv_path: str, gpu_billing_path: Path, batch_size: int) -> None:
             "Skipped billings for unknown clusters: %s", dict(skipped_billings)
         )
 
-    cluster_cfgs: dict[str, ClusterConfig] = cfg.clusters
+    cluster_cfgs: dict[str, ClusterConfig] = config.clusters
     harmonised: Counter = Counter()
     unharmonisable: Counter = Counter()
 

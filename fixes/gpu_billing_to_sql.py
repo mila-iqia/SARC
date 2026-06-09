@@ -50,7 +50,7 @@ def main() -> None:
     inserted = 0
     unknown_clusters: dict[str, int] = {}
 
-    with config().db.session() as sess:
+    with config.db.session() as sess:
         # Cache cluster_id lookups to avoid one query per entry.
         cluster_id_cache: dict[str, int | None] = {}
 

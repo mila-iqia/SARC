@@ -24,7 +24,7 @@ router = APIRouter(prefix="/dash", dependencies=[Depends(require_basic_auth)])
 
 
 def session_dep() -> Generator[Session]:
-    with config().db.session() as sess:
+    with config.db.session() as sess:
         # Disable parallel query for dashboard requests: parallel workers
         # allocate dynamic shared-memory segments in /dev/shm, which is tiny in
         # a default container (~64 MB) and overflows on big joins/aggregations
@@ -153,7 +153,7 @@ def _iter_buckets(begin_dt: datetime, finish_dt: datetime, period: timedelta | s
             frontier = nxt
 
 
-def _date_range(start, end):
+def _date_range(start, end) -> tuple[datetime, datetime]:
     today = datetime.now(UTC).date()
     if start is None:
         start = today
@@ -435,9 +435,9 @@ def _build_heatmap_payload(
     )
     z = [[0] * _HEATMAP_BINS for _ in range(_HEATMAP_BINS)]
     total = 0
-    for r in sess.exec(q):
-        c = int(r.c)
-        z[int(r.by)][int(r.bx)] = c
+    for bx, by, count in sess.exec(q):
+        c = int(count)
+        z[int(by)][int(bx)] = c
         total += c
 
     # Bin centres in log space then converted back to linear value (seconds).
@@ -462,7 +462,9 @@ def metrics_global_heatmap(
     begin_dt, finish_dt = _apply_focus(*_date_range(start, end), focus_start, focus_end)
     cluster_ids = _resolve_cluster_ids(sess, clusters)
 
-    wait_expr = func.extract("epoch", SlurmJobDB.start_time - SlurmJobDB.submit_time)
+    wait_expr = func.extract(
+        "epoch", col(SlurmJobDB.start_time) - col(SlurmJobDB.submit_time)
+    )
     base_filters = [
         col(SlurmJobDB.submit_time) >= begin_dt,
         col(SlurmJobDB.submit_time) < finish_dt,
@@ -476,7 +478,7 @@ def metrics_global_heatmap(
     if job_states:
         base_filters.append(col(SlurmJobDB.job_state).in_(job_states))
 
-    bounds = sess.exec(
+    max_l, max_e, max_w = sess.exec(
         select(
             func.max(SlurmJobDB.time_limit).label("max_l"),
             func.max(SlurmJobDB.elapsed_time).label("max_e"),
@@ -484,7 +486,7 @@ def metrics_global_heatmap(
         ).where(*base_filters)
     ).one()
 
-    if bounds.max_l is None:
+    if max_l is None:
         # No matching rows
         return {"elapsed_vs_limit": None, "wait_vs_limit": None, "total_jobs": 0}
 
@@ -493,16 +495,11 @@ def metrics_global_heatmap(
         base_filters,
         SlurmJobDB.time_limit,
         SlurmJobDB.elapsed_time,
-        float(bounds.max_l),
-        float(bounds.max_e),
+        float(max_l),
+        float(max_e),
     )
     wait_hmap = _build_heatmap_payload(
-        sess,
-        base_filters,
-        SlurmJobDB.time_limit,
-        wait_expr,
-        float(bounds.max_l),
-        float(bounds.max_w),
+        sess, base_filters, SlurmJobDB.time_limit, wait_expr, float(max_l), float(max_w)
     )
 
     return {
