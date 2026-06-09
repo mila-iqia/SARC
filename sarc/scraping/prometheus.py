@@ -95,7 +95,7 @@ def parse_prometheus_ce(sess: Session, ce: CacheEntry) -> bool:
             error = True
             continue
         job_id = int(job_id_str)
-        submit_time = datetime.fromisoformat(submit_time_str)
+        submit_time = datetime.fromisoformat(submit_time_str).astimezone(UTC)
         data = json.loads(value.decode("utf-8"))
         if data == []:
             logger.warning(
