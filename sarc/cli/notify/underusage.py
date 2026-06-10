@@ -8,7 +8,11 @@ import simple_parsing
 
 from sarc.config import config
 from sarc.notifications.messages import build_admin_digest, build_user_dm
-from sarc.notifications.underusage import get_historical_stats, get_underusers
+from sarc.notifications.underusage import (
+    get_historical_stats,
+    get_recurring_underusers,
+    get_underusers,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +112,15 @@ class UnderusageNotifyCommand:
             resource=self.resource,
             exclude_zero_usage=True,
         )
+        recurring = get_recurring_underusers(
+            end,
+            min_ratio=min_ratio,
+            min_rgu_hours=min_rgu_hours,
+            resource=self.resource,
+            window_weeks=ncfg.recurrence_window_weeks,
+            cluster_share_threshold=ncfg.recurrence_cluster_share,
+            exclude_zero_usage=True,
+        )
 
         print(f"Recipients ({len(rows)} user(s) flagged):")
         for row in rows:
@@ -115,7 +128,11 @@ class UnderusageNotifyCommand:
         print()
 
         digest = build_admin_digest(
-            rows, period=period, top_n=ncfg.digest_top_n, historical=historical
+            rows,
+            period=period,
+            top_n=ncfg.digest_top_n,
+            historical=historical,
+            recurring=recurring,
         )
         print("=== Admin Digest ===")
         print(digest)

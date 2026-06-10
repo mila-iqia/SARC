@@ -283,6 +283,10 @@ class UnderusageNotifyConfig:
     dashboard_url: str | None = None
     # Verbatim text appended at the end of every user DM (support links, hours, etc.)
     help_section: str | None = None
+    # Recurring-underusers table (Module C): rolling window length in weeks.
+    recurrence_window_weeks: int = 6
+    # Fraction of cluster wasted RGU-h at which selection stops (0..1).
+    recurrence_cluster_share: float = 0.30
 
 
 @dataclass

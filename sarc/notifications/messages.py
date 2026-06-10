@@ -1,6 +1,16 @@
 from collections import defaultdict
 
-from sarc.notifications.underusage import HistoricalStats, UnderuserJob, UnderuserRow
+from sarc.notifications.underusage import (
+    HistoricalStats,
+    RecurringUserRow,
+    UnderuserJob,
+    UnderuserRow,
+)
+
+
+def _fmt_rgu_int(hours: float) -> str:
+    """Format RGU-hours as an integer with a space thousands separator."""
+    return f"{int(round(hours)):,}".replace(",", " ")
 
 
 def _first_name(display_name: str) -> str:
@@ -113,12 +123,76 @@ def _historical_section(stats: HistoricalStats) -> str:
     return "\n".join(lines)
 
 
+def build_recurring_table(
+    recurring: dict[str, list[RecurringUserRow]],
+    *,
+    window_weeks: int = 6,
+    cluster_share_threshold: float = 0.30,
+) -> str:
+    """Build the recurring-underusers per-cluster table for the admin digest.
+
+    Pure function — no I/O, deterministic for fixed input.
+    """
+    if not recurring:
+        return ""
+
+    share_pct = f"{cluster_share_threshold * 100:.0f} %"
+    sections = []
+
+    for cluster, rows in sorted(recurring.items()):
+        if not rows:
+            continue
+
+        email_w = max(len(r.email) for r in rows)
+        # Header aligns "User" with the email column (after the tree prefix).
+        header = (
+            f"  {'':3} {'User':<{email_w}}"
+            f"  {'Wasted RGU-h':>12}"
+            f"  {'Share':>6}"
+            f"   W0  W-2  W-4  W-6  Action"
+        )
+        lines = [
+            f"Recurring underusers (last {window_weeks} weeks) — Cluster {cluster}",
+            f"(top users accounting for ≥ {share_pct} of the cluster's wasted RGU-h)",
+            header,
+        ]
+
+        n = len(rows)
+        for i, row in enumerate(rows):
+            if n == 1:
+                pfx = "  └─"
+            elif i == 0:
+                pfx = "  ┌─"
+            elif i == n - 1:
+                pfx = "  └─"
+            else:
+                pfx = "  ├─"
+
+            flags = "".join(
+                f"   {'✓' if f else '✗'}"
+                for f in (row.w0, row.w2, row.w4, row.w6)
+            )
+            action = "   ⚑ personalized" if row.personalized_action else ""
+            lines.append(
+                f"{pfx} {row.email:<{email_w}}"
+                f"  {_fmt_rgu_int(row.wasted_6w):>12}"
+                f"  {row.cluster_share * 100:>5.0f} %"
+                + flags
+                + action
+            )
+
+        sections.append("\n".join(lines))
+
+    return "\n\n".join(sections)
+
+
 def build_admin_digest(
     rows: list[UnderuserRow],
     *,
     period: str,
     top_n: int = 16,
     historical: HistoricalStats | None = None,
+    recurring: dict[str, list[RecurringUserRow]] | None = None,
 ) -> str:
     """Build a Module C plain-text admin digest.
 
@@ -144,5 +218,10 @@ def build_admin_digest(
 
     if historical is not None:
         lines.append(_historical_section(historical))
+
+    if recurring is not None:
+        recurring_text = build_recurring_table(recurring)
+        if recurring_text:
+            lines += ["", recurring_text]
 
     return "\n".join(lines)
