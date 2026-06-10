@@ -54,10 +54,12 @@ class UnderusageNotifyCommand:
         alias=["--no-dms"],
         help="Skip per-user DMs even when --send is set.",
     )
-    week_number: int | None = simple_parsing.field(
+    as_of: str | None = simple_parsing.field(
         default=None,
-        alias=["--week-number"],
-        help="ISO week number override (default: derived from run date).",
+        alias=["--as-of"],
+        help="Simulate a run as of this date (YYYY-MM-DD, UTC). "
+             "Default: now. Anchors the window, all queries, and the "
+             "ISO-week DM parity.",
     )
 
     def execute(self) -> int:
@@ -80,12 +82,24 @@ class UnderusageNotifyCommand:
             self.min_rgu_hours if self.min_rgu_hours is not None else ncfg.min_rgu_hours
         )
 
-        end = _now_utc()
+        if self.as_of is not None:
+            try:
+                parsed = datetime.fromisoformat(self.as_of)
+                end = parsed.replace(tzinfo=UTC) if parsed.tzinfo is None else parsed.astimezone(UTC)
+            except ValueError:
+                logger.error("Invalid --as-of date %r: expected YYYY-MM-DD", self.as_of)
+                return -1
+        else:
+            end = _now_utc()
         start = end - timedelta(days=window_days)
         period = f"{start.date()} – {end.date()}"
 
-        week_num = self.week_number if self.week_number is not None else _iso_week(end)
-        dms_eligible = week_num % 2 == 0
+        week_num = _iso_week(end)
+        dms_eligible = not self.no_dms and week_num % 2 == 0
+
+        if self.as_of is not None and end > _now_utc():
+            print("Note: --as-of is in the future; the window may contain no jobs.")
+            print()
 
         if not self.send:
             print("=== DRY RUN — nothing will be sent ===")

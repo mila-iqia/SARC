@@ -105,10 +105,20 @@ def build_user_dm(
 
 
 def _month_table(title: str, months: list[MonthlyStats]) -> list[str]:
-    rows = [title, f"{'Month':<9}  {'Avg waste ratio':>17}  {'Above threshold':>15}"]
-    for m in months:
+    pct_strs = [_pct(m.avg_waste_ratio) for m in months]
+    count_strs = [f"{m.above_threshold_count} user(s)" for m in months]
+
+    month_w = max(len("Month"), max((len(m.label) for m in months), default=0))
+    pct_w = max(len("Avg waste ratio"), max((len(s) for s in pct_strs), default=0))
+    count_w = max(len("Above threshold"), max((len(s) for s in count_strs), default=0))
+
+    rows = [
+        title,
+        f"{'Month'.ljust(month_w)}  {'Avg waste ratio'.rjust(pct_w)}  {'Above threshold'.rjust(count_w)}",
+    ]
+    for m, pct_s, count_s in zip(months, pct_strs, count_strs):
         rows.append(
-            f"  {m.label}   {_pct(m.avg_waste_ratio):>17}  {m.above_threshold_count:>12} user(s)"
+            f"{m.label.ljust(month_w)}  {pct_s.rjust(pct_w)}  {count_s.rjust(count_w)}"
         )
     return rows
 
@@ -136,6 +146,10 @@ def build_recurring_table(
         return ""
 
     share_pct = f"{cluster_share_threshold * 100:.0f} %"
+    flag_labels = ("W0", "W-2", "W-4", "W-6")
+    flag_attrs = ("w0", "w2", "w4", "w6")
+    flag_ws = [len(lbl) for lbl in flag_labels]
+    flag_header = "".join(f"   {lbl}" for lbl in flag_labels)
     sections = []
 
     for cluster, rows in sorted(recurring.items()):
@@ -143,12 +157,12 @@ def build_recurring_table(
             continue
 
         email_w = max(len(r.email) for r in rows)
-        # Header aligns "User" with the email column (after the tree prefix).
         header = (
-            f"  {'':3} {'User':<{email_w}}"
+            f"  {'':2} {'User':<{email_w}}"
             f"  {'Wasted RGU-h':>12}"
-            f"  {'Share':>6}"
-            f"   W0  W-2  W-4  W-6  Action"
+            f"  {'Share':>7}"
+            + flag_header
+            + "   Action"
         )
         lines = [
             f"Recurring underusers (last {window_weeks} weeks) — Cluster {cluster}",
@@ -161,8 +175,8 @@ def build_recurring_table(
             pfx = _tree_prefix(i, n)
 
             flags = "".join(
-                f"   {'✓' if f else '✗'}"
-                for f in (row.w0, row.w2, row.w4, row.w6)
+                f"   {('✓' if getattr(row, attr) else '✗').rjust(w)}"
+                for attr, w in zip(flag_attrs, flag_ws)
             )
             action = "   ⚑ personalized" if row.personalized_action else ""
             lines.append(
@@ -199,14 +213,28 @@ def build_admin_digest(
         "",
     ]
 
-    for i, row in enumerate(ranked, start=1):
-        primary = row.by_cluster[0].cluster if row.by_cluster else "unknown"
-        lines.append(
-            f" {i:2d}. {row.display_name} ({row.email})"
-            f"  —  {primary}"
-            f"  |  {_fmt_h(row.wasted)} RGU-h wasted"
-            f"  |  waste ratio: {_pct(row.waste_ratio)}"
-        )
+    clusters = [r.by_cluster[0].cluster if r.by_cluster else "unknown" for r in ranked]
+    wasted_s = [_fmt_h(r.wasted) for r in ranked]
+    ratio_s = [_pct(r.waste_ratio) for r in ranked]
+
+    if ranked:
+        name_w = max(len(r.display_name) for r in ranked)
+        email_w = max(len(r.email) for r in ranked)
+        cluster_w = max(len(c) for c in clusters)
+        wasted_w = max(len(s) for s in wasted_s)
+        ratio_w = max(len(s) for s in ratio_s)
+
+        for i, (row, cluster, ws, rs) in enumerate(
+            zip(ranked, clusters, wasted_s, ratio_s), start=1
+        ):
+            lines.append(
+                f" {i:2d}.  "
+                f"{row.display_name.ljust(name_w)}  "
+                f"{row.email.ljust(email_w)}  "
+                f"{cluster.ljust(cluster_w)}  "
+                f"{ws.rjust(wasted_w)} RGU-h wasted  "
+                f"{rs.rjust(ratio_w)}"
+            )
 
     if historical is not None:
         lines.append(_historical_section(historical))

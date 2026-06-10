@@ -161,11 +161,11 @@ def test_dry_run_dm_preview_contains_greeting(notify_db, cli_main, monkeypatch, 
 # ── T5: bi-weekly cadence gating ──────────────────────────────────────────────
 
 
-def test_even_week_shows_dm_previews(notify_db, cli_main, monkeypatch, capsys):
-    monkeypatch.setattr("sarc.cli.notify.underusage._now_utc", lambda: _CLI_TEST_END)
+def test_even_week_shows_dm_previews(notify_db, cli_main, capsys):
+    # 2024-06-30 is ISO week 26 (even); job at 2024-06-10 is inside [2024-05-31, 2024-06-30]
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         rc = cli_main(
-            ["notify", "underusage", "--window-days", "30", "--week-number", "26"]
+            ["notify", "underusage", "--window-days", "30", "--as-of", "2024-06-30"]
         )
     assert rc == 0
     out = capsys.readouterr().out
@@ -173,11 +173,11 @@ def test_even_week_shows_dm_previews(notify_db, cli_main, monkeypatch, capsys):
     assert "even" in out
 
 
-def test_odd_week_suppresses_dm_previews(notify_db, cli_main, monkeypatch, capsys):
-    monkeypatch.setattr("sarc.cli.notify.underusage._now_utc", lambda: _CLI_TEST_END)
+def test_odd_week_suppresses_dm_previews(notify_db, cli_main, capsys):
+    # 2024-06-23 is ISO week 25 (odd); job at 2024-06-10 is inside [2024-05-24, 2024-06-23]
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         rc = cli_main(
-            ["notify", "underusage", "--window-days", "30", "--week-number", "25"]
+            ["notify", "underusage", "--window-days", "30", "--as-of", "2024-06-23"]
         )
     assert rc == 0
     out = capsys.readouterr().out
@@ -186,11 +186,87 @@ def test_odd_week_suppresses_dm_previews(notify_db, cli_main, monkeypatch, capsy
 
 
 def test_week_parity_derived_from_run_date(notify_db, cli_main, monkeypatch, capsys):
-    # _CLI_TEST_END is ISO week 26 (even) — should show DMs without --week-number
+    # _CLI_TEST_END is ISO week 26 (even) — should show DMs without --as-of
     monkeypatch.setattr("sarc.cli.notify.underusage._now_utc", lambda: _CLI_TEST_END)
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         cli_main(["notify", "underusage", "--window-days", "30"])
     assert "DM Previews" in capsys.readouterr().out
+
+
+# ── year-boundary regression ──────────────────────────────────────────────────
+
+
+@pytest.fixture
+def year_boundary_db(read_write_db):
+    """Seed one high-wasting user with a job in late-December 2024."""
+    session = read_write_db
+    users = {u.email.split("@")[0]: u for u in session.exec(select(UserDB)).all()}
+    clusters = {c.name: c for c in session.exec(select(SlurmClusterDB)).all()}
+    _add_gpu_job(
+        session,
+        user_id=users["petitbonhomme"].id,
+        cluster_id=clusters["mila"].id,
+        elapsed_h=700,
+        gpu_type=_MILA_GPU_TYPE,
+        utilization=0.10,
+        job_id=70002,
+        submit_time=datetime(2024, 12, 20, tzinfo=UTC),
+    )
+    session.commit()
+    yield session
+
+
+def test_year_boundary_window_is_correct(year_boundary_db, cli_main, capsys):
+    # 2025-01-05 is ISO week 1 (odd); window [2024-12-06, 2025-01-05] spans the year
+    # boundary and covers the Dec-20 job.  The old --week-number 1 arithmetic would
+    # have shifted end to the wrong quarter (week 1 from ~week 24 = 161 days back).
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        rc = cli_main(
+            ["notify", "underusage", "--window-days", "30", "--as-of", "2025-01-05"]
+        )
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "2024-12-06" in out              # window start in digest header
+    assert "2025-01-05" in out              # window end in digest header
+    assert "petitbonhomme@mila.quebec" in out  # job is inside the window
+    assert "digest-only" in out             # week 1 is odd → no DMs
+
+
+# ── future anchor guard ───────────────────────────────────────────────────────
+
+
+def test_future_anchor_prints_note_and_does_not_crash(notify_db, cli_main, capsys):
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        rc = cli_main(
+            ["notify", "underusage", "--window-days", "30", "--as-of", "2099-01-01"]
+        )
+    assert rc == 0
+    assert "future" in capsys.readouterr().out
+
+
+# ── invalid --as-of ───────────────────────────────────────────────────────────
+
+
+def test_invalid_as_of_returns_error(notify_db, cli_main, caplog):
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        rc = cli_main(
+            ["notify", "underusage", "--window-days", "30", "--as-of", "not-a-date"]
+        )
+    assert rc == -1
+    assert any("not-a-date" in r.message for r in caplog.records)
+
+
+def test_bare_date_as_of_interpreted_as_utc_midnight(notify_db, cli_main, capsys):
+    # A bare YYYY-MM-DD must be treated as 00:00 UTC, not local midnight.
+    # The period string in the digest header is derived from start.date() and end.date(),
+    # so if end is midnight UTC on 2024-06-23 the window is [2024-05-24, 2024-06-23].
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        cli_main(
+            ["notify", "underusage", "--window-days", "30", "--as-of", "2024-06-23"]
+        )
+    out = capsys.readouterr().out
+    assert "2024-06-23" in out
+    assert "2024-05-24" in out
 
 
 # ── missing config ────────────────────────────────────────────────────────────
