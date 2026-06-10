@@ -87,6 +87,8 @@ class JobSeries:
     gpu_type_rgu_drac: float | None = None
     rgu: float | None = None
     rgu_drac: float | None = None
+    physical_rgu: float | None = None
+    physical_rgu_drac: float | None = None
     display_name: str | None = None
     email: str | None = None
     member_type: MemberType | None = None
