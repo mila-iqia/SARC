@@ -2,6 +2,7 @@ from collections import defaultdict
 
 from sarc.notifications.underusage import (
     HistoricalStats,
+    MonthlyStats,
     RecurringUserRow,
     UnderuserJob,
     UnderuserRow,
@@ -25,6 +26,12 @@ def _fmt_h(hours: float) -> str:
     return f"{hours:.1f}"
 
 
+def _tree_prefix(i: int, n: int) -> str:
+    if n == 1 or i == n - 1:
+        return "  └─"
+    return "  ┌─" if i == 0 else "  ├─"
+
+
 def _jobs_section(top_jobs: list[UnderuserJob]) -> str:
     # Group by cluster preserving descending-waste order within each cluster.
     by_cluster: dict[str, list[UnderuserJob]] = defaultdict(list)
@@ -42,14 +49,7 @@ def _jobs_section(top_jobs: list[UnderuserJob]) -> str:
         jobs = by_cluster[cluster]
         lines.append(f"  Cluster {cluster}")
         for i, job in enumerate(jobs):
-            if len(jobs) == 1:
-                prefix = "  └─"
-            elif i == 0:
-                prefix = "  ┌─"
-            elif i == len(jobs) - 1:
-                prefix = "  └─"
-            else:
-                prefix = "  ├─"
+            prefix = _tree_prefix(i, len(jobs))
             date_str = job.submit_time.strftime("%Y-%m-%d")
             util_str = (
                 f"{job.gpu_utilization * 100:.0f} %"
@@ -104,22 +104,21 @@ def build_user_dm(
 #     return max(0.0, min(1.0, value))
 
 
-def _historical_section(stats: HistoricalStats) -> str:
-    lines = ["", "── 6-Month Trend ──"]
-    lines.append(f"{'Month':<9}  {'Avg waste ratio':>17}  {'Above threshold':>15}")
-    for m in stats.months:
-        lines.append(
+def _month_table(title: str, months: list[MonthlyStats]) -> list[str]:
+    rows = [title, f"{'Month':<9}  {'Avg waste ratio':>17}  {'Above threshold':>15}"]
+    for m in months:
+        rows.append(
             f"  {m.label}   {_pct(m.avg_waste_ratio):>17}  {m.above_threshold_count:>12} user(s)"
         )
+    return rows
+
+
+def _historical_section(stats: HistoricalStats) -> str:
+    lines = ["", *_month_table("── 6-Month Trend ──", stats.months)]
 
     if stats.yoy_months is not None:
-        lines.append("")
-        lines.append("── Year-over-Year (same 6 months, prior year) ──")
-        lines.append(f"{'Month':<9}  {'Avg waste ratio':>17}  {'Above threshold':>15}")
-        for m in stats.yoy_months:
-            lines.append(
-                f"  {m.label}   {_pct(m.avg_waste_ratio):>17}  {m.above_threshold_count:>12} user(s)"
-            )
+        lines += ["", *_month_table("── Year-over-Year (same 6 months, prior year) ──", stats.yoy_months)]
+
     return "\n".join(lines)
 
 
@@ -159,14 +158,7 @@ def build_recurring_table(
 
         n = len(rows)
         for i, row in enumerate(rows):
-            if n == 1:
-                pfx = "  └─"
-            elif i == 0:
-                pfx = "  ┌─"
-            elif i == n - 1:
-                pfx = "  └─"
-            else:
-                pfx = "  ├─"
+            pfx = _tree_prefix(i, n)
 
             flags = "".join(
                 f"   {'✓' if f else '✗'}"

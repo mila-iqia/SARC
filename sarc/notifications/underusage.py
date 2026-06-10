@@ -121,6 +121,12 @@ def _with_rgu_window(stmt, util_alias, start, end, *, exclude_zero_usage, rgu_us
     return stmt
 
 
+def _split_waste(row) -> tuple[float, float, float]:
+    rgu_h = float(row.sum_rgu_hours or 0.0)
+    rgu_used_h = float(row.sum_rgu_used or 0.0)
+    return rgu_h, rgu_used_h, rgu_h - rgu_used_h
+
+
 def get_underusers(
     start: datetime,
     end: datetime,
@@ -169,9 +175,7 @@ def get_underusers(
                     "display_name": row.display_name,
                     "clusters": [],
                 }
-            rgu_h = float(row.sum_rgu_hours or 0.0)
-            rgu_used_h = float(row.sum_rgu_used or 0.0)
-            wasted_h = rgu_h - rgu_used_h
+            rgu_h, rgu_used_h, wasted_h = _split_waste(row)
             user_data[uid]["clusters"].append(
                 ClusterBreakdown(
                     cluster=row.cluster_name or "unknown",
@@ -334,9 +338,7 @@ def _query_month_agg(
     total_wasted = 0.0
     above_count = 0
     for row in agg_rows:
-        rgu_h = float(row.sum_rgu_hours or 0.0)
-        rgu_used_h = float(row.sum_rgu_used or 0.0)
-        wasted_h = rgu_h - rgu_used_h
+        rgu_h, rgu_used_h, wasted_h = _split_waste(row)
         total_rgu_h += rgu_h
         total_wasted += wasted_h
         if rgu_h > 0:
@@ -477,9 +479,7 @@ def get_recurring_underusers(
     for row in agg_rows:
         cluster = row.cluster_name or "unknown"
         uid = row.sarc_user_id
-        rgu_h = float(row.sum_rgu_hours or 0.0)
-        rgu_used_h = float(row.sum_rgu_used or 0.0)
-        wasted = rgu_h - rgu_used_h
+        rgu_h, rgu_used_h, wasted = _split_waste(row)
         if wasted <= 0:
             continue
         if cluster not in cluster_users:
