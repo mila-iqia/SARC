@@ -11,8 +11,8 @@ import secrets
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
-_BASIC_AUTH_USER = os.environ.get("DASH_BASIC_AUTH_USER")
-_BASIC_AUTH_PASSWORD = os.environ.get("DASH_BASIC_AUTH_PASSWORD")
+_DASH_BASIC_AUTH_USER = os.environ.get("DASH_BASIC_AUTH_USER")
+_DASH_BASIC_AUTH_PASSWORD = os.environ.get("DASH_BASIC_AUTH_PASSWORD")
 _basic_security = HTTPBasic(auto_error=False)
 
 
@@ -24,12 +24,12 @@ def require_basic_auth(
     `secrets.compare_digest` is constant-time so timing attacks can't be used
     to leak the expected user/password byte by byte.
     """
-    if not _BASIC_AUTH_USER or not _BASIC_AUTH_PASSWORD:
+    if not _DASH_BASIC_AUTH_USER or not _DASH_BASIC_AUTH_PASSWORD:
         return
     bad = (
         credentials is None
-        or not secrets.compare_digest(credentials.username, _BASIC_AUTH_USER)
-        or not secrets.compare_digest(credentials.password, _BASIC_AUTH_PASSWORD)
+        or not secrets.compare_digest(credentials.username, _DASH_BASIC_AUTH_USER)
+        or not secrets.compare_digest(credentials.password, _DASH_BASIC_AUTH_PASSWORD)
     )
     if bad:
         raise HTTPException(
