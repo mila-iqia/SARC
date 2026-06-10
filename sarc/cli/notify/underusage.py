@@ -17,6 +17,10 @@ def _now_utc() -> datetime:
     return datetime.now(UTC)
 
 
+def _iso_week(dt: datetime) -> int:
+    return dt.isocalendar().week
+
+
 @dataclass
 class UnderusageNotifyCommand:
     """Preview or send resource-underusage notifications (dry-run by default)."""
@@ -46,6 +50,11 @@ class UnderusageNotifyCommand:
         alias=["--no-dms"],
         help="Skip per-user DMs even when --send is set.",
     )
+    week_number: int | None = simple_parsing.field(
+        default=None,
+        alias=["--week-number"],
+        help="ISO week number override (default: derived from run date).",
+    )
 
     def execute(self) -> int:
         if self.config is None:
@@ -71,9 +80,18 @@ class UnderusageNotifyCommand:
         start = end - timedelta(days=window_days)
         period = f"{start.date()} – {end.date()}"
 
+        week_num = self.week_number if self.week_number is not None else _iso_week(end)
+        dms_eligible = week_num % 2 == 0
+
         if not self.send:
             print("=== DRY RUN — nothing will be sent ===")
             print()
+
+        if dms_eligible:
+            print(f"ISO week {week_num} (even) — DMs eligible this run.")
+        else:
+            print(f"ISO week {week_num} (odd) — digest-only this run, no DMs.")
+        print()
 
         rows = get_underusers(
             start,
@@ -102,7 +120,7 @@ class UnderusageNotifyCommand:
         print("=== Admin Digest ===")
         print(digest)
 
-        if rows:
+        if rows and dms_eligible:
             print()
             print("=== DM Previews ===")
             for row in rows:

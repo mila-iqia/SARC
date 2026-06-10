@@ -158,6 +158,41 @@ def test_dry_run_dm_preview_contains_greeting(notify_db, cli_main, monkeypatch, 
     assert "Hi M/Ms," in capsys.readouterr().out
 
 
+# ── T5: bi-weekly cadence gating ──────────────────────────────────────────────
+
+
+def test_even_week_shows_dm_previews(notify_db, cli_main, monkeypatch, capsys):
+    monkeypatch.setattr("sarc.cli.notify.underusage._now_utc", lambda: _CLI_TEST_END)
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        rc = cli_main(
+            ["notify", "underusage", "--window-days", "30", "--week-number", "26"]
+        )
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "DM Previews" in out
+    assert "even" in out
+
+
+def test_odd_week_suppresses_dm_previews(notify_db, cli_main, monkeypatch, capsys):
+    monkeypatch.setattr("sarc.cli.notify.underusage._now_utc", lambda: _CLI_TEST_END)
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        rc = cli_main(
+            ["notify", "underusage", "--window-days", "30", "--week-number", "25"]
+        )
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "DM Previews" not in out
+    assert "digest-only" in out
+
+
+def test_week_parity_derived_from_run_date(notify_db, cli_main, monkeypatch, capsys):
+    # _CLI_TEST_END is ISO week 26 (even) — should show DMs without --week-number
+    monkeypatch.setattr("sarc.cli.notify.underusage._now_utc", lambda: _CLI_TEST_END)
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        cli_main(["notify", "underusage", "--window-days", "30"])
+    assert "DM Previews" in capsys.readouterr().out
+
+
 # ── missing config ────────────────────────────────────────────────────────────
 
 
