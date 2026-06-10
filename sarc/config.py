@@ -270,8 +270,7 @@ class SlackConfig:
 
 @dataclass
 class UnderusageNotifyConfig:
-    slack_token: Secret[str]
-    admin_channel: str
+    slack: SlackConfig
     enabled: bool = True
     send_dms: bool = False
     min_ratio: float = 0.50

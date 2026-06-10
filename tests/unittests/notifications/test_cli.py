@@ -18,8 +18,11 @@ _MILA_GPU_TYPE = "A100-SXM4-80GB"
 _CLI_TEST_END = datetime(2024, 6, 30, tzinfo=UTC)
 
 _NOTIFY_CFG = {
-    "slack_token": "xoxb-test-token",
-    "admin_channel": "#test-channel",
+    "slack": {
+        "description": "test channel",
+        "token": "xoxb-test-token",
+        "channel": "#test-channel",
+    },
     "min_ratio": 0.50,
     "min_rgu_hours": 672.0,
     "window_days": 30,

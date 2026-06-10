@@ -37,8 +37,11 @@ _MIN_RATIO = 0.50
 _MIN_RGU_HOURS = 100.0
 
 _NOTIFY_CFG = {
-    "slack_token": "xoxb-test-token",
-    "admin_channel": "#test-channel",
+    "slack": {
+        "description": "test channel",
+        "token": "xoxb-test-token",
+        "channel": "#test-channel",
+    },
     "min_ratio": _MIN_RATIO,
     "min_rgu_hours": _MIN_RGU_HOURS,
     "window_days": 14,
