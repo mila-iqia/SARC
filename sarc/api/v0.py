@@ -13,7 +13,6 @@ from sqlalchemy.orm import Mapped
 from sqlmodel import Session, and_, col, func, or_, select
 from sqlmodel.sql.expression import SelectOfScalar
 
-from sarc.api.auth import require_basic_auth
 from sarc.config import UTC, Config, config
 from sarc.db.cluster import SlurmClusterDB, get_available_clusters
 from sarc.db.healthcheck import HealthCheckStateDB
@@ -50,7 +49,7 @@ def _ensure_datetime_utc(v: datetime) -> datetime:
 
 datetime_api = Annotated[datetime, AfterValidator(_ensure_datetime_utc)]
 
-router = APIRouter(prefix="/v0", dependencies=[Depends(require_basic_auth)])
+router = APIRouter(prefix="/v0")
 
 
 def config_dep() -> Config:
