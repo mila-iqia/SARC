@@ -269,6 +269,15 @@ class SlackConfig:
 
 
 @dataclass
+class EmailConfig:
+    host: str
+    port: int
+    from_address: str
+    username: str | None = None
+    password: Secret[str] | None = None
+
+
+@dataclass
 class UnderusageNotifyConfig:
     slack: SlackConfig
     enabled: bool = True
@@ -286,6 +295,7 @@ class UnderusageNotifyConfig:
     recurrence_window_weeks: int = 6
     # Fraction of cluster wasted RGU-h at which selection stops (0..1).
     recurrence_cluster_share: float = 0.30
+    email: EmailConfig | None = None
 
 
 @dataclass
