@@ -89,6 +89,8 @@ ALL_COLUMNS = sorted(
         "work_dir",
         "rgu",
         "rgu_drac",
+        "physical_rgu",
+        "physical_rgu_drac",
         "gpu_type_rgu",
         "gpu_type_rgu_drac",
         "cpu_cost",
