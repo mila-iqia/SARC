@@ -61,6 +61,34 @@ class UnderuserRow:
 
 
 @dataclass
+class UsageClusterBreakdown:
+    cluster: str
+    rgu_hours_requested: float
+    rgu_hours_used: float
+
+
+@dataclass
+class UsageJob:
+    job_id: int
+    cluster: str
+    submit_time: datetime
+    rgu_hours_used: float
+    gpu_utilization: float | None
+
+
+@dataclass
+class UsageRow:
+    email: str
+    display_name: str
+    user_id: int
+    rgu_hours_requested: float
+    rgu_hours_used: float
+    avg_utilization: float
+    by_cluster: list[UsageClusterBreakdown] = field(default_factory=list)
+    top_jobs: list[UsageJob] = field(default_factory=list)
+
+
+@dataclass
 class RecurringUserRow:
     email: str
     display_name: str
@@ -256,6 +284,126 @@ def get_underusers(
                 waste_ratio=waste_ratio,
                 avg_utilization=1.0 - waste_ratio,
                 rgu_hours_unused=total_wasted,
+                by_cluster=by_cluster,
+                top_jobs=top_jobs,
+            )
+        )
+
+    return result
+
+
+def get_all_users_usage(
+    start: datetime,
+    end: datetime,
+    *,
+    resource: str = "gpu",
+) -> list[UsageRow]:
+    if resource != "gpu":
+        raise ValueError(f"Unsupported resource: {resource!r}")
+
+    with config().db.session() as session:
+        util, m_mean, rgu_h_expr, rgu_used_expr = _rgu_exprs()
+        stmt = _with_rgu_window(
+            select(
+                JobSeriesDB.sarc_user_id,
+                JobSeriesDB.email,
+                JobSeriesDB.display_name,
+                JobSeriesDB.cluster_name,
+                func.coalesce(func.sum(rgu_h_expr), 0).label("sum_rgu_hours"),
+                func.coalesce(func.sum(rgu_used_expr), 0).label("sum_rgu_used"),
+            ),
+            util,
+            start,
+            end,
+            exclude_zero_usage=False,
+            rgu_used_expr=rgu_used_expr,
+        ).group_by(
+            JobSeriesDB.sarc_user_id,
+            JobSeriesDB.email,
+            JobSeriesDB.display_name,
+            JobSeriesDB.cluster_name,
+        )
+        agg_rows = session.exec(stmt).all()
+
+        user_data: dict[int, dict] = {}
+        for row in agg_rows:
+            uid = row.sarc_user_id
+            if uid not in user_data:
+                user_data[uid] = {
+                    "email": row.email,
+                    "display_name": row.display_name,
+                    "clusters": [],
+                }
+            rgu_h, rgu_used_h, _ = _split_waste(row)
+            user_data[uid]["clusters"].append(
+                UsageClusterBreakdown(
+                    cluster=row.cluster_name or "unknown",
+                    rgu_hours_requested=rgu_h,
+                    rgu_hours_used=rgu_used_h,
+                )
+            )
+
+        all_user_ids = list(user_data.keys())
+
+        jobs_by_user: dict[int, list[UsageJob]] = {uid: [] for uid in all_user_ids}
+        if all_user_ids:
+            util, m_mean, rgu_h_expr, rgu_used_expr = _rgu_exprs()
+            job_rows = session.exec(
+                _with_rgu_window(
+                    select(
+                        JobSeriesDB.job_db_id,
+                        JobSeriesDB.sarc_user_id,
+                        JobSeriesDB.cluster_name,
+                        JobSeriesDB.submit_time,
+                        rgu_h_expr.label("rgu_hours"),
+                        rgu_used_expr.label("rgu_used"),
+                        m_mean.label("util_mean"),
+                    ),
+                    util,
+                    start,
+                    end,
+                    exclude_zero_usage=False,
+                    rgu_used_expr=rgu_used_expr,
+                )
+            ).all()
+
+            for jr in job_rows:
+                uid = jr.sarc_user_id
+                if uid not in jobs_by_user:
+                    continue
+                rgu_used_h = float(jr.rgu_used or 0.0)
+                util_val = float(jr.util_mean) if jr.util_mean is not None else None
+                jobs_by_user[uid].append(
+                    UsageJob(
+                        job_id=jr.job_db_id,
+                        cluster=jr.cluster_name or "unknown",
+                        submit_time=jr.submit_time,
+                        rgu_hours_used=rgu_used_h,
+                        gpu_utilization=util_val,
+                    )
+                )
+
+    result = []
+    for uid, u in user_data.items():
+        clusters = u["clusters"]
+        total_requested = sum(c.rgu_hours_requested for c in clusters)
+        total_used = sum(c.rgu_hours_used for c in clusters)
+        if total_requested <= 0:
+            continue
+
+        by_cluster = sorted(clusters, key=lambda c: c.rgu_hours_used, reverse=True)
+        top_jobs = sorted(
+            jobs_by_user[uid], key=lambda j: j.rgu_hours_used, reverse=True
+        )[:_TOP_JOBS_N]
+
+        result.append(
+            UsageRow(
+                email=u["email"],
+                display_name=u["display_name"],
+                user_id=uid,
+                rgu_hours_requested=total_requested,
+                rgu_hours_used=total_used,
+                avg_utilization=total_used / total_requested,
                 by_cluster=by_cluster,
                 top_jobs=top_jobs,
             )
