@@ -29,16 +29,33 @@ class SlackClient:
 
         self._client: Any = WebClient(token=token)
 
-    def post_channel(self, channel: str, text: str) -> SendResult:
-        """Post a plain-text message to a public/private channel."""
+    @staticmethod
+    def _preformatted_blocks(text: str) -> list[dict]:
+        return [
+            {
+                "type": "rich_text",
+                "elements": [
+                    {
+                        "type": "rich_text_preformatted",
+                        "elements": [{"type": "text", "text": text}],
+                    }
+                ],
+            }
+        ]
+
+    def post_channel(self, channel: str, text: str, *, preformatted: bool = False) -> SendResult:
+        """Post a message to a public/private channel."""
         try:
-            self._client.chat_postMessage(channel=channel, text=text)
+            kwargs: dict = {"channel": channel, "text": text}
+            if preformatted:
+                kwargs["blocks"] = self._preformatted_blocks(text)
+            self._client.chat_postMessage(**kwargs)
             return SendResult(SendStatus.OK)
         except Exception as exc:
             logger.error("Slack channel post failed: %s", exc)
             return SendResult(SendStatus.FAILED, str(exc))
 
-    def dm_user(self, email: str, text: str) -> SendResult:
+    def dm_user(self, email: str, text: str, *, preformatted: bool = False) -> SendResult:
         """Send a DM to a user identified by their Slack-registered email."""
         try:
             lookup = self._client.users_lookupByEmail(email=email)
@@ -55,7 +72,10 @@ class SlackClient:
         try:
             conv = self._client.conversations_open(users=[user_id])
             channel_id = conv["channel"]["id"]
-            self._client.chat_postMessage(channel=channel_id, text=text)
+            kwargs: dict = {"channel": channel_id, "text": text}
+            if preformatted:
+                kwargs["blocks"] = self._preformatted_blocks(text)
+            self._client.chat_postMessage(**kwargs)
             return SendResult(SendStatus.OK)
         except Exception as exc:
             logger.error("Slack DM failed for %s (%s): %s", email, user_id, exc)

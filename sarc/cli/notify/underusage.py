@@ -230,7 +230,7 @@ class UnderusageNotifyCommand:
                     dashboard_url=ncfg.dashboard_url,
                     help_section=ncfg.help_section,
                 )
-                slack_res = slack_client.dm_user(row.email, dm_text)
+                slack_res = slack_client.dm_user(row.email, dm_text, preformatted=True)
                 if slack_res.status == SendStatus.OK:
                     delivery_results.append(
                         _DeliveryResult(row.email, row.display_name, "dm_sent")
@@ -270,7 +270,7 @@ class UnderusageNotifyCommand:
         footer = _build_delivery_footer(delivery_results, flagged=len(rows))
         digest_with_footer = digest + "\n\n" + footer
 
-        channel_res = slack_client.post_channel(ncfg.slack.channel, digest_with_footer)
+        channel_res = slack_client.post_channel(ncfg.slack.channel, digest_with_footer, preformatted=True)
         if channel_res.status != SendStatus.OK:
             logger.error(
                 "Failed to post admin digest to %s: %s",
