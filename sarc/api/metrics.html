@@ -94,11 +94,14 @@
     .ms-plot { width: 100%; flex: 1; min-height: 0; }
     .ms-metric2 { font-size: 12px; padding: 1px 6px; max-width: 160px; }
 
-    /* RGU-by-user: per-tile "top N" control above the (dynamic-height) plot. */
+    /* RGU-by-user: per-tile "top N" + sort controls above the (dynamic-height) plot. */
     .ur-ctrl { font-size: 12px; color: #888; padding: 2px 0 6px;
-               display: flex; align-items: center; gap: 6px; }
+               display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
     .ur-ctrl input  { width: 56px; font-size: 12px; padding: 1px 4px; }
     .ur-ctrl button { font-size: 12px; padding: 1px 8px; cursor: pointer; }
+    .ur-ctrl select { font-size: 12px; padding: 1px 4px; border: 1px solid #ccc;
+                      border-radius: 4px; background: #fff; color: #444; cursor: pointer; }
+    .ur-sep { color: #ccc; }
 
     /* Job table */
     .job-table-box { display: flex; flex-direction: column; width: 100%; height: 100%; }
@@ -540,6 +543,10 @@
     // secondary so it survives Updates; applied via the tile's OK button — a pure
     // re-slice/re-render of the already-fetched rows, never a refetch.
     let userRguTopN = 16;
+    // Sort criterion for the RGU-by-user tile. Pure front-end re-sort of the
+    // already-fetched rows — never triggers a refetch.
+    // Values: 'rgu_requested' | 'rgu_used' | 'rgu_unused' | 'rgu_unmeasured' | 'efficiency'
+    let userRguSortBy = 'rgu_requested';
     // Job-table column keys hidden via the per-table column picker. Global (a
     // display preference shared by every job-table tile) so it survives
     // pagination, sorting and Update. Empty = all columns visible.
@@ -1100,21 +1107,41 @@
       if (!el) return;
       if (!d.userrgu.length) { el.textContent = 'No data.'; return; }
 
-      // "Top N" is chosen on the tile (module-scoped userRguTopN). It only slices
-      // the already-fetched rows, so applying it re-renders this tile in place —
-      // no refetch. An explicit OK/Enter applies it, so typing digits doesn't
-      // redraw on every keystroke.
+      // "Top N" and "Sort by" are module-scoped so they survive Updates.
+      // Both controls re-render in place — no refetch needed.
       el.style.height = 'auto';  // override .tile-chart's fixed height; the plot sets its own
       el.innerHTML = '';
       const ctrl = document.createElement('div');
       ctrl.className = 'ur-ctrl';
+
+      // --- Top N input ---
       const input = document.createElement('input');
       input.type = 'number'; input.min = '1'; input.step = '1'; input.value = userRguTopN;
       const okBtn = document.createElement('button');
       okBtn.type = 'button'; okBtn.textContent = 'OK';
       const lab = document.createElement('label');
       lab.append('Top ', input, ' users');
-      ctrl.append(lab, okBtn);
+
+      // --- Sort-by dropdown ---
+      const sep = document.createElement('span');
+      sep.className = 'ur-sep'; sep.textContent = '|';
+      const sortLab = document.createElement('label');
+      sortLab.textContent = 'Sort by:';
+      const sortSel = document.createElement('select');
+      const SORT_OPTIONS = [
+        { value: 'rgu_requested',  label: 'RGU requested' },
+        { value: 'rgu_used',       label: 'RGU used' },
+        { value: 'rgu_unused',     label: 'RGU unused' },
+        { value: 'rgu_unmeasured', label: 'RGU unmeasured' },
+      ];
+      SORT_OPTIONS.forEach(opt => {
+        const o = document.createElement('option');
+        o.value = opt.value; o.textContent = opt.label;
+        if (opt.value === userRguSortBy) o.selected = true;
+        sortSel.appendChild(o);
+      });
+
+      ctrl.append(lab, okBtn, sep, sortLab, sortSel);
       const plot = document.createElement('div');
       plot.style.width = '100%';
       el.appendChild(ctrl);
@@ -1127,39 +1154,75 @@
       }
       okBtn.addEventListener('click', apply);
       input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); apply(); } });
+      sortSel.addEventListener('change', () => { userRguSortBy = sortSel.value; draw(); });
 
       function draw() {
         // Rescale the cumulative RGU·h to the unit selected in the toolbar.
         const unit = rguUnit();
         const selectedUser = document.getElementById('cluster_user').value.trim();
 
-        // Top N rows, sorted descending; append selected user below if outside top N
-        let topRows = d.userrgu.slice(0, userRguTopN);
+        // Helper to compute the sort key for a row.
+        function sortKey(r) {
+          const used       = r.rgu_used;
+          const unmeasured = r.rgu_unmeasured || 0;
+          const unused     = r.rgu_requested - used - unmeasured;
+          switch (userRguSortBy) {
+            case 'rgu_used':       return used;
+            case 'rgu_unused':     return unused;
+            case 'rgu_unmeasured': return unmeasured;
+            default: return r.rgu_requested;  // 'rgu_requested'
+          }
+        }
+
+        // Sort a copy of all rows descending by chosen criterion, then slice top N.
+        const sorted = d.userrgu.slice().sort((a, b) => sortKey(b) - sortKey(a));
+        let topRows = sorted.slice(0, userRguTopN);
+        // If there is a focused user outside the top N, append them at the bottom.
         if (selectedUser && !topRows.some(r => r.user === selectedUser)) {
-          const sel = d.userrgu.find(r => r.user === selectedUser);
+          const sel = sorted.find(r => r.user === selectedUser);
           if (sel) topRows = [...topRows, sel];
         }
-        // Reverse so highest-RGU user appears at the top of the horizontal chart
-        const rows      = topRows.reverse();
-        const users     = rows.map(r => r.user);
-        const rguUsed       = rows.map(r => r.rgu_used * unit.factor);
-        const rguUnused     = rows.map(r => (r.rgu_requested - r.rgu_used - (r.rgu_unmeasured || 0)) * unit.factor);
-        const rguUnmeasured = rows.map(r => (r.rgu_unmeasured || 0) * unit.factor);
+        // Reverse so the highest-value user appears at the TOP of the horizontal bar chart.
+        const rows  = topRows.reverse();
+        const users = rows.map(r => r.user);
+
+        const valUsed       = rows.map(r => r.rgu_used * unit.factor);
+        const valUnused     = rows.map(r => (r.rgu_requested - r.rgu_used - (r.rgu_unmeasured || 0)) * unit.factor);
+        const valUnmeasured = rows.map(r => (r.rgu_unmeasured || 0) * unit.factor);
         const colorUsed       = rows.map(r => r.user === selectedUser ? '#e07020' : '#1a6fd4');
         const colorUnused     = rows.map(r => r.user === selectedUser ? '#f0c090' : '#a8c8f0');
         const colorUnmeasured = rows.map(r => r.user === selectedUser ? '#8a8a8a' : '#bdbdbd');
-        const chartH    = Math.max(300, users.length * 24 + 80);
-        Plotly.react(plot, [
-          { type: 'bar', name: 'Used',   orientation: 'h', y: users, x: rguUsed,
-            marker: { color: colorUsed },
-            hovertemplate: '%{y}<br>' + unit.label + ' used: %{x:,.1f}<extra></extra>' },
-          { type: 'bar', name: 'Unused', orientation: 'h', y: users, x: rguUnused,
-            marker: { color: colorUnused },
-            hovertemplate: '%{y}<br>' + unit.label + ' unused: %{x:,.1f}<extra></extra>' },
-          { type: 'bar', name: 'No metric data', orientation: 'h', y: users, x: rguUnmeasured,
-            marker: { color: colorUnmeasured },
-            hovertemplate: '%{y}<br>' + unit.label + ' (no metric): %{x:,.1f}<extra></extra>' },
-        ], pLayout({
+
+        // Bar order (which trace is drawn first = leftmost segment) depends on
+        // the sort criterion so the primary metric leads the bar.
+        //   rgu_requested / rgu_used → [used, unused, unmeasured]
+        //   rgu_unused               → [unused, used, unmeasured]
+        //   rgu_unmeasured           → [unmeasured, used, unused]
+        const traceUsed = {
+          type: 'bar', name: 'Used',          orientation: 'h', y: users, x: valUsed,
+          marker: { color: colorUsed },
+          hovertemplate: '%{y}<br>' + unit.label + ' used: %{x:,.1f}<extra></extra>',
+        };
+        const traceUnused = {
+          type: 'bar', name: 'Unused',         orientation: 'h', y: users, x: valUnused,
+          marker: { color: colorUnused },
+          hovertemplate: '%{y}<br>' + unit.label + ' unused: %{x:,.1f}<extra></extra>',
+        };
+        const traceUnmeasured = {
+          type: 'bar', name: 'No metric data', orientation: 'h', y: users, x: valUnmeasured,
+          marker: { color: colorUnmeasured },
+          hovertemplate: '%{y}<br>' + unit.label + ' (no metric): %{x:,.1f}<extra></extra>',
+        };
+
+        let traces;
+        switch (userRguSortBy) {
+          case 'rgu_unused':     traces = [traceUnused,     traceUsed, traceUnmeasured]; break;
+          case 'rgu_unmeasured': traces = [traceUnmeasured, traceUsed, traceUnused];     break;
+          default:               traces = [traceUsed, traceUnused, traceUnmeasured];     break;
+        }
+
+        const chartH = Math.max(300, users.length * 24 + 80);
+        Plotly.react(plot, traces, pLayout({
           title: { text: 'Total ' + unit.label + ' by User — Used vs Unused (click to filter)', font: { size: 16 } },
           barmode: 'stack', height: chartH,
           xaxis: { title: 'Total ' + unit.label },
@@ -1170,8 +1233,8 @@
           gd.removeAllListeners('plotly_click');
           gd.on('plotly_click', data => {
             if (!data.points || !data.points.length) return;
-            const clicked  = data.points[0].y;
-            const current  = document.getElementById('cluster_user').value.trim();
+            const clicked = data.points[0].y;
+            const current = document.getElementById('cluster_user').value.trim();
             document.getElementById('cluster_user').value = clicked === current ? '' : clicked;
             loadCharts();
           });
