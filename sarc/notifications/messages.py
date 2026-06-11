@@ -1,4 +1,5 @@
 from collections import defaultdict
+from datetime import date
 
 from sarc.notifications.underusage import (
     HistoricalStats,
@@ -137,8 +138,14 @@ def build_recurring_table(
     *,
     window_weeks: int = 6,
     cluster_share_threshold: float = 0.30,
+    cycle_dates: list[date] | None = None,
 ) -> str:
     """Build the recurring-underusers per-cluster table for the admin digest.
+
+    *cycle_dates* — four date objects [W0, W-2, W-4, W-6] — when provided,
+    renders column headers as "MM-DD" strings; when None, falls back to the
+    fixed labels "W0", "W-2", "W-4", "W-6".  Cycle cells whose flag is None
+    (future cycle, no data yet) are rendered as blank.
 
     Pure function — no I/O, deterministic for fixed input.
     """
@@ -146,8 +153,11 @@ def build_recurring_table(
         return ""
 
     share_pct = f"{cluster_share_threshold * 100:.0f} %"
-    flag_labels = ("W0", "W-2", "W-4", "W-6")
     flag_attrs = ("w0", "w2", "w4", "w6")
+    if cycle_dates is not None:
+        flag_labels = tuple(d.strftime("%m-%d") for d in cycle_dates)
+    else:
+        flag_labels = ("W0", "W-2", "W-4", "W-6")
     flag_ws = [len(lbl) for lbl in flag_labels]
     flag_header = "".join(f"   {lbl}" for lbl in flag_labels)
     sections = []
@@ -174,8 +184,13 @@ def build_recurring_table(
         for i, row in enumerate(rows):
             pfx = _tree_prefix(i, n)
 
+            def _flag_cell(flag: bool | None, w: int) -> str:
+                if flag is None:
+                    return " " * (3 + w)
+                return f"   {('✓' if flag else '✗').rjust(w)}"
+
             flags = "".join(
-                f"   {('✓' if getattr(row, attr) else '✗').rjust(w)}"
+                _flag_cell(getattr(row, attr), w)
                 for attr, w in zip(flag_attrs, flag_ws)
             )
             action = "   ⚑ personalized" if row.personalized_action else ""
@@ -199,6 +214,7 @@ def build_admin_digest(
     top_n: int = 16,
     historical: HistoricalStats | None = None,
     recurring: dict[str, list[RecurringUserRow]] | None = None,
+    cycle_dates: list[date] | None = None,
 ) -> str:
     """Build a Module C plain-text admin digest.
 
@@ -240,7 +256,7 @@ def build_admin_digest(
         lines.append(_historical_section(historical))
 
     if recurring is not None:
-        recurring_text = build_recurring_table(recurring)
+        recurring_text = build_recurring_table(recurring, cycle_dates=cycle_dates)
         if recurring_text:
             lines += ["", recurring_text]
 

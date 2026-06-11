@@ -1,7 +1,7 @@
 """Tests for T3b: recurring-underusers table (get_recurring_underusers + builder)."""
 
 import copy
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import gifnoc
 import pytest
@@ -11,7 +11,12 @@ from sarc.db.cluster import SlurmClusterDB
 from sarc.db.job import JobStatisticDB, SlurmJobDB
 from sarc.db.users import UserDB
 from sarc.notifications.messages import build_recurring_table
-from sarc.notifications.underusage import RecurringUserRow, get_recurring_underusers
+from sarc.notifications.underusage import (
+    RecurringUserRow,
+    _even_week_anchor,
+    get_cycle_dates,
+    get_recurring_underusers,
+)
 from tests.db.factory import base_job
 
 # "Today" for all recurring tests.
@@ -486,3 +491,179 @@ def test_dry_run_prints_recurring_table(recurring_db, cli_main, monkeypatch, cap
         cli_main(["notify", "underusage", "--window-days", "14"])
     out = capsys.readouterr().out
     assert "Recurring underusers" in out
+
+
+# ── _even_week_anchor ─────────────────────────────────────────────────────────
+
+# 2024-06-24: Monday of ISO week 26 (even)
+_EVEN_MON = datetime(2024, 6, 24, tzinfo=UTC)
+# 2024-06-30: Sunday of ISO week 26 (even) — _TEST_END
+_EVEN_SUN = _TEST_END
+# 2024-06-26: Wednesday of ISO week 26 (even)
+_EVEN_WED = datetime(2024, 6, 26, tzinfo=UTC)
+# 2024-06-17: Monday of ISO week 25 (odd)
+_ODD_MON = datetime(2024, 6, 17, tzinfo=UTC)
+# 2024-06-19: Wednesday of ISO week 25 (odd)
+_ODD_WED = datetime(2024, 6, 19, tzinfo=UTC)
+
+
+def test_anchor_even_monday_returns_same_day():
+    # 2024-06-24 is already the Monday of an even week
+    assert _even_week_anchor(_EVEN_MON) == _EVEN_MON.replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+
+
+def test_anchor_even_midweek_returns_same_day():
+    # 2024-06-26 (Wed, wk 26 even) → anchor = same day
+    assert _even_week_anchor(_EVEN_WED) == _EVEN_WED.replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+
+
+def test_anchor_even_sunday_returns_same_day():
+    # 2024-06-30 (Sun, wk 26 even) → anchor = same day
+    assert _even_week_anchor(_EVEN_SUN) == _EVEN_SUN.replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+
+
+def test_anchor_odd_monday_shifts_to_next_week():
+    # 2024-06-17 (Mon, wk 25 odd) → anchor = 2024-06-24 (Mon, wk 26 even)
+    assert _even_week_anchor(_ODD_MON) == _EVEN_MON.replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+
+
+def test_anchor_odd_midweek_shifts_to_next_week():
+    # 2024-06-19 (Wed, wk 25 odd) → anchor = 2024-06-26 (Wed, wk 26 even)
+    assert _even_week_anchor(_ODD_WED) == (_ODD_WED + timedelta(weeks=1)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+
+
+def test_anchor_result_always_even_week():
+    for offset in range(28):
+        dt = datetime(2024, 6, 1, tzinfo=UTC) + timedelta(days=offset)
+        anchor = _even_week_anchor(dt)
+        assert anchor.isocalendar().week % 2 == 0, f"odd week for end={dt.date()}"
+
+
+# ── get_cycle_dates ───────────────────────────────────────────────────────────
+
+
+def test_cycle_dates_even_week_four_mondays():
+    # end = 2024-06-24 (Mon, wk 26 even)
+    dates = get_cycle_dates(_EVEN_MON)
+    assert len(dates) == 4
+    assert all(isinstance(d, date) for d in dates)
+    # Each must be a Monday of an even week, 14 days apart
+    for i, d in enumerate(dates):
+        dt = datetime(d.year, d.month, d.day, tzinfo=UTC)
+        assert dt.weekday() == 0, f"dates[{i}] is not a Monday"
+        assert dt.isocalendar().week % 2 == 0, f"dates[{i}] not an even week"
+    assert (dates[0] - dates[1]).days == 14
+    assert (dates[1] - dates[2]).days == 14
+    assert (dates[2] - dates[3]).days == 14
+
+
+def test_cycle_dates_even_week_all_not_future():
+    # end = 2024-06-24 (Mon, wk 26 even); all cycle dates ≤ end.date()
+    end = _EVEN_MON
+    dates = get_cycle_dates(end)
+    for d in dates:
+        assert d <= end.date()
+
+
+def test_cycle_dates_odd_week_w0_is_future():
+    # end = 2024-06-17 (Mon, wk 25 odd); W0 anchor = 2024-06-24 > end
+    end = _ODD_MON
+    dates = get_cycle_dates(end)
+    assert dates[0] > end.date(), "W0 should be in the future for odd-week end"
+    for d in dates[1:]:
+        assert d < end.date(), f"{d} should be in the past"
+
+
+# ── get_recurring_underusers — odd-week end ───────────────────────────────────
+
+
+def test_odd_week_end_w0_is_none(recurring_db):
+    # _ODD_MON = 2024-06-17 (wk 25, odd) → anchor = 2024-06-24 > end → w0=None
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        result = get_recurring_underusers(
+            _ODD_MON,
+            min_ratio=_MIN_RATIO,
+            min_rgu_hours=_MIN_RGU_HOURS,
+            window_weeks=6,
+        )
+    if not result:
+        pytest.skip("no users selected for this window (may be outside data range)")
+    for rows in result.values():
+        for row in rows:
+            assert row.w0 is None, f"expected w0=None for odd-week end, got {row.w0}"
+
+
+def test_odd_week_end_personalized_action_false(recurring_db):
+    # With w0=None, personalized_action must be False even if w2/w4/w6 are True
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        result = get_recurring_underusers(
+            _ODD_MON,
+            min_ratio=_MIN_RATIO,
+            min_rgu_hours=_MIN_RGU_HOURS,
+            window_weeks=6,
+        )
+    for rows in result.values():
+        for row in rows:
+            assert row.personalized_action is False
+
+
+# ── build_recurring_table with cycle_dates ────────────────────────────────────
+
+_CYCLE_DATES = [
+    date(2024, 6, 24),   # W0  (Mon, wk 26 even)
+    date(2024, 6, 10),   # W-2 (Mon, wk 24 even)
+    date(2024, 5, 27),   # W-4 (Mon, wk 22 even)
+    date(2024, 5, 13),   # W-6 (Mon, wk 20 even)
+]
+
+_ROW_FUTURE_W0 = RecurringUserRow(
+    email="alice@mila.quebec",
+    display_name="Alice Liddell",
+    cluster="narval",
+    wasted_6w=4200.0,
+    cluster_share=0.18,
+    w0=None,   # future cycle
+    w2=True,
+    w4=True,
+    w6=False,
+    personalized_action=False,
+)
+
+
+def test_table_with_cycle_dates_renders_mm_dd_headers():
+    text = build_recurring_table({"narval": [_ROW_ALICE]}, cycle_dates=_CYCLE_DATES)
+    assert "06-24" in text
+    assert "06-10" in text
+    assert "05-27" in text
+    assert "05-13" in text
+
+
+def test_table_with_cycle_dates_no_w0_label():
+    text = build_recurring_table({"narval": [_ROW_ALICE]}, cycle_dates=_CYCLE_DATES)
+    assert "W0" not in text
+    assert "W-2" not in text
+
+
+def test_table_none_flag_renders_blank_not_cross(capsys):
+    text = build_recurring_table({"narval": [_ROW_FUTURE_W0]}, cycle_dates=_CYCLE_DATES)
+    # The row has w0=None; it should NOT render ✗ for that cell
+    # Count ✓ and ✗: w2=True→✓, w4=True→✓, w6=False→✗, w0=None→blank
+    assert text.count("✓") == 2
+    assert text.count("✗") == 1
+
+
+def test_table_without_cycle_dates_keeps_w0_label():
+    # Backward compat: no cycle_dates → "W0"/"W-2" labels still present
+    text = build_recurring_table({"narval": [_ROW_ALICE]})
+    assert "W0" in text
+    assert "W-2" in text

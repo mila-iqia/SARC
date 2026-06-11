@@ -11,6 +11,7 @@ from sarc.notifications.email import EmailClient
 from sarc.notifications.messages import build_admin_digest, build_user_dm
 from sarc.notifications.slack import SendStatus, SlackClient
 from sarc.notifications.underusage import (
+    get_cycle_dates,
     get_historical_stats,
     get_recurring_underusers,
     get_underusers,
@@ -95,8 +96,8 @@ class UnderusageNotifyCommand:
         default=None,
         alias=["--as-of"],
         help="Simulate a run as of this date (YYYY-MM-DD, UTC). "
-             "Default: now. Anchors the window, all queries, and the "
-             "ISO-week DM parity.",
+        "Default: now. Anchors the window, all queries, and the "
+        "ISO-week DM parity.",
     )
 
     def execute(self) -> int:
@@ -122,17 +123,26 @@ class UnderusageNotifyCommand:
         if self.as_of is not None:
             try:
                 parsed = datetime.fromisoformat(self.as_of)
-                end = parsed.replace(tzinfo=UTC) if parsed.tzinfo is None else parsed.astimezone(UTC)
+                end = (
+                    parsed.replace(tzinfo=UTC)
+                    if parsed.tzinfo is None
+                    else parsed.astimezone(UTC)
+                )
             except ValueError:
                 logger.error("Invalid --as-of date %r: expected YYYY-MM-DD", self.as_of)
                 return -1
         else:
             end = _now_utc()
+            # Clip to midnight, today
+            end.replace(hour=0, minute=0, second=0, microsecond=0)
         start = end - timedelta(days=window_days)
         period = f"{start.date()} – {end.date()}"
 
         week_num = _iso_week(end)
-        dms_eligible = not self.no_dms and week_num % 2 == 0
+        # dms_eligible: week parity (controls preview section)
+        dms_eligible = week_num % 2 == 0
+        # dms_will_send: additionally requires --no-dms gate and send_dms config (controls actual sends)
+        dms_will_send = dms_eligible and not self.no_dms and ncfg.send_dms
 
         if self.as_of is not None and end > _now_utc():
             print("Note: --as-of is in the future; the window may contain no jobs.")
@@ -178,12 +188,14 @@ class UnderusageNotifyCommand:
             print(f"  - {row.display_name} ({row.email})")
         print()
 
+        cycle_dates = get_cycle_dates(end)
         digest = build_admin_digest(
             rows,
             period=period,
             top_n=ncfg.digest_top_n,
             historical=historical,
             recurring=recurring,
+            cycle_dates=cycle_dates,
         )
         print("=== Admin Digest ===")
         print(digest)
@@ -209,7 +221,6 @@ class UnderusageNotifyCommand:
         email_client = EmailClient(ncfg.email)
 
         delivery_results: list[_DeliveryResult] = []
-        dms_will_send = dms_eligible and ncfg.send_dms
 
         if dms_will_send:
             for row in rows:
@@ -226,9 +237,7 @@ class UnderusageNotifyCommand:
                     )
                 elif slack_res.status == SendStatus.USER_NOT_FOUND:
                     email_res = email_client.send_plaintext(
-                        row.email,
-                        f"GPU underusage alert ({period})",
-                        dm_text,
+                        row.email, f"GPU underusage alert ({period})", dm_text
                     )
                     if email_res.status == SendStatus.OK:
                         delivery_results.append(
@@ -236,11 +245,15 @@ class UnderusageNotifyCommand:
                         )
                     else:
                         delivery_results.append(
-                            _DeliveryResult(row.email, row.display_name, "failed", email_res.detail)
+                            _DeliveryResult(
+                                row.email, row.display_name, "failed", email_res.detail
+                            )
                         )
                 else:
                     delivery_results.append(
-                        _DeliveryResult(row.email, row.display_name, "failed", slack_res.detail)
+                        _DeliveryResult(
+                            row.email, row.display_name, "failed", slack_res.detail
+                        )
                     )
         elif rows:
             if week_num % 2 != 0:

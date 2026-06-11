@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from sqlalchemy.orm import aliased
 from sqlmodel import Session, and_, case, col, func, select
@@ -70,11 +70,12 @@ class RecurringUserRow:
     # Fraction of the cluster's total wasted RGU-h in the same window (0..1).
     cluster_share: float
     # Cycle membership: was this user flagged by get_underusers for each window?
-    w0: bool  # [end - 14d, end]
-    w2: bool  # [end - 28d, end - 14d]
-    w4: bool  # [end - 42d, end - 28d]
-    w6: bool  # [end - 56d, end - 42d]
-    # True iff flagged in all 4 cycles (continuous underuse over ~8 weeks).
+    # None = future cycle (anchor > end at run time); bool = past/present cycle.
+    w0: bool | None  # [anchor - 14d, anchor]
+    w2: bool | None  # [anchor - 28d, anchor - 14d]
+    w4: bool | None  # [anchor - 42d, anchor - 28d]
+    w6: bool | None  # [anchor - 56d, anchor - 42d]
+    # True iff flagged in all 4 past cycles (continuous underuse over ~8 weeks).
     personalized_action: bool
 
 
@@ -97,24 +98,22 @@ def _rgu_exprs():
     return util_alias, m_mean, rgu_h_expr, rgu_used_expr
 
 
-def _with_rgu_window(stmt, util_alias, start, end, *, exclude_zero_usage, rgu_used_expr):
+def _with_rgu_window(
+    stmt, util_alias, start, end, *, exclude_zero_usage, rgu_used_expr
+):
     """Apply the gpu_utilization LEFT JOIN and submit-time / GPU-type / RGU filters."""
-    stmt = (
-        stmt
-        .join(
-            util_alias,
-            and_(
-                col(util_alias.job_id) == col(JobSeriesDB.job_db_id),
-                col(util_alias.name) == "gpu_utilization",
-            ),
-            isouter=True,
-        )
-        .where(
-            col(JobSeriesDB.submit_time) >= start,
-            col(JobSeriesDB.submit_time) < end,
-            col(JobSeriesDB.allocated_gpu_type).is_not(None),
-            col(JobSeriesDB.rgu).is_not(None),
-        )
+    stmt = stmt.join(
+        util_alias,
+        and_(
+            col(util_alias.job_id) == col(JobSeriesDB.job_db_id),
+            col(util_alias.name) == "gpu_utilization",
+        ),
+        isouter=True,
+    ).where(
+        col(JobSeriesDB.submit_time) >= start,
+        col(JobSeriesDB.submit_time) < end,
+        col(JobSeriesDB.allocated_gpu_type).is_not(None),
+        col(JobSeriesDB.rgu).is_not(None),
     )
     if exclude_zero_usage:
         stmt = stmt.having(func.coalesce(func.sum(rgu_used_expr), 0) > 0)
@@ -141,28 +140,25 @@ def get_underusers(
 
     with config().db.session() as session:
         util, m_mean, rgu_h_expr, rgu_used_expr = _rgu_exprs()
-        stmt = (
-            _with_rgu_window(
-                select(
-                    JobSeriesDB.sarc_user_id,
-                    JobSeriesDB.email,
-                    JobSeriesDB.display_name,
-                    JobSeriesDB.cluster_name,
-                    func.coalesce(func.sum(rgu_h_expr), 0).label("sum_rgu_hours"),
-                    func.coalesce(func.sum(rgu_used_expr), 0).label("sum_rgu_used"),
-                ),
-                util,
-                start,
-                end,
-                exclude_zero_usage=exclude_zero_usage,
-                rgu_used_expr=rgu_used_expr,
-            )
-            .group_by(
+        stmt = _with_rgu_window(
+            select(
                 JobSeriesDB.sarc_user_id,
                 JobSeriesDB.email,
                 JobSeriesDB.display_name,
                 JobSeriesDB.cluster_name,
-            )
+                func.coalesce(func.sum(rgu_h_expr), 0).label("sum_rgu_hours"),
+                func.coalesce(func.sum(rgu_used_expr), 0).label("sum_rgu_used"),
+            ),
+            util,
+            start,
+            end,
+            exclude_zero_usage=exclude_zero_usage,
+            rgu_used_expr=rgu_used_expr,
+        ).group_by(
+            JobSeriesDB.sarc_user_id,
+            JobSeriesDB.email,
+            JobSeriesDB.display_name,
+            JobSeriesDB.cluster_name,
         )
         agg_rows = session.exec(stmt).all()
 
@@ -317,21 +313,18 @@ def _query_month_agg(
 ) -> MonthlyStats:
     """Aggregate fleet-level waste stats for a single calendar month window."""
     util, m_mean, rgu_h_expr, rgu_used_expr = _rgu_exprs()
-    stmt = (
-        _with_rgu_window(
-            select(
-                JobSeriesDB.sarc_user_id,
-                func.coalesce(func.sum(rgu_h_expr), 0).label("sum_rgu_hours"),
-                func.coalesce(func.sum(rgu_used_expr), 0).label("sum_rgu_used"),
-            ),
-            util,
-            start,
-            end,
-            exclude_zero_usage=exclude_zero_usage,
-            rgu_used_expr=rgu_used_expr,
-        )
-        .group_by(JobSeriesDB.sarc_user_id)
-    )
+    stmt = _with_rgu_window(
+        select(
+            JobSeriesDB.sarc_user_id,
+            func.coalesce(func.sum(rgu_h_expr), 0).label("sum_rgu_hours"),
+            func.coalesce(func.sum(rgu_used_expr), 0).label("sum_rgu_used"),
+        ),
+        util,
+        start,
+        end,
+        exclude_zero_usage=exclude_zero_usage,
+        rgu_used_expr=rgu_used_expr,
+    ).group_by(JobSeriesDB.sarc_user_id)
     agg_rows = session.exec(stmt).all()
 
     total_rgu_h = 0.0
@@ -415,6 +408,27 @@ def get_historical_stats(
 # ── Recurring-underusers table (Module C digest) ─────────────────────────────
 
 
+def _even_week_anchor(end: datetime) -> datetime:
+    """Return day of the current (or next) even ISO week.
+
+    If *end* falls in an odd ISO week the anchor shifts one week forward so that
+    all four cycle columns always land on even-week, the day of *end*. The
+    anchor may therefore be in the future relative to *end*."""
+    if end.isocalendar().week % 2 != 0:
+        end += timedelta(weeks=1)
+    return end
+
+
+def get_cycle_dates(end: datetime) -> list[date]:
+    """Return the four cycle end-dates [W0, W-2, W-4, W-6] as date objects.
+
+    Each date is the day of an even ISO week, spaced 14 days apart, anchored
+    to the current (or next) even ISO week from *end*.
+    """
+    anchor = _even_week_anchor(end)
+    return [(anchor - timedelta(days=i * 14)).date() for i in range(4)]
+
+
 def get_recurring_underusers(
     end: datetime,
     *,
@@ -428,14 +442,15 @@ def get_recurring_underusers(
     """Return per-cluster top wasters for the recurring-underusers digest table.
 
     Selection: for each cluster, rank users by wasted RGU-h over the rolling
-    *window_weeks* × 7-day window (ending at *end*) and include the top users
-    until their cumulative waste reaches >= *cluster_share_threshold* of that
-    cluster's total wasted RGU-h.
+    *window_weeks* × 7-day window (ending at the even-week anchor) and include
+    the top users until their cumulative waste reaches >= *cluster_share_threshold*
+    of that cluster's total wasted RGU-h.
 
     Cycle flags: for each of the 4 most-recent 14-day windows (W0, W-2, W-4,
-    W-6 — rolling from *end*), call get_underusers to determine per-user
-    membership.  The "personalized action" flag is set iff a user was flagged in
-    all 4 cycles.
+    W-6 — anchored to even ISO-week Mondays), call get_underusers to determine
+    per-user membership.  Cycles whose end date is in the future relative to
+    *end* are marked None (no data yet).  The "personalized action" flag is set
+    iff a user was flagged True in all 4 cycles.
 
     Returns a dict of cluster_name -> list[RecurringUserRow] (sorted desc by
     wasted_6w within each cluster), ordered by cluster name.
@@ -443,33 +458,31 @@ def get_recurring_underusers(
     if resource != "gpu":
         raise ValueError(f"Unsupported resource: {resource!r}")
 
-    agg_start = end - timedelta(days=window_weeks * 7)
+    anchor = _even_week_anchor(end)
+    agg_start = anchor - timedelta(weeks=window_weeks)
 
     # ── Per-(user, cluster) aggregate over the full recurrence window ─────────
     with config().db.session() as session:
         util, m_mean, rgu_h_expr, rgu_used_expr = _rgu_exprs()
-        stmt = (
-            _with_rgu_window(
-                select(
-                    JobSeriesDB.sarc_user_id,
-                    JobSeriesDB.email,
-                    JobSeriesDB.display_name,
-                    JobSeriesDB.cluster_name,
-                    func.coalesce(func.sum(rgu_h_expr), 0).label("sum_rgu_hours"),
-                    func.coalesce(func.sum(rgu_used_expr), 0).label("sum_rgu_used"),
-                ),
-                util,
-                agg_start,
-                end,
-                exclude_zero_usage=exclude_zero_usage,
-                rgu_used_expr=rgu_used_expr,
-            )
-            .group_by(
+        stmt = _with_rgu_window(
+            select(
                 JobSeriesDB.sarc_user_id,
                 JobSeriesDB.email,
                 JobSeriesDB.display_name,
                 JobSeriesDB.cluster_name,
-            )
+                func.coalesce(func.sum(rgu_h_expr), 0).label("sum_rgu_hours"),
+                func.coalesce(func.sum(rgu_used_expr), 0).label("sum_rgu_used"),
+            ),
+            util,
+            agg_start,
+            anchor,
+            exclude_zero_usage=exclude_zero_usage,
+            rgu_used_expr=rgu_used_expr,
+        ).group_by(
+            JobSeriesDB.sarc_user_id,
+            JobSeriesDB.email,
+            JobSeriesDB.display_name,
+            JobSeriesDB.cluster_name,
         )
         agg_rows = session.exec(stmt).all()
 
@@ -493,10 +506,14 @@ def get_recurring_underusers(
         cluster_users[cluster][uid]["wasted"] += wasted
 
     # ── Cycle membership sets (W0 .. W-6) ────────────────────────────────────
-    # W0 = [end-14d, end], W-2 = [end-28d, end-14d], ...
-    cycle_flagged: list[set[int]] = []
+    # Each cycle ends at anchor - i*14d (always an even-week Monday).
+    # Cycles whose end is in the future relative to `end` yield None (no data).
+    cycle_flagged: list[set[int] | None] = []
     for i in range(4):
-        c_end = end - timedelta(days=i * 14)
+        c_end = anchor - timedelta(days=i * 14)
+        if c_end > end:
+            cycle_flagged.append(None)
+            continue
         c_start = c_end - timedelta(days=14)
         flagged_rows = get_underusers(
             c_start,
@@ -530,10 +547,10 @@ def get_recurring_underusers(
         w0_set, w2_set, w4_set, w6_set = cycle_flagged
         rows_out = []
         for uid, u in selected:
-            w0 = uid in w0_set
-            w2 = uid in w2_set
-            w4 = uid in w4_set
-            w6 = uid in w6_set
+            w0 = None if w0_set is None else uid in w0_set
+            w2 = None if w2_set is None else uid in w2_set
+            w4 = None if w4_set is None else uid in w4_set
+            w6 = None if w6_set is None else uid in w6_set
             rows_out.append(
                 RecurringUserRow(
                     email=u["email"],
@@ -545,7 +562,9 @@ def get_recurring_underusers(
                     w2=w2,
                     w4=w4,
                     w6=w6,
-                    personalized_action=(w0 and w2 and w4 and w6),
+                    personalized_action=(
+                        w0 is True and w2 is True and w4 is True and w6 is True
+                    ),
                 )
             )
         result[cluster] = rows_out
