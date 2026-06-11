@@ -1,0 +1,10 @@
+[Unit]
+Description=SARC underusage notifications — weekly on Monday morning
+Requires=sarc_notify_underusage.service
+
+[Timer]
+Unit=sarc_notify_underusage.service
+OnCalendar=Mon *-*-* 09:00:00
+
+[Install]
+WantedBy=timers.target

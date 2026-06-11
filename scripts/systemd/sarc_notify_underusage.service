@@ -1,0 +1,10 @@
+[Unit]
+Description=SARC underusage notifications
+Wants=sarc_notify_underusage.timer
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /home/sarc/SARC/scripts/systemd/notify_underusage.sh
+
+[Install]
+WantedBy=multi-user.target
