@@ -288,7 +288,7 @@
       <input type="number" id="top_n_users" value="16" min="1" step="1" />
     </div>
     <div class="ctrl">
-      <label for="metric-select">Primary metric</label>
+      <label for="metric-select">Efficiency metric</label>
       <select id="metric-select"></select>
     </div>
     <button onclick="loadCharts()">Update</button>
@@ -394,7 +394,7 @@
     const JOBTABLE_PAGE_SIZES = [50, 100, 200, 500];
 
     // Fresh <option> nodes for the metric list, optionally led by a blank
-    // "— none —". Shared by the global primary-metric select and the per-tile
+    // "— none —". Shared by the global efficiency-metric select and the per-tile
     // secondary-metric picker on the Metric heatmap, so each select owns its
     // own nodes.
     function metricOptions(includeNone) {
@@ -411,7 +411,7 @@
       });
       return opts;
     }
-    // Populate the global primary-metric dropdown.
+    // Populate the global efficiency-metric dropdown.
     const metSel = document.getElementById('metric-select');
     metricOptions(false).forEach(o => metSel.appendChild(o));
     metSel.value = 'gpu_sm_occupancy';
@@ -918,7 +918,7 @@
       if (!data || !data.periods.length || !data.series.length) return;
       const x    = data.periods.map(p => p.period_start);
       const ends = data.periods.map(p => p.period_end);
-      // Primary metric only: a single series, two traces. Dash style encodes
+      // Efficiency metric only: a single series, two traces. Dash style encodes
       // the statistic (max solid, mean dashed). Null buckets (no job carries
       // the stat) leave a gap.
       const MET_COLORS = ['#1a6fd4'];
@@ -990,7 +990,7 @@
     // the job-table pagination, which is navigation state and resets). This tile
     // owns its data flow: renderTile renders it without a shared-cache fetch
     // (the `d` argument is unused), and each pick re-fetches only this tile from
-    // /metric_comparison (global primary + the picked secondary).
+    // /metric_comparison (global efficiency metric + the picked secondary).
     function renderMetricScatter(id, d) {
       const el = document.getElementById(id);
       if (!el) return;
@@ -1038,7 +1038,7 @@
         try {
           // Cache the paired payload per secondary metric (cleared on Update,
           // like endpointCache). A layout change re-renders every tile, so
-          // without this the heatmap would re-fetch each time; the primary
+          // without this the heatmap would re-fetch each time; the efficiency
           // metric and all filters are fixed between Updates, so metric2 alone
           // keys the result (an in-flight promise is shared too).
           if (!comparisonCache[m2])
@@ -1195,7 +1195,7 @@
 
       if (!total) { el.textContent = 'No jobs found.'; return; }
 
-      // The Waste column depends on the primary metric picked at last Update.
+      // The Waste column depends on the efficiency metric picked at last Update.
       const metricName = (currentParams && currentParams.metric) || 'selected metric';
       const metricPretty = METRICS[metricName] || metricName;
       // RGU·time columns honour the toolbar unit (display rescale of the RGU·h
@@ -1242,7 +1242,7 @@
           title: `RGU × elapsed time, shown in ${unit.label}`,
           fmt: fmtRguTime },
         { key: 'waste',                 label: `${metricPretty} waste (${unit.label})`,
-          title: `RGU·time × (1 − mean ${metricPretty}): estimated unused RGU·time, taking the selected primary metric as the "useful" fraction`,
+          title: `RGU·time × (1 − mean ${metricPretty}): estimated unused RGU·time, taking the selected efficiency metric as the "useful" fraction`,
           fmt: fmtRguTime },
         { key: 'gpu_utilization_mean',  label: 'GPU util',  fmt: v => v != null ? (v*100).toFixed(1)+'%' : '—' },
         { key: 'gpu_sm_occupancy_mean', label: 'SM occ',    fmt: v => v != null ? (v*100).toFixed(1)+'%' : '—' },
