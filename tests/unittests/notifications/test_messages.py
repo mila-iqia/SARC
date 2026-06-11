@@ -1,7 +1,19 @@
 from datetime import UTC, datetime
 
-from sarc.notifications.messages import build_admin_digest, build_user_dm
-from sarc.notifications.underusage import ClusterBreakdown, UnderuserJob, UnderuserRow
+from sarc.notifications.messages import (
+    build_admin_digest,
+    build_usage_report,
+    build_user_dm,
+    split_usage_report_recipients,
+)
+from sarc.notifications.underusage import (
+    ClusterBreakdown,
+    UnderuserJob,
+    UnderuserRow,
+    UsageClusterBreakdown,
+    UsageJob,
+    UsageRow,
+)
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -217,3 +229,192 @@ def test_digest_deterministic():
 def test_digest_empty_rows():
     text = build_admin_digest([], period="…")
     assert "0 user(s) flagged" in text
+
+
+# ── build_usage_report fixtures ───────────────────────────────────────────────
+
+_USAGE_JOB_NARVAL_1 = UsageJob(
+    job_id=300001,
+    cluster="narval",
+    submit_time=datetime(2026, 5, 28, tzinfo=UTC),
+    rgu_hours_used=120.0,
+    gpu_utilization=0.72,
+)
+_USAGE_JOB_NARVAL_2 = UsageJob(
+    job_id=300002,
+    cluster="narval",
+    submit_time=datetime(2026, 6, 1, tzinfo=UTC),
+    rgu_hours_used=90.0,
+    gpu_utilization=0.65,
+)
+_USAGE_JOB_FIR = UsageJob(
+    job_id=300003,
+    cluster="fir",
+    submit_time=datetime(2026, 5, 30, tzinfo=UTC),
+    rgu_hours_used=50.0,
+    gpu_utilization=None,
+)
+
+_USAGE_ROW_ALICE = UsageRow(
+    email="alice@mila.quebec",
+    display_name="Alice Liddell",
+    user_id=1,
+    rgu_hours_requested=1000.0,
+    rgu_hours_used=745.0,
+    avg_utilization=0.745,
+    by_cluster=[
+        UsageClusterBreakdown("narval", 700.0, 525.0),
+        UsageClusterBreakdown("fir", 300.0, 220.0),
+    ],
+    top_jobs=[_USAGE_JOB_NARVAL_1, _USAGE_JOB_NARVAL_2, _USAGE_JOB_FIR],
+)
+
+_USAGE_ROW_BOB = UsageRow(
+    email="bob@mila.quebec",
+    display_name="Bob Marley",
+    user_id=2,
+    rgu_hours_requested=800.0,
+    rgu_hours_used=200.0,
+    avg_utilization=0.25,
+    by_cluster=[UsageClusterBreakdown("fir", 800.0, 200.0)],
+    top_jobs=[],
+)
+
+
+# ── build_usage_report ────────────────────────────────────────────────────────
+
+
+def test_usage_report_greeting_uses_first_name():
+    text = build_usage_report(_USAGE_ROW_ALICE, window_days=28)
+    assert text.startswith("Hi Alice,")
+
+
+def test_usage_report_neutral_wording_used_not_unused():
+    text = build_usage_report(_USAGE_ROW_ALICE, window_days=28)
+    assert "unused" not in text
+    assert "waste" not in text
+    assert "used on average" in text
+
+
+def test_usage_report_overview_contains_utilization():
+    text = build_usage_report(_USAGE_ROW_ALICE, window_days=28)
+    assert "74.5 %" in text
+
+
+def test_usage_report_overview_contains_rgu_used():
+    text = build_usage_report(_USAGE_ROW_ALICE, window_days=28)
+    assert "745.0 RGU-hours total" in text
+
+
+def test_usage_report_overview_contains_window_days():
+    text = build_usage_report(_USAGE_ROW_ALICE, window_days=28)
+    assert "last 28 days" in text
+
+
+def test_usage_report_top_jobs_section_present():
+    text = build_usage_report(_USAGE_ROW_ALICE, window_days=28)
+    assert "Your top jobs by GPU usage:" in text
+
+
+def test_usage_report_top_jobs_grouped_by_cluster():
+    text = build_usage_report(_USAGE_ROW_ALICE, window_days=28)
+    # narval has more total usage than fir → appears first
+    assert text.index("Cluster narval") < text.index("Cluster fir")
+
+
+def test_usage_report_job_line_format():
+    text = build_usage_report(_USAGE_ROW_ALICE, window_days=28)
+    assert "job_300001 (2026-05-28)" in text
+    assert "120.0 RGU-h" in text
+    assert "GPU utilization: 72 %" in text
+
+
+def test_usage_report_job_utilization_none_shows_na():
+    text = build_usage_report(_USAGE_ROW_ALICE, window_days=28)
+    assert "GPU utilization: n/a" in text
+
+
+def test_usage_report_tree_characters_multi_job_cluster():
+    text = build_usage_report(_USAGE_ROW_ALICE, window_days=28)
+    assert "┌─ job_300001" in text
+    assert "└─ job_300002" in text
+
+
+def test_usage_report_tree_character_single_job_cluster():
+    text = build_usage_report(_USAGE_ROW_ALICE, window_days=28)
+    assert "└─ job_300003" in text
+
+
+def test_usage_report_no_dashboard_url_by_default():
+    text = build_usage_report(_USAGE_ROW_ALICE, window_days=28)
+    assert "Track your usage" not in text
+
+
+def test_usage_report_dashboard_url_included_when_provided():
+    text = build_usage_report(_USAGE_ROW_ALICE, window_days=28, dashboard_url="https://dash.example.com")
+    assert "Track your usage over time: https://dash.example.com" in text
+
+
+def test_usage_report_help_section_appended_when_provided():
+    help_text = "Need help? Ask in #idt-support — IDT Team"
+    text = build_usage_report(_USAGE_ROW_ALICE, window_days=28, help_section=help_text)
+    assert text.endswith(help_text)
+
+
+def test_usage_report_no_jobs_omits_jobs_section():
+    text = build_usage_report(_USAGE_ROW_BOB, window_days=28)
+    assert "Your top jobs" not in text
+
+
+def test_usage_report_deterministic():
+    a = build_usage_report(_USAGE_ROW_ALICE, window_days=28, dashboard_url="https://x", help_section="help")
+    b = build_usage_report(_USAGE_ROW_ALICE, window_days=28, dashboard_url="https://x", help_section="help")
+    assert a == b
+
+
+# ── split_usage_report_recipients ────────────────────────────────────────────
+
+
+def test_split_underuser_excluded_from_report():
+    report, skipped = split_usage_report_recipients(
+        [_USAGE_ROW_ALICE, _USAGE_ROW_BOB],
+        underuser_emails={"alice@mila.quebec"},
+    )
+    assert all(r.email != "alice@mila.quebec" for r in report)
+    assert any(r.email == "alice@mila.quebec" for r in skipped)
+
+
+def test_split_non_underuser_included_in_report():
+    report, skipped = split_usage_report_recipients(
+        [_USAGE_ROW_ALICE, _USAGE_ROW_BOB],
+        underuser_emails={"alice@mila.quebec"},
+    )
+    assert any(r.email == "bob@mila.quebec" for r in report)
+    assert all(r.email != "bob@mila.quebec" for r in skipped)
+
+
+def test_split_empty_underusers_all_get_report():
+    report, skipped = split_usage_report_recipients(
+        [_USAGE_ROW_ALICE, _USAGE_ROW_BOB],
+        underuser_emails=set(),
+    )
+    assert len(report) == 2
+    assert len(skipped) == 0
+
+
+def test_split_all_are_underusers_none_get_report():
+    report, skipped = split_usage_report_recipients(
+        [_USAGE_ROW_ALICE, _USAGE_ROW_BOB],
+        underuser_emails={"alice@mila.quebec", "bob@mila.quebec"},
+    )
+    assert len(report) == 0
+    assert len(skipped) == 2
+
+
+def test_split_lists_are_disjoint_and_cover_all():
+    rows = [_USAGE_ROW_ALICE, _USAGE_ROW_BOB]
+    report, skipped = split_usage_report_recipients(rows, underuser_emails={"alice@mila.quebec"})
+    assert len(report) + len(skipped) == len(rows)
+    report_emails = {r.email for r in report}
+    skipped_emails = {r.email for r in skipped}
+    assert report_emails.isdisjoint(skipped_emails)

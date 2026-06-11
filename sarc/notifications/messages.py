@@ -7,6 +7,8 @@ from sarc.notifications.underusage import (
     RecurringUserRow,
     UnderuserJob,
     UnderuserRow,
+    UsageJob,
+    UsageRow,
 )
 
 
@@ -90,6 +92,74 @@ def build_user_dm(
             "Jobs with the lowest GPU utilization:",
             "",
             _jobs_section(row.top_jobs),
+        ]
+
+    if dashboard_url is not None:
+        parts += ["", f"Track your usage over time: {dashboard_url}"]
+
+    if help_section is not None:
+        parts += ["", help_section]
+
+    return "\n".join(parts)
+
+
+def _usage_jobs_section(top_jobs: list[UsageJob]) -> str:
+    by_cluster: dict[str, list[UsageJob]] = defaultdict(list)
+    for job in top_jobs:
+        by_cluster[job.cluster].append(job)
+
+    cluster_order = sorted(
+        by_cluster,
+        key=lambda c: sum(j.rgu_hours_used for j in by_cluster[c]),
+        reverse=True,
+    )
+
+    lines = []
+    for cluster in cluster_order:
+        jobs = by_cluster[cluster]
+        lines.append(f"  Cluster {cluster}")
+        for i, job in enumerate(jobs):
+            prefix = _tree_prefix(i, len(jobs))
+            date_str = job.submit_time.strftime("%Y-%m-%d")
+            util_str = (
+                f"{job.gpu_utilization * 100:.0f} %"
+                if job.gpu_utilization is not None
+                else "n/a"
+            )
+            lines.append(
+                f"{prefix} job_{job.job_id} ({date_str})"
+                f" — {_fmt_h(job.rgu_hours_used)} RGU-h"
+                f"  (GPU utilization: {util_str})"
+            )
+    return "\n".join(lines)
+
+
+def build_usage_report(
+    row: UsageRow,
+    *,
+    window_days: int,
+    dashboard_url: str | None = None,
+    help_section: str | None = None,
+) -> str:
+    """Build a Phase 3 plain-text usage report for a single researcher.
+
+    Neutral wording — shows used volume, no waste/unused framing.
+    Pure function — no I/O, deterministic for fixed input.
+    """
+    parts = [
+        f"Hi {_first_name(row.display_name)},",
+        "",
+        f"Over the last {window_days} days, your jobs used on average"
+        f" {_pct(row.avg_utilization)} of the GPU resources you"
+        f" requested ({_fmt_h(row.rgu_hours_used)} RGU-hours total).",
+    ]
+
+    if row.top_jobs:
+        parts += [
+            "",
+            "Your top jobs by GPU usage:",
+            "",
+            _usage_jobs_section(row.top_jobs),
         ]
 
     if dashboard_url is not None:
@@ -205,6 +275,21 @@ def build_recurring_table(
         sections.append("\n".join(lines))
 
     return "\n\n".join(sections)
+
+
+def split_usage_report_recipients(
+    usage_rows: list[UsageRow],
+    underuser_emails: set[str],
+) -> tuple[list[UsageRow], list[UsageRow]]:
+    """Partition active users into (report_recipients, underuser_skipped).
+
+    Users whose email is in *underuser_emails* receive the underusage alert
+    instead of the usage report.  The two lists are disjoint; their union
+    covers all of *usage_rows*.  Pure function — no I/O.
+    """
+    report = [r for r in usage_rows if r.email not in underuser_emails]
+    skipped = [r for r in usage_rows if r.email in underuser_emails]
+    return report, skipped
 
 
 def build_admin_digest(

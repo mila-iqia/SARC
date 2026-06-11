@@ -296,6 +296,9 @@ class UnderusageNotifyConfig:
     # Fraction of cluster wasted RGU-h at which selection stops (0..1).
     recurrence_cluster_share: float = 0.30
     email: EmailConfig | None = None
+    # Phase 3 — universal usage report cadence.
+    usage_report_window_days: int = 28
+    usage_report_every_weeks: int = 4
 
 
 @dataclass
