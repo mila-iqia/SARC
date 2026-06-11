@@ -554,7 +554,6 @@ def metrics_metric_distribution(
     cluster_user: str | None = Query(default=None),
     job_states: list[str] = Query(default=[]),
     metric: str = Query(default="gpu_sm_occupancy"),
-    metric2: str | None = Query(default=None),
     focus_start: datetime | None = Query(default=None),
     focus_end: datetime | None = Query(default=None),
     rgu_type: str = Query(default="physical"),
@@ -564,20 +563,18 @@ def metrics_metric_distribution(
 
     ``metric`` is a [0, 1] GPU/system stat (e.g. gpu_sm_occupancy). Over GPU jobs
     in the window, bins each job's mean value into 50 bins weighted by
-    rgu * elapsed (so long/big jobs count more). With ``metric2``, also returns its
-    distribution and a 100x100 paired heatmap (metric vs metric2). Returns
-    {primary, secondary, paired}.
+    rgu * elapsed (so long/big jobs count more). Returns {primary: {values,
+    weights}}. The paired (metric vs metric2) heatmap is a separate endpoint,
+    /metrics/metric_comparison.
     """
     if metric not in _METRICS_0_1:
         raise HTTPException(status_code=400, detail=f"Unknown metric: {metric!r}")
-    if metric2 is not None and metric2 not in _METRICS_0_1:
-        raise HTTPException(status_code=400, detail=f"Unknown metric: {metric2!r}")
 
     begin_dt, finish_dt = _apply_focus(*_date_range(start, end), focus_start, focus_end)
 
-    # Read each metric mean via a targeted LEFT JOIN on jobstatisticdb (one
-    # aliased row per metric) instead of JobSeriesDB.statistics, which forces a
-    # per-row json_object_agg of all stats. See histogram for the rationale.
+    # Read the metric mean via a targeted LEFT JOIN on jobstatisticdb instead of
+    # JobSeriesDB.statistics, which forces a per-row json_object_agg of all
+    # stats. See histogram for the rationale.
     js1 = aliased(JobStatisticDB)
     m1 = col(js1.mean)
     src = _rgu_source(
@@ -586,119 +583,105 @@ def metrics_metric_distribution(
     weight = src.rgu_drac * src.elapsed_time
     bin_width = 1.0 / _DENSITY_BINS
 
-    # Common job-population filter shared by primary, secondary and paired.
-    # When metric2 is specified, both metric and metric2 must be valid (matches
-    # original Python loop: secondary failure skips the primary too).
-    base_filters = [
-        src.submit_time >= begin_dt,
-        src.submit_time < finish_dt,
-        src.allocated_gpu_type.is_not(None),
-        src.rgu_drac.is_not(None),
-        _valid_metric_filter(m1),
-    ]
-    if metric2:
-        js2 = aliased(JobStatisticDB)
-        m2 = col(js2.mean)
-        base_filters.append(_valid_metric_filter(m2))
-    else:
-        js2 = None
-        m2 = None
-
-    def _add_metric_joins(q):
-        # src.apply anchors the FROM (SlurmJobDB+gpurgudb physical / view billing)
-        # and adds the common filters; then attach the stat aliases on job_pk.
-        q = src.apply(q).join(
+    # src.apply anchors the FROM (SlurmJobDB+gpurgudb physical / view billing)
+    # and adds the common filters; then attach the stat alias on job_pk.
+    bin_expr = _density_bin_expr(m1).label("bin")
+    q = (
+        src.apply(select(bin_expr, func.sum(weight).label("w")))
+        .join(
             js1,
             and_(col(js1.job_id) == src.job_pk, col(js1.name) == metric),
             isouter=True,
         )
-        if js2 is not None:
-            q = q.join(
-                js2,
-                and_(col(js2.job_id) == src.job_pk, col(js2.name) == metric2),
-                isouter=True,
-            )
-        return q
+        .where(
+            src.submit_time >= begin_dt,
+            src.submit_time < finish_dt,
+            src.allocated_gpu_type.is_not(None),
+            src.rgu_drac.is_not(None),
+            _valid_metric_filter(m1),
+        )
+        .group_by("bin")
+        .order_by("bin")
+    )
 
-    def _binned_query(metric_expr):
-        bin_expr = _density_bin_expr(metric_expr).label("bin")
-        q = _add_metric_joins(select(bin_expr, func.sum(weight).label("w")))
-        return q.where(*base_filters).group_by("bin").order_by("bin")
+    # Each bin yields a single (centre, weight) pair; Plotly's nbinsx=50 resolves
+    # them back to a 50-bar density plot.
+    values, weights = [], []
+    for r in sess.exec(q):
+        values.append((int(r.bin) + 0.5) * bin_width)
+        weights.append(float(r.w or 0.0))
+    return {"primary": {"values": values, "weights": weights}}
 
-    def _bin_to_payload(rows):
-        # Convert (bin_index, weight_sum) rows to centred-value/weight lists
-        # consumable by Plotly's histogram. Each bin yields a single (x, y)
-        # pair at the bin centre, which Plotly's nbinsx=50 will resolve back
-        # to a 50-bar density plot.
-        values, weights = [], []
-        for r in rows:
-            centre = (int(r.bin) + 0.5) * bin_width
-            values.append(centre)
-            weights.append(float(r.w or 0.0))
-        return values, weights
 
-    if not metric2 or m2 is None:
-        p_values, p_weights = _bin_to_payload(sess.exec(_binned_query(m1)))
-        return {
-            "primary": {"values": p_values, "weights": p_weights},
-            "secondary": None,
-            "paired": None,
-        }
+@router.get("/metrics/metric_comparison")
+def metrics_metric_comparison(
+    start: date = Query(default=None),
+    end: date = Query(default=None),
+    clusters: list[str] = Query(default=[]),
+    cluster_user: str | None = Query(default=None),
+    job_states: list[str] = Query(default=[]),
+    metric: str = Query(default="gpu_sm_occupancy"),
+    metric2: str = Query(default="gpu_memory"),
+    focus_start: datetime | None = Query(default=None),
+    focus_end: datetime | None = Query(default=None),
+    rgu_type: str = Query(default="physical"),
+    sess: Session = Depends(session_dep),
+):
+    """100x100 paired heatmap of two normalized GPU metrics.
 
-    # One 2D-binned pass serves all three payloads: primary is the per-column
-    # weight sum, secondary the per-row one, and paired the 100x100 cell-count
-    # matrix rendered as a heatmap (no sampling: like the elapsed/wait
-    # heatmaps, every job lands in exactly one cell). Replaces two 1D scans
-    # plus an ORDER BY random() LIMIT 5000 over the full view (a 1% sample
-    # that still paid every view join per row) — ~22s -> ~4s on a 5-month
-    # window, and the heatmap is exact.
+    Counts GPU jobs in the window into a 100x100 grid of (metric, metric2) mean
+    values; a job contributes only if it carries both stats. No sampling: every
+    job lands in exactly one cell (like the elapsed/wait heatmaps). Returns
+    {x, y, z} with z[iby][ibx] the job count of that cell (Plotly heatmap order).
+    """
+    if metric not in _METRICS_0_1:
+        raise HTTPException(status_code=400, detail=f"Unknown metric: {metric!r}")
+    if metric2 not in _METRICS_0_1:
+        raise HTTPException(status_code=400, detail=f"Unknown metric: {metric2!r}")
+
+    begin_dt, finish_dt = _apply_focus(*_date_range(start, end), focus_start, focus_end)
+
+    js1 = aliased(JobStatisticDB)
+    js2 = aliased(JobStatisticDB)
+    m1 = col(js1.mean)
+    m2 = col(js2.mean)
+    src = _rgu_source(
+        sess, rgu_type, clusters, cluster_user, job_states, need_cluster_name=False
+    )
+
     bx = _density_bin_expr(m1, _PAIRED_BINS).label("bx")
     by = _density_bin_expr(m2, _PAIRED_BINS).label("by")
-    # group_by by label, not by expression: pg8000's server-side binding
-    # renders the expression with fresh placeholders in GROUP BY (error 42803).
-    q2d = _add_metric_joins(
-        select(bx, by, func.sum(weight).label("w"), func.count().label("n"))
+    # group_by by label, not by expression: pg8000's server-side binding renders
+    # the expression with fresh placeholders in GROUP BY (error 42803).
+    q = (
+        src.apply(select(bx, by, func.count().label("n")))
+        .join(
+            js1,
+            and_(col(js1.job_id) == src.job_pk, col(js1.name) == metric),
+            isouter=True,
+        )
+        .join(
+            js2,
+            and_(col(js2.job_id) == src.job_pk, col(js2.name) == metric2),
+            isouter=True,
+        )
+        .where(
+            src.submit_time >= begin_dt,
+            src.submit_time < finish_dt,
+            src.allocated_gpu_type.is_not(None),
+            src.rgu_drac.is_not(None),
+            _valid_metric_filter(m1),
+            _valid_metric_filter(m2),
+        )
+        .group_by("bx", "by")
     )
-    q2d = q2d.where(*base_filters).group_by("bx", "by")
 
     z = [[0] * _PAIRED_BINS for _ in range(_PAIRED_BINS)]  # z[by][bx] (Plotly)
-    p_w = [0.0] * _PAIRED_BINS
-    s_w = [0.0] * _PAIRED_BINS
-    p_seen = [False] * _PAIRED_BINS
-    s_seen = [False] * _PAIRED_BINS
-    for r in sess.exec(q2d):
-        ibx, iby = int(r.bx), int(r.by)
-        w = float(r.w or 0.0)
-        z[iby][ibx] += int(r.n)
-        p_w[ibx] += w
-        s_w[iby] += w
-        p_seen[ibx] = True
-        s_seen[iby] = True
-
-    def _marginal(weights, seens):
-        """Fold the 100-bin accumulators down to the 50 density bins.
-
-        floor(m*100)//2 == floor(m*50) (clipping included), so this is
-        bit-identical to a direct 1D scan at _DENSITY_BINS resolution.
-        """
-        ratio = _PAIRED_BINS // _DENSITY_BINS
-        out_v, out_w = [], []
-        for i in range(_DENSITY_BINS):
-            cells = range(i * ratio, (i + 1) * ratio)
-            if any(seens[j] for j in cells):
-                out_v.append((i + 0.5) * bin_width)
-                out_w.append(sum(weights[j] for j in cells))
-        return out_v, out_w
-
-    p_values, p_weights = _marginal(p_w, p_seen)
-    s_values, s_weights = _marginal(s_w, s_seen)
+    for r in sess.exec(q):
+        z[int(r.by)][int(r.bx)] += int(r.n)
 
     centres = [(i + 0.5) / _PAIRED_BINS for i in range(_PAIRED_BINS)]
-    return {
-        "primary": {"values": p_values, "weights": p_weights},
-        "secondary": {"values": s_values, "weights": s_weights},
-        "paired": {"x": centres, "y": centres, "z": z},
-    }
+    return {"x": centres, "y": centres, "z": z}
 
 
 @router.get("/metrics/rgu_usage")
@@ -875,7 +858,6 @@ def metrics_metric_trend(
     cluster_user: str | None = Query(default=None),
     job_states: list[str] = Query(default=[]),
     metric: str = Query(default="gpu_sm_occupancy"),
-    metric2: str | None = Query(default=None),
     sess: Session = Depends(session_dep),
 ):
     """Per-period averages of a metric's per-job ``mean`` and ``max``.
@@ -884,14 +866,12 @@ def metrics_metric_trend(
     jobs submitted in that bucket (plain per-job average, not duration
     weighted). Jobs lacking the statistic are simply absent from the average
     (inner join) and no GPU/RGU filter is applied, so system metrics also
-    cover CPU-only jobs. Returns one series per requested metric, aligned on
-    a shared period axis; buckets with no data yield null (a curve gap), not 0.
+    cover CPU-only jobs. Returns a single ``series`` entry (the requested
+    metric) on a period axis; buckets with no data yield null (a curve gap),
+    not 0.
     """
     if metric not in _METRICS_0_1:
         raise HTTPException(status_code=400, detail=f"Unknown metric: {metric!r}")
-    if metric2 is not None and metric2 not in _METRICS_0_1:
-        raise HTTPException(status_code=400, detail=f"Unknown metric: {metric2!r}")
-    wanted = [metric] + ([metric2] if metric2 and metric2 != metric else [])
 
     begin_dt, finish_dt = _date_range(start, end)
     parsed = _parse_period(period)
@@ -911,25 +891,20 @@ def metrics_metric_trend(
     avg_max = func.avg(case((m_max == m_max, m_max))).label("avg_max")  # noqa: PLR0124
 
     query = (
-        select(
-            bucket_expr,
-            col(JobStatisticDB.name).label("metric_name"),
-            avg_mean,
-            avg_max,
-        )
+        select(bucket_expr, avg_mean, avg_max)
         .select_from(SlurmJobDB)
         .join(
             JobStatisticDB,
             and_(
                 col(JobStatisticDB.job_id) == col(SlurmJobDB.id),
-                col(JobStatisticDB.name).in_(wanted),
+                col(JobStatisticDB.name) == metric,
             ),
         )
         .where(
             col(SlurmJobDB.submit_time) >= begin_dt,
             col(SlurmJobDB.submit_time) < finish_dt,
         )
-        .group_by("bucket", col(JobStatisticDB.name))
+        .group_by("bucket")
         .order_by("bucket")
     )
     query = _apply_slurm_job_filters(query, cluster_ids, cluster_user, job_states)
@@ -937,10 +912,7 @@ def metrics_metric_trend(
     cells = {}
     for r in sess.exec(query):
         key = _sql_bucket_key(parsed, r.bucket)
-        cells[(key, r.metric_name)] = (
-            _nan_to_none(r.avg_mean),
-            _nan_to_none(r.avg_max),
-        )
+        cells[key] = (_nan_to_none(r.avg_mean), _nan_to_none(r.avg_max))
 
     buckets = list(_iter_buckets(begin_dt, finish_dt, parsed))
     return {
@@ -950,11 +922,10 @@ def metrics_metric_trend(
         ],
         "series": [
             {
-                "metric": m,
-                "mean": [cells.get((k, m), (None, None))[0] for k, _, _ in buckets],
-                "max": [cells.get((k, m), (None, None))[1] for k, _, _ in buckets],
+                "metric": metric,
+                "mean": [cells.get(k, (None, None))[0] for k, _, _ in buckets],
+                "max": [cells.get(k, (None, None))[1] for k, _, _ in buckets],
             }
-            for m in wanted
         ],
     }
 

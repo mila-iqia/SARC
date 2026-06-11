@@ -87,6 +87,13 @@
     }
     .add-row-label { font-size: 13px; color: #888; }
 
+    /* Metric heatmap: per-tile secondary-metric picker sitting above the plot. */
+    .ms-box  { display: flex; flex-direction: column; width: 100%; height: 100%; }
+    .ms-ctrl { flex-shrink: 0; font-size: 12px; color: #888; padding: 2px 0 6px;
+               display: flex; align-items: center; gap: 6px; }
+    .ms-plot { width: 100%; flex: 1; min-height: 0; }
+    .ms-metric2 { font-size: 12px; padding: 1px 6px; max-width: 160px; }
+
     /* Job table */
     .job-table-box { display: flex; flex-direction: column; width: 100%; height: 100%; }
     .job-table-caption {
@@ -284,10 +291,6 @@
       <label for="metric-select">Primary metric</label>
       <select id="metric-select"></select>
     </div>
-    <div class="ctrl">
-      <label for="metric2-select">Secondary metric</label>
-      <select id="metric2-select"></select>
-    </div>
     <button onclick="loadCharts()">Update</button>
     <div id="focus-label" class="no-focus">
       <span id="focus-label-text">No focus — click a bar in a period plot to set one</span>
@@ -359,10 +362,11 @@
     };
     const PLOT_KEYS = Object.keys(PLOT_NAMES);
 
-    // Map each plot type to the backend endpoint it consumes. Several plot
-    // types share an endpoint (heatmap_elapsed/heatmap_wait reuse /heatmap;
-    // metricscatter reuses /density.paired) so caching by endpoint dedups
-    // fetches.
+    // Map each plot type to the backend endpoint it consumes. heatmap_elapsed
+    // and heatmap_wait share /heatmap, so caching by endpoint dedups fetches.
+    // The metric heatmap (metricscatter) is absent on purpose: it owns its data
+    // flow (a per-tile secondary picker that fetches /metric_comparison itself),
+    // rendered directly by renderTile without a shared-cache fetch.
     const PLOT_TO_ENDPOINT = {
       bar:             'data',
       heatmap_elapsed: 'heatmap',
@@ -370,7 +374,6 @@
       histogram:       'histogram',
       clusterrgu:      'rgu_by_cluster',
       density:         'density',
-      metricscatter:   'density',
       metrictrend:     'metric_trend',
       userrgu:         'user_rgu',
       jobtable:        'jobs',
@@ -390,21 +393,28 @@
     const JOBTABLE_DEFAULTS = { offset: 0, limit: 50, sortBy: 'rgu_hours', sortDir: 'desc' };
     const JOBTABLE_PAGE_SIZES = [50, 100, 200, 500];
 
-    // Populate metric dropdowns
-    const metSel  = document.getElementById('metric-select');
-    const met2Sel = document.getElementById('metric2-select');
-    const noneOpt = document.createElement('option');
-    noneOpt.value = ''; noneOpt.textContent = '— none —';
-    met2Sel.appendChild(noneOpt);
-    Object.entries(METRICS).forEach(([key, label]) => {
-      [metSel, met2Sel].forEach(sel => {
-        const opt = document.createElement('option');
-        opt.value = key; opt.textContent = label;
-        sel.appendChild(opt);
+    // Fresh <option> nodes for the metric list, optionally led by a blank
+    // "— none —". Shared by the global primary-metric select and the per-tile
+    // secondary-metric picker on the Metric heatmap, so each select owns its
+    // own nodes.
+    function metricOptions(includeNone) {
+      const opts = [];
+      if (includeNone) {
+        const o = document.createElement('option');
+        o.value = ''; o.textContent = '— none —';
+        opts.push(o);
+      }
+      Object.entries(METRICS).forEach(([key, label]) => {
+        const o = document.createElement('option');
+        o.value = key; o.textContent = label;
+        opts.push(o);
       });
-    });
+      return opts;
+    }
+    // Populate the global primary-metric dropdown.
+    const metSel = document.getElementById('metric-select');
+    metricOptions(false).forEach(o => metSel.appendChild(o));
     metSel.value = 'gpu_sm_occupancy';
-    met2Sel.value = '';
 
     // The RGU unit is a pure display rescale (the backend always returns
     // RGU·h), so changing it never re-fetches: on change we redraw every tile
@@ -514,6 +524,16 @@
     let currentParams = null;
     let endpointCache = {};
     let endpointStatus = {};
+    // Paired-heatmap payloads keyed by secondary metric, cleared on Update like
+    // endpointCache. Without it the metric-heatmap tile would re-fetch on every
+    // renderLayout() (e.g. when another tile changes type), since it bypasses
+    // the shared endpoint cache.
+    let comparisonCache = {};
+    // Secondary metric for the Metric heatmap tile. Module-scoped (not stored on
+    // the tile div, which renderLayout() recreates on every Update) so the pick
+    // survives Updates — like the global field it replaces. '' = none chosen yet
+    // (the tile then prompts for one). Two heatmap tiles would share this value.
+    let metricScatterMetric2 = '';
     // Job-table column keys hidden via the per-table column picker. Global (a
     // display preference shared by every job-table tile) so it survives
     // pagination, sorting and Update. Empty = all columns visible.
@@ -898,10 +918,10 @@
       if (!data || !data.periods.length || !data.series.length) return;
       const x    = data.periods.map(p => p.period_start);
       const ends = data.periods.map(p => p.period_end);
-      // Colour encodes the metric (blue = primary, red = secondary), dash style
-      // the statistic: max solid, mean dashed. Null buckets (no job carries the
-      // stat) leave a gap.
-      const MET_COLORS = ['#1a6fd4', '#d62728'];
+      // Primary metric only: a single series, two traces. Dash style encodes
+      // the statistic (max solid, mean dashed). Null buckets (no job carries
+      // the stat) leave a gap.
+      const MET_COLORS = ['#1a6fd4'];
       const traces = [];
       data.series.forEach((s, i) => {
         const label = METRICS[s.metric] || s.metric;
@@ -945,76 +965,123 @@
     }
 
     function renderDensity(id, d) {
-      const metric  = document.getElementById('metric-select').value;
-      const metric2 = document.getElementById('metric2-select').value;
-      const ml  = METRICS[metric]  || metric;
-      const ml2 = metric2 ? (METRICS[metric2] || metric2) : null;
-      const traces = [];
+      const metric = document.getElementById('metric-select').value;
+      const ml = METRICS[metric] || metric;
+      if (!d.density.primary.values.length) return;
       // Server pre-bins into 50 equal bins over [0, 1] (matches xbins below).
       const XBINS = { start: 0, end: 1, size: 1 / 50 };
-      if (d.density.primary.values.length) {
-        traces.push({
-          type: 'histogram', name: ml,
-          x: d.density.primary.values, y: d.density.primary.weights,
-          histfunc: 'sum', histnorm: 'probability density',
-          opacity: metric2 ? 0.7 : 1, marker: { color: '#1a6fd4' },
-          xbins: XBINS, autobinx: false,
-          hovertemplate: ml + ': %{x:.2f}<br>Density: %{y:.4f}<extra></extra>',
-        });
-      }
-      if (metric2 && d.density.secondary && d.density.secondary.values.length) {
-        traces.push({
-          type: 'histogram', name: ml2,
-          x: d.density.secondary.values, y: d.density.secondary.weights,
-          histfunc: 'sum', histnorm: 'probability density',
-          opacity: 0.7, marker: { color: '#e05c2a' },
-          xbins: XBINS, autobinx: false,
-          hovertemplate: ml2 + ': %{x:.2f}<br>Density: %{y:.4f}<extra></extra>',
-        });
-      }
-      if (traces.length) {
-        Plotly.react(id, traces, pLayout({
-          title: { text: 'Metric Density — weighted by RGU·time', font: { size: 16 } },
-          barmode: 'overlay',
-          xaxis: { title: 'Metric mean' }, yaxis: { title: 'Density' },
-          legend: { x: 0.75, y: 0.95 },
-        }), { responsive: true });
-      }
+      Plotly.react(id, [{
+        type: 'histogram', name: ml,
+        x: d.density.primary.values, y: d.density.primary.weights,
+        histfunc: 'sum', histnorm: 'probability density',
+        marker: { color: '#1a6fd4' },
+        xbins: XBINS, autobinx: false,
+        hovertemplate: ml + ': %{x:.2f}<br>Density: %{y:.4f}<extra></extra>',
+      }], pLayout({
+        title: { text: 'Metric Density — weighted by RGU·time', font: { size: 16 } },
+        xaxis: { title: 'Metric mean' }, yaxis: { title: 'Density' },
+        legend: { x: 0.75, y: 0.95 },
+      }), { responsive: true });
     }
 
+    // Metric heatmap: the secondary metric is chosen *on the tile* (the picker
+    // built here), not in the global toolbar. The choice lives in the module
+    // variable `metricScatterMetric2`, so it survives a global Update (unlike
+    // the job-table pagination, which is navigation state and resets). This tile
+    // owns its data flow: renderTile renders it without a shared-cache fetch
+    // (the `d` argument is unused), and each pick re-fetches only this tile from
+    // /metric_comparison (global primary + the picked secondary).
     function renderMetricScatter(id, d) {
-      const metric  = document.getElementById('metric-select').value;
-      const metric2 = document.getElementById('metric2-select').value;
-      if (!metric2) {
-        // Only reached from renderTile (this tile is unit-independent), so
-        // the div was just cleared — no live Plotly state to desync.
-        const el = document.getElementById(id);
-        if (el) el.innerHTML = '<div class="tile-loading">Select a second metric (Metric 2) to compare.</div>';
-        return;
+      const el = document.getElementById(id);
+      if (!el) return;
+      const metric = document.getElementById('metric-select').value;
+      const ml = METRICS[metric] || metric;
+
+      el.innerHTML = '';
+      const box = document.createElement('div');
+      box.className = 'ms-box';
+      const ctrl = document.createElement('div');
+      ctrl.className = 'ms-ctrl';
+      const lab = document.createElement('label');
+      lab.textContent = 'Compare ' + ml + ' to:';
+      const sel = document.createElement('select');
+      sel.className = 'ms-metric2 add-select';
+      metricOptions(true).forEach(o => sel.appendChild(o));
+      sel.value = metricScatterMetric2;
+      lab.appendChild(sel);
+      ctrl.appendChild(lab);
+      const plot = document.createElement('div');
+      plot.className = 'ms-plot';
+      box.appendChild(ctrl);
+      box.appendChild(plot);
+      el.appendChild(box);
+
+      // Draw for the current pick: a prompt when none is chosen, else a
+      // dedicated fetch + heatmap. The picker is disabled while loading so a
+      // second change can't race the first; after the await we re-validate the
+      // tile (an Update/tile-swap may have replaced it — its div is then
+      // detached, so document.body.contains(el) is false).
+      async function draw() {
+        const m2 = metricScatterMetric2;
+        // The plot div may still host a Plotly graph from the previous pick.
+        // Purge it before reusing the div: innerHTML alone wipes Plotly's inner
+        // DOM but leaves its element state behind, so the next Plotly.react()
+        // desyncs — the symptom was a stuck "Loading…" on the second change.
+        Plotly.purge(plot);
+        if (!m2) {
+          plot.innerHTML = '<div class="tile-loading">Select a metric to compare.</div>';
+          return;
+        }
+        if (!currentParams) return;
+        plot.innerHTML = '<div class="tile-loading">Loading…</div>';
+        sel.disabled = true;
+        try {
+          // Cache the paired payload per secondary metric (cleared on Update,
+          // like endpointCache). A layout change re-renders every tile, so
+          // without this the heatmap would re-fetch each time; the primary
+          // metric and all filters are fixed between Updates, so metric2 alone
+          // keys the result (an in-flight promise is shared too).
+          if (!comparisonCache[m2])
+            comparisonCache[m2] = fetch(comparisonURL(currentParams, m2)).then(r => {
+              if (!r.ok) throw new Error(`HTTP ${r.status}`);
+              return r.json();
+            });
+          const p = await comparisonCache[m2];
+          if (!document.body.contains(el) || el.dataset.plotType !== 'metricscatter') return;
+          if (!p || !p.z || !p.z.length) {
+            plot.innerHTML = '<div class="tile-loading">No data for this pair.</div>';
+            return;
+          }
+          const ml2 = METRICS[m2] || m2;
+          // 100x100 server-binned job counts over the full filtered population.
+          // Log colour scale like the elapsed/wait heatmaps.
+          const { zLog, tickVals, tickText } = logHeatmapScale(p.z);
+          await Plotly.react(plot, [{
+            type: 'heatmap',
+            x: p.x, y: p.y, z: zLog, customdata: p.z,
+            colorscale: [[0, '#f7fbff'], [1, '#08306b']],
+            showscale: true,
+            colorbar: {
+              title: { text: 'Jobs (log₁₀)', side: 'right' },
+              tickmode: 'array', tickvals: tickVals, ticktext: tickText,
+            },
+            hovertemplate: ml + ': %{x:.3f}<br>' + ml2 + ': %{y:.3f}<br>Jobs: %{customdata}<extra></extra>',
+          }], pLayout({
+            title: { text: ml + ' vs ' + ml2 + ' (jobs per cell)', font: { size: 16 } },
+            xaxis: { title: ml, range: [0, 1] },
+            yaxis: { title: ml2, range: [0, 1] },
+          }), { responsive: true });
+        } catch (e) {
+          delete comparisonCache[m2];  // don't cache a failed fetch
+          if (document.body.contains(el) && el.dataset.plotType === 'metricscatter')
+            plot.innerHTML = `<div class="tile-error">Error: ${e.message}</div>`;
+        } finally {
+          if (document.body.contains(el)) sel.disabled = false;
+        }
       }
-      const p = d.density.paired;
-      if (!p || !p.z || !p.z.length) return;
-      const ml  = METRICS[metric]  || metric;
-      const ml2 = METRICS[metric2] || metric2;
-      // 100x100 server-binned job counts over the full filtered population
-      // (the former scatter drew a 5000-point random sample). Log colour
-      // scale like the elapsed/wait heatmaps.
-      const { zLog, tickVals, tickText } = logHeatmapScale(p.z);
-      Plotly.react(id, [{
-        type: 'heatmap',
-        x: p.x, y: p.y, z: zLog, customdata: p.z,
-        colorscale: [[0, '#f7fbff'], [1, '#08306b']],
-        showscale: true,
-        colorbar: {
-          title: { text: 'Jobs (log₁₀)', side: 'right' },
-          tickmode: 'array', tickvals: tickVals, ticktext: tickText,
-        },
-        hovertemplate: ml + ': %{x:.3f}<br>' + ml2 + ': %{y:.3f}<br>Jobs: %{customdata}<extra></extra>',
-      }], pLayout({
-        title: { text: ml + ' vs ' + ml2 + ' (jobs per cell)', font: { size: 16 } },
-        xaxis: { title: ml, range: [0, 1] },
-        yaxis: { title: ml2, range: [0, 1] },
-      }), { responsive: true });
+
+      sel.addEventListener('change', () => { metricScatterMetric2 = sel.value; draw(); });
+      draw();
     }
 
     function renderUserRgu(id, d) {
@@ -1639,7 +1706,6 @@
         clusters:      clSelected(),
         cluster_user:  document.getElementById('cluster_user').value.trim(),
         metric:        document.getElementById('metric-select').value,
-        metric2:       document.getElementById('metric2-select').value,
         focus_start:   focusStart,
         focus_end:     focusEnd,
         job_states:    jsSelected(),
@@ -1681,6 +1747,20 @@
         offset, limit, sort_by: sortBy, sort_dir: sortDir });
     }
 
+    // /metric_comparison URL for the metric-heatmap tile. Separate from
+    // endpointURLBase (like jobsURL) so the tile re-fetches its paired heatmap
+    // for the picked secondary metric without touching the shared cache.
+    function comparisonURL(p, metric2) {
+      const focusParams = {
+        ...(p.focus_start ? { focus_start: p.focus_start } : {}),
+        ...(p.focus_end   ? { focus_end:   p.focus_end   } : {}),
+      };
+      return withClustersAndStates('/dash/metrics/metric_comparison?' + new URLSearchParams({
+        start: p.start, end: p.end, metric: p.metric, metric2,
+        ...(p.cluster_user ? { cluster_user: p.cluster_user } : {}),
+        ...focusParams, rgu_type: p.rgu_type }), p);
+    }
+
     function endpointURLBase(ep, p) {
       const base = { start: p.start, end: p.end,
                      ...(p.cluster_user ? { cluster_user: p.cluster_user } : {}) };
@@ -1688,8 +1768,7 @@
         ...(p.focus_start ? { focus_start: p.focus_start } : {}),
         ...(p.focus_end   ? { focus_end:   p.focus_end   } : {}),
       };
-      const densityParams = { ...base, metric: p.metric,
-                              ...(p.metric2 ? { metric2: p.metric2 } : {}) };
+      const densityParams = { ...base, metric: p.metric };
       switch (ep) {
         case 'data':      return '/dash/metrics/job_counts?' + new URLSearchParams({ ...base, period: p.period });
         case 'heatmap':   return '/dash/metrics/job_times_vs_limit?' + new URLSearchParams({ ...base, ...focusParams });
@@ -1698,7 +1777,7 @@
         case 'user_rgu':  return '/dash/metrics/rgu_by_user?' + new URLSearchParams({ start: p.start, end: p.end, metric: p.metric, ...focusParams, rgu_type: p.rgu_type });
         case 'jobs':      return jobsURL(p, JOBTABLE_DEFAULTS);
         case 'rgu_by_cluster': return '/dash/metrics/rgu_by_cluster?' + new URLSearchParams({ start: p.start, end: p.end, period: p.period, ...(p.cluster_user ? { cluster_user: p.cluster_user } : {}), rgu_type: p.rgu_type });
-        case 'metric_trend': return '/dash/metrics/metric_trend?' + new URLSearchParams({ ...base, period: p.period, metric: p.metric, ...(p.metric2 ? { metric2: p.metric2 } : {}) });
+        case 'metric_trend': return '/dash/metrics/metric_trend?' + new URLSearchParams({ ...base, period: p.period, metric: p.metric });
       }
       throw new Error('Unknown endpoint: ' + ep);
     }
@@ -1751,6 +1830,14 @@
     // still in the DOM and still bound to the same plot type after the
     // await — the user may have removed or swapped the tile in the meantime.
     async function renderTile(chartDiv, plotType) {
+      // The metric heatmap owns its data flow (per-tile secondary picker that
+      // re-fetches /metric_comparison itself), so it skips the shared endpoint
+      // cache: render it straight away and let its own draw() do the fetching.
+      if (plotType === 'metricscatter') {
+        chartDiv.innerHTML = '';
+        renderPlot(chartDiv.id, plotType, {});
+        return;
+      }
       const ep = PLOT_TO_ENDPOINT[plotType];
       if (!ep) {
         chartDiv.innerHTML = `<div class="tile-error">Unknown plot type: ${plotType}</div>`;
@@ -1779,9 +1866,10 @@
           'Please select start and end dates.';
         return;
       }
-      currentParams  = params;
-      endpointCache  = {};
-      endpointStatus = {};
+      currentParams   = params;
+      endpointCache   = {};
+      comparisonCache = {};
+      endpointStatus  = {};
       updateStatus();
       renderLayout();
     }
