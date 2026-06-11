@@ -1,5 +1,5 @@
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -7,7 +7,9 @@ import gifnoc
 import simple_parsing
 
 from sarc.config import config
+from sarc.notifications.email import EmailClient
 from sarc.notifications.messages import build_admin_digest, build_user_dm
+from sarc.notifications.slack import SendStatus, SlackClient
 from sarc.notifications.underusage import (
     get_historical_stats,
     get_recurring_underusers,
@@ -15,6 +17,41 @@ from sarc.notifications.underusage import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class _DeliveryResult:
+    email: str
+    display_name: str
+    status: str  # "dm_sent" | "email_sent" | "skipped" | "failed"
+    detail: str = field(default="")
+
+
+def _delivery_counts(results: list[_DeliveryResult]) -> dict[str, int]:
+    return {
+        "dm_sent": sum(1 for r in results if r.status == "dm_sent"),
+        "email_sent": sum(1 for r in results if r.status == "email_sent"),
+        "skipped": sum(1 for r in results if r.status == "skipped"),
+        "failed": sum(1 for r in results if r.status == "failed"),
+    }
+
+
+def _build_delivery_footer(results: list[_DeliveryResult], *, flagged: int) -> str:
+    counts = _delivery_counts(results)
+    lines = [
+        "--- Delivery Summary ---",
+        (
+            f"flagged={flagged}  dm_sent={counts['dm_sent']}"
+            f"  email_sent={counts['email_sent']}"
+            f"  skipped={counts['skipped']}  failed={counts['failed']}"
+        ),
+    ]
+    failures = [r for r in results if r.status == "failed"]
+    if failures:
+        lines.append("Failures:")
+        for r in failures:
+            lines.append(f"  - {r.display_name} ({r.email}): {r.detail}")
+    return "\n".join(lines)
 
 
 def _now_utc() -> datetime:
@@ -163,5 +200,83 @@ class UnderusageNotifyCommand:
                     help_section=ncfg.help_section,
                 )
                 print(dm)
+
+        if not self.send:
+            return 0
+
+        # === SEND MODE ===
+        slack_client = SlackClient(ncfg.slack.token)
+        email_client = EmailClient(ncfg.email)
+
+        delivery_results: list[_DeliveryResult] = []
+        dms_will_send = dms_eligible and ncfg.send_dms
+
+        if dms_will_send:
+            for row in rows:
+                dm_text = build_user_dm(
+                    row,
+                    window_days=window_days,
+                    dashboard_url=ncfg.dashboard_url,
+                    help_section=ncfg.help_section,
+                )
+                slack_res = slack_client.dm_user(row.email, dm_text)
+                if slack_res.status == SendStatus.OK:
+                    delivery_results.append(
+                        _DeliveryResult(row.email, row.display_name, "dm_sent")
+                    )
+                elif slack_res.status == SendStatus.USER_NOT_FOUND:
+                    email_res = email_client.send_plaintext(
+                        row.email,
+                        f"GPU underusage alert ({period})",
+                        dm_text,
+                    )
+                    if email_res.status == SendStatus.OK:
+                        delivery_results.append(
+                            _DeliveryResult(row.email, row.display_name, "email_sent")
+                        )
+                    else:
+                        delivery_results.append(
+                            _DeliveryResult(row.email, row.display_name, "failed", email_res.detail)
+                        )
+                else:
+                    delivery_results.append(
+                        _DeliveryResult(row.email, row.display_name, "failed", slack_res.detail)
+                    )
+        elif rows:
+            if week_num % 2 != 0:
+                reason = "odd_week"
+            elif self.no_dms:
+                reason = "no_dms_flag"
+            else:
+                reason = "send_dms_disabled"
+            for row in rows:
+                delivery_results.append(
+                    _DeliveryResult(row.email, row.display_name, "skipped", reason)
+                )
+
+        footer = _build_delivery_footer(delivery_results, flagged=len(rows))
+        digest_with_footer = digest + "\n\n" + footer
+
+        channel_res = slack_client.post_channel(ncfg.slack.channel, digest_with_footer)
+        if channel_res.status != SendStatus.OK:
+            logger.error(
+                "Failed to post admin digest to %s: %s",
+                ncfg.slack.channel,
+                channel_res.detail,
+            )
+
+        counts = _delivery_counts(delivery_results)
+        logger.info(
+            "Underusage notification run: flagged=%d dm_sent=%d email_sent=%d skipped=%d failed=%d",
+            len(rows),
+            counts["dm_sent"],
+            counts["email_sent"],
+            counts["skipped"],
+            counts["failed"],
+        )
+
+        print()
+        print("=== Send Complete ===")
+        print(footer)
 
         return 0

@@ -1,11 +1,14 @@
-"""Tests for `sarc notify underusage` CLI command (T4)."""
+"""Tests for `sarc notify underusage` CLI command (T4 + T8)."""
 
 import copy
 from datetime import UTC, datetime, timedelta
+from unittest.mock import MagicMock
 
 import gifnoc
 import pytest
 from sqlmodel import select
+
+from sarc.notifications.slack import SendResult, SendStatus
 
 from sarc.db.cluster import SlurmClusterDB
 from sarc.db.job import JobStatisticDB, SlurmJobDB
@@ -303,3 +306,133 @@ def test_cli_flags_override_config_thresholds(notify_db, cli_main, monkeypatch, 
         )
     assert rc == 0
     assert "petitbonhomme@mila.quebec" in capsys.readouterr().out
+
+
+# ── T8: --send flag wires actual sending ──────────────────────────────────────
+
+_EVEN_WEEK = "2024-06-30"  # ISO week 26
+_ODD_WEEK = "2024-06-23"   # ISO week 25
+
+
+def _mock_slack(dm_status=SendStatus.OK, channel_status=SendStatus.OK):
+    inst = MagicMock()
+    inst.dm_user.return_value = SendResult(dm_status)
+    inst.post_channel.return_value = SendResult(channel_status)
+    cls = MagicMock(return_value=inst)
+    return cls, inst
+
+
+def _mock_email(status=SendStatus.OK):
+    inst = MagicMock()
+    inst.send_plaintext.return_value = SendResult(status)
+    cls = MagicMock(return_value=inst)
+    return cls, inst
+
+
+def _patch_senders(monkeypatch, slack_cls, email_cls):
+    monkeypatch.setattr("sarc.cli.notify.underusage.SlackClient", slack_cls)
+    monkeypatch.setattr("sarc.cli.notify.underusage.EmailClient", email_cls)
+
+
+def test_dry_run_does_not_instantiate_slack_or_email(notify_db, cli_main, monkeypatch):
+    slack_cls = MagicMock()
+    email_cls = MagicMock()
+    _patch_senders(monkeypatch, slack_cls, email_cls)
+    cfg = {**_NOTIFY_CFG, "send_dms": True}
+    with gifnoc.overlay({"sarc.notifications": cfg}):
+        rc = cli_main(
+            ["notify", "underusage", "--window-days", "30", "--as-of", _EVEN_WEEK]
+        )
+    assert rc == 0
+    slack_cls.assert_not_called()
+    email_cls.assert_not_called()
+
+
+def test_send_even_week_posts_digest_and_dms(notify_db, cli_main, monkeypatch):
+    slack_cls, slack_inst = _mock_slack()
+    email_cls, email_inst = _mock_email()
+    _patch_senders(monkeypatch, slack_cls, email_cls)
+    cfg = {**_NOTIFY_CFG, "send_dms": True}
+    with gifnoc.overlay({"sarc.notifications": cfg}):
+        rc = cli_main(
+            ["notify", "underusage", "--window-days", "30", "--as-of", _EVEN_WEEK, "--send"]
+        )
+    assert rc == 0
+    slack_inst.post_channel.assert_called_once()
+    slack_inst.dm_user.assert_called_once()
+    email_inst.send_plaintext.assert_not_called()
+
+
+def test_send_odd_week_posts_digest_only(notify_db, cli_main, monkeypatch):
+    slack_cls, slack_inst = _mock_slack()
+    email_cls, email_inst = _mock_email()
+    _patch_senders(monkeypatch, slack_cls, email_cls)
+    cfg = {**_NOTIFY_CFG, "send_dms": True}
+    with gifnoc.overlay({"sarc.notifications": cfg}):
+        rc = cli_main(
+            ["notify", "underusage", "--window-days", "30", "--as-of", _ODD_WEEK, "--send"]
+        )
+    assert rc == 0
+    slack_inst.post_channel.assert_called_once()
+    slack_inst.dm_user.assert_not_called()
+
+
+def test_send_no_dms_flag_skips_dms(notify_db, cli_main, monkeypatch):
+    slack_cls, slack_inst = _mock_slack()
+    email_cls, email_inst = _mock_email()
+    _patch_senders(monkeypatch, slack_cls, email_cls)
+    cfg = {**_NOTIFY_CFG, "send_dms": True}
+    with gifnoc.overlay({"sarc.notifications": cfg}):
+        rc = cli_main(
+            [
+                "notify", "underusage", "--window-days", "30",
+                "--as-of", _EVEN_WEEK, "--send", "--no-dms",
+            ]
+        )
+    assert rc == 0
+    slack_inst.post_channel.assert_called_once()
+    slack_inst.dm_user.assert_not_called()
+
+
+def test_send_dms_false_suppresses_dms(notify_db, cli_main, monkeypatch):
+    slack_cls, slack_inst = _mock_slack()
+    email_cls, email_inst = _mock_email()
+    _patch_senders(monkeypatch, slack_cls, email_cls)
+    # send_dms defaults to False in _NOTIFY_CFG
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        rc = cli_main(
+            ["notify", "underusage", "--window-days", "30", "--as-of", _EVEN_WEEK, "--send"]
+        )
+    assert rc == 0
+    slack_inst.post_channel.assert_called_once()
+    slack_inst.dm_user.assert_not_called()
+
+
+def test_send_slack_not_found_uses_email_fallback(notify_db, cli_main, monkeypatch, capsys):
+    slack_cls, slack_inst = _mock_slack(dm_status=SendStatus.USER_NOT_FOUND)
+    email_cls, email_inst = _mock_email(status=SendStatus.OK)
+    _patch_senders(monkeypatch, slack_cls, email_cls)
+    cfg = {**_NOTIFY_CFG, "send_dms": True}
+    with gifnoc.overlay({"sarc.notifications": cfg}):
+        rc = cli_main(
+            ["notify", "underusage", "--window-days", "30", "--as-of", _EVEN_WEEK, "--send"]
+        )
+    assert rc == 0
+    slack_inst.dm_user.assert_called_once()
+    email_inst.send_plaintext.assert_called_once()
+    assert "email_sent=1" in capsys.readouterr().out
+
+
+def test_send_dm_failure_surfaced_in_footer(notify_db, cli_main, monkeypatch, capsys):
+    slack_cls, slack_inst = _mock_slack()
+    slack_inst.dm_user.return_value = SendResult(SendStatus.FAILED, "channel_not_found")
+    email_cls, email_inst = _mock_email()
+    _patch_senders(monkeypatch, slack_cls, email_cls)
+    cfg = {**_NOTIFY_CFG, "send_dms": True}
+    with gifnoc.overlay({"sarc.notifications": cfg}):
+        rc = cli_main(
+            ["notify", "underusage", "--window-days", "30", "--as-of", _EVEN_WEEK, "--send"]
+        )
+    assert rc == 0  # failures reported, run does not crash
+    out = capsys.readouterr().out
+    assert "failed=1" in out
