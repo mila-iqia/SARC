@@ -299,6 +299,7 @@ class UnderusageNotifyConfig:
     # Phase 3 — universal usage report cadence.
     usage_report_window_days: int = 28
     usage_report_every_weeks: int = 4
+    send_usage_report: bool = False
 
 
 @dataclass

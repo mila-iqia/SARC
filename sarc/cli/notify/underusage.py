@@ -8,9 +8,15 @@ import simple_parsing
 
 from sarc.config import config
 from sarc.notifications.email import EmailClient
-from sarc.notifications.messages import build_admin_digest, build_user_dm
+from sarc.notifications.messages import (
+    build_admin_digest,
+    build_usage_report,
+    build_user_dm,
+    split_usage_report_recipients,
+)
 from sarc.notifications.slack import SendStatus, SlackClient
 from sarc.notifications.underusage import (
+    get_all_users_usage,
     get_cycle_dates,
     get_historical_stats,
     get_recurring_underusers,
@@ -143,6 +149,8 @@ class UnderusageNotifyCommand:
         dms_eligible = week_num % 2 == 0
         # dms_will_send: additionally requires --no-dms gate and send_dms config (controls actual sends)
         dms_will_send = dms_eligible and not self.no_dms and ncfg.send_dms
+        usage_report_eligible = week_num % ncfg.usage_report_every_weeks == 0
+        usage_report_will_send = usage_report_eligible and ncfg.send_usage_report
 
         if self.as_of is not None and end > _now_utc():
             print("Note: --as-of is in the future; the window may contain no jobs.")
@@ -156,6 +164,8 @@ class UnderusageNotifyCommand:
             print(f"ISO week {week_num} (even) — DMs eligible this run.")
         else:
             print(f"ISO week {week_num} (odd) — digest-only this run, no DMs.")
+        if usage_report_eligible:
+            print(f"Usage report eligible this run (ISO week {week_num} is a multiple of {ncfg.usage_report_every_weeks}).")
         print()
 
         rows = get_underusers(
@@ -213,6 +223,34 @@ class UnderusageNotifyCommand:
                 )
                 print(dm)
 
+        usage_report_window_days = ncfg.usage_report_window_days
+        report_recipients = []
+        usage_report_skipped = []
+        if usage_report_eligible:
+            usage_start = end - timedelta(days=usage_report_window_days)
+            usage_rows = get_all_users_usage(usage_start, end, resource=self.resource)
+            underuser_emails = {r.email for r in rows}
+            report_recipients, usage_report_skipped = split_usage_report_recipients(
+                usage_rows, underuser_emails
+            )
+            if report_recipients:
+                print()
+                skip_note = (
+                    f" ({len(usage_report_skipped)} already getting the underusage alert)"
+                    if usage_report_skipped
+                    else ""
+                )
+                print(f"=== Usage Report Previews ({len(report_recipients)} recipient(s)){skip_note} ===")
+                for row in report_recipients:
+                    print(f"\n--- {row.display_name} ({row.email}) ---")
+                    report_text = build_usage_report(
+                        row,
+                        window_days=usage_report_window_days,
+                        dashboard_url=ncfg.dashboard_url,
+                        help_section=ncfg.help_section,
+                    )
+                    print(report_text)
+
         if not self.send:
             return 0
 
@@ -267,8 +305,64 @@ class UnderusageNotifyCommand:
                     _DeliveryResult(row.email, row.display_name, "skipped", reason)
                 )
 
+        report_results: list[_DeliveryResult] = []
+        if usage_report_will_send:
+            for row in report_recipients:
+                report_text = build_usage_report(
+                    row,
+                    window_days=usage_report_window_days,
+                    dashboard_url=ncfg.dashboard_url,
+                    help_section=ncfg.help_section,
+                )
+                slack_res = slack_client.dm_user(row.email, report_text, preformatted=True)
+                if slack_res.status == SendStatus.OK:
+                    report_results.append(
+                        _DeliveryResult(row.email, row.display_name, "dm_sent")
+                    )
+                elif slack_res.status == SendStatus.USER_NOT_FOUND:
+                    email_res = email_client.send_plaintext(
+                        row.email, f"GPU usage report ({period})", report_text
+                    )
+                    if email_res.status == SendStatus.OK:
+                        report_results.append(
+                            _DeliveryResult(row.email, row.display_name, "email_sent")
+                        )
+                    else:
+                        report_results.append(
+                            _DeliveryResult(
+                                row.email, row.display_name, "failed", email_res.detail
+                            )
+                        )
+                else:
+                    report_results.append(
+                        _DeliveryResult(
+                            row.email, row.display_name, "failed", slack_res.detail
+                        )
+                    )
+        elif usage_report_eligible and report_recipients:
+            for row in report_recipients:
+                report_results.append(
+                    _DeliveryResult(row.email, row.display_name, "skipped", "send_usage_report_disabled")
+                )
+
         footer = _build_delivery_footer(delivery_results, flagged=len(rows))
         digest_with_footer = digest + "\n\n" + footer
+        if usage_report_eligible:
+            report_counts = _delivery_counts(report_results)
+            report_footer = (
+                "--- Usage Report Summary ---\n"
+                f"eligible={len(report_recipients)}"
+                f"  dm_sent={report_counts['dm_sent']}"
+                f"  email_sent={report_counts['email_sent']}"
+                f"  skipped={report_counts['skipped']}"
+                f"  failed={report_counts['failed']}"
+            )
+            report_failures = [r for r in report_results if r.status == "failed"]
+            if report_failures:
+                report_footer += "\nFailures:"
+                for r in report_failures:
+                    report_footer += f"\n  - {r.display_name} ({r.email}): {r.detail}"
+            digest_with_footer += "\n\n" + report_footer
 
         channel_res = slack_client.post_channel(ncfg.slack.channel, digest_with_footer, preformatted=True)
         if channel_res.status != SendStatus.OK:
@@ -279,17 +373,27 @@ class UnderusageNotifyCommand:
             )
 
         counts = _delivery_counts(delivery_results)
+        report_counts = _delivery_counts(report_results)
         logger.info(
-            "Underusage notification run: flagged=%d dm_sent=%d email_sent=%d skipped=%d failed=%d",
+            "Underusage notification run: flagged=%d dm_sent=%d email_sent=%d skipped=%d failed=%d"
+            " | report_eligible=%s report_sent=%d report_email=%d report_skipped=%d report_failed=%d",
             len(rows),
             counts["dm_sent"],
             counts["email_sent"],
             counts["skipped"],
             counts["failed"],
+            usage_report_eligible,
+            report_counts["dm_sent"],
+            report_counts["email_sent"],
+            report_counts["skipped"],
+            report_counts["failed"],
         )
 
         print()
         print("=== Send Complete ===")
         print(footer)
+        if usage_report_eligible:
+            print()
+            print(report_footer)
 
         return 0

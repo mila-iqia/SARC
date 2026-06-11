@@ -436,3 +436,155 @@ def test_send_dm_failure_surfaced_in_footer(notify_db, cli_main, monkeypatch, ca
     assert rc == 0  # failures reported, run does not crash
     out = capsys.readouterr().out
     assert "failed=1" in out
+
+
+# ── T12: usage report (Phase 3) ───────────────────────────────────────────────
+# ISO week 28 (2024-07-14) → week_num=28, 28 % 4 == 0 → usage report eligible.
+# ISO week 26 (2024-06-30) → week_num=26, 26 % 4 == 2 → not eligible.
+_USAGE_REPORT_WEEK = "2024-07-14"   # wk 28, multiple of 4
+_EVEN_NON_REPORT_WEEK = "2024-06-30"  # wk 26, even but not multiple of 4
+
+
+@pytest.fixture
+def usage_report_db(read_write_db):
+    """Two users with GPU jobs inside [2024-06-16, 2024-07-14]:
+    - petitbonhomme: high waste → underuser (gets the alert, not the report)
+    - beaubonhomme:  low waste  → active user (gets the usage report)
+    """
+    session = read_write_db
+    users = {u.email.split("@")[0]: u for u in session.exec(select(UserDB)).all()}
+    clusters = {c.name: c for c in session.exec(select(SlurmClusterDB)).all()}
+    mila_id = clusters["mila"].id
+
+    # petitbonhomme: 700 h @ 10 % → waste_ratio=0.90, wasted=3024 >> 672 floor → underuser
+    _add_gpu_job(
+        session,
+        user_id=users["petitbonhomme"].id,
+        cluster_id=mila_id,
+        elapsed_h=700,
+        gpu_type=_MILA_GPU_TYPE,
+        utilization=0.10,
+        job_id=80001,
+        submit_time=datetime(2024, 7, 1, tzinfo=UTC),
+    )
+    # beaubonhomme: 100 h @ 90 % → waste_ratio=0.10, wasted=48 < 672 floor → NOT underuser
+    _add_gpu_job(
+        session,
+        user_id=users["beaubonhomme"].id,
+        cluster_id=mila_id,
+        elapsed_h=100,
+        gpu_type=_MILA_GPU_TYPE,
+        utilization=0.90,
+        job_id=80002,
+        submit_time=datetime(2024, 7, 1, tzinfo=UTC),
+    )
+    session.commit()
+    yield session
+
+
+def test_usage_report_week_dry_run_prints_previews(usage_report_db, cli_main, capsys):
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        rc = cli_main(
+            ["notify", "underusage", "--window-days", "14", "--as-of", _USAGE_REPORT_WEEK]
+        )
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "Usage Report Previews" in out
+    assert "beaubonhomme@mila.quebec" in out
+
+
+def test_usage_report_week_underuser_not_in_report_previews(usage_report_db, cli_main, capsys):
+    """petitbonhomme is an underuser — they get the DM alert, not the usage report."""
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        cli_main(
+            ["notify", "underusage", "--window-days", "14", "--as-of", _USAGE_REPORT_WEEK]
+        )
+    out = capsys.readouterr().out
+    # petitbonhomme should appear in DM previews (alert), not usage report previews
+    dm_section = out[out.find("=== DM Previews ==="):out.find("=== Usage Report Previews")]
+    assert "petitbonhomme" in dm_section
+
+
+def test_non_usage_report_week_no_report_section(usage_report_db, cli_main, capsys):
+    """Even week but not a multiple of 4 → no usage report section."""
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        cli_main(
+            ["notify", "underusage", "--window-days", "14", "--as-of", _EVEN_NON_REPORT_WEEK]
+        )
+    assert "Usage Report Previews" not in capsys.readouterr().out
+
+
+def test_dry_run_usage_report_week_no_sends(usage_report_db, cli_main, monkeypatch):
+    """Dry-run never instantiates senders, even on a usage-report week."""
+    slack_cls = MagicMock()
+    email_cls = MagicMock()
+    _patch_senders(monkeypatch, slack_cls, email_cls)
+    cfg = {**_NOTIFY_CFG, "send_dms": True, "send_usage_report": True}
+    with gifnoc.overlay({"sarc.notifications": cfg}):
+        rc = cli_main(
+            ["notify", "underusage", "--window-days", "14", "--as-of", _USAGE_REPORT_WEEK]
+        )
+    assert rc == 0
+    slack_cls.assert_not_called()
+    email_cls.assert_not_called()
+
+
+def test_send_usage_report_disabled_no_report_sends(usage_report_db, cli_main, monkeypatch, capsys):
+    """send_usage_report=False (default) → no usage report DMs even on a report week."""
+    slack_cls, slack_inst = _mock_slack()
+    email_cls, email_inst = _mock_email()
+    _patch_senders(monkeypatch, slack_cls, email_cls)
+    # _NOTIFY_CFG has send_dms=False and no send_usage_report key → defaults to False
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        rc = cli_main(
+            ["notify", "underusage", "--window-days", "14", "--as-of", _USAGE_REPORT_WEEK, "--send"]
+        )
+    assert rc == 0
+    # Only the admin digest channel post; no DMs for underusers or report recipients
+    slack_inst.post_channel.assert_called_once()
+    # dm_user may be called 0 times (send_dms=False, send_usage_report=False)
+    assert slack_inst.dm_user.call_count == 0
+    out = capsys.readouterr().out
+    assert "send_usage_report_disabled" in out or "skipped=1" in out
+
+
+def test_send_usage_report_enabled_sends_report_to_non_underusers(
+    usage_report_db, cli_main, monkeypatch, capsys
+):
+    """send_usage_report=True + --send + wk%4==0 → beaubonhomme gets the report."""
+    slack_cls, slack_inst = _mock_slack()
+    email_cls, email_inst = _mock_email()
+    _patch_senders(monkeypatch, slack_cls, email_cls)
+    cfg = {**_NOTIFY_CFG, "send_usage_report": True}
+    with gifnoc.overlay({"sarc.notifications": cfg}):
+        rc = cli_main(
+            ["notify", "underusage", "--window-days", "14", "--as-of", _USAGE_REPORT_WEEK, "--send"]
+        )
+    assert rc == 0
+    # beaubonhomme gets the usage report via dm_user
+    dm_calls = [call.args[0] for call in slack_inst.dm_user.call_args_list]
+    assert "beaubonhomme@mila.quebec" in dm_calls
+    # petitbonhomme is an underuser (send_dms=False) → no dm for them
+    assert "petitbonhomme@mila.quebec" not in dm_calls
+    out = capsys.readouterr().out
+    assert "dm_sent=1" in out
+
+
+def test_send_usage_report_non_report_week_no_reports(
+    usage_report_db, cli_main, monkeypatch
+):
+    """Even week but not wk%4==0 → no usage report sends regardless of config."""
+    slack_cls, slack_inst = _mock_slack()
+    email_cls, _email_inst = _mock_email()
+    _patch_senders(monkeypatch, slack_cls, email_cls)
+    cfg = {**_NOTIFY_CFG, "send_usage_report": True}
+    with gifnoc.overlay({"sarc.notifications": cfg}):
+        rc = cli_main(
+            ["notify", "underusage", "--window-days", "14", "--as-of", _EVEN_NON_REPORT_WEEK, "--send"]
+        )
+    assert rc == 0
+    # Only the digest channel post; no usage report DMs
+    slack_inst.post_channel.assert_called_once()
+    # beaubonhomme's job on 2024-07-01 is outside [2024-06-16, 2024-06-30] — no reports
+    dm_calls = [call.args[0] for call in slack_inst.dm_user.call_args_list]
+    assert "beaubonhomme@mila.quebec" not in dm_calls
