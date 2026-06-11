@@ -837,10 +837,12 @@
       const unit = rguUnit();
       const periods    = d.histogram.map(r => r.period_start);
       const periodEnds = d.histogram.map(r => r.period_end);
-      const rguUsed    = d.histogram.map(r => r.rgu_used * unit.factor);
-      const rguUnused  = d.histogram.map(r => (r.rgu_requested - r.rgu_used) * unit.factor);
-      const colorUsed  = periods.map(p => { const f = periodInFocus(p); return f === null ? '#1a6fd4' : f ? '#e07020' : '#c8d8f0'; });
-      const colorUnused= periods.map(p => { const f = periodInFocus(p); return f === null ? '#a8c8f0' : f ? '#f0c090' : '#e4eef8'; });
+      const rguUsed       = d.histogram.map(r => r.rgu_used * unit.factor);
+      const rguUnused     = d.histogram.map(r => (r.rgu_requested - r.rgu_used - (r.rgu_unmeasured || 0)) * unit.factor);
+      const rguUnmeasured = d.histogram.map(r => (r.rgu_unmeasured || 0) * unit.factor);
+      const colorUsed      = periods.map(p => { const f = periodInFocus(p); return f === null ? '#1a6fd4' : f ? '#e07020' : '#c8d8f0'; });
+      const colorUnused    = periods.map(p => { const f = periodInFocus(p); return f === null ? '#a8c8f0' : f ? '#f0c090' : '#e4eef8'; });
+      const colorUnmeasured= periods.map(p => { const f = periodInFocus(p); return f === null ? '#bdbdbd' : f ? '#8a8a8a' : '#e6e6e6'; });
       Plotly.react(id, [
         { type: 'bar', name: 'Used',   x: periods, y: rguUsed, customdata: periodEnds,
           marker: { color: colorUsed },
@@ -848,6 +850,9 @@
         { type: 'bar', name: 'Unused', x: periods, y: rguUnused, customdata: periodEnds,
           marker: { color: colorUnused },
           hovertemplate: 'Period: %{x}<br>' + unit.label + ' unused: %{y:,.1f}<extra></extra>' },
+        { type: 'bar', name: 'No metric data', x: periods, y: rguUnmeasured, customdata: periodEnds,
+          marker: { color: colorUnmeasured },
+          hovertemplate: 'Period: %{x}<br>' + unit.label + ' (no metric): %{y:,.1f}<extra></extra>' },
       ], pLayout({
         title: { text: 'Total ' + unit.label + ' per Period — Used vs Unused (click to focus)', font: { size: 16 } },
         barmode: 'stack',
@@ -1137,10 +1142,12 @@
         // Reverse so highest-RGU user appears at the top of the horizontal chart
         const rows      = topRows.reverse();
         const users     = rows.map(r => r.user);
-        const rguUsed   = rows.map(r => r.rgu_used * unit.factor);
-        const rguUnused = rows.map(r => (r.rgu_requested - r.rgu_used) * unit.factor);
-        const colorUsed   = rows.map(r => r.user === selectedUser ? '#e07020' : '#1a6fd4');
-        const colorUnused = rows.map(r => r.user === selectedUser ? '#f0c090' : '#a8c8f0');
+        const rguUsed       = rows.map(r => r.rgu_used * unit.factor);
+        const rguUnused     = rows.map(r => (r.rgu_requested - r.rgu_used - (r.rgu_unmeasured || 0)) * unit.factor);
+        const rguUnmeasured = rows.map(r => (r.rgu_unmeasured || 0) * unit.factor);
+        const colorUsed       = rows.map(r => r.user === selectedUser ? '#e07020' : '#1a6fd4');
+        const colorUnused     = rows.map(r => r.user === selectedUser ? '#f0c090' : '#a8c8f0');
+        const colorUnmeasured = rows.map(r => r.user === selectedUser ? '#8a8a8a' : '#bdbdbd');
         const chartH    = Math.max(300, users.length * 24 + 80);
         Plotly.react(plot, [
           { type: 'bar', name: 'Used',   orientation: 'h', y: users, x: rguUsed,
@@ -1149,13 +1156,16 @@
           { type: 'bar', name: 'Unused', orientation: 'h', y: users, x: rguUnused,
             marker: { color: colorUnused },
             hovertemplate: '%{y}<br>' + unit.label + ' unused: %{x:,.1f}<extra></extra>' },
+          { type: 'bar', name: 'No metric data', orientation: 'h', y: users, x: rguUnmeasured,
+            marker: { color: colorUnmeasured },
+            hovertemplate: '%{y}<br>' + unit.label + ' (no metric): %{x:,.1f}<extra></extra>' },
         ], pLayout({
           title: { text: 'Total ' + unit.label + ' by User — Used vs Unused (click to filter)', font: { size: 16 } },
           barmode: 'stack', height: chartH,
           xaxis: { title: 'Total ' + unit.label },
           yaxis: { title: '', automargin: true },
-          legend: { x: 0.8, y: 1.05, orientation: 'h' },
-          margin: { l: 20, r: 20, t: 40, b: 50 },
+          legend: { orientation: 'h', x: 0, xanchor: 'left', y: 1.02, yanchor: 'bottom' },
+          margin: { l: 20, r: 20, t: 72, b: 50 },
         }), { responsive: true }).then(gd => {
           gd.removeAllListeners('plotly_click');
           gd.on('plotly_click', data => {

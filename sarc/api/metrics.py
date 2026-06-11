@@ -723,12 +723,19 @@ def metrics_rgu_usage(
         (m_mean == m_mean, rgu_hours * m_mean),  # noqa: PLR0124
         else_=0.0,
     )
+    # RGU·h of jobs with no usable metric (NULL via the LEFT JOIN, or NaN): kept
+    # apart from "unused" so a missing measurement isn't counted as waste.
+    rgu_unmeasured_term = case(
+        (m_mean == m_mean, 0.0),  # noqa: PLR0124
+        else_=rgu_hours,
+    )
 
     query = src.apply(
         select(
             bucket_expr,
             func.sum(rgu_hours).label("rgu_requested"),
             func.sum(rgu_used_term).label("rgu_used"),
+            func.sum(rgu_unmeasured_term).label("rgu_unmeasured"),
         )
     )
     query = (
@@ -754,19 +761,21 @@ def metrics_rgu_usage(
         _sql_bucket_key(parsed, row.bucket): (
             float(row.rgu_requested or 0.0),
             float(row.rgu_used or 0.0),
+            float(row.rgu_unmeasured or 0.0),
         )
         for row in sess.exec(query)
     }
 
     period_data = []
     for key, ps, pe in _iter_buckets(begin_dt, finish_dt, parsed):
-        req, used = sums.get(key, (0.0, 0.0))
+        req, used, unmeasured = sums.get(key, (0.0, 0.0, 0.0))
         period_data.append(
             {
                 "period_start": ps.strftime(fmt),
                 "period_end": pe.strftime(fmt),
                 "rgu_requested": req,
                 "rgu_used": used,
+                "rgu_unmeasured": unmeasured,
             }
         )
 
@@ -963,11 +972,22 @@ def metrics_rgu_by_user(
         (m_mean == m_mean, rgu_hours * m_mean),  # noqa: PLR0124
         else_=0.0,
     )
+    # RGU·h of jobs with no usable metric (NULL via the LEFT JOIN, or NaN): kept
+    # apart from "unused" so a missing measurement isn't counted as waste.
+    rgu_unmeasured_term = case(
+        (m_mean == m_mean, 0.0),  # noqa: PLR0124
+        else_=rgu_hours,
+    )
     user_expr = func.coalesce(col(src.base.cluster_user), "unknown").label("user")
     rgu_requested_sum = func.sum(rgu_hours).label("rgu_requested")
 
     query = src.apply(
-        select(user_expr, rgu_requested_sum, func.sum(rgu_used_term).label("rgu_used"))
+        select(
+            user_expr,
+            rgu_requested_sum,
+            func.sum(rgu_used_term).label("rgu_used"),
+            func.sum(rgu_unmeasured_term).label("rgu_unmeasured"),
+        )
     )
     query = (
         query.join(
@@ -993,6 +1013,7 @@ def metrics_rgu_by_user(
             "user": row.user,
             "rgu_requested": float(row.rgu_requested or 0.0),
             "rgu_used": float(row.rgu_used or 0.0),
+            "rgu_unmeasured": float(row.rgu_unmeasured or 0.0),
         }
         for row in sess.exec(query)
     ]
