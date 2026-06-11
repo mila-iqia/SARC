@@ -1570,6 +1570,25 @@
         txt = 'Every ' + n + ' ' + (periodUnit.value === 'h' ? 'hour' : 'day') + (n > 1 ? 's' : '');
       }
       periodBtn.textContent = txt + ' ▾';
+      syncRguUnitToPeriod();
+    }
+    // Keep the RGU display unit in step with the period bucket — one-way
+    // (period -> unit); changing the unit never touches the period. Calendar
+    // modes map straight across (h/d/w/m); a custom window follows its
+    // hours/days selector. We fire the select's change event so the RGU tiles
+    // re-scale in place at once (rerenderRguTiles), keeping "select = displayed
+    // unit" true. That rescale is a cosmetic Y-axis change independent of the
+    // bucket, so the unit can switch a moment before the bars do (the bucket
+    // follows on the next Update); rerenderRguTiles is a no-op before the first
+    // load, so the server-injected default syncs without a stray redraw.
+    function syncRguUnitToPeriod() {
+      const mode = periodMode();
+      const target = mode === 'custom' ? periodUnit.value : mode;
+      const sel = document.getElementById('rgu-unit');
+      if (sel.value !== target && [...sel.options].some(o => o.value === target)) {
+        sel.value = target;
+        sel.dispatchEvent(new Event('change'));
+      }
     }
     function setPeriod(s) {
       // Accepts the API grammar (used for the server-injected default).
