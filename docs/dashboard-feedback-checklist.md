@@ -31,13 +31,14 @@
 - [x] **Mouse-over explicatif sur tous les filtres** — tooltips ajoutés sur Start, End, User, Efficiency metric, Cluster, Job states (+ bouton Update) ; complètent Period / RGU type / RGU unit / Reset déjà présents `(G)`
 - [x] **Titres des charts de métrique nomment la métrique** — Metric Trend → « SM occupancy per period — mean & max » et Density → « SM occupancy density — weighted by RGU·time » (dynamiques via `METRICS`, suivent l'Efficiency metric) ; le heatmap nommait déjà ses métriques `(S10 — Chart 2)`
 - [x] **Tri par défaut Job table = RGU inutilisés (waste) desc** — `JOBTABLE_DEFAULTS.sortBy = 'waste'` (init + `resetState`) ; back-end déjà compatible (`waste = rgu_hours × (1 − mean)`, NULLs en dernier, suit l'Efficiency metric) `(SC, SP)`
+- [x] **Clarté Primary/Secondary metric** — « Primary » → « Efficiency metric », « Secondary » retirée de la barre (devenue le picker « Compare … to: » du heatmap) + tooltip ; aucune occurrence visible de Primary/Secondary restante. Le masquage *Advanced* et le défaut Secondary sont des items distincts (Axe 1) `(G, S10)`
+- [x] **Confusion Start/End vs Focus levée** — focus déjà transformé en label d'état (plus un champ) ; tooltip explicatif sur `#focus-label` (plage globale vs sous-tranche, tuiles filtrées : density / heatmap / RGU by user / job table) + message « No focus » enrichi pour décrire l'effet `(G)`
+- [x] **Défaut Secondary metric (heatmap) = GPU utilization** — `metricScatterMetric2` initialisé à `'gpu_utilization'` (init via `??` pour préserver un « — none — » sauvegardé, + `resetState`) ; le heatmap par défaut compare donc SM occupancy × GPU utilization `(SC)`
 
 ---
 
 ## 🟡 Partiellement fait
 
-- [ ] **Clarifier Primary/Secondary metric** — renommage + relocalisation faits ; reste : masquer derrière *Advanced* (cf. Axe 1) `(G, S10)`
-- [ ] **Lever la confusion Start/End vs Focus** — focus garde l'heure ✅ ; reste : regroupement/explication (cf. *Advanced*) `(G)`
 - [ ] **« RGU requested vs used » en total agrégé** — la vue par période existe ; le feedback raye « per period » (veut un total Used vs Unused sur la plage) `(SC, SP)`
 
 ---
@@ -50,7 +51,6 @@
 - [ ] **Boutons raccourcis « 7 / 14 / 30 derniers jours »** `(SC, SP)`
 - [ ] **User par défaut = l'utilisateur courant** (nécessite l'identité connectée) `(SC)`
 - [ ] **Sélection multi-users (« User+s »)** — back-end en égalité stricte `cluster_user == <user>` `(SC)`
-- [ ] **Défaut Secondary metric = GPU utilization** — actuellement vide (`metricScatterMetric2 = ''`, prompt « Select a metric ») `(SC)`
 - [ ] **Section « Advanced »** masquant Focus + Primary/Secondary metric `(SC)`
 - [ ] **Profils de layout chercheur vs prof** — un seul `DEFAULT_LAYOUT` aujourd'hui `(SC, SP)`
 

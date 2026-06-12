@@ -303,8 +303,9 @@
     </div>
     <button onclick="loadCharts()" title="Apply the current filters (date range, clusters, user, job states, metric, RGU type) and reload every plot.">Update</button>
     <button id="reset-btn" onclick="resetState()" title="Clear all saved settings and reset to defaults" style="background:#888;">Reset</button>
-    <div id="focus-label" class="no-focus">
-      <span id="focus-label-text">No focus — click a bar in a period plot to set one</span>
+    <div id="focus-label" class="no-focus"
+         title="Focus is an optional zoom on top of the Start/End range. Click a bar in a period plot to restrict the detail plots (Metric density, Metric heatmap, RGU by user, Job table) to that time slice; the period plots only highlight it. Use Clear focus to return to the full range.">
+      <span id="focus-label-text">No focus — click a bar in a period plot to zoom the detail plots onto that slice</span>
       <button type="button" id="clear-focus" style="display:none" onclick="clearFocus()">Clear focus</button>
     </div>
   </div>
@@ -386,7 +387,7 @@
       // Module-level state defaults
       userRguTopN          = 16;
       userRguSortBy        = 'rgu_requested';
-      metricScatterMetric2 = '';
+      metricScatterMetric2 = 'gpu_utilization';
       jobTableHiddenCols.clear();
       JOBTABLE_DEFAULTS.limit   = 50;
       JOBTABLE_DEFAULTS.sortBy  = 'waste';
@@ -655,12 +656,14 @@
     let comparisonCache = {};
     // Secondary metric for the Metric heatmap tile. Module-scoped (not stored on
     // the tile div, which renderLayout() recreates on every Update) so the pick
-    // survives Updates — like the global field it replaces. '' = none chosen yet
-    // (the tile then prompts for one). Two heatmap tiles would share this value.
+    // survives Updates — like the global field it replaces. Defaults to GPU
+    // utilization so a fresh heatmap shows data immediately; '' is the explicit
+    // "— none —" choice (the tile then prompts for one) — hence ?? not ||, so a
+    // saved '' doesn't snap back to the default. Two heatmap tiles share this.
     // Restore persisted module-level state (plot-local preferences). _saved
     // itself is loaded near the top of the script (it is read earlier — by
     // JOBTABLE_DEFAULTS and the filter-bar restore).
-    let metricScatterMetric2 = _saved.metricScatterMetric2 || '';
+    let metricScatterMetric2 = _saved.metricScatterMetric2 ?? 'gpu_utilization';
     // Top-N users shown by the RGU-by-user tile. Module-scoped like the heatmap's
     // secondary so it survives Updates; applied via the tile's OK button — a pure
     // re-slice/re-render of the already-fetched rows, never a refetch.
@@ -1147,6 +1150,7 @@
       ctrl.className = 'ms-ctrl';
       const lab = document.createElement('label');
       lab.textContent = 'Compare ' + ml + ' to:';
+      lab.title = 'Second metric to compare against the efficiency metric. The heatmap bins GPU jobs by both values and colours each cell by job count (log scale).';
       const sel = document.createElement('select');
       sel.className = 'ms-metric2 add-select';
       metricOptions(true).forEach(o => sel.appendChild(o));
@@ -1785,7 +1789,7 @@
       const txt = document.getElementById('focus-label-text');
       if (!focusStart && !focusEnd) {
         box.classList.add('no-focus');
-        txt.textContent = 'No focus — click a bar in a period plot to set one';
+        txt.textContent = 'No focus — click a bar in a period plot to zoom the detail plots onto that slice';
         btn.style.display = 'none';
       } else {
         box.classList.remove('no-focus');
