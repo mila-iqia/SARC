@@ -204,13 +204,16 @@ class UnderusageNotifyCommand:
         print()
 
         cycle_dates = get_cycle_dates(
-            end, ncfg.recurrence_display_cycles, cycle_length_weeks=ncfg.cycle_length_weeks
+            end,
+            ncfg.recurrence_display_cycles,
+            cycle_length_weeks=ncfg.cycle_length_weeks,
         )
         digest = build_admin_digest(
             rows,
             period=period,
-            window_weeks=ncfg.recurrence_window_weeks,
             cluster_share_threshold=ncfg.recurrence_cluster_share,
+            cycle_length_weeks=ncfg.cycle_length_weeks,
+            active_cycles=ncfg.recurrence_active_cycles,
             top_n=ncfg.digest_top_n,
             historical=historical,
             recurring=recurring,

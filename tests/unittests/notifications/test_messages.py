@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 
 from sarc.notifications.messages import (
     build_admin_digest,
+    build_recurring_table,
     build_usage_report,
     build_user_dm,
     split_usage_report_recipients,
@@ -67,9 +68,7 @@ _ROW_BOB = UnderuserRow(
     waste_ratio=0.75,
     avg_utilization=0.25,
     rgu_hours_unused=600.0,
-    by_cluster=[
-        ClusterBreakdown("fir", 800.0, 600.0, 800.0),
-    ],
+    by_cluster=[ClusterBreakdown("fir", 800.0, 600.0, 800.0)],
     top_jobs=[],
 )
 
@@ -153,7 +152,9 @@ def test_dm_no_dashboard_url_by_default():
 
 
 def test_dm_dashboard_url_included_when_provided():
-    text = build_user_dm(_ROW_ALICE, window_weeks=2, dashboard_url="https://dash.example.com")
+    text = build_user_dm(
+        _ROW_ALICE, window_weeks=2, dashboard_url="https://dash.example.com"
+    )
     assert "Track your usage over time: https://dash.example.com" in text
 
 
@@ -174,15 +175,23 @@ def test_dm_no_jobs_omits_jobs_section():
 
 
 def test_dm_deterministic():
-    a = build_user_dm(_ROW_ALICE, window_weeks=2, dashboard_url="https://x", help_section="help")
-    b = build_user_dm(_ROW_ALICE, window_weeks=2, dashboard_url="https://x", help_section="help")
+    a = build_user_dm(
+        _ROW_ALICE, window_weeks=2, dashboard_url="https://x", help_section="help"
+    )
+    b = build_user_dm(
+        _ROW_ALICE, window_weeks=2, dashboard_url="https://x", help_section="help"
+    )
     assert a == b
 
 
 # ── build_admin_digest ────────────────────────────────────────────────────────
 
 
-_DIGEST_KW = {"window_weeks": 6, "cluster_share_threshold": 0.30}
+_DIGEST_KW = {
+    "cluster_share_threshold": 0.30,
+    "cycle_length_weeks": 2,
+    "active_cycles": 3,
+}
 
 
 def test_digest_header_contains_period():
@@ -193,12 +202,16 @@ def test_digest_header_contains_period():
 
 
 def test_digest_count_line():
-    text = build_admin_digest([_ROW_ALICE, _ROW_BOB, _ROW_CAROL], period="…", **_DIGEST_KW)
+    text = build_admin_digest(
+        [_ROW_ALICE, _ROW_BOB, _ROW_CAROL], period="…", **_DIGEST_KW
+    )
     assert "3 user(s) flagged" in text
 
 
 def test_digest_ranked_by_wasted_descending():
-    text = build_admin_digest([_ROW_ALICE, _ROW_BOB, _ROW_CAROL], period="…", **_DIGEST_KW)
+    text = build_admin_digest(
+        [_ROW_ALICE, _ROW_BOB, _ROW_CAROL], period="…", **_DIGEST_KW
+    )
     # Bob: 600 wasted, Carol: 420, Alice: 245 → Bob is rank 1
     assert text.index("Bob Marley") < text.index("Carol Danvers")
     assert text.index("Carol Danvers") < text.index("Alice Liddell")
@@ -239,8 +252,8 @@ def test_digest_empty_rows():
     assert "0 user(s) flagged" in text
 
 
-def test_digest_recurring_header_reflects_window_and_share():
-    """Non-default window_weeks/cluster_share_threshold propagate to the recurring table header."""
+def test_digest_recurring_header_reflects_share():
+    """Non-default cluster_share_threshold propagate to the recurring table header."""
     row = RecurringUserRow(
         email="alice@mila.quebec",
         display_name="Alice Liddell",
@@ -253,12 +266,101 @@ def test_digest_recurring_header_reflects_window_and_share():
     text = build_admin_digest(
         [],
         period="…",
-        window_weeks=8,
         cluster_share_threshold=0.40,
+        cycle_length_weeks=2,
+        active_cycles=3,
         recurring={"narval": [row]},
     )
-    assert "last 8 weeks" in text
     assert "40 %" in text
+
+
+# ── build_recurring_table direct tests ───────────────────────────────────────
+
+_RECURRING_ROW_DEFAULT = RecurringUserRow(
+    email="bob@mila.quebec",
+    display_name="Bob",
+    cluster="narval",
+    wasted_6w=500.0,
+    cluster_share=0.25,
+    cycles=[True, True, True, False, False],
+    personalized_action=True,
+)
+
+_RECURRING_KW_DEFAULT = {
+    "cluster_share_threshold": 0.30,
+    "cycle_length_weeks": 2,
+    "active_cycles": 3,
+}
+
+
+def test_recurring_table_default_labels():
+    """5-cycle/3-active default: labels W0…W-8, separator after W-4."""
+    text = build_recurring_table(
+        {"narval": [_RECURRING_ROW_DEFAULT]}, **_RECURRING_KW_DEFAULT
+    )
+    assert "W0" in text
+    assert "W-2" in text
+    assert "W-4" in text
+    assert "W-6" in text
+    assert "W-8" in text
+    # Separator appears in the header between W-4 (index 2) and W-6 (index 3)
+    assert "W-4" in text and "  |" in text
+    idx_w4 = text.index("W-4")
+    idx_sep = text.index("  |")
+    idx_w6 = text.index("W-6")
+    assert idx_w4 < idx_sep < idx_w6
+
+
+def test_recurring_table_4_cycles():
+    """4-cycle/2-active: labels W0 W-2 W-4 W-6, separator after W-2."""
+    row = RecurringUserRow(
+        email="carol@mila.quebec",
+        display_name="Carol",
+        cluster="beluga",
+        wasted_6w=300.0,
+        cluster_share=0.15,
+        cycles=[True, True, False, False],
+        personalized_action=True,
+    )
+    text = build_recurring_table(
+        {"beluga": [row]},
+        cluster_share_threshold=0.30,
+        cycle_length_weeks=2,
+        active_cycles=2,
+    )
+    assert "W0" in text
+    assert "W-2" in text
+    assert "W-4" in text
+    assert "W-6" in text
+    assert "W-8" not in text
+    idx_w2 = text.index("W-2")
+    idx_sep = text.index("  |")
+    idx_w4 = text.index("W-4")
+    assert idx_w2 < idx_sep < idx_w4
+
+
+def test_recurring_table_6_cycles():
+    """6-cycle/3-active with cycle_length_weeks=2: labels include W-10, separator after W-4."""
+    row = RecurringUserRow(
+        email="dave@mila.quebec",
+        display_name="Dave",
+        cluster="cedar",
+        wasted_6w=800.0,
+        cluster_share=0.35,
+        cycles=[True, True, True, False, False, False],
+        personalized_action=True,
+    )
+    text = build_recurring_table(
+        {"cedar": [row]},
+        cluster_share_threshold=0.30,
+        cycle_length_weeks=2,
+        active_cycles=3,
+    )
+    assert "W-10" in text
+    idx_w4 = text.index("W-4")
+    idx_sep = text.index("  |")
+    idx_w6 = text.index("W-6")
+    assert idx_w4 < idx_sep < idx_w6
 
 
 # ── build_usage_report fixtures ───────────────────────────────────────────────
@@ -381,7 +483,9 @@ def test_usage_report_no_dashboard_url_by_default():
 
 
 def test_usage_report_dashboard_url_included_when_provided():
-    text = build_usage_report(_USAGE_ROW_ALICE, window_weeks=4, dashboard_url="https://dash.example.com")
+    text = build_usage_report(
+        _USAGE_ROW_ALICE, window_weeks=4, dashboard_url="https://dash.example.com"
+    )
     assert "Track your usage over time: https://dash.example.com" in text
 
 
@@ -397,8 +501,12 @@ def test_usage_report_no_jobs_omits_jobs_section():
 
 
 def test_usage_report_deterministic():
-    a = build_usage_report(_USAGE_ROW_ALICE, window_weeks=4, dashboard_url="https://x", help_section="help")
-    b = build_usage_report(_USAGE_ROW_ALICE, window_weeks=4, dashboard_url="https://x", help_section="help")
+    a = build_usage_report(
+        _USAGE_ROW_ALICE, window_weeks=4, dashboard_url="https://x", help_section="help"
+    )
+    b = build_usage_report(
+        _USAGE_ROW_ALICE, window_weeks=4, dashboard_url="https://x", help_section="help"
+    )
     assert a == b
 
 
@@ -407,8 +515,7 @@ def test_usage_report_deterministic():
 
 def test_split_underuser_excluded_from_report():
     report, skipped = split_usage_report_recipients(
-        [_USAGE_ROW_ALICE, _USAGE_ROW_BOB],
-        underuser_emails={"alice@mila.quebec"},
+        [_USAGE_ROW_ALICE, _USAGE_ROW_BOB], underuser_emails={"alice@mila.quebec"}
     )
     assert all(r.email != "alice@mila.quebec" for r in report)
     assert any(r.email == "alice@mila.quebec" for r in skipped)
@@ -416,8 +523,7 @@ def test_split_underuser_excluded_from_report():
 
 def test_split_non_underuser_included_in_report():
     report, skipped = split_usage_report_recipients(
-        [_USAGE_ROW_ALICE, _USAGE_ROW_BOB],
-        underuser_emails={"alice@mila.quebec"},
+        [_USAGE_ROW_ALICE, _USAGE_ROW_BOB], underuser_emails={"alice@mila.quebec"}
     )
     assert any(r.email == "bob@mila.quebec" for r in report)
     assert all(r.email != "bob@mila.quebec" for r in skipped)
@@ -425,8 +531,7 @@ def test_split_non_underuser_included_in_report():
 
 def test_split_empty_underusers_all_get_report():
     report, skipped = split_usage_report_recipients(
-        [_USAGE_ROW_ALICE, _USAGE_ROW_BOB],
-        underuser_emails=set(),
+        [_USAGE_ROW_ALICE, _USAGE_ROW_BOB], underuser_emails=set()
     )
     assert len(report) == 2
     assert len(skipped) == 0
@@ -443,7 +548,9 @@ def test_split_all_are_underusers_none_get_report():
 
 def test_split_lists_are_disjoint_and_cover_all():
     rows = [_USAGE_ROW_ALICE, _USAGE_ROW_BOB]
-    report, skipped = split_usage_report_recipients(rows, underuser_emails={"alice@mila.quebec"})
+    report, skipped = split_usage_report_recipients(
+        rows, underuser_emails={"alice@mila.quebec"}
+    )
     assert len(report) + len(skipped) == len(rows)
     report_emails = {r.email for r in report}
     skipped_emails = {r.email for r in skipped}

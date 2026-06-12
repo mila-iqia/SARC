@@ -38,13 +38,7 @@ _MIN_RGU_HOURS = 672.0
 # "Today" for the tests: 2025-07-15.  The 6 complete months before it are
 # 2025-01, 2025-02, 2025-03, 2025-04, 2025-05, 2025-06.
 _END = datetime(2025, 7, 15, tzinfo=UTC)
-_MONTHS_WITH_DATA = [
-    "2025-02",
-    "2025-03",
-    "2025-04",
-    "2025-05",
-    "2025-06",
-]
+_MONTHS_WITH_DATA = ["2025-02", "2025-03", "2025-04", "2025-05", "2025-06"]
 _MONTH_NO_DATA = "2025-01"
 
 
@@ -180,20 +174,26 @@ def test_iter_months_covers_expected_labels():
 
 
 def test_months_with_data_have_nonzero_ratio(historical_db):
-    result = get_historical_stats(_END, min_ratio=_MIN_RATIO, min_rgu_hours=_MIN_RGU_HOURS)
+    result = get_historical_stats(
+        _END, min_ratio=_MIN_RATIO, min_rgu_hours=_MIN_RGU_HOURS
+    )
     ratios = {m.label: m.avg_waste_ratio for m in result.months}
     for label in _MONTHS_WITH_DATA:
         assert ratios[label] > 0.0, f"{label} should have nonzero avg_waste_ratio"
 
 
 def test_empty_month_has_zero_ratio(historical_db):
-    result = get_historical_stats(_END, min_ratio=_MIN_RATIO, min_rgu_hours=_MIN_RGU_HOURS)
+    result = get_historical_stats(
+        _END, min_ratio=_MIN_RATIO, min_rgu_hours=_MIN_RGU_HOURS
+    )
     ratios = {m.label: m.avg_waste_ratio for m in result.months}
     assert ratios[_MONTH_NO_DATA] == 0.0
 
 
 def test_above_threshold_count_in_data_months(historical_db):
-    result = get_historical_stats(_END, min_ratio=_MIN_RATIO, min_rgu_hours=_MIN_RGU_HOURS)
+    result = get_historical_stats(
+        _END, min_ratio=_MIN_RATIO, min_rgu_hours=_MIN_RGU_HOURS
+    )
     counts = {m.label: m.above_threshold_count for m in result.months}
     # petitbonhomme is above threshold in all data months
     for label in _MONTHS_WITH_DATA:
@@ -201,26 +201,34 @@ def test_above_threshold_count_in_data_months(historical_db):
 
 
 def test_above_threshold_count_empty_month(historical_db):
-    result = get_historical_stats(_END, min_ratio=_MIN_RATIO, min_rgu_hours=_MIN_RGU_HOURS)
+    result = get_historical_stats(
+        _END, min_ratio=_MIN_RATIO, min_rgu_hours=_MIN_RGU_HOURS
+    )
     counts = {m.label: m.above_threshold_count for m in result.months}
     assert counts[_MONTH_NO_DATA] == 0
 
 
 def test_below_threshold_user_not_counted(historical_db):
     # beaubonhomme (20 % waste) must not inflate above_threshold_count
-    result = get_historical_stats(_END, min_ratio=_MIN_RATIO, min_rgu_hours=_MIN_RGU_HOURS)
+    result = get_historical_stats(
+        _END, min_ratio=_MIN_RATIO, min_rgu_hours=_MIN_RGU_HOURS
+    )
     jun = next(m for m in result.months if m.label == "2025-06")
     # Both petitbonhomme (90 %) and beaubonhomme (20 %) are in Jun; only 1 above threshold
     assert jun.above_threshold_count == 1
 
 
 def test_result_has_six_months(historical_db):
-    result = get_historical_stats(_END, min_ratio=_MIN_RATIO, min_rgu_hours=_MIN_RGU_HOURS)
+    result = get_historical_stats(
+        _END, min_ratio=_MIN_RATIO, min_rgu_hours=_MIN_RGU_HOURS
+    )
     assert len(result.months) == 6
 
 
 def test_months_ordered_chronologically(historical_db):
-    result = get_historical_stats(_END, min_ratio=_MIN_RATIO, min_rgu_hours=_MIN_RGU_HOURS)
+    result = get_historical_stats(
+        _END, min_ratio=_MIN_RATIO, min_rgu_hours=_MIN_RGU_HOURS
+    )
     labels = [m.label for m in result.months]
     assert labels == sorted(labels)
 
@@ -230,7 +238,9 @@ def test_months_ordered_chronologically(historical_db):
 
 def test_yoy_absent_when_no_prior_year_data(historical_db):
     # No jobs exist in 2024 → yoy_months should be None
-    result = get_historical_stats(_END, min_ratio=_MIN_RATIO, min_rgu_hours=_MIN_RGU_HOURS)
+    result = get_historical_stats(
+        _END, min_ratio=_MIN_RATIO, min_rgu_hours=_MIN_RGU_HOURS
+    )
     assert result.yoy_months is None
 
 
@@ -255,7 +265,9 @@ def test_yoy_present_when_prior_year_has_data(read_write_db):
     )
     session.commit()
 
-    result = get_historical_stats(_END, min_ratio=_MIN_RATIO, min_rgu_hours=_MIN_RGU_HOURS)
+    result = get_historical_stats(
+        _END, min_ratio=_MIN_RATIO, min_rgu_hours=_MIN_RGU_HOURS
+    )
     assert result.yoy_months is not None
     assert len(result.yoy_months) == 6
     jun_yoy = next(m for m in result.yoy_months if m.label == "2024-06")
@@ -279,7 +291,9 @@ def test_yoy_has_six_months_when_present(read_write_db):
     )
     session.commit()
 
-    result = get_historical_stats(_END, min_ratio=_MIN_RATIO, min_rgu_hours=_MIN_RGU_HOURS)
+    result = get_historical_stats(
+        _END, min_ratio=_MIN_RATIO, min_rgu_hours=_MIN_RGU_HOURS
+    )
     assert result.yoy_months is not None
     assert len(result.yoy_months) == 6
 
@@ -289,7 +303,9 @@ def test_yoy_has_six_months_when_present(read_write_db):
 
 def test_unsupported_resource_raises(historical_db):
     with pytest.raises(ValueError, match="Unsupported resource"):
-        get_historical_stats(_END, min_ratio=_MIN_RATIO, min_rgu_hours=_MIN_RGU_HOURS, resource="cpu")
+        get_historical_stats(
+            _END, min_ratio=_MIN_RATIO, min_rgu_hours=_MIN_RGU_HOURS, resource="cpu"
+        )
 
 
 # ── build_admin_digest with historical ────────────────────────────────────────
@@ -297,12 +313,18 @@ def test_unsupported_resource_raises(historical_db):
 
 def _make_stats(with_yoy: bool = False) -> HistoricalStats:
     months = [
-        MonthlyStats(label=f"2025-0{i}", avg_waste_ratio=0.5 + i * 0.01, above_threshold_count=i)
+        MonthlyStats(
+            label=f"2025-0{i}", avg_waste_ratio=0.5 + i * 0.01, above_threshold_count=i
+        )
         for i in range(1, 7)
     ]
     yoy = (
         [
-            MonthlyStats(label=f"2024-0{i}", avg_waste_ratio=0.6 + i * 0.01, above_threshold_count=i + 1)
+            MonthlyStats(
+                label=f"2024-0{i}",
+                avg_waste_ratio=0.6 + i * 0.01,
+                above_threshold_count=i + 1,
+            )
             for i in range(1, 7)
         ]
         if with_yoy
@@ -311,7 +333,11 @@ def _make_stats(with_yoy: bool = False) -> HistoricalStats:
     return HistoricalStats(months=months, yoy_months=yoy)
 
 
-_DIGEST_KW = {"window_weeks": 6, "cluster_share_threshold": 0.30}
+_DIGEST_KW = {
+    "cluster_share_threshold": 0.30,
+    "cycle_length_weeks": 2,
+    "active_cycles": 3,
+}
 
 
 def test_digest_no_historical_by_default():
@@ -352,17 +378,23 @@ def test_digest_historical_waste_ratio_rendered():
 
 
 def test_digest_historical_yoy_section_present():
-    text = build_admin_digest([], period="…", historical=_make_stats(with_yoy=True), **_DIGEST_KW)
+    text = build_admin_digest(
+        [], period="…", historical=_make_stats(with_yoy=True), **_DIGEST_KW
+    )
     assert "Year-over-Year" in text
 
 
 def test_digest_historical_no_yoy_when_absent():
-    text = build_admin_digest([], period="…", historical=_make_stats(with_yoy=False), **_DIGEST_KW)
+    text = build_admin_digest(
+        [], period="…", historical=_make_stats(with_yoy=False), **_DIGEST_KW
+    )
     assert "Year-over-Year" not in text
 
 
 def test_digest_historical_yoy_labels():
-    text = build_admin_digest([], period="…", historical=_make_stats(with_yoy=True), **_DIGEST_KW)
+    text = build_admin_digest(
+        [], period="…", historical=_make_stats(with_yoy=True), **_DIGEST_KW
+    )
     for i in range(1, 7):
         assert f"2024-0{i}" in text
 

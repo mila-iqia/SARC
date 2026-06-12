@@ -25,7 +25,7 @@ _14D = timedelta(days=14)
 
 # Default keyword args for build_recurring_table and get_recurring_underusers callers
 # that don't need to exercise specific window/share values.
-_BRT_KW = {"window_weeks": 6, "cluster_share_threshold": 0.30}
+_BRT_KW = {"cluster_share_threshold": 0.30, "cycle_length_weeks": 2, "active_cycles": 3}
 _GRU_KW = {"window_weeks": 6, "cluster_share_threshold": 0.30}
 
 # Cycle windows (rolling from _TEST_END)
@@ -36,11 +36,11 @@ _GRU_KW = {"window_weeks": 6, "cluster_share_threshold": 0.30}
 # W-8: [2024-04-21, 2024-05-05]
 # 6-week aggregate: [2024-05-19, 2024-06-30] = W-4 + W-2 + W0
 
-_W0_START = _TEST_END - 1 * _14D      # 2024-06-16
-_W2_START = _TEST_END - 2 * _14D      # 2024-06-02
-_W4_START = _TEST_END - 3 * _14D      # 2024-05-19
-_W6_START = _TEST_END - 4 * _14D      # 2024-05-05
-_W8_START = _TEST_END - 5 * _14D      # 2024-04-21
+_W0_START = _TEST_END - 1 * _14D  # 2024-06-16
+_W2_START = _TEST_END - 2 * _14D  # 2024-06-02
+_W4_START = _TEST_END - 3 * _14D  # 2024-05-19
+_W6_START = _TEST_END - 4 * _14D  # 2024-05-05
+_W8_START = _TEST_END - 5 * _14D  # 2024-04-21
 
 _MILA_GPU_TYPE = "A100-SXM4-80GB"
 _MILA_RGU = 4.8
@@ -355,8 +355,8 @@ def test_display_cycles_6_produces_6_columns(recurring_db):
 @pytest.mark.parametrize(
     "active_cycles,expected",
     [
-        (2, True),   # fourthuser cycles[:2] = [T, T]
-        (3, True),   # fourthuser cycles[:3] = [T, T, T]
+        (2, True),  # fourthuser cycles[:2] = [T, T]
+        (3, True),  # fourthuser cycles[:3] = [T, T, T]
         (4, False),  # fourthuser cycles[:4] = [T, T, T, F]
         (5, False),  # fourthuser cycles[:5] = [T, T, T, F, F]
     ],
@@ -383,10 +383,7 @@ def test_empty_db_returns_empty_dict(read_write_db):
     before = datetime(2020, 1, 1, tzinfo=UTC)
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         result = get_recurring_underusers(
-            before,
-            min_ratio=_MIN_RATIO,
-            min_rgu_hours=_MIN_RGU_HOURS,
-            **_GRU_KW,
+            before, min_ratio=_MIN_RATIO, min_rgu_hours=_MIN_RGU_HOURS, **_GRU_KW
         )
     assert result == {}
 
@@ -442,12 +439,22 @@ def test_table_header_contains_cluster():
 
 
 def test_table_header_contains_window_weeks():
-    text = build_recurring_table({"narval": [_ROW_ALICE]}, window_weeks=6, cluster_share_threshold=0.30)
+    text = build_recurring_table(
+        {"narval": [_ROW_ALICE]},
+        cluster_share_threshold=0.30,
+        cycle_length_weeks=2,
+        active_cycles=3,
+    )
     assert "last 6 weeks" in text
 
 
 def test_table_threshold_in_sub_header():
-    text = build_recurring_table({"narval": [_ROW_ALICE]}, window_weeks=6, cluster_share_threshold=0.30)
+    text = build_recurring_table(
+        {"narval": [_ROW_ALICE]},
+        cluster_share_threshold=0.30,
+        cycle_length_weeks=2,
+        active_cycles=3,
+    )
     assert "30 %" in text
 
 
@@ -483,7 +490,9 @@ def test_table_check_and_cross_marks():
 
 
 def test_table_tree_chars_multiple_rows():
-    text = build_recurring_table({"narval": [_ROW_ALICE, _ROW_BOB, _ROW_CAROL]}, **_BRT_KW)
+    text = build_recurring_table(
+        {"narval": [_ROW_ALICE, _ROW_BOB, _ROW_CAROL]}, **_BRT_KW
+    )
     assert "┌─" in text
     assert "├─" in text
     assert "└─" in text
@@ -534,7 +543,9 @@ def test_table_empty_dict_returns_empty_string():
 
 def test_table_deterministic():
     data = {"narval": [_ROW_ALICE, _ROW_BOB]}
-    assert build_recurring_table(data, **_BRT_KW) == build_recurring_table(data, **_BRT_KW)
+    assert build_recurring_table(data, **_BRT_KW) == build_recurring_table(
+        data, **_BRT_KW
+    )
 
 
 # ── CLI integration: recurring table appears in digest output ─────────────────
@@ -549,7 +560,9 @@ def test_dry_run_prints_recurring_table(recurring_db, cli_main, monkeypatch, cap
 
 
 @pytest.mark.parametrize("display_cycles", [4, 6])
-def test_dry_run_display_cycles(recurring_db, cli_main, monkeypatch, capsys, display_cycles):
+def test_dry_run_display_cycles(
+    recurring_db, cli_main, monkeypatch, capsys, display_cycles
+):
     """CLI must not IndexError when recurrence_display_cycles deviates from the default 5."""
     monkeypatch.setattr("sarc.cli.notify.underusage._now_utc", lambda: _TEST_END)
     cfg = {**_NOTIFY_CFG, "recurrence_display_cycles": display_cycles}
@@ -666,7 +679,9 @@ def test_odd_week_end_w0_is_none(recurring_db):
         pytest.skip("no users selected for this window (may be outside data range)")
     for rows in result.values():
         for row in rows:
-            assert row.cycles[0] is None, f"expected cycles[0]=None for odd-week end, got {row.cycles[0]}"
+            assert row.cycles[0] is None, (
+                f"expected cycles[0]=None for odd-week end, got {row.cycles[0]}"
+            )
 
 
 def test_odd_week_end_personalized_action_false(recurring_db):
@@ -687,11 +702,11 @@ def test_odd_week_end_personalized_action_false(recurring_db):
 # ── build_recurring_table with cycle_dates ────────────────────────────────────
 
 _CYCLE_DATES = [
-    date(2024, 6, 24),   # W0  (Mon, wk 26 even)
-    date(2024, 6, 10),   # W-2 (Mon, wk 24 even)
-    date(2024, 5, 27),   # W-4 (Mon, wk 22 even)
-    date(2024, 5, 13),   # W-6 (Mon, wk 20 even)
-    date(2024, 4, 29),   # W-8 (Mon, wk 18 even)
+    date(2024, 6, 24),  # W0  (Mon, wk 26 even)
+    date(2024, 6, 10),  # W-2 (Mon, wk 24 even)
+    date(2024, 5, 27),  # W-4 (Mon, wk 22 even)
+    date(2024, 5, 13),  # W-6 (Mon, wk 20 even)
+    date(2024, 4, 29),  # W-8 (Mon, wk 18 even)
 ]
 
 _ROW_FUTURE_W0 = RecurringUserRow(
@@ -706,7 +721,9 @@ _ROW_FUTURE_W0 = RecurringUserRow(
 
 
 def test_table_with_cycle_dates_renders_mm_dd_headers():
-    text = build_recurring_table({"narval": [_ROW_ALICE]}, cycle_dates=_CYCLE_DATES, **_BRT_KW)
+    text = build_recurring_table(
+        {"narval": [_ROW_ALICE]}, cycle_dates=_CYCLE_DATES, **_BRT_KW
+    )
     assert "06-24" in text
     assert "06-10" in text
     assert "05-27" in text
@@ -715,17 +732,21 @@ def test_table_with_cycle_dates_renders_mm_dd_headers():
 
 
 def test_table_with_cycle_dates_no_w0_label():
-    text = build_recurring_table({"narval": [_ROW_ALICE]}, cycle_dates=_CYCLE_DATES, **_BRT_KW)
+    text = build_recurring_table(
+        {"narval": [_ROW_ALICE]}, cycle_dates=_CYCLE_DATES, **_BRT_KW
+    )
     assert "W0" not in text
     assert "W-2" not in text
 
 
 def test_table_none_flag_renders_blank_not_cross(capsys):
-    text = build_recurring_table({"narval": [_ROW_FUTURE_W0]}, cycle_dates=_CYCLE_DATES, **_BRT_KW)
+    text = build_recurring_table(
+        {"narval": [_ROW_FUTURE_W0]}, cycle_dates=_CYCLE_DATES, **_BRT_KW
+    )
     # _ROW_FUTURE_W0: w0=None→blank, w2=True→✗, w4=True→✗, w6=False→✓, w8=False→✓
     # True (flagged/underuser) → ✗; False (good usage) → ✓; None (future) → blank
-    assert text.count("✓") == 2   # w6 and w8
-    assert text.count("✗") == 2   # w2 and w4
+    assert text.count("✓") == 2  # w6 and w8
+    assert text.count("✗") == 2  # w2 and w4
 
 
 def test_table_without_cycle_dates_keeps_w0_label():

@@ -211,32 +211,37 @@ def _historical_section(stats: HistoricalStats) -> str:
 def build_recurring_table(
     recurring: dict[str, list[RecurringUserRow]],
     *,
-    window_weeks: int,
     cluster_share_threshold: float,
+    cycle_length_weeks: int,
+    active_cycles: int,
     cycle_dates: list[date] | None = None,
 ) -> str:
     """Build the recurring-underusers per-cluster table for the admin digest.
 
-    *cycle_dates* — five date objects [W0, W-2, W-4, W-6, W-8] — when provided,
-    renders column headers as "MM-DD" strings; when None, falls back to the
-    fixed labels "W0", "W-2", "W-4", "W-6", "W-8".  Cycle cells whose flag is
-    None (future cycle, no data yet) are rendered as blank.
+    *cycle_dates* — n date objects [W0, W-k, W-2k, …] — when provided, renders
+    column headers as "MM-DD" strings; when None, derives labels from
+    *cycle_length_weeks* (e.g. "W0", "W-2", "W-4", …).  Cycle cells whose flag
+    is None (future cycle, no data yet) are rendered as blank.
 
-    A "|" separator is rendered between the last active flag cycle (W-4) and the
-    first display-only cycle (W-6).  Per-cycle ⚑ is shown at cycle W-N when
-    W-N, W-(N+2), and W-(N+4) are all flagged (✗).
+    A "|" separator is rendered after the last active cycle (index *active_cycles*).
+    Per-cycle ⚑ is shown when *active_cycles* consecutive cycles starting at that
+    position are all flagged (✗).
 
     Pure function — no I/O, deterministic for fixed input.
     """
     if not recurring:
         return ""
 
+    window_weeks = active_cycles * cycle_length_weeks
     share_pct = f"{cluster_share_threshold * 100:.0f} %"
-    flag_window = window_weeks // 2  # active flag cycles (3 with default 6 weeks)
+    flag_window = active_cycles
     if cycle_dates is not None:
         flag_labels = tuple(d.strftime("%m-%d") for d in cycle_dates)
     else:
-        flag_labels = ("W0", "W-2", "W-4", "W-6", "W-8")
+        n_cycles = len(next(iter(recurring.values()))[0].cycles)
+        flag_labels = tuple(
+            "W0" if i == 0 else f"W-{i * cycle_length_weeks}" for i in range(n_cycles)
+        )
     flag_ws = [len(lbl) for lbl in flag_labels]
 
     def _flag_cell(flag: bool | None, w: int, has_peak: bool = False) -> str:
@@ -263,11 +268,8 @@ def build_recurring_table(
             if i == flag_window:
                 parts.append("  |")
             flag = cycle_vals[i]
-            has_peak = (
-                i + 2 < len(cycle_vals)
-                and cycle_vals[i] is True
-                and cycle_vals[i + 1] is True
-                and cycle_vals[i + 2] is True
+            has_peak = i + (active_cycles - 1) < len(cycle_vals) and all(
+                cycle_vals[i + j] is True for j in range(active_cycles)
             )
             parts.append(_flag_cell(flag, w, has_peak))
         return "".join(parts)
@@ -325,8 +327,9 @@ def build_admin_digest(
     rows: list[UnderuserRow],
     *,
     period: str,
-    window_weeks: int,
     cluster_share_threshold: float,
+    cycle_length_weeks: int,
+    active_cycles: int,
     top_n: int = 16,
     historical: HistoricalStats | None = None,
     recurring: dict[str, list[RecurringUserRow]] | None = None,
@@ -374,8 +377,9 @@ def build_admin_digest(
     if recurring is not None:
         recurring_text = build_recurring_table(
             recurring,
-            window_weeks=window_weeks,
             cluster_share_threshold=cluster_share_threshold,
+            cycle_length_weeks=cycle_length_weeks,
+            active_cycles=active_cycles,
             cycle_dates=cycle_dates,
         )
         if recurring_text:
