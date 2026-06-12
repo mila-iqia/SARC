@@ -1,13 +1,12 @@
 from collections import defaultdict
+from collections.abc import Callable
 from datetime import date
 
 from sarc.notifications.underusage import (
     HistoricalStats,
     MonthlyStats,
     RecurringUserRow,
-    UnderuserJob,
     UnderuserRow,
-    UsageJob,
     UsageRow,
 )
 
@@ -36,15 +35,14 @@ def _tree_prefix(i: int, n: int) -> str:
     return "  ┌─" if i == 0 else "  ├─"
 
 
-def _jobs_section(top_jobs: list[UnderuserJob]) -> str:
-    # Group by cluster preserving descending-waste order within each cluster.
-    by_cluster: dict[str, list[UnderuserJob]] = defaultdict(list)
+def _jobs_section(top_jobs: list, *, rgu_value: Callable, suffix: str) -> str:
+    by_cluster: dict[str, list] = defaultdict(list)
     for job in top_jobs:
         by_cluster[job.cluster].append(job)
 
     cluster_order = sorted(
         by_cluster,
-        key=lambda c: sum(j.rgu_hours_unused for j in by_cluster[c]),
+        key=lambda c: sum(rgu_value(j) for j in by_cluster[c]),
         reverse=True,
     )
 
@@ -62,7 +60,7 @@ def _jobs_section(top_jobs: list[UnderuserJob]) -> str:
             )
             lines.append(
                 f"{prefix} job_{job.job_id} ({date_str})"
-                f" — {_fmt_h(job.rgu_hours_unused)} RGU-h unused"
+                f" — {_fmt_h(rgu_value(job))} {suffix}"
                 f"  (GPU utilization: {util_str})"
             )
     return "\n".join(lines)
@@ -92,7 +90,11 @@ def build_user_dm(
             "",
             "Jobs with the lowest GPU utilization:",
             "",
-            _jobs_section(row.top_jobs),
+            _jobs_section(
+                row.top_jobs,
+                rgu_value=lambda j: j.rgu_hours_unused,
+                suffix="RGU-h unused",
+            ),
         ]
 
     if dashboard_url is not None:
@@ -102,37 +104,6 @@ def build_user_dm(
         parts += ["", help_section]
 
     return "\n".join(parts)
-
-
-def _usage_jobs_section(top_jobs: list[UsageJob]) -> str:
-    by_cluster: dict[str, list[UsageJob]] = defaultdict(list)
-    for job in top_jobs:
-        by_cluster[job.cluster].append(job)
-
-    cluster_order = sorted(
-        by_cluster,
-        key=lambda c: sum(j.rgu_hours_used for j in by_cluster[c]),
-        reverse=True,
-    )
-
-    lines = []
-    for cluster in cluster_order:
-        jobs = by_cluster[cluster]
-        lines.append(f"  Cluster {cluster}")
-        for i, job in enumerate(jobs):
-            prefix = _tree_prefix(i, len(jobs))
-            date_str = job.submit_time.strftime("%Y-%m-%d")
-            util_str = (
-                f"{job.gpu_utilization * 100:.0f} %"
-                if job.gpu_utilization is not None
-                else "n/a"
-            )
-            lines.append(
-                f"{prefix} job_{job.job_id} ({date_str})"
-                f" — {_fmt_h(job.rgu_hours_used)} RGU-h"
-                f"  (GPU utilization: {util_str})"
-            )
-    return "\n".join(lines)
 
 
 def build_usage_report(
@@ -160,7 +131,11 @@ def build_usage_report(
             "",
             "Your top jobs by GPU usage:",
             "",
-            _usage_jobs_section(row.top_jobs),
+            _jobs_section(
+                row.top_jobs,
+                rgu_value=lambda j: j.rgu_hours_used,
+                suffix="RGU-h",
+            ),
         ]
 
     if dashboard_url is not None:
