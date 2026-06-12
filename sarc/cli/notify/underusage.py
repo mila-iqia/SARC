@@ -74,10 +74,10 @@ class UnderusageNotifyCommand:
     """Preview or send resource-underusage notifications (dry-run by default)."""
 
     config: Path | None = None
-    window_days: int | None = simple_parsing.field(
+    window_weeks: int | None = simple_parsing.field(
         default=None,
-        alias=["--window-days"],
-        help="Analysis window in days (overrides config).",
+        alias=["--window-weeks"],
+        help="Analysis window in weeks (overrides config).",
     )
     min_ratio: float | None = simple_parsing.field(
         default=None,
@@ -118,8 +118,8 @@ class UnderusageNotifyCommand:
             logger.error("No notifications configuration found in config")
             return -1
 
-        window_days = (
-            self.window_days if self.window_days is not None else ncfg.window_days
+        window_weeks = (
+            self.window_weeks if self.window_weeks is not None else ncfg.window_weeks
         )
         min_ratio = self.min_ratio if self.min_ratio is not None else ncfg.min_ratio
         min_rgu_hours = (
@@ -141,12 +141,12 @@ class UnderusageNotifyCommand:
             end = _now_utc()
             # Clip to midnight, today
             end.replace(hour=0, minute=0, second=0, microsecond=0)
-        start = end - timedelta(days=window_days)
+        start = end - timedelta(weeks=window_weeks)
         period = f"{start.date()} – {end.date()}"
 
         week_num = _iso_week(end)
         # dms_eligible: week parity (controls preview section)
-        dms_eligible = week_num % 2 == 0
+        dms_eligible = week_num % ncfg.cycle_length_weeks == 0
         # dms_will_send: additionally requires --no-dms gate and send_dms config (controls actual sends)
         dms_will_send = dms_eligible and not self.no_dms and ncfg.send_dms
         usage_report_eligible = week_num % ncfg.usage_report_every_weeks == 0
@@ -193,6 +193,9 @@ class UnderusageNotifyCommand:
             window_weeks=ncfg.recurrence_window_weeks,
             cluster_share_threshold=ncfg.recurrence_cluster_share,
             exclude_zero_usage=True,
+            recurrence_display_cycles=ncfg.recurrence_display_cycles,
+            recurrence_active_cycles=ncfg.recurrence_active_cycles,
+            cycle_length_weeks=ncfg.cycle_length_weeks,
         )
 
         print(f"Recipients ({len(rows)} user(s) flagged):")
@@ -200,7 +203,9 @@ class UnderusageNotifyCommand:
             print(f"  - {row.display_name} ({row.email})")
         print()
 
-        cycle_dates = get_cycle_dates(end, ncfg.recurrence_display_cycles)
+        cycle_dates = get_cycle_dates(
+            end, ncfg.recurrence_display_cycles, cycle_length_weeks=ncfg.cycle_length_weeks
+        )
         digest = build_admin_digest(
             rows,
             period=period,
@@ -219,17 +224,17 @@ class UnderusageNotifyCommand:
                 print(f"\n--- {row.display_name} ({row.email}) ---")
                 dm = build_user_dm(
                     row,
-                    window_days=window_days,
+                    window_weeks=window_weeks,
                     dashboard_url=ncfg.dashboard_url,
                     help_section=ncfg.help_section,
                 )
                 print(dm)
 
-        usage_report_window_days = ncfg.usage_report_window_days
+        usage_report_window_weeks = ncfg.usage_report_window_weeks
         report_recipients = []
         usage_report_skipped = []
         if usage_report_eligible:
-            usage_start = end - timedelta(days=usage_report_window_days)
+            usage_start = end - timedelta(weeks=usage_report_window_weeks)
             usage_rows = get_all_users_usage(usage_start, end, resource=self.resource)
             underuser_emails = {r.email for r in rows}
             report_recipients, usage_report_skipped = split_usage_report_recipients(
@@ -249,7 +254,7 @@ class UnderusageNotifyCommand:
                     print(f"\n--- {row.display_name} ({row.email}) ---")
                     report_text = build_usage_report(
                         row,
-                        window_days=usage_report_window_days,
+                        window_weeks=usage_report_window_weeks,
                         dashboard_url=ncfg.dashboard_url,
                         help_section=ncfg.help_section,
                     )
@@ -268,7 +273,7 @@ class UnderusageNotifyCommand:
             for row in rows:
                 dm_text = build_user_dm(
                     row,
-                    window_days=window_days,
+                    window_weeks=window_weeks,
                     dashboard_url=ncfg.dashboard_url,
                     help_section=ncfg.help_section,
                 )
@@ -298,7 +303,7 @@ class UnderusageNotifyCommand:
                         )
                     )
         elif rows:
-            if week_num % 2 != 0:
+            if week_num % ncfg.cycle_length_weeks != 0:
                 reason = "odd_week"
             elif self.no_dms:
                 reason = "no_dms_flag"
@@ -314,7 +319,7 @@ class UnderusageNotifyCommand:
             for row in report_recipients:
                 report_text = build_usage_report(
                     row,
-                    window_days=usage_report_window_days,
+                    window_weeks=usage_report_window_weeks,
                     dashboard_url=ncfg.dashboard_url,
                     help_section=ncfg.help_section,
                 )

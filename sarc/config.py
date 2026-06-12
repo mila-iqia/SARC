@@ -284,7 +284,8 @@ class UnderusageNotifyConfig:
     send_dms: bool = False
     min_ratio: float = 0.50
     min_rgu_hours: float = 3225.6  # 4x A100-80GB RGU x 7d
-    window_days: int = 14
+    # Analysis window for the main underusage query.
+    window_weeks: int = 2
     digest_top_n: int = 16
     digest_grouping: str = "overall"
     primary_clusters_in_dm: int = 2
@@ -295,17 +296,36 @@ class UnderusageNotifyConfig:
     recurrence_window_weeks: int = 6
     # Fraction of cluster wasted RGU-h at which selection stops (0..1).
     recurrence_cluster_share: float = 0.30
-    # Number of bi-weekly cycle columns to display in the recurring table.
+    # Number of cycle columns to display in the recurring table.
     recurrence_display_cycles: int = 5
-    # Length of one cycle in days (drives column spacing and parity check).
-    cycle_length_days: int = 14
+    # Length of one cycle in weeks (drives column spacing and parity check).
+    cycle_length_weeks: int = 2
     # Number of most-recent cycles that count toward personalized_action.
     recurrence_active_cycles: int = 3
     email: EmailConfig | None = None
     # Universal usage report cadence.
-    usage_report_window_days: int = 28
+    usage_report_window_weeks: int = 4
     usage_report_every_weeks: int = 4
     send_usage_report: bool = False
+
+    def __post_init__(self):
+        for field_name, value in [
+            ("window_weeks", self.window_weeks),
+            ("usage_report_window_weeks", self.usage_report_window_weeks),
+            ("recurrence_window_weeks", self.recurrence_window_weeks),
+            ("cycle_length_weeks", self.cycle_length_weeks),
+            ("recurrence_display_cycles", self.recurrence_display_cycles),
+            ("recurrence_active_cycles", self.recurrence_active_cycles),
+        ]:
+            if not isinstance(value, int) or value < 1:
+                raise ValueError(
+                    f"{field_name} must be a positive integer, got {value!r}"
+                )
+        if self.recurrence_active_cycles > self.recurrence_display_cycles:
+            raise ValueError(
+                f"recurrence_active_cycles ({self.recurrence_active_cycles}) must be"
+                f" ≤ recurrence_display_cycles ({self.recurrence_display_cycles})"
+            )
 
 
 @dataclass

@@ -291,10 +291,7 @@ def get_underusers(
 
 
 def get_all_users_usage(
-    start: datetime,
-    end: datetime,
-    *,
-    resource: str = "gpu",
+    start: datetime, end: datetime, *, resource: str = "gpu"
 ) -> list[UsageRow]:
     if resource != "gpu":
         raise ValueError(f"Unsupported resource: {resource!r}")
@@ -566,15 +563,15 @@ def _even_week_anchor(end: datetime, *, cycle_length_weeks: int = 2) -> datetime
 
 
 def get_cycle_dates(
-    end: datetime, n: int = 5, *, cycle_length_days: int = 14
+    end: datetime, n: int = 5, *, cycle_length_weeks: int = 2
 ) -> list[date]:
     """Return n cycle end-dates [W0, W-2, ..., W-(2*(n-1))] as date objects.
 
-    Each date is the day of an aligned ISO week, spaced *cycle_length_days*
+    Each date is the day of an aligned ISO week, spaced *cycle_length_weeks*
     apart, anchored to the current (or next) aligned week from *end*.
     """
-    anchor = _even_week_anchor(end, cycle_length_weeks=cycle_length_days // 7)
-    return [(anchor - timedelta(days=i * cycle_length_days)).date() for i in range(n)]
+    anchor = _even_week_anchor(end, cycle_length_weeks=cycle_length_weeks)
+    return [(anchor - timedelta(weeks=i * cycle_length_weeks)).date() for i in range(n)]
 
 
 def get_recurring_underusers(
@@ -588,7 +585,7 @@ def get_recurring_underusers(
     exclude_zero_usage: bool = False,
     recurrence_active_cycles: int = 3,
     recurrence_display_cycles: int = 5,
-    cycle_length_days: int = 14,
+    cycle_length_weeks: int = 2,
 ) -> dict[str, list[RecurringUserRow]]:
     """Return per-cluster top wasters for the recurring-underusers digest table.
 
@@ -598,7 +595,7 @@ def get_recurring_underusers(
     of that cluster's total wasted RGU-h.
 
     Cycle flags: for each of the *recurrence_display_cycles* most-recent
-    *cycle_length_days*-day windows, call get_underusers to determine per-user
+    *cycle_length_weeks*-week windows, call get_underusers to determine per-user
     membership.  Cycles whose end date is in the future relative to *end* are
     marked None (no data yet).  The "personalized action" flag is set iff a user
     was flagged True in all *recurrence_active_cycles* most-recent cycles.
@@ -609,7 +606,7 @@ def get_recurring_underusers(
     if resource != "gpu":
         raise ValueError(f"Unsupported resource: {resource!r}")
 
-    anchor = _even_week_anchor(end, cycle_length_weeks=cycle_length_days // 7)
+    anchor = _even_week_anchor(end, cycle_length_weeks=cycle_length_weeks)
     agg_start = anchor - timedelta(weeks=window_weeks)
 
     # ── Per-(user, cluster) aggregate over the full recurrence window ─────────
@@ -657,15 +654,15 @@ def get_recurring_underusers(
         cluster_users[cluster][uid]["wasted"] += wasted
 
     # ── Cycle membership sets ─────────────────────────────────────────────────
-    # Each cycle ends at anchor - i*cycle_length_days (always an aligned week).
-    # Cycles whose end is in the future relative to `end` yield None (no data).
+    # Each cycle ends at anchor - i*cycle_length_weeks (always aligned). Cycles
+    # whose end is in the future relative to `end` yield None (no data).
     cycle_flagged: list[set[int] | None] = []
     for i in range(recurrence_display_cycles):
-        c_end = anchor - timedelta(days=i * cycle_length_days)
+        c_end = anchor - timedelta(weeks=i * cycle_length_weeks)
         if c_end > end:
             cycle_flagged.append(None)
             continue
-        c_start = c_end - timedelta(days=cycle_length_days)
+        c_start = c_end - timedelta(weeks=cycle_length_weeks)
         flagged_rows = get_underusers(
             c_start,
             c_end,
@@ -698,8 +695,7 @@ def get_recurring_underusers(
         rows_out = []
         for uid, u in selected:
             cycles_for_user = [
-                (None if cf is None else uid in cf)
-                for cf in cycle_flagged
+                (None if cf is None else uid in cf) for cf in cycle_flagged
             ]
             rows_out.append(
                 RecurringUserRow(

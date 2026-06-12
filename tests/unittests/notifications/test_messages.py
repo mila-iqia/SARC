@@ -91,90 +91,90 @@ _ROW_CAROL = UnderuserRow(
 
 
 def test_dm_greeting_uses_first_name():
-    text = build_user_dm(_ROW_ALICE, window_days=14)
+    text = build_user_dm(_ROW_ALICE, window_weeks=2)
     assert text.startswith("Hi Alice,")
 
 
 def test_dm_overview_line_contains_utilization():
-    text = build_user_dm(_ROW_ALICE, window_days=14)
+    text = build_user_dm(_ROW_ALICE, window_weeks=2)
     assert "74.5 %" in text
 
 
 def test_dm_overview_line_contains_unused_hours():
-    text = build_user_dm(_ROW_ALICE, window_days=14)
+    text = build_user_dm(_ROW_ALICE, window_weeks=2)
     assert "255.0 RGU-hours unused" in text
 
 
-def test_dm_overview_line_contains_window_days():
-    text = build_user_dm(_ROW_ALICE, window_days=14)
-    assert "last 14 days" in text
+def test_dm_overview_line_contains_window_weeks():
+    text = build_user_dm(_ROW_ALICE, window_weeks=2)
+    assert "last 2 weeks" in text
 
 
 def test_dm_top_jobs_section_present():
-    text = build_user_dm(_ROW_ALICE, window_days=14)
+    text = build_user_dm(_ROW_ALICE, window_weeks=2)
     assert "Jobs with the lowest GPU utilization:" in text
 
 
 def test_dm_top_jobs_grouped_by_cluster():
-    text = build_user_dm(_ROW_ALICE, window_days=14)
+    text = build_user_dm(_ROW_ALICE, window_weeks=2)
     # narval block appears before fir block (narval has more total waste)
     assert text.index("Cluster narval") < text.index("Cluster fir")
 
 
 def test_dm_top_jobs_narval_first_job():
-    text = build_user_dm(_ROW_ALICE, window_days=14)
+    text = build_user_dm(_ROW_ALICE, window_weeks=2)
     assert "job_111111 (2026-05-28)" in text
     assert "80.0 RGU-h unused" in text
     assert "GPU utilization: 5 %" in text
 
 
 def test_dm_top_jobs_utilization_none_shows_na():
-    text = build_user_dm(_ROW_ALICE, window_days=14)
+    text = build_user_dm(_ROW_ALICE, window_weeks=2)
     assert "GPU utilization: n/a" in text
 
 
 def test_dm_tree_characters_multi_job_cluster():
-    text = build_user_dm(_ROW_ALICE, window_days=14)
+    text = build_user_dm(_ROW_ALICE, window_weeks=2)
     # Two narval jobs → first uses ┌─, last uses └─
     assert "┌─ job_111111" in text
     assert "└─ job_111112" in text
 
 
 def test_dm_tree_character_single_job_cluster():
-    text = build_user_dm(_ROW_ALICE, window_days=14)
+    text = build_user_dm(_ROW_ALICE, window_weeks=2)
     # Single fir job → uses └─
     assert "└─ job_222222" in text
 
 
 def test_dm_no_dashboard_url_by_default():
-    text = build_user_dm(_ROW_ALICE, window_days=14)
+    text = build_user_dm(_ROW_ALICE, window_weeks=2)
     assert "Track your usage" not in text
 
 
 def test_dm_dashboard_url_included_when_provided():
-    text = build_user_dm(_ROW_ALICE, window_days=14, dashboard_url="https://dash.example.com")
+    text = build_user_dm(_ROW_ALICE, window_weeks=2, dashboard_url="https://dash.example.com")
     assert "Track your usage over time: https://dash.example.com" in text
 
 
 def test_dm_no_help_section_by_default():
-    text = build_user_dm(_ROW_ALICE, window_days=14)
+    text = build_user_dm(_ROW_ALICE, window_weeks=2)
     assert "IDT Team" not in text
 
 
 def test_dm_help_section_appended_when_provided():
     help_text = "Need help? Ask in #idt-support — IDT Team"
-    text = build_user_dm(_ROW_ALICE, window_days=14, help_section=help_text)
+    text = build_user_dm(_ROW_ALICE, window_weeks=2, help_section=help_text)
     assert text.endswith(help_text)
 
 
 def test_dm_no_jobs_omits_jobs_section():
-    text = build_user_dm(_ROW_BOB, window_days=14)
+    text = build_user_dm(_ROW_BOB, window_weeks=2)
     assert "Jobs with the lowest" not in text
 
 
 def test_dm_deterministic():
-    a = build_user_dm(_ROW_ALICE, window_days=14, dashboard_url="https://x", help_section="help")
-    b = build_user_dm(_ROW_ALICE, window_days=14, dashboard_url="https://x", help_section="help")
+    a = build_user_dm(_ROW_ALICE, window_weeks=2, dashboard_url="https://x", help_section="help")
+    b = build_user_dm(_ROW_ALICE, window_weeks=2, dashboard_url="https://x", help_section="help")
     assert a == b
 
 
@@ -285,90 +285,90 @@ _USAGE_ROW_BOB = UsageRow(
 
 
 def test_usage_report_greeting_uses_first_name():
-    text = build_usage_report(_USAGE_ROW_ALICE, window_days=28)
+    text = build_usage_report(_USAGE_ROW_ALICE, window_weeks=4)
     assert text.startswith("Hi Alice,")
 
 
 def test_usage_report_neutral_wording_used_not_unused():
-    text = build_usage_report(_USAGE_ROW_ALICE, window_days=28)
+    text = build_usage_report(_USAGE_ROW_ALICE, window_weeks=4)
     assert "unused" not in text
     assert "waste" not in text
     assert "used on average" in text
 
 
 def test_usage_report_overview_contains_utilization():
-    text = build_usage_report(_USAGE_ROW_ALICE, window_days=28)
+    text = build_usage_report(_USAGE_ROW_ALICE, window_weeks=4)
     assert "74.5 %" in text
 
 
 def test_usage_report_overview_contains_rgu_used():
-    text = build_usage_report(_USAGE_ROW_ALICE, window_days=28)
+    text = build_usage_report(_USAGE_ROW_ALICE, window_weeks=4)
     assert "745.0 RGU-hours total" in text
 
 
-def test_usage_report_overview_contains_window_days():
-    text = build_usage_report(_USAGE_ROW_ALICE, window_days=28)
-    assert "last 28 days" in text
+def test_usage_report_overview_contains_window_weeks():
+    text = build_usage_report(_USAGE_ROW_ALICE, window_weeks=4)
+    assert "last 4 weeks" in text
 
 
 def test_usage_report_top_jobs_section_present():
-    text = build_usage_report(_USAGE_ROW_ALICE, window_days=28)
+    text = build_usage_report(_USAGE_ROW_ALICE, window_weeks=4)
     assert "Your top jobs by GPU usage:" in text
 
 
 def test_usage_report_top_jobs_grouped_by_cluster():
-    text = build_usage_report(_USAGE_ROW_ALICE, window_days=28)
+    text = build_usage_report(_USAGE_ROW_ALICE, window_weeks=4)
     # narval has more total usage than fir → appears first
     assert text.index("Cluster narval") < text.index("Cluster fir")
 
 
 def test_usage_report_job_line_format():
-    text = build_usage_report(_USAGE_ROW_ALICE, window_days=28)
+    text = build_usage_report(_USAGE_ROW_ALICE, window_weeks=4)
     assert "job_300001 (2026-05-28)" in text
     assert "120.0 RGU-h" in text
     assert "GPU utilization: 72 %" in text
 
 
 def test_usage_report_job_utilization_none_shows_na():
-    text = build_usage_report(_USAGE_ROW_ALICE, window_days=28)
+    text = build_usage_report(_USAGE_ROW_ALICE, window_weeks=4)
     assert "GPU utilization: n/a" in text
 
 
 def test_usage_report_tree_characters_multi_job_cluster():
-    text = build_usage_report(_USAGE_ROW_ALICE, window_days=28)
+    text = build_usage_report(_USAGE_ROW_ALICE, window_weeks=4)
     assert "┌─ job_300001" in text
     assert "└─ job_300002" in text
 
 
 def test_usage_report_tree_character_single_job_cluster():
-    text = build_usage_report(_USAGE_ROW_ALICE, window_days=28)
+    text = build_usage_report(_USAGE_ROW_ALICE, window_weeks=4)
     assert "└─ job_300003" in text
 
 
 def test_usage_report_no_dashboard_url_by_default():
-    text = build_usage_report(_USAGE_ROW_ALICE, window_days=28)
+    text = build_usage_report(_USAGE_ROW_ALICE, window_weeks=4)
     assert "Track your usage" not in text
 
 
 def test_usage_report_dashboard_url_included_when_provided():
-    text = build_usage_report(_USAGE_ROW_ALICE, window_days=28, dashboard_url="https://dash.example.com")
+    text = build_usage_report(_USAGE_ROW_ALICE, window_weeks=4, dashboard_url="https://dash.example.com")
     assert "Track your usage over time: https://dash.example.com" in text
 
 
 def test_usage_report_help_section_appended_when_provided():
     help_text = "Need help? Ask in #idt-support — IDT Team"
-    text = build_usage_report(_USAGE_ROW_ALICE, window_days=28, help_section=help_text)
+    text = build_usage_report(_USAGE_ROW_ALICE, window_weeks=4, help_section=help_text)
     assert text.endswith(help_text)
 
 
 def test_usage_report_no_jobs_omits_jobs_section():
-    text = build_usage_report(_USAGE_ROW_BOB, window_days=28)
+    text = build_usage_report(_USAGE_ROW_BOB, window_weeks=4)
     assert "Your top jobs" not in text
 
 
 def test_usage_report_deterministic():
-    a = build_usage_report(_USAGE_ROW_ALICE, window_days=28, dashboard_url="https://x", help_section="help")
-    b = build_usage_report(_USAGE_ROW_ALICE, window_days=28, dashboard_url="https://x", help_section="help")
+    a = build_usage_report(_USAGE_ROW_ALICE, window_weeks=4, dashboard_url="https://x", help_section="help")
+    b = build_usage_report(_USAGE_ROW_ALICE, window_weeks=4, dashboard_url="https://x", help_section="help")
     assert a == b
 
 

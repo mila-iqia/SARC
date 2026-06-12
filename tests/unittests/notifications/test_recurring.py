@@ -51,7 +51,7 @@ _NOTIFY_CFG = {
     },
     "min_ratio": _MIN_RATIO,
     "min_rgu_hours": _MIN_RGU_HOURS,
-    "window_days": 14,
+    "window_weeks": 2,
     "digest_top_n": 16,
     "recurrence_window_weeks": 6,
     "recurrence_cluster_share": 0.30,
@@ -528,7 +528,7 @@ def test_table_deterministic():
 def test_dry_run_prints_recurring_table(recurring_db, cli_main, monkeypatch, capsys):
     monkeypatch.setattr("sarc.cli.notify.underusage._now_utc", lambda: _TEST_END)
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
-        cli_main(["notify", "underusage", "--window-days", "14"])
+        cli_main(["notify", "underusage", "--window-weeks", "2"])
     out = capsys.readouterr().out
     assert "Recurring underusers" in out
 

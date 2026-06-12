@@ -28,7 +28,7 @@ _NOTIFY_CFG = {
     },
     "min_ratio": 0.50,
     "min_rgu_hours": 672.0,
-    "window_days": 30,
+    "window_weeks": 4,
     "digest_top_n": 16,
 }
 
@@ -113,14 +113,14 @@ def notify_db(read_write_db):
 def test_dry_run_exits_zero(notify_db, cli_main, monkeypatch):
     monkeypatch.setattr("sarc.cli.notify.underusage._now_utc", lambda: _CLI_TEST_END)
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
-        rc = cli_main(["notify", "underusage", "--window-days", "30"])
+        rc = cli_main(["notify", "underusage", "--window-weeks", "4"])
     assert rc == 0
 
 
 def test_dry_run_prints_dry_run_header(notify_db, cli_main, monkeypatch, capsys):
     monkeypatch.setattr("sarc.cli.notify.underusage._now_utc", lambda: _CLI_TEST_END)
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
-        cli_main(["notify", "underusage", "--window-days", "30"])
+        cli_main(["notify", "underusage", "--window-weeks", "4"])
     assert "DRY RUN" in capsys.readouterr().out
 
 
@@ -130,7 +130,7 @@ def test_dry_run_prints_dry_run_header(notify_db, cli_main, monkeypatch, capsys)
 def test_dry_run_prints_flagged_recipient(notify_db, cli_main, monkeypatch, capsys):
     monkeypatch.setattr("sarc.cli.notify.underusage._now_utc", lambda: _CLI_TEST_END)
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
-        cli_main(["notify", "underusage", "--window-days", "30"])
+        cli_main(["notify", "underusage", "--window-weeks", "4"])
     assert "petitbonhomme@mila.quebec" in capsys.readouterr().out
 
 
@@ -140,7 +140,7 @@ def test_dry_run_prints_flagged_recipient(notify_db, cli_main, monkeypatch, caps
 def test_dry_run_prints_admin_digest(notify_db, cli_main, monkeypatch, capsys):
     monkeypatch.setattr("sarc.cli.notify.underusage._now_utc", lambda: _CLI_TEST_END)
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
-        cli_main(["notify", "underusage", "--window-days", "30"])
+        cli_main(["notify", "underusage", "--window-weeks", "4"])
     out = capsys.readouterr().out
     assert "Admin Digest" in out
     assert "Weekly GPU Underusage Digest" in out
@@ -152,14 +152,14 @@ def test_dry_run_prints_admin_digest(notify_db, cli_main, monkeypatch, capsys):
 def test_dry_run_prints_dm_previews_section(notify_db, cli_main, monkeypatch, capsys):
     monkeypatch.setattr("sarc.cli.notify.underusage._now_utc", lambda: _CLI_TEST_END)
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
-        cli_main(["notify", "underusage", "--window-days", "30"])
+        cli_main(["notify", "underusage", "--window-weeks", "4"])
     assert "DM Previews" in capsys.readouterr().out
 
 
 def test_dry_run_dm_preview_contains_greeting(notify_db, cli_main, monkeypatch, capsys):
     monkeypatch.setattr("sarc.cli.notify.underusage._now_utc", lambda: _CLI_TEST_END)
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
-        cli_main(["notify", "underusage", "--window-days", "30"])
+        cli_main(["notify", "underusage", "--window-weeks", "4"])
     # display_name = "M/Ms Petitbonhomme"; _first_name() returns the first token
     assert "Hi M/Ms," in capsys.readouterr().out
 
@@ -171,7 +171,7 @@ def test_even_week_shows_dm_previews(notify_db, cli_main, capsys):
     # 2024-06-30 is ISO week 26 (even); job at 2024-06-10 is inside [2024-05-31, 2024-06-30]
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         rc = cli_main(
-            ["notify", "underusage", "--window-days", "30", "--as-of", "2024-06-30"]
+            ["notify", "underusage", "--window-weeks", "4", "--as-of", "2024-06-30"]
         )
     assert rc == 0
     out = capsys.readouterr().out
@@ -183,7 +183,7 @@ def test_odd_week_suppresses_dm_previews(notify_db, cli_main, capsys):
     # 2024-06-23 is ISO week 25 (odd); job at 2024-06-10 is inside [2024-05-24, 2024-06-23]
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         rc = cli_main(
-            ["notify", "underusage", "--window-days", "30", "--as-of", "2024-06-23"]
+            ["notify", "underusage", "--window-weeks", "4", "--as-of", "2024-06-23"]
         )
     assert rc == 0
     out = capsys.readouterr().out
@@ -195,7 +195,7 @@ def test_week_parity_derived_from_run_date(notify_db, cli_main, monkeypatch, cap
     # _CLI_TEST_END is ISO week 26 (even) — should show DMs without --as-of
     monkeypatch.setattr("sarc.cli.notify.underusage._now_utc", lambda: _CLI_TEST_END)
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
-        cli_main(["notify", "underusage", "--window-days", "30"])
+        cli_main(["notify", "underusage", "--window-weeks", "4"])
     assert "DM Previews" in capsys.readouterr().out
 
 
@@ -223,16 +223,16 @@ def year_boundary_db(read_write_db):
 
 
 def test_year_boundary_window_is_correct(year_boundary_db, cli_main, capsys):
-    # 2025-01-05 is ISO week 1 (odd); window [2024-12-06, 2025-01-05] spans the year
+    # 2025-01-05 is ISO week 1 (odd); window [2024-12-08, 2025-01-05] spans the year
     # boundary and covers the Dec-20 job.  The old --week-number 1 arithmetic would
     # have shifted end to the wrong quarter (week 1 from ~week 24 = 161 days back).
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         rc = cli_main(
-            ["notify", "underusage", "--window-days", "30", "--as-of", "2025-01-05"]
+            ["notify", "underusage", "--window-weeks", "4", "--as-of", "2025-01-05"]
         )
     assert rc == 0
     out = capsys.readouterr().out
-    assert "2024-12-06" in out              # window start in digest header
+    assert "2024-12-08" in out              # window start in digest header
     assert "2025-01-05" in out              # window end in digest header
     assert "petitbonhomme@mila.quebec" in out  # job is inside the window
     assert "digest-only" in out             # week 1 is odd → no DMs
@@ -244,7 +244,7 @@ def test_year_boundary_window_is_correct(year_boundary_db, cli_main, capsys):
 def test_future_anchor_prints_note_and_does_not_crash(notify_db, cli_main, capsys):
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         rc = cli_main(
-            ["notify", "underusage", "--window-days", "30", "--as-of", "2099-01-01"]
+            ["notify", "underusage", "--window-weeks", "4", "--as-of", "2099-01-01"]
         )
     assert rc == 0
     assert "future" in capsys.readouterr().out
@@ -256,7 +256,7 @@ def test_future_anchor_prints_note_and_does_not_crash(notify_db, cli_main, capsy
 def test_invalid_as_of_returns_error(notify_db, cli_main, caplog):
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         rc = cli_main(
-            ["notify", "underusage", "--window-days", "30", "--as-of", "not-a-date"]
+            ["notify", "underusage", "--window-weeks", "4", "--as-of", "not-a-date"]
         )
     assert rc == -1
     assert any("not-a-date" in r.message for r in caplog.records)
@@ -265,14 +265,14 @@ def test_invalid_as_of_returns_error(notify_db, cli_main, caplog):
 def test_bare_date_as_of_interpreted_as_utc_midnight(notify_db, cli_main, capsys):
     # A bare YYYY-MM-DD must be treated as 00:00 UTC, not local midnight.
     # The period string in the digest header is derived from start.date() and end.date(),
-    # so if end is midnight UTC on 2024-06-23 the window is [2024-05-24, 2024-06-23].
+    # so if end is midnight UTC on 2024-06-23 the window is [2024-05-26, 2024-06-23].
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         cli_main(
-            ["notify", "underusage", "--window-days", "30", "--as-of", "2024-06-23"]
+            ["notify", "underusage", "--window-weeks", "4", "--as-of", "2024-06-23"]
         )
     out = capsys.readouterr().out
     assert "2024-06-23" in out
-    assert "2024-05-24" in out
+    assert "2024-05-26" in out
 
 
 # ── missing config ────────────────────────────────────────────────────────────
@@ -296,8 +296,8 @@ def test_cli_flags_override_config_thresholds(notify_db, cli_main, monkeypatch, 
             [
                 "notify",
                 "underusage",
-                "--window-days",
-                "30",
+                "--window-weeks",
+                "4",
                 "--min-ratio",
                 "0.50",
                 "--min-rgu-hours",
@@ -341,7 +341,7 @@ def test_dry_run_does_not_instantiate_slack_or_email(notify_db, cli_main, monkey
     cfg = {**_NOTIFY_CFG, "send_dms": True}
     with gifnoc.overlay({"sarc.notifications": cfg}):
         rc = cli_main(
-            ["notify", "underusage", "--window-days", "30", "--as-of", _EVEN_WEEK]
+            ["notify", "underusage", "--window-weeks", "4", "--as-of", _EVEN_WEEK]
         )
     assert rc == 0
     slack_cls.assert_not_called()
@@ -355,7 +355,7 @@ def test_send_even_week_posts_digest_and_dms(notify_db, cli_main, monkeypatch):
     cfg = {**_NOTIFY_CFG, "send_dms": True}
     with gifnoc.overlay({"sarc.notifications": cfg}):
         rc = cli_main(
-            ["notify", "underusage", "--window-days", "30", "--as-of", _EVEN_WEEK, "--send"]
+            ["notify", "underusage", "--window-weeks", "4", "--as-of", _EVEN_WEEK, "--send"]
         )
     assert rc == 0
     slack_inst.post_channel_file.assert_called_once()
@@ -370,7 +370,7 @@ def test_send_odd_week_posts_digest_only(notify_db, cli_main, monkeypatch):
     cfg = {**_NOTIFY_CFG, "send_dms": True}
     with gifnoc.overlay({"sarc.notifications": cfg}):
         rc = cli_main(
-            ["notify", "underusage", "--window-days", "30", "--as-of", _ODD_WEEK, "--send"]
+            ["notify", "underusage", "--window-weeks", "4", "--as-of", _ODD_WEEK, "--send"]
         )
     assert rc == 0
     slack_inst.post_channel_file.assert_called_once()
@@ -385,7 +385,7 @@ def test_send_no_dms_flag_skips_dms(notify_db, cli_main, monkeypatch):
     with gifnoc.overlay({"sarc.notifications": cfg}):
         rc = cli_main(
             [
-                "notify", "underusage", "--window-days", "30",
+                "notify", "underusage", "--window-weeks", "4",
                 "--as-of", _EVEN_WEEK, "--send", "--no-dms",
             ]
         )
@@ -401,7 +401,7 @@ def test_send_dms_false_suppresses_dms(notify_db, cli_main, monkeypatch):
     # send_dms defaults to False in _NOTIFY_CFG
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         rc = cli_main(
-            ["notify", "underusage", "--window-days", "30", "--as-of", _EVEN_WEEK, "--send"]
+            ["notify", "underusage", "--window-weeks", "4", "--as-of", _EVEN_WEEK, "--send"]
         )
     assert rc == 0
     slack_inst.post_channel_file.assert_called_once()
@@ -415,7 +415,7 @@ def test_send_slack_not_found_uses_email_fallback(notify_db, cli_main, monkeypat
     cfg = {**_NOTIFY_CFG, "send_dms": True}
     with gifnoc.overlay({"sarc.notifications": cfg}):
         rc = cli_main(
-            ["notify", "underusage", "--window-days", "30", "--as-of", _EVEN_WEEK, "--send"]
+            ["notify", "underusage", "--window-weeks", "4", "--as-of", _EVEN_WEEK, "--send"]
         )
     assert rc == 0
     slack_inst.dm_user.assert_called_once()
@@ -431,7 +431,7 @@ def test_send_dm_failure_surfaced_in_footer(notify_db, cli_main, monkeypatch, ca
     cfg = {**_NOTIFY_CFG, "send_dms": True}
     with gifnoc.overlay({"sarc.notifications": cfg}):
         rc = cli_main(
-            ["notify", "underusage", "--window-days", "30", "--as-of", _EVEN_WEEK, "--send"]
+            ["notify", "underusage", "--window-weeks", "4", "--as-of", _EVEN_WEEK, "--send"]
         )
     assert rc == 0  # failures reported, run does not crash
     out = capsys.readouterr().out
@@ -485,7 +485,7 @@ def usage_report_db(read_write_db):
 def test_usage_report_week_dry_run_prints_previews(usage_report_db, cli_main, capsys):
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         rc = cli_main(
-            ["notify", "underusage", "--window-days", "14", "--as-of", _USAGE_REPORT_WEEK]
+            ["notify", "underusage", "--window-weeks", "2", "--as-of", _USAGE_REPORT_WEEK]
         )
     assert rc == 0
     out = capsys.readouterr().out
@@ -497,7 +497,7 @@ def test_usage_report_week_underuser_not_in_report_previews(usage_report_db, cli
     """petitbonhomme is an underuser — they get the DM alert, not the usage report."""
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         cli_main(
-            ["notify", "underusage", "--window-days", "14", "--as-of", _USAGE_REPORT_WEEK]
+            ["notify", "underusage", "--window-weeks", "2", "--as-of", _USAGE_REPORT_WEEK]
         )
     out = capsys.readouterr().out
     # petitbonhomme should appear in DM previews (alert), not usage report previews
@@ -509,7 +509,7 @@ def test_non_usage_report_week_no_report_section(usage_report_db, cli_main, caps
     """Even week but not a multiple of 4 → no usage report section."""
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         cli_main(
-            ["notify", "underusage", "--window-days", "14", "--as-of", _EVEN_NON_REPORT_WEEK]
+            ["notify", "underusage", "--window-weeks", "2", "--as-of", _EVEN_NON_REPORT_WEEK]
         )
     assert "Usage Report Previews" not in capsys.readouterr().out
 
@@ -522,7 +522,7 @@ def test_dry_run_usage_report_week_no_sends(usage_report_db, cli_main, monkeypat
     cfg = {**_NOTIFY_CFG, "send_dms": True, "send_usage_report": True}
     with gifnoc.overlay({"sarc.notifications": cfg}):
         rc = cli_main(
-            ["notify", "underusage", "--window-days", "14", "--as-of", _USAGE_REPORT_WEEK]
+            ["notify", "underusage", "--window-weeks", "2", "--as-of", _USAGE_REPORT_WEEK]
         )
     assert rc == 0
     slack_cls.assert_not_called()
@@ -537,7 +537,7 @@ def test_send_usage_report_disabled_no_report_sends(usage_report_db, cli_main, m
     # _NOTIFY_CFG has send_dms=False and no send_usage_report key → defaults to False
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         rc = cli_main(
-            ["notify", "underusage", "--window-days", "14", "--as-of", _USAGE_REPORT_WEEK, "--send"]
+            ["notify", "underusage", "--window-weeks", "2", "--as-of", _USAGE_REPORT_WEEK, "--send"]
         )
     assert rc == 0
     # Only the admin digest channel post; no DMs for underusers or report recipients
@@ -558,7 +558,7 @@ def test_send_usage_report_enabled_sends_report_to_non_underusers(
     cfg = {**_NOTIFY_CFG, "send_usage_report": True}
     with gifnoc.overlay({"sarc.notifications": cfg}):
         rc = cli_main(
-            ["notify", "underusage", "--window-days", "14", "--as-of", _USAGE_REPORT_WEEK, "--send"]
+            ["notify", "underusage", "--window-weeks", "2", "--as-of", _USAGE_REPORT_WEEK, "--send"]
         )
     assert rc == 0
     # beaubonhomme gets the usage report via dm_user
@@ -580,7 +580,7 @@ def test_send_usage_report_non_report_week_no_reports(
     cfg = {**_NOTIFY_CFG, "send_usage_report": True}
     with gifnoc.overlay({"sarc.notifications": cfg}):
         rc = cli_main(
-            ["notify", "underusage", "--window-days", "14", "--as-of", _EVEN_NON_REPORT_WEEK, "--send"]
+            ["notify", "underusage", "--window-weeks", "2", "--as-of", _EVEN_NON_REPORT_WEEK, "--send"]
         )
     assert rc == 0
     # Only the digest channel post; no usage report DMs

@@ -70,7 +70,7 @@ def _jobs_section(top_jobs: list[UnderuserJob]) -> str:
 def build_user_dm(
     row: UnderuserRow,
     *,
-    window_days: int,
+    window_weeks: int,
     dashboard_url: str | None = None,
     help_section: str | None = None,
 ) -> str:
@@ -81,7 +81,7 @@ def build_user_dm(
     parts = [
         f"Hi {_first_name(row.display_name)},",
         "",
-        f"Over the last {window_days} days, your jobs utilized on average"
+        f"Over the last {window_weeks} weeks, your jobs utilized on average"
         f" {_pct(row.avg_utilization)} of requested GPUs,"
         f" leaving {_fmt_h(row.rgu_hours_unused)} RGU-hours unused.",
     ]
@@ -137,7 +137,7 @@ def _usage_jobs_section(top_jobs: list[UsageJob]) -> str:
 def build_usage_report(
     row: UsageRow,
     *,
-    window_days: int,
+    window_weeks: int,
     dashboard_url: str | None = None,
     help_section: str | None = None,
 ) -> str:
@@ -149,7 +149,7 @@ def build_usage_report(
     parts = [
         f"Hi {_first_name(row.display_name)},",
         "",
-        f"Over the last {window_days} days, your jobs used on average"
+        f"Over the last {window_weeks} weeks, your jobs used on average"
         f" {_pct(row.avg_utilization)} of the GPU resources you"
         f" requested ({_fmt_h(row.rgu_hours_used)} RGU-hours total).",
     ]
