@@ -116,3 +116,31 @@ def test_dm_user_postmessage_error():
 
     assert result.status == SendStatus.FAILED
     assert "msg_too_long" in result.detail
+
+
+def test_dm_user_not_found_via_response_data():
+    """SlackApiError carries error code in .response.data, not in str(exc)."""
+    web = MagicMock()
+    exc = Exception("some_slack_error")
+    exc.response = MagicMock()
+    exc.response.data = {"error": "users_not_found"}
+    web.users_lookupByEmail.side_effect = exc
+    client = _make_client(web)
+
+    result = client.dm_user("ghost@example.com", "hi")
+
+    assert result.status == SendStatus.USER_NOT_FOUND
+    assert result.detail == "ghost@example.com"
+
+
+def test_dm_user_not_found_response_without_data_attr():
+    """Response object that lacks .data does not raise AttributeError."""
+    web = MagicMock()
+    exc = Exception("something_went_wrong")
+    exc.response = object()  # has no .data
+    web.users_lookupByEmail.side_effect = exc
+    client = _make_client(web)
+
+    result = client.dm_user("alice@example.com", "hi")
+
+    assert result.status == SendStatus.FAILED
