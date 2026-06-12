@@ -164,7 +164,7 @@ def get_underusers(
         raise ValueError(f"Unsupported resource: {resource!r}")
 
     with config().db.session() as session:
-        util, m_mean, rgu_h_expr, rgu_used_expr = _rgu_exprs()
+        util, _, rgu_h_expr, rgu_used_expr = _rgu_exprs()
         stmt = _with_rgu_window(
             select(
                 JobSeriesDB.sarc_user_id,
@@ -246,14 +246,14 @@ def get_underusers(
             for jr in job_rows:
                 rgu_h = float(jr.rgu_hours or 0.0)
                 rgu_used_h = float(jr.rgu_used or 0.0)
-                util = float(jr.util_mean) if jr.util_mean is not None else None
+                util_val = float(jr.util_mean) if jr.util_mean is not None else None
                 jobs_by_user[jr.sarc_user_id].append(
                     UnderuserJob(
                         job_id=jr.job_db_id,
                         cluster=jr.cluster_name or "unknown",
                         submit_time=jr.submit_time,
                         rgu_hours_unused=rgu_h - rgu_used_h,
-                        gpu_utilization=util,
+                        gpu_utilization=util_val,
                     )
                 )
 
@@ -296,7 +296,7 @@ def get_all_users_usage(
         raise ValueError(f"Unsupported resource: {resource!r}")
 
     with config().db.session() as session:
-        util, m_mean, rgu_h_expr, rgu_used_expr = _rgu_exprs()
+        util, _, rgu_h_expr, rgu_used_expr = _rgu_exprs()
         stmt = _with_rgu_window(
             select(
                 JobSeriesDB.sarc_user_id,
@@ -454,7 +454,7 @@ def _query_month_agg(
     exclude_zero_usage: bool = False,
 ) -> MonthlyStats:
     """Aggregate fleet-level waste stats for a single calendar month window."""
-    util, m_mean, rgu_h_expr, rgu_used_expr = _rgu_exprs()
+    util, _, rgu_h_expr, rgu_used_expr = _rgu_exprs()
     stmt = _with_rgu_window(
         select(
             JobSeriesDB.sarc_user_id,
@@ -616,7 +616,7 @@ def get_recurring_underusers(
 
     # ── Per-(user, cluster) aggregate over the full recurrence window ─────────
     with config().db.session() as session:
-        util, m_mean, rgu_h_expr, rgu_used_expr = _rgu_exprs()
+        util, _, rgu_h_expr, rgu_used_expr = _rgu_exprs()
         stmt = _with_rgu_window(
             select(
                 JobSeriesDB.sarc_user_id,

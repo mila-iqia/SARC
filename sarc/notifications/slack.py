@@ -43,15 +43,18 @@ class SlackClient:
             }
         ]
 
+    def _message_kwargs(self, channel: str, text: str, *, preformatted: bool) -> dict:
+        kwargs: dict = {"channel": channel, "text": text}
+        if preformatted:
+            kwargs["blocks"] = self._preformatted_blocks(text)
+        return kwargs
+
     def post_channel(
         self, channel: str, text: str, *, preformatted: bool = False
     ) -> SendResult:
         """Post a message to a public/private channel."""
         try:
-            kwargs: dict = {"channel": channel, "text": text}
-            if preformatted:
-                kwargs["blocks"] = self._preformatted_blocks(text)
-            self._client.chat_postMessage(**kwargs)
+            self._client.chat_postMessage(**self._message_kwargs(channel, text, preformatted=preformatted))
             return SendResult(SendStatus.OK)
         except Exception as exc:
             logger.error("Slack channel post failed: %s", exc)
@@ -106,10 +109,7 @@ class SlackClient:
         try:
             conv = self._client.conversations_open(users=[user_id])
             channel_id = conv["channel"]["id"]
-            kwargs: dict = {"channel": channel_id, "text": text}
-            if preformatted:
-                kwargs["blocks"] = self._preformatted_blocks(text)
-            self._client.chat_postMessage(**kwargs)
+            self._client.chat_postMessage(**self._message_kwargs(channel_id, text, preformatted=preformatted))
             return SendResult(SendStatus.OK)
         except Exception as exc:
             logger.error("Slack DM failed for %s (%s): %s", email, user_id, exc)

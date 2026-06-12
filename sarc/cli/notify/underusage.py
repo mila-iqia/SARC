@@ -317,7 +317,7 @@ class UnderusageNotifyCommand:
                         )
                     )
         elif rows:
-            if week_num % ncfg.cycle_length_weeks != 0:
+            if not dms_eligible:
                 reason = "odd_week"
             elif self.no_dms:
                 reason = "no_dms_flag"
