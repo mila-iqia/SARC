@@ -172,10 +172,6 @@ def build_usage_report(
     return "\n".join(parts)
 
 
-# def _clamp01(value: float) -> float:
-#     return max(0.0, min(1.0, value))
-
-
 def _month_table(title: str, months: list[MonthlyStats]) -> list[str]:
     pct_strs = [_pct(m.avg_waste_ratio) for m in months]
     count_strs = [f"{m.above_threshold_count} user(s)" for m in months]
