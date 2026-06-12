@@ -389,7 +389,7 @@
       metricScatterMetric2 = '';
       jobTableHiddenCols.clear();
       JOBTABLE_DEFAULTS.limit   = 50;
-      JOBTABLE_DEFAULTS.sortBy  = 'rgu_hours';
+      JOBTABLE_DEFAULTS.sortBy  = 'waste';
       JOBTABLE_DEFAULTS.sortDir = 'desc';
 
       // Focus
@@ -500,7 +500,7 @@
     const JOBTABLE_DEFAULTS = {
       offset:  0,
       limit:   _saved.jobTableLimit   || 50,
-      sortBy:  _saved.jobTableSortBy  || 'rgu_hours',
+      sortBy:  _saved.jobTableSortBy  || 'waste',
       sortDir: _saved.jobTableSortDir || 'desc',
     };
     const JOBTABLE_PAGE_SIZES = [50, 100, 200, 500];
