@@ -128,6 +128,10 @@
     .job-table .col-cmd {
       max-width: 100px; overflow: hidden; text-overflow: ellipsis;
       white-space: nowrap; font-family: monospace; font-size: 11px; color: #555;
+      cursor: pointer;
+    }
+    .job-table .col-cmd.expanded {
+      max-width: 280px; overflow: visible; white-space: normal; word-break: break-word;
     }
     .job-table th.no-sort { cursor: default; }
     .job-table th.no-sort:hover { background: #f0f0f0; }
@@ -1618,7 +1622,11 @@
           td.dataset.col = c.key;
           const raw = job[c.key];
           td.textContent = c.fmt ? c.fmt(raw) : (raw ?? '—');
-          if (c.cls) { td.className = c.cls; td.title = raw || ''; }
+          if (c.cls) {
+            td.className = c.cls; td.title = raw || '';
+            // Nodes is truncated by default; click toggles the full (wrapped) list.
+            if (raw) td.addEventListener('click', () => td.classList.toggle('expanded'));
+          }
         });
       });
       wrap.appendChild(tbl);

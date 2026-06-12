@@ -37,6 +37,7 @@
 - [x] **« RGU requested vs used » — vue agrégée (whole range)** — dropdown « View: Per period / Whole range » sur la tuile (`renderHistogram`) ; agrégé = une barre empilée sommant toute la plage Start–End, focus-agnostique (ni clic-focus, ni réaction à un focus posé ailleurs) ; somme côté front (pas de nouvel endpoint) ; mode persisté (`rguUsageView`) `(SC, SP)`
 - [x] **Unité en % sur les charts de métrique** — `tickformat: '.0%'` sur les axes (Metric Trend Y, Density X, heatmap X/Y) + hovers en `.1%` ; données laissées en 0–1 (bins / range / focus intacts) ; la job table était déjà en % `(S10 — Chart 2)`
 - [x] **`Enter` = `Update`** — `keydown` sur `.controls` : Entrée dans un champ (input/select) appelle `loadCharts()` ; les boutons (Update/Reset, toggles de dropdown, All/None) gardent leur comportement ; popovers des tuiles (dans `#tile-grid`) non affectés `(S10)`
+- [x] **Lire tous les nœuds (job table)** — clic sur la cellule Nodes pour la développer / replier (wrap complet via `.col-cmd.expanded`) ; résout le besoin du feedback. Le *resize générique de colonnes* n'a pas été jugé nécessaire : seule Nodes était tronquée, les autres colonnes sont déjà auto-larges avec scroll horizontal `(S10 — Table)`
 
 ---
 
@@ -69,7 +70,6 @@ _(plus rien — tout est désormais soit fait, soit listé dans « À faire ».)
 - [ ] **Vérifier/corriger les timestamps des charts** — à préciser avec l'auteur du feedback `(S10)`
 
 ### Table
-- [ ] **Colonnes redimensionnables** (lire tous les nœuds utilisés) — le show/hide de colonnes existe, pas le resize (`nodes` en ellipsis + hover) `(S10 — Table)`
 - [ ] **(nice to have) Coloration des lignes** : used foncé / unused pâle, comme les barres `(SC, SP)`
 
 ### Nice to have
