@@ -297,6 +297,7 @@
       <select id="metric-select"></select>
     </div>
     <button onclick="loadCharts()">Update</button>
+    <button id="reset-btn" onclick="resetState()" title="Clear all saved settings and reset to defaults" style="background:#888;">Reset</button>
     <div id="focus-label" class="no-focus">
       <span id="focus-label-text">No focus — click a bar in a period plot to set one</span>
       <button type="button" id="clear-focus" style="display:none" onclick="clearFocus()">Clear focus</button>
@@ -309,6 +310,99 @@
     const SEC_TO_H = 1 / 3600;
 
     function isoDate(d) { return d.toISOString().split('T')[0]; }
+
+    // ── Persistent state (localStorage) ─────────────────────────────────────
+    // Schema version: bump when the saved structure changes incompatibly.
+    const STORAGE_KEY = 'sarc_dash_v1';
+
+    function loadSavedState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        return raw ? JSON.parse(raw) : {};
+      } catch { return {}; }
+    }
+
+    function saveState() {
+      try {
+        const state = {
+          // Filter bar
+          start:       document.getElementById('start').value,
+          end:         document.getElementById('end').value,
+          rgu_type:    document.getElementById('rgu-type').value,
+          rgu_unit:    document.getElementById('rgu-unit').value,
+          metric:      document.getElementById('metric-select').value,
+          cluster_user: document.getElementById('cluster_user').value,
+          period:      periodValue(),
+          clusters:    clSelected(),
+          job_states:  jsSelected(),
+          // Focus
+          focusStart, focusEnd,
+          // Layout
+          layout: layoutToParam(tileLayout),
+          // Plot-local state
+          userRguTopN, userRguSortBy,
+          metricScatterMetric2,
+          jobTableHiddenCols: [...jobTableHiddenCols],
+          jobTableLimit:   JOBTABLE_DEFAULTS.limit,
+          jobTableSortBy:  JOBTABLE_DEFAULTS.sortBy,
+          jobTableSortDir: JOBTABLE_DEFAULTS.sortDir,
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      } catch { /* quota exceeded or private browsing — silently ignore */ }
+    }
+
+    // Called by the Reset button: wipe localStorage and revert every control
+    // to its hard-coded default, then reload charts.
+    function resetState() {
+      if (!confirm('Reset all dashboard settings to their defaults?\n\nThis clears your saved filters, layout, focus and table preferences.'))
+        return;
+      try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+
+      // Filter bar defaults
+      const today     = new Date();
+      const yearStart = new Date(today.getFullYear(), 0, 1);
+      const monday    = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+      document.getElementById('start').value = isoDate(yearStart);
+      document.getElementById('end').value   = isoDate(monday);
+      document.getElementById('rgu-type').value  = 'physical';
+      document.getElementById('rgu-unit').value  = 'h';
+      document.getElementById('metric-select').value = 'gpu_sm_occupancy';
+      document.getElementById('cluster_user').value  = '';
+      setPeriod('w');
+
+      // All clusters checked
+      clPanel.querySelectorAll('input').forEach(c => { c.checked = true; });
+      clUpdateLabel();
+      // All job states checked
+      jsPanel.querySelectorAll('input').forEach(c => { c.checked = true; });
+      jsUpdateLabel();
+
+      // Module-level state defaults
+      userRguTopN          = 16;
+      userRguSortBy        = 'rgu_requested';
+      metricScatterMetric2 = '';
+      jobTableHiddenCols.clear();
+      JOBTABLE_DEFAULTS.limit   = 50;
+      JOBTABLE_DEFAULTS.sortBy  = 'rgu_hours';
+      JOBTABLE_DEFAULTS.sortDir = 'desc';
+
+      // Focus
+      focusStart = '';
+      focusEnd   = '';
+      updateFocusLabel();
+
+      // Layout
+      tileLayout = DEFAULT_LAYOUT.map(r => [...r]);
+      syncUrl();
+
+      loadCharts();
+    }
+
+    // Persisted UI state, loaded once at startup. Declared here — before its
+    // first read in JOBTABLE_DEFAULTS and the filter-bar restore below — so the
+    // const is never accessed inside its temporal dead zone.
+    const _saved = loadSavedState();
 
     function pLayout(extra) {
       return { autosize: true, margin: { l: 60, r: 20, t: 40, b: 60 }, ...extra };
@@ -395,7 +489,15 @@
     // Job-table pagination/sort. Used both for the initial shared fetch
     // (endpointURLBase) and as the per-tile starting state in renderJobTable, so
     // a freshly (re)built tile and its first fetched page always agree.
-    const JOBTABLE_DEFAULTS = { offset: 0, limit: 50, sortBy: 'rgu_hours', sortDir: 'desc' };
+    // JOBTABLE_DEFAULTS is intentionally a mutable object so that persisted
+    // job-table preferences (sort, page size) can update it in place; all new
+    // tiles then start from the last-used settings.
+    const JOBTABLE_DEFAULTS = {
+      offset:  0,
+      limit:   _saved.jobTableLimit   || 50,
+      sortBy:  _saved.jobTableSortBy  || 'rgu_hours',
+      sortDir: _saved.jobTableSortDir || 'desc',
+    };
     const JOBTABLE_PAGE_SIZES = [50, 100, 200, 500];
 
     // Fresh <option> nodes for the metric list, optionally led by a blank
@@ -461,7 +563,7 @@
           renderPlot(chartDiv.id, plotType, { [ENDPOINT_TO_KEY[ep]]: data });
       }));
     }
-    document.getElementById('rgu-unit').addEventListener('change', rerenderRguTiles);
+    document.getElementById('rgu-unit').addEventListener('change', () => { rerenderRguTiles(); saveState(); });
 
     // ── Cluster selector (multi-select, mirrors the job-states widget) ─────────
     const clBtn = document.getElementById('cluster-btn');
@@ -500,6 +602,12 @@
       };
       document.getElementById('cl-all').addEventListener('click', setAll(true));
       document.getElementById('cl-none').addEventListener('click', setAll(false));
+      // Restore saved cluster selection (null/undefined = keep all checked).
+      if (Array.isArray(_saved.clusters)) {
+        clPanel.querySelectorAll('input').forEach(c => {
+          c.checked = _saved.clusters.includes(c.value);
+        });
+      }
       clUpdateLabel();
       loadCharts();
     });
@@ -510,8 +618,14 @@
     const yearStart = new Date(today.getFullYear(), 0, 1);
     const monday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
-    document.getElementById('start').value = isoDate(yearStart);
-    document.getElementById('end').value   = isoDate(monday);
+    // Apply saved filter-bar values (fall back to defaults when absent).
+    document.getElementById('start').value = _saved.start || isoDate(yearStart);
+    document.getElementById('end').value   = _saved.end   || isoDate(monday);
+    if (_saved.rgu_type)  document.getElementById('rgu-type').value  = _saved.rgu_type;
+    if (_saved.rgu_unit)  document.getElementById('rgu-unit').value  = _saved.rgu_unit;
+    if (_saved.metric)    document.getElementById('metric-select').value = _saved.metric;
+    if (_saved.cluster_user !== undefined)
+      document.getElementById('cluster_user').value = _saved.cluster_user;
 
     // ── Tile layout ──────────────────────────────────────────────────────────
     // tileLayout: string[][]  e.g. [['bar','clusterrgu'],['histogram']]
@@ -538,19 +652,22 @@
     // the tile div, which renderLayout() recreates on every Update) so the pick
     // survives Updates — like the global field it replaces. '' = none chosen yet
     // (the tile then prompts for one). Two heatmap tiles would share this value.
-    let metricScatterMetric2 = '';
+    // Restore persisted module-level state (plot-local preferences). _saved
+    // itself is loaded near the top of the script (it is read earlier — by
+    // JOBTABLE_DEFAULTS and the filter-bar restore).
+    let metricScatterMetric2 = _saved.metricScatterMetric2 || '';
     // Top-N users shown by the RGU-by-user tile. Module-scoped like the heatmap's
     // secondary so it survives Updates; applied via the tile's OK button — a pure
     // re-slice/re-render of the already-fetched rows, never a refetch.
-    let userRguTopN = 16;
+    let userRguTopN = (_saved.userRguTopN > 0) ? _saved.userRguTopN : 16;
     // Sort criterion for the RGU-by-user tile. Pure front-end re-sort of the
     // already-fetched rows — never triggers a refetch.
-    // Values: 'rgu_requested' | 'rgu_used' | 'rgu_unused' | 'rgu_unmeasured' | 'efficiency'
-    let userRguSortBy = 'rgu_requested';
+    // Values: 'rgu_requested' | 'rgu_used' | 'rgu_unused' | 'rgu_unmeasured'
+    let userRguSortBy = _saved.userRguSortBy || 'rgu_requested';
     // Job-table column keys hidden via the per-table column picker. Global (a
     // display preference shared by every job-table tile) so it survives
     // pagination, sorting and Update. Empty = all columns visible.
-    const jobTableHiddenCols = new Set();
+    const jobTableHiddenCols = new Set(_saved.jobTableHiddenCols || []);
 
     function layoutToParam(l) {
       return l.map(row => row.join(',')).join(';');
@@ -572,6 +689,7 @@
       const url = new URL(window.location);
       url.searchParams.set('plots', layoutToParam(tileLayout));
       window.history.replaceState({}, '', url);
+      saveState();
     }
 
     let _picker = null;
@@ -1098,7 +1216,7 @@
         }
       }
 
-      sel.addEventListener('change', () => { metricScatterMetric2 = sel.value; draw(); });
+      sel.addEventListener('change', () => { metricScatterMetric2 = sel.value; saveState(); draw(); });
       draw();
     }
 
@@ -1150,11 +1268,12 @@
       function apply() {
         userRguTopN = Math.max(1, parseInt(input.value, 10) || userRguTopN);
         input.value = userRguTopN;
+        saveState();
         draw();
       }
       okBtn.addEventListener('click', apply);
       input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); apply(); } });
-      sortSel.addEventListener('change', () => { userRguSortBy = sortSel.value; draw(); });
+      sortSel.addEventListener('change', () => { userRguSortBy = sortSel.value; saveState(); draw(); });
 
       function draw() {
         // Rescale the cumulative RGU·h to the unit selected in the toolbar.
@@ -1267,7 +1386,8 @@
       const limit   = el._jtLimit   ?? JOBTABLE_DEFAULTS.limit;
       const offset  = el._jtOffset  ?? JOBTABLE_DEFAULTS.offset;
       const sortKey = el._jtSortKey ?? JOBTABLE_DEFAULTS.sortBy;
-      const sortDir = el._jtSortDir != null ? el._jtSortDir : -1;  // -1 = desc
+      const sortDir = el._jtSortDir != null ? el._jtSortDir
+                    : (JOBTABLE_DEFAULTS.sortDir === 'asc' ? 1 : -1);  // -1 = desc
       el._jtLimit = limit; el._jtOffset = offset;
       el._jtSortKey = sortKey; el._jtSortDir = sortDir;
 
@@ -1403,6 +1523,10 @@
             if (el._jtSortKey === c.key) el._jtSortDir = -el._jtSortDir;
             else { el._jtSortKey = c.key; el._jtSortDir = -1; }
             el._jtOffset = 0;
+            // Persist the sort (not the page) as the default for every table tile.
+            JOBTABLE_DEFAULTS.sortBy  = el._jtSortKey;
+            JOBTABLE_DEFAULTS.sortDir = el._jtSortDir === 1 ? 'asc' : 'desc';
+            saveState();
             reload();
           });
         }
@@ -1541,6 +1665,9 @@
       sz.addEventListener('change', () => {
         el._jtLimit = parseInt(sz.value, 10);
         el._jtOffset = 0;
+        // Persist the page size (not the page) as the default for every tile.
+        JOBTABLE_DEFAULTS.limit = el._jtLimit;
+        saveState();
         reload();
       });
       szLabel.appendChild(sz);
@@ -1562,11 +1689,14 @@
       colPanel.className = 'job-states-panel jt-cols-panel';
       colPanel.style.display = 'none';
       const colChecks = [];
-      const setAllCols = visible => () => COLS.forEach((c, i) => {
-        colChecks[i].checked = visible;
-        if (visible) jobTableHiddenCols.delete(c.key); else jobTableHiddenCols.add(c.key);
-        setColVisible(c.key, visible);
-      });
+      const setAllCols = visible => () => {
+        COLS.forEach((c, i) => {
+          colChecks[i].checked = visible;
+          if (visible) jobTableHiddenCols.delete(c.key); else jobTableHiddenCols.add(c.key);
+          setColVisible(c.key, visible);
+        });
+        saveState();
+      };
       const mkColAct = (txt, fn) => {
         const b = document.createElement('button');
         b.type = 'button'; b.textContent = txt; b.addEventListener('click', fn);
@@ -1584,6 +1714,7 @@
         cb.addEventListener('change', () => {
           if (cb.checked) jobTableHiddenCols.delete(c.key); else jobTableHiddenCols.add(c.key);
           setColVisible(c.key, cb.checked);
+          saveState();
         });
         colChecks.push(cb);
         lbl.append(cb, ' ' + c.label);
@@ -1710,6 +1841,12 @@
       };
       document.getElementById('js-all').addEventListener('click', setAll(true));
       document.getElementById('js-none').addEventListener('click', setAll(false));
+      // Restore saved job-state selection.
+      if (Array.isArray(_saved.job_states)) {
+        jsPanel.querySelectorAll('input').forEach(c => {
+          c.checked = _saved.job_states.includes(c.value);
+        });
+      }
       jsUpdateLabel();
     });
     jsBtn.addEventListener('click', e => {
@@ -1980,13 +2117,29 @@
       endpointCache   = {};
       comparisonCache = {};
       endpointStatus  = {};
+      saveState();
       updateStatus();
       renderLayout();
     }
 
     // ── Init ─────────────────────────────────────────────────────────────────
 
-    tileLayout = paramToLayout(new URLSearchParams(window.location.search).get('plots'));
+    // Layout: URL param wins over localStorage (allows bookmarkable layouts);
+    // fall back to saved state, then to DEFAULT_LAYOUT.
+    const _urlPlots = new URLSearchParams(window.location.search).get('plots');
+    tileLayout = _urlPlots
+      ? paramToLayout(_urlPlots)
+      : (_saved.layout ? paramToLayout(_saved.layout) : DEFAULT_LAYOUT.map(r => [...r]));
+    syncUrl();
+
+    // Restore period (after setPeriod is defined, which is above).
+    if (_saved.period) setPeriod(_saved.period);
+
+    // Restore focus state.
+    if (_saved.focusStart) focusStart = _saved.focusStart;
+    if (_saved.focusEnd)   focusEnd   = _saved.focusEnd;
+    updateFocusLabel();
+
     renderLayout();
   </script>
 </body>
