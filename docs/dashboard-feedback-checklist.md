@@ -29,12 +29,12 @@
 - [x] **Dashboard configurable (layout de tuiles) + sauvegarde** (localStorage) `(G — « se faire son propre dashboard ET le sauvegarder »)`
 - [x] **Focus conserve l'heure** (`YYYY-MM-DDTHH:MM`) `(G)`
 - [x] **Mouse-over explicatif sur tous les filtres** — tooltips ajoutés sur Start, End, User, Efficiency metric, Cluster, Job states (+ bouton Update) ; complètent Period / RGU type / RGU unit / Reset déjà présents `(G)`
+- [x] **Titres des charts de métrique nomment la métrique** — Metric Trend → « SM occupancy per period — mean & max » et Density → « SM occupancy density — weighted by RGU·time » (dynamiques via `METRICS`, suivent l'Efficiency metric) ; le heatmap nommait déjà ses métriques `(S10 — Chart 2)`
 
 ---
 
 ## 🟡 Partiellement fait
 
-- [ ] **Titre du chart de métrique nommant explicitement `sm_occupancy`** — la métrique n'apparaît que dans la légende (`renderMetricTrend`, titre générique) `(S10 — Chart 2)`
 - [ ] **Tri par défaut Job table = RGU inutilisés (absolu) desc** — actuellement `rgu_hours desc` (changer `JOBTABLE_DEFAULTS.sortBy`) `(SC, SP)`
 - [ ] **Clarifier Primary/Secondary metric** — renommage + relocalisation faits ; reste : masquer derrière *Advanced* (cf. Axe 1) `(G, S10)`
 - [ ] **Lever la confusion Start/End vs Focus** — focus garde l'heure ✅ ; reste : regroupement/explication (cf. *Advanced*) `(G)`

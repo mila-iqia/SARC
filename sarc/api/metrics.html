@@ -1057,6 +1057,8 @@
     function renderMetricTrend(id, d) {
       const data = d.metrictrend;
       if (!data || !data.periods.length || !data.series.length) return;
+      // Title names the metric actually plotted (single series, guarded above).
+      const ml = METRICS[data.series[0].metric] || data.series[0].metric;
       const x    = data.periods.map(p => p.period_start);
       const ends = data.periods.map(p => p.period_end);
       // Efficiency metric only: a single series, two traces. Dash style encodes
@@ -1091,7 +1093,7 @@
         });
       });
       Plotly.react(id, traces, pLayout({
-        title: { text: 'Metric Trend per Period — mean & max (click to focus)', font: { size: 16 } },
+        title: { text: ml + ' per period — mean & max (click to focus)', font: { size: 16 } },
         xaxis: { title: 'Period start', type: 'category', tickangle: -45 },
         yaxis: { title: 'Metric value' },
         legend: { x: 1.0, y: 1.0 },
@@ -1119,7 +1121,7 @@
         xbins: XBINS, autobinx: false,
         hovertemplate: ml + ': %{x:.2f}<br>Density: %{y:.4f}<extra></extra>',
       }], pLayout({
-        title: { text: 'Metric Density — weighted by RGU·time', font: { size: 16 } },
+        title: { text: ml + ' density — weighted by RGU·time', font: { size: 16 } },
         xaxis: { title: 'Metric mean' }, yaxis: { title: 'Density' },
         legend: { x: 0.75, y: 0.95 },
       }), { responsive: true });
