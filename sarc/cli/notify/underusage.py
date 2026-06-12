@@ -1,4 +1,5 @@
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -59,6 +60,35 @@ def _build_delivery_footer(results: list[_DeliveryResult], *, flagged: int) -> s
         for r in failures:
             lines.append(f"  - {r.display_name} ({r.email}): {r.detail}")
     return "\n".join(lines)
+
+
+def _deliver(
+    rows: list,
+    build_fn: Callable,
+    subject: str,
+    *,
+    slack: SlackClient,
+    email: EmailClient,
+) -> list[_DeliveryResult]:
+    results: list[_DeliveryResult] = []
+    for row in rows:
+        text = build_fn(row)
+        slack_res = slack.dm_user(row.email, text, preformatted=True)
+        if slack_res.status == SendStatus.OK:
+            results.append(_DeliveryResult(row.email, row.display_name, "dm_sent"))
+        elif slack_res.status == SendStatus.USER_NOT_FOUND:
+            email_res = email.send_plaintext(row.email, subject, text)
+            if email_res.status == SendStatus.OK:
+                results.append(_DeliveryResult(row.email, row.display_name, "email_sent"))
+            else:
+                results.append(
+                    _DeliveryResult(row.email, row.display_name, "failed", email_res.detail)
+                )
+        else:
+            results.append(
+                _DeliveryResult(row.email, row.display_name, "failed", slack_res.detail)
+            )
+    return results
 
 
 def _now_utc() -> datetime:
@@ -284,38 +314,18 @@ class UnderusageNotifyCommand:
         delivery_results: list[_DeliveryResult] = []
 
         if dms_will_send:
-            for row in rows:
-                dm_text = build_user_dm(
+            delivery_results = _deliver(
+                rows,
+                lambda row: build_user_dm(
                     row,
                     window_weeks=window_weeks,
                     dashboard_url=ncfg.dashboard_url,
                     help_section=ncfg.help_section,
-                )
-                slack_res = slack_client.dm_user(row.email, dm_text, preformatted=True)
-                if slack_res.status == SendStatus.OK:
-                    delivery_results.append(
-                        _DeliveryResult(row.email, row.display_name, "dm_sent")
-                    )
-                elif slack_res.status == SendStatus.USER_NOT_FOUND:
-                    email_res = email_client.send_plaintext(
-                        row.email, f"GPU underusage alert ({period})", dm_text
-                    )
-                    if email_res.status == SendStatus.OK:
-                        delivery_results.append(
-                            _DeliveryResult(row.email, row.display_name, "email_sent")
-                        )
-                    else:
-                        delivery_results.append(
-                            _DeliveryResult(
-                                row.email, row.display_name, "failed", email_res.detail
-                            )
-                        )
-                else:
-                    delivery_results.append(
-                        _DeliveryResult(
-                            row.email, row.display_name, "failed", slack_res.detail
-                        )
-                    )
+                ),
+                f"GPU underusage alert ({period})",
+                slack=slack_client,
+                email=email_client,
+            )
         elif rows:
             if not dms_eligible:
                 reason = "odd_week"
@@ -330,40 +340,18 @@ class UnderusageNotifyCommand:
 
         report_results: list[_DeliveryResult] = []
         if usage_report_will_send:
-            for row in report_recipients:
-                report_text = build_usage_report(
+            report_results = _deliver(
+                report_recipients,
+                lambda row: build_usage_report(
                     row,
                     window_weeks=usage_report_window_weeks,
                     dashboard_url=ncfg.dashboard_url,
                     help_section=ncfg.help_section,
-                )
-                slack_res = slack_client.dm_user(
-                    row.email, report_text, preformatted=True
-                )
-                if slack_res.status == SendStatus.OK:
-                    report_results.append(
-                        _DeliveryResult(row.email, row.display_name, "dm_sent")
-                    )
-                elif slack_res.status == SendStatus.USER_NOT_FOUND:
-                    email_res = email_client.send_plaintext(
-                        row.email, f"GPU usage report ({period})", report_text
-                    )
-                    if email_res.status == SendStatus.OK:
-                        report_results.append(
-                            _DeliveryResult(row.email, row.display_name, "email_sent")
-                        )
-                    else:
-                        report_results.append(
-                            _DeliveryResult(
-                                row.email, row.display_name, "failed", email_res.detail
-                            )
-                        )
-                else:
-                    report_results.append(
-                        _DeliveryResult(
-                            row.email, row.display_name, "failed", slack_res.detail
-                        )
-                    )
+                ),
+                f"GPU usage report ({period})",
+                slack=slack_client,
+                email=email_client,
+            )
         elif usage_report_eligible and report_recipients:
             reason = "no_dms_flag" if self.no_dms else "send_usage_report_disabled"
             for row in report_recipients:
