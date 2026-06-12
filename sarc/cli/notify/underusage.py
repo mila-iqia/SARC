@@ -209,6 +209,8 @@ class UnderusageNotifyCommand:
         digest = build_admin_digest(
             rows,
             period=period,
+            window_weeks=ncfg.recurrence_window_weeks,
+            cluster_share_threshold=ncfg.recurrence_cluster_share,
             top_n=ncfg.digest_top_n,
             historical=historical,
             recurring=recurring,

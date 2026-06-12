@@ -8,6 +8,7 @@ from sarc.notifications.messages import (
 )
 from sarc.notifications.underusage import (
     ClusterBreakdown,
+    RecurringUserRow,
     UnderuserJob,
     UnderuserRow,
     UsageClusterBreakdown,
@@ -181,18 +182,23 @@ def test_dm_deterministic():
 # ── build_admin_digest ────────────────────────────────────────────────────────
 
 
+_DIGEST_KW = {"window_weeks": 6, "cluster_share_threshold": 0.30}
+
+
 def test_digest_header_contains_period():
-    text = build_admin_digest([_ROW_ALICE, _ROW_BOB], period="2026-05-21 to 2026-06-04")
+    text = build_admin_digest(
+        [_ROW_ALICE, _ROW_BOB], period="2026-05-21 to 2026-06-04", **_DIGEST_KW
+    )
     assert "2026-05-21 to 2026-06-04" in text
 
 
 def test_digest_count_line():
-    text = build_admin_digest([_ROW_ALICE, _ROW_BOB, _ROW_CAROL], period="…")
+    text = build_admin_digest([_ROW_ALICE, _ROW_BOB, _ROW_CAROL], period="…", **_DIGEST_KW)
     assert "3 user(s) flagged" in text
 
 
 def test_digest_ranked_by_wasted_descending():
-    text = build_admin_digest([_ROW_ALICE, _ROW_BOB, _ROW_CAROL], period="…")
+    text = build_admin_digest([_ROW_ALICE, _ROW_BOB, _ROW_CAROL], period="…", **_DIGEST_KW)
     # Bob: 600 wasted, Carol: 420, Alice: 245 → Bob is rank 1
     assert text.index("Bob Marley") < text.index("Carol Danvers")
     assert text.index("Carol Danvers") < text.index("Alice Liddell")
@@ -200,35 +206,59 @@ def test_digest_ranked_by_wasted_descending():
 
 def test_digest_capped_at_top_n():
     rows = [_ROW_ALICE, _ROW_BOB, _ROW_CAROL]
-    text = build_admin_digest(rows, period="…", top_n=2)
+    text = build_admin_digest(rows, period="…", top_n=2, **_DIGEST_KW)
     assert "Alice Liddell" not in text  # rank 3 — excluded
     assert "Bob Marley" in text
     assert "Carol Danvers" in text
 
 
 def test_digest_contains_primary_cluster():
-    text = build_admin_digest([_ROW_ALICE], period="…")
+    text = build_admin_digest([_ROW_ALICE], period="…", **_DIGEST_KW)
     assert "narval" in text
 
 
 def test_digest_contains_wasted_hours():
-    text = build_admin_digest([_ROW_BOB], period="…")
+    text = build_admin_digest([_ROW_BOB], period="…", **_DIGEST_KW)
     assert "600.0 RGU-h wasted" in text
 
 
 def test_digest_contains_waste_ratio():
-    text = build_admin_digest([_ROW_BOB], period="…")
+    text = build_admin_digest([_ROW_BOB], period="…", **_DIGEST_KW)
     assert "75.0 %" in text
 
 
 def test_digest_deterministic():
     rows = [_ROW_ALICE, _ROW_BOB]
-    assert build_admin_digest(rows, period="p") == build_admin_digest(rows, period="p")
+    assert build_admin_digest(rows, period="p", **_DIGEST_KW) == build_admin_digest(
+        rows, period="p", **_DIGEST_KW
+    )
 
 
 def test_digest_empty_rows():
-    text = build_admin_digest([], period="…")
+    text = build_admin_digest([], period="…", **_DIGEST_KW)
     assert "0 user(s) flagged" in text
+
+
+def test_digest_recurring_header_reflects_window_and_share():
+    """Non-default window_weeks/cluster_share_threshold propagate to the recurring table header."""
+    row = RecurringUserRow(
+        email="alice@mila.quebec",
+        display_name="Alice Liddell",
+        cluster="narval",
+        wasted_6w=1000.0,
+        cluster_share=0.20,
+        cycles=[True, True, True, True, True],
+        personalized_action=True,
+    )
+    text = build_admin_digest(
+        [],
+        period="…",
+        window_weeks=8,
+        cluster_share_threshold=0.40,
+        recurring={"narval": [row]},
+    )
+    assert "last 8 weeks" in text
+    assert "40 %" in text
 
 
 # ── build_usage_report fixtures ───────────────────────────────────────────────

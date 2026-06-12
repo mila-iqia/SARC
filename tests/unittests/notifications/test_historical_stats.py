@@ -311,6 +311,9 @@ def _make_stats(with_yoy: bool = False) -> HistoricalStats:
     return HistoricalStats(months=months, yoy_months=yoy)
 
 
+_DIGEST_KW = {"window_weeks": 6, "cluster_share_threshold": 0.30}
+
+
 def test_digest_no_historical_by_default():
     from sarc.notifications.underusage import ClusterBreakdown, UnderuserRow
 
@@ -327,45 +330,45 @@ def test_digest_no_historical_by_default():
         by_cluster=[ClusterBreakdown("mila", 1000.0, 500.0, 1000.0)],
         top_jobs=[],
     )
-    text = build_admin_digest([row], period="…")
+    text = build_admin_digest([row], period="…", **_DIGEST_KW)
     assert "6-Month Trend" not in text
 
 
 def test_digest_historical_section_present():
-    text = build_admin_digest([], period="…", historical=_make_stats())
+    text = build_admin_digest([], period="…", historical=_make_stats(), **_DIGEST_KW)
     assert "6-Month Trend" in text
 
 
 def test_digest_historical_month_labels():
-    text = build_admin_digest([], period="…", historical=_make_stats())
+    text = build_admin_digest([], period="…", historical=_make_stats(), **_DIGEST_KW)
     for i in range(1, 7):
         assert f"2025-0{i}" in text
 
 
 def test_digest_historical_waste_ratio_rendered():
-    text = build_admin_digest([], period="…", historical=_make_stats())
+    text = build_admin_digest([], period="…", historical=_make_stats(), **_DIGEST_KW)
     # first month: 0.51 → "51.0 %"
     assert "51.0 %" in text
 
 
 def test_digest_historical_yoy_section_present():
-    text = build_admin_digest([], period="…", historical=_make_stats(with_yoy=True))
+    text = build_admin_digest([], period="…", historical=_make_stats(with_yoy=True), **_DIGEST_KW)
     assert "Year-over-Year" in text
 
 
 def test_digest_historical_no_yoy_when_absent():
-    text = build_admin_digest([], period="…", historical=_make_stats(with_yoy=False))
+    text = build_admin_digest([], period="…", historical=_make_stats(with_yoy=False), **_DIGEST_KW)
     assert "Year-over-Year" not in text
 
 
 def test_digest_historical_yoy_labels():
-    text = build_admin_digest([], period="…", historical=_make_stats(with_yoy=True))
+    text = build_admin_digest([], period="…", historical=_make_stats(with_yoy=True), **_DIGEST_KW)
     for i in range(1, 7):
         assert f"2024-0{i}" in text
 
 
 def test_digest_deterministic_with_historical():
     stats = _make_stats(with_yoy=True)
-    a = build_admin_digest([], period="p", historical=stats)
-    b = build_admin_digest([], period="p", historical=stats)
+    a = build_admin_digest([], period="p", historical=stats, **_DIGEST_KW)
+    b = build_admin_digest([], period="p", historical=stats, **_DIGEST_KW)
     assert a == b

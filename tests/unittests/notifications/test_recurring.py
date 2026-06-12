@@ -23,6 +23,11 @@ from tests.db.factory import base_job
 _TEST_END = datetime(2024, 6, 30, tzinfo=UTC)
 _14D = timedelta(days=14)
 
+# Default keyword args for build_recurring_table and get_recurring_underusers callers
+# that don't need to exercise specific window/share values.
+_BRT_KW = {"window_weeks": 6, "cluster_share_threshold": 0.30}
+_GRU_KW = {"window_weeks": 6, "cluster_share_threshold": 0.30}
+
 # Cycle windows (rolling from _TEST_END)
 # W0:  [2024-06-16, 2024-06-30]
 # W-2: [2024-06-02, 2024-06-16]
@@ -381,6 +386,7 @@ def test_empty_db_returns_empty_dict(read_write_db):
             before,
             min_ratio=_MIN_RATIO,
             min_rgu_hours=_MIN_RGU_HOURS,
+            **_GRU_KW,
         )
     assert result == {}
 
@@ -393,6 +399,7 @@ def test_unsupported_resource_raises(recurring_db):
                 min_ratio=_MIN_RATIO,
                 min_rgu_hours=_MIN_RGU_HOURS,
                 resource="cpu",
+                **_GRU_KW,
             )
 
 
@@ -430,60 +437,60 @@ _ROW_CAROL = RecurringUserRow(
 
 
 def test_table_header_contains_cluster():
-    text = build_recurring_table({"narval": [_ROW_ALICE]})
+    text = build_recurring_table({"narval": [_ROW_ALICE]}, **_BRT_KW)
     assert "Cluster narval" in text
 
 
 def test_table_header_contains_window_weeks():
-    text = build_recurring_table({"narval": [_ROW_ALICE]}, window_weeks=6)
+    text = build_recurring_table({"narval": [_ROW_ALICE]}, window_weeks=6, cluster_share_threshold=0.30)
     assert "last 6 weeks" in text
 
 
 def test_table_threshold_in_sub_header():
-    text = build_recurring_table({"narval": [_ROW_ALICE]}, cluster_share_threshold=0.30)
+    text = build_recurring_table({"narval": [_ROW_ALICE]}, window_weeks=6, cluster_share_threshold=0.30)
     assert "30 %" in text
 
 
 def test_table_contains_email():
-    text = build_recurring_table({"narval": [_ROW_ALICE]})
+    text = build_recurring_table({"narval": [_ROW_ALICE]}, **_BRT_KW)
     assert "alice@mila.quebec" in text
 
 
 def test_table_wasted_formatted_with_space_thousands():
-    text = build_recurring_table({"narval": [_ROW_ALICE]})
+    text = build_recurring_table({"narval": [_ROW_ALICE]}, **_BRT_KW)
     assert "4 200" in text
 
 
 def test_table_share_percentage():
-    text = build_recurring_table({"narval": [_ROW_BOB]})
+    text = build_recurring_table({"narval": [_ROW_BOB]}, **_BRT_KW)
     assert "11 %" in text
 
 
 def test_table_personalized_action_flag():
-    text = build_recurring_table({"narval": [_ROW_ALICE]})
+    text = build_recurring_table({"narval": [_ROW_ALICE]}, **_BRT_KW)
     assert "⚑ personalized" in text
 
 
 def test_table_no_action_flag_when_not_all_cycles():
-    text = build_recurring_table({"narval": [_ROW_BOB]})
+    text = build_recurring_table({"narval": [_ROW_BOB]}, **_BRT_KW)
     assert "⚑ personalized" not in text
 
 
 def test_table_check_and_cross_marks():
-    text = build_recurring_table({"narval": [_ROW_BOB]})
+    text = build_recurring_table({"narval": [_ROW_BOB]}, **_BRT_KW)
     assert "✓" in text
     assert "✗" in text
 
 
 def test_table_tree_chars_multiple_rows():
-    text = build_recurring_table({"narval": [_ROW_ALICE, _ROW_BOB, _ROW_CAROL]})
+    text = build_recurring_table({"narval": [_ROW_ALICE, _ROW_BOB, _ROW_CAROL]}, **_BRT_KW)
     assert "┌─" in text
     assert "├─" in text
     assert "└─" in text
 
 
 def test_table_single_row_uses_end_cap():
-    text = build_recurring_table({"narval": [_ROW_ALICE]})
+    text = build_recurring_table({"narval": [_ROW_ALICE]}, **_BRT_KW)
     assert "└─" in text
     assert "┌─" not in text
 
@@ -499,7 +506,7 @@ def test_table_multiple_clusters_rendered():
         personalized_action=False,
     )
     text = build_recurring_table(
-        {"narval": [_ROW_ALICE], "fir": [carol_fir]}
+        {"narval": [_ROW_ALICE], "fir": [carol_fir]}, **_BRT_KW
     )
     assert "Cluster narval" in text
     assert "Cluster fir" in text
@@ -516,18 +523,18 @@ def test_table_clusters_sorted_alphabetically():
         personalized_action=False,
     )
     text = build_recurring_table(
-        {"narval": [_ROW_ALICE], "fir": [carol_fir]}
+        {"narval": [_ROW_ALICE], "fir": [carol_fir]}, **_BRT_KW
     )
     assert text.index("Cluster fir") < text.index("Cluster narval")
 
 
 def test_table_empty_dict_returns_empty_string():
-    assert build_recurring_table({}) == ""
+    assert build_recurring_table({}, **_BRT_KW) == ""
 
 
 def test_table_deterministic():
     data = {"narval": [_ROW_ALICE, _ROW_BOB]}
-    assert build_recurring_table(data) == build_recurring_table(data)
+    assert build_recurring_table(data, **_BRT_KW) == build_recurring_table(data, **_BRT_KW)
 
 
 # ── CLI integration: recurring table appears in digest output ─────────────────
@@ -536,6 +543,17 @@ def test_table_deterministic():
 def test_dry_run_prints_recurring_table(recurring_db, cli_main, monkeypatch, capsys):
     monkeypatch.setattr("sarc.cli.notify.underusage._now_utc", lambda: _TEST_END)
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        cli_main(["notify", "underusage", "--window-weeks", "2"])
+    out = capsys.readouterr().out
+    assert "Recurring underusers" in out
+
+
+@pytest.mark.parametrize("display_cycles", [4, 6])
+def test_dry_run_display_cycles(recurring_db, cli_main, monkeypatch, capsys, display_cycles):
+    """CLI must not IndexError when recurrence_display_cycles deviates from the default 5."""
+    monkeypatch.setattr("sarc.cli.notify.underusage._now_utc", lambda: _TEST_END)
+    cfg = {**_NOTIFY_CFG, "recurrence_display_cycles": display_cycles}
+    with gifnoc.overlay({"sarc.notifications": cfg}):
         cli_main(["notify", "underusage", "--window-weeks", "2"])
     out = capsys.readouterr().out
     assert "Recurring underusers" in out
@@ -642,6 +660,7 @@ def test_odd_week_end_w0_is_none(recurring_db):
             min_ratio=_MIN_RATIO,
             min_rgu_hours=_MIN_RGU_HOURS,
             window_weeks=6,
+            cluster_share_threshold=0.30,
         )
     if not result:
         pytest.skip("no users selected for this window (may be outside data range)")
@@ -658,6 +677,7 @@ def test_odd_week_end_personalized_action_false(recurring_db):
             min_ratio=_MIN_RATIO,
             min_rgu_hours=_MIN_RGU_HOURS,
             window_weeks=6,
+            cluster_share_threshold=0.30,
         )
     for rows in result.values():
         for row in rows:
@@ -686,7 +706,7 @@ _ROW_FUTURE_W0 = RecurringUserRow(
 
 
 def test_table_with_cycle_dates_renders_mm_dd_headers():
-    text = build_recurring_table({"narval": [_ROW_ALICE]}, cycle_dates=_CYCLE_DATES)
+    text = build_recurring_table({"narval": [_ROW_ALICE]}, cycle_dates=_CYCLE_DATES, **_BRT_KW)
     assert "06-24" in text
     assert "06-10" in text
     assert "05-27" in text
@@ -695,13 +715,13 @@ def test_table_with_cycle_dates_renders_mm_dd_headers():
 
 
 def test_table_with_cycle_dates_no_w0_label():
-    text = build_recurring_table({"narval": [_ROW_ALICE]}, cycle_dates=_CYCLE_DATES)
+    text = build_recurring_table({"narval": [_ROW_ALICE]}, cycle_dates=_CYCLE_DATES, **_BRT_KW)
     assert "W0" not in text
     assert "W-2" not in text
 
 
 def test_table_none_flag_renders_blank_not_cross(capsys):
-    text = build_recurring_table({"narval": [_ROW_FUTURE_W0]}, cycle_dates=_CYCLE_DATES)
+    text = build_recurring_table({"narval": [_ROW_FUTURE_W0]}, cycle_dates=_CYCLE_DATES, **_BRT_KW)
     # _ROW_FUTURE_W0: w0=None→blank, w2=True→✗, w4=True→✗, w6=False→✓, w8=False→✓
     # True (flagged/underuser) → ✗; False (good usage) → ✓; None (future) → blank
     assert text.count("✓") == 2   # w6 and w8
@@ -710,7 +730,7 @@ def test_table_none_flag_renders_blank_not_cross(capsys):
 
 def test_table_without_cycle_dates_keeps_w0_label():
     # Backward compat: no cycle_dates → "W0"/"W-2" labels still present
-    text = build_recurring_table({"narval": [_ROW_ALICE]})
+    text = build_recurring_table({"narval": [_ROW_ALICE]}, **_BRT_KW)
     assert "W0" in text
     assert "W-2" in text
 
@@ -719,12 +739,12 @@ def test_table_without_cycle_dates_keeps_w0_label():
 
 
 def test_table_contains_separator():
-    text = build_recurring_table({"narval": [_ROW_ALICE]})
+    text = build_recurring_table({"narval": [_ROW_ALICE]}, **_BRT_KW)
     assert "|" in text
 
 
 def test_table_separator_between_w4_and_w6():
-    text = build_recurring_table({"narval": [_ROW_ALICE]})
+    text = build_recurring_table({"narval": [_ROW_ALICE]}, **_BRT_KW)
     # W-4 column appears before | which appears before W-6 column
     assert text.index("W-4") < text.index("|") < text.index("W-6")
 
@@ -755,25 +775,25 @@ _ROW_ALL_TRUE = RecurringUserRow(
 
 
 def test_per_cycle_peak_at_w4():
-    text = build_recurring_table({"narval": [_ROW_PEAK_AT_W4]})
+    text = build_recurring_table({"narval": [_ROW_PEAK_AT_W4]}, **_BRT_KW)
     assert "⚑✗" in text
 
 
 def test_per_cycle_no_peak_when_chain_broken():
     # w0=False breaks the chain at W0 and W-2; only W-4 has a valid lookback (W-4+W-6+W-8)
-    text = build_recurring_table({"narval": [_ROW_PEAK_AT_W4]})
+    text = build_recurring_table({"narval": [_ROW_PEAK_AT_W4]}, **_BRT_KW)
     # ⚑✗ appears exactly once (at W-4)
     assert text.count("⚑✗") == 1
 
 
 def test_per_cycle_all_true_peak_at_w0_w2_w4():
-    text = build_recurring_table({"narval": [_ROW_ALL_TRUE]})
+    text = build_recurring_table({"narval": [_ROW_ALL_TRUE]}, **_BRT_KW)
     # All 5 True → ⚑ at W0, W-2, W-4 (each has a valid 3-cycle lookback)
     assert text.count("⚑✗") == 3
 
 
 def test_per_cycle_w6_w8_never_show_peak():
     # W-6 and W-8 cannot show ⚑ (no W-10/W-12 in display)
-    text = build_recurring_table({"narval": [_ROW_ALL_TRUE]})
+    text = build_recurring_table({"narval": [_ROW_ALL_TRUE]}, **_BRT_KW)
     # Only 3 ⚑✗ for W0, W-2, W-4 — not W-6 or W-8
     assert text.count("⚑✗") == 3

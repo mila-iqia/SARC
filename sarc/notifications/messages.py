@@ -211,8 +211,8 @@ def _historical_section(stats: HistoricalStats) -> str:
 def build_recurring_table(
     recurring: dict[str, list[RecurringUserRow]],
     *,
-    window_weeks: int = 6,
-    cluster_share_threshold: float = 0.30,
+    window_weeks: int,
+    cluster_share_threshold: float,
     cycle_dates: list[date] | None = None,
 ) -> str:
     """Build the recurring-underusers per-cluster table for the admin digest.
@@ -325,6 +325,8 @@ def build_admin_digest(
     rows: list[UnderuserRow],
     *,
     period: str,
+    window_weeks: int,
+    cluster_share_threshold: float,
     top_n: int = 16,
     historical: HistoricalStats | None = None,
     recurring: dict[str, list[RecurringUserRow]] | None = None,
@@ -370,7 +372,12 @@ def build_admin_digest(
         lines.append(_historical_section(historical))
 
     if recurring is not None:
-        recurring_text = build_recurring_table(recurring, cycle_dates=cycle_dates)
+        recurring_text = build_recurring_table(
+            recurring,
+            window_weeks=window_weeks,
+            cluster_share_threshold=cluster_share_threshold,
+            cycle_dates=cycle_dates,
+        )
         if recurring_text:
             lines += ["", recurring_text]
 
