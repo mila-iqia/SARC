@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 
 from sarc.notifications.messages import (
+    _first_name,
     build_admin_digest,
     build_recurring_table,
     build_usage_report,
@@ -85,6 +86,25 @@ _ROW_CAROL = UnderuserRow(
     by_cluster=[ClusterBreakdown("mila", 700.0, 420.0, 700.0)],
     top_jobs=[],
 )
+
+
+# ── T2: _first_name guard ────────────────────────────────────────────────────
+
+
+def test_first_name_normal():
+    assert _first_name("Alice Foo") == "Alice"
+
+
+def test_first_name_single_token():
+    assert _first_name("Alice") == "Alice"
+
+
+def test_first_name_empty_string():
+    assert _first_name("") == "there"
+
+
+def test_first_name_none():
+    assert _first_name(None) == "there"
 
 
 # ── build_user_dm ─────────────────────────────────────────────────────────────

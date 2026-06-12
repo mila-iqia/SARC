@@ -17,8 +17,9 @@ def _fmt_rgu_int(hours: float) -> str:
     return f"{int(round(hours)):,}".replace(",", " ")
 
 
-def _first_name(display_name: str) -> str:
-    return display_name.split()[0]
+def _first_name(display_name: str | None) -> str:
+    parts = (display_name or "").split()
+    return parts[0] if parts else "there"
 
 
 def _pct(fraction: float) -> str:
