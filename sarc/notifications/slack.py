@@ -1,4 +1,4 @@
-# Required bot scopes: chat:write, users:read.email, im:write
+# Required bot scopes: chat:write, files:write, im:write, users:read.email
 from __future__ import annotations
 
 import logging
@@ -43,7 +43,9 @@ class SlackClient:
             }
         ]
 
-    def post_channel(self, channel: str, text: str, *, preformatted: bool = False) -> SendResult:
+    def post_channel(
+        self, channel: str, text: str, *, preformatted: bool = False
+    ) -> SendResult:
         """Post a message to a public/private channel."""
         try:
             kwargs: dict = {"channel": channel, "text": text}
@@ -55,13 +57,43 @@ class SlackClient:
             logger.error("Slack channel post failed: %s", exc)
             return SendResult(SendStatus.FAILED, str(exc))
 
-    def dm_user(self, email: str, text: str, *, preformatted: bool = False) -> SendResult:
+    def post_channel_file(
+        self,
+        channel: str,
+        content: str,
+        *,
+        filename: str = "digest.txt",
+        title: str | None = None,
+    ) -> SendResult:
+        """Upload text as a file snippet to a channel (no block-length limit).
+
+        Requires the files:write bot scope.
+        """
+        try:
+            kwargs: dict = {
+                "channel": channel,
+                "content": content,
+                "filename": filename,
+            }
+            if title is not None:
+                kwargs["title"] = title
+            self._client.files_upload_v2(**kwargs)
+            return SendResult(SendStatus.OK)
+        except Exception as exc:
+            logger.error("Slack file upload failed: %s", exc)
+            return SendResult(SendStatus.FAILED, str(exc))
+
+    def dm_user(
+        self, email: str, text: str, *, preformatted: bool = False
+    ) -> SendResult:
         """Send a DM to a user identified by their Slack-registered email."""
         try:
             lookup = self._client.users_lookupByEmail(email=email)
         except Exception as exc:
             err = str(exc)
-            if "users_not_found" in err or "users_not_found" in getattr(exc, "response", {}).get("error", ""):
+            if "users_not_found" in err or "users_not_found" in getattr(
+                exc, "response", {}
+            ).get("error", ""):
                 logger.warning("Slack user not found for email %s", email)
                 return SendResult(SendStatus.USER_NOT_FOUND, email)
             logger.error("Slack users.lookupByEmail failed for %s: %s", email, exc)

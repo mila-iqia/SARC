@@ -33,6 +33,37 @@ def test_post_channel_api_error():
     assert "not_in_channel" in result.detail
 
 
+# ── post_channel_file ─────────────────────────────────────────────────────────
+
+
+def test_post_channel_file_success():
+    web = MagicMock()
+    client = _make_client(web)
+    result = client.post_channel_file("#alerts", "content", title="My Digest")
+    web.files_upload_v2.assert_called_once_with(
+        channel="#alerts", content="content", filename="digest.txt", title="My Digest"
+    )
+    assert result.status == SendStatus.OK
+
+
+def test_post_channel_file_no_title():
+    web = MagicMock()
+    client = _make_client(web)
+    client.post_channel_file("#alerts", "content")
+    web.files_upload_v2.assert_called_once_with(
+        channel="#alerts", content="content", filename="digest.txt"
+    )
+
+
+def test_post_channel_file_api_error():
+    web = MagicMock()
+    web.files_upload_v2.side_effect = Exception("missing_scope")
+    client = _make_client(web)
+    result = client.post_channel_file("#alerts", "content")
+    assert result.status == SendStatus.FAILED
+    assert "missing_scope" in result.detail
+
+
 # ── dm_user ───────────────────────────────────────────────────────────────────
 
 

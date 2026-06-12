@@ -28,12 +28,14 @@ _14D = timedelta(days=14)
 # W-2: [2024-06-02, 2024-06-16]
 # W-4: [2024-05-19, 2024-06-02]
 # W-6: [2024-05-05, 2024-05-19]
+# W-8: [2024-04-21, 2024-05-05]
 # 6-week aggregate: [2024-05-19, 2024-06-30] = W-4 + W-2 + W0
 
 _W0_START = _TEST_END - 1 * _14D      # 2024-06-16
 _W2_START = _TEST_END - 2 * _14D      # 2024-06-02
 _W4_START = _TEST_END - 3 * _14D      # 2024-05-19
 _W6_START = _TEST_END - 4 * _14D      # 2024-05-05
+_W8_START = _TEST_END - 5 * _14D      # 2024-04-21
 
 _MILA_GPU_TYPE = "A100-SXM4-80GB"
 _MILA_RGU = 4.8
@@ -113,9 +115,10 @@ def recurring_db(read_write_db):
       rgu_h = 4.8 * elapsed_h; wasted = rgu_h * 0.95; waste_ratio = 0.95 ≥ 0.50 ✓
 
       - petitbonhomme: W0+W-2+W-4 @ 24h → wasted 3*109.44=328.32 RGU-h over 6w (highest)
-                       ALSO W-6 @ 24h   → flagged in all 4 cycles → personalized_action=True
+                       ALSO W-6 @ 24h and W-8 @ 24h → all 5 cycles flagged
+                       personalized_action=True (W0+W-2+W-4 all True)
       - fourthuser:    W0+W-2+W-4 @ 23h → 3*104.88=314.64 RGU-h (2nd)
-                       NO W-6            → flagged only W0+W-2+W-4 → personalized_action=False
+                       NO W-6, NO W-8    → personalized_action=True (W0+W-2+W-4 all True)
       - bramin:        W0+W-2+W-4 @ 22h → 3*100.32=300.96 RGU-h (not selected at 30%)
       - beaubonhomme:  W0+W-2+W-4 @ 21h → 3*95.76=287.28 RGU-h (not selected; below floor)
 
@@ -157,8 +160,8 @@ def recurring_db(read_write_db):
         )
         job_id += 1
 
-    # petitbonhomme: W0, W-2, W-4 (6w aggregate) + W-6 (cycle flag only)
-    for start in (_W0_START, _W2_START, _W4_START, _W6_START):
+    # petitbonhomme: W0, W-2, W-4 (6w aggregate) + W-6 + W-8 (display-only cycles)
+    for start in (_W0_START, _W2_START, _W4_START, _W6_START, _W8_START):
         _seed(petitbonhomme_id, start, 24)
 
     # fourthuser: W0, W-2, W-4 only
@@ -260,8 +263,8 @@ def test_cluster_share_sum_to_one_when_all_selected(recurring_db):
 # ── Cycle flags ───────────────────────────────────────────────────────────────
 
 
-def test_petitbonhomme_flagged_all_four_cycles(recurring_db):
-    """petitbonhomme has jobs in W0+W-2+W-4+W-6 → all cycle flags True."""
+def test_petitbonhomme_flagged_all_five_cycles(recurring_db):
+    """petitbonhomme has jobs in W0+W-2+W-4+W-6+W-8 → all 5 cycle flags True."""
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         result = get_recurring_underusers(
             _TEST_END,
@@ -275,6 +278,7 @@ def test_petitbonhomme_flagged_all_four_cycles(recurring_db):
     assert row.w2 is True
     assert row.w4 is True
     assert row.w6 is True
+    assert row.w8 is True
 
 
 def test_petitbonhomme_personalized_action(recurring_db):
@@ -290,8 +294,9 @@ def test_petitbonhomme_personalized_action(recurring_db):
     assert row.personalized_action is True
 
 
-def test_fourthuser_missing_w6_cycle(recurring_db):
-    """fourthuser has no W-6 job → w6=False, personalized_action=False."""
+def test_fourthuser_missing_w6_w8_cycles(recurring_db):
+    """fourthuser has no W-6 or W-8 job → w6=False, w8=False.
+    personalized_action=True because W0+W-2+W-4 are all True (only 3 active cycles)."""
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         result = get_recurring_underusers(
             _TEST_END,
@@ -305,7 +310,8 @@ def test_fourthuser_missing_w6_cycle(recurring_db):
     assert row.w2 is True
     assert row.w4 is True
     assert row.w6 is False
-    assert row.personalized_action is False
+    assert row.w8 is False
+    assert row.personalized_action is True
 
 
 # ── Empty / edge cases ────────────────────────────────────────────────────────
@@ -345,6 +351,7 @@ _ROW_ALICE = RecurringUserRow(
     w2=True,
     w4=True,
     w6=True,
+    w8=True,
     personalized_action=True,
 )
 
@@ -358,6 +365,7 @@ _ROW_BOB = RecurringUserRow(
     w2=False,
     w4=True,
     w6=True,
+    w8=True,
     personalized_action=False,
 )
 
@@ -371,6 +379,7 @@ _ROW_CAROL = RecurringUserRow(
     w2=True,
     w4=False,
     w6=False,
+    w8=False,
     personalized_action=False,
 )
 
@@ -445,6 +454,7 @@ def test_table_multiple_clusters_rendered():
         w2=False,
         w4=False,
         w6=False,
+        w8=False,
         personalized_action=False,
     )
     text = build_recurring_table(
@@ -465,6 +475,7 @@ def test_table_clusters_sorted_alphabetically():
         w2=False,
         w4=False,
         w6=False,
+        w8=False,
         personalized_action=False,
     )
     text = build_recurring_table(
@@ -552,19 +563,18 @@ def test_anchor_result_always_even_week():
 # ── get_cycle_dates ───────────────────────────────────────────────────────────
 
 
-def test_cycle_dates_even_week_four_mondays():
+def test_cycle_dates_even_week_five_mondays():
     # end = 2024-06-24 (Mon, wk 26 even)
     dates = get_cycle_dates(_EVEN_MON)
-    assert len(dates) == 4
+    assert len(dates) == 5
     assert all(isinstance(d, date) for d in dates)
     # Each must be a Monday of an even week, 14 days apart
     for i, d in enumerate(dates):
         dt = datetime(d.year, d.month, d.day, tzinfo=UTC)
         assert dt.weekday() == 0, f"dates[{i}] is not a Monday"
         assert dt.isocalendar().week % 2 == 0, f"dates[{i}] not an even week"
-    assert (dates[0] - dates[1]).days == 14
-    assert (dates[1] - dates[2]).days == 14
-    assert (dates[2] - dates[3]).days == 14
+    for i in range(len(dates) - 1):
+        assert (dates[i] - dates[i + 1]).days == 14
 
 
 def test_cycle_dates_even_week_all_not_future():
@@ -624,6 +634,7 @@ _CYCLE_DATES = [
     date(2024, 6, 10),   # W-2 (Mon, wk 24 even)
     date(2024, 5, 27),   # W-4 (Mon, wk 22 even)
     date(2024, 5, 13),   # W-6 (Mon, wk 20 even)
+    date(2024, 4, 29),   # W-8 (Mon, wk 18 even)
 ]
 
 _ROW_FUTURE_W0 = RecurringUserRow(
@@ -636,6 +647,7 @@ _ROW_FUTURE_W0 = RecurringUserRow(
     w2=True,
     w4=True,
     w6=False,
+    w8=False,
     personalized_action=False,
 )
 
@@ -646,6 +658,7 @@ def test_table_with_cycle_dates_renders_mm_dd_headers():
     assert "06-10" in text
     assert "05-27" in text
     assert "05-13" in text
+    assert "04-29" in text
 
 
 def test_table_with_cycle_dates_no_w0_label():
@@ -656,10 +669,10 @@ def test_table_with_cycle_dates_no_w0_label():
 
 def test_table_none_flag_renders_blank_not_cross(capsys):
     text = build_recurring_table({"narval": [_ROW_FUTURE_W0]}, cycle_dates=_CYCLE_DATES)
-    # The row has w0=None; it should NOT render ✗ for that cell
-    # Count ✓ and ✗: w2=True→✓, w4=True→✓, w6=False→✗, w0=None→blank
-    assert text.count("✓") == 2
-    assert text.count("✗") == 1
+    # _ROW_FUTURE_W0: w0=None→blank, w2=True→✗, w4=True→✗, w6=False→✓, w8=False→✓
+    # True (flagged/underuser) → ✗; False (good usage) → ✓; None (future) → blank
+    assert text.count("✓") == 2   # w6 and w8
+    assert text.count("✗") == 2   # w2 and w4
 
 
 def test_table_without_cycle_dates_keeps_w0_label():
@@ -667,3 +680,75 @@ def test_table_without_cycle_dates_keeps_w0_label():
     text = build_recurring_table({"narval": [_ROW_ALICE]})
     assert "W0" in text
     assert "W-2" in text
+
+
+# ── | separator ──────────────────────────────────────────────────────────────
+
+
+def test_table_contains_separator():
+    text = build_recurring_table({"narval": [_ROW_ALICE]})
+    assert "|" in text
+
+
+def test_table_separator_between_w4_and_w6():
+    text = build_recurring_table({"narval": [_ROW_ALICE]})
+    # W-4 column appears before | which appears before W-6 column
+    assert text.index("W-4") < text.index("|") < text.index("W-6")
+
+
+# ── per-cycle ⚑ ───────────────────────────────────────────────────────────────
+
+# Row where W-4, W-6, W-8 are all True → ⚑ at W-4; W0+W-2+W-4 not all True → no ⚑ at W0
+_ROW_PEAK_AT_W4 = RecurringUserRow(
+    email="dave@mila.quebec",
+    display_name="Dave Bowie",
+    cluster="narval",
+    wasted_6w=3000.0,
+    cluster_share=0.25,
+    w0=False,
+    w2=False,
+    w4=True,
+    w6=True,
+    w8=True,
+    personalized_action=False,
+)
+
+# Row where all 5 cycles True → ⚑ at W0 (personalized), W-2, and W-4
+_ROW_ALL_TRUE = RecurringUserRow(
+    email="eve@mila.quebec",
+    display_name="Eve Online",
+    cluster="narval",
+    wasted_6w=5000.0,
+    cluster_share=0.40,
+    w0=True,
+    w2=True,
+    w4=True,
+    w6=True,
+    w8=True,
+    personalized_action=True,
+)
+
+
+def test_per_cycle_peak_at_w4():
+    text = build_recurring_table({"narval": [_ROW_PEAK_AT_W4]})
+    assert "⚑✗" in text
+
+
+def test_per_cycle_no_peak_when_chain_broken():
+    # w0=False breaks the chain at W0 and W-2; only W-4 has a valid lookback (W-4+W-6+W-8)
+    text = build_recurring_table({"narval": [_ROW_PEAK_AT_W4]})
+    # ⚑✗ appears exactly once (at W-4)
+    assert text.count("⚑✗") == 1
+
+
+def test_per_cycle_all_true_peak_at_w0_w2_w4():
+    text = build_recurring_table({"narval": [_ROW_ALL_TRUE]})
+    # All 5 True → ⚑ at W0, W-2, W-4 (each has a valid 3-cycle lookback)
+    assert text.count("⚑✗") == 3
+
+
+def test_per_cycle_w6_w8_never_show_peak():
+    # W-6 and W-8 cannot show ⚑ (no W-10/W-12 in display)
+    text = build_recurring_table({"narval": [_ROW_ALL_TRUE]})
+    # Only 3 ⚑✗ for W0, W-2, W-4 — not W-6 or W-8
+    assert text.count("⚑✗") == 3

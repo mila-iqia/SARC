@@ -165,7 +165,9 @@ class UnderusageNotifyCommand:
         else:
             print(f"ISO week {week_num} (odd) — digest-only this run, no DMs.")
         if usage_report_eligible:
-            print(f"Usage report eligible this run (ISO week {week_num} is a multiple of {ncfg.usage_report_every_weeks}).")
+            print(
+                f"ISO week {week_num} (multiple of {ncfg.usage_report_every_weeks}) — Usage report eligible this run."
+            )
         print()
 
         rows = get_underusers(
@@ -198,7 +200,7 @@ class UnderusageNotifyCommand:
             print(f"  - {row.display_name} ({row.email})")
         print()
 
-        cycle_dates = get_cycle_dates(end)
+        cycle_dates = get_cycle_dates(end, ncfg.recurrence_display_cycles)
         digest = build_admin_digest(
             rows,
             period=period,
@@ -240,7 +242,9 @@ class UnderusageNotifyCommand:
                     if usage_report_skipped
                     else ""
                 )
-                print(f"=== Usage Report Previews ({len(report_recipients)} recipient(s)){skip_note} ===")
+                print(
+                    f"=== Usage Report Previews ({len(report_recipients)} recipient(s)){skip_note} ==="
+                )
                 for row in report_recipients:
                     print(f"\n--- {row.display_name} ({row.email}) ---")
                     report_text = build_usage_report(
@@ -314,7 +318,9 @@ class UnderusageNotifyCommand:
                     dashboard_url=ncfg.dashboard_url,
                     help_section=ncfg.help_section,
                 )
-                slack_res = slack_client.dm_user(row.email, report_text, preformatted=True)
+                slack_res = slack_client.dm_user(
+                    row.email, report_text, preformatted=True
+                )
                 if slack_res.status == SendStatus.OK:
                     report_results.append(
                         _DeliveryResult(row.email, row.display_name, "dm_sent")
@@ -342,7 +348,12 @@ class UnderusageNotifyCommand:
         elif usage_report_eligible and report_recipients:
             for row in report_recipients:
                 report_results.append(
-                    _DeliveryResult(row.email, row.display_name, "skipped", "send_usage_report_disabled")
+                    _DeliveryResult(
+                        row.email,
+                        row.display_name,
+                        "skipped",
+                        "send_usage_report_disabled",
+                    )
                 )
 
         footer = _build_delivery_footer(delivery_results, flagged=len(rows))
@@ -364,7 +375,11 @@ class UnderusageNotifyCommand:
                     report_footer += f"\n  - {r.display_name} ({r.email}): {r.detail}"
             digest_with_footer += "\n\n" + report_footer
 
-        channel_res = slack_client.post_channel(ncfg.slack.channel, digest_with_footer, preformatted=True)
+        channel_res = slack_client.post_channel_file(
+            ncfg.slack.channel,
+            digest_with_footer,
+            title=f"GPU Underusage Digest — {period}",
+        )
         if channel_res.status != SendStatus.OK:
             logger.error(
                 "Failed to post admin digest to %s: %s",

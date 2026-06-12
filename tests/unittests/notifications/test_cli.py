@@ -317,7 +317,7 @@ _ODD_WEEK = "2024-06-23"   # ISO week 25
 def _mock_slack(dm_status=SendStatus.OK, channel_status=SendStatus.OK):
     inst = MagicMock()
     inst.dm_user.return_value = SendResult(dm_status)
-    inst.post_channel.return_value = SendResult(channel_status)
+    inst.post_channel_file.return_value = SendResult(channel_status)
     cls = MagicMock(return_value=inst)
     return cls, inst
 
@@ -358,7 +358,7 @@ def test_send_even_week_posts_digest_and_dms(notify_db, cli_main, monkeypatch):
             ["notify", "underusage", "--window-days", "30", "--as-of", _EVEN_WEEK, "--send"]
         )
     assert rc == 0
-    slack_inst.post_channel.assert_called_once()
+    slack_inst.post_channel_file.assert_called_once()
     slack_inst.dm_user.assert_called_once()
     email_inst.send_plaintext.assert_not_called()
 
@@ -373,7 +373,7 @@ def test_send_odd_week_posts_digest_only(notify_db, cli_main, monkeypatch):
             ["notify", "underusage", "--window-days", "30", "--as-of", _ODD_WEEK, "--send"]
         )
     assert rc == 0
-    slack_inst.post_channel.assert_called_once()
+    slack_inst.post_channel_file.assert_called_once()
     slack_inst.dm_user.assert_not_called()
 
 
@@ -390,7 +390,7 @@ def test_send_no_dms_flag_skips_dms(notify_db, cli_main, monkeypatch):
             ]
         )
     assert rc == 0
-    slack_inst.post_channel.assert_called_once()
+    slack_inst.post_channel_file.assert_called_once()
     slack_inst.dm_user.assert_not_called()
 
 
@@ -404,7 +404,7 @@ def test_send_dms_false_suppresses_dms(notify_db, cli_main, monkeypatch):
             ["notify", "underusage", "--window-days", "30", "--as-of", _EVEN_WEEK, "--send"]
         )
     assert rc == 0
-    slack_inst.post_channel.assert_called_once()
+    slack_inst.post_channel_file.assert_called_once()
     slack_inst.dm_user.assert_not_called()
 
 
@@ -541,7 +541,7 @@ def test_send_usage_report_disabled_no_report_sends(usage_report_db, cli_main, m
         )
     assert rc == 0
     # Only the admin digest channel post; no DMs for underusers or report recipients
-    slack_inst.post_channel.assert_called_once()
+    slack_inst.post_channel_file.assert_called_once()
     # dm_user may be called 0 times (send_dms=False, send_usage_report=False)
     assert slack_inst.dm_user.call_count == 0
     out = capsys.readouterr().out
@@ -584,7 +584,7 @@ def test_send_usage_report_non_report_week_no_reports(
         )
     assert rc == 0
     # Only the digest channel post; no usage report DMs
-    slack_inst.post_channel.assert_called_once()
+    slack_inst.post_channel_file.assert_called_once()
     # beaubonhomme's job on 2024-07-01 is outside [2024-06-16, 2024-06-30] — no reports
     dm_calls = [call.args[0] for call in slack_inst.dm_user.call_args_list]
     assert "beaubonhomme@mila.quebec" not in dm_calls

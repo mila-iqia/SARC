@@ -102,8 +102,9 @@ class RecurringUserRow:
     w0: bool | None  # [anchor - 14d, anchor]
     w2: bool | None  # [anchor - 28d, anchor - 14d]
     w4: bool | None  # [anchor - 42d, anchor - 28d]
-    w6: bool | None  # [anchor - 56d, anchor - 42d]
-    # True iff flagged in all 4 past cycles (continuous underuse over ~8 weeks).
+    w6: bool | None  # [anchor - 56d, anchor - 42d]  — display only
+    w8: bool | None  # [anchor - 70d, anchor - 56d]  — display only
+    # True iff flagged in all 3 active cycles W0, W-2, W-4.
     personalized_action: bool
 
 
@@ -567,14 +568,14 @@ def _even_week_anchor(end: datetime) -> datetime:
     return end
 
 
-def get_cycle_dates(end: datetime) -> list[date]:
-    """Return the four cycle end-dates [W0, W-2, W-4, W-6] as date objects.
+def get_cycle_dates(end: datetime, n: int = 5) -> list[date]:
+    """Return n cycle end-dates [W0, W-2, ..., W-(2*(n-1))] as date objects.
 
     Each date is the day of an even ISO week, spaced 14 days apart, anchored
     to the current (or next) even ISO week from *end*.
     """
     anchor = _even_week_anchor(end)
-    return [(anchor - timedelta(days=i * 14)).date() for i in range(4)]
+    return [(anchor - timedelta(days=i * 14)).date() for i in range(n)]
 
 
 def get_recurring_underusers(
@@ -594,11 +595,11 @@ def get_recurring_underusers(
     the top users until their cumulative waste reaches >= *cluster_share_threshold*
     of that cluster's total wasted RGU-h.
 
-    Cycle flags: for each of the 4 most-recent 14-day windows (W0, W-2, W-4,
-    W-6 — anchored to even ISO-week Mondays), call get_underusers to determine
-    per-user membership.  Cycles whose end date is in the future relative to
-    *end* are marked None (no data yet).  The "personalized action" flag is set
-    iff a user was flagged True in all 4 cycles.
+    Cycle flags: for each of the 5 most-recent 14-day windows (W0, W-2, W-4,
+    W-6, W-8 — anchored to even ISO-week Mondays), call get_underusers to
+    determine per-user membership.  Cycles whose end date is in the future
+    relative to *end* are marked None (no data yet).  The "personalized action"
+    flag is set iff a user was flagged True in all 3 active cycles W0, W-2, W-4.
 
     Returns a dict of cluster_name -> list[RecurringUserRow] (sorted desc by
     wasted_6w within each cluster), ordered by cluster name.
@@ -653,11 +654,11 @@ def get_recurring_underusers(
             }
         cluster_users[cluster][uid]["wasted"] += wasted
 
-    # ── Cycle membership sets (W0 .. W-6) ────────────────────────────────────
+    # ── Cycle membership sets (W0 .. W-8) ────────────────────────────────────
     # Each cycle ends at anchor - i*14d (always an even-week Monday).
     # Cycles whose end is in the future relative to `end` yield None (no data).
     cycle_flagged: list[set[int] | None] = []
-    for i in range(4):
+    for i in range(5):
         c_end = anchor - timedelta(days=i * 14)
         if c_end > end:
             cycle_flagged.append(None)
@@ -692,13 +693,14 @@ def get_recurring_underusers(
             if cumulative / cluster_total >= cluster_share_threshold:
                 break
 
-        w0_set, w2_set, w4_set, w6_set = cycle_flagged
+        w0_set, w2_set, w4_set, w6_set, w8_set = cycle_flagged
         rows_out = []
         for uid, u in selected:
             w0 = None if w0_set is None else uid in w0_set
             w2 = None if w2_set is None else uid in w2_set
             w4 = None if w4_set is None else uid in w4_set
             w6 = None if w6_set is None else uid in w6_set
+            w8 = None if w8_set is None else uid in w8_set
             rows_out.append(
                 RecurringUserRow(
                     email=u["email"],
@@ -710,8 +712,9 @@ def get_recurring_underusers(
                     w2=w2,
                     w4=w4,
                     w6=w6,
+                    w8=w8,
                     personalized_action=(
-                        w0 is True and w2 is True and w4 is True and w6 is True
+                        w0 is True and w2 is True and w4 is True
                     ),
                 )
             )

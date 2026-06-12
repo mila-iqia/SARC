@@ -291,12 +291,14 @@ class UnderusageNotifyConfig:
     dashboard_url: str | None = None
     # Verbatim text appended at the end of every user DM (support links, hours, etc.)
     help_section: str | None = None
-    # Recurring-underusers table (Module C): rolling window length in weeks.
+    # Recurring-underusers table: rolling window length in weeks.
     recurrence_window_weeks: int = 6
     # Fraction of cluster wasted RGU-h at which selection stops (0..1).
     recurrence_cluster_share: float = 0.30
+    # Number of bi-weekly cycle columns to display in the recurring table.
+    recurrence_display_cycles: int = 5
     email: EmailConfig | None = None
-    # Phase 3 — universal usage report cadence.
+    # Universal usage report cadence.
     usage_report_window_days: int = 28
     usage_report_every_weeks: int = 4
     send_usage_report: bool = False
