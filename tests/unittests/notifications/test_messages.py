@@ -191,6 +191,7 @@ _DIGEST_KW = {
     "cluster_share_threshold": 0.30,
     "cycle_length_weeks": 2,
     "active_cycles": 3,
+    "top_n": 16,
 }
 
 
@@ -219,7 +220,7 @@ def test_digest_ranked_by_wasted_descending():
 
 def test_digest_capped_at_top_n():
     rows = [_ROW_ALICE, _ROW_BOB, _ROW_CAROL]
-    text = build_admin_digest(rows, period="…", top_n=2, **_DIGEST_KW)
+    text = build_admin_digest(rows, period="…", **{**_DIGEST_KW, "top_n": 2})
     assert "Alice Liddell" not in text  # rank 3 — excluded
     assert "Bob Marley" in text
     assert "Carol Danvers" in text
@@ -269,6 +270,7 @@ def test_digest_recurring_header_reflects_share():
         cluster_share_threshold=0.40,
         cycle_length_weeks=2,
         active_cycles=3,
+        top_n=16,
         recurring={"narval": [row]},
     )
     assert "40 %" in text

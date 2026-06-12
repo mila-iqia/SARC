@@ -337,6 +337,7 @@ _DIGEST_KW = {
     "cluster_share_threshold": 0.30,
     "cycle_length_weeks": 2,
     "active_cycles": 3,
+    "top_n": 16,
 }
 
 

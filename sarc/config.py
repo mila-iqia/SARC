@@ -287,6 +287,7 @@ class UnderusageNotifyConfig:
     # Analysis window for the main underusage query.
     window_weeks: int = 2
     digest_top_n: int = 16
+    top_jobs_per_user: int = 5
     digest_grouping: str = "overall"
     primary_clusters_in_dm: int = 2
     dashboard_url: str | None = None
@@ -319,6 +320,7 @@ class UnderusageNotifyConfig:
             ("recurrence_display_cycles", self.recurrence_display_cycles),
             ("recurrence_active_cycles", self.recurrence_active_cycles),
             ("historical_months", self.historical_months),
+            ("top_jobs_per_user", self.top_jobs_per_user),
         ]:
             if not isinstance(value, int) or value < 1:
                 raise ValueError(

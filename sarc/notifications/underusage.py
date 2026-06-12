@@ -8,8 +8,6 @@ from sarc.config import UTC, config
 from sarc.db.job import JobStatisticDB
 from sarc.db.job_series import JobSeriesDB
 
-_TOP_JOBS_N = 5
-
 
 @dataclass
 class ClusterBreakdown:
@@ -158,6 +156,7 @@ def get_underusers(
     *,
     min_ratio: float,
     min_rgu_hours: float,
+    top_jobs_per_user: int,
     resource: str = "gpu",
     exclude_zero_usage: bool = False,
 ) -> list[UnderuserRow]:
@@ -269,7 +268,7 @@ def get_underusers(
 
         top_jobs = sorted(
             jobs_by_user[uid], key=lambda j: j.rgu_hours_unused, reverse=True
-        )[:_TOP_JOBS_N]
+        )[:top_jobs_per_user]
 
         result.append(
             UnderuserRow(
@@ -291,7 +290,7 @@ def get_underusers(
 
 
 def get_all_users_usage(
-    start: datetime, end: datetime, *, resource: str = "gpu"
+    start: datetime, end: datetime, *, top_jobs_per_user: int, resource: str = "gpu"
 ) -> list[UsageRow]:
     if resource != "gpu":
         raise ValueError(f"Unsupported resource: {resource!r}")
@@ -389,7 +388,7 @@ def get_all_users_usage(
         by_cluster = sorted(clusters, key=lambda c: c.rgu_hours_used, reverse=True)
         top_jobs = sorted(
             jobs_by_user[uid], key=lambda j: j.rgu_hours_used, reverse=True
-        )[:_TOP_JOBS_N]
+        )[:top_jobs_per_user]
 
         result.append(
             UsageRow(
@@ -669,6 +668,8 @@ def get_recurring_underusers(
             c_end,
             min_ratio=min_ratio,
             min_rgu_hours=min_rgu_hours,
+            # Only user_id is used for membership — top jobs are discarded.
+            top_jobs_per_user=1,
             resource=resource,
             exclude_zero_usage=exclude_zero_usage,
         )

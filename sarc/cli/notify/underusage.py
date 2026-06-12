@@ -175,6 +175,7 @@ class UnderusageNotifyCommand:
             end,
             min_ratio=min_ratio,
             min_rgu_hours=min_rgu_hours,
+            top_jobs_per_user=ncfg.top_jobs_per_user,
             resource=self.resource,
             exclude_zero_usage=True,
         )
@@ -241,7 +242,12 @@ class UnderusageNotifyCommand:
         usage_report_skipped = []
         if usage_report_eligible:
             usage_start = end - timedelta(weeks=usage_report_window_weeks)
-            usage_rows = get_all_users_usage(usage_start, end, resource=self.resource)
+            usage_rows = get_all_users_usage(
+                usage_start,
+                end,
+                top_jobs_per_user=ncfg.top_jobs_per_user,
+                resource=self.resource,
+            )
             underuser_emails = {r.email for r in rows}
             report_recipients, usage_report_skipped = split_usage_report_recipients(
                 usage_rows, underuser_emails

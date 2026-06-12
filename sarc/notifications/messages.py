@@ -332,7 +332,7 @@ def build_admin_digest(
     cluster_share_threshold: float,
     cycle_length_weeks: int,
     active_cycles: int,
-    top_n: int = 16,
+    top_n: int,
     historical: HistoricalStats | None = None,
     recurring: dict[str, list[RecurringUserRow]] | None = None,
     cycle_dates: list[date] | None = None,
