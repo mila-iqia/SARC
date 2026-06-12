@@ -348,6 +348,7 @@
           // Plot-local state
           userRguTopN, userRguSortBy,
           metricScatterMetric2,
+          rguUsageView,
           jobTableHiddenCols: [...jobTableHiddenCols],
           jobTableLimit:   JOBTABLE_DEFAULTS.limit,
           jobTableSortBy:  JOBTABLE_DEFAULTS.sortBy,
@@ -388,6 +389,7 @@
       userRguTopN          = 16;
       userRguSortBy        = 'rgu_requested';
       metricScatterMetric2 = 'gpu_utilization';
+      rguUsageView         = 'per_period';
       jobTableHiddenCols.clear();
       JOBTABLE_DEFAULTS.limit   = 50;
       JOBTABLE_DEFAULTS.sortBy  = 'waste';
@@ -676,6 +678,11 @@
     // display preference shared by every job-table tile) so it survives
     // pagination, sorting and Update. Empty = all columns visible.
     const jobTableHiddenCols = new Set(_saved.jobTableHiddenCols || []);
+    // RGU-usage tile view: 'per_period' (one stacked bar per time bucket, click to
+    // focus) or 'whole_range' (a single stacked bar summing the whole Start–End
+    // range, focus-agnostic). Module-scoped like the other plot-local state, so it
+    // survives Updates and is shared by every RGU-usage tile.
+    let rguUsageView = _saved.rguUsageView || 'per_period';
 
     function layoutToParam(l) {
       return l.map(row => row.join(',')).join(';');
@@ -965,9 +972,58 @@
     }
 
     function renderHistogram(id, d) {
-      if (!d.histogram.length) return;
-      // Rescale the cumulative RGU·h to the unit selected in the toolbar.
+      const el = document.getElementById(id);
+      if (!el || !d.histogram.length) return;
       const unit = rguUnit();
+
+      // Box/ctrl/plot layout (reusing the heatmap's classes) so a small "View:"
+      // picker sits above the plot, which fills the rest at the tile's fixed height.
+      el.innerHTML = '';
+      const box = document.createElement('div'); box.className = 'ms-box';
+      const ctrl = document.createElement('div'); ctrl.className = 'ms-ctrl';
+      const lab = document.createElement('label');
+      lab.textContent = 'View: ';
+      const sel = document.createElement('select');
+      sel.className = 'add-select';
+      [['per_period', 'Per period'], ['whole_range', 'Whole range']].forEach(([v, t]) => {
+        const o = document.createElement('option');
+        o.value = v; o.textContent = t;
+        if (v === rguUsageView) o.selected = true;
+        sel.appendChild(o);
+      });
+      lab.appendChild(sel);
+      ctrl.appendChild(lab);
+      const plot = document.createElement('div'); plot.className = 'ms-plot';
+      box.appendChild(ctrl); box.appendChild(plot);
+      el.appendChild(box);
+      // View is module-scoped (shared by every RGU-usage tile), so a change
+      // re-renders them all from cache — no refetch — like the RGU-unit switch.
+      sel.addEventListener('change', () => { rguUsageView = sel.value; saveState(); rerenderRguTiles(); });
+
+      if (rguUsageView === 'whole_range') {
+        // One stacked bar summing the whole Start–End range. Focus is ignored on
+        // purpose (no per-bucket axis) and the single bar is not click-to-focus.
+        const sum = key => d.histogram.reduce((a, r) => a + (r[key] || 0), 0);
+        const reqTot = sum('rgu_requested'), usedTot = sum('rgu_used'), unmTot = sum('rgu_unmeasured');
+        const X = ['Whole range'];
+        Plotly.react(plot, [
+          { type: 'bar', name: 'Used',   x: X, y: [usedTot * unit.factor], marker: { color: '#1a6fd4' },
+            hovertemplate: unit.label + ' used: %{y:,.1f}<extra></extra>' },
+          { type: 'bar', name: 'Unused', x: X, y: [(reqTot - usedTot - unmTot) * unit.factor], marker: { color: '#a8c8f0' },
+            hovertemplate: unit.label + ' unused: %{y:,.1f}<extra></extra>' },
+          { type: 'bar', name: 'No metric data', x: X, y: [unmTot * unit.factor], marker: { color: '#bdbdbd' },
+            hovertemplate: unit.label + ' (no metric): %{y:,.1f}<extra></extra>' },
+        ], pLayout({
+          title: { text: 'Total ' + unit.label + ' — Whole range (Used vs Unused)', font: { size: 16 } },
+          barmode: 'stack', bargap: 0.7,
+          xaxis: { type: 'category' },
+          yaxis: { title: 'Total ' + unit.label },
+          legend: { x: 0.8, y: 0.95 },
+        }), { responsive: true });
+        return;
+      }
+
+      // Per-period: one stacked bar per time bucket; click a bar to set the focus.
       const periods    = d.histogram.map(r => r.period_start);
       const periodEnds = d.histogram.map(r => r.period_end);
       const rguUsed       = d.histogram.map(r => r.rgu_used * unit.factor);
@@ -976,7 +1032,7 @@
       const colorUsed      = periods.map(p => { const f = periodInFocus(p); return f === null ? '#1a6fd4' : f ? '#e07020' : '#c8d8f0'; });
       const colorUnused    = periods.map(p => { const f = periodInFocus(p); return f === null ? '#a8c8f0' : f ? '#f0c090' : '#e4eef8'; });
       const colorUnmeasured= periods.map(p => { const f = periodInFocus(p); return f === null ? '#bdbdbd' : f ? '#8a8a8a' : '#e6e6e6'; });
-      Plotly.react(id, [
+      Plotly.react(plot, [
         { type: 'bar', name: 'Used',   x: periods, y: rguUsed, customdata: periodEnds,
           marker: { color: colorUsed },
           hovertemplate: 'Period: %{x}<br>' + unit.label + ' used: %{y:,.1f}<extra></extra>' },

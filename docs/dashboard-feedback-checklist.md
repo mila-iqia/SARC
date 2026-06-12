@@ -34,12 +34,13 @@
 - [x] **Clarté Primary/Secondary metric** — « Primary » → « Efficiency metric », « Secondary » retirée de la barre (devenue le picker « Compare … to: » du heatmap) + tooltip ; aucune occurrence visible de Primary/Secondary restante. Le masquage *Advanced* et le défaut Secondary sont des items distincts (Axe 1) `(G, S10)`
 - [x] **Confusion Start/End vs Focus levée** — focus déjà transformé en label d'état (plus un champ) ; tooltip explicatif sur `#focus-label` (plage globale vs sous-tranche, tuiles filtrées : density / heatmap / RGU by user / job table) + message « No focus » enrichi pour décrire l'effet `(G)`
 - [x] **Défaut Secondary metric (heatmap) = GPU utilization** — `metricScatterMetric2` initialisé à `'gpu_utilization'` (init via `??` pour préserver un « — none — » sauvegardé, + `resetState`) ; le heatmap par défaut compare donc SM occupancy × GPU utilization `(SC)`
+- [x] **« RGU requested vs used » — vue agrégée (whole range)** — dropdown « View: Per period / Whole range » sur la tuile (`renderHistogram`) ; agrégé = une barre empilée sommant toute la plage Start–End, focus-agnostique (ni clic-focus, ni réaction à un focus posé ailleurs) ; somme côté front (pas de nouvel endpoint) ; mode persisté (`rguUsageView`) `(SC, SP)`
 
 ---
 
 ## 🟡 Partiellement fait
 
-- [ ] **« RGU requested vs used » en total agrégé** — la vue par période existe ; le feedback raye « per period » (veut un total Used vs Unused sur la plage) `(SC, SP)`
+_(plus rien — tout est désormais soit fait, soit listé dans « À faire ».)_
 
 ---
 
