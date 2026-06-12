@@ -232,7 +232,6 @@ def build_recurring_table(
         return ""
 
     share_pct = f"{cluster_share_threshold * 100:.0f} %"
-    flag_attrs = ("w0", "w2", "w4", "w6", "w8")
     flag_window = window_weeks // 2  # active flag cycles (3 with default 6 weeks)
     if cycle_dates is not None:
         flag_labels = tuple(d.strftime("%m-%d") for d in cycle_dates)
@@ -258,9 +257,9 @@ def build_recurring_table(
         return "".join(parts)
 
     def _build_flag_cells(row: RecurringUserRow) -> str:
-        cycle_vals = [getattr(row, attr) for attr in flag_attrs]
+        cycle_vals = row.cycles
         parts = []
-        for i, (attr, w) in enumerate(zip(flag_attrs, flag_ws)):
+        for i, w in enumerate(flag_ws):
             if i == flag_window:
                 parts.append("  |")
             flag = cycle_vals[i]

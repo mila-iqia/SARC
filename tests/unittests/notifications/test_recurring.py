@@ -274,11 +274,11 @@ def test_petitbonhomme_flagged_all_five_cycles(recurring_db):
             cluster_share_threshold=1.1,
         )
     row = next(r for r in result["mila"] if r.email == "petitbonhomme@mila.quebec")
-    assert row.w0 is True
-    assert row.w2 is True
-    assert row.w4 is True
-    assert row.w6 is True
-    assert row.w8 is True
+    assert row.cycles[0] is True
+    assert row.cycles[1] is True
+    assert row.cycles[2] is True
+    assert row.cycles[3] is True
+    assert row.cycles[4] is True
 
 
 def test_petitbonhomme_personalized_action(recurring_db):
@@ -306,11 +306,60 @@ def test_fourthuser_missing_w6_w8_cycles(recurring_db):
             cluster_share_threshold=1.1,
         )
     row = next(r for r in result["mila"] if r.email == "fourthuser@mila.quebec")
-    assert row.w0 is True
-    assert row.w2 is True
-    assert row.w4 is True
-    assert row.w6 is False
-    assert row.w8 is False
+    assert row.cycles[0] is True
+    assert row.cycles[1] is True
+    assert row.cycles[2] is True
+    assert row.cycles[3] is False
+    assert row.cycles[4] is False
+    assert row.personalized_action is True
+
+
+# ── Non-default cycle counts (acceptance criteria) ────────────────────────────
+
+
+def test_display_cycles_4_produces_4_columns(recurring_db):
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        result = get_recurring_underusers(
+            _TEST_END,
+            min_ratio=_MIN_RATIO,
+            min_rgu_hours=_MIN_RGU_HOURS,
+            window_weeks=6,
+            cluster_share_threshold=1.1,
+            recurrence_display_cycles=4,
+        )
+    for rows in result.values():
+        for row in rows:
+            assert len(row.cycles) == 4
+
+
+def test_display_cycles_6_produces_6_columns(recurring_db):
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        result = get_recurring_underusers(
+            _TEST_END,
+            min_ratio=_MIN_RATIO,
+            min_rgu_hours=_MIN_RGU_HOURS,
+            window_weeks=6,
+            cluster_share_threshold=1.1,
+            recurrence_display_cycles=6,
+        )
+    for rows in result.values():
+        for row in rows:
+            assert len(row.cycles) == 6
+
+
+def test_active_cycles_2_personalized_action(recurring_db):
+    """recurrence_active_cycles=2: only cycles[0] and cycles[1] must be True."""
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        result = get_recurring_underusers(
+            _TEST_END,
+            min_ratio=_MIN_RATIO,
+            min_rgu_hours=_MIN_RGU_HOURS,
+            window_weeks=6,
+            cluster_share_threshold=1.1,
+            recurrence_active_cycles=2,
+        )
+    # fourthuser has cycles[0]=True and cycles[1]=True but cycles[3]=False, cycles[4]=False
+    row = next(r for r in result["mila"] if r.email == "fourthuser@mila.quebec")
     assert row.personalized_action is True
 
 
@@ -347,11 +396,7 @@ _ROW_ALICE = RecurringUserRow(
     cluster="narval",
     wasted_6w=4200.0,
     cluster_share=0.18,
-    w0=True,
-    w2=True,
-    w4=True,
-    w6=True,
-    w8=True,
+    cycles=[True, True, True, True, True],
     personalized_action=True,
 )
 
@@ -361,11 +406,7 @@ _ROW_BOB = RecurringUserRow(
     cluster="narval",
     wasted_6w=2600.0,
     cluster_share=0.11,
-    w0=True,
-    w2=False,
-    w4=True,
-    w6=True,
-    w8=True,
+    cycles=[True, False, True, True, True],
     personalized_action=False,
 )
 
@@ -375,11 +416,7 @@ _ROW_CAROL = RecurringUserRow(
     cluster="narval",
     wasted_6w=1100.0,
     cluster_share=0.05,
-    w0=True,
-    w2=True,
-    w4=False,
-    w6=False,
-    w8=False,
+    cycles=[True, True, False, False, False],
     personalized_action=False,
 )
 
@@ -450,11 +487,7 @@ def test_table_multiple_clusters_rendered():
         cluster="fir",
         wasted_6w=500.0,
         cluster_share=0.50,
-        w0=True,
-        w2=False,
-        w4=False,
-        w6=False,
-        w8=False,
+        cycles=[True, False, False, False, False],
         personalized_action=False,
     )
     text = build_recurring_table(
@@ -471,11 +504,7 @@ def test_table_clusters_sorted_alphabetically():
         cluster="fir",
         wasted_6w=500.0,
         cluster_share=0.50,
-        w0=True,
-        w2=False,
-        w4=False,
-        w6=False,
-        w8=False,
+        cycles=[True, False, False, False, False],
         personalized_action=False,
     )
     text = build_recurring_table(
@@ -610,7 +639,7 @@ def test_odd_week_end_w0_is_none(recurring_db):
         pytest.skip("no users selected for this window (may be outside data range)")
     for rows in result.values():
         for row in rows:
-            assert row.w0 is None, f"expected w0=None for odd-week end, got {row.w0}"
+            assert row.cycles[0] is None, f"expected cycles[0]=None for odd-week end, got {row.cycles[0]}"
 
 
 def test_odd_week_end_personalized_action_false(recurring_db):
@@ -643,11 +672,7 @@ _ROW_FUTURE_W0 = RecurringUserRow(
     cluster="narval",
     wasted_6w=4200.0,
     cluster_share=0.18,
-    w0=None,   # future cycle
-    w2=True,
-    w4=True,
-    w6=False,
-    w8=False,
+    cycles=[None, True, True, False, False],
     personalized_action=False,
 )
 
@@ -705,11 +730,7 @@ _ROW_PEAK_AT_W4 = RecurringUserRow(
     cluster="narval",
     wasted_6w=3000.0,
     cluster_share=0.25,
-    w0=False,
-    w2=False,
-    w4=True,
-    w6=True,
-    w8=True,
+    cycles=[False, False, True, True, True],
     personalized_action=False,
 )
 
@@ -720,11 +741,7 @@ _ROW_ALL_TRUE = RecurringUserRow(
     cluster="narval",
     wasted_6w=5000.0,
     cluster_share=0.40,
-    w0=True,
-    w2=True,
-    w4=True,
-    w6=True,
-    w8=True,
+    cycles=[True, True, True, True, True],
     personalized_action=True,
 )
 

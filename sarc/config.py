@@ -297,6 +297,10 @@ class UnderusageNotifyConfig:
     recurrence_cluster_share: float = 0.30
     # Number of bi-weekly cycle columns to display in the recurring table.
     recurrence_display_cycles: int = 5
+    # Length of one cycle in days (drives column spacing and parity check).
+    cycle_length_days: int = 14
+    # Number of most-recent cycles that count toward personalized_action.
+    recurrence_active_cycles: int = 3
     email: EmailConfig | None = None
     # Universal usage report cadence.
     usage_report_window_days: int = 28
