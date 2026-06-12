@@ -141,9 +141,7 @@ class UnderusageNotifyCommand:
                 logger.error("Invalid --as-of date %r: expected YYYY-MM-DD", self.as_of)
                 return -1
         else:
-            end = _now_utc()
-            # Clip to midnight, today
-            end.replace(hour=0, minute=0, second=0, microsecond=0)
+            end = _now_utc().replace(hour=0, minute=0, second=0, microsecond=0)
         start = end - timedelta(weeks=window_weeks)
         period = f"{start.date()} – {end.date()}"
 

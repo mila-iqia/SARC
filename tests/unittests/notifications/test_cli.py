@@ -275,6 +275,24 @@ def test_bare_date_as_of_interpreted_as_utc_midnight(notify_db, cli_main, capsys
     assert "2024-05-26" in out
 
 
+# ── T3: window-end clipped to midnight ───────────────────────────────────────
+
+
+def test_now_clipped_to_midnight(notify_db, cli_main, monkeypatch, capsys):
+    # _now_utc returns 15:30 UTC; the window end in the digest header must still
+    # show the date only (derived from end.date()), and the period start must be
+    # exactly 4 weeks before midnight on that date.
+    non_midnight = datetime(2024, 6, 30, 15, 30, 0, tzinfo=UTC)
+    monkeypatch.setattr("sarc.cli.notify.underusage._now_utc", lambda: non_midnight)
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        rc = cli_main(["notify", "underusage", "--window-weeks", "4"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    # window: [2024-06-02, 2024-06-30]  (midnight-to-midnight, 4 weeks)
+    assert "2024-06-30" in out
+    assert "2024-06-02" in out
+
+
 # ── T1: enabled kill-switch ───────────────────────────────────────────────────
 
 
