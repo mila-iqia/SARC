@@ -195,13 +195,15 @@ def _month_table(title: str, months: list[MonthlyStats]) -> list[str]:
 
 
 def _historical_section(stats: HistoricalStats) -> str:
-    lines = ["", *_month_table("── 6-Month Trend ──", stats.months)]
+    n = len(stats.months)
+    lines = ["", *_month_table(f"── {n}-Month Trend ──", stats.months)]
 
     if stats.yoy_months is not None:
         lines += [
             "",
             *_month_table(
-                "── Year-over-Year (same 6 months, prior year) ──", stats.yoy_months
+                f"── Year-over-Year (same {n} months, prior year) ──",
+                stats.yoy_months,
             ),
         ]
 

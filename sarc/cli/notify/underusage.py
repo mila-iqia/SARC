@@ -183,6 +183,7 @@ class UnderusageNotifyCommand:
             min_ratio=min_ratio,
             min_rgu_hours=min_rgu_hours,
             resource=self.resource,
+            months=ncfg.historical_months,
             exclude_zero_usage=True,
         )
         recurring = get_recurring_underusers(

@@ -302,6 +302,8 @@ class UnderusageNotifyConfig:
     cycle_length_weeks: int = 2
     # Number of most-recent cycles that count toward personalized_action.
     recurrence_active_cycles: int = 3
+    # Number of calendar months included in the historical trend section.
+    historical_months: int = 6
     email: EmailConfig | None = None
     # Universal usage report cadence.
     usage_report_window_weeks: int = 4
@@ -316,6 +318,7 @@ class UnderusageNotifyConfig:
             ("cycle_length_weeks", self.cycle_length_weeks),
             ("recurrence_display_cycles", self.recurrence_display_cycles),
             ("recurrence_active_cycles", self.recurrence_active_cycles),
+            ("historical_months", self.historical_months),
         ]:
             if not isinstance(value, int) or value < 1:
                 raise ValueError(

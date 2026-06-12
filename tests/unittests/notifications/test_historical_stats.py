@@ -365,6 +365,20 @@ def test_digest_historical_section_present():
     assert "6-Month Trend" in text
 
 
+def test_digest_historical_title_follows_count():
+    """Title derives from len(stats.months), not a hardcoded '6'."""
+    stats = HistoricalStats(
+        months=[
+            MonthlyStats(label=f"2025-0{i}", avg_waste_ratio=0.5, above_threshold_count=1)
+            for i in range(1, 4)  # 3 months
+        ],
+        yoy_months=None,
+    )
+    text = build_admin_digest([], period="…", historical=stats, **_DIGEST_KW)
+    assert "3-Month Trend" in text
+    assert "6-Month Trend" not in text
+
+
 def test_digest_historical_month_labels():
     text = build_admin_digest([], period="…", historical=_make_stats(), **_DIGEST_KW)
     for i in range(1, 7):
