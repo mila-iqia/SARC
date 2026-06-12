@@ -44,12 +44,18 @@ def _delivery_counts(results: list[_DeliveryResult]) -> dict[str, int]:
     }
 
 
-def _build_delivery_footer(results: list[_DeliveryResult], *, flagged: int) -> str:
+def _build_delivery_footer(
+    results: list[_DeliveryResult],
+    *,
+    title: str,
+    count_label: str,
+    count: int,
+) -> str:
     counts = _delivery_counts(results)
     lines = [
-        "--- Delivery Summary ---",
+        f"--- {title} ---",
         (
-            f"flagged={flagged}  dm_sent={counts['dm_sent']}"
+            f"{count_label}={count}  dm_sent={counts['dm_sent']}"
             f"  email_sent={counts['email_sent']}"
             f"  skipped={counts['skipped']}  failed={counts['failed']}"
         ),
@@ -359,23 +365,20 @@ class UnderusageNotifyCommand:
                     _DeliveryResult(row.email, row.display_name, "skipped", reason)
                 )
 
-        footer = _build_delivery_footer(delivery_results, flagged=len(rows))
+        footer = _build_delivery_footer(
+            delivery_results,
+            title="Delivery Summary",
+            count_label="flagged",
+            count=len(rows),
+        )
         digest_with_footer = digest + "\n\n" + footer
         if usage_report_eligible:
-            report_counts = _delivery_counts(report_results)
-            report_footer = (
-                "--- Usage Report Summary ---\n"
-                f"eligible={len(report_recipients)}"
-                f"  dm_sent={report_counts['dm_sent']}"
-                f"  email_sent={report_counts['email_sent']}"
-                f"  skipped={report_counts['skipped']}"
-                f"  failed={report_counts['failed']}"
+            report_footer = _build_delivery_footer(
+                report_results,
+                title="Usage Report Summary",
+                count_label="eligible",
+                count=len(report_recipients),
             )
-            report_failures = [r for r in report_results if r.status == "failed"]
-            if report_failures:
-                report_footer += "\nFailures:"
-                for r in report_failures:
-                    report_footer += f"\n  - {r.display_name} ({r.email}): {r.detail}"
             digest_with_footer += "\n\n" + report_footer
 
         channel_res = slack_client.post_channel_file(

@@ -35,6 +35,17 @@ def _tree_prefix(i: int, n: int) -> str:
     return "  ┌─" if i == 0 else "  ├─"
 
 
+def _footer_lines(
+    dashboard_url: str | None, help_section: str | None
+) -> list[str]:
+    lines: list[str] = []
+    if dashboard_url is not None:
+        lines += ["", f"Track your usage over time: {dashboard_url}"]
+    if help_section is not None:
+        lines += ["", help_section]
+    return lines
+
+
 def _jobs_section(top_jobs: list, *, rgu_value: Callable, suffix: str) -> str:
     by_cluster: dict[str, list] = defaultdict(list)
     for job in top_jobs:
@@ -97,12 +108,7 @@ def build_user_dm(
             ),
         ]
 
-    if dashboard_url is not None:
-        parts += ["", f"Track your usage over time: {dashboard_url}"]
-
-    if help_section is not None:
-        parts += ["", help_section]
-
+    parts += _footer_lines(dashboard_url, help_section)
     return "\n".join(parts)
 
 
@@ -138,12 +144,7 @@ def build_usage_report(
             ),
         ]
 
-    if dashboard_url is not None:
-        parts += ["", f"Track your usage over time: {dashboard_url}"]
-
-    if help_section is not None:
-        parts += ["", help_section]
-
+    parts += _footer_lines(dashboard_url, help_section)
     return "\n".join(parts)
 
 
