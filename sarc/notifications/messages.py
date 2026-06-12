@@ -241,7 +241,10 @@ def build_recurring_table(
     if cycle_dates is not None:
         flag_labels = tuple(d.strftime("%m-%d") for d in cycle_dates)
     else:
-        n_cycles = len(next(iter(recurring.values()))[0].cycles)
+        first_nonempty = next((rows for rows in recurring.values() if rows), None)
+        if first_nonempty is None:
+            return ""
+        n_cycles = len(first_nonempty[0].cycles)
         flag_labels = tuple(
             "W0" if i == 0 else f"W-{i * cycle_length_weeks}" for i in range(n_cycles)
         )

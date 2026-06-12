@@ -385,6 +385,34 @@ def test_recurring_table_6_cycles():
     assert idx_w4 < idx_sep < idx_w6
 
 
+def test_recurring_table_empty_cluster_is_skipped():
+    """An empty-row cluster in the dict is omitted; populated clusters still render."""
+    row = RecurringUserRow(
+        email="carol@mila.quebec",
+        display_name="Carol",
+        cluster="narval",
+        wasted_6w=500.0,
+        cluster_share=0.25,
+        cycles=[True, True, True, False, False],
+        personalized_action=True,
+    )
+    text = build_recurring_table(
+        {"empty_cluster": [], "narval": [row]},
+        **_RECURRING_KW_DEFAULT,
+    )
+    assert "narval" in text
+    assert "empty_cluster" not in text
+
+
+def test_recurring_table_all_empty_clusters_returns_empty_string():
+    """A dict of all-empty cluster lists returns '' without raising IndexError."""
+    text = build_recurring_table(
+        {"cluster1": [], "cluster2": []},
+        **_RECURRING_KW_DEFAULT,
+    )
+    assert text == ""
+
+
 # ── build_usage_report fixtures ───────────────────────────────────────────────
 
 _USAGE_JOB_NARVAL_1 = UsageJob(

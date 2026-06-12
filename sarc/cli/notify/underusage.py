@@ -161,10 +161,11 @@ class UnderusageNotifyCommand:
             print("=== DRY RUN — nothing will be sent ===")
             print()
 
+        parity = "even" if week_num % 2 == 0 else "odd"
         if dms_eligible:
-            print(f"ISO week {week_num} (even) — DMs eligible this run.")
+            print(f"ISO week {week_num} ({parity}) — DMs eligible this run.")
         else:
-            print(f"ISO week {week_num} (odd) — digest-only this run, no DMs.")
+            print(f"ISO week {week_num} ({parity}) — digest-only this run, no DMs.")
         if usage_report_eligible:
             print(
                 f"ISO week {week_num} (multiple of {ncfg.usage_report_every_weeks}) — Usage report eligible this run."

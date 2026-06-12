@@ -555,7 +555,12 @@ def _even_week_anchor(end: datetime, *, cycle_length_weeks: int = 2) -> datetime
 
     Advances *end* forward so that the resulting ISO week number is divisible by
     *cycle_length_weeks*.  The anchor may therefore be in the future relative to
-    *end*."""
+    *end*.
+
+    Limitation: ISO years with 53 weeks cause week 53 to be treated as an
+    off-cycle week (53 % cycle_length_weeks != 0 for cycle_length_weeks=2),
+    effectively skipping the DM cycle that would otherwise align with it.
+    """
     remainder = end.isocalendar().week % cycle_length_weeks
     end += timedelta(weeks=(cycle_length_weeks - remainder) % cycle_length_weeks)
     return end
