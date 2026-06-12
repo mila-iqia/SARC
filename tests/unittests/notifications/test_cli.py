@@ -621,3 +621,25 @@ def test_send_usage_report_non_report_week_no_reports(
     # beaubonhomme's job on 2024-07-01 is outside [2024-06-16, 2024-06-30] — no reports
     dm_calls = [call.args[0] for call in slack_inst.dm_user.call_args_list]
     assert "beaubonhomme@mila.quebec" not in dm_calls
+
+
+def test_no_dms_flag_suppresses_usage_report_sends(
+    usage_report_db, cli_main, monkeypatch, capsys
+):
+    """--no-dms suppresses usage-report DMs and records no_dms_flag as the skip reason."""
+    slack_cls, slack_inst = _mock_slack()
+    email_cls, email_inst = _mock_email()
+    _patch_senders(monkeypatch, slack_cls, email_cls)
+    cfg = {**_NOTIFY_CFG, "send_dms": True, "send_usage_report": True}
+    with gifnoc.overlay({"sarc.notifications": cfg}):
+        rc = cli_main(
+            [
+                "notify", "underusage", "--window-weeks", "2",
+                "--as-of", _USAGE_REPORT_WEEK, "--send", "--no-dms",
+            ]
+        )
+    assert rc == 0
+    # No per-user DMs of any kind — neither underusage alerts nor usage reports
+    assert slack_inst.dm_user.call_count == 0
+    out = capsys.readouterr().out
+    assert "skipped=1" in out  # usage-report recipients recorded as skipped

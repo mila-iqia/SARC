@@ -151,7 +151,7 @@ class UnderusageNotifyCommand:
         # dms_will_send: additionally requires --no-dms gate and send_dms config (controls actual sends)
         dms_will_send = dms_eligible and not self.no_dms and ncfg.send_dms
         usage_report_eligible = week_num % ncfg.usage_report_every_weeks == 0
-        usage_report_will_send = usage_report_eligible and ncfg.send_usage_report
+        usage_report_will_send = usage_report_eligible and not self.no_dms and ncfg.send_usage_report
 
         if self.as_of is not None and end > _now_utc():
             print("Note: --as-of is in the future; the window may contain no jobs.")
@@ -364,14 +364,10 @@ class UnderusageNotifyCommand:
                         )
                     )
         elif usage_report_eligible and report_recipients:
+            reason = "no_dms_flag" if self.no_dms else "send_usage_report_disabled"
             for row in report_recipients:
                 report_results.append(
-                    _DeliveryResult(
-                        row.email,
-                        row.display_name,
-                        "skipped",
-                        "send_usage_report_disabled",
-                    )
+                    _DeliveryResult(row.email, row.display_name, "skipped", reason)
                 )
 
         footer = _build_delivery_footer(delivery_results, flagged=len(rows))
