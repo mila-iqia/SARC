@@ -28,12 +28,12 @@
 - [x] **Défaut Efficiency metric = SM occupancy** `(SC, SP)`
 - [x] **Dashboard configurable (layout de tuiles) + sauvegarde** (localStorage) `(G — « se faire son propre dashboard ET le sauvegarder »)`
 - [x] **Focus conserve l'heure** (`YYYY-MM-DDTHH:MM`) `(G)`
+- [x] **Mouse-over explicatif sur tous les filtres** — tooltips ajoutés sur Start, End, User, Efficiency metric, Cluster, Job states (+ bouton Update) ; complètent Period / RGU type / RGU unit / Reset déjà présents `(G)`
 
 ---
 
 ## 🟡 Partiellement fait
 
-- [ ] **Mouse-over explicatif sur TOUS les filtres** — présents sur *Period / RGU type / RGU unit / Reset* ; **manquent** *Start, End, User, Efficiency metric, Cluster, Job states* `(G)`
 - [ ] **Titre du chart de métrique nommant explicitement `sm_occupancy`** — la métrique n'apparaît que dans la légende (`renderMetricTrend`, titre générique) `(S10 — Chart 2)`
 - [ ] **Tri par défaut Job table = RGU inutilisés (absolu) desc** — actuellement `rgu_hours desc` (changer `JOBTABLE_DEFAULTS.sortBy`) `(SC, SP)`
 - [ ] **Clarifier Primary/Secondary metric** — renommage + relocalisation faits ; reste : masquer derrière *Advanced* (cf. Axe 1) `(G, S10)`

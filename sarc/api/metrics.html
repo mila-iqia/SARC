@@ -221,11 +221,13 @@
   <div class="controls">
     <div class="ctrl">
       <label for="start">Start</label>
-      <input type="date" id="start" />
+      <input type="date" id="start"
+             title="Start of the date range (inclusive), in UTC. Every plot and the job table cover jobs in this range. Takes effect on Update." />
     </div>
     <div class="ctrl">
       <label for="end">End</label>
-      <input type="date" id="end" />
+      <input type="date" id="end"
+             title="End of the date range (inclusive), in UTC. Every plot and the job table cover jobs in this range. Takes effect on Update." />
     </div>
     <div class="ctrl">
       <label>Period</label>
@@ -275,6 +277,7 @@
       <label>Cluster</label>
       <div class="js-dropdown">
         <button type="button" id="cluster-btn" class="add-select"
+                title="Restrict every plot to the selected clusters. All checked = all clusters. Takes effect on Update."
                 style="text-align:left;min-width:110px">All clusters ▾</button>
         <div id="cluster-panel" class="job-states-panel" style="display:none"></div>
       </div>
@@ -283,6 +286,7 @@
       <label>Job states</label>
       <div class="js-dropdown">
         <button type="button" id="js-btn" class="add-select"
+                title="Restrict every plot to jobs in the selected Slurm states (e.g. COMPLETED, FAILED, TIMEOUT). All checked = all states. Takes effect on Update."
                 style="text-align:left;min-width:110px">All states ▾</button>
         <div id="js-panel" class="job-states-panel" style="display:none"></div>
       </div>
@@ -290,13 +294,14 @@
     <div class="ctrl">
       <label for="cluster_user">User</label>
       <input type="text" id="cluster_user" placeholder="all users"
+             title="Restrict every plot to a single username (exact match). Leave empty for all users. Takes effect on Update."
              autocomplete="off" data-lpignore="true" data-form-type="other" />
     </div>
     <div class="ctrl">
       <label for="metric-select">Efficiency metric</label>
-      <select id="metric-select"></select>
+      <select id="metric-select" title="Metric taken as the 'useful' fraction: it splits Used vs Unused RGU (RGU usage, RGU by user, job-table waste column) and is the value plotted in Metric Trend, Density and the heatmap. Takes effect on Update."></select>
     </div>
-    <button onclick="loadCharts()">Update</button>
+    <button onclick="loadCharts()" title="Apply the current filters (date range, clusters, user, job states, metric, RGU type) and reload every plot.">Update</button>
     <button id="reset-btn" onclick="resetState()" title="Clear all saved settings and reset to defaults" style="background:#888;">Reset</button>
     <div id="focus-label" class="no-focus">
       <span id="focus-label-text">No focus — click a bar in a period plot to set one</span>
