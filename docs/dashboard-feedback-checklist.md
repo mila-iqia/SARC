@@ -36,6 +36,7 @@
 - [x] **Défaut Secondary metric (heatmap) = GPU utilization** — `metricScatterMetric2` initialisé à `'gpu_utilization'` (init via `??` pour préserver un « — none — » sauvegardé, + `resetState`) ; le heatmap par défaut compare donc SM occupancy × GPU utilization `(SC)`
 - [x] **« RGU requested vs used » — vue agrégée (whole range)** — dropdown « View: Per period / Whole range » sur la tuile (`renderHistogram`) ; agrégé = une barre empilée sommant toute la plage Start–End, focus-agnostique (ni clic-focus, ni réaction à un focus posé ailleurs) ; somme côté front (pas de nouvel endpoint) ; mode persisté (`rguUsageView`) `(SC, SP)`
 - [x] **Unité en % sur les charts de métrique** — `tickformat: '.0%'` sur les axes (Metric Trend Y, Density X, heatmap X/Y) + hovers en `.1%` ; données laissées en 0–1 (bins / range / focus intacts) ; la job table était déjà en % `(S10 — Chart 2)`
+- [x] **`Enter` = `Update`** — `keydown` sur `.controls` : Entrée dans un champ (input/select) appelle `loadCharts()` ; les boutons (Update/Reset, toggles de dropdown, All/None) gardent leur comportement ; popovers des tuiles (dans `#tile-grid`) non affectés `(S10)`
 
 ---
 
@@ -64,7 +65,6 @@ _(plus rien — tout est désormais soit fait, soit listé dans « À faire ».)
 - [ ] **Étiquettes de valeurs lisibles sans hover** (+ arrondi à l'unité / au % près) — tout est en hover `(S10 — Charts all)`
 - [ ] **Texte explicatif au-dessus de chaque chart** (ce qui est représenté + niveau de perf attendu / références) `(S10 — Charts all)`
 - [ ] **Chart RGU by user scrollable** pour Top 100 sans casser le layout `(S10 — Chart 3)`
-- [ ] **`Enter` = `Update`** sur la barre de filtres `(S10)`
 - [ ] **Repenser les dropdowns de type de plot par tuile** (jugés confus ; viser 2–3 charts fixes) `(S10 — Charts all)`
 - [ ] **Vérifier/corriger les timestamps des charts** — à préciser avec l'auteur du feedback `(S10)`
 

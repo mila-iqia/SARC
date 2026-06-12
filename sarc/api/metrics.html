@@ -573,6 +573,16 @@
     }
     document.getElementById('rgu-unit').addEventListener('change', () => { rerenderRguTiles(); saveState(); });
 
+    // Pressing Enter in any filter field applies the filters, like clicking Update.
+    // Buttons keep their own behaviour (Update / Reset, dropdown toggles, All/None).
+    document.querySelector('.controls').addEventListener('keydown', e => {
+      if (e.key !== 'Enter' || e.target.tagName === 'BUTTON') return;
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') {
+        e.preventDefault();
+        loadCharts();
+      }
+    });
+
     // ── Cluster selector (multi-select, mirrors the job-states widget) ─────────
     const clBtn = document.getElementById('cluster-btn');
     const clPanel = document.getElementById('cluster-panel');
