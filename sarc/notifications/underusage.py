@@ -565,7 +565,8 @@ def _even_week_anchor(end: datetime, *, cycle_length_weeks: int = 2) -> datetime
 def get_cycle_dates(
     end: datetime, n: int = 5, *, cycle_length_weeks: int = 2
 ) -> list[date]:
-    """Return n cycle end-dates [W0, W-2, ..., W-(2*(n-1))] as date objects.
+    """Return n cycle end-dates [W0, W-k, ..., W-(k*(n-1))] as date objects,
+    where k = cycle_length_weeks.
 
     Each date is the day of an aligned ISO week, spaced *cycle_length_weeks*
     apart, anchored to the current (or next) aligned week from *end*.

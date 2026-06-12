@@ -347,8 +347,17 @@ def test_display_cycles_6_produces_6_columns(recurring_db):
             assert len(row.cycles) == 6
 
 
-def test_active_cycles_2_personalized_action(recurring_db):
-    """recurrence_active_cycles=2: only cycles[0] and cycles[1] must be True."""
+@pytest.mark.parametrize(
+    "active_cycles,expected",
+    [
+        (2, True),   # fourthuser cycles[:2] = [T, T]
+        (3, True),   # fourthuser cycles[:3] = [T, T, T]
+        (4, False),  # fourthuser cycles[:4] = [T, T, T, F]
+        (5, False),  # fourthuser cycles[:5] = [T, T, T, F, F]
+    ],
+)
+def test_active_cycles_personalized_action(recurring_db, active_cycles, expected):
+    """recurrence_active_cycles controls the cutoff; tests both True and False sides."""
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         result = get_recurring_underusers(
             _TEST_END,
@@ -356,11 +365,10 @@ def test_active_cycles_2_personalized_action(recurring_db):
             min_rgu_hours=_MIN_RGU_HOURS,
             window_weeks=6,
             cluster_share_threshold=1.1,
-            recurrence_active_cycles=2,
+            recurrence_active_cycles=active_cycles,
         )
-    # fourthuser has cycles[0]=True and cycles[1]=True but cycles[3]=False, cycles[4]=False
     row = next(r for r in result["mila"] if r.email == "fourthuser@mila.quebec")
-    assert row.personalized_action is True
+    assert row.personalized_action is expected
 
 
 # ── Empty / edge cases ────────────────────────────────────────────────────────
