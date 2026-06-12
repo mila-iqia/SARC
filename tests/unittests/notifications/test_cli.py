@@ -275,6 +275,21 @@ def test_bare_date_as_of_interpreted_as_utc_midnight(notify_db, cli_main, capsys
     assert "2024-05-26" in out
 
 
+# ── T1: enabled kill-switch ───────────────────────────────────────────────────
+
+
+def test_enabled_false_returns_zero_without_sending(cli_main, monkeypatch):
+    slack_cls = MagicMock()
+    email_cls = MagicMock()
+    _patch_senders(monkeypatch, slack_cls, email_cls)
+    cfg = {**_NOTIFY_CFG, "enabled": False, "send_dms": True}
+    with gifnoc.overlay({"sarc.notifications": cfg}):
+        rc = cli_main(["notify", "underusage", "--window-weeks", "4", "--as-of", _EVEN_WEEK, "--send"])
+    assert rc == 0
+    slack_cls.assert_not_called()
+    email_cls.assert_not_called()
+
+
 # ── missing config ────────────────────────────────────────────────────────────
 
 

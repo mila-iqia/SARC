@@ -117,6 +117,9 @@ class UnderusageNotifyCommand:
         if ncfg is None:
             logger.error("No notifications configuration found in config")
             return -1
+        if not ncfg.enabled:
+            logger.info("Underusage notifications disabled (enabled=false); skipping")
+            return 0
 
         window_weeks = (
             self.window_weeks if self.window_weeks is not None else ncfg.window_weeks
