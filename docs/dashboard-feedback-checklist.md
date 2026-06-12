@@ -35,6 +35,7 @@
 - [x] **Confusion Start/End vs Focus levée** — focus déjà transformé en label d'état (plus un champ) ; tooltip explicatif sur `#focus-label` (plage globale vs sous-tranche, tuiles filtrées : density / heatmap / RGU by user / job table) + message « No focus » enrichi pour décrire l'effet `(G)`
 - [x] **Défaut Secondary metric (heatmap) = GPU utilization** — `metricScatterMetric2` initialisé à `'gpu_utilization'` (init via `??` pour préserver un « — none — » sauvegardé, + `resetState`) ; le heatmap par défaut compare donc SM occupancy × GPU utilization `(SC)`
 - [x] **« RGU requested vs used » — vue agrégée (whole range)** — dropdown « View: Per period / Whole range » sur la tuile (`renderHistogram`) ; agrégé = une barre empilée sommant toute la plage Start–End, focus-agnostique (ni clic-focus, ni réaction à un focus posé ailleurs) ; somme côté front (pas de nouvel endpoint) ; mode persisté (`rguUsageView`) `(SC, SP)`
+- [x] **Unité en % sur les charts de métrique** — `tickformat: '.0%'` sur les axes (Metric Trend Y, Density X, heatmap X/Y) + hovers en `.1%` ; données laissées en 0–1 (bins / range / focus intacts) ; la job table était déjà en % `(S10 — Chart 2)`
 
 ---
 
@@ -61,7 +62,6 @@ _(plus rien — tout est désormais soit fait, soit listé dans « À faire ».)
 ### Axe 3 — Lisibilité & interaction des charts
 - [ ] **Drill-down hiérarchique** (double-clic : mois → semaine → jour → heure) — seul le focus simple existe `(S10 — Charts 1 & 2)`
 - [ ] **Étiquettes de valeurs lisibles sans hover** (+ arrondi à l'unité / au % près) — tout est en hover `(S10 — Charts all)`
-- [ ] **Unité en %** pour les métriques (sm_occupancy affiché en fraction 0–1) `(S10 — Chart 2)`
 - [ ] **Texte explicatif au-dessus de chaque chart** (ce qui est représenté + niveau de perf attendu / références) `(S10 — Charts all)`
 - [ ] **Chart RGU by user scrollable** pour Top 100 sans casser le layout `(S10 — Chart 3)`
 - [ ] **`Enter` = `Update`** sur la barre de filtres `(S10)`
