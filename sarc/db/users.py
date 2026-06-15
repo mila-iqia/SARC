@@ -385,7 +385,8 @@ class SupervisorsHelper(SQLModel, table=True):
 class SupervisorsDB(ValidDB, table=True):
     __tablename__ = "user_supervisors"
     supervisors: list[SupervisorsHelper] = Relationship(
-        cascade_delete=True, sa_relationship_kwargs={"order_by": SupervisorsHelper.pos}
+        passive_deletes="all",
+        sa_relationship_kwargs={"order_by": SupervisorsHelper.pos},
     )
 
 
