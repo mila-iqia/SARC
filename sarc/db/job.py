@@ -40,7 +40,7 @@ class SlurmJobDB(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     # job identification
     cluster_id: int = Field(foreign_key="clusters.id", ondelete="RESTRICT")
-    cluster: SlurmClusterDB = Relationship()
+    cluster: SlurmClusterDB = Relationship(passive_deletes="all")
     account: str
     job_id: int
     array_job_id: int | None = None
@@ -103,7 +103,9 @@ class SlurmJobDB(SQLModel, table=True):
 
     statistics: dict[str, JobStatisticDB] = Relationship(
         sa_relationship=relationship(
-            JobStatisticDB, collection_class=attribute_keyed_dict("name")
+            JobStatisticDB,
+            collection_class=attribute_keyed_dict("name"),
+            passive_deletes="all",
         )
     )
 

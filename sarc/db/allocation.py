@@ -28,7 +28,7 @@ class AllocationDB(SQLModel, table=True):
     # Database ID
     id: int | None = Field(default=None, primary_key=True)
     cluster_id: int = Field(foreign_key="clusters.id", index=True)
-    cluster: SlurmClusterDB = Relationship()
+    cluster: SlurmClusterDB = Relationship(passive_deletes="all")
 
     resource_name: str
     group_name: str
