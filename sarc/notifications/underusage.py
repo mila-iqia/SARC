@@ -196,7 +196,7 @@ def get_underusers(
                     "display_name": row.display_name,
                     "clusters": [],
                 }
-            rgu_h, rgu_used_h, wasted_h = _split_waste(row)
+            rgu_h, _, wasted_h = _split_waste(row)
             user_data[uid]["clusters"].append(
                 ClusterBreakdown(
                     cluster=row.cluster_name or "unknown",

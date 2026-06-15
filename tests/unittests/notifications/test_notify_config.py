@@ -66,3 +66,74 @@ def test_active_cycles_greater_than_display_raises():
 def test_active_cycles_equal_to_display_is_valid():
     cfg = _make(recurrence_active_cycles=5, recurrence_display_cycles=5)
     assert cfg.recurrence_active_cycles == 5
+
+
+# --- New fields ---
+
+
+def test_new_field_defaults():
+    cfg = _make()
+    assert cfg.clusters == []
+    assert cfg.usage_report_min_rgu_hours == 0.0
+    assert cfg.personalized_action_min_waste_rgu_hours == 16128.0
+    assert cfg.waste_rescale_threshold == 1.0
+
+
+def test_waste_rescale_threshold_boundary_one_is_valid():
+    cfg = _make(waste_rescale_threshold=1.0)
+    assert cfg.waste_rescale_threshold == 1.0
+
+
+def test_waste_rescale_threshold_zero_raises():
+    with pytest.raises(ValueError, match="waste_rescale_threshold"):
+        _make(waste_rescale_threshold=0.0)
+
+
+def test_waste_rescale_threshold_negative_raises():
+    with pytest.raises(ValueError, match="waste_rescale_threshold"):
+        _make(waste_rescale_threshold=-0.1)
+
+
+def test_waste_rescale_threshold_above_one_raises():
+    with pytest.raises(ValueError, match="waste_rescale_threshold"):
+        _make(waste_rescale_threshold=1.01)
+
+
+def test_usage_report_min_rgu_hours_zero_is_valid():
+    cfg = _make(usage_report_min_rgu_hours=0.0)
+    assert cfg.usage_report_min_rgu_hours == 0.0
+
+
+def test_usage_report_min_rgu_hours_negative_raises():
+    with pytest.raises(ValueError, match="usage_report_min_rgu_hours"):
+        _make(usage_report_min_rgu_hours=-1.0)
+
+
+def test_personalized_action_min_waste_rgu_hours_zero_is_valid():
+    cfg = _make(personalized_action_min_waste_rgu_hours=0.0)
+    assert cfg.personalized_action_min_waste_rgu_hours == 0.0
+
+
+def test_personalized_action_min_waste_rgu_hours_negative_raises():
+    with pytest.raises(ValueError, match="personalized_action_min_waste_rgu_hours"):
+        _make(personalized_action_min_waste_rgu_hours=-1.0)
+
+
+def test_clusters_list_of_strings_is_valid():
+    cfg = _make(clusters=["mila"])
+    assert cfg.clusters == ["mila"]
+
+
+def test_clusters_empty_list_is_valid():
+    cfg = _make(clusters=[])
+    assert cfg.clusters == []
+
+
+def test_clusters_non_string_entry_raises():
+    with pytest.raises(ValueError, match="clusters"):
+        _make(clusters=[123])
+
+
+def test_clusters_empty_string_entry_raises():
+    with pytest.raises(ValueError, match="clusters"):
+        _make(clusters=[""])

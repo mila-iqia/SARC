@@ -308,6 +308,10 @@ class UnderusageNotifyConfig:
     usage_report_window_weeks: int = 4
     usage_report_every_weeks: int = 4
     send_usage_report: bool = False
+    clusters: list[str] = field(default_factory=list)
+    usage_report_min_rgu_hours: float = 0.0
+    personalized_action_min_waste_rgu_hours: float = 16128.0
+    waste_rescale_threshold: float = 1.0
 
     def __post_init__(self):
         for field_name, value in [
@@ -329,6 +333,24 @@ class UnderusageNotifyConfig:
                 f"recurrence_active_cycles ({self.recurrence_active_cycles}) must be"
                 f" ≤ recurrence_display_cycles ({self.recurrence_display_cycles})"
             )
+        if not (0 < self.waste_rescale_threshold <= 1):
+            raise ValueError(
+                f"waste_rescale_threshold must be in (0, 1], got {self.waste_rescale_threshold!r}"
+            )
+        if self.usage_report_min_rgu_hours < 0:
+            raise ValueError(
+                f"usage_report_min_rgu_hours must be >= 0, got {self.usage_report_min_rgu_hours!r}"
+            )
+        if self.personalized_action_min_waste_rgu_hours < 0:
+            raise ValueError(
+                f"personalized_action_min_waste_rgu_hours must be >= 0,"
+                f" got {self.personalized_action_min_waste_rgu_hours!r}"
+            )
+        for entry in self.clusters:
+            if not isinstance(entry, str) or not entry:
+                raise ValueError(
+                    f"clusters must be a list of non-empty strings, got {entry!r}"
+                )
 
 
 @dataclass
