@@ -8,7 +8,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse
-from sqlalchemy import nulls_last
+from sqlalchemy import literal_column, nulls_last
 from sqlalchemy.orm import aliased
 from sqlmodel import Session, and_, case, col, func, select, text
 
@@ -537,13 +537,20 @@ def _density_bin_expr(metric_expr, nbins: int = _DENSITY_BINS):
     return func.least(func.greatest(func.floor(metric_expr * nbins), 0), nbins - 1)
 
 
+# Postgres treats NaN = NaN as TRUE (unlike IEEE/Python), so `expr == expr` does
+# NOT exclude NaN. Compare against this literal instead — it also adds no bind
+# parameter, sidestepping pg8000's quirks around bound values.
+_NAN = literal_column("'NaN'::float8")
+
+
+def _is_real(expr):
+    """SQL predicate: expr is a usable number — neither NULL nor NaN."""
+    return and_(expr.is_not(None), expr != _NAN)
+
+
 def _valid_metric_filter(metric_expr):
-    """SQL predicate: metric expr is not NULL, >= 0, and not NaN (NaN != NaN)."""
-    return and_(
-        metric_expr.is_not(None),
-        metric_expr >= 0,
-        metric_expr == metric_expr,  # noqa: PLR0124
-    )
+    """SQL predicate: metric is a real number (not NULL/NaN) and >= 0."""
+    return and_(_is_real(metric_expr), metric_expr >= 0)
 
 
 @router.get("/metrics/metric_distribution")
@@ -718,17 +725,12 @@ def metrics_rgu_usage(
     bucket_expr = _bucket_expr(parsed, src.submit_time, begin_dt)
     rgu_hours = src.rgu_drac * src.elapsed_time / 3600.0
     m_mean = col(JobStatisticDB.mean)
-    # NaN is its only non-equal value; `m_mean == m_mean` is the SQL idiom.
-    rgu_used_term = case(
-        (m_mean == m_mean, rgu_hours * m_mean),  # noqa: PLR0124
-        else_=0.0,
-    )
-    # RGU·h of jobs with no usable metric (NULL via the LEFT JOIN, or NaN): kept
-    # apart from "unused" so a missing measurement isn't counted as waste.
-    rgu_unmeasured_term = case(
-        (m_mean == m_mean, 0.0),  # noqa: PLR0124
-        else_=rgu_hours,
-    )
+    # Split used vs unmeasured on whether the metric is a real value (not
+    # NULL/NaN); a missing measurement is kept apart from "unused" rather than
+    # counted as waste.
+    m_present = _is_real(m_mean)
+    rgu_used_term = case((m_present, rgu_hours * m_mean), else_=0.0)
+    rgu_unmeasured_term = case((m_present, 0.0), else_=rgu_hours)
 
     query = src.apply(
         select(
@@ -894,10 +896,11 @@ def metrics_metric_trend(
     bucket_expr = _bucket_expr(parsed, SlurmJobDB.submit_time, begin_dt)
     m_mean = col(JobStatisticDB.mean)
     m_max = col(JobStatisticDB.max)
-    # NaN-proof averages: NaN != NaN, and a single NaN would contaminate the
-    # whole AVG, so each value is independently nulled out when NaN.
-    avg_mean = func.avg(case((m_mean == m_mean, m_mean))).label("avg_mean")  # noqa: PLR0124
-    avg_max = func.avg(case((m_max == m_max, m_max))).label("avg_max")  # noqa: PLR0124
+    # NaN-proof averages: a single NaN would contaminate the whole AVG, so each
+    # value is nulled out unless it is real (`x == x` won't do this on Postgres,
+    # where NaN = NaN is TRUE — see _is_real).
+    avg_mean = func.avg(case((_is_real(m_mean), m_mean))).label("avg_mean")
+    avg_max = func.avg(case((_is_real(m_max), m_max))).label("avg_max")
 
     query = (
         select(bucket_expr, avg_mean, avg_max)
@@ -968,16 +971,11 @@ def metrics_rgu_by_user(
     )
     rgu_hours = src.rgu_drac * src.elapsed_time / 3600.0
     m_mean = col(JobStatisticDB.mean)
-    rgu_used_term = case(
-        (m_mean == m_mean, rgu_hours * m_mean),  # noqa: PLR0124
-        else_=0.0,
-    )
-    # RGU·h of jobs with no usable metric (NULL via the LEFT JOIN, or NaN): kept
-    # apart from "unused" so a missing measurement isn't counted as waste.
-    rgu_unmeasured_term = case(
-        (m_mean == m_mean, 0.0),  # noqa: PLR0124
-        else_=rgu_hours,
-    )
+    # Split used vs unmeasured on whether the metric is a real value (not
+    # NULL/NaN); a missing measurement is kept apart from "unused".
+    m_present = _is_real(m_mean)
+    rgu_used_term = case((m_present, rgu_hours * m_mean), else_=0.0)
+    rgu_unmeasured_term = case((m_present, 0.0), else_=rgu_hours)
     user_expr = func.coalesce(col(src.base.cluster_user), "unknown").label("user")
     rgu_requested_sum = func.sum(rgu_hours).label("rgu_requested")
 
