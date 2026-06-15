@@ -263,16 +263,6 @@ class DbConfig:
 
 
 @dataclass
-class LokiConfig:
-    uri: str
-
-
-@dataclass
-class TempoConfig:
-    uri: str
-
-
-@dataclass
 class SlackConfig:
     description: str
     token: Secret[str]
@@ -308,8 +298,6 @@ class Config:
     patches: Path
     server: ServerConfig = field(default_factory=ServerConfig)
     cache: Path | None = None
-    loki: LokiConfig | None = None
-    tempo: TempoConfig | None = None
     health_monitor: HealthMonitorConfig | None = None
     users: UserScrapingConfig | None = None
     clusters: dict[str, ClusterConfig] = field(default_factory=dict)
