@@ -13,27 +13,13 @@ $ git clone git@github.com:mila-iqia/SARC.git
 $ cd SARC
 ```
 
-`sarc` will be looking into the current working directory to find the dev config file. To work with prod config or
-from any directory set the environment variable as follow.
+If you want to run the API server locally for trying out things, run:
 
 ```bash
-$ export SARC_CONFIG=/path/to/SARC/config/sarc-prod.json
+$ SARC_CONFIG=<config file> uv run uvicorn sarc.api.main:app
 ```
 
-To access the database, you need to setup the mila idt vpn and create an ssh
-tunnel. If you never accessed the VM, see documention here first https://mila-iqia.atlassian.net/wiki/spaces/IDT/pages/2216329289/VM+SARC.
-
-To create the ssh tunnel:
-
-```bash
-$ ssh -L 27017:localhost:27017 sarc
-```
-
-You can now test on your machine a simple example to see if `sarc` is able to access the database:
-
-```bash
-$ uv run python example/waste_stats.py
-```
+It will print the URL to visit in your browser.
 
 ## Contributing
 
@@ -45,6 +31,7 @@ Those commands are for the proper formatting.
 uv run ruff check --select I --fix
 uv run ruff format
 uv run tox -e ruff
+uv run tox -e ty
 ```
 
 ### How to add dependencies
@@ -69,21 +56,7 @@ This runs the tests.
 uv run tox -e test
 ```
 
-If you're running on Mac OS, you can install `podman` with `brew install podman`.
-Later you can start the virtual machine with
-
-```
-podman machine init
-podman machine start
-```
-
-### Scripts meant to be run on their own
-
-```
-sarc/account_matching/make_matches.py
-sarc/account_matching/update_account_matches_in_database.py
-sarc/inode_storage_scanner/get_diskusage.py  (stub)
-```
+You need to have an instance of postgresql 18 running on localhost:5432 with authentification set so that the local user can connect without a password for the tests to work.
 
 ### How to generate doc
 

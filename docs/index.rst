@@ -11,15 +11,6 @@ Welcome to SARC's documentation!
    :caption: Contents:
 
    README
-   notebooks/index
    account_matching
    account_matching_manual_procedure
-   deployment
-   remote_mongo_access
-   secrets
-   scripts/README
-   scripts/remote/README
-   scripts/systemd/README
-   scripts/deploy/README
    api
-
