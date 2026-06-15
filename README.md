@@ -4,8 +4,6 @@ SARC stands for "Supervision et Analyde des Resources de Calcul". It's a Mila in
 
 ## Installation and setup
 
-This is the guide to use the client. For deployment, see `docs/deployment.md`.
-
 To install sarc, git clone the repo and install `uv`.
 
 ```bash

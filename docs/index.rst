@@ -11,6 +11,5 @@ Welcome to SARC's documentation!
    :caption: Contents:
 
    README
-   account_matching
-   account_matching_manual_procedure
    api
+   dev_overview/README
