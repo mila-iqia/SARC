@@ -105,7 +105,7 @@ class SlurmJobDB(SQLModel, table=True):
         sa_relationship=relationship(
             JobStatisticDB,
             collection_class=attribute_keyed_dict("name"),
-            cascade="all, delete-orphan",
+            passive_deletes="all",
         )
     )
 
