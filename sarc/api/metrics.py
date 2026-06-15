@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse
 from sqlalchemy import literal_column, nulls_last
 from sqlalchemy.orm import aliased
-from sqlmodel import Session, and_, case, col, func, select, text
+from sqlmodel import Session, and_, case, col, func, select
 
 from sarc.api.auth import require_basic_auth
 from sarc.config import config
@@ -25,13 +25,6 @@ router = APIRouter(prefix="/dash", dependencies=[Depends(require_basic_auth)])
 
 def session_dep() -> Generator[Session]:
     with config.db.session() as sess:
-        # Disable parallel query for dashboard requests: parallel workers
-        # allocate dynamic shared-memory segments in /dev/shm, which is tiny in
-        # a default container (~64 MB) and overflows on big joins/aggregations
-        # ("could not resize shared memory segment"). No measurable speedup here.
-        # SET LOCAL (not SET) scopes it to this request's transaction, so it
-        # never leaks to later sessions reusing the pooled connection.
-        sess.connection().execute(text("SET LOCAL max_parallel_workers_per_gather = 0"))
         yield sess
 
 
