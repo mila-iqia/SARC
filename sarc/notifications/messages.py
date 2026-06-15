@@ -35,9 +35,7 @@ def _tree_prefix(i: int, n: int) -> str:
     return "  ┌─" if i == 0 else "  ├─"
 
 
-def _footer_lines(
-    dashboard_url: str | None, help_section: str | None
-) -> list[str]:
+def _footer_lines(dashboard_url: str | None, help_section: str | None) -> list[str]:
     lines: list[str] = []
     if dashboard_url is not None:
         lines += ["", f"Track your usage over time: {dashboard_url}"]
@@ -52,9 +50,7 @@ def _jobs_section(top_jobs: list, *, rgu_value: Callable, suffix: str) -> str:
         by_cluster[job.cluster].append(job)
 
     cluster_order = sorted(
-        by_cluster,
-        key=lambda c: sum(rgu_value(j) for j in by_cluster[c]),
-        reverse=True,
+        by_cluster, key=lambda c: sum(rgu_value(j) for j in by_cluster[c]), reverse=True
     )
 
     lines = []
@@ -138,9 +134,7 @@ def build_usage_report(
             "Your top jobs by GPU usage:",
             "",
             _jobs_section(
-                row.top_jobs,
-                rgu_value=lambda j: j.rgu_hours_used,
-                suffix="RGU-h",
+                row.top_jobs, rgu_value=lambda j: j.rgu_hours_used, suffix="RGU-h"
             ),
         ]
 
@@ -175,8 +169,7 @@ def _historical_section(stats: HistoricalStats) -> str:
         lines += [
             "",
             *_month_table(
-                f"── Year-over-Year (same {n} months, prior year) ──",
-                stats.yoy_months,
+                f"── Year-over-Year (same {n} months, prior year) ──", stats.yoy_months
             ),
         ]
 

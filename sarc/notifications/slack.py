@@ -54,7 +54,9 @@ class SlackClient:
     ) -> SendResult:
         """Post a message to a public/private channel."""
         try:
-            self._client.chat_postMessage(**self._message_kwargs(channel, text, preformatted=preformatted))
+            self._client.chat_postMessage(
+                **self._message_kwargs(channel, text, preformatted=preformatted)
+            )
             return SendResult(SendStatus.OK)
         except Exception as exc:
             logger.error("Slack channel post failed: %s", exc)
@@ -109,7 +111,9 @@ class SlackClient:
         try:
             conv = self._client.conversations_open(users=[user_id])
             channel_id = conv["channel"]["id"]
-            self._client.chat_postMessage(**self._message_kwargs(channel_id, text, preformatted=preformatted))
+            self._client.chat_postMessage(
+                **self._message_kwargs(channel_id, text, preformatted=preformatted)
+            )
             return SendResult(SendStatus.OK)
         except Exception as exc:
             logger.error("Slack DM failed for %s (%s): %s", email, user_id, exc)

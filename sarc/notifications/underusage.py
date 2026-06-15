@@ -238,7 +238,7 @@ def get_underusers(
                     util,
                     start,
                     end,
-                    exclude_zero_usage=False,
+                    exclude_zero_usage=exclude_zero_usage,
                     rgu_used_expr=rgu_used_expr,
                 )
             ).all()

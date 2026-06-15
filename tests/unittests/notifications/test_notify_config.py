@@ -26,27 +26,33 @@ def test_valid_config_constructs():
     assert cfg.window_weeks == 2
 
 
-@pytest.mark.parametrize("field", [
-    "window_weeks",
-    "usage_report_window_weeks",
-    "recurrence_window_weeks",
-    "cycle_length_weeks",
-    "recurrence_display_cycles",
-    "recurrence_active_cycles",
-])
+@pytest.mark.parametrize(
+    "field",
+    [
+        "window_weeks",
+        "usage_report_window_weeks",
+        "recurrence_window_weeks",
+        "cycle_length_weeks",
+        "recurrence_display_cycles",
+        "recurrence_active_cycles",
+    ],
+)
 def test_zero_value_raises(field):
     with pytest.raises(ValueError, match=field):
         _make(**{field: 0})
 
 
-@pytest.mark.parametrize("field", [
-    "window_weeks",
-    "usage_report_window_weeks",
-    "recurrence_window_weeks",
-    "cycle_length_weeks",
-    "recurrence_display_cycles",
-    "recurrence_active_cycles",
-])
+@pytest.mark.parametrize(
+    "field",
+    [
+        "window_weeks",
+        "usage_report_window_weeks",
+        "recurrence_window_weeks",
+        "cycle_length_weeks",
+        "recurrence_display_cycles",
+        "recurrence_active_cycles",
+    ],
+)
 def test_negative_value_raises(field):
     with pytest.raises(ValueError, match=field):
         _make(**{field: -1})

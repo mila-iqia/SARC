@@ -51,7 +51,13 @@ class NiceHandler(logging.StreamHandler):
 @dataclass
 class CLI:
     command: Health | Fetch | Parse | Encrypt | Notify = subparsers(
-        {"health": Health, "fetch": Fetch, "parse": Parse, "encrypt": Encrypt, "notify": Notify}  # ty:ignore[invalid-argument-type]
+        {
+            "health": Health,
+            "fetch": Fetch,
+            "parse": Parse,
+            "encrypt": Encrypt,
+            "notify": Notify,
+        }  # ty:ignore[invalid-argument-type]
     )
 
     color: bool = False

@@ -3,10 +3,10 @@ from datetime import date, timezone
 
 import matplotlib.pyplot as plt
 import pandas as pd
-from sarc.allocations import get_allocation_summaries
 from sarc.client.job import get_jobs
 from tqdm import tqdm
 
+from sarc.allocations import get_allocation_summaries
 from sarc.config import config
 
 # Clusters we want to compare

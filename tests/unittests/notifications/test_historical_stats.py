@@ -19,7 +19,6 @@ from sqlmodel import select
 
 from sarc.db.cluster import SlurmClusterDB
 from sarc.db.job import JobStatisticDB, SlurmJobDB
-from sarc.db.support import GpuRguDB
 from sarc.db.users import UserDB
 from sarc.notifications.messages import build_admin_digest
 from sarc.notifications.underusage import (
@@ -370,7 +369,9 @@ def test_digest_historical_title_follows_count():
     """Title derives from len(stats.months), not a hardcoded '6'."""
     stats = HistoricalStats(
         months=[
-            MonthlyStats(label=f"2025-0{i}", avg_waste_ratio=0.5, above_threshold_count=1)
+            MonthlyStats(
+                label=f"2025-0{i}", avg_waste_ratio=0.5, above_threshold_count=1
+            )
             for i in range(1, 4)  # 3 months
         ],
         yoy_months=None,

@@ -361,7 +361,9 @@ def test_unsupported_resource_raises(underusage_db):
 
 def test_all_active_users_returned(underusage_db):
     # All 3 users have GPU jobs in the window — no threshold filtering.
-    results = get_all_users_usage(_WINDOW_START, _WINDOW_END, top_jobs_per_user=_TOP_JOBS_PER_USER)
+    results = get_all_users_usage(
+        _WINDOW_START, _WINDOW_END, top_jobs_per_user=_TOP_JOBS_PER_USER
+    )
     emails = {r.email for r in results}
     assert "petitbonhomme@mila.quebec" in emails
     assert "beaubonhomme@mila.quebec" in emails
@@ -371,31 +373,41 @@ def test_all_active_users_returned(underusage_db):
 def test_usage_outside_window_excluded(underusage_db):
     before = datetime(2020, 1, 1, tzinfo=UTC)
     after = datetime(2020, 12, 31, tzinfo=UTC)
-    assert get_all_users_usage(before, after, top_jobs_per_user=_TOP_JOBS_PER_USER) == []
+    assert (
+        get_all_users_usage(before, after, top_jobs_per_user=_TOP_JOBS_PER_USER) == []
+    )
 
 
 def test_usage_overview_rgu_hours_used(underusage_db):
-    results = get_all_users_usage(_WINDOW_START, _WINDOW_END, top_jobs_per_user=_TOP_JOBS_PER_USER)
+    results = get_all_users_usage(
+        _WINDOW_START, _WINDOW_END, top_jobs_per_user=_TOP_JOBS_PER_USER
+    )
     row = next(r for r in results if r.email == "beaubonhomme@mila.quebec")
     # 4.8 * 700 * 0.80 = 2688.0 RGU-h used
     assert abs(row.rgu_hours_used - 2688.0) < 0.1
 
 
 def test_usage_overview_avg_utilization(underusage_db):
-    results = get_all_users_usage(_WINDOW_START, _WINDOW_END, top_jobs_per_user=_TOP_JOBS_PER_USER)
+    results = get_all_users_usage(
+        _WINDOW_START, _WINDOW_END, top_jobs_per_user=_TOP_JOBS_PER_USER
+    )
     row = next(r for r in results if r.email == "beaubonhomme@mila.quebec")
     assert abs(row.avg_utilization - 0.80) < 1e-6
 
 
 def test_usage_top_jobs_capped_at_five(underusage_db):
     # petitbonhomme has 8 mila jobs + 1 raisin job = 9 total, capped at 5.
-    results = get_all_users_usage(_WINDOW_START, _WINDOW_END, top_jobs_per_user=_TOP_JOBS_PER_USER)
+    results = get_all_users_usage(
+        _WINDOW_START, _WINDOW_END, top_jobs_per_user=_TOP_JOBS_PER_USER
+    )
     row = next(r for r in results if r.email == "petitbonhomme@mila.quebec")
     assert len(row.top_jobs) == 5
 
 
 def test_usage_top_jobs_ordered_desc_by_rgu_hours_used(underusage_db):
-    results = get_all_users_usage(_WINDOW_START, _WINDOW_END, top_jobs_per_user=_TOP_JOBS_PER_USER)
+    results = get_all_users_usage(
+        _WINDOW_START, _WINDOW_END, top_jobs_per_user=_TOP_JOBS_PER_USER
+    )
     row = next(r for r in results if r.email == "petitbonhomme@mila.quebec")
     used = [j.rgu_hours_used for j in row.top_jobs]
     assert used == sorted(used, reverse=True)

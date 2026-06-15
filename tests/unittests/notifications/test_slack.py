@@ -1,7 +1,5 @@
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from sarc.notifications.slack import SendStatus, SlackClient
 
 

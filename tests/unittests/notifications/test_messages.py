@@ -397,8 +397,7 @@ def test_recurring_table_empty_cluster_is_skipped():
         personalized_action=True,
     )
     text = build_recurring_table(
-        {"empty_cluster": [], "narval": [row]},
-        **_RECURRING_KW_DEFAULT,
+        {"empty_cluster": [], "narval": [row]}, **_RECURRING_KW_DEFAULT
     )
     assert "narval" in text
     assert "empty_cluster" not in text
@@ -407,8 +406,7 @@ def test_recurring_table_empty_cluster_is_skipped():
 def test_recurring_table_all_empty_clusters_returns_empty_string():
     """A dict of all-empty cluster lists returns '' without raising IndexError."""
     text = build_recurring_table(
-        {"cluster1": [], "cluster2": []},
-        **_RECURRING_KW_DEFAULT,
+        {"cluster1": [], "cluster2": []}, **_RECURRING_KW_DEFAULT
     )
     assert text == ""
 

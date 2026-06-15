@@ -14,7 +14,9 @@ def _smtp_mock():
 
 
 def test_send_success():
-    cfg = EmailConfig(host="smtp.example.com", port=587, from_address="noreply@example.com")
+    cfg = EmailConfig(
+        host="smtp.example.com", port=587, from_address="noreply@example.com"
+    )
     smtp = _smtp_mock()
 
     with patch("smtplib.SMTP", return_value=smtp):
@@ -53,7 +55,9 @@ def test_send_not_configured(caplog):
 
 
 def test_send_smtp_error():
-    cfg = EmailConfig(host="smtp.example.com", port=587, from_address="noreply@example.com")
+    cfg = EmailConfig(
+        host="smtp.example.com", port=587, from_address="noreply@example.com"
+    )
     smtp = _smtp_mock()
     smtp.send_message.side_effect = Exception("Connection refused")
 

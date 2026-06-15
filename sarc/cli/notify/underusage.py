@@ -1,4 +1,5 @@
 import logging
+import sys
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -45,11 +46,7 @@ def _delivery_counts(results: list[_DeliveryResult]) -> dict[str, int]:
 
 
 def _build_delivery_footer(
-    results: list[_DeliveryResult],
-    *,
-    title: str,
-    count_label: str,
-    count: int,
+    results: list[_DeliveryResult], *, title: str, count_label: str, count: int
 ) -> str:
     counts = _delivery_counts(results)
     lines = [
@@ -63,8 +60,7 @@ def _build_delivery_footer(
     failures = [r for r in results if r.status == "failed"]
     if failures:
         lines.append("Failures:")
-        for r in failures:
-            lines.append(f"  - {r.display_name} ({r.email}): {r.detail}")
+        lines.extend(f"  - {r.display_name} ({r.email}): {r.detail}" for r in failures)
     return "\n".join(lines)
 
 
@@ -85,10 +81,14 @@ def _deliver(
         elif slack_res.status == SendStatus.USER_NOT_FOUND:
             email_res = email.send_plaintext(row.email, subject, text)
             if email_res.status == SendStatus.OK:
-                results.append(_DeliveryResult(row.email, row.display_name, "email_sent"))
+                results.append(
+                    _DeliveryResult(row.email, row.display_name, "email_sent")
+                )
             else:
                 results.append(
-                    _DeliveryResult(row.email, row.display_name, "failed", email_res.detail)
+                    _DeliveryResult(
+                        row.email, row.display_name, "failed", email_res.detail
+                    )
                 )
         else:
             results.append(
@@ -103,6 +103,10 @@ def _now_utc() -> datetime:
 
 def _iso_week(dt: datetime) -> int:
     return dt.isocalendar().week
+
+
+def _userfacing_print(*args, **kwargs) -> None:
+    print(*args, **kwargs)  # noqa: T201
 
 
 @dataclass
@@ -184,29 +188,41 @@ class UnderusageNotifyCommand:
         week_num = _iso_week(end)
         # dms_eligible: week parity (controls preview section)
         dms_eligible = week_num % ncfg.cycle_length_weeks == 0
-        # dms_will_send: additionally requires --no-dms gate and send_dms config (controls actual sends)
+        # dms_will_send: additionally blocked by --no-dms gate and requires send_dms config (controls actual sends)
         dms_will_send = dms_eligible and not self.no_dms and ncfg.send_dms
         usage_report_eligible = week_num % ncfg.usage_report_every_weeks == 0
-        usage_report_will_send = usage_report_eligible and not self.no_dms and ncfg.send_usage_report
+        usage_report_will_send = (
+            usage_report_eligible and not self.no_dms and ncfg.send_usage_report
+        )
 
         if self.as_of is not None and end > _now_utc():
-            print("Note: --as-of is in the future; the window may contain no jobs.")
-            print()
+            _userfacing_print(
+                "Note: --as-of is in the future; the window may contain no jobs.",
+                file=sys.stderr,
+            )
+            _userfacing_print(file=sys.stderr)
 
         if not self.send:
-            print("=== DRY RUN — nothing will be sent ===")
-            print()
+            _userfacing_print("=== DRY RUN — nothing will be sent ===", file=sys.stderr)
+            _userfacing_print(file=sys.stderr)
 
         parity = "even" if week_num % 2 == 0 else "odd"
         if dms_eligible:
-            print(f"ISO week {week_num} ({parity}) — DMs eligible this run.")
-        else:
-            print(f"ISO week {week_num} ({parity}) — digest-only this run, no DMs.")
-        if usage_report_eligible:
-            print(
-                f"ISO week {week_num} (multiple of {ncfg.usage_report_every_weeks}) — Usage report eligible this run."
+            _userfacing_print(
+                f"ISO week {week_num} ({parity}) — DMs eligible this run.",
+                file=sys.stderr,
             )
-        print()
+        else:
+            _userfacing_print(
+                f"ISO week {week_num} ({parity}) — digest-only this run, no DMs.",
+                file=sys.stderr,
+            )
+        if usage_report_eligible:
+            _userfacing_print(
+                f"ISO week {week_num} (multiple of {ncfg.usage_report_every_weeks}) — Usage report eligible this run.",
+                file=sys.stderr,
+            )
+        _userfacing_print(file=sys.stderr)
 
         rows = get_underusers(
             start,
@@ -238,10 +254,10 @@ class UnderusageNotifyCommand:
             cycle_length_weeks=ncfg.cycle_length_weeks,
         )
 
-        print(f"Recipients ({len(rows)} user(s) flagged):")
+        _userfacing_print(f"Recipients ({len(rows)} user(s) flagged):")
         for row in rows:
-            print(f"  - {row.display_name} ({row.email})")
-        print()
+            _userfacing_print(f"  - {row.display_name} ({row.email})")
+        _userfacing_print()
 
         cycle_dates = get_cycle_dates(
             end,
@@ -259,21 +275,21 @@ class UnderusageNotifyCommand:
             recurring=recurring,
             cycle_dates=cycle_dates,
         )
-        print("=== Admin Digest ===")
-        print(digest)
+        _userfacing_print("=== Admin Digest ===")
+        _userfacing_print(digest)
 
         if rows and dms_eligible:
-            print()
-            print("=== DM Previews ===")
+            _userfacing_print()
+            _userfacing_print("=== DM Previews ===")
             for row in rows:
-                print(f"\n--- {row.display_name} ({row.email}) ---")
+                _userfacing_print(f"\n--- {row.display_name} ({row.email}) ---")
                 dm = build_user_dm(
                     row,
                     window_weeks=window_weeks,
                     dashboard_url=ncfg.dashboard_url,
                     help_section=ncfg.help_section,
                 )
-                print(dm)
+                _userfacing_print(dm)
 
         usage_report_window_weeks = ncfg.usage_report_window_weeks
         report_recipients = []
@@ -291,24 +307,24 @@ class UnderusageNotifyCommand:
                 usage_rows, underuser_emails
             )
             if report_recipients:
-                print()
+                _userfacing_print()
                 skip_note = (
                     f" ({len(usage_report_skipped)} already getting the underusage alert)"
                     if usage_report_skipped
                     else ""
                 )
-                print(
+                _userfacing_print(
                     f"=== Usage Report Previews ({len(report_recipients)} recipient(s)){skip_note} ==="
                 )
                 for row in report_recipients:
-                    print(f"\n--- {row.display_name} ({row.email}) ---")
+                    _userfacing_print(f"\n--- {row.display_name} ({row.email}) ---")
                     report_text = build_usage_report(
                         row,
                         window_weeks=usage_report_window_weeks,
                         dashboard_url=ncfg.dashboard_url,
                         help_section=ncfg.help_section,
                     )
-                    print(report_text)
+                    _userfacing_print(report_text)
 
         if not self.send:
             return 0
@@ -410,11 +426,11 @@ class UnderusageNotifyCommand:
             report_counts["failed"],
         )
 
-        print()
-        print("=== Send Complete ===")
-        print(footer)
+        _userfacing_print()
+        _userfacing_print("=== Send Complete ===")
+        _userfacing_print(footer)
         if usage_report_eligible:
-            print()
-            print(report_footer)
+            _userfacing_print()
+            _userfacing_print(report_footer)
 
         return 0

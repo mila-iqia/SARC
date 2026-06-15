@@ -8,11 +8,10 @@ import gifnoc
 import pytest
 from sqlmodel import select
 
-from sarc.notifications.slack import SendResult, SendStatus
-
 from sarc.db.cluster import SlurmClusterDB
 from sarc.db.job import JobStatisticDB, SlurmJobDB
 from sarc.db.users import UserDB
+from sarc.notifications.slack import SendResult, SendStatus
 from tests.db.factory import base_job
 
 _MILA_GPU_TYPE = "A100-SXM4-80GB"
@@ -232,10 +231,10 @@ def test_year_boundary_window_is_correct(year_boundary_db, cli_main, capsys):
         )
     assert rc == 0
     out = capsys.readouterr().out
-    assert "2024-12-08" in out              # window start in digest header
-    assert "2025-01-05" in out              # window end in digest header
+    assert "2024-12-08" in out  # window start in digest header
+    assert "2025-01-05" in out  # window end in digest header
     assert "petitbonhomme@mila.quebec" in out  # job is inside the window
-    assert "digest-only" in out             # week 1 is odd → no DMs
+    assert "digest-only" in out  # week 1 is odd → no DMs
 
 
 # ── future anchor guard ───────────────────────────────────────────────────────
@@ -302,7 +301,17 @@ def test_enabled_false_returns_zero_without_sending(cli_main, monkeypatch):
     _patch_senders(monkeypatch, slack_cls, email_cls)
     cfg = {**_NOTIFY_CFG, "enabled": False, "send_dms": True}
     with gifnoc.overlay({"sarc.notifications": cfg}):
-        rc = cli_main(["notify", "underusage", "--window-weeks", "4", "--as-of", _EVEN_WEEK, "--send"])
+        rc = cli_main(
+            [
+                "notify",
+                "underusage",
+                "--window-weeks",
+                "4",
+                "--as-of",
+                _EVEN_WEEK,
+                "--send",
+            ]
+        )
     assert rc == 0
     slack_cls.assert_not_called()
     email_cls.assert_not_called()
@@ -344,7 +353,7 @@ def test_cli_flags_override_config_thresholds(notify_db, cli_main, monkeypatch, 
 # ── T8: --send flag wires actual sending ──────────────────────────────────────
 
 _EVEN_WEEK = "2024-06-30"  # ISO week 26
-_ODD_WEEK = "2024-06-23"   # ISO week 25
+_ODD_WEEK = "2024-06-23"  # ISO week 25
 
 
 def _mock_slack(dm_status=SendStatus.OK, channel_status=SendStatus.OK):
@@ -388,7 +397,15 @@ def test_send_even_week_posts_digest_and_dms(notify_db, cli_main, monkeypatch):
     cfg = {**_NOTIFY_CFG, "send_dms": True}
     with gifnoc.overlay({"sarc.notifications": cfg}):
         rc = cli_main(
-            ["notify", "underusage", "--window-weeks", "4", "--as-of", _EVEN_WEEK, "--send"]
+            [
+                "notify",
+                "underusage",
+                "--window-weeks",
+                "4",
+                "--as-of",
+                _EVEN_WEEK,
+                "--send",
+            ]
         )
     assert rc == 0
     slack_inst.post_channel_file.assert_called_once()
@@ -403,7 +420,15 @@ def test_send_odd_week_posts_digest_only(notify_db, cli_main, monkeypatch):
     cfg = {**_NOTIFY_CFG, "send_dms": True}
     with gifnoc.overlay({"sarc.notifications": cfg}):
         rc = cli_main(
-            ["notify", "underusage", "--window-weeks", "4", "--as-of", _ODD_WEEK, "--send"]
+            [
+                "notify",
+                "underusage",
+                "--window-weeks",
+                "4",
+                "--as-of",
+                _ODD_WEEK,
+                "--send",
+            ]
         )
     assert rc == 0
     slack_inst.post_channel_file.assert_called_once()
@@ -418,8 +443,14 @@ def test_send_no_dms_flag_skips_dms(notify_db, cli_main, monkeypatch):
     with gifnoc.overlay({"sarc.notifications": cfg}):
         rc = cli_main(
             [
-                "notify", "underusage", "--window-weeks", "4",
-                "--as-of", _EVEN_WEEK, "--send", "--no-dms",
+                "notify",
+                "underusage",
+                "--window-weeks",
+                "4",
+                "--as-of",
+                _EVEN_WEEK,
+                "--send",
+                "--no-dms",
             ]
         )
     assert rc == 0
@@ -434,21 +465,39 @@ def test_send_dms_false_suppresses_dms(notify_db, cli_main, monkeypatch):
     # send_dms defaults to False in _NOTIFY_CFG
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         rc = cli_main(
-            ["notify", "underusage", "--window-weeks", "4", "--as-of", _EVEN_WEEK, "--send"]
+            [
+                "notify",
+                "underusage",
+                "--window-weeks",
+                "4",
+                "--as-of",
+                _EVEN_WEEK,
+                "--send",
+            ]
         )
     assert rc == 0
     slack_inst.post_channel_file.assert_called_once()
     slack_inst.dm_user.assert_not_called()
 
 
-def test_send_slack_not_found_uses_email_fallback(notify_db, cli_main, monkeypatch, capsys):
+def test_send_slack_not_found_uses_email_fallback(
+    notify_db, cli_main, monkeypatch, capsys
+):
     slack_cls, slack_inst = _mock_slack(dm_status=SendStatus.USER_NOT_FOUND)
     email_cls, email_inst = _mock_email(status=SendStatus.OK)
     _patch_senders(monkeypatch, slack_cls, email_cls)
     cfg = {**_NOTIFY_CFG, "send_dms": True}
     with gifnoc.overlay({"sarc.notifications": cfg}):
         rc = cli_main(
-            ["notify", "underusage", "--window-weeks", "4", "--as-of", _EVEN_WEEK, "--send"]
+            [
+                "notify",
+                "underusage",
+                "--window-weeks",
+                "4",
+                "--as-of",
+                _EVEN_WEEK,
+                "--send",
+            ]
         )
     assert rc == 0
     slack_inst.dm_user.assert_called_once()
@@ -464,7 +513,15 @@ def test_send_dm_failure_surfaced_in_footer(notify_db, cli_main, monkeypatch, ca
     cfg = {**_NOTIFY_CFG, "send_dms": True}
     with gifnoc.overlay({"sarc.notifications": cfg}):
         rc = cli_main(
-            ["notify", "underusage", "--window-weeks", "4", "--as-of", _EVEN_WEEK, "--send"]
+            [
+                "notify",
+                "underusage",
+                "--window-weeks",
+                "4",
+                "--as-of",
+                _EVEN_WEEK,
+                "--send",
+            ]
         )
     assert rc == 0  # failures reported, run does not crash
     out = capsys.readouterr().out
@@ -474,7 +531,7 @@ def test_send_dm_failure_surfaced_in_footer(notify_db, cli_main, monkeypatch, ca
 # ── T12: usage report (Phase 3) ───────────────────────────────────────────────
 # ISO week 28 (2024-07-14) → week_num=28, 28 % 4 == 0 → usage report eligible.
 # ISO week 26 (2024-06-30) → week_num=26, 26 % 4 == 2 → not eligible.
-_USAGE_REPORT_WEEK = "2024-07-14"   # wk 28, multiple of 4
+_USAGE_REPORT_WEEK = "2024-07-14"  # wk 28, multiple of 4
 _EVEN_NON_REPORT_WEEK = "2024-06-30"  # wk 26, even but not multiple of 4
 
 
@@ -518,7 +575,14 @@ def usage_report_db(read_write_db):
 def test_usage_report_week_dry_run_prints_previews(usage_report_db, cli_main, capsys):
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         rc = cli_main(
-            ["notify", "underusage", "--window-weeks", "2", "--as-of", _USAGE_REPORT_WEEK]
+            [
+                "notify",
+                "underusage",
+                "--window-weeks",
+                "2",
+                "--as-of",
+                _USAGE_REPORT_WEEK,
+            ]
         )
     assert rc == 0
     out = capsys.readouterr().out
@@ -526,15 +590,26 @@ def test_usage_report_week_dry_run_prints_previews(usage_report_db, cli_main, ca
     assert "beaubonhomme@mila.quebec" in out
 
 
-def test_usage_report_week_underuser_not_in_report_previews(usage_report_db, cli_main, capsys):
+def test_usage_report_week_underuser_not_in_report_previews(
+    usage_report_db, cli_main, capsys
+):
     """petitbonhomme is an underuser — they get the DM alert, not the usage report."""
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         cli_main(
-            ["notify", "underusage", "--window-weeks", "2", "--as-of", _USAGE_REPORT_WEEK]
+            [
+                "notify",
+                "underusage",
+                "--window-weeks",
+                "2",
+                "--as-of",
+                _USAGE_REPORT_WEEK,
+            ]
         )
     out = capsys.readouterr().out
     # petitbonhomme should appear in DM previews (alert), not usage report previews
-    dm_section = out[out.find("=== DM Previews ==="):out.find("=== Usage Report Previews")]
+    dm_section = out[
+        out.find("=== DM Previews ===") : out.find("=== Usage Report Previews")
+    ]
     assert "petitbonhomme" in dm_section
 
 
@@ -542,7 +617,14 @@ def test_non_usage_report_week_no_report_section(usage_report_db, cli_main, caps
     """Even week but not a multiple of 4 → no usage report section."""
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         cli_main(
-            ["notify", "underusage", "--window-weeks", "2", "--as-of", _EVEN_NON_REPORT_WEEK]
+            [
+                "notify",
+                "underusage",
+                "--window-weeks",
+                "2",
+                "--as-of",
+                _EVEN_NON_REPORT_WEEK,
+            ]
         )
     assert "Usage Report Previews" not in capsys.readouterr().out
 
@@ -555,14 +637,23 @@ def test_dry_run_usage_report_week_no_sends(usage_report_db, cli_main, monkeypat
     cfg = {**_NOTIFY_CFG, "send_dms": True, "send_usage_report": True}
     with gifnoc.overlay({"sarc.notifications": cfg}):
         rc = cli_main(
-            ["notify", "underusage", "--window-weeks", "2", "--as-of", _USAGE_REPORT_WEEK]
+            [
+                "notify",
+                "underusage",
+                "--window-weeks",
+                "2",
+                "--as-of",
+                _USAGE_REPORT_WEEK,
+            ]
         )
     assert rc == 0
     slack_cls.assert_not_called()
     email_cls.assert_not_called()
 
 
-def test_send_usage_report_disabled_no_report_sends(usage_report_db, cli_main, monkeypatch, capsys):
+def test_send_usage_report_disabled_no_report_sends(
+    usage_report_db, cli_main, monkeypatch, capsys
+):
     """send_usage_report=False (default) → no usage report DMs even on a report week."""
     slack_cls, slack_inst = _mock_slack()
     email_cls, email_inst = _mock_email()
@@ -570,7 +661,15 @@ def test_send_usage_report_disabled_no_report_sends(usage_report_db, cli_main, m
     # _NOTIFY_CFG has send_dms=False and no send_usage_report key → defaults to False
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         rc = cli_main(
-            ["notify", "underusage", "--window-weeks", "2", "--as-of", _USAGE_REPORT_WEEK, "--send"]
+            [
+                "notify",
+                "underusage",
+                "--window-weeks",
+                "2",
+                "--as-of",
+                _USAGE_REPORT_WEEK,
+                "--send",
+            ]
         )
     assert rc == 0
     # Only the admin digest channel post; no DMs for underusers or report recipients
@@ -591,7 +690,15 @@ def test_send_usage_report_enabled_sends_report_to_non_underusers(
     cfg = {**_NOTIFY_CFG, "send_usage_report": True}
     with gifnoc.overlay({"sarc.notifications": cfg}):
         rc = cli_main(
-            ["notify", "underusage", "--window-weeks", "2", "--as-of", _USAGE_REPORT_WEEK, "--send"]
+            [
+                "notify",
+                "underusage",
+                "--window-weeks",
+                "2",
+                "--as-of",
+                _USAGE_REPORT_WEEK,
+                "--send",
+            ]
         )
     assert rc == 0
     # beaubonhomme gets the usage report via dm_user
@@ -613,7 +720,15 @@ def test_send_usage_report_non_report_week_no_reports(
     cfg = {**_NOTIFY_CFG, "send_usage_report": True}
     with gifnoc.overlay({"sarc.notifications": cfg}):
         rc = cli_main(
-            ["notify", "underusage", "--window-weeks", "2", "--as-of", _EVEN_NON_REPORT_WEEK, "--send"]
+            [
+                "notify",
+                "underusage",
+                "--window-weeks",
+                "2",
+                "--as-of",
+                _EVEN_NON_REPORT_WEEK,
+                "--send",
+            ]
         )
     assert rc == 0
     # Only the digest channel post; no usage report DMs
@@ -634,8 +749,14 @@ def test_no_dms_flag_suppresses_usage_report_sends(
     with gifnoc.overlay({"sarc.notifications": cfg}):
         rc = cli_main(
             [
-                "notify", "underusage", "--window-weeks", "2",
-                "--as-of", _USAGE_REPORT_WEEK, "--send", "--no-dms",
+                "notify",
+                "underusage",
+                "--window-weeks",
+                "2",
+                "--as-of",
+                _USAGE_REPORT_WEEK,
+                "--send",
+                "--no-dms",
             ]
         )
     assert rc == 0
