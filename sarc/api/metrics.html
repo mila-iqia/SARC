@@ -611,7 +611,10 @@
 
     // Populate cluster panel (all checked by default), then kick off the
     // initial load once the full cluster list is known.
-    fetch('/dash/clusters').then(r => r.json()).then(clusters => {
+    // Reuse the public API's cluster list (/v0/cluster/list returns SlurmCluster
+    // objects; the dashboard only needs the sorted names).
+    fetch('/v0/cluster/list').then(r => r.json()).then(rows => {
+      const clusters = rows.map(c => c.name).sort();
       CLUSTERS = clusters;
       clPanel.innerHTML =
         '<div class="js-actions"><button type="button" id="cl-all">All</button>' +
@@ -1903,7 +1906,7 @@
     // ── Job states selector ──────────────────────────────────────────────────
     const jsBtn = document.getElementById('js-btn');
     const jsPanel = document.getElementById('js-panel');
-    let JOB_STATES = [];
+    const JOB_STATES = __JOB_STATES__;  // injected by the backend from the SlurmState enum
 
     function jsSelected() {
       return [...jsPanel.querySelectorAll('input:checked')].map(c => c.value);
@@ -1913,12 +1916,13 @@
       jsBtn.textContent =
         (n === JOB_STATES.length ? 'All states' : n + ' selected') + ' ▾';
     }
-    fetch('/dash/job_states').then(r => r.json()).then(states => {
-      JOB_STATES = states;
+    // JOB_STATES is injected into the page from the SlurmState enum (see _HTML),
+    // so the panel is built synchronously — no fetch needed.
+    {
       jsPanel.innerHTML =
         '<div class="js-actions"><button type="button" id="js-all">All</button>' +
         '<button type="button" id="js-none">None</button></div>' +
-        states.map(s => `<label><input type="checkbox" value="${s}" checked> ${s}</label>`).join('');
+        JOB_STATES.map(s => `<label><input type="checkbox" value="${s}" checked> ${s}</label>`).join('');
       jsPanel.querySelectorAll('input').forEach(c => c.addEventListener('change', jsUpdateLabel));
       const setAll = v => () => {
         jsPanel.querySelectorAll('input').forEach(c => { c.checked = v; });
@@ -1933,7 +1937,7 @@
         });
       }
       jsUpdateLabel();
-    });
+    }
     jsBtn.addEventListener('click', e => {
       e.stopPropagation();
       jsPanel.style.display = jsPanel.style.display === 'none' ? 'block' : 'none';

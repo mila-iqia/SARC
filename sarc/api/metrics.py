@@ -1,3 +1,4 @@
+import json
 import math
 import re
 from collections.abc import Callable, Generator
@@ -14,7 +15,7 @@ from sqlmodel import Session, and_, case, col, func, select
 
 from sarc.api.auth import require_basic_auth
 from sarc.config import config
-from sarc.db.cluster import SlurmClusterDB, get_available_clusters
+from sarc.db.cluster import SlurmClusterDB
 from sarc.db.job import JobStatisticDB, SlurmJobDB
 from sarc.db.job_series import JobSeriesDB
 from sarc.db.support import GpuRguDB
@@ -338,18 +339,6 @@ def _rgu_source(
 def metrics_homepage():
     """Serve the dashboard's single-page HTML UI; its charts call the JSON endpoints below."""
     return _HTML
-
-
-@router.get("/clusters")
-def metrics_clusters(sess: Session = Depends(session_dep)) -> list[str]:
-    """Names of all known clusters, for the dashboard's cluster filter."""
-    return sorted(c.name for c in get_available_clusters(sess))
-
-
-@router.get("/job_states")
-def metrics_job_states() -> list[str]:
-    """All Slurm job states the dashboard can filter on."""
-    return [s.value for s in SlurmState]
 
 
 @router.get("/metrics/job_counts")
@@ -1190,6 +1179,8 @@ def metrics_jobs(
 
 _html_path = Path(__file__).parent / "metrics.html"
 
-_HTML = _html_path.read_text(encoding="utf-8").replace(
-    "__DEFAULT_PERIOD__", _DEFAULT_PERIOD
+_HTML = (
+    _html_path.read_text(encoding="utf-8")
+    .replace("__DEFAULT_PERIOD__", _DEFAULT_PERIOD)
+    .replace("__JOB_STATES__", json.dumps([s.value for s in SlurmState]))
 )
