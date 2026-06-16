@@ -9,8 +9,6 @@ _SLACK = SlackConfig(description="test", token="xoxb-test", channel="#test")
 _VALID_KWARGS = dict(
     slack=_SLACK,
     window_weeks=2,
-    recurrence_window_weeks=6,
-    cycle_length_weeks=2,
     recurrence_display_cycles=5,
     recurrence_active_cycles=3,
     usage_report_window_weeks=4,
@@ -31,8 +29,6 @@ def test_valid_config_constructs():
     [
         "window_weeks",
         "usage_report_window_weeks",
-        "recurrence_window_weeks",
-        "cycle_length_weeks",
         "recurrence_display_cycles",
         "recurrence_active_cycles",
     ],
@@ -47,8 +43,6 @@ def test_zero_value_raises(field):
     [
         "window_weeks",
         "usage_report_window_weeks",
-        "recurrence_window_weeks",
-        "cycle_length_weeks",
         "recurrence_display_cycles",
         "recurrence_active_cycles",
     ],

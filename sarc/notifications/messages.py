@@ -192,8 +192,8 @@ def build_recurring_table(
     is None (future cycle, no data yet) are rendered as blank.
 
     A "|" separator is rendered after the last active cycle (index *active_cycles*).
-    Per-cycle ⚑ is shown when *active_cycles* consecutive cycles starting at that
-    position are all flagged (✗).
+    Per-cycle ⚑ is shown on ✗ cells in positions 0..active_cycles-1 whose
+    pa_flags entry indicates scaled cross-cluster waste ≥ the action threshold.
 
     Pure function — no I/O, deterministic for fixed input.
     """
@@ -217,19 +217,19 @@ def build_recurring_table(
 
     def _flag_cell(flag: bool | None, w: int, has_peak: bool = False) -> str:
         if flag is None:
-            return " " * (3 + w)
+            return " " * (2 + w)
         if flag:
             symbol = "⚑✗" if has_peak else "✗"
         else:
             symbol = "✓"
-        return f"   {symbol.rjust(w)}"
+        return f"  {symbol.rjust(w)}"
 
     def _build_flag_header() -> str:
         parts = []
         for i, lbl in enumerate(flag_labels):
             if i == flag_window:
                 parts.append("  |")
-            parts.append(f"   {lbl}")
+            parts.append(f"  {lbl}")
         return "".join(parts)
 
     def _build_flag_cells(row: RecurringUserRow) -> str:
@@ -239,8 +239,8 @@ def build_recurring_table(
             if i == flag_window:
                 parts.append("  |")
             flag = cycle_vals[i]
-            has_peak = i + (active_cycles - 1) < len(cycle_vals) and all(
-                cycle_vals[i + j] is True for j in range(active_cycles)
+            has_peak = (
+                i < active_cycles and i < len(row.pa_flags) and bool(row.pa_flags[i])
             )
             parts.append(_flag_cell(flag, w, has_peak))
         return "".join(parts)
@@ -256,7 +256,7 @@ def build_recurring_table(
         header = (
             f"  {'':2} {'User':<{email_w}}"
             f"  {'Wasted RGU-h':>12}"
-            f"  {'Share':>7}" + flag_header + "   Action"
+            f"  {'Share':>5}" + flag_header + "  Action"
         )
         lines = [
             f"Recurring underusers (last {window_weeks} weeks) — Cluster {cluster}",
@@ -268,11 +268,11 @@ def build_recurring_table(
         for i, row in enumerate(rows):
             pfx = _tree_prefix(i, n)
             flags = _build_flag_cells(row)
-            action = "   ⚑ personalized" if row.personalized_action else ""
+            action = "  ⚑ personalized" if row.personalized_action else ""
             lines.append(
                 f"{pfx} {row.email:<{email_w}}"
-                f"  {_fmt_rgu_int(row.wasted_6w):>12}"
-                f"  {row.cluster_share * 100:>5.0f} %" + flags + action
+                f"  {_fmt_rgu_int(row.wasted_current_active_window):>12}"
+                f"  {row.cluster_share * 100:>3.0f} %" + flags + action
             )
 
         sections.append("\n".join(lines))

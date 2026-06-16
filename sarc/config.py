@@ -284,41 +284,35 @@ class UnderusageNotifyConfig:
     send_dms: bool = False
     min_ratio: float = 0.50
     min_rgu_hours: float = 3225.6  # 4x A100-80GB RGU x 7d
-    # Analysis window for the main underusage query.
+    # Analysis window length of one cycle (also drives parity check)
     window_weeks: int = 2
     digest_top_n: int = 16
     top_jobs_per_user: int = 5
     dashboard_url: str | None = None
     # Verbatim text appended at the end of every user DM (support links, hours, etc.)
     help_section: str | None = None
-    # Recurring-underusers table: rolling window length in weeks.
-    recurrence_window_weeks: int = 6
     # Fraction of cluster wasted RGU-h at which selection stops (0..1).
-    recurrence_cluster_share: float = 0.30
+    recurrence_cluster_share: float = 0.50
+    # Number of most-recent cycles that count toward personalized_action and
+    # rolling window length
+    recurrence_active_cycles: int = 3
     # Number of cycle columns to display in the recurring table.
     recurrence_display_cycles: int = 5
-    # Length of one cycle in weeks (drives column spacing and parity check).
-    cycle_length_weeks: int = 2
-    # Number of most-recent cycles that count toward personalized_action.
-    recurrence_active_cycles: int = 3
     # Number of calendar months included in the historical trend section.
     historical_months: int = 6
     email: EmailConfig | None = None
     # Universal usage report cadence.
     usage_report_window_weeks: int = 4
-    usage_report_every_weeks: int = 4
+    usage_report_min_rgu_hours: float = 1843.2  # 4x A100-80GB RGU x4d
     send_usage_report: bool = False
     clusters: list[str] = field(default_factory=lambda: ["mila"])
-    usage_report_min_rgu_hours: float = 0.0
     personalized_action_min_waste_rgu_hours: float = 16128.0  # 20x A100-80GB RGU x 7d
-    waste_rescale_threshold: float = 1.0
+    waste_rescale_threshold: float = 0.8
 
     def __post_init__(self):
         for field_name, value in [
             ("window_weeks", self.window_weeks),
             ("usage_report_window_weeks", self.usage_report_window_weeks),
-            ("recurrence_window_weeks", self.recurrence_window_weeks),
-            ("cycle_length_weeks", self.cycle_length_weeks),
             ("recurrence_display_cycles", self.recurrence_display_cycles),
             ("recurrence_active_cycles", self.recurrence_active_cycles),
             ("historical_months", self.historical_months),

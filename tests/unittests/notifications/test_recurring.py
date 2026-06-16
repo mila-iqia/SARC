@@ -26,7 +26,7 @@ _14D = timedelta(days=14)
 # Default keyword args for build_recurring_table and get_recurring_underusers callers
 # that don't need to exercise specific window/share values.
 _BRT_KW = {"cluster_share_threshold": 0.30, "cycle_length_weeks": 2, "active_cycles": 3}
-_GRU_KW = {"window_weeks": 6, "cluster_share_threshold": 0.30}
+_GRU_KW = {"cluster_share_threshold": 0.30}
 
 # Cycle windows (rolling from _TEST_END)
 # W0:  [2024-06-16, 2024-06-30]
@@ -58,7 +58,6 @@ _NOTIFY_CFG = {
     "min_rgu_hours": _MIN_RGU_HOURS,
     "window_weeks": 2,
     "digest_top_n": 16,
-    "recurrence_window_weeks": 6,
     "recurrence_cluster_share": 0.30,
     "personalized_action_min_waste_rgu_hours": 0.0,
 }
@@ -195,7 +194,6 @@ def test_selection_stops_at_threshold(recurring_db):
             _TEST_END,
             min_ratio=_MIN_RATIO,
             min_rgu_hours=_MIN_RGU_HOURS,
-            window_weeks=6,
             cluster_share_threshold=0.30,
         )
     mila_rows = result.get("mila", [])
@@ -213,7 +211,6 @@ def test_selection_cumulative_share_reaches_threshold(recurring_db):
             _TEST_END,
             min_ratio=_MIN_RATIO,
             min_rgu_hours=_MIN_RGU_HOURS,
-            window_weeks=6,
             cluster_share_threshold=0.30,
         )
     mila_rows = result["mila"]
@@ -227,7 +224,6 @@ def test_all_users_included_when_threshold_above_one(recurring_db):
             _TEST_END,
             min_ratio=_MIN_RATIO,
             min_rgu_hours=_MIN_RGU_HOURS,
-            window_weeks=6,
             cluster_share_threshold=1.1,
         )
     mila_emails = {r.email for r in result.get("mila", [])}
@@ -243,10 +239,9 @@ def test_rows_sorted_desc_by_wasted(recurring_db):
             _TEST_END,
             min_ratio=_MIN_RATIO,
             min_rgu_hours=_MIN_RGU_HOURS,
-            window_weeks=6,
             cluster_share_threshold=1.1,
         )
-    wastes = [r.wasted_6w for r in result["mila"]]
+    wastes = [r.wasted_current_active_window for r in result["mila"]]
     assert wastes == sorted(wastes, reverse=True)
 
 
@@ -259,7 +254,6 @@ def test_cluster_share_sum_to_one_when_all_selected(recurring_db):
             _TEST_END,
             min_ratio=_MIN_RATIO,
             min_rgu_hours=_MIN_RGU_HOURS,
-            window_weeks=6,
             cluster_share_threshold=1.1,
         )
     total_share = sum(r.cluster_share for r in result["mila"])
@@ -276,7 +270,6 @@ def test_petitbonhomme_flagged_all_five_cycles(recurring_db):
             _TEST_END,
             min_ratio=_MIN_RATIO,
             min_rgu_hours=_MIN_RGU_HOURS,
-            window_weeks=6,
             cluster_share_threshold=1.1,
         )
     row = next(r for r in result["mila"] if r.email == "petitbonhomme@mila.quebec")
@@ -293,7 +286,6 @@ def test_petitbonhomme_personalized_action(recurring_db):
             _TEST_END,
             min_ratio=_MIN_RATIO,
             min_rgu_hours=_MIN_RGU_HOURS,
-            window_weeks=6,
             cluster_share_threshold=1.1,
         )
     row = next(r for r in result["mila"] if r.email == "petitbonhomme@mila.quebec")
@@ -308,7 +300,6 @@ def test_fourthuser_missing_w6_w8_cycles(recurring_db):
             _TEST_END,
             min_ratio=_MIN_RATIO,
             min_rgu_hours=_MIN_RGU_HOURS,
-            window_weeks=6,
             cluster_share_threshold=1.1,
         )
     row = next(r for r in result["mila"] if r.email == "fourthuser@mila.quebec")
@@ -329,7 +320,6 @@ def test_display_cycles_4_produces_4_columns(recurring_db):
             _TEST_END,
             min_ratio=_MIN_RATIO,
             min_rgu_hours=_MIN_RGU_HOURS,
-            window_weeks=6,
             cluster_share_threshold=1.1,
             recurrence_display_cycles=4,
         )
@@ -344,7 +334,6 @@ def test_display_cycles_6_produces_6_columns(recurring_db):
             _TEST_END,
             min_ratio=_MIN_RATIO,
             min_rgu_hours=_MIN_RGU_HOURS,
-            window_weeks=6,
             cluster_share_threshold=1.1,
             recurrence_display_cycles=6,
         )
@@ -375,7 +364,6 @@ def test_active_cycles_personalized_action(recurring_db, active_cycles, expected
             _TEST_END,
             min_ratio=_MIN_RATIO,
             min_rgu_hours=_MIN_RGU_HOURS,
-            window_weeks=6,
             cluster_share_threshold=1.1,
             recurrence_active_cycles=active_cycles,
             personalized_action_min_waste_rgu_hours=400.0,
@@ -414,7 +402,7 @@ _ROW_ALICE = RecurringUserRow(
     email="alice@mila.quebec",
     display_name="Alice Liddell",
     cluster="narval",
-    wasted_6w=4200.0,
+    wasted_current_active_window=4200.0,
     cluster_share=0.18,
     cycles=[True, True, True, True, True],
     personalized_action=True,
@@ -424,7 +412,7 @@ _ROW_BOB = RecurringUserRow(
     email="bob@mila.quebec",
     display_name="Bob Marley",
     cluster="narval",
-    wasted_6w=2600.0,
+    wasted_current_active_window=2600.0,
     cluster_share=0.11,
     cycles=[True, False, True, True, True],
     personalized_action=False,
@@ -434,7 +422,7 @@ _ROW_CAROL = RecurringUserRow(
     email="carol@mila.quebec",
     display_name="Carol Danvers",
     cluster="narval",
-    wasted_6w=1100.0,
+    wasted_current_active_window=1100.0,
     cluster_share=0.05,
     cycles=[True, True, False, False, False],
     personalized_action=False,
@@ -517,7 +505,7 @@ def test_table_multiple_clusters_rendered():
         email="carol@mila.quebec",
         display_name="Carol Danvers",
         cluster="fir",
-        wasted_6w=500.0,
+        wasted_current_active_window=500.0,
         cluster_share=0.50,
         cycles=[True, False, False, False, False],
         personalized_action=False,
@@ -534,7 +522,7 @@ def test_table_clusters_sorted_alphabetically():
         email="carol@mila.quebec",
         display_name="Carol Danvers",
         cluster="fir",
-        wasted_6w=500.0,
+        wasted_current_active_window=500.0,
         cluster_share=0.50,
         cycles=[True, False, False, False, False],
         personalized_action=False,
@@ -680,7 +668,6 @@ def test_odd_week_end_w0_is_none(recurring_db):
             _ODD_MON,
             min_ratio=_MIN_RATIO,
             min_rgu_hours=_MIN_RGU_HOURS,
-            window_weeks=6,
             cluster_share_threshold=0.30,
         )
     if not result:
@@ -700,7 +687,6 @@ def test_odd_week_end_personalized_action_floor_controls(recurring_db):
             _ODD_MON,
             min_ratio=_MIN_RATIO,
             min_rgu_hours=_MIN_RGU_HOURS,
-            window_weeks=6,
             cluster_share_threshold=0.30,
             personalized_action_min_waste_rgu_hours=999999.0,
         )
@@ -723,7 +709,7 @@ _ROW_FUTURE_W0 = RecurringUserRow(
     email="alice@mila.quebec",
     display_name="Alice Liddell",
     cluster="narval",
-    wasted_6w=4200.0,
+    wasted_current_active_window=4200.0,
     cluster_share=0.18,
     cycles=[None, True, True, False, False],
     personalized_action=False,
@@ -782,26 +768,28 @@ def test_table_separator_between_w4_and_w6():
 
 # ── per-cycle ⚑ ───────────────────────────────────────────────────────────────
 
-# Row where W-4, W-6, W-8 are all True → ⚑ at W-4; W0+W-2+W-4 not all True → no ⚑ at W0
+# Row where only W-4 (position 2) is pa-flagged → ⚑ at W-4 only
 _ROW_PEAK_AT_W4 = RecurringUserRow(
     email="dave@mila.quebec",
     display_name="Dave Bowie",
     cluster="narval",
-    wasted_6w=3000.0,
+    wasted_current_active_window=3000.0,
     cluster_share=0.25,
     cycles=[False, False, True, True, True],
     personalized_action=False,
+    pa_flags=[False, False, True],
 )
 
-# Row where all 5 cycles True → ⚑ at W0 (personalized), W-2, and W-4
+# Row where all 3 active positions are pa-flagged → ⚑ at W0, W-2, W-4
 _ROW_ALL_TRUE = RecurringUserRow(
     email="eve@mila.quebec",
     display_name="Eve Online",
     cluster="narval",
-    wasted_6w=5000.0,
+    wasted_current_active_window=5000.0,
     cluster_share=0.40,
     cycles=[True, True, True, True, True],
     personalized_action=True,
+    pa_flags=[True, True, True],
 )
 
 
@@ -810,24 +798,39 @@ def test_per_cycle_peak_at_w4():
     assert "⚑✗" in text
 
 
-def test_per_cycle_no_peak_when_chain_broken():
-    # w0=False breaks the chain at W0 and W-2; only W-4 has a valid lookback (W-4+W-6+W-8)
+def test_per_cycle_no_peak_at_w0_w2():
+    # pa_flags[0]=False and pa_flags[1]=False → no ⚑ at W0 or W-2
     text = build_recurring_table({"narval": [_ROW_PEAK_AT_W4]}, **_BRT_KW)
-    # ⚑✗ appears exactly once (at W-4)
     assert text.count("⚑✗") == 1
 
 
-def test_per_cycle_all_true_peak_at_w0_w2_w4():
+def test_per_cycle_all_active_flagged():
     text = build_recurring_table({"narval": [_ROW_ALL_TRUE]}, **_BRT_KW)
-    # All 5 True → ⚑ at W0, W-2, W-4 (each has a valid 3-cycle lookback)
+    # pa_flags=[True,True,True] → ⚑ at W0, W-2, W-4
     assert text.count("⚑✗") == 3
 
 
 def test_per_cycle_w6_w8_never_show_peak():
-    # W-6 and W-8 cannot show ⚑ (no W-10/W-12 in display)
+    # Positions ≥ active_cycles are never eligible regardless of pa_flags
     text = build_recurring_table({"narval": [_ROW_ALL_TRUE]}, **_BRT_KW)
-    # Only 3 ⚑✗ for W0, W-2, W-4 — not W-6 or W-8
     assert text.count("⚑✗") == 3
+
+
+def test_per_cycle_no_peak_on_passing_cell():
+    # ⚑ never renders on a ✓ cell even when pa_flags[i] is True
+    row = RecurringUserRow(
+        email="frank@mila.quebec",
+        display_name="Frank Test",
+        cluster="narval",
+        wasted_current_active_window=1000.0,
+        cluster_share=0.10,
+        cycles=[False, True, True, True, True],
+        personalized_action=True,
+        pa_flags=[True, True, True],
+    )
+    text = build_recurring_table({"narval": [row]}, **_BRT_KW)
+    # W0 is ✓ (cycles[0]=False) so no ⚑ there; W-2 and W-4 are ✗ with pa_flags → 2 ⚑✗
+    assert text.count("⚑✗") == 2
 
 
 # ── Threshold scaling, true_wasted, personalized_action floor ────────────────
@@ -841,7 +844,6 @@ def test_wasted_6w_uses_scaled_waste(recurring_db):
             _TEST_END,
             min_ratio=_MIN_RATIO,
             min_rgu_hours=_MIN_RGU_HOURS,
-            window_weeks=6,
             cluster_share_threshold=1.1,
             threshold=0.05,
         )
@@ -856,7 +858,6 @@ def test_true_wasted_field_populated(recurring_db):
             _TEST_END,
             min_ratio=_MIN_RATIO,
             min_rgu_hours=_MIN_RGU_HOURS,
-            window_weeks=6,
             cluster_share_threshold=1.1,
         )
     row = next(r for r in result["mila"] if r.email == "petitbonhomme@mila.quebec")
@@ -870,7 +871,6 @@ def test_personalized_action_floor_zero_flags_wasters(recurring_db):
             _TEST_END,
             min_ratio=_MIN_RATIO,
             min_rgu_hours=_MIN_RGU_HOURS,
-            window_weeks=6,
             cluster_share_threshold=1.1,
             personalized_action_min_waste_rgu_hours=0.0,
         )
@@ -885,10 +885,102 @@ def test_personalized_action_floor_high_excludes_all(recurring_db):
             _TEST_END,
             min_ratio=_MIN_RATIO,
             min_rgu_hours=_MIN_RGU_HOURS,
-            window_weeks=6,
             cluster_share_threshold=1.1,
             personalized_action_min_waste_rgu_hours=999999.0,
         )
     for rows in result.values():
         for row in rows:
             assert row.personalized_action is False
+
+
+# ── Per-anchor pa_flags four-scenario computation test ────────────────────────
+# RGU=4.8, util=0.0 → wasted = 4.8 * elapsed_h. elapsed_h = target_rgu_h / 4.8.
+# Scenarios (active_cycles=3, cycle_length_weeks=2, PA threshold=30):
+#   user1: 10 RGU-h/cycle × 5 → every 3-cycle window = 30 ≥ 30 → pa_flags=[T,T,T]
+#   user2: W0=15,W-2=10,W-4=5,W-6=5,W-8=5
+#          pos-0=30≥30,pos-1=20<30,pos-2=15<30 → pa_flags=[T,F,F]
+#   user3: W0=30 only → pos-0=30,pos-1=0,pos-2=0 → pa_flags=[T,F,F]
+#   user4: 5 RGU-h/cycle × 5 → every window = 15 < 30 → pa_flags=[F,F,F]
+
+
+@pytest.fixture
+def pa_scenario_db(read_write_db):
+    session = read_write_db
+    clusters = {c.name: c for c in session.exec(select(SlurmClusterDB)).all()}
+    mila_id = clusters["mila"].id
+
+    u1 = UserDB(display_name="PA Scenario U1", email="pa_u1@mila.quebec")
+    u2 = UserDB(display_name="PA Scenario U2", email="pa_u2@mila.quebec")
+    u3 = UserDB(display_name="PA Scenario U3", email="pa_u3@mila.quebec")
+    u4 = UserDB(display_name="PA Scenario U4", email="pa_u4@mila.quebec")
+    for u in (u1, u2, u3, u4):
+        session.add(u)
+    session.flush()
+
+    job_id_ctr = [80000]
+
+    def _seed(uid, start, rgu_h):
+        _add_gpu_job(
+            session,
+            user_id=uid,
+            cluster_id=mila_id,
+            elapsed_h=rgu_h / _MILA_RGU,
+            submit_time=start,
+            job_id=job_id_ctr[0],
+            utilization=0.0,
+        )
+        job_id_ctr[0] += 1
+
+    for start in (_W0_START, _W2_START, _W4_START, _W6_START, _W8_START):
+        _seed(u1.id, start, 10)
+
+    for start, rgu in (
+        (_W0_START, 15),
+        (_W2_START, 10),
+        (_W4_START, 5),
+        (_W6_START, 5),
+        (_W8_START, 5),
+    ):
+        _seed(u2.id, start, rgu)
+
+    _seed(u3.id, _W0_START, 30)
+
+    for start in (_W0_START, _W2_START, _W4_START, _W6_START, _W8_START):
+        _seed(u4.id, start, 5)
+
+    session.commit()
+    yield {"u1": u1, "u2": u2, "u3": u3, "u4": u4}
+
+
+def test_pa_flags_four_scenarios(pa_scenario_db):
+    """pa_flags are computed correctly for the four canonical scenarios."""
+    users = pa_scenario_db
+    result = get_recurring_underusers(
+        _TEST_END,
+        min_ratio=0.0,
+        min_rgu_hours=0.0,
+        cluster_share_threshold=1.1,
+        recurrence_active_cycles=3,
+        recurrence_display_cycles=5,
+        cycle_length_weeks=2,
+        clusters=["mila"],
+        personalized_action_min_waste_rgu_hours=30.0,
+    )
+    rows = {r.email: r for r in result.get("mila", [])}
+
+    u1 = rows[users["u1"].email]
+    u2 = rows[users["u2"].email]
+    u3 = rows[users["u3"].email]
+    u4 = rows[users["u4"].email]
+
+    assert u1.pa_flags == [True, True, True]
+    assert u1.personalized_action is True
+
+    assert u2.pa_flags == [True, False, False]
+    assert u2.personalized_action is True
+
+    assert u3.pa_flags == [True, False, False]
+    assert u3.personalized_action is True
+
+    assert u4.pa_flags == [False, False, False]
+    assert u4.personalized_action is False

@@ -96,7 +96,7 @@ class RecurringUserRow:
     display_name: str
     cluster: str
     # Wasted RGU-h for this user in this cluster over the recurrence window.
-    wasted_6w: float
+    wasted_current_active_window: float
     # Fraction of the cluster's total wasted RGU-h in the same window (0..1).
     cluster_share: float
     # Cycle membership: was this user flagged by get_underusers for each window?
@@ -107,6 +107,10 @@ class RecurringUserRow:
     personalized_action: bool
     # True (unscaled) wasted RGU-h for this user in this cluster over the recurrence window.
     true_wasted: float = 0.0
+    # Per-active-anchor PA flags: index 0 = most-recent anchor, True iff the
+    # recurrence_active_cycles-cycle window ending at that anchor has scaled
+    # cross-cluster waste ≥ personalized_action_min_waste_rgu_hours.
+    pa_flags: list[bool] = field(default_factory=list)
 
 
 def _rgu_exprs(threshold: float = 1.0):
@@ -639,7 +643,6 @@ def get_recurring_underusers(
     min_ratio: float,
     min_rgu_hours: float,
     resource: str = "gpu",
-    window_weeks: int,
     cluster_share_threshold: float,
     exclude_zero_usage: bool = False,
     recurrence_active_cycles: int = 3,
@@ -668,6 +671,7 @@ def get_recurring_underusers(
     if resource != "gpu":
         raise ValueError(f"Unsupported resource: {resource!r}")
 
+    window_weeks = recurrence_active_cycles * cycle_length_weeks
     anchor = _even_week_anchor(end, cycle_length_weeks=cycle_length_weeks)
     agg_start = anchor - timedelta(weeks=window_weeks)
 
@@ -744,32 +748,37 @@ def get_recurring_underusers(
         )
         cycle_flagged.append({r.user_id for r in flagged_rows})
 
-    # ── Personalized-action aggregate (active cycles window, cross-cluster) ───
+    # ── Personalized-action aggregate (per active anchor, cross-cluster) ────────
+    # For position i, the window is [anchor − (i+active_cycles)·cl, anchor − i·cl].
+    # Index 0 = most-recent anchor (matches the former single-window query).
     pa_window_weeks = recurrence_active_cycles * cycle_length_weeks
-    pa_start = anchor - timedelta(weeks=pa_window_weeks)
+    user_pa_flags: dict[int, list[bool]] = {}
     with config().db.session() as session:
-        pa_util, _, pa_rgu_h_expr, _, pa_scaled_expr = _rgu_exprs(threshold)
-        pa_stmt = _with_rgu_window(
-            select(
-                JobSeriesDB.sarc_user_id,
-                func.coalesce(func.sum(pa_rgu_h_expr), 0).label("sum_rgu_hours"),
-                func.coalesce(func.sum(pa_scaled_expr), 0).label("sum_rgu_used"),
-            ),
-            pa_util,
-            pa_start,
-            anchor,
-            exclude_zero_usage=exclude_zero_usage,
-            rgu_used_expr=pa_scaled_expr,
-            clusters=clusters,
-        ).group_by(JobSeriesDB.sarc_user_id)
-        pa_rows = session.exec(pa_stmt).all()
-
-    user_pa_flag: dict[int, bool] = {}
-    for row in pa_rows:
-        _, _, pa_wasted = _split_waste(row)
-        user_pa_flag[row.sarc_user_id] = (
-            pa_wasted >= personalized_action_min_waste_rgu_hours
-        )
+        for i in range(recurrence_active_cycles):
+            pa_end = anchor - timedelta(weeks=i * cycle_length_weeks)
+            pa_start = pa_end - timedelta(weeks=pa_window_weeks)
+            pa_util, _, pa_rgu_h_expr, _, pa_scaled_expr = _rgu_exprs(threshold)
+            pa_stmt = _with_rgu_window(
+                select(
+                    JobSeriesDB.sarc_user_id,
+                    func.coalesce(func.sum(pa_rgu_h_expr), 0).label("sum_rgu_hours"),
+                    func.coalesce(func.sum(pa_scaled_expr), 0).label("sum_rgu_used"),
+                ),
+                pa_util,
+                pa_start,
+                pa_end,
+                exclude_zero_usage=exclude_zero_usage,
+                rgu_used_expr=pa_scaled_expr,
+                clusters=clusters,
+            ).group_by(JobSeriesDB.sarc_user_id)
+            for row in session.exec(pa_stmt).all():
+                uid = row.sarc_user_id
+                if uid not in user_pa_flags:
+                    user_pa_flags[uid] = [False] * recurrence_active_cycles
+                _, _, pa_wasted = _split_waste(row)
+                user_pa_flags[uid][i] = (
+                    pa_wasted >= personalized_action_min_waste_rgu_hours
+                )
 
     # ── Per-cluster greedy selection (cumulative share >= threshold) ──────────
     result: dict[str, list[RecurringUserRow]] = {}
@@ -795,16 +804,22 @@ def get_recurring_underusers(
             cycles_for_user = [
                 (None if cf is None else uid in cf) for cf in cycle_flagged
             ]
+            pa_flags = user_pa_flags.get(uid, [])
             rows_out.append(
                 RecurringUserRow(
                     email=u["email"],
                     display_name=u["display_name"],
                     cluster=cluster,
-                    wasted_6w=u["wasted"],
+                    wasted_current_active_window=u["wasted"],
                     cluster_share=u["wasted"] / cluster_total,
                     cycles=cycles_for_user,
-                    personalized_action=user_pa_flag.get(uid, False),
+                    # personalized action should not be triggered for a current
+                    # cycle that would ends in the future
+                    personalized_action=pa_flags[0] and anchor == end
+                    if pa_flags
+                    else False,
                     true_wasted=u["true_wasted"],
+                    pa_flags=pa_flags,
                 )
             )
         result[cluster] = rows_out

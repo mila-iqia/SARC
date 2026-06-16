@@ -187,10 +187,10 @@ class UnderusageNotifyCommand:
 
         week_num = _iso_week(end)
         # dms_eligible: week parity (controls preview section)
-        dms_eligible = week_num % ncfg.cycle_length_weeks == 0
+        dms_eligible = week_num % window_weeks == 0
         # dms_will_send: additionally blocked by --no-dms gate and requires send_dms config (controls actual sends)
         dms_will_send = dms_eligible and not self.no_dms and ncfg.send_dms
-        usage_report_eligible = week_num % ncfg.usage_report_every_weeks == 0
+        usage_report_eligible = week_num % ncfg.usage_report_window_weeks == 0
         usage_report_will_send = (
             usage_report_eligible and not self.no_dms and ncfg.send_usage_report
         )
@@ -219,7 +219,7 @@ class UnderusageNotifyCommand:
             )
         if usage_report_eligible:
             _userfacing_print(
-                f"ISO week {week_num} (multiple of {ncfg.usage_report_every_weeks}) — Usage report eligible this run.",
+                f"ISO week {week_num} (multiple of {ncfg.usage_report_window_weeks}) — Usage report eligible this run.",
                 file=sys.stderr,
             )
         _userfacing_print(file=sys.stderr)
@@ -253,12 +253,11 @@ class UnderusageNotifyCommand:
             min_ratio=min_ratio,
             min_rgu_hours=min_rgu_hours,
             resource=self.resource,
-            window_weeks=ncfg.recurrence_window_weeks,
             cluster_share_threshold=ncfg.recurrence_cluster_share,
             exclude_zero_usage=True,
             recurrence_display_cycles=ncfg.recurrence_display_cycles,
             recurrence_active_cycles=ncfg.recurrence_active_cycles,
-            cycle_length_weeks=ncfg.cycle_length_weeks,
+            cycle_length_weeks=window_weeks,
             clusters=clusters,
             threshold=threshold,
             personalized_action_min_waste_rgu_hours=ncfg.personalized_action_min_waste_rgu_hours,
@@ -270,15 +269,13 @@ class UnderusageNotifyCommand:
         _userfacing_print()
 
         cycle_dates = get_cycle_dates(
-            end,
-            ncfg.recurrence_display_cycles,
-            cycle_length_weeks=ncfg.cycle_length_weeks,
+            end, ncfg.recurrence_display_cycles, cycle_length_weeks=window_weeks
         )
         digest = build_admin_digest(
             rows,
             period=period,
             cluster_share_threshold=ncfg.recurrence_cluster_share,
-            cycle_length_weeks=ncfg.cycle_length_weeks,
+            cycle_length_weeks=window_weeks,
             active_cycles=ncfg.recurrence_active_cycles,
             top_n=ncfg.digest_top_n,
             historical=historical,
