@@ -493,20 +493,21 @@ def _query_month_agg(
     min_rgu_hours: float,
     exclude_zero_usage: bool = False,
     clusters: list[str] | None = None,
+    threshold: float = 1.0,
 ) -> MonthlyStats:
     """Aggregate fleet-level waste stats for a single calendar month window."""
-    util, _, rgu_h_expr, rgu_used_expr, _ = _rgu_exprs()
+    util, _, rgu_h_expr, _, scaled_used_expr = _rgu_exprs(threshold)
     stmt = _with_rgu_window(
         select(
             JobSeriesDB.sarc_user_id,
             func.coalesce(func.sum(rgu_h_expr), 0).label("sum_rgu_hours"),
-            func.coalesce(func.sum(rgu_used_expr), 0).label("sum_rgu_used"),
+            func.coalesce(func.sum(scaled_used_expr), 0).label("sum_rgu_used"),
         ),
         util,
         start,
         end,
         exclude_zero_usage=exclude_zero_usage,
-        rgu_used_expr=rgu_used_expr,
+        rgu_used_expr=scaled_used_expr,
         clusters=clusters,
     ).group_by(JobSeriesDB.sarc_user_id)
     agg_rows = session.exec(stmt).all()
@@ -539,6 +540,7 @@ def get_historical_stats(
     months: int = 6,
     exclude_zero_usage: bool = False,
     clusters: list[str] | None = None,
+    threshold: float = 1.0,
 ) -> HistoricalStats:
     """Compute 6-month fleet-level waste trend and year-over-year comparison.
 
@@ -568,6 +570,7 @@ def get_historical_stats(
                 min_rgu_hours=min_rgu_hours,
                 exclude_zero_usage=exclude_zero_usage,
                 clusters=clusters,
+                threshold=threshold,
             )
             for s, e in current_buckets
         ]
@@ -580,6 +583,7 @@ def get_historical_stats(
                 min_rgu_hours=min_rgu_hours,
                 exclude_zero_usage=exclude_zero_usage,
                 clusters=clusters,
+                threshold=threshold,
             )
             for s, e in yoy_buckets
         ]
