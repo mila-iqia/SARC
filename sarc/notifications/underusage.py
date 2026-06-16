@@ -14,12 +14,13 @@ class ClusterBreakdown:
     cluster: str
     # RGU-hours requested for this cluster in the window.
     rgu_hours: float
-    # RGU-hours wasted (rgu_hours - rgu_used).  Jobs without a gpu_utilization
-    # stat contribute their full RGU-hours to wasted (utilization assumed 0).
+    # Scaled RGU-hours wasted (rgu_hours - scaled_used).
     wasted: float
     # Same as rgu_hours; kept as a separate field for clarity in waste_ratio
     # computations (wasted / requested).
     requested: float
+    # Unscaled RGU-hours wasted (rgu_hours - true_used).
+    true_wasted: float = 0.0
 
 
 @dataclass
@@ -53,6 +54,9 @@ class UnderuserRow:
     avg_utilization: float
     # Human-readable label for wasted (same value, different name for messages).
     rgu_hours_unused: float
+    # Unscaled reference values (threshold=1.0 → equal to wasted/waste_ratio).
+    true_wasted: float = 0.0
+    true_waste_ratio: float = 0.0
     by_cluster: list[ClusterBreakdown] = field(default_factory=list)
     # Top-N GPU jobs by RGU-hours unused, descending.
     top_jobs: list[UnderuserJob] = field(default_factory=list)
@@ -167,12 +171,13 @@ def get_underusers(
     resource: str = "gpu",
     exclude_zero_usage: bool = False,
     clusters: list[str] | None = None,
+    threshold: float = 1.0,
 ) -> list[UnderuserRow]:
     if resource != "gpu":
         raise ValueError(f"Unsupported resource: {resource!r}")
 
     with config().db.session() as session:
-        util, _, rgu_h_expr, rgu_used_expr, _ = _rgu_exprs()
+        util, _, rgu_h_expr, true_used_expr, scaled_used_expr = _rgu_exprs(threshold)
         stmt = _with_rgu_window(
             select(
                 JobSeriesDB.sarc_user_id,
@@ -180,13 +185,14 @@ def get_underusers(
                 JobSeriesDB.display_name,
                 JobSeriesDB.cluster_name,
                 func.coalesce(func.sum(rgu_h_expr), 0).label("sum_rgu_hours"),
-                func.coalesce(func.sum(rgu_used_expr), 0).label("sum_rgu_used"),
+                func.coalesce(func.sum(true_used_expr), 0).label("sum_rgu_true_used"),
+                func.coalesce(func.sum(scaled_used_expr), 0).label("sum_rgu_used"),
             ),
             util,
             start,
             end,
             exclude_zero_usage=exclude_zero_usage,
-            rgu_used_expr=rgu_used_expr,
+            rgu_used_expr=scaled_used_expr,
             clusters=clusters,
         ).group_by(
             JobSeriesDB.sarc_user_id,
@@ -205,12 +211,15 @@ def get_underusers(
                     "display_name": row.display_name,
                     "clusters": [],
                 }
-            rgu_h, _, wasted_h = _split_waste(row)
+            rgu_h, _, scaled_wasted_h = _split_waste(row)
+            true_used_h = float(row.sum_rgu_true_used or 0.0)
+            true_wasted_h = rgu_h - true_used_h
             user_data[uid]["clusters"].append(
                 ClusterBreakdown(
                     cluster=row.cluster_name or "unknown",
                     rgu_hours=rgu_h,
-                    wasted=wasted_h,
+                    wasted=scaled_wasted_h,
+                    true_wasted=true_wasted_h,
                     requested=rgu_h,
                 )
             )
@@ -222,6 +231,7 @@ def get_underusers(
             total_wasted = sum(c.wasted for c in breakdowns)
             u["total_rgu_h"] = total_rgu_h
             u["total_wasted"] = total_wasted
+            u["total_true_wasted"] = sum(c.true_wasted for c in breakdowns)
             if total_rgu_h <= 0:
                 continue
             waste_ratio = total_wasted / total_rgu_h
@@ -232,7 +242,7 @@ def get_underusers(
         # Per-job data for the identified underusers — same RGU × utilisation pattern.
         jobs_by_user: dict[int, list[UnderuserJob]] = {uid: [] for uid in underuser_ids}
         if underuser_ids:
-            util, m_mean, rgu_h_expr, rgu_used_expr, _ = _rgu_exprs()
+            util, m_mean, rgu_h_expr, _, scaled_used_expr = _rgu_exprs(threshold)
             job_rows = session.exec(
                 _with_rgu_window(
                     select(
@@ -241,7 +251,7 @@ def get_underusers(
                         JobSeriesDB.cluster_name,
                         JobSeriesDB.submit_time,
                         rgu_h_expr.label("rgu_hours"),
-                        rgu_used_expr.label("rgu_used"),
+                        scaled_used_expr.label("rgu_used"),
                         m_mean.label("util_mean"),
                     ).where(col(JobSeriesDB.sarc_user_id).in_(underuser_ids)),
                     util,
@@ -255,22 +265,23 @@ def get_underusers(
                     # The underusers were already filtered by the aggregated
                     # query above; no per-job filter is needed.
                     exclude_zero_usage=False,
-                    rgu_used_expr=rgu_used_expr,
+                    rgu_used_expr=scaled_used_expr,
                     clusters=clusters,
                 )
             ).all()
 
             for jr in job_rows:
                 rgu_h = float(jr.rgu_hours or 0.0)
-                rgu_used_h = float(jr.rgu_used or 0.0)
+                scaled_used_h = float(jr.rgu_used or 0.0)
                 util_val = float(jr.util_mean) if jr.util_mean is not None else None
+                gpu_util = min(1.0, util_val / threshold) if util_val is not None else None
                 jobs_by_user[jr.sarc_user_id].append(
                     UnderuserJob(
                         job_id=jr.job_db_id,
                         cluster=jr.cluster_name or "unknown",
                         submit_time=jr.submit_time,
-                        rgu_hours_unused=rgu_h - rgu_used_h,
-                        gpu_utilization=util_val,
+                        rgu_hours_unused=rgu_h - scaled_used_h,
+                        gpu_utilization=gpu_util,
                     )
                 )
 
@@ -287,6 +298,7 @@ def get_underusers(
             jobs_by_user[uid], key=lambda j: j.rgu_hours_unused, reverse=True
         )[:top_jobs_per_user]
 
+        total_true_wasted = u["total_true_wasted"]
         result.append(
             UnderuserRow(
                 email=u["email"],
@@ -298,6 +310,8 @@ def get_underusers(
                 waste_ratio=waste_ratio,
                 avg_utilization=1.0 - waste_ratio,
                 rgu_hours_unused=total_wasted,
+                true_wasted=total_true_wasted,
+                true_waste_ratio=total_true_wasted / total_rgu_h if total_rgu_h > 0 else 0.0,
                 by_cluster=by_cluster,
                 top_jobs=top_jobs,
             )

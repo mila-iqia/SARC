@@ -461,3 +461,41 @@ def test_clusters_filter_excludes_other_clusters(underusage_db):
     )
     petitbonhomme = next(r for r in results if "petitbonhomme" in r.email)
     assert {c.cluster for c in petitbonhomme.by_cluster} == {"mila"}
+
+
+# ── Scaled waste + true_* reference fields ────────────────────────────────────
+
+
+def test_true_wasted_field_at_identity(underusage_db):
+    # At threshold=1.0, true_wasted must equal wasted on every row.
+    results = get_underusers(
+        _WINDOW_START,
+        _WINDOW_END,
+        min_ratio=_MIN_RATIO,
+        min_rgu_hours=_MIN_RGU_HOURS,
+        top_jobs_per_user=_TOP_JOBS_PER_USER,
+        threshold=1.0,
+    )
+    for row in results:
+        assert row.true_wasted == pytest.approx(row.wasted)
+        assert row.true_waste_ratio == pytest.approx(row.waste_ratio)
+        for c in row.by_cluster:
+            assert c.true_wasted == pytest.approx(c.wasted)
+
+
+def test_scaled_waste_less_than_true_waste_below_threshold(underusage_db):
+    # petitbonhomme: m=0.10 on mila, rgu_h≈3360.  At threshold=0.20,
+    # scaled_used = LEAST(rgu_h, rgu_h*0.10/0.20) = rgu_h*0.50  → wasted=50%
+    # true_used = rgu_h*0.10  → true_wasted=90%
+    # So scaled waste < true waste.
+    results = get_underusers(
+        _WINDOW_START,
+        _WINDOW_END,
+        min_ratio=_MIN_RATIO,
+        min_rgu_hours=_MIN_RGU_HOURS,
+        top_jobs_per_user=_TOP_JOBS_PER_USER,
+        threshold=0.20,
+    )
+    row = next(r for r in results if "petitbonhomme" in r.email)
+    assert row.wasted < row.true_wasted
+    assert row.waste_ratio < row.true_waste_ratio
