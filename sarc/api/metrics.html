@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <title>Global Job Metrics ({{ user_email }})</title>
-  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  <script src="https://cdn.plot.ly/plotly-3.6.0.min.js"></script>
   <style>
     * { box-sizing: border-box; }
     body { font-family: system-ui, sans-serif; margin: 32px; color: #222; }
@@ -330,7 +330,7 @@
 
     // ── Persistent state (localStorage) ─────────────────────────────────────
     // Schema version: bump when the saved structure changes incompatibly.
-    const STORAGE_KEY = 'sarc_dash_v1';
+    const STORAGE_KEY = '{{ 'sarc_dash_v1_admin' if is_admin else 'sarc_dash_v1_user' }}';
 
     function loadSavedState() {
       try {
