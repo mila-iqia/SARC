@@ -312,7 +312,6 @@ class UnderusageNotifyCommand:
                 top_jobs_per_user=ncfg.top_jobs_per_user,
                 resource=self.resource,
                 clusters=clusters,
-                threshold=threshold,
                 usage_report_min_rgu_hours=ncfg.usage_report_min_rgu_hours,
             )
             underuser_emails = {r.email for r in rows}

@@ -8,6 +8,9 @@ sarc:
     connection_string: mongodb://localhost:27017/sarc-dev
     database_name: sarc-dev
   db:
+    # host: 34.152.3.253
+    # name: sarc-demo
+    # user: postgres
     host: localhost
     name: sarc-dev
   patches: secret/patches
@@ -19,6 +22,9 @@ sarc:
     enabled: True
     min_ratio: 0.80
     min_rgu_hours: 10752
+    clusters:
+      - mila
+    waste_rescale_threshold: 0.8
   cache: "../sarc-cache"
   sshconfig: "~/.ssh/config"
   clusters:
