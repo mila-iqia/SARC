@@ -214,6 +214,10 @@ class DbConfiguration:
         with custom_db_config(db_name):
             self.executive(f'CREATE DATABASE "{db_name}"')
             command.upgrade(Config(toml_file="pyproject.toml"), "head")
+            # Alembic reuses config.db.engine, leaving a pooled connection that
+            # predates the ALTER DATABASE SET timezone=UTC migration. Dispose so
+            # init_insert() gets a fresh connection that inherits UTC.
+            config.db.engine.dispose()
             init_insert()
             try:
                 if not self.empty:
