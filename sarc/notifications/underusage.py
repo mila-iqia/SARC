@@ -128,7 +128,7 @@ def _rgu_exprs(threshold: float = 1.0):
 
 
 def _with_rgu_window(
-    stmt, util_alias, start, end, *, exclude_zero_usage, rgu_used_expr
+    stmt, util_alias, start, end, *, exclude_zero_usage, rgu_used_expr, clusters=None
 ):
     """Apply the gpu_utilization LEFT JOIN and submit-time / GPU-type / RGU filters."""
     stmt = stmt.join(
@@ -144,6 +144,8 @@ def _with_rgu_window(
         col(JobSeriesDB.allocated_gpu_type).is_not(None),
         col(JobSeriesDB.rgu).is_not(None),
     )
+    if clusters:
+        stmt = stmt.where(col(JobSeriesDB.cluster_name).in_(clusters))
     if exclude_zero_usage:
         stmt = stmt.having(func.coalesce(func.sum(rgu_used_expr), 0) > 0)
     return stmt
@@ -164,6 +166,7 @@ def get_underusers(
     top_jobs_per_user: int,
     resource: str = "gpu",
     exclude_zero_usage: bool = False,
+    clusters: list[str] | None = None,
 ) -> list[UnderuserRow]:
     if resource != "gpu":
         raise ValueError(f"Unsupported resource: {resource!r}")
@@ -184,6 +187,7 @@ def get_underusers(
             end,
             exclude_zero_usage=exclude_zero_usage,
             rgu_used_expr=rgu_used_expr,
+            clusters=clusters,
         ).group_by(
             JobSeriesDB.sarc_user_id,
             JobSeriesDB.email,
@@ -213,9 +217,9 @@ def get_underusers(
 
         underuser_ids: list[int] = []
         for uid, u in user_data.items():
-            clusters = u["clusters"]
-            total_rgu_h = sum(c.rgu_hours for c in clusters)
-            total_wasted = sum(c.wasted for c in clusters)
+            breakdowns = u["clusters"]
+            total_rgu_h = sum(c.rgu_hours for c in breakdowns)
+            total_wasted = sum(c.wasted for c in breakdowns)
             u["total_rgu_h"] = total_rgu_h
             u["total_wasted"] = total_wasted
             if total_rgu_h <= 0:
@@ -252,6 +256,7 @@ def get_underusers(
                     # query above; no per-job filter is needed.
                     exclude_zero_usage=False,
                     rgu_used_expr=rgu_used_expr,
+                    clusters=clusters,
                 )
             ).all()
 
@@ -302,7 +307,12 @@ def get_underusers(
 
 
 def get_all_users_usage(
-    start: datetime, end: datetime, *, top_jobs_per_user: int, resource: str = "gpu"
+    start: datetime,
+    end: datetime,
+    *,
+    top_jobs_per_user: int,
+    resource: str = "gpu",
+    clusters: list[str] | None = None,
 ) -> list[UsageRow]:
     if resource != "gpu":
         raise ValueError(f"Unsupported resource: {resource!r}")
@@ -323,6 +333,7 @@ def get_all_users_usage(
             end,
             exclude_zero_usage=False,
             rgu_used_expr=rgu_used_expr,
+            clusters=clusters,
         ).group_by(
             JobSeriesDB.sarc_user_id,
             JobSeriesDB.email,
@@ -370,6 +381,7 @@ def get_all_users_usage(
                     end,
                     exclude_zero_usage=False,
                     rgu_used_expr=rgu_used_expr,
+                    clusters=clusters,
                 )
             ).all()
 
@@ -464,6 +476,7 @@ def _query_month_agg(
     min_ratio: float,
     min_rgu_hours: float,
     exclude_zero_usage: bool = False,
+    clusters: list[str] | None = None,
 ) -> MonthlyStats:
     """Aggregate fleet-level waste stats for a single calendar month window."""
     util, _, rgu_h_expr, rgu_used_expr, _ = _rgu_exprs()
@@ -478,6 +491,7 @@ def _query_month_agg(
         end,
         exclude_zero_usage=exclude_zero_usage,
         rgu_used_expr=rgu_used_expr,
+        clusters=clusters,
     ).group_by(JobSeriesDB.sarc_user_id)
     agg_rows = session.exec(stmt).all()
 
@@ -508,6 +522,7 @@ def get_historical_stats(
     resource: str = "gpu",
     months: int = 6,
     exclude_zero_usage: bool = False,
+    clusters: list[str] | None = None,
 ) -> HistoricalStats:
     """Compute 6-month fleet-level waste trend and year-over-year comparison.
 
@@ -536,6 +551,7 @@ def get_historical_stats(
                 min_ratio=min_ratio,
                 min_rgu_hours=min_rgu_hours,
                 exclude_zero_usage=exclude_zero_usage,
+                clusters=clusters,
             )
             for s, e in current_buckets
         ]
@@ -547,6 +563,7 @@ def get_historical_stats(
                 min_ratio=min_ratio,
                 min_rgu_hours=min_rgu_hours,
                 exclude_zero_usage=exclude_zero_usage,
+                clusters=clusters,
             )
             for s, e in yoy_buckets
         ]
@@ -603,6 +620,7 @@ def get_recurring_underusers(
     recurrence_active_cycles: int = 3,
     recurrence_display_cycles: int = 5,
     cycle_length_weeks: int = 2,
+    clusters: list[str] | None = None,
 ) -> dict[str, list[RecurringUserRow]]:
     """Return per-cluster top wasters for the recurring-underusers digest table.
 
@@ -643,6 +661,7 @@ def get_recurring_underusers(
             anchor,
             exclude_zero_usage=exclude_zero_usage,
             rgu_used_expr=rgu_used_expr,
+            clusters=clusters,
         ).group_by(
             JobSeriesDB.sarc_user_id,
             JobSeriesDB.email,
@@ -689,6 +708,7 @@ def get_recurring_underusers(
             top_jobs_per_user=1,
             resource=resource,
             exclude_zero_usage=exclude_zero_usage,
+            clusters=clusters,
         )
         cycle_flagged.append({r.user_id for r in flagged_rows})
 

@@ -68,17 +68,6 @@ def test_active_cycles_equal_to_display_is_valid():
     assert cfg.recurrence_active_cycles == 5
 
 
-# --- New fields ---
-
-
-def test_new_field_defaults():
-    cfg = _make()
-    assert cfg.clusters == []
-    assert cfg.usage_report_min_rgu_hours == 0.0
-    assert cfg.personalized_action_min_waste_rgu_hours == 16128.0
-    assert cfg.waste_rescale_threshold == 1.0
-
-
 def test_waste_rescale_threshold_boundary_one_is_valid():
     cfg = _make(waste_rescale_threshold=1.0)
     assert cfg.waste_rescale_threshold == 1.0

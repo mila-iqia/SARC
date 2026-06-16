@@ -444,3 +444,20 @@ def test_usage_top_jobs_per_user_3(underusage_db):
     results = get_all_users_usage(_WINDOW_START, _WINDOW_END, top_jobs_per_user=3)
     row = next(r for r in results if r.email == "petitbonhomme@mila.quebec")
     assert len(row.top_jobs) == 3
+
+
+# ── Cluster filter ────────────────────────────────────────────────────────────
+
+
+def test_clusters_filter_excludes_other_clusters(underusage_db):
+    # petitbonhomme has jobs on both mila and raisin; restrict to mila only.
+    results = get_underusers(
+        _WINDOW_START,
+        _WINDOW_END,
+        min_ratio=_MIN_RATIO,
+        min_rgu_hours=_MIN_RGU_HOURS,
+        top_jobs_per_user=_TOP_JOBS_PER_USER,
+        clusters=["mila"],
+    )
+    petitbonhomme = next(r for r in results if "petitbonhomme" in r.email)
+    assert {c.cluster for c in petitbonhomme.by_cluster} == {"mila"}

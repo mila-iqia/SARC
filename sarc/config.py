@@ -308,7 +308,7 @@ class UnderusageNotifyConfig:
     usage_report_window_weeks: int = 4
     usage_report_every_weeks: int = 4
     send_usage_report: bool = False
-    clusters: list[str] = field(default_factory=list)
+    clusters: list[str] = field(default_factory=lambda: ["mila"])
     usage_report_min_rgu_hours: float = 0.0
     personalized_action_min_waste_rgu_hours: float = 16128.0
     waste_rescale_threshold: float = 1.0
