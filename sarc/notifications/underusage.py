@@ -238,7 +238,14 @@ def get_underusers(
                     util,
                     start,
                     end,
-                    exclude_zero_usage=exclude_zero_usage,
+                    # Must be False here: this is a per-job SELECT with no GROUP
+                    # BY. _with_rgu_window implements exclude_zero_usage via
+                    # HAVING sum(rgu_used_expr) > 0, which requires a grouped
+                    # query. Passing True would generate HAVING without GROUP
+                    # BY, which PostgreSQL rejects.
+                    # The underusers were already filtered by the aggregated
+                    # query above; no per-job filter is needed.
+                    exclude_zero_usage=False,
                     rgu_used_expr=rgu_used_expr,
                 )
             ).all()

@@ -120,7 +120,7 @@ def test_dry_run_prints_dry_run_header(notify_db, cli_main, monkeypatch, capsys)
     monkeypatch.setattr("sarc.cli.notify.underusage._now_utc", lambda: _CLI_TEST_END)
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         cli_main(["notify", "underusage", "--window-weeks", "4"])
-    assert "DRY RUN" in capsys.readouterr().out
+    assert "DRY RUN" in capsys.readouterr().err
 
 
 # ── recipients ────────────────────────────────────────────────────────────────
@@ -173,9 +173,9 @@ def test_even_week_shows_dm_previews(notify_db, cli_main, capsys):
             ["notify", "underusage", "--window-weeks", "4", "--as-of", "2024-06-30"]
         )
     assert rc == 0
-    out = capsys.readouterr().out
-    assert "DM Previews" in out
-    assert "even" in out
+    captured = capsys.readouterr()
+    assert "DM Previews" in captured.out
+    assert "even" in captured.err
 
 
 def test_odd_week_suppresses_dm_previews(notify_db, cli_main, capsys):
@@ -185,7 +185,7 @@ def test_odd_week_suppresses_dm_previews(notify_db, cli_main, capsys):
             ["notify", "underusage", "--window-weeks", "4", "--as-of", "2024-06-23"]
         )
     assert rc == 0
-    out = capsys.readouterr().out
+    out = capsys.readouterr().err
     assert "DM Previews" not in out
     assert "digest-only" in out
 
@@ -230,11 +230,11 @@ def test_year_boundary_window_is_correct(year_boundary_db, cli_main, capsys):
             ["notify", "underusage", "--window-weeks", "4", "--as-of", "2025-01-05"]
         )
     assert rc == 0
-    out = capsys.readouterr().out
-    assert "2024-12-08" in out  # window start in digest header
-    assert "2025-01-05" in out  # window end in digest header
-    assert "petitbonhomme@mila.quebec" in out  # job is inside the window
-    assert "digest-only" in out  # week 1 is odd → no DMs
+    captured = capsys.readouterr()
+    assert "2024-12-08" in captured.out  # window start in digest header
+    assert "2025-01-05" in captured.out  # window end in digest header
+    assert "petitbonhomme@mila.quebec" in captured.out  # job is inside the window
+    assert "digest-only" in captured.err  # week 1 is odd → no DMs
 
 
 # ── future anchor guard ───────────────────────────────────────────────────────
@@ -246,7 +246,7 @@ def test_future_anchor_prints_note_and_does_not_crash(notify_db, cli_main, capsy
             ["notify", "underusage", "--window-weeks", "4", "--as-of", "2099-01-01"]
         )
     assert rc == 0
-    assert "future" in capsys.readouterr().out
+    assert "future" in capsys.readouterr().err
 
 
 # ── invalid --as-of ───────────────────────────────────────────────────────────
@@ -626,7 +626,7 @@ def test_non_usage_report_week_no_report_section(usage_report_db, cli_main, caps
                 _EVEN_NON_REPORT_WEEK,
             ]
         )
-    assert "Usage Report Previews" not in capsys.readouterr().out
+    assert "Usage Report Previews" not in capsys.readouterr().err
 
 
 def test_dry_run_usage_report_week_no_sends(usage_report_db, cli_main, monkeypatch):
