@@ -124,12 +124,19 @@ def _calendar_next(dt: datetime, field: str) -> datetime:
 
 def _bucket_expr(period: timedelta | str, time_col, begin_dt: datetime):
     """SQL bucket expression: floor((t - begin)/step) for a fixed period,
-    date_trunc(unit, t) for a calendar period."""
+    date_trunc(unit, t) for a calendar period.
+
+    Calendar buckets truncate ``timezone('UTC', t)`` (i.e. ``t AT TIME ZONE
+    'UTC'``), not ``t`` directly: ``date_trunc`` on a timestamptz floors in the
+    session's TimeZone, and the IAM/Connector engine used in prod does not pin
+    timezone=utc the way the direct-connection engine does. Truncating the UTC
+    wall-clock keeps buckets aligned with the UTC begin/finish bounds on any
+    connection. Portable form, unlike date_trunc's PG16+ 3-arg variant."""
     if isinstance(period, timedelta):
         return func.floor(
             func.extract("epoch", time_col - begin_dt) / period.total_seconds()
         ).label("bucket")
-    return func.date_trunc(period, time_col).label("bucket")
+    return func.date_trunc(period, func.timezone("UTC", time_col)).label("bucket")
 
 
 def _sql_bucket_key(period: timedelta | str, raw):
