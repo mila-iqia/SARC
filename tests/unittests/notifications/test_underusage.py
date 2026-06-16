@@ -499,3 +499,31 @@ def test_scaled_waste_less_than_true_waste_below_threshold(underusage_db):
     row = next(r for r in results if "petitbonhomme" in r.email)
     assert row.wasted < row.true_wasted
     assert row.waste_ratio < row.true_waste_ratio
+
+
+# ── Usage report floor ────────────────────────────────────────────────────────
+
+
+def test_usage_floor_excludes_below_threshold(underusage_db):
+    # bramin: 100h * 4.8 rgu = 480 rgu_h total_requested → below 500 floor → excluded
+    results = get_all_users_usage(
+        _WINDOW_START,
+        _WINDOW_END,
+        top_jobs_per_user=_TOP_JOBS_PER_USER,
+        usage_report_min_rgu_hours=500.0,
+    )
+    emails = {r.email for r in results}
+    assert "bramin@mila.quebec" not in emails
+    assert "petitbonhomme@mila.quebec" in emails
+
+
+def test_usage_floor_at_boundary_is_excluded(underusage_db):
+    # bramin ≈ 480 rgu_h; floor=481 is just above → excluded
+    results = get_all_users_usage(
+        _WINDOW_START,
+        _WINDOW_END,
+        top_jobs_per_user=_TOP_JOBS_PER_USER,
+        usage_report_min_rgu_hours=481.0,
+    )
+    emails = {r.email for r in results}
+    assert "bramin@mila.quebec" not in emails

@@ -327,6 +327,8 @@ def get_all_users_usage(
     top_jobs_per_user: int,
     resource: str = "gpu",
     clusters: list[str] | None = None,
+    threshold: float = 1.0,
+    usage_report_min_rgu_hours: float = 0.0,
 ) -> list[UsageRow]:
     if resource != "gpu":
         raise ValueError(f"Unsupported resource: {resource!r}")
@@ -417,13 +419,13 @@ def get_all_users_usage(
 
     result = []
     for uid, u in user_data.items():
-        clusters = u["clusters"]
-        total_requested = sum(c.rgu_hours_requested for c in clusters)
-        total_used = sum(c.rgu_hours_used for c in clusters)
-        if total_requested <= 0:
+        breakdowns = u["clusters"]
+        total_requested = sum(c.rgu_hours_requested for c in breakdowns)
+        total_used = sum(c.rgu_hours_used for c in breakdowns)
+        if total_requested <= usage_report_min_rgu_hours:
             continue
 
-        by_cluster = sorted(clusters, key=lambda c: c.rgu_hours_used, reverse=True)
+        by_cluster = sorted(breakdowns, key=lambda c: c.rgu_hours_used, reverse=True)
         top_jobs = sorted(
             jobs_by_user[uid], key=lambda j: j.rgu_hours_used, reverse=True
         )[:top_jobs_per_user]
