@@ -8,7 +8,7 @@ from pathlib import Path
 import gifnoc
 import simple_parsing
 
-from sarc.config import config
+from sarc.config import UNDERUSAGE_CYCLE_LENGTH_WEEKS, config
 from sarc.notifications.email import EmailClient
 from sarc.notifications.messages import (
     build_admin_digest,
@@ -187,7 +187,7 @@ class UnderusageNotifyCommand:
 
         week_num = _iso_week(end)
         # dms_eligible: week parity (controls preview section)
-        dms_eligible = week_num % window_weeks == 0
+        dms_eligible = week_num % UNDERUSAGE_CYCLE_LENGTH_WEEKS == 0
         # dms_will_send: additionally blocked by --no-dms gate and requires send_dms config (controls actual sends)
         dms_will_send = dms_eligible and not self.no_dms and ncfg.send_dms
         usage_report_eligible = week_num % ncfg.usage_report_window_weeks == 0
@@ -257,7 +257,7 @@ class UnderusageNotifyCommand:
             exclude_zero_usage=True,
             recurrence_display_cycles=ncfg.recurrence_display_cycles,
             recurrence_active_cycles=ncfg.recurrence_active_cycles,
-            cycle_length_weeks=window_weeks,
+            cycle_length_weeks=UNDERUSAGE_CYCLE_LENGTH_WEEKS,
             clusters=clusters,
             threshold=threshold,
             personalized_action_min_waste_rgu_hours=ncfg.personalized_action_min_waste_rgu_hours,
@@ -269,13 +269,15 @@ class UnderusageNotifyCommand:
         _userfacing_print()
 
         cycle_dates = get_cycle_dates(
-            end, ncfg.recurrence_display_cycles, cycle_length_weeks=window_weeks
+            end,
+            ncfg.recurrence_display_cycles,
+            cycle_length_weeks=UNDERUSAGE_CYCLE_LENGTH_WEEKS,
         )
         digest = build_admin_digest(
             rows,
             period=period,
             cluster_share_threshold=ncfg.recurrence_cluster_share,
-            cycle_length_weeks=window_weeks,
+            cycle_length_weeks=UNDERUSAGE_CYCLE_LENGTH_WEEKS,
             active_cycles=ncfg.recurrence_active_cycles,
             top_n=ncfg.digest_top_n,
             historical=historical,

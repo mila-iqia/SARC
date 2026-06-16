@@ -16,8 +16,8 @@ from tests.db.factory import base_job
 
 _MILA_GPU_TYPE = "A100-SXM4-80GB"
 
-# "Today" for all CLI tests.  Window of 30 days covers jobs seeded on 2024-06-10.
-_CLI_TEST_END = datetime(2024, 6, 30, tzinfo=UTC)
+# "Today" for all CLI tests.
+_CLI_TEST_END = datetime(2024, 6, 24, tzinfo=UTC)
 
 _NOTIFY_CFG = {
     "slack": {
@@ -29,6 +29,7 @@ _NOTIFY_CFG = {
     "min_rgu_hours": 672.0,
     "window_weeks": 4,
     "digest_top_n": 16,
+    "usage_report_min_rgu_hours": 0,
 }
 
 

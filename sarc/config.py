@@ -34,6 +34,11 @@ MIG_FLAG = "__MIG_FLAG__"
 DEFAULTS_FLAG = "__DEFAULTS__"
 
 
+# The code currently assumes 2 weeks for the frequency of a generic underusage
+# notification
+UNDERUSAGE_CYCLE_LENGTH_WEEKS = 2
+
+
 class ConfigurationError(Exception):
     pass
 
@@ -284,8 +289,8 @@ class UnderusageNotifyConfig:
     send_dms: bool = False
     min_ratio: float = 0.50
     min_rgu_hours: float = 3225.6  # 4x A100-80GB RGU x 7d
-    # Analysis window length of one cycle (also drives parity check)
-    window_weeks: int = 2
+    # Analysis window length
+    window_weeks: int = UNDERUSAGE_CYCLE_LENGTH_WEEKS
     digest_top_n: int = 16
     top_jobs_per_user: int = 5
     dashboard_url: str | None = None

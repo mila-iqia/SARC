@@ -255,12 +255,12 @@ def build_recurring_table(
         email_w = max(len(r.email) for r in rows)
         header = (
             f"  {'':2} {'User':<{email_w}}"
-            f"  {'Wasted RGU-h':>12}"
+            f"  {'Unused RGU-h':>12}"
             f"  {'Share':>5}" + flag_header + "  Action"
         )
         lines = [
             f"Recurring underusers (last {window_weeks} weeks) — Cluster {cluster}",
-            f"(top users accounting for ≥ {share_pct} of the cluster's wasted RGU-h)",
+            f"(top users accounting for ≥ {share_pct} of the cluster's unused RGU-h)",
             header,
         ]
 
@@ -338,7 +338,7 @@ def build_admin_digest(
                 f"{row.display_name.ljust(name_w)}  "
                 f"{row.email.ljust(email_w)}  "
                 f"{cluster.ljust(cluster_w)}  "
-                f"{ws.rjust(wasted_w)} RGU-h wasted  "
+                f"{ws.rjust(wasted_w)} RGU-h unused  "
                 f"{rs.rjust(ratio_w)}"
             )
 
