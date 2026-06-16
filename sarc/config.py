@@ -310,7 +310,7 @@ class UnderusageNotifyConfig:
     send_usage_report: bool = False
     clusters: list[str] = field(default_factory=lambda: ["mila"])
     usage_report_min_rgu_hours: float = 0.0
-    personalized_action_min_waste_rgu_hours: float = 16128.0
+    personalized_action_min_waste_rgu_hours: float = 16128.0  # 20x A100-80GB RGU x 7d
     waste_rescale_threshold: float = 1.0
 
     def __post_init__(self):

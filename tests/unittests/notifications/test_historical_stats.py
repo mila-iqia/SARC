@@ -432,4 +432,6 @@ def test_scaled_threshold_reduces_above_count(historical_db):
         _END, min_ratio=_MIN_RATIO, min_rgu_hours=_MIN_RGU_HOURS, threshold=0.10
     )
     for m in result.months:
-        assert m.above_threshold_count == 0, f"{m.label}: expected 0 but got {m.above_threshold_count}"
+        assert m.above_threshold_count == 0, (
+            f"{m.label}: expected 0 but got {m.above_threshold_count}"
+        )

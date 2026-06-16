@@ -276,7 +276,9 @@ def get_underusers(
                 rgu_h = float(jr.rgu_hours or 0.0)
                 scaled_used_h = float(jr.rgu_used or 0.0)
                 util_val = float(jr.util_mean) if jr.util_mean is not None else None
-                gpu_util = min(1.0, util_val / threshold) if util_val is not None else None
+                gpu_util = (
+                    min(1.0, util_val / threshold) if util_val is not None else None
+                )
                 jobs_by_user[jr.sarc_user_id].append(
                     UnderuserJob(
                         job_id=jr.job_db_id,
@@ -313,7 +315,9 @@ def get_underusers(
                 avg_utilization=1.0 - waste_ratio,
                 rgu_hours_unused=total_wasted,
                 true_wasted=total_true_wasted,
-                true_waste_ratio=total_true_wasted / total_rgu_h if total_rgu_h > 0 else 0.0,
+                true_waste_ratio=total_true_wasted / total_rgu_h
+                if total_rgu_h > 0
+                else 0.0,
                 by_cluster=by_cluster,
                 top_jobs=top_jobs,
             )
@@ -329,7 +333,6 @@ def get_all_users_usage(
     top_jobs_per_user: int,
     resource: str = "gpu",
     clusters: list[str] | None = None,
-    threshold: float = 1.0,
     usage_report_min_rgu_hours: float = 0.0,
 ) -> list[UsageRow]:
     if resource != "gpu":

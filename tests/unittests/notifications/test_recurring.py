@@ -358,8 +358,14 @@ def test_display_cycles_6_produces_6_columns(recurring_db):
     [
         (2, False),  # PA window=4w: petitbonhomme waste=218.88 < 400 floor
         (3, False),  # PA window=6w: petitbonhomme waste=328.32 < 400 floor
-        (4, True),   # PA window=8w: petitbonhomme waste=437.76 >= 400 floor (W-6 enters window)
-        (5, True),   # PA window=10w: petitbonhomme waste=547.20 >= 400 floor (W-8 enters window)
+        (
+            4,
+            True,
+        ),  # PA window=8w: petitbonhomme waste=437.76 >= 400 floor (W-6 enters window)
+        (
+            5,
+            True,
+        ),  # PA window=10w: petitbonhomme waste=547.20 >= 400 floor (W-8 enters window)
     ],
 )
 def test_active_cycles_personalized_action(recurring_db, active_cycles, expected):
