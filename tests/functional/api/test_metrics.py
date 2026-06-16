@@ -1,19 +1,30 @@
-"""Tests for the `/dash` dashboard endpoints in ``sarc.api.metrics``.
+"""Tests for the ``/dash`` dashboard endpoints in ``sarc.api.metrics``.
 
-Each endpoint is checked twice: an empty-data test (default window, no jobs)
-and a value test on enriched data. Plus branch tests (period bucketing,
-validation, filters, sort) and the basic-auth tests. The HTML page is not tested.
+The endpoints are checked along three axes:
+
+- **Access control.** Every ``/dash`` route shares one gate
+  (``APIRouter(..., dependencies=[Depends(requestor)])``): a guest (no token)
+  gets 401, an authenticated email absent from the DB gets 403, and both a
+  regular user and an admin get 200. Same matrix idea as ``test_auth`` for /v0.
+- **Per-user scoping.** A non-admin only sees their own jobs (``_scope`` filters
+  every query on ``sarc_user_id``); an admin sees everything. Proven on every
+  aggregating endpoint: the admin total partitions exactly into the two
+  user-scoped totals, the averaging endpoint (metric_trend) tells the scopes
+  apart by value, and a user who owns no job sees nothing at all.
+- **Functional values.** The RGU/metric outputs are exact on enriched data, run
+  as admin (full visibility). Plus branch tests (period bucketing, validation,
+  filters, sort).
+
+The ``app`` fixture (conftest) mounts the router under the OAuth mock, so
+``app.client(email)`` yields a client authenticated as that email (``None`` =
+guest). The HTML homepage is only checked through the access matrix.
 """
 
 from types import SimpleNamespace
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
 from sqlmodel import col, func, select
 
-from sarc.api import auth
-from sarc.api.metrics import router as metrics_router
 from sarc.config import config
 from sarc.db.job import JobStatisticDB, SlurmJobDB
 from sarc.db.support import GpuRguDB
@@ -21,21 +32,239 @@ from sarc.db.support import GpuRguDB
 # Covers every factory-seeded job (submitted from 2023-02-14, +6h each).
 WINDOW = {"start": "2023-02-01", "end": "2023-03-01"}
 
+# Roles, mapped to the factory's seeded identities (tests/db/factory.py):
+#   admin@admin.admin   -> admin capability (sarc-test.yaml user_overrides), no
+#                          UserDB row needed; sees everything.
+#   petitbonhomme       -> regular user owning the large majority of jobs.
+#   beaubonhomme        -> regular user owning exactly one job.
+#   smithj@mila.quebec  -> valid user (mila_ldap) but owns no job (empty scope).
+#   unknown-user        -> authenticates, but no UserDB row -> 403.
+_ADMIN = "admin@admin.admin"
+_USER = "petitbonhomme@mila.quebec"
+_OTHER_USER = "beaubonhomme@mila.quebec"
+_USER_NO_JOBS = "smithj@mila.quebec"
+_NOT_IN_DB = "unknown-user@mila.quebec"
+
+# GPU-job enrichment, shared by the scoping fixture and the value-test fixture.
+# Constants make the RGU/metric outputs exact: physical RGU (the default
+# rgu_type) = allocated_gres_gpu * drac_rgu; rgu_hours = rgu * elapsed / 3600.
+_GPU = "DASH-TEST-GPU"
+_DRAC_RGU = 8.0
+_GRES = 2
+_BASE_ELAPSED = 43200.0  # factory default elapsed_time: 12h, in seconds
+_RGU_PER_JOB = _GRES * _DRAC_RGU  # = 16
+_RGU_HOURS_PER_JOB = _RGU_PER_JOB * _BASE_ELAPSED / 3600.0  # = 192
+_WEIGHT_PER_JOB = _RGU_PER_JOB * _BASE_ELAPSED  # = 691200, the distribution weight
+
+# Per-job statistics as (mean, max), all in [0, 1]; gpu_sm_occupancy is the default.
+_STATS = {
+    "gpu_sm_occupancy": (0.5, 0.5),
+    "gpu_utilization": (0.4, 0.8),
+    "gpu_memory": (0.6, 0.9),
+    "system_memory": (0.3, 0.5),
+}
+_SM_OCC = _STATS["gpu_sm_occupancy"][0]
+
 
 @pytest.fixture
-def dash_client():
-    """TestClient over an app mounting only the /dash router."""
-    app = FastAPI()
-    app.include_router(metrics_router)
-    return TestClient(app)
+def dash_client(app):
+    """Admin client (full visibility): the functional value tests run as admin."""
+    return app.client(_ADMIN)
 
 
-# === Empty-data smoke =======================================================
+# Every /dash endpoint, with the minimal params it needs. Reused by the access
+# matrix and the empty-data tests. The homepage takes no params.
+_ENDPOINTS = [
+    ("homepage", "/dash/metrics", {}),
+    ("job_counts", "/dash/metrics/job_counts", WINDOW),
+    ("job_times", "/dash/metrics/job_times_vs_limit", WINDOW),
+    ("metric_distribution", "/dash/metrics/metric_distribution", WINDOW),
+    ("metric_comparison", "/dash/metrics/metric_comparison", WINDOW),
+    ("rgu_usage", "/dash/metrics/rgu_usage", WINDOW),
+    ("rgu_by_cluster", "/dash/metrics/rgu_by_cluster", WINDOW),
+    ("metric_trend", "/dash/metrics/metric_trend", WINDOW),
+    ("rgu_by_user", "/dash/metrics/rgu_by_user", WINDOW),
+    ("jobs", "/dash/metrics/jobs", WINDOW),
+]
+
+
+# === Access control =========================================================
+
+
+@pytest.mark.usefixtures("read_only_db")
+@pytest.mark.parametrize(
+    "email,expected",
+    [
+        pytest.param(None, 401, id="guest"),
+        pytest.param(_NOT_IN_DB, 403, id="not_in_db"),
+        pytest.param(_USER, 200, id="user"),
+        pytest.param(_ADMIN, 200, id="admin"),
+    ],
+)
+@pytest.mark.parametrize(
+    "path,params",
+    [(path, params) for _, path, params in _ENDPOINTS],
+    ids=[name for name, _, _ in _ENDPOINTS],
+)
+def test_access_control(app, path, params, email, expected):
+    """One gate for every /dash endpoint: guest 401, absent-from-DB 403,
+    user and admin 200."""
+    app.client(email).get(path, params=params, expect_status=expected)
+
+
+# === Per-user scoping =======================================================
+
+
+# Distinct gpu_sm_occupancy means for the two scoped users, so the averaging
+# endpoint (metric_trend) can tell their scopes apart by value, not just count.
+_OCC_PETIT = 0.3
+_OCC_BEAU = 0.7
+
+
+@pytest.fixture
+def scoped_db(read_write_db):
+    """Turn one petitbonhomme job and one beaubonhomme job into GPU jobs (+ stats).
+
+    With exactly one enriched job per user, every aggregating endpoint must
+    partition: admin sees both, each user sees only their own, and the two
+    user-scoped totals sum to the admin's. The two jobs get distinct
+    gpu_sm_occupancy means (_OCC_PETIT / _OCC_BEAU) so metric_trend (an average,
+    not a sum) can also distinguish the scopes by value.
+    """
+    sess = read_write_db
+    # GpuRguDB first: harmonized_gpu_type is an FK to it.
+    sess.add(GpuRguDB(name=_GPU, rgu=10.0, drac_rgu=_DRAC_RGU))
+    sess.flush()
+
+    for cluster_user, sm_occ in (
+        ("petitbonhomme", _OCC_PETIT),
+        ("beaubonhomme", _OCC_BEAU),
+    ):
+        job = sess.exec(
+            select(SlurmJobDB)
+            .where(
+                col(SlurmJobDB.cluster_user) == cluster_user,
+                col(SlurmJobDB.elapsed_time) == _BASE_ELAPSED,
+            )
+            .order_by(col(SlurmJobDB.id))
+        ).first()
+        assert job is not None, f"expected a seeded job for {cluster_user}"
+        job.harmonized_gpu_type = _GPU
+        job.allocated_gpu_type = _GPU
+        job.allocated_gres_gpu = _GRES
+        sess.add(job)
+        stats = {**_STATS, "gpu_sm_occupancy": (sm_occ, sm_occ)}
+        for name, (mean, mx) in stats.items():
+            sess.add(
+                JobStatisticDB(
+                    job_id=job.id,
+                    name=name,
+                    mean=mean,
+                    std=0.0,
+                    q05=mean,
+                    q25=mean,
+                    median=mean,
+                    q75=mean,
+                    max=mx,
+                    unused=0.0,
+                )
+            )
+    sess.commit()
+
+
+# Every aggregating endpoint, with a function reducing its payload to one
+# additive scalar. metric_trend (an average) is checked separately; the homepage
+# carries no job data (only the cosmetic is_admin flag).
+_SCOPE_TOTALS = [
+    ("job_counts", "/dash/metrics/job_counts", lambda d: sum(r["count"] for r in d)),
+    ("job_times", "/dash/metrics/job_times_vs_limit", lambda d: d["total_jobs"]),
+    (
+        "metric_distribution",
+        "/dash/metrics/metric_distribution",
+        lambda d: sum(d["primary"]["weights"]),
+    ),
+    (
+        "metric_comparison",
+        "/dash/metrics/metric_comparison",
+        lambda d: sum(sum(row) for row in d["z"]),
+    ),
+    (
+        "rgu_usage",
+        "/dash/metrics/rgu_usage",
+        lambda d: sum(r["rgu_requested"] for r in d),
+    ),
+    (
+        "rgu_by_cluster",
+        "/dash/metrics/rgu_by_cluster",
+        lambda d: sum(sum(s["rgu"]) for s in d["series"]),
+    ),
+    (
+        "rgu_by_user",
+        "/dash/metrics/rgu_by_user",
+        lambda d: sum(u["rgu_requested"] for u in d),
+    ),
+    ("jobs", "/dash/metrics/jobs", lambda d: d["total"]),
+]
+
+
+@pytest.mark.parametrize(
+    "path,total",
+    [(path, total) for _, path, total in _SCOPE_TOTALS],
+    ids=[name for name, _, _ in _SCOPE_TOTALS],
+)
+def test_scope_partitions_per_endpoint(app, scoped_db, path, total):
+    """Every aggregating endpoint scopes to the requestor: admin sees all, each
+    user only their own, and the two user views partition the admin's exactly.
+
+    The strict ``user + other == admin`` is what proves the scope keys on the
+    right ``sarc_user_id`` — not merely that a non-admin gets *some* subset.
+    """
+    admin = total(app.client(_ADMIN).get(path, params=WINDOW).json())
+    user = total(app.client(_USER).get(path, params=WINDOW).json())
+    other = total(app.client(_OTHER_USER).get(path, params=WINDOW).json())
+
+    assert admin > 0
+    assert 0 < user < admin
+    assert 0 < other < admin
+    assert user + other == pytest.approx(admin)
+
+
+def _trend_means(client) -> list[float]:
+    """Non-null per-bucket gpu_sm_occupancy means from /metrics/metric_trend."""
+    data = client.get("/dash/metrics/metric_trend", params=WINDOW).json()
+    series = {s["metric"]: s for s in data["series"]}["gpu_sm_occupancy"]
+    return [m for m in series["mean"] if m is not None]
+
+
+def test_metric_trend_scoped(app, scoped_db):
+    """metric_trend averages, so scoping shows up as the value, not the count:
+    each user sees only their own occupancy, while the admin's view mixes both."""
+    petit = _trend_means(app.client(_USER))
+    beau = _trend_means(app.client(_OTHER_USER))
+    admin = _trend_means(app.client(_ADMIN))
+
+    assert petit and all(m == pytest.approx(_OCC_PETIT) for m in petit)
+    assert beau and all(m == pytest.approx(_OCC_BEAU) for m in beau)
+    # The admin sees beau's job too, so at least one bucket isn't petit-only.
+    assert any(m != pytest.approx(_OCC_PETIT) for m in admin)
+
+
+@pytest.mark.usefixtures("read_only_db")
+@pytest.mark.parametrize(
+    "path,total",
+    [(path, total) for _, path, total in _SCOPE_TOTALS],
+    ids=[name for name, _, _ in _SCOPE_TOTALS],
+)
+def test_user_without_jobs_sees_nothing(app, path, total):
+    """A valid, authenticated user who owns no job is scoped down to empty —
+    scoping keys on identity, not "show everything when you own nothing"."""
+    assert total(app.client(_USER_NO_JOBS).get(path, params=WINDOW).json()) == 0
+
+
+# === Empty-data (admin) ===============================================
 # Each endpoint on the default window (no jobs): assert the right empty
-# container. clusters/job_states are static, so only their type is checked.
+# container. Run as admin so the emptiness is the window, not the scope.
 EMPTY_ENDPOINTS = [
-    ("clusters", "/dash/clusters", lambda d: isinstance(d, list)),
-    ("job_states", "/dash/job_states", lambda d: isinstance(d, list)),
     (
         "job_counts",
         "/dash/metrics/job_counts",
@@ -49,11 +278,12 @@ EMPTY_ENDPOINTS = [
     (
         "metric_distribution",
         "/dash/metrics/metric_distribution",
-        lambda d: (
-            d["primary"]["values"] == []
-            and d["secondary"] is None
-            and d["paired"] is None
-        ),
+        lambda d: d["primary"]["values"] == [],
+    ),
+    (
+        "metric_comparison",
+        "/dash/metrics/metric_comparison",
+        lambda d: all(v == 0 for row in d["z"] for v in row),
     ),
     (
         "rgu_usage",
@@ -83,32 +313,17 @@ def test_endpoint_empty(dash_client, path, is_empty):
     assert is_empty(data), f"unexpected payload from {path}: {data!r}"
 
 
-# === Value tests (enriched data) ============================================
-# Constants make the RGU/metric outputs exact: physical RGU (the default
-# rgu_type) = allocated_gres_gpu * drac_rgu; rgu_hours = rgu * elapsed / 3600.
-_GPU = "DASH-TEST-GPU"
-_DRAC_RGU = 8.0
-_GRES = 2
-_BASE_ELAPSED = 43200.0  # factory default elapsed_time: 12h, in seconds
-_RGU_PER_JOB = _GRES * _DRAC_RGU  # = 16
-_RGU_HOURS_PER_JOB = _RGU_PER_JOB * _BASE_ELAPSED / 3600.0  # = 192
-_WEIGHT_PER_JOB = _RGU_PER_JOB * _BASE_ELAPSED  # = 691200, the distribution weight
-
-# Per-job statistics as (mean, max), all in [0, 1]; gpu_sm_occupancy is the default.
-_STATS = {
-    "gpu_sm_occupancy": (0.5, 0.5),
-    "gpu_utilization": (0.4, 0.8),
-    "gpu_memory": (0.6, 0.9),
-    "system_memory": (0.3, 0.5),
-}
-_SM_OCC = _STATS["gpu_sm_occupancy"][0]
+# === Value tests (enriched data, admin) =====================================
+# Uses the GPU-job enrichment constants defined near the top of this module.
 
 
 @pytest.fixture
 def dash_db(read_write_db):
     """Writable DB with a few jobs turned into GPU jobs (+ statistics).
 
-    Returns the facts the value tests assert against.
+    The enriched jobs all belong to petitbonhomme (the factory's default
+    cluster_user, so the first jobs are theirs). Returns the facts the value
+    tests assert against.
     """
     sess = read_write_db
     # GpuRguDB first: harmonized_gpu_type is an FK to it.
@@ -156,7 +371,7 @@ def dash_db(read_write_db):
 
 @pytest.mark.usefixtures("read_only_db")
 def test_job_counts_with_data(dash_client):
-    """Bucketed counts sum to the jobs in the window."""
+    """Bucketed counts sum to the jobs in the window (admin sees all of them)."""
     data = dash_client.get("/dash/metrics/job_counts", params=WINDOW).json()
     with config.db.session() as sess:
         n_jobs = sess.exec(select(func.count()).select_from(SlurmJobDB)).one()
@@ -227,21 +442,17 @@ def test_metric_distribution_with_data(dash_client, dash_db):
     assert sum(primary["weights"]) == pytest.approx(dash_db.total_weight)
 
 
-def test_metric_distribution_paired_with_data(dash_client, dash_db):
-    """metric2 -> 2D pass with both marginals and the paired heatmap.
+def test_metric_comparison_with_data(dash_client, dash_db):
+    """metric vs metric2 paired heatmap (its own endpoint now).
 
-    All jobs at gpu_utilization 0.4 / gpu_memory 0.6 -> one cell (bx=40, by=60),
-    marginals at 0.41 / 0.61.
+    All jobs at gpu_utilization 0.4 / gpu_memory 0.6 -> one cell (bx=40, by=60)
+    in the 100x100 grid.
     """
     data = dash_client.get(
-        "/dash/metrics/metric_distribution",
+        "/dash/metrics/metric_comparison",
         params={**WINDOW, "metric": "gpu_utilization", "metric2": "gpu_memory"},
     ).json()
-    assert data["primary"]["values"] == pytest.approx([0.41])
-    assert sum(data["primary"]["weights"]) == pytest.approx(dash_db.total_weight)
-    assert data["secondary"]["values"] == pytest.approx([0.61])
-    assert sum(data["secondary"]["weights"]) == pytest.approx(dash_db.total_weight)
-    z = data["paired"]["z"]
+    z = data["z"]
     assert z[60][40] == dash_db.n
     assert sum(sum(row) for row in z) == dash_db.n
 
@@ -273,10 +484,10 @@ def test_invalid_period_returns_400(dash_client):
 @pytest.mark.parametrize(
     "path,bad_param",
     [
-        ("/dash/metrics/metric_trend", "metric"),
-        ("/dash/metrics/metric_trend", "metric2"),
         ("/dash/metrics/metric_distribution", "metric"),
-        ("/dash/metrics/metric_distribution", "metric2"),
+        ("/dash/metrics/metric_comparison", "metric"),
+        ("/dash/metrics/metric_comparison", "metric2"),
+        ("/dash/metrics/metric_trend", "metric"),
     ],
 )
 def test_unknown_metric_returns_400(dash_client, path, bad_param):
@@ -338,39 +549,4 @@ def test_focus_narrows_window(dash_client):
 def test_jobs_sort_by_stat_column(dash_client, sort_by):
     """Sorting by a stat column joins that stat into the page subquery."""
     r = dash_client.get("/dash/metrics/jobs", params={**WINDOW, "sort_by": sort_by})
-    assert r.status_code == 200
-
-
-# === Basic auth gate ========================================================
-
-_USER, _PASSWORD = "dashuser", "s3cret"
-
-
-@pytest.fixture
-def basic_auth_enabled(monkeypatch):
-    """Enable the env-driven gate by patching the import-time module globals."""
-    monkeypatch.setattr(auth, "_DASH_BASIC_AUTH_USER", _USER)
-    monkeypatch.setattr(auth, "_DASH_BASIC_AUTH_PASSWORD", _PASSWORD)
-
-
-@pytest.mark.usefixtures("read_only_db")
-def test_basic_auth_off_by_default(dash_client):
-    """No credentials configured -> the gate is a no-op."""
-    assert dash_client.get("/dash/clusters").status_code == 200
-
-
-@pytest.mark.usefixtures("read_only_db", "basic_auth_enabled")
-def test_basic_auth_missing_credentials_401(dash_client):
-    assert dash_client.get("/dash/clusters").status_code == 401
-
-
-@pytest.mark.usefixtures("read_only_db", "basic_auth_enabled")
-def test_basic_auth_wrong_credentials_401(dash_client):
-    r = dash_client.get("/dash/clusters", auth=(_USER, "wrong"))
-    assert r.status_code == 401
-
-
-@pytest.mark.usefixtures("read_only_db", "basic_auth_enabled")
-def test_basic_auth_correct_credentials_200(dash_client):
-    r = dash_client.get("/dash/clusters", auth=(_USER, _PASSWORD))
     assert r.status_code == 200

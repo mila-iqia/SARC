@@ -29,7 +29,10 @@ def _scope(req: Requestor) -> int | None:
     scoping. Passed explicitly to the filter helpers, mirroring how /v0 uses the
     requestor — no implicit/global state. ``req.user`` is non-None for a
     non-admin (requestor raises 403 otherwise)."""
-    return None if req.is_admin else req.user.id
+    if req.is_admin:
+        return None
+    assert req.user is not None  # guaranteed by requestor (403 otherwise)
+    return req.user.id
 
 
 router = APIRouter(prefix="/dash", dependencies=[Depends(requestor)])
@@ -841,12 +844,12 @@ def metrics_rgu_usage(
 
     period_data = []
     for key, ps, pe in _iter_buckets(begin_dt, finish_dt, parsed):
-        req, used, unmeasured = sums.get(key, (0.0, 0.0, 0.0))
+        requested, used, unmeasured = sums.get(key, (0.0, 0.0, 0.0))
         period_data.append(
             {
                 "period_start": ps.strftime(fmt),
                 "period_end": pe.strftime(fmt),
-                "rgu_requested": req,
+                "rgu_requested": requested,
                 "rgu_used": used,
                 "rgu_unmeasured": unmeasured,
             }
