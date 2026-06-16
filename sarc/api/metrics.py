@@ -13,7 +13,7 @@ from sqlalchemy import literal_column, nulls_last
 from sqlalchemy.orm import aliased
 from sqlmodel import Session, and_, case, col, func, select
 
-from sarc.api.auth import require_basic_auth
+from sarc.api.v0 import Requestor, requestor
 from sarc.config import config
 from sarc.db.cluster import SlurmClusterDB
 from sarc.db.job import JobStatisticDB, SlurmJobDB
@@ -21,7 +21,17 @@ from sarc.db.job_series import JobSeriesDB
 from sarc.db.support import GpuRguDB
 from sarc.models.job import SlurmState
 
-router = APIRouter(prefix="/dash", dependencies=[Depends(require_basic_auth)])
+
+def _scope(req: Requestor) -> int | None:
+    """Non-admin → their own UserDB id, used to restrict every /dash query to
+    their jobs; admin (or auth off, where requestor yields admin) → None, no
+    scoping. Passed explicitly to the filter helpers, mirroring how /v0 uses the
+    requestor — no implicit/global state. ``req.user`` is non-None for a
+    non-admin (requestor raises 403 otherwise)."""
+    return None if req.is_admin else req.user.id
+
+
+router = APIRouter(prefix="/dash", dependencies=[Depends(requestor)])
 
 
 def session_dep() -> Generator[Session]:
@@ -189,17 +199,24 @@ def _apply_job_states(query, state_col, job_states: list[str]):
 
 
 def _apply_common_filters(
-    query, clusters: list[str], cluster_user: str | None, job_states: list[str]
+    query,
+    clusters: list[str],
+    cluster_user: str | None,
+    job_states: list[str],
+    scope_user_id: int | None = None,
 ):
     """Apply job-state + cluster/user filters to a JobSeriesDB query.
 
     An empty ``clusters`` list means no cluster filter (all clusters).
+    ``scope_user_id`` (a non-admin's UserDB id) restricts to that user's jobs.
     """
     query = _apply_job_states(query, JobSeriesDB.job_state, job_states)
     if clusters:
         query = query.where(col(JobSeriesDB.cluster_name).in_(clusters))
     if cluster_user:
         query = query.where(JobSeriesDB.cluster_user == cluster_user)
+    if scope_user_id is not None:
+        query = query.where(JobSeriesDB.sarc_user_id == scope_user_id)
     return query
 
 
@@ -224,17 +241,21 @@ def _apply_slurm_job_filters(
     cluster_ids: list[int] | None,
     cluster_user: str | None,
     job_states: list[str],
+    scope_user_id: int | None = None,
 ):
     """Apply job-state + cluster_id/user filters to a SlurmJobDB query.
 
     Filters by cluster_ids (resolved upfront) to avoid the SlurmClusterDB join
     that JobSeriesDB needs for cluster_name. None/empty means no cluster filter.
+    ``scope_user_id`` (a non-admin's UserDB id) restricts to that user's jobs.
     """
     query = _apply_job_states(query, SlurmJobDB.job_state, job_states)
     if cluster_ids:
         query = query.where(col(SlurmJobDB.cluster_id).in_(cluster_ids))
     if cluster_user:
         query = query.where(SlurmJobDB.cluster_user == cluster_user)
+    if scope_user_id is not None:
+        query = query.where(SlurmJobDB.sarc_user_id == scope_user_id)
     return query
 
 
@@ -272,6 +293,7 @@ def _rgu_source(
     job_states: list[str],
     *,
     need_cluster_name: bool,
+    scope_user_id: int | None = None,
 ) -> _RguSource:
     """Pick the data source for an RGU plot based on ``rgu_type``.
 
@@ -301,7 +323,7 @@ def _rgu_source(
                     SlurmClusterDB, col(SlurmJobDB.cluster_id) == col(SlurmClusterDB.id)
                 )
             return _apply_slurm_job_filters(
-                query, cluster_ids, cluster_user, job_states
+                query, cluster_ids, cluster_user, job_states, scope_user_id
             )
 
         return _RguSource(
@@ -320,7 +342,9 @@ def _rgu_source(
         # Anchor the FROM on the view so stat-alias columns added by the caller
         # don't form a cartesian product before their join is attached.
         query = query.select_from(JobSeriesDB)
-        return _apply_common_filters(query, clusters, cluster_user, job_states)
+        return _apply_common_filters(
+            query, clusters, cluster_user, job_states, scope_user_id
+        )
 
     return _RguSource(
         submit_time=col(JobSeriesDB.submit_time),
@@ -336,13 +360,17 @@ def _rgu_source(
 
 
 @router.get("/metrics", response_class=HTMLResponse)
-def metrics_homepage():
-    """Serve the dashboard's single-page HTML UI; its charts call the JSON endpoints below."""
-    return _HTML
+def metrics_homepage(req: Requestor = Depends(requestor)):
+    """Serve the dashboard's single-page HTML UI; its charts call the JSON
+    endpoints below. ``is_admin`` is injected per-request so the page adapts
+    immediately (hide the user filter / RGU-by-user for a non-admin) with no
+    round-trip; the backend scopes the data regardless."""
+    return _HTML.replace("__IS_ADMIN__", "true" if req.is_admin else "false")
 
 
 @router.get("/metrics/job_counts")
 def metrics_job_counts(
+    req: Requestor = Depends(requestor),
     start: date = Query(default=None),
     end: date = Query(default=None),
     period: str = Query(default=_DEFAULT_PERIOD),
@@ -370,7 +398,9 @@ def metrics_job_counts(
     query = select(bucket_expr, func.count().label("count")).where(
         col(SlurmJobDB.submit_time) >= begin_dt, col(SlurmJobDB.submit_time) < finish_dt
     )
-    query = _apply_slurm_job_filters(query, cluster_ids, cluster_user, job_states)
+    query = _apply_slurm_job_filters(
+        query, cluster_ids, cluster_user, job_states, _scope(req)
+    )
     # group_by by label name: pg8000 binds parameters server-side, so repeating
     # the expression would yield distinct $N placeholders in SELECT vs GROUP BY
     # and PostgreSQL could not match them (42803). Same pattern below.
@@ -440,6 +470,7 @@ def _build_heatmap_payload(
 
 @router.get("/metrics/job_times_vs_limit")
 def metrics_job_times_vs_limit(
+    req: Requestor = Depends(requestor),
     start: date = Query(default=None),
     end: date = Query(default=None),
     clusters: list[str] = Query(default=[]),
@@ -475,6 +506,9 @@ def metrics_job_times_vs_limit(
         base_filters.append(col(SlurmJobDB.cluster_user) == cluster_user)
     if job_states:
         base_filters.append(col(SlurmJobDB.job_state).in_(job_states))
+    scope_user_id = _scope(req)
+    if scope_user_id is not None:
+        base_filters.append(col(SlurmJobDB.sarc_user_id) == scope_user_id)
 
     max_l, max_e, max_w = sess.exec(
         select(
@@ -537,6 +571,7 @@ def _valid_metric_filter(metric_expr):
 
 @router.get("/metrics/metric_distribution")
 def metrics_metric_distribution(
+    req: Requestor = Depends(requestor),
     start: date = Query(default=None),
     end: date = Query(default=None),
     clusters: list[str] = Query(default=[]),
@@ -567,7 +602,13 @@ def metrics_metric_distribution(
     js1 = aliased(JobStatisticDB)
     m1 = col(js1.mean)
     src = _rgu_source(
-        sess, rgu_type, clusters, cluster_user, job_states, need_cluster_name=False
+        sess,
+        rgu_type,
+        clusters,
+        cluster_user,
+        job_states,
+        need_cluster_name=False,
+        scope_user_id=_scope(req),
     )
     weight = src.rgu_drac * src.elapsed_time
     bin_width = 1.0 / _DENSITY_BINS
@@ -604,6 +645,7 @@ def metrics_metric_distribution(
 
 @router.get("/metrics/metric_comparison")
 def metrics_metric_comparison(
+    req: Requestor = Depends(requestor),
     start: date = Query(default=None),
     end: date = Query(default=None),
     clusters: list[str] = Query(default=[]),
@@ -635,7 +677,13 @@ def metrics_metric_comparison(
     m1 = col(js1.mean)
     m2 = col(js2.mean)
     src = _rgu_source(
-        sess, rgu_type, clusters, cluster_user, job_states, need_cluster_name=False
+        sess,
+        rgu_type,
+        clusters,
+        cluster_user,
+        job_states,
+        need_cluster_name=False,
+        scope_user_id=_scope(req),
     )
 
     bx = _density_bin_expr(m1, _PAIRED_BINS).label("bx")
@@ -675,6 +723,7 @@ def metrics_metric_comparison(
 
 @router.get("/metrics/rgu_usage")
 def metrics_rgu_usage(
+    req: Requestor = Depends(requestor),
     start: date = Query(default=None),
     end: date = Query(default=None),
     period: str = Query(default=_DEFAULT_PERIOD),
@@ -702,7 +751,13 @@ def metrics_rgu_usage(
     # targeted LEFT JOIN on jobstatisticdb (one metric, job_id index) — never the
     # per-row json_object_agg of JobSeriesDB.statistics.
     src = _rgu_source(
-        sess, rgu_type, clusters, cluster_user, job_states, need_cluster_name=False
+        sess,
+        rgu_type,
+        clusters,
+        cluster_user,
+        job_states,
+        need_cluster_name=False,
+        scope_user_id=_scope(req),
     )
     bucket_expr = _bucket_expr(parsed, src.submit_time, begin_dt)
     rgu_hours = src.rgu_drac * src.elapsed_time / 3600.0
@@ -768,6 +823,7 @@ def metrics_rgu_usage(
 
 @router.get("/metrics/rgu_by_cluster")
 def metrics_rgu_by_cluster(
+    req: Requestor = Depends(requestor),
     start: date = Query(default=None),
     end: date = Query(default=None),
     period: str = Query(default=_DEFAULT_PERIOD),
@@ -792,7 +848,13 @@ def metrics_rgu_by_cluster(
     # physical (default) reads SlurmJobDB directly (~2.7x faster); billing stays
     # on the view. cluster_name is the stack key, so it is needed either way.
     src = _rgu_source(
-        sess, rgu_type, clusters, cluster_user, job_states, need_cluster_name=True
+        sess,
+        rgu_type,
+        clusters,
+        cluster_user,
+        job_states,
+        need_cluster_name=True,
+        scope_user_id=_scope(req),
     )
     bucket_expr = _bucket_expr(parsed, src.submit_time, begin_dt)
     rgu_hours = src.rgu_drac * src.elapsed_time / 3600.0
@@ -844,6 +906,7 @@ def metrics_rgu_by_cluster(
 
 @router.get("/metrics/metric_trend")
 def metrics_metric_trend(
+    req: Requestor = Depends(requestor),
     start: date = Query(default=None),
     end: date = Query(default=None),
     period: str = Query(default=_DEFAULT_PERIOD),
@@ -901,7 +964,9 @@ def metrics_metric_trend(
         .group_by("bucket")
         .order_by("bucket")
     )
-    query = _apply_slurm_job_filters(query, cluster_ids, cluster_user, job_states)
+    query = _apply_slurm_job_filters(
+        query, cluster_ids, cluster_user, job_states, _scope(req)
+    )
 
     cells = {}
     for r in sess.exec(query):
@@ -926,6 +991,7 @@ def metrics_metric_trend(
 
 @router.get("/metrics/rgu_by_user")
 def metrics_rgu_by_user(
+    req: Requestor = Depends(requestor),
     start: date = Query(default=None),
     end: date = Query(default=None),
     clusters: list[str] = Query(default=[]),
@@ -949,7 +1015,13 @@ def metrics_rgu_by_user(
     # SlurmJobDB directly; billing the view. Metric mean via a targeted LEFT JOIN
     # on jobstatisticdb (one metric, job_id index) — see rgu_usage.
     src = _rgu_source(
-        sess, rgu_type, clusters, cluster_user, job_states, need_cluster_name=False
+        sess,
+        rgu_type,
+        clusters,
+        cluster_user,
+        job_states,
+        need_cluster_name=False,
+        scope_user_id=_scope(req),
     )
     rgu_hours = src.rgu_drac * src.elapsed_time / 3600.0
     m_mean = col(JobStatisticDB.mean)
@@ -1001,6 +1073,7 @@ def metrics_rgu_by_user(
 
 @router.get("/metrics/jobs")
 def metrics_jobs(
+    req: Requestor = Depends(requestor),
     start: date = Query(default=None),
     end: date = Query(default=None),
     clusters: list[str] = Query(default=[]),
@@ -1035,7 +1108,13 @@ def metrics_jobs(
     # physical (default) reads SlurmJobDB directly (+ clusters/gpurgudb); billing
     # the view. `jobs_src` is the source model for the raw columns both share.
     src = _rgu_source(
-        sess, rgu_type, clusters, cluster_user, job_states, need_cluster_name=True
+        sess,
+        rgu_type,
+        clusters,
+        cluster_user,
+        job_states,
+        need_cluster_name=True,
+        scope_user_id=_scope(req),
     )
     jobs_src = src.base
     rgu_hours_raw = src.rgu_drac * src.elapsed_time / 3600.0

@@ -295,7 +295,7 @@
         <div id="js-panel" class="job-states-panel" style="display:none"></div>
       </div>
     </div>
-    <div class="ctrl">
+    <div class="ctrl" id="user-ctrl">
       <label for="cluster_user">User</label>
       <input type="text" id="cluster_user" placeholder="all users"
              title="Restrict every plot to a single username (exact match). Leave empty for all users. Takes effect on Update."
@@ -472,6 +472,12 @@
       jobtable:        'Job table',
     };
     const PLOT_KEYS = Object.keys(PLOT_NAMES);
+    // Role gate, injected by metrics_homepage (per request). A non-admin is
+    // scoped to their own jobs, so RGU-by-user (a multi-user plot) is removed
+    // from the tile-type pickers; the backend scopes the data regardless.
+    const IS_ADMIN = __IS_ADMIN__;
+    const visiblePlotKeys = () =>
+      IS_ADMIN ? PLOT_KEYS : PLOT_KEYS.filter(k => k !== 'userrgu');
 
     // Map each plot type to the backend endpoint it consumes. heatmap_elapsed
     // and heatmap_wait share /heatmap, so caching by endpoint dedups fetches.
@@ -735,7 +741,7 @@
       const menu = document.createElement('div');
       menu.className = 'plot-picker';
       _picker = menu;
-      PLOT_KEYS.forEach(key => {
+      visiblePlotKeys().forEach(key => {
         const item = document.createElement('div');
         item.className = 'plot-picker-item';
         item.textContent = PLOT_NAMES[key];
@@ -764,7 +770,7 @@
       const ph = document.createElement('option');
       ph.value = ''; ph.textContent = '＋ add plot';
       sel.appendChild(ph);
-      PLOT_KEYS.forEach(key => {
+      visiblePlotKeys().forEach(key => {
         const opt = document.createElement('option');
         opt.value = key; opt.textContent = PLOT_NAMES[key];
         sel.appendChild(opt);
@@ -795,7 +801,7 @@
           actions.style.cssText = 'display:flex;align-items:center;gap:4px';
           const changeSel = document.createElement('select');
           changeSel.className = 'tile-change-sel';
-          PLOT_KEYS.forEach(key => {
+          visiblePlotKeys().forEach(key => {
             const opt = document.createElement('option');
             opt.value = key; opt.textContent = PLOT_NAMES[key];
             if (key === plotType) opt.selected = true;
@@ -2229,6 +2235,19 @@
     if (_saved.focusEnd)   focusEnd   = _saved.focusEnd;
     updateFocusLabel();
 
+    // Role-aware UI: a non-admin is scoped to their own jobs (backend-enforced),
+    // so hide the user filter and drop the RGU-by-user tiles. IS_ADMIN is injected
+    // by metrics_homepage, so this runs BEFORE the first render (no flash, no
+    // round-trip); no-op for admins / auth off.
+    if (!IS_ADMIN) {
+      const uc = document.getElementById('user-ctrl');
+      if (uc) uc.style.display = 'none';
+      document.getElementById('cluster_user').value = '';
+      tileLayout = tileLayout
+        .map(row => row.filter(t => t !== 'userrgu'))
+        .filter(row => row.length);
+      syncUrl();
+    }
     renderLayout();
   </script>
 </body>
