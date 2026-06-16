@@ -60,6 +60,7 @@ _NOTIFY_CFG = {
     "digest_top_n": 16,
     "recurrence_window_weeks": 6,
     "recurrence_cluster_share": 0.30,
+    "personalized_action_min_waste_rgu_hours": 0.0,
 }
 
 
@@ -355,14 +356,14 @@ def test_display_cycles_6_produces_6_columns(recurring_db):
 @pytest.mark.parametrize(
     "active_cycles,expected",
     [
-        (2, True),  # fourthuser cycles[:2] = [T, T]
-        (3, True),  # fourthuser cycles[:3] = [T, T, T]
-        (4, False),  # fourthuser cycles[:4] = [T, T, T, F]
-        (5, False),  # fourthuser cycles[:5] = [T, T, T, F, F]
+        (2, False),  # PA window=4w: petitbonhomme waste=218.88 < 400 floor
+        (3, False),  # PA window=6w: petitbonhomme waste=328.32 < 400 floor
+        (4, True),   # PA window=8w: petitbonhomme waste=437.76 >= 400 floor (W-6 enters window)
+        (5, True),   # PA window=10w: petitbonhomme waste=547.20 >= 400 floor (W-8 enters window)
     ],
 )
 def test_active_cycles_personalized_action(recurring_db, active_cycles, expected):
-    """recurrence_active_cycles controls the cutoff; tests both True and False sides."""
+    """recurrence_active_cycles widens the PA window; floor=400 splits at the 3→4 cycle boundary."""
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         result = get_recurring_underusers(
             _TEST_END,
@@ -371,8 +372,9 @@ def test_active_cycles_personalized_action(recurring_db, active_cycles, expected
             window_weeks=6,
             cluster_share_threshold=1.1,
             recurrence_active_cycles=active_cycles,
+            personalized_action_min_waste_rgu_hours=400.0,
         )
-    row = next(r for r in result["mila"] if r.email == "fourthuser@mila.quebec")
+    row = next(r for r in result["mila"] if r.email == "petitbonhomme@mila.quebec")
     assert row.personalized_action is expected
 
 
@@ -684,8 +686,9 @@ def test_odd_week_end_w0_is_none(recurring_db):
             )
 
 
-def test_odd_week_end_personalized_action_false(recurring_db):
-    # With w0=None, personalized_action must be False even if w2/w4/w6 are True
+def test_odd_week_end_personalized_action_floor_controls(recurring_db):
+    # With w0=None the PA flag is still based on waste in the active window, not cycles.
+    # A high floor means nobody qualifies even though users have past-cycle waste.
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         result = get_recurring_underusers(
             _ODD_MON,
@@ -693,6 +696,7 @@ def test_odd_week_end_personalized_action_false(recurring_db):
             min_rgu_hours=_MIN_RGU_HOURS,
             window_weeks=6,
             cluster_share_threshold=0.30,
+            personalized_action_min_waste_rgu_hours=999999.0,
         )
     for rows in result.values():
         for row in rows:
@@ -818,3 +822,67 @@ def test_per_cycle_w6_w8_never_show_peak():
     text = build_recurring_table({"narval": [_ROW_ALL_TRUE]}, **_BRT_KW)
     # Only 3 ⚑✗ for W0, W-2, W-4 — not W-6 or W-8
     assert text.count("⚑✗") == 3
+
+
+# ── Threshold scaling, true_wasted, personalized_action floor ────────────────
+
+
+def test_wasted_6w_uses_scaled_waste(recurring_db):
+    # petitbonhomme: util=0.05, threshold=0.05 → scaled_used=LEAST(rgu_h, rgu_h*1.0)=rgu_h
+    # → wasted=0 → excluded from the recurring table entirely
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        result = get_recurring_underusers(
+            _TEST_END,
+            min_ratio=_MIN_RATIO,
+            min_rgu_hours=_MIN_RGU_HOURS,
+            window_weeks=6,
+            cluster_share_threshold=1.1,
+            threshold=0.05,
+        )
+    emails = {r.email for rows in result.values() for r in rows}
+    assert "petitbonhomme@mila.quebec" not in emails
+
+
+def test_true_wasted_field_populated(recurring_db):
+    # At identity threshold, RecurringUserRow.true_wasted should be positive.
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        result = get_recurring_underusers(
+            _TEST_END,
+            min_ratio=_MIN_RATIO,
+            min_rgu_hours=_MIN_RGU_HOURS,
+            window_weeks=6,
+            cluster_share_threshold=1.1,
+        )
+    row = next(r for r in result["mila"] if r.email == "petitbonhomme@mila.quebec")
+    assert row.true_wasted > 0.0
+
+
+def test_personalized_action_floor_zero_flags_wasters(recurring_db):
+    # With floor=0.0, any user with positive scaled waste in the active window is flagged.
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        result = get_recurring_underusers(
+            _TEST_END,
+            min_ratio=_MIN_RATIO,
+            min_rgu_hours=_MIN_RGU_HOURS,
+            window_weeks=6,
+            cluster_share_threshold=1.1,
+            personalized_action_min_waste_rgu_hours=0.0,
+        )
+    row = next(r for r in result["mila"] if r.email == "petitbonhomme@mila.quebec")
+    assert row.personalized_action is True
+
+
+def test_personalized_action_floor_high_excludes_all(recurring_db):
+    # With a very high floor, no user crosses the threshold → all False.
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        result = get_recurring_underusers(
+            _TEST_END,
+            min_ratio=_MIN_RATIO,
+            min_rgu_hours=_MIN_RGU_HOURS,
+            window_weeks=6,
+            cluster_share_threshold=1.1,
+            personalized_action_min_waste_rgu_hours=999999.0,
+        )
+    for rows in result.values():
+        for row in rows:
+            assert row.personalized_action is False

@@ -103,8 +103,10 @@ class RecurringUserRow:
     # Index 0 = W0 (most recent), last = W-(2*(n-1)).
     # None = future cycle (anchor > end at run time); bool = past/present cycle.
     cycles: list[bool | None]
-    # True iff flagged in all recurrence_active_cycles most-recent cycles.
+    # True iff the user's scaled waste in the active-cycles window meets the floor.
     personalized_action: bool
+    # True (unscaled) wasted RGU-h for this user in this cluster over the recurrence window.
+    true_wasted: float = 0.0
 
 
 def _rgu_exprs(threshold: float = 1.0):
@@ -641,6 +643,8 @@ def get_recurring_underusers(
     recurrence_display_cycles: int = 5,
     cycle_length_weeks: int = 2,
     clusters: list[str] | None = None,
+    threshold: float = 1.0,
+    personalized_action_min_waste_rgu_hours: float = 0.0,
 ) -> dict[str, list[RecurringUserRow]]:
     """Return per-cluster top wasters for the recurring-underusers digest table.
 
@@ -666,7 +670,7 @@ def get_recurring_underusers(
 
     # ── Per-(user, cluster) aggregate over the full recurrence window ─────────
     with config().db.session() as session:
-        util, _, rgu_h_expr, rgu_used_expr, _ = _rgu_exprs()
+        util, _, rgu_h_expr, true_used_expr, scaled_used_expr = _rgu_exprs(threshold)
         stmt = _with_rgu_window(
             select(
                 JobSeriesDB.sarc_user_id,
@@ -674,13 +678,14 @@ def get_recurring_underusers(
                 JobSeriesDB.display_name,
                 JobSeriesDB.cluster_name,
                 func.coalesce(func.sum(rgu_h_expr), 0).label("sum_rgu_hours"),
-                func.coalesce(func.sum(rgu_used_expr), 0).label("sum_rgu_used"),
+                func.coalesce(func.sum(scaled_used_expr), 0).label("sum_rgu_used"),
+                func.coalesce(func.sum(true_used_expr), 0).label("sum_true_rgu_used"),
             ),
             util,
             agg_start,
             anchor,
             exclude_zero_usage=exclude_zero_usage,
-            rgu_used_expr=rgu_used_expr,
+            rgu_used_expr=scaled_used_expr,
             clusters=clusters,
         ).group_by(
             JobSeriesDB.sarc_user_id,
@@ -691,7 +696,7 @@ def get_recurring_underusers(
         agg_rows = session.exec(stmt).all()
 
     # ── Organise wasted RGU-h per (cluster, user) ─────────────────────────────
-    # cluster -> user_id -> {email, display_name, wasted}
+    # cluster -> user_id -> {email, display_name, wasted, true_wasted}
     cluster_users: dict[str, dict[int, dict]] = {}
     for row in agg_rows:
         cluster = row.cluster_name or "unknown"
@@ -699,6 +704,7 @@ def get_recurring_underusers(
         rgu_h, rgu_used_h, wasted = _split_waste(row)
         if wasted <= 0:
             continue
+        true_wasted_h = rgu_h - float(row.sum_true_rgu_used or 0.0)
         if cluster not in cluster_users:
             cluster_users[cluster] = {}
         if uid not in cluster_users[cluster]:
@@ -706,8 +712,10 @@ def get_recurring_underusers(
                 "email": row.email,
                 "display_name": row.display_name,
                 "wasted": 0.0,
+                "true_wasted": 0.0,
             }
         cluster_users[cluster][uid]["wasted"] += wasted
+        cluster_users[cluster][uid]["true_wasted"] += true_wasted_h
 
     # ── Cycle membership sets ─────────────────────────────────────────────────
     # Each cycle ends at anchor - i*cycle_length_weeks (always aligned). Cycles
@@ -729,8 +737,36 @@ def get_recurring_underusers(
             resource=resource,
             exclude_zero_usage=exclude_zero_usage,
             clusters=clusters,
+            threshold=threshold,
         )
         cycle_flagged.append({r.user_id for r in flagged_rows})
+
+    # ── Personalized-action aggregate (active cycles window, cross-cluster) ───
+    pa_window_weeks = recurrence_active_cycles * cycle_length_weeks
+    pa_start = anchor - timedelta(weeks=pa_window_weeks)
+    with config().db.session() as session:
+        pa_util, _, pa_rgu_h_expr, _, pa_scaled_expr = _rgu_exprs(threshold)
+        pa_stmt = _with_rgu_window(
+            select(
+                JobSeriesDB.sarc_user_id,
+                func.coalesce(func.sum(pa_rgu_h_expr), 0).label("sum_rgu_hours"),
+                func.coalesce(func.sum(pa_scaled_expr), 0).label("sum_rgu_used"),
+            ),
+            pa_util,
+            pa_start,
+            anchor,
+            exclude_zero_usage=exclude_zero_usage,
+            rgu_used_expr=pa_scaled_expr,
+            clusters=clusters,
+        ).group_by(JobSeriesDB.sarc_user_id)
+        pa_rows = session.exec(pa_stmt).all()
+
+    user_pa_flag: dict[int, bool] = {}
+    for row in pa_rows:
+        _, _, pa_wasted = _split_waste(row)
+        user_pa_flag[row.sarc_user_id] = (
+            pa_wasted >= personalized_action_min_waste_rgu_hours
+        )
 
     # ── Per-cluster greedy selection (cumulative share >= threshold) ──────────
     result: dict[str, list[RecurringUserRow]] = {}
@@ -764,9 +800,8 @@ def get_recurring_underusers(
                     wasted_6w=u["wasted"],
                     cluster_share=u["wasted"] / cluster_total,
                     cycles=cycles_for_user,
-                    personalized_action=all(
-                        c is True for c in cycles_for_user[:recurrence_active_cycles]
-                    ),
+                    personalized_action=user_pa_flag.get(uid, False),
+                    true_wasted=u["true_wasted"],
                 )
             )
         result[cluster] = rows_out
