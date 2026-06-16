@@ -103,23 +103,28 @@ class RecurringUserRow:
     personalized_action: bool
 
 
-def _rgu_exprs():
-    """Return (util_alias, m_mean, rgu_h_expr, rgu_used_expr) for GPU-utilization queries.
+def _rgu_exprs(threshold: float = 1.0):
+    """Return (util_alias, m_mean, rgu_h_expr, true_used_expr,
+    scaled_used_expr).
 
-    rgu_h_expr    = rgu * elapsed_time / 3600  (RGU-hours per job)
-    rgu_used_expr = rgu_h_expr * gpu_utilization_mean, or 0.0 when NaN or NULL.
-    The `m == m` NaN idiom (NaN != NaN in SQL) combined with the LEFT JOIN
-    else_=0.0 fallback means jobs with no utilization stat count as fully
-    wasted (conservative assumption).
+    true_used_expr = rgu_h * m, or 0.0 when m is NaN/NULL. scaled_used_expr =
+    LEAST(rgu_h, rgu_h*m/threshold), or 0.0 when m is NaN/NULL. At threshold=1.0
+    scaled == true (identity). The `m == m` NaN idiom (NaN != NaN in SQL)
+    combined with the LEFT JOIN else_=0.0 fallback means jobs with no
+    utilization stat count as fully wasted (conservative assumption).
     """
     util_alias = aliased(JobStatisticDB)
     m_mean = col(util_alias.mean)
     rgu_h_expr = col(JobSeriesDB.rgu) * col(JobSeriesDB.elapsed_time) / 3600.0
-    rgu_used_expr = case(
+    true_used_expr = case(
         (m_mean == m_mean, rgu_h_expr * m_mean),  # noqa: PLR0124
         else_=0.0,
     )
-    return util_alias, m_mean, rgu_h_expr, rgu_used_expr
+    scaled_used_expr = case(
+        (m_mean == m_mean, func.least(rgu_h_expr, rgu_h_expr * m_mean / threshold)),  # noqa: PLR0124
+        else_=0.0,
+    )
+    return util_alias, m_mean, rgu_h_expr, true_used_expr, scaled_used_expr
 
 
 def _with_rgu_window(
@@ -164,7 +169,7 @@ def get_underusers(
         raise ValueError(f"Unsupported resource: {resource!r}")
 
     with config().db.session() as session:
-        util, _, rgu_h_expr, rgu_used_expr = _rgu_exprs()
+        util, _, rgu_h_expr, rgu_used_expr, _ = _rgu_exprs()
         stmt = _with_rgu_window(
             select(
                 JobSeriesDB.sarc_user_id,
@@ -223,7 +228,7 @@ def get_underusers(
         # Per-job data for the identified underusers — same RGU × utilisation pattern.
         jobs_by_user: dict[int, list[UnderuserJob]] = {uid: [] for uid in underuser_ids}
         if underuser_ids:
-            util, m_mean, rgu_h_expr, rgu_used_expr = _rgu_exprs()
+            util, m_mean, rgu_h_expr, rgu_used_expr, _ = _rgu_exprs()
             job_rows = session.exec(
                 _with_rgu_window(
                     select(
@@ -303,7 +308,7 @@ def get_all_users_usage(
         raise ValueError(f"Unsupported resource: {resource!r}")
 
     with config().db.session() as session:
-        util, _, rgu_h_expr, rgu_used_expr = _rgu_exprs()
+        util, _, rgu_h_expr, rgu_used_expr, _ = _rgu_exprs()
         stmt = _with_rgu_window(
             select(
                 JobSeriesDB.sarc_user_id,
@@ -348,7 +353,7 @@ def get_all_users_usage(
 
         jobs_by_user: dict[int, list[UsageJob]] = {uid: [] for uid in all_user_ids}
         if all_user_ids:
-            util, m_mean, rgu_h_expr, rgu_used_expr = _rgu_exprs()
+            util, m_mean, rgu_h_expr, rgu_used_expr, _ = _rgu_exprs()
             job_rows = session.exec(
                 _with_rgu_window(
                     select(
@@ -461,7 +466,7 @@ def _query_month_agg(
     exclude_zero_usage: bool = False,
 ) -> MonthlyStats:
     """Aggregate fleet-level waste stats for a single calendar month window."""
-    util, _, rgu_h_expr, rgu_used_expr = _rgu_exprs()
+    util, _, rgu_h_expr, rgu_used_expr, _ = _rgu_exprs()
     stmt = _with_rgu_window(
         select(
             JobSeriesDB.sarc_user_id,
@@ -623,7 +628,7 @@ def get_recurring_underusers(
 
     # ── Per-(user, cluster) aggregate over the full recurrence window ─────────
     with config().db.session() as session:
-        util, _, rgu_h_expr, rgu_used_expr = _rgu_exprs()
+        util, _, rgu_h_expr, rgu_used_expr, _ = _rgu_exprs()
         stmt = _with_rgu_window(
             select(
                 JobSeriesDB.sarc_user_id,
