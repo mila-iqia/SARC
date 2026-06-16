@@ -419,18 +419,3 @@ def test_digest_deterministic_with_historical():
     a = build_admin_digest([], period="p", historical=stats, **_DIGEST_KW)
     b = build_admin_digest([], period="p", historical=stats, **_DIGEST_KW)
     assert a == b
-
-
-# ── Scaled threshold ──────────────────────────────────────────────────────────
-
-
-def test_scaled_threshold_reduces_above_count(historical_db):
-    # petitbonhomme: m=0.10. At threshold=0.10, scaled_used = LEAST(rgu_h, rgu_h*1.0)
-    # = rgu_h → scaled_wasted=0 → waste_ratio=0 → NOT above threshold.
-    result = get_historical_stats(
-        _END, min_ratio=_MIN_RATIO, min_rgu_hours=_MIN_RGU_HOURS, threshold=0.10
-    )
-    for m in result.months:
-        assert m.above_threshold_count == 0, (
-            f"{m.label}: expected 0 but got {m.above_threshold_count}"
-        )

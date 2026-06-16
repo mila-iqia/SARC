@@ -250,9 +250,9 @@ def test_digest_contains_primary_cluster():
     assert "narval" in text
 
 
-def test_digest_contains_wasted_hours():
+def test_digest_contains_unused_hours():
     text = build_admin_digest([_ROW_BOB], period="…", **_DIGEST_KW)
-    assert "600.0 RGU-h wasted" in text
+    assert "600.0 RGU-h unused" in text
 
 
 def test_digest_contains_waste_ratio():

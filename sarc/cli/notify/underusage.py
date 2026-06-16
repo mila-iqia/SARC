@@ -246,7 +246,6 @@ class UnderusageNotifyCommand:
             months=ncfg.historical_months,
             exclude_zero_usage=True,
             clusters=clusters,
-            threshold=threshold,
         )
         recurring = get_recurring_underusers(
             end,

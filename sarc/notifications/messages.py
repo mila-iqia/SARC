@@ -98,9 +98,7 @@ def build_user_dm(
             "Jobs with the lowest GPU utilization:",
             "",
             _jobs_section(
-                row.top_jobs,
-                rgu_value=lambda j: j.rgu_hours_unused,
-                suffix="RGU-h unused",
+                row.top_jobs, rgu_value=lambda j: j.wasted, suffix="RGU-h unused"
             ),
         ]
 

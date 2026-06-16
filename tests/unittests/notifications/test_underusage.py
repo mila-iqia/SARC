@@ -596,9 +596,7 @@ def test_missing_util_non_negative_waste_at_sub_threshold(missing_util_db):
 
 def test_missing_util_usage_rgu_hours_used_equals_requested(missing_util_db):
     results = get_all_users_usage(
-        _WINDOW_START,
-        _WINDOW_END,
-        top_jobs_per_user=_TOP_JOBS_PER_USER,
+        _WINDOW_START, _WINDOW_END, top_jobs_per_user=_TOP_JOBS_PER_USER
     )
     row = next(r for r in results if r.email == "bramin@mila.quebec")
     assert row.rgu_hours_used == pytest.approx(row.rgu_hours_requested)
