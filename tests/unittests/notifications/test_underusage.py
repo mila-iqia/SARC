@@ -271,7 +271,7 @@ def test_overview_rgu_hours_unused(underusage_db):
     )
     row = next(r for r in results if r.email == "beaubonhomme@mila.quebec")
     # 4.8 * 700 * (1 - 0.80) = 672.0 RGU-h unused
-    assert abs(row.rgu_hours_unused - 672.0) < 0.1
+    assert abs(row.wasted - 672.0) < 0.1
 
 
 def test_waste_ratio_value(underusage_db):
@@ -310,7 +310,7 @@ def test_top_jobs_ordered_desc_by_rgu_hours_unused(underusage_db):
         top_jobs_per_user=_TOP_JOBS_PER_USER,
     )
     row = next(r for r in results if r.email == "petitbonhomme@mila.quebec")
-    unused = [j.rgu_hours_unused for j in row.top_jobs]
+    unused = [j.wasted for j in row.top_jobs]
     assert unused == sorted(unused, reverse=True)
 
 

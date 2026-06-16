@@ -89,7 +89,7 @@ def build_user_dm(
         "",
         f"Over the last {window_weeks} weeks, your jobs utilized on average"
         f" {_pct(row.avg_utilization)} of requested GPUs,"
-        f" leaving {_fmt_h(row.rgu_hours_unused)} RGU-hours unused.",
+        f" leaving {_fmt_h(row.wasted)} RGU-hours unused.",
     ]
 
     if row.top_jobs:
@@ -260,7 +260,7 @@ def build_recurring_table(
         )
         lines = [
             f"Recurring underusers (last {window_weeks} weeks) — Cluster {cluster}",
-            f"(top users accounting for ≥ {share_pct} of the cluster's unused RGU-h)",
+            f"(top users accounting for {share_pct} of the cluster's unused RGU-h)",
             header,
         ]
 

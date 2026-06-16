@@ -352,7 +352,6 @@ def test_digest_no_historical_by_default():
         requested=1000.0,
         waste_ratio=0.5,
         avg_utilization=0.5,
-        rgu_hours_unused=500.0,
         by_cluster=[ClusterBreakdown("mila", 1000.0, 500.0, 1000.0)],
         top_jobs=[],
     )

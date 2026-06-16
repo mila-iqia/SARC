@@ -11,7 +11,6 @@ from sarc.notifications.messages import (
 from sarc.notifications.underusage import (
     ClusterBreakdown,
     RecurringUserRow,
-    UnderuserJob,
     UnderuserRow,
     UsageClusterBreakdown,
     UsageJob,
@@ -20,25 +19,28 @@ from sarc.notifications.underusage import (
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
-_JOB_NARVAL_1 = UnderuserJob(
+_JOB_NARVAL_1 = UsageJob(
     job_id=111111,
     cluster="narval",
     submit_time=datetime(2026, 5, 28, tzinfo=UTC),
-    rgu_hours_unused=80.0,
+    wasted=80.0,
+    rgu_hours_used=None,
     gpu_utilization=0.05,
 )
-_JOB_NARVAL_2 = UnderuserJob(
+_JOB_NARVAL_2 = UsageJob(
     job_id=111112,
     cluster="narval",
     submit_time=datetime(2026, 5, 30, tzinfo=UTC),
-    rgu_hours_unused=60.0,
+    wasted=60.0,
+    rgu_hours_used=None,
     gpu_utilization=0.12,
 )
-_JOB_FIR = UnderuserJob(
+_JOB_FIR = UsageJob(
     job_id=222222,
     cluster="fir",
     submit_time=datetime(2026, 5, 31, tzinfo=UTC),
-    rgu_hours_unused=40.0,
+    wasted=40.0,
+    rgu_hours_used=None,
     gpu_utilization=None,
 )
 
@@ -51,7 +53,6 @@ _ROW_ALICE = UnderuserRow(
     requested=1000.0,
     waste_ratio=0.255,
     avg_utilization=0.745,
-    rgu_hours_unused=255.0,
     by_cluster=[
         ClusterBreakdown("narval", 700.0, 210.0, 700.0),
         ClusterBreakdown("fir", 300.0, 45.0, 300.0),
@@ -68,7 +69,6 @@ _ROW_BOB = UnderuserRow(
     requested=800.0,
     waste_ratio=0.75,
     avg_utilization=0.25,
-    rgu_hours_unused=600.0,
     by_cluster=[ClusterBreakdown("fir", 800.0, 600.0, 800.0)],
     top_jobs=[],
 )
@@ -82,7 +82,6 @@ _ROW_CAROL = UnderuserRow(
     requested=700.0,
     waste_ratio=0.60,
     avg_utilization=0.40,
-    rgu_hours_unused=420.0,
     by_cluster=[ClusterBreakdown("mila", 700.0, 420.0, 700.0)],
     top_jobs=[],
 )
@@ -417,6 +416,7 @@ _USAGE_JOB_NARVAL_1 = UsageJob(
     job_id=300001,
     cluster="narval",
     submit_time=datetime(2026, 5, 28, tzinfo=UTC),
+    wasted=None,
     rgu_hours_used=120.0,
     gpu_utilization=0.72,
 )
@@ -424,6 +424,7 @@ _USAGE_JOB_NARVAL_2 = UsageJob(
     job_id=300002,
     cluster="narval",
     submit_time=datetime(2026, 6, 1, tzinfo=UTC),
+    wasted=None,
     rgu_hours_used=90.0,
     gpu_utilization=0.65,
 )
@@ -431,6 +432,7 @@ _USAGE_JOB_FIR = UsageJob(
     job_id=300003,
     cluster="fir",
     submit_time=datetime(2026, 5, 30, tzinfo=UTC),
+    wasted=None,
     rgu_hours_used=50.0,
     gpu_utilization=None,
 )
