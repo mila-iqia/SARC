@@ -1,3 +1,4 @@
+import html
 import json
 import math
 import re
@@ -364,8 +365,14 @@ def metrics_homepage(req: Requestor = Depends(requestor)):
     """Serve the dashboard's single-page HTML UI; its charts call the JSON
     endpoints below. ``is_admin`` is injected per-request so the page adapts
     immediately (hide the user filter / RGU-by-user for a non-admin) with no
-    round-trip; the backend scopes the data regardless."""
-    return _HTML.replace("__IS_ADMIN__", "true" if req.is_admin else "false")
+    round-trip; the backend scopes the data regardless. The connected email is
+    shown in the title/header, coloured by role (admin red, user grey)."""
+    email = html.escape(req.email, quote=False)
+    return (
+        _HTML.replace("__IS_ADMIN__", "true" if req.is_admin else "false")
+        .replace("__USER_ROLE_CLASS__", "admin" if req.is_admin else "user")
+        .replace("__USER_EMAIL__", email)
+    )
 
 
 @router.get("/metrics/job_counts")
