@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from functools import cached_property
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, cast
 
 import gifnoc
 from easy_oauth import OAuthManager
