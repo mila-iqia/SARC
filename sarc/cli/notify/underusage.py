@@ -224,6 +224,9 @@ class UnderusageNotifyCommand:
             )
         _userfacing_print(file=sys.stderr)
 
+        clusters = ncfg.clusters or None
+        threshold = ncfg.waste_rescale_threshold
+
         rows = get_underusers(
             start,
             end,
@@ -232,6 +235,8 @@ class UnderusageNotifyCommand:
             top_jobs_per_user=ncfg.top_jobs_per_user,
             resource=self.resource,
             exclude_zero_usage=True,
+            clusters=clusters,
+            threshold=threshold,
         )
         historical = get_historical_stats(
             end,
@@ -240,6 +245,8 @@ class UnderusageNotifyCommand:
             resource=self.resource,
             months=ncfg.historical_months,
             exclude_zero_usage=True,
+            clusters=clusters,
+            threshold=threshold,
         )
         recurring = get_recurring_underusers(
             end,
@@ -252,6 +259,9 @@ class UnderusageNotifyCommand:
             recurrence_display_cycles=ncfg.recurrence_display_cycles,
             recurrence_active_cycles=ncfg.recurrence_active_cycles,
             cycle_length_weeks=ncfg.cycle_length_weeks,
+            clusters=clusters,
+            threshold=threshold,
+            personalized_action_min_waste_rgu_hours=ncfg.personalized_action_min_waste_rgu_hours,
         )
 
         _userfacing_print(f"Recipients ({len(rows)} user(s) flagged):")
@@ -301,6 +311,9 @@ class UnderusageNotifyCommand:
                 end,
                 top_jobs_per_user=ncfg.top_jobs_per_user,
                 resource=self.resource,
+                clusters=clusters,
+                threshold=threshold,
+                usage_report_min_rgu_hours=ncfg.usage_report_min_rgu_hours,
             )
             underuser_emails = {r.email for r in rows}
             report_recipients, usage_report_skipped = split_usage_report_recipients(

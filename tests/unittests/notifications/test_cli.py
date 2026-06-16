@@ -738,6 +738,31 @@ def test_send_usage_report_non_report_week_no_reports(
     assert "beaubonhomme@mila.quebec" not in dm_calls
 
 
+# ── Config-knob wiring ───────────────────────────────────────────────────────
+
+
+def test_clusters_config_filters_cli_results(notify_db, cli_main, monkeypatch, capsys):
+    # notify_db only has mila jobs.  With clusters=["raisin"] the cluster filter
+    # must reach all four query functions → no flagged recipients.
+    monkeypatch.setattr("sarc.cli.notify.underusage._now_utc", lambda: _CLI_TEST_END)
+    cfg = {**_NOTIFY_CFG, "clusters": ["raisin"]}
+    with gifnoc.overlay({"sarc.notifications": cfg}):
+        cli_main(["notify", "underusage", "--window-weeks", "4"])
+    out = capsys.readouterr().out
+    assert "0 user(s) flagged" in out
+
+
+def test_threshold_config_filters_cli_results(notify_db, cli_main, monkeypatch, capsys):
+    # petitbonhomme has util=0.10.  At threshold=0.10 scaled_used=rgu_h → wasted=0
+    # → waste_ratio=0 < min_ratio=0.50 → not flagged.
+    monkeypatch.setattr("sarc.cli.notify.underusage._now_utc", lambda: _CLI_TEST_END)
+    cfg = {**_NOTIFY_CFG, "waste_rescale_threshold": 0.10}
+    with gifnoc.overlay({"sarc.notifications": cfg}):
+        cli_main(["notify", "underusage", "--window-weeks", "4"])
+    out = capsys.readouterr().out
+    assert "0 user(s) flagged" in out
+
+
 def test_no_dms_flag_suppresses_usage_report_sends(
     usage_report_db, cli_main, monkeypatch, capsys
 ):
