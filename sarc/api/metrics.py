@@ -1,3 +1,4 @@
+import hashlib
 import math
 import re
 from collections.abc import Callable, Generator
@@ -370,7 +371,17 @@ def metrics_homepage(request: Request, req: Requestor = Depends(requestor)):
     round-trip — the backend scopes the data regardless — and the connected
     email is shown in the title/header, coloured by role (admin red, user grey).
     Jinja auto-escapes ``user_email`` in HTML; ``| tojson`` makes the
-    booleans/lists safe to inline in <script>."""
+    booleans/lists safe to inline in <script>.
+
+    ``storage_key`` namespaces the per-user localStorage state. We hash the
+    identity rather than embed the email in clear as a key, and fold in the role
+    so a promote/demote (or the force_user toggle used in local testing) starts
+    fresh instead of reloading selections that reference now-absent controls.
+    It's a namespacing key, not a secret, so a short digest is enough."""
+    storage_key = (
+        "sarc_dash_v1_"
+        + hashlib.sha256(f"{req.email}|{req.is_admin}".encode()).hexdigest()[:16]
+    )
     return _TEMPLATES.TemplateResponse(
         request,
         "metrics.html",
@@ -379,6 +390,7 @@ def metrics_homepage(request: Request, req: Requestor = Depends(requestor)):
             "user_email": req.email,
             "default_period": _DEFAULT_PERIOD,
             "job_states": [s.value for s in SlurmState],
+            "storage_key": storage_key,
         },
     )
 

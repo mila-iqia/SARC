@@ -1,9 +1,18 @@
+{#
+  Jinja2 template — rendered by metrics_homepage() in metrics.py; NOT a static
+  file. Keep the .html extension: Starlette uses select_autoescape, so HTML
+  auto-escaping is ON for .html but OFF for .j2 / .html.j2 (renaming would
+  expose user_email to XSS). Jinja variable / block / comment tags are all
+  interpreted here; write a literal double brace as {{ '{{' }}.
+-#}
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <title>Global Job Metrics ({{ user_email }})</title>
-  <script src="https://cdn.plot.ly/plotly-3.6.0.min.js"></script>
+  <script src="https://cdn.plot.ly/plotly-3.6.0.min.js"
+          integrity="sha384-VJGrWzhaqeZH5V40n11N6iTMH+MBDakZZjfPZAPtqS/BCEnF102uwlswiJq07HmW"
+          crossorigin="anonymous"></script>
   <style>
     * { box-sizing: border-box; }
     body { font-family: system-ui, sans-serif; margin: 32px; color: #222; }
@@ -330,7 +339,7 @@
 
     // ── Persistent state (localStorage) ─────────────────────────────────────
     // Schema version: bump when the saved structure changes incompatibly.
-    const STORAGE_KEY = '{{ 'sarc_dash_v1_admin' if is_admin else 'sarc_dash_v1_user' }}';
+    const STORAGE_KEY = {{ storage_key | tojson }};
 
     function loadSavedState() {
       try {
