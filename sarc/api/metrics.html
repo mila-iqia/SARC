@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Global Job Metrics (__USER_EMAIL__)</title>
+  <title>Global Job Metrics ({{ user_email }})</title>
   <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
   <style>
     * { box-sizing: border-box; }
@@ -97,6 +97,7 @@
     .ms-plot { width: 100%; flex: 1; min-height: 0; }
     .ms-metric2 { font-size: 12px; padding: 1px 6px; max-width: 160px; }
 
+    {% if is_admin %}
     /* RGU-by-user: per-tile "top N" + sort controls above the (dynamic-height) plot. */
     .ur-ctrl { font-size: 12px; color: #888; padding: 2px 0 6px;
                display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
@@ -105,6 +106,7 @@
     .ur-ctrl select { font-size: 12px; padding: 1px 4px; border: 1px solid #ccc;
                       border-radius: 4px; background: #fff; color: #444; cursor: pointer; }
     .ur-sep { color: #ccc; }
+    {% endif %}
 
     /* Job table */
     .job-table-box { display: flex; flex-direction: column; width: 100%; height: 100%; }
@@ -224,7 +226,7 @@
   </style>
 </head>
 <body>
-  <h3>Global Job Metrics <span class="conn-email __USER_ROLE_CLASS__">(__USER_EMAIL__)</span></h3>
+  <h3>Global Job Metrics <span class="conn-email {{ 'admin' if is_admin else 'user' }}">({{ user_email }})</span></h3>
   <div class="controls">
     <div class="ctrl">
       <label for="start">Start</label>
@@ -243,7 +245,7 @@
                 style="text-align:left;min-width:110px"
                 title="Calendar buckets align to calendar boundaries (week starts Monday, month on the 1st), clipped to the range. A fixed window steps uniformly from Start.">By week ▾</button>
         <div id="period-panel" class="job-states-panel period-panel" style="display:none"
-             data-default="__DEFAULT_PERIOD__">
+             data-default="{{ default_period }}">
           <div class="period-title">Calendar buckets</div>
           <label><input type="radio" name="period-mode" value="h"> By hour</label>
           <label><input type="radio" name="period-mode" value="d"> By day</label>
@@ -272,7 +274,7 @@
     </div>
     <div class="ctrl">
       <label for="rgu-unit">RGU unit</label>
-      <select id="rgu-unit" title="Display unit for every plot showing cumulative RGU·time (RGU by cluster / RGU requested vs used / RGU by user / job table). Purely a display rescale — no re-fetch (RGU·m uses a fixed 30-day month).">
+      <select id="rgu-unit" title="Display unit for every plot showing cumulative RGU·time (RGU by cluster / RGU requested vs used / {% if is_admin %}RGU by user / {% endif %}job table). Purely a display rescale — no re-fetch (RGU·m uses a fixed 30-day month).">
         <option value="s">RGU·s</option>
         <option value="h" selected>RGU·h</option>
         <option value="d">RGU·d</option>
@@ -298,20 +300,22 @@
         <div id="js-panel" class="job-states-panel" style="display:none"></div>
       </div>
     </div>
+    {% if is_admin %}
     <div class="ctrl" id="user-ctrl">
       <label for="cluster_user">User</label>
       <input type="text" id="cluster_user" placeholder="all users"
              title="Restrict every plot to a single username (exact match). Leave empty for all users. Takes effect on Update."
              autocomplete="off" data-lpignore="true" data-form-type="other" />
     </div>
+    {% endif %}
     <div class="ctrl">
       <label for="metric-select">Efficiency metric</label>
-      <select id="metric-select" title="Metric taken as the 'useful' fraction: it splits Used vs Unused RGU (RGU usage, RGU by user, job-table waste column) and is the value plotted in Metric Trend, Density and the heatmap. Takes effect on Update."></select>
+      <select id="metric-select" title="Metric taken as the 'useful' fraction: it splits Used vs Unused RGU (RGU usage, {% if is_admin %}RGU by user, {% endif %}job-table waste column) and is the value plotted in Metric Trend, Density and the heatmap. Takes effect on Update."></select>
     </div>
-    <button onclick="loadCharts()" title="Apply the current filters (date range, clusters, user, job states, metric, RGU type) and reload every plot.">Update</button>
+    <button onclick="loadCharts()" title="Apply the current filters (date range, clusters, {% if is_admin %}user, {% endif %}job states, metric, RGU type) and reload every plot.">Update</button>
     <button id="reset-btn" onclick="resetState()" title="Clear all saved settings and reset to defaults" style="background:#888;">Reset</button>
     <div id="focus-label" class="no-focus"
-         title="Focus is an optional zoom on top of the Start/End range. Click a bar in a period plot to restrict the detail plots (Metric density, Metric heatmap, RGU by user, Job table) to that time slice; the period plots only highlight it. Use Clear focus to return to the full range.">
+         title="Focus is an optional zoom on top of the Start/End range. Click a bar in a period plot to restrict the detail plots (Metric density, Metric heatmap, {% if is_admin %}RGU by user, {% endif %}Job table) to that time slice; the period plots only highlight it. Use Clear focus to return to the full range.">
       <span id="focus-label-text">No focus — click a bar in a period plot to zoom the detail plots onto that slice</span>
       <button type="button" id="clear-focus" style="display:none" onclick="clearFocus()">Clear focus</button>
     </div>
@@ -344,7 +348,9 @@
           rgu_type:    document.getElementById('rgu-type').value,
           rgu_unit:    document.getElementById('rgu-unit').value,
           metric:      document.getElementById('metric-select').value,
+          {% if is_admin %}
           cluster_user: document.getElementById('cluster_user').value,
+          {% endif %}
           period:      periodValue(),
           clusters:    clSelected(),
           job_states:  jsSelected(),
@@ -353,7 +359,9 @@
           // Layout
           layout: layoutToParam(tileLayout),
           // Plot-local state
+          {% if is_admin %}
           userRguTopN, userRguSortBy,
+          {% endif %}
           metricScatterMetric2,
           rguUsageView,
           jobTableHiddenCols: [...jobTableHiddenCols],
@@ -382,7 +390,9 @@
       document.getElementById('rgu-type').value  = 'physical';
       document.getElementById('rgu-unit').value  = 'h';
       document.getElementById('metric-select').value = 'gpu_sm_occupancy';
+      {% if is_admin %}
       document.getElementById('cluster_user').value  = '';
+      {% endif %}
       setPeriod('w');
 
       // All clusters checked
@@ -393,8 +403,10 @@
       jsUpdateLabel();
 
       // Module-level state defaults
+      {% if is_admin %}
       userRguTopN          = 16;
       userRguSortBy        = 'rgu_requested';
+      {% endif %}
       metricScatterMetric2 = 'gpu_utilization';
       rguUsageView         = 'per_period';
       jobTableHiddenCols.clear();
@@ -471,16 +483,12 @@
       density:         'Metric density',
       metricscatter:   'Metric heatmap',
       metrictrend:     'Metric trend (mean/max)',
+      {% if is_admin %}
       userrgu:         'RGU by user',
+      {% endif %}
       jobtable:        'Job table',
     };
     const PLOT_KEYS = Object.keys(PLOT_NAMES);
-    // Role gate, injected by metrics_homepage (per request). A non-admin is
-    // scoped to their own jobs, so RGU-by-user (a multi-user plot) is removed
-    // from the tile-type pickers; the backend scopes the data regardless.
-    const IS_ADMIN = __IS_ADMIN__;
-    const visiblePlotKeys = () =>
-      IS_ADMIN ? PLOT_KEYS : PLOT_KEYS.filter(k => k !== 'userrgu');
 
     // Map each plot type to the backend endpoint it consumes. heatmap_elapsed
     // and heatmap_wait share /heatmap, so caching by endpoint dedups fetches.
@@ -495,16 +503,25 @@
       clusterrgu:      'rgu_by_cluster',
       density:         'density',
       metrictrend:     'metric_trend',
+      {% if is_admin %}
       userrgu:         'user_rgu',
+      {% endif %}
       jobtable:        'jobs',
     };
-    // The renderers expect data under historical keys (e.g. d.bar, d.userrgu);
+    // The renderers expect data under historical keys (e.g. d.bar, d.heatmap);
     // this maps the endpoint back to the renderer's key so we can hand off a
     // single-entry object: { [ENDPOINT_TO_KEY[ep]]: data }.
     const ENDPOINT_TO_KEY = {
-      data: 'bar', heatmap: 'heatmap',
-      histogram: 'histogram', density: 'density', user_rgu: 'userrgu', jobs: 'jobs',
-      rgu_by_cluster: 'clusterrgu', metric_trend: 'metrictrend',
+      data: 'bar',
+      heatmap: 'heatmap',
+      histogram: 'histogram',
+      density: 'density',
+      {% if is_admin %}
+      user_rgu: 'userrgu',
+      {% endif %}
+      jobs: 'jobs',
+      rgu_by_cluster: 'clusterrgu',
+      metric_trend: 'metrictrend',
     };
 
     // Job-table pagination/sort. Used both for the initial shared fetch
@@ -553,7 +570,11 @@
     // when no RGU tile is shown (avoids a stray fetch). Density is *not* here:
     // its weights feed a normalized density, which is invariant under a
     // uniform rescale.
+    {% if is_admin %}
     const RGU_UNIT_TILES = new Set(['clusterrgu', 'histogram', 'userrgu', 'jobtable']);
+    {% else %}
+    const RGU_UNIT_TILES = new Set(['clusterrgu', 'histogram', 'jobtable']);
+    {% endif %}
     async function rerenderRguTiles() {
       if (!currentParams) return;
       const tiles = [];
@@ -658,8 +679,10 @@
     if (_saved.rgu_type)  document.getElementById('rgu-type').value  = _saved.rgu_type;
     if (_saved.rgu_unit)  document.getElementById('rgu-unit').value  = _saved.rgu_unit;
     if (_saved.metric)    document.getElementById('metric-select').value = _saved.metric;
+    {% if is_admin %}
     if (_saved.cluster_user !== undefined)
       document.getElementById('cluster_user').value = _saved.cluster_user;
+    {% endif %}
 
     // ── Tile layout ──────────────────────────────────────────────────────────
     // tileLayout: string[][]  e.g. [['bar','clusterrgu'],['histogram']]
@@ -692,6 +715,7 @@
     // itself is loaded near the top of the script (it is read earlier — by
     // JOBTABLE_DEFAULTS and the filter-bar restore).
     let metricScatterMetric2 = _saved.metricScatterMetric2 ?? 'gpu_utilization';
+    {% if is_admin %}
     // Top-N users shown by the RGU-by-user tile. Module-scoped like the heatmap's
     // secondary so it survives Updates; applied via the tile's OK button — a pure
     // re-slice/re-render of the already-fetched rows, never a refetch.
@@ -700,6 +724,7 @@
     // already-fetched rows — never triggers a refetch.
     // Values: 'rgu_requested' | 'rgu_used' | 'rgu_unused' | 'rgu_unmeasured'
     let userRguSortBy = _saved.userRguSortBy || 'rgu_requested';
+    {% endif %}
     // Job-table column keys hidden via the per-table column picker. Global (a
     // display preference shared by every job-table tile) so it survives
     // pagination, sorting and Update. Empty = all columns visible.
@@ -717,7 +742,11 @@
     // Tiles shown on a fresh load (no ?plots= param): RGU-by-cluster and metric
     // trend side by side on the first row, the job table on its own row below.
     // Copied per call so mutating tileLayout never corrupts this template.
+    {% if is_admin %}
     const DEFAULT_LAYOUT = [['clusterrgu', 'jobtable'], ['metrictrend', 'userrgu']];
+    {% else %}
+    const DEFAULT_LAYOUT = [['clusterrgu', 'jobtable'], ['metrictrend']];
+    {% endif %}
     function paramToLayout(s) {
       if (!s) return DEFAULT_LAYOUT.map(r => [...r]);
       const rows = s.split(';')
@@ -744,7 +773,7 @@
       const menu = document.createElement('div');
       menu.className = 'plot-picker';
       _picker = menu;
-      visiblePlotKeys().forEach(key => {
+      PLOT_KEYS.forEach(key => {
         const item = document.createElement('div');
         item.className = 'plot-picker-item';
         item.textContent = PLOT_NAMES[key];
@@ -773,7 +802,7 @@
       const ph = document.createElement('option');
       ph.value = ''; ph.textContent = '＋ add plot';
       sel.appendChild(ph);
-      visiblePlotKeys().forEach(key => {
+      PLOT_KEYS.forEach(key => {
         const opt = document.createElement('option');
         opt.value = key; opt.textContent = PLOT_NAMES[key];
         sel.appendChild(opt);
@@ -804,7 +833,7 @@
           actions.style.cssText = 'display:flex;align-items:center;gap:4px';
           const changeSel = document.createElement('select');
           changeSel.className = 'tile-change-sel';
-          visiblePlotKeys().forEach(key => {
+          PLOT_KEYS.forEach(key => {
             const opt = document.createElement('option');
             opt.value = key; opt.textContent = PLOT_NAMES[key];
             if (key === plotType) opt.selected = true;
@@ -889,9 +918,14 @@
       const fn = { bar: renderBar,
                    heatmap_elapsed: renderHeatmapElapsed,
                    heatmap_wait: renderHeatmapWait,
-                   histogram: renderHistogram, density: renderDensity,
-                   metricscatter: renderMetricScatter, userrgu: renderUserRgu,
-                   jobtable: renderJobTable, clusterrgu: renderClusterRgu,
+                   histogram: renderHistogram,
+                   density: renderDensity,
+                   metricscatter: renderMetricScatter,
+                   {% if is_admin %}
+                   userrgu: renderUserRgu,
+                   {% endif %}
+                   jobtable: renderJobTable,
+                   clusterrgu: renderClusterRgu,
                    metrictrend: renderMetricTrend }[type];
       if (fn) fn(id, d);
     }
@@ -1313,6 +1347,7 @@
       draw();
     }
 
+    {% if is_admin %}
     function renderUserRgu(id, d) {
       const el = document.getElementById(id);
       if (!el) return;
@@ -1454,6 +1489,7 @@
       }
       draw();
     }
+    {% endif %}
 
     function renderJobTable(id, d) {
       const el = document.getElementById(id);
@@ -1915,7 +1951,7 @@
     // ── Job states selector ──────────────────────────────────────────────────
     const jsBtn = document.getElementById('js-btn');
     const jsPanel = document.getElementById('js-panel');
-    const JOB_STATES = __JOB_STATES__;  // injected by the backend from the SlurmState enum
+    const JOB_STATES = {{ job_states | tojson }};  // injected by the backend from the SlurmState enum
 
     function jsSelected() {
       return [...jsPanel.querySelectorAll('input:checked')].map(c => c.value);
@@ -2049,7 +2085,9 @@
         start, end,
         period:        periodValue(),
         clusters:      clSelected(),
+        {% if is_admin %}
         cluster_user:  document.getElementById('cluster_user').value.trim(),
+        {% endif %}
         metric:        document.getElementById('metric-select').value,
         focus_start:   focusStart,
         focus_end:     focusEnd,
@@ -2081,8 +2119,11 @@
     // page/sort — withClustersAndStates(jobsURL(...)) — without disturbing the
     // shared endpoint cache used by the other tiles.
     function jobsURL(p, { offset, limit, sortBy, sortDir }) {
-      const base = { start: p.start, end: p.end,
-                     ...(p.cluster_user ? { cluster_user: p.cluster_user } : {}) };
+      {% if is_admin %}
+      const base = { start: p.start, end: p.end, ...(p.cluster_user ? { cluster_user: p.cluster_user } : {}) };
+      {% else %}
+      const base = { start: p.start, end: p.end };
+      {% endif %}
       const focusParams = {
         ...(p.focus_start ? { focus_start: p.focus_start } : {}),
         ...(p.focus_end   ? { focus_end:   p.focus_end   } : {}),
@@ -2102,13 +2143,18 @@
       };
       return withClustersAndStates('/dash/metrics/metric_comparison?' + new URLSearchParams({
         start: p.start, end: p.end, metric: p.metric, metric2,
+        {% if is_admin %}
         ...(p.cluster_user ? { cluster_user: p.cluster_user } : {}),
+        {% endif %}
         ...focusParams, rgu_type: p.rgu_type }), p);
     }
 
     function endpointURLBase(ep, p) {
-      const base = { start: p.start, end: p.end,
-                     ...(p.cluster_user ? { cluster_user: p.cluster_user } : {}) };
+      {% if is_admin %}
+      const base = { start: p.start, end: p.end, ...(p.cluster_user ? { cluster_user: p.cluster_user } : {}) };
+      {% else %}
+      const base = { start: p.start, end: p.end };
+      {% endif %}
       const focusParams = {
         ...(p.focus_start ? { focus_start: p.focus_start } : {}),
         ...(p.focus_end   ? { focus_end:   p.focus_end   } : {}),
@@ -2119,9 +2165,13 @@
         case 'heatmap':   return '/dash/metrics/job_times_vs_limit?' + new URLSearchParams({ ...base, ...focusParams });
         case 'histogram': return '/dash/metrics/rgu_usage?' + new URLSearchParams({ ...base, period: p.period, metric: p.metric, rgu_type: p.rgu_type });
         case 'density':   return '/dash/metrics/metric_distribution?' + new URLSearchParams({ ...densityParams, ...focusParams, rgu_type: p.rgu_type });
-        case 'user_rgu':  return '/dash/metrics/rgu_by_user?' + new URLSearchParams({ start: p.start, end: p.end, metric: p.metric, ...focusParams, rgu_type: p.rgu_type });
         case 'jobs':      return jobsURL(p, JOBTABLE_DEFAULTS);
+        {% if is_admin %}
+        case 'user_rgu':  return '/dash/metrics/rgu_by_user?' + new URLSearchParams({ start: p.start, end: p.end, metric: p.metric, ...focusParams, rgu_type: p.rgu_type });
         case 'rgu_by_cluster': return '/dash/metrics/rgu_by_cluster?' + new URLSearchParams({ start: p.start, end: p.end, period: p.period, ...(p.cluster_user ? { cluster_user: p.cluster_user } : {}), rgu_type: p.rgu_type });
+        {% else %}
+        case 'rgu_by_cluster': return '/dash/metrics/rgu_by_cluster?' + new URLSearchParams({ start: p.start, end: p.end, period: p.period, rgu_type: p.rgu_type });
+        {% endif %}
         case 'metric_trend': return '/dash/metrics/metric_trend?' + new URLSearchParams({ ...base, period: p.period, metric: p.metric });
       }
       throw new Error('Unknown endpoint: ' + ep);
@@ -2201,7 +2251,7 @@
       }
     }
 
-    // Update button + click handlers (focus, user filter) call this. Captures
+    // Update button + click handlers call this. Captures
     // the current form values, invalidates the endpoint cache, and re-renders
     // every tile. Each tile then independently fetches what it needs.
     async function loadCharts() {
@@ -2238,19 +2288,6 @@
     if (_saved.focusEnd)   focusEnd   = _saved.focusEnd;
     updateFocusLabel();
 
-    // Role-aware UI: a non-admin is scoped to their own jobs (backend-enforced),
-    // so hide the user filter and drop the RGU-by-user tiles. IS_ADMIN is injected
-    // by metrics_homepage, so this runs BEFORE the first render (no flash, no
-    // round-trip); no-op for admins / auth off.
-    if (!IS_ADMIN) {
-      const uc = document.getElementById('user-ctrl');
-      if (uc) uc.style.display = 'none';
-      document.getElementById('cluster_user').value = '';
-      tileLayout = tileLayout
-        .map(row => row.filter(t => t !== 'userrgu'))
-        .filter(row => row.length);
-      syncUrl();
-    }
     renderLayout();
   </script>
 </body>

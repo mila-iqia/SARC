@@ -1,5 +1,3 @@
-import html
-import json
 import math
 import re
 from collections.abc import Callable, Generator
@@ -8,8 +6,9 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
 from sqlalchemy import literal_column, nulls_last
 from sqlalchemy.orm import aliased
 from sqlmodel import Session, and_, case, col, func, select
@@ -360,18 +359,27 @@ def _rgu_source(
     )
 
 
+_TEMPLATES = Jinja2Templates(directory=Path(__file__).parent)
+
+
 @router.get("/metrics", response_class=HTMLResponse)
-def metrics_homepage(req: Requestor = Depends(requestor)):
+def metrics_homepage(request: Request, req: Requestor = Depends(requestor)):
     """Serve the dashboard's single-page HTML UI; its charts call the JSON
-    endpoints below. ``is_admin`` is injected per-request so the page adapts
-    immediately (hide the user filter / RGU-by-user for a non-admin) with no
-    round-trip; the backend scopes the data regardless. The connected email is
-    shown in the title/header, coloured by role (admin red, user grey)."""
-    email = html.escape(req.email, quote=False)
-    return (
-        _HTML.replace("__IS_ADMIN__", "true" if req.is_admin else "false")
-        .replace("__USER_ROLE_CLASS__", "admin" if req.is_admin else "user")
-        .replace("__USER_EMAIL__", email)
+    endpoints below. Rendered with Jinja2: ``is_admin`` adapts the page
+    per-request (hide the user filter / RGU-by-user for a non-admin) with no
+    round-trip — the backend scopes the data regardless — and the connected
+    email is shown in the title/header, coloured by role (admin red, user grey).
+    Jinja auto-escapes ``user_email`` in HTML; ``| tojson`` makes the
+    booleans/lists safe to inline in <script>."""
+    return _TEMPLATES.TemplateResponse(
+        request,
+        "metrics.html",
+        {
+            "is_admin": req.is_admin,
+            "user_email": req.email,
+            "default_period": _DEFAULT_PERIOD,
+            "job_states": [s.value for s in SlurmState],
+        },
     )
 
 
@@ -1261,12 +1269,3 @@ def metrics_jobs(
         )
 
     return {"total": total, "jobs": jobs}
-
-
-_html_path = Path(__file__).parent / "metrics.html"
-
-_HTML = (
-    _html_path.read_text(encoding="utf-8")
-    .replace("__DEFAULT_PERIOD__", _DEFAULT_PERIOD)
-    .replace("__JOB_STATES__", json.dumps([s.value for s in SlurmState]))
-)
