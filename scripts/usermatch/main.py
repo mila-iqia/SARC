@@ -18,7 +18,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from sqlmodel import select
 
-from sarc.config import config, using_sarc_mode
+from sarc.config import config
 from sarc.db.users import UserDB
 
 # ---------------------------------------------------------------------------
@@ -616,18 +616,17 @@ function badge(p, mid) {
 
 def load_users() -> list[dict]:
     """Fetch all users from the database with their matching IDs."""
-    with using_sarc_mode("scraping"):
-        with config().db.session() as sess:
-            db_users = sess.exec(select(UserDB)).all()
-            return [
-                {
-                    "id": u.id,
-                    "display_name": u.display_name,
-                    "email": u.email,
-                    "matching_ids": dict(u.matching_ids),
-                }
-                for u in db_users
-            ]
+    with config.db.session() as sess:
+        db_users = sess.exec(select(UserDB)).all()
+        return [
+            {
+                "id": u.id,
+                "display_name": u.display_name,
+                "email": u.email,
+                "matching_ids": dict(u.matching_ids),
+            }
+            for u in db_users
+        ]
 
 
 # ---------------------------------------------------------------------------
