@@ -298,8 +298,7 @@ def test_now_clipped_to_midnight(notify_db, cli_main, monkeypatch, capsys):
 
 def test_enabled_false_returns_zero_without_sending(cli_main, monkeypatch):
     slack_cls = MagicMock()
-    email_cls = MagicMock()
-    _patch_senders(monkeypatch, slack_cls, email_cls)
+    _patch_senders(monkeypatch, slack_cls)
     cfg = {**_NOTIFY_CFG, "enabled": False, "send_dms": True}
     with gifnoc.overlay({"sarc.notifications": cfg}):
         rc = cli_main(
@@ -315,7 +314,6 @@ def test_enabled_false_returns_zero_without_sending(cli_main, monkeypatch):
         )
     assert rc == 0
     slack_cls.assert_not_called()
-    email_cls.assert_not_called()
 
 
 # ── missing config ────────────────────────────────────────────────────────────
@@ -365,22 +363,13 @@ def _mock_slack(dm_status=SendStatus.OK, channel_status=SendStatus.OK):
     return cls, inst
 
 
-def _mock_email(status=SendStatus.OK):
-    inst = MagicMock()
-    inst.send_plaintext.return_value = SendResult(status)
-    cls = MagicMock(return_value=inst)
-    return cls, inst
-
-
-def _patch_senders(monkeypatch, slack_cls, email_cls):
+def _patch_senders(monkeypatch, slack_cls):
     monkeypatch.setattr("sarc.cli.notify.underusage.SlackClient", slack_cls)
-    monkeypatch.setattr("sarc.cli.notify.underusage.EmailClient", email_cls)
 
 
 def test_dry_run_does_not_instantiate_slack_or_email(notify_db, cli_main, monkeypatch):
     slack_cls = MagicMock()
-    email_cls = MagicMock()
-    _patch_senders(monkeypatch, slack_cls, email_cls)
+    _patch_senders(monkeypatch, slack_cls)
     cfg = {**_NOTIFY_CFG, "send_dms": True}
     with gifnoc.overlay({"sarc.notifications": cfg}):
         rc = cli_main(
@@ -388,13 +377,11 @@ def test_dry_run_does_not_instantiate_slack_or_email(notify_db, cli_main, monkey
         )
     assert rc == 0
     slack_cls.assert_not_called()
-    email_cls.assert_not_called()
 
 
 def test_send_even_week_posts_digest_and_dms(notify_db, cli_main, monkeypatch):
     slack_cls, slack_inst = _mock_slack()
-    email_cls, email_inst = _mock_email()
-    _patch_senders(monkeypatch, slack_cls, email_cls)
+    _patch_senders(monkeypatch, slack_cls)
     cfg = {**_NOTIFY_CFG, "send_dms": True}
     with gifnoc.overlay({"sarc.notifications": cfg}):
         rc = cli_main(
@@ -411,13 +398,11 @@ def test_send_even_week_posts_digest_and_dms(notify_db, cli_main, monkeypatch):
     assert rc == 0
     slack_inst.post_channel_file.assert_called_once()
     slack_inst.dm_user.assert_called_once()
-    email_inst.send_plaintext.assert_not_called()
 
 
 def test_send_odd_week_posts_digest_only(notify_db, cli_main, monkeypatch):
     slack_cls, slack_inst = _mock_slack()
-    email_cls, email_inst = _mock_email()
-    _patch_senders(monkeypatch, slack_cls, email_cls)
+    _patch_senders(monkeypatch, slack_cls)
     cfg = {**_NOTIFY_CFG, "send_dms": True}
     with gifnoc.overlay({"sarc.notifications": cfg}):
         rc = cli_main(
@@ -438,8 +423,7 @@ def test_send_odd_week_posts_digest_only(notify_db, cli_main, monkeypatch):
 
 def test_send_no_dms_flag_skips_dms(notify_db, cli_main, monkeypatch):
     slack_cls, slack_inst = _mock_slack()
-    email_cls, email_inst = _mock_email()
-    _patch_senders(monkeypatch, slack_cls, email_cls)
+    _patch_senders(monkeypatch, slack_cls)
     cfg = {**_NOTIFY_CFG, "send_dms": True}
     with gifnoc.overlay({"sarc.notifications": cfg}):
         rc = cli_main(
@@ -461,8 +445,7 @@ def test_send_no_dms_flag_skips_dms(notify_db, cli_main, monkeypatch):
 
 def test_send_dms_false_suppresses_dms(notify_db, cli_main, monkeypatch):
     slack_cls, slack_inst = _mock_slack()
-    email_cls, email_inst = _mock_email()
-    _patch_senders(monkeypatch, slack_cls, email_cls)
+    _patch_senders(monkeypatch, slack_cls)
     # send_dms defaults to False in _NOTIFY_CFG
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         rc = cli_main(
@@ -481,36 +464,10 @@ def test_send_dms_false_suppresses_dms(notify_db, cli_main, monkeypatch):
     slack_inst.dm_user.assert_not_called()
 
 
-def test_send_slack_not_found_uses_email_fallback(
-    notify_db, cli_main, monkeypatch, capsys
-):
-    slack_cls, slack_inst = _mock_slack(dm_status=SendStatus.USER_NOT_FOUND)
-    email_cls, email_inst = _mock_email(status=SendStatus.OK)
-    _patch_senders(monkeypatch, slack_cls, email_cls)
-    cfg = {**_NOTIFY_CFG, "send_dms": True}
-    with gifnoc.overlay({"sarc.notifications": cfg}):
-        rc = cli_main(
-            [
-                "notify",
-                "underusage",
-                "--window-weeks",
-                "4",
-                "--as-of",
-                _EVEN_WEEK,
-                "--send",
-            ]
-        )
-    assert rc == 0
-    slack_inst.dm_user.assert_called_once()
-    email_inst.send_plaintext.assert_called_once()
-    assert "email_sent=1" in capsys.readouterr().out
-
-
 def test_send_dm_failure_surfaced_in_footer(notify_db, cli_main, monkeypatch, capsys):
     slack_cls, slack_inst = _mock_slack()
     slack_inst.dm_user.return_value = SendResult(SendStatus.FAILED, "channel_not_found")
-    email_cls, email_inst = _mock_email()
-    _patch_senders(monkeypatch, slack_cls, email_cls)
+    _patch_senders(monkeypatch, slack_cls)
     cfg = {**_NOTIFY_CFG, "send_dms": True}
     with gifnoc.overlay({"sarc.notifications": cfg}):
         rc = cli_main(
@@ -633,8 +590,7 @@ def test_non_usage_report_week_no_report_section(usage_report_db, cli_main, caps
 def test_dry_run_usage_report_week_no_sends(usage_report_db, cli_main, monkeypatch):
     """Dry-run never instantiates senders, even on a usage-report week."""
     slack_cls = MagicMock()
-    email_cls = MagicMock()
-    _patch_senders(monkeypatch, slack_cls, email_cls)
+    _patch_senders(monkeypatch, slack_cls)
     cfg = {**_NOTIFY_CFG, "send_dms": True, "send_usage_report": True}
     with gifnoc.overlay({"sarc.notifications": cfg}):
         rc = cli_main(
@@ -649,7 +605,6 @@ def test_dry_run_usage_report_week_no_sends(usage_report_db, cli_main, monkeypat
         )
     assert rc == 0
     slack_cls.assert_not_called()
-    email_cls.assert_not_called()
 
 
 def test_send_usage_report_disabled_no_report_sends(
@@ -657,8 +612,7 @@ def test_send_usage_report_disabled_no_report_sends(
 ):
     """send_usage_report=False (default) → no usage report DMs even on a report week."""
     slack_cls, slack_inst = _mock_slack()
-    email_cls, email_inst = _mock_email()
-    _patch_senders(monkeypatch, slack_cls, email_cls)
+    _patch_senders(monkeypatch, slack_cls)
     # _NOTIFY_CFG has send_dms=False and no send_usage_report key → defaults to False
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         rc = cli_main(
@@ -686,8 +640,7 @@ def test_send_usage_report_enabled_sends_report_to_non_underusers(
 ):
     """send_usage_report=True + --send + wk%4==0 → beaubonhomme gets the report."""
     slack_cls, slack_inst = _mock_slack()
-    email_cls, email_inst = _mock_email()
-    _patch_senders(monkeypatch, slack_cls, email_cls)
+    _patch_senders(monkeypatch, slack_cls)
     cfg = {**_NOTIFY_CFG, "send_usage_report": True}
     with gifnoc.overlay({"sarc.notifications": cfg}):
         rc = cli_main(
@@ -716,8 +669,7 @@ def test_send_usage_report_non_report_week_no_reports(
 ):
     """Even week but not wk%4==0 → no usage report sends regardless of config."""
     slack_cls, slack_inst = _mock_slack()
-    email_cls, _email_inst = _mock_email()
-    _patch_senders(monkeypatch, slack_cls, email_cls)
+    _patch_senders(monkeypatch, slack_cls)
     cfg = {**_NOTIFY_CFG, "send_usage_report": True}
     with gifnoc.overlay({"sarc.notifications": cfg}):
         rc = cli_main(
@@ -769,8 +721,7 @@ def test_no_dms_flag_suppresses_usage_report_sends(
 ):
     """--no-dms suppresses usage-report DMs and records no_dms_flag as the skip reason."""
     slack_cls, slack_inst = _mock_slack()
-    email_cls, email_inst = _mock_email()
-    _patch_senders(monkeypatch, slack_cls, email_cls)
+    _patch_senders(monkeypatch, slack_cls)
     cfg = {**_NOTIFY_CFG, "send_dms": True, "send_usage_report": True}
     with gifnoc.overlay({"sarc.notifications": cfg}):
         rc = cli_main(

@@ -9,7 +9,6 @@ import gifnoc
 import simple_parsing
 
 from sarc.config import USAGE_CYCLE_LENGTH_WEEKS, config
-from sarc.notifications.email import EmailClient
 from sarc.notifications.messages import (
     build_admin_digest,
     build_usage_report,
@@ -32,14 +31,13 @@ logger = logging.getLogger(__name__)
 class _DeliveryResult:
     email: str
     display_name: str
-    status: str  # "dm_sent" | "email_sent" | "skipped" | "failed"
+    status: str  # "dm_sent" | "skipped" | "failed"
     detail: str = field(default="")
 
 
 def _delivery_counts(results: list[_DeliveryResult]) -> dict[str, int]:
     return {
         "dm_sent": sum(1 for r in results if r.status == "dm_sent"),
-        "email_sent": sum(1 for r in results if r.status == "email_sent"),
         "skipped": sum(1 for r in results if r.status == "skipped"),
         "failed": sum(1 for r in results if r.status == "failed"),
     }
@@ -53,7 +51,6 @@ def _build_delivery_footer(
         f"--- {title} ---",
         (
             f"{count_label}={count}  dm_sent={counts['dm_sent']}"
-            f"  email_sent={counts['email_sent']}"
             f"  skipped={counts['skipped']}  failed={counts['failed']}"
         ),
     ]
@@ -65,12 +62,7 @@ def _build_delivery_footer(
 
 
 def _deliver(
-    rows: list,
-    build_fn: Callable,
-    subject: str,
-    *,
-    slack: SlackClient,
-    email: EmailClient,
+    rows: list, build_fn: Callable, *, slack: SlackClient
 ) -> list[_DeliveryResult]:
     results: list[_DeliveryResult] = []
     for row in rows:
@@ -78,18 +70,6 @@ def _deliver(
         slack_res = slack.dm_user(row.email, text, preformatted=True)
         if slack_res.status == SendStatus.OK:
             results.append(_DeliveryResult(row.email, row.display_name, "dm_sent"))
-        elif slack_res.status == SendStatus.USER_NOT_FOUND:
-            email_res = email.send_plaintext(row.email, subject, text)
-            if email_res.status == SendStatus.OK:
-                results.append(
-                    _DeliveryResult(row.email, row.display_name, "email_sent")
-                )
-            else:
-                results.append(
-                    _DeliveryResult(
-                        row.email, row.display_name, "failed", email_res.detail
-                    )
-                )
         else:
             results.append(
                 _DeliveryResult(row.email, row.display_name, "failed", slack_res.detail)
@@ -338,7 +318,6 @@ class UnderusageNotifyCommand:
 
         # === SEND MODE ===
         slack_client = SlackClient(ncfg.slack.token)
-        email_client = EmailClient(ncfg.email)
 
         delivery_results: list[_DeliveryResult] = []
 
@@ -351,9 +330,7 @@ class UnderusageNotifyCommand:
                     dashboard_url=ncfg.dashboard_url,
                     help_section=ncfg.help_section,
                 ),
-                f"GPU underusage alert ({period})",
                 slack=slack_client,
-                email=email_client,
             )
         elif rows:
             if not dms_eligible:
@@ -377,9 +354,7 @@ class UnderusageNotifyCommand:
                     dashboard_url=ncfg.dashboard_url,
                     help_section=ncfg.help_section,
                 ),
-                f"GPU usage report ({period})",
                 slack=slack_client,
-                email=email_client,
             )
         elif usage_report_eligible and report_recipients:
             reason = "no_dms_flag" if self.no_dms else "send_usage_report_disabled"
@@ -419,16 +394,14 @@ class UnderusageNotifyCommand:
         counts = _delivery_counts(delivery_results)
         report_counts = _delivery_counts(report_results)
         logger.info(
-            "Underusage notification run: flagged=%d dm_sent=%d email_sent=%d skipped=%d failed=%d"
-            " | report_eligible=%s report_sent=%d report_email=%d report_skipped=%d report_failed=%d",
+            "Underusage notification run: flagged=%d dm_sent=%d skipped=%d failed=%d"
+            " | report_eligible=%s report_sent=%d report_skipped=%d report_failed=%d",
             len(rows),
             counts["dm_sent"],
-            counts["email_sent"],
             counts["skipped"],
             counts["failed"],
             usage_report_eligible,
             report_counts["dm_sent"],
-            report_counts["email_sent"],
             report_counts["skipped"],
             report_counts["failed"],
         )
