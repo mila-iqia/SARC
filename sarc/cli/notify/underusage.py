@@ -225,7 +225,6 @@ class UnderusageNotifyCommand:
         _userfacing_print(file=sys.stderr)
 
         clusters = ncfg.clusters or None
-        threshold = ncfg.waste_rescale_threshold
 
         rows = get_underusers(
             start,
@@ -236,12 +235,10 @@ class UnderusageNotifyCommand:
             resource=self.resource,
             exclude_zero_usage=True,
             clusters=clusters,
-            threshold=threshold,
+            waste_rescale_threshold=ncfg.waste_rescale_threshold,
         )
         historical = get_historical_stats(
             end,
-            min_ratio=min_ratio,
-            min_rgu_hours=min_rgu_hours,
             resource=self.resource,
             months=ncfg.historical_months,
             exclude_zero_usage=True,
@@ -258,7 +255,7 @@ class UnderusageNotifyCommand:
             recurrence_active_cycles=ncfg.recurrence_active_cycles,
             cycle_length_weeks=USAGE_CYCLE_LENGTH_WEEKS,
             clusters=clusters,
-            threshold=threshold,
+            waste_rescale_threshold=ncfg.waste_rescale_threshold,
             personalized_action_min_waste_rgu_hours=ncfg.personalized_action_min_waste_rgu_hours,
         )
 

@@ -845,7 +845,7 @@ def test_wasted_6w_uses_scaled_waste(recurring_db):
             min_ratio=_MIN_RATIO,
             min_rgu_hours=_MIN_RGU_HOURS,
             cluster_share_threshold=1.1,
-            threshold=0.05,
+            waste_rescale_threshold=0.05,
         )
     emails = {r.email for rows in result.values() for r in rows}
     assert "petitbonhomme@mila.quebec" not in emails

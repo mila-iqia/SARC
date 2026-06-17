@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
+from functools import cached_property
 
 from sqlalchemy.orm import aliased
 from sqlmodel import Session, and_, case, col, func, select
@@ -10,17 +11,18 @@ from sarc.db.job_series import JobSeriesDB
 
 
 @dataclass
-class ClusterBreakdown:
+class UsageClusterBreakdown:
     cluster: str
     # RGU-hours requested for this cluster in the window.
     rgu_hours: float
-    # Scaled RGU-hours wasted (rgu_hours - scaled_used).
-    wasted: float
-    # Same as rgu_hours; kept as a separate field for clarity in waste_ratio
-    # computations (wasted / requested).
-    requested: float
+    rgu_hours_used: float
     # Unscaled RGU-hours wasted (rgu_hours - true_used).
     true_wasted: float = 0.0
+
+    # Scaled RGU-hours wasted (rgu_hours - scaled_used).
+    @cached_property
+    def wasted(self) -> float:
+        return self.rgu_hours - self.rgu_hours_used
 
 
 @dataclass
@@ -53,19 +55,12 @@ class UnderuserRow:
     waste_ratio: float
     # avg_utilization = 1 - waste_ratio  (= rgu_used / rgu_requested)
     avg_utilization: float
-    # Unscaled reference values (threshold=1.0 → equal to wasted/waste_ratio).
+    # Unscaled reference values (waste_rescale_threshold=1.0 → equal to wasted/waste_ratio).
     true_wasted: float = 0.0
     true_waste_ratio: float = 0.0
-    by_cluster: list[ClusterBreakdown] = field(default_factory=list)
+    by_cluster: list[UsageClusterBreakdown] = field(default_factory=list)
     # Top-N GPU jobs by RGU-hours unused, descending.
     top_jobs: list[UsageJob] = field(default_factory=list)
-
-
-@dataclass
-class UsageClusterBreakdown:
-    cluster: str
-    rgu_hours_requested: float
-    rgu_hours_used: float
 
 
 @dataclass
@@ -73,7 +68,7 @@ class UsageRow:
     email: str
     display_name: str
     user_id: int
-    rgu_hours_requested: float
+    rgu_hours: float
     rgu_hours_used: float
     avg_utilization: float
     by_cluster: list[UsageClusterBreakdown] = field(default_factory=list)
@@ -103,14 +98,14 @@ class RecurringUserRow:
     pa_flags: list[bool] = field(default_factory=list)
 
 
-def _rgu_exprs(threshold: float = 1.0):
+def _rgu_exprs(waste_rescale_threshold: float = 1.0):
     """Return (util_alias, m_mean, rgu_h_expr, true_used_expr, scaled_used_expr).
 
     true_used_expr   = rgu_h * m, or rgu_h (fully used, zero waste) when m is
                        NaN/NULL.
-    scaled_used_expr = LEAST(rgu_h, rgu_h * m / threshold), or rgu_h (fully
-                       used, zero waste) when m is NaN/NULL. At threshold=1.0,
-                       scaled == true (identity).
+    scaled_used_expr = LEAST(rgu_h, rgu_h * m / waste_rescale_threshold), or
+                       rgu_h (fully used, zero waste) when m is NaN/NULL. At
+                       waste_rescale_threshold=1.0, scaled == true (identity).
 
     The `m == m` NaN idiom (NaN != NaN in SQL) routes both SQL NULL (LEFT-JOIN
     miss) and NaN to the else branch, treating jobs with no recorded utilization
@@ -124,7 +119,10 @@ def _rgu_exprs(threshold: float = 1.0):
         else_=rgu_h_expr,
     )
     scaled_used_expr = case(
-        (m_mean == m_mean, func.least(rgu_h_expr, rgu_h_expr * m_mean / threshold)),  # noqa: PLR0124
+        (
+            m_mean == m_mean,  # noqa: PLR0124
+            func.least(rgu_h_expr, rgu_h_expr * m_mean / waste_rescale_threshold),
+        ),
         else_=rgu_h_expr,
     )
     return util_alias, m_mean, rgu_h_expr, true_used_expr, scaled_used_expr
@@ -155,6 +153,7 @@ def _with_rgu_window(
 
 
 def _split_waste(row) -> tuple[float, float, float]:
+    """Return (rgu_h, rgu_used_h, rgu_h - rgu_used_h)."""
     rgu_h = float(row.sum_rgu_hours or 0.0)
     rgu_used_h = float(row.sum_rgu_used or 0.0)
     return rgu_h, rgu_used_h, rgu_h - rgu_used_h
@@ -170,13 +169,15 @@ def get_underusers(
     resource: str = "gpu",
     exclude_zero_usage: bool = False,
     clusters: list[str] | None = None,
-    threshold: float = 1.0,
+    waste_rescale_threshold: float = 1.0,
 ) -> list[UnderuserRow]:
     if resource != "gpu":
         raise ValueError(f"Unsupported resource: {resource!r}")
 
     with config().db.session() as session:
-        util, _, rgu_h_expr, true_used_expr, scaled_used_expr = _rgu_exprs(threshold)
+        util, _, rgu_h_expr, true_used_expr, scaled_used_expr = _rgu_exprs(
+            waste_rescale_threshold
+        )
         stmt = _with_rgu_window(
             select(
                 JobSeriesDB.sarc_user_id,
@@ -191,7 +192,7 @@ def get_underusers(
             start,
             end,
             exclude_zero_usage=exclude_zero_usage,
-            rgu_used_expr=true_used_expr,
+            rgu_used_expr=rgu_h_expr,
             clusters=clusters,
         ).group_by(
             JobSeriesDB.sarc_user_id,
@@ -210,19 +211,21 @@ def get_underusers(
                     "display_name": row.display_name,
                     "clusters": [],
                 }
-            rgu_h, _, scaled_wasted_h = _split_waste(row)
+            rgu_h, rgu_used_h, _ = _split_waste(row)
             true_used_h = float(row.sum_rgu_true_used or 0.0)
             true_wasted_h = rgu_h - true_used_h
             user_data[uid]["clusters"].append(
-                ClusterBreakdown(
+                UsageClusterBreakdown(
                     cluster=row.cluster_name or "unknown",
                     rgu_hours=rgu_h,
-                    wasted=scaled_wasted_h,
+                    rgu_hours_used=rgu_used_h,
                     true_wasted=true_wasted_h,
-                    requested=rgu_h,
                 )
             )
 
+        # Identify users who meet both threshold conditions: their cross-cluster
+        # aggregated waste ratio and total wasted RGU-hours exceed `min_ratio`
+        # and `min_rgu_hours` respectively.
         underuser_ids: list[int] = []
         for uid, u in user_data.items():
             breakdowns = u["clusters"]
@@ -231,17 +234,18 @@ def get_underusers(
             u["total_rgu_h"] = total_rgu_h
             u["total_wasted"] = total_wasted
             u["total_true_wasted"] = sum(c.true_wasted for c in breakdowns)
-            if total_rgu_h <= 0:
-                continue
             waste_ratio = total_wasted / total_rgu_h
             u["waste_ratio"] = waste_ratio
             if waste_ratio >= min_ratio and total_wasted >= min_rgu_hours:
                 underuser_ids.append(uid)
 
-        # Per-job data for the identified underusers — same RGU × utilisation pattern.
+        # Per-job data for the identified underusers — same RGU × utilisation
+        # pattern.
         jobs_by_user: dict[int, list[UsageJob]] = {uid: [] for uid in underuser_ids}
         if underuser_ids:
-            util, m_mean, rgu_h_expr, _, scaled_used_expr = _rgu_exprs(threshold)
+            util, m_mean, rgu_h_expr, _, scaled_used_expr = _rgu_exprs(
+                waste_rescale_threshold
+            )
             job_rows = session.exec(
                 _with_rgu_window(
                     select(
@@ -264,19 +268,18 @@ def get_underusers(
                     # The underusers were already filtered by the aggregated
                     # query above; no per-job filter is needed.
                     exclude_zero_usage=False,
-                    rgu_used_expr=scaled_used_expr,
+                    rgu_used_expr=rgu_h_expr,
                     clusters=clusters,
                 )
             ).all()
 
             for jr in job_rows:
+                uid = jr.sarc_user_id
                 rgu_h = float(jr.rgu_hours or 0.0)
                 scaled_used_h = float(jr.rgu_used or 0.0)
-                util_val = float(jr.util_mean) if jr.util_mean is not None else None
-                gpu_util = (
-                    min(1.0, util_val / threshold) if util_val is not None else 1.0
-                )
-                jobs_by_user[jr.sarc_user_id].append(
+                util_val = float(jr.util_mean) if jr.util_mean is not None else 1.0
+                gpu_util = min(1.0, util_val / waste_rescale_threshold)
+                jobs_by_user[uid].append(
                     UsageJob(
                         job_id=jr.job_db_id,
                         cluster=jr.cluster_name or "unknown",
@@ -336,7 +339,7 @@ def get_all_users_usage(
         raise ValueError(f"Unsupported resource: {resource!r}")
 
     with config().db.session() as session:
-        util, _, rgu_h_expr, true_used_expr, _ = _rgu_exprs()
+        util, _, rgu_h_expr, true_used_expr, scaled_used_expr = _rgu_exprs()
         stmt = _with_rgu_window(
             select(
                 JobSeriesDB.sarc_user_id,
@@ -344,13 +347,14 @@ def get_all_users_usage(
                 JobSeriesDB.display_name,
                 JobSeriesDB.cluster_name,
                 func.coalesce(func.sum(rgu_h_expr), 0).label("sum_rgu_hours"),
-                func.coalesce(func.sum(true_used_expr), 0).label("sum_rgu_used"),
+                func.coalesce(func.sum(true_used_expr), 0).label("sum_rgu_true_used"),
+                func.coalesce(func.sum(scaled_used_expr), 0).label("sum_rgu_used"),
             ),
             util,
             start,
             end,
             exclude_zero_usage=False,
-            rgu_used_expr=true_used_expr,
+            rgu_used_expr=rgu_h_expr,
             clusters=clusters,
         ).group_by(
             JobSeriesDB.sarc_user_id,
@@ -370,11 +374,14 @@ def get_all_users_usage(
                     "clusters": [],
                 }
             rgu_h, rgu_used_h, _ = _split_waste(row)
+            true_used_h = float(row.sum_rgu_true_used or 0.0)
+            true_wasted_h = rgu_h - true_used_h
             user_data[uid]["clusters"].append(
                 UsageClusterBreakdown(
                     cluster=row.cluster_name or "unknown",
-                    rgu_hours_requested=rgu_h,
+                    rgu_hours=rgu_h,
                     rgu_hours_used=rgu_used_h,
+                    true_wasted=true_wasted_h,
                 )
             )
 
@@ -398,7 +405,7 @@ def get_all_users_usage(
                     start,
                     end,
                     exclude_zero_usage=False,
-                    rgu_used_expr=true_used_expr,
+                    rgu_used_expr=rgu_h_expr,
                     clusters=clusters,
                 )
             ).all()
@@ -423,9 +430,9 @@ def get_all_users_usage(
     result = []
     for uid, u in user_data.items():
         breakdowns = u["clusters"]
-        total_requested = sum(c.rgu_hours_requested for c in breakdowns)
+        total_rgu_h = sum(c.rgu_hours for c in breakdowns)
         total_used = sum(c.rgu_hours_used for c in breakdowns)
-        if total_requested <= usage_report_min_rgu_hours:
+        if total_rgu_h <= usage_report_min_rgu_hours:
             continue
 
         by_cluster = sorted(breakdowns, key=lambda c: c.rgu_hours_used, reverse=True)
@@ -438,9 +445,9 @@ def get_all_users_usage(
                 email=u["email"],
                 display_name=u["display_name"],
                 user_id=uid,
-                rgu_hours_requested=total_requested,
+                rgu_hours=total_rgu_h,
                 rgu_hours_used=total_used,
-                avg_utilization=total_used / total_requested,
+                avg_utilization=total_used / total_rgu_h,
                 by_cluster=by_cluster,
                 top_jobs=top_jobs,
             )
@@ -449,14 +456,13 @@ def get_all_users_usage(
     return result
 
 
-# ── 6-month historical stats (Module C digest) ────────────────────────────────
+# ── 6-month historical stats ──
 
 
 @dataclass
 class MonthlyStats:
     label: str  # "YYYY-MM"
     avg_waste_ratio: float
-    above_threshold_count: int
 
 
 @dataclass
@@ -492,52 +498,42 @@ def _query_month_agg(
     start: datetime,
     end: datetime,
     *,
-    min_ratio: float,
-    min_rgu_hours: float,
     exclude_zero_usage: bool = False,
     clusters: list[str] | None = None,
 ) -> MonthlyStats:
     """Aggregate fleet-level waste stats for a single calendar month window."""
-    util, _, rgu_h_expr, true_used_expr, _ = _rgu_exprs()
+    util, _, rgu_h_expr, true_used_expr, scaled_used_expr = _rgu_exprs()
     stmt = _with_rgu_window(
         select(
             JobSeriesDB.sarc_user_id,
             func.coalesce(func.sum(rgu_h_expr), 0).label("sum_rgu_hours"),
-            func.coalesce(func.sum(true_used_expr), 0).label("sum_rgu_used"),
+            func.coalesce(func.sum(true_used_expr), 0).label("sum_rgu_true_used"),
+            func.coalesce(func.sum(scaled_used_expr), 0).label("sum_rgu_used"),
         ),
         util,
         start,
         end,
         exclude_zero_usage=exclude_zero_usage,
-        rgu_used_expr=true_used_expr,
+        rgu_used_expr=rgu_h_expr,
         clusters=clusters,
     ).group_by(JobSeriesDB.sarc_user_id)
     agg_rows = session.exec(stmt).all()
 
     total_rgu_h = 0.0
     total_wasted = 0.0
-    above_count = 0
     for row in agg_rows:
         rgu_h, _, wasted_h = _split_waste(row)
         total_rgu_h += rgu_h
         total_wasted += wasted_h
-        if rgu_h > 0:
-            ratio = wasted_h / rgu_h
-            if ratio >= min_ratio and wasted_h >= min_rgu_hours:
-                above_count += 1
 
     avg_ratio = total_wasted / total_rgu_h if total_rgu_h > 0 else 0.0
     label = start.strftime("%Y-%m")
-    return MonthlyStats(
-        label=label, avg_waste_ratio=avg_ratio, above_threshold_count=above_count
-    )
+    return MonthlyStats(label=label, avg_waste_ratio=avg_ratio)
 
 
 def get_historical_stats(
     end: datetime,
     *,
-    min_ratio: float,
-    min_rgu_hours: float,
     resource: str = "gpu",
     months: int = 6,
     exclude_zero_usage: bool = False,
@@ -546,9 +542,11 @@ def get_historical_stats(
     """Compute 6-month fleet-level waste trend and year-over-year comparison.
 
     *end* is typically the current run date (datetime.now(UTC)).
-    Returns monthly stats for the *months* complete calendar months before *end*,
-    plus the same window one year prior (yoy_months=None when no data exists).
+    Returns monthly stats for the *months* complete calendar months before
+    *end*, plus the same window one year prior (yoy_months=None when no data
+    exists).
     """
+    # TODO: it could be interesting to have the number of underusers per month
     if resource != "gpu":
         raise ValueError(f"Unsupported resource: {resource!r}")
 
@@ -564,38 +562,24 @@ def get_historical_stats(
     with config().db.session() as session:
         current_stats = [
             _query_month_agg(
-                session,
-                s,
-                e,
-                min_ratio=min_ratio,
-                min_rgu_hours=min_rgu_hours,
-                exclude_zero_usage=exclude_zero_usage,
-                clusters=clusters,
+                session, s, e, exclude_zero_usage=exclude_zero_usage, clusters=clusters
             )
             for s, e in current_buckets
         ]
         yoy_raw = [
             _query_month_agg(
-                session,
-                s,
-                e,
-                min_ratio=min_ratio,
-                min_rgu_hours=min_rgu_hours,
-                exclude_zero_usage=exclude_zero_usage,
-                clusters=clusters,
+                session, s, e, exclude_zero_usage=exclude_zero_usage, clusters=clusters
             )
             for s, e in yoy_buckets
         ]
 
-    has_yoy_data = any(
-        m.avg_waste_ratio > 0 or m.above_threshold_count > 0 for m in yoy_raw
-    )
+    has_yoy_data = any(m.avg_waste_ratio > 0 for m in yoy_raw)
     return HistoricalStats(
         months=current_stats, yoy_months=yoy_raw if has_yoy_data else None
     )
 
 
-# ── Recurring-underusers table (Module C digest) ─────────────────────────────
+# ── Recurring-underusers table ──
 
 
 def _even_week_anchor(end: datetime, *, cycle_length_weeks: int = 2) -> datetime:
@@ -639,20 +623,20 @@ def get_recurring_underusers(
     recurrence_display_cycles: int = 5,
     cycle_length_weeks: int = USAGE_CYCLE_LENGTH_WEEKS,
     clusters: list[str] | None = None,
-    threshold: float = 1.0,
+    waste_rescale_threshold: float = 1.0,
     personalized_action_min_waste_rgu_hours: float = 0.0,
 ) -> dict[str, list[RecurringUserRow]]:
     """Return per-cluster top wasters for the recurring-underusers digest table.
 
     Selection: for each cluster, rank users by wasted RGU-h over the rolling
-    *window_weeks* × 7-day window (ending at the aligned-week anchor) and include
-    the top users until their cumulative waste reaches >= *cluster_share_threshold*
-    of that cluster's total wasted RGU-h.
+    *window_weeks* × 7-day window (ending at the aligned-week anchor) and
+    include the top users until their cumulative waste reaches >=
+    *cluster_share_threshold* of that cluster's total wasted RGU-h.
 
     Cycle flags: for each of the *recurrence_display_cycles* most-recent
     *cycle_length_weeks*-week windows, call get_underusers to determine per-user
-    membership.  Cycles whose end date is in the future relative to *end* are
-    marked None (no data yet).  The "personalized action" flag is set iff a user
+    membership. Cycles whose end date is in the future relative to *end* are
+    marked None (no data yet). The "personalized action" flag is set iff a user
     was flagged True in all *recurrence_active_cycles* most-recent cycles.
 
     Returns a dict of cluster_name -> list[RecurringUserRow] (sorted desc by
@@ -667,7 +651,9 @@ def get_recurring_underusers(
 
     # ── Per-(user, cluster) aggregate over the full recurrence window ─────────
     with config().db.session() as session:
-        util, _, rgu_h_expr, true_used_expr, scaled_used_expr = _rgu_exprs(threshold)
+        util, _, rgu_h_expr, true_used_expr, scaled_used_expr = _rgu_exprs(
+            waste_rescale_threshold
+        )
         stmt = _with_rgu_window(
             select(
                 JobSeriesDB.sarc_user_id,
@@ -682,7 +668,7 @@ def get_recurring_underusers(
             agg_start,
             anchor,
             exclude_zero_usage=exclude_zero_usage,
-            rgu_used_expr=true_used_expr,
+            rgu_used_expr=rgu_h_expr,
             clusters=clusters,
         ).group_by(
             JobSeriesDB.sarc_user_id,
@@ -734,20 +720,23 @@ def get_recurring_underusers(
             resource=resource,
             exclude_zero_usage=exclude_zero_usage,
             clusters=clusters,
-            threshold=threshold,
+            waste_rescale_threshold=waste_rescale_threshold,
         )
         cycle_flagged.append({r.user_id for r in flagged_rows})
 
-    # ── Personalized-action aggregate (per active anchor, cross-cluster) ────────
-    # For position i, the window is [anchor − (i+active_cycles)·cl, anchor − i·cl].
-    # Index 0 = most-recent anchor (matches the former single-window query).
+    # ── Personalized-action aggregate (per active anchor, cross-cluster) ──────
+    # For position i, the window is [anchor − (i+active_cycles)·cl, anchor −
+    # i·cl]. Index 0 = most-recent anchor (matches the former single-window
+    # query).
     pa_window_weeks = recurrence_active_cycles * cycle_length_weeks
     user_pa_flags: dict[int, list[bool]] = {}
     with config().db.session() as session:
         for i in range(recurrence_active_cycles):
             pa_end = anchor - timedelta(weeks=i * cycle_length_weeks)
             pa_start = pa_end - timedelta(weeks=pa_window_weeks)
-            pa_util, _, pa_rgu_h_expr, _, pa_scaled_expr = _rgu_exprs(threshold)
+            pa_util, _, pa_rgu_h_expr, _, pa_scaled_expr = _rgu_exprs(
+                waste_rescale_threshold
+            )
             pa_stmt = _with_rgu_window(
                 select(
                     JobSeriesDB.sarc_user_id,
@@ -758,7 +747,7 @@ def get_recurring_underusers(
                 pa_start,
                 pa_end,
                 exclude_zero_usage=exclude_zero_usage,
-                rgu_used_expr=pa_scaled_expr,
+                rgu_used_expr=pa_rgu_h_expr,
                 clusters=clusters,
             ).group_by(JobSeriesDB.sarc_user_id)
             for row in session.exec(pa_stmt).all():
@@ -770,7 +759,7 @@ def get_recurring_underusers(
                     pa_wasted >= personalized_action_min_waste_rgu_hours
                 )
 
-    # ── Per-cluster greedy selection (cumulative share >= threshold) ──────────
+    # ── Per-cluster greedy selection (cumulative share >= cluster_share_threshold) ──
     result: dict[str, list[RecurringUserRow]] = {}
     for cluster, users in sorted(cluster_users.items()):
         cluster_total = sum(u["wasted"] for u in users.values())

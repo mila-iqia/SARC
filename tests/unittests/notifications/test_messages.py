@@ -9,7 +9,6 @@ from sarc.notifications.messages import (
     split_usage_report_recipients,
 )
 from sarc.notifications.underusage import (
-    ClusterBreakdown,
     RecurringUserRow,
     UnderuserRow,
     UsageClusterBreakdown,
@@ -54,8 +53,8 @@ _ROW_ALICE = UnderuserRow(
     waste_ratio=0.255,
     avg_utilization=0.745,
     by_cluster=[
-        ClusterBreakdown("narval", 700.0, 210.0, 700.0),
-        ClusterBreakdown("fir", 300.0, 45.0, 300.0),
+        UsageClusterBreakdown("narval", 700.0, 490.0),
+        UsageClusterBreakdown("fir", 300.0, 255.0),
     ],
     top_jobs=[_JOB_NARVAL_1, _JOB_NARVAL_2, _JOB_FIR],
 )
@@ -69,7 +68,7 @@ _ROW_BOB = UnderuserRow(
     requested=800.0,
     waste_ratio=0.75,
     avg_utilization=0.25,
-    by_cluster=[ClusterBreakdown("fir", 800.0, 600.0, 800.0)],
+    by_cluster=[UsageClusterBreakdown("fir", 800.0, 200.0)],
     top_jobs=[],
 )
 
@@ -82,7 +81,7 @@ _ROW_CAROL = UnderuserRow(
     requested=700.0,
     waste_ratio=0.60,
     avg_utilization=0.40,
-    by_cluster=[ClusterBreakdown("mila", 700.0, 420.0, 700.0)],
+    by_cluster=[UsageClusterBreakdown("mila", 700.0, 280.0)],
     top_jobs=[],
 )
 
@@ -441,7 +440,7 @@ _USAGE_ROW_ALICE = UsageRow(
     email="alice@mila.quebec",
     display_name="Alice Liddell",
     user_id=1,
-    rgu_hours_requested=1000.0,
+    rgu_hours=1000.0,
     rgu_hours_used=745.0,
     avg_utilization=0.745,
     by_cluster=[
@@ -455,7 +454,7 @@ _USAGE_ROW_BOB = UsageRow(
     email="bob@mila.quebec",
     display_name="Bob Marley",
     user_id=2,
-    rgu_hours_requested=800.0,
+    rgu_hours=800.0,
     rgu_hours_used=200.0,
     avg_utilization=0.25,
     by_cluster=[UsageClusterBreakdown("fir", 800.0, 200.0)],

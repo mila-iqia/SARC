@@ -474,7 +474,7 @@ def test_true_wasted_field_at_identity(underusage_db):
         min_ratio=_MIN_RATIO,
         min_rgu_hours=_MIN_RGU_HOURS,
         top_jobs_per_user=_TOP_JOBS_PER_USER,
-        threshold=1.0,
+        waste_rescale_threshold=1.0,
     )
     for row in results:
         assert row.true_wasted == pytest.approx(row.wasted)
@@ -494,7 +494,7 @@ def test_scaled_waste_less_than_true_waste_below_threshold(underusage_db):
         min_ratio=_MIN_RATIO,
         min_rgu_hours=_MIN_RGU_HOURS,
         top_jobs_per_user=_TOP_JOBS_PER_USER,
-        threshold=0.20,
+        waste_rescale_threshold=0.20,
     )
     row = next(r for r in results if "petitbonhomme" in r.email)
     assert row.wasted < row.true_wasted
@@ -587,7 +587,7 @@ def test_missing_util_non_negative_waste_at_sub_threshold(missing_util_db):
         min_ratio=0.0,
         min_rgu_hours=0.0,
         top_jobs_per_user=_TOP_JOBS_PER_USER,
-        threshold=0.8,
+        waste_rescale_threshold=0.8,
     )
     row = next(r for r in results if r.email == "bramin@mila.quebec")
     assert row.wasted >= 0.0
@@ -599,4 +599,4 @@ def test_missing_util_usage_rgu_hours_used_equals_requested(missing_util_db):
         _WINDOW_START, _WINDOW_END, top_jobs_per_user=_TOP_JOBS_PER_USER
     )
     row = next(r for r in results if r.email == "bramin@mila.quebec")
-    assert row.rgu_hours_used == pytest.approx(row.rgu_hours_requested)
+    assert row.rgu_hours_used == pytest.approx(row.rgu_hours)

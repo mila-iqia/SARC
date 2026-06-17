@@ -80,7 +80,7 @@ def build_user_dm(
     dashboard_url: str | None = None,
     help_section: str | None = None,
 ) -> str:
-    """Build a Module A plain-text DM for a single underusing researcher.
+    """Build a plain-text DM for a single underusing researcher.
 
     Pure function — no I/O, deterministic for fixed input.
     """
@@ -142,20 +142,13 @@ def build_usage_report(
 
 def _month_table(title: str, months: list[MonthlyStats]) -> list[str]:
     pct_strs = [_pct(m.avg_waste_ratio) for m in months]
-    count_strs = [f"{m.above_threshold_count} user(s)" for m in months]
 
     month_w = max(len("Month"), max((len(m.label) for m in months), default=0))
     pct_w = max(len("Avg waste ratio"), max((len(s) for s in pct_strs), default=0))
-    count_w = max(len("Above threshold"), max((len(s) for s in count_strs), default=0))
 
-    rows = [
-        title,
-        f"{'Month'.ljust(month_w)}  {'Avg waste ratio'.rjust(pct_w)}  {'Above threshold'.rjust(count_w)}",
-    ]
-    for m, pct_s, count_s in zip(months, pct_strs, count_strs):
-        rows.append(
-            f"{m.label.ljust(month_w)}  {pct_s.rjust(pct_w)}  {count_s.rjust(count_w)}"
-        )
+    rows = [title, f"{'Month'.ljust(month_w)}  {'Avg waste ratio'.rjust(pct_w)}"]
+    for m, pct_s in zip(months, pct_strs):
+        rows.append(f"{m.label.ljust(month_w)}  {pct_s.rjust(pct_w)}")
     return rows
 
 
@@ -304,7 +297,7 @@ def build_admin_digest(
     recurring: dict[str, list[RecurringUserRow]] | None = None,
     cycle_dates: list[date] | None = None,
 ) -> str:
-    """Build a Module C plain-text admin digest.
+    """Build a plain-text admin digest.
 
     Ranks underusers by RGU-hours wasted (descending), capped at top_n.
     Pure function — no I/O, deterministic for fixed input.
