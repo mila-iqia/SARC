@@ -30,7 +30,80 @@ def init_insert() -> None:
     with config.db.session() as sess:
         insert_clusters(sess)
         insert_rgu(sess)
+        sync_cluster_end_times(sess)
         sess.commit()
+
+
+def sync_cluster_end_times(sess: Session) -> None:
+    """Update end_time_sacct and end_time_prometheus based on latest cache entries.
+
+    Scans the cache backward (most recent first) to find the latest entry per
+    cluster and updates the DB fields only when the found time is more recent
+    than the current value. Falls back to cluster start_date when no cache
+    entry exists for a given cluster. Prometheus search is skipped for clusters
+    without a prometheus_url to avoid scanning a potentially large cache for
+    nothing.
+    """
+    from datetime import UTC, datetime
+
+    from sarc.cache import Cache
+    from sarc.config import config
+
+    from .cluster import SlurmClusterDB
+
+    if config.cache is None:
+        return
+
+    clusters_cfg = config.clusters
+    db_clusters = {c.name: c for c in sess.exec(select(SlurmClusterDB)).all()}
+
+    # -- jobs cache → end_time_sacct --
+    pending = set(db_clusters.keys())
+    sacct_times: dict[str, datetime] = {}
+    for ce in Cache("jobs").read_backward():
+        if not pending:
+            break
+        entry_time = ce.get_entry_datetime()
+        for key in ce.keys():
+            cluster_name = key.split("_")[0]
+            if cluster_name in pending:
+                sacct_times[cluster_name] = entry_time
+                pending.discard(cluster_name)
+
+    # -- prometheus cache → end_time_prometheus (skip clusters without URL) --
+    prom_enabled = {
+        name
+        for name, cfg in clusters_cfg.items()
+        if cfg.prometheus_url is not None and name in db_clusters
+    }
+    pending = set(prom_enabled)
+    prom_times: dict[str, datetime] = {}
+    for ce in Cache("prometheus").read_backward():
+        if not pending:
+            break
+        entry_time = ce.get_entry_datetime()
+        for key in ce.keys():
+            cluster_name = key.split("$")[0]
+            if cluster_name in pending:
+                prom_times[cluster_name] = entry_time
+                pending.discard(cluster_name)
+
+    # -- apply to DB --
+    for cluster_name, db_cluster in db_clusters.items():
+        start_dt = datetime.combine(
+            db_cluster.start_date, datetime.min.time(), tzinfo=UTC
+        )
+
+        new_sacct = sacct_times.get(cluster_name, start_dt)
+        if db_cluster.end_time_sacct is None or new_sacct > db_cluster.end_time_sacct:
+            db_cluster.end_time_sacct = new_sacct
+
+        new_prom = prom_times.get(cluster_name, start_dt)
+        if (
+            db_cluster.end_time_prometheus is None
+            or new_prom > db_cluster.end_time_prometheus
+        ):
+            db_cluster.end_time_prometheus = new_prom
 
 
 def insert_clusters(sess: Session) -> None:

@@ -22,6 +22,8 @@ sarc-test-cache
 dbconfig.txt
 token.json
 .vscode
+.zed
+.claude
 .mypy_cache
 GEMINI.md
 CLAUDE.md
