@@ -279,7 +279,11 @@ class Cache:
 
     def read_backward(self) -> Iterator[CacheEntry]:
         """Yield all cache entries in reverse chronological order."""
-        cdir = self.cache_dir
+        root = config.cache
+        assert root is not None
+        cdir = root / self.subdirectory
+        if not cdir.exists():
+            return
         ignore = {".DS_Store"}
         for year_dir in sorted(
             filter(lambda p: p.name not in ignore, cdir.iterdir()),
