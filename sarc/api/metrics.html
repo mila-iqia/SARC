@@ -300,10 +300,12 @@
              autocomplete="off" data-lpignore="true" data-form-type="other" />
     </div>
     {% endif %}
+    {% if is_admin %}
     <div class="ctrl">
       <label for="metric-select">Efficiency metric</label>
-      <select id="metric-select" title="Metric taken as the 'useful' fraction: it splits Used vs Unused RGU (RGU usage, {% if is_admin %}RGU by user, {% endif %}job-table waste column) and is the value plotted in Metric Trend, Density and the heatmap. Takes effect on Update."></select>
+      <select id="metric-select" title="Metric taken as the 'useful' fraction: it splits Used vs Unused RGU (RGU usage, RGU by user, job-table waste column) and is the value plotted in Metric Trend, Density and the heatmap. Takes effect on Update."></select>
     </div>
+    {% endif %}
     <button onclick="loadCharts()" title="Apply the current filters (date range, clusters, {% if is_admin %}user, {% endif %}job states, metric) and reload every plot.">Update</button>
     <button id="reset-btn" onclick="resetState()" title="Clear all saved settings and reset to defaults" style="background:#888;">Reset</button>
     <div id="focus-label" class="no-focus"
@@ -337,7 +339,7 @@
           // Filter bar
           start:       document.getElementById('start').value,
           end:         document.getElementById('end').value,
-          metric:      document.getElementById('metric-select').value,
+          metric:      selectedMetric(),
           {% if is_admin %}
           cluster_user: document.getElementById('cluster_user').value,
           {% endif %}
@@ -377,8 +379,8 @@
       monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
       document.getElementById('start').value = isoDate(yearStart);
       document.getElementById('end').value   = isoDate(monday);
-      document.getElementById('metric-select').value = 'gpu_sm_occupancy';
       {% if is_admin %}
+      document.getElementById('metric-select').value = 'gpu_sm_occupancy';
       document.getElementById('cluster_user').value  = '';
       {% endif %}
       setPeriod('w');
@@ -450,6 +452,13 @@
     function rguUnit() {
       const mode = periodMode();
       return RGU_UNITS[mode === 'custom' ? periodUnit.value : mode] || RGU_UNITS.h;
+    }
+
+    // The efficiency metric is admin-only; non-admins are pinned to SM occupancy
+    // (the select is absent from their DOM). Every reader goes through this.
+    function selectedMetric() {
+      const el = document.getElementById('metric-select');
+      return el ? el.value : 'gpu_sm_occupancy';
     }
 
     // Stable colour per cluster (assigned by sorted index).
@@ -547,10 +556,12 @@
       });
       return opts;
     }
-    // Populate the global efficiency-metric dropdown.
+    // Populate the global efficiency-metric dropdown (admin-only widget).
+    {% if is_admin %}
     const metSel = document.getElementById('metric-select');
     metricOptions(false).forEach(o => metSel.appendChild(o));
     metSel.value = 'gpu_sm_occupancy';
+    {% endif %}
 
     // The RGU unit is a pure display rescale (the backend always returns RGU·h),
     // so redrawing an RGU·time tile in place needs no re-fetch — we reuse the
@@ -667,8 +678,8 @@
     // Apply saved filter-bar values (fall back to defaults when absent).
     document.getElementById('start').value = _saved.start || isoDate(yearStart);
     document.getElementById('end').value   = _saved.end   || isoDate(monday);
-    if (_saved.metric)    document.getElementById('metric-select').value = _saved.metric;
     {% if is_admin %}
+    if (_saved.metric)    document.getElementById('metric-select').value = _saved.metric;
     if (_saved.cluster_user !== undefined)
       document.getElementById('cluster_user').value = _saved.cluster_user;
     {% endif %}
@@ -1216,7 +1227,7 @@
     }
 
     function renderDensity(id, d) {
-      const metric = document.getElementById('metric-select').value;
+      const metric = selectedMetric();
       const ml = METRICS[metric] || metric;
       if (!d.density.primary.values.length) return;
       // Server pre-bins into 50 equal bins over [0, 1] (matches xbins below).
@@ -1245,7 +1256,7 @@
     function renderMetricScatter(id, d) {
       const el = document.getElementById(id);
       if (!el) return;
-      const metric = document.getElementById('metric-select').value;
+      const metric = selectedMetric();
       const ml = METRICS[metric] || metric;
 
       el.innerHTML = '';
@@ -2058,7 +2069,7 @@
         {% if is_admin %}
         cluster_user:  document.getElementById('cluster_user').value.trim(),
         {% endif %}
-        metric:        document.getElementById('metric-select').value,
+        metric:        selectedMetric(),
         focus_start:   focusStart,
         focus_end:     focusEnd,
         job_states:    jsSelected(),
