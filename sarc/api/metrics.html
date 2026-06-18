@@ -275,13 +275,6 @@
       </div>
     </div>
     <div class="ctrl">
-      <label for="rgu-type">RGU type</label>
-      <select id="rgu-type" title="Which RGU all RGU plots aggregate: Physical = GPUs actually allocated; Billing = billing-normalized RGU (~1.5x higher for Mila). Takes effect on Update.">
-        <option value="physical" selected>Physical RGU</option>
-        <option value="billing">Billing RGU</option>
-      </select>
-    </div>
-    <div class="ctrl">
       <label for="rgu-unit">RGU unit</label>
       <select id="rgu-unit" title="Display unit for every plot showing cumulative RGU·time (RGU by cluster / RGU requested vs used / {% if is_admin %}RGU by user / {% endif %}job table). Purely a display rescale — no re-fetch (RGU·m uses a fixed 30-day month).">
         <option value="s">RGU·s</option>
@@ -321,7 +314,7 @@
       <label for="metric-select">Efficiency metric</label>
       <select id="metric-select" title="Metric taken as the 'useful' fraction: it splits Used vs Unused RGU (RGU usage, {% if is_admin %}RGU by user, {% endif %}job-table waste column) and is the value plotted in Metric Trend, Density and the heatmap. Takes effect on Update."></select>
     </div>
-    <button onclick="loadCharts()" title="Apply the current filters (date range, clusters, {% if is_admin %}user, {% endif %}job states, metric, RGU type) and reload every plot.">Update</button>
+    <button onclick="loadCharts()" title="Apply the current filters (date range, clusters, {% if is_admin %}user, {% endif %}job states, metric) and reload every plot.">Update</button>
     <button id="reset-btn" onclick="resetState()" title="Clear all saved settings and reset to defaults" style="background:#888;">Reset</button>
     <div id="focus-label" class="no-focus"
          title="Focus is an optional zoom on top of the Start/End range. Click a bar in a period plot to restrict the detail plots (Metric density, Metric heatmap, {% if is_admin %}RGU by user, {% endif %}Job table) to that time slice; the period plots only highlight it. Use Clear focus to return to the full range.">
@@ -354,7 +347,6 @@
           // Filter bar
           start:       document.getElementById('start').value,
           end:         document.getElementById('end').value,
-          rgu_type:    document.getElementById('rgu-type').value,
           rgu_unit:    document.getElementById('rgu-unit').value,
           metric:      document.getElementById('metric-select').value,
           {% if is_admin %}
@@ -396,7 +388,6 @@
       monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
       document.getElementById('start').value = isoDate(yearStart);
       document.getElementById('end').value   = isoDate(monday);
-      document.getElementById('rgu-type').value  = 'physical';
       document.getElementById('rgu-unit').value  = 'h';
       document.getElementById('metric-select').value = 'gpu_sm_occupancy';
       {% if is_admin %}
@@ -685,7 +676,6 @@
     // Apply saved filter-bar values (fall back to defaults when absent).
     document.getElementById('start').value = _saved.start || isoDate(yearStart);
     document.getElementById('end').value   = _saved.end   || isoDate(monday);
-    if (_saved.rgu_type)  document.getElementById('rgu-type').value  = _saved.rgu_type;
     if (_saved.rgu_unit)  document.getElementById('rgu-unit').value  = _saved.rgu_unit;
     if (_saved.metric)    document.getElementById('metric-select').value = _saved.metric;
     {% if is_admin %}
@@ -2101,7 +2091,6 @@
         focus_start:   focusStart,
         focus_end:     focusEnd,
         job_states:    jsSelected(),
-        rgu_type:      document.getElementById('rgu-type').value,
       };
     }
 
@@ -2138,7 +2127,7 @@
         ...(p.focus_end   ? { focus_end:   p.focus_end   } : {}),
       };
       return '/dash/metrics/jobs?' + new URLSearchParams({
-        ...base, metric: p.metric, ...focusParams, rgu_type: p.rgu_type,
+        ...base, metric: p.metric, ...focusParams,
         offset, limit, sort_by: sortBy, sort_dir: sortDir });
     }
 
@@ -2155,7 +2144,7 @@
         {% if is_admin %}
         ...(p.cluster_user ? { cluster_user: p.cluster_user } : {}),
         {% endif %}
-        ...focusParams, rgu_type: p.rgu_type }), p);
+        ...focusParams }), p);
     }
 
     function endpointURLBase(ep, p) {
@@ -2172,14 +2161,14 @@
       switch (ep) {
         case 'data':      return '/dash/metrics/job_counts?' + new URLSearchParams({ ...base, period: p.period });
         case 'heatmap':   return '/dash/metrics/job_times_vs_limit?' + new URLSearchParams({ ...base, ...focusParams });
-        case 'histogram': return '/dash/metrics/rgu_usage?' + new URLSearchParams({ ...base, period: p.period, metric: p.metric, rgu_type: p.rgu_type });
-        case 'density':   return '/dash/metrics/metric_distribution?' + new URLSearchParams({ ...densityParams, ...focusParams, rgu_type: p.rgu_type });
+        case 'histogram': return '/dash/metrics/rgu_usage?' + new URLSearchParams({ ...base, period: p.period, metric: p.metric });
+        case 'density':   return '/dash/metrics/metric_distribution?' + new URLSearchParams({ ...densityParams, ...focusParams });
         case 'jobs':      return jobsURL(p, JOBTABLE_DEFAULTS);
         {% if is_admin %}
-        case 'user_rgu':  return '/dash/metrics/rgu_by_user?' + new URLSearchParams({ start: p.start, end: p.end, metric: p.metric, ...focusParams, rgu_type: p.rgu_type });
-        case 'rgu_by_cluster': return '/dash/metrics/rgu_by_cluster?' + new URLSearchParams({ start: p.start, end: p.end, period: p.period, ...(p.cluster_user ? { cluster_user: p.cluster_user } : {}), rgu_type: p.rgu_type });
+        case 'user_rgu':  return '/dash/metrics/rgu_by_user?' + new URLSearchParams({ start: p.start, end: p.end, metric: p.metric, ...focusParams });
+        case 'rgu_by_cluster': return '/dash/metrics/rgu_by_cluster?' + new URLSearchParams({ start: p.start, end: p.end, period: p.period, ...(p.cluster_user ? { cluster_user: p.cluster_user } : {}) });
         {% else %}
-        case 'rgu_by_cluster': return '/dash/metrics/rgu_by_cluster?' + new URLSearchParams({ start: p.start, end: p.end, period: p.period, rgu_type: p.rgu_type });
+        case 'rgu_by_cluster': return '/dash/metrics/rgu_by_cluster?' + new URLSearchParams({ start: p.start, end: p.end, period: p.period });
         {% endif %}
         case 'metric_trend': return '/dash/metrics/metric_trend?' + new URLSearchParams({ ...base, period: p.period, metric: p.metric });
       }

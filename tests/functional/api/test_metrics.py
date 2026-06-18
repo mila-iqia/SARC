@@ -46,8 +46,8 @@ _USER_NO_JOBS = "smithj@mila.quebec"
 _NOT_IN_DB = "unknown-user@mila.quebec"
 
 # GPU-job enrichment, shared by the scoping fixture and the value-test fixture.
-# Constants make the RGU/metric outputs exact: physical RGU (the default
-# rgu_type) = allocated_gres_gpu * drac_rgu; rgu_hours = rgu * elapsed / 3600.
+# Constants make the RGU/metric outputs exact: physical RGU =
+# allocated_gres_gpu * drac_rgu; rgu_hours = rgu * elapsed / 3600.
 _GPU = "DASH-TEST-GPU"
 _DRAC_RGU = 8.0
 _GRES = 2
@@ -514,18 +514,13 @@ _FILTERS = {
 
 
 @pytest.mark.usefixtures("read_only_db")
-def test_physical_path_filters(dash_client):
-    """Cluster + user + state filters on the SlurmJobDB path."""
-    r = dash_client.get("/dash/metrics/job_counts", params={**WINDOW, **_FILTERS})
-    assert r.status_code == 200
-
-
-@pytest.mark.usefixtures("read_only_db")
-def test_billing_path_filters(dash_client):
-    """Same filters on the billing (job_series_view) path."""
-    r = dash_client.get(
-        "/dash/metrics/rgu_usage", params={**WINDOW, "rgu_type": "billing", **_FILTERS}
-    )
+@pytest.mark.parametrize(
+    "path", ["/dash/metrics/job_counts", "/dash/metrics/rgu_usage"]
+)
+def test_filters_accepted(dash_client, path):
+    """Cluster + user + state filters are accepted on both the direct-SlurmJobDB
+    (job_counts) and the RGU base (_apply_rgu_base) query paths."""
+    r = dash_client.get(path, params={**WINDOW, **_FILTERS})
     assert r.status_code == 200
 
 
@@ -545,8 +540,31 @@ def test_focus_narrows_window(dash_client):
 
 
 @pytest.mark.usefixtures("read_only_db")
-@pytest.mark.parametrize("sort_by", ["waste", "gpu_utilization_mean", "gpu_memory_max"])
-def test_jobs_sort_by_stat_column(dash_client, sort_by):
-    """Sorting by a stat column joins that stat into the page subquery."""
+@pytest.mark.parametrize(
+    "sort_by",
+    [
+        "cluster",  # joins clusters into the page subquery
+        "waste",  # joins a stat alias (sort_needs_stat)
+        "gpu_utilization_mean",
+        "gpu_sm_occupancy_mean",
+        "gpu_memory_max",
+        "job_id",  # ranks on slurm_jobs(+gpurgudb) alone — no extra join
+        "submit_time",
+        "user",
+        "job_state",
+        "elapsed",
+        "requested_gpu",
+        "allocated_gpu",
+        "billing",
+        "gpu_type",
+        "gpu_type_rgu",
+        "rgu",
+        "rgu_hours",
+    ],
+)
+def test_jobs_sort_columns(dash_client, sort_by):
+    """Every sortable column yields a valid page query, whichever join branch the
+    sort needs: clusters ("cluster"), a stat alias (sort_needs_stat), or the
+    source alone. A missing join would surface as a SQL error (500), not a 200."""
     r = dash_client.get("/dash/metrics/jobs", params={**WINDOW, "sort_by": sort_by})
     assert r.status_code == 200
