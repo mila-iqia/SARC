@@ -56,7 +56,7 @@ def test_check_prometheus_vs_slurmconfig(
     )
     # Add node_to_gpu entry in db if necessary
     if params["node_to_gpu"]:
-        with config().db.session() as sess:
+        with config.db.session() as sess:
             NodeGPUMappingDB.get_or_create(
                 sess,
                 cluster_id=SlurmClusterDB.by_name(sess, params["cluster"]).id,
@@ -96,7 +96,7 @@ def test_check_prometheus_vs_slurmconfig_all(
 
     for params in TESTING_DATA.values():
         if params["node_to_gpu"]:
-            with config().db.session() as sess:
+            with config.db.session() as sess:
                 NodeGPUMappingDB.get_or_create(
                     sess,
                     cluster_id=SlurmClusterDB.by_name(sess, params["cluster"]).id,

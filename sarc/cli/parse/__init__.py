@@ -40,7 +40,7 @@ class Parse:
     )
 
     def execute(self) -> int:
-        with config().db.session() as sess:
+        with config.db.session() as sess:
             patch_db(sess)
             sess.commit()
         return self.command.execute()

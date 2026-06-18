@@ -103,7 +103,7 @@ def get_job_time_series_data(
         query = f"{query}[{duration_seconds}s:{interval}s] {offset_string}"
 
     logger.debug(f"prometheus query with offset: {query}")
-    return config("scraping").clusters[job.cluster.name].prometheus.custom_query(query)
+    return config.clusters[job.cluster.name].prometheus.custom_query(query)
 
 
 def get_job_time_series_metric_names() -> dict[str, str]:

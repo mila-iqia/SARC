@@ -64,7 +64,7 @@ def check_gpu_type_usage_per_node(
         minimum_runtime = timedelta(seconds=0)
 
     ok = True
-    with config().db.session() as sess:
+    with config.db.session() as sess:
         if not sess.exec(select(func.count(col(SlurmJobDB.id)))).one():
             logger.warning("No jobs in database.")
             return False
@@ -84,7 +84,11 @@ def check_gpu_type_usage_per_node(
                 SlurmClusterDB.name,
                 func.jsonb_array_elements_text(SlurmJobDB.nodes).label("node"),
                 func.sum(
-                    case((SlurmJobDB.allocated_gpu_type == gpu_type, 1), else_=0)
+                    case(
+                        (SlurmJobDB.harmonized_gpu_type == gpu_type, 1),
+                        (SlurmJobDB.allocated_gpu_type == gpu_type, 1),
+                        else_=0,
+                    )
                 ).label("nb_gpu_tasks"),
                 func.count(col(SlurmJobDB.id)).label("nb_tasks"),
             )

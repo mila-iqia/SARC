@@ -84,9 +84,7 @@ DATE_2020_05_01_MTL = datetime(2020, 5, 1, tzinfo=MTL)
 
 
 @pytest.mark.usefixtures("read_only_db", "enabled_cache", "no_pkey")
-def test_fetch_slurmconfig(
-    cli_main, test_config, remote, caplog, time_machine, monkeypatch
-):
+def test_fetch_slurmconfig(cli_main, test_config, remote, caplog, time_machine):
     """Test slurm conf file downloading using `fetch slurmconfig`."""
     caplog.set_level(logging.INFO)
 
@@ -95,7 +93,7 @@ def test_fetch_slurmconfig(
     # Use cluster raisin for download test
     cluster = test_config.clusters[cluster_name]
 
-    cache = Cache(subdirectory=f"slurm_conf/{cluster_name}")
+    cache = Cache(subdirectory="slurm_conf")
     file_path_2020_01_01 = cache._dir_from_date(
         cache.cache_dir, DATE_2020_01_01_MTL
     ) / DATE_2020_01_01_MTL.astimezone(UTC).time().isoformat("milliseconds")
@@ -131,7 +129,7 @@ def test_fetch_slurmconfig(
     assert not file_path_2020_05_01.is_file(), file_path_2020_05_01
     with ZipFile(file_path_2020_01_01) as zf:
         ((key, blob),) = CacheEntry(zf, DATE_2020_01_01_MTL).items()
-        assert key == DATE_2020_01_01_MTL.astimezone(UTC).isoformat()
+        assert key == "raisin"
         assert blob.decode("utf-8") == SLURM_CONF_RAISIN_2020_01_01
     caplog.clear()
 
@@ -144,57 +142,12 @@ def test_fetch_slurmconfig(
     assert file_path_2020_05_01.is_file(), file_path_2020_05_01
     with ZipFile(file_path_2020_01_01) as zf:
         ((key, blob),) = CacheEntry(zf, DATE_2020_01_01_MTL).items()
-        assert key == DATE_2020_01_01_MTL.astimezone(UTC).isoformat()
+        assert key == "raisin"
         assert blob.decode("utf-8") == SLURM_CONF_RAISIN_2020_01_01
     with ZipFile(file_path_2020_05_01) as zf:
         ((key, blob),) = CacheEntry(zf, DATE_2020_05_01_MTL).items()
-        assert key == DATE_2020_05_01_MTL.astimezone(UTC).isoformat()
+        assert key == "raisin"
         assert blob.decode("utf-8") == SLURM_CONF_RAISIN_2020_05_01
-
-
-@pytest.mark.time_machine(DATE_2020_01_01_MTL, tick=False)
-@pytest.mark.usefixtures("enabled_cache", "no_pkey")
-def test_fetch_slurmconfig_no_change(
-    cli_main, test_config, remote, caplog, monkeypatch
-):
-    """test fetch slurmconfig when downloaded file is identical to previous cached file"""
-    caplog.set_level(logging.INFO)
-
-    cluster_name = "raisin"
-
-    # Use cluster raisin for download test
-    cluster = test_config.clusters[cluster_name]
-
-    cache = Cache(subdirectory=f"slurm_conf/{cluster_name}")
-    file_path_2020_01_01 = cache._dir_from_date(
-        cache.cache_dir, DATE_2020_01_01_MTL
-    ) / DATE_2020_01_01_MTL.astimezone(UTC).time().isoformat("seconds")
-
-    # Cache same content in a previous date (2019-01-01(
-    prev_date = datetime(2019, 1, 1, tzinfo=MTL).astimezone(UTC)
-    _save_slurm_conf(cluster_name, "2019-01-01", SLURM_CONF_RAISIN_2020_01_01)
-
-    remote.expect_sessions(
-        Session(
-            host=cluster.host,
-            commands=[
-                Command(
-                    cmd=f"cat {cluster.slurm_conf_host_path}",
-                    out=SLURM_CONF_RAISIN_2020_01_01.encode(),
-                )
-            ],
-        )
-    )
-
-    # Should download from current day
-    assert not file_path_2020_01_01.exists()
-    assert cli_main(["fetch", "slurmconfig", "-c", "raisin"]) == 0
-    assert not file_path_2020_01_01.exists()
-
-    assert (
-        f"slurm.conf file at {DATE_2020_01_01_MTL.astimezone(UTC)} have not changed since: {prev_date}, skipping."
-        in caplog.text
-    )
 
 
 @pytest.mark.usefixtures("enabled_cache")
@@ -206,7 +159,7 @@ def test_parse_slurmconfig(cli_main, caplog, empty_read_write_db):
     assert raisin.node_gpu_mapping == []
 
     #  when cache is empty
-    assert cli_main(["parse", "slurmconfig", "-c", "raisin"]) == 0
+    assert cli_main(["parse", "slurmconfig"]) == 0
     empty_read_write_db.refresh(raisin)
     assert raisin.gpu_billing == []
     assert raisin.node_gpu_mapping == []
@@ -214,11 +167,7 @@ def test_parse_slurmconfig(cli_main, caplog, empty_read_write_db):
 
     _save_slurm_conf("raisin", "2020-01-01", SLURM_CONF_RAISIN_2020_01_01)
 
-    with pytest.raises(KeyError) as exc_info:
-        cli_main(["parse", "slurmconfig", "-c", "unknown_raisin"])
-        assert str(exc_info.value) == "unknown_raisin"
-
-    assert cli_main(["-v", "parse", "slurmconfig", "-c", "raisin"]) == 0
+    assert cli_main(["-v", "parse", "slurmconfig"]) == 0
     empty_read_write_db.refresh(raisin)
 
     # No harmonization available for gpu1
@@ -263,7 +212,7 @@ def test_parse_slurmconfig(cli_main, caplog, empty_read_write_db):
 
     # Save next conf file
     _save_slurm_conf("raisin", "2020-05-01", SLURM_CONF_RAISIN_2020_05_01)
-    assert cli_main(["-v", "parse", "slurmconfig", "-c", "raisin"]) == 0
+    assert cli_main(["-v", "parse", "slurmconfig"]) == 0
     empty_read_write_db.refresh(raisin)
 
     expected_gpu_billing_2 = GPUBillingDB(
@@ -323,12 +272,7 @@ def test_parse_slurmconfig_since(cli_main, caplog, empty_read_write_db):
     _save_slurm_conf("raisin", "2020-01-01", SLURM_CONF_RAISIN_2020_01_01)
     _save_slurm_conf("raisin", "2020-05-01", SLURM_CONF_RAISIN_2020_05_01)
 
-    assert (
-        cli_main(
-            ["-v", "parse", "slurmconfig", "-c", "raisin", "--since", "2020-04-01"]
-        )
-        == 0
-    )
+    assert cli_main(["-v", "parse", "slurmconfig", "--since", "2020-04-01"]) == 0
     empty_read_write_db.refresh(raisin)
 
     # No harmonization available for gpu1
@@ -409,7 +353,7 @@ def test_parse_slurmconfig_mila(cli_main, caplog, empty_read_write_db):
 
     _save_slurm_conf(mila.name, "2020-01-01", SLURM_CONF_RAISIN_2020_01_01)
 
-    assert cli_main(["-v", "parse", "slurmconfig", "-c", mila.name]) == 0
+    assert cli_main(["-v", "parse", "slurmconfig"]) == 0
     empty_read_write_db.refresh(mila)
     assert (
         f"GPU billing won't be parsed on cluster `{mila.name}`, "
@@ -448,7 +392,7 @@ def test_parse_slurmconfig_mila(cli_main, caplog, empty_read_write_db):
 
     # Save next conf file
     _save_slurm_conf("mila", "2020-05-01", SLURM_CONF_RAISIN_2020_05_01)
-    assert cli_main(["-v", "parse", "slurmconfig", "-c", mila.name]) == 0
+    assert cli_main(["-v", "parse", "slurmconfig"]) == 0
     empty_read_write_db.refresh(mila)
     assert (
         f"GPU billing won't be parsed on cluster `{mila.name}`, "
@@ -509,7 +453,7 @@ def test_parse_slurmconfig_inconsistent_billing(cli_main, threshold):
         "raisin", "2020-01-01", SLURM_CONF_RAISIN_2020_01_01_INCONSISTENT_BILLING
     )
 
-    command = ["parse", "slurmconfig", "-c", "raisin"]
+    command = ["parse", "slurmconfig"]
     if threshold is not None:
         threshold = float(threshold)
         command += ["--threshold", str(threshold)]
@@ -538,7 +482,7 @@ def test_parse_slurmconfig_inconsistent_billing_success(
     _save_slurm_conf(
         "raisin", "2020-01-01", SLURM_CONF_RAISIN_2020_01_01_INCONSISTENT_BILLING
     )
-    assert cli_main(["parse", "slurmconfig", "-c", "raisin", "-t", str(threshold)]) == 0
+    assert cli_main(["parse", "slurmconfig", "-t", str(threshold)]) == 0
     raisin = SlurmClusterDB.by_name(empty_read_write_db, "raisin")
     (gpu_billing,) = raisin.gpu_billing
     assert gpu_billing.gpu_to_billing == {"gpu1": (5000 + 6000) / 2}
@@ -557,10 +501,10 @@ def assert_same_node_gpu_mapping(given: NodeGPUMappingDB, expected: NodeGPUMappi
 
 
 def _save_slurm_conf(cluster_name: str, day: str, content: str):
-    cache = Cache(subdirectory=f"slurm_conf/{cluster_name}")
+    cache = Cache(subdirectory="slurm_conf")
     date = datetime.strptime(day, "%Y-%m-%d").replace(tzinfo=MTL).astimezone(UTC)
     with cache.create_entry(date) as entry:
-        entry.add_value(date.isoformat(), content.encode("utf-8"))
+        entry.add_value(cluster_name, content.encode("utf-8"))
 
 
 def test_file_lines():

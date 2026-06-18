@@ -93,7 +93,7 @@ def main(argv: list[str] | None = None) -> int:
     """Main commandline for SARC"""
     from sarc.config import config
 
-    load(config().patches)
+    load(config.patches)
 
     parser = ArgumentParser()
     parser.add_arguments(CLI, dest="command")

@@ -9,6 +9,7 @@ from sarc.db.cluster import SlurmClusterDB
 from sarc.db.job import SlurmJobDB
 from sarc.db.runstate import get_parsed_date, set_parsed_date
 from sarc.db.users import get_user_id_for_cluster_user
+from sarc.scraping.gpu_fixes import fix_gpu_types
 from sarc.scraping.jobs_utils import (
     DATE_FORMAT_HOUR,
     fetch_raw,
@@ -145,13 +146,14 @@ def parse_jobs(
     update_parsed_date: bool,
 ) -> None:
 
-    with config("scraping").db.session() as sess:
+    cache = Cache(subdirectory="jobs")
+    with config.db.session() as sess:
         if since is None:
             since = get_parsed_date(sess, "jobs")
+            if since is None:
+                since = cache.oldest_year()
 
         # Retrieve from the cache
-        assert since is not None
-        cache = Cache(subdirectory="jobs")
         for cache_entry in cache.read_from(from_time=since):
             parse_cache_entry(sess, cache_entry, clusters_cfg)
             # Update the parsed date
@@ -161,6 +163,8 @@ def parse_jobs(
                 )
                 set_parsed_date(sess, "jobs", cache_entry.get_entry_datetime())
             sess.commit()
+
+        fix_gpu_types(sess)
 
 
 def parse_date(val: str) -> datetime:
@@ -193,28 +197,39 @@ def parse_cache_entry(
         scraped_start = parse_date(key.split("_")[1])
         scraped_end = parse_date(key.split("_")[2])
 
+        nb_skipped = 0
+        nb_total = 0
         for entry in parse_raw(value, cluster_name, scraped_start, scraped_end):
             if entry is None:
                 continue
 
-            cluster_name = entry.pop("cluster_name")
-            entry["cluster_id"] = SlurmClusterDB.id_by_name(sess, cluster_name)
+            nb_total += 1
+
+            entry_cluster_name = entry.pop("cluster_name")
+            entry["cluster_id"] = SlurmClusterDB.id_by_name(sess, entry_cluster_name)
             if entry["cluster_id"] is None:
                 raise ValueError(
                     "Unknown cluster name % for job id %s",
-                    cluster_name,
+                    entry_cluster_name,
                     entry["job_id"],
                 )
             entry["sarc_user_id"] = get_user_id_for_cluster_user(
                 sess, entry["cluster_id"], entry["cluster_user"], entry["submit_time"]
             )
             if entry["sarc_user_id"] is None:
-                logger.warning(
-                    "Skipping job %s on cluster %s because we can't find a user for it",
+                logger.debug(
+                    "Skipping job %s on cluster %s because we can't find a user %s for it",
                     entry["job_id"],
-                    cluster_name,
+                    entry_cluster_name,
+                    entry["cluster_user"],
                 )
+                nb_skipped += 1
                 continue
             job = SlurmJobDB.get_or_create(sess, **entry)
             sess.flush()
-            update_allocated_gpu_type_from_nodes(clusters_cfg[cluster_name], job)
+            update_allocated_gpu_type_from_nodes(clusters_cfg[entry_cluster_name], job)
+
+        if nb_skipped > 0:
+            logger.warning(
+                f"skipped {nb_skipped}/{nb_total} ({int(100 * nb_skipped / nb_total)}%) jobs on {cluster_name} because we can't find a user for it"
+            )

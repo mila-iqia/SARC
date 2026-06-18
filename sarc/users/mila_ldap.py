@@ -123,7 +123,7 @@ class MilaLDAPScraper(UserScraper[MilaLDAPConfig]):
         displayName[0] -> display_name
         suspended[0]   -> status  (as string "enabled" or "disabled")
         """
-        with config().db.session() as s:
+        with config.db.session() as s:
             for user_raw in json.loads(data.decode()):
                 creds = Credentials()
                 if user_raw["suspended"][0] != "true":

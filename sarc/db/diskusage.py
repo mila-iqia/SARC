@@ -34,7 +34,7 @@ class DiskUsageGroupDB(SQLModel, table=True):
         exclude=True,
     )
     group_name: str
-    _users: list[DiskUsageUserDB] = Relationship()
+    _users: list[DiskUsageUserDB] = Relationship(passive_deletes="all")
 
     @computed_field
     @property
@@ -48,9 +48,9 @@ class DiskUsageDB(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     cluster_id: int = Field(foreign_key="clusters.id")
-    cluster: SlurmClusterDB = Relationship()
+    cluster: SlurmClusterDB = Relationship(passive_deletes="all")
     timestamp: datetime_utc = datetime_utc_field()
-    _groups: list[DiskUsageGroupDB] = Relationship()
+    _groups: list[DiskUsageGroupDB] = Relationship(passive_deletes="all")
 
     @computed_field
     @property

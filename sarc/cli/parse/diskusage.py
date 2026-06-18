@@ -28,7 +28,7 @@ class ParseDiskUsage:
         ts = ts.astimezone(UTC)
 
         cache = Cache("disk_usage")
-        with config().db.session() as sess:
+        with config.db.session() as sess:
             for ce in cache.read_from(ts):
                 for item in ce.items():
                     scraper = get_diskusage_scraper(item[0])

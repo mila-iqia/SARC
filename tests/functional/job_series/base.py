@@ -46,6 +46,7 @@ ALL_COLUMNS = sorted(
         "allocated_billing",
         "allocated_cpu",
         "allocated_gpu_type",
+        "harmonized_gpu_type",
         "allocated_gres_gpu",
         "allocated_mem",
         "allocated_node",

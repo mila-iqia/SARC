@@ -122,6 +122,11 @@ class ExampleData:
         billing lookup (which uses submit_time) selects the appropriate
         GPUBilling for the period each row represents.
         """
+        existing_harmonized_names = {
+            harmonized_name
+            for harmonized_name in sess.exec(sqlmodel.select(GpuRguDB.name))
+        }
+
         clusters = {c.name: c for c in sess.exec(sqlmodel.select(SlurmClusterDB)).all()}
         user = sess.exec(sqlmodel.select(UserDB)).one()
         elapsed_seconds = 10
@@ -139,6 +144,9 @@ class ExampleData:
                     allocated_gres_gpu=row.job_billing,
                     allocated_billing=row.job_billing,
                     allocated_gpu_type=row.gpu_type,
+                    harmonized_gpu_type=row.gpu_type
+                    if row.gpu_type in existing_harmonized_names
+                    else None,
                     requested_gres_gpu=row.job_billing,
                     account="account",
                     job_id=i,

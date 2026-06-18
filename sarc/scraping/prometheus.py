@@ -65,11 +65,12 @@ def fetch_prometheus(
 @trace_decorator()
 def parse_prometheus(since: datetime | None, update_parsed_date: bool) -> None:
     cache = Cache("prometheus")
-    with config("scraping").db.session() as sess:
+    with config.db.session() as sess:
         if since is None:
             since = get_parsed_date(sess, "prometheus")
+            if since is None:
+                since = cache.oldest_year()
 
-        assert since is not None
         for ce in cache.read_from(from_time=since):
             error = parse_prometheus_ce(sess, ce)
             if update_parsed_date and not error:
@@ -88,13 +89,13 @@ def parse_prometheus_ce(sess: Session, ce: CacheEntry) -> bool:
     for key, value in ce.items():
         nb_jobs += 1
         cluster_name, job_id_str, submit_time_str = key.split("$")
-        cluster = config("scraping").clusters.get(cluster_name, None)
+        cluster = config.clusters.get(cluster_name, None)
         if cluster is None:
             logger.error("Could not find cluster '%s' in config", cluster_name)
             error = True
             continue
         job_id = int(job_id_str)
-        submit_time = datetime.fromisoformat(submit_time_str)
+        submit_time = datetime.fromisoformat(submit_time_str).astimezone(UTC)
         data = json.loads(value.decode("utf-8"))
         if data == []:
             logger.warning(
@@ -113,8 +114,9 @@ def parse_prometheus_ce(sess: Session, ce: CacheEntry) -> bool:
             continue
         gpu_type = data[0]["metric"].get("gpu_type", None)
         if gpu_type is not None:
-            entry.allocated_gpu_type = (
-                cluster.harmonize_gpu_from_nodes(entry.nodes, gpu_type) or gpu_type
+            entry.allocated_gpu_type = gpu_type
+            entry.harmonized_gpu_type = cluster.harmonize_gpu_from_nodes(
+                entry.nodes, gpu_type
             )
         statistics = series.compute_job_statistics(entry, data)
         if len(statistics) != 0:

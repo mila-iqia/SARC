@@ -74,10 +74,11 @@ class SlurmClusterDB(SQLModel, table=True):
     billing_is_gpu: bool = False
 
     gpu_billing: list[GPUBillingDB] = Relationship(
-        sa_relationship_kwargs={"order_by": GPUBillingDB.since}
+        passive_deletes="all", sa_relationship_kwargs={"order_by": GPUBillingDB.since}
     )
     node_gpu_mapping: list[NodeGPUMappingDB] = Relationship(
-        sa_relationship_kwargs={"order_by": NodeGPUMappingDB.since}
+        passive_deletes="all",
+        sa_relationship_kwargs={"order_by": NodeGPUMappingDB.since},
     )
 
     def get_node_to_gpu(

@@ -36,7 +36,7 @@ def _time_auto_first_date(cluster_name: str, end_field: str) -> datetime:
     # get the last valid date in the database for the cluster
     # pylint: disable=broad-exception-raised
     #
-    with config().db.session() as sess:
+    with config.db.session() as sess:
         cluster = SlurmClusterDB.by_name(sess, cluster_name)
         if cluster is None:
             raise ClusterNotFound(f"Cluster {cluster_name} not found in database")
@@ -101,7 +101,7 @@ def parse_auto_intervals(
 def set_auto_end_time(cluster_name: str, end_field: str, date: datetime) -> None:
     # set the last valid date in the database for the cluster
     logger.info(f"set last successful date for cluster {cluster_name} to {date}")
-    with config().db.session() as sess:
+    with config.db.session() as sess:
         sess.exec(
             update(SlurmClusterDB)
             .where(col(SlurmClusterDB.name) == cluster_name)
@@ -111,7 +111,8 @@ def set_auto_end_time(cluster_name: str, end_field: str, date: datetime) -> None
 
 
 def parse_in_timezone(timestamp: int | None) -> datetime | None:
-    if timestamp is None or timestamp == 0:
+    # -1 and -2 are flags returned by sacct
+    if timestamp in (None, 0, 4294967294, 4294967295):
         return None
     # Slurm returns timestamps in UTC
     return datetime.fromtimestamp(timestamp, UTC)
@@ -321,7 +322,7 @@ def parse_raw(
 @trace_decorator()
 def update_allocated_gpu_type_from_nodes(
     cluster: ClusterConfig, entry: SlurmJobDB
-) -> str | None:
+) -> None:
     """
     Try to infer job GPU type from entry nodes
 
@@ -331,13 +332,6 @@ def update_allocated_gpu_type_from_nodes(
         Cluster configuration for the current job.
     entry: SlurmJob
         Slurm job for which to infer the gpu type.
-
-    Returns
-    -------
-    str
-        String representing the gpu type.
-    None
-        Unable to infer gpu type.
     """
     gpu_type = None
 
@@ -357,10 +351,10 @@ def update_allocated_gpu_type_from_nodes(
         # If value is not None, it could be harmonized below.
         gpu_type = entry.allocated_gpu_type
 
-    # If we found a GPU type, try to infer descriptive GPU name
+    # Save GPU type found
     if gpu_type is not None:
-        entry.allocated_gpu_type = (
-            cluster.harmonize_gpu_from_nodes(entry.nodes, gpu_type) or gpu_type
+        entry.allocated_gpu_type = gpu_type
+        # And try to harmonize GPU type. Set to None if cannot harmonize.
+        entry.harmonized_gpu_type = cluster.harmonize_gpu_from_nodes(
+            entry.nodes, gpu_type
         )
-
-    return entry.allocated_gpu_type

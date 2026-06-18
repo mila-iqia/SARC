@@ -4,9 +4,10 @@ from datetime import UTC, datetime
 
 from simple_parsing import field
 
+from sarc.cache import Cache
 from sarc.config import config
 from sarc.db.runstate import get_parsed_date, set_parsed_date
-from sarc.scraping.users import parse_ce, parse_users, update_user
+from sarc.scraping.users import parse_ce, update_user
 
 logger = logging.getLogger(__name__)
 
@@ -23,27 +24,27 @@ class ParseUsers:
     )
 
     def execute(self) -> int:
-
+        cache = Cache(subdirectory="users")
         _since = None
         if self.since is not None:
             _since = datetime.fromisoformat(self.since).astimezone(UTC)
 
-        with config("scraping").db.session() as sess:
+        with config.db.session() as sess:
             if _since is None:
                 _since = get_parsed_date(sess, "users")
+                if _since is None:
+                    _since = cache.oldest_year()
+
+            for ce in cache.read_from(from_time=_since):
+                for um in parse_ce(ce):
+                    update_user(sess, um)
+                    sess.flush()
+                if self.update_parsed_date:
+                    logger.info(
+                        f"Set parsed_dates for users to {ce.get_entry_datetime()}."
+                    )
+                    set_parsed_date(sess, "users", ce.get_entry_datetime())
+                    sess.flush()
                 sess.commit()
-            assert _since is not None
-            for ce in parse_users(from_=_since):
-                with sess.begin():
-                    for um in parse_ce(ce):
-                        update_user(sess, um)
-                        sess.flush()
-                    if self.update_parsed_date:
-                        logger.info(
-                            f"Set parsed_dates for users to {ce.get_entry_datetime()}."
-                        )
-                        set_parsed_date(sess, "users", ce.get_entry_datetime())
-                        sess.flush()
-                    sess.commit()
 
         return 0

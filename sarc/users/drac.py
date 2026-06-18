@@ -40,7 +40,7 @@ class DRACMemberScraper(UserScraper[DRACMemberConfig]):
         try:
             j = json.loads(data.decode("utf-8"))
             if isinstance(j, list):
-                with config().db.session() as sess:
+                with config.db.session() as sess:
                     for d in j:
                         yield from parse_csv_line(d, sess, None)
             else:
@@ -54,13 +54,15 @@ class DRACMemberScraper(UserScraper[DRACMemberConfig]):
 
 def parse_csv(csv_file: str, csv_date: date | None) -> Iterable[UserMatch]:
 
-    with config().db.session() as sess:
+    with config.db.session() as sess:
         for d in csv.DictReader(csv_file.split("\n")):
             yield from parse_csv_line(d, sess, csv_date)
 
 
 def parse_csv_line(d: dict, sess: Session, csv_date: date | None):
     d = _dict_to_lowercase(d)
+    if d["ccri"] == "":
+        return
     creds = Credentials()
     if d["activation_status"] in ["activated", "recently_renewed"]:
         creds.insert(

@@ -19,6 +19,7 @@ Found 1 job(s):
     "end_time": "2023-02-14T11:00:00Z",
     "exit_code": 0,
     "group": "bramin",
+    "harmonized_gpu_type": null,
     "job_id": 1,
     "job_state": "COMPLETED",
     "latest_scraped_end": "2023-02-16T05:00:00Z",

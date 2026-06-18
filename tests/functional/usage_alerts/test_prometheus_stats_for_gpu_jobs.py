@@ -56,7 +56,7 @@ PARAMS = {
 def test_check_prometheus_stats_for_gpu_jobs(
     check_name, caplog, file_regression, cli_main
 ):
-    with config().db.session() as sess:
+    with config.db.session() as sess:
         for job in sess.exec(sqlmodel.select(SlurmJobDB)).all():
             if job.end_time is not None and job.nodes:
                 stats = compute_job_statistics(job, generate_fake_timeseries(job))

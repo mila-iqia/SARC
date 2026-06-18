@@ -99,7 +99,7 @@ class LegacyDumpScraper(UserScraper[LegacyDumpConfig]):
             # Mila LDAP match
             known_matches.add(MatchID(name="mila_ldap", mid=record["mila"]["email"]))
             # DRAC members match
-            drac_members_data = record.get("drac_members")
+            drac_members_data = record.get("drac_members") or record.get("drac_roles")
             if drac_members_data and drac_members_data.get("ccri"):
                 known_matches.add(
                     MatchID(name="drac_member", mid=drac_members_data["ccri"][:-3])

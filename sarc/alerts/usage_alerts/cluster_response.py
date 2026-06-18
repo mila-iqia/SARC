@@ -32,7 +32,7 @@ def check_cluster_response(time_interval: timedelta = timedelta(days=7)) -> bool
     oldest_allowed_date = current_date - time_interval
     # Check each available cluster
     ok = True
-    with config().db.session() as sess:
+    with config.db.session() as sess:
         for cluster in get_available_clusters(sess):
             if cluster.end_time_sacct is None:
                 logger.error(

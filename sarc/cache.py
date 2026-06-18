@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import io
 import logging
 from collections.abc import Iterable, Iterator
 from datetime import UTC, datetime, time, timedelta
@@ -15,7 +16,7 @@ UTCOFFSET = timedelta(0)
 
 
 def no_current(fname: Path) -> bool:
-    return fname.suffix not in [".current", ".DS_Store"]
+    return fname.suffix != ".current" and fname.name != ".DS_Store"
 
 
 class CacheEntry:
@@ -32,6 +33,11 @@ class CacheEntry:
     def add_value(self, key: str, value: bytes) -> None:
         """Add a key-value pair to the cache entry"""
         self._zf.writestr(key, value)
+
+    def keys(self) -> Iterator[str]:
+        """Get all key names without loading the values."""
+        for zi in self._zf.infolist():
+            yield zi.filename
 
     def items(self) -> Iterator[tuple[str, bytes]]:
         """Get all the key, value pairs in the order they were added."""
@@ -73,7 +79,7 @@ class Cache:
         Returns:
             Path: The absolute path to the cache directory.
         """
-        root = config().cache
+        root = config.cache
         assert root is not None
         res = root / self.subdirectory
         res.mkdir(parents=True, exist_ok=True)
@@ -245,7 +251,11 @@ class Cache:
             ...         print(f"Key: {key}, Data size: {len(data)} bytes")
         """
         for file, fetch_time in self._paths_from(from_time):
-            yield CacheEntry(ZipFile(file, mode="r"), fetch_time)
+            # read the entire raw zip file in memory to speed up a little the CacheEntry reads
+            with open(file, "rb") as f:
+                zip_bytes = f.read()
+                zip_buffer = io.BytesIO(zip_bytes)
+                yield CacheEntry(ZipFile(zip_buffer, mode="r"), fetch_time)
 
     def latest_entry(self) -> CacheEntry | None:
         """Returns the most recent cache entry if exists, otherwise None."""
@@ -266,6 +276,38 @@ class Cache:
                             ZipFile(file, mode="r"), self._datetime_from_path(file)
                         )
         return None
+
+    def read_backward(self) -> Iterator[CacheEntry]:
+        """Yield all cache entries in reverse chronological order."""
+        root = config.cache
+        assert root is not None
+        cdir = root / self.subdirectory
+        if not cdir.exists():
+            return
+        ignore = {".DS_Store"}
+        for year_dir in sorted(
+            filter(lambda p: p.name not in ignore, cdir.iterdir()),
+            key=_basename_to_int,
+            reverse=True,
+        ):
+            for month_dir in sorted(
+                filter(lambda p: p.name not in ignore, year_dir.iterdir()),
+                key=_basename_to_int,
+                reverse=True,
+            ):
+                for day_dir in sorted(
+                    filter(lambda p: p.name not in ignore, month_dir.iterdir()),
+                    key=_basename_to_int,
+                    reverse=True,
+                ):
+                    for file in sorted(
+                        filter(no_current, day_dir.iterdir()),
+                        key=_basename_to_time,
+                        reverse=True,
+                    ):
+                        yield CacheEntry(
+                            ZipFile(file, mode="r"), self._datetime_from_path(file)
+                        )
 
     def oldest_year(self) -> datetime:
         """

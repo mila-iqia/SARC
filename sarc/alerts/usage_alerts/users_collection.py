@@ -22,7 +22,7 @@ class UsersCollectionCheck(HealthCheck):
         from sarc.db.users import UserDB
 
         has_duplicates = False
-        with config().db.session() as sess:
+        with config.db.session() as sess:
             email_duplicates = (
                 sqlmodel.select(
                     UserDB.email,

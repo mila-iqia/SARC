@@ -35,7 +35,7 @@ PARAMS = [
     "check_name", PARAMS, ids=[f"params{i}" for i in range(len(PARAMS))]
 )
 def test_alert_gpu_util_per_user(check_name, caplog, file_regression, cli_main):
-    with config().db.session() as sess:
+    with config.db.session() as sess:
         for job in sess.exec(sqlmodel.select(SlurmJobDB)).all():
             if job.end_time is not None and job.nodes:
                 stats = compute_job_statistics(job, generate_fake_timeseries(job))
@@ -54,7 +54,7 @@ def test_alert_gpu_util_per_user_no_stats(caplog, cli_main):
     # Setup: No statistics generated for any job.
     # The check should fail for all users who have GPU jobs.
     assert cli_main(["health", "run", "--check", "gpu_util_per_user_1"]) == 0
-    with config().db.session() as sess:
+    with config.db.session() as sess:
         users = sess.exec(
             sqlmodel.select(sqlmodel.distinct(SlurmJobDB.cluster_user))
         ).all()

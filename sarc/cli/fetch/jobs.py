@@ -56,10 +56,10 @@ class FetchJobs:
             )
             return -1
 
-        clusters_cfg = config("scraping").clusters
+        clusters_cfg = config.clusters
         assert clusters_cfg is not None
 
-        assert config().cache is not None
+        assert config.cache is not None
 
         fetch_jobs(
             self.cluster_names,
