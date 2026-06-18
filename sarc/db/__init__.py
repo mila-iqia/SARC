@@ -63,12 +63,18 @@ def sync_cluster_end_times(sess: Session) -> None:
     for ce in Cache("jobs").read_backward():
         if not pending:
             break
-        entry_time = ce.get_entry_datetime()
+        clusters_set_in_ce = set()
         for key in ce.keys():
             cluster_name = key.split("_")[0]
+            end_time = datetime.fromisoformat(key.split("_")[2]).replace(tzinfo=UTC)
             if cluster_name in pending:
-                sacct_times[cluster_name] = entry_time
-                pending.discard(cluster_name)
+                if (cluster_name not in sacct_times) or (
+                    sacct_times[cluster_name] < end_time
+                ):
+                    sacct_times[cluster_name] = end_time
+                clusters_set_in_ce.add(cluster_name)
+        for cluster_name in clusters_set_in_ce:
+            pending.discard(cluster_name)
 
     # -- prometheus cache → end_time_prometheus (skip clusters without URL) --
     prom_enabled = {
@@ -95,8 +101,7 @@ def sync_cluster_end_times(sess: Session) -> None:
         )
 
         new_sacct = sacct_times.get(cluster_name, start_dt)
-        if db_cluster.end_time_sacct is None or new_sacct > db_cluster.end_time_sacct:
-            db_cluster.end_time_sacct = new_sacct
+        db_cluster.end_time_sacct = new_sacct
 
         new_prom = prom_times.get(cluster_name, start_dt)
         if (
