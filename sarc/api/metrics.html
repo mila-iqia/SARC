@@ -830,6 +830,8 @@
           header.className = 'tile-header';
           const title = document.createElement('span');
           title.textContent = PLOT_NAMES[plotType];
+          header.appendChild(title);
+          {% if is_admin %}
           const actions = document.createElement('span');
           actions.style.cssText = 'display:flex;align-items:center;gap:4px';
           const changeSel = document.createElement('select');
@@ -851,8 +853,8 @@
           rmBtn.onclick = () => removeTile(rowIdx, colIdx);
           actions.appendChild(changeSel);
           actions.appendChild(rmBtn);
-          header.appendChild(title);
           header.appendChild(actions);
+          {% endif %}
 
           const chartDiv = document.createElement('div');
           chartDiv.className = 'tile-chart';
@@ -866,6 +868,7 @@
           rowDiv.appendChild(tile);
         });
 
+        {% if is_admin %}
         const addCol = document.createElement('div');
         addCol.className = 'tile-add-col';
         addCol.appendChild(makeAddTileButton(pt => {
@@ -874,9 +877,11 @@
           renderLayout();
         }));
         rowDiv.appendChild(addCol);
+        {% endif %}
         grid.appendChild(rowDiv);
       });
 
+      {% if is_admin %}
       // New-row control
       const wrap = document.createElement('div');
       wrap.className = 'add-row-wrap';
@@ -890,6 +895,7 @@
         renderLayout();
       }));
       grid.appendChild(wrap);
+      {% endif %}
 
       // Kick off a render for each tile. Each one independently awaits the
       // cached endpoint promise (or triggers a fetch), so a fast endpoint
@@ -2261,12 +2267,17 @@
 
     // ── Init ─────────────────────────────────────────────────────────────────
 
-    // Layout: URL param wins over localStorage (allows bookmarkable layouts);
-    // fall back to saved state, then to DEFAULT_LAYOUT.
+    // Admins: URL param wins over localStorage (bookmarkable layouts), then saved
+    // state, then DEFAULT_LAYOUT. Non-admins: layout is fixed to DEFAULT_LAYOUT
+    // (saved/URL layout ignored — the editing controls are hidden too).
+    {% if is_admin %}
     const _urlPlots = new URLSearchParams(window.location.search).get('plots');
     tileLayout = _urlPlots
       ? paramToLayout(_urlPlots)
       : (_saved.layout ? paramToLayout(_saved.layout) : DEFAULT_LAYOUT.map(r => [...r]));
+    {% else %}
+    tileLayout = DEFAULT_LAYOUT.map(r => [...r]);
+    {% endif %}
     syncUrl();
 
     // Restore period (after setPeriod is defined, which is above).
