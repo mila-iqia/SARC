@@ -1145,6 +1145,10 @@
         let cum = 0;
         for (const i of order) { bases[i][p] = cum; cum += yvals[i][p]; }
       }
+      // Colour is keyed on the by-total index i, so each cluster keeps its current
+      // colour; the traces are then sorted by name so the legend reads A→Z. Trace
+      // order is cosmetic here — the per-period `base` stacking above is independent
+      // of it.
       const traces = series.map((s, i) => ({
         type: 'bar', name: s.cluster,
         // customdata = [period_end (for click-focus), this cluster's value]. We
@@ -1154,7 +1158,7 @@
         customdata: ends.map((e, p) => [e, yvals[i][p]]),
         marker: { color: clusterColor(i, series.length), opacity: opac },
         hovertemplate: s.cluster + '<br>Period: %{x}<br>' + unit.label + ': %{customdata[1]:,.2f}<extra></extra>',
-      }));
+      })).sort((a, b) => a.name.localeCompare(b.name));
       Plotly.react(id, traces, pLayout({
         title: { text: 'Total ' + unit.label + ' by Cluster (click to focus)', font: { size: 16 } },
         // Manual per-period `base` offsets do the stacking, so overlay — not
@@ -1162,12 +1166,12 @@
         barmode: 'overlay',
         xaxis: { title: { text: 'Period start' }, type: 'category', tickangle: -45 },
         yaxis: { title: { text: 'Total ' + unit.label } },
-        // 'reversed' keeps the same legend order as the old stacked view (Plotly
-        // auto-reverses a stack legend, but not an overlay one). showlegend forces
+        // Legend reads A→Z (traces are sorted by name above); 'normal' so the
+        // horizontal legend runs left-to-right alphabetically. showlegend forces
         // the legend even with a single cluster (Plotly hides it by default when
         // there is only one trace).
         showlegend: true,
-        legend: { orientation: 'h', x: 0, xanchor: 'left', y: 1.02, yanchor: 'bottom', traceorder: 'reversed' },
+        legend: { orientation: 'h', x: 0, xanchor: 'left', y: 1.02, yanchor: 'bottom', traceorder: 'normal' },
         margin: { l: 60, r: 20, t: 72, b: 100 },
       }), { responsive: true }).then(gd => {
         gd.removeAllListeners('plotly_click');
