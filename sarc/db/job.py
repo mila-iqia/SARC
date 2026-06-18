@@ -5,7 +5,7 @@ from typing import Self
 from iguane.fom import RAWDATA, fom_ugr
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import attribute_keyed_dict, relationship
-from sqlmodel import BIGINT, Field, Session, UniqueConstraint, select
+from sqlmodel import BIGINT, Field, Index, Session, UniqueConstraint, select
 from sqlmodel.main import Relationship
 
 from sarc.db.cluster import SlurmClusterDB
@@ -20,7 +20,11 @@ class JobStatisticDB(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     job_id: int | None = Field(
-        default=None, foreign_key="slurm_jobs.id", nullable=False, ondelete="CASCADE"
+        default=None,
+        foreign_key="slurm_jobs.id",
+        nullable=False,
+        ondelete="CASCADE",
+        index=True,
     )
     name: str | None = Field(default=None, nullable=False)
     mean: float | None
@@ -35,7 +39,10 @@ class JobStatisticDB(SQLModel, table=True):
 
 class SlurmJobDB(SQLModel, table=True):
     __tablename__ = "slurm_jobs"
-    __table_args__ = (UniqueConstraint("cluster_id", "job_id", "submit_time"),)
+    __table_args__ = (
+        UniqueConstraint("cluster_id", "job_id", "submit_time"),
+        Index("ix_slurm_jobs_cluster_submit_time", "cluster_id", "submit_time"),
+    )
 
     id: int | None = Field(default=None, primary_key=True)
     # job identification

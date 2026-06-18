@@ -18,7 +18,7 @@ class GPUBillingDB(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
 
-    cluster_id: int = Field(foreign_key="clusters.id")
+    cluster_id: int = Field(foreign_key="clusters.id", index=True)
     since: datetime_utc = datetime_utc_field()
     gpu_to_billing: dict[str, float] = Field(sa_type=JSONB)
 
@@ -43,7 +43,7 @@ class NodeGPUMappingDB(SQLModel, table=True):
     # # Database ID
     id: int | None = Field(default=None, primary_key=True)
 
-    cluster_id: int = Field(foreign_key="clusters.id")
+    cluster_id: int = Field(foreign_key="clusters.id", index=True)
     since: datetime_utc = datetime_utc_field()
     node_to_gpu: dict[str, list[str]] = Field(sa_type=JSONB)
 

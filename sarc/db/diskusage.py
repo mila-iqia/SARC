@@ -47,7 +47,7 @@ class DiskUsageDB(SQLModel, table=True):
     __table_args__ = (Index("idx_cluster_time", "cluster_id", "timestamp"),)
 
     id: int | None = Field(default=None, primary_key=True)
-    cluster_id: int = Field(foreign_key="clusters.id")
+    cluster_id: int = Field(foreign_key="clusters.id", index=True)
     cluster: SlurmClusterDB = Relationship(passive_deletes="all")
     timestamp: datetime_utc = datetime_utc_field()
     _groups: list[DiskUsageGroupDB] = Relationship(passive_deletes="all")
