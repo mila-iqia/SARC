@@ -478,9 +478,9 @@
       bar:             'Submitted jobs per period',
       histogram:       'RGU requested vs used',
       clusterrgu:      'RGU by cluster',
-      metrictrend:     'Metric trend (mean/max)',
       jobtable:        'Job table',
       {% if is_admin %}
+      metrictrend:     'Metric trend (mean/max)',
       heatmap_elapsed: 'Elapsed vs limit (heatmap)',
       heatmap_wait:    'Wait vs limit (heatmap)',
       density:         'Metric density',
@@ -499,9 +499,9 @@
       bar:             'data',
       histogram:       'histogram',
       clusterrgu:      'rgu_by_cluster',
-      metrictrend:     'metric_trend',
       jobtable:        'jobs',
       {% if is_admin %}
+      metrictrend:     'metric_trend',
       heatmap_elapsed: 'heatmap',
       heatmap_wait:    'heatmap',
       density:         'density',
@@ -516,8 +516,8 @@
       histogram: 'histogram',
       jobs: 'jobs',
       rgu_by_cluster: 'clusterrgu',
-      metric_trend: 'metrictrend',
       {% if is_admin %}
+      metric_trend: 'metrictrend',
       heatmap: 'heatmap',
       density: 'density',
       user_rgu: 'userrgu',
@@ -739,13 +739,14 @@
       return l.map(row => row.join(',')).join(';');
     }
 
-    // Tiles shown on a fresh load (no ?plots= param): RGU-by-cluster and metric
-    // trend side by side on the first row, the job table on its own row below.
-    // Copied per call so mutating tileLayout never corrupts this template.
+    // Tiles shown on a fresh load (no ?plots= param). Admins: RGU-by-cluster +
+    // job table on row 1, metric trend + RGU-by-user on row 2. Non-admins: a
+    // fixed 2x2 — submitted jobs + RGU-by-cluster, then RGU req-vs-used + job
+    // table. Copied per call so mutating tileLayout never corrupts this template.
     {% if is_admin %}
     const DEFAULT_LAYOUT = [['clusterrgu', 'jobtable'], ['metrictrend', 'userrgu']];
     {% else %}
-    const DEFAULT_LAYOUT = [['clusterrgu', 'jobtable'], ['metrictrend']];
+    const DEFAULT_LAYOUT = [['clusterrgu', 'jobtable'], ['histogram', 'bar']];
     {% endif %}
     function paramToLayout(s) {
       if (!s) return DEFAULT_LAYOUT.map(r => [...r]);
@@ -919,8 +920,8 @@
                    histogram: renderHistogram,
                    jobtable: renderJobTable,
                    clusterrgu: renderClusterRgu,
-                   metrictrend: renderMetricTrend,
                    {% if is_admin %}
+                   metrictrend: renderMetricTrend,
                    heatmap_elapsed: renderHeatmapElapsed,
                    heatmap_wait: renderHeatmapWait,
                    density: renderDensity,
