@@ -408,8 +408,7 @@ class WhitelistProxy:
 
 
 full_config = gifnoc.define("sarc", Config)
-# Do not ommit for now, only used to have serieux patch -m working
-_config_root = gifnoc.global_registry.model()
+
 
 gifnoc.set_sources("${envfile:SARC_CONFIG}")
 config_path = Path(os.getenv("SARC_CONFIG", "")).parent

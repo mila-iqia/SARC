@@ -156,7 +156,7 @@ SARC_SECRETS = "{env:SARC_SECRETS:{home:real}/secrets/sarc/config.yaml}"
 uv = 'UV_PROJECT_ENVIRONMENT="{env:VIRTUAL_ENV}" "$(which uv)" {args}'
 make-secrets = [
     "uv sync",
-    'serieux patch -m "sarc.config:_config_root" -o "$(echo "{env:SARC_CONFIG}" | cut -d"," -f1)" "{env:SARC_SECRETS}" {args}',
+    'serieux patch -m "sarc.config:Config" -o "$(echo "{env:SARC_CONFIG}" | cut -d"," -f1)" "{env:SARC_SECRETS}:sarc" {args}',
 ]
 
 [tool.hatch.envs.pixi]
