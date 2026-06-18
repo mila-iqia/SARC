@@ -88,6 +88,7 @@ def _add_gpu_job(
             "requested_gres_gpu": 1,
             "allocated_gres_gpu": 1,
             "allocated_gpu_type": gpu_type,
+            "harmonized_gpu_type": gpu_type,
             "job_state": "COMPLETED",
         }
     )

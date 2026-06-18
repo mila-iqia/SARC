@@ -174,7 +174,7 @@ def get_underusers(
     if resource != "gpu":
         raise ValueError(f"Unsupported resource: {resource!r}")
 
-    with config().db.session() as session:
+    with config.db.session() as session:
         util, _, rgu_h_expr, true_used_expr, scaled_used_expr = _rgu_exprs(
             waste_rescale_threshold
         )
@@ -338,7 +338,7 @@ def get_all_users_usage(
     if resource != "gpu":
         raise ValueError(f"Unsupported resource: {resource!r}")
 
-    with config().db.session() as session:
+    with config.db.session() as session:
         util, _, rgu_h_expr, true_used_expr, scaled_used_expr = _rgu_exprs()
         stmt = _with_rgu_window(
             select(
@@ -559,7 +559,7 @@ def get_historical_stats(
         for s, e in current_buckets
     ]
 
-    with config().db.session() as session:
+    with config.db.session() as session:
         current_stats = [
             _query_month_agg(
                 session, s, e, exclude_zero_usage=exclude_zero_usage, clusters=clusters
@@ -650,7 +650,7 @@ def get_recurring_underusers(
     agg_start = anchor - timedelta(weeks=window_weeks)
 
     # ── Per-(user, cluster) aggregate over the full recurrence window ─────────
-    with config().db.session() as session:
+    with config.db.session() as session:
         util, _, rgu_h_expr, true_used_expr, scaled_used_expr = _rgu_exprs(
             waste_rescale_threshold
         )
@@ -730,7 +730,7 @@ def get_recurring_underusers(
     # query).
     pa_window_weeks = recurrence_active_cycles * cycle_length_weeks
     user_pa_flags: dict[int, list[bool]] = {}
-    with config().db.session() as session:
+    with config.db.session() as session:
         for i in range(recurrence_active_cycles):
             pa_end = anchor - timedelta(weeks=i * cycle_length_weeks)
             pa_start = pa_end - timedelta(weeks=pa_window_weeks)

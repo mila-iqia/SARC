@@ -133,7 +133,7 @@ class UnderusageNotifyCommand:
             return self._exec()
 
     def _exec(self) -> int:
-        ncfg = config().notifications
+        ncfg = config.notifications
         if ncfg is None:
             logger.error("No notifications configuration found in config")
             return -1
