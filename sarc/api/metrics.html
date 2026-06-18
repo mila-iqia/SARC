@@ -1078,7 +1078,8 @@
           barmode: 'stack', bargap: 0.7,
           xaxis: { type: 'category' },
           yaxis: { title: { text: 'Total ' + unit.label } },
-          legend: { x: 0.8, y: 0.95 },
+          legend: { orientation: 'h', x: 0, xanchor: 'left', y: 1.02, yanchor: 'bottom' },
+          margin: { l: 60, r: 20, t: 72, b: 60 },
         }), { responsive: true });
         return;
       }
@@ -1107,8 +1108,8 @@
         barmode: 'stack',
         xaxis: { title: { text: 'Period start' }, type: 'category', tickangle: -45 },
         yaxis: { title: { text: 'Total ' + unit.label } },
-        legend: { x: 0.8, y: 0.95 },
-        margin: { l: 60, r: 20, t: 40, b: 100 },
+        legend: { orientation: 'h', x: 0, xanchor: 'left', y: 1.02, yanchor: 'bottom' },
+        margin: { l: 60, r: 20, t: 72, b: 100 },
       }), { responsive: true }).then(gd => {
         gd.removeAllListeners('plotly_click');
         gd.on('plotly_click', evt => {
