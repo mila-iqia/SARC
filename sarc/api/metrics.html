@@ -309,7 +309,7 @@
     <button onclick="loadCharts()" title="Apply the current filters (date range, clusters, {% if is_admin %}user, {% endif %}job states, metric) and reload every plot.">Update</button>
     <button id="reset-btn" onclick="resetState()" title="Clear all saved settings and reset to defaults" style="background:#888;">Reset</button>
     <div id="focus-label" class="no-focus"
-         title="Focus is an optional zoom on top of the Start/End range. Click a bar in a period plot to restrict the detail plots (Metric density, Metric heatmap, {% if is_admin %}RGU by user, {% endif %}Job table) to that time slice; the period plots only highlight it. Use Clear focus to return to the full range.">
+         title="Focus is an optional zoom on top of the Start/End range. Click a bar in a period plot to restrict the detail plots ({% if is_admin %}Metric density, Metric heatmap, RGU by user, {% endif %}Job table) to that time slice; the period plots only highlight it. Use Clear focus to return to the full range.">
       <span id="focus-label-text">No focus — click a bar in a period plot to zoom the detail plots onto that slice</span>
       <button type="button" id="clear-focus" style="display:none" onclick="clearFocus()">Clear focus</button>
     </div>
@@ -476,17 +476,17 @@
 
     const PLOT_NAMES = {
       bar:             'Jobs per period',
-      heatmap_elapsed: 'Elapsed vs limit (heatmap)',
-      heatmap_wait:    'Wait vs limit (heatmap)',
       histogram:       'RGU requested vs used',
       clusterrgu:      'RGU by cluster',
+      metrictrend:     'Metric trend (mean/max)',
+      jobtable:        'Job table',
+      {% if is_admin %}
+      heatmap_elapsed: 'Elapsed vs limit (heatmap)',
+      heatmap_wait:    'Wait vs limit (heatmap)',
       density:         'Metric density',
       metricscatter:   'Metric heatmap',
-      metrictrend:     'Metric trend (mean/max)',
-      {% if is_admin %}
       userrgu:         'RGU by user',
       {% endif %}
-      jobtable:        'Job table',
     };
     const PLOT_KEYS = Object.keys(PLOT_NAMES);
 
@@ -497,31 +497,31 @@
     // rendered directly by renderTile without a shared-cache fetch.
     const PLOT_TO_ENDPOINT = {
       bar:             'data',
-      heatmap_elapsed: 'heatmap',
-      heatmap_wait:    'heatmap',
       histogram:       'histogram',
       clusterrgu:      'rgu_by_cluster',
-      density:         'density',
       metrictrend:     'metric_trend',
+      jobtable:        'jobs',
       {% if is_admin %}
+      heatmap_elapsed: 'heatmap',
+      heatmap_wait:    'heatmap',
+      density:         'density',
       userrgu:         'user_rgu',
       {% endif %}
-      jobtable:        'jobs',
     };
     // The renderers expect data under historical keys (e.g. d.bar, d.heatmap);
     // this maps the endpoint back to the renderer's key so we can hand off a
     // single-entry object: { [ENDPOINT_TO_KEY[ep]]: data }.
     const ENDPOINT_TO_KEY = {
       data: 'bar',
-      heatmap: 'heatmap',
       histogram: 'histogram',
-      density: 'density',
-      {% if is_admin %}
-      user_rgu: 'userrgu',
-      {% endif %}
       jobs: 'jobs',
       rgu_by_cluster: 'clusterrgu',
       metric_trend: 'metrictrend',
+      {% if is_admin %}
+      heatmap: 'heatmap',
+      density: 'density',
+      user_rgu: 'userrgu',
+      {% endif %}
     };
 
     // Job-table pagination/sort. Used both for the initial shared fetch
@@ -916,17 +916,17 @@
 
     function renderPlot(id, type, d) {
       const fn = { bar: renderBar,
-                   heatmap_elapsed: renderHeatmapElapsed,
-                   heatmap_wait: renderHeatmapWait,
                    histogram: renderHistogram,
-                   density: renderDensity,
-                   metricscatter: renderMetricScatter,
-                   {% if is_admin %}
-                   userrgu: renderUserRgu,
-                   {% endif %}
                    jobtable: renderJobTable,
                    clusterrgu: renderClusterRgu,
-                   metrictrend: renderMetricTrend }[type];
+                   metrictrend: renderMetricTrend,
+                   {% if is_admin %}
+                   heatmap_elapsed: renderHeatmapElapsed,
+                   heatmap_wait: renderHeatmapWait,
+                   density: renderDensity,
+                   metricscatter: renderMetricScatter,
+                   userrgu: renderUserRgu,
+                   {% endif %} }[type];
       if (fn) fn(id, d);
     }
 
