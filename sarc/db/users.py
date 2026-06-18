@@ -65,7 +65,7 @@ class ValidDB(SQLModel):
         ExcludeConstraint(("user_id", "="), ("valid", "&&"), using="gist"),
     )
     id: int | None = Field(default=None, primary_key=True)
-    user_id: int = Field(foreign_key="users.id", ondelete="CASCADE")
+    user_id: int = Field(foreign_key="users.id", ondelete="CASCADE", index=True)
     valid: Range[datetime_utc] = Field(sa_type=TSTZRANGE)
 
 
@@ -433,7 +433,11 @@ class MatchingID(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     # This can't really be None, but it needs to be for a small period of time due to SQLAlchemy magic
     user_id: int | None = Field(
-        default=None, foreign_key="users.id", ondelete="CASCADE", nullable=False
+        default=None,
+        foreign_key="users.id",
+        ondelete="CASCADE",
+        nullable=False,
+        index=True,
     )
     plugin_name: str
     match_id: str
