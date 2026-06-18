@@ -19,8 +19,6 @@ class JobStatisticDB(SQLModel, table=True):
     """Statistics for a timeseries."""
 
     id: int | None = Field(default=None, primary_key=True)
-    # index=True: without it the json_object_agg subquery in job_series_view
-    # falls back to a sequential scan of jobstatisticdb on every job lookup.
     job_id: int | None = Field(
         default=None,
         foreign_key="slurm_jobs.id",
