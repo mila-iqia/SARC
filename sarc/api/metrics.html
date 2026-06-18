@@ -475,7 +475,7 @@
     }
 
     const PLOT_NAMES = {
-      bar:             'Jobs per period',
+      bar:             'Submitted jobs per period',
       histogram:       'RGU requested vs used',
       clusterrgu:      'RGU by cluster',
       metrictrend:     'Metric trend (mean/max)',
@@ -1019,7 +1019,7 @@
         marker: { color: colors },
         hovertemplate: 'Period: %{x}<br>Jobs: %{y}<extra></extra>',
       }], pLayout({
-        title: { text: 'Completed Jobs per Period (click to focus)', font: { size: 16 } },
+        title: { text: 'Submitted jobs per period (click to focus)', font: { size: 16 } },
         xaxis: { title: { text: 'Period start' }, type: 'category', tickangle: -45 },
         yaxis: { title: { text: 'Number of jobs' } },
         bargap: 0.15, margin: { l: 60, r: 20, t: 40, b: 100 },
