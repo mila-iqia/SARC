@@ -275,16 +275,6 @@
       </div>
     </div>
     <div class="ctrl">
-      <label for="rgu-unit">RGU unit</label>
-      <select id="rgu-unit" title="Display unit for every plot showing cumulative RGU·time (RGU by cluster / RGU requested vs used / {% if is_admin %}RGU by user / {% endif %}job table). Purely a display rescale — no re-fetch (RGU·m uses a fixed 30-day month).">
-        <option value="s">RGU·s</option>
-        <option value="h" selected>RGU·h</option>
-        <option value="d">RGU·d</option>
-        <option value="w">RGU·w</option>
-        <option value="m">RGU·m (30d)</option>
-      </select>
-    </div>
-    <div class="ctrl">
       <label>Cluster</label>
       <div class="js-dropdown">
         <button type="button" id="cluster-btn" class="add-select"
@@ -347,7 +337,6 @@
           // Filter bar
           start:       document.getElementById('start').value,
           end:         document.getElementById('end').value,
-          rgu_unit:    document.getElementById('rgu-unit').value,
           metric:      document.getElementById('metric-select').value,
           {% if is_admin %}
           cluster_user: document.getElementById('cluster_user').value,
@@ -388,7 +377,6 @@
       monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
       document.getElementById('start').value = isoDate(yearStart);
       document.getElementById('end').value   = isoDate(monday);
-      document.getElementById('rgu-unit').value  = 'h';
       document.getElementById('metric-select').value = 'gpu_sm_occupancy';
       {% if is_admin %}
       document.getElementById('cluster_user').value  = '';
@@ -456,9 +444,12 @@
       w: { label: 'RGU·w', factor: 1 / 168 },
       m: { label: 'RGU·m', factor: 1 / 720 },
     };
-    // Currently selected display unit, shared by every RGU·time renderer.
+    // The RGU·time display unit follows the period bucket (the RGU-unit selector
+    // was removed): a calendar mode maps straight across (h/d/w/m); a custom
+    // N+unit window follows its hours/days selector. Shared by every renderer.
     function rguUnit() {
-      return RGU_UNITS[document.getElementById('rgu-unit').value] || RGU_UNITS.h;
+      const mode = periodMode();
+      return RGU_UNITS[mode === 'custom' ? periodUnit.value : mode] || RGU_UNITS.h;
     }
 
     // Stable colour per cluster (assigned by sorted index).
@@ -561,9 +552,10 @@
     metricOptions(false).forEach(o => metSel.appendChild(o));
     metSel.value = 'gpu_sm_occupancy';
 
-    // The RGU unit is a pure display rescale (the backend always returns
-    // RGU·h), so changing it never re-fetches: on change we redraw every tile
-    // showing cumulative RGU·time in place with the cached endpoint data. We
+    // The RGU unit is a pure display rescale (the backend always returns RGU·h),
+    // so redrawing an RGU·time tile in place needs no re-fetch — we reuse the
+    // cached endpoint data (e.g. on the RGU-usage view toggle; the unit itself
+    // follows the period and only changes on the next Update). We
     // call renderPlot() directly (Plotly.react updates in place) rather than
     // renderTile(), which clears the div's innerHTML and would desync Plotly's
     // existing graph-div state -> blank plot. No-op before the first load or
@@ -605,7 +597,6 @@
           renderPlot(chartDiv.id, plotType, { [ENDPOINT_TO_KEY[ep]]: data });
       }));
     }
-    document.getElementById('rgu-unit').addEventListener('change', () => { rerenderRguTiles(); saveState(); });
 
     // Pressing Enter in any filter field applies the filters, like clicking Update.
     // Buttons keep their own behaviour (Update / Reset, dropdown toggles, All/None).
@@ -676,7 +667,6 @@
     // Apply saved filter-bar values (fall back to defaults when absent).
     document.getElementById('start').value = _saved.start || isoDate(yearStart);
     document.getElementById('end').value   = _saved.end   || isoDate(monday);
-    if (_saved.rgu_unit)  document.getElementById('rgu-unit').value  = _saved.rgu_unit;
     if (_saved.metric)    document.getElementById('metric-select').value = _saved.metric;
     {% if is_admin %}
     if (_saved.cluster_user !== undefined)
@@ -2017,25 +2007,6 @@
         txt = 'Every ' + n + ' ' + (periodUnit.value === 'h' ? 'hour' : 'day') + (n > 1 ? 's' : '');
       }
       periodBtn.textContent = txt + ' ▾';
-      syncRguUnitToPeriod();
-    }
-    // Keep the RGU display unit in step with the period bucket — one-way
-    // (period -> unit); changing the unit never touches the period. Calendar
-    // modes map straight across (h/d/w/m); a custom window follows its
-    // hours/days selector. We fire the select's change event so the RGU tiles
-    // re-scale in place at once (rerenderRguTiles), keeping "select = displayed
-    // unit" true. That rescale is a cosmetic Y-axis change independent of the
-    // bucket, so the unit can switch a moment before the bars do (the bucket
-    // follows on the next Update); rerenderRguTiles is a no-op before the first
-    // load, so the server-injected default syncs without a stray redraw.
-    function syncRguUnitToPeriod() {
-      const mode = periodMode();
-      const target = mode === 'custom' ? periodUnit.value : mode;
-      const sel = document.getElementById('rgu-unit');
-      if (sel.value !== target && [...sel.options].some(o => o.value === target)) {
-        sel.value = target;
-        sel.dispatchEvent(new Event('change'));
-      }
     }
     function setPeriod(s) {
       // Accepts the API grammar (used for the server-injected default).
