@@ -70,6 +70,7 @@ class ClusterConfig:
     timezone: zoneinfo.ZoneInfo | None = None
     prometheus_url: str | None = None
     prometheus_headers: dict[str, Secret[str]] | str = field(default_factory=dict)
+    prometheus_check_ssl: bool = True
     name: str | None = None
     sacct_bin: str = "sacct"
     ignore_tz_utc: bool = False
@@ -198,7 +199,11 @@ class ClusterConfig:
             headers["Authorization"] = f"Bearer {credentials.token}"
         elif isinstance(self.prometheus_headers, dict):
             headers = self.prometheus_headers
-        return PrometheusConnect(url=self.prometheus_url, headers=headers)
+        return PrometheusConnect(
+            url=self.prometheus_url,
+            headers=headers,
+            disable_ssl=not self.prometheus_check_ssl,
+        )
 
 
 def get_db_user() -> str:
