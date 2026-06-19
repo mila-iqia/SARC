@@ -2,8 +2,9 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from functools import cached_property
 
+from sqlalchemy import select
 from sqlalchemy.orm import aliased
-from sqlmodel import Session, and_, case, col, func, select
+from sqlmodel import Session, and_, case, col, func
 
 from sarc.config import USAGE_CYCLE_LENGTH_WEEKS, UTC, config
 from sarc.db.job import JobStatisticDB
@@ -180,10 +181,10 @@ def get_underusers(
         )
         stmt = _with_rgu_window(
             select(
-                JobSeriesDB.sarc_user_id,
-                JobSeriesDB.email,
-                JobSeriesDB.display_name,
-                JobSeriesDB.cluster_name,
+                col(JobSeriesDB.sarc_user_id),
+                col(JobSeriesDB.email),
+                col(JobSeriesDB.display_name),
+                col(JobSeriesDB.cluster_name),
                 func.coalesce(func.sum(rgu_h_expr), 0).label("sum_rgu_hours"),
                 func.coalesce(func.sum(true_used_expr), 0).label("sum_rgu_true_used"),
                 func.coalesce(func.sum(scaled_used_expr), 0).label("sum_rgu_used"),
@@ -249,10 +250,10 @@ def get_underusers(
             job_rows = session.exec(
                 _with_rgu_window(
                     select(
-                        JobSeriesDB.job_db_id,
-                        JobSeriesDB.sarc_user_id,
-                        JobSeriesDB.cluster_name,
-                        JobSeriesDB.submit_time,
+                        col(JobSeriesDB.job_db_id),
+                        col(JobSeriesDB.sarc_user_id),
+                        col(JobSeriesDB.cluster_name),
+                        col(JobSeriesDB.submit_time),
                         rgu_h_expr.label("rgu_hours"),
                         scaled_used_expr.label("rgu_used"),
                         m_mean.label("util_mean"),
@@ -342,10 +343,10 @@ def get_all_users_usage(
         util, _, rgu_h_expr, true_used_expr, scaled_used_expr = _rgu_exprs()
         stmt = _with_rgu_window(
             select(
-                JobSeriesDB.sarc_user_id,
-                JobSeriesDB.email,
-                JobSeriesDB.display_name,
-                JobSeriesDB.cluster_name,
+                col(JobSeriesDB.sarc_user_id),
+                col(JobSeriesDB.email),
+                col(JobSeriesDB.display_name),
+                col(JobSeriesDB.cluster_name),
                 func.coalesce(func.sum(rgu_h_expr), 0).label("sum_rgu_hours"),
                 func.coalesce(func.sum(true_used_expr), 0).label("sum_rgu_true_used"),
                 func.coalesce(func.sum(scaled_used_expr), 0).label("sum_rgu_used"),
@@ -393,10 +394,10 @@ def get_all_users_usage(
             job_rows = session.exec(
                 _with_rgu_window(
                     select(
-                        JobSeriesDB.job_db_id,
-                        JobSeriesDB.sarc_user_id,
-                        JobSeriesDB.cluster_name,
-                        JobSeriesDB.submit_time,
+                        col(JobSeriesDB.job_db_id),
+                        col(JobSeriesDB.sarc_user_id),
+                        col(JobSeriesDB.cluster_name),
+                        col(JobSeriesDB.submit_time),
                         rgu_h_expr.label("rgu_hours"),
                         true_used_expr.label("rgu_used"),
                         m_mean.label("util_mean"),
@@ -505,7 +506,7 @@ def _query_month_agg(
     util, _, rgu_h_expr, true_used_expr, scaled_used_expr = _rgu_exprs()
     stmt = _with_rgu_window(
         select(
-            JobSeriesDB.sarc_user_id,
+            col(JobSeriesDB.sarc_user_id),
             func.coalesce(func.sum(rgu_h_expr), 0).label("sum_rgu_hours"),
             func.coalesce(func.sum(true_used_expr), 0).label("sum_rgu_true_used"),
             func.coalesce(func.sum(scaled_used_expr), 0).label("sum_rgu_used"),
@@ -656,10 +657,10 @@ def get_recurring_underusers(
         )
         stmt = _with_rgu_window(
             select(
-                JobSeriesDB.sarc_user_id,
-                JobSeriesDB.email,
-                JobSeriesDB.display_name,
-                JobSeriesDB.cluster_name,
+                col(JobSeriesDB.sarc_user_id),
+                col(JobSeriesDB.email),
+                col(JobSeriesDB.display_name),
+                col(JobSeriesDB.cluster_name),
                 func.coalesce(func.sum(rgu_h_expr), 0).label("sum_rgu_hours"),
                 func.coalesce(func.sum(scaled_used_expr), 0).label("sum_rgu_used"),
                 func.coalesce(func.sum(true_used_expr), 0).label("sum_true_rgu_used"),
@@ -739,7 +740,7 @@ def get_recurring_underusers(
             )
             pa_stmt = _with_rgu_window(
                 select(
-                    JobSeriesDB.sarc_user_id,
+                    col(JobSeriesDB.sarc_user_id),
                     func.coalesce(func.sum(pa_rgu_h_expr), 0).label("sum_rgu_hours"),
                     func.coalesce(func.sum(pa_scaled_expr), 0).label("sum_rgu_used"),
                 ),

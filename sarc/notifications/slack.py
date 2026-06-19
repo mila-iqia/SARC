@@ -96,10 +96,10 @@ class SlackClient:
             lookup = self._client.users_lookupByEmail(email=email)
         except Exception as exc:
             err = str(exc)
-            try:
-                response_error = exc.response.data.get("error", "")
-            except AttributeError:
-                response_error = ""
+            # Read the response error from SlackApiError.response.data["error"]
+            response_error = getattr(getattr(exc, "response", None), "data", {}).get(
+                "error", ""
+            )
             if "users_not_found" in err or "users_not_found" in response_error:
                 logger.warning("Slack user not found for email %s", email)
                 return SendResult(SendStatus.USER_NOT_FOUND, email)
