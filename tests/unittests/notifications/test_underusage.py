@@ -475,7 +475,7 @@ def test_true_wasted_field_at_identity(underusage_db):
         min_ratio=_MIN_RATIO,
         min_rgu_hours=_MIN_RGU_HOURS,
         top_jobs_per_user=_TOP_JOBS_PER_USER,
-        waste_rescale_threshold=1.0,
+        utilization_ceiling=1.0,
     )
     for row in results:
         assert row.true_wasted == pytest.approx(row.wasted)
@@ -485,8 +485,8 @@ def test_true_wasted_field_at_identity(underusage_db):
 
 
 def test_scaled_waste_less_than_true_waste_below_threshold(underusage_db):
-    # petitbonhomme: m=0.10 on mila, rgu_h≈3360.  At threshold=0.20,
-    # scaled_used = LEAST(rgu_h, rgu_h*0.10/0.20) = rgu_h*0.50  → wasted=50%
+    # petitbonhomme: m=0.10 on mila, rgu_h≈3360.  At threshold=0.80,
+    # credited_used = LEAST(rgu_h, rgu_h*(1-0.80+0.10)) = rgu_h*0.30  → wasted=70%
     # true_used = rgu_h*0.10  → true_wasted=90%
     # So scaled waste < true waste.
     results = get_underusers(
@@ -495,11 +495,86 @@ def test_scaled_waste_less_than_true_waste_below_threshold(underusage_db):
         min_ratio=_MIN_RATIO,
         min_rgu_hours=_MIN_RGU_HOURS,
         top_jobs_per_user=_TOP_JOBS_PER_USER,
-        waste_rescale_threshold=0.20,
+        utilization_ceiling=0.80,
     )
     row = next(r for r in results if "petitbonhomme" in r.email)
     assert row.wasted < row.true_wasted
     assert row.waste_ratio < row.true_waste_ratio
+
+
+def test_subtractive_formula_exact_waste_ratio(underusage_db):
+    # Petitbonhomme total: rgu_h=12800 (mila 4800 + raisin 8000).
+    # Subtractive waste per job = rgu_h * max(0, T - m).
+    # At T=0.80: sum(waste) = 9592 → waste_ratio = 9592/12800.
+    results = get_underusers(
+        _WINDOW_START,
+        _WINDOW_END,
+        min_ratio=_MIN_RATIO,
+        min_rgu_hours=_MIN_RGU_HOURS,
+        top_jobs_per_user=_TOP_JOBS_PER_USER,
+        utilization_ceiling=0.80,
+    )
+    row = next(r for r in results if "petitbonhomme" in r.email)
+    assert row.waste_ratio == pytest.approx(9592 / 12800, rel=1e-4)
+
+    # At T=0.20: sum(waste) = 1984 → waste_ratio = 1984/12800 < _MIN_RATIO;
+    # pass min_ratio=0.10 so petitbonhomme still appears.
+    results = get_underusers(
+        _WINDOW_START,
+        _WINDOW_END,
+        min_ratio=0.10,
+        min_rgu_hours=_MIN_RGU_HOURS,
+        top_jobs_per_user=_TOP_JOBS_PER_USER,
+        utilization_ceiling=0.20,
+    )
+    row = next(r for r in results if "petitbonhomme" in r.email)
+    assert row.waste_ratio == pytest.approx(1984 / 12800, rel=1e-4)
+
+
+def test_subtractive_formula_boundary_zero_waste(underusage_db):
+    # Beaubonhomme: single mila job, m=0.80, rgu_h=3360.
+    # Subtractive: waste_ratio = max(0, T - m).  Allocation-independent.
+    # At T=0.80: m == T → waste = 0.
+    results = get_underusers(
+        _WINDOW_START,
+        _WINDOW_END,
+        min_ratio=0.0,
+        min_rgu_hours=0.0,
+        top_jobs_per_user=_TOP_JOBS_PER_USER,
+        utilization_ceiling=0.80,
+    )
+    row = next(r for r in results if "beaubonhomme" in r.email)
+    assert row.wasted == pytest.approx(0.0, abs=1e-6)
+
+    # At T=0.90: waste_ratio = 0.90 - 0.80 = 0.10 exactly.
+    results = get_underusers(
+        _WINDOW_START,
+        _WINDOW_END,
+        min_ratio=0.05,
+        min_rgu_hours=0.0,
+        top_jobs_per_user=_TOP_JOBS_PER_USER,
+        utilization_ceiling=0.90,
+    )
+    row = next(r for r in results if "beaubonhomme" in r.email)
+    assert row.waste_ratio == pytest.approx(0.10, abs=1e-6)
+
+
+def test_top_job_gpu_utilization_is_raw_mean(underusage_db):
+    # At T=0.80, displayed gpu_utilization must be raw m, independent of T.
+    # Raisin job m=0.0: shows 0.0.  Mila top job m=0.10: shows 0.10 (not 0.125 = 0.10/0.80).
+    results = get_underusers(
+        _WINDOW_START,
+        _WINDOW_END,
+        min_ratio=_MIN_RATIO,
+        min_rgu_hours=_MIN_RGU_HOURS,
+        top_jobs_per_user=_TOP_JOBS_PER_USER,
+        utilization_ceiling=0.80,
+    )
+    row = next(r for r in results if "petitbonhomme" in r.email)
+    raisin_job = next(j for j in row.top_jobs if j.cluster == "raisin")
+    mila_top = next(j for j in row.top_jobs if j.cluster == "mila")
+    assert raisin_job.gpu_utilization == pytest.approx(0.0, abs=1e-6)
+    assert mila_top.gpu_utilization == pytest.approx(0.10, abs=1e-6)
 
 
 # ── Usage report floor ────────────────────────────────────────────────────────
@@ -580,15 +655,16 @@ def test_missing_util_zero_waste(missing_util_db):
 
 
 def test_missing_util_non_negative_waste_at_sub_threshold(missing_util_db):
-    # Regression guard: at threshold < 1, scaled else-branch must not produce
-    # rgu_h / threshold > rgu_h → negative waste.
+    # Regression guard: at threshold < 1, the NaN/NULL else-branch must keep
+    # credited_used == rgu_h (zero waste) and not apply the subtractive adjustment,
+    # which would yield rgu_h * (1 - T + NaN) = NaN → undefined waste.
     results = get_underusers(
         _WINDOW_START,
         _WINDOW_END,
         min_ratio=0.0,
         min_rgu_hours=0.0,
         top_jobs_per_user=_TOP_JOBS_PER_USER,
-        waste_rescale_threshold=0.8,
+        utilization_ceiling=0.8,
     )
     row = next(r for r in results if r.email == "bramin@mila.quebec")
     assert row.wasted >= 0.0

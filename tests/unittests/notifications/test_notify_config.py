@@ -62,24 +62,24 @@ def test_active_cycles_equal_to_display_is_valid():
     assert cfg.recurrence_active_cycles == 5
 
 
-def test_waste_rescale_threshold_boundary_one_is_valid():
-    cfg = _make(waste_rescale_threshold=1.0)
-    assert cfg.waste_rescale_threshold == 1.0
+def test_utilization_ceiling_boundary_one_is_valid():
+    cfg = _make(utilization_ceiling=1.0)
+    assert cfg.utilization_ceiling == 1.0
 
 
-def test_waste_rescale_threshold_zero_raises():
-    with pytest.raises(ValueError, match="waste_rescale_threshold"):
-        _make(waste_rescale_threshold=0.0)
+def test_utilization_ceiling_zero_raises():
+    with pytest.raises(ValueError, match="utilization_ceiling"):
+        _make(utilization_ceiling=0.0)
 
 
-def test_waste_rescale_threshold_negative_raises():
-    with pytest.raises(ValueError, match="waste_rescale_threshold"):
-        _make(waste_rescale_threshold=-0.1)
+def test_utilization_ceiling_negative_raises():
+    with pytest.raises(ValueError, match="utilization_ceiling"):
+        _make(utilization_ceiling=-0.1)
 
 
-def test_waste_rescale_threshold_above_one_raises():
-    with pytest.raises(ValueError, match="waste_rescale_threshold"):
-        _make(waste_rescale_threshold=1.01)
+def test_utilization_ceiling_above_one_raises():
+    with pytest.raises(ValueError, match="utilization_ceiling"):
+        _make(utilization_ceiling=1.01)
 
 
 def test_usage_report_min_rgu_hours_zero_is_valid():
@@ -92,14 +92,14 @@ def test_usage_report_min_rgu_hours_negative_raises():
         _make(usage_report_min_rgu_hours=-1.0)
 
 
-def test_personalized_action_min_waste_rgu_hours_zero_is_valid():
-    cfg = _make(personalized_action_min_waste_rgu_hours=0.0)
-    assert cfg.personalized_action_min_waste_rgu_hours == 0.0
+def test_personalized_action_min_rgu_hours_zero_is_valid():
+    cfg = _make(personalized_action_min_rgu_hours=0.0)
+    assert cfg.personalized_action_min_rgu_hours == 0.0
 
 
-def test_personalized_action_min_waste_rgu_hours_negative_raises():
-    with pytest.raises(ValueError, match="personalized_action_min_waste_rgu_hours"):
-        _make(personalized_action_min_waste_rgu_hours=-1.0)
+def test_personalized_action_min_rgu_hours_negative_raises():
+    with pytest.raises(ValueError, match="personalized_action_min_rgu_hours"):
+        _make(personalized_action_min_rgu_hours=-1.0)
 
 
 def test_clusters_list_of_strings_is_valid():

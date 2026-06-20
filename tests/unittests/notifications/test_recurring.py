@@ -59,7 +59,7 @@ _NOTIFY_CFG = {
     "window_weeks": 2,
     "digest_top_n": 16,
     "recurrence_cluster_share": 0.30,
-    "personalized_action_min_waste_rgu_hours": 0.0,
+    "personalized_action_min_rgu_hours": 0.0,
 }
 
 
@@ -367,7 +367,7 @@ def test_active_cycles_personalized_action(recurring_db, active_cycles, expected
             min_rgu_hours=_MIN_RGU_HOURS,
             cluster_share_threshold=1.1,
             recurrence_active_cycles=active_cycles,
-            personalized_action_min_waste_rgu_hours=400.0,
+            personalized_action_min_rgu_hours=400.0,
         )
     row = next(r for r in result["mila"] if r.email == "petitbonhomme@mila.quebec")
     assert row.personalized_action is expected
@@ -689,7 +689,7 @@ def test_odd_week_end_personalized_action_floor_controls(recurring_db):
             min_ratio=_MIN_RATIO,
             min_rgu_hours=_MIN_RGU_HOURS,
             cluster_share_threshold=0.30,
-            personalized_action_min_waste_rgu_hours=999999.0,
+            personalized_action_min_rgu_hours=999999.0,
         )
     for rows in result.values():
         for row in rows:
@@ -838,7 +838,7 @@ def test_per_cycle_no_peak_on_passing_cell():
 
 
 def test_wasted_6w_uses_scaled_waste(recurring_db):
-    # petitbonhomme: util=0.05, threshold=0.05 → scaled_used=LEAST(rgu_h, rgu_h*1.0)=rgu_h
+    # petitbonhomme: util=0.05, threshold=0.05 → credited_used=LEAST(rgu_h, rgu_h*1.0)=rgu_h
     # → wasted=0 → excluded from the recurring table entirely
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         result = get_recurring_underusers(
@@ -846,7 +846,7 @@ def test_wasted_6w_uses_scaled_waste(recurring_db):
             min_ratio=_MIN_RATIO,
             min_rgu_hours=_MIN_RGU_HOURS,
             cluster_share_threshold=1.1,
-            waste_rescale_threshold=0.05,
+            utilization_ceiling=0.05,
         )
     emails = {r.email for rows in result.values() for r in rows}
     assert "petitbonhomme@mila.quebec" not in emails
@@ -873,7 +873,7 @@ def test_personalized_action_floor_zero_flags_wasters(recurring_db):
             min_ratio=_MIN_RATIO,
             min_rgu_hours=_MIN_RGU_HOURS,
             cluster_share_threshold=1.1,
-            personalized_action_min_waste_rgu_hours=0.0,
+            personalized_action_min_rgu_hours=0.0,
         )
     row = next(r for r in result["mila"] if r.email == "petitbonhomme@mila.quebec")
     assert row.personalized_action is True
@@ -887,7 +887,7 @@ def test_personalized_action_floor_high_excludes_all(recurring_db):
             min_ratio=_MIN_RATIO,
             min_rgu_hours=_MIN_RGU_HOURS,
             cluster_share_threshold=1.1,
-            personalized_action_min_waste_rgu_hours=999999.0,
+            personalized_action_min_rgu_hours=999999.0,
         )
     for rows in result.values():
         for row in rows:
@@ -965,7 +965,7 @@ def test_pa_flags_four_scenarios(pa_scenario_db):
         recurrence_display_cycles=5,
         cycle_length_weeks=2,
         clusters=["mila"],
-        personalized_action_min_waste_rgu_hours=30.0,
+        personalized_action_min_rgu_hours=30.0,
     )
     rows = {r.email: r for r in result.get("mila", [])}
 

@@ -184,7 +184,7 @@ def build_recurring_table(
 
     A "|" separator is rendered after the last active cycle (index *active_cycles*).
     Per-cycle ⚑ is shown on ✗ cells in positions 0..active_cycles-1 whose
-    pa_flags entry indicates scaled cross-cluster waste ≥ the action threshold.
+    pa_flags entry indicates ceiling-adjusted cross-cluster waste ≥ the action threshold.
 
     Pure function — no I/O, deterministic for fixed input.
     """

@@ -283,15 +283,6 @@ class SlackConfig:
 
 
 @dataclass
-class EmailConfig:
-    host: str
-    port: int
-    from_address: str
-    username: str | None = None
-    password: Secret[str] | None = None
-
-
-@dataclass
 class UnderusageNotifyConfig:
     slack: SlackConfig
     enabled: bool = True
@@ -314,14 +305,13 @@ class UnderusageNotifyConfig:
     recurrence_display_cycles: int = 5
     # Number of calendar months included in the historical trend section.
     historical_months: int = 6
-    email: EmailConfig | None = None
     # Universal usage report cadence.
     usage_report_window_weeks: int = 4
     usage_report_min_rgu_hours: float = 1843.2  # 4x A100-80GB RGU x4d
     send_usage_report: bool = False
     clusters: list[str] = field(default_factory=lambda: ["mila"])
-    personalized_action_min_waste_rgu_hours: float = 16128.0  # 20x A100-80GB RGU x 7d
-    waste_rescale_threshold: float = 1.0
+    personalized_action_min_rgu_hours: float = 16128.0  # 20x A100-80GB RGU x 7d
+    utilization_ceiling: float = 1.0  # T ∈ (0,1]: wasted = max(0, rgu_h × (T − m))
 
     def __post_init__(self):
         for field_name, value in [
@@ -341,18 +331,18 @@ class UnderusageNotifyConfig:
                 f"recurrence_active_cycles ({self.recurrence_active_cycles}) must be"
                 f" ≤ recurrence_display_cycles ({self.recurrence_display_cycles})"
             )
-        if not (0 < self.waste_rescale_threshold <= 1):
+        if not (0 < self.utilization_ceiling <= 1):
             raise ValueError(
-                f"waste_rescale_threshold must be in (0, 1], got {self.waste_rescale_threshold!r}"
+                f"utilization_ceiling must be in (0, 1], got {self.utilization_ceiling!r}"
             )
         if self.usage_report_min_rgu_hours < 0:
             raise ValueError(
                 f"usage_report_min_rgu_hours must be >= 0, got {self.usage_report_min_rgu_hours!r}"
             )
-        if self.personalized_action_min_waste_rgu_hours < 0:
+        if self.personalized_action_min_rgu_hours < 0:
             raise ValueError(
-                f"personalized_action_min_waste_rgu_hours must be >= 0,"
-                f" got {self.personalized_action_min_waste_rgu_hours!r}"
+                f"personalized_action_min_rgu_hours must be >= 0,"
+                f" got {self.personalized_action_min_rgu_hours!r}"
             )
         for entry in self.clusters:
             if not isinstance(entry, str) or not entry:

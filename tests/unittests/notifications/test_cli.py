@@ -707,10 +707,10 @@ def test_clusters_config_filters_cli_results(notify_db, cli_main, monkeypatch, c
 
 
 def test_threshold_config_filters_cli_results(notify_db, cli_main, monkeypatch, capsys):
-    # petitbonhomme has util=0.10.  At threshold=0.10 scaled_used=rgu_h → wasted=0
+    # petitbonhomme has util=0.10.  At threshold=0.10 credited_used=rgu_h → wasted=0
     # → waste_ratio=0 < min_ratio=0.50 → not flagged.
     monkeypatch.setattr("sarc.cli.notify.underusage._now_utc", lambda: _CLI_TEST_END)
-    cfg = {**_NOTIFY_CFG, "waste_rescale_threshold": 0.10}
+    cfg = {**_NOTIFY_CFG, "utilization_ceiling": 0.10}
     with gifnoc.overlay({"sarc.notifications": cfg}):
         cli_main(["notify", "underusage", "--window-weeks", "4"])
     out = capsys.readouterr().out

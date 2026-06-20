@@ -19,7 +19,7 @@ sarc:
     enabled: True
     min_ratio: 0.80
     min_rgu_hours: 10752
-    waste_rescale_threshold: 0.8
+    utilization_ceiling: 0.8
   cache: "../sarc-cache"
   sshconfig: "~/.ssh/config"
   clusters:

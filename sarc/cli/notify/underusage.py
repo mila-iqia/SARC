@@ -215,7 +215,7 @@ class UnderusageNotifyCommand:
             resource=self.resource,
             exclude_zero_usage=True,
             clusters=clusters,
-            waste_rescale_threshold=ncfg.waste_rescale_threshold,
+            utilization_ceiling=ncfg.utilization_ceiling,
         )
         historical = get_historical_stats(
             end,
@@ -235,8 +235,8 @@ class UnderusageNotifyCommand:
             recurrence_active_cycles=ncfg.recurrence_active_cycles,
             cycle_length_weeks=USAGE_CYCLE_LENGTH_WEEKS,
             clusters=clusters,
-            waste_rescale_threshold=ncfg.waste_rescale_threshold,
-            personalized_action_min_waste_rgu_hours=ncfg.personalized_action_min_waste_rgu_hours,
+            utilization_ceiling=ncfg.utilization_ceiling,
+            personalized_action_min_rgu_hours=ncfg.personalized_action_min_rgu_hours,
         )
 
         _userfacing_print(f"Recipients ({len(rows)} user(s) flagged):")
