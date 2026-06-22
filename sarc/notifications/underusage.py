@@ -134,7 +134,7 @@ def _rgu_exprs(utilization_ceiling: float = 1.0):
 def _with_rgu_window(
     stmt, util_alias, start, end, *, exclude_zero_usage, rgu_used_expr, clusters=None
 ):
-    """Apply the gpu_utilization LEFT JOIN and submit-time / GPU-type / RGU filters."""
+    """Apply the gpu_utilization LEFT JOIN and end-time / GPU-type / RGU filters."""
     stmt = stmt.join(
         util_alias,
         and_(
@@ -143,8 +143,8 @@ def _with_rgu_window(
         ),
         isouter=True,
     ).where(
-        col(JobSeriesDB.submit_time) >= start,
-        col(JobSeriesDB.submit_time) < end,
+        col(JobSeriesDB.end_time) >= start,
+        col(JobSeriesDB.end_time) < end,
         col(JobSeriesDB.allocated_gpu_type).is_not(None),
         col(JobSeriesDB.rgu).is_not(None),
     )
@@ -184,8 +184,15 @@ def get_underusers(
         stmt = _with_rgu_window(
             select(
                 col(JobSeriesDB.sarc_user_id),
-                col(JobSeriesDB.email),
-                col(JobSeriesDB.display_name),
+                # Use func.any_value for email and display_name to allow
+                # aggregation across multiple rows per (user_id, cluster)
+                # without requiring these fields in the GROUP BY clause.
+                # https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-GROUP
+                # "In general, if a table is grouped, columns that are not
+                # listed in GROUP BY cannot be referenced except in aggregate
+                # expressions."
+                func.any_value(JobSeriesDB.email).label("email"),
+                func.any_value(JobSeriesDB.display_name).label("display_name"),
                 col(JobSeriesDB.cluster_name),
                 func.coalesce(func.sum(rgu_h_expr), 0).label("sum_rgu_hours"),
                 func.coalesce(func.sum(true_used_expr), 0).label("sum_rgu_true_used"),
@@ -197,12 +204,7 @@ def get_underusers(
             exclude_zero_usage=exclude_zero_usage,
             rgu_used_expr=rgu_h_expr,
             clusters=clusters,
-        ).group_by(
-            JobSeriesDB.sarc_user_id,
-            JobSeriesDB.email,
-            JobSeriesDB.display_name,
-            JobSeriesDB.cluster_name,
-        )
+        ).group_by(JobSeriesDB.sarc_user_id, JobSeriesDB.cluster_name)
         agg_rows = session.exec(stmt).all()
 
         user_data: dict[int, dict] = {}
@@ -346,8 +348,8 @@ def get_all_users_usage(
         stmt = _with_rgu_window(
             select(
                 col(JobSeriesDB.sarc_user_id),
-                col(JobSeriesDB.email),
-                col(JobSeriesDB.display_name),
+                func.any_value(JobSeriesDB.email).label("email"),
+                func.any_value(JobSeriesDB.display_name).label("display_name"),
                 col(JobSeriesDB.cluster_name),
                 func.coalesce(func.sum(rgu_h_expr), 0).label("sum_rgu_hours"),
                 func.coalesce(func.sum(true_used_expr), 0).label("sum_rgu_true_used"),
@@ -359,12 +361,7 @@ def get_all_users_usage(
             exclude_zero_usage=False,
             rgu_used_expr=rgu_h_expr,
             clusters=clusters,
-        ).group_by(
-            JobSeriesDB.sarc_user_id,
-            JobSeriesDB.email,
-            JobSeriesDB.display_name,
-            JobSeriesDB.cluster_name,
-        )
+        ).group_by(JobSeriesDB.sarc_user_id, JobSeriesDB.cluster_name)
         agg_rows = session.exec(stmt).all()
 
         user_data: dict[int, dict] = {}
@@ -660,8 +657,8 @@ def get_recurring_underusers(
         stmt = _with_rgu_window(
             select(
                 col(JobSeriesDB.sarc_user_id),
-                col(JobSeriesDB.email),
-                col(JobSeriesDB.display_name),
+                func.any_value(JobSeriesDB.email).label("email"),
+                func.any_value(JobSeriesDB.display_name).label("display_name"),
                 col(JobSeriesDB.cluster_name),
                 func.coalesce(func.sum(rgu_h_expr), 0).label("sum_rgu_hours"),
                 func.coalesce(func.sum(credited_used_expr), 0).label("sum_rgu_used"),
@@ -673,12 +670,7 @@ def get_recurring_underusers(
             exclude_zero_usage=exclude_zero_usage,
             rgu_used_expr=rgu_h_expr,
             clusters=clusters,
-        ).group_by(
-            JobSeriesDB.sarc_user_id,
-            JobSeriesDB.email,
-            JobSeriesDB.display_name,
-            JobSeriesDB.cluster_name,
-        )
+        ).group_by(JobSeriesDB.sarc_user_id, JobSeriesDB.cluster_name)
         agg_rows = session.exec(stmt).all()
 
     # ── Organise wasted RGU-h per (cluster, user) ─────────────────────────────

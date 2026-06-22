@@ -44,6 +44,7 @@ def _add_gpu_job(
     job_id: int,
     submit_time: datetime,
 ) -> SlurmJobDB:
+    submit_time += -timedelta(hours=elapsed_h)
     job_data = copy.deepcopy(base_job)
     job_data.pop("cluster_name")
     job_data.update(

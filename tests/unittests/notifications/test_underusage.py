@@ -48,10 +48,12 @@ def _add_gpu_job(
     gpu_type: str,
     utilization: float | None = None,
     job_id: int,
-    submit_offset_h: int = 0,
+    end_offset_h: int = 0,
     allocated_billing: int | None = None,
 ) -> SlurmJobDB:
-    submit = _WINDOW_START + timedelta(hours=submit_offset_h)
+    submit_time = (
+        _WINDOW_START - timedelta(hours=elapsed_h) + timedelta(hours=end_offset_h)
+    )
     job_data = copy.deepcopy(base_job)
     job_data.pop("cluster_name")
     job_data.update(
@@ -59,9 +61,9 @@ def _add_gpu_job(
             "sarc_user_id": user_id,
             "cluster_id": cluster_id,
             "elapsed_time": int(elapsed_h * 3600),
-            "submit_time": submit,
-            "start_time": submit + timedelta(seconds=60),
-            "end_time": submit + timedelta(hours=elapsed_h),
+            "submit_time": submit_time,
+            "start_time": submit_time + timedelta(seconds=60),
+            "end_time": submit_time + timedelta(hours=elapsed_h),
             "job_id": job_id,
             "requested_gres_gpu": requested_gres,
             "allocated_gres_gpu": allocated_gres,
@@ -123,7 +125,7 @@ def underusage_db(read_write_db):
         gpu_type=_MILA_GPU_TYPE,
         utilization=0.10,
         job_id=80001,
-        submit_offset_h=0,
+        end_offset_h=0,
     )
 
     # Low waster: 700 GPU-hours on mila, 80 % utilisation
@@ -138,7 +140,7 @@ def underusage_db(read_write_db):
         gpu_type=_MILA_GPU_TYPE,
         utilization=0.80,
         job_id=80002,
-        submit_offset_h=1,
+        end_offset_h=1,
     )
 
     # Below floor: 100 GPU-hours, 0 % utilisation
@@ -153,7 +155,7 @@ def underusage_db(read_write_db):
         gpu_type=_MILA_GPU_TYPE,
         utilization=0.0,
         job_id=80003,
-        submit_offset_h=2,
+        end_offset_h=2,
     )
 
     # Multi-cluster: petitbonhomme on raisin — large job at 0 % util to be the
@@ -169,7 +171,7 @@ def underusage_db(read_write_db):
         gpu_type=_RAISIN_GPU_TYPE,
         utilization=0.0,
         job_id=80004,
-        submit_offset_h=10,
+        end_offset_h=10,
         allocated_billing=_RAISIN_BILLING,
     )
 
@@ -186,7 +188,7 @@ def underusage_db(read_write_db):
             gpu_type=_MILA_GPU_TYPE,
             utilization=util,
             job_id=80000 + i,
-            submit_offset_h=20 + i,
+            end_offset_h=20 + i,
         )
 
     session.commit()
