@@ -69,7 +69,7 @@ class ClusterConfig:
     password: OTPInfo | StaticInfo | None = None
     timezone: zoneinfo.ZoneInfo | None = None
     prometheus_url: str | None = None
-    prometheus_headers: dict[str, Secret[str]] | str = field(default_factory=dict)
+    prometheus_headers: dict[str, Secret[str]] = field(default_factory=dict)
     prometheus_check_ssl: bool = True
     name: str | None = None
     sacct_bin: str = "sacct"
@@ -185,23 +185,10 @@ class ClusterConfig:
             raise ConfigurationError(
                 f"No prometheus config provided for cluster '{self.name}'"
             )
-        headers = {}
-        if isinstance(self.prometheus_headers, str):
-            assert self.prometheus_headers == "gcp"
-            import google.auth
-            import google.auth.transport.requests
 
-            credentials, _ = google.auth.default(
-                scopes=["https://www.googleapis.com/auth/monitoring.read"]
-            )
-            auth_request = google.auth.transport.requests.Request()
-            credentials.refresh(auth_request)
-            headers["Authorization"] = f"Bearer {credentials.token}"
-        elif isinstance(self.prometheus_headers, dict):
-            headers = self.prometheus_headers
         return PrometheusConnect(
             url=self.prometheus_url,
-            headers=headers,
+            headers=self.prometheus_headers,
             disable_ssl=not self.prometheus_check_ssl,
         )
 
