@@ -1003,6 +1003,7 @@ def metrics_jobs(
     job_states: list[str] = Query(default=[]),
     limit: int = Query(default=50, gt=0, le=500),
     offset: int = Query(default=0, ge=0),
+    include_total: bool = Query(default=True),
     sort_by: str = Query(default="rgu_hours"),
     sort_dir: str = Query(default="desc"),
     metric: str = Query(default="gpu_sm_occupancy"),
@@ -1016,7 +1017,11 @@ def metrics_jobs(
     per job: cluster, user, state, elapsed, GPU counts, billing, gpu_type, rgu,
     rgu_hours, per-job metric means and ``waste`` (rgu_hours * (1 - mean)). Sorted
     by ``sort_by``/``sort_dir`` and paginated by ``limit``/``offset``. Returns
-    {total, jobs}, where ``total`` is the full filtered count.
+    {total, jobs}. ``total`` is the full filtered count, computed by a SEPARATE
+    query (kept out of the page query so the page parallelises — see below) and
+    only when ``include_total`` is set (None otherwise). The frontend requests it
+    on every page so the count and page numbers stay current as scraping adds
+    jobs; the separate query stays cheap precisely because it parallelises.
     """
     begin_dt, finish_dt = _apply_focus(*_date_range(start, end), focus_start, focus_end)
 
@@ -1089,10 +1094,30 @@ def metrics_jobs(
         col(SlurmJobDB.submit_time) < finish_dt,
     )
 
-    # PAGE: the page's job ids + the pre-LIMIT total. The expensive scan/sort/
-    # count runs here, on the source only (+ the sort's stat alias when needed).
+    # COUNT: the full filtered total, computed by its own query and only when
+    # asked (include_total). The frontend requests it on every page so the count
+    # and page numbers stay current as scraping adds jobs. It is deliberately kept
+    # OUT of the page query below: a `count(*) OVER ()` there forces the whole
+    # filtered set to be materialised AND disables parallelism, so every page would
+    # pay the full-set cost. Isolated like this the count parallelises (and needs
+    # neither the clusters nor the stat join), so paying it per page stays cheap.
+    total: int | None = None
+    if include_total:
+        count_q = _apply_rgu_base(
+            select(func.count()),
+            sess,
+            clusters,
+            cluster_user,
+            job_states,
+            scope_user_id=_scope(req),
+        ).where(*base_filters)
+        total = int(sess.exec(count_q).one())
+
+    # PAGE: the page's job ids only. The scan/sort runs here on the source alone
+    # (+ the sort's stat alias when needed). With no window count it parallelises,
+    # and a small offset top-N heapsorts instead of sorting the whole set.
     page_q = _apply_rgu_base(
-        select(col(SlurmJobDB.id).label("jid"), func.count().over().label("total")),
+        select(col(SlurmJobDB.id).label("jid")),
         sess,
         clusters,
         cluster_user,
@@ -1111,7 +1136,7 @@ def metrics_jobs(
     ).subquery()
 
     # FINAL: display columns + the 3 stats, fetched only for the page's rows
-    # (joined back on the job id). `total` is carried over from the page.
+    # (joined back on the job id). The total comes from the separate count above.
     query = (
         _apply_rgu_base(
             select(  # ty:ignore[no-matching-overload]
@@ -1134,7 +1159,6 @@ def metrics_jobs(
                 col(js["gpu_utilization"].mean).label("gpu_utilization_mean"),
                 col(js["gpu_sm_occupancy"].mean).label("gpu_sm_occupancy_mean"),
                 col(js["gpu_memory"].max).label("gpu_memory_max"),
-                page.c.total,
             ),
             sess,
             clusters,
@@ -1150,9 +1174,7 @@ def metrics_jobs(
     query = query.order_by(*order_by)
 
     jobs = []
-    total = 0
     for row in sess.exec(query):
-        total = int(row.total)
         mm = _nan_to_none(row.metric_mean)
         rh = float(row.rgu_hours)
         waste = round(rh * (1 - mm), 2) if mm is not None else None

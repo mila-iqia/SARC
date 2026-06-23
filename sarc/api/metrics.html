@@ -1521,6 +1521,9 @@
       // div, which resets the state to JOBTABLE_DEFAULTS.
       const payload = d.jobs || {};
       const jobList = payload.jobs || [];
+      // The total is fetched fresh on every page (not cached) so the job count
+      // and page numbers track the DB as scraping adds jobs. The backend keeps it
+      // a separate, parallelised query, so paying it per page stays cheap.
       const total = payload.total || 0;
       el._jtData = payload;  // kept so an RGU-unit change can rescale in place
 
