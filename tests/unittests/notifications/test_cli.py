@@ -1,6 +1,5 @@
 """Tests for `sarc notify underusage` CLI command."""
 
-import copy
 from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
@@ -9,10 +8,9 @@ import pytest
 from sqlmodel import select
 
 from sarc.db.cluster import SlurmClusterDB
-from sarc.db.job import JobStatisticDB, SlurmJobDB
 from sarc.db.users import UserDB
 from sarc.notifications.slack import SendResult, SendStatus
-from tests.db.factory import base_job
+from tests.unittests.notifications._factory import add_gpu_job
 
 _MILA_GPU_TYPE = "A100-SXM4-80GB"
 
@@ -36,55 +34,14 @@ _NOTIFY_CFG = {
 }
 
 
-def _add_gpu_job(
-    session,
-    *,
-    user_id: int,
-    cluster_id: int,
-    elapsed_h: float,
-    gpu_type: str,
-    utilization: float | None,
-    job_id: int,
-    end_time: datetime,
-) -> SlurmJobDB:
-    submit_time = end_time - timedelta(hours=elapsed_h)
-    job_data = copy.deepcopy(base_job)
-    job_data.pop("cluster_name")
-    job_data.update(
-        {
-            "sarc_user_id": user_id,
-            "cluster_id": cluster_id,
-            "elapsed_time": int(elapsed_h * 3600),
-            "submit_time": submit_time,
-            "start_time": submit_time + timedelta(seconds=60),
-            "end_time": end_time,
-            "job_id": job_id,
-            "requested_gres_gpu": 1,
-            "allocated_gres_gpu": 1,
-            "allocated_gpu_type": gpu_type,
-            "harmonized_gpu_type": gpu_type,
-            "job_state": "COMPLETED",
-        }
+def _add_gpu_job(session, *, end_time: datetime, elapsed_h: float, **kwargs):
+    """Seed a job whose end_time is the given anchor."""
+    return add_gpu_job(
+        session,
+        submit_time=end_time - timedelta(hours=elapsed_h),
+        elapsed_h=elapsed_h,
+        **kwargs,
     )
-    job = SlurmJobDB(**job_data)
-    session.add(job)
-    session.flush()
-    if utilization is not None:
-        session.add(
-            JobStatisticDB(
-                job_id=job.id,
-                name="gpu_utilization",
-                mean=utilization,
-                std=None,
-                q05=None,
-                q25=None,
-                median=None,
-                q75=None,
-                max=None,
-                unused=None,
-            )
-        )
-    return job
 
 
 @pytest.fixture
@@ -512,7 +469,12 @@ def test_send_usage_report_disabled_no_report_sends(
     # dm_user may be called 0 times (send_underusage_report=False, send_usage_report=False)
     slack_inst.dm_user.assert_not_called()
     out = capsys.readouterr().out
-    assert "skipped=1" in out
+    # The usage-report recipient (beaubonhomme) is recorded as skipped in the
+    # Usage Report Summary footer — scope the assertion there so it is unambiguous.
+    report_section = out[out.index("--- Usage Report Summary ---") :]
+    assert "eligible=1" in report_section
+    assert "skipped=1" in report_section
+    assert "dm_sent=0" in report_section
 
 
 def test_send_usage_report_enabled_sends_report_to_non_underusers(

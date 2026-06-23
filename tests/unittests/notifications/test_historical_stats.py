@@ -11,14 +11,12 @@ Seed layout (mila cluster, A100-SXM4-80GB → rgu=4.8):
   Last-year period: no jobs → yoy_months should be None.
 """
 
-import copy
 from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlmodel import select
 
 from sarc.db.cluster import SlurmClusterDB
-from sarc.db.job import JobStatisticDB, SlurmJobDB
 from sarc.db.users import UserDB
 from sarc.notifications.messages import build_admin_digest
 from sarc.notifications.underusage import (
@@ -26,7 +24,7 @@ from sarc.notifications.underusage import (
     MonthlyStats,
     get_historical_stats,
 )
-from tests.db.factory import base_job
+from tests.unittests.notifications._factory import add_gpu_job
 
 _MILA_GPU_TYPE = "A100-SXM4-80GB"
 _MILA_RGU = 4.8
@@ -45,55 +43,14 @@ def _month_midpoint(year: int, month: int) -> datetime:
     return datetime(year, month, 15, tzinfo=UTC)
 
 
-def _add_gpu_job(
-    session,
-    *,
-    user_id: int,
-    cluster_id: int,
-    elapsed_h: float,
-    gpu_type: str,
-    utilization: float | None,
-    job_id: int,
-    submit_time: datetime,
-) -> SlurmJobDB:
-    submit_time += -timedelta(hours=elapsed_h)
-    job_data = copy.deepcopy(base_job)
-    job_data.pop("cluster_name")
-    job_data.update(
-        {
-            "sarc_user_id": user_id,
-            "cluster_id": cluster_id,
-            "elapsed_time": int(elapsed_h * 3600),
-            "submit_time": submit_time,
-            "start_time": submit_time + timedelta(seconds=60),
-            "end_time": submit_time + timedelta(hours=elapsed_h),
-            "job_id": job_id,
-            "requested_gres_gpu": 1,
-            "allocated_gres_gpu": 1,
-            "allocated_gpu_type": gpu_type,
-            "harmonized_gpu_type": gpu_type,
-            "job_state": "COMPLETED",
-        }
+def _add_gpu_job(session, *, end_time: datetime, elapsed_h: float, **kwargs):
+    """Seed a job whose end_time is the given month midpoint anchor."""
+    return add_gpu_job(
+        session,
+        submit_time=end_time - timedelta(hours=elapsed_h),
+        elapsed_h=elapsed_h,
+        **kwargs,
     )
-    job = SlurmJobDB(**job_data)
-    session.add(job)
-    session.flush()
-    if utilization is not None:
-        session.add(
-            JobStatisticDB(
-                job_id=job.id,
-                name="gpu_utilization",
-                mean=utilization,
-                std=None,
-                q05=None,
-                q25=None,
-                median=None,
-                q75=None,
-                max=None,
-                unused=None,
-            )
-        )
-    return job
 
 
 @pytest.fixture
@@ -117,7 +74,7 @@ def historical_db(read_write_db):
             gpu_type=_MILA_GPU_TYPE,
             utilization=0.10,
             job_id=job_counter,
-            submit_time=_month_midpoint(2025, month),
+            end_time=_month_midpoint(2025, month),
         )
 
     # beaubonhomme: low-waste job only in Jun 2025
@@ -130,7 +87,7 @@ def historical_db(read_write_db):
         gpu_type=_MILA_GPU_TYPE,
         utilization=0.80,
         job_id=job_counter,
-        submit_time=_month_midpoint(2025, 6),
+        end_time=_month_midpoint(2025, 6),
     )
 
     session.commit()
@@ -223,8 +180,8 @@ def test_yoy_present_when_prior_year_has_data(read_write_db):
         gpu_type=_MILA_GPU_TYPE,
         utilization=0.10,
         job_id=99999,
-        # 2024-06-15 falls in the YoY window (Jun 2024 = Jun 2025 - 1 year)
-        submit_time=datetime(2024, 6, 15, tzinfo=UTC),
+        # 2024-06-15 falls in the YoY window
+        end_time=_END.replace(year=_END.year - 1, month=_END.month - 1),
     )
     session.commit()
 
@@ -248,7 +205,7 @@ def test_yoy_has_six_months_when_present(read_write_db):
         gpu_type=_MILA_GPU_TYPE,
         utilization=0.10,
         job_id=99998,
-        submit_time=datetime(2024, 3, 15, tzinfo=UTC),
+        end_time=datetime(2024, 3, 15, tzinfo=UTC),
     )
     session.commit()
 

@@ -1,6 +1,5 @@
 """Tests for T3b: recurring-underusers table (get_recurring_underusers + builder)."""
 
-import copy
 from datetime import UTC, date, datetime, timedelta
 
 import gifnoc
@@ -8,7 +7,6 @@ import pytest
 from sqlmodel import select
 
 from sarc.db.cluster import SlurmClusterDB
-from sarc.db.job import JobStatisticDB, SlurmJobDB
 from sarc.db.users import UserDB
 from sarc.notifications.messages import build_recurring_table
 from sarc.notifications.underusage import (
@@ -17,7 +15,7 @@ from sarc.notifications.underusage import (
     get_cycle_dates,
     get_recurring_underusers,
 )
-from tests.db.factory import base_job
+from tests.unittests.notifications._factory import add_gpu_job
 
 # "Today" for all recurring tests.
 _TEST_END = datetime(2024, 6, 30, tzinfo=UTC)
@@ -62,54 +60,9 @@ _NOTIFY_CFG = {
 }
 
 
-def _add_gpu_job(
-    session,
-    *,
-    user_id: int,
-    cluster_id: int,
-    elapsed_h: float,
-    submit_time: datetime,
-    job_id: int,
-    gpu_type: str = _MILA_GPU_TYPE,
-    utilization: float = 0.0,
-) -> SlurmJobDB:
-    job_data = copy.deepcopy(base_job)
-    job_data.pop("cluster_name")
-    job_data.update(
-        {
-            "sarc_user_id": user_id,
-            "cluster_id": cluster_id,
-            "elapsed_time": int(elapsed_h * 3600),
-            "submit_time": submit_time,
-            "start_time": submit_time + timedelta(seconds=60),
-            "end_time": submit_time + timedelta(hours=elapsed_h),
-            "job_id": job_id,
-            "requested_gres_gpu": 1,
-            "allocated_gres_gpu": 1,
-            "allocated_gpu_type": gpu_type,
-            "harmonized_gpu_type": gpu_type,
-            "job_state": "COMPLETED",
-        }
-    )
-    job = SlurmJobDB(**job_data)
-    session.add(job)
-    session.flush()
-    if utilization is not None:
-        session.add(
-            JobStatisticDB(
-                job_id=job.id,
-                name="gpu_utilization",
-                mean=utilization,
-                std=None,
-                q05=None,
-                q25=None,
-                median=None,
-                q75=None,
-                max=None,
-                unused=None,
-            )
-        )
-    return job
+def _add_gpu_job(session, *, utilization: float | None = 0.0, **kwargs):
+    """Seed a job at the literal submit_time (recurring tests pass cycle starts)."""
+    return add_gpu_job(session, utilization=utilization, **kwargs)
 
 
 @pytest.fixture
@@ -670,8 +623,7 @@ def test_odd_week_end_w0_is_none(recurring_db):
             min_rgu_hours=_MIN_RGU_HOURS,
             cluster_share_threshold=0.30,
         )
-    if not result:
-        pytest.skip("no users selected for this window (may be outside data range)")
+    assert result, "expected selected users for the odd-week window"
     for rows in result.values():
         for row in rows:
             assert row.cycles[0] is None, (

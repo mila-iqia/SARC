@@ -8,18 +8,16 @@ RGU values used:
                  gpu_type "A100"  →  rgu = 1 * 4.0 = 4.0   (inserted in fixture)
 """
 
-import copy
 from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlmodel import select
 
 from sarc.db.cluster import SlurmClusterDB
-from sarc.db.job import JobStatisticDB, SlurmJobDB
 from sarc.db.support import GpuRguDB
 from sarc.db.users import UserDB
 from sarc.notifications.underusage import get_all_users_usage, get_underusers
-from tests.db.factory import base_job
+from tests.unittests.notifications._factory import add_gpu_job
 
 _WINDOW_START = datetime(2024, 6, 1, tzinfo=UTC)
 _WINDOW_END = datetime(2024, 6, 30, tzinfo=UTC)
@@ -37,62 +35,12 @@ _RAISIN_RGU = 4.0
 _RAISIN_BILLING = 100
 
 
-def _add_gpu_job(
-    session,
-    *,
-    user_id: int,
-    cluster_id: int,
-    elapsed_h: float,
-    requested_gres: int,
-    allocated_gres: int,
-    gpu_type: str,
-    utilization: float | None = None,
-    job_id: int,
-    end_offset_h: int = 0,
-    allocated_billing: int | None = None,
-) -> SlurmJobDB:
+def _add_gpu_job(session, *, elapsed_h: float, end_offset_h: int = 0, **kwargs):
+    """Seed a job whose end_time is `_WINDOW_START + end_offset_h`."""
     submit_time = (
         _WINDOW_START - timedelta(hours=elapsed_h) + timedelta(hours=end_offset_h)
     )
-    job_data = copy.deepcopy(base_job)
-    job_data.pop("cluster_name")
-    job_data.update(
-        {
-            "sarc_user_id": user_id,
-            "cluster_id": cluster_id,
-            "elapsed_time": int(elapsed_h * 3600),
-            "submit_time": submit_time,
-            "start_time": submit_time + timedelta(seconds=60),
-            "end_time": submit_time + timedelta(hours=elapsed_h),
-            "job_id": job_id,
-            "requested_gres_gpu": requested_gres,
-            "allocated_gres_gpu": allocated_gres,
-            "allocated_gpu_type": gpu_type,
-            "harmonized_gpu_type": gpu_type,
-            "job_state": "COMPLETED",
-        }
-    )
-    if allocated_billing is not None:
-        job_data["allocated_billing"] = allocated_billing
-    job = SlurmJobDB(**job_data)
-    session.add(job)
-    session.flush()
-    if utilization is not None:
-        session.add(
-            JobStatisticDB(
-                job_id=job.id,
-                name="gpu_utilization",
-                mean=utilization,
-                std=None,
-                q05=None,
-                q25=None,
-                median=None,
-                q75=None,
-                max=None,
-                unused=None,
-            )
-        )
-    return job
+    return add_gpu_job(session, submit_time=submit_time, elapsed_h=elapsed_h, **kwargs)
 
 
 @pytest.fixture
