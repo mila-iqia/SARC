@@ -81,6 +81,10 @@ def _now_utc() -> datetime:
     return datetime.now(UTC)
 
 
+def _today_utc() -> datetime:
+    return _now_utc().replace(hour=0, minute=0, second=0, microsecond=0)
+
+
 def _iso_week(dt: datetime) -> int:
     return dt.isocalendar().week
 
@@ -94,11 +98,6 @@ class UnderusageNotifyCommand:
     """Preview or send resource-underusage notifications (dry-run by default)."""
 
     config: Path | None = None
-    window_weeks: int | None = simple_parsing.field(
-        default=None,
-        alias=["--window-weeks"],
-        help="Analysis window in weeks (overrides config).",
-    )
     min_ratio: float | None = simple_parsing.field(
         default=None,
         alias=["--min-ratio"],
@@ -141,9 +140,7 @@ class UnderusageNotifyCommand:
             logger.info("Underusage notifications disabled (enabled=false); skipping")
             return 0
 
-        window_weeks = (
-            self.window_weeks if self.window_weeks is not None else ncfg.window_weeks
-        )
+        window_weeks = USAGE_CYCLE_LENGTH_WEEKS
         min_ratio = self.min_ratio if self.min_ratio is not None else ncfg.min_ratio
         min_rgu_hours = (
             self.min_rgu_hours if self.min_rgu_hours is not None else ncfg.min_rgu_hours
@@ -161,21 +158,22 @@ class UnderusageNotifyCommand:
                 logger.error("Invalid --as-of date %r: expected YYYY-MM-DD", self.as_of)
                 return -1
         else:
-            end = _now_utc().replace(hour=0, minute=0, second=0, microsecond=0)
+            end = _today_utc()
         start = end - timedelta(weeks=window_weeks)
         period = f"{start.date()} – {end.date()}"
 
         week_num = _iso_week(end)
         # dms_eligible: week parity (controls preview section)
         dms_eligible = week_num % USAGE_CYCLE_LENGTH_WEEKS == 0
-        # dms_will_send: additionally blocked by --no-dms gate and requires send_dms config (controls actual sends)
-        dms_will_send = dms_eligible and not self.no_dms and ncfg.send_dms
+        # dms_will_send: additionally blocked by --no-dms gate and requires
+        # send_underusage_report config (controls actual sends)
+        dms_will_send = dms_eligible and not self.no_dms and ncfg.send_underusage_report
         usage_report_eligible = week_num % ncfg.usage_report_window_weeks == 0
         usage_report_will_send = (
             usage_report_eligible and not self.no_dms and ncfg.send_usage_report
         )
 
-        if self.as_of is not None and end > _now_utc():
+        if self.as_of is not None and end > _today_utc():
             _userfacing_print(
                 "Note: --as-of is in the future; the window may contain no jobs.",
                 file=sys.stderr,
@@ -338,7 +336,7 @@ class UnderusageNotifyCommand:
             elif self.no_dms:
                 reason = "no_dms_flag"
             else:
-                reason = "send_dms_disabled"
+                reason = "send_underusage_report_disabled"
             for row in rows:
                 delivery_results.append(
                     _DeliveryResult(row.email, row.display_name, "skipped", reason)

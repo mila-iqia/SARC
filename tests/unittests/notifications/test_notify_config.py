@@ -8,7 +8,6 @@ _SLACK = SlackConfig(description="test", token="xoxb-test", channel="#test")
 
 _VALID_KWARGS = dict(
     slack=_SLACK,
-    window_weeks=2,
     recurrence_display_cycles=5,
     recurrence_active_cycles=3,
     usage_report_window_weeks=4,
@@ -19,15 +18,9 @@ def _make(**overrides):
     return UnderusageNotifyConfig(**{**_VALID_KWARGS, **overrides})
 
 
-def test_valid_config_constructs():
-    cfg = _make()
-    assert cfg.window_weeks == 2
-
-
 @pytest.mark.parametrize(
     "field",
     [
-        "window_weeks",
         "usage_report_window_weeks",
         "recurrence_display_cycles",
         "recurrence_active_cycles",
@@ -41,7 +34,6 @@ def test_zero_value_raises(field):
 @pytest.mark.parametrize(
     "field",
     [
-        "window_weeks",
         "usage_report_window_weeks",
         "recurrence_display_cycles",
         "recurrence_active_cycles",

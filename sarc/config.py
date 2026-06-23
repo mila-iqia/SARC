@@ -286,11 +286,9 @@ class SlackConfig:
 class UnderusageNotifyConfig:
     slack: SlackConfig
     enabled: bool = True
-    send_dms: bool = False
+    send_underusage_report: bool = False
     min_ratio: float = 0.50
     min_rgu_hours: float = 3225.6  # 4x A100-80GB RGU x 7d
-    # Analysis window length
-    window_weeks: int = USAGE_CYCLE_LENGTH_WEEKS
     digest_top_n: int = 16
     top_jobs_per_user: int = 5
     dashboard_url: str | None = None
@@ -303,19 +301,18 @@ class UnderusageNotifyConfig:
     recurrence_active_cycles: int = 3
     # Number of cycle columns to display in the recurring table.
     recurrence_display_cycles: int = 5
+    personalized_action_min_rgu_hours: float = 16128.0  # 20x A100-80GB RGU x 7d
     # Number of calendar months included in the historical trend section.
     historical_months: int = 6
+    send_usage_report: bool = False
     # Universal usage report cadence.
     usage_report_window_weeks: int = 4
     usage_report_min_rgu_hours: float = 1843.2  # 4x A100-80GB RGU x4d
-    send_usage_report: bool = False
     clusters: list[str] = field(default_factory=lambda: ["mila"])
-    personalized_action_min_rgu_hours: float = 16128.0  # 20x A100-80GB RGU x 7d
     utilization_ceiling: float = 1.0  # T ∈ (0,1]: wasted = max(0, rgu_h × (T − m))
 
     def __post_init__(self):
         for field_name, value in [
-            ("window_weeks", self.window_weeks),
             ("usage_report_window_weeks", self.usage_report_window_weeks),
             ("recurrence_display_cycles", self.recurrence_display_cycles),
             ("recurrence_active_cycles", self.recurrence_active_cycles),
