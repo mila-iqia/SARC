@@ -26,7 +26,11 @@ class JobStatisticDB(SQLModel, table=True):
         ondelete="CASCADE",
         index=True,
     )
-    name: str | None = Field(default=None, nullable=False)
+    # index=True: /dash joins jobstatisticdb on job_id then filters name='<metric>'.
+    # Without an index on name, that filter forces a full seq scan of the table
+    # (~12.6M rows) on every metric/RGU query — the dashboard's main bottleneck on
+    # large windows. job_id already has its own index above, for the join itself.
+    name: str | None = Field(default=None, nullable=False, index=True)
     mean: float | None
     std: float | None
     q05: float | None
