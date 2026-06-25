@@ -1,4 +1,4 @@
-"""Tests for T3b: recurring-underusers table (get_recurring_underusers + builder)."""
+"""Tests for recurring-underusers table (get_recurring_underusers + builder)."""
 
 from datetime import UTC, date, datetime, timedelta
 
@@ -15,7 +15,7 @@ from sarc.notifications.underusage import (
     get_cycle_dates,
     get_recurring_underusers,
 )
-from tests.unittests.notifications._factory import add_gpu_job
+from tests.unittests.notifications._factory import DEFAULT_GPU_TYPE, add_gpu_job
 
 # "Today" for all recurring tests.
 _TEST_END = datetime(2024, 6, 30, tzinfo=UTC)
@@ -40,11 +40,10 @@ _W4_START = _TEST_END - 3 * _14D  # 2024-05-19
 _W6_START = _TEST_END - 4 * _14D  # 2024-05-05
 _W8_START = _TEST_END - 5 * _14D  # 2024-04-21
 
-_MILA_GPU_TYPE = "A100-SXM4-80GB"
 _MILA_RGU = 4.8
 
 _MIN_RATIO = 0.50
-_MIN_RGU_HOURS = 100.0
+_MIN_RGU_HOURS = 24
 
 _NOTIFY_CFG = {
     "slack": {
@@ -55,8 +54,8 @@ _NOTIFY_CFG = {
     "min_ratio": _MIN_RATIO,
     "min_rgu_hours": _MIN_RGU_HOURS,
     "digest_top_n": 16,
-    "recurrence_cluster_share": 0.30,
-    "personalized_action_min_rgu_hours": 0.0,
+    "recurrence_cluster_share": 0.70,
+    "personalized_action_min_rgu_hours": 115.2,  # 24h * A100 80GB RGU
 }
 
 
@@ -72,36 +71,48 @@ def recurring_db(read_write_db):
     Layout (mila cluster, util=0.05 so rgu_used > 0 for exclude_zero_usage=True):
       rgu_h = 4.8 * elapsed_h; wasted = rgu_h * 0.95; waste_ratio = 0.95 ≥ 0.50 ✓
 
-      - petitbonhomme: W0+W-2+W-4 @ 24h → wasted 3*109.44=328.32 RGU-h over 6w (highest)
-                       ALSO W-6 @ 24h and W-8 @ 24h → all 5 cycles flagged
-                       personalized_action=True (W0+W-2+W-4 all True)
-      - fourthuser:    W0+W-2+W-4 @ 23h → 3*104.88=314.64 RGU-h (2nd)
-                       NO W-6, NO W-8    → personalized_action=True (W0+W-2+W-4 all True)
-      - bramin:        W0+W-2+W-4 @ 22h → 3*100.32=300.96 RGU-h (not selected at 30%)
-      - beaubonhomme:  W0+W-2+W-4 @ 21h → 3*95.76=287.28 RGU-h (not selected; below floor)
+      - firstuser:     W0+W-2+W-4 @ 20h → wasted 3*91.2=273.6 RGU-h over 6w (highest)
+                       ALSO W-6 @ 20h and W-8 @ 20h
+                       personalized_action=True (W0+W-2+W-4 >115.2 RGU)
+      - seconduser:    W0+W-2+W-4 @ 15h → wasted 3*68.4=205.2 RGU-h (2nd)
+                       NO W-6, NO W-8
+                       personalized_action=True (W0+W-2+W-4 >115.2 RGU)
+      - thirduser:     W0+W-2+W-4 @ 10h → wasted 3*45.6=136.8 RGU-h (not selected at 70%)
+                       ALSO W-6 @ 0h and W-8 @ 10h
+                       personalized_action=True (W0+W-2+W-4 >115.2 RGU)
+      - fourthuser:    W0+W-2+W-4 @  5h → wasted 3*22.8=68.4 RGU-h (not selected)
+                       ALSO W-6 @ 15h and W-8 @ 15h
+                       personalized_action=False (W0+W-2+W-4 <115.2 RGU)
 
-    Cluster total (6w) = 1231.2 RGU-h.
-    Selection at 30%:
-      petitbonhomme (26.7%) < 30% → continue
-      +fourthuser   (52.2%) ≥ 30% → stop  (bramin + beaubonhomme excluded)
+    Cluster wasted total (6w) = 684 RGU-h.
+    Selection at 70%:
+      firstuser (40%) < 70% → continue
+      +seconduser (70%) ≥ 70% → stop  (thirduser + fourthuser excluded)
 
-    Per-cycle floor (min_rgu_hours=100): petitbonhomme/fourthuser/bramin pass (≥100);
-    beaubonhomme (95.76) does not — but beaubonhomme is never selected anyway.
+    Per-cycle floor (min_rgu_hours=24): firstuser/seconduser/thirduser pass (≥24);
+    fourthuser (22.8) does not
     """
     session = read_write_db
-    users = {u.email.split("@")[0]: u for u in session.exec(select(UserDB)).all()}
     clusters = {c.name: c for c in session.exec(select(SlurmClusterDB)).all()}
     mila_id = clusters["mila"].id
 
-    # Add a 4th test user not in the default fixture.
+    # Add 4 dedicated test users so the fixture isn't polluted by the shared DB
+    # fixture's users.
+    firstuser = UserDB(display_name="M/Ms Firstuser", email="firstuser@mila.quebec")
+    session.add(firstuser)
+    seconduser = UserDB(display_name="M/Ms Seconduser", email="seconduser@mila.quebec")
+    session.add(seconduser)
+    thirduser = UserDB(display_name="M/Ms Thirduser", email="thirduser@mila.quebec")
+    session.add(thirduser)
     fourthuser = UserDB(display_name="M/Ms Fourthuser", email="fourthuser@mila.quebec")
     session.add(fourthuser)
     session.flush()
 
-    petitbonhomme_id = users["petitbonhomme"].id
-    beaubonhomme_id = users["beaubonhomme"].id
-    bramin_id = users["bramin"].id
-    fourthuser_id = fourthuser.id
+    users = {u.email.split("@")[0]: u for u in session.exec(select(UserDB)).all()}
+    firstuser_id = users["firstuser"].id
+    seconduser_id = users["seconduser"].id
+    thirduser_id = users["thirduser"].id
+    fourthuser_id = users["fourthuser"].id
 
     job_id = 90000
 
@@ -114,25 +125,32 @@ def recurring_db(read_write_db):
             elapsed_h=elapsed,
             submit_time=submit,
             job_id=job_id,
+            gpu_type=DEFAULT_GPU_TYPE,
             utilization=0.05,
         )
         job_id += 1
 
-    # petitbonhomme: W0, W-2, W-4 (6w aggregate) + W-6 + W-8 (display-only cycles)
+    # firstuser: W0, W-2, W-4 (6w aggregate) + W-6 + W-8 (display-only cycles)
     for start in (_W0_START, _W2_START, _W4_START, _W6_START, _W8_START):
-        _seed(petitbonhomme_id, start, 24)
+        _seed(firstuser_id, start, 20)
 
-    # fourthuser: W0, W-2, W-4 only
+    # seconduser: W0, W-2, W-4 only
     for start in (_W0_START, _W2_START, _W4_START):
-        _seed(fourthuser_id, start, 23)
+        _seed(seconduser_id, start, 15)
 
-    # bramin: W0, W-2, W-4 (not selected at 30%)
+    # thirduser: W0, W-2, W-4 (not selected at 70%)
     for start in (_W0_START, _W2_START, _W4_START):
-        _seed(bramin_id, start, 22)
+        _seed(thirduser_id, start, 10)
 
-    # beaubonhomme: W0, W-2, W-4 (not selected; per-cycle wasted < floor)
+    for start in (_W8_START,):
+        _seed(thirduser_id, start, 10)
+
+    # fourthuser: W0, W-2, W-4 (not selected; per-cycle wasted < floor)
     for start in (_W0_START, _W2_START, _W4_START):
-        _seed(beaubonhomme_id, start, 21)
+        _seed(fourthuser_id, start, 5)
+
+    for start in (_W6_START, _W8_START):
+        _seed(fourthuser_id, start, 15)
 
     session.commit()
     yield session
@@ -141,188 +159,140 @@ def recurring_db(read_write_db):
 # ── Selection / 30 % cutoff ───────────────────────────────────────────────────
 
 
-def test_selection_stops_at_threshold(recurring_db):
+def test_selection_threshold(recurring_db):
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         result = get_recurring_underusers(
             _TEST_END,
             min_ratio=_MIN_RATIO,
             min_rgu_hours=_MIN_RGU_HOURS,
-            cluster_share_threshold=0.30,
+            cluster_share_threshold=0.70,
         )
     mila_rows = result.get("mila", [])
     selected_emails = {r.email for r in mila_rows}
-    # petitbonhomme (highest) + fourthuser together cross 30%; bramin/beaubonhomme not included.
-    assert "petitbonhomme@mila.quebec" in selected_emails
-    assert "fourthuser@mila.quebec" in selected_emails
-    assert "bramin@mila.quebec" not in selected_emails
-    assert "beaubonhomme@mila.quebec" not in selected_emails
+    # firstuser (highest) + seconduser together cross 70%; thirduser/fourthuser not included.
+    assert "firstuser@mila.quebec" in selected_emails
+    assert "seconduser@mila.quebec" in selected_emails
+    assert "thirduser@mila.quebec" not in selected_emails
+    assert "fourthuser@mila.quebec" not in selected_emails
 
-
-def test_selection_cumulative_share_reaches_threshold(recurring_db):
-    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
-        result = get_recurring_underusers(
-            _TEST_END,
-            min_ratio=_MIN_RATIO,
-            min_rgu_hours=_MIN_RGU_HOURS,
-            cluster_share_threshold=0.30,
-        )
-    mila_rows = result["mila"]
     cumulative = sum(r.cluster_share for r in mila_rows)
-    assert cumulative >= 0.30
-
-
-def test_all_users_included_when_threshold_above_one(recurring_db):
-    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
-        result = get_recurring_underusers(
-            _TEST_END,
-            min_ratio=_MIN_RATIO,
-            min_rgu_hours=_MIN_RGU_HOURS,
-            cluster_share_threshold=1.1,
-        )
-    mila_emails = {r.email for r in result.get("mila", [])}
-    assert "petitbonhomme@mila.quebec" in mila_emails
-    assert "fourthuser@mila.quebec" in mila_emails
-    assert "bramin@mila.quebec" in mila_emails
-    assert "beaubonhomme@mila.quebec" in mila_emails
-
-
-def test_rows_sorted_desc_by_wasted(recurring_db):
-    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
-        result = get_recurring_underusers(
-            _TEST_END,
-            min_ratio=_MIN_RATIO,
-            min_rgu_hours=_MIN_RGU_HOURS,
-            cluster_share_threshold=1.1,
-        )
-    wastes = [r.wasted_current_active_window for r in result["mila"]]
-    assert wastes == sorted(wastes, reverse=True)
+    assert cumulative >= 0.70
 
 
 # ── Cluster share values ──────────────────────────────────────────────────────
 
 
-def test_cluster_share_sum_to_one_when_all_selected(recurring_db):
-    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+def test_all_users_included_when_threshold_is_one(recurring_db):
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}) as config:
+        ncfg = config.sarc.notifications
         result = get_recurring_underusers(
             _TEST_END,
             min_ratio=_MIN_RATIO,
             min_rgu_hours=_MIN_RGU_HOURS,
-            cluster_share_threshold=1.1,
+            cluster_share_threshold=1.0,
+            personalized_action_min_rgu_hours=ncfg.personalized_action_min_rgu_hours,
         )
+    mila_emails = {r.email for r in result.get("mila", [])}
+    assert "firstuser@mila.quebec" in mila_emails
+    assert "seconduser@mila.quebec" in mila_emails
+    assert "thirduser@mila.quebec" in mila_emails
+    assert "fourthuser@mila.quebec" in mila_emails
+
+    wastes = [r.wasted_current_active_window for r in result["mila"]]
+    assert wastes == sorted(wastes, reverse=True)
+
     total_share = sum(r.cluster_share for r in result["mila"])
     assert abs(total_share - 1.0) < 1e-6
 
-
-# ── Cycle flags ───────────────────────────────────────────────────────────────
-
-
-def test_petitbonhomme_flagged_all_five_cycles(recurring_db):
-    """petitbonhomme has jobs in W0+W-2+W-4+W-6+W-8 → all 5 cycle flags True."""
-    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
-        result = get_recurring_underusers(
-            _TEST_END,
-            min_ratio=_MIN_RATIO,
-            min_rgu_hours=_MIN_RGU_HOURS,
-            cluster_share_threshold=1.1,
-        )
-    row = next(r for r in result["mila"] if r.email == "petitbonhomme@mila.quebec")
-    assert row.cycles[0] is True
-    assert row.cycles[1] is True
-    assert row.cycles[2] is True
-    assert row.cycles[3] is True
-    assert row.cycles[4] is True
-
-
-def test_petitbonhomme_personalized_action(recurring_db):
-    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
-        result = get_recurring_underusers(
-            _TEST_END,
-            min_ratio=_MIN_RATIO,
-            min_rgu_hours=_MIN_RGU_HOURS,
-            cluster_share_threshold=1.1,
-        )
-    row = next(r for r in result["mila"] if r.email == "petitbonhomme@mila.quebec")
+    # Test firstuser flagged all five cycles
+    row = next(r for r in result["mila"] if r.email == "firstuser@mila.quebec")
+    assert row.cycles == [True] * 5
+    # Test firstuser flagged for personalized action all 3 cycles
+    assert row.pa_flags == [True] * 3
     assert row.personalized_action is True
 
+    # Test seconduser only flagged for the first 3 cycles
+    row = next(r for r in result["mila"] if r.email == "seconduser@mila.quebec")
+    assert row.cycles == [True] * 3 + [False] * 2
+    # Test seconduser flagged for personalized action the first 2 cycles
+    assert row.pa_flags == [True] * 2 + [False] * 1
+    assert row.personalized_action is True
 
-def test_fourthuser_missing_w6_w8_cycles(recurring_db):
-    """fourthuser has no W-6 or W-8 job → w6=False, w8=False.
-    personalized_action=True because W0+W-2+W-4 are all True (only 3 active cycles)."""
-    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
-        result = get_recurring_underusers(
-            _TEST_END,
-            min_ratio=_MIN_RATIO,
-            min_rgu_hours=_MIN_RGU_HOURS,
-            cluster_share_threshold=1.1,
-        )
+    # Test thirduser flagged all cycles except for 4th
+    row = next(r for r in result["mila"] if r.email == "thirduser@mila.quebec")
+    assert row.cycles == [True] * 3 + [False] * 1 + [True] * 1
+    # Test thirduser flagged for personalized action the first cycle
+    assert row.pa_flags == [True] * 1 + [False] * 2
+    assert row.personalized_action is True
+
+    # Test fourthuser only flagged for the last 2 cycles
     row = next(r for r in result["mila"] if r.email == "fourthuser@mila.quebec")
-    assert row.cycles[0] is True
-    assert row.cycles[1] is True
-    assert row.cycles[2] is True
-    assert row.cycles[3] is False
-    assert row.cycles[4] is False
-    assert row.personalized_action is True
+    assert row.cycles == [False] * 3 + [True] * 2
+    # Test fourthuser only flagged for personalized action on 3rd cycles
+    assert row.pa_flags == [False] * 2 + [True] * 1
+    assert row.personalized_action is False
 
 
 # ── Non-default cycle counts (acceptance criteria) ────────────────────────────
 
 
-def test_display_cycles_4_produces_4_columns(recurring_db):
+def test_display_cycles_columns(recurring_db):
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         result = get_recurring_underusers(
             _TEST_END,
             min_ratio=_MIN_RATIO,
             min_rgu_hours=_MIN_RGU_HOURS,
-            cluster_share_threshold=1.1,
+            cluster_share_threshold=1.0,
             recurrence_display_cycles=4,
         )
+    # Test cycles 4 produces 4 columns
     for rows in result.values():
         for row in rows:
             assert len(row.cycles) == 4
 
-
-def test_display_cycles_6_produces_6_columns(recurring_db):
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         result = get_recurring_underusers(
             _TEST_END,
             min_ratio=_MIN_RATIO,
             min_rgu_hours=_MIN_RGU_HOURS,
-            cluster_share_threshold=1.1,
+            cluster_share_threshold=1.0,
             recurrence_display_cycles=6,
         )
+    # Test cycles 6 produces 6 columns
     for rows in result.values():
         for row in rows:
             assert len(row.cycles) == 6
 
 
-@pytest.mark.parametrize(
-    "active_cycles,expected",
-    [
-        (2, False),  # PA window=4w: petitbonhomme waste=218.88 < 400 floor
-        (3, False),  # PA window=6w: petitbonhomme waste=328.32 < 400 floor
+def test_active_cycles_personalized_action(recurring_db):
+    """recurrence_active_cycles widens the PA window; floor=300 splits at the 3→4 cycle boundary."""
+    # Using a loop instead of pytest.mark.parametrize to avoid repopulating the
+    # database for each tests
+    for active_cycles, expected in [
+        (2, False),  # PA window=4w: firstuser waste=182.4 < 300 floor
+        (3, False),  # PA window=6w: firstuser waste=273.6 < 300 floor
         (
             4,
             True,
-        ),  # PA window=8w: petitbonhomme waste=437.76 >= 400 floor (W-6 enters window)
+        ),  # PA window=8w: firstuser waste=364.8 >= 300 floor (W-6 enters window)
         (
             5,
             True,
-        ),  # PA window=10w: petitbonhomme waste=547.20 >= 400 floor (W-8 enters window)
-    ],
-)
-def test_active_cycles_personalized_action(recurring_db, active_cycles, expected):
-    """recurrence_active_cycles widens the PA window; floor=400 splits at the 3→4 cycle boundary."""
-    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
-        result = get_recurring_underusers(
-            _TEST_END,
-            min_ratio=_MIN_RATIO,
-            min_rgu_hours=_MIN_RGU_HOURS,
-            cluster_share_threshold=1.1,
-            recurrence_active_cycles=active_cycles,
-            personalized_action_min_rgu_hours=400.0,
-        )
-    row = next(r for r in result["mila"] if r.email == "petitbonhomme@mila.quebec")
-    assert row.personalized_action is expected
+        ),  # PA window=10w: firstuser waste=456 >= 300 floor (W-8 enters window)
+    ]:
+        with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+            result = get_recurring_underusers(
+                _TEST_END,
+                min_ratio=_MIN_RATIO,
+                min_rgu_hours=_MIN_RGU_HOURS,
+                cluster_share_threshold=1.0,
+                recurrence_active_cycles=active_cycles,
+                personalized_action_min_rgu_hours=300.0,
+            )
+            row = next(r for r in result["mila"] if r.email == "firstuser@mila.quebec")
+            assert row.personalized_action is expected, (
+                f"{expected=} for {active_cycles=} but got {row.personalized_action=}"
+            )
 
 
 # ── Empty / edge cases ────────────────────────────────────────────────────────
@@ -621,7 +591,7 @@ def test_odd_week_end_w0_is_none(recurring_db):
             _ODD_MON,
             min_ratio=_MIN_RATIO,
             min_rgu_hours=_MIN_RGU_HOURS,
-            cluster_share_threshold=0.30,
+            cluster_share_threshold=0.70,
         )
     assert result, "expected selected users for the odd-week window"
     for rows in result.values():
@@ -639,7 +609,7 @@ def test_odd_week_end_personalized_action_floor_controls(recurring_db):
             _ODD_MON,
             min_ratio=_MIN_RATIO,
             min_rgu_hours=_MIN_RGU_HOURS,
-            cluster_share_threshold=0.30,
+            cluster_share_threshold=0.70,
             personalized_action_min_rgu_hours=999999.0,
         )
     for rows in result.values():
@@ -789,18 +759,18 @@ def test_per_cycle_no_peak_on_passing_cell():
 
 
 def test_wasted_6w_uses_scaled_waste(recurring_db):
-    # petitbonhomme: util=0.05, threshold=0.05 → credited_used=LEAST(rgu_h, rgu_h*1.0)=rgu_h
+    # firstuser: util=0.05, threshold=0.05 → credited_used=LEAST(rgu_h, rgu_h*1.0)=rgu_h
     # → wasted=0 → excluded from the recurring table entirely
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         result = get_recurring_underusers(
             _TEST_END,
             min_ratio=_MIN_RATIO,
             min_rgu_hours=_MIN_RGU_HOURS,
-            cluster_share_threshold=1.1,
+            cluster_share_threshold=1.0,
             utilization_ceiling=0.05,
         )
     emails = {r.email for rows in result.values() for r in rows}
-    assert "petitbonhomme@mila.quebec" not in emails
+    assert "firstuser@mila.quebec" not in emails
 
 
 def test_true_wasted_field_populated(recurring_db):
@@ -810,34 +780,33 @@ def test_true_wasted_field_populated(recurring_db):
             _TEST_END,
             min_ratio=_MIN_RATIO,
             min_rgu_hours=_MIN_RGU_HOURS,
-            cluster_share_threshold=1.1,
+            cluster_share_threshold=1.0,
         )
-    row = next(r for r in result["mila"] if r.email == "petitbonhomme@mila.quebec")
+    row = next(r for r in result["mila"] if r.email == "firstuser@mila.quebec")
     assert row.true_wasted > 0.0
 
 
-def test_personalized_action_floor_zero_flags_wasters(recurring_db):
+def test_personalized_action_floor(recurring_db):
     # With floor=0.0, any user with positive scaled waste in the active window is flagged.
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         result = get_recurring_underusers(
             _TEST_END,
             min_ratio=_MIN_RATIO,
             min_rgu_hours=_MIN_RGU_HOURS,
-            cluster_share_threshold=1.1,
+            cluster_share_threshold=1.0,
             personalized_action_min_rgu_hours=0.0,
         )
-    row = next(r for r in result["mila"] if r.email == "petitbonhomme@mila.quebec")
-    assert row.personalized_action is True
+        for rows in result.values():
+            for row in rows:
+                assert row.personalized_action is True
 
-
-def test_personalized_action_floor_high_excludes_all(recurring_db):
     # With a very high floor, no user crosses the threshold → all False.
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         result = get_recurring_underusers(
             _TEST_END,
             min_ratio=_MIN_RATIO,
             min_rgu_hours=_MIN_RGU_HOURS,
-            cluster_share_threshold=1.1,
+            cluster_share_threshold=1.0,
             personalized_action_min_rgu_hours=999999.0,
         )
     for rows in result.values():
