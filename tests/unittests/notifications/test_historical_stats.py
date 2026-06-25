@@ -165,7 +165,7 @@ def test_yoy_absent_when_no_prior_year_data(historical_db):
 
 
 def test_yoy_present_when_prior_year_has_data(read_write_db):
-    """Seed a job in Jul 2024 (one year before _END's range) to trigger YoY."""
+    """Seed a job in Jun 2024 (one year before _END's range) to trigger YoY."""
     session = read_write_db
     users = {u.email.split("@")[0]: u for u in session.exec(select(UserDB)).all()}
     clusters = {c.name: c for c in session.exec(select(SlurmClusterDB)).all()}
@@ -190,28 +190,6 @@ def test_yoy_present_when_prior_year_has_data(read_write_db):
     assert len(result.yoy_months) == 6
     jun_yoy = next(m for m in result.yoy_months if m.label == "2024-06")
     assert jun_yoy.avg_waste_ratio > 0.0
-
-
-def test_yoy_has_six_months_when_present(read_write_db):
-    session = read_write_db
-    users = {u.email.split("@")[0]: u for u in session.exec(select(UserDB)).all()}
-    clusters = {c.name: c for c in session.exec(select(SlurmClusterDB)).all()}
-
-    _add_gpu_job(
-        session,
-        user_id=users["petitbonhomme"].id,
-        cluster_id=clusters["mila"].id,
-        elapsed_h=700,
-        gpu_type=_MILA_GPU_TYPE,
-        utilization=0.10,
-        job_id=99998,
-        end_time=datetime(2024, 3, 15, tzinfo=UTC),
-    )
-    session.commit()
-
-    result = get_historical_stats(_END)
-    assert result.yoy_months is not None
-    assert len(result.yoy_months) == 6
 
 
 # ── unsupported resource ──────────────────────────────────────────────────────
@@ -269,8 +247,25 @@ def test_digest_no_historical_by_default():
 
 
 def test_digest_historical_section_present():
-    text = build_admin_digest([], period="…", historical=_make_stats(), **_DIGEST_KW)
+    text = build_admin_digest(
+        [], period="…", historical=_make_stats(with_yoy=True), **_DIGEST_KW
+    )
     assert "6-Month Trend" in text
+
+    # Test Month labels
+    for i in range(1, 7):
+        assert f"2025-0{i}" in text
+
+    # Test waste ratio
+    # first month: 0.51 → "51.0 %"
+    assert "51.0 %" in text
+
+    # Test YoY section present
+    assert "Year-over-Year" in text
+
+    # Test YoY Month labels
+    for i in range(1, 7):
+        assert f"2024-0{i}" in text
 
 
 def test_digest_historical_title_follows_count():
@@ -287,38 +282,11 @@ def test_digest_historical_title_follows_count():
     assert "6-Month Trend" not in text
 
 
-def test_digest_historical_month_labels():
-    text = build_admin_digest([], period="…", historical=_make_stats(), **_DIGEST_KW)
-    for i in range(1, 7):
-        assert f"2025-0{i}" in text
-
-
-def test_digest_historical_waste_ratio_rendered():
-    text = build_admin_digest([], period="…", historical=_make_stats(), **_DIGEST_KW)
-    # first month: 0.51 → "51.0 %"
-    assert "51.0 %" in text
-
-
-def test_digest_historical_yoy_section_present():
-    text = build_admin_digest(
-        [], period="…", historical=_make_stats(with_yoy=True), **_DIGEST_KW
-    )
-    assert "Year-over-Year" in text
-
-
 def test_digest_historical_no_yoy_when_absent():
     text = build_admin_digest(
         [], period="…", historical=_make_stats(with_yoy=False), **_DIGEST_KW
     )
     assert "Year-over-Year" not in text
-
-
-def test_digest_historical_yoy_labels():
-    text = build_admin_digest(
-        [], period="…", historical=_make_stats(with_yoy=True), **_DIGEST_KW
-    )
-    for i in range(1, 7):
-        assert f"2024-0{i}" in text
 
 
 def test_digest_deterministic_with_historical():

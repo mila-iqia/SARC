@@ -21,9 +21,13 @@ def _make(**overrides):
 @pytest.mark.parametrize(
     "field",
     [
-        "usage_report_window_weeks",
-        "recurrence_display_cycles",
+        "digest_top_n",
+        "historical_months",
         "recurrence_active_cycles",
+        "recurrence_display_cycles",
+        "top_jobs_per_user",
+        "usage_report_window_weeks",
+        "utilization_ceiling",
     ],
 )
 def test_zero_value_raises(field):
@@ -34,9 +38,18 @@ def test_zero_value_raises(field):
 @pytest.mark.parametrize(
     "field",
     [
-        "usage_report_window_weeks",
-        "recurrence_display_cycles",
+        "digest_top_n",
+        "historical_months",
         "recurrence_active_cycles",
+        "recurrence_display_cycles",
+        "top_jobs_per_user",
+        "usage_report_window_weeks",
+        "utilization_ceiling",
+        "min_ratio",
+        "min_rgu_hours",
+        "recurrence_cluster_share",
+        "usage_report_min_rgu_hours",
+        "personalized_action_min_rgu_hours",
     ],
 )
 def test_negative_value_raises(field):
@@ -59,16 +72,6 @@ def test_utilization_ceiling_boundary_one_is_valid():
     assert cfg.utilization_ceiling == 1.0
 
 
-def test_utilization_ceiling_zero_raises():
-    with pytest.raises(ValueError, match="utilization_ceiling"):
-        _make(utilization_ceiling=0.0)
-
-
-def test_utilization_ceiling_negative_raises():
-    with pytest.raises(ValueError, match="utilization_ceiling"):
-        _make(utilization_ceiling=-0.1)
-
-
 def test_utilization_ceiling_above_one_raises():
     with pytest.raises(ValueError, match="utilization_ceiling"):
         _make(utilization_ceiling=1.01)
@@ -79,19 +82,9 @@ def test_usage_report_min_rgu_hours_zero_is_valid():
     assert cfg.usage_report_min_rgu_hours == 0.0
 
 
-def test_usage_report_min_rgu_hours_negative_raises():
-    with pytest.raises(ValueError, match="usage_report_min_rgu_hours"):
-        _make(usage_report_min_rgu_hours=-1.0)
-
-
 def test_personalized_action_min_rgu_hours_zero_is_valid():
     cfg = _make(personalized_action_min_rgu_hours=0.0)
     assert cfg.personalized_action_min_rgu_hours == 0.0
-
-
-def test_personalized_action_min_rgu_hours_negative_raises():
-    with pytest.raises(ValueError, match="personalized_action_min_rgu_hours"):
-        _make(personalized_action_min_rgu_hours=-1.0)
 
 
 def test_clusters_list_of_strings_is_valid():

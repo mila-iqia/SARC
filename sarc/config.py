@@ -313,11 +313,12 @@ class UnderusageNotifyConfig:
 
     def __post_init__(self):
         for field_name, value in [
+            ("digest_top_n", self.digest_top_n),
+            ("top_jobs_per_user", self.top_jobs_per_user),
             ("usage_report_window_weeks", self.usage_report_window_weeks),
             ("recurrence_display_cycles", self.recurrence_display_cycles),
             ("recurrence_active_cycles", self.recurrence_active_cycles),
             ("historical_months", self.historical_months),
-            ("top_jobs_per_user", self.top_jobs_per_user),
         ]:
             if not isinstance(value, int) or value < 1:
                 raise ValueError(
@@ -332,15 +333,18 @@ class UnderusageNotifyConfig:
             raise ValueError(
                 f"utilization_ceiling must be in (0, 1], got {self.utilization_ceiling!r}"
             )
-        if self.usage_report_min_rgu_hours < 0:
-            raise ValueError(
-                f"usage_report_min_rgu_hours must be >= 0, got {self.usage_report_min_rgu_hours!r}"
-            )
-        if self.personalized_action_min_rgu_hours < 0:
-            raise ValueError(
-                f"personalized_action_min_rgu_hours must be >= 0,"
-                f" got {self.personalized_action_min_rgu_hours!r}"
-            )
+        for field_name, value in [
+            ("min_ratio", self.min_ratio),
+            ("min_rgu_hours", self.min_rgu_hours),
+            ("recurrence_cluster_share", self.recurrence_cluster_share),
+            ("usage_report_min_rgu_hours", self.usage_report_min_rgu_hours),
+            (
+                "personalized_action_min_rgu_hours",
+                self.personalized_action_min_rgu_hours,
+            ),
+        ]:
+            if value < 0:
+                raise ValueError(f"{field_name} must be >= 0, got {value!r}")
         for entry in self.clusters:
             if not isinstance(entry, str) or not entry:
                 raise ValueError(

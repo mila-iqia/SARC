@@ -86,7 +86,7 @@ _ROW_CAROL = UnderuserRow(
 )
 
 
-# ── T2: _first_name guard ────────────────────────────────────────────────────
+# ── _first_name guard ─────────────────────────────────────────────────────────
 
 
 def test_first_name_normal():
@@ -97,76 +97,41 @@ def test_first_name_single_token():
     assert _first_name("Alice") == "Alice"
 
 
-def test_first_name_empty_string():
+def test_first_name_empty():
     assert _first_name("") == "there"
-
-
-def test_first_name_none():
     assert _first_name(None) == "there"
 
 
 # ── build_user_dm ─────────────────────────────────────────────────────────────
 
 
-def test_dm_greeting_uses_first_name():
+def test_dm_greeting():
     text = build_user_dm(_ROW_ALICE, window_weeks=2)
+    # Test uses first name
     assert text.startswith("Hi Alice,")
-
-
-def test_dm_overview_line_contains_utilization():
-    text = build_user_dm(_ROW_ALICE, window_weeks=2)
+    # Test contains utilization
     assert "74.5 %" in text
-
-
-def test_dm_overview_line_contains_unused_hours():
-    text = build_user_dm(_ROW_ALICE, window_weeks=2)
+    # Test contains unused hours
     assert "255.0 RGU-hours unused" in text
-
-
-def test_dm_overview_line_contains_window_weeks():
-    text = build_user_dm(_ROW_ALICE, window_weeks=2)
+    # Test contains window weeks
     assert "last 2 weeks" in text
-
-
-def test_dm_top_jobs_section_present():
-    text = build_user_dm(_ROW_ALICE, window_weeks=2)
+    # Test top jobs section present
     assert "Jobs with the lowest GPU utilization:" in text
-
-
-def test_dm_top_jobs_grouped_by_cluster():
-    text = build_user_dm(_ROW_ALICE, window_weeks=2)
+    # Test top jobs grouped by cluster
     # narval block appears before fir block (narval has more total waste)
     assert text.index("Cluster narval") < text.index("Cluster fir")
-
-
-def test_dm_top_jobs_narval_first_job():
-    text = build_user_dm(_ROW_ALICE, window_weeks=2)
+    # Test narval first job is in top jobs
     assert "job_111111 (2026-05-28)" in text
     assert "80.0 RGU-h unused" in text
     assert "GPU utilization: 5 %" in text
-
-
-def test_dm_top_jobs_utilization_none_shows_na():
-    text = build_user_dm(_ROW_ALICE, window_weeks=2)
+    # Test utilization none shows na
     assert "GPU utilization: n/a" in text
-
-
-def test_dm_tree_characters_multi_job_cluster():
-    text = build_user_dm(_ROW_ALICE, window_weeks=2)
+    # Tets tree characters multi-job cluster
     # Two narval jobs → first uses ┌─, last uses └─
     assert "┌─ job_111111" in text
     assert "└─ job_111112" in text
-
-
-def test_dm_tree_character_single_job_cluster():
-    text = build_user_dm(_ROW_ALICE, window_weeks=2)
     # Single fir job → uses └─
     assert "└─ job_222222" in text
-
-
-def test_dm_no_dashboard_url_by_default():
-    text = build_user_dm(_ROW_ALICE, window_weeks=2)
-    assert "Track your usage" not in text
 
 
 def test_dm_dashboard_url_included_when_provided():
@@ -174,11 +139,6 @@ def test_dm_dashboard_url_included_when_provided():
         _ROW_ALICE, window_weeks=2, dashboard_url="https://dash.example.com"
     )
     assert "Track your usage over time: https://dash.example.com" in text
-
-
-def test_dm_no_help_section_by_default():
-    text = build_user_dm(_ROW_ALICE, window_weeks=2)
-    assert "IDT Team" not in text
 
 
 def test_dm_help_section_appended_when_provided():
@@ -232,13 +192,17 @@ def test_digest_ranked_by_wasted_descending():
         [_ROW_ALICE, _ROW_BOB, _ROW_CAROL], period="…", **_DIGEST_KW
     )
     # Bob: 600 wasted, Carol: 420, Alice: 245 → Bob is rank 1
-    assert text.index("Bob Marley") < text.index("Carol Danvers")
-    assert text.index("Carol Danvers") < text.index("Alice Liddell")
+    assert (
+        text.index("Bob Marley")
+        < text.index("Carol Danvers")
+        < text.index("Alice Liddell")
+    )
 
 
 def test_digest_capped_at_top_n():
-    rows = [_ROW_ALICE, _ROW_BOB, _ROW_CAROL]
-    text = build_admin_digest(rows, period="…", **{**_DIGEST_KW, "top_n": 2})
+    text = build_admin_digest(
+        [_ROW_ALICE, _ROW_BOB, _ROW_CAROL], period="…", **{**_DIGEST_KW, "top_n": 2}
+    )
     assert "Alice Liddell" not in text  # rank 3 — excluded
     assert "Bob Marley" in text
     assert "Carol Danvers" in text
@@ -249,13 +213,11 @@ def test_digest_contains_primary_cluster():
     assert "narval" in text
 
 
-def test_digest_contains_unused_hours():
+def test_digest():
     text = build_admin_digest([_ROW_BOB], period="…", **_DIGEST_KW)
+    # Test contains unused hours
     assert "600.0 RGU-h unused" in text
-
-
-def test_digest_contains_waste_ratio():
-    text = build_admin_digest([_ROW_BOB], period="…", **_DIGEST_KW)
+    # Test contains waste ratio
     assert "75.0 %" in text
 
 
@@ -323,12 +285,9 @@ def test_recurring_table_default_labels():
     assert "W-4" in text
     assert "W-6" in text
     assert "W-8" in text
-    # Separator appears in the header between W-4 (index 2) and W-6 (index 3)
     assert "W-4" in text and "  |" in text
-    idx_w4 = text.index("W-4")
-    idx_sep = text.index("  |")
-    idx_w6 = text.index("W-6")
-    assert idx_w4 < idx_sep < idx_w6
+    # Separator appears in the header between W-4 and W-6
+    assert text.index("W-4") < text.index("  |") < text.index("W-6")
 
 
 def test_recurring_table_4_cycles():
@@ -353,10 +312,7 @@ def test_recurring_table_4_cycles():
     assert "W-4" in text
     assert "W-6" in text
     assert "W-8" not in text
-    idx_w2 = text.index("W-2")
-    idx_sep = text.index("  |")
-    idx_w4 = text.index("W-4")
-    assert idx_w2 < idx_sep < idx_w4
+    assert text.index("W-2") < text.index("  |") < text.index("W-4")
 
 
 def test_recurring_table_6_cycles():
@@ -377,10 +333,7 @@ def test_recurring_table_6_cycles():
         active_cycles=3,
     )
     assert "W-10" in text
-    idx_w4 = text.index("W-4")
-    idx_sep = text.index("  |")
-    idx_w6 = text.index("W-6")
-    assert idx_w4 < idx_sep < idx_w6
+    assert text.index("W-4") < text.index("  |") < text.index("W-6")
 
 
 def test_recurring_table_empty_cluster_is_skipped():
@@ -465,70 +418,35 @@ _USAGE_ROW_BOB = UsageRow(
 # ── build_usage_report ────────────────────────────────────────────────────────
 
 
-def test_usage_report_greeting_uses_first_name():
+def test_usage_report():
     text = build_usage_report(_USAGE_ROW_ALICE, window_weeks=4)
+    # Test greeting uses first name
     assert text.startswith("Hi Alice,")
-
-
-def test_usage_report_neutral_wording_used_not_unused():
-    text = build_usage_report(_USAGE_ROW_ALICE, window_weeks=4)
+    # Test neutral wording used not unused
     assert "unused" not in text
     assert "waste" not in text
     assert "used on average" in text
-
-
-def test_usage_report_overview_contains_utilization():
-    text = build_usage_report(_USAGE_ROW_ALICE, window_weeks=4)
+    # Test overview contains utilization
     assert "74.5 %" in text
-
-
-def test_usage_report_overview_contains_rgu_used():
-    text = build_usage_report(_USAGE_ROW_ALICE, window_weeks=4)
+    # Test overview contains rgu used
     assert "745.0 RGU-hours total" in text
-
-
-def test_usage_report_overview_contains_window_weeks():
-    text = build_usage_report(_USAGE_ROW_ALICE, window_weeks=4)
+    # Test overview contains window weeks
     assert "last 4 weeks" in text
-
-
-def test_usage_report_top_jobs_section_present():
-    text = build_usage_report(_USAGE_ROW_ALICE, window_weeks=4)
+    # Test top jobs section present
     assert "Your top jobs by GPU usage:" in text
-
-
-def test_usage_report_top_jobs_grouped_by_cluster():
-    text = build_usage_report(_USAGE_ROW_ALICE, window_weeks=4)
+    # Test top jobs grouped by cluster
     # narval has more total usage than fir → appears first
     assert text.index("Cluster narval") < text.index("Cluster fir")
-
-
-def test_usage_report_job_line_format():
-    text = build_usage_report(_USAGE_ROW_ALICE, window_weeks=4)
+    # Test job line format
     assert "job_300001 (2026-05-28)" in text
     assert "120.0 RGU-h" in text
     assert "GPU utilization: 72 %" in text
-
-
-def test_usage_report_job_utilization_none_shows_na():
-    text = build_usage_report(_USAGE_ROW_ALICE, window_weeks=4)
     assert "GPU utilization: n/a" in text
-
-
-def test_usage_report_tree_characters_multi_job_cluster():
-    text = build_usage_report(_USAGE_ROW_ALICE, window_weeks=4)
+    # Test tree characters multi-job cluster
     assert "┌─ job_300001" in text
     assert "└─ job_300002" in text
-
-
-def test_usage_report_tree_character_single_job_cluster():
-    text = build_usage_report(_USAGE_ROW_ALICE, window_weeks=4)
+    # Test tree character single job cluster
     assert "└─ job_300003" in text
-
-
-def test_usage_report_no_dashboard_url_by_default():
-    text = build_usage_report(_USAGE_ROW_ALICE, window_weeks=4)
-    assert "Track your usage" not in text
 
 
 def test_usage_report_dashboard_url_included_when_provided():
@@ -563,19 +481,20 @@ def test_usage_report_deterministic():
 
 
 def test_split_underuser_excluded_from_report():
-    report, skipped = split_usage_report_recipients(
-        [_USAGE_ROW_ALICE, _USAGE_ROW_BOB], underuser_emails={"alice@mila.quebec"}
-    )
-    assert all(r.email != "alice@mila.quebec" for r in report)
-    assert any(r.email == "alice@mila.quebec" for r in skipped)
-
-
-def test_split_non_underuser_included_in_report():
+    rows = [_USAGE_ROW_ALICE, _USAGE_ROW_BOB]
     report, skipped = split_usage_report_recipients(
         [_USAGE_ROW_ALICE, _USAGE_ROW_BOB], underuser_emails={"alice@mila.quebec"}
     )
     assert any(r.email == "bob@mila.quebec" for r in report)
     assert all(r.email != "bob@mila.quebec" for r in skipped)
+    assert all(r.email != "alice@mila.quebec" for r in report)
+    assert any(r.email == "alice@mila.quebec" for r in skipped)
+
+    # Test lists are disjoint and cover all
+    assert len(report) + len(skipped) == len(rows)
+    report_emails = {r.email for r in report}
+    skipped_emails = {r.email for r in skipped}
+    assert report_emails.isdisjoint(skipped_emails)
 
 
 def test_split_empty_underusers_all_get_report():
@@ -593,14 +512,3 @@ def test_split_all_are_underusers_none_get_report():
     )
     assert len(report) == 0
     assert len(skipped) == 2
-
-
-def test_split_lists_are_disjoint_and_cover_all():
-    rows = [_USAGE_ROW_ALICE, _USAGE_ROW_BOB]
-    report, skipped = split_usage_report_recipients(
-        rows, underuser_emails={"alice@mila.quebec"}
-    )
-    assert len(report) + len(skipped) == len(rows)
-    report_emails = {r.email for r in report}
-    skipped_emails = {r.email for r in skipped}
-    assert report_emails.isdisjoint(skipped_emails)
