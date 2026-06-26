@@ -146,7 +146,7 @@ def underusage_db(read_write_db):
 # ── Threshold filtering ───────────────────────────────────────────────────────
 
 
-def test_high_waster_is_returned(underusage_db):
+def test_underusers_filtering_and_top_jobs(underusage_db):
     results = get_underusers(
         _WINDOW_START,
         _WINDOW_END,
@@ -154,52 +154,34 @@ def test_high_waster_is_returned(underusage_db):
         min_rgu_hours=_MIN_RGU_HOURS,
         top_jobs_per_user=_TOP_JOBS_PER_USER,
     )
+    # Test high waster is returned
     assert "petitbonhomme@mila.quebec" in {r.email for r in results}
-
-
-def test_low_waster_is_excluded(underusage_db):
-    results = get_underusers(
-        _WINDOW_START,
-        _WINDOW_END,
-        min_ratio=_MIN_RATIO,
-        min_rgu_hours=_MIN_RGU_HOURS,
-        top_jobs_per_user=_TOP_JOBS_PER_USER,
-    )
+    # Test below floor is excluded
+    assert "bramin@mila.quebec" not in {r.email for r in results}
+    # Test low waster is excluded
     assert "beaubonhomme@mila.quebec" not in {r.email for r in results}
 
-
-def test_below_floor_is_excluded(underusage_db):
-    results = get_underusers(
-        _WINDOW_START,
-        _WINDOW_END,
-        min_ratio=_MIN_RATIO,
-        min_rgu_hours=_MIN_RGU_HOURS,
-        top_jobs_per_user=_TOP_JOBS_PER_USER,
-    )
-    assert "bramin@mila.quebec" not in {r.email for r in results}
-
-
-# ── Cluster ordering ──────────────────────────────────────────────────────────
-
-
-def test_by_cluster_ordered_desc_by_waste(underusage_db):
-    results = get_underusers(
-        _WINDOW_START,
-        _WINDOW_END,
-        min_ratio=_MIN_RATIO,
-        min_rgu_hours=_MIN_RGU_HOURS,
-        top_jobs_per_user=_TOP_JOBS_PER_USER,
-    )
+    # Test by cluster ordered desc by waste
     row = next(r for r in results if r.email == "petitbonhomme@mila.quebec")
     # raisin: 4.0 * 2000 * 1.0 = 80 RGU-h wasted
     # mila:   4.8 * 700 * 0.9 + extras ≈ 4152 RGU-h wasted
     assert row.by_cluster[0].cluster == "raisin"
 
+    # Test top jobs capped at five
+    assert len(row.top_jobs) == _TOP_JOBS_PER_USER
+
+    # Test top jobs ordered desc by rgu hours unused
+    unused = [j.wasted for j in row.top_jobs]
+    assert unused == sorted(unused, reverse=True)
+
+    # Test top jobs have utilization
+    assert all(j.gpu_utilization is not None for j in row.top_jobs)
+
 
 # ── Overview fields ───────────────────────────────────────────────────────────
 
 
-def test_overview_avg_utilization(underusage_db):
+def test_underusers_overview_fields(underusage_db):
     results = get_underusers(
         _WINDOW_START,
         _WINDOW_END,
@@ -209,72 +191,12 @@ def test_overview_avg_utilization(underusage_db):
     )
     row = next(r for r in results if r.email == "beaubonhomme@mila.quebec")
     # rgu_used / rgu_requested = 0.80
-    assert abs(row.avg_utilization - 0.80) < 1e-6
+    assert row.avg_utilization == pytest.approx(0.80)
 
-
-def test_overview_rgu_hours_unused(underusage_db):
-    results = get_underusers(
-        _WINDOW_START,
-        _WINDOW_END,
-        min_ratio=0.0,
-        min_rgu_hours=0.0,
-        top_jobs_per_user=_TOP_JOBS_PER_USER,
-    )
-    row = next(r for r in results if r.email == "beaubonhomme@mila.quebec")
     # 4.8 * 700 * (1 - 0.80) = 672.0 RGU-h unused
-    assert abs(row.wasted - 672.0) < 0.1
+    assert row.wasted == pytest.approx(672.0)
 
-
-def test_waste_ratio_value(underusage_db):
-    results = get_underusers(
-        _WINDOW_START,
-        _WINDOW_END,
-        min_ratio=0.0,
-        min_rgu_hours=0.0,
-        top_jobs_per_user=_TOP_JOBS_PER_USER,
-    )
-    row = next(r for r in results if r.email == "beaubonhomme@mila.quebec")
-    assert abs(row.waste_ratio - 0.20) < 1e-6
-
-
-# ── Top-5 jobs ────────────────────────────────────────────────────────────────
-
-
-def test_top_jobs_capped_at_five(underusage_db):
-    results = get_underusers(
-        _WINDOW_START,
-        _WINDOW_END,
-        min_ratio=_MIN_RATIO,
-        min_rgu_hours=_MIN_RGU_HOURS,
-        top_jobs_per_user=_TOP_JOBS_PER_USER,
-    )
-    row = next(r for r in results if r.email == "petitbonhomme@mila.quebec")
-    assert len(row.top_jobs) == 5
-
-
-def test_top_jobs_ordered_desc_by_rgu_hours_unused(underusage_db):
-    results = get_underusers(
-        _WINDOW_START,
-        _WINDOW_END,
-        min_ratio=_MIN_RATIO,
-        min_rgu_hours=_MIN_RGU_HOURS,
-        top_jobs_per_user=_TOP_JOBS_PER_USER,
-    )
-    row = next(r for r in results if r.email == "petitbonhomme@mila.quebec")
-    unused = [j.wasted for j in row.top_jobs]
-    assert unused == sorted(unused, reverse=True)
-
-
-def test_top_jobs_have_utilization(underusage_db):
-    results = get_underusers(
-        _WINDOW_START,
-        _WINDOW_END,
-        min_ratio=_MIN_RATIO,
-        min_rgu_hours=_MIN_RGU_HOURS,
-        top_jobs_per_user=_TOP_JOBS_PER_USER,
-    )
-    row = next(r for r in results if r.email == "petitbonhomme@mila.quebec")
-    assert all(j.gpu_utilization is not None for j in row.top_jobs)
+    assert row.waste_ratio == pytest.approx(0.20)
 
 
 # ── Edge cases ────────────────────────────────────────────────────────────────
@@ -310,7 +232,7 @@ def test_unsupported_resource_raises(underusage_db):
 # ── get_all_users_usage ───────────────────────────────────────────────────────
 
 
-def test_all_active_users_returned(underusage_db):
+def test_usage_all_users_overview_and_top_jobs(underusage_db):
     # All 3 users have GPU jobs in the window — no threshold filtering.
     results = get_all_users_usage(
         _WINDOW_START, _WINDOW_END, top_jobs_per_user=_TOP_JOBS_PER_USER
@@ -320,6 +242,22 @@ def test_all_active_users_returned(underusage_db):
     assert "beaubonhomme@mila.quebec" in emails
     assert "bramin@mila.quebec" in emails
 
+    # Test overview rgu hours used
+    row = next(r for r in results if r.email == "beaubonhomme@mila.quebec")
+    # 4.8 * 700 * 0.80 = 2688.0 RGU-h used
+    assert row.rgu_hours_used == pytest.approx(2688.0)
+
+    # Test overview avg utilization
+    assert row.avg_utilization == pytest.approx(0.80)
+
+    row = next(r for r in results if r.email == "petitbonhomme@mila.quebec")
+    # petitbonhomme has 8 mila jobs + 1 raisin job = 9 total, capped at 5.
+    assert len(row.top_jobs) == _TOP_JOBS_PER_USER
+
+    # Test top jobs ordered desc by rgu hours used
+    used = [j.rgu_hours_used for j in row.top_jobs]
+    assert used == sorted(used, reverse=True)
+
 
 def test_usage_outside_window_excluded(underusage_db):
     before = datetime(2020, 1, 1, tzinfo=UTC)
@@ -327,41 +265,6 @@ def test_usage_outside_window_excluded(underusage_db):
     assert (
         get_all_users_usage(before, after, top_jobs_per_user=_TOP_JOBS_PER_USER) == []
     )
-
-
-def test_usage_overview_rgu_hours_used(underusage_db):
-    results = get_all_users_usage(
-        _WINDOW_START, _WINDOW_END, top_jobs_per_user=_TOP_JOBS_PER_USER
-    )
-    row = next(r for r in results if r.email == "beaubonhomme@mila.quebec")
-    # 4.8 * 700 * 0.80 = 2688.0 RGU-h used
-    assert abs(row.rgu_hours_used - 2688.0) < 0.1
-
-
-def test_usage_overview_avg_utilization(underusage_db):
-    results = get_all_users_usage(
-        _WINDOW_START, _WINDOW_END, top_jobs_per_user=_TOP_JOBS_PER_USER
-    )
-    row = next(r for r in results if r.email == "beaubonhomme@mila.quebec")
-    assert abs(row.avg_utilization - 0.80) < 1e-6
-
-
-def test_usage_top_jobs_capped_at_five(underusage_db):
-    # petitbonhomme has 8 mila jobs + 1 raisin job = 9 total, capped at 5.
-    results = get_all_users_usage(
-        _WINDOW_START, _WINDOW_END, top_jobs_per_user=_TOP_JOBS_PER_USER
-    )
-    row = next(r for r in results if r.email == "petitbonhomme@mila.quebec")
-    assert len(row.top_jobs) == 5
-
-
-def test_usage_top_jobs_ordered_desc_by_rgu_hours_used(underusage_db):
-    results = get_all_users_usage(
-        _WINDOW_START, _WINDOW_END, top_jobs_per_user=_TOP_JOBS_PER_USER
-    )
-    row = next(r for r in results if r.email == "petitbonhomme@mila.quebec")
-    used = [j.rgu_hours_used for j in row.top_jobs]
-    assert used == sorted(used, reverse=True)
 
 
 def test_usage_unsupported_resource_raises(underusage_db):
@@ -422,8 +325,8 @@ def test_true_wasted_field_at_identity(underusage_db):
     results = get_underusers(
         _WINDOW_START,
         _WINDOW_END,
-        min_ratio=_MIN_RATIO,
-        min_rgu_hours=_MIN_RGU_HOURS,
+        min_ratio=0.0,
+        min_rgu_hours=0.0,
         top_jobs_per_user=_TOP_JOBS_PER_USER,
         utilization_ceiling=1.0,
     )
@@ -483,7 +386,7 @@ def test_subtractive_formula_exact_waste_ratio(underusage_db):
 
 def test_subtractive_formula_boundary_zero_waste(underusage_db):
     # Beaubonhomme: single mila job, m=0.80, rgu_h=3360.
-    # Subtractive: waste_ratio = max(0, T - m).  Allocation-independent.
+    # Subtractive: waste_ratio = max(0, T - m). Allocation-independent.
     # At T=0.80: m == T → waste = 0.
     results = get_underusers(
         _WINDOW_START,
@@ -511,7 +414,8 @@ def test_subtractive_formula_boundary_zero_waste(underusage_db):
 
 def test_top_job_gpu_utilization_is_raw_mean(underusage_db):
     # At T=0.80, displayed gpu_utilization must be raw m, independent of T.
-    # Raisin job m=0.0: shows 0.0.  Mila top job m=0.10: shows 0.10 (not 0.125 = 0.10/0.80).
+    # Raisin job m=0.0: shows 0.0. Mila top job m=0.10: shows 0.10 (not 0.125 =
+    # 0.10/0.80).
     results = get_underusers(
         _WINDOW_START,
         _WINDOW_END,
@@ -606,8 +510,9 @@ def test_missing_util_zero_waste(missing_util_db):
 
 def test_missing_util_non_negative_waste_at_sub_threshold(missing_util_db):
     # Regression guard: at threshold < 1, the NaN/NULL else-branch must keep
-    # credited_used == rgu_h (zero waste) and not apply the subtractive adjustment,
-    # which would yield rgu_h * (1 - T + NaN) = NaN → undefined waste.
+    # credited_used == rgu_h (zero waste) and not apply the subtractive
+    # adjustment, which would yield rgu_h * (1 - T + NaN) = NaN → undefined
+    # waste.
     results = get_underusers(
         _WINDOW_START,
         _WINDOW_END,

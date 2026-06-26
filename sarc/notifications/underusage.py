@@ -102,13 +102,13 @@ class RecurringUserRow:
 def _rgu_exprs(utilization_ceiling: float = 1.0):
     """Return (util_alias, m_mean, rgu_h_expr, true_used_expr, credited_used_expr).
 
-    true_used_expr   = rgu_h * m, or rgu_h (fully used, zero waste) when m is
-                       NaN/NULL.
-    credited_used_expr = LEAST(rgu_h, rgu_h * (1 - utilization_ceiling + m)),
-                       or rgu_h (fully used, zero waste) when m is NaN/NULL.
-                       Waste = rgu_h - credited_used = max(0, rgu_h * (T - m)),
-                       where T = utilization_ceiling. At T=1.0, credited == true
-                       (identity: 1 - 1 + m = m).
+    true_used_expr = rgu_h * m, or rgu_h (fully used, zero waste) when m is
+                     NaN/NULL.
+    credited_used_expr = LEAST(rgu_h, rgu_h * (1 - utilization_ceiling + m)), or
+                         rgu_h (fully used, zero waste) when m is NaN/NULL.
+                         Waste = rgu_h - credited_used = max(0, rgu_h * (T -
+                         m)), where T = utilization_ceiling. At T=1.0, credited
+                         == true (identity: 1 - 1 + m = m).
 
     The `m == m` NaN idiom (NaN != NaN in SQL) routes both SQL NULL (LEFT-JOIN
     miss) and NaN to the else branch, treating jobs with no recorded utilization
