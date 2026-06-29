@@ -20,6 +20,10 @@ class FetchPrometheus:
     max_jobs: int | None = field(
         type=int, default=None, help="Max number of jobs  to fetch"
     )
+    retry_failed: bool = field(
+        default=False,
+        help="Also retry jobs for which a previous fetch attempt failed",
+    )
 
     def execute(self) -> int:
         after = None
@@ -44,7 +48,7 @@ class FetchPrometheus:
                         f"Acquire Prometheus metrics on {cluster_name} for jobs after {after}"
                     )
                     with config.db.session() as sess:
-                        fetch_prometheus(sess, cluster, after, self.max_jobs)
+                        fetch_prometheus(sess, cluster, after, self.max_jobs, self.retry_failed)
 
             except Exception as e:
                 logger.error(
