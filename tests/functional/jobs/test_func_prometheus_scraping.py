@@ -6,10 +6,9 @@ from datetime import datetime, timedelta
 import pytest
 from fabric.testing.base import Command, Session
 from opentelemetry.trace import StatusCode
-
-from sarc.config import UTC
 from sqlmodel import select
 
+from sarc.config import UTC
 from sarc.db.job import JobStatisticDB, JobStatisticsFetchDateDB, SlurmJobDB
 from sarc.db.support import GpuRguDB
 
@@ -418,8 +417,12 @@ _SACCT_CMD_RAISIN = (
     " -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json --duplicates"
 )
 _FETCH_JOBS_ARGS = [
-    "fetch", "jobs", "--cluster_names", "raisin",
-    "--intervals", "2023-02-15T00:00-2023-02-16T00:00",
+    "fetch",
+    "jobs",
+    "--cluster_names",
+    "raisin",
+    "--intervals",
+    "2023-02-15T00:00-2023-02-16T00:00",
 ]
 _PARSE_JOBS_ARGS = ["parse", "jobs", "--since", "2023-02-14T00:00"]
 
@@ -538,5 +541,8 @@ def test_fetch_prometheus_skip_failed_and_retry(
     assert call_count == 1  # unchanged
 
     # Third fetch with --retry_failed: job re-fetched despite prior attempt
-    assert cli_main(["fetch", "prometheus", "--cluster_name", "raisin", "--retry_failed"]) == 0
+    assert (
+        cli_main(["fetch", "prometheus", "--cluster_name", "raisin", "--retry_failed"])
+        == 0
+    )
     assert call_count == 2
