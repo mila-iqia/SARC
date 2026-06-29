@@ -60,6 +60,7 @@ def fetch_prometheus(
     cache = Cache("prometheus")
     with cache.create_entry(fetch_date_now) as ce:
         for entry in sess.exec(query):
+            assert entry.id is not None
             fetch_record = sess.exec(
                 select(JobStatisticsFetchDateDB).where(
                     JobStatisticsFetchDateDB.job_id == entry.id
@@ -67,9 +68,7 @@ def fetch_prometheus(
             ).one_or_none()
             if fetch_record is None:
                 sess.add(
-                    JobStatisticsFetchDateDB(
-                        job_id=entry.id, fetch_date=fetch_date_now
-                    )
+                    JobStatisticsFetchDateDB(job_id=entry.id, fetch_date=fetch_date_now)
                 )
             else:
                 fetch_record.fetch_date = fetch_date_now

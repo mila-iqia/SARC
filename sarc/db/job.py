@@ -44,11 +44,7 @@ class JobStatisticsFetchDateDB(SQLModel, table=True):
     __table_args__ = (UniqueConstraint("job_id"),)
 
     id: int | None = Field(default=None, primary_key=True)
-    job_id: int = Field(
-        foreign_key="slurm_jobs.id",
-        nullable=False,
-        ondelete="CASCADE",
-    )
+    job_id: int = Field(foreign_key="slurm_jobs.id", nullable=False, ondelete="CASCADE")
     fetch_date: datetime_utc = datetime_utc_field()
     jobstatistic_id: int | None = Field(
         default=None,
