@@ -53,8 +53,9 @@ def fetch_prometheus(
         query = query.where(~was_attempted)
     if after is not None:
         query = query.where(SlurmJobDB.submit_time >= after)
+    query = query.order_by(col(SlurmJobDB.submit_time).desc())
     if max_jobs is not None:
-        query = query.order_by(col(SlurmJobDB.submit_time)).limit(max_jobs)
+        query = query.limit(max_jobs)
     nb_jobs = 0
     fetch_date_now = datetime.now(UTC)
     cache = Cache("prometheus")
