@@ -29,6 +29,7 @@ def fetch_prometheus(
     cluster_id = SlurmClusterDB.id_by_name(sess, cluster.name)
     if cluster_id is None:
         logger.error("Unknown cluster %, skipping cluster", cluster.name)
+        return
     has_statistics = (
         select(JobStatisticDB.job_id)
         .where(JobStatisticDB.job_id == SlurmJobDB.id)
