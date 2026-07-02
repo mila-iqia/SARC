@@ -490,7 +490,7 @@ def test_fetch_prometheus_records_fetch_date(
 
 
 @pytest.mark.usefixtures("enabled_cache", "no_pkey")
-def test_fetch_prometheus_skip_failed_and_retry(
+def test_fetch_prometheus_skip_failed(
     test_config,
     get_jobs,
     jobless_read_write_db,
@@ -499,7 +499,7 @@ def test_fetch_prometheus_skip_failed_and_retry(
     cli_main,
     monkeypatch,
 ):
-    """Jobs with a prior failed fetch are skipped by default; --retry_failed re-fetches them."""
+    """Jobs with a prior failed fetch are skipped"""
     sacct_json_str = create_sacct_json([{}])
     remote.expect(
         host="raisin",
@@ -539,10 +539,3 @@ def test_fetch_prometheus_skip_failed_and_retry(
     # Second fetch (default): already attempted → job skipped
     assert cli_main(["fetch", "prometheus", "--cluster_name", "raisin"]) == 0
     assert call_count == 1  # unchanged
-
-    # Third fetch with --retry_failed: job re-fetched despite prior attempt
-    assert (
-        cli_main(["fetch", "prometheus", "--cluster_name", "raisin", "--retry_failed"])
-        == 0
-    )
-    assert call_count == 2

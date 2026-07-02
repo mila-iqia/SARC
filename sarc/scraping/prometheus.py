@@ -18,11 +18,7 @@ logger = logging.getLogger(__name__)
 
 @trace_decorator()
 def fetch_prometheus(
-    sess: Session,
-    cluster: ClusterConfig,
-    after: datetime | None,
-    max_jobs: int | None,
-    retry_failed: bool = False,
+    sess: Session, cluster: ClusterConfig, after: datetime | None, max_jobs: int | None
 ) -> None:
     """
     Fetch Prometheus metrics for jobs on the specified cluster.
@@ -44,13 +40,12 @@ def fetch_prometheus(
         SlurmJobDB.job_state != SlurmState.RUNNING,
         ~has_statistics,
     )
-    if not retry_failed:
-        was_attempted = (
-            select(JobStatisticsFetchDateDB.job_id)
-            .where(JobStatisticsFetchDateDB.job_id == SlurmJobDB.id)
-            .exists()
-        )
-        query = query.where(~was_attempted)
+    was_attempted = (
+        select(JobStatisticsFetchDateDB.job_id)
+        .where(JobStatisticsFetchDateDB.job_id == SlurmJobDB.id)
+        .exists()
+    )
+    query = query.where(~was_attempted)
     if after is not None:
         query = query.where(SlurmJobDB.submit_time >= after)
     query = query.order_by(col(SlurmJobDB.submit_time).desc())
