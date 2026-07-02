@@ -6,9 +6,10 @@ from datetime import datetime, timedelta
 import pytest
 from fabric.testing.base import Command, Session
 from opentelemetry.trace import StatusCode
+from sqlmodel import select
 
 from sarc.config import UTC
-from sarc.db.job import JobStatisticDB, SlurmJobDB
+from sarc.db.job import JobStatisticDB, JobStatisticsFetchDateDB, SlurmJobDB
 from sarc.db.support import GpuRguDB
 
 from ...common.dateutils import MTL, _dtfmt, _dtreg
@@ -409,3 +410,132 @@ def test_acquire_prometheus_for_cluster_without_prometheus(
             caplog.text,
         )
     )
+
+
+_SACCT_CMD_RAISIN = (
+    "export TZ=UTC && /opt/slurm/bin/sacct"
+    " -X -S 2023-02-15T00:00 -E 2023-02-16T00:00 --allusers --json --duplicates"
+)
+_FETCH_JOBS_ARGS = [
+    "fetch",
+    "jobs",
+    "--cluster_names",
+    "raisin",
+    "--intervals",
+    "2023-02-15T00:00-2023-02-16T00:00",
+]
+_PARSE_JOBS_ARGS = ["parse", "jobs", "--since", "2023-02-14T00:00"]
+
+
+@pytest.mark.usefixtures("enabled_cache", "no_pkey")
+def test_fetch_prometheus_records_fetch_date(
+    test_config,
+    get_jobs,
+    jobless_read_write_db,
+    create_sacct_json,
+    remote,
+    cli_main,
+    monkeypatch,
+    mock_compute_job_statistics,
+):
+    """fetch prometheus creates a fetch record; parse prometheus fills in jobstatistic_id."""
+    sacct_json_str = create_sacct_json([{}])
+    remote.expect(
+        host="raisin",
+        commands=[
+            Command(
+                cmd=_SACCT_CMD_RAISIN,
+                out=f"Welcome on raisin,\n{sacct_json_str}".encode("utf-8"),
+            )
+        ],
+    )
+
+    assert cli_main(_FETCH_JOBS_ARGS) == 0
+    assert cli_main(_PARSE_JOBS_ARGS) == 0
+    jobs = list(get_jobs())
+    assert len(jobs) == 1
+
+    def mock_get_job_time_series(job, metric, **kwargs):
+        mock_get_job_time_series.called += 1
+        return [{"metric": {"__name__": "slurm_job_gpu_name", "gpu_type": "test_gpu"}}]
+
+    mock_get_job_time_series.called = 0
+    monkeypatch.setattr(
+        "sarc.scraping.series.get_job_time_series_data", mock_get_job_time_series
+    )
+
+    assert cli_main(["fetch", "prometheus", "--cluster_name", "raisin"]) == 0
+    assert mock_get_job_time_series.called == 1
+
+    # Fetch record created; jobstatistic_id not set yet (parse hasn't run)
+    jobless_read_write_db.expire_all()
+    fetch_records = jobless_read_write_db.exec(select(JobStatisticsFetchDateDB)).all()
+    assert len(fetch_records) == 1
+    fetch_record = fetch_records[0]
+    assert fetch_record.job_id == jobs[0].id
+    assert fetch_record.fetch_date is not None
+    assert fetch_record.jobstatistic_id is None
+
+    assert cli_main(["parse", "prometheus", "--since", "2023-02-14T00:00"]) == 0
+
+    # After parse, jobstatistic_id points to one of the created JobStatisticDB rows
+    jobless_read_write_db.expire_all()
+    fetch_records = jobless_read_write_db.exec(select(JobStatisticsFetchDateDB)).all()
+    assert len(fetch_records) == 1
+    assert fetch_records[0].jobstatistic_id is not None
+
+    stat = jobless_read_write_db.get(JobStatisticDB, fetch_records[0].jobstatistic_id)
+    assert stat is not None
+    assert stat.job_id == jobs[0].id
+
+
+@pytest.mark.usefixtures("enabled_cache", "no_pkey")
+def test_fetch_prometheus_skip_failed(
+    test_config,
+    get_jobs,
+    jobless_read_write_db,
+    create_sacct_json,
+    remote,
+    cli_main,
+    monkeypatch,
+):
+    """Jobs with a prior failed fetch are skipped"""
+    sacct_json_str = create_sacct_json([{}])
+    remote.expect(
+        host="raisin",
+        commands=[
+            Command(
+                cmd=_SACCT_CMD_RAISIN,
+                out=f"Welcome on raisin,\n{sacct_json_str}".encode("utf-8"),
+            )
+        ],
+    )
+
+    assert cli_main(_FETCH_JOBS_ARGS) == 0
+    assert cli_main(_PARSE_JOBS_ARGS) == 0
+    jobs = list(get_jobs())
+    assert len(jobs) == 1
+
+    call_count = 0
+
+    def mock_empty_time_series(job, metric, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        return []  # simulate a failed prometheus fetch (no data)
+
+    monkeypatch.setattr(
+        "sarc.scraping.series.get_job_time_series_data", mock_empty_time_series
+    )
+
+    # First fetch: job selected, prometheus returns nothing — fetch record created
+    assert cli_main(["fetch", "prometheus", "--cluster_name", "raisin"]) == 0
+    assert call_count == 1
+
+    jobless_read_write_db.expire_all()
+    fetch_records = jobless_read_write_db.exec(select(JobStatisticsFetchDateDB)).all()
+    assert len(fetch_records) == 1
+    assert fetch_records[0].jobstatistic_id is None
+
+    # Second fetch (default): already attempted → job skipped
+    assert cli_main(["fetch", "prometheus", "--cluster_name", "raisin"]) == 0
+    assert call_count == 1  # unchanged

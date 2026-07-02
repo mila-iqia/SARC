@@ -7,7 +7,7 @@ from sqlmodel import Session, col, select
 from sarc.cache import Cache, CacheEntry
 from sarc.config import ClusterConfig, config
 from sarc.db.cluster import SlurmClusterDB
-from sarc.db.job import JobStatisticDB, SlurmJobDB
+from sarc.db.job import JobStatisticDB, JobStatisticsFetchDateDB, SlurmJobDB
 from sarc.db.runstate import get_parsed_date, set_parsed_date
 from sarc.models.job import SlurmState
 from sarc.scraping import series
@@ -29,7 +29,8 @@ def fetch_prometheus(
     cluster_id = SlurmClusterDB.id_by_name(sess, cluster.name)
     if cluster_id is None:
         logger.error("Unknown cluster %, skipping cluster", cluster.name)
-    subquery = (
+        return
+    has_statistics = (
         select(JobStatisticDB.job_id)
         .where(JobStatisticDB.job_id == SlurmJobDB.id)
         .exists()
@@ -38,16 +39,37 @@ def fetch_prometheus(
         SlurmJobDB.cluster_id == cluster_id,
         SlurmJobDB.elapsed_time != 0,
         SlurmJobDB.job_state != SlurmState.RUNNING,
-        ~subquery,  # not users that have statistics
+        ~has_statistics,
     )
+    was_attempted = (
+        select(JobStatisticsFetchDateDB.job_id)
+        .where(JobStatisticsFetchDateDB.job_id == SlurmJobDB.id)
+        .exists()
+    )
+    query = query.where(~was_attempted)
     if after is not None:
         query = query.where(SlurmJobDB.submit_time >= after)
+    query = query.order_by(col(SlurmJobDB.submit_time).desc())
     if max_jobs is not None:
-        query = query.order_by(col(SlurmJobDB.submit_time)).limit(max_jobs)
+        query = query.limit(max_jobs)
     nb_jobs = 0
+    fetch_date_now = datetime.now(UTC)
     cache = Cache("prometheus")
-    with cache.create_entry(datetime.now(UTC)) as ce:
+    with cache.create_entry(fetch_date_now) as ce:
         for entry in sess.exec(query):
+            assert entry.id is not None
+            fetch_record = sess.exec(
+                select(JobStatisticsFetchDateDB).where(
+                    JobStatisticsFetchDateDB.job_id == entry.id
+                )
+            ).one_or_none()
+            if fetch_record is None:
+                sess.add(
+                    JobStatisticsFetchDateDB(job_id=entry.id, fetch_date=fetch_date_now)
+                )
+            else:
+                fetch_record.fetch_date = fetch_date_now
+                fetch_record.jobstatistic_id = None
             raw_prom_data = series.get_job_time_series_data(
                 job=entry, metric=series.JOB_STATISTICS_METRIC_NAMES, max_points=10_000
             )
@@ -121,6 +143,15 @@ def parse_prometheus_ce(sess: Session, ce: CacheEntry) -> bool:
         statistics = series.compute_job_statistics(entry, data)
         if len(statistics) != 0:
             entry.statistics = statistics
+            sess.flush()
+            any_stat = next(iter(entry.statistics.values()))
+            fetch_record = sess.exec(
+                select(JobStatisticsFetchDateDB).where(
+                    JobStatisticsFetchDateDB.job_id == entry.id
+                )
+            ).one_or_none()
+            if fetch_record is not None:
+                fetch_record.jobstatistic_id = any_stat.id
 
     logger.info(f"Saved Prometheus metrics for {nb_jobs} jobs.")
     return error

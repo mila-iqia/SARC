@@ -37,6 +37,23 @@ class JobStatisticDB(SQLModel, table=True):
     unused: float | None
 
 
+class JobStatisticsFetchDateDB(SQLModel, table=True):
+    """Tracks when we last attempted to fetch Prometheus stats for a job."""
+
+    __tablename__ = "jobstatistics_fetchdate"
+    __table_args__ = (UniqueConstraint("job_id"),)
+
+    id: int | None = Field(default=None, primary_key=True)
+    job_id: int = Field(foreign_key="slurm_jobs.id", nullable=False, ondelete="CASCADE")
+    fetch_date: datetime_utc = datetime_utc_field()
+    jobstatistic_id: int | None = Field(
+        default=None,
+        foreign_key="jobstatisticdb.id",
+        nullable=True,
+        ondelete="SET NULL",
+    )
+
+
 class SlurmJobDB(SQLModel, table=True):
     __tablename__ = "slurm_jobs"
     __table_args__ = (
