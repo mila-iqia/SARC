@@ -61,8 +61,8 @@ def _jobs_section(top_jobs: list, *, rgu_value: Callable, suffix: str) -> str:
             prefix = _tree_prefix(i, len(jobs))
             date_str = job.submit_time.strftime("%Y-%m-%d")
             util_str = (
-                f"{job.gpu_utilization * 100:.0f} %"
-                if job.gpu_utilization is not None
+                f"{job.gpu_sm_occupancy * 100:.0f} %"
+                if job.gpu_sm_occupancy is not None
                 else "n/a"
             )
             lines.append(
@@ -113,7 +113,7 @@ def build_usage_report(
     dashboard_url: str | None = None,
     help_section: str | None = None,
 ) -> str:
-    """Build a Phase 3 plain-text usage report for a single researcher.
+    """Build a plain-text usage report for a single researcher.
 
     Neutral wording — shows used volume, no waste/unused framing.
     Pure function — no I/O, deterministic for fixed input.

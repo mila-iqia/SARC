@@ -24,7 +24,7 @@ _JOB_NARVAL_1 = UsageJob(
     submit_time=datetime(2026, 5, 28, tzinfo=UTC),
     wasted=80.0,
     rgu_hours_used=None,
-    gpu_utilization=0.05,
+    gpu_sm_occupancy=0.05,
 )
 _JOB_NARVAL_2 = UsageJob(
     job_id=111112,
@@ -32,7 +32,7 @@ _JOB_NARVAL_2 = UsageJob(
     submit_time=datetime(2026, 5, 30, tzinfo=UTC),
     wasted=60.0,
     rgu_hours_used=None,
-    gpu_utilization=0.12,
+    gpu_sm_occupancy=0.12,
 )
 _JOB_FIR = UsageJob(
     job_id=222222,
@@ -40,7 +40,7 @@ _JOB_FIR = UsageJob(
     submit_time=datetime(2026, 5, 31, tzinfo=UTC),
     wasted=40.0,
     rgu_hours_used=None,
-    gpu_utilization=None,
+    gpu_sm_occupancy=None,
 )
 
 _ROW_ALICE = UnderuserRow(
@@ -51,10 +51,9 @@ _ROW_ALICE = UnderuserRow(
     wasted=255.0,
     requested=1000.0,
     waste_ratio=0.255,
-    avg_utilization=0.745,
     by_cluster=[
-        UsageClusterBreakdown("narval", 700.0, 490.0),
-        UsageClusterBreakdown("fir", 300.0, 255.0),
+        UsageClusterBreakdown("narval", 700.0, 490.0, 700.0 - 490.0),
+        UsageClusterBreakdown("fir", 300.0, 255.0, 300.0 - 255.0),
     ],
     top_jobs=[_JOB_NARVAL_1, _JOB_NARVAL_2, _JOB_FIR],
 )
@@ -67,8 +66,7 @@ _ROW_BOB = UnderuserRow(
     wasted=600.0,
     requested=800.0,
     waste_ratio=0.75,
-    avg_utilization=0.25,
-    by_cluster=[UsageClusterBreakdown("fir", 800.0, 200.0)],
+    by_cluster=[UsageClusterBreakdown("fir", 800.0, 200.0, 800.0 - 200.0)],
     top_jobs=[],
 )
 
@@ -80,8 +78,7 @@ _ROW_CAROL = UnderuserRow(
     wasted=420.0,
     requested=700.0,
     waste_ratio=0.60,
-    avg_utilization=0.40,
-    by_cluster=[UsageClusterBreakdown("mila", 700.0, 280.0)],
+    by_cluster=[UsageClusterBreakdown("mila", 700.0, 280.0, 700.0 - 280.0)],
     top_jobs=[],
 )
 
@@ -370,7 +367,7 @@ _USAGE_JOB_NARVAL_1 = UsageJob(
     submit_time=datetime(2026, 5, 28, tzinfo=UTC),
     wasted=None,
     rgu_hours_used=120.0,
-    gpu_utilization=0.72,
+    gpu_sm_occupancy=0.72,
 )
 _USAGE_JOB_NARVAL_2 = UsageJob(
     job_id=300002,
@@ -378,7 +375,7 @@ _USAGE_JOB_NARVAL_2 = UsageJob(
     submit_time=datetime(2026, 6, 1, tzinfo=UTC),
     wasted=None,
     rgu_hours_used=90.0,
-    gpu_utilization=0.65,
+    gpu_sm_occupancy=0.65,
 )
 _USAGE_JOB_FIR = UsageJob(
     job_id=300003,
@@ -386,7 +383,7 @@ _USAGE_JOB_FIR = UsageJob(
     submit_time=datetime(2026, 5, 30, tzinfo=UTC),
     wasted=None,
     rgu_hours_used=50.0,
-    gpu_utilization=None,
+    gpu_sm_occupancy=None,
 )
 
 _USAGE_ROW_ALICE = UsageRow(
@@ -395,10 +392,9 @@ _USAGE_ROW_ALICE = UsageRow(
     user_id=1,
     rgu_hours=1000.0,
     rgu_hours_used=745.0,
-    avg_utilization=0.745,
     by_cluster=[
-        UsageClusterBreakdown("narval", 700.0, 525.0),
-        UsageClusterBreakdown("fir", 300.0, 220.0),
+        UsageClusterBreakdown("narval", 700.0, 525.0, 700.0 - 525.0),
+        UsageClusterBreakdown("fir", 300.0, 220.0, 300.0 - 220.0),
     ],
     top_jobs=[_USAGE_JOB_NARVAL_1, _USAGE_JOB_NARVAL_2, _USAGE_JOB_FIR],
 )
@@ -409,8 +405,7 @@ _USAGE_ROW_BOB = UsageRow(
     user_id=2,
     rgu_hours=800.0,
     rgu_hours_used=200.0,
-    avg_utilization=0.25,
-    by_cluster=[UsageClusterBreakdown("fir", 800.0, 200.0)],
+    by_cluster=[UsageClusterBreakdown("fir", 800.0, 200.0, 800.0 - 200.0)],
     top_jobs=[],
 )
 

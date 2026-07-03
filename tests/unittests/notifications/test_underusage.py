@@ -175,7 +175,7 @@ def test_underusers_filtering_and_top_jobs(underusage_db):
     assert unused == sorted(unused, reverse=True)
 
     # Test top jobs have utilization
-    assert all(j.gpu_utilization is not None for j in row.top_jobs)
+    assert all(j.gpu_sm_occupancy is not None for j in row.top_jobs)
 
 
 # ── Overview fields ───────────────────────────────────────────────────────────
@@ -334,7 +334,7 @@ def test_true_wasted_field_at_identity(underusage_db):
         assert row.true_wasted == pytest.approx(row.wasted)
         assert row.true_waste_ratio == pytest.approx(row.waste_ratio)
         for c in row.by_cluster:
-            assert c.true_wasted == pytest.approx(c.wasted)
+            assert (c.rgu_hours - c.rgu_hours_used) == pytest.approx(c.wasted)
 
 
 def test_scaled_waste_less_than_true_waste_below_threshold(underusage_db):
@@ -412,8 +412,8 @@ def test_subtractive_formula_boundary_zero_waste(underusage_db):
     assert row.waste_ratio == pytest.approx(0.10, abs=1e-6)
 
 
-def test_top_job_gpu_utilization_is_raw_mean(underusage_db):
-    # At T=0.80, displayed gpu_utilization must be raw m, independent of T.
+def test_top_job_gpu_sm_occupancy_is_raw_mean(underusage_db):
+    # At T=0.80, displayed gpu_sm_occupancy must be raw m, independent of T.
     # Raisin job m=0.0: shows 0.0. Mila top job m=0.10: shows 0.10 (not 0.125 =
     # 0.10/0.80).
     results = get_underusers(
@@ -427,8 +427,8 @@ def test_top_job_gpu_utilization_is_raw_mean(underusage_db):
     row = next(r for r in results if "petitbonhomme" in r.email)
     raisin_job = next(j for j in row.top_jobs if j.cluster == "raisin")
     mila_top = next(j for j in row.top_jobs if j.cluster == "mila")
-    assert raisin_job.gpu_utilization == pytest.approx(0.0, abs=1e-6)
-    assert mila_top.gpu_utilization == pytest.approx(0.10, abs=1e-6)
+    assert raisin_job.gpu_sm_occupancy == pytest.approx(0.0, abs=1e-6)
+    assert mila_top.gpu_sm_occupancy == pytest.approx(0.10, abs=1e-6)
 
 
 # ── Usage report floor ────────────────────────────────────────────────────────

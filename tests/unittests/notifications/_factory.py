@@ -1,7 +1,7 @@
-"""Shared test helper for seeding GPU jobs (+ optional gpu_utilization stat).
+"""Shared test helper for seeding GPU jobs (+ optional gpu_sm_occupancy stat).
 
 Not collected by pytest (leading underscore). The existing JobFactory builds a
-SlurmJobDB but does not create the gpu_utilization JobStatisticDB stat, so the
+SlurmJobDB but does not create the gpu_sm_occupancy JobStatisticDB stat, so the
 notification tests need this dedicated helper.
 """
 
@@ -31,7 +31,7 @@ def add_gpu_job(
     """Insert a COMPLETED GPU SlurmJobDB at the literal *submit_time* and return it.
 
     end_time = submit_time + elapsed_h. When *utilization* is not None, also adds a
-    gpu_utilization JobStatisticDB stat with that mean.
+    gpu_sm_occupancy JobStatisticDB stat with that mean.
     """
     job_data = copy.deepcopy(base_job)
     job_data.pop("cluster_name")
@@ -60,7 +60,7 @@ def add_gpu_job(
         session.add(
             JobStatisticDB(
                 job_id=job.id,
-                name="gpu_utilization",
+                name="gpu_sm_occupancy",
                 mean=utilization,
                 std=None,
                 q05=None,

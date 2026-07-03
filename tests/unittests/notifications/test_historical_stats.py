@@ -238,8 +238,7 @@ def test_digest_no_historical_by_default():
         wasted=500.0,
         requested=1000.0,
         waste_ratio=0.5,
-        avg_utilization=0.5,
-        by_cluster=[UsageClusterBreakdown("mila", 1000.0, 500.0)],
+        by_cluster=[UsageClusterBreakdown("mila", 1000.0, 500.0, 1000.0 - 500.0)],
         top_jobs=[],
     )
     text = build_admin_digest([row], period="…", **_DIGEST_KW)
