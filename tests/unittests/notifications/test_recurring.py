@@ -6,12 +6,13 @@ import gifnoc
 import pytest
 from sqlmodel import select
 
+from sarc.config import USAGE_CYCLE_LENGTH_WEEKS
 from sarc.db.cluster import SlurmClusterDB
 from sarc.db.users import UserDB
 from sarc.notifications.messages import build_recurring_table
 from sarc.notifications.underusage import (
     RecurringUserRow,
-    _even_week_anchor,
+    _week_anchor,
     get_cycle_dates,
     get_recurring_underusers,
 )
@@ -491,122 +492,129 @@ def test_dry_run_display_cycles(
     assert "Recurring underusers" in out
 
 
-# ── _even_week_anchor ─────────────────────────────────────────────────────────
+# ── _week_anchor ──────────────────────────────────────────────────────────────
+# "aligned" = ISO week number is a multiple of USAGE_CYCLE_LENGTH_WEEKS;
+# "off-cycle" = it is not.
 
-# 2024-06-24: Monday of ISO week 26 (even)
-_EVEN_MON = datetime(2024, 6, 24, tzinfo=UTC)
-# 2024-06-30: Sunday of ISO week 26 (even) — _TEST_END
-_EVEN_SUN = _TEST_END
-# 2024-06-26: Wednesday of ISO week 26 (even)
-_EVEN_WED = datetime(2024, 6, 26, tzinfo=UTC)
-# 2024-06-17: Monday of ISO week 25 (odd)
-_ODD_MON = datetime(2024, 6, 17, tzinfo=UTC)
-# 2024-06-19: Wednesday of ISO week 25 (odd)
-_ODD_WED = datetime(2024, 6, 19, tzinfo=UTC)
+# 2024-06-24: Monday of ISO week 26 (aligned)
+_ALIGNED_MON = datetime(2024, 6, 24, tzinfo=UTC)
+# 2024-06-30: Sunday of ISO week 26 (aligned) — _TEST_END
+_ALIGNED_SUN = _TEST_END
+# 2024-06-26: Wednesday of ISO week 26 (aligned)
+_ALIGNED_WED = datetime(2024, 6, 26, tzinfo=UTC)
+# 2024-06-17: Monday of ISO week 25 (off-cycle)
+_OFF_CYCLE_MON = datetime(2024, 6, 17, tzinfo=UTC)
+# 2024-06-19: Wednesday of ISO week 25 (off-cycle)
+_OFF_CYCLE_WED = datetime(2024, 6, 19, tzinfo=UTC)
 
 
-def test_anchor_even_monday_returns_same_day():
-    # 2024-06-24 is already the Monday of an even week
-    assert _even_week_anchor(_EVEN_MON) == _EVEN_MON.replace(
+def test_anchor_aligned_monday_returns_same_day():
+    # 2024-06-24 is already the Monday of an aligned week
+    assert _week_anchor(_ALIGNED_MON) == _ALIGNED_MON.replace(
         hour=0, minute=0, second=0, microsecond=0
     )
 
 
-def test_anchor_even_midweek_returns_same_day():
-    # 2024-06-26 (Wed, wk 26 even) → anchor = same day
-    assert _even_week_anchor(_EVEN_WED) == _EVEN_WED.replace(
+def test_anchor_aligned_midweek_returns_same_day():
+    # 2024-06-26 (Wed, wk 26 aligned) → anchor = same day
+    assert _week_anchor(_ALIGNED_WED) == _ALIGNED_WED.replace(
         hour=0, minute=0, second=0, microsecond=0
     )
 
 
-def test_anchor_even_sunday_returns_same_day():
-    # 2024-06-30 (Sun, wk 26 even) → anchor = same day
-    assert _even_week_anchor(_EVEN_SUN) == _EVEN_SUN.replace(
+def test_anchor_aligned_sunday_returns_same_day():
+    # 2024-06-30 (Sun, wk 26 aligned) → anchor = same day
+    assert _week_anchor(_ALIGNED_SUN) == _ALIGNED_SUN.replace(
         hour=0, minute=0, second=0, microsecond=0
     )
 
 
-def test_anchor_odd_monday_shifts_to_next_week():
-    # 2024-06-17 (Mon, wk 25 odd) → anchor = 2024-06-24 (Mon, wk 26 even)
-    assert _even_week_anchor(_ODD_MON) == _EVEN_MON.replace(
+def test_anchor_off_cycle_monday_shifts_to_aligned_week():
+    # 2024-06-17 (Mon, wk 25 off-cycle) → anchor = 2024-06-24 (Mon, wk 26 aligned)
+    assert _week_anchor(_OFF_CYCLE_MON) == _ALIGNED_MON.replace(
         hour=0, minute=0, second=0, microsecond=0
     )
 
 
-def test_anchor_odd_midweek_shifts_to_next_week():
-    # 2024-06-19 (Wed, wk 25 odd) → anchor = 2024-06-26 (Wed, wk 26 even)
-    assert _even_week_anchor(_ODD_WED) == (_ODD_WED + timedelta(weeks=1)).replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
+def test_anchor_off_cycle_midweek_shifts_to_aligned_week():
+    # 2024-06-19 (Wed, wk 25 off-cycle) → anchor = 2024-06-26 (Wed, wk 26 aligned)
+    assert _week_anchor(_OFF_CYCLE_WED) == (
+        _OFF_CYCLE_WED + timedelta(weeks=1)
+    ).replace(hour=0, minute=0, second=0, microsecond=0)
 
 
-def test_anchor_result_always_even_week():
+def test_anchor_result_always_aligned_week():
     for offset in range(28):
         dt = datetime(2024, 6, 1, tzinfo=UTC) + timedelta(days=offset)
-        anchor = _even_week_anchor(dt)
-        assert anchor.isocalendar().week % 2 == 0, f"odd week for end={dt.date()}"
+        anchor = _week_anchor(dt)
+        assert anchor.isocalendar().week % USAGE_CYCLE_LENGTH_WEEKS == 0, (
+            f"off-cycle week for end={dt.date()}"
+        )
 
 
 # ── get_cycle_dates ───────────────────────────────────────────────────────────
 
 
-def test_cycle_dates_even_week_five_mondays():
-    # end = 2024-06-24 (Mon, wk 26 even)
-    dates = get_cycle_dates(_EVEN_MON)
+def test_cycle_dates_aligned_week_five_mondays():
+    # end = 2024-06-24 (Mon, wk 26 aligned)
+    dates = get_cycle_dates(_ALIGNED_MON)
     assert len(dates) == 5
     assert all(isinstance(d, date) for d in dates)
-    # Each must be a Monday of an even week, 14 days apart
+    # Each must be a Monday of an aligned week, USAGE_CYCLE_LENGTH_WEEKS weeks apart
     for i, d in enumerate(dates):
         dt = datetime(d.year, d.month, d.day, tzinfo=UTC)
         assert dt.weekday() == 0, f"dates[{i}] is not a Monday"
-        assert dt.isocalendar().week % 2 == 0, f"dates[{i}] not an even week"
+        assert dt.isocalendar().week % USAGE_CYCLE_LENGTH_WEEKS == 0, (
+            f"dates[{i}] not an aligned week"
+        )
     for i in range(len(dates) - 1):
-        assert (dates[i] - dates[i + 1]).days == 14
+        assert (dates[i] - dates[i + 1]).days == USAGE_CYCLE_LENGTH_WEEKS * 7
 
 
-def test_cycle_dates_even_week_all_not_future():
-    # end = 2024-06-24 (Mon, wk 26 even); all cycle dates ≤ end.date()
-    end = _EVEN_MON
+def test_cycle_dates_aligned_week_all_not_future():
+    # end = 2024-06-24 (Mon, wk 26 aligned); all cycle dates ≤ end.date()
+    end = _ALIGNED_MON
     dates = get_cycle_dates(end)
     for d in dates:
         assert d <= end.date()
 
 
-def test_cycle_dates_odd_week_w0_is_future():
-    # end = 2024-06-17 (Mon, wk 25 odd); W0 anchor = 2024-06-24 > end
-    end = _ODD_MON
+def test_cycle_dates_off_cycle_week_w0_is_future():
+    # end = 2024-06-17 (Mon, wk 25 off-cycle); W0 anchor = 2024-06-24 > end
+    end = _OFF_CYCLE_MON
     dates = get_cycle_dates(end)
-    assert dates[0] > end.date(), "W0 should be in the future for odd-week end"
+    assert dates[0] > end.date(), "W0 should be in the future for off-cycle-week end"
     for d in dates[1:]:
         assert d < end.date(), f"{d} should be in the past"
 
 
-# ── get_recurring_underusers — odd-week end ───────────────────────────────────
+# ── get_recurring_underusers — off-cycle-week end ─────────────────────────────
 
 
-def test_odd_week_end_w0_is_none(recurring_db):
-    # _ODD_MON = 2024-06-17 (wk 25, odd) → anchor = 2024-06-24 > end → w0=None
+def test_off_cycle_week_end_w0_is_none(recurring_db):
+    # _OFF_CYCLE_MON = 2024-06-17 (wk 25, off-cycle) → anchor = 2024-06-24 > end
+    # → w0=None
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         result = get_recurring_underusers(
-            _ODD_MON,
+            _OFF_CYCLE_MON,
             min_ratio=_MIN_RATIO,
             min_rgu_hours=_MIN_RGU_HOURS,
             cluster_share_threshold=0.70,
         )
-    assert result, "expected selected users for the odd-week window"
+    assert result, "expected selected users for the off-cycle-week window"
     for rows in result.values():
         for row in rows:
             assert row.cycles[0] is None, (
-                f"expected cycles[0]=None for odd-week end, got {row.cycles[0]}"
+                f"expected cycles[0]=None for off-cycle-week end, got {row.cycles[0]}"
             )
 
 
-def test_odd_week_end_personalized_action_floor_controls(recurring_db):
+def test_off_cycle_week_end_personalized_action_floor_controls(recurring_db):
     # With w0=None the PA flag is still based on waste in the active window, not cycles.
     # A high floor means nobody qualifies even though users have past-cycle waste.
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         result = get_recurring_underusers(
-            _ODD_MON,
+            _OFF_CYCLE_MON,
             min_ratio=_MIN_RATIO,
             min_rgu_hours=_MIN_RGU_HOURS,
             cluster_share_threshold=0.70,
@@ -620,11 +628,11 @@ def test_odd_week_end_personalized_action_floor_controls(recurring_db):
 # ── build_recurring_table with cycle_dates ────────────────────────────────────
 
 _CYCLE_DATES = [
-    date(2024, 6, 24),  # W0  (Mon, wk 26 even)
-    date(2024, 6, 10),  # W-2 (Mon, wk 24 even)
-    date(2024, 5, 27),  # W-4 (Mon, wk 22 even)
-    date(2024, 5, 13),  # W-6 (Mon, wk 20 even)
-    date(2024, 4, 29),  # W-8 (Mon, wk 18 even)
+    date(2024, 6, 24),  # W0  (Mon, wk 26 aligned)
+    date(2024, 6, 10),  # W-2 (Mon, wk 24 aligned)
+    date(2024, 5, 27),  # W-4 (Mon, wk 22 aligned)
+    date(2024, 5, 13),  # W-6 (Mon, wk 20 aligned)
+    date(2024, 4, 29),  # W-8 (Mon, wk 18 aligned)
 ]
 
 _ROW_FUTURE_W0 = RecurringUserRow(

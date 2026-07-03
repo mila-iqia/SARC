@@ -306,7 +306,7 @@ class UnderusageNotifyConfig:
     historical_months: int = 6
     send_usage_report: bool = False
     # Universal usage report cadence.
-    usage_report_window_weeks: int = 4
+    usage_report_cycles: int = 2
     usage_report_min_rgu_hours: float = 1843.2  # 4x A100-80GB RGU x4d
     clusters: list[str] = field(default_factory=lambda: ["mila"])
     utilization_ceiling: float = 1.0  # T ∈ (0,1]: wasted = max(0, rgu_h × (T − m))
@@ -315,7 +315,7 @@ class UnderusageNotifyConfig:
         for field_name, value in [
             ("digest_top_n", self.digest_top_n),
             ("top_jobs_per_user", self.top_jobs_per_user),
-            ("usage_report_window_weeks", self.usage_report_window_weeks),
+            ("usage_report_cycles", self.usage_report_cycles),
             ("recurrence_display_cycles", self.recurrence_display_cycles),
             ("recurrence_active_cycles", self.recurrence_active_cycles),
             ("historical_months", self.historical_months),

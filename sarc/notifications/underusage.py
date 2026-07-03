@@ -180,7 +180,7 @@ def get_underusers(
         raise ValueError(f"Unsupported resource: {resource!r}")
 
     with config.db.session() as session:
-        util, _, rgu_h_expr, true_used_expr, credited_used_expr = _rgu_exprs(
+        util, m_mean, rgu_h_expr, true_used_expr, credited_used_expr = _rgu_exprs(
             utilization_ceiling
         )
         stmt = _with_rgu_window(
@@ -250,9 +250,6 @@ def get_underusers(
         # pattern.
         jobs_by_user: dict[int, list[UsageJob]] = {uid: [] for uid in underuser_ids}
         if underuser_ids:
-            util, m_mean, rgu_h_expr, _, credited_used_expr = _rgu_exprs(
-                utilization_ceiling
-            )
             job_rows = session.exec(
                 _with_rgu_window(
                     select(
@@ -345,7 +342,7 @@ def get_all_users_usage(
         raise ValueError(f"Unsupported resource: {resource!r}")
 
     with config.db.session() as session:
-        util, _, rgu_h_expr, true_used_expr, credited_used_expr = _rgu_exprs()
+        util, m_mean, rgu_h_expr, true_used_expr, credited_used_expr = _rgu_exprs()
         stmt = _with_rgu_window(
             select(
                 col(JobSeriesDB.sarc_user_id),
@@ -388,7 +385,6 @@ def get_all_users_usage(
 
         jobs_by_user: dict[int, list[UsageJob]] = {uid: [] for uid in all_user_ids}
         if all_user_ids:
-            util, m_mean, rgu_h_expr, true_used_expr, _ = _rgu_exprs()
             job_rows = session.exec(
                 _with_rgu_window(
                     select(
@@ -580,7 +576,9 @@ def get_historical_stats(
 # ── Recurring-underusers table ──
 
 
-def _even_week_anchor(end: datetime, *, cycle_length_weeks: int = 2) -> datetime:
+def _week_anchor(
+    end: datetime, *, cycle_length_weeks: int = USAGE_CYCLE_LENGTH_WEEKS
+) -> datetime:
     """Return day of the current (or next) week that is a multiple of cycle_length_weeks.
 
     Advances *end* forward so that the resulting ISO week number is divisible by
@@ -597,7 +595,7 @@ def _even_week_anchor(end: datetime, *, cycle_length_weeks: int = 2) -> datetime
 
 
 def get_cycle_dates(
-    end: datetime, n: int = 5, *, cycle_length_weeks: int = 2
+    end: datetime, n: int = 5, *, cycle_length_weeks: int = USAGE_CYCLE_LENGTH_WEEKS
 ) -> list[date]:
     """Return n cycle end-dates [W0, W-k, ..., W-(k*(n-1))] as date objects,
     where k = cycle_length_weeks.
@@ -605,7 +603,7 @@ def get_cycle_dates(
     Each date is the day of an aligned ISO week, spaced *cycle_length_weeks*
     apart, anchored to the current (or next) aligned week from *end*.
     """
-    anchor = _even_week_anchor(end, cycle_length_weeks=cycle_length_weeks)
+    anchor = _week_anchor(end, cycle_length_weeks=cycle_length_weeks)
     return [(anchor - timedelta(weeks=i * cycle_length_weeks)).date() for i in range(n)]
 
 
@@ -644,7 +642,7 @@ def get_recurring_underusers(
         raise ValueError(f"Unsupported resource: {resource!r}")
 
     window_weeks = recurrence_active_cycles * cycle_length_weeks
-    anchor = _even_week_anchor(end, cycle_length_weeks=cycle_length_weeks)
+    anchor = _week_anchor(end, cycle_length_weeks=cycle_length_weeks)
     agg_start = anchor - timedelta(weeks=window_weeks)
 
     # ── Per-(user, cluster) aggregate over the full recurrence window ─────────
@@ -727,23 +725,22 @@ def get_recurring_underusers(
         for i in range(recurrence_active_cycles):
             pa_end = anchor - timedelta(weeks=i * cycle_length_weeks)
             pa_start = pa_end - timedelta(weeks=pa_window_weeks)
-            pa_util, _, pa_rgu_h_expr, pa_true_used_expr, pa_credited_expr = _rgu_exprs(
-                utilization_ceiling
-            )
             pa_stmt = _with_rgu_window(
                 select(
                     col(JobSeriesDB.sarc_user_id),
-                    func.coalesce(func.sum(pa_rgu_h_expr), 0).label("sum_rgu_hours"),
-                    func.coalesce(func.sum(pa_true_used_expr), 0).label(
+                    func.coalesce(func.sum(rgu_h_expr), 0).label("sum_rgu_hours"),
+                    func.coalesce(func.sum(true_used_expr), 0).label(
                         "sum_rgu_true_used"
                     ),
-                    func.coalesce(func.sum(pa_credited_expr), 0).label("sum_rgu_used"),
+                    func.coalesce(func.sum(credited_used_expr), 0).label(
+                        "sum_rgu_used"
+                    ),
                 ),
-                pa_util,
+                util,
                 pa_start,
                 pa_end,
                 exclude_zero_usage=exclude_zero_usage,
-                rgu_used_expr=pa_rgu_h_expr,
+                rgu_used_expr=rgu_h_expr,
                 clusters=clusters,
             ).group_by(JobSeriesDB.sarc_user_id)
             for row in session.exec(pa_stmt).all():

@@ -48,7 +48,7 @@ def _build_delivery_footer(
 ) -> str:
     counts = _delivery_counts(results)
     lines = [
-        f"--- {title} ---",
+        f"=== {title} ===",
         (
             f"{count_label}={count}  dm_sent={counts['dm_sent']}"
             f"  skipped={counts['skipped']}  failed={counts['failed']}"
@@ -120,9 +120,9 @@ class UnderusageNotifyCommand:
     as_of: str | None = simple_parsing.field(
         default=None,
         alias=["--as-of"],
-        help="Simulate a run as of this date (YYYY-MM-DD, UTC). "
-        "Default: now. Anchors the window, all queries, and the "
-        "ISO-week DM parity.",
+        help="Simulate a run as of this date (YYYY-MM-DD, UTC). Default: now. "
+        "Anchors the window, all queries, and the usage-cycle eligibility (ISO "
+        "week % USAGE_CYCLE_LENGTH_WEEKS).",
     )
 
     def execute(self) -> int:
@@ -163,12 +163,15 @@ class UnderusageNotifyCommand:
         period = f"{start.date()} – {end.date()}"
 
         week_num = _iso_week(end)
-        # dms_eligible: week parity (controls preview section)
-        dms_eligible = week_num % USAGE_CYCLE_LENGTH_WEEKS == 0
+        # dms_eligible: week is a multiple of USAGE_CYCLE_LENGTH_WEEKS (controls
+        # preview section)
+        dms_eligible = week_num % window_weeks == 0
         # dms_will_send: additionally blocked by --no-dms gate and requires
         # send_underusage_report config (controls actual sends)
         dms_will_send = dms_eligible and not self.no_dms and ncfg.send_underusage_report
-        usage_report_eligible = week_num % ncfg.usage_report_window_weeks == 0
+
+        usage_report_window_weeks = ncfg.usage_report_cycles * USAGE_CYCLE_LENGTH_WEEKS
+        usage_report_eligible = week_num % usage_report_window_weeks == 0
         usage_report_will_send = (
             usage_report_eligible and not self.no_dms and ncfg.send_usage_report
         )
@@ -184,20 +187,14 @@ class UnderusageNotifyCommand:
             _userfacing_print("=== DRY RUN — nothing will be sent ===", file=sys.stderr)
             _userfacing_print(file=sys.stderr)
 
-        parity = "even" if week_num % 2 == 0 else "odd"
         if dms_eligible:
             _userfacing_print(
-                f"ISO week {week_num} ({parity}) — DMs eligible this run.",
-                file=sys.stderr,
-            )
-        else:
-            _userfacing_print(
-                f"ISO week {week_num} ({parity}) — digest-only this run, no DMs.",
+                f"ISO week {week_num} (multiple of {window_weeks}) — Underusage report eligible this run.",
                 file=sys.stderr,
             )
         if usage_report_eligible:
             _userfacing_print(
-                f"ISO week {week_num} (multiple of {ncfg.usage_report_window_weeks}) — Usage report eligible this run.",
+                f"ISO week {week_num} (multiple of {usage_report_window_weeks}) — Usage report eligible this run.",
                 file=sys.stderr,
             )
         _userfacing_print(file=sys.stderr)
@@ -263,7 +260,7 @@ class UnderusageNotifyCommand:
 
         if rows and dms_eligible:
             _userfacing_print()
-            _userfacing_print("=== DM Previews ===")
+            _userfacing_print("=== Under Usage Report Previews ===")
             for row in rows:
                 _userfacing_print(f"\n--- {row.display_name} ({row.email}) ---")
                 dm = build_user_dm(
@@ -274,7 +271,6 @@ class UnderusageNotifyCommand:
                 )
                 _userfacing_print(dm)
 
-        usage_report_window_weeks = ncfg.usage_report_window_weeks
         report_recipients = []
         usage_report_skipped = []
         if usage_report_eligible:
@@ -332,7 +328,7 @@ class UnderusageNotifyCommand:
             )
         elif rows:
             if not dms_eligible:
-                reason = "odd_week"
+                reason = "off_cycle_week"
             elif self.no_dms:
                 reason = "no_dms_flag"
             else:

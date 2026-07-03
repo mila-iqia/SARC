@@ -10,7 +10,7 @@ _VALID_KWARGS = dict(
     slack=_SLACK,
     recurrence_display_cycles=5,
     recurrence_active_cycles=3,
-    usage_report_window_weeks=4,
+    usage_report_cycles=2,
 )
 
 
@@ -26,7 +26,7 @@ def _make(**overrides):
         "recurrence_active_cycles",
         "recurrence_display_cycles",
         "top_jobs_per_user",
-        "usage_report_window_weeks",
+        "usage_report_cycles",
         "utilization_ceiling",
     ],
 )
@@ -43,7 +43,7 @@ def test_zero_value_raises(field):
         "recurrence_active_cycles",
         "recurrence_display_cycles",
         "top_jobs_per_user",
-        "usage_report_window_weeks",
+        "usage_report_cycles",
         "utilization_ceiling",
         "min_ratio",
         "min_rgu_hours",
