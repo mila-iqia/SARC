@@ -210,6 +210,7 @@ class DbConfig:
     host: str
     name: str
     user: str | None = None
+    port: int | None = None
 
     @cached_property
     def engine(self) -> Engine:
@@ -244,8 +245,11 @@ class DbConfig:
             db_user = self.user
             if db_user is None:
                 db_user = get_db_user()
+            hostname = self.host
+            if self.port is not None:
+                hostname = f"{hostname}:{self.port}"
             engine = create_engine(
-                f"postgresql+pg8000://{db_user}@{self.host}/{self.name}"
+                f"postgresql+pg8000://{db_user}@{hostname}/{self.name}"
             )
 
         return engine
