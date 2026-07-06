@@ -118,13 +118,15 @@ def _rgu_exprs(utilization_ceiling: float = 1.0):
     util_alias = aliased(JobStatisticDB)
     m_mean = col(util_alias.mean)
     rgu_h_expr = col(JobSeriesDB.rgu) * col(JobSeriesDB.elapsed_time) / 3600.0
-    true_used_expr = case(
-        (m_mean == m_mean, rgu_h_expr * m_mean),  # noqa: PLR0124
-        else_=rgu_h_expr,
+    finite_mean = and_(
+        m_mean == m_mean,  # noqa: PLR0124  — excludes NaN
+        m_mean > float("-inf"),
+        m_mean < float("inf"),  # excludes ±Infinity
     )
+    true_used_expr = case((finite_mean, rgu_h_expr * m_mean), else_=rgu_h_expr)
     credited_used_expr = case(
         (
-            m_mean == m_mean,  # noqa: PLR0124
+            finite_mean,
             func.least(rgu_h_expr, rgu_h_expr * (m_mean + (1.0 - utilization_ceiling))),
         ),
         else_=rgu_h_expr,
