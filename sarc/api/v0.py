@@ -5,7 +5,6 @@ from datetime import datetime, timedelta
 from functools import reduce
 from typing import Annotated
 
-from easy_oauth.cap import Capability
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import AfterValidator, BaseModel, Field
 from serieux import deserialize
@@ -89,9 +88,9 @@ def is_admin(
     user: Annotated[str, Depends(can_query)], cfg: Config = Depends(config_dep)
 ) -> bool:
     auth = cfg.server.auth
-    if not auth:
+    if auth is None:
         return True
-    admin: Capability = deserialize(auth.capabilities.captype, "admin")
+    admin = deserialize(auth.capabilities.captype, "admin")
     return auth.capabilities.check(user, admin)
 
 

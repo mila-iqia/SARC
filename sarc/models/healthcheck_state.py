@@ -17,7 +17,7 @@ def _serialize_health_check(hc: HealthCheck) -> dict[str, Any]:
     Use serieux serializer with TaggedSubclass
     to be sure check class is saved in model
     """
-    return serialize(TaggedSubclass[HealthCheck], hc)
+    return serialize(TaggedSubclass[HealthCheck], hc)  # ty:ignore[invalid-return-type, invalid-argument-type]
 
 
 def _validate_health_check(v: Any) -> HealthCheck:
@@ -25,7 +25,7 @@ def _validate_health_check(v: Any) -> HealthCheck:
     if isinstance(v, HealthCheck):
         return v
     assert isinstance(v, dict)
-    return deserialize(TaggedSubclass[HealthCheck], v)
+    return deserialize(TaggedSubclass[HealthCheck], v)  # ty:ignore[invalid-argument-type]
 
 
 HealthCheckPydantic = Annotated[
@@ -46,7 +46,7 @@ def _serialize_check_result(result: CheckResult) -> dict[str, Any]:
     we prevent recursion and save space by cleaning `result.check`.
     """
     result.check = None
-    return serialize(TaggedSubclass[CheckResult], result)
+    return serialize(TaggedSubclass[CheckResult], result)  # ty:ignore[invalid-argument-type, invalid-return-type]
 
 
 def _validate_check_result(v: Any) -> CheckResult:
@@ -54,7 +54,7 @@ def _validate_check_result(v: Any) -> CheckResult:
     if isinstance(v, CheckResult):
         return v
     assert isinstance(v, dict)
-    return deserialize(TaggedSubclass[CheckResult], v)
+    return deserialize(TaggedSubclass[CheckResult], v)  # ty:ignore[invalid-argument-type]
 
 
 CheckResultPydantic = Annotated[
