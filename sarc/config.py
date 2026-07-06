@@ -218,6 +218,10 @@ class DbConfig:
         from sqlmodel import create_engine
 
         if ":" in self.host:
+            # NB: `port` is not used here, since Google Cloud connector
+            # explicitly drops the port argument and uses its own parameters:
+            # https://github.com/GoogleCloudPlatform/cloud-sql-python-connector/blob/v1.20.3/google/cloud/sql/connector/connector.py#L376
+
             import google.auth
             import google.auth.transport.requests
             from google.cloud.sql.connector import Connector, IPTypes
