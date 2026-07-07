@@ -623,7 +623,9 @@ def test_cycle_dates_spacing_and_alignment_for_n(cycle_weeks):
             )
         for i in range(len(dates) - 1):
             assert (dates[i] - dates[i + 1]).days == cycle_weeks * 7
-        assert dates[0] == _week_anchor(end).date(), "W0 anchored to current-or-next aligned week"
+        assert dates[0] == _week_anchor(end).date(), (
+            "W0 anchored to current-or-next aligned week"
+        )
 
 
 # ── _week_anchor — pinned year-boundary / week-53 limitation ──────────────────
