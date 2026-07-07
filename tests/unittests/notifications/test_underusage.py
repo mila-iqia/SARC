@@ -21,8 +21,8 @@ from tests.unittests.notifications._factory import add_gpu_job
 
 _WINDOW_START = datetime(2024, 6, 1, tzinfo=UTC)
 _WINDOW_END = datetime(2024, 6, 30, tzinfo=UTC)
-_MIN_RATIO = 0.50
-_MIN_RGU_HOURS = 672.0  # RGU-hours floor
+_MIN_WASTE_RATIO = 0.50
+_MIN_WASTE_RGU_HOURS = 672.0  # RGU-hours floor
 _TOP_JOBS_PER_USER = 5
 
 # mila: billing_is_gpu=True, gpu_type A100-SXM4-80GB → rgu = 4.8
@@ -150,8 +150,8 @@ def test_underusers_filtering_and_top_jobs(underusage_db):
     results = get_underusers(
         _WINDOW_START,
         _WINDOW_END,
-        min_ratio=_MIN_RATIO,
-        min_rgu_hours=_MIN_RGU_HOURS,
+        min_waste_ratio=_MIN_WASTE_RATIO,
+        min_waste_rgu_hours=_MIN_WASTE_RGU_HOURS,
         top_jobs_per_user=_TOP_JOBS_PER_USER,
     )
     # Test high waster is returned
@@ -185,8 +185,8 @@ def test_underusers_overview_fields(underusage_db):
     results = get_underusers(
         _WINDOW_START,
         _WINDOW_END,
-        min_ratio=0.0,
-        min_rgu_hours=0.0,
+        min_waste_ratio=0.0,
+        min_waste_rgu_hours=0.0,
         top_jobs_per_user=_TOP_JOBS_PER_USER,
     )
     row = next(r for r in results if r.email == "beaubonhomme@mila.quebec")
@@ -209,8 +209,8 @@ def test_outside_window_excluded(underusage_db):
         get_underusers(
             before,
             after,
-            min_ratio=0.0,
-            min_rgu_hours=0.0,
+            min_waste_ratio=0.0,
+            min_waste_rgu_hours=0.0,
             top_jobs_per_user=_TOP_JOBS_PER_USER,
         )
         == []
@@ -222,8 +222,8 @@ def test_unsupported_resource_raises(underusage_db):
         get_underusers(
             _WINDOW_START,
             _WINDOW_END,
-            min_ratio=_MIN_RATIO,
-            min_rgu_hours=_MIN_RGU_HOURS,
+            min_waste_ratio=_MIN_WASTE_RATIO,
+            min_waste_rgu_hours=_MIN_WASTE_RGU_HOURS,
             top_jobs_per_user=_TOP_JOBS_PER_USER,
             resource="cpu",
         )
@@ -285,8 +285,8 @@ def test_top_jobs_per_user_3(underusage_db):
     results = get_underusers(
         _WINDOW_START,
         _WINDOW_END,
-        min_ratio=_MIN_RATIO,
-        min_rgu_hours=_MIN_RGU_HOURS,
+        min_waste_ratio=_MIN_WASTE_RATIO,
+        min_waste_rgu_hours=_MIN_WASTE_RGU_HOURS,
         top_jobs_per_user=3,
     )
     row = next(r for r in results if r.email == "petitbonhomme@mila.quebec")
@@ -308,8 +308,8 @@ def test_clusters_filter_excludes_other_clusters(underusage_db):
     results = get_underusers(
         _WINDOW_START,
         _WINDOW_END,
-        min_ratio=_MIN_RATIO,
-        min_rgu_hours=_MIN_RGU_HOURS,
+        min_waste_ratio=_MIN_WASTE_RATIO,
+        min_waste_rgu_hours=_MIN_WASTE_RGU_HOURS,
         top_jobs_per_user=_TOP_JOBS_PER_USER,
         clusters=["mila"],
     )
@@ -325,8 +325,8 @@ def test_true_wasted_field_at_identity(underusage_db):
     results = get_underusers(
         _WINDOW_START,
         _WINDOW_END,
-        min_ratio=0.0,
-        min_rgu_hours=0.0,
+        min_waste_ratio=0.0,
+        min_waste_rgu_hours=0.0,
         top_jobs_per_user=_TOP_JOBS_PER_USER,
         utilization_ceiling=1.0,
     )
@@ -345,8 +345,8 @@ def test_scaled_waste_less_than_true_waste_below_threshold(underusage_db):
     results = get_underusers(
         _WINDOW_START,
         _WINDOW_END,
-        min_ratio=_MIN_RATIO,
-        min_rgu_hours=_MIN_RGU_HOURS,
+        min_waste_ratio=_MIN_WASTE_RATIO,
+        min_waste_rgu_hours=_MIN_WASTE_RGU_HOURS,
         top_jobs_per_user=_TOP_JOBS_PER_USER,
         utilization_ceiling=0.80,
     )
@@ -362,8 +362,8 @@ def test_subtractive_formula_exact_waste_ratio(underusage_db):
     results = get_underusers(
         _WINDOW_START,
         _WINDOW_END,
-        min_ratio=_MIN_RATIO,
-        min_rgu_hours=_MIN_RGU_HOURS,
+        min_waste_ratio=_MIN_WASTE_RATIO,
+        min_waste_rgu_hours=_MIN_WASTE_RGU_HOURS,
         top_jobs_per_user=_TOP_JOBS_PER_USER,
         utilization_ceiling=0.80,
     )
@@ -375,8 +375,8 @@ def test_subtractive_formula_exact_waste_ratio(underusage_db):
     results = get_underusers(
         _WINDOW_START,
         _WINDOW_END,
-        min_ratio=0.10,
-        min_rgu_hours=_MIN_RGU_HOURS,
+        min_waste_ratio=0.10,
+        min_waste_rgu_hours=_MIN_WASTE_RGU_HOURS,
         top_jobs_per_user=_TOP_JOBS_PER_USER,
         utilization_ceiling=0.20,
     )
@@ -391,8 +391,8 @@ def test_subtractive_formula_boundary_zero_waste(underusage_db):
     results = get_underusers(
         _WINDOW_START,
         _WINDOW_END,
-        min_ratio=0.0,
-        min_rgu_hours=0.0,
+        min_waste_ratio=0.0,
+        min_waste_rgu_hours=0.0,
         top_jobs_per_user=_TOP_JOBS_PER_USER,
         utilization_ceiling=0.80,
     )
@@ -403,8 +403,8 @@ def test_subtractive_formula_boundary_zero_waste(underusage_db):
     results = get_underusers(
         _WINDOW_START,
         _WINDOW_END,
-        min_ratio=0.05,
-        min_rgu_hours=0.0,
+        min_waste_ratio=0.05,
+        min_waste_rgu_hours=0.0,
         top_jobs_per_user=_TOP_JOBS_PER_USER,
         utilization_ceiling=0.90,
     )
@@ -419,8 +419,8 @@ def test_top_job_gpu_sm_occupancy_is_raw_mean(underusage_db):
     results = get_underusers(
         _WINDOW_START,
         _WINDOW_END,
-        min_ratio=_MIN_RATIO,
-        min_rgu_hours=_MIN_RGU_HOURS,
+        min_waste_ratio=_MIN_WASTE_RATIO,
+        min_waste_rgu_hours=_MIN_WASTE_RGU_HOURS,
         top_jobs_per_user=_TOP_JOBS_PER_USER,
         utilization_ceiling=0.80,
     )
@@ -440,7 +440,7 @@ def test_usage_floor_excludes_below_threshold(underusage_db):
         _WINDOW_START,
         _WINDOW_END,
         top_jobs_per_user=_TOP_JOBS_PER_USER,
-        usage_report_min_rgu_hours=500.0,
+        usage_report_min_usage_rgu_hours=500.0,
     )
     emails = {r.email for r in results}
     assert "bramin@mila.quebec" not in emails
@@ -453,7 +453,7 @@ def test_usage_floor_at_boundary_is_excluded(underusage_db):
         _WINDOW_START,
         _WINDOW_END,
         top_jobs_per_user=_TOP_JOBS_PER_USER,
-        usage_report_min_rgu_hours=481.0,
+        usage_report_min_usage_rgu_hours=481.0,
     )
     emails = {r.email for r in results}
     assert "bramin@mila.quebec" not in emails
@@ -488,8 +488,8 @@ def test_missing_util_not_flagged(missing_util_db):
     results = get_underusers(
         _WINDOW_START,
         _WINDOW_END,
-        min_ratio=_MIN_RATIO,
-        min_rgu_hours=_MIN_RGU_HOURS,
+        min_waste_ratio=_MIN_WASTE_RATIO,
+        min_waste_rgu_hours=_MIN_WASTE_RGU_HOURS,
         top_jobs_per_user=_TOP_JOBS_PER_USER,
     )
     assert "bramin@mila.quebec" not in {r.email for r in results}
@@ -499,8 +499,8 @@ def test_missing_util_zero_waste(missing_util_db):
     results = get_underusers(
         _WINDOW_START,
         _WINDOW_END,
-        min_ratio=0.0,
-        min_rgu_hours=0.0,
+        min_waste_ratio=0.0,
+        min_waste_rgu_hours=0.0,
         top_jobs_per_user=_TOP_JOBS_PER_USER,
     )
     row = next(r for r in results if r.email == "bramin@mila.quebec")
@@ -516,8 +516,8 @@ def test_missing_util_non_negative_waste_at_sub_threshold(missing_util_db):
     results = get_underusers(
         _WINDOW_START,
         _WINDOW_END,
-        min_ratio=0.0,
-        min_rgu_hours=0.0,
+        min_waste_ratio=0.0,
+        min_waste_rgu_hours=0.0,
         top_jobs_per_user=_TOP_JOBS_PER_USER,
         utilization_ceiling=0.8,
     )

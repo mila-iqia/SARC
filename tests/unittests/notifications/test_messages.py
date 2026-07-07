@@ -162,12 +162,7 @@ def test_dm_deterministic():
 # ── build_admin_digest ────────────────────────────────────────────────────────
 
 
-_DIGEST_KW = {
-    "cluster_share_threshold": 0.30,
-    "cycle_length_weeks": 2,
-    "active_cycles": 3,
-    "top_n": 16,
-}
+_DIGEST_KW = {"cluster_share_threshold": 0.30, "active_cycles": 3, "top_n": 16}
 
 
 def test_digest_header_contains_period():
@@ -245,7 +240,6 @@ def test_digest_recurring_header_reflects_share():
         [],
         period="…",
         cluster_share_threshold=0.40,
-        cycle_length_weeks=2,
         active_cycles=3,
         top_n=16,
         recurring={"narval": [row]},
@@ -265,11 +259,7 @@ _RECURRING_ROW_DEFAULT = RecurringUserRow(
     personalized_action=True,
 )
 
-_RECURRING_KW_DEFAULT = {
-    "cluster_share_threshold": 0.30,
-    "cycle_length_weeks": 2,
-    "active_cycles": 3,
-}
+_RECURRING_KW_DEFAULT = {"cluster_share_threshold": 0.30, "active_cycles": 3}
 
 
 def test_recurring_table_default_labels():
@@ -299,10 +289,7 @@ def test_recurring_table_4_cycles():
         personalized_action=True,
     )
     text = build_recurring_table(
-        {"beluga": [row]},
-        cluster_share_threshold=0.30,
-        cycle_length_weeks=2,
-        active_cycles=2,
+        {"beluga": [row]}, cluster_share_threshold=0.30, active_cycles=2
     )
     assert "W0" in text
     assert "W-2" in text
@@ -324,10 +311,7 @@ def test_recurring_table_6_cycles():
         personalized_action=True,
     )
     text = build_recurring_table(
-        {"cedar": [row]},
-        cluster_share_threshold=0.30,
-        cycle_length_weeks=2,
-        active_cycles=3,
+        {"cedar": [row]}, cluster_share_threshold=0.30, active_cycles=3
     )
     assert "W-10" in text
     assert text.index("W-4") < text.index("  |") < text.index("W-6")

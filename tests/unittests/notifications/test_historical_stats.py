@@ -27,12 +27,9 @@ from sarc.notifications.underusage import (
 from tests.unittests.notifications._factory import add_gpu_job
 
 _MILA_GPU_TYPE = "A100-SXM4-80GB"
-_MILA_RGU = 4.8
 
-_MIN_RATIO = 0.50
-_MIN_RGU_HOURS = 672.0
 
-# "Today" for the tests: 2025-07-15.  The 6 complete months before it are
+# "Today" for the tests: 2025-07-15. The 6 complete months before it are
 # 2025-01, 2025-02, 2025-03, 2025-04, 2025-05, 2025-06.
 _END = datetime(2025, 7, 15, tzinfo=UTC)
 _MONTHS_WITH_DATA = ["2025-02", "2025-03", "2025-04", "2025-05", "2025-06"]
@@ -219,12 +216,7 @@ def _make_stats(with_yoy: bool = False) -> HistoricalStats:
     return HistoricalStats(months=months, yoy_months=yoy)
 
 
-_DIGEST_KW = {
-    "cluster_share_threshold": 0.30,
-    "cycle_length_weeks": 2,
-    "active_cycles": 3,
-    "top_n": 16,
-}
+_DIGEST_KW = {"cluster_share_threshold": 0.30, "active_cycles": 3, "top_n": 16}
 
 
 def test_digest_no_historical_by_default():

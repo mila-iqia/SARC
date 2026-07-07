@@ -26,6 +26,7 @@ def _make(**overrides):
         "recurrence_active_cycles",
         "recurrence_display_cycles",
         "top_jobs_per_user",
+        "usage_cycle_length_weeks",
         "usage_report_cycles",
         "utilization_ceiling",
     ],
@@ -40,16 +41,17 @@ def test_zero_value_raises(field):
     [
         "digest_top_n",
         "historical_months",
+        "min_waste_ratio",
+        "min_waste_rgu_hours",
+        "personalized_action_min_waste_rgu_hours",
         "recurrence_active_cycles",
+        "recurrence_cluster_share",
         "recurrence_display_cycles",
         "top_jobs_per_user",
+        "usage_cycle_length_weeks",
         "usage_report_cycles",
+        "usage_report_min_usage_rgu_hours",
         "utilization_ceiling",
-        "min_ratio",
-        "min_rgu_hours",
-        "recurrence_cluster_share",
-        "usage_report_min_rgu_hours",
-        "personalized_action_min_rgu_hours",
     ],
 )
 def test_negative_value_raises(field):
@@ -78,13 +80,13 @@ def test_utilization_ceiling_above_one_raises():
 
 
 def test_usage_report_min_rgu_hours_zero_is_valid():
-    cfg = _make(usage_report_min_rgu_hours=0.0)
-    assert cfg.usage_report_min_rgu_hours == 0.0
+    cfg = _make(usage_report_min_usage_rgu_hours=0.0)
+    assert cfg.usage_report_min_usage_rgu_hours == 0.0
 
 
 def test_personalized_action_min_rgu_hours_zero_is_valid():
-    cfg = _make(personalized_action_min_rgu_hours=0.0)
-    assert cfg.personalized_action_min_rgu_hours == 0.0
+    cfg = _make(personalized_action_min_waste_rgu_hours=0.0)
+    assert cfg.personalized_action_min_waste_rgu_hours == 0.0
 
 
 def test_clusters_list_of_strings_is_valid():

@@ -17,9 +17,13 @@ sarc:
       token: PLACEHOLDER
       channel: test
     enabled: True
-    min_ratio: 0.80
-    min_rgu_hours: 10752
-    utilization_ceiling: 0.8
+    send_underusage_report: True
+    send_usage_report: True
+    min_waste_ratio: 0.50
+    min_waste_rgu_hours: 3225.6
+    recurrence_cluster_share: 0.50
+    personalized_action_min_waste_rgu_hours: 16128
+    usage_report_min_usage_rgu_hours: 1843.2
   cache: "../sarc-cache"
   sshconfig: "~/.ssh/config"
   clusters:

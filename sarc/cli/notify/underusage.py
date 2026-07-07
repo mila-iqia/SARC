@@ -8,7 +8,7 @@ from pathlib import Path
 import gifnoc
 import simple_parsing
 
-from sarc.config import USAGE_CYCLE_LENGTH_WEEKS, config
+from sarc.config import config
 from sarc.notifications.messages import (
     build_admin_digest,
     build_usage_report,
@@ -98,12 +98,12 @@ class UnderusageNotifyCommand:
     """Preview or send resource-underusage notifications (dry-run by default)."""
 
     config: Path | None = None
-    min_ratio: float | None = simple_parsing.field(
+    min_waste_ratio: float | None = simple_parsing.field(
         default=None,
         alias=["--min-ratio"],
         help="Minimum waste ratio threshold (overrides config).",
     )
-    min_rgu_hours: float | None = simple_parsing.field(
+    min_waste_rgu_hours: float | None = simple_parsing.field(
         default=None,
         alias=["--min-rgu-hours"],
         help="Minimum RGU-hours floor (overrides config).",
@@ -121,8 +121,7 @@ class UnderusageNotifyCommand:
         default=None,
         alias=["--as-of"],
         help="Simulate a run as of this date (YYYY-MM-DD, UTC). Default: now. "
-        "Anchors the window, all queries, and the usage-cycle eligibility (ISO "
-        "week % USAGE_CYCLE_LENGTH_WEEKS).",
+        "Anchors the window, all queries, and the usage-cycle eligibility.",
     )
 
     def execute(self) -> int:
@@ -140,10 +139,16 @@ class UnderusageNotifyCommand:
             logger.info("Underusage notifications disabled (enabled=false); skipping")
             return 0
 
-        window_weeks = USAGE_CYCLE_LENGTH_WEEKS
-        min_ratio = self.min_ratio if self.min_ratio is not None else ncfg.min_ratio
-        min_rgu_hours = (
-            self.min_rgu_hours if self.min_rgu_hours is not None else ncfg.min_rgu_hours
+        window_weeks = ncfg.usage_cycle_length_weeks
+        min_waste_ratio = (
+            self.min_waste_ratio
+            if self.min_waste_ratio is not None
+            else ncfg.min_waste_ratio
+        )
+        min_waste_rgu_hours = (
+            self.min_waste_rgu_hours
+            if self.min_waste_rgu_hours is not None
+            else ncfg.min_waste_rgu_hours
         )
 
         if self.as_of is not None:
@@ -163,14 +168,14 @@ class UnderusageNotifyCommand:
         period = f"{start.date()} – {end.date()}"
 
         week_num = _iso_week(end)
-        # dms_eligible: week is a multiple of USAGE_CYCLE_LENGTH_WEEKS (controls
+        # dms_eligible: week is a multiple of window_weeks (controls
         # preview section)
         dms_eligible = week_num % window_weeks == 0
         # dms_will_send: additionally blocked by --no-dms gate and requires
         # send_underusage_report config (controls actual sends)
         dms_will_send = dms_eligible and not self.no_dms and ncfg.send_underusage_report
 
-        usage_report_window_weeks = ncfg.usage_report_cycles * USAGE_CYCLE_LENGTH_WEEKS
+        usage_report_window_weeks = ncfg.usage_report_cycles * window_weeks
         usage_report_eligible = week_num % usage_report_window_weeks == 0
         usage_report_will_send = (
             usage_report_eligible and not self.no_dms and ncfg.send_usage_report
@@ -204,8 +209,8 @@ class UnderusageNotifyCommand:
         rows = get_underusers(
             start,
             end,
-            min_ratio=min_ratio,
-            min_rgu_hours=min_rgu_hours,
+            min_waste_ratio=min_waste_ratio,
+            min_waste_rgu_hours=min_waste_rgu_hours,
             top_jobs_per_user=ncfg.top_jobs_per_user,
             resource=self.resource,
             exclude_zero_usage=True,
@@ -221,17 +226,16 @@ class UnderusageNotifyCommand:
         )
         recurring = get_recurring_underusers(
             end,
-            min_ratio=min_ratio,
-            min_rgu_hours=min_rgu_hours,
+            min_waste_ratio=min_waste_ratio,
+            min_waste_rgu_hours=min_waste_rgu_hours,
             resource=self.resource,
             cluster_share_threshold=ncfg.recurrence_cluster_share,
             exclude_zero_usage=True,
             recurrence_display_cycles=ncfg.recurrence_display_cycles,
             recurrence_active_cycles=ncfg.recurrence_active_cycles,
-            cycle_length_weeks=USAGE_CYCLE_LENGTH_WEEKS,
             clusters=clusters,
             utilization_ceiling=ncfg.utilization_ceiling,
-            personalized_action_min_rgu_hours=ncfg.personalized_action_min_rgu_hours,
+            personalized_action_min_waste_rgu_hours=ncfg.personalized_action_min_waste_rgu_hours,
         )
 
         _userfacing_print(f"Recipients ({len(rows)} user(s) flagged):")
@@ -239,16 +243,11 @@ class UnderusageNotifyCommand:
             _userfacing_print(f"  - {row.display_name} ({row.email})")
         _userfacing_print()
 
-        cycle_dates = get_cycle_dates(
-            end,
-            ncfg.recurrence_display_cycles,
-            cycle_length_weeks=USAGE_CYCLE_LENGTH_WEEKS,
-        )
+        cycle_dates = get_cycle_dates(end, ncfg.recurrence_display_cycles)
         digest = build_admin_digest(
             rows,
             period=period,
             cluster_share_threshold=ncfg.recurrence_cluster_share,
-            cycle_length_weeks=USAGE_CYCLE_LENGTH_WEEKS,
             active_cycles=ncfg.recurrence_active_cycles,
             top_n=ncfg.digest_top_n,
             historical=historical,
@@ -281,7 +280,7 @@ class UnderusageNotifyCommand:
                 top_jobs_per_user=ncfg.top_jobs_per_user,
                 resource=self.resource,
                 clusters=clusters,
-                usage_report_min_rgu_hours=ncfg.usage_report_min_rgu_hours,
+                usage_report_min_usage_rgu_hours=ncfg.usage_report_min_usage_rgu_hours,
             )
             underuser_emails = {r.email for r in rows}
             report_recipients, usage_report_skipped = split_usage_report_recipients(

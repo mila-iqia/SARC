@@ -31,11 +31,6 @@ MIG_FLAG = "__MIG_FLAG__"
 DEFAULTS_FLAG = "__DEFAULTS__"
 
 
-# The code currently assumes 2 weeks for the frequency of a generic underusage
-# notification
-USAGE_CYCLE_LENGTH_WEEKS = 2
-
-
 class ConfigurationError(Exception):
     pass
 
@@ -286,14 +281,16 @@ class SlackConfig:
 class UnderusageNotifyConfig:
     slack: SlackConfig
     enabled: bool = True
+
     send_underusage_report: bool = False
-    min_ratio: float = 0.50
-    min_rgu_hours: float = 3225.6  # 4x A100-80GB RGU x 7d
+    min_waste_ratio: float = 0.50
+    min_waste_rgu_hours: float = 3225.6  # 4x A100-80GB RGU x 7d
     digest_top_n: int = 16
     top_jobs_per_user: int = 5
     dashboard_url: str | None = None
     # Verbatim text appended at the end of every user DM (support links, hours, etc.)
     help_section: str | None = None
+
     # Fraction of cluster wasted RGU-h at which selection stops (0..1).
     recurrence_cluster_share: float = 0.50
     # Number of most-recent cycles that count toward personalized_action and
@@ -301,24 +298,28 @@ class UnderusageNotifyConfig:
     recurrence_active_cycles: int = 3
     # Number of cycle columns to display in the recurring table.
     recurrence_display_cycles: int = 5
-    personalized_action_min_rgu_hours: float = 16128.0  # 20x A100-80GB RGU x 7d
+    personalized_action_min_waste_rgu_hours: float = 16128.0  # 20x A100-80GB RGU x 7d
     # Number of calendar months included in the historical trend section.
     historical_months: int = 6
+
     send_usage_report: bool = False
     # Universal usage report cadence.
     usage_report_cycles: int = 2
-    usage_report_min_rgu_hours: float = 1843.2  # 4x A100-80GB RGU x4d
+    usage_report_min_usage_rgu_hours: float = 1843.2  # 4x A100-80GB RGU x4d
+
     clusters: list[str] = field(default_factory=lambda: ["mila"])
+    usage_cycle_length_weeks: int = 2  # frequency of a usage cycle
     utilization_ceiling: float = 1.0  # T ∈ (0,1]: wasted = max(0, rgu_h × (T − m))
 
     def __post_init__(self):
         for field_name, value in [
             ("digest_top_n", self.digest_top_n),
-            ("top_jobs_per_user", self.top_jobs_per_user),
-            ("usage_report_cycles", self.usage_report_cycles),
-            ("recurrence_display_cycles", self.recurrence_display_cycles),
-            ("recurrence_active_cycles", self.recurrence_active_cycles),
             ("historical_months", self.historical_months),
+            ("recurrence_active_cycles", self.recurrence_active_cycles),
+            ("recurrence_display_cycles", self.recurrence_display_cycles),
+            ("top_jobs_per_user", self.top_jobs_per_user),
+            ("usage_cycle_length_weeks", self.usage_cycle_length_weeks),
+            ("usage_report_cycles", self.usage_report_cycles),
         ]:
             if not isinstance(value, int) or value < 1:
                 raise ValueError(
@@ -334,14 +335,14 @@ class UnderusageNotifyConfig:
                 f"utilization_ceiling must be in (0, 1], got {self.utilization_ceiling!r}"
             )
         for field_name, value in [
-            ("min_ratio", self.min_ratio),
-            ("min_rgu_hours", self.min_rgu_hours),
-            ("recurrence_cluster_share", self.recurrence_cluster_share),
-            ("usage_report_min_rgu_hours", self.usage_report_min_rgu_hours),
+            ("min_waste_ratio", self.min_waste_ratio),
+            ("min_waste_rgu_hours", self.min_waste_rgu_hours),
             (
-                "personalized_action_min_rgu_hours",
-                self.personalized_action_min_rgu_hours,
+                "personalized_action_min_waste_rgu_hours",
+                self.personalized_action_min_waste_rgu_hours,
             ),
+            ("recurrence_cluster_share", self.recurrence_cluster_share),
+            ("usage_report_min_usage_rgu_hours", self.usage_report_min_usage_rgu_hours),
         ]:
             if value < 0:
                 raise ValueError(f"{field_name} must be >= 0, got {value!r}")

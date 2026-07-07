@@ -6,9 +6,19 @@ from sqlalchemy import select
 from sqlalchemy.orm import aliased
 from sqlmodel import Session, and_, case, col, func
 
-from sarc.config import USAGE_CYCLE_LENGTH_WEEKS, UTC, config
+from sarc.config import UTC, config
 from sarc.db.job import JobStatisticDB
 from sarc.db.job_series import JobSeriesDB
+
+DEFAULT_USAGE_CYCLE_LENGTH_WEEKS = 2
+
+
+def usage_cycle_length_weeks():
+    return (
+        config.notifications.usage_cycle_length_weeks
+        if config.notifications
+        else DEFAULT_USAGE_CYCLE_LENGTH_WEEKS
+    )
 
 
 @dataclass
@@ -170,8 +180,8 @@ def get_underusers(
     start: datetime,
     end: datetime,
     *,
-    min_ratio: float,
-    min_rgu_hours: float,
+    min_waste_ratio: float,
+    min_waste_rgu_hours: float,
     top_jobs_per_user: int,
     resource: str = "gpu",
     exclude_zero_usage: bool = False,
@@ -245,7 +255,7 @@ def get_underusers(
             )
             waste_ratio = total_wasted / total_rgu_h
             u["waste_ratio"] = waste_ratio
-            if waste_ratio >= min_ratio and total_wasted >= min_rgu_hours:
+            if waste_ratio >= min_waste_ratio and total_wasted >= min_waste_rgu_hours:
                 underuser_ids.append(uid)
 
         # Per-job data for the identified underusers — same RGU × utilisation
@@ -338,7 +348,7 @@ def get_all_users_usage(
     top_jobs_per_user: int,
     resource: str = "gpu",
     clusters: list[str] | None = None,
-    usage_report_min_rgu_hours: float = 0.0,
+    usage_report_min_usage_rgu_hours: float = 0.0,
 ) -> list[UsageRow]:
     if resource != "gpu":
         raise ValueError(f"Unsupported resource: {resource!r}")
@@ -429,7 +439,7 @@ def get_all_users_usage(
         breakdowns = u["clusters"]
         total_rgu_h = sum(c.rgu_hours for c in breakdowns)
         total_used = sum(c.rgu_hours_used for c in breakdowns)
-        if total_rgu_h <= usage_report_min_rgu_hours:
+        if total_rgu_h <= usage_report_min_usage_rgu_hours:
             continue
 
         by_cluster = sorted(breakdowns, key=lambda c: c.rgu_hours_used, reverse=True)
@@ -578,51 +588,48 @@ def get_historical_stats(
 # ── Recurring-underusers table ──
 
 
-def _week_anchor(
-    end: datetime, *, cycle_length_weeks: int = USAGE_CYCLE_LENGTH_WEEKS
-) -> datetime:
+def _week_anchor(end: datetime) -> datetime:
     """Return day of the current (or next) week that is a multiple of cycle_length_weeks.
 
     Advances *end* forward so that the resulting ISO week number is divisible by
-    *cycle_length_weeks*.  The anchor may therefore be in the future relative to
+    *cycle_length_weeks*. The anchor may therefore be in the future relative to
     *end*.
 
     Limitation: ISO years with 53 weeks cause week 53 to be treated as an
     off-cycle week (53 % cycle_length_weeks != 0 for cycle_length_weeks=2),
     effectively skipping the DM cycle that would otherwise align with it.
     """
+    cycle_length_weeks = usage_cycle_length_weeks()
     remainder = end.isocalendar().week % cycle_length_weeks
     end += timedelta(weeks=(cycle_length_weeks - remainder) % cycle_length_weeks)
     return end
 
 
-def get_cycle_dates(
-    end: datetime, n: int = 5, *, cycle_length_weeks: int = USAGE_CYCLE_LENGTH_WEEKS
-) -> list[date]:
+def get_cycle_dates(end: datetime, n: int = 5) -> list[date]:
     """Return n cycle end-dates [W0, W-k, ..., W-(k*(n-1))] as date objects,
     where k = cycle_length_weeks.
 
     Each date is the day of an aligned ISO week, spaced *cycle_length_weeks*
     apart, anchored to the current (or next) aligned week from *end*.
     """
-    anchor = _week_anchor(end, cycle_length_weeks=cycle_length_weeks)
+    cycle_length_weeks = usage_cycle_length_weeks()
+    anchor = _week_anchor(end)
     return [(anchor - timedelta(weeks=i * cycle_length_weeks)).date() for i in range(n)]
 
 
 def get_recurring_underusers(
     end: datetime,
     *,
-    min_ratio: float,
-    min_rgu_hours: float,
+    min_waste_ratio: float,
+    min_waste_rgu_hours: float,
     resource: str = "gpu",
     cluster_share_threshold: float,
     exclude_zero_usage: bool = False,
     recurrence_active_cycles: int = 3,
     recurrence_display_cycles: int = 5,
-    cycle_length_weeks: int = USAGE_CYCLE_LENGTH_WEEKS,
     clusters: list[str] | None = None,
     utilization_ceiling: float = 1.0,
-    personalized_action_min_rgu_hours: float = 0.0,
+    personalized_action_min_waste_rgu_hours: float = 0.0,
 ) -> dict[str, list[RecurringUserRow]]:
     """Return per-cluster top wasters for the recurring-underusers digest table.
 
@@ -640,11 +647,12 @@ def get_recurring_underusers(
     Returns a dict of cluster_name -> list[RecurringUserRow] (sorted desc by
     wasted_6w within each cluster), ordered by cluster name.
     """
+    cycle_length_weeks = usage_cycle_length_weeks()
     if resource != "gpu":
         raise ValueError(f"Unsupported resource: {resource!r}")
 
     window_weeks = recurrence_active_cycles * cycle_length_weeks
-    anchor = _week_anchor(end, cycle_length_weeks=cycle_length_weeks)
+    anchor = _week_anchor(end)
     agg_start = anchor - timedelta(weeks=window_weeks)
 
     # ── Per-(user, cluster) aggregate over the full recurrence window ─────────
@@ -706,8 +714,8 @@ def get_recurring_underusers(
         flagged_rows = get_underusers(
             c_start,
             c_end,
-            min_ratio=min_ratio,
-            min_rgu_hours=min_rgu_hours,
+            min_waste_ratio=min_waste_ratio,
+            min_waste_rgu_hours=min_waste_rgu_hours,
             # Only user_id is used for membership — top jobs are discarded.
             top_jobs_per_user=1,
             resource=resource,
@@ -751,7 +759,7 @@ def get_recurring_underusers(
                     user_pa_flags[uid] = [False] * recurrence_active_cycles
                 _, _, pa_rgu_wasted_h = _split_waste(row)
                 user_pa_flags[uid][i] = (
-                    pa_rgu_wasted_h >= personalized_action_min_rgu_hours
+                    pa_rgu_wasted_h >= personalized_action_min_waste_rgu_hours
                 )
 
     # ── Per-cluster greedy selection (cumulative share >= cluster_share_threshold) ──

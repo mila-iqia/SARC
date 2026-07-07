@@ -7,7 +7,6 @@ import gifnoc
 import pytest
 from sqlmodel import select
 
-from sarc.config import USAGE_CYCLE_LENGTH_WEEKS
 from sarc.db.cluster import SlurmClusterDB
 from sarc.db.users import UserDB
 from sarc.notifications.slack import SendResult, SendStatus
@@ -29,11 +28,11 @@ _NOTIFY_CFG = {
     },
     "enabled": True,
     "send_underusage_report": True,
-    "min_ratio": 0.50,
-    "min_rgu_hours": 672.0,
+    "min_waste_ratio": 0.50,
+    "min_waste_rgu_hours": 672.0,
     "digest_top_n": 16,
     "send_usage_report": True,
-    "usage_report_min_rgu_hours": 0,
+    "usage_report_min_usage_rgu_hours": 0,
 }
 
 
@@ -136,12 +135,13 @@ _OFF_CYCLE_WEEK = (
 def test_cycle_week_shows_dm_previews(notify_db, cli_main, capsys):
     # 2024-06-16 is ISO week 24 — multiple of USAGE_CYCLE_LENGTH_WEEKS;
     # job at 2024-06-10 is inside [2024-06-02, 2024-06-16]
-    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}) as config:
+        usage_cycle_length_weeks = config.sarc.notifications.usage_cycle_length_weeks
         rc = cli_main(["notify", "underusage", "--as-of", _CYCLE_WEEK])
     assert rc == 0
     captured = capsys.readouterr()
     assert "=== Under Usage Report Previews" in captured.out
-    assert f"multiple of {USAGE_CYCLE_LENGTH_WEEKS}" in captured.err
+    assert f"multiple of {usage_cycle_length_weeks}" in captured.err
 
 
 def test_off_cycle_week_suppresses_dm_previews(notify_db, cli_main, capsys):
@@ -272,7 +272,11 @@ def test_missing_notifications_config_returns_error(cli_main, caplog):
 def test_cli_flags_override_config_thresholds(notify_db, cli_main, monkeypatch, capsys):
     """Config has impossibly strict thresholds; CLI flags relax them back."""
     monkeypatch.setattr("sarc.cli.notify.underusage._now_utc", lambda: _CLI_TEST_END)
-    strict_cfg = {**_NOTIFY_CFG, "min_ratio": 0.99, "min_rgu_hours": 999_999.0}
+    strict_cfg = {
+        **_NOTIFY_CFG,
+        "min_waste_ratio": 0.99,
+        "min_waste_rgu_hours": 999_999.0,
+    }
     with gifnoc.overlay({"sarc.notifications": strict_cfg}):
         rc = cli_main(
             ["notify", "underusage", "--min-ratio", "0.50", "--min-rgu-hours", "672.0"]
@@ -523,7 +527,7 @@ def test_send_usage_report_enabled_sends_report_to_non_underusers(
         # recipients.
         {"clusters": ["raisin"]},
         # petitbonhomme has util=0.10. At threshold=0.10 credited_used=rgu_h →
-        # wasted=0 → waste_ratio=0 < min_ratio=0.50 → not flagged.
+        # wasted=0 → waste_ratio=0 < min_waste_ratio=0.50 → not flagged.
         {"utilization_ceiling": 0.10},
     ],
 )

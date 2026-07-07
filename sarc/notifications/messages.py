@@ -8,6 +8,7 @@ from sarc.notifications.underusage import (
     RecurringUserRow,
     UnderuserRow,
     UsageRow,
+    usage_cycle_length_weeks,
 )
 
 
@@ -171,7 +172,6 @@ def build_recurring_table(
     recurring: dict[str, list[RecurringUserRow]],
     *,
     cluster_share_threshold: float,
-    cycle_length_weeks: int,
     active_cycles: int,
     cycle_dates: list[date] | None = None,
 ) -> str:
@@ -191,6 +191,7 @@ def build_recurring_table(
     if not recurring:
         return ""
 
+    cycle_length_weeks = usage_cycle_length_weeks()
     window_weeks = active_cycles * cycle_length_weeks
     share_pct = f"{cluster_share_threshold * 100:.0f} %"
     flag_window = active_cycles
@@ -290,7 +291,6 @@ def build_admin_digest(
     *,
     period: str,
     cluster_share_threshold: float,
-    cycle_length_weeks: int,
     active_cycles: int,
     top_n: int,
     historical: HistoricalStats | None = None,
@@ -340,7 +340,6 @@ def build_admin_digest(
         recurring_text = build_recurring_table(
             recurring,
             cluster_share_threshold=cluster_share_threshold,
-            cycle_length_weeks=cycle_length_weeks,
             active_cycles=active_cycles,
             cycle_dates=cycle_dates,
         )
