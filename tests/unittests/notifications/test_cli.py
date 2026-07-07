@@ -571,3 +571,42 @@ def test_no_dms_flag_suppresses_usage_report_sends(
     slack_inst.dm_user.assert_not_called()
     out = capsys.readouterr().out
     assert "skipped=1" in out  # usage-report recipients recorded as skipped
+
+
+# ── non-default usage_cycle_length_weeks (N) ──────────────────────────────────
+# Smoke tests proving the CLI pipeline reads the config value end-to-end,
+# rather than a hardcoded 2. Each test asserts something that would differ
+# under a hardcoded-2 regression.
+
+
+def test_n1_underusage_window_and_eligibility(notify_db, cli_main, capsys):
+    # N=1: window is 1 week back from _CYCLE_WEEK (2024-06-16) → 2024-06-09,
+    # not the default-2 start of 2024-06-02. Job at 2024-06-10 is inside
+    # [2024-06-09, 2024-06-16].
+    cfg = {**_NOTIFY_CFG, "usage_cycle_length_weeks": 1}
+    with gifnoc.overlay({"sarc.notifications": cfg}):
+        rc = cli_main(["notify", "underusage", "--as-of", _CYCLE_WEEK])
+    assert rc == 0
+    captured = capsys.readouterr()
+    assert "multiple of 1" in captured.err
+    out = captured.out
+    assert "2024-06-09" in out
+    assert "2024-06-02" not in out
+    assert "petitbonhomme@mila.quebec" in out
+    assert "=== Under Usage Report Previews" in out
+
+
+def test_n1_usage_report_cadence(usage_report_db, cli_main, capsys):
+    # N=1: usage-report period = usage_report_cycles(2) * 1 = 2 weeks.
+    # ISO week 26 (2024-06-30) is a multiple of 2 → report-eligible; under a
+    # hardcoded-2 regression the period would be 4 weeks and week 26 (26 % 4
+    # != 0) would NOT be eligible, so the report section would be absent.
+    cfg = {**_NOTIFY_CFG, "usage_cycle_length_weeks": 1, "send_usage_report": True}
+    with gifnoc.overlay({"sarc.notifications": cfg}):
+        rc = cli_main(["notify", "underusage", "--as-of", "2024-06-30"])
+    assert rc == 0
+    captured = capsys.readouterr()
+    assert "ISO week 26 (multiple of 2) — Usage report eligible" in captured.err
+    out = captured.out
+    assert "=== Usage Report Previews" in out
+    assert "beaubonhomme@mila.quebec" in out
