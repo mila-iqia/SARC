@@ -291,9 +291,22 @@ def test_cli_flags_override_config_thresholds(notify_db, cli_main, monkeypatch, 
 def _mock_slack(dm_status=SendStatus.OK, channel_status=SendStatus.OK):
     inst = MagicMock()
     inst.dm_user.return_value = SendResult(dm_status)
-    inst.post_channel_file.return_value = SendResult(channel_status)
+    ts = "111.222" if channel_status == SendStatus.OK else None
+    inst.post_channel.return_value = SendResult(channel_status, ts=ts)
     cls = MagicMock(return_value=inst)
     return cls, inst
+
+
+def _channel_posts(inst):
+    """Split post_channel calls into (digest posts, thread replies).
+
+    The digest post never passes thread_ts; the footer replies always do
+    (possibly as None when the digest post failed).
+    """
+    calls = inst.post_channel.call_args_list
+    digests = [c for c in calls if "thread_ts" not in c.kwargs]
+    replies = [c for c in calls if "thread_ts" in c.kwargs]
+    return digests, replies
 
 
 def _patch_senders(monkeypatch, slack_cls):
@@ -317,7 +330,10 @@ def test_send_cycle_week_posts_digest_and_dms(notify_db, cli_main, monkeypatch):
     with gifnoc.overlay({"sarc.notifications": cfg}):
         rc = cli_main(["notify", "underusage", "--as-of", _CYCLE_WEEK, "--send"])
     assert rc == 0
-    slack_inst.post_channel_file.assert_called_once()
+    # week 24 is also a usage-report week (24 % 4 == 0) → digest + 2 replies
+    digests, replies = _channel_posts(slack_inst)
+    assert len(digests) == 1
+    assert len(replies) == 2
     assert slack_inst.dm_user.call_count == 3
 
 
@@ -328,7 +344,10 @@ def test_send_off_cycle_week_posts_digest_only(notify_db, cli_main, monkeypatch)
     with gifnoc.overlay({"sarc.notifications": cfg}):
         rc = cli_main(["notify", "underusage", "--as-of", _OFF_CYCLE_WEEK, "--send"])
     assert rc == 0
-    slack_inst.post_channel_file.assert_called_once()
+    # off-cycle week → digest + Delivery Summary reply only
+    digests, replies = _channel_posts(slack_inst)
+    assert len(digests) == 1
+    assert len(replies) == 1
     slack_inst.dm_user.assert_not_called()
 
 
@@ -341,7 +360,9 @@ def test_send_no_dms_flag_skips_dms(notify_db, cli_main, monkeypatch):
             ["notify", "underusage", "--as-of", _CYCLE_WEEK, "--send", "--no-dms"]
         )
     assert rc == 0
-    slack_inst.post_channel_file.assert_called_once()
+    digests, replies = _channel_posts(slack_inst)
+    assert len(digests) == 1
+    assert len(replies) == 2  # week 24 is also a usage-report week
     slack_inst.dm_user.assert_not_called()
 
 
@@ -354,7 +375,9 @@ def test_send_underusage_report_false_suppresses_underusage_report(
     with gifnoc.overlay({"sarc.notifications": cfg}):
         rc = cli_main(["notify", "underusage", "--as-of", _CYCLE_WEEK, "--send"])
     assert rc == 0
-    slack_inst.post_channel_file.assert_called_once()
+    digests, replies = _channel_posts(slack_inst)
+    assert len(digests) == 1
+    assert len(replies) == 2  # week 24 is also a usage-report week
     slack_inst.dm_user.assert_not_called()
 
 
@@ -368,11 +391,31 @@ def test_send_dm_failure_surfaced_in_footer(notify_db, cli_main, monkeypatch, ca
     assert rc == 0  # failures reported, run does not crash
     out = capsys.readouterr().out
     assert "failed=3" in out
-    # The delivery summary is console/log-only (failures reach admins via
-    # rapporteur); the digest posted to the channel stays pure content.
-    posted_digest = slack_inst.post_channel_file.call_args.args[1]
+    # The digest stays pure content; the delivery summaries (with the failed
+    # user emails) are posted as replies in the digest's thread.
+    digests, replies = _channel_posts(slack_inst)
+    posted_digest = digests[0].args[1]
     assert "Delivery Summary" not in posted_digest
     assert "Usage Report Summary" not in posted_digest
+    footer_reply = replies[0]
+    assert footer_reply.kwargs["thread_ts"] == "111.222"
+    assert "Delivery Summary" in footer_reply.args[1]
+    assert "channel_not_found" in footer_reply.args[1]
+
+
+def test_send_digest_failure_posts_footers_unthreaded(notify_db, cli_main, monkeypatch):
+    """No digest ts to thread on → summaries land as regular channel posts."""
+    slack_cls, slack_inst = _mock_slack(channel_status=SendStatus.FAILED)
+    _patch_senders(monkeypatch, slack_cls)
+    cfg = {**_NOTIFY_CFG, "send_underusage_report": True, "send_usage_report": False}
+    with gifnoc.overlay({"sarc.notifications": cfg}):
+        rc = cli_main(["notify", "underusage", "--as-of", _CYCLE_WEEK, "--send"])
+    assert rc == 0
+    digests, replies = _channel_posts(slack_inst)
+    assert len(digests) == 1
+    assert len(replies) == 2  # week 24 is also a usage-report week
+    for reply in replies:
+        assert reply.kwargs["thread_ts"] is None
 
 
 # ── usage report ──────────────────────────────────────────────────────────────
@@ -487,8 +530,12 @@ def test_non_usage_report_week_no_report_section(
     assert "=== Under Usage Report Previews" in out
     assert "=== Usage Report Previews" not in out
 
-    # Only the digest channel post; no usage report DMs
-    slack_inst.post_channel_file.assert_called_once()
+    # Digest + Delivery Summary reply only — no Usage Report Summary on a
+    # non-report week; no usage report DMs
+    digests, replies = _channel_posts(slack_inst)
+    assert len(digests) == 1
+    assert len(replies) == 1
+    assert "Usage Report Summary" not in replies[0].args[1]
     # beaubonhomme is not an underuser, and week 26 is not a usage-report week
     # → no DM of either kind
     dm_calls = [call.args[0] for call in slack_inst.dm_user.call_args_list]
@@ -505,8 +552,11 @@ def test_send_usage_report_disabled_no_report_sends(
     with gifnoc.overlay({"sarc.notifications": cfg}):
         rc = cli_main(["notify", "underusage", "--as-of", _USAGE_REPORT_WEEK, "--send"])
     assert rc == 0
-    # Only the admin digest channel post; no DMs for underusers or report recipients
-    slack_inst.post_channel_file.assert_called_once()
+    # Digest + both summary replies (report week); no DMs for underusers or
+    # report recipients
+    digests, replies = _channel_posts(slack_inst)
+    assert len(digests) == 1
+    assert len(replies) == 2
     # dm_user may be called 0 times (send_underusage_report=False, send_usage_report=False)
     slack_inst.dm_user.assert_not_called()
     out = capsys.readouterr().out
@@ -516,6 +566,10 @@ def test_send_usage_report_disabled_no_report_sends(
     assert "eligible=1" in report_section
     assert "skipped=1" in report_section
     assert "dm_sent=0" in report_section
+    # The same summary is threaded under the digest
+    report_reply = replies[1]
+    assert report_reply.kwargs["thread_ts"] == "111.222"
+    assert "Usage Report Summary" in report_reply.args[1]
 
 
 def test_send_usage_report_enabled_sends_report_to_non_underusers(

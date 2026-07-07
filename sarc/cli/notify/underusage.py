@@ -356,8 +356,6 @@ class UnderusageNotifyCommand:
                     _DeliveryResult(row.email, row.display_name, "skipped", reason)
                 )
 
-        # Delivery summaries are console/log-only: failures reach the admins via
-        # rapporteur's error report, so the posted digest stays pure content.
         footer = _build_delivery_footer(
             delivery_results,
             title="Delivery Summary",
@@ -372,14 +370,29 @@ class UnderusageNotifyCommand:
                 count=len(report_recipients),
             )
 
-        channel_res = slack_client.post_channel_file(
-            ncfg.slack.channel, digest, title=f"GPU Underusage Digest — {period}"
+        channel_res = slack_client.post_channel(
+            ncfg.slack.channel, digest, preformatted=True
         )
         if channel_res.status != SendStatus.OK:
             logger.error(
                 "Failed to post admin digest to %s: %s",
                 ncfg.slack.channel,
                 channel_res.detail,
+            )
+
+        # Delivery summaries go in the digest's thread: rapporteur only relays
+        # the last few ERROR logs, so counts and failed-user emails need a
+        # guaranteed home in the channel. If the digest post failed, ts is None
+        # and the replies land as regular channel messages instead.
+        slack_client.post_channel(
+            ncfg.slack.channel, footer, preformatted=True, thread_ts=channel_res.ts
+        )
+        if usage_report_eligible:
+            slack_client.post_channel(
+                ncfg.slack.channel,
+                report_footer,
+                preformatted=True,
+                thread_ts=channel_res.ts,
             )
 
         counts = _delivery_counts(delivery_results)

@@ -1,4 +1,4 @@
-# Required bot scopes: chat:write, files:write, im:write, users:read.email
+# Required bot scopes: chat:write, im:write, users:read.email
 from __future__ import annotations
 
 import logging
@@ -19,6 +19,7 @@ class SendStatus(Enum):
 class SendResult:
     status: SendStatus
     detail: str = ""
+    ts: str | None = None
 
 
 class SlackClient:
@@ -56,42 +57,26 @@ class SlackClient:
         return kwargs
 
     def post_channel(
-        self, channel: str, text: str, *, preformatted: bool = False
-    ) -> SendResult:
-        """Post a message to a public/private channel."""
-        try:
-            self._client.chat_postMessage(
-                **self._message_kwargs(channel, text, preformatted=preformatted)
-            )
-            return SendResult(SendStatus.OK)
-        except Exception as exc:
-            logger.error("Slack channel post failed: %s", exc)
-            return SendResult(SendStatus.FAILED, str(exc))
-
-    def post_channel_file(
         self,
         channel: str,
-        content: str,
+        text: str,
         *,
-        filename: str = "digest.txt",
-        title: str | None = None,
+        preformatted: bool = False,
+        thread_ts: str | None = None,
     ) -> SendResult:
-        """Upload text as a file snippet to a channel (no block-length limit).
+        """Post a message to a public/private channel.
 
-        Requires the files:write bot scope.
+        Pass thread_ts to reply in a message's thread; the returned
+        SendResult carries the posted message's ts for threading follow-ups.
         """
         try:
-            kwargs: dict = {
-                "channel": channel,
-                "content": content,
-                "filename": filename,
-            }
-            if title is not None:
-                kwargs["title"] = title
-            self._client.files_upload_v2(**kwargs)
-            return SendResult(SendStatus.OK)
+            kwargs = self._message_kwargs(channel, text, preformatted=preformatted)
+            if thread_ts is not None:
+                kwargs["thread_ts"] = thread_ts
+            resp = self._client.chat_postMessage(**kwargs)
+            return SendResult(SendStatus.OK, ts=resp["ts"])
         except Exception as exc:
-            logger.error("Slack file upload failed: %s", exc)
+            logger.error("Slack channel post failed: %s", exc)
             return SendResult(SendStatus.FAILED, str(exc))
 
     def dm_user(

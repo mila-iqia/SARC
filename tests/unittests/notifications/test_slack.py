@@ -34,10 +34,31 @@ def test_init_attaches_rate_limit_retry_handler():
 
 def test_post_channel_success():
     web = MagicMock()
+    web.chat_postMessage.return_value = {"ts": "111.222"}
     client = _make_client(web)
     result = client.post_channel("#alerts", "hello")
     web.chat_postMessage.assert_called_once_with(channel="#alerts", text="hello")
     assert result.status == SendStatus.OK
+    assert result.ts == "111.222"
+
+
+def test_post_channel_thread_ts_passed_through():
+    web = MagicMock()
+    web.chat_postMessage.return_value = {"ts": "111.223"}
+    client = _make_client(web)
+    result = client.post_channel("#alerts", "reply", thread_ts="111.222")
+    web.chat_postMessage.assert_called_once_with(
+        channel="#alerts", text="reply", thread_ts="111.222"
+    )
+    assert result.status == SendStatus.OK
+
+
+def test_post_channel_thread_ts_omitted_when_none():
+    web = MagicMock()
+    web.chat_postMessage.return_value = {"ts": "111.222"}
+    client = _make_client(web)
+    client.post_channel("#alerts", "hello", thread_ts=None)
+    assert "thread_ts" not in web.chat_postMessage.call_args.kwargs
 
 
 def test_post_channel_api_error():
@@ -47,37 +68,7 @@ def test_post_channel_api_error():
     result = client.post_channel("#alerts", "hello")
     assert result.status == SendStatus.FAILED
     assert "not_in_channel" in result.detail
-
-
-# ── post_channel_file ─────────────────────────────────────────────────────────
-
-
-def test_post_channel_file_success():
-    web = MagicMock()
-    client = _make_client(web)
-    result = client.post_channel_file("#alerts", "content", title="My Digest")
-    web.files_upload_v2.assert_called_once_with(
-        channel="#alerts", content="content", filename="digest.txt", title="My Digest"
-    )
-    assert result.status == SendStatus.OK
-
-
-def test_post_channel_file_no_title():
-    web = MagicMock()
-    client = _make_client(web)
-    client.post_channel_file("#alerts", "content")
-    web.files_upload_v2.assert_called_once_with(
-        channel="#alerts", content="content", filename="digest.txt"
-    )
-
-
-def test_post_channel_file_api_error():
-    web = MagicMock()
-    web.files_upload_v2.side_effect = Exception("missing_scope")
-    client = _make_client(web)
-    result = client.post_channel_file("#alerts", "content")
-    assert result.status == SendStatus.FAILED
-    assert "missing_scope" in result.detail
+    assert result.ts is None
 
 
 # ── dm_user ───────────────────────────────────────────────────────────────────
