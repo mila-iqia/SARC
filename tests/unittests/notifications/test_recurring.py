@@ -585,6 +585,47 @@ def test_cycle_dates_off_cycle_week_w0_is_future():
         assert d < end.date(), f"{d} should be in the past"
 
 
+# ── non-default usage_cycle_length_weeks (N) ──────────────────────────────────
+# Properties are computed from N rather than hardcoded, so a regression that
+# ignores the config value (e.g. a hardcoded 2) fails these at N=1 and N=3.
+
+
+@pytest.mark.parametrize("cycle_weeks", [1, 2, 3])
+def test_anchor_always_aligned_for_n(cycle_weeks):
+    cfg = {**_NOTIFY_CFG, "usage_cycle_length_weeks": cycle_weeks}
+    with gifnoc.overlay({"sarc.notifications": cfg}):
+        assert usage_cycle_length_weeks() == cycle_weeks
+        for offset in range(35):  # 5-week mid-year sweep
+            dt = datetime(2024, 6, 1, tzinfo=UTC) + timedelta(days=offset)
+            anchor = _week_anchor(dt)
+            assert anchor.isocalendar().week % cycle_weeks == 0, (
+                f"off-cycle week for end={dt.date()} at N={cycle_weeks}"
+            )
+            assert anchor >= dt
+            assert anchor - dt < timedelta(weeks=cycle_weeks), (
+                "shift should be the minimal forward move to an aligned week"
+            )
+            if cycle_weeks == 1:
+                assert anchor == dt, "every week is aligned when N=1 (identity)"
+
+
+@pytest.mark.parametrize("cycle_weeks", [1, 2, 3])
+def test_cycle_dates_spacing_and_alignment_for_n(cycle_weeks):
+    cfg = {**_NOTIFY_CFG, "usage_cycle_length_weeks": cycle_weeks}
+    with gifnoc.overlay({"sarc.notifications": cfg}):
+        end = _ALIGNED_MON  # 2024-06-24, Mon of ISO week 26
+        dates = get_cycle_dates(end, n=5)
+        assert len(dates) == 5
+        for d in dates:
+            dt = datetime(d.year, d.month, d.day, tzinfo=UTC)
+            assert dt.isocalendar().week % cycle_weeks == 0, (
+                f"{d} not an aligned week at N={cycle_weeks}"
+            )
+        for i in range(len(dates) - 1):
+            assert (dates[i] - dates[i + 1]).days == cycle_weeks * 7
+        assert dates[0] == _week_anchor(end).date(), "W0 anchored to current-or-next aligned week"
+
+
 # ── get_recurring_underusers — off-cycle-week end ─────────────────────────────
 
 
