@@ -57,7 +57,7 @@ def _build_delivery_footer(
     failures = [r for r in results if r.status == "failed"]
     if failures:
         lines.append("Failures:")
-        lines.extend(f"  - {r.display_name} ({r.email}): {r.detail}" for r in failures)
+        lines.extend(f"- {r.email}: {r.detail}" for r in failures)
     return "\n".join(lines)
 
 
@@ -168,12 +168,16 @@ class UnderusageNotifyCommand:
         period = f"{start.date()} – {end.date()}"
 
         week_num = _iso_week(end)
-        # dms_eligible: week is a multiple of window_weeks (controls
-        # preview section)
-        dms_eligible = week_num % window_weeks == 0
+        # underusage_report_eligible: week is a multiple of window_weeks
+        # (controls preview section)
+        underusage_report_eligible = week_num % window_weeks == 0
         # dms_will_send: additionally blocked by --no-dms gate and requires
         # send_underusage_report config (controls actual sends)
-        dms_will_send = dms_eligible and not self.no_dms and ncfg.send_underusage_report
+        dms_will_send = (
+            underusage_report_eligible
+            and not self.no_dms
+            and ncfg.send_underusage_report
+        )
 
         usage_report_window_weeks = ncfg.usage_report_cycles * window_weeks
         usage_report_eligible = week_num % usage_report_window_weeks == 0
@@ -192,7 +196,7 @@ class UnderusageNotifyCommand:
             _userfacing_print("=== DRY RUN — nothing will be sent ===", file=sys.stderr)
             _userfacing_print(file=sys.stderr)
 
-        if dms_eligible:
+        if underusage_report_eligible:
             _userfacing_print(
                 f"ISO week {week_num} (multiple of {window_weeks}) — Underusage report eligible this run.",
                 file=sys.stderr,
@@ -257,7 +261,7 @@ class UnderusageNotifyCommand:
         _userfacing_print("=== Admin Digest ===")
         _userfacing_print(digest)
 
-        if rows and dms_eligible:
+        if rows and underusage_report_eligible:
             _userfacing_print()
             _userfacing_print("=== Under Usage Report Previews ===")
             for row in rows:
@@ -326,7 +330,7 @@ class UnderusageNotifyCommand:
                 slack=slack_client,
             )
         elif rows:
-            if not dms_eligible:
+            if not underusage_report_eligible:
                 reason = "off_cycle_week"
             elif self.no_dms:
                 reason = "no_dms_flag"
@@ -356,12 +360,15 @@ class UnderusageNotifyCommand:
                     _DeliveryResult(row.email, row.display_name, "skipped", reason)
                 )
 
-        footer = _build_delivery_footer(
-            delivery_results,
-            title="Delivery Summary",
-            count_label="flagged",
-            count=len(rows),
-        )
+        footer = None
+        report_footer = None
+        if underusage_report_eligible:
+            footer = _build_delivery_footer(
+                delivery_results,
+                title="Delivery Summary",
+                count_label="flagged",
+                count=len(rows),
+            )
         if usage_report_eligible:
             report_footer = _build_delivery_footer(
                 report_results,
@@ -384,15 +391,13 @@ class UnderusageNotifyCommand:
         # the last few ERROR logs, so counts and failed-user emails need a
         # guaranteed home in the channel. If the digest post failed, ts is None
         # and the replies land as regular channel messages instead.
-        slack_client.post_channel(
-            ncfg.slack.channel, footer, preformatted=True, thread_ts=channel_res.ts
-        )
-        if usage_report_eligible:
+        if footer:
             slack_client.post_channel(
-                ncfg.slack.channel,
-                report_footer,
-                preformatted=True,
-                thread_ts=channel_res.ts,
+                ncfg.slack.channel, footer, thread_ts=channel_res.ts
+            )
+        if report_footer:
+            slack_client.post_channel(
+                ncfg.slack.channel, report_footer, thread_ts=channel_res.ts
             )
 
         counts = _delivery_counts(delivery_results)
@@ -412,8 +417,9 @@ class UnderusageNotifyCommand:
 
         _userfacing_print()
         _userfacing_print("=== Send Complete ===")
-        _userfacing_print(footer)
-        if usage_report_eligible:
+        if footer:
+            _userfacing_print(footer)
+        if report_footer:
             _userfacing_print()
             _userfacing_print(report_footer)
 

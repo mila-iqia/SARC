@@ -313,7 +313,7 @@ def _patch_senders(monkeypatch, slack_cls):
     monkeypatch.setattr("sarc.cli.notify.underusage.SlackClient", slack_cls)
 
 
-def test_dry_run_does_not_instantiate_slack_or_email(notify_db, cli_main, monkeypatch):
+def test_dry_run_does_not_instantiate_slack(notify_db, cli_main, monkeypatch):
     slack_cls = MagicMock()
     _patch_senders(monkeypatch, slack_cls)
     cfg = {**_NOTIFY_CFG, "send_underusage_report": True, "send_usage_report": False}
@@ -344,10 +344,10 @@ def test_send_off_cycle_week_posts_digest_only(notify_db, cli_main, monkeypatch)
     with gifnoc.overlay({"sarc.notifications": cfg}):
         rc = cli_main(["notify", "underusage", "--as-of", _OFF_CYCLE_WEEK, "--send"])
     assert rc == 0
-    # off-cycle week → digest + Delivery Summary reply only
+    # off-cycle week → digest only
     digests, replies = _channel_posts(slack_inst)
     assert len(digests) == 1
-    assert len(replies) == 1
+    assert len(replies) == 0
     slack_inst.dm_user.assert_not_called()
 
 
