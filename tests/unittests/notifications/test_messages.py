@@ -300,7 +300,7 @@ def test_recurring_table_4_cycles():
 
 
 def test_recurring_table_6_cycles():
-    """6-cycle/3-active with cycle_length_weeks=2: labels include W-10, separator after W-4."""
+    """6-cycle/3-active with usage_cycle_length_weeks=2: labels include W-10, separator after W-4."""
     row = RecurringUserRow(
         email="dave@mila.quebec",
         display_name="Dave",

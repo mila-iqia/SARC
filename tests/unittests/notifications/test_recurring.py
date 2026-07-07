@@ -90,7 +90,7 @@ def recurring_db(read_write_db):
       firstuser (40%) < 70% → continue
       +seconduser (70%) ≥ 70% → stop  (thirduser + fourthuser excluded)
 
-    Per-cycle floor (min_rgu_hours=24): firstuser/seconduser/thirduser pass (≥24);
+    Per-cycle floor (min_waste_rgu_hours=24): firstuser/seconduser/thirduser pass (≥24);
     fourthuser (22.8) does not
     """
     session = read_write_db
@@ -490,7 +490,7 @@ def test_dry_run_display_cycles(
 
 
 # ── _week_anchor ──────────────────────────────────────────────────────────────
-# "aligned" = ISO week number is a multiple of USAGE_CYCLE_LENGTH_WEEKS;
+# "aligned" = ISO week number is a multiple of usage_cycle_length_weeks;
 # "off-cycle" = it is not.
 
 # 2024-06-24: Monday of ISO week 26 (aligned)
@@ -557,7 +557,7 @@ def test_cycle_dates_aligned_week_five_mondays():
     dates = get_cycle_dates(_ALIGNED_MON)
     assert len(dates) == 5
     assert all(isinstance(d, date) for d in dates)
-    # Each must be a Monday of an aligned week, USAGE_CYCLE_LENGTH_WEEKS weeks apart
+    # Each must be a Monday of an aligned week, usage_cycle_length_weeks weeks apart
     for i, d in enumerate(dates):
         dt = datetime(d.year, d.month, d.day, tzinfo=UTC)
         assert dt.weekday() == 0, f"dates[{i}] is not a Monday"
@@ -894,7 +894,7 @@ def test_personalized_action_floor(recurring_db):
 
 # ── Per-anchor pa_flags four-scenario computation test ────────────────────────
 # RGU=4.8, util=0.0 → wasted = 4.8 * elapsed_h. elapsed_h = target_rgu_h / 4.8.
-# Scenarios (active_cycles=3, cycle_length_weeks=2, PA threshold=30):
+# Scenarios (active_cycles=3, usage_cycle_length_weeks=2, PA threshold=30):
 #   user1: 10 RGU-h/cycle × 5 → every 3-cycle window = 30 ≥ 30 → pa_flags=[T,T,T]
 #   user2: W0=15,W-2=10,W-4=5,W-6=5,W-8=5
 #          pos-0=30≥30,pos-1=20<30,pos-2=15<30 → pa_flags=[T,F,F]

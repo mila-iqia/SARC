@@ -16,7 +16,7 @@ _MILA_GPU_TYPE = "A100-SXM4-80GB"
 
 _CLI_TEST_END = datetime(
     2024, 6, 24, tzinfo=UTC
-)  # ISO week 26 — multiple of USAGE_CYCLE_LENGTH_WEEKS
+)  # ISO week 26 — multiple of usage_cycle_length_weeks
 
 _NOTIFY_JOB_END = datetime(2024, 6, 10, tzinfo=UTC)
 
@@ -117,7 +117,7 @@ def test_dry_run(notify_db, cli_main, monkeypatch, capsys):
     assert "Admin Digest" in out
     assert "Weekly GPU Underusage Digest" in out
 
-    # _CLI_TEST_END is ISO week 26 — multiple of USAGE_CYCLE_LENGTH_WEEKS → shows DMs
+    # _CLI_TEST_END is ISO week 26 — multiple of usage_cycle_length_weeks → shows DMs
     # DM preview
     assert "=== Under Usage Report Previews" in out
     # display_name = "M/Ms Petitbonhomme"; _first_name() returns the first token
@@ -126,14 +126,14 @@ def test_dry_run(notify_db, cli_main, monkeypatch, capsys):
 
 # ── usage-cycle cadence gating ────────────────────────────────────────────
 
-_CYCLE_WEEK = "2024-06-16"  # ISO week 24 — multiple of USAGE_CYCLE_LENGTH_WEEKS
+_CYCLE_WEEK = "2024-06-16"  # ISO week 24 — multiple of usage_cycle_length_weeks
 _OFF_CYCLE_WEEK = (
-    "2024-06-23"  # ISO week 25 — not a multiple of USAGE_CYCLE_LENGTH_WEEKS
+    "2024-06-23"  # ISO week 25 — not a multiple of usage_cycle_length_weeks
 )
 
 
 def test_cycle_week_shows_dm_previews(notify_db, cli_main, capsys):
-    # 2024-06-16 is ISO week 24 — multiple of USAGE_CYCLE_LENGTH_WEEKS;
+    # 2024-06-16 is ISO week 24 — multiple of usage_cycle_length_weeks;
     # job at 2024-06-10 is inside [2024-06-02, 2024-06-16]
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}) as config:
         usage_cycle_length_weeks = config.sarc.notifications.usage_cycle_length_weeks
@@ -145,7 +145,7 @@ def test_cycle_week_shows_dm_previews(notify_db, cli_main, capsys):
 
 
 def test_off_cycle_week_suppresses_dm_previews(notify_db, cli_main, capsys):
-    # 2024-06-23 is ISO week 25 — not a multiple of USAGE_CYCLE_LENGTH_WEEKS;
+    # 2024-06-23 is ISO week 25 — not a multiple of usage_cycle_length_weeks;
     # job at 2024-06-10 is inside [2024-06-09, 2024-06-23]
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         rc = cli_main(["notify", "underusage", "--as-of", _OFF_CYCLE_WEEK])
@@ -179,7 +179,7 @@ def year_boundary_db(read_write_db):
 
 
 def test_year_boundary_window_is_correct(year_boundary_db, cli_main, capsys):
-    # 2025-01-05 is ISO week 1 — not a multiple of USAGE_CYCLE_LENGTH_WEEKS;
+    # 2025-01-05 is ISO week 1 — not a multiple of usage_cycle_length_weeks;
     # window [2024-12-22, 2025-01-05] spans the year boundary and covers the
     # Dec-27 job.
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
@@ -191,7 +191,7 @@ def test_year_boundary_window_is_correct(year_boundary_db, cli_main, capsys):
     assert "petitbonhomme@mila.quebec" in captured.out  # job is inside the window
     assert (
         "Underusage report eligible this run" not in captured.err
-    )  # week 1 is not a multiple of USAGE_CYCLE_LENGTH_WEEKS → no Under Usage Report
+    )  # week 1 is not a multiple of usage_cycle_length_weeks → no Under Usage Report
 
 
 # ── future anchor guard ───────────────────────────────────────────────────────
@@ -220,7 +220,7 @@ def test_invalid_as_of_returns_error(notify_db, cli_main, caplog):
 def test_now_clipped_to_midnight(notify_db, cli_main, monkeypatch, capsys):
     # _now_utc returns 15:30 UTC; the window end in the digest header must still
     # show the date only (derived from end.date()), and the period start must be
-    # exactly usage_report_cycles × USAGE_CYCLE_LENGTH_WEEKS weeks before
+    # exactly usage_report_cycles × usage_cycle_length_weeks weeks before
     # midnight on that date.
     monkeypatch.setattr(
         "sarc.cli.notify.underusage._now_utc",
@@ -231,7 +231,7 @@ def test_now_clipped_to_midnight(notify_db, cli_main, monkeypatch, capsys):
     assert rc == 0
     out = capsys.readouterr().out
     # window: [2024-05-27, 2024-06-10] (midnight-to-midnight,
-    # usage_report_cycles × USAGE_CYCLE_LENGTH_WEEKS weeks)
+    # usage_report_cycles × usage_cycle_length_weeks weeks)
     assert "2024-06-10" in out
     assert "2024-05-27" in out
     assert "petitbonhomme@mila.quebec" not in out  # job is not inside the window
@@ -371,9 +371,9 @@ def test_send_dm_failure_surfaced_in_footer(notify_db, cli_main, monkeypatch, ca
 
 
 # ── usage report ──────────────────────────────────────────────────────────────
-# Usage report period = usage_report_cycles × USAGE_CYCLE_LENGTH_WEEKS (= 4 weeks).
+# Usage report period = usage_report_cycles × usage_cycle_length_weeks (= 4 weeks).
 # ISO week 28 (2024-07-14) → multiple of the usage-report period → usage report eligible.
-# ISO week 26 (2024-06-30) → multiple of USAGE_CYCLE_LENGTH_WEEKS only → underusage DMs, no usage report.
+# ISO week 26 (2024-06-30) → multiple of usage_cycle_length_weeks only → underusage DMs, no usage report.
 _USAGE_REPORT_WEEK = "2024-07-14"  # wk 28 — multiple of the usage-report period
 _CYCLE_NON_REPORT_WEEK = "2024-06-30"  # wk 26 — cycle week but not a usage-report week
 
@@ -471,8 +471,8 @@ def test_usage_report_week_underuser_not_in_report_previews(
 def test_non_usage_report_week_no_report_section(
     usage_report_db, cli_main, monkeypatch, capsys
 ):
-    """Multiple of USAGE_CYCLE_LENGTH_WEEKS but not of usage_report_cycles ×
-    USAGE_CYCLE_LENGTH_WEEKS → no usage report section."""
+    """Multiple of usage_cycle_length_weeks but not of usage_report_cycles ×
+    usage_cycle_length_weeks → no usage report section."""
     slack_cls, slack_inst = _mock_slack()
     _patch_senders(monkeypatch, slack_cls)
     cfg = {**_NOTIFY_CFG, "send_underusage_report": True, "send_usage_report": True}

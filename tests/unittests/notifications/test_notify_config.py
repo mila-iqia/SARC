@@ -79,12 +79,12 @@ def test_utilization_ceiling_above_one_raises():
         _make(utilization_ceiling=1.01)
 
 
-def test_usage_report_min_rgu_hours_zero_is_valid():
+def test_usage_report_min_usage_rgu_hours_zero_is_valid():
     cfg = _make(usage_report_min_usage_rgu_hours=0.0)
     assert cfg.usage_report_min_usage_rgu_hours == 0.0
 
 
-def test_personalized_action_min_rgu_hours_zero_is_valid():
+def test_personalized_action_min_waste_rgu_hours_zero_is_valid():
     cfg = _make(personalized_action_min_waste_rgu_hours=0.0)
     assert cfg.personalized_action_min_waste_rgu_hours == 0.0
 

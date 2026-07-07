@@ -241,8 +241,8 @@ def get_underusers(
             )
 
         # Identify users who meet both threshold conditions: their cross-cluster
-        # aggregated waste ratio and total wasted RGU-hours exceed `min_ratio`
-        # and `min_rgu_hours` respectively.
+        # aggregated waste ratio and total wasted RGU-hours exceed
+        # `min_waste_ratio` and `min_waste_rgu_hours` respectively.
         underuser_ids: list[int] = []
         for uid, u in user_data.items():
             breakdowns: list[UsageClusterBreakdown] = u["clusters"]
@@ -589,15 +589,17 @@ def get_historical_stats(
 
 
 def _week_anchor(end: datetime) -> datetime:
-    """Return day of the current (or next) week that is a multiple of cycle_length_weeks.
+    """Return day of the current (or next) week that is a multiple of the
+    configured usage_cycle_length_weeks.
 
     Advances *end* forward so that the resulting ISO week number is divisible by
-    *cycle_length_weeks*. The anchor may therefore be in the future relative to
-    *end*.
+    usage_cycle_length_weeks. The anchor may therefore be in the future relative
+    to *end*.
 
     Limitation: ISO years with 53 weeks cause week 53 to be treated as an
-    off-cycle week (53 % cycle_length_weeks != 0 for cycle_length_weeks=2),
-    effectively skipping the DM cycle that would otherwise align with it.
+    off-cycle week (53 % usage_cycle_length_weeks != 0 for
+    usage_cycle_length_weeks=2), effectively skipping the DM cycle that would
+    otherwise align with it.
     """
     cycle_length_weeks = usage_cycle_length_weeks()
     remainder = end.isocalendar().week % cycle_length_weeks
@@ -607,9 +609,9 @@ def _week_anchor(end: datetime) -> datetime:
 
 def get_cycle_dates(end: datetime, n: int = 5) -> list[date]:
     """Return n cycle end-dates [W0, W-k, ..., W-(k*(n-1))] as date objects,
-    where k = cycle_length_weeks.
+    where k = the configured usage_cycle_length_weeks.
 
-    Each date is the day of an aligned ISO week, spaced *cycle_length_weeks*
+    Each date is the day of an aligned ISO week, spaced usage_cycle_length_weeks
     apart, anchored to the current (or next) aligned week from *end*.
     """
     cycle_length_weeks = usage_cycle_length_weeks()
@@ -639,8 +641,8 @@ def get_recurring_underusers(
     *cluster_share_threshold* of that cluster's total wasted RGU-h.
 
     Cycle flags: for each of the *recurrence_display_cycles* most-recent
-    *cycle_length_weeks*-week windows, call get_underusers to determine per-user
-    membership. Cycles whose end date is in the future relative to *end* are
+    windows of the configured usage_cycle_length_weeks weeks, call
+    get_underusers to determine per-user membership. Cycles whose end date is in the future relative to *end* are
     marked None (no data yet). The "personalized action" flag is set iff a user
     was flagged True in all *recurrence_active_cycles* most-recent cycles.
 

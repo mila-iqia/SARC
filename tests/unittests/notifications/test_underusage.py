@@ -370,8 +370,8 @@ def test_subtractive_formula_exact_waste_ratio(underusage_db):
     row = next(r for r in results if "petitbonhomme" in r.email)
     assert row.waste_ratio == pytest.approx(9592 / 12800, rel=1e-4)
 
-    # At T=0.20: sum(waste) = 1984 → waste_ratio = 1984/12800 < _MIN_RATIO;
-    # pass min_ratio=0.10 so petitbonhomme still appears.
+    # At T=0.20: sum(waste) = 1984 → waste_ratio = 1984/12800 < _MIN_WASTE_RATIO;
+    # pass min_waste_ratio=0.10 so petitbonhomme still appears.
     results = get_underusers(
         _WINDOW_START,
         _WINDOW_END,

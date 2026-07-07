@@ -178,9 +178,9 @@ def build_recurring_table(
     """Build the recurring-underusers per-cluster table for the admin digest.
 
     *cycle_dates* — n date objects [W0, W-k, W-2k, …] — when provided, renders
-    column headers as "MM-DD" strings; when None, derives labels from
-    *cycle_length_weeks* (e.g. "W0", "W-2", "W-4", …).  Cycle cells whose flag
-    is None (future cycle, no data yet) are rendered as blank.
+    column headers as "MM-DD" strings; when None, derives labels from the
+    configured usage_cycle_length_weeks (e.g. "W0", "W-2", "W-4", …).  Cycle
+    cells whose flag is None (future cycle, no data yet) are rendered as blank.
 
     A "|" separator is rendered after the last active cycle (index *active_cycles*).
     Per-cycle ⚑ is shown on ✗ cells in positions 0..active_cycles-1 whose
