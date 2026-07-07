@@ -93,9 +93,11 @@ class SlackClient:
             )
             if "users_not_found" in err or "users_not_found" in response_error:
                 logger.warning("Slack user not found for email %s", email)
-                return SendResult(SendStatus.USER_NOT_FOUND, email)
+                send_status = SendStatus.USER_NOT_FOUND
+            else:
+                send_status = None
             logger.error("Slack users.lookupByEmail failed for %s: %s", email, exc)
-            return SendResult(SendStatus.FAILED, err)
+            return SendResult(send_status or SendStatus.FAILED, err)
 
         user_id = lookup["user"]["id"]
 

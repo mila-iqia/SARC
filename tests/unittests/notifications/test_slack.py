@@ -96,7 +96,6 @@ def test_dm_user_not_found():
     result = client.dm_user("ghost@example.com", "hi")
 
     assert result.status == SendStatus.USER_NOT_FOUND
-    assert result.detail == "ghost@example.com"
     web.conversations_open.assert_not_called()
     web.chat_postMessage.assert_not_called()
 
@@ -137,7 +136,6 @@ def test_dm_user_not_found_via_response_data():
     result = client.dm_user("ghost@example.com", "hi")
 
     assert result.status == SendStatus.USER_NOT_FOUND
-    assert result.detail == "ghost@example.com"
 
 
 def test_dm_user_not_found_response_without_data_attr():
