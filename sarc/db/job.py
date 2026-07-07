@@ -26,7 +26,11 @@ class JobStatisticDB(SQLModel, table=True):
         ondelete="CASCADE",
         index=True,
     )
-    name: str | None = Field(default=None, nullable=False)
+    # index=True: /dash joins jobstatisticdb on job_id then filters name='<metric>'.
+    # Without an index on name, that filter forces a full seq scan of the table
+    # (~12.6M rows) on every metric/RGU query — the dashboard's main bottleneck on
+    # large windows. job_id already has its own index above, for the join itself.
+    name: str | None = Field(default=None, nullable=False, index=True)
     mean: float | None
     std: float | None
     q05: float | None
@@ -98,7 +102,12 @@ class SlurmJobDB(SQLModel, table=True):
 
     # temporal fields
     time_limit: int | None = None
-    submit_time: datetime_utc = datetime_utc_field()
+    # index=True: standalone btree for range filters on submit_time alone.
+    # The composite unique above (cluster_id, job_id, submit_time) can't be
+    # range-seeked by submit_time since it's the 3rd column. See PostgreSQL
+    # docs §11.3 Multicolumn Indexes:
+    # https://www.postgresql.org/docs/current/indexes-multicolumn.html
+    submit_time: datetime_utc = datetime_utc_field(index=True)
     start_time: datetime_utc | None = datetime_utc_field(default=None)
     end_time: datetime_utc | None = datetime_utc_field(default=None)
     elapsed_time: float
