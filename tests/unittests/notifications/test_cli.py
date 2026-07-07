@@ -368,6 +368,11 @@ def test_send_dm_failure_surfaced_in_footer(notify_db, cli_main, monkeypatch, ca
     assert rc == 0  # failures reported, run does not crash
     out = capsys.readouterr().out
     assert "failed=3" in out
+    # The delivery summary is console/log-only (failures reach admins via
+    # rapporteur); the digest posted to the channel stays pure content.
+    posted_digest = slack_inst.post_channel_file.call_args.args[1]
+    assert "Delivery Summary" not in posted_digest
+    assert "Usage Report Summary" not in posted_digest
 
 
 # ── usage report ──────────────────────────────────────────────────────────────

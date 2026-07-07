@@ -356,13 +356,14 @@ class UnderusageNotifyCommand:
                     _DeliveryResult(row.email, row.display_name, "skipped", reason)
                 )
 
+        # Delivery summaries are console/log-only: failures reach the admins via
+        # rapporteur's error report, so the posted digest stays pure content.
         footer = _build_delivery_footer(
             delivery_results,
             title="Delivery Summary",
             count_label="flagged",
             count=len(rows),
         )
-        digest_with_footer = digest + "\n\n" + footer
         if usage_report_eligible:
             report_footer = _build_delivery_footer(
                 report_results,
@@ -370,12 +371,9 @@ class UnderusageNotifyCommand:
                 count_label="eligible",
                 count=len(report_recipients),
             )
-            digest_with_footer += "\n\n" + report_footer
 
         channel_res = slack_client.post_channel_file(
-            ncfg.slack.channel,
-            digest_with_footer,
-            title=f"GPU Underusage Digest — {period}",
+            ncfg.slack.channel, digest, title=f"GPU Underusage Digest — {period}"
         )
         if channel_res.status != SendStatus.OK:
             logger.error(
