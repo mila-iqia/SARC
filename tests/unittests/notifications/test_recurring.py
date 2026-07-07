@@ -626,6 +626,38 @@ def test_cycle_dates_spacing_and_alignment_for_n(cycle_weeks):
         assert dates[0] == _week_anchor(end).date(), "W0 anchored to current-or-next aligned week"
 
 
+# ── _week_anchor — pinned year-boundary / week-53 limitation ──────────────────
+# See the docstring on _week_anchor (sarc/notifications/underusage.py): the
+# naive `(N - remainder) % N` shift is computed from the *original* date's ISO
+# week number, so when the shift crosses an ISO year boundary the resulting
+# date can land on a week number that is itself not a multiple of N. These
+# pin that current (out-of-scope-to-fix) behavior as an exact regression
+# check, not a spec to preserve.
+
+
+@pytest.mark.parametrize(
+    "cycle_weeks, end, expected_anchor",
+    [
+        # 2020-12-28 is ISO week 53 of 2020 (off-cycle for N=2). The naive
+        # shift lands on 2021-01-04, ISO week 1 of 2021 — itself off-cycle
+        # (1 % 2 != 0), because the shift ignores the year-boundary rollover.
+        (2, datetime(2020, 12, 28, tzinfo=UTC), datetime(2021, 1, 4, tzinfo=UTC)),
+        # 2024-12-23 is ISO week 52 of 2024 (off-cycle for N=3). The naive
+        # shift lands on 2025-01-06, ISO week 2 of 2025 — itself off-cycle
+        # (2 % 3 != 0), same year-boundary limitation as above.
+        (3, datetime(2024, 12, 23, tzinfo=UTC), datetime(2025, 1, 6, tzinfo=UTC)),
+    ],
+)
+def test_anchor_year_boundary_pinned(cycle_weeks, end, expected_anchor):
+    cfg = {**_NOTIFY_CFG, "usage_cycle_length_weeks": cycle_weeks}
+    with gifnoc.overlay({"sarc.notifications": cfg}):
+        anchor = _week_anchor(end)
+        assert anchor == expected_anchor
+        assert anchor.isocalendar().week % cycle_weeks != 0, (
+            "pinned: rollover misaligns the anchor"
+        )
+
+
 # ── get_recurring_underusers — off-cycle-week end ─────────────────────────────
 
 
