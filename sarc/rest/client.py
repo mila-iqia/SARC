@@ -43,7 +43,7 @@ class SarcClient:
     )
 
     @classmethod
-    def load(cls, config_file: str | Path | None = None):
+    def load(cls, config_file: str | Path | FileSource | None = None):
         """Load a client from a configuration file.
 
         * No argument: load from sarc.client in the main configuration file

@@ -171,7 +171,9 @@ class ClusterConfig:
             config=fconfig,
             connect_kwargs={
                 "pkey": PKey.from_path(
-                    self.private_key.file, self.private_key.password.encode("ascii")
+                    # PKey.from_path has the wrong type annotation, the password must be bytes if provided directly
+                    self.private_key.file,
+                    self.private_key.password.encode("ascii"),  # ty:ignore[invalid-argument-type]
                 ),
                 **extra_args,
             },
