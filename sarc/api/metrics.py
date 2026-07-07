@@ -4,6 +4,7 @@ import re
 from collections.abc import Generator
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
@@ -20,15 +21,20 @@ from sarc.db.support import GpuRguDB
 from sarc.models.job import SlurmState
 
 
-def _scope(req: Requestor) -> int | None:
+def _scope(req: Requestor) -> int | Literal["admin"]:
     """Non-admin → their own UserDB id, used to restrict every /dash query to
-    their jobs; admin (or auth off, where requestor yields admin) → None, no
-    scoping. Passed explicitly to the filter helpers, mirroring how /v0 uses the
-    requestor — no implicit/global state. ``req.user`` is non-None for a
-    non-admin (requestor raises 403 otherwise)."""
+    their jobs; admin (or auth off, where requestor yields admin) → the sentinel
+    ``"admin"``, no scoping. A string rather than None on purpose: a forgotten
+    return then yields None, a type error caught by the checker, instead of
+    silently masquerading as admin and granting full scope. Passed explicitly to
+    the filter helpers, mirroring how /v0 uses the requestor — no implicit/global
+    state. ``req.user`` is non-None for a non-admin (requestor raises 403
+    otherwise)."""
     if req.is_admin:
-        return None
-    assert req.user is not None  # guaranteed by requestor (403 otherwise)
+        return "admin"
+    # requestor guarantees a non-admin has a DB-loaded user (403 otherwise), and a
+    # persisted UserDB always has an int id (Optional only before insert).
+    assert req.user is not None and req.user.id is not None
     return req.user.id
 
 
@@ -220,13 +226,14 @@ def _apply_slurm_job_filters(
     cluster_ids: list[int] | None,
     cluster_user: str | None,
     job_states: list[str],
-    scope_user_id: int | None = None,
+    scope_user_id: int | Literal["admin"],
 ):
     """Apply job-state + cluster_id/user filters to a SlurmJobDB query.
 
     Filters by cluster_ids (resolved upfront) to avoid joining SlurmClusterDB
     just to filter on cluster_name. None/empty means no cluster filter.
-    ``scope_user_id`` (a non-admin's UserDB id) restricts to that user's jobs.
+    ``scope_user_id`` (a non-admin's UserDB id) restricts to that user's jobs;
+    the sentinel ``"admin"`` applies no user scoping.
     """
     if job_states:
         query = query.where(col(SlurmJobDB.job_state).in_(job_states))
@@ -234,7 +241,7 @@ def _apply_slurm_job_filters(
         query = query.where(col(SlurmJobDB.cluster_id).in_(cluster_ids))
     if cluster_user:
         query = query.where(SlurmJobDB.cluster_user == cluster_user)
-    if scope_user_id is not None:
+    if scope_user_id != "admin":
         query = query.where(SlurmJobDB.sarc_user_id == scope_user_id)
     return query
 
@@ -253,7 +260,7 @@ def _apply_rgu_base(
     cluster_user: str | None,
     job_states: list[str],
     *,
-    scope_user_id: int | None = None,
+    scope_user_id: int | Literal["admin"],
 ):
     """Build the shared base of every RGU query.
 
@@ -458,7 +465,7 @@ def metrics_job_times_vs_limit(
     if job_states:
         base_filters.append(col(SlurmJobDB.job_state).in_(job_states))
     scope_user_id = _scope(req)
-    if scope_user_id is not None:
+    if scope_user_id != "admin":
         base_filters.append(col(SlurmJobDB.sarc_user_id) == scope_user_id)
 
     max_l, max_e, max_w = sess.exec(
