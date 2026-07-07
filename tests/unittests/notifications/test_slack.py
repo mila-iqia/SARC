@@ -1,3 +1,4 @@
+import logging
 from unittest.mock import MagicMock, patch
 
 from sarc.notifications.slack import SendStatus, SlackClient
@@ -9,6 +10,23 @@ def _make_client(mock_web_client):
         client = SlackClient.__new__(SlackClient)
         client._client = mock_web_client
         return client
+
+
+# ── __init__ ──────────────────────────────────────────────────────────────────
+
+
+def test_init_attaches_rate_limit_retry_handler():
+    from slack_sdk.http_retry.builtin_handlers import RateLimitErrorRetryHandler
+
+    # WebClient construction makes no network calls; a fake token is fine.
+    client = SlackClient("xoxb-fake")
+    handlers = [
+        h
+        for h in client._client.retry_handlers
+        if isinstance(h, RateLimitErrorRetryHandler)
+    ]
+    assert len(handlers) == 1
+    assert handlers[0].max_retry_count == 3
 
 
 # ── post_channel ──────────────────────────────────────────────────────────────
@@ -142,3 +160,32 @@ def test_dm_user_not_found_response_without_data_attr():
     result = client.dm_user("alice@example.com", "hi")
 
     assert result.status == SendStatus.FAILED
+
+
+# ── rapporteur contract ───────────────────────────────────────────────────────
+# rapporteur's LogHook only captures records at ERROR level and above; delivery
+# failures must be logged at ERROR to reach the Slack error report.
+
+
+def test_delivery_failures_log_at_error_level(caplog):
+    web = MagicMock()
+    web.users_lookupByEmail.return_value = {"user": {"id": "U12345"}}
+    web.conversations_open.return_value = {"channel": {"id": "C99999"}}
+    web.chat_postMessage.side_effect = Exception("msg_too_long")
+    client = _make_client(web)
+
+    with caplog.at_level(logging.ERROR, logger="sarc.notifications.slack"):
+        client.dm_user("alice@example.com", "hi")
+
+    assert any(r.levelno == logging.ERROR for r in caplog.records)
+
+
+def test_lookup_failures_log_at_error_level(caplog):
+    web = MagicMock()
+    web.users_lookupByEmail.side_effect = Exception("internal_error")
+    client = _make_client(web)
+
+    with caplog.at_level(logging.ERROR, logger="sarc.notifications.slack"):
+        client.dm_user("alice@example.com", "hi")
+
+    assert any(r.levelno == logging.ERROR for r in caplog.records)

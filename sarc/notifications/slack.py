@@ -26,8 +26,14 @@ class SlackClient:
 
     def __init__(self, token: str) -> None:
         from slack_sdk import WebClient
+        from slack_sdk.http_retry.builtin_handlers import RateLimitErrorRetryHandler
 
         self._client: Any = WebClient(token=token)
+        # Auto-retry HTTP 429s (sleeps for the Retry-After duration); applies to
+        # every API call made through this client.
+        self._client.retry_handlers.append(
+            RateLimitErrorRetryHandler(max_retry_count=3)
+        )
 
     @staticmethod
     def _preformatted_blocks(text: str) -> list[dict]:
