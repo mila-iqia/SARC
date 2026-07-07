@@ -383,6 +383,10 @@ def usage_report_db(read_write_db):
     """Two users with GPU jobs inside [2024-06-16, 2024-07-14]:
     - petitbonhomme: high waste → underuser (gets the under usage report, not the usage report)
     - beaubonhomme:  low waste  → active user (gets the usage report)
+
+    beaubonhomme also has a job in May, inside the wider [2024-05-05, 2024-06-16]
+    window used by the N=3 usage-report cadence test (usage_report_cycles(2) x 3
+    = 6-week period, aligned to ISO week 24).
     """
     session = read_write_db
     users = {u.email.split("@")[0]: u for u in session.exec(select(UserDB)).all()}
@@ -420,6 +424,17 @@ def usage_report_db(read_write_db):
         utilization=0.90,
         job_id=80003,
         end_time=datetime(2024, 6, 29, tzinfo=UTC),
+    )
+    # beaubonhomme: same shape, but in May — only inside the N=3 6-week report window.
+    _add_gpu_job(
+        session,
+        user_id=users["beaubonhomme"].id,
+        cluster_id=mila_id,
+        elapsed_h=100,
+        gpu_type=_MILA_GPU_TYPE,
+        utilization=0.90,
+        job_id=80004,
+        end_time=datetime(2024, 5, 20, tzinfo=UTC),
     )
     session.commit()
     yield session
@@ -607,6 +622,65 @@ def test_n1_usage_report_cadence(usage_report_db, cli_main, capsys):
     assert rc == 0
     captured = capsys.readouterr()
     assert "ISO week 26 (multiple of 2) — Usage report eligible" in captured.err
+    out = captured.out
+    assert "=== Usage Report Previews" in out
+    assert "beaubonhomme@mila.quebec" in out
+
+
+def test_n3_off_cycle_week_suppresses_dms(notify_db, cli_main, capsys):
+    # Week 26 (2024-06-30) is aligned at the default N=2 but off-cycle at N=3
+    # (26 % 3 == 2). Under a hardcoded-2 regression this would incorrectly
+    # show DM previews.
+    cfg = {**_NOTIFY_CFG, "usage_cycle_length_weeks": 3}
+    with gifnoc.overlay({"sarc.notifications": cfg}):
+        rc = cli_main(["notify", "underusage", "--as-of", "2024-06-30"])
+    assert rc == 0
+    captured = capsys.readouterr()
+    assert "Underusage report eligible this run" not in captured.err
+    assert "=== Under Usage Report Previews" not in captured.out
+
+
+def test_n3_aligned_week_shows_dms_with_window(notify_db, cli_main, capsys):
+    # Week 24 (_CYCLE_WEEK) is aligned for N=3 (24 % 3 == 0). Window is 3
+    # weeks back → 2024-05-26, not the default-2 start of 2024-06-02. Job at
+    # 2024-06-10 is inside [2024-05-26, 2024-06-16].
+    cfg = {**_NOTIFY_CFG, "usage_cycle_length_weeks": 3}
+    with gifnoc.overlay({"sarc.notifications": cfg}):
+        rc = cli_main(["notify", "underusage", "--as-of", _CYCLE_WEEK])
+    assert rc == 0
+    captured = capsys.readouterr()
+    assert "multiple of 3" in captured.err
+    out = captured.out
+    assert "2024-05-26" in out
+    assert "2024-06-02" not in out
+    assert "petitbonhomme@mila.quebec" in out
+    assert "=== Under Usage Report Previews" in out
+
+
+def test_n3_usage_report_cadence_flip(usage_report_db, cli_main, capsys):
+    # N=3: usage-report period = usage_report_cycles(2) * 3 = 6 weeks. Week 28
+    # (_USAGE_REPORT_WEEK) is a report week at the default N=2 (28 % 4 == 0)
+    # but NOT at N=3 (28 % 6 == 4) — the strongest plumbing discriminator.
+    cfg = {**_NOTIFY_CFG, "usage_cycle_length_weeks": 3, "send_usage_report": True}
+    with gifnoc.overlay({"sarc.notifications": cfg}):
+        rc = cli_main(["notify", "underusage", "--as-of", _USAGE_REPORT_WEEK])
+    assert rc == 0
+    captured = capsys.readouterr()
+    assert "Usage report eligible this run" not in captured.err
+    assert "=== Usage Report Previews" not in captured.out
+
+
+def test_n3_usage_report_positive_case(usage_report_db, cli_main, capsys):
+    # N=3: report period = 6 weeks. Week 24 (_CYCLE_WEEK) IS report-aligned
+    # (24 % 6 == 0); window = [2024-05-05, 2024-06-16], which contains
+    # beaubonhomme's May job (see usage_report_db) but none of petitbonhomme's
+    # (underuser, excluded from the usage report regardless).
+    cfg = {**_NOTIFY_CFG, "usage_cycle_length_weeks": 3, "send_usage_report": True}
+    with gifnoc.overlay({"sarc.notifications": cfg}):
+        rc = cli_main(["notify", "underusage", "--as-of", _CYCLE_WEEK])
+    assert rc == 0
+    captured = capsys.readouterr()
+    assert "ISO week 24 (multiple of 6) — Usage report eligible" in captured.err
     out = captured.out
     assert "=== Usage Report Previews" in out
     assert "beaubonhomme@mila.quebec" in out
