@@ -38,6 +38,18 @@ def upgrade() -> None:
     op.drop_table("jobstatisticdb")
     op.execute("ALTER TABLE jobstatisticdb_clean RENAME TO jobstatisticdb")
     op.execute("ALTER TABLE jobstatisticdb ADD PRIMARY KEY (id)")
+    # CREATE TABLE ... AS SELECT copies only column types and data, dropping the
+    # original SERIAL default on `id` (its owned sequence went away with the old
+    # table). Restore it so inserts can omit `id`, as the model expects. The
+    # setval (is_called=false, +1) leaves the next id at max(id)+1, and at 1 for
+    # an empty table (e.g. a fresh test database).
+    op.execute("CREATE SEQUENCE jobstatisticdb_id_seq OWNED BY jobstatisticdb.id")
+    op.execute(
+        "ALTER TABLE jobstatisticdb ALTER COLUMN id SET DEFAULT nextval('jobstatisticdb_id_seq')"
+    )
+    op.execute(
+        "SELECT setval('jobstatisticdb_id_seq', (SELECT COALESCE(max(id), 0) FROM jobstatisticdb) + 1, false)"
+    )
     op.alter_column(
         "jobstatisticdb", "job_id", existing_type=sa.INTEGER(), nullable=False
     )
