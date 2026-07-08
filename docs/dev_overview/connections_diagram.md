@@ -1,21 +1,22 @@
+<div style="background-color: #838383;">
 
-
-```mermaid
+```{mermaid}
 ---
 title: Connections diagram
 ---
 flowchart TB
 	subgraph Mila
 		%% direction BT
-		subgraph sarc01_dev
-		 	%% direction LR
-			mongodb[(mongoDB)]
-			sarc["SARC"]
-		end
 		cluster_mila@{shape: procs, label: "Mila cluster"}
     client1["SARC (client)"]
-	ldap[LDAP]
+    idt["Stats collection"]
+	  ldap[LDAP]
+	end
 
+	subgraph GCP
+		DB[(PostgresQL)]
+		sarc@{shape: procs, label: "Jobs"}
+		api["API"]
 	end
 
 	subgraph DRAC
@@ -25,18 +26,29 @@ flowchart TB
 		cluster_graham@{shape: procs, label: "Graham"}
 	end
 
-	mongodb <==> sarc  
-	ldap -..- sarc
-    sarc-.sacct.->cluster_mila
+  style Mila fill:#662e7d
+  style DRAC fill:#d6ab00
+  style GCP fill:#1f2123
 
-    sarc-.ssh / sacct.->cluster_cedar
-    sarc-.ssh / sacct.->cluster_beluga
-    sarc-.ssh / sacct.->cluster_narval
-    sarc-.ssh / sacct.->cluster_graham
+	DB <==> sarc
+	api <==> DB
+	sarc -..-> ldap
 
-    client2["SARC (client)"]
+  sarc-.ssh / sacct.->cluster_mila
+  sarc-.ssh / sacct.->cluster_cedar
+  sarc-.ssh / sacct.->cluster_beluga
+  sarc-.ssh / sacct.->cluster_narval
+  sarc-.ssh / sacct.->cluster_graham
 
-	client1-..-mongodb
-	client2-.VPN.-mongodb
-	%% Mila ~~~ DRAC
+  pbi["Power BI"]
+  client2["SARC (client)"]
+  browser["Client browser"]
+
+	client1-..-api
+	client2-..-api
+	browser-..-api
+	pbi-..-DB
+	idt-.Cloud SQL Proxy.-DB
 ```
+
+</div>

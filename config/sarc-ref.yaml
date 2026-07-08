@@ -1,0 +1,90 @@
+sarc:
+  db: # DB connection parameters
+    host: "localhost" # either a hostname or an GCP instance name
+    port: 5432 # The port to connect to, ignored if host is a GCP instance name
+    user:
+      "postgres" # The username to connect to the DB with.
+      # This defaults to the content of the PGUSER environnment variable or the local user,
+      # unless host is a GCP instance name in which case it will use the
+      # default service account for the machine
+  patches: "patches" # this is the path to the patches directory
+  server: # API server config
+    auth: # If null, disables authentification for the API
+      # easy-oauth config, see https://pypi.org/project/easy-oauth/
+  cache: "sarc-cache" # The path to the sarc cache for fetching and parsing
+  health_monitor:
+    parameterizations: { "key": ["val1", "val2"] } # Parameterizations for the checks
+    checks:
+      cluster_scraping: # This is an example of a check config, see the documentation about
+        # health checks for the different checks available and their parameters
+        $class: "sarc.alerts.usage_alerts.cluster_scraping:ClusterScrapingCheck"
+        active: true
+        time_unit: "0s"
+  users:
+    scrapers: # This is a list of scraping directives
+      - drac: # The key is the plugin name (which can be repeated)
+          # The rest is the plugin config data.
+          # See the documentation about user plugins for their config options
+          csv: "1, 2, 3"
+          csv_date: "2025-01-02"
+  clusters:
+    mila: # The cluster name. This must be the same name as slurm thinks it is
+      host: login.server.mila.quebec # Host to connect to to run sacct commands
+      private_key:
+        file: "some_file" # The file that contains the ssh private key to connect to this cluster
+        password: "" # Optional password to decrypt the private key, if it is encrypted
+      timezone: America/Montreal # The timezone of the cluster
+      accounts: # list of slurm accounts to fetch job data for. Fetch data for all jobs if left empty
+        - abc
+        - def
+      sacct_bin: "/opt/slurm/bin/sacct" # Path to the sacct binary on the cluster
+      prometheus_url:
+        http://prometheus01.server.mila.quebec:9090/ # Prometheus server with data from https://github.com/guilbaults/slurm-job-exporter,
+        # can be ommited if there is no data
+      start_date: "2022-04-01" # The date the cluster went online
+      billing_is_gpu: true # Deprecated, can be ignored
+      user_domain: mila # The domain key for users on this cluster.  Refer to the user plugins documentation for more information
+      gpus_per_nodes: # Table mapping which node have which kind of GPU along with canonical mapping for RGU computations
+        __DEFAULTS__:
+          rtx8000: RTX8000
+          NVIDIA A100 80GB PCIe: A100-PCIe-80GB
+          NVIDIA A100-SXM4-40GB: A100-SXM4-40GB
+          NVIDIA A100-SXM4-80GB: A100-SXM4-80GB
+          NVIDIA H100 80GB HBM3: H100-SXM5-80GB
+          NVIDIA L40S: L40S
+          l40S: L40S
+          NVIDIA RTX A6000: A6000
+          Quadro RTX 8000: RTX8000
+          Tesla V100-SXM2-32GB: V100-SXM2-32GB
+          Tesla V100-SXM2-32GB-LS: V100-SXM2-32GB
+        cn-b[001-005]:
+          v100: V100-SXM2-32GB
+        cn-d[001-002]:
+          a100: A100-SXM4-40GB
+        cn-d[003-004]:
+          a100l: A100-SXM4-80GB
+        cn-e[002-003]:
+          v100: V100-SXM2-32GB
+        cn-g[001-029]:
+          a100l: A100-SXM4-80GB
+          2g.20gb: __MIG_FLAG__a100l
+          3g.40gb: __MIG_FLAG__a100l
+          4g.40gb: __MIG_FLAG__a100l
+        cn-i001:
+          a100l: A100-PCIe-80GB
+        cn-j001:
+          a6000: A6000
+        cn-k[001-004]:
+          a100: A100-SXM4-40GB
+        cn-l[001-091]:
+          l40s: L40S
+        cn-n[001-002]:
+          h100: H100-SXM5-80GB
+  logging:
+    log_level: INFO # The default log level
+    OTLP_endpoint: https://localhost/otlp_reciever # Optional OTLP endpoint to send the logs to
+    service_name: sarc-dev # service name used for OTLP, must be set to enable OTLP
+    slack: # Optional config to get messages about jobs on slack
+      description: SARC-prod # used to distinguish multiple instances if the message the same channel
+      token: slack-token-replaceme # SENSITIVE: can be used to send messages on slack
+      channel: slack-channel-id-replace-me # The slack channel ID to message
