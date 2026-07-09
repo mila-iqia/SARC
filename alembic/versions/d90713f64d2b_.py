@@ -9,6 +9,7 @@ Create Date: 2026-07-07 20:18:10.932637+00:00
 from typing import Sequence, Union
 
 import sqlalchemy as sa
+import sqlmodel.sql.sqltypes
 from alembic_utils.pg_view import PGView
 
 from alembic import op
@@ -28,7 +29,24 @@ def upgrade() -> None:
         signature="job_series_view",
         definition="SELECT slurm_jobs.id AS job_db_id, users.id AS sarc_user_id, slurm_jobs.cluster_id, slurm_jobs.account, slurm_jobs.job_id, slurm_jobs.array_job_id, slurm_jobs.task_id, slurm_jobs.name, slurm_jobs.cluster_user, slurm_jobs.\"group\", slurm_jobs.job_state, slurm_jobs.exit_code, slurm_jobs.signal, slurm_jobs.partition, slurm_jobs.nodes, slurm_jobs.work_dir, slurm_jobs.submit_line, slurm_jobs.constraints, slurm_jobs.priority, slurm_jobs.qos, slurm_jobs.\"CLEAR_SCHEDULING\", slurm_jobs.\"STARTED_ON_SUBMIT\", slurm_jobs.\"STARTED_ON_SCHEDULE\", slurm_jobs.\"STARTED_ON_BACKFILL\", slurm_jobs.time_limit, slurm_jobs.submit_time, slurm_jobs.start_time, slurm_jobs.end_time, slurm_jobs.elapsed_time, slurm_jobs.requested_cpu, slurm_jobs.requested_mem, slurm_jobs.requested_node, slurm_jobs.requested_billing, slurm_jobs.requested_gres_gpu, slurm_jobs.requested_gpu_type, slurm_jobs.allocated_cpu, slurm_jobs.allocated_mem, slurm_jobs.allocated_node, slurm_jobs.allocated_billing, slurm_jobs.allocated_gres_gpu, slurm_jobs.allocated_gpu_type, slurm_jobs.harmonized_gpu_type, users.display_name, users.email, clusters.name AS cluster_name, membertypedb.member_type, (SELECT json_object_agg(jobstatisticdb.name, json_build_object('mean', jobstatisticdb.mean, 'std', jobstatisticdb.std, 'q05', jobstatisticdb.q05, 'q25', jobstatisticdb.q25, 'median', jobstatisticdb.median, 'q75', jobstatisticdb.q75, 'max', jobstatisticdb.max, 'unused', jobstatisticdb.unused)) AS json_object_agg_1 \nFROM jobstatisticdb \nWHERE jobstatisticdb.job_id = slurm_jobs.id) AS statistics, (SELECT json_agg(supervisorshelper.supervisor ORDER BY supervisorshelper.pos) AS json_agg_1 \nFROM user_supervisors JOIN supervisorshelper ON user_supervisors.id = supervisorshelper.list_id \nWHERE user_supervisors.user_id = slurm_jobs.sarc_user_id AND user_supervisors.valid @> slurm_jobs.submit_time) AS supervisors, gpurgudb.rgu AS gpu_type_rgu, gpurgudb.drac_rgu AS gpu_type_rgu_drac, CASE WHEN (clusters.billing_is_gpu = true) THEN CASE WHEN (coalesce(slurm_jobs.requested_gres_gpu, 0) > 0) THEN greatest(coalesce(slurm_jobs.allocated_billing, 0), coalesce(slurm_jobs.requested_gres_gpu, 0)) ELSE coalesce(slurm_jobs.requested_gres_gpu, 0) END WHEN (anon_1.gpu_to_billing IS NULL AND (SELECT count(gpubillingdb.id) AS count_1 \nFROM gpubillingdb \nWHERE gpubillingdb.cluster_id = clusters.id) > 0) THEN CASE WHEN (coalesce(slurm_jobs.requested_gres_gpu, 0) > 0) THEN greatest(coalesce(slurm_jobs.allocated_billing, 0), coalesce(slurm_jobs.requested_gres_gpu, 0)) ELSE coalesce(slurm_jobs.requested_gres_gpu, 0) END ELSE CASE WHEN (coalesce(slurm_jobs.requested_gres_gpu, 0) > 0) THEN greatest(coalesce(slurm_jobs.allocated_billing, 0), coalesce(slurm_jobs.requested_gres_gpu, 0)) ELSE coalesce(slurm_jobs.requested_gres_gpu, 0) END / CAST(CAST(anon_1.gpu_to_billing ->> slurm_jobs.harmonized_gpu_type AS FLOAT) AS FLOAT) END * gpurgudb.rgu AS rgu, CASE WHEN (clusters.billing_is_gpu = true) THEN CASE WHEN (coalesce(slurm_jobs.requested_gres_gpu, 0) > 0) THEN greatest(coalesce(slurm_jobs.allocated_billing, 0), coalesce(slurm_jobs.requested_gres_gpu, 0)) ELSE coalesce(slurm_jobs.requested_gres_gpu, 0) END WHEN (anon_1.gpu_to_billing IS NULL AND (SELECT count(gpubillingdb.id) AS count_1 \nFROM gpubillingdb \nWHERE gpubillingdb.cluster_id = clusters.id) > 0) THEN CASE WHEN (coalesce(slurm_jobs.requested_gres_gpu, 0) > 0) THEN greatest(coalesce(slurm_jobs.allocated_billing, 0), coalesce(slurm_jobs.requested_gres_gpu, 0)) ELSE coalesce(slurm_jobs.requested_gres_gpu, 0) END ELSE CASE WHEN (coalesce(slurm_jobs.requested_gres_gpu, 0) > 0) THEN greatest(coalesce(slurm_jobs.allocated_billing, 0), coalesce(slurm_jobs.requested_gres_gpu, 0)) ELSE coalesce(slurm_jobs.requested_gres_gpu, 0) END / CAST(CAST(anon_1.gpu_to_billing ->> slurm_jobs.harmonized_gpu_type AS FLOAT) AS FLOAT) END * gpurgudb.drac_rgu AS rgu_drac, coalesce(slurm_jobs.allocated_gres_gpu, 0) * gpurgudb.rgu AS physical_rgu, coalesce(slurm_jobs.allocated_gres_gpu, 0) * gpurgudb.drac_rgu AS physical_rgu_drac, slurm_jobs.elapsed_time * slurm_jobs.requested_cpu AS cpu_cost, (1 - (SELECT jobstatisticdb.mean \nFROM jobstatisticdb \nWHERE jobstatisticdb.job_id = slurm_jobs.id AND jobstatisticdb.name = 'cpu_utilization')) * slurm_jobs.elapsed_time * slurm_jobs.requested_cpu AS cpu_waste, slurm_jobs.elapsed_time * slurm_jobs.allocated_cpu AS cpu_equivalent_cost, (1 - (SELECT jobstatisticdb.mean \nFROM jobstatisticdb \nWHERE jobstatisticdb.job_id = slurm_jobs.id AND jobstatisticdb.name = 'cpu_utilization')) * slurm_jobs.elapsed_time * slurm_jobs.allocated_cpu AS cpu_equivalent_waste, slurm_jobs.elapsed_time * (slurm_jobs.allocated_cpu - slurm_jobs.requested_cpu) AS cpu_overbilling_cost, slurm_jobs.elapsed_time * slurm_jobs.requested_gres_gpu AS gpu_cost, (1 - (SELECT jobstatisticdb.mean \nFROM jobstatisticdb \nWHERE jobstatisticdb.job_id = slurm_jobs.id AND jobstatisticdb.name = 'gpu_utilization')) * slurm_jobs.elapsed_time * slurm_jobs.requested_gres_gpu AS gpu_waste, slurm_jobs.elapsed_time * slurm_jobs.allocated_gres_gpu AS gpu_equivalent_cost, (1 - (SELECT jobstatisticdb.mean \nFROM jobstatisticdb \nWHERE jobstatisticdb.job_id = slurm_jobs.id AND jobstatisticdb.name = 'gpu_utilization')) * slurm_jobs.elapsed_time * slurm_jobs.allocated_gres_gpu AS gpu_equivalent_waste, slurm_jobs.elapsed_time * (slurm_jobs.allocated_gres_gpu - slurm_jobs.requested_gres_gpu) AS gpu_overbilling_cost \nFROM slurm_jobs JOIN users ON slurm_jobs.sarc_user_id = users.id JOIN clusters ON slurm_jobs.cluster_id = clusters.id LEFT OUTER JOIN membertypedb ON membertypedb.user_id = slurm_jobs.sarc_user_id AND (membertypedb.valid @> slurm_jobs.submit_time) LEFT OUTER JOIN gpurgudb ON gpurgudb.name = slurm_jobs.harmonized_gpu_type LEFT OUTER JOIN LATERAL (SELECT gpubillingdb.gpu_to_billing AS gpu_to_billing \nFROM gpubillingdb \nWHERE gpubillingdb.cluster_id = slurm_jobs.cluster_id AND gpubillingdb.since <= slurm_jobs.submit_time ORDER BY gpubillingdb.since DESC \n LIMIT 1) AS anon_1 ON true",
     )
-    op.execute("""CREATE TABLE jobstatisticdb_clean AS
+    op.create_table(
+        "jobstatisticdb_clean",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("job_id", sa.Integer(), nullable=False),
+        sa.Column("name", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+        sa.Column("mean", sa.Float(), nullable=True),
+        sa.Column("std", sa.Float(), nullable=True),
+        sa.Column("q05", sa.Float(), nullable=True),
+        sa.Column("q25", sa.Float(), nullable=True),
+        sa.Column("median", sa.Float(), nullable=True),
+        sa.Column("q75", sa.Float(), nullable=True),
+        sa.Column("max", sa.Float(), nullable=True),
+        sa.Column("unused", sa.Float(), nullable=True),
+        sa.ForeignKeyConstraint(["job_id"], ["slurm_jobs.id"], ondelete="CASCADE"),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("job_id", "name", name="uq_jobstatistics_job_id_name"),
+    )
+    op.execute("""INSERT INTO jobstatisticdb_clean
     SELECT DISTINCT ON (job_id, name) *
     FROM jobstatisticdb
     ORDER BY job_id, name, id DESC;""")
@@ -37,27 +55,11 @@ def upgrade() -> None:
     op.drop_table("jobstatistics_fetchdate")
     op.drop_table("jobstatisticdb")
     op.execute("ALTER TABLE jobstatisticdb_clean RENAME TO jobstatisticdb")
-    op.execute("ALTER TABLE jobstatisticdb ADD PRIMARY KEY (id)")
-    # CREATE TABLE ... AS SELECT copies only column types and data, dropping the
-    # original SERIAL default on `id` (its owned sequence went away with the old
-    # table). Restore it so inserts can omit `id`, as the model expects. The
-    # setval (is_called=false, +1) leaves the next id at max(id)+1, and at 1 for
-    # an empty table (e.g. a fresh test database).
-    op.execute("CREATE SEQUENCE jobstatisticdb_id_seq OWNED BY jobstatisticdb.id")
     op.execute(
-        "ALTER TABLE jobstatisticdb ALTER COLUMN id SET DEFAULT nextval('jobstatisticdb_id_seq')"
+        "ALTER SEQUENCE jobstatisticdb_clean_id_seq RENAME TO jobstatisticdb_id_seq"
     )
     op.execute(
         "SELECT setval('jobstatisticdb_id_seq', (SELECT COALESCE(max(id), 0) FROM jobstatisticdb) + 1, false)"
-    )
-    op.alter_column(
-        "jobstatisticdb", "job_id", existing_type=sa.INTEGER(), nullable=False
-    )
-    op.alter_column(
-        "jobstatisticdb", "name", existing_type=sa.VARCHAR(), nullable=False
-    )
-    op.create_foreign_key(
-        None, "jobstatisticdb", "slurm_jobs", ["job_id"], ["id"], ondelete="CASCADE"
     )
     op.create_index("ix_jobstatisticdb_job_id", "jobstatisticdb", ["job_id"])
     op.create_index(
@@ -77,16 +79,13 @@ def upgrade() -> None:
         sa.UniqueConstraint("job_id", name="uq_jobstatistics_fetchdate_job_id"),
     )
     op.create_entity(public_job_series_view)  # ty:ignore[unresolved-attribute]
-    op.create_unique_constraint(
-        "unique_stat_name", "jobstatisticdb", ["job_id", "name"]
-    )
     # ### end Alembic commands ###
 
 
 def downgrade() -> None:
     """Downgrade schema."""
     # ### commands auto generated by Alembic - please adjust! ###
-    op.drop_constraint("unique_stat_name", "jobstatisticdb", type_="unique")
+    op.drop_constraint("uq_jobstatistics_job_id_name", "jobstatisticdb", type_="unique")
     public_job_series_view = PGView(
         schema="public",
         signature="job_series_view",
