@@ -18,6 +18,8 @@ from sarc.validators import datetime_utc
 class JobStatisticDB(SQLModel, table=True):
     """Statistics for a timeseries."""
 
+    __table_args__ = (UniqueConstraint("job_id", "name"),)
+
     id: int | None = Field(default=None, primary_key=True)
     job_id: int | None = Field(
         default=None,

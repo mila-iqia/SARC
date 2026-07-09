@@ -106,7 +106,7 @@ physical_rgu_drac_expr = (gres_gpu * GpuRguDB.drac_rgu).label("physical_rgu_drac
 # Cost and waste
 cpu_cost = col(SlurmJobDB.elapsed_time) * col(SlurmJobDB.requested_cpu)
 cpu_utilization = (
-    select(func.max(JobStatisticDB.mean))
+    select(JobStatisticDB.mean)
     .where(JobStatisticDB.job_id == SlurmJobDB.id)
     .where(JobStatisticDB.name == "cpu_utilization")
     .scalar_subquery()
@@ -119,7 +119,7 @@ cpu_overbilling_cost = (
 
 gpu_cost = col(SlurmJobDB.elapsed_time) * col(SlurmJobDB.requested_gres_gpu)
 gpu_utilization = (
-    select(func.max(JobStatisticDB.mean))
+    select(JobStatisticDB.mean)
     .where(JobStatisticDB.job_id == SlurmJobDB.id)
     .where(JobStatisticDB.name == "gpu_utilization")
     .scalar_subquery()
