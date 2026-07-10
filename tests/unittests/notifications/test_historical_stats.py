@@ -228,7 +228,6 @@ def test_digest_no_historical_by_default():
         user_id=1,
         rgu_hours=1000.0,
         wasted=500.0,
-        requested=1000.0,
         waste_ratio=0.5,
         by_cluster=[UsageClusterBreakdown("mila", 1000.0, 500.0, 1000.0 - 500.0)],
         top_jobs=[],

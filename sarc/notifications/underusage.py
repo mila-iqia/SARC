@@ -22,7 +22,7 @@ def usage_cycle_length_weeks():
 @dataclass
 class UsageClusterBreakdown:
     cluster: str
-    # RGU-hours requested for this cluster in the window.
+    # RGU-hours allocated for this cluster in the window.
     rgu_hours: float
     rgu_hours_used: float
     # Ceiling-adjusted RGU-hours wasted (rgu_hours - credited_used).
@@ -47,15 +47,14 @@ class UnderuserRow:
     email: str
     display_name: str
     user_id: int
-    # Total RGU-hours requested over the window.
+    # Total RGU-hours allocated over the window.
     rgu_hours: float
-    requested: float
     # RGU-hours wasted over the window (= rgu_hours - rgu_used). Used for the
     # activity floor: the floor is compared against *wasted* RGU-hours, so that
     # users who waste a significant absolute amount are flagged regardless of
     # their total allocation size.
     wasted: float
-    # waste_ratio = wasted / requested  (= 1 - rgu_used / rgu_requested)
+    # waste_ratio = wasted / rgu_hours  (= 1 - rgu_used / rgu_hours)
     waste_ratio: float
     # Unadjusted reference values (utilization_ceiling=1.0 → equal to wasted/waste_ratio).
     true_wasted: float = 0.0
@@ -64,7 +63,7 @@ class UnderuserRow:
     # Top-N GPU jobs by RGU-hours unused, descending.
     top_jobs: list[UsageJob] = field(default_factory=list)
 
-    # avg_utilization = 1 - waste_ratio  (= rgu_used / rgu_requested)
+    # avg_utilization = 1 - waste_ratio  (= rgu_used / rgu_hours)
     @cached_property
     def avg_utilization(self) -> float:
         return 1.0 - self.waste_ratio
@@ -112,8 +111,8 @@ def _rgu_exprs(utilization_ceiling: float = 1.0):
     """Return (rgu_h_expr, true_used_expr, credited_used_expr), all derived
     from job_series_view columns alone (m = the job's gpu_sm_occupancy mean):
 
-    rgu_h_expr = allocated_gpu_cost / 3600 — billing RGU-hours (== rgu * elapsed
-                 / 3600).
+    rgu_h_expr = allocated_gpu_cost / 3600 — allocated RGU-hours (== rgu *
+                 elapsed / 3600).
     true_wasted = allocated_gpu_waste / 3600 = rgu_h * (1 - m), or 0 (fully used,
                   zero waste) when m is NaN/NULL — no gpu_sm_occupancy stat
                   recorded.
@@ -341,7 +340,6 @@ def get_underusers(
                 user_id=uid,
                 rgu_hours=total_rgu_h,
                 wasted=total_wasted,
-                requested=total_rgu_h,
                 waste_ratio=waste_ratio,
                 true_wasted=total_true_wasted,
                 true_waste_ratio=total_true_wasted / total_rgu_h
