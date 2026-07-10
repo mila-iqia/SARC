@@ -3,11 +3,9 @@ from datetime import date, datetime, timedelta
 from functools import cached_property
 
 from sqlalchemy import select
-from sqlalchemy.orm import aliased
 from sqlmodel import Session, and_, case, col, func
 
 from sarc.config import UTC, config
-from sarc.db.job import JobStatisticDB
 from sarc.db.job_series import JobSeriesDB
 
 DEFAULT_USAGE_CYCLE_LENGTH_WEEKS = 2
@@ -111,61 +109,79 @@ class RecurringUserRow:
 
 
 def _rgu_exprs(utilization_ceiling: float = 1.0):
-    """Return (util_alias, m_mean, rgu_h_expr, true_used_expr, credited_used_expr).
+    """Return (rgu_h_expr, true_used_expr, credited_used_expr), all derived
+    from job_series_view columns alone (m = the job's gpu_sm_occupancy mean):
 
-    true_used_expr = rgu_h * m, or rgu_h (fully used, zero waste) when m is
-                     NaN/NULL.
-    credited_used_expr = LEAST(rgu_h, rgu_h * (1 - utilization_ceiling + m)), or
-                         rgu_h (fully used, zero waste) when m is NaN/NULL.
+    rgu_h_expr = allocated_gpu_cost / 3600 — billing RGU-hours (== rgu * elapsed
+                 / 3600).
+    true_wasted = allocated_gpu_waste / 3600 = rgu_h * (1 - m), or 0 (fully used,
+                  zero waste) when m is NaN/NULL — no gpu_sm_occupancy stat
+                  recorded.
+    true_used_expr = rgu_h - true_wasted.
+    credited_used_expr = rgu_h - GREATEST(0, true_wasted - rgu_h * (1 - T)),
+                         with T = utilization_ceiling — algebraically identical
+                         to LEAST(rgu_h, rgu_h * (1 - T + m)) since rgu_h >= 0.
                          Waste = rgu_h - credited_used = max(0, rgu_h * (T -
-                         m)), where T = utilization_ceiling. At T=1.0, credited
-                         == true (identity: 1 - 1 + m = m).
+                         m)). At T=1.0, credited == true.
 
-    The `m == m` NaN idiom (NaN != NaN in SQL) routes both SQL NULL (LEFT-JOIN
-    miss) and NaN to the else branch, treating jobs with no recorded utilization
-    stat as fully used — zero waste, user not flagged.
+    The `w == w` idiom (NaN != NaN in SQL, and NULL == NULL is NULL) routes
+    both SQL NULL and NaN allocated_gpu_waste to the else branch (zero waste,
+    user not flagged).
     """
-    util_alias = aliased(JobStatisticDB)
-    m_mean = col(util_alias.mean)
-    rgu_h_expr = col(JobSeriesDB.rgu) * col(JobSeriesDB.elapsed_time) / 3600.0
-    finite_mean = and_(
-        m_mean == m_mean,  # noqa: PLR0124  — excludes NaN
-        m_mean > float("-inf"),
-        m_mean < float("inf"),  # excludes ±Infinity
-    )
-    true_used_expr = case((finite_mean, rgu_h_expr * m_mean), else_=rgu_h_expr)
-    credited_used_expr = case(
+    rgu_h_expr = col(JobSeriesDB.allocated_gpu_cost) / 3600.0
+    wasted_raw = col(JobSeriesDB.allocated_gpu_waste)
+    # Guard and subtract the ceiling on the raw RGU-second columns, before the
+    # /3600, so that allocated_gpu_waste - allocated_gpu_cost * (1 - T) cancels
+    # exactly when the job's occupancy equals T (both sides compute the
+    # identical product).
+    finite_wasted_raw = case(
         (
-            finite_mean,
-            func.least(rgu_h_expr, rgu_h_expr * (m_mean + (1.0 - utilization_ceiling))),
+            and_(
+                wasted_raw == wasted_raw,  # noqa: PLR0124  — excludes NaN/NULL
+                wasted_raw > float("-inf"),
+                wasted_raw < float("inf"),  # excludes ±Infinity
+            ),
+            wasted_raw,
         ),
-        else_=rgu_h_expr,
+        else_=0.0,
     )
-    return util_alias, m_mean, rgu_h_expr, true_used_expr, credited_used_expr
+    true_used_expr = rgu_h_expr - finite_wasted_raw / 3600.0
+    credited_used_expr = (
+        rgu_h_expr
+        - func.greatest(
+            0.0,
+            finite_wasted_raw
+            - col(JobSeriesDB.allocated_gpu_cost) * (1.0 - utilization_ceiling),
+        )
+        / 3600.0
+    )
+    return rgu_h_expr, true_used_expr, credited_used_expr
 
 
 def _with_rgu_window(
-    stmt, util_alias, start, end, *, exclude_zero_usage, rgu_used_expr, clusters=None
+    stmt, start, end, *, exclude_zero_usage, rgu_used_expr, clusters=None
 ):
-    """Apply the gpu_sm_occupancy LEFT JOIN and end-time / GPU-type / RGU filters."""
-    stmt = stmt.join(
-        util_alias,
-        and_(
-            col(util_alias.job_id) == col(JobSeriesDB.job_db_id),
-            col(util_alias.name) == "gpu_sm_occupancy",
-        ),
-        isouter=True,
-    ).where(
+    """Apply the end-time / GPU-type / RGU window filters."""
+    stmt = stmt.where(
         col(JobSeriesDB.end_time) >= start,
         col(JobSeriesDB.end_time) < end,
         col(JobSeriesDB.allocated_gpu_type).is_not(None),
-        col(JobSeriesDB.rgu).is_not(None),
+        col(JobSeriesDB.allocated_rgu_drac).is_not(None),
     )
     if clusters:
         stmt = stmt.where(col(JobSeriesDB.cluster_name).in_(clusters))
     if exclude_zero_usage:
         stmt = stmt.having(func.coalesce(func.sum(rgu_used_expr), 0) > 0)
     return stmt
+
+
+def _job_occupancy(cost: float | None, waste: float | None) -> float:
+    """Recover a job's gpu_sm_occupancy mean from the view's cost/waste columns
+    (waste = (1 - m) * cost), clamped to <= 1.0. Missing stat (waste NULL/NaN)
+    or zero cost -> 1.0 (fully used)."""
+    if cost and waste is not None:
+        return min(1.0, 1.0 - waste / cost)
+    return 1.0
 
 
 def _split_waste(row) -> tuple[float, float, float]:
@@ -192,9 +208,7 @@ def get_underusers(
         raise ValueError(f"Unsupported resource: {resource!r}")
 
     with config.db.session() as session:
-        util, m_mean, rgu_h_expr, true_used_expr, credited_used_expr = _rgu_exprs(
-            utilization_ceiling
-        )
+        rgu_h_expr, true_used_expr, credited_used_expr = _rgu_exprs(utilization_ceiling)
         stmt = _with_rgu_window(
             select(
                 col(JobSeriesDB.sarc_user_id),
@@ -212,7 +226,6 @@ def get_underusers(
                 func.coalesce(func.sum(true_used_expr), 0).label("sum_rgu_true_used"),
                 func.coalesce(func.sum(credited_used_expr), 0).label("sum_rgu_used"),
             ),
-            util,
             start,
             end,
             exclude_zero_usage=exclude_zero_usage,
@@ -271,9 +284,9 @@ def get_underusers(
                         col(JobSeriesDB.submit_time),
                         rgu_h_expr.label("rgu_hours"),
                         credited_used_expr.label("rgu_used"),
-                        m_mean.label("util_mean"),
+                        col(JobSeriesDB.allocated_gpu_cost),
+                        col(JobSeriesDB.allocated_gpu_waste),
                     ).where(col(JobSeriesDB.sarc_user_id).in_(underuser_ids)),
-                    util,
                     start,
                     end,
                     # Must be False here: this is a per-job SELECT with no GROUP
@@ -293,8 +306,9 @@ def get_underusers(
                 uid = jr.sarc_user_id
                 rgu_h = float(jr.rgu_hours or 0.0)
                 rgu_h_credited_used = float(jr.rgu_used or 0.0)
-                util_val = float(jr.util_mean) if jr.util_mean is not None else 1.0
-                gpu_sm_occupancy = min(1.0, util_val)
+                gpu_sm_occupancy = _job_occupancy(
+                    jr.allocated_gpu_cost, jr.allocated_gpu_waste
+                )
                 jobs_by_user[uid].append(
                     UsageJob(
                         job_id=jr.job_db_id,
@@ -354,7 +368,7 @@ def get_all_users_usage(
         raise ValueError(f"Unsupported resource: {resource!r}")
 
     with config.db.session() as session:
-        util, m_mean, rgu_h_expr, true_used_expr, credited_used_expr = _rgu_exprs()
+        rgu_h_expr, true_used_expr, credited_used_expr = _rgu_exprs()
         stmt = _with_rgu_window(
             select(
                 col(JobSeriesDB.sarc_user_id),
@@ -365,7 +379,6 @@ def get_all_users_usage(
                 func.coalesce(func.sum(true_used_expr), 0).label("sum_rgu_true_used"),
                 func.coalesce(func.sum(credited_used_expr), 0).label("sum_rgu_used"),
             ),
-            util,
             start,
             end,
             exclude_zero_usage=False,
@@ -406,9 +419,9 @@ def get_all_users_usage(
                         col(JobSeriesDB.submit_time),
                         rgu_h_expr.label("rgu_hours"),
                         true_used_expr.label("rgu_used"),
-                        m_mean.label("util_mean"),
+                        col(JobSeriesDB.allocated_gpu_cost),
+                        col(JobSeriesDB.allocated_gpu_waste),
                     ),
-                    util,
                     start,
                     end,
                     exclude_zero_usage=False,
@@ -422,7 +435,6 @@ def get_all_users_usage(
                 if uid not in jobs_by_user:
                     continue
                 rgu_used_h = float(jr.rgu_used or 0.0)
-                util_val = float(jr.util_mean) if jr.util_mean is not None else 1.0
                 jobs_by_user[uid].append(
                     UsageJob(
                         job_id=jr.job_db_id,
@@ -430,7 +442,9 @@ def get_all_users_usage(
                         submit_time=jr.submit_time,
                         wasted=None,
                         rgu_hours_used=rgu_used_h,
-                        gpu_sm_occupancy=util_val,
+                        gpu_sm_occupancy=_job_occupancy(
+                            jr.allocated_gpu_cost, jr.allocated_gpu_waste
+                        ),
                     )
                 )
 
@@ -508,7 +522,7 @@ def _query_month_agg(
     clusters: list[str] | None = None,
 ) -> MonthlyStats:
     """Aggregate fleet-level waste stats for a single calendar month window."""
-    util, _, rgu_h_expr, true_used_expr, credited_used_expr = _rgu_exprs()
+    rgu_h_expr, true_used_expr, credited_used_expr = _rgu_exprs()
     stmt = _with_rgu_window(
         select(
             col(JobSeriesDB.sarc_user_id),
@@ -516,7 +530,6 @@ def _query_month_agg(
             func.coalesce(func.sum(true_used_expr), 0).label("sum_rgu_true_used"),
             func.coalesce(func.sum(credited_used_expr), 0).label("sum_rgu_used"),
         ),
-        util,
         start,
         end,
         exclude_zero_usage=exclude_zero_usage,
@@ -659,9 +672,7 @@ def get_recurring_underusers(
 
     # ── Per-(user, cluster) aggregate over the full recurrence window ─────────
     with config.db.session() as session:
-        util, _, rgu_h_expr, true_used_expr, credited_used_expr = _rgu_exprs(
-            utilization_ceiling
-        )
+        rgu_h_expr, true_used_expr, credited_used_expr = _rgu_exprs(utilization_ceiling)
         stmt = _with_rgu_window(
             select(
                 col(JobSeriesDB.sarc_user_id),
@@ -672,7 +683,6 @@ def get_recurring_underusers(
                 func.coalesce(func.sum(true_used_expr), 0).label("sum_rgu_true_used"),
                 func.coalesce(func.sum(credited_used_expr), 0).label("sum_rgu_used"),
             ),
-            util,
             agg_start,
             anchor,
             exclude_zero_usage=exclude_zero_usage,
@@ -748,7 +758,6 @@ def get_recurring_underusers(
                         "sum_rgu_used"
                     ),
                 ),
-                util,
                 pa_start,
                 pa_end,
                 exclude_zero_usage=exclude_zero_usage,
