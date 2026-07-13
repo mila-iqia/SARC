@@ -81,8 +81,8 @@ class UserScraper[T](Protocol):
         return deserialize(
             self.config_type,
             config_data,
-            WorkingDirectory(directory=config_path)  # ty:ignore[unknown-argument]
-            + EncryptionKey(password=os.environ.get("SERIEUX_PASSWORD", None)),  # ty:ignore[unknown-argument]
+            WorkingDirectory(config_path)
+            + EncryptionKey(os.environ.get("SERIEUX_PASSWORD", None)),
         )
 
     def get_user_data(self, config: T) -> bytes: ...  # pragma: nocover
