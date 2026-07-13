@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import os
 from collections.abc import Iterator
 from dataclasses import dataclass, field
@@ -58,9 +56,7 @@ class SarcClient:
             if isinstance(config_file, str):
                 config_file = deserialize(FileSource, config_file)
             return deserialize(
-                cls,
-                config_file,
-                EncryptionKey(os.getenv("SERIEUX_PASSWORD")),  # ty:ignore[too-many-positional-arguments]
+                cls, config_file, EncryptionKey(os.getenv("SERIEUX_PASSWORD"))
             )
 
     def _extra_fields(self, extra_fields: list[str] | None) -> list[str] | None:
