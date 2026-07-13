@@ -1,5 +1,5 @@
 ===================================================================================
-Example data with expected RGU information [main cluster: raisin (1 billing date(s))]:
+Example data with expected RGU information [main cluster: raisin]:
 ===================================================================================
 
 ----------
@@ -17,22 +17,6 @@ RGU values
  "mila_gpu_with_rgu_with_billing": 28.0
 }
 
-------------------
-GPU billing values
-------------------
-{
- "raisin": [
-  {
-   "since": "2023-02-15",
-   "gpu_to_billing": {
-    "A100": 100.0,
-    "raisin_gpu_no_rgu_with_billing": 150.0,
-    "raisin_gpu_with_rgu_with_billing": 50.0
-   }
-  }
- ]
-}
-
 ----
 Data
 ----
@@ -44,8 +28,7 @@ Data
   "gpu_type": "raisin_gpu_no_rgu_no_billing",
   "expected": {
    "gres_rgu": NaN,
-   "gpu_type_rgu": NaN,
-   "gpu_billing_found": null
+   "gpu_type_rgu": NaN
   }
  },
  {
@@ -55,8 +38,7 @@ Data
   "gpu_type": "raisin_gpu_no_rgu_with_billing",
   "expected": {
    "gres_rgu": NaN,
-   "gpu_type_rgu": NaN,
-   "gpu_billing_found": null
+   "gpu_type_rgu": NaN
   }
  },
  {
@@ -66,8 +48,7 @@ Data
   "gpu_type": "raisin_gpu_with_rgu_no_billing",
   "expected": {
    "gres_rgu": 4.5,
-   "gpu_type_rgu": 1.5,
-   "gpu_billing_found": null
+   "gpu_type_rgu": 1.5
   }
  },
  {
@@ -77,8 +58,7 @@ Data
   "gpu_type": "raisin_gpu_with_rgu_with_billing",
   "expected": {
    "gres_rgu": 10.0,
-   "gpu_type_rgu": 2.5,
-   "gpu_billing_found": null
+   "gpu_type_rgu": 2.5
   }
  },
  {
@@ -88,8 +68,7 @@ Data
   "gpu_type": "A100",
   "expected": {
    "gres_rgu": 16.05,
-   "gpu_type_rgu": 3.21,
-   "gpu_billing_found": null
+   "gpu_type_rgu": 3.21
   }
  },
  {
@@ -99,8 +78,7 @@ Data
   "gpu_type": "raisin_gpu_no_rgu_no_billing",
   "expected": {
    "gres_rgu": NaN,
-   "gpu_type_rgu": NaN,
-   "gpu_billing_found": null
+   "gpu_type_rgu": NaN
   }
  },
  {
@@ -110,8 +88,7 @@ Data
   "gpu_type": "raisin_gpu_no_rgu_with_billing",
   "expected": {
    "gres_rgu": NaN,
-   "gpu_type_rgu": NaN,
-   "gpu_billing_found": 150.0
+   "gpu_type_rgu": NaN
   }
  },
  {
@@ -120,9 +97,8 @@ Data
   "job_billing": 1000,
   "gpu_type": "raisin_gpu_with_rgu_no_billing",
   "expected": {
-   "gres_rgu": NaN,
-   "gpu_type_rgu": 1.5,
-   "gpu_billing_found": null
+   "gres_rgu": 1500.0,
+   "gpu_type_rgu": 1.5
   }
  },
  {
@@ -131,9 +107,8 @@ Data
   "job_billing": 4500,
   "gpu_type": "raisin_gpu_with_rgu_with_billing",
   "expected": {
-   "gres_rgu": 225.0,
-   "gpu_type_rgu": 2.5,
-   "gpu_billing_found": 50.0
+   "gres_rgu": 11250.0,
+   "gpu_type_rgu": 2.5
   }
  },
  {
@@ -142,9 +117,8 @@ Data
   "job_billing": 400,
   "gpu_type": "A100",
   "expected": {
-   "gres_rgu": 12.84,
-   "gpu_type_rgu": 3.21,
-   "gpu_billing_found": 100.0
+   "gres_rgu": 1284.0,
+   "gpu_type_rgu": 3.21
   }
  },
  {
@@ -154,8 +128,7 @@ Data
   "gpu_type": "raisin_gpu_no_rgu_no_billing",
   "expected": {
    "gres_rgu": NaN,
-   "gpu_type_rgu": NaN,
-   "gpu_billing_found": null
+   "gpu_type_rgu": NaN
   }
  },
  {
@@ -165,8 +138,7 @@ Data
   "gpu_type": "raisin_gpu_no_rgu_with_billing",
   "expected": {
    "gres_rgu": NaN,
-   "gpu_type_rgu": NaN,
-   "gpu_billing_found": 150.0
+   "gpu_type_rgu": NaN
   }
  },
  {
@@ -175,9 +147,8 @@ Data
   "job_billing": 1000,
   "gpu_type": "raisin_gpu_with_rgu_no_billing",
   "expected": {
-   "gres_rgu": NaN,
-   "gpu_type_rgu": 1.5,
-   "gpu_billing_found": null
+   "gres_rgu": 1500.0,
+   "gpu_type_rgu": 1.5
   }
  },
  {
@@ -186,9 +157,8 @@ Data
   "job_billing": 4500,
   "gpu_type": "raisin_gpu_with_rgu_with_billing",
   "expected": {
-   "gres_rgu": 225.0,
-   "gpu_type_rgu": 2.5,
-   "gpu_billing_found": 50.0
+   "gres_rgu": 11250.0,
+   "gpu_type_rgu": 2.5
   }
  },
  {
@@ -197,9 +167,8 @@ Data
   "job_billing": 400,
   "gpu_type": "A100",
   "expected": {
-   "gres_rgu": 12.84,
-   "gpu_type_rgu": 3.21,
-   "gpu_billing_found": 100.0
+   "gres_rgu": 1284.0,
+   "gpu_type_rgu": 3.21
   }
  },
  {
@@ -209,8 +178,7 @@ Data
   "gpu_type": "hyrule_gpu_9",
   "expected": {
    "gres_rgu": NaN,
-   "gpu_type_rgu": NaN,
-   "gpu_billing_found": null
+   "gpu_type_rgu": NaN
   }
  }
 ]

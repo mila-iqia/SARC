@@ -8,7 +8,7 @@ import sqlmodel
 from sqlmodel import Session
 
 from sarc.config import UTC
-from sarc.db.cluster import GPUBillingDB, SlurmClusterDB
+from sarc.db.cluster import SlurmClusterDB
 from sarc.db.job import SlurmJobDB
 from sarc.db.support import GpuRguDB
 from sarc.db.users import UserDB
@@ -17,8 +17,6 @@ from tests.common.dateutils import MTL
 
 cluster_no_gpu_billing = "hyrule"
 cluster_gpu_billing_one_date = "raisin"
-cluster_gpu_billing_many_dates = "patate"
-cluster_gpu_billing_is_gpu = "mila"
 
 
 def _get_rgus(sess: Session) -> dict[str, float]:
@@ -31,7 +29,6 @@ class Expected:
 
     gres_rgu: float
     gpu_type_rgu: float
-    gpu_billing_found: float | None
 
 
 class Row:
@@ -61,7 +58,6 @@ class Row:
                 else {
                     "gres_rgu": self.expected.gres_rgu,
                     "gpu_type_rgu": self.expected.gpu_type_rgu,
-                    "gpu_billing_found": self.expected.gpu_billing_found,
                 }
             ),
         }
@@ -116,12 +112,7 @@ class ExampleData:
         return json.dumps([row.json() for row in self.data], indent=1)
 
     def populate(self, sess) -> None:
-        """Insert this data as SlurmJobDB rows into the given session.
-
-        submit_time is set to row.start_time so that the JobSeriesDB view's
-        billing lookup (which uses submit_time) selects the appropriate
-        GPUBilling for the period each row represents.
-        """
+        """Insert this data as SlurmJobDB rows into the given session."""
         existing_harmonized_names = {
             harmonized_name
             for harmonized_name in sess.exec(sqlmodel.select(GpuRguDB.name))
@@ -165,86 +156,24 @@ class ExampleData:
     def get_expected(self, sess):
         """Compute expected RGU values matching the JobSeriesDB view's rgu_expr.
 
-        Mirrors the three branches of the CASE expression in sarc/db/job_series.py:
-          A. cluster.billing_is_gpu                -> gpu_count_raw * rgu
-          B. cluster has billings but none yet applicable (pre-billing era)
-                                                   -> gpu_count_raw * rgu
-          C. otherwise                             -> (gpu_count_raw / unit_billing) * rgu
-
-        In C, when unit_billing is missing (cluster has no billings at all OR
-        gpu_type missing from the applicable mapping), the result is NaN.
+        rgu = coalesce(requested_gres_gpu, 0) * gpu_type_rgu. Since populate()
+        always sets requested_gres_gpu = row.job_billing, this simplifies to
+        row.job_billing * rgu(gpu_type). rgu(gpu_type) is NaN when the GPU
+        type has no matching GpuRguDB row.
         """
-        cluster_by_name = {
-            c.name: c for c in sess.exec(sqlmodel.select(SlurmClusterDB)).all()
-        }
-
         expected_rgu = []
         expected_gpu_type_rgu = []
+        rgus = _get_rgus(sess)
 
         for row in self.data:
-            cluster = cluster_by_name[row.cluster_name]
-            cluster_billing_count = sess.exec(
-                sqlmodel.select(sqlmodel.func.count(GPUBillingDB.id)).where(
-                    GPUBillingDB.cluster_id == cluster.id
-                )
-            ).one()
-            # Most recent billing applicable to this row's start_time, if any.
-            billing = sess.exec(
-                sqlmodel.select(GPUBillingDB)
-                .where(GPUBillingDB.cluster_id == cluster.id)
-                .where(GPUBillingDB.since <= row.start_time.astimezone(UTC))
-                .order_by(sqlmodel.col(GPUBillingDB.since).desc())
-                .limit(1)
-            ).first()
+            rgu = rgus.get(row.gpu_type, math.nan)
+            rgu_value = row.job_billing * rgu
 
-            rgu = _get_rgus(sess).get(row.gpu_type, math.nan)
-            # gpu_count_raw = max(allocated_billing, requested_gres_gpu); here both
-            # are set to row.job_billing, so it simplifies.
-            gpu_count_raw = row.job_billing
-
-            gpu_billing_found = None
-            if cluster.billing_is_gpu:
-                rgu_value = gpu_count_raw * rgu
-            elif cluster_billing_count == 0:
-                # No billing found on cluster
-                # Since billing_is_gpu is False, we can't tell if
-                # either we are in pre-billing era, or billing is missing.
-                # Generate a NaN as alert.
-                rgu_value = math.nan
-            elif billing is None:
-                # Pre-billing era: cluster has billings but none applicable yet.
-                rgu_value = gpu_count_raw * rgu
-            elif row.gpu_type not in billing.gpu_to_billing:
-                # gpu_type missing from mapping -> NaN.
-                rgu_value = math.nan
-            else:
-                unit_billing = billing.gpu_to_billing[row.gpu_type]
-                rgu_value = (gpu_count_raw / unit_billing) * rgu
-                gpu_billing_found = unit_billing
-
-            row.expected = Expected(
-                gres_rgu=rgu_value,
-                gpu_type_rgu=rgu,
-                gpu_billing_found=gpu_billing_found,
-            )
+            row.expected = Expected(gres_rgu=rgu_value, gpu_type_rgu=rgu)
             expected_rgu.append(rgu_value)
             expected_gpu_type_rgu.append(rgu)
 
         return expected_rgu, expected_gpu_type_rgu
-
-
-def _billings_dump(sess, cluster_names) -> dict:
-    """Serialize the GPUBillings of the named clusters for file regression output."""
-    return {
-        cluster_name: [
-            {
-                "since": billing.since.astimezone(MTL).strftime("%Y-%m-%d"),
-                "gpu_to_billing": billing.gpu_to_billing,
-            }
-            for billing in SlurmClusterDB.by_name(sess, cluster_name).gpu_billing
-        ]
-        for cluster_name in cluster_names
-    }
 
 
 def _series_equals(actual, expected):

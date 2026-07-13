@@ -330,6 +330,14 @@ def dash_db(read_write_db):
     sess.add(GpuRguDB(name=_GPU, rgu=10.0, drac_rgu=_DRAC_RGU))
     sess.flush()
 
+    # The factory seeds one job with a harmonized, RGU-computable GPU type;
+    # detach it so the value tests below cover exactly the enriched jobs.
+    for job in sess.exec(
+        select(SlurmJobDB).where(col(SlurmJobDB.harmonized_gpu_type).is_not(None))
+    ).all():
+        job.harmonized_gpu_type = None
+        sess.add(job)
+
     jobs = sess.exec(
         select(SlurmJobDB)
         .where(col(SlurmJobDB.elapsed_time) == _BASE_ELAPSED)

@@ -68,7 +68,13 @@ class JobSeries:
     # User ID
     sarc_user_id: int
 
-    # Cost / waste (computed by the JobSeriesDB view)
+    # Cost / waste (computed by the JobSeriesDB view). cpu_* are CPU-seconds;
+    # gpu_cost/gpu_waste are RGU-seconds from the raw requested GPU count,
+    # gpu_equivalent_* and gpu_overbilling_cost RGU-seconds from the raw
+    # allocated GPU count — count-based cost, not billing cost. rgu/
+    # physical_rgu below (see sarc/db/job_series.py) are the equivalent per-job,
+    # non-time-integrated RGU-count metrics: rgu from the (coalesced) requested
+    # GPU count, physical_rgu from the (coalesced) allocated count.
     cpu_cost: float | None
     cpu_waste: float | None
     cpu_equivalent_cost: float | None
