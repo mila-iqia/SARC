@@ -38,7 +38,26 @@ def _scope(req: Requestor) -> int | Literal["admin"]:
     return req.user.id
 
 
-router = APIRouter(prefix="/dash", dependencies=[Depends(requestor)])
+async def _dash_login_redirect(request: Request) -> None:
+    """Router-level gate for ``/dash``: redirect unauthenticated requests to the
+    OAuth login page instead of returning the API's 401. ``ensure_email`` raises
+    a 307 to the ``/login`` route (recording the target URL in the session, so
+    the user lands back on the dashboard after logging in) when anonymous, and
+    returns the email (unused here — ``requestor`` re-derives it) otherwise.
+
+    Registered *before* ``requestor`` in the router dependencies (FastAPI
+    resolves them in order), so an anonymous request redirects here before the
+    capability check in ``requestor`` runs; authenticated ones fall through to
+    it. No-op when auth is disabled."""
+    auth = config.server.auth
+    if auth is None:
+        return
+    await auth.ensure_email(request)
+
+
+router = APIRouter(
+    prefix="/dash", dependencies=[Depends(_dash_login_redirect), Depends(requestor)]
+)
 
 
 def session_dep() -> Generator[Session]:
