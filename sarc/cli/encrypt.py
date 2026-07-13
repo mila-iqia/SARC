@@ -15,7 +15,7 @@ class File:
     path: Path
 
     def execute(self) -> int:
-        ek = EncryptionKey(password=os.environ.get("SERIEUX_PASSWORD", None))  # ty:ignore[unknown-argument]
+        ek = EncryptionKey(os.environ.get("SERIEUX_PASSWORD", None))
         content = self.path.read_text()
         if content.startswith(crypt_prefix):
             logger.error("File is already encrypted (or looks like it is)")
@@ -31,7 +31,7 @@ class Append:
     value: str
 
     def execute(self) -> int:
-        ek = EncryptionKey(password=os.environ.get("SERIEUX_PASSWORD", None))  # ty:ignore[unknown-argument]
+        ek = EncryptionKey(os.environ.get("SERIEUX_PASSWORD", None))
         val = ek.decrypt(self.path.read_text())
         val[self.key] = self.value
         self.path.write_text(ek.encrypt(val))
