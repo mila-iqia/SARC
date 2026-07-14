@@ -471,7 +471,7 @@ _EXTRA_FIELDS = {
     "sarc_user": {"display_name", "member_type", "email"},
     "supervisors": {"supervisors"},
     "statistics": {"statistics"},
-    "rgu": {"gpu_type_rgu", "rgu"},
+    "rgu": {"gpu_type_rgu", "requested_rgu"},
 }
 
 _SERIES_OPTIONAL_COLS = reduce(operator.or_, _EXTRA_FIELDS.values())

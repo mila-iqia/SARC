@@ -189,5 +189,5 @@ def _series_equals(actual, expected):
 def _check_rgu_columns(frame: pandas.DataFrame, data: ExampleData, sess):
     """Assert frame's rgu / gpu_type_rgu match expectations."""
     expected_rgu, expected_gpu_type_rgu = data.get_expected(sess)
-    _series_equals(frame["rgu"].tolist(), expected_rgu)
+    _series_equals(frame["requested_rgu"].tolist(), expected_rgu)
     _series_equals(frame["gpu_type_rgu"].tolist(), expected_gpu_type_rgu)

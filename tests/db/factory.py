@@ -402,7 +402,7 @@ def create_jobs(
         },
         requested={"billing": 2, "cpu": 12, "gres_gpu": 1, "mem": 59152, "node": 1},
         # Harmonized name known to GpuRguDB so this job has a computable RGU
-        # (and hence non-NULL RGU-based gpu_cost/gpu_waste).
+        # (and hence non-NULL RGU-based requested_gpu_cost/requested_gpu_waste).
         harmonized_gpu_type="A100-SXM4-80GB",
     )
 
@@ -462,7 +462,7 @@ def create_gpu_billings(clusters: list[SlurmClusterDB]) -> list[GPUBillingDB]:
                 "raisin_gpu_with_rgu_with_billing": 50,
                 "A100": 100,
                 # Billing for the harmonized A100 job in base_store, so its
-                # RGU (and RGU-based gpu_cost/gpu_waste) is computable.
+                # RGU (and RGU-based requested_gpu_cost/requested_gpu_waste) is computable.
                 "A100-SXM4-80GB": 100,
             },
         ),

@@ -69,21 +69,22 @@ class JobSeries:
     sarc_user_id: int
 
     # Cost / waste (computed by the JobSeriesDB view). cpu_* are CPU-seconds;
-    # gpu_cost/gpu_waste are RGU-seconds from the raw requested GPU count,
-    # gpu_equivalent_* and gpu_overbilling_cost RGU-seconds from the raw
-    # allocated GPU count — count-based cost, not billing cost. rgu/
-    # physical_rgu below (see sarc/db/job_series.py) are the equivalent per-job,
-    # non-time-integrated RGU-count metrics: rgu from the (coalesced) requested
-    # GPU count, physical_rgu from the (coalesced) allocated count.
-    cpu_cost: float | None
-    cpu_waste: float | None
-    cpu_equivalent_cost: float | None
-    cpu_equivalent_waste: float | None
+    # requested_gpu_cost/requested_gpu_waste are RGU-seconds from the raw
+    # requested GPU count, allocated_gpu_* and gpu_overbilling_cost RGU-seconds
+    # from the raw allocated GPU count — count-based cost, not billing cost.
+    # requested_rgu/allocated_rgu below (see sarc/db/job_series.py) are the
+    # equivalent per-job, non-time-integrated RGU-count metrics: requested_rgu
+    # from the (coalesced) requested GPU count, allocated_rgu from the
+    # (coalesced) allocated count.
+    requested_cpu_cost: float | None
+    requested_cpu_waste: float | None
+    allocated_cpu_cost: float | None
+    allocated_cpu_waste: float | None
     cpu_overbilling_cost: float | None
-    gpu_cost: float | None
-    gpu_waste: float | None
-    gpu_equivalent_cost: float | None
-    gpu_equivalent_waste: float | None
+    requested_gpu_cost: float | None
+    requested_gpu_waste: float | None
+    allocated_gpu_cost: float | None
+    allocated_gpu_waste: float | None
     gpu_overbilling_cost: float | None
 
     # Optional extra fields
@@ -91,10 +92,10 @@ class JobSeries:
     statistics: dict[str, dict[str, float]] | None = None
     gpu_type_rgu: float | None = None
     gpu_type_rgu_drac: float | None = None
-    rgu: float | None = None
-    rgu_drac: float | None = None
-    physical_rgu: float | None = None
-    physical_rgu_drac: float | None = None
+    requested_rgu: float | None = None
+    requested_rgu_drac: float | None = None
+    allocated_rgu: float | None = None
+    allocated_rgu_drac: float | None = None
     display_name: str | None = None
     email: str | None = None
     member_type: MemberType | None = None

@@ -367,7 +367,7 @@ def test_get_series_default_extra_fields_are_none(seriesq):
     assert series.supervisors is None
     assert series.statistics is None
     assert series.gpu_type_rgu is None
-    assert series.rgu is None
+    assert series.requested_rgu is None
 
 
 @pytest.mark.usefixtures("read_only_db")
@@ -408,9 +408,9 @@ def test_get_series_extra_sarc_user(seriesq):
 # @pytest.mark.usefixtures("read_only_db")
 # def test_get_series_extra_rgu(seriesq):
 #     (series,) = seriesq(cluster_user="beaubonhomme", extra_fields="rgu")
-#     # beaubonhomme's job has no allocated GPU type → gpu_type_rgu and rgu are None
+#     # beaubonhomme's job has no allocated GPU type → gpu_type_rgu and requested_rgu are None
 #     assert series.gpu_type_rgu is None
-#     assert series.rgu is None
+#     assert series.requested_rgu is None
 
 
 @pytest.mark.usefixtures("read_only_db")
