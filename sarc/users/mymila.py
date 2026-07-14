@@ -143,7 +143,10 @@ class MyMilaScraper(UserScraper[MyMilaConfig]):
         headers[-1] = "MEMBER_NUM"
         assert headers == [h.name for h in Headers]
         for record in records:
-            if record[Headers.MEMBER_NUM] in Invalid_MEMBER_NUM:
+            if (
+                record[Headers.MILA_Email] is None
+                or record[Headers.MEMBER_NUM] in Invalid_MEMBER_NUM
+            ):
                 continue
             first_name = record[Headers.Preferred_First_Name]
             if first_name is None:
