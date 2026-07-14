@@ -20,6 +20,23 @@
     .conn-email { font-size: 0.9em; }
     .conn-email.admin { color: #c0392b; }
     .conn-email.user { color: #888; }
+    .view-as-badge, .view-as-ctrl {
+      font-size: 0.75em; font-weight: 400; color: #555; margin-left: 10px;
+      display: inline-flex; align-items: center; gap: 6px; vertical-align: middle;
+    }
+    .view-as-badge strong { color: #1a6fd4; }
+    .view-as-clear {
+      padding: 2px 8px; font-size: 0.95em; background: #888;
+    }
+    .view-as-clear:hover { background: #666; }
+    .view-as-ctrl input {
+      padding: 3px 6px; font-size: 0.95em; width: 200px;
+      border: 1px solid #ccc; border-radius: 4px;
+    }
+    .view-as-ctrl button {
+      padding: 3px 10px; font-size: 0.95em;
+    }
+    .view-as-error { color: #c0392b; font-weight: 600; }
     .controls {
       display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: flex-end;
       margin-bottom: 12px; padding: 10px 12px; background: #f5f5f5; border-radius: 8px;
@@ -235,7 +252,27 @@
   </style>
 </head>
 <body>
-  <h3>Global Job Metrics <span class="conn-email {{ 'admin' if is_admin else 'user' }}">({{ user_email }})</span></h3>
+  <h3>
+    Global Job Metrics
+    <span class="conn-email {{ 'admin' if admin_email else 'user' }}">({{ user_email }})</span>
+    {% if admin_email and view_as_email %}
+    <span class="view-as-badge">/ as user <strong>{{ view_as_email }}</strong>
+      <button type="button" class="view-as-clear" onclick="clearViewAsUser()">clear</button>
+    </span>
+    {% elif admin_email %}
+    <span class="view-as-ctrl">
+      <input type="text" id="view-as-input" placeholder="user email"
+             title="Preview the dashboard exactly as this user (mila_ldap email) would see it. Reloads the page."
+             autocomplete="off" data-lpignore="true" data-form-type="other"
+             {% if view_as_error %}value="{{ view_as_error }}"{% endif %}
+             onkeydown="if(event.key==='Enter'){event.preventDefault(); viewAsUser();}" />
+      <button type="button" onclick="viewAsUser()">View as user</button>
+      {% if view_as_error %}
+      <span class="view-as-error">Unknown user "{{ view_as_error }}"</span>
+      {% endif %}
+    </span>
+    {% endif %}
+  </h3>
   <div class="controls">
     <div class="ctrl">
       <label for="start">Start</label>
@@ -325,6 +362,34 @@
     // ── Persistent state (localStorage) ─────────────────────────────────────
     // Schema version: bump when the saved structure changes incompatibly.
     const STORAGE_KEY = {{ storage_key | tojson }};
+
+    // Admin "view as user" preview. VIEW_AS_EMAIL, when set, is appended to
+    // every /dash/metrics/* call below (see withAsUser) so the backend scopes
+    // data to that user — same as if they were the connected user — while
+    // is_admin (server-rendered) is False for the rest of this page, hiding
+    // every admin-only control exactly like a real non-admin session.
+    const VIEW_AS_EMAIL = {{ view_as_email | tojson }};
+
+    function withAsUser(params) {
+      return VIEW_AS_EMAIL ? { ...params, as_user: VIEW_AS_EMAIL } : params;
+    }
+
+    // Reloads the page scoped to the typed user's email (admin-only; enforced
+    // server-side too). A full reload, not a client-side toggle, because
+    // is_admin drives which controls Jinja renders in the first place.
+    function viewAsUser() {
+      const email = document.getElementById('view-as-input').value.trim();
+      if (!email) return;
+      const url = new URL(window.location.href);
+      url.searchParams.set('as_user', email);
+      window.location.href = url.toString();
+    }
+
+    function clearViewAsUser() {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('as_user');
+      window.location.href = url.toString();
+    }
 
     function loadSavedState() {
       try {
@@ -2126,9 +2191,9 @@
         ...(p.focus_start ? { focus_start: p.focus_start } : {}),
         ...(p.focus_end   ? { focus_end:   p.focus_end   } : {}),
       };
-      return '/dash/metrics/jobs?' + new URLSearchParams({
+      return '/dash/metrics/jobs?' + new URLSearchParams(withAsUser({
         ...base, metric: p.metric, ...focusParams,
-        offset, limit, sort_by: sortBy, sort_dir: sortDir });
+        offset, limit, sort_by: sortBy, sort_dir: sortDir }));
     }
 
     // /metric_comparison URL for the metric-heatmap tile. Separate from
@@ -2139,19 +2204,19 @@
         ...(p.focus_start ? { focus_start: p.focus_start } : {}),
         ...(p.focus_end   ? { focus_end:   p.focus_end   } : {}),
       };
-      return withClustersAndStates('/dash/metrics/metric_comparison?' + new URLSearchParams({
+      return withClustersAndStates('/dash/metrics/metric_comparison?' + new URLSearchParams(withAsUser({
         start: p.start, end: p.end, metric: p.metric, metric2,
         {% if is_admin %}
         ...(p.cluster_user ? { cluster_user: p.cluster_user } : {}),
         {% endif %}
-        ...focusParams }), p);
+        ...focusParams })), p);
     }
 
     function endpointURLBase(ep, p) {
       {% if is_admin %}
-      const base = { start: p.start, end: p.end, ...(p.cluster_user ? { cluster_user: p.cluster_user } : {}) };
+      const base = withAsUser({ start: p.start, end: p.end, ...(p.cluster_user ? { cluster_user: p.cluster_user } : {}) });
       {% else %}
-      const base = { start: p.start, end: p.end };
+      const base = withAsUser({ start: p.start, end: p.end });
       {% endif %}
       const focusParams = {
         ...(p.focus_start ? { focus_start: p.focus_start } : {}),
@@ -2165,10 +2230,10 @@
         case 'density':   return '/dash/metrics/metric_distribution?' + new URLSearchParams({ ...densityParams, ...focusParams });
         case 'jobs':      return jobsURL(p, JOBTABLE_DEFAULTS);
         {% if is_admin %}
-        case 'user_rgu':  return '/dash/metrics/rgu_by_user?' + new URLSearchParams({ start: p.start, end: p.end, metric: p.metric, ...focusParams });
-        case 'rgu_by_cluster': return '/dash/metrics/rgu_by_cluster?' + new URLSearchParams({ start: p.start, end: p.end, period: p.period, ...(p.cluster_user ? { cluster_user: p.cluster_user } : {}) });
+        case 'user_rgu':  return '/dash/metrics/rgu_by_user?' + new URLSearchParams(withAsUser({ start: p.start, end: p.end, metric: p.metric, ...focusParams }));
+        case 'rgu_by_cluster': return '/dash/metrics/rgu_by_cluster?' + new URLSearchParams(withAsUser({ start: p.start, end: p.end, period: p.period, ...(p.cluster_user ? { cluster_user: p.cluster_user } : {}) }));
         {% else %}
-        case 'rgu_by_cluster': return '/dash/metrics/rgu_by_cluster?' + new URLSearchParams({ start: p.start, end: p.end, period: p.period });
+        case 'rgu_by_cluster': return '/dash/metrics/rgu_by_cluster?' + new URLSearchParams(withAsUser({ start: p.start, end: p.end, period: p.period }));
         {% endif %}
         case 'metric_trend': return '/dash/metrics/metric_trend?' + new URLSearchParams({ ...base, period: p.period, metric: p.metric });
       }
