@@ -1,12 +1,11 @@
 from datetime import datetime
 
-from sqlalchemy import true
 from sqlalchemy.dialects.postgresql import JSONB, aggregate_order_by
-from sqlmodel import BIGINT, FLOAT, JSON, Field, and_, case, col, desc, func, select
+from sqlmodel import BIGINT, JSON, Field, and_, col, func, select
 
 from sarc.models.user import MemberType
 
-from .cluster import GPUBillingDB, SlurmClusterDB
+from .cluster import SlurmClusterDB
 from .job import JobStatisticDB, SlurmJobDB, SlurmState
 from .sqlmodel import SQLModel
 from .support import GpuRguDB
@@ -57,70 +56,63 @@ supervisors_subq = (
 ).label("supervisors")
 
 #### RGU
-base_gres_gpu = func.coalesce(SlurmJobDB.requested_gres_gpu, 0)
-base_billing = func.coalesce(SlurmJobDB.allocated_billing, 0)
-gpu_count_raw = case(
-    (base_gres_gpu > 0, func.greatest(base_billing, base_gres_gpu)), else_=base_gres_gpu
-)
-billing_subq = (
-    select(GPUBillingDB.gpu_to_billing)
-    .where(GPUBillingDB.cluster_id == SlurmJobDB.cluster_id)
-    .where(GPUBillingDB.since <= SlurmJobDB.submit_time)
-    .order_by(desc(GPUBillingDB.since))
-    .limit(1)
-    .correlate(SlurmJobDB)
-    .lateral()
-)
-gpu_unit_billing = func.cast(
-    billing_subq.c.gpu_to_billing.op("->>")(SlurmJobDB.harmonized_gpu_type), FLOAT
-)
-cluster_billing_count = (
-    select(func.count(col(GPUBillingDB.id)))
-    .where(GPUBillingDB.cluster_id == SlurmClusterDB.id)
-    .scalar_subquery()
-)
-gpu_count_normalized_expr = case(
-    # A: billing_is_gpu -> multiply.
-    (col(SlurmClusterDB.billing_is_gpu) == True, gpu_count_raw),  # noqa: E712
-    # B: pre-billing era (cluster has billings but none applicable yet) -> multiply.
-    (
-        and_(col(billing_subq.c.gpu_to_billing).is_(None), cluster_billing_count > 0),
-        gpu_count_raw,
-    ),
-    # C: scale by per-type billing. NULL division yields NULL (NaN) when
-    # gpu_unit_billing is missing (cluster has no billing record at all, or
-    # gpu_type missing from the mapping).
-    else_=(gpu_count_raw / gpu_unit_billing),
+# requested_rgu/requested_rgu_drac and allocated_rgu/allocated_rgu_drac are
+# per-job RGU-count metrics (GPU count x RGU weight, not time-integrated):
+# requested_rgu/requested_rgu_drac from the requested GPU count,
+# allocated_rgu/allocated_rgu_drac from the allocated GPU count. Both coalesce a
+# missing GPU count to 0 (non-GPU jobs get RGU 0).
+requested_gres_gpu = func.coalesce(SlurmJobDB.requested_gres_gpu, 0)
+requested_rgu_expr = (requested_gres_gpu * GpuRguDB.rgu).label("requested_rgu")
+requested_rgu_drac_expr = (requested_gres_gpu * GpuRguDB.drac_rgu).label(
+    "requested_rgu_drac"
 )
 
-rgu_expr = (gpu_count_normalized_expr * GpuRguDB.rgu).label("rgu")
-rgu_drac_expr = (gpu_count_normalized_expr * GpuRguDB.drac_rgu).label("rgu_drac")
+allocated_gres_gpu = func.coalesce(SlurmJobDB.allocated_gres_gpu, 0)
+allocated_rgu_expr = (allocated_gres_gpu * GpuRguDB.rgu).label("allocated_rgu")
+allocated_rgu_drac_expr = (allocated_gres_gpu * GpuRguDB.drac_rgu).label(
+    "allocated_rgu_drac"
+)
 
-# Cost and waste
-cpu_cost = col(SlurmJobDB.elapsed_time) * col(SlurmJobDB.requested_cpu)
+# Cost and waste. CPU costs are in CPU-seconds; GPU cost/waste/overbilling are
+# in RGU-seconds, using the raw (not coalesced) requested/allocated GPU counts —
+# requested_gpu_cost and requested_gpu_waste are count-based cost metrics, not
+# billing cost. requested_gres_gpu for requested_gpu_cost, allocated_gres_gpu
+# for allocated_gpu_cost and gpu_overbilling_cost — all NULL when the job's RGU
+# is not computable, and also NULL (not 0) when the underlying GPU count itself
+# is NULL (unlike requested_rgu/allocated_rgu above, which coalesce to 0).
 cpu_utilization = (
     select(JobStatisticDB.mean)
     .where(JobStatisticDB.job_id == SlurmJobDB.id)
     .where(JobStatisticDB.name == "cpu_utilization")
     .scalar_subquery()
 )
-cpu_equivalent_cost = col(SlurmJobDB.elapsed_time) * col(SlurmJobDB.allocated_cpu)
+requested_cpu_cost = col(SlurmJobDB.elapsed_time) * col(SlurmJobDB.requested_cpu)
+allocated_cpu_cost = col(SlurmJobDB.elapsed_time) * col(SlurmJobDB.allocated_cpu)
 cpu_overbilling_cost = (
     SlurmJobDB.elapsed_time
     * (col(SlurmJobDB.allocated_cpu) - col(SlurmJobDB.requested_cpu))
 ).label("cpu_overbilling_cost")
 
-gpu_cost = col(SlurmJobDB.elapsed_time) * col(SlurmJobDB.requested_gres_gpu)
-gpu_utilization = (
+gpu_sm_occupancy = (
     select(JobStatisticDB.mean)
     .where(JobStatisticDB.job_id == SlurmJobDB.id)
-    .where(JobStatisticDB.name == "gpu_utilization")
+    .where(JobStatisticDB.name == "gpu_sm_occupancy")
     .scalar_subquery()
 )
-gpu_equivalent_cost = col(SlurmJobDB.elapsed_time) * col(SlurmJobDB.allocated_gres_gpu)
+requested_gpu_cost = (
+    col(SlurmJobDB.elapsed_time)
+    * col(SlurmJobDB.requested_gres_gpu)
+    * GpuRguDB.drac_rgu
+)
+allocated_gpu_cost = (
+    col(SlurmJobDB.elapsed_time)
+    * col(SlurmJobDB.allocated_gres_gpu)
+    * GpuRguDB.drac_rgu
+)
 gpu_overbilling_cost = (
     SlurmJobDB.elapsed_time
     * (col(SlurmJobDB.allocated_gres_gpu) - col(SlurmJobDB.requested_gres_gpu))
+    * GpuRguDB.drac_rgu
 ).label("gpu_overbilling_cost")
 
 JOB_SERIES_EXCLUDED_JOB_COLS = frozenset(
@@ -146,17 +138,19 @@ class JobSeriesDB(SQLModel, table=True):
             supervisors_subq,
             col(GpuRguDB.rgu).label("gpu_type_rgu"),
             col(GpuRguDB.drac_rgu).label("gpu_type_rgu_drac"),
-            rgu_expr,
-            rgu_drac_expr,
-            cpu_cost.label("cpu_cost"),
-            ((1 - cpu_utilization) * cpu_cost).label("cpu_waste"),
-            cpu_equivalent_cost.label("cpu_equivalent_cost"),
-            ((1 - cpu_utilization) * cpu_equivalent_cost).label("cpu_equivalent_waste"),
+            requested_rgu_expr,
+            requested_rgu_drac_expr,
+            allocated_rgu_expr,
+            allocated_rgu_drac_expr,
+            requested_cpu_cost.label("requested_cpu_cost"),
+            ((1 - cpu_utilization) * requested_cpu_cost).label("requested_cpu_waste"),
+            allocated_cpu_cost.label("allocated_cpu_cost"),
+            ((1 - cpu_utilization) * allocated_cpu_cost).label("allocated_cpu_waste"),
             cpu_overbilling_cost,
-            gpu_cost.label("gpu_cost"),
-            ((1 - gpu_utilization) * gpu_cost).label("gpu_waste"),
-            gpu_equivalent_cost.label("gpu_equivalent_cost"),
-            ((1 - gpu_utilization) * gpu_equivalent_cost).label("gpu_equivalent_waste"),
+            requested_gpu_cost.label("requested_gpu_cost"),
+            ((1 - gpu_sm_occupancy) * requested_gpu_cost).label("requested_gpu_waste"),
+            allocated_gpu_cost.label("allocated_gpu_cost"),
+            ((1 - gpu_sm_occupancy) * allocated_gpu_cost).label("allocated_gpu_waste"),
             gpu_overbilling_cost,
         )  # ty:ignore[no-matching-overload]
         .join(UserDB, SlurmJobDB.sarc_user_id == UserDB.id)
@@ -170,7 +164,6 @@ class JobSeriesDB(SQLModel, table=True):
             isouter=True,
         )
         .join(GpuRguDB, GpuRguDB.name == SlurmJobDB.harmonized_gpu_type, isouter=True)
-        .outerjoin(billing_subq, true())
     )
     job_db_id: int = Field(primary_key=True)
     # job identification
@@ -234,18 +227,20 @@ class JobSeriesDB(SQLModel, table=True):
 
     gpu_type_rgu: float | None
     gpu_type_rgu_drac: float | None
-    rgu: float | None
-    rgu_drac: float | None
+    requested_rgu: float | None
+    requested_rgu_drac: float | None
+    allocated_rgu: float | None  # RGU computed using gres_gpu
+    allocated_rgu_drac: float | None  # RGU computed using gres_gpu and DRAC RGU values
 
-    cpu_cost: float | None
-    cpu_waste: float | None
-    cpu_equivalent_cost: float | None
-    cpu_equivalent_waste: float | None
+    requested_cpu_cost: float | None
+    requested_cpu_waste: float | None
+    allocated_cpu_cost: float | None
+    allocated_cpu_waste: float | None
     cpu_overbilling_cost: float | None
-    gpu_cost: float | None
-    gpu_waste: float | None
-    gpu_equivalent_cost: float | None
-    gpu_equivalent_waste: float | None
+    requested_gpu_cost: float | None
+    requested_gpu_waste: float | None
+    allocated_gpu_cost: float | None
+    allocated_gpu_waste: float | None
     gpu_overbilling_cost: float | None
 
     # User ID

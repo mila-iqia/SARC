@@ -168,10 +168,6 @@ sarc:
     name: "!OVERRIDE!"
   mymila:
     tmp_json_path: secrets/tmp_mymila.json
-  loki:
-    uri: "https://localhost/loki"
-  tempo:
-    uri: "https://localhost/tempo"
   server:
     auth:
       client_id: "mock_client_id"

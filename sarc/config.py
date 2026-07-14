@@ -69,7 +69,8 @@ class ClusterConfig:
     password: OTPInfo | StaticInfo | None = None
     timezone: zoneinfo.ZoneInfo | None = None
     prometheus_url: str | None = None
-    prometheus_headers: dict[str, Secret[str]] | str = field(default_factory=dict)
+    prometheus_headers: dict[str, Secret[str]] = field(default_factory=dict)
+    prometheus_check_ssl: bool = True
     name: str | None = None
     sacct_bin: str = "sacct"
     ignore_tz_utc: bool = False
@@ -170,7 +171,9 @@ class ClusterConfig:
             config=fconfig,
             connect_kwargs={
                 "pkey": PKey.from_path(
-                    self.private_key.file, self.private_key.password.encode("ascii")
+                    # PKey.from_path has the wrong type annotation, the password must be bytes if provided directly
+                    self.private_key.file,
+                    self.private_key.password.encode("ascii"),  # ty:ignore[invalid-argument-type]
                 ),
                 **extra_args,
             },
@@ -184,21 +187,12 @@ class ClusterConfig:
             raise ConfigurationError(
                 f"No prometheus config provided for cluster '{self.name}'"
             )
-        headers = {}
-        if isinstance(self.prometheus_headers, str):
-            assert self.prometheus_headers == "gcp"
-            import google.auth
-            import google.auth.transport.requests
 
-            credentials, _ = google.auth.default(
-                scopes=["https://www.googleapis.com/auth/monitoring.read"]
-            )
-            auth_request = google.auth.transport.requests.Request()
-            credentials.refresh(auth_request)
-            headers["Authorization"] = f"Bearer {credentials.token}"
-        elif isinstance(self.prometheus_headers, dict):
-            headers = self.prometheus_headers
-        return PrometheusConnect(url=self.prometheus_url, headers=headers)
+        return PrometheusConnect(
+            url=self.prometheus_url,
+            headers=self.prometheus_headers,
+            disable_ssl=not self.prometheus_check_ssl,
+        )
 
 
 def get_db_user() -> str:
@@ -216,6 +210,7 @@ class DbConfig:
     host: str
     name: str
     user: str | None = None
+    port: int | None = None
 
     @cached_property
     def engine(self) -> Engine:
@@ -223,6 +218,10 @@ class DbConfig:
         from sqlmodel import create_engine
 
         if ":" in self.host:
+            # NB: `port` is not used here, since Google Cloud connector
+            # explicitly drops the port argument and uses its own parameters:
+            # https://github.com/GoogleCloudPlatform/cloud-sql-python-connector/blob/v1.20.3/google/cloud/sql/connector/connector.py#L376
+
             import google.auth
             import google.auth.transport.requests
             from google.cloud.sql.connector import Connector, IPTypes
@@ -250,24 +249,17 @@ class DbConfig:
             db_user = self.user
             if db_user is None:
                 db_user = get_db_user()
+            hostname = self.host
+            if self.port is not None:
+                hostname = f"{hostname}:{self.port}"
             engine = create_engine(
-                f"postgresql+pg8000://{db_user}@{self.host}/{self.name}"
+                f"postgresql+pg8000://{db_user}@{hostname}/{self.name}"
             )
 
         return engine
 
     def session(self) -> Session:
         return Session(self.engine)
-
-
-@dataclass
-class LokiConfig:
-    uri: str
-
-
-@dataclass
-class TempoConfig:
-    uri: str
 
 
 @dataclass
@@ -382,8 +374,6 @@ class Config:
     patches: Path
     server: ServerConfig = field(default_factory=ServerConfig)
     cache: Path | None = None
-    loki: LokiConfig | None = None
-    tempo: TempoConfig | None = None
     health_monitor: HealthMonitorConfig | None = None
     users: UserScrapingConfig | None = None
     clusters: dict[str, ClusterConfig] = field(default_factory=dict)

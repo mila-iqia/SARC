@@ -1,0 +1,2297 @@
+{#
+  Jinja2 template — rendered by metrics_homepage() in metrics.py; NOT a static
+  file. Keep the .html extension: Starlette uses select_autoescape, so HTML
+  auto-escaping is ON for .html but OFF for .j2 / .html.j2 (renaming would
+  expose user_email to XSS). Jinja variable / block / comment tags are all
+  interpreted here; write a literal double brace as {{ '{{' }}.
+-#}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Global Job Metrics ({{ user_email }})</title>
+  <script src="https://cdn.plot.ly/plotly-3.6.0.min.js"
+          integrity="sha384-VJGrWzhaqeZH5V40n11N6iTMH+MBDakZZjfPZAPtqS/BCEnF102uwlswiJq07HmW"
+          crossorigin="anonymous"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; margin: 32px; color: #222; }
+    h1, h3 { margin: 0 0 12px; }
+    .conn-email { font-size: 0.9em; }
+    .conn-email.admin { color: #c0392b; }
+    .conn-email.user { color: #888; }
+    .controls {
+      display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: flex-end;
+      margin-bottom: 12px; padding: 10px 12px; background: #f5f5f5; border-radius: 8px;
+    }
+    .ctrl { display: flex; flex-direction: column; gap: 2px; }
+    label { font-size: 12px; font-weight: 600; color: #555; }
+    input[type="date"], input[type="number"], input[type="text"], select {
+      padding: 4px 8px; font-size: 13px;
+      border: 1px solid #ccc; border-radius: 4px; background: #fff;
+    }
+    input[type="number"] { width: 90px; }
+    input[type="text"]   { width: 120px; }
+    button {
+      padding: 6px 16px; font-size: 13px; font-weight: 600;
+      background: #1a6fd4; color: #fff; border: none; border-radius: 4px; cursor: pointer;
+    }
+    button:hover { background: #155cb5; }
+    #focus-label {
+      flex-basis: 100%; display: flex; align-items: center; gap: 8px;
+      font-size: 12px; font-weight: 600; color: #555; min-height: 20px;
+    }
+    #focus-label.no-focus { color: #999; font-weight: 400; }
+    #clear-focus { padding: 3px 10px; font-size: 12px; background: #c00; }
+    #clear-focus:hover { background: #a00; }
+    #status { font-size: 12px; color: #888; margin-bottom: 8px; min-height: 16px; }
+
+    /* Tile grid */
+    #tile-grid { display: flex; flex-direction: column; gap: 20px; }
+    .tile-row   { display: flex; gap: 12px; align-items: flex-start; }
+    .tile       { flex: 1; min-width: 0; }
+    .tile-header {
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 13px; font-weight: 600; color: #555; padding: 2px 0 6px;
+    }
+    .tile-chart  { width: 100%; height: 480px; }
+    .tile-loading, .tile-error {
+      display: flex; align-items: center; justify-content: center;
+      width: 100%; height: 100%; font-size: 14px;
+    }
+    .tile-loading { color: #888; }
+    .tile-error   { color: #c00; }
+    .tile-remove {
+      background: none; border: none; cursor: pointer; color: #bbb;
+      font-size: 18px; padding: 0 2px; line-height: 1; font-weight: 400;
+    }
+    .tile-remove:hover { color: #c00; background: none; }
+    .tile-add-col {
+      flex-shrink: 0; display: flex; align-items: flex-start; padding-top: 28px;
+    }
+    .add-tile-btn {
+      width: 26px; height: 26px; border-radius: 50%; padding: 0;
+      font-size: 17px; font-weight: 300; line-height: 1;
+      background: #eee; color: #555; border: 1px solid #ccc;
+    }
+    .add-tile-btn:hover { background: #dde6f5; color: #1a6fd4; border-color: #1a6fd4; }
+    .plot-picker {
+      position: absolute; z-index: 9999; background: #fff;
+      border: 1px solid #ccc; border-radius: 4px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      min-width: 160px; padding: 4px 0;
+    }
+    .plot-picker-item {
+      padding: 6px 12px; font-size: 13px; cursor: pointer;
+      color: #333; white-space: nowrap;
+    }
+    .plot-picker-item:hover { background: #f0f4ff; color: #1a6fd4; }
+    .tile-change-sel {
+      font-size: 12px; padding: 2px 4px; border: 1px solid #e0e0e0;
+      border-radius: 3px; color: #666; background: #f8f8f8; max-width: 120px;
+    }
+    .add-select {
+      padding: 4px 6px; font-size: 13px; border: 1px dashed #aaa;
+      border-radius: 4px; background: #fafafa; cursor: pointer; color: #555;
+    }
+    .add-row-wrap {
+      display: flex; align-items: center; gap: 8px; padding: 2px 0;
+    }
+    .add-row-label { font-size: 13px; color: #888; }
+
+    /* Metric heatmap: per-tile secondary-metric picker sitting above the plot. */
+    .ms-box  { display: flex; flex-direction: column; width: 100%; height: 100%; }
+    .ms-ctrl { flex-shrink: 0; font-size: 12px; color: #888; padding: 2px 0 6px;
+               display: flex; align-items: center; gap: 6px; }
+    .ms-plot { width: 100%; flex: 1; min-height: 0; }
+    .ms-metric2 { font-size: 12px; padding: 1px 6px; max-width: 160px; }
+
+    {% if is_admin %}
+    /* RGU-by-user: per-tile "top N" + sort controls above the (dynamic-height) plot. */
+    .ur-ctrl { font-size: 12px; color: #888; padding: 2px 0 6px;
+               display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .ur-ctrl input  { width: 56px; font-size: 12px; padding: 1px 4px; }
+    .ur-ctrl button { font-size: 12px; padding: 1px 8px; cursor: pointer; }
+    .ur-ctrl select { font-size: 12px; padding: 1px 4px; border: 1px solid #ccc;
+                      border-radius: 4px; background: #fff; color: #444; cursor: pointer; }
+    .ur-sep { color: #ccc; }
+    {% endif %}
+
+    /* Job table */
+    .job-table-box { display: flex; flex-direction: column; width: 100%; height: 100%; }
+    .job-table-caption {
+      flex-shrink: 0; font-size: 12px; color: #888; padding: 2px 0 6px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .job-table-caption .jt-cols { margin-left: auto; }     /* push the column picker to the right */
+    .job-table-caption .add-select { padding: 1px 6px; font-size: 11px; }
+    .jt-cols-panel { right: 0; }                            /* anchor the panel to the right edge */
+    .job-table-wrap { width: 100%; flex: 1; min-height: 0; overflow: auto; }
+    .job-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .job-table th {
+      position: sticky; top: 0; background: #f0f0f0; padding: 6px 8px;
+      text-align: left; font-size: 12px; font-weight: 600; color: #444;
+      cursor: pointer; user-select: none; white-space: nowrap;
+      border-bottom: 2px solid #ccc;
+    }
+    .job-table th:hover { background: #e4e4e4; }
+    .job-table th.sort-asc::after  { content: ' ▲'; font-size: 10px; }
+    .job-table th.sort-desc::after { content: ' ▼'; font-size: 10px; }
+    .job-table td { padding: 4px 8px; border-bottom: 1px solid #eee; vertical-align: middle; }
+    .job-table tr:hover td { background: #f4f6ff; }
+    .job-table .col-cmd {
+      max-width: 100px; overflow: hidden; text-overflow: ellipsis;
+      white-space: nowrap; font-family: monospace; font-size: 11px; color: #555;
+      cursor: pointer;
+    }
+    .job-table .col-cmd.expanded {
+      max-width: 280px; overflow: visible; white-space: normal; word-break: break-word;
+    }
+    .job-table th.no-sort { cursor: default; }
+    .job-table th.no-sort:hover { background: #f0f0f0; }
+    /* Job-table pagination footer */
+    .job-table-foot {
+      flex-shrink: 0; display: flex; align-items: center; gap: 10px;
+      padding: 6px 2px 0; font-size: 12px; color: #555;
+      border-top: 1px solid #eee; flex-wrap: wrap;
+    }
+    .job-table-foot button {
+      padding: 2px 10px; font-size: 12px; cursor: pointer; color: #333;
+      border: 1px solid #ccc; border-radius: 4px; background: #fafafa;
+    }
+    .job-table-foot button:hover:not(:disabled) { background: #eee; }
+    .job-table-foot button:disabled { opacity: 0.4; cursor: default; }
+    .job-table-foot select { font-size: 12px; padding: 1px 4px; }
+    .job-table-foot .jt-page-input {
+      width: 5em; font-size: 12px; padding: 1px 4px; text-align: center;
+    }
+    .job-table-foot .jt-pageinfo { position: relative; }
+    .job-table-foot .jt-page-link {
+      color: #1a6fd4; cursor: pointer; text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+    .job-table-foot .jt-page-link:hover { color: #155cb5; }
+    /* Page-jump popover, anchored above the page link (opens upward so it is
+       never clipped at the tile's bottom edge). */
+    .jt-page-pop {
+      position: absolute; bottom: 135%; left: 50%; transform: translateX(-50%);
+      z-index: 9999; background: #fff; border: 1px solid #ccc; border-radius: 4px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.18); padding: 8px;
+      display: flex; flex-direction: column; gap: 6px; align-items: stretch;
+    }
+    .jt-page-pop button { padding: 2px 0; }
+    .job-table-foot .jt-spacer { flex: 1; }
+    /* "Loading" cue shown in the caption while a page is being (re)fetched:
+       bold + italic + accent colour, a gentle opacity pulse, and animated
+       trailing dots via ::after. The class is added in reload() and cleared
+       automatically when renderJobTable rebuilds the caption. */
+    .jt-caption-text.jt-loading {
+      color: #1a6fd4; font-weight: 700; font-style: italic;
+      animation: jt-pulse 1.1s ease-in-out infinite;
+    }
+    .jt-caption-text.jt-loading::after {
+      content: '...'; display: inline-block; width: 0; overflow: hidden;
+      vertical-align: bottom; animation: jt-ellipsis 1.2s steps(4, end) infinite;
+    }
+    @keyframes jt-pulse    { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+    @keyframes jt-ellipsis { to { width: 1.25em; } }
+    /* While a page is loading the still-visible table is dimmed and inert
+       (headers not clickable); renderJobTable() rebuilds a fresh, active table. */
+    .job-table.jt-busy { opacity: 0.55; }
+    .job-table.jt-busy th { pointer-events: none; cursor: default; }
+    /* Job-states multi-select dropdown */
+    .js-dropdown { position: relative; }
+    .job-states-panel {
+      position: absolute; z-index: 9999; background: #fff; border: 1px solid #ccc;
+      border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      max-height: 320px; overflow-y: auto; padding: 4px 0; min-width: 190px;
+    }
+    .job-states-panel .js-actions {
+      display: flex; gap: 6px; padding: 4px 12px 6px;
+      border-bottom: 1px solid #eee; margin-bottom: 4px;
+    }
+    .job-states-panel .js-actions button {
+      padding: 3px 8px; font-size: 12px; background: #eee; color: #333;
+    }
+    .job-states-panel label {
+      display: block; padding: 3px 12px; font-size: 13px; font-weight: 400;
+      color: #333; cursor: pointer; white-space: nowrap;
+    }
+    .job-states-panel label:hover { background: #f0f4ff; }
+    /* Period radio dropdown (same chrome as the job-states panel) */
+    .period-panel { min-width: 235px; }
+    .period-panel .period-title {
+      padding: 4px 12px 2px; font-size: 11px; text-transform: uppercase;
+      letter-spacing: 0.4px; color: #888;
+    }
+    .period-panel .period-sep { border-top: 1px solid #eee; margin: 4px 0; }
+    .period-panel .period-hint { color: #999; font-size: 11px; }
+    .period-panel .period-custom {
+      display: flex; gap: 6px; align-items: center;
+      padding: 3px 12px 6px; font-size: 13px; color: #333;
+    }
+    .period-panel .period-custom label { padding: 0; }
+    .period-panel .period-custom input[type="number"] { width: 60px; }
+  </style>
+</head>
+<body>
+  <h3>Global Job Metrics <span class="conn-email {{ 'admin' if is_admin else 'user' }}">({{ user_email }})</span></h3>
+  <div class="controls">
+    <div class="ctrl">
+      <label for="start">Start</label>
+      <input type="date" id="start"
+             title="Start of the date range (inclusive), in UTC. Every plot and the job table cover jobs in this range. Takes effect on Update." />
+    </div>
+    <div class="ctrl">
+      <label for="end">End</label>
+      <input type="date" id="end"
+             title="End of the date range (inclusive), in UTC. Every plot and the job table cover jobs in this range. Takes effect on Update." />
+    </div>
+    <div class="ctrl">
+      <label>Period</label>
+      <div class="js-dropdown">
+        <button type="button" id="period-btn" class="add-select"
+                style="text-align:left;min-width:110px"
+                title="Calendar buckets align to calendar boundaries (week starts Monday, month on the 1st), clipped to the range. A fixed window steps uniformly from Start.">By week ▾</button>
+        <div id="period-panel" class="job-states-panel period-panel" style="display:none"
+             data-default="{{ default_period }}">
+          <div class="period-title">Calendar buckets</div>
+          <label><input type="radio" name="period-mode" value="h"> By hour</label>
+          <label><input type="radio" name="period-mode" value="d"> By day</label>
+          <label><input type="radio" name="period-mode" value="w" checked> By week <span class="period-hint">(starts Monday)</span></label>
+          <label><input type="radio" name="period-mode" value="m"> By month <span class="period-hint">(starts the 1st)</span></label>
+          <div class="period-sep"></div>
+          <div class="period-custom"
+               title="Buckets of exactly this length, counted from the Start date (not aligned to the calendar).">
+            <label><input type="radio" name="period-mode" value="custom"> Every</label>
+            <input type="number" id="period-n" min="1" step="1" value="14">
+            <select id="period-unit">
+              <option value="h">hours</option>
+              <option value="d" selected>days</option>
+            </select>
+            <span class="period-hint">from Start</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="ctrl">
+      <label>Cluster</label>
+      <div class="js-dropdown">
+        <button type="button" id="cluster-btn" class="add-select"
+                title="Restrict every plot to the selected clusters. All checked = all clusters. Takes effect on Update."
+                style="text-align:left;min-width:110px">All clusters ▾</button>
+        <div id="cluster-panel" class="job-states-panel" style="display:none"></div>
+      </div>
+    </div>
+    <div class="ctrl">
+      <label>Job states</label>
+      <div class="js-dropdown">
+        <button type="button" id="js-btn" class="add-select"
+                title="Restrict every plot to jobs in the selected Slurm states (e.g. COMPLETED, FAILED, TIMEOUT). All checked = all states. Takes effect on Update."
+                style="text-align:left;min-width:110px">All states ▾</button>
+        <div id="js-panel" class="job-states-panel" style="display:none"></div>
+      </div>
+    </div>
+    {% if is_admin %}
+    <div class="ctrl" id="user-ctrl">
+      <label for="cluster_user">User</label>
+      <input type="text" id="cluster_user" placeholder="all users"
+             title="Restrict every plot to a single username (exact match). Leave empty for all users. Takes effect on Update."
+             autocomplete="off" data-lpignore="true" data-form-type="other" />
+    </div>
+    {% endif %}
+    {% if is_admin %}
+    <div class="ctrl">
+      <label for="metric-select">Efficiency metric</label>
+      <select id="metric-select" title="Metric taken as the 'useful' fraction: it splits Used vs Unused RGU (RGU usage, RGU by user, job-table waste column) and is the value plotted in Metric Trend, Density and the heatmap. Takes effect on Update."></select>
+    </div>
+    {% endif %}
+    <button onclick="loadCharts()" title="Apply the current filters (date range, clusters, {% if is_admin %}user, {% endif %}job states, metric) and reload every plot.">Update</button>
+    <button id="reset-btn" onclick="resetState()" title="Clear all saved settings and reset to defaults" style="background:#888;">Reset</button>
+    <div id="focus-label" class="no-focus"
+         title="Focus is an optional zoom on top of the Start/End range. Click a bar in a period plot to restrict the detail plots ({% if is_admin %}Metric density, Metric heatmap, RGU by user, {% endif %}Job table) to that time slice; the period plots only highlight it. Use Clear focus to return to the full range.">
+      <span id="focus-label-text">No focus — click a bar in a period plot to zoom the detail plots onto that slice</span>
+      <button type="button" id="clear-focus" style="display:none" onclick="clearFocus()">Clear focus</button>
+    </div>
+  </div>
+  <div id="status"></div>
+  <div id="tile-grid"></div>
+
+  <script>
+    const SEC_TO_H = 1 / 3600;
+
+    function isoDate(d) { return d.toISOString().split('T')[0]; }
+
+    // ── Persistent state (localStorage) ─────────────────────────────────────
+    // Schema version: bump when the saved structure changes incompatibly.
+    const STORAGE_KEY = {{ storage_key | tojson }};
+
+    function loadSavedState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        return raw ? JSON.parse(raw) : {};
+      } catch { return {}; }
+    }
+
+    function saveState() {
+      try {
+        const state = {
+          // Filter bar
+          start:       document.getElementById('start').value,
+          end:         document.getElementById('end').value,
+          metric:      selectedMetric(),
+          {% if is_admin %}
+          cluster_user: document.getElementById('cluster_user').value,
+          {% endif %}
+          period:      periodValue(),
+          clusters:    clSelected(),
+          job_states:  jsSelected(),
+          // Focus
+          focusStart, focusEnd,
+          // Layout
+          layout: layoutToParam(tileLayout),
+          // Plot-local state
+          {% if is_admin %}
+          userRguTopN, userRguSortBy,
+          {% endif %}
+          metricScatterMetric2,
+          rguUsageView,
+          jobTableHiddenCols: [...jobTableHiddenCols],
+          jobTableLimit:   JOBTABLE_DEFAULTS.limit,
+          jobTableSortBy:  JOBTABLE_DEFAULTS.sortBy,
+          jobTableSortDir: JOBTABLE_DEFAULTS.sortDir,
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      } catch { /* quota exceeded or private browsing — silently ignore */ }
+    }
+
+    // Called by the Reset button: wipe localStorage and revert every control
+    // to its hard-coded default, then reload charts.
+    function resetState() {
+      if (!confirm('Reset all dashboard settings to their defaults?\n\nThis clears your saved filters, layout, focus and table preferences.'))
+        return;
+      try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+
+      // Filter bar defaults
+      const today     = new Date();
+      const yearStart = new Date(today.getFullYear(), 0, 1);
+      const monday    = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+      document.getElementById('start').value = isoDate(yearStart);
+      document.getElementById('end').value   = isoDate(monday);
+      {% if is_admin %}
+      document.getElementById('metric-select').value = 'gpu_sm_occupancy';
+      document.getElementById('cluster_user').value  = '';
+      {% endif %}
+      setPeriod('w');
+
+      // All clusters checked
+      clPanel.querySelectorAll('input').forEach(c => { c.checked = true; });
+      clUpdateLabel();
+      // All job states checked
+      jsPanel.querySelectorAll('input').forEach(c => { c.checked = true; });
+      jsUpdateLabel();
+
+      // Module-level state defaults
+      {% if is_admin %}
+      userRguTopN          = 16;
+      userRguSortBy        = 'rgu_requested';
+      {% endif %}
+      metricScatterMetric2 = 'gpu_utilization';
+      rguUsageView         = 'per_period';
+      jobTableHiddenCols.clear();
+      JOBTABLE_DEFAULTS.limit   = 50;
+      JOBTABLE_DEFAULTS.sortBy  = 'waste';
+      JOBTABLE_DEFAULTS.sortDir = 'desc';
+
+      // Focus
+      focusStart = '';
+      focusEnd   = '';
+      updateFocusLabel();
+
+      // Layout
+      tileLayout = DEFAULT_LAYOUT.map(r => [...r]);
+      syncUrl();
+
+      loadCharts();
+    }
+
+    // Persisted UI state, loaded once at startup. Declared here — before its
+    // first read in JOBTABLE_DEFAULTS and the filter-bar restore below — so the
+    // const is never accessed inside its temporal dead zone.
+    const _saved = loadSavedState();
+
+    function pLayout(extra) {
+      return { autosize: true, margin: { l: 60, r: 20, t: 40, b: 60 }, ...extra };
+    }
+
+    const METRICS = {
+      gpu_sm_occupancy:     'SM occupancy',
+      gpu_utilization:      'GPU utilization',
+      gpu_utilization_fp16: 'GPU util. FP16',
+      gpu_utilization_fp32: 'GPU util. FP32',
+      gpu_utilization_fp64: 'GPU util. FP64',
+      gpu_memory:           'GPU memory',
+      system_memory:        'System memory',
+    };
+
+    // Display units for the cumulative RGU·time quantity. The backend always
+    // returns RGU·h; `factor` rescales RGU·h -> the chosen unit (purely a
+    // Y-axis cosmetic, independent of the period bucket). RGU·m uses a fixed
+    // 30-day month, matching _PERIOD_MULTIPLIERS["m"] on the backend.
+    const RGU_UNITS = {
+      s: { label: 'RGU·s', factor: 3600 },
+      h: { label: 'RGU·h', factor: 1 },
+      d: { label: 'RGU·d', factor: 1 / 24 },
+      w: { label: 'RGU·w', factor: 1 / 168 },
+      m: { label: 'RGU·m', factor: 1 / 720 },
+    };
+    // The RGU·time display unit follows the period bucket (the RGU-unit selector
+    // was removed): a calendar mode maps straight across (h/d/w/m); a custom
+    // N+unit window follows its hours/days selector. Shared by every renderer.
+    function rguUnit() {
+      const mode = periodMode();
+      return RGU_UNITS[mode === 'custom' ? periodUnit.value : mode] || RGU_UNITS.h;
+    }
+
+    // The efficiency metric is admin-only; non-admins are pinned to SM occupancy
+    // (the select is absent from their DOM). Every reader goes through this.
+    function selectedMetric() {
+      const el = document.getElementById('metric-select');
+      return el ? el.value : 'gpu_sm_occupancy';
+    }
+
+    // Stable colour per cluster (assigned by sorted index).
+    // Palette assigned by stacking order (largest cluster first). Ordered to
+    // match the current clusters-by-size; purely positional (not keyed on names),
+    // so it may no longer match the reference if the size ranking changes.
+    const CLUSTER_COLORS = ['#29a3f5', '#2e3192', '#e0479e', '#6d2d91', '#e8852a', '#2ca02c', '#17becf', '#8c564b'];
+    // Distinct colour for cluster i of n: fixed palette when it fits, else
+    // evenly-spaced HSL hues so any number of clusters stays distinguishable.
+    function clusterColor(i, n) {
+      return n <= CLUSTER_COLORS.length
+        ? CLUSTER_COLORS[i]
+        : `hsl(${Math.round(360 * i / n)}, 65%, 52%)`;
+    }
+
+    const PLOT_NAMES = {
+      bar:             'Submitted jobs per period',
+      histogram:       'RGU requested vs used',
+      clusterrgu:      'RGU by cluster',
+      jobtable:        'Job table',
+      {% if is_admin %}
+      metrictrend:     'Metric trend (mean/max)',
+      heatmap_elapsed: 'Elapsed vs limit (heatmap)',
+      heatmap_wait:    'Wait vs limit (heatmap)',
+      density:         'Metric density',
+      metricscatter:   'Metric heatmap',
+      userrgu:         'RGU by user',
+      {% endif %}
+    };
+    const PLOT_KEYS = Object.keys(PLOT_NAMES);
+
+    // Map each plot type to the backend endpoint it consumes. heatmap_elapsed
+    // and heatmap_wait share /heatmap, so caching by endpoint dedups fetches.
+    // The metric heatmap (metricscatter) is absent on purpose: it owns its data
+    // flow (a per-tile secondary picker that fetches /metric_comparison itself),
+    // rendered directly by renderTile without a shared-cache fetch.
+    const PLOT_TO_ENDPOINT = {
+      bar:             'data',
+      histogram:       'histogram',
+      clusterrgu:      'rgu_by_cluster',
+      jobtable:        'jobs',
+      {% if is_admin %}
+      metrictrend:     'metric_trend',
+      heatmap_elapsed: 'heatmap',
+      heatmap_wait:    'heatmap',
+      density:         'density',
+      userrgu:         'user_rgu',
+      {% endif %}
+    };
+    // The renderers expect data under historical keys (e.g. d.bar, d.heatmap);
+    // this maps the endpoint back to the renderer's key so we can hand off a
+    // single-entry object: { [ENDPOINT_TO_KEY[ep]]: data }.
+    const ENDPOINT_TO_KEY = {
+      data: 'bar',
+      histogram: 'histogram',
+      jobs: 'jobs',
+      rgu_by_cluster: 'clusterrgu',
+      {% if is_admin %}
+      metric_trend: 'metrictrend',
+      heatmap: 'heatmap',
+      density: 'density',
+      user_rgu: 'userrgu',
+      {% endif %}
+    };
+
+    // Job-table pagination/sort. Used both for the initial shared fetch
+    // (endpointURLBase) and as the per-tile starting state in renderJobTable, so
+    // a freshly (re)built tile and its first fetched page always agree.
+    // JOBTABLE_DEFAULTS is intentionally a mutable object so that persisted
+    // job-table preferences (sort, page size) can update it in place; all new
+    // tiles then start from the last-used settings.
+    const JOBTABLE_DEFAULTS = {
+      offset:  0,
+      limit:   _saved.jobTableLimit   || 50,
+      sortBy:  _saved.jobTableSortBy  || 'waste',
+      sortDir: _saved.jobTableSortDir || 'desc',
+    };
+    const JOBTABLE_PAGE_SIZES = [50, 100, 200, 500];
+
+    // Fresh <option> nodes for the metric list, optionally led by a blank
+    // "— none —". Shared by the global efficiency-metric select and the per-tile
+    // secondary-metric picker on the Metric heatmap, so each select owns its
+    // own nodes.
+    function metricOptions(includeNone) {
+      const opts = [];
+      if (includeNone) {
+        const o = document.createElement('option');
+        o.value = ''; o.textContent = '— none —';
+        opts.push(o);
+      }
+      Object.entries(METRICS).forEach(([key, label]) => {
+        const o = document.createElement('option');
+        o.value = key; o.textContent = label;
+        opts.push(o);
+      });
+      return opts;
+    }
+    // Populate the global efficiency-metric dropdown (admin-only widget).
+    {% if is_admin %}
+    const metSel = document.getElementById('metric-select');
+    metricOptions(false).forEach(o => metSel.appendChild(o));
+    metSel.value = 'gpu_sm_occupancy';
+    {% endif %}
+
+    // The RGU unit is a pure display rescale (the backend always returns RGU·h),
+    // so redrawing an RGU·time tile in place needs no re-fetch — we reuse the
+    // cached endpoint data (e.g. on the RGU-usage view toggle; the unit itself
+    // follows the period and only changes on the next Update). We
+    // call renderPlot() directly (Plotly.react updates in place) rather than
+    // renderTile(), which clears the div's innerHTML and would desync Plotly's
+    // existing graph-div state -> blank plot. No-op before the first load or
+    // when no RGU tile is shown (avoids a stray fetch). Density is *not* here:
+    // its weights feed a normalized density, which is invariant under a
+    // uniform rescale.
+    {% if is_admin %}
+    const RGU_UNIT_TILES = new Set(['clusterrgu', 'histogram', 'userrgu', 'jobtable']);
+    {% else %}
+    const RGU_UNIT_TILES = new Set(['clusterrgu', 'histogram', 'jobtable']);
+    {% endif %}
+    async function rerenderRguTiles() {
+      if (!currentParams) return;
+      const tiles = [];
+      tileLayout.forEach((row, ri) => row.forEach((plotType, ci) => {
+        if (!RGU_UNIT_TILES.has(plotType)) return;
+        const chartDiv = document.getElementById(`tile-${ri}-${ci}`);
+        if (chartDiv) tiles.push({ chartDiv, plotType });
+      }));
+      // Per-tile await: endpoints already in the cache resolve instantly, and
+      // a tile whose endpoint errored just keeps its error state.
+      await Promise.all(tiles.map(async ({ chartDiv, plotType }) => {
+        const ep = PLOT_TO_ENDPOINT[plotType];
+        // The job table paginates itself, so re-render it from the page it is
+        // currently showing (a unit change is a pure display rescale) rather
+        // than the shared endpoint cache, which holds only page 0 and would
+        // snap the tile back to the first page.
+        if (plotType === 'jobtable') {
+          if (chartDiv._jtData) renderPlot(chartDiv.id, plotType, { jobs: chartDiv._jtData });
+          return;
+        }
+        let data;
+        try {
+          data = await ensureEndpoint(ep);
+        } catch {
+          return;
+        }
+        if (document.body.contains(chartDiv) && chartDiv.dataset.plotType === plotType)
+          renderPlot(chartDiv.id, plotType, { [ENDPOINT_TO_KEY[ep]]: data });
+      }));
+    }
+
+    // Pressing Enter in any filter field applies the filters, like clicking Update.
+    // Buttons keep their own behaviour (Update / Reset, dropdown toggles, All/None).
+    document.querySelector('.controls').addEventListener('keydown', e => {
+      if (e.key !== 'Enter' || e.target.tagName === 'BUTTON') return;
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') {
+        e.preventDefault();
+        loadCharts();
+      }
+    });
+
+    // ── Cluster selector (multi-select, mirrors the job-states widget) ─────────
+    const clBtn = document.getElementById('cluster-btn');
+    const clPanel = document.getElementById('cluster-panel');
+    let CLUSTERS = [];
+
+    function clSelected() {
+      return [...clPanel.querySelectorAll('input:checked')].map(c => c.value);
+    }
+    function clUpdateLabel() {
+      const n = clSelected().length;
+      clBtn.textContent =
+        (n === CLUSTERS.length ? 'All clusters' : n + ' selected') + ' ▾';
+    }
+    clBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      clPanel.style.display = clPanel.style.display === 'none' ? 'block' : 'none';
+    });
+    document.addEventListener('click', e => {
+      if (clPanel.style.display !== 'none' && !clPanel.contains(e.target) && e.target !== clBtn)
+        clPanel.style.display = 'none';
+    });
+
+    // Populate cluster panel (all checked by default), then kick off the
+    // initial load once the full cluster list is known.
+    // Reuse the public API's cluster list (/v0/cluster/list returns SlurmCluster
+    // objects; the dashboard only needs the sorted names).
+    fetch('/v0/cluster/list').then(r => r.json()).then(rows => {
+      const clusters = rows.map(c => c.name).sort();
+      CLUSTERS = clusters;
+      clPanel.innerHTML =
+        '<div class="js-actions"><button type="button" id="cl-all">All</button>' +
+        '<button type="button" id="cl-none">None</button></div>' +
+        clusters.map(c => `<label><input type="checkbox" value="${c}" checked> ${c}</label>`).join('');
+      clPanel.querySelectorAll('input').forEach(c => c.addEventListener('change', clUpdateLabel));
+      const setAll = v => () => {
+        clPanel.querySelectorAll('input').forEach(c => { c.checked = v; });
+        clUpdateLabel();
+      };
+      document.getElementById('cl-all').addEventListener('click', setAll(true));
+      document.getElementById('cl-none').addEventListener('click', setAll(false));
+      // Restore saved cluster selection (null/undefined = keep all checked).
+      if (Array.isArray(_saved.clusters)) {
+        clPanel.querySelectorAll('input').forEach(c => {
+          c.checked = _saved.clusters.includes(c.value);
+        });
+      }
+      clUpdateLabel();
+      loadCharts();
+    });
+
+    const today = new Date();
+    // Defaults: start = Jan 1 of the current year, end = Monday of the current
+    // week (calendar-aligned with the default 'w' period).
+    const yearStart = new Date(today.getFullYear(), 0, 1);
+    const monday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+    // Apply saved filter-bar values (fall back to defaults when absent).
+    document.getElementById('start').value = _saved.start || isoDate(yearStart);
+    document.getElementById('end').value   = _saved.end   || isoDate(monday);
+    {% if is_admin %}
+    if (_saved.metric)    document.getElementById('metric-select').value = _saved.metric;
+    if (_saved.cluster_user !== undefined)
+      document.getElementById('cluster_user').value = _saved.cluster_user;
+    {% endif %}
+
+    // ── Tile layout ──────────────────────────────────────────────────────────
+    // tileLayout: string[][]  e.g. [['bar','clusterrgu'],['histogram']]
+    // URL param:  plots=bar,clusterrgu;histogram
+
+    let tileLayout = [];
+    // Cache + state for the per-endpoint loader.
+    //   currentParams: snapshot of the form's parameters at the last Update.
+    //                  null until the first loadCharts() has been called.
+    //   endpointCache: { ep -> Promise<data> } — same promise can be awaited
+    //                  by several tiles. Cleared entirely when params change.
+    //   endpointStatus: { ep -> 'loading' | 'ready' | 'error' }, synced with
+    //                  the cache so updateStatus() can summarise progress
+    //                  without inspecting unsettled promises.
+    let currentParams = null;
+    let endpointCache = {};
+    let endpointStatus = {};
+    // Paired-heatmap payloads keyed by secondary metric, cleared on Update like
+    // endpointCache. Without it the metric-heatmap tile would re-fetch on every
+    // renderLayout() (e.g. when another tile changes type), since it bypasses
+    // the shared endpoint cache.
+    let comparisonCache = {};
+    // Secondary metric for the Metric heatmap tile. Module-scoped (not stored on
+    // the tile div, which renderLayout() recreates on every Update) so the pick
+    // survives Updates — like the global field it replaces. Defaults to GPU
+    // utilization so a fresh heatmap shows data immediately; '' is the explicit
+    // "— none —" choice (the tile then prompts for one) — hence ?? not ||, so a
+    // saved '' doesn't snap back to the default. Two heatmap tiles share this.
+    // Restore persisted module-level state (plot-local preferences). _saved
+    // itself is loaded near the top of the script (it is read earlier — by
+    // JOBTABLE_DEFAULTS and the filter-bar restore).
+    let metricScatterMetric2 = _saved.metricScatterMetric2 ?? 'gpu_utilization';
+    {% if is_admin %}
+    // Top-N users shown by the RGU-by-user tile. Module-scoped like the heatmap's
+    // secondary so it survives Updates; applied via the tile's OK button — a pure
+    // re-slice/re-render of the already-fetched rows, never a refetch.
+    let userRguTopN = (_saved.userRguTopN > 0) ? _saved.userRguTopN : 16;
+    // Sort criterion for the RGU-by-user tile. Pure front-end re-sort of the
+    // already-fetched rows — never triggers a refetch.
+    // Values: 'rgu_requested' | 'rgu_used' | 'rgu_unused' | 'rgu_unmeasured'
+    let userRguSortBy = _saved.userRguSortBy || 'rgu_requested';
+    {% endif %}
+    // Job-table column keys hidden via the per-table column picker. Global (a
+    // display preference shared by every job-table tile) so it survives
+    // pagination, sorting and Update. Empty = all columns visible.
+    const jobTableHiddenCols = new Set(_saved.jobTableHiddenCols || []);
+    // RGU-usage tile view: 'per_period' (one stacked bar per time bucket, click to
+    // focus) or 'whole_range' (a single stacked bar summing the whole Start–End
+    // range, focus-agnostic). Module-scoped like the other plot-local state, so it
+    // survives Updates and is shared by every RGU-usage tile.
+    let rguUsageView = _saved.rguUsageView || 'per_period';
+
+    function layoutToParam(l) {
+      return l.map(row => row.join(',')).join(';');
+    }
+
+    // Tiles shown on a fresh load (no ?plots= param). Admins: RGU-by-cluster +
+    // job table on row 1, metric trend + RGU-by-user on row 2. Non-admins: a
+    // fixed 2x2 — submitted jobs + RGU-by-cluster, then RGU req-vs-used + job
+    // table. Copied per call so mutating tileLayout never corrupts this template.
+    {% if is_admin %}
+    const DEFAULT_LAYOUT = [['clusterrgu', 'jobtable'], ['metrictrend', 'userrgu']];
+    {% else %}
+    const DEFAULT_LAYOUT = [['clusterrgu', 'jobtable'], ['histogram', 'bar']];
+    {% endif %}
+    function paramToLayout(s) {
+      if (!s) return DEFAULT_LAYOUT.map(r => [...r]);
+      const rows = s.split(';')
+        .map(row => row.split(',').filter(p => PLOT_NAMES[p]))
+        .filter(r => r.length > 0);
+      return rows.length ? rows : DEFAULT_LAYOUT.map(r => [...r]);
+    }
+
+    function syncUrl() {
+      const url = new URL(window.location);
+      url.searchParams.set('plots', layoutToParam(tileLayout));
+      window.history.replaceState({}, '', url);
+      saveState();
+    }
+
+    let _picker = null;
+
+    function closePicker() {
+      if (_picker) { _picker.remove(); _picker = null; }
+    }
+
+    function openPicker(anchor, onPick) {
+      closePicker();
+      const menu = document.createElement('div');
+      menu.className = 'plot-picker';
+      _picker = menu;
+      PLOT_KEYS.forEach(key => {
+        const item = document.createElement('div');
+        item.className = 'plot-picker-item';
+        item.textContent = PLOT_NAMES[key];
+        item.addEventListener('click', e => { e.stopPropagation(); closePicker(); onPick(key); });
+        menu.appendChild(item);
+      });
+      document.body.appendChild(menu);
+      const r = anchor.getBoundingClientRect();
+      menu.style.top  = (r.bottom + window.scrollY + 4) + 'px';
+      menu.style.left = (r.right  + window.scrollX - menu.offsetWidth) + 'px';
+      setTimeout(() => document.addEventListener('click', closePicker, { once: true }), 0);
+    }
+
+    function makeAddTileButton(onAdd) {
+      const btn = document.createElement('button');
+      btn.className = 'add-tile-btn';
+      btn.textContent = '+';
+      btn.title = 'Add plot to this row';
+      btn.addEventListener('click', e => { e.stopPropagation(); openPicker(btn, onAdd); });
+      return btn;
+    }
+
+    function makeAddSelect(onAdd) {
+      const sel = document.createElement('select');
+      sel.className = 'add-select';
+      const ph = document.createElement('option');
+      ph.value = ''; ph.textContent = '＋ add plot';
+      sel.appendChild(ph);
+      PLOT_KEYS.forEach(key => {
+        const opt = document.createElement('option');
+        opt.value = key; opt.textContent = PLOT_NAMES[key];
+        sel.appendChild(opt);
+      });
+      sel.addEventListener('change', () => {
+        if (sel.value) { onAdd(sel.value); sel.value = ''; }
+      });
+      return sel;
+    }
+
+    function renderLayout() {
+      const grid = document.getElementById('tile-grid');
+      grid.innerHTML = '';
+
+      tileLayout.forEach((row, rowIdx) => {
+        const rowDiv = document.createElement('div');
+        rowDiv.className = 'tile-row';
+
+        row.forEach((plotType, colIdx) => {
+          const tile = document.createElement('div');
+          tile.className = 'tile';
+
+          const header = document.createElement('div');
+          header.className = 'tile-header';
+          const title = document.createElement('span');
+          title.textContent = PLOT_NAMES[plotType];
+          header.appendChild(title);
+          {% if is_admin %}
+          const actions = document.createElement('span');
+          actions.style.cssText = 'display:flex;align-items:center;gap:4px';
+          const changeSel = document.createElement('select');
+          changeSel.className = 'tile-change-sel';
+          PLOT_KEYS.forEach(key => {
+            const opt = document.createElement('option');
+            opt.value = key; opt.textContent = PLOT_NAMES[key];
+            if (key === plotType) opt.selected = true;
+            changeSel.appendChild(opt);
+          });
+          changeSel.addEventListener('change', () => {
+            tileLayout[rowIdx][colIdx] = changeSel.value;
+            syncUrl(); renderLayout();
+          });
+          const rmBtn = document.createElement('button');
+          rmBtn.className = 'tile-remove';
+          rmBtn.textContent = '×';
+          rmBtn.title = 'Remove';
+          rmBtn.onclick = () => removeTile(rowIdx, colIdx);
+          actions.appendChild(changeSel);
+          actions.appendChild(rmBtn);
+          header.appendChild(actions);
+          {% endif %}
+
+          const chartDiv = document.createElement('div');
+          chartDiv.className = 'tile-chart';
+          chartDiv.id = `tile-${rowIdx}-${colIdx}`;
+          // dataset.plotType lets renderTile detect "the tile has been swapped
+          // to another type while my fetch was in flight" before drawing.
+          chartDiv.dataset.plotType = plotType;
+
+          tile.appendChild(header);
+          tile.appendChild(chartDiv);
+          rowDiv.appendChild(tile);
+        });
+
+        {% if is_admin %}
+        const addCol = document.createElement('div');
+        addCol.className = 'tile-add-col';
+        addCol.appendChild(makeAddTileButton(pt => {
+          tileLayout[rowIdx].push(pt);
+          syncUrl();
+          renderLayout();
+        }));
+        rowDiv.appendChild(addCol);
+        {% endif %}
+        grid.appendChild(rowDiv);
+      });
+
+      {% if is_admin %}
+      // New-row control
+      const wrap = document.createElement('div');
+      wrap.className = 'add-row-wrap';
+      const lbl = document.createElement('span');
+      lbl.className = 'add-row-label';
+      lbl.textContent = 'New row:';
+      wrap.appendChild(lbl);
+      wrap.appendChild(makeAddSelect(plotType => {
+        tileLayout.push([plotType]);
+        syncUrl();
+        renderLayout();
+      }));
+      grid.appendChild(wrap);
+      {% endif %}
+
+      // Kick off a render for each tile. Each one independently awaits the
+      // cached endpoint promise (or triggers a fetch), so a fast endpoint
+      // appears immediately while slower ones still show "Loading…".
+      // No-op if currentParams is null (initial state before first Update).
+      if (currentParams) {
+        tileLayout.forEach((row, ri) => {
+          row.forEach((plotType, ci) => {
+            const chartDiv = document.getElementById(`tile-${ri}-${ci}`);
+            if (chartDiv) renderTile(chartDiv, plotType);
+          });
+        });
+      }
+    }
+
+    function removeTile(rowIdx, colIdx) {
+      tileLayout[rowIdx].splice(colIdx, 1);
+      if (tileLayout[rowIdx].length === 0) tileLayout.splice(rowIdx, 1);
+      if (tileLayout.length === 0) tileLayout = [['clusterrgu']];
+      syncUrl();
+      renderLayout();
+    }
+
+    // ── Per-plot renderers ───────────────────────────────────────────────────
+
+    function renderPlot(id, type, d) {
+      const fn = { bar: renderBar,
+                   histogram: renderHistogram,
+                   jobtable: renderJobTable,
+                   clusterrgu: renderClusterRgu,
+                   {% if is_admin %}
+                   metrictrend: renderMetricTrend,
+                   heatmap_elapsed: renderHeatmapElapsed,
+                   heatmap_wait: renderHeatmapWait,
+                   density: renderDensity,
+                   metricscatter: renderMetricScatter,
+                   userrgu: renderUserRgu,
+                   {% endif %} }[type];
+      if (fn) fn(id, d);
+    }
+
+    // Log10 colour mapping shared by the heatmap renderers: counts span many
+    // orders of magnitude (1 outlier cell vs a ~1M-job one), so a linear
+    // scale would make every cell except the densest one look white. Returns
+    // the log-transformed matrix (zeros -> null = blank cell) plus colorbar
+    // ticks at the decade marks; callers keep the raw matrix as customdata so
+    // hovers show real counts.
+    function logHeatmapScale(zRaw) {
+      const zLog = zRaw.map(row => row.map(v => v > 0 ? Math.log10(v) : null));
+      let zMaxLog = 0;
+      for (const row of zLog) for (const v of row) if (v != null && v > zMaxLog) zMaxLog = v;
+      const tickVals = [];
+      for (let p = 0; p <= Math.ceil(zMaxLog); p++) tickVals.push(p);
+      const tickText = tickVals.map(p => {
+        const n = Math.pow(10, p);
+        if (n >= 1e6) return (n / 1e6) + 'M';
+        if (n >= 1e3) return (n / 1e3) + 'K';
+        return String(n);
+      });
+      return { zLog, tickVals, tickText };
+    }
+
+    function renderHeatmapCell(id, payload, title, yLabel) {
+      if (!payload || !payload.z || !payload.z.length) return;
+      // Server returns x/y in seconds; convert axes to hours for display.
+      const xs = payload.x.map(v => v * SEC_TO_H);
+      const ys = payload.y.map(v => v * SEC_TO_H);
+
+      const zRaw = payload.z;
+      const { zLog, tickVals: tickPows, tickText: tickLabels } = logHeatmapScale(zRaw);
+
+      // Diagonal y = x line: with log-log axes it's still mathematically y=x,
+      // which plots as a straight 45° line. Use the smallest positive centre
+      // as start to keep both endpoints within the log axis range.
+      const diagMin = Math.max(xs[0], ys[0], 1e-6);
+      const diagMax = Math.max(xs[xs.length - 1], ys[ys.length - 1]);
+      const diagTrace = {
+        type: 'scatter', mode: 'lines',
+        x: [diagMin, diagMax], y: [diagMin, diagMax],
+        line: { color: '#e07020', width: 1.5, dash: 'dash' },
+        name: yLabel + ' = Limit',
+        showlegend: false,
+        hoverinfo: 'skip',
+      };
+
+      Plotly.react(id, [{
+        type: 'heatmap',
+        x: xs, y: ys, z: zLog, customdata: zRaw,
+        // Explicit white→dark-blue ramp: the named 'Blues' palette can be
+        // displayed reversed by Plotly depending on version. Spelling it out
+        // guarantees dense cells stay dark.
+        colorscale: [[0, '#f7fbff'], [1, '#08306b']],
+        showscale: true,
+        colorbar: {
+          title: { text: 'Jobs (log₁₀)', side: 'right' },
+          tickmode: 'array',
+          tickvals: tickPows, ticktext: tickLabels,
+        },
+        hovertemplate: 'Limit: %{x:.2f}h<br>' + yLabel +
+                       ': %{y:.2f}h<br>Jobs: %{customdata}<extra></extra>',
+      }, diagTrace], pLayout({
+        title: { text: title, font: { size: 16 } },
+        xaxis: { title: { text: 'Time limit (hours, log)' }, type: 'log' },
+        yaxis: { title: { text: yLabel + ' (hours, log)' }, type: 'log' },
+      }), { responsive: true });
+    }
+
+    function renderHeatmapElapsed(id, d) {
+      renderHeatmapCell(id, d.heatmap && d.heatmap.elapsed_vs_limit,
+                        'Elapsed vs Time Limit (count per cell)', 'Elapsed');
+    }
+
+    function renderHeatmapWait(id, d) {
+      renderHeatmapCell(id, d.heatmap && d.heatmap.wait_vs_limit,
+                        'Wait vs Time Limit (count per cell)', 'Wait');
+    }
+
+    function renderBar(id, d) {
+      if (!d.bar.length) return;
+      const colors = d.bar.map(r => {
+        const inf = periodInFocus(r.period_start);
+        return inf === null ? '#1a6fd4' : inf ? '#e07020' : '#c8d8f0';
+      });
+      Plotly.react(id, [{
+        type: 'bar',
+        x: d.bar.map(r => r.period_start), y: d.bar.map(r => r.count),
+        customdata: d.bar.map(r => r.period_end),
+        marker: { color: colors },
+        hovertemplate: 'Period: %{x}<br>Jobs: %{y}<extra></extra>',
+      }], pLayout({
+        title: { text: 'Submitted jobs per period (click to focus)', font: { size: 16 } },
+        xaxis: { title: { text: 'Period start' }, type: 'category', tickangle: -45 },
+        yaxis: { title: { text: 'Number of jobs' } },
+        bargap: 0.15, margin: { l: 60, r: 20, t: 40, b: 100 },
+      }), { responsive: true }).then(gd => {
+        gd.removeAllListeners('plotly_click');
+        gd.on('plotly_click', evt => {
+          if (evt.points && evt.points.length) clickSetFocus(evt.points[0].x, evt.points[0].customdata);
+        });
+      });
+    }
+
+    function renderHistogram(id, d) {
+      const el = document.getElementById(id);
+      if (!el || !d.histogram.length) return;
+      const unit = rguUnit();
+
+      // Box/ctrl/plot layout (reusing the heatmap's classes) so a small "View:"
+      // picker sits above the plot, which fills the rest at the tile's fixed height.
+      el.innerHTML = '';
+      const box = document.createElement('div'); box.className = 'ms-box';
+      const ctrl = document.createElement('div'); ctrl.className = 'ms-ctrl';
+      const lab = document.createElement('label');
+      lab.textContent = 'View: ';
+      const sel = document.createElement('select');
+      sel.className = 'add-select';
+      [['per_period', 'Per period'], ['whole_range', 'Whole range']].forEach(([v, t]) => {
+        const o = document.createElement('option');
+        o.value = v; o.textContent = t;
+        if (v === rguUsageView) o.selected = true;
+        sel.appendChild(o);
+      });
+      lab.appendChild(sel);
+      ctrl.appendChild(lab);
+      const plot = document.createElement('div'); plot.className = 'ms-plot';
+      box.appendChild(ctrl); box.appendChild(plot);
+      el.appendChild(box);
+      // View is module-scoped (shared by every RGU-usage tile), so a change
+      // re-renders them all from cache — no refetch — like the RGU-unit switch.
+      sel.addEventListener('change', () => { rguUsageView = sel.value; saveState(); rerenderRguTiles(); });
+
+      if (rguUsageView === 'whole_range') {
+        // One stacked bar summing the whole Start–End range. Focus is ignored on
+        // purpose (no per-bucket axis) and the single bar is not click-to-focus.
+        const sum = key => d.histogram.reduce((a, r) => a + (r[key] || 0), 0);
+        const reqTot = sum('rgu_requested'), usedTot = sum('rgu_used'), unmTot = sum('rgu_unmeasured');
+        const X = ['Whole range'];
+        Plotly.react(plot, [
+          { type: 'bar', name: 'Used',   x: X, y: [usedTot * unit.factor], marker: { color: '#1a6fd4' },
+            hovertemplate: unit.label + ' used: %{y:,.1f}<extra></extra>' },
+          { type: 'bar', name: 'Unused', x: X, y: [(reqTot - usedTot - unmTot) * unit.factor], marker: { color: '#a8c8f0' },
+            hovertemplate: unit.label + ' unused: %{y:,.1f}<extra></extra>' },
+          { type: 'bar', name: 'No metric data', x: X, y: [unmTot * unit.factor], marker: { color: '#bdbdbd' },
+            hovertemplate: unit.label + ' (no metric): %{y:,.1f}<extra></extra>' },
+        ], pLayout({
+          title: { text: 'Total ' + unit.label + ' — Whole range (Used vs Unused)', font: { size: 16 } },
+          barmode: 'stack', bargap: 0.7,
+          xaxis: { type: 'category' },
+          yaxis: { title: { text: 'Total ' + unit.label } },
+          legend: { orientation: 'h', x: 0, xanchor: 'left', y: 1.02, yanchor: 'bottom' },
+          margin: { l: 60, r: 20, t: 72, b: 60 },
+        }), { responsive: true });
+        return;
+      }
+
+      // Per-period: one stacked bar per time bucket; click a bar to set the focus.
+      const periods    = d.histogram.map(r => r.period_start);
+      const periodEnds = d.histogram.map(r => r.period_end);
+      const rguUsed       = d.histogram.map(r => r.rgu_used * unit.factor);
+      const rguUnused     = d.histogram.map(r => (r.rgu_requested - r.rgu_used - (r.rgu_unmeasured || 0)) * unit.factor);
+      const rguUnmeasured = d.histogram.map(r => (r.rgu_unmeasured || 0) * unit.factor);
+      const colorUsed      = periods.map(p => { const f = periodInFocus(p); return f === null ? '#1a6fd4' : f ? '#e07020' : '#c8d8f0'; });
+      const colorUnused    = periods.map(p => { const f = periodInFocus(p); return f === null ? '#a8c8f0' : f ? '#f0c090' : '#e4eef8'; });
+      const colorUnmeasured= periods.map(p => { const f = periodInFocus(p); return f === null ? '#bdbdbd' : f ? '#8a8a8a' : '#e6e6e6'; });
+      Plotly.react(plot, [
+        { type: 'bar', name: 'Used',   x: periods, y: rguUsed, customdata: periodEnds,
+          marker: { color: colorUsed },
+          hovertemplate: 'Period: %{x}<br>' + unit.label + ' used: %{y:,.1f}<extra></extra>' },
+        { type: 'bar', name: 'Unused', x: periods, y: rguUnused, customdata: periodEnds,
+          marker: { color: colorUnused },
+          hovertemplate: 'Period: %{x}<br>' + unit.label + ' unused: %{y:,.1f}<extra></extra>' },
+        { type: 'bar', name: 'No metric data', x: periods, y: rguUnmeasured, customdata: periodEnds,
+          marker: { color: colorUnmeasured },
+          hovertemplate: 'Period: %{x}<br>' + unit.label + ' (no metric): %{y:,.1f}<extra></extra>' },
+      ], pLayout({
+        title: { text: 'Total ' + unit.label + ' per Period — Used vs Unused (click to focus)', font: { size: 16 } },
+        barmode: 'stack',
+        xaxis: { title: { text: 'Period start' }, type: 'category', tickangle: -45 },
+        yaxis: { title: { text: 'Total ' + unit.label } },
+        legend: { orientation: 'h', x: 0, xanchor: 'left', y: 1.02, yanchor: 'bottom' },
+        margin: { l: 60, r: 20, t: 72, b: 100 },
+      }), { responsive: true }).then(gd => {
+        gd.removeAllListeners('plotly_click');
+        gd.on('plotly_click', evt => {
+          if (evt.points && evt.points.length) clickSetFocus(evt.points[0].x, evt.points[0].customdata);
+        });
+      });
+    }
+
+    function renderClusterRgu(id, d) {
+      const data = d.clusterrgu;
+      if (!data || !data.periods.length || !data.series.length) return;
+      // Rescale the cumulative RGU·h to the unit selected in the toolbar.
+      const unit = rguUnit();
+      const x    = data.periods.map(p => p.period_start);
+      const ends = data.periods.map(p => p.period_end);
+      // Focus feedback like the other period plots, but via per-point opacity
+      // instead of an orange recolour: here colour encodes the cluster, so the
+      // focused period keeps full cluster colours while the rest are dimmed.
+      const opac = x.map(p => { const f = periodInFocus(p); return f === null ? 1 : f ? 1 : 0.35; });
+      const series = data.series;
+      const yvals = series.map(s => s.rgu.map(v => v * unit.factor));
+      // Per-period stacking order: within each period, sort clusters by THAT
+      // period's value and assign cumulative `base` offsets so the largest
+      // segment sits at the bottom — independently per period. A plain
+      // barmode:'stack' can only use one global trace order (here: by total),
+      // which leaves individual periods unsorted; manual base + overlay lets
+      // each column be sorted on its own values while every cluster keeps one
+      // stable colour and legend entry.
+      const bases = series.map(() => new Array(x.length).fill(0));
+      for (let p = 0; p < x.length; p++) {
+        const order = series.map((_, i) => i)
+          .sort((a, b) => (yvals[b][p] - yvals[a][p]) || (a - b));
+        let cum = 0;
+        for (const i of order) { bases[i][p] = cum; cum += yvals[i][p]; }
+      }
+      // Colour is keyed on the by-total index i, so each cluster keeps its current
+      // colour; the traces are then sorted by name so the legend reads A→Z. Trace
+      // order is cosmetic here — the per-period `base` stacking above is independent
+      // of it.
+      const traces = series.map((s, i) => ({
+        type: 'bar', name: s.cluster,
+        // customdata = [period_end (for click-focus), this cluster's value]. We
+        // read the value from customdata for the hover because, with `base` set,
+        // %{y} renders the cumulative top (base + value), not the segment value.
+        x: x, y: yvals[i], base: bases[i],
+        customdata: ends.map((e, p) => [e, yvals[i][p]]),
+        marker: { color: clusterColor(i, series.length), opacity: opac },
+        hovertemplate: s.cluster + '<br>Period: %{x}<br>' + unit.label + ': %{customdata[1]:,.2f}<extra></extra>',
+      })).sort((a, b) => a.name.localeCompare(b.name));
+      Plotly.react(id, traces, pLayout({
+        title: { text: 'Total ' + unit.label + ' by Cluster (click to focus)', font: { size: 16 } },
+        // Manual per-period `base` offsets do the stacking, so overlay — not
+        // 'stack', which ignores base and re-stacks in (global) trace order.
+        barmode: 'overlay',
+        xaxis: { title: { text: 'Period start' }, type: 'category', tickangle: -45 },
+        yaxis: { title: { text: 'Total ' + unit.label } },
+        // Legend reads A→Z (traces are sorted by name above); 'normal' so the
+        // horizontal legend runs left-to-right alphabetically. showlegend forces
+        // the legend even with a single cluster (Plotly hides it by default when
+        // there is only one trace).
+        showlegend: true,
+        legend: { orientation: 'h', x: 0, xanchor: 'left', y: 1.02, yanchor: 'bottom', traceorder: 'normal' },
+        margin: { l: 60, r: 20, t: 72, b: 100 },
+      }), { responsive: true }).then(gd => {
+        gd.removeAllListeners('plotly_click');
+        gd.on('plotly_click', evt => {
+          if (evt.points && evt.points.length) clickSetFocus(evt.points[0].x, evt.points[0].customdata[0]);
+        });
+      });
+    }
+
+    function renderMetricTrend(id, d) {
+      const data = d.metrictrend;
+      if (!data || !data.periods.length || !data.series.length) return;
+      // Title names the metric actually plotted (single series, guarded above).
+      const ml = METRICS[data.series[0].metric] || data.series[0].metric;
+      const x    = data.periods.map(p => p.period_start);
+      const ends = data.periods.map(p => p.period_end);
+      // Efficiency metric only: a single series, two traces. Dash style encodes
+      // the statistic (max solid, mean dashed). Null buckets (no job carries
+      // the stat) leave a gap.
+      const MET_COLORS = ['#1a6fd4'];
+      const traces = [];
+      data.series.forEach((s, i) => {
+        const label = METRICS[s.metric] || s.metric;
+        const color = MET_COLORS[i % MET_COLORS.length];
+        traces.push({
+          type: 'scatter', mode: 'lines+markers', name: label + ' — mean',
+          x: x, y: s.mean, customdata: ends,
+          line: { color: color, width: 2, dash: 'dash' }, marker: { size: 5 },
+          hovertemplate: label + ' mean<br>Period: %{x}<br>Value: %{y:.1%}<extra></extra>',
+        });
+        traces.push({
+          type: 'scatter', mode: 'lines+markers', name: label + ' — max',
+          x: x, y: s.max, customdata: ends,
+          line: { color: color, width: 2 }, marker: { size: 5 },
+          hovertemplate: label + ' max<br>Period: %{x}<br>Value: %{y:.1%}<extra></extra>',
+        });
+      });
+      // Highlight the focused period; on a category axis, shape coordinates
+      // are the category indices.
+      const shapes = [];
+      x.forEach((p, idx) => {
+        if (periodInFocus(p)) shapes.push({
+          type: 'rect', xref: 'x', yref: 'paper',
+          x0: idx - 0.5, x1: idx + 0.5, y0: 0, y1: 1,
+          fillcolor: 'rgba(224, 112, 32, 0.12)', line: { width: 0 },
+        });
+      });
+      Plotly.react(id, traces, pLayout({
+        title: { text: ml + ' per period — mean & max (click to focus)', font: { size: 16 } },
+        xaxis: { title: { text: 'Period start' }, type: 'category', tickangle: -45 },
+        yaxis: { title: { text: 'Metric value' }, tickformat: '.0%' },
+        legend: { orientation: 'h', x: 0, xanchor: 'left', y: 1.02, yanchor: 'bottom' },
+        shapes: shapes,
+        margin: { l: 60, r: 20, t: 72, b: 100 },
+      }), { responsive: true }).then(gd => {
+        gd.removeAllListeners('plotly_click');
+        gd.on('plotly_click', evt => {
+          if (evt.points && evt.points.length) clickSetFocus(evt.points[0].x, evt.points[0].customdata);
+        });
+      });
+    }
+
+    function renderDensity(id, d) {
+      const metric = selectedMetric();
+      const ml = METRICS[metric] || metric;
+      if (!d.density.primary.values.length) return;
+      // Server pre-bins into 50 equal bins over [0, 1] (matches xbins below).
+      const XBINS = { start: 0, end: 1, size: 1 / 50 };
+      Plotly.react(id, [{
+        type: 'histogram', name: ml,
+        x: d.density.primary.values, y: d.density.primary.weights,
+        histfunc: 'sum', histnorm: 'probability density',
+        marker: { color: '#1a6fd4' },
+        xbins: XBINS, autobinx: false,
+        hovertemplate: ml + ': %{x:.1%}<br>Density: %{y:.4f}<extra></extra>',
+      }], pLayout({
+        title: { text: ml + ' density — weighted by RGU·time', font: { size: 16 } },
+        xaxis: { title: { text: 'Metric mean' }, tickformat: '.0%' }, yaxis: { title: { text: 'Density' } },
+        legend: { x: 0.75, y: 0.95 },
+      }), { responsive: true });
+    }
+
+    // Metric heatmap: the secondary metric is chosen *on the tile* (the picker
+    // built here), not in the global toolbar. The choice lives in the module
+    // variable `metricScatterMetric2`, so it survives a global Update (unlike
+    // the job-table pagination, which is navigation state and resets). This tile
+    // owns its data flow: renderTile renders it without a shared-cache fetch
+    // (the `d` argument is unused), and each pick re-fetches only this tile from
+    // /metric_comparison (global efficiency metric + the picked secondary).
+    function renderMetricScatter(id, d) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const metric = selectedMetric();
+      const ml = METRICS[metric] || metric;
+
+      el.innerHTML = '';
+      const box = document.createElement('div');
+      box.className = 'ms-box';
+      const ctrl = document.createElement('div');
+      ctrl.className = 'ms-ctrl';
+      const lab = document.createElement('label');
+      lab.textContent = 'Compare ' + ml + ' to:';
+      lab.title = 'Second metric to compare against the efficiency metric. The heatmap bins GPU jobs by both values and colours each cell by job count (log scale).';
+      const sel = document.createElement('select');
+      sel.className = 'ms-metric2 add-select';
+      metricOptions(true).forEach(o => sel.appendChild(o));
+      sel.value = metricScatterMetric2;
+      lab.appendChild(sel);
+      ctrl.appendChild(lab);
+      const plot = document.createElement('div');
+      plot.className = 'ms-plot';
+      box.appendChild(ctrl);
+      box.appendChild(plot);
+      el.appendChild(box);
+
+      // Draw for the current pick: a prompt when none is chosen, else a
+      // dedicated fetch + heatmap. The picker is disabled while loading so a
+      // second change can't race the first; after the await we re-validate the
+      // tile (an Update/tile-swap may have replaced it — its div is then
+      // detached, so document.body.contains(el) is false).
+      async function draw() {
+        const m2 = metricScatterMetric2;
+        // The plot div may still host a Plotly graph from the previous pick.
+        // Purge it before reusing the div: innerHTML alone wipes Plotly's inner
+        // DOM but leaves its element state behind, so the next Plotly.react()
+        // desyncs — the symptom was a stuck "Loading…" on the second change.
+        Plotly.purge(plot);
+        if (!m2) {
+          plot.innerHTML = '<div class="tile-loading">Select a metric to compare.</div>';
+          return;
+        }
+        if (!currentParams) return;
+        plot.innerHTML = '<div class="tile-loading">Loading…</div>';
+        sel.disabled = true;
+        try {
+          // Cache the paired payload per secondary metric (cleared on Update,
+          // like endpointCache). A layout change re-renders every tile, so
+          // without this the heatmap would re-fetch each time; the efficiency
+          // metric and all filters are fixed between Updates, so metric2 alone
+          // keys the result (an in-flight promise is shared too).
+          if (!comparisonCache[m2])
+            comparisonCache[m2] = fetch(comparisonURL(currentParams, m2)).then(r => {
+              if (!r.ok) throw new Error(`HTTP ${r.status}`);
+              return r.json();
+            });
+          const p = await comparisonCache[m2];
+          if (!document.body.contains(el) || el.dataset.plotType !== 'metricscatter') return;
+          if (!p || !p.z || !p.z.length) {
+            plot.innerHTML = '<div class="tile-loading">No data for this pair.</div>';
+            return;
+          }
+          const ml2 = METRICS[m2] || m2;
+          // 100x100 server-binned job counts over the full filtered population.
+          // Log colour scale like the elapsed/wait heatmaps.
+          const { zLog, tickVals, tickText } = logHeatmapScale(p.z);
+          await Plotly.react(plot, [{
+            type: 'heatmap',
+            x: p.x, y: p.y, z: zLog, customdata: p.z,
+            colorscale: [[0, '#f7fbff'], [1, '#08306b']],
+            showscale: true,
+            colorbar: {
+              title: { text: 'Jobs (log₁₀)', side: 'right' },
+              tickmode: 'array', tickvals: tickVals, ticktext: tickText,
+            },
+            hovertemplate: ml + ': %{x:.1%}<br>' + ml2 + ': %{y:.1%}<br>Jobs: %{customdata}<extra></extra>',
+          }], pLayout({
+            title: { text: ml + ' vs ' + ml2 + ' (jobs per cell)', font: { size: 16 } },
+            xaxis: { title: { text: ml }, range: [0, 1], tickformat: '.0%' },
+            yaxis: { title: { text: ml2 }, range: [0, 1], tickformat: '.0%' },
+          }), { responsive: true });
+        } catch (e) {
+          delete comparisonCache[m2];  // don't cache a failed fetch
+          if (document.body.contains(el) && el.dataset.plotType === 'metricscatter')
+            plot.innerHTML = `<div class="tile-error">Error: ${e.message}</div>`;
+        } finally {
+          if (document.body.contains(el)) sel.disabled = false;
+        }
+      }
+
+      sel.addEventListener('change', () => { metricScatterMetric2 = sel.value; saveState(); draw(); });
+      draw();
+    }
+
+    {% if is_admin %}
+    function renderUserRgu(id, d) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      if (!d.userrgu.length) { el.textContent = 'No data.'; return; }
+
+      // "Top N" and "Sort by" are module-scoped so they survive Updates.
+      // Both controls re-render in place — no refetch needed.
+      el.style.height = 'auto';  // override .tile-chart's fixed height; the plot sets its own
+      el.innerHTML = '';
+      const ctrl = document.createElement('div');
+      ctrl.className = 'ur-ctrl';
+
+      // --- Top N input ---
+      const input = document.createElement('input');
+      input.type = 'number'; input.min = '1'; input.step = '1'; input.value = userRguTopN;
+      const okBtn = document.createElement('button');
+      okBtn.type = 'button'; okBtn.textContent = 'OK';
+      const lab = document.createElement('label');
+      lab.append('Top ', input, ' users');
+
+      // --- Sort-by dropdown ---
+      const sep = document.createElement('span');
+      sep.className = 'ur-sep'; sep.textContent = '|';
+      const sortLab = document.createElement('label');
+      sortLab.textContent = 'Sort by:';
+      const sortSel = document.createElement('select');
+      const SORT_OPTIONS = [
+        { value: 'rgu_requested',  label: 'RGU requested' },
+        { value: 'rgu_used',       label: 'RGU used' },
+        { value: 'rgu_unused',     label: 'RGU unused' },
+        { value: 'rgu_unmeasured', label: 'RGU unmeasured' },
+      ];
+      SORT_OPTIONS.forEach(opt => {
+        const o = document.createElement('option');
+        o.value = opt.value; o.textContent = opt.label;
+        if (opt.value === userRguSortBy) o.selected = true;
+        sortSel.appendChild(o);
+      });
+
+      ctrl.append(lab, okBtn, sep, sortLab, sortSel);
+      const plot = document.createElement('div');
+      plot.style.width = '100%';
+      el.appendChild(ctrl);
+      el.appendChild(plot);
+
+      function apply() {
+        userRguTopN = Math.max(1, parseInt(input.value, 10) || userRguTopN);
+        input.value = userRguTopN;
+        saveState();
+        draw();
+      }
+      okBtn.addEventListener('click', apply);
+      input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); apply(); } });
+      sortSel.addEventListener('change', () => { userRguSortBy = sortSel.value; saveState(); draw(); });
+
+      function draw() {
+        // Rescale the cumulative RGU·h to the unit selected in the toolbar.
+        const unit = rguUnit();
+        const selectedUser = document.getElementById('cluster_user').value.trim();
+
+        // Helper to compute the sort key for a row.
+        function sortKey(r) {
+          const used       = r.rgu_used;
+          const unmeasured = r.rgu_unmeasured || 0;
+          const unused     = r.rgu_requested - used - unmeasured;
+          switch (userRguSortBy) {
+            case 'rgu_used':       return used;
+            case 'rgu_unused':     return unused;
+            case 'rgu_unmeasured': return unmeasured;
+            default: return r.rgu_requested;  // 'rgu_requested'
+          }
+        }
+
+        // Sort a copy of all rows descending by chosen criterion, then slice top N.
+        const sorted = d.userrgu.slice().sort((a, b) => sortKey(b) - sortKey(a));
+        let topRows = sorted.slice(0, userRguTopN);
+        // If there is a focused user outside the top N, append them at the bottom.
+        if (selectedUser && !topRows.some(r => r.user === selectedUser)) {
+          const sel = sorted.find(r => r.user === selectedUser);
+          if (sel) topRows = [...topRows, sel];
+        }
+        // Reverse so the highest-value user appears at the TOP of the horizontal bar chart.
+        const rows  = topRows.reverse();
+        const users = rows.map(r => r.user);
+
+        const valUsed       = rows.map(r => r.rgu_used * unit.factor);
+        const valUnused     = rows.map(r => (r.rgu_requested - r.rgu_used - (r.rgu_unmeasured || 0)) * unit.factor);
+        const valUnmeasured = rows.map(r => (r.rgu_unmeasured || 0) * unit.factor);
+        const colorUsed       = rows.map(r => r.user === selectedUser ? '#e07020' : '#1a6fd4');
+        const colorUnused     = rows.map(r => r.user === selectedUser ? '#f0c090' : '#a8c8f0');
+        const colorUnmeasured = rows.map(r => r.user === selectedUser ? '#8a8a8a' : '#bdbdbd');
+
+        // Bar order (which trace is drawn first = leftmost segment) depends on
+        // the sort criterion so the primary metric leads the bar.
+        //   rgu_requested / rgu_used → [used, unused, unmeasured]
+        //   rgu_unused               → [unused, used, unmeasured]
+        //   rgu_unmeasured           → [unmeasured, used, unused]
+        const traceUsed = {
+          type: 'bar', name: 'Used',          orientation: 'h', y: users, x: valUsed,
+          marker: { color: colorUsed },
+          hovertemplate: '%{y}<br>' + unit.label + ' used: %{x:,.1f}<extra></extra>',
+        };
+        const traceUnused = {
+          type: 'bar', name: 'Unused',         orientation: 'h', y: users, x: valUnused,
+          marker: { color: colorUnused },
+          hovertemplate: '%{y}<br>' + unit.label + ' unused: %{x:,.1f}<extra></extra>',
+        };
+        const traceUnmeasured = {
+          type: 'bar', name: 'No metric data', orientation: 'h', y: users, x: valUnmeasured,
+          marker: { color: colorUnmeasured },
+          hovertemplate: '%{y}<br>' + unit.label + ' (no metric): %{x:,.1f}<extra></extra>',
+        };
+
+        let traces;
+        switch (userRguSortBy) {
+          case 'rgu_unused':     traces = [traceUnused,     traceUsed, traceUnmeasured]; break;
+          case 'rgu_unmeasured': traces = [traceUnmeasured, traceUsed, traceUnused];     break;
+          default:               traces = [traceUsed, traceUnused, traceUnmeasured];     break;
+        }
+
+        const chartH = Math.max(300, users.length * 24 + 80);
+        Plotly.react(plot, traces, pLayout({
+          title: { text: 'Total ' + unit.label + ' by User — Used vs Unused (click to filter)', font: { size: 16 } },
+          barmode: 'stack', height: chartH,
+          xaxis: { title: { text: 'Total ' + unit.label } },
+          yaxis: { title: { text: '' }, automargin: true },
+          legend: { orientation: 'h', x: 0, xanchor: 'left', y: 1.02, yanchor: 'bottom' },
+          margin: { l: 20, r: 20, t: 72, b: 50 },
+        }), { responsive: true }).then(gd => {
+          gd.removeAllListeners('plotly_click');
+          gd.on('plotly_click', data => {
+            if (!data.points || !data.points.length) return;
+            const clicked = data.points[0].y;
+            const current = document.getElementById('cluster_user').value.trim();
+            document.getElementById('cluster_user').value = clicked === current ? '' : clicked;
+            loadCharts();
+          });
+        });
+      }
+      draw();
+    }
+    {% endif %}
+
+    function renderJobTable(id, d) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      // Tear down any page-jump popover left open by a previous render (and its
+      // document listener) before rebuilding this tile's DOM.
+      if (el._jtClosePop) el._jtClosePop();
+      if (el._jtCloseCols) el._jtCloseCols();
+      // The endpoint returns one page: { total, jobs } where `total` is the full
+      // filtered GPU-job count and `jobs` are the rows for the current
+      // offset/limit/sort. Header clicks and the prev/next/page-size controls
+      // mutate the per-tile state stored on `el` and re-fetch only this tile via
+      // reload(); other tiles are untouched. A global Update rebuilds the tile
+      // div, which resets the state to JOBTABLE_DEFAULTS.
+      const payload = d.jobs || {};
+      const jobList = payload.jobs || [];
+      // The total is fetched fresh on every page (not cached) so the job count
+      // and page numbers track the DB as scraping adds jobs. The backend keeps it
+      // a separate, parallelised query, so paying it per page stays cheap.
+      const total = payload.total || 0;
+      el._jtData = payload;  // kept so an RGU-unit change can rescale in place
+
+      // Per-tile pagination + sort state, persisted on the element. Defaults
+      // mirror JOBTABLE_DEFAULTS so the first page (fetched via the shared cache
+      // with those defaults) lines up with this state.
+      const limit   = el._jtLimit   ?? JOBTABLE_DEFAULTS.limit;
+      const offset  = el._jtOffset  ?? JOBTABLE_DEFAULTS.offset;
+      const sortKey = el._jtSortKey ?? JOBTABLE_DEFAULTS.sortBy;
+      const sortDir = el._jtSortDir != null ? el._jtSortDir
+                    : (JOBTABLE_DEFAULTS.sortDir === 'asc' ? 1 : -1);  // -1 = desc
+      el._jtLimit = limit; el._jtOffset = offset;
+      el._jtSortKey = sortKey; el._jtSortDir = sortDir;
+
+      // Re-fetch this tile for its current element state and re-render in place.
+      // Bypasses the shared endpoint cache (which only holds the page-0/default-
+      // sort payload), so paging/sorting never disturbs the other tiles.
+      async function reload() {
+        if (!currentParams) return;
+        const cap = el.querySelector('.jt-caption-text');
+        if (cap) { cap.textContent = 'Loading'; cap.classList.add('jt-loading'); }
+        el.querySelectorAll('.job-table-foot button, .job-table-foot input, .job-table-foot select')
+          .forEach(c => { c.disabled = true; });
+        // Make the still-visible table inert while the next page loads. The
+        // sortable headers would otherwise stay clickable, and a click fires a
+        // handler that mutates the sort state and calls reload() again — a
+        // second, racing fetch. pointer-events:none stops the click at the
+        // source; the fresh table from renderJobTable() drops the class.
+        const busyTbl = el.querySelector('.job-table');
+        if (busyTbl) busyTbl.classList.add('jt-busy');
+        const url = withClustersAndStates(jobsURL(currentParams, {
+          offset: el._jtOffset, limit: el._jtLimit,
+          sortBy: el._jtSortKey, sortDir: el._jtSortDir === 1 ? 'asc' : 'desc',
+        }), currentParams);
+        try {
+          const r = await fetch(url);
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          const data = await r.json();
+          if (!document.body.contains(el) || el.dataset.plotType !== 'jobtable') return;
+          renderJobTable(id, { jobs: data });
+        } catch (e) {
+          if (document.body.contains(el))
+            el.innerHTML = `<div class="tile-error">Error: ${e.message}</div>`;
+        }
+      }
+
+      if (!total) { el.textContent = 'No jobs found.'; return; }
+
+      // The Waste column depends on the efficiency metric picked at last Update.
+      const metricName = (currentParams && currentParams.metric) || 'selected metric';
+      const metricPretty = METRICS[metricName] || metricName;
+      // RGU·time columns honour the toolbar unit (display rescale of the RGU·h
+      // returned by the backend; the server sort uses raw values, so the order
+      // is unit-independent). The per-job 'RGU' weight is not time-cumulative.
+      const unit = rguUnit();
+      const fmtRguTime = v => v != null
+        ? (v * unit.factor).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+        : '—';
+      // submit_time arrives as an ISO string; show it in UTC (YYYY-MM-DD HH:MM)
+      // to match the dashboard's UTC date range / focus.
+      const fmtDateTime = v => {
+        if (!v) return '—';
+        const d = new Date(v);
+        if (isNaN(d.getTime())) return v;
+        const p = n => String(n).padStart(2, '0');
+        return `${d.getUTCFullYear()}-${p(d.getUTCMonth()+1)}-${p(d.getUTCDate())} `
+             + `${p(d.getUTCHours())}:${p(d.getUTCMinutes())} UTC`;
+      };
+      const fmtInt = v => v != null ? String(v) : '—';
+      const COLS = [
+        { key: 'cluster',               label: 'Cluster' },
+        { key: 'job_id',                label: 'Job ID',    fmt: fmtInt },
+        { key: 'submit_time',           label: 'Submitted', fmt: fmtDateTime },
+        { key: 'user',                  label: 'User' },
+        { key: 'job_state',             label: 'State' },
+        { key: 'elapsed',               label: 'Elapsed',   fmt: v => {
+            if (v == null) return '—';
+            const s = Math.floor(v), h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sec = s%60;
+            return h > 0 ? `${h}h${String(m).padStart(2,'0')}m` : `${m}m${String(sec).padStart(2,'0')}s`;
+          }},
+        { key: 'nodes',                 label: 'Nodes',     cls: 'col-cmd' },
+        { key: 'requested_gpu',         label: 'Requested GPU', fmt: fmtInt },
+        { key: 'allocated_gpu',         label: 'Allocated GPU', fmt: fmtInt },
+        { key: 'billing',               label: 'Billing',   fmt: fmtInt },
+        { key: 'gpu_type',              label: 'GPU type' },
+        { key: 'gpu_type_rgu',          label: 'GPU type RGU',
+          title: 'Per-GPU DRAC RGU weight of this GPU type',
+          fmt: v => v != null ? v.toFixed(2) : '—' },
+        { key: 'rgu',                   label: 'RGU',
+          title: 'RGU weight of the job\'s allocated GPUs',
+          fmt: v => v != null ? v.toFixed(2) : '—' },
+        { key: 'rgu_hours',             label: unit.label,
+          title: `RGU × elapsed time, shown in ${unit.label}`,
+          fmt: fmtRguTime },
+        { key: 'waste',                 label: `${metricPretty} waste (${unit.label})`,
+          title: `RGU·time × (1 − mean ${metricPretty}): estimated unused RGU·time, taking the selected efficiency metric as the "useful" fraction`,
+          fmt: fmtRguTime },
+        { key: 'gpu_utilization_mean',  label: 'GPU util',  fmt: v => v != null ? (v*100).toFixed(1)+'%' : '—' },
+        { key: 'gpu_sm_occupancy_mean', label: 'SM occ',    fmt: v => v != null ? (v*100).toFixed(1)+'%' : '—' },
+        { key: 'gpu_memory_max',        label: 'Mem max',   fmt: v => v != null ? (v*100).toFixed(1)+'%' : '—' },
+      ];
+      // Columns the server can sort on; the array-valued 'nodes' column can't.
+      const SORTABLE = new Set(COLS.map(c => c.key).filter(k => k !== 'nodes'));
+
+      el.innerHTML = '';
+      const box = document.createElement('div');
+      box.className = 'job-table-box';
+
+      const caption = document.createElement('div');
+      caption.className = 'job-table-caption';
+      // Count text in its own span so reload() can swap it for the animated
+      // "Loading" cue without wiping the column picker that shares this line.
+      const capText = document.createElement('span');
+      capText.className = 'jt-caption-text';
+      // "GPU jobs": only jobs with an allocated GPU and a known RGU are listed,
+      // so this total is lower than the all-jobs counts in the per-period plot.
+      const from = offset + 1, to = offset + jobList.length;
+      capText.textContent =
+        `GPU jobs ${from.toLocaleString('en-US')}–${to.toLocaleString('en-US')} `
+        + `of ${total.toLocaleString('en-US')}`;
+      capText.title = 'Only GPU jobs (allocated GPU with a known RGU) are listed; '
+        + 'CPU-only jobs are counted in the per-period bar plot but not here.';
+      caption.appendChild(capText);
+
+      const wrap = document.createElement('div');
+      wrap.className = 'job-table-wrap';
+      const tbl = document.createElement('table');
+      tbl.className = 'job-table';
+
+      const thead = tbl.createTHead();
+      const hr = thead.insertRow();
+      COLS.forEach(c => {
+        const th = document.createElement('th');
+        th.dataset.col = c.key;
+        th.textContent = c.label;
+        if (c.title) th.title = c.title;
+        if (!SORTABLE.has(c.key)) {
+          th.className = 'no-sort';
+        } else {
+          if (c.key === sortKey) th.className = sortDir === 1 ? 'sort-asc' : 'sort-desc';
+          // A new sort order spans every page, so reset to the first page and
+          // re-fetch (the server does the ordering).
+          th.addEventListener('click', () => {
+            if (el._jtSortKey === c.key) el._jtSortDir = -el._jtSortDir;
+            else { el._jtSortKey = c.key; el._jtSortDir = -1; }
+            el._jtOffset = 0;
+            // Persist the sort (not the page) as the default for every table tile.
+            JOBTABLE_DEFAULTS.sortBy  = el._jtSortKey;
+            JOBTABLE_DEFAULTS.sortDir = el._jtSortDir === 1 ? 'asc' : 'desc';
+            saveState();
+            reload();
+          });
+        }
+        hr.appendChild(th);
+      });
+
+      const tbody = tbl.createTBody();
+      jobList.forEach(job => {
+        const tr = tbody.insertRow();
+        COLS.forEach(c => {
+          const td = tr.insertCell();
+          td.dataset.col = c.key;
+          const raw = job[c.key];
+          td.textContent = c.fmt ? c.fmt(raw) : (raw ?? '—');
+          if (c.cls) {
+            td.className = c.cls; td.title = raw || '';
+            // Nodes is truncated by default; click toggles the full (wrapped) list.
+            if (raw) td.addEventListener('click', () => td.classList.toggle('expanded'));
+          }
+        });
+      });
+      wrap.appendChild(tbl);
+
+      // Show/hide an entire column by key (every cell carries data-col=key),
+      // then apply the persisted column-visibility preference to this table.
+      const setColVisible = (key, visible) => {
+        tbl.querySelectorAll(`[data-col="${CSS.escape(key)}"]`)
+          .forEach(cell => { cell.style.display = visible ? '' : 'none'; });
+      };
+      COLS.forEach(c => setColVisible(c.key, !jobTableHiddenCols.has(c.key)));
+
+      // ── Pagination footer ─────────────────────────────────────────────────
+      const foot = document.createElement('div');
+      foot.className = 'job-table-foot';
+      const pages = Math.max(1, Math.ceil(total / limit));
+      const page  = Math.floor(offset / limit) + 1;
+      const lastOffset = (pages - 1) * limit;  // offset of the final page
+
+      const first = document.createElement('button');
+      first.textContent = '« First';
+      first.disabled = offset <= 0;
+      first.addEventListener('click', () => { el._jtOffset = 0; reload(); });
+
+      const prev = document.createElement('button');
+      prev.textContent = '‹ Prev';
+      prev.disabled = offset <= 0;
+      prev.addEventListener('click', () => {
+        el._jtOffset = Math.max(0, el._jtOffset - el._jtLimit);
+        reload();
+      });
+      const next = document.createElement('button');
+      next.textContent = 'Next ›';
+      next.disabled = offset + limit >= total;
+      next.addEventListener('click', () => {
+        el._jtOffset = el._jtOffset + el._jtLimit;
+        reload();
+      });
+      const last = document.createElement('button');
+      last.textContent = 'Last »';
+      last.disabled = offset + limit >= total;
+      last.addEventListener('click', () => { el._jtOffset = lastOffset; reload(); });
+
+      // Current page shown as a clickable link. Clicking it opens a small
+      // popover (number input + OK below) anchored to the link. The jump fires
+      // ONLY on OK (or Enter in the input); clicking outside or pressing Esc
+      // closes it with no action — so a stray blur/change never reloads.
+      const pageInfo = document.createElement('span');
+      pageInfo.className = 'jt-pageinfo';
+
+      let pop = null;
+      function closePop() {
+        document.removeEventListener('mousedown', onDocDown, true);
+        if (pop) { pop.remove(); pop = null; }
+        el._jtClosePop = null;
+      }
+      function onDocDown(e) {
+        // Close when the click lands outside the popover (the link itself is
+        // excluded so re-clicking it doesn't close-then-reopen).
+        if (pop && !pop.contains(e.target) && e.target !== pageLink) closePop();
+      }
+      function openPop() {
+        if (pop || pages <= 1) return;
+        pop = document.createElement('div');
+        pop.className = 'jt-page-pop';
+        const inp = document.createElement('input');
+        inp.type = 'number';
+        inp.className = 'jt-page-input';
+        inp.min = '1'; inp.max = String(pages);
+        inp.value = String(page);
+        const ok = document.createElement('button');
+        ok.type = 'button';
+        ok.textContent = 'OK';
+        const submit = () => {
+          let p = parseInt(inp.value, 10);
+          closePop();
+          if (!Number.isFinite(p)) return;
+          p = Math.min(pages, Math.max(1, p));
+          const newOffset = (p - 1) * limit;
+          if (newOffset !== el._jtOffset) { el._jtOffset = newOffset; reload(); }
+        };
+        ok.addEventListener('click', submit);
+        inp.addEventListener('keydown', e => {
+          if (e.key === 'Enter')  { e.preventDefault(); submit(); }
+          if (e.key === 'Escape') { e.preventDefault(); closePop(); pageLink.focus(); }
+        });
+        pop.append(inp, ok);
+        pageInfo.appendChild(pop);
+        inp.focus(); inp.select();
+        el._jtClosePop = closePop;
+        // Defer so the click that opened the popover isn't caught as "outside".
+        setTimeout(() => document.addEventListener('mousedown', onDocDown, true), 0);
+      }
+
+      const pageLink = document.createElement('span');
+      pageLink.textContent = page.toLocaleString('en-US');
+      if (pages > 1) {
+        pageLink.className = 'jt-page-link';
+        pageLink.tabIndex = 0;
+        pageLink.title = `Click to jump to a page (1–${pages.toLocaleString('en-US')})`;
+        pageLink.addEventListener('click', openPop);
+        pageLink.addEventListener('keydown', e => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPop(); }
+        });
+      }
+      pageInfo.append('Page ', pageLink, ` / ${pages.toLocaleString('en-US')}`);
+
+      const spacer = document.createElement('span');
+      spacer.className = 'jt-spacer';
+
+      const szLabel = document.createElement('label');
+      szLabel.textContent = 'Rows ';
+      const sz = document.createElement('select');
+      JOBTABLE_PAGE_SIZES.forEach(n => {
+        const opt = document.createElement('option');
+        opt.value = String(n); opt.textContent = String(n);
+        if (n === limit) opt.selected = true;
+        sz.appendChild(opt);
+      });
+      // A new page size shifts page boundaries, so jump back to the first page.
+      sz.addEventListener('change', () => {
+        el._jtLimit = parseInt(sz.value, 10);
+        el._jtOffset = 0;
+        // Persist the page size (not the page) as the default for every tile.
+        JOBTABLE_DEFAULTS.limit = el._jtLimit;
+        saveState();
+        reload();
+      });
+      szLabel.appendChild(sz);
+
+      foot.append(first, prev, pageInfo, next, last, spacer, szLabel);
+
+      // ── Column-visibility picker (caption line, right-aligned) ────────────
+      // Pure display: toggling a checkbox shows/hides that column live (no
+      // refetch) and the menu stays open. Mirrors the toolbar's cluster /
+      // job-state dropdowns; the choice is global (jobTableHiddenCols).
+      const colMenu = document.createElement('div');
+      colMenu.className = 'js-dropdown jt-cols';
+      const colBtn = document.createElement('button');
+      colBtn.type = 'button';
+      colBtn.className = 'add-select';
+      colBtn.textContent = 'Columns ▾';
+      colBtn.title = 'Show / hide table columns';
+      const colPanel = document.createElement('div');
+      colPanel.className = 'job-states-panel jt-cols-panel';
+      colPanel.style.display = 'none';
+      const colChecks = [];
+      const setAllCols = visible => () => {
+        COLS.forEach((c, i) => {
+          colChecks[i].checked = visible;
+          if (visible) jobTableHiddenCols.delete(c.key); else jobTableHiddenCols.add(c.key);
+          setColVisible(c.key, visible);
+        });
+        saveState();
+      };
+      const mkColAct = (txt, fn) => {
+        const b = document.createElement('button');
+        b.type = 'button'; b.textContent = txt; b.addEventListener('click', fn);
+        return b;
+      };
+      const colActions = document.createElement('div');
+      colActions.className = 'js-actions';
+      colActions.append(mkColAct('All', setAllCols(true)), mkColAct('None', setAllCols(false)));
+      colPanel.appendChild(colActions);
+      COLS.forEach(c => {
+        const lbl = document.createElement('label');
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = !jobTableHiddenCols.has(c.key);
+        cb.addEventListener('change', () => {
+          if (cb.checked) jobTableHiddenCols.delete(c.key); else jobTableHiddenCols.add(c.key);
+          setColVisible(c.key, cb.checked);
+          saveState();
+        });
+        colChecks.push(cb);
+        lbl.append(cb, ' ' + c.label);
+        colPanel.appendChild(lbl);
+      });
+      function closeColMenu() {
+        colPanel.style.display = 'none';
+        document.removeEventListener('mousedown', onColMenuDown, true);
+        el._jtCloseCols = null;
+      }
+      function onColMenuDown(e) {
+        if (!colPanel.contains(e.target) && e.target !== colBtn) closeColMenu();
+      }
+      colBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        if (colPanel.style.display === 'none') {
+          colPanel.style.display = 'block';
+          el._jtCloseCols = closeColMenu;
+          // Defer so this opening click isn't caught as an outside click.
+          setTimeout(() => document.addEventListener('mousedown', onColMenuDown, true), 0);
+        } else {
+          closeColMenu();
+        }
+      });
+      colMenu.append(colBtn, colPanel);
+      caption.appendChild(colMenu);
+
+      box.appendChild(caption);
+      box.appendChild(wrap);
+      box.appendChild(foot);
+      el.appendChild(box);
+    }
+
+    // ── Focus helpers ────────────────────────────────────────────────────────
+
+    // Active focus sub-range ('YYYY-MM-DDTHH:MM' UTC; '' = no focus). Set by
+    // clicking a bar in the period plots, cleared by re-clicking the same bar
+    // or via the Clear-focus button at the bottom of the toolbar.
+    let focusStart = '';
+    let focusEnd   = '';
+
+    function periodStartToMs(s) {
+      return new Date(s.length === 10 ? s + 'T00:00:00Z' : s.replace(' ', 'T') + ':00Z').getTime();
+    }
+
+    // Returns true/false if focus is active, null if no focus set (all bars same)
+    function periodInFocus(periodStartStr) {
+      if (!focusStart && !focusEnd) return null;
+      const pMs = periodStartToMs(periodStartStr);
+      const fsMs = focusStart ? new Date(focusStart + ':00Z').getTime() : -Infinity;
+      const feMs = focusEnd   ? new Date(focusEnd   + ':00Z').getTime() :  Infinity;
+      return pMs >= fsMs && pMs < feMs;
+    }
+
+    // Permanently-visible toolbar line (constant height via min-height, so
+    // toggling focus never reflows the page): either the active focus range
+    // plus the Clear-focus button, or a dimmed "No focus" hint.
+    function updateFocusLabel() {
+      const box = document.getElementById('focus-label');
+      const btn = document.getElementById('clear-focus');
+      const txt = document.getElementById('focus-label-text');
+      if (!focusStart && !focusEnd) {
+        box.classList.add('no-focus');
+        txt.textContent = 'No focus — click a bar in a period plot to zoom the detail plots onto that slice';
+        btn.style.display = 'none';
+      } else {
+        box.classList.remove('no-focus');
+        txt.textContent =
+          'Focused on ' + focusStart.replace('T', ' ') + ' ; ' + focusEnd.replace('T', ' ');
+        btn.style.display = '';
+      }
+    }
+
+    function clearFocus() {
+      focusStart = '';
+      focusEnd   = '';
+      updateFocusLabel();
+      loadCharts();
+    }
+
+    function clickSetFocus(periodStartStr, periodEndStr) {
+      const toInput   = ms => new Date(ms).toISOString().slice(0, 16);
+      const newStart  = toInput(periodStartToMs(periodStartStr));
+      const newEnd    = toInput(periodStartToMs(periodEndStr));
+      // Toggle off if clicking the already-focused period
+      if (focusStart === newStart && focusEnd === newEnd) {
+        focusStart = '';
+        focusEnd   = '';
+      } else {
+        focusStart = newStart;
+        focusEnd   = newEnd;
+      }
+      updateFocusLabel();
+      loadCharts();
+    }
+
+    // ── Data loading ─────────────────────────────────────────────────────────
+
+    // Snapshot the form's parameters into a plain object. Returns null if
+    // mandatory fields (start/end) are missing.
+    // ── Job states selector ──────────────────────────────────────────────────
+    const jsBtn = document.getElementById('js-btn');
+    const jsPanel = document.getElementById('js-panel');
+    const JOB_STATES = {{ job_states | tojson }};  // injected by the backend from the SlurmState enum
+
+    function jsSelected() {
+      return [...jsPanel.querySelectorAll('input:checked')].map(c => c.value);
+    }
+    function jsUpdateLabel() {
+      const n = jsSelected().length;
+      jsBtn.textContent =
+        (n === JOB_STATES.length ? 'All states' : n + ' selected') + ' ▾';
+    }
+    // JOB_STATES is injected into the page from the SlurmState enum (see _HTML),
+    // so the panel is built synchronously — no fetch needed.
+    {
+      jsPanel.innerHTML =
+        '<div class="js-actions"><button type="button" id="js-all">All</button>' +
+        '<button type="button" id="js-none">None</button></div>' +
+        JOB_STATES.map(s => `<label><input type="checkbox" value="${s}" checked> ${s}</label>`).join('');
+      jsPanel.querySelectorAll('input').forEach(c => c.addEventListener('change', jsUpdateLabel));
+      const setAll = v => () => {
+        jsPanel.querySelectorAll('input').forEach(c => { c.checked = v; });
+        jsUpdateLabel();
+      };
+      document.getElementById('js-all').addEventListener('click', setAll(true));
+      document.getElementById('js-none').addEventListener('click', setAll(false));
+      // Restore saved job-state selection.
+      if (Array.isArray(_saved.job_states)) {
+        jsPanel.querySelectorAll('input').forEach(c => {
+          c.checked = _saved.job_states.includes(c.value);
+        });
+      }
+      jsUpdateLabel();
+    }
+    jsBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      jsPanel.style.display = jsPanel.style.display === 'none' ? 'block' : 'none';
+    });
+    document.addEventListener('click', e => {
+      if (jsPanel.style.display !== 'none' && !jsPanel.contains(e.target) && e.target !== jsBtn)
+        jsPanel.style.display = 'none';
+    });
+
+    // ── Period selector (radio dropdown, mirrors the job-states widget) ──────
+    // Produces the API grammar: a bare letter (h/d/w/m) for calendar buckets,
+    // or N+unit (e.g. 14d, 72h) for a fixed window stepping from Start.
+    const periodBtn = document.getElementById('period-btn');
+    const periodPanel = document.getElementById('period-panel');
+    const periodN = document.getElementById('period-n');
+    const periodUnit = document.getElementById('period-unit');
+    const PERIOD_LABELS = { h: 'By hour', d: 'By day', w: 'By week', m: 'By month' };
+
+    function periodMode() {
+      return periodPanel.querySelector('input[name="period-mode"]:checked').value;
+    }
+    function periodCustomN() {
+      return Math.max(1, Math.floor(Number(periodN.value) || 1));
+    }
+    function periodValue() {
+      const mode = periodMode();
+      return mode === 'custom' ? periodCustomN() + periodUnit.value : mode;
+    }
+    function periodUpdateLabel() {
+      let txt = PERIOD_LABELS[periodMode()];
+      if (!txt) {
+        const n = periodCustomN();
+        txt = 'Every ' + n + ' ' + (periodUnit.value === 'h' ? 'hour' : 'day') + (n > 1 ? 's' : '');
+      }
+      periodBtn.textContent = txt + ' ▾';
+    }
+    function setPeriod(s) {
+      // Accepts the API grammar (used for the server-injected default).
+      const m = /^(\d+(?:\.\d+)?)?\s*([hdwm]?)$/i.exec((s || '').trim()) || [];
+      let num = m[1] ? parseFloat(m[1]) : null;
+      let unit = (m[2] || (num !== null ? 'd' : 'w')).toLowerCase();
+      if (num === null) {
+        periodPanel.querySelector(`input[value="${unit}"]`).checked = true;
+      } else {
+        // The custom form only offers hours/days: rewrite w/m (and sub-day
+        // day fractions) to keep the value representable.
+        if (unit === 'w') { num *= 7; unit = 'd'; }
+        if (unit === 'm') { num *= 30; unit = 'd'; }
+        if (unit === 'd' && num < 1) { num *= 24; unit = 'h'; }
+        periodPanel.querySelector('input[value="custom"]').checked = true;
+        periodN.value = Math.max(1, Math.round(num));
+        periodUnit.value = unit;
+      }
+      periodUpdateLabel();
+    }
+    periodBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      periodPanel.style.display = periodPanel.style.display === 'none' ? 'block' : 'none';
+    });
+    document.addEventListener('click', e => {
+      if (periodPanel.style.display !== 'none' && !periodPanel.contains(e.target) && e.target !== periodBtn)
+        periodPanel.style.display = 'none';
+    });
+    periodPanel.querySelectorAll('input[name="period-mode"]')
+      .forEach(r => r.addEventListener('change', periodUpdateLabel));
+    // Touching the custom fields implies the custom mode.
+    [periodN, periodUnit].forEach(el => {
+      el.addEventListener('focus', () => {
+        periodPanel.querySelector('input[value="custom"]').checked = true;
+        periodUpdateLabel();
+      });
+      el.addEventListener('change', periodUpdateLabel);
+    });
+    setPeriod(periodPanel.dataset.default);
+
+    function captureParams() {
+      const start = document.getElementById('start').value;
+      const end   = document.getElementById('end').value;
+      if (!start || !end) return null;
+      return {
+        start, end,
+        period:        periodValue(),
+        clusters:      clSelected(),
+        {% if is_admin %}
+        cluster_user:  document.getElementById('cluster_user').value.trim(),
+        {% endif %}
+        metric:        selectedMetric(),
+        focus_start:   focusStart,
+        focus_end:     focusEnd,
+        job_states:    jsSelected(),
+      };
+    }
+
+    // Append the cluster + job-state multi-filters that every endpoint shares.
+    // Each is omitted when all (or none) are selected (= no filter).
+    function withClustersAndStates(url, p) {
+      if (p.clusters && p.clusters.length && p.clusters.length < CLUSTERS.length) {
+        const sep = url.includes('?') ? '&' : '?';
+        url += sep + p.clusters.map(c => 'clusters=' + encodeURIComponent(c)).join('&');
+      }
+      if (p.job_states && p.job_states.length && p.job_states.length < JOB_STATES.length) {
+        const sep = url.includes('?') ? '&' : '?';
+        url += sep + p.job_states.map(s => 'job_states=' + encodeURIComponent(s)).join('&');
+      }
+      return url;
+    }
+
+    function endpointURL(ep, p) {
+      return withClustersAndStates(endpointURLBase(ep, p), p);
+    }
+
+    // /jobs base URL with explicit pagination + sort. Kept separate from
+    // endpointURLBase so the job-table tile can re-fetch a different
+    // page/sort — withClustersAndStates(jobsURL(...)) — without disturbing the
+    // shared endpoint cache used by the other tiles.
+    function jobsURL(p, { offset, limit, sortBy, sortDir }) {
+      {% if is_admin %}
+      const base = { start: p.start, end: p.end, ...(p.cluster_user ? { cluster_user: p.cluster_user } : {}) };
+      {% else %}
+      const base = { start: p.start, end: p.end };
+      {% endif %}
+      const focusParams = {
+        ...(p.focus_start ? { focus_start: p.focus_start } : {}),
+        ...(p.focus_end   ? { focus_end:   p.focus_end   } : {}),
+      };
+      return '/dash/metrics/jobs?' + new URLSearchParams({
+        ...base, metric: p.metric, ...focusParams,
+        offset, limit, sort_by: sortBy, sort_dir: sortDir });
+    }
+
+    // /metric_comparison URL for the metric-heatmap tile. Separate from
+    // endpointURLBase (like jobsURL) so the tile re-fetches its paired heatmap
+    // for the picked secondary metric without touching the shared cache.
+    function comparisonURL(p, metric2) {
+      const focusParams = {
+        ...(p.focus_start ? { focus_start: p.focus_start } : {}),
+        ...(p.focus_end   ? { focus_end:   p.focus_end   } : {}),
+      };
+      return withClustersAndStates('/dash/metrics/metric_comparison?' + new URLSearchParams({
+        start: p.start, end: p.end, metric: p.metric, metric2,
+        {% if is_admin %}
+        ...(p.cluster_user ? { cluster_user: p.cluster_user } : {}),
+        {% endif %}
+        ...focusParams }), p);
+    }
+
+    function endpointURLBase(ep, p) {
+      {% if is_admin %}
+      const base = { start: p.start, end: p.end, ...(p.cluster_user ? { cluster_user: p.cluster_user } : {}) };
+      {% else %}
+      const base = { start: p.start, end: p.end };
+      {% endif %}
+      const focusParams = {
+        ...(p.focus_start ? { focus_start: p.focus_start } : {}),
+        ...(p.focus_end   ? { focus_end:   p.focus_end   } : {}),
+      };
+      const densityParams = { ...base, metric: p.metric };
+      switch (ep) {
+        case 'data':      return '/dash/metrics/job_counts?' + new URLSearchParams({ ...base, period: p.period });
+        case 'heatmap':   return '/dash/metrics/job_times_vs_limit?' + new URLSearchParams({ ...base, ...focusParams });
+        case 'histogram': return '/dash/metrics/rgu_usage?' + new URLSearchParams({ ...base, period: p.period, metric: p.metric });
+        case 'density':   return '/dash/metrics/metric_distribution?' + new URLSearchParams({ ...densityParams, ...focusParams });
+        case 'jobs':      return jobsURL(p, JOBTABLE_DEFAULTS);
+        {% if is_admin %}
+        case 'user_rgu':  return '/dash/metrics/rgu_by_user?' + new URLSearchParams({ start: p.start, end: p.end, metric: p.metric, ...focusParams });
+        case 'rgu_by_cluster': return '/dash/metrics/rgu_by_cluster?' + new URLSearchParams({ start: p.start, end: p.end, period: p.period, ...(p.cluster_user ? { cluster_user: p.cluster_user } : {}) });
+        {% else %}
+        case 'rgu_by_cluster': return '/dash/metrics/rgu_by_cluster?' + new URLSearchParams({ start: p.start, end: p.end, period: p.period });
+        {% endif %}
+        case 'metric_trend': return '/dash/metrics/metric_trend?' + new URLSearchParams({ ...base, period: p.period, metric: p.metric });
+      }
+      throw new Error('Unknown endpoint: ' + ep);
+    }
+
+    // Return a promise for the data of `ep`, fetching it once and caching it.
+    // Multiple tiles can call this concurrently; they all share the same in-
+    // flight promise.
+    function ensureEndpoint(ep) {
+      if (endpointCache[ep]) return endpointCache[ep];
+      endpointStatus[ep] = 'loading';
+      endpointCache[ep] = (async () => {
+        try {
+          const r = await fetch(endpointURL(ep, currentParams));
+          if (!r.ok) throw new Error(`HTTP ${r.status} on /${ep}`);
+          const data = await r.json();
+          endpointStatus[ep] = 'ready';
+          updateStatus();
+          return data;
+        } catch (e) {
+          endpointStatus[ep] = 'error';
+          updateStatus();
+          throw e;
+        }
+      })();
+      updateStatus();
+      return endpointCache[ep];
+    }
+
+    function updateStatus() {
+      const statusEl = document.getElementById('status');
+      const states = Object.values(endpointStatus);
+      const loading = states.filter(s => s === 'loading').length;
+      const ready   = states.filter(s => s === 'ready').length;
+      const errored = states.filter(s => s === 'error').length;
+      if (loading > 0) {
+        statusEl.textContent =
+          `Loading ${loading} endpoint(s)… (${ready} ready` +
+          (errored ? `, ${errored} error` : '') + ')';
+      } else if (errored > 0) {
+        statusEl.textContent = `${ready} endpoint(s) loaded, ${errored} error(s).`;
+      } else if (ready > 0) {
+        statusEl.textContent = `${ready} endpoint(s) loaded.`;
+      } else {
+        statusEl.textContent = '';
+      }
+    }
+
+    // Draw a single tile: show "Loading…", await its endpoint, then either
+    // render the plot or show an error. We must re-validate the chartDiv is
+    // still in the DOM and still bound to the same plot type after the
+    // await — the user may have removed or swapped the tile in the meantime.
+    async function renderTile(chartDiv, plotType) {
+      // The metric heatmap owns its data flow (per-tile secondary picker that
+      // re-fetches /metric_comparison itself), so it skips the shared endpoint
+      // cache: render it straight away and let its own draw() do the fetching.
+      if (plotType === 'metricscatter') {
+        chartDiv.innerHTML = '';
+        renderPlot(chartDiv.id, plotType, {});
+        return;
+      }
+      const ep = PLOT_TO_ENDPOINT[plotType];
+      if (!ep) {
+        chartDiv.innerHTML = `<div class="tile-error">Unknown plot type: ${plotType}</div>`;
+        return;
+      }
+      chartDiv.innerHTML = '<div class="tile-loading">Loading…</div>';
+      try {
+        const data = await ensureEndpoint(ep);
+        if (!document.body.contains(chartDiv)) return;
+        if (chartDiv.dataset.plotType !== plotType) return;
+        chartDiv.innerHTML = '';
+        renderPlot(chartDiv.id, plotType, { [ENDPOINT_TO_KEY[ep]]: data });
+      } catch (e) {
+        if (!document.body.contains(chartDiv)) return;
+        chartDiv.innerHTML = `<div class="tile-error">Error: ${e.message}</div>`;
+      }
+    }
+
+    // Update button + click handlers call this. Captures
+    // the current form values, invalidates the endpoint cache, and re-renders
+    // every tile. Each tile then independently fetches what it needs.
+    async function loadCharts() {
+      const params = captureParams();
+      if (params === null) {
+        document.getElementById('status').textContent =
+          'Please select start and end dates.';
+        return;
+      }
+      currentParams   = params;
+      endpointCache   = {};
+      comparisonCache = {};
+      endpointStatus  = {};
+      saveState();
+      updateStatus();
+      renderLayout();
+    }
+
+    // ── Init ─────────────────────────────────────────────────────────────────
+
+    // Admins: URL param wins over localStorage (bookmarkable layouts), then saved
+    // state, then DEFAULT_LAYOUT. Non-admins: layout is fixed to DEFAULT_LAYOUT
+    // (saved/URL layout ignored — the editing controls are hidden too).
+    {% if is_admin %}
+    const _urlPlots = new URLSearchParams(window.location.search).get('plots');
+    tileLayout = _urlPlots
+      ? paramToLayout(_urlPlots)
+      : (_saved.layout ? paramToLayout(_saved.layout) : DEFAULT_LAYOUT.map(r => [...r]));
+    {% else %}
+    tileLayout = DEFAULT_LAYOUT.map(r => [...r]);
+    {% endif %}
+    syncUrl();
+
+    // Restore period (after setPeriod is defined, which is above).
+    if (_saved.period) setPeriod(_saved.period);
+
+    // Restore focus state.
+    if (_saved.focusStart) focusStart = _saved.focusStart;
+    if (_saved.focusEnd)   focusEnd   = _saved.focusEnd;
+    updateFocusLabel();
+
+    renderLayout();
+  </script>
+</body>
+</html>

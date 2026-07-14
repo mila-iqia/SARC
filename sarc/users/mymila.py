@@ -42,15 +42,11 @@ A MyMila entry contains the following fields:
 import json
 import logging
 import re
-import struct
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time
 from enum import IntEnum, unique
-from itertools import chain, repeat
-from typing import Sequence
 
-from azure.identity import ClientSecretCredential
 from serieux.features.encrypt import Secret
 
 from sarc.models.user import MemberType
@@ -147,7 +143,10 @@ class MyMilaScraper(UserScraper[MyMilaConfig]):
         headers[-1] = "MEMBER_NUM"
         assert headers == [h.name for h in Headers]
         for record in records:
-            if record[Headers.MEMBER_NUM] in Invalid_MEMBER_NUM:
+            if (
+                record[Headers.MILA_Email] is None
+                or record[Headers.MEMBER_NUM] in Invalid_MEMBER_NUM
+            ):
                 continue
             first_name = record[Headers.Preferred_First_Name]
             if first_name is None:
@@ -208,29 +207,29 @@ def _query_mymila(cfg: MyMilaConfig) -> tuple[list, list[str]]:
     Contact MyMila in order to retrieve users data,
     then return these data as MyMilaUser elements.
     """
-    import pyodbc  # type: ignore[import-not-found]
+    import mssql_python  # type: ignore[import-not-found]
+
+    connection_string = (
+        f"Server={cfg.sql_endpoint},1433;"
+        f"Database={cfg.database};"
+        f"Authentication=ActiveDirectoryServicePrincipal;"
+        f"UID={cfg.client_id};"
+        f"PWD={cfg.client_secret};"
+        f"Encrypt=Yes;"
+        f"TrustServerCertificate=No;"
+    )
 
     # Retrieve MyMila data
-    credential = ClientSecretCredential(
-        client_id=cfg.client_id,
-        tenant_id=cfg.tenant_id,
-        client_secret=cfg.client_secret,
-    )
-    connection_string = f"Driver={{ODBC Driver 18 for SQL Server}};Server={cfg.sql_endpoint},1433;Database={cfg.database};Encrypt=Yes;TrustServerCertificate=No"
-    token_object = credential.get_token("https://database.windows.net/.default")
-    token_as_bytes = token_object.token.encode("UTF-8")
-    encoded_bytes = bytes(chain.from_iterable(zip(token_as_bytes, repeat(0))))
-    token_bytes = struct.pack("<i", len(encoded_bytes)) + encoded_bytes
-    attrs_before: dict[int, int | bytes | bytearray | str | Sequence[str]] = {
-        1256: token_bytes
-    }
+    connection = mssql_python.connect(connection_string)
+    try:
+        cursor = connection.cursor()
+        cursor.execute(
+            "SELECT * FROM MyMila_Extract_Etudiants_2 WHERE Status != 'Applicant' AND Profile_Type IN ('Student', 'Professor')"
+        )
+        records = [tuple(row) for row in cursor.fetchall()]
+        assert cursor.description is not None
+        headers = [i[0] for i in cursor.description]
 
-    connection = pyodbc.connect(connection_string, attrs_before=attrs_before)
-    cursor = connection.cursor()
-    cursor.execute(
-        "SELECT * FROM MyMila_Extract_Etudiants_2 WHERE Status != 'Applicant' AND Profile_Type IN ('Student', 'Professor')"
-    )
-    records = [tuple(row) for row in cursor.fetchall()]
-    headers = [i[0] for i in cursor.description]
-
-    return records, headers
+        return records, headers
+    finally:
+        connection.close()

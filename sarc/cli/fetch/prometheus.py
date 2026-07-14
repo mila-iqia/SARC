@@ -1,6 +1,6 @@
 import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 
 from simple_parsing import field
 
@@ -24,7 +24,7 @@ class FetchPrometheus:
     def execute(self) -> int:
         after = None
         if self.after is not None:
-            after = datetime.fromisoformat(self.after)
+            after = datetime.fromisoformat(self.after).astimezone(UTC)
 
         clusters_configs = config.clusters
 

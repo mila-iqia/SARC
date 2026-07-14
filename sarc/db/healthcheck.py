@@ -44,23 +44,23 @@ class HealthCheckStateDB(SQLModel, table=True):
 
     @property
     def check(self) -> HealthCheck:
-        return deserialize(TaggedSubclass[HealthCheck], self.check_dict)
+        return deserialize(TaggedSubclass[HealthCheck], self.check_dict)  # ty:ignore[invalid-argument-type]
 
     @check.setter
     def check(self, hc: HealthCheck):
-        self.check_dict = serialize(TaggedSubclass[HealthCheck], hc)
+        self.check_dict = serialize(TaggedSubclass[HealthCheck], hc)  # ty:ignore[invalid-argument-type, invalid-assignment]
 
     @property
     def last_result(self) -> CheckResult | None:
         return (
             None
             if self.last_result_dict is None
-            else deserialize(TaggedSubclass[CheckResult], self.last_result_dict)
+            else deserialize(TaggedSubclass[CheckResult], self.last_result_dict)  # ty:ignore[invalid-argument-type]
         )
 
     @last_result.setter
     def last_result(self, rc: CheckResult):
-        self.last_result_dict = serialize(TaggedSubclass[CheckResult], rc)
+        self.last_result_dict = serialize(TaggedSubclass[CheckResult], rc)  # ty:ignore[invalid-argument-type, invalid-assignment]
 
     @classmethod
     def get_state(cls, sess: Session, name: str) -> Self | None:

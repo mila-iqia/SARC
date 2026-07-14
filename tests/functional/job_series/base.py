@@ -16,24 +16,19 @@ from typing import Protocol
 
 import pandas
 import pytest
-import sqlmodel
 import time_machine
 from sqlmodel import Session, col, or_, select
 
-from sarc.db.cluster import GPUBillingDB, SlurmClusterDB
+from sarc.db.cluster import SlurmClusterDB
 from sarc.db.job import JobStatisticDB, SlurmJobDB
 from sarc.scraping.series import compute_job_statistics
 from tests.common.dateutils import MTL
 from tests.functional.common import MOCK_TIME, generate_fake_timeseries
 from tests.functional.job_series.rgu_utils import (
     ExampleData,
-    _billings_dump,
     _check_rgu_columns,
     _get_rgus,
-    cluster_gpu_billing_is_gpu,
-    cluster_gpu_billing_many_dates,
     cluster_gpu_billing_one_date,
-    cluster_no_gpu_billing,
 )
 
 ALL_COLUMNS = sorted(
@@ -87,20 +82,22 @@ ALL_COLUMNS = sorted(
         "cluster_user",
         "sarc_user_id",
         "work_dir",
-        "rgu",
-        "rgu_drac",
+        "requested_rgu",
+        "requested_rgu_drac",
+        "allocated_rgu",
+        "allocated_rgu_drac",
         "gpu_type_rgu",
         "gpu_type_rgu_drac",
-        "cpu_cost",
-        "cpu_equivalent_cost",
+        "requested_cpu_cost",
+        "allocated_cpu_cost",
         "cpu_overbilling_cost",
-        "cpu_waste",
-        "cpu_equivalent_waste",
-        "gpu_cost",
-        "gpu_equivalent_cost",
+        "requested_cpu_waste",
+        "allocated_cpu_waste",
+        "requested_gpu_cost",
+        "allocated_gpu_cost",
         "gpu_overbilling_cost",
-        "gpu_waste",
-        "gpu_equivalent_waste",
+        "requested_gpu_waste",
+        "allocated_gpu_waste",
     ]
 )
 USER_COLUMNS = sorted(["email", "display_name", "supervisors", "member_type"])
@@ -214,15 +211,15 @@ def _cost_and_waste_markdown(df: pandas.DataFrame) -> str:
             "allocated_gres_gpu",
             "cpu_utilization",
             "gpu_utilization",
-            "cpu_cost",
-            "cpu_waste",
-            "cpu_equivalent_cost",
-            "cpu_equivalent_waste",
+            "requested_cpu_cost",
+            "requested_cpu_waste",
+            "allocated_cpu_cost",
+            "allocated_cpu_waste",
             "cpu_overbilling_cost",
-            "gpu_cost",
-            "gpu_waste",
-            "gpu_equivalent_cost",
-            "gpu_equivalent_waste",
+            "requested_gpu_cost",
+            "requested_gpu_waste",
+            "allocated_gpu_cost",
+            "allocated_gpu_waste",
             "gpu_overbilling_cost",
         ]
     ].to_markdown()
@@ -540,11 +537,11 @@ class BaseTestLoadJobSeries:
 
         # Jobs do not have statistics, so, (gpu/cpu)_utilization is nan, and waste is nan too.
         assert frame["cpu_utilization"].isnull().all()
-        assert frame["cpu_waste"].isnull().all()
-        assert frame["cpu_equivalent_waste"].isnull().all()
+        assert frame["requested_cpu_waste"].isnull().all()
+        assert frame["allocated_cpu_waste"].isnull().all()
         assert frame["gpu_utilization"].isnull().all()
-        assert frame["gpu_waste"].isnull().all()
-        assert frame["gpu_equivalent_waste"].isnull().all()
+        assert frame["requested_gpu_waste"].isnull().all()
+        assert frame["allocated_gpu_waste"].isnull().all()
 
         file_regression.check(
             f"Compute cost and waste for {frame.shape[0]} job(s):\n\n{_cost_and_waste_markdown(frame)}"
@@ -561,61 +558,37 @@ class BaseTestLoadJobSeries:
         frame = fn_load_job_series(read_write_db)
         assert frame["cpu_utilization"].isnull().all()
         assert frame["gpu_utilization"].isnull().all()
-        assert frame["cpu_waste"].isnull().all()
-        assert frame["cpu_equivalent_waste"].isnull().all()
-        assert frame["gpu_waste"].isnull().all()
-        assert frame["gpu_equivalent_waste"].isnull().all()
+        assert frame["requested_cpu_waste"].isnull().all()
+        assert frame["allocated_cpu_waste"].isnull().all()
+        assert frame["requested_gpu_waste"].isnull().all()
+        assert frame["allocated_gpu_waste"].isnull().all()
 
         for job in jobs:
             job.statistics = compute_job_statistics(job, generate_fake_timeseries(job))
             read_write_db.merge(job)
             read_write_db.commit()
 
-        # With statistics computed, utilization fields are not nan, so waste fields are not nan neither.
+        # With statistics computed, utilization fields are not nan, so waste
+        # fields are not nan either. GPU cost/waste are RGU-based: they are
+        # defined exactly for the jobs with a computable RGU.
         frame = fn_load_job_series(read_write_db)
         assert frame["cpu_utilization"].notnull().all()
         assert frame["gpu_utilization"].notnull().all()
-        assert frame["cpu_waste"].notnull().all()
-        assert frame["cpu_equivalent_waste"].notnull().all()
-        assert frame["gpu_waste"].notnull().all()
-        assert frame["gpu_equivalent_waste"].notnull().all()
+        assert frame["requested_cpu_waste"].notnull().all()
+        assert frame["allocated_cpu_waste"].notnull().all()
+        has_rgu = frame["requested_rgu"].notnull()
+        assert has_rgu.any()
+        assert frame["requested_gpu_waste"].notnull().equals(has_rgu)
+        assert frame["allocated_gpu_waste"].notnull().equals(has_rgu)
 
         file_regression.check(
             f"Compute cost and waste for {frame.shape[0]} job(s):\n\n{_cost_and_waste_markdown(frame)}"
         )
 
     @pytest.mark.usefixtures("tzlocal_is_mtl")
-    @pytest.mark.parametrize(
-        "cluster_name,nb_billings",
-        [
-            (cluster_no_gpu_billing, 0),
-            (cluster_gpu_billing_one_date, 1),
-            (cluster_gpu_billing_many_dates, 2),
-        ],
-    )
-    def test_clusters_gpu_billings(self, rgu_db, cluster_name, nb_billings):
-        """Sanity check: GPUBillings populated as expected for each test cluster."""
-        count = rgu_db.exec(
-            sqlmodel.select(sqlmodel.func.count(GPUBillingDB.id))
-            .join(SlurmClusterDB)
-            .where(SlurmClusterDB.name == cluster_name)
-        ).one()
-        assert count == nb_billings
-
-    @pytest.mark.usefixtures("tzlocal_is_mtl")
-    @pytest.mark.parametrize(
-        "cluster_name",
-        [
-            cluster_gpu_billing_one_date,
-            cluster_gpu_billing_many_dates,
-            cluster_gpu_billing_is_gpu,
-        ],
-        ids=["one_date", "with_many_dates", "billing_is_gpu"],
-    )
-    def test_job_series_rgu(
-        self, rgu_db, file_regression, fn_load_job_series, cluster_name
-    ):
-        """RGU computation across various cluster configurations."""
+    def test_job_series_rgu(self, rgu_db, file_regression, fn_load_job_series):
+        """RGU computation is count-based (requested_gres_gpu), not billing-based."""
+        cluster_name = cluster_gpu_billing_one_date
         data = ExampleData(cluster=cluster_name)
         data.populate(rgu_db)
 
@@ -624,21 +597,14 @@ class BaseTestLoadJobSeries:
 
         _check_rgu_columns(frame, data, rgu_db)
 
-        billings_dump = _billings_dump(rgu_db, [cluster_name])
-        nb_billings = len(billings_dump[cluster_name])
         file_regression.check(
             f"===================================================================================\n"
-            f"Example data with expected RGU information "
-            f"[main cluster: {cluster_name} ({nb_billings} billing date(s))]:\n"
+            f"Example data with expected RGU information [main cluster: {cluster_name}]:\n"
             f"===================================================================================\n\n"
             f"----------\n"
             f"RGU values\n"
             f"----------\n"
             f"{json.dumps(_get_rgus(rgu_db), indent=1)}\n\n"
-            f"------------------\n"
-            f"GPU billing values\n"
-            f"------------------\n"
-            f"{json.dumps(billings_dump, indent=1)}\n\n"
             f"----\n"
             f"Data\n"
             f"----\n"

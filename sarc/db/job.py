@@ -5,7 +5,7 @@ from typing import Self
 from iguane.fom import RAWDATA, fom_ugr
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import attribute_keyed_dict, relationship
-from sqlmodel import BIGINT, Field, Session, UniqueConstraint, select
+from sqlmodel import BIGINT, Field, Index, Session, UniqueConstraint, select
 from sqlmodel.main import Relationship
 
 from sarc.db.cluster import SlurmClusterDB
@@ -18,11 +18,21 @@ from sarc.validators import datetime_utc
 class JobStatisticDB(SQLModel, table=True):
     """Statistics for a timeseries."""
 
+    __table_args__ = (UniqueConstraint("job_id", "name"),)
+
     id: int | None = Field(default=None, primary_key=True)
     job_id: int | None = Field(
-        default=None, foreign_key="slurm_jobs.id", nullable=False, ondelete="CASCADE"
+        default=None,
+        foreign_key="slurm_jobs.id",
+        nullable=False,
+        ondelete="CASCADE",
+        index=True,
     )
-    name: str | None = Field(default=None, nullable=False)
+    # index=True: /dash joins jobstatisticdb on job_id then filters name='<metric>'.
+    # Without an index on name, that filter forces a full seq scan of the table
+    # (~12.6M rows) on every metric/RGU query — the dashboard's main bottleneck on
+    # large windows. job_id already has its own index above, for the join itself.
+    name: str | None = Field(default=None, nullable=False, index=True)
     mean: float | None
     std: float | None
     q05: float | None
@@ -33,9 +43,29 @@ class JobStatisticDB(SQLModel, table=True):
     unused: float | None
 
 
+class JobStatisticsFetchDateDB(SQLModel, table=True):
+    """Tracks when we last attempted to fetch Prometheus stats for a job."""
+
+    __tablename__ = "jobstatistics_fetchdate"
+    __table_args__ = (UniqueConstraint("job_id"),)
+
+    id: int | None = Field(default=None, primary_key=True)
+    job_id: int = Field(foreign_key="slurm_jobs.id", nullable=False, ondelete="CASCADE")
+    fetch_date: datetime_utc = datetime_utc_field()
+    jobstatistic_id: int | None = Field(
+        default=None,
+        foreign_key="jobstatisticdb.id",
+        nullable=True,
+        ondelete="SET NULL",
+    )
+
+
 class SlurmJobDB(SQLModel, table=True):
     __tablename__ = "slurm_jobs"
-    __table_args__ = (UniqueConstraint("cluster_id", "job_id", "submit_time"),)
+    __table_args__ = (
+        UniqueConstraint("cluster_id", "job_id", "submit_time"),
+        Index("ix_slurm_jobs_cluster_submit_time", "cluster_id", "submit_time"),
+    )
 
     id: int | None = Field(default=None, primary_key=True)
     # job identification
@@ -74,7 +104,12 @@ class SlurmJobDB(SQLModel, table=True):
 
     # temporal fields
     time_limit: int | None = None
-    submit_time: datetime_utc = datetime_utc_field()
+    # index=True: standalone btree for range filters on submit_time alone.
+    # The composite unique above (cluster_id, job_id, submit_time) can't be
+    # range-seeked by submit_time since it's the 3rd column. See PostgreSQL
+    # docs §11.3 Multicolumn Indexes:
+    # https://www.postgresql.org/docs/current/indexes-multicolumn.html
+    submit_time: datetime_utc = datetime_utc_field(index=True)
     start_time: datetime_utc | None = datetime_utc_field(default=None)
     end_time: datetime_utc | None = datetime_utc_field(default=None)
     elapsed_time: float

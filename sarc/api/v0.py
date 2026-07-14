@@ -5,7 +5,6 @@ from datetime import datetime, timedelta
 from functools import reduce
 from typing import Annotated
 
-from easy_oauth.cap import Capability
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import AfterValidator, BaseModel, Field
 from serieux import deserialize
@@ -89,9 +88,9 @@ def is_admin(
     user: Annotated[str, Depends(can_query)], cfg: Config = Depends(config_dep)
 ) -> bool:
     auth = cfg.server.auth
-    if not auth:
+    if auth is None:
         return True
-    admin: Capability = deserialize(auth.capabilities.captype, "admin")
+    admin = deserialize(auth.capabilities.captype, "admin")
     return auth.capabilities.check(user, admin)
 
 
@@ -472,7 +471,14 @@ _EXTRA_FIELDS = {
     "sarc_user": {"display_name", "member_type", "email"},
     "supervisors": {"supervisors"},
     "statistics": {"statistics"},
-    "rgu": {"gpu_type_rgu", "rgu"},
+    "rgu": {
+        "gpu_type_rgu",
+        "gpu_type_rgu_drac",
+        "requested_rgu",
+        "requested_rgu_drac",
+        "allocated_rgu",
+        "allocated_rgu_drac",
+    },
 }
 
 _SERIES_OPTIONAL_COLS = reduce(operator.or_, _EXTRA_FIELDS.values())

@@ -115,7 +115,3 @@ sarc:
     name: "!OVERRIDE!"
   mymila:
     tmp_json_path: secrets/tmp_mymila.json
-  loki:
-    uri: "https://localhost/loki"
-  tempo:
-    uri: "https://localhost/tempo"
