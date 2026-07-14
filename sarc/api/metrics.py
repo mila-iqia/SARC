@@ -1183,11 +1183,23 @@ def metrics_jobs(
     }
     sort_expr = sortable.get(sort_by, rgu_hours_raw)
     ordered = sort_expr.asc() if sort_dir == "asc" else sort_expr.desc()
-    # NULLs (e.g. a job missing this metric) always sort last; the job id is a
-    # unique tiebreaker that makes the order total, so offset pagination never
-    # skips or repeats a row between pages. Reused verbatim by the page and final
-    # queries so both produce the same order.
-    order_by = (nulls_last(ordered), col(SlurmJobDB.id))
+    # nulls_last only for keys nullable in the result set: the LEFT-joined stats
+    # and the nullable gpu/billing cols. On a NOT NULL indexed key like submit_time
+    # it defeats the index -- DESC NULLS LAST matches neither the btree nor its
+    # reverse scan, forcing Seq Scan + Sort. Sorting by id last breaks ties between
+    # equal keys, so offset paging never skips or repeats a row.
+    nullable_sorts = {
+        "requested_gpu",
+        "allocated_gpu",
+        "billing",
+        "waste",
+        "gpu_utilization_mean",
+        "gpu_sm_occupancy_mean",
+        "gpu_memory_max",
+    }
+    if sort_by in nullable_sorts:
+        ordered = nulls_last(ordered)
+    order_by = (ordered, col(SlurmJobDB.id))
 
     # Window only; the gpu_type/RGU validity filter now lives in _apply_rgu_base.
     base_filters = (

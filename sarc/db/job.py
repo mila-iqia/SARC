@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from typing import Self
 
 from iguane.fom import RAWDATA, fom_ugr
+from sqlalchemy import text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import attribute_keyed_dict, relationship
 from sqlmodel import BIGINT, Field, Index, Session, UniqueConstraint, select
@@ -18,7 +19,17 @@ from sarc.validators import datetime_utc
 class JobStatisticDB(SQLModel, table=True):
     """Statistics for a timeseries."""
 
-    __table_args__ = (UniqueConstraint("job_id", "name"),)
+    __table_args__ = (
+        UniqueConstraint("job_id", "name"),
+        # /dash joins filter by name then read mean/max: name-first so `name = X`
+        # scans only that name's rows, INCLUDE (mean, max) makes the join index-only.
+        Index(
+            "ix_jobstatisticdb_name_job_covering",
+            "name",
+            "job_id",
+            postgresql_include=["mean", "max"],
+        ),
+    )
 
     id: int | None = Field(default=None, primary_key=True)
     job_id: int | None = Field(
@@ -28,11 +39,9 @@ class JobStatisticDB(SQLModel, table=True):
         ondelete="CASCADE",
         index=True,
     )
-    # index=True: /dash joins jobstatisticdb on job_id then filters name='<metric>'.
-    # Without an index on name, that filter forces a full seq scan of the table
-    # (~12.6M rows) on every metric/RGU query — the dashboard's main bottleneck on
-    # large windows. job_id already has its own index above, for the join itself.
-    name: str | None = Field(default=None, nullable=False, index=True)
+    # `name` is already indexed in covering index ix_jobstatisticdb_name_job_covering above.
+    # job_id already has its own index above, for the join itself.
+    name: str | None = Field(default=None, nullable=False)
     mean: float | None
     std: float | None
     q05: float | None
@@ -65,6 +74,28 @@ class SlurmJobDB(SQLModel, table=True):
     __table_args__ = (
         UniqueConstraint("cluster_id", "job_id", "submit_time"),
         Index("ix_slurm_jobs_cluster_submit_time", "cluster_id", "submit_time"),
+        # Partial covering index for the /dash GPU queries (count, page, rgu_by_*):
+        # they read every column they need from the index, without opening the table
+        # -- but only while autovacuum stays current, else Postgres opens the rows
+        # anyway to check they are still live.
+        Index(
+            "ix_slurm_jobs_gpu_submit",
+            "submit_time",
+            postgresql_include=[
+                "id",
+                "harmonized_gpu_type",
+                "allocated_gres_gpu",
+                "elapsed_time",
+                "cluster_id",
+                "cluster_user",
+            ],
+            postgresql_where=text("allocated_gpu_type IS NOT NULL"),
+        ),
+        # submit_time-first index covering ALL jobs. ix_slurm_jobs_gpu_submit is
+        # also submit_time-first but partial (GPU jobs only), so it can't serve
+        # metric_trend / job_counts, which count every job by date. INCLUDE (id)
+        # allows reading id by index alone.
+        Index("ix_slurm_jobs_submit_id", "submit_time", postgresql_include=["id"]),
     )
 
     id: int | None = Field(default=None, primary_key=True)
@@ -104,12 +135,8 @@ class SlurmJobDB(SQLModel, table=True):
 
     # temporal fields
     time_limit: int | None = None
-    # index=True: standalone btree for range filters on submit_time alone.
-    # The composite unique above (cluster_id, job_id, submit_time) can't be
-    # range-seeked by submit_time since it's the 3rd column. See PostgreSQL
-    # docs §11.3 Multicolumn Indexes:
-    # https://www.postgresql.org/docs/current/indexes-multicolumn.html
-    submit_time: datetime_utc = datetime_utc_field(index=True)
+    # Indexed via ix_slurm_jobs_submit_id in __table_args__ (covering, INCLUDE id).
+    submit_time: datetime_utc = datetime_utc_field()
     start_time: datetime_utc | None = datetime_utc_field(default=None)
     end_time: datetime_utc | None = datetime_utc_field(default=None)
     elapsed_time: float
