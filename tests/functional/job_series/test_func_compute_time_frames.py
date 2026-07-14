@@ -42,7 +42,9 @@ def _df_to_pretty_str(df: pandas.DataFrame, fields: list) -> str:
 def test_compute_time_frames(read_only_db, file_regression):
     jobs = load_job_series(read_only_db)
     time_frames = compute_time_frames(
-        jobs, columns=["elapsed_time", "requested_cpu_cost"], frame_size=timedelta(days=1)
+        jobs,
+        columns=["elapsed_time", "requested_cpu_cost"],
+        frame_size=timedelta(days=1),
     )
     assert len(jobs) < len(time_frames)
     file_regression.check(
@@ -58,7 +60,9 @@ def test_compute_time_frames(read_only_db, file_regression):
 def test_compute_time_frames_default_frame_size(read_only_db, file_regression):
     # Default frame size is 7 days
     jobs = load_job_series(read_only_db)
-    time_frames = compute_time_frames(jobs, columns=["elapsed_time", "requested_cpu_cost"])
+    time_frames = compute_time_frames(
+        jobs, columns=["elapsed_time", "requested_cpu_cost"]
+    )
     assert len(jobs) < len(time_frames)
     file_regression.check(
         f"Compute time frames for {jobs.shape[0]} job(s):"
@@ -75,7 +79,9 @@ def test_compute_time_frames_full_frame_size(read_only_db, file_regression):
     # so, there should be only one time frame in output, with same line number as initial jobs.
     jobs = load_job_series(read_only_db)
     time_frames = compute_time_frames(
-        jobs, columns=["elapsed_time", "requested_cpu_cost"], frame_size=timedelta(days=30)
+        jobs,
+        columns=["elapsed_time", "requested_cpu_cost"],
+        frame_size=timedelta(days=30),
     )
     assert len(jobs) == len(time_frames)
     file_regression.check(

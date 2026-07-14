@@ -100,15 +100,19 @@ gpu_sm_occupancy = (
     .scalar_subquery()
 )
 requested_gpu_cost = (
-    col(SlurmJobDB.elapsed_time) * col(SlurmJobDB.requested_gres_gpu) * GpuRguDB.rgu
+    col(SlurmJobDB.elapsed_time)
+    * col(SlurmJobDB.requested_gres_gpu)
+    * GpuRguDB.drac_rgu
 )
 allocated_gpu_cost = (
-    col(SlurmJobDB.elapsed_time) * col(SlurmJobDB.allocated_gres_gpu) * GpuRguDB.rgu
+    col(SlurmJobDB.elapsed_time)
+    * col(SlurmJobDB.allocated_gres_gpu)
+    * GpuRguDB.drac_rgu
 )
 gpu_overbilling_cost = (
     SlurmJobDB.elapsed_time
     * (col(SlurmJobDB.allocated_gres_gpu) - col(SlurmJobDB.requested_gres_gpu))
-    * GpuRguDB.rgu
+    * GpuRguDB.drac_rgu
 ).label("gpu_overbilling_cost")
 
 JOB_SERIES_EXCLUDED_JOB_COLS = frozenset(
