@@ -217,7 +217,6 @@ class UnderusageNotifyCommand:
             min_waste_rgu_hours=min_waste_rgu_hours,
             top_jobs_per_user=ncfg.top_jobs_per_user,
             resource=self.resource,
-            exclude_zero_usage=True,
             clusters=clusters,
             utilization_ceiling=ncfg.utilization_ceiling,
         )
@@ -225,7 +224,6 @@ class UnderusageNotifyCommand:
             end,
             resource=self.resource,
             months=ncfg.historical_months,
-            exclude_zero_usage=True,
             clusters=clusters,
         )
         recurring = get_recurring_underusers(
@@ -234,7 +232,6 @@ class UnderusageNotifyCommand:
             min_waste_rgu_hours=min_waste_rgu_hours,
             resource=self.resource,
             cluster_share_threshold=ncfg.recurrence_cluster_share,
-            exclude_zero_usage=True,
             recurrence_display_cycles=ncfg.recurrence_display_cycles,
             recurrence_active_cycles=ncfg.recurrence_active_cycles,
             clusters=clusters,

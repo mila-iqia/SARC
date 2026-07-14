@@ -532,3 +532,41 @@ def test_missing_util_usage_rgu_hours_used_equals_requested(missing_util_db):
     )
     row = next(r for r in results if r.email == "bramin@mila.quebec")
     assert row.rgu_hours_used == pytest.approx(row.rgu_hours)
+
+
+# ── Zero-cost jobs (gpu_cost == 0) ────────────────────────────────────────────
+
+
+@pytest.fixture
+def zero_cost_db(read_write_db):
+    session = read_write_db
+    users = {u.email.split("@")[0]: u for u in session.exec(select(UserDB)).all()}
+    clusters = {c.name: c for c in session.exec(select(SlurmClusterDB)).all()}
+    # Zero-elapsed job: gpu_cost = elapsed_time * gpu_count * rgu = 0, but the row
+    # still passes the window filter (allocated_gpu_type and rgu are set). This is
+    # the case the dropped exclude_zero_usage HAVING clause used to filter out.
+    _add_gpu_job(
+        session,
+        user_id=users["bramin"].id,
+        cluster_id=clusters["mila"].id,
+        elapsed_h=0,
+        gpu_type=_MILA_GPU_TYPE,
+        utilization=None,
+        job_id=95001,
+    )
+    session.commit()
+    yield session
+
+
+def test_zero_cost_job_does_not_crash(zero_cost_db):
+    # Regression: total_rgu_h == 0 for this user must not raise ZeroDivisionError
+    # in the waste_ratio computation (which runs before the floor check), and the
+    # user must be excluded (waste == 0 fails the min_waste_rgu_hours floor).
+    results = get_underusers(
+        _WINDOW_START,
+        _WINDOW_END,
+        min_waste_ratio=_MIN_WASTE_RATIO,
+        min_waste_rgu_hours=_MIN_WASTE_RGU_HOURS,
+        top_jobs_per_user=_TOP_JOBS_PER_USER,
+    )
+    assert "bramin@mila.quebec" not in {r.email for r in results}

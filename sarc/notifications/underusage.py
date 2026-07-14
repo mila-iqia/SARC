@@ -157,9 +157,7 @@ def _rgu_exprs(utilization_ceiling: float = 1.0):
     return rgu_h_expr, true_used_expr, credited_used_expr
 
 
-def _with_rgu_window(
-    stmt, start, end, *, exclude_zero_usage, rgu_used_expr, clusters=None
-):
+def _with_rgu_window(stmt, start, end, *, clusters=None):
     """Apply the end-time / GPU-type / RGU window filters."""
     stmt = stmt.where(
         col(JobSeriesDB.end_time) >= start,
@@ -169,8 +167,6 @@ def _with_rgu_window(
     )
     if clusters:
         stmt = stmt.where(col(JobSeriesDB.cluster_name).in_(clusters))
-    if exclude_zero_usage:
-        stmt = stmt.having(func.coalesce(func.sum(rgu_used_expr), 0) > 0)
     return stmt
 
 
@@ -199,7 +195,6 @@ def get_underusers(
     min_waste_rgu_hours: float,
     top_jobs_per_user: int,
     resource: str = "gpu",
-    exclude_zero_usage: bool = False,
     clusters: list[str] | None = None,
     utilization_ceiling: float = 1.0,
 ) -> list[UnderuserRow]:
@@ -227,8 +222,6 @@ def get_underusers(
             ),
             start,
             end,
-            exclude_zero_usage=exclude_zero_usage,
-            rgu_used_expr=rgu_h_expr,
             clusters=clusters,
         ).group_by(JobSeriesDB.sarc_user_id, JobSeriesDB.cluster_name)
         agg_rows = session.exec(stmt).all()
@@ -265,7 +258,7 @@ def get_underusers(
             u["total_true_wasted"] = total_rgu_h - sum(
                 c.rgu_hours_used for c in breakdowns
             )
-            waste_ratio = total_wasted / total_rgu_h
+            waste_ratio = total_wasted / total_rgu_h if total_rgu_h > 0 else 0.0
             u["waste_ratio"] = waste_ratio
             if waste_ratio >= min_waste_ratio and total_wasted >= min_waste_rgu_hours:
                 underuser_ids.append(uid)
@@ -288,15 +281,6 @@ def get_underusers(
                     ).where(col(JobSeriesDB.sarc_user_id).in_(underuser_ids)),
                     start,
                     end,
-                    # Must be False here: this is a per-job SELECT with no GROUP
-                    # BY. _with_rgu_window implements exclude_zero_usage via
-                    # HAVING sum(rgu_used_expr) > 0, which requires a grouped
-                    # query. Passing True would generate HAVING without GROUP
-                    # BY, which PostgreSQL rejects.
-                    # The underusers were already filtered by the aggregated
-                    # query above; no per-job filter is needed.
-                    exclude_zero_usage=False,
-                    rgu_used_expr=rgu_h_expr,
                     clusters=clusters,
                 )
             ).all()
@@ -379,8 +363,6 @@ def get_all_users_usage(
             ),
             start,
             end,
-            exclude_zero_usage=False,
-            rgu_used_expr=rgu_h_expr,
             clusters=clusters,
         ).group_by(JobSeriesDB.sarc_user_id, JobSeriesDB.cluster_name)
         agg_rows = session.exec(stmt).all()
@@ -422,8 +404,6 @@ def get_all_users_usage(
                     ),
                     start,
                     end,
-                    exclude_zero_usage=False,
-                    rgu_used_expr=rgu_h_expr,
                     clusters=clusters,
                 )
             ).all()
@@ -516,7 +496,6 @@ def _query_month_agg(
     start: datetime,
     end: datetime,
     *,
-    exclude_zero_usage: bool = False,
     clusters: list[str] | None = None,
 ) -> MonthlyStats:
     """Aggregate fleet-level waste stats for a single calendar month window."""
@@ -530,8 +509,6 @@ def _query_month_agg(
         ),
         start,
         end,
-        exclude_zero_usage=exclude_zero_usage,
-        rgu_used_expr=rgu_h_expr,
         clusters=clusters,
     ).group_by(JobSeriesDB.sarc_user_id)
     agg_rows = session.exec(stmt).all()
@@ -553,7 +530,6 @@ def get_historical_stats(
     *,
     resource: str = "gpu",
     months: int = 6,
-    exclude_zero_usage: bool = False,
     clusters: list[str] | None = None,
 ) -> HistoricalStats:
     """Compute 6-month fleet-level waste trend and year-over-year comparison.
@@ -578,16 +554,11 @@ def get_historical_stats(
 
     with config.db.session() as session:
         current_stats = [
-            _query_month_agg(
-                session, s, e, exclude_zero_usage=exclude_zero_usage, clusters=clusters
-            )
+            _query_month_agg(session, s, e, clusters=clusters)
             for s, e in current_buckets
         ]
         yoy_raw = [
-            _query_month_agg(
-                session, s, e, exclude_zero_usage=exclude_zero_usage, clusters=clusters
-            )
-            for s, e in yoy_buckets
+            _query_month_agg(session, s, e, clusters=clusters) for s, e in yoy_buckets
         ]
 
     has_yoy_data = any(m.avg_waste_ratio > 0 for m in yoy_raw)
@@ -637,7 +608,6 @@ def get_recurring_underusers(
     min_waste_rgu_hours: float,
     resource: str = "gpu",
     cluster_share_threshold: float,
-    exclude_zero_usage: bool = False,
     recurrence_active_cycles: int = 3,
     recurrence_display_cycles: int = 5,
     clusters: list[str] | None = None,
@@ -683,8 +653,6 @@ def get_recurring_underusers(
             ),
             agg_start,
             anchor,
-            exclude_zero_usage=exclude_zero_usage,
-            rgu_used_expr=rgu_h_expr,
             clusters=clusters,
         ).group_by(JobSeriesDB.sarc_user_id, JobSeriesDB.cluster_name)
         agg_rows = session.exec(stmt).all()
@@ -729,7 +697,6 @@ def get_recurring_underusers(
             # Only user_id is used for membership — top jobs are discarded.
             top_jobs_per_user=1,
             resource=resource,
-            exclude_zero_usage=exclude_zero_usage,
             clusters=clusters,
             utilization_ceiling=utilization_ceiling,
         )
@@ -758,8 +725,6 @@ def get_recurring_underusers(
                 ),
                 pa_start,
                 pa_end,
-                exclude_zero_usage=exclude_zero_usage,
-                rgu_used_expr=rgu_h_expr,
                 clusters=clusters,
             ).group_by(JobSeriesDB.sarc_user_id)
             for row in session.exec(pa_stmt).all():
