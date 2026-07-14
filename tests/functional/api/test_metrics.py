@@ -3,9 +3,11 @@
 The endpoints are checked along three axes:
 
 - **Access control.** Every ``/dash`` route shares one gate
-  (``APIRouter(..., dependencies=[Depends(requestor)])``): a guest (no token)
-  gets 401, an authenticated email absent from the DB gets 403, and both a
-  regular user and an admin get 200. Same matrix idea as ``test_auth`` for /v0.
+  (``APIRouter(..., dependencies=[Depends(_dash_login_redirect),
+  Depends(requestor)])``): a guest (no token) is 307-redirected to the OAuth
+  ``/login`` route (``_dash_login_redirect``, which runs before ``requestor``),
+  an authenticated email absent from the DB gets 403, and both a regular user
+  and an admin get 200.
 - **Per-user scoping.** A non-admin only sees their own jobs (``_scope`` filters
   every query on ``sarc_user_id``); an admin sees everything. Proven on every
   aggregating endpoint: the admin total partitions exactly into the two
@@ -17,12 +19,14 @@ The endpoints are checked along three axes:
 
 The ``app`` fixture (conftest) mounts the router under the OAuth mock, so
 ``app.client(email)`` yields a client authenticated as that email (``None`` =
-guest). The HTML homepage is only checked through the access matrix.
+guest). The guest -> login redirect is checked by
+``test_guest_redirected_to_login``.
 """
 
 from types import SimpleNamespace
 
 import pytest
+from fastapi.testclient import TestClient
 from sqlmodel import col, func, select
 
 from sarc.config import config
@@ -95,7 +99,6 @@ _ENDPOINTS = [
 @pytest.mark.parametrize(
     "email,expected",
     [
-        pytest.param(None, 401, id="guest"),
         pytest.param(_NOT_IN_DB, 403, id="not_in_db"),
         pytest.param(_USER, 200, id="user"),
         pytest.param(_ADMIN, 200, id="admin"),
@@ -107,9 +110,27 @@ _ENDPOINTS = [
     ids=[name for name, _, _ in _ENDPOINTS],
 )
 def test_access_control(app, path, params, email, expected):
-    """One gate for every /dash endpoint: guest 401, absent-from-DB 403,
-    user and admin 200."""
+    """Authenticated access to every /dash endpoint: absent-from-DB 403, user
+    and admin 200. Guests are redirected instead — see
+    test_guest_redirected_to_login."""
     app.client(email).get(path, params=params, expect_status=expected)
+
+
+@pytest.mark.parametrize(
+    "path,params",
+    [(path, params) for _, path, params in _ENDPOINTS],
+    ids=[name for name, _, _ in _ENDPOINTS],
+)
+def test_guest_redirected_to_login(app, path, params):
+    """An unauthenticated request to any /dash endpoint is 307-redirected to the
+    OAuth ``/login`` route instead of getting a 401 (the /v0 behaviour). A raw,
+    non-following client observes the 307 before it is chased into the OAuth
+    flow. Needs no DB: the redirect happens in the auth gate, before any
+    query."""
+    client = TestClient(app, follow_redirects=False)
+    resp = client.get(path, params=params)
+    assert resp.status_code == 307
+    assert resp.headers["location"].endswith("/login")
 
 
 # === Per-user scoping =======================================================
