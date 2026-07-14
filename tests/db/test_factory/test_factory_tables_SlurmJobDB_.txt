@@ -983,7 +983,7 @@ Result #21
     "end_time": "2023-02-19T17:01:00Z",
     "exit_code": 0,
     "group": "petitbonhomme",
-    "harmonized_gpu_type": null,
+    "harmonized_gpu_type": "A100-SXM4-80GB",
     "job_id": 21,
     "job_state": "CANCELLED",
     "latest_scraped_end": null,

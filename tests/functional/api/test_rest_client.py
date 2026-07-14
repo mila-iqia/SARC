@@ -1,6 +1,7 @@
 import httpx
 import pytest
 
+from sarc.api.v0 import _EXTRA_FIELDS, _SERIES_OPTIONAL_COLS
 from tests.common.dateutils import _iso_mtl_dt
 
 
@@ -162,6 +163,35 @@ def test_job_extra_fields_merged(sarc_client):
     )
     assert job.cluster_name == "raisin"
     assert job.sarc_user is not None
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_job_series_no_extra_fields_by_default(sarc_client):
+    jobs = list(sarc_client.get_job_series())
+    assert len(jobs) > 0
+    for job in jobs:
+        for col in _SERIES_OPTIONAL_COLS:
+            assert getattr(job, col) is None, f"{col} should be None by default"
+
+
+@pytest.mark.usefixtures("read_only_db")
+@pytest.mark.parametrize("extra_field", sorted(_EXTRA_FIELDS.keys()))
+def test_job_series_extra_field(sarc_client, extra_field):
+    jobs = list(sarc_client.get_job_series(extra_fields=[extra_field]))
+    assert len(jobs) > 0
+
+    sibling_cols = _SERIES_OPTIONAL_COLS - _EXTRA_FIELDS[extra_field]
+    for job in jobs:
+        for col in sibling_cols:
+            assert getattr(job, col) is None, f"{col} should stay None"
+
+    # There's no data in statistics and supervisors fields
+    if extra_field not in ["statistics", "supervisors"]:
+        assert any(
+            getattr(job, col) for job in jobs for col in _EXTRA_FIELDS[extra_field]
+        ), (
+            f"At least on field from {extra_field}:{_EXTRA_FIELDS[extra_field]} should not be None"
+        )
 
 
 @pytest.mark.usefixtures("read_only_db")

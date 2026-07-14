@@ -24,6 +24,7 @@ Result #3
     "cluster_id": 7,
     "gpu_to_billing": {
         "A100": 100.0,
+        "A100-SXM4-80GB": 100.0,
         "raisin_gpu_no_rgu_with_billing": 150.0,
         "raisin_gpu_with_rgu_with_billing": 50.0
     },
