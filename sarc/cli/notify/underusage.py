@@ -64,7 +64,7 @@ def _deliver(
     results: list[_DeliveryResult] = []
     for row in rows:
         text = build_fn(row)
-        slack_res = slack.dm_user(row.email, text, preformatted=True)
+        slack_res = slack.dm_user(row.email, text)
         if slack_res.status == SendStatus.OK:
             results.append(_DeliveryResult(row.email, row.display_name, "dm_sent"))
         else:
@@ -225,12 +225,7 @@ class UnderusageNotifyCommand:
             _userfacing_print("=== Under Usage Report Previews ===")
             for row in underusage_rows:
                 _userfacing_print(f"\n--- {row.display_name} ({row.email}) ---")
-                dm = build_user_dm(
-                    row,
-                    window_weeks=window_weeks,
-                    dashboard_url=ncfg.dashboard_url,
-                    help_section=ncfg.help_section,
-                )
+                dm = build_user_dm(row, window_weeks=window_weeks)
                 _userfacing_print(dm)
 
         usage_rows = []
@@ -262,10 +257,7 @@ class UnderusageNotifyCommand:
                 for row in usage_rows:
                     _userfacing_print(f"\n--- {row.display_name} ({row.email}) ---")
                     report_text = build_usage_report(
-                        row,
-                        window_weeks=usage_report_window_weeks,
-                        dashboard_url=ncfg.dashboard_url,
-                        help_section=ncfg.help_section,
+                        row, window_weeks=usage_report_window_weeks
                     )
                     _userfacing_print(report_text)
 
@@ -280,12 +272,7 @@ class UnderusageNotifyCommand:
         if underusage_report_will_send:
             underusage_report_delivery_results = _deliver(
                 underusage_rows,
-                lambda row: build_user_dm(
-                    row,
-                    window_weeks=window_weeks,
-                    dashboard_url=ncfg.dashboard_url,
-                    help_section=ncfg.help_section,
-                ),
+                lambda row: build_user_dm(row, window_weeks=window_weeks),
                 slack=slack_client,
             )
         elif underusage_report_eligible and underusage_rows:
@@ -300,10 +287,7 @@ class UnderusageNotifyCommand:
             usage_report_delivery_results = _deliver(
                 usage_rows,
                 lambda row: build_usage_report(
-                    row,
-                    window_weeks=usage_report_window_weeks,
-                    dashboard_url=ncfg.dashboard_url,
-                    help_section=ncfg.help_section,
+                    row, window_weeks=usage_report_window_weeks
                 ),
                 slack=slack_client,
             )

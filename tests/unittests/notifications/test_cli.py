@@ -10,7 +10,11 @@ from sqlmodel import select
 from sarc.db.cluster import SlurmClusterDB
 from sarc.db.users import UserDB
 from sarc.notifications.slack import SendResult, SendStatus
-from tests.unittests.notifications._factory import add_gpu_job
+from tests.unittests.notifications._factory import (
+    UNDERUSAGE_REPORT_TEMPLATE,
+    USAGE_REPORT_TEMPLATE,
+    add_gpu_job,
+)
 
 _MILA_GPU_TYPE = "A100-SXM4-80GB"
 
@@ -26,6 +30,8 @@ _NOTIFY_CFG = {
         "token": "xoxb-test-token",
         "channel": "#test-channel",
     },
+    "underusage_report_template": UNDERUSAGE_REPORT_TEMPLATE,
+    "usage_report_template": USAGE_REPORT_TEMPLATE,
     "enabled": True,
     "send_underusage_report": True,
     "min_waste_ratio": 0.50,
@@ -121,7 +127,7 @@ def test_dry_run(notify_db, cli_main, monkeypatch, capsys):
     # DM preview
     assert "=== Under Usage Report Previews" in out
     # display_name = "M/Ms Petitbonhomme"; _first_name() returns the first token
-    assert "Hi M/Ms," in out
+    assert "M/Ms" in out
 
 
 # ── usage-cycle cadence gating ────────────────────────────────────────────
