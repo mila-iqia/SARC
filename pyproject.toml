@@ -41,6 +41,7 @@ dependencies = [
     "mssql-python>=1.10.0",
     "slack-sdk>=3.43.0",
     "opentelemetry-instrumentation-sqlalchemy>=0.64b0",
+    "mistune>=3.3.3,<4",
 ]
 
 [project.scripts]

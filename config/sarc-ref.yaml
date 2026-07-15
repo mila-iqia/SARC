@@ -93,13 +93,21 @@ sarc:
       description: Usage Alerts # used to distinguish multiple instances if the message the same channel
       token: slack-token-replace-me # SENSITIVE: can be used to send messages on slack
       channel: slack-channel-id-replace-me # The slack channel ID to message
+    underusage_report_template: "" # Template for the per-user underusage DM body; placeholders:
+      # {name}, {window_weeks}, {avg_utilization}, {rgu_hours_wasted}, {jobs_section}.
+      # Normally loaded from a file, see config/usage_notify/underusage_report_template.md
+    usage_report_template: "" # Template for the neutral usage report body; placeholders:
+      # {name}, {window_weeks}, {avg_utilization}, {rgu_hours_used}, {jobs_section}.
+      # Normally loaded from a file, see config/usage_notify/usage_report_template.md
+    # resources_section: "" # Text appended to the footer of both underusage DMs and usage
+      # reports. Normally loaded from a file, see config/usage_notify/resources_section.md
+    # help_section: "" # Text appended to the footer of underusage DMs only (not usage
+      # reports). Normally loaded from a file, see config/usage_notify/help_section.md
     enabled: True # Master switch; when False the notify command is a no-op
-    clusters: # Cluster-name allowlist scoping every query; empty list = all clusters
-      - mila
-    usage_cycle_length_weeks: 2 # Weeks per usage cycle (base cadence unit for alerts/report window)
-    utilization_ceiling: 1.0 # T in (0,1]; wasted = max(0, rgu_h * (T - m)); 1.0 = true waste
-    # --- Individual underusage alerts (user DMs) + admin digest ---
     send_underusage_report: True # Enable the user underusage DMs and the admin digest
+    send_usage_report: True # Enable the neutral usage report to all active GPU users
+    usage_cycle_length_weeks: 2 # Weeks per usage cycle (base cadence unit for alerts/report window)
+    # --- Individual underusage alerts (user DMs) + admin digest ---
     min_waste_ratio: 0.80 # Min scaled waste ratio (1 - effective_util) to flag a user
     min_waste_rgu_hours: 3225.6 # Min scaled wasted RGU-h to flag a user (~4x A100-80GB RGU x 7d)
     digest_top_n: 16 # Number of top wasters listed in the admin digest ranking
@@ -110,7 +118,10 @@ sarc:
     recurrence_display_cycles: 5 # Per-cycle columns shown in the recurring-users table
     personalized_action_min_waste_rgu_hours: 96768 # Summed scaled wasted RGU-h over active cycles to flag for action
     # --- Universal usage report (neutral, all active GPU users) ---
-    send_usage_report: True # Enable the neutral usage report to all active GPU users
     usage_report_cycles: 2 # Usage-report window length, in usage cycles
     usage_report_min_usage_rgu_hours: 1843.2 # Min occupied (used+wasted) RGU-h to include a user (~4x A100-80GB RGU x 4d)
     dashboard_url: dashboard-url-replace-me # Dashboard link inserted into user-facing messages
+
+    clusters: # Cluster-name allowlist scoping every query; empty list = all clusters
+      - mila
+    utilization_ceiling: 1.0 # T in (0,1]; wasted = max(0, rgu_h * (T - m)); 1.0 = true waste

@@ -16,7 +16,12 @@ from sarc.notifications.underusage import (
     get_recurring_underusers,
     usage_cycle_length_weeks,
 )
-from tests.unittests.notifications._factory import DEFAULT_GPU_TYPE, add_gpu_job
+from tests.unittests.notifications._factory import (
+    DEFAULT_GPU_TYPE,
+    UNDERUSAGE_REPORT_TEMPLATE,
+    USAGE_REPORT_TEMPLATE,
+    add_gpu_job,
+)
 
 # "Today" for all recurring tests.
 _TEST_END = datetime(2024, 6, 30, tzinfo=UTC)
@@ -52,6 +57,8 @@ _NOTIFY_CFG = {
         "token": "xoxb-test-token",
         "channel": "#test-channel",
     },
+    "underusage_report_template": UNDERUSAGE_REPORT_TEMPLATE,
+    "usage_report_template": USAGE_REPORT_TEMPLATE,
     "min_waste_ratio": _MIN_WASTE_RATIO,
     "min_waste_rgu_hours": _MIN_WASTE_RGU_HOURS,
     "digest_top_n": 16,
@@ -400,7 +407,7 @@ def test_table_check_and_cross_marks():
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         text = build_recurring_table({"narval": [_ROW_BOB]}, **_BRT_KW)
     assert "✓" in text
-    assert "✗" in text
+    assert "▲" in text
 
 
 def test_table_tree_chars_multiple_rows():
@@ -755,7 +762,7 @@ def test_table_none_flag_renders_blank_not_cross(capsys):
     # _ROW_FUTURE_W0: w0=None→blank, w2=True→✗, w4=True→✗, w6=False→✓, w8=False→✓
     # True (flagged/underuser) → ✗; False (good usage) → ✓; None (future) → blank
     assert text.count("✓") == 2  # w6 and w8
-    assert text.count("✗") == 2  # w2 and w4
+    assert text.count("▲") == 2  # w2 and w4
 
 
 def test_table_without_cycle_dates_keeps_w0_label():
@@ -812,28 +819,28 @@ _ROW_ALL_TRUE = RecurringUserRow(
 def test_per_cycle_peak_at_w4():
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         text = build_recurring_table({"narval": [_ROW_PEAK_AT_W4]}, **_BRT_KW)
-    assert "⚑✗" in text
+    assert "⚑▲" in text
 
 
 def test_per_cycle_no_peak_at_w0_w2():
     # pa_flags[0]=False and pa_flags[1]=False → no ⚑ at W0 or W-2
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         text = build_recurring_table({"narval": [_ROW_PEAK_AT_W4]}, **_BRT_KW)
-    assert text.count("⚑✗") == 1
+    assert text.count("⚑▲") == 1
 
 
 def test_per_cycle_all_active_flagged():
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         text = build_recurring_table({"narval": [_ROW_ALL_TRUE]}, **_BRT_KW)
     # pa_flags=[True,True,True] → ⚑ at W0, W-2, W-4
-    assert text.count("⚑✗") == 3
+    assert text.count("⚑▲") == 3
 
 
 def test_per_cycle_w6_w8_never_show_peak():
     # Positions ≥ active_cycles are never eligible regardless of pa_flags
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         text = build_recurring_table({"narval": [_ROW_ALL_TRUE]}, **_BRT_KW)
-    assert text.count("⚑✗") == 3
+    assert text.count("⚑▲") == 3
 
 
 def test_per_cycle_no_peak_on_passing_cell():
@@ -850,8 +857,8 @@ def test_per_cycle_no_peak_on_passing_cell():
     )
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         text = build_recurring_table({"narval": [row]}, **_BRT_KW)
-    # W0 is ✓ (cycles[0]=False) so no ⚑ there; W-2 and W-4 are ✗ with pa_flags → 2 ⚑✗
-    assert text.count("⚑✗") == 2
+    # W0 is ✓ (cycles[0]=False) so no ⚑ there; W-2 and W-4 are ▲ with pa_flags → 2 ⚑▲
+    assert text.count("⚑▲") == 2
 
 
 # ── Threshold scaling, true_wasted, personalized_action floor ────────────────
