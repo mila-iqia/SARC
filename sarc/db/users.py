@@ -170,10 +170,10 @@ class ValidField[V]:
             session.delete(record[0])
         session.flush()
 
-        to_insert = [final_range]
+        to_insert: list[Range[datetime]] = [final_range]
 
         for record in to_conflict:
-            new_insert = []
+            new_insert: list[Range[datetime]] = []
             for r_incoming in to_insert:
                 if not r_incoming.overlaps(record[0].valid):
                     new_insert.append(r_incoming)
