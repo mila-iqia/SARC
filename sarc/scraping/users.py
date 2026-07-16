@@ -288,7 +288,7 @@ def update_user(sess: Session, user: UserMatch) -> None:
             db_user.display_name = user.display_name
         if user.email is not None:
             db_user.email = user.email
-        for mid in user.known_matches:
+        for mid in user.known_matches.union((user.matching_id,)):
             if mid.name not in db_user.matching_ids:
                 db_user.matching_ids[mid.name] = mid.mid
             elif db_user.matching_ids[mid.name] != mid.mid:
