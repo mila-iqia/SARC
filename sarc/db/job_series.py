@@ -79,7 +79,10 @@ allocated_rgu_drac_expr = (allocated_gres_gpu * GpuRguDB.drac_rgu).label(
 # billing cost. requested_gres_gpu for requested_gpu_cost, allocated_gres_gpu
 # for allocated_gpu_cost and gpu_overbilling_cost — all NULL when the job's RGU
 # is not computable, and also NULL (not 0) when the underlying GPU count itself
-# is NULL (unlike requested_rgu/allocated_rgu above, which coalesce to 0).
+# is NULL (unlike requested_rgu/allocated_rgu above, which coalesce to 0). Mean
+# of the per-job "cpu_utilization" statistic (fraction in [0, 1] of the
+# allocated CPU capacity that was actually used); used below to derive CPU
+# waste.
 cpu_utilization = (
     select(JobStatisticDB.mean)
     .where(JobStatisticDB.job_id == SlurmJobDB.id)
@@ -93,6 +96,14 @@ cpu_overbilling_cost = (
     * (col(SlurmJobDB.allocated_cpu) - col(SlurmJobDB.requested_cpu))
 ).label("cpu_overbilling_cost")
 
+# Mean of the per-job "gpu_sm_occupancy" statistic. Two distinct GPU stats are
+# scraped from DCGM/Prometheus, both normalized to [0, 1]:
+# - gpu_utilization (slurm_job_utilization_gpu): the GPU "busy" fraction, i.e.
+#   the fraction of time the GPU was active on any work.
+# - gpu_sm_occupancy (slurm_job_sm_occupancy_gpu): the fraction of streaming
+#   multiprocessors (SMs) occupied, a finer-grained measure of how much of the
+#   GPU's compute is actually used.
+# GPU waste below is computed from SM-occupancy mean (not GPU utilization).
 gpu_sm_occupancy = (
     select(JobStatisticDB.mean)
     .where(JobStatisticDB.job_id == SlurmJobDB.id)
@@ -169,83 +180,183 @@ class JobSeriesDB(SQLModel, table=True):
     # job identification
     cluster_id: int
     account: str
+    """Slurm accounting account the job was charged to (e.g. "rrg-..."); an
+    allocation/billing account, not a person."""
     job_id: int
+    """Individual Slurm job id (unique per array task)."""
     array_job_id: int | None
+    """Shared parent id of the job array; None for non-array jobs."""
     task_id: int | None
+    """Task index within the job array; None for non-array jobs. (DB uniqueness
+    is on (cluster_id, job_id, submit_time), not on these array fields.)"""
     name: str
     cluster_user: str
+    """Cluster login username; resolves to the SARC user in sarc_user_id."""
     group: str
+    """Unix group of the submitting user."""
 
     # status
     job_state: SlurmState
+    """Slurm job-state code (see the SlurmState enum), e.g. COMPLETED, FAILED,
+    TIMEOUT, CANCELLED."""
     exit_code: int | None
+    """Process return code of the job."""
     signal: int | None
+    """Number of the signal that terminated the job, if any."""
 
     # allocation information
     partition: str
     nodes: list[str] = Field(sa_type=JSONB)
+    """Expanded list of node hostnames the job ran on; empty when none assigned."""
 
     work_dir: str
     submit_line: str | None
+    """The command line used to submit the job. Added later, so old records may
+    lack it."""
 
     # Miscellaneous
     constraints: str | None
+    """Job constraint/feature expression requested at submit time."""
     priority: int | None
+    """Dimensionless Slurm scheduling priority value."""
     qos: str | None
+    """Quality-of-Service (QoS) name."""
 
     # Flags
+    # Slurm's own job flags (booleans, default False). Names come straight from
+    # Slurm; no in-repo source elaborates beyond the name.
     CLEAR_SCHEDULING: bool
+    """Slurm flag: the job's scheduling information was cleared."""
     STARTED_ON_SUBMIT: bool
+    """Slurm flag: the job started immediately on submission."""
     STARTED_ON_SCHEDULE: bool
+    """Slurm flag: the job started via the main scheduler."""
     STARTED_ON_BACKFILL: bool
+    """Slurm flag: the job started via the backfill scheduler."""
 
     # temporal fields
     time_limit: int | None
+    """Wall-clock time limit in SECONDS (sacct reports minutes; multiplied by 60
+    on ingest). None if unset."""
     submit_time: datetime
     start_time: datetime | None
     end_time: datetime | None
     elapsed_time: float
+    """Elapsed wall-clock time in SECONDS. Used as the time factor in all
+    cost/waste columns below."""
 
     # tres
+    # TRES columns hold the raw Slurm TRES count for each resource, copied
+    # verbatim with no unit conversion on ingest.
     requested_cpu: int | None = Field(default=None, sa_type=BIGINT)
+    """Requested CPU core COUNT (not core-seconds)."""
     requested_mem: int | None = Field(default=None, sa_type=BIGINT)
+    """Requested memory as the raw Slurm `mem` TRES count. Slurm reports MB by
+    convention (not asserted in-repo)."""
     requested_node: int | None = Field(default=None, sa_type=BIGINT)
+    """Requested node count."""
     requested_billing: int | None = Field(default=None, sa_type=BIGINT)
+    """Requested Slurm `billing` TRES: the scheduler's weighted-usage number
+    derived from TRESBillingWeights. Dimensionless -- not currency, not GPU
+    count."""
     requested_gres_gpu: int | None = Field(default=None, sa_type=BIGINT)
+    """Requested GPU COUNT."""
     requested_gpu_type: str | None
+    """Raw GPU model string from the requested TRES name (before harmonization)."""
 
     allocated_cpu: int | None = Field(default=None, sa_type=BIGINT)
+    """Allocated CPU core COUNT (not core-seconds)."""
     allocated_mem: int | None = Field(default=None, sa_type=BIGINT)
+    """Allocated memory as the raw Slurm `mem` TRES count. Slurm reports MB by
+    convention (not asserted in-repo)."""
     allocated_node: int | None = Field(default=None, sa_type=BIGINT)
+    """Allocated node count."""
     allocated_billing: int | None = Field(default=None, sa_type=BIGINT)
+    """Allocated Slurm `billing` TRES: the scheduler's weighted-usage number
+    derived from TRESBillingWeights. Dimensionless -- not currency, not GPU
+    count."""
     allocated_gres_gpu: int | None = Field(default=None, sa_type=BIGINT)
+    """Allocated GPU COUNT."""
     allocated_gpu_type: str | None
+    """Raw GPU model string from the allocated TRES name (before harmonization);
+    may be inferred from the node->GPU mapping."""
     harmonized_gpu_type: str | None
+    """Canonicalized GPU name derived from allocated_gpu_type via
+    Cluster.harmonize_gpu; the join key to the RGU weights in GpuRguDB (handles
+    MIG partitions specially). Distinct from the raw requested_gpu_type /
+    allocated_gpu_type above."""
 
     cluster_name: str | None = None
     statistics: dict[str, dict[str, float]] | None = Field(sa_type=JSON)
+    """Per-job statistics as a JSON map: stat_name -> {mean, std, q05, q25,
+    median, q75, max, unused} (e.g. "cpu_utilization", "gpu_sm_occupancy")."""
 
+    # RGU (Reference GPU Unit) is a per-GPU-type weight that normalizes
+    # heterogeneous GPU types to a common reference.
     gpu_type_rgu: float | None
+    """RGU weight for this job's harmonized GPU type (mila/default weight).
+    Equal to gpu_type_rgu_drac except for MIG partitions."""
     gpu_type_rgu_drac: float | None
+    """DRAC reference RGU weight for this job's harmonized GPU type. Equal to
+    gpu_type_rgu except for MIG partitions."""
     requested_rgu: float | None
+    """RGU demand = requested GPU count x RGU weight (NOT a raw GPU count); a
+    missing GPU count is coalesced to 0."""
     requested_rgu_drac: float | None
-    allocated_rgu: float | None  # RGU computed using gres_gpu
-    allocated_rgu_drac: float | None  # RGU computed using gres_gpu and DRAC RGU values
+    """As requested_rgu but using the DRAC RGU weight."""
+    allocated_rgu: float | None
+    """RGU demand = allocated GPU count x RGU weight (NOT a raw GPU count); a
+    missing GPU count is coalesced to 0."""
+    allocated_rgu_drac: float | None
+    """As allocated_rgu but using the DRAC RGU weight."""
 
+    # Cost / waste / overbilling. requested_* uses what the user asked for,
+    # allocated_* what the scheduler actually gave. Unlike the *_rgu columns
+    # above, these use the raw (non-coalesced) GPU count, so they are NULL (not
+    # 0) when the count/RGU is not computable.
+    #
+    # CPU columns are in CPU-SECONDS; GPU columns in RGU-SECONDS (DRAC weight).
+    # For each: cost = elapsed_time x count (x rgu weight for GPU);
+    # overbilling = elapsed_time x (allocated - requested) (x rgu weight).
+    # Waste = (1 - utilization) x cost = the paid-for capacity left unused, and
+    # the utilization term differs by resource: CPU uses the cpu_utilization
+    # stat mean, while GPU uses the gpu_sm_occupancy mean -- the fraction of
+    # streaming multiprocessors (SMs) occupied (finer-grained) -- NOT
+    # gpu_utilization, which is only the GPU "busy"/active-time fraction.
     requested_cpu_cost: float | None
+    """CPU-seconds the user requested: elapsed_time x requested_cpu."""
     requested_cpu_waste: float | None
+    """Unused requested CPU-seconds: (1 - cpu_utilization mean) x
+    requested_cpu_cost."""
     allocated_cpu_cost: float | None
+    """CPU-seconds the scheduler allocated: elapsed_time x allocated_cpu."""
     allocated_cpu_waste: float | None
+    """Unused allocated CPU-seconds: (1 - cpu_utilization mean) x
+    allocated_cpu_cost."""
     cpu_overbilling_cost: float | None
+    """CPU-seconds billed beyond the request: elapsed_time x (allocated_cpu -
+    requested_cpu)."""
     requested_gpu_cost: float | None
+    """RGU-seconds the user requested: elapsed_time x requested_gres_gpu x DRAC
+    RGU weight."""
     requested_gpu_waste: float | None
+    """Unused requested RGU-seconds: (1 - gpu_sm_occupancy mean) x
+    requested_gpu_cost."""
     allocated_gpu_cost: float | None
+    """RGU-seconds the scheduler allocated: elapsed_time x allocated_gres_gpu x
+    DRAC RGU weight."""
     allocated_gpu_waste: float | None
+    """Unused allocated RGU-seconds: (1 - gpu_sm_occupancy mean) x
+    allocated_gpu_cost."""
     gpu_overbilling_cost: float | None
+    """RGU-seconds billed beyond the request: elapsed_time x (allocated_gres_gpu
+    - requested_gres_gpu) x DRAC RGU weight."""
 
     # User ID
     sarc_user_id: int
     display_name: str
     email: str
     member_type: MemberType | None = None
+    """The user's member type valid at the job's submit time."""
     supervisors: list[int] | None = Field(sa_type=JSON)
+    """Supervisor user ids, ordered, valid at the job's submit time."""
