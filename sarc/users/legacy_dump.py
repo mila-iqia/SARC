@@ -126,24 +126,6 @@ class LegacyDumpScraper(UserScraper[LegacyDumpConfig]):
                 drac_creds.insert(drac_data["username"], record_start, record_end)
                 user_match.associated_accounts["drac"] = drac_creds
 
-            # Supervisor information
-            supervisors = []
-            supervisor_email = record.get("mila_ldap", {}).get("supervisor")
-            if supervisor_email:
-                supervisors.append(
-                    MatchID(name="legacy_dump", mid=supervisor_email.lower())
-                )
-
-            # Co-supervisor information
-            co_supervisor_email = record.get("mila_ldap", {}).get("co_supervisor")
-            if co_supervisor_email:
-                supervisors.append(
-                    MatchID(name="legacy_dump", mid=co_supervisor_email.lower())
-                )
-
-            if len(supervisors) != 0:
-                user_match.supervisors.insert(supervisors, record_start, record_end)
-
             yield user_match
 
 
