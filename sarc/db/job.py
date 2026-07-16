@@ -88,14 +88,20 @@ class SlurmJobDB(SQLModel, table=True):
                 "elapsed_time",
                 "cluster_id",
                 "cluster_user",
+                "sarc_user_id",  # used by view when joining users and member_type
             ],
             postgresql_where=text("allocated_gpu_type IS NOT NULL"),
         ),
         # submit_time-first index covering ALL jobs. ix_slurm_jobs_gpu_submit is
         # also submit_time-first but partial (GPU jobs only), so it can't serve
-        # metric_trend / job_counts, which count every job by date. INCLUDE (id)
-        # allows reading id by index alone.
-        Index("ix_slurm_jobs_submit_id", "submit_time", postgresql_include=["id"]),
+        # /dash queries metric_trend / job_counts, which count every job by date.
+        # INCLUDE (id, sarc_user_id) allows reading id by index alone.
+        # sarc_user_id is included because it's used by view to get user info.
+        Index(
+            "ix_slurm_jobs_submit_id",
+            "submit_time",
+            postgresql_include=["id", "sarc_user_id"],
+        ),
     )
 
     id: int | None = Field(default=None, primary_key=True)

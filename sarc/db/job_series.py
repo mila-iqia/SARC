@@ -1,6 +1,10 @@
 from datetime import datetime
 
 from sqlalchemy.dialects.postgresql import JSONB, aggregate_order_by
+from sqlalchemy.orm import aliased
+from sqlalchemy.sql import visitors
+from sqlalchemy.sql.elements import ColumnClause
+from sqlalchemy.sql.expression import FromClause, Join, Select
 from sqlmodel import BIGINT, JSON, Field, and_, col, func, select
 
 from sarc.models.user import MemberType
@@ -55,6 +59,20 @@ supervisors_subq = (
     .scalar_subquery()
 ).label("supervisors")
 
+#### member_type
+# Correlated subquery, not a join: pruned when member_type is not selected (the
+# dashboard never reads it; /v0/job/series caps pages at 100 rows so the per-row
+# GiST lookup on membertypedb stays cheap). A LEFT join would be non-removable
+# (the `valid @> submit_time` range predicate) and cost ~288ms on every wide query.
+member_type_subq = (
+    select(MemberTypeDB.member_type)
+    .where(
+        MemberTypeDB.user_id == SlurmJobDB.sarc_user_id,
+        MemberTypeDB.valid.contains(SlurmJobDB.submit_time),
+    )
+    .scalar_subquery()
+).label("member_type")
+
 #### RGU
 # requested_rgu/requested_rgu_drac and allocated_rgu/allocated_rgu_drac are
 # per-job RGU-count metrics (GPU count x RGU weight, not time-integrated):
@@ -83,12 +101,8 @@ allocated_rgu_drac_expr = (allocated_gres_gpu * GpuRguDB.drac_rgu).label(
 # of the per-job "cpu_utilization" statistic (fraction in [0, 1] of the
 # allocated CPU capacity that was actually used); used below to derive CPU
 # waste.
-cpu_utilization = (
-    select(JobStatisticDB.mean)
-    .where(JobStatisticDB.job_id == SlurmJobDB.id)
-    .where(JobStatisticDB.name == "cpu_utilization")
-    .scalar_subquery()
-)
+cpu_jsdb = aliased(JobStatisticDB)
+cpu_utilization = col(cpu_jsdb.mean).label("cpu_utilization")
 requested_cpu_cost = col(SlurmJobDB.elapsed_time) * col(SlurmJobDB.requested_cpu)
 allocated_cpu_cost = col(SlurmJobDB.elapsed_time) * col(SlurmJobDB.allocated_cpu)
 cpu_overbilling_cost = (
@@ -104,12 +118,8 @@ cpu_overbilling_cost = (
 #   multiprocessors (SMs) occupied, a finer-grained measure of how much of the
 #   GPU's compute is actually used.
 # GPU waste below is computed from SM-occupancy mean (not GPU utilization).
-gpu_sm_occupancy = (
-    select(JobStatisticDB.mean)
-    .where(JobStatisticDB.job_id == SlurmJobDB.id)
-    .where(JobStatisticDB.name == "gpu_sm_occupancy")
-    .scalar_subquery()
-)
+sm_occ_jsdb = aliased(JobStatisticDB)
+gpu_sm_occupancy = col(sm_occ_jsdb.mean).label("gpu_sm_occupancy")
 requested_gpu_cost = (
     col(SlurmJobDB.elapsed_time)
     * col(SlurmJobDB.requested_gres_gpu)
@@ -132,11 +142,34 @@ JOB_SERIES_EXCLUDED_JOB_COLS = frozenset(
 
 
 class JobSeriesDB(SQLModel, table=True):
+    """Wide read-model view (slurm_jobs + users, clusters, gpurgudb, per-job stats,
+    and per-row subqueries). Performance gotchas when querying it at /dash window sizes:
+
+    - slurm_jobs stays index-only only while every column the query needs is in the
+      covering index -- notably the join keys sarc_user_id (users LEFT join,
+      member_type/supervisors subqueries) and cluster_id (clusters LEFT join). Both
+      the users and clusters joins are LEFT so the planner drops them when their
+      columns are unused (FK + NOT NULL make LEFT == INNER, so no row is lost).
+      Even a dropped join pins its key columns to the scan, though; when the target
+      index lacks them, build the query with ``job_series_select()`` below instead.
+    - member_type, supervisors and statistics are per-row correlated subqueries:
+      pruned when not selected, but evaluated once per output row otherwise -- cheap
+      only on bounded/paginated selects, not over a wide unbounded window. statistics
+      is the worst (json_object_agg reads every stat column -> heap scan of jobstatisticdb).
+    - ``*_gpu_waste`` / ``*_cpu_waste`` read the metric mean via set-based LEFT joins
+      on jobstatisticdb (gpu_sm_occupancy, cpu_utilization): index-only, parallel, and
+      each join is dropped when its stat is unused. But the mean can be NaN (Prometheus
+      gap) and on Postgres NaN poisons SUM -- filter it (e.g. ``WHERE col != 'NaN'``).
+    """
+
     __tablename__ = "job_series_view"  # This is filtered out in table creation
     __sql_view__ = (
         select(
             col(SlurmJobDB.id).label("job_db_id"),
-            col(UserDB.id).label("sarc_user_id"),
+            # sarc_user_id from slurm_jobs (not UserDB.id) so the users join below
+            # can be LEFT and dropped by the planner when display_name/email are
+            # unused. sarc_user_id is NOT NULL + FK to users, so LEFT == INNER here.
+            col(SlurmJobDB.sarc_user_id).label("sarc_user_id"),
             *[
                 c
                 for c in SlurmJobDB.__table__.columns  # ty:ignore[unresolved-attribute]
@@ -144,7 +177,7 @@ class JobSeriesDB(SQLModel, table=True):
             ],
             *[c for c in UserDB.__table__.columns if c.name != "id"],  # ty:ignore[unresolved-attribute]
             col(SlurmClusterDB.name).label("cluster_name"),
-            col(MemberTypeDB.member_type),
+            member_type_subq,
             stats_subq,
             supervisors_subq,
             col(GpuRguDB.rgu).label("gpu_type_rgu"),
@@ -164,17 +197,25 @@ class JobSeriesDB(SQLModel, table=True):
             ((1 - gpu_sm_occupancy) * allocated_gpu_cost).label("allocated_gpu_waste"),
             gpu_overbilling_cost,
         )  # ty:ignore[no-matching-overload]
-        .join(UserDB, SlurmJobDB.sarc_user_id == UserDB.id)
-        .join(SlurmClusterDB, SlurmJobDB.cluster_id == SlurmClusterDB.id)
+        .join(UserDB, SlurmJobDB.sarc_user_id == UserDB.id, isouter=True)
+        # LEFT so the planner drops it when cluster_name is unused (same as the
+        # users join above). cluster_id is NOT NULL + FK to clusters.id (a unique
+        # PK) with ondelete RESTRICT, so no row is ever dropped -- LEFT == INNER.
+        .join(SlurmClusterDB, SlurmJobDB.cluster_id == SlurmClusterDB.id, isouter=True)
+        .join(GpuRguDB, GpuRguDB.name == SlurmJobDB.harmonized_gpu_type, isouter=True)
         .join(
-            MemberTypeDB,
+            sm_occ_jsdb,
             and_(
-                MemberTypeDB.user_id == SlurmJobDB.sarc_user_id,
-                MemberTypeDB.valid.contains(SlurmJobDB.submit_time),
+                sm_occ_jsdb.job_id == SlurmJobDB.id,
+                sm_occ_jsdb.name == "gpu_sm_occupancy",
             ),
             isouter=True,
         )
-        .join(GpuRguDB, GpuRguDB.name == SlurmJobDB.harmonized_gpu_type, isouter=True)
+        .join(
+            cpu_jsdb,
+            and_(cpu_jsdb.job_id == SlurmJobDB.id, cpu_jsdb.name == "cpu_utilization"),
+            isouter=True,
+        )
     )
     job_db_id: int = Field(primary_key=True)
     # job identification
@@ -360,3 +401,45 @@ class JobSeriesDB(SQLModel, table=True):
     """The user's member type valid at the job's submit time."""
     supervisors: list[int] | None = Field(sa_type=JSON)
     """Supervisor user ids, ordered, valid at the job's submit time."""
+
+
+def _referenced_relations(expressions) -> set[FromClause]:
+    """Tables/aliases whose columns appear in the expressions (subqueries included)."""
+    return {
+        el.table
+        for expr in expressions
+        for el in visitors.iterate(expr)
+        if isinstance(el, ColumnClause) and el.table is not None
+    }
+
+
+def _prune_joins(node: FromClause, needed: set[FromClause]) -> FromClause:
+    """Rebuild a join tree without the LEFT joins to unreferenced relations."""
+    if not isinstance(node, Join):
+        return node
+    left = _prune_joins(node.left, needed)
+    if node.isouter and node.right not in needed:
+        return left
+    return left.join(node.right, node.onclause, isouter=node.isouter)
+
+
+def job_series_select(*columns: str) -> Select:
+    """SELECT of the given job_series columns, minus the view joins they don't use.
+
+    Querying the DB view keeps the removed joins' key columns marked as needed
+    (Postgres never un-marks them), which alone can disqualify index-only scans.
+    Building the same statement client-side, the planner never sees the unused
+    joins or their keys. Dropping one is safe because every view join is LEFT on
+    a unique key, so it never changes the row set. Use ``.subquery()`` and read
+    every needed column through it.
+    """
+    view = JobSeriesDB.__sql_view__
+    missing = sorted(set(columns) - set(view.selected_columns.keys()))
+    if missing:
+        raise KeyError(f"unknown job_series column(s): {missing}")
+    keep = [view.selected_columns[name] for name in columns]
+    froms = view.get_final_froms()
+    assert len(froms) == 1, "job_series is expected to be a single join tree"
+    return select(*keep).select_from(
+        _prune_joins(froms[0], _referenced_relations(keep))
+    )

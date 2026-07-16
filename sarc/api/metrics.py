@@ -16,8 +16,8 @@ from sqlmodel import Session, and_, case, col, func, select
 from sarc.api.v0 import Requestor, requestor
 from sarc.config import config
 from sarc.db.cluster import SlurmClusterDB
-from sarc.db.job import JobStatisticDB, SlurmJobDB
-from sarc.db.support import GpuRguDB
+from sarc.db.job import JobStatisticDB
+from sarc.db.job_series import JobSeriesDB, job_series_select
 from sarc.db.users import MatchingID, UserDB
 from sarc.models.job import SlurmState
 
@@ -269,39 +269,33 @@ def _resolve_cluster_ids(sess: Session, clusters: list[str]) -> list[int] | None
     return ids
 
 
-def _apply_slurm_job_filters(
+def _apply_job_filters(
     query,
+    cols,
     cluster_ids: list[int] | None,
     cluster_user: str | None,
     job_states: list[str],
     scope_user_id: int | Literal["admin"],
 ):
-    """Apply job-state + cluster_id/user filters to a SlurmJobDB query.
+    """Common job filters on ``cols`` — a column namespace: a table/view model
+    class, or the ``.c`` of a job_series_select subquery.
 
-    Filters by cluster_ids (resolved upfront) to avoid joining SlurmClusterDB
-    just to filter on cluster_name. None/empty means no cluster filter.
-    ``scope_user_id`` (a non-admin's UserDB id) restricts to that user's jobs;
-    the sentinel ``"admin"`` applies no user scoping.
+    Filters by cluster_ids (resolved upfront, no clusters join needed); empty
+    means no cluster filter. ``scope_user_id`` (a non-admin's UserDB id)
+    restricts to that user's jobs; the sentinel ``"admin"`` applies no scoping.
     """
     if job_states:
-        query = query.where(col(SlurmJobDB.job_state).in_(job_states))
+        query = query.where(cols.job_state.in_(job_states))
     if cluster_ids:
-        query = query.where(col(SlurmJobDB.cluster_id).in_(cluster_ids))
+        query = query.where(cols.cluster_id.in_(cluster_ids))
     if cluster_user:
-        query = query.where(SlurmJobDB.cluster_user == cluster_user)
+        query = query.where(cols.cluster_user == cluster_user)
     if scope_user_id != "admin":
-        query = query.where(SlurmJobDB.sarc_user_id == scope_user_id)
+        query = query.where(cols.sarc_user_id == scope_user_id)
     return query
 
 
-# Physical RGU per job: coalesce(allocated_gres_gpu, 0) * drac_rgu. Only valid on
-# a query whose FROM was built by _apply_rgu_base (it left-joins gpurgudb on
-# harmonized_gpu_type). A missing gpurgudb row makes it NULL, which
-# _apply_rgu_base drops via its `_RGU_DRAC IS NOT NULL` filter.
-_RGU_DRAC = func.coalesce(SlurmJobDB.allocated_gres_gpu, 0) * GpuRguDB.drac_rgu
-
-
-def _apply_rgu_base(
+def _apply_rgu_base_view(
     query,
     sess: Session,
     clusters: list[str],
@@ -310,25 +304,21 @@ def _apply_rgu_base(
     *,
     scope_user_id: int | Literal["admin"],
 ):
-    """Build the shared base of every RGU query.
+    """Build the shared base of every RGU query, on the job_series view.
 
-    Anchors ``query`` on SlurmJobDB, left-joins gpurgudb on harmonized_gpu_type
-    (so ``_RGU_DRAC`` and ``col(GpuRguDB.drac_rgu)`` resolve), keeps only the GPU
-    jobs whose physical RGU is calculable (a known gpu_type with a matching
-    gpurgudb row), then applies the common cluster/user/state filters. ``query``
-    must already project its columns; the caller still adds its own time window.
+    The view already carries the RGU weight (``allocated_rgu_drac`` =
+    coalesce(allocated_gres_gpu, 0) * drac_rgu) and ``cluster_name``, so no
+    gpurgudb/clusters join is needed. Keeps only GPU jobs whose physical RGU is
+    computable, then the common cluster/user/state filters; the caller adds its
+    own time window.
     """
-    query = (
-        query.select_from(SlurmJobDB)
-        .join(
-            GpuRguDB,
-            col(GpuRguDB.name) == col(SlurmJobDB.harmonized_gpu_type),
-            isouter=True,
-        )
-        .where(col(SlurmJobDB.allocated_gpu_type).is_not(None), _RGU_DRAC.is_not(None))
+    query = query.select_from(JobSeriesDB).where(
+        col(JobSeriesDB.allocated_gpu_type).is_not(None),
+        col(JobSeriesDB.allocated_rgu_drac).is_not(None),
     )
-    return _apply_slurm_job_filters(
+    return _apply_job_filters(
         query,
+        JobSeriesDB,
         _resolve_cluster_ids(sess, clusters),
         cluster_user,
         job_states,
@@ -431,15 +421,20 @@ def metrics_job_counts(
     fmt = _label_fmt(parsed)
 
     # Bucket each job in SQL (floor for fixed periods, date_trunc for calendar)
-    # and group, instead of one COUNT per bucket. Queries SlurmJobDB directly to
-    # skip the JobSeriesDB view (RGU/statistics aggregations are not needed).
-    bucket_expr = _bucket_expr(parsed, SlurmJobDB.submit_time, begin_dt)
+    # and group, instead of one COUNT per bucket. Counts every job, GPU or not;
+    # the DB view would degrade this to a full-table scan (see JobSeriesDB
+    # docstring), job_series_select keeps it on the small submit_time index.
+    js = job_series_select(
+        "submit_time", "cluster_id", "cluster_user", "job_state", "sarc_user_id"
+    ).subquery()
+    bucket_expr = _bucket_expr(parsed, js.c.submit_time, begin_dt)
 
     query = select(bucket_expr, func.count().label("count")).where(
-        col(SlurmJobDB.submit_time) >= begin_dt, col(SlurmJobDB.submit_time) < finish_dt
+        js.c.submit_time >= begin_dt, js.c.submit_time < finish_dt
     )
-    query = _apply_slurm_job_filters(
+    query = _apply_job_filters(
         query,
+        js.c,
         _resolve_cluster_ids(sess, clusters),
         cluster_user,
         job_states,
@@ -536,29 +531,39 @@ def metrics_job_times_vs_limit(
     begin_dt, finish_dt = _apply_focus(*_date_range(start, end), focus_start, focus_end)
     cluster_ids = _resolve_cluster_ids(sess, clusters)
 
-    wait_expr = func.extract(
-        "epoch", col(SlurmJobDB.start_time) - col(SlurmJobDB.submit_time)
-    )
+    # Through the pruned view for uniformity only: the columns read here are in
+    # no index, so the whole table gets read either way.
+    js = job_series_select(
+        "submit_time",
+        "time_limit",
+        "start_time",
+        "elapsed_time",
+        "cluster_id",
+        "cluster_user",
+        "job_state",
+        "sarc_user_id",
+    ).subquery()
+    wait_expr = func.extract("epoch", js.c.start_time - js.c.submit_time)
     base_filters = [
-        col(SlurmJobDB.submit_time) >= begin_dt,
-        col(SlurmJobDB.submit_time) < finish_dt,
-        col(SlurmJobDB.time_limit).is_not(None),
-        col(SlurmJobDB.start_time).is_not(None),
+        js.c.submit_time >= begin_dt,
+        js.c.submit_time < finish_dt,
+        js.c.time_limit.is_not(None),
+        js.c.start_time.is_not(None),
     ]
     if cluster_ids:
-        base_filters.append(col(SlurmJobDB.cluster_id).in_(cluster_ids))
+        base_filters.append(js.c.cluster_id.in_(cluster_ids))
     if cluster_user:
-        base_filters.append(col(SlurmJobDB.cluster_user) == cluster_user)
+        base_filters.append(js.c.cluster_user == cluster_user)
     if job_states:
-        base_filters.append(col(SlurmJobDB.job_state).in_(job_states))
+        base_filters.append(js.c.job_state.in_(job_states))
     scope_user_id = _scope_or_view_as(sess, req, as_user)
     if scope_user_id != "admin":
-        base_filters.append(col(SlurmJobDB.sarc_user_id) == scope_user_id)
+        base_filters.append(js.c.sarc_user_id == scope_user_id)
 
     max_l, max_e, max_w = sess.exec(
         select(
-            func.max(SlurmJobDB.time_limit).label("max_l"),
-            func.max(SlurmJobDB.elapsed_time).label("max_e"),
+            func.max(js.c.time_limit).label("max_l"),
+            func.max(js.c.elapsed_time).label("max_e"),
             func.max(wait_expr).label("max_w"),
         ).where(*base_filters)
     ).one()
@@ -570,13 +575,13 @@ def metrics_job_times_vs_limit(
     elapsed_hmap = _build_heatmap_payload(
         sess,
         base_filters,
-        SlurmJobDB.time_limit,
-        SlurmJobDB.elapsed_time,
+        js.c.time_limit,
+        js.c.elapsed_time,
         float(max_l),
         float(max_e),
     )
     wait_hmap = _build_heatmap_payload(
-        sess, base_filters, SlurmJobDB.time_limit, wait_expr, float(max_l), float(max_w)
+        sess, base_filters, js.c.time_limit, wait_expr, float(max_l), float(max_w)
     )
 
     return {
@@ -641,20 +646,19 @@ def metrics_metric_distribution(
 
     begin_dt, finish_dt = _apply_focus(*_date_range(start, end), focus_start, focus_end)
 
-    # Read the metric mean via a targeted LEFT JOIN on jobstatisticdb instead of
-    # JobSeriesDB.statistics, which forces a per-row json_object_agg of all
-    # stats. See histogram for the rationale.
+    # View-anchored: weight = allocated_gpu_cost (precomputed rgu * elapsed). Read
+    # the metric mean via a targeted jobstatisticdb join (metric is parametrized),
+    # not the view's frozen stat columns/json.
     js1 = aliased(JobStatisticDB)
     m1 = col(js1.mean)
-    weight = _RGU_DRAC * col(SlurmJobDB.elapsed_time)
+    weight = col(JobSeriesDB.allocated_gpu_cost)
     bin_width = 1.0 / _DENSITY_BINS
 
-    # _apply_rgu_base anchors the FROM (SlurmJobDB + gpurgudb), keeps only jobs
-    # with a calculable RGU and adds the common filters; then attach the stat
-    # alias on the job id.
+    # _apply_rgu_base_view anchors the FROM on the view, keeps only calculable-RGU
+    # jobs and adds the common filters; then attach the stat alias on the job id.
     bin_expr = _density_bin_expr(m1).label("bin")
     q = (
-        _apply_rgu_base(
+        _apply_rgu_base_view(
             select(bin_expr, func.sum(weight).label("w")),
             sess,
             clusters,
@@ -664,12 +668,14 @@ def metrics_metric_distribution(
         )
         .join(
             js1,
-            and_(col(js1.job_id) == col(SlurmJobDB.id), col(js1.name) == metric),
+            and_(
+                col(js1.job_id) == col(JobSeriesDB.job_db_id), col(js1.name) == metric
+            ),
             isouter=True,
         )
         .where(
-            col(SlurmJobDB.submit_time) >= begin_dt,
-            col(SlurmJobDB.submit_time) < finish_dt,
+            col(JobSeriesDB.submit_time) >= begin_dt,
+            col(JobSeriesDB.submit_time) < finish_dt,
             _valid_metric_filter(m1),
         )
         .group_by("bin")
@@ -724,7 +730,7 @@ def metrics_metric_comparison(
     # group_by by label, not by expression: pg8000's server-side binding renders
     # the expression with fresh placeholders in GROUP BY (error 42803).
     q = (
-        _apply_rgu_base(
+        _apply_rgu_base_view(
             select(bx, by, func.count().label("n")),
             sess,
             clusters,
@@ -734,17 +740,21 @@ def metrics_metric_comparison(
         )
         .join(
             js1,
-            and_(col(js1.job_id) == col(SlurmJobDB.id), col(js1.name) == metric),
+            and_(
+                col(js1.job_id) == col(JobSeriesDB.job_db_id), col(js1.name) == metric
+            ),
             isouter=True,
         )
         .join(
             js2,
-            and_(col(js2.job_id) == col(SlurmJobDB.id), col(js2.name) == metric2),
+            and_(
+                col(js2.job_id) == col(JobSeriesDB.job_db_id), col(js2.name) == metric2
+            ),
             isouter=True,
         )
         .where(
-            col(SlurmJobDB.submit_time) >= begin_dt,
-            col(SlurmJobDB.submit_time) < finish_dt,
+            col(JobSeriesDB.submit_time) >= begin_dt,
+            col(JobSeriesDB.submit_time) < finish_dt,
             _valid_metric_filter(m1),
             _valid_metric_filter(m2),
         )
@@ -783,12 +793,13 @@ def metrics_rgu_usage(
     parsed = _parse_period(period)
     fmt = _label_fmt(parsed)
 
-    # Aggregate per bucket: SUM(rgu * elapsed / 3600) for requested, the same
-    # times the metric mean for used (the `m == m` test nulls NaN to 0). The
-    # metric mean comes from a targeted LEFT JOIN on jobstatisticdb (one metric,
-    # job_id index) — never the per-row json_object_agg of JobSeriesDB.statistics.
-    bucket_expr = _bucket_expr(parsed, col(SlurmJobDB.submit_time), begin_dt)
-    rgu_hours = _RGU_DRAC * col(SlurmJobDB.elapsed_time) / 3600.0
+    # Per bucket: requested = SUM(allocated_gpu_cost)/3600 (the view's precomputed
+    # RGU-seconds -> RGU-hours); used = the same scaled by the metric mean (NaN
+    # nulled to 0). The metric is parametrized over 7 values but the view's *_waste
+    # columns are frozen to gpu_sm_occupancy/cpu_utilization, so we read the mean
+    # via our own targeted jobstatisticdb join (never the view's json statistics).
+    bucket_expr = _bucket_expr(parsed, col(JobSeriesDB.submit_time), begin_dt)
+    rgu_hours = col(JobSeriesDB.allocated_gpu_cost) / 3600.0
     m_mean = col(JobStatisticDB.mean)
     # Split used vs unmeasured on whether the metric is a real value (not
     # NULL/NaN); a missing measurement is kept apart from "unused" rather than
@@ -797,7 +808,7 @@ def metrics_rgu_usage(
     rgu_used_term = case((m_present, rgu_hours * m_mean), else_=0.0)
     rgu_unmeasured_term = case((m_present, 0.0), else_=rgu_hours)
 
-    query = _apply_rgu_base(
+    query = _apply_rgu_base_view(
         select(
             bucket_expr,
             func.sum(rgu_hours).label("rgu_requested"),
@@ -814,14 +825,14 @@ def metrics_rgu_usage(
         query.join(
             JobStatisticDB,
             and_(
-                col(JobStatisticDB.job_id) == col(SlurmJobDB.id),
+                col(JobStatisticDB.job_id) == col(JobSeriesDB.job_db_id),
                 col(JobStatisticDB.name) == metric,
             ),
             isouter=True,
         )
         .where(
-            col(SlurmJobDB.submit_time) >= begin_dt,
-            col(SlurmJobDB.submit_time) < finish_dt,
+            col(JobSeriesDB.submit_time) >= begin_dt,
+            col(JobSeriesDB.submit_time) < finish_dt,
         )
         .group_by("bucket")
         .order_by("bucket")
@@ -876,13 +887,16 @@ def metrics_rgu_by_cluster(
     parsed = _parse_period(period)
     fmt = _label_fmt(parsed)
 
-    # cluster_name is the stack key, so the query always joins clusters
-    bucket_expr = _bucket_expr(parsed, col(SlurmJobDB.submit_time), begin_dt)
-    rgu_hours = _RGU_DRAC * col(SlurmJobDB.elapsed_time) / 3600.0
-    query = _apply_rgu_base(
+    # The view carries cluster_name and allocated_gpu_cost -- its precomputed
+    # RGU-seconds (elapsed_time * allocated_gres_gpu * drac_rgu) -- so no
+    # clusters/gpurgudb join is needed. /3600 -> RGU-hours (equals
+    # allocated_rgu_drac * elapsed / 3600 in the sum, and a touch cheaper).
+    bucket_expr = _bucket_expr(parsed, col(JobSeriesDB.submit_time), begin_dt)
+    rgu_hours = col(JobSeriesDB.allocated_gpu_cost) / 3600.0
+    query = _apply_rgu_base_view(
         select(
             bucket_expr,
-            col(SlurmClusterDB.name).label("cluster_name"),
+            col(JobSeriesDB.cluster_name).label("cluster_name"),
             func.sum(rgu_hours).label("rgu"),
         ),
         sess,
@@ -890,11 +904,11 @@ def metrics_rgu_by_cluster(
         cluster_user,
         job_states,
         scope_user_id=_scope_or_view_as(sess, req, as_user),
-    ).join(SlurmClusterDB, col(SlurmJobDB.cluster_id) == col(SlurmClusterDB.id))
+    )
     query = (
         query.where(
-            col(SlurmJobDB.submit_time) >= begin_dt,
-            col(SlurmJobDB.submit_time) < finish_dt,
+            col(JobSeriesDB.submit_time) >= begin_dt,
+            col(JobSeriesDB.submit_time) < finish_dt,
         )
         .group_by("bucket", "cluster_name")
         .order_by("bucket")
@@ -958,11 +972,19 @@ def metrics_metric_trend(
     parsed = _parse_period(period)
     fmt = _label_fmt(parsed)
 
-    # No RGU/statistics-view columns are needed, so query SlurmJobDB directly
-    # rather than the JobSeriesDB view (whose per-row billing lateral and
-    # user/membertype joins dominate). The view's inner joins never drop a job,
-    # so the result is identical. Same pattern as /metrics/job_counts.
-    bucket_expr = _bucket_expr(parsed, SlurmJobDB.submit_time, begin_dt)
+    # No GPU filter, unlike the RGU endpoints: ``metric`` is user-selected and
+    # not always GPU-bound (system_memory is also measured on CPU-only jobs).
+    # The DB view would then degrade to a full-table scan (see JobSeriesDB
+    # docstring); job_series_select keeps it on the small submit_time index.
+    js = job_series_select(
+        "job_db_id",
+        "submit_time",
+        "cluster_id",
+        "cluster_user",
+        "job_state",
+        "sarc_user_id",
+    ).subquery()
+    bucket_expr = _bucket_expr(parsed, js.c.submit_time, begin_dt)
     m_mean = col(JobStatisticDB.mean)
     m_max = col(JobStatisticDB.max)
     # NaN-proof averages: a single NaN would contaminate the whole AVG, so each
@@ -973,23 +995,21 @@ def metrics_metric_trend(
 
     query = (
         select(bucket_expr, avg_mean, avg_max)
-        .select_from(SlurmJobDB)
+        .select_from(js)
         .join(
             JobStatisticDB,
             and_(
-                col(JobStatisticDB.job_id) == col(SlurmJobDB.id),
+                col(JobStatisticDB.job_id) == js.c.job_db_id,
                 col(JobStatisticDB.name) == metric,
             ),
         )
-        .where(
-            col(SlurmJobDB.submit_time) >= begin_dt,
-            col(SlurmJobDB.submit_time) < finish_dt,
-        )
+        .where(js.c.submit_time >= begin_dt, js.c.submit_time < finish_dt)
         .group_by("bucket")
         .order_by("bucket")
     )
-    query = _apply_slurm_job_filters(
+    query = _apply_job_filters(
         query,
+        js.c,
         _resolve_cluster_ids(sess, clusters),
         cluster_user,
         job_states,
@@ -1039,20 +1059,19 @@ def metrics_rgu_by_user(
     """
     begin_dt, finish_dt = _apply_focus(*_date_range(start, end), focus_start, focus_end)
 
-    # Aggregate by user: SUM(rgu * elapsed / 3600) per user. Metric mean via a
-    # targeted LEFT JOIN on jobstatisticdb (one metric, job_id index) — see
-    # rgu_usage.
-    rgu_hours = _RGU_DRAC * col(SlurmJobDB.elapsed_time) / 3600.0
+    # Aggregate by user: SUM(allocated_gpu_cost)/3600 = RGU.h per user. Metric mean
+    # via a targeted jobstatisticdb join (parametrized) — see rgu_usage.
+    rgu_hours = col(JobSeriesDB.allocated_gpu_cost) / 3600.0
     m_mean = col(JobStatisticDB.mean)
     # Split used vs unmeasured on whether the metric is a real value (not
     # NULL/NaN); a missing measurement is kept apart from "unused".
     m_present = _is_real(m_mean)
     rgu_used_term = case((m_present, rgu_hours * m_mean), else_=0.0)
     rgu_unmeasured_term = case((m_present, 0.0), else_=rgu_hours)
-    user_expr = func.coalesce(col(SlurmJobDB.cluster_user), "unknown").label("user")
+    user_expr = func.coalesce(col(JobSeriesDB.cluster_user), "unknown").label("user")
     rgu_requested_sum = func.sum(rgu_hours).label("rgu_requested")
 
-    query = _apply_rgu_base(
+    query = _apply_rgu_base_view(
         select(
             user_expr,
             rgu_requested_sum,
@@ -1069,14 +1088,14 @@ def metrics_rgu_by_user(
         query.join(
             JobStatisticDB,
             and_(
-                col(JobStatisticDB.job_id) == col(SlurmJobDB.id),
+                col(JobStatisticDB.job_id) == col(JobSeriesDB.job_db_id),
                 col(JobStatisticDB.name) == metric,
             ),
             isouter=True,
         )
         .where(
-            col(SlurmJobDB.submit_time) >= begin_dt,
-            col(SlurmJobDB.submit_time) < finish_dt,
+            col(JobSeriesDB.submit_time) >= begin_dt,
+            col(JobSeriesDB.submit_time) < finish_dt,
         )
         .group_by("user")
         .order_by(rgu_requested_sum.desc(), user_expr)
@@ -1132,7 +1151,7 @@ def metrics_jobs(
     # page of rows. Without this split, the 3 stat joins + count(*) would run over
     # the whole window (millions of rows) just to return 50. See the perf note in
     # docs / the /metrics/jobs investigation.
-    rgu_hours_raw = _RGU_DRAC * col(SlurmJobDB.elapsed_time) / 3600.0
+    rgu_hours_raw = col(JobSeriesDB.allocated_gpu_cost) / 3600.0
 
     # One aliased jobstatisticdb row per distinct stat name, LEFT-joined on the
     # job id (never JobSeriesDB.statistics, a per-row json_object_agg — see
@@ -1145,30 +1164,32 @@ def metrics_jobs(
         alias = js[name]
         return query.join(
             alias,
-            and_(col(alias.job_id) == col(SlurmJobDB.id), col(alias.name) == name),
+            and_(
+                col(alias.job_id) == col(JobSeriesDB.job_db_id), col(alias.name) == name
+            ),
             isouter=True,
         )
 
     # Sortable columns -> ORDER BY expression. Raw (unlabelled) so they compose
     # with nulls_last/asc/desc cleanly. `nodes` is an array and is not sortable,
-    # so it is intentionally absent. Ranking by "cluster" needs the clusters join
-    # and the keys in `sort_needs_stat` need their stat alias, so the page joins
-    # just the one it needs; every other key ranks on slurm_jobs(+gpurgudb) alone.
+    # so it is intentionally absent. cluster_name/rgu come straight from the view;
+    # the keys in `sort_needs_stat` need their stat alias, so the page joins just
+    # that one; every other key ranks on the view (index-only) alone.
     sortable = {
-        "cluster": col(SlurmClusterDB.name),
-        "job_id": col(SlurmJobDB.job_id),
-        "submit_time": col(SlurmJobDB.submit_time),
-        "user": col(SlurmJobDB.cluster_user),
-        "job_state": col(SlurmJobDB.job_state),
-        "elapsed": col(SlurmJobDB.elapsed_time),
-        "requested_gpu": col(SlurmJobDB.requested_gres_gpu),
-        "allocated_gpu": col(SlurmJobDB.allocated_gres_gpu),
-        "billing": col(SlurmJobDB.allocated_billing),
+        "cluster": col(JobSeriesDB.cluster_name),
+        "job_id": col(JobSeriesDB.job_id),
+        "submit_time": col(JobSeriesDB.submit_time),
+        "user": col(JobSeriesDB.cluster_user),
+        "job_state": col(JobSeriesDB.job_state),
+        "elapsed": col(JobSeriesDB.elapsed_time),
+        "requested_gpu": col(JobSeriesDB.requested_gres_gpu),
+        "allocated_gpu": col(JobSeriesDB.allocated_gres_gpu),
+        "billing": col(JobSeriesDB.allocated_billing),
         "gpu_type": func.coalesce(
-            col(SlurmJobDB.harmonized_gpu_type), col(SlurmJobDB.allocated_gpu_type)
+            col(JobSeriesDB.harmonized_gpu_type), col(JobSeriesDB.allocated_gpu_type)
         ),
-        "gpu_type_rgu": col(GpuRguDB.drac_rgu),
-        "rgu": _RGU_DRAC,
+        "gpu_type_rgu": col(JobSeriesDB.gpu_type_rgu_drac),
+        "rgu": col(JobSeriesDB.allocated_rgu_drac),
         "rgu_hours": rgu_hours_raw,
         "waste": rgu_hours_raw * (1 - metric_mean_raw),
         "gpu_utilization_mean": col(js["gpu_utilization"].mean),
@@ -1199,12 +1220,12 @@ def metrics_jobs(
     }
     if sort_by in nullable_sorts:
         ordered = nulls_last(ordered)
-    order_by = (ordered, col(SlurmJobDB.id))
+    order_by = (ordered, col(JobSeriesDB.job_db_id))
 
-    # Window only; the gpu_type/RGU validity filter now lives in _apply_rgu_base.
+    # Window only; the gpu_type/RGU validity filter now lives in _apply_rgu_base_view.
     base_filters = (
-        col(SlurmJobDB.submit_time) >= begin_dt,
-        col(SlurmJobDB.submit_time) < finish_dt,
+        col(JobSeriesDB.submit_time) >= begin_dt,
+        col(JobSeriesDB.submit_time) < finish_dt,
     )
 
     scope_user_id = _scope_or_view_as(sess, req, as_user)
@@ -1218,7 +1239,7 @@ def metrics_jobs(
     # neither the clusters nor the stat join), so paying it per page stays cheap.
     total: int | None = None
     if include_total:
-        count_q = _apply_rgu_base(
+        count_q = _apply_rgu_base_view(
             select(func.count()),
             sess,
             clusters,
@@ -1228,22 +1249,19 @@ def metrics_jobs(
         ).where(*base_filters)
         total = int(sess.exec(count_q).one())
 
-    # PAGE: the page's job ids only. The scan/sort runs here on the source alone
+    # PAGE: the page's job ids only. The scan/sort runs here on the view alone
     # (+ the sort's stat alias when needed). With no window count it parallelises,
     # and a small offset top-N heapsorts instead of sorting the whole set.
-    page_q = _apply_rgu_base(
-        select(col(SlurmJobDB.id).label("jid")),
+    page_q = _apply_rgu_base_view(
+        select(col(JobSeriesDB.job_db_id).label("jid")),
         sess,
         clusters,
         cluster_user,
         job_states,
         scope_user_id=scope_user_id,
     )
-    # clusters only when ranking by cluster_name; the stat alias only for stat sorts.
-    if sort_by == "cluster":
-        page_q = page_q.join(
-            SlurmClusterDB, col(SlurmJobDB.cluster_id) == col(SlurmClusterDB.id)
-        )
+    # Stat alias only for stat sorts; cluster_name is a view column, so the
+    # cluster sort needs no extra join.
     if sort_by in sort_needs_stat:
         page_q = _join_stat(page_q, sort_needs_stat[sort_by])
     page = (
@@ -1252,38 +1270,34 @@ def metrics_jobs(
 
     # FINAL: display columns + the 3 stats, fetched only for the page's rows
     # (joined back on the job id). The total comes from the separate count above.
-    query = (
-        _apply_rgu_base(
-            select(  # ty:ignore[no-matching-overload]
-                col(SlurmClusterDB.name).label("cluster_name"),
-                col(SlurmJobDB.job_id),
-                col(SlurmJobDB.submit_time).label("submit_time"),
-                col(SlurmJobDB.cluster_user),
-                col(SlurmJobDB.job_state),
-                col(SlurmJobDB.elapsed_time).label("elapsed_time"),
-                col(SlurmJobDB.nodes),
-                col(SlurmJobDB.requested_gres_gpu),
-                col(SlurmJobDB.allocated_gres_gpu),
-                col(SlurmJobDB.allocated_billing),
-                col(SlurmJobDB.allocated_gpu_type).label("allocated_gpu_type"),
-                col(SlurmJobDB.harmonized_gpu_type),
-                col(GpuRguDB.drac_rgu).label("gpu_type_rgu_drac"),
-                _RGU_DRAC.label("rgu"),
-                rgu_hours_raw.label("rgu_hours"),
-                metric_mean_raw.label("metric_mean"),
-                col(js["gpu_utilization"].mean).label("gpu_utilization_mean"),
-                col(js["gpu_sm_occupancy"].mean).label("gpu_sm_occupancy_mean"),
-                col(js["gpu_memory"].max).label("gpu_memory_max"),
-            ),
-            sess,
-            clusters,
-            cluster_user,
-            job_states,
-            scope_user_id=scope_user_id,
-        )
-        .join(SlurmClusterDB, col(SlurmJobDB.cluster_id) == col(SlurmClusterDB.id))
-        .join(page, page.c.jid == col(SlurmJobDB.id))
-    )
+    query = _apply_rgu_base_view(
+        select(  # ty:ignore[no-matching-overload]
+            col(JobSeriesDB.cluster_name).label("cluster_name"),
+            col(JobSeriesDB.job_id),
+            col(JobSeriesDB.submit_time).label("submit_time"),
+            col(JobSeriesDB.cluster_user),
+            col(JobSeriesDB.job_state),
+            col(JobSeriesDB.elapsed_time).label("elapsed_time"),
+            col(JobSeriesDB.nodes),
+            col(JobSeriesDB.requested_gres_gpu),
+            col(JobSeriesDB.allocated_gres_gpu),
+            col(JobSeriesDB.allocated_billing),
+            col(JobSeriesDB.allocated_gpu_type).label("allocated_gpu_type"),
+            col(JobSeriesDB.harmonized_gpu_type),
+            col(JobSeriesDB.gpu_type_rgu_drac).label("gpu_type_rgu_drac"),
+            col(JobSeriesDB.allocated_rgu_drac).label("rgu"),
+            rgu_hours_raw.label("rgu_hours"),
+            metric_mean_raw.label("metric_mean"),
+            col(js["gpu_utilization"].mean).label("gpu_utilization_mean"),
+            col(js["gpu_sm_occupancy"].mean).label("gpu_sm_occupancy_mean"),
+            col(js["gpu_memory"].max).label("gpu_memory_max"),
+        ),
+        sess,
+        clusters,
+        cluster_user,
+        job_states,
+        scope_user_id=scope_user_id,
+    ).join(page, page.c.jid == col(JobSeriesDB.job_db_id))
     for name in js:
         query = _join_stat(query, name)
     query = query.order_by(*order_by)

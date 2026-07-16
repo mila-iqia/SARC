@@ -23,6 +23,7 @@ guest). The guest -> login redirect is checked by
 ``test_guest_redirected_to_login``.
 """
 
+import math
 import re
 from types import SimpleNamespace
 
@@ -485,6 +486,129 @@ def test_metric_comparison_with_data(dash_client, dash_db):
     z = data["z"]
     assert z[60][40] == dash_db.n
     assert sum(sum(row) for row in z) == dash_db.n
+
+
+# === NaN / missing-stat handling (migration guardrail) ======================
+# Prometheus gaps leave some jobs with a NaN metric mean, and some
+# RGU-computable jobs have no stat row at all (LEFT-join NULL). On Postgres
+# NaN = NaN is TRUE and NaN poisons SUM/AVG, so the endpoints gate every
+# mean-based term on `_is_real` (NOT NULL AND != 'NaN'). This pins that
+# behaviour by value so the slurm_jobs -> job_series migration must reproduce
+# it exactly: such jobs count wherever their RGU is used, but never enter (nor
+# poison) a mean-based aggregate.
+
+_NAN = float("nan")
+
+
+@pytest.fixture
+def dash_db_nan(read_write_db):
+    """Four RGU-computable GPU jobs, differing only in gpu_sm_occupancy: two
+    "good" (mean 0.5), one with a NaN mean, one with the stat missing entirely.
+
+    All four have a valid RGU (GPU type + gres), so all four count in the jobs
+    table and in ``rgu_requested``; only the two good ones may enter a mean-based
+    aggregate. Returns the expected totals.
+    """
+    sess = read_write_db
+    sess.add(GpuRguDB(name=_GPU, rgu=10.0, drac_rgu=_DRAC_RGU))
+    sess.flush()
+
+    # Detach the factory's own RGU-computable job so only ours are counted.
+    for job in sess.exec(
+        select(SlurmJobDB).where(col(SlurmJobDB.harmonized_gpu_type).is_not(None))
+    ).all():
+        job.harmonized_gpu_type = None
+        sess.add(job)
+
+    jobs = sess.exec(
+        select(SlurmJobDB)
+        .where(col(SlurmJobDB.elapsed_time) == _BASE_ELAPSED)
+        .order_by(col(SlurmJobDB.id))
+    ).all()[:4]
+    assert len(jobs) == 4, "need 4 seeded jobs to enrich"
+
+    # gpu_sm_occupancy mean per job: 2 good, 1 NaN, 1 missing (no stat row).
+    occupancies = [_SM_OCC, _SM_OCC, _NAN, None]
+    for job, sm in zip(jobs, occupancies):
+        job.harmonized_gpu_type = _GPU
+        job.allocated_gpu_type = _GPU
+        job.allocated_gres_gpu = _GRES
+        sess.add(job)
+        stats = dict(_STATS)
+        if sm is None:
+            del stats["gpu_sm_occupancy"]  # no row -> LEFT join yields NULL
+        elif math.isnan(sm):
+            stats["gpu_sm_occupancy"] = (sm, sm)  # NaN mean (Prometheus gap)
+        # else: keep the finite default (_SM_OCC)
+        for name, (mean, mx) in stats.items():
+            sess.add(
+                JobStatisticDB(
+                    job_id=job.id,
+                    name=name,
+                    mean=mean,
+                    std=0.0,
+                    q05=mean,
+                    q25=mean,
+                    median=mean,
+                    q75=mean,
+                    max=mx,
+                    unused=0.0,
+                )
+            )
+    sess.commit()
+
+    n_total, n_good = 4, 2
+    return SimpleNamespace(
+        n_total=n_total,
+        n_good=n_good,
+        total_requested=_RGU_HOURS_PER_JOB * n_total,
+        total_used=_RGU_HOURS_PER_JOB * _SM_OCC * n_good,
+        total_unmeasured=_RGU_HOURS_PER_JOB * (n_total - n_good),
+        total_weight=_WEIGHT_PER_JOB * n_good,
+    )
+
+
+def test_nan_and_missing_means_never_poison_aggregates(dash_client, dash_db_nan):
+    """A NaN or missing metric mean must count where RGU is used but stay out of
+    every mean-based aggregate, which must remain finite (never NaN)."""
+    facts = dash_db_nan
+
+    # jobs table: every RGU-computable job is listed; NaN/NULL means don't drop it.
+    jobs = dash_client.get("/dash/metrics/jobs", params=WINDOW).json()
+    assert jobs["total"] == facts.n_total
+    assert len(jobs["jobs"]) == facts.n_total
+
+    # rgu_usage: requested counts all jobs; used sums only the real means and
+    # stays finite; the NaN/NULL jobs land in rgu_unmeasured, not rgu_used.
+    usage = dash_client.get("/dash/metrics/rgu_usage", params=WINDOW).json()
+    used = sum(r["rgu_used"] for r in usage)
+    assert math.isfinite(used)
+    assert sum(r["rgu_requested"] for r in usage) == pytest.approx(
+        facts.total_requested
+    )
+    assert used == pytest.approx(facts.total_used)
+    assert sum(r["rgu_unmeasured"] for r in usage) == pytest.approx(
+        facts.total_unmeasured
+    )
+
+    # rgu_by_user carries its own copy of the same NaN gate.
+    by_user = dash_client.get("/dash/metrics/rgu_by_user", params=WINDOW).json()
+    used_by_user = sum(u["rgu_used"] for u in by_user)
+    assert math.isfinite(used_by_user)
+    assert used_by_user == pytest.approx(facts.total_used)
+
+    # metric_trend: the average skips NaN/NULL, so every non-empty bucket is 0.5.
+    trend = dash_client.get("/dash/metrics/metric_trend", params=WINDOW).json()
+    series = {s["metric"]: s for s in trend["series"]}["gpu_sm_occupancy"]
+    means = [m for m in series["mean"] if m is not None]
+    assert means, "expected at least one non-empty bucket"
+    assert all(math.isfinite(m) and m == pytest.approx(_SM_OCC) for m in means)
+
+    # metric_distribution: only the two good jobs are binned; weights stay finite.
+    dist = dash_client.get("/dash/metrics/metric_distribution", params=WINDOW).json()
+    weights = dist["primary"]["weights"]
+    assert all(math.isfinite(w) for w in weights)
+    assert sum(weights) == pytest.approx(facts.total_weight)
 
 
 # === Period bucketing =======================================================
