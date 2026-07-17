@@ -306,21 +306,13 @@ def update_user(sess: Session, user: UserMatch) -> None:
 
 @overload
 def valid_merge[T](
-    valid: ValidField[T],
-    db_valid: ValidFieldDB[T],
-    *,
-    map: None = None,
-    truncate: bool = False,
+    valid: ValidField[T], db_valid: ValidFieldDB[T], *, map: None = None
 ) -> None: ...
 
 
 @overload
 def valid_merge[T, U](
-    valid: ValidField[T],
-    db_valid: ValidFieldDB[U],
-    *,
-    map: Callable[[T], U],
-    truncate: bool = False,
+    valid: ValidField[T], db_valid: ValidFieldDB[U], *, map: Callable[[T], U]
 ) -> None: ...
 
 
@@ -329,7 +321,6 @@ def valid_merge[T, U](
     db_valid: ValidFieldDB[U],
     *,
     map: Callable[[T], U] | None = None,
-    truncate: bool = False,
 ) -> None:
     if map is None:
 
@@ -339,15 +330,13 @@ def valid_merge[T, U](
         map = mapf
 
     for tag in valid.values:
-        db_valid.insert(
-            map(tag.value), tag.valid.lower, tag.valid.upper, truncate=truncate
-        )
+        db_valid.insert(map(tag.value), tag.valid.lower, tag.valid.upper)
 
 
 def update_user_db(sess: Session, user: UserMatch, db_user: UserDB) -> None:
     for domain, creds in user.associated_accounts.items():
         valid_merge(creds, db_user.associated_accounts[domain])
-    valid_merge(user.member_type, db_user.member_type, truncate=True)
+    valid_merge(user.member_type, db_user.member_type)
 
     def map_super(match_id: MatchID) -> int:
         res = lookup_match_id(sess, match_id)

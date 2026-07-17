@@ -91,8 +91,6 @@ class ValidField[V]:
         start: datetime | None = None,
         end: datetime | None = None,
         session: SASession | None = None,
-        *,
-        truncate: bool = False,
     ) -> None:
         """Add a value with optional validity bounds.
 
@@ -115,9 +113,7 @@ class ValidField[V]:
             assert end.tzinfo is not None
             end = end.astimezone(UTC)
 
-        self._insert_tag(
-            session, value, Range(start, end, bounds="[)"), truncate=truncate
-        )
+        self._insert_tag(session, value, Range(start, end, bounds="[)"))
         session.flush()
 
     def _insert_tag(
@@ -422,13 +418,11 @@ class SupervisorIDsField:
         start: datetime | None = None,
         end: datetime | None = None,
         session: SASession | None = None,
-        *,
-        truncate: bool = False,
     ) -> None:
         helpers = [
             SupervisorsHelper(pos=i, supervisor=sid) for i, sid in enumerate(value)
         ]
-        self._field.insert(helpers, start, end, session, truncate=truncate)
+        self._field.insert(helpers, start, end, session)
 
 
 class MatchingID(SQLModel, table=True):
