@@ -1,11 +1,15 @@
 import logging
 import os
 
+from opentelemetry import trace
 from opentelemetry._logs import set_logger_provider
 from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
 from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from rapporteur.report import Report
 from rapporteur.slack import SlackReporter
 
@@ -35,6 +39,27 @@ def getOpenTelemetryLoggingHandler(log_conf: LoggingConfig):
     return LoggingHandler(level=logging.NOTSET, logger_provider=logger_provider)
 
 
+def setup_opentelemetry_tracing(log_conf: LoggingConfig):
+    if log_conf.OTLP_endpoint is None or log_conf.service_name is None:
+        return
+
+    # 1. Create the same resource identification as your logs
+    resource = Resource.create(
+        {
+            "service.name": log_conf.service_name,
+            "service.instance.id": os.uname().nodename,
+        }
+    )
+
+    tracer_provider = TracerProvider(resource=resource)
+    trace.set_tracer_provider(tracer_provider)
+
+    trace_exporter = OTLPSpanExporter(endpoint=log_conf.OTLP_endpoint)
+
+    span_processor = BatchSpanProcessor(trace_exporter)
+    tracer_provider.add_span_processor(span_processor)
+
+
 def setupSlackReport(slack_config: SlackConfig, command_name: str | None = None):
     global rapporteur_report  # noqa: PLW0603
     slack_reporter = SlackReporter(
@@ -62,7 +87,6 @@ def setupLogging(verbose_level: int = 0, command_name: str | None = None):
     }
 
     if config.logging is not None:
-        assert isinstance(config.logging, LoggingConfig)
         if config.logging.slack:
             setupSlackReport(config.logging.slack, command_name)
 
@@ -102,6 +126,8 @@ def setupLogging(verbose_level: int = 0, command_name: str | None = None):
         # Set the logger level (this controls what messages get processed)
         root_logger.setLevel(log_level)
 
+        setup_opentelemetry_tracing(config.logging)
+
         logger.debug("setupLogging done")
 
     else:
@@ -111,5 +137,5 @@ def setupLogging(verbose_level: int = 0, command_name: str | None = None):
             format="%(asctime)-15s::%(levelname)s::%(name)s::%(message)s",
             level=verbose_levels.get(
                 verbose_level, logging.DEBUG
-            ),  # Default log level, if not specidied in config
+            ),  # Default log level, if not specified in config
         )

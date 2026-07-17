@@ -42,11 +42,8 @@ def using_trace(
             span.record_exception(exc)
 
             # re-raise the exception to be caught by the caller
-            if not any(isinstance(exc, t) for t in exception_types):
+            if not isinstance(exc, exception_types):
                 raise
-        finally:
-            # nothing to do, end or close...
-            pass
 
 
 def trace_decorator[**P, R](

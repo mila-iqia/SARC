@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, cast
 import gifnoc
 from easy_oauth import OAuthManager
 from hostlist import expand_hostlist
+from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 from paramiko import PKey
 from serieux.features.encrypt import Secret
 from sqlmodel import Session
@@ -256,6 +257,7 @@ class DbConfig:
                 f"postgresql+pg8000://{db_user}@{hostname}/{self.name}"
             )
 
+        SQLAlchemyInstrumentor().instrument(engine=engine)
         return engine
 
     def session(self) -> Session:
