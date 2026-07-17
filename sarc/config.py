@@ -272,77 +272,90 @@ class SlackConfig:
 @dataclass
 class UnderusageNotifyConfig:
     slack: SlackConfig
+    """Slack workspace/channel credentials used to deliver all notifications
+    (user DMs and the admin digest)."""
+
     enabled: bool = True
+    """Master switch; when False the notify command is a no-op regardless of the
+    per-report flags below."""
 
     send_underusage_report: bool = False
-    min_waste_ratio: float = 0.50
-    min_waste_rgu_hours: float = 3225.6  # 4x A100-80GB RGU x 7d
-    digest_top_n: int = 16
-    top_jobs_per_user: int = 5
-    dashboard_url: str | None = None
-    # Verbatim text appended at the end of every user DM (support links, hours, etc.)
-    help_section: str | None = None
+    """Enable the individual underusage alerts (user DMs) and the admin
+    digest."""
 
-    # Fraction of cluster wasted RGU-h at which selection stops (0..1).
+    min_waste_ratio: float = 0.50
+    """Minimum scaled waste ratio (0..1), ``1 − effective_util``, for a user to
+    be flagged as underusing."""
+
+    min_waste_rgu_hours: float = 3225.6  # 4x A100-80GB RGU x 7d
+    """Minimum scaled wasted RGU-hours for a user to be flagged; an activity
+    floor that suppresses trivially small waste. Default ≈ 4× A100-80GB RGU ×
+    7d."""
+
+    digest_top_n: int = 16
+    """Number of top wasters listed in the admin digest ranking. Positive
+    int."""
+
+    top_jobs_per_user: int = 5
+    """Number of a user's worst jobs shown per user (in DMs and the usage
+    report). Positive int."""
+
+    dashboard_url: str | None = None
+    """Link inserted into user-facing messages pointing at the usage dashboard;
+    omitted from messages if None."""
+
+    help_section: str | None = None
+    """Verbatim Markdown appended to the end of every user DM (support links,
+    office hours, etc.); omitted if None."""
+
     recurrence_cluster_share: float = 0.50
-    # Number of most-recent cycles that count toward personalized_action and
-    # rolling window length
+    """Fraction (0..1) of a cluster's total wasted RGU-h at which the
+    recurring-underusers selection stops accumulating users per cluster."""
+
     recurrence_active_cycles: int = 3
-    # Number of cycle columns to display in the recurring table.
+    """Number of most-recent cycles that count toward the personalized-action
+    decision and the rolling recurrence window. Positive int, ≤
+    recurrence_display_cycles."""
+
     recurrence_display_cycles: int = 5
+    """Number of per-cycle columns shown in the recurring-users table. Positive
+    int."""
+
     personalized_action_min_waste_rgu_hours: float = 16128.0  # 20x A100-80GB RGU x 7d
-    # Number of calendar months included in the historical trend section.
+    """Threshold on a user's summed scaled wasted RGU-h across allowlisted
+    clusters over the last ``recurrence_active_cycles`` cycles; at or above it
+    the user is flagged for personalized action. Default ≈ 20× A100-80GB RGU ×
+    7d."""
+
     historical_months: int = 6
+    """Number of calendar months included in the digest's historical trend
+    section. Positive int."""
 
     send_usage_report: bool = False
-    # Universal usage report cadence.
+    """Enable the neutral universal usage report sent to all active GPU
+    users."""
+
     usage_report_cycles: int = 2
+    """Length of the usage-report window in usage cycles (window =
+    usage_report_cycles × usage_cycle_length_weeks). Positive int."""
+
     usage_report_min_usage_rgu_hours: float = 1843.2  # 4x A100-80GB RGU x4d
+    """Minimum occupied (used+wasted) RGU-h for a user to be included in the
+    usage report; filters out negligible usage. Default ≈ 4× A100-80GB RGU ×
+    4d."""
 
     clusters: list[str] = field(default_factory=lambda: ["mila"])
-    usage_cycle_length_weeks: int = 2  # frequency of a usage cycle
-    utilization_ceiling: float = 1.0  # T ∈ (0,1]: wasted = max(0, rgu_h × (T − m))
+    """Cluster-name allowlist scoping every query (alerts, usage report,
+    recurring table, historical trend). Empty list = all clusters."""
 
-    def __post_init__(self):
-        for field_name, value in [
-            ("digest_top_n", self.digest_top_n),
-            ("historical_months", self.historical_months),
-            ("recurrence_active_cycles", self.recurrence_active_cycles),
-            ("recurrence_display_cycles", self.recurrence_display_cycles),
-            ("top_jobs_per_user", self.top_jobs_per_user),
-            ("usage_cycle_length_weeks", self.usage_cycle_length_weeks),
-            ("usage_report_cycles", self.usage_report_cycles),
-        ]:
-            if not isinstance(value, int) or value < 1:
-                raise ValueError(
-                    f"{field_name} must be a positive integer, got {value!r}"
-                )
-        if self.recurrence_active_cycles > self.recurrence_display_cycles:
-            raise ValueError(
-                f"recurrence_active_cycles ({self.recurrence_active_cycles}) must be"
-                f" ≤ recurrence_display_cycles ({self.recurrence_display_cycles})"
-            )
-        if not (0 < self.utilization_ceiling <= 1):
-            raise ValueError(
-                f"utilization_ceiling must be in (0, 1], got {self.utilization_ceiling!r}"
-            )
-        for field_name, value in [
-            ("min_waste_ratio", self.min_waste_ratio),
-            ("min_waste_rgu_hours", self.min_waste_rgu_hours),
-            (
-                "personalized_action_min_waste_rgu_hours",
-                self.personalized_action_min_waste_rgu_hours,
-            ),
-            ("recurrence_cluster_share", self.recurrence_cluster_share),
-            ("usage_report_min_usage_rgu_hours", self.usage_report_min_usage_rgu_hours),
-        ]:
-            if value < 0:
-                raise ValueError(f"{field_name} must be >= 0, got {value!r}")
-        for entry in self.clusters:
-            if not isinstance(entry, str) or not entry:
-                raise ValueError(
-                    f"clusters must be a list of non-empty strings, got {entry!r}"
-                )
+    usage_cycle_length_weeks: int = 2
+    """Length in weeks of one usage cycle — the base cadence unit for alerts and
+    the usage-report window. Positive int."""
+
+    utilization_ceiling: float = 1.0
+    """Utilization ceiling T ∈ (0,1] for the subtractive waste model: ``wasted =
+    max(0, rgu_h × (T − m))`` where m is measured utilization. T=1.0 collapses
+    to true waste (``1 − util``). Displayed per-job GPU % remains raw m."""
 
 
 @dataclass

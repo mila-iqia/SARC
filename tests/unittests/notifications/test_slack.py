@@ -1,6 +1,8 @@
 import logging
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from sarc.notifications.slack import SendStatus, SlackClient
 
 
@@ -27,6 +29,22 @@ def test_init_attaches_rate_limit_retry_handler():
     ]
     assert len(handlers) == 1
     assert handlers[0].max_retry_count == 3
+
+
+# ── _message_kwargs ────────────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("preformatted", [True, False])
+def test_message_kwargs_preformatted(preformatted):
+    client = _make_client(MagicMock())
+    kwargs = client._message_kwargs("C123", "hello", preformatted=preformatted)
+
+    assert kwargs["channel"] == "C123"
+    assert kwargs["text"] == "hello"
+    if preformatted:
+        assert kwargs["blocks"] == SlackClient._preformatted_blocks("hello")
+    else:
+        assert "blocks" not in kwargs
 
 
 # ── post_channel ──────────────────────────────────────────────────────────────

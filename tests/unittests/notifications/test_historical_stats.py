@@ -189,14 +189,6 @@ def test_yoy_present_when_prior_year_has_data(read_write_db):
     assert jun_yoy.avg_waste_ratio > 0.0
 
 
-# ── unsupported resource ──────────────────────────────────────────────────────
-
-
-def test_unsupported_resource_raises(historical_db):
-    with pytest.raises(ValueError, match="Unsupported resource"):
-        get_historical_stats(_END, resource="cpu")
-
-
 # ── build_admin_digest with historical ────────────────────────────────────────
 
 

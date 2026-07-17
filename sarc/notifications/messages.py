@@ -260,7 +260,7 @@ def build_recurring_table(
         for i, row in enumerate(rows):
             pfx = _tree_prefix(i, n)
             flags = _build_flag_cells(row)
-            action = "  ⚑ personalized" if row.personalized_action else ""
+            action = "  ⚑ personalized" if row.flagged_for_personalized_action else ""
             lines.append(
                 f"{pfx} {row.email:<{email_w}}"
                 f"  {_fmt_rgu_int(row.wasted_current_active_window):>12}"
@@ -270,20 +270,6 @@ def build_recurring_table(
         sections.append("\n".join(lines))
 
     return "\n\n".join(sections)
-
-
-def split_usage_report_recipients(
-    usage_rows: list[UsageRow], underuser_emails: set[str]
-) -> tuple[list[UsageRow], list[UsageRow]]:
-    """Partition active users into (report_recipients, underuser_skipped).
-
-    Users whose email is in *underuser_emails* receive the underusage alert
-    instead of the usage report.  The two lists are disjoint; their union
-    covers all of *usage_rows*.  Pure function — no I/O.
-    """
-    report = [r for r in usage_rows if r.email not in underuser_emails]
-    skipped = [r for r in usage_rows if r.email in underuser_emails]
-    return report, skipped
 
 
 def build_admin_digest(

@@ -29,7 +29,7 @@ A few things to keep straight before the details:
 | Layer | File | Key entry points |
 |---|---|---|
 | Flagging / data | `sarc/notifications/underusage.py` | `get_underusers`, `get_recurring_underusers`, `get_historical_stats`, `get_all_users_usage` |
-| Message building | `sarc/notifications/messages.py` | `build_admin_digest`, `build_user_dm`, `build_usage_report`, `build_recurring_table`, `split_usage_report_recipients` |
+| Message building | `sarc/notifications/messages.py` | `build_admin_digest`, `build_user_dm`, `build_usage_report`, `build_recurring_table` |
 | Delivery | `sarc/notifications/slack.py` | `SlackClient.dm_user`, `SlackClient.post_channel` |
 | Orchestration | `sarc/cli/notify/underusage.py` | `UnderusageNotifyCommand` |
 
@@ -50,7 +50,7 @@ flowchart TD
     FLAG --> DIGEST["build_admin_digest"]
     REC --> DIGEST
     FLAG --> DM["build_user_dm<br/>(per flagged user)"]
-    USAGE --> SPLIT{"split_usage_report_recipients<br/>drop users already flagged"}
+    USAGE --> SPLIT{"drop users already flagged"}
     FLAG --> SPLIT
     SPLIT --> REPORT["build_usage_report<br/>(active, non-flagged users)"]
 

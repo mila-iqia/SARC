@@ -7,23 +7,6 @@ sarc:
   mongo:
     connection_string: mongodb://localhost:27017/sarc-dev
     database_name: sarc-dev
-  db:
-    host: localhost
-    name: sarc-dev
-  patches: secret/patches
-  notifications:
-    slack:
-      description: test channel
-      token: PLACEHOLDER
-      channel: test
-    enabled: True
-    send_underusage_report: True
-    send_usage_report: True
-    min_waste_ratio: 0.50
-    min_waste_rgu_hours: 3225.6
-    recurrence_cluster_share: 0.50
-    personalized_action_min_waste_rgu_hours: 16128
-    usage_report_min_usage_rgu_hours: 1843.2
   cache: "../sarc-cache"
   sshconfig: "~/.ssh/config"
   clusters:
@@ -190,19 +173,6 @@ sarc:
           nvidia_h100_80gb_hbm3_2g.20gb: $2g.20gb
           nvidia_h100_80gb_hbm3_3g.40gb: $3g.40gb
     trillium:
-      host: trillium.alliancecan.ca
-      private_key: pkey.yaml
-      timezone: America/Montreal
-      accounts:
-        - rrg-bengioy-ad_gpu
-        - rrg-bengioy-ad_cpu
-        - def-bengioy_gpu
-        - def-bengioy_cpu
-      sacct_bin: "/opt/slurm/bin/sacct"
-      prometheus_url:
-      start_date: "2025-06-19"
-      user_domain: drac
-    trillium-gpu:
       host: trillium.alliancecan.ca
       private_key: pkey.yaml
       timezone: America/Montreal

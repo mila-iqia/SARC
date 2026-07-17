@@ -210,28 +210,28 @@ def test_all_users_included_when_threshold_is_one(recurring_db):
     assert row.cycles == [True] * 5
     # Test firstuser flagged for personalized action all 3 cycles
     assert row.pa_flags == [True] * 3
-    assert row.personalized_action is True
+    assert row.flagged_for_personalized_action is True
 
     # Test seconduser only flagged for the first 3 cycles
     row = next(r for r in result["mila"] if r.email == "seconduser@mila.quebec")
     assert row.cycles == [True] * 3 + [False] * 2
     # Test seconduser flagged for personalized action the first 2 cycles
     assert row.pa_flags == [True] * 2 + [False] * 1
-    assert row.personalized_action is True
+    assert row.flagged_for_personalized_action is True
 
     # Test thirduser flagged all cycles except for 4th
     row = next(r for r in result["mila"] if r.email == "thirduser@mila.quebec")
     assert row.cycles == [True] * 3 + [False] * 1 + [True] * 1
     # Test thirduser flagged for personalized action the first cycle
     assert row.pa_flags == [True] * 1 + [False] * 2
-    assert row.personalized_action is True
+    assert row.flagged_for_personalized_action is True
 
     # Test fourthuser only flagged for the last 2 cycles
     row = next(r for r in result["mila"] if r.email == "fourthuser@mila.quebec")
     assert row.cycles == [False] * 3 + [True] * 2
     # Test fourthuser only flagged for personalized action on 3rd cycles
     assert row.pa_flags == [False] * 2 + [True] * 1
-    assert row.personalized_action is False
+    assert row.flagged_for_personalized_action is False
 
 
 # ── Non-default cycle counts (acceptance criteria) ────────────────────────────
@@ -291,8 +291,8 @@ def test_active_cycles_personalized_action(recurring_db):
                 personalized_action_min_waste_rgu_hours=300.0,
             )
             row = next(r for r in result["mila"] if r.email == "firstuser@mila.quebec")
-            assert row.personalized_action is expected, (
-                f"{expected=} for {active_cycles=} but got {row.personalized_action=}"
+            assert row.flagged_for_personalized_action is expected, (
+                f"{expected=} for {active_cycles=} but got {row.flagged_for_personalized_action=}"
             )
 
 
@@ -311,18 +311,6 @@ def test_empty_db_returns_empty_dict(read_write_db):
     assert result == {}
 
 
-def test_unsupported_resource_raises(recurring_db):
-    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
-        with pytest.raises(ValueError, match="Unsupported resource"):
-            get_recurring_underusers(
-                _TEST_END,
-                min_waste_ratio=_MIN_WASTE_RATIO,
-                min_waste_rgu_hours=_MIN_WASTE_RGU_HOURS,
-                resource="cpu",
-                **_GRU_KW,
-            )
-
-
 # ── build_recurring_table ─────────────────────────────────────────────────────
 
 _ROW_ALICE = RecurringUserRow(
@@ -332,7 +320,7 @@ _ROW_ALICE = RecurringUserRow(
     wasted_current_active_window=4200.0,
     cluster_share=0.18,
     cycles=[True, True, True, True, True],
-    personalized_action=True,
+    flagged_for_personalized_action=True,
 )
 
 _ROW_BOB = RecurringUserRow(
@@ -342,7 +330,7 @@ _ROW_BOB = RecurringUserRow(
     wasted_current_active_window=2600.0,
     cluster_share=0.11,
     cycles=[True, False, True, True, True],
-    personalized_action=False,
+    flagged_for_personalized_action=False,
 )
 
 _ROW_CAROL = RecurringUserRow(
@@ -352,71 +340,82 @@ _ROW_CAROL = RecurringUserRow(
     wasted_current_active_window=1100.0,
     cluster_share=0.05,
     cycles=[True, True, False, False, False],
-    personalized_action=False,
+    flagged_for_personalized_action=False,
 )
 
 
 def test_table_header_contains_cluster():
-    text = build_recurring_table({"narval": [_ROW_ALICE]}, **_BRT_KW)
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        text = build_recurring_table({"narval": [_ROW_ALICE]}, **_BRT_KW)
     assert "Cluster narval" in text
 
 
 def test_table_header_contains_window_weeks():
-    text = build_recurring_table(
-        {"narval": [_ROW_ALICE]}, cluster_share_threshold=0.30, active_cycles=3
-    )
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        text = build_recurring_table(
+            {"narval": [_ROW_ALICE]}, cluster_share_threshold=0.30, active_cycles=3
+        )
     assert "last 6 weeks" in text
 
 
 def test_table_threshold_in_sub_header():
-    text = build_recurring_table(
-        {"narval": [_ROW_ALICE]}, cluster_share_threshold=0.30, active_cycles=3
-    )
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        text = build_recurring_table(
+            {"narval": [_ROW_ALICE]}, cluster_share_threshold=0.30, active_cycles=3
+        )
     assert "30 %" in text
 
 
 def test_table_contains_email():
-    text = build_recurring_table({"narval": [_ROW_ALICE]}, **_BRT_KW)
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        text = build_recurring_table({"narval": [_ROW_ALICE]}, **_BRT_KW)
     assert "alice@mila.quebec" in text
 
 
 def test_table_wasted_formatted_with_space_thousands():
-    text = build_recurring_table({"narval": [_ROW_ALICE]}, **_BRT_KW)
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        text = build_recurring_table({"narval": [_ROW_ALICE]}, **_BRT_KW)
     assert "4 200" in text
 
 
 def test_table_share_percentage():
-    text = build_recurring_table({"narval": [_ROW_BOB]}, **_BRT_KW)
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        text = build_recurring_table({"narval": [_ROW_BOB]}, **_BRT_KW)
     assert "11 %" in text
 
 
 def test_table_personalized_action_flag():
-    text = build_recurring_table({"narval": [_ROW_ALICE]}, **_BRT_KW)
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        text = build_recurring_table({"narval": [_ROW_ALICE]}, **_BRT_KW)
     assert "⚑ personalized" in text
 
 
 def test_table_no_action_flag_when_not_all_cycles():
-    text = build_recurring_table({"narval": [_ROW_BOB]}, **_BRT_KW)
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        text = build_recurring_table({"narval": [_ROW_BOB]}, **_BRT_KW)
     assert "⚑ personalized" not in text
 
 
 def test_table_check_and_cross_marks():
-    text = build_recurring_table({"narval": [_ROW_BOB]}, **_BRT_KW)
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        text = build_recurring_table({"narval": [_ROW_BOB]}, **_BRT_KW)
     assert "✓" in text
     assert "✗" in text
 
 
 def test_table_tree_chars_multiple_rows():
-    text = build_recurring_table(
-        {"narval": [_ROW_ALICE, _ROW_BOB, _ROW_CAROL]}, **_BRT_KW
-    )
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        text = build_recurring_table(
+            {"narval": [_ROW_ALICE, _ROW_BOB, _ROW_CAROL]}, **_BRT_KW
+        )
     assert "┌─" in text
     assert "├─" in text
     assert "└─" in text
 
 
 def test_table_single_row_uses_end_cap():
-    text = build_recurring_table({"narval": [_ROW_ALICE]}, **_BRT_KW)
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        text = build_recurring_table({"narval": [_ROW_ALICE]}, **_BRT_KW)
     assert "└─" in text
     assert "┌─" not in text
 
@@ -429,11 +428,12 @@ def test_table_multiple_clusters_rendered():
         wasted_current_active_window=500.0,
         cluster_share=0.50,
         cycles=[True, False, False, False, False],
-        personalized_action=False,
+        flagged_for_personalized_action=False,
     )
-    text = build_recurring_table(
-        {"narval": [_ROW_ALICE], "fir": [carol_fir]}, **_BRT_KW
-    )
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        text = build_recurring_table(
+            {"narval": [_ROW_ALICE], "fir": [carol_fir]}, **_BRT_KW
+        )
     assert "Cluster narval" in text
     assert "Cluster fir" in text
 
@@ -446,11 +446,12 @@ def test_table_clusters_sorted_alphabetically():
         wasted_current_active_window=500.0,
         cluster_share=0.50,
         cycles=[True, False, False, False, False],
-        personalized_action=False,
+        flagged_for_personalized_action=False,
     )
-    text = build_recurring_table(
-        {"narval": [_ROW_ALICE], "fir": [carol_fir]}, **_BRT_KW
-    )
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        text = build_recurring_table(
+            {"narval": [_ROW_ALICE], "fir": [carol_fir]}, **_BRT_KW
+        )
     assert text.index("Cluster fir") < text.index("Cluster narval")
 
 
@@ -460,9 +461,10 @@ def test_table_empty_dict_returns_empty_string():
 
 def test_table_deterministic():
     data = {"narval": [_ROW_ALICE, _ROW_BOB]}
-    assert build_recurring_table(data, **_BRT_KW) == build_recurring_table(
-        data, **_BRT_KW
-    )
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        first = build_recurring_table(data, **_BRT_KW)
+        second = build_recurring_table(data, **_BRT_KW)
+    assert first == second
 
 
 # ── CLI integration: recurring table appears in digest output ─────────────────
@@ -507,46 +509,49 @@ _OFF_CYCLE_WED = datetime(2024, 6, 19, tzinfo=UTC)
 
 def test_anchor_aligned_monday_returns_same_day():
     # 2024-06-24 is already the Monday of an aligned week
-    assert _week_anchor(_ALIGNED_MON) == _ALIGNED_MON.replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        anchor = _week_anchor(_ALIGNED_MON)
+    assert anchor == _ALIGNED_MON.replace(hour=0, minute=0, second=0, microsecond=0)
 
 
 def test_anchor_aligned_midweek_returns_same_day():
     # 2024-06-26 (Wed, wk 26 aligned) → anchor = same day
-    assert _week_anchor(_ALIGNED_WED) == _ALIGNED_WED.replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        anchor = _week_anchor(_ALIGNED_WED)
+    assert anchor == _ALIGNED_WED.replace(hour=0, minute=0, second=0, microsecond=0)
 
 
 def test_anchor_aligned_sunday_returns_same_day():
     # 2024-06-30 (Sun, wk 26 aligned) → anchor = same day
-    assert _week_anchor(_ALIGNED_SUN) == _ALIGNED_SUN.replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        anchor = _week_anchor(_ALIGNED_SUN)
+    assert anchor == _ALIGNED_SUN.replace(hour=0, minute=0, second=0, microsecond=0)
 
 
 def test_anchor_off_cycle_monday_shifts_to_aligned_week():
     # 2024-06-17 (Mon, wk 25 off-cycle) → anchor = 2024-06-24 (Mon, wk 26 aligned)
-    assert _week_anchor(_OFF_CYCLE_MON) == _ALIGNED_MON.replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        anchor = _week_anchor(_OFF_CYCLE_MON)
+    assert anchor == _ALIGNED_MON.replace(hour=0, minute=0, second=0, microsecond=0)
 
 
 def test_anchor_off_cycle_midweek_shifts_to_aligned_week():
     # 2024-06-19 (Wed, wk 25 off-cycle) → anchor = 2024-06-26 (Wed, wk 26 aligned)
-    assert _week_anchor(_OFF_CYCLE_WED) == (
-        _OFF_CYCLE_WED + timedelta(weeks=1)
-    ).replace(hour=0, minute=0, second=0, microsecond=0)
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        anchor = _week_anchor(_OFF_CYCLE_WED)
+    assert anchor == (_OFF_CYCLE_WED + timedelta(weeks=1)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
 
 
 def test_anchor_result_always_aligned_week():
-    for offset in range(28):
-        dt = datetime(2024, 6, 1, tzinfo=UTC) + timedelta(days=offset)
-        anchor = _week_anchor(dt)
-        assert anchor.isocalendar().week % usage_cycle_length_weeks() == 0, (
-            f"off-cycle week for end={dt.date()}"
-        )
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        for offset in range(28):
+            dt = datetime(2024, 6, 1, tzinfo=UTC) + timedelta(days=offset)
+            anchor = _week_anchor(dt)
+            assert anchor.isocalendar().week % usage_cycle_length_weeks() == 0, (
+                f"off-cycle week for end={dt.date()}"
+            )
 
 
 # ── get_cycle_dates ───────────────────────────────────────────────────────────
@@ -554,24 +559,26 @@ def test_anchor_result_always_aligned_week():
 
 def test_cycle_dates_aligned_week_five_mondays():
     # end = 2024-06-24 (Mon, wk 26 aligned)
-    dates = get_cycle_dates(_ALIGNED_MON)
-    assert len(dates) == 5
-    assert all(isinstance(d, date) for d in dates)
-    # Each must be a Monday of an aligned week, usage_cycle_length_weeks weeks apart
-    for i, d in enumerate(dates):
-        dt = datetime(d.year, d.month, d.day, tzinfo=UTC)
-        assert dt.weekday() == 0, f"dates[{i}] is not a Monday"
-        assert dt.isocalendar().week % usage_cycle_length_weeks() == 0, (
-            f"dates[{i}] not an aligned week"
-        )
-    for i in range(len(dates) - 1):
-        assert (dates[i] - dates[i + 1]).days == usage_cycle_length_weeks() * 7
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        dates = get_cycle_dates(_ALIGNED_MON)
+        assert len(dates) == 5
+        assert all(isinstance(d, date) for d in dates)
+        # Each must be a Monday of an aligned week, usage_cycle_length_weeks weeks apart
+        for i, d in enumerate(dates):
+            dt = datetime(d.year, d.month, d.day, tzinfo=UTC)
+            assert dt.weekday() == 0, f"dates[{i}] is not a Monday"
+            assert dt.isocalendar().week % usage_cycle_length_weeks() == 0, (
+                f"dates[{i}] not an aligned week"
+            )
+        for i in range(len(dates) - 1):
+            assert (dates[i] - dates[i + 1]).days == usage_cycle_length_weeks() * 7
 
 
 def test_cycle_dates_aligned_week_all_not_future():
     # end = 2024-06-24 (Mon, wk 26 aligned); all cycle dates ≤ end.date()
     end = _ALIGNED_MON
-    dates = get_cycle_dates(end)
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        dates = get_cycle_dates(end)
     for d in dates:
         assert d <= end.date()
 
@@ -579,7 +586,8 @@ def test_cycle_dates_aligned_week_all_not_future():
 def test_cycle_dates_off_cycle_week_w0_is_future():
     # end = 2024-06-17 (Mon, wk 25 off-cycle); W0 anchor = 2024-06-24 > end
     end = _OFF_CYCLE_MON
-    dates = get_cycle_dates(end)
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        dates = get_cycle_dates(end)
     assert dates[0] > end.date(), "W0 should be in the future for off-cycle-week end"
     for d in dates[1:]:
         assert d < end.date(), f"{d} should be in the past"
@@ -694,7 +702,7 @@ def test_off_cycle_week_end_personalized_action_floor_controls(recurring_db):
         )
     for rows in result.values():
         for row in rows:
-            assert row.personalized_action is False
+            assert row.flagged_for_personalized_action is False
 
 
 # ── build_recurring_table with cycle_dates ────────────────────────────────────
@@ -714,14 +722,15 @@ _ROW_FUTURE_W0 = RecurringUserRow(
     wasted_current_active_window=4200.0,
     cluster_share=0.18,
     cycles=[None, True, True, False, False],
-    personalized_action=False,
+    flagged_for_personalized_action=False,
 )
 
 
 def test_table_with_cycle_dates_renders_mm_dd_headers():
-    text = build_recurring_table(
-        {"narval": [_ROW_ALICE]}, cycle_dates=_CYCLE_DATES, **_BRT_KW
-    )
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        text = build_recurring_table(
+            {"narval": [_ROW_ALICE]}, cycle_dates=_CYCLE_DATES, **_BRT_KW
+        )
     assert "06-24" in text
     assert "06-10" in text
     assert "05-27" in text
@@ -730,17 +739,19 @@ def test_table_with_cycle_dates_renders_mm_dd_headers():
 
 
 def test_table_with_cycle_dates_no_w0_label():
-    text = build_recurring_table(
-        {"narval": [_ROW_ALICE]}, cycle_dates=_CYCLE_DATES, **_BRT_KW
-    )
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        text = build_recurring_table(
+            {"narval": [_ROW_ALICE]}, cycle_dates=_CYCLE_DATES, **_BRT_KW
+        )
     assert "W0" not in text
     assert "W-2" not in text
 
 
 def test_table_none_flag_renders_blank_not_cross(capsys):
-    text = build_recurring_table(
-        {"narval": [_ROW_FUTURE_W0]}, cycle_dates=_CYCLE_DATES, **_BRT_KW
-    )
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        text = build_recurring_table(
+            {"narval": [_ROW_FUTURE_W0]}, cycle_dates=_CYCLE_DATES, **_BRT_KW
+        )
     # _ROW_FUTURE_W0: w0=None→blank, w2=True→✗, w4=True→✗, w6=False→✓, w8=False→✓
     # True (flagged/underuser) → ✗; False (good usage) → ✓; None (future) → blank
     assert text.count("✓") == 2  # w6 and w8
@@ -749,7 +760,8 @@ def test_table_none_flag_renders_blank_not_cross(capsys):
 
 def test_table_without_cycle_dates_keeps_w0_label():
     # Backward compat: no cycle_dates → "W0"/"W-2" labels still present
-    text = build_recurring_table({"narval": [_ROW_ALICE]}, **_BRT_KW)
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        text = build_recurring_table({"narval": [_ROW_ALICE]}, **_BRT_KW)
     assert "W0" in text
     assert "W-2" in text
 
@@ -758,12 +770,14 @@ def test_table_without_cycle_dates_keeps_w0_label():
 
 
 def test_table_contains_separator():
-    text = build_recurring_table({"narval": [_ROW_ALICE]}, **_BRT_KW)
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        text = build_recurring_table({"narval": [_ROW_ALICE]}, **_BRT_KW)
     assert "|" in text
 
 
 def test_table_separator_between_w4_and_w6():
-    text = build_recurring_table({"narval": [_ROW_ALICE]}, **_BRT_KW)
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        text = build_recurring_table({"narval": [_ROW_ALICE]}, **_BRT_KW)
     # W-4 column appears before | which appears before W-6 column
     assert text.index("W-4") < text.index("|") < text.index("W-6")
 
@@ -778,7 +792,7 @@ _ROW_PEAK_AT_W4 = RecurringUserRow(
     wasted_current_active_window=3000.0,
     cluster_share=0.25,
     cycles=[False, False, True, True, True],
-    personalized_action=False,
+    flagged_for_personalized_action=False,
     pa_flags=[False, False, True],
 )
 
@@ -790,31 +804,35 @@ _ROW_ALL_TRUE = RecurringUserRow(
     wasted_current_active_window=5000.0,
     cluster_share=0.40,
     cycles=[True, True, True, True, True],
-    personalized_action=True,
+    flagged_for_personalized_action=True,
     pa_flags=[True, True, True],
 )
 
 
 def test_per_cycle_peak_at_w4():
-    text = build_recurring_table({"narval": [_ROW_PEAK_AT_W4]}, **_BRT_KW)
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        text = build_recurring_table({"narval": [_ROW_PEAK_AT_W4]}, **_BRT_KW)
     assert "⚑✗" in text
 
 
 def test_per_cycle_no_peak_at_w0_w2():
     # pa_flags[0]=False and pa_flags[1]=False → no ⚑ at W0 or W-2
-    text = build_recurring_table({"narval": [_ROW_PEAK_AT_W4]}, **_BRT_KW)
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        text = build_recurring_table({"narval": [_ROW_PEAK_AT_W4]}, **_BRT_KW)
     assert text.count("⚑✗") == 1
 
 
 def test_per_cycle_all_active_flagged():
-    text = build_recurring_table({"narval": [_ROW_ALL_TRUE]}, **_BRT_KW)
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        text = build_recurring_table({"narval": [_ROW_ALL_TRUE]}, **_BRT_KW)
     # pa_flags=[True,True,True] → ⚑ at W0, W-2, W-4
     assert text.count("⚑✗") == 3
 
 
 def test_per_cycle_w6_w8_never_show_peak():
     # Positions ≥ active_cycles are never eligible regardless of pa_flags
-    text = build_recurring_table({"narval": [_ROW_ALL_TRUE]}, **_BRT_KW)
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        text = build_recurring_table({"narval": [_ROW_ALL_TRUE]}, **_BRT_KW)
     assert text.count("⚑✗") == 3
 
 
@@ -827,10 +845,11 @@ def test_per_cycle_no_peak_on_passing_cell():
         wasted_current_active_window=1000.0,
         cluster_share=0.10,
         cycles=[False, True, True, True, True],
-        personalized_action=True,
+        flagged_for_personalized_action=True,
         pa_flags=[True, True, True],
     )
-    text = build_recurring_table({"narval": [row]}, **_BRT_KW)
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        text = build_recurring_table({"narval": [row]}, **_BRT_KW)
     # W0 is ✓ (cycles[0]=False) so no ⚑ there; W-2 and W-4 are ✗ with pa_flags → 2 ⚑✗
     assert text.count("⚑✗") == 2
 
@@ -878,7 +897,7 @@ def test_personalized_action_floor(recurring_db):
         )
         for rows in result.values():
             for row in rows:
-                assert row.personalized_action is True
+                assert row.flagged_for_personalized_action is True
 
     # With a very high floor, no user crosses the threshold → all False.
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
@@ -891,7 +910,7 @@ def test_personalized_action_floor(recurring_db):
         )
     for rows in result.values():
         for row in rows:
-            assert row.personalized_action is False
+            assert row.flagged_for_personalized_action is False
 
 
 # ── Per-anchor pa_flags four-scenario computation test ────────────────────────
@@ -956,16 +975,17 @@ def pa_scenario_db(read_write_db):
 def test_pa_flags_four_scenarios(pa_scenario_db):
     """pa_flags are computed correctly for the four canonical scenarios."""
     users = pa_scenario_db
-    result = get_recurring_underusers(
-        _TEST_END,
-        min_waste_ratio=0.0,
-        min_waste_rgu_hours=0.0,
-        cluster_share_threshold=1.1,
-        recurrence_active_cycles=3,
-        recurrence_display_cycles=5,
-        clusters=["mila"],
-        personalized_action_min_waste_rgu_hours=30.0,
-    )
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        result = get_recurring_underusers(
+            _TEST_END,
+            min_waste_ratio=0.0,
+            min_waste_rgu_hours=0.0,
+            cluster_share_threshold=1.1,
+            recurrence_active_cycles=3,
+            recurrence_display_cycles=5,
+            clusters=["mila"],
+            personalized_action_min_waste_rgu_hours=30.0,
+        )
     rows = {r.email: r for r in result.get("mila", [])}
 
     u1 = rows[users["u1"].email]
@@ -974,13 +994,13 @@ def test_pa_flags_four_scenarios(pa_scenario_db):
     u4 = rows[users["u4"].email]
 
     assert u1.pa_flags == [True, True, True]
-    assert u1.personalized_action is True
+    assert u1.flagged_for_personalized_action is True
 
     assert u2.pa_flags == [True, False, False]
-    assert u2.personalized_action is True
+    assert u2.flagged_for_personalized_action is True
 
     assert u3.pa_flags == [True, False, False]
-    assert u3.personalized_action is True
+    assert u3.flagged_for_personalized_action is True
 
     assert u4.pa_flags == [False, False, False]
-    assert u4.personalized_action is False
+    assert u4.flagged_for_personalized_action is False

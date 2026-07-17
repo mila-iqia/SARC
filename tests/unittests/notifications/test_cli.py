@@ -266,25 +266,6 @@ def test_missing_notifications_config_returns_error(cli_main, caplog):
     assert rc == -1
 
 
-# ── CLI flags override config ─────────────────────────────────────────────────
-
-
-def test_cli_flags_override_config_thresholds(notify_db, cli_main, monkeypatch, capsys):
-    """Config has impossibly strict thresholds; CLI flags relax them back."""
-    monkeypatch.setattr("sarc.cli.notify.underusage._now_utc", lambda: _CLI_TEST_END)
-    strict_cfg = {
-        **_NOTIFY_CFG,
-        "min_waste_ratio": 0.99,
-        "min_waste_rgu_hours": 999_999.0,
-    }
-    with gifnoc.overlay({"sarc.notifications": strict_cfg}):
-        rc = cli_main(
-            ["notify", "underusage", "--min-ratio", "0.50", "--min-rgu-hours", "672.0"]
-        )
-    assert rc == 0
-    assert "petitbonhomme@mila.quebec" in capsys.readouterr().out
-
-
 # ── --send flag wires actual sending ──────────────────────────────────────
 
 
@@ -351,7 +332,7 @@ def test_send_off_cycle_week_posts_digest_only(notify_db, cli_main, monkeypatch)
     slack_inst.dm_user.assert_not_called()
 
 
-def test_send_no_dms_flag_skips_dms(notify_db, cli_main, monkeypatch):
+def test_send_no_dms_flag_skips_dms(notify_db, cli_main, monkeypatch, capsys):
     slack_cls, slack_inst = _mock_slack()
     _patch_senders(monkeypatch, slack_cls)
     cfg = {**_NOTIFY_CFG, "send_underusage_report": True, "send_usage_report": True}
@@ -364,10 +345,15 @@ def test_send_no_dms_flag_skips_dms(notify_db, cli_main, monkeypatch):
     assert len(digests) == 1
     assert len(replies) == 2  # week 24 is also a usage-report week
     slack_inst.dm_user.assert_not_called()
+    out = capsys.readouterr().out
+    summary = out[out.index("=== Delivery Summary ===") :]
+    assert "flagged=3" in summary
+    assert "skipped=3" in summary
+    assert "dm_sent=0" in summary
 
 
 def test_send_underusage_report_false_suppresses_underusage_report(
-    notify_db, cli_main, monkeypatch
+    notify_db, cli_main, monkeypatch, capsys
 ):
     slack_cls, slack_inst = _mock_slack()
     _patch_senders(monkeypatch, slack_cls)
@@ -379,6 +365,11 @@ def test_send_underusage_report_false_suppresses_underusage_report(
     assert len(digests) == 1
     assert len(replies) == 2  # week 24 is also a usage-report week
     slack_inst.dm_user.assert_not_called()
+    out = capsys.readouterr().out
+    summary = out[out.index("=== Delivery Summary ===") :]
+    assert "flagged=3" in summary
+    assert "skipped=3" in summary
+    assert "dm_sent=0" in summary
 
 
 def test_send_dm_failure_surfaced_in_footer(notify_db, cli_main, monkeypatch, capsys):

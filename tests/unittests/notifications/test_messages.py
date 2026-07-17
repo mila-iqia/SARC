@@ -1,12 +1,13 @@
 from datetime import UTC, datetime
 
+import gifnoc
+
 from sarc.notifications.messages import (
     _first_name,
     build_admin_digest,
     build_recurring_table,
     build_usage_report,
     build_user_dm,
-    split_usage_report_recipients,
 )
 from sarc.notifications.underusage import (
     RecurringUserRow,
@@ -15,6 +16,15 @@ from sarc.notifications.underusage import (
     UsageJob,
     UsageRow,
 )
+
+_NOTIFY_CFG = {
+    "slack": {
+        "description": "test channel",
+        "token": "xoxb-test-token",
+        "channel": "#test-channel",
+    },
+    "enabled": False,
+}
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -231,16 +241,17 @@ def test_digest_recurring_header_reflects_share():
         wasted_current_active_window=1000.0,
         cluster_share=0.20,
         cycles=[True, True, True, True, True],
-        personalized_action=True,
+        flagged_for_personalized_action=True,
     )
-    text = build_admin_digest(
-        [],
-        period="…",
-        cluster_share_threshold=0.40,
-        active_cycles=3,
-        top_n=16,
-        recurring={"narval": [row]},
-    )
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        text = build_admin_digest(
+            [],
+            period="…",
+            cluster_share_threshold=0.40,
+            active_cycles=3,
+            top_n=16,
+            recurring={"narval": [row]},
+        )
     assert "40 %" in text
 
 
@@ -253,7 +264,7 @@ _RECURRING_ROW_DEFAULT = RecurringUserRow(
     wasted_current_active_window=500.0,
     cluster_share=0.25,
     cycles=[True, True, True, False, False],
-    personalized_action=True,
+    flagged_for_personalized_action=True,
 )
 
 _RECURRING_KW_DEFAULT = {"cluster_share_threshold": 0.30, "active_cycles": 3}
@@ -261,9 +272,10 @@ _RECURRING_KW_DEFAULT = {"cluster_share_threshold": 0.30, "active_cycles": 3}
 
 def test_recurring_table_default_labels():
     """5-cycle/3-active default: labels W0…W-8, separator after W-4."""
-    text = build_recurring_table(
-        {"narval": [_RECURRING_ROW_DEFAULT]}, **_RECURRING_KW_DEFAULT
-    )
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        text = build_recurring_table(
+            {"narval": [_RECURRING_ROW_DEFAULT]}, **_RECURRING_KW_DEFAULT
+        )
     assert "W0" in text
     assert "W-2" in text
     assert "W-4" in text
@@ -283,11 +295,12 @@ def test_recurring_table_4_cycles():
         wasted_current_active_window=300.0,
         cluster_share=0.15,
         cycles=[True, True, False, False],
-        personalized_action=True,
+        flagged_for_personalized_action=True,
     )
-    text = build_recurring_table(
-        {"beluga": [row]}, cluster_share_threshold=0.30, active_cycles=2
-    )
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        text = build_recurring_table(
+            {"beluga": [row]}, cluster_share_threshold=0.30, active_cycles=2
+        )
     assert "W0" in text
     assert "W-2" in text
     assert "W-4" in text
@@ -305,11 +318,12 @@ def test_recurring_table_6_cycles():
         wasted_current_active_window=800.0,
         cluster_share=0.35,
         cycles=[True, True, True, False, False, False],
-        personalized_action=True,
+        flagged_for_personalized_action=True,
     )
-    text = build_recurring_table(
-        {"cedar": [row]}, cluster_share_threshold=0.30, active_cycles=3
-    )
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        text = build_recurring_table(
+            {"cedar": [row]}, cluster_share_threshold=0.30, active_cycles=3
+        )
     assert "W-10" in text
     assert text.index("W-4") < text.index("  |") < text.index("W-6")
 
@@ -323,20 +337,22 @@ def test_recurring_table_empty_cluster_is_skipped():
         wasted_current_active_window=500.0,
         cluster_share=0.25,
         cycles=[True, True, True, False, False],
-        personalized_action=True,
+        flagged_for_personalized_action=True,
     )
-    text = build_recurring_table(
-        {"empty_cluster": [], "narval": [row]}, **_RECURRING_KW_DEFAULT
-    )
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        text = build_recurring_table(
+            {"empty_cluster": [], "narval": [row]}, **_RECURRING_KW_DEFAULT
+        )
     assert "narval" in text
     assert "empty_cluster" not in text
 
 
 def test_recurring_table_all_empty_clusters_returns_empty_string():
     """A dict of all-empty cluster lists returns '' without raising IndexError."""
-    text = build_recurring_table(
-        {"cluster1": [], "cluster2": []}, **_RECURRING_KW_DEFAULT
-    )
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        text = build_recurring_table(
+            {"cluster1": [], "cluster2": []}, **_RECURRING_KW_DEFAULT
+        )
     assert text == ""
 
 
@@ -451,40 +467,3 @@ def test_usage_report_deterministic():
         _USAGE_ROW_ALICE, window_weeks=4, dashboard_url="https://x", help_section="help"
     )
     assert a == b
-
-
-# ── split_usage_report_recipients ────────────────────────────────────────────
-
-
-def test_split_underuser_excluded_from_report():
-    rows = [_USAGE_ROW_ALICE, _USAGE_ROW_BOB]
-    report, skipped = split_usage_report_recipients(
-        [_USAGE_ROW_ALICE, _USAGE_ROW_BOB], underuser_emails={"alice@mila.quebec"}
-    )
-    assert any(r.email == "bob@mila.quebec" for r in report)
-    assert all(r.email != "bob@mila.quebec" for r in skipped)
-    assert all(r.email != "alice@mila.quebec" for r in report)
-    assert any(r.email == "alice@mila.quebec" for r in skipped)
-
-    # Test lists are disjoint and cover all
-    assert len(report) + len(skipped) == len(rows)
-    report_emails = {r.email for r in report}
-    skipped_emails = {r.email for r in skipped}
-    assert report_emails.isdisjoint(skipped_emails)
-
-
-def test_split_empty_underusers_all_get_report():
-    report, skipped = split_usage_report_recipients(
-        [_USAGE_ROW_ALICE, _USAGE_ROW_BOB], underuser_emails=set()
-    )
-    assert len(report) == 2
-    assert len(skipped) == 0
-
-
-def test_split_all_are_underusers_none_get_report():
-    report, skipped = split_usage_report_recipients(
-        [_USAGE_ROW_ALICE, _USAGE_ROW_BOB],
-        underuser_emails={"alice@mila.quebec", "bob@mila.quebec"},
-    )
-    assert len(report) == 0
-    assert len(skipped) == 2

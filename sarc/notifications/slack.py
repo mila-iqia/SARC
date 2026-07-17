@@ -6,6 +6,9 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
+from slack_sdk import WebClient
+from slack_sdk.http_retry.builtin_handlers import RateLimitErrorRetryHandler
+
 logger = logging.getLogger(__name__)
 
 
@@ -26,9 +29,6 @@ class SlackClient:
     """Thin wrapper around slack_sdk.WebClient for channel posts and DMs."""
 
     def __init__(self, token: str) -> None:
-        from slack_sdk import WebClient
-        from slack_sdk.http_retry.builtin_handlers import RateLimitErrorRetryHandler
-
         self._client: Any = WebClient(token=token)
         # Auto-retry HTTP 429s (sleeps for the Retry-After duration); applies to
         # every API call made through this client.

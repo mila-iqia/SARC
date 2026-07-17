@@ -16,7 +16,11 @@ from sqlmodel import select
 from sarc.db.cluster import SlurmClusterDB
 from sarc.db.support import GpuRguDB
 from sarc.db.users import UserDB
-from sarc.notifications.underusage import get_all_users_usage, get_underusers
+from sarc.notifications.underusage import (
+    _select_user_jobs,
+    get_all_users_usage,
+    get_underusers,
+)
 from tests.unittests.notifications._factory import add_gpu_job
 
 _WINDOW_START = datetime(2024, 6, 1, tzinfo=UTC)
@@ -217,16 +221,23 @@ def test_outside_window_excluded(underusage_db):
     )
 
 
-def test_unsupported_resource_raises(underusage_db):
-    with pytest.raises(ValueError, match="Unsupported resource"):
-        get_underusers(
-            _WINDOW_START,
-            _WINDOW_END,
-            min_waste_ratio=_MIN_WASTE_RATIO,
-            min_waste_rgu_hours=_MIN_WASTE_RGU_HOURS,
-            top_jobs_per_user=_TOP_JOBS_PER_USER,
-            resource="cpu",
-        )
+# ── _select_user_jobs (user_ids filter) ───────────────────────────────────────
+
+
+def test_select_user_jobs_none_returns_all_users(underusage_db):
+    """user_ids=None applies no filter — jobs for every user come back."""
+    users = {
+        u.email.split("@")[0]: u.id for u in underusage_db.exec(select(UserDB)).all()
+    }
+    stmt = _select_user_jobs(None, _WINDOW_START, _WINDOW_END)
+    seen_uids = {r.sarc_user_id for r in underusage_db.exec(stmt).all()}
+    assert seen_uids == {users["petitbonhomme"], users["beaubonhomme"], users["bramin"]}
+
+
+def test_select_user_jobs_empty_list_returns_no_rows(underusage_db):
+    """user_ids=[] is a real (non-matching) filter, unlike user_ids=None."""
+    stmt = _select_user_jobs([], _WINDOW_START, _WINDOW_END)
+    assert underusage_db.exec(stmt).all() == []
 
 
 # ── get_all_users_usage ───────────────────────────────────────────────────────
@@ -265,16 +276,6 @@ def test_usage_outside_window_excluded(underusage_db):
     assert (
         get_all_users_usage(before, after, top_jobs_per_user=_TOP_JOBS_PER_USER) == []
     )
-
-
-def test_usage_unsupported_resource_raises(underusage_db):
-    with pytest.raises(ValueError, match="Unsupported resource"):
-        get_all_users_usage(
-            _WINDOW_START,
-            _WINDOW_END,
-            top_jobs_per_user=_TOP_JOBS_PER_USER,
-            resource="cpu",
-        )
 
 
 # ── top_jobs_per_user is config-driven ───────────────────────────────────────
