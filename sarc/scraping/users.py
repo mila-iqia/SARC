@@ -245,6 +245,7 @@ def parse_ce(ce: CacheEntry) -> Iterable[UserMatch]:
                 um = user_refs[k]
                 patch_usermatch(um)
                 yield um
+            break
 
 
 def lookup_match_id(sess: Session, match_id: MatchID) -> Sequence[UserDB]:
@@ -258,18 +259,13 @@ def lookup_match_id(sess: Session, match_id: MatchID) -> Sequence[UserDB]:
 
 
 def update_user(sess: Session, user: UserMatch) -> None:
+    matches = user.known_matches.union((user.matching_id,))
     clauses = [
-        and_(
-            MatchingID.plugin_name == user.matching_id.name,
-            MatchingID.match_id == user.matching_id.mid,
-        )
-    ]
-    clauses.extend(
         and_(
             MatchingID.plugin_name == match_id.name, MatchingID.match_id == match_id.mid
         )
-        for match_id in user.known_matches
-    )
+        for match_id in matches
+    ]
     results = sess.exec(
         select(MatchingID.user_id).where(or_(*clauses)).distinct()
     ).all()
