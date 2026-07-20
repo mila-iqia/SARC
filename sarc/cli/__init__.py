@@ -11,6 +11,7 @@ from sarc.patch import load
 from .encrypt import Encrypt
 from .fetch import Fetch
 from .health import Health
+from .notify import Notify
 from .parse import Parse
 
 colors = SimpleNamespace(
@@ -49,8 +50,14 @@ class NiceHandler(logging.StreamHandler):
 
 @dataclass
 class CLI:
-    command: Health | Fetch | Parse | Encrypt = subparsers(
-        {"health": Health, "fetch": Fetch, "parse": Parse, "encrypt": Encrypt}  # ty:ignore[invalid-argument-type]
+    command: Health | Fetch | Parse | Encrypt | Notify = subparsers(
+        {
+            "health": Health,
+            "fetch": Fetch,
+            "parse": Parse,
+            "encrypt": Encrypt,
+            "notify": Notify,
+        }  # ty:ignore[invalid-argument-type]
     )
 
     color: bool = False

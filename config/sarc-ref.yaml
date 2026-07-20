@@ -86,5 +86,31 @@ sarc:
     service_name: sarc-dev # service name used for OTLP, must be set to enable OTLP
     slack: # Optional config to get messages about jobs on slack
       description: SARC-prod # used to distinguish multiple instances if the message the same channel
-      token: slack-token-replaceme # SENSITIVE: can be used to send messages on slack
+      token: slack-token-replace-me # SENSITIVE: can be used to send messages on slack
       channel: slack-channel-id-replace-me # The slack channel ID to message
+  notifications:
+    slack: # Credentials for delivering user DMs and the admin digest
+      description: Usage Alerts # used to distinguish multiple instances if the message the same channel
+      token: slack-token-replace-me # SENSITIVE: can be used to send messages on slack
+      channel: slack-channel-id-replace-me # The slack channel ID to message
+    enabled: True # Master switch; when False the notify command is a no-op
+    clusters: # Cluster-name allowlist scoping every query; empty list = all clusters
+      - mila
+    usage_cycle_length_weeks: 2 # Weeks per usage cycle (base cadence unit for alerts/report window)
+    utilization_ceiling: 1.0 # T in (0,1]; wasted = max(0, rgu_h * (T - m)); 1.0 = true waste
+    # --- Individual underusage alerts (user DMs) + admin digest ---
+    send_underusage_report: True # Enable the user underusage DMs and the admin digest
+    min_waste_ratio: 0.80 # Min scaled waste ratio (1 - effective_util) to flag a user
+    min_waste_rgu_hours: 3225.6 # Min scaled wasted RGU-h to flag a user (~4x A100-80GB RGU x 7d)
+    digest_top_n: 16 # Number of top wasters listed in the admin digest ranking
+    top_jobs_per_user: 5 # Number of a user's worst jobs shown per user
+    historical_months: 6 # Calendar months included in the digest historical-trend section
+    recurrence_cluster_share: 0.50 # Cluster waste fraction at which per-cluster selection stops
+    recurrence_active_cycles: 3 # Recent cycles counting toward personalized-action + recurrence window
+    recurrence_display_cycles: 5 # Per-cycle columns shown in the recurring-users table
+    personalized_action_min_waste_rgu_hours: 96768 # Summed scaled wasted RGU-h over active cycles to flag for action
+    # --- Universal usage report (neutral, all active GPU users) ---
+    send_usage_report: True # Enable the neutral usage report to all active GPU users
+    usage_report_cycles: 2 # Usage-report window length, in usage cycles
+    usage_report_min_usage_rgu_hours: 1843.2 # Min occupied (used+wasted) RGU-h to include a user (~4x A100-80GB RGU x 4d)
+    dashboard_url: dashboard-url-replace-me # Dashboard link inserted into user-facing messages
