@@ -18,6 +18,7 @@ from sarc.config import config
 from sarc.db.cluster import SlurmClusterDB
 from sarc.db.job import JobStatisticDB, SlurmJobDB
 from sarc.db.support import GpuRguDB
+from sarc.db.users import MatchingID, UserDB
 from sarc.models.job import SlurmState
 
 
@@ -36,6 +37,34 @@ def _scope(req: Requestor) -> int | Literal["admin"]:
     # persisted UserDB always has an int id (Optional only before insert).
     assert req.user is not None and req.user.id is not None
     return req.user.id
+
+
+def _find_user_by_email(sess: Session, email: str) -> UserDB | None:
+    """mila_ldap email -> UserDB row, or None if unknown. Mirrors the lookup in
+    ``requestor()``; used to resolve an admin's ``as_user`` override."""
+    return sess.exec(
+        select(UserDB)
+        .join(MatchingID)
+        .where(MatchingID.plugin_name == "mila_ldap", MatchingID.match_id == email)
+    ).one_or_none()
+
+
+def _scope_or_view_as(
+    sess: Session, req: Requestor, as_user: str | None
+) -> int | Literal["admin"]:
+    """Scope for a /dash data query: ``_scope(req)`` by default, or — admin
+    only — the impersonated user's id when ``as_user`` is set (the dashboard's
+    "view as user" preview). Fails closed: 403 for a non-admin, 404 for an
+    unknown email, never a silent fallback to the admin's full view."""
+    if as_user is None:
+        return _scope(req)
+    if not req.is_admin:
+        raise HTTPException(status_code=403, detail="as_user is admin-only")
+    target = _find_user_by_email(sess, as_user)
+    if target is None:
+        raise HTTPException(status_code=404, detail=f"Unknown user {as_user!r}")
+    assert target.id is not None
+    return target.id
 
 
 async def _dash_login_redirect(request: Request) -> None:
@@ -310,8 +339,19 @@ def _apply_rgu_base(
 _TEMPLATES = Jinja2Templates(directory=Path(__file__).parent)
 
 
+_AS_USER_QUERY = Query(
+    default=None,
+    description="Admin-only: preview scoped to this user's jobs (mila_ldap email).",
+)
+
+
 @router.get("/metrics", response_class=HTMLResponse)
-def metrics_homepage(request: Request, req: Requestor = Depends(requestor)):
+def metrics_homepage(
+    request: Request,
+    req: Requestor = Depends(requestor),
+    as_user: str | None = Query(default=None),
+    sess: Session = Depends(session_dep),
+):
     """Serve the dashboard's single-page HTML UI; its charts call the JSON
     endpoints below. Rendered with Jinja2: ``is_admin`` adapts the page
     per-request (hide the user filter / RGU-by-user for a non-admin) with no
@@ -320,20 +360,46 @@ def metrics_homepage(request: Request, req: Requestor = Depends(requestor)):
     Jinja auto-escapes ``user_email`` in HTML; ``| tojson`` makes the
     booleans/lists safe to inline in <script>.
 
-    ``storage_key`` namespaces the per-user localStorage state. We hash the
-    identity rather than embed the email in clear as a key, and fold in the role
-    so a promote/demote (or the force_user toggle used in local testing) starts
-    fresh instead of reloading selections that reference now-absent controls.
-    It's a namespacing key, not a secret, so a short digest is enough."""
+    ``as_user`` (mila_ldap email) lets an admin preview the dashboard exactly
+    as that user would see it: ``is_admin`` in the template goes False (hiding
+    the admin-only widgets, same as the JSON endpoints scoping via
+    ``_scope_or_view_as``) while ``admin_email``/``user_email`` keep showing
+    the real admin's identity, next to a "clear" control. An unknown email is
+    a soft error (``view_as_error``) that leaves the admin in their own view
+    rather than a 404 page — a typo shouldn't blow away the dashboard; a
+    non-admin supplying ``as_user`` still gets a hard 403.
+
+    ``storage_key`` namespaces the per-user localStorage state; it hashes the
+    identity rather than using the email in clear. The key is
+    ``(identity, role, view-as target)``: each distinct view gets its own
+    bucket, so a role change (promote/demote, or the force_user toggle) or an
+    admin's view-as preview never reloads selections for controls it no longer
+    shows. A preview's bucket also stays separate from the target's real
+    session. It's a namespacing key, not a secret."""
+    view_as_email = None
+    view_as_error = None
+    if as_user is not None:
+        if not req.is_admin:
+            raise HTTPException(status_code=403, detail="as_user is admin-only")
+        if _find_user_by_email(sess, as_user) is not None:
+            view_as_email = as_user
+        else:
+            view_as_error = as_user
+    effective_is_admin = req.is_admin and view_as_email is None
     storage_key = (
         "sarc_dash_v1_"
-        + hashlib.sha256(f"{req.email}|{req.is_admin}".encode()).hexdigest()[:16]
+        + hashlib.sha256(
+            f"{req.email}|{req.is_admin}|{view_as_email or ''}".encode()
+        ).hexdigest()[:16]
     )
     return _TEMPLATES.TemplateResponse(
         request,
         "metrics.html",
         {
-            "is_admin": req.is_admin,
+            "is_admin": effective_is_admin,
+            "admin_email": req.email if req.is_admin else None,
+            "view_as_email": view_as_email,
+            "view_as_error": view_as_error,
             "user_email": req.email,
             "default_period": _DEFAULT_PERIOD,
             "job_states": [s.value for s in SlurmState],
@@ -345,6 +411,7 @@ def metrics_homepage(request: Request, req: Requestor = Depends(requestor)):
 @router.get("/metrics/job_counts")
 def metrics_job_counts(
     req: Requestor = Depends(requestor),
+    as_user: str | None = _AS_USER_QUERY,
     start: date = Query(default=None),
     end: date = Query(default=None),
     period: str = Query(default=_DEFAULT_PERIOD),
@@ -376,7 +443,7 @@ def metrics_job_counts(
         _resolve_cluster_ids(sess, clusters),
         cluster_user,
         job_states,
-        _scope(req),
+        _scope_or_view_as(sess, req, as_user),
     )
     # group_by by label name: pg8000 binds parameters server-side, so repeating
     # the expression would yield distinct $N placeholders in SELECT vs GROUP BY
@@ -448,6 +515,7 @@ def _build_heatmap_payload(
 @router.get("/metrics/job_times_vs_limit")
 def metrics_job_times_vs_limit(
     req: Requestor = Depends(requestor),
+    as_user: str | None = _AS_USER_QUERY,
     start: date = Query(default=None),
     end: date = Query(default=None),
     clusters: list[str] = Query(default=[]),
@@ -483,7 +551,7 @@ def metrics_job_times_vs_limit(
         base_filters.append(col(SlurmJobDB.cluster_user) == cluster_user)
     if job_states:
         base_filters.append(col(SlurmJobDB.job_state).in_(job_states))
-    scope_user_id = _scope(req)
+    scope_user_id = _scope_or_view_as(sess, req, as_user)
     if scope_user_id != "admin":
         base_filters.append(col(SlurmJobDB.sarc_user_id) == scope_user_id)
 
@@ -549,6 +617,7 @@ def _valid_metric_filter(metric_expr):
 @router.get("/metrics/metric_distribution")
 def metrics_metric_distribution(
     req: Requestor = Depends(requestor),
+    as_user: str | None = _AS_USER_QUERY,
     start: date = Query(default=None),
     end: date = Query(default=None),
     clusters: list[str] = Query(default=[]),
@@ -591,7 +660,7 @@ def metrics_metric_distribution(
             clusters,
             cluster_user,
             job_states,
-            scope_user_id=_scope(req),
+            scope_user_id=_scope_or_view_as(sess, req, as_user),
         )
         .join(
             js1,
@@ -619,6 +688,7 @@ def metrics_metric_distribution(
 @router.get("/metrics/metric_comparison")
 def metrics_metric_comparison(
     req: Requestor = Depends(requestor),
+    as_user: str | None = _AS_USER_QUERY,
     start: date = Query(default=None),
     end: date = Query(default=None),
     clusters: list[str] = Query(default=[]),
@@ -660,7 +730,7 @@ def metrics_metric_comparison(
             clusters,
             cluster_user,
             job_states,
-            scope_user_id=_scope(req),
+            scope_user_id=_scope_or_view_as(sess, req, as_user),
         )
         .join(
             js1,
@@ -692,6 +762,7 @@ def metrics_metric_comparison(
 @router.get("/metrics/rgu_usage")
 def metrics_rgu_usage(
     req: Requestor = Depends(requestor),
+    as_user: str | None = _AS_USER_QUERY,
     start: date = Query(default=None),
     end: date = Query(default=None),
     period: str = Query(default=_DEFAULT_PERIOD),
@@ -737,7 +808,7 @@ def metrics_rgu_usage(
         clusters,
         cluster_user,
         job_states,
-        scope_user_id=_scope(req),
+        scope_user_id=_scope_or_view_as(sess, req, as_user),
     )
     query = (
         query.join(
@@ -784,6 +855,7 @@ def metrics_rgu_usage(
 @router.get("/metrics/rgu_by_cluster")
 def metrics_rgu_by_cluster(
     req: Requestor = Depends(requestor),
+    as_user: str | None = _AS_USER_QUERY,
     start: date = Query(default=None),
     end: date = Query(default=None),
     period: str = Query(default=_DEFAULT_PERIOD),
@@ -817,7 +889,7 @@ def metrics_rgu_by_cluster(
         clusters,
         cluster_user,
         job_states,
-        scope_user_id=_scope(req),
+        scope_user_id=_scope_or_view_as(sess, req, as_user),
     ).join(SlurmClusterDB, col(SlurmJobDB.cluster_id) == col(SlurmClusterDB.id))
     query = (
         query.where(
@@ -859,6 +931,7 @@ def metrics_rgu_by_cluster(
 @router.get("/metrics/metric_trend")
 def metrics_metric_trend(
     req: Requestor = Depends(requestor),
+    as_user: str | None = _AS_USER_QUERY,
     start: date = Query(default=None),
     end: date = Query(default=None),
     period: str = Query(default=_DEFAULT_PERIOD),
@@ -920,7 +993,7 @@ def metrics_metric_trend(
         _resolve_cluster_ids(sess, clusters),
         cluster_user,
         job_states,
-        _scope(req),
+        _scope_or_view_as(sess, req, as_user),
     )
 
     cells = {}
@@ -947,6 +1020,7 @@ def metrics_metric_trend(
 @router.get("/metrics/rgu_by_user")
 def metrics_rgu_by_user(
     req: Requestor = Depends(requestor),
+    as_user: str | None = _AS_USER_QUERY,
     start: date = Query(default=None),
     end: date = Query(default=None),
     clusters: list[str] = Query(default=[]),
@@ -989,7 +1063,7 @@ def metrics_rgu_by_user(
         clusters,
         cluster_user,
         job_states,
-        scope_user_id=_scope(req),
+        scope_user_id=_scope_or_view_as(sess, req, as_user),
     )
     query = (
         query.join(
@@ -1022,6 +1096,7 @@ def metrics_rgu_by_user(
 @router.get("/metrics/jobs")
 def metrics_jobs(
     req: Requestor = Depends(requestor),
+    as_user: str | None = _AS_USER_QUERY,
     start: date = Query(default=None),
     end: date = Query(default=None),
     clusters: list[str] = Query(default=[]),
@@ -1120,6 +1195,8 @@ def metrics_jobs(
         col(SlurmJobDB.submit_time) < finish_dt,
     )
 
+    scope_user_id = _scope_or_view_as(sess, req, as_user)
+
     # COUNT: the full filtered total, computed by its own query and only when
     # asked (include_total). The frontend requests it on every page so the count
     # and page numbers stay current as scraping adds jobs. It is deliberately kept
@@ -1135,7 +1212,7 @@ def metrics_jobs(
             clusters,
             cluster_user,
             job_states,
-            scope_user_id=_scope(req),
+            scope_user_id=scope_user_id,
         ).where(*base_filters)
         total = int(sess.exec(count_q).one())
 
@@ -1148,7 +1225,7 @@ def metrics_jobs(
         clusters,
         cluster_user,
         job_states,
-        scope_user_id=_scope(req),
+        scope_user_id=scope_user_id,
     )
     # clusters only when ranking by cluster_name; the stat alias only for stat sorts.
     if sort_by == "cluster":
@@ -1190,7 +1267,7 @@ def metrics_jobs(
             clusters,
             cluster_user,
             job_states,
-            scope_user_id=_scope(req),
+            scope_user_id=scope_user_id,
         )
         .join(SlurmClusterDB, col(SlurmJobDB.cluster_id) == col(SlurmClusterDB.id))
         .join(page, page.c.jid == col(SlurmJobDB.id))

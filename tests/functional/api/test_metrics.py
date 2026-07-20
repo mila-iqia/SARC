@@ -23,6 +23,7 @@ guest). The guest -> login redirect is checked by
 ``test_guest_redirected_to_login``.
 """
 
+import re
 from types import SimpleNamespace
 
 import pytest
@@ -597,3 +598,96 @@ def test_jobs_sort_columns(dash_client, sort_by):
     source alone. A missing join would surface as a SQL error (500), not a 200."""
     r = dash_client.get("/dash/metrics/jobs", params={**WINDOW, "sort_by": sort_by})
     assert r.status_code == 200
+
+
+# === Admin "view as user" (as_user) =========================================
+# An admin can pass ?as_user=<mila_ldap email> to preview the dashboard scoped
+# to that user. JSON endpoints resolve it through _scope_or_view_as (hard 403
+# for a non-admin, 404 for an unknown email); the homepage adds a soft guard
+# (unknown email -> the admin stays in their own view, no 404 page).
+
+
+@pytest.mark.parametrize(
+    "path,total",
+    [(path, total) for _, path, total in _SCOPE_TOTALS],
+    ids=[name for name, _, _ in _SCOPE_TOTALS],
+)
+@pytest.mark.parametrize("email", [_USER, _OTHER_USER], ids=["petit", "beau"])
+def test_as_user_matches_direct_scope(app, scoped_db, email, path, total):
+    """Admin with ?as_user=X sees exactly what X sees connecting directly."""
+    direct = total(app.client(email).get(path, params=WINDOW).json())
+    scoped = total(
+        app.client(_ADMIN).get(path, params={**WINDOW, "as_user": email}).json()
+    )
+    assert scoped > 0
+    assert scoped == pytest.approx(direct)
+
+
+@pytest.mark.usefixtures("read_only_db")
+@pytest.mark.parametrize(
+    "path", ["/dash/metrics", "/dash/metrics/job_counts"], ids=["homepage", "json"]
+)
+def test_as_user_forbidden_for_non_admin(app, path):
+    """as_user is admin-only: a regular user supplying it (even another user's
+    email) is rejected 403 on both the homepage and a JSON endpoint — it never
+    silently degrades to the caller's own scope."""
+    app.client(_USER).get(
+        path, params={**WINDOW, "as_user": _OTHER_USER}, expect_status=403
+    )
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_as_user_unknown_returns_404_on_json(app):
+    """An admin targeting an unknown email on a JSON endpoint gets a hard 404 —
+    _scope_or_view_as fails closed rather than falling back to the full view."""
+    app.client(_ADMIN).get(
+        "/dash/metrics/job_counts",
+        params={**WINDOW, "as_user": _NOT_IN_DB},
+        expect_status=404,
+    )
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_homepage_view_as_valid_user(app):
+    """Homepage as_user=<valid>: 200, renders the impersonation badge for that
+    user, and drops to the non-admin layout (the 'View as user' entry control
+    is replaced by the 'clear' control)."""
+    html = app.client(_ADMIN).get("/dash/metrics", params={"as_user": _USER}).text
+    assert "as user" in html and _USER in html
+    assert 'onclick="clearViewAsUser()"' in html  # the "clear" control is shown
+    assert 'onclick="viewAsUser()"' not in html  # the entry control is hidden
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_homepage_view_as_unknown_is_soft_error(app):
+    """Homepage as_user=<unknown>: a typo is a soft error — 200, the admin stays
+    in their own view (entry control still present) with an inline message,
+    rather than the 404 the JSON endpoints return."""
+    resp = app.client(_ADMIN).get("/dash/metrics", params={"as_user": _NOT_IN_DB})
+    assert resp.status_code == 200
+    assert f'Unknown user "{_NOT_IN_DB}"' in resp.text
+    assert 'onclick="viewAsUser()"' in resp.text  # still the admin entry control
+
+
+_STORAGE_KEY_RE = re.compile(r'const STORAGE_KEY = ("[^"]+")')
+
+
+def _storage_key(client, params=None):
+    """The STORAGE_KEY string literal inlined in the homepage <script>."""
+    html = client.get("/dash/metrics", params=params or {}).text
+    m = _STORAGE_KEY_RE.search(html)
+    assert m, "STORAGE_KEY not found in homepage"
+    return m.group(1)
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_view_as_storage_key_is_distinct(app):
+    """The localStorage namespace (STORAGE_KEY) is keyed on (identity, role,
+    view-as target): an admin viewing as X gets a bucket distinct from both
+    their own view and X's real session, so a preview never clobbers or reuses
+    anyone's saved state."""
+    admin_own = _storage_key(app.client(_ADMIN))
+    admin_as_user = _storage_key(app.client(_ADMIN), {"as_user": _USER})
+    user_direct = _storage_key(app.client(_USER))
+
+    assert len({admin_own, admin_as_user, user_direct}) == 3
