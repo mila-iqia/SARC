@@ -1,5 +1,6 @@
 import os
 import re
+import warnings
 import zoneinfo
 from dataclasses import dataclass, field
 from datetime import date
@@ -258,6 +259,13 @@ class DbConfig:
             )
 
         SQLAlchemyInstrumentor().instrument(engine=engine)
+
+        # This filters out the warning that otherwise spams the logs
+        warnings.filterwarnings(
+            "ignore",
+            category=UserWarning,
+            message=r".*DB-API extension cursor\.connection used.*",
+        )
         return engine
 
     def session(self) -> Session:
