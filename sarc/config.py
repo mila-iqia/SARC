@@ -270,6 +270,95 @@ class SlackConfig:
 
 
 @dataclass
+class UnderusageNotifyConfig:
+    slack: SlackConfig
+    """Slack workspace/channel credentials used to deliver all notifications
+    (user DMs and the admin digest)."""
+
+    enabled: bool = True
+    """Master switch; when False the notify command is a no-op regardless of the
+    per-report flags below."""
+
+    send_underusage_report: bool = False
+    """Enable the individual underusage alerts (user DMs) and the admin
+    digest."""
+
+    min_waste_ratio: float = 0.50
+    """Minimum scaled waste ratio (0..1), ``1 − effective_util``, for a user to
+    be flagged as underusing."""
+
+    min_waste_rgu_hours: float = 3225.6  # 4x A100-80GB RGU x 7d
+    """Minimum scaled wasted RGU-hours for a user to be flagged; an activity
+    floor that suppresses trivially small waste. Default ≈ 4× A100-80GB RGU ×
+    7d."""
+
+    digest_top_n: int = 16
+    """Number of top wasters listed in the admin digest ranking. Positive
+    int."""
+
+    top_jobs_per_user: int = 5
+    """Number of a user's worst jobs shown per user (in DMs and the usage
+    report). Positive int."""
+
+    dashboard_url: str | None = None
+    """Link inserted into user-facing messages pointing at the usage dashboard;
+    omitted from messages if None."""
+
+    help_section: str | None = None
+    """Verbatim Markdown appended to the end of every user DM (support links,
+    office hours, etc.); omitted if None."""
+
+    recurrence_cluster_share: float = 0.50
+    """Fraction (0..1) of a cluster's total wasted RGU-h at which the
+    recurring-underusers selection stops accumulating users per cluster."""
+
+    recurrence_active_cycles: int = 3
+    """Number of most-recent cycles that count toward the personalized-action
+    decision and the rolling recurrence window. Positive int, ≤
+    recurrence_display_cycles."""
+
+    recurrence_display_cycles: int = 5
+    """Number of per-cycle columns shown in the recurring-users table. Positive
+    int."""
+
+    personalized_action_min_waste_rgu_hours: float = 16128.0  # 20x A100-80GB RGU x 7d
+    """Threshold on a user's summed scaled wasted RGU-h across allowlisted
+    clusters over the last ``recurrence_active_cycles`` cycles; at or above it
+    the user is flagged for personalized action. Default ≈ 20× A100-80GB RGU ×
+    7d."""
+
+    historical_months: int = 6
+    """Number of calendar months included in the digest's historical trend
+    section. Positive int."""
+
+    send_usage_report: bool = False
+    """Enable the neutral universal usage report sent to all active GPU
+    users."""
+
+    usage_report_cycles: int = 2
+    """Length of the usage-report window in usage cycles (window =
+    usage_report_cycles × usage_cycle_length_weeks). Positive int."""
+
+    usage_report_min_usage_rgu_hours: float = 1843.2  # 4x A100-80GB RGU x4d
+    """Minimum occupied (used+wasted) RGU-h for a user to be included in the
+    usage report; filters out negligible usage. Default ≈ 4× A100-80GB RGU ×
+    4d."""
+
+    clusters: list[str] = field(default_factory=lambda: ["mila"])
+    """Cluster-name allowlist scoping every query (alerts, usage report,
+    recurring table, historical trend). Empty list = all clusters."""
+
+    usage_cycle_length_weeks: int = 2
+    """Length in weeks of one usage cycle — the base cadence unit for alerts and
+    the usage-report window. Positive int."""
+
+    utilization_ceiling: float = 1.0
+    """Utilization ceiling T ∈ (0,1] for the subtractive waste model: ``wasted =
+    max(0, rgu_h × (T − m))`` where m is measured utilization. T=1.0 collapses
+    to true waste (``1 − util``). Displayed per-job GPU % remains raw m."""
+
+
+@dataclass
 class LoggingConfig:
     log_level: str
     OTLP_endpoint: str | None = None
@@ -302,6 +391,7 @@ class Config:
     users: UserScrapingConfig | None = None
     clusters: dict[str, ClusterConfig] = field(default_factory=dict)
     logging: LoggingConfig | None = None
+    notifications: UnderusageNotifyConfig | None = None
 
     def __post_init__(self):
         for name, cluster in self.clusters.items():
