@@ -3,8 +3,8 @@ import os
 
 from opentelemetry import trace
 from opentelemetry._logs import set_logger_provider
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
-from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
 from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.sdk.resources import Resource
@@ -21,7 +21,7 @@ rapporteur_report: Report | None = None
 
 
 def getOpenTelemetryLoggingHandler(log_conf: LoggingConfig):
-    if log_conf.OTLP_endpoint is None or log_conf.service_name is None:
+    if log_conf.OTLP_log_endpoint is None or log_conf.service_name is None:
         return None
     logger_provider = LoggerProvider(
         resource=Resource.create(
@@ -33,17 +33,16 @@ def getOpenTelemetryLoggingHandler(log_conf: LoggingConfig):
     )
     set_logger_provider(logger_provider)
 
-    otlp_exporter = OTLPLogExporter(log_conf.OTLP_endpoint)
+    otlp_exporter = OTLPLogExporter(log_conf.OTLP_log_endpoint)
     logger_provider.add_log_record_processor(BatchLogRecordProcessor(otlp_exporter))
     # Use logging.NOTSET to let the logger level control filtering, not the handler
     return LoggingHandler(level=logging.NOTSET, logger_provider=logger_provider)
 
 
 def setup_opentelemetry_tracing(log_conf: LoggingConfig):
-    if log_conf.OTLP_endpoint is None or log_conf.service_name is None:
+    if log_conf.OTLP_trace_endpoint is None or log_conf.service_name is None:
         return
 
-    # 1. Create the same resource identification as your logs
     resource = Resource.create(
         {
             "service.name": log_conf.service_name,
@@ -54,7 +53,7 @@ def setup_opentelemetry_tracing(log_conf: LoggingConfig):
     tracer_provider = TracerProvider(resource=resource)
     trace.set_tracer_provider(tracer_provider)
 
-    trace_exporter = OTLPSpanExporter(endpoint=log_conf.OTLP_endpoint)
+    trace_exporter = OTLPSpanExporter(endpoint=log_conf.OTLP_trace_endpoint)
 
     span_processor = BatchSpanProcessor(trace_exporter)
     tracer_provider.add_span_processor(span_processor)
