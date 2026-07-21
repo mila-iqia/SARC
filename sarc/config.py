@@ -1,6 +1,5 @@
 import os
 import re
-import warnings
 import zoneinfo
 from dataclasses import dataclass, field
 from datetime import date
@@ -11,7 +10,6 @@ from typing import TYPE_CHECKING, cast
 import gifnoc
 from easy_oauth import OAuthManager
 from hostlist import expand_hostlist
-from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 from paramiko import PKey
 from serieux.features.encrypt import Secret
 from sqlmodel import Session
@@ -258,14 +256,6 @@ class DbConfig:
                 f"postgresql+pg8000://{db_user}@{hostname}/{self.name}"
             )
 
-        SQLAlchemyInstrumentor().instrument(engine=engine)
-
-        # This filters out the warning that otherwise spams the logs
-        warnings.filterwarnings(
-            "ignore",
-            category=UserWarning,
-            message=r".*DB-API extension cursor\.connection used.*",
-        )
         return engine
 
     def session(self) -> Session:

@@ -65,7 +65,7 @@ def test_using_trace_unexpected_exception(captrace):
         with using_trace(
             "test_using_trace_default_exception",
             "span2",
-            exception_types=[ZeroDivisionError],
+            exception_types=(ZeroDivisionError,),
         ) as span:
             span.add_event("event1")
             assert False
@@ -140,7 +140,7 @@ def test_using_trace_error_nested(captrace):
         with using_trace(
             "test_using_trace_nested_spans",
             "span2",
-            exception_types=[ZeroDivisionError],
+            exception_types=(ZeroDivisionError,),
         ) as span2:
             span2.add_event("event2")
             _ = 1 / 0

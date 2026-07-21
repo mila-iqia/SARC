@@ -180,7 +180,7 @@ Found 4 job(s):
     "work_dir": "/home/drac/b/bramin/scratch"
 }
 
-Found 29 span(s):
+Found 33 span(s):
 [
  {
   "span_name": "parse_prometheus",
@@ -223,19 +223,7 @@ Found 29 span(s):
   "span_has_error": false
  },
  {
-  "span_name": "_convert_json_job",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "parse_raw",
-  "span_events": [],
-  "span_attributes": {},
-  "span_has_error": false
- },
- {
-  "span_name": "update_allocated_gpu_type_from_nodes",
+  "span_name": "get_user_id_for_cluster_user",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
@@ -259,6 +247,12 @@ Found 29 span(s):
   "span_has_error": false
  },
  {
+  "span_name": "get_user_id_for_cluster_user",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
   "span_name": "_convert_json_job",
   "span_events": [],
   "span_attributes": {},
@@ -272,6 +266,36 @@ Found 29 span(s):
  },
  {
   "span_name": "update_allocated_gpu_type_from_nodes",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "get_user_id_for_cluster_user",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "_convert_json_job",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "parse_raw",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "update_allocated_gpu_type_from_nodes",
+  "span_events": [],
+  "span_attributes": {},
+  "span_has_error": false
+ },
+ {
+  "span_name": "get_user_id_for_cluster_user",
   "span_events": [],
   "span_attributes": {},
   "span_has_error": false
