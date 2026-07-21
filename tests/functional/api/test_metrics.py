@@ -493,7 +493,7 @@ def test_metric_comparison_with_data(dash_client, dash_db):
 # RGU-computable jobs have no stat row at all (LEFT-join NULL). On Postgres
 # NaN = NaN is TRUE and NaN poisons SUM/AVG, so the endpoints gate every
 # mean-based term on `_is_real` (NOT NULL AND != 'NaN'). This pins that
-# behaviour by value so the slurm_jobs -> job_series migration must reproduce
+# behavior by value so the slurm_jobs -> job_series migration must reproduce
 # it exactly: such jobs count wherever their RGU is used, but never enter (nor
 # poison) a mean-based aggregate.
 

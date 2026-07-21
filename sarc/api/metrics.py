@@ -527,43 +527,41 @@ def metrics_job_times_vs_limit(
     ``wait_vs_limit`` plots the queue wait, start - submit (y), against time_limit
     (x). Each is a 100x100 log-binned grid of job counts. Returns both grids plus
     total_jobs. ``focus_start/end`` narrows the window.
+
+    **NB** This endpoint is the only one not yet optimized, because it would need
+    to add or expand covering indexes. We should later decide if we really need
+    this endpoint/plot (currently seen in admin view only).
     """
     begin_dt, finish_dt = _apply_focus(*_date_range(start, end), focus_start, focus_end)
     cluster_ids = _resolve_cluster_ids(sess, clusters)
 
-    # Through the pruned view for uniformity only: the columns read here are in
-    # no index, so the whole table gets read either way.
-    js = job_series_select(
-        "submit_time",
-        "time_limit",
-        "start_time",
-        "elapsed_time",
-        "cluster_id",
-        "cluster_user",
-        "job_state",
-        "sarc_user_id",
-    ).subquery()
-    wait_expr = func.extract("epoch", js.c.start_time - js.c.submit_time)
+    # Query the view directly: the columns read here (time_limit/start_time/
+    # elapsed_time) are in no index, so this full-scans regardless, and the
+    # planner prunes the view's unused joins on its own -- job_series_select
+    # would compile to the identical plan here (see the NB above).
+    wait_expr = func.extract(
+        "epoch", col(JobSeriesDB.start_time) - col(JobSeriesDB.submit_time)
+    )
     base_filters = [
-        js.c.submit_time >= begin_dt,
-        js.c.submit_time < finish_dt,
-        js.c.time_limit.is_not(None),
-        js.c.start_time.is_not(None),
+        col(JobSeriesDB.submit_time) >= begin_dt,
+        col(JobSeriesDB.submit_time) < finish_dt,
+        col(JobSeriesDB.time_limit).is_not(None),
+        col(JobSeriesDB.start_time).is_not(None),
     ]
     if cluster_ids:
-        base_filters.append(js.c.cluster_id.in_(cluster_ids))
+        base_filters.append(col(JobSeriesDB.cluster_id).in_(cluster_ids))
     if cluster_user:
-        base_filters.append(js.c.cluster_user == cluster_user)
+        base_filters.append(col(JobSeriesDB.cluster_user) == cluster_user)
     if job_states:
-        base_filters.append(js.c.job_state.in_(job_states))
+        base_filters.append(col(JobSeriesDB.job_state).in_(job_states))
     scope_user_id = _scope_or_view_as(sess, req, as_user)
     if scope_user_id != "admin":
-        base_filters.append(js.c.sarc_user_id == scope_user_id)
+        base_filters.append(col(JobSeriesDB.sarc_user_id) == scope_user_id)
 
     max_l, max_e, max_w = sess.exec(
         select(
-            func.max(js.c.time_limit).label("max_l"),
-            func.max(js.c.elapsed_time).label("max_e"),
+            func.max(col(JobSeriesDB.time_limit)).label("max_l"),
+            func.max(col(JobSeriesDB.elapsed_time)).label("max_e"),
             func.max(wait_expr).label("max_w"),
         ).where(*base_filters)
     ).one()
@@ -575,13 +573,18 @@ def metrics_job_times_vs_limit(
     elapsed_hmap = _build_heatmap_payload(
         sess,
         base_filters,
-        js.c.time_limit,
-        js.c.elapsed_time,
+        col(JobSeriesDB.time_limit),
+        col(JobSeriesDB.elapsed_time),
         float(max_l),
         float(max_e),
     )
     wait_hmap = _build_heatmap_payload(
-        sess, base_filters, js.c.time_limit, wait_expr, float(max_l), float(max_w)
+        sess,
+        base_filters,
+        col(JobSeriesDB.time_limit),
+        wait_expr,
+        float(max_l),
+        float(max_w),
     )
 
     return {
