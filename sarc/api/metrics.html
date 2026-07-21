@@ -439,10 +439,11 @@
 
       // Filter bar defaults
       const today     = new Date();
-      const yearStart = new Date(today.getFullYear(), 0, 1);
       const monday    = new Date(today.getFullYear(), today.getMonth(), today.getDate());
       monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
-      document.getElementById('start').value = isoDate(yearStart);
+      const winStart  = new Date(monday);
+      winStart.setDate(winStart.getDate() - 42);  // 6 weeks before the last Monday
+      document.getElementById('start').value = isoDate(winStart);
       document.getElementById('end').value   = isoDate(monday);
       {% if is_admin %}
       document.getElementById('metric-select').value = 'gpu_sm_occupancy';
@@ -735,13 +736,14 @@
     });
 
     const today = new Date();
-    // Defaults: start = Jan 1 of the current year, end = Monday of the current
-    // week (calendar-aligned with the default 'w' period).
-    const yearStart = new Date(today.getFullYear(), 0, 1);
+    // Defaults: end = Monday of the current week, start = 6 weeks before that
+    // (calendar-aligned with the default 'w' period).
     const monday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+    const winStart = new Date(monday);
+    winStart.setDate(winStart.getDate() - 42);  // 6 weeks before the last Monday
     // Apply saved filter-bar values (fall back to defaults when absent).
-    document.getElementById('start').value = _saved.start || isoDate(yearStart);
+    document.getElementById('start').value = _saved.start || isoDate(winStart);
     document.getElementById('end').value   = _saved.end   || isoDate(monday);
     {% if is_admin %}
     if (_saved.metric)    document.getElementById('metric-select').value = _saved.metric;
