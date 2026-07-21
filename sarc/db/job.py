@@ -3,7 +3,6 @@ from types import SimpleNamespace
 from typing import Self
 
 from iguane.fom import RAWDATA, fom_ugr
-from sqlalchemy import text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import attribute_keyed_dict, relationship
 from sqlmodel import BIGINT, Field, Index, Session, UniqueConstraint, select
@@ -20,7 +19,6 @@ class JobStatisticDB(SQLModel, table=True):
     """Statistics for a timeseries."""
 
     __table_args__ = (
-        UniqueConstraint("job_id", "name"),
         # /dash joins filter by name then read mean/max: name-first so `name = X`
         # scans only that name's rows, INCLUDE (mean, max) makes the join index-only.
         Index(
@@ -28,6 +26,7 @@ class JobStatisticDB(SQLModel, table=True):
             "name",
             "job_id",
             postgresql_include=["mean", "max"],
+            unique=True,
         ),
     )
 
@@ -72,15 +71,15 @@ class JobStatisticsFetchDateDB(SQLModel, table=True):
 class SlurmJobDB(SQLModel, table=True):
     __tablename__ = "slurm_jobs"
     __table_args__ = (
-        UniqueConstraint("cluster_id", "job_id", "submit_time"),
-        Index("ix_slurm_jobs_cluster_submit_time", "cluster_id", "submit_time"),
+        UniqueConstraint("cluster_id", "submit_time", "job_id"),
         # Partial covering index for the /dash GPU queries (count, page, rgu_by_*):
         # they read every column they need from the index, without opening the table
         # -- but only while autovacuum stays current, else Postgres opens the rows
         # anyway to check they are still live.
         Index(
-            "ix_slurm_jobs_gpu_submit",
+            "ix_slurm_jobs_submit_gpu_type",
             "submit_time",
+            "allocated_gpu_type",
             postgresql_include=[
                 "id",
                 "harmonized_gpu_type",
@@ -90,17 +89,6 @@ class SlurmJobDB(SQLModel, table=True):
                 "cluster_user",
                 "sarc_user_id",  # used by view when joining users and member_type
             ],
-            postgresql_where=text("allocated_gpu_type IS NOT NULL"),
-        ),
-        # submit_time-first index covering ALL jobs. ix_slurm_jobs_gpu_submit is
-        # also submit_time-first but partial (GPU jobs only), so it can't serve
-        # /dash queries metric_trend / job_counts, which count every job by date.
-        # INCLUDE (id, sarc_user_id) allows reading id by index alone.
-        # sarc_user_id is included because it's used by view to get user info.
-        Index(
-            "ix_slurm_jobs_submit_id",
-            "submit_time",
-            postgresql_include=["id", "sarc_user_id"],
         ),
     )
 
