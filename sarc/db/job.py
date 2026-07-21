@@ -18,7 +18,17 @@ from sarc.validators import datetime_utc
 class JobStatisticDB(SQLModel, table=True):
     """Statistics for a timeseries."""
 
-    __table_args__ = (UniqueConstraint("job_id", "name"),)
+    __table_args__ = (
+        # /dash joins filter by name then read mean/max: name-first so `name = X`
+        # scans only that name's rows, INCLUDE (mean, max) makes the join index-only.
+        Index(
+            "ix_jobstatisticdb_name_job_covering",
+            "name",
+            "job_id",
+            postgresql_include=["mean", "max"],
+            unique=True,
+        ),
+    )
 
     id: int | None = Field(default=None, primary_key=True)
     job_id: int | None = Field(
@@ -28,11 +38,9 @@ class JobStatisticDB(SQLModel, table=True):
         ondelete="CASCADE",
         index=True,
     )
-    # index=True: /dash joins jobstatisticdb on job_id then filters name='<metric>'.
-    # Without an index on name, that filter forces a full seq scan of the table
-    # (~12.6M rows) on every metric/RGU query — the dashboard's main bottleneck on
-    # large windows. job_id already has its own index above, for the join itself.
-    name: str | None = Field(default=None, nullable=False, index=True)
+    # `name` is already indexed in covering index ix_jobstatisticdb_name_job_covering above.
+    # job_id already has its own index above, for the join itself.
+    name: str | None = Field(default=None, nullable=False)
     mean: float | None
     std: float | None
     q05: float | None
@@ -63,8 +71,25 @@ class JobStatisticsFetchDateDB(SQLModel, table=True):
 class SlurmJobDB(SQLModel, table=True):
     __tablename__ = "slurm_jobs"
     __table_args__ = (
-        UniqueConstraint("cluster_id", "job_id", "submit_time"),
-        Index("ix_slurm_jobs_cluster_submit_time", "cluster_id", "submit_time"),
+        UniqueConstraint("cluster_id", "submit_time", "job_id"),
+        # Partial covering index for the /dash GPU queries (count, page, rgu_by_*):
+        # they read every column they need from the index, without opening the table
+        # -- but only while autovacuum stays current, else Postgres opens the rows
+        # anyway to check they are still live.
+        Index(
+            "ix_slurm_jobs_submit_gpu_type",
+            "submit_time",
+            "allocated_gpu_type",
+            postgresql_include=[
+                "id",
+                "harmonized_gpu_type",
+                "allocated_gres_gpu",
+                "elapsed_time",
+                "cluster_id",
+                "cluster_user",
+                "sarc_user_id",  # used by view when joining users and member_type
+            ],
+        ),
     )
 
     id: int | None = Field(default=None, primary_key=True)
@@ -104,12 +129,8 @@ class SlurmJobDB(SQLModel, table=True):
 
     # temporal fields
     time_limit: int | None = None
-    # index=True: standalone btree for range filters on submit_time alone.
-    # The composite unique above (cluster_id, job_id, submit_time) can't be
-    # range-seeked by submit_time since it's the 3rd column. See PostgreSQL
-    # docs §11.3 Multicolumn Indexes:
-    # https://www.postgresql.org/docs/current/indexes-multicolumn.html
-    submit_time: datetime_utc = datetime_utc_field(index=True)
+    # Indexed via ix_slurm_jobs_submit_id in __table_args__ (covering, INCLUDE id).
+    submit_time: datetime_utc = datetime_utc_field()
     start_time: datetime_utc | None = datetime_utc_field(default=None)
     end_time: datetime_utc | None = datetime_utc_field(default=None)
     elapsed_time: float
