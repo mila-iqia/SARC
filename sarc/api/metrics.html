@@ -540,29 +540,29 @@
     }
 
     const PLOT_NAMES = {
-      bar:             'Submitted jobs per period',
-      histogram:       'RGU requested vs used',
+      job_counts:      'Submitted jobs per period',
+      rgu_usage:       'RGU requested vs used',
       clusterrgu:      'RGU by cluster',
       jobtable:        'Job table',
       {% if is_admin %}
-      metrictrend:     'Metric trend (mean/max)',
-      heatmap_elapsed: 'Elapsed vs limit (heatmap)',
-      heatmap_wait:    'Wait vs limit (heatmap)',
-      density:         'Metric density',
-      metricscatter:   'Metric heatmap',
-      userrgu:         'RGU by user',
+      metrictrend:       'Metric trend (mean/max)',
+      heatmap_elapsed:   'Elapsed vs limit (heatmap)',
+      heatmap_wait:      'Wait vs limit (heatmap)',
+      density:           'Metric density',
+      metric_comparison: 'Metric heatmap',
+      userrgu:           'RGU by user',
       {% endif %}
     };
     const PLOT_KEYS = Object.keys(PLOT_NAMES);
 
     // Map each plot type to the backend endpoint it consumes. heatmap_elapsed
     // and heatmap_wait share /heatmap, so caching by endpoint dedups fetches.
-    // The metric heatmap (metricscatter) is absent on purpose: it owns its data
-    // flow (a per-tile secondary picker that fetches /metric_comparison itself),
-    // rendered directly by renderTile without a shared-cache fetch.
+    // metric_comparison is absent on purpose: it owns its data flow (a per-tile
+    // secondary picker that fetches /metric_comparison itself), rendered directly
+    // by renderTile without a shared-cache fetch.
     const PLOT_TO_ENDPOINT = {
-      bar:             'data',
-      histogram:       'histogram',
+      job_counts:      'job_counts',
+      rgu_usage:       'rgu_usage',
       clusterrgu:      'rgu_by_cluster',
       jobtable:        'jobs',
       {% if is_admin %}
@@ -573,12 +573,12 @@
       userrgu:         'user_rgu',
       {% endif %}
     };
-    // The renderers expect data under historical keys (e.g. d.bar, d.heatmap);
-    // this maps the endpoint back to the renderer's key so we can hand off a
+    // The renderers expect data under a per-endpoint key (e.g. d.job_counts,
+    // d.heatmap); this maps the endpoint back to that key so we can hand off a
     // single-entry object: { [ENDPOINT_TO_KEY[ep]]: data }.
     const ENDPOINT_TO_KEY = {
-      data: 'bar',
-      histogram: 'histogram',
+      job_counts: 'job_counts',
+      rgu_usage: 'rgu_usage',
       jobs: 'jobs',
       rgu_by_cluster: 'clusterrgu',
       {% if is_admin %}
@@ -639,9 +639,9 @@
     // its weights feed a normalized density, which is invariant under a
     // uniform rescale.
     {% if is_admin %}
-    const RGU_UNIT_TILES = new Set(['clusterrgu', 'histogram', 'userrgu', 'jobtable']);
+    const RGU_UNIT_TILES = new Set(['clusterrgu', 'rgu_usage', 'userrgu', 'jobtable']);
     {% else %}
-    const RGU_UNIT_TILES = new Set(['clusterrgu', 'histogram', 'jobtable']);
+    const RGU_UNIT_TILES = new Set(['clusterrgu', 'rgu_usage', 'jobtable']);
     {% endif %}
     async function rerenderRguTiles() {
       if (!currentParams) return;
@@ -750,8 +750,8 @@
     {% endif %}
 
     // ── Tile layout ──────────────────────────────────────────────────────────
-    // tileLayout: string[][]  e.g. [['bar','clusterrgu'],['histogram']]
-    // URL param:  plots=bar,clusterrgu;histogram
+    // tileLayout: string[][]  e.g. [['job_counts','clusterrgu'],['rgu_usage']]
+    // URL param:  plots=job_counts,clusterrgu;rgu_usage
 
     let tileLayout = [];
     // Cache + state for the per-endpoint loader.
@@ -811,7 +811,7 @@
     {% if is_admin %}
     const DEFAULT_LAYOUT = [['clusterrgu', 'jobtable'], ['metrictrend', 'userrgu']];
     {% else %}
-    const DEFAULT_LAYOUT = [['clusterrgu', 'jobtable'], ['histogram', 'bar']];
+    const DEFAULT_LAYOUT = [['clusterrgu', 'jobtable'], ['rgu_usage', 'job_counts']];
     {% endif %}
     function paramToLayout(s) {
       if (!s) return DEFAULT_LAYOUT.map(r => [...r]);
@@ -987,8 +987,8 @@
     // ── Per-plot renderers ───────────────────────────────────────────────────
 
     function renderPlot(id, type, d) {
-      const fn = { bar: renderBar,
-                   histogram: renderHistogram,
+      const fn = { job_counts: renderJobCounts,
+                   rgu_usage: renderRguUsage,
                    jobtable: renderJobTable,
                    clusterrgu: renderClusterRgu,
                    {% if is_admin %}
@@ -996,7 +996,7 @@
                    heatmap_elapsed: renderHeatmapElapsed,
                    heatmap_wait: renderHeatmapWait,
                    density: renderDensity,
-                   metricscatter: renderMetricScatter,
+                   metric_comparison: renderMetricComparison,
                    userrgu: renderUserRgu,
                    {% endif %} }[type];
       if (fn) fn(id, d);
@@ -1078,16 +1078,16 @@
                         'Wait vs Time Limit (count per cell)', 'Wait');
     }
 
-    function renderBar(id, d) {
-      if (!d.bar.length) return;
-      const colors = d.bar.map(r => {
+    function renderJobCounts(id, d) {
+      if (!d.job_counts.length) return;
+      const colors = d.job_counts.map(r => {
         const inf = periodInFocus(r.period_start);
         return inf === null ? '#1a6fd4' : inf ? '#e07020' : '#c8d8f0';
       });
       Plotly.react(id, [{
         type: 'bar',
-        x: d.bar.map(r => r.period_start), y: d.bar.map(r => r.count),
-        customdata: d.bar.map(r => r.period_end),
+        x: d.job_counts.map(r => r.period_start), y: d.job_counts.map(r => r.count),
+        customdata: d.job_counts.map(r => r.period_end),
         marker: { color: colors },
         hovertemplate: 'Period: %{x}<br>Jobs: %{y}<extra></extra>',
       }], pLayout({
@@ -1103,9 +1103,9 @@
       });
     }
 
-    function renderHistogram(id, d) {
+    function renderRguUsage(id, d) {
       const el = document.getElementById(id);
-      if (!el || !d.histogram.length) return;
+      if (!el || !d.rgu_usage.length) return;
       const unit = rguUnit();
 
       // Box/ctrl/plot layout (reusing the heatmap's classes) so a small "View:"
@@ -1135,7 +1135,7 @@
       if (rguUsageView === 'whole_range') {
         // One stacked bar summing the whole Start–End range. Focus is ignored on
         // purpose (no per-bucket axis) and the single bar is not click-to-focus.
-        const sum = key => d.histogram.reduce((a, r) => a + (r[key] || 0), 0);
+        const sum = key => d.rgu_usage.reduce((a, r) => a + (r[key] || 0), 0);
         const reqTot = sum('rgu_requested'), usedTot = sum('rgu_used'), unmTot = sum('rgu_unmeasured');
         const X = ['Whole range'];
         Plotly.react(plot, [
@@ -1157,11 +1157,11 @@
       }
 
       // Per-period: one stacked bar per time bucket; click a bar to set the focus.
-      const periods    = d.histogram.map(r => r.period_start);
-      const periodEnds = d.histogram.map(r => r.period_end);
-      const rguUsed       = d.histogram.map(r => r.rgu_used * unit.factor);
-      const rguUnused     = d.histogram.map(r => (r.rgu_requested - r.rgu_used - (r.rgu_unmeasured || 0)) * unit.factor);
-      const rguUnmeasured = d.histogram.map(r => (r.rgu_unmeasured || 0) * unit.factor);
+      const periods    = d.rgu_usage.map(r => r.period_start);
+      const periodEnds = d.rgu_usage.map(r => r.period_end);
+      const rguUsed       = d.rgu_usage.map(r => r.rgu_used * unit.factor);
+      const rguUnused     = d.rgu_usage.map(r => (r.rgu_requested - r.rgu_used - (r.rgu_unmeasured || 0)) * unit.factor);
+      const rguUnmeasured = d.rgu_usage.map(r => (r.rgu_unmeasured || 0) * unit.factor);
       const colorUsed      = periods.map(p => { const f = periodInFocus(p); return f === null ? '#1a6fd4' : f ? '#e07020' : '#c8d8f0'; });
       const colorUnused    = periods.map(p => { const f = periodInFocus(p); return f === null ? '#a8c8f0' : f ? '#f0c090' : '#e4eef8'; });
       const colorUnmeasured= periods.map(p => { const f = periodInFocus(p); return f === null ? '#bdbdbd' : f ? '#8a8a8a' : '#e6e6e6'; });
@@ -1333,7 +1333,7 @@
     // owns its data flow: renderTile renders it without a shared-cache fetch
     // (the `d` argument is unused), and each pick re-fetches only this tile from
     // /metric_comparison (global efficiency metric + the picked secondary).
-    function renderMetricScatter(id, d) {
+    function renderMetricComparison(id, d) {
       const el = document.getElementById(id);
       if (!el) return;
       const metric = selectedMetric();
@@ -1390,7 +1390,7 @@
               return r.json();
             });
           const p = await comparisonCache[m2];
-          if (!document.body.contains(el) || el.dataset.plotType !== 'metricscatter') return;
+          if (!document.body.contains(el) || el.dataset.plotType !== 'metric_comparison') return;
           if (!p || !p.z || !p.z.length) {
             plot.innerHTML = '<div class="tile-loading">No data for this pair.</div>';
             return;
@@ -1416,7 +1416,7 @@
           }), { responsive: true });
         } catch (e) {
           delete comparisonCache[m2];  // don't cache a failed fetch
-          if (document.body.contains(el) && el.dataset.plotType === 'metricscatter')
+          if (document.body.contains(el) && el.dataset.plotType === 'metric_comparison')
             plot.innerHTML = `<div class="tile-error">Error: ${e.message}</div>`;
         } finally {
           if (document.body.contains(el)) sel.disabled = false;
@@ -2224,9 +2224,9 @@
       };
       const densityParams = { ...base, metric: p.metric };
       switch (ep) {
-        case 'data':      return '/dash/metrics/job_counts?' + new URLSearchParams({ ...base, period: p.period });
+        case 'job_counts': return '/dash/metrics/job_counts?' + new URLSearchParams({ ...base, period: p.period });
         case 'heatmap':   return '/dash/metrics/job_times_vs_limit?' + new URLSearchParams({ ...base, ...focusParams });
-        case 'histogram': return '/dash/metrics/rgu_usage?' + new URLSearchParams({ ...base, period: p.period, metric: p.metric });
+        case 'rgu_usage': return '/dash/metrics/rgu_usage?' + new URLSearchParams({ ...base, period: p.period, metric: p.metric });
         case 'density':   return '/dash/metrics/metric_distribution?' + new URLSearchParams({ ...densityParams, ...focusParams });
         case 'jobs':      return jobsURL(p, JOBTABLE_DEFAULTS);
         {% if is_admin %}
@@ -2291,7 +2291,7 @@
       // The metric heatmap owns its data flow (per-tile secondary picker that
       // re-fetches /metric_comparison itself), so it skips the shared endpoint
       // cache: render it straight away and let its own draw() do the fetching.
-      if (plotType === 'metricscatter') {
+      if (plotType === 'metric_comparison') {
         chartDiv.innerHTML = '';
         renderPlot(chartDiv.id, plotType, {});
         return;
