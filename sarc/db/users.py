@@ -21,6 +21,7 @@ from sqlmodel import (
 )
 
 from sarc.models.user import MemberType
+from sarc.traces import trace_decorator
 from sarc.validators import datetime_utc
 
 from .sqlmodel import SQLModel
@@ -166,10 +167,10 @@ class ValidField[V]:
             session.delete(record[0])
         session.flush()
 
-        to_insert = [final_range]
+        to_insert: list[Range[datetime]] = [final_range]
 
         for record in to_conflict:
-            new_insert = []
+            new_insert: list[Range[datetime]] = []
             for r_incoming in to_insert:
                 if not r_incoming.overlaps(record[0].valid):
                     new_insert.append(r_incoming)
@@ -511,6 +512,7 @@ class UserDB(SQLModel, table=True):
         return sess.exec(select(cls).where(cls.email == email)).one_or_none()
 
 
+@trace_decorator()
 def get_user_id_for_cluster_user(
     sess: Session, cluster_id: int, user: str, submit_time: datetime
 ) -> int | None:
@@ -532,6 +534,7 @@ def get_users(sess: Session) -> Sequence[UserDB]:
     return sess.exec(select(UserDB)).all()
 
 
+@trace_decorator()
 def merge_users(sess: Session, db_user1: UserDB, db_user2: UserDB) -> None:
     from .job import SlurmJobDB
     # Merge db_user2 into db_user1

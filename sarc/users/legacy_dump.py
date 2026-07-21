@@ -10,12 +10,10 @@ import json
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
 from zoneinfo import ZoneInfo
 
 from serieux.features.encrypt import Secret
 
-from sarc.db.users import MemberType
 from sarc.scraping.users import (
     Credentials,
     MatchID,
@@ -33,33 +31,6 @@ def _parse_mtl_datetime(date_str: str | None) -> datetime | None:
         return None
 
     return datetime.fromisoformat(date_str).replace(tzinfo=MTL).astimezone(UTC)
-
-
-def _determine_member_type(drac_members: dict[str, Any] | None) -> MemberType | None:  # noqa: PLR0911
-    """Determine member type from DRAC members data."""
-    if not drac_members or not isinstance(drac_members, dict):
-        return None
-
-    position = drac_members.get("position", "").lower()
-
-    if "professeur" in position or "professor" in position:
-        return MemberType.PROFESSOR
-    elif "étudiant à la maîtrise" in position or "master" in position:
-        return MemberType.MASTER_RESEARCH
-    elif (
-        "étudiant au doctorat" in position
-        or "phd" in position
-        or "doctorat" in position
-    ):
-        return MemberType.PHD_STUDENT
-    elif "postdoc" in position or "post-doc" in position:
-        return MemberType.POSTDOC
-    elif "stagiaire" in position or "intern" in position:
-        return MemberType.INTERN
-    elif "staff" in position or "employé" in position:
-        return MemberType.STAFF
-
-    return None  # pragma: no cover
 
 
 @dataclass
@@ -107,11 +78,6 @@ class LegacyDumpScraper(UserScraper[LegacyDumpConfig]):
 
             user_match.known_matches = known_matches
 
-            # Set member type
-            member_type = _determine_member_type(record.get("drac_members"))
-            if member_type:
-                user_match.member_type.insert(member_type, record_start, record_end)
-
             # Add associated accounts
             # Mila account
             if record.get("mila", {}).get("active", False):
@@ -125,24 +91,6 @@ class LegacyDumpScraper(UserScraper[LegacyDumpConfig]):
                 drac_creds = Credentials()
                 drac_creds.insert(drac_data["username"], record_start, record_end)
                 user_match.associated_accounts["drac"] = drac_creds
-
-            # Supervisor information
-            supervisors = []
-            supervisor_email = record.get("mila_ldap", {}).get("supervisor")
-            if supervisor_email:
-                supervisors.append(
-                    MatchID(name="legacy_dump", mid=supervisor_email.lower())
-                )
-
-            # Co-supervisor information
-            co_supervisor_email = record.get("mila_ldap", {}).get("co_supervisor")
-            if co_supervisor_email:
-                supervisors.append(
-                    MatchID(name="legacy_dump", mid=co_supervisor_email.lower())
-                )
-
-            if len(supervisors) != 0:
-                user_match.supervisors.insert(supervisors, record_start, record_end)
 
             yield user_match
 

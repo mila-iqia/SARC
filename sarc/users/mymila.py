@@ -112,6 +112,7 @@ Invalid_MEMBER_NUM = [
     5482,
     5484,
     12494,
+    12849,
 ]
 
 
@@ -186,16 +187,22 @@ class MyMilaScraper(UserScraper[MyMilaConfig]):
                     member_type = MemberType.INTERN
             if member_type is not None:
                 um.member_type.insert(member_type, start=start_date, end=end_date)
-            supervisors = []
-            supervisor = record[Headers.Supervisor_Principal__MEMBER_NUM_]
-            if supervisor is not None and supervisor not in Invalid_MEMBER_NUM:
-                supervisors.append(MatchID(name="mymila", mid=str(supervisor)))
+            if member_type != MemberType.PROFESSOR:
+                # Some professors are listed as supervising themselves which break our data model
+                # so we just skip supervisor processing for profs.
+                supervisors = []
+                supervisor = record[Headers.Supervisor_Principal__MEMBER_NUM_]
+                if supervisor is not None and supervisor not in Invalid_MEMBER_NUM:
+                    supervisors.append(MatchID(name="mymila", mid=str(supervisor)))
 
-            co_supervisor = record[Headers.Co_Supervisor__MEMBER_NUM_]
-            if co_supervisor is not None and co_supervisor not in Invalid_MEMBER_NUM:
-                supervisors.append(MatchID(name="mymila", mid=str(co_supervisor)))
-            if len(supervisors) != 0:
-                um.supervisors.insert(supervisors, start=start_date, end=end_date)
+                co_supervisor = record[Headers.Co_Supervisor__MEMBER_NUM_]
+                if (
+                    co_supervisor is not None
+                    and co_supervisor not in Invalid_MEMBER_NUM
+                ):
+                    supervisors.append(MatchID(name="mymila", mid=str(co_supervisor)))
+                if len(supervisors) != 0:
+                    um.supervisors.insert(supervisors, start=start_date, end=end_date)
             yield um
 
 

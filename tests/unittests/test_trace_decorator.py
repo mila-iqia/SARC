@@ -47,7 +47,7 @@ def test_decorator_fn_with_error_renamed(captrace):
 
 
 def test_decorator_fn_with_error_captured(captrace):
-    trace_decorator(exception_types=[ValueError])(fn_with_error)()
+    trace_decorator(exception_types=(ValueError,))(fn_with_error)()
     spans = captrace.get_finished_spans()
     assert len(spans) == 1
     assert spans[0].name == "fn_with_error"
@@ -56,7 +56,7 @@ def test_decorator_fn_with_error_captured(captrace):
 
 def test_decorator_fn_with_error_renamed_captured(captrace):
     trace_decorator(
-        span_name="function with value error", exception_types=[ValueError]
+        span_name="function with value error", exception_types=(ValueError,)
     )(fn_with_error)()
     spans = captrace.get_finished_spans()
     assert len(spans) == 1

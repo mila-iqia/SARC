@@ -15,6 +15,7 @@ from sarc.config import config_path
 from sarc.db.users import MatchingID, MemberType, UserDB, merge_users
 from sarc.db.users import ValidField as ValidFieldDB
 from sarc.patch import declare_patch
+from sarc.traces import trace_decorator, using_trace
 from sarc.validators import ValidField
 
 deserialize = (Serieux + IncludeFile)().deserialize  # type: ignore[operator]
@@ -108,6 +109,7 @@ def get_user_scraper(name: str) -> UserScraper:
     return val.load()()
 
 
+@trace_decorator()
 def update_user_match(*, value: UserMatch, update: UserMatch) -> None:
     """
     Fills in any missing information in value with the data in update.
@@ -141,6 +143,7 @@ def update_user_match(*, value: UserMatch, update: UserMatch) -> None:
     value.supervisors.merge_with(update.supervisors, truncate=True)
 
 
+@trace_decorator()
 def fetch_users(scrapers: list[tuple[str, Any]]) -> None:
     """Fetch user data and place the results in cache.
 
@@ -181,6 +184,7 @@ def patch_usermatch(um: UserMatch) -> None:
     pass
 
 
+@trace_decorator()
 def parse_ce(ce: CacheEntry) -> Iterable[UserMatch]:
     # UserMatches, referenced by matching id
     user_refs: dict[MatchID, UserMatch] = {}
@@ -245,8 +249,10 @@ def parse_ce(ce: CacheEntry) -> Iterable[UserMatch]:
                 um = user_refs[k]
                 patch_usermatch(um)
                 yield um
+            break
 
 
+@trace_decorator()
 def lookup_match_id(sess: Session, match_id: MatchID) -> Sequence[UserDB]:
     return sess.exec(
         select(UserDB)
@@ -257,19 +263,15 @@ def lookup_match_id(sess: Session, match_id: MatchID) -> Sequence[UserDB]:
     ).all()
 
 
+@trace_decorator()
 def update_user(sess: Session, user: UserMatch) -> None:
+    matches = user.known_matches.union((user.matching_id,))
     clauses = [
-        and_(
-            MatchingID.plugin_name == user.matching_id.name,
-            MatchingID.match_id == user.matching_id.mid,
-        )
-    ]
-    clauses.extend(
         and_(
             MatchingID.plugin_name == match_id.name, MatchingID.match_id == match_id.mid
         )
-        for match_id in user.known_matches
-    )
+        for match_id in matches
+    ]
     results = sess.exec(
         select(MatchingID.user_id).where(or_(*clauses)).distinct()
     ).all()
@@ -288,7 +290,7 @@ def update_user(sess: Session, user: UserMatch) -> None:
             db_user.display_name = user.display_name
         if user.email is not None:
             db_user.email = user.email
-        for mid in user.known_matches:
+        for mid in user.known_matches.union((user.matching_id,)):
             if mid.name not in db_user.matching_ids:
                 db_user.matching_ids[mid.name] = mid.mid
             elif db_user.matching_ids[mid.name] != mid.mid:
@@ -301,7 +303,8 @@ def update_user(sess: Session, user: UserMatch) -> None:
                     mid.mid,
                 )
                 db_user.matching_ids[mid.name] = mid.mid
-        update_user_db(sess, user, db_user)
+        with using_trace("update", "user_db"):
+            update_user_db(sess, user, db_user)
 
 
 @overload
@@ -316,6 +319,7 @@ def valid_merge[T, U](
 ) -> None: ...
 
 
+@trace_decorator()
 def valid_merge[T, U](
     valid: ValidField[T],
     db_valid: ValidFieldDB[U],
@@ -333,6 +337,7 @@ def valid_merge[T, U](
         db_valid.insert(map(tag.value), tag.valid.lower, tag.valid.upper)
 
 
+@trace_decorator()
 def update_user_db(sess: Session, user: UserMatch, db_user: UserDB) -> None:
     for domain, creds in user.associated_accounts.items():
         valid_merge(creds, db_user.associated_accounts[domain])
@@ -358,6 +363,7 @@ def update_user_db(sess: Session, user: UserMatch, db_user: UserDB) -> None:
     )  # ty:ignore[no-matching-overload]
 
 
+@trace_decorator()
 def insert_new(sess: Session, user: UserMatch) -> None:
     if user.display_name is None or user.email is None:
         logger.error("Attempting to add a new user with missing attributes: %s", user)

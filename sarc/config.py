@@ -361,7 +361,8 @@ class UnderusageNotifyConfig:
 @dataclass
 class LoggingConfig:
     log_level: str
-    OTLP_endpoint: str | None = None
+    OTLP_log_endpoint: str | None = None
+    OTLP_trace_endpoint: str | None = None
     service_name: str | None = None
     slack: SlackConfig | None = None
 
