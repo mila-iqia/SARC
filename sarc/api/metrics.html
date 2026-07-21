@@ -805,13 +805,13 @@
     }
 
     // Tiles shown on a fresh load (no ?plots= param). Admins: RGU-by-cluster +
-    // job table on row 1, metric trend + RGU-by-user on row 2. Non-admins: a
-    // fixed 2x2 — submitted jobs + RGU-by-cluster, then RGU req-vs-used + job
-    // table. Copied per call so mutating tileLayout never corrupts this template.
+    // job table on row 1, metric trend + RGU-by-user on row 2. Non-admins:
+    // RGU req-vs-used + RGU-by-cluster on row 1, job table on row 2. Copied per
+    // call so mutating tileLayout never corrupts this template.
     {% if is_admin %}
     const DEFAULT_LAYOUT = [['clusterrgu', 'jobtable'], ['metrictrend', 'userrgu']];
     {% else %}
-    const DEFAULT_LAYOUT = [['clusterrgu', 'jobtable'], ['rgu_usage', 'job_counts']];
+    const DEFAULT_LAYOUT = [['rgu_usage', 'clusterrgu'], ['jobtable']];
     {% endif %}
     function paramToLayout(s) {
       if (!s) return DEFAULT_LAYOUT.map(r => [...r]);
