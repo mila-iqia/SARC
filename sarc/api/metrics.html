@@ -1662,33 +1662,39 @@
         { key: 'cluster',               label: 'Cluster' },
         { key: 'job_id',                label: 'Job ID',    fmt: fmtInt },
         { key: 'submit_time',           label: 'Submitted', fmt: fmtDateTime },
+        {% if is_admin %}
         { key: 'user',                  label: 'User' },
+        {% endif %}
         { key: 'job_state',             label: 'State' },
         { key: 'elapsed',               label: 'Elapsed',   fmt: v => {
             if (v == null) return '—';
             const s = Math.floor(v), h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sec = s%60;
             return h > 0 ? `${h}h${String(m).padStart(2,'0')}m` : `${m}m${String(sec).padStart(2,'0')}s`;
           }},
-        { key: 'nodes',                 label: 'Nodes',     cls: 'col-cmd' },
-        { key: 'requested_gpu',         label: 'Requested GPU', fmt: fmtInt },
-        { key: 'allocated_gpu',         label: 'Allocated GPU', fmt: fmtInt },
-        { key: 'billing',               label: 'Billing',   fmt: fmtInt },
+        { key: 'rgu_hours',             label: unit.label,
+          title: `RGU × elapsed time, shown in ${unit.label}`,
+          fmt: fmtRguTime },
+        { key: 'gpu_sm_occupancy_mean', label: 'SM occ',    fmt: v => v != null ? (v*100).toFixed(1)+'%' : '—' },
+        { key: 'waste',                 label: `${metricPretty} waste (${unit.label})`,
+          title: `RGU·time × (1 − mean ${metricPretty}): estimated unused RGU·time, taking the selected efficiency metric as the "useful" fraction`,
+          fmt: fmtRguTime },
         { key: 'gpu_type',              label: 'GPU type' },
+        {% if is_admin %}
         { key: 'gpu_type_rgu',          label: 'GPU type RGU',
           title: 'Per-GPU DRAC RGU weight of this GPU type',
           fmt: v => v != null ? v.toFixed(2) : '—' },
         { key: 'rgu',                   label: 'RGU',
           title: 'RGU weight of the job\'s allocated GPUs',
           fmt: v => v != null ? v.toFixed(2) : '—' },
-        { key: 'rgu_hours',             label: unit.label,
-          title: `RGU × elapsed time, shown in ${unit.label}`,
-          fmt: fmtRguTime },
-        { key: 'waste',                 label: `${metricPretty} waste (${unit.label})`,
-          title: `RGU·time × (1 − mean ${metricPretty}): estimated unused RGU·time, taking the selected efficiency metric as the "useful" fraction`,
-          fmt: fmtRguTime },
+        {% endif %}
+        { key: 'requested_gpu',         label: 'Requested GPU', fmt: fmtInt },
+        { key: 'allocated_gpu',         label: 'Allocated GPU', fmt: fmtInt },
+        {% if is_admin %}
+        { key: 'billing',               label: 'Billing',   fmt: fmtInt },
         { key: 'gpu_utilization_mean',  label: 'GPU util',  fmt: v => v != null ? (v*100).toFixed(1)+'%' : '—' },
-        { key: 'gpu_sm_occupancy_mean', label: 'SM occ',    fmt: v => v != null ? (v*100).toFixed(1)+'%' : '—' },
         { key: 'gpu_memory_max',        label: 'Mem max',   fmt: v => v != null ? (v*100).toFixed(1)+'%' : '—' },
+        {% endif %}
+        { key: 'nodes',                 label: 'Nodes',     cls: 'col-cmd' },
       ];
       // Columns the server can sort on; the array-valued 'nodes' column can't.
       const SORTABLE = new Set(COLS.map(c => c.key).filter(k => k !== 'nodes'));
