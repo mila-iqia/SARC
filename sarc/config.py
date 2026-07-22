@@ -327,7 +327,7 @@ class UnderusageNotifyConfig:
     decision and the rolling recurrence window. Positive int, ≤
     recurrence_display_cycles."""
 
-    recurrence_display_cycles: int = 5
+    recurrence_display_cycles: int = 6
     """Number of per-cycle columns shown in the recurring-users table. Positive
     int."""
 
@@ -336,6 +336,13 @@ class UnderusageNotifyConfig:
     clusters over the last ``recurrence_active_cycles`` cycles; at or above it
     the user is flagged for personalized action. Default ≈ 20× A100-80GB RGU ×
     7d."""
+
+    restrictive_action_run_cycles: int = 4
+    """Number of consecutive personalized-action (⚑) peak cycles — the peak
+    cycle plus the (n-1) cycles following it — that escalate to a
+    restrictive-action marker ("!!⚑▲") in the recurring-underusers table.
+    Positive int; a value greater than ``recurrence_display_cycles`` simply
+    yields no escalation."""
 
     historical_months: int = 6
     """Number of calendar months included in the digest's historical trend
