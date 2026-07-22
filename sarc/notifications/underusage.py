@@ -16,6 +16,14 @@ def usage_cycle_length_weeks():
     return config.notifications.usage_cycle_length_weeks
 
 
+def restrictive_action_run_cycles():
+    # A personalized-action (⚑) peak sustained over this many consecutive cycles
+    # (the peak cycle plus the (n-1) cycles following it) escalates to a
+    # restrictive action.
+    assert config.notifications, f"{config.notifications=}"
+    return config.notifications.restrictive_action_run_cycles
+
+
 @dataclass
 class UsageClusterBreakdown:
     cluster: str
@@ -98,10 +106,26 @@ class RecurringUserRow:
     flagged_for_personalized_action: bool
     # True (unadjusted) wasted RGU-h for this user in this cluster over the recurrence window.
     true_wasted: float = 0.0
-    # Per-active-anchor PA flags: index 0 = most-recent anchor, True iff the
-    # recurrence_active_cycles-cycle window ending at that anchor has ceiling-adjusted
-    # cross-cluster waste ≥ personalized_action_min_waste_rgu_hours.
+    # Per-anchor PA flags, one per displayed cycle (length
+    # recurrence_display_cycles): index 0 = most-recent anchor, True iff the
+    # recurrence_active_cycles-cycle window ending at that anchor has
+    # ceiling-adjusted cross-cluster waste ≥
+    # personalized_action_min_waste_rgu_hours (and the user is a single-cycle
+    # underuser in that cycle). These drive the per-cell ⚑ peak marker.
     pa_flags: list[bool] = field(default_factory=list)
+
+    @cached_property
+    def restrictive_action_flags(self) -> list[bool]:
+        """Per-cycle escalation flags derived from pa_flags. Index i is True iff
+        this cycle and the ``restrictive_action_run_cycles``-1 cycles following
+        it in time (older cycles, i+1, i+2, …) are all personalized-action (⚑)
+        peaks — a sustained run signalling that a restrictive action could be
+        enforced. The flag lands on the newest cell of each such run. The run
+        length is the ``restrictive_action_run_cycles`` notifications config
+        knob."""
+        n = len(self.pa_flags)
+        run = restrictive_action_run_cycles()
+        return [i + run <= n and all(self.pa_flags[i : i + run]) for i in range(n)]
 
 
 def _rgu_exprs(utilization_ceiling: float = 1.0):
@@ -613,7 +637,7 @@ def get_recurring_underusers(
     get_underusers to determine per-user membership. Cycles whose end date is in the future relative to *end* are
     marked None (no data yet).
 
-    Personalized-action flags: for each of the *recurrence_active_cycles* most-recent
+    Personalized-action flags: for each of the *recurrence_display_cycles* most-recent
     positions, ``pa_flags[i]`` is True iff the user's wasted RGU-h over the
     *recurrence_active_cycles*-cycle window ending at position *i* reaches
     *personalized_action_min_waste_rgu_hours* **and** the user is a single-cycle
@@ -702,7 +726,7 @@ def get_recurring_underusers(
     pa_window_weeks = recurrence_active_cycles * cycle_length_weeks
     user_pa_flags: dict[int, list[bool]] = {}
     with config.db.session() as session:
-        for i in range(recurrence_active_cycles):
+        for i in range(recurrence_display_cycles):
             # PA at position i requires both the waste floor and single-cycle
             # underuse in that position's most-recent cycle. cycle_flagged[i]
             # is None for a cycle ending in the future (guarded before membership).
@@ -723,7 +747,7 @@ def get_recurring_underusers(
             for row in session.exec(pa_stmt).all():
                 uid = row.sarc_user_id
                 if uid not in user_pa_flags:
-                    user_pa_flags[uid] = [False] * recurrence_active_cycles
+                    user_pa_flags[uid] = [False] * recurrence_display_cycles
                 _, _, pa_rgu_wasted_h = _split_waste(row)
                 user_pa_flags[uid][i] = (
                     pa_rgu_wasted_h >= personalized_action_min_waste_rgu_hours
