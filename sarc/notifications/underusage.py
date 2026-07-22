@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from functools import cached_property
 
-from sqlmodel import Session, case, col, func, select
+from sqlmodel import Session, col, func, select
 
 from sarc.api.metrics import _is_real
 from sarc.config import UTC, config
@@ -31,12 +31,10 @@ class UsageJob:
     job_id: int
     cluster: str
     submit_time: datetime
-    # RGU-hours unused for this job. Equals 0 RGU-hours when utilization is
-    # missing (utilization assumed 100%).
+    # RGU-hours unused for this job.
     wasted: float | None
     rgu_hours_used: float | None
-    # 100% when no gpu_sm_occupancy stat was recorded for this job.
-    gpu_sm_occupancy: float | None
+    gpu_sm_occupancy: float
 
 
 @dataclass
@@ -110,33 +108,23 @@ def _rgu_exprs(utilization_ceiling: float = 1.0):
 
     rgu_h_expr = allocated_gpu_cost / 3600 — allocated RGU-hours (== rgu *
                  elapsed / 3600).
-    true_wasted = allocated_gpu_waste / 3600 = rgu_h * (1 - m), or 0 (fully used,
-                  zero waste) when m is NaN/NULL — no gpu_sm_occupancy stat
-                  recorded.
+    true_wasted = allocated_gpu_waste / 3600 = rgu_h * (1 - m). Jobs with no
+                  gpu_sm_occupancy stat recorded (NaN/NULL allocated_gpu_waste)
+                  are excluded upstream by `_with_rgu_window`, so wasted_raw is
+                  always real here.
     true_used_expr = rgu_h - true_wasted.
     credited_used_expr = rgu_h - GREATEST(0, true_wasted - rgu_h * (1 - T)),
                          with T = utilization_ceiling — algebraically identical
                          to LEAST(rgu_h, rgu_h * (1 - T + m)) since rgu_h >= 0.
                          Waste = rgu_h - credited_used = max(0, rgu_h * (T -
                          m)). At T=1.0, credited == true.
-
-    The `w == w` idiom (NaN != NaN in SQL, and NULL == NULL is NULL) routes
-    both SQL NULL and NaN allocated_gpu_waste to the else branch (zero waste,
-    user not flagged).
     """
     rgu_h_expr = col(JobSeriesDB.allocated_gpu_cost) / 3600.0
+    # Subtract the ceiling on the raw RGU-second columns, before the /3600, so
+    # that allocated_gpu_waste - allocated_gpu_cost * (1 - T) cancels exactly
+    # when the job's occupancy equals T (both sides compute the identical
+    # product).
     wasted_raw = col(JobSeriesDB.allocated_gpu_waste)
-    # Guard and subtract the ceiling on the raw RGU-second columns, before the
-    # /3600, so that allocated_gpu_waste - allocated_gpu_cost * (1 - T) cancels
-    # exactly when the job's occupancy equals T (both sides compute the
-    # identical product).
-    wasted_raw = case(
-        (
-            _is_real(wasted_raw),  # excludes NaN/NULL
-            wasted_raw,
-        ),
-        else_=0.0,
-    )
     true_used_expr = rgu_h_expr - wasted_raw / 3600.0
     credited_used_expr = (
         rgu_h_expr
@@ -151,12 +139,18 @@ def _rgu_exprs(utilization_ceiling: float = 1.0):
 
 
 def _with_rgu_window(stmt, start, end, *, clusters=None):
-    """Apply the end-time / GPU-type / RGU window filters."""
+    """Apply the end-time / GPU-type / RGU window filters.
+
+    Also excludes jobs with no recorded gpu_sm_occupancy stat (NULL/NaN
+    allocated_gpu_waste) — such jobs carry no usage signal and are dropped
+    entirely rather than counted as fully utilized.
+    """
     stmt = stmt.where(
         col(JobSeriesDB.end_time) >= start,
         col(JobSeriesDB.end_time) < end,
         col(JobSeriesDB.allocated_gpu_type).is_not(None),
         col(JobSeriesDB.allocated_rgu_drac).is_not(None),
+        _is_real(col(JobSeriesDB.allocated_gpu_waste)),
     )
     if clusters:
         stmt = stmt.where(col(JobSeriesDB.cluster_name).in_(clusters))
@@ -235,13 +229,11 @@ def _select_jobs_usage(
     )
 
 
-def _job_occupancy(cost: float | None, waste: float | None) -> float:
+def _job_occupancy(cost: float, waste: float) -> float:
     """Recover a job's gpu_sm_occupancy mean from the view's cost/waste columns
-    (waste = (1 - m) * cost), clamped to <= 1.0. Missing stat (waste NULL/NaN)
-    or zero cost -> 1.0 (fully used)."""
-    if cost and waste is not None:
-        return min(1.0, 1.0 - waste / cost)
-    return 1.0
+    (waste = (1 - m) * cost), clamped to <= 1.0. Zero cost -> 1.0 (fully
+    used)."""
+    return min(1.0, 1.0 - waste / cost)
 
 
 def _split_waste(row) -> tuple[float, float, float]:

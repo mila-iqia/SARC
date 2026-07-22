@@ -497,6 +497,9 @@ def test_missing_util_not_flagged(missing_util_db):
 
 
 def test_missing_util_zero_waste(missing_util_db):
+    # bramin's only job has no gpu_sm_occupancy stat, so it's excluded
+    # entirely upstream — he produces no aggregate row at all, even at
+    # zero-value thresholds.
     results = get_underusers(
         _WINDOW_START,
         _WINDOW_END,
@@ -504,16 +507,13 @@ def test_missing_util_zero_waste(missing_util_db):
         min_waste_rgu_hours=0.0,
         top_jobs_per_user=_TOP_JOBS_PER_USER,
     )
-    row = next(r for r in results if r.email == "bramin@mila.quebec")
-    assert row.wasted == pytest.approx(0.0)
-    assert row.true_wasted == pytest.approx(0.0)
+    assert "bramin@mila.quebec" not in {r.email for r in results}
 
 
 def test_missing_util_non_negative_waste_at_sub_threshold(missing_util_db):
-    # Regression guard: at threshold < 1, the NaN/NULL else-branch must keep
-    # credited_used == rgu_h (zero waste) and not apply the subtractive
-    # adjustment, which would yield rgu_h * (1 - T + NaN) = NaN → undefined
-    # waste.
+    # Regression guard: at a sub-1.0 ceiling, bramin's no-stat job must still
+    # be excluded upstream rather than entering the subtractive ceiling
+    # formula (which would otherwise propagate NaN into an undefined waste).
     results = get_underusers(
         _WINDOW_START,
         _WINDOW_END,
@@ -522,17 +522,17 @@ def test_missing_util_non_negative_waste_at_sub_threshold(missing_util_db):
         top_jobs_per_user=_TOP_JOBS_PER_USER,
         utilization_ceiling=0.8,
     )
-    row = next(r for r in results if r.email == "bramin@mila.quebec")
-    assert row.wasted >= 0.0
-    assert row.wasted == pytest.approx(0.0)
+    assert "bramin@mila.quebec" not in {r.email for r in results}
 
 
 def test_missing_util_usage_rgu_hours_used_equals_requested(missing_util_db):
+    # bramin's only job is excluded from the SQL aggregate entirely (no
+    # gpu_sm_occupancy stat), so he never produces a user_data entry and
+    # never reaches get_all_users_usage's usage-floor check at all.
     results = get_all_users_usage(
         _WINDOW_START, _WINDOW_END, top_jobs_per_user=_TOP_JOBS_PER_USER
     )
-    row = next(r for r in results if r.email == "bramin@mila.quebec")
-    assert row.rgu_hours_used == pytest.approx(row.rgu_hours)
+    assert "bramin@mila.quebec" not in {r.email for r in results}
 
 
 # ── Zero-cost jobs (gpu_cost == 0) ────────────────────────────────────────────
@@ -544,15 +544,17 @@ def zero_cost_db(read_write_db):
     users = {u.email.split("@")[0]: u for u in session.exec(select(UserDB)).all()}
     clusters = {c.name: c for c in session.exec(select(SlurmClusterDB)).all()}
     # Zero-elapsed job: gpu_cost = elapsed_time * gpu_count * rgu = 0, but the row
-    # still passes the window filter (allocated_gpu_type and rgu are set). This is
-    # the case the dropped exclude_zero_usage HAVING clause used to filter out.
+    # still passes the window filter (allocated_gpu_type and rgu are set, and a
+    # real gpu_sm_occupancy stat of 0% is recorded so it isn't excluded as a
+    # missing-stat job). This is the case the dropped exclude_zero_usage HAVING
+    # clause used to filter out.
     _add_gpu_job(
         session,
         user_id=users["bramin"].id,
         cluster_id=clusters["mila"].id,
         elapsed_h=0,
         gpu_type=_MILA_GPU_TYPE,
-        utilization=None,
+        utilization=0.0,
         job_id=95001,
     )
     session.commit()

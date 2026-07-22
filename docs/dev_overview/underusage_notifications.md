@@ -67,7 +67,7 @@ identity/display fields:
 | Column | What it is |
 |---|---|
 | `allocated_gpu_cost` | Allocated GPU cost in RGU-seconds (`elapsed × gpus × drac_rgu`); `/3600` gives allocated RGU-hours. |
-| `allocated_gpu_waste` | Unused portion of that cost in RGU-seconds (`(1 − gpu_sm_occupancy) × allocated_gpu_cost`); the basis for "wasted". |
+| `allocated_gpu_waste` | Unused portion of that cost in RGU-seconds (`(1 − gpu_sm_occupancy) × allocated_gpu_cost`); the basis for "wasted". NULL/NaN when no `gpu_sm_occupancy` stat was recorded for the job — such jobs are excluded entirely (not counted as fully utilized). |
 | `end_time` | Job end time; the analysis window filters on `start ≤ end_time < end`. |
 | `allocated_gpu_type` | Allocated GPU type; rows with no GPU type are excluded (non-GPU jobs). |
 | `allocated_rgu_drac` | Per-job allocated RGU count; must be non-null for a job to count (guards missing RGU weights). |
