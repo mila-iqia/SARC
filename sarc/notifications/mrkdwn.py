@@ -32,10 +32,14 @@ class SlackMrkdwnRenderer(MarkdownRenderer):
     def link(self, token, state):
         text = self.render_children(token, state)
         if token.get("label"):
-            # Reference-style links ([text][label]) don't appear in the
-            # authored templates; fall back to plain text rather than
-            # resolving the reference table.
-            return text
+            # Reference-style links ([text][label]) are unsupported by design.
+            # Raise rather than silently dropping the URL, so a template edit
+            # that introduces this syntax is caught immediately instead of
+            # shipping a Slack message with a quietly broken link.
+            raise NotImplementedError(
+                "Reference-style links ([text][label]) are not supported by "
+                "SlackMrkdwnRenderer; use inline links ([text](url)) in templates."
+            )
         url = token["attrs"]["url"]
         if url in (text, f"mailto:{text}"):
             return f"<{url}>"
