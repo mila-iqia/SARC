@@ -1308,8 +1308,11 @@ def metrics_jobs(
     jobs = []
     for row in sess.exec(query):
         mm = _nan_to_none(row.metric_mean)
-        rh = float(row.rgu_hours)
-        waste = round(rh * (1 - mm), 2) if mm is not None else None
+        # rgu_hours (allocated_gpu_cost / 3600) may be NULL
+        # even though allocated_rgu_drac is not
+        # — the two are computed differently in the view.
+        rh = _nan_to_none(row.rgu_hours)
+        waste = round(rh * (1 - mm), 2) if (rh is not None and mm is not None) else None
         jobs.append(
             {
                 "cluster": row.cluster_name or "",
@@ -1327,7 +1330,7 @@ def metrics_jobs(
                 "gpu_type": row.harmonized_gpu_type or row.allocated_gpu_type or "",
                 "gpu_type_rgu": _nan_to_none(row.gpu_type_rgu_drac),
                 "rgu": round(float(row.rgu), 2),
-                "rgu_hours": round(rh, 2),
+                "rgu_hours": round(rh, 2) if rh is not None else None,
                 "waste": waste,
                 "gpu_utilization_mean": _nan_to_none(row.gpu_utilization_mean),
                 "gpu_sm_occupancy_mean": _nan_to_none(row.gpu_sm_occupancy_mean),
