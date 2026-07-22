@@ -1,7 +1,9 @@
 from datetime import UTC, datetime
 
 import gifnoc
+import pytest
 
+from sarc.config import ConfigurationError
 from sarc.notifications.messages import (
     _first_name,
     _fmt_h,
@@ -175,6 +177,11 @@ def test_usage_report_deterministic():
     assert a == b
 
 
+def test_usage_report_raises_without_notifications_config():
+    with pytest.raises(ConfigurationError, match="No notifications configuration"):
+        build_usage_report(_USAGE_ROW_ALICE, window_weeks=2)
+
+
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
 _JOB_NARVAL_1 = UsageJob(
@@ -294,6 +301,11 @@ def test_dm_deterministic():
         a = build_user_dm(_ROW_ALICE, window_weeks=2)
         b = build_user_dm(_ROW_ALICE, window_weeks=2)
     assert a == b
+
+
+def test_dm_raises_without_notifications_config():
+    with pytest.raises(ConfigurationError, match="No notifications configuration"):
+        build_user_dm(_ROW_ALICE, window_weeks=2)
 
 
 # ── build_admin_digest ────────────────────────────────────────────────────────

@@ -1,3 +1,5 @@
+import pytest
+
 from sarc.notifications.mrkdwn import to_slack_mrkdwn
 
 
@@ -40,3 +42,19 @@ def test_placeholder_angle_bracket_passes_through_unchanged():
 
 def test_heading_becomes_bold_not_hash():
     assert to_slack_mrkdwn("# Title") == "*Title*"
+
+
+def test_reference_style_link_raises():
+    with pytest.raises(NotImplementedError, match="Reference-style links"):
+        to_slack_mrkdwn("[docs][1]\n\n[1]: https://example.com\n")
+
+
+def test_image_converted_to_angle_pipe_syntax():
+    assert (
+        to_slack_mrkdwn("![alt text](https://example.com/img.png)")
+        == "<https://example.com/img.png|alt text>"
+    )
+
+
+def test_thematic_break_becomes_dashes():
+    assert to_slack_mrkdwn("---\n") == "---"
