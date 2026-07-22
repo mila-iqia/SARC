@@ -236,8 +236,11 @@ def test_all_users_included_when_threshold_is_one(recurring_db):
     # Test fourthuser only flagged for the last 2 cycles
     row = next(r for r in result["mila"] if r.email == "fourthuser@mila.quebec")
     assert row.cycles == [False] * 3 + [True] * 2
-    # Test fourthuser only flagged for personalized action on 3rd cycles
-    assert row.pa_flags == [False] * 2 + [True] * 1
+    # fourthuser's aggregate waste crosses the floor only at position 2 (its window
+    # reaches the high-waste W-6/W-8 cycles), but they are NOT a single-cycle
+    # underuser in that position's most-recent cycle (cycles[2] is False), so PA is
+    # suppressed at every position.
+    assert row.pa_flags == [False] * 3
     assert row.flagged_for_personalized_action is False
 
 
@@ -697,8 +700,9 @@ def test_off_cycle_week_end_w0_is_none(recurring_db):
 
 
 def test_off_cycle_week_end_personalized_action_floor_controls(recurring_db):
-    # With w0=None the PA flag is still based on waste in the active window, not cycles.
-    # A high floor means nobody qualifies even though users have past-cycle waste.
+    # With w0=None (off-cycle-week end) position-0 PA is suppressed regardless of waste,
+    # because cycle_flagged[0] is None. Here a high floor independently keeps everyone
+    # below the threshold, so all rows are unflagged.
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         result = get_recurring_underusers(
             _OFF_CYCLE_MON,
@@ -893,7 +897,11 @@ def test_true_wasted_field_populated(recurring_db):
 
 
 def test_personalized_action_floor(recurring_db):
-    # With floor=0.0, any user with positive scaled waste in the active window is flagged.
+    # With floor=0.0 the waste floor is met by every user, so PA reduces to the
+    # current-cycle-underuse requirement: a user is flagged iff they are present in
+    # the most-recent cycle (cycle_flagged[0]). fourthuser clears the floor over the
+    # active window but is NOT a current-cycle underuser (cycles == [False]*3 +
+    # [True]*2), so PA is suppressed for them while the other three are flagged.
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         result = get_recurring_underusers(
             _TEST_END,
@@ -902,9 +910,17 @@ def test_personalized_action_floor(recurring_db):
             cluster_share_threshold=1.0,
             personalized_action_min_waste_rgu_hours=0.0,
         )
-        for rows in result.values():
-            for row in rows:
-                assert row.flagged_for_personalized_action is True
+    flagged = {
+        r.email: r.flagged_for_personalized_action
+        for rows in result.values()
+        for r in rows
+    }
+    assert flagged["firstuser@mila.quebec"] is True
+    assert flagged["seconduser@mila.quebec"] is True
+    assert flagged["thirduser@mila.quebec"] is True
+    # Discriminating case for the per-cycle gating: above the floor but absent from
+    # the most-recent cycle → not flagged.
+    assert flagged["fourthuser@mila.quebec"] is False
 
     # With a very high floor, no user crosses the threshold → all False.
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
