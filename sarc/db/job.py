@@ -71,7 +71,14 @@ class JobStatisticsFetchDateDB(SQLModel, table=True):
 class SlurmJobDB(SQLModel, table=True):
     __tablename__ = "slurm_jobs"
     __table_args__ = (
-        UniqueConstraint("cluster_id", "submit_time", "job_id"),
+        Index(
+            "ix_job_unique",
+            "cluster_id",
+            "submit_time",
+            "job_id",
+            unique=True,
+            postgresql_include=["id"],
+        ),
         # Partial covering index for the /dash GPU queries (count, page, rgu_by_*):
         # they read every column they need from the index, without opening the table
         # -- but only while autovacuum stays current, else Postgres opens the rows

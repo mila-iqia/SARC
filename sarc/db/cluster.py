@@ -62,6 +62,9 @@ class SlurmClusterDB(SQLModel, table=True):
     """Hold data for a Slurm cluster."""
 
     __tablename__ = "clusters"
+    __table_args__ = (
+        Index("ix_cluster_name", "name", unique=True, postgresql_include=["id"]),
+    )
 
     # Database ID
     id: int | None = Field(default=None, primary_key=True)
