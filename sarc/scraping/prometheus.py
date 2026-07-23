@@ -93,15 +93,18 @@ def parse_prometheus(since: datetime | None, update_parsed_date: bool) -> None:
             if since is None:
                 since = cache.oldest_year()
 
+        cluster_ids: dict[str, int | None] = {}
         for ce in cache.read_from(from_time=since):
-            error = parse_prometheus_ce(sess, ce)
+            error = parse_prometheus_ce(sess, ce, cluster_ids)
             if update_parsed_date and not error:
                 logger.info(f"Set parsed_dates for jobs to {ce.get_entry_datetime()}.")
                 set_parsed_date(sess, "prometheus", ce.get_entry_datetime())
             sess.commit()
 
 
-def parse_prometheus_ce(sess: Session, ce: CacheEntry) -> bool:
+def parse_prometheus_ce(
+    sess: Session, ce: CacheEntry, cluster_ids: dict[str, int | None]
+) -> bool:
     error = False
     nb_jobs = 0
 
@@ -124,7 +127,9 @@ def parse_prometheus_ce(sess: Session, ce: CacheEntry) -> bool:
                 f"Empty data found for job {job_id} on cluster {cluster_name} (submit_time {submit_time}), skipping cache entry"
             )
             continue
-        cluster_id = SlurmClusterDB.id_by_name(sess, cluster_name)
+        if cluster_name not in cluster_ids:
+            cluster_ids[cluster_name] = SlurmClusterDB.id_by_name(sess, cluster_name)
+        cluster_id = cluster_ids[cluster_name]
         if cluster_id is None:
             logger.error("Unknown cluster name %s in entry key %s", cluster_name, key)
             error = True
