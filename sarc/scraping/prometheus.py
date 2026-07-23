@@ -2,6 +2,7 @@ import json
 import logging
 from datetime import UTC, datetime
 
+from sqlalchemy.orm import joinedload
 from sqlmodel import Session, col, select
 
 from sarc.cache import Cache, CacheEntry
@@ -134,7 +135,19 @@ def parse_prometheus_ce(
             logger.error("Unknown cluster name %s in entry key %s", cluster_name, key)
             error = True
             continue
-        entry = SlurmJobDB.by_ref(sess, cluster_id, job_id, submit_time)
+        entry = (
+            sess.exec(
+                select(SlurmJobDB)
+                .where(
+                    SlurmJobDB.cluster_id == cluster_id,
+                    SlurmJobDB.job_id == job_id,
+                    SlurmJobDB.submit_time == submit_time,
+                )
+                .options(joinedload(SlurmJobDB.statistics))
+            )
+            .unique()
+            .one_or_none()
+        )
         if entry is None:
             logger.error("Could not find job for %s", key)
             error = True
