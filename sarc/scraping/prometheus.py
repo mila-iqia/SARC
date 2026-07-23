@@ -1,5 +1,6 @@
 import json
 import logging
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from itertools import batched
 
@@ -168,10 +169,15 @@ def _parse_prometheus_batch(
         (cluster_id, job_id, submit_time)
         for _, _, cluster_id, job_id, submit_time, _ in parsed
     ]
-    entries_by_ref = {
-        (job.cluster_id, job.job_id, job.submit_time): job
-        for job in sess.exec(
-            select(SlurmJobDB)
+    # fetch fetch-date records in the same round trip via an outer join instead
+    # of a separate query after flush.
+    rows: Sequence[tuple[SlurmJobDB, JobStatisticsFetchDateDB]] = (
+        sess.exec(
+            select(SlurmJobDB, JobStatisticsFetchDateDB)
+            .outerjoin(
+                JobStatisticsFetchDateDB,
+                col(JobStatisticsFetchDateDB.job_id) == col(SlurmJobDB.id),
+            )
             .where(
                 tuple_(
                     col(SlurmJobDB.cluster_id),
@@ -179,11 +185,18 @@ def _parse_prometheus_batch(
                     col(SlurmJobDB.submit_time),
                 ).in_(refs)
             )
-            .options(joinedload(SlurmJobDB.statistics))
+            .options(joinedload(SlurmJobDB.statistics))  # ty:ignore[invalid-argument-type]
         )
-        .unique()
+        .unique()  # ty:ignore[unresolved-attribute]
         .all()
-    }
+    )
+
+    entries_by_ref = {}
+    fetch_records_by_job_id = {}
+    for job, fetch_record in rows:
+        entries_by_ref[(job.cluster_id, job.job_id, job.submit_time)] = job
+        if fetch_record is not None:
+            fetch_records_by_job_id[job.id] = fetch_record
 
     updated_entries = []
     for key, cluster, cluster_id, job_id, submit_time, data in parsed:
@@ -214,16 +227,6 @@ def _parse_prometheus_batch(
 
     if updated_entries:
         sess.flush()
-        fetch_records_by_job_id = {
-            fetch_record.job_id: fetch_record
-            for fetch_record in sess.exec(
-                select(JobStatisticsFetchDateDB).where(
-                    col(JobStatisticsFetchDateDB.job_id).in_(
-                        [entry.id for entry in updated_entries]
-                    )
-                )
-            )
-        }
         for entry in updated_entries:
             fetch_record = fetch_records_by_job_id.get(entry.id)
             if fetch_record is not None:
