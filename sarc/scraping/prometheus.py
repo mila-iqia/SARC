@@ -145,7 +145,13 @@ def parse_prometheus_ce(sess: Session, ce: CacheEntry) -> bool:
                 )
         statistics = series.compute_job_statistics(entry, data)
         if len(statistics) != 0:
-            entry.statistics = statistics
+            for k, v in statistics.items():
+                if (existing := entry.statistics.get(k)) is not None:
+                    v.id = existing.id
+                    v.job_id = existing.job_id
+                    existing.sqlmodel_update(v)
+                else:
+                    entry.statistics[k] = v
             sess.flush()
             any_stat = next(iter(entry.statistics.values()))
             fetch_record = sess.exec(
