@@ -324,7 +324,7 @@ def update_allocated_gpu_type_from_nodes(
     cluster: ClusterConfig, entry: SlurmJobDB
 ) -> None:
     """
-    Try to infer job GPU type from entry nodes
+    Try to infer job GPU type from entry nodes, only for GPU jobs.
 
     Parameters
     ----------
@@ -333,6 +333,9 @@ def update_allocated_gpu_type_from_nodes(
     entry: SlurmJob
         Slurm job for which to infer the gpu type.
     """
+    if entry.allocated_gres_gpu is None:
+        return
+
     gpu_type = None
 
     node_gpu_mapping = entry.cluster.get_node_to_gpu(entry.start_time)
@@ -341,7 +344,7 @@ def update_allocated_gpu_type_from_nodes(
         gpu_types = {
             gpu for nodename in entry.nodes for gpu in node_to_gpu.get(nodename, ())
         }
-        # We infer gpu_type only if we found 1 GPU for this job.
+        # We infer gpu_type only if we found 1 GPU for this job across all job's nodes.
         if len(gpu_types) == 1:
             gpu_type = gpu_types.pop()
 

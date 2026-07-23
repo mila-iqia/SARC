@@ -15,7 +15,7 @@ from sqlmodel import select
 
 from sarc.cache import Cache
 from sarc.config import UTC, config
-from sarc.db.cluster import SlurmClusterDB
+from sarc.db.cluster import NodeGPUMappingDB, SlurmClusterDB
 from sarc.db.job import SlurmJobDB
 from sarc.models.job import SlurmState
 from sarc.scraping.jobs_utils import _convert_json_job, fetch_raw, parse_raw
@@ -686,6 +686,89 @@ def test_multiple_clusters_and_dates(
             ]
         )
     )
+
+
+@pytest.mark.usefixtures("jobless_read_write_db", "enabled_cache", "no_pkey")
+def test_parse_jobs_gpu_type_inference_requires_allocated_gpu(
+    jobless_read_write_db, create_sacct_json, get_jobs, test_config, remote, cli_main
+):
+    """`sarc parse jobs` must not infer a GPU type for a CPU-only job.
+
+    A job with no allocated_gres_gpu running on a GPU node keeps
+    allocated_gpu_type/harmonized_gpu_type None, while a GPU job on the same
+    node still gets its type inferred from the node mapping.
+    """
+    # Seed a node->GPU mapping for raisin: node "cn-g001" carries a single GPU.
+    raisin = jobless_read_write_db.exec(
+        select(SlurmClusterDB).where(SlurmClusterDB.name == "raisin")
+    ).one()
+    jobless_read_write_db.add(
+        NodeGPUMappingDB(
+            cluster_id=raisin.id,
+            since=datetime(2020, 1, 1, tzinfo=UTC),
+            node_to_gpu={"cn-g001": ["h100"]},
+        )
+    )
+    jobless_read_write_db.commit()
+
+    submit_dt = datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC)
+    remote.expect(
+        host="raisin",
+        cmd=(
+            "export TZ=UTC && /opt/slurm/bin/sacct -X "
+            f"-S {_dtfmt(2023, 2, 15)} -E {_dtfmt(2023, 2, 16)} "
+            "--allusers --json --duplicates"
+        ),
+        out=create_sacct_json(
+            [
+                # CPU-only job on the GPU node: must NOT get a GPU type.
+                {"job_id": 0, "nodes": "cn-g001", "time": _times_for(submit_dt)},
+                # GPU job on the same node: type still inferred from the node.
+                {
+                    "job_id": 1,
+                    "nodes": "cn-g001",
+                    "time": _times_for(submit_dt),
+                    "tres": {
+                        "allocated": [
+                            {"count": 2, "id": 1, "name": None, "type": "cpu"},
+                            {"count": 1, "id": 1001, "name": "gpu", "type": "gres"},
+                        ]
+                    },
+                },
+            ]
+        ).encode("utf-8"),
+    )
+
+    # Import here so that config is setup correctly when CLI is created.
+    import sarc.cli  # noqa: F401
+
+    assert (
+        cli_main(
+            [
+                "fetch",
+                "jobs",
+                "--cluster_names",
+                "raisin",
+                "--intervals",
+                f"{_dtfmt(2023, 2, 15)}-{_dtfmt(2023, 2, 16)}",
+            ]
+        )
+        == 0
+    )
+    assert cli_main(["-v", "parse", "jobs", "--since", "2023-02-14T00:00"]) == 0
+
+    jobs = {j.job_id: j for j in get_jobs()}
+    assert len(jobs) == 2
+
+    # CPU-only job: no GPU type inferred from the node.
+    assert jobs[0].allocated_gres_gpu is None
+    assert jobs[0].allocated_gpu_type is None
+    assert jobs[0].harmonized_gpu_type is None
+
+    # GPU job on the same node: inference still works.
+    assert jobs[1].allocated_gres_gpu == 1
+    assert jobs[1].allocated_gpu_type == "h100"
+    assert jobs[1].harmonized_gpu_type == "H100-SXM5-80GB"
 
 
 @pytest.mark.usefixtures("tzlocal_is_mtl")

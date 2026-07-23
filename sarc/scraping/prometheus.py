@@ -134,12 +134,15 @@ def parse_prometheus_ce(sess: Session, ce: CacheEntry) -> bool:
             logger.error("Could not find job for %s", key)
             error = True
             continue
-        gpu_type = data[0]["metric"].get("gpu_type", None)
-        if gpu_type is not None:
-            entry.allocated_gpu_type = gpu_type
-            entry.harmonized_gpu_type = cluster.harmonize_gpu_from_nodes(
-                entry.nodes, gpu_type
-            )
+        if entry.allocated_gres_gpu is not None:
+            # If it's a GPU job, get job GPU type from Prometheus.
+            # NB: Will Prometheus even provide a GPU type for a CPU-only job?
+            gpu_type = data[0]["metric"].get("gpu_type", None)
+            if gpu_type is not None:
+                entry.allocated_gpu_type = gpu_type
+                entry.harmonized_gpu_type = cluster.harmonize_gpu_from_nodes(
+                    entry.nodes, gpu_type
+                )
         statistics = series.compute_job_statistics(entry, data)
         if len(statistics) != 0:
             entry.statistics = statistics
