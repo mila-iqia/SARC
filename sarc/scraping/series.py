@@ -2,7 +2,6 @@ import logging
 from datetime import datetime
 from typing import Callable, Sequence, TypedDict, cast
 
-import pandas
 from pandas import DataFrame, Series
 from prometheus_api_client.metric_range_df import MetricRangeDataFrame
 
@@ -121,7 +120,6 @@ STATS = TypedDict(
         "median": float,
         "q75": float,
         "q05": float,
-        "unused": int,
     },
 )
 
@@ -131,7 +129,6 @@ def compute_job_statistics_from_dataframe(
     df: DataFrame | None,
     statistics: dict[str, Callable[[Series], float]],
     normalization: Callable[[float], float] = float,
-    unused_threshold: float | None = 0.01,
     is_time_counter: bool = False,
 ) -> STATS | None:
     if df is None:
@@ -160,20 +157,7 @@ def compute_job_statistics_from_dataframe(
         # Recompute groupby after modifying df
         gdf = df.groupby(groupby)
 
-    if unused_threshold is not None:
-        means = gdf["value"].mean()
-        n_unused = (means < unused_threshold).astype(bool).sum()
-
-        df_with_means = pandas.merge(
-            df, means.reset_index().rename(columns={"value": "mean"}), on=groupby
-        )
-
-        df = df_with_means[df_with_means["mean"] >= unused_threshold]
-    else:
-        n_unused = 0
-
-    rval = {name: normalization(fn(df["value"])) for name, fn in statistics.items()}
-    return {**rval, "unused": n_unused}  # ty:ignore[missing-typed-dict-key, invalid-return-type]
+    return {name: normalization(fn(df["value"])) for name, fn in statistics.items()}  # ty:ignore[invalid-return-type]
 
 
 JOB_STATISTICS_METRIC_NAMES = (
@@ -221,35 +205,30 @@ def compute_job_statistics(
     gpu_utilization = compute_job_statistics_from_dataframe(
         metrics["slurm_job_utilization_gpu"],
         statistics=statistics_dict,
-        unused_threshold=0.01,
         normalization=lambda x: float(x / 100),
     )
 
     gpu_utilization_fp16 = compute_job_statistics_from_dataframe(
         metrics["slurm_job_fp16_gpu"],
         statistics=statistics_dict,
-        unused_threshold=0.01,
         normalization=lambda x: float(x / 100),
     )
 
     gpu_utilization_fp32 = compute_job_statistics_from_dataframe(
         metrics["slurm_job_fp32_gpu"],
         statistics=statistics_dict,
-        unused_threshold=0.01,
         normalization=lambda x: float(x / 100),
     )
 
     gpu_utilization_fp64 = compute_job_statistics_from_dataframe(
         metrics["slurm_job_fp64_gpu"],
         statistics=statistics_dict,
-        unused_threshold=0.01,
         normalization=lambda x: float(x / 100),
     )
 
     gpu_sm_occupancy = compute_job_statistics_from_dataframe(
         metrics["slurm_job_sm_occupancy_gpu"],
         statistics=statistics_dict,
-        unused_threshold=0.01,
         normalization=lambda x: float(x / 100),
     )
 
@@ -257,19 +236,15 @@ def compute_job_statistics(
         metrics["slurm_job_utilization_gpu_memory"],
         statistics=statistics_dict,
         normalization=lambda x: float(x / 100),
-        unused_threshold=False,
     )
 
     gpu_power = compute_job_statistics_from_dataframe(
-        metrics["slurm_job_power_gpu"],
-        statistics=statistics_dict,
-        unused_threshold=False,
+        metrics["slurm_job_power_gpu"], statistics=statistics_dict
     )
 
     cpu_utilization = compute_job_statistics_from_dataframe(
         metrics["slurm_job_core_usage"],
         statistics=statistics_dict,
-        unused_threshold=0.01,
         is_time_counter=True,
     )
 
@@ -281,7 +256,6 @@ def compute_job_statistics(
             metrics["slurm_job_memory_usage"],
             statistics=statistics_dict,
             normalization=lambda x: float(x / (2**20) / cast(int, job.allocated_mem)),
-            unused_threshold=False,
         )
     elif metrics["slurm_job_memory_usage"] is not None:
         logger.warning(

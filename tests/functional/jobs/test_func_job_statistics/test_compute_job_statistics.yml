@@ -9,7 +9,6 @@ cpu_utilization:
   q25: 0.999976851851823
   q75: 0.9999768518518555
   std: 5.469073189940807e-14
-  unused: 0.0
 gpu_memory:
   id: null
   job_id: null
@@ -21,7 +20,6 @@ gpu_memory:
   q25: 0.2498263888888889
   q75: 0.7494791666666667
   std: 0.28877535162077755
-  unused: 0.0
 gpu_power:
   id: null
   job_id: null
@@ -33,7 +31,6 @@ gpu_power:
   q25: 74982.63888888889
   q75: 124947.91666666667
   std: 28877.53516207775
-  unused: 0.0
 gpu_sm_occupancy:
   id: null
   job_id: null
@@ -45,7 +42,6 @@ gpu_sm_occupancy:
   q25: 0.2498263888888889
   q75: 0.7494791666666667
   std: 0.28877535162077755
-  unused: 0.0
 gpu_utilization:
   id: null
   job_id: null
@@ -57,7 +53,6 @@ gpu_utilization:
   q25: 0.2498263888888889
   q75: 0.7494791666666667
   std: 0.28877535162077755
-  unused: 0.0
 gpu_utilization_fp16:
   id: null
   job_id: null
@@ -69,7 +64,6 @@ gpu_utilization_fp16:
   q25: 0.2498263888888889
   q75: 0.7494791666666667
   std: 0.28877535162077755
-  unused: 0.0
 gpu_utilization_fp32:
   id: null
   job_id: null
@@ -81,7 +75,6 @@ gpu_utilization_fp32:
   q25: 0.2498263888888889
   q75: 0.7494791666666667
   std: 0.28877535162077755
-  unused: 0.0
 gpu_utilization_fp64:
   id: null
   job_id: null
@@ -93,7 +86,6 @@ gpu_utilization_fp64:
   q25: 0.2498263888888889
   q75: 0.7494791666666667
   std: 0.28877535162077755
-  unused: 0.0
 system_memory:
   id: null
   job_id: null
@@ -105,4 +97,3 @@ system_memory:
   q25: 0.23825301064385307
   q75: 0.7147590319315592
   std: 0.2753976360519195
-  unused: 0.0

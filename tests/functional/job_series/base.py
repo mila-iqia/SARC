@@ -491,7 +491,6 @@ class BaseTestLoadJobSeries:
                     q25=0,
                     q75=0,
                     max=0,
-                    unused=0,
                 )
             )
             read_write_db.merge(job)

@@ -189,7 +189,6 @@ def scoped_db(read_write_db):
                     median=mean,
                     q75=mean,
                     max=mx,
-                    unused=0.0,
                 )
             )
     sess.commit()
@@ -385,7 +384,6 @@ def dash_db(read_write_db):
                     median=mean,
                     q75=mean,
                     max=mx,
-                    unused=0.0,
                 )
             )
     sess.commit()
@@ -552,7 +550,6 @@ def dash_db_nan(read_write_db):
                     median=mean,
                     q75=mean,
                     max=mx,
-                    unused=0.0,
                 )
             )
     sess.commit()

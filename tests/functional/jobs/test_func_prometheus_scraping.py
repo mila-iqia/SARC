@@ -27,7 +27,6 @@ def mock_compute_job_statistics(monkeypatch):
         median=1.0,
         q75=1.0,
         max=1.0,
-        unused=0.0,
     )
 
     def mock_func(job, prom_stats):
