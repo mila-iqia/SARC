@@ -1,8 +1,11 @@
 import json
 import logging
+from collections.abc import Sequence
 from datetime import UTC, datetime
+from itertools import batched
 
-from sqlmodel import Session, col, select
+from sqlalchemy.orm import joinedload
+from sqlmodel import Session, col, select, tuple_
 
 from sarc.cache import Cache, CacheEntry
 from sarc.config import ClusterConfig, config
@@ -93,22 +96,48 @@ def parse_prometheus(since: datetime | None, update_parsed_date: bool) -> None:
             if since is None:
                 since = cache.oldest_year()
 
+        cluster_ids: dict[str, int | None] = {}
         for ce in cache.read_from(from_time=since):
-            error = parse_prometheus_ce(sess, ce)
+            error = parse_prometheus_ce(sess, ce, cluster_ids)
             if update_parsed_date and not error:
                 logger.info(f"Set parsed_dates for jobs to {ce.get_entry_datetime()}.")
                 set_parsed_date(sess, "prometheus", ce.get_entry_datetime())
             sess.commit()
 
 
-def parse_prometheus_ce(sess: Session, ce: CacheEntry) -> bool:
+PARSE_BATCH_SIZE = 100
+
+
+def parse_prometheus_ce(
+    sess: Session, ce: CacheEntry, cluster_ids: dict[str, int | None]
+) -> bool:
     error = False
     nb_jobs = 0
 
     logger.info(
         f"Parsing prometheus data from cache entry: {ce.get_entry_datetime().isoformat(timespec='milliseconds')}"
     )
-    for key, value in ce.items():
+    for batch in batched(ce.items(), PARSE_BATCH_SIZE):
+        batch_error, batch_nb_jobs = _parse_prometheus_batch(sess, batch, cluster_ids)
+        error = error or batch_error
+        nb_jobs += batch_nb_jobs
+
+    logger.info(f"Saved Prometheus metrics for {nb_jobs} jobs.")
+    return error
+
+
+def _parse_prometheus_batch(
+    sess: Session,
+    batch: tuple[tuple[str, bytes], ...],
+    cluster_ids: dict[str, int | None],
+) -> tuple[bool, int]:
+    error = False
+    nb_jobs = 0
+
+    # First pass: cheap, in-memory parsing/validation of every key in the batch,
+    # so the DB is only hit once (below) for the jobs that are actually usable.
+    parsed = []
+    for key, value in batch:
         nb_jobs += 1
         cluster_name, job_id_str, submit_time_str = key.split("$")
         cluster = config.clusters.get(cluster_name, None)
@@ -124,12 +153,54 @@ def parse_prometheus_ce(sess: Session, ce: CacheEntry) -> bool:
                 f"Empty data found for job {job_id} on cluster {cluster_name} (submit_time {submit_time}), skipping cache entry"
             )
             continue
-        cluster_id = SlurmClusterDB.id_by_name(sess, cluster_name)
+        if cluster_name not in cluster_ids:
+            cluster_ids[cluster_name] = SlurmClusterDB.id_by_name(sess, cluster_name)
+        cluster_id = cluster_ids[cluster_name]
         if cluster_id is None:
             logger.error("Unknown cluster name %s in entry key %s", cluster_name, key)
             error = True
             continue
-        entry = SlurmJobDB.by_ref(sess, cluster_id, job_id, submit_time)
+        parsed.append((key, cluster, cluster_id, job_id, submit_time, data))
+
+    if not parsed:
+        return error, nb_jobs
+
+    refs = [
+        (cluster_id, job_id, submit_time)
+        for _, _, cluster_id, job_id, submit_time, _ in parsed
+    ]
+    # fetch fetch-date records in the same round trip via an outer join instead
+    # of a separate query after flush.
+    rows: Sequence[tuple[SlurmJobDB, JobStatisticsFetchDateDB]] = (
+        sess.exec(
+            select(SlurmJobDB, JobStatisticsFetchDateDB)
+            .outerjoin(
+                JobStatisticsFetchDateDB,
+                col(JobStatisticsFetchDateDB.job_id) == col(SlurmJobDB.id),
+            )
+            .where(
+                tuple_(
+                    col(SlurmJobDB.cluster_id),
+                    col(SlurmJobDB.job_id),
+                    col(SlurmJobDB.submit_time),
+                ).in_(refs)
+            )
+            .options(joinedload(SlurmJobDB.statistics))  # ty:ignore[invalid-argument-type]
+        )
+        .unique()  # ty:ignore[unresolved-attribute]
+        .all()
+    )
+
+    entries_by_ref = {}
+    fetch_records_by_job_id = {}
+    for job, fetch_record in rows:
+        entries_by_ref[(job.cluster_id, job.job_id, job.submit_time)] = job
+        if fetch_record is not None:
+            fetch_records_by_job_id[job.id] = fetch_record
+
+    updated_entries = []
+    for key, cluster, cluster_id, job_id, submit_time, data in parsed:
+        entry = entries_by_ref.get((cluster_id, job_id, submit_time))
         if entry is None:
             logger.error("Could not find job for %s", key)
             error = True
@@ -145,16 +216,21 @@ def parse_prometheus_ce(sess: Session, ce: CacheEntry) -> bool:
                 )
         statistics = series.compute_job_statistics(entry, data)
         if len(statistics) != 0:
-            entry.statistics = statistics
-            sess.flush()
-            any_stat = next(iter(entry.statistics.values()))
-            fetch_record = sess.exec(
-                select(JobStatisticsFetchDateDB).where(
-                    JobStatisticsFetchDateDB.job_id == entry.id
-                )
-            ).one_or_none()
+            for k, v in statistics.items():
+                if (existing := entry.statistics.get(k)) is not None:
+                    v.id = existing.id
+                    v.job_id = existing.job_id
+                    existing.sqlmodel_update(v)
+                else:
+                    entry.statistics[k] = v
+            updated_entries.append(entry)
+
+    if updated_entries:
+        sess.flush()
+        for entry in updated_entries:
+            fetch_record = fetch_records_by_job_id.get(entry.id)
             if fetch_record is not None:
+                any_stat = next(iter(entry.statistics.values()))
                 fetch_record.jobstatistic_id = any_stat.id
 
-    logger.info(f"Saved Prometheus metrics for {nb_jobs} jobs.")
-    return error
+    return error, nb_jobs
