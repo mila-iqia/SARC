@@ -41,11 +41,11 @@ loaded into config as strings (see `UnderusageNotifyConfig` in
 
 ```mermaid
 flowchart TD
-    JS[("job_series_view<br/>→ per-user waste aggregation<br/><i>(sarc/db/job_series.py)</i>")]
+    JS[("job_series_view<br/><i>(sarc/db/job_series.py)</i>")]
 
-    JS --> FLAG["get_underusers<br/><b>flagging</b>"]
-    JS --> USAGE["get_all_users_usage<br/>(active users)"]
-    JS --> REC["get_recurring_underusers<br/>+ get_historical_stats<br/>(digest enrichment)"]
+    JS --> FLAG["get_underusers<br/><b>flagging</b><br/><i>(per-user waste aggregation)</i>"]
+    JS --> USAGE["get_all_users_usage<br/>(active users)<br/><i>(per-user waste aggregation)</i>"]
+    JS --> REC["get_recurring_underusers<br/>+ get_historical_stats<br/>(digest enrichment)<br/><i>(per-user waste aggregation)</i>"]
 
     FLAG --> DIGEST["build_admin_digest"]
     REC --> DIGEST
