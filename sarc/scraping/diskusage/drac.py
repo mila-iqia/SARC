@@ -72,7 +72,7 @@ class DRACDiskUsage(DiskUsageScraper[DRACDiskUsageConfig]):
         cmd = f"{config.diskusage_path} --project --all_users"
         output, errors = run_command(ssh, cmd, 1)
         for err in errors:
-            logger.exception("Error fetching diskusage report", exc_info=err)
+            logger.error("Error fetching diskusage report", exc_info=err)
         if output is None:
             output = ""
         return json.dumps(

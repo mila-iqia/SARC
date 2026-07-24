@@ -66,7 +66,7 @@ dev = [
     "types-ldap3>=2.9.13.20240205",
     "types-tqdm>=4.67.0.20250417",
     "pytest-env>=1.1.5,<2",
-    "ruff>=0.15,<0.16",
+    "ruff>=0.16,<0.17",
     "sphinxcontrib-openapi>=0.9.0,<0.10.0",
     "time-machine>=3.2.0",
     "ty>=0.0.36",
@@ -96,6 +96,7 @@ ignore = [
   "PLR0912",  # too many branches
   "PLR0913",  # too many function arguments
   "PLR0915",  # too many statements
+  "PLR0917",  # too many positional arguments
   "PLR2004",  # replace magic value by variable
   "PLC0415",  # imports should be a the top level
 ]
