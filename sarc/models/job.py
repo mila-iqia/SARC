@@ -61,7 +61,6 @@ class Statistics(BaseModel):
     median: SmartFloat
     q75: SmartFloat
     max: SmartFloat
-    unused: SmartFloat
 
 
 class SlurmJob(BaseModel):

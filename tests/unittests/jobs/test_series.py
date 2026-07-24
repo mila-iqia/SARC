@@ -1,4 +1,3 @@
-import math
 from datetime import datetime, timedelta
 
 import pandas
@@ -29,7 +28,7 @@ def test_compute_job_statistics_from_dataframe(captrace):
     stats = compute_job_statistics_from_dataframe(
         df, {"mean": lambda self: self.mean()}
     )
-    assert stats == {"mean": 99 / 2, "unused": 0}
+    assert stats == {"mean": 99 / 2}
 
     # Check trace
     spans = captrace.get_finished_spans()
@@ -43,7 +42,7 @@ def test_compute_job_statistics_from_dataframe_normalization():
     stats = compute_job_statistics_from_dataframe(
         df, {"mean": lambda self: self.mean()}, normalization=lambda x: x * 10
     )
-    assert stats == {"mean": 10 * 99 / 2, "unused": 0}
+    assert stats == {"mean": 10 * 99 / 2}
 
 
 @pytest.mark.parametrize(["delta"], [[30], [60]])
@@ -61,7 +60,7 @@ def test_compute_job_statistics_from_dataframe_time_counter(delta):
     stats = compute_job_statistics_from_dataframe(
         df, {"mean": lambda self: self.mean()}, is_time_counter=True
     )
-    assert stats == {"mean": (75 / delta + 15 / delta) / 2, "unused": 0}
+    assert stats == {"mean": (75 / delta + 15 / delta) / 2}
 
 
 def test_compute_job_statistics_from_dataframe_filters_dcgm_blank():
@@ -77,11 +76,9 @@ def test_compute_job_statistics_from_dataframe_filters_dcgm_blank():
     rows = [{"instance": "cn-c002", "value": v} for v in [1.0, 2.0, 3.0, *sentinels]]
     df = _generate_df(rows)
     stats = compute_job_statistics_from_dataframe(
-        df,
-        {"mean": lambda self: self.mean(), "max": lambda self: self.max()},
-        unused_threshold=None,
+        df, {"mean": lambda self: self.mean(), "max": lambda self: self.max()}
     )
-    assert stats == {"mean": 2.0, "max": 3.0, "unused": 0}
+    assert stats == {"mean": 2.0, "max": 3.0}
 
 
 def test_compute_job_statistics_from_dataframe_all_blank_returns_none():
@@ -91,45 +88,3 @@ def test_compute_job_statistics_from_dataframe_all_blank_returns_none():
         df, {"mean": lambda self: self.mean()}
     )
     assert stats is None
-
-
-@pytest.mark.parametrize(
-    ["nprops", "threshold"], [[1, 0.2], [2, 0.2], [2, 2.0], [2, None]]
-)
-def test_compute_job_statistics_from_dataframe_unused_count(nprops, threshold):
-    values = [0.5, 0.1, 1.0]
-    assert nprops in (1, 2)
-    if nprops == 2:
-        # Two properties differentiate the series: instance and core
-        rows1 = [
-            {"instance": "cn-c002", "core": 1, "value": values[0]} for _ in range(10)
-        ]
-        rows2 = [
-            {"instance": "cn-c007", "core": 1, "value": values[1]} for _ in range(10)
-        ]
-        rows3 = [
-            {"instance": "cn-c007", "core": 2, "value": values[2]} for _ in range(10)
-        ]
-    else:
-        # One property differentiates the series: instance
-        rows1 = [{"instance": "cn-c002", "value": values[0]} for _ in range(10)]
-        rows2 = [{"instance": "cn-c007", "value": values[1]} for _ in range(10)]
-        rows3 = [{"instance": "cn-c009", "value": values[2]} for _ in range(10)]
-
-    df1 = _generate_df(rows1)
-    df2 = _generate_df(rows2)
-    df3 = _generate_df(rows3)
-
-    df = pandas.concat([df1, df2, df3])
-    df = df.sort_values(by="timestamp")
-
-    stats = compute_job_statistics_from_dataframe(
-        df, {"mean": lambda self: self.mean()}, unused_threshold=threshold
-    )
-    valid = [v for v in values if threshold is None or v >= threshold]
-    nvalid = len(valid)
-    nunused = len(values) - len(valid)
-    if nvalid:
-        assert stats == {"mean": sum(valid) / nvalid, "unused": nunused}
-    else:
-        assert math.isnan(stats["mean"]) and stats["unused"] == nunused

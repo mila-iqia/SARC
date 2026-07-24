@@ -47,7 +47,6 @@ class JobStatisticDB(SQLModel, table=True):
     median: float | None
     q75: float | None
     max: float | None
-    unused: float | None
 
 
 class JobStatisticsFetchDateDB(SQLModel, table=True):
