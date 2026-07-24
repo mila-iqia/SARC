@@ -20,6 +20,7 @@ def test_update_allocations(data_regression, empty_read_write_db: Session):
                 select(AllocationDB)
                 .join(SlurmClusterDB, SlurmClusterDB.id == AllocationDB.cluster_id)
                 .where(SlurmClusterDB.name.in_(["fromage", "patate"]))
+                .order_by(AllocationDB.cluster_id)
             ).all()
         )
         == 0
@@ -30,6 +31,7 @@ def test_update_allocations(data_regression, empty_read_write_db: Session):
         select(AllocationDB)
         .join(SlurmClusterDB, SlurmClusterDB.id == AllocationDB.cluster_id)
         .where(SlurmClusterDB.name.in_(["fromage", "patate"]))
+        .order_by(AllocationDB.cluster_id)
     ).all()
     assert len(data) == 11
     data_regression.check(
@@ -48,6 +50,7 @@ def test_update_allocations_no_duplicates(
                 select(AllocationDB)
                 .join(SlurmClusterDB, SlurmClusterDB.id == AllocationDB.cluster_id)
                 .where(SlurmClusterDB.name.in_(["fromage", "patate"]))
+                .order_by(AllocationDB.cluster_id)
             ).all()
         )
         == 0
@@ -58,6 +61,7 @@ def test_update_allocations_no_duplicates(
         select(AllocationDB)
         .join(SlurmClusterDB, SlurmClusterDB.id == AllocationDB.cluster_id)
         .where(SlurmClusterDB.name.in_(["fromage", "patate"]))
+        .order_by(AllocationDB.cluster_id)
     ).all()
     assert len(data) == 11
     main(["parse", "allocations", "--since", "2023-02-14"])
@@ -65,6 +69,7 @@ def test_update_allocations_no_duplicates(
         select(AllocationDB)
         .join(SlurmClusterDB, SlurmClusterDB.id == AllocationDB.cluster_id)
         .where(SlurmClusterDB.name.in_(["fromage", "patate"]))
+        .order_by(AllocationDB.cluster_id)
     ).all()
     assert len(data) == 11
     data_regression.check(
