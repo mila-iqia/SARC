@@ -96,9 +96,8 @@ def parse_prometheus(since: datetime | None, update_parsed_date: bool) -> None:
             if since is None:
                 since = cache.oldest_year()
 
-        cluster_ids: dict[str, int | None] = {}
         for ce in cache.read_from(from_time=since):
-            error = parse_prometheus_ce(sess, ce, cluster_ids)
+            error = parse_prometheus_ce(sess, ce)
             if update_parsed_date and not error:
                 logger.info(f"Set parsed_dates for jobs to {ce.get_entry_datetime()}.")
                 set_parsed_date(sess, "prometheus", ce.get_entry_datetime())
@@ -108,9 +107,7 @@ def parse_prometheus(since: datetime | None, update_parsed_date: bool) -> None:
 PARSE_BATCH_SIZE = 100
 
 
-def parse_prometheus_ce(
-    sess: Session, ce: CacheEntry, cluster_ids: dict[str, int | None]
-) -> bool:
+def parse_prometheus_ce(sess: Session, ce: CacheEntry) -> bool:
     error = False
     nb_jobs = 0
 
@@ -118,7 +115,7 @@ def parse_prometheus_ce(
         f"Parsing prometheus data from cache entry: {ce.get_entry_datetime().isoformat(timespec='milliseconds')}"
     )
     for batch in batched(ce.items(), PARSE_BATCH_SIZE):
-        batch_error, batch_nb_jobs = _parse_prometheus_batch(sess, batch, cluster_ids)
+        batch_error, batch_nb_jobs = _parse_prometheus_batch(sess, batch)
         error = error or batch_error
         nb_jobs += batch_nb_jobs
 
@@ -127,9 +124,7 @@ def parse_prometheus_ce(
 
 
 def _parse_prometheus_batch(
-    sess: Session,
-    batch: tuple[tuple[str, bytes], ...],
-    cluster_ids: dict[str, int | None],
+    sess: Session, batch: tuple[tuple[str, bytes], ...]
 ) -> tuple[bool, int]:
     error = False
     nb_jobs = 0
@@ -153,9 +148,7 @@ def _parse_prometheus_batch(
                 f"Empty data found for job {job_id} on cluster {cluster_name} (submit_time {submit_time}), skipping cache entry"
             )
             continue
-        if cluster_name not in cluster_ids:
-            cluster_ids[cluster_name] = SlurmClusterDB.id_by_name(sess, cluster_name)
-        cluster_id = cluster_ids[cluster_name]
+        cluster_id = SlurmClusterDB.id_by_name(sess, cluster_name)
         if cluster_id is None:
             logger.error("Unknown cluster name %s in entry key %s", cluster_name, key)
             error = True

@@ -124,7 +124,13 @@ class SlurmClusterDB(SQLModel, table=True):
 
     @classmethod
     def id_by_name(cls, sess: Session, cluster_name: str) -> int | None:
-        return sess.exec(select(cls.id).where(cls.name == cluster_name)).one_or_none()
+        if not hasattr(cls, "_id_by_name_cache"):
+            cls._id_by_name_cache: dict[str, int] = dict()
+        if (id := cls._id_by_name_cache.get(cluster_name)) is None:
+            id = sess.exec(select(cls.id).where(cls.name == cluster_name)).one_or_none()
+            if id is not None:
+                cls._id_by_name_cache[cluster_name] = id
+        return id
 
     @classmethod
     def by_name(cls, sess: Session, cluster_name: str) -> Self | None:
