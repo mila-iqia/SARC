@@ -275,6 +275,20 @@ class UnderusageNotifyConfig:
     """Slack workspace/channel credentials used to deliver all notifications
     (user DMs and the admin digest)."""
 
+    underusage_report_template: str
+    """``.format()``-able template for the per-user underusage DM body (see
+    ``build_user_dm`` in sarc/notifications/messages.py). Placeholders:
+    ``{name}``, ``{window_weeks}``, ``{avg_utilization}``,
+    ``{rgu_hours_wasted}``, ``{jobs_section}``. Normally sourced from a file,
+    e.g. config/usage_notify/underusage_report_template.md."""
+
+    usage_report_template: str
+    """``.format()``-able template for the neutral usage report body (see
+    ``build_usage_report`` in sarc/notifications/messages.py). Placeholders:
+    ``{name}``, ``{window_weeks}``, ``{avg_utilization}``,
+    ``{rgu_hours_used}``, ``{jobs_section}``. Normally sourced from a file,
+    e.g. config/usage_notify/usage_report_template.md."""
+
     enabled: bool = True
     """Master switch; when False the notify command is a no-op regardless of the
     per-report flags below."""
@@ -282,6 +296,14 @@ class UnderusageNotifyConfig:
     send_underusage_report: bool = False
     """Enable the individual underusage alerts (user DMs) and the admin
     digest."""
+
+    send_usage_report: bool = False
+    """Enable the neutral universal usage report sent to all active GPU
+    users."""
+
+    usage_cycle_length_weeks: int = 2
+    """Length in weeks of one usage cycle — the base cadence unit for alerts and
+    the usage-report window. Positive int."""
 
     min_waste_ratio: float = 0.50
     """Minimum scaled waste ratio (0..1), ``1 − effective_util``, for a user to
@@ -296,18 +318,6 @@ class UnderusageNotifyConfig:
     """Number of top wasters listed in the admin digest ranking. Positive
     int."""
 
-    top_jobs_per_user: int = 5
-    """Number of a user's worst jobs shown per user (in DMs and the usage
-    report). Positive int."""
-
-    dashboard_url: str | None = None
-    """Link inserted into user-facing messages pointing at the usage dashboard;
-    omitted from messages if None."""
-
-    help_section: str | None = None
-    """Verbatim Markdown appended to the end of every user DM (support links,
-    office hours, etc.); omitted if None."""
-
     recurrence_cluster_share: float = 0.50
     """Fraction (0..1) of a cluster's total wasted RGU-h at which the
     recurring-underusers selection stops accumulating users per cluster."""
@@ -317,7 +327,7 @@ class UnderusageNotifyConfig:
     decision and the rolling recurrence window. Positive int, ≤
     recurrence_display_cycles."""
 
-    recurrence_display_cycles: int = 5
+    recurrence_display_cycles: int = 6
     """Number of per-cycle columns shown in the recurring-users table. Positive
     int."""
 
@@ -327,13 +337,16 @@ class UnderusageNotifyConfig:
     the user is flagged for personalized action. Default ≈ 20× A100-80GB RGU ×
     7d."""
 
+    restrictive_action_run_cycles: int = 4
+    """Number of consecutive personalized-action (⚑) peak cycles — the peak
+    cycle plus the (n-1) cycles following it — that escalate to a
+    restrictive-action marker ("!!⚑▲") in the recurring-underusers table.
+    Positive int; a value greater than ``recurrence_display_cycles`` simply
+    yields no escalation."""
+
     historical_months: int = 6
     """Number of calendar months included in the digest's historical trend
     section. Positive int."""
-
-    send_usage_report: bool = False
-    """Enable the neutral universal usage report sent to all active GPU
-    users."""
 
     usage_report_cycles: int = 2
     """Length of the usage-report window in usage cycles (window =
@@ -344,13 +357,27 @@ class UnderusageNotifyConfig:
     usage report; filters out negligible usage. Default ≈ 4× A100-80GB RGU ×
     4d."""
 
+    top_jobs_per_user: int = 5
+    """Number of a user's worst jobs shown per user (in DMs and the usage
+    report). Positive int."""
+
+    dashboard_url: str | None = None
+    """Link inserted into user-facing messages pointing at the usage dashboard;
+    omitted from messages if None."""
+
+    resources_section: str | None = None
+    """Markdown/plain text appended to the footer of both underusage DMs and
+    usage reports (unlike ``help_section`` below, which is underusage-DM-only);
+    omitted from messages if None. Normally sourced from a file, e.g.
+    config/usage_notify/resources_section.md."""
+
+    help_section: str | None = None
+    """Markdown text appended at the end of underusage DMs only (support links,
+    hours, etc.); usage reports intentionally omit it."""
+
     clusters: list[str] = field(default_factory=lambda: ["mila"])
     """Cluster-name allowlist scoping every query (alerts, usage report,
     recurring table, historical trend). Empty list = all clusters."""
-
-    usage_cycle_length_weeks: int = 2
-    """Length in weeks of one usage cycle — the base cadence unit for alerts and
-    the usage-report window. Positive int."""
 
     utilization_ceiling: float = 1.0
     """Utilization ceiling T ∈ (0,1] for the subtractive waste model: ``wasted =

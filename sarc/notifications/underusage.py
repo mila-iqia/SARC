@@ -16,6 +16,14 @@ def usage_cycle_length_weeks():
     return config.notifications.usage_cycle_length_weeks
 
 
+def restrictive_action_run_cycles():
+    # A personalized-action (⚑) peak sustained over this many consecutive cycles
+    # (the peak cycle plus the (n-1) cycles following it) escalates to a
+    # restrictive action.
+    assert config.notifications, f"{config.notifications=}"
+    return config.notifications.restrictive_action_run_cycles
+
+
 @dataclass
 class UsageClusterBreakdown:
     cluster: str
@@ -96,10 +104,26 @@ class RecurringUserRow:
     flagged_for_personalized_action: bool
     # True (unadjusted) wasted RGU-h for this user in this cluster over the recurrence window.
     true_wasted: float = 0.0
-    # Per-active-anchor PA flags: index 0 = most-recent anchor, True iff the
-    # recurrence_active_cycles-cycle window ending at that anchor has ceiling-adjusted
-    # cross-cluster waste ≥ personalized_action_min_waste_rgu_hours.
+    # Per-anchor PA flags, one per displayed cycle (length
+    # recurrence_display_cycles): index 0 = most-recent anchor, True iff the
+    # recurrence_active_cycles-cycle window ending at that anchor has
+    # ceiling-adjusted cross-cluster waste ≥
+    # personalized_action_min_waste_rgu_hours (and the user is a single-cycle
+    # underuser in that cycle). These drive the per-cell ⚑ peak marker.
     pa_flags: list[bool] = field(default_factory=list)
+
+    @cached_property
+    def restrictive_action_flags(self) -> list[bool]:
+        """Per-cycle escalation flags derived from pa_flags. Index i is True iff
+        this cycle and the ``restrictive_action_run_cycles``-1 cycles following
+        it in time (older cycles, i+1, i+2, …) are all personalized-action (⚑)
+        peaks — a sustained run signalling that a restrictive action could be
+        enforced. The flag lands on the newest cell of each such run. The run
+        length is the ``restrictive_action_run_cycles`` notifications config
+        knob."""
+        n = len(self.pa_flags)
+        run = restrictive_action_run_cycles()
+        return [i + run <= n and all(self.pa_flags[i : i + run]) for i in range(n)]
 
 
 def _rgu_exprs(utilization_ceiling: float = 1.0):
@@ -603,13 +627,28 @@ def get_recurring_underusers(
     Cycle flags: for each of the *recurrence_display_cycles* most-recent
     windows of the configured usage_cycle_length_weeks weeks, call
     get_underusers to determine per-user membership. Cycles whose end date is in the future relative to *end* are
-    marked None (no data yet). The "personalized action" flag is set iff a user
-    was flagged True in all *recurrence_active_cycles* most-recent cycles.
+    marked None (no data yet).
+
+    Personalized-action flags: for each of the *recurrence_display_cycles* most-recent
+    positions, ``pa_flags[i]`` is True iff the user's wasted RGU-h over the
+    *recurrence_active_cycles*-cycle window ending at position *i* reaches
+    *personalized_action_min_waste_rgu_hours* **and** the user is a single-cycle
+    underuser in that position's most-recent cycle (i.e. present in
+    ``cycle_flagged[i]``). The aggregate ``flagged_for_personalized_action`` is
+    ``pa_flags[0]`` restricted to a current cycle that is not in the future.
+    Requires ``recurrence_active_cycles <= recurrence_display_cycles``.
 
     Returns a dict of cluster_name -> list[RecurringUserRow] (sorted desc by
     wasted_6w within each cluster), ordered by cluster name.
     """
     cycle_length_weeks = usage_cycle_length_weeks()
+
+    # The per-position PA loop indexes cycle_flagged (sized by
+    # recurrence_display_cycles), so the active window must fit within the
+    # displayed cycles.
+    assert recurrence_active_cycles <= recurrence_display_cycles, (
+        f"{recurrence_active_cycles=} must be <= {recurrence_display_cycles=}"
+    )
 
     window_weeks = recurrence_active_cycles * cycle_length_weeks
     anchor = _week_anchor(end)
@@ -679,7 +718,14 @@ def get_recurring_underusers(
     pa_window_weeks = recurrence_active_cycles * cycle_length_weeks
     user_pa_flags: dict[int, list[bool]] = {}
     with config.db.session() as session:
-        for i in range(recurrence_active_cycles):
+        for i in range(recurrence_display_cycles):
+            # PA at position i requires both the waste floor and single-cycle
+            # underuse in that position's most-recent cycle. cycle_flagged[i]
+            # is None for a cycle ending in the future (guarded before membership).
+            if cycle_flagged[i] is None:
+                continue
+            _this_cycle_flagged: set[int] = cycle_flagged[i] or set()
+
             pa_end = anchor - timedelta(weeks=i * cycle_length_weeks)
             pa_start = pa_end - timedelta(weeks=pa_window_weeks)
             pa_stmt = _select_jobs_usage(
@@ -693,10 +739,11 @@ def get_recurring_underusers(
             for row in session.exec(pa_stmt).all():
                 uid = row.sarc_user_id
                 if uid not in user_pa_flags:
-                    user_pa_flags[uid] = [False] * recurrence_active_cycles
+                    user_pa_flags[uid] = [False] * recurrence_display_cycles
                 _, _, pa_rgu_wasted_h = _split_waste(row)
                 user_pa_flags[uid][i] = (
                     pa_rgu_wasted_h >= personalized_action_min_waste_rgu_hours
+                    and uid in _this_cycle_flagged
                 )
 
     # ── Per-cluster greedy selection (cumulative share >= cluster_share_threshold) ──
@@ -721,6 +768,9 @@ def get_recurring_underusers(
             cycles_for_user = [
                 (None if cf is None else uid in cf) for cf in cycle_flagged
             ]
+            # A selected user always has a user_pa_flags entry: the position-0 PA
+            # window equals the aggregate window that selected them. The [] default
+            # (and the `else False` below) is therefore defensive/unreachable.
             pa_flags = user_pa_flags.get(uid, [])
             rows_out.append(
                 RecurringUserRow(
@@ -730,11 +780,10 @@ def get_recurring_underusers(
                     wasted_current_active_window=u["wasted"],
                     cluster_share=u["wasted"] / cluster_total,
                     cycles=cycles_for_user,
-                    # personalized action should not be triggered for a current
-                    # cycle that would ends in the future
-                    flagged_for_personalized_action=pa_flags[0] and anchor == end
-                    if pa_flags
-                    else False,
+                    # pa_flags[0] already encodes the "current cycle not in the
+                    # future" guard (cycle_flagged[0] is None for a future cycle,
+                    # and anchor >= end always), so no extra anchor check is needed.
+                    flagged_for_personalized_action=pa_flags[0] if pa_flags else False,
                     true_wasted=u["true_wasted"],
                     pa_flags=pa_flags,
                 )

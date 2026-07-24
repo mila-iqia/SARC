@@ -16,7 +16,12 @@ from sarc.notifications.underusage import (
     get_recurring_underusers,
     usage_cycle_length_weeks,
 )
-from tests.unittests.notifications._factory import DEFAULT_GPU_TYPE, add_gpu_job
+from tests.unittests.notifications._factory import (
+    DEFAULT_GPU_TYPE,
+    UNDERUSAGE_REPORT_TEMPLATE,
+    USAGE_REPORT_TEMPLATE,
+    add_gpu_job,
+)
 
 # "Today" for all recurring tests.
 _TEST_END = datetime(2024, 6, 30, tzinfo=UTC)
@@ -52,6 +57,8 @@ _NOTIFY_CFG = {
         "token": "xoxb-test-token",
         "channel": "#test-channel",
     },
+    "underusage_report_template": UNDERUSAGE_REPORT_TEMPLATE,
+    "usage_report_template": USAGE_REPORT_TEMPLATE,
     "min_waste_ratio": _MIN_WASTE_RATIO,
     "min_waste_rgu_hours": _MIN_WASTE_RGU_HOURS,
     "digest_top_n": 16,
@@ -184,6 +191,9 @@ def test_selection_threshold(recurring_db):
 
 
 def test_all_users_included_when_threshold_is_one(recurring_db):
+    # Keep the notifications overlay active across the assertions: the
+    # restrictive_action_flags property reads restrictive_action_run_cycles from
+    # config, which is only defined inside this overlay.
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}) as config:
         ncfg = config.sarc.notifications
         result = get_recurring_underusers(
@@ -193,6 +203,10 @@ def test_all_users_included_when_threshold_is_one(recurring_db):
             cluster_share_threshold=1.0,
             personalized_action_min_waste_rgu_hours=ncfg.personalized_action_min_waste_rgu_hours,
         )
+        # Trigger cache on restrictive_action_flags
+        for rows in result.values():
+            for row in rows:
+                row.restrictive_action_flags
     mila_emails = {r.email for r in result.get("mila", [])}
     assert "firstuser@mila.quebec" in mila_emails
     assert "seconduser@mila.quebec" in mila_emails
@@ -205,33 +219,43 @@ def test_all_users_included_when_threshold_is_one(recurring_db):
     total_share = sum(r.cluster_share for r in result["mila"])
     assert abs(total_share - 1.0) < 1e-6
 
-    # Test firstuser flagged all five cycles
+    # Test firstuser flagged all five cycles. pa_flags now spans all
+    # recurrence_display_cycles (5) positions: the 3-cycle PA window ending at
+    # position i clears the floor for i=0..3 (W-6+W-8+W-10 = 182.4 ≥ 115.2) but
+    # not i=4 (W-8 alone = 91.2 < 115.2).
     row = next(r for r in result["mila"] if r.email == "firstuser@mila.quebec")
     assert row.cycles == [True] * 5
-    # Test firstuser flagged for personalized action all 3 cycles
-    assert row.pa_flags == [True] * 3
+    assert row.pa_flags == [True, True, True, True, False]
     assert row.flagged_for_personalized_action is True
+    # A sustained run of four ⚑ peaks (positions 0..3) escalates on the newest cell.
+    assert row.restrictive_action_flags == [True, False, False, False, False]
 
     # Test seconduser only flagged for the first 3 cycles
     row = next(r for r in result["mila"] if r.email == "seconduser@mila.quebec")
     assert row.cycles == [True] * 3 + [False] * 2
-    # Test seconduser flagged for personalized action the first 2 cycles
-    assert row.pa_flags == [True] * 2 + [False] * 1
+    # PA clears the floor only at positions 0 (205.2) and 1 (136.8); no 4-run.
+    assert row.pa_flags == [True, True, False, False, False]
     assert row.flagged_for_personalized_action is True
+    assert row.restrictive_action_flags == [False] * 5
 
     # Test thirduser flagged all cycles except for 4th
     row = next(r for r in result["mila"] if r.email == "thirduser@mila.quebec")
     assert row.cycles == [True] * 3 + [False] * 1 + [True] * 1
-    # Test thirduser flagged for personalized action the first cycle
-    assert row.pa_flags == [True] * 1 + [False] * 2
+    # PA clears the floor only at position 0 (136.8).
+    assert row.pa_flags == [True, False, False, False, False]
     assert row.flagged_for_personalized_action is True
+    assert row.restrictive_action_flags == [False] * 5
 
     # Test fourthuser only flagged for the last 2 cycles
     row = next(r for r in result["mila"] if r.email == "fourthuser@mila.quebec")
     assert row.cycles == [False] * 3 + [True] * 2
-    # Test fourthuser only flagged for personalized action on 3rd cycles
-    assert row.pa_flags == [False] * 2 + [True] * 1
+    # fourthuser is NOT a current-cycle underuser at positions 0..2 (cycles False),
+    # so PA is suppressed there. At position 3 the PA window (W-6+W-8 = 136.8 ≥
+    # 115.2) clears the floor AND they are a single-cycle underuser at W-6, so
+    # pa_flags[3] is True. Position 4's window (W-8 alone = 68.4) is below the floor.
+    assert row.pa_flags == [False, False, False, True, False]
     assert row.flagged_for_personalized_action is False
+    assert row.restrictive_action_flags == [False] * 5
 
 
 # ── Non-default cycle counts (acceptance criteria) ────────────────────────────
@@ -384,15 +408,12 @@ def test_table_share_percentage():
     assert "11 %" in text
 
 
-def test_table_personalized_action_flag():
+def test_table_has_no_action_column():
+    # The Action column was removed; personalized action is now conveyed per-cycle
+    # via the ⚑ peak marker, not a trailing summary column.
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         text = build_recurring_table({"narval": [_ROW_ALICE]}, **_BRT_KW)
-    assert "⚑ personalized" in text
-
-
-def test_table_no_action_flag_when_not_all_cycles():
-    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
-        text = build_recurring_table({"narval": [_ROW_BOB]}, **_BRT_KW)
+    assert "Action" not in text
     assert "⚑ personalized" not in text
 
 
@@ -400,7 +421,7 @@ def test_table_check_and_cross_marks():
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         text = build_recurring_table({"narval": [_ROW_BOB]}, **_BRT_KW)
     assert "✓" in text
-    assert "✗" in text
+    assert "▲" in text
 
 
 def test_table_tree_chars_multiple_rows():
@@ -690,8 +711,9 @@ def test_off_cycle_week_end_w0_is_none(recurring_db):
 
 
 def test_off_cycle_week_end_personalized_action_floor_controls(recurring_db):
-    # With w0=None the PA flag is still based on waste in the active window, not cycles.
-    # A high floor means nobody qualifies even though users have past-cycle waste.
+    # With w0=None (off-cycle-week end) position-0 PA is suppressed regardless of waste,
+    # because cycle_flagged[0] is None. Here a high floor independently keeps everyone
+    # below the threshold, so all rows are unflagged.
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         result = get_recurring_underusers(
             _OFF_CYCLE_MON,
@@ -755,7 +777,7 @@ def test_table_none_flag_renders_blank_not_cross(capsys):
     # _ROW_FUTURE_W0: w0=None→blank, w2=True→✗, w4=True→✗, w6=False→✓, w8=False→✓
     # True (flagged/underuser) → ✗; False (good usage) → ✓; None (future) → blank
     assert text.count("✓") == 2  # w6 and w8
-    assert text.count("✗") == 2  # w2 and w4
+    assert text.count("▲") == 2  # w2 and w4
 
 
 def test_table_without_cycle_dates_keeps_w0_label():
@@ -793,10 +815,10 @@ _ROW_PEAK_AT_W4 = RecurringUserRow(
     cluster_share=0.25,
     cycles=[False, False, True, True, True],
     flagged_for_personalized_action=False,
-    pa_flags=[False, False, True],
+    pa_flags=[False, False, True, False, False],
 )
 
-# Row where all 3 active positions are pa-flagged → ⚑ at W0, W-2, W-4
+# Row where the first 3 positions are pa-flagged → ⚑ at W0, W-2, W-4 (no 4-run).
 _ROW_ALL_TRUE = RecurringUserRow(
     email="eve@mila.quebec",
     display_name="Eve Online",
@@ -805,35 +827,50 @@ _ROW_ALL_TRUE = RecurringUserRow(
     cluster_share=0.40,
     cycles=[True, True, True, True, True],
     flagged_for_personalized_action=True,
-    pa_flags=[True, True, True],
+    pa_flags=[True, True, True, False, False],
+)
+
+# Row with a ⚑ peak on a display-only cycle (position 3, right of the "|").
+_ROW_PEAK_AT_W6 = RecurringUserRow(
+    email="gwen@mila.quebec",
+    display_name="Gwen Stacy",
+    cluster="narval",
+    wasted_current_active_window=2000.0,
+    cluster_share=0.15,
+    cycles=[False, False, False, True, False],
+    flagged_for_personalized_action=False,
+    pa_flags=[False, False, False, True, False],
 )
 
 
 def test_per_cycle_peak_at_w4():
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         text = build_recurring_table({"narval": [_ROW_PEAK_AT_W4]}, **_BRT_KW)
-    assert "⚑✗" in text
+    assert "⚑▲" in text
 
 
 def test_per_cycle_no_peak_at_w0_w2():
     # pa_flags[0]=False and pa_flags[1]=False → no ⚑ at W0 or W-2
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         text = build_recurring_table({"narval": [_ROW_PEAK_AT_W4]}, **_BRT_KW)
-    assert text.count("⚑✗") == 1
+    assert text.count("⚑▲") == 1
 
 
 def test_per_cycle_all_active_flagged():
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         text = build_recurring_table({"narval": [_ROW_ALL_TRUE]}, **_BRT_KW)
     # pa_flags=[True,True,True] → ⚑ at W0, W-2, W-4
-    assert text.count("⚑✗") == 3
+    assert text.count("⚑▲") == 3
 
 
-def test_per_cycle_w6_w8_never_show_peak():
-    # Positions ≥ active_cycles are never eligible regardless of pa_flags
+def test_per_cycle_display_only_cycle_shows_peak():
+    # A ⚑ peak on a display-only cycle (position ≥ active_cycles, right of "|") is
+    # now rendered — previously these were suppressed.
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
-        text = build_recurring_table({"narval": [_ROW_ALL_TRUE]}, **_BRT_KW)
-    assert text.count("⚑✗") == 3
+        text = build_recurring_table({"narval": [_ROW_PEAK_AT_W6]}, **_BRT_KW)
+    assert text.count("⚑▲") == 1
+    # The peak sits after the active/history separator.
+    assert text.index("|") < text.index("⚑▲")
 
 
 def test_per_cycle_no_peak_on_passing_cell():
@@ -846,12 +883,114 @@ def test_per_cycle_no_peak_on_passing_cell():
         cluster_share=0.10,
         cycles=[False, True, True, True, True],
         flagged_for_personalized_action=True,
-        pa_flags=[True, True, True],
+        pa_flags=[True, True, True, False, False],
     )
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         text = build_recurring_table({"narval": [row]}, **_BRT_KW)
-    # W0 is ✓ (cycles[0]=False) so no ⚑ there; W-2 and W-4 are ✗ with pa_flags → 2 ⚑✗
-    assert text.count("⚑✗") == 2
+    # W0 is ✓ (cycles[0]=False) so no ⚑ there; W-2 and W-4 are ▲ with pa_flags → 2 ⚑▲
+    assert text.count("⚑▲") == 2
+
+
+# ── Restrictive-action escalation (⚑ run → !!⚑▲) ─────────────────────────────
+
+
+def _row_with_pa_flags(pa_flags: list[bool]) -> RecurringUserRow:
+    """Minimal row for exercising restrictive_action_flags in isolation."""
+    return RecurringUserRow(
+        email="x@mila.quebec",
+        display_name="X",
+        cluster="mila",
+        wasted_current_active_window=1.0,
+        cluster_share=0.1,
+        cycles=[bool(f) for f in pa_flags],
+        flagged_for_personalized_action=bool(pa_flags[:1] == [True]),
+        pa_flags=list(pa_flags),
+    )
+
+
+@pytest.mark.parametrize(
+    "pa_flags, expected",
+    [
+        ([], []),
+        ([True, True, True], [False, False, False]),  # run shorter than 4
+        ([True, True, True, True], [True, False, False, False]),  # exact 4-run
+        ([True, True, True, False], [False, False, False, False]),
+        # 5-run → the two newest cells each start a full 4-run.
+        ([True, True, True, True, True], [True, True, False, False, False]),
+        # Run not anchored at index 0: flag lands on the newest cell of the run.
+        ([False, True, True, True, True], [False, True, False, False, False]),
+        # A gap breaks the run; the later 4-run flags its own newest cell.
+        (
+            [True, True, False, True, True, True, True],
+            [False, False, False, True, False, False, False],
+        ),
+    ],
+)
+def test_restrictive_action_flags(pa_flags, expected):
+    # restrictive_action_flags reads the run length from config; the default
+    # (4) applies inside this overlay since _NOTIFY_CFG doesn't override it.
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        assert _row_with_pa_flags(pa_flags).restrictive_action_flags == expected
+
+
+def test_restrictive_action_run_cycles_config_override():
+    # A 2-cycle ⚑ run: no escalation under the default run length (4), but
+    # escalates once restrictive_action_run_cycles is lowered to 2.
+    pa_flags = [True, True, False, False, False]
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        assert _row_with_pa_flags(pa_flags).restrictive_action_flags == [False] * 5
+    with gifnoc.overlay(
+        {"sarc.notifications": {**_NOTIFY_CFG, "restrictive_action_run_cycles": 2}}
+    ):
+        assert _row_with_pa_flags(pa_flags).restrictive_action_flags == [
+            True,
+            False,
+            False,
+            False,
+            False,
+        ]
+
+
+def test_table_escalation_marker_on_four_run():
+    # pa_flags peaks over 4 consecutive cycles (0..3) → !!⚑▲ on the newest cell.
+    row = RecurringUserRow(
+        email="hugo@mila.quebec",
+        display_name="Hugo Weaving",
+        cluster="narval",
+        wasted_current_active_window=6000.0,
+        cluster_share=0.45,
+        cycles=[True, True, True, True, True],
+        flagged_for_personalized_action=True,
+        pa_flags=[True, True, True, True, False],
+    )
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        text = build_recurring_table({"narval": [row]}, **_BRT_KW)
+    assert "!!⚑▲" in text
+    assert text.count("!!⚑▲") == 1
+
+
+def test_table_escalation_two_cells_on_five_run():
+    # A 5-cycle peak run escalates the two newest cells.
+    row = RecurringUserRow(
+        email="ivy@mila.quebec",
+        display_name="Ivy Green",
+        cluster="narval",
+        wasted_current_active_window=7000.0,
+        cluster_share=0.50,
+        cycles=[True, True, True, True, True],
+        flagged_for_personalized_action=True,
+        pa_flags=[True, True, True, True, True],
+    )
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        text = build_recurring_table({"narval": [row]}, **_BRT_KW)
+    assert text.count("!!⚑▲") == 2
+
+
+def test_table_no_escalation_without_four_run():
+    # Only 3 consecutive peaks → no escalation marker.
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        text = build_recurring_table({"narval": [_ROW_ALL_TRUE]}, **_BRT_KW)
+    assert "!!" not in text
 
 
 # ── Threshold scaling, true_wasted, personalized_action floor ────────────────
@@ -886,7 +1025,11 @@ def test_true_wasted_field_populated(recurring_db):
 
 
 def test_personalized_action_floor(recurring_db):
-    # With floor=0.0, any user with positive scaled waste in the active window is flagged.
+    # With floor=0.0 the waste floor is met by every user, so PA reduces to the
+    # current-cycle-underuse requirement: a user is flagged iff they are present in
+    # the most-recent cycle (cycle_flagged[0]). fourthuser clears the floor over the
+    # active window but is NOT a current-cycle underuser (cycles == [False]*3 +
+    # [True]*2), so PA is suppressed for them while the other three are flagged.
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         result = get_recurring_underusers(
             _TEST_END,
@@ -895,9 +1038,17 @@ def test_personalized_action_floor(recurring_db):
             cluster_share_threshold=1.0,
             personalized_action_min_waste_rgu_hours=0.0,
         )
-        for rows in result.values():
-            for row in rows:
-                assert row.flagged_for_personalized_action is True
+    flagged = {
+        r.email: r.flagged_for_personalized_action
+        for rows in result.values()
+        for r in rows
+    }
+    assert flagged["firstuser@mila.quebec"] is True
+    assert flagged["seconduser@mila.quebec"] is True
+    assert flagged["thirduser@mila.quebec"] is True
+    # Discriminating case for the per-cycle gating: above the floor but absent from
+    # the most-recent cycle → not flagged.
+    assert flagged["fourthuser@mila.quebec"] is False
 
     # With a very high floor, no user crosses the threshold → all False.
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
@@ -915,12 +1066,14 @@ def test_personalized_action_floor(recurring_db):
 
 # ── Per-anchor pa_flags four-scenario computation test ────────────────────────
 # RGU=4.8, util=0.0 → wasted = 4.8 * elapsed_h. elapsed_h = target_rgu_h / 4.8.
-# Scenarios (active_cycles=3, usage_cycle_length_weeks=2, PA threshold=30):
-#   user1: 10 RGU-h/cycle × 5 → every 3-cycle window = 30 ≥ 30 → pa_flags=[T,T,T]
+# Scenarios (active_cycles=3, display_cycles=5, cycle_length=2w, PA threshold=30);
+# pa_flags now spans all 5 displayed positions:
+#   user1: 10 RGU-h/cycle × 5 → windows pos0..2 = 30 ≥ 30, pos3 = 20, pos4 = 10
+#          → pa_flags=[T,T,T,F,F]
 #   user2: W0=15,W-2=10,W-4=5,W-6=5,W-8=5
-#          pos-0=30≥30,pos-1=20<30,pos-2=15<30 → pa_flags=[T,F,F]
-#   user3: W0=30 only → pos-0=30,pos-1=0,pos-2=0 → pa_flags=[T,F,F]
-#   user4: 5 RGU-h/cycle × 5 → every window = 15 < 30 → pa_flags=[F,F,F]
+#          pos0=30≥30, pos1=20, pos2=15, pos3=10, pos4=5 → pa_flags=[T,F,F,F,F]
+#   user3: W0=30 only → pos0=30, pos1..4=0 → pa_flags=[T,F,F,F,F]
+#   user4: 5 RGU-h/cycle × 5 → every window ≤ 15 < 30 → pa_flags=[F,F,F,F,F]
 
 
 @pytest.fixture
@@ -993,14 +1146,19 @@ def test_pa_flags_four_scenarios(pa_scenario_db):
     u3 = rows[users["u3"].email]
     u4 = rows[users["u4"].email]
 
-    assert u1.pa_flags == [True, True, True]
+    assert u1.pa_flags == [True, True, True, False, False]
     assert u1.flagged_for_personalized_action is True
 
-    assert u2.pa_flags == [True, False, False]
+    assert u2.pa_flags == [True, False, False, False, False]
     assert u2.flagged_for_personalized_action is True
 
-    assert u3.pa_flags == [True, False, False]
+    assert u3.pa_flags == [True, False, False, False, False]
     assert u3.flagged_for_personalized_action is True
 
-    assert u4.pa_flags == [False, False, False]
+    assert u4.pa_flags == [False, False, False, False, False]
     assert u4.flagged_for_personalized_action is False
+
+    # None of the scenarios has a four-cycle ⚑ run → no restrictive-action escalation.
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        for u in (u1, u2, u3, u4):
+            assert u.restrictive_action_flags == [False] * 5

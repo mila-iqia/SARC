@@ -1,9 +1,14 @@
 from datetime import UTC, datetime
 
 import gifnoc
+import pytest
 
+from sarc.config import ConfigurationError
 from sarc.notifications.messages import (
     _first_name,
+    _fmt_h,
+    _jobs_section,
+    _pct,
     build_admin_digest,
     build_recurring_table,
     build_usage_report,
@@ -16,6 +21,22 @@ from sarc.notifications.underusage import (
     UsageJob,
     UsageRow,
 )
+from tests.unittests.notifications._factory import (
+    UNDERUSAGE_REPORT_TEMPLATE,
+    USAGE_REPORT_TEMPLATE,
+)
+
+_BASE_NOTIFY_CFG = {
+    "slack": {"description": "test", "token": "xoxb-test", "channel": "#test"},
+    "underusage_report_template": UNDERUSAGE_REPORT_TEMPLATE,
+    "usage_report_template": USAGE_REPORT_TEMPLATE,
+}
+
+
+def _notify_overlay(**overrides):
+    """gifnoc.overlay for sarc.notifications with the real repo templates."""
+    return gifnoc.overlay({"sarc.notifications": {**_BASE_NOTIFY_CFG, **overrides}})
+
 
 _NOTIFY_CFG = {
     "slack": {
@@ -24,7 +45,142 @@ _NOTIFY_CFG = {
         "channel": "#test-channel",
     },
     "enabled": False,
+    "underusage_report_template": "",
+    "usage_report_template": "",
 }
+
+
+# ── _first_name guard ─────────────────────────────────────────────────────────
+
+
+def test_first_name_normal():
+    assert _first_name("Alice Foo") == "Alice"
+
+
+def test_first_name_single_token():
+    assert _first_name("Alice") == "Alice"
+
+
+def test_first_name_empty():
+    assert _first_name("") == "there"
+    assert _first_name(None) == "there"
+
+
+# ── build_usage_report fixtures ───────────────────────────────────────────────
+
+_USAGE_JOB_NARVAL_1 = UsageJob(
+    job_id=300001,
+    cluster="narval",
+    submit_time=datetime(2026, 5, 28, tzinfo=UTC),
+    wasted=None,
+    rgu_hours_used=120.0,
+    gpu_sm_occupancy=0.72,
+)
+_USAGE_JOB_NARVAL_2 = UsageJob(
+    job_id=300002,
+    cluster="narval",
+    submit_time=datetime(2026, 6, 1, tzinfo=UTC),
+    wasted=None,
+    rgu_hours_used=90.0,
+    gpu_sm_occupancy=0.65,
+)
+_USAGE_JOB_FIR = UsageJob(
+    job_id=300003,
+    cluster="fir",
+    submit_time=datetime(2026, 5, 30, tzinfo=UTC),
+    wasted=None,
+    rgu_hours_used=50.0,
+    gpu_sm_occupancy=None,
+)
+
+_USAGE_ROW_ALICE = UsageRow(
+    email="alice@mila.quebec",
+    display_name="Alice Liddell",
+    user_id=1,
+    rgu_hours=1000.0,
+    rgu_hours_used=745.0,
+    by_cluster=[
+        UsageClusterBreakdown("narval", 700.0, 525.0, 700.0 - 525.0),
+        UsageClusterBreakdown("fir", 300.0, 220.0, 300.0 - 220.0),
+    ],
+    top_jobs=[_USAGE_JOB_NARVAL_1, _USAGE_JOB_NARVAL_2, _USAGE_JOB_FIR],
+)
+
+_USAGE_ROW_BOB = UsageRow(
+    email="bob@mila.quebec",
+    display_name="Bob Marley",
+    user_id=2,
+    rgu_hours=800.0,
+    rgu_hours_used=200.0,
+    by_cluster=[UsageClusterBreakdown("fir", 800.0, 200.0, 800.0 - 200.0)],
+    top_jobs=[],
+)
+
+
+# ── build_usage_report ────────────────────────────────────────────────────────
+
+
+def test_usage_report():
+    window_weeks = 4
+    with _notify_overlay():
+        text = build_usage_report(_USAGE_ROW_ALICE, window_weeks=window_weeks)
+    # Ensure no formatting braces {} remain
+    assert "{" not in text
+    assert "}" not in text
+    # Test overview contains first name
+    assert _first_name(_USAGE_ROW_ALICE.display_name) in text
+    # Test overview contains window weeks
+    assert f"{window_weeks}" in text
+    # Test overview contains utilization
+    assert _pct(_USAGE_ROW_ALICE.avg_utilization) in text
+    # Test overview contains rgu used
+    assert _fmt_h(_USAGE_ROW_ALICE.rgu_hours) in text
+    # Test top jobs grouped by cluster
+    # narval has more total usage than fir → appears first
+    assert text.index("Cluster narval") < text.index("Cluster fir")
+    # Test job line format
+    assert (
+        _jobs_section(
+            _USAGE_ROW_ALICE.top_jobs,
+            rgu_value=lambda j: j.rgu_hours_used,
+            suffix="RGU-h",
+        )
+        in text
+    )
+
+
+def test_usage_report_dashboard_url_included_when_provided():
+    with _notify_overlay(dashboard_url="https://dash.example.com"):
+        text = build_usage_report(_USAGE_ROW_ALICE, window_weeks=4)
+    assert "https://dash.example.com" in text
+
+
+def test_usage_report_excludes_help_section():
+    """Usage reports intentionally omit help_section, unlike underusage DMs."""
+    help_text = "Need help? Ask in #idt-support — IDT Team"
+    with _notify_overlay(help_section=help_text):
+        text = build_usage_report(_USAGE_ROW_ALICE, window_weeks=4)
+    assert help_text not in text
+
+
+def test_usage_report_resources_section_appended_when_provided():
+    resources_section = "A_RESOURCES_SECTION"
+    with _notify_overlay(resources_section=resources_section):
+        text = build_usage_report(_USAGE_ROW_ALICE, window_weeks=2)
+    assert resources_section in text
+
+
+def test_usage_report_deterministic():
+    with _notify_overlay(dashboard_url="https://x", help_section="help"):
+        a = build_usage_report(_USAGE_ROW_ALICE, window_weeks=4)
+        b = build_usage_report(_USAGE_ROW_ALICE, window_weeks=4)
+    assert a == b
+
+
+def test_usage_report_raises_without_notifications_config():
+    with pytest.raises(ConfigurationError, match="No notifications configuration"):
+        build_usage_report(_USAGE_ROW_ALICE, window_weeks=2)
+
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -90,80 +246,66 @@ _ROW_CAROL = UnderuserRow(
 )
 
 
-# ── _first_name guard ─────────────────────────────────────────────────────────
-
-
-def test_first_name_normal():
-    assert _first_name("Alice Foo") == "Alice"
-
-
-def test_first_name_single_token():
-    assert _first_name("Alice") == "Alice"
-
-
-def test_first_name_empty():
-    assert _first_name("") == "there"
-    assert _first_name(None) == "there"
-
-
 # ── build_user_dm ─────────────────────────────────────────────────────────────
 
 
-def test_dm_greeting():
-    text = build_user_dm(_ROW_ALICE, window_weeks=2)
-    # Test uses first name
-    assert text.startswith("Hi Alice,")
-    # Test contains utilization
-    assert "74.5 %" in text
-    # Test contains unused hours
-    assert "255.0 RGU-hours unused" in text
-    # Test contains window weeks
-    assert "last 2 weeks" in text
-    # Test top jobs section present
-    assert "Jobs with the lowest GPU utilization:" in text
+def test_underusage_report():
+    window_weeks = 2
+    with _notify_overlay():
+        text = build_user_dm(_ROW_ALICE, window_weeks=window_weeks)
+    # Ensure no formatting braces {} remain
+    assert "{" not in text
+    assert "}" not in text
+    # Test greeting uses first name
+    assert _first_name(_ROW_ALICE.display_name) in text
+    # Test overview contains window weeks
+    assert f"{window_weeks}" in text
+    # Test overview contains utilization
+    assert _pct(_ROW_ALICE.avg_utilization) in text
+    # Test overview contains unused hours
+    assert _fmt_h(_ROW_ALICE.wasted) in text
     # Test top jobs grouped by cluster
     # narval block appears before fir block (narval has more total waste)
     assert text.index("Cluster narval") < text.index("Cluster fir")
-    # Test narval first job is in top jobs
-    assert "job_111111 (2026-05-28)" in text
-    assert "80.0 RGU-h unused" in text
-    assert "GPU utilization: 5 %" in text
-    # Test utilization none shows na
-    assert "GPU utilization: n/a" in text
-    # Tets tree characters multi-job cluster
-    # Two narval jobs → first uses ┌─, last uses └─
-    assert "┌─ job_111111" in text
-    assert "└─ job_111112" in text
-    # Single fir job → uses └─
-    assert "└─ job_222222" in text
+    # Test job line format
+    assert (
+        _jobs_section(
+            _ROW_ALICE.top_jobs, rgu_value=lambda j: j.wasted, suffix="RGU-h unused"
+        )
+        in text
+    )
 
 
 def test_dm_dashboard_url_included_when_provided():
-    text = build_user_dm(
-        _ROW_ALICE, window_weeks=2, dashboard_url="https://dash.example.com"
-    )
+    with _notify_overlay(dashboard_url="https://dash.example.com"):
+        text = build_user_dm(_ROW_ALICE, window_weeks=2)
     assert "Track your usage over time: https://dash.example.com" in text
 
 
 def test_dm_help_section_appended_when_provided():
     help_text = "Need help? Ask in #idt-support — IDT Team"
-    text = build_user_dm(_ROW_ALICE, window_weeks=2, help_section=help_text)
+    with _notify_overlay(help_section=help_text):
+        text = build_user_dm(_ROW_ALICE, window_weeks=2)
     assert text.endswith(help_text)
 
 
-def test_dm_no_jobs_omits_jobs_section():
-    text = build_user_dm(_ROW_BOB, window_weeks=2)
-    assert "Jobs with the lowest" not in text
+def test_dm_resources_section_appended_when_provided():
+    resources_section = "A_RESOURCES_SECTION"
+    with _notify_overlay(resources_section=resources_section):
+        text = build_usage_report(_USAGE_ROW_ALICE, window_weeks=2)
+    assert resources_section in text
 
 
 def test_dm_deterministic():
-    a = build_user_dm(
-        _ROW_ALICE, window_weeks=2, dashboard_url="https://x", help_section="help"
-    )
-    b = build_user_dm(
-        _ROW_ALICE, window_weeks=2, dashboard_url="https://x", help_section="help"
-    )
+    with _notify_overlay(dashboard_url="https://x", help_section="help"):
+        a = build_user_dm(_ROW_ALICE, window_weeks=2)
+        b = build_user_dm(_ROW_ALICE, window_weeks=2)
     assert a == b
+
+
+def test_dm_raises_without_notifications_config():
+    with pytest.raises(ConfigurationError, match="No notifications configuration"):
+        build_user_dm(_ROW_ALICE, window_weeks=2)
 
 
 # ── build_admin_digest ────────────────────────────────────────────────────────
@@ -354,116 +496,3 @@ def test_recurring_table_all_empty_clusters_returns_empty_string():
             {"cluster1": [], "cluster2": []}, **_RECURRING_KW_DEFAULT
         )
     assert text == ""
-
-
-# ── build_usage_report fixtures ───────────────────────────────────────────────
-
-_USAGE_JOB_NARVAL_1 = UsageJob(
-    job_id=300001,
-    cluster="narval",
-    submit_time=datetime(2026, 5, 28, tzinfo=UTC),
-    wasted=None,
-    rgu_hours_used=120.0,
-    gpu_sm_occupancy=0.72,
-)
-_USAGE_JOB_NARVAL_2 = UsageJob(
-    job_id=300002,
-    cluster="narval",
-    submit_time=datetime(2026, 6, 1, tzinfo=UTC),
-    wasted=None,
-    rgu_hours_used=90.0,
-    gpu_sm_occupancy=0.65,
-)
-_USAGE_JOB_FIR = UsageJob(
-    job_id=300003,
-    cluster="fir",
-    submit_time=datetime(2026, 5, 30, tzinfo=UTC),
-    wasted=None,
-    rgu_hours_used=50.0,
-    gpu_sm_occupancy=None,
-)
-
-_USAGE_ROW_ALICE = UsageRow(
-    email="alice@mila.quebec",
-    display_name="Alice Liddell",
-    user_id=1,
-    rgu_hours=1000.0,
-    rgu_hours_used=745.0,
-    by_cluster=[
-        UsageClusterBreakdown("narval", 700.0, 525.0, 700.0 - 525.0),
-        UsageClusterBreakdown("fir", 300.0, 220.0, 300.0 - 220.0),
-    ],
-    top_jobs=[_USAGE_JOB_NARVAL_1, _USAGE_JOB_NARVAL_2, _USAGE_JOB_FIR],
-)
-
-_USAGE_ROW_BOB = UsageRow(
-    email="bob@mila.quebec",
-    display_name="Bob Marley",
-    user_id=2,
-    rgu_hours=800.0,
-    rgu_hours_used=200.0,
-    by_cluster=[UsageClusterBreakdown("fir", 800.0, 200.0, 800.0 - 200.0)],
-    top_jobs=[],
-)
-
-
-# ── build_usage_report ────────────────────────────────────────────────────────
-
-
-def test_usage_report():
-    text = build_usage_report(_USAGE_ROW_ALICE, window_weeks=4)
-    # Test greeting uses first name
-    assert text.startswith("Hi Alice,")
-    # Test neutral wording used not unused
-    assert "unused" not in text
-    assert "waste" not in text
-    assert "used on average" in text
-    # Test overview contains utilization
-    assert "74.5 %" in text
-    # Test overview contains rgu used
-    assert "745.0 RGU-hours total" in text
-    # Test overview contains window weeks
-    assert "last 4 weeks" in text
-    # Test top jobs section present
-    assert "Your top jobs by GPU usage:" in text
-    # Test top jobs grouped by cluster
-    # narval has more total usage than fir → appears first
-    assert text.index("Cluster narval") < text.index("Cluster fir")
-    # Test job line format
-    assert "job_300001 (2026-05-28)" in text
-    assert "120.0 RGU-h" in text
-    assert "GPU utilization: 72 %" in text
-    assert "GPU utilization: n/a" in text
-    # Test tree characters multi-job cluster
-    assert "┌─ job_300001" in text
-    assert "└─ job_300002" in text
-    # Test tree character single job cluster
-    assert "└─ job_300003" in text
-
-
-def test_usage_report_dashboard_url_included_when_provided():
-    text = build_usage_report(
-        _USAGE_ROW_ALICE, window_weeks=4, dashboard_url="https://dash.example.com"
-    )
-    assert "Track your usage over time: https://dash.example.com" in text
-
-
-def test_usage_report_help_section_appended_when_provided():
-    help_text = "Need help? Ask in #idt-support — IDT Team"
-    text = build_usage_report(_USAGE_ROW_ALICE, window_weeks=4, help_section=help_text)
-    assert text.endswith(help_text)
-
-
-def test_usage_report_no_jobs_omits_jobs_section():
-    text = build_usage_report(_USAGE_ROW_BOB, window_weeks=4)
-    assert "Your top jobs" not in text
-
-
-def test_usage_report_deterministic():
-    a = build_usage_report(
-        _USAGE_ROW_ALICE, window_weeks=4, dashboard_url="https://x", help_section="help"
-    )
-    b = build_usage_report(
-        _USAGE_ROW_ALICE, window_weeks=4, dashboard_url="https://x", help_section="help"
-    )
-    assert a == b

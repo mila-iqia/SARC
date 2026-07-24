@@ -2,6 +2,8 @@ from collections import defaultdict
 from collections.abc import Callable
 from datetime import date
 
+from sarc.config import ConfigurationError, config
+from sarc.notifications.mrkdwn import to_slack_mrkdwn
 from sarc.notifications.underusage import (
     HistoricalStats,
     MonthlyStats,
@@ -32,14 +34,20 @@ def _fmt_h(hours: float) -> str:
 
 def _tree_prefix(i: int, n: int) -> str:
     if n == 1 or i == n - 1:
-        return "  └─"
-    return "  ┌─" if i == 0 else "  ├─"
+        return "└─"
+    return "┌─" if i == 0 else "├─"
 
 
-def _footer_lines(dashboard_url: str | None, help_section: str | None) -> list[str]:
+def _footer_lines(
+    dashboard_url: str | None,
+    resources_section: str | None,
+    help_section: str | None = None,
+) -> list[str]:
     lines: list[str] = []
     if dashboard_url is not None:
         lines += ["", f"Track your usage over time: {dashboard_url}"]
+    if resources_section is not None:
+        lines += ["", resources_section]
     if help_section is not None:
         lines += ["", help_section]
     return lines
@@ -57,7 +65,9 @@ def _jobs_section(top_jobs: list, *, rgu_value: Callable, suffix: str) -> str:
     lines = []
     for cluster in cluster_order:
         jobs = by_cluster[cluster]
-        lines.append(f"  Cluster {cluster}")
+        # 2-space gutter matches the width of the "┌─"/"└─" job-line prefixes
+        # below, so cluster names align with job names.
+        lines.append(f"{'':2} Cluster {cluster}")
         for i, job in enumerate(jobs):
             prefix = _tree_prefix(i, len(jobs))
             date_str = job.submit_time.strftime("%Y-%m-%d")
@@ -74,71 +84,53 @@ def _jobs_section(top_jobs: list, *, rgu_value: Callable, suffix: str) -> str:
     return "\n".join(lines)
 
 
-def build_user_dm(
-    row: UnderuserRow,
-    *,
-    window_weeks: int,
-    dashboard_url: str | None = None,
-    help_section: str | None = None,
-) -> str:
-    """Build a plain-text DM for a single underusing researcher.
-
-    Pure function — no I/O, deterministic for fixed input.
-    """
+def build_user_dm(row: UnderuserRow, *, window_weeks: int) -> str:
+    """Build a plain-text DM for a single underusing researcher."""
+    if not config.notifications:
+        raise ConfigurationError("No notifications configuration found in config")
     parts = [
-        f"Hi {_first_name(row.display_name)},",
-        "",
-        f"Over the last {window_weeks} weeks, your jobs utilized on average"
-        f" {_pct(row.avg_utilization)} of requested GPUs,"
-        f" leaving {_fmt_h(row.wasted)} RGU-hours unused.",
-    ]
-
-    if row.top_jobs:
-        parts += [
-            "",
-            "Jobs with the lowest GPU utilization:",
-            "",
-            _jobs_section(
+        config.notifications.underusage_report_template.format(
+            name=_first_name(row.display_name),
+            window_weeks=window_weeks,
+            avg_utilization=_pct(row.avg_utilization),
+            rgu_hours_wasted=_fmt_h(row.wasted),
+            jobs_section=_jobs_section(
                 row.top_jobs, rgu_value=lambda j: j.wasted, suffix="RGU-h unused"
             ),
-        ]
+        ).rstrip()
+    ]
 
-    parts += _footer_lines(dashboard_url, help_section)
-    return "\n".join(parts)
+    parts += _footer_lines(
+        config.notifications.dashboard_url,
+        config.notifications.resources_section,
+        config.notifications.help_section,
+    )
+    return to_slack_mrkdwn("\n".join(parts))
 
 
-def build_usage_report(
-    row: UsageRow,
-    *,
-    window_weeks: int,
-    dashboard_url: str | None = None,
-    help_section: str | None = None,
-) -> str:
+def build_usage_report(row: UsageRow, *, window_weeks: int) -> str:
     """Build a plain-text usage report for a single researcher.
 
     Neutral wording — shows used volume, no waste/unused framing.
-    Pure function — no I/O, deterministic for fixed input.
     """
+    if not config.notifications:
+        raise ConfigurationError("No notifications configuration found in config")
     parts = [
-        f"Hi {_first_name(row.display_name)},",
-        "",
-        f"Over the last {window_weeks} weeks, your jobs used on average"
-        f" {_pct(row.avg_utilization)} of the GPU resources you"
-        f" requested ({_fmt_h(row.rgu_hours_used)} RGU-hours total).",
-    ]
-
-    if row.top_jobs:
-        parts += [
-            "",
-            "Your top jobs by GPU usage:",
-            "",
-            _jobs_section(
+        config.notifications.usage_report_template.format(
+            name=_first_name(row.display_name),
+            window_weeks=window_weeks,
+            avg_utilization=_pct(row.avg_utilization),
+            rgu_hours_allocated=_fmt_h(row.rgu_hours),
+            jobs_section=_jobs_section(
                 row.top_jobs, rgu_value=lambda j: j.rgu_hours_used, suffix="RGU-h"
             ),
-        ]
+        ).rstrip()
+    ]
 
-    parts += _footer_lines(dashboard_url, help_section)
-    return "\n".join(parts)
+    parts += _footer_lines(
+        config.notifications.dashboard_url, config.notifications.resources_section
+    )
+    return to_slack_mrkdwn("\n".join(parts))
 
 
 def _month_table(title: str, months: list[MonthlyStats]) -> list[str]:
@@ -179,12 +171,15 @@ def build_recurring_table(
 
     *cycle_dates* — n date objects [W0, W-k, W-2k, …] — when provided, renders
     column headers as "MM-DD" strings; when None, derives labels from the
-    configured usage_cycle_length_weeks (e.g. "W0", "W-2", "W-4", …).  Cycle
+    configured usage_cycle_length_weeks (e.g. "W0", "W-2", "W-4", …). Cycle
     cells whose flag is None (future cycle, no data yet) are rendered as blank.
 
-    A "|" separator is rendered after the last active cycle (index *active_cycles*).
-    Per-cycle ⚑ is shown on ✗ cells in positions 0..active_cycles-1 whose
-    pa_flags entry indicates ceiling-adjusted cross-cluster waste ≥ the action threshold.
+    A "|" separator is rendered after the last active cycle (index
+    *active_cycles*). Per-cycle ⚑ is shown on every ▲ cell whose pa_flags entry
+    indicates ceiling-adjusted cross-cluster waste ≥ the action threshold
+    (rendered "⚑▲"). A sustained run of ⚑ peaks escalates to a
+    restrictive-action marker "!!⚑▲" on the newest cell of the run (see
+    RecurringUserRow.restrictive_action_flags).
 
     Pure function — no I/O, deterministic for fixed input.
     """
@@ -207,11 +202,18 @@ def build_recurring_table(
         )
     flag_ws = [len(lbl) for lbl in flag_labels]
 
-    def _flag_cell(flag: bool | None, w: int, has_peak: bool = False) -> str:
+    def _flag_cell(
+        flag: bool | None, w: int, has_peak: bool = False, escalated: bool = False
+    ) -> str:
         if flag is None:
             return " " * (2 + w)
         if flag:
-            symbol = "⚑✗" if has_peak else "✗"
+            if escalated:
+                symbol = "!!⚑▲"
+            elif has_peak:
+                symbol = "⚑▲"
+            else:
+                symbol = "▲"
         else:
             symbol = "✓"
         return f"  {symbol.rjust(w)}"
@@ -226,15 +228,15 @@ def build_recurring_table(
 
     def _build_flag_cells(row: RecurringUserRow) -> str:
         cycle_vals = row.cycles
+        esc_flags = row.restrictive_action_flags
         parts = []
         for i, w in enumerate(flag_ws):
             if i == flag_window:
                 parts.append("  |")
             flag = cycle_vals[i]
-            has_peak = (
-                i < active_cycles and i < len(row.pa_flags) and bool(row.pa_flags[i])
-            )
-            parts.append(_flag_cell(flag, w, has_peak))
+            has_peak = i < len(row.pa_flags) and bool(row.pa_flags[i])
+            escalated = i < len(esc_flags) and bool(esc_flags[i])
+            parts.append(_flag_cell(flag, w, has_peak, escalated))
         return "".join(parts)
 
     flag_header = _build_flag_header()
@@ -246,9 +248,9 @@ def build_recurring_table(
 
         email_w = max(len(r.email) for r in rows)
         header = (
-            f"  {'':2} {'User':<{email_w}}"
+            f"{'':2} {'User':<{email_w}}"
             f"  {'Unused RGU-h':>12}"
-            f"  {'Share':>5}" + flag_header + "  Action"
+            f"  {'Share':>5}" + flag_header
         )
         lines = [
             f"Recurring underusers (last {window_weeks} weeks) — Cluster {cluster}",
@@ -260,11 +262,10 @@ def build_recurring_table(
         for i, row in enumerate(rows):
             pfx = _tree_prefix(i, n)
             flags = _build_flag_cells(row)
-            action = "  ⚑ personalized" if row.flagged_for_personalized_action else ""
             lines.append(
                 f"{pfx} {row.email:<{email_w}}"
                 f"  {_fmt_rgu_int(row.wasted_current_active_window):>12}"
-                f"  {row.cluster_share * 100:>3.0f} %" + flags + action
+                f"  {row.cluster_share * 100:>3.0f} %" + flags
             )
 
         sections.append("\n".join(lines))
