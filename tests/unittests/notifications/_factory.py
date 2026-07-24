@@ -68,7 +68,6 @@ def add_gpu_job(
                 median=None,
                 q75=None,
                 max=None,
-                unused=None,
             )
         )
     return job

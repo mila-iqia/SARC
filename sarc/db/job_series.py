@@ -31,8 +31,6 @@ inner_dict = func.json_build_object(
     JobStatisticDB.q75,
     "max",
     JobStatisticDB.max,
-    "unused",
-    JobStatisticDB.unused,
 )
 
 stats_subq = (
@@ -330,7 +328,7 @@ class JobSeriesDB(SQLModel, table=True):
     cluster_name: str | None = None
     statistics: dict[str, dict[str, float]] | None = Field(sa_type=JSON)
     """Per-job statistics as a JSON map: stat_name -> {mean, std, q05, q25,
-    median, q75, max, unused} (e.g. "cpu_utilization", "gpu_sm_occupancy")."""
+    median, q75, max} (e.g. "cpu_utilization", "gpu_sm_occupancy")."""
 
     # RGU (Reference GPU Unit) is a per-GPU-type weight that normalizes
     # heterogeneous GPU types to a common reference.
