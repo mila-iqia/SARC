@@ -28,6 +28,10 @@ def _pct(fraction: float) -> str:
     return f"{fraction * 100:.1f} %"
 
 
+def _date_range(start: date, end: date) -> str:
+    return f"{start:%b %d, %Y} – {end:%b %d, %Y}"
+
+
 def _fmt_h(hours: float) -> str:
     return f"{hours:.1f}"
 
@@ -36,21 +40,6 @@ def _tree_prefix(i: int, n: int) -> str:
     if n == 1 or i == n - 1:
         return "└─"
     return "┌─" if i == 0 else "├─"
-
-
-def _footer_lines(
-    dashboard_url: str | None,
-    resources_section: str | None,
-    help_section: str | None = None,
-) -> list[str]:
-    lines: list[str] = []
-    if dashboard_url is not None:
-        lines += ["", f"Track your usage over time: {dashboard_url}"]
-    if resources_section is not None:
-        lines += ["", resources_section]
-    if help_section is not None:
-        lines += ["", help_section]
-    return lines
 
 
 def _jobs_section(top_jobs: list, *, rgu_value: Callable, suffix: str) -> str:
@@ -79,58 +68,57 @@ def _jobs_section(top_jobs: list, *, rgu_value: Callable, suffix: str) -> str:
             lines.append(
                 f"{prefix} job_{job.job_id} ({date_str})"
                 f" — {_fmt_h(rgu_value(job))} {suffix}"
-                f"  (GPU utilization: {util_str})"
+                f"  (SM occupancy: {util_str})"
             )
     return "\n".join(lines)
 
 
-def build_user_dm(row: UnderuserRow, *, window_weeks: int) -> str:
+def build_user_dm(
+    row: UnderuserRow, *, window_weeks: int, window_start: date, window_end: date
+) -> str:
     """Build a plain-text DM for a single underusing researcher."""
     if not config.notifications:
         raise ConfigurationError("No notifications configuration found in config")
-    parts = [
-        config.notifications.underusage_report_template.format(
-            name=_first_name(row.display_name),
-            window_weeks=window_weeks,
-            avg_utilization=_pct(row.avg_utilization),
-            rgu_hours_wasted=_fmt_h(row.wasted),
-            jobs_section=_jobs_section(
-                row.top_jobs, rgu_value=lambda j: j.wasted, suffix="RGU-h unused"
-            ),
-        ).rstrip()
-    ]
-
-    parts += _footer_lines(
-        config.notifications.dashboard_url,
-        config.notifications.resources_section,
-        config.notifications.help_section,
-    )
-    return to_slack_mrkdwn("\n".join(parts))
+    ncfg = config.notifications
+    text = ncfg.underusage_report_template.format(
+        name=_first_name(row.display_name),
+        window_weeks=window_weeks,
+        window_range=_date_range(window_start, window_end),
+        rgu_hours_allocated=_fmt_h(row.rgu_hours),
+        rgu_hours_wasted=_fmt_h(row.wasted),
+        avg_utilization=_pct(row.avg_utilization),
+        top_jobs_count=len(row.top_jobs),
+        jobs_section=_jobs_section(
+            row.top_jobs, rgu_value=lambda j: j.wasted, suffix="RGU-h unused"
+        ),
+        dashboard_url=ncfg.dashboard_url,
+    ).rstrip()
+    return to_slack_mrkdwn(text)
 
 
-def build_usage_report(row: UsageRow, *, window_weeks: int) -> str:
+def build_usage_report(
+    row: UsageRow, *, window_weeks: int, window_start: date, window_end: date
+) -> str:
     """Build a plain-text usage report for a single researcher.
 
     Neutral wording — shows used volume, no waste/unused framing.
     """
     if not config.notifications:
         raise ConfigurationError("No notifications configuration found in config")
-    parts = [
-        config.notifications.usage_report_template.format(
-            name=_first_name(row.display_name),
-            window_weeks=window_weeks,
-            avg_utilization=_pct(row.avg_utilization),
-            rgu_hours_allocated=_fmt_h(row.rgu_hours),
-            jobs_section=_jobs_section(
-                row.top_jobs, rgu_value=lambda j: j.rgu_hours_used, suffix="RGU-h"
-            ),
-        ).rstrip()
-    ]
-
-    parts += _footer_lines(
-        config.notifications.dashboard_url, config.notifications.resources_section
-    )
-    return to_slack_mrkdwn("\n".join(parts))
+    ncfg = config.notifications
+    text = ncfg.usage_report_template.format(
+        name=_first_name(row.display_name),
+        window_weeks=window_weeks,
+        window_range=_date_range(window_start, window_end),
+        rgu_hours_allocated=_fmt_h(row.rgu_hours),
+        avg_utilization=_pct(row.avg_utilization),
+        top_jobs_count=len(row.top_jobs),
+        jobs_section=_jobs_section(
+            row.top_jobs, rgu_value=lambda j: j.rgu_hours_used, suffix="RGU-h"
+        ),
+        dashboard_url=ncfg.dashboard_url,
+    ).rstrip()
+    return to_slack_mrkdwn(text)
 
 
 def _month_table(title: str, months: list[MonthlyStats]) -> list[str]:
@@ -320,9 +308,6 @@ def build_admin_digest(
                 f"{rs.rjust(ratio_w)}"
             )
 
-    if historical is not None:
-        lines.append(_historical_section(historical))
-
     if recurring is not None:
         recurring_text = build_recurring_table(
             recurring,
@@ -332,5 +317,8 @@ def build_admin_digest(
         )
         if recurring_text:
             lines += ["", recurring_text]
+
+    if historical is not None:
+        lines.append(_historical_section(historical))
 
     return "\n".join(lines)

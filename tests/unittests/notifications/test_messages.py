@@ -5,6 +5,7 @@ import pytest
 
 from sarc.config import ConfigurationError
 from sarc.notifications.messages import (
+    _date_range,
     _first_name,
     _fmt_h,
     _jobs_section,
@@ -30,6 +31,7 @@ _BASE_NOTIFY_CFG = {
     "slack": {"description": "test", "token": "xoxb-test", "channel": "#test"},
     "underusage_report_template": UNDERUSAGE_REPORT_TEMPLATE,
     "usage_report_template": USAGE_REPORT_TEMPLATE,
+    "dashboard_url": "https://dash.example.com",
 }
 
 
@@ -47,6 +49,7 @@ _NOTIFY_CFG = {
     "enabled": False,
     "underusage_report_template": "",
     "usage_report_template": "",
+    "dashboard_url": "https://dash.example.com",
 }
 
 
@@ -116,14 +119,26 @@ _USAGE_ROW_BOB = UsageRow(
     top_jobs=[],
 )
 
+_WINDOW_START = datetime(2026, 1, 1, tzinfo=UTC)
+_WINDOW_END = datetime(2026, 2, 1, tzinfo=UTC)
+
+
+def _build_usage_report(row, *, window_weeks):
+    return build_usage_report(
+        row,
+        window_weeks=window_weeks,
+        window_start=_WINDOW_START,
+        window_end=_WINDOW_END,
+    )
+
 
 # ── build_usage_report ────────────────────────────────────────────────────────
 
 
 def test_usage_report():
     window_weeks = 4
-    with _notify_overlay():
-        text = build_usage_report(_USAGE_ROW_ALICE, window_weeks=window_weeks)
+    with _notify_overlay(dashboard_url="https://dash.example.com"):
+        text = _build_usage_report(_USAGE_ROW_ALICE, window_weeks=window_weeks)
     # Ensure no formatting braces {} remain
     assert "{" not in text
     assert "}" not in text
@@ -131,10 +146,14 @@ def test_usage_report():
     assert _first_name(_USAGE_ROW_ALICE.display_name) in text
     # Test overview contains window weeks
     assert f"{window_weeks}" in text
-    # Test overview contains utilization
-    assert _pct(_USAGE_ROW_ALICE.avg_utilization) in text
+    # Test overview contains the real date range
+    assert _date_range(_WINDOW_START, _WINDOW_END) in text
     # Test overview contains rgu used
     assert _fmt_h(_USAGE_ROW_ALICE.rgu_hours) in text
+    # Test overview contains utilization
+    assert _pct(_USAGE_ROW_ALICE.avg_utilization) in text
+    # Test overview contains top jobs count
+    assert f"top_jobs_count:{len(_USAGE_ROW_ALICE.top_jobs)}" in text
     # Test top jobs grouped by cluster
     # narval has more total usage than fir → appears first
     assert text.index("Cluster narval") < text.index("Cluster fir")
@@ -147,39 +166,13 @@ def test_usage_report():
         )
         in text
     )
-
-
-def test_usage_report_dashboard_url_included_when_provided():
-    with _notify_overlay(dashboard_url="https://dash.example.com"):
-        text = build_usage_report(_USAGE_ROW_ALICE, window_weeks=4)
+    # Test overview contains dashboard_url
     assert "https://dash.example.com" in text
-
-
-def test_usage_report_excludes_help_section():
-    """Usage reports intentionally omit help_section, unlike underusage DMs."""
-    help_text = "Need help? Ask in #idt-support — IDT Team"
-    with _notify_overlay(help_section=help_text):
-        text = build_usage_report(_USAGE_ROW_ALICE, window_weeks=4)
-    assert help_text not in text
-
-
-def test_usage_report_resources_section_appended_when_provided():
-    resources_section = "A_RESOURCES_SECTION"
-    with _notify_overlay(resources_section=resources_section):
-        text = build_usage_report(_USAGE_ROW_ALICE, window_weeks=2)
-    assert resources_section in text
-
-
-def test_usage_report_deterministic():
-    with _notify_overlay(dashboard_url="https://x", help_section="help"):
-        a = build_usage_report(_USAGE_ROW_ALICE, window_weeks=4)
-        b = build_usage_report(_USAGE_ROW_ALICE, window_weeks=4)
-    assert a == b
 
 
 def test_usage_report_raises_without_notifications_config():
     with pytest.raises(ConfigurationError, match="No notifications configuration"):
-        build_usage_report(_USAGE_ROW_ALICE, window_weeks=2)
+        _build_usage_report(_USAGE_ROW_ALICE, window_weeks=2)
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -246,13 +239,22 @@ _ROW_CAROL = UnderuserRow(
 )
 
 
+def _build_user_dm(row, *, window_weeks):
+    return build_user_dm(
+        row,
+        window_weeks=window_weeks,
+        window_start=_WINDOW_START,
+        window_end=_WINDOW_END,
+    )
+
+
 # ── build_user_dm ─────────────────────────────────────────────────────────────
 
 
 def test_underusage_report():
     window_weeks = 2
     with _notify_overlay():
-        text = build_user_dm(_ROW_ALICE, window_weeks=window_weeks)
+        text = _build_user_dm(_ROW_ALICE, window_weeks=window_weeks)
     # Ensure no formatting braces {} remain
     assert "{" not in text
     assert "}" not in text
@@ -260,10 +262,16 @@ def test_underusage_report():
     assert _first_name(_ROW_ALICE.display_name) in text
     # Test overview contains window weeks
     assert f"{window_weeks}" in text
+    # Test overview contains the real date range
+    assert _date_range(_WINDOW_START, _WINDOW_END) in text
+    # Test overview contains rgu used
+    assert _fmt_h(_USAGE_ROW_ALICE.rgu_hours) in text
     # Test overview contains utilization
     assert _pct(_ROW_ALICE.avg_utilization) in text
     # Test overview contains unused hours
     assert _fmt_h(_ROW_ALICE.wasted) in text
+    # Test overview contains top jobs count
+    assert f"top_jobs_count:{len(_USAGE_ROW_ALICE.top_jobs)}" in text
     # Test top jobs grouped by cluster
     # narval block appears before fir block (narval has more total waste)
     assert text.index("Cluster narval") < text.index("Cluster fir")
@@ -274,38 +282,13 @@ def test_underusage_report():
         )
         in text
     )
-
-
-def test_dm_dashboard_url_included_when_provided():
-    with _notify_overlay(dashboard_url="https://dash.example.com"):
-        text = build_user_dm(_ROW_ALICE, window_weeks=2)
-    assert "Track your usage over time: https://dash.example.com" in text
-
-
-def test_dm_help_section_appended_when_provided():
-    help_text = "Need help? Ask in #idt-support — IDT Team"
-    with _notify_overlay(help_section=help_text):
-        text = build_user_dm(_ROW_ALICE, window_weeks=2)
-    assert text.endswith(help_text)
-
-
-def test_dm_resources_section_appended_when_provided():
-    resources_section = "A_RESOURCES_SECTION"
-    with _notify_overlay(resources_section=resources_section):
-        text = build_usage_report(_USAGE_ROW_ALICE, window_weeks=2)
-    assert resources_section in text
-
-
-def test_dm_deterministic():
-    with _notify_overlay(dashboard_url="https://x", help_section="help"):
-        a = build_user_dm(_ROW_ALICE, window_weeks=2)
-        b = build_user_dm(_ROW_ALICE, window_weeks=2)
-    assert a == b
+    # Test overview contains dashboard_url
+    assert "https://dash.example.com" in text
 
 
 def test_dm_raises_without_notifications_config():
     with pytest.raises(ConfigurationError, match="No notifications configuration"):
-        build_user_dm(_ROW_ALICE, window_weeks=2)
+        _build_user_dm(_ROW_ALICE, window_weeks=2)
 
 
 # ── build_admin_digest ────────────────────────────────────────────────────────

@@ -329,7 +329,7 @@ def get_underusers(
         # Per-job data for the identified underusers — same RGU × utilisation
         # pattern.
         jobs_by_user: dict[int, list[UsageJob]] = {uid: [] for uid in underuser_ids}
-        if underuser_ids:
+        if top_jobs_per_user > 0 and jobs_by_user:
             job_rows = session.exec(
                 _select_user_jobs(
                     underuser_ids,
@@ -398,9 +398,9 @@ def get_all_users_usage(
     start: datetime,
     end: datetime,
     *,
+    min_usage_rgu_hours: float = 0.0,
     top_jobs_per_user: int,
     clusters: list[str] | None = None,
-    usage_report_min_usage_rgu_hours: float = 0.0,
 ) -> list[UsageRow]:
     with config.db.session() as session:
         stmt = _select_jobs_usage(None, start, end, by_cluster=True, clusters=clusters)
@@ -428,7 +428,7 @@ def get_all_users_usage(
         all_user_ids = list(user_data.keys())
 
         jobs_by_user: dict[int, list[UsageJob]] = {uid: [] for uid in all_user_ids}
-        if all_user_ids:
+        if top_jobs_per_user > 0 and all_user_ids:
             job_rows = session.exec(
                 _select_user_jobs(all_user_ids, start, end, clusters)
             ).all()
@@ -454,12 +454,14 @@ def get_all_users_usage(
         breakdowns = u["clusters"]
         total_rgu_h = sum(c.rgu_hours for c in breakdowns)
         total_used = sum(c.rgu_hours_used for c in breakdowns)
-        if total_rgu_h <= usage_report_min_usage_rgu_hours:
+        if total_rgu_h <= min_usage_rgu_hours:
             continue
 
         by_cluster = sorted(breakdowns, key=lambda c: c.rgu_hours_used, reverse=True)
+        # Sorted by GPU utilization (not usage volume) so these are honestly
+        # the user's *most efficient* jobs, per the usage report's framing.
         top_jobs = sorted(
-            jobs_by_user[uid], key=lambda j: j.rgu_hours_used, reverse=True
+            jobs_by_user[uid], key=lambda j: j.gpu_sm_occupancy, reverse=True
         )[:top_jobs_per_user]  # ty:ignore[no-matching-overload]
 
         result.append(
@@ -706,7 +708,7 @@ def get_recurring_underusers(
             min_waste_ratio=min_waste_ratio,
             min_waste_rgu_hours=min_waste_rgu_hours,
             # Only user_id is used for membership — top jobs are discarded.
-            top_jobs_per_user=1,
+            top_jobs_per_user=0,
             clusters=clusters,
             utilization_ceiling=utilization_ceiling,
         )
@@ -722,8 +724,8 @@ def get_recurring_underusers(
     with config.db.session() as session:
         for i in range(recurrence_display_cycles):
             # PA at position i requires both the waste floor and single-cycle
-            # underuse in that position's most-recent cycle. cycle_flagged[i]
-            # is None for a cycle ending in the future (guarded before membership).
+            # underuse in that position's most-recent cycle. cycle_flagged[i] is
+            # None for a cycle ending in the future (guarded before membership).
             if cycle_flagged[i] is None:
                 continue
             _this_cycle_flagged: set[int] = cycle_flagged[i] or set()

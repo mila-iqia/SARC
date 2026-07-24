@@ -32,6 +32,7 @@ _NOTIFY_CFG = {
     },
     "underusage_report_template": UNDERUSAGE_REPORT_TEMPLATE,
     "usage_report_template": USAGE_REPORT_TEMPLATE,
+    "dashboard_url": "https://dash.example.com",
     "enabled": True,
     "send_underusage_report": True,
     "min_waste_ratio": 0.50,

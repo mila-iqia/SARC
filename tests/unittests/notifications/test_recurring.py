@@ -59,6 +59,7 @@ _NOTIFY_CFG = {
     },
     "underusage_report_template": UNDERUSAGE_REPORT_TEMPLATE,
     "usage_report_template": USAGE_REPORT_TEMPLATE,
+    "dashboard_url": "https://dash.example.com",
     "min_waste_ratio": _MIN_WASTE_RATIO,
     "min_waste_rgu_hours": _MIN_WASTE_RGU_HOURS,
     "digest_top_n": 16,

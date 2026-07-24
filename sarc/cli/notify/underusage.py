@@ -121,8 +121,6 @@ class UnderusageNotifyCommand:
             logger.info("Underusage notifications disabled (enabled=false); skipping")
             return 0
 
-        window_weeks = ncfg.usage_cycle_length_weeks
-
         if self.as_of is not None:
             try:
                 parsed = datetime.fromisoformat(self.as_of)
@@ -136,6 +134,8 @@ class UnderusageNotifyCommand:
                 return -1
         else:
             end = _today_utc()
+
+        window_weeks = ncfg.usage_cycle_length_weeks
         start = end - timedelta(weeks=window_weeks)
         period = f"{start.date()} – {end.date()}"
 
@@ -152,10 +152,13 @@ class UnderusageNotifyCommand:
         )
 
         usage_report_window_weeks = ncfg.usage_report_cycles * window_weeks
+        usage_start = end - timedelta(weeks=usage_report_window_weeks)
         usage_report_eligible = week_num % usage_report_window_weeks == 0
         usage_report_will_send = (
             usage_report_eligible and not self.no_dms and ncfg.send_usage_report
         )
+
+        clusters = ncfg.clusters or None
 
         if self.as_of is not None and end > _today_utc():
             _userfacing_print(
@@ -179,8 +182,6 @@ class UnderusageNotifyCommand:
                 file=sys.stderr,
             )
         _userfacing_print(file=sys.stderr)
-
-        clusters = ncfg.clusters or None
 
         underusage_rows = get_underusers(
             start,
@@ -225,19 +226,20 @@ class UnderusageNotifyCommand:
             _userfacing_print("=== Under Usage Report Previews ===")
             for row in underusage_rows:
                 _userfacing_print(f"\n--- {row.display_name} ({row.email}) ---")
-                dm = build_user_dm(row, window_weeks=window_weeks)
+                dm = build_user_dm(
+                    row, window_weeks=window_weeks, window_start=start, window_end=end
+                )
                 _userfacing_print(dm)
 
         usage_rows = []
         usage_report_skipped = []
         if usage_report_eligible:
-            usage_start = end - timedelta(weeks=usage_report_window_weeks)
             all_usage_rows = get_all_users_usage(
                 usage_start,
                 end,
                 top_jobs_per_user=ncfg.top_jobs_per_user,
                 clusters=clusters,
-                usage_report_min_usage_rgu_hours=ncfg.usage_report_min_usage_rgu_hours,
+                min_usage_rgu_hours=ncfg.usage_report_min_usage_rgu_hours,
             )
             underuser_emails = {r.email for r in underusage_rows}
             usage_rows = [r for r in all_usage_rows if r.email not in underuser_emails]
@@ -257,7 +259,10 @@ class UnderusageNotifyCommand:
                 for row in usage_rows:
                     _userfacing_print(f"\n--- {row.display_name} ({row.email}) ---")
                     report_text = build_usage_report(
-                        row, window_weeks=usage_report_window_weeks
+                        row,
+                        window_weeks=usage_report_window_weeks,
+                        window_start=usage_start,
+                        window_end=end,
                     )
                     _userfacing_print(report_text)
 
@@ -272,7 +277,9 @@ class UnderusageNotifyCommand:
         if underusage_report_will_send:
             underusage_report_delivery_results = _deliver(
                 underusage_rows,
-                lambda row: build_user_dm(row, window_weeks=window_weeks),
+                lambda row: build_user_dm(
+                    row, window_weeks=window_weeks, window_start=start, window_end=end
+                ),
                 slack=slack_client,
             )
         elif underusage_report_eligible and underusage_rows:
@@ -287,7 +294,10 @@ class UnderusageNotifyCommand:
             usage_report_delivery_results = _deliver(
                 usage_rows,
                 lambda row: build_usage_report(
-                    row, window_weeks=usage_report_window_weeks
+                    row,
+                    window_weeks=usage_report_window_weeks,
+                    window_start=usage_start,
+                    window_end=end,
                 ),
                 slack=slack_client,
             )

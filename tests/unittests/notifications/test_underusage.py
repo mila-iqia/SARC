@@ -265,9 +265,9 @@ def test_usage_all_users_overview_and_top_jobs(underusage_db):
     # petitbonhomme has 8 mila jobs + 1 raisin job = 9 total, capped at 5.
     assert len(row.top_jobs) == _TOP_JOBS_PER_USER
 
-    # Test top jobs ordered desc by rgu hours used
-    used = [j.rgu_hours_used for j in row.top_jobs]
-    assert used == sorted(used, reverse=True)
+    # Test top jobs ordered desc by GPU utilization (most efficient first)
+    occ = [j.gpu_sm_occupancy for j in row.top_jobs]
+    assert occ == sorted(occ, reverse=True)
 
 
 def test_usage_outside_window_excluded(underusage_db):
@@ -441,7 +441,7 @@ def test_usage_floor_excludes_below_threshold(underusage_db):
         _WINDOW_START,
         _WINDOW_END,
         top_jobs_per_user=_TOP_JOBS_PER_USER,
-        usage_report_min_usage_rgu_hours=500.0,
+        min_usage_rgu_hours=500.0,
     )
     emails = {r.email for r in results}
     assert "bramin@mila.quebec" not in emails
@@ -454,7 +454,7 @@ def test_usage_floor_at_boundary_is_excluded(underusage_db):
         _WINDOW_START,
         _WINDOW_END,
         top_jobs_per_user=_TOP_JOBS_PER_USER,
-        usage_report_min_usage_rgu_hours=481.0,
+        min_usage_rgu_hours=481.0,
     )
     emails = {r.email for r in results}
     assert "bramin@mila.quebec" not in emails
