@@ -4,6 +4,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
+import gifnoc
 import simple_parsing
 
 from sarc.config import config
@@ -108,9 +109,80 @@ class UnderusageNotifyCommand:
         help="Simulate a run as of this date (YYYY-MM-DD, UTC). Default: now. "
         "Anchors the window, all queries, and the usage-cycle eligibility.",
     )
+    min_waste_ratio: float | None = simple_parsing.field(
+        default=None,
+        alias=["--min-waste-ratio"],
+        help="override min_waste_ratio for this run.",
+    )
+    min_waste_rgu_hours: float | None = simple_parsing.field(
+        default=None,
+        alias=["--min-waste-rgu-hours"],
+        help="override min_waste_rgu_hours for this run.",
+    )
+    personalized_action_min_waste_rgu_hours: float | None = simple_parsing.field(
+        default=None,
+        alias=["--personalized-action-min-waste-rgu-hours"],
+        help="override personalized_action_min_waste_rgu_hours for this run.",
+    )
+    usage_report_min_usage_rgu_hours: float | None = simple_parsing.field(
+        default=None,
+        alias=["--usage-report-min-usage-rgu-hours"],
+        help="override usage_report_min_usage_rgu_hours for this run.",
+    )
+    user_email: str | None = simple_parsing.field(
+        default=None,
+        alias=["--user-email"],
+        help="Restrict this run to a single user's email via a query-level "
+        "filter. min_waste_ratio, min_waste_rgu_hours, and "
+        "usage_report_min_usage_rgu_hours default to 0.0 unless the corresponding "
+        "override flag above is also passed "
+        "(personalized_action_min_waste_rgu_hours is never auto-zeroed). Skips "
+        "the admin-digest/summary channel posts in --send mode.",
+    )
 
     def execute(self) -> int:
-        return self._exec()
+        if config.notifications is None:
+            # No base config at all — let _exec()'s existing check log and
+            # return -1. Checked here, before any overlay, because entering
+            # gifnoc.overlay(...) with nothing to merge onto crashes instead of
+            # degrading gracefully.
+            return self._exec()
+
+        # Debug-only threshold overrides, applied via a config overlay so every
+        # ncfg.* read in _exec() (including inside get_recurring_underusers)
+        # sees the override. Precedence: explicit CLI flag > (--user-email
+        # auto-zero) > config default. personalized_action_min_waste_rgu_hours
+        # is never auto-zeroed by --user-email, only by its own explicit flag.
+        # Since get_recurring_underusers isn't restricted by user_emails, a
+        # --user-email run without an explicit threshold override also zeroes
+        # those thresholds fleet-wide for the Recurring/Admin-Digest section —
+        # intentional, not a bug.
+        config_overrides = {}
+        if self.user_email:
+            config_overrides["min_waste_ratio"] = 0.0
+            config_overrides["min_waste_rgu_hours"] = 0.0
+            config_overrides["usage_report_min_usage_rgu_hours"] = 0.0
+
+        if self.min_waste_ratio is not None:
+            config_overrides["min_waste_ratio"] = self.min_waste_ratio
+        if self.min_waste_rgu_hours is not None:
+            config_overrides["min_waste_rgu_hours"] = self.min_waste_rgu_hours
+        if self.usage_report_min_usage_rgu_hours is not None:
+            config_overrides["usage_report_min_usage_rgu_hours"] = (
+                self.usage_report_min_usage_rgu_hours
+            )
+        if self.personalized_action_min_waste_rgu_hours is not None:
+            config_overrides["personalized_action_min_waste_rgu_hours"] = (
+                self.personalized_action_min_waste_rgu_hours
+            )
+
+        if not config_overrides:
+            # Nothing to override — skip the overlay entirely so a normal run
+            # behaves exactly as it did before this feature existed.
+            return self._exec()
+
+        with gifnoc.overlay({"sarc.notifications": config_overrides}):
+            return self._exec()
 
     def _exec(self) -> int:
         ncfg = config.notifications
@@ -159,6 +231,7 @@ class UnderusageNotifyCommand:
         )
 
         clusters = ncfg.clusters or None
+        user_emails = [self.user_email] if self.user_email is not None else None
 
         if self.as_of is not None and end > _today_utc():
             _userfacing_print(
@@ -191,6 +264,7 @@ class UnderusageNotifyCommand:
             top_jobs_per_user=ncfg.top_jobs_per_user,
             clusters=clusters,
             utilization_ceiling=ncfg.utilization_ceiling,
+            user_emails=user_emails,
         )
         historical = get_historical_stats(
             end, months=ncfg.historical_months, clusters=clusters
@@ -237,9 +311,10 @@ class UnderusageNotifyCommand:
             all_usage_rows = get_all_users_usage(
                 usage_start,
                 end,
+                min_usage_rgu_hours=ncfg.usage_report_min_usage_rgu_hours,
                 top_jobs_per_user=ncfg.top_jobs_per_user,
                 clusters=clusters,
-                min_usage_rgu_hours=ncfg.usage_report_min_usage_rgu_hours,
+                user_emails=user_emails,
             )
             underuser_emails = {r.email for r in underusage_rows}
             usage_rows = [r for r in all_usage_rows if r.email not in underuser_emails]
@@ -325,28 +400,36 @@ class UnderusageNotifyCommand:
                 count=len(usage_rows),
             )
 
-        channel_res = slack_client.post_channel(
-            ncfg.slack.channel, digest, preformatted=True
-        )
-        if channel_res.status != SendStatus.OK:
-            logger.error(
-                "Failed to post admin digest to %s: %s",
-                ncfg.slack.channel,
-                channel_res.detail,
+        # --user-email restricts this run to a single test user: skip the
+        # fleet-wide admin-digest/footer channel posts entirely, only the
+        # per-user DM(s) above should go out.
+        channel_res = None
+        if self.user_email is None:
+            channel_res = slack_client.post_channel(
+                ncfg.slack.channel, digest, preformatted=True
             )
+            if channel_res.status != SendStatus.OK:
+                logger.error(
+                    "Failed to post admin digest to %s: %s",
+                    ncfg.slack.channel,
+                    channel_res.detail,
+                )
 
-        # Delivery summaries go in the digest's thread: rapporteur only relays
-        # the last few ERROR logs, so counts and failed-user emails need a
-        # guaranteed home in the channel. If the digest post failed, ts is None
-        # and the replies land as regular channel messages instead.
-        if underusage_report_footer:
-            slack_client.post_channel(
-                ncfg.slack.channel, underusage_report_footer, thread_ts=channel_res.ts
-            )
-        if usage_report_footer:
-            slack_client.post_channel(
-                ncfg.slack.channel, usage_report_footer, thread_ts=channel_res.ts
-            )
+            # Delivery summaries go in the digest's thread: rapporteur only
+            # relays the last few ERROR logs, so counts and failed-user emails
+            # need a guaranteed home in the channel. If the digest post failed,
+            # ts is None and the replies land as regular channel messages
+            # instead.
+            if underusage_report_footer:
+                slack_client.post_channel(
+                    ncfg.slack.channel,
+                    underusage_report_footer,
+                    thread_ts=channel_res.ts,
+                )
+            if usage_report_footer:
+                slack_client.post_channel(
+                    ncfg.slack.channel, usage_report_footer, thread_ts=channel_res.ts
+                )
 
         underusage_report_counts = _delivery_counts(underusage_report_delivery_results)
         usage_report_counts = _delivery_counts(usage_report_delivery_results)

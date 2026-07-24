@@ -318,6 +318,72 @@ def test_clusters_filter_excludes_other_clusters(underusage_db):
     assert {c.cluster for c in petitbonhomme.by_cluster} == {"mila"}
 
 
+# ── user_emails filter ────────────────────────────────────────────────────────
+
+
+def test_get_underusers_user_emails_filters_to_single_user(underusage_db):
+    results = get_underusers(
+        _WINDOW_START,
+        _WINDOW_END,
+        min_waste_ratio=0.0,
+        min_waste_rgu_hours=0.0,
+        top_jobs_per_user=_TOP_JOBS_PER_USER,
+        user_emails=["petitbonhomme@mila.quebec"],
+    )
+    # At threshold 0.0, beaubonhomme and bramin would normally also qualify —
+    # the email filter must exclude them regardless.
+    assert {r.email for r in results} == {"petitbonhomme@mila.quebec"}
+
+
+def test_get_underusers_user_emails_none_matches_default(underusage_db):
+    kwargs = dict(
+        min_waste_ratio=0.0,
+        min_waste_rgu_hours=0.0,
+        top_jobs_per_user=_TOP_JOBS_PER_USER,
+    )
+    with_none = get_underusers(_WINDOW_START, _WINDOW_END, user_emails=None, **kwargs)
+    without_kwarg = get_underusers(_WINDOW_START, _WINDOW_END, **kwargs)
+    assert {r.email for r in with_none} == {r.email for r in without_kwarg}
+
+
+def test_get_underusers_user_emails_empty_list_returns_no_rows(underusage_db):
+    """user_emails=[] is a real (non-matching) filter, unlike user_emails=None."""
+    results = get_underusers(
+        _WINDOW_START,
+        _WINDOW_END,
+        min_waste_ratio=0.0,
+        min_waste_rgu_hours=0.0,
+        top_jobs_per_user=_TOP_JOBS_PER_USER,
+        user_emails=[],
+    )
+    assert results == []
+
+
+def test_get_all_users_usage_user_emails_filters_to_single_user(underusage_db):
+    results = get_all_users_usage(
+        _WINDOW_START,
+        _WINDOW_END,
+        top_jobs_per_user=_TOP_JOBS_PER_USER,
+        user_emails=["beaubonhomme@mila.quebec"],
+    )
+    assert {r.email for r in results} == {"beaubonhomme@mila.quebec"}
+
+
+def test_get_all_users_usage_user_emails_none_returns_all(underusage_db):
+    results = get_all_users_usage(
+        _WINDOW_START,
+        _WINDOW_END,
+        top_jobs_per_user=_TOP_JOBS_PER_USER,
+        user_emails=None,
+    )
+    emails = {r.email for r in results}
+    assert emails == {
+        "petitbonhomme@mila.quebec",
+        "beaubonhomme@mila.quebec",
+        "bramin@mila.quebec",
+    }
+
+
 # ── Scaled waste + true_* reference fields ────────────────────────────────────
 
 

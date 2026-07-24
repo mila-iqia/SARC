@@ -216,6 +216,7 @@ def _select_jobs_usage(
     by_cluster: bool,
     clusters: list[str] | None = None,
     utilization_ceiling: float = 1.0,
+    user_emails: list[str] | None = None,
 ):
     """Return an already-grouped per-user RGU-usage aggregate statement
     (sum_rgu_hours, sum_rgu_true_used, sum_rgu_used) — the caller does not
@@ -227,7 +228,8 @@ def _select_jobs_usage(
     per user.
 
     *user_ids* optionally restricts to a subset of users (None = all users in
-    the window).
+    the window). *user_emails* optionally restricts to a subset of users by
+    email (None = all users in the window); independent of *user_ids*.
     """
     rgu_h_expr, true_used_expr, credited_used_expr = _rgu_exprs(utilization_ceiling)
     _by_cluster = [col(JobSeriesDB.cluster_name)] if by_cluster else []
@@ -248,6 +250,8 @@ def _select_jobs_usage(
     )
     if user_ids is not None:
         stmt = stmt.where(col(JobSeriesDB.sarc_user_id).in_(user_ids))
+    if user_emails is not None:
+        stmt = stmt.where(col(JobSeriesDB.email).in_(user_emails))
     return _with_rgu_window(stmt, start, end, clusters=clusters).group_by(
         JobSeriesDB.sarc_user_id, *_by_cluster
     )
@@ -277,6 +281,7 @@ def get_underusers(
     top_jobs_per_user: int,
     clusters: list[str] | None = None,
     utilization_ceiling: float = 1.0,
+    user_emails: list[str] | None = None,
 ) -> list[UnderuserRow]:
     with config.db.session() as session:
         stmt = _select_jobs_usage(
@@ -286,6 +291,7 @@ def get_underusers(
             by_cluster=True,
             clusters=clusters,
             utilization_ceiling=utilization_ceiling,
+            user_emails=user_emails,
         )
         agg_rows = session.exec(stmt).all()
 
@@ -401,9 +407,17 @@ def get_all_users_usage(
     min_usage_rgu_hours: float = 0.0,
     top_jobs_per_user: int,
     clusters: list[str] | None = None,
+    user_emails: list[str] | None = None,
 ) -> list[UsageRow]:
     with config.db.session() as session:
-        stmt = _select_jobs_usage(None, start, end, by_cluster=True, clusters=clusters)
+        stmt = _select_jobs_usage(
+            None,
+            start,
+            end,
+            by_cluster=True,
+            clusters=clusters,
+            user_emails=user_emails,
+        )
         agg_rows = session.exec(stmt).all()
 
         user_data: dict[int, dict] = {}
