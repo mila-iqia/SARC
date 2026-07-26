@@ -87,45 +87,40 @@ class UsageJob:
 
 
 @dataclass
-class UnderuserRow:
+class UsageRow:
     email: str
     display_name: str
     user_id: int
     # Total RGU-hours allocated over the window.
-    rgu_hours: float
+    rgu_hours: float = 0.0
+    rgu_hours_used: float = 0.0
     # RGU-hours wasted over the window (= rgu_hours - rgu_used). Used for the
     # activity floor: the floor is compared against *wasted* RGU-hours, so that
     # users who waste a significant absolute amount are flagged regardless of
     # their total allocation size.
-    wasted: float
-    # waste_ratio = wasted / rgu_hours  (= 1 - rgu_used / rgu_hours)
-    waste_ratio: float
-    # Unadjusted reference values (utilization_ceiling=1.0 → equal to wasted/waste_ratio).
-    true_wasted: float = 0.0
-    true_waste_ratio: float = 0.0
+    wasted: float = 0.0
     by_cluster: list[UsageClusterBreakdown] = field(default_factory=list)
     # Top-N GPU jobs by RGU-hours unused, descending.
     top_jobs: list[UsageJob] = field(default_factory=list)
+
+    # waste_ratio = wasted / rgu_hours  (= 1 - rgu_used / rgu_hours)
+    @cached_property
+    def waste_ratio(self) -> float:
+        return self.wasted / self.rgu_hours if self.rgu_hours > 0 else 0.0
+
+    # Unadjusted reference values (utilization_ceiling=1.0 → equal to wasted/waste_ratio).
+    @cached_property
+    def true_wasted(self) -> float:
+        return max(0.0, self.rgu_hours - self.rgu_hours_used)
+
+    @cached_property
+    def true_waste_ratio(self) -> float:
+        return self.true_wasted / self.rgu_hours if self.rgu_hours > 0 else 0.0
 
     # avg_utilization = 1 - waste_ratio  (= rgu_used / rgu_hours)
     @cached_property
     def avg_utilization(self) -> float:
         return 1.0 - self.waste_ratio
-
-
-@dataclass
-class UsageRow:
-    email: str
-    display_name: str
-    user_id: int
-    rgu_hours: float
-    rgu_hours_used: float
-    by_cluster: list[UsageClusterBreakdown] = field(default_factory=list)
-    top_jobs: list[UsageJob] = field(default_factory=list)
-
-    @cached_property
-    def avg_utilization(self) -> float:
-        return self.rgu_hours_used / self.rgu_hours
 
 
 @dataclass
@@ -329,17 +324,16 @@ def _split_waste(row) -> tuple[float, float, float]:
     return rgu_h, rgu_h_true_used, rgu_h - rgu_h_used
 
 
-def get_underusers(
+def _get_users_usage(
     start: datetime,
     end: datetime,
     *,
-    min_waste_ratio: float,
-    min_waste_rgu_hours: float,
-    top_jobs_per_user: int,
+    usage_filter: Callable,
+    fetch_jobs_per_user: bool = True,
     clusters: list[str] | None = None,
     utilization_ceiling: float = 1.0,
     user_emails: list[str] | None = None,
-) -> list[UnderuserRow]:
+) -> list[UsageRow]:
     with config.db.session() as session:
         stmt = _select_jobs_usage(
             None,
@@ -357,8 +351,9 @@ def get_underusers(
             uid = row.sarc_user_id
             if uid not in user_data:
                 user_data[uid] = {
-                    "email": row.email,
-                    "display_name": row.display_name,
+                    "usage_data": UsageRow(
+                        email=row.email, display_name=row.display_name, user_id=uid
+                    ),
                     "clusters": [],
                 }
             rgu_h, rgu_h_true_used, rgu_h_wasted = _split_waste(row)
@@ -371,31 +366,28 @@ def get_underusers(
                 )
             )
 
-        # Identify users who meet both threshold conditions: their cross-cluster
-        # aggregated waste ratio and total wasted RGU-hours exceed
-        # `min_waste_ratio` and `min_waste_rgu_hours` respectively.
-        underuser_ids: list[int] = []
-        for uid, u in user_data.items():
+        for uid, u in list(user_data.items()):
+            usage_data: UsageRow = u["usage_data"]
             breakdowns: list[UsageClusterBreakdown] = u["clusters"]
-            total_rgu_h = sum(c.rgu_hours for c in breakdowns)
-            total_wasted = sum(c.wasted for c in breakdowns)
-            u["total_rgu_h"] = total_rgu_h
-            u["total_wasted"] = total_wasted
-            u["total_true_wasted"] = total_rgu_h - sum(
-                c.rgu_hours_used for c in breakdowns
+
+            usage_data.rgu_hours = sum(c.rgu_hours for c in breakdowns)
+            usage_data.rgu_hours_used = sum(c.rgu_hours_used for c in breakdowns)
+            usage_data.wasted = sum(c.wasted for c in breakdowns)
+
+            usage_data.by_cluster = sorted(
+                u["clusters"], key=lambda c: c.wasted, reverse=True
             )
-            waste_ratio = total_wasted / total_rgu_h if total_rgu_h > 0 else 0.0
-            u["waste_ratio"] = waste_ratio
-            if waste_ratio >= min_waste_ratio and total_wasted >= min_waste_rgu_hours:
-                underuser_ids.append(uid)
+
+            if not usage_filter(usage_data):
+                user_data.pop(uid)
 
         # Per-job data for the identified underusers — same RGU × utilisation
         # pattern.
-        jobs_by_user: dict[int, list[UsageJob]] = {uid: [] for uid in underuser_ids}
-        if top_jobs_per_user > 0 and jobs_by_user:
+        jobs_by_user: dict[int, list[UsageJob]] = {uid: [] for uid in user_data.keys()}
+        if fetch_jobs_per_user and jobs_by_user:
             job_rows = session.exec(
                 _select_user_jobs(
-                    underuser_ids,
+                    list(jobs_by_user.keys()),
                     start,
                     end,
                     clusters=clusters,
@@ -406,7 +398,7 @@ def get_underusers(
             for jr in job_rows:
                 uid = jr.sarc_user_id
                 rgu_h = float(jr.rgu_hours or 0.0)
-                rgu_h_credited_used = float(jr.rgu_used or 0.0)
+                rgu_used_h = float(jr.rgu_used or 0.0)
                 gpu_sm_occupancy = _job_occupancy(
                     jr.allocated_gpu_cost, jr.allocated_gpu_waste
                 )
@@ -415,137 +407,80 @@ def get_underusers(
                         job_id=jr.job_db_id,
                         cluster=jr.cluster_name or "unknown",
                         submit_time=jr.submit_time,
-                        wasted=rgu_h - rgu_h_credited_used,
-                        rgu_hours_used=None,
+                        wasted=rgu_h - rgu_used_h,
+                        rgu_hours_used=rgu_used_h,
                         gpu_sm_occupancy=gpu_sm_occupancy,
                     )
                 )
 
     result = []
-    for uid in underuser_ids:
-        u = user_data[uid]
-        total_rgu_h = u["total_rgu_h"]
-        total_wasted = u["total_wasted"]
-        waste_ratio = u["waste_ratio"]
-
-        by_cluster = sorted(u["clusters"], key=lambda c: c.wasted, reverse=True)
-
-        top_jobs = sorted(
-            jobs_by_user[uid], key=lambda j: j.wasted, reverse=True
-        )[  # ty:ignore[no-matching-overload]
-            :top_jobs_per_user
-        ]
-
-        total_true_wasted = u["total_true_wasted"]
-        result.append(
-            UnderuserRow(
-                email=u["email"],
-                display_name=u["display_name"],
-                user_id=uid,
-                rgu_hours=total_rgu_h,
-                wasted=total_wasted,
-                waste_ratio=waste_ratio,
-                true_wasted=total_true_wasted,
-                true_waste_ratio=total_true_wasted / total_rgu_h
-                if total_rgu_h > 0
-                else 0.0,
-                by_cluster=by_cluster,
-                top_jobs=top_jobs,
-            )
-        )
+    for uid, u in user_data.items():
+        usage_data: UsageRow = u["usage_data"]
+        usage_data.top_jobs = jobs_by_user[uid]
+        result.append(usage_data)
 
     return result
 
 
-def get_all_users_usage(
+def get_underusers_usage(
+    start: datetime,
+    end: datetime,
+    *,
+    min_waste_ratio: float,
+    min_waste_rgu_hours: float,
+    top_jobs_per_user: int = 5,
+    clusters: list[str] | None = None,
+    utilization_ceiling: float = 1.0,
+    user_emails: list[str] | None = None,
+) -> list[UsageRow]:
+    # Filter users who don't meet both threshold conditions: their cross-cluster
+    # aggregated waste ratio and total wasted RGU-hours exceed `min_waste_ratio`
+    # and `min_waste_rgu_hours` respectively.
+    def filter_underusers(row: UsageRow):
+        return row.waste_ratio >= min_waste_ratio and row.wasted >= min_waste_rgu_hours
+
+    result = _get_users_usage(
+        start,
+        end,
+        usage_filter=filter_underusers,
+        fetch_jobs_per_user=top_jobs_per_user > 0,
+        clusters=clusters,
+        utilization_ceiling=utilization_ceiling,
+        user_emails=user_emails,
+    )
+
+    for row in result:
+        row.top_jobs.sort(key=lambda j: j.wasted, reverse=True)
+        row.top_jobs = row.top_jobs[:top_jobs_per_user]
+
+    return result
+
+
+def get_users_usage(
     start: datetime,
     end: datetime,
     *,
     min_usage_rgu_hours: float = 0.0,
-    top_jobs_per_user: int,
+    top_jobs_per_user: int = 5,
     clusters: list[str] | None = None,
     user_emails: list[str] | None = None,
 ) -> list[UsageRow]:
-    with config.db.session() as session:
-        stmt = _select_jobs_usage(
-            None,
-            start,
-            end,
-            by_cluster=True,
-            clusters=clusters,
-            user_emails=user_emails,
-        )
-        agg_rows = session.exec(stmt).all()
+    def filter_users(row: UsageRow):
+        return row.rgu_hours >= min_usage_rgu_hours
 
-        user_data: dict[int, dict] = {}
-        for row in agg_rows:
-            uid = row.sarc_user_id
-            if uid not in user_data:
-                user_data[uid] = {
-                    "email": row.email,
-                    "display_name": row.display_name,
-                    "clusters": [],
-                }
-            rgu_h, rgu_h_true_used, rgu_h_wasted = _split_waste(row)
-            user_data[uid]["clusters"].append(
-                UsageClusterBreakdown(
-                    cluster=row.cluster_name or "unknown",
-                    rgu_hours=rgu_h,
-                    rgu_hours_used=rgu_h_true_used,
-                    wasted=rgu_h_wasted,
-                )
-            )
+    result = _get_users_usage(
+        start,
+        end,
+        usage_filter=filter_users,
+        fetch_jobs_per_user=top_jobs_per_user > 0,
+        clusters=clusters,
+        user_emails=user_emails,
+    )
 
-        all_user_ids = list(user_data.keys())
-
-        jobs_by_user: dict[int, list[UsageJob]] = {uid: [] for uid in all_user_ids}
-        if top_jobs_per_user > 0 and all_user_ids:
-            job_rows = session.exec(
-                _select_user_jobs(all_user_ids, start, end, clusters)
-            ).all()
-
-            for jr in job_rows:
-                uid = jr.sarc_user_id
-                rgu_used_h = float(jr.rgu_used or 0.0)
-                jobs_by_user[uid].append(
-                    UsageJob(
-                        job_id=jr.job_db_id,
-                        cluster=jr.cluster_name or "unknown",
-                        submit_time=jr.submit_time,
-                        wasted=None,
-                        rgu_hours_used=rgu_used_h,
-                        gpu_sm_occupancy=_job_occupancy(
-                            jr.allocated_gpu_cost, jr.allocated_gpu_waste
-                        ),
-                    )
-                )
-
-    result = []
-    for uid, u in user_data.items():
-        breakdowns = u["clusters"]
-        total_rgu_h = sum(c.rgu_hours for c in breakdowns)
-        total_used = sum(c.rgu_hours_used for c in breakdowns)
-        if total_rgu_h <= min_usage_rgu_hours:
-            continue
-
-        by_cluster = sorted(breakdowns, key=lambda c: c.rgu_hours_used, reverse=True)
-        # Sorted by GPU utilization (not usage volume) so these are honestly
-        # the user's *most efficient* jobs, per the usage report's framing.
-        top_jobs = sorted(
-            jobs_by_user[uid], key=lambda j: j.gpu_sm_occupancy, reverse=True
-        )[:top_jobs_per_user]
-
-        result.append(
-            UsageRow(
-                email=u["email"],
-                display_name=u["display_name"],
-                user_id=uid,
-                rgu_hours=total_rgu_h,
-                rgu_hours_used=total_used,
-                by_cluster=by_cluster,
-                top_jobs=top_jobs,
-            )
-        )
+    # Sorted by GPU utilization so these are the user's *most efficient* jobs
+    for row in result:
+        row.top_jobs.sort(key=lambda j: j.gpu_sm_occupancy, reverse=True)
+        row.top_jobs = row.top_jobs[:top_jobs_per_user]
 
     return result
 
@@ -709,7 +644,7 @@ def get_recurring_underusers(
     membership_results = _run_concurrently(
         [
             partial(
-                get_underusers,
+                get_underusers_usage,
                 c_start,
                 c_end,
                 min_waste_ratio=min_waste_ratio,

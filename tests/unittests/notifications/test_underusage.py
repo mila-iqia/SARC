@@ -19,8 +19,8 @@ from sarc.db.users import UserDB
 from sarc.notifications.underusage import (
     _run_concurrently,
     _select_user_jobs,
-    get_all_users_usage,
-    get_underusers,
+    get_underusers_usage,
+    get_users_usage,
 )
 from tests.unittests.notifications._factory import add_gpu_job
 
@@ -152,7 +152,7 @@ def underusage_db(read_write_db):
 
 
 def test_underusers_filtering_and_top_jobs(underusage_db):
-    results = get_underusers(
+    results = get_underusers_usage(
         _WINDOW_START,
         _WINDOW_END,
         min_waste_ratio=_MIN_WASTE_RATIO,
@@ -187,7 +187,7 @@ def test_underusers_filtering_and_top_jobs(underusage_db):
 
 
 def test_underusers_overview_fields(underusage_db):
-    results = get_underusers(
+    results = get_underusers_usage(
         _WINDOW_START,
         _WINDOW_END,
         min_waste_ratio=0.0,
@@ -211,7 +211,7 @@ def test_outside_window_excluded(underusage_db):
     before = datetime(2020, 1, 1, tzinfo=UTC)
     after = datetime(2020, 12, 31, tzinfo=UTC)
     assert (
-        get_underusers(
+        get_underusers_usage(
             before,
             after,
             min_waste_ratio=0.0,
@@ -254,7 +254,7 @@ def test_run_concurrently_empty_tasks_returns_empty_list():
 
 def test_usage_all_users_overview_and_top_jobs(underusage_db):
     # All 3 users have GPU jobs in the window — no threshold filtering.
-    results = get_all_users_usage(
+    results = get_users_usage(
         _WINDOW_START, _WINDOW_END, top_jobs_per_user=_TOP_JOBS_PER_USER
     )
     emails = {r.email for r in results}
@@ -282,9 +282,7 @@ def test_usage_all_users_overview_and_top_jobs(underusage_db):
 def test_usage_outside_window_excluded(underusage_db):
     before = datetime(2020, 1, 1, tzinfo=UTC)
     after = datetime(2020, 12, 31, tzinfo=UTC)
-    assert (
-        get_all_users_usage(before, after, top_jobs_per_user=_TOP_JOBS_PER_USER) == []
-    )
+    assert get_users_usage(before, after, top_jobs_per_user=_TOP_JOBS_PER_USER) == []
 
 
 # ── top_jobs_per_user is config-driven ───────────────────────────────────────
@@ -292,7 +290,7 @@ def test_usage_outside_window_excluded(underusage_db):
 
 def test_top_jobs_per_user_3(underusage_db):
     # petitbonhomme has >5 jobs; verify the cap follows the param.
-    results = get_underusers(
+    results = get_underusers_usage(
         _WINDOW_START,
         _WINDOW_END,
         min_waste_ratio=_MIN_WASTE_RATIO,
@@ -305,7 +303,7 @@ def test_top_jobs_per_user_3(underusage_db):
 
 def test_usage_top_jobs_per_user_3(underusage_db):
     # petitbonhomme has 9 jobs total; verify the cap follows the param.
-    results = get_all_users_usage(_WINDOW_START, _WINDOW_END, top_jobs_per_user=3)
+    results = get_users_usage(_WINDOW_START, _WINDOW_END, top_jobs_per_user=3)
     row = next(r for r in results if r.email == "petitbonhomme@mila.quebec")
     assert len(row.top_jobs) == 3
 
@@ -315,7 +313,7 @@ def test_usage_top_jobs_per_user_3(underusage_db):
 
 def test_clusters_filter_excludes_other_clusters(underusage_db):
     # petitbonhomme has jobs on both mila and raisin; restrict to mila only.
-    results = get_underusers(
+    results = get_underusers_usage(
         _WINDOW_START,
         _WINDOW_END,
         min_waste_ratio=_MIN_WASTE_RATIO,
@@ -331,7 +329,7 @@ def test_clusters_filter_excludes_other_clusters(underusage_db):
 
 
 def test_get_underusers_user_emails_filters_to_single_user(underusage_db):
-    results = get_underusers(
+    results = get_underusers_usage(
         _WINDOW_START,
         _WINDOW_END,
         min_waste_ratio=0.0,
@@ -350,14 +348,16 @@ def test_get_underusers_user_emails_none_matches_default(underusage_db):
         min_waste_rgu_hours=0.0,
         top_jobs_per_user=_TOP_JOBS_PER_USER,
     )
-    with_none = get_underusers(_WINDOW_START, _WINDOW_END, user_emails=None, **kwargs)
-    without_kwarg = get_underusers(_WINDOW_START, _WINDOW_END, **kwargs)
+    with_none = get_underusers_usage(
+        _WINDOW_START, _WINDOW_END, user_emails=None, **kwargs
+    )
+    without_kwarg = get_underusers_usage(_WINDOW_START, _WINDOW_END, **kwargs)
     assert {r.email for r in with_none} == {r.email for r in without_kwarg}
 
 
 def test_get_underusers_user_emails_empty_list_returns_no_rows(underusage_db):
     """user_emails=[] is a real (non-matching) filter, unlike user_emails=None."""
-    results = get_underusers(
+    results = get_underusers_usage(
         _WINDOW_START,
         _WINDOW_END,
         min_waste_ratio=0.0,
@@ -369,7 +369,7 @@ def test_get_underusers_user_emails_empty_list_returns_no_rows(underusage_db):
 
 
 def test_get_all_users_usage_user_emails_filters_to_single_user(underusage_db):
-    results = get_all_users_usage(
+    results = get_users_usage(
         _WINDOW_START,
         _WINDOW_END,
         top_jobs_per_user=_TOP_JOBS_PER_USER,
@@ -379,7 +379,7 @@ def test_get_all_users_usage_user_emails_filters_to_single_user(underusage_db):
 
 
 def test_get_all_users_usage_user_emails_none_returns_all(underusage_db):
-    results = get_all_users_usage(
+    results = get_users_usage(
         _WINDOW_START,
         _WINDOW_END,
         top_jobs_per_user=_TOP_JOBS_PER_USER,
@@ -397,7 +397,7 @@ def test_get_all_users_usage_exclusion_only_list_does_not_match_nobody(underusag
     """user_emails=["~x"] (exclusion-only, no allow-list entries) must not be
     treated the same as an explicit empty allow-list — it should return every
     other user, only excluding x."""
-    results = get_all_users_usage(
+    results = get_users_usage(
         _WINDOW_START,
         _WINDOW_END,
         top_jobs_per_user=_TOP_JOBS_PER_USER,
@@ -412,7 +412,7 @@ def test_get_all_users_usage_exclusion_only_list_does_not_match_nobody(underusag
 
 def test_true_wasted_field_at_identity(underusage_db):
     # At threshold=1.0, true_wasted must equal wasted on every row.
-    results = get_underusers(
+    results = get_underusers_usage(
         _WINDOW_START,
         _WINDOW_END,
         min_waste_ratio=0.0,
@@ -432,7 +432,7 @@ def test_scaled_waste_less_than_true_waste_below_threshold(underusage_db):
     # credited_used = LEAST(rgu_h, rgu_h*(1-0.80+0.10)) = rgu_h*0.30  → wasted=70%
     # true_used = rgu_h*0.10  → true_wasted=90%
     # So scaled waste < true waste.
-    results = get_underusers(
+    results = get_underusers_usage(
         _WINDOW_START,
         _WINDOW_END,
         min_waste_ratio=_MIN_WASTE_RATIO,
@@ -449,7 +449,7 @@ def test_subtractive_formula_exact_waste_ratio(underusage_db):
     # Petitbonhomme total: rgu_h=12800 (mila 4800 + raisin 8000).
     # Subtractive waste per job = rgu_h * max(0, T - m).
     # At T=0.80: sum(waste) = 9592 → waste_ratio = 9592/12800.
-    results = get_underusers(
+    results = get_underusers_usage(
         _WINDOW_START,
         _WINDOW_END,
         min_waste_ratio=_MIN_WASTE_RATIO,
@@ -462,7 +462,7 @@ def test_subtractive_formula_exact_waste_ratio(underusage_db):
 
     # At T=0.20: sum(waste) = 1984 → waste_ratio = 1984/12800 < _MIN_WASTE_RATIO;
     # pass min_waste_ratio=0.10 so petitbonhomme still appears.
-    results = get_underusers(
+    results = get_underusers_usage(
         _WINDOW_START,
         _WINDOW_END,
         min_waste_ratio=0.10,
@@ -478,7 +478,7 @@ def test_subtractive_formula_boundary_zero_waste(underusage_db):
     # Beaubonhomme: single mila job, m=0.80, rgu_h=3360.
     # Subtractive: waste_ratio = max(0, T - m). Allocation-independent.
     # At T=0.80: m == T → waste = 0.
-    results = get_underusers(
+    results = get_underusers_usage(
         _WINDOW_START,
         _WINDOW_END,
         min_waste_ratio=0.0,
@@ -490,7 +490,7 @@ def test_subtractive_formula_boundary_zero_waste(underusage_db):
     assert row.wasted == pytest.approx(0.0, abs=1e-6)
 
     # At T=0.90: waste_ratio = 0.90 - 0.80 = 0.10 exactly.
-    results = get_underusers(
+    results = get_underusers_usage(
         _WINDOW_START,
         _WINDOW_END,
         min_waste_ratio=0.05,
@@ -506,7 +506,7 @@ def test_top_job_gpu_sm_occupancy_is_raw_mean(underusage_db):
     # At T=0.80, displayed gpu_sm_occupancy must be raw m, independent of T.
     # Raisin job m=0.0: shows 0.0. Mila top job m=0.10: shows 0.10 (not 0.125 =
     # 0.10/0.80).
-    results = get_underusers(
+    results = get_underusers_usage(
         _WINDOW_START,
         _WINDOW_END,
         min_waste_ratio=_MIN_WASTE_RATIO,
@@ -526,7 +526,7 @@ def test_top_job_gpu_sm_occupancy_is_raw_mean(underusage_db):
 
 def test_usage_floor_excludes_below_threshold(underusage_db):
     # bramin: 100h * 4.8 rgu = 480 rgu_h total_requested → below 500 floor → excluded
-    results = get_all_users_usage(
+    results = get_users_usage(
         _WINDOW_START,
         _WINDOW_END,
         top_jobs_per_user=_TOP_JOBS_PER_USER,
@@ -539,7 +539,7 @@ def test_usage_floor_excludes_below_threshold(underusage_db):
 
 def test_usage_floor_at_boundary_is_excluded(underusage_db):
     # bramin ≈ 480 rgu_h; floor=481 is just above → excluded
-    results = get_all_users_usage(
+    results = get_users_usage(
         _WINDOW_START,
         _WINDOW_END,
         top_jobs_per_user=_TOP_JOBS_PER_USER,
@@ -575,7 +575,7 @@ def missing_util_db(read_write_db):
 
 
 def test_missing_util_not_flagged(missing_util_db):
-    results = get_underusers(
+    results = get_underusers_usage(
         _WINDOW_START,
         _WINDOW_END,
         min_waste_ratio=_MIN_WASTE_RATIO,
@@ -589,7 +589,7 @@ def test_missing_util_zero_waste(missing_util_db):
     # bramin's only job has no gpu_sm_occupancy stat, so it's excluded
     # entirely upstream — he produces no aggregate row at all, even at
     # zero-value thresholds.
-    results = get_underusers(
+    results = get_underusers_usage(
         _WINDOW_START,
         _WINDOW_END,
         min_waste_ratio=0.0,
@@ -603,7 +603,7 @@ def test_missing_util_non_negative_waste_at_sub_threshold(missing_util_db):
     # Regression guard: at a sub-1.0 ceiling, bramin's no-stat job must still
     # be excluded upstream rather than entering the subtractive ceiling
     # formula (which would otherwise propagate NaN into an undefined waste).
-    results = get_underusers(
+    results = get_underusers_usage(
         _WINDOW_START,
         _WINDOW_END,
         min_waste_ratio=0.0,
@@ -618,7 +618,7 @@ def test_missing_util_usage_rgu_hours_used_equals_requested(missing_util_db):
     # bramin's only job is excluded from the SQL aggregate entirely (no
     # gpu_sm_occupancy stat), so he never produces a user_data entry and
     # never reaches get_all_users_usage's usage-floor check at all.
-    results = get_all_users_usage(
+    results = get_users_usage(
         _WINDOW_START, _WINDOW_END, top_jobs_per_user=_TOP_JOBS_PER_USER
     )
     assert "bramin@mila.quebec" not in {r.email for r in results}
@@ -654,7 +654,7 @@ def test_zero_cost_job_does_not_crash(zero_cost_db):
     # Regression: total_rgu_h == 0 for this user must not raise ZeroDivisionError
     # in the waste_ratio computation (which runs before the floor check), and the
     # user must be excluded (waste == 0 fails the min_waste_rgu_hours floor).
-    results = get_underusers(
+    results = get_underusers_usage(
         _WINDOW_START,
         _WINDOW_END,
         min_waste_ratio=_MIN_WASTE_RATIO,

@@ -17,7 +17,6 @@ from sarc.notifications.messages import (
 from sarc.notifications.slack import MENTION_TOKEN
 from sarc.notifications.underusage import (
     RecurringUserRow,
-    UnderuserRow,
     UsageClusterBreakdown,
     UsageJob,
     UsageRow,
@@ -196,13 +195,12 @@ _JOB_FIR = UsageJob(
     gpu_sm_occupancy=None,
 )
 
-_ROW_ALICE = UnderuserRow(
+_ROW_ALICE = UsageRow(
     email="alice@mila.quebec",
     display_name="Alice Liddell",
     user_id=1,
     rgu_hours=1000.0,
     wasted=255.0,
-    waste_ratio=0.255,
     by_cluster=[
         UsageClusterBreakdown("narval", 700.0, 490.0, 700.0 - 490.0),
         UsageClusterBreakdown("fir", 300.0, 255.0, 300.0 - 255.0),
@@ -210,24 +208,22 @@ _ROW_ALICE = UnderuserRow(
     top_jobs=[_JOB_NARVAL_1, _JOB_NARVAL_2, _JOB_FIR],
 )
 
-_ROW_BOB = UnderuserRow(
+_ROW_BOB = UsageRow(
     email="bob@mila.quebec",
     display_name="Bob Marley",
     user_id=2,
     rgu_hours=800.0,
     wasted=600.0,
-    waste_ratio=0.75,
     by_cluster=[UsageClusterBreakdown("fir", 800.0, 200.0, 800.0 - 200.0)],
     top_jobs=[],
 )
 
-_ROW_CAROL = UnderuserRow(
+_ROW_CAROL = UsageRow(
     email="carol@mila.quebec",
     display_name="Carol Danvers",
     user_id=3,
     rgu_hours=700.0,
     wasted=420.0,
-    waste_ratio=0.60,
     by_cluster=[UsageClusterBreakdown("mila", 700.0, 280.0, 700.0 - 280.0)],
     top_jobs=[],
 )

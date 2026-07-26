@@ -15,10 +15,10 @@ from sarc.notifications.messages import (
 )
 from sarc.notifications.slack import SendStatus, SlackClient
 from sarc.notifications.underusage import (
-    get_all_users_usage,
     get_cycle_dates,
     get_recurring_underusers,
-    get_underusers,
+    get_underusers_usage,
+    get_users_usage,
 )
 
 logger = logging.getLogger(__name__)
@@ -279,7 +279,7 @@ class UnderusageNotifyCommand:
             )
         _userfacing_print(file=sys.stderr)
 
-        underusage_rows = get_underusers(
+        underusage_rows = get_underusers_usage(
             start,
             end,
             min_waste_ratio=ncfg.min_waste_ratio,
@@ -339,7 +339,7 @@ class UnderusageNotifyCommand:
                 _user_emails = (_user_emails or []) + [
                     f"~{r.email}" for r in underusage_rows
                 ]
-            usage_rows = get_all_users_usage(
+            usage_rows = get_users_usage(
                 usage_start,
                 end,
                 min_usage_rgu_hours=ncfg.usage_report_min_usage_rgu_hours,

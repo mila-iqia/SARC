@@ -7,7 +7,6 @@ from sarc.notifications.mrkdwn import to_slack_mrkdwn
 from sarc.notifications.slack import MENTION_TOKEN
 from sarc.notifications.underusage import (
     RecurringUserRow,
-    UnderuserRow,
     UsageRow,
     usage_cycle_length_weeks,
 )
@@ -72,7 +71,7 @@ def _jobs_section(top_jobs: list, *, rgu_value: Callable, suffix: str) -> str:
 
 
 def build_user_dm(
-    row: UnderuserRow, *, window_weeks: int, window_start: date, window_end: date
+    row: UsageRow, *, window_weeks: int, window_start: date, window_end: date
 ) -> str:
     """Build a plain-text DM for a single underusing researcher."""
     if not config.notifications:
@@ -233,7 +232,7 @@ def build_recurring_table(
 
 
 def build_admin_digest(
-    rows: list[UnderuserRow],
+    rows: list[UsageRow],
     *,
     period: str,
     cluster_share_threshold: float,

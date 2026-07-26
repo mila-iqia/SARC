@@ -12,12 +12,12 @@ from sarc.db.cluster import SlurmClusterDB
 from sarc.db.users import UserDB
 from sarc.notifications.slack import SendResult, SendStatus
 from sarc.notifications.underusage import (
-    get_all_users_usage as _real_get_all_users_usage,
-)
-from sarc.notifications.underusage import (
     get_recurring_underusers as _real_get_recurring_underusers,
 )
-from sarc.notifications.underusage import get_underusers as _real_get_underusers
+from sarc.notifications.underusage import (
+    get_underusers_usage as _real_get_underusers_usage,
+)
+from sarc.notifications.underusage import get_users_usage as _real_get_users_usage
 from tests.unittests.notifications._factory import (
     UNDERUSAGE_REPORT_TEMPLATE,
     USAGE_REPORT_TEMPLATE,
@@ -694,8 +694,8 @@ def test_no_dms_flag_suppresses_usage_report_sends(
 def test_min_waste_ratio_flag_overrides_config(
     notify_db, cli_main, monkeypatch, capsys
 ):
-    spy = MagicMock(wraps=_real_get_underusers)
-    monkeypatch.setattr("sarc.cli.notify.underusage.get_underusers", spy)
+    spy = MagicMock(wraps=_real_get_underusers_usage)
+    monkeypatch.setattr("sarc.cli.notify.underusage.get_underusers_usage", spy)
 
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         rc = cli_main(["notify", "underusage", "--as-of", _CYCLE_WEEK])
@@ -723,11 +723,11 @@ def test_min_waste_ratio_flag_overrides_config(
 def test_min_waste_ratio_flag_explicit_zero_is_honored(
     notify_db, cli_main, monkeypatch
 ):
-    """An explicit --min-waste-ratio 0 must reach get_underusers as 0.0, not be
+    """An explicit --min-waste-ratio 0 must reach get_underusers_usage as 0.0, not be
     silently dropped in favor of the config default (0.0 is falsy in Python, so
     a naive `if self.min_waste_ratio:` check would incorrectly ignore it)."""
-    spy = MagicMock(wraps=_real_get_underusers)
-    monkeypatch.setattr("sarc.cli.notify.underusage.get_underusers", spy)
+    spy = MagicMock(wraps=_real_get_underusers_usage)
+    monkeypatch.setattr("sarc.cli.notify.underusage.get_underusers_usage", spy)
 
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         rc = cli_main(
@@ -780,8 +780,8 @@ def test_user_email_flag_logs_warning(notify_db, cli_main, caplog):
 def test_min_waste_rgu_hours_flag_overrides_config(
     notify_db, cli_main, monkeypatch, capsys
 ):
-    spy = MagicMock(wraps=_real_get_underusers)
-    monkeypatch.setattr("sarc.cli.notify.underusage.get_underusers", spy)
+    spy = MagicMock(wraps=_real_get_underusers_usage)
+    monkeypatch.setattr("sarc.cli.notify.underusage.get_underusers_usage", spy)
 
     # Each seeded user wastes 4.8 * 700 * 0.9 = 3024 RGU-h — a 5000 override excludes them all.
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
@@ -803,8 +803,8 @@ def test_min_waste_rgu_hours_flag_overrides_config(
 def test_usage_report_min_usage_rgu_hours_flag_overrides_config(
     usage_report_db, cli_main, monkeypatch, capsys
 ):
-    spy = MagicMock(wraps=_real_get_all_users_usage)
-    monkeypatch.setattr("sarc.cli.notify.underusage.get_all_users_usage", spy)
+    spy = MagicMock(wraps=_real_get_users_usage)
+    monkeypatch.setattr("sarc.cli.notify.underusage.get_users_usage", spy)
 
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         rc = cli_main(["notify", "underusage", "--as-of", _USAGE_REPORT_WEEK])
@@ -838,8 +838,8 @@ def test_usage_report_not_email_filtered_when_no_underusers(
     usage-report query must receive user_emails=None (no filter). Passing an
     empty list instead makes _select_jobs_usage filter `email IN ()`, matching
     nobody — silently emptying the fleet-wide usage report."""
-    spy = MagicMock(wraps=_real_get_all_users_usage)
-    monkeypatch.setattr("sarc.cli.notify.underusage.get_all_users_usage", spy)
+    spy = MagicMock(wraps=_real_get_users_usage)
+    monkeypatch.setattr("sarc.cli.notify.underusage.get_users_usage", spy)
 
     # An impossible waste-ratio floor means nobody qualifies as an underuser
     # this cycle, while the usage report is still eligible.
