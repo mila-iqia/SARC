@@ -17,6 +17,7 @@ from sarc.db.cluster import SlurmClusterDB
 from sarc.db.support import GpuRguDB
 from sarc.db.users import UserDB
 from sarc.notifications.underusage import (
+    _run_concurrently,
     _select_user_jobs,
     get_all_users_usage,
     get_underusers,
@@ -238,6 +239,14 @@ def test_select_user_jobs_empty_list_returns_no_rows(underusage_db):
     """user_ids=[] is a real (non-matching) filter, unlike user_ids=None."""
     stmt = _select_user_jobs([], _WINDOW_START, _WINDOW_END)
     assert underusage_db.exec(stmt).all() == []
+
+
+# ── _run_concurrently ─────────────────────────────────────────────────────────
+
+
+def test_run_concurrently_empty_tasks_returns_empty_list():
+    """Empty task list short-circuits before spinning up the thread pool."""
+    assert _run_concurrently([]) == []
 
 
 # ── get_all_users_usage ───────────────────────────────────────────────────────

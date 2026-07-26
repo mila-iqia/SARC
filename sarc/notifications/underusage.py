@@ -1,12 +1,53 @@
+import contextvars
+from collections.abc import Callable, Sequence
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
-from functools import cached_property
+from functools import cached_property, partial
+from typing import TypeVar
 
 from sqlmodel import col, func, select
 
 from sarc.api.metrics import _is_real
 from sarc.config import config
 from sarc.db.job_series import JobSeriesDB
+
+_MAX_WORKERS = 4
+
+T = TypeVar("T")
+
+
+def _run_concurrently(tasks: Sequence[Callable[[], T]]) -> list[T]:
+    # Order-preserving: results match the order of `tasks`, not completion
+    # order. On any task exception, that exception propagates from
+    # .result(), but only after every already-dispatched task has finished
+    # (ThreadPoolExecutor's __exit__ waits for all of them; there's no cheap
+    # way to cancel already-running threads) -- fine for a handful of
+    # iterations with no external SLA.
+    #
+    # Each task gets its own contextvars.copy_context() rather than one
+    # shared copy: gifnoc's active-configuration overlay (set via `with
+    # gifnoc.overlay(...):`) lives in a ContextVar, which a fresh worker
+    # thread won't see unless the context is copied in explicitly -- and a
+    # single Context object can't be entered concurrently by more than one
+    # thread, so reusing one copy across submissions raises
+    # "RuntimeError: cannot enter context" as soon as two tasks overlap.
+    if not tasks:
+        return []
+
+    def _run_in_context(ctx: contextvars.Context, task: Callable[[], T]) -> T:
+        return ctx.run(task)
+
+    with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as executor:
+        # contextvars.copy_context() is called here, in the submitting
+        # thread, for each task -- NOT inside _run_in_context, which runs on
+        # the worker thread and would otherwise copy that (uninitialized)
+        # worker context instead of this thread's overlaid one.
+        futures: list[Future[T]] = [
+            executor.submit(_run_in_context, contextvars.copy_context(), task)
+            for task in tasks
+        ]
+        return [f.result() for f in futures]
 
 
 def usage_cycle_length_weeks():
@@ -543,6 +584,31 @@ def get_cycle_dates(end: datetime, n: int = 5) -> list[date]:
     return [(anchor - timedelta(weeks=i * cycle_length_weeks)).date() for i in range(n)]
 
 
+def _fetch_pa_window_rows(
+    user_ids: list[int],
+    pa_start: datetime,
+    pa_end: datetime,
+    i: int,
+    clusters: list[str] | None,
+    utilization_ceiling: float,
+):
+    """One position's personalized-action rolling-window query, run inside
+    `get_recurring_underusers`'s capped thread pool -- opens its own session
+    rather than sharing one, since sessions aren't thread-safe. Module-level
+    (not a nested closure) so it's directly monkeypatch-able from tests.
+    """
+    with config.db.session() as session:
+        pa_stmt = _select_jobs_usage(
+            user_ids,
+            pa_start,
+            pa_end,
+            by_cluster=False,
+            clusters=clusters,
+            utilization_ceiling=utilization_ceiling,
+        )
+        return i, session.exec(pa_stmt).all()
+
+
 def get_recurring_underusers(
     end: datetime,
     *,
@@ -628,61 +694,82 @@ def get_recurring_underusers(
 
     # ── Cycle membership sets ─────────────────────────────────────────────────
     # Each cycle ends at anchor - i*cycle_length_weeks (always aligned). Cycles
-    # whose end is in the future relative to `end` yield None (no data).
-    cycle_flagged: list[set[int] | None] = []
+    # whose end is in the future relative to `end` yield None (no data). Each
+    # position's get_underusers call is independent of every other, so they
+    # run on a small capped thread pool instead of one after another.
+    cycle_flagged: list[set[int] | None] = [None] * recurrence_display_cycles
+    active_cycles: list[tuple[int, datetime, datetime]] = []
     for i in range(recurrence_display_cycles):
         c_end = anchor - timedelta(weeks=i * cycle_length_weeks)
         if c_end > end:
-            cycle_flagged.append(None)
             continue
         c_start = c_end - timedelta(weeks=cycle_length_weeks)
-        flagged_rows = get_underusers(
-            c_start,
-            c_end,
-            min_waste_ratio=min_waste_ratio,
-            min_waste_rgu_hours=min_waste_rgu_hours,
-            # Only user_id is used for membership — top jobs are discarded.
-            top_jobs_per_user=0,
-            clusters=clusters,
-            utilization_ceiling=utilization_ceiling,
-        )
-        cycle_flagged.append({r.user_id for r in flagged_rows})
+        active_cycles.append((i, c_start, c_end))
+
+    membership_results = _run_concurrently(
+        [
+            partial(
+                get_underusers,
+                c_start,
+                c_end,
+                min_waste_ratio=min_waste_ratio,
+                min_waste_rgu_hours=min_waste_rgu_hours,
+                # Only user_id is used for membership — top jobs are discarded.
+                top_jobs_per_user=0,
+                clusters=clusters,
+                utilization_ceiling=utilization_ceiling,
+            )
+            for _, c_start, c_end in active_cycles
+        ]
+    )
+    for (i, _, _), flagged_rows in zip(active_cycles, membership_results):
+        cycle_flagged[i] = {r.user_id for r in flagged_rows}
 
     # ── Personalized-action aggregate (per active anchor, cross-cluster) ──────
     # For position i, the window is [anchor − (i+active_cycles)·cl, anchor −
     # i·cl]. Index 0 = most-recent anchor (matches the former single-window
-    # query).
+    # query). Same independence-per-position as above, so also run concurrently
+    # — each position opens its own session (_fetch_pa_window_rows) rather than
+    # sharing one across positions.
     user_ids = list({uid for uids in cluster_users.values() for uid in uids})
     pa_window_weeks = recurrence_active_cycles * cycle_length_weeks
-    user_pa_flags: dict[int, list[bool]] = {}
-    with config.db.session() as session:
-        for i in range(recurrence_display_cycles):
-            # PA at position i requires both the waste floor and single-cycle
-            # underuse in that position's most-recent cycle. cycle_flagged[i] is
-            # None for a cycle ending in the future (guarded before membership).
-            if cycle_flagged[i] is None:
-                continue
-            _this_cycle_flagged: set[int] = cycle_flagged[i] or set()
+    active_pa_positions: list[tuple[int, datetime, datetime]] = []
+    for i in range(recurrence_display_cycles):
+        if cycle_flagged[i] is None:
+            continue
+        pa_end = anchor - timedelta(weeks=i * cycle_length_weeks)
+        pa_start = pa_end - timedelta(weeks=pa_window_weeks)
+        active_pa_positions.append((i, pa_start, pa_end))
 
-            pa_end = anchor - timedelta(weeks=i * cycle_length_weeks)
-            pa_start = pa_end - timedelta(weeks=pa_window_weeks)
-            pa_stmt = _select_jobs_usage(
+    pa_results = _run_concurrently(
+        [
+            partial(
+                _fetch_pa_window_rows,
                 user_ids,
                 pa_start,
                 pa_end,
-                by_cluster=False,
-                clusters=clusters,
-                utilization_ceiling=utilization_ceiling,
+                i,
+                clusters,
+                utilization_ceiling,
             )
-            for row in session.exec(pa_stmt).all():
-                uid = row.sarc_user_id
-                if uid not in user_pa_flags:
-                    user_pa_flags[uid] = [False] * recurrence_display_cycles
-                _, _, pa_rgu_wasted_h = _split_waste(row)
-                user_pa_flags[uid][i] = (
-                    pa_rgu_wasted_h >= personalized_action_min_waste_rgu_hours
-                    and uid in _this_cycle_flagged
-                )
+            for i, pa_start, pa_end in active_pa_positions
+        ]
+    )
+
+    user_pa_flags: dict[int, list[bool]] = {}
+    for i, rows in pa_results:
+        # PA at position i requires both the waste floor and single-cycle
+        # underuse in that position's most-recent cycle.
+        _this_cycle_flagged: set[int] = cycle_flagged[i] or set()
+        for row in rows:
+            uid = row.sarc_user_id
+            if uid not in user_pa_flags:
+                user_pa_flags[uid] = [False] * recurrence_display_cycles
+            _, _, pa_rgu_wasted_h = _split_waste(row)
+            user_pa_flags[uid][i] = (
+                pa_rgu_wasted_h >= personalized_action_min_waste_rgu_hours
+                and uid in _this_cycle_flagged
+            )
 
     # ── Per-cluster greedy selection (cumulative share >= cluster_share_threshold) ──
     result: dict[str, list[RecurringUserRow]] = {}
