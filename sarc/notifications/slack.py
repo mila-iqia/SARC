@@ -1,15 +1,26 @@
-# Required bot scopes: chat:write, im:write, users:read.email
 from __future__ import annotations
 
 import logging
+import ssl
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
+import certifi
 from slack_sdk import WebClient
 from slack_sdk.http_retry.builtin_handlers import RateLimitErrorRetryHandler
 
 logger = logging.getLogger(__name__)
+
+MENTION_TOKEN = "@USERNAME"
+"""Sentinel placeholder templates use for the recipient's name; dm_user
+substitutes it for a real Slack mention once it has resolved a user_id."""
+
+# slack_sdk uses urllib.request, not requests/httpx, so it doesn't pick up
+# certifi's CA bundle automatically. Without an explicit ssl.SSLContext,
+# urlopen() falls back to the OS trust store, which can be missing/incomplete
+# and cause CERTIFICATE_VERIFY_FAILED.
+_SSL_CONTEXT = ssl.create_default_context(cafile=certifi.where())
 
 
 class SendStatus(Enum):
@@ -29,7 +40,7 @@ class SlackClient:
     """Thin wrapper around slack_sdk.WebClient for channel posts and DMs."""
 
     def __init__(self, token: str) -> None:
-        self._client: Any = WebClient(token=token)
+        self._client: Any = WebClient(token=token, ssl=_SSL_CONTEXT)
         # Auto-retry HTTP 429s (sleeps for the Retry-After duration); applies to
         # every API call made through this client.
         self._client.retry_handlers.append(
@@ -100,6 +111,13 @@ class SlackClient:
             return SendResult(send_status or SendStatus.FAILED, err)
 
         user_id = lookup["user"]["id"]
+
+        if MENTION_TOKEN in text:
+            text = text.replace(MENTION_TOKEN, f"<@{user_id}>")
+        else:
+            logger.warning(
+                "Mention token %r not found in DM text for %s", MENTION_TOKEN, email
+            )
 
         try:
             conv = self._client.conversations_open(users=[user_id])

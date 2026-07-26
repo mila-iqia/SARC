@@ -2,10 +2,10 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from functools import cached_property
 
-from sqlmodel import Session, col, func, select
+from sqlmodel import col, func, select
 
 from sarc.api.metrics import _is_real
-from sarc.config import UTC, config
+from sarc.config import config
 from sarc.db.job_series import JobSeriesDB
 
 
@@ -233,6 +233,20 @@ def _select_jobs_usage(
     """
     rgu_h_expr, true_used_expr, credited_used_expr = _rgu_exprs(utilization_ceiling)
     _by_cluster = [col(JobSeriesDB.cluster_name)] if by_cluster else []
+    if user_emails is None:
+        user_emails, not_user_emails = None, None
+    else:
+        user_emails, not_user_emails = (
+            [email for email in user_emails if not email.startswith("~")],
+            [email[1:] for email in user_emails if email.startswith("~")],
+        )
+        if not user_emails and not_user_emails:
+            # Every entry was an exclusion (~email) — the caller expressed no
+            # positive allow-list restriction, only exclusions. Contrast with
+            # an explicit user_emails=[] (no exclusions either), which is a
+            # real "match nobody" filter and must still apply below.
+            user_emails = None
+
     stmt = select(  # ty:ignore[no-matching-overload]
         col(JobSeriesDB.sarc_user_id),
         # Use func.any_value for email and display_name to allow aggregation
@@ -252,6 +266,8 @@ def _select_jobs_usage(
         stmt = stmt.where(col(JobSeriesDB.sarc_user_id).in_(user_ids))
     if user_emails is not None:
         stmt = stmt.where(col(JobSeriesDB.email).in_(user_emails))
+    if not_user_emails is not None:
+        stmt = stmt.where(~col(JobSeriesDB.email).in_(not_user_emails))
     return _with_rgu_window(stmt, start, end, clusters=clusters).group_by(
         JobSeriesDB.sarc_user_id, *_by_cluster
     )
@@ -491,102 +507,6 @@ def get_all_users_usage(
         )
 
     return result
-
-
-# ── 6-month historical stats ──
-
-
-@dataclass
-class MonthlyStats:
-    label: str  # "YYYY-MM"
-    avg_waste_ratio: float
-
-
-@dataclass
-class HistoricalStats:
-    # 6 monthly data-points, oldest first.
-    months: list[MonthlyStats]
-    # Same 6 months one year prior. None when that period has no data at all.
-    yoy_months: list[MonthlyStats] | None
-
-
-def _iter_months(end: datetime, n: int) -> list[tuple[datetime, datetime]]:
-    """Return n complete calendar months immediately before *end*, oldest first."""
-    year, month = end.year, end.month
-    buckets: list[tuple[datetime, datetime]] = []
-    for _ in range(n):
-        month -= 1
-        if month == 0:
-            month = 12
-            year -= 1
-        m_start = datetime(year, month, 1, tzinfo=UTC)
-        next_month = month + 1
-        next_year = year
-        if next_month == 13:
-            next_month = 1
-            next_year += 1
-        m_end = datetime(next_year, next_month, 1, tzinfo=UTC)
-        buckets.append((m_start, m_end))
-    return list(reversed(buckets))
-
-
-def _query_month_agg(
-    session: Session,
-    start: datetime,
-    end: datetime,
-    *,
-    clusters: list[str] | None = None,
-) -> MonthlyStats:
-    """Aggregate fleet-level waste stats for a single calendar month window."""
-    stmt = _select_jobs_usage(None, start, end, by_cluster=True, clusters=clusters)
-    agg_rows = session.exec(stmt).all()
-
-    total_rgu_h = 0.0
-    total_wasted = 0.0
-    for row in agg_rows:
-        rgu_h, _, rgu_h_wasted = _split_waste(row)
-        total_rgu_h += rgu_h
-        total_wasted += rgu_h_wasted
-
-    avg_ratio = total_wasted / total_rgu_h if total_rgu_h > 0 else 0.0
-    label = start.strftime("%Y-%m")
-    return MonthlyStats(label=label, avg_waste_ratio=avg_ratio)
-
-
-def get_historical_stats(
-    end: datetime, *, months: int = 6, clusters: list[str] | None = None
-) -> HistoricalStats:
-    """Compute 6-month fleet-level waste trend and year-over-year comparison.
-
-    *end* is typically the current run date (datetime.now(UTC)).
-    Returns monthly stats for the *months* complete calendar months before
-    *end*, plus the same window one year prior (yoy_months=None when no data
-    exists).
-    """
-    # TODO: it could be interesting to have the number of underusers per month
-
-    current_buckets = _iter_months(end, months)
-    yoy_buckets = [
-        (
-            datetime(s.year - 1, s.month, s.day, tzinfo=UTC),
-            datetime(e.year - 1, e.month, e.day, tzinfo=UTC),
-        )
-        for s, e in current_buckets
-    ]
-
-    with config.db.session() as session:
-        current_stats = [
-            _query_month_agg(session, s, e, clusters=clusters)
-            for s, e in current_buckets
-        ]
-        yoy_raw = [
-            _query_month_agg(session, s, e, clusters=clusters) for s, e in yoy_buckets
-        ]
-
-    has_yoy_data = any(m.avg_waste_ratio > 0 for m in yoy_raw)
-    return HistoricalStats(
-        months=current_stats, yoy_months=yoy_raw if has_yoy_data else None
-    )
 
 
 # ── Recurring-underusers table ──

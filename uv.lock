@@ -3157,6 +3157,7 @@ source = { editable = "." }
 dependencies = [
     { name = "alembic" },
     { name = "alembic-utils" },
+    { name = "certifi" },
     { name = "cloud-sql-python-connector" },
     { name = "easy-oauth" },
     { name = "fabric" },
@@ -3231,6 +3232,7 @@ examples = [
 requires-dist = [
     { name = "alembic", specifier = ">=1.18.4" },
     { name = "alembic-utils", specifier = ">=0.8.8" },
+    { name = "certifi", specifier = ">=2024.2.2" },
     { name = "cloud-sql-python-connector", specifier = ">=1.20.3" },
     { name = "easy-oauth", specifier = ">=0.0.5" },
     { name = "fabric", specifier = ">=3.0.0,<4" },

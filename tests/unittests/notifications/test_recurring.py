@@ -52,7 +52,12 @@ _MIN_WASTE_RATIO = 0.50
 _MIN_WASTE_RGU_HOURS = 24
 
 _NOTIFY_CFG = {
-    "slack": {
+    "slack_underusage": {
+        "description": "test channel",
+        "token": "xoxb-test-token",
+        "channel": "#test-channel",
+    },
+    "slack_usage": {
         "description": "test channel",
         "token": "xoxb-test-token",
         "channel": "#test-channel",

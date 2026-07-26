@@ -28,7 +28,7 @@ A few things to keep straight before the details:
 
 | Layer | File | Key entry points |
 |---|---|---|
-| Flagging / data | `sarc/notifications/underusage.py` | `get_underusers`, `get_recurring_underusers`, `get_historical_stats`, `get_all_users_usage` |
+| Flagging / data | `sarc/notifications/underusage.py` | `get_underusers`, `get_recurring_underusers`, `get_all_users_usage` |
 | Message building | `sarc/notifications/messages.py` | `build_admin_digest`, `build_user_dm`, `build_usage_report`, `build_recurring_table` |
 | Delivery | `sarc/notifications/slack.py` | `SlackClient.dm_user`, `SlackClient.post_channel` |
 | Orchestration | `sarc/cli/notify/underusage.py` | `UnderusageNotifyCommand` |
@@ -45,7 +45,7 @@ flowchart TD
 
     JS --> FLAG["get_underusers<br/><b>flagging</b><br/><i>(per-user waste aggregation)</i>"]
     JS --> USAGE["get_all_users_usage<br/>(active users)<br/><i>(per-user waste aggregation)</i>"]
-    JS --> REC["get_recurring_underusers<br/>+ get_historical_stats<br/>(digest enrichment)<br/><i>(per-user waste aggregation)</i>"]
+    JS --> REC["get_recurring_underusers<br/>(digest enrichment)<br/><i>(per-user waste aggregation)</i>"]
 
     FLAG --> DIGEST["build_admin_digest"]
     REC --> DIGEST
@@ -99,11 +99,9 @@ absolute amount wasted is significant enough to be worth a nudge. Both
 thresholds come from config and can be overridden per-run with `--min-ratio` /
 `--min-rgu-hours`.
 
-For the admin digest, flagged users are enriched with two extra views:
+For the admin digest, flagged users are enriched with an extra view:
 `get_recurring_underusers` (per-cluster top wasters seen across several recent
-cycles, with a "personalized action" flag for persistent offenders) and
-`get_historical_stats` (a fleet-wide monthly waste trend with a year-over-year
-comparison).
+cycles, with a "personalized action" flag for persistent offenders).
 
 ## Cadence and send gating
 
@@ -139,9 +137,8 @@ auditing dry runs).
 
 ## The three message types
 
-- **Admin digest** — one `post_channel` message to `slack.channel`. A ranked
-  table of flagged users (capped at `digest_top_n`), plus the historical trend
-  and the recurring underusers table. Built by `build_admin_digest`.
+- **Admin digest** — one `post_channel` message to `slack_underusage.channel`. A ranked
+  table of flagged users (capped at `digest_top_n`), plus the recurring underusers table. Built by `build_admin_digest`.
 - **Underusage DM** — sent to each flagged user. Personalized: average
   utilization, RGU-hours wasted, and their lowest-utilization jobs. Built by
   `build_user_dm` from `underusage_report_template.md`.

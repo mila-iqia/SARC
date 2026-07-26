@@ -4,9 +4,8 @@ from datetime import date
 
 from sarc.config import ConfigurationError, config
 from sarc.notifications.mrkdwn import to_slack_mrkdwn
+from sarc.notifications.slack import MENTION_TOKEN
 from sarc.notifications.underusage import (
-    HistoricalStats,
-    MonthlyStats,
     RecurringUserRow,
     UnderuserRow,
     UsageRow,
@@ -19,11 +18,6 @@ def _fmt_rgu_int(hours: float) -> str:
     return f"{int(round(hours)):,}".replace(",", " ")
 
 
-def _first_name(display_name: str | None) -> str:
-    parts = (display_name or "").split()
-    return parts[0] if parts else "there"
-
-
 def _pct(fraction: float) -> str:
     return f"{fraction * 100:.1f} %"
 
@@ -34,6 +28,10 @@ def _date_range(start: date, end: date) -> str:
 
 def _fmt_h(hours: float) -> str:
     return f"{hours:.1f}"
+
+
+def _dashboard_url(base_url: str, start: date, end: date) -> str:
+    return f"{base_url}?start={start:%Y-%m-%d}&end={end:%Y-%m-%d}"
 
 
 def _tree_prefix(i: int, n: int) -> str:
@@ -81,7 +79,7 @@ def build_user_dm(
         raise ConfigurationError("No notifications configuration found in config")
     ncfg = config.notifications
     text = ncfg.underusage_report_template.format(
-        name=_first_name(row.display_name),
+        name=MENTION_TOKEN,
         window_weeks=window_weeks,
         window_range=_date_range(window_start, window_end),
         rgu_hours_allocated=_fmt_h(row.rgu_hours),
@@ -91,7 +89,7 @@ def build_user_dm(
         jobs_section=_jobs_section(
             row.top_jobs, rgu_value=lambda j: j.wasted, suffix="RGU-h unused"
         ),
-        dashboard_url=ncfg.dashboard_url,
+        dashboard_url=_dashboard_url(ncfg.dashboard_url, window_start, window_end),
     ).rstrip()
     return to_slack_mrkdwn(text)
 
@@ -107,7 +105,7 @@ def build_usage_report(
         raise ConfigurationError("No notifications configuration found in config")
     ncfg = config.notifications
     text = ncfg.usage_report_template.format(
-        name=_first_name(row.display_name),
+        name=MENTION_TOKEN,
         window_weeks=window_weeks,
         window_range=_date_range(window_start, window_end),
         rgu_hours_allocated=_fmt_h(row.rgu_hours),
@@ -116,36 +114,9 @@ def build_usage_report(
         jobs_section=_jobs_section(
             row.top_jobs, rgu_value=lambda j: j.rgu_hours_used, suffix="RGU-h"
         ),
-        dashboard_url=ncfg.dashboard_url,
+        dashboard_url=_dashboard_url(ncfg.dashboard_url, window_start, window_end),
     ).rstrip()
     return to_slack_mrkdwn(text)
-
-
-def _month_table(title: str, months: list[MonthlyStats]) -> list[str]:
-    pct_strs = [_pct(m.avg_waste_ratio) for m in months]
-
-    month_w = max(len("Month"), max((len(m.label) for m in months), default=0))
-    pct_w = max(len("Avg waste ratio"), max((len(s) for s in pct_strs), default=0))
-
-    rows = [title, f"{'Month'.ljust(month_w)}  {'Avg waste ratio'.rjust(pct_w)}"]
-    for m, pct_s in zip(months, pct_strs):
-        rows.append(f"{m.label.ljust(month_w)}  {pct_s.rjust(pct_w)}")
-    return rows
-
-
-def _historical_section(stats: HistoricalStats) -> str:
-    n = len(stats.months)
-    lines = ["", *_month_table(f"── {n}-Month Trend ──", stats.months)]
-
-    if stats.yoy_months is not None:
-        lines += [
-            "",
-            *_month_table(
-                f"── Year-over-Year (same {n} months, prior year) ──", stats.yoy_months
-            ),
-        ]
-
-    return "\n".join(lines)
 
 
 def build_recurring_table(
@@ -268,7 +239,6 @@ def build_admin_digest(
     cluster_share_threshold: float,
     active_cycles: int,
     top_n: int,
-    historical: HistoricalStats | None = None,
     recurring: dict[str, list[RecurringUserRow]] | None = None,
     cycle_dates: list[date] | None = None,
 ) -> str:
@@ -317,8 +287,5 @@ def build_admin_digest(
         )
         if recurring_text:
             lines += ["", recurring_text]
-
-    if historical is not None:
-        lines.append(_historical_section(historical))
 
     return "\n".join(lines)

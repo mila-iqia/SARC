@@ -1,9 +1,10 @@
 import logging
+import ssl
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from sarc.notifications.slack import SendStatus, SlackClient
+from sarc.notifications.slack import MENTION_TOKEN, SendStatus, SlackClient
 
 
 def _make_client(mock_web_client):
@@ -29,6 +30,11 @@ def test_init_attaches_rate_limit_retry_handler():
     ]
     assert len(handlers) == 1
     assert handlers[0].max_retry_count == 3
+
+
+def test_init_configures_certifi_ssl_context():
+    client = SlackClient("xoxb-fake")
+    assert isinstance(client._client.ssl, ssl.SSLContext)
 
 
 # ── _message_kwargs ────────────────────────────────────────────────────────────
@@ -103,6 +109,36 @@ def test_dm_user_success():
     web.users_lookupByEmail.assert_called_once_with(email="alice@example.com")
     web.conversations_open.assert_called_once_with(users=["U12345"])
     web.chat_postMessage.assert_called_once_with(channel="C99999", text="hi alice")
+    assert result.status == SendStatus.OK
+
+
+def test_dm_user_replaces_mention_token():
+    web = MagicMock()
+    web.users_lookupByEmail.return_value = {"user": {"id": "U12345"}}
+    web.conversations_open.return_value = {"channel": {"id": "C99999"}}
+    client = _make_client(web)
+
+    result = client.dm_user("alice@example.com", f"Hi {MENTION_TOKEN}, welcome")
+
+    web.chat_postMessage.assert_called_once_with(
+        channel="C99999", text="Hi <@U12345>, welcome"
+    )
+    assert result.status == SendStatus.OK
+
+
+def test_dm_user_warns_when_mention_token_missing(caplog):
+    web = MagicMock()
+    web.users_lookupByEmail.return_value = {"user": {"id": "U12345"}}
+    web.conversations_open.return_value = {"channel": {"id": "C99999"}}
+    client = _make_client(web)
+
+    with caplog.at_level(logging.WARNING, logger="sarc.notifications.slack"):
+        result = client.dm_user("alice@example.com", "hi there, no mention here")
+
+    assert any(r.levelno == logging.WARNING for r in caplog.records)
+    web.chat_postMessage.assert_called_once_with(
+        channel="C99999", text="hi there, no mention here"
+    )
     assert result.status == SendStatus.OK
 
 

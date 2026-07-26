@@ -271,9 +271,14 @@ class SlackConfig:
 
 @dataclass
 class UnderusageNotifyConfig:
-    slack: SlackConfig
-    """Slack workspace/channel credentials used to deliver all notifications
-    (user DMs and the admin digest)."""
+    # Required bot scopes: chat:write, im:write, users:read.email
+    slack_underusage: SlackConfig
+    """Slack workspace/channel credentials used to deliver underusage-report
+    DMs and the admin digest channel post."""
+
+    # Required bot scopes: chat:write, im:write, users:read.email
+    slack_usage: SlackConfig
+    """Slack workspace/channel credentials used to deliver usage-report DMs."""
 
     underusage_report_template: str
     """``.format()``-able template for the per-user underusage report body.
@@ -288,8 +293,9 @@ class UnderusageNotifyConfig:
     ``{jobs_section}``, ``{dashboard_url}``."""
 
     dashboard_url: str
-    """Link to the usage dashboard, rendered directly into both templates' body
-    text (referenced as ``{dashboard_url}``)."""
+    """Base link to the usage dashboard; each message appends its own
+    ``?start=YYYY-MM-DD&end=YYYY-MM-DD`` window before rendering into both
+    templates' body text (referenced as ``{dashboard_url}``)."""
 
     enabled: bool = True
     """Master switch; when False the notify command is a no-op regardless of the
@@ -359,13 +365,9 @@ class UnderusageNotifyConfig:
     Positive int; a value greater than ``recurrence_display_cycles`` simply
     yields no escalation."""
 
-    historical_months: int = 6
-    """Number of calendar months included in the digest's historical trend
-    section. Positive int."""
-
     clusters: list[str] = field(default_factory=lambda: ["mila"])
     """Cluster-name allowlist scoping every query (alerts, usage report,
-    recurring table, historical trend). Empty list = all clusters."""
+    recurring table). Empty list = all clusters."""
 
     utilization_ceiling: float = 1.0
     """Utilization ceiling T ∈ (0,1] for the subtractive waste model: ``wasted =

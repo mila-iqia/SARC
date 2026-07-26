@@ -89,8 +89,14 @@ sarc:
       token: slack-token-replace-me # SENSITIVE: can be used to send messages on slack
       channel: slack-channel-id-replace-me # The slack channel ID to message
   notifications:
-    slack: # Credentials for delivering user DMs and the admin digest
-      description: Usage Alerts # used to distinguish multiple instances if the message the same channel
+    # Required bot scopes: chat:write, im:write, users:read.email
+    slack_underusage: # Credentials for delivering user DMs and the admin digest
+      description: Under Usage Reports # used to distinguish multiple instances if the message the same channel
+      token: slack-token-replace-me # SENSITIVE: can be used to send messages on slack
+      channel: slack-channel-id-replace-me # The slack channel ID to message
+    # Required bot scopes: chat:write, im:write, users:read.email
+    slack_usage: # Credentials for delivering user DMs and the admin digest
+      description: Usage Reports # used to distinguish multiple instances if the message the same channel
       token: slack-token-replace-me # SENSITIVE: can be used to send messages on slack
       channel: slack-channel-id-replace-me # The slack channel ID to message
     underusage_report_template:
@@ -117,7 +123,6 @@ sarc:
     usage_report_min_usage_rgu_hours: 1843.2 # Min occupied (used+wasted) RGU-h to include a user (~4x A100-80GB RGU x 4d)
     # --- Admin digest ---
     digest_top_n: 16 # Number of top wasters listed in the admin digest ranking
-    historical_months: 6 # Calendar months included in the digest historical-trend section
     recurrence_cluster_share: 0.50 # Cluster waste fraction at which per-cluster selection stops
     recurrence_active_cycles: 3 # Recent cycles counting toward personalized-action + recurrence window
     recurrence_display_cycles: 5 # Per-cycle columns shown in the recurring-users table

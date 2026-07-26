@@ -6,7 +6,6 @@ import pytest
 from sarc.config import ConfigurationError
 from sarc.notifications.messages import (
     _date_range,
-    _first_name,
     _fmt_h,
     _jobs_section,
     _pct,
@@ -15,6 +14,7 @@ from sarc.notifications.messages import (
     build_usage_report,
     build_user_dm,
 )
+from sarc.notifications.slack import MENTION_TOKEN
 from sarc.notifications.underusage import (
     RecurringUserRow,
     UnderuserRow,
@@ -28,7 +28,12 @@ from tests.unittests.notifications._factory import (
 )
 
 _BASE_NOTIFY_CFG = {
-    "slack": {"description": "test", "token": "xoxb-test", "channel": "#test"},
+    "slack_underusage": {
+        "description": "test",
+        "token": "xoxb-test",
+        "channel": "#test",
+    },
+    "slack_usage": {"description": "test", "token": "xoxb-test", "channel": "#test"},
     "underusage_report_template": UNDERUSAGE_REPORT_TEMPLATE,
     "usage_report_template": USAGE_REPORT_TEMPLATE,
     "dashboard_url": "https://dash.example.com",
@@ -41,7 +46,12 @@ def _notify_overlay(**overrides):
 
 
 _NOTIFY_CFG = {
-    "slack": {
+    "slack_underusage": {
+        "description": "test channel",
+        "token": "xoxb-test-token",
+        "channel": "#test-channel",
+    },
+    "slack_usage": {
         "description": "test channel",
         "token": "xoxb-test-token",
         "channel": "#test-channel",
@@ -51,22 +61,6 @@ _NOTIFY_CFG = {
     "usage_report_template": "",
     "dashboard_url": "https://dash.example.com",
 }
-
-
-# ── _first_name guard ─────────────────────────────────────────────────────────
-
-
-def test_first_name_normal():
-    assert _first_name("Alice Foo") == "Alice"
-
-
-def test_first_name_single_token():
-    assert _first_name("Alice") == "Alice"
-
-
-def test_first_name_empty():
-    assert _first_name("") == "there"
-    assert _first_name(None) == "there"
 
 
 # ── build_usage_report fixtures ───────────────────────────────────────────────
@@ -142,8 +136,8 @@ def test_usage_report():
     # Ensure no formatting braces {} remain
     assert "{" not in text
     assert "}" not in text
-    # Test overview contains first name
-    assert _first_name(_USAGE_ROW_ALICE.display_name) in text
+    # Test overview contains the mention token, ready for dm_user to substitute
+    assert MENTION_TOKEN in text
     # Test overview contains window weeks
     assert f"{window_weeks}" in text
     # Test overview contains the real date range
@@ -166,8 +160,8 @@ def test_usage_report():
         )
         in text
     )
-    # Test overview contains dashboard_url
-    assert "https://dash.example.com" in text
+    # Test overview contains dashboard_url with the report window as query params
+    assert "https://dash.example.com?start=2026-01-01&end=2026-02-01" in text
 
 
 def test_usage_report_raises_without_notifications_config():
@@ -258,8 +252,8 @@ def test_underusage_report():
     # Ensure no formatting braces {} remain
     assert "{" not in text
     assert "}" not in text
-    # Test greeting uses first name
-    assert _first_name(_ROW_ALICE.display_name) in text
+    # Test greeting contains the mention token, ready for dm_user to substitute
+    assert MENTION_TOKEN in text
     # Test overview contains window weeks
     assert f"{window_weeks}" in text
     # Test overview contains the real date range
@@ -282,8 +276,8 @@ def test_underusage_report():
         )
         in text
     )
-    # Test overview contains dashboard_url
-    assert "https://dash.example.com" in text
+    # Test overview contains dashboard_url with the report window as query params
+    assert "https://dash.example.com?start=2026-01-01&end=2026-02-01" in text
 
 
 def test_dm_raises_without_notifications_config():
