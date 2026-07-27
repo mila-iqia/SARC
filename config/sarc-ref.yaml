@@ -115,7 +115,7 @@ sarc:
     send_usage_report: True # Enable the neutral usage report to all active GPU users
     usage_cycle_length_weeks: 2 # Weeks per usage cycle (base cadence unit for alerts/report window)
     # --- Individual underusage alerts (user DMs) ---
-    min_waste_ratio: 0.80 # Min scaled waste ratio (1 - effective_util) to flag a user
+    min_waste_ratio: 0.50 # Min scaled waste ratio (1 - effective_util) to flag a user
     min_waste_rgu_hours: 3225.6 # Min scaled wasted RGU-h to flag a user (~4x A100-80GB RGU x 7d)
     top_jobs_per_user: 5 # Number of a user's worst jobs shown per user
     # --- Universal usage report (neutral, all active GPU users) ---

@@ -5,7 +5,7 @@ from datetime import date
 from sarc.config import ConfigurationError, config
 from sarc.notifications.mrkdwn import to_slack_mrkdwn
 from sarc.notifications.slack import MENTION_TOKEN
-from sarc.notifications.underusage import (
+from sarc.notifications.usage import (
     RecurringUserRow,
     UsageRow,
     usage_cycle_length_weeks,

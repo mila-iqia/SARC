@@ -16,7 +16,7 @@ from sqlmodel import select
 from sarc.db.cluster import SlurmClusterDB
 from sarc.db.support import GpuRguDB
 from sarc.db.users import UserDB
-from sarc.notifications.underusage import (
+from sarc.notifications.usage import (
     _run_concurrently,
     _select_user_jobs,
     get_underusers_usage,

@@ -9,7 +9,7 @@ from sqlmodel import select
 from sarc.db.cluster import SlurmClusterDB
 from sarc.db.users import UserDB
 from sarc.notifications.messages import build_recurring_table
-from sarc.notifications.underusage import (
+from sarc.notifications.usage import (
     RecurringUserRow,
     _week_anchor,
     get_cycle_dates,
@@ -498,9 +498,9 @@ def test_table_deterministic():
 
 
 def test_dry_run_prints_recurring_table(recurring_db, cli_main, monkeypatch, capsys):
-    monkeypatch.setattr("sarc.cli.notify.underusage._now_utc", lambda: _TEST_END)
+    monkeypatch.setattr("sarc.cli.notify.usage._now_utc", lambda: _TEST_END)
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
-        cli_main(["notify", "underusage"])
+        cli_main(["notify", "usage"])
     out = capsys.readouterr().out
     assert "Recurring underusers" in out
 
@@ -510,10 +510,10 @@ def test_dry_run_display_cycles(
     recurring_db, cli_main, monkeypatch, capsys, display_cycles
 ):
     """CLI must not IndexError when recurrence_display_cycles deviates from the default 5."""
-    monkeypatch.setattr("sarc.cli.notify.underusage._now_utc", lambda: _TEST_END)
+    monkeypatch.setattr("sarc.cli.notify.usage._now_utc", lambda: _TEST_END)
     cfg = {**_NOTIFY_CFG, "recurrence_display_cycles": display_cycles}
     with gifnoc.overlay({"sarc.notifications": cfg}):
-        cli_main(["notify", "underusage"])
+        cli_main(["notify", "usage"])
     out = capsys.readouterr().out
     assert "Recurring underusers" in out
 
@@ -664,7 +664,7 @@ def test_cycle_dates_spacing_and_alignment_for_n(cycle_weeks):
 
 
 # ── _week_anchor — pinned year-boundary / week-53 limitation ──────────────────
-# See the docstring on _week_anchor (sarc/notifications/underusage.py): the
+# See the docstring on _week_anchor (sarc/notifications/usage.py): the
 # naive `(N - remainder) % N` shift is computed from the *original* date's ISO
 # week number, so when the shift crosses an ISO year boundary the resulting
 # date can land on a week number that is itself not a multiple of N. These
