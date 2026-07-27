@@ -492,7 +492,7 @@ def get_all_users_usage(
         # the user's *most efficient* jobs, per the usage report's framing.
         top_jobs = sorted(
             jobs_by_user[uid], key=lambda j: j.gpu_sm_occupancy, reverse=True
-        )[:top_jobs_per_user]  # ty:ignore[no-matching-overload]
+        )[:top_jobs_per_user]
 
         result.append(
             UsageRow(
