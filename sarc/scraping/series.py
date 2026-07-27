@@ -151,7 +151,7 @@ def compute_job_statistics_from_dataframe(
     if is_time_counter:
         # This is a time-based counter like the cpu counters in /proc/stat, with
         # a resolution of 1 nanosecond.
-        timediffs = gdf["timestamp"].diff().map(lambda x: x.total_seconds())
+        timediffs = gdf["timestamp"].diff().map(lambda x: x.total_seconds())  # ty:ignore[unresolved-attribute]
         df["value"] = gdf["value"].diff() / timediffs / 1e9
         df = df.drop(index=0)
         # Recompute groupby after modifying df

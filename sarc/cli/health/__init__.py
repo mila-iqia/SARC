@@ -9,7 +9,7 @@ from .run import HealthRunCommand
 @dataclass
 class Health:
     command: HealthRunCommand | HealthListCommand = subparsers(
-        {"run": HealthRunCommand, "list": HealthListCommand}  # ty:ignore[invalid-argument-type]
+        {"run": HealthRunCommand, "list": HealthListCommand}
     )
 
     def execute(self) -> int:

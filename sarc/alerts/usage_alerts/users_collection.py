@@ -37,7 +37,7 @@ class UsersCollectionCheck(HealthCheck):
             for email, count, user_indices in sess.exec(email_duplicates):
                 logger.error(
                     f"Duplicate email '{email}' "
-                    f"shared by {count} users: {sorted(user_indices)}"
+                    f"shared by {count} users: {sorted(user_indices)}"  # ty:ignore[invalid-argument-type]
                 )
                 has_duplicates = True
 
@@ -55,7 +55,7 @@ class UsersCollectionCheck(HealthCheck):
             for display_name, count, user_indices in sess.exec(name_duplicates):
                 logger.error(
                     f"Duplicate display_name '{display_name}' "
-                    f"shared by {count} users: {sorted(user_indices)}"
+                    f"shared by {count} users: {sorted(user_indices)}"  # ty:ignore[invalid-argument-type]
                 )
                 has_duplicates = True
 

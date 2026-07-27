@@ -40,9 +40,7 @@ class Append:
 
 @dataclass
 class Encrypt:
-    command: File | Append = subparsers(
-        {"file": File, "append": Append}  # ty:ignore[invalid-argument-type]
-    )
+    command: File | Append = subparsers({"file": File, "append": Append})
 
     def execute(self) -> int:
         return self.command.execute()
