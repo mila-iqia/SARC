@@ -450,7 +450,7 @@ def get_underusers_usage(
     )
 
     for row in result:
-        row.top_jobs.sort(key=lambda j: j.wasted, reverse=True)
+        row.top_jobs.sort(key=lambda j: j.wasted, reverse=True)  # ty:ignore[no-matching-overload]
         row.top_jobs = row.top_jobs[:top_jobs_per_user]
 
     return result
