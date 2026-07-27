@@ -57,7 +57,7 @@ class CLI:
             "parse": Parse,
             "encrypt": Encrypt,
             "notify": Notify,
-        }  # ty:ignore[invalid-argument-type]
+        }
     )
 
     color: bool = False

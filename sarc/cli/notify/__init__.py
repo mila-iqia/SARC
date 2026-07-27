@@ -8,7 +8,7 @@ from .underusage import UnderusageNotifyCommand
 @dataclass
 class Notify:
     command: UnderusageNotifyCommand = subparsers(
-        {"underusage": UnderusageNotifyCommand}  # ty:ignore[invalid-argument-type]
+        {"underusage": UnderusageNotifyCommand}
     )
 
     def execute(self) -> int:

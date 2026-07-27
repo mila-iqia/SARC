@@ -343,7 +343,9 @@ def get_underusers(
 
         by_cluster = sorted(u["clusters"], key=lambda c: c.wasted, reverse=True)
 
-        top_jobs = sorted(jobs_by_user[uid], key=lambda j: j.wasted, reverse=True)[
+        top_jobs = sorted(
+            jobs_by_user[uid], key=lambda j: j.wasted, reverse=True
+        )[  # ty:ignore[no-matching-overload]
             :top_jobs_per_user
         ]
 
@@ -434,7 +436,7 @@ def get_all_users_usage(
         by_cluster = sorted(breakdowns, key=lambda c: c.rgu_hours_used, reverse=True)
         top_jobs = sorted(
             jobs_by_user[uid], key=lambda j: j.rgu_hours_used, reverse=True
-        )[:top_jobs_per_user]
+        )[:top_jobs_per_user]  # ty:ignore[no-matching-overload]
 
         result.append(
             UsageRow(
