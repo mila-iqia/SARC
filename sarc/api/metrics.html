@@ -1677,8 +1677,8 @@
           title: `RGU × elapsed time, shown in ${unit.label}`,
           fmt: fmtRguTime },
         { key: 'gpu_sm_occupancy_mean', label: 'SM occ',    fmt: v => v != null ? (v*100).toFixed(1)+'%' : '—' },
-        { key: 'waste',                 label: `${metricPretty} waste (${unit.label})`,
-          title: `RGU·time × (1 − mean ${metricPretty}): estimated unused RGU·time, taking the selected efficiency metric as the "useful" fraction`,
+        { key: 'waste',                 label: `Waste (${unit.label})`,
+          title: `RGU·time × (1 − mean ${metricPretty}): estimated unused RGU·time`,
           fmt: fmtRguTime },
         { key: 'gpu_type',              label: 'GPU type' },
         {% if is_admin %}
