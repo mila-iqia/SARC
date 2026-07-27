@@ -7,11 +7,34 @@ notification tests need this dedicated helper.
 
 import copy
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from sarc.db.job import JobStatisticDB, SlurmJobDB
 from tests.db.factory import base_job
 
 DEFAULT_GPU_TYPE = "A100-SXM4-80GB"
+
+_REPO_ROOT = Path(__file__).parent.parent.parent.parent
+
+
+UNDERUSAGE_REPORT_TEMPLATE = """{name}
+{window_weeks} {window_range} {rgu_hours_allocated} RGU-hours {avg_utilization} leaving {rgu_hours_wasted} RGU-hours unused
+top_jobs_count:{top_jobs_count}
+```
+{jobs_section}
+```
+Track your usage over time: {dashboard_url}
+"""
+
+
+USAGE_REPORT_TEMPLATE = """{name}
+{window_weeks} {window_range} {rgu_hours_allocated} RGU-hours {avg_utilization}
+top_jobs_count:{top_jobs_count}
+```
+{jobs_section}
+```
+Track your usage over time: {dashboard_url}
+"""
 
 
 def add_gpu_job(

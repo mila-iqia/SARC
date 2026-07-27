@@ -1,5 +1,6 @@
 """Tests for `sarc notify underusage` CLI command."""
 
+import logging
 from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
@@ -10,7 +11,18 @@ from sqlmodel import select
 from sarc.db.cluster import SlurmClusterDB
 from sarc.db.users import UserDB
 from sarc.notifications.slack import SendResult, SendStatus
-from tests.unittests.notifications._factory import add_gpu_job
+from sarc.notifications.underusage import (
+    get_all_users_usage as _real_get_all_users_usage,
+)
+from sarc.notifications.underusage import (
+    get_recurring_underusers as _real_get_recurring_underusers,
+)
+from sarc.notifications.underusage import get_underusers as _real_get_underusers
+from tests.unittests.notifications._factory import (
+    UNDERUSAGE_REPORT_TEMPLATE,
+    USAGE_REPORT_TEMPLATE,
+    add_gpu_job,
+)
 
 _MILA_GPU_TYPE = "A100-SXM4-80GB"
 
@@ -21,11 +33,19 @@ _CLI_TEST_END = datetime(
 _NOTIFY_JOB_END = datetime(2024, 6, 10, tzinfo=UTC)
 
 _NOTIFY_CFG = {
-    "slack": {
+    "slack_underusage": {
         "description": "test channel",
         "token": "xoxb-test-token",
         "channel": "#test-channel",
     },
+    "slack_usage": {
+        "description": "test channel",
+        "token": "xoxb-test-token",
+        "channel": "#test-channel",
+    },
+    "underusage_report_template": UNDERUSAGE_REPORT_TEMPLATE,
+    "usage_report_template": USAGE_REPORT_TEMPLATE,
+    "dashboard_url": "https://dash.example.com",
     "enabled": True,
     "send_underusage_report": True,
     "min_waste_ratio": 0.50,
@@ -121,7 +141,7 @@ def test_dry_run(notify_db, cli_main, monkeypatch, capsys):
     # DM preview
     assert "=== Under Usage Report Previews" in out
     # display_name = "M/Ms Petitbonhomme"; _first_name() returns the first token
-    assert "Hi M/Ms," in out
+    assert "M/Ms" in out
 
 
 # ── usage-cycle cadence gating ────────────────────────────────────────────
@@ -318,6 +338,31 @@ def test_send_cycle_week_posts_digest_and_dms(notify_db, cli_main, monkeypatch):
     assert slack_inst.dm_user.call_count == 3
 
 
+def test_send_footers_target_the_underusage_channel(notify_db, cli_main, monkeypatch):
+    """Regression: both delivery-summary footers must land in the digest's own
+    thread (slack_underusage's channel), never slack_usage's channel — a
+    thread_ts only resolves within the channel its parent message was posted
+    to, and slack_usage's bot token isn't even scoped for channel posts."""
+    slack_cls, slack_inst = _mock_slack()
+    _patch_senders(monkeypatch, slack_cls)
+    cfg = {
+        **_NOTIFY_CFG,
+        "slack_underusage": {
+            **_NOTIFY_CFG["slack_underusage"],
+            "channel": "#underusage-channel",
+        },
+        "slack_usage": {**_NOTIFY_CFG["slack_usage"], "channel": "#usage-channel"},
+        "send_underusage_report": True,
+        "send_usage_report": True,
+    }
+    with gifnoc.overlay({"sarc.notifications": cfg}):
+        rc = cli_main(["notify", "underusage", "--as-of", _CYCLE_WEEK, "--send"])
+    assert rc == 0
+    calls = slack_inst.post_channel.call_args_list
+    assert len(calls) == 3  # digest + underusage footer + usage footer
+    assert all(c.args[0] == "#underusage-channel" for c in calls)
+
+
 def test_send_off_cycle_week_posts_digest_only(notify_db, cli_main, monkeypatch):
     slack_cls, slack_inst = _mock_slack()
     _patch_senders(monkeypatch, slack_cls)
@@ -502,6 +547,11 @@ def test_usage_report_week_underuser_not_in_report_previews(
     usage_section = out[out.find("=== Usage Report Previews") :]
     assert "petitbonhomme@mila.quebec" not in usage_section
     assert "beaubonhomme@mila.quebec" in usage_section
+    # Regression: the usage-report query excludes underusers at the DB level, so
+    # there is no longer a way to know how many were excluded without a second
+    # query — the header must not claim a (possibly wrong) count.
+    assert "=== Usage Report Previews (1 recipient(s)) ===" in out
+    assert "already getting the underusage alert" not in out
 
     # Dry-run never instantiates senders
     slack_cls.assert_not_called()
@@ -636,6 +686,326 @@ def test_no_dms_flag_suppresses_usage_report_sends(
     slack_inst.dm_user.assert_not_called()
     out = capsys.readouterr().out
     assert "skipped=1" in out  # usage-report recipients recorded as skipped
+
+
+# ── Debug overrides (--min-waste-ratio, --user-email, etc.) ─────────────────
+
+
+def test_min_waste_ratio_flag_overrides_config(
+    notify_db, cli_main, monkeypatch, capsys
+):
+    spy = MagicMock(wraps=_real_get_underusers)
+    monkeypatch.setattr("sarc.cli.notify.underusage.get_underusers", spy)
+
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        rc = cli_main(["notify", "underusage", "--as-of", _CYCLE_WEEK])
+    assert rc == 0
+    assert spy.call_args.kwargs["min_waste_ratio"] == 0.50  # config default
+    assert "3 user(s) flagged" in capsys.readouterr().out
+
+    # All 3 seeded users have waste_ratio == 0.90 — a 0.95 override excludes them all.
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        rc = cli_main(
+            [
+                "notify",
+                "underusage",
+                "--as-of",
+                _CYCLE_WEEK,
+                "--min-waste-ratio",
+                "0.95",
+            ]
+        )
+    assert rc == 0
+    assert spy.call_args.kwargs["min_waste_ratio"] == 0.95
+    assert "0 user(s) flagged" in capsys.readouterr().out
+
+
+def test_min_waste_ratio_flag_explicit_zero_is_honored(
+    notify_db, cli_main, monkeypatch
+):
+    """An explicit --min-waste-ratio 0 must reach get_underusers as 0.0, not be
+    silently dropped in favor of the config default (0.0 is falsy in Python, so
+    a naive `if self.min_waste_ratio:` check would incorrectly ignore it)."""
+    spy = MagicMock(wraps=_real_get_underusers)
+    monkeypatch.setattr("sarc.cli.notify.underusage.get_underusers", spy)
+
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        rc = cli_main(
+            ["notify", "underusage", "--as-of", _CYCLE_WEEK, "--min-waste-ratio", "0"]
+        )
+    assert rc == 0
+    assert spy.call_args.kwargs["min_waste_ratio"] == 0.0
+
+
+def test_min_waste_ratio_override_logs_warning(notify_db, cli_main, caplog):
+    """Threshold overrides are debug-only; warn so one left active isn't missed."""
+    with (
+        gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}),
+        caplog.at_level(logging.WARNING, logger="sarc.cli.notify.underusage"),
+    ):
+        rc = cli_main(
+            [
+                "notify",
+                "underusage",
+                "--as-of",
+                _CYCLE_WEEK,
+                "--min-waste-ratio",
+                "0.95",
+            ]
+        )
+    assert rc == 0
+    assert any("min_waste_ratio" in r.message for r in caplog.records)
+
+
+def test_user_email_flag_logs_warning(notify_db, cli_main, caplog):
+    """--user-email restricts a run to one test user; warn so it's not left on by accident."""
+    with (
+        gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}),
+        caplog.at_level(logging.WARNING, logger="sarc.cli.notify.underusage"),
+    ):
+        rc = cli_main(
+            [
+                "notify",
+                "underusage",
+                "--as-of",
+                _CYCLE_WEEK,
+                "--user-email",
+                "beaubonhomme@mila.quebec",
+            ]
+        )
+    assert rc == 0
+    assert any("beaubonhomme@mila.quebec" in r.message for r in caplog.records)
+
+
+def test_min_waste_rgu_hours_flag_overrides_config(
+    notify_db, cli_main, monkeypatch, capsys
+):
+    spy = MagicMock(wraps=_real_get_underusers)
+    monkeypatch.setattr("sarc.cli.notify.underusage.get_underusers", spy)
+
+    # Each seeded user wastes 4.8 * 700 * 0.9 = 3024 RGU-h — a 5000 override excludes them all.
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        rc = cli_main(
+            [
+                "notify",
+                "underusage",
+                "--as-of",
+                _CYCLE_WEEK,
+                "--min-waste-rgu-hours",
+                "5000",
+            ]
+        )
+    assert rc == 0
+    assert spy.call_args.kwargs["min_waste_rgu_hours"] == 5000.0
+    assert "0 user(s) flagged" in capsys.readouterr().out
+
+
+def test_usage_report_min_usage_rgu_hours_flag_overrides_config(
+    usage_report_db, cli_main, monkeypatch, capsys
+):
+    spy = MagicMock(wraps=_real_get_all_users_usage)
+    monkeypatch.setattr("sarc.cli.notify.underusage.get_all_users_usage", spy)
+
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        rc = cli_main(["notify", "underusage", "--as-of", _USAGE_REPORT_WEEK])
+    assert rc == 0
+    assert spy.call_args.kwargs["min_usage_rgu_hours"] == 0.0
+    out = capsys.readouterr().out
+    assert "beaubonhomme@mila.quebec" in out[out.find("=== Usage Report Previews") :]
+
+    # beaubonhomme's in-window usage is 4.8 * 100 = 480 RGU-h — a 1000 override
+    # drops them below the floor, so the section disappears entirely.
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        rc = cli_main(
+            [
+                "notify",
+                "underusage",
+                "--as-of",
+                _USAGE_REPORT_WEEK,
+                "--usage-report-min-usage-rgu-hours",
+                "1000",
+            ]
+        )
+    assert rc == 0
+    assert spy.call_args.kwargs["min_usage_rgu_hours"] == 1000.0
+    assert "=== Usage Report Previews" not in capsys.readouterr().out
+
+
+def test_usage_report_not_email_filtered_when_no_underusers(
+    usage_report_db, cli_main, monkeypatch, capsys
+):
+    """Regression: with no --user-email and no underusers this cycle, the
+    usage-report query must receive user_emails=None (no filter). Passing an
+    empty list instead makes _select_jobs_usage filter `email IN ()`, matching
+    nobody — silently emptying the fleet-wide usage report."""
+    spy = MagicMock(wraps=_real_get_all_users_usage)
+    monkeypatch.setattr("sarc.cli.notify.underusage.get_all_users_usage", spy)
+
+    # An impossible waste-ratio floor means nobody qualifies as an underuser
+    # this cycle, while the usage report is still eligible.
+    cfg = {**_NOTIFY_CFG, "min_waste_ratio": 2.0}
+    with gifnoc.overlay({"sarc.notifications": cfg}):
+        rc = cli_main(["notify", "underusage", "--as-of", _USAGE_REPORT_WEEK])
+    assert rc == 0
+    assert spy.call_args.kwargs["user_emails"] is None
+    out = capsys.readouterr().out
+    assert "beaubonhomme@mila.quebec" in out[out.find("=== Usage Report Previews") :]
+
+
+def test_personalized_action_min_waste_rgu_hours_flag_overrides_config(
+    notify_db, cli_main, monkeypatch
+):
+    spy = MagicMock(wraps=_real_get_recurring_underusers)
+    monkeypatch.setattr("sarc.cli.notify.underusage.get_recurring_underusers", spy)
+
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        rc = cli_main(
+            [
+                "notify",
+                "underusage",
+                "--as-of",
+                _CYCLE_WEEK,
+                "--personalized-action-min-waste-rgu-hours",
+                "42.0",
+            ]
+        )
+    assert rc == 0
+    assert spy.call_args.kwargs["personalized_action_min_waste_rgu_hours"] == 42.0
+
+
+def test_user_email_filters_dm_to_single_user(notify_db, cli_main, monkeypatch):
+    slack_cls, slack_inst = _mock_slack()
+    _patch_senders(monkeypatch, slack_cls)
+    cfg = {**_NOTIFY_CFG, "send_underusage_report": True, "send_usage_report": False}
+    with gifnoc.overlay({"sarc.notifications": cfg}):
+        rc = cli_main(
+            [
+                "notify",
+                "underusage",
+                "--as-of",
+                _CYCLE_WEEK,
+                "--send",
+                "--user-email",
+                "beaubonhomme@mila.quebec",
+            ]
+        )
+    assert rc == 0
+    # All 3 seeded users would normally be DMed at this cycle week (see
+    # test_send_cycle_week_posts_digest_and_dms) — --user-email restricts to one.
+    assert slack_inst.dm_user.call_count == 1
+    assert slack_inst.dm_user.call_args.args[0] == "beaubonhomme@mila.quebec"
+
+
+def test_user_email_skips_admin_channel_posts(notify_db, cli_main, monkeypatch):
+    slack_cls, slack_inst = _mock_slack()
+    _patch_senders(monkeypatch, slack_cls)
+    cfg = {**_NOTIFY_CFG, "send_underusage_report": True, "send_usage_report": True}
+    with gifnoc.overlay({"sarc.notifications": cfg}):
+        rc = cli_main(
+            [
+                "notify",
+                "underusage",
+                "--as-of",
+                _CYCLE_WEEK,
+                "--send",
+                "--user-email",
+                "beaubonhomme@mila.quebec",
+            ]
+        )
+    assert rc == 0
+    digests, replies = _channel_posts(slack_inst)
+    assert digests == []
+    assert replies == []
+
+
+def test_user_email_auto_zeroes_thresholds(usage_report_db, cli_main, capsys):
+    """beaubonhomme (waste_ratio=0.10, wasted=48 < 672 floor) is NOT an underuser
+    by default at week 26 — see test_non_usage_report_week_no_report_section.
+    Forcing --user-email auto-zeroes the floors, so they qualify instead."""
+    cfg = {**_NOTIFY_CFG, "send_underusage_report": True, "send_usage_report": True}
+    with gifnoc.overlay({"sarc.notifications": cfg}):
+        rc = cli_main(
+            [
+                "notify",
+                "underusage",
+                "--as-of",
+                _CYCLE_NON_REPORT_WEEK,
+                "--user-email",
+                "beaubonhomme@mila.quebec",
+            ]
+        )
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "=== Under Usage Report Previews" in out
+    dm_section = out[out.find("=== Under Usage Report Previews") :]
+    assert "beaubonhomme@mila.quebec" in dm_section
+    # petitbonhomme is a real underuser at week 26 too, but the query-level
+    # user_emails filter restricts the DM section to just the forced target.
+    assert "petitbonhomme@mila.quebec" not in dm_section
+
+
+def test_user_email_explicit_override_wins_over_auto_zero(
+    usage_report_db, cli_main, capsys
+):
+    # 2024-07-08 is ISO week 28 — a multiple of both usage_cycle_length_weeks(2)
+    # and the usage-report period(4), and its 2-week underusage window
+    # [2024-06-24, 2024-07-08] contains beaubonhomme's 2024-06-29 job (unlike
+    # _USAGE_REPORT_WEEK's window, which starts after that job).
+    as_of = "2024-07-08"
+    cfg = {**_NOTIFY_CFG, "send_underusage_report": True, "send_usage_report": True}
+    with gifnoc.overlay({"sarc.notifications": cfg}):
+        rc = cli_main(
+            [
+                "notify",
+                "underusage",
+                "--as-of",
+                as_of,
+                "--user-email",
+                "beaubonhomme@mila.quebec",
+                "--min-waste-ratio",
+                "0.99",
+            ]
+        )
+    assert rc == 0
+    out = capsys.readouterr().out
+    # --user-email skips admin-digest computation entirely, so there's no
+    # "N user(s) flagged" text to check here — the override is instead
+    # verified by beaubonhomme landing in the Usage Report below, not the
+    # Under Usage Report (which would happen if the auto-zero had won).
+    assert "=== Under Usage Report Previews" not in out
+    # usage_report_min_usage_rgu_hours is still auto-zeroed (no explicit flag for
+    # it), and beaubonhomme is no longer excluded as an underuser, so they now
+    # land in the Usage Report instead.
+    assert "=== Usage Report Previews" in out
+    assert "beaubonhomme@mila.quebec" in out[out.find("=== Usage Report Previews") :]
+
+
+def test_user_email_skips_recurring_computation(notify_db, cli_main, monkeypatch):
+    """--user-email skips the fleet-wide admin-digest/recurring-underusers
+    computation entirely (not just the later channel post) — so
+    get_recurring_underusers, and by extension the
+    personalized_action_min_waste_rgu_hours auto-zero-exemption it would
+    otherwise receive, is never reached in this mode. The exemption itself
+    is still covered by
+    test_personalized_action_min_waste_rgu_hours_flag_overrides_config in
+    the normal (non-single-user) path, where get_recurring_underusers does run.
+    """
+    spy = MagicMock(wraps=_real_get_recurring_underusers)
+    monkeypatch.setattr("sarc.cli.notify.underusage.get_recurring_underusers", spy)
+
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        rc = cli_main(
+            [
+                "notify",
+                "underusage",
+                "--as-of",
+                _CYCLE_WEEK,
+                "--user-email",
+                "beaubonhomme@mila.quebec",
+            ]
+        )
+    assert rc == 0
+    spy.assert_not_called()
 
 
 # ── non-default usage_cycle_length_weeks (N) ──────────────────────────────────
