@@ -14,6 +14,7 @@ from sarc.notifications.usage import (
     _week_anchor,
     get_cycle_dates,
     get_recurring_underusers,
+    select_recurring_table_view,
     usage_cycle_length_weeks,
 )
 from tests.unittests.notifications._factory import (
@@ -30,7 +31,6 @@ _14D = timedelta(days=14)
 # Default keyword args for build_recurring_table and get_recurring_underusers callers
 # that don't need to exercise specific window/share values.
 _BRT_KW = {"cluster_share_threshold": 0.30, "active_cycles": 3}
-_GRU_KW = {"cluster_share_threshold": 0.30}
 
 # Cycle windows (rolling from _TEST_END)
 # W0:  [2024-06-16, 2024-06-30]
@@ -174,13 +174,18 @@ def recurring_db(read_write_db):
 
 
 def test_selection_threshold(recurring_db):
-    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
-        result = get_recurring_underusers(
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}) as config:
+        ncfg = config.sarc.notifications
+        unfiltered_result = get_recurring_underusers(
             _TEST_END,
             min_waste_ratio=_MIN_WASTE_RATIO,
             min_waste_rgu_hours=_MIN_WASTE_RGU_HOURS,
-            cluster_share_threshold=0.70,
             ignore_store=True,
+        )
+        result = select_recurring_table_view(
+            unfiltered_result,
+            display_cycles=ncfg.recurrence_display_cycles,
+            cluster_share_threshold=0.70,
         )
     mila_rows = result.get("mila", [])
     selected_emails = {r.email for r in mila_rows}
@@ -203,13 +208,17 @@ def test_all_users_included_when_threshold_is_one(recurring_db):
     # config, which is only defined inside this overlay.
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}) as config:
         ncfg = config.sarc.notifications
-        result = get_recurring_underusers(
+        unfiltered_result = get_recurring_underusers(
             _TEST_END,
             min_waste_ratio=_MIN_WASTE_RATIO,
             min_waste_rgu_hours=_MIN_WASTE_RGU_HOURS,
-            cluster_share_threshold=1.0,
             personalized_action_min_waste_rgu_hours=ncfg.personalized_action_min_waste_rgu_hours,
             ignore_store=True,
+        )
+        result = select_recurring_table_view(
+            unfiltered_result,
+            display_cycles=ncfg.recurrence_display_cycles,
+            cluster_share_threshold=1.0,
         )
         # Trigger cache on restrictive_action_flags
         for rows in result.values():
@@ -271,13 +280,15 @@ def test_all_users_included_when_threshold_is_one(recurring_db):
 
 def test_display_cycles_columns(recurring_db):
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
-        result = get_recurring_underusers(
+        unfiltered_result = get_recurring_underusers(
             _TEST_END,
             min_waste_ratio=_MIN_WASTE_RATIO,
             min_waste_rgu_hours=_MIN_WASTE_RGU_HOURS,
-            cluster_share_threshold=1.0,
             recurrence_display_cycles=4,
             ignore_store=True,
+        )
+        result = select_recurring_table_view(
+            unfiltered_result, display_cycles=4, cluster_share_threshold=1.0
         )
     # Test cycles 4 produces 4 columns
     for rows in result.values():
@@ -285,13 +296,15 @@ def test_display_cycles_columns(recurring_db):
             assert len(row.cycles) == 4
 
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
-        result = get_recurring_underusers(
+        unfiltered_result = get_recurring_underusers(
             _TEST_END,
             min_waste_ratio=_MIN_WASTE_RATIO,
             min_waste_rgu_hours=_MIN_WASTE_RGU_HOURS,
-            cluster_share_threshold=1.0,
             recurrence_display_cycles=6,
             ignore_store=True,
+        )
+        result = select_recurring_table_view(
+            unfiltered_result, display_cycles=6, cluster_share_threshold=1.0
         )
     # Test cycles 6 produces 6 columns
     for rows in result.values():
@@ -315,15 +328,20 @@ def test_active_cycles_personalized_action(recurring_db):
             True,
         ),  # PA window=10w: firstuser waste=456 >= 300 floor (W-8 enters window)
     ]:
-        with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
-            result = get_recurring_underusers(
+        with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}) as config:
+            ncfg = config.sarc.notifications
+            unfiltered_result = get_recurring_underusers(
                 _TEST_END,
                 min_waste_ratio=_MIN_WASTE_RATIO,
                 min_waste_rgu_hours=_MIN_WASTE_RGU_HOURS,
-                cluster_share_threshold=1.0,
                 recurrence_active_cycles=active_cycles,
                 personalized_action_min_waste_rgu_hours=300.0,
                 ignore_store=True,
+            )
+            result = select_recurring_table_view(
+                unfiltered_result,
+                display_cycles=ncfg.recurrence_display_cycles,
+                cluster_share_threshold=1.0,
             )
             row = next(r for r in result["mila"] if r.email == "firstuser@mila.quebec")
             assert row.flagged_for_personalized_action is expected, (
@@ -336,14 +354,20 @@ def test_active_cycles_personalized_action(recurring_db):
 
 def test_empty_db_returns_empty_dict(read_write_db):
     before = datetime(2020, 1, 1, tzinfo=UTC)
-    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
-        result = get_recurring_underusers(
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}) as config:
+        ncfg = config.sarc.notifications
+        unfiltered_result = get_recurring_underusers(
             before,
             min_waste_ratio=_MIN_WASTE_RATIO,
             min_waste_rgu_hours=_MIN_WASTE_RGU_HOURS,
-            **_GRU_KW,
             ignore_store=True,
         )
+        result = select_recurring_table_view(
+            unfiltered_result,
+            display_cycles=ncfg.recurrence_display_cycles,
+            cluster_share_threshold=0.30,
+        )
+
     assert result == {}
 
 
@@ -708,13 +732,18 @@ def test_anchor_year_boundary_pinned(cycle_weeks, end, expected_anchor):
 def test_off_cycle_week_end_w0_is_none(recurring_db):
     # _OFF_CYCLE_MON = 2024-06-17 (wk 25, off-cycle) → anchor = 2024-06-24 > end
     # → w0=None
-    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
-        result = get_recurring_underusers(
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}) as config:
+        ncfg = config.sarc.notifications
+        unfiltered_result = get_recurring_underusers(
             _OFF_CYCLE_MON,
             min_waste_ratio=_MIN_WASTE_RATIO,
             min_waste_rgu_hours=_MIN_WASTE_RGU_HOURS,
-            cluster_share_threshold=0.70,
             ignore_store=True,
+        )
+        result = select_recurring_table_view(
+            unfiltered_result,
+            display_cycles=ncfg.recurrence_display_cycles,
+            cluster_share_threshold=0.70,
         )
     assert result, "expected selected users for the off-cycle-week window"
     for rows in result.values():
@@ -728,14 +757,19 @@ def test_off_cycle_week_end_personalized_action_floor_controls(recurring_db):
     # With w0=None (off-cycle-week end) position-0 PA is suppressed regardless of waste,
     # because cycle_flagged[0] is None. Here a high floor independently keeps everyone
     # below the threshold, so all rows are unflagged.
-    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
-        result = get_recurring_underusers(
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}) as config:
+        ncfg = config.sarc.notifications
+        unfiltered_result = get_recurring_underusers(
             _OFF_CYCLE_MON,
             min_waste_ratio=_MIN_WASTE_RATIO,
             min_waste_rgu_hours=_MIN_WASTE_RGU_HOURS,
-            cluster_share_threshold=0.70,
             personalized_action_min_waste_rgu_hours=999999.0,
             ignore_store=True,
+        )
+        result = select_recurring_table_view(
+            unfiltered_result,
+            display_cycles=ncfg.recurrence_display_cycles,
+            cluster_share_threshold=0.70,
         )
     for rows in result.values():
         for row in rows:
@@ -1014,14 +1048,19 @@ def test_table_no_escalation_without_four_run():
 def test_wasted_6w_uses_scaled_waste(recurring_db):
     # firstuser: util=0.05, threshold=0.05 → credited_used=LEAST(rgu_h, rgu_h*1.0)=rgu_h
     # → wasted=0 → excluded from the recurring table entirely
-    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
-        result = get_recurring_underusers(
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}) as config:
+        ncfg = config.sarc.notifications
+        unfiltered_result = get_recurring_underusers(
             _TEST_END,
             min_waste_ratio=_MIN_WASTE_RATIO,
             min_waste_rgu_hours=_MIN_WASTE_RGU_HOURS,
-            cluster_share_threshold=1.0,
             utilization_ceiling=0.05,
             ignore_store=True,
+        )
+        result = select_recurring_table_view(
+            unfiltered_result,
+            display_cycles=ncfg.recurrence_display_cycles,
+            cluster_share_threshold=1.0,
         )
     emails = {r.email for rows in result.values() for r in rows}
     assert "firstuser@mila.quebec" not in emails
@@ -1029,13 +1068,18 @@ def test_wasted_6w_uses_scaled_waste(recurring_db):
 
 def test_true_wasted_field_populated(recurring_db):
     # At identity threshold, RecurringUserRow.true_wasted should be positive.
-    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
-        result = get_recurring_underusers(
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}) as config:
+        ncfg = config.sarc.notifications
+        unfiltered_result = get_recurring_underusers(
             _TEST_END,
             min_waste_ratio=_MIN_WASTE_RATIO,
             min_waste_rgu_hours=_MIN_WASTE_RGU_HOURS,
-            cluster_share_threshold=1.0,
             ignore_store=True,
+        )
+        result = select_recurring_table_view(
+            unfiltered_result,
+            display_cycles=ncfg.recurrence_display_cycles,
+            cluster_share_threshold=1.0,
         )
     row = next(r for r in result["mila"] if r.email == "firstuser@mila.quebec")
     assert row.true_wasted > 0.0
@@ -1047,14 +1091,19 @@ def test_personalized_action_floor(recurring_db):
     # the most-recent cycle (cycle_flagged[0]). fourthuser clears the floor over the
     # active window but is NOT a current-cycle underuser (cycles == [False]*3 +
     # [True]*2), so PA is suppressed for them while the other three are flagged.
-    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
-        result = get_recurring_underusers(
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}) as config:
+        ncfg = config.sarc.notifications
+        unfiltered_result = get_recurring_underusers(
             _TEST_END,
             min_waste_ratio=_MIN_WASTE_RATIO,
             min_waste_rgu_hours=_MIN_WASTE_RGU_HOURS,
-            cluster_share_threshold=1.0,
             personalized_action_min_waste_rgu_hours=0.0,
             ignore_store=True,
+        )
+        result = select_recurring_table_view(
+            unfiltered_result,
+            display_cycles=ncfg.recurrence_display_cycles,
+            cluster_share_threshold=1.0,
         )
     flagged = {
         r.email: r.flagged_for_personalized_action
@@ -1069,14 +1118,19 @@ def test_personalized_action_floor(recurring_db):
     assert flagged["fourthuser@mila.quebec"] is False
 
     # With a very high floor, no user crosses the threshold → all False.
-    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
-        result = get_recurring_underusers(
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}) as config:
+        ncfg = config.sarc.notifications
+        unfiltered_result = get_recurring_underusers(
             _TEST_END,
             min_waste_ratio=_MIN_WASTE_RATIO,
             min_waste_rgu_hours=_MIN_WASTE_RGU_HOURS,
-            cluster_share_threshold=1.0,
             personalized_action_min_waste_rgu_hours=999999.0,
             ignore_store=True,
+        )
+        result = select_recurring_table_view(
+            unfiltered_result,
+            display_cycles=ncfg.recurrence_display_cycles,
+            cluster_share_threshold=1.0,
         )
     for rows in result.values():
         for row in rows:
@@ -1148,16 +1202,18 @@ def test_pa_flags_four_scenarios(pa_scenario_db):
     """pa_flags are computed correctly for the four canonical scenarios."""
     users = pa_scenario_db
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
-        result = get_recurring_underusers(
+        unfiltered_result = get_recurring_underusers(
             _TEST_END,
             min_waste_ratio=0.0,
             min_waste_rgu_hours=0.0,
-            cluster_share_threshold=1.1,
             recurrence_active_cycles=3,
             recurrence_display_cycles=5,
             clusters=["mila"],
             personalized_action_min_waste_rgu_hours=30.0,
             ignore_store=True,
+        )
+        result = select_recurring_table_view(
+            unfiltered_result, display_cycles=5, cluster_share_threshold=1.1
         )
     rows = {r.email: r for r in result.get("mila", [])}
 
@@ -1182,3 +1238,179 @@ def test_pa_flags_four_scenarios(pa_scenario_db):
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
         for u in (u1, u2, u3, u4):
             assert u.restrictive_action_flags == [False] * 5
+
+
+# ── RecurringUserRow.cycle_symbol ─────────────────────────────────────────────
+
+
+def test_cycle_symbol_future_cycle_is_blank():
+    row = RecurringUserRow(
+        email="x@mila.quebec",
+        display_name="X",
+        cluster="mila",
+        wasted_current_active_window=1.0,
+        cluster_share=0.1,
+        cycles=[None],
+        flagged_for_personalized_action=False,
+    )
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        assert row.cycle_symbol(0) == ""
+
+
+def test_cycle_symbol_not_underuser_is_check():
+    row = RecurringUserRow(
+        email="x@mila.quebec",
+        display_name="X",
+        cluster="mila",
+        wasted_current_active_window=1.0,
+        cluster_share=0.1,
+        cycles=[False],
+        flagged_for_personalized_action=False,
+    )
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        assert row.cycle_symbol(0) == "✓"
+
+
+def test_cycle_symbol_underuser_no_peak_is_triangle():
+    row = RecurringUserRow(
+        email="x@mila.quebec",
+        display_name="X",
+        cluster="mila",
+        wasted_current_active_window=1.0,
+        cluster_share=0.1,
+        cycles=[True],
+        flagged_for_personalized_action=False,
+        pa_flags=[False],
+    )
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        assert row.cycle_symbol(0) == "▲"
+
+
+def test_cycle_symbol_pa_peak_is_flag_triangle():
+    row = RecurringUserRow(
+        email="x@mila.quebec",
+        display_name="X",
+        cluster="mila",
+        wasted_current_active_window=1.0,
+        cluster_share=0.1,
+        cycles=[True],
+        flagged_for_personalized_action=True,
+        pa_flags=[True],
+    )
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        assert row.cycle_symbol(0) == "⚑▲"
+
+
+def test_cycle_symbol_escalated_is_double_bang():
+    row = RecurringUserRow(
+        email="x@mila.quebec",
+        display_name="X",
+        cluster="mila",
+        wasted_current_active_window=1.0,
+        cluster_share=0.1,
+        cycles=[True, True, True, True],
+        flagged_for_personalized_action=True,
+        pa_flags=[True, True, True, True],
+    )
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        assert row.cycle_symbol(0) == "!!⚑▲"
+
+
+def test_cycle_symbol_matches_expected_sequence():
+    # _ROW_PEAK_AT_W4: cycles=[F,F,T,T,T], pa_flags=[F,F,T,F,F] (no 4-run).
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        symbols = [_ROW_PEAK_AT_W4.cycle_symbol(i) for i in range(5)]
+    assert symbols == ["✓", "✓", "⚑▲", "▲", "▲"]
+
+
+# ── Floating-point-safe "select all" threshold ────────────────────────────────
+
+
+def test_selection_threshold_above_one_includes_all(recurring_db):
+    # Confirms the fix is a >= comparison, not an exact-equality special case
+    # for 1.0 only.
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}) as config:
+        ncfg = config.sarc.notifications
+        unfiltered_result = get_recurring_underusers(
+            _TEST_END,
+            min_waste_ratio=_MIN_WASTE_RATIO,
+            min_waste_rgu_hours=_MIN_WASTE_RGU_HOURS,
+            ignore_store=True,
+        )
+        result = select_recurring_table_view(
+            unfiltered_result,
+            display_cycles=ncfg.recurrence_display_cycles,
+            cluster_share_threshold=1.5,
+        )
+    mila_emails = {r.email for r in result.get("mila", [])}
+    assert mila_emails == {
+        "firstuser@mila.quebec",
+        "seconduser@mila.quebec",
+        "thirduser@mila.quebec",
+        "fourthuser@mila.quebec",
+    }
+
+
+# ── select_recurring_table_view ───────────────────────────────────────────────
+
+
+def test_select_recurring_table_view_narrows_cycles_and_pa_flags():
+    row = RecurringUserRow(
+        email="alice@mila.quebec",
+        display_name="Alice",
+        cluster="narval",
+        wasted_current_active_window=100.0,
+        cluster_share=1.0,
+        cycles=[True, True, True, True, True],
+        flagged_for_personalized_action=True,
+        pa_flags=[True, True, True, True, False],
+    )
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        result = select_recurring_table_view(
+            {"narval": [row]}, display_cycles=3, cluster_share_threshold=1.0
+        )
+        narrowed = result["narval"][0]
+        assert narrowed.cycles == [True, True, True]
+        assert narrowed.pa_flags == [True, True, True]
+        # restrictive_action_flags must be recomputed against the sliced (len-3)
+        # pa_flags, not stay stale at the original 5-length value — a 3-cycle
+        # window can't contain a 4-cycle run, so no escalation.
+        assert narrowed.restrictive_action_flags == [False, False, False]
+
+
+def test_select_recurring_table_view_reapplies_threshold_selection():
+    rows = [
+        RecurringUserRow(
+            email="a@mila.quebec",
+            display_name="A",
+            cluster="narval",
+            wasted_current_active_window=60.0,
+            cluster_share=0.6,
+            cycles=[True] * 5,
+            flagged_for_personalized_action=False,
+        ),
+        RecurringUserRow(
+            email="b@mila.quebec",
+            display_name="B",
+            cluster="narval",
+            wasted_current_active_window=30.0,
+            cluster_share=0.3,
+            cycles=[True] * 5,
+            flagged_for_personalized_action=False,
+        ),
+        RecurringUserRow(
+            email="c@mila.quebec",
+            display_name="C",
+            cluster="narval",
+            wasted_current_active_window=10.0,
+            cluster_share=0.1,
+            cycles=[True] * 5,
+            flagged_for_personalized_action=False,
+        ),
+    ]
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+        result = select_recurring_table_view(
+            {"narval": rows}, display_cycles=5, cluster_share_threshold=0.70
+        )
+    # a (0.6) + b (0.3) = 0.9 >= 0.70 -> stop after b; c excluded.
+    assert [r.email for r in result["narval"]] == ["a@mila.quebec", "b@mila.quebec"]

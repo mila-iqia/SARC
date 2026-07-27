@@ -292,6 +292,7 @@ def _mock_slack(dm_status=SendStatus.OK, channel_status=SendStatus.OK):
     inst.dm_user.return_value = SendResult(dm_status)
     ts = "111.222" if channel_status == SendStatus.OK else None
     inst.post_channel.return_value = SendResult(channel_status, ts=ts)
+    inst.upload_files.return_value = SendResult(SendStatus.OK)
     cls = MagicMock(return_value=inst)
     return cls, inst
 
@@ -1074,3 +1075,65 @@ def test_n3_usage_report_positive_case(usage_report_db, cli_main, capsys):
     out = captured.out
     assert "=== Usage Report Previews" in out
     assert "beaubonhomme@mila.quebec" in out
+
+
+# ── Recurring-underusers CSV export ───────────────────────────────────────────
+
+_DASHBOARD_URL = "https://sarc-api.example.com/dash/metrics"
+
+
+def test_send_uploads_recurring_csvs_when_dashboard_url_set(
+    notify_db, cli_main, monkeypatch
+):
+    slack_cls, slack_inst = _mock_slack()
+    _patch_senders(monkeypatch, slack_cls)
+    cfg = {
+        **_NOTIFY_CFG,
+        "send_underusage_report": True,
+        "send_usage_report": False,
+        "dashboard_url": _DASHBOARD_URL,
+    }
+    with gifnoc.overlay({"sarc.notifications": cfg}):
+        rc = cli_main(
+            ["notify", "usage", "--as-of", _CYCLE_WEEK, "--send", "--ignore-store"]
+        )
+    assert rc == 0
+    digests, _replies = _channel_posts(slack_inst)
+    assert slack_inst.upload_files.call_count == 1
+    call = slack_inst.upload_files.call_args
+    assert call.args[0] == "#test-channel"
+    files = call.args[1]
+    assert len(files) == 1
+    names = [f[0] for f in files]
+    assert any("distilled" in n for n in names)
+    for _name, content in files:
+        assert content  # non-empty CSV body
+    assert len(digests) == 1
+    # thread_ts must match the digest post's ts (via post_channel's return value).
+    assert call.kwargs["thread_ts"] == slack_inst.post_channel.return_value.ts
+
+
+def test_send_upload_failure_logs_error(notify_db, cli_main, monkeypatch, caplog):
+    slack_cls, slack_inst = _mock_slack()
+    slack_inst.upload_files.return_value = SendResult(SendStatus.FAILED, "upload_boom")
+    _patch_senders(monkeypatch, slack_cls)
+    cfg = {**_NOTIFY_CFG, "send_underusage_report": True, "send_usage_report": False}
+    with gifnoc.overlay({"sarc.notifications": cfg}):
+        rc = cli_main(["notify", "usage", "--as-of", _CYCLE_WEEK, "--send"])
+    assert rc == 0
+    assert any(
+        "Failed to upload recurring-underusers CSVs" in r.message
+        for r in caplog.records
+    )
+    assert any("upload_boom" in r.message for r in caplog.records)
+
+
+def test_dry_run_does_not_upload_csvs(notify_db, cli_main, monkeypatch):
+    slack_cls = MagicMock()
+    _patch_senders(monkeypatch, slack_cls)
+    cfg = {**_NOTIFY_CFG, "dashboard_url": _DASHBOARD_URL}
+    with gifnoc.overlay({"sarc.notifications": cfg}):
+        rc = cli_main(["notify", "usage", "--as-of", _CYCLE_WEEK])
+    assert rc == 0
+    # SlackClient is never instantiated in dry-run mode.
+    slack_cls.assert_not_called()

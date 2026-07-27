@@ -269,7 +269,6 @@ def test_off_cycle_week_end_store_path_w0_excluded_but_aggregated(
             off_cycle_end,
             min_waste_ratio=_MIN_WASTE_RATIO,
             min_waste_rgu_hours=_MIN_WASTE_RGU_HOURS,
-            cluster_share_threshold=0.30,
             ignore_store=False,
         )  # clusters omitted -> None -> exercises the `if clusters:` false arm
 

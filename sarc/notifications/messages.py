@@ -179,20 +179,9 @@ def build_recurring_table(
         )
     flag_ws = [len(lbl) for lbl in flag_labels]
 
-    def _flag_cell(
-        flag: bool | None, w: int, has_peak: bool = False, escalated: bool = False
-    ) -> str:
-        if flag is None:
+    def _flag_cell(symbol: str, w: int) -> str:
+        if not symbol:
             return " " * (2 + w)
-        if flag:
-            if escalated:
-                symbol = "!!⚑▲"
-            elif has_peak:
-                symbol = "⚑▲"
-            else:
-                symbol = "▲"
-        else:
-            symbol = "✓"
         return f"  {symbol.rjust(w)}"
 
     def _build_flag_header() -> str:
@@ -204,16 +193,11 @@ def build_recurring_table(
         return "".join(parts)
 
     def _build_flag_cells(row: RecurringUserRow) -> str:
-        cycle_vals = row.cycles
-        esc_flags = row.restrictive_action_flags
         parts = []
         for i, w in enumerate(flag_ws):
             if i == flag_window:
                 parts.append("  |")
-            flag = cycle_vals[i]
-            has_peak = i < len(row.pa_flags) and bool(row.pa_flags[i])
-            escalated = i < len(esc_flags) and bool(esc_flags[i])
-            parts.append(_flag_cell(flag, w, has_peak, escalated))
+            parts.append(_flag_cell(row.cycle_symbol(i), w))
         return "".join(parts)
 
     flag_header = _build_flag_header()
