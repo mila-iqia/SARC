@@ -1676,10 +1676,11 @@
         { key: 'rgu_hours',             label: unit.label,
           title: `RGU × elapsed time, shown in ${unit.label}`,
           fmt: fmtRguTime },
-        { key: 'gpu_sm_occupancy_mean', label: 'SM occ',    fmt: v => v != null ? (v*100).toFixed(1)+'%' : '—' },
         { key: 'waste',                 label: `Waste (${unit.label})`,
           title: `RGU·time × (1 − mean ${metricPretty}): estimated unused RGU·time`,
           fmt: fmtRguTime },
+        { key: 'gpu_sm_occupancy_mean', label: 'SM occ',    fmt: v => v != null ? (v*100).toFixed(1)+'%' : '—' },
+        { key: 'gpu_utilization_mean',  label: 'GPU util',  fmt: v => v != null ? (v*100).toFixed(1)+'%' : '—' },
         { key: 'gpu_type',              label: 'GPU type' },
         {% if is_admin %}
         { key: 'gpu_type_rgu',          label: 'GPU type RGU',
@@ -1693,7 +1694,6 @@
         { key: 'allocated_gpu',         label: 'Allocated GPU', fmt: fmtInt },
         {% if is_admin %}
         { key: 'billing',               label: 'Billing',   fmt: fmtInt },
-        { key: 'gpu_utilization_mean',  label: 'GPU util',  fmt: v => v != null ? (v*100).toFixed(1)+'%' : '—' },
         { key: 'gpu_memory_max',        label: 'Mem max',   fmt: v => v != null ? (v*100).toFixed(1)+'%' : '—' },
         {% endif %}
         { key: 'nodes',                 label: 'Nodes',     cls: 'col-cmd' },
