@@ -228,9 +228,7 @@ def _date_range(start, end) -> tuple[datetime, datetime]:
     begin = min(start, end)
     finish = max(start, end)
     begin_dt = datetime(begin.year, begin.month, begin.day, tzinfo=UTC)
-    finish_dt = datetime(finish.year, finish.month, finish.day, tzinfo=UTC) + timedelta(
-        days=1
-    )
+    finish_dt = datetime(finish.year, finish.month, finish.day, tzinfo=UTC)
     return begin_dt, finish_dt
 
 
