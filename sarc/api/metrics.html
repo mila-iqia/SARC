@@ -1679,8 +1679,8 @@
         { key: 'waste',                 label: `Waste (${unit.label})`,
           title: `RGU·time × (1 − mean ${metricPretty}): estimated unused RGU·time`,
           fmt: fmtRguTime },
-        { key: 'gpu_sm_occupancy_mean', label: 'SM occ',    fmt: v => v != null ? (v*100).toFixed(1)+'%' : '—' },
-        { key: 'gpu_utilization_mean',  label: 'GPU util',  fmt: v => v != null ? (v*100).toFixed(1)+'%' : '—' },
+        { key: 'gpu_sm_occupancy_mean', label: 'SM occ',    fmt: v => v != null ? (v < 0 ? 'NaN' : (v*100).toFixed(1)+'%') : '—' },
+        { key: 'gpu_utilization_mean',  label: 'GPU util',  fmt: v => v != null ? (v < 0 ? 'NaN' : (v*100).toFixed(1)+'%') : '—' },
         { key: 'gpu_type',              label: 'GPU type' },
         {% if is_admin %}
         { key: 'gpu_type_rgu',          label: 'GPU type RGU',

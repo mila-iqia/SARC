@@ -249,8 +249,10 @@ def _apply_focus(
     return begin_dt, finish_dt
 
 
-def _nan_to_none(v: float | None) -> float | None:
-    return None if (isinstance(v, float) and math.isnan(v)) else v
+def _nan_to_none(
+    v: float | None, replace_with: float | int | None = None
+) -> float | None:
+    return replace_with if (isinstance(v, float) and math.isnan(v)) else v
 
 
 def _resolve_cluster_ids(sess: Session, clusters: list[str]) -> list[int] | None:
@@ -1332,8 +1334,12 @@ def metrics_jobs(
                 "rgu": round(float(row.rgu), 2),
                 "rgu_hours": round(rh, 2) if rh is not None else None,
                 "waste": waste,
-                "gpu_utilization_mean": _nan_to_none(row.gpu_utilization_mean),
-                "gpu_sm_occupancy_mean": _nan_to_none(row.gpu_sm_occupancy_mean),
+                "gpu_utilization_mean": _nan_to_none(
+                    row.gpu_utilization_mean, replace_with=-1
+                ),
+                "gpu_sm_occupancy_mean": _nan_to_none(
+                    row.gpu_sm_occupancy_mean, replace_with=-1
+                ),
                 "gpu_memory_max": _nan_to_none(row.gpu_memory_max),
             }
         )
