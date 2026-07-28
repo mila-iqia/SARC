@@ -811,7 +811,7 @@
     // RGU req-vs-used + RGU-by-cluster on row 1, job table on row 2. Copied per
     // call so mutating tileLayout never corrupts this template.
     {% if is_admin %}
-    const DEFAULT_LAYOUT = [['clusterrgu', 'jobtable'], ['metrictrend', 'userrgu']];
+    const DEFAULT_LAYOUT = [['rgu_usage', 'clusterrgu'], ['jobtable'], ['metrictrend', 'userrgu']];
     {% else %}
     const DEFAULT_LAYOUT = [['rgu_usage', 'clusterrgu'], ['jobtable']];
     {% endif %}
