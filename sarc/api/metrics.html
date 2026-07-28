@@ -355,6 +355,9 @@
   <div id="tile-grid"></div>
 
   <script>
+    const MIN_USAGE_EXPECTED_PERCENT = 15;
+    const MIN_USAGE_EXPECTED = MIN_USAGE_EXPECTED_PERCENT / 100;
+
     const SEC_TO_H = 1 / 3600;
 
     function isoDate(d) { return d.toISOString().split('T')[0]; }
@@ -1105,6 +1108,10 @@
       });
     }
 
+    function _jobRguWasted(r) {
+      return Math.max(0, (MIN_USAGE_EXPECTED_PERCENT * (r.rgu_allocated - r.rgu_unmeasured) / 100 - r.rgu_used));
+    }
+
     function renderRguUsage(id, d) {
       const el = document.getElementById(id);
       if (!el || !d.rgu_usage.length) return;
@@ -1138,12 +1145,17 @@
         // One stacked bar summing the whole Start–End range. Focus is ignored on
         // purpose (no per-bucket axis) and the single bar is not click-to-focus.
         const sum = key => d.rgu_usage.reduce((a, r) => a + (r[key] || 0), 0);
-        const reqTot = sum('rgu_requested'), usedTot = sum('rgu_used'), unmTot = sum('rgu_unmeasured');
+        const reqTot = sum('rgu_allocated'), usedTot = sum('rgu_used'), unmTot = sum('rgu_unmeasured');
+        const bestUsedTot = (reqTot - unmTot) * MIN_USAGE_EXPECTED_PERCENT / 100;
+        const wastedTot = Math.max(0, bestUsedTot - usedTot);
+        const unusedTot = reqTot - usedTot - unmTot - wastedTot;
         const X = ['Whole range'];
         Plotly.react(plot, [
           { type: 'bar', name: 'Used',   x: X, y: [usedTot * unit.factor], marker: { color: '#1a6fd4' },
             hovertemplate: unit.label + ' used: %{y:,.1f}<extra></extra>' },
-          { type: 'bar', name: 'Unused', x: X, y: [(reqTot - usedTot - unmTot) * unit.factor], marker: { color: '#a8c8f0' },
+          { type: 'bar', name: 'Wasted', x: X, y: [wastedTot * unit.factor], marker: { color: '#ff0000' },
+            hovertemplate: unit.label + ' wasted: %{y:,.1f}<extra></extra>' },
+          { type: 'bar', name: 'Unused', x: X, y: [unusedTot * unit.factor], marker: { color: '#a8c8f0' },
             hovertemplate: unit.label + ' unused: %{y:,.1f}<extra></extra>' },
           { type: 'bar', name: 'No metric data', x: X, y: [unmTot * unit.factor], marker: { color: '#bdbdbd' },
             hovertemplate: unit.label + ' (no metric): %{y:,.1f}<extra></extra>' },
@@ -1162,15 +1174,20 @@
       const periods    = d.rgu_usage.map(r => r.period_start);
       const periodEnds = d.rgu_usage.map(r => r.period_end);
       const rguUsed       = d.rgu_usage.map(r => r.rgu_used * unit.factor);
-      const rguUnused     = d.rgu_usage.map(r => (r.rgu_requested - r.rgu_used - (r.rgu_unmeasured || 0)) * unit.factor);
+      const rguWasted     = d.rgu_usage.map(r => _jobRguWasted(r) * unit.factor);
+      const rguUnused     = d.rgu_usage.map(r => (r.rgu_allocated - r.rgu_used - r.rgu_unmeasured - _jobRguWasted(r)) * unit.factor);
       const rguUnmeasured = d.rgu_usage.map(r => (r.rgu_unmeasured || 0) * unit.factor);
       const colorUsed      = periods.map(p => { const f = periodInFocus(p); return f === null ? '#1a6fd4' : f ? '#e07020' : '#c8d8f0'; });
       const colorUnused    = periods.map(p => { const f = periodInFocus(p); return f === null ? '#a8c8f0' : f ? '#f0c090' : '#e4eef8'; });
+      const colorWasted    = periods.map(p => { const f = periodInFocus(p); return f === null ? '#ff0000' : f ? '#aa00cc' : '#ffdddd'; });
       const colorUnmeasured= periods.map(p => { const f = periodInFocus(p); return f === null ? '#bdbdbd' : f ? '#8a8a8a' : '#e6e6e6'; });
       Plotly.react(plot, [
         { type: 'bar', name: 'Used',   x: periods, y: rguUsed, customdata: periodEnds,
           marker: { color: colorUsed },
           hovertemplate: 'Period: %{x}<br>' + unit.label + ' used: %{y:,.1f}<extra></extra>' },
+        { type: 'bar', name: 'Wasted',   x: periods, y: rguWasted, customdata: periodEnds,
+          marker: { color: colorWasted },
+          hovertemplate: 'Period: %{x}<br>' + unit.label + ' wasted: %{y:,.1f}<extra></extra>' },
         { type: 'bar', name: 'Unused', x: periods, y: rguUnused, customdata: periodEnds,
           marker: { color: colorUnused },
           hovertemplate: 'Period: %{x}<br>' + unit.label + ' unused: %{y:,.1f}<extra></extra>' },
