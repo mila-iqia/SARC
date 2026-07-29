@@ -144,18 +144,16 @@ def _filtered_points(series: dict) -> tuple[np.ndarray, np.ndarray]:
     return timestamps[keep], values[keep]
 
 
-def _counter_rates(results: Sequence[dict]) -> np.ndarray | None:
+def _counter_rates(results: Sequence[dict]) -> np.ndarray:
     """Pooled per-second rates of a nanosecond time counter (e.g. core usage).
 
     Series are grouped by their (instance, core, gpu) labels — series sharing
     the same labels are concatenated in input order — and each group is
-    differenced separately. Returns None when no attributable real sample
-    survives the sentinel filter, and an empty array when the groups are all
-    too short to difference (statistics then come out NaN).
+    differenced separately. The result is empty when no group has at least
+    two attributable real samples.
     """
     used = [k for k in _COUNTER_GROUP_LABELS if any(k in s["metric"] for s in results)]
     groups: dict[tuple, list[tuple[np.ndarray, np.ndarray]]] = {}
-    n_samples = 0
     for series in results:
         labels = series["metric"]
         try:
@@ -163,11 +161,8 @@ def _counter_rates(results: Sequence[dict]) -> np.ndarray | None:
         except KeyError:
             continue  # a group label is missing: these samples are not attributable
         timestamps, values = _filtered_points(series)
-        n_samples += values.size
         if values.size:
             groups.setdefault(key, []).append((timestamps, values))
-    if n_samples == 0:
-        return None
     rates = []
     for chunks in groups.values():
         timestamps = np.concatenate([c[0] for c in chunks])
@@ -203,23 +198,10 @@ def compute_metric_statistics(
         return None
     if is_time_counter:
         values = _counter_rates(results)
-        if values is None:
-            return None
-        if values.size == 0:
-            nan = normalization(math.nan)
-            return {
-                "mean": nan,
-                "std": nan,
-                "max": nan,
-                "q25": nan,
-                "median": nan,
-                "q75": nan,
-                "q05": nan,
-            }
     else:
         values = np.concatenate([_filtered_points(s)[1] for s in results])
-        if values.size == 0:
-            return None
+    if values.size == 0:
+        return None
     std = float(np.std(values, ddof=1)) if values.size >= 2 else math.nan
     q05, q25, median, q75 = map(float, np.quantile(values, (0.05, 0.25, 0.5, 0.75)))
     return {

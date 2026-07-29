@@ -101,14 +101,13 @@ def test_compute_metric_statistics_time_counter_same_labels_concatenated():
     assert stats["mean"] == (1.0 + 2.0 + 2.0) / 3
 
 
-def test_compute_metric_statistics_time_counter_too_short_gives_nan():
-    # Single-sample sources cannot be differenced: statistics exist but are
-    # all NaN (behavior inherited from the pandas implementation).
+def test_compute_metric_statistics_time_counter_too_short_returns_none():
+    # Single-sample sources cannot be differenced: no rate, no statistics
+    # (the former pandas implementation stored all-NaN statistics instead).
     stats = compute_metric_statistics(
         [_series([5e9], instance="cn-c002", core="0")], is_time_counter=True
     )
-    assert stats is not None
-    assert all(math.isnan(v) for v in stats.values())
+    assert stats is None
 
 
 def test_compute_metric_statistics_time_counter_all_blank_returns_none():
