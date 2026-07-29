@@ -3,22 +3,22 @@
 This document describes how SARC flags GPU-underusing researchers and turns that
 into reports and notifications. It is a dev-facing overview meant to be read in
 ~5 minutes; for the exact RGU/waste math, read the well-commented source in
-`sarc/notifications/underusage.py`.
+`sarc/notifications/usage.py`.
 
 ## Overview
 
 The system runs periodically (typically weekly, driven by an external scheduler)
-via the CLI command `notify underusage`. On each run it looks back over a
+via the CLI command `notify usage`. On each run it looks back over a
 rolling window, decides which researchers are wasting GPU allocation, and —
 depending on the calendar cadence and config gates — posts a digest for admins
 and DMs individual researchers.
 
 A few things to keep straight before the details:
 
-- **The CLI file is only the orchestrator.** `sarc/cli/notify/underusage.py`
+- **The CLI file is only the orchestrator.** `sarc/cli/notify/usage.py`
   handles dry-run vs. send, calendar eligibility, delivery loops, and summary
   footers. The actual **flagging logic lives in
-  `sarc/notifications/underusage.py`**.
+  `sarc/notifications/usage.py`**.
 - **"Notifications" are delivered on Slack.** A user's `email` is used as the
   key to look them up in Slack. Delivery is Slack DMs plus one channel post.
 - **Dry-run is the default.** Nothing is sent unless `--send` is passed *and*
@@ -28,10 +28,10 @@ A few things to keep straight before the details:
 
 | Layer | File | Key entry points |
 |---|---|---|
-| Flagging / data | `sarc/notifications/underusage.py` | `get_underusers`, `get_recurring_underusers`, `get_all_users_usage` |
+| Flagging / data | `sarc/notifications/usage.py` | `get_underusers`, `get_recurring_underusers`, `get_all_users_usage` |
 | Message building | `sarc/notifications/messages.py` | `build_admin_digest`, `build_user_dm`, `build_usage_report`, `build_recurring_table` |
 | Delivery | `sarc/notifications/slack.py` | `SlackClient.dm_user`, `SlackClient.post_channel` |
-| Orchestration | `sarc/cli/notify/underusage.py` | `UnderusageNotifyCommand` |
+| Orchestration | `sarc/cli/notify/usage.py` | `UsageNotifyCommand` |
 
 Message bodies come from `str.format` templates in `config/notifications/*.md`,
 loaded into config as strings (see `UnderusageNotifyConfig` in
@@ -80,7 +80,7 @@ identity/display fields:
 
 Everything downstream consumes aggregates built from these columns. The exact
 filters and RGU/waste expressions live in `_with_rgu_window` and `_rgu_exprs`
-(`sarc/notifications/underusage.py`).
+(`sarc/notifications/usage.py`).
 
 ## What makes a user "flagged"
 
@@ -112,7 +112,7 @@ then applies the send gates. Underusage alerts recur every
 
 ```mermaid
 flowchart TD
-    START["notify underusage run"] --> ENABLED{"config.notifications<br/>enabled?"}
+    START["notify usage run"] --> ENABLED{"config.notifications<br/>enabled?"}
     ENABLED -->|no| STOP["exit"]
     ENABLED -->|yes| FETCH["fetch data + build digest/previews"]
 
@@ -137,8 +137,9 @@ auditing dry runs).
 
 ## The three message types
 
-- **Admin digest** — one `post_channel` message to `slack_underusage.channel`. A ranked
-  table of flagged users (capped at `digest_top_n`), plus the recurring underusers table. Built by `build_admin_digest`.
+- **Admin digest** — one `post_channel` message to `slack_underusage.channel`.
+  A ranked table of flagged users (capped at `digest_top_n`), plus the
+  recurring underusers table. Built by `build_admin_digest`.
 - **Underusage DM** — sent to each flagged user. Personalized: average
   utilization, RGU-hours wasted, and their lowest-utilization jobs. Built by
   `build_user_dm` from `underusage_report_template.md`.

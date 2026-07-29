@@ -2,14 +2,12 @@ from dataclasses import dataclass
 
 from simple_parsing import subparsers
 
-from .underusage import UnderusageNotifyCommand
+from .usage import UsageNotifyCommand
 
 
 @dataclass
 class Notify:
-    command: UnderusageNotifyCommand = subparsers(
-        {"underusage": UnderusageNotifyCommand}
-    )
+    command: UsageNotifyCommand = subparsers({"usage": UsageNotifyCommand})
 
     def execute(self) -> int:
         return self.command.execute()

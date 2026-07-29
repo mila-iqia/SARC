@@ -14,7 +14,7 @@ from sarc.notifications.messages import (
     build_user_dm,
 )
 from sarc.notifications.slack import SendStatus, SlackClient
-from sarc.notifications.underusage import (
+from sarc.notifications.usage import (
     get_cycle_dates,
     get_recurring_underusers,
     get_underusers_usage,
@@ -91,8 +91,8 @@ def _userfacing_print(*args, **kwargs) -> None:
 
 
 @dataclass
-class UnderusageNotifyCommand:
-    """Preview or send resource-underusage notifications (dry-run by default)."""
+class UsageNotifyCommand:
+    """Preview or send resource-usage reports (dry-run by default)."""
 
     send: bool = simple_parsing.field(
         action="store_true", help="Send notifications (default: dry-run, prints only)."
@@ -213,7 +213,7 @@ class UnderusageNotifyCommand:
             logger.error("No notifications configuration found in config")
             return -1
         if not ncfg.enabled:
-            logger.info("Underusage notifications disabled (enabled=false); skipping")
+            logger.info("Usage notifications disabled (enabled=false); skipping")
             return 0
 
         if self.as_of is not None:

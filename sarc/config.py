@@ -270,7 +270,7 @@ class SlackConfig:
 
 
 @dataclass
-class UnderusageNotifyConfig:
+class UsageNotifyConfig:
     # Required bot scopes: chat:write, im:write, users:read.email
     slack_underusage: SlackConfig
     """Slack workspace/channel credentials used to deliver underusage-report
@@ -409,7 +409,7 @@ class Config:
     users: UserScrapingConfig | None = None
     clusters: dict[str, ClusterConfig] = field(default_factory=dict)
     logging: LoggingConfig | None = None
-    notifications: UnderusageNotifyConfig | None = None
+    notifications: UsageNotifyConfig | None = None
 
     def __post_init__(self):
         for name, cluster in self.clusters.items():

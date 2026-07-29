@@ -15,7 +15,7 @@ from sarc.notifications.messages import (
     build_user_dm,
 )
 from sarc.notifications.slack import MENTION_TOKEN
-from sarc.notifications.underusage import (
+from sarc.notifications.usage import (
     RecurringUserRow,
     UsageClusterBreakdown,
     UsageJob,
