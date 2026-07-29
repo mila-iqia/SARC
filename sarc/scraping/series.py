@@ -1,9 +1,9 @@
 import logging
+import math
 from datetime import datetime
 from typing import Callable, Sequence, TypedDict, cast
 
-from pandas import DataFrame, Series
-from prometheus_api_client.metric_range_df import MetricRangeDataFrame
+import numpy as np
 
 from sarc.config import UTC, config
 from sarc.db.job import JobStatisticDB, SlurmJobDB
@@ -124,40 +124,99 @@ STATS = TypedDict(
 )
 
 
+# Labels that identify one physical source (node, CPU core, GPU) within a
+# job's series; time counters are differenced per source.
+_COUNTER_GROUP_LABELS = ("instance", "core", "gpu")
+
+
+def _filtered_points(series: dict) -> tuple[np.ndarray, np.ndarray]:
+    """Timestamps and values of one raw Prometheus series, real samples only.
+
+    Drops the DCGM BLANK sentinels (2**47 and the NOT_FOUND/NOT_SUPPORTED/
+    NOT_PERMISSIONED variants) that the GPU exporter forwards untouched when a
+    metric is unavailable, as well as NaN samples: any comparison with NaN is
+    False, so `value < DCGM_FP64_BLANK` discards both.
+    """
+    points = series["values"]
+    timestamps = np.fromiter((p[0] for p in points), dtype=float, count=len(points))
+    values = np.array([p[1] for p in points], dtype=float)
+    keep = values < DCGM_FP64_BLANK
+    return timestamps[keep], values[keep]
+
+
+def _counter_rates(results: Sequence[dict]) -> np.ndarray:
+    """Pooled per-second rates of a nanosecond time counter (e.g. core usage).
+
+    Series are grouped by their (instance, core, gpu) labels — series sharing
+    the same labels are concatenated in input order — and each group is
+    differenced separately. The result is empty when no group has at least
+    two attributable real samples.
+    """
+    used = [k for k in _COUNTER_GROUP_LABELS if any(k in s["metric"] for s in results)]
+    groups: dict[tuple, list[tuple[np.ndarray, np.ndarray]]] = {}
+    for series in results:
+        labels = series["metric"]
+        try:
+            key = tuple(labels[k] for k in used)
+        except KeyError:
+            continue  # a group label is missing: these samples are not attributable
+        timestamps, values = _filtered_points(series)
+        if values.size:
+            groups.setdefault(key, []).append((timestamps, values))
+    rates = []
+    for chunks in groups.values():
+        timestamps = np.concatenate([c[0] for c in chunks])
+        values = np.concatenate([c[1] for c in chunks])
+        if values.size >= 2:
+            # 1-nanosecond resolution, like the cpu counters in /proc/stat.
+            rates.append(np.diff(values) / np.diff(timestamps) / 1e9)
+    return np.concatenate(rates) if rates else np.empty(0)
+
+
 @trace_decorator()
-def compute_job_statistics_from_dataframe(
-    df: DataFrame | None,
-    statistics: dict[str, Callable[[Series], float]],
+def compute_metric_statistics(
+    results: Sequence[dict],
     normalization: Callable[[float], float] = float,
     is_time_counter: bool = False,
 ) -> STATS | None:
-    if df is None:
+    """Compute the stored statistics of one metric's raw Prometheus series.
+
+    Arguments:
+        results: The raw `custom_query` result list for a single metric:
+            dicts with a "metric" labels mapping and a "values" list of
+            [timestamp, value] samples.
+        normalization: Applied to each computed statistic.
+        is_time_counter: The metric is a monotonic nanosecond counter:
+            statistics are computed on its per-second rate instead of its
+            raw values.
+
+    Values are pooled across all the metric's series. Returns None when no
+    usable sample remains. std uses ddof=1 (NaN for a single sample) and
+    quantiles interpolate linearly, matching the former pandas reductions.
+    """
+    if not results:
         return None
-
-    df = df.reset_index()
-
-    # Drop DCGM BLANK sentinels (2**47 and the NOT_FOUND/NOT_SUPPORTED/
-    # NOT_PERMISSIONED variants) that the GPU exporter forwards untouched
-    # when a metric is unavailable; otherwise they pollute mean/max/quantiles.
-    df = df[df["value"] < DCGM_FP64_BLANK]
-    if df.empty:
-        return None
-
-    groupby = ["instance", "core", "gpu"]
-    groupby = [col for col in groupby if col in df]
-
-    gdf = df.groupby(groupby)
-
     if is_time_counter:
-        # This is a time-based counter like the cpu counters in /proc/stat, with
-        # a resolution of 1 nanosecond.
-        timediffs = gdf["timestamp"].diff().map(lambda x: x.total_seconds())  # ty:ignore[unresolved-attribute]
-        df["value"] = gdf["value"].diff() / timediffs / 1e9
-        df = df.drop(index=0)
-        # Recompute groupby after modifying df
-        gdf = df.groupby(groupby)
+        values = _counter_rates(results)
+    else:
+        values = np.concatenate([_filtered_points(s)[1] for s in results])
+    if values.size == 0:
+        return None
+    std = float(np.std(values, ddof=1)) if values.size >= 2 else math.nan
+    q05, q25, median, q75 = map(float, np.quantile(values, (0.05, 0.25, 0.5, 0.75)))
+    return {
+        "mean": normalization(float(np.mean(values))),
+        "std": normalization(std),
+        "max": normalization(float(np.max(values))),
+        "q25": normalization(q25),
+        "median": normalization(median),
+        "q75": normalization(q75),
+        "q05": normalization(q05),
+    }
 
-    return {name: normalization(fn(df["value"])) for name, fn in statistics.items()}  # ty:ignore[invalid-return-type]
+
+def _percent(x: float) -> float:
+    return float(x / 100)
 
 
 JOB_STATISTICS_METRIC_NAMES = (
@@ -177,89 +236,57 @@ JOB_STATISTICS_METRIC_NAMES = (
 def compute_job_statistics(
     job: SlurmJobDB, prom_stats: list[dict]
 ) -> dict[str, JobStatisticDB]:
-    statistics_dict: dict[str, Callable[[Series], float]] = {
-        "mean": lambda self: self.mean(),
-        "std": lambda self: self.std(),
-        "max": lambda self: self.max(),
-        "q25": lambda self: self.quantile(0.25),
-        "median": lambda self: self.median(),
-        "q75": lambda self: self.quantile(0.75),
-        "q05": lambda self: self.quantile(0.05),
-    }
-
-    # We will get all required job time series
-    # with just 1 call to get_job_time_series()
+    # We get all required job time series with just 1 call to
+    # get_job_time_series(), then split them by metric.
     metric_to_data: dict[str, list[dict]] = {
         metric: [] for metric in JOB_STATISTICS_METRIC_NAMES
     }
     for result in prom_stats:
         metric_to_data[result["metric"]["__name__"]].append(result)
-    # Then we convert series to data frames for each metric
-    metrics = {
-        metric: MetricRangeDataFrame(results) if results else None
-        for metric, results in metric_to_data.items()
-    }
-    # Now we can use data frames to compute statistics for each metric,
-    # by directly using compute_job_statistics_from_dataframe().
 
-    gpu_utilization = compute_job_statistics_from_dataframe(
-        metrics["slurm_job_utilization_gpu"],
-        statistics=statistics_dict,
-        normalization=lambda x: float(x / 100),
+    gpu_utilization = compute_metric_statistics(
+        metric_to_data["slurm_job_utilization_gpu"], normalization=_percent
     )
 
-    gpu_utilization_fp16 = compute_job_statistics_from_dataframe(
-        metrics["slurm_job_fp16_gpu"],
-        statistics=statistics_dict,
-        normalization=lambda x: float(x / 100),
+    gpu_utilization_fp16 = compute_metric_statistics(
+        metric_to_data["slurm_job_fp16_gpu"], normalization=_percent
     )
 
-    gpu_utilization_fp32 = compute_job_statistics_from_dataframe(
-        metrics["slurm_job_fp32_gpu"],
-        statistics=statistics_dict,
-        normalization=lambda x: float(x / 100),
+    gpu_utilization_fp32 = compute_metric_statistics(
+        metric_to_data["slurm_job_fp32_gpu"], normalization=_percent
     )
 
-    gpu_utilization_fp64 = compute_job_statistics_from_dataframe(
-        metrics["slurm_job_fp64_gpu"],
-        statistics=statistics_dict,
-        normalization=lambda x: float(x / 100),
+    gpu_utilization_fp64 = compute_metric_statistics(
+        metric_to_data["slurm_job_fp64_gpu"], normalization=_percent
     )
 
-    gpu_sm_occupancy = compute_job_statistics_from_dataframe(
-        metrics["slurm_job_sm_occupancy_gpu"],
-        statistics=statistics_dict,
-        normalization=lambda x: float(x / 100),
+    gpu_sm_occupancy = compute_metric_statistics(
+        metric_to_data["slurm_job_sm_occupancy_gpu"], normalization=_percent
     )
 
-    gpu_memory = compute_job_statistics_from_dataframe(
-        metrics["slurm_job_utilization_gpu_memory"],
-        statistics=statistics_dict,
-        normalization=lambda x: float(x / 100),
+    gpu_memory = compute_metric_statistics(
+        metric_to_data["slurm_job_utilization_gpu_memory"], normalization=_percent
     )
 
-    gpu_power = compute_job_statistics_from_dataframe(
-        metrics["slurm_job_power_gpu"], statistics=statistics_dict
-    )
+    gpu_power = compute_metric_statistics(metric_to_data["slurm_job_power_gpu"])
 
-    cpu_utilization = compute_job_statistics_from_dataframe(
-        metrics["slurm_job_core_usage"],
-        statistics=statistics_dict,
-        is_time_counter=True,
+    cpu_utilization = compute_metric_statistics(
+        metric_to_data["slurm_job_core_usage"], is_time_counter=True
     )
 
     system_memory = None
-    if job.allocated_mem is not None:
+    if job.allocated_mem:
         # NB: slurm_job_memory_usage is expressed in bytes
         # job.allocated_mem is in megabytes (multiple of 2**20 bytes)
-        system_memory = compute_job_statistics_from_dataframe(
-            metrics["slurm_job_memory_usage"],
-            statistics=statistics_dict,
+        system_memory = compute_metric_statistics(
+            metric_to_data["slurm_job_memory_usage"],
             normalization=lambda x: float(x / (2**20) / cast(int, job.allocated_mem)),
         )
-    elif metrics["slurm_job_memory_usage"] is not None:
+    elif metric_to_data["slurm_job_memory_usage"]:
+        # A zero allocation cannot normalize anything: skip system_memory
+        # instead of dividing by zero.
         logger.warning(
-            f"job.allocated.mem is None for job {job.job_id} (job status: {job.job_state.value})"
+            f"job.allocated_mem is None or 0 for job {job.job_id} (job status: {job.job_state.value})"
         )
 
     res = dict()

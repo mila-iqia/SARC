@@ -241,9 +241,11 @@ read_write_db_config_object = DbConfiguration("rw").fixture()
 
 read_write_db_with_many_cpu_jobs_config_object = DbConfiguration(
     "r-jobs",
+    # CPU-only jobs: no GPU, but a real memory allocation (factory default), so
+    # computed statistics include a genuine system_memory entry.
     job_patch={
-        "allocated": {"billing": 0, "cpu": 0, "gres_gpu": 0, "mem": 0, "node": 0},
-        "requested": {"billing": 0, "cpu": 0, "gres_gpu": 0, "mem": 0, "node": 0},
+        "allocated": {"billing": 0, "cpu": 0, "gres_gpu": 0, "node": 0},
+        "requested": {"billing": 0, "cpu": 0, "gres_gpu": 0, "node": 0},
     },
 ).fixture()
 
