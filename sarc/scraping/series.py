@@ -293,7 +293,7 @@ def compute_job_statistics(
     )
 
     system_memory = None
-    if job.allocated_mem is not None:
+    if job.allocated_mem:
         # NB: slurm_job_memory_usage is expressed in bytes
         # job.allocated_mem is in megabytes (multiple of 2**20 bytes)
         system_memory = compute_metric_statistics(
@@ -301,8 +301,10 @@ def compute_job_statistics(
             normalization=lambda x: float(x / (2**20) / cast(int, job.allocated_mem)),
         )
     elif metric_to_data["slurm_job_memory_usage"]:
+        # A zero allocation cannot normalize anything: skip system_memory
+        # instead of dividing by zero.
         logger.warning(
-            f"job.allocated.mem is None for job {job.job_id} (job status: {job.job_state.value})"
+            f"job.allocated.mem is None or 0 for job {job.job_id} (job status: {job.job_state.value})"
         )
 
     res = dict()

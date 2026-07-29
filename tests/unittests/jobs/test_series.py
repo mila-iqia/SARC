@@ -1,25 +1,37 @@
+import logging
 import math
 from datetime import UTC, datetime
 
 import pytest
 
+from sarc.db.job import SlurmJobDB
+from sarc.models.job import SlurmState
 from sarc.scraping.dcgm import (
     DCGM_FP64_BLANK,
     DCGM_FP64_NOT_FOUND,
     DCGM_FP64_NOT_PERMISSIONED,
     DCGM_FP64_NOT_SUPPORTED,
 )
-from sarc.scraping.series import compute_metric_statistics
+from sarc.scraping.series import compute_job_statistics, compute_metric_statistics
+from tests.db.factory import base_job
 
 T0 = int(datetime(2023, 1, 1, tzinfo=UTC).timestamp())
 
 
-def _series(values, delta=30, **labels):
+def _series(values, delta=30, name="some_metric", **labels):
     """One raw Prometheus series as returned by custom_query."""
     return {
-        "metric": {"__name__": "some_metric", **labels},
+        "metric": {"__name__": name, **labels},
         "values": [[T0 + i * delta, str(v)] for i, v in enumerate(values)],
     }
+
+
+def _job(**patch):
+    """A detached SlurmJobDB built from the factory's base fields."""
+    fields = {k: v for k, v in base_job.items() if k != "cluster_name"}
+    fields.update(cluster_id=1, sarc_user_id=1, job_state=SlurmState.CANCELLED)
+    fields.update(patch)
+    return SlurmJobDB(**fields)
 
 
 def test_compute_metric_statistics(captrace):
@@ -99,6 +111,25 @@ def test_compute_metric_statistics_time_counter_too_short_gives_nan():
     assert all(math.isnan(v) for v in stats.values())
 
 
+def test_compute_metric_statistics_time_counter_all_blank_returns_none():
+    stats = compute_metric_statistics(
+        [_series([DCGM_FP64_BLANK] * 5, instance="cn-c002", core="0")],
+        is_time_counter=True,
+    )
+    assert stats is None
+
+
+def test_compute_metric_statistics_time_counter_unlabeled_series_ignored():
+    # The second series lacks the (instance, core) group labels used by this
+    # metric: its samples cannot be attributed to a source and are dropped.
+    results = [
+        _series([0.0, 30e9], instance="cn-c002", core="0"),  # rate 1.0
+        _series([0.0, 999e9]),
+    ]
+    stats = compute_metric_statistics(results, is_time_counter=True)
+    assert stats["mean"] == 1.0
+
+
 def test_compute_metric_statistics_filters_dcgm_blank():
     # Mix of valid values and DCGM sentinels (BLANK + the three error
     # variants). All sentinels must be discarded so that stats reflect only
@@ -129,3 +160,17 @@ def test_compute_metric_statistics_all_blank_returns_none():
         [_series([DCGM_FP64_BLANK] * 5, instance="cn-c002")]
     )
     assert stats is None
+
+
+@pytest.mark.parametrize("mem", [0, None])
+def test_compute_job_statistics_without_allocated_mem(mem, caplog):
+    # A None or zero allocation cannot normalize memory usage: no
+    # system_memory statistic, and a warning is logged.
+    job = _job(allocated_mem=mem)
+    memory_series = _series(
+        [1e9, 2e9], name="slurm_job_memory_usage", instance="cn-c002"
+    )
+    with caplog.at_level(logging.WARNING):
+        stats = compute_job_statistics(job, [memory_series])
+    assert stats == {}
+    assert f"job.allocated.mem is None or 0 for job {job.job_id}" in caplog.text
