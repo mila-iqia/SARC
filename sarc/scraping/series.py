@@ -149,9 +149,9 @@ def _counter_rates(results: Sequence[dict]) -> np.ndarray | None:
 
     Series are grouped by their (instance, core, gpu) labels — series sharing
     the same labels are concatenated in input order — and each group is
-    differenced separately. Returns None when no real sample survives the
-    sentinel filter, and an empty array when the groups are all too short to
-    difference (statistics then come out NaN).
+    differenced separately. Returns None when no attributable real sample
+    survives the sentinel filter, and an empty array when the groups are all
+    too short to difference (statistics then come out NaN).
     """
     used = [k for k in _COUNTER_GROUP_LABELS if any(k in s["metric"] for s in results)]
     groups: dict[tuple, list[tuple[np.ndarray, np.ndarray]]] = {}
@@ -304,7 +304,7 @@ def compute_job_statistics(
         # A zero allocation cannot normalize anything: skip system_memory
         # instead of dividing by zero.
         logger.warning(
-            f"job.allocated.mem is None or 0 for job {job.job_id} (job status: {job.job_state.value})"
+            f"job.allocated_mem is None or 0 for job {job.job_id} (job status: {job.job_state.value})"
         )
 
     res = dict()

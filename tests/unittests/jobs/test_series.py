@@ -173,4 +173,4 @@ def test_compute_job_statistics_without_allocated_mem(mem, caplog):
     with caplog.at_level(logging.WARNING):
         stats = compute_job_statistics(job, [memory_series])
     assert stats == {}
-    assert f"job.allocated.mem is None or 0 for job {job.job_id}" in caplog.text
+    assert f"job.allocated_mem is None or 0 for job {job.job_id}" in caplog.text
