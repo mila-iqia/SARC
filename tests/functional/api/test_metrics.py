@@ -426,6 +426,8 @@ def test_jobs_table_with_data(dash_client, dash_db):
         assert job["rgu"] == pytest.approx(_RGU_PER_JOB)
         assert job["rgu_hours"] == pytest.approx(_RGU_HOURS_PER_JOB)
         assert job["gpu_sm_occupancy_mean"] == pytest.approx(_SM_OCC)
+        # Default metric is gpu_sm_occupancy, so metric_mean mirrors it.
+        assert job["metric_mean"] == pytest.approx(_SM_OCC)
         assert job["gpu_utilization_mean"] == pytest.approx(0.4)
         assert job["gpu_memory_max"] == pytest.approx(0.9)
 

@@ -178,6 +178,12 @@
     .job-table th.sort-desc::after { content: ' ▼'; font-size: 10px; }
     .job-table td { padding: 4px 8px; border-bottom: 1px solid #eee; vertical-align: middle; }
     .job-table tr:hover td { background: #f4f6ff; }
+    /* Usage shading (thresholds: MIN_USAGE_EXPECTED_PERCENT / CRITICAL_USAGE_PERCENT):
+       light red below the expected minimum, stronger red below the critical bar. */
+    .job-table tr.jt-low td  { background: #ffefef; }
+    .job-table tr.jt-crit td { background: #ffcccc; }
+    .job-table tr.jt-low:hover td  { background: #ffe2e2; }
+    .job-table tr.jt-crit:hover td { background: #ffbdbd; }
     .job-table .col-cmd {
       max-width: 100px; overflow: hidden; text-overflow: ellipsis;
       white-space: nowrap; font-family: monospace; font-size: 11px; color: #555;
@@ -382,6 +388,10 @@
     // the per-job wasted-RGU shortfall, computed server-side) and shown in the
     // Wasted/Unused bar labels.
     const MIN_USAGE_EXPECTED_PERCENT = 15;
+
+    // Below this, usage is critically low: the job table shades those rows a
+    // stronger red (vs light red between here and MIN_USAGE_EXPECTED_PERCENT).
+    const CRITICAL_USAGE_PERCENT = 5;
 
     // Temporary user-guide target (Google Doc), linked from inside the "ⓘ"
     // help panel on the RGU-usage tiles.
@@ -1835,7 +1845,9 @@
         `GPU jobs ${from.toLocaleString('en-US')}–${to.toLocaleString('en-US')} `
         + `of ${total.toLocaleString('en-US')}`;
       capText.title = 'Only GPU jobs (allocated GPU with a known RGU) are listed; '
-        + 'CPU-only jobs are counted in the per-period bar plot but not here.';
+        + 'CPU-only jobs are counted in the per-period bar plot but not here. '
+        + `Red rows: mean ${metricPretty} below the ${MIN_USAGE_EXPECTED_PERCENT} % `
+        + `expected minimum (stronger red: below ${CRITICAL_USAGE_PERCENT} %).`;
       caption.appendChild(capText);
 
       const wrap = document.createElement('div');
@@ -1877,6 +1889,16 @@
       const tbody = tbl.createTBody();
       jobList.forEach(job => {
         const tr = tbody.insertRow();
+        // Shade under-using rows (measured jobs only): the same per-job mean
+        // that feeds the Unused columns, so table and bars tell one story.
+        const mm = job.metric_mean;
+        if (mm != null && mm < MIN_USAGE_EXPECTED_PERCENT / 100) {
+          const crit = mm < CRITICAL_USAGE_PERCENT / 100;
+          tr.className = crit ? 'jt-crit' : 'jt-low';
+          tr.title = `Mean ${metricPretty}: ${(mm * 100).toFixed(1)} % — `
+            + (crit ? `critically low (below ${CRITICAL_USAGE_PERCENT} %)`
+                    : `below the ${MIN_USAGE_EXPECTED_PERCENT} % expected minimum`);
+        }
         COLS.forEach(c => {
           const td = tr.insertCell();
           td.dataset.col = c.key;

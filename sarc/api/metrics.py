@@ -1345,6 +1345,9 @@ def metrics_jobs(
                 "rgu": round(float(row.rgu), 2),
                 "rgu_hours": round(rh, 2) if rh is not None else None,
                 "waste": waste,
+                # Selected-metric mean (None when unmeasured): drives the
+                # job-table row shading.
+                "metric_mean": mm,
                 "gpu_utilization_mean": _nan_to_none(
                     row.gpu_utilization_mean, replace_with=-1
                 ),
