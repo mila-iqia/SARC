@@ -828,7 +828,7 @@ def metrics_rgu_usage(
             func.sum(rgu_used_term).label("rgu_used"),
             func.sum(rgu_unmeasured_term).label("rgu_unmeasured"),
             func.sum(rgu_wasted_term).label("rgu_wasted"),
-        ),
+        ),  # ty:ignore[no-matching-overload]
         sess,
         clusters,
         cluster_user,
