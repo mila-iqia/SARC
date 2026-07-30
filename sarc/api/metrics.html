@@ -1851,7 +1851,7 @@
         th.textContent = c.label;
         if (c.title) {
           th.title = c.title;
-          if (c.adminOnly) th.title += " (admin column)";
+          if (c.adminOnly) th.title += " (admin-only column)";
         }
         if (c.adminOnly) th.classList.add('th-admin-only');
         if (!SORTABLE.has(c.key)) {
