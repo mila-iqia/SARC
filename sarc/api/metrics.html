@@ -166,6 +166,7 @@
     }
     .job-table th.no-sort { cursor: default; }
     .job-table th.no-sort:hover { background: #f0f0f0; }
+    .job-table th.th-admin-only { color: #bb0000; }
     /* Job-table pagination footer */
     .job-table-foot {
       flex-shrink: 0; display: flex; align-items: center; gap: 10px;
@@ -1682,7 +1683,7 @@
         { key: 'job_id',                label: 'Job ID',    fmt: fmtInt },
         { key: 'submit_time',           label: 'Submitted', fmt: fmtDateTime },
         {% if is_admin %}
-        { key: 'user',                  label: 'User' },
+        { key: 'user',                  label: 'User', adminOnly: true, title: 'Cluster user name' },
         {% endif %}
         { key: 'job_state',             label: 'State' },
         { key: 'elapsed',               label: 'Elapsed',   fmt: v => {
@@ -1700,17 +1701,17 @@
         { key: 'gpu_utilization_mean',  label: 'GPU util',  fmt: v => v != null ? (v < 0 ? 'NaN' : (v*100).toFixed(1)+'%') : '—' },
         { key: 'gpu_type',              label: 'GPU type' },
         {% if is_admin %}
-        { key: 'gpu_type_rgu',          label: 'GPU type RGU',
+        { key: 'gpu_type_rgu',          label: 'GPU type RGU', adminOnly: true,
           title: 'Per-GPU DRAC RGU weight of this GPU type',
           fmt: v => v != null ? v.toFixed(2) : '—' },
-        { key: 'rgu',                   label: 'RGU',
+        { key: 'rgu',                   label: 'RGU', adminOnly: true,
           title: 'RGU weight of the job\'s allocated GPUs',
           fmt: v => v != null ? v.toFixed(2) : '—' },
         {% endif %}
         { key: 'requested_gpu',         label: 'Requested GPU', fmt: fmtInt },
         { key: 'allocated_gpu',         label: 'Allocated GPU', fmt: fmtInt },
         {% if is_admin %}
-        { key: 'gpu_memory_max',        label: 'Mem max',   fmt: v => v != null ? (v*100).toFixed(1)+'%' : '—' },
+        { key: 'gpu_memory_max',        label: 'Mem max',   fmt: v => v != null ? (v*100).toFixed(1)+'%' : '—', adminOnly: true, title: 'Max memory usage' },
         {% endif %}
         { key: 'nodes',                 label: 'Nodes',     cls: 'col-cmd' },
       ];
@@ -1748,11 +1749,15 @@
         const th = document.createElement('th');
         th.dataset.col = c.key;
         th.textContent = c.label;
-        if (c.title) th.title = c.title;
+        if (c.title) {
+          th.title = c.title;
+          if (c.adminOnly) th.title += " (admin column)";
+        }
+        if (c.adminOnly) th.classList.add('th-admin-only');
         if (!SORTABLE.has(c.key)) {
-          th.className = 'no-sort';
+          th.classList.add('no-sort');
         } else {
-          if (c.key === sortKey) th.className = sortDir === 1 ? 'sort-asc' : 'sort-desc';
+          if (c.key === sortKey) th.classList.add( sortDir === 1 ? 'sort-asc' : 'sort-desc' );
           // A new sort order spans every page, so reset to the first page and
           // re-fetch (the server does the ordering).
           th.addEventListener('click', () => {
