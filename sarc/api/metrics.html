@@ -122,6 +122,28 @@
                display: flex; align-items: center; gap: 6px; }
     .ms-plot { width: 100%; flex: 1; min-height: 0; }
     .ms-metric2 { font-size: 12px; padding: 1px 6px; max-width: 160px; }
+    /* "?" help badge in the RGU-usage tile header: standard circular help
+       button (quiet grey, blue on hover — same hover palette as .add-tile-btn);
+       clicking it opens a definition panel that expands rightward from the
+       title (left-anchored, so it stays inside the tile). The title span goes
+       inline-flex so the badge is vertically centred on the text (a plain
+       vertical-align sits a 17px badge too low beside 13px text). */
+    .tile-title-help { display: inline-flex; align-items: center; gap: 6px; }
+    .ms-help-btn {
+      width: 17px; height: 17px; border-radius: 50%; box-sizing: border-box;
+      border: 1.5px solid #999; background: none; color: #999;
+      font-size: 11px; font-weight: 700; line-height: 1; padding: 0;
+      cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+    }
+    .ms-help-btn:hover { border-color: #1a6fd4; color: #1a6fd4; background: #dde6f5; }
+    .ms-help-panel {
+      position: absolute; left: 0; z-index: 9999; background: #fff;
+      border: 1px solid #ccc; border-radius: 4px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      width: 300px; padding: 8px 12px; font-size: 12px; color: #333;
+      font-weight: 400; text-align: left;
+    }
+    .ms-help-panel p { margin: 4px 0; }
 
     {% if is_admin %}
     /* RGU-by-user: per-tile "top N" + sort controls above the (dynamic-height) plot. */
@@ -360,6 +382,10 @@
     // the per-job wasted-RGU shortfall, computed server-side) and shown in the
     // Wasted/Unused bar labels.
     const MIN_USAGE_EXPECTED_PERCENT = 15;
+
+    // Temporary user-guide target (Google Doc), linked from inside the "ⓘ"
+    // help panel on the RGU-usage tiles.
+    const USER_GUIDE_URL = 'https://docs.google.com/document/d/1kLm-3JXlyuukIS0n2cR_8XxhQuKIvW7-omll-wwXvaM/';
 
     const SEC_TO_H = 1 / 3600;
 
@@ -887,6 +913,57 @@
       return sel;
     }
 
+    // "?" help badge for the RGU-usage tile title: click opens a panel defining
+    // Wasted/Unused with the user-guide link inside (a native title can't hold
+    // a clickable link). Open/close mechanics mirror the job-table column
+    // picker. The panel content is built on open so the metric name tracks the
+    // last Update — the tile header outlives chart re-renders.
+    function makeRguUsageHelp() {
+      const wrap = document.createElement('div');
+      wrap.className = 'js-dropdown';
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'ms-help-btn';
+      btn.textContent = '?';
+      btn.setAttribute('aria-label', 'Help: what do Wasted / Unused mean?');
+      const panel = document.createElement('div');
+      panel.className = 'ms-help-panel';
+      panel.style.display = 'none';
+      let closeTimer = null;
+      function openHelp() {
+        if (panel.style.display !== 'none') return;
+        const metricName = (currentParams && currentParams.metric) || 'gpu_sm_occupancy';
+        const metricPretty = METRICS[metricName] || metricName;
+        panel.innerHTML =
+          `<h3>What do Wasted / Unused mean?</h3>` +
+          `<p><strong>Wasted</strong> (red): unused compute missing for each job to reach the expected minimum of ` +
+          `${MIN_USAGE_EXPECTED_PERCENT} % ${metricPretty}.</p>` +
+          `<p><strong>Unused</strong> (light blue): idle capacity above the minimum.</p>` +
+          `<p><a href="${USER_GUIDE_URL}" target="_blank" rel="noopener">Open the user guide ↗</a></p>`;
+        panel.style.display = 'block';
+        // Defer so an opening click isn't caught as an outside click.
+        setTimeout(() => document.addEventListener('mousedown', onDown, true), 0);
+      }
+      function closeHelp() {
+        panel.style.display = 'none';
+        document.removeEventListener('mousedown', onDown, true);
+      }
+      function onDown(e) {
+        if (!panel.contains(e.target) && e.target !== btn) closeHelp();
+      }
+      // Hover opens; leaving closes after a short grace period so the pointer
+      // can travel into the panel (a child of `wrap`, so moving onto it never
+      // fires wrap's mouseleave). Click still toggles: keyboard/touch fallback.
+      wrap.addEventListener('mouseenter', () => { clearTimeout(closeTimer); openHelp(); });
+      wrap.addEventListener('mouseleave', () => { closeTimer = setTimeout(closeHelp, 250); });
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        if (panel.style.display === 'none') openHelp(); else closeHelp();
+      });
+      wrap.append(btn, panel);
+      return wrap;
+    }
+
     function renderLayout() {
       const grid = document.getElementById('tile-grid');
       grid.innerHTML = '';
@@ -903,6 +980,10 @@
           header.className = 'tile-header';
           const title = document.createElement('span');
           title.textContent = PLOT_NAMES[plotType];
+          if (plotType === 'rgu_usage') {
+            title.classList.add('tile-title-help');
+            title.appendChild(makeRguUsageHelp());
+          }
           header.appendChild(title);
           {% if is_admin %}
           const actions = document.createElement('span');
