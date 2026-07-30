@@ -1710,7 +1710,6 @@
         { key: 'requested_gpu',         label: 'Requested GPU', fmt: fmtInt },
         { key: 'allocated_gpu',         label: 'Allocated GPU', fmt: fmtInt },
         {% if is_admin %}
-        { key: 'billing',               label: 'Billing',   fmt: fmtInt },
         { key: 'gpu_memory_max',        label: 'Mem max',   fmt: v => v != null ? (v*100).toFixed(1)+'%' : '—' },
         {% endif %}
         { key: 'nodes',                 label: 'Nodes',     cls: 'col-cmd' },
