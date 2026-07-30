@@ -1667,6 +1667,12 @@
       const fmtRguTime = v => v != null
         ? (v * unit.factor).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
         : '—';
+
+      const unitHour = RGU_UNITS.h;
+      const fmtRguHour = v => v != null
+        ? (v * unitHour.factor).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+        : '—';
+
       // submit_time arrives as an ISO string; show it in UTC (YYYY-MM-DD HH:MM)
       // to match the dashboard's UTC date range / focus.
       const fmtDateTime = v => {
@@ -1694,9 +1700,19 @@
         { key: 'rgu_hours',             label: unit.label,
           title: `RGU × elapsed time, shown in ${unit.label}`,
           fmt: fmtRguTime },
+
+        { key: 'rgu_hours',             label: unitHour.label,
+          title: `RGU × elapsed time, shown in ${unitHour.label}`,
+          fmt: fmtRguHour },
+
         { key: 'waste',                 label: `Waste (${unit.label})`,
           title: `RGU·time × (1 − mean ${metricPretty}): estimated unused RGU·time`,
           fmt: fmtRguTime },
+
+        { key: 'waste',                 label: `Waste (${unitHour.label})`,
+          title: `RGU·time × (1 − mean ${metricPretty}): estimated unused RGU·time`,
+          fmt: fmtRguHour },
+
         { key: 'gpu_sm_occupancy_mean', label: 'SM occ',    fmt: v => v != null ? (v < 0 ? 'NaN' : (v*100).toFixed(1)+'%') : '—' },
         { key: 'gpu_utilization_mean',  label: 'GPU util',  fmt: v => v != null ? (v < 0 ? 'NaN' : (v*100).toFixed(1)+'%') : '—' },
         { key: 'gpu_type',              label: 'GPU type' },
