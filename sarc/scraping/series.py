@@ -1,5 +1,4 @@
 import logging
-import math
 from datetime import datetime
 from typing import Callable, Sequence, TypedDict, cast
 
@@ -191,8 +190,9 @@ def compute_metric_statistics(
             raw values.
 
     Values are pooled across all the metric's series. Returns None when no
-    usable sample remains. std uses ddof=1 (NaN for a single sample) and
-    quantiles interpolate linearly, matching the former pandas reductions.
+    usable sample remains. std uses ddof=0 (population std, 0.0 for a single
+    sample): jobs are only fetched once finished, so their samples form the
+    complete population. Quantiles interpolate linearly.
     """
     if not results:
         return None
@@ -202,7 +202,7 @@ def compute_metric_statistics(
         values = np.concatenate([_filtered_points(s)[1] for s in results])
     if values.size == 0:
         return None
-    std = float(np.std(values, ddof=1)) if values.size >= 2 else math.nan
+    std = float(np.std(values))
     q05, q25, median, q75 = map(float, np.quantile(values, (0.05, 0.25, 0.5, 0.75)))
     return {
         "mean": normalization(float(np.mean(values))),
