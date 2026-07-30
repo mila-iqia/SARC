@@ -213,7 +213,7 @@ _SCOPE_TOTALS = [
     (
         "rgu_usage",
         "/dash/metrics/rgu_usage",
-        lambda d: sum(r["rgu_requested"] for r in d),
+        lambda d: sum(r["rgu_allocated"] for r in d),
     ),
     (
         "rgu_by_cluster",
@@ -310,7 +310,7 @@ EMPTY_ENDPOINTS = [
     (
         "rgu_usage",
         "/dash/metrics/rgu_usage",
-        lambda d: isinstance(d, list) and all(r["rgu_requested"] == 0 for r in d),
+        lambda d: isinstance(d, list) and all(r["rgu_allocated"] == 0 for r in d),
     ),
     ("rgu_by_cluster", "/dash/metrics/rgu_by_cluster", lambda d: d["series"] == []),
     (
@@ -432,7 +432,7 @@ def test_jobs_table_with_data(dash_client, dash_db):
 
 def test_rgu_usage_with_data(dash_client, dash_db):
     data = dash_client.get("/dash/metrics/rgu_usage", params=WINDOW).json()
-    assert sum(r["rgu_requested"] for r in data) == pytest.approx(
+    assert sum(r["rgu_allocated"] for r in data) == pytest.approx(
         dash_db.total_requested
     )
     assert sum(r["rgu_used"] for r in data) == pytest.approx(dash_db.total_used)
@@ -504,8 +504,8 @@ def dash_db_nan(read_write_db):
     "good" (mean 0.5), one with a NaN mean, one with the stat missing entirely.
 
     All four have a valid RGU (GPU type + gres), so all four count in the jobs
-    table and in ``rgu_requested``; only the two good ones may enter a mean-based
-    aggregate. Returns the expected totals.
+    table and in the allocated-RGU totals; only the two good ones may enter a
+    mean-based aggregate. Returns the expected totals.
     """
     sess = read_write_db
     sess.add(GpuRguDB(name=_GPU, rgu=10.0, drac_rgu=_DRAC_RGU))
@@ -575,12 +575,12 @@ def test_nan_and_missing_means_never_poison_aggregates(dash_client, dash_db_nan)
     assert jobs["total"] == facts.n_total
     assert len(jobs["jobs"]) == facts.n_total
 
-    # rgu_usage: requested counts all jobs; used sums only the real means and
+    # rgu_usage: allocated counts all jobs; used sums only the real means and
     # stays finite; the NaN/NULL jobs land in rgu_unmeasured, not rgu_used.
     usage = dash_client.get("/dash/metrics/rgu_usage", params=WINDOW).json()
     used = sum(r["rgu_used"] for r in usage)
     assert math.isfinite(used)
-    assert sum(r["rgu_requested"] for r in usage) == pytest.approx(
+    assert sum(r["rgu_allocated"] for r in usage) == pytest.approx(
         facts.total_requested
     )
     assert used == pytest.approx(facts.total_used)
