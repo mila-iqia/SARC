@@ -341,7 +341,7 @@
     {% if is_admin %}
     <div class="ctrl">
       <label for="metric-select">Efficiency metric</label>
-      <select id="metric-select" title="Metric taken as the 'useful' fraction: it splits Used vs Unused RGU (RGU usage, RGU by user, job-table waste column) and is the value plotted in Metric Trend, Density and the heatmap. Takes effect on Update."></select>
+      <select id="metric-select" title="Metric taken as the 'useful' fraction: it splits Used vs Unused RGU (RGU usage, RGU by user, job-table Unused columns) and is the value plotted in Metric Trend, Density and the heatmap. Takes effect on Update."></select>
     </div>
     {% endif %}
     <button onclick="loadCharts()" title="Apply the current filters (date range, clusters, {% if is_admin %}user, {% endif %}job states, metric) and reload every plot.">Update</button>
@@ -357,7 +357,6 @@
 
   <script>
     const MIN_USAGE_EXPECTED_PERCENT = 15;
-    const MIN_USAGE_EXPECTED = MIN_USAGE_EXPECTED_PERCENT / 100;
 
     const SEC_TO_H = 1 / 3600;
 
@@ -1109,7 +1108,7 @@
       });
     }
 
-    function _jobRguWasted(r) {
+    function _jobRguUnusedUnderThreshold(r) {
       return Math.max(0, (MIN_USAGE_EXPECTED_PERCENT * (r.rgu_allocated - r.rgu_unmeasured) / 100 - r.rgu_used));
     }
 
@@ -1154,10 +1153,10 @@
         Plotly.react(plot, [
           { type: 'bar', name: 'Used',   x: X, y: [usedTot * unit.factor], marker: { color: '#1a6fd4' },
             hovertemplate: unit.label + ' used: %{y:,.1f}<extra></extra>' },
-          { type: 'bar', name: 'Wasted', x: X, y: [wastedTot * unit.factor], marker: { color: '#ff0000' },
-            hovertemplate: unit.label + ' wasted: %{y:,.1f}<extra></extra>' },
-          { type: 'bar', name: 'Unused', x: X, y: [unusedTot * unit.factor], marker: { color: '#a8c8f0' },
-            hovertemplate: unit.label + ' unused: %{y:,.1f}<extra></extra>' },
+          { type: 'bar', name: `Wasted under ${MIN_USAGE_EXPECTED_PERCENT} %`, x: X, y: [wastedTot * unit.factor], marker: { color: '#ff0000' },
+            hovertemplate: `${unit.label} wasted under ${MIN_USAGE_EXPECTED_PERCENT} %: %{y:,.1f}<extra></extra>` },
+          { type: 'bar', name: `Unused over ${MIN_USAGE_EXPECTED_PERCENT} %`, x: X, y: [unusedTot * unit.factor], marker: { color: '#a8c8f0' },
+            hovertemplate: `${unit.label} unused over ${MIN_USAGE_EXPECTED_PERCENT} %: %{y:,.1f}<extra></extra>` },
           { type: 'bar', name: 'No metric data', x: X, y: [unmTot * unit.factor], marker: { color: '#bdbdbd' },
             hovertemplate: unit.label + ' (no metric): %{y:,.1f}<extra></extra>' },
         ], pLayout({
@@ -1175,8 +1174,8 @@
       const periods    = d.rgu_usage.map(r => r.period_start);
       const periodEnds = d.rgu_usage.map(r => r.period_end);
       const rguUsed       = d.rgu_usage.map(r => r.rgu_used * unit.factor);
-      const rguWasted     = d.rgu_usage.map(r => _jobRguWasted(r) * unit.factor);
-      const rguUnused     = d.rgu_usage.map(r => (r.rgu_allocated - r.rgu_used - r.rgu_unmeasured - _jobRguWasted(r)) * unit.factor);
+      const rguWasted     = d.rgu_usage.map(r => _jobRguUnusedUnderThreshold(r) * unit.factor);
+      const rguUnused     = d.rgu_usage.map(r => (r.rgu_allocated - r.rgu_used - r.rgu_unmeasured - _jobRguUnusedUnderThreshold(r)) * unit.factor);
       const rguUnmeasured = d.rgu_usage.map(r => (r.rgu_unmeasured || 0) * unit.factor);
       const colorUsed      = periods.map(p => { const f = periodInFocus(p); return f === null ? '#1a6fd4' : f ? '#e07020' : '#c8d8f0'; });
       const colorUnused    = periods.map(p => { const f = periodInFocus(p); return f === null ? '#a8c8f0' : f ? '#f0c090' : '#e4eef8'; });
@@ -1186,12 +1185,12 @@
         { type: 'bar', name: 'Used',   x: periods, y: rguUsed, customdata: periodEnds,
           marker: { color: colorUsed },
           hovertemplate: 'Period: %{x}<br>' + unit.label + ' used: %{y:,.1f}<extra></extra>' },
-        { type: 'bar', name: 'Wasted',   x: periods, y: rguWasted, customdata: periodEnds,
+        { type: 'bar', name: `Wasted under ${MIN_USAGE_EXPECTED_PERCENT} %`,   x: periods, y: rguWasted, customdata: periodEnds,
           marker: { color: colorWasted },
-          hovertemplate: 'Period: %{x}<br>' + unit.label + ' wasted: %{y:,.1f}<extra></extra>' },
-        { type: 'bar', name: 'Unused', x: periods, y: rguUnused, customdata: periodEnds,
+          hovertemplate: `Period: %{x}<br>${unit.label} wasted under ${MIN_USAGE_EXPECTED_PERCENT} %: %{y:,.1f}<extra></extra>` },
+        { type: 'bar', name: `Unused over ${MIN_USAGE_EXPECTED_PERCENT} %`, x: periods, y: rguUnused, customdata: periodEnds,
           marker: { color: colorUnused },
-          hovertemplate: 'Period: %{x}<br>' + unit.label + ' unused: %{y:,.1f}<extra></extra>' },
+          hovertemplate: `Period: %{x}<br>${unit.label} unused over ${MIN_USAGE_EXPECTED_PERCENT} %: %{y:,.1f}<extra></extra>` },
         { type: 'bar', name: 'No metric data', x: periods, y: rguUnmeasured, customdata: periodEnds,
           marker: { color: colorUnmeasured },
           hovertemplate: 'Period: %{x}<br>' + unit.label + ' (no metric): %{y:,.1f}<extra></extra>' },
@@ -1657,7 +1656,7 @@
 
       if (!total) { el.textContent = 'No jobs found.'; return; }
 
-      // The Waste column depends on the efficiency metric picked at last Update.
+      // The Unused columns depend on the efficiency metric picked at last Update.
       const metricName = (currentParams && currentParams.metric) || 'selected metric';
       const metricPretty = METRICS[metricName] || metricName;
       // RGU·time columns honour the toolbar unit (display rescale of the RGU·h
@@ -1705,11 +1704,11 @@
           title: `RGU × elapsed time, shown in ${unitHour.label}`,
           fmt: fmtRguHour },
 
-        { key: 'waste',                 label: `Waste (${unit.label})`,
+        { key: 'waste',                 label: `Unused (${unit.label})`,
           title: `RGU·time × (1 − mean ${metricPretty}): estimated unused RGU·time`,
           fmt: fmtRguTime },
 
-        { key: 'waste',                 label: `Waste (${unitHour.label})`,
+        { key: 'waste',                 label: `Unused (${unitHour.label})`,
           title: `RGU·time × (1 − mean ${metricPretty}): estimated unused RGU·time`,
           fmt: fmtRguHour },
 
