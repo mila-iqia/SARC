@@ -1699,19 +1699,21 @@
         { key: 'rgu_hours',             label: unit.label,
           title: `RGU × elapsed time, shown in ${unit.label}`,
           fmt: fmtRguTime },
-
+        // Fixed RGU·h twin, skipped when the toolbar unit is already hours
+        // (it would be an exact duplicate).
+        ...(unit === unitHour ? [] : [
         { key: 'rgu_hours',             label: unitHour.label,
           title: `RGU × elapsed time, shown in ${unitHour.label}`,
           fmt: fmtRguHour },
-
+        ]),
         { key: 'waste',                 label: `Unused (${unit.label})`,
           title: `RGU·time × (1 − mean ${metricPretty}): estimated unused RGU·time`,
           fmt: fmtRguTime },
-
+        ...(unit === unitHour ? [] : [
         { key: 'waste',                 label: `Unused (${unitHour.label})`,
           title: `RGU·time × (1 − mean ${metricPretty}): estimated unused RGU·time`,
           fmt: fmtRguHour },
-
+        ]),
         { key: 'gpu_sm_occupancy_mean', label: 'SM occ',    fmt: v => v != null ? (v < 0 ? 'NaN' : (v*100).toFixed(1)+'%') : '—' },
         { key: 'gpu_utilization_mean',  label: 'GPU util',  fmt: v => v != null ? (v < 0 ? 'NaN' : (v*100).toFixed(1)+'%') : '—' },
         { key: 'gpu_type',              label: 'GPU type' },
