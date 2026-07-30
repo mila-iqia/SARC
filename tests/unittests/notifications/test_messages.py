@@ -6,7 +6,7 @@ import pytest
 from sarc.config import ConfigurationError
 from sarc.notifications.messages import (
     _date_range,
-    _fmt_h,
+    _fmt_rgu,
     _jobs_section,
     _pct,
     build_admin_digest,
@@ -130,7 +130,9 @@ def _build_usage_report(row, *, window_weeks):
 
 def test_usage_report():
     window_weeks = 4
-    with _notify_overlay(dashboard_url="https://dash.example.com"):
+    with _notify_overlay(dashboard_url="https://dash.example.com") as config:
+        rgu_unit = config.sarc.notifications.rgu_unit
+        user_unit = config.sarc.notifications.user_unit
         text = _build_usage_report(_USAGE_ROW_ALICE, window_weeks=window_weeks)
     # Ensure no formatting braces {} remain
     assert "{" not in text
@@ -142,7 +144,13 @@ def test_usage_report():
     # Test overview contains the real date range
     assert _date_range(_WINDOW_START, _WINDOW_END) in text
     # Test overview contains rgu used
-    assert _fmt_h(_USAGE_ROW_ALICE.rgu_hours) in text
+    assert _fmt_rgu(_USAGE_ROW_ALICE.rgu_hours, rgu_unit.factor) in text
+    # Test overview contains rgu long unit
+    assert rgu_unit.unit_long in text
+    # Test overview contains user friendly used
+    assert _fmt_rgu(_USAGE_ROW_ALICE.rgu_hours, user_unit.factor) in text
+    # Test overview contains user friendly long unit
+    assert user_unit.unit_long in text
     # Test overview contains utilization
     assert _pct(_USAGE_ROW_ALICE.avg_utilization) in text
     # Test overview contains top jobs count
@@ -155,7 +163,8 @@ def test_usage_report():
         _jobs_section(
             _USAGE_ROW_ALICE.top_jobs,
             rgu_value=lambda j: j.rgu_hours_used,
-            suffix="RGU-h",
+            rgu_factor=rgu_unit.factor,
+            suffix=rgu_unit.unit,
         )
         in text
     )
@@ -243,7 +252,9 @@ def _build_user_dm(row, *, window_weeks):
 
 def test_underusage_report():
     window_weeks = 2
-    with _notify_overlay():
+    with _notify_overlay() as config:
+        rgu_unit = config.sarc.notifications.rgu_unit
+        user_unit = config.sarc.notifications.user_unit
         text = _build_user_dm(_ROW_ALICE, window_weeks=window_weeks)
     # Ensure no formatting braces {} remain
     assert "{" not in text
@@ -255,20 +266,29 @@ def test_underusage_report():
     # Test overview contains the real date range
     assert _date_range(_WINDOW_START, _WINDOW_END) in text
     # Test overview contains rgu used
-    assert _fmt_h(_USAGE_ROW_ALICE.rgu_hours) in text
+    assert _fmt_rgu(_ROW_ALICE.rgu_hours, rgu_unit.factor) in text
+    # Test overview contains rgu long unit
+    assert rgu_unit.unit_long in text
     # Test overview contains utilization
     assert _pct(_ROW_ALICE.avg_utilization) in text
     # Test overview contains unused hours
-    assert _fmt_h(_ROW_ALICE.wasted) in text
+    assert _fmt_rgu(_ROW_ALICE.wasted, rgu_unit.factor) in text
+    # Test overview contains user friendly used
+    assert _fmt_rgu(_ROW_ALICE.wasted, user_unit.factor) in text
+    # Test overview contains user friendly long unit
+    assert user_unit.unit_long in text
     # Test overview contains top jobs count
-    assert f"top_jobs_count:{len(_USAGE_ROW_ALICE.top_jobs)}" in text
+    assert f"top_jobs_count:{len(_ROW_ALICE.top_jobs)}" in text
     # Test top jobs grouped by cluster
     # narval block appears before fir block (narval has more total waste)
     assert text.index("Cluster narval") < text.index("Cluster fir")
     # Test job line format
     assert (
         _jobs_section(
-            _ROW_ALICE.top_jobs, rgu_value=lambda j: j.wasted, suffix="RGU-h unused"
+            _ROW_ALICE.top_jobs,
+            rgu_value=lambda j: j.wasted,
+            rgu_factor=rgu_unit.factor,
+            suffix=f"{rgu_unit.unit} unused",
         )
         in text
     )
@@ -288,23 +308,26 @@ _DIGEST_KW = {"cluster_share_threshold": 0.30, "active_cycles": 3, "top_n": 16}
 
 
 def test_digest_header_contains_period():
-    text = build_admin_digest(
-        [_ROW_ALICE, _ROW_BOB], period="2026-05-21 to 2026-06-04", **_DIGEST_KW
-    )
+    with _notify_overlay():
+        text = build_admin_digest(
+            [_ROW_ALICE, _ROW_BOB], period="2026-05-21 to 2026-06-04", **_DIGEST_KW
+        )
     assert "2026-05-21 to 2026-06-04" in text
 
 
 def test_digest_count_line():
-    text = build_admin_digest(
-        [_ROW_ALICE, _ROW_BOB, _ROW_CAROL], period="…", **_DIGEST_KW
-    )
+    with _notify_overlay():
+        text = build_admin_digest(
+            [_ROW_ALICE, _ROW_BOB, _ROW_CAROL], period="…", **_DIGEST_KW
+        )
     assert "3 user(s) flagged" in text
 
 
 def test_digest_ranked_by_wasted_descending():
-    text = build_admin_digest(
-        [_ROW_ALICE, _ROW_BOB, _ROW_CAROL], period="…", **_DIGEST_KW
-    )
+    with _notify_overlay():
+        text = build_admin_digest(
+            [_ROW_ALICE, _ROW_BOB, _ROW_CAROL], period="…", **_DIGEST_KW
+        )
     # Bob: 600 wasted, Carol: 420, Alice: 245 → Bob is rank 1
     assert (
         text.index("Bob Marley")
@@ -314,36 +337,42 @@ def test_digest_ranked_by_wasted_descending():
 
 
 def test_digest_capped_at_top_n():
-    text = build_admin_digest(
-        [_ROW_ALICE, _ROW_BOB, _ROW_CAROL], period="…", **{**_DIGEST_KW, "top_n": 2}
-    )
+    with _notify_overlay():
+        text = build_admin_digest(
+            [_ROW_ALICE, _ROW_BOB, _ROW_CAROL], period="…", **{**_DIGEST_KW, "top_n": 2}
+        )
     assert "Alice Liddell" not in text  # rank 3 — excluded
     assert "Bob Marley" in text
     assert "Carol Danvers" in text
 
 
 def test_digest_contains_primary_cluster():
-    text = build_admin_digest([_ROW_ALICE], period="…", **_DIGEST_KW)
+    with _notify_overlay():
+        text = build_admin_digest([_ROW_ALICE], period="…", **_DIGEST_KW)
     assert "narval" in text
 
 
 def test_digest():
-    text = build_admin_digest([_ROW_BOB], period="…", **_DIGEST_KW)
+    with _notify_overlay() as config:
+        rgu_unit = config.sarc.notifications.rgu_unit
+        text = build_admin_digest([_ROW_BOB], period="…", **_DIGEST_KW)
     # Test contains unused hours
-    assert "600.0 RGU-h unused" in text
+    assert f"{_fmt_rgu(600.0, rgu_unit.factor)} {rgu_unit.unit} unused" in text
     # Test contains waste ratio
     assert "75.0 %" in text
 
 
 def test_digest_deterministic():
     rows = [_ROW_ALICE, _ROW_BOB]
-    assert build_admin_digest(rows, period="p", **_DIGEST_KW) == build_admin_digest(
-        rows, period="p", **_DIGEST_KW
-    )
+    with _notify_overlay():
+        assert build_admin_digest(rows, period="p", **_DIGEST_KW) == build_admin_digest(
+            rows, period="p", **_DIGEST_KW
+        )
 
 
 def test_digest_empty_rows():
-    text = build_admin_digest([], period="…", **_DIGEST_KW)
+    with _notify_overlay():
+        text = build_admin_digest([], period="…", **_DIGEST_KW)
     assert "0 user(s) flagged" in text
 
 
@@ -368,6 +397,13 @@ def test_digest_recurring_header_reflects_share():
             recurring={"narval": [row]},
         )
     assert "40 %" in text
+
+
+def test_digest_raises_without_notifications_config():
+    with pytest.raises(ConfigurationError, match="No notifications configuration"):
+        build_admin_digest(
+            [], period="", cluster_share_threshold=0.0, active_cycles=0, top_n=0
+        )
 
 
 # ── build_recurring_table direct tests ───────────────────────────────────────
@@ -469,3 +505,10 @@ def test_recurring_table_all_empty_clusters_returns_empty_string():
             {"cluster1": [], "cluster2": []}, **_RECURRING_KW_DEFAULT
         )
     assert text == ""
+
+
+def test_recurring_table_raises_without_notifications_config():
+    with pytest.raises(ConfigurationError, match="No notifications configuration"):
+        build_recurring_table(
+            {"cluster1": []}, cluster_share_threshold=0.0, active_cycles=1
+        )

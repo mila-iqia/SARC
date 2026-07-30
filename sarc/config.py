@@ -270,6 +270,15 @@ class SlackConfig:
 
 
 @dataclass
+class UsageNotifyUnitConfig:
+    unit: str
+    """Short unit label"""
+    unit_long: str
+    """Long unit label"""
+    factor: float = 1.0
+
+
+@dataclass
 class UsageNotifyConfig:
     # Required bot scopes: chat:write, im:write, users:read.email
     slack_underusage: SlackConfig
@@ -283,14 +292,16 @@ class UsageNotifyConfig:
     underusage_report_template: str
     """``.format()``-able template for the per-user underusage report body.
     Placeholders: ``{name}``, ``{window_weeks}``, ``{window_range}``,
-    ``{rgu_hours_allocated}``, ``{rgu_hours_wasted}``, ``{avg_utilization}``,
+    ``{rgu_allocated}``, ``{user_allocated}``, ``{rgu_wasted}``,
+    ``{user_wasted}``, ``{avg_utilization}``, ``{rgu_unit}``, ``{user_unit}``,
     ``{top_jobs_count}``, ``{jobs_section}``, ``{dashboard_url}``."""
 
     usage_report_template: str
     """``.format()``-able template for the neutral usage report body.
     Placeholders: ``{name}``, ``{window_weeks}``, ``{window_range}``,
-    ``{rgu_hours_allocated}``, ``{avg_utilization}``, ``{top_jobs_count}``,
-    ``{jobs_section}``, ``{dashboard_url}``."""
+    ``{rgu_allocated}``, ``{user_allocated}``, ``{avg_utilization}``,
+    ``{rgu_unit}``, ``{top_jobs_count}``, ``{jobs_section}``,
+    ``{dashboard_url}``."""
 
     dashboard_url: str
     """Base link to the usage dashboard; each message appends its own
@@ -364,6 +375,17 @@ class UsageNotifyConfig:
     restrictive-action marker ("!!⚑▲") in the recurring-underusers table.
     Positive int; a value greater than ``recurrence_display_cycles`` simply
     yields no escalation."""
+
+    rgu_unit: UsageNotifyUnitConfig = field(
+        default_factory=lambda: UsageNotifyUnitConfig(
+            "RGU-w", "RGU-weeks", 1 / (24 * 7)
+        )
+    )
+    user_unit: UsageNotifyUnitConfig = field(
+        default_factory=lambda: UsageNotifyUnitConfig(
+            "A100-w", "A100-weeks", 1 / (4.8 * 24 * 7)
+        )
+    )
 
     clusters: list[str] = field(default_factory=lambda: ["mila"])
     """Cluster-name allowlist scoping every query (alerts, usage report,

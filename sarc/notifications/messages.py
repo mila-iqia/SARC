@@ -12,9 +12,13 @@ from sarc.notifications.usage import (
 )
 
 
-def _fmt_rgu_int(hours: float) -> str:
+def _fmt_rgu_int(hours: float, factor: float) -> str:
     """Format RGU-hours as an integer with a space thousands separator."""
-    return f"{int(round(hours)):,}".replace(",", " ")
+    return f"{int(round(hours * factor)):,}".replace(",", " ")
+
+
+def _fmt_rgu(hours: float, factor: float) -> str:
+    return f"{hours * factor:.1f}"
 
 
 def _pct(fraction: float) -> str:
@@ -23,10 +27,6 @@ def _pct(fraction: float) -> str:
 
 def _date_range(start: date, end: date) -> str:
     return f"{start:%b %d, %Y} – {end:%b %d, %Y}"
-
-
-def _fmt_h(hours: float) -> str:
-    return f"{hours:.1f}"
 
 
 def _dashboard_url(base_url: str, start: date, end: date) -> str:
@@ -39,7 +39,9 @@ def _tree_prefix(i: int, n: int) -> str:
     return "┌─" if i == 0 else "├─"
 
 
-def _jobs_section(top_jobs: list, *, rgu_value: Callable, suffix: str) -> str:
+def _jobs_section(
+    top_jobs: list, *, rgu_value: Callable, rgu_factor: float, suffix: str
+) -> str:
     by_cluster: dict[str, list] = defaultdict(list)
     for job in top_jobs:
         by_cluster[job.cluster].append(job)
@@ -64,7 +66,7 @@ def _jobs_section(top_jobs: list, *, rgu_value: Callable, suffix: str) -> str:
             )
             lines.append(
                 f"{prefix} job_{job.job_id} ({date_str})"
-                f" — {_fmt_h(rgu_value(job))} {suffix}"
+                f" — {_fmt_rgu(rgu_value(job), rgu_factor)} {suffix}"
                 f"  (SM occupancy: {util_str})"
             )
     return "\n".join(lines)
@@ -81,12 +83,19 @@ def build_user_dm(
         name=MENTION_TOKEN,
         window_weeks=window_weeks,
         window_range=_date_range(window_start, window_end),
-        rgu_hours_allocated=_fmt_h(row.rgu_hours),
-        rgu_hours_wasted=_fmt_h(row.wasted),
+        rgu_allocated=_fmt_rgu(row.rgu_hours, ncfg.rgu_unit.factor),
+        rgu_wasted=_fmt_rgu(row.wasted, ncfg.rgu_unit.factor),
+        user_allocated=_fmt_rgu(row.rgu_hours, ncfg.user_unit.factor),
+        user_wasted=_fmt_rgu(row.wasted, ncfg.user_unit.factor),
         avg_utilization=_pct(row.avg_utilization),
+        rgu_unit=ncfg.rgu_unit.unit_long,
+        user_unit=ncfg.user_unit.unit_long,
         top_jobs_count=len(row.top_jobs),
         jobs_section=_jobs_section(
-            row.top_jobs, rgu_value=lambda j: j.wasted, suffix="RGU-h unused"
+            row.top_jobs,
+            rgu_value=lambda j: j.wasted,
+            rgu_factor=ncfg.rgu_unit.factor,
+            suffix=f"{ncfg.rgu_unit.unit} unused",
         ),
         dashboard_url=_dashboard_url(ncfg.dashboard_url, window_start, window_end),
     ).rstrip()
@@ -107,11 +116,17 @@ def build_usage_report(
         name=MENTION_TOKEN,
         window_weeks=window_weeks,
         window_range=_date_range(window_start, window_end),
-        rgu_hours_allocated=_fmt_h(row.rgu_hours),
+        rgu_allocated=_fmt_rgu(row.rgu_hours, ncfg.rgu_unit.factor),
+        user_allocated=_fmt_rgu(row.rgu_hours, ncfg.user_unit.factor),
         avg_utilization=_pct(row.avg_utilization),
+        rgu_unit=ncfg.rgu_unit.unit_long,
+        user_unit=ncfg.user_unit.unit_long,
         top_jobs_count=len(row.top_jobs),
         jobs_section=_jobs_section(
-            row.top_jobs, rgu_value=lambda j: j.rgu_hours_used, suffix="RGU-h"
+            row.top_jobs,
+            rgu_value=lambda j: j.rgu_hours_used,
+            rgu_factor=ncfg.rgu_unit.factor,
+            suffix=ncfg.rgu_unit.unit,
         ),
         dashboard_url=_dashboard_url(ncfg.dashboard_url, window_start, window_end),
     ).rstrip()
@@ -143,6 +158,10 @@ def build_recurring_table(
     """
     if not recurring:
         return ""
+
+    if not config.notifications:
+        raise ConfigurationError("No notifications configuration found in config")
+    ncfg = config.notifications
 
     cycle_length_weeks = usage_cycle_length_weeks()
     window_weeks = active_cycles * cycle_length_weeks
@@ -222,7 +241,7 @@ def build_recurring_table(
             flags = _build_flag_cells(row)
             lines.append(
                 f"{pfx} {row.email:<{email_w}}"
-                f"  {_fmt_rgu_int(row.wasted_current_active_window):>12}"
+                f"  {_fmt_rgu_int(row.wasted_current_active_window, ncfg.rgu_unit.factor):>12}"
                 f"  {row.cluster_share * 100:>3.0f} %" + flags
             )
 
@@ -246,6 +265,10 @@ def build_admin_digest(
     Ranks underusers by RGU-hours wasted (descending), capped at top_n.
     Pure function — no I/O, deterministic for fixed input.
     """
+    if not config.notifications:
+        raise ConfigurationError("No notifications configuration found in config")
+    ncfg = config.notifications
+
     ranked = sorted(rows, key=lambda r: r.wasted, reverse=True)[:top_n]
 
     lines = [
@@ -255,7 +278,7 @@ def build_admin_digest(
     ]
 
     clusters = [r.by_cluster[0].cluster if r.by_cluster else "unknown" for r in ranked]
-    wasted_s = [_fmt_h(r.wasted) for r in ranked]
+    wasted_s = [_fmt_rgu(r.wasted, ncfg.rgu_unit.factor) for r in ranked]
     ratio_s = [_pct(r.waste_ratio) for r in ranked]
 
     if ranked:
@@ -273,7 +296,7 @@ def build_admin_digest(
                 f"{row.display_name.ljust(name_w)}  "
                 f"{row.email.ljust(email_w)}  "
                 f"{cluster.ljust(cluster_w)}  "
-                f"{ws.rjust(wasted_w)} RGU-h unused  "
+                f"{ws.rjust(wasted_w)} {ncfg.rgu_unit.unit} unused  "
                 f"{rs.rjust(ratio_w)}"
             )
 
