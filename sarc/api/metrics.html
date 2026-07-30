@@ -1115,6 +1115,10 @@
       const el = document.getElementById(id);
       if (!el || !d.rgu_usage.length) return;
       const unit = rguUnit();
+      // The wasted/unused hovers name the efficiency metric picked at last
+      // Update (non-admins are pinned to SM occupancy).
+      const metricName = (currentParams && currentParams.metric) || 'gpu_sm_occupancy';
+      const metricPretty = METRICS[metricName] || metricName;
 
       // Box/ctrl/plot layout (reusing the heatmap's classes) so a small "View:"
       // picker sits above the plot, which fills the rest at the tile's fixed height.
@@ -1151,14 +1155,14 @@
         Plotly.react(plot, [
           { type: 'bar', name: 'Used',   x: X, y: [usedTot * unit.factor], marker: { color: '#1a6fd4' },
             hovertemplate: unit.label + ' used: %{y:,.1f}<extra></extra>' },
-          { type: 'bar', name: `Wasted under ${MIN_USAGE_EXPECTED_PERCENT} %`, x: X, y: [wastedTot * unit.factor], marker: { color: '#ff0000' },
-            hovertemplate: `${unit.label} wasted under ${MIN_USAGE_EXPECTED_PERCENT} %: %{y:,.1f}<extra></extra>` },
-          { type: 'bar', name: `Unused over ${MIN_USAGE_EXPECTED_PERCENT} %`, x: X, y: [unusedTot * unit.factor], marker: { color: '#a8c8f0' },
-            hovertemplate: `${unit.label} unused over ${MIN_USAGE_EXPECTED_PERCENT} %: %{y:,.1f}<extra></extra>` },
+          { type: 'bar', name: `Wasted (below ${MIN_USAGE_EXPECTED_PERCENT} % min)`, x: X, y: [wastedTot * unit.factor], marker: { color: '#ff0000' },
+            hovertemplate: `${unit.label} wasted: %{y:,.1f}<br>shortfall of jobs below the <br>${MIN_USAGE_EXPECTED_PERCENT} % ${metricPretty} minimum<extra></extra>` },
+          { type: 'bar', name: 'Unused (above min)', x: X, y: [unusedTot * unit.factor], marker: { color: '#a8c8f0' },
+            hovertemplate: `${unit.label} unused: %{y:,.1f}<br>idle capacity above the ${MIN_USAGE_EXPECTED_PERCENT} % minimum<extra></extra>` },
           { type: 'bar', name: 'No metric data', x: X, y: [unmTot * unit.factor], marker: { color: '#bdbdbd' },
             hovertemplate: unit.label + ' (no metric): %{y:,.1f}<extra></extra>' },
         ], pLayout({
-          title: { text: 'Total ' + unit.label + ' — Whole range (Used vs Unused)', font: { size: 16 } },
+          title: { text: 'Total ' + unit.label + ' — Whole range (Used / Wasted / Unused)', font: { size: 16 } },
           barmode: 'stack', bargap: 0.7,
           xaxis: { type: 'category' },
           yaxis: { title: { text: 'Total ' + unit.label } },
@@ -1183,17 +1187,17 @@
         { type: 'bar', name: 'Used',   x: periods, y: rguUsed, customdata: periodEnds,
           marker: { color: colorUsed },
           hovertemplate: 'Period: %{x}<br>' + unit.label + ' used: %{y:,.1f}<extra></extra>' },
-        { type: 'bar', name: `Wasted under ${MIN_USAGE_EXPECTED_PERCENT} %`,   x: periods, y: rguWasted, customdata: periodEnds,
+        { type: 'bar', name: `Wasted (below ${MIN_USAGE_EXPECTED_PERCENT} % min)`,   x: periods, y: rguWasted, customdata: periodEnds,
           marker: { color: colorWasted },
-          hovertemplate: `Period: %{x}<br>${unit.label} wasted under ${MIN_USAGE_EXPECTED_PERCENT} %: %{y:,.1f}<extra></extra>` },
-        { type: 'bar', name: `Unused over ${MIN_USAGE_EXPECTED_PERCENT} %`, x: periods, y: rguUnused, customdata: periodEnds,
+          hovertemplate: `Period: %{x}<br>${unit.label} wasted: %{y:,.1f}<br>shortfall of jobs below the <br>${MIN_USAGE_EXPECTED_PERCENT} % ${metricPretty} minimum<extra></extra>` },
+        { type: 'bar', name: 'Unused (above min)', x: periods, y: rguUnused, customdata: periodEnds,
           marker: { color: colorUnused },
-          hovertemplate: `Period: %{x}<br>${unit.label} unused over ${MIN_USAGE_EXPECTED_PERCENT} %: %{y:,.1f}<extra></extra>` },
+          hovertemplate: `Period: %{x}<br>${unit.label} unused: %{y:,.1f}<br>idle capacity above the ${MIN_USAGE_EXPECTED_PERCENT} % minimum<extra></extra>` },
         { type: 'bar', name: 'No metric data', x: periods, y: rguUnmeasured, customdata: periodEnds,
           marker: { color: colorUnmeasured },
           hovertemplate: 'Period: %{x}<br>' + unit.label + ' (no metric): %{y:,.1f}<extra></extra>' },
       ], pLayout({
-        title: { text: 'Total ' + unit.label + ' per Period — Used vs Unused (click to focus)', font: { size: 16 } },
+        title: { text: 'Total ' + unit.label + ' per Period — Used / Wasted / Unused (click to focus)', font: { size: 16 } },
         barmode: 'stack',
         xaxis: { title: { text: 'Period start' }, type: 'category', tickangle: -45 },
         yaxis: { title: { text: 'Total ' + unit.label } },
