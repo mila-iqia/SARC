@@ -356,6 +356,9 @@
   <div id="tile-grid"></div>
 
   <script>
+    // Minimum expected usage: sent to /rgu_usage as `min_usage` (threshold of
+    // the per-job wasted-RGU shortfall, computed server-side) and shown in the
+    // Wasted/Unused bar labels.
     const MIN_USAGE_EXPECTED_PERCENT = 15;
 
     const SEC_TO_H = 1 / 3600;
@@ -1108,10 +1111,6 @@
       });
     }
 
-    function _jobRguUnusedUnderThreshold(r) {
-      return Math.max(0, (MIN_USAGE_EXPECTED_PERCENT * (r.rgu_allocated - r.rgu_unmeasured) / 100 - r.rgu_used));
-    }
-
     function renderRguUsage(id, d) {
       const el = document.getElementById(id);
       if (!el || !d.rgu_usage.length) return;
@@ -1146,8 +1145,7 @@
         // purpose (no per-bucket axis) and the single bar is not click-to-focus.
         const sum = key => d.rgu_usage.reduce((a, r) => a + (r[key] || 0), 0);
         const reqTot = sum('rgu_allocated'), usedTot = sum('rgu_used'), unmTot = sum('rgu_unmeasured');
-        const bestUsedTot = (reqTot - unmTot) * MIN_USAGE_EXPECTED_PERCENT / 100;
-        const wastedTot = Math.max(0, bestUsedTot - usedTot);
+        const wastedTot = sum('rgu_wasted');
         const unusedTot = reqTot - usedTot - unmTot - wastedTot;
         const X = ['Whole range'];
         Plotly.react(plot, [
@@ -1174,8 +1172,8 @@
       const periods    = d.rgu_usage.map(r => r.period_start);
       const periodEnds = d.rgu_usage.map(r => r.period_end);
       const rguUsed       = d.rgu_usage.map(r => r.rgu_used * unit.factor);
-      const rguWasted     = d.rgu_usage.map(r => _jobRguUnusedUnderThreshold(r) * unit.factor);
-      const rguUnused     = d.rgu_usage.map(r => (r.rgu_allocated - r.rgu_used - r.rgu_unmeasured - _jobRguUnusedUnderThreshold(r)) * unit.factor);
+      const rguWasted     = d.rgu_usage.map(r => (r.rgu_wasted || 0) * unit.factor);
+      const rguUnused     = d.rgu_usage.map(r => (r.rgu_allocated - r.rgu_used - r.rgu_unmeasured - (r.rgu_wasted || 0)) * unit.factor);
       const rguUnmeasured = d.rgu_usage.map(r => (r.rgu_unmeasured || 0) * unit.factor);
       const colorUsed      = periods.map(p => { const f = periodInFocus(p); return f === null ? '#1a6fd4' : f ? '#e07020' : '#c8d8f0'; });
       const colorUnused    = periods.map(p => { const f = periodInFocus(p); return f === null ? '#a8c8f0' : f ? '#f0c090' : '#e4eef8'; });
@@ -2272,7 +2270,7 @@
       switch (ep) {
         case 'job_counts': return '/dash/metrics/job_counts?' + new URLSearchParams({ ...base, period: p.period });
         case 'heatmap':   return '/dash/metrics/job_times_vs_limit?' + new URLSearchParams({ ...base, ...focusParams });
-        case 'rgu_usage': return '/dash/metrics/rgu_usage?' + new URLSearchParams({ ...base, period: p.period, metric: p.metric });
+        case 'rgu_usage': return '/dash/metrics/rgu_usage?' + new URLSearchParams({ ...base, period: p.period, metric: p.metric, min_usage: MIN_USAGE_EXPECTED_PERCENT / 100 });
         case 'density':   return '/dash/metrics/metric_distribution?' + new URLSearchParams({ ...densityParams, ...focusParams });
         case 'jobs':      return jobsURL(p, JOBTABLE_DEFAULTS);
         {% if is_admin %}

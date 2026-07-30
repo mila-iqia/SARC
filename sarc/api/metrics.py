@@ -783,14 +783,16 @@ def metrics_rgu_usage(
     cluster_user: str | None = Query(default=None),
     job_states: list[str] = Query(default=[]),
     metric: str = Query(default="gpu_sm_occupancy"),
+    min_usage: float = Query(default=0.15, ge=0.0, le=1.0),
     sess: Session = Depends(session_dep),
 ):
     """Allocated vs effectively-used RGU.h per time bucket.
 
     Over GPU jobs submitted in each ``period`` bucket: ``rgu_allocated`` =
     SUM(rgu * elapsed / 3600); ``rgu_used`` = the same scaled by each job's mean
-    ``metric`` (e.g. gpu_sm_occupancy). Their gap is wasted GPU capacity. Returns
-    one row per bucket.
+    ``metric`` (e.g. gpu_sm_occupancy); ``rgu_wasted`` = the per-job shortfall
+    below ``min_usage`` (SUM of rgu_hours * (min_usage - mean) over measured
+    jobs with mean < min_usage). Returns one row per bucket.
     """
     begin_dt, finish_dt = _date_range(start, end)
     parsed = _parse_period(period)
@@ -810,6 +812,14 @@ def metrics_rgu_usage(
     m_present = _is_real(m_mean)
     rgu_used_term = case((m_present, rgu_hours * m_mean), else_=0.0)
     rgu_unmeasured_term = case((m_present, 0.0), else_=rgu_hours)
+    # Shortfall to min_usage per job: a job above the threshold contributes 0
+    # (its surplus never offsets another job's deficit), so the SUM is additive
+    # across regroupings -- per-period bars, the whole-range view and a period
+    # change all tell the same story.
+    rgu_wasted_term = case(
+        (and_(m_present, m_mean < min_usage), rgu_hours * (min_usage - m_mean)),
+        else_=0.0,
+    )
 
     query = _apply_rgu_base_view(
         select(
@@ -817,6 +827,7 @@ def metrics_rgu_usage(
             func.sum(rgu_hours).label("rgu_allocated"),
             func.sum(rgu_used_term).label("rgu_used"),
             func.sum(rgu_unmeasured_term).label("rgu_unmeasured"),
+            func.sum(rgu_wasted_term).label("rgu_wasted"),
         ),
         sess,
         clusters,
@@ -846,13 +857,14 @@ def metrics_rgu_usage(
             float(row.rgu_allocated or 0.0),
             float(row.rgu_used or 0.0),
             float(row.rgu_unmeasured or 0.0),
+            float(row.rgu_wasted or 0.0),
         )
         for row in sess.exec(query)
     }
 
     period_data = []
     for key, ps, pe in _iter_buckets(begin_dt, finish_dt, parsed):
-        allocated, used, unmeasured = sums.get(key, (0.0, 0.0, 0.0))
+        allocated, used, unmeasured, wasted = sums.get(key, (0.0, 0.0, 0.0, 0.0))
         period_data.append(
             {
                 "period_start": ps.strftime(fmt),
@@ -860,6 +872,7 @@ def metrics_rgu_usage(
                 "rgu_allocated": allocated,
                 "rgu_used": used,
                 "rgu_unmeasured": unmeasured,
+                "rgu_wasted": wasted,
             }
         )
 
