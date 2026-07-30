@@ -1,5 +1,4 @@
 import logging
-import math
 from datetime import UTC, datetime
 
 import pytest
@@ -38,7 +37,7 @@ def test_compute_metric_statistics(captrace):
     stats = compute_metric_statistics([_series(range(100), instance="cn-c002")])
     assert stats == {
         "mean": 99 / 2,
-        "std": pytest.approx(29.011491975882016),
+        "std": pytest.approx(28.86607004772212),
         "max": 99.0,
         "q05": pytest.approx(4.95),
         "q25": pytest.approx(24.75),
@@ -63,10 +62,10 @@ def test_compute_metric_statistics_normalization():
     assert stats["mean"] == 10 * 99 / 2
 
 
-def test_compute_metric_statistics_single_sample_std_is_nan():
+def test_compute_metric_statistics_single_sample_std_is_zero():
     stats = compute_metric_statistics([_series([5.0], instance="cn-c002")])
     assert stats["mean"] == 5.0
-    assert math.isnan(stats["std"])
+    assert stats["std"] == 0.0
 
 
 @pytest.mark.parametrize(["delta"], [[30], [60]])
