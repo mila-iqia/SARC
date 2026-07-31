@@ -117,11 +117,26 @@
     .add-row-label { font-size: 13px; color: #888; }
 
     /* Metric heatmap: per-tile secondary-metric picker sitting above the plot. */
-    .ms-box  { display: flex; flex-direction: column; width: 100%; height: 100%; }
+    .ms-box  { position: relative; display: flex; flex-direction: column; width: 100%; height: 100%; }
     .ms-ctrl { flex-shrink: 0; font-size: 12px; color: #888; padding: 2px 0 6px;
                display: flex; align-items: center; gap: 6px; }
     .ms-plot { width: 100%; flex: 1; min-height: 0; }
     .ms-metric2 { font-size: 12px; padding: 1px 6px; max-width: 160px; }
+    /* RGU-usage: the "View:" picker shares its row with the plot title (an HTML
+       title — the plot carries no Plotly title) to save one line of tile
+       height. Grid centres the title on the tile; the picker sits on the left.
+       Font stack/colour mirror Plotly's default titles next door. */
+    /* RGU-usage: the "View:" picker floats over the plot's top-left corner —
+       the empty left side of the title band (the modebar hovers top-RIGHT).
+       The plot then keeps the exact same Plotly layout as rgu_by_cluster, so
+       the two tiles align by construction, with no height arithmetic. */
+    .ms-float-ctrl {
+      position: absolute; top: 0; left: 0; z-index: 10;
+      font-size: 12px; color: #888; display: flex; align-items: center; gap: 6px;
+      padding: 2px 4px 4px 0;
+      background-color: white;
+    }
+    .ms-float-ctrl .add-select { padding: 1px 6px; font-size: 11px; }
     /* "?" help badge in the RGU-usage tile header: standard circular help
        button (quiet grey, blue on hover — same hover palette as .add-tile-btn);
        clicking it opens a definition panel that expands rightward from the
@@ -717,6 +732,16 @@
       }));
     }
 
+    // Plotly's own responsive handler resizes the plots live but can leave a
+    // wrapping horizontal legend at its old position (drawn over the bars)
+    // when the window grows back. Once the resize settles, re-render the RGU
+    // tiles from cache: a full react recomputes margins and legend placement.
+    let _resizeTimer = null;
+    window.addEventListener('resize', () => {
+      clearTimeout(_resizeTimer);
+      _resizeTimer = setTimeout(rerenderRguTiles, 250);
+    });
+
     // Pressing Enter in any filter field applies the filters, like clicking Update.
     // Buttons keep their own behaviour (Update / Reset, dropdown toggles, All/None).
     document.querySelector('.controls').addEventListener('keydown', e => {
@@ -1211,11 +1236,12 @@
       const metricName = (currentParams && currentParams.metric) || 'gpu_sm_occupancy';
       const metricPretty = METRICS[metricName] || metricName;
 
-      // Box/ctrl/plot layout (reusing the heatmap's classes) so a small "View:"
-      // picker sits above the plot, which fills the rest at the tile's fixed height.
+      // Box/plot layout (reusing the heatmap's classes); the "View:" picker
+      // floats over the plot's top-left corner (see .ms-float-ctrl), so the
+      // plot itself is laid out exactly like rgu_by_cluster next door.
       el.innerHTML = '';
       const box = document.createElement('div'); box.className = 'ms-box';
-      const ctrl = document.createElement('div'); ctrl.className = 'ms-ctrl';
+      const ctrl = document.createElement('div'); ctrl.className = 'ms-float-ctrl';
       const lab = document.createElement('label');
       lab.textContent = 'View: ';
       const sel = document.createElement('select');
@@ -1253,12 +1279,15 @@
           { type: 'bar', name: 'No metric data', x: X, y: [unmTot * unit.factor], marker: { color: '#bdbdbd' },
             hovertemplate: unit.label + ' (no metric): %{y:,.1f}<extra></extra>' },
         ], pLayout({
-          title: { text: 'Total ' + unit.label + ' — Whole range (Used / Wasted / Unused)', font: { size: 16 } },
+          // Same pinned title + t as rgu_by_cluster, so the two tiles align
+          // by construction (the View picker floats over the top-left corner).
+          title: { text: 'Total ' + unit.label + ' — Whole range (Used / Wasted / Unused)',
+                   font: { size: 16 }, y: 1, yanchor: 'top', pad: { t: 2 } },
           barmode: 'stack', bargap: 0.7,
           xaxis: { type: 'category' },
           yaxis: { title: { text: 'Total ' + unit.label } },
           legend: { orientation: 'h', x: 0, xanchor: 'left', y: 1.02, yanchor: 'bottom' },
-          margin: { l: 60, r: 20, t: 72, b: 60 },
+          margin: { l: 60, r: 20, t: 58, b: 60 },
         }), { responsive: true });
         return;
       }
@@ -1288,12 +1317,13 @@
           marker: { color: colorUnmeasured },
           hovertemplate: 'Period: %{x}<br>' + unit.label + ' (no metric): %{y:,.1f}<extra></extra>' },
       ], pLayout({
-        title: { text: 'Total ' + unit.label + ' per Period — Used / Wasted / Unused (click to focus)', font: { size: 16 } },
+        title: { text: 'Total ' + unit.label + ' per Period — Used / Wasted / Unused (click to focus)',
+                 font: { size: 16 }, y: 1, yanchor: 'top', pad: { t: 2 } },
         barmode: 'stack',
         xaxis: { title: { text: 'Period start' }, type: 'category', tickangle: -45 },
         yaxis: { title: { text: 'Total ' + unit.label } },
         legend: { orientation: 'h', x: 0, xanchor: 'left', y: 1.02, yanchor: 'bottom' },
-        margin: { l: 60, r: 20, t: 72, b: 100 },
+        margin: { l: 60, r: 20, t: 58, b: 100 },
       }), { responsive: true }).then(gd => {
         gd.removeAllListeners('plotly_click');
         gd.on('plotly_click', evt => {
@@ -1344,7 +1374,11 @@
         hovertemplate: s.cluster + '<br>Period: %{x}<br>' + unit.label + ': %{customdata[1]:,.2f}<extra></extra>',
       })).sort((a, b) => a.name.localeCompare(b.name));
       Plotly.react(id, traces, pLayout({
-        title: { text: 'Total ' + unit.label + ' by Cluster (click to focus)', font: { size: 16 } },
+        // Title pinned to the container top; t:58 = title band + legend +
+        // gap. rgu_usage uses the same pinned title + t, so titles, legends
+        // and bars align side by side.
+        title: { text: 'Total ' + unit.label + ' by Cluster (click to focus)',
+                 font: { size: 16 }, y: 1, yanchor: 'top', pad: { t: 2 } },
         // Manual per-period `base` offsets do the stacking, so overlay — not
         // 'stack', which ignores base and re-stacks in (global) trace order.
         barmode: 'overlay',
@@ -1356,7 +1390,7 @@
         // there is only one trace).
         showlegend: true,
         legend: { orientation: 'h', x: 0, xanchor: 'left', y: 1.02, yanchor: 'bottom', traceorder: 'normal' },
-        margin: { l: 60, r: 20, t: 72, b: 100 },
+        margin: { l: 60, r: 20, t: 58, b: 100 },
       }), { responsive: true }).then(gd => {
         gd.removeAllListeners('plotly_click');
         gd.on('plotly_click', evt => {
