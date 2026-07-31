@@ -173,13 +173,15 @@
 
     /* Job table */
     .job-table-box { display: flex; flex-direction: column; width: 100%; height: 100%; }
-    .job-table-caption {
-      flex-shrink: 0; font-size: 12px; color: #888; padding: 2px 0 6px;
-      display: flex; align-items: center; gap: 8px;
+    /* Job-table header slot: the jobs-count label + column picker share the
+       tile-header line, left-aligned after the title (the tile controls keep
+       the right edge); flex:1 absorbs the label's variable width. */
+    .jt-head-slot {
+      flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px;
+      margin-left: 12px; font-size: 12px; font-weight: 400; color: #888;
     }
-    .job-table-caption .jt-cols { margin-left: auto; }     /* push the column picker to the right */
-    .job-table-caption .add-select { padding: 1px 6px; font-size: 11px; }
-    .jt-cols-panel { right: 0; }                            /* anchor the panel to the right edge */
+    .jt-head-slot .jt-caption-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .jt-head-slot .add-select { padding: 1px 6px; font-size: 11px; }
     .job-table-wrap { width: 100%; flex: 1; min-height: 0; overflow: auto; }
     .job-table { width: 100%; border-collapse: collapse; font-size: 13px; }
     .job-table th {
@@ -230,6 +232,9 @@
     .job-table-foot .jt-page-link {
       color: #1a6fd4; cursor: pointer; text-decoration: underline;
       text-underline-offset: 2px;
+      /* Right-aligned in a box reserved (via inline min-width, in ch) for the
+         largest page number, so 'Page X / N' never shifts as X gains digits. */
+      display: inline-block; text-align: right;
     }
     .job-table-foot .jt-page-link:hover { color: #155cb5; }
     /* Page-jump popover, anchored above the page link (opens upward so it is
@@ -241,7 +246,6 @@
       display: flex; flex-direction: column; gap: 6px; align-items: stretch;
     }
     .jt-page-pop button { padding: 2px 0; }
-    .job-table-foot .jt-spacer { flex: 1; }
     /* "Loading" cue shown in the caption while a page is being (re)fetched:
        bold + italic + accent colour, a gentle opacity pulse, and animated
        trailing dots via ::after. The class is added in reload() and cleared
@@ -1020,6 +1024,13 @@
             title.appendChild(makeRguUsageHelp());
           }
           header.appendChild(title);
+          if (plotType === 'jobtable') {
+            // Slot the job-table renderer fills with the jobs-count label +
+            // column picker, so they share the header line (one row saved).
+            const slot = document.createElement('span');
+            slot.className = 'jt-head-slot';
+            header.appendChild(slot);
+          }
           {% if is_admin %}
           const actions = document.createElement('span');
           actions.style.cssText = 'display:flex;align-items:center;gap:4px';
@@ -1754,7 +1765,7 @@
       // sort payload), so paging/sorting never disturbs the other tiles.
       async function reload() {
         if (!currentParams) return;
-        const cap = el.querySelector('.jt-caption-text');
+        const cap = el.closest('.tile')?.querySelector('.jt-caption-text');
         if (cap) { cap.textContent = 'Loading'; cap.classList.add('jt-loading'); }
         el.querySelectorAll('.job-table-foot button, .job-table-foot input, .job-table-foot select')
           .forEach(c => { c.disabled = true; });
@@ -1776,12 +1787,22 @@
           if (!document.body.contains(el) || el.dataset.plotType !== 'jobtable') return;
           renderJobTable(id, { jobs: data });
         } catch (e) {
-          if (document.body.contains(el))
+          if (document.body.contains(el)) {
+            // Also clear the header slot, or it would keep a stale count (or
+            // a stuck animated "Loading") next to the error message.
+            const slot = el.closest('.tile')?.querySelector('.jt-head-slot');
+            if (slot) slot.innerHTML = '';
             el.innerHTML = `<div class="tile-error">Error: ${e.message}</div>`;
+          }
         }
       }
 
-      if (!total) { el.textContent = 'No jobs found.'; return; }
+      if (!total) {
+        const slot = el.closest('.tile')?.querySelector('.jt-head-slot');
+        if (slot) slot.innerHTML = '';
+        el.textContent = 'No jobs found.';
+        return;
+      }
 
       // The Unused columns depend on the efficiency metric picked at last Update.
       const metricName = (currentParams && currentParams.metric) || 'selected metric';
@@ -1866,8 +1887,12 @@
       const box = document.createElement('div');
       box.className = 'job-table-box';
 
-      const caption = document.createElement('div');
-      caption.className = 'job-table-caption';
+      // The caption content (jobs-count label + column picker) lives in the
+      // tile header's .jt-head-slot (created by renderLayout), not in a row of
+      // its own — one line saved for the table. Rebuilt on every render.
+      const caption = el.closest('.tile')?.querySelector('.jt-head-slot')
+        ?? document.createElement('span');   // detached fallback: renders nothing
+      caption.innerHTML = '';
       // Count text in its own span so reload() can swap it for the animated
       // "Loading" cue without wiping the column picker that shares this line.
       const capText = document.createElement('span');
@@ -2041,6 +2066,9 @@
       pageLink.textContent = page.toLocaleString('en-US');
       if (pages > 1) {
         pageLink.className = 'jt-page-link';
+        // Reserve the width of the largest page number (ch ≈ digit width;
+        // thousands separators counted, slightly over-wide for them).
+        pageLink.style.minWidth = `${pages.toLocaleString('en-US').length}ch`;
         pageLink.tabIndex = 0;
         pageLink.title = `Click to jump to a page (1–${pages.toLocaleString('en-US')})`;
         pageLink.addEventListener('click', openPop);
@@ -2050,11 +2078,8 @@
       }
       pageInfo.append('Page ', pageLink, ` / ${pages.toLocaleString('en-US')}`);
 
-      const spacer = document.createElement('span');
-      spacer.className = 'jt-spacer';
-
       const szLabel = document.createElement('label');
-      szLabel.textContent = 'Rows ';
+      szLabel.textContent = 'Jobs per page ';
       const sz = document.createElement('select');
       JOBTABLE_PAGE_SIZES.forEach(n => {
         const opt = document.createElement('option');
@@ -2073,9 +2098,9 @@
       });
       szLabel.appendChild(sz);
 
-      foot.append(first, prev, pageInfo, next, last, spacer, szLabel);
+      foot.append(first, prev, pageInfo, next, last, szLabel);
 
-      // ── Column-visibility picker (caption line, right-aligned) ────────────
+      // ── Column-visibility picker (header slot, after the jobs count) ──────
       // Pure display: toggling a checkbox shows/hides that column live (no
       // refetch) and the menu stays open. Mirrors the toolbar's cluster /
       // job-state dropdowns; the choice is global (jobTableHiddenCols).
@@ -2143,7 +2168,6 @@
       colMenu.append(colBtn, colPanel);
       caption.appendChild(colMenu);
 
-      box.appendChild(caption);
       box.appendChild(wrap);
       box.appendChild(foot);
       el.appendChild(box);
