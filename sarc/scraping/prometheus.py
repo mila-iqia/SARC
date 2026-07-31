@@ -21,7 +21,12 @@ logger = logging.getLogger(__name__)
 
 @trace_decorator()
 def fetch_prometheus(
-    sess: Session, cluster: ClusterConfig, after: datetime | None, max_jobs: int | None
+    sess: Session,
+    cluster: ClusterConfig,
+    after: datetime | None,
+    max_jobs: int | None,
+    *,
+    batch_size: int = 100,
 ) -> None:
     """
     Fetch Prometheus metrics for jobs on the specified cluster.
@@ -55,34 +60,50 @@ def fetch_prometheus(
     query = query.order_by(col(SlurmJobDB.submit_time).desc())
     if max_jobs is not None:
         query = query.limit(max_jobs)
+
+    jobs = list(sess.exec(query))
+    if not jobs:
+        logger.info("No jobs found to fetch Prometheus metrics for.")
+        return
+
     nb_jobs = 0
     fetch_date_now = datetime.now(UTC)
     cache = Cache("prometheus")
     with cache.create_entry(fetch_date_now) as ce:
-        for entry in sess.exec(query):
-            assert entry.id is not None
-            fetch_record = sess.exec(
-                select(JobStatisticsFetchDateDB).where(
-                    JobStatisticsFetchDateDB.job_id == entry.id
+        for i in range(0, len(jobs), batch_size):
+            batch = jobs[i : i + batch_size]
+            batch_ids = [job.id for job in batch]
+            existing_records = {
+                rec.job_id: rec
+                for rec in sess.exec(
+                    select(JobStatisticsFetchDateDB).where(
+                        col(JobStatisticsFetchDateDB.job_id).in_(batch_ids)
+                    )
                 )
-            ).one_or_none()
-            if fetch_record is None:
-                sess.add(
-                    JobStatisticsFetchDateDB(job_id=entry.id, fetch_date=fetch_date_now)
+            }
+            for job in batch:
+                assert job.id is not None
+                fetch_record = existing_records.get(job.id)
+                if fetch_record is None:
+                    sess.add(
+                        JobStatisticsFetchDateDB(
+                            job_id=job.id, fetch_date=fetch_date_now
+                        )
+                    )
+                else:
+                    fetch_record.fetch_date = fetch_date_now
+                    fetch_record.jobstatistic_id = None
+            batched_results = series.get_job_time_series_batched(
+                jobs=batch, metric=series.JOB_STATISTICS_METRIC_NAMES
+            )
+            for job, raw_prom_data in zip(batch, batched_results):
+                if raw_prom_data == []:
+                    continue
+                nb_jobs += 1
+                ce.add_value(
+                    f"{job.cluster.name}${job.job_id}${job.submit_time.isoformat(timespec='seconds')}",
+                    json.dumps(raw_prom_data).encode("utf-8"),
                 )
-            else:
-                fetch_record.fetch_date = fetch_date_now
-                fetch_record.jobstatistic_id = None
-            raw_prom_data = series.get_job_time_series_data(
-                job=entry, metric=series.JOB_STATISTICS_METRIC_NAMES, max_points=10_000
-            )
-            if raw_prom_data == []:
-                continue
-            nb_jobs += 1
-            ce.add_value(
-                f"{entry.cluster.name}${entry.job_id}${entry.submit_time.isoformat(timespec='seconds')}",
-                json.dumps(raw_prom_data).encode("utf-8"),
-            )
     sess.commit()
     logger.info(f"Fetched Prometheus metrics for {nb_jobs} jobs.")
 
