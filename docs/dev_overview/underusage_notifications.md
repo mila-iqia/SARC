@@ -28,10 +28,12 @@ A few things to keep straight before the details:
 
 | Layer | File | Key entry points |
 |---|---|---|
-| Flagging / data | `sarc/notifications/usage.py` | `get_underusers`, `get_recurring_underusers`, `get_all_users_usage` |
+| Flagging / data | `sarc/notifications/usage.py` | `get_underusers`, `get_recurring_underusers`, `get_all_users_usage`, `classify_cycle` |
 | Message building | `sarc/notifications/messages.py` | `build_admin_digest`, `build_user_dm`, `build_usage_report`, `build_recurring_table` |
 | Delivery | `sarc/notifications/slack.py` | `SlackClient.dm_user`, `SlackClient.post_channel` |
 | Orchestration | `sarc/cli/notify/usage.py` | `UsageNotifyCommand` |
+| Store refresh | `sarc/cli/usage/refresh_store.py` | `UsageRefreshStoreCommand` (`sarc usage refresh-store`) |
+| Store schema | `sarc/db/user_periods.py` | `UserPeriods` |
 
 Message bodies come from `str.format` templates in `config/notifications/*.md`,
 loaded into config as strings (see `UnderusageNotifyConfig` in
@@ -102,6 +104,56 @@ thresholds come from config and can be overridden per-run with `--min-ratio` /
 For the admin digest, flagged users are enriched with an extra view:
 `get_recurring_underusers` (per-cluster top wasters seen across several recent
 cycles, with a "personalized action" flag for persistent offenders).
+
+## PowerBI + the `UserPeriods` store
+
+PowerBI needs the same per-cycle recurrence data Slack gets from
+`get_recurring_underusers`, without re-deriving the threshold/ceiling
+decisions independently (which would risk PowerBI and Slack disagreeing on who
+counts as an underuser). Rather than a literal Postgres materialized view —
+which takes no runtime parameters, and debug threshold overrides need to
+re-run the exact same decision logic with different numbers — the
+classification logic is a standalone function, `classify_cycle`, called by
+both the weekly store refresh and (when needed) a live recompute:
+
+```mermaid
+flowchart TD
+    JS[("job_series_view")]
+    JS --> CC["classify_cycle<br/><i>(per user × cluster × cycle)</i>"]
+
+    CC --> REFRESH["UsageRefreshStoreCommand<br/><i>sarc usage refresh-store</i><br/>(last history_cycles, weekly)"]
+    REFRESH --> STORE[("UserPeriods table")]
+
+    STORE --> FAST["get_recurring_underusers<br/>(ignore_store=False, default)"]
+    CC -->|"ignore_store=True<br/>(debug overrides)"| LIVE["get_recurring_underusers<br/>(live recompute)"]
+    STORE --> POWERBI["PowerBI<br/>(reads UserPeriods directly)"]
+
+    FAST --> DIGEST["build_admin_digest"]
+    LIVE --> DIGEST
+```
+
+Confirmed weekly flow: (1) an external scheduler runs `sarc usage
+refresh-store`, (2) it then runs `sarc notify usage --send` (reads the
+just-refreshed store by default), (3) PowerBI reads `UserPeriods`
+independently, on its own schedule.
+
+**`ignore_store` dual path.** `get_recurring_underusers(..., ignore_store=False)`
+(the default) reads `UserPeriods` — fast, and what PowerBI itself reads.
+`ignore_store=True` recomputes everything live against `job_series` via
+`classify_cycle`, the original (slower) path. `UsageNotifyCommand` forces
+`ignore_store=True` automatically whenever a debug threshold override
+(`--min-waste-ratio`, `--user-email`, etc.) is active, since the store was
+populated with the *configured* defaults and can't reflect an ad hoc override.
+
+**Stale-store limitation.** The store holds the last `history_cycles` cycles
+(config knob on `UsageNotifyConfig`, default 12) as of its most recent
+refresh. If `refresh-store` hasn't run recently — or a cycle simply
+predates the store's history window — that cycle reads as **"no underusers,"
+not an error**: `get_recurring_underusers` can't tell "nobody was flagged"
+apart from "no data was ever stored for this cycle." A stale store therefore
+silently under-reports rather than failing loudly; `--ignore-store` (or a
+fresh `refresh-store` run) is the way to check whether a suspiciously-empty
+result is real.
 
 ## Cadence and send gating
 

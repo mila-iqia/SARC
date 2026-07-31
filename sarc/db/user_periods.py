@@ -5,14 +5,17 @@ from sarc.validators import datetime_utc
 
 
 class UserPeriods(SQLModel, table=True):
-    __table_args__ = (UniqueConstraint("user_id", "cluster_id"),)
-    id: int | None = Field(primary_key=True, nullable=False)
-    user_id: int = Field(foreign_key="users.id")
-    cluster_id: int = Field(foreign_key="cluster.id")
+    __tablename__ = "user_periods"
+    __table_args__ = (UniqueConstraint("user_id", "cluster_id", "end_date"),)
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.id", index=True)
+    cluster_id: int = Field(foreign_key="clusters.id", index=True)
     start_date: datetime_utc = datetime_utc_field()
-    end_date: datetime_utc = datetime_utc_field()
+    end_date: datetime_utc = datetime_utc_field(index=True)
     sm_occ_mean: float
-    unused_rguh: int
+    rgu_hours: float
+    unused_rguh: float
     isunderuser: bool
     flagged: bool
     elevated: bool

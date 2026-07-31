@@ -13,6 +13,7 @@ from .fetch import Fetch
 from .health import Health
 from .notify import Notify
 from .parse import Parse
+from .usage import Usage
 
 colors = SimpleNamespace(
     grey="\033[38;21m",
@@ -50,13 +51,16 @@ class NiceHandler(logging.StreamHandler):
 
 @dataclass
 class CLI:
-    command: Health | Fetch | Parse | Encrypt | Notify = subparsers(
+    # TODO: migrate `notify usage` to `usage notify` once the usage group is
+    # established.
+    command: Health | Fetch | Parse | Encrypt | Notify | Usage = subparsers(
         {
             "health": Health,
             "fetch": Fetch,
             "parse": Parse,
             "encrypt": Encrypt,
             "notify": Notify,
+            "usage": Usage,
         }
     )
 

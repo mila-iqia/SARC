@@ -180,6 +180,7 @@ def test_selection_threshold(recurring_db):
             min_waste_ratio=_MIN_WASTE_RATIO,
             min_waste_rgu_hours=_MIN_WASTE_RGU_HOURS,
             cluster_share_threshold=0.70,
+            ignore_store=True,
         )
     mila_rows = result.get("mila", [])
     selected_emails = {r.email for r in mila_rows}
@@ -208,6 +209,7 @@ def test_all_users_included_when_threshold_is_one(recurring_db):
             min_waste_rgu_hours=_MIN_WASTE_RGU_HOURS,
             cluster_share_threshold=1.0,
             personalized_action_min_waste_rgu_hours=ncfg.personalized_action_min_waste_rgu_hours,
+            ignore_store=True,
         )
         # Trigger cache on restrictive_action_flags
         for rows in result.values():
@@ -275,6 +277,7 @@ def test_display_cycles_columns(recurring_db):
             min_waste_rgu_hours=_MIN_WASTE_RGU_HOURS,
             cluster_share_threshold=1.0,
             recurrence_display_cycles=4,
+            ignore_store=True,
         )
     # Test cycles 4 produces 4 columns
     for rows in result.values():
@@ -288,6 +291,7 @@ def test_display_cycles_columns(recurring_db):
             min_waste_rgu_hours=_MIN_WASTE_RGU_HOURS,
             cluster_share_threshold=1.0,
             recurrence_display_cycles=6,
+            ignore_store=True,
         )
     # Test cycles 6 produces 6 columns
     for rows in result.values():
@@ -319,6 +323,7 @@ def test_active_cycles_personalized_action(recurring_db):
                 cluster_share_threshold=1.0,
                 recurrence_active_cycles=active_cycles,
                 personalized_action_min_waste_rgu_hours=300.0,
+                ignore_store=True,
             )
             row = next(r for r in result["mila"] if r.email == "firstuser@mila.quebec")
             assert row.flagged_for_personalized_action is expected, (
@@ -337,6 +342,7 @@ def test_empty_db_returns_empty_dict(read_write_db):
             min_waste_ratio=_MIN_WASTE_RATIO,
             min_waste_rgu_hours=_MIN_WASTE_RGU_HOURS,
             **_GRU_KW,
+            ignore_store=True,
         )
     assert result == {}
 
@@ -501,7 +507,7 @@ def test_table_deterministic():
 def test_dry_run_prints_recurring_table(recurring_db, cli_main, monkeypatch, capsys):
     monkeypatch.setattr("sarc.cli.notify.usage._now_utc", lambda: _TEST_END)
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
-        cli_main(["notify", "usage"])
+        cli_main(["notify", "usage", "--ignore-store"])
     out = capsys.readouterr().out
     assert "Recurring underusers" in out
 
@@ -514,7 +520,7 @@ def test_dry_run_display_cycles(
     monkeypatch.setattr("sarc.cli.notify.usage._now_utc", lambda: _TEST_END)
     cfg = {**_NOTIFY_CFG, "recurrence_display_cycles": display_cycles}
     with gifnoc.overlay({"sarc.notifications": cfg}):
-        cli_main(["notify", "usage"])
+        cli_main(["notify", "usage", "--ignore-store"])
     out = capsys.readouterr().out
     assert "Recurring underusers" in out
 
@@ -708,6 +714,7 @@ def test_off_cycle_week_end_w0_is_none(recurring_db):
             min_waste_ratio=_MIN_WASTE_RATIO,
             min_waste_rgu_hours=_MIN_WASTE_RGU_HOURS,
             cluster_share_threshold=0.70,
+            ignore_store=True,
         )
     assert result, "expected selected users for the off-cycle-week window"
     for rows in result.values():
@@ -728,6 +735,7 @@ def test_off_cycle_week_end_personalized_action_floor_controls(recurring_db):
             min_waste_rgu_hours=_MIN_WASTE_RGU_HOURS,
             cluster_share_threshold=0.70,
             personalized_action_min_waste_rgu_hours=999999.0,
+            ignore_store=True,
         )
     for rows in result.values():
         for row in rows:
@@ -1013,6 +1021,7 @@ def test_wasted_6w_uses_scaled_waste(recurring_db):
             min_waste_rgu_hours=_MIN_WASTE_RGU_HOURS,
             cluster_share_threshold=1.0,
             utilization_ceiling=0.05,
+            ignore_store=True,
         )
     emails = {r.email for rows in result.values() for r in rows}
     assert "firstuser@mila.quebec" not in emails
@@ -1026,6 +1035,7 @@ def test_true_wasted_field_populated(recurring_db):
             min_waste_ratio=_MIN_WASTE_RATIO,
             min_waste_rgu_hours=_MIN_WASTE_RGU_HOURS,
             cluster_share_threshold=1.0,
+            ignore_store=True,
         )
     row = next(r for r in result["mila"] if r.email == "firstuser@mila.quebec")
     assert row.true_wasted > 0.0
@@ -1044,6 +1054,7 @@ def test_personalized_action_floor(recurring_db):
             min_waste_rgu_hours=_MIN_WASTE_RGU_HOURS,
             cluster_share_threshold=1.0,
             personalized_action_min_waste_rgu_hours=0.0,
+            ignore_store=True,
         )
     flagged = {
         r.email: r.flagged_for_personalized_action
@@ -1065,6 +1076,7 @@ def test_personalized_action_floor(recurring_db):
             min_waste_rgu_hours=_MIN_WASTE_RGU_HOURS,
             cluster_share_threshold=1.0,
             personalized_action_min_waste_rgu_hours=999999.0,
+            ignore_store=True,
         )
     for rows in result.values():
         for row in rows:
@@ -1145,6 +1157,7 @@ def test_pa_flags_four_scenarios(pa_scenario_db):
             recurrence_display_cycles=5,
             clusters=["mila"],
             personalized_action_min_waste_rgu_hours=30.0,
+            ignore_store=True,
         )
     rows = {r.email: r for r in result.get("mila", [])}
 

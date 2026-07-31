@@ -138,6 +138,14 @@ class UsageNotifyCommand:
         "(personalized_action_min_waste_rgu_hours is never auto-zeroed). Skips "
         "the admin-digest/summary channel posts in --send mode.",
     )
+    ignore_store: bool = simple_parsing.field(
+        action="store_true",
+        alias=["--ignore-store"],
+        help="Recompute the recurring-underusers table live against job_series "
+        "instead of reading the precomputed UserPeriods store. Automatically "
+        "forced on whenever a debug threshold override is active, since the "
+        "store was populated with the configured defaults.",
+    )
 
     def execute(self) -> int:
         if config.notifications is None:
@@ -145,7 +153,7 @@ class UsageNotifyCommand:
             # return -1. Checked here, before any overlay, because entering
             # gifnoc.overlay(...) with nothing to merge onto crashes instead of
             # degrading gracefully.
-            return self._exec()
+            return self._exec(ignore_store=self.ignore_store)
 
         # Debug-only threshold overrides, applied via a config overlay so every
         # ncfg.* read in _exec() (including inside get_recurring_underusers)
@@ -202,15 +210,21 @@ class UsageNotifyCommand:
                 self.personalized_action_min_waste_rgu_hours
             )
 
+        # A debug threshold override makes the store's precomputed values
+        # incorrect for this run (it was populated with the configured
+        # defaults) — force the live path whenever one is active, regardless
+        # of --ignore-store.
+        ignore_store = self.ignore_store or bool(config_overrides)
+
         if not config_overrides:
             # Nothing to override — skip the overlay entirely so a normal run
             # behaves exactly as it did before this feature existed.
-            return self._exec()
+            return self._exec(ignore_store=ignore_store)
 
         with gifnoc.overlay({"sarc.notifications": config_overrides}):
-            return self._exec()
+            return self._exec(ignore_store=ignore_store)
 
-    def _exec(self) -> int:
+    def _exec(self, *, ignore_store: bool) -> int:
         ncfg = config.notifications
         if ncfg is None:
             logger.error("No notifications configuration found in config")
@@ -348,6 +362,7 @@ class UsageNotifyCommand:
                 clusters=clusters,
                 utilization_ceiling=ncfg.utilization_ceiling,
                 personalized_action_min_waste_rgu_hours=ncfg.personalized_action_min_waste_rgu_hours,
+                ignore_store=ignore_store,
             )
 
             cycle_dates = get_cycle_dates(end, ncfg.recurrence_display_cycles)
