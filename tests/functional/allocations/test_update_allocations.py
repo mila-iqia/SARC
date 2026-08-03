@@ -30,6 +30,9 @@ def test_update_allocations(data_regression, empty_read_write_db: Session):
         select(AllocationDB)
         .join(SlurmClusterDB, SlurmClusterDB.id == AllocationDB.cluster_id)
         .where(SlurmClusterDB.name.in_(["fromage", "patate"]))
+        .order_by(
+            AllocationDB.start, AllocationDB.resource_name, AllocationDB.cluster_id
+        )
     ).all()
     assert len(data) == 11
     data_regression.check(
@@ -65,6 +68,9 @@ def test_update_allocations_no_duplicates(
         select(AllocationDB)
         .join(SlurmClusterDB, SlurmClusterDB.id == AllocationDB.cluster_id)
         .where(SlurmClusterDB.name.in_(["fromage", "patate"]))
+        .order_by(
+            AllocationDB.start, AllocationDB.resource_name, AllocationDB.cluster_id
+        )
     ).all()
     assert len(data) == 11
     data_regression.check(

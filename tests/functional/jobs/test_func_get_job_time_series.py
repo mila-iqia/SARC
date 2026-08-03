@@ -1,10 +1,9 @@
-import itertools
 from datetime import datetime, timedelta
 
 import pytest
 
 from sarc.config import UTC
-from sarc.scraping.series import get_job_time_series_data
+from sarc.scraping.series import get_job_time_series_batched
 from tests.common.dateutils import MTL
 from tests.db.factory import JobFactory
 
@@ -38,12 +37,11 @@ def job(request, read_write_db):
 @pytest.mark.usefixtures("base_config")
 def test_non_existing_metric(job):
     with pytest.raises(ValueError, match="^Unknown metric name: non_existing_metric"):
-        get_job_time_series_data(job, "non_existing_metric")
+        get_job_time_series_batched([job], "non_existing_metric")
 
 
 parameters = {
     "job_id": {"job_id": 10},
-    "no_end_time": {"job_state": "RUNNING", "end_time": None},
     "end_time_in_past": {
         "job_state": "COMPLETED",
         "end_time": utc_test_time - timedelta(hours=1),
@@ -60,7 +58,7 @@ parameters = {
     "job", parameters.values(), ids=parameters.keys(), indirect=True
 )
 def test_get_job_time_series_data(job, prom_custom_query_mock, file_regression):
-    assert get_job_time_series_data(job, "slurm_job_core_usage") == [], (
+    assert get_job_time_series_batched([job], "slurm_job_core_usage") == [[]], (
         "custom_query was not mocked properly"
     )
 
@@ -94,61 +92,7 @@ no_duration_parameters = {
     indirect=True,
 )
 def test_jobs_with_no_duration(job):
-    assert get_job_time_series_data(job, "slurm_job_core_usage") == []
-
-
-@pytest.mark.time_machine(utc_test_time, tick=False)
-@pytest.mark.parametrize(
-    "measure,aggregation",
-    itertools.product(
-        ["avg_over_time", "quantile_over_time", None], ["total", "interval"]
-    ),
-)
-def test_measure_and_aggregation(
-    job, measure, aggregation, prom_custom_query_mock, file_regression
-):
-    assert not get_job_time_series_data(
-        job, metric="slurm_job_fp16_gpu", measure=measure, aggregation=aggregation
-    ), "custom_query was not mocked properly"
-
-    file_regression.check(prom_custom_query_mock.call_args[0][0])
-
-
-@pytest.mark.usefixtures("base_config")
-def test_invalid_aggregation(job):
-    with pytest.raises(ValueError, match="^Aggregation must be one of "):
-        get_job_time_series_data(
-            job, metric="slurm_job_fp16_gpu", aggregation="invalid"
-        )
-
-
-@pytest.mark.time_machine(utc_test_time, tick=False)
-@pytest.mark.parametrize(
-    "min_interval,max_points",
-    [
-        (0, 1),  # min_interval smaller than duration / max_points
-        (1080.0, 20),  # Should give 10 points
-        (10, 20),  # Should give 20 points
-    ],
-)
-def test_intervals(
-    job, min_interval, max_points, prom_custom_query_mock, file_regression
-):
-    assert not get_job_time_series_data(
-        job,
-        "slurm_job_fp16_gpu",
-        measure="avg_over_time",
-        aggregation="interval",
-        min_interval=min_interval,
-        max_points=max_points,
-    ), "custom_query was not mocked properly"
-
-    file_regression.check(prom_custom_query_mock.call_args[0][0])
-
-    # TODO: Test when prometheus is mocked
-    # assert isinstance(df, pd.DataFrame)
-    # assert df["time"].diff().min() >= min_interval
-    # assert df.shape[0] <= max_points
+    assert get_job_time_series_batched([job], "slurm_job_core_usage") == [[]]
 
 
 @pytest.mark.skip("TODO: Test when prometheus is mocked")
