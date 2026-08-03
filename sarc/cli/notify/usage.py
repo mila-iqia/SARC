@@ -162,12 +162,15 @@ class UsageNotifyCommand:
             logger.warning(
                 "Restricting this run to a single user (%s); min_waste_ratio, "
                 "min_waste_rgu_hours, and usage_report_min_usage_rgu_hours are "
-                "auto-zeroed for this run unless explicitly overridden",
+                "auto-zeroed for this run unless explicitly overridden, and "
+                "send_underusage_report/send_usage_report are set to True",
                 self.user_email,
             )
             config_overrides["min_waste_ratio"] = 0.0
             config_overrides["min_waste_rgu_hours"] = 0.0
             config_overrides["usage_report_min_usage_rgu_hours"] = 0.0
+            config_overrides["send_underusage_report"] = True
+            config_overrides["send_usage_report"] = True
 
         if self.min_waste_ratio is not None:
             logger.warning(
@@ -290,38 +293,6 @@ class UsageNotifyCommand:
             user_emails=user_emails,
         )
 
-        # --user-email restricts this run to a single test user: skip computing
-        # the fleet-wide recurring-underusers/admin-digest data (and therefore
-        # also the preview print and the later channel post) entirely — only the
-        # per-user DM(s) above should go out.
-        if self.user_email is None:
-            recurring = get_recurring_underusers(
-                end,
-                min_waste_ratio=ncfg.min_waste_ratio,
-                min_waste_rgu_hours=ncfg.min_waste_rgu_hours,
-                cluster_share_threshold=ncfg.recurrence_cluster_share,
-                recurrence_display_cycles=ncfg.recurrence_display_cycles,
-                recurrence_active_cycles=ncfg.recurrence_active_cycles,
-                clusters=clusters,
-                utilization_ceiling=ncfg.utilization_ceiling,
-                personalized_action_min_waste_rgu_hours=ncfg.personalized_action_min_waste_rgu_hours,
-            )
-
-            cycle_dates = get_cycle_dates(end, ncfg.recurrence_display_cycles)
-            digest = build_admin_digest(
-                underusage_rows,
-                period=period,
-                cluster_share_threshold=ncfg.recurrence_cluster_share,
-                active_cycles=ncfg.recurrence_active_cycles,
-                top_n=ncfg.digest_top_n,
-                recurring=recurring,
-                cycle_dates=cycle_dates,
-            )
-            _userfacing_print("=== Admin Digest ===")
-            _userfacing_print(digest)
-        else:
-            digest = None
-
         if underusage_rows and underusage_report_eligible:
             _userfacing_print()
             _userfacing_print("=== Under Usage Report Previews ===")
@@ -362,6 +333,38 @@ class UsageNotifyCommand:
                     )
                     _userfacing_print(report_text)
 
+        # --user-email restricts this run to a single test user: skip computing
+        # the fleet-wide recurring-underusers/admin-digest data (and therefore
+        # also the preview print and the later channel post) entirely — only the
+        # per-user DM(s) above should go out.
+        if self.user_email is None:
+            recurring = get_recurring_underusers(
+                end,
+                min_waste_ratio=ncfg.min_waste_ratio,
+                min_waste_rgu_hours=ncfg.min_waste_rgu_hours,
+                cluster_share_threshold=ncfg.recurrence_cluster_share,
+                recurrence_display_cycles=ncfg.recurrence_display_cycles,
+                recurrence_active_cycles=ncfg.recurrence_active_cycles,
+                clusters=clusters,
+                utilization_ceiling=ncfg.utilization_ceiling,
+                personalized_action_min_waste_rgu_hours=ncfg.personalized_action_min_waste_rgu_hours,
+            )
+
+            cycle_dates = get_cycle_dates(end, ncfg.recurrence_display_cycles)
+            digest = build_admin_digest(
+                underusage_rows,
+                period=period,
+                cluster_share_threshold=ncfg.recurrence_cluster_share,
+                active_cycles=ncfg.recurrence_active_cycles,
+                top_n=ncfg.digest_top_n,
+                recurring=recurring,
+                cycle_dates=cycle_dates,
+            )
+            _userfacing_print("=== Admin Digest ===")
+            _userfacing_print(digest)
+        else:
+            digest = None
+
         if not self.send:
             return 0
 
@@ -370,6 +373,7 @@ class UsageNotifyCommand:
         slack_usage_client = SlackClient(ncfg.slack_usage.token)
 
         underusage_report_delivery_results: list[_DeliveryResult] = []
+        usage_report_delivery_results: list[_DeliveryResult] = []
 
         if underusage_report_will_send:
             underusage_report_delivery_results = _deliver(
@@ -386,7 +390,6 @@ class UsageNotifyCommand:
                     _DeliveryResult(row.email, row.display_name, "skipped", reason)
                 )
 
-        usage_report_delivery_results: list[_DeliveryResult] = []
         if usage_report_will_send:
             usage_report_delivery_results = _deliver(
                 usage_rows,
@@ -407,6 +410,7 @@ class UsageNotifyCommand:
 
         underusage_report_footer = None
         usage_report_footer = None
+
         if underusage_report_eligible:
             underusage_report_footer = _build_delivery_footer(
                 underusage_report_delivery_results,
@@ -414,6 +418,7 @@ class UsageNotifyCommand:
                 count_label="flagged",
                 count=len(underusage_rows),
             )
+
         if usage_report_eligible:
             usage_report_footer = _build_delivery_footer(
                 usage_report_delivery_results,

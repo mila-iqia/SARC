@@ -8,7 +8,7 @@ from sqlmodel import select
 
 from sarc.db.cluster import SlurmClusterDB
 from sarc.db.users import UserDB
-from sarc.notifications.messages import build_recurring_table
+from sarc.notifications.messages import _fmt_rgu_int, build_recurring_table
 from sarc.notifications.usage import (
     RecurringUserRow,
     _week_anchor,
@@ -403,9 +403,10 @@ def test_table_contains_email():
 
 
 def test_table_wasted_formatted_with_space_thousands():
-    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
+    with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}) as config:
+        rgu_unit = config.sarc.notifications.rgu_unit
         text = build_recurring_table({"narval": [_ROW_ALICE]}, **_BRT_KW)
-    assert "4 200" in text
+    assert _fmt_rgu_int(4200, rgu_unit.factor) in text
 
 
 def test_table_share_percentage():

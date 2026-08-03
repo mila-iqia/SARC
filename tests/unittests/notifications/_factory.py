@@ -18,7 +18,8 @@ _REPO_ROOT = Path(__file__).parent.parent.parent.parent
 
 
 UNDERUSAGE_REPORT_TEMPLATE = """{name}
-{window_weeks} {window_range} {rgu_hours_allocated} RGU-hours {avg_utilization} leaving {rgu_hours_wasted} RGU-hours unused
+{window_weeks} {window_range} {rgu_allocated} {rgu_unit} {avg_utilization}
+leaving {rgu_wasted} {rgu_unit} unused (or about {user_wasted} {user_unit})
 top_jobs_count:{top_jobs_count}
 ```
 {jobs_section}
@@ -28,7 +29,8 @@ Track your usage over time: {dashboard_url}
 
 
 USAGE_REPORT_TEMPLATE = """{name}
-{window_weeks} {window_range} {rgu_hours_allocated} RGU-hours {avg_utilization}
+{window_weeks} {window_range} {rgu_allocated} {rgu_unit} (or about
+{user_allocated} {user_unit}) {avg_utilization}
 top_jobs_count:{top_jobs_count}
 ```
 {jobs_section}
