@@ -150,16 +150,17 @@ def test_get_gpu_type(
     # -------------------------
     # Prometheus data is prior to node->gpu and sacct data
 
-    def mock_get_job_time_series(job, metric, **kwargs):
+    def mock_get_job_time_series(jobs, metric, **kwargs):
         mock_get_job_time_series.called += 1
-        assert job.job_id == 1
+        assert len(jobs) == 1
+        assert jobs[0].job_id == 1
         return [
-            {"metric": {"__name__": "slurm_job_gpu_name", "gpu_type": "phantom_gpu"}}
+            [{"metric": {"__name__": "slurm_job_gpu_name", "gpu_type": "phantom_gpu"}}]
         ]
 
     mock_get_job_time_series.called = 0
     monkeypatch.setattr(
-        "sarc.scraping.series.get_job_time_series_data", mock_get_job_time_series
+        "sarc.scraping.series.get_job_time_series_batched", mock_get_job_time_series
     )
 
     assert cli_main(["fetch", "prometheus", "--cluster_name", "raisin"]) == 0
@@ -275,11 +276,14 @@ def test_tracer_with_multiple_clusters_and_dates_and_prometheus(
     # Import here so that config is setup correctly when CLI is created.
     import sarc.cli  # noqa: F401
 
-    def mock_get_job_time_series(job, metric, **kwargs):
-        return [{"metric": {"gpu_type": f"phantom_gpu_{job.cluster_id}_{job.job_id}"}}]
+    def mock_get_job_time_series(jobs, metric, **kwargs):
+        return [
+            [{"metric": {"gpu_type": f"phantom_gpu_{job.cluster_id}_{job.job_id}"}}]
+            for job in jobs
+        ]
 
     monkeypatch.setattr(
-        "sarc.scraping.series.get_job_time_series_data", mock_get_job_time_series
+        "sarc.scraping.series.get_job_time_series_batched", mock_get_job_time_series
     )
 
     assert (
@@ -454,13 +458,16 @@ def test_fetch_prometheus_records_fetch_date(
     jobs = list(get_jobs())
     assert len(jobs) == 1
 
-    def mock_get_job_time_series(job, metric, **kwargs):
+    def mock_get_job_time_series(jobs, metric, **kwargs):
         mock_get_job_time_series.called += 1
-        return [{"metric": {"__name__": "slurm_job_gpu_name", "gpu_type": "test_gpu"}}]
+        assert len(jobs) == 1
+        return [
+            [{"metric": {"__name__": "slurm_job_gpu_name", "gpu_type": "test_gpu"}}]
+        ]
 
     mock_get_job_time_series.called = 0
     monkeypatch.setattr(
-        "sarc.scraping.series.get_job_time_series_data", mock_get_job_time_series
+        "sarc.scraping.series.get_job_time_series_batched", mock_get_job_time_series
     )
 
     assert cli_main(["fetch", "prometheus", "--cluster_name", "raisin"]) == 0
@@ -517,13 +524,13 @@ def test_fetch_prometheus_skip_failed(
 
     call_count = 0
 
-    def mock_empty_time_series(job, metric, **kwargs):
+    def mock_empty_time_series(jobs, metric, **kwargs):
         nonlocal call_count
         call_count += 1
-        return []  # simulate a failed prometheus fetch (no data)
+        return [[]] * len(jobs)  # simulate a failed prometheus fetch (no data)
 
     monkeypatch.setattr(
-        "sarc.scraping.series.get_job_time_series_data", mock_empty_time_series
+        "sarc.scraping.series.get_job_time_series_batched", mock_empty_time_series
     )
 
     # First fetch: job selected, prometheus returns nothing — fetch record created
