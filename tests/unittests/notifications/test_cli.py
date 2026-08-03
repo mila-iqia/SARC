@@ -540,7 +540,9 @@ def test_usage_report_week_underuser_not_in_report_previews(
         )
     ]
     assert "petitbonhomme@mila.quebec" in dm_section
-    usage_section = out[out.find("=== Usage Report Previews") :]
+    usage_section = out[
+        out.find("=== Usage Report Previews") : out.find("=== Admin Digest ===")
+    ]
     assert "petitbonhomme@mila.quebec" not in usage_section
     assert "beaubonhomme@mila.quebec" in usage_section
     # Regression: the usage-report query excludes underusers at the DB level, so
