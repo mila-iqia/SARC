@@ -78,7 +78,7 @@ def get_job_time_series_batched(
         ]
 
     selector = prefix + "{" + ", ".join(label_exprs) + "}"
-    combined_query = f"({selector}[{global_duration}s:30s]{offset_string})"
+    combined_query = f"({selector}[{global_duration}s]{offset_string})"
 
     logger.debug(f"batched prometheus query: {combined_query}")
 
