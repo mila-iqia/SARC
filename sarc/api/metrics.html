@@ -211,7 +211,7 @@
     }
     .job-table th.no-sort { cursor: default; }
     .job-table th.no-sort:hover { background: #f0f0f0; }
-    .job-table th.th-admin-only { color: #bb0000; }
+    .job-table th.th-admin-only { color: #bb00bb; }
     /* Job-table pagination footer */
     .job-table-foot {
       flex-shrink: 0; display: flex; align-items: center; gap: 10px;
@@ -1864,6 +1864,7 @@
         ]),
         { key: 'gpu_sm_occupancy_mean', label: 'SM occ',    fmt: v => v != null ? (v < 0 ? 'NaN' : (v*100).toFixed(1)+'%') : '—' },
         { key: 'gpu_utilization_mean',  label: 'GPU util',  fmt: v => v != null ? (v < 0 ? 'NaN' : (v*100).toFixed(1)+'%') : '—' },
+        { key: 'gpu_memory_max',        label: 'Mem max',   fmt: v => v != null ? (v*100).toFixed(1)+'%' : '—', title: 'Max memory usage' },
         { key: 'gpu_type',              label: 'GPU type' },
         {% if is_admin %}
         { key: 'gpu_type_rgu',          label: 'GPU type RGU', adminOnly: true,
@@ -1875,9 +1876,6 @@
         {% endif %}
         { key: 'requested_gpu',         label: 'Requested GPU', fmt: fmtInt },
         { key: 'allocated_gpu',         label: 'Allocated GPU', fmt: fmtInt },
-        {% if is_admin %}
-        { key: 'gpu_memory_max',        label: 'Mem max',   fmt: v => v != null ? (v*100).toFixed(1)+'%' : '—', adminOnly: true, title: 'Max memory usage' },
-        {% endif %}
         { key: 'nodes',                 label: 'Nodes',     cls: 'col-cmd' },
       ];
       // Columns the server can sort on; the array-valued 'nodes' column can't.
