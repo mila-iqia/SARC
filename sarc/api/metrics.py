@@ -9,7 +9,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import literal_column, nulls_last
+from sqlalchemy import BigInteger, cast, literal_column, nulls_last, true
 from sqlalchemy.orm import aliased
 from sqlmodel import Session, and_, case, col, func, select
 
@@ -326,6 +326,104 @@ def _apply_rgu_base_view(
     )
 
 
+# --- Pro-rata time attribution ---
+# The RGU endpoints attribute a job's RGU to the time it actually RAN — pro
+# rata of the overlap between [start_time, virtual end) and the window (or each
+# bucket) — instead of putting rgu * full elapsed in the submit_time bucket.
+# The virtual end of a still-running job is start_time + elapsed_time as of the
+# last scrape (no extrapolation to now()), so a past bucket's total freezes as
+# soon as every overlapping job has been scraped past the bucket's end.
+
+_ONE_SECOND = literal_column("interval '1 second'")
+
+
+def _virtual_end():
+    """End of the job's run interval: end_time, or start_time + elapsed_time
+    (the run as measured at the last scrape) while the job is still running."""
+    return func.coalesce(
+        col(JobSeriesDB.end_time),
+        col(JobSeriesDB.start_time) + col(JobSeriesDB.elapsed_time) * _ONE_SECOND,
+    )
+
+
+def _run_overlap_filters(begin_dt: datetime, finish_dt: datetime):
+    """Filters keeping jobs whose run interval overlaps [begin, finish).
+
+    Strict inequalities: zero-length overlaps and zero-runtime jobs are
+    excluded (a job must have run inside the window to count, mirroring the
+    RGU metrics script).
+    """
+    vend = _virtual_end()
+    return (
+        col(JobSeriesDB.start_time).is_not(None),
+        col(JobSeriesDB.start_time) < finish_dt,
+        vend > begin_dt,
+        vend > col(JobSeriesDB.start_time),
+    )
+
+
+def _overlap_seconds(begin_dt: datetime, finish_dt: datetime):
+    """Seconds of the job's run interval spent inside [begin, finish)."""
+    return func.extract(
+        "epoch",
+        func.least(_virtual_end(), finish_dt)
+        - func.greatest(col(JobSeriesDB.start_time), begin_dt),
+    )
+
+
+def _prorata_bucket(period: timedelta | str, begin_dt: datetime, finish_dt: datetime):
+    """Bucketed variant of _overlap_seconds: spread each job over the buckets
+    its run interval overlaps.
+
+    Returns (bucket_expr, series, overlap_secs). ``series`` is a LATERAL
+    generate_series to attach with ``.join(series, true())`` — one output row
+    per (job, overlapped bucket); ``bucket_expr`` matches _sql_bucket_key();
+    ``overlap_secs`` is the seconds the job ran inside that bucket. A job
+    ending exactly on a bucket boundary yields a last row of 0 seconds,
+    harmless under SUM.
+    """
+    clip_start = func.greatest(col(JobSeriesDB.start_time), begin_dt)
+    clip_end = func.least(_virtual_end(), finish_dt)
+    if isinstance(period, timedelta):
+        step = period.total_seconds()
+        # All-epoch arithmetic relative to begin: the job's clipped run spans
+        # [js, je] seconds, bucket b spans [b*step, (b+1)*step].
+        js = func.extract("epoch", clip_start - begin_dt)
+        je = func.extract("epoch", clip_end - begin_dt)
+        series = (
+            func.generate_series(
+                cast(func.floor(js / step), BigInteger),
+                cast(func.floor(je / step), BigInteger),
+            )
+            # render_derived: PG names a set-function's column after the
+            # function; AS bucket_series(bucket) renames it.
+            .table_valued("bucket")
+            .render_derived()
+            .lateral("bucket_series")
+        )
+        b = series.c.bucket
+        secs = func.least(je, (b + 1) * step) - func.greatest(js, b * step)
+    else:
+        # Calendar buckets: truncate and step in the naive UTC wall-clock —
+        # date_trunc on a timestamptz floors in the session's TimeZone, not
+        # pinned to UTC in prod (see _bucket_expr). The series values are then
+        # directly the bucket keys _sql_bucket_key expects.
+        cs = func.timezone("UTC", clip_start)
+        ce = func.timezone("UTC", clip_end)
+        step_iv = literal_column(f"interval '1 {period}'")
+        series = (
+            func.generate_series(func.date_trunc(period, cs), ce, step_iv)
+            # render_derived: PG names a set-function's column after the
+            # function; AS bucket_series(bucket) renames it.
+            .table_valued("bucket")
+            .render_derived()
+            .lateral("bucket_series")
+        )
+        b = series.c.bucket
+        secs = func.extract("epoch", func.least(ce, b + step_iv) - func.greatest(cs, b))
+    return b.label("bucket"), series, secs
+
+
 _TEMPLATES = Jinja2Templates(directory=Path(__file__).parent)
 
 
@@ -638,23 +736,24 @@ def metrics_metric_distribution(
 ):
     """Duration-weighted distribution of a normalized GPU metric.
 
-    ``metric`` is a [0, 1] GPU/system stat (e.g. gpu_sm_occupancy). Over GPU jobs
-    in the window, bins each job's mean value into 50 bins weighted by
-    rgu * elapsed (so long/big jobs count more). Returns {primary: {values,
-    weights}}. The paired (metric vs metric2) heatmap is a separate endpoint,
-    /metrics/metric_comparison.
+    ``metric`` is a [0, 1] GPU/system stat (e.g. gpu_sm_occupancy). Over GPU
+    jobs that ran in the window, bins each job's mean value into 50 bins
+    weighted by rgu * seconds run inside the window (so long/big jobs count
+    more, and the weights total the same RGU as /rgu_usage over the window).
+    Returns {primary: {values, weights}}. The paired (metric vs metric2)
+    heatmap is a separate endpoint, /metrics/metric_comparison.
     """
     if metric not in _METRICS_0_1:
         raise HTTPException(status_code=400, detail=f"Unknown metric: {metric!r}")
 
     begin_dt, finish_dt = _apply_focus(*_date_range(start, end), focus_start, focus_end)
 
-    # View-anchored: weight = allocated_gpu_cost (precomputed rgu * elapsed). Read
-    # the metric mean via a targeted jobstatisticdb join (metric is parametrized),
-    # not the view's frozen stat columns/json.
+    # View-anchored: weight = rgu * overlap seconds (RGU-seconds run inside the
+    # window). Read the metric mean via a targeted jobstatisticdb join (metric
+    # is parametrized), not the view's frozen stat columns/json.
     js1 = aliased(JobStatisticDB)
     m1 = col(js1.mean)
-    weight = col(JobSeriesDB.allocated_gpu_cost)
+    weight = col(JobSeriesDB.allocated_rgu_drac) * _overlap_seconds(begin_dt, finish_dt)
     bin_width = 1.0 / _DENSITY_BINS
 
     # _apply_rgu_base_view anchors the FROM on the view, keeps only calculable-RGU
@@ -676,11 +775,7 @@ def metrics_metric_distribution(
             ),
             isouter=True,
         )
-        .where(
-            col(JobSeriesDB.submit_time) >= begin_dt,
-            col(JobSeriesDB.submit_time) < finish_dt,
-            _valid_metric_filter(m1),
-        )
+        .where(*_run_overlap_filters(begin_dt, finish_dt), _valid_metric_filter(m1))
         .group_by("bin")
         .order_by("bin")
     )
@@ -788,23 +883,24 @@ def metrics_rgu_usage(
 ):
     """Allocated vs effectively-used RGU.h per time bucket.
 
-    Over GPU jobs submitted in each ``period`` bucket: ``rgu_allocated`` =
-    SUM(rgu * elapsed / 3600); ``rgu_used`` = the same scaled by each job's mean
-    ``metric`` (e.g. gpu_sm_occupancy); ``rgu_wasted`` = the per-job shortfall
-    below ``min_usage`` (SUM of rgu_hours * (min_usage - mean) over measured
-    jobs with mean < min_usage). Returns one row per bucket.
+    Over GPU jobs that RAN in each ``period`` bucket (pro-rata attribution, see
+    _prorata_bucket): ``rgu_allocated`` = SUM(rgu * seconds run inside the
+    bucket / 3600); ``rgu_used`` = the same scaled by each job's mean ``metric``
+    (e.g. gpu_sm_occupancy); ``rgu_wasted`` = the per-job shortfall below
+    ``min_usage`` (SUM of rgu_hours * (min_usage - mean) over measured jobs
+    with mean < min_usage). Returns one row per bucket.
     """
     begin_dt, finish_dt = _date_range(start, end)
     parsed = _parse_period(period)
     fmt = _label_fmt(parsed)
 
-    # Per bucket: allocated = SUM(allocated_gpu_cost)/3600 (the view's precomputed
-    # RGU-seconds -> RGU-hours); used = the same scaled by the metric mean (NaN
-    # nulled to 0). The metric is parametrized over 7 values but the view's *_waste
+    # Per bucket: allocated = SUM(rgu * overlap seconds)/3600 -> RGU-hours run
+    # inside the bucket; used = the same scaled by the metric mean (NaN nulled
+    # to 0). The metric is parametrized over 7 values but the view's *_waste
     # columns are frozen to gpu_sm_occupancy/cpu_utilization, so we read the mean
     # via our own targeted jobstatisticdb join (never the view's json statistics).
-    bucket_expr = _bucket_expr(parsed, col(JobSeriesDB.submit_time), begin_dt)
-    rgu_hours = col(JobSeriesDB.allocated_gpu_cost) / 3600.0
+    bucket_expr, series, overlap_secs = _prorata_bucket(parsed, begin_dt, finish_dt)
+    rgu_hours = col(JobSeriesDB.allocated_rgu_drac) * overlap_secs / 3600.0
     m_mean = col(JobStatisticDB.mean)
     # Split used vs unmeasured on whether the metric is a real value (not
     # NULL/NaN); a missing measurement is kept apart from "unused" rather than
@@ -836,7 +932,8 @@ def metrics_rgu_usage(
         scope_user_id=_scope_or_view_as(sess, req, as_user),
     )
     query = (
-        query.join(
+        query.join(series, true())
+        .join(
             JobStatisticDB,
             and_(
                 col(JobStatisticDB.job_id) == col(JobSeriesDB.job_db_id),
@@ -844,10 +941,7 @@ def metrics_rgu_usage(
             ),
             isouter=True,
         )
-        .where(
-            col(JobSeriesDB.submit_time) >= begin_dt,
-            col(JobSeriesDB.submit_time) < finish_dt,
-        )
+        .where(*_run_overlap_filters(begin_dt, finish_dt))
         .group_by("bucket")
         .order_by("bucket")
     )
@@ -893,22 +987,21 @@ def metrics_rgu_by_cluster(
 ):
     """Total RGU.h per period, stacked by cluster.
 
-    Aggregates the same RGU metric as /rgu_usage (SUM(rgu * elapsed / 3600))
-    and groups by cluster_name. When ``clusters`` is given, only those clusters
-    are kept (empty = all clusters). Returns one series per cluster, aligned on
-    a shared period axis; clusters with no RGU at all (e.g. no billing) are
-    dropped.
+    Aggregates the same RGU metric as /rgu_usage (pro-rata: SUM(rgu * seconds
+    run inside the bucket / 3600)) and groups by cluster_name. When
+    ``clusters`` is given, only those clusters are kept (empty = all clusters).
+    Returns one series per cluster, aligned on a shared period axis; clusters
+    with no RGU at all (e.g. no billing) are dropped.
     """
     begin_dt, finish_dt = _date_range(start, end)
     parsed = _parse_period(period)
     fmt = _label_fmt(parsed)
 
-    # The view carries cluster_name and allocated_gpu_cost -- its precomputed
-    # RGU-seconds (elapsed_time * allocated_gres_gpu * drac_rgu) -- so no
-    # clusters/gpurgudb join is needed. /3600 -> RGU-hours (equals
-    # allocated_rgu_drac * elapsed / 3600 in the sum, and a touch cheaper).
-    bucket_expr = _bucket_expr(parsed, col(JobSeriesDB.submit_time), begin_dt)
-    rgu_hours = col(JobSeriesDB.allocated_gpu_cost) / 3600.0
+    # The view carries cluster_name and allocated_rgu_drac (allocated_gres_gpu
+    # * drac_rgu), so no clusters/gpurgudb join is needed. rgu * overlap
+    # seconds / 3600 -> RGU-hours run inside the bucket.
+    bucket_expr, series, overlap_secs = _prorata_bucket(parsed, begin_dt, finish_dt)
+    rgu_hours = col(JobSeriesDB.allocated_rgu_drac) * overlap_secs / 3600.0
     query = _apply_rgu_base_view(
         select(
             bucket_expr,
@@ -922,10 +1015,8 @@ def metrics_rgu_by_cluster(
         scope_user_id=_scope_or_view_as(sess, req, as_user),
     )
     query = (
-        query.where(
-            col(JobSeriesDB.submit_time) >= begin_dt,
-            col(JobSeriesDB.submit_time) < finish_dt,
-        )
+        query.join(series, true())
+        .where(*_run_overlap_filters(begin_dt, finish_dt))
         .group_by("bucket", "cluster_name")
         .order_by("bucket")
     )
@@ -1069,15 +1160,22 @@ def metrics_rgu_by_user(
 ):
     """Requested vs used RGU.h aggregated per user (not over time).
 
-    Same RGU.h measure as /rgu_usage, summed per cluster_user over GPU jobs in the
-    window (requested = SUM(rgu * elapsed / 3600); used = scaled by the mean
-    ``metric``). Returns a list sorted by descending requested RGU.h.
+    Same RGU.h measure as /rgu_usage, summed per cluster_user over GPU jobs
+    that ran in the window (requested = SUM(rgu * seconds run inside the
+    window / 3600); used = scaled by the mean ``metric``). Returns a list
+    sorted by descending requested RGU.h.
     """
     begin_dt, finish_dt = _apply_focus(*_date_range(start, end), focus_start, focus_end)
 
-    # Aggregate by user: SUM(allocated_gpu_cost)/3600 = RGU.h per user. Metric mean
-    # via a targeted jobstatisticdb join (parametrized) — see rgu_usage.
-    rgu_hours = col(JobSeriesDB.allocated_gpu_cost) / 3600.0
+    # Aggregate by user: SUM(rgu * overlap seconds)/3600 = RGU.h run inside the
+    # window, per user — the window-clipped (no buckets) variant of the
+    # /rgu_usage measure, so both total the same over the same window. Metric
+    # mean via a targeted jobstatisticdb join (parametrized) — see rgu_usage.
+    rgu_hours = (
+        col(JobSeriesDB.allocated_rgu_drac)
+        * _overlap_seconds(begin_dt, finish_dt)
+        / 3600.0
+    )
     m_mean = col(JobStatisticDB.mean)
     # Split used vs unmeasured on whether the metric is a real value (not
     # NULL/NaN); a missing measurement is kept apart from "unused".
@@ -1109,10 +1207,7 @@ def metrics_rgu_by_user(
             ),
             isouter=True,
         )
-        .where(
-            col(JobSeriesDB.submit_time) >= begin_dt,
-            col(JobSeriesDB.submit_time) < finish_dt,
-        )
+        .where(*_run_overlap_filters(begin_dt, finish_dt))
         .group_by("user")
         .order_by(rgu_requested_sum.desc(), user_expr)
     )
@@ -1149,9 +1244,11 @@ def metrics_jobs(
 ):
     """Paginated, sortable table of individual jobs.
 
-    Lists GPU jobs submitted in the window (cluster/user/state filtered), one row
+    Lists GPU jobs that RAN in the window (cluster/user/state filtered), one row
     per job: cluster, user, state, elapsed, GPU counts, billing, gpu_type, rgu,
-    rgu_hours, per-job metric means and ``waste`` (rgu_hours * (1 - mean)). Sorted
+    rgu_hours (rgu * seconds run inside the window / 3600 — window-clipped, so
+    the table totals reconcile with the RGU charts), per-job metric means and
+    ``waste`` (rgu_hours * (1 - mean)). Sorted
     by ``sort_by``/``sort_dir`` and paginated by ``limit``/``offset``. Returns
     {total, jobs}. ``total`` is the full filtered count, computed by a SEPARATE
     query (kept out of the page query so the page parallelises — see below) and
@@ -1167,7 +1264,11 @@ def metrics_jobs(
     # page of rows. Without this split, the 3 stat joins + count(*) would run over
     # the whole window (millions of rows) just to return 50. See the perf note in
     # docs / the /metrics/jobs investigation.
-    rgu_hours_raw = col(JobSeriesDB.allocated_gpu_cost) / 3600.0
+    rgu_hours_raw = (
+        col(JobSeriesDB.allocated_rgu_drac)
+        * _overlap_seconds(begin_dt, finish_dt)
+        / 3600.0
+    )
 
     # One aliased jobstatisticdb row per distinct stat name, LEFT-joined on the
     # job id (never JobSeriesDB.statistics, a per-row json_object_agg — see
@@ -1239,10 +1340,7 @@ def metrics_jobs(
     order_by = (ordered, col(JobSeriesDB.job_db_id))
 
     # Window only; the gpu_type/RGU validity filter now lives in _apply_rgu_base_view.
-    base_filters = (
-        col(JobSeriesDB.submit_time) >= begin_dt,
-        col(JobSeriesDB.submit_time) < finish_dt,
-    )
+    base_filters = _run_overlap_filters(begin_dt, finish_dt)
 
     scope_user_id = _scope_or_view_as(sess, req, as_user)
 
@@ -1321,9 +1419,6 @@ def metrics_jobs(
     jobs = []
     for row in sess.exec(query):
         mm = _nan_to_none(row.metric_mean)
-        # rgu_hours (allocated_gpu_cost / 3600) may be NULL
-        # even though allocated_rgu_drac is not
-        # — the two are computed differently in the view.
         rh = _nan_to_none(row.rgu_hours)
         waste = round(rh * (1 - mm), 2) if (rh is not None and mm is not None) else None
         jobs.append(

@@ -325,12 +325,12 @@
     <div class="ctrl">
       <label for="start">Start</label>
       <input type="date" id="start"
-             title="Start of the date range (inclusive), in UTC. Every plot and the job table cover jobs in this range. Takes effect on Update." />
+             title="Start of the date range (inclusive), in UTC. Job counts cover jobs submitted in this range; RGU plots and the job table cover the time jobs ran in this range. Takes effect on Update." />
     </div>
     <div class="ctrl">
       <label for="end">End</label>
       <input type="date" id="end"
-             title="End of the date range (exclusive: covers jobs submitted before this date), in UTC. Every plot and the job table cover jobs in this range. Takes effect on Update." />
+             title="End of the date range (exclusive), in UTC. Job counts cover jobs submitted in this range; RGU plots and the job table cover the time jobs ran in this range. Takes effect on Update." />
     </div>
     <div class="ctrl">
       <label>Period</label>
@@ -978,6 +978,8 @@
           `<p><strong>Wasted</strong> (red): unused compute missing for each job to reach the expected minimum of ` +
           `${MIN_USAGE_EXPECTED_PERCENT} % ${metricPretty}.</p>` +
           `<p><strong>Unused</strong> (light blue): idle capacity above the minimum.</p>` +
+          `<p>RGU is attributed to the periods a job actually ran (pro rata), ` +
+          `not to its submission period.</p>` +
           `<p><a href="${USER_GUIDE_URL}" target="_blank" rel="noopener">Open the user guide ↗</a></p>`;
         panel.style.display = 'block';
         // Defer so an opening click isn't caught as an outside click.
@@ -1845,13 +1847,13 @@
             return h > 0 ? `${h}h${String(m).padStart(2,'0')}m` : `${m}m${String(sec).padStart(2,'0')}s`;
           }},
         { key: 'rgu_hours',             label: unit.label,
-          title: `RGU × elapsed time, shown in ${unit.label}`,
+          title: `RGU × time run inside the selected range, shown in ${unit.label}`,
           fmt: fmtRguTime },
         // Fixed RGU·h twin, skipped when the toolbar unit is already hours
         // (it would be an exact duplicate).
         ...(unit === unitHour ? [] : [
         { key: 'rgu_hours',             label: unitHour.label,
-          title: `RGU × elapsed time, shown in ${unitHour.label}`,
+          title: `RGU × time run inside the selected range, shown in ${unitHour.label}`,
           fmt: fmtRguHour },
         ]),
         { key: 'waste',                 label: `Unused (${unit.label})`,
