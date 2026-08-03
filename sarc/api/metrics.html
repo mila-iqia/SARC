@@ -9,7 +9,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Global Job Metrics ({{ user_email }})</title>
+  <title>Utilization Dashboard ({{ user_email }})</title>
   <script src="https://cdn.plot.ly/plotly-3.6.0.min.js"
           integrity="sha384-VJGrWzhaqeZH5V40n11N6iTMH+MBDakZZjfPZAPtqS/BCEnF102uwlswiJq07HmW"
           crossorigin="anonymous"></script>
@@ -117,11 +117,48 @@
     .add-row-label { font-size: 13px; color: #888; }
 
     /* Metric heatmap: per-tile secondary-metric picker sitting above the plot. */
-    .ms-box  { display: flex; flex-direction: column; width: 100%; height: 100%; }
+    .ms-box  { position: relative; display: flex; flex-direction: column; width: 100%; height: 100%; }
     .ms-ctrl { flex-shrink: 0; font-size: 12px; color: #888; padding: 2px 0 6px;
                display: flex; align-items: center; gap: 6px; }
     .ms-plot { width: 100%; flex: 1; min-height: 0; }
     .ms-metric2 { font-size: 12px; padding: 1px 6px; max-width: 160px; }
+    /* RGU-usage: the "View:" picker shares its row with the plot title (an HTML
+       title — the plot carries no Plotly title) to save one line of tile
+       height. Grid centres the title on the tile; the picker sits on the left.
+       Font stack/colour mirror Plotly's default titles next door. */
+    /* RGU-usage: the "View:" picker floats over the plot's top-left corner —
+       the empty left side of the title band (the modebar hovers top-RIGHT).
+       The plot then keeps the exact same Plotly layout as rgu_by_cluster, so
+       the two tiles align by construction, with no height arithmetic. */
+    .ms-float-ctrl {
+      position: absolute; top: 0; left: 0; z-index: 10;
+      font-size: 12px; color: #888; display: flex; align-items: center; gap: 6px;
+      padding: 2px 4px 4px 0;
+      background-color: white;
+    }
+    .ms-float-ctrl .add-select { padding: 1px 6px; font-size: 11px; }
+    /* "?" help badge in the RGU-usage tile header: standard circular help
+       button (quiet grey, blue on hover — same hover palette as .add-tile-btn);
+       clicking it opens a definition panel that expands rightward from the
+       title (left-anchored, so it stays inside the tile). The title span goes
+       inline-flex so the badge is vertically centred on the text (a plain
+       vertical-align sits a 17px badge too low beside 13px text). */
+    .tile-title-help { display: inline-flex; align-items: center; gap: 6px; }
+    .ms-help-btn {
+      width: 17px; height: 17px; border-radius: 50%; box-sizing: border-box;
+      border: 1.5px solid #999; background: none; color: #999;
+      font-size: 11px; font-weight: 700; line-height: 1; padding: 0;
+      cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+    }
+    .ms-help-btn:hover { border-color: #1a6fd4; color: #1a6fd4; background: #dde6f5; }
+    .ms-help-panel {
+      position: absolute; left: 0; z-index: 9999; background: #fff;
+      border: 1px solid #ccc; border-radius: 4px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      width: 300px; padding: 8px 12px; font-size: 12px; color: #333;
+      font-weight: 400; text-align: left;
+    }
+    .ms-help-panel p { margin: 4px 0; }
 
     {% if is_admin %}
     /* RGU-by-user: per-tile "top N" + sort controls above the (dynamic-height) plot. */
@@ -136,13 +173,15 @@
 
     /* Job table */
     .job-table-box { display: flex; flex-direction: column; width: 100%; height: 100%; }
-    .job-table-caption {
-      flex-shrink: 0; font-size: 12px; color: #888; padding: 2px 0 6px;
-      display: flex; align-items: center; gap: 8px;
+    /* Job-table header slot: the jobs-count label + column picker share the
+       tile-header line, left-aligned after the title (the tile controls keep
+       the right edge); flex:1 absorbs the label's variable width. */
+    .jt-head-slot {
+      flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px;
+      margin-left: 12px; font-size: 12px; font-weight: 400; color: #888;
     }
-    .job-table-caption .jt-cols { margin-left: auto; }     /* push the column picker to the right */
-    .job-table-caption .add-select { padding: 1px 6px; font-size: 11px; }
-    .jt-cols-panel { right: 0; }                            /* anchor the panel to the right edge */
+    .jt-head-slot .jt-caption-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .jt-head-slot .add-select { padding: 1px 6px; font-size: 11px; }
     .job-table-wrap { width: 100%; flex: 1; min-height: 0; overflow: auto; }
     .job-table { width: 100%; border-collapse: collapse; font-size: 13px; }
     .job-table th {
@@ -156,6 +195,12 @@
     .job-table th.sort-desc::after { content: ' ▼'; font-size: 10px; }
     .job-table td { padding: 4px 8px; border-bottom: 1px solid #eee; vertical-align: middle; }
     .job-table tr:hover td { background: #f4f6ff; }
+    /* Usage shading (thresholds: MIN_USAGE_EXPECTED_PERCENT / CRITICAL_USAGE_PERCENT):
+       light red below the expected minimum, stronger red below the critical bar. */
+    .job-table tr.jt-low td  { background: #ffefef; }
+    .job-table tr.jt-crit td { background: #ffcccc; }
+    .job-table tr.jt-low:hover td  { background: #ffe2e2; }
+    .job-table tr.jt-crit:hover td { background: #ffbdbd; }
     .job-table .col-cmd {
       max-width: 100px; overflow: hidden; text-overflow: ellipsis;
       white-space: nowrap; font-family: monospace; font-size: 11px; color: #555;
@@ -166,6 +211,7 @@
     }
     .job-table th.no-sort { cursor: default; }
     .job-table th.no-sort:hover { background: #f0f0f0; }
+    .job-table th.th-admin-only { color: #bb00bb; }
     /* Job-table pagination footer */
     .job-table-foot {
       flex-shrink: 0; display: flex; align-items: center; gap: 10px;
@@ -186,6 +232,9 @@
     .job-table-foot .jt-page-link {
       color: #1a6fd4; cursor: pointer; text-decoration: underline;
       text-underline-offset: 2px;
+      /* Right-aligned in a box reserved (via inline min-width, in ch) for the
+         largest page number, so 'Page X / N' never shifts as X gains digits. */
+      display: inline-block; text-align: right;
     }
     .job-table-foot .jt-page-link:hover { color: #155cb5; }
     /* Page-jump popover, anchored above the page link (opens upward so it is
@@ -197,7 +246,6 @@
       display: flex; flex-direction: column; gap: 6px; align-items: stretch;
     }
     .jt-page-pop button { padding: 2px 0; }
-    .job-table-foot .jt-spacer { flex: 1; }
     /* "Loading" cue shown in the caption while a page is being (re)fetched:
        bold + italic + accent colour, a gentle opacity pulse, and animated
        trailing dots via ::after. The class is added in reload() and cleared
@@ -253,7 +301,7 @@
 </head>
 <body>
   <h3>
-    Global Job Metrics
+    Utilization Dashboard
     <span class="conn-email {{ 'admin' if admin_email else 'user' }}">({{ user_email }})</span>
     {% if admin_email and view_as_email %}
     <span class="view-as-badge">/ as user <strong>{{ view_as_email }}</strong>
@@ -282,7 +330,7 @@
     <div class="ctrl">
       <label for="end">End</label>
       <input type="date" id="end"
-             title="End of the date range (inclusive), in UTC. Every plot and the job table cover jobs in this range. Takes effect on Update." />
+             title="End of the date range (exclusive: covers jobs submitted before this date), in UTC. Every plot and the job table cover jobs in this range. Takes effect on Update." />
     </div>
     <div class="ctrl">
       <label>Period</label>
@@ -340,7 +388,7 @@
     {% if is_admin %}
     <div class="ctrl">
       <label for="metric-select">Efficiency metric</label>
-      <select id="metric-select" title="Metric taken as the 'useful' fraction: it splits Used vs Unused RGU (RGU usage, RGU by user, job-table waste column) and is the value plotted in Metric Trend, Density and the heatmap. Takes effect on Update."></select>
+      <select id="metric-select" title="Metric taken as the 'useful' fraction: it splits Used vs Unused RGU (RGU usage, RGU by user, job-table Unused columns) and is the value plotted in Metric Trend, Density and the heatmap. Takes effect on Update."></select>
     </div>
     {% endif %}
     <button onclick="loadCharts()" title="Apply the current filters (date range, clusters, {% if is_admin %}user, {% endif %}job states, metric) and reload every plot.">Update</button>
@@ -355,6 +403,19 @@
   <div id="tile-grid"></div>
 
   <script>
+    // Minimum expected usage: sent to /rgu_usage as `min_usage` (threshold of
+    // the per-job wasted-RGU shortfall, computed server-side) and shown in the
+    // Wasted/Unused bar labels.
+    const MIN_USAGE_EXPECTED_PERCENT = 15;
+
+    // Below this, usage is critically low: the job table shades those rows a
+    // stronger red (vs light red between here and MIN_USAGE_EXPECTED_PERCENT).
+    const CRITICAL_USAGE_PERCENT = 5;
+
+    // Temporary user-guide target (Google Doc), linked from inside the "ⓘ"
+    // help panel on the RGU-usage tiles.
+    const USER_GUIDE_URL = 'https://docs.google.com/document/d/1kLm-3JXlyuukIS0n2cR_8XxhQuKIvW7-omll-wwXvaM/';
+
     const SEC_TO_H = 1 / 3600;
 
     function isoDate(d) { return d.toISOString().split('T')[0]; }
@@ -542,7 +603,7 @@
 
     const PLOT_NAMES = {
       job_counts:      'Submitted jobs per period',
-      rgu_usage:       'RGU requested vs used',
+      rgu_usage:       'RGU allocated vs used',
       clusterrgu:      'RGU by cluster',
       jobtable:        'Job table',
       {% if is_admin %}
@@ -674,6 +735,16 @@
           renderPlot(chartDiv.id, plotType, { [ENDPOINT_TO_KEY[ep]]: data });
       }));
     }
+
+    // Plotly's own responsive handler resizes the plots live but can leave a
+    // wrapping horizontal legend at its old position (drawn over the bars)
+    // when the window grows back. Once the resize settles, re-render the RGU
+    // tiles from cache: a full react recomputes margins and legend placement.
+    let _resizeTimer = null;
+    window.addEventListener('resize', () => {
+      clearTimeout(_resizeTimer);
+      _resizeTimer = setTimeout(rerenderRguTiles, 250);
+    });
 
     // Pressing Enter in any filter field applies the filters, like clicking Update.
     // Buttons keep their own behaviour (Update / Reset, dropdown toggles, All/None).
@@ -811,7 +882,7 @@
     // RGU req-vs-used + RGU-by-cluster on row 1, job table on row 2. Copied per
     // call so mutating tileLayout never corrupts this template.
     {% if is_admin %}
-    const DEFAULT_LAYOUT = [['clusterrgu', 'jobtable'], ['metrictrend', 'userrgu']];
+    const DEFAULT_LAYOUT = [['rgu_usage', 'clusterrgu'], ['jobtable'], ['metrictrend', 'userrgu']];
     {% else %}
     const DEFAULT_LAYOUT = [['rgu_usage', 'clusterrgu'], ['jobtable']];
     {% endif %}
@@ -881,6 +952,57 @@
       return sel;
     }
 
+    // "?" help badge for the RGU-usage tile title: click opens a panel defining
+    // Wasted/Unused with the user-guide link inside (a native title can't hold
+    // a clickable link). Open/close mechanics mirror the job-table column
+    // picker. The panel content is built on open so the metric name tracks the
+    // last Update — the tile header outlives chart re-renders.
+    function makeRguUsageHelp() {
+      const wrap = document.createElement('div');
+      wrap.className = 'js-dropdown';
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'ms-help-btn';
+      btn.textContent = '?';
+      btn.setAttribute('aria-label', 'Help: what do Wasted / Unused mean?');
+      const panel = document.createElement('div');
+      panel.className = 'ms-help-panel';
+      panel.style.display = 'none';
+      let closeTimer = null;
+      function openHelp() {
+        if (panel.style.display !== 'none') return;
+        const metricName = (currentParams && currentParams.metric) || 'gpu_sm_occupancy';
+        const metricPretty = METRICS[metricName] || metricName;
+        panel.innerHTML =
+          `<h3>What do Wasted / Unused mean?</h3>` +
+          `<p><strong>Wasted</strong> (red): unused compute missing for each job to reach the expected minimum of ` +
+          `${MIN_USAGE_EXPECTED_PERCENT} % ${metricPretty}.</p>` +
+          `<p><strong>Unused</strong> (light blue): idle capacity above the minimum.</p>` +
+          `<p><a href="${USER_GUIDE_URL}" target="_blank" rel="noopener">Open the user guide ↗</a></p>`;
+        panel.style.display = 'block';
+        // Defer so an opening click isn't caught as an outside click.
+        setTimeout(() => document.addEventListener('mousedown', onDown, true), 0);
+      }
+      function closeHelp() {
+        panel.style.display = 'none';
+        document.removeEventListener('mousedown', onDown, true);
+      }
+      function onDown(e) {
+        if (!panel.contains(e.target) && e.target !== btn) closeHelp();
+      }
+      // Hover opens; leaving closes after a short grace period so the pointer
+      // can travel into the panel (a child of `wrap`, so moving onto it never
+      // fires wrap's mouseleave). Click still toggles: keyboard/touch fallback.
+      wrap.addEventListener('mouseenter', () => { clearTimeout(closeTimer); openHelp(); });
+      wrap.addEventListener('mouseleave', () => { closeTimer = setTimeout(closeHelp, 250); });
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        if (panel.style.display === 'none') openHelp(); else closeHelp();
+      });
+      wrap.append(btn, panel);
+      return wrap;
+    }
+
     function renderLayout() {
       const grid = document.getElementById('tile-grid');
       grid.innerHTML = '';
@@ -897,7 +1019,18 @@
           header.className = 'tile-header';
           const title = document.createElement('span');
           title.textContent = PLOT_NAMES[plotType];
+          if (plotType === 'rgu_usage') {
+            title.classList.add('tile-title-help');
+            title.appendChild(makeRguUsageHelp());
+          }
           header.appendChild(title);
+          if (plotType === 'jobtable') {
+            // Slot the job-table renderer fills with the jobs-count label +
+            // column picker, so they share the header line (one row saved).
+            const slot = document.createElement('span');
+            slot.className = 'jt-head-slot';
+            header.appendChild(slot);
+          }
           {% if is_admin %}
           const actions = document.createElement('span');
           actions.style.cssText = 'display:flex;align-items:center;gap:4px';
@@ -1109,12 +1242,17 @@
       const el = document.getElementById(id);
       if (!el || !d.rgu_usage.length) return;
       const unit = rguUnit();
+      // The wasted/unused hovers name the efficiency metric picked at last
+      // Update (non-admins are pinned to SM occupancy).
+      const metricName = (currentParams && currentParams.metric) || 'gpu_sm_occupancy';
+      const metricPretty = METRICS[metricName] || metricName;
 
-      // Box/ctrl/plot layout (reusing the heatmap's classes) so a small "View:"
-      // picker sits above the plot, which fills the rest at the tile's fixed height.
+      // Box/plot layout (reusing the heatmap's classes); the "View:" picker
+      // floats over the plot's top-left corner (see .ms-float-ctrl), so the
+      // plot itself is laid out exactly like rgu_by_cluster next door.
       el.innerHTML = '';
       const box = document.createElement('div'); box.className = 'ms-box';
-      const ctrl = document.createElement('div'); ctrl.className = 'ms-ctrl';
+      const ctrl = document.createElement('div'); ctrl.className = 'ms-float-ctrl';
       const lab = document.createElement('label');
       lab.textContent = 'View: ';
       const sel = document.createElement('select');
@@ -1138,22 +1276,29 @@
         // One stacked bar summing the whole Start–End range. Focus is ignored on
         // purpose (no per-bucket axis) and the single bar is not click-to-focus.
         const sum = key => d.rgu_usage.reduce((a, r) => a + (r[key] || 0), 0);
-        const reqTot = sum('rgu_requested'), usedTot = sum('rgu_used'), unmTot = sum('rgu_unmeasured');
+        const reqTot = sum('rgu_allocated'), usedTot = sum('rgu_used'), unmTot = sum('rgu_unmeasured');
+        const wastedTot = sum('rgu_wasted');
+        const unusedTot = reqTot - usedTot - unmTot - wastedTot;
         const X = ['Whole range'];
         Plotly.react(plot, [
           { type: 'bar', name: 'Used',   x: X, y: [usedTot * unit.factor], marker: { color: '#1a6fd4' },
             hovertemplate: unit.label + ' used: %{y:,.1f}<extra></extra>' },
-          { type: 'bar', name: 'Unused', x: X, y: [(reqTot - usedTot - unmTot) * unit.factor], marker: { color: '#a8c8f0' },
-            hovertemplate: unit.label + ' unused: %{y:,.1f}<extra></extra>' },
+          { type: 'bar', name: `Wasted (below ${MIN_USAGE_EXPECTED_PERCENT} % min)`, x: X, y: [wastedTot * unit.factor], marker: { color: '#ff0000' },
+            hovertemplate: `${unit.label} wasted: %{y:,.1f}<br>shortfall of jobs below the <br>${MIN_USAGE_EXPECTED_PERCENT} % ${metricPretty} minimum<extra></extra>` },
+          { type: 'bar', name: 'Unused (above min)', x: X, y: [unusedTot * unit.factor], marker: { color: '#a8c8f0' },
+            hovertemplate: `${unit.label} unused: %{y:,.1f}<br>idle capacity above the ${MIN_USAGE_EXPECTED_PERCENT} % minimum<extra></extra>` },
           { type: 'bar', name: 'No metric data', x: X, y: [unmTot * unit.factor], marker: { color: '#bdbdbd' },
             hovertemplate: unit.label + ' (no metric): %{y:,.1f}<extra></extra>' },
         ], pLayout({
-          title: { text: 'Total ' + unit.label + ' — Whole range (Used vs Unused)', font: { size: 16 } },
+          // Same pinned title + t as rgu_by_cluster, so the two tiles align
+          // by construction (the View picker floats over the top-left corner).
+          title: { text: 'Total ' + unit.label + ' — Whole range (Used / Wasted / Unused)',
+                   font: { size: 16 }, y: 1, yanchor: 'top', pad: { t: 2 } },
           barmode: 'stack', bargap: 0.7,
           xaxis: { type: 'category' },
           yaxis: { title: { text: 'Total ' + unit.label } },
           legend: { orientation: 'h', x: 0, xanchor: 'left', y: 1.02, yanchor: 'bottom' },
-          margin: { l: 60, r: 20, t: 72, b: 60 },
+          margin: { l: 60, r: 20, t: 58, b: 60 },
         }), { responsive: true });
         return;
       }
@@ -1162,28 +1307,34 @@
       const periods    = d.rgu_usage.map(r => r.period_start);
       const periodEnds = d.rgu_usage.map(r => r.period_end);
       const rguUsed       = d.rgu_usage.map(r => r.rgu_used * unit.factor);
-      const rguUnused     = d.rgu_usage.map(r => (r.rgu_requested - r.rgu_used - (r.rgu_unmeasured || 0)) * unit.factor);
+      const rguWasted     = d.rgu_usage.map(r => (r.rgu_wasted || 0) * unit.factor);
+      const rguUnused     = d.rgu_usage.map(r => (r.rgu_allocated - r.rgu_used - r.rgu_unmeasured - (r.rgu_wasted || 0)) * unit.factor);
       const rguUnmeasured = d.rgu_usage.map(r => (r.rgu_unmeasured || 0) * unit.factor);
       const colorUsed      = periods.map(p => { const f = periodInFocus(p); return f === null ? '#1a6fd4' : f ? '#e07020' : '#c8d8f0'; });
       const colorUnused    = periods.map(p => { const f = periodInFocus(p); return f === null ? '#a8c8f0' : f ? '#f0c090' : '#e4eef8'; });
+      const colorWasted    = periods.map(p => { const f = periodInFocus(p); return f === null ? '#ff0000' : f ? '#aa00cc' : '#ffdddd'; });
       const colorUnmeasured= periods.map(p => { const f = periodInFocus(p); return f === null ? '#bdbdbd' : f ? '#8a8a8a' : '#e6e6e6'; });
       Plotly.react(plot, [
         { type: 'bar', name: 'Used',   x: periods, y: rguUsed, customdata: periodEnds,
           marker: { color: colorUsed },
           hovertemplate: 'Period: %{x}<br>' + unit.label + ' used: %{y:,.1f}<extra></extra>' },
-        { type: 'bar', name: 'Unused', x: periods, y: rguUnused, customdata: periodEnds,
+        { type: 'bar', name: `Wasted (below ${MIN_USAGE_EXPECTED_PERCENT} % min)`,   x: periods, y: rguWasted, customdata: periodEnds,
+          marker: { color: colorWasted },
+          hovertemplate: `Period: %{x}<br>${unit.label} wasted: %{y:,.1f}<br>shortfall of jobs below the <br>${MIN_USAGE_EXPECTED_PERCENT} % ${metricPretty} minimum<extra></extra>` },
+        { type: 'bar', name: 'Unused (above min)', x: periods, y: rguUnused, customdata: periodEnds,
           marker: { color: colorUnused },
-          hovertemplate: 'Period: %{x}<br>' + unit.label + ' unused: %{y:,.1f}<extra></extra>' },
+          hovertemplate: `Period: %{x}<br>${unit.label} unused: %{y:,.1f}<br>idle capacity above the ${MIN_USAGE_EXPECTED_PERCENT} % minimum<extra></extra>` },
         { type: 'bar', name: 'No metric data', x: periods, y: rguUnmeasured, customdata: periodEnds,
           marker: { color: colorUnmeasured },
           hovertemplate: 'Period: %{x}<br>' + unit.label + ' (no metric): %{y:,.1f}<extra></extra>' },
       ], pLayout({
-        title: { text: 'Total ' + unit.label + ' per Period — Used vs Unused (click to focus)', font: { size: 16 } },
+        title: { text: 'Total ' + unit.label + ' per Period — Used / Wasted / Unused (click to focus)',
+                 font: { size: 16 }, y: 1, yanchor: 'top', pad: { t: 2 } },
         barmode: 'stack',
         xaxis: { title: { text: 'Period start' }, type: 'category', tickangle: -45 },
         yaxis: { title: { text: 'Total ' + unit.label } },
         legend: { orientation: 'h', x: 0, xanchor: 'left', y: 1.02, yanchor: 'bottom' },
-        margin: { l: 60, r: 20, t: 72, b: 100 },
+        margin: { l: 60, r: 20, t: 58, b: 100 },
       }), { responsive: true }).then(gd => {
         gd.removeAllListeners('plotly_click');
         gd.on('plotly_click', evt => {
@@ -1234,7 +1385,11 @@
         hovertemplate: s.cluster + '<br>Period: %{x}<br>' + unit.label + ': %{customdata[1]:,.2f}<extra></extra>',
       })).sort((a, b) => a.name.localeCompare(b.name));
       Plotly.react(id, traces, pLayout({
-        title: { text: 'Total ' + unit.label + ' by Cluster (click to focus)', font: { size: 16 } },
+        // Title pinned to the container top; t:58 = title band + legend +
+        // gap. rgu_usage uses the same pinned title + t, so titles, legends
+        // and bars align side by side.
+        title: { text: 'Total ' + unit.label + ' by Cluster (click to focus)',
+                 font: { size: 16 }, y: 1, yanchor: 'top', pad: { t: 2 } },
         // Manual per-period `base` offsets do the stacking, so overlay — not
         // 'stack', which ignores base and re-stacks in (global) trace order.
         barmode: 'overlay',
@@ -1246,7 +1401,7 @@
         // there is only one trace).
         showlegend: true,
         legend: { orientation: 'h', x: 0, xanchor: 'left', y: 1.02, yanchor: 'bottom', traceorder: 'normal' },
-        margin: { l: 60, r: 20, t: 72, b: 100 },
+        margin: { l: 60, r: 20, t: 58, b: 100 },
       }), { responsive: true }).then(gd => {
         gd.removeAllListeners('plotly_click');
         gd.on('plotly_click', evt => {
@@ -1610,7 +1765,7 @@
       // sort payload), so paging/sorting never disturbs the other tiles.
       async function reload() {
         if (!currentParams) return;
-        const cap = el.querySelector('.jt-caption-text');
+        const cap = el.closest('.tile')?.querySelector('.jt-caption-text');
         if (cap) { cap.textContent = 'Loading'; cap.classList.add('jt-loading'); }
         el.querySelectorAll('.job-table-foot button, .job-table-foot input, .job-table-foot select')
           .forEach(c => { c.disabled = true; });
@@ -1632,14 +1787,24 @@
           if (!document.body.contains(el) || el.dataset.plotType !== 'jobtable') return;
           renderJobTable(id, { jobs: data });
         } catch (e) {
-          if (document.body.contains(el))
+          if (document.body.contains(el)) {
+            // Also clear the header slot, or it would keep a stale count (or
+            // a stuck animated "Loading") next to the error message.
+            const slot = el.closest('.tile')?.querySelector('.jt-head-slot');
+            if (slot) slot.innerHTML = '';
             el.innerHTML = `<div class="tile-error">Error: ${e.message}</div>`;
+          }
         }
       }
 
-      if (!total) { el.textContent = 'No jobs found.'; return; }
+      if (!total) {
+        const slot = el.closest('.tile')?.querySelector('.jt-head-slot');
+        if (slot) slot.innerHTML = '';
+        el.textContent = 'No jobs found.';
+        return;
+      }
 
-      // The Waste column depends on the efficiency metric picked at last Update.
+      // The Unused columns depend on the efficiency metric picked at last Update.
       const metricName = (currentParams && currentParams.metric) || 'selected metric';
       const metricPretty = METRICS[metricName] || metricName;
       // RGU·time columns honour the toolbar unit (display rescale of the RGU·h
@@ -1649,6 +1814,12 @@
       const fmtRguTime = v => v != null
         ? (v * unit.factor).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
         : '—';
+
+      const unitHour = RGU_UNITS.h;
+      const fmtRguHour = v => v != null
+        ? (v * unitHour.factor).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+        : '—';
+
       // submit_time arrives as an ISO string; show it in UTC (YYYY-MM-DD HH:MM)
       // to match the dashboard's UTC date range / focus.
       const fmtDateTime = v => {
@@ -1665,7 +1836,7 @@
         { key: 'job_id',                label: 'Job ID',    fmt: fmtInt },
         { key: 'submit_time',           label: 'Submitted', fmt: fmtDateTime },
         {% if is_admin %}
-        { key: 'user',                  label: 'User' },
+        { key: 'user',                  label: 'User', adminOnly: true, title: 'Cluster user name' },
         {% endif %}
         { key: 'job_state',             label: 'State' },
         { key: 'elapsed',               label: 'Elapsed',   fmt: v => {
@@ -1676,26 +1847,35 @@
         { key: 'rgu_hours',             label: unit.label,
           title: `RGU × elapsed time, shown in ${unit.label}`,
           fmt: fmtRguTime },
-        { key: 'gpu_sm_occupancy_mean', label: 'SM occ',    fmt: v => v != null ? (v*100).toFixed(1)+'%' : '—' },
-        { key: 'waste',                 label: `${metricPretty} waste (${unit.label})`,
-          title: `RGU·time × (1 − mean ${metricPretty}): estimated unused RGU·time, taking the selected efficiency metric as the "useful" fraction`,
+        // Fixed RGU·h twin, skipped when the toolbar unit is already hours
+        // (it would be an exact duplicate).
+        ...(unit === unitHour ? [] : [
+        { key: 'rgu_hours',             label: unitHour.label,
+          title: `RGU × elapsed time, shown in ${unitHour.label}`,
+          fmt: fmtRguHour },
+        ]),
+        { key: 'waste',                 label: `Unused (${unit.label})`,
+          title: `RGU·time × (1 − mean ${metricPretty}): estimated unused RGU·time`,
           fmt: fmtRguTime },
+        ...(unit === unitHour ? [] : [
+        { key: 'waste',                 label: `Unused (${unitHour.label})`,
+          title: `RGU·time × (1 − mean ${metricPretty}): estimated unused RGU·time`,
+          fmt: fmtRguHour },
+        ]),
+        { key: 'gpu_sm_occupancy_mean', label: 'SM occ',    fmt: v => v != null ? (v < 0 ? 'NaN' : (v*100).toFixed(1)+'%') : '—' },
+        { key: 'gpu_utilization_mean',  label: 'GPU util',  fmt: v => v != null ? (v < 0 ? 'NaN' : (v*100).toFixed(1)+'%') : '—' },
+        { key: 'gpu_memory_max',        label: 'Mem max',   fmt: v => v != null ? (v*100).toFixed(1)+'%' : '—', title: 'Max memory usage' },
         { key: 'gpu_type',              label: 'GPU type' },
         {% if is_admin %}
-        { key: 'gpu_type_rgu',          label: 'GPU type RGU',
+        { key: 'gpu_type_rgu',          label: 'GPU type RGU', adminOnly: true,
           title: 'Per-GPU DRAC RGU weight of this GPU type',
           fmt: v => v != null ? v.toFixed(2) : '—' },
-        { key: 'rgu',                   label: 'RGU',
+        { key: 'rgu',                   label: 'RGU', adminOnly: true,
           title: 'RGU weight of the job\'s allocated GPUs',
           fmt: v => v != null ? v.toFixed(2) : '—' },
         {% endif %}
         { key: 'requested_gpu',         label: 'Requested GPU', fmt: fmtInt },
         { key: 'allocated_gpu',         label: 'Allocated GPU', fmt: fmtInt },
-        {% if is_admin %}
-        { key: 'billing',               label: 'Billing',   fmt: fmtInt },
-        { key: 'gpu_utilization_mean',  label: 'GPU util',  fmt: v => v != null ? (v*100).toFixed(1)+'%' : '—' },
-        { key: 'gpu_memory_max',        label: 'Mem max',   fmt: v => v != null ? (v*100).toFixed(1)+'%' : '—' },
-        {% endif %}
         { key: 'nodes',                 label: 'Nodes',     cls: 'col-cmd' },
       ];
       // Columns the server can sort on; the array-valued 'nodes' column can't.
@@ -1705,8 +1885,12 @@
       const box = document.createElement('div');
       box.className = 'job-table-box';
 
-      const caption = document.createElement('div');
-      caption.className = 'job-table-caption';
+      // The caption content (jobs-count label + column picker) lives in the
+      // tile header's .jt-head-slot (created by renderLayout), not in a row of
+      // its own — one line saved for the table. Rebuilt on every render.
+      const caption = el.closest('.tile')?.querySelector('.jt-head-slot')
+        ?? document.createElement('span');   // detached fallback: renders nothing
+      caption.innerHTML = '';
       // Count text in its own span so reload() can swap it for the animated
       // "Loading" cue without wiping the column picker that shares this line.
       const capText = document.createElement('span');
@@ -1718,7 +1902,9 @@
         `GPU jobs ${from.toLocaleString('en-US')}–${to.toLocaleString('en-US')} `
         + `of ${total.toLocaleString('en-US')}`;
       capText.title = 'Only GPU jobs (allocated GPU with a known RGU) are listed; '
-        + 'CPU-only jobs are counted in the per-period bar plot but not here.';
+        + 'CPU-only jobs are counted in the per-period bar plot but not here. '
+        + `Red rows: mean ${metricPretty} below the ${MIN_USAGE_EXPECTED_PERCENT} % `
+        + `expected minimum (stronger red: below ${CRITICAL_USAGE_PERCENT} %).`;
       caption.appendChild(capText);
 
       const wrap = document.createElement('div');
@@ -1732,11 +1918,15 @@
         const th = document.createElement('th');
         th.dataset.col = c.key;
         th.textContent = c.label;
-        if (c.title) th.title = c.title;
+        if (c.title) {
+          th.title = c.title;
+          if (c.adminOnly) th.title += " (admin-only column)";
+        }
+        if (c.adminOnly) th.classList.add('th-admin-only');
         if (!SORTABLE.has(c.key)) {
-          th.className = 'no-sort';
+          th.classList.add('no-sort');
         } else {
-          if (c.key === sortKey) th.className = sortDir === 1 ? 'sort-asc' : 'sort-desc';
+          if (c.key === sortKey) th.classList.add( sortDir === 1 ? 'sort-asc' : 'sort-desc' );
           // A new sort order spans every page, so reset to the first page and
           // re-fetch (the server does the ordering).
           th.addEventListener('click', () => {
@@ -1756,6 +1946,16 @@
       const tbody = tbl.createTBody();
       jobList.forEach(job => {
         const tr = tbody.insertRow();
+        // Shade under-using rows (measured jobs only): the same per-job mean
+        // that feeds the Unused columns, so table and bars tell one story.
+        const mm = job.metric_mean;
+        if (mm != null && mm < MIN_USAGE_EXPECTED_PERCENT / 100) {
+          const crit = mm < CRITICAL_USAGE_PERCENT / 100;
+          tr.className = crit ? 'jt-crit' : 'jt-low';
+          tr.title = `Mean ${metricPretty}: ${(mm * 100).toFixed(1)} % — `
+            + (crit ? `critically low (below ${CRITICAL_USAGE_PERCENT} %)`
+                    : `below the ${MIN_USAGE_EXPECTED_PERCENT} % expected minimum`);
+        }
         COLS.forEach(c => {
           const td = tr.insertCell();
           td.dataset.col = c.key;
@@ -1864,6 +2064,9 @@
       pageLink.textContent = page.toLocaleString('en-US');
       if (pages > 1) {
         pageLink.className = 'jt-page-link';
+        // Reserve the width of the largest page number (ch ≈ digit width;
+        // thousands separators counted, slightly over-wide for them).
+        pageLink.style.minWidth = `${pages.toLocaleString('en-US').length}ch`;
         pageLink.tabIndex = 0;
         pageLink.title = `Click to jump to a page (1–${pages.toLocaleString('en-US')})`;
         pageLink.addEventListener('click', openPop);
@@ -1873,11 +2076,8 @@
       }
       pageInfo.append('Page ', pageLink, ` / ${pages.toLocaleString('en-US')}`);
 
-      const spacer = document.createElement('span');
-      spacer.className = 'jt-spacer';
-
       const szLabel = document.createElement('label');
-      szLabel.textContent = 'Rows ';
+      szLabel.textContent = 'Jobs per page ';
       const sz = document.createElement('select');
       JOBTABLE_PAGE_SIZES.forEach(n => {
         const opt = document.createElement('option');
@@ -1896,9 +2096,9 @@
       });
       szLabel.appendChild(sz);
 
-      foot.append(first, prev, pageInfo, next, last, spacer, szLabel);
+      foot.append(first, prev, pageInfo, next, last, szLabel);
 
-      // ── Column-visibility picker (caption line, right-aligned) ────────────
+      // ── Column-visibility picker (header slot, after the jobs count) ──────
       // Pure display: toggling a checkbox shows/hides that column live (no
       // refetch) and the menu stays open. Mirrors the toolbar's cluster /
       // job-state dropdowns; the choice is global (jobTableHiddenCols).
@@ -1966,7 +2166,6 @@
       colMenu.append(colBtn, colPanel);
       caption.appendChild(colMenu);
 
-      box.appendChild(caption);
       box.appendChild(wrap);
       box.appendChild(foot);
       el.appendChild(box);
@@ -2234,7 +2433,7 @@
       switch (ep) {
         case 'job_counts': return '/dash/metrics/job_counts?' + new URLSearchParams({ ...base, period: p.period });
         case 'heatmap':   return '/dash/metrics/job_times_vs_limit?' + new URLSearchParams({ ...base, ...focusParams });
-        case 'rgu_usage': return '/dash/metrics/rgu_usage?' + new URLSearchParams({ ...base, period: p.period, metric: p.metric });
+        case 'rgu_usage': return '/dash/metrics/rgu_usage?' + new URLSearchParams({ ...base, period: p.period, metric: p.metric, min_usage: MIN_USAGE_EXPECTED_PERCENT / 100 });
         case 'density':   return '/dash/metrics/metric_distribution?' + new URLSearchParams({ ...densityParams, ...focusParams });
         case 'jobs':      return jobsURL(p, JOBTABLE_DEFAULTS);
         {% if is_admin %}

@@ -213,7 +213,7 @@ _SCOPE_TOTALS = [
     (
         "rgu_usage",
         "/dash/metrics/rgu_usage",
-        lambda d: sum(r["rgu_requested"] for r in d),
+        lambda d: sum(r["rgu_allocated"] for r in d),
     ),
     (
         "rgu_by_cluster",
@@ -310,7 +310,7 @@ EMPTY_ENDPOINTS = [
     (
         "rgu_usage",
         "/dash/metrics/rgu_usage",
-        lambda d: isinstance(d, list) and all(r["rgu_requested"] == 0 for r in d),
+        lambda d: isinstance(d, list) and all(r["rgu_allocated"] == 0 for r in d),
     ),
     ("rgu_by_cluster", "/dash/metrics/rgu_by_cluster", lambda d: d["series"] == []),
     (
@@ -426,16 +426,66 @@ def test_jobs_table_with_data(dash_client, dash_db):
         assert job["rgu"] == pytest.approx(_RGU_PER_JOB)
         assert job["rgu_hours"] == pytest.approx(_RGU_HOURS_PER_JOB)
         assert job["gpu_sm_occupancy_mean"] == pytest.approx(_SM_OCC)
+        # Default metric is gpu_sm_occupancy, so metric_mean mirrors it.
+        assert job["metric_mean"] == pytest.approx(_SM_OCC)
         assert job["gpu_utilization_mean"] == pytest.approx(0.4)
         assert job["gpu_memory_max"] == pytest.approx(0.9)
 
 
 def test_rgu_usage_with_data(dash_client, dash_db):
     data = dash_client.get("/dash/metrics/rgu_usage", params=WINDOW).json()
-    assert sum(r["rgu_requested"] for r in data) == pytest.approx(
+    assert sum(r["rgu_allocated"] for r in data) == pytest.approx(
         dash_db.total_requested
     )
     assert sum(r["rgu_used"] for r in data) == pytest.approx(dash_db.total_used)
+    # Every enriched job runs at 50 % >= the 15 % default min_usage: no shortfall.
+    assert sum(r["rgu_wasted"] for r in data) == 0.0
+
+
+def test_rgu_usage_wasted_is_per_job(dash_client, dash_db):
+    """``rgu_wasted`` sums each job's own shortfall below ``min_usage``: a job
+    above the threshold contributes zero and never offsets a job below it.
+
+    With one job dropped to 2 % and the rest at 50 %, the bucket-aggregated
+    shortfall would be 0 (mean usage is well above 15 %); the per-job one is
+    exactly the low job's deficit.
+    """
+    low_mean = 0.02
+    with config.db.session() as sess:
+        job = sess.exec(
+            select(SlurmJobDB)
+            .where(col(SlurmJobDB.harmonized_gpu_type) == _GPU)
+            .order_by(col(SlurmJobDB.id))
+        ).first()
+        stat = sess.exec(
+            select(JobStatisticDB).where(
+                col(JobStatisticDB.job_id) == job.id,
+                col(JobStatisticDB.name) == "gpu_sm_occupancy",
+            )
+        ).one()
+        stat.mean = low_mean
+        sess.add(stat)
+        sess.commit()
+
+    data = dash_client.get("/dash/metrics/rgu_usage", params=WINDOW).json()
+    assert sum(r["rgu_wasted"] for r in data) == pytest.approx(
+        _RGU_HOURS_PER_JOB * (0.15 - low_mean)
+    )
+    # The shortfall stays within the unused share: no negative bar segment.
+    for r in data:
+        assert (
+            r["rgu_wasted"]
+            <= r["rgu_allocated"] - r["rgu_used"] - r["rgu_unmeasured"] + 1e-9
+        )
+
+    # min_usage is a request parameter: at 60 % every job falls short.
+    data = dash_client.get(
+        "/dash/metrics/rgu_usage", params={**WINDOW, "min_usage": 0.6}
+    ).json()
+    expected = _RGU_HOURS_PER_JOB * (
+        (0.6 - low_mean) + (dash_db.n - 1) * (0.6 - _SM_OCC)
+    )
+    assert sum(r["rgu_wasted"] for r in data) == pytest.approx(expected)
 
 
 def test_rgu_by_cluster_with_data(dash_client, dash_db):
@@ -504,8 +554,8 @@ def dash_db_nan(read_write_db):
     "good" (mean 0.5), one with a NaN mean, one with the stat missing entirely.
 
     All four have a valid RGU (GPU type + gres), so all four count in the jobs
-    table and in ``rgu_requested``; only the two good ones may enter a mean-based
-    aggregate. Returns the expected totals.
+    table and in the allocated-RGU totals; only the two good ones may enter a
+    mean-based aggregate. Returns the expected totals.
     """
     sess = read_write_db
     sess.add(GpuRguDB(name=_GPU, rgu=10.0, drac_rgu=_DRAC_RGU))
@@ -575,18 +625,20 @@ def test_nan_and_missing_means_never_poison_aggregates(dash_client, dash_db_nan)
     assert jobs["total"] == facts.n_total
     assert len(jobs["jobs"]) == facts.n_total
 
-    # rgu_usage: requested counts all jobs; used sums only the real means and
+    # rgu_usage: allocated counts all jobs; used sums only the real means and
     # stays finite; the NaN/NULL jobs land in rgu_unmeasured, not rgu_used.
     usage = dash_client.get("/dash/metrics/rgu_usage", params=WINDOW).json()
     used = sum(r["rgu_used"] for r in usage)
     assert math.isfinite(used)
-    assert sum(r["rgu_requested"] for r in usage) == pytest.approx(
+    assert sum(r["rgu_allocated"] for r in usage) == pytest.approx(
         facts.total_requested
     )
     assert used == pytest.approx(facts.total_used)
     assert sum(r["rgu_unmeasured"] for r in usage) == pytest.approx(
         facts.total_unmeasured
     )
+    # NaN/missing means never count as shortfall (nor do the 50 % good jobs).
+    assert sum(r["rgu_wasted"] for r in usage) == 0.0
 
     # rgu_by_user carries its own copy of the same NaN gate.
     by_user = dash_client.get("/dash/metrics/rgu_by_user", params=WINDOW).json()
