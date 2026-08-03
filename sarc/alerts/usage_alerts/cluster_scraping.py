@@ -113,7 +113,7 @@ def check_nb_jobs_per_cluster_per_time(
         cluster_counts: dict[str, dict[datetime, int]] = {}
         # For each frame, count jobs per cluster.
         for cluster_name, frame_start_db, count in sess.exec(query):
-            cluster_counts.setdefault(cluster_name, {})[frame_start_db] = count  # ty:ignore[no-matching-overload]
+            cluster_counts.setdefault(cluster_name, {})[frame_start_db] = count
 
     # Determine which clusters to report on.
     if cluster_names:
