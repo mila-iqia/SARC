@@ -1,7 +1,9 @@
 import logging
+from collections.abc import Sequence
 from datetime import datetime
 
-from sqlmodel import Session
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlmodel import Session, select
 
 from sarc.cache import Cache, CacheEntry
 from sarc.config import UTC, ClusterConfig, config
@@ -140,6 +142,18 @@ def fetch_jobs(
             set_auto_end_time(cluster_name, auto_end_field, time_to)
 
 
+def bulk_upsert_jobs(sess: Session, jobs_dicts: Sequence[dict]) -> None:
+    if not jobs_dicts:
+        return
+    stmt = pg_insert(SlurmJobDB).values(jobs_dicts)
+    columns_to_exclude = {"id", "cluster_id", "job_id", "submit_time"}
+    update_dict = {c.name: c for c in stmt.excluded if c.name not in columns_to_exclude}
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["cluster_id", "job_id", "submit_time"], set_=update_dict
+    )
+    sess.exec(stmt)
+
+
 def parse_jobs(
     clusters_cfg: dict[str, ClusterConfig],
     since: datetime | None,
@@ -153,9 +167,11 @@ def parse_jobs(
             if since is None:
                 since = cache.oldest_year()
 
+        clusters_cache = {c.name: c for c in sess.exec(select(SlurmClusterDB)).all()}
+
         # Retrieve from the cache
         for cache_entry in cache.read_from(from_time=since):
-            parse_cache_entry(sess, cache_entry, clusters_cfg)
+            parse_cache_entry(sess, cache_entry, clusters_cfg, clusters_cache)
             # Update the parsed date
             if update_parsed_date:
                 logger.info(
@@ -177,12 +193,18 @@ def parse_date(val: str) -> datetime:
 
 
 def parse_cache_entry(
-    sess: Session, cache_entry: CacheEntry, clusters_cfg: dict[str, ClusterConfig]
+    sess: Session,
+    cache_entry: CacheEntry,
+    clusters_cfg: dict[str, ClusterConfig],
+    clusters_cache: dict[str, SlurmClusterDB],
+    *,
+    batch_size: int = 500,
 ):
     logger.info(
         f"Parsing slurm jobs from cache entry: {cache_entry.get_entry_datetime()}"
     )
 
+    jobs_to_upsert = []
     # Retrieve all jobs associated to the time intervals
     # The cache entry is designed to yield the jobs intervals
     # in the same order they were added, i.e. in chronological order.
@@ -190,8 +212,8 @@ def parse_cache_entry(
         logger.info(f"Parsing slurm jobs identified by: {key}...")
 
         cluster_name = key.split("_")[0]
-        cluster_id = SlurmClusterDB.id_by_name(sess, cluster_name)
-        if cluster_id is None:
+        cluster = clusters_cache.get(cluster_name)
+        if cluster is None:
             logger.error("Unknown cluster %s, skipping cache entry", cluster_name)
             continue
         scraped_start = parse_date(key.split("_")[1])
@@ -206,13 +228,14 @@ def parse_cache_entry(
             nb_total += 1
 
             entry_cluster_name = entry.pop("cluster_name")
-            entry["cluster_id"] = SlurmClusterDB.id_by_name(sess, entry_cluster_name)
-            if entry["cluster_id"] is None:
+            entry_cluster = clusters_cache.get(entry_cluster_name)
+            if entry_cluster is None:
                 raise ValueError(
                     "Unknown cluster name % for job id %s",
                     entry_cluster_name,
                     entry["job_id"],
                 )
+            entry["cluster_id"] = entry_cluster.id
             entry["sarc_user_id"] = get_user_id_for_cluster_user(
                 sess, entry["cluster_id"], entry["cluster_user"], entry["submit_time"]
             )
@@ -225,11 +248,18 @@ def parse_cache_entry(
                 )
                 nb_skipped += 1
                 continue
-            job = SlurmJobDB.get_or_create(sess, **entry)
-            sess.flush()
-            update_allocated_gpu_type_from_nodes(clusters_cfg[entry_cluster_name], job)
+            job = SlurmJobDB.model_validate(entry)
+            update_allocated_gpu_type_from_nodes(
+                clusters_cfg[entry_cluster_name], job, entry_cluster
+            )
+            job_dict = job.model_dump(exclude={"id"})
+            jobs_to_upsert.append(job_dict)
+            if len(jobs_to_upsert) >= batch_size:
+                bulk_upsert_jobs(sess, jobs_to_upsert)
+                jobs_to_upsert = []
 
         if nb_skipped > 0:
             logger.warning(
                 f"skipped {nb_skipped}/{nb_total} ({int(100 * nb_skipped / nb_total)}%) jobs on {cluster_name} because we can't find a user for it"
             )
+    bulk_upsert_jobs(sess, jobs_to_upsert)

@@ -7,7 +7,7 @@ import simple_parsing
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlmodel import col, delete, select
 
-from sarc.cli.notify.usage import _today_utc
+from sarc.cli.usage.notify import _today_utc
 from sarc.config import config
 from sarc.db.cluster import SlurmClusterDB
 from sarc.db.user_periods import UserPeriods

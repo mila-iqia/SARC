@@ -1,7 +1,7 @@
 import contextvars
 from collections.abc import Callable, Sequence
 from concurrent.futures import Future, ThreadPoolExecutor
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta
 from functools import cached_property, partial
 from typing import TypeVar
@@ -103,8 +103,12 @@ class UsageRow:
     # their total allocation size.
     wasted: float = 0.0
     by_cluster: list[UsageClusterBreakdown] = field(default_factory=list)
-    # Top-N GPU jobs by RGU-hours unused, descending.
+    # Top-N GPU jobs by GPU utilization (SM occupancy), descending -- the
+    # user's most efficient jobs.
     top_jobs: list[UsageJob] = field(default_factory=list)
+    # Bottom-N GPU jobs by RGU-hours unused, descending, excluding any job
+    # already selected in top_jobs.
+    bottom_jobs: list[UsageJob] = field(default_factory=list)
 
     # waste_ratio = wasted / rgu_hours  (= 1 - rgu_used / rgu_hours)
     @cached_property
@@ -161,6 +165,23 @@ class RecurringUserRow:
         length is the ``restrictive_action_run_cycles`` notifications config
         knob."""
         return _restrictive_action_flags(self.pa_flags)
+
+    def cycle_symbol(self, i: int) -> str:
+        """Return the marker for cycle position i, matching the
+        recurring-underusers table rendering: "" for a future cycle
+        (cycles[i] is None, no data yet), "✓" not flagged, "▲" underuser,
+        "⚑▲" personalized-action peak, "!!⚑▲" sustained restrictive-action
+        escalation. Bare symbol, no padding."""
+        flag = self.cycles[i]
+        if flag is None:
+            return ""
+        if not flag:
+            return "✓"
+        if i < len(self.restrictive_action_flags) and self.restrictive_action_flags[i]:
+            return "!!⚑▲"
+        if i < len(self.pa_flags) and self.pa_flags[i]:
+            return "⚑▲"
+        return "▲"
 
 
 def _restrictive_action_flags(flags: list[bool]) -> list[bool]:
@@ -436,7 +457,7 @@ def get_underusers_usage(
     *,
     min_waste_ratio: float,
     min_waste_rgu_hours: float,
-    top_jobs_per_user: int = 5,
+    max_jobs_per_user: int = 5,
     clusters: list[str] | None = None,
     utilization_ceiling: float = 1.0,
     user_emails: list[str] | None = None,
@@ -455,15 +476,31 @@ def get_underusers_usage(
         start,
         end,
         usage_filter=filter_underusers,
-        fetch_jobs_per_user=top_jobs_per_user > 0,
+        fetch_jobs_per_user=max_jobs_per_user > 0,
         clusters=clusters,
         utilization_ceiling=utilization_ceiling,
         user_emails=user_emails,
     )
 
     for row in result:
-        row.top_jobs.sort(key=lambda j: j.wasted, reverse=True)  # ty:ignore[no-matching-overload]
-        row.top_jobs = row.top_jobs[:top_jobs_per_user]
+        # Least efficient jobs, by wasted resources. Computed first (unlike
+        # get_users_usage) because this is the underuser digest -- the worst
+        # jobs are the whole point of the message, so they get first pick of
+        # any job that would otherwise land in both lists.
+        all_jobs = row.top_jobs
+        row.bottom_jobs = sorted(
+            all_jobs, key=lambda j: j.wasted, reverse=True
+        )[  # ty:ignore[no-matching-overload]
+            :max_jobs_per_user
+        ]
+
+        # Most efficient jobs, by GPU utilization, excluding anything already
+        # shown in bottom_jobs.
+        top_job_ids = {j.job_id for j in row.bottom_jobs}
+        remaining_jobs = [j for j in all_jobs if j.job_id not in top_job_ids]
+        row.top_jobs = sorted(
+            remaining_jobs, key=lambda j: j.gpu_sm_occupancy, reverse=True
+        )[:max_jobs_per_user]
 
     return result
 
@@ -473,7 +510,7 @@ def get_users_usage(
     end: datetime,
     *,
     min_usage_rgu_hours: float = 0.0,
-    top_jobs_per_user: int = 5,
+    max_jobs_per_user: int = 5,
     clusters: list[str] | None = None,
     user_emails: list[str] | None = None,
 ) -> list[UsageRow]:
@@ -484,15 +521,30 @@ def get_users_usage(
         start,
         end,
         usage_filter=filter_users,
-        fetch_jobs_per_user=top_jobs_per_user > 0,
+        fetch_jobs_per_user=max_jobs_per_user > 0,
         clusters=clusters,
         user_emails=user_emails,
     )
 
-    # Sorted by GPU utilization so these are the user's *most efficient* jobs
     for row in result:
-        row.top_jobs.sort(key=lambda j: j.gpu_sm_occupancy, reverse=True)
-        row.top_jobs = row.top_jobs[:top_jobs_per_user]
+        # Most efficient jobs, by GPU utilization. Computed first (unlike
+        # get_underusers_usage) because this is the neutral usage report --
+        # it leads with the best-jobs section, so that gets first pick of any
+        # job that would otherwise land in both lists.
+        all_jobs = row.top_jobs
+        row.top_jobs = sorted(all_jobs, key=lambda j: j.gpu_sm_occupancy, reverse=True)[
+            :max_jobs_per_user
+        ]
+
+        # Least efficient jobs, by wasted resources, excluding anything already
+        # shown in top_jobs.
+        top_job_ids = {j.job_id for j in row.top_jobs}
+        remaining_jobs = [j for j in all_jobs if j.job_id not in top_job_ids]
+        row.bottom_jobs = sorted(
+            remaining_jobs, key=lambda j: j.wasted, reverse=True
+        )[  # ty:ignore[no-matching-overload]
+            :max_jobs_per_user
+        ]
 
     return result
 
@@ -853,7 +905,6 @@ def get_recurring_underusers(
     *,
     min_waste_ratio: float,
     min_waste_rgu_hours: float,
-    cluster_share_threshold: float,
     recurrence_active_cycles: int = 3,
     recurrence_display_cycles: int = 5,
     clusters: list[str] | None = None,
@@ -935,7 +986,7 @@ def get_recurring_underusers(
             clusters=clusters,
         )
 
-    # ── Per-cluster greedy selection (cumulative share >= cluster_share_threshold) ──
+    # ── Per-cluster selection ──
     result: dict[str, list[RecurringUserRow]] = {}
     for cluster, users in sorted(cluster_users.items()):
         cluster_total = sum(u["wasted"] for u in users.values())
@@ -944,16 +995,8 @@ def get_recurring_underusers(
             users.items(), key=lambda kv: kv[1]["wasted"], reverse=True
         )
 
-        selected: list[tuple[int, dict]] = []
-        cumulative = 0.0
-        for uid, u in sorted_users:
-            selected.append((uid, u))
-            cumulative += u["wasted"]
-            if cumulative / cluster_total >= cluster_share_threshold:
-                break
-
         rows_out = []
-        for uid, u in selected:
+        for uid, u in sorted_users:
             cycles_for_user = [
                 (None if cf is None else uid in cf) for cf in cycle_flagged
             ]
@@ -978,5 +1021,51 @@ def get_recurring_underusers(
                 )
             )
         result[cluster] = rows_out
+
+    return result
+
+
+def select_recurring_table_view(
+    all_users: dict[str, list[RecurringUserRow]],
+    *,
+    display_cycles: int,
+    cluster_share_threshold: float,
+) -> dict[str, list[RecurringUserRow]]:
+    """Derive a threshold-selected, narrower-cycle-window table view from a full
+    (all-users, wide-cycle) ``get_recurring_underusers()`` pull.
+
+    Exact, not an approximation: per-user ``wasted_current_active_window``/
+    ``cluster_share`` and each cycle position's flags are already independent of
+    ``recurrence_display_cycles``/``cluster_share_threshold`` in the underlying
+    aggregate — this only re-applies the same greedy cumulative- share selection
+    used by ``get_recurring_underusers`` and truncates the per-cycle lists,
+    giving identical results to a direct call with
+    ``recurrence_display_cycles=display_cycles,
+    cluster_share_threshold=cluster_share_threshold``.
+
+    *all_users* rows must already be sorted descending by
+    ``wasted_current_active_window`` within each cluster (as returned by
+    ``get_recurring_underusers``).
+    """
+    result: dict[str, list[RecurringUserRow]] = {}
+    for cluster, rows in all_users.items():
+        cluster_total = sum(r.wasted_current_active_window for r in rows)
+
+        selected = []
+        cumulative = 0.0
+        for r in rows:
+            selected.append(r)
+            cumulative += r.wasted_current_active_window
+            if cumulative / cluster_total >= cluster_share_threshold:
+                break
+
+        result[cluster] = [
+            replace(
+                r,
+                cycles=r.cycles[:display_cycles],
+                pa_flags=r.pa_flags[:display_cycles],
+            )
+            for r in selected
+        ]
 
     return result

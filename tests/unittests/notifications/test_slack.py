@@ -95,6 +95,43 @@ def test_post_channel_api_error():
     assert result.ts is None
 
 
+# ── upload_files ──────────────────────────────────────────────────────────────
+
+
+def test_upload_files_success():
+    web = MagicMock()
+    client = _make_client(web)
+    result = client.upload_files(
+        "#alerts", [("a.csv", "a,b\n1,2"), ("b.csv", "x,y\n3,4")]
+    )
+    web.files_upload_v2.assert_called_once_with(
+        channel="#alerts",
+        file_uploads=[
+            {"filename": "a.csv", "content": "a,b\n1,2"},
+            {"filename": "b.csv", "content": "x,y\n3,4"},
+        ],
+        initial_comment=None,
+        thread_ts=None,
+    )
+    assert result.status == SendStatus.OK
+
+
+def test_upload_files_thread_ts_passed_through():
+    web = MagicMock()
+    client = _make_client(web)
+    client.upload_files("#alerts", [("a.csv", "a,b")], thread_ts="111.222")
+    assert web.files_upload_v2.call_args.kwargs["thread_ts"] == "111.222"
+
+
+def test_upload_files_api_error():
+    web = MagicMock()
+    web.files_upload_v2.side_effect = Exception("missing_scope")
+    client = _make_client(web)
+    result = client.upload_files("#alerts", [("a.csv", "a,b")])
+    assert result.status == SendStatus.FAILED
+    assert "missing_scope" in result.detail
+
+
 # ── dm_user ───────────────────────────────────────────────────────────────────
 
 

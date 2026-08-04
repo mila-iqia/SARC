@@ -89,7 +89,7 @@ sarc:
       token: slack-token-replace-me # SENSITIVE: can be used to send messages on slack
       channel: slack-channel-id-replace-me # The slack channel ID to message
   notifications:
-    # Required bot scopes: chat:write, im:write, users:read.email
+    # Required bot scopes: chat:write, im:write, users:read.email, files:write
     slack_underusage: # Credentials for delivering user DMs and the admin digest
       description: Under Usage Reports # used to distinguish multiple instances if the message the same channel
       token: slack-token-replace-me # SENSITIVE: can be used to send messages on slack
@@ -103,12 +103,13 @@ sarc:
       "" # Template for the per-user underusage DM body; placeholders: {name},
       # {window_weeks}, {window_range}, {rgu_allocated}, {user_allocated},
       # {rgu_wasted}, {user_wasted}, {avg_utilization}, {rgu_unit}, {user_unit},
-      # {top_jobs_count}, {jobs_section}, {dashboard_url}.
+      # {bottom_jobs_count}, {bottom_jobs_section}, {dashboard_url}.
     usage_report_template:
       "" # Template for the neutral usage report body; placeholders: {name},
       # {window_weeks}, {window_range}, {rgu_allocated}, {user_allocated},
       # {avg_utilization}, {rgu_unit}, {user_unit}, {top_jobs_count},
-      # {jobs_section}, {dashboard_url}.
+      # {top_jobs_section}, {bottom_jobs_count}, {bottom_jobs_section},
+      # {dashboard_url}.
     dashboard_url: dashboard-url-replace-me # Dashboard link inserted into user-facing messages
     enabled: True # Master switch; when False the notify command is a no-op
     send_underusage_report: True # Enable the user underusage DMs and the admin digest
@@ -118,7 +119,7 @@ sarc:
     # --- Individual underusage alerts (user DMs) ---
     min_waste_ratio: 0.50 # Min scaled waste ratio (1 - effective_util) to flag a user
     min_waste_rgu_hours: 3225.6 # Min scaled wasted RGU-h to flag a user (~4x A100-80GB RGU x 7d)
-    top_jobs_per_user: 5 # Number of a user's worst jobs shown per user
+    max_jobs_per_user: 5 # Max jobs shown per per-user job list (underusage DM's worst jobs; usage report's best- and worst-jobs lists)
     # --- Universal usage report (neutral, all active GPU users) ---
     usage_report_cycles: 2 # Usage-report window length, in usage cycles
     usage_report_min_usage_rgu_hours: 1843.2 # Min occupied (used+wasted) RGU-h to include a user (~4x A100-80GB RGU x 4d)
@@ -133,6 +134,15 @@ sarc:
       # the (n-1) cycles following it — that escalate to a restrictive-action
       # marker ("!!⚑▲") in the recurring-underusers table; a value greater than
       # recurrence_display_cycles yields no escalation
+
+    rgu_unit: # Display unit for RGU-hour quantities (rgu_allocated/rgu_wasted in templates)
+      unit: RGU-w # Short label
+      unit_long: RGU-weeks # Long label
+      hours_per_unit: 168 # RGU-hours per unit; 24*7 hours in a week -> unit = "RGU-week"
+    user_unit: # Same quantities re-expressed in A100-equivalent terms (user_allocated/user_wasted)
+      unit: A100-w # Short label
+      unit_long: A100-weeks # Long label
+      hours_per_unit: 806.4 # RGU-hours per unit; 1x A100-80GB ≈ 4.8 RGU, so 4.8*24*7 -> unit = "A100-week"
 
     clusters: # Cluster-name allowlist scoping every query; empty list = all clusters
       - mila
