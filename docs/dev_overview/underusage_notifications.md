@@ -8,14 +8,14 @@ into reports and notifications. It is a dev-facing overview meant to be read in
 ## Overview
 
 The system runs periodically (typically weekly, driven by an external scheduler)
-via the CLI command `notify usage`. On each run it looks back over a
+via the CLI command `usage notify`. On each run it looks back over a
 rolling window, decides which researchers are wasting GPU allocation, and —
 depending on the calendar cadence and config gates — posts a digest for admins
 and DMs individual researchers.
 
 A few things to keep straight before the details:
 
-- **The CLI file is only the orchestrator.** `sarc/cli/notify/usage.py`
+- **The CLI file is only the orchestrator.** `sarc/cli/usage/notify.py`
   handles dry-run vs. send, calendar eligibility, delivery loops, and summary
   footers. The actual **flagging logic lives in
   `sarc/notifications/usage.py`**.
@@ -31,7 +31,7 @@ A few things to keep straight before the details:
 | Flagging / data | `sarc/notifications/usage.py` | `get_underusers`, `get_recurring_underusers`, `get_all_users_usage`, `classify_cycle` |
 | Message building | `sarc/notifications/messages.py` | `build_admin_digest`, `build_user_dm`, `build_usage_report`, `build_recurring_table` |
 | Delivery | `sarc/notifications/slack.py` | `SlackClient.dm_user`, `SlackClient.post_channel` |
-| Orchestration | `sarc/cli/notify/usage.py` | `UsageNotifyCommand` |
+| Orchestration | `sarc/cli/usage/notify.py` | `UsageNotifyCommand` |
 | Store refresh | `sarc/cli/usage/refresh_store.py` | `UsageRefreshStoreCommand` (`sarc usage refresh-store`) |
 | Store schema | `sarc/db/user_periods.py` | `UserPeriods` |
 
@@ -133,7 +133,7 @@ flowchart TD
 ```
 
 Confirmed weekly flow: (1) an external scheduler runs `sarc usage
-refresh-store`, (2) it then runs `sarc notify usage --send` (reads the
+refresh-store`, (2) it then runs `sarc usage notify --send` (reads the
 just-refreshed store by default), (3) PowerBI reads `UserPeriods`
 independently, on its own schedule.
 
@@ -164,7 +164,7 @@ then applies the send gates. Underusage alerts recur every
 
 ```mermaid
 flowchart TD
-    START["notify usage run"] --> ENABLED{"config.notifications<br/>enabled?"}
+    START["usage notify run"] --> ENABLED{"config.notifications<br/>enabled?"}
     ENABLED -->|no| STOP["exit"]
     ENABLED -->|yes| FETCH["fetch data + build digest/previews"]
 

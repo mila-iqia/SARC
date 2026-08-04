@@ -8,6 +8,7 @@ import gifnoc
 import simple_parsing
 
 from sarc.config import config
+from sarc.notifications.csv_export import build_recurring_distilled_csv
 from sarc.notifications.messages import (
     build_admin_digest,
     build_usage_report,
@@ -19,6 +20,7 @@ from sarc.notifications.usage import (
     get_recurring_underusers,
     get_underusers_usage,
     get_users_usage,
+    select_recurring_table_view,
 )
 
 logger = logging.getLogger(__name__)
@@ -301,7 +303,7 @@ class UsageNotifyCommand:
             end,
             min_waste_ratio=ncfg.min_waste_ratio,
             min_waste_rgu_hours=ncfg.min_waste_rgu_hours,
-            top_jobs_per_user=ncfg.top_jobs_per_user,
+            max_jobs_per_user=ncfg.max_jobs_per_user,
             clusters=clusters,
             utilization_ceiling=ncfg.utilization_ceiling,
             user_emails=user_emails,
@@ -328,7 +330,7 @@ class UsageNotifyCommand:
                 usage_start,
                 end,
                 min_usage_rgu_hours=ncfg.usage_report_min_usage_rgu_hours,
-                top_jobs_per_user=ncfg.top_jobs_per_user,
+                max_jobs_per_user=ncfg.max_jobs_per_user,
                 clusters=clusters,
                 user_emails=_user_emails,
             )
@@ -352,20 +354,33 @@ class UsageNotifyCommand:
         # also the preview print and the later channel post) entirely — only the
         # per-user DM(s) above should go out.
         if self.user_email is None:
-            recurring = get_recurring_underusers(
+            # Wide/unfiltered pull: every underusing user per cluster (no
+            # cluster_share_threshold cutoff), history_cycles cycles. The Slack
+            # table's narrower view is derived from this same pull below —
+            # exact, not an approximation, since per-user waste/share and each
+            # cycle
+            # position's flags are independent of recurrence_display_cycles/
+            # cluster_share_threshold in the underlying aggregate.
+            csv_recurring = get_recurring_underusers(
                 end,
                 min_waste_ratio=ncfg.min_waste_ratio,
                 min_waste_rgu_hours=ncfg.min_waste_rgu_hours,
-                cluster_share_threshold=ncfg.recurrence_cluster_share,
-                recurrence_display_cycles=ncfg.recurrence_display_cycles,
+                recurrence_display_cycles=ncfg.history_cycles,
                 recurrence_active_cycles=ncfg.recurrence_active_cycles,
                 clusters=clusters,
                 utilization_ceiling=ncfg.utilization_ceiling,
                 personalized_action_min_waste_rgu_hours=ncfg.personalized_action_min_waste_rgu_hours,
                 ignore_store=ignore_store,
             )
+            recurring = select_recurring_table_view(
+                csv_recurring,
+                display_cycles=ncfg.recurrence_display_cycles,
+                cluster_share_threshold=ncfg.recurrence_cluster_share,
+            )
 
-            cycle_dates = get_cycle_dates(end, ncfg.recurrence_display_cycles)
+            cycle_dates = get_cycle_dates(end, ncfg.history_cycles)[
+                : ncfg.recurrence_display_cycles
+            ]
             digest = build_admin_digest(
                 underusage_rows,
                 period=period,
@@ -377,8 +392,10 @@ class UsageNotifyCommand:
             )
             _userfacing_print("=== Admin Digest ===")
             _userfacing_print(digest)
+
         else:
             digest = None
+            csv_recurring = None
 
         if not self.send:
             return 0
@@ -443,7 +460,7 @@ class UsageNotifyCommand:
             )
 
         channel_res = None
-        if digest is not None:
+        if digest is not None and csv_recurring is not None:
             channel_res = slack_underusage_client.post_channel(
                 ncfg.slack_underusage.channel, digest, preformatted=True
             )
@@ -452,6 +469,38 @@ class UsageNotifyCommand:
                     "Failed to post admin digest to %s: %s",
                     ncfg.slack_underusage.channel,
                     channel_res.detail,
+                )
+
+            # Recurring-underusers CSV export (full dataset, history_cycles
+            # cycles): a distilled close-copy of the Slack table, uploaded as a
+            # threaded reply. thread_ts is passed through even when
+            # channel_res.ts is None (digest post failed) — same
+            # degrade-to-non-threaded-post behavior the footer replies below
+            # already rely on.
+            assert ncfg.recurrence_active_cycles < ncfg.history_cycles, (
+                f"{ncfg.recurrence_active_cycles=} must be < {ncfg.history_cycles=}"
+            )
+            csv_cycle_dates = get_cycle_dates(end, ncfg.history_cycles)
+            window_end = csv_cycle_dates[0]
+            window_start = csv_cycle_dates[ncfg.recurrence_active_cycles]
+            distilled_csv = build_recurring_distilled_csv(
+                csv_recurring,
+                active_cycles=ncfg.recurrence_active_cycles,
+                cycle_dates=csv_cycle_dates,
+                dashboard_url=ncfg.dashboard_url,
+                window_start=window_start,
+                window_end=window_end,
+            )
+            upload_res = slack_underusage_client.upload_files(
+                ncfg.slack_underusage.channel,
+                [(f"recurring_underusers_distilled_{end.date()}.csv", distilled_csv)],
+                thread_ts=channel_res.ts,
+            )
+            if upload_res.status != SendStatus.OK:
+                logger.error(
+                    "Failed to upload recurring-underusers CSVs to %s: %s",
+                    ncfg.slack_underusage.channel,
+                    upload_res.detail,
                 )
 
             # Delivery summaries go in the digest's thread: rapporteur only

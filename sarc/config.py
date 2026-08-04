@@ -275,7 +275,7 @@ class UsageNotifyUnitConfig:
     """Short unit label"""
     unit_long: str
     """Long unit label"""
-    factor: float = 1.0
+    hours_per_unit: float = 1.0
 
 
 @dataclass
@@ -294,13 +294,14 @@ class UsageNotifyConfig:
     Placeholders: ``{name}``, ``{window_weeks}``, ``{window_range}``,
     ``{rgu_allocated}``, ``{user_allocated}``, ``{rgu_wasted}``,
     ``{user_wasted}``, ``{avg_utilization}``, ``{rgu_unit}``, ``{user_unit}``,
-    ``{top_jobs_count}``, ``{jobs_section}``, ``{dashboard_url}``."""
+    ``{bottom_jobs_count}``, ``{bottom_jobs_section}``, ``{dashboard_url}``."""
 
     usage_report_template: str
     """``.format()``-able template for the neutral usage report body.
     Placeholders: ``{name}``, ``{window_weeks}``, ``{window_range}``,
     ``{rgu_allocated}``, ``{user_allocated}``, ``{avg_utilization}``,
-    ``{rgu_unit}``, ``{top_jobs_count}``, ``{jobs_section}``,
+    ``{rgu_unit}``, ``{top_jobs_count}``, ``{top_jobs_section}``,
+    ``{bottom_jobs_count}``, ``{bottom_jobs_section}``,
     ``{dashboard_url}``."""
 
     dashboard_url: str
@@ -338,9 +339,10 @@ class UsageNotifyConfig:
     floor that suppresses trivially small waste. Default ≈ 4× A100-80GB RGU ×
     7d."""
 
-    top_jobs_per_user: int = 5
-    """Number of a user's worst jobs shown per user in the underusage DM.
-    Positive int."""
+    max_jobs_per_user: int = 5
+    """Number of jobs shown per user in each per-user job list — the
+    underusage DM's worst jobs, and the usage report's most- and
+    least-efficient job lists. Positive int."""
 
     usage_report_cycles: int = 2
     """Length of the usage-report window in usage cycles (window =
@@ -382,15 +384,23 @@ class UsageNotifyConfig:
     yields no escalation."""
 
     rgu_unit: UsageNotifyUnitConfig = field(
-        default_factory=lambda: UsageNotifyUnitConfig(
-            "RGU-w", "RGU-weeks", 1 / (24 * 7)
-        )
+        default_factory=lambda: UsageNotifyUnitConfig("RGU-w", "RGU-weeks", 24 * 7)
     )
+    """Display unit for raw RGU-hour quantities (``rgu_allocated``/``rgu_wasted``
+    in the templates). ``hours_per_unit`` divides stored RGU-hours down into
+    this unit. Default ``hours_per_unit=24*7`` (hours in a week) makes the
+    unit an "RGU-week"."""
+
     user_unit: UsageNotifyUnitConfig = field(
         default_factory=lambda: UsageNotifyUnitConfig(
-            "A100-w", "A100-weeks", 1 / (4.8 * 24 * 7)
+            "A100-w", "A100-weeks", 4.8 * 24 * 7
         )
     )
+    """Display unit for the same RGU-hour quantities re-expressed in
+    "A100-equivalent" terms (``user_allocated``/``user_wasted``), for readers
+    who don't think in RGU. Default ``hours_per_unit=4.8*24*7`` uses 1x
+    A100-80GB ≈ 4.8 RGU, so the unit is one A100-80GB running for a week
+    ("A100-week")."""
 
     clusters: list[str] = field(default_factory=lambda: ["mila"])
     """Cluster-name allowlist scoping every query (alerts, usage report,

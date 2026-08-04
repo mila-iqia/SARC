@@ -28,7 +28,7 @@ _WINDOW_START = datetime(2024, 6, 1, tzinfo=UTC)
 _WINDOW_END = datetime(2024, 6, 30, tzinfo=UTC)
 _MIN_WASTE_RATIO = 0.50
 _MIN_WASTE_RGU_HOURS = 672.0  # RGU-hours floor
-_TOP_JOBS_PER_USER = 5
+_MAX_JOBS_PER_USER = 5
 
 # mila: billing_is_gpu=True, gpu_type A100-SXM4-80GB → rgu = 4.8
 _MILA_GPU_TYPE = "A100-SXM4-80GB"
@@ -157,7 +157,7 @@ def test_underusers_filtering_and_top_jobs(underusage_db):
         _WINDOW_END,
         min_waste_ratio=_MIN_WASTE_RATIO,
         min_waste_rgu_hours=_MIN_WASTE_RGU_HOURS,
-        top_jobs_per_user=_TOP_JOBS_PER_USER,
+        max_jobs_per_user=_MAX_JOBS_PER_USER,
     )
     # Test high waster is returned
     assert "petitbonhomme@mila.quebec" in {r.email for r in results}
@@ -172,15 +172,15 @@ def test_underusers_filtering_and_top_jobs(underusage_db):
     # mila:   4.8 * 700 * 0.9 + extras ≈ 4152 RGU-h wasted
     assert row.by_cluster[0].cluster == "raisin"
 
-    # Test top jobs capped at five
-    assert len(row.top_jobs) == _TOP_JOBS_PER_USER
+    # Test bottom jobs capped at five
+    assert len(row.bottom_jobs) == _MAX_JOBS_PER_USER
 
-    # Test top jobs ordered desc by rgu hours unused
-    unused = [j.wasted for j in row.top_jobs]
+    # Test bottom jobs ordered desc by rgu hours unused
+    unused = [j.wasted for j in row.bottom_jobs]
     assert unused == sorted(unused, reverse=True)
 
-    # Test top jobs have utilization
-    assert all(j.gpu_sm_occupancy is not None for j in row.top_jobs)
+    # Test bottom jobs have utilization
+    assert all(j.gpu_sm_occupancy is not None for j in row.bottom_jobs)
 
 
 # ── Overview fields ───────────────────────────────────────────────────────────
@@ -192,7 +192,7 @@ def test_underusers_overview_fields(underusage_db):
         _WINDOW_END,
         min_waste_ratio=0.0,
         min_waste_rgu_hours=0.0,
-        top_jobs_per_user=_TOP_JOBS_PER_USER,
+        max_jobs_per_user=_MAX_JOBS_PER_USER,
     )
     row = next(r for r in results if r.email == "beaubonhomme@mila.quebec")
     # rgu_used / rgu_requested = 0.80
@@ -216,7 +216,7 @@ def test_outside_window_excluded(underusage_db):
             after,
             min_waste_ratio=0.0,
             min_waste_rgu_hours=0.0,
-            top_jobs_per_user=_TOP_JOBS_PER_USER,
+            max_jobs_per_user=_MAX_JOBS_PER_USER,
         )
         == []
     )
@@ -255,7 +255,7 @@ def test_run_concurrently_empty_tasks_returns_empty_list():
 def test_usage_all_users_overview_and_top_jobs(underusage_db):
     # All 3 users have GPU jobs in the window — no threshold filtering.
     results = get_users_usage(
-        _WINDOW_START, _WINDOW_END, top_jobs_per_user=_TOP_JOBS_PER_USER
+        _WINDOW_START, _WINDOW_END, max_jobs_per_user=_MAX_JOBS_PER_USER
     )
     emails = {r.email for r in results}
     assert "petitbonhomme@mila.quebec" in emails
@@ -272,40 +272,58 @@ def test_usage_all_users_overview_and_top_jobs(underusage_db):
 
     row = next(r for r in results if r.email == "petitbonhomme@mila.quebec")
     # petitbonhomme has 8 mila jobs + 1 raisin job = 9 total, capped at 5.
-    assert len(row.top_jobs) == _TOP_JOBS_PER_USER
+    assert len(row.top_jobs) == _MAX_JOBS_PER_USER
 
     # Test top jobs ordered desc by GPU utilization (most efficient first)
     occ = [j.gpu_sm_occupancy for j in row.top_jobs]
     assert occ == sorted(occ, reverse=True)
 
+    # Test bottom jobs (least efficient, by wasted resources): only 3 jobs
+    # remain after the top 5 are taken from 8 total, so the cap is not hit.
+    assert len(row.bottom_jobs) == 3
+    wasted = [j.wasted for j in row.bottom_jobs]
+    assert wasted == sorted(wasted, reverse=True)
+
+    # Test no job appears in both lists
+    top_ids = {j.job_id for j in row.top_jobs}
+    bottom_ids = {j.job_id for j in row.bottom_jobs}
+    assert top_ids.isdisjoint(bottom_ids)
+
 
 def test_usage_outside_window_excluded(underusage_db):
     before = datetime(2020, 1, 1, tzinfo=UTC)
     after = datetime(2020, 12, 31, tzinfo=UTC)
-    assert get_users_usage(before, after, top_jobs_per_user=_TOP_JOBS_PER_USER) == []
+    assert get_users_usage(before, after, max_jobs_per_user=_MAX_JOBS_PER_USER) == []
 
 
-# ── top_jobs_per_user is config-driven ───────────────────────────────────────
+# ── max_jobs_per_user is config-driven ───────────────────────────────────────
 
 
-def test_top_jobs_per_user_3(underusage_db):
+def test_max_jobs_per_user_3(underusage_db):
     # petitbonhomme has >5 jobs; verify the cap follows the param.
     results = get_underusers_usage(
         _WINDOW_START,
         _WINDOW_END,
         min_waste_ratio=_MIN_WASTE_RATIO,
         min_waste_rgu_hours=_MIN_WASTE_RGU_HOURS,
-        top_jobs_per_user=3,
+        max_jobs_per_user=3,
     )
     row = next(r for r in results if r.email == "petitbonhomme@mila.quebec")
-    assert len(row.top_jobs) == 3
+    assert len(row.bottom_jobs) == 3
 
 
-def test_usage_top_jobs_per_user_3(underusage_db):
+def test_usage_max_jobs_per_user_3(underusage_db):
     # petitbonhomme has 9 jobs total; verify the cap follows the param.
-    results = get_users_usage(_WINDOW_START, _WINDOW_END, top_jobs_per_user=3)
+    results = get_users_usage(_WINDOW_START, _WINDOW_END, max_jobs_per_user=3)
     row = next(r for r in results if r.email == "petitbonhomme@mila.quebec")
     assert len(row.top_jobs) == 3
+
+    # bottom_jobs uses the same knob: 8 total jobs, top 3 taken, 5 remain — the
+    # cap (3) is hit here, unlike the max_jobs_per_user=5 case above.
+    assert len(row.bottom_jobs) == 3
+    top_ids = {j.job_id for j in row.top_jobs}
+    bottom_ids = {j.job_id for j in row.bottom_jobs}
+    assert top_ids.isdisjoint(bottom_ids)
 
 
 # ── Cluster filter ────────────────────────────────────────────────────────────
@@ -318,7 +336,7 @@ def test_clusters_filter_excludes_other_clusters(underusage_db):
         _WINDOW_END,
         min_waste_ratio=_MIN_WASTE_RATIO,
         min_waste_rgu_hours=_MIN_WASTE_RGU_HOURS,
-        top_jobs_per_user=_TOP_JOBS_PER_USER,
+        max_jobs_per_user=_MAX_JOBS_PER_USER,
         clusters=["mila"],
     )
     petitbonhomme = next(r for r in results if "petitbonhomme" in r.email)
@@ -334,7 +352,7 @@ def test_get_underusers_user_emails_filters_to_single_user(underusage_db):
         _WINDOW_END,
         min_waste_ratio=0.0,
         min_waste_rgu_hours=0.0,
-        top_jobs_per_user=_TOP_JOBS_PER_USER,
+        max_jobs_per_user=_MAX_JOBS_PER_USER,
         user_emails=["petitbonhomme@mila.quebec"],
     )
     # At threshold 0.0, beaubonhomme and bramin would normally also qualify —
@@ -346,7 +364,7 @@ def test_get_underusers_user_emails_none_matches_default(underusage_db):
     kwargs = dict(
         min_waste_ratio=0.0,
         min_waste_rgu_hours=0.0,
-        top_jobs_per_user=_TOP_JOBS_PER_USER,
+        max_jobs_per_user=_MAX_JOBS_PER_USER,
     )
     with_none = get_underusers_usage(
         _WINDOW_START, _WINDOW_END, user_emails=None, **kwargs
@@ -362,7 +380,7 @@ def test_get_underusers_user_emails_empty_list_returns_no_rows(underusage_db):
         _WINDOW_END,
         min_waste_ratio=0.0,
         min_waste_rgu_hours=0.0,
-        top_jobs_per_user=_TOP_JOBS_PER_USER,
+        max_jobs_per_user=_MAX_JOBS_PER_USER,
         user_emails=[],
     )
     assert results == []
@@ -372,7 +390,7 @@ def test_get_all_users_usage_user_emails_filters_to_single_user(underusage_db):
     results = get_users_usage(
         _WINDOW_START,
         _WINDOW_END,
-        top_jobs_per_user=_TOP_JOBS_PER_USER,
+        max_jobs_per_user=_MAX_JOBS_PER_USER,
         user_emails=["beaubonhomme@mila.quebec"],
     )
     assert {r.email for r in results} == {"beaubonhomme@mila.quebec"}
@@ -382,7 +400,7 @@ def test_get_all_users_usage_user_emails_none_returns_all(underusage_db):
     results = get_users_usage(
         _WINDOW_START,
         _WINDOW_END,
-        top_jobs_per_user=_TOP_JOBS_PER_USER,
+        max_jobs_per_user=_MAX_JOBS_PER_USER,
         user_emails=None,
     )
     emails = {r.email for r in results}
@@ -400,7 +418,7 @@ def test_get_all_users_usage_exclusion_only_list_does_not_match_nobody(underusag
     results = get_users_usage(
         _WINDOW_START,
         _WINDOW_END,
-        top_jobs_per_user=_TOP_JOBS_PER_USER,
+        max_jobs_per_user=_MAX_JOBS_PER_USER,
         user_emails=["~petitbonhomme@mila.quebec"],
     )
     emails = {r.email for r in results}
@@ -417,7 +435,7 @@ def test_true_wasted_field_at_identity(underusage_db):
         _WINDOW_END,
         min_waste_ratio=0.0,
         min_waste_rgu_hours=0.0,
-        top_jobs_per_user=_TOP_JOBS_PER_USER,
+        max_jobs_per_user=_MAX_JOBS_PER_USER,
         utilization_ceiling=1.0,
     )
     for row in results:
@@ -437,7 +455,7 @@ def test_scaled_waste_less_than_true_waste_below_threshold(underusage_db):
         _WINDOW_END,
         min_waste_ratio=_MIN_WASTE_RATIO,
         min_waste_rgu_hours=_MIN_WASTE_RGU_HOURS,
-        top_jobs_per_user=_TOP_JOBS_PER_USER,
+        max_jobs_per_user=_MAX_JOBS_PER_USER,
         utilization_ceiling=0.80,
     )
     row = next(r for r in results if "petitbonhomme" in r.email)
@@ -454,7 +472,7 @@ def test_subtractive_formula_exact_waste_ratio(underusage_db):
         _WINDOW_END,
         min_waste_ratio=_MIN_WASTE_RATIO,
         min_waste_rgu_hours=_MIN_WASTE_RGU_HOURS,
-        top_jobs_per_user=_TOP_JOBS_PER_USER,
+        max_jobs_per_user=_MAX_JOBS_PER_USER,
         utilization_ceiling=0.80,
     )
     row = next(r for r in results if "petitbonhomme" in r.email)
@@ -467,7 +485,7 @@ def test_subtractive_formula_exact_waste_ratio(underusage_db):
         _WINDOW_END,
         min_waste_ratio=0.10,
         min_waste_rgu_hours=_MIN_WASTE_RGU_HOURS,
-        top_jobs_per_user=_TOP_JOBS_PER_USER,
+        max_jobs_per_user=_MAX_JOBS_PER_USER,
         utilization_ceiling=0.20,
     )
     row = next(r for r in results if "petitbonhomme" in r.email)
@@ -483,7 +501,7 @@ def test_subtractive_formula_boundary_zero_waste(underusage_db):
         _WINDOW_END,
         min_waste_ratio=0.0,
         min_waste_rgu_hours=0.0,
-        top_jobs_per_user=_TOP_JOBS_PER_USER,
+        max_jobs_per_user=_MAX_JOBS_PER_USER,
         utilization_ceiling=0.80,
     )
     row = next(r for r in results if "beaubonhomme" in r.email)
@@ -495,7 +513,7 @@ def test_subtractive_formula_boundary_zero_waste(underusage_db):
         _WINDOW_END,
         min_waste_ratio=0.05,
         min_waste_rgu_hours=0.0,
-        top_jobs_per_user=_TOP_JOBS_PER_USER,
+        max_jobs_per_user=_MAX_JOBS_PER_USER,
         utilization_ceiling=0.90,
     )
     row = next(r for r in results if "beaubonhomme" in r.email)
@@ -511,12 +529,12 @@ def test_top_job_gpu_sm_occupancy_is_raw_mean(underusage_db):
         _WINDOW_END,
         min_waste_ratio=_MIN_WASTE_RATIO,
         min_waste_rgu_hours=_MIN_WASTE_RGU_HOURS,
-        top_jobs_per_user=_TOP_JOBS_PER_USER,
+        max_jobs_per_user=_MAX_JOBS_PER_USER,
         utilization_ceiling=0.80,
     )
     row = next(r for r in results if "petitbonhomme" in r.email)
-    raisin_job = next(j for j in row.top_jobs if j.cluster == "raisin")
-    mila_top = next(j for j in row.top_jobs if j.cluster == "mila")
+    raisin_job = next(j for j in row.bottom_jobs if j.cluster == "raisin")
+    mila_top = next(j for j in row.bottom_jobs if j.cluster == "mila")
     assert raisin_job.gpu_sm_occupancy == pytest.approx(0.0, abs=1e-6)
     assert mila_top.gpu_sm_occupancy == pytest.approx(0.10, abs=1e-6)
 
@@ -529,7 +547,7 @@ def test_usage_floor_excludes_below_threshold(underusage_db):
     results = get_users_usage(
         _WINDOW_START,
         _WINDOW_END,
-        top_jobs_per_user=_TOP_JOBS_PER_USER,
+        max_jobs_per_user=_MAX_JOBS_PER_USER,
         min_usage_rgu_hours=500.0,
     )
     emails = {r.email for r in results}
@@ -542,7 +560,7 @@ def test_usage_floor_at_boundary_is_excluded(underusage_db):
     results = get_users_usage(
         _WINDOW_START,
         _WINDOW_END,
-        top_jobs_per_user=_TOP_JOBS_PER_USER,
+        max_jobs_per_user=_MAX_JOBS_PER_USER,
         min_usage_rgu_hours=481.0,
     )
     emails = {r.email for r in results}
@@ -580,7 +598,7 @@ def test_missing_util_not_flagged(missing_util_db):
         _WINDOW_END,
         min_waste_ratio=_MIN_WASTE_RATIO,
         min_waste_rgu_hours=_MIN_WASTE_RGU_HOURS,
-        top_jobs_per_user=_TOP_JOBS_PER_USER,
+        max_jobs_per_user=_MAX_JOBS_PER_USER,
     )
     assert "bramin@mila.quebec" not in {r.email for r in results}
 
@@ -594,7 +612,7 @@ def test_missing_util_zero_waste(missing_util_db):
         _WINDOW_END,
         min_waste_ratio=0.0,
         min_waste_rgu_hours=0.0,
-        top_jobs_per_user=_TOP_JOBS_PER_USER,
+        max_jobs_per_user=_MAX_JOBS_PER_USER,
     )
     assert "bramin@mila.quebec" not in {r.email for r in results}
 
@@ -608,7 +626,7 @@ def test_missing_util_non_negative_waste_at_sub_threshold(missing_util_db):
         _WINDOW_END,
         min_waste_ratio=0.0,
         min_waste_rgu_hours=0.0,
-        top_jobs_per_user=_TOP_JOBS_PER_USER,
+        max_jobs_per_user=_MAX_JOBS_PER_USER,
         utilization_ceiling=0.8,
     )
     assert "bramin@mila.quebec" not in {r.email for r in results}
@@ -619,7 +637,7 @@ def test_missing_util_usage_rgu_hours_used_equals_requested(missing_util_db):
     # gpu_sm_occupancy stat), so he never produces a user_data entry and
     # never reaches get_all_users_usage's usage-floor check at all.
     results = get_users_usage(
-        _WINDOW_START, _WINDOW_END, top_jobs_per_user=_TOP_JOBS_PER_USER
+        _WINDOW_START, _WINDOW_END, max_jobs_per_user=_MAX_JOBS_PER_USER
     )
     assert "bramin@mila.quebec" not in {r.email for r in results}
 
@@ -659,6 +677,6 @@ def test_zero_cost_job_does_not_crash(zero_cost_db):
         _WINDOW_END,
         min_waste_ratio=_MIN_WASTE_RATIO,
         min_waste_rgu_hours=_MIN_WASTE_RGU_HOURS,
-        top_jobs_per_user=_TOP_JOBS_PER_USER,
+        max_jobs_per_user=_MAX_JOBS_PER_USER,
     )
     assert "bramin@mila.quebec" not in {r.email for r in results}
