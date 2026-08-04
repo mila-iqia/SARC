@@ -103,8 +103,12 @@ class UsageRow:
     # their total allocation size.
     wasted: float = 0.0
     by_cluster: list[UsageClusterBreakdown] = field(default_factory=list)
-    # Top-N GPU jobs by RGU-hours unused, descending.
+    # Top-N GPU jobs by GPU utilization (SM occupancy), descending -- the
+    # user's most efficient jobs.
     top_jobs: list[UsageJob] = field(default_factory=list)
+    # Bottom-N GPU jobs by RGU-hours unused, descending, excluding any job
+    # already selected in top_jobs.
+    bottom_jobs: list[UsageJob] = field(default_factory=list)
 
     # waste_ratio = wasted / rgu_hours  (= 1 - rgu_used / rgu_hours)
     @cached_property
@@ -453,7 +457,7 @@ def get_underusers_usage(
     *,
     min_waste_ratio: float,
     min_waste_rgu_hours: float,
-    top_jobs_per_user: int = 5,
+    max_jobs_per_user: int = 5,
     clusters: list[str] | None = None,
     utilization_ceiling: float = 1.0,
     user_emails: list[str] | None = None,
@@ -472,15 +476,31 @@ def get_underusers_usage(
         start,
         end,
         usage_filter=filter_underusers,
-        fetch_jobs_per_user=top_jobs_per_user > 0,
+        fetch_jobs_per_user=max_jobs_per_user > 0,
         clusters=clusters,
         utilization_ceiling=utilization_ceiling,
         user_emails=user_emails,
     )
 
     for row in result:
-        row.top_jobs.sort(key=lambda j: j.wasted, reverse=True)  # ty:ignore[no-matching-overload]
-        row.top_jobs = row.top_jobs[:top_jobs_per_user]
+        # Least efficient jobs, by wasted resources. Computed first (unlike
+        # get_users_usage) because this is the underuser digest -- the worst
+        # jobs are the whole point of the message, so they get first pick of
+        # any job that would otherwise land in both lists.
+        all_jobs = row.top_jobs
+        row.bottom_jobs = sorted(
+            all_jobs, key=lambda j: j.wasted, reverse=True
+        )[  # ty:ignore[no-matching-overload]
+            :max_jobs_per_user
+        ]
+
+        # Most efficient jobs, by GPU utilization, excluding anything already
+        # shown in bottom_jobs.
+        top_job_ids = {j.job_id for j in row.bottom_jobs}
+        remaining_jobs = [j for j in all_jobs if j.job_id not in top_job_ids]
+        row.top_jobs = sorted(
+            remaining_jobs, key=lambda j: j.gpu_sm_occupancy, reverse=True
+        )[:max_jobs_per_user]
 
     return result
 
@@ -490,7 +510,7 @@ def get_users_usage(
     end: datetime,
     *,
     min_usage_rgu_hours: float = 0.0,
-    top_jobs_per_user: int = 5,
+    max_jobs_per_user: int = 5,
     clusters: list[str] | None = None,
     user_emails: list[str] | None = None,
 ) -> list[UsageRow]:
@@ -501,15 +521,30 @@ def get_users_usage(
         start,
         end,
         usage_filter=filter_users,
-        fetch_jobs_per_user=top_jobs_per_user > 0,
+        fetch_jobs_per_user=max_jobs_per_user > 0,
         clusters=clusters,
         user_emails=user_emails,
     )
 
-    # Sorted by GPU utilization so these are the user's *most efficient* jobs
     for row in result:
-        row.top_jobs.sort(key=lambda j: j.gpu_sm_occupancy, reverse=True)
-        row.top_jobs = row.top_jobs[:top_jobs_per_user]
+        # Most efficient jobs, by GPU utilization. Computed first (unlike
+        # get_underusers_usage) because this is the neutral usage report --
+        # it leads with the best-jobs section, so that gets first pick of any
+        # job that would otherwise land in both lists.
+        all_jobs = row.top_jobs
+        row.top_jobs = sorted(all_jobs, key=lambda j: j.gpu_sm_occupancy, reverse=True)[
+            :max_jobs_per_user
+        ]
+
+        # Least efficient jobs, by wasted resources, excluding anything already
+        # shown in top_jobs.
+        top_job_ids = {j.job_id for j in row.top_jobs}
+        remaining_jobs = [j for j in all_jobs if j.job_id not in top_job_ids]
+        row.bottom_jobs = sorted(
+            remaining_jobs, key=lambda j: j.wasted, reverse=True
+        )[  # ty:ignore[no-matching-overload]
+            :max_jobs_per_user
+        ]
 
     return result
 

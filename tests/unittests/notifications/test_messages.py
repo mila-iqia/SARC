@@ -89,6 +89,23 @@ _USAGE_JOB_FIR = UsageJob(
     gpu_sm_occupancy=None,
 )
 
+_USAGE_JOB_NARVAL_3 = UsageJob(
+    job_id=300004,
+    cluster="narval",
+    submit_time=datetime(2026, 6, 2, tzinfo=UTC),
+    wasted=80.0,
+    rgu_hours_used=10.0,
+    gpu_sm_occupancy=0.05,
+)
+_USAGE_JOB_FIR_2 = UsageJob(
+    job_id=300005,
+    cluster="fir",
+    submit_time=datetime(2026, 5, 31, tzinfo=UTC),
+    wasted=40.0,
+    rgu_hours_used=5.0,
+    gpu_sm_occupancy=0.02,
+)
+
 _USAGE_ROW_ALICE = UsageRow(
     email="alice@mila.quebec",
     display_name="Alice Liddell",
@@ -100,6 +117,7 @@ _USAGE_ROW_ALICE = UsageRow(
         UsageClusterBreakdown("fir", 300.0, 220.0, 300.0 - 220.0),
     ],
     top_jobs=[_USAGE_JOB_NARVAL_1, _USAGE_JOB_NARVAL_2, _USAGE_JOB_FIR],
+    bottom_jobs=[_USAGE_JOB_NARVAL_3, _USAGE_JOB_FIR_2],
 )
 
 _USAGE_ROW_BOB = UsageRow(
@@ -144,11 +162,11 @@ def test_usage_report():
     # Test overview contains the real date range
     assert _date_range(_WINDOW_START, _WINDOW_END) in text
     # Test overview contains rgu used
-    assert _fmt_rgu(_USAGE_ROW_ALICE.rgu_hours, rgu_unit.factor) in text
+    assert _fmt_rgu(_USAGE_ROW_ALICE.rgu_hours, rgu_unit.hours_per_unit) in text
     # Test overview contains rgu long unit
     assert rgu_unit.unit_long in text
     # Test overview contains user friendly used
-    assert _fmt_rgu(_USAGE_ROW_ALICE.rgu_hours, user_unit.factor) in text
+    assert _fmt_rgu(_USAGE_ROW_ALICE.rgu_hours, user_unit.hours_per_unit) in text
     # Test overview contains user friendly long unit
     assert user_unit.unit_long in text
     # Test overview contains utilization
@@ -163,8 +181,20 @@ def test_usage_report():
         _jobs_section(
             _USAGE_ROW_ALICE.top_jobs,
             rgu_value=lambda j: j.rgu_hours_used,
-            rgu_factor=rgu_unit.factor,
+            hours_per_unit=rgu_unit.hours_per_unit,
             suffix=rgu_unit.unit,
+        )
+        in text
+    )
+    # Test overview contains bottom (least efficient) jobs count
+    assert f"bottom_jobs_count:{len(_USAGE_ROW_ALICE.bottom_jobs)}" in text
+    # Test bottom job line format
+    assert (
+        _jobs_section(
+            _USAGE_ROW_ALICE.bottom_jobs,
+            rgu_value=lambda j: j.wasted,
+            hours_per_unit=rgu_unit.hours_per_unit,
+            suffix=f"{rgu_unit.unit} unused",
         )
         in text
     )
@@ -215,6 +245,7 @@ _ROW_ALICE = UsageRow(
         UsageClusterBreakdown("fir", 300.0, 255.0, 300.0 - 255.0),
     ],
     top_jobs=[_JOB_NARVAL_1, _JOB_NARVAL_2, _JOB_FIR],
+    bottom_jobs=[_JOB_NARVAL_1, _JOB_NARVAL_2, _JOB_FIR],
 )
 
 _ROW_BOB = UsageRow(
@@ -266,28 +297,28 @@ def test_underusage_report():
     # Test overview contains the real date range
     assert _date_range(_WINDOW_START, _WINDOW_END) in text
     # Test overview contains rgu used
-    assert _fmt_rgu(_ROW_ALICE.rgu_hours, rgu_unit.factor) in text
+    assert _fmt_rgu(_ROW_ALICE.rgu_hours, rgu_unit.hours_per_unit) in text
     # Test overview contains rgu long unit
     assert rgu_unit.unit_long in text
     # Test overview contains utilization
     assert _pct(_ROW_ALICE.avg_utilization) in text
     # Test overview contains unused hours
-    assert _fmt_rgu(_ROW_ALICE.wasted, rgu_unit.factor) in text
+    assert _fmt_rgu(_ROW_ALICE.wasted, rgu_unit.hours_per_unit) in text
     # Test overview contains user friendly used
-    assert _fmt_rgu(_ROW_ALICE.wasted, user_unit.factor) in text
+    assert _fmt_rgu(_ROW_ALICE.wasted, user_unit.hours_per_unit) in text
     # Test overview contains user friendly long unit
     assert user_unit.unit_long in text
-    # Test overview contains top jobs count
-    assert f"top_jobs_count:{len(_ROW_ALICE.top_jobs)}" in text
-    # Test top jobs grouped by cluster
+    # Test overview contains bottom jobs count
+    assert f"bottom_jobs_count:{len(_ROW_ALICE.bottom_jobs)}" in text
+    # Test bottom jobs grouped by cluster
     # narval block appears before fir block (narval has more total waste)
     assert text.index("Cluster narval") < text.index("Cluster fir")
     # Test job line format
     assert (
         _jobs_section(
-            _ROW_ALICE.top_jobs,
+            _ROW_ALICE.bottom_jobs,
             rgu_value=lambda j: j.wasted,
-            rgu_factor=rgu_unit.factor,
+            hours_per_unit=rgu_unit.hours_per_unit,
             suffix=f"{rgu_unit.unit} unused",
         )
         in text
@@ -357,7 +388,7 @@ def test_digest():
         rgu_unit = config.sarc.notifications.rgu_unit
         text = build_admin_digest([_ROW_BOB], period="…", **_DIGEST_KW)
     # Test contains unused hours
-    assert f"{_fmt_rgu(600.0, rgu_unit.factor)} {rgu_unit.unit} unused" in text
+    assert f"{_fmt_rgu(600.0, rgu_unit.hours_per_unit)} {rgu_unit.unit} unused" in text
     # Test contains waste ratio
     assert "75.0 %" in text
 

@@ -129,7 +129,7 @@ def test_isunderuser_matches_get_underusers_usage_membership(classify_db):
         _CYCLE_END,
         min_waste_ratio=_MIN_WASTE_RATIO,
         min_waste_rgu_hours=_MIN_WASTE_RGU_HOURS,
-        top_jobs_per_user=0,
+        max_jobs_per_user=0,
     )
     live_underusers = {r.user_id for r in live_rows}
 
