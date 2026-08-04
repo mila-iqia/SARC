@@ -11,7 +11,6 @@ from sarc.patch import load
 from .encrypt import Encrypt
 from .fetch import Fetch
 from .health import Health
-from .notify import Notify
 from .parse import Parse
 from .usage import Usage
 
@@ -51,15 +50,12 @@ class NiceHandler(logging.StreamHandler):
 
 @dataclass
 class CLI:
-    # TODO: migrate `notify usage` to `usage notify` once the usage group is
-    # established.
-    command: Health | Fetch | Parse | Encrypt | Notify | Usage = subparsers(
+    command: Health | Fetch | Parse | Encrypt | Usage = subparsers(
         {
             "health": Health,
             "fetch": Fetch,
             "parse": Parse,
             "encrypt": Encrypt,
-            "notify": Notify,
             "usage": Usage,
         }
     )

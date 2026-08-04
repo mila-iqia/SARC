@@ -23,7 +23,7 @@ _HISTORY_CYCLES = UsageNotifyConfig.history_cycles
 
 
 def _run(cli_main, monkeypatch, *extra_args, notify_cfg=None):
-    monkeypatch.setattr("sarc.cli.notify.usage._now_utc", lambda: _TEST_END)
+    monkeypatch.setattr("sarc.cli.usage.notify._now_utc", lambda: _TEST_END)
     with gifnoc.overlay({"sarc.notifications": notify_cfg or _NOTIFY_CFG}):
         return cli_main(["usage", "refresh-store", *extra_args])
 
@@ -219,24 +219,24 @@ def test_notify_usage_parity_between_store_and_ignore_store(
     monkeypatch,
     capsys,
 ):
-    """Once the store is freshly refreshed, `notify usage` (store-backed,
-    default) and `notify usage --ignore-store` (live recompute) must render
+    """Once the store is freshly refreshed, `usage notify` (store-backed,
+    default) and `usage notify --ignore-store` (live recompute) must render
     an identical recurring-underusers table for the same fixture — proving
     PowerBI (which only ever reads the store) and Slack (either path) can
     never disagree."""
     rc0 = _run(cli_main, monkeypatch)
     assert rc0 == 0
 
-    monkeypatch.setattr("sarc.cli.notify.usage._now_utc", lambda: _TEST_END)
+    monkeypatch.setattr("sarc.cli.usage.notify._now_utc", lambda: _TEST_END)
 
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
-        rc1 = cli_main(["notify", "usage"])
+        rc1 = cli_main(["usage", "notify"])
     assert rc1 == 0
     store_out = capsys.readouterr().out
     assert "Recurring underusers" in store_out
 
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}):
-        rc2 = cli_main(["notify", "usage", "--ignore-store"])
+        rc2 = cli_main(["usage", "notify", "--ignore-store"])
     assert rc2 == 0
     live_out = capsys.readouterr().out
 
