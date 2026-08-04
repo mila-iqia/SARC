@@ -1,6 +1,7 @@
 import logging
 from collections.abc import Iterable, Sequence
 from datetime import UTC, datetime
+from functools import lru_cache
 from typing import Any, Self, Type
 
 from sqlalchemy.dialects.postgresql import TSTZRANGE, ExcludeConstraint, Range
@@ -513,16 +514,17 @@ class UserDB(SQLModel, table=True):
 
 
 @trace_decorator()
+@lru_cache(maxsize=5000)
 def get_user_id_for_cluster_user(
     sess: Session, cluster_id: int, user: str, submit_time: datetime
 ) -> int | None:
     from .cluster import SlurmClusterDB
 
-    cluster = sess.get(SlurmClusterDB, cluster_id)
-    assert cluster is not None
     return sess.exec(
-        select(CredentialsDB.user_id).where(
-            CredentialsDB.domain == cluster.domain,
+        select(CredentialsDB.user_id)
+        .join(SlurmClusterDB, col(SlurmClusterDB.domain) == col(CredentialsDB.domain))
+        .where(
+            SlurmClusterDB.id == cluster_id,
             CredentialsDB.username == user,
             CredentialsDB.valid.contains(submit_time),
         )
