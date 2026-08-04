@@ -321,7 +321,7 @@ def parse_raw(
 
 @trace_decorator()
 def update_allocated_gpu_type_from_nodes(
-    cluster: ClusterConfig, entry: SlurmJobDB
+    cluster: ClusterConfig, entry: SlurmJobDB, entry_cluster: SlurmClusterDB
 ) -> None:
     """
     Try to infer job GPU type from entry nodes, only for GPU jobs.
@@ -338,7 +338,8 @@ def update_allocated_gpu_type_from_nodes(
 
     gpu_type = None
 
-    node_gpu_mapping = entry.cluster.get_node_to_gpu(entry.start_time)
+    assert entry_cluster.id == entry.cluster_id
+    node_gpu_mapping = entry_cluster.get_node_to_gpu(entry.start_time)
     if node_gpu_mapping:
         node_to_gpu = node_gpu_mapping.node_to_gpu
         gpu_types = {
