@@ -1,7 +1,7 @@
 import contextvars
 from collections.abc import Callable, Sequence
 from concurrent.futures import Future, ThreadPoolExecutor
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta
 from functools import cached_property, partial
 from typing import TypeVar
@@ -161,6 +161,23 @@ class RecurringUserRow:
         length is the ``restrictive_action_run_cycles`` notifications config
         knob."""
         return _restrictive_action_flags(self.pa_flags)
+
+    def cycle_symbol(self, i: int) -> str:
+        """Return the marker for cycle position i, matching the
+        recurring-underusers table rendering: "" for a future cycle
+        (cycles[i] is None, no data yet), "✓" not flagged, "▲" underuser,
+        "⚑▲" personalized-action peak, "!!⚑▲" sustained restrictive-action
+        escalation. Bare symbol, no padding."""
+        flag = self.cycles[i]
+        if flag is None:
+            return ""
+        if not flag:
+            return "✓"
+        if i < len(self.restrictive_action_flags) and self.restrictive_action_flags[i]:
+            return "!!⚑▲"
+        if i < len(self.pa_flags) and self.pa_flags[i]:
+            return "⚑▲"
+        return "▲"
 
 
 def _restrictive_action_flags(flags: list[bool]) -> list[bool]:
@@ -853,7 +870,6 @@ def get_recurring_underusers(
     *,
     min_waste_ratio: float,
     min_waste_rgu_hours: float,
-    cluster_share_threshold: float,
     recurrence_active_cycles: int = 3,
     recurrence_display_cycles: int = 5,
     clusters: list[str] | None = None,
@@ -935,7 +951,7 @@ def get_recurring_underusers(
             clusters=clusters,
         )
 
-    # ── Per-cluster greedy selection (cumulative share >= cluster_share_threshold) ──
+    # ── Per-cluster selection ──
     result: dict[str, list[RecurringUserRow]] = {}
     for cluster, users in sorted(cluster_users.items()):
         cluster_total = sum(u["wasted"] for u in users.values())
@@ -944,16 +960,8 @@ def get_recurring_underusers(
             users.items(), key=lambda kv: kv[1]["wasted"], reverse=True
         )
 
-        selected: list[tuple[int, dict]] = []
-        cumulative = 0.0
-        for uid, u in sorted_users:
-            selected.append((uid, u))
-            cumulative += u["wasted"]
-            if cumulative / cluster_total >= cluster_share_threshold:
-                break
-
         rows_out = []
-        for uid, u in selected:
+        for uid, u in sorted_users:
             cycles_for_user = [
                 (None if cf is None else uid in cf) for cf in cycle_flagged
             ]
@@ -978,5 +986,51 @@ def get_recurring_underusers(
                 )
             )
         result[cluster] = rows_out
+
+    return result
+
+
+def select_recurring_table_view(
+    all_users: dict[str, list[RecurringUserRow]],
+    *,
+    display_cycles: int,
+    cluster_share_threshold: float,
+) -> dict[str, list[RecurringUserRow]]:
+    """Derive a threshold-selected, narrower-cycle-window table view from a full
+    (all-users, wide-cycle) ``get_recurring_underusers()`` pull.
+
+    Exact, not an approximation: per-user ``wasted_current_active_window``/
+    ``cluster_share`` and each cycle position's flags are already independent of
+    ``recurrence_display_cycles``/``cluster_share_threshold`` in the underlying
+    aggregate — this only re-applies the same greedy cumulative- share selection
+    used by ``get_recurring_underusers`` and truncates the per-cycle lists,
+    giving identical results to a direct call with
+    ``recurrence_display_cycles=display_cycles,
+    cluster_share_threshold=cluster_share_threshold``.
+
+    *all_users* rows must already be sorted descending by
+    ``wasted_current_active_window`` within each cluster (as returned by
+    ``get_recurring_underusers``).
+    """
+    result: dict[str, list[RecurringUserRow]] = {}
+    for cluster, rows in all_users.items():
+        cluster_total = sum(r.wasted_current_active_window for r in rows)
+
+        selected = []
+        cumulative = 0.0
+        for r in rows:
+            selected.append(r)
+            cumulative += r.wasted_current_active_window
+            if cumulative / cluster_total >= cluster_share_threshold:
+                break
+
+        result[cluster] = [
+            replace(
+                r,
+                cycles=r.cycles[:display_cycles],
+                pa_flags=r.pa_flags[:display_cycles],
+            )
+            for r in selected
+        ]
 
     return result

@@ -90,6 +90,34 @@ class SlackClient:
             logger.error("Slack channel post failed: %s", exc)
             return SendResult(SendStatus.FAILED, str(exc))
 
+    def upload_files(
+        self,
+        channel: str,
+        files: list[tuple[str, str]],
+        *,
+        initial_comment: str | None = None,
+        thread_ts: str | None = None,
+    ) -> SendResult:
+        """Upload one or more files (filename, content) to a channel.
+
+        Pass thread_ts to upload into a message's thread, same as post_channel.
+        """
+        try:
+            file_uploads = [
+                {"filename": filename, "content": content}
+                for filename, content in files
+            ]
+            self._client.files_upload_v2(
+                channel=channel,
+                file_uploads=file_uploads,
+                initial_comment=initial_comment,
+                thread_ts=thread_ts,
+            )
+            return SendResult(SendStatus.OK)
+        except Exception as exc:
+            logger.error("Slack file upload failed: %s", exc)
+            return SendResult(SendStatus.FAILED, str(exc))
+
     def dm_user(
         self, email: str, text: str, *, preformatted: bool = False
     ) -> SendResult:

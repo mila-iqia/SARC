@@ -89,7 +89,7 @@ sarc:
       token: slack-token-replace-me # SENSITIVE: can be used to send messages on slack
       channel: slack-channel-id-replace-me # The slack channel ID to message
   notifications:
-    # Required bot scopes: chat:write, im:write, users:read.email
+    # Required bot scopes: chat:write, im:write, users:read.email, files:write
     slack_underusage: # Credentials for delivering user DMs and the admin digest
       description: Under Usage Reports # used to distinguish multiple instances if the message the same channel
       token: slack-token-replace-me # SENSITIVE: can be used to send messages on slack
