@@ -436,7 +436,7 @@ def test_table_wasted_formatted_with_space_thousands():
     with gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}) as config:
         rgu_unit = config.sarc.notifications.rgu_unit
         text = build_recurring_table({"narval": [_ROW_ALICE]}, **_BRT_KW)
-    assert _fmt_rgu_int(4200, rgu_unit.factor) in text
+    assert _fmt_rgu_int(4200, rgu_unit.hours_per_unit) in text
 
 
 def test_table_share_percentage():

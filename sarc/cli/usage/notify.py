@@ -303,7 +303,7 @@ class UsageNotifyCommand:
             end,
             min_waste_ratio=ncfg.min_waste_ratio,
             min_waste_rgu_hours=ncfg.min_waste_rgu_hours,
-            top_jobs_per_user=ncfg.top_jobs_per_user,
+            max_jobs_per_user=ncfg.max_jobs_per_user,
             clusters=clusters,
             utilization_ceiling=ncfg.utilization_ceiling,
             user_emails=user_emails,
@@ -330,7 +330,7 @@ class UsageNotifyCommand:
                 usage_start,
                 end,
                 min_usage_rgu_hours=ncfg.usage_report_min_usage_rgu_hours,
-                top_jobs_per_user=ncfg.top_jobs_per_user,
+                max_jobs_per_user=ncfg.max_jobs_per_user,
                 clusters=clusters,
                 user_emails=_user_emails,
             )
