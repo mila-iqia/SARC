@@ -324,6 +324,11 @@ class UsageNotifyConfig:
     """Length in weeks of one usage cycle — the base cadence unit for alerts and
     the usage-report window. Positive int."""
 
+    history_cycles: int = 12
+    """Number of most-recent cycles retained in the UserPeriods store by `sarc
+    usage refresh-store`; older rows are pruned on every refresh. Positive
+    int."""
+
     min_waste_ratio: float = 0.50
     """Minimum scaled waste ratio (0..1), ``1 − effective_util``, for a user to
     be flagged as underusing."""

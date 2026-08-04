@@ -10,7 +10,10 @@ from sqlmodel import col, func, select
 
 from sarc.api.metrics import _is_real
 from sarc.config import config
+from sarc.db.cluster import SlurmClusterDB
 from sarc.db.job_series import JobSeriesDB
+from sarc.db.user_periods import UserPeriods
+from sarc.db.users import UserDB
 
 _MAX_WORKERS = 4
 
@@ -157,9 +160,13 @@ class RecurringUserRow:
         enforced. The flag lands on the newest cell of each such run. The run
         length is the ``restrictive_action_run_cycles`` notifications config
         knob."""
-        n = len(self.pa_flags)
-        run = restrictive_action_run_cycles()
-        return [i + run <= n and all(self.pa_flags[i : i + run]) for i in range(n)]
+        return _restrictive_action_flags(self.pa_flags)
+
+
+def _restrictive_action_flags(flags: list[bool]) -> list[bool]:
+    n = len(flags)
+    run = restrictive_action_run_cycles()
+    return [i + run <= n and all(flags[i : i + run]) for i in range(n)]
 
 
 def _rgu_exprs(utilization_ceiling: float = 1.0):
@@ -245,7 +252,6 @@ def _select_user_jobs(
 
 
 def _select_jobs_usage(
-    user_ids: list[int] | None,
     start: datetime,
     end: datetime,
     *,
@@ -263,9 +269,8 @@ def _select_jobs_usage(
     by_cluster=False: grouped by sarc_user_id only — one cross-cluster row
     per user.
 
-    *user_ids* optionally restricts to a subset of users (None = all users in
-    the window). *user_emails* optionally restricts to a subset of users by
-    email (None = all users in the window); independent of *user_ids*.
+    *user_emails* optionally restricts to a subset of users by email (None =
+    all users in the window).
     """
     rgu_h_expr, true_used_expr, credited_used_expr = _rgu_exprs(utilization_ceiling)
     _by_cluster = [col(JobSeriesDB.cluster_name)] if by_cluster else []
@@ -298,8 +303,6 @@ def _select_jobs_usage(
         func.coalesce(func.sum(true_used_expr), 0).label("sum_rgu_true_used"),
         func.coalesce(func.sum(credited_used_expr), 0).label("sum_rgu_used"),
     )
-    if user_ids is not None:
-        stmt = stmt.where(col(JobSeriesDB.sarc_user_id).in_(user_ids))
     if user_emails is not None:
         stmt = stmt.where(col(JobSeriesDB.email).in_(user_emails))
     if not_user_emails is not None:
@@ -336,7 +339,6 @@ def _get_users_usage(
 ) -> list[UsageRow]:
     with config.db.session() as session:
         stmt = _select_jobs_usage(
-            None,
             start,
             end,
             by_cluster=True,
@@ -422,6 +424,12 @@ def _get_users_usage(
     return result
 
 
+def _meets_underuser_threshold(
+    row: UsageRow, *, min_waste_ratio: float, min_waste_rgu_hours: float
+) -> bool:
+    return row.waste_ratio >= min_waste_ratio and row.wasted >= min_waste_rgu_hours
+
+
 def get_underusers_usage(
     start: datetime,
     end: datetime,
@@ -437,7 +445,11 @@ def get_underusers_usage(
     # aggregated waste ratio and total wasted RGU-hours exceed `min_waste_ratio`
     # and `min_waste_rgu_hours` respectively.
     def filter_underusers(row: UsageRow):
-        return row.waste_ratio >= min_waste_ratio and row.wasted >= min_waste_rgu_hours
+        return _meets_underuser_threshold(
+            row,
+            min_waste_ratio=min_waste_ratio,
+            min_waste_rgu_hours=min_waste_rgu_hours,
+        )
 
     result = _get_users_usage(
         start,
@@ -519,29 +531,321 @@ def get_cycle_dates(end: datetime, n: int = 5) -> list[date]:
     return [(anchor - timedelta(weeks=i * cycle_length_weeks)).date() for i in range(n)]
 
 
-def _fetch_pa_window_rows(
-    user_ids: list[int],
-    pa_start: datetime,
-    pa_end: datetime,
-    i: int,
-    clusters: list[str] | None,
-    utilization_ceiling: float,
-):
-    """One position's personalized-action rolling-window query, run inside
-    `get_recurring_underusers`'s capped thread pool -- opens its own session
-    rather than sharing one, since sessions aren't thread-safe. Module-level
-    (not a nested closure) so it's directly monkeypatch-able from tests.
+@dataclass
+class CycleUserClusterStat:
+    user_id: int
+    cluster: str
+    # RGU-hours allocated to this (user, cluster) over this single cycle
+    # (`cycle_length_weeks` wide, ending at `c_end`).
+    rgu_hours: float
+    # Ceiling-adjusted RGU-hours wasted, same window.
+    wasted: float
+    # Mean GPU SM occupancy (unadjusted, true_used / rgu_hours), same window.
+    sm_occ_mean: float
+    # True iff the user (cross-cluster) meets the underuser threshold over
+    # this single cycle.
+    isunderuser: bool
+    # True iff `isunderuser` and the user's cross-cluster wasted RGU-h over
+    # the trailing `recurrence_active_cycles`-cycle window ending at `c_end`
+    # meets `personalized_action_min_waste_rgu_hours`.
+    flagged: bool
+
+
+def classify_cycle(
+    c_start: datetime,
+    c_end: datetime,
+    *,
+    min_waste_ratio: float,
+    min_waste_rgu_hours: float,
+    personalized_action_min_waste_rgu_hours: float,
+    recurrence_active_cycles: int,
+    cycle_length_weeks: int,
+    clusters: list[str] | None = None,
+    utilization_ceiling: float = 1.0,
+) -> list[CycleUserClusterStat]:
+    """Classify every (user, cluster) active in the single cycle [c_start,
+    c_end) -- run inside `get_recurring_underusers`'s capped thread pool, one
+    call per displayed position. Module-level (not a nested closure) so it's
+    directly monkeypatch-able from tests.
+
+    `isunderuser` reuses `_get_users_usage` with an always-true filter (rather
+    than `get_underusers_usage`) so every active user is returned, not just
+    those meeting the threshold -- the store this feeds must hold every user
+    unconditionally. `flagged` additionally requires the user's cross-cluster
+    wasted RGU-h over the trailing `recurrence_active_cycles`-cycle window
+    ending at `c_end` to meet `personalized_action_min_waste_rgu_hours`; that
+    window's aggregate is independent of `[c_start, c_end)` and queried
+    separately, cross-cluster only (`by_cluster=False`), same as the per-user
+    values `get_recurring_underusers` computed before this extraction.
     """
+    usage_rows = _get_users_usage(
+        c_start,
+        c_end,
+        usage_filter=lambda _row: True,
+        fetch_jobs_per_user=False,
+        clusters=clusters,
+        utilization_ceiling=utilization_ceiling,
+    )
+    isunderuser_by_user = {
+        row.user_id: _meets_underuser_threshold(
+            row,
+            min_waste_ratio=min_waste_ratio,
+            min_waste_rgu_hours=min_waste_rgu_hours,
+        )
+        for row in usage_rows
+    }
+
+    pa_start = c_end - timedelta(weeks=recurrence_active_cycles * cycle_length_weeks)
     with config.db.session() as session:
         pa_stmt = _select_jobs_usage(
-            user_ids,
             pa_start,
-            pa_end,
+            c_end,
             by_cluster=False,
             clusters=clusters,
             utilization_ceiling=utilization_ceiling,
         )
-        return i, session.exec(pa_stmt).all()
+        pa_rows = session.exec(pa_stmt).all()
+    pa_wasted_by_user = {row.sarc_user_id: _split_waste(row)[2] for row in pa_rows}
+
+    stats: list[CycleUserClusterStat] = []
+    for row in usage_rows:
+        is_underuser = isunderuser_by_user[row.user_id]
+        flagged = (
+            is_underuser
+            and pa_wasted_by_user.get(row.user_id, 0.0)
+            >= personalized_action_min_waste_rgu_hours
+        )
+        stats.extend(
+            CycleUserClusterStat(
+                user_id=row.user_id,
+                cluster=cb.cluster,
+                rgu_hours=cb.rgu_hours,
+                wasted=cb.wasted,
+                sm_occ_mean=(
+                    cb.rgu_hours_used / cb.rgu_hours if cb.rgu_hours > 0 else 1.0
+                ),
+                isunderuser=is_underuser,
+                flagged=flagged,
+            )
+            for cb in row.by_cluster
+        )
+    return stats
+
+
+def _active_positions(
+    anchor: datetime,
+    end: datetime,
+    cycle_length_weeks: int,
+    recurrence_display_cycles: int,
+) -> list[int]:
+    """Indices (0 = most recent) among recurrence_display_cycles positions whose
+    end date is not in the future relative to *end*."""
+    return [
+        i
+        for i in range(recurrence_display_cycles)
+        if anchor - timedelta(weeks=i * cycle_length_weeks) <= end
+    ]
+
+
+def _live_recurrence_aggregate(
+    agg_start: datetime,
+    anchor: datetime,
+    *,
+    clusters: list[str] | None,
+    utilization_ceiling: float,
+) -> dict[str, dict[int, dict]]:
+    """Per-(user, cluster) aggregate over the full recurrence window
+    [agg_start, anchor). Returns cluster -> user_id -> {email, display_name,
+    wasted, true_wasted}."""
+    with config.db.session() as session:
+        stmt = _select_jobs_usage(
+            agg_start,
+            anchor,
+            by_cluster=True,
+            clusters=clusters,
+            utilization_ceiling=utilization_ceiling,
+        )
+        agg_rows = session.exec(stmt).all()
+
+    cluster_users: dict[str, dict[int, dict]] = {}
+    for row in agg_rows:
+        cluster = row.cluster_name or "unknown"
+        uid = row.sarc_user_id
+        rgu_h, rgu_h_true_used, rgu_h_wasted = _split_waste(row)
+        if rgu_h_wasted <= 0:
+            continue
+        rgu_h_true_wasted = rgu_h - rgu_h_true_used
+        if cluster not in cluster_users:
+            cluster_users[cluster] = {}
+        assert uid not in cluster_users[cluster], (
+            f"A {uid=} should not appear twice for the same {cluster=}"
+        )
+        cluster_users[cluster][uid] = {
+            "email": row.email,
+            "display_name": row.display_name,
+            "wasted": rgu_h_wasted,
+            "true_wasted": rgu_h_true_wasted,
+        }
+    return cluster_users
+
+
+def _live_cycle_data(
+    anchor: datetime,
+    end: datetime,
+    cycle_length_weeks: int,
+    *,
+    min_waste_ratio: float,
+    min_waste_rgu_hours: float,
+    personalized_action_min_waste_rgu_hours: float,
+    recurrence_active_cycles: int,
+    recurrence_display_cycles: int,
+    clusters: list[str] | None,
+    utilization_ceiling: float,
+) -> tuple[list[set[int] | None], dict[int, list[bool]]]:
+    """Per-cycle membership + personalized-action flags via classify_cycle, one
+    call per displayed position. Positions whose end is in the future relative
+    to `end` are skipped (cycle_flagged stays None, no user_pa_flags entries
+    created for them). Each position's classification is independent of every
+    other, so they run on a small capped thread pool instead of one after
+    another."""
+    cycle_flagged: list[set[int] | None] = [None] * recurrence_display_cycles
+    active_positions = _active_positions(
+        anchor, end, cycle_length_weeks, recurrence_display_cycles
+    )
+
+    classify_results = _run_concurrently(
+        [
+            partial(
+                classify_cycle,
+                anchor - timedelta(weeks=(i + 1) * cycle_length_weeks),
+                anchor - timedelta(weeks=i * cycle_length_weeks),
+                min_waste_ratio=min_waste_ratio,
+                min_waste_rgu_hours=min_waste_rgu_hours,
+                personalized_action_min_waste_rgu_hours=personalized_action_min_waste_rgu_hours,
+                recurrence_active_cycles=recurrence_active_cycles,
+                cycle_length_weeks=cycle_length_weeks,
+                clusters=clusters,
+                utilization_ceiling=utilization_ceiling,
+            )
+            for i in active_positions
+        ]
+    )
+
+    user_pa_flags: dict[int, list[bool]] = {}
+    for i, stats in zip(active_positions, classify_results):
+        cycle_flagged[i] = {s.user_id for s in stats if s.isunderuser}
+        for s in stats:
+            if s.user_id not in user_pa_flags:
+                user_pa_flags[s.user_id] = [False] * recurrence_display_cycles
+            user_pa_flags[s.user_id][i] = s.flagged
+
+    return cycle_flagged, user_pa_flags
+
+
+def _read_store_recurring_data(
+    anchor: datetime,
+    end: datetime,
+    cycle_length_weeks: int,
+    *,
+    recurrence_active_cycles: int,
+    recurrence_display_cycles: int,
+    clusters: list[str] | None,
+) -> tuple[dict[str, dict[int, dict]], list[set[int] | None], dict[int, list[bool]]]:
+    """Reconstruct the same (cluster_users, cycle_flagged, user_pa_flags) shapes
+    the live path builds, by reading UserPeriods rows joined to users/clusters.
+
+    A stored row's isunderuser/flagged columns are already per-user (identical
+    across that user's cluster rows in the same cycle, per classify_cycle), so
+    any one row for (user, position) carries the value. The full-window
+    aggregate (cluster_users) sums each (user, cluster)'s stored wasted/
+    true_wasted over the recurrence_active_cycles most-recent positions,
+    unconditionally -- matching the live path's own aggregate query, which
+    isn't gated by the future-cycle check that only applies to per-cycle
+    membership/PA flags.
+
+    A position with no stored rows (future cycle, or a stale/never-refreshed
+    store) reads as "no underusers" for an active position -- cycle_flagged[i]
+    is an empty set, not None -- and as a genuine future cycle (None) only
+    when the position itself is beyond `end`. The store does not distinguish
+    "stale" from "genuinely empty"; both read the same way.
+    """
+    active_positions = _active_positions(
+        anchor, end, cycle_length_weeks, recurrence_display_cycles
+    )
+    end_dates = [
+        anchor - timedelta(weeks=i * cycle_length_weeks)
+        for i in range(recurrence_display_cycles)
+    ]
+    position_by_end_date = {d: i for i, d in enumerate(end_dates)}
+
+    cycle_flagged: list[set[int] | None] = [
+        set() if i in active_positions else None
+        for i in range(recurrence_display_cycles)
+    ]
+    user_pa_flags: dict[int, list[bool]] = {}
+    cluster_agg: dict[str, dict[int, dict]] = {}
+
+    with config.db.session() as session:
+        stmt = (
+            select(  # ty:ignore[no-matching-overload]
+                col(UserPeriods.user_id),
+                col(UserPeriods.end_date),
+                col(UserPeriods.rgu_hours),
+                col(UserPeriods.sm_occ_mean),
+                col(UserPeriods.unused_rguh),
+                col(UserPeriods.isunderuser),
+                col(UserPeriods.flagged),
+                col(UserDB.email),
+                col(UserDB.display_name),
+                col(SlurmClusterDB.name).label("cluster_name"),
+            )
+            .select_from(UserPeriods)
+            .join(UserDB, col(UserPeriods.user_id) == col(UserDB.id))
+            .join(SlurmClusterDB, col(UserPeriods.cluster_id) == col(SlurmClusterDB.id))
+            .where(col(UserPeriods.end_date).in_(end_dates))
+        )
+        if clusters:
+            stmt = stmt.where(col(SlurmClusterDB.name).in_(clusters))
+        rows = session.exec(stmt).all()
+
+    for row in rows:
+        i = position_by_end_date[row.end_date]
+
+        if i in active_positions:
+            flagged_set = cycle_flagged[i]
+            assert flagged_set is not None, (
+                f"active position {i} must be a set, not None"
+            )
+            if row.isunderuser:
+                flagged_set.add(row.user_id)
+            if row.user_id not in user_pa_flags:
+                user_pa_flags[row.user_id] = [False] * recurrence_display_cycles
+            user_pa_flags[row.user_id][i] = row.flagged
+
+        if i < recurrence_active_cycles:
+            cluster = row.cluster_name or "unknown"
+            true_wasted = row.rgu_hours * (1.0 - row.sm_occ_mean)
+            bucket = cluster_agg.setdefault(cluster, {}).setdefault(
+                row.user_id,
+                {
+                    "email": row.email,
+                    "display_name": row.display_name,
+                    "wasted": 0.0,
+                    "true_wasted": 0.0,
+                },
+            )
+            bucket["wasted"] += row.unused_rguh
+            bucket["true_wasted"] += true_wasted
+
+    cluster_users = {
+        cluster: {uid: u for uid, u in users.items() if u["wasted"] > 0}
+        for cluster, users in cluster_agg.items()
+    }
+    cluster_users = {
+        cluster: users for cluster, users in cluster_users.items() if users
+    }
+
+    return cluster_users, cycle_flagged, user_pa_flags
 
 
 def get_recurring_underusers(
@@ -555,6 +859,7 @@ def get_recurring_underusers(
     clusters: list[str] | None = None,
     utilization_ceiling: float = 1.0,
     personalized_action_min_waste_rgu_hours: float = 0.0,
+    ignore_store: bool = False,
 ) -> dict[str, list[RecurringUserRow]]:
     """Return per-cluster top wasters for the recurring-underusers digest table.
 
@@ -577,6 +882,14 @@ def get_recurring_underusers(
     ``pa_flags[0]`` restricted to a current cycle that is not in the future.
     Requires ``recurrence_active_cycles <= recurrence_display_cycles``.
 
+    ``ignore_store``: False (default) reads the precomputed ``UserPeriods``
+    store (fast path, shared with PowerBI, populated by ``usage
+    refresh-store``); a past cycle with no stored rows reads as "no
+    underusers", not an error. True recomputes everything live against
+    job_series (the original, slower path) -- used whenever debug threshold
+    overrides are active, since the store was populated with the configured
+    defaults and can't reflect an ad hoc override.
+
     Returns a dict of cluster_name -> list[RecurringUserRow] (sorted desc by
     wasted_6w within each cluster), ordered by cluster name.
     """
@@ -593,118 +906,34 @@ def get_recurring_underusers(
     anchor = _week_anchor(end)
     agg_start = anchor - timedelta(weeks=window_weeks)
 
-    # ── Per-(user, cluster) aggregate over the full recurrence window ─────────
-    with config.db.session() as session:
-        stmt = _select_jobs_usage(
-            None,
+    if ignore_store:
+        cluster_users = _live_recurrence_aggregate(
             agg_start,
             anchor,
-            by_cluster=True,
             clusters=clusters,
             utilization_ceiling=utilization_ceiling,
         )
-        agg_rows = session.exec(stmt).all()
-
-    # ── Organise wasted RGU-h per (cluster, user) ─────────────────────────────
-    # cluster -> user_id -> {email, display_name, wasted, true_wasted}
-    cluster_users: dict[str, dict[int, dict]] = {}
-    for row in agg_rows:
-        cluster = row.cluster_name or "unknown"
-        uid = row.sarc_user_id
-        rgu_h, rgu_h_true_used, rgu_h_wasted = _split_waste(row)
-        if rgu_h_wasted <= 0:
-            continue
-        rgu_h_true_wasted = rgu_h - rgu_h_true_used
-        if cluster not in cluster_users:
-            cluster_users[cluster] = {}
-        assert uid not in cluster_users[cluster], (
-            f"A {uid=} should not appear twice for the same {cluster=}"
+        cycle_flagged, user_pa_flags = _live_cycle_data(
+            anchor,
+            end,
+            cycle_length_weeks,
+            min_waste_ratio=min_waste_ratio,
+            min_waste_rgu_hours=min_waste_rgu_hours,
+            personalized_action_min_waste_rgu_hours=personalized_action_min_waste_rgu_hours,
+            recurrence_active_cycles=recurrence_active_cycles,
+            recurrence_display_cycles=recurrence_display_cycles,
+            clusters=clusters,
+            utilization_ceiling=utilization_ceiling,
         )
-        cluster_users[cluster][uid] = {
-            "email": row.email,
-            "display_name": row.display_name,
-            "wasted": rgu_h_wasted,
-            "true_wasted": rgu_h_true_wasted,
-        }
-
-    # ── Cycle membership sets ─────────────────────────────────────────────────
-    # Each cycle ends at anchor - i*cycle_length_weeks (always aligned). Cycles
-    # whose end is in the future relative to `end` yield None (no data). Each
-    # position's get_underusers call is independent of every other, so they
-    # run on a small capped thread pool instead of one after another.
-    cycle_flagged: list[set[int] | None] = [None] * recurrence_display_cycles
-    active_cycles: list[tuple[int, datetime, datetime]] = []
-    for i in range(recurrence_display_cycles):
-        c_end = anchor - timedelta(weeks=i * cycle_length_weeks)
-        if c_end > end:
-            continue
-        c_start = c_end - timedelta(weeks=cycle_length_weeks)
-        active_cycles.append((i, c_start, c_end))
-
-    membership_results = _run_concurrently(
-        [
-            partial(
-                get_underusers_usage,
-                c_start,
-                c_end,
-                min_waste_ratio=min_waste_ratio,
-                min_waste_rgu_hours=min_waste_rgu_hours,
-                # Only user_id is used for membership — top jobs are discarded.
-                top_jobs_per_user=0,
-                clusters=clusters,
-                utilization_ceiling=utilization_ceiling,
-            )
-            for _, c_start, c_end in active_cycles
-        ]
-    )
-    for (i, _, _), flagged_rows in zip(active_cycles, membership_results):
-        cycle_flagged[i] = {r.user_id for r in flagged_rows}
-
-    # ── Personalized-action aggregate (per active anchor, cross-cluster) ──────
-    # For position i, the window is [anchor − (i+active_cycles)·cl, anchor −
-    # i·cl]. Index 0 = most-recent anchor (matches the former single-window
-    # query). Same independence-per-position as above, so also run concurrently
-    # — each position opens its own session (_fetch_pa_window_rows) rather than
-    # sharing one across positions.
-    user_ids = list({uid for uids in cluster_users.values() for uid in uids})
-    pa_window_weeks = recurrence_active_cycles * cycle_length_weeks
-    active_pa_positions: list[tuple[int, datetime, datetime]] = []
-    for i in range(recurrence_display_cycles):
-        if cycle_flagged[i] is None:
-            continue
-        pa_end = anchor - timedelta(weeks=i * cycle_length_weeks)
-        pa_start = pa_end - timedelta(weeks=pa_window_weeks)
-        active_pa_positions.append((i, pa_start, pa_end))
-
-    pa_results = _run_concurrently(
-        [
-            partial(
-                _fetch_pa_window_rows,
-                user_ids,
-                pa_start,
-                pa_end,
-                i,
-                clusters,
-                utilization_ceiling,
-            )
-            for i, pa_start, pa_end in active_pa_positions
-        ]
-    )
-
-    user_pa_flags: dict[int, list[bool]] = {}
-    for i, rows in pa_results:
-        # PA at position i requires both the waste floor and single-cycle
-        # underuse in that position's most-recent cycle.
-        _this_cycle_flagged: set[int] = cycle_flagged[i] or set()
-        for row in rows:
-            uid = row.sarc_user_id
-            if uid not in user_pa_flags:
-                user_pa_flags[uid] = [False] * recurrence_display_cycles
-            _, _, pa_rgu_wasted_h = _split_waste(row)
-            user_pa_flags[uid][i] = (
-                pa_rgu_wasted_h >= personalized_action_min_waste_rgu_hours
-                and uid in _this_cycle_flagged
-            )
+    else:
+        cluster_users, cycle_flagged, user_pa_flags = _read_store_recurring_data(
+            anchor,
+            end,
+            cycle_length_weeks,
+            recurrence_active_cycles=recurrence_active_cycles,
+            recurrence_display_cycles=recurrence_display_cycles,
+            clusters=clusters,
+        )
 
     # ── Per-cluster greedy selection (cumulative share >= cluster_share_threshold) ──
     result: dict[str, list[RecurringUserRow]] = {}

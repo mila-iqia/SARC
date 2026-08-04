@@ -18,6 +18,7 @@ def get_meta():
         job_series,
         runstate,
         support,
+        user_periods,
         users,
     )
 
