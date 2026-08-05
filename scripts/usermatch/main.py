@@ -15,11 +15,48 @@ import socket
 import threading
 import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
 
 from sqlmodel import select
 
 from sarc.config import config
 from sarc.db.users import UserDB
+
+
+def load_ignore_list(path: str | Path | None) -> list[str]:
+    """Load ignored DRAC member IDs from a JSON file.
+
+    Returns a list of string DRAC member IDs (mids).
+    If path is None, file doesn't exist, or file contains invalid JSON, returns [].
+    """
+    if path is None:
+        return []
+    p = Path(path)
+    if not p.is_file():
+        return []
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+
+    if not isinstance(data, list):
+        return []
+
+    result = []
+    for item in data:
+        if isinstance(item, str):
+            result.append(item)
+        elif isinstance(item, dict):
+            if "matching_id" in item and isinstance(item["matching_id"], dict):
+                mid = item["matching_id"].get("mid")
+                if mid:
+                    result.append(str(mid))
+            elif "mid" in item and item["mid"]:
+                result.append(str(item["mid"]))
+            elif "drac_member" in item and item["drac_member"]:
+                result.append(str(item["drac_member"]))
+    return result
+
 
 # ---------------------------------------------------------------------------
 # HTML page — users data is injected as a JSON literal before serving
@@ -187,6 +224,15 @@ _HTML = """\
     padding: 2px 8px;
   }
   .btn-danger:hover { background: #3d1217; }
+  .btn-danger:hover { background: #3d1217; }
+  .btn-ignore {
+    background: transparent;
+    border-color: #8b949e;
+    color: #8b949e;
+    font-size: 11px;
+    padding: 2px 8px;
+  }
+  .btn-ignore:hover { background: #21262d; color: #c9d1d9; border-color: #c9d1d9; }
   .pairs-empty { color: #8b949e; font-style: italic; padding: 10px 0; }
   .pair-row {
     display: flex;
@@ -256,7 +302,7 @@ _HTML = """\
       <div class="match-col-inner">
         <table>
           <thead>
-            <tr><th>Display name</th><th>Email</th><th>DRAC ID</th></tr>
+            <tr><th>Display name</th><th>Email</th><th>DRAC ID</th><th>Action</th></tr>
           </thead>
           <tbody id="tbody-drac"></tbody>
         </table>
@@ -291,6 +337,19 @@ _HTML = """\
     <span id="load-report" style="color:#8b949e;font-size:12px;"></span>
   </div>
   <div id="pairs-list"></div>
+
+  <!-- Ignored section -->
+  <div style="margin-top:24px; border-top:1px solid #30363d; padding-top:16px;">
+    <div class="pairs-header">
+      <h3>Ignored DRAC Users <span id="count-ignored" class="count"></span></h3>
+      <button id="btn-download-ignore" class="btn btn-primary" disabled>Download Ignore List</button>
+      <button id="btn-load-ignore" class="btn btn-primary">Load Ignore List…</button>
+      <button id="btn-clear-ignore" class="btn btn-danger">Clear Ignore List</button>
+      <input id="file-input-ignore" type="file" accept=".json,application/json" style="display:none;">
+      <span id="load-ignore-report" style="color:#8b949e;font-size:12px;"></span>
+    </div>
+    <div id="ignored-list"></div>
+  </div>
 </div>
 
 <!-- ================================================================== -->
@@ -298,6 +357,7 @@ _HTML = """\
 <!-- ================================================================== -->
 <script>
 const USERS = __USERS_DATA__;
+const INITIAL_IGNORED = __IGNORED_DATA__;
 
 // ---- navigation --------------------------------------------------------
 document.querySelectorAll(".nav-tab").forEach(tab => {
@@ -360,6 +420,7 @@ function badge(p, mid) {
     "mila_ldap" in u.matching_ids && !("drac_member" in u.matching_ids));
 
   const pairs = [];         // [{drac: user, ldap: user}]
+  const ignoredMids = new Set(INITIAL_IGNORED || []);
   let selectedDrac = null;  // currently selected DRAC row user
 
   const tbodyDrac = document.getElementById("tbody-drac");
@@ -369,10 +430,19 @@ function badge(p, mid) {
   const countDrac = document.getElementById("count-drac");
   const countLdap = document.getElementById("count-ldap");
 
+  const ignoredList = document.getElementById("ignored-list");
+  const btnDownloadIgnore = document.getElementById("btn-download-ignore");
+  const btnLoadIgnore = document.getElementById("btn-load-ignore");
+  const btnClearIgnore = document.getElementById("btn-clear-ignore");
+  const fileInputIgnore = document.getElementById("file-input-ignore");
+  const loadIgnoreReport = document.getElementById("load-ignore-report");
+  const countIgnored = document.getElementById("count-ignored");
+
   // Set of user IDs already paired (removed from lists)
   const pairedIds = new Set();
 
   function isPaired(u) { return pairedIds.has(u.id); }
+  function isIgnored(u) { return ignoredMids.has(u.matching_ids.drac_member); }
 
   // ---- render left column (DRAC-only) ----------------------------------
   function renderDrac(q) {
@@ -382,29 +452,44 @@ function badge(p, mid) {
       const mid = u.matching_ids.drac_member || "";
       const hay = `${u.display_name} ${u.email} ${mid}`.toLowerCase();
       const visible = !q || hay.includes(q);
-      if (visible && !isPaired(u)) n++;
+      const hidden = !visible || isPaired(u) || isIgnored(u);
+      if (!hidden) n++;
       const cls = [
         "selectable",
         isPaired(u)         ? "paired"   : "",
         u === selectedDrac  ? "selected" : "",
-        (!visible || isPaired(u)) ? "hidden" : "",
+        hidden              ? "hidden"   : "",
       ].filter(Boolean).join(" ");
       return `<tr class="${cls}" data-id="${u.id}">
         <td class="name">${u.display_name}</td>
         <td class="email">${u.email || ""}</td>
         <td>${badge("drac_member", mid)}</td>
+        <td><button class="btn btn-ignore" data-id="${u.id}">Ignore</button></td>
       </tr>`;
     }).join("");
     tbodyDrac.innerHTML = rows;
     countDrac.textContent = `(${n} remaining)`;
 
-    // re-attach click handlers
+    // re-attach click handlers for selection
     tbodyDrac.querySelectorAll("tr.selectable:not(.paired)").forEach(tr => {
       tr.addEventListener("click", () => {
         const user = dracOnly.find(u => u.id === parseInt(tr.dataset.id));
         if (!user) return;
         selectedDrac = (selectedDrac === user) ? null : user;
         renderDrac(document.getElementById("search-drac").value);
+      });
+    });
+
+    // re-attach click handlers for ignore button
+    tbodyDrac.querySelectorAll(".btn-ignore").forEach(btn => {
+      btn.addEventListener("click", e => {
+        e.stopPropagation();
+        const user = dracOnly.find(u => u.id === parseInt(btn.dataset.id));
+        if (!user) return;
+        if (selectedDrac === user) selectedDrac = null;
+        ignoredMids.add(user.matching_ids.drac_member);
+        renderAll();
+        renderIgnored();
       });
     });
   }
@@ -464,7 +549,7 @@ function badge(p, mid) {
   function renderPairs() {
     btnDownload.disabled = pairs.length === 0;
     if (pairs.length === 0) {
-      pairsList.innerHTML = "<p class=\\"pairs-empty\\">No pairs yet.</p>";
+      pairsList.innerHTML = '<p class="pairs-empty">No pairs yet.</p>';
       return;
     }
     pairsList.innerHTML = pairs.map((p, i) => `
@@ -485,6 +570,90 @@ function badge(p, mid) {
       btn.addEventListener("click", () => removePair(parseInt(btn.dataset.idx)));
     });
   }
+
+  // ---- ignored section --------------------------------------------------
+  function renderIgnored() {
+    btnDownloadIgnore.disabled = ignoredMids.size === 0;
+    countIgnored.textContent = `(${ignoredMids.size})`;
+    if (ignoredMids.size === 0) {
+      ignoredList.innerHTML = '<p class="pairs-empty">No ignored DRAC users.</p>';
+      return;
+    }
+    ignoredList.innerHTML = Array.from(ignoredMids).map(mid => {
+      const u = dracOnly.find(user => user.matching_ids.drac_member === mid);
+      const name = u ? u.display_name : mid;
+      const email = u && u.email ? u.email : "";
+      return `<div class="pair-row">
+        <div class="pair-cell">
+          <div class="pair-name">${name}</div>
+          <div class="pair-mid">${email ? email + " • " : ""}${badge("drac_member", mid)}</div>
+        </div>
+        <button class="btn btn-ignore btn-unignore" data-mid="${mid}">Unignore</button>
+      </div>`;
+    }).join("");
+
+    ignoredList.querySelectorAll(".btn-unignore").forEach(btn => {
+      btn.addEventListener("click", () => {
+        ignoredMids.delete(btn.dataset.mid);
+        renderAll();
+        renderIgnored();
+      });
+    });
+  }
+
+  btnDownloadIgnore.addEventListener("click", () => {
+    const data = Array.from(ignoredMids).map(mid => ({
+      matching_id: { name: "drac_member", mid: mid },
+    }));
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "drac_ignored.json";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
+  btnLoadIgnore.addEventListener("click", () => fileInputIgnore.click());
+  fileInputIgnore.addEventListener("change", () => {
+    const file = fileInputIgnore.files[0];
+    if (!file) return;
+    fileInputIgnore.value = "";
+    const reader = new FileReader();
+    reader.onload = e => {
+      let entries;
+      try { entries = JSON.parse(e.target.result); }
+      catch { loadIgnoreReport.textContent = "Error: invalid JSON file."; return; }
+      if (!Array.isArray(entries)) {
+        loadIgnoreReport.textContent = "Error: JSON must be an array.";
+        return;
+      }
+      let loaded = 0;
+      entries.forEach(entry => {
+        let mid = null;
+        if (typeof entry === "string") mid = entry;
+        else if (typeof entry === "object" && entry !== null) {
+          if (entry.matching_id && entry.matching_id.mid) mid = entry.matching_id.mid;
+          else if (entry.mid) mid = entry.mid;
+          else if (entry.drac_member) mid = entry.drac_member;
+        }
+        if (mid && !ignoredMids.has(mid)) {
+          ignoredMids.add(mid);
+          loaded++;
+        }
+      });
+      renderAll();
+      renderIgnored();
+      loadIgnoreReport.textContent = `Loaded ${loaded} ignored user(s).`;
+    };
+    reader.readAsText(file);
+  });
+
+  btnClearIgnore.addEventListener("click", () => {
+    ignoredMids.clear();
+    loadIgnoreReport.textContent = "";
+    renderAll();
+    renderIgnored();
+  });
 
   function renderAll() {
     renderDrac(document.getElementById("search-drac").value);
@@ -565,7 +734,7 @@ function badge(p, mid) {
 
   // ---- auto-pair by email ----------------------------------------------
   document.getElementById("btn-autopair").addEventListener("click", () => {
-    const eligible = dracOnly.filter(u => !isPaired(u));
+    const eligible = dracOnly.filter(u => !isPaired(u) && !isIgnored(u));
     const ldapByEmail = {};
     ldapOnly.forEach(u => {
       if (u.email && !isPaired(u)) ldapByEmail[u.email.toLowerCase()] = u;
@@ -588,7 +757,7 @@ function badge(p, mid) {
     renderAll();
     renderPairs();
 
-    const remaining = dracOnly.filter(u => !isPaired(u)).length;
+    const remaining = dracOnly.filter(u => !isPaired(u) && !isIgnored(u)).length;
     const pct = eligible.length > 0 ? Math.round(matched / eligible.length * 100) : 0;
     const s = matched !== 1 ? "s" : "";
     document.getElementById("autopair-report").textContent =
@@ -602,6 +771,7 @@ function badge(p, mid) {
   // ---- init ------------------------------------------------------------
   renderAll();
   renderPairs();
+  renderIgnored();
 })();
 </script>
 </body>
@@ -676,14 +846,29 @@ def main():
         action="store_true",
         help="Do not open the browser automatically",
     )
+    parser.add_argument(
+        "--ignore-file",
+        type=str,
+        default=None,
+        help="Path to JSON file containing ignored DRAC user IDs",
+    )
     args = parser.parse_args()
 
     print("Loading users from database…")
     users = load_users()
     print(f"Loaded {len(users)} users.")
 
+    ignored_mids = load_ignore_list(args.ignore_file)
+    if ignored_mids:
+        print(f"Loaded {len(ignored_mids)} ignored DRAC IDs from {args.ignore_file}.")
+
     users_json = json.dumps(users, ensure_ascii=False)
-    html_bytes = _HTML.replace("__USERS_DATA__", users_json).encode("utf-8")
+    ignored_json = json.dumps(ignored_mids, ensure_ascii=False)
+    html_bytes = (
+        _HTML.replace("__USERS_DATA__", users_json)
+        .replace("__IGNORED_DATA__", ignored_json)
+        .encode("utf-8")
+    )
 
     port = args.port or _find_free_port()
     server = HTTPServer(("127.0.0.1", port), _make_handler(html_bytes))
