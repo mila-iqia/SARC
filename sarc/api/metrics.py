@@ -11,7 +11,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import BigInteger, cast, literal_column, nulls_last, true
 from sqlalchemy.orm import aliased
-from sqlmodel import Session, and_, case, col, func, select
+from sqlmodel import Session, and_, case, col, func, or_, select
 
 from sarc.api.v0 import Requestor, requestor
 from sarc.config import config
@@ -349,16 +349,29 @@ def _virtual_end():
 def _run_overlap_filters(begin_dt: datetime, finish_dt: datetime):
     """Filters keeping jobs whose run interval overlaps [begin, finish).
 
+    The virtual-end conditions are exploded into a case analysis on end_time:
+    the coalesce in _virtual_end() is not indexable, the exploded arms are.
+
     Strict inequalities: zero-length overlaps and zero-runtime jobs are
     excluded (a job must have run inside the window to count, mirroring the
     RGU metrics script).
     """
-    vend = _virtual_end()
+    start = col(JobSeriesDB.start_time)
+    end = col(JobSeriesDB.end_time)
+    still_running = end.is_(None)
     return (
-        col(JobSeriesDB.start_time).is_not(None),
-        col(JobSeriesDB.start_time) < finish_dt,
-        vend > begin_dt,
-        vend > col(JobSeriesDB.start_time),
+        start.is_not(None),
+        start < finish_dt,
+        # virtual_end > begin_dt
+        or_(
+            end > begin_dt,
+            and_(
+                still_running,
+                start + col(JobSeriesDB.elapsed_time) * _ONE_SECOND > begin_dt,
+            ),
+        ),
+        # virtual_end > start_time (non-empty run)
+        or_(end > start, and_(still_running, col(JobSeriesDB.elapsed_time) > 0)),
     )
 
 

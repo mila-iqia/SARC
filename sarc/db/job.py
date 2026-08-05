@@ -95,6 +95,25 @@ class SlurmJobDB(SQLModel, table=True):
                 "sarc_user_id",  # used by view when joining users and member_type
             ],
         ),
+        # /dash RGU window filter (_run_overlap_filters), one index per regime:
+        # recent windows BitmapOr the bare end_time index; historical windows
+        # index-only scan the start_time covering index.
+        Index("ix_slurm_jobs_end_time", "end_time"),
+        Index(
+            "ix_slurm_jobs_start_covering",
+            "start_time",
+            postgresql_include=[
+                "id",
+                "end_time",
+                "elapsed_time",
+                "allocated_gpu_type",
+                "harmonized_gpu_type",
+                "allocated_gres_gpu",
+                "cluster_id",
+                "cluster_user",
+                "sarc_user_id",
+            ],
+        ),
     )
 
     id: int | None = Field(default=None, primary_key=True)
