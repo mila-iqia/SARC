@@ -348,6 +348,12 @@ class UsageNotifyConfig:
     """Length of the usage-report window in usage cycles (window =
     usage_report_cycles × usage_cycle_length_weeks). Positive int."""
 
+    usage_report_cycle_offset: int = 0
+    """Number of usage cycles to shift the usage-report trigger by (shift =
+    usage_report_cycle_offset × usage_cycle_length_weeks weeks). Does not
+    affect the underusage-cycle check or cycle anchor. Any int accepted;
+    wraps modulo usage_report_cycles. Default 0 = no shift."""
+
     usage_report_min_usage_rgu_hours: float = 1843.2  # 4x A100-80GB RGU x4d
     """Minimum occupied (used+wasted) RGU-h for a user to be included in the
     usage report; filters out negligible usage. Default ≈ 4× A100-80GB RGU ×

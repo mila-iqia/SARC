@@ -61,12 +61,12 @@ def _build_delivery_footer(
 
 
 def _deliver(
-    rows: list, build_fn: Callable, *, slack: SlackClient
+    rows: list, build_fn: Callable, *, slack: SlackClient, send_to: str | None = None
 ) -> list[_DeliveryResult]:
     results: list[_DeliveryResult] = []
     for row in rows:
         text = build_fn(row)
-        slack_res = slack.dm_user(row.email, text)
+        slack_res = slack.dm_user(send_to or row.email, text)
         if slack_res.status == SendStatus.OK:
             results.append(_DeliveryResult(row.email, row.display_name, "dm_sent"))
         else:
@@ -140,6 +140,13 @@ class UsageNotifyCommand:
         "(personalized_action_min_waste_rgu_hours is never auto-zeroed). Skips "
         "the admin-digest/summary channel posts in --send mode.",
     )
+    send_to: str | None = simple_parsing.field(
+        default=None,
+        alias=["--send-to"],
+        help="Debug only: deliver this run's DM(s) to this Slack address "
+        "instead of each recipient's own address, so you can preview the "
+        "exact notification content without messaging them.",
+    )
     ignore_store: bool = simple_parsing.field(
         action="store_true",
         alias=["--ignore-store"],
@@ -150,6 +157,10 @@ class UsageNotifyCommand:
     )
 
     def execute(self) -> int:
+        if self.send_to:
+            logger.warning(f"Redirecting this run's DM(s) to {self.send_to}")
+            self.send = True
+
         if config.notifications is None:
             # No base config at all — let _exec()'s existing check log and
             # return -1. Checked here, before any overlay, because entering
@@ -267,7 +278,10 @@ class UsageNotifyCommand:
 
         usage_report_window_weeks = ncfg.usage_report_cycles * window_weeks
         usage_start = end - timedelta(weeks=usage_report_window_weeks)
-        usage_report_eligible = week_num % usage_report_window_weeks == 0
+        usage_report_cycle_offset = ncfg.usage_report_cycle_offset
+        usage_report_eligible = (
+            week_num - usage_report_cycle_offset * window_weeks
+        ) % usage_report_window_weeks == 0
         usage_report_will_send = (
             usage_report_eligible and not self.no_dms and ncfg.send_usage_report
         )
@@ -292,8 +306,13 @@ class UsageNotifyCommand:
                 file=sys.stderr,
             )
         if usage_report_eligible:
+            offset_note = (
+                f", offset {usage_report_cycle_offset} cycle(s)"
+                if usage_report_cycle_offset
+                else ""
+            )
             _userfacing_print(
-                f"ISO week {week_num} (multiple of {usage_report_window_weeks}) — Usage report eligible this run.",
+                f"ISO week {week_num} (multiple of {usage_report_window_weeks}{offset_note}) — Usage report eligible this run.",
                 file=sys.stderr,
             )
         _userfacing_print(file=sys.stderr)
@@ -308,46 +327,6 @@ class UsageNotifyCommand:
             utilization_ceiling=ncfg.utilization_ceiling,
             user_emails=user_emails,
         )
-
-        if underusage_rows and underusage_report_eligible:
-            _userfacing_print()
-            _userfacing_print("=== Under Usage Report Previews ===")
-            for row in underusage_rows:
-                _userfacing_print(f"\n--- {row.display_name} ({row.email}) ---")
-                dm = build_user_dm(
-                    row, window_weeks=window_weeks, window_start=start, window_end=end
-                )
-                _userfacing_print(dm)
-
-        usage_rows = []
-        if usage_report_eligible:
-            _user_emails = user_emails
-            if underusage_rows:
-                _user_emails = (_user_emails or []) + [
-                    f"~{r.email}" for r in underusage_rows
-                ]
-            usage_rows = get_users_usage(
-                usage_start,
-                end,
-                min_usage_rgu_hours=ncfg.usage_report_min_usage_rgu_hours,
-                max_jobs_per_user=ncfg.max_jobs_per_user,
-                clusters=clusters,
-                user_emails=_user_emails,
-            )
-            if usage_rows:
-                _userfacing_print()
-                _userfacing_print(
-                    f"=== Usage Report Previews ({len(usage_rows)} recipient(s)) ==="
-                )
-                for row in usage_rows:
-                    _userfacing_print(f"\n--- {row.display_name} ({row.email}) ---")
-                    report_text = build_usage_report(
-                        row,
-                        window_weeks=usage_report_window_weeks,
-                        window_start=usage_start,
-                        window_end=end,
-                    )
-                    _userfacing_print(report_text)
 
         # --user-email restricts this run to a single test user: skip computing
         # the fleet-wide recurring-underusers/admin-digest data (and therefore
@@ -397,6 +376,46 @@ class UsageNotifyCommand:
             digest = None
             csv_recurring = None
 
+        if underusage_rows and underusage_report_eligible:
+            _userfacing_print()
+            _userfacing_print("=== Under Usage Report Previews ===")
+            for row in underusage_rows:
+                _userfacing_print(f"\n--- {row.display_name} ({row.email}) ---")
+                dm = build_user_dm(
+                    row, window_weeks=window_weeks, window_start=start, window_end=end
+                )
+                _userfacing_print(dm)
+
+        usage_rows = []
+        if usage_report_eligible:
+            _user_emails = user_emails
+            if underusage_rows:
+                _user_emails = (_user_emails or []) + [
+                    f"~{r.email}" for r in underusage_rows
+                ]
+            usage_rows = get_users_usage(
+                usage_start,
+                end,
+                min_usage_rgu_hours=ncfg.usage_report_min_usage_rgu_hours,
+                max_jobs_per_user=ncfg.max_jobs_per_user,
+                clusters=clusters,
+                user_emails=_user_emails,
+            )
+            if usage_rows:
+                _userfacing_print()
+                _userfacing_print(
+                    f"=== Usage Report Previews ({len(usage_rows)} recipient(s)) ==="
+                )
+                for row in usage_rows:
+                    _userfacing_print(f"\n--- {row.display_name} ({row.email}) ---")
+                    report_text = build_usage_report(
+                        row,
+                        window_weeks=usage_report_window_weeks,
+                        window_start=usage_start,
+                        window_end=end,
+                    )
+                    _userfacing_print(report_text)
+
         if not self.send:
             return 0
 
@@ -414,6 +433,7 @@ class UsageNotifyCommand:
                     row, window_weeks=window_weeks, window_start=start, window_end=end
                 ),
                 slack=slack_underusage_client,
+                send_to=self.send_to,
             )
         elif underusage_report_eligible and underusage_rows:
             reason = "no_dms_flag" if self.no_dms else "send_underusage_report_disabled"
@@ -432,6 +452,7 @@ class UsageNotifyCommand:
                     window_end=end,
                 ),
                 slack=slack_usage_client,
+                send_to=self.send_to,
             )
         elif usage_report_eligible and usage_rows:
             reason = "no_dms_flag" if self.no_dms else "send_usage_report_disabled"
