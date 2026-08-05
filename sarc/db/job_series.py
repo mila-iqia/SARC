@@ -15,30 +15,6 @@ from .sqlmodel import SQLModel
 from .support import GpuRguDB
 from .users import MemberTypeDB, SupervisorsDB, SupervisorsHelper, UserDB
 
-#### statistics
-inner_dict = func.json_build_object(
-    "mean",
-    JobStatisticDB.mean,
-    "std",
-    JobStatisticDB.std,
-    "q05",
-    JobStatisticDB.q05,
-    "q25",
-    JobStatisticDB.q25,
-    "median",
-    JobStatisticDB.median,
-    "q75",
-    JobStatisticDB.q75,
-    "max",
-    JobStatisticDB.max,
-)
-
-stats_subq = (
-    select(func.json_object_agg(JobStatisticDB.name, inner_dict))
-    .where(JobStatisticDB.job_id == SlurmJobDB.id)
-    .scalar_subquery()
-).label("statistics")
-
 #### supervisors
 supervisors_subq = (
     select(
@@ -108,16 +84,18 @@ cpu_overbilling_cost = (
     * (col(SlurmJobDB.allocated_cpu) - col(SlurmJobDB.requested_cpu))
 ).label("cpu_overbilling_cost")
 
-# Mean of the per-job "gpu_sm_occupancy" statistic. Two distinct GPU stats are
-# scraped from DCGM/Prometheus, both normalized to [0, 1]:
-# - gpu_utilization (slurm_job_utilization_gpu): the GPU "busy" fraction, i.e.
-#   the fraction of time the GPU was active on any work.
-# - gpu_sm_occupancy (slurm_job_sm_occupancy_gpu): the fraction of streaming
-#   multiprocessors (SMs) occupied, a finer-grained measure of how much of the
-#   GPU's compute is actually used.
-# GPU waste below is computed from SM-occupancy mean (not GPU utilization).
 sm_occ_jsdb = aliased(JobStatisticDB)
-gpu_sm_occupancy = col(sm_occ_jsdb.mean).label("gpu_sm_occupancy")
+gpu_sm_occupancy = col(sm_occ_jsdb.mean).label("gpu_sm_occupancy_mean")
+gpu_sm_occupancy_max = col(sm_occ_jsdb.max).label("gpu_sm_occupancy_max")
+
+gpu_util_jsdb = aliased(JobStatisticDB)
+gpu_utilization = col(gpu_util_jsdb.mean).label("gpu_utilization_mean")
+
+gpu_memory_jsdb = aliased(JobStatisticDB)
+gpu_memory_max = col(gpu_memory_jsdb.max).label("gpu_memory_max")
+
+usage_metric = gpu_sm_occupancy.label("usage_metric")
+
 requested_gpu_cost = (
     col(SlurmJobDB.elapsed_time)
     * col(SlurmJobDB.requested_gres_gpu)
@@ -150,14 +128,18 @@ class JobSeriesDB(SQLModel, table=True):
       columns are unused (FK + NOT NULL make LEFT == INNER, so no row is lost).
       Even a dropped join pins its key columns to the scan, though; when the target
       index lacks them, build the query with ``job_series_select()`` below instead.
-    - member_type, supervisors and statistics are per-row correlated subqueries:
+    - member_type and supervisors are per-row correlated subqueries:
       pruned when not selected, but evaluated once per output row otherwise -- cheap
-      only on bounded/paginated selects, not over a wide unbounded window. statistics
-      is the worst (json_object_agg reads every stat column -> heap scan of jobstatisticdb).
-    - ``*_gpu_waste`` / ``*_cpu_waste`` read the metric mean via set-based LEFT joins
-      on jobstatisticdb (gpu_sm_occupancy, cpu_utilization): index-only, parallel, and
-      each join is dropped when its stat is unused. But the mean can be NaN (Prometheus
-      gap) and on Postgres NaN poisons SUM -- filter it (e.g. ``WHERE col != 'NaN'``).
+      only on bounded/paginated selects, not over a wide unbounded window.
+    - ``usage_metric``, the per-stat columns (``gpu_sm_occupancy_mean``/``_max``,
+      ``gpu_utilization_mean``, ``gpu_memory_max``) and the ``*_gpu_waste`` /
+      ``*_cpu_waste`` derived from them read jobstatisticdb through one set-based LEFT
+      join per stat name: index-only (unique covering index on (name, job_id)),
+      parallel, and each join is dropped when its stat is unused. usage_metric, both
+      sm-occupancy columns and ``*_gpu_waste`` all ride on the same join, so they cost
+      the same as any one of them; gpu_utilization_mean and gpu_memory_max each add
+      one. A stat with no recorded row reads NULL, and so does the waste derived from
+      it: a missing measurement, not zero waste.
     """
 
     __tablename__ = "job_series_view"  # This is filtered out in table creation
@@ -176,7 +158,6 @@ class JobSeriesDB(SQLModel, table=True):
             *[c for c in UserDB.__table__.columns if c.name != "id"],  # ty:ignore[unresolved-attribute]
             col(SlurmClusterDB.name).label("cluster_name"),
             member_type_subq,
-            stats_subq,
             supervisors_subq,
             col(GpuRguDB.rgu).label("gpu_type_rgu"),
             col(GpuRguDB.drac_rgu).label("gpu_type_rgu_drac"),
@@ -190,10 +171,15 @@ class JobSeriesDB(SQLModel, table=True):
             ((1 - cpu_utilization) * allocated_cpu_cost).label("allocated_cpu_waste"),
             cpu_overbilling_cost,
             requested_gpu_cost.label("requested_gpu_cost"),
-            ((1 - gpu_sm_occupancy) * requested_gpu_cost).label("requested_gpu_waste"),
+            ((1 - usage_metric) * requested_gpu_cost).label("requested_gpu_waste"),
             allocated_gpu_cost.label("allocated_gpu_cost"),
-            ((1 - gpu_sm_occupancy) * allocated_gpu_cost).label("allocated_gpu_waste"),
+            ((1 - usage_metric) * allocated_gpu_cost).label("allocated_gpu_waste"),
             gpu_overbilling_cost,
+            usage_metric,
+            gpu_sm_occupancy,
+            gpu_sm_occupancy_max,
+            gpu_utilization,
+            gpu_memory_max,
         )  # ty:ignore[no-matching-overload]
         .join(UserDB, SlurmJobDB.sarc_user_id == UserDB.id, isouter=True)
         # LEFT so the planner drops it when cluster_name is unused (same as the
@@ -212,6 +198,22 @@ class JobSeriesDB(SQLModel, table=True):
         .join(
             cpu_jsdb,
             and_(cpu_jsdb.job_id == SlurmJobDB.id, cpu_jsdb.name == "cpu_utilization"),
+            isouter=True,
+        )
+        .join(
+            gpu_util_jsdb,
+            and_(
+                gpu_util_jsdb.job_id == SlurmJobDB.id,
+                gpu_util_jsdb.name == "gpu_utilization",
+            ),
+            isouter=True,
+        )
+        .join(
+            gpu_memory_jsdb,
+            and_(
+                gpu_memory_jsdb.job_id == SlurmJobDB.id,
+                gpu_memory_jsdb.name == "gpu_memory",
+            ),
             isouter=True,
         )
     )
@@ -326,9 +328,6 @@ class JobSeriesDB(SQLModel, table=True):
     allocated_gpu_type above."""
 
     cluster_name: str | None = None
-    statistics: dict[str, dict[str, float]] | None = Field(sa_type=JSON)
-    """Per-job statistics as a JSON map: stat_name -> {mean, std, q05, q25,
-    median, q75, max} (e.g. "cpu_utilization", "gpu_sm_occupancy")."""
 
     # RGU (Reference GPU Unit) is a per-GPU-type weight that normalizes
     # heterogeneous GPU types to a common reference.
@@ -358,10 +357,10 @@ class JobSeriesDB(SQLModel, table=True):
     # For each: cost = elapsed_time x count (x rgu weight for GPU);
     # overbilling = elapsed_time x (allocated - requested) (x rgu weight).
     # Waste = (1 - utilization) x cost = the paid-for capacity left unused, and
-    # the utilization term differs by resource: CPU uses the cpu_utilization
-    # stat mean, while GPU uses the gpu_sm_occupancy mean -- the fraction of
-    # streaming multiprocessors (SMs) occupied (finer-grained) -- NOT
-    # gpu_utilization, which is only the GPU "busy"/active-time fraction.
+    # the utilization term differs by resource: CPU uses the cpu_utilization stat
+    # mean, while GPU uses usage_metric -- whichever statistic currently defines
+    # GPU usage (see its docstring below), so waste follows that definition
+    # instead of pinning one statistic of its own.
     requested_cpu_cost: float | None
     """CPU-seconds the user requested: elapsed_time x requested_cpu."""
     requested_cpu_waste: float | None
@@ -379,17 +378,32 @@ class JobSeriesDB(SQLModel, table=True):
     """RGU-seconds the user requested: elapsed_time x requested_gres_gpu x DRAC
     RGU weight."""
     requested_gpu_waste: float | None
-    """Unused requested RGU-seconds: (1 - gpu_sm_occupancy mean) x
-    requested_gpu_cost."""
+    """Unused requested RGU-seconds: (1 - usage_metric) x requested_gpu_cost."""
     allocated_gpu_cost: float | None
     """RGU-seconds the scheduler allocated: elapsed_time x allocated_gres_gpu x
     DRAC RGU weight."""
     allocated_gpu_waste: float | None
-    """Unused allocated RGU-seconds: (1 - gpu_sm_occupancy mean) x
+    """Unused allocated RGU-seconds: (1 - usage_metric) x
     allocated_gpu_cost."""
     gpu_overbilling_cost: float | None
     """RGU-seconds billed beyond the request: elapsed_time x (allocated_gres_gpu
     - requested_gres_gpu) x DRAC RGU weight."""
+
+    usage_metric: float | None
+    """The GPU usage measure to read by default (fraction in [0, 1]), currently the
+    gpu_sm_occupancy mean. One alias for whichever statistic SARC treats as "GPU
+    usage", so redefining it stays confined to this module; read the named columns
+    below only when one specific statistic is wanted."""
+
+    # Quick access to most used Prometheus statistics.
+    gpu_sm_occupancy_mean: float | None
+    """Mean of GPU SM occupancy (between 0 and 1) for a GPU job."""
+    gpu_sm_occupancy_max: float | None
+    """Max of GPU SM occupancy (between 0 and 1) for a GPU job."""
+    gpu_utilization_mean: float | None
+    """Mean of GPU utilization (between 0 and 1) for a GPU job."""
+    gpu_memory_max: float | None
+    """Max of GPU memory usage (between 0 and 1) for a GPU job."""
 
     # User ID
     sarc_user_id: int

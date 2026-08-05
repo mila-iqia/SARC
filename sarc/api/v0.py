@@ -470,7 +470,10 @@ _EXTRA_FIELDS = {
     "cluster_name": {"cluster_name"},
     "sarc_user": {"display_name", "member_type", "email"},
     "supervisors": {"supervisors"},
-    "statistics": {"statistics"},
+    "gpu_sm_occupancy_mean": {"gpu_sm_occupancy_mean"},
+    "gpu_sm_occupancy_max": {"gpu_sm_occupancy_max"},
+    "gpu_utilization_mean": {"gpu_utilization_mean"},
+    "gpu_memory_max": {"gpu_memory_max"},
     "rgu": {
         "gpu_type_rgu",
         "gpu_type_rgu_drac",

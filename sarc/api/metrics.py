@@ -802,7 +802,7 @@ def metrics_rgu_usage(
     # RGU-seconds -> RGU-hours); used = the same scaled by the metric mean (NaN
     # nulled to 0). The metric is parametrized over 7 values but the view's *_waste
     # columns are frozen to gpu_sm_occupancy/cpu_utilization, so we read the mean
-    # via our own targeted jobstatisticdb join (never the view's json statistics).
+    # via our own targeted jobstatisticdb join.
     bucket_expr = _bucket_expr(parsed, col(JobSeriesDB.submit_time), begin_dt)
     rgu_hours = col(JobSeriesDB.allocated_gpu_cost) / 3600.0
     m_mean = col(JobStatisticDB.mean)
@@ -1170,8 +1170,8 @@ def metrics_jobs(
     rgu_hours_raw = col(JobSeriesDB.allocated_gpu_cost) / 3600.0
 
     # One aliased jobstatisticdb row per distinct stat name, LEFT-joined on the
-    # job id (never JobSeriesDB.statistics, a per-row json_object_agg — see
-    # rgu_usage).
+    # job id. Not the view's own gpu_*_mean/max columns: those would join over the
+    # whole window, while the page subquery below joins the stats onto the page only.
     stat_names = {metric, "gpu_utilization", "gpu_sm_occupancy", "gpu_memory"}
     js = {name: aliased(JobStatisticDB) for name in sorted(stat_names)}
     metric_mean_raw = col(js[metric].mean)

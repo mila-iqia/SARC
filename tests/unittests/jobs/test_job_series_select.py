@@ -69,7 +69,7 @@ def test_all_columns_keep_all_joins():
     sql = _sql(job_series_select(*every))
     for target in ("JOIN users", "JOIN clusters", "JOIN gpurgudb"):
         assert target in sql
-    assert sql.count("JOIN jobstatisticdb") == 2
+    assert sql.count("JOIN jobstatisticdb") == 4
 
 
 def test_unknown_column_raises():

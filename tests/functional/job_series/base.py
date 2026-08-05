@@ -73,7 +73,6 @@ ALL_COLUMNS = sorted(
         "requested_node",
         "signal",
         "start_time",
-        "statistics",
         "submit_line",
         "submit_time",
         "system_memory",
@@ -98,6 +97,11 @@ ALL_COLUMNS = sorted(
         "gpu_overbilling_cost",
         "requested_gpu_waste",
         "allocated_gpu_waste",
+        "usage_metric",
+        "gpu_sm_occupancy_mean",
+        "gpu_sm_occupancy_max",
+        "gpu_utilization_mean",
+        "gpu_memory_max",
     ]
 )
 USER_COLUMNS = sorted(["email", "display_name", "supervisors", "member_type"])
@@ -166,12 +170,32 @@ def _flatten_stat(label: str, stats: dict | None) -> float:
     return stat["median"]
 
 
-def _finalize_records(records: list[dict], now: datetime) -> None:
+def read_job_stats(sess: Session) -> dict[int, dict[str, dict[str, float | None]]]:
+    """job id -> {stat name: {median, max}}, read straight from jobstatisticdb.
+
+    job_series_view only exposes a few hand-picked stat columns, so the flattened
+    columns below are built from the source table instead.
+    """
+    stats: dict[int, dict[str, dict[str, float | None]]] = {}
+    for row in sess.exec(select(JobStatisticDB)).all():
+        assert row.job_id is not None and row.name is not None
+        stats.setdefault(row.job_id, {})[row.name] = {
+            "median": row.median,
+            "max": row.max,
+        }
+    return stats
+
+
+def _finalize_records(
+    records: list[dict],
+    now: datetime,
+    job_stats: dict[int, dict[str, dict[str, float | None]]],
+) -> None:
     """Apply common post-processing to job-series records, in place.
 
     - end_time = now if None
-    - flatten statistics into 5 scalar columns (median for util/power, max for memory)
-      (NB: statistics column is still present in records, along with new scalar columns)
+    - flatten each job's stats into 5 scalar columns (median for util/power, max
+      for memory), from the ``job_stats`` mapping returned by read_job_stats()
     - clip gpu_utilization > 1 to NaN
     Used by both the SQL and REST implementations of fn_load_job_series so that
     the resulting DataFrames are identical in shape and values.
@@ -179,7 +203,7 @@ def _finalize_records(records: list[dict], now: datetime) -> None:
     for d in records:
         if d.get("end_time") is None:
             d["end_time"] = now
-        stats = d.get("statistics") or {}
+        stats = job_stats.get(d["job_db_id"], {})
         for label in _STAT_LABELS:
             d[label] = _flatten_stat(label, stats)
         gpu_util = d["gpu_utilization"]

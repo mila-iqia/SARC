@@ -11,11 +11,21 @@ from tests.functional.job_series.base import (
     LoadJobSeriesFn,
     _finalize_records,
     _parse_dt,
+    read_job_stats,
 )
 
 # extra_fields needed so the REST response carries every column the SQL view
 # returns (otherwise the resulting DataFrame would miss columns).
-_ALL_EXTRA_FIELDS = ["cluster_name", "sarc_user", "supervisors", "statistics", "rgu"]
+_ALL_EXTRA_FIELDS = [
+    "cluster_name",
+    "sarc_user",
+    "supervisors",
+    "rgu",
+    "gpu_sm_occupancy_mean",
+    "gpu_sm_occupancy_max",
+    "gpu_utilization_mean",
+    "gpu_memory_max",
+]
 
 
 def _to_api_datetime(value: datetime | str | None) -> datetime | None:
@@ -43,9 +53,7 @@ class TestRestLoadJobSeries(BaseTestLoadJobSeries):
             end: datetime | str | None = None,
         ) -> DataFrame:
             # The REST endpoint reads from the configured DB session; `sess` is
-            # passed for protocol compatibility but not used directly here.
-            del sess
-
+            # only used here to read the raw stats the endpoint does not expose.
             api_job_id: list[int] | None
             if job_id is None:
                 api_job_id = None
@@ -66,7 +74,7 @@ class TestRestLoadJobSeries(BaseTestLoadJobSeries):
                 )
             )
             records = [asdict(r) for r in rows]
-            _finalize_records(records, datetime.now(tz=UTC))
+            _finalize_records(records, datetime.now(tz=UTC), read_job_stats(sess))
             df = DataFrame(records)
             if not df.empty:
                 df = df.sort_values("job_db_id").reset_index(drop=True)
