@@ -4,6 +4,15 @@ import pytest
 from sarc.api.v0 import _EXTRA_FIELDS, _SERIES_OPTIONAL_COLS
 from tests.common.dateutils import _iso_mtl_dt
 
+# job_series extra fields with no value to read in the test data
+_EMPTY_IN_TEST_DATA = {
+    "supervisors",
+    "gpu_sm_occupancy_mean",
+    "gpu_sm_occupancy_max",
+    "gpu_utilization_mean",
+    "gpu_memory_max",
+}
+
 
 @pytest.mark.usefixtures("read_only_db")
 def test_get_jobs_no_filters(sarc_client):
@@ -185,8 +194,9 @@ def test_job_series_extra_field(sarc_client, extra_field):
         for col in sibling_cols:
             assert getattr(job, col) is None, f"{col} should stay None"
 
-    # There's no data in statistics and supervisors fields
-    if extra_field not in ["statistics", "supervisors"]:
+    # No supervisor and no scraped statistic in the test data, so the fields
+    # reading them stay None even when requested.
+    if extra_field not in _EMPTY_IN_TEST_DATA:
         assert any(
             getattr(job, col) for job in jobs for col in _EXTRA_FIELDS[extra_field]
         ), (

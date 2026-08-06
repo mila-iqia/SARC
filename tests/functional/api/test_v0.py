@@ -365,9 +365,12 @@ def test_get_series_default_extra_fields_are_none(seriesq):
     assert series.email is None
     assert series.member_type is None
     assert series.supervisors is None
-    assert series.statistics is None
     assert series.gpu_type_rgu is None
     assert series.requested_rgu is None
+    assert series.gpu_sm_occupancy_mean is None
+    assert series.gpu_sm_occupancy_max is None
+    assert series.gpu_utilization_mean is None
+    assert series.gpu_memory_max is None
 
 
 @pytest.mark.usefixtures("read_only_db")
@@ -387,13 +390,6 @@ def test_get_series_extra_sarc_user(seriesq):
     # TODO: expand factory to make test more meaningful
     # petitbonhomme/beaubonhomme have no member_type in test data
     assert series.member_type is None
-
-
-# TODO: expand factory to make test meaningful
-# @pytest.mark.usefixtures("read_only_db")
-# def test_get_series_extra_statistics(seriesq):
-#     (series,) = seriesq(cluster_user="beaubonhomme", extra_fields="statistics")
-#     assert isinstance(series.statistics, dict)
 
 
 # TODO: expand factory to make test meaningful
@@ -418,7 +414,7 @@ def test_get_series_extra_all(seriesq):
     """Request all extra fields at once."""
     (series,) = seriesq(
         cluster_user="beaubonhomme",
-        extra_fields="cluster_name,sarc_user,supervisors,statistics,rgu",
+        extra_fields="cluster_name,sarc_user,supervisors,rgu,gpu_sm_occupancy_mean,gpu_sm_occupancy_max,gpu_utilization_mean,gpu_memory_max",
     )
     assert series.cluster_name == "raisin"
     assert series.display_name == "M/Ms Beaubonhomme"

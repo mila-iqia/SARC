@@ -11,6 +11,7 @@ from tests.functional.job_series.base import (
     LoadJobSeriesFn,
     _finalize_records,
     _parse_dt,
+    read_job_stats,
 )
 
 
@@ -51,7 +52,7 @@ def sql_load_job_series(sess: Session, **kwargs) -> DataFrame:
         select(JobSeriesDB).order_by(JobSeriesDB.job_db_id), **kwargs
     )
     records = [row.model_dump() for row in sess.exec(query).all()]
-    _finalize_records(records, datetime.now(tz=UTC))
+    _finalize_records(records, datetime.now(tz=UTC), read_job_stats(sess))
     return DataFrame(records)
 
 

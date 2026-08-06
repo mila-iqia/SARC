@@ -86,10 +86,16 @@ class JobSeries:
     allocated_gpu_cost: float | None
     allocated_gpu_waste: float | None
     gpu_overbilling_cost: float | None
+    usage_metric: float | None
 
     # Optional extra fields
+
+    gpu_sm_occupancy_mean: float | None = None
+    gpu_sm_occupancy_max: float | None = None
+    gpu_utilization_mean: float | None = None
+    gpu_memory_max: float | None = None
+
     cluster_name: str | None = None
-    statistics: dict[str, dict[str, float]] | None = None
     gpu_type_rgu: float | None = None
     gpu_type_rgu_drac: float | None = None
     requested_rgu: float | None = None
