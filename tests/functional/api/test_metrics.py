@@ -25,6 +25,7 @@ guest). The guest -> login redirect is checked by
 
 import math
 import re
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
@@ -502,6 +503,113 @@ def test_rgu_by_user_with_data(dash_client, dash_db):
         dash_db.total_requested
     )
     assert sum(u["rgu_used"] for u in data) == pytest.approx(dash_db.total_used)
+
+
+@pytest.fixture
+def prorata_db(read_write_db):
+    """Four GPU jobs probing the pro-rata time attribution of the RGU endpoints.
+
+    Each job is 16 RGU (2 GPUs x drac_rgu 8); rgu_hours = 16 * hours run
+    inside the window/bucket:
+
+    - straddler: runs 24h across the window's left edge -> only the 12h inside
+      the window count (192 RGU.h in the 02-01 bucket).
+    - crosser: runs 12h across a day boundary -> 6h in each of the two day
+      buckets (96 + 96).
+    - runner: still running (end_time None), 6h elapsed at the last scrape ->
+      virtual end = start + elapsed, 96 RGU.h.
+    - late starter: submitted inside the window but starts after it -> excluded
+      (it was the submit_time semantics that would have counted it).
+    """
+    sess = read_write_db
+    sess.add(GpuRguDB(name=_GPU, rgu=10.0, drac_rgu=_DRAC_RGU))
+    sess.flush()
+
+    # Detach the factory's pre-harmonized job so only the jobs below count.
+    for job in sess.exec(
+        select(SlurmJobDB).where(col(SlurmJobDB.harmonized_gpu_type).is_not(None))
+    ).all():
+        job.harmonized_gpu_type = None
+        sess.add(job)
+
+    def _dt(*args):
+        return datetime(*args, tzinfo=UTC)
+
+    times = [
+        # (submit, start, end, elapsed_seconds)
+        (_dt(2023, 1, 31, 11), _dt(2023, 1, 31, 12), _dt(2023, 2, 1, 12), 86400.0),
+        (_dt(2023, 2, 10, 17), _dt(2023, 2, 10, 18), _dt(2023, 2, 11, 6), 43200.0),
+        (_dt(2023, 2, 19, 23), _dt(2023, 2, 20, 0), None, 21600.0),
+        (_dt(2023, 2, 28, 12), _dt(2023, 3, 2, 0), _dt(2023, 3, 2, 12), 43200.0),
+    ]
+    jobs = sess.exec(
+        select(SlurmJobDB)
+        .where(col(SlurmJobDB.elapsed_time) == _BASE_ELAPSED)
+        .order_by(col(SlurmJobDB.id))
+    ).all()[: len(times)]
+    assert len(jobs) == len(times), "expected seeded jobs to enrich"
+
+    for job, (submit, start, end, elapsed) in zip(jobs, times):
+        job.harmonized_gpu_type = _GPU
+        job.allocated_gpu_type = _GPU
+        job.allocated_gres_gpu = _GRES
+        job.submit_time = submit
+        job.start_time = start
+        job.end_time = end
+        job.elapsed_time = elapsed
+        sess.add(job)
+    sess.commit()
+
+
+def test_prorata_attribution(dash_client, prorata_db):
+    """RGU is attributed to the time a job RAN, clipped to the window/bucket."""
+    params = {**WINDOW, "period": "d"}
+    data = dash_client.get("/dash/metrics/rgu_usage", params=params).json()
+    per_bucket = {r["period_start"]: r["rgu_allocated"] for r in data}
+    # straddler: 12h of its 24h run are inside the window, all on 02-01.
+    assert per_bucket["2023-02-01"] == pytest.approx(192.0)
+    # crosser: 12h split as 6h + 6h across the day boundary.
+    assert per_bucket["2023-02-10"] == pytest.approx(96.0)
+    assert per_bucket["2023-02-11"] == pytest.approx(96.0)
+    # runner: 6h elapsed at the last scrape, no extrapolation past it.
+    assert per_bucket["2023-02-20"] == pytest.approx(96.0)
+    # late starter: submitted inside the window but ran outside it -> nothing.
+    total = sum(per_bucket.values())
+    assert total == pytest.approx(192.0 + 192.0 + 96.0)
+
+    # The same total through every granularity (calendar and fixed-step paths)
+    # and through the window-clipped (no-bucket) endpoints.
+    for period in ("w", "5d"):
+        other = dash_client.get(
+            "/dash/metrics/rgu_usage", params={**WINDOW, "period": period}
+        ).json()
+        assert sum(r["rgu_allocated"] for r in other) == pytest.approx(total)
+    by_user = dash_client.get("/dash/metrics/rgu_by_user", params=WINDOW).json()
+    assert sum(u["rgu_requested"] for u in by_user) == pytest.approx(total)
+
+    # jobs table: the late starter is not listed; rgu_hours is window-clipped.
+    table = dash_client.get("/dash/metrics/jobs", params=WINDOW).json()
+    assert table["total"] == 3
+    assert sorted(j["rgu_hours"] for j in table["jobs"]) == pytest.approx(
+        [96.0, 192.0, 192.0]
+    )
+
+
+def test_prorata_windows_are_additive(dash_client, prorata_db):
+    """Splitting the window in two must conserve the total (the property the
+    submit_time semantics lacked)."""
+    half1 = {"start": "2023-02-01", "end": "2023-02-11"}
+    half2 = {"start": "2023-02-11", "end": "2023-03-01"}
+    totals = []
+    for win in (WINDOW, half1, half2):
+        data = dash_client.get(
+            "/dash/metrics/rgu_usage", params={**win, "period": "d"}
+        ).json()
+        totals.append(sum(r["rgu_allocated"] for r in data))
+    assert totals[0] == pytest.approx(totals[1] + totals[2])
+    # The crosser's 02-10 18:00 .. 02-11 06:00 run splits 6h/6h at the cut.
+    assert totals[1] == pytest.approx(192.0 + 96.0)
+    assert totals[2] == pytest.approx(96.0 + 96.0)
 
 
 def test_metric_trend_with_data(dash_client, dash_db):
