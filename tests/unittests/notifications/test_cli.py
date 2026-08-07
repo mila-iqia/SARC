@@ -541,9 +541,9 @@ def test_usage_report_week_underuser_not_in_report_previews(
         )
     ]
     assert "petitbonhomme@mila.quebec" in dm_section
-    usage_section = out[
-        out.find("=== Usage Report Previews") : out.find("=== Admin Digest ===")
-    ]
+    # Usage Report Previews is the last section printed in a dry run — the
+    # Admin Digest now prints before both preview sections.
+    usage_section = out[out.find("=== Usage Report Previews") :]
     assert "petitbonhomme@mila.quebec" not in usage_section
     assert "beaubonhomme@mila.quebec" in usage_section
     # Regression: the usage-report query excludes underusers at the DB level, so
@@ -753,6 +753,191 @@ def test_user_email_flag_logs_warning(notify_db, cli_main, caplog):
         )
     assert rc == 0
     assert any("beaubonhomme@mila.quebec" in r.message for r in caplog.records)
+
+
+# ── --send-to (redirect delivery for debugging) ────────────────────────
+
+
+def test_send_to_flag_logs_warning(notify_db, cli_main, caplog):
+    with (
+        gifnoc.overlay({"sarc.notifications": _NOTIFY_CFG}),
+        caplog.at_level(logging.WARNING, logger="sarc.cli.usage.notify"),
+    ):
+        rc = cli_main(
+            [
+                "usage",
+                "notify",
+                "--as-of",
+                _CYCLE_WEEK,
+                "--user-email",
+                "beaubonhomme@mila.quebec",
+                "--send-to",
+                "debug@example.com",
+            ]
+        )
+    assert rc == 0
+    assert any("debug@example.com" in r.message for r in caplog.records)
+
+
+def test_send_to_redirects_underusage_dm(notify_db, cli_main, monkeypatch):
+    """--send-to redirects the underusage DM recipient, but the message
+    text sent must be identical to the un-redirected run (pixel-identical
+    content, only the destination changes)."""
+    baseline_cls, baseline_inst = _mock_slack()
+    _patch_senders(monkeypatch, baseline_cls)
+    cfg = {**_NOTIFY_CFG, "send_underusage_report": True, "send_usage_report": False}
+    with gifnoc.overlay({"sarc.notifications": cfg}):
+        rc = cli_main(
+            [
+                "usage",
+                "notify",
+                "--as-of",
+                _CYCLE_WEEK,
+                "--send",
+                "--user-email",
+                "beaubonhomme@mila.quebec",
+            ]
+        )
+    assert rc == 0
+    baseline_text = baseline_inst.dm_user.call_args.args[1]
+
+    redirected_cls, redirected_inst = _mock_slack()
+    _patch_senders(monkeypatch, redirected_cls)
+    with gifnoc.overlay({"sarc.notifications": cfg}):
+        rc = cli_main(
+            [
+                "usage",
+                "notify",
+                "--as-of",
+                _CYCLE_WEEK,
+                "--send",
+                "--user-email",
+                "beaubonhomme@mila.quebec",
+                "--send-to",
+                "debug@example.com",
+            ]
+        )
+    assert rc == 0
+    assert redirected_inst.dm_user.call_count == 1
+    assert redirected_inst.dm_user.call_args.args[0] == "debug@example.com"
+    assert redirected_inst.dm_user.call_args.args[1] == baseline_text
+
+
+def test_send_to_redirects_underusage_dm_without_user_email(
+    notify_db, cli_main, monkeypatch
+):
+    """--send-to must redirect DM(s) in a fleet-wide run too (no --user-email
+    restricting to a single target) — every flagged user's DM goes to the
+    debug address, with pixel-identical content to the un-redirected run."""
+    baseline_cls, baseline_inst = _mock_slack()
+    _patch_senders(monkeypatch, baseline_cls)
+    cfg = {**_NOTIFY_CFG, "send_underusage_report": True, "send_usage_report": False}
+    with gifnoc.overlay({"sarc.notifications": cfg}):
+        rc = cli_main(["usage", "notify", "--as-of", _CYCLE_WEEK, "--send"])
+    assert rc == 0
+    baseline_calls = {
+        call.args[0]: call.args[1] for call in baseline_inst.dm_user.call_args_list
+    }
+    assert len(baseline_calls) > 1  # genuinely fleet-wide, not a single recipient
+
+    redirected_cls, redirected_inst = _mock_slack()
+    _patch_senders(monkeypatch, redirected_cls)
+    with gifnoc.overlay({"sarc.notifications": cfg}):
+        rc = cli_main(
+            [
+                "usage",
+                "notify",
+                "--as-of",
+                _CYCLE_WEEK,
+                "--send",
+                "--send-to",
+                "debug@example.com",
+            ]
+        )
+    assert rc == 0
+    redirected_calls = redirected_inst.dm_user.call_args_list
+    assert len(redirected_calls) == len(baseline_calls)
+    assert all(call.args[0] == "debug@example.com" for call in redirected_calls)
+    assert sorted(call.args[1] for call in redirected_calls) == sorted(
+        baseline_calls.values()
+    )
+
+
+def test_send_to_redirects_usage_report_dm(usage_report_db, cli_main, monkeypatch):
+    """Same redirect, but on the usage-report send path (slack_usage_client,
+    a distinct SlackClient instance from slack_underusage_client) — proves
+    the fix covers both report types, not just underusage."""
+    baseline_cls, baseline_inst = _mock_slack()
+    _patch_senders(monkeypatch, baseline_cls)
+    cfg = {**_NOTIFY_CFG, "send_underusage_report": True, "send_usage_report": True}
+    with gifnoc.overlay({"sarc.notifications": cfg}):
+        rc = cli_main(
+            [
+                "usage",
+                "notify",
+                "--as-of",
+                _USAGE_REPORT_WEEK,
+                "--send",
+                "--user-email",
+                "beaubonhomme@mila.quebec",
+            ]
+        )
+    assert rc == 0
+    assert baseline_inst.dm_user.call_count == 1  # only the usage-report DM
+    baseline_text = baseline_inst.dm_user.call_args.args[1]
+
+    redirected_cls, redirected_inst = _mock_slack()
+    _patch_senders(monkeypatch, redirected_cls)
+    with gifnoc.overlay({"sarc.notifications": cfg}):
+        rc = cli_main(
+            [
+                "usage",
+                "notify",
+                "--as-of",
+                _USAGE_REPORT_WEEK,
+                "--send",
+                "--user-email",
+                "beaubonhomme@mila.quebec",
+                "--send-to",
+                "debug@example.com",
+            ]
+        )
+    assert rc == 0
+    assert redirected_inst.dm_user.call_count == 1
+    assert redirected_inst.dm_user.call_args.args[0] == "debug@example.com"
+    assert redirected_inst.dm_user.call_args.args[1] == baseline_text
+
+
+def test_send_to_footer_still_shows_target_email(
+    notify_db, cli_main, monkeypatch, capsys
+):
+    """The redirect only changes the Slack API recipient — the delivery-summary
+    footer's bookkeeping (built from _DeliveryResult) still reports on the
+    real target user, not the debug address."""
+    slack_cls, slack_inst = _mock_slack(dm_status=SendStatus.FAILED)
+    _patch_senders(monkeypatch, slack_cls)
+    cfg = {**_NOTIFY_CFG, "send_underusage_report": True, "send_usage_report": False}
+    with gifnoc.overlay({"sarc.notifications": cfg}):
+        rc = cli_main(
+            [
+                "usage",
+                "notify",
+                "--as-of",
+                _CYCLE_WEEK,
+                "--send",
+                "--user-email",
+                "beaubonhomme@mila.quebec",
+                "--send-to",
+                "debug@example.com",
+            ]
+        )
+    assert rc == 0
+    out = capsys.readouterr().out
+    summary = out[out.index("=== Delivery Summary ===") :]
+    assert "beaubonhomme@mila.quebec" in summary
+    assert "debug@example.com" not in summary
+    # the actual Slack call still targeted the debug address, not the target
+    assert slack_inst.dm_user.call_args.args[0] == "debug@example.com"
 
 
 def test_min_waste_rgu_hours_flag_overrides_config(
@@ -1072,6 +1257,62 @@ def test_n3_usage_report_positive_case(usage_report_db, cli_main, capsys):
     assert rc == 0
     captured = capsys.readouterr()
     assert "ISO week 24 (multiple of 6) — Usage report eligible" in captured.err
+    out = captured.out
+    assert "=== Usage Report Previews" in out
+    assert "beaubonhomme@mila.quebec" in out
+
+
+# ── usage_report_cycle_offset (N) ─────────────────────────────────────────────
+# usage_report_cycle_offset shifts only the usage-report eligibility check
+# (shift = offset x usage_cycle_length_weeks weeks); the underusage-cycle
+# check and cycle anchor never read this field and must stay unaffected.
+
+
+def test_offset_moves_a_previously_eligible_week_off_cycle(
+    usage_report_db, cli_main, capsys
+):
+    # wk 28 (_USAGE_REPORT_WEEK) is report-eligible at offset=0 (28 % 4 == 0)
+    # but not at offset=1 ((28 - 1*2) % 4 == 2).
+    cfg = {**_NOTIFY_CFG, "send_usage_report": True, "usage_report_cycle_offset": 1}
+    with gifnoc.overlay({"sarc.notifications": cfg}):
+        rc = cli_main(["usage", "notify", "--as-of", _USAGE_REPORT_WEEK])
+    assert rc == 0
+    captured = capsys.readouterr()
+    assert "Usage report eligible this run" not in captured.err
+    assert "=== Usage Report Previews" not in captured.out
+
+
+def test_offset_moves_a_previously_off_cycle_week_onto_cycle(
+    usage_report_db, cli_main, capsys
+):
+    # wk 26 (_CYCLE_NON_REPORT_WEEK) is NOT report-eligible at offset=0
+    # (26 % 4 == 2) but becomes eligible at offset=1 ((26 - 1*2) % 4 == 0).
+    cfg = {**_NOTIFY_CFG, "send_usage_report": True, "usage_report_cycle_offset": 1}
+    with gifnoc.overlay({"sarc.notifications": cfg}):
+        rc = cli_main(["usage", "notify", "--as-of", _CYCLE_NON_REPORT_WEEK])
+    assert rc == 0
+    captured = capsys.readouterr()
+    assert (
+        "ISO week 26 (multiple of 4, offset 1 cycle(s)) — Usage report eligible"
+        in captured.err
+    )
+    out = captured.out
+    assert "=== Usage Report Previews" in out
+    assert "beaubonhomme@mila.quebec" in out
+
+
+def test_offset_wraps_modulo_usage_report_cycles(usage_report_db, cli_main, capsys):
+    # offset=2 == usage_report_cycles(2) wraps back to the same eligibility as
+    # offset=0 — proves modulo wraparound rather than a permanent shift/crash.
+    cfg = {**_NOTIFY_CFG, "send_usage_report": True, "usage_report_cycle_offset": 2}
+    with gifnoc.overlay({"sarc.notifications": cfg}):
+        rc = cli_main(["usage", "notify", "--as-of", _USAGE_REPORT_WEEK])
+    assert rc == 0
+    captured = capsys.readouterr()
+    assert (
+        "ISO week 28 (multiple of 4, offset 2 cycle(s)) — Usage report eligible"
+        in captured.err
+    )
     out = captured.out
     assert "=== Usage Report Previews" in out
     assert "beaubonhomme@mila.quebec" in out
