@@ -122,21 +122,14 @@
                display: flex; align-items: center; gap: 6px; }
     .ms-plot { width: 100%; flex: 1; min-height: 0; }
     .ms-metric2 { font-size: 12px; padding: 1px 6px; max-width: 160px; }
-    /* RGU-usage: the "View:" picker shares its row with the plot title (an HTML
-       title — the plot carries no Plotly title) to save one line of tile
-       height. Grid centres the title on the tile; the picker sits on the left.
-       Font stack/colour mirror Plotly's default titles next door. */
-    /* RGU-usage: the "View:" picker floats over the plot's top-left corner —
-       the empty left side of the title band (the modebar hovers top-RIGHT).
-       The plot then keeps the exact same Plotly layout as rgu_by_cluster, so
-       the two tiles align by construction, with no height arithmetic. */
-    .ms-float-ctrl {
-      position: absolute; top: 0; left: 0; z-index: 10;
-      font-size: 12px; color: #888; display: flex; align-items: center; gap: 6px;
-      padding: 2px 4px 4px 0;
-      background-color: white;
+    /* RGU-usage: header slot the renderer fills with the "View:" picker once the
+       data is in (same pattern as .jt-head-slot). Off the plot, so the Plotly
+       title keeps the full width; flex:1 centres it between title and actions. */
+    .ru-head-slot {
+      flex: 1; display: flex; align-items: center; justify-content: center;
+      gap: 6px; font-size: 12px; font-weight: 400; color: #888;
     }
-    .ms-float-ctrl .add-select { padding: 1px 6px; font-size: 11px; }
+    .ru-head-slot .add-select { padding: 1px 6px; font-size: 11px; }
     /* "?" help badge in the RGU-usage tile header: standard circular help
        button (quiet grey, blue on hover — same hover palette as .add-tile-btn);
        clicking it opens a definition panel that expands rightward from the
@@ -159,6 +152,10 @@
       font-weight: 400; text-align: left;
     }
     .ms-help-panel p { margin: 4px 0; }
+    /* Key takeaway. Highlighted rather than coloured: every colour in this panel
+       already names a series (blue/red/light blue/grey bars, green and purple
+       curves), so a coloured emphasis would read as one of them. */
+    .ms-help-panel .ms-help-key { background: #fff3cd; padding: 0 3px; border-radius: 2px; }
 
     {% if is_admin %}
     /* RGU-by-user: per-tile "top N" + sort controls above the (dynamic-height) plot. */
@@ -585,6 +582,45 @@
       return RGU_UNITS[mode === 'custom' ? periodUnit.value : mode] || RGU_UNITS.h;
     }
 
+    // Metric means overlaid on the RGU-usage tile, on a right-hand 0-100 % axis.
+    // Fixed (not the efficiency-metric selector) so the curves stay comparable.
+    // Colours stay clear of the bars' palette and of the focus orange, and are
+    // dark enough to hold up over the light blue segment they both cross.
+    const TREND_CURVES = [
+      ['gpu_sm_occupancy', '#000000'],
+      ['gpu_utilization',  '#8b2fc9'],
+    ];
+    // Thick enough to read over the bars, in both views.
+    const TREND_LINE = { width: 3 };
+
+    // Per-job simple mean over several buckets: recombined by job count, never a
+    // plain average of the per-bucket averages (buckets hold unequal job counts).
+    function trendMean(rows, metric) {
+      let num = 0, den = 0;
+      for (const r of rows) {
+        const t = r.metric_means && r.metric_means[metric];
+        if (t && t.n > 0 && t.mean != null) { num += t.mean * t.n; den += t.n; }
+      }
+      return den ? num / den : null;
+    }
+
+    // Right-hand axis shared by both RGU-usage views. The range is pinned to
+    // [0, 1]: autoscaled, an 8 % mean would fill the frame and read as a good score.
+    const TREND_YAXIS = {
+      overlaying: 'y', side: 'right', range: [0, 1], tickformat: '.0%',
+      showgrid: false, fixedrange: true,
+    };
+    // Names the right axis above its top tick. An annotation, not yaxis2.title:
+    // Plotly only centres axis titles sideways, which would cost ~20px of width
+    // (and the same on rgu_by_cluster, to keep both plot areas aligned).
+    const TREND_YAXIS_TITLE = {
+      xref: 'paper', yref: 'paper', x: 1, y: 1, xanchor: 'left', yanchor: 'bottom',
+      // Left-anchored at x=1 so it sits over the tick labels in the right
+      // margin, not inside the plot area; yshift lifts it off the top tick.
+      xshift: 0, yshift: 15, text: 'Metric<br>value', showarrow: false, align: 'center',
+      font: { size: 12, color: '#888' },
+    };
+
     // The efficiency metric is admin-only; non-admins are pinned to SM occupancy
     // (the select is absent from their DOM). Every reader goes through this.
     function selectedMetric() {
@@ -973,7 +1009,7 @@
       btn.type = 'button';
       btn.className = 'ms-help-btn';
       btn.textContent = '?';
-      btn.setAttribute('aria-label', 'Help: what do Wasted / Unused mean?');
+      btn.setAttribute('aria-label', 'Help: how to read this plot');
       const panel = document.createElement('div');
       panel.className = 'ms-help-panel';
       panel.style.display = 'none';
@@ -982,11 +1018,23 @@
         if (panel.style.display !== 'none') return;
         const metricName = (currentParams && currentParams.metric) || 'gpu_sm_occupancy';
         const metricPretty = METRICS[metricName] || metricName;
+        const unit = rguUnit();
         panel.innerHTML =
-          `<h3>What do Wasted / Unused mean?</h3>` +
-          `<p><strong>Wasted</strong> (red): unused compute missing for each job to reach the expected minimum of ` +
+          `<h3>How to read this plot</h3>` +
+          `<h4>Left axis: allocated ${unit.label}, split by ${metricPretty}</h4>` +
+          `<p>Each segment sums per-job amounts, not shares of the period total: a job below the minimum adds its own shortfall even when the period average is above it.</p>` +
+          `<p><strong>Used</strong> (blue): allocated × ${metricPretty}.</p>` +
+          `<p>Idle capacity is cut at the ${MIN_USAGE_EXPECTED_PERCENT} % minimum:</p>` +
+          `<p><strong>Unused &lt; ${MIN_USAGE_EXPECTED_PERCENT} %</strong> (red): unused compute missing for each job to reach the expected minimum of ` +
           `${MIN_USAGE_EXPECTED_PERCENT} % ${metricPretty}.</p>` +
-          `<p><strong>Unused</strong> (light blue): idle capacity above the minimum.</p>` +
+          `<p><strong>Unused ≥ ${MIN_USAGE_EXPECTED_PERCENT} %</strong> (light blue): unused compute above the expected minimum of ` +
+          `${MIN_USAGE_EXPECTED_PERCENT} % ${metricPretty}.</p>` +
+          `<p><strong>No metric data</strong> (gray): no ${metricPretty} recorded. Still counted in the allocated total, but <em>left out of</em> the used/unused split and the underusage notifications.</p>` +
+          `<h4>Right axis: average utilization</h4>` +
+          `<p><strong>SM occupancy</strong>: how full the GPU was.<br/>` +
+          `<strong>GPU utilization</strong>: how often GPU ran anything at all.<br/>` +
+          `A job can keep a GPU busy while using only a fraction of it, which is why <strong class="ms-help-key">SM occupancy is the usage reference</strong>.</p>` +
+          `<p>Both are plain per-job averages, not weighted by ${unit.label}, so they do not match the Used share of the bars.</p>` +
           `<p><a href="${USER_GUIDE_URL}" target="_blank" rel="noopener">Open the user guide ↗</a></p>`;
         panel.style.display = 'block';
         // Defer so an opening click isn't caught as an outside click.
@@ -1038,6 +1086,11 @@
             // column picker, so they share the header line (one row saved).
             const slot = document.createElement('span');
             slot.className = 'jt-head-slot';
+            header.appendChild(slot);
+          } else if (plotType === 'rgu_usage') {
+            // Same idea for the "View:" picker: filled once the data is in.
+            const slot = document.createElement('span');
+            slot.className = 'ru-head-slot';
             header.appendChild(slot);
           }
           {% if is_admin %}
@@ -1256,30 +1309,36 @@
       const metricName = (currentParams && currentParams.metric) || 'gpu_sm_occupancy';
       const metricPretty = METRICS[metricName] || metricName;
 
-      // Box/plot layout (reusing the heatmap's classes); the "View:" picker
-      // floats over the plot's top-left corner (see .ms-float-ctrl), so the
-      // plot itself is laid out exactly like rgu_by_cluster next door.
+      // Box/plot layout (reusing the heatmap's classes); the plot is laid out
+      // exactly like rgu_by_cluster next door.
       el.innerHTML = '';
       const box = document.createElement('div'); box.className = 'ms-box';
-      const ctrl = document.createElement('div'); ctrl.className = 'ms-float-ctrl';
-      const lab = document.createElement('label');
-      lab.textContent = 'View: ';
-      const sel = document.createElement('select');
-      sel.className = 'add-select';
-      [['per_period', 'Per period'], ['whole_range', 'Whole range']].forEach(([v, t]) => {
-        const o = document.createElement('option');
-        o.value = v; o.textContent = t;
-        if (v === rguUsageView) o.selected = true;
-        sel.appendChild(o);
-      });
-      lab.appendChild(sel);
-      ctrl.appendChild(lab);
       const plot = document.createElement('div'); plot.className = 'ms-plot';
-      box.appendChild(ctrl); box.appendChild(plot);
+      box.appendChild(plot);
       el.appendChild(box);
-      // View is module-scoped (shared by every RGU-usage tile), so a change
-      // re-renders them all from cache — no refetch — like the RGU-unit switch.
-      sel.addEventListener('change', () => { rguUsageView = sel.value; saveState(); rerenderRguTiles(); });
+
+      // "View:" picker in this tile's header slot (closest('.tile') so several
+      // RGU-usage tiles each fill their own). Filled here, i.e. only once the
+      // data is in; renderTile clears it while loading.
+      const slot = el.closest('.tile')?.querySelector('.ru-head-slot');
+      if (slot) {
+        slot.innerHTML = '';
+        const lab = document.createElement('label');
+        lab.textContent = 'View: ';
+        const sel = document.createElement('select');
+        sel.className = 'add-select';
+        [['per_period', 'Per period'], ['whole_range', 'Whole range']].forEach(([v, t]) => {
+          const o = document.createElement('option');
+          o.value = v; o.textContent = t;
+          if (v === rguUsageView) o.selected = true;
+          sel.appendChild(o);
+        });
+        lab.appendChild(sel);
+        slot.appendChild(lab);
+        // View is module-scoped (shared by every RGU-usage tile), so a change
+        // re-renders them all from cache — no refetch — like the RGU-unit switch.
+        sel.addEventListener('change', () => { rguUsageView = sel.value; saveState(); rerenderRguTiles(); });
+      }
 
       if (rguUsageView === 'whole_range') {
         // One stacked bar summing the whole Start–End range. Focus is ignored on
@@ -1289,25 +1348,57 @@
         const wastedTot = sum('rgu_wasted');
         const unusedTot = reqTot - usedTot - unmTot - wastedTot;
         const X = ['Whole range'];
+        // Over the whole range each metric collapses to a single value, so the
+        // per-period curve becomes a level line over the RGU bar. Drawn in paper
+        // coordinates: numeric x values on a category axis become extra
+        // categories, which would push the line beside the bar instead of across
+        // it. The anchor point carries the legend, the hover and the right axis
+        // (a layout shape alone would leave it without a trace).
+        const trendLevels = [], trendRules = [];
+        TREND_CURVES.forEach(([m, color], i) => {
+          const v = trendMean(d.rgu_usage, m);
+          if (v == null) return;
+          trendRules.push({
+            type: 'line', xref: 'paper', yref: 'y2',
+            x0: 0, x1: 1, y0: v, y1: v, line: { color: color, ...TREND_LINE },
+          });
+          trendLevels.push({
+            type: 'scatter', mode: 'markers+text', yaxis: 'y2',
+            name: METRICS[m] + ' mean', x: X, y: [v],
+            marker: { color: color, size: 6 },
+            text: [(v * 100).toFixed(1) + ' %'],
+            textposition: i ? 'top right' : 'top left',
+            textfont: { color: color, size: 12 },
+            hovertemplate: METRICS[m] + ' mean over the whole range: %{y:.1%}<extra></extra>',
+          });
+        });
+        // Metric traces come first because a stacked barmode reverses the legend:
+        // this lands them after the bars, which keep the pile's top-to-bottom
+        // reading order. Same ordering in the per-period view below.
         Plotly.react(plot, [
+          ...trendLevels,
           { type: 'bar', name: 'Used',   x: X, y: [usedTot * unit.factor], marker: { color: '#1a6fd4' },
             hovertemplate: unit.label + ' used: %{y:,.1f}<extra></extra>' },
-          { type: 'bar', name: `Wasted (below ${MIN_USAGE_EXPECTED_PERCENT} % min)`, x: X, y: [wastedTot * unit.factor], marker: { color: '#ff0000' },
-            hovertemplate: `${unit.label} wasted: %{y:,.1f}<br>shortfall of jobs below the <br>${MIN_USAGE_EXPECTED_PERCENT} % ${metricPretty} minimum<extra></extra>` },
-          { type: 'bar', name: 'Unused (above min)', x: X, y: [unusedTot * unit.factor], marker: { color: '#a8c8f0' },
-            hovertemplate: `${unit.label} unused: %{y:,.1f}<br>idle capacity above the ${MIN_USAGE_EXPECTED_PERCENT} % minimum<extra></extra>` },
+          { type: 'bar', name: `Unused < ${MIN_USAGE_EXPECTED_PERCENT} %`, x: X, y: [wastedTot * unit.factor], marker: { color: '#ff0000' },
+            hovertemplate: `${unit.label} unused below ${MIN_USAGE_EXPECTED_PERCENT} %: %{y:,.1f}<br>what each job lacked to reach<br>the ${MIN_USAGE_EXPECTED_PERCENT} % ${metricPretty} minimum<extra></extra>` },
+          { type: 'bar', name: `Unused ≥ ${MIN_USAGE_EXPECTED_PERCENT} %`, x: X, y: [unusedTot * unit.factor], marker: { color: '#a8c8f0' },
+            hovertemplate: `${unit.label} unused above ${MIN_USAGE_EXPECTED_PERCENT} %: %{y:,.1f}<br>idle capacity above the minimum<extra></extra>` },
           { type: 'bar', name: 'No metric data', x: X, y: [unmTot * unit.factor], marker: { color: '#bdbdbd' },
-            hovertemplate: unit.label + ' (no metric): %{y:,.1f}<extra></extra>' },
+            hovertemplate: unit.label + ' (no metric): %{y:,.1f}<br>no ' + metricPretty + ' data<extra></extra>' },
         ], pLayout({
           // Same pinned title + t as rgu_by_cluster, so the two tiles align
           // by construction (the View picker floats over the top-left corner).
-          title: { text: 'Total ' + unit.label + ' — Whole range (Used / Wasted / Unused)',
+          // t:78 fits a two-row legend under the title; at 58 the rows overlap it.
+          title: { text: 'RGU usage and metric value — whole range',
                    font: { size: 16 }, y: 1, yanchor: 'top', pad: { t: 2 } },
           barmode: 'stack', bargap: 0.7,
           xaxis: { type: 'category' },
           yaxis: { title: { text: 'Total ' + unit.label } },
+          yaxis2: TREND_YAXIS,
+          shapes: trendRules,
+          annotations: [TREND_YAXIS_TITLE],
           legend: { orientation: 'h', x: 0, xanchor: 'left', y: 1.02, yanchor: 'bottom' },
-          margin: { l: 60, r: 20, t: 58, b: 60 },
+          margin: { l: 60, r: 60, t: 78, b: 60 },
         }), { responsive: true });
         return;
       }
@@ -1323,27 +1414,40 @@
       const colorUnused    = periods.map(p => { const f = periodInFocus(p); return f === null ? '#a8c8f0' : f ? '#f0c090' : '#e4eef8'; });
       const colorWasted    = periods.map(p => { const f = periodInFocus(p); return f === null ? '#ff0000' : f ? '#aa00cc' : '#ffdddd'; });
       const colorUnmeasured= periods.map(p => { const f = periodInFocus(p); return f === null ? '#bdbdbd' : f ? '#8a8a8a' : '#e6e6e6'; });
+      // Metric means on the right-hand axis. Deliberately not tinted by the focus
+      // (the bars already carry that feedback); 6 series plus a shaded band would
+      // be unreadable. Null buckets leave a gap, like the Metric trend tile.
+      const trendLines = TREND_CURVES.map(([m, color]) => ({
+        type: 'scatter', mode: 'lines+markers', yaxis: 'y2',
+        name: METRICS[m] + ' mean', x: periods, customdata: periodEnds,
+        y: d.rgu_usage.map(r => (r.metric_means && r.metric_means[m] ? r.metric_means[m].mean : null)),
+        line: { color: color, ...TREND_LINE }, marker: { size: 5 },
+        hovertemplate: METRICS[m] + ' mean<br>Period: %{x}<br>Value: %{y:.1%}<extra></extra>',
+      }));
       Plotly.react(plot, [
+        ...trendLines,
         { type: 'bar', name: 'Used',   x: periods, y: rguUsed, customdata: periodEnds,
           marker: { color: colorUsed },
           hovertemplate: 'Period: %{x}<br>' + unit.label + ' used: %{y:,.1f}<extra></extra>' },
-        { type: 'bar', name: `Wasted (below ${MIN_USAGE_EXPECTED_PERCENT} % min)`,   x: periods, y: rguWasted, customdata: periodEnds,
+        { type: 'bar', name: `Unused < ${MIN_USAGE_EXPECTED_PERCENT} %`,   x: periods, y: rguWasted, customdata: periodEnds,
           marker: { color: colorWasted },
-          hovertemplate: `Period: %{x}<br>${unit.label} wasted: %{y:,.1f}<br>shortfall of jobs below the <br>${MIN_USAGE_EXPECTED_PERCENT} % ${metricPretty} minimum<extra></extra>` },
-        { type: 'bar', name: 'Unused (above min)', x: periods, y: rguUnused, customdata: periodEnds,
+          hovertemplate: `Period: %{x}<br>${unit.label} unused below ${MIN_USAGE_EXPECTED_PERCENT} %: %{y:,.1f}<br>what each job lacked to reach<br>the ${MIN_USAGE_EXPECTED_PERCENT} % ${metricPretty} minimum<extra></extra>` },
+        { type: 'bar', name: `Unused ≥ ${MIN_USAGE_EXPECTED_PERCENT} %`, x: periods, y: rguUnused, customdata: periodEnds,
           marker: { color: colorUnused },
-          hovertemplate: `Period: %{x}<br>${unit.label} unused: %{y:,.1f}<br>idle capacity above the ${MIN_USAGE_EXPECTED_PERCENT} % minimum<extra></extra>` },
+          hovertemplate: `Period: %{x}<br>${unit.label} unused above ${MIN_USAGE_EXPECTED_PERCENT} %: %{y:,.1f}<br>idle capacity above the minimum<extra></extra>` },
         { type: 'bar', name: 'No metric data', x: periods, y: rguUnmeasured, customdata: periodEnds,
           marker: { color: colorUnmeasured },
-          hovertemplate: 'Period: %{x}<br>' + unit.label + ' (no metric): %{y:,.1f}<extra></extra>' },
+          hovertemplate: 'Period: %{x}<br>' + unit.label + ' (no metric): %{y:,.1f}<br>no ' + metricPretty + ' data<extra></extra>' },
       ], pLayout({
-        title: { text: 'Total ' + unit.label + ' per Period — Used / Wasted / Unused (click to focus)',
+        title: { text: 'RGU usage and metric value — per period (click to focus)',
                  font: { size: 16 }, y: 1, yanchor: 'top', pad: { t: 2 } },
         barmode: 'stack',
         xaxis: { title: { text: 'Period start' }, type: 'category', tickangle: -45 },
         yaxis: { title: { text: 'Total ' + unit.label } },
+        yaxis2: TREND_YAXIS,
+        annotations: [TREND_YAXIS_TITLE],
         legend: { orientation: 'h', x: 0, xanchor: 'left', y: 1.02, yanchor: 'bottom' },
-        margin: { l: 60, r: 20, t: 58, b: 100 },
+        margin: { l: 60, r: 60, t: 78, b: 100 },
       }), { responsive: true }).then(gd => {
         gd.removeAllListeners('plotly_click');
         gd.on('plotly_click', evt => {
@@ -1394,9 +1498,10 @@
         hovertemplate: s.cluster + '<br>Period: %{x}<br>' + unit.label + ': %{customdata[1]:,.2f}<extra></extra>',
       })).sort((a, b) => a.name.localeCompare(b.name));
       Plotly.react(id, traces, pLayout({
-        // Title pinned to the container top; t:58 = title band + legend +
-        // gap. rgu_usage uses the same pinned title + t, so titles, legends
-        // and bars align side by side.
+        // Title pinned to the container top; t:78 = title band + a two-row
+        // legend + gap. rgu_usage uses the same pinned title + t, so titles,
+        // legends and bars align side by side. r:60 matches the room its metric
+        // axis takes on the right, keeping both plot areas the same width.
         title: { text: 'Total ' + unit.label + ' by Cluster (click to focus)',
                  font: { size: 16 }, y: 1, yanchor: 'top', pad: { t: 2 } },
         // Manual per-period `base` offsets do the stacking, so overlay — not
@@ -1410,7 +1515,7 @@
         // there is only one trace).
         showlegend: true,
         legend: { orientation: 'h', x: 0, xanchor: 'left', y: 1.02, yanchor: 'bottom', traceorder: 'normal' },
-        margin: { l: 60, r: 20, t: 58, b: 100 },
+        margin: { l: 60, r: 60, t: 78, b: 100 },
       }), { responsive: true }).then(gd => {
         gd.removeAllListeners('plotly_click');
         gd.on('plotly_click', evt => {
@@ -2518,6 +2623,11 @@
         return;
       }
       chartDiv.innerHTML = '<div class="tile-loading">Loading…</div>';
+      // The RGU-usage "View:" picker lives in the tile header, outside chartDiv:
+      // clear it here so it is absent while loading and on error, and let
+      // renderRguUsage put it back once the data is in.
+      const ruSlot = chartDiv.closest('.tile')?.querySelector('.ru-head-slot');
+      if (ruSlot) ruSlot.innerHTML = '';
       try {
         const data = await ensureEndpoint(ep);
         if (!document.body.contains(chartDiv)) return;

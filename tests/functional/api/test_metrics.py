@@ -25,6 +25,7 @@ guest). The guest -> login redirect is checked by
 
 import math
 import re
+from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import pytest
@@ -486,6 +487,62 @@ def test_rgu_usage_wasted_is_per_job(dash_client, dash_db):
         (0.6 - low_mean) + (dash_db.n - 1) * (0.6 - _SM_OCC)
     )
     assert sum(r["rgu_wasted"] for r in data) == pytest.approx(expected)
+
+
+def test_rgu_usage_metric_means(dash_client, dash_db):
+    """``metric_means`` gives the plain per-job mean of each trend metric, plus
+    the job count behind it. Empty buckets report a null mean over 0 job."""
+    data = dash_client.get("/dash/metrics/rgu_usage", params=WINDOW).json()
+    for name, expected in (("gpu_sm_occupancy", _SM_OCC), ("gpu_utilization", 0.4)):
+        cells = [r["metric_means"][name] for r in data]
+        assert sum(c["n"] for c in cells) == dash_db.n
+        for cell in cells:
+            if cell["n"]:
+                assert cell["mean"] == pytest.approx(expected)
+            else:
+                assert cell["mean"] is None
+
+
+def test_rgu_usage_metric_means_weight_unequal_buckets(dash_client, dash_db):
+    """The counts are what lets a caller recombine buckets into a range-wide
+    mean: with 3 jobs at 20 % one week and 1 at 80 % the next, the count-weighted
+    mean is 35 %, where averaging the two bucket means would read 50 %.
+    """
+    low, high = 0.2, 0.8
+    week1 = datetime(2023, 2, 14, 12, tzinfo=timezone.utc)
+    week2 = datetime(2023, 2, 21, 12, tzinfo=timezone.utc)
+    with config.db.session() as sess:
+        jobs = sess.exec(
+            select(SlurmJobDB)
+            .where(col(SlurmJobDB.harmonized_gpu_type) == _GPU)
+            .order_by(col(SlurmJobDB.id))
+        ).all()
+        assert len(jobs) == 4, "the fixture enriches exactly 4 jobs"
+        for i, job in enumerate(jobs):
+            job.submit_time = week1 if i < 3 else week2
+            sess.add(job)
+            stat = sess.exec(
+                select(JobStatisticDB).where(
+                    col(JobStatisticDB.job_id) == job.id,
+                    col(JobStatisticDB.name) == "gpu_sm_occupancy",
+                )
+            ).one()
+            stat.mean = low if i < 3 else high
+            sess.add(stat)
+        sess.commit()
+
+    data = dash_client.get(
+        "/dash/metrics/rgu_usage", params={**WINDOW, "period": "w"}
+    ).json()
+    cells = [
+        c for c in (r["metric_means"]["gpu_sm_occupancy"] for r in data) if c["n"] > 0
+    ]
+    assert sorted((c["n"], round(c["mean"], 6)) for c in cells) == [(1, high), (3, low)]
+
+    weighted = sum(c["mean"] * c["n"] for c in cells) / sum(c["n"] for c in cells)
+    naive = sum(c["mean"] for c in cells) / len(cells)
+    assert weighted == pytest.approx((3 * low + high) / 4)
+    assert naive == pytest.approx((low + high) / 2)
 
 
 def test_rgu_by_cluster_with_data(dash_client, dash_db):
