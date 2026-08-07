@@ -438,17 +438,21 @@
     // Reloads the page scoped to the typed user's email (admin-only; enforced
     // server-side too). A full reload, not a client-side toggle, because
     // is_admin drives which controls Jinja renders in the first place.
+    // Both toggles drop `plots`: the layout is role-dependent, so carrying it
+    // across would show the preview's 3 tiles on the way back to the admin view.
     function viewAsUser() {
       const email = document.getElementById('view-as-input').value.trim();
       if (!email) return;
       const url = new URL(window.location.href);
       url.searchParams.set('as_user', email);
+      url.searchParams.delete('plots');
       window.location.href = url.toString();
     }
 
     function clearViewAsUser() {
       const url = new URL(window.location.href);
       url.searchParams.delete('as_user');
+      url.searchParams.delete('plots');
       window.location.href = url.toString();
     }
 
@@ -894,10 +898,15 @@
       return rows.length ? rows : DEFAULT_LAYOUT.map(r => [...r]);
     }
 
+    // Publishes the layout as ?plots= so it stays bookmarkable. Admin-only: a
+    // non-admin view has a fixed layout and ignores the param on load, so
+    // writing it would only leak an unusable layout into shared/back-button URLs.
     function syncUrl() {
+      {% if is_admin %}
       const url = new URL(window.location);
       url.searchParams.set('plots', layoutToParam(tileLayout));
       window.history.replaceState({}, '', url);
+      {% endif %}
       saveState();
     }
 
