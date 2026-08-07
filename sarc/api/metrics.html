@@ -305,7 +305,7 @@
     <span class="conn-email {{ 'admin' if admin_email else 'user' }}">({{ user_email }})</span>
     {% if admin_email and view_as_email %}
     <span class="view-as-badge">/ as user <strong>{{ view_as_email }}</strong>
-      <button type="button" class="view-as-clear" onclick="clearViewAsUser()">clear</button>
+      <button type="button" class="view-as-clear" onclick="clearViewAsUser()">back to admin view</button>
     </span>
     {% elif admin_email %}
     <span class="view-as-ctrl">
