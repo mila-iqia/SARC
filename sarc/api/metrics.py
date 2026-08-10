@@ -110,6 +110,10 @@ _METRICS_0_1: dict[str, str] = {
     "system_memory": "System memory",
 }
 
+# Metric means overlaid on the RGU-usage plot: fixed, unlike the `metric`
+# selector that drives the bars, so the two curves stay comparable over time.
+_TREND_METRICS = ("gpu_sm_occupancy", "gpu_utilization")
+
 
 _PERIOD_RE = re.compile(r"^(\d+(?:\.\d+)?)?\s*([hdwm]?)$", re.IGNORECASE)
 _PERIOD_MULTIPLIERS = {"h": 1 / 24, "d": 1, "w": 7, "m": 30}
@@ -793,6 +797,10 @@ def metrics_rgu_usage(
     ``metric`` (e.g. gpu_sm_occupancy); ``rgu_wasted`` = the per-job shortfall
     below ``min_usage`` (SUM of rgu_hours * (min_usage - mean) over measured
     jobs with mean < min_usage). Returns one row per bucket.
+
+    Each row also carries ``metric_means``: the plain per-job mean of every
+    _TREND_METRICS entry, with the job count that weights it when callers
+    recombine buckets (a mean is not additive).
     """
     begin_dt, finish_dt = _date_range(start, end)
     parsed = _parse_period(period)
@@ -805,7 +813,11 @@ def metrics_rgu_usage(
     # via our own targeted jobstatisticdb join.
     bucket_expr = _bucket_expr(parsed, col(JobSeriesDB.submit_time), begin_dt)
     rgu_hours = col(JobSeriesDB.allocated_gpu_cost) / 3600.0
-    m_mean = col(JobStatisticDB.mean)
+    # `metric` reads off the trend alias whenever it is one of them (the
+    # default): joining jobstatisticdb again on the same (name, job_id) row
+    # would buy nothing.
+    trend = {name: aliased(JobStatisticDB) for name in _TREND_METRICS}
+    m_mean = col(trend.get(metric, JobStatisticDB).mean)
     # Split used vs unmeasured on whether the metric is a real value (not
     # NULL/NaN); a missing measurement is kept apart from "unused" rather than
     # counted as waste.
@@ -821,6 +833,17 @@ def metrics_rgu_usage(
         else_=0.0,
     )
 
+    # Plain per-job means of the fixed trend metrics, plotted over the bars. The
+    # counts are the bucket weights: averaging the per-bucket averages would be
+    # wrong when buckets hold different job counts (whole-range view).
+    trend_cols = []
+    for name in _TREND_METRICS:
+        t_mean = col(trend[name].mean)
+        trend_cols += [
+            func.avg(case((_is_real(t_mean), t_mean))).label(f"{name}_mean"),
+            func.count(case((_is_real(t_mean), t_mean))).label(f"{name}_n"),
+        ]
+
     query = _apply_rgu_base_view(
         select(
             bucket_expr,
@@ -828,6 +851,7 @@ def metrics_rgu_usage(
             func.sum(rgu_used_term).label("rgu_used"),
             func.sum(rgu_unmeasured_term).label("rgu_unmeasured"),
             func.sum(rgu_wasted_term).label("rgu_wasted"),
+            *trend_cols,
         ),  # ty:ignore[no-matching-overload]
         sess,
         clusters,
@@ -835,8 +859,8 @@ def metrics_rgu_usage(
         job_states,
         scope_user_id=_scope_or_view_as(sess, req, as_user),
     )
-    query = (
-        query.join(
+    if metric not in trend:
+        query = query.join(
             JobStatisticDB,
             and_(
                 col(JobStatisticDB.job_id) == col(JobSeriesDB.job_db_id),
@@ -844,7 +868,19 @@ def metrics_rgu_usage(
             ),
             isouter=True,
         )
-        .where(
+    # One alias per trend metric: (name, job_id) is unique, so these stay 1:1
+    # and leave the SUMs above untouched.
+    for name in _TREND_METRICS:
+        alias = trend[name]
+        query = query.join(
+            alias,
+            and_(
+                col(alias.job_id) == col(JobSeriesDB.job_db_id), col(alias.name) == name
+            ),
+            isouter=True,
+        )
+    query = (
+        query.where(
             col(JobSeriesDB.submit_time) >= begin_dt,
             col(JobSeriesDB.submit_time) < finish_dt,
         )
@@ -852,15 +888,23 @@ def metrics_rgu_usage(
         .order_by("bucket")
     )
 
-    sums = {
-        _sql_bucket_key(parsed, row.bucket): (
+    sums = {}
+    trends = {}
+    for row in sess.exec(query):
+        key = _sql_bucket_key(parsed, row.bucket)
+        sums[key] = (
             float(row.rgu_allocated or 0.0),
             float(row.rgu_used or 0.0),
             float(row.rgu_unmeasured or 0.0),
             float(row.rgu_wasted or 0.0),
         )
-        for row in sess.exec(query)
-    }
+        trends[key] = {
+            name: {
+                "mean": _nan_to_none(getattr(row, f"{name}_mean")),
+                "n": int(getattr(row, f"{name}_n") or 0),
+            }
+            for name in _TREND_METRICS
+        }
 
     period_data = []
     for key, ps, pe in _iter_buckets(begin_dt, finish_dt, parsed):
@@ -873,6 +917,9 @@ def metrics_rgu_usage(
                 "rgu_used": used,
                 "rgu_unmeasured": unmeasured,
                 "rgu_wasted": wasted,
+                "metric_means": trends.get(
+                    key, {name: {"mean": None, "n": 0} for name in _TREND_METRICS}
+                ),
             }
         )
 
