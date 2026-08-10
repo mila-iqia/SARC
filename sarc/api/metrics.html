@@ -1530,7 +1530,7 @@
           });
           trendLevels.push({
             type: 'scatter', mode: 'markers+text', yaxis: 'y2',
-            name: METRICS[m] + ' mean (right)', x: X, y: [v],
+            name: METRICS[m] + ' mean (right axis)', x: X, y: [v],
             marker: { color: color, size: 6 },
             text: [(v * 100).toFixed(1) + ' %'],
             textposition: i ? 'top right' : 'top left',
@@ -1585,7 +1585,7 @@
       // be unreadable. Null buckets leave a gap, like the Metric trend tile.
       const trendLines = TREND_CURVES.map(([m, color]) => ({
         type: 'scatter', mode: 'lines+markers', yaxis: 'y2',
-        name: METRICS[m] + ' mean (right)', x: periods, customdata: periodEnds,
+        name: METRICS[m] + ' mean (right axis)', x: periods, customdata: periodEnds,
         y: d.rgu_usage.map(r => (r.metric_means && r.metric_means[m] ? r.metric_means[m].mean : null)),
         line: { color: color, ...TREND_LINE }, marker: { size: 5 },
         hovertemplate: METRICS[m] + ' mean<br>Period: %{x}<br>Value: %{y:.1%}<extra></extra>',
