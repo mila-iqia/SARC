@@ -147,8 +147,10 @@ class MilaLDAPScraper(UserScraper[MilaLDAPConfig]):
                 if creds.values != []:
                     yield UserMatch(
                         display_name=user_raw["displayName"][0],
-                        email=user_raw["mail"][0],
-                        matching_id=MatchID(name="mila_ldap", mid=user_raw["mail"][0]),
+                        email=user_raw["mail"][0].lower(),
+                        matching_id=MatchID(
+                            name="mila_ldap", mid=user_raw["mail"][0].lower()
+                        ),
                         associated_accounts={"mila": creds},
                     )
 

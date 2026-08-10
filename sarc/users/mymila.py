@@ -154,10 +154,10 @@ class MyMilaScraper(UserScraper[MyMilaConfig]):
                 first_name = record[Headers.First_Name]
             um = UserMatch(
                 display_name=f"{first_name} {record[Headers.Last_Name]}",
-                email=record[Headers.MILA_Email],
+                email=record[Headers.MILA_Email].lower(),
                 matching_id=MatchID(name="mymila", mid=str(record[Headers.MEMBER_NUM])),
                 known_matches={
-                    MatchID(name="mila_ldap", mid=record[Headers.MILA_Email])
+                    MatchID(name="mila_ldap", mid=record[Headers.MILA_Email].lower())
                 },
             )
             start_date = (
