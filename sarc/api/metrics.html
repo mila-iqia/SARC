@@ -9,7 +9,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Compute Utilization Dashboard ({{ user_email }})</title>
+  <title>Compute Utilization Dashboard [beta] ({{ user_email }})</title>
   <script src="https://cdn.plot.ly/plotly-3.6.0.min.js"
           integrity="sha384-VJGrWzhaqeZH5V40n11N6iTMH+MBDakZZjfPZAPtqS/BCEnF102uwlswiJq07HmW"
           crossorigin="anonymous"></script>
@@ -362,7 +362,7 @@
 </head>
 <body>
   <h3 class="page-head">
-    <span>Compute Utilization Dashboard</span>
+    <span>Compute Utilization Dashboard <sup>[beta]</sup></span>
     <span class="conn-email {{ 'admin' if admin_email else 'user' }}">({{ user_email }})</span>
     {% if admin_email and view_as_email %}
     <span class="view-as-badge">/ as user <strong>{{ view_as_email }}</strong>
