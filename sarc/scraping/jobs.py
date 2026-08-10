@@ -262,4 +262,5 @@ def parse_cache_entry(
             logger.warning(
                 f"skipped {nb_skipped}/{nb_total} ({int(100 * nb_skipped / nb_total)}%) jobs on {cluster_name} because we can't find a user for it"
             )
-    bulk_upsert_jobs(sess, jobs_to_upsert)
+        bulk_upsert_jobs(sess, jobs_to_upsert)
+        jobs_to_upsert = []
