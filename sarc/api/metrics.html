@@ -180,6 +180,16 @@
        purple curves), so a coloured emphasis would read as one of them.
        Not scoped to .ms-help-panel: the same markup is reused in the intro. */
     .ms-help-key { background: #fff3cd; padding: 0 3px; border-radius: 2px; }
+    /* Usage scale in the help text, each band carrying the job-table shade it
+       stands for, so the reader matches colour to threshold without a legend. */
+    .ms-scale {
+      display: inline-block; padding: 0 4px; margin: 1px 0; border-radius: 2px;
+      border: 1px solid #e0e0e0; font-weight: 600; white-space: nowrap;
+    }
+    .ms-scale.ms-crit { background: #ffcccc; border-color: #f0b0b0; }
+    .ms-scale.ms-low  { background: #ffefef; border-color: #f2d8d8; }
+    .ms-scale.ms-good { background: #cdfac6; border-color: #aee0a6; }
+    .ms-scale.ms-exc  { background: #9be593; border-color: #7fc877; }
 
     /* Intro dialog: what the whole dashboard means by "used", shown once per
        browser until dismissed for good. Same content as the page-title "?"
@@ -244,6 +254,14 @@
     .job-table tr.jt-crit td { background: #ffcccc; }
     .job-table tr.jt-low:hover td  { background: #ffe2e2; }
     .job-table tr.jt-crit:hover td { background: #ffbdbd; }
+    /* Good usage, on the hue of #1f8027 (139.6°). Built at a fixed chroma
+       (31 and 51) rather than by tinting that green with white, which drains
+       the chroma and turns it grey; matching the reds' contrast instead put it
+       at chroma 84, i.e. fluorescent. */
+    .job-table tr.jt-good td { background: #cdfac6; }
+    .job-table tr.jt-exc  td { background: #9be593; }
+    .job-table tr.jt-good:hover td { background: #c1f0ba; }
+    .job-table tr.jt-exc:hover  td { background: #8bda84; }
     .job-table .col-cmd {
       max-width: 100px; overflow: hidden; text-overflow: ellipsis;
       white-space: nowrap; font-family: monospace; font-size: 11px; color: #555;
@@ -471,6 +489,13 @@
     // stronger red (vs light red between here and MIN_USAGE_EXPECTED_PERCENT).
     const CRITICAL_USAGE_PERCENT = 5;
 
+    // Upper end of the same scale, shaded green in the job table so good work
+    // is visible and not only failures. Grades taken from the user guide;
+    // MIN_USAGE_EXPECTED_PERCENT to GOOD leaves a deliberately neutral band,
+    // which is what keeps the coloured rows standing out at all.
+    const GOOD_USAGE_PERCENT = 30;
+    const EXCELLENT_USAGE_PERCENT = 50;
+
     // Temporary user-guide target (Google Doc), linked from inside the "ⓘ"
     // help panel on the RGU-usage tiles.
     const USER_GUIDE_URL = 'https://docs.google.com/document/d/1kLm-3JXlyuukIS0n2cR_8XxhQuKIvW7-omll-wwXvaM/';
@@ -691,6 +716,21 @@
       xshift: 0, yshift: 15, text: 'Metric<br>value', showarrow: false, align: 'center',
       font: { size: 12, color: '#888' },
     };
+
+    // One legend row per axis: curves above, RGU segments below. Two legends
+    // rather than one because a single horizontal legend wraps on width alone,
+    // which split the bars across both rows; legendgroup was worse, laying the
+    // groups out side by side (5 rows, breaking the plot-area alignment with
+    // rgu_by_cluster). No legend titles: they render smaller than the entries
+    // and are of unequal width, so each row started at a different x. The axes
+    // already name themselves — 'Total <unit>' left, 'Metric value' above the
+    // right — so the curves only have to say which one they read.
+    function rguLegends() {
+      const row = { orientation: 'h', x: 0, xanchor: 'left', yanchor: 'bottom' };
+      // y is capped: past ~1.12 Plotly autoexpands the top margin beyond 78 and
+      // rgu_by_cluster stops lining up. 1.09 spaces the two rows evenly.
+      return { legend: { ...row, y: 1.09 }, legend2: { ...row, y: 1.02 } };
+    }
 
     // The efficiency metric is admin-only; non-admins are pinned to SM occupancy
     // (the select is absent from their DOM). Every reader goes through this.
@@ -1089,11 +1129,19 @@
     function usageMetricHelpHtml({ heading = true } = {}) {
       return (heading ? `<h3>${USAGE_METRIC_QUESTION}</h3>` : '') +
         `<p>One single metric decides everything this dashboard calls <em>used</em> or ` +
-        `<em>unused</em>: how the RGU bars are split, which job-table rows turn red, and ` +
+        `<em>unused</em>: how the RGU bars are split, how the job-table rows are shaded, and ` +
         `which jobs end up in the underusage notifications.</p>` +
         metricDefinitionsHtml() +
         `<p>Both are drawn on the <em>RGU allocated vs used</em> chart, so a wide gap ` +
         `between the two curves means the GPU was kept busy but barely filled.</p>` +
+        // These cuts were only visible as row shading, documented nowhere; naming
+        // them is what makes the job-table colours readable without hovering.
+        `<h4>How the job table highlights a job's SM occupancy:</h4>` +
+        `<p><span class="ms-scale ms-crit">below ${CRITICAL_USAGE_PERCENT} %</span> critical waste ` +
+        `<span class="ms-scale ms-low">${CRITICAL_USAGE_PERCENT}–${MIN_USAGE_EXPECTED_PERCENT} %</span> under the expected minimum ` +
+        `<span class="ms-scale">${MIN_USAGE_EXPECTED_PERCENT}–${GOOD_USAGE_PERCENT} %</span> acceptable ` +
+        `<span class="ms-scale ms-good">${GOOD_USAGE_PERCENT}–${EXCELLENT_USAGE_PERCENT} %</span> good ` +
+        `<span class="ms-scale ms-exc">${EXCELLENT_USAGE_PERCENT} % and up</span> excellent.</p>` +
         `<p><a href="${USER_GUIDE_URL}" target="_blank" rel="noopener">Open the user guide ↗</a></p>`;
     }
 
@@ -1482,7 +1530,7 @@
           });
           trendLevels.push({
             type: 'scatter', mode: 'markers+text', yaxis: 'y2',
-            name: METRICS[m] + ' mean', x: X, y: [v],
+            name: METRICS[m] + ' mean (right)', x: X, y: [v],
             marker: { color: color, size: 6 },
             text: [(v * 100).toFixed(1) + ' %'],
             textposition: i ? 'top right' : 'top left',
@@ -1495,13 +1543,13 @@
         // reading order. Same ordering in the per-period view below.
         Plotly.react(plot, [
           ...trendLevels,
-          { type: 'bar', name: 'Used',   x: X, y: [usedTot * unit.factor], marker: { color: '#1a6fd4' },
+          { type: 'bar', legend: 'legend2', name: 'Used',   x: X, y: [usedTot * unit.factor], marker: { color: '#1a6fd4' },
             hovertemplate: unit.label + ' used: %{y:,.1f}<extra></extra>' },
-          { type: 'bar', name: `Unused < ${MIN_USAGE_EXPECTED_PERCENT} %`, x: X, y: [wastedTot * unit.factor], marker: { color: '#ff0000' },
+          { type: 'bar', legend: 'legend2', name: `Unused < ${MIN_USAGE_EXPECTED_PERCENT} %`, x: X, y: [wastedTot * unit.factor], marker: { color: '#ff0000' },
             hovertemplate: `${unit.label} unused below ${MIN_USAGE_EXPECTED_PERCENT} %: %{y:,.1f}<br>what each job lacked to reach<br>the ${MIN_USAGE_EXPECTED_PERCENT} % ${metricPretty} minimum<extra></extra>` },
-          { type: 'bar', name: `Unused ≥ ${MIN_USAGE_EXPECTED_PERCENT} %`, x: X, y: [unusedTot * unit.factor], marker: { color: '#a8c8f0' },
+          { type: 'bar', legend: 'legend2', name: `Unused ≥ ${MIN_USAGE_EXPECTED_PERCENT} %`, x: X, y: [unusedTot * unit.factor], marker: { color: '#a8c8f0' },
             hovertemplate: `${unit.label} unused above ${MIN_USAGE_EXPECTED_PERCENT} %: %{y:,.1f}<br>idle capacity above the minimum<extra></extra>` },
-          { type: 'bar', name: 'No metric data', x: X, y: [unmTot * unit.factor], marker: { color: '#bdbdbd' },
+          { type: 'bar', legend: 'legend2', name: 'No metric data', x: X, y: [unmTot * unit.factor], marker: { color: '#bdbdbd' },
             hovertemplate: unit.label + ' (no metric): %{y:,.1f}<br>no ' + metricPretty + ' data<extra></extra>' },
         ], pLayout({
           // Same pinned title + t as rgu_by_cluster, so the two tiles align
@@ -1515,7 +1563,7 @@
           yaxis2: TREND_YAXIS,
           shapes: trendRules,
           annotations: [TREND_YAXIS_TITLE],
-          legend: { orientation: 'h', x: 0, xanchor: 'left', y: 1.02, yanchor: 'bottom' },
+          ...rguLegends(),
           margin: { l: 60, r: 60, t: 78, b: 60 },
         }), { responsive: true });
         return;
@@ -1537,23 +1585,23 @@
       // be unreadable. Null buckets leave a gap, like the Metric trend tile.
       const trendLines = TREND_CURVES.map(([m, color]) => ({
         type: 'scatter', mode: 'lines+markers', yaxis: 'y2',
-        name: METRICS[m] + ' mean', x: periods, customdata: periodEnds,
+        name: METRICS[m] + ' mean (right)', x: periods, customdata: periodEnds,
         y: d.rgu_usage.map(r => (r.metric_means && r.metric_means[m] ? r.metric_means[m].mean : null)),
         line: { color: color, ...TREND_LINE }, marker: { size: 5 },
         hovertemplate: METRICS[m] + ' mean<br>Period: %{x}<br>Value: %{y:.1%}<extra></extra>',
       }));
       Plotly.react(plot, [
         ...trendLines,
-        { type: 'bar', name: 'Used',   x: periods, y: rguUsed, customdata: periodEnds,
+        { type: 'bar', legend: 'legend2', name: 'Used',   x: periods, y: rguUsed, customdata: periodEnds,
           marker: { color: colorUsed },
           hovertemplate: 'Period: %{x}<br>' + unit.label + ' used: %{y:,.1f}<extra></extra>' },
-        { type: 'bar', name: `Unused < ${MIN_USAGE_EXPECTED_PERCENT} %`,   x: periods, y: rguWasted, customdata: periodEnds,
+        { type: 'bar', legend: 'legend2', name: `Unused < ${MIN_USAGE_EXPECTED_PERCENT} %`,   x: periods, y: rguWasted, customdata: periodEnds,
           marker: { color: colorWasted },
           hovertemplate: `Period: %{x}<br>${unit.label} unused below ${MIN_USAGE_EXPECTED_PERCENT} %: %{y:,.1f}<br>what each job lacked to reach<br>the ${MIN_USAGE_EXPECTED_PERCENT} % ${metricPretty} minimum<extra></extra>` },
-        { type: 'bar', name: `Unused ≥ ${MIN_USAGE_EXPECTED_PERCENT} %`, x: periods, y: rguUnused, customdata: periodEnds,
+        { type: 'bar', legend: 'legend2', name: `Unused ≥ ${MIN_USAGE_EXPECTED_PERCENT} %`, x: periods, y: rguUnused, customdata: periodEnds,
           marker: { color: colorUnused },
           hovertemplate: `Period: %{x}<br>${unit.label} unused above ${MIN_USAGE_EXPECTED_PERCENT} %: %{y:,.1f}<br>idle capacity above the minimum<extra></extra>` },
-        { type: 'bar', name: 'No metric data', x: periods, y: rguUnmeasured, customdata: periodEnds,
+        { type: 'bar', legend: 'legend2', name: 'No metric data', x: periods, y: rguUnmeasured, customdata: periodEnds,
           marker: { color: colorUnmeasured },
           hovertemplate: 'Period: %{x}<br>' + unit.label + ' (no metric): %{y:,.1f}<br>no ' + metricPretty + ' data<extra></extra>' },
       ], pLayout({
@@ -1564,7 +1612,7 @@
         yaxis: { title: { text: 'Total ' + unit.label } },
         yaxis2: TREND_YAXIS,
         annotations: [TREND_YAXIS_TITLE],
-        legend: { orientation: 'h', x: 0, xanchor: 'left', y: 1.02, yanchor: 'bottom' },
+        ...rguLegends(),
         margin: { l: 60, r: 60, t: 78, b: 100 },
       }), { responsive: true }).then(gd => {
         gd.removeAllListeners('plotly_click');
@@ -2178,15 +2226,25 @@
       const tbody = tbl.createTBody();
       jobList.forEach(job => {
         const tr = tbody.insertRow();
-        // Shade under-using rows (measured jobs only): the same per-job mean
-        // that feeds the Unused columns, so table and bars tell one story.
+        // Shade rows by usage (measured jobs only): the same per-job mean that
+        // feeds the Unused columns, so table and bars tell one story. The band
+        // between the expected minimum and GOOD stays unshaded on purpose —
+        // without a neutral middle, nothing at either end would stand out.
+        // isFinite, not != null: unmeasured jobs come back as NaN, which is
+        // neither null nor undefined and would fall through every comparison.
         const mm = job.metric_mean;
-        if (mm != null && mm < MIN_USAGE_EXPECTED_PERCENT / 100) {
-          const crit = mm < CRITICAL_USAGE_PERCENT / 100;
-          tr.className = crit ? 'jt-crit' : 'jt-low';
-          tr.title = `Mean ${metricPretty}: ${(mm * 100).toFixed(1)} % — `
-            + (crit ? `critically low (below ${CRITICAL_USAGE_PERCENT} %)`
-                    : `below the ${MIN_USAGE_EXPECTED_PERCENT} % expected minimum`);
+        if (Number.isFinite(mm)) {
+          const pct = mm * 100;
+          const grade =
+            pct < CRITICAL_USAGE_PERCENT  ? ['jt-crit', `critically low (below ${CRITICAL_USAGE_PERCENT} %)`] :
+            pct < MIN_USAGE_EXPECTED_PERCENT ? ['jt-low', `below the ${MIN_USAGE_EXPECTED_PERCENT} % expected minimum`] :
+            pct >= EXCELLENT_USAGE_PERCENT ? ['jt-exc', `excellent (${EXCELLENT_USAGE_PERCENT} % and above)`] :
+            pct >= GOOD_USAGE_PERCENT     ? ['jt-good', `good (${GOOD_USAGE_PERCENT}–${EXCELLENT_USAGE_PERCENT} %)`] :
+            null;
+          if (grade) {
+            tr.className = grade[0];
+            tr.title = `Mean ${metricPretty}: ${pct.toFixed(1)} % — ${grade[1]}`;
+          }
         }
         COLS.forEach(c => {
           const td = tr.insertCell();
