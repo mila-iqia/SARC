@@ -17,6 +17,11 @@
     * { box-sizing: border-box; }
     body { font-family: system-ui, sans-serif; margin: 32px; color: #222; }
     h1, h3 { margin: 0 0 12px; }
+    /* Page title line. Flex so the global "?" badge can be pushed to the far
+       right; the title text is wrapped in its own span rather than left as an
+       anonymous flex item, whose surrounding whitespace would be dropped. */
+    .page-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+    .page-help { margin-left: auto; }
     .conn-email { font-size: 0.9em; }
     .conn-email.admin { color: #c0392b; }
     .conn-email.user { color: #888; }
@@ -130,12 +135,12 @@
       gap: 6px; font-size: 12px; font-weight: 400; color: #888;
     }
     .ru-head-slot .add-select { padding: 1px 6px; font-size: 11px; }
-    /* "?" help badge in the RGU-usage tile header: standard circular help
-       button (quiet grey, blue on hover — same hover palette as .add-tile-btn);
-       clicking it opens a definition panel that expands rightward from the
-       title (left-anchored, so it stays inside the tile). The title span goes
-       inline-flex so the badge is vertically centred on the text (a plain
-       vertical-align sits a 17px badge too low beside 13px text). */
+    /* "?" help badges (RGU-usage tile header, page title line): standard
+       circular help button (quiet grey, blue on hover — same hover palette as
+       .add-tile-btn); clicking it opens a definition panel that expands
+       rightward from the title (left-anchored, so it stays inside the tile).
+       The title span goes inline-flex so the badge is vertically centred on the
+       text (a plain vertical-align sits a 17px badge too low beside 13px text). */
     .tile-title-help { display: inline-flex; align-items: center; gap: 6px; }
     .ms-help-btn {
       width: 17px; height: 17px; border-radius: 50%; box-sizing: border-box;
@@ -144,6 +149,21 @@
       cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
     }
     .ms-help-btn:hover { border-color: #1a6fd4; color: #1a6fd4; background: #dde6f5; }
+    /* Page-level help: a bare "?" up there reads as decoration and says nothing
+       about what it covers, so it carries its own question as a label. The
+       whole pill is the hover/click target (see makeHelpBadge). */
+    .ms-help-cta {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 3px 4px 3px 10px; border: 1px solid #ccc; border-radius: 14px;
+      background: #fff; cursor: pointer;
+      font-size: 12px; font-weight: 400; color: #555;
+    }
+    .ms-help-cta:hover { border-color: #1a6fd4; color: #1a6fd4; background: #f2f7fe; }
+    .ms-help-cta:hover .ms-help-btn { border-color: #1a6fd4; color: #1a6fd4; }
+    /* Explicit, unlike the tile badge: inside a flex container the static
+       position of an absolute child is the box corner, so the panel would
+       otherwise open on top of the pill instead of below it. */
+    .ms-help-cta .ms-help-panel { top: calc(100% + 4px); }
     .ms-help-panel {
       position: absolute; left: 0; z-index: 9999; background: #fff;
       border: 1px solid #ccc; border-radius: 4px;
@@ -151,11 +171,37 @@
       width: 300px; padding: 8px 12px; font-size: 12px; color: #333;
       font-weight: 400; text-align: left;
     }
+    /* Anchored on the badge's left instead: a 300px panel hanging off a badge
+       at the page's right edge would otherwise overflow the viewport. */
+    .ms-help-panel--right { left: auto; right: 0; }
     .ms-help-panel p { margin: 4px 0; }
-    /* Key takeaway. Highlighted rather than coloured: every colour in this panel
-       already names a series (blue/red/light blue/grey bars, green and purple
-       curves), so a coloured emphasis would read as one of them. */
-    .ms-help-panel .ms-help-key { background: #fff3cd; padding: 0 3px; border-radius: 2px; }
+    /* Key takeaway. Highlighted rather than coloured: every colour in the tile
+       panel already names a series (blue/red/light blue/grey bars, black and
+       purple curves), so a coloured emphasis would read as one of them.
+       Not scoped to .ms-help-panel: the same markup is reused in the intro. */
+    .ms-help-key { background: #fff3cd; padding: 0 3px; border-radius: 2px; }
+
+    /* Intro dialog: what the whole dashboard means by "used", shown once per
+       browser until dismissed for good. Same content as the page-title "?"
+       badge, so the two can never drift (see usageMetricHelpHtml). */
+    dialog.ms-intro {
+      padding: 0; border: 1px solid #bbb; border-radius: 8px; color: #222;
+      width: min(560px, calc(100vw - 64px));
+      box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+    }
+    dialog.ms-intro::backdrop { background: rgba(0,0,0,0.35); }
+    .ms-intro-body { padding: 16px 20px; font-size: 13px; line-height: 1.5; }
+    .ms-intro-body h3 { margin: 0 0 10px; font-size: 17px; }
+    .ms-intro-body p { margin: 10px 0; }
+    .ms-intro-foot {
+      display: flex; align-items: center; justify-content: space-between; gap: 16px;
+      padding: 10px 20px; border-top: 1px solid #eee; background: #fafafa;
+      border-radius: 0 0 7px 7px;
+    }
+    .ms-intro-foot label {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 12px; font-weight: 400; color: #555; cursor: pointer;
+    }
 
     {% if is_admin %}
     /* RGU-by-user: per-tile "top N" + sort controls above the (dynamic-height) plot. */
@@ -297,8 +343,8 @@
   </style>
 </head>
 <body>
-  <h3>
-    Utilization Dashboard
+  <h3 class="page-head">
+    <span>Utilization Dashboard</span>
     <span class="conn-email {{ 'admin' if admin_email else 'user' }}">({{ user_email }})</span>
     {% if admin_email and view_as_email %}
     <span class="view-as-badge">/ as user <strong>{{ view_as_email }}</strong>
@@ -317,6 +363,9 @@
       {% endif %}
     </span>
     {% endif %}
+    <!-- Filled by makeHelpBadge(): the dashboard-wide "?" (same content as the
+         intro dialog), pushed to the far right of the title line. -->
+    <span id="page-help" class="page-help"></span>
   </h3>
   <div class="controls">
     <div class="ctrl">
@@ -399,6 +448,19 @@
   <div id="status"></div>
   <div id="tile-grid"></div>
 
+  <!-- Body filled at init from usageMetricHelpHtml(). Opened on load unless the
+       reader ticked "don't show this message again"; always reachable from the
+       "?" badge on the title line. -->
+  <dialog id="intro-dialog" class="ms-intro">
+    <div class="ms-intro-body" id="intro-body"></div>
+    <div class="ms-intro-foot">
+      <label><input type="checkbox" id="intro-hide"> Don't show this message again</label>
+      <!-- autofocus: showModal() otherwise focuses the first focusable child,
+           which is the user-guide link inside the body — ringed and off-target. -->
+      <button type="button" autofocus onclick="document.getElementById('intro-dialog').close()">Got it</button>
+    </div>
+  </dialog>
+
   <script>
     // Minimum expected usage: sent to /rgu_usage as `min_usage` (threshold of
     // the per-job wasted-RGU shortfall, computed server-side) and shown in the
@@ -420,6 +482,13 @@
     // ── Persistent state (localStorage) ─────────────────────────────────────
     // Schema version: bump when the saved structure changes incompatibly.
     const STORAGE_KEY = {{ storage_key | tojson }};
+
+    // "Don't show the intro again" flag. Deliberately outside STORAGE_KEY, which
+    // is namespaced per identity/role/view-as target: dismissing the intro is a
+    // browser-level reading preference, not dashboard state, so an admin who
+    // ticked the box isn't shown it again on every "view as user" preview.
+    // Reset clears it, like every other saved preference.
+    const INTRO_KEY = 'sarc-dash-intro-dismissed';
 
     // Admin "view as user" preview. VIEW_AS_EMAIL, when set, is appended to
     // every /dash/metrics/* call below (see withAsUser) so the backend scopes
@@ -498,6 +567,8 @@
       if (!confirm('Reset all dashboard settings to their defaults?\n\nThis clears your saved filters, layout, focus and table preferences.'))
         return;
       try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+      // The intro flag lives outside STORAGE_KEY, so clear it explicitly.
+      try { localStorage.removeItem(INTRO_KEY); } catch { /* ignore */ }
 
       // Filter bar defaults
       const today     = new Date();
@@ -997,45 +1068,79 @@
       return sel;
     }
 
-    // "?" help badge for the RGU-usage tile title: click opens a panel defining
-    // Wasted/Unused with the user-guide link inside (a native title can't hold
-    // a clickable link). Open/close mechanics mirror the job-table column
-    // picker. The panel content is built on open so the metric name tracks the
-    // last Update — the tile header outlives chart re-renders.
-    function makeRguUsageHelp() {
+    // SM occupancy vs GPU utilization. Shared by the RGU-usage tile help and the
+    // dashboard-wide intro: GPU utilization is the number most people already
+    // know, so saying which one we use is only half the answer — the other half
+    // is why it isn't the other one.
+    function metricDefinitionsHtml() {
+      return `<p><strong>SM occupancy</strong>: how full the GPU was.<br/>` +
+        `<strong>GPU utilization</strong>: how often the GPU ran anything at all.</p>` +
+        `<p>A job can keep a GPU busy while using only a fraction of it, which is why ` +
+        `<strong class="ms-help-key">SM occupancy is the reference usage metric in SARC.</strong></p>`;
+    }
+
+    // Doubles as the label of the title-line help button, which is why the
+    // panel it opens drops the heading: the question stays visible just above.
+    const USAGE_METRIC_QUESTION = 'Which usage metric do we use?';
+
+    // Dashboard-wide answer to "where does this red come from?". Shown once on
+    // load and behind the title-line "?", identical for admins and users on
+    // purpose: an admin should see exactly what their users were told.
+    function usageMetricHelpHtml({ heading = true } = {}) {
+      return (heading ? `<h3>${USAGE_METRIC_QUESTION}</h3>` : '') +
+        `<p>One single metric decides everything this dashboard calls <em>used</em> or ` +
+        `<em>unused</em>: how the RGU bars are split, which job-table rows turn red, and ` +
+        `which jobs end up in the underusage notifications.</p>` +
+        metricDefinitionsHtml() +
+        `<p>Both are drawn on the <em>RGU allocated vs used</em> chart, so a wide gap ` +
+        `between the two curves means the GPU was kept busy but barely filled.</p>` +
+        `<p><a href="${USER_GUIDE_URL}" target="_blank" rel="noopener">Open the user guide ↗</a></p>`;
+    }
+
+    // Panel content for the RGU-usage tile title, defining Wasted/Unused with
+    // the user-guide link inside (a native title can't hold a clickable link).
+    // Rebuilt on every open so the metric name tracks the last Update — the tile
+    // header outlives chart re-renders.
+    function rguUsageHelpHtml() {
+      const metricName = (currentParams && currentParams.metric) || 'gpu_sm_occupancy';
+      const metricPretty = METRICS[metricName] || metricName;
+      const unit = rguUnit();
+      return `<h3>How to read this plot</h3>` +
+        `<h4>Left axis: allocated ${unit.label}, split by ${metricPretty}</h4>` +
+        `<p>Each segment sums per-job amounts, not shares of the period total: a job below the minimum adds its own shortfall even when the period average is above it.</p>` +
+        `<p><strong>Used</strong> (blue): allocated × ${metricPretty}.</p>` +
+        `<p>Idle capacity is cut at the ${MIN_USAGE_EXPECTED_PERCENT} % minimum:</p>` +
+        `<p><strong>Unused &lt; ${MIN_USAGE_EXPECTED_PERCENT} %</strong> (red): unused compute missing for each job to reach the expected minimum of ` +
+        `${MIN_USAGE_EXPECTED_PERCENT} % ${metricPretty}.</p>` +
+        `<p><strong>Unused ≥ ${MIN_USAGE_EXPECTED_PERCENT} %</strong> (light blue): unused compute above the expected minimum of ` +
+        `${MIN_USAGE_EXPECTED_PERCENT} % ${metricPretty}.</p>` +
+        `<p><strong>No metric data</strong> (gray): no ${metricPretty} recorded. Still counted in the allocated total, but <em>left out of</em> the used/unused split and the underusage notifications.</p>` +
+        `<h4>Right axis: average utilization</h4>` +
+        metricDefinitionsHtml() +
+        `<p>Both are plain per-job averages, not weighted by ${unit.label}, so they do not match the Used share of the bars.</p>` +
+        `<p><a href="${USER_GUIDE_URL}" target="_blank" rel="noopener">Open the user guide ↗</a></p>`;
+    }
+
+    // "?" help badge: hover opens a panel, clicking toggles it (keyboard/touch
+    // fallback), an outside click closes it. Open/close mechanics mirror the
+    // job-table column picker. `build` is called on every open, so a panel can
+    // track state that changed since it was last shown. `cta`, when given, adds
+    // a visible label before the badge and boxes the two together.
+    function makeHelpBadge({ label, build, align, cta }) {
       const wrap = document.createElement('div');
-      wrap.className = 'js-dropdown';
+      wrap.className = 'js-dropdown' + (cta ? ' ms-help-cta' : '');
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'ms-help-btn';
       btn.textContent = '?';
-      btn.setAttribute('aria-label', 'Help: how to read this plot');
+      btn.setAttribute('aria-label', label);
       const panel = document.createElement('div');
-      panel.className = 'ms-help-panel';
+      panel.className = 'ms-help-panel' + (align === 'right' ? ' ms-help-panel--right' : '');
       panel.style.display = 'none';
       let closeTimer = null;
       function openHelp() {
         if (panel.style.display !== 'none') return;
-        const metricName = (currentParams && currentParams.metric) || 'gpu_sm_occupancy';
-        const metricPretty = METRICS[metricName] || metricName;
-        const unit = rguUnit();
-        panel.innerHTML =
-          `<h3>How to read this plot</h3>` +
-          `<h4>Left axis: allocated ${unit.label}, split by ${metricPretty}</h4>` +
-          `<p>Each segment sums per-job amounts, not shares of the period total: a job below the minimum adds its own shortfall even when the period average is above it.</p>` +
-          `<p><strong>Used</strong> (blue): allocated × ${metricPretty}.</p>` +
-          `<p>Idle capacity is cut at the ${MIN_USAGE_EXPECTED_PERCENT} % minimum:</p>` +
-          `<p><strong>Unused &lt; ${MIN_USAGE_EXPECTED_PERCENT} %</strong> (red): unused compute missing for each job to reach the expected minimum of ` +
-          `${MIN_USAGE_EXPECTED_PERCENT} % ${metricPretty}.</p>` +
-          `<p><strong>Unused ≥ ${MIN_USAGE_EXPECTED_PERCENT} %</strong> (light blue): unused compute above the expected minimum of ` +
-          `${MIN_USAGE_EXPECTED_PERCENT} % ${metricPretty}.</p>` +
-          `<p><strong>No metric data</strong> (gray): no ${metricPretty} recorded. Still counted in the allocated total, but <em>left out of</em> the used/unused split and the underusage notifications.</p>` +
-          `<h4>Right axis: average utilization</h4>` +
-          `<p><strong>SM occupancy</strong>: how full the GPU was.<br/>` +
-          `<strong>GPU utilization</strong>: how often GPU ran anything at all.<br/>` +
-          `A job can keep a GPU busy while using only a fraction of it, which is why <strong class="ms-help-key">SM occupancy is the usage reference</strong>.</p>` +
-          `<p>Both are plain per-job averages, not weighted by ${unit.label}, so they do not match the Used share of the bars.</p>` +
-          `<p><a href="${USER_GUIDE_URL}" target="_blank" rel="noopener">Open the user guide ↗</a></p>`;
+        panel.innerHTML = build();
         panel.style.display = 'block';
         // Defer so an opening click isn't caught as an outside click.
         setTimeout(() => document.addEventListener('mousedown', onDown, true), 0);
@@ -1045,17 +1150,28 @@
         document.removeEventListener('mousedown', onDown, true);
       }
       function onDown(e) {
-        if (!panel.contains(e.target) && e.target !== btn) closeHelp();
+        // Anything inside the wrap — badge, label, panel — is ours to handle;
+        // only a press outside it counts as dismissing the panel.
+        if (!wrap.contains(e.target)) closeHelp();
       }
       // Hover opens; leaving closes after a short grace period so the pointer
       // can travel into the panel (a child of `wrap`, so moving onto it never
       // fires wrap's mouseleave). Click still toggles: keyboard/touch fallback.
       wrap.addEventListener('mouseenter', () => { clearTimeout(closeTimer); openHelp(); });
       wrap.addEventListener('mouseleave', () => { closeTimer = setTimeout(closeHelp, 250); });
-      btn.addEventListener('click', e => {
+      // Bound on the wrap, not the badge: with a label beside it the text is
+      // the natural click target. Clicks inside the panel are content — the
+      // user-guide link — and must not toggle it shut.
+      wrap.addEventListener('click', e => {
+        if (panel.contains(e.target)) return;
         e.stopPropagation();
         if (panel.style.display === 'none') openHelp(); else closeHelp();
       });
+      if (cta) {
+        const text = document.createElement('span');
+        text.textContent = cta;
+        wrap.appendChild(text);
+      }
       wrap.append(btn, panel);
       return wrap;
     }
@@ -1078,7 +1194,9 @@
           title.textContent = PLOT_NAMES[plotType];
           if (plotType === 'rgu_usage') {
             title.classList.add('tile-title-help');
-            title.appendChild(makeRguUsageHelp());
+            title.appendChild(makeHelpBadge({
+              label: 'Help: how to read this plot', build: rguUsageHelpHtml,
+            }));
           }
           header.appendChild(title);
           if (plotType === 'jobtable') {
@@ -2681,6 +2799,39 @@
     if (_saved.focusStart) focusStart = _saved.focusStart;
     if (_saved.focusEnd)   focusEnd   = _saved.focusEnd;
     updateFocusLabel();
+
+    // Dashboard-wide help: the "?" on the title line, and the same text as a
+    // modal on arrival. Nothing here waits for chart data — the intro must be
+    // up before the reader starts making sense of the plots on their own.
+    document.getElementById('page-help').appendChild(makeHelpBadge({
+      label: 'Help: which usage metric the dashboard uses',
+      build: () => usageMetricHelpHtml({ heading: false }),
+      align: 'right', cta: USAGE_METRIC_QUESTION,
+    }));
+    (function initIntro() {
+      const dlg = document.getElementById('intro-dialog');
+      const chk = document.getElementById('intro-hide');
+      document.getElementById('intro-body').innerHTML = usageMetricHelpHtml();
+      // Read the checkbox on close, not on the button: Escape and backdrop
+      // clicks dismiss the dialog too, and they must honour the tick as well.
+      dlg.addEventListener('close', () => {
+        try {
+          if (chk.checked) localStorage.setItem(INTRO_KEY, '1');
+          else localStorage.removeItem(INTRO_KEY);
+        } catch { /* quota exceeded or private browsing — silently ignore */ }
+      });
+      // A native <dialog> ignores backdrop clicks; with padding:0 the dialog
+      // element itself is only reachable where the backdrop was clicked.
+      dlg.addEventListener('click', e => { if (e.target === dlg) dlg.close(); });
+      let dismissed = false;
+      try { dismissed = localStorage.getItem(INTRO_KEY) === '1'; } catch { /* ignore */ }
+      // The flag is the only source of truth for the box. Browsers restore
+      // checkbox state across a reload, so after a Reset the box would come back
+      // ticked over a cleared flag — and closing the dialog would write the flag
+      // straight back, silently undoing the Reset.
+      chk.checked = dismissed;
+      if (!dismissed) dlg.showModal();
+    })();
 
     renderLayout();
   </script>
