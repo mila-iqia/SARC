@@ -813,7 +813,11 @@ def metrics_rgu_usage(
     # via our own targeted jobstatisticdb join.
     bucket_expr = _bucket_expr(parsed, col(JobSeriesDB.submit_time), begin_dt)
     rgu_hours = col(JobSeriesDB.allocated_gpu_cost) / 3600.0
-    m_mean = col(JobStatisticDB.mean)
+    # `metric` reads off the trend alias whenever it is one of them (the
+    # default): joining jobstatisticdb again on the same (name, job_id) row
+    # would buy nothing.
+    trend = {name: aliased(JobStatisticDB) for name in _TREND_METRICS}
+    m_mean = col(trend.get(metric, JobStatisticDB).mean)
     # Split used vs unmeasured on whether the metric is a real value (not
     # NULL/NaN); a missing measurement is kept apart from "unused" rather than
     # counted as waste.
@@ -832,7 +836,6 @@ def metrics_rgu_usage(
     # Plain per-job means of the fixed trend metrics, plotted over the bars. The
     # counts are the bucket weights: averaging the per-bucket averages would be
     # wrong when buckets hold different job counts (whole-range view).
-    trend = {name: aliased(JobStatisticDB) for name in _TREND_METRICS}
     trend_cols = []
     for name in _TREND_METRICS:
         t_mean = col(trend[name].mean)
@@ -856,14 +859,15 @@ def metrics_rgu_usage(
         job_states,
         scope_user_id=_scope_or_view_as(sess, req, as_user),
     )
-    query = query.join(
-        JobStatisticDB,
-        and_(
-            col(JobStatisticDB.job_id) == col(JobSeriesDB.job_db_id),
-            col(JobStatisticDB.name) == metric,
-        ),
-        isouter=True,
-    )
+    if metric not in trend:
+        query = query.join(
+            JobStatisticDB,
+            and_(
+                col(JobStatisticDB.job_id) == col(JobSeriesDB.job_db_id),
+                col(JobStatisticDB.name) == metric,
+            ),
+            isouter=True,
+        )
     # One alias per trend metric: (name, job_id) is unique, so these stay 1:1
     # and leave the SUMs above untouched.
     for name in _TREND_METRICS:
