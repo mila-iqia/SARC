@@ -9,7 +9,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import literal_column, nulls_last
+from sqlalchemy import literal_column, nulls_last, text
 from sqlalchemy.orm import aliased
 from sqlmodel import Session, and_, case, col, func, select
 
@@ -89,8 +89,27 @@ router = APIRouter(
 )
 
 
+# Postgres defaults to 8. It caps how many relations go into one join list, and
+# the planner reorders only within a list: what does not fit is planned as its own
+# unit first. job_series is 8 relations, so a subquery joined on top makes 9, and
+# at 8 the view gets built for the whole window before that join happens. That is
+# what /metrics/jobs pays: its 50-row page can no longer drive the query (6 s vs
+# 0.1 s on 12M jobs). Postgres drops the view's unused joins either way -- they
+# just count towards the limit first. 9 is enough; 12 adds headroom, ~1 ms planning.
+# Do not raise it much further: geqo_threshold is 12 too. Past that many relations
+# in one list, Postgres stops trying every join order and uses a genetic algorithm,
+# which can pick a different plan on each run.
+_JOIN_COLLAPSE_LIMIT = 12
+
+
 def session_dep() -> Generator[Session]:
     with config.db.session() as sess:
+        # LOCAL so it dies with this request's transaction instead of riding the
+        # pooled connection into the next one (/v0 shares this engine); all /dash
+        # queries run in that transaction, so one statement covers them.
+        sess.connection().execute(
+            text(f"SET LOCAL join_collapse_limit = {_JOIN_COLLAPSE_LIMIT}")
+        )
         yield sess
 
 
