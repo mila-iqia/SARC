@@ -389,12 +389,12 @@
     <div class="ctrl">
       <label for="start">Start</label>
       <input type="date" id="start"
-             title="Start of the date range (inclusive), in UTC. Every plot and the job table cover jobs in this range. Takes effect on Update." />
+             title="Start of the date range (inclusive), in UTC. Every plot and the job table cover the time jobs spent running in this range. Takes effect on Update." />
     </div>
     <div class="ctrl">
       <label for="end">End</label>
       <input type="date" id="end"
-             title="End of the date range (exclusive: covers jobs submitted before this date), in UTC. Every plot and the job table cover jobs in this range. Takes effect on Update." />
+             title="End of the date range (exclusive), in UTC. A job that started before the range or ran past it is counted only for the hours inside it. Takes effect on Update." />
     </div>
     <div class="ctrl">
       <label>Period</label>
@@ -753,7 +753,7 @@
     }
 
     const PLOT_NAMES = {
-      job_counts:      'Submitted jobs per period',
+      job_counts:      'Running jobs per period',
       rgu_usage:       'RGU allocated vs used',
       clusterrgu:      'RGU by cluster',
       jobtable:        'Job table',
@@ -1454,7 +1454,7 @@
         marker: { color: colors },
         hovertemplate: 'Period: %{x}<br>Jobs: %{y}<extra></extra>',
       }], pLayout({
-        title: { text: 'Submitted jobs per period (click to focus)', font: { size: 16 } },
+        title: { text: 'Running jobs per period (click to focus)', font: { size: 16 } },
         xaxis: { title: { text: 'Period start' }, type: 'category', tickangle: -45 },
         yaxis: { title: { text: 'Number of jobs' } },
         bargap: 0.15, margin: { l: 60, r: 20, t: 40, b: 100 },
@@ -2125,13 +2125,13 @@
             return h > 0 ? `${h}h${String(m).padStart(2,'0')}m` : `${m}m${String(sec).padStart(2,'0')}s`;
           }},
         { key: 'rgu_hours',             label: unit.label,
-          title: `RGU × elapsed time, shown in ${unit.label}`,
+          title: `RGU × the hours this job ran inside the selected date range, shown in ${unit.label}. A job that started before the range or ran past it counts only for the part inside — unlike Elapsed, which is its whole run.`,
           fmt: fmtRguTime },
         // Fixed RGU·h twin, skipped when the toolbar unit is already hours
         // (it would be an exact duplicate).
         ...(unit === unitHour ? [] : [
         { key: 'rgu_hours',             label: unitHour.label,
-          title: `RGU × elapsed time, shown in ${unitHour.label}`,
+          title: `RGU × the hours this job ran inside the selected date range, shown in ${unitHour.label}. A job that started before the range or ran past it counts only for the part inside — unlike Elapsed, which is its whole run.`,
           fmt: fmtRguHour },
         ]),
         { key: 'waste',                 label: `Unused (${unit.label})`,

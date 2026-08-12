@@ -9,7 +9,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import literal_column, nulls_last, text
+from sqlalchemy import Float, Integer, column, literal_column, nulls_last, text, values
 from sqlalchemy.orm import aliased
 from sqlmodel import Session, and_, case, col, func, select
 
@@ -138,7 +138,6 @@ _PERIOD_RE = re.compile(r"^(\d+(?:\.\d+)?)?\s*([hdwm]?)$", re.IGNORECASE)
 _PERIOD_MULTIPLIERS = {"h": 1 / 24, "d": 1, "w": 7, "m": 30}
 # Single-letter period -> PostgreSQL date_trunc field, for calendar bucketing.
 _CALENDAR_TRUNC = {"h": "hour", "d": "day", "w": "week", "m": "month"}
-_BUCKET_KEYFMT = "%Y-%m-%d %H:%M:%S"
 
 
 def _parse_period(s: str) -> timedelta | str:
@@ -199,46 +198,25 @@ def _calendar_next(dt: datetime, field: str) -> datetime:
     )
 
 
-def _bucket_expr(period: timedelta | str, time_col, begin_dt: datetime):
-    """SQL bucket expression: floor((t - begin)/step) for a fixed period,
-    date_trunc(unit, t) for a calendar period.
-
-    Calendar buckets truncate ``timezone('UTC', t)`` (i.e. ``t AT TIME ZONE
-    'UTC'``), not ``t`` directly: ``date_trunc`` on a timestamptz floors in the
-    session's TimeZone, and the IAM/Connector engine used in prod does not pin
-    timezone=utc the way the direct-connection engine does. Truncating the UTC
-    wall-clock keeps buckets aligned with the UTC begin/finish bounds on any
-    connection. Portable form, unlike date_trunc's PG16+ 3-arg variant."""
-    if isinstance(period, timedelta):
-        return func.floor(
-            func.extract("epoch", time_col - begin_dt) / period.total_seconds()
-        ).label("bucket")
-    return func.date_trunc(period, func.timezone("UTC", time_col)).label("bucket")
-
-
-def _sql_bucket_key(period: timedelta | str, raw):
-    """Normalise a SQL bucket value into a key matching _iter_buckets()."""
-    return int(raw) if isinstance(period, timedelta) else raw.strftime(_BUCKET_KEYFMT)
-
-
 def _iter_buckets(begin_dt: datetime, finish_dt: datetime, period: timedelta | str):
-    """Yield (key, period_start, period_end) for every bucket in [begin, finish),
-    with period_start/end clipped to the range. key matches _sql_bucket_key()."""
+    """Yield (period_start, period_end) for every bucket in [begin, finish),
+    clipped to the range.
+
+    The single definition of where a bucket starts and ends: ``_bucket_table``
+    hands these same bounds to SQL, so a row's ``bucket_index`` is a position in
+    this sequence and needs no key to match on.
+    """
     if isinstance(period, timedelta):
-        cur, idx = begin_dt, 0
+        cur = begin_dt
         while cur < finish_dt:
             nxt = cur + period
-            yield idx, cur, min(nxt, finish_dt)
-            cur, idx = nxt, idx + 1
+            yield cur, min(nxt, finish_dt)
+            cur = nxt
     else:
         frontier = _calendar_trunc(begin_dt, period)
         while frontier < finish_dt:
             nxt = _calendar_next(frontier, period)
-            yield (
-                frontier.strftime(_BUCKET_KEYFMT),
-                max(frontier, begin_dt),
-                min(nxt, finish_dt),
-            )
+            yield max(frontier, begin_dt), min(nxt, finish_dt)
             frontier = nxt
 
 
@@ -268,6 +246,87 @@ def _apply_focus(
         fe = focus_end if focus_end.tzinfo else focus_end.replace(tzinfo=UTC)
         finish_dt = min(finish_dt, fe)
     return begin_dt, finish_dt
+
+
+# --------------------------------------------------------------------------- #
+# Pro-rating: attributing a job's usage to the time it was actually running
+# --------------------------------------------------------------------------- #
+#
+# A job is charged to the periods it ran in, in proportion to the time it spent
+# in each ("au prorata temporis"), rather than wholly to the period it was
+# submitted in. A three-week job then raises three weekly bars by a week's worth
+# each, instead of one bar by three weeks' worth: a bar reads as "RGU.h spent in
+# this week", which is what someone reading it assumes, and not as "RGU.h
+# eventually spent by the jobs submitted this week".
+#
+# Two consequences worth keeping in mind. Selection changes with it -- a job
+# submitted before the window but still running inside it now counts, and is
+# found by overlap rather than by submit_time. And a bar no longer sums the jobs
+# it is drawn from: only the slice of each that lands in the window is counted,
+# which is the whole point.
+
+
+def _job_span(cols):
+    """A job's run as epoch seconds: ``[start, start + elapsed)``.
+
+    Anchored on ``elapsed_time`` rather than on ``end_time`` so that the slices
+    always add back up to the whole: every cost column in the view is built from
+    elapsed, while a job Slurm suspended and resumed has ``end - start``
+    strictly greater. A job that never ran has ``elapsed_time`` 0 and, in
+    practice, a NULL ``start_time``; NULL propagates through every comparison
+    below, so it simply matches no period.
+    """
+    start = func.extract("epoch", cols.start_time)
+    return start, start + cols.elapsed_time
+
+
+def _ran_between(cols, lo, hi):
+    """SQL predicate: the job was running at some point within ``[lo, hi)``.
+
+    Bounds are epoch seconds -- either Python floats for a fixed window, or the
+    bucket columns of ``_bucket_table``.
+    """
+    start, end = _job_span(cols)
+    return and_(start < hi, end > lo)
+
+
+def _overlap_hours(cols, lo, hi):
+    """SQL expression: hours of the job's run that fall inside ``[lo, hi)``.
+
+    Only meaningful where ``_ran_between`` holds; elsewhere it goes negative.
+    Multiply by a per-job RGU *rate* (``allocated_rgu_drac``, GPU count x RGU
+    weight, carrying no time of its own) to get the RGU.h the job owes to that
+    span -- no division, and nothing to guard against a zero elapsed.
+    """
+    start, end = _job_span(cols)
+    return (func.least(end, hi) - func.greatest(start, lo)) / 3600.0
+
+
+def _bucket_table(begin_dt: datetime, finish_dt: datetime, period: timedelta | str):
+    """The window's buckets as a table to join jobs against.
+
+    Carries the bounds ``_iter_buckets`` already computes into SQL as epoch
+    seconds, rather than re-deriving them there: one definition of where a
+    bucket starts instead of two, and no ``date_trunc`` whose result depends on
+    the session's TimeZone (which is why bucketing in SQL had to truncate a UTC
+    wall-clock). Rows are identified by position, so the caller matches them
+    back against its own ``_iter_buckets`` list.
+
+    Joining against it also selects: a job overlapping no bucket is outside the
+    window, so no separate time filter is needed -- and, unlike a submit_time
+    range, this one does not drop a job that started before the window and was
+    still running inside it.
+    """
+    rows = [
+        (i, ps.timestamp(), pe.timestamp())
+        for i, (ps, pe) in enumerate(_iter_buckets(begin_dt, finish_dt, period))
+    ]
+    return values(
+        column("bucket_index", Integer),
+        column("bucket_start", Float),
+        column("bucket_end", Float),
+        name="buckets",
+    ).data(rows)
 
 
 def _nan_to_none(
@@ -435,25 +494,37 @@ def metrics_job_counts(
 ):
     """Job count per time bucket.
 
-    Counts jobs whose submit_time falls in each ``period`` bucket of the window,
-    after the cluster/user/state filters. Returns one {period_start, period_end,
-    count} per bucket, with empty buckets reported as 0.
+    Counts the jobs *running* in each ``period`` bucket of the window, after the
+    cluster/user/state filters. Returns one {period_start, period_end, count} per
+    bucket, with empty buckets reported as 0.
+
+    A count is not an integral over time, so nothing is pro-rated here: a job
+    spanning three buckets is one job in each of the three, and the counts do not
+    add up to a number of distinct jobs. It reads as occupancy ("how many jobs
+    were running that week"), matching the plots it sits next to, rather than as
+    a submission rate.
     """
     begin_dt, finish_dt = _date_range(start, end)
     parsed = _parse_period(period)
     fmt = _label_fmt(parsed)
 
-    # Bucket each job in SQL (floor for fixed periods, date_trunc for calendar)
-    # and group, instead of one COUNT per bucket. Counts every job, GPU or not;
-    # the DB view would degrade this to a full-table scan (see JobSeriesDB
-    # docstring), job_series_select keeps it on the small submit_time index.
+    # Count every job, GPU or not; the DB view would degrade this to a
+    # full-table scan (see JobSeriesDB docstring), job_series_select keeps it
+    # narrow.
     js = job_series_select(
-        "submit_time", "cluster_id", "cluster_user", "job_state", "sarc_user_id"
+        "start_time",
+        "elapsed_time",
+        "cluster_id",
+        "cluster_user",
+        "job_state",
+        "sarc_user_id",
     ).subquery()
-    bucket_expr = _bucket_expr(parsed, js.c.submit_time, begin_dt)
+    bucket_table = _bucket_table(begin_dt, finish_dt, parsed)
 
-    query = select(bucket_expr, func.count().label("count")).where(
-        js.c.submit_time >= begin_dt, js.c.submit_time < finish_dt
+    query = select(bucket_table.c.bucket_index, func.count().label("count")).join_from(
+        js,
+        bucket_table,
+        _ran_between(js.c, bucket_table.c.bucket_start, bucket_table.c.bucket_end),
     )
     query = _apply_job_filters(
         query,
@@ -463,22 +534,19 @@ def metrics_job_counts(
         job_states,
         _scope_or_view_as(sess, req, as_user),
     )
-    # group_by by label name: pg8000 binds parameters server-side, so repeating
-    # the expression would yield distinct $N placeholders in SELECT vs GROUP BY
-    # and PostgreSQL could not match them (42803). Same pattern below.
-    query = query.group_by("bucket").order_by("bucket")
+    query = query.group_by(bucket_table.c.bucket_index).order_by(
+        bucket_table.c.bucket_index
+    )
 
-    counts = {
-        _sql_bucket_key(parsed, row.bucket): int(row.count) for row in sess.exec(query)
-    }
+    counts = {row.bucket_index: int(row.count) for row in sess.exec(query)}
 
     return [
         {
             "period_start": ps.strftime(fmt),
             "period_end": pe.strftime(fmt),
-            "count": counts.get(key, 0),
+            "count": counts.get(i, 0),
         }
-        for key, ps, pe in _iter_buckets(begin_dt, finish_dt, parsed)
+        for i, (ps, pe) in enumerate(_iter_buckets(begin_dt, finish_dt, parsed))
     ]
 
 
@@ -545,7 +613,7 @@ def metrics_job_times_vs_limit(
 ):
     """Two job-count heatmaps relating each job's runtime to its requested time limit.
 
-    Over jobs submitted in the window that have a time_limit and have started:
+    Over jobs that ran in the window and have a time_limit:
     ``elapsed_vs_limit`` plots elapsed_time (y) against time_limit (x), and
     ``wait_vs_limit`` plots the queue wait, start - submit (y), against time_limit
     (x). Each is a 100x100 log-binned grid of job counts. Returns both grids plus
@@ -565,11 +633,11 @@ def metrics_job_times_vs_limit(
     wait_expr = func.extract(
         "epoch", col(JobSeriesDB.start_time) - col(JobSeriesDB.submit_time)
     )
+    # _ran_between already implies start_time IS NOT NULL: NULL propagates
+    # through its comparisons, so a job that never started matches nothing.
     base_filters = [
-        col(JobSeriesDB.submit_time) >= begin_dt,
-        col(JobSeriesDB.submit_time) < finish_dt,
+        _ran_between(JobSeriesDB, begin_dt.timestamp(), finish_dt.timestamp()),
         col(JobSeriesDB.time_limit).is_not(None),
-        col(JobSeriesDB.start_time).is_not(None),
     ]
     if cluster_ids:
         base_filters.append(col(JobSeriesDB.cluster_id).in_(cluster_ids))
@@ -662,22 +730,29 @@ def metrics_metric_distribution(
     """Duration-weighted distribution of a normalized GPU metric.
 
     ``metric`` is a [0, 1] GPU/system stat (e.g. gpu_sm_occupancy). Over GPU jobs
-    in the window, bins each job's mean value into 50 bins weighted by
-    rgu * elapsed (so long/big jobs count more). Returns {primary: {values,
-    weights}}. The paired (metric vs metric2) heatmap is a separate endpoint,
-    /metrics/metric_comparison.
+    running in the window, bins each job's mean value into 50 bins weighted by
+    the RGU-seconds it spent inside the window (so long/big jobs count more, and
+    a job straddling the edge weighs only for the part that is in). Returns
+    {primary: {values, weights}}. The paired (metric vs metric2) heatmap is a
+    separate endpoint, /metrics/metric_comparison.
     """
     if metric not in _METRICS_0_1:
         raise HTTPException(status_code=400, detail=f"Unknown metric: {metric!r}")
 
     begin_dt, finish_dt = _apply_focus(*_date_range(start, end), focus_start, focus_end)
+    window = (begin_dt.timestamp(), finish_dt.timestamp())
 
-    # View-anchored: weight = allocated_gpu_cost (precomputed rgu * elapsed). Read
-    # the metric mean via a targeted jobstatisticdb join (metric is parametrized),
-    # not the view's frozen stat columns/json.
+    # View-anchored: weight = the job's RGU-seconds inside the window (rate x
+    # overlap), keeping the unit allocated_gpu_cost had. Read the metric mean via
+    # a targeted jobstatisticdb join (metric is parametrized), not the view's
+    # frozen stat columns/json.
     js1 = aliased(JobStatisticDB)
     m1 = col(js1.mean)
-    weight = col(JobSeriesDB.allocated_gpu_cost)
+    weight = (
+        col(JobSeriesDB.allocated_rgu_drac)
+        * _overlap_hours(JobSeriesDB, *window)
+        * 3600.0
+    )
     bin_width = 1.0 / _DENSITY_BINS
 
     # _apply_rgu_base_view anchors the FROM on the view, keeps only calculable-RGU
@@ -699,11 +774,7 @@ def metrics_metric_distribution(
             ),
             isouter=True,
         )
-        .where(
-            col(JobSeriesDB.submit_time) >= begin_dt,
-            col(JobSeriesDB.submit_time) < finish_dt,
-            _valid_metric_filter(m1),
-        )
+        .where(_ran_between(JobSeriesDB, *window), _valid_metric_filter(m1))
         .group_by("bin")
         .order_by("bin")
     )
@@ -734,10 +805,13 @@ def metrics_metric_comparison(
 ):
     """100x100 paired heatmap of two normalized GPU metrics.
 
-    Counts GPU jobs in the window into a 100x100 grid of (metric, metric2) mean
-    values; a job contributes only if it carries both stats. No sampling: every
-    job lands in exactly one cell (like the elapsed/wait heatmaps). Returns
-    {x, y, z} with z[iby][ibx] the job count of that cell (Plotly heatmap order).
+    Counts GPU jobs that ran in the window into a 100x100 grid of (metric,
+    metric2) mean values; a job contributes only if it carries both stats. No
+    sampling: every job lands in exactly one cell (like the elapsed/wait
+    heatmaps) -- this counts jobs rather than integrating usage over time, so
+    there is nothing to pro-rate, only the same set of jobs to draw from.
+    Returns {x, y, z} with z[iby][ibx] the job count of that cell (Plotly heatmap
+    order).
     """
     if metric not in _METRICS_0_1:
         raise HTTPException(status_code=400, detail=f"Unknown metric: {metric!r}")
@@ -745,6 +819,7 @@ def metrics_metric_comparison(
         raise HTTPException(status_code=400, detail=f"Unknown metric: {metric2!r}")
 
     begin_dt, finish_dt = _apply_focus(*_date_range(start, end), focus_start, focus_end)
+    window = (begin_dt.timestamp(), finish_dt.timestamp())
 
     js1 = aliased(JobStatisticDB)
     js2 = aliased(JobStatisticDB)
@@ -779,8 +854,7 @@ def metrics_metric_comparison(
             isouter=True,
         )
         .where(
-            col(JobSeriesDB.submit_time) >= begin_dt,
-            col(JobSeriesDB.submit_time) < finish_dt,
+            _ran_between(JobSeriesDB, *window),
             _valid_metric_filter(m1),
             _valid_metric_filter(m2),
         )
@@ -811,27 +885,34 @@ def metrics_rgu_usage(
 ):
     """Allocated vs effectively-used RGU.h per time bucket.
 
-    Over GPU jobs submitted in each ``period`` bucket: ``rgu_allocated`` =
-    SUM(rgu * elapsed / 3600); ``rgu_used`` = the same scaled by each job's mean
-    ``metric`` (e.g. gpu_sm_occupancy); ``rgu_wasted`` = the per-job shortfall
-    below ``min_usage`` (SUM of rgu_hours * (min_usage - mean) over measured
-    jobs with mean < min_usage). Returns one row per bucket.
+    Over GPU jobs *running* in each ``period`` bucket, each charged only for the
+    time it spent there (see the pro-rating section above): ``rgu_allocated`` =
+    SUM(rgu * hours in the bucket); ``rgu_used`` = the same scaled by each job's
+    mean ``metric`` (e.g. gpu_sm_occupancy); ``rgu_wasted`` = the per-job
+    shortfall below ``min_usage`` (SUM of rgu_hours * (min_usage - mean) over
+    measured jobs with mean < min_usage). Returns one row per bucket.
 
     Each row also carries ``metric_means``: the plain per-job mean of every
-    _TREND_METRICS entry, with the job count that weights it when callers
-    recombine buckets (a mean is not additive).
+    _TREND_METRICS entry over the jobs running in that bucket, with the job
+    count that weights it when callers recombine buckets (a mean is not
+    additive). A job spanning several buckets is counted in each, unweighted --
+    its RGU.h are split, its mean is not.
     """
     begin_dt, finish_dt = _date_range(start, end)
     parsed = _parse_period(period)
     fmt = _label_fmt(parsed)
 
-    # Per bucket: allocated = SUM(allocated_gpu_cost)/3600 (the view's precomputed
-    # RGU-seconds -> RGU-hours); used = the same scaled by the metric mean (NaN
-    # nulled to 0). The metric is parametrized over 7 values but the view's *_waste
-    # columns are frozen to gpu_sm_occupancy/cpu_utilization, so we read the mean
-    # via our own targeted jobstatisticdb join.
-    bucket_expr = _bucket_expr(parsed, col(JobSeriesDB.submit_time), begin_dt)
-    rgu_hours = col(JobSeriesDB.allocated_gpu_cost) / 3600.0
+    # Per bucket: allocated = the RGU.h each job owes to that bucket -- its RGU
+    # rate times the hours of its run that land inside (see _overlap_hours), so a
+    # job spanning several buckets is split across them; used = the same scaled
+    # by the metric mean (NaN nulled to 0). The metric is parametrized over 7
+    # values but the view's *_waste columns are frozen to gpu_sm_occupancy/
+    # cpu_utilization, so we read the mean via our own targeted jobstatisticdb
+    # join.
+    buckets = _bucket_table(begin_dt, finish_dt, parsed)
+    rgu_hours = col(JobSeriesDB.allocated_rgu_drac) * _overlap_hours(
+        JobSeriesDB, buckets.c.bucket_start, buckets.c.bucket_end
+    )
     # `metric` reads off the trend alias whenever it is one of them (the
     # default): joining jobstatisticdb again on the same (name, job_id) row
     # would buy nothing.
@@ -865,7 +946,7 @@ def metrics_rgu_usage(
 
     query = _apply_rgu_base_view(
         select(
-            bucket_expr,
+            buckets.c.bucket_index,
             func.sum(rgu_hours).label("rgu_allocated"),
             func.sum(rgu_used_term).label("rgu_used"),
             func.sum(rgu_unmeasured_term).label("rgu_unmeasured"),
@@ -898,19 +979,23 @@ def metrics_rgu_usage(
             ),
             isouter=True,
         )
+    # The join is also the time filter: a job overlapping no bucket is outside
+    # the window. A job spanning several buckets yields one row per bucket, which
+    # is what splits its RGU.h across them -- and what makes the trend counts
+    # above read as "jobs running in this bucket".
     query = (
-        query.where(
-            col(JobSeriesDB.submit_time) >= begin_dt,
-            col(JobSeriesDB.submit_time) < finish_dt,
+        query.join(
+            buckets,
+            _ran_between(JobSeriesDB, buckets.c.bucket_start, buckets.c.bucket_end),
         )
-        .group_by("bucket")
-        .order_by("bucket")
+        .group_by(buckets.c.bucket_index)
+        .order_by(buckets.c.bucket_index)
     )
 
     sums = {}
     trends = {}
     for row in sess.exec(query):
-        key = _sql_bucket_key(parsed, row.bucket)
+        key = row.bucket_index
         sums[key] = (
             float(row.rgu_allocated or 0.0),
             float(row.rgu_used or 0.0),
@@ -926,7 +1011,7 @@ def metrics_rgu_usage(
         }
 
     period_data = []
-    for key, ps, pe in _iter_buckets(begin_dt, finish_dt, parsed):
+    for key, (ps, pe) in enumerate(_iter_buckets(begin_dt, finish_dt, parsed)):
         allocated, used, unmeasured, wasted = sums.get(key, (0.0, 0.0, 0.0, 0.0))
         period_data.append(
             {
@@ -959,25 +1044,26 @@ def metrics_rgu_by_cluster(
 ):
     """Total RGU.h per period, stacked by cluster.
 
-    Aggregates the same RGU metric as /rgu_usage (SUM(rgu * elapsed / 3600))
-    and groups by cluster_name. When ``clusters`` is given, only those clusters
-    are kept (empty = all clusters). Returns one series per cluster, aligned on
-    a shared period axis; clusters with no RGU at all (e.g. no billing) are
-    dropped.
+    Aggregates the same RGU metric as /rgu_usage -- each job charged to the
+    buckets it ran in, in proportion to the time it spent in each -- and groups
+    by cluster_name. When ``clusters`` is given, only those clusters are kept
+    (empty = all clusters). Returns one series per cluster, aligned on a shared
+    period axis; clusters with no RGU at all (e.g. no billing) are dropped.
     """
     begin_dt, finish_dt = _date_range(start, end)
     parsed = _parse_period(period)
     fmt = _label_fmt(parsed)
 
-    # The view carries cluster_name and allocated_gpu_cost -- its precomputed
-    # RGU-seconds (elapsed_time * allocated_gres_gpu * drac_rgu) -- so no
-    # clusters/gpurgudb join is needed. /3600 -> RGU-hours (equals
-    # allocated_rgu_drac * elapsed / 3600 in the sum, and a touch cheaper).
-    bucket_expr = _bucket_expr(parsed, col(JobSeriesDB.submit_time), begin_dt)
-    rgu_hours = col(JobSeriesDB.allocated_gpu_cost) / 3600.0
+    # The view carries cluster_name and allocated_rgu_drac -- the per-job RGU
+    # rate (allocated_gres_gpu * drac_rgu, no time in it) -- so no clusters/
+    # gpurgudb join is needed, and the rate is what the bucket's hours multiply.
+    bucket_table = _bucket_table(begin_dt, finish_dt, parsed)
+    rgu_hours = col(JobSeriesDB.allocated_rgu_drac) * _overlap_hours(
+        JobSeriesDB, bucket_table.c.bucket_start, bucket_table.c.bucket_end
+    )
     query = _apply_rgu_base_view(
         select(
-            bucket_expr,
+            bucket_table.c.bucket_index,
             col(JobSeriesDB.cluster_name).label("cluster_name"),
             func.sum(rgu_hours).label("rgu"),
         ),
@@ -988,12 +1074,14 @@ def metrics_rgu_by_cluster(
         scope_user_id=_scope_or_view_as(sess, req, as_user),
     )
     query = (
-        query.where(
-            col(JobSeriesDB.submit_time) >= begin_dt,
-            col(JobSeriesDB.submit_time) < finish_dt,
+        query.join(
+            bucket_table,
+            _ran_between(
+                JobSeriesDB, bucket_table.c.bucket_start, bucket_table.c.bucket_end
+            ),
         )
-        .group_by("bucket", "cluster_name")
-        .order_by("bucket")
+        .group_by(bucket_table.c.bucket_index, "cluster_name")
+        .order_by(bucket_table.c.bucket_index)
     )
 
     sums = {}
@@ -1002,7 +1090,7 @@ def metrics_rgu_by_cluster(
         if not r.cluster_name:
             continue
         v = float(r.rgu or 0.0)
-        sums[(_sql_bucket_key(parsed, r.bucket), r.cluster_name)] = v
+        sums[(r.bucket_index, r.cluster_name)] = v
         totals[r.cluster_name] = totals.get(r.cluster_name, 0.0) + v
 
     # Largest total first -> drawn at the bottom of the stack (Plotly stacks the
@@ -1015,10 +1103,10 @@ def metrics_rgu_by_cluster(
     return {
         "periods": [
             {"period_start": ps.strftime(fmt), "period_end": pe.strftime(fmt)}
-            for _, ps, pe in buckets
+            for ps, pe in buckets
         ],
         "series": [
-            {"cluster": c, "rgu": [sums.get((k, c), 0.0) for k, _, _ in buckets]}
+            {"cluster": c, "rgu": [sums.get((i, c), 0.0) for i in range(len(buckets))]}
             for c in stacked_clusters
         ],
     }
@@ -1039,13 +1127,13 @@ def metrics_metric_trend(
 ):
     """Per-period averages of a metric's per-job ``mean`` and ``max``.
 
-    For each period bucket, averages the per-job statistic values over the
-    jobs submitted in that bucket (plain per-job average, not duration
-    weighted). Jobs lacking the statistic are simply absent from the average
-    (inner join) and no GPU/RGU filter is applied, so system metrics also
-    cover CPU-only jobs. Returns a single ``series`` entry (the requested
-    metric) on a period axis; buckets with no data yield null (a curve gap),
-    not 0.
+    For each period bucket, averages the per-job statistic values over the jobs
+    *running* in that bucket (plain per-job average, not duration weighted, so a
+    job spanning several buckets counts once in each). Jobs lacking the statistic
+    are simply absent from the average (inner join) and no GPU/RGU filter is
+    applied, so system metrics also cover CPU-only jobs. Returns a single
+    ``series`` entry (the requested metric) on a period axis; buckets with no
+    data yield null (a curve gap), not 0.
     """
     if metric not in _METRICS_0_1:
         raise HTTPException(status_code=400, detail=f"Unknown metric: {metric!r}")
@@ -1060,13 +1148,14 @@ def metrics_metric_trend(
     # docstring); job_series_select keeps it on the small submit_time index.
     js = job_series_select(
         "job_db_id",
-        "submit_time",
+        "start_time",
+        "elapsed_time",
         "cluster_id",
         "cluster_user",
         "job_state",
         "sarc_user_id",
     ).subquery()
-    bucket_expr = _bucket_expr(parsed, js.c.submit_time, begin_dt)
+    bucket_table = _bucket_table(begin_dt, finish_dt, parsed)
     m_mean = col(JobStatisticDB.mean)
     m_max = col(JobStatisticDB.max)
     # NaN-proof averages: a single NaN would contaminate the whole AVG, so each
@@ -1076,7 +1165,7 @@ def metrics_metric_trend(
     avg_max = func.avg(case((_is_real(m_max), m_max))).label("avg_max")
 
     query = (
-        select(bucket_expr, avg_mean, avg_max)
+        select(bucket_table.c.bucket_index, avg_mean, avg_max)
         .select_from(js)
         .join(
             JobStatisticDB,
@@ -1085,9 +1174,12 @@ def metrics_metric_trend(
                 col(JobStatisticDB.name) == metric,
             ),
         )
-        .where(js.c.submit_time >= begin_dt, js.c.submit_time < finish_dt)
-        .group_by("bucket")
-        .order_by("bucket")
+        .join(
+            bucket_table,
+            _ran_between(js.c, bucket_table.c.bucket_start, bucket_table.c.bucket_end),
+        )
+        .group_by(bucket_table.c.bucket_index)
+        .order_by(bucket_table.c.bucket_index)
     )
     query = _apply_job_filters(
         query,
@@ -1100,20 +1192,19 @@ def metrics_metric_trend(
 
     cells = {}
     for r in sess.exec(query):
-        key = _sql_bucket_key(parsed, r.bucket)
-        cells[key] = (_nan_to_none(r.avg_mean), _nan_to_none(r.avg_max))
+        cells[r.bucket_index] = (_nan_to_none(r.avg_mean), _nan_to_none(r.avg_max))
 
     buckets = list(_iter_buckets(begin_dt, finish_dt, parsed))
     return {
         "periods": [
             {"period_start": ps.strftime(fmt), "period_end": pe.strftime(fmt)}
-            for _, ps, pe in buckets
+            for ps, pe in buckets
         ],
         "series": [
             {
                 "metric": metric,
-                "mean": [cells.get(k, (None, None))[0] for k, _, _ in buckets],
-                "max": [cells.get(k, (None, None))[1] for k, _, _ in buckets],
+                "mean": [cells.get(i, (None, None))[0] for i in range(len(buckets))],
+                "max": [cells.get(i, (None, None))[1] for i in range(len(buckets))],
             }
         ],
     }
@@ -1135,15 +1226,21 @@ def metrics_rgu_by_user(
 ):
     """Requested vs used RGU.h aggregated per user (not over time).
 
-    Same RGU.h measure as /rgu_usage, summed per cluster_user over GPU jobs in the
-    window (requested = SUM(rgu * elapsed / 3600); used = scaled by the mean
-    ``metric``). Returns a list sorted by descending requested RGU.h.
+    Same RGU.h measure as /rgu_usage -- each job charged only for the hours it
+    ran inside the window -- summed per cluster_user (requested = SUM(rgu *
+    hours in the window); used = scaled by the mean ``metric``). Returns a list
+    sorted by descending requested RGU.h. The window is one bucket here, so the
+    totals match what the per-bucket plots add up to.
     """
     begin_dt, finish_dt = _apply_focus(*_date_range(start, end), focus_start, focus_end)
+    window = (begin_dt.timestamp(), finish_dt.timestamp())
 
-    # Aggregate by user: SUM(allocated_gpu_cost)/3600 = RGU.h per user. Metric mean
-    # via a targeted jobstatisticdb join (parametrized) — see rgu_usage.
-    rgu_hours = col(JobSeriesDB.allocated_gpu_cost) / 3600.0
+    # Aggregate by user: the RGU rate times the hours spent inside the window.
+    # Metric mean via a targeted jobstatisticdb join (parametrized) — see
+    # rgu_usage.
+    rgu_hours = col(JobSeriesDB.allocated_rgu_drac) * _overlap_hours(
+        JobSeriesDB, *window
+    )
     m_mean = col(JobStatisticDB.mean)
     # Split used vs unmeasured on whether the metric is a real value (not
     # NULL/NaN); a missing measurement is kept apart from "unused".
@@ -1175,10 +1272,7 @@ def metrics_rgu_by_user(
             ),
             isouter=True,
         )
-        .where(
-            col(JobSeriesDB.submit_time) >= begin_dt,
-            col(JobSeriesDB.submit_time) < finish_dt,
-        )
+        .where(_ran_between(JobSeriesDB, *window))
         .group_by("user")
         .order_by(rgu_requested_sum.desc(), user_expr)
     )
@@ -1215,9 +1309,12 @@ def metrics_jobs(
 ):
     """Paginated, sortable table of individual jobs.
 
-    Lists GPU jobs submitted in the window (cluster/user/state filtered), one row
+    Lists GPU jobs that ran in the window (cluster/user/state filtered), one row
     per job: cluster, user, state, elapsed, GPU counts, billing, gpu_type, rgu,
-    rgu_hours, per-job metric means and ``waste`` (rgu_hours * (1 - mean)). Sorted
+    rgu_hours, per-job metric means and ``waste`` (rgu_hours * (1 - mean)).
+    ``rgu_hours`` counts only the hours inside the window, like every other plot,
+    so a job that straddles the edge shows less here than it cost in total --
+    ``elapsed`` still reports the job's whole run. Sorted
     by ``sort_by``/``sort_dir`` and paginated by ``limit``/``offset``. Returns
     {total, jobs}. ``total`` is the full filtered count, computed by a SEPARATE
     query (kept out of the page query so the page parallelises — see below) and
@@ -1226,6 +1323,7 @@ def metrics_jobs(
     jobs; the separate query stays cheap precisely because it parallelises.
     """
     begin_dt, finish_dt = _apply_focus(*_date_range(start, end), focus_start, focus_end)
+    window = (begin_dt.timestamp(), finish_dt.timestamp())
 
     # Limit-first pagination. A `page` subquery ranks, paginates and counts the
     # full filtered set from the source alone (plus the single stat the sort needs,
@@ -1233,7 +1331,11 @@ def metrics_jobs(
     # page of rows. Without this split, the 3 stat joins + count(*) would run over
     # the whole window (millions of rows) just to return 50. See the perf note in
     # docs / the /metrics/jobs investigation.
-    rgu_hours_raw = col(JobSeriesDB.allocated_gpu_cost) / 3600.0
+    # Pro-rated to the window, so the column adds up to what the plots show; the
+    # rgu_hours and waste sorts rank on this same expression.
+    rgu_hours_raw = col(JobSeriesDB.allocated_rgu_drac) * _overlap_hours(
+        JobSeriesDB, *window
+    )
 
     # One aliased jobstatisticdb row per distinct stat name, LEFT-joined on the
     # job id. Not the view's own gpu_*_mean/max columns: those would join over the
@@ -1305,10 +1407,9 @@ def metrics_jobs(
     order_by = (ordered, col(JobSeriesDB.job_db_id))
 
     # Window only; the gpu_type/RGU validity filter now lives in _apply_rgu_base_view.
-    base_filters = (
-        col(JobSeriesDB.submit_time) >= begin_dt,
-        col(JobSeriesDB.submit_time) < finish_dt,
-    )
+    # "Ran in the window", not "was submitted in it": the table has to list the
+    # same jobs the plots are drawn from.
+    base_filters = (_ran_between(JobSeriesDB, *window),)
 
     scope_user_id = _scope_or_view_as(sess, req, as_user)
 
@@ -1387,9 +1488,11 @@ def metrics_jobs(
     jobs = []
     for row in sess.exec(query):
         mm = _nan_to_none(row.metric_mean)
-        # rgu_hours (allocated_gpu_cost / 3600) may be NULL
-        # even though allocated_rgu_drac is not
-        # — the two are computed differently in the view.
+        # rgu_hours is the RGU rate times the hours spent in the window, so it is
+        # non-NULL for every row the filters let through (_apply_rgu_base_view
+        # requires the rate, _ran_between requires a start). Still guarded: the
+        # row shape is what the frontend reads, and a None there is a blank cell
+        # rather than a crash.
         rh = _nan_to_none(row.rgu_hours)
         waste = round(rh * (1 - mm), 2) if (rh is not None and mm is not None) else None
         jobs.append(
