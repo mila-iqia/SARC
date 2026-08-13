@@ -264,6 +264,11 @@ def _apply_focus(
 # found by overlap rather than by submit_time. And a bar no longer sums the jobs
 # it is drawn from: only the slice of each that lands in the window is counted,
 # which is the whole point.
+#
+# Everything here asks the same question -- which jobs were running then, and
+# for how long -- so a job that never ran answers it the same way everywhere:
+# not at all. That is one predicate, ``_ran_between``, and every endpoint goes
+# through it.
 
 
 def _job_span(cols):
@@ -271,10 +276,10 @@ def _job_span(cols):
 
     Anchored on ``elapsed_time`` rather than on ``end_time`` so that the slices
     always add back up to the whole: every cost column in the view is built from
-    elapsed, while a job Slurm suspended and resumed has ``end - start``
-    strictly greater. A job that never ran has ``elapsed_time`` 0 and, in
-    practice, a NULL ``start_time``; NULL propagates through every comparison
-    below, so it simply matches no period.
+    elapsed, and the two disagree far too often to treat them as interchangeable
+    (7.7 % of production jobs, most by more than an hour, ``end - start`` being
+    the larger). Whatever stretches the wall-clock -- suspension, requeue --
+    elapsed stays the time the job consumed.
     """
     start = func.extract("epoch", cols.start_time)
     return start, start + cols.elapsed_time
@@ -285,9 +290,19 @@ def _ran_between(cols, lo, hi):
 
     Bounds are epoch seconds -- either Python floats for a fixed window, or the
     bucket columns of ``_bucket_table``.
+
+    ``elapsed_time > 0`` is what makes this an intersection of intervals rather
+    than an approximation of one: a job that ran for no time spans the empty
+    interval, and the empty interval meets nothing. Without it, a job with a
+    zero elapsed whose start falls inside the window satisfies the two
+    comparisons below and gets counted as running there -- contributing 0 RGU.h,
+    but inflating every job count. It also settles, by construction rather than
+    by exception, the incoherent rows production carries: those whose end_time
+    precedes their start_time, and the one that starts before it was submitted,
+    all of which have a zero elapsed.
     """
     start, end = _job_span(cols)
-    return and_(start < hi, end > lo)
+    return and_(cols.elapsed_time > 0, start < hi, end > lo)
 
 
 def _overlap_hours(cols, lo, hi):

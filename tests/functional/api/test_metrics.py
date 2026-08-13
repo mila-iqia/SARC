@@ -458,6 +458,60 @@ def test_jobs_table_with_data(dash_client, dash_db):
         assert job["gpu_memory_max"] == pytest.approx(0.9)
 
 
+def test_a_job_that_never_ran_appears_nowhere(dash_client, dash_db):
+    """Every plot answers the same question -- which jobs were running then --
+    so a job that ran for no time answers it the same way everywhere: not at all.
+
+    It spans the empty interval, and the empty interval meets no bucket. Before
+    the `elapsed_time > 0` guard it still matched the bucket its start_time fell
+    in: worth 0 RGU.h, but inflating the job counts. Production carries 258 674
+    of these.
+    """
+    with config.db.session() as sess:
+        job = sess.exec(
+            select(SlurmJobDB)
+            .where(col(SlurmJobDB.harmonized_gpu_type) == _GPU)
+            .order_by(col(SlurmJobDB.id))
+        ).first()
+        job.elapsed_time = 0.0
+        job.end_time = job.start_time
+        sess.add(job)
+        sess.commit()
+
+    # The RGU views drop it (it was worth 0 anyway), and so does the job table.
+    usage = dash_client.get("/dash/metrics/rgu_usage", params=WINDOW).json()
+    assert sum(r["rgu_allocated"] for r in usage) == pytest.approx(
+        _RGU_HOURS_PER_JOB * (dash_db.n - 1)
+    )
+    table = dash_client.get("/dash/metrics/jobs", params=WINDOW).json()
+    assert table["total"] == dash_db.n - 1
+
+    # And the counts, which is where it used to show up despite weighing nothing.
+    # _jobs_that_ran already applies the rule, so it drops the job too: the point
+    # is that the endpoint agrees with it.
+    counts = dash_client.get(
+        "/dash/metrics/job_counts", params={**WINDOW, "period": "m"}
+    ).json()
+    assert sum(r["count"] for r in counts) == _jobs_that_ran()
+
+
+def _jobs_that_ran() -> int:
+    """Seeded jobs whose run overlaps WINDOW, counted in Python so the test does
+    not restate the SQL it is checking."""
+    begin = datetime(2023, 2, 1, tzinfo=timezone.utc)
+    finish = datetime(2023, 3, 1, tzinfo=timezone.utc)
+    with config.db.session() as sess:
+        jobs = sess.exec(select(SlurmJobDB)).all()
+    return sum(
+        1
+        for job in jobs
+        if job.start_time is not None
+        and job.elapsed_time > 0
+        and job.start_time < finish
+        and job.start_time + timedelta(seconds=job.elapsed_time) > begin
+    )
+
+
 def test_rgu_usage_with_data(dash_client, dash_db):
     data = dash_client.get("/dash/metrics/rgu_usage", params=WINDOW).json()
     assert sum(r["rgu_allocated"] for r in data) == pytest.approx(
