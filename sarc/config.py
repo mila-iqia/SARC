@@ -441,6 +441,10 @@ class ServerConfig:
     # Authentication manager
     auth: OAuthManager | None = None
 
+    # Google Analytics measurement ID for the Utilization Dashboard
+    # (/dash/metrics); unset disables analytics on that page.
+    ga_measurement_id: str | None = None
+
 
 @dataclass
 class Config:

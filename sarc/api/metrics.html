@@ -13,6 +13,15 @@
   <script src="https://cdn.plot.ly/plotly-3.6.0.min.js"
           integrity="sha384-VJGrWzhaqeZH5V40n11N6iTMH+MBDakZZjfPZAPtqS/BCEnF102uwlswiJq07HmW"
           crossorigin="anonymous"></script>
+  {% if ga_measurement_id %}
+  <script async src="https://www.googletagmanager.com/gtag/js?id={{ ga_measurement_id }}"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', '{{ ga_measurement_id }}');
+  </script>
+  {% endif %}
   <style>
     * { box-sizing: border-box; }
     body { font-family: system-ui, sans-serif; margin: 32px; color: #222; }
