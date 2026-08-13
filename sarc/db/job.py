@@ -2,6 +2,7 @@ from types import SimpleNamespace
 from typing import Self
 
 from iguane.fom import RAWDATA, fom_ugr
+from sqlalchemy import text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import attribute_keyed_dict, relationship
 from sqlmodel import BIGINT, Field, Index, Session, UniqueConstraint, select
@@ -66,6 +67,34 @@ class JobStatisticsFetchDateDB(SQLModel, table=True):
     )
 
 
+# A job's run as a time range, for the /dash "was it running then?" queries.
+#
+# It exists as a function only to be IMMUTABLE. `timestamptz + interval` is
+# merely STABLE -- an interval carrying days or months lands on a different
+# instant depending on the session TimeZone (DST) -- and Postgres refuses a
+# STABLE expression in an index. make_interval(secs => ...) yields hours,
+# minutes and seconds only, never days, so the addition really is absolute and
+# the marking is honest rather than a way around the check.
+#
+# STRICT is not decoration: tstzrange(NULL, NULL) is `(,)`, the *unbounded*
+# range, which overlaps every period there is. A job that never started would
+# then land in every bucket of every window. Returning NULL instead keeps them out,
+# since NULL && anything is NULL.
+#
+# Registered with alembic-utils in alembic/env.py, like the job_series view.
+SLURM_JOB_RUN_SIGNATURE = (
+    "slurm_job_run(job_start timestamptz, job_elapsed double precision)"
+)
+SLURM_JOB_RUN_DEFINITION = """
+returns tstzrange
+language sql
+immutable
+strict
+parallel safe
+as $$ select tstzrange(job_start, job_start + make_interval(secs => job_elapsed)) $$
+"""
+
+
 class SlurmJobDB(SQLModel, table=True):
     __tablename__ = "slurm_jobs"
     __table_args__ = (
@@ -94,6 +123,19 @@ class SlurmJobDB(SQLModel, table=True):
                 "cluster_user",
                 "sarc_user_id",  # used by view when joining users and member_type
             ],
+        ),
+        # The /dash window filter asks which jobs were running during a period,
+        # which is an overlap between two time ranges. A btree cannot answer it:
+        # it orders one scalar, while the answer depends on start_time *and*
+        # elapsed_time together -- two jobs starting the same second can end six
+        # months apart. GiST indexes the range itself, each node bounding the
+        # ranges below it, so a period that misses a node prunes its whole
+        # subtree. Nothing here is tuned to how long jobs happen to run: the tree
+        # learns that from the rows and keeps up on its own.
+        Index(
+            "ix_slurm_jobs_run",
+            text("slurm_job_run(start_time, elapsed_time)"),
+            postgresql_using="gist",
         ),
     )
 

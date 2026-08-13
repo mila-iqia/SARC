@@ -271,6 +271,11 @@ def _apply_focus(
 # through it.
 
 
+def _job_run(cols):
+    """The job's run as a ``tstzrange``, through the indexed SQL function."""
+    return func.slurm_job_run(cols.start_time, cols.elapsed_time)
+
+
 def _job_span(cols):
     """A job's run as epoch seconds: ``[start, start + elapsed)``.
 
@@ -291,18 +296,22 @@ def _ran_between(cols, lo, hi):
     Bounds are epoch seconds -- either Python floats for a fixed window, or the
     bucket columns of ``_bucket_table``.
 
-    ``elapsed_time > 0`` is what makes this an intersection of intervals rather
-    than an approximation of one: a job that ran for no time spans the empty
-    interval, and the empty interval meets nothing. Without it, a job with a
-    zero elapsed whose start falls inside the window satisfies the two
-    comparisons below and gets counted as running there -- contributing 0 RGU.h,
-    but inflating every job count. It also settles, by construction rather than
-    by exception, the incoherent rows production carries: those whose end_time
-    precedes their start_time, and the one that starts before it was submitted,
-    all of which have a zero elapsed.
+    Written as an overlap between two ranges rather than as two comparisons,
+    because that is what it means and because ``ix_slurm_jobs_run`` indexes
+    exactly this expression (see ``slurm_job_run`` in sarc/db/job.py). Spelling
+    it any other way still returns the right rows, but reads all of them.
+
+    The degenerate cases fall out of range semantics instead of needing their
+    own clauses: a job that ran for no time spans the empty range, and the empty
+    range meets nothing -- which is what keeps a zero-elapsed job out of the
+    counts even when its start_time lands inside the window, and settles with it
+    the incoherent rows in the data (end before start, start before submit), all
+    of which have a zero elapsed. A job that never started yields NULL, the
+    function being STRICT, and NULL is not a match either.
     """
-    start, end = _job_span(cols)
-    return and_(cols.elapsed_time > 0, start < hi, end > lo)
+    return _job_run(cols).op("&&")(
+        func.tstzrange(func.to_timestamp(lo), func.to_timestamp(hi))
+    )
 
 
 def _overlap_hours(cols, lo, hi):
