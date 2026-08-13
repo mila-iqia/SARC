@@ -310,7 +310,7 @@ def _ran_between(cols, lo, hi):
     function being STRICT, and NULL is not a match either.
     """
     return _job_run(cols).op("&&")(
-        func.tstzrange(func.to_timestamp(lo), func.to_timestamp(hi))
+        func.tstzrange(func.to_timestamp(lo), func.to_timestamp(hi), "[)")
     )
 
 

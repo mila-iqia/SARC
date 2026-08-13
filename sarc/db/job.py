@@ -72,16 +72,24 @@ class JobStatisticsFetchDateDB(SQLModel, table=True):
 # It exists as a function only to be IMMUTABLE. `timestamptz + interval` is
 # merely STABLE -- an interval carrying days or months lands on a different
 # instant depending on the session TimeZone (DST) -- and Postgres refuses a
-# STABLE expression in an index. make_interval(secs => ...) yields hours,
-# minutes and seconds only, never days, so the addition really is absolute and
-# the marking is honest rather than a way around the check.
+# STABLE expression in an index. make_interval(secs => ...) yields seconds only,
+# so the addition really is absolute and immutable.
 #
-# STRICT is not decoration: tstzrange(NULL, NULL) is `(,)`, the *unbounded*
-# range, which overlaps every period there is. A job that never started would
+# STRICT is necessary: tstzrange(NULL, NULL) is `(,)`, the *unbounded*
+# range, which overlaps every period. A job that never started would
 # then land in every bucket of every window. Returning NULL instead keeps them out,
 # since NULL && anything is NULL.
 #
+# The `[)` bounds are the default, passed explicitly for better understanding;
+# buckets tile the window bound to bound, so half-open is what
+# puts each instant in exactly one of them, and it is what makes a zero-elapsed
+# run the *empty* range -- which overlaps nothing -- rather than a point, which
+# would overlap. `[]` would double-count every job sitting on a bucket edge.
+#
 # Registered with alembic-utils in alembic/env.py, like the job_series view.
+# Careful when editing this body: alembic replaces the function in place and
+# leaves ix_slurm_jobs_run holding whatever the old one computed.
+# A change that does alter the result has to REINDEX in the same migration.
 SLURM_JOB_RUN_SIGNATURE = (
     "slurm_job_run(job_start timestamptz, job_elapsed double precision)"
 )
@@ -91,7 +99,7 @@ language sql
 immutable
 strict
 parallel safe
-as $$ select tstzrange(job_start, job_start + make_interval(secs => job_elapsed)) $$
+as $$ select tstzrange(job_start, job_start + make_interval(secs => job_elapsed), '[)') $$
 """
 
 
