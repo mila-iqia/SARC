@@ -911,18 +911,22 @@ def metrics_rgu_usage(
     ``rgu_used`` = the same scaled by each job's mean ``metric`` (e.g.
     gpu_sm_occupancy); ``rgu_wasted`` = the per-job shortfall below ``min_usage``
     (SUM of rgu_hours * (min_usage - mean) over measured jobs with mean <
-    min_usage). Returns one row per bucket.
+    min_usage).
 
-    Each row also carries ``metric_means``: the plain per-job mean of every
-    _TREND_METRICS entry, with the job count that weights it when callers
-    recombine buckets (a mean is not additive). A job spanning several buckets
-    has its RGU.h split across them, its mean counted whole in each.
+    Returns ``{periods, overall}``, one ``periods`` row per bucket. Each row also
+    carries ``metric_means``: the plain per-job mean of every _TREND_METRICS
+    entry over the jobs running in that bucket. A job spanning several buckets has its RGU.h split across them,
+    its mean counted whole in each -- so the sums recombine across buckets and
+    the means do not. ``overall`` holds the same means over the whole window,
+    counting each job once, for callers that need a range-wide figure.
     """
     begin_dt, finish_dt = _date_range(start, end)
     parsed = _parse_period(period)
     fmt = _label_fmt(parsed)
+    scope_user_id = _scope_or_view_as(sess, req, as_user)
+    empty_means = {name: {"mean": None} for name in _TREND_METRICS}
     if _no_buckets(begin_dt, finish_dt):
-        return []
+        return {"periods": [], "overall": empty_means}
 
     # Per bucket: allocated = RGU rate x hours landing inside (_overlap_hours);
     # used = the same scaled by the metric mean. The metric is parametrized over
@@ -952,16 +956,25 @@ def metrics_rgu_usage(
         else_=0.0,
     )
 
-    # Plain per-job means of the fixed trend metrics, plotted over the bars. The
-    # counts are the bucket weights: averaging the per-bucket averages would be
-    # wrong when buckets hold different job counts (whole-range view).
-    trend_cols = []
-    for name in _TREND_METRICS:
+    # Plain per-job mean of a trend metric, plotted over the bars.
+    def _trend_avg(name: str):
         t_mean = col(trend[name].mean)
-        trend_cols += [
-            func.avg(case((_is_real(t_mean), t_mean))).label(f"{name}_mean"),
-            func.count(case((_is_real(t_mean), t_mean))).label(f"{name}_n"),
-        ]
+        return func.avg(case((_is_real(t_mean), t_mean))).label(f"{name}_mean")
+
+    # One alias per trend metric: (name, job_id) is unique, so these stay 1:1 and
+    # leave the SUMs untouched. Shared with the whole-range query below.
+    def _join_trends(q):
+        for name in _TREND_METRICS:
+            alias = trend[name]
+            q = q.join(
+                alias,
+                and_(
+                    col(alias.job_id) == col(JobSeriesDB.job_db_id),
+                    col(alias.name) == name,
+                ),
+                isouter=True,
+            )
+        return q
 
     query = _apply_rgu_base_view(
         select(
@@ -970,13 +983,13 @@ def metrics_rgu_usage(
             func.sum(rgu_used_term).label("rgu_used"),
             func.sum(rgu_unmeasured_term).label("rgu_unmeasured"),
             func.sum(rgu_wasted_term).label("rgu_wasted"),
-            *trend_cols,
+            *[_trend_avg(name) for name in _TREND_METRICS],
         ),  # ty:ignore[no-matching-overload]
         sess,
         clusters,
         cluster_user,
         job_states,
-        scope_user_id=_scope_or_view_as(sess, req, as_user),
+        scope_user_id=scope_user_id,
     )
     if metric not in trend:
         query = query.join(
@@ -987,21 +1000,11 @@ def metrics_rgu_usage(
             ),
             isouter=True,
         )
-    # One alias per trend metric: (name, job_id) is unique, so these stay 1:1
-    # and leave the SUMs above untouched.
-    for name in _TREND_METRICS:
-        alias = trend[name]
-        query = query.join(
-            alias,
-            and_(
-                col(alias.job_id) == col(JobSeriesDB.job_db_id), col(alias.name) == name
-            ),
-            isouter=True,
-        )
+    query = _join_trends(query)
     # The join is also the time filter: a job overlapping no bucket is outside
     # the window. A job spanning several buckets yields one row per bucket, which
-    # is what splits its RGU.h across them -- and what makes the trend counts
-    # above read as "jobs running in this bucket".
+    # is what splits its RGU.h across them -- and what makes the trend means
+    # above read as "over the jobs running in this bucket".
     query = (
         query.join(
             buckets,
@@ -1022,12 +1025,30 @@ def metrics_rgu_usage(
             float(row.rgu_wasted or 0.0),
         )
         trends[key] = {
-            name: {
-                "mean": _nan_to_none(getattr(row, f"{name}_mean")),
-                "n": int(getattr(row, f"{name}_n") or 0),
-            }
+            name: {"mean": _nan_to_none(getattr(row, f"{name}_mean"))}
             for name in _TREND_METRICS
         }
+
+    # Whole-range means, taken over the jobs and not over the bucket rows: joined
+    # to the buckets, a job crossing three of them is averaged three times, so
+    # recombining the rows above weighs each job by the buckets it spans -- a
+    # duration weighting nobody asked for, and one that moves with the period
+    # selector. Its own query because no per-bucket aggregate can undo that.
+    overall_q = _join_trends(
+        _apply_rgu_base_view(
+            select(*[_trend_avg(name) for name in _TREND_METRICS]),
+            sess,
+            clusters,
+            cluster_user,
+            job_states,
+            scope_user_id=scope_user_id,
+        )
+    ).where(_ran_between(JobSeriesDB, begin_dt.timestamp(), finish_dt.timestamp()))
+    overall_row = sess.exec(overall_q).one()
+    overall = {
+        name: {"mean": _nan_to_none(getattr(overall_row, f"{name}_mean"))}
+        for name in _TREND_METRICS
+    }
 
     period_data = []
     for key, (ps, pe) in enumerate(_iter_buckets(begin_dt, finish_dt, parsed)):
@@ -1040,13 +1061,11 @@ def metrics_rgu_usage(
                 "rgu_used": used,
                 "rgu_unmeasured": unmeasured,
                 "rgu_wasted": wasted,
-                "metric_means": trends.get(
-                    key, {name: {"mean": None, "n": 0} for name in _TREND_METRICS}
-                ),
+                "metric_means": trends.get(key, empty_means),
             }
         )
 
-    return period_data
+    return {"periods": period_data, "overall": overall}
 
 
 @router.get("/metrics/rgu_by_cluster")

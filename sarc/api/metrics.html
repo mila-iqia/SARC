@@ -689,17 +689,6 @@
     // Thick enough to read over the bars, in both views.
     const TREND_LINE = { width: 3 };
 
-    // Per-job simple mean over several buckets: recombined by job count, never a
-    // plain average of the per-bucket averages (buckets hold unequal job counts).
-    function trendMean(rows, metric) {
-      let num = 0, den = 0;
-      for (const r of rows) {
-        const t = r.metric_means && r.metric_means[metric];
-        if (t && t.n > 0 && t.mean != null) { num += t.mean * t.n; den += t.n; }
-      }
-      return den ? num / den : null;
-    }
-
     // Right-hand axis shared by both RGU-usage views. The range is pinned to
     // [0, 1]: autoscaled, an 8 % mean would fill the frame and read as a good score.
     const TREND_YAXIS = {
@@ -1468,7 +1457,8 @@
 
     function renderRguUsage(id, d) {
       const el = document.getElementById(id);
-      if (!el || !d.rgu_usage.length) return;
+      const rows = d.rgu_usage.periods;
+      if (!el || !rows.length) return;
       const unit = rguUnit();
       // The wasted/unused hovers name the efficiency metric picked at last
       // Update (non-admins are pinned to SM occupancy).
@@ -1509,7 +1499,7 @@
       if (rguUsageView === 'whole_range') {
         // One stacked bar summing the whole Start–End range. Focus is ignored on
         // purpose (no per-bucket axis) and the single bar is not click-to-focus.
-        const sum = key => d.rgu_usage.reduce((a, r) => a + (r[key] || 0), 0);
+        const sum = key => rows.reduce((a, r) => a + (r[key] || 0), 0);
         const reqTot = sum('rgu_allocated'), usedTot = sum('rgu_used'), unmTot = sum('rgu_unmeasured');
         const wastedTot = sum('rgu_wasted');
         const unusedTot = reqTot - usedTot - unmTot - wastedTot;
@@ -1521,8 +1511,12 @@
         // it. The anchor point carries the legend, the hover and the right axis
         // (a layout shape alone would leave it without a trace).
         const trendLevels = [], trendRules = [];
+        // Straight from the API: a mean over the whole range counts each job
+        // once, while the bars a job spans count it once each — so recombining
+        // the per-bucket means would weigh jobs by how long they ran, and the
+        // figure would move with the Period selector.
         TREND_CURVES.forEach(([m, color], i) => {
-          const v = trendMean(d.rgu_usage, m);
+          const v = d.rgu_usage.overall[m] ? d.rgu_usage.overall[m].mean : null;
           if (v == null) return;
           trendRules.push({
             type: 'line', xref: 'paper', yref: 'y2',
@@ -1570,12 +1564,12 @@
       }
 
       // Per-period: one stacked bar per time bucket; click a bar to set the focus.
-      const periods    = d.rgu_usage.map(r => r.period_start);
-      const periodEnds = d.rgu_usage.map(r => r.period_end);
-      const rguUsed       = d.rgu_usage.map(r => r.rgu_used * unit.factor);
-      const rguWasted     = d.rgu_usage.map(r => (r.rgu_wasted || 0) * unit.factor);
-      const rguUnused     = d.rgu_usage.map(r => (r.rgu_allocated - r.rgu_used - r.rgu_unmeasured - (r.rgu_wasted || 0)) * unit.factor);
-      const rguUnmeasured = d.rgu_usage.map(r => (r.rgu_unmeasured || 0) * unit.factor);
+      const periods    = rows.map(r => r.period_start);
+      const periodEnds = rows.map(r => r.period_end);
+      const rguUsed       = rows.map(r => r.rgu_used * unit.factor);
+      const rguWasted     = rows.map(r => (r.rgu_wasted || 0) * unit.factor);
+      const rguUnused     = rows.map(r => (r.rgu_allocated - r.rgu_used - r.rgu_unmeasured - (r.rgu_wasted || 0)) * unit.factor);
+      const rguUnmeasured = rows.map(r => (r.rgu_unmeasured || 0) * unit.factor);
       const colorUsed      = periods.map(p => { const f = periodInFocus(p); return f === null ? '#1a6fd4' : f ? '#e07020' : '#c8d8f0'; });
       const colorUnused    = periods.map(p => { const f = periodInFocus(p); return f === null ? '#a8c8f0' : f ? '#f0c090' : '#e4eef8'; });
       const colorWasted    = periods.map(p => { const f = periodInFocus(p); return f === null ? '#ff0000' : f ? '#aa00cc' : '#ffdddd'; });
@@ -1586,7 +1580,7 @@
       const trendLines = TREND_CURVES.map(([m, color]) => ({
         type: 'scatter', mode: 'lines+markers', yaxis: 'y2',
         name: METRICS[m] + ' mean (right axis)', x: periods, customdata: periodEnds,
-        y: d.rgu_usage.map(r => (r.metric_means && r.metric_means[m] ? r.metric_means[m].mean : null)),
+        y: rows.map(r => (r.metric_means && r.metric_means[m] ? r.metric_means[m].mean : null)),
         line: { color: color, ...TREND_LINE }, marker: { size: 5 },
         hovertemplate: METRICS[m] + ' mean<br>Period: %{x}<br>Value: %{y:.1%}<extra></extra>',
       }));
