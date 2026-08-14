@@ -244,7 +244,10 @@ def _apply_focus(
     if focus_end is not None:
         fe = focus_end if focus_end.tzinfo else focus_end.replace(tzinfo=UTC)
         finish_dt = min(finish_dt, fe)
-    return begin_dt, finish_dt
+    # A focus outside the range clamps past it. Collapse to the empty window
+    # rather than an inverted one: _ran_between would build a tstzrange whose
+    # lower bound is above its upper, which Postgres rejects outright.
+    return begin_dt, max(begin_dt, finish_dt)
 
 
 # --------------------------------------------------------------------------- #

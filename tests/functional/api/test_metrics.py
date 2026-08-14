@@ -1252,6 +1252,38 @@ def test_focus_narrows_window(dash_client):
     assert r.status_code == 200
 
 
+# Every endpoint taking a focus, with how many jobs its payload accounts for.
+_FOCUSED = [
+    ("jobs", lambda d: d["total"]),
+    ("rgu_by_user", len),
+    ("metric_distribution", lambda d: len(d["primary"]["values"])),
+    ("metric_comparison", lambda d: sum(sum(row) for row in d["z"])),
+    ("job_times_vs_limit", lambda d: d["total_jobs"]),
+]
+
+
+@pytest.mark.usefixtures("read_only_db")
+@pytest.mark.parametrize(("endpoint", "jobs_seen"), _FOCUSED)
+def test_focus_outside_the_range_is_an_empty_window(dash_client, endpoint, jobs_seen):
+    """A focus clipping past the range asks about no time at all: no jobs.
+
+    The dashboard keeps a focus across a range change, so any range moved off the
+    focused slice sends exactly this. It has to collapse to the empty window:
+    left inverted, it reaches ``_ran_between`` as a tstzrange whose lower bound
+    is above its upper, which Postgres refuses outright.
+    """
+    r = dash_client.get(
+        f"/dash/metrics/{endpoint}",
+        params={
+            **WINDOW,  # 2023-02-01 -> 2023-03-01
+            "focus_start": "2023-05-01T00:00:00Z",
+            "focus_end": "2023-05-08T00:00:00Z",
+        },
+    )
+    assert r.status_code == 200
+    assert jobs_seen(r.json()) == 0
+
+
 @pytest.mark.usefixtures("read_only_db")
 @pytest.mark.parametrize(
     "sort_by",

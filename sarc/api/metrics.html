@@ -2820,6 +2820,18 @@
     // the current form values, invalidates the endpoint cache, and re-renders
     // every tile. Each tile then independently fetches what it needs.
     async function loadCharts() {
+      // A focus names a slice of the current range, so a new range voids it —
+      // and a focus left outside the range asks the API for an inverted window.
+      // Cleared before captureParams reads it, and never on the first load,
+      // which restores the focus saved alongside its own range.
+      const newStart = document.getElementById('start').value;
+      const newEnd   = document.getElementById('end').value;
+      if (currentParams &&
+          (currentParams.start !== newStart || currentParams.end !== newEnd)) {
+        focusStart = '';
+        focusEnd   = '';
+        updateFocusLabel();
+      }
       const params = captureParams();
       if (params === null) {
         document.getElementById('status').textContent =
