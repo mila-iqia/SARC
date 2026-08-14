@@ -433,6 +433,40 @@ def test_job_counts_with_data(dash_client):
     assert sum(row["count"] for row in daily) >= len(ran_in_window)
 
 
+# Every bucketed endpoint, with the empty payload it owes an empty window.
+_BUCKETED = [
+    ("job_counts", []),
+    ("rgu_usage", []),
+    ("rgu_by_cluster", {"periods": [], "series": []}),
+    (
+        "metric_trend",
+        {
+            "periods": [],
+            "series": [{"metric": "gpu_sm_occupancy", "mean": [], "max": []}],
+        },
+    ),
+]
+
+
+@pytest.mark.usefixtures("read_only_db")
+@pytest.mark.parametrize("period", ["d", "w", "m", "h", "14d"])
+@pytest.mark.parametrize(("endpoint", "empty"), _BUCKETED)
+def test_bucketed_endpoints_on_an_empty_window(dash_client, endpoint, empty, period):
+    """start == end asks about a window of no length: the answer is nothing.
+
+    End being exclusive, that is what the UI sends whenever someone fills both
+    date inputs with the same day -- neither is validated. There is no bucket to
+    charge anything to, so each endpoint owes its own empty shape, not a 200 with
+    a bucket axis it cannot build.
+    """
+    resp = dash_client.get(
+        f"/dash/metrics/{endpoint}",
+        params={"start": "2023-02-15", "end": "2023-02-15", "period": period},
+    )
+    assert resp.status_code == 200
+    assert resp.json() == empty
+
+
 @pytest.mark.usefixtures("read_only_db")
 def test_job_times_with_data(dash_client):
     """Both heatmaps are populated from the seeded jobs."""
@@ -569,6 +603,35 @@ def test_rgu_usage_prorates_a_job_over_the_weeks_it_ran(dash_client, dash_db):
     assert sum(charged) == pytest.approx(total)
 
 
+def test_rgu_usage_prorates_across_a_month_boundary(dash_client, dash_db):
+    """Monthly buckets split a run on the 1st, like any other period.
+
+    Months are the one period whose buckets are not a fixed number of seconds, so
+    a position in the axis is counted off the calendar rather than divided out of
+    a length. This checks that arithmetic where it can actually be wrong: the
+    charged buckets are the 2nd and 3rd of four, not the 1st, and the window opens
+    mid-month so bucket 0 is clipped.
+    """
+    start = datetime(2023, 2, 27, tzinfo=timezone.utc)  # 2 days of February left
+    with config.db.session() as sess:
+        total = _run_single_job(sess, start, hours=5 * 24)
+
+    data = dash_client.get(
+        "/dash/metrics/rgu_usage",
+        params={"start": "2023-01-15", "end": "2023-04-10", "period": "m"},
+    ).json()
+    assert [r["period_start"] for r in data] == [
+        "2023-01-15",
+        "2023-02-01",
+        "2023-03-01",
+        "2023-04-01",
+    ]
+    assert [r["rgu_allocated"] for r in data] == pytest.approx(
+        [0.0, _RGU_PER_JOB * 2 * 24, _RGU_PER_JOB * 3 * 24, 0.0]
+    )
+    assert sum(r["rgu_allocated"] for r in data) == pytest.approx(total)
+
+
 def test_rgu_usage_counts_a_job_that_started_before_the_window(dash_client, dash_db):
     """Selection follows the run, not the submission: a job submitted before the
     window but still running inside it owes the window those hours.
@@ -617,6 +680,7 @@ def test_every_view_agrees_on_the_windows_rgu_hours(dash_client, dash_db):
     usage = dash_client.get("/dash/metrics/rgu_usage", params=WINDOW).json()
     by_user = dash_client.get("/dash/metrics/rgu_by_user", params=WINDOW).json()
     table = dash_client.get("/dash/metrics/jobs", params=WINDOW).json()
+    dist = dash_client.get("/dash/metrics/metric_distribution", params=WINDOW).json()
 
     assert sum(r["rgu_allocated"] for r in usage) == pytest.approx(expected)
     assert sum(u["rgu_requested"] for u in by_user) == pytest.approx(expected)
@@ -624,7 +688,42 @@ def test_every_view_agrees_on_the_windows_rgu_hours(dash_client, dash_db):
     assert sum(j["rgu_hours"] for j in table["jobs"]) == pytest.approx(
         expected, abs=0.01
     )
-    assert table["total"] == 1, "the straddling job is listed, once"
+    assert table["total"] == 1, "the job crossing the window edge is listed, once"
+    # The histogram weighs in RGU-seconds -- the same measure in another unit,
+    # and the only place the pro-rating shows up in a distribution.
+    assert sum(dist["primary"]["weights"]) / 3600.0 == pytest.approx(expected)
+
+
+def test_rgu_usage_is_additive_over_a_window_split(dash_client, dash_db):
+    """Cutting the window in two conserves the total -- the property submit_time
+    semantics did not have.
+
+    Under the old rule a job belonged wholly to the half its submission fell in,
+    so a cut either double-counted it or lost it. Charging the time itself splits
+    the hours instead. The cut falls inside a run here (02-10 12:00 -> 02-12
+    00:00, window cut at 02-11), where the property used to break.
+    """
+    start = datetime(2023, 2, 10, 12, tzinfo=timezone.utc)
+    with config.db.session() as sess:
+        total = _run_single_job(sess, start, hours=36)
+
+    halves = (
+        {"start": "2023-02-01", "end": "2023-02-11"},
+        {"start": "2023-02-11", "end": "2023-03-01"},
+    )
+
+    def charged(window):
+        data = dash_client.get(
+            "/dash/metrics/rgu_usage", params={**window, "period": "d"}
+        ).json()
+        return sum(r["rgu_allocated"] for r in data)
+
+    whole, first, second = charged(WINDOW), charged(halves[0]), charged(halves[1])
+    assert whole == pytest.approx(total), "the whole run falls inside WINDOW"
+    assert first + second == pytest.approx(whole)
+    # 12h before the cut, 24h after it.
+    assert first == pytest.approx(_RGU_PER_JOB * 12)
+    assert second == pytest.approx(_RGU_PER_JOB * 24)
 
 
 def test_rgu_usage_wasted_is_per_job(dash_client, dash_db):
@@ -916,6 +1015,171 @@ def test_period_bucketing(dash_client, period):
     params = {"start": "2023-02-14", "end": "2023-02-16", "period": period}
     r = dash_client.get("/dash/metrics/job_counts", params=params)
     assert r.status_code == 200
+
+
+# The bucket axis is the x-axis every time plot shares, so the four bucketed
+# endpoints have to agree on it. These tests pin the axis down independently of
+# the data, then which buckets the data lands in.
+#
+# QUIET is a window no seeded job touches (the factory runs 2023-02-14 05:01 to
+# 2023-02-20 05:01), so one job placed inside it accounts for everything the
+# endpoints report -- job_counts included, which counts non-GPU jobs too.
+QUIET = {"start": "2023-02-01", "end": "2023-02-11"}
+_QUIET_DAYS = 10
+
+
+def _period_axis(payload) -> list[tuple[str, str]]:
+    """The (period_start, period_end) axis, whichever shape the endpoint returns:
+    a bare list of bucket rows, or {periods, series}."""
+    rows = payload if isinstance(payload, list) else payload["periods"]
+    return [(r["period_start"], r["period_end"]) for r in rows]
+
+
+# One case per arm of the bucket arithmetic: a fixed step, a calendar unit of
+# fixed length (hour/day/week), and months, which have none. Each also has a
+# first or last bucket clipped by the window, what a naive enumeration misses.
+_AXIS_CASES = [
+    pytest.param(
+        QUIET,
+        "d",
+        [(f"2023-02-{d:02d}", f"2023-02-{d + 1:02d}") for d in range(1, 11)],
+        id="calendar_day",
+    ),
+    pytest.param(
+        QUIET,
+        "2d",
+        [
+            ("2023-02-01", "2023-02-03"),
+            ("2023-02-03", "2023-02-05"),
+            ("2023-02-05", "2023-02-07"),
+            ("2023-02-07", "2023-02-09"),
+            ("2023-02-09", "2023-02-11"),
+        ],
+        id="fixed_2d",
+    ),
+    # 2023-02-01 is a Wednesday, so bucket 0 opens on the Monday before the window
+    # and is clipped back to it; the last one is cut short by the end.
+    pytest.param(
+        QUIET,
+        "w",
+        [("2023-02-01", "2023-02-06"), ("2023-02-06", "2023-02-11")],
+        id="calendar_week_clipped_both_ends",
+    ),
+    # Months, over enough of them that a position is not always 0: this is the one
+    # arm that counts calendar months instead of dividing a length.
+    pytest.param(
+        {"start": "2023-01-15", "end": "2023-04-10"},
+        "m",
+        [
+            ("2023-01-15", "2023-02-01"),
+            ("2023-02-01", "2023-03-01"),
+            ("2023-03-01", "2023-04-01"),
+            ("2023-04-01", "2023-04-10"),
+        ],
+        id="calendar_month_multi",
+    ),
+    # Sub-daily labels carry the time too, so the axis format changes with it.
+    pytest.param(
+        {"start": "2023-02-01", "end": "2023-02-02"},
+        "h",
+        [
+            (
+                f"2023-02-01 {h:02d}:00",
+                f"2023-02-0{1 if h < 23 else 2} {(h + 1) % 24:02d}:00",
+            )
+            for h in range(24)
+        ],
+        id="calendar_hour",
+    ),
+]
+
+
+@pytest.mark.usefixtures("read_only_db")
+@pytest.mark.parametrize(("window", "period", "expected"), _AXIS_CASES)
+@pytest.mark.parametrize(
+    "endpoint", ["job_counts", "rgu_usage", "rgu_by_cluster", "metric_trend"]
+)
+def test_bucket_axis_tiles_the_window(dash_client, endpoint, window, period, expected):
+    """The axis tiles [start, end) exactly: every bucket present, contiguous, none
+    past the end, and identical across the four bucketed endpoints.
+
+    An endpoint returning only the buckets it found data in -- or one too many
+    past the end -- would misalign the whole dashboard. Mostly checked on a
+    window holding no job at all, the case that tells the two apart.
+    """
+    payload = dash_client.get(
+        f"/dash/metrics/{endpoint}", params={**window, "period": period}
+    ).json()
+    axis = _period_axis(payload)
+    assert axis == expected
+    # Contiguous: each bucket resumes where the previous one stopped.
+    for (_, end), (start, _) in zip(axis, axis[1:], strict=False):
+        assert end == start
+
+
+def test_empty_buckets_are_reported_as_empty(dash_client, dash_db):
+    """A bucket no job ran in is present and empty -- not missing, and not folded
+    into its neighbour.
+
+    One job, 36h from 02-04 12:00, so exactly two of the ten daily buckets are
+    charged (12h on the 4th, 24h on the 5th) and the eight others must come back
+    at zero. Each endpoint says "empty" in its own way: 0 for a count or a sum,
+    null for metric_trend (an average has no value without a job, and a null is
+    a gap in the curve rather than a misleading 0).
+    """
+    with config.db.session() as sess:
+        total = _run_single_job(sess, datetime(2023, 2, 4, 12, tzinfo=timezone.utc), 36)
+    params = {**QUIET, "period": "d"}
+    charged = {3, 4}  # 0-based: the 4th and the 5th of February
+
+    counts = dash_client.get("/dash/metrics/job_counts", params=params).json()
+    assert [r["count"] for r in counts] == [
+        1 if i in charged else 0 for i in range(_QUIET_DAYS)
+    ]
+
+    expected_rgu = [0.0] * _QUIET_DAYS
+    expected_rgu[3] = _RGU_PER_JOB * 12
+    expected_rgu[4] = _RGU_PER_JOB * 24
+    usage = dash_client.get("/dash/metrics/rgu_usage", params=params).json()
+    assert [r["rgu_allocated"] for r in usage] == pytest.approx(expected_rgu)
+    assert sum(r["rgu_allocated"] for r in usage) == pytest.approx(total)
+
+    by_cluster = dash_client.get("/dash/metrics/rgu_by_cluster", params=params).json()
+    per_bucket = by_cluster["series"][0]["rgu"]
+    assert len(per_bucket) == _QUIET_DAYS
+    assert [i for i, v in enumerate(per_bucket) if v > 0] == sorted(charged)
+
+    trend = dash_client.get("/dash/metrics/metric_trend", params=params).json()
+    means = trend["series"][0]["mean"]
+    assert len(means) == _QUIET_DAYS
+    assert [i for i, v in enumerate(means) if v is not None] == sorted(charged)
+
+
+def test_a_run_ending_on_a_bucket_edge_charges_nothing_to_the_next(
+    dash_client, dash_db
+):
+    """A run that stops exactly on a bucket boundary leaves the next bucket empty.
+
+    Bounds are half-open on both sides, so the instant a run ends belongs to the
+    next bucket without reaching into it. Both natural mistakes get this wrong --
+    an inclusive stop bound, or `[]` bounds -- and the damage is invisible in a
+    sum (zero hours) but not in job_counts, which would report the job running on
+    a day it had already finished.
+    """
+    # 02-03 00:00 + 48h = 02-05 00:00, exactly where the 5th's bucket opens.
+    with config.db.session() as sess:
+        _run_single_job(sess, datetime(2023, 2, 3, tzinfo=timezone.utc), 48)
+    params = {**QUIET, "period": "d"}
+
+    counts = dash_client.get("/dash/metrics/job_counts", params=params).json()
+    assert [r["count"] for r in counts] == [0, 0, 1, 1, 0, 0, 0, 0, 0, 0]
+    assert counts[4]["period_start"] == "2023-02-05"
+
+    usage = dash_client.get("/dash/metrics/rgu_usage", params=params).json()
+    assert usage[4]["rgu_allocated"] == 0.0
+    assert [r["rgu_allocated"] for r in usage[:4]] == pytest.approx(
+        [0.0, 0.0, _RGU_PER_JOB * 24, _RGU_PER_JOB * 24]
+    )
 
 
 # === Input validation =======================================================

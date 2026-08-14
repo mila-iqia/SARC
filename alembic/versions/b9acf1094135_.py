@@ -26,7 +26,7 @@ def upgrade() -> None:
     public_slurm_job_run = PGFunction(
         schema="public",
         signature="slurm_job_run(job_start timestamptz, job_elapsed double precision)",
-        definition="returns tstzrange\nlanguage sql\nimmutable\nstrict\nparallel safe\nas $$ select tstzrange(job_start, job_start + make_interval(secs => job_elapsed)) $$",
+        definition="returns tstzrange\nlanguage sql\nimmutable\nstrict\nparallel safe\nas $$ select tstzrange(job_start, job_start + make_interval(secs => job_elapsed), '[)') $$",
     )
     op.create_entity(public_slurm_job_run)
 
@@ -47,7 +47,7 @@ def downgrade() -> None:
     public_slurm_job_run = PGFunction(
         schema="public",
         signature="slurm_job_run(job_start timestamptz, job_elapsed double precision)",
-        definition="returns tstzrange\nlanguage sql\nimmutable\nstrict\nparallel safe\nas $$ select tstzrange(job_start, job_start + make_interval(secs => job_elapsed)) $$",
+        definition="returns tstzrange\nlanguage sql\nimmutable\nstrict\nparallel safe\nas $$ select tstzrange(job_start, job_start + make_interval(secs => job_elapsed), '[)') $$",
     )
     op.drop_entity(public_slurm_job_run)
 

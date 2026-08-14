@@ -69,27 +69,17 @@ class JobStatisticsFetchDateDB(SQLModel, table=True):
 
 # A job's run as a time range, for the /dash "was it running then?" queries.
 #
-# It exists as a function only to be IMMUTABLE. `timestamptz + interval` is
-# merely STABLE -- an interval carrying days or months lands on a different
-# instant depending on the session TimeZone (DST) -- and Postgres refuses a
-# STABLE expression in an index. make_interval(secs => ...) yields seconds only,
-# so the addition really is absolute and immutable.
+# A function only to be IMMUTABLE, which an index requires: `timestamptz +
+# interval` is merely STABLE (days/months shift with the session TimeZone),
+# while make_interval(secs => ...) is absolute. STRICT keeps a never-started job
+# out -- tstzrange(NULL, NULL) is the *unbounded* range, overlapping every
+# period. `[)` is the default, spelled out: buckets tile the window bound to
+# bound, so half-open puts each instant in exactly one, and makes a zero-elapsed
+# run the empty range (which overlaps nothing) rather than a point.
 #
-# STRICT is necessary: tstzrange(NULL, NULL) is `(,)`, the *unbounded*
-# range, which overlaps every period. A job that never started would
-# then land in every bucket of every window. Returning NULL instead keeps them out,
-# since NULL && anything is NULL.
-#
-# The `[)` bounds are the default, passed explicitly for better understanding;
-# buckets tile the window bound to bound, so half-open is what
-# puts each instant in exactly one of them, and it is what makes a zero-elapsed
-# run the *empty* range -- which overlaps nothing -- rather than a point, which
-# would overlap. `[]` would double-count every job sitting on a bucket edge.
-#
-# Registered with alembic-utils in alembic/env.py, like the job_series view.
-# Careful when editing this body: alembic replaces the function in place and
-# leaves ix_slurm_jobs_run holding whatever the old one computed.
-# A change that does alter the result has to REINDEX in the same migration.
+# Registered with alembic-utils in alembic/env.py. Alembic replaces the function
+# in place, leaving ix_slurm_jobs_run on the old result: a body change that
+# alters the result must REINDEX in the same migration.
 SLURM_JOB_RUN_SIGNATURE = (
     "slurm_job_run(job_start timestamptz, job_elapsed double precision)"
 )
@@ -114,10 +104,15 @@ class SlurmJobDB(SQLModel, table=True):
             unique=True,
             postgresql_include=["id"],
         ),
-        # Partial covering index for the /dash GPU queries (count, page, rgu_by_*):
-        # they read every column they need from the index, without opening the table
-        # -- but only while autovacuum stays current, else Postgres opens the rows
-        # anyway to check they are still live.
+        # Ordered on submit_time, which the /dash job table now only *sorts* by:
+        # the window filter became a range overlap, answered by ix_slurm_jobs_run
+        # below. Still needed -- without it that page falls to a seq scan.
+        #
+        # The INCLUDE payload dates from when the filter was on submit_time too.
+        # Measured on 12M jobs: no query left does an index-only scan here (the
+        # overlap needs start_time, which the index does not carry), and dropping
+        # the payload leaves the same plan for 821 MB of the 1281 MB. Reclaiming
+        # it is a REINDEX, worth its own change.
         Index(
             "ix_slurm_jobs_submit_gpu_type",
             "submit_time",
@@ -132,14 +127,13 @@ class SlurmJobDB(SQLModel, table=True):
                 "sarc_user_id",  # used by view when joining users and member_type
             ],
         ),
-        # The /dash window filter asks which jobs were running during a period,
-        # which is an overlap between two time ranges. A btree cannot answer it:
-        # it orders one scalar, while the answer depends on start_time *and*
-        # elapsed_time together -- two jobs starting the same second can end six
-        # months apart. GiST indexes the range itself, each node bounding the
-        # ranges below it, so a period that misses a node prunes its whole
-        # subtree. Nothing here is tuned to how long jobs happen to run: the tree
-        # learns that from the rows and keeps up on its own.
+        # "Which jobs were running during a period" is a range overlap, which no
+        # btree can answer: it orders one scalar, and the answer needs start_time
+        # and elapsed_time together. GiST indexes the range itself, each node
+        # bounding the ranges below it, so a period missing a node prunes the
+        # whole subtree. Serves every /dash view, RGU included -- a GPU-only
+        # variant was measured at 15 % on the median query for 350 MB and a
+        # second tree to maintain, and was dropped.
         Index(
             "ix_slurm_jobs_run",
             text("slurm_job_run(start_time, elapsed_time)"),

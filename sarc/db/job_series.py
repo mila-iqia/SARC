@@ -1,5 +1,3 @@
-from datetime import datetime
-
 from sqlalchemy.dialects.postgresql import JSONB, aggregate_order_by
 from sqlalchemy.orm import aliased
 from sqlalchemy.sql import visitors
@@ -8,10 +6,11 @@ from sqlalchemy.sql.expression import FromClause, Join, Select
 from sqlmodel import BIGINT, JSON, Field, and_, col, func, select
 
 from sarc.models.user import MemberType
+from sarc.validators import datetime_utc
 
 from .cluster import SlurmClusterDB
 from .job import JobStatisticDB, SlurmJobDB, SlurmState
-from .sqlmodel import SQLModel
+from .sqlmodel import SQLModel, datetime_utc_field
 from .support import GpuRguDB
 from .users import MemberTypeDB, SupervisorsDB, SupervisorsHelper, UserDB
 
@@ -279,9 +278,14 @@ class JobSeriesDB(SQLModel, table=True):
     time_limit: int | None
     """Wall-clock time limit in SECONDS (sacct reports minutes; multiplied by 60
     on ingest). None if unset."""
-    submit_time: datetime
-    start_time: datetime | None
-    end_time: datetime | None
+    # datetime_utc_field, matching SlurmJobDB: a bare `datetime` maps to
+    # DateTime(timezone=False), so tz-aware bounds went out naive and Postgres
+    # read them back in the session TimeZone -- not UTC on the prod IAM engine,
+    # where the same filter returned 277572 rows through the view against 278860
+    # through the table. Python mapping only, so no migration.
+    submit_time: datetime_utc = datetime_utc_field()
+    start_time: datetime_utc | None = datetime_utc_field(default=None)
+    end_time: datetime_utc | None = datetime_utc_field(default=None)
     elapsed_time: float
     """Elapsed wall-clock time in SECONDS. Used as the time factor in all
     cost/waste columns below."""

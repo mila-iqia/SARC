@@ -2125,13 +2125,13 @@
             return h > 0 ? `${h}h${String(m).padStart(2,'0')}m` : `${m}m${String(sec).padStart(2,'0')}s`;
           }},
         { key: 'rgu_hours',             label: unit.label,
-          title: `RGU × the hours this job ran inside the selected date range, shown in ${unit.label}. A job that started before the range or ran past it counts only for the part inside — unlike Elapsed, which is its whole run.`,
+          title: `RGU × the hours this job ran inside the selected date range, shown in ${unit.label}. A job that started before the range or ran past it counts only for the part inside. By contrast, the Elapsed column shows the whole job run.`,
           fmt: fmtRguTime },
         // Fixed RGU·h twin, skipped when the toolbar unit is already hours
         // (it would be an exact duplicate).
         ...(unit === unitHour ? [] : [
         { key: 'rgu_hours',             label: unitHour.label,
-          title: `RGU × the hours this job ran inside the selected date range, shown in ${unitHour.label}. A job that started before the range or ran past it counts only for the part inside — unlike Elapsed, which is its whole run.`,
+          title: `RGU × the hours this job ran inside the selected date range, shown in ${unitHour.label}. A job that started before the range or ran past it counts only for the part inside. By contrast, the Elapsed column shows the whole job run.`,
           fmt: fmtRguHour },
         ]),
         { key: 'waste',                 label: `Unused (${unit.label})`,

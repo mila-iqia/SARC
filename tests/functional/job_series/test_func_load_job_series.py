@@ -36,10 +36,15 @@ def _apply_view_filters(
             query = query.where(JobSeriesDB.job_id == job_id)
     if user is not None:
         query = query.where(JobSeriesDB.cluster_user == user)
+    # astimezone(UTC) before binding: _parse_dt reads a bare date in local time,
+    # and the view's UTCDateTime columns reject a non-UTC instant rather than
+    # reinterpret it. Same normalisation as test_rest_load_job_series.
     if end is not None:
-        query = query.where(col(JobSeriesDB.submit_time) < _parse_dt(end))
+        query = query.where(
+            col(JobSeriesDB.submit_time) < _parse_dt(end).astimezone(UTC)
+        )
     if start is not None:
-        dt = _parse_dt(start)
+        dt = _parse_dt(start).astimezone(UTC)
         query = query.where(
             or_(col(JobSeriesDB.end_time).is_(None), col(JobSeriesDB.end_time) > dt)
         )
