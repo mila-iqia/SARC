@@ -646,11 +646,15 @@ def metrics_job_times_vs_limit(
 ):
     """Two job-count heatmaps relating each job's runtime to its requested time limit.
 
-    Over jobs that ran in the window and have a time_limit:
+    Over jobs submitted in the window that have a time_limit and have started:
     ``elapsed_vs_limit`` plots elapsed_time (y) against time_limit (x), and
     ``wait_vs_limit`` plots the queue wait, start - submit (y), against time_limit
     (x). Each is a 100x100 log-binned grid of job counts. Returns both grids plus
     total_jobs. ``focus_start/end`` narrows the window.
+
+    The one endpoint selected on submit_time, not on the run: both grids measure
+    how well a job guessed its limit, and neither the queue wait nor the whole
+    elapsed belongs to a slice of time.
 
     **NB** This endpoint is the only one not yet optimized, because it would need
     to add or expand covering indexes. We should later decide if we really need
@@ -659,17 +663,19 @@ def metrics_job_times_vs_limit(
     begin_dt, finish_dt = _apply_focus(*_date_range(start, end), focus_start, focus_end)
     cluster_ids = _resolve_cluster_ids(sess, clusters)
 
-    # Query the view directly: ix_slurm_jobs_run answers the window, but
-    # time_limit is in no index, so the rows are read from the table either way.
-    # The planner prunes the view's unused joins on its own here, so
-    # job_series_select would compile to the same plan (see the NB above).
+    # Query the view directly: the columns read here (time_limit/start_time/
+    # elapsed_time) are in no index, so this full-scans regardless, and the
+    # planner prunes the view's unused joins on its own -- job_series_select
+    # would compile to the identical plan here (see the NB above).
     wait_expr = func.extract(
         "epoch", col(JobSeriesDB.start_time) - col(JobSeriesDB.submit_time)
     )
-    # _ran_between already implies start_time IS NOT NULL (STRICT function).
+    # start_time spelled out: no STRICT slurm_job_run to imply it here.
     base_filters = [
-        _ran_between(JobSeriesDB, begin_dt.timestamp(), finish_dt.timestamp()),
+        col(JobSeriesDB.submit_time) >= begin_dt,
+        col(JobSeriesDB.submit_time) < finish_dt,
         col(JobSeriesDB.time_limit).is_not(None),
+        col(JobSeriesDB.start_time).is_not(None),
     ]
     if cluster_ids:
         base_filters.append(col(JobSeriesDB.cluster_id).in_(cluster_ids))

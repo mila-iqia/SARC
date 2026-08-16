@@ -560,6 +560,26 @@ def test_a_job_that_never_started_appears_nowhere(dash_client, dash_db):
     assert sum(r["count"] for r in counts) == _jobs_that_ran()
 
 
+def test_job_times_vs_limit_follows_the_submission(dash_client, dash_db):
+    """The one endpoint selected on submit_time: a job submitted before the
+    window and running well into it is charged to the window everywhere else,
+    and counted nowhere here."""
+    start = datetime(2023, 1, 30, tzinfo=timezone.utc)  # 2 days before the window
+    with config.db.session() as sess:
+        _run_single_job(sess, start, hours=5 * 24)
+
+    # It did run inside the window: the RGU views charge it 3 of its 5 days.
+    usage = dash_client.get("/dash/metrics/rgu_usage", params=WINDOW).json()
+    assert sum(r["rgu_allocated"] for r in usage) == pytest.approx(
+        _RGU_PER_JOB * 3 * 24
+    )
+
+    submitted = _jobs_submitted()
+    assert submitted, "the seeded jobs must still populate this plot"
+    data = dash_client.get("/dash/metrics/job_times_vs_limit", params=WINDOW).json()
+    assert data["total_jobs"] == submitted
+
+
 def _jobs_that_ran() -> int:
     """Seeded jobs whose run overlaps WINDOW, counted in Python so the test does
     not restate the SQL it is checking."""
@@ -574,6 +594,23 @@ def _jobs_that_ran() -> int:
         and job.elapsed_time > 0
         and job.start_time < finish
         and job.start_time + timedelta(seconds=job.elapsed_time) > begin
+    )
+
+
+def _jobs_submitted() -> int:
+    """Seeded jobs submitted inside WINDOW that started and asked for a
+    time_limit -- the population of /job_times_vs_limit, counted in Python for
+    the same reason as _jobs_that_ran()."""
+    begin = datetime(2023, 2, 1, tzinfo=timezone.utc)
+    finish = datetime(2023, 3, 1, tzinfo=timezone.utc)
+    with config.db.session() as sess:
+        jobs = sess.exec(select(SlurmJobDB)).all()
+    return sum(
+        1
+        for job in jobs
+        if job.start_time is not None
+        and job.time_limit is not None
+        and begin <= job.submit_time < finish
     )
 
 
