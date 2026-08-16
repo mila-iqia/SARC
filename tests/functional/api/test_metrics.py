@@ -33,7 +33,7 @@ from fastapi.testclient import TestClient
 from sqlmodel import col, select
 
 from sarc.config import config
-from sarc.db.job import JobStatisticDB, SlurmJobDB
+from sarc.db.job import JobStatisticDB, SlurmJobDB, SlurmState
 from sarc.db.support import GpuRguDB
 
 # Covers every factory-seeded job (submitted from 2023-02-14, +6h each).
@@ -629,7 +629,9 @@ def _run_single_job(sess, start: datetime, hours: float):
 
     Pro-rating is about one job meeting several buckets, so these tests need a
     job whose span they choose; the other three are detached rather than moved,
-    so whatever lands in a bucket comes from this one alone.
+    so whatever lands in a bucket comes from this one alone. Detaching drops the
+    RGU weight, hence the GPU-filtered endpoints only: job_counts and
+    metric_trend still see the other three.
     """
     jobs = sess.exec(
         select(SlurmJobDB)
@@ -700,20 +702,77 @@ def test_rgu_usage_prorates_across_a_month_boundary(dash_client, dash_db):
     assert sum(r["rgu_allocated"] for r in data) == pytest.approx(total)
 
 
-def test_rgu_usage_counts_a_job_that_started_before_the_window(dash_client, dash_db):
-    """Selection follows the run, not the submission: a job submitted before the
-    window but still running inside it owes the window those hours.
+def _utc(month: int, day: int) -> datetime:
+    return datetime(2023, month, day, tzinfo=timezone.utc)
 
-    Under the old submit_time filter it was invisible, which made the first bar
-    of any range read low.
+
+# (label, run start, run length, hours the window is owed). WINDOW is the 28 days
+# of [02-01, 03-01).
+_WINDOW_SHARES = [
+    ("inside", _utc(2, 10), 24, 24),
+    ("clipped at the start", _utc(1, 30), 5 * 24, 3 * 24),
+    ("clipped at the end", _utc(2, 27), 5 * 24, 2 * 24),
+    ("spanning the whole window", _utc(1, 25), 40 * 24, 28 * 24),
+    ("opening on the window's first instant", _utc(2, 1), 24, 24),
+    ("closing on the window's first instant", _utc(1, 31), 24, 0),
+    ("opening on the window's last instant", _utc(3, 1), 24, 0),
+    ("entirely before", _utc(1, 20), 24, 0),
+    ("entirely after", _utc(3, 5), 24, 0),
+    ("of no length", _utc(2, 10), 0, 0),
+]
+
+
+@pytest.mark.parametrize(
+    ("start", "hours", "owed"),
+    [case[1:] for case in _WINDOW_SHARES],
+    ids=[case[0] for case in _WINDOW_SHARES],
+)
+def test_a_run_owes_the_window_its_hours_inside_it(
+    dash_client, dash_db, start, hours, owed
+):
+    """A run is charged for the hours it spent inside the window, and only those.
+
+    The boundary rows are the point: bounds are half-open on both sides, so a run
+    closing exactly on the window's first instant owes nothing, and one opening on
+    its last instant owes nothing either. Under submit_time none of the clipped
+    rows counted at all, which made the first bar of any range read low.
+
+    Whether the table lists the job is asserted too, and it is the half that
+    bites: a boundary touched inclusively is worth zero hours either way, so the
+    sum alone would accept `[]` bounds while the table would list a job that never
+    reached the window.
     """
-    start = datetime(2023, 1, 30, tzinfo=timezone.utc)  # 2 days before the window
     with config.db.session() as sess:
-        _run_single_job(sess, start, hours=5 * 24)
+        _run_single_job(sess, start, hours)
 
     data = dash_client.get("/dash/metrics/rgu_usage", params=WINDOW).json()
-    # WINDOW opens on 2023-02-01: 3 of the 5 days fall inside it.
-    assert sum(r["rgu_allocated"] for r in data) == pytest.approx(_RGU_PER_JOB * 3 * 24)
+    assert sum(r["rgu_allocated"] for r in data) == pytest.approx(_RGU_PER_JOB * owed)
+
+    table = dash_client.get("/dash/metrics/jobs", params=WINDOW).json()
+    assert table["total"] == (1 if owed else 0)
+
+
+def test_a_running_job_is_charged_from_its_elapsed_not_its_end(dash_client, dash_db):
+    """A job still running carries no end_time, and is charged all the same.
+
+    The measure is [start_time, start_time + elapsed_time); end_time never enters
+    it. That is what freezes a past bucket once one scrape has run after it:
+    elapsed only ever grows, so the interval only ever extends to the right.
+    """
+    with config.db.session() as sess:
+        _run_single_job(sess, _utc(2, 10), hours=24)
+        job = sess.exec(
+            select(SlurmJobDB).where(col(SlurmJobDB.harmonized_gpu_type) == _GPU)
+        ).first()
+        job.job_state = SlurmState.RUNNING
+        job.end_time = None
+        sess.add(job)
+        sess.commit()
+
+    data = dash_client.get("/dash/metrics/rgu_usage", params=WINDOW).json()
+    assert sum(r["rgu_allocated"] for r in data) == pytest.approx(_RGU_PER_JOB * 24)
+    table = dash_client.get("/dash/metrics/jobs", params=WINDOW).json()
+    assert table["total"] == 1
 
 
 def test_rgu_by_cluster_prorates_like_rgu_usage(dash_client, dash_db):
