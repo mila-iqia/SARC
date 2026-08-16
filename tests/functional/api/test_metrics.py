@@ -1375,6 +1375,19 @@ def test_as_user_forbidden_for_non_admin(app, path):
 
 
 @pytest.mark.usefixtures("read_only_db")
+@pytest.mark.parametrize("endpoint", [name for name, _ in _BUCKETED])
+def test_as_user_is_checked_before_an_empty_window_shortcut(app, endpoint):
+    """A window with no bucket answers nothing, but it still answers the right
+    caller: every bucketed endpoint resolves its scope before returning its empty
+    shape, so a non-admin passing as_user gets its 403 whatever the window."""
+    app.client(_USER).get(
+        f"/dash/metrics/{endpoint}",
+        params={"start": "2023-02-15", "end": "2023-02-15", "as_user": _OTHER_USER},
+        expect_status=403,
+    )
+
+
+@pytest.mark.usefixtures("read_only_db")
 def test_as_user_unknown_returns_404_on_json(app):
     """An admin targeting an unknown email on a JSON endpoint gets a hard 404 —
     _scope_or_view_as fails closed rather than falling back to the full view."""

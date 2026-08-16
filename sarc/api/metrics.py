@@ -350,6 +350,10 @@ def _no_buckets(begin_dt: datetime, finish_dt: datetime) -> bool:
     """Empty window (start == end): the bucketed endpoints return their empty
     shape instead of querying. It is the only case ``_iter_buckets`` yields
     nothing for, a calendar frontier being floored to at or before ``begin``.
+
+    Callers resolve their scope (``_scope_or_view_as``) *before* taking this
+    shortcut: an empty answer is still an answer, and a caller not entitled to
+    ask must get its 403/404 whatever the window happens to be.
     """
     return begin_dt >= finish_dt
 
@@ -530,6 +534,7 @@ def metrics_job_counts(
     begin_dt, finish_dt = _date_range(start, end)
     parsed = _parse_period(period)
     fmt = _label_fmt(parsed)
+    scope_user_id = _scope_or_view_as(sess, req, as_user)
     if _no_buckets(begin_dt, finish_dt):
         return []
 
@@ -557,7 +562,7 @@ def metrics_job_counts(
         _resolve_cluster_ids(sess, clusters),
         cluster_user,
         job_states,
-        _scope_or_view_as(sess, req, as_user),
+        scope_user_id,
     )
     query = query.group_by(bucket_table.c.bucket_index).order_by(
         bucket_table.c.bucket_index
@@ -1090,6 +1095,7 @@ def metrics_rgu_by_cluster(
     begin_dt, finish_dt = _date_range(start, end)
     parsed = _parse_period(period)
     fmt = _label_fmt(parsed)
+    scope_user_id = _scope_or_view_as(sess, req, as_user)
     if _no_buckets(begin_dt, finish_dt):
         return {"periods": [], "series": []}
 
@@ -1109,7 +1115,7 @@ def metrics_rgu_by_cluster(
         clusters,
         cluster_user,
         job_states,
-        scope_user_id=_scope_or_view_as(sess, req, as_user),
+        scope_user_id=scope_user_id,
     )
     query = (
         query.join(
@@ -1179,6 +1185,7 @@ def metrics_metric_trend(
     begin_dt, finish_dt = _date_range(start, end)
     parsed = _parse_period(period)
     fmt = _label_fmt(parsed)
+    scope_user_id = _scope_or_view_as(sess, req, as_user)
     if _no_buckets(begin_dt, finish_dt):
         return {"periods": [], "series": [{"metric": metric, "mean": [], "max": []}]}
 
@@ -1227,7 +1234,7 @@ def metrics_metric_trend(
         _resolve_cluster_ids(sess, clusters),
         cluster_user,
         job_states,
-        _scope_or_view_as(sess, req, as_user),
+        scope_user_id,
     )
 
     cells = {}
