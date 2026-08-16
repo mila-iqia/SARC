@@ -161,7 +161,15 @@ def _parse_period(s: str) -> timedelta | str:
     num, unit = m.group(1), (m.group(2) or "d").lower()
     if num is None:
         return _CALENDAR_TRUNC[unit]
-    return timedelta(days=float(num) * _PERIOD_MULTIPLIERS[unit])
+    step = timedelta(days=float(num) * _PERIOD_MULTIPLIERS[unit])
+    # A zero-length bucket never advances, so _iter_buckets would step in place
+    # for ever. Checked on the parsed step, not on `num`: a small enough
+    # fraction rounds down to no microseconds at all.
+    if not step:
+        raise HTTPException(
+            status_code=400, detail=f"Invalid period {s!r}. It must be positive."
+        )
+    return step
 
 
 def _label_fmt(period: timedelta | str) -> str:
@@ -351,9 +359,10 @@ def _no_buckets(begin_dt: datetime, finish_dt: datetime) -> bool:
     shape instead of querying. It is the only case ``_iter_buckets`` yields
     nothing for, a calendar frontier being floored to at or before ``begin``.
 
-    Callers resolve their scope (``_scope_or_view_as``) *before* taking this
-    shortcut: an empty answer is still an answer, and a caller not entitled to
-    ask must get its 403/404 whatever the window happens to be.
+    Callers resolve their scope (``_scope_or_view_as``) and their cluster names
+    (``_resolve_cluster_ids``) *before* taking this shortcut: an empty answer is
+    still an answer, and a request that would be refused must get its 403/404
+    whatever the window happens to be.
     """
     return begin_dt >= finish_dt
 
@@ -408,8 +417,7 @@ def _apply_job_filters(
 
 def _apply_rgu_base_view(
     query,
-    sess: Session,
-    clusters: list[str],
+    cluster_ids: list[int] | None,
     cluster_user: str | None,
     job_states: list[str],
     *,
@@ -422,18 +430,16 @@ def _apply_rgu_base_view(
     gpurgudb/clusters join is needed. Keeps only GPU jobs whose physical RGU is
     computable, then the common cluster/user/state filters; the caller adds its
     own time window.
+
+    Takes resolved cluster ids, like ``_apply_job_filters``: the 404 on an
+    unknown name is the caller's to raise, before any early return of its own.
     """
     query = query.select_from(JobSeriesDB).where(
         col(JobSeriesDB.allocated_gpu_type).is_not(None),
         col(JobSeriesDB.allocated_rgu_drac).is_not(None),
     )
     return _apply_job_filters(
-        query,
-        JobSeriesDB,
-        _resolve_cluster_ids(sess, clusters),
-        cluster_user,
-        job_states,
-        scope_user_id,
+        query, JobSeriesDB, cluster_ids, cluster_user, job_states, scope_user_id
     )
 
 
@@ -535,6 +541,7 @@ def metrics_job_counts(
     parsed = _parse_period(period)
     fmt = _label_fmt(parsed)
     scope_user_id = _scope_or_view_as(sess, req, as_user)
+    cluster_ids = _resolve_cluster_ids(sess, clusters)
     if _no_buckets(begin_dt, finish_dt):
         return []
 
@@ -557,12 +564,7 @@ def metrics_job_counts(
         _ran_between(js.c, bucket_table.c.bucket_start, bucket_table.c.bucket_end),
     )
     query = _apply_job_filters(
-        query,
-        js.c,
-        _resolve_cluster_ids(sess, clusters),
-        cluster_user,
-        job_states,
-        scope_user_id,
+        query, js.c, cluster_ids, cluster_user, job_states, scope_user_id
     )
     query = query.group_by(bucket_table.c.bucket_index).order_by(
         bucket_table.c.bucket_index
@@ -656,10 +658,10 @@ def metrics_job_times_vs_limit(
     begin_dt, finish_dt = _apply_focus(*_date_range(start, end), focus_start, focus_end)
     cluster_ids = _resolve_cluster_ids(sess, clusters)
 
-    # Query the view directly: the columns read here (time_limit/start_time/
-    # elapsed_time) are in no index, so this full-scans regardless, and the
-    # planner prunes the view's unused joins on its own -- job_series_select
-    # would compile to the identical plan here (see the NB above).
+    # Query the view directly: ix_slurm_jobs_run answers the window, but
+    # time_limit is in no index, so the rows are read from the table either way.
+    # The planner prunes the view's unused joins on its own here, so
+    # job_series_select would compile to the same plan (see the NB above).
     wait_expr = func.extract(
         "epoch", col(JobSeriesDB.start_time) - col(JobSeriesDB.submit_time)
     )
@@ -789,8 +791,7 @@ def metrics_metric_distribution(
     q = (
         _apply_rgu_base_view(
             select(bin_expr, func.sum(weight).label("w")),
-            sess,
-            clusters,
+            _resolve_cluster_ids(sess, clusters),
             cluster_user,
             job_states,
             scope_user_id=_scope_or_view_as(sess, req, as_user),
@@ -859,8 +860,7 @@ def metrics_metric_comparison(
     q = (
         _apply_rgu_base_view(
             select(bx, by, func.count().label("n")),
-            sess,
-            clusters,
+            _resolve_cluster_ids(sess, clusters),
             cluster_user,
             job_states,
             scope_user_id=_scope_or_view_as(sess, req, as_user),
@@ -939,6 +939,7 @@ def metrics_rgu_usage(
         parsed = finish_dt - begin_dt
     fmt = _label_fmt(parsed)
     scope_user_id = _scope_or_view_as(sess, req, as_user)
+    cluster_ids = _resolve_cluster_ids(sess, clusters)
     if _no_buckets(begin_dt, finish_dt):
         return []
 
@@ -999,8 +1000,7 @@ def metrics_rgu_usage(
             func.sum(rgu_wasted_term).label("rgu_wasted"),
             *[_trend_avg(name) for name in _TREND_METRICS],
         ),  # ty:ignore[no-matching-overload]
-        sess,
-        clusters,
+        cluster_ids,
         cluster_user,
         job_states,
         scope_user_id=scope_user_id,
@@ -1085,6 +1085,7 @@ def metrics_rgu_by_cluster(
     parsed = _parse_period(period)
     fmt = _label_fmt(parsed)
     scope_user_id = _scope_or_view_as(sess, req, as_user)
+    cluster_ids = _resolve_cluster_ids(sess, clusters)
     if _no_buckets(begin_dt, finish_dt):
         return {"periods": [], "series": []}
 
@@ -1100,8 +1101,7 @@ def metrics_rgu_by_cluster(
             col(JobSeriesDB.cluster_name).label("cluster_name"),
             func.sum(rgu_hours).label("rgu"),
         ),
-        sess,
-        clusters,
+        cluster_ids,
         cluster_user,
         job_states,
         scope_user_id=scope_user_id,
@@ -1175,6 +1175,7 @@ def metrics_metric_trend(
     parsed = _parse_period(period)
     fmt = _label_fmt(parsed)
     scope_user_id = _scope_or_view_as(sess, req, as_user)
+    cluster_ids = _resolve_cluster_ids(sess, clusters)
     if _no_buckets(begin_dt, finish_dt):
         return {"periods": [], "series": [{"metric": metric, "mean": [], "max": []}]}
 
@@ -1218,12 +1219,7 @@ def metrics_metric_trend(
         .order_by(bucket_table.c.bucket_index)
     )
     query = _apply_job_filters(
-        query,
-        js.c,
-        _resolve_cluster_ids(sess, clusters),
-        cluster_user,
-        job_states,
-        scope_user_id,
+        query, js.c, cluster_ids, cluster_user, job_states, scope_user_id
     )
 
     cells = {}
@@ -1291,8 +1287,7 @@ def metrics_rgu_by_user(
             func.sum(rgu_used_term).label("rgu_used"),
             func.sum(rgu_unmeasured_term).label("rgu_unmeasured"),
         ),
-        sess,
-        clusters,
+        _resolve_cluster_ids(sess, clusters),
         cluster_user,
         job_states,
         scope_user_id=_scope_or_view_as(sess, req, as_user),
@@ -1443,6 +1438,7 @@ def metrics_jobs(
     base_filters = (_ran_between(JobSeriesDB, *window),)
 
     scope_user_id = _scope_or_view_as(sess, req, as_user)
+    cluster_ids = _resolve_cluster_ids(sess, clusters)
 
     # COUNT: the full filtered total, computed by its own query and only when
     # asked (include_total). The frontend requests it on every page so the count
@@ -1455,8 +1451,7 @@ def metrics_jobs(
     if include_total:
         count_q = _apply_rgu_base_view(
             select(func.count()),
-            sess,
-            clusters,
+            cluster_ids,
             cluster_user,
             job_states,
             scope_user_id=scope_user_id,
@@ -1468,8 +1463,7 @@ def metrics_jobs(
     # and a small offset top-N heapsorts instead of sorting the whole set.
     page_q = _apply_rgu_base_view(
         select(col(JobSeriesDB.job_db_id).label("jid")),
-        sess,
-        clusters,
+        cluster_ids,
         cluster_user,
         job_states,
         scope_user_id=scope_user_id,
@@ -1506,8 +1500,7 @@ def metrics_jobs(
             col(js["gpu_sm_occupancy"].mean).label("gpu_sm_occupancy_mean"),
             col(js["gpu_memory"].max).label("gpu_memory_max"),
         ),
-        sess,
-        clusters,
+        cluster_ids,
         cluster_user,
         job_states,
         scope_user_id=scope_user_id,

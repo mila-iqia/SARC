@@ -1219,6 +1219,24 @@ def test_invalid_period_returns_400(dash_client):
 
 
 @pytest.mark.usefixtures("read_only_db")
+@pytest.mark.parametrize("period", ["0", "0d", "0h", "0.0w", "0.0000000000001d"])
+@pytest.mark.parametrize("endpoint", [name for name, _ in _BUCKETED])
+def test_zero_length_period_returns_400(dash_client, endpoint, period):
+    """A bucket of no length never advances, so enumerating the axis would step
+    in place for ever.
+
+    The last case is not written as zero: a timedelta counts microseconds, and
+    1e-13 day rounds down to none. Hence a check on the parsed step rather than
+    on the number typed -- which is also what makes this list exhaustive, every
+    other period being a positive step that reaches the end of the window.
+    """
+    r = dash_client.get(
+        f"/dash/metrics/{endpoint}", params={**WINDOW, "period": period}
+    )
+    assert r.status_code == 400
+
+
+@pytest.mark.usefixtures("read_only_db")
 def test_invalid_period_returns_400_even_when_ignored(dash_client):
     """``whole=true`` buckets the range itself and never looks at ``period`` --
     but a parameter the endpoint ignores is still one it accepts or refuses, and
@@ -1248,6 +1266,25 @@ def test_unknown_metric_returns_400(dash_client, path, bad_param):
 def test_unknown_cluster_returns_404(dash_client):
     r = dash_client.get(
         "/dash/metrics/job_counts", params={**WINDOW, "clusters": ["no_such_cluster"]}
+    )
+    assert r.status_code == 404
+
+
+@pytest.mark.usefixtures("read_only_db")
+@pytest.mark.parametrize("endpoint", [name for name, _ in _BUCKETED])
+def test_unknown_cluster_is_checked_before_an_empty_window_shortcut(
+    dash_client, endpoint
+):
+    """Same rule as ``as_user``: a request that would be refused is refused
+    whatever the window, so the cluster names are resolved before the empty
+    window returns its empty shape."""
+    r = dash_client.get(
+        f"/dash/metrics/{endpoint}",
+        params={
+            "start": "2023-02-15",
+            "end": "2023-02-15",
+            "clusters": ["no_such_cluster"],
+        },
     )
     assert r.status_code == 404
 
