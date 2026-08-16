@@ -77,12 +77,13 @@
       font-size: 13px; font-weight: 600; color: #555; padding: 2px 0 6px;
     }
     .tile-chart  { width: 100%; height: 480px; }
-    .tile-loading, .tile-error {
+    .tile-loading, .tile-error, .tile-empty {
       display: flex; align-items: center; justify-content: center;
       width: 100%; height: 100%; font-size: 14px;
     }
     .tile-loading { color: #888; }
     .tile-error   { color: #c00; }
+    .tile-empty   { color: #888; font-style: italic; }
     .tile-remove {
       background: none; border: none; cursor: pointer; color: #bbb;
       font-size: 18px; padding: 0 2px; line-height: 1; font-weight: 400;
@@ -1387,6 +1388,16 @@
       if (fn) fn(id, d);
     }
 
+    // Every renderer bails through here when its payload holds nothing to draw:
+    // a blank tile reads as "still loading", or as a bug.
+    function showNoData(el, msg = 'No data for this selection.') {
+      if (!el) return;
+      // Purge first: overwriting innerHTML under a live Plotly graph leaves its
+      // state pointing at nodes that are gone. A no-op on a plain div.
+      Plotly.purge(el);
+      el.innerHTML = `<div class="tile-empty">${msg}</div>`;
+    }
+
     // Log10 colour mapping shared by the heatmap renderers: counts span many
     // orders of magnitude (1 outlier cell vs a ~1M-job one), so a linear
     // scale would make every cell except the densest one look white. Returns
@@ -1409,7 +1420,10 @@
     }
 
     function renderHeatmapCell(id, payload, title, yLabel) {
-      if (!payload || !payload.z || !payload.z.length) return;
+      if (!payload || !payload.z || !payload.z.length) {
+        showNoData(document.getElementById(id));
+        return;
+      }
       // Server returns x/y in seconds; convert axes to hours for display.
       const xs = payload.x.map(v => v * SEC_TO_H);
       const ys = payload.y.map(v => v * SEC_TO_H);
@@ -1464,7 +1478,10 @@
     }
 
     function renderJobCounts(id, d) {
-      if (!d.job_counts.length) return;
+      if (!d.job_counts.length) {
+        showNoData(document.getElementById(id));
+        return;
+      }
       const colors = d.job_counts.map(r => {
         const inf = periodInFocus(r.period_start);
         return inf === null ? '#1a6fd4' : inf ? '#e07020' : '#c8d8f0';
@@ -1491,7 +1508,7 @@
     function renderRguUsage(id, d) {
       const el = document.getElementById(id);
       const rows = d.rgu_usage;
-      if (!el || !rows.length) return;
+      if (!el) return;
       const unit = rguUnit();
       // The wasted/unused hovers name the efficiency metric picked at last
       // Update (non-admins are pinned to SM occupancy).
@@ -1527,6 +1544,13 @@
         // View is module-scoped, so every RGU-usage tile follows -- and it picks
         // the query, not just the drawing, hence a reload rather than a redraw.
         sel.addEventListener('change', () => { rguUsageView = sel.value; saveState(); reloadRguUsageTiles(); });
+      }
+
+      // After the picker, not before: with nothing to draw the reader must still
+      // be able to switch view without going through Update.
+      if (!rows.length) {
+        showNoData(plot);
+        return;
       }
 
       if (rguUsageView === 'whole_range') {
@@ -1651,7 +1675,10 @@
 
     function renderClusterRgu(id, d) {
       const data = d.clusterrgu;
-      if (!data || !data.periods.length || !data.series.length) return;
+      if (!data || !data.periods.length || !data.series.length) {
+        showNoData(document.getElementById(id));
+        return;
+      }
       // Rescale the cumulative RGU·h to the unit selected in the toolbar.
       const unit = rguUnit();
       const x    = data.periods.map(p => p.period_start);
@@ -1719,7 +1746,10 @@
 
     function renderMetricTrend(id, d) {
       const data = d.metrictrend;
-      if (!data || !data.periods.length || !data.series.length) return;
+      if (!data || !data.periods.length || !data.series.length) {
+        showNoData(document.getElementById(id));
+        return;
+      }
       // Title names the metric actually plotted (single series, guarded above).
       const ml = METRICS[data.series[0].metric] || data.series[0].metric;
       const x    = data.periods.map(p => p.period_start);
@@ -1773,7 +1803,10 @@
     function renderDensity(id, d) {
       const metric = selectedMetric();
       const ml = METRICS[metric] || metric;
-      if (!d.density.primary.values.length) return;
+      if (!d.density.primary.values.length) {
+        showNoData(document.getElementById(id));
+        return;
+      }
       // Server pre-bins into 50 equal bins over [0, 1] (matches xbins below).
       const XBINS = { start: 0, end: 1, size: 1 / 50 };
       Plotly.react(id, [{
@@ -1855,8 +1888,10 @@
             });
           const p = await comparisonCache[m2];
           if (!document.body.contains(el) || el.dataset.plotType !== 'metric_comparison') return;
-          if (!p || !p.z || !p.z.length) {
-            plot.innerHTML = '<div class="tile-loading">No data for this pair.</div>';
+          // An all-zero grid too, not just a missing one: the server always
+          // returns the full 100x100, and log-scaling zeros gives a blank plot.
+          if (!p || !p.z || !p.z.some(row => row.some(v => v > 0))) {
+            showNoData(plot, 'No data for this pair.');
             return;
           }
           const ml2 = METRICS[m2] || m2;
@@ -1895,7 +1930,7 @@
     function renderUserRgu(id, d) {
       const el = document.getElementById(id);
       if (!el) return;
-      if (!d.userrgu.length) { el.textContent = 'No data.'; return; }
+      if (!d.userrgu.length) { showNoData(el); return; }
 
       // "Top N" and "Sort by" are module-scoped so they survive Updates.
       // Both controls re-render in place — no refetch needed.
@@ -2107,7 +2142,7 @@
       if (!total) {
         const slot = el.closest('.tile')?.querySelector('.jt-head-slot');
         if (slot) slot.innerHTML = '';
-        el.textContent = 'No jobs found.';
+        showNoData(el, 'No jobs found.');
         return;
       }
 
@@ -2138,6 +2173,11 @@
              + `${p(d.getUTCHours())}:${p(d.getUTCMinutes())} UTC`;
       };
       const fmtInt = v => v != null ? String(v) : '—';
+      // Both RGU·time columns count only the hours spent inside the date range,
+      // like the plots; Elapsed next to them is the whole run.
+      const IN_RANGE = 'A job that started before the range or ran past it counts only for the part inside. By contrast, the Elapsed column shows the whole job elapsed time.';
+      const rguTimeTitle  = u => `RGU × the hours this job ran inside the selected date range, shown in ${u.label}. ${IN_RANGE}`;
+      const rguWasteTitle = u => `RGU·time × (1 − mean ${metricPretty}): estimated unused RGU·time, in ${u.label}. ${IN_RANGE}`;
       const COLS = [
         { key: 'cluster',               label: 'Cluster' },
         { key: 'job_id',                label: 'Job ID',    fmt: fmtInt },
@@ -2152,22 +2192,18 @@
             return h > 0 ? `${h}h${String(m).padStart(2,'0')}m` : `${m}m${String(sec).padStart(2,'0')}s`;
           }},
         { key: 'rgu_hours',             label: unit.label,
-          title: `RGU × the hours this job ran inside the selected date range, shown in ${unit.label}. A job that started before the range or ran past it counts only for the part inside. By contrast, the Elapsed column shows the whole job run.`,
-          fmt: fmtRguTime },
+          title: rguTimeTitle(unit), fmt: fmtRguTime },
         // Fixed RGU·h twin, skipped when the toolbar unit is already hours
         // (it would be an exact duplicate).
         ...(unit === unitHour ? [] : [
         { key: 'rgu_hours',             label: unitHour.label,
-          title: `RGU × the hours this job ran inside the selected date range, shown in ${unitHour.label}. A job that started before the range or ran past it counts only for the part inside. By contrast, the Elapsed column shows the whole job run.`,
-          fmt: fmtRguHour },
+          title: rguTimeTitle(unitHour), fmt: fmtRguHour },
         ]),
         { key: 'waste',                 label: `Unused (${unit.label})`,
-          title: `RGU·time × (1 − mean ${metricPretty}): estimated unused RGU·time`,
-          fmt: fmtRguTime },
+          title: rguWasteTitle(unit), fmt: fmtRguTime },
         ...(unit === unitHour ? [] : [
         { key: 'waste',                 label: `Unused (${unitHour.label})`,
-          title: `RGU·time × (1 − mean ${metricPretty}): estimated unused RGU·time`,
-          fmt: fmtRguHour },
+          title: rguWasteTitle(unitHour), fmt: fmtRguHour },
         ]),
         { key: 'gpu_sm_occupancy_mean', label: 'SM occ',    fmt: v => v != null ? (v < 0 ? 'NaN' : (v*100).toFixed(1)+'%') : '—' },
         { key: 'gpu_utilization_mean',  label: 'GPU util',  fmt: v => v != null ? (v < 0 ? 'NaN' : (v*100).toFixed(1)+'%') : '—' },
