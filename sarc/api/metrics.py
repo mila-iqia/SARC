@@ -310,9 +310,10 @@ def _ran_between(cols, lo, hi):
 def _overlap_hours(cols, lo, hi):
     """SQL expression: hours of the job's run that fall inside ``[lo, hi)``.
 
-    Only meaningful where ``_ran_between`` holds; elsewhere it goes negative.
-    Multiply by a per-job RGU *rate* (``allocated_rgu_drac``, GPU count x RGU
-    weight, no time of its own) for the RGU.h the job owes to that span.
+    Only valid where ``_ran_between`` holds over the same bounds: ``least``/
+    ``greatest`` ignore NULL, so a job that never started collects the full
+    width of ``[lo, hi)``, not nothing. Multiply by a per-job RGU *rate*
+    (``allocated_rgu_drac``) for the RGU.h owed to that span.
     """
     start, end = _job_span(cols)
     return (func.least(end, hi) - func.greatest(start, lo)) / 3600.0

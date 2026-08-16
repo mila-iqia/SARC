@@ -529,6 +529,37 @@ def test_a_job_that_never_ran_appears_nowhere(dash_client, dash_db):
     assert sum(r["count"] for r in counts) == _jobs_that_ran()
 
 
+def test_a_job_that_never_started_appears_nowhere(dash_client, dash_db):
+    """A job still queued has no span, so it meets no bucket -- whatever its
+    elapsed_time says.
+
+    Separate from the zero-elapsed case above: that one spans the empty range,
+    this one spans NULL, and ``_overlap_hours`` alone would hand it the full
+    width of every bucket. Only ``slurm_job_run`` being STRICT keeps it out.
+    """
+    with config.db.session() as sess:
+        job = sess.exec(
+            select(SlurmJobDB)
+            .where(col(SlurmJobDB.harmonized_gpu_type) == _GPU)
+            .order_by(col(SlurmJobDB.id))
+        ).first()
+        job.start_time = None
+        job.end_time = None
+        sess.add(job)
+        sess.commit()
+
+    usage = dash_client.get("/dash/metrics/rgu_usage", params=WINDOW).json()
+    assert sum(r["rgu_allocated"] for r in usage) == pytest.approx(
+        _RGU_HOURS_PER_JOB * (dash_db.n - 1)
+    )
+    table = dash_client.get("/dash/metrics/jobs", params=WINDOW).json()
+    assert table["total"] == dash_db.n - 1
+    counts = dash_client.get(
+        "/dash/metrics/job_counts", params={**WINDOW, "period": "m"}
+    ).json()
+    assert sum(r["count"] for r in counts) == _jobs_that_ran()
+
+
 def _jobs_that_ran() -> int:
     """Seeded jobs whose run overlaps WINDOW, counted in Python so the test does
     not restate the SQL it is checking."""
