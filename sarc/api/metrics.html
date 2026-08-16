@@ -830,26 +830,27 @@
     metSel.value = 'gpu_sm_occupancy';
     {% endif %}
 
-    // The RGU unit is a pure display rescale (the backend always returns RGU·h),
-    // so redrawing an RGU·time tile in place needs no re-fetch — we reuse the
-    // cached endpoint data (e.g. on the RGU-usage view toggle; the unit itself
-    // follows the period and only changes on the next Update). We
-    // call renderPlot() directly (Plotly.react updates in place) rather than
-    // renderTile(), which clears the div's innerHTML and would desync Plotly's
-    // existing graph-div state -> blank plot. No-op before the first load or
-    // when no RGU tile is shown (avoids a stray fetch). Density is *not* here:
-    // its weights feed a normalized density, which is invariant under a
-    // uniform rescale.
+    // Tiles redrawn once a window resize settles — see the resize listener below
+    // for why. Redrawing is free: the data comes from the endpoint cache, and
+    // nothing here re-fetches. renderPlot() directly, not renderTile(): the
+    // latter clears the div's innerHTML, which desyncs Plotly's existing
+    // graph-div state -> blank plot. No-op before the first load, or when none
+    // of these tiles is on screen.
+    //
+    // The list is inherited from the RGU-unit selector this used to serve (the
+    // tiles carrying an RGU·time quantity, hence the RGU in the name) and is not
+    // a property of resizing: any other tile hurt by the same legend drift
+    // belongs here just as much.
     {% if is_admin %}
-    const RGU_UNIT_TILES = new Set(['clusterrgu', 'rgu_usage', 'userrgu', 'jobtable']);
+    const RESIZE_REDRAW_TILES = new Set(['clusterrgu', 'rgu_usage', 'userrgu', 'jobtable']);
     {% else %}
-    const RGU_UNIT_TILES = new Set(['clusterrgu', 'rgu_usage', 'jobtable']);
+    const RESIZE_REDRAW_TILES = new Set(['clusterrgu', 'rgu_usage', 'jobtable']);
     {% endif %}
-    async function rerenderRguTiles() {
+    async function redrawTilesOnResize() {
       if (!currentParams) return;
       const tiles = [];
       tileLayout.forEach((row, ri) => row.forEach((plotType, ci) => {
-        if (!RGU_UNIT_TILES.has(plotType)) return;
+        if (!RESIZE_REDRAW_TILES.has(plotType)) return;
         const chartDiv = document.getElementById(`tile-${ri}-${ci}`);
         if (chartDiv) tiles.push({ chartDiv, plotType });
       }));
@@ -858,10 +859,13 @@
       await Promise.all(tiles.map(async ({ chartDiv, plotType }) => {
         const ep = PLOT_TO_ENDPOINT[plotType];
         // The job table paginates itself, so re-render it from the page it is
-        // currently showing (a unit change is a pure display rescale) rather
-        // than the shared endpoint cache, which holds only page 0 and would
-        // snap the tile back to the first page.
+        // currently showing rather than from the shared endpoint cache, which
+        // holds only page 0 and would snap the tile back to the first page --
+        // a redraw must not move the reader. Unless it has a page in flight:
+        // jt-busy is what stops a click from starting a second, racing fetch,
+        // and rebuilding the table here would drop it.
         if (plotType === 'jobtable') {
+          if (chartDiv.querySelector('.job-table.jt-busy')) return;
           if (chartDiv._jtData) renderPlot(chartDiv.id, plotType, { jobs: chartDiv._jtData });
           return;
         }
@@ -871,6 +875,11 @@
         } catch {
           return;
         }
+        // A tile that went into "Loading…" while we waited belongs to a render
+        // in flight (a View switch, say). Drawing the payload we asked for would
+        // put the old view back under the new picker, and re-arm a control the
+        // loading state had deliberately taken away.
+        if (chartDiv.querySelector('.tile-loading')) return;
         if (document.body.contains(chartDiv) && chartDiv.dataset.plotType === plotType)
           renderPlot(chartDiv.id, plotType, { [ENDPOINT_TO_KEY[ep]]: data });
       }));
@@ -895,12 +904,14 @@
 
     // Plotly's own responsive handler resizes the plots live but can leave a
     // wrapping horizontal legend at its old position (drawn over the bars)
-    // when the window grows back. Once the resize settles, re-render the RGU
-    // tiles from cache: a full react recomputes margins and legend placement.
+    // when the window grows back. Once the resize settles, redraw from cache:
+    // a full react recomputes margins and legend placement. The sole caller of
+    // redrawTilesOnResize -- a tile is otherwise only ever redrawn by the render
+    // that fetched it.
     let _resizeTimer = null;
     window.addEventListener('resize', () => {
       clearTimeout(_resizeTimer);
-      _resizeTimer = setTimeout(rerenderRguTiles, 250);
+      _resizeTimer = setTimeout(redrawTilesOnResize, 250);
     });
 
     // Pressing Enter in any filter field applies the filters, like clicking Update.
@@ -2043,7 +2054,7 @@
       // and page numbers track the DB as scraping adds jobs. The backend keeps it
       // a separate, parallelised query, so paying it per page stays cheap.
       const total = payload.total || 0;
-      el._jtData = payload;  // kept so an RGU-unit change can rescale in place
+      el._jtData = payload;  // kept so a resize can redraw this page in place
 
       // Per-tile pagination + sort state, persisted on the element. Defaults
       // mirror JOBTABLE_DEFAULTS so the first page (fetched via the shared cache
