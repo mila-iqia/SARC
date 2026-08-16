@@ -867,13 +867,30 @@
         }
         let data;
         try {
-          data = await ensureEndpoint(ep);
+          data = await ensureEndpoint(ep, endpointURL(ep, currentParams));
         } catch {
           return;
         }
         if (document.body.contains(chartDiv) && chartDiv.dataset.plotType === plotType)
           renderPlot(chartDiv.id, plotType, { [ENDPOINT_TO_KEY[ep]]: data });
       }));
+    }
+
+    // Switching the RGU-usage view is a different query, not a redraw: the
+    // whole-range view asks for the range as a single bucket, which is what
+    // makes its metric means count each job once instead of once per bucket it
+    // ran through. Re-render those tiles the way a first load does -- renderTile
+    // shows "Loading…" until the answer lands. Nothing is evicted: the two views
+    // have different URLs, so each keeps its entry and switching back is free.
+    async function reloadRguUsageTiles() {
+      if (!currentParams) return;
+      const tiles = [];
+      tileLayout.forEach((row, ri) => row.forEach((plotType, ci) => {
+        if (plotType !== 'rgu_usage') return;
+        const chartDiv = document.getElementById(`tile-${ri}-${ci}`);
+        if (chartDiv) tiles.push(chartDiv);
+      }));
+      await Promise.all(tiles.map(chartDiv => renderTile(chartDiv, 'rgu_usage')));
     }
 
     // Plotly's own responsive handler resizes the plots live but can leave a
@@ -970,11 +987,16 @@
     // Cache + state for the per-endpoint loader.
     //   currentParams: snapshot of the form's parameters at the last Update.
     //                  null until the first loadCharts() has been called.
-    //   endpointCache: { ep -> Promise<data> } — same promise can be awaited
+    //   endpointCache: { url -> Promise<data> } — same promise can be awaited
     //                  by several tiles. Cleared entirely when params change.
+    //                  Keyed by URL, not by endpoint: currentParams is not the
+    //                  only thing an endpoint's URL depends on any more (the
+    //                  RGU-usage View picker puts `whole` in it), so one entry
+    //                  per endpoint would have the two views evict each other.
     //   endpointStatus: { ep -> 'loading' | 'ready' | 'error' }, synced with
     //                  the cache so updateStatus() can summarise progress
-    //                  without inspecting unsettled promises.
+    //                  without inspecting unsettled promises. Per endpoint, not
+    //                  per URL: it counts what the status line counts.
     let currentParams = null;
     let endpointCache = {};
     let endpointStatus = {};
@@ -1457,7 +1479,7 @@
 
     function renderRguUsage(id, d) {
       const el = document.getElementById(id);
-      const rows = d.rgu_usage.periods;
+      const rows = d.rgu_usage;
       if (!el || !rows.length) return;
       const unit = rguUnit();
       // The wasted/unused hovers name the efficiency metric picked at last
@@ -1491,17 +1513,21 @@
         });
         lab.appendChild(sel);
         slot.appendChild(lab);
-        // View is module-scoped (shared by every RGU-usage tile), so a change
-        // re-renders them all from cache — no refetch — like the RGU-unit switch.
-        sel.addEventListener('change', () => { rguUsageView = sel.value; saveState(); rerenderRguTiles(); });
+        // View is module-scoped, so every RGU-usage tile follows -- and it picks
+        // the query, not just the drawing, hence a reload rather than a redraw.
+        sel.addEventListener('change', () => { rguUsageView = sel.value; saveState(); reloadRguUsageTiles(); });
       }
 
       if (rguUsageView === 'whole_range') {
-        // One stacked bar summing the whole Start–End range. Focus is ignored on
+        // One stacked bar over the whole Start–End range. Focus is ignored on
         // purpose (no per-bucket axis) and the single bar is not click-to-focus.
-        const sum = key => rows.reduce((a, r) => a + (r[key] || 0), 0);
-        const reqTot = sum('rgu_allocated'), usedTot = sum('rgu_used'), unmTot = sum('rgu_unmeasured');
-        const wastedTot = sum('rgu_wasted');
+        // The payload already *is* that single bucket (whole=true), rather than
+        // the per-period one added up: the sums would agree either way, but the
+        // metric means below only count each job once when the range is one
+        // bucket. So this view is a fetch of its own, not a redraw.
+        const whole = rows[0];
+        const reqTot = whole.rgu_allocated || 0, usedTot = whole.rgu_used || 0;
+        const unmTot = whole.rgu_unmeasured || 0, wastedTot = whole.rgu_wasted || 0;
         const unusedTot = reqTot - usedTot - unmTot - wastedTot;
         const X = ['Whole range'];
         // Over the whole range each metric collapses to a single value, so the
@@ -1511,12 +1537,8 @@
         // it. The anchor point carries the legend, the hover and the right axis
         // (a layout shape alone would leave it without a trace).
         const trendLevels = [], trendRules = [];
-        // Straight from the API: a mean over the whole range counts each job
-        // once, while the bars a job spans count it once each — so recombining
-        // the per-bucket means would weigh jobs by how long they ran, and the
-        // figure would move with the Period selector.
         TREND_CURVES.forEach(([m, color], i) => {
-          const v = d.rgu_usage.overall[m] ? d.rgu_usage.overall[m].mean : null;
+          const v = whole.metric_means[m] ? whole.metric_means[m].mean : null;
           if (v == null) return;
           trendRules.push({
             type: 'line', xref: 'paper', yref: 'y2',
@@ -2717,7 +2739,9 @@
       switch (ep) {
         case 'job_counts': return '/dash/metrics/job_counts?' + new URLSearchParams({ ...base, period: p.period });
         case 'heatmap':   return '/dash/metrics/job_times_vs_limit?' + new URLSearchParams({ ...base, ...focusParams });
-        case 'rgu_usage': return '/dash/metrics/rgu_usage?' + new URLSearchParams({ ...base, period: p.period, metric: p.metric, min_usage: MIN_USAGE_EXPECTED_PERCENT / 100 });
+        // whole=true asks for the range as one bucket, which is what the
+        // whole-range view draws; the server then ignores `period`.
+        case 'rgu_usage': return '/dash/metrics/rgu_usage?' + new URLSearchParams({ ...base, period: p.period, metric: p.metric, min_usage: MIN_USAGE_EXPECTED_PERCENT / 100, ...(rguUsageView === 'whole_range' ? { whole: 'true' } : {}) });
         case 'density':   return '/dash/metrics/metric_distribution?' + new URLSearchParams({ ...densityParams, ...focusParams });
         case 'jobs':      return jobsURL(p, JOBTABLE_DEFAULTS);
         {% if is_admin %}
@@ -2731,15 +2755,15 @@
       throw new Error('Unknown endpoint: ' + ep);
     }
 
-    // Return a promise for the data of `ep`, fetching it once and caching it.
+    // Return a promise for the data at `url`, fetching it once and caching it.
     // Multiple tiles can call this concurrently; they all share the same in-
-    // flight promise.
-    function ensureEndpoint(ep) {
-      if (endpointCache[ep]) return endpointCache[ep];
+    // flight promise. `ep` only labels the entry for the status line.
+    function ensureEndpoint(ep, url) {
+      if (endpointCache[url]) return endpointCache[url];
       endpointStatus[ep] = 'loading';
-      endpointCache[ep] = (async () => {
+      endpointCache[url] = (async () => {
         try {
-          const r = await fetch(endpointURL(ep, currentParams));
+          const r = await fetch(url);
           if (!r.ok) throw new Error(`HTTP ${r.status} on /${ep}`);
           const data = await r.json();
           endpointStatus[ep] = 'ready';
@@ -2752,7 +2776,7 @@
         }
       })();
       updateStatus();
-      return endpointCache[ep];
+      return endpointCache[url];
     }
 
     function updateStatus() {
@@ -2795,11 +2819,13 @@
       chartDiv.innerHTML = '<div class="tile-loading">Loading…</div>';
       // The RGU-usage "View:" picker lives in the tile header, outside chartDiv:
       // clear it here so it is absent while loading and on error, and let
-      // renderRguUsage put it back once the data is in.
+      // renderRguUsage put it back once the data is in. That is also what keeps
+      // a second view switch from racing this one: the control is gone until
+      // the answer lands.
       const ruSlot = chartDiv.closest('.tile')?.querySelector('.ru-head-slot');
       if (ruSlot) ruSlot.innerHTML = '';
       try {
-        const data = await ensureEndpoint(ep);
+        const data = await ensureEndpoint(ep, endpointURL(ep, currentParams));
         if (!document.body.contains(chartDiv)) return;
         if (chartDiv.dataset.plotType !== plotType) return;
         chartDiv.innerHTML = '';

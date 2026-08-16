@@ -214,7 +214,7 @@ _SCOPE_TOTALS = [
     (
         "rgu_usage",
         "/dash/metrics/rgu_usage",
-        lambda d: sum(r["rgu_allocated"] for r in d["periods"]),
+        lambda d: sum(r["rgu_allocated"] for r in d),
     ),
     (
         "rgu_by_cluster",
@@ -311,12 +311,7 @@ EMPTY_ENDPOINTS = [
     (
         "rgu_usage",
         "/dash/metrics/rgu_usage",
-        # No job also means no mean to report over the range, hence a null
-        # `overall` rather than a 0 % that would read as measured idleness.
-        lambda d: (
-            all(r["rgu_allocated"] == 0 for r in d["periods"])
-            and all(t["mean"] is None for t in d["overall"].values())
-        ),
+        lambda d: isinstance(d, list) and all(r["rgu_allocated"] == 0 for r in d),
     ),
     ("rgu_by_cluster", "/dash/metrics/rgu_by_cluster", lambda d: d["series"] == []),
     (
@@ -441,16 +436,7 @@ def test_job_counts_with_data(dash_client):
 # Every bucketed endpoint, with the empty payload it owes an empty window.
 _BUCKETED = [
     ("job_counts", []),
-    (
-        "rgu_usage",
-        {
-            "periods": [],
-            "overall": {
-                "gpu_sm_occupancy": {"mean": None},
-                "gpu_utilization": {"mean": None},
-            },
-        },
-    ),
+    ("rgu_usage", []),
     ("rgu_by_cluster", {"periods": [], "series": []}),
     (
         "metric_trend",
@@ -527,7 +513,7 @@ def test_a_job_that_never_ran_appears_nowhere(dash_client, dash_db):
         sess.commit()
 
     # The RGU views drop it (it was worth 0 anyway), and so does the job table.
-    usage = dash_client.get("/dash/metrics/rgu_usage", params=WINDOW).json()["periods"]
+    usage = dash_client.get("/dash/metrics/rgu_usage", params=WINDOW).json()
     assert sum(r["rgu_allocated"] for r in usage) == pytest.approx(
         _RGU_HOURS_PER_JOB * (dash_db.n - 1)
     )
@@ -561,7 +547,7 @@ def _jobs_that_ran() -> int:
 
 
 def test_rgu_usage_with_data(dash_client, dash_db):
-    data = dash_client.get("/dash/metrics/rgu_usage", params=WINDOW).json()["periods"]
+    data = dash_client.get("/dash/metrics/rgu_usage", params=WINDOW).json()
     assert sum(r["rgu_allocated"] for r in data) == pytest.approx(
         dash_db.total_requested
     )
@@ -609,7 +595,7 @@ def test_rgu_usage_prorates_a_job_over_the_weeks_it_ran(dash_client, dash_db):
 
     data = dash_client.get(
         "/dash/metrics/rgu_usage", params={**WINDOW, "period": "w"}
-    ).json()["periods"]
+    ).json()
     charged = [r["rgu_allocated"] for r in data if r["rgu_allocated"] > 0]
     assert len(charged) == 2, "the job spans two calendar weeks"
     assert charged[0] == pytest.approx(_RGU_PER_JOB * 3.5 * 24)
@@ -633,7 +619,7 @@ def test_rgu_usage_prorates_across_a_month_boundary(dash_client, dash_db):
     data = dash_client.get(
         "/dash/metrics/rgu_usage",
         params={"start": "2023-01-15", "end": "2023-04-10", "period": "m"},
-    ).json()["periods"]
+    ).json()
     assert [r["period_start"] for r in data] == [
         "2023-01-15",
         "2023-02-01",
@@ -657,7 +643,7 @@ def test_rgu_usage_counts_a_job_that_started_before_the_window(dash_client, dash
     with config.db.session() as sess:
         _run_single_job(sess, start, hours=5 * 24)
 
-    data = dash_client.get("/dash/metrics/rgu_usage", params=WINDOW).json()["periods"]
+    data = dash_client.get("/dash/metrics/rgu_usage", params=WINDOW).json()
     # WINDOW opens on 2023-02-01: 3 of the 5 days fall inside it.
     assert sum(r["rgu_allocated"] for r in data) == pytest.approx(_RGU_PER_JOB * 3 * 24)
 
@@ -669,7 +655,7 @@ def test_rgu_by_cluster_prorates_like_rgu_usage(dash_client, dash_db):
         _run_single_job(sess, start, hours=9 * 24)
 
     params = {**WINDOW, "period": "w"}
-    usage = dash_client.get("/dash/metrics/rgu_usage", params=params).json()["periods"]
+    usage = dash_client.get("/dash/metrics/rgu_usage", params=params).json()
     by_cluster = dash_client.get("/dash/metrics/rgu_by_cluster", params=params).json()
 
     assert len(by_cluster["series"]) == 1, "the enriched job is on one cluster"
@@ -691,7 +677,7 @@ def test_every_view_agrees_on_the_windows_rgu_hours(dash_client, dash_db):
         _run_single_job(sess, start, hours=5 * 24)
     expected = _RGU_PER_JOB * 2 * 24  # WINDOW ends 2023-03-01
 
-    usage = dash_client.get("/dash/metrics/rgu_usage", params=WINDOW).json()["periods"]
+    usage = dash_client.get("/dash/metrics/rgu_usage", params=WINDOW).json()
     by_user = dash_client.get("/dash/metrics/rgu_by_user", params=WINDOW).json()
     table = dash_client.get("/dash/metrics/jobs", params=WINDOW).json()
     dist = dash_client.get("/dash/metrics/metric_distribution", params=WINDOW).json()
@@ -729,7 +715,7 @@ def test_rgu_usage_is_additive_over_a_window_split(dash_client, dash_db):
     def charged(window):
         data = dash_client.get(
             "/dash/metrics/rgu_usage", params={**window, "period": "d"}
-        ).json()["periods"]
+        ).json()
         return sum(r["rgu_allocated"] for r in data)
 
     whole, first, second = charged(WINDOW), charged(halves[0]), charged(halves[1])
@@ -765,7 +751,7 @@ def test_rgu_usage_wasted_is_per_job(dash_client, dash_db):
         sess.add(stat)
         sess.commit()
 
-    data = dash_client.get("/dash/metrics/rgu_usage", params=WINDOW).json()["periods"]
+    data = dash_client.get("/dash/metrics/rgu_usage", params=WINDOW).json()
     assert sum(r["rgu_wasted"] for r in data) == pytest.approx(
         _RGU_HOURS_PER_JOB * (0.15 - low_mean)
     )
@@ -779,7 +765,7 @@ def test_rgu_usage_wasted_is_per_job(dash_client, dash_db):
     # min_usage is a request parameter: at 60 % every job falls short.
     data = dash_client.get(
         "/dash/metrics/rgu_usage", params={**WINDOW, "min_usage": 0.6}
-    ).json()["periods"]
+    ).json()
     expected = _RGU_HOURS_PER_JOB * (
         (0.6 - low_mean) + (dash_db.n - 1) * (0.6 - _SM_OCC)
     )
@@ -787,29 +773,33 @@ def test_rgu_usage_wasted_is_per_job(dash_client, dash_db):
 
 
 def test_rgu_usage_metric_means(dash_client, dash_db):
-    """``metric_means`` gives the plain per-job mean of each trend metric, and
-    ``overall`` the same over the whole window. A bucket holding no job reports a
-    null mean -- an average of nothing, not a 0 % that would read as measured."""
+    """``metric_means`` gives the plain per-job mean of each trend metric. A
+    bucket holding no job reports a null mean -- an average of nothing, not a
+    0 % that would read as measured."""
     data = dash_client.get("/dash/metrics/rgu_usage", params=WINDOW).json()
     for name, expected in (("gpu_sm_occupancy", _SM_OCC), ("gpu_utilization", 0.4)):
-        assert data["overall"][name]["mean"] == pytest.approx(expected)
-        means = [r["metric_means"][name]["mean"] for r in data["periods"]]
+        means = [r["metric_means"][name]["mean"] for r in data]
         assert any(m is not None for m in means), "expected a charged bucket"
         for mean in means:
             assert mean is None or mean == pytest.approx(expected)
 
 
-def test_rgu_usage_overall_counts_each_job_once(dash_client, dash_db):
-    """``overall`` averages over the jobs, not over the bucket rows.
+def test_rgu_usage_whole_counts_each_job_once(dash_client, dash_db):
+    """``whole=true`` averages over the jobs, which is why it is a query of its
+    own rather than the per-period rows added up.
 
     A job is counted in every bucket it runs through, so no recombination of the
     per-bucket means can recover a per-job average: it would weigh each job by
-    how long it ran, and the figure would move with the Period selector. Only a
-    separate pass over the jobs themselves gets it right.
+    how long it ran, and the figure would move with the Period selector. Over a
+    single bucket each job is averaged once, and the question goes away.
 
     Three jobs at 20 % inside one week, and one at 80 % running across two. The
     per-job mean is 35 %; recombining the buckets by their job counts -- what the
     frontend used to do -- reads 44 %, and averaging the bucket means 57.5 %.
+
+    The sums are checked too: those *are* additive, so both views must agree on
+    them, which is what lets the reader switch between them without the totals
+    moving.
     """
     low, high = 0.2, 0.8
     short = datetime(2023, 2, 14, 12, tzinfo=timezone.utc)  # inside 02-13..02-20
@@ -839,21 +829,33 @@ def test_rgu_usage_overall_counts_each_job_once(dash_client, dash_db):
             sess.add(stat)
         sess.commit()
 
-    data = dash_client.get(
-        "/dash/metrics/rgu_usage", params={**WINDOW, "period": "w"}
-    ).json()
-    assert data["overall"]["gpu_sm_occupancy"]["mean"] == pytest.approx(
+    def fetch(**extra):
+        return dash_client.get(
+            "/dash/metrics/rgu_usage", params={**WINDOW, "period": "w", **extra}
+        ).json()
+
+    whole = fetch(whole="true")
+    assert len(whole) == 1, "the whole range is one bucket"
+    assert whole[0]["metric_means"]["gpu_sm_occupancy"]["mean"] == pytest.approx(
         (3 * low + high) / 4
     )
 
-    # The long job does show up in two buckets -- that is what makes the
-    # per-bucket means unrecombinable, and what the assertion above steps around.
+    # The long job does show up in two weekly buckets -- that is what makes the
+    # per-bucket means unrecombinable, and what whole=true steps around.
+    weekly = fetch()
     charged = [
         r["metric_means"]["gpu_sm_occupancy"]["mean"]
-        for r in data["periods"]
+        for r in weekly
         if r["metric_means"]["gpu_sm_occupancy"]["mean"] is not None
     ]
     assert charged == pytest.approx([(3 * low + high) / 4, high])
+
+    # Sums are additive, so the two views agree on them whatever the bucketing.
+    for key in ("rgu_allocated", "rgu_used", "rgu_unmeasured", "rgu_wasted"):
+        assert whole[0][key] == pytest.approx(sum(r[key] for r in weekly)), key
+
+    # period is ignored under whole=true: a different one gives the same answer.
+    assert fetch(whole="true", period="d") == whole
 
 
 def test_rgu_by_cluster_with_data(dash_client, dash_db):
@@ -995,7 +997,7 @@ def test_nan_and_missing_means_never_poison_aggregates(dash_client, dash_db_nan)
 
     # rgu_usage: allocated counts all jobs; used sums only the real means and
     # stays finite; the NaN/NULL jobs land in rgu_unmeasured, not rgu_used.
-    usage = dash_client.get("/dash/metrics/rgu_usage", params=WINDOW).json()["periods"]
+    usage = dash_client.get("/dash/metrics/rgu_usage", params=WINDOW).json()
     used = sum(r["rgu_used"] for r in usage)
     assert math.isfinite(used)
     assert sum(r["rgu_allocated"] for r in usage) == pytest.approx(
@@ -1163,7 +1165,7 @@ def test_empty_buckets_are_reported_as_empty(dash_client, dash_db):
     expected_rgu = [0.0] * _QUIET_DAYS
     expected_rgu[3] = _RGU_PER_JOB * 12
     expected_rgu[4] = _RGU_PER_JOB * 24
-    usage = dash_client.get("/dash/metrics/rgu_usage", params=params).json()["periods"]
+    usage = dash_client.get("/dash/metrics/rgu_usage", params=params).json()
     assert [r["rgu_allocated"] for r in usage] == pytest.approx(expected_rgu)
     assert sum(r["rgu_allocated"] for r in usage) == pytest.approx(total)
 
@@ -1198,7 +1200,7 @@ def test_a_run_ending_on_a_bucket_edge_charges_nothing_to_the_next(
     assert [r["count"] for r in counts] == [0, 0, 1, 1, 0, 0, 0, 0, 0, 0]
     assert counts[4]["period_start"] == "2023-02-05"
 
-    usage = dash_client.get("/dash/metrics/rgu_usage", params=params).json()["periods"]
+    usage = dash_client.get("/dash/metrics/rgu_usage", params=params).json()
     assert usage[4]["rgu_allocated"] == 0.0
     assert [r["rgu_allocated"] for r in usage[:4]] == pytest.approx(
         [0.0, 0.0, _RGU_PER_JOB * 24, _RGU_PER_JOB * 24]
@@ -1212,6 +1214,17 @@ def test_a_run_ending_on_a_bucket_edge_charges_nothing_to_the_next(
 def test_invalid_period_returns_400(dash_client):
     r = dash_client.get(
         "/dash/metrics/job_counts", params={**WINDOW, "period": "bogus"}
+    )
+    assert r.status_code == 400
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_invalid_period_returns_400_even_when_ignored(dash_client):
+    """``whole=true`` buckets the range itself and never looks at ``period`` --
+    but a parameter the endpoint ignores is still one it accepts or refuses, and
+    a typo must not be swallowed by the view the caller happens to ask for."""
+    r = dash_client.get(
+        "/dash/metrics/rgu_usage", params={**WINDOW, "period": "bogus", "whole": "true"}
     )
     assert r.status_code == 400
 
