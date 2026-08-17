@@ -142,6 +142,25 @@ class SlurmJobDB(SQLModel, table=True):
                 "allocated_gres_gpu > 0 AND harmonized_gpu_type IS NOT NULL"
             ),
         ),
+        # The two /dash plots that ask about submission rather than execution --
+        # job_times_vs_limit and job_counts?submitted -- filter on submit_time
+        # with the same GPU predicate and no run-time bound, which the index
+        # above cannot answer. Without this one they seq-scan all 12M rows to
+        # keep 1M: measured on their captured queries, 1736 -> 865 ms and
+        # 1697 -> 503 ms over seven months, 709 -> 198 ms and 665 -> 76 ms over
+        # six weeks. 143 MB.
+        #
+        # No payload. A partial index's predicate columns come free, and adding
+        # INCLUDE (time_limit, start_time) for the heatmap costs 115 MB more to
+        # buy 50 ms on one window -- the extra pages to walk eat the heap fetches
+        # they save.
+        Index(
+            "ix_slurm_jobs_submit_gpu",
+            "submit_time",
+            postgresql_where=text(
+                "allocated_gres_gpu > 0 AND harmonized_gpu_type IS NOT NULL"
+            ),
+        ),
     )
 
     id: int | None = Field(default=None, primary_key=True)
