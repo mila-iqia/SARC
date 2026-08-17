@@ -15,14 +15,14 @@ job_series_view = PGView(
     schema="public", signature="job_series_view", definition=f"{compiled_query}"
 )
 btree_gist = PGExtension(schema="public", signature="btree_gist")
-# Must exist before ix_slurm_jobs_run, which indexes calls to it.
-slurm_job_run = PGFunction(
+# Must exist before ix_slurm_jobs_end, which indexes calls to it.
+slurm_job_end = PGFunction(
     schema="public",
-    signature=job.SLURM_JOB_RUN_SIGNATURE,
-    definition=job.SLURM_JOB_RUN_DEFINITION,
+    signature=job.SLURM_JOB_END_SIGNATURE,
+    definition=job.SLURM_JOB_END_DEFINITION,
 )
 
-register_entities([btree_gist, slurm_job_run, job_series_view])
+register_entities([btree_gist, slurm_job_end, job_series_view])
 
 target_metadata = get_meta()
 

@@ -390,7 +390,7 @@
     <div class="ctrl">
       <label for="start">Start</label>
       <input type="date" id="start"
-             title="Start of the date range (inclusive), in UTC. Every plot and the job table cover the time jobs spent running in this range; the two Time-limit heatmaps cover the jobs submitted in it. Takes effect on Update." />
+             title="Start of the date range (inclusive), in UTC. Every plot and the job table cover GPU jobs — those with an allocated GPU and a known RGU — and the time they spent running in this range; the two Time-limit heatmaps cover the ones submitted in it. Takes effect on Update." />
     </div>
     <div class="ctrl">
       <label for="end">End</label>
@@ -743,7 +743,7 @@
     }
 
     const PLOT_NAMES = {
-      job_counts:      'Running jobs per period',
+      job_counts:      'Running GPU jobs per period',
       rgu_usage:       'RGU allocated vs used',
       clusterrgu:      'RGU by cluster',
       jobtable:        'Job table',
@@ -1493,7 +1493,7 @@
         marker: { color: colors },
         hovertemplate: 'Period: %{x}<br>Jobs: %{y}<extra></extra>',
       }], pLayout({
-        title: { text: 'Running jobs per period (click to focus)', font: { size: 16 } },
+        title: { text: 'Running GPU jobs per period (click to focus)', font: { size: 16 } },
         xaxis: { title: { text: 'Period start' }, type: 'category', tickangle: -45 },
         yaxis: { title: { text: 'Number of jobs' } },
         bargap: 0.15, margin: { l: 60, r: 20, t: 40, b: 100 },

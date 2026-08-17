@@ -9,8 +9,9 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import ARRAY, Float, literal, literal_column, nulls_last, text
+from sqlalchemy import ARRAY, Float, literal, literal_column, nulls_last, text, true
 from sqlalchemy.orm import aliased
+from sqlalchemy.sql.elements import Grouping
 from sqlmodel import Session, and_, case, col, func, select
 
 from sarc.api.v0 import Requestor, requestor
@@ -271,9 +272,9 @@ def _apply_focus(
 # through the same ``_ran_between`` predicate.
 
 
-def _job_run(cols):
-    """The job's run as a ``tstzrange``, through the indexed SQL function."""
-    return func.slurm_job_run(cols.start_time, cols.elapsed_time)
+def _job_end(cols):
+    """The instant the job's run stopped, through the indexed SQL function."""
+    return func.slurm_job_end(cols.start_time, cols.elapsed_time)
 
 
 def _job_span(cols):
@@ -292,18 +293,16 @@ def _ran_between(cols, lo, hi):
     """SQL predicate: the job was running at some point within ``[lo, hi)``.
 
     Bounds are epoch seconds -- either Python floats for a fixed window, or the
-    bucket columns of ``_bucket_table``.
+    bucket bounds of ``_bucket_table``.
 
-    A range overlap, not two comparisons: ``ix_slurm_jobs_run`` indexes exactly
-    this expression (see ``slurm_job_run`` in sarc/db/job.py), and any other
-    spelling reads every row. The degenerate cases fall out of range semantics:
-    a zero-elapsed run is the empty range and overlaps nothing, which also
-    excludes the incoherent rows (end before start, start before submit), all of
-    them zero-elapsed; a job that never started yields NULL, the function being
-    STRICT.
+    Two comparisons over ``ix_slurm_jobs_end_gpu``, which indexes the end (see
+    ``slurm_job_end`` in sarc/db/job.py); any other spelling reads every row.
+    The degenerate cases are the function's NULL: a job that never started, and
+    a run of no length. Half-open on both sides, so a run closing exactly on
+    ``lo`` is out, and one opening exactly on ``hi`` too.
     """
-    return _job_run(cols).op("&&")(
-        func.tstzrange(func.to_timestamp(lo), func.to_timestamp(hi), "[)")
+    return and_(
+        _job_end(cols) > func.to_timestamp(lo), cols.start_time < func.to_timestamp(hi)
     )
 
 
@@ -319,40 +318,56 @@ def _overlap_hours(cols, lo, hi):
     return (func.least(end, hi) - func.greatest(start, lo)) / 3600.0
 
 
-def _bucket_table(begin_dt: datetime, finish_dt: datetime, period: timedelta | str):
-    """The window's buckets as a table to join jobs against.
+def _bucket_table(
+    cols, begin_dt: datetime, finish_dt: datetime, period: timedelta | str
+):
+    """The buckets a job's run touches, as a LATERAL to join it against.
 
     Carries the bounds ``_iter_buckets`` already computes into SQL as epoch
     seconds: one definition of where a bucket starts, and no ``date_trunc``
     whose result depends on the session TimeZone. Rows are identified by
     position, matched back against the caller's own ``_iter_buckets`` list.
 
-    Joining against it also selects: a job overlapping no bucket is outside the
-    window, and unlike a submit_time range it keeps a job that started before it.
+    ``width_bucket`` binary-searches the starts for the first and last bucket the
+    run can reach, so a run expands to the one or two buckets it covers instead
+    of being tested against every one of them -- 1.09M pairs rather than 31M over
+    a seven-month window. Positions off either end read NULL and fail the WHERE,
+    so the search needs no clamping; a NULL bound makes generate_series yield
+    nothing, which is what a job that never started should get.
+
+    The overlap is spelled in epoch seconds here, not through ``_ran_between``:
+    the epochs are already computed for the search above, and reaching for
+    ``slurm_job_end`` again costs 30 % on a seven-month window. Same three cases,
+    so the two must move together: no start (no rows at all), no length (the
+    ``elapsed_time`` guard), and half-open bounds.
+
+    This picks the buckets, *not* the jobs: pair it with ``_ran_between`` over
+    the whole window, which is the half an index can answer.
 
     Bounds go in as two arrays rather than a VALUES list: the Bind message counts
     parameters on an Int16, so three columns per bucket capped the endpoint at
     65535/3 = 21845 buckets (pg8000 raised before the server saw anything). Two
     parameters whatever the count, same plan, fixed-size statement.
-    ``with_ordinality`` numbers from 1, making the position a guarantee.
     """
     bounds = list(_iter_buckets(begin_dt, finish_dt, period))
-    unnested = (
-        func.unnest(
-            literal([ps.timestamp() for ps, _ in bounds], ARRAY(Float)),
-            literal([pe.timestamp() for _, pe in bounds], ARRAY(Float)),
+    # Grouping: without the parentheses Postgres reads `$1::float8[][pos]` as a
+    # two-dimensional array type and hands back the whole array, silently.
+    starts = Grouping(literal([ps.timestamp() for ps, _ in bounds], ARRAY(Float)))
+    ends = Grouping(literal([pe.timestamp() for _, pe in bounds], ARRAY(Float)))
+    run_start, run_end = _job_span(cols)
+    # width_bucket numbers from 1, so position - 1 is the caller's index.
+    pos = func.generate_series(
+        func.width_bucket(run_start, starts), func.width_bucket(run_end, starts)
+    ).column_valued("pos")
+    return (
+        select(
+            (pos - 1).label("bucket_index"),
+            starts[pos].label("bucket_start"),
+            ends[pos].label("bucket_end"),
         )
-        # render_derived: PG names a set-returning function's columns after the
-        # function, AS bucket_bounds(...) names them one by one.
-        .table_valued("bucket_start", "bucket_end", with_ordinality="ord")
-        .render_derived()
-        .alias("bucket_bounds")
+        .where(starts[pos] < run_end, ends[pos] > run_start, cols.elapsed_time > 0)
+        .lateral("buckets")
     )
-    return select(
-        (unnested.c.ord - 1).label("bucket_index"),
-        unnested.c.bucket_start,
-        unnested.c.bucket_end,
-    ).subquery("buckets")
 
 
 def _no_buckets(begin_dt: datetime, finish_dt: datetime) -> bool:
@@ -416,6 +431,26 @@ def _apply_job_filters(
     return query
 
 
+def _gpu_only(query, cols):
+    """Restrict to the jobs the dashboard is about: GPU jobs with a known RGU.
+
+    Every plot counts the same population, so a bar and the count above it are
+    drawn from the same jobs. Nothing here is about CPU jobs, and leaving them in
+    made the counts disagree with the RGU they sit next to.
+
+    ``allocated_gres_gpu > 0`` is what the rest of SARC calls a GPU job (see
+    sarc/alerts/usage_alerts/), and it is what "used a GPU" means -- a job that
+    declares a GPU type but allocates none used none. ``harmonized_gpu_type``
+    says its RGU rate is known: it is a foreign key to gpurgudb, whose drac_rgu
+    is NOT NULL, so non-NULL here is exactly `allocated_rgu_drac IS NOT NULL` --
+    the schema guarantees it, not the data. Spelled this way, both columns are
+    slurm_jobs' own, so no endpoint drags in the gpurgudb join merely to filter.
+    """
+    return query.where(
+        cols.allocated_gres_gpu > 0, cols.harmonized_gpu_type.is_not(None)
+    )
+
+
 def _apply_rgu_base_view(
     query,
     cluster_ids: list[int] | None,
@@ -435,10 +470,7 @@ def _apply_rgu_base_view(
     Takes resolved cluster ids, like ``_apply_job_filters``: the 404 on an
     unknown name is the caller's to raise, before any early return of its own.
     """
-    query = query.select_from(JobSeriesDB).where(
-        col(JobSeriesDB.allocated_gpu_type).is_not(None),
-        col(JobSeriesDB.allocated_rgu_drac).is_not(None),
-    )
+    query = _gpu_only(query.select_from(JobSeriesDB), JobSeriesDB)
     return _apply_job_filters(
         query, JobSeriesDB, cluster_ids, cluster_user, job_states, scope_user_id
     )
@@ -546,23 +578,27 @@ def metrics_job_counts(
     if _no_buckets(begin_dt, finish_dt):
         return []
 
-    # Count every job, GPU or not; the DB view would degrade this to a
-    # full-table scan (see JobSeriesDB docstring), job_series_select keeps it
-    # narrow.
+    # The DB view would degrade this to a full-table scan (see JobSeriesDB
+    # docstring); job_series_select keeps it narrow.
     js = job_series_select(
         "start_time",
         "elapsed_time",
+        "allocated_gres_gpu",
+        "harmonized_gpu_type",
         "cluster_id",
         "cluster_user",
         "job_state",
         "sarc_user_id",
     ).subquery()
-    bucket_table = _bucket_table(begin_dt, finish_dt, parsed)
+    bucket_table = _bucket_table(js.c, begin_dt, finish_dt, parsed)
 
-    query = select(bucket_table.c.bucket_index, func.count().label("count")).join_from(
-        js,
-        bucket_table,
-        _ran_between(js.c, bucket_table.c.bucket_start, bucket_table.c.bucket_end),
+    query = _gpu_only(
+        select(bucket_table.c.bucket_index, func.count().label("count"))
+        .join_from(js, bucket_table, true())
+        # The window filter, which the bucket LATERAL does not do: it splits the
+        # jobs it is handed, it does not choose them.
+        .where(_ran_between(js.c, begin_dt.timestamp(), finish_dt.timestamp())),
+        js.c,
     )
     query = _apply_job_filters(
         query, js.c, cluster_ids, cluster_user, job_states, scope_user_id
@@ -670,12 +706,17 @@ def metrics_job_times_vs_limit(
     wait_expr = func.extract(
         "epoch", col(JobSeriesDB.start_time) - col(JobSeriesDB.submit_time)
     )
-    # start_time spelled out: no STRICT slurm_job_run to imply it here.
+    # start_time spelled out: no STRICT slurm_job_end to imply it here.
+    #
+    # _gpu_only's predicate, spelled out: this endpoint builds its filters as a
+    # list rather than on a query.
     base_filters = [
         col(JobSeriesDB.submit_time) >= begin_dt,
         col(JobSeriesDB.submit_time) < finish_dt,
         col(JobSeriesDB.time_limit).is_not(None),
         col(JobSeriesDB.start_time).is_not(None),
+        col(JobSeriesDB.allocated_gres_gpu) > 0,
+        col(JobSeriesDB.harmonized_gpu_type).is_not(None),
     ]
     if cluster_ids:
         base_filters.append(col(JobSeriesDB.cluster_id).in_(cluster_ids))
@@ -954,7 +995,7 @@ def metrics_rgu_usage(
     # used = the same scaled by the metric mean. The metric is parametrized over
     # 7 values but the view's *_waste columns are frozen to gpu_sm_occupancy /
     # cpu_utilization, hence our own targeted jobstatisticdb join.
-    buckets = _bucket_table(begin_dt, finish_dt, parsed)
+    buckets = _bucket_table(JobSeriesDB, begin_dt, finish_dt, parsed)
     rgu_hours = col(JobSeriesDB.allocated_rgu_drac) * _overlap_hours(
         JobSeriesDB, buckets.c.bucket_start, buckets.c.bucket_end
     )
@@ -1022,15 +1063,12 @@ def metrics_rgu_usage(
             isouter=True,
         )
     query = _join_trends(query)
-    # The join is also the time filter: a job overlapping no bucket is outside
-    # the window. A job spanning several buckets yields one row per bucket, which
-    # is what splits its RGU.h across them -- and what makes the trend means
-    # above read as "over the jobs running in this bucket".
+    # A job spanning several buckets yields one row per bucket, which is what
+    # splits its RGU.h across them -- and what makes the trend means above read
+    # as "over the jobs running in this bucket".
     query = (
-        query.join(
-            buckets,
-            _ran_between(JobSeriesDB, buckets.c.bucket_start, buckets.c.bucket_end),
-        )
+        query.join(buckets, true())
+        .where(_ran_between(JobSeriesDB, begin_dt.timestamp(), finish_dt.timestamp()))
         .group_by(buckets.c.bucket_index)
         .order_by(buckets.c.bucket_index)
     )
@@ -1098,7 +1136,7 @@ def metrics_rgu_by_cluster(
 
     # The view carries cluster_name and allocated_rgu_drac (the per-job RGU rate,
     # allocated_gres_gpu * drac_rgu), so no clusters/gpurgudb join is needed.
-    bucket_table = _bucket_table(begin_dt, finish_dt, parsed)
+    bucket_table = _bucket_table(JobSeriesDB, begin_dt, finish_dt, parsed)
     rgu_hours = col(JobSeriesDB.allocated_rgu_drac) * _overlap_hours(
         JobSeriesDB, bucket_table.c.bucket_start, bucket_table.c.bucket_end
     )
@@ -1114,12 +1152,8 @@ def metrics_rgu_by_cluster(
         scope_user_id=scope_user_id,
     )
     query = (
-        query.join(
-            bucket_table,
-            _ran_between(
-                JobSeriesDB, bucket_table.c.bucket_start, bucket_table.c.bucket_end
-            ),
-        )
+        query.join(bucket_table, true())
+        .where(_ran_between(JobSeriesDB, begin_dt.timestamp(), finish_dt.timestamp()))
         .group_by(bucket_table.c.bucket_index, "cluster_name")
         .order_by(bucket_table.c.bucket_index)
     )
@@ -1186,20 +1220,23 @@ def metrics_metric_trend(
     if _no_buckets(begin_dt, finish_dt):
         return {"periods": [], "series": [{"metric": metric, "mean": [], "max": []}]}
 
-    # No GPU filter, unlike the RGU endpoints: ``metric`` is user-selected and
-    # not always GPU-bound (system_memory is also measured on CPU-only jobs).
-    # The DB view would then degrade to a full-table scan (see JobSeriesDB
-    # docstring); job_series_select keeps it narrow, on ix_slurm_jobs_run.
+    # GPU jobs only, like every other plot (_gpu_only below), including for
+    # system_memory -- the one metric CPU jobs also report, but this dashboard
+    # does not plot them anywhere else. The DB view would degrade this to a
+    # full-table scan (see JobSeriesDB docstring); job_series_select keeps it
+    # narrow, on ix_slurm_jobs_end_gpu.
     js = job_series_select(
         "job_db_id",
         "start_time",
         "elapsed_time",
+        "allocated_gres_gpu",
+        "harmonized_gpu_type",
         "cluster_id",
         "cluster_user",
         "job_state",
         "sarc_user_id",
     ).subquery()
-    bucket_table = _bucket_table(begin_dt, finish_dt, parsed)
+    bucket_table = _bucket_table(js.c, begin_dt, finish_dt, parsed)
     m_mean = col(JobStatisticDB.mean)
     m_max = col(JobStatisticDB.max)
     # NaN-proof averages: a single NaN would contaminate the whole AVG, so each
@@ -1209,8 +1246,9 @@ def metrics_metric_trend(
     avg_max = func.avg(case((_is_real(m_max), m_max))).label("avg_max")
 
     query = (
-        select(bucket_table.c.bucket_index, avg_mean, avg_max)
-        .select_from(js)
+        _gpu_only(
+            select(bucket_table.c.bucket_index, avg_mean, avg_max).select_from(js), js.c
+        )
         .join(
             JobStatisticDB,
             and_(
@@ -1218,10 +1256,8 @@ def metrics_metric_trend(
                 col(JobStatisticDB.name) == metric,
             ),
         )
-        .join(
-            bucket_table,
-            _ran_between(js.c, bucket_table.c.bucket_start, bucket_table.c.bucket_end),
-        )
+        .join(bucket_table, true())
+        .where(_ran_between(js.c, begin_dt.timestamp(), finish_dt.timestamp()))
         .group_by(bucket_table.c.bucket_index)
         .order_by(bucket_table.c.bucket_index)
     )

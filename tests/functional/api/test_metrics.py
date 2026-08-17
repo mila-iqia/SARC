@@ -37,6 +37,7 @@ from sqlmodel import col, select
 
 from sarc.config import config
 from sarc.db.job import JobStatisticDB, SlurmJobDB, SlurmState
+from sarc.db.job_series import JobSeriesDB
 from sarc.db.support import GpuRguDB
 
 # Covers every factory-seeded job (submitted from 2023-02-14, +6h each).
@@ -44,7 +45,7 @@ WINDOW = {"start": "2023-02-01", "end": "2023-03-01"}
 
 # QUIET is a window no seeded job touches (the factory runs 2023-02-14 05:01 to
 # 2023-02-20 05:01), so one job placed inside it accounts for everything the
-# endpoints report -- job_counts included, which counts non-GPU jobs too.
+# endpoints report.
 QUIET = {"start": "2023-02-01", "end": "2023-02-11"}
 _QUIET_DAYS = 10
 
@@ -419,15 +420,13 @@ def test_job_counts_with_data(dash_client):
     """
     begin = datetime(2023, 2, 1, tzinfo=timezone.utc)
     finish = datetime(2023, 3, 1, tzinfo=timezone.utc)
-    with config.db.session() as sess:
-        jobs = sess.exec(select(SlurmJobDB)).all()
-        ran_in_window = [
-            job
-            for job in jobs
-            if job.start_time is not None
-            and job.start_time < finish
-            and job.start_time + timedelta(seconds=job.elapsed_time) > begin
-        ]
+    ran_in_window = [
+        job
+        for job in _dashboard_jobs()
+        if job.start_time is not None
+        and job.start_time < finish
+        and job.start_time + timedelta(seconds=job.elapsed_time) > begin
+    ]
     assert ran_in_window, "expected seeded jobs running in the window"
 
     whole = dash_client.get(
@@ -515,10 +514,32 @@ def test_job_times_vs_limit_follows_the_submission(dash_client, dash_db):
         _RGU_PER_JOB * 3 * 24
     )
 
-    submitted = _jobs_submitted()
-    assert submitted, "the seeded jobs must still populate this plot"
+    assert _jobs_submitted() == 0, "the one job left was submitted before the window"
     data = dash_client.get("/dash/metrics/job_times_vs_limit", params=WINDOW).json()
-    assert data["total_jobs"] == submitted
+    assert data["total_jobs"] == 0
+
+    # And it is not that the plot counts nothing: over a window holding the
+    # submission, the same job shows up.
+    january = {"start": "2023-01-01", "end": "2023-02-01"}
+    data = dash_client.get("/dash/metrics/job_times_vs_limit", params=january).json()
+    assert data["total_jobs"] == 1
+
+
+def _dashboard_jobs() -> list[JobSeriesDB]:
+    """The seeded jobs every plot draws from: GPU jobs with a known RGU.
+
+    Read off the view the endpoints read, so the population is stated once here
+    and the tests never restate the SQL that selects it.
+    """
+    with config.db.session() as sess:
+        return list(
+            sess.exec(
+                select(JobSeriesDB).where(
+                    col(JobSeriesDB.allocated_gres_gpu) > 0,
+                    col(JobSeriesDB.harmonized_gpu_type).is_not(None),
+                )
+            ).all()
+        )
 
 
 def _jobs_submitted() -> int:
@@ -527,11 +548,9 @@ def _jobs_submitted() -> int:
     the same reason as _jobs_that_ran()."""
     begin = datetime(2023, 2, 1, tzinfo=timezone.utc)
     finish = datetime(2023, 3, 1, tzinfo=timezone.utc)
-    with config.db.session() as sess:
-        jobs = sess.exec(select(SlurmJobDB)).all()
     return sum(
         1
-        for job in jobs
+        for job in _dashboard_jobs()
         if job.start_time is not None
         and job.time_limit is not None
         and begin <= job.submit_time < finish
@@ -737,8 +756,7 @@ def _run_single_job(sess, start: datetime, hours: float):
     Pro-rating is about one job meeting several buckets, so these tests need a
     job whose span they choose; the other three are detached rather than moved,
     so whatever lands in a bucket comes from this one alone. Detaching drops the
-    RGU weight, hence the GPU-filtered endpoints only: job_counts and
-    metric_trend still see the other three.
+    RGU weight, which every plot now filters on, so the isolation is total.
     """
     jobs = sess.exec(
         select(SlurmJobDB)
@@ -762,11 +780,9 @@ def _jobs_that_ran() -> int:
     not restate the SQL it is checking."""
     begin = datetime(2023, 2, 1, tzinfo=timezone.utc)
     finish = datetime(2023, 3, 1, tzinfo=timezone.utc)
-    with config.db.session() as sess:
-        jobs = sess.exec(select(SlurmJobDB)).all()
     return sum(
         1
-        for job in jobs
+        for job in _dashboard_jobs()
         if job.start_time is not None
         and job.elapsed_time > 0
         and job.start_time < finish
@@ -888,9 +904,10 @@ def test_a_job_that_never_started_appears_nowhere(dash_client, dash_db):
     """A job still queued has no span, so it meets no bucket -- whatever its
     elapsed_time says.
 
-    Separate from the zero-elapsed case above: that one spans the empty range,
-    this one spans NULL, and ``_overlap_hours`` alone would hand it the full
-    width of every bucket. Only ``slurm_job_run`` being STRICT keeps it out.
+    Separate from the zero-elapsed case above: that one has no end because it
+    lasted nothing, this one because it never began, and ``_overlap_hours``
+    alone would hand either the full width of every bucket. Only
+    ``slurm_job_end`` returning NULL keeps them out.
     """
     with config.db.session() as sess:
         job = sess.exec(

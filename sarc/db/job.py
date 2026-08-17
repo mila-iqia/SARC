@@ -67,29 +67,30 @@ class JobStatisticsFetchDateDB(SQLModel, table=True):
     )
 
 
-# A job's run as a time range, for the /dash "was it running then?" queries.
+# The instant a job's run stopped, for the /dash "was it running then?" queries:
+# a run meets [lo, hi) exactly when this is above lo and start_time below hi.
 #
 # A function only to be IMMUTABLE, which an index requires: `timestamptz +
 # interval` is merely STABLE (days/months shift with the session TimeZone),
-# while make_interval(secs => ...) is absolute. STRICT keeps a never-started job
-# out -- tstzrange(NULL, NULL) is the *unbounded* range, overlapping every
-# period. `[)` is the default, spelled out: buckets tile the window bound to
-# bound, so half-open puts each instant in exactly one, and makes a zero-elapsed
-# run the empty range (which overlaps nothing) rather than a point.
+# while make_interval(secs => ...) is absolute. NULL is "meets no window": STRICT
+# gives that to a job that never started, and the CASE to a run of no length,
+# which occupies no instant (the incoherent rows -- end before start, start
+# before submit -- are all zero-elapsed). Both then drop out of the comparison
+# above, with no second test to forget.
 #
 # Registered with alembic-utils in alembic/env.py. Alembic replaces the function
-# in place, leaving ix_slurm_jobs_run on the old result: a body change that
+# in place, leaving the indexes below on the old result: a body change that
 # alters the result must REINDEX in the same migration.
-SLURM_JOB_RUN_SIGNATURE = (
-    "slurm_job_run(job_start timestamptz, job_elapsed double precision)"
+SLURM_JOB_END_SIGNATURE = (
+    "slurm_job_end(job_start timestamptz, job_elapsed double precision)"
 )
-SLURM_JOB_RUN_DEFINITION = """
-returns tstzrange
+SLURM_JOB_END_DEFINITION = """
+returns timestamptz
 language sql
 immutable
 strict
 parallel safe
-as $$ select tstzrange(job_start, job_start + make_interval(secs => job_elapsed), '[)') $$
+as $$ select case when job_elapsed > 0 then job_start + make_interval(secs => job_elapsed) end $$
 """
 
 
@@ -105,39 +106,41 @@ class SlurmJobDB(SQLModel, table=True):
             postgresql_include=["id"],
         ),
         # Ordered on submit_time, which the /dash job table now only *sorts* by:
-        # the window filter became a range overlap, answered by ix_slurm_jobs_run
-        # below. Still needed -- without it that page falls to a seq scan.
+        # the window filter reads the index below. Still needed -- without it
+        # that page falls to a seq scan. No payload: measured on 12M jobs, the
+        # sort reads 88 index tuples for a 50-row page, so it wants the order and
+        # nothing else, and the payload it used to carry cost 1026 of 1281 MB.
+        Index("ix_slurm_jobs_submit", "submit_time"),
+        # "Which jobs were running during a period" is `end > lo AND start < hi`,
+        # two scalar comparisons over one indexed expression. Covering, so the
+        # window never reaches the heap; and a btree scan parallelises, which no
+        # GiST scan does -- measured on 12M jobs, that alone is most of the 3x
+        # against a GiST index on the range.
         #
-        # The INCLUDE payload dates from when the filter was on submit_time too.
-        # Measured on 12M jobs: no query left does an index-only scan here (the
-        # overlap needs start_time, which the index does not carry), and dropping
-        # the payload leaves the same plan for 821 MB of the 1281 MB. Reclaiming
-        # it is a REINDEX, worth its own change.
+        # Partial because every /dash plot is about GPU jobs (_gpu_only in
+        # sarc/api/metrics.py): the filter is paid once, at build time, over the
+        # 56 % of rows that have a GPU. Its predicate must stay the one the
+        # endpoints write, or the planner cannot prove the index applies. A
+        # reader that drops the filter falls to a seq scan -- which is what a
+        # total variant covered, for 567 MB and no measurable gain once every
+        # endpoint filtered.
         Index(
-            "ix_slurm_jobs_submit_gpu_type",
-            "submit_time",
-            "allocated_gpu_type",
+            "ix_slurm_jobs_end_gpu",
+            text("slurm_job_end(start_time, elapsed_time)"),
             postgresql_include=[
+                "start_time",  # with elapsed_time: the expression's own inputs,
+                "elapsed_time",  # which an index-only scan must be able to return
                 "id",
                 "harmonized_gpu_type",
                 "allocated_gres_gpu",
-                "elapsed_time",
                 "cluster_id",
                 "cluster_user",
                 "sarc_user_id",  # used by view when joining users and member_type
+                "job_state",
             ],
-        ),
-        # "Which jobs were running during a period" is a range overlap, which no
-        # btree can answer: it orders one scalar, and the answer needs start_time
-        # and elapsed_time together. GiST indexes the range itself, each node
-        # bounding the ranges below it, so a period missing a node prunes the
-        # whole subtree. Serves every /dash view, RGU included -- a GPU-only
-        # variant was measured at 15 % on the median query for 350 MB and a
-        # second tree to maintain, and was dropped.
-        Index(
-            "ix_slurm_jobs_run",
-            text("slurm_job_run(start_time, elapsed_time)"),
-            postgresql_using="gist",
+            postgresql_where=text(
+                "allocated_gres_gpu > 0 AND harmonized_gpu_type IS NOT NULL"
+            ),
         ),
     )
 
