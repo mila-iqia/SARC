@@ -120,14 +120,14 @@ _DEFAULT_WINDOW_DAYS = 1
 _DEFAULT_PERIOD = "w"
 
 # GPU/system metrics (stored per-job in JobStatisticDB) normalized to [0, 1]
-_METRICS_0_1: dict[str, str] = {
-    "gpu_sm_occupancy": "SM occupancy",
-    "gpu_utilization": "GPU utilization",
-    "gpu_utilization_fp16": "GPU util. FP16",
-    "gpu_utilization_fp32": "GPU util. FP32",
-    "gpu_utilization_fp64": "GPU util. FP64",
-    "gpu_memory": "GPU memory",
-    "system_memory": "System memory",
+_METRICS_0_1: set[str] = {
+    "gpu_sm_occupancy",
+    "gpu_utilization",
+    "gpu_utilization_fp16",
+    "gpu_utilization_fp32",
+    "gpu_utilization_fp64",
+    "gpu_memory",
+    "system_memory",
 }
 
 # Metric means overlaid on the RGU-usage plot: fixed, unlike the `metric`
