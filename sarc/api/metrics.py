@@ -318,15 +318,48 @@ def _overlap_hours(cols, lo, hi):
     return (func.least(end, hi) - func.greatest(start, lo)) / 3600.0
 
 
+def _bucket_bounds(begin_dt: datetime, finish_dt: datetime, period: timedelta | str):
+    """The bucket bounds as two SQL arrays, for ``width_bucket`` to search.
+
+    Carries the bounds ``_iter_buckets`` already computes into SQL as epoch
+    seconds: one definition of where a bucket starts, and no ``date_trunc``
+    whose result depends on the session TimeZone. Buckets are identified by
+    position, matched back against the caller's own ``_iter_buckets`` list.
+
+    Arrays rather than a VALUES list: the Bind message counts parameters on an
+    Int16, so three columns per bucket capped the endpoint at 65535/3 = 21845
+    buckets (pg8000 raised before the server saw anything). Two parameters
+    whatever the count, same plan, fixed-size statement.
+    """
+    bounds = list(_iter_buckets(begin_dt, finish_dt, period))
+    # Grouping: without the parentheses Postgres reads `$1::float8[][pos]` as a
+    # two-dimensional array type and hands back the whole array, silently.
+    return (
+        Grouping(literal([ps.timestamp() for ps, _ in bounds], ARRAY(Float))),
+        Grouping(literal([pe.timestamp() for _, pe in bounds], ARRAY(Float))),
+    )
+
+
+def _submitted_bucket(
+    cols, begin_dt: datetime, finish_dt: datetime, period: timedelta | str
+):
+    """The bucket a job was submitted in, as a ``bucket_index`` expression.
+
+    The counterpart of ``_bucket_table`` for a plot that reads submissions: a
+    submit instant falls in exactly one bucket, so there is nothing to expand and
+    no LATERAL to join -- the same binary search over the same bounds, run once
+    per job. Only meaningful for a job inside the window; the caller's
+    ``submit_time`` filter is what puts it there.
+    """
+    starts, _ = _bucket_bounds(begin_dt, finish_dt, period)
+    # width_bucket numbers from 1, so its result - 1 is the caller's index.
+    return func.width_bucket(func.extract("epoch", cols.submit_time), starts) - 1
+
+
 def _bucket_table(
     cols, begin_dt: datetime, finish_dt: datetime, period: timedelta | str
 ):
     """The buckets a job's run touches, as a LATERAL to join it against.
-
-    Carries the bounds ``_iter_buckets`` already computes into SQL as epoch
-    seconds: one definition of where a bucket starts, and no ``date_trunc``
-    whose result depends on the session TimeZone. Rows are identified by
-    position, matched back against the caller's own ``_iter_buckets`` list.
 
     ``width_bucket`` binary-searches the starts for the first and last bucket the
     run can reach, so a run expands to the one or two buckets it covers instead
@@ -343,17 +376,8 @@ def _bucket_table(
 
     This picks the buckets, *not* the jobs: pair it with ``_ran_between`` over
     the whole window, which is the half an index can answer.
-
-    Bounds go in as two arrays rather than a VALUES list: the Bind message counts
-    parameters on an Int16, so three columns per bucket capped the endpoint at
-    65535/3 = 21845 buckets (pg8000 raised before the server saw anything). Two
-    parameters whatever the count, same plan, fixed-size statement.
     """
-    bounds = list(_iter_buckets(begin_dt, finish_dt, period))
-    # Grouping: without the parentheses Postgres reads `$1::float8[][pos]` as a
-    # two-dimensional array type and hands back the whole array, silently.
-    starts = Grouping(literal([ps.timestamp() for ps, _ in bounds], ARRAY(Float)))
-    ends = Grouping(literal([pe.timestamp() for _, pe in bounds], ARRAY(Float)))
+    starts, ends = _bucket_bounds(begin_dt, finish_dt, period)
     run_start, run_end = _job_span(cols)
     # width_bucket numbers from 1, so position - 1 is the caller's index.
     pos = func.generate_series(
@@ -558,17 +582,24 @@ def metrics_job_counts(
     clusters: list[str] = Query(default=[]),
     cluster_user: str | None = Query(default=None),
     job_states: list[str] = Query(default=[]),
+    submitted: bool = Query(default=False),
     sess: Session = Depends(session_dep),
 ):
-    """Job count per time bucket.
+    """Job count per time bucket, of the jobs running or of the jobs submitted.
 
-    Counts the jobs *running* in each ``period`` bucket of the window, after the
-    cluster/user/state filters. Returns one {period_start, period_end, count} per
-    bucket, with empty buckets reported as 0.
+    Returns one {period_start, period_end, count} per ``period`` bucket of the
+    window, empty buckets reported as 0, after the cluster/user/state filters.
 
-    A count is not an integral over time, so nothing is pro-rated: a job spanning
-    three buckets is one job in each, and the counts do not add up to a number of
-    distinct jobs. It reads as occupancy, not as a submission rate.
+    Default -- the jobs *running* in each bucket. A count is not an integral over
+    time, so nothing is pro-rated: a job spanning three buckets is one job in
+    each, and the counts do not add up to a number of distinct jobs. It reads as
+    occupancy, and is the population every other plot draws from.
+
+    ``submitted=true`` -- the jobs *submitted* in each bucket. Each job lands in
+    exactly one, so these counts do add up, and they read as a submission rate.
+    The window then selects on ``submit_time``, so this is deliberately not the
+    population of the other plots: a job submitted in the window may run outside
+    it, and one running in it may have been submitted long before.
     """
     begin_dt, finish_dt = _date_range(start, end)
     parsed = _parse_period(period)
@@ -579,10 +610,12 @@ def metrics_job_counts(
         return []
 
     # The DB view would degrade this to a full-table scan (see JobSeriesDB
-    # docstring); job_series_select keeps it narrow.
+    # docstring); job_series_select keeps it narrow. The two modes ask for
+    # different time columns rather than for both: submit_time is not in
+    # ix_slurm_jobs_end_gpu, so requesting it here unconditionally would cost the
+    # running mode the index-only scan that index exists for.
     js = job_series_select(
-        "start_time",
-        "elapsed_time",
+        *(("submit_time",) if submitted else ("start_time", "elapsed_time")),
         "allocated_gres_gpu",
         "harmonized_gpu_type",
         "cluster_id",
@@ -590,22 +623,36 @@ def metrics_job_counts(
         "job_state",
         "sarc_user_id",
     ).subquery()
-    bucket_table = _bucket_table(js.c, begin_dt, finish_dt, parsed)
 
-    query = _gpu_only(
-        select(bucket_table.c.bucket_index, func.count().label("count"))
-        .join_from(js, bucket_table, true())
-        # The window filter, which the bucket LATERAL does not do: it splits the
-        # jobs it is handed, it does not choose them.
-        .where(_ran_between(js.c, begin_dt.timestamp(), finish_dt.timestamp())),
-        js.c,
-    )
+    if submitted:
+        bucket_index = _submitted_bucket(js.c, begin_dt, finish_dt, parsed).label(
+            "bucket_index"
+        )
+        query = (
+            select(bucket_index, func.count().label("count"))
+            .select_from(js)
+            .where(js.c.submit_time >= begin_dt, js.c.submit_time < finish_dt)
+        )
+    else:
+        bucket_table = _bucket_table(js.c, begin_dt, finish_dt, parsed)
+        bucket_index = bucket_table.c.bucket_index
+        query = (
+            select(bucket_index, func.count().label("count"))
+            .join_from(js, bucket_table, true())
+            # The window filter, which the bucket LATERAL does not do: it splits
+            # the jobs it is handed, it does not choose them.
+            .where(_ran_between(js.c, begin_dt.timestamp(), finish_dt.timestamp()))
+        )
+
+    query = _gpu_only(query, js.c)
     query = _apply_job_filters(
         query, js.c, cluster_ids, cluster_user, job_states, scope_user_id
     )
-    query = query.group_by(bucket_table.c.bucket_index).order_by(
-        bucket_table.c.bucket_index
-    )
+    # By output column name, not by the expression again: rendered twice, the
+    # submitted-mode expression gets a second set of placeholders for the bucket
+    # bounds, and Postgres does not match $6 against $1 as one expression.
+    key = literal_column("bucket_index")
+    query = query.group_by(key).order_by(key)
 
     counts = {row.bucket_index: int(row.count) for row in sess.exec(query)}
 

@@ -128,14 +128,15 @@
                display: flex; align-items: center; gap: 6px; }
     .ms-plot { width: 100%; flex: 1; min-height: 0; }
     .ms-metric2 { font-size: 12px; padding: 1px 6px; max-width: 160px; }
-    /* RGU-usage: header slot the renderer fills with the "View:" picker once the
-       data is in (same pattern as .jt-head-slot). Off the plot, so the Plotly
-       title keeps the full width; flex:1 centres it between title and actions. */
-    .ru-head-slot {
+    /* Header slot the renderer fills with the tile's "View:" picker once the data
+       is in (same pattern as .jt-head-slot), for the tiles that have one:
+       RGU-usage and job counts. Off the plot, so the Plotly title keeps the full
+       width; flex:1 centres it between title and actions. */
+    .view-head-slot {
       flex: 1; display: flex; align-items: center; justify-content: center;
       gap: 6px; font-size: 12px; font-weight: 400; color: #888;
     }
-    .ru-head-slot .add-select { padding: 1px 6px; font-size: 11px; }
+    .view-head-slot .add-select { padding: 1px 6px; font-size: 11px; }
     /* "?" help badges (RGU-usage tile header, page title line): standard
        circular help button (quiet grey, blue on hover — same hover palette as
        .add-tile-btn); clicking it opens a definition panel that expands
@@ -390,7 +391,7 @@
     <div class="ctrl">
       <label for="start">Start</label>
       <input type="date" id="start"
-             title="Start of the date range (inclusive), in UTC. Every plot and the job table cover GPU jobs — those with an allocated GPU and a known RGU — and the time they spent running in this range; the two Time-limit heatmaps cover the ones submitted in it. Takes effect on Update." />
+             title="Start of the date range (inclusive), in UTC. Every plot and the job table cover GPU jobs — those with an allocated GPU and a known RGU — and the time they spent running in this range; the two Time-limit heatmaps, and the GPU-jobs-per-period plot in its Submitted view, cover the ones submitted in it. Takes effect on Update." />
     </div>
     <div class="ctrl">
       <label for="end">End</label>
@@ -578,6 +579,7 @@
           {% endif %}
           metricScatterMetric2,
           rguUsageView,
+          jobCountsView,
           jobTableHiddenCols: [...jobTableHiddenCols],
           jobTableLimit:   JOBTABLE_DEFAULTS.limit,
           jobTableSortBy:  JOBTABLE_DEFAULTS.sortBy,
@@ -743,7 +745,7 @@
     }
 
     const PLOT_NAMES = {
-      job_counts:      'Running GPU jobs per period',
+      job_counts:      'GPU jobs per period',
       rgu_usage:       'RGU allocated vs used',
       clusterrgu:      'RGU by cluster',
       jobtable:        'Job table',
@@ -886,21 +888,45 @@
       }));
     }
 
-    // Switching the RGU-usage view is a different query, not a redraw: the
-    // whole-range view asks for the range as a single bucket, which is what
-    // makes its metric means count each job once instead of once per bucket it
-    // ran through. Re-render those tiles the way a first load does -- renderTile
-    // shows "Loading…" until the answer lands. Nothing is evicted: the two views
-    // have different URLs, so each keeps its entry and switching back is free.
-    async function reloadRguUsageTiles() {
+    // Switching a "View:" picker is a different query, not a redraw -- the RGU
+    // whole-range view asks for the range as a single bucket, the job-counts
+    // submitted view selects on submit_time. Re-render every tile of that type
+    // the way a first load does; renderTile shows "Loading…" until the answer
+    // lands. Nothing is evicted: the two views have different URLs, so each keeps
+    // its cache entry and switching back is free.
+    async function reloadTilesOfType(plotType) {
       if (!currentParams) return;
       const tiles = [];
-      tileLayout.forEach((row, ri) => row.forEach((plotType, ci) => {
-        if (plotType !== 'rgu_usage') return;
+      tileLayout.forEach((row, ri) => row.forEach((t, ci) => {
+        if (t !== plotType) return;
         const chartDiv = document.getElementById(`tile-${ri}-${ci}`);
         if (chartDiv) tiles.push(chartDiv);
       }));
-      await Promise.all(tiles.map(chartDiv => renderTile(chartDiv, 'rgu_usage')));
+      await Promise.all(tiles.map(chartDiv => renderTile(chartDiv, plotType)));
+    }
+
+    // Fill a tile's header "View:" picker. Called from the renderer, i.e. only
+    // once the data is in: renderTile empties the slot while loading, which is
+    // also what keeps a second switch from racing the first. closest('.tile') so
+    // several tiles of the same type each fill their own; the view itself is
+    // module-scoped, so they all follow.
+    function fillViewPicker(el, options, current, onPick) {
+      const slot = el?.closest('.tile')?.querySelector('.view-head-slot');
+      if (!slot) return;
+      slot.innerHTML = '';
+      const lab = document.createElement('label');
+      lab.textContent = 'View: ';
+      const sel = document.createElement('select');
+      sel.className = 'add-select';
+      options.forEach(([v, t]) => {
+        const o = document.createElement('option');
+        o.value = v; o.textContent = t;
+        if (v === current) o.selected = true;
+        sel.appendChild(o);
+      });
+      lab.appendChild(sel);
+      slot.appendChild(lab);
+      sel.addEventListener('change', () => onPick(sel.value));
     }
 
     // Plotly's own responsive handler resizes the plots live but can leave a
@@ -1046,6 +1072,15 @@
     // range, focus-agnostic). Module-scoped like the other plot-local state, so it
     // survives Updates and is shared by every RGU-usage tile.
     let rguUsageView = _saved.rguUsageView || 'per_period';
+    // Job-counts tile view: 'running' (jobs running in each bucket — occupancy,
+    // and the population every other tile draws from) or 'submitted' (jobs
+    // submitted in each bucket — a submission rate, on a different population).
+    // Module-scoped like rguUsageView, and like it a different query, not a
+    // redraw.
+    let jobCountsView = _saved.jobCountsView || 'running';
+    // The tiles whose header carries a "View:" picker, i.e. the ones that get a
+    // .view-head-slot and are reloaded as a group when their view changes.
+    const VIEW_PICKER_TILES = new Set(['rgu_usage', 'job_counts']);
 
     function layoutToParam(l) {
       return l.map(row => row.join(',')).join(';');
@@ -1276,10 +1311,10 @@
             const slot = document.createElement('span');
             slot.className = 'jt-head-slot';
             header.appendChild(slot);
-          } else if (plotType === 'rgu_usage') {
+          } else if (VIEW_PICKER_TILES.has(plotType)) {
             // Same idea for the "View:" picker: filled once the data is in.
             const slot = document.createElement('span');
-            slot.className = 'ru-head-slot';
+            slot.className = 'view-head-slot';
             header.appendChild(slot);
           }
           {% if is_admin %}
@@ -1478,10 +1513,17 @@
     }
 
     function renderJobCounts(id, d) {
+      const el = document.getElementById(id);
+      // Before the empty check: with nothing to draw the reader must still be
+      // able to switch view without going through Update.
+      fillViewPicker(el, [['running', 'Running'], ['submitted', 'Submitted']],
+        jobCountsView,
+        v => { jobCountsView = v; saveState(); reloadTilesOfType('job_counts'); });
       if (!d.job_counts.length) {
-        showNoData(document.getElementById(id));
+        showNoData(el);
         return;
       }
+      const submitted = jobCountsView === 'submitted';
       const colors = d.job_counts.map(r => {
         const inf = periodInFocus(r.period_start);
         return inf === null ? '#1a6fd4' : inf ? '#e07020' : '#c8d8f0';
@@ -1493,7 +1535,11 @@
         marker: { color: colors },
         hovertemplate: 'Period: %{x}<br>Jobs: %{y}<extra></extra>',
       }], pLayout({
-        title: { text: 'Running GPU jobs per period (click to focus)', font: { size: 16 } },
+        // The mode belongs in the title, not only in the picker: the two count
+        // different populations, and only the running one is the population the
+        // neighbouring tiles are drawn from.
+        title: { text: (submitted ? 'Submitted' : 'Running')
+                       + ' GPU jobs per period (click to focus)', font: { size: 16 } },
         xaxis: { title: { text: 'Period start' }, type: 'category', tickangle: -45 },
         yaxis: { title: { text: 'Number of jobs' } },
         bargap: 0.15, margin: { l: 60, r: 20, t: 40, b: 100 },
@@ -1523,28 +1569,9 @@
       box.appendChild(plot);
       el.appendChild(box);
 
-      // "View:" picker in this tile's header slot (closest('.tile') so several
-      // RGU-usage tiles each fill their own). Filled here, i.e. only once the
-      // data is in; renderTile clears it while loading.
-      const slot = el.closest('.tile')?.querySelector('.ru-head-slot');
-      if (slot) {
-        slot.innerHTML = '';
-        const lab = document.createElement('label');
-        lab.textContent = 'View: ';
-        const sel = document.createElement('select');
-        sel.className = 'add-select';
-        [['per_period', 'Per period'], ['whole_range', 'Whole range']].forEach(([v, t]) => {
-          const o = document.createElement('option');
-          o.value = v; o.textContent = t;
-          if (v === rguUsageView) o.selected = true;
-          sel.appendChild(o);
-        });
-        lab.appendChild(sel);
-        slot.appendChild(lab);
-        // View is module-scoped, so every RGU-usage tile follows -- and it picks
-        // the query, not just the drawing, hence a reload rather than a redraw.
-        sel.addEventListener('change', () => { rguUsageView = sel.value; saveState(); reloadRguUsageTiles(); });
-      }
+      fillViewPicker(el, [['per_period', 'Per period'], ['whole_range', 'Whole range']],
+        rguUsageView,
+        v => { rguUsageView = v; saveState(); reloadTilesOfType('rgu_usage'); });
 
       // After the picker, not before: with nothing to draw the reader must still
       // be able to switch view without going through Update.
@@ -2784,7 +2811,9 @@
       };
       const densityParams = { ...base, metric: p.metric };
       switch (ep) {
-        case 'job_counts': return '/dash/metrics/job_counts?' + new URLSearchParams({ ...base, period: p.period });
+        // submitted=true counts the jobs submitted in each bucket instead of the
+        // ones running in it -- a different population, hence a different URL.
+        case 'job_counts': return '/dash/metrics/job_counts?' + new URLSearchParams({ ...base, period: p.period, ...(jobCountsView === 'submitted' ? { submitted: 'true' } : {}) });
         case 'heatmap':   return '/dash/metrics/job_times_vs_limit?' + new URLSearchParams({ ...base, ...focusParams });
         // whole=true asks for the range as one bucket, which is what the
         // whole-range view draws; the server then ignores `period`.
@@ -2864,13 +2893,12 @@
         return;
       }
       chartDiv.innerHTML = '<div class="tile-loading">Loading…</div>';
-      // The RGU-usage "View:" picker lives in the tile header, outside chartDiv:
-      // clear it here so it is absent while loading and on error, and let
-      // renderRguUsage put it back once the data is in. That is also what keeps
-      // a second view switch from racing this one: the control is gone until
-      // the answer lands.
-      const ruSlot = chartDiv.closest('.tile')?.querySelector('.ru-head-slot');
-      if (ruSlot) ruSlot.innerHTML = '';
+      // A "View:" picker lives in the tile header, outside chartDiv: clear it
+      // here so it is absent while loading and on error, and let the renderer put
+      // it back once the data is in. That is also what keeps a second view switch
+      // from racing this one: the control is gone until the answer lands.
+      const viewSlot = chartDiv.closest('.tile')?.querySelector('.view-head-slot');
+      if (viewSlot) viewSlot.innerHTML = '';
       try {
         const data = await ensureEndpoint(ep, endpointURL(ep, currentParams));
         if (!document.body.contains(chartDiv)) return;

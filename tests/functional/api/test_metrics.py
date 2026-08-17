@@ -440,6 +440,15 @@ def test_job_counts_with_data(dash_client):
     ).json()
     assert sum(row["count"] for row in daily) >= len(ran_in_window)
 
+    # The Submitted view answers the other question: each job lands in exactly one
+    # bucket, so there its buckets do add up -- and to its own population.
+    submitted = [job for job in _dashboard_jobs() if begin <= job.submit_time < finish]
+    submitted_daily = dash_client.get(
+        "/dash/metrics/job_counts",
+        params={**WINDOW, "period": "d", "submitted": "true"},
+    ).json()
+    assert sum(row["count"] for row in submitted_daily) == len(submitted)
+
 
 # Every bucketed endpoint, with the empty payload it owes an empty window.
 _BUCKETED = [
@@ -750,13 +759,18 @@ def test_metric_comparison_with_data(dash_client, dash_db):
 # === Pro-rating =============================================================
 
 
-def _run_single_job(sess, start: datetime, hours: float):
+def _run_single_job(
+    sess, start: datetime, hours: float, submit: datetime | None = None
+):
     """Leave exactly one enriched GPU job, running for ``hours`` from ``start``.
 
     Pro-rating is about one job meeting several buckets, so these tests need a
     job whose span they choose; the other three are detached rather than moved,
     so whatever lands in a bucket comes from this one alone. Detaching drops the
     RGU weight, which every plot now filters on, so the isolation is total.
+
+    ``submit`` defaults to ``start``; pass it to pull the submission away from the
+    run, which is what separates the two job-count views.
     """
     jobs = sess.exec(
         select(SlurmJobDB)
@@ -767,7 +781,8 @@ def _run_single_job(sess, start: datetime, hours: float):
         job.harmonized_gpu_type = None
         sess.add(job)
     job = jobs[0]
-    job.submit_time = job.start_time = start
+    job.start_time = start
+    job.submit_time = submit or start
     job.elapsed_time = hours * 3600.0
     job.end_time = start + timedelta(hours=hours)
     sess.add(job)
@@ -838,6 +853,36 @@ def test_a_run_owes_the_window_its_hours_inside_it(
 
     table = dash_client.get("/dash/metrics/jobs", params=WINDOW).json()
     assert table["total"] == (1 if owed else 0)
+
+
+def test_the_two_job_count_views_select_on_different_columns(dash_client, dash_db):
+    """One job queued on 01-15 and running 01-30 to 02-04, so the views disagree.
+
+    A January window holds its submission and not its run; WINDOW holds its run
+    and not its submission. Each view counts it in exactly one of the two, which
+    is the whole reason for offering both.
+    """
+    with config.db.session() as sess:
+        _run_single_job(sess, _utc(1, 30), hours=5 * 24, submit=_utc(1, 15))
+
+    def counted(window, **extra):
+        rows = dash_client.get(
+            "/dash/metrics/job_counts", params={**window, "period": "m", **extra}
+        ).json()
+        return sum(row["count"] for row in rows)
+
+    january = {"start": "2023-01-01", "end": "2023-01-20"}
+    assert counted(january) == 0
+    assert counted(january, submitted="true") == 1
+    assert counted(WINDOW) == 1
+    assert counted(WINDOW, submitted="true") == 0
+
+    # And it lands in the bucket of its submission, not merely somewhere.
+    daily = dash_client.get(
+        "/dash/metrics/job_counts",
+        params={**january, "period": "d", "submitted": "true"},
+    ).json()
+    assert [row["period_start"] for row in daily if row["count"]] == ["2023-01-15"]
 
 
 def test_a_running_job_is_charged_from_its_elapsed_not_its_end(dash_client, dash_db):
