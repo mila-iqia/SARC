@@ -510,7 +510,7 @@ def test_jobs_table_with_data(dash_client, dash_db):
 
 
 def test_job_times_vs_limit_follows_the_submission(dash_client, dash_db):
-    """The one endpoint selected on submit_time: a job submitted before the
+    """This endpoint is selected on submit_time: a job submitted before the
     window and running well into it is charged to the window everywhere else,
     and counted nowhere here."""
     start = datetime(2023, 1, 30, tzinfo=timezone.utc)  # 2 days before the window
@@ -630,6 +630,9 @@ def test_rgu_usage_metric_means(dash_client, dash_db):
     for name, expected in (("gpu_sm_occupancy", _SM_OCC), ("gpu_utilization", 0.4)):
         means = [r["metric_means"][name]["mean"] for r in data]
         assert any(m is not None for m in means), "expected a charged bucket"
+        assert any(m is None for m in means), (
+            "expected at least one bucket without running jobs"
+        )
         for mean in means:
             assert mean is None or mean == pytest.approx(expected)
 
@@ -837,13 +840,8 @@ def test_a_run_owes_the_window_its_hours_inside_it(
 
     The boundary rows are the point: bounds are half-open on both sides, so a run
     closing exactly on the window's first instant owes nothing, and one opening on
-    its last instant owes nothing either. Under submit_time none of the clipped
-    rows counted at all, which made the first bar of any range read low.
-
-    Whether the table lists the job is asserted too, and it is the half that
-    bites: a boundary touched inclusively is worth zero hours either way, so the
-    sum alone would accept `[]` bounds while the table would list a job that never
-    reached the window.
+    its last instant owes nothing either. A run that only touches a boundary is
+    charged nothing, and is not listed either.
     """
     with config.db.session() as sess:
         _run_single_job(sess, start, hours)
@@ -857,12 +855,8 @@ def test_a_run_owes_the_window_its_hours_inside_it(
 
 def test_the_table_reports_the_clipped_run_and_the_whole_one(dash_client, dash_db):
     """``elapsed`` is the part of the run inside the window, ``elapsed_total`` all
-    of it: five days from 01-30, of which the window holds three.
-
-    Every other number in the row is pro-rated, so this one is too, and
-    ``rgu_hours`` is asserted against the same three days to pin them together.
-    The whole run rides along because 1152 RGU.h beside a five-day elapsed reads
-    as a contradiction rather than as a job the window only partly holds.
+    of it: five days from 01-30, of which the window holds three. Rgu*times displayed
+    in the row are pro-rated too.
     """
     with config.db.session() as sess:
         _run_single_job(sess, _utc(1, 30), hours=5 * 24)
@@ -933,8 +927,7 @@ def test_a_job_that_never_ran_appears_nowhere(dash_client, dash_db):
 
     It spans the empty interval, and the empty interval meets no bucket. Before
     the `elapsed_time > 0` guard it still matched the bucket its start_time fell
-    in: worth 0 RGU.h, but inflating the job counts. Production carries 258 674
-    of these.
+    in: worth 0 RGU.h, but inflating the job counts.
     """
     with config.db.session() as sess:
         job = sess.exec(
