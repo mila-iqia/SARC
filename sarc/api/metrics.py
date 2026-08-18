@@ -1407,10 +1407,12 @@ def metrics_jobs(
     """Paginated, sortable table of individual jobs.
 
     Lists GPU jobs that ran in the window (cluster/user/state filtered), one row
-    per job: cluster, user, state, elapsed, GPU counts, billing, gpu_type, rgu,
-    rgu_hours, per-job metric means and ``waste`` (rgu_hours * (1 - mean)).
-    ``rgu_hours`` counts only the hours inside the window, like the plots, while
-    ``elapsed`` still reports the job's whole run. Sorted by
+    per job: cluster, user, state, submit/start times, elapsed, GPU counts,
+    billing, gpu_type, rgu, rgu_hours, per-job metric means and ``waste``
+    (rgu_hours * (1 - mean)). Every quantity counts only what falls inside the
+    window, like the plots: ``elapsed`` is the slice ``rgu_hours`` is built
+    from, and ``elapsed_total`` rides along so a job that crosses a boundary
+    reads as partial rather than as disagreeing with itself. Sorted by
     ``sort_by``/``sort_dir`` and paginated by ``limit``/``offset``. Returns
     {total, jobs}. ``total`` is the full filtered count, computed by a SEPARATE
     query (kept out of the page query so the page parallelises — see below) and
@@ -1428,9 +1430,13 @@ def metrics_jobs(
     # the whole window (millions of rows) just to return 50. See the perf note in
     # docs / the /metrics/jobs investigation.
     # Pro-rated like the plots; the rgu_hours and waste sorts rank on it too.
-    rgu_hours_raw = col(JobSeriesDB.allocated_rgu_drac) * _overlap_hours(
-        JobSeriesDB, *window
-    )
+    overlap_hours = _overlap_hours(JobSeriesDB, *window)
+    rgu_hours_raw = col(JobSeriesDB.allocated_rgu_drac) * overlap_hours
+    # The same slice in seconds, to show beside the whole elapsed_time. Sorting
+    # "Elapsed" ranks on this, not on the column: every other number in the row
+    # is this slice, so ordering by the whole run would rank by a quantity the
+    # table does not otherwise use.
+    elapsed_in_window = overlap_hours * 3600.0
 
     # One aliased jobstatisticdb row per distinct stat name, LEFT-joined on the
     # job id. Not the view's own gpu_*_mean/max columns: those would join over the
@@ -1458,9 +1464,10 @@ def metrics_jobs(
         "cluster": col(JobSeriesDB.cluster_name),
         "job_id": col(JobSeriesDB.job_id),
         "submit_time": col(JobSeriesDB.submit_time),
+        "start_time": col(JobSeriesDB.start_time),
         "user": col(JobSeriesDB.cluster_user),
         "job_state": col(JobSeriesDB.job_state),
-        "elapsed": col(JobSeriesDB.elapsed_time),
+        "elapsed": elapsed_in_window,
         "requested_gpu": col(JobSeriesDB.requested_gres_gpu),
         "allocated_gpu": col(JobSeriesDB.allocated_gres_gpu),
         "billing": col(JobSeriesDB.allocated_billing),
@@ -1551,9 +1558,11 @@ def metrics_jobs(
             col(JobSeriesDB.cluster_name).label("cluster_name"),
             col(JobSeriesDB.job_id),
             col(JobSeriesDB.submit_time).label("submit_time"),
+            col(JobSeriesDB.start_time).label("start_time"),
             col(JobSeriesDB.cluster_user),
             col(JobSeriesDB.job_state),
             col(JobSeriesDB.elapsed_time).label("elapsed_time"),
+            elapsed_in_window.label("elapsed_in_window"),
             col(JobSeriesDB.nodes),
             col(JobSeriesDB.requested_gres_gpu),
             col(JobSeriesDB.allocated_gres_gpu),
@@ -1589,9 +1598,11 @@ def metrics_jobs(
                 "cluster": row.cluster_name or "",
                 "job_id": row.job_id,
                 "submit_time": row.submit_time.isoformat() if row.submit_time else None,
+                "start_time": row.start_time.isoformat() if row.start_time else None,
                 "user": row.cluster_user or "",
                 "job_state": row.job_state.value if row.job_state is not None else "",
-                "elapsed": row.elapsed_time or 0,
+                "elapsed": _nan_to_none(row.elapsed_in_window),
+                "elapsed_total": row.elapsed_time or 0,
                 "nodes": ", ".join(row.nodes or []) or None,
                 "requested_gpu": row.requested_gres_gpu,
                 "allocated_gpu": row.allocated_gres_gpu,

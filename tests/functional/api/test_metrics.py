@@ -855,6 +855,25 @@ def test_a_run_owes_the_window_its_hours_inside_it(
     assert table["total"] == (1 if owed else 0)
 
 
+def test_the_table_reports_the_clipped_run_and_the_whole_one(dash_client, dash_db):
+    """``elapsed`` is the part of the run inside the window, ``elapsed_total`` all
+    of it: five days from 01-30, of which the window holds three.
+
+    Every other number in the row is pro-rated, so this one is too, and
+    ``rgu_hours`` is asserted against the same three days to pin them together.
+    The whole run rides along because 1152 RGU.h beside a five-day elapsed reads
+    as a contradiction rather than as a job the window only partly holds.
+    """
+    with config.db.session() as sess:
+        _run_single_job(sess, _utc(1, 30), hours=5 * 24)
+
+    row = dash_client.get("/dash/metrics/jobs", params=WINDOW).json()["jobs"][0]
+    assert row["elapsed"] == pytest.approx(3 * 24 * 3600.0)
+    assert row["elapsed_total"] == pytest.approx(5 * 24 * 3600.0)
+    assert row["rgu_hours"] == pytest.approx(_RGU_PER_JOB * 3 * 24)
+    assert row["start_time"].startswith("2023-01-30")
+
+
 def test_the_two_job_count_views_select_on_different_columns(dash_client, dash_db):
     """One job queued on 01-15 and running 01-30 to 02-04, so the views disagree.
 

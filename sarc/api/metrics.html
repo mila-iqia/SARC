@@ -2184,23 +2184,37 @@
              + `${p(d.getUTCHours())}:${p(d.getUTCMinutes())} UTC`;
       };
       const fmtInt = v => v != null ? String(v) : '—';
-      // Both RGU·time columns count only the hours spent inside the date range,
-      // like the plots; Elapsed next to them is the whole run.
-      const IN_RANGE = 'A job that started before the range or ran past it counts only for the part inside. By contrast, the Elapsed column shows the whole job elapsed time.';
+      // Seconds as h/m or m/s, whichever the magnitude calls for.
+      const fmtDuration = v => {
+        if (v == null) return '—';
+        const s = Math.floor(v), h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sec = s%60;
+        return h > 0 ? `${h}h${String(m).padStart(2,'0')}m` : `${m}m${String(sec).padStart(2,'0')}s`;
+      };
+      // Every quantity in the row counts only the part inside the date range,
+      // like the plots. Elapsed shows the whole run beside it, so a job that
+      // crosses a boundary reads as partial instead of contradicting its RGU·time.
+      const IN_RANGE = 'A job that started before the range or ran past it counts only for the part inside — the Elapsed column shows that part, then the job\'s whole run after the slash.';
       const rguTimeTitle  = u => `RGU × the hours this job ran inside the selected date range, shown in ${u.label}. ${IN_RANGE}`;
       const rguWasteTitle = u => `RGU·time × (1 − mean ${metricPretty}): estimated unused RGU·time, in ${u.label}. ${IN_RANGE}`;
       const COLS = [
         { key: 'cluster',               label: 'Cluster' },
         { key: 'job_id',                label: 'Job ID',    fmt: fmtInt },
         { key: 'submit_time',           label: 'Submitted', fmt: fmtDateTime },
+        { key: 'start_time',            label: 'Started',   fmt: fmtDateTime,
+          title: 'When the job started running, in UTC. This is what tells you whether the job crossed the range boundary — a job can be submitted long before it starts.' },
         {% if is_admin %}
         { key: 'user',                  label: 'User', adminOnly: true, title: 'Cluster user name' },
         {% endif %}
         { key: 'job_state',             label: 'State' },
-        { key: 'elapsed',               label: 'Elapsed',   fmt: v => {
+        // The part inside the range first, since that is what every other number
+        // in the row is built from; the whole run after the slash, and only when
+        // the two differ. Sorting ranks on the part inside.
+        { key: 'elapsed',               label: 'Elapsed',
+          title: `Time this job spent running inside the selected date range. ${IN_RANGE}`,
+          fmt: (v, job) => {
             if (v == null) return '—';
-            const s = Math.floor(v), h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sec = s%60;
-            return h > 0 ? `${h}h${String(m).padStart(2,'0')}m` : `${m}m${String(sec).padStart(2,'0')}s`;
+            const inRange = fmtDuration(v), whole = fmtDuration(job.elapsed_total);
+            return inRange === whole ? inRange : `${inRange} / ${whole}`;
           }},
         { key: 'rgu_hours',             label: unit.label,
           title: rguTimeTitle(unit), fmt: fmtRguTime },
@@ -2324,7 +2338,8 @@
           const td = tr.insertCell();
           td.dataset.col = c.key;
           const raw = job[c.key];
-          td.textContent = c.fmt ? c.fmt(raw) : (raw ?? '—');
+          // The row too: Elapsed reads elapsed_total alongside its own value.
+          td.textContent = c.fmt ? c.fmt(raw, job) : (raw ?? '—');
           if (c.cls) {
             td.className = c.cls; td.title = raw || '';
             // Nodes is truncated by default; click toggles the full (wrapped) list.
