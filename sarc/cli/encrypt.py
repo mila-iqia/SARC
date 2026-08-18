@@ -39,8 +39,35 @@ class Append:
 
 
 @dataclass
+class Remove:
+    path: Path
+    key: str
+
+    def execute(self) -> int:
+        ek = EncryptionKey(os.environ.get("SERIEUX_PASSWORD", None))
+        val = ek.decrypt(self.path.read_text())
+        del val[self.key]
+        self.path.write_text(ek.encrypt(val))
+        return 0
+
+
+@dataclass
+class List:
+    path: Path
+
+    def execute(self) -> int:
+        ek = EncryptionKey(os.environ.get("SERIEUX_PASSWORD", None))
+        val = ek.decrypt(self.path.read_text())
+        for key, val in val.items():
+            print(f"{key} -> {val}")  # noqa: T201
+        return 0
+
+
+@dataclass
 class Encrypt:
-    command: File | Append = subparsers({"file": File, "append": Append})
+    command: File | Append | Remove | List = subparsers(
+        {"file": File, "append": Append, "remove": Remove, "list": List}
+    )
 
     def execute(self) -> int:
         return self.command.execute()
