@@ -105,25 +105,35 @@ class SlurmJobDB(SQLModel, table=True):
             unique=True,
             postgresql_include=["id"],
         ),
-        # Ordered on submit_time, which the /dash job table now only *sorts* by:
-        # the window filter reads the index below. Still needed -- without it
-        # that page falls to a seq scan. No payload: measured on 12M jobs, the
-        # sort reads 88 index tuples for a 50-row page, so it wants the order and
-        # nothing else, and the payload it used to carry cost 1026 of 1281 MB.
-        Index("ix_slurm_jobs_submit", "submit_time"),
+        # Covering index for any query based on submit_time
+        # (dashboard, Prometheus scraping, etc.). Covering so that a scan
+        # over a submit range gets what it filters and groups on without
+        # reading the table; displaying a job's other columns still does.
+        Index(
+            "ix_slurm_jobs_submit",
+            "submit_time",
+            postgresql_include=[
+                "id",
+                "harmonized_gpu_type",
+                "allocated_gpu_type",
+                "allocated_gres_gpu",
+                "elapsed_time",
+                "cluster_id",
+                "cluster_user",
+                "sarc_user_id",  # used by view when joining users and member_type
+                "start_time",  # with time_limit and job_state, what the
+                "time_limit",  # time-limit heatmaps read beyond the above
+                "job_state",
+            ],
+        ),
         # "Which jobs were running during a period" is `end > lo AND start < hi`,
         # two scalar comparisons over one indexed expression. Covering, so the
-        # window never reaches the heap; and a btree scan parallelises, which no
-        # GiST scan does -- measured on 12M jobs, that alone is most of the 3x
-        # against a GiST index on the range.
+        # window never reaches the heap; and a btree scan parallelizes, which no
+        # GiST scan does.
         #
         # Partial because every /dash plot is about GPU jobs (_gpu_only in
-        # sarc/api/metrics.py): the filter is paid once, at build time, over the
-        # 56 % of rows that have a GPU. Its predicate must stay the one the
-        # endpoints write, or the planner cannot prove the index applies. A
-        # reader that drops the filter falls to a seq scan -- which is what a
-        # total variant covered, for 567 MB and no measurable gain once every
-        # endpoint filtered.
+        # sarc/api/metrics.py). Its predicate must stay the one the
+        # endpoints write, or the planner cannot prove the index applies.
         Index(
             "ix_slurm_jobs_end_gpu",
             text("slurm_job_end(start_time, elapsed_time)"),
@@ -138,25 +148,6 @@ class SlurmJobDB(SQLModel, table=True):
                 "sarc_user_id",  # used by view when joining users and member_type
                 "job_state",
             ],
-            postgresql_where=text(
-                "allocated_gres_gpu > 0 AND harmonized_gpu_type IS NOT NULL"
-            ),
-        ),
-        # The two /dash plots that ask about submission rather than execution --
-        # job_times_vs_limit and job_counts?submitted -- filter on submit_time
-        # with the same GPU predicate and no run-time bound, which the index
-        # above cannot answer. Without this one they seq-scan all 12M rows to
-        # keep 1M: measured on their captured queries, 1736 -> 865 ms and
-        # 1697 -> 503 ms over seven months, 709 -> 198 ms and 665 -> 76 ms over
-        # six weeks. 143 MB.
-        #
-        # No payload. A partial index's predicate columns come free, and adding
-        # INCLUDE (time_limit, start_time) for the heatmap costs 115 MB more to
-        # buy 50 ms on one window -- the extra pages to walk eat the heap fetches
-        # they save.
-        Index(
-            "ix_slurm_jobs_submit_gpu",
-            "submit_time",
             postgresql_where=text(
                 "allocated_gres_gpu > 0 AND harmonized_gpu_type IS NOT NULL"
             ),
