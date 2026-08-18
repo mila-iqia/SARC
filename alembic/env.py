@@ -15,7 +15,7 @@ job_series_view = PGView(
     schema="public", signature="job_series_view", definition=f"{compiled_query}"
 )
 btree_gist = PGExtension(schema="public", signature="btree_gist")
-# Must exist before ix_slurm_jobs_end, which indexes calls to it.
+# Must exist before index ix_slurm_jobs_end, which calls this function.
 slurm_job_end = PGFunction(
     schema="public",
     signature=job.SLURM_JOB_END_SIGNATURE,

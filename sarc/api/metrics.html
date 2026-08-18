@@ -122,16 +122,12 @@
     }
     .add-row-label { font-size: 13px; color: #888; }
 
-    /* Metric heatmap: per-tile secondary-metric picker sitting above the plot. */
+    /* Metric comparison: per-tile secondary-metric picker sitting above the plot. */
     .ms-box  { position: relative; display: flex; flex-direction: column; width: 100%; height: 100%; }
     .ms-ctrl { flex-shrink: 0; font-size: 12px; color: #888; padding: 2px 0 6px;
                display: flex; align-items: center; gap: 6px; }
     .ms-plot { width: 100%; flex: 1; min-height: 0; }
     .ms-metric2 { font-size: 12px; padding: 1px 6px; max-width: 160px; }
-    /* Header slot the renderer fills with the tile's "View:" picker once the data
-       is in (same pattern as .jt-head-slot), for the tiles that have one:
-       RGU-usage and job counts. Off the plot, so the Plotly title keeps the full
-       width; flex:1 centres it between title and actions. */
     .view-head-slot {
       flex: 1; display: flex; align-items: center; justify-content: center;
       gap: 6px; font-size: 12px; font-weight: 400; color: #888;
@@ -391,12 +387,20 @@
     <div class="ctrl">
       <label for="start">Start</label>
       <input type="date" id="start"
-             title="Start of the date range (inclusive), in UTC. Every plot and the job table cover GPU jobs — those with an allocated GPU and a known RGU — and the time they spent running in this range; the two Time-limit heatmaps, and the GPU-jobs-per-period plot in its Submitted view, cover the ones submitted in it. Takes effect on Update." />
+             {% if is_admin %}
+             title="Start of the date range (inclusive), in UTC. Unless otherwise stated, every plot displays GPU jobs (those with an allocated GPU and a known RGU) for the time they spent inside this range. Takes effect on Update." />
+             {% else %}
+             title="Start of the date range (inclusive), in UTC. Every plot displays GPU jobs (those with an allocated GPU and a known RGU) for the time they spent inside this range. Takes effect on Update." />
+             {% endif %}
     </div>
     <div class="ctrl">
       <label for="end">End</label>
       <input type="date" id="end"
-             title="End of the date range (exclusive), in UTC. A job that started before the range or ran past it is counted only for the hours inside it. Takes effect on Update." />
+             {% if is_admin %}
+             title="End of the date range (exclusive), in UTC. Unless otherwise stated, every plot displays GPU jobs (those with an allocated GPU and a known RGU) for the time they spent inside this range. Takes effect on Update." />
+             {% else %}
+             title="End of the date range (exclusive), in UTC. Every plot displays GPU jobs (those with an allocated GPU and a known RGU) for the time they spent inside this range. Takes effect on Update." />
+             {% endif %}
     </div>
     <div class="ctrl">
       <label>Period</label>
@@ -460,7 +464,7 @@
     <button onclick="loadCharts()" title="Apply the current filters (date range, clusters, {% if is_admin %}user, {% endif %}job states, metric) and reload every plot.">Update</button>
     <button id="reset-btn" onclick="resetState()" title="Clear all saved settings and reset to defaults" style="background:#888;">Reset</button>
     <div id="focus-label" class="no-focus"
-         title="Focus is an optional zoom on top of the Start/End range. Click a bar in a period plot to restrict the detail plots ({% if is_admin %}Metric density, Metric heatmap, RGU by user, {% endif %}Job table) to that time slice; the period plots only highlight it. Use Clear focus to return to the full range.">
+         title="Focus is an optional zoom on top of the Start/End range. Click a bar in a period plot to restrict the detail plots ({% if is_admin %}Metric density, Metric comparison, RGU by user, {% endif %}Job table) to that time slice; the period plots only highlight it. Use Clear focus to return to the full range.">
       <span id="focus-label-text">No focus — click a bar in a period plot to zoom the detail plots onto that slice</span>
       <button type="button" id="clear-focus" style="display:none" onclick="clearFocus()">Clear focus</button>
     </div>
@@ -745,7 +749,7 @@
     }
 
     const PLOT_NAMES = {
-      job_counts:      'GPU jobs per period',
+      job_counts:      'GPU jobs count per period',
       rgu_usage:       'RGU allocated vs used',
       clusterrgu:      'RGU by cluster',
       jobtable:        'Job table',
@@ -754,7 +758,7 @@
       heatmap_elapsed:   'Elapsed vs limit (heatmap)',
       heatmap_wait:      'Wait vs limit (heatmap)',
       density:           'Metric density',
-      metric_comparison: 'Metric heatmap',
+      metric_comparison: 'Metric comparison',
       userrgu:           'RGU by user',
       {% endif %}
     };
@@ -810,8 +814,8 @@
 
     // Fresh <option> nodes for the metric list, optionally led by a blank
     // "— none —". Shared by the global efficiency-metric select and the per-tile
-    // secondary-metric picker on the Metric heatmap, so each select owns its
-    // own nodes.
+    // secondary-metric picker on the Metric-comparison tile, so each select
+    // owns its own nodes.
     function metricOptions(includeNone) {
       const opts = [];
       if (includeNone) {
@@ -833,22 +837,17 @@
     metSel.value = 'gpu_sm_occupancy';
     {% endif %}
 
-    // Tiles redrawn once a window resize settles — see the resize listener below
-    // for why. Redrawing is free: the data comes from the endpoint cache, and
-    // nothing here re-fetches. renderPlot() directly, not renderTile(): the
-    // latter clears the div's innerHTML, which desyncs Plotly's existing
-    // graph-div state -> blank plot. No-op before the first load, or when none
-    // of these tiles is on screen.
-    //
-    // The list is inherited from the RGU-unit selector this used to serve (the
-    // tiles carrying an RGU·time quantity, hence the RGU in the name) and is not
-    // a property of resizing: any other tile hurt by the same legend drift
-    // belongs here just as much.
+    // Tiles to redraw once a window resize settles -- those a live rescale
+    // leaves visibly wrong, the known case being a wrapping legend stranded
+    // over the plot. See the resize listener below.
     {% if is_admin %}
     const RESIZE_REDRAW_TILES = new Set(['clusterrgu', 'rgu_usage', 'userrgu', 'jobtable']);
     {% else %}
     const RESIZE_REDRAW_TILES = new Set(['clusterrgu', 'rgu_usage', 'jobtable']);
     {% endif %}
+    // Free: every tile reads the endpoint cache, nothing re-fetches. renderPlot,
+    // not renderTile -- renderTile clears the div's innerHTML, which desyncs
+    // Plotly's existing graph-div state into a blank plot.
     async function redrawTilesOnResize() {
       if (!currentParams) return;
       const tiles = [];
@@ -861,12 +860,10 @@
       // a tile whose endpoint errored just keeps its error state.
       await Promise.all(tiles.map(async ({ chartDiv, plotType }) => {
         const ep = PLOT_TO_ENDPOINT[plotType];
-        // The job table paginates itself, so re-render it from the page it is
-        // currently showing rather than from the shared endpoint cache, which
-        // holds only page 0 and would snap the tile back to the first page --
-        // a redraw must not move the reader. Unless it has a page in flight:
-        // jt-busy is what stops a click from starting a second, racing fetch,
-        // and rebuilding the table here would drop it.
+        // The table paginates itself, so redraw the page it is showing: the
+        // shared cache holds only page 0 and would snap the reader back to it.
+        // Skip a tile with a page in flight -- rebuilding it would drop the
+        // jt-busy flag that keeps a click from starting a second, racing fetch.
         if (plotType === 'jobtable') {
           if (chartDiv.querySelector('.job-table.jt-busy')) return;
           if (chartDiv._jtData) renderPlot(chartDiv.id, plotType, { jobs: chartDiv._jtData });
@@ -878,22 +875,19 @@
         } catch {
           return;
         }
-        // A tile that went into "Loading…" while we waited belongs to a render
-        // in flight (a View switch, say). Drawing the payload we asked for would
-        // put the old view back under the new picker, and re-arm a control the
-        // loading state had deliberately taken away.
+        // A tile that went into "Loading…" while we waited belongs to a newer
+        // render (a View switch, say). Our payload is stale: it would put the old
+        // view back under the new picker, and re-arm what loading took away.
         if (chartDiv.querySelector('.tile-loading')) return;
         if (document.body.contains(chartDiv) && chartDiv.dataset.plotType === plotType)
           renderPlot(chartDiv.id, plotType, { [ENDPOINT_TO_KEY[ep]]: data });
       }));
     }
 
-    // Switching a "View:" picker is a different query, not a redraw -- the RGU
-    // whole-range view asks for the range as a single bucket, the job-counts
-    // submitted view selects on submit_time. Re-render every tile of that type
-    // the way a first load does; renderTile shows "Loading…" until the answer
-    // lands. Nothing is evicted: the two views have different URLs, so each keeps
-    // its cache entry and switching back is free.
+    // A "View:" switch is a different query, not a redraw: the RGU whole-range
+    // view asks for one bucket, the job-counts submitted view selects on
+    // submit_time. So reload like a first load. The two views have distinct
+    // URLs, so each keeps its cache entry and switching back is free.
     async function reloadTilesOfType(plotType) {
       if (!currentParams) return;
       const tiles = [];
@@ -905,11 +899,9 @@
       await Promise.all(tiles.map(chartDiv => renderTile(chartDiv, plotType)));
     }
 
-    // Fill a tile's header "View:" picker. Called from the renderer, i.e. only
-    // once the data is in: renderTile empties the slot while loading, which is
-    // also what keeps a second switch from racing the first. closest('.tile') so
-    // several tiles of the same type each fill their own; the view itself is
-    // module-scoped, so they all follow.
+    // Fill a tile's header "View:" picker. Called from the renderer, so only
+    // once the data is in -- renderTile empties the slot while loading, which
+    // also stops a second switch racing the first. One slot per tile.
     function fillViewPicker(el, options, current, onPick) {
       const slot = el?.closest('.tile')?.querySelector('.view-head-slot');
       if (!slot) return;
@@ -929,12 +921,10 @@
       sel.addEventListener('change', () => onPick(sel.value));
     }
 
-    // Plotly's own responsive handler resizes the plots live but can leave a
-    // wrapping horizontal legend at its old position (drawn over the bars)
-    // when the window grows back. Once the resize settles, redraw from cache:
-    // a full react recomputes margins and legend placement. The sole caller of
-    // redrawTilesOnResize -- a tile is otherwise only ever redrawn by the render
-    // that fetched it.
+    // Plotly's responsive handler rescales live but can strand a wrapping
+    // horizontal legend over the bars when the window grows back. Once the
+    // resize settles, redraw from cache: a full react recomputes margins and
+    // legend placement. The only redraw not driven by a fetch.
     let _resizeTimer = null;
     window.addEventListener('resize', () => {
       clearTimeout(_resizeTimer);
@@ -1027,10 +1017,8 @@
     //                  null until the first loadCharts() has been called.
     //   endpointCache: { url -> Promise<data> } — same promise can be awaited
     //                  by several tiles. Cleared entirely when params change.
-    //                  Keyed by URL, not by endpoint: currentParams is not the
-    //                  only thing an endpoint's URL depends on any more (the
-    //                  RGU-usage View picker puts `whole` in it), so one entry
-    //                  per endpoint would have the two views evict each other.
+    //                  Keyed by URL, not by endpoint, since an endpoint result
+    //                  may vary depending on given parameters.
     //   endpointStatus: { ep -> 'loading' | 'ready' | 'error' }, synced with
     //                  the cache so updateStatus() can summarise progress
     //                  without inspecting unsettled promises. Per endpoint, not
@@ -1043,7 +1031,7 @@
     // renderLayout() (e.g. when another tile changes type), since it bypasses
     // the shared endpoint cache.
     let comparisonCache = {};
-    // Secondary metric for the Metric heatmap tile. Module-scoped (not stored on
+    // Secondary metric for the Metric-comparison tile. Module-scoped (not stored on
     // the tile div, which renderLayout() recreates on every Update) so the pick
     // survives Updates — like the global field it replaces. Defaults to GPU
     // utilization so a fresh heatmap shows data immediately; '' is the explicit
@@ -1075,8 +1063,6 @@
     // Job-counts tile view: 'running' (jobs running in each bucket — occupancy,
     // and the population every other tile draws from) or 'submitted' (jobs
     // submitted in each bucket — a submission rate, on a different population).
-    // Module-scoped like rguUsageView, and like it a different query, not a
-    // redraw.
     let jobCountsView = _saved.jobCountsView || 'running';
     // The tiles whose header carries a "View:" picker, i.e. the ones that get a
     // .view-head-slot and are reloaded as a group when their view changes.
@@ -1535,9 +1521,7 @@
         marker: { color: colors },
         hovertemplate: 'Period: %{x}<br>Jobs: %{y}<extra></extra>',
       }], pLayout({
-        // The mode belongs in the title, not only in the picker: the two count
-        // different populations, and only the running one is the population the
-        // neighbouring tiles are drawn from.
+        // In the title, not just the picker: the other tiles all draw on Running.
         title: { text: (submitted ? 'Submitted' : 'Running')
                        + ' GPU jobs per period (click to focus)', font: { size: 16 } },
         xaxis: { title: { text: 'Period start' }, type: 'category', tickangle: -45 },
@@ -1850,7 +1834,7 @@
       }), { responsive: true });
     }
 
-    // Metric heatmap: the secondary metric is chosen *on the tile* (the picker
+    // Metric comparison: the secondary metric is chosen *on the tile* (the picker
     // built here), not in the global toolbar. The choice lives in the module
     // variable `metricScatterMetric2`, so it survives a global Update (unlike
     // the job-table pagination, which is navigation state and resets). This tile
@@ -2879,7 +2863,13 @@
     // still in the DOM and still bound to the same plot type after the
     // await — the user may have removed or swapped the tile in the meantime.
     async function renderTile(chartDiv, plotType) {
-      // The metric heatmap owns its data flow (per-tile secondary picker that
+      // Purge before the innerHTML writes below: the renderers that draw on
+      // chartDiv itself leave a live graph here, and clobbering it keeps
+      // Plotly's element state, so the next react() draws nothing. A no-op on a
+      // plain div. Only reloadTilesOfType hits this -- an Update rebuilds the
+      // tile divs, so the stale state never survives one.
+      Plotly.purge(chartDiv);
+      // Metric comparison owns its data flow (per-tile secondary picker that
       // re-fetches /metric_comparison itself), so it skips the shared endpoint
       // cache: render it straight away and let its own draw() do the fetching.
       if (plotType === 'metric_comparison') {
