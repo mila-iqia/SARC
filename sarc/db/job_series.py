@@ -7,7 +7,6 @@ from sqlmodel import BIGINT, JSON, Field, and_, col, func, select
 
 from sarc.models.user import MemberType
 from sarc.validators import datetime_utc
-
 from .cluster import SlurmClusterDB
 from .job import JobStatisticDB, SlurmJobDB, SlurmState
 from .sqlmodel import SQLModel, datetime_utc_field
@@ -280,9 +279,7 @@ class JobSeriesDB(SQLModel, table=True):
     on ingest). None if unset."""
     # datetime_utc_field, matching SlurmJobDB: a bare `datetime` maps to
     # DateTime(timezone=False), so tz-aware bounds went out naive and Postgres
-    # read them back in the session TimeZone -- not UTC on the prod IAM engine,
-    # where the same filter returned 277572 rows through the view against 278860
-    # through the table. Python mapping only, so no migration.
+    # read them back in the session TimeZone.
     submit_time: datetime_utc = datetime_utc_field()
     start_time: datetime_utc | None = datetime_utc_field(default=None)
     end_time: datetime_utc | None = datetime_utc_field(default=None)
