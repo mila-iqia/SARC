@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 from sqlmodel import col, select
 
 from sarc.config import config
+from sarc.db.cluster import SlurmClusterDB
 from sarc.db.job import JobStatisticDB, SlurmJobDB, SlurmState
 from sarc.db.job_series import JobSeriesDB
 from sarc.db.support import GpuRguDB
@@ -1160,16 +1161,6 @@ def test_nan_and_missing_means_never_poison_aggregates(dash_client, dash_db_nan)
 
 # === Period bucketing =======================================================
 
-
-@pytest.mark.usefixtures("read_only_db")
-@pytest.mark.parametrize("period", ["1d", "h", "d", "m"])
-def test_period_bucketing(dash_client, period):
-    """Fixed (1d) and calendar (h/d/m) periods; default 'w' covers the week arm."""
-    params = {"start": "2023-02-14", "end": "2023-02-16", "period": period}
-    r = dash_client.get("/dash/metrics/job_counts", params=params)
-    assert r.status_code == 200
-
-
 # The bucket axis is the x-axis every time plot shares, so the four bucketed
 # endpoints have to agree on it.
 
@@ -1341,30 +1332,75 @@ _FILTERS = {
 }
 
 
-@pytest.mark.usefixtures("read_only_db")
+# (cluster, user, state) per enriched job: the 1st matches every filter of
+# _FILTERS, each of the others misses exactly one.
+_FILTER_JOBS = [
+    ("raisin", "petitbonhomme", SlurmState.COMPLETED),
+    ("fromage", "petitbonhomme", SlurmState.COMPLETED),
+    ("raisin", "beaubonhomme", SlurmState.COMPLETED),
+    ("raisin", "petitbonhomme", SlurmState.CANCELLED),
+]
+
+
+@pytest.fixture
+def filtered_db(read_write_db):
+    """The _FILTER_JOBS jobs, enriched and running inside WINDOW."""
+    sess = read_write_db
+    sess.add(GpuRguDB(name=_GPU, rgu=10.0, drac_rgu=_DRAC_RGU))
+    sess.flush()
+
+    for job in sess.exec(
+        select(SlurmJobDB).where(col(SlurmJobDB.harmonized_gpu_type).is_not(None))
+    ).all():
+        job.harmonized_gpu_type = None
+        sess.add(job)
+
+    clusters = {
+        name: sess.exec(
+            select(SlurmClusterDB).where(col(SlurmClusterDB.name) == name)
+        ).one()
+        for name, _, _ in _FILTER_JOBS
+    }
+    jobs = sess.exec(
+        select(SlurmJobDB)
+        .where(col(SlurmJobDB.elapsed_time) == _BASE_ELAPSED)
+        .order_by(col(SlurmJobDB.id))
+    ).all()[: len(_FILTER_JOBS)]
+    assert len(jobs) == len(_FILTER_JOBS), "expected seeded jobs to enrich"
+
+    for job, (cluster, user, state) in zip(jobs, _FILTER_JOBS, strict=True):
+        job.harmonized_gpu_type = _GPU
+        job.allocated_gpu_type = _GPU
+        job.allocated_gres_gpu = _GRES
+        job.cluster_id = clusters[cluster].id
+        job.cluster_user = user
+        job.job_state = state
+        job.submit_time = job.start_time = _utc(2, 10)
+        job.end_time = job.start_time + timedelta(seconds=job.elapsed_time)
+        sess.add(job)
+    sess.commit()
+
+
+@pytest.mark.usefixtures("filtered_db")
+@pytest.mark.parametrize("dropped", list(_FILTERS))
 @pytest.mark.parametrize(
-    "path", ["/dash/metrics/job_counts", "/dash/metrics/rgu_usage"]
+    "path", ["/dash/metrics/job_counts", "/dash/metrics/jobs"], ids=["counts", "jobs"]
 )
-def test_filters_accepted(dash_client, path):
-    """Cluster + user + state filters are accepted on both the direct-SlurmJobDB
-    (job_counts) and the RGU base (_apply_rgu_base) query paths."""
-    r = dash_client.get(path, params={**WINDOW, **_FILTERS})
-    assert r.status_code == 200
+def test_each_filter_drops_the_jobs_it_excludes(dash_client, path, dropped):
+    """Each filter of _FILTERS excludes exactly one of the four jobs, on both
+    column namespaces: job_series_select (job_counts) and the view (everything
+    else)."""
 
+    def counted(**params):
+        data = dash_client.get(path, params={**WINDOW, "period": "m", **params}).json()
+        return (
+            sum(r["count"] for r in data) if isinstance(data, list) else data["total"]
+        )
 
-@pytest.mark.usefixtures("read_only_db")
-def test_focus_narrows_window(dash_client):
-    """focus_start/end clip the window."""
-    r = dash_client.get(
-        "/dash/metrics/job_times_vs_limit",
-        params={
-            **WINDOW,
-            **_FILTERS,
-            "focus_start": "2023-02-14T00:00:00Z",
-            "focus_end": "2023-02-20T00:00:00Z",
-        },
-    )
-    assert r.status_code == 200
+    assert counted() == len(_FILTER_JOBS)
+    assert counted(**_FILTERS) == 1, "only the job matching all three is left"
+    # Lifting one filter lets its own job back in, and only it.
+    assert counted(**{k: v for k, v in _FILTERS.items() if k != dropped}) == 2
 
 
 # Every endpoint taking a focus, with how many jobs its payload accounts for.
@@ -1422,6 +1458,74 @@ def test_jobs_sort_columns(dash_client, sort_by):
     sort needs. A missing join would surface as a 500, not a 200."""
     r = dash_client.get("/dash/metrics/jobs", params={**WINDOW, "sort_by": sort_by})
     assert r.status_code == 200
+
+
+@pytest.fixture
+def ranked_db(dash_db):
+    """dash_db, with a distinct occupancy per job so a sort has something to rank."""
+    with config.db.session() as sess:
+        jobs = sess.exec(
+            select(SlurmJobDB)
+            .where(col(SlurmJobDB.harmonized_gpu_type) == _GPU)
+            .order_by(col(SlurmJobDB.id))
+        ).all()
+        for i, job in enumerate(jobs):
+            stat = sess.exec(
+                select(JobStatisticDB).where(
+                    col(JobStatisticDB.job_id) == job.id,
+                    col(JobStatisticDB.name) == "gpu_sm_occupancy",
+                )
+            ).one()
+            stat.mean = 0.1 * (i + 1)
+            sess.add(stat)
+        sess.commit()
+    return dash_db
+
+
+def _jobs_page(client, **params):
+    return client.get("/dash/metrics/jobs", params={**WINDOW, **params}).json()["jobs"]
+
+
+@pytest.mark.parametrize(
+    "sort_by", ["job_id", "gpu_sm_occupancy_mean"], ids=["no_join", "stat_join"]
+)
+def test_jobs_sort_dir_orders_the_page(dash_client, ranked_db, sort_by):
+    """``sort_dir`` orders the rows, both branches of the sort: a column of the
+    source alone and one behind the stat join."""
+    asc = [j[sort_by] for j in _jobs_page(dash_client, sort_by=sort_by, sort_dir="asc")]
+    desc = [
+        j[sort_by] for j in _jobs_page(dash_client, sort_by=sort_by, sort_dir="desc")
+    ]
+
+    assert len(asc) == ranked_db.n
+    assert len(set(asc)) == ranked_db.n, "the fixture must rank without ties"
+    assert asc == sorted(asc)
+    assert desc == asc[::-1]
+
+
+def test_jobs_pagination_slices_one_order(dash_client, ranked_db):
+    """limit/offset cut a single order into pages; ``total`` stays the whole
+    filtered count rather than the page's, and include_total drops it."""
+    page = dict(sort_by="job_id", sort_dir="asc")
+    whole = _jobs_page(dash_client, **page)
+    every_id = [j["job_id"] for j in whole]
+
+    first = dash_client.get(
+        "/dash/metrics/jobs", params={**WINDOW, **page, "limit": 2, "offset": 0}
+    ).json()
+    second = dash_client.get(
+        "/dash/metrics/jobs", params={**WINDOW, **page, "limit": 2, "offset": 2}
+    ).json()
+
+    assert [j["job_id"] for j in first["jobs"]] == every_id[:2]
+    assert [j["job_id"] for j in second["jobs"]] == every_id[2:]
+    assert first["total"] == second["total"] == ranked_db.n
+
+    no_total = dash_client.get(
+        "/dash/metrics/jobs", params={**WINDOW, **page, "include_total": "false"}
+    ).json()
+    assert no_total["total"] is None
+    assert len(no_total["jobs"]) == ranked_db.n
 
 
 # === Admin "view as user" (as_user) =========================================
