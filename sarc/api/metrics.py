@@ -94,9 +94,9 @@ router = APIRouter(
 # the planner reorders only within a list: what does not fit is planned as its own
 # unit first. job_series is 8 relations, so a subquery joined on top makes 9, and
 # at 8 the view gets built for the whole window before that join happens. That is
-# what /metrics/jobs pays: its 50-row page can no longer drive the query (6 s vs
-# 0.1 s on 12M jobs). Postgres drops the view's unused joins either way -- they
-# just count towards the limit first. 9 is enough; 12 adds headroom, ~1 ms planning.
+# what /metrics/jobs pays: its 50-row page can no longer drive the query.
+# Postgres drops the view's unused joins either way -- they just count towards
+# the limit first. 9 is enough; 12 adds headroom for negligible planning cost.
 # Do not raise it much further: geqo_threshold is 12 too. Past that many relations
 # in one list, Postgres stops trying every join order and uses a genetic algorithm,
 # which can pick a different plan on each run.
@@ -163,9 +163,6 @@ def _parse_period(s: str) -> timedelta | str:
     if num is None:
         return _CALENDAR_TRUNC[unit]
     step = timedelta(days=float(num) * _PERIOD_MULTIPLIERS[unit])
-    # A zero-length bucket never advances, so _iter_buckets would step in place
-    # for ever. Checked on the parsed step, not on `num`: a small enough
-    # fraction rounds down to no microseconds at all.
     if not step:
         raise HTTPException(
             status_code=400, detail=f"Invalid period {s!r}. It must be positive."
@@ -253,9 +250,7 @@ def _apply_focus(
     if focus_end is not None:
         fe = focus_end if focus_end.tzinfo else focus_end.replace(tzinfo=UTC)
         finish_dt = min(finish_dt, fe)
-    # A focus outside the range clamps past it. Collapse to the empty window
-    # rather than an inverted one: _ran_between would build a tstzrange whose
-    # lower bound is above its upper, which Postgres rejects outright.
+    # Return a valid focus, or an empty window.
     return begin_dt, max(begin_dt, finish_dt)
 
 
@@ -281,9 +276,7 @@ def _job_span(cols):
     """A job's run as epoch seconds: ``[start, start + elapsed)``.
 
     Anchored on ``elapsed_time``, not ``end_time``, so the slices add back up to
-    the view's cost columns, which are all built from elapsed. The two disagree
-    on 7.7 % of production jobs, ``end - start`` being the larger: whatever
-    stretches the wall-clock (suspension, requeue) is not time consumed.
+    the view's cost columns, which are all built from elapsed.
     """
     start = func.extract("epoch", cols.start_time)
     return start, start + cols.elapsed_time
@@ -309,10 +302,10 @@ def _ran_between(cols, lo, hi):
 def _overlap_hours(cols, lo, hi):
     """SQL expression: hours of the job's run that fall inside ``[lo, hi)``.
 
-    Only valid where ``_ran_between`` holds over the same bounds: ``least``/
-    ``greatest`` ignore NULL, so a job that never started collects the full
-    width of ``[lo, hi)``, not nothing. Multiply by a per-job RGU *rate*
-    (``allocated_rgu_drac``) for the RGU.h owed to that span.
+    Guard it or it lies: ``least``/``greatest`` ignore NULL, so a job that
+    never started would take the full width of ``[lo, hi)``, and one running
+    outside the bounds a negative width -- nothing clamps either. The window is
+    guarded by ``_ran_between``, each bucket by ``_bucket_table``.
     """
     start, end = _job_span(cols)
     return (func.least(end, hi) - func.greatest(start, lo)) / 3600.0
@@ -348,11 +341,12 @@ def _submitted_bucket(
     The counterpart of ``_bucket_table`` for a plot that reads submissions: a
     submit instant falls in exactly one bucket, so there is nothing to expand and
     no LATERAL to join -- the same binary search over the same bounds, run once
-    per job. Only meaningful for a job inside the window; the caller's
-    ``submit_time`` filter is what puts it there.
+    per job. The search is unbounded: a submit before the window gives -1, and
+    one at or after it folds silently into the last bucket. The caller's
+    ``submit_time`` filter is what keeps both out.
     """
     starts, _ = _bucket_bounds(begin_dt, finish_dt, period)
-    # width_bucket numbers from 1, so its result - 1 is the caller's index.
+    # width_bucket numbers from 1; the caller indexes _iter_buckets from 0.
     return func.width_bucket(func.extract("epoch", cols.submit_time), starts) - 1
 
 
@@ -361,18 +355,17 @@ def _bucket_table(
 ):
     """The buckets a job's run touches, as a LATERAL to join it against.
 
-    ``width_bucket`` binary-searches the starts for the first and last bucket the
-    run can reach, so a run expands to the one or two buckets it covers instead
-    of being tested against every one of them -- 1.09M pairs rather than 31M over
-    a seven-month window. Positions off either end read NULL and fail the WHERE,
-    so the search needs no clamping; a NULL bound makes generate_series yield
-    nothing, which is what a job that never started should get.
+    ``width_bucket`` binary-searches the starts for the first and last bucket
+    the run reaches, and ``generate_series`` walks that span, so a run expands
+    to the buckets it covers instead of being tested against every one of them.
+    Past either end of the array ``starts[pos]`` reads NULL, which the WHERE
+    drops -- nothing needs clamping. A run with no start searches on NULL and
+    expands to no bucket at all, which is what it should get.
 
-    The overlap is spelled in epoch seconds here, not through ``_ran_between``:
-    the epochs are already computed for the search above, and reaching for
-    ``slurm_job_end`` again costs 30 % on a seven-month window. Same three cases,
-    so the two must move together: no start (no rows at all), no length (the
-    ``elapsed_time`` guard), and half-open bounds.
+    The overlap is spelled here in epoch seconds rather than through
+    ``_ran_between``, which would re-derive an end this search already holds.
+    The two must stay in step: a job with no start yields nothing, one with no
+    length is excluded (``elapsed_time > 0``), and the bounds are half-open.
 
     This picks the buckets, *not* the jobs: pair it with ``_ran_between`` over
     the whole window, which is the half an index can answer.
@@ -395,15 +388,7 @@ def _bucket_table(
 
 
 def _no_buckets(begin_dt: datetime, finish_dt: datetime) -> bool:
-    """Empty window (start == end): the bucketed endpoints return their empty
-    shape instead of querying. It is the only case ``_iter_buckets`` yields
-    nothing for, a calendar frontier being floored to at or before ``begin``.
-
-    Callers resolve their scope (``_scope_or_view_as``) and their cluster names
-    (``_resolve_cluster_ids``) *before* taking this shortcut: an empty answer is
-    still an answer, and a request that would be refused must get its 403/404
-    whatever the window happens to be.
-    """
+    """Return True for an empty window (start == end)."""
     return begin_dt >= finish_dt
 
 
@@ -457,10 +442,6 @@ def _apply_job_filters(
 
 def _gpu_only(query, cols):
     """Restrict to the jobs the dashboard is about: GPU jobs with a known RGU.
-
-    Every plot counts the same population, so a bar and the count above it are
-    drawn from the same jobs. Nothing here is about CPU jobs, and leaving them in
-    made the counts disagree with the RGU they sit next to.
 
     ``allocated_gres_gpu > 0`` is what the rest of SARC calls a GPU job (see
     sarc/alerts/usage_alerts/), and it is what "used a GPU" means -- a job that
@@ -585,7 +566,7 @@ def metrics_job_counts(
     submitted: bool = Query(default=False),
     sess: Session = Depends(session_dep),
 ):
-    """Job count per time bucket, of the jobs running or of the jobs submitted.
+    """Job count per time bucket, of the jobs running or submitted.
 
     Returns one {period_start, period_end, count} per ``period`` bucket of the
     window, empty buckets reported as 0, after the cluster/user/state filters.
@@ -610,10 +591,7 @@ def metrics_job_counts(
         return []
 
     # The DB view would degrade this to a full-table scan (see JobSeriesDB
-    # docstring); job_series_select keeps it narrow. The two modes ask for
-    # different time columns rather than for both: submit_time is not in
-    # ix_slurm_jobs_end_gpu, so requesting it here unconditionally would cost the
-    # running mode the index-only scan that index exists for.
+    # docstring); job_series_select keeps it narrow.
     js = job_series_select(
         *(("submit_time",) if submitted else ("start_time", "elapsed_time")),
         "allocated_gres_gpu",
@@ -735,7 +713,7 @@ def metrics_job_times_vs_limit(
     (x). Each is a 100x100 log-binned grid of job counts. Returns both grids plus
     total_jobs. ``focus_start/end`` narrows the window.
 
-    The one endpoint selected on submit_time, not on the run: both grids measure
+    This endpoint is selected on submit_time, not on the run: both grids measure
     how well a job guessed its limit, and neither the queue wait nor the whole
     elapsed belongs to a slice of time.
 
@@ -1271,7 +1249,7 @@ def metrics_metric_trend(
     # system_memory -- the one metric CPU jobs also report, but this dashboard
     # does not plot them anywhere else. The DB view would degrade this to a
     # full-table scan (see JobSeriesDB docstring); job_series_select keeps it
-    # narrow, on ix_slurm_jobs_end_gpu.
+    # narrow.
     js = job_series_select(
         "job_db_id",
         "start_time",
