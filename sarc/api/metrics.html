@@ -2202,6 +2202,11 @@
              + `${p(d.getUTCHours())}:${p(d.getUTCMinutes())} UTC`;
       };
       const fmtInt = v => v != null ? String(v) : '—';
+      // Usage as the table prints it, one decimal. The row shading grades this
+      // rounded value rather than the raw one, so two rows both reading 50.0 %
+      // can never come out in different colours. toFixed, not Math.round: the
+      // two disagree on halfway values, and this one has to match the cell.
+      const usagePct = v => Number((v * 100).toFixed(1));
       // Seconds as h/m or m/s, whichever the magnitude calls for.
       const fmtDuration = v => {
         if (v == null) return '—';
@@ -2248,8 +2253,8 @@
         { key: 'waste',                 label: `Unused (${unitHour.label})`,
           title: rguWasteTitle(unitHour), fmt: fmtRguHour },
         ]),
-        { key: 'gpu_sm_occupancy_mean', label: 'SM occ',    fmt: v => v != null ? (v < 0 ? 'NaN' : (v*100).toFixed(1)+'%') : '—' },
-        { key: 'gpu_utilization_mean',  label: 'GPU util',  fmt: v => v != null ? (v < 0 ? 'NaN' : (v*100).toFixed(1)+'%') : '—' },
+        { key: 'gpu_sm_occupancy_mean', label: 'SM occ',    fmt: v => v != null ? (v < 0 ? 'NaN' : usagePct(v).toFixed(1)+'%') : '—' },
+        { key: 'gpu_utilization_mean',  label: 'GPU util',  fmt: v => v != null ? (v < 0 ? 'NaN' : usagePct(v).toFixed(1)+'%') : '—' },
         { key: 'gpu_memory_max',        label: 'Mem max',   fmt: v => v != null ? (v*100).toFixed(1)+'%' : '—', title: 'Max memory usage' },
         { key: 'gpu_type',              label: 'GPU type' },
         {% if is_admin %}
@@ -2340,7 +2345,7 @@
         // neither null nor undefined and would fall through every comparison.
         const mm = job.metric_mean;
         if (Number.isFinite(mm)) {
-          const pct = mm * 100;
+          const pct = usagePct(mm);
           const grade =
             pct < CRITICAL_USAGE_PERCENT  ? ['jt-crit', `critically low (below ${CRITICAL_USAGE_PERCENT} %)`] :
             pct < MIN_USAGE_EXPECTED_PERCENT ? ['jt-low', `below the ${MIN_USAGE_EXPECTED_PERCENT} % expected minimum`] :
