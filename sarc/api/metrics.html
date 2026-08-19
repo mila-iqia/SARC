@@ -178,6 +178,13 @@
        purple curves), so a coloured emphasis would read as one of them.
        Not scoped to .ms-help-panel: the same markup is reused in the intro. */
     .ms-help-key { background: #fff3cd; padding: 0 3px; border-radius: 2px; }
+    /* Colour disc naming an RGU segment in the tile help panel: the bar colour
+       itself, so the text needs no "(light blue)" gloss to point at a segment.
+       The hairline border keeps the pale discs visible on white. */
+    .ms-dot {
+      display: inline-block; width: 10px; height: 10px; border-radius: 50%;
+      margin-right: 5px; border: 1px solid rgba(0,0,0,0.2); vertical-align: middle;
+    }
     /* Usage scale in the help text, each band carrying the job-table shade it
        stands for, so the reader matches colour to threshold without a legend. */
     .ms-scale {
@@ -488,7 +495,7 @@
   <script>
     // Minimum expected usage: sent to /rgu_usage as `min_usage` (threshold of
     // the per-job wasted-RGU shortfall, computed server-side) and shown in the
-    // Wasted/Unused bar labels.
+    // Critical Waste / Acceptable Idle bar labels.
     const MIN_USAGE_EXPECTED_PERCENT = 15;
 
     // Below this, usage is critically low: the job table shades those rows a
@@ -748,9 +755,13 @@
         : `hsl(${Math.round(360 * i / n)}, 65%, 52%)`;
     }
 
+    // Base colour of each RGU segment. Shared by the bars and by the discs in
+    // the tile help panel, which is what keeps the two from drifting apart.
+    const RGU_COLORS = { used: '#1a6fd4', waste: '#ff0000', idle: '#a8c8f0', nodata: '#bdbdbd' };
+
     const PLOT_NAMES = {
       job_counts:      'GPU jobs count per period',
-      rgu_usage:       'RGU allocated vs used',
+      rgu_usage:       'RGU allocated vs efficiency levels',
       clusterrgu:      'RGU by cluster',
       jobtable:        'Job table',
       {% if is_admin %}
@@ -1176,7 +1187,7 @@
         `<em>unused</em>: how the RGU bars are split, how the job-table rows are shaded, and ` +
         `which jobs end up in the underusage notifications.</p>` +
         metricDefinitionsHtml() +
-        `<p>Both are drawn on the <em>RGU allocated vs used</em> chart, so a wide gap ` +
+        `<p>Both are drawn on the <em>RGU allocated vs efficiency levels</em> chart, so a wide gap ` +
         `between the two curves means the GPU was kept busy but barely filled.</p>` +
         // These cuts were only visible as row shading, documented nowhere; naming
         // them is what makes the job-table colours readable without hovering.
@@ -1189,8 +1200,13 @@
         `<p><a href="${USER_GUIDE_URL}" target="_blank" rel="noopener">Open the user guide ↗</a></p>`;
     }
 
-    // Panel content for the RGU-usage tile title, defining Wasted/Unused with
-    // the user-guide link inside (a native title can't hold a clickable link).
+    // Segment name in the help panel, preceded by a disc of its bar colour.
+    function rguDot(segment, label) {
+      return `<span class="ms-dot" style="background:${RGU_COLORS[segment]}"></span><strong>${label}</strong>`;
+    }
+
+    // Panel content for the RGU-usage tile title, defining the efficiency levels
+    // with the user-guide link inside (a native title can't hold a clickable link).
     // Rebuilt on every open so the metric name tracks the last Update — the tile
     // header outlives chart re-renders.
     function rguUsageHelpHtml() {
@@ -1200,13 +1216,15 @@
       return `<h3>How to read this plot</h3>` +
         `<h4>Left axis: allocated ${unit.label}, split by ${metricPretty}</h4>` +
         `<p>Each segment sums per-job amounts, not shares of the period total: a job below the minimum adds its own shortfall even when the period average is above it.</p>` +
-        `<p><strong>Used</strong> (blue): allocated × ${metricPretty}.</p>` +
+        `<p>${rguDot('used', 'Used')}: the allocated compute that actively performed computations.</p>` +
         `<p>Idle capacity is cut at the ${MIN_USAGE_EXPECTED_PERCENT} % minimum:</p>` +
-        `<p><strong>Unused &lt; ${MIN_USAGE_EXPECTED_PERCENT} %</strong> (red): unused compute missing for each job to reach the expected minimum of ` +
-        `${MIN_USAGE_EXPECTED_PERCENT} % ${metricPretty}.</p>` +
-        `<p><strong>Unused ≥ ${MIN_USAGE_EXPECTED_PERCENT} %</strong> (light blue): unused compute above the expected minimum of ` +
-        `${MIN_USAGE_EXPECTED_PERCENT} % ${metricPretty}.</p>` +
-        `<p><strong>No metric data</strong> (gray): no ${metricPretty} recorded. Still counted in the allocated total, but <em>left out of</em> the used/unused split and the underusage notifications.</p>` +
+        `<p>${rguDot('waste', 'Critical Waste')} (below the ${MIN_USAGE_EXPECTED_PERCENT} % threshold): unused compute from jobs running under the ` +
+        `${MIN_USAGE_EXPECTED_PERCENT} % minimum efficiency threshold. This is the unacceptable portion of unused ` +
+        `compute from jobs that failed to reach our minimum efficiency threshold (${MIN_USAGE_EXPECTED_PERCENT} % ${metricPretty}). This represents direct, preventable resource loss.</p>` +
+        `<p>${rguDot('idle', 'Acceptable Idle')} (above the ${MIN_USAGE_EXPECTED_PERCENT} % threshold): the unused compute capacity remaining above the ` +
+        `${MIN_USAGE_EXPECTED_PERCENT} % minimum threshold, allocated to jobs that met or exceeded the ${MIN_USAGE_EXPECTED_PERCENT} % efficiency baseline.</p>` +
+        `<p>${rguDot('nodata', 'No data')}: telemetry could not be gathered (e.g. the cluster running the job is not yet connected to the service). ` +
+        `Still counted in the allocated total, but <em>left out of</em> the used/unused split and the underusage notifications.</p>` +
         `<h4>Right axis: average utilization</h4>` +
         metricDefinitionsHtml() +
         `<p>Both are plain per-job averages, not weighted by ${unit.label}, so they do not match the Used share of the bars.</p>` +
@@ -1605,14 +1623,14 @@
         // reading order. Same ordering in the per-period view below.
         Plotly.react(plot, [
           ...trendLevels,
-          { type: 'bar', legend: 'legend2', name: 'Used',   x: X, y: [usedTot * unit.factor], marker: { color: '#1a6fd4' },
+          { type: 'bar', legend: 'legend2', name: 'Used',   x: X, y: [usedTot * unit.factor], marker: { color: RGU_COLORS.used },
             hovertemplate: unit.label + ' used: %{y:,.1f}<extra></extra>' },
-          { type: 'bar', legend: 'legend2', name: `Unused < ${MIN_USAGE_EXPECTED_PERCENT} %`, x: X, y: [wastedTot * unit.factor], marker: { color: '#ff0000' },
-            hovertemplate: `${unit.label} unused below ${MIN_USAGE_EXPECTED_PERCENT} %: %{y:,.1f}<br>what each job lacked to reach<br>the ${MIN_USAGE_EXPECTED_PERCENT} % ${metricPretty} minimum<extra></extra>` },
-          { type: 'bar', legend: 'legend2', name: `Unused ≥ ${MIN_USAGE_EXPECTED_PERCENT} %`, x: X, y: [unusedTot * unit.factor], marker: { color: '#a8c8f0' },
-            hovertemplate: `${unit.label} unused above ${MIN_USAGE_EXPECTED_PERCENT} %: %{y:,.1f}<br>idle capacity above the minimum<extra></extra>` },
-          { type: 'bar', legend: 'legend2', name: 'No metric data', x: X, y: [unmTot * unit.factor], marker: { color: '#bdbdbd' },
-            hovertemplate: unit.label + ' (no metric): %{y:,.1f}<br>no ' + metricPretty + ' data<extra></extra>' },
+          { type: 'bar', legend: 'legend2', name: `Critical Waste (<${MIN_USAGE_EXPECTED_PERCENT}%)`, x: X, y: [wastedTot * unit.factor], marker: { color: RGU_COLORS.waste },
+            hovertemplate: `${unit.label} critical waste: %{y:,.1f}<br>what each job lacked to reach<br>the ${MIN_USAGE_EXPECTED_PERCENT} % ${metricPretty} minimum<extra></extra>` },
+          { type: 'bar', legend: 'legend2', name: `Acceptable Idle (≥${MIN_USAGE_EXPECTED_PERCENT}%)`, x: X, y: [unusedTot * unit.factor], marker: { color: RGU_COLORS.idle },
+            hovertemplate: `${unit.label} acceptable idle: %{y:,.1f}<br>idle capacity above the minimum<extra></extra>` },
+          { type: 'bar', legend: 'legend2', name: 'No data', x: X, y: [unmTot * unit.factor], marker: { color: RGU_COLORS.nodata },
+            hovertemplate: unit.label + ' (no data): %{y:,.1f}<br>no ' + metricPretty + ' telemetry<extra></extra>' },
         ], pLayout({
           // Same pinned title + t as rgu_by_cluster, so the two tiles align
           // by construction (the View picker floats over the top-left corner).
@@ -1638,10 +1656,10 @@
       const rguWasted     = rows.map(r => (r.rgu_wasted || 0) * unit.factor);
       const rguUnused     = rows.map(r => (r.rgu_allocated - r.rgu_used - r.rgu_unmeasured - (r.rgu_wasted || 0)) * unit.factor);
       const rguUnmeasured = rows.map(r => (r.rgu_unmeasured || 0) * unit.factor);
-      const colorUsed      = periods.map(p => { const f = periodInFocus(p); return f === null ? '#1a6fd4' : f ? '#e07020' : '#c8d8f0'; });
-      const colorUnused    = periods.map(p => { const f = periodInFocus(p); return f === null ? '#a8c8f0' : f ? '#f0c090' : '#e4eef8'; });
-      const colorWasted    = periods.map(p => { const f = periodInFocus(p); return f === null ? '#ff0000' : f ? '#aa00cc' : '#ffdddd'; });
-      const colorUnmeasured= periods.map(p => { const f = periodInFocus(p); return f === null ? '#bdbdbd' : f ? '#8a8a8a' : '#e6e6e6'; });
+      const colorUsed      = periods.map(p => { const f = periodInFocus(p); return f === null ? RGU_COLORS.used : f ? '#e07020' : '#c8d8f0'; });
+      const colorUnused    = periods.map(p => { const f = periodInFocus(p); return f === null ? RGU_COLORS.idle : f ? '#f0c090' : '#e4eef8'; });
+      const colorWasted    = periods.map(p => { const f = periodInFocus(p); return f === null ? RGU_COLORS.waste : f ? '#aa00cc' : '#ffdddd'; });
+      const colorUnmeasured= periods.map(p => { const f = periodInFocus(p); return f === null ? RGU_COLORS.nodata : f ? '#8a8a8a' : '#e6e6e6'; });
       // Metric means on the right-hand axis. Deliberately not tinted by the focus
       // (the bars already carry that feedback); 6 series plus a shaded band would
       // be unreadable. Null buckets leave a gap, like the Metric trend tile.
@@ -1657,15 +1675,15 @@
         { type: 'bar', legend: 'legend2', name: 'Used',   x: periods, y: rguUsed, customdata: periodEnds,
           marker: { color: colorUsed },
           hovertemplate: 'Period: %{x}<br>' + unit.label + ' used: %{y:,.1f}<extra></extra>' },
-        { type: 'bar', legend: 'legend2', name: `Unused < ${MIN_USAGE_EXPECTED_PERCENT} %`,   x: periods, y: rguWasted, customdata: periodEnds,
+        { type: 'bar', legend: 'legend2', name: `Critical Waste (<${MIN_USAGE_EXPECTED_PERCENT}%)`,   x: periods, y: rguWasted, customdata: periodEnds,
           marker: { color: colorWasted },
-          hovertemplate: `Period: %{x}<br>${unit.label} unused below ${MIN_USAGE_EXPECTED_PERCENT} %: %{y:,.1f}<br>what each job lacked to reach<br>the ${MIN_USAGE_EXPECTED_PERCENT} % ${metricPretty} minimum<extra></extra>` },
-        { type: 'bar', legend: 'legend2', name: `Unused ≥ ${MIN_USAGE_EXPECTED_PERCENT} %`, x: periods, y: rguUnused, customdata: periodEnds,
+          hovertemplate: `Period: %{x}<br>${unit.label} critical waste: %{y:,.1f}<br>what each job lacked to reach<br>the ${MIN_USAGE_EXPECTED_PERCENT} % ${metricPretty} minimum<extra></extra>` },
+        { type: 'bar', legend: 'legend2', name: `Acceptable Idle (≥${MIN_USAGE_EXPECTED_PERCENT}%)`, x: periods, y: rguUnused, customdata: periodEnds,
           marker: { color: colorUnused },
-          hovertemplate: `Period: %{x}<br>${unit.label} unused above ${MIN_USAGE_EXPECTED_PERCENT} %: %{y:,.1f}<br>idle capacity above the minimum<extra></extra>` },
-        { type: 'bar', legend: 'legend2', name: 'No metric data', x: periods, y: rguUnmeasured, customdata: periodEnds,
+          hovertemplate: `Period: %{x}<br>${unit.label} acceptable idle: %{y:,.1f}<br>idle capacity above the minimum<extra></extra>` },
+        { type: 'bar', legend: 'legend2', name: 'No data', x: periods, y: rguUnmeasured, customdata: periodEnds,
           marker: { color: colorUnmeasured },
-          hovertemplate: 'Period: %{x}<br>' + unit.label + ' (no metric): %{y:,.1f}<br>no ' + metricPretty + ' data<extra></extra>' },
+          hovertemplate: 'Period: %{x}<br>' + unit.label + ' (no data): %{y:,.1f}<br>no ' + metricPretty + ' telemetry<extra></extra>' },
       ], pLayout({
         title: { text: 'RGU usage and metric value — per period (click to focus)',
                  font: { size: 16 }, y: 1, yanchor: 'top', pad: { t: 2 } },
@@ -1964,11 +1982,14 @@
       const sortLab = document.createElement('label');
       sortLab.textContent = 'Sort by:';
       const sortSel = document.createElement('select');
+      // Same four segments as the RGU-usage bars, so a user can be ranked by
+      // the one that matters.
       const SORT_OPTIONS = [
         { value: 'rgu_requested',  label: 'RGU requested' },
         { value: 'rgu_used',       label: 'RGU used' },
-        { value: 'rgu_unused',     label: 'RGU unused' },
-        { value: 'rgu_unmeasured', label: 'RGU unmeasured' },
+        { value: 'rgu_wasted',     label: 'RGU critical waste' },
+        { value: 'rgu_unused',     label: 'RGU acceptable idle' },
+        { value: 'rgu_unmeasured', label: 'RGU no data' },
       ];
       SORT_OPTIONS.forEach(opt => {
         const o = document.createElement('option');
@@ -1997,15 +2018,21 @@
         // Rescale the cumulative RGU·h to the unit selected in the toolbar.
         const unit = rguUnit();
         const selectedUser = document.getElementById('cluster_user').value.trim();
+        // The critical-waste hover names the efficiency metric picked at last
+        // Update, like the RGU-usage bars.
+        const metricName = (currentParams && currentParams.metric) || 'gpu_sm_occupancy';
+        const metricPretty = METRICS[metricName] || metricName;
 
         // Helper to compute the sort key for a row.
         function sortKey(r) {
           const used       = r.rgu_used;
           const unmeasured = r.rgu_unmeasured || 0;
-          const unused     = r.rgu_requested - used - unmeasured;
+          const wasted     = r.rgu_wasted || 0;
+          const idle       = r.rgu_requested - used - unmeasured - wasted;
           switch (userRguSortBy) {
             case 'rgu_used':       return used;
-            case 'rgu_unused':     return unused;
+            case 'rgu_wasted':     return wasted;
+            case 'rgu_unused':     return idle;
             case 'rgu_unmeasured': return unmeasured;
             default: return r.rgu_requested;  // 'rgu_requested'
           }
@@ -2023,44 +2050,55 @@
         const rows  = topRows.reverse();
         const users = rows.map(r => r.user);
 
+        // Same split as the RGU-usage bars: idle is what is left once the
+        // per-job shortfall below the minimum has been taken out of unused.
         const valUsed       = rows.map(r => r.rgu_used * unit.factor);
-        const valUnused     = rows.map(r => (r.rgu_requested - r.rgu_used - (r.rgu_unmeasured || 0)) * unit.factor);
+        const valWasted     = rows.map(r => (r.rgu_wasted || 0) * unit.factor);
+        const valIdle       = rows.map(r => (r.rgu_requested - r.rgu_used - (r.rgu_unmeasured || 0) - (r.rgu_wasted || 0)) * unit.factor);
         const valUnmeasured = rows.map(r => (r.rgu_unmeasured || 0) * unit.factor);
-        const colorUsed       = rows.map(r => r.user === selectedUser ? '#e07020' : '#1a6fd4');
-        const colorUnused     = rows.map(r => r.user === selectedUser ? '#f0c090' : '#a8c8f0');
-        const colorUnmeasured = rows.map(r => r.user === selectedUser ? '#8a8a8a' : '#bdbdbd');
+        const colorUsed       = rows.map(r => r.user === selectedUser ? '#e07020' : RGU_COLORS.used);
+        const colorWasted     = rows.map(r => r.user === selectedUser ? '#aa00cc' : RGU_COLORS.waste);
+        const colorIdle       = rows.map(r => r.user === selectedUser ? '#f0c090' : RGU_COLORS.idle);
+        const colorUnmeasured = rows.map(r => r.user === selectedUser ? '#8a8a8a' : RGU_COLORS.nodata);
 
         // Bar order (which trace is drawn first = leftmost segment) depends on
         // the sort criterion so the primary metric leads the bar.
-        //   rgu_requested / rgu_used → [used, unused, unmeasured]
-        //   rgu_unused               → [unused, used, unmeasured]
-        //   rgu_unmeasured           → [unmeasured, used, unused]
+        //   rgu_requested / rgu_used → [used, wasted, idle, unmeasured]
+        //   rgu_wasted               → [wasted, used, idle, unmeasured]
+        //   rgu_unused               → [idle, used, wasted, unmeasured]
+        //   rgu_unmeasured           → [unmeasured, used, wasted, idle]
         const traceUsed = {
           type: 'bar', name: 'Used',          orientation: 'h', y: users, x: valUsed,
           marker: { color: colorUsed },
           hovertemplate: '%{y}<br>' + unit.label + ' used: %{x:,.1f}<extra></extra>',
         };
-        const traceUnused = {
-          type: 'bar', name: 'Unused',         orientation: 'h', y: users, x: valUnused,
-          marker: { color: colorUnused },
-          hovertemplate: '%{y}<br>' + unit.label + ' unused: %{x:,.1f}<extra></extra>',
+        const traceWasted = {
+          type: 'bar', name: `Critical Waste (<${MIN_USAGE_EXPECTED_PERCENT}%)`, orientation: 'h', y: users, x: valWasted,
+          marker: { color: colorWasted },
+          hovertemplate: `%{y}<br>${unit.label} critical waste: %{x:,.1f}<br>what each job lacked to reach<br>the ${MIN_USAGE_EXPECTED_PERCENT} % ${metricPretty} minimum<extra></extra>`,
+        };
+        const traceIdle = {
+          type: 'bar', name: `Acceptable Idle (≥${MIN_USAGE_EXPECTED_PERCENT}%)`, orientation: 'h', y: users, x: valIdle,
+          marker: { color: colorIdle },
+          hovertemplate: `%{y}<br>${unit.label} acceptable idle: %{x:,.1f}<br>idle capacity above the minimum<extra></extra>`,
         };
         const traceUnmeasured = {
-          type: 'bar', name: 'No metric data', orientation: 'h', y: users, x: valUnmeasured,
+          type: 'bar', name: 'No data', orientation: 'h', y: users, x: valUnmeasured,
           marker: { color: colorUnmeasured },
-          hovertemplate: '%{y}<br>' + unit.label + ' (no metric): %{x:,.1f}<extra></extra>',
+          hovertemplate: '%{y}<br>' + unit.label + ' (no data): %{x:,.1f}<extra></extra>',
         };
 
         let traces;
         switch (userRguSortBy) {
-          case 'rgu_unused':     traces = [traceUnused,     traceUsed, traceUnmeasured]; break;
-          case 'rgu_unmeasured': traces = [traceUnmeasured, traceUsed, traceUnused];     break;
-          default:               traces = [traceUsed, traceUnused, traceUnmeasured];     break;
+          case 'rgu_wasted':     traces = [traceWasted, traceUsed, traceIdle, traceUnmeasured];   break;
+          case 'rgu_unused':     traces = [traceIdle, traceUsed, traceWasted, traceUnmeasured];   break;
+          case 'rgu_unmeasured': traces = [traceUnmeasured, traceUsed, traceWasted, traceIdle];   break;
+          default:               traces = [traceUsed, traceWasted, traceIdle, traceUnmeasured];   break;
         }
 
         const chartH = Math.max(300, users.length * 24 + 80);
         Plotly.react(plot, traces, pLayout({
-          title: { text: 'Total ' + unit.label + ' by User — Used vs Unused (click to filter)', font: { size: 16 } },
+          title: { text: 'Total ' + unit.label + ' by User — efficiency levels (click to filter)', font: { size: 16 } },
           barmode: 'stack', height: chartH,
           xaxis: { title: { text: 'Total ' + unit.label } },
           yaxis: { title: { text: '' }, automargin: true },
@@ -2184,6 +2222,11 @@
              + `${p(d.getUTCHours())}:${p(d.getUTCMinutes())} UTC`;
       };
       const fmtInt = v => v != null ? String(v) : '—';
+      // Usage as the table prints it, one decimal. The row shading grades this
+      // rounded value rather than the raw one, so two rows both reading 50.0 %
+      // can never come out in different colours. toFixed, not Math.round: the
+      // two disagree on halfway values, and this one has to match the cell.
+      const usagePct = v => Number((v * 100).toFixed(1));
       // Seconds as h/m or m/s, whichever the magnitude calls for.
       const fmtDuration = v => {
         if (v == null) return '—';
@@ -2230,8 +2273,8 @@
         { key: 'waste',                 label: `Unused (${unitHour.label})`,
           title: rguWasteTitle(unitHour), fmt: fmtRguHour },
         ]),
-        { key: 'gpu_sm_occupancy_mean', label: 'SM occ',    fmt: v => v != null ? (v < 0 ? 'NaN' : (v*100).toFixed(1)+'%') : '—' },
-        { key: 'gpu_utilization_mean',  label: 'GPU util',  fmt: v => v != null ? (v < 0 ? 'NaN' : (v*100).toFixed(1)+'%') : '—' },
+        { key: 'gpu_sm_occupancy_mean', label: 'SM occ',    fmt: v => v != null ? (v < 0 ? 'NaN' : usagePct(v).toFixed(1)+'%') : '—' },
+        { key: 'gpu_utilization_mean',  label: 'GPU util',  fmt: v => v != null ? (v < 0 ? 'NaN' : usagePct(v).toFixed(1)+'%') : '—' },
         { key: 'gpu_memory_max',        label: 'Mem max',   fmt: v => v != null ? (v*100).toFixed(1)+'%' : '—', title: 'Max memory usage' },
         { key: 'gpu_type',              label: 'GPU type' },
         {% if is_admin %}
@@ -2322,7 +2365,7 @@
         // neither null nor undefined and would fall through every comparison.
         const mm = job.metric_mean;
         if (Number.isFinite(mm)) {
-          const pct = mm * 100;
+          const pct = usagePct(mm);
           const grade =
             pct < CRITICAL_USAGE_PERCENT  ? ['jt-crit', `critically low (below ${CRITICAL_USAGE_PERCENT} %)`] :
             pct < MIN_USAGE_EXPECTED_PERCENT ? ['jt-low', `below the ${MIN_USAGE_EXPECTED_PERCENT} % expected minimum`] :
@@ -2820,7 +2863,7 @@
         case 'density':   return '/dash/metrics/metric_distribution?' + new URLSearchParams({ ...densityParams, ...focusParams });
         case 'jobs':      return jobsURL(p, JOBTABLE_DEFAULTS);
         {% if is_admin %}
-        case 'user_rgu':  return '/dash/metrics/rgu_by_user?' + new URLSearchParams(withAsUser({ start: p.start, end: p.end, metric: p.metric, ...focusParams }));
+        case 'user_rgu':  return '/dash/metrics/rgu_by_user?' + new URLSearchParams(withAsUser({ start: p.start, end: p.end, metric: p.metric, min_usage: MIN_USAGE_EXPECTED_PERCENT / 100, ...focusParams }));
         case 'rgu_by_cluster': return '/dash/metrics/rgu_by_cluster?' + new URLSearchParams(withAsUser({ start: p.start, end: p.end, period: p.period, ...(p.cluster_user ? { cluster_user: p.cluster_user } : {}) }));
         {% else %}
         case 'rgu_by_cluster': return '/dash/metrics/rgu_by_cluster?' + new URLSearchParams(withAsUser({ start: p.start, end: p.end, period: p.period }));
