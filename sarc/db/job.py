@@ -2,6 +2,7 @@ from types import SimpleNamespace
 from typing import Self
 
 from iguane.fom import RAWDATA, fom_ugr
+from sqlalchemy import text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import attribute_keyed_dict, relationship
 from sqlmodel import BIGINT, Field, Index, Session, UniqueConstraint, select
@@ -66,6 +67,33 @@ class JobStatisticsFetchDateDB(SQLModel, table=True):
     )
 
 
+# The instant a job's run stopped, for the /dash "was it running then?" queries:
+# a run meets [lo, hi) exactly when this is above lo and start_time below hi.
+#
+# A function only to be IMMUTABLE, which an index requires: `timestamptz +
+# interval` is merely STABLE (days/months shift with the session TimeZone),
+# while make_interval(secs => ...) is absolute. NULL is "meets no window": STRICT
+# gives that to a job that never started, and the CASE to a run of no length,
+# which occupies no instant (the incoherent rows -- end before start, start
+# before submit -- are all zero-elapsed). Both then drop out of the comparison
+# above, with no second test to forget.
+#
+# Registered with alembic-utils in alembic/env.py. Alembic replaces the function
+# in place, leaving the indexes below on the old result: a body change that
+# alters the result must REINDEX in the same migration.
+SLURM_JOB_END_SIGNATURE = (
+    "slurm_job_end(job_start timestamptz, job_elapsed double precision)"
+)
+SLURM_JOB_END_DEFINITION = """
+returns timestamptz
+language sql
+immutable
+strict
+parallel safe
+as $$ select case when job_elapsed > 0 then job_start + make_interval(secs => job_elapsed) end $$
+"""
+
+
 class SlurmJobDB(SQLModel, table=True):
     __tablename__ = "slurm_jobs"
     __table_args__ = (
@@ -77,23 +105,52 @@ class SlurmJobDB(SQLModel, table=True):
             unique=True,
             postgresql_include=["id"],
         ),
-        # Partial covering index for the /dash GPU queries (count, page, rgu_by_*):
-        # they read every column they need from the index, without opening the table
-        # -- but only while autovacuum stays current, else Postgres opens the rows
-        # anyway to check they are still live.
+        # Covering index for any query based on submit_time
+        # (dashboard, Prometheus scraping, etc.). Covering so that a scan
+        # over a submit range gets what it filters and groups on without
+        # reading the table; displaying a job's other columns still does.
         Index(
-            "ix_slurm_jobs_submit_gpu_type",
+            "ix_slurm_jobs_submit",
             "submit_time",
-            "allocated_gpu_type",
             postgresql_include=[
                 "id",
                 "harmonized_gpu_type",
+                "allocated_gpu_type",
                 "allocated_gres_gpu",
                 "elapsed_time",
                 "cluster_id",
                 "cluster_user",
                 "sarc_user_id",  # used by view when joining users and member_type
+                "start_time",  # with time_limit and job_state, what the
+                "time_limit",  # time-limit heatmaps read beyond the above
+                "job_state",
             ],
+        ),
+        # "Which jobs were running during a period" is `end > lo AND start < hi`,
+        # two scalar comparisons over one indexed expression. Covering, so the
+        # window never reaches the heap; and a btree scan parallelizes, which no
+        # GiST scan does.
+        #
+        # Partial because every /dash plot is about GPU jobs (_gpu_only in
+        # sarc/api/metrics.py). Its predicate must stay the one the
+        # endpoints write, or the planner cannot prove the index applies.
+        Index(
+            "ix_slurm_jobs_end_gpu",
+            text("slurm_job_end(start_time, elapsed_time)"),
+            postgresql_include=[
+                "start_time",  # with elapsed_time: the expression's own inputs,
+                "elapsed_time",  # which an index-only scan must be able to return
+                "id",
+                "harmonized_gpu_type",
+                "allocated_gres_gpu",
+                "cluster_id",
+                "cluster_user",
+                "sarc_user_id",  # used by view when joining users and member_type
+                "job_state",
+            ],
+            postgresql_where=text(
+                "allocated_gres_gpu > 0 AND harmonized_gpu_type IS NOT NULL"
+            ),
         ),
     )
 

@@ -77,12 +77,13 @@
       font-size: 13px; font-weight: 600; color: #555; padding: 2px 0 6px;
     }
     .tile-chart  { width: 100%; height: 480px; }
-    .tile-loading, .tile-error {
+    .tile-loading, .tile-error, .tile-empty {
       display: flex; align-items: center; justify-content: center;
       width: 100%; height: 100%; font-size: 14px;
     }
     .tile-loading { color: #888; }
     .tile-error   { color: #c00; }
+    .tile-empty   { color: #888; font-style: italic; }
     .tile-remove {
       background: none; border: none; cursor: pointer; color: #bbb;
       font-size: 18px; padding: 0 2px; line-height: 1; font-weight: 400;
@@ -121,20 +122,17 @@
     }
     .add-row-label { font-size: 13px; color: #888; }
 
-    /* Metric heatmap: per-tile secondary-metric picker sitting above the plot. */
+    /* Metric comparison: per-tile secondary-metric picker sitting above the plot. */
     .ms-box  { position: relative; display: flex; flex-direction: column; width: 100%; height: 100%; }
     .ms-ctrl { flex-shrink: 0; font-size: 12px; color: #888; padding: 2px 0 6px;
                display: flex; align-items: center; gap: 6px; }
     .ms-plot { width: 100%; flex: 1; min-height: 0; }
     .ms-metric2 { font-size: 12px; padding: 1px 6px; max-width: 160px; }
-    /* RGU-usage: header slot the renderer fills with the "View:" picker once the
-       data is in (same pattern as .jt-head-slot). Off the plot, so the Plotly
-       title keeps the full width; flex:1 centres it between title and actions. */
-    .ru-head-slot {
+    .view-head-slot {
       flex: 1; display: flex; align-items: center; justify-content: center;
       gap: 6px; font-size: 12px; font-weight: 400; color: #888;
     }
-    .ru-head-slot .add-select { padding: 1px 6px; font-size: 11px; }
+    .view-head-slot .add-select { padding: 1px 6px; font-size: 11px; }
     /* "?" help badges (RGU-usage tile header, page title line): standard
        circular help button (quiet grey, blue on hover — same hover palette as
        .add-tile-btn); clicking it opens a definition panel that expands
@@ -389,12 +387,20 @@
     <div class="ctrl">
       <label for="start">Start</label>
       <input type="date" id="start"
-             title="Start of the date range (inclusive), in UTC. Every plot and the job table cover jobs in this range. Takes effect on Update." />
+             {% if is_admin %}
+             title="Start of the date range (inclusive), in UTC. Unless otherwise stated, every plot displays GPU jobs (those with an allocated GPU and a known RGU) for the time they spent inside this range. Takes effect on Update." />
+             {% else %}
+             title="Start of the date range (inclusive), in UTC. Every plot displays GPU jobs (those with an allocated GPU and a known RGU) for the time they spent inside this range. Takes effect on Update." />
+             {% endif %}
     </div>
     <div class="ctrl">
       <label for="end">End</label>
       <input type="date" id="end"
-             title="End of the date range (exclusive: covers jobs submitted before this date), in UTC. Every plot and the job table cover jobs in this range. Takes effect on Update." />
+             {% if is_admin %}
+             title="End of the date range (exclusive), in UTC. Unless otherwise stated, every plot displays GPU jobs (those with an allocated GPU and a known RGU) for the time they spent inside this range. Takes effect on Update." />
+             {% else %}
+             title="End of the date range (exclusive), in UTC. Every plot displays GPU jobs (those with an allocated GPU and a known RGU) for the time they spent inside this range. Takes effect on Update." />
+             {% endif %}
     </div>
     <div class="ctrl">
       <label>Period</label>
@@ -458,7 +464,7 @@
     <button onclick="loadCharts()" title="Apply the current filters (date range, clusters, {% if is_admin %}user, {% endif %}job states, metric) and reload every plot.">Update</button>
     <button id="reset-btn" onclick="resetState()" title="Clear all saved settings and reset to defaults" style="background:#888;">Reset</button>
     <div id="focus-label" class="no-focus"
-         title="Focus is an optional zoom on top of the Start/End range. Click a bar in a period plot to restrict the detail plots ({% if is_admin %}Metric density, Metric heatmap, RGU by user, {% endif %}Job table) to that time slice; the period plots only highlight it. Use Clear focus to return to the full range.">
+         title="Focus is an optional zoom on top of the Start/End range. Click a bar in a period plot to restrict the detail plots ({% if is_admin %}Metric density, Metric comparison, RGU by user, {% endif %}Job table) to that time slice; the period plots only highlight it. Use Clear focus to return to the full range.">
       <span id="focus-label-text">No focus — click a bar in a period plot to zoom the detail plots onto that slice</span>
       <button type="button" id="clear-focus" style="display:none" onclick="clearFocus()">Clear focus</button>
     </div>
@@ -577,6 +583,7 @@
           {% endif %}
           metricScatterMetric2,
           rguUsageView,
+          jobCountsView,
           jobTableHiddenCols: [...jobTableHiddenCols],
           jobTableLimit:   JOBTABLE_DEFAULTS.limit,
           jobTableSortBy:  JOBTABLE_DEFAULTS.sortBy,
@@ -689,17 +696,6 @@
     // Thick enough to read over the bars, in both views.
     const TREND_LINE = { width: 3 };
 
-    // Per-job simple mean over several buckets: recombined by job count, never a
-    // plain average of the per-bucket averages (buckets hold unequal job counts).
-    function trendMean(rows, metric) {
-      let num = 0, den = 0;
-      for (const r of rows) {
-        const t = r.metric_means && r.metric_means[metric];
-        if (t && t.n > 0 && t.mean != null) { num += t.mean * t.n; den += t.n; }
-      }
-      return den ? num / den : null;
-    }
-
     // Right-hand axis shared by both RGU-usage views. The range is pinned to
     // [0, 1]: autoscaled, an 8 % mean would fill the frame and read as a good score.
     const TREND_YAXIS = {
@@ -753,7 +749,7 @@
     }
 
     const PLOT_NAMES = {
-      job_counts:      'Submitted jobs per period',
+      job_counts:      'GPU jobs count per period',
       rgu_usage:       'RGU allocated vs used',
       clusterrgu:      'RGU by cluster',
       jobtable:        'Job table',
@@ -762,7 +758,7 @@
       heatmap_elapsed:   'Elapsed vs limit (heatmap)',
       heatmap_wait:      'Wait vs limit (heatmap)',
       density:           'Metric density',
-      metric_comparison: 'Metric heatmap',
+      metric_comparison: 'Metric comparison',
       userrgu:           'RGU by user',
       {% endif %}
     };
@@ -818,8 +814,8 @@
 
     // Fresh <option> nodes for the metric list, optionally led by a blank
     // "— none —". Shared by the global efficiency-metric select and the per-tile
-    // secondary-metric picker on the Metric heatmap, so each select owns its
-    // own nodes.
+    // secondary-metric picker on the Metric-comparison tile, so each select
+    // owns its own nodes.
     function metricOptions(includeNone) {
       const opts = [];
       if (includeNone) {
@@ -841,26 +837,22 @@
     metSel.value = 'gpu_sm_occupancy';
     {% endif %}
 
-    // The RGU unit is a pure display rescale (the backend always returns RGU·h),
-    // so redrawing an RGU·time tile in place needs no re-fetch — we reuse the
-    // cached endpoint data (e.g. on the RGU-usage view toggle; the unit itself
-    // follows the period and only changes on the next Update). We
-    // call renderPlot() directly (Plotly.react updates in place) rather than
-    // renderTile(), which clears the div's innerHTML and would desync Plotly's
-    // existing graph-div state -> blank plot. No-op before the first load or
-    // when no RGU tile is shown (avoids a stray fetch). Density is *not* here:
-    // its weights feed a normalized density, which is invariant under a
-    // uniform rescale.
+    // Tiles to redraw once a window resize settles -- those a live rescale
+    // leaves visibly wrong, the known case being a wrapping legend stranded
+    // over the plot. See the resize listener below.
     {% if is_admin %}
-    const RGU_UNIT_TILES = new Set(['clusterrgu', 'rgu_usage', 'userrgu', 'jobtable']);
+    const RESIZE_REDRAW_TILES = new Set(['clusterrgu', 'rgu_usage', 'userrgu', 'jobtable']);
     {% else %}
-    const RGU_UNIT_TILES = new Set(['clusterrgu', 'rgu_usage', 'jobtable']);
+    const RESIZE_REDRAW_TILES = new Set(['clusterrgu', 'rgu_usage', 'jobtable']);
     {% endif %}
-    async function rerenderRguTiles() {
+    // Free: every tile reads the endpoint cache, nothing re-fetches. renderPlot,
+    // not renderTile -- renderTile clears the div's innerHTML, which desyncs
+    // Plotly's existing graph-div state into a blank plot.
+    async function redrawTilesOnResize() {
       if (!currentParams) return;
       const tiles = [];
       tileLayout.forEach((row, ri) => row.forEach((plotType, ci) => {
-        if (!RGU_UNIT_TILES.has(plotType)) return;
+        if (!RESIZE_REDRAW_TILES.has(plotType)) return;
         const chartDiv = document.getElementById(`tile-${ri}-${ci}`);
         if (chartDiv) tiles.push({ chartDiv, plotType });
       }));
@@ -868,33 +860,75 @@
       // a tile whose endpoint errored just keeps its error state.
       await Promise.all(tiles.map(async ({ chartDiv, plotType }) => {
         const ep = PLOT_TO_ENDPOINT[plotType];
-        // The job table paginates itself, so re-render it from the page it is
-        // currently showing (a unit change is a pure display rescale) rather
-        // than the shared endpoint cache, which holds only page 0 and would
-        // snap the tile back to the first page.
+        // The table paginates itself, so redraw the page it is showing: the
+        // shared cache holds only page 0 and would snap the reader back to it.
+        // Skip a tile with a page in flight -- rebuilding it would drop the
+        // jt-busy flag that keeps a click from starting a second, racing fetch.
         if (plotType === 'jobtable') {
+          if (chartDiv.querySelector('.job-table.jt-busy')) return;
           if (chartDiv._jtData) renderPlot(chartDiv.id, plotType, { jobs: chartDiv._jtData });
           return;
         }
         let data;
         try {
-          data = await ensureEndpoint(ep);
+          data = await ensureEndpoint(ep, endpointURL(ep, currentParams));
         } catch {
           return;
         }
+        // A tile that went into "Loading…" while we waited belongs to a newer
+        // render (a View switch, say). Our payload is stale: it would put the old
+        // view back under the new picker, and re-arm what loading took away.
+        if (chartDiv.querySelector('.tile-loading')) return;
         if (document.body.contains(chartDiv) && chartDiv.dataset.plotType === plotType)
           renderPlot(chartDiv.id, plotType, { [ENDPOINT_TO_KEY[ep]]: data });
       }));
     }
 
-    // Plotly's own responsive handler resizes the plots live but can leave a
-    // wrapping horizontal legend at its old position (drawn over the bars)
-    // when the window grows back. Once the resize settles, re-render the RGU
-    // tiles from cache: a full react recomputes margins and legend placement.
+    // A "View:" switch is a different query, not a redraw: the RGU whole-range
+    // view asks for one bucket, the job-counts submitted view selects on
+    // submit_time. So reload like a first load. The two views have distinct
+    // URLs, so each keeps its cache entry and switching back is free.
+    async function reloadTilesOfType(plotType) {
+      if (!currentParams) return;
+      const tiles = [];
+      tileLayout.forEach((row, ri) => row.forEach((t, ci) => {
+        if (t !== plotType) return;
+        const chartDiv = document.getElementById(`tile-${ri}-${ci}`);
+        if (chartDiv) tiles.push(chartDiv);
+      }));
+      await Promise.all(tiles.map(chartDiv => renderTile(chartDiv, plotType)));
+    }
+
+    // Fill a tile's header "View:" picker. Called from the renderer, so only
+    // once the data is in -- renderTile empties the slot while loading, which
+    // also stops a second switch racing the first. One slot per tile.
+    function fillViewPicker(el, options, current, onPick) {
+      const slot = el?.closest('.tile')?.querySelector('.view-head-slot');
+      if (!slot) return;
+      slot.innerHTML = '';
+      const lab = document.createElement('label');
+      lab.textContent = 'View: ';
+      const sel = document.createElement('select');
+      sel.className = 'add-select';
+      options.forEach(([v, t]) => {
+        const o = document.createElement('option');
+        o.value = v; o.textContent = t;
+        if (v === current) o.selected = true;
+        sel.appendChild(o);
+      });
+      lab.appendChild(sel);
+      slot.appendChild(lab);
+      sel.addEventListener('change', () => onPick(sel.value));
+    }
+
+    // Plotly's responsive handler rescales live but can strand a wrapping
+    // horizontal legend over the bars when the window grows back. Once the
+    // resize settles, redraw from cache: a full react recomputes margins and
+    // legend placement. The only redraw not driven by a fetch.
     let _resizeTimer = null;
     window.addEventListener('resize', () => {
       clearTimeout(_resizeTimer);
-      _resizeTimer = setTimeout(rerenderRguTiles, 250);
+      _resizeTimer = setTimeout(redrawTilesOnResize, 250);
     });
 
     // Pressing Enter in any filter field applies the filters, like clicking Update.
@@ -981,11 +1015,14 @@
     // Cache + state for the per-endpoint loader.
     //   currentParams: snapshot of the form's parameters at the last Update.
     //                  null until the first loadCharts() has been called.
-    //   endpointCache: { ep -> Promise<data> } — same promise can be awaited
+    //   endpointCache: { url -> Promise<data> } — same promise can be awaited
     //                  by several tiles. Cleared entirely when params change.
+    //                  Keyed by URL, not by endpoint, since an endpoint result
+    //                  may vary depending on given parameters.
     //   endpointStatus: { ep -> 'loading' | 'ready' | 'error' }, synced with
     //                  the cache so updateStatus() can summarise progress
-    //                  without inspecting unsettled promises.
+    //                  without inspecting unsettled promises. Per endpoint, not
+    //                  per URL: it counts what the status line counts.
     let currentParams = null;
     let endpointCache = {};
     let endpointStatus = {};
@@ -994,7 +1031,7 @@
     // renderLayout() (e.g. when another tile changes type), since it bypasses
     // the shared endpoint cache.
     let comparisonCache = {};
-    // Secondary metric for the Metric heatmap tile. Module-scoped (not stored on
+    // Secondary metric for the Metric-comparison tile. Module-scoped (not stored on
     // the tile div, which renderLayout() recreates on every Update) so the pick
     // survives Updates — like the global field it replaces. Defaults to GPU
     // utilization so a fresh heatmap shows data immediately; '' is the explicit
@@ -1023,6 +1060,13 @@
     // range, focus-agnostic). Module-scoped like the other plot-local state, so it
     // survives Updates and is shared by every RGU-usage tile.
     let rguUsageView = _saved.rguUsageView || 'per_period';
+    // Job-counts tile view: 'running' (jobs running in each bucket — occupancy,
+    // and the population every other tile draws from) or 'submitted' (jobs
+    // submitted in each bucket — a submission rate, on a different population).
+    let jobCountsView = _saved.jobCountsView || 'running';
+    // The tiles whose header carries a "View:" picker, i.e. the ones that get a
+    // .view-head-slot and are reloaded as a group when their view changes.
+    const VIEW_PICKER_TILES = new Set(['rgu_usage', 'job_counts']);
 
     function layoutToParam(l) {
       return l.map(row => row.join(',')).join(';');
@@ -1116,7 +1160,7 @@
       return `<p><strong>SM occupancy</strong>: how full the GPU was.<br/>` +
         `<strong>GPU utilization</strong>: how often the GPU ran anything at all.</p>` +
         `<p>A job can keep a GPU busy while using only a fraction of it, which is why ` +
-        `<strong class="ms-help-key">SM occupancy is the reference usage metric in SARC.</strong></p>`;
+        `<strong class="ms-help-key">SM occupancy is the reference usage metric in the dashboard.</strong></p>`;
     }
 
     // Doubles as the label of the title-line help button, which is why the
@@ -1253,10 +1297,10 @@
             const slot = document.createElement('span');
             slot.className = 'jt-head-slot';
             header.appendChild(slot);
-          } else if (plotType === 'rgu_usage') {
+          } else if (VIEW_PICKER_TILES.has(plotType)) {
             // Same idea for the "View:" picker: filled once the data is in.
             const slot = document.createElement('span');
-            slot.className = 'ru-head-slot';
+            slot.className = 'view-head-slot';
             header.appendChild(slot);
           }
           {% if is_admin %}
@@ -1365,6 +1409,16 @@
       if (fn) fn(id, d);
     }
 
+    // Every renderer bails through here when its payload holds nothing to draw:
+    // a blank tile reads as "still loading", or as a bug.
+    function showNoData(el, msg = 'No data for this selection.') {
+      if (!el) return;
+      // Purge first: overwriting innerHTML under a live Plotly graph leaves its
+      // state pointing at nodes that are gone. A no-op on a plain div.
+      Plotly.purge(el);
+      el.innerHTML = `<div class="tile-empty">${msg}</div>`;
+    }
+
     // Log10 colour mapping shared by the heatmap renderers: counts span many
     // orders of magnitude (1 outlier cell vs a ~1M-job one), so a linear
     // scale would make every cell except the densest one look white. Returns
@@ -1387,7 +1441,10 @@
     }
 
     function renderHeatmapCell(id, payload, title, yLabel) {
-      if (!payload || !payload.z || !payload.z.length) return;
+      if (!payload || !payload.z || !payload.z.length) {
+        showNoData(document.getElementById(id));
+        return;
+      }
       // Server returns x/y in seconds; convert axes to hours for display.
       const xs = payload.x.map(v => v * SEC_TO_H);
       const ys = payload.y.map(v => v * SEC_TO_H);
@@ -1442,7 +1499,17 @@
     }
 
     function renderJobCounts(id, d) {
-      if (!d.job_counts.length) return;
+      const el = document.getElementById(id);
+      // Before the empty check: with nothing to draw the reader must still be
+      // able to switch view without going through Update.
+      fillViewPicker(el, [['running', 'Running'], ['submitted', 'Submitted']],
+        jobCountsView,
+        v => { jobCountsView = v; saveState(); reloadTilesOfType('job_counts'); });
+      if (!d.job_counts.length) {
+        showNoData(el);
+        return;
+      }
+      const submitted = jobCountsView === 'submitted';
       const colors = d.job_counts.map(r => {
         const inf = periodInFocus(r.period_start);
         return inf === null ? '#1a6fd4' : inf ? '#e07020' : '#c8d8f0';
@@ -1454,7 +1521,9 @@
         marker: { color: colors },
         hovertemplate: 'Period: %{x}<br>Jobs: %{y}<extra></extra>',
       }], pLayout({
-        title: { text: 'Submitted jobs per period (click to focus)', font: { size: 16 } },
+        // In the title, not just the picker: the other tiles all draw on Running.
+        title: { text: (submitted ? 'Submitted' : 'Running')
+                       + ' GPU jobs per period (click to focus)', font: { size: 16 } },
         xaxis: { title: { text: 'Period start' }, type: 'category', tickangle: -45 },
         yaxis: { title: { text: 'Number of jobs' } },
         bargap: 0.15, margin: { l: 60, r: 20, t: 40, b: 100 },
@@ -1468,7 +1537,8 @@
 
     function renderRguUsage(id, d) {
       const el = document.getElementById(id);
-      if (!el || !d.rgu_usage.length) return;
+      const rows = d.rgu_usage;
+      if (!el) return;
       const unit = rguUnit();
       // The wasted/unused hovers name the efficiency metric picked at last
       // Update (non-admins are pinned to SM occupancy).
@@ -1483,35 +1553,27 @@
       box.appendChild(plot);
       el.appendChild(box);
 
-      // "View:" picker in this tile's header slot (closest('.tile') so several
-      // RGU-usage tiles each fill their own). Filled here, i.e. only once the
-      // data is in; renderTile clears it while loading.
-      const slot = el.closest('.tile')?.querySelector('.ru-head-slot');
-      if (slot) {
-        slot.innerHTML = '';
-        const lab = document.createElement('label');
-        lab.textContent = 'View: ';
-        const sel = document.createElement('select');
-        sel.className = 'add-select';
-        [['per_period', 'Per period'], ['whole_range', 'Whole range']].forEach(([v, t]) => {
-          const o = document.createElement('option');
-          o.value = v; o.textContent = t;
-          if (v === rguUsageView) o.selected = true;
-          sel.appendChild(o);
-        });
-        lab.appendChild(sel);
-        slot.appendChild(lab);
-        // View is module-scoped (shared by every RGU-usage tile), so a change
-        // re-renders them all from cache — no refetch — like the RGU-unit switch.
-        sel.addEventListener('change', () => { rguUsageView = sel.value; saveState(); rerenderRguTiles(); });
+      fillViewPicker(el, [['per_period', 'Per period'], ['whole_range', 'Whole range']],
+        rguUsageView,
+        v => { rguUsageView = v; saveState(); reloadTilesOfType('rgu_usage'); });
+
+      // After the picker, not before: with nothing to draw the reader must still
+      // be able to switch view without going through Update.
+      if (!rows.length) {
+        showNoData(plot);
+        return;
       }
 
       if (rguUsageView === 'whole_range') {
-        // One stacked bar summing the whole Start–End range. Focus is ignored on
+        // One stacked bar over the whole Start–End range. Focus is ignored on
         // purpose (no per-bucket axis) and the single bar is not click-to-focus.
-        const sum = key => d.rgu_usage.reduce((a, r) => a + (r[key] || 0), 0);
-        const reqTot = sum('rgu_allocated'), usedTot = sum('rgu_used'), unmTot = sum('rgu_unmeasured');
-        const wastedTot = sum('rgu_wasted');
+        // The payload already *is* that single bucket (whole=true), rather than
+        // the per-period one added up: the sums would agree either way, but the
+        // metric means below only count each job once when the range is one
+        // bucket. So this view is a fetch of its own, not a redraw.
+        const whole = rows[0];
+        const reqTot = whole.rgu_allocated || 0, usedTot = whole.rgu_used || 0;
+        const unmTot = whole.rgu_unmeasured || 0, wastedTot = whole.rgu_wasted || 0;
         const unusedTot = reqTot - usedTot - unmTot - wastedTot;
         const X = ['Whole range'];
         // Over the whole range each metric collapses to a single value, so the
@@ -1522,7 +1584,7 @@
         // (a layout shape alone would leave it without a trace).
         const trendLevels = [], trendRules = [];
         TREND_CURVES.forEach(([m, color], i) => {
-          const v = trendMean(d.rgu_usage, m);
+          const v = whole.metric_means[m] ? whole.metric_means[m].mean : null;
           if (v == null) return;
           trendRules.push({
             type: 'line', xref: 'paper', yref: 'y2',
@@ -1570,12 +1632,12 @@
       }
 
       // Per-period: one stacked bar per time bucket; click a bar to set the focus.
-      const periods    = d.rgu_usage.map(r => r.period_start);
-      const periodEnds = d.rgu_usage.map(r => r.period_end);
-      const rguUsed       = d.rgu_usage.map(r => r.rgu_used * unit.factor);
-      const rguWasted     = d.rgu_usage.map(r => (r.rgu_wasted || 0) * unit.factor);
-      const rguUnused     = d.rgu_usage.map(r => (r.rgu_allocated - r.rgu_used - r.rgu_unmeasured - (r.rgu_wasted || 0)) * unit.factor);
-      const rguUnmeasured = d.rgu_usage.map(r => (r.rgu_unmeasured || 0) * unit.factor);
+      const periods    = rows.map(r => r.period_start);
+      const periodEnds = rows.map(r => r.period_end);
+      const rguUsed       = rows.map(r => r.rgu_used * unit.factor);
+      const rguWasted     = rows.map(r => (r.rgu_wasted || 0) * unit.factor);
+      const rguUnused     = rows.map(r => (r.rgu_allocated - r.rgu_used - r.rgu_unmeasured - (r.rgu_wasted || 0)) * unit.factor);
+      const rguUnmeasured = rows.map(r => (r.rgu_unmeasured || 0) * unit.factor);
       const colorUsed      = periods.map(p => { const f = periodInFocus(p); return f === null ? '#1a6fd4' : f ? '#e07020' : '#c8d8f0'; });
       const colorUnused    = periods.map(p => { const f = periodInFocus(p); return f === null ? '#a8c8f0' : f ? '#f0c090' : '#e4eef8'; });
       const colorWasted    = periods.map(p => { const f = periodInFocus(p); return f === null ? '#ff0000' : f ? '#aa00cc' : '#ffdddd'; });
@@ -1586,7 +1648,7 @@
       const trendLines = TREND_CURVES.map(([m, color]) => ({
         type: 'scatter', mode: 'lines+markers', yaxis: 'y2',
         name: METRICS[m] + ' mean (right axis)', x: periods, customdata: periodEnds,
-        y: d.rgu_usage.map(r => (r.metric_means && r.metric_means[m] ? r.metric_means[m].mean : null)),
+        y: rows.map(r => (r.metric_means && r.metric_means[m] ? r.metric_means[m].mean : null)),
         line: { color: color, ...TREND_LINE }, marker: { size: 5 },
         hovertemplate: METRICS[m] + ' mean<br>Period: %{x}<br>Value: %{y:.1%}<extra></extra>',
       }));
@@ -1624,7 +1686,10 @@
 
     function renderClusterRgu(id, d) {
       const data = d.clusterrgu;
-      if (!data || !data.periods.length || !data.series.length) return;
+      if (!data || !data.periods.length || !data.series.length) {
+        showNoData(document.getElementById(id));
+        return;
+      }
       // Rescale the cumulative RGU·h to the unit selected in the toolbar.
       const unit = rguUnit();
       const x    = data.periods.map(p => p.period_start);
@@ -1692,7 +1757,10 @@
 
     function renderMetricTrend(id, d) {
       const data = d.metrictrend;
-      if (!data || !data.periods.length || !data.series.length) return;
+      if (!data || !data.periods.length || !data.series.length) {
+        showNoData(document.getElementById(id));
+        return;
+      }
       // Title names the metric actually plotted (single series, guarded above).
       const ml = METRICS[data.series[0].metric] || data.series[0].metric;
       const x    = data.periods.map(p => p.period_start);
@@ -1746,7 +1814,10 @@
     function renderDensity(id, d) {
       const metric = selectedMetric();
       const ml = METRICS[metric] || metric;
-      if (!d.density.primary.values.length) return;
+      if (!d.density.primary.values.length) {
+        showNoData(document.getElementById(id));
+        return;
+      }
       // Server pre-bins into 50 equal bins over [0, 1] (matches xbins below).
       const XBINS = { start: 0, end: 1, size: 1 / 50 };
       Plotly.react(id, [{
@@ -1763,7 +1834,7 @@
       }), { responsive: true });
     }
 
-    // Metric heatmap: the secondary metric is chosen *on the tile* (the picker
+    // Metric comparison: the secondary metric is chosen *on the tile* (the picker
     // built here), not in the global toolbar. The choice lives in the module
     // variable `metricScatterMetric2`, so it survives a global Update (unlike
     // the job-table pagination, which is navigation state and resets). This tile
@@ -1828,8 +1899,10 @@
             });
           const p = await comparisonCache[m2];
           if (!document.body.contains(el) || el.dataset.plotType !== 'metric_comparison') return;
-          if (!p || !p.z || !p.z.length) {
-            plot.innerHTML = '<div class="tile-loading">No data for this pair.</div>';
+          // An all-zero grid too, not just a missing one: the server always
+          // returns the full 100x100, and log-scaling zeros gives a blank plot.
+          if (!p || !p.z || !p.z.some(row => row.some(v => v > 0))) {
+            showNoData(plot, 'No data for this pair.');
             return;
           }
           const ml2 = METRICS[m2] || m2;
@@ -1868,7 +1941,7 @@
     function renderUserRgu(id, d) {
       const el = document.getElementById(id);
       if (!el) return;
-      if (!d.userrgu.length) { el.textContent = 'No data.'; return; }
+      if (!d.userrgu.length) { showNoData(el); return; }
 
       // "Top N" and "Sort by" are module-scoped so they survive Updates.
       // Both controls re-render in place — no refetch needed.
@@ -2027,7 +2100,7 @@
       // and page numbers track the DB as scraping adds jobs. The backend keeps it
       // a separate, parallelised query, so paying it per page stays cheap.
       const total = payload.total || 0;
-      el._jtData = payload;  // kept so an RGU-unit change can rescale in place
+      el._jtData = payload;  // kept so a resize can redraw this page in place
 
       // Per-tile pagination + sort state, persisted on the element. Defaults
       // mirror JOBTABLE_DEFAULTS so the first page (fetched via the shared cache
@@ -2080,7 +2153,7 @@
       if (!total) {
         const slot = el.closest('.tile')?.querySelector('.jt-head-slot');
         if (slot) slot.innerHTML = '';
-        el.textContent = 'No jobs found.';
+        showNoData(el, 'No jobs found.');
         return;
       }
 
@@ -2111,36 +2184,51 @@
              + `${p(d.getUTCHours())}:${p(d.getUTCMinutes())} UTC`;
       };
       const fmtInt = v => v != null ? String(v) : '—';
+      // Seconds as h/m or m/s, whichever the magnitude calls for.
+      const fmtDuration = v => {
+        if (v == null) return '—';
+        const s = Math.floor(v), h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sec = s%60;
+        return h > 0 ? `${h}h${String(m).padStart(2,'0')}m` : `${m}m${String(sec).padStart(2,'0')}s`;
+      };
+      // Every quantity in the row counts only the part inside the date range,
+      // like the plots. Elapsed shows the whole run beside it, so a job that
+      // crosses a boundary reads as partial instead of contradicting its RGU·time.
+      const IN_RANGE = 'A job that started before the range or ran past it counts only for the part inside — the Elapsed column shows that part, then the job\'s whole run after the slash.';
+      const rguTimeTitle  = u => `RGU × the hours this job ran inside the selected date range, shown in ${u.label}. ${IN_RANGE}`;
+      const rguWasteTitle = u => `RGU·time × (1 − mean ${metricPretty}): estimated unused RGU·time, in ${u.label}. ${IN_RANGE}`;
       const COLS = [
         { key: 'cluster',               label: 'Cluster' },
         { key: 'job_id',                label: 'Job ID',    fmt: fmtInt },
         { key: 'submit_time',           label: 'Submitted', fmt: fmtDateTime },
+        { key: 'start_time',            label: 'Started',   fmt: fmtDateTime,
+          title: 'When the job started running, in UTC. This is what tells you whether the job crossed the range boundary — a job can be submitted long before it starts.' },
         {% if is_admin %}
         { key: 'user',                  label: 'User', adminOnly: true, title: 'Cluster user name' },
         {% endif %}
         { key: 'job_state',             label: 'State' },
-        { key: 'elapsed',               label: 'Elapsed',   fmt: v => {
+        // The part inside the range first, since that is what every other number
+        // in the row is built from; the whole run after the slash, and only when
+        // the two differ. Sorting ranks on the part inside.
+        { key: 'elapsed',               label: 'Elapsed',
+          title: `Time this job spent running inside the selected date range. ${IN_RANGE}`,
+          fmt: (v, job) => {
             if (v == null) return '—';
-            const s = Math.floor(v), h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sec = s%60;
-            return h > 0 ? `${h}h${String(m).padStart(2,'0')}m` : `${m}m${String(sec).padStart(2,'0')}s`;
+            const inRange = fmtDuration(v), whole = fmtDuration(job.elapsed_total);
+            return inRange === whole ? inRange : `${inRange} / ${whole}`;
           }},
         { key: 'rgu_hours',             label: unit.label,
-          title: `RGU × elapsed time, shown in ${unit.label}`,
-          fmt: fmtRguTime },
+          title: rguTimeTitle(unit), fmt: fmtRguTime },
         // Fixed RGU·h twin, skipped when the toolbar unit is already hours
         // (it would be an exact duplicate).
         ...(unit === unitHour ? [] : [
         { key: 'rgu_hours',             label: unitHour.label,
-          title: `RGU × elapsed time, shown in ${unitHour.label}`,
-          fmt: fmtRguHour },
+          title: rguTimeTitle(unitHour), fmt: fmtRguHour },
         ]),
         { key: 'waste',                 label: `Unused (${unit.label})`,
-          title: `RGU·time × (1 − mean ${metricPretty}): estimated unused RGU·time`,
-          fmt: fmtRguTime },
+          title: rguWasteTitle(unit), fmt: fmtRguTime },
         ...(unit === unitHour ? [] : [
         { key: 'waste',                 label: `Unused (${unitHour.label})`,
-          title: `RGU·time × (1 − mean ${metricPretty}): estimated unused RGU·time`,
-          fmt: fmtRguHour },
+          title: rguWasteTitle(unitHour), fmt: fmtRguHour },
         ]),
         { key: 'gpu_sm_occupancy_mean', label: 'SM occ',    fmt: v => v != null ? (v < 0 ? 'NaN' : (v*100).toFixed(1)+'%') : '—' },
         { key: 'gpu_utilization_mean',  label: 'GPU util',  fmt: v => v != null ? (v < 0 ? 'NaN' : (v*100).toFixed(1)+'%') : '—' },
@@ -2250,7 +2338,8 @@
           const td = tr.insertCell();
           td.dataset.col = c.key;
           const raw = job[c.key];
-          td.textContent = c.fmt ? c.fmt(raw) : (raw ?? '—');
+          // The row too: Elapsed reads elapsed_total alongside its own value.
+          td.textContent = c.fmt ? c.fmt(raw, job) : (raw ?? '—');
           if (c.cls) {
             td.className = c.cls; td.title = raw || '';
             // Nodes is truncated by default; click toggles the full (wrapped) list.
@@ -2721,9 +2810,13 @@
       };
       const densityParams = { ...base, metric: p.metric };
       switch (ep) {
-        case 'job_counts': return '/dash/metrics/job_counts?' + new URLSearchParams({ ...base, period: p.period });
+        // submitted=true counts the jobs submitted in each bucket instead of the
+        // ones running in it -- a different population, hence a different URL.
+        case 'job_counts': return '/dash/metrics/job_counts?' + new URLSearchParams({ ...base, period: p.period, ...(jobCountsView === 'submitted' ? { submitted: 'true' } : {}) });
         case 'heatmap':   return '/dash/metrics/job_times_vs_limit?' + new URLSearchParams({ ...base, ...focusParams });
-        case 'rgu_usage': return '/dash/metrics/rgu_usage?' + new URLSearchParams({ ...base, period: p.period, metric: p.metric, min_usage: MIN_USAGE_EXPECTED_PERCENT / 100 });
+        // whole=true asks for the range as one bucket, which is what the
+        // whole-range view draws; the server then ignores `period`.
+        case 'rgu_usage': return '/dash/metrics/rgu_usage?' + new URLSearchParams({ ...base, period: p.period, metric: p.metric, min_usage: MIN_USAGE_EXPECTED_PERCENT / 100, ...(rguUsageView === 'whole_range' ? { whole: 'true' } : {}) });
         case 'density':   return '/dash/metrics/metric_distribution?' + new URLSearchParams({ ...densityParams, ...focusParams });
         case 'jobs':      return jobsURL(p, JOBTABLE_DEFAULTS);
         {% if is_admin %}
@@ -2737,15 +2830,15 @@
       throw new Error('Unknown endpoint: ' + ep);
     }
 
-    // Return a promise for the data of `ep`, fetching it once and caching it.
+    // Return a promise for the data at `url`, fetching it once and caching it.
     // Multiple tiles can call this concurrently; they all share the same in-
-    // flight promise.
-    function ensureEndpoint(ep) {
-      if (endpointCache[ep]) return endpointCache[ep];
+    // flight promise. `ep` only labels the entry for the status line.
+    function ensureEndpoint(ep, url) {
+      if (endpointCache[url]) return endpointCache[url];
       endpointStatus[ep] = 'loading';
-      endpointCache[ep] = (async () => {
+      endpointCache[url] = (async () => {
         try {
-          const r = await fetch(endpointURL(ep, currentParams));
+          const r = await fetch(url);
           if (!r.ok) throw new Error(`HTTP ${r.status} on /${ep}`);
           const data = await r.json();
           endpointStatus[ep] = 'ready';
@@ -2758,7 +2851,7 @@
         }
       })();
       updateStatus();
-      return endpointCache[ep];
+      return endpointCache[url];
     }
 
     function updateStatus() {
@@ -2785,7 +2878,13 @@
     // still in the DOM and still bound to the same plot type after the
     // await — the user may have removed or swapped the tile in the meantime.
     async function renderTile(chartDiv, plotType) {
-      // The metric heatmap owns its data flow (per-tile secondary picker that
+      // Purge before the innerHTML writes below: the renderers that draw on
+      // chartDiv itself leave a live graph here, and clobbering it keeps
+      // Plotly's element state, so the next react() draws nothing. A no-op on a
+      // plain div. Only reloadTilesOfType hits this -- an Update rebuilds the
+      // tile divs, so the stale state never survives one.
+      Plotly.purge(chartDiv);
+      // Metric comparison owns its data flow (per-tile secondary picker that
       // re-fetches /metric_comparison itself), so it skips the shared endpoint
       // cache: render it straight away and let its own draw() do the fetching.
       if (plotType === 'metric_comparison') {
@@ -2799,13 +2898,14 @@
         return;
       }
       chartDiv.innerHTML = '<div class="tile-loading">Loading…</div>';
-      // The RGU-usage "View:" picker lives in the tile header, outside chartDiv:
-      // clear it here so it is absent while loading and on error, and let
-      // renderRguUsage put it back once the data is in.
-      const ruSlot = chartDiv.closest('.tile')?.querySelector('.ru-head-slot');
-      if (ruSlot) ruSlot.innerHTML = '';
+      // A "View:" picker lives in the tile header, outside chartDiv: clear it
+      // here so it is absent while loading and on error, and let the renderer put
+      // it back once the data is in. That is also what keeps a second view switch
+      // from racing this one: the control is gone until the answer lands.
+      const viewSlot = chartDiv.closest('.tile')?.querySelector('.view-head-slot');
+      if (viewSlot) viewSlot.innerHTML = '';
       try {
-        const data = await ensureEndpoint(ep);
+        const data = await ensureEndpoint(ep, endpointURL(ep, currentParams));
         if (!document.body.contains(chartDiv)) return;
         if (chartDiv.dataset.plotType !== plotType) return;
         chartDiv.innerHTML = '';
@@ -2820,6 +2920,18 @@
     // the current form values, invalidates the endpoint cache, and re-renders
     // every tile. Each tile then independently fetches what it needs.
     async function loadCharts() {
+      // A focus names a slice of the current range, so a new range voids it —
+      // and a focus left outside the range asks the API for an inverted window.
+      // Cleared before captureParams reads it, and never on the first load,
+      // which restores the focus saved alongside its own range.
+      const newStart = document.getElementById('start').value;
+      const newEnd   = document.getElementById('end').value;
+      if (currentParams &&
+          (currentParams.start !== newStart || currentParams.end !== newEnd)) {
+        focusStart = '';
+        focusEnd   = '';
+        updateFocusLabel();
+      }
       const params = captureParams();
       if (params === null) {
         document.getElementById('status').textContent =

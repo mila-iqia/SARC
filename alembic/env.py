@@ -1,11 +1,12 @@
 from alembic_utils.pg_extension import PGExtension
+from alembic_utils.pg_function import PGFunction
 from alembic_utils.pg_view import PGView
 from alembic_utils.replaceable_entity import register_entities
 from sqlalchemy.dialects.postgresql.psycopg import PGDialect_psycopg
 
 from alembic import context
 from sarc.config import config
-from sarc.db import get_meta, job_series
+from sarc.db import get_meta, job, job_series
 
 compiled_query = job_series.JobSeriesDB.__sql_view__.compile(
     dialect=PGDialect_psycopg(), compile_kwargs={"literal_binds": True}
@@ -14,8 +15,14 @@ job_series_view = PGView(
     schema="public", signature="job_series_view", definition=f"{compiled_query}"
 )
 btree_gist = PGExtension(schema="public", signature="btree_gist")
+# Must exist before index ix_slurm_jobs_end, which calls this function.
+slurm_job_end = PGFunction(
+    schema="public",
+    signature=job.SLURM_JOB_END_SIGNATURE,
+    definition=job.SLURM_JOB_END_DEFINITION,
+)
 
-register_entities([btree_gist, job_series_view])
+register_entities([btree_gist, slurm_job_end, job_series_view])
 
 target_metadata = get_meta()
 
