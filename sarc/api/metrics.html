@@ -1982,11 +1982,14 @@
       const sortLab = document.createElement('label');
       sortLab.textContent = 'Sort by:';
       const sortSel = document.createElement('select');
+      // Same four segments as the RGU-usage bars, so a user can be ranked by
+      // the one that matters.
       const SORT_OPTIONS = [
         { value: 'rgu_requested',  label: 'RGU requested' },
         { value: 'rgu_used',       label: 'RGU used' },
-        { value: 'rgu_unused',     label: 'RGU unused' },
-        { value: 'rgu_unmeasured', label: 'RGU unmeasured' },
+        { value: 'rgu_wasted',     label: 'RGU critical waste' },
+        { value: 'rgu_unused',     label: 'RGU acceptable idle' },
+        { value: 'rgu_unmeasured', label: 'RGU no data' },
       ];
       SORT_OPTIONS.forEach(opt => {
         const o = document.createElement('option');
@@ -2015,15 +2018,21 @@
         // Rescale the cumulative RGU·h to the unit selected in the toolbar.
         const unit = rguUnit();
         const selectedUser = document.getElementById('cluster_user').value.trim();
+        // The critical-waste hover names the efficiency metric picked at last
+        // Update, like the RGU-usage bars.
+        const metricName = (currentParams && currentParams.metric) || 'gpu_sm_occupancy';
+        const metricPretty = METRICS[metricName] || metricName;
 
         // Helper to compute the sort key for a row.
         function sortKey(r) {
           const used       = r.rgu_used;
           const unmeasured = r.rgu_unmeasured || 0;
-          const unused     = r.rgu_requested - used - unmeasured;
+          const wasted     = r.rgu_wasted || 0;
+          const idle       = r.rgu_requested - used - unmeasured - wasted;
           switch (userRguSortBy) {
             case 'rgu_used':       return used;
-            case 'rgu_unused':     return unused;
+            case 'rgu_wasted':     return wasted;
+            case 'rgu_unused':     return idle;
             case 'rgu_unmeasured': return unmeasured;
             default: return r.rgu_requested;  // 'rgu_requested'
           }
@@ -2041,44 +2050,55 @@
         const rows  = topRows.reverse();
         const users = rows.map(r => r.user);
 
+        // Same split as the RGU-usage bars: idle is what is left once the
+        // per-job shortfall below the minimum has been taken out of unused.
         const valUsed       = rows.map(r => r.rgu_used * unit.factor);
-        const valUnused     = rows.map(r => (r.rgu_requested - r.rgu_used - (r.rgu_unmeasured || 0)) * unit.factor);
+        const valWasted     = rows.map(r => (r.rgu_wasted || 0) * unit.factor);
+        const valIdle       = rows.map(r => (r.rgu_requested - r.rgu_used - (r.rgu_unmeasured || 0) - (r.rgu_wasted || 0)) * unit.factor);
         const valUnmeasured = rows.map(r => (r.rgu_unmeasured || 0) * unit.factor);
-        const colorUsed       = rows.map(r => r.user === selectedUser ? '#e07020' : '#1a6fd4');
-        const colorUnused     = rows.map(r => r.user === selectedUser ? '#f0c090' : '#a8c8f0');
-        const colorUnmeasured = rows.map(r => r.user === selectedUser ? '#8a8a8a' : '#bdbdbd');
+        const colorUsed       = rows.map(r => r.user === selectedUser ? '#e07020' : RGU_COLORS.used);
+        const colorWasted     = rows.map(r => r.user === selectedUser ? '#aa00cc' : RGU_COLORS.waste);
+        const colorIdle       = rows.map(r => r.user === selectedUser ? '#f0c090' : RGU_COLORS.idle);
+        const colorUnmeasured = rows.map(r => r.user === selectedUser ? '#8a8a8a' : RGU_COLORS.nodata);
 
         // Bar order (which trace is drawn first = leftmost segment) depends on
         // the sort criterion so the primary metric leads the bar.
-        //   rgu_requested / rgu_used → [used, unused, unmeasured]
-        //   rgu_unused               → [unused, used, unmeasured]
-        //   rgu_unmeasured           → [unmeasured, used, unused]
+        //   rgu_requested / rgu_used → [used, wasted, idle, unmeasured]
+        //   rgu_wasted               → [wasted, used, idle, unmeasured]
+        //   rgu_unused               → [idle, used, wasted, unmeasured]
+        //   rgu_unmeasured           → [unmeasured, used, wasted, idle]
         const traceUsed = {
           type: 'bar', name: 'Used',          orientation: 'h', y: users, x: valUsed,
           marker: { color: colorUsed },
           hovertemplate: '%{y}<br>' + unit.label + ' used: %{x:,.1f}<extra></extra>',
         };
-        const traceUnused = {
-          type: 'bar', name: 'Unused',         orientation: 'h', y: users, x: valUnused,
-          marker: { color: colorUnused },
-          hovertemplate: '%{y}<br>' + unit.label + ' unused: %{x:,.1f}<extra></extra>',
+        const traceWasted = {
+          type: 'bar', name: `Critical Waste (<${MIN_USAGE_EXPECTED_PERCENT}%)`, orientation: 'h', y: users, x: valWasted,
+          marker: { color: colorWasted },
+          hovertemplate: `%{y}<br>${unit.label} critical waste: %{x:,.1f}<br>what each job lacked to reach<br>the ${MIN_USAGE_EXPECTED_PERCENT} % ${metricPretty} minimum<extra></extra>`,
+        };
+        const traceIdle = {
+          type: 'bar', name: `Acceptable Idle (≥${MIN_USAGE_EXPECTED_PERCENT}%)`, orientation: 'h', y: users, x: valIdle,
+          marker: { color: colorIdle },
+          hovertemplate: `%{y}<br>${unit.label} acceptable idle: %{x:,.1f}<br>idle capacity above the minimum<extra></extra>`,
         };
         const traceUnmeasured = {
-          type: 'bar', name: 'No metric data', orientation: 'h', y: users, x: valUnmeasured,
+          type: 'bar', name: 'No data', orientation: 'h', y: users, x: valUnmeasured,
           marker: { color: colorUnmeasured },
-          hovertemplate: '%{y}<br>' + unit.label + ' (no metric): %{x:,.1f}<extra></extra>',
+          hovertemplate: '%{y}<br>' + unit.label + ' (no data): %{x:,.1f}<extra></extra>',
         };
 
         let traces;
         switch (userRguSortBy) {
-          case 'rgu_unused':     traces = [traceUnused,     traceUsed, traceUnmeasured]; break;
-          case 'rgu_unmeasured': traces = [traceUnmeasured, traceUsed, traceUnused];     break;
-          default:               traces = [traceUsed, traceUnused, traceUnmeasured];     break;
+          case 'rgu_wasted':     traces = [traceWasted, traceUsed, traceIdle, traceUnmeasured];   break;
+          case 'rgu_unused':     traces = [traceIdle, traceUsed, traceWasted, traceUnmeasured];   break;
+          case 'rgu_unmeasured': traces = [traceUnmeasured, traceUsed, traceWasted, traceIdle];   break;
+          default:               traces = [traceUsed, traceWasted, traceIdle, traceUnmeasured];   break;
         }
 
         const chartH = Math.max(300, users.length * 24 + 80);
         Plotly.react(plot, traces, pLayout({
-          title: { text: 'Total ' + unit.label + ' by User — Used vs Unused (click to filter)', font: { size: 16 } },
+          title: { text: 'Total ' + unit.label + ' by User — efficiency levels (click to filter)', font: { size: 16 } },
           barmode: 'stack', height: chartH,
           xaxis: { title: { text: 'Total ' + unit.label } },
           yaxis: { title: { text: '' }, automargin: true },
@@ -2843,7 +2863,7 @@
         case 'density':   return '/dash/metrics/metric_distribution?' + new URLSearchParams({ ...densityParams, ...focusParams });
         case 'jobs':      return jobsURL(p, JOBTABLE_DEFAULTS);
         {% if is_admin %}
-        case 'user_rgu':  return '/dash/metrics/rgu_by_user?' + new URLSearchParams(withAsUser({ start: p.start, end: p.end, metric: p.metric, ...focusParams }));
+        case 'user_rgu':  return '/dash/metrics/rgu_by_user?' + new URLSearchParams(withAsUser({ start: p.start, end: p.end, metric: p.metric, min_usage: MIN_USAGE_EXPECTED_PERCENT / 100, ...focusParams }));
         case 'rgu_by_cluster': return '/dash/metrics/rgu_by_cluster?' + new URLSearchParams(withAsUser({ start: p.start, end: p.end, period: p.period, ...(p.cluster_user ? { cluster_user: p.cluster_user } : {}) }));
         {% else %}
         case 'rgu_by_cluster': return '/dash/metrics/rgu_by_cluster?' + new URLSearchParams(withAsUser({ start: p.start, end: p.end, period: p.period }));

@@ -1320,6 +1320,7 @@ def metrics_rgu_by_user(
     cluster_user: str | None = Query(default=None),
     job_states: list[str] = Query(default=[]),
     metric: str = Query(default="gpu_sm_occupancy"),
+    min_usage: float = Query(default=0.15, ge=0.0, le=1.0),
     focus_start: datetime | None = Query(default=None),
     focus_end: datetime | None = Query(default=None),
     sess: Session = Depends(session_dep),
@@ -1328,8 +1329,10 @@ def metrics_rgu_by_user(
 
     Same pro-rated RGU.h measure as /rgu_usage, summed per cluster_user
     (requested = SUM(rgu * hours in the window); used = scaled by the mean
-    ``metric``). The window is one bucket here, so the totals match what the
-    per-bucket plots add up to. Sorted by descending requested RGU.h.
+    ``metric``; ``rgu_wasted`` = the same per-job shortfall below ``min_usage``,
+    so a user's critical waste reads the same here as in the bars). The window
+    is one bucket here, so the totals match what the per-bucket plots add up to.
+    Sorted by descending requested RGU.h.
     """
     begin_dt, finish_dt = _apply_focus(*_date_range(start, end), focus_start, focus_end)
     window = (begin_dt.timestamp(), finish_dt.timestamp())
@@ -1345,6 +1348,13 @@ def metrics_rgu_by_user(
     m_present = _is_real(m_mean)
     rgu_used_term = case((m_present, rgu_hours * m_mean), else_=0.0)
     rgu_unmeasured_term = case((m_present, 0.0), else_=rgu_hours)
+    # Per-job shortfall below min_usage, exactly as /rgu_usage sums it: a job
+    # over the threshold contributes 0, so a user's critical waste is their own
+    # jobs' and does not dilute in their good ones.
+    rgu_wasted_term = case(
+        (and_(m_present, m_mean < min_usage), rgu_hours * (min_usage - m_mean)),
+        else_=0.0,
+    )
     user_expr = func.coalesce(col(JobSeriesDB.cluster_user), "unknown").label("user")
     rgu_requested_sum = func.sum(rgu_hours).label("rgu_requested")
 
@@ -1354,7 +1364,8 @@ def metrics_rgu_by_user(
             rgu_requested_sum,
             func.sum(rgu_used_term).label("rgu_used"),
             func.sum(rgu_unmeasured_term).label("rgu_unmeasured"),
-        ),
+            func.sum(rgu_wasted_term).label("rgu_wasted"),
+        ),  # ty:ignore[no-matching-overload]
         _resolve_cluster_ids(sess, clusters),
         cluster_user,
         job_states,
@@ -1380,6 +1391,7 @@ def metrics_rgu_by_user(
             "rgu_requested": float(row.rgu_requested or 0.0),
             "rgu_used": float(row.rgu_used or 0.0),
             "rgu_unmeasured": float(row.rgu_unmeasured or 0.0),
+            "rgu_wasted": float(row.rgu_wasted or 0.0),
         }
         for row in sess.exec(query)
     ]

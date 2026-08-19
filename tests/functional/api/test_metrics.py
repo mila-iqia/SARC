@@ -653,6 +653,66 @@ def test_rgu_by_user_with_data(dash_client, dash_db):
         dash_db.total_requested
     )
     assert sum(u["rgu_used"] for u in data) == pytest.approx(dash_db.total_used)
+    # Every enriched job runs at 50 % >= the 15 % default min_usage: no shortfall.
+    assert sum(u["rgu_wasted"] for u in data) == 0.0
+
+
+def test_rgu_by_user_wasted_follows_the_job(dash_client, dash_db):
+    """``rgu_wasted`` charges each user their own jobs' shortfall: a single job
+    dropped to 2 % takes its whole critical waste to the user it belongs to,
+    and the rows still add up to what the bars report."""
+    assert dash_db.n >= 2, "expected enriched jobs for two users"
+    low_mean = 0.02
+    with config.db.session() as sess:
+        job = sess.exec(
+            select(SlurmJobDB)
+            .where(col(SlurmJobDB.harmonized_gpu_type) == _GPU)
+            .order_by(col(SlurmJobDB.id))
+        ).first()
+        job.cluster_user = "beaubonhomme"
+        sess.add(job)
+        stat = sess.exec(
+            select(JobStatisticDB).where(
+                col(JobStatisticDB.job_id) == job.id,
+                col(JobStatisticDB.name) == "gpu_sm_occupancy",
+            )
+        ).one()
+        stat.mean = low_mean
+        sess.add(stat)
+        sess.commit()
+
+    def by_user(**params):
+        data = dash_client.get(
+            "/dash/metrics/rgu_by_user", params={**WINDOW, **params}
+        ).json()
+        return {u["user"]: u for u in data}
+
+    rows = by_user()
+    assert rows["beaubonhomme"]["rgu_wasted"] == pytest.approx(
+        _RGU_HOURS_PER_JOB * (0.15 - low_mean)
+    )
+    # The other user's jobs all run at 50 %: none of that waste is theirs.
+    assert rows["petitbonhomme"]["rgu_wasted"] == 0.0
+    # The shortfall stays within the user's own unused share.
+    for row in rows.values():
+        assert (
+            row["rgu_wasted"]
+            <= row["rgu_requested"] - row["rgu_used"] - row["rgu_unmeasured"] + 1e-9
+        )
+    # Same measure as the bars, cut per user instead of per bucket.
+    usage = dash_client.get("/dash/metrics/rgu_usage", params=WINDOW).json()
+    assert sum(r["rgu_wasted"] for r in rows.values()) == pytest.approx(
+        sum(r["rgu_wasted"] for r in usage)
+    )
+
+    # min_usage is a request parameter here too: at 60 % every job falls short.
+    rows = by_user(min_usage=0.6)
+    assert rows["beaubonhomme"]["rgu_wasted"] == pytest.approx(
+        _RGU_HOURS_PER_JOB * (0.6 - low_mean)
+    )
+    assert rows["petitbonhomme"]["rgu_wasted"] == pytest.approx(
+        _RGU_HOURS_PER_JOB * (dash_db.n - 1) * (0.6 - _SM_OCC)
+    )
 
 
 def test_metric_trend_with_data(dash_client, dash_db):
