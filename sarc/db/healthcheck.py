@@ -11,7 +11,7 @@ from sarc.models.healthcheck_state import HealthCheckState
 
 
 class HealthCheckStateDB(SQLModel, table=True):
-    """State of a health check stored in MongoDB.
+    """State of a health check stored in SQL.
 
     This is used by the polling system to track when checks were last run
     and what their status was, enabling scheduled execution without a

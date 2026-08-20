@@ -256,7 +256,7 @@ class LoadJobSeriesFn(Protocol):
 class BaseTestLoadJobSeries:
     """
     Base class to test_load_job_series.
-    Use to test both MongoDB and REST API implementations.
+    Use to test both database and REST API implementations.
     """
 
     @pytest.fixture

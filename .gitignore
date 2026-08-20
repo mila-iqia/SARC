@@ -16,7 +16,6 @@ clockwork_ldap.key
 sarc-cache/
 .idea
 _build
-sarc_mongo
 *-checkpoint.ipynb
 sarc-test-cache
 dbconfig.txt
