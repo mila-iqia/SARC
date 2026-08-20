@@ -118,6 +118,10 @@ UTC = timezone.utc
 
 _DEFAULT_WINDOW_DAYS = 1
 _DEFAULT_PERIOD = "w"
+# Dashboard date-range dropdown default: a rolling 6-week window ending
+# today. Purely client-side (resolved to concrete start/end dates in the
+# browser before any API call), so this only seeds the template.
+_DEFAULT_RANGE = "last_6w"
 
 # GPU/system metrics (stored per-job in JobStatisticDB) normalized to [0, 1]
 _METRICS_0_1: set[str] = {
@@ -547,6 +551,7 @@ def metrics_homepage(
             "view_as_error": view_as_error,
             "user_email": req.email,
             "default_period": _DEFAULT_PERIOD,
+            "default_range": _DEFAULT_RANGE,
             "job_states": [s.value for s in SlurmState],
             "storage_key": storage_key,
         },
