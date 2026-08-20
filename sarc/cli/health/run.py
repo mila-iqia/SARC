@@ -2,7 +2,7 @@
 
 This command is designed to be run periodically (e.g., by cron) and will
 execute either all checks (--all), or only specified checks (--check check1 check2 ...).
-State is persistent in MongoDB, and results are logged instead of written to files.
+State is persistent in database, and results are logged instead of written to files.
 """
 
 import logging
@@ -107,7 +107,7 @@ class HealthRunCommand:
                 checks_run += 1
                 # Log the result
                 message = result.log_result()
-                # Update MongoDB state
+                # Update DB state
                 state.last_result = result
                 state.last_message = message
                 sess.merge(state)
