@@ -567,8 +567,12 @@ def test_rgu_usage_wasted_is_per_job(dash_client, dash_db):
 
 
 def test_rgu_usage_metric_means(dash_client, dash_db):
-    """``metric_means`` is the plain per-job mean of each trend metric; a bucket
-    holding no job reports null, not a 0 % that would read as measured."""
+    """``metric_means`` is the rgu_hours-weighted mean of each trend metric
+    (equal to the plain average here since dash_db's jobs share the same
+    RGU rate and elapsed time); a bucket holding no job reports null, not a
+    0 % that would read as measured. Covers both the reused path (the metric_
+    means entry matching the endpoint's own default ``metric``,
+    gpu_sm_occupancy) and the independently-summed one (gpu_utilization)."""
     data = dash_client.get("/dash/metrics/rgu_usage", params=WINDOW).json()
     for name, expected in (("gpu_sm_occupancy", _SM_OCC), ("gpu_utilization", 0.4)):
         means = [r["metric_means"][name]["mean"] for r in data]
@@ -580,9 +584,12 @@ def test_rgu_usage_metric_means(dash_client, dash_db):
             assert mean is None or mean == pytest.approx(expected)
 
 
-def test_rgu_usage_whole_counts_each_job_once(dash_client, dash_db):
-    """``whole=true`` averages over the jobs, not over the buckets: three jobs at
-    20 % in one week plus one at 80 % across two average to 35 %, not 44 %."""
+def test_rgu_usage_whole_weighs_by_the_whole_jobs_rgu_hours(dash_client, dash_db):
+    """``metric_means`` is weighted by rgu_hours (elapsed hours x allocated GPU
+    count x RGU weight), not a plain per-job average. ``whole=true`` weighs each
+    job once, by its whole rgu_hours; the weekly view instead splits the job
+    crossing the boundary into two slices, each weighted by only the hours
+    landing in that bucket -- so the two views need not agree bucket by bucket."""
     low, high = 0.2, 0.8
     short = datetime(2023, 2, 14, 12, tzinfo=timezone.utc)  # inside 02-13..02-20
     crossing = datetime(2023, 2, 18, 12, tzinfo=timezone.utc)  # +4d -> 02-22 12:00
@@ -616,21 +623,30 @@ def test_rgu_usage_whole_counts_each_job_once(dash_client, dash_db):
             "/dash/metrics/rgu_usage", params={**WINDOW, "period": "w", **extra}
         ).json()
 
+    # All 4 enriched jobs share the same RGU rate (dash_db's enrichment), so it
+    # cancels out of the weighted average: the weight ratio reduces to a plain
+    # ratio of elapsed hours. 12h for each of the 3 short jobs, 96h for the long
+    # one -- neither clipped by the window, so their whole runs count.
+    short_h, long_h = 12.0, 96.0
+    whole_expected = (3 * short_h * low + long_h * high) / (3 * short_h + long_h)
+
     whole = fetch(whole="true")
     assert len(whole) == 1, "the whole range is one bucket"
     assert whole[0]["metric_means"]["gpu_sm_occupancy"]["mean"] == pytest.approx(
-        (3 * low + high) / 4
+        whole_expected
     )
 
-    # The long job does show up in two weekly buckets, which is what makes the
-    # per-bucket means unrecombinable.
+    # The long job crosses into a second week: 1.5 days (36h) land in the first
+    # bucket alongside the 3 short jobs, the remaining 2.5 days (60h) alone in
+    # the second -- each slice weighted only by the hours in its own bucket.
     weekly = fetch()
     charged = [
         r["metric_means"]["gpu_sm_occupancy"]["mean"]
         for r in weekly
         if r["metric_means"]["gpu_sm_occupancy"]["mean"] is not None
     ]
-    assert charged == pytest.approx([(3 * low + high) / 4, high])
+    first_bucket_expected = (3 * short_h * low + 36.0 * high) / (3 * short_h + 36.0)
+    assert charged == pytest.approx([first_bucket_expected, high])
 
     # Sums are additive, so the two views agree on them whatever the bucketing.
     for key in ("rgu_allocated", "rgu_used", "rgu_unmeasured", "rgu_wasted"):

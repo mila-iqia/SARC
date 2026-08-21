@@ -1004,12 +1004,16 @@ def metrics_rgu_usage(
     ``whole=true`` returns the range as a single bucket instead, and ``period``
     is then ignored (still validated). Not the same as adding the rows up: the
     sums would come out the same, but a job runs through several buckets and is
-    averaged in each, so recombining ``metric_means`` would weigh each job by how
-    long it ran -- and would move with ``period``. Over one bucket each job is
-    averaged once.
+    weighted in each by the slice of it that lands there, so recombining
+    ``metric_means`` would double-count the rest of a job crossing the
+    boundary -- and would move with ``period``. Over one bucket each job is
+    weighted once, by its whole rgu_hours.
 
-    Each row also carries ``metric_means``: the plain per-job mean of every
-    _TREND_METRICS entry over the jobs running in that bucket.
+    Each row also carries ``metric_means``: for every _TREND_METRICS entry, the
+    rgu_hours-weighted mean (hours in the bucket x allocated GPU count x RGU
+    weight) over the jobs running in that bucket with a real (non-NULL/NaN)
+    value for it -- a job without one contributes to neither the sum nor the
+    weight, for that metric only.
     """
     begin_dt, finish_dt = _date_range(start, end)
     # A period of exactly the range yields a single bucket, so `whole` needs no
@@ -1053,10 +1057,19 @@ def metrics_rgu_usage(
         else_=0.0,
     )
 
-    # Plain per-job mean of a trend metric, plotted over the bars.
-    def _trend_avg(name: str):
+    # rgu_hours-weighted mean of a trend metric, plotted over the bars: the two
+    # SUMs a weighted average needs, each gated on a real (non-NULL/NaN) value so
+    # an unmeasured job contributes to neither -- CASE with no `else_` is SQL
+    # NULL, which SUM (unlike AVG) does not skip, hence the explicit 0.0.
+    # Skipped when this trend metric is the endpoint's own `metric`: its two SUMs
+    # are already `rgu_used` and `rgu_allocated - rgu_unmeasured` above, so
+    # computing them again here would just re-run the same join for nothing.
+    def _trend_weighted_cols(name: str):
         t_mean = col(trend[name].mean)
-        return func.avg(case((_is_real(t_mean), t_mean))).label(f"{name}_mean")
+        is_real = _is_real(t_mean)
+        num = func.sum(case((is_real, rgu_hours * t_mean), else_=0.0))
+        den = func.sum(case((is_real, rgu_hours), else_=0.0))
+        return num.label(f"{name}_wnum"), den.label(f"{name}_wden")
 
     # One alias per trend metric: (name, job_id) is unique, so these stay 1:1 and
     # leave the SUMs untouched.
@@ -1073,6 +1086,12 @@ def metrics_rgu_usage(
             )
         return q
 
+    # A trend metric that is also the endpoint's own `metric` reuses rgu_used /
+    # rgu_allocated / rgu_unmeasured for its weighted mean instead of a second
+    # pair of SUMs (see _trend_weighted_cols).
+    weighted_cols = [
+        c for name in _TREND_METRICS if name != metric for c in _trend_weighted_cols(name)
+    ]
     query = _apply_rgu_base_view(
         select(
             buckets.c.bucket_index,
@@ -1080,7 +1099,7 @@ def metrics_rgu_usage(
             func.sum(rgu_used_term).label("rgu_used"),
             func.sum(rgu_unmeasured_term).label("rgu_unmeasured"),
             func.sum(rgu_wasted_term).label("rgu_wasted"),
-            *[_trend_avg(name) for name in _TREND_METRICS],
+            *weighted_cols,
         ),  # ty:ignore[no-matching-overload]
         cluster_ids,
         user_email,
@@ -1107,18 +1126,29 @@ def metrics_rgu_usage(
         .order_by(buckets.c.bucket_index)
     )
 
+    def _weighted_mean(num: float, den: float) -> float | None:
+        # den <= 0: no job in the bucket had a real value for this metric --
+        # excluded entirely, not a 0 that would read as measured.
+        return num / den if den > 0 else None
+
     sums = {}
     trends = {}
     for row in sess.exec(query):
         key = row.bucket_index
-        sums[key] = (
-            float(row.rgu_allocated or 0.0),
-            float(row.rgu_used or 0.0),
-            float(row.rgu_unmeasured or 0.0),
-            float(row.rgu_wasted or 0.0),
-        )
+        allocated = float(row.rgu_allocated or 0.0)
+        used = float(row.rgu_used or 0.0)
+        unmeasured = float(row.rgu_unmeasured or 0.0)
+        wasted = float(row.rgu_wasted or 0.0)
+        sums[key] = (allocated, used, unmeasured, wasted)
         trends[key] = {
-            name: {"mean": _nan_to_none(getattr(row, f"{name}_mean"))}
+            name: {
+                "mean": _weighted_mean(used, allocated - unmeasured)
+                if name == metric
+                else _weighted_mean(
+                    float(_nan_to_none(getattr(row, f"{name}_wnum")) or 0.0),
+                    float(_nan_to_none(getattr(row, f"{name}_wden")) or 0.0),
+                )
+            }
             for name in _TREND_METRICS
         }
 
