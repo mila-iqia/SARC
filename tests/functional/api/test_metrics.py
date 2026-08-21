@@ -566,22 +566,30 @@ def test_rgu_usage_wasted_is_per_job(dash_client, dash_db):
     assert sum(r["rgu_wasted"] for r in data) == pytest.approx(expected)
 
 
-def test_rgu_usage_metric_means(dash_client, dash_db):
-    """``metric_means`` is the rgu_hours-weighted mean of each trend metric
-    (equal to the plain average here since dash_db's jobs share the same
-    RGU rate and elapsed time); a bucket holding no job reports null, not a
-    0 % that would read as measured. Covers both the reused path (the metric_
-    means entry matching the endpoint's own default ``metric``,
-    gpu_sm_occupancy) and the independently-summed one (gpu_utilization)."""
-    data = dash_client.get("/dash/metrics/rgu_usage", params=WINDOW).json()
-    for name, expected in (("gpu_sm_occupancy", _SM_OCC), ("gpu_utilization", 0.4)):
-        means = [r["metric_means"][name]["mean"] for r in data]
-        assert any(m is not None for m in means), "expected a charged bucket"
-        assert any(m is None for m in means), (
-            "expected at least one bucket without running jobs"
-        )
-        for mean in means:
-            assert mean is None or mean == pytest.approx(expected)
+@pytest.mark.parametrize(
+    ("metric_param", "expected"),
+    [({}, _SM_OCC), ({"metric": "gpu_utilization"}, 0.4)],
+    ids=["default_sm_occupancy", "gpu_utilization"],
+)
+def test_rgu_usage_metric_means(dash_client, dash_db, metric_param, expected):
+    """``metric_means`` holds exactly one entry, keyed on the endpoint's own
+    ``metric`` (default gpu_sm_occupancy): the rgu_hours-weighted mean over the
+    jobs running in the bucket (equal to the plain average here since dash_db's
+    jobs share the same RGU rate and elapsed time). A bucket holding no job
+    reports null, not a 0 % that would read as measured."""
+    data = dash_client.get(
+        "/dash/metrics/rgu_usage", params={**WINDOW, **metric_param}
+    ).json()
+    name = metric_param.get("metric", "gpu_sm_occupancy")
+    for row in data:
+        assert set(row["metric_means"]) == {name}
+    means = [r["metric_means"][name]["mean"] for r in data]
+    assert any(m is not None for m in means), "expected a charged bucket"
+    assert any(m is None for m in means), (
+        "expected at least one bucket without running jobs"
+    )
+    for mean in means:
+        assert mean is None or mean == pytest.approx(expected)
 
 
 def test_rgu_usage_whole_weighs_by_the_whole_jobs_rgu_hours(dash_client, dash_db):
@@ -744,6 +752,58 @@ def test_metric_trend_with_data(dash_client, dash_db):
     means = [m for m in series["gpu_sm_occupancy"]["mean"] if m is not None]
     assert means, "expected at least one non-empty bucket"
     assert all(m == pytest.approx(_SM_OCC) for m in means)
+
+
+def test_metric_trend_weighs_by_rgu_hours(dash_client, dash_db):
+    """``mean`` and ``max`` use the same rgu_hours weighting as /rgu_usage's
+    metric_means, not a plain per-job average: tripling one job's GPU count
+    (and so its RGU weight) triples its pull on both."""
+    assert dash_db.n >= 2, "expected several enriched jobs to reweight"
+    low, high = 0.2, 0.8
+    low_max, high_max = 0.3, 0.9
+    heavy_gpu = _GRES * 3  # 3x the RGU weight of the other jobs
+    with config.db.session() as sess:
+        jobs = sess.exec(
+            select(SlurmJobDB)
+            .where(col(SlurmJobDB.harmonized_gpu_type) == _GPU)
+            .order_by(col(SlurmJobDB.id))
+        ).all()
+        jobs[0].allocated_gres_gpu = heavy_gpu
+        sess.add(jobs[0])
+        for job, mean, mx in zip(
+            jobs,
+            [high, *([low] * (len(jobs) - 1))],
+            [high_max, *([low_max] * (len(jobs) - 1))],
+            strict=True,
+        ):
+            stat = sess.exec(
+                select(JobStatisticDB).where(
+                    col(JobStatisticDB.job_id) == job.id,
+                    col(JobStatisticDB.name) == "gpu_sm_occupancy",
+                )
+            ).one()
+            stat.mean = mean
+            stat.max = mx
+            sess.add(stat)
+        sess.commit()
+
+    data = dash_client.get("/dash/metrics/metric_trend", params=WINDOW).json()
+    series = {s["metric"]: s for s in data["series"]}["gpu_sm_occupancy"]
+    means = [m for m in series["mean"] if m is not None]
+    maxes = [m for m in series["max"] if m is not None]
+    assert means and maxes, "expected at least one non-empty bucket"
+
+    n = dash_db.n
+    w_heavy, w_rest = heavy_gpu / _GRES, 1.0
+    total_w = w_heavy + w_rest * (n - 1)
+    expected_mean = (w_heavy * high + w_rest * (n - 1) * low) / total_w
+    expected_max = (w_heavy * high_max + w_rest * (n - 1) * low_max) / total_w
+    plain_mean = (high + (n - 1) * low) / n
+    assert expected_mean != pytest.approx(plain_mean), (
+        "the fixture must make weighting matter"
+    )
+    assert all(m == pytest.approx(expected_mean) for m in means)
+    assert all(m == pytest.approx(expected_max) for m in maxes)
 
 
 def test_metric_distribution_with_data(dash_client, dash_db):
