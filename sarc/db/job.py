@@ -152,6 +152,21 @@ class SlurmJobDB(SQLModel, table=True):
                 "allocated_gres_gpu > 0 AND harmonized_gpu_type IS NOT NULL"
             ),
         ),
+        # Statistics-only: never scanned (ix_slurm_jobs_end_gpu above is always
+        # cheaper for that). Its sole purpose is to give ANALYZE something to
+        # collect a histogram on for this expression outside of a WHERE clause --
+        # a partial index's own expression stats aren't used by the planner to
+        # estimate a scan of *itself*, so without this, every /dash query sees
+        # the same fixed, wrong row estimate for `slurm_job_end(...) > x`
+        # regardless of x. That flat estimate pushes the planner toward hash/merge
+        # joins that scan a whole jobstatisticdb metric partition even when the
+        # requested window only touches a few thousand jobs. Non-partial and
+        # INCLUDE-less on purpose: the planner only needs to find a matching,
+        # always-applicable index to borrow real statistics from.
+        Index(
+            "ix_slurm_jobs_end_gpu_stats",
+            text("slurm_job_end(start_time, elapsed_time)"),
+        ),
     )
 
     id: int | None = Field(default=None, primary_key=True)
