@@ -1,7 +1,7 @@
 import hashlib
 import math
 import re
-from collections.abc import Generator
+from collections.abc import Generator, Iterator
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Literal
@@ -208,7 +208,9 @@ def _calendar_next(dt: datetime, field: str) -> datetime:
     )
 
 
-def _iter_buckets(begin_dt: datetime, finish_dt: datetime, period: timedelta | str):
+def _iter_buckets(
+    begin_dt: datetime, finish_dt: datetime, period: timedelta | str
+) -> Iterator[tuple[datetime, datetime]]:
     """Yield (period_start, period_end) for every bucket in [begin, finish),
     clipped to the range.
 
@@ -315,7 +317,9 @@ def _overlap_hours(cols, lo, hi):
     return (func.least(end, hi) - func.greatest(start, lo)) / 3600.0
 
 
-def _bucket_bounds(begin_dt: datetime, finish_dt: datetime, period: timedelta | str):
+def _bucket_bounds(
+    begin_dt: datetime, finish_dt: datetime, period: timedelta | str
+) -> tuple[Grouping, Grouping]:
     """The bucket bounds as two SQL arrays, for ``width_bucket`` to search.
 
     Carries the bounds ``_iter_buckets`` already computes into SQL as epoch

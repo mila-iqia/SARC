@@ -256,6 +256,21 @@ class DbConfig:
                 f"postgresql+pg8000://{db_user}@{hostname}/{self.name}"
             )
 
+        from sarc.logging import tracing_enabled
+
+        if tracing_enabled():
+            import warnings
+
+            from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+
+            SQLAlchemyInstrumentor().instrument(engine=engine)
+            # This filters out the warning that otherwise spams the logs
+            warnings.filterwarnings(
+                "ignore",
+                category=UserWarning,
+                message=r".*DB-API extension cursor\.connection used.*",
+            )
+
         return engine
 
     def session(self) -> Session:
