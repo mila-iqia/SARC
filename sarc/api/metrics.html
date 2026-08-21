@@ -692,14 +692,16 @@
       return RGU_UNITS[mode === 'custom' ? periodUnit.value : mode] || RGU_UNITS.h;
     }
 
-    // Metric means overlaid on the RGU-usage tile, on a right-hand 0-100 % axis.
-    // Fixed (not the efficiency-metric selector) so the curves stay comparable.
-    // Colours stay clear of the bars' palette and of the focus orange, and are
-    // dark enough to hold up over the light blue segment they both cross.
-    const TREND_CURVES = [
-      ['gpu_sm_occupancy', '#000000'],
-      ['gpu_utilization',  '#8b2fc9'],
-    ];
+    // The metric mean overlaid on the RGU-usage tile, on a right-hand 0-100 %
+    // axis: always the current efficiency-metric selector, matching the
+    // backend (metric_means there is keyed on that same `metric`). One entry,
+    // called fresh on every render so it tracks the selector -- a plain
+    // constant would freeze whatever metric was selected on page load.
+    // Colour stays clear of the bars' palette and of the focus orange, and dark
+    // enough to hold up over the light blue segment it crosses.
+    function trendCurves() {
+      return [[selectedMetric(), '#000000']];
+    }
     // Thick enough to read over the bars, in both views.
     const TREND_LINE = { width: 3 };
 
@@ -1187,8 +1189,9 @@
         `<em>unused</em>: how the RGU bars are split, how the job-table rows are shaded, and ` +
         `which jobs end up in the underusage notifications.</p>` +
         metricDefinitionsHtml() +
-        `<p>Both are drawn on the <em>RGU allocated vs efficiency levels</em> chart, so a wide gap ` +
-        `between the two curves means the GPU was kept busy but barely filled.</p>` +
+        `<p>Whichever one is selected is the curve drawn on the <em>RGU allocated vs ` +
+        `efficiency levels</em> chart — weighted the same way as the bars, so it always ` +
+        `matches their Used share.</p>` +
         // These cuts were only visible as row shading, documented nowhere; naming
         // them is what makes the job-table colours readable without hovering.
         `<h4>How the job table highlights a job's SM occupancy:</h4>` +
@@ -1225,9 +1228,9 @@
         `${MIN_USAGE_EXPECTED_PERCENT} % minimum threshold, allocated to jobs that met or exceeded the ${MIN_USAGE_EXPECTED_PERCENT} % efficiency baseline.</p>` +
         `<p>${rguDot('nodata', 'No data')}: telemetry could not be gathered (e.g. the cluster running the job is not yet connected to the service). ` +
         `Still counted in the allocated total, but <em>left out of</em> the used/unused split and the underusage notifications.</p>` +
-        `<h4>Right axis: average utilization</h4>` +
-        metricDefinitionsHtml() +
-        `<p>Both are plain per-job averages, not weighted by ${unit.label}, so they do not match the Used share of the bars.</p>` +
+        `<h4>Right axis: ${metricPretty} mean</h4>` +
+        `<p>Weighted the same way as the bars (by ${unit.label}), so this curve always matches ` +
+        `the Used share on the left.</p>` +
         `<p><a href="${USER_GUIDE_URL}" target="_blank" rel="noopener">Open the user guide ↗</a></p>`;
     }
 
@@ -1601,7 +1604,7 @@
         // it. The anchor point carries the legend, the hover and the right axis
         // (a layout shape alone would leave it without a trace).
         const trendLevels = [], trendRules = [];
-        TREND_CURVES.forEach(([m, color], i) => {
+        trendCurves().forEach(([m, color], i) => {
           const v = whole.metric_means[m] ? whole.metric_means[m].mean : null;
           if (v == null) return;
           trendRules.push({
@@ -1660,10 +1663,11 @@
       const colorUnused    = periods.map(p => { const f = periodInFocus(p); return f === null ? RGU_COLORS.idle : f ? '#f0c090' : '#e4eef8'; });
       const colorWasted    = periods.map(p => { const f = periodInFocus(p); return f === null ? RGU_COLORS.waste : f ? '#aa00cc' : '#ffdddd'; });
       const colorUnmeasured= periods.map(p => { const f = periodInFocus(p); return f === null ? RGU_COLORS.nodata : f ? '#8a8a8a' : '#e6e6e6'; });
-      // Metric means on the right-hand axis. Deliberately not tinted by the focus
-      // (the bars already carry that feedback); 6 series plus a shaded band would
-      // be unreadable. Null buckets leave a gap, like the Metric trend tile.
-      const trendLines = TREND_CURVES.map(([m, color]) => ({
+      // Metric mean on the right-hand axis. Deliberately not tinted by the focus
+      // (the bars already carry that feedback); a shaded band on top of the bars'
+      // own focus tinting would be unreadable. Null buckets leave a gap, like the
+      // Metric trend tile.
+      const trendLines = trendCurves().map(([m, color]) => ({
         type: 'scatter', mode: 'lines+markers', yaxis: 'y2',
         name: METRICS[m] + ' mean (right axis)', x: periods, customdata: periodEnds,
         y: rows.map(r => (r.metric_means && r.metric_means[m] ? r.metric_means[m].mean : null)),
