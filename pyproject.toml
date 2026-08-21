@@ -43,6 +43,7 @@ dependencies = [
     "certifi>=2024.2.2",
     "opentelemetry-instrumentation-sqlalchemy>=0.64b0",
     "mistune>=3.3.3,<4",
+    "opentelemetry-instrumentation-fastapi>=0.65b0",
 ]
 
 [project.scripts]

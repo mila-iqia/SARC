@@ -19,6 +19,7 @@ from sarc.db.cluster import SlurmClusterDB
 from sarc.db.job import JobStatisticDB, SlurmJobDB, SlurmState
 from sarc.db.job_series import JobSeriesDB
 from sarc.db.support import GpuRguDB
+from sarc.db.users import UserDB
 
 # Covers every factory-seeded job (submitted from 2023-02-14, +6h each).
 WINDOW = {"start": "2023-02-01", "end": "2023-03-01"}
@@ -565,23 +566,38 @@ def test_rgu_usage_wasted_is_per_job(dash_client, dash_db):
     assert sum(r["rgu_wasted"] for r in data) == pytest.approx(expected)
 
 
-def test_rgu_usage_metric_means(dash_client, dash_db):
-    """``metric_means`` is the plain per-job mean of each trend metric; a bucket
-    holding no job reports null, not a 0 % that would read as measured."""
-    data = dash_client.get("/dash/metrics/rgu_usage", params=WINDOW).json()
-    for name, expected in (("gpu_sm_occupancy", _SM_OCC), ("gpu_utilization", 0.4)):
-        means = [r["metric_means"][name]["mean"] for r in data]
-        assert any(m is not None for m in means), "expected a charged bucket"
-        assert any(m is None for m in means), (
-            "expected at least one bucket without running jobs"
-        )
-        for mean in means:
-            assert mean is None or mean == pytest.approx(expected)
+@pytest.mark.parametrize(
+    ("metric_param", "expected"),
+    [({}, _SM_OCC), ({"metric": "gpu_utilization"}, 0.4)],
+    ids=["default_sm_occupancy", "gpu_utilization"],
+)
+def test_rgu_usage_metric_means(dash_client, dash_db, metric_param, expected):
+    """``metric_means`` holds exactly one entry, keyed on the endpoint's own
+    ``metric`` (default gpu_sm_occupancy): the rgu_hours-weighted mean over the
+    jobs running in the bucket (equal to the plain average here since dash_db's
+    jobs share the same RGU rate and elapsed time). A bucket holding no job
+    reports null, not a 0 % that would read as measured."""
+    data = dash_client.get(
+        "/dash/metrics/rgu_usage", params={**WINDOW, **metric_param}
+    ).json()
+    name = metric_param.get("metric", "gpu_sm_occupancy")
+    for row in data:
+        assert set(row["metric_means"]) == {name}
+    means = [r["metric_means"][name]["mean"] for r in data]
+    assert any(m is not None for m in means), "expected a charged bucket"
+    assert any(m is None for m in means), (
+        "expected at least one bucket without running jobs"
+    )
+    for mean in means:
+        assert mean is None or mean == pytest.approx(expected)
 
 
-def test_rgu_usage_whole_counts_each_job_once(dash_client, dash_db):
-    """``whole=true`` averages over the jobs, not over the buckets: three jobs at
-    20 % in one week plus one at 80 % across two average to 35 %, not 44 %."""
+def test_rgu_usage_whole_weighs_by_the_whole_jobs_rgu_hours(dash_client, dash_db):
+    """``metric_means`` is weighted by rgu_hours (elapsed hours x allocated GPU
+    count x RGU weight), not a plain per-job average. ``whole=true`` weighs each
+    job once, by its whole rgu_hours; the weekly view instead splits the job
+    crossing the boundary into two slices, each weighted by only the hours
+    landing in that bucket -- so the two views need not agree bucket by bucket."""
     low, high = 0.2, 0.8
     short = datetime(2023, 2, 14, 12, tzinfo=timezone.utc)  # inside 02-13..02-20
     crossing = datetime(2023, 2, 18, 12, tzinfo=timezone.utc)  # +4d -> 02-22 12:00
@@ -615,21 +631,30 @@ def test_rgu_usage_whole_counts_each_job_once(dash_client, dash_db):
             "/dash/metrics/rgu_usage", params={**WINDOW, "period": "w", **extra}
         ).json()
 
+    # All 4 enriched jobs share the same RGU rate (dash_db's enrichment), so it
+    # cancels out of the weighted average: the weight ratio reduces to a plain
+    # ratio of elapsed hours. 12h for each of the 3 short jobs, 96h for the long
+    # one -- neither clipped by the window, so their whole runs count.
+    short_h, long_h = 12.0, 96.0
+    whole_expected = (3 * short_h * low + long_h * high) / (3 * short_h + long_h)
+
     whole = fetch(whole="true")
     assert len(whole) == 1, "the whole range is one bucket"
     assert whole[0]["metric_means"]["gpu_sm_occupancy"]["mean"] == pytest.approx(
-        (3 * low + high) / 4
+        whole_expected
     )
 
-    # The long job does show up in two weekly buckets, which is what makes the
-    # per-bucket means unrecombinable.
+    # The long job crosses into a second week: 1.5 days (36h) land in the first
+    # bucket alongside the 3 short jobs, the remaining 2.5 days (60h) alone in
+    # the second -- each slice weighted only by the hours in its own bucket.
     weekly = fetch()
     charged = [
         r["metric_means"]["gpu_sm_occupancy"]["mean"]
         for r in weekly
         if r["metric_means"]["gpu_sm_occupancy"]["mean"] is not None
     ]
-    assert charged == pytest.approx([(3 * low + high) / 4, high])
+    first_bucket_expected = (3 * short_h * low + 36.0 * high) / (3 * short_h + 36.0)
+    assert charged == pytest.approx([first_bucket_expected, high])
 
     # Sums are additive, so the two views agree on them whatever the bucketing.
     for key in ("rgu_allocated", "rgu_used", "rgu_unmeasured", "rgu_wasted"):
@@ -670,6 +695,11 @@ def test_rgu_by_user_wasted_follows_the_job(dash_client, dash_db):
             .order_by(col(SlurmJobDB.id))
         ).first()
         job.cluster_user = "beaubonhomme"
+        # The group-by key is the owning user's email (sarc_user_id), not the
+        # cosmetic cluster_user login name, so reassign both.
+        job.sarc_user_id = sess.exec(
+            select(UserDB.id).where(UserDB.email == _OTHER_USER)
+        ).one()
         sess.add(job)
         stat = sess.exec(
             select(JobStatisticDB).where(
@@ -688,11 +718,11 @@ def test_rgu_by_user_wasted_follows_the_job(dash_client, dash_db):
         return {u["user"]: u for u in data}
 
     rows = by_user()
-    assert rows["beaubonhomme"]["rgu_wasted"] == pytest.approx(
+    assert rows[_OTHER_USER]["rgu_wasted"] == pytest.approx(
         _RGU_HOURS_PER_JOB * (0.15 - low_mean)
     )
     # The other user's jobs all run at 50 %: none of that waste is theirs.
-    assert rows["petitbonhomme"]["rgu_wasted"] == 0.0
+    assert rows[_USER]["rgu_wasted"] == 0.0
     # The shortfall stays within the user's own unused share.
     for row in rows.values():
         assert (
@@ -707,10 +737,10 @@ def test_rgu_by_user_wasted_follows_the_job(dash_client, dash_db):
 
     # min_usage is a request parameter here too: at 60 % every job falls short.
     rows = by_user(min_usage=0.6)
-    assert rows["beaubonhomme"]["rgu_wasted"] == pytest.approx(
+    assert rows[_OTHER_USER]["rgu_wasted"] == pytest.approx(
         _RGU_HOURS_PER_JOB * (0.6 - low_mean)
     )
-    assert rows["petitbonhomme"]["rgu_wasted"] == pytest.approx(
+    assert rows[_USER]["rgu_wasted"] == pytest.approx(
         _RGU_HOURS_PER_JOB * (dash_db.n - 1) * (0.6 - _SM_OCC)
     )
 
@@ -722,6 +752,58 @@ def test_metric_trend_with_data(dash_client, dash_db):
     means = [m for m in series["gpu_sm_occupancy"]["mean"] if m is not None]
     assert means, "expected at least one non-empty bucket"
     assert all(m == pytest.approx(_SM_OCC) for m in means)
+
+
+def test_metric_trend_weighs_by_rgu_hours(dash_client, dash_db):
+    """``mean`` and ``max`` use the same rgu_hours weighting as /rgu_usage's
+    metric_means, not a plain per-job average: tripling one job's GPU count
+    (and so its RGU weight) triples its pull on both."""
+    assert dash_db.n >= 2, "expected several enriched jobs to reweight"
+    low, high = 0.2, 0.8
+    low_max, high_max = 0.3, 0.9
+    heavy_gpu = _GRES * 3  # 3x the RGU weight of the other jobs
+    with config.db.session() as sess:
+        jobs = sess.exec(
+            select(SlurmJobDB)
+            .where(col(SlurmJobDB.harmonized_gpu_type) == _GPU)
+            .order_by(col(SlurmJobDB.id))
+        ).all()
+        jobs[0].allocated_gres_gpu = heavy_gpu
+        sess.add(jobs[0])
+        for job, mean, mx in zip(
+            jobs,
+            [high, *([low] * (len(jobs) - 1))],
+            [high_max, *([low_max] * (len(jobs) - 1))],
+            strict=True,
+        ):
+            stat = sess.exec(
+                select(JobStatisticDB).where(
+                    col(JobStatisticDB.job_id) == job.id,
+                    col(JobStatisticDB.name) == "gpu_sm_occupancy",
+                )
+            ).one()
+            stat.mean = mean
+            stat.max = mx
+            sess.add(stat)
+        sess.commit()
+
+    data = dash_client.get("/dash/metrics/metric_trend", params=WINDOW).json()
+    series = {s["metric"]: s for s in data["series"]}["gpu_sm_occupancy"]
+    means = [m for m in series["mean"] if m is not None]
+    maxes = [m for m in series["max"] if m is not None]
+    assert means and maxes, "expected at least one non-empty bucket"
+
+    n = dash_db.n
+    w_heavy, w_rest = heavy_gpu / _GRES, 1.0
+    total_w = w_heavy + w_rest * (n - 1)
+    expected_mean = (w_heavy * high + w_rest * (n - 1) * low) / total_w
+    expected_max = (w_heavy * high_max + w_rest * (n - 1) * low_max) / total_w
+    plain_mean = (high + (n - 1) * low) / n
+    assert expected_mean != pytest.approx(plain_mean), (
+        "the fixture must make weighting matter"
+    )
+    assert all(m == pytest.approx(expected_mean) for m in means)
+    assert all(m == pytest.approx(expected_max) for m in maxes)
 
 
 def test_metric_distribution_with_data(dash_client, dash_db):
@@ -1387,7 +1469,7 @@ def test_unknown_cluster_is_checked_before_an_empty_window_shortcut(
 # Filters matching seeded jobs (raisin / petitbonhomme / a COMPLETED job).
 _FILTERS = {
     "clusters": ["raisin"],
-    "cluster_user": "petitbonhomme",
+    "user_email": _USER,
     "job_states": ["COMPLETED"],
 }
 
@@ -1434,6 +1516,11 @@ def filtered_db(read_write_db):
         job.allocated_gres_gpu = _GRES
         job.cluster_id = clusters[cluster].id
         job.cluster_user = user
+        # The user filter now keys on email (sarc_user_id), not the cosmetic
+        # cluster_user login name, so reassign the owner to match.
+        job.sarc_user_id = sess.exec(
+            select(UserDB.id).where(UserDB.email == f"{user}@mila.quebec")
+        ).one()
         job.job_state = state
         job.submit_time = job.start_time = _utc(2, 10)
         job.end_time = job.start_time + timedelta(seconds=job.elapsed_time)

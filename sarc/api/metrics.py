@@ -1,7 +1,7 @@
 import hashlib
 import math
 import re
-from collections.abc import Generator
+from collections.abc import Generator, Iterator
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Literal
@@ -130,10 +130,6 @@ _METRICS_0_1: set[str] = {
     "system_memory",
 }
 
-# Metric means overlaid on the RGU-usage plot: fixed, unlike the `metric`
-# selector that drives the bars, so the two curves stay comparable over time.
-_TREND_METRICS = ("gpu_sm_occupancy", "gpu_utilization")
-
 
 _PERIOD_RE = re.compile(r"^(\d+(?:\.\d+)?)?\s*([hdwm]?)$", re.IGNORECASE)
 _PERIOD_MULTIPLIERS = {"h": 1 / 24, "d": 1, "w": 7, "m": 30}
@@ -204,7 +200,9 @@ def _calendar_next(dt: datetime, field: str) -> datetime:
     )
 
 
-def _iter_buckets(begin_dt: datetime, finish_dt: datetime, period: timedelta | str):
+def _iter_buckets(
+    begin_dt: datetime, finish_dt: datetime, period: timedelta | str
+) -> Iterator[tuple[datetime, datetime]]:
     """Yield (period_start, period_end) for every bucket in [begin, finish),
     clipped to the range.
 
@@ -311,7 +309,9 @@ def _overlap_hours(cols, lo, hi):
     return (func.least(end, hi) - func.greatest(start, lo)) / 3600.0
 
 
-def _bucket_bounds(begin_dt: datetime, finish_dt: datetime, period: timedelta | str):
+def _bucket_bounds(
+    begin_dt: datetime, finish_dt: datetime, period: timedelta | str
+) -> tuple[Grouping, Grouping]:
     """The bucket bounds as two SQL arrays, for ``width_bucket`` to search.
 
     Carries the bounds ``_iter_buckets`` already computes into SQL as epoch
@@ -398,6 +398,26 @@ def _nan_to_none(
     return replace_with if (isinstance(v, float) and math.isnan(v)) else v
 
 
+def _weighted_mean_cols(value_expr, weight_expr, label_prefix: str):
+    """SUM(weight * value) and SUM(weight) SQL columns, the two halves a
+    weighted average needs, each gated on ``value_expr`` being a real
+    (non-NULL/NaN) value -- a row that fails this contributes to neither, not
+    just to a zero-weighted term. CASE with no ``else_`` is SQL NULL, which SUM
+    (unlike AVG) does not skip on its own, hence the explicit 0.0.
+    """
+    is_real = _is_real(value_expr)
+    num = func.sum(case((is_real, weight_expr * value_expr), else_=0.0))
+    den = func.sum(case((is_real, weight_expr), else_=0.0))
+    return num.label(f"{label_prefix}_num"), den.label(f"{label_prefix}_den")
+
+
+def _weighted_mean(num: float, den: float) -> float | None:
+    """The ratio of the two ``_weighted_mean_cols`` sums, or None when the
+    weight is <= 0 -- nothing had a real value, excluded entirely rather than
+    read as a 0 that would look measured."""
+    return num / den if den > 0 else None
+
+
 def _resolve_cluster_ids(sess: Session, clusters: list[str]) -> list[int] | None:
     """Look up cluster ids; returns None if the cluster filter is unset (empty).
 
@@ -418,7 +438,7 @@ def _apply_job_filters(
     query,
     cols,
     cluster_ids: list[int] | None,
-    cluster_user: str | None,
+    user_email: str | None,
     job_states: list[str],
     scope_user_id: int | Literal["admin"],
 ):
@@ -433,8 +453,8 @@ def _apply_job_filters(
         query = query.where(cols.job_state.in_(job_states))
     if cluster_ids:
         query = query.where(cols.cluster_id.in_(cluster_ids))
-    if cluster_user:
-        query = query.where(cols.cluster_user == cluster_user)
+    if user_email:
+        query = query.where(cols.email == user_email)
     if scope_user_id != "admin":
         query = query.where(cols.sarc_user_id == scope_user_id)
     return query
@@ -459,7 +479,7 @@ def _gpu_only(query, cols):
 def _apply_rgu_base_view(
     query,
     cluster_ids: list[int] | None,
-    cluster_user: str | None,
+    user_email: str | None,
     job_states: list[str],
     *,
     scope_user_id: int | Literal["admin"],
@@ -477,7 +497,7 @@ def _apply_rgu_base_view(
     """
     query = _gpu_only(query.select_from(JobSeriesDB), JobSeriesDB)
     return _apply_job_filters(
-        query, JobSeriesDB, cluster_ids, cluster_user, job_states, scope_user_id
+        query, JobSeriesDB, cluster_ids, user_email, job_states, scope_user_id
     )
 
 
@@ -561,7 +581,7 @@ def metrics_job_counts(
     end: date = Query(default=None),
     period: str = Query(default=_DEFAULT_PERIOD),
     clusters: list[str] = Query(default=[]),
-    cluster_user: str | None = Query(default=None),
+    user_email: str | None = Query(default=None),
     job_states: list[str] = Query(default=[]),
     submitted: bool = Query(default=False),
     sess: Session = Depends(session_dep),
@@ -597,7 +617,7 @@ def metrics_job_counts(
         "allocated_gres_gpu",
         "harmonized_gpu_type",
         "cluster_id",
-        "cluster_user",
+        "email",
         "job_state",
         "sarc_user_id",
     ).subquery()
@@ -624,7 +644,7 @@ def metrics_job_counts(
 
     query = _gpu_only(query, js.c)
     query = _apply_job_filters(
-        query, js.c, cluster_ids, cluster_user, job_states, scope_user_id
+        query, js.c, cluster_ids, user_email, job_states, scope_user_id
     )
     # By output column name, not by the expression again: rendered twice, the
     # submitted-mode expression gets a second set of placeholders for the bucket
@@ -699,7 +719,7 @@ def metrics_job_times_vs_limit(
     start: date = Query(default=None),
     end: date = Query(default=None),
     clusters: list[str] = Query(default=[]),
-    cluster_user: str | None = Query(default=None),
+    user_email: str | None = Query(default=None),
     job_states: list[str] = Query(default=[]),
     focus_start: datetime | None = Query(default=None),
     focus_end: datetime | None = Query(default=None),
@@ -745,8 +765,8 @@ def metrics_job_times_vs_limit(
     ]
     if cluster_ids:
         base_filters.append(col(JobSeriesDB.cluster_id).in_(cluster_ids))
-    if cluster_user:
-        base_filters.append(col(JobSeriesDB.cluster_user) == cluster_user)
+    if user_email:
+        base_filters.append(col(JobSeriesDB.email) == user_email)
     if job_states:
         base_filters.append(col(JobSeriesDB.job_state).in_(job_states))
     scope_user_id = _scope_or_view_as(sess, req, as_user)
@@ -824,7 +844,7 @@ def metrics_metric_distribution(
     start: date = Query(default=None),
     end: date = Query(default=None),
     clusters: list[str] = Query(default=[]),
-    cluster_user: str | None = Query(default=None),
+    user_email: str | None = Query(default=None),
     job_states: list[str] = Query(default=[]),
     metric: str = Query(default="gpu_sm_occupancy"),
     focus_start: datetime | None = Query(default=None),
@@ -865,7 +885,7 @@ def metrics_metric_distribution(
         _apply_rgu_base_view(
             select(bin_expr, func.sum(weight).label("w")),
             _resolve_cluster_ids(sess, clusters),
-            cluster_user,
+            user_email,
             job_states,
             scope_user_id=_scope_or_view_as(sess, req, as_user),
         )
@@ -897,7 +917,7 @@ def metrics_metric_comparison(
     start: date = Query(default=None),
     end: date = Query(default=None),
     clusters: list[str] = Query(default=[]),
-    cluster_user: str | None = Query(default=None),
+    user_email: str | None = Query(default=None),
     job_states: list[str] = Query(default=[]),
     metric: str = Query(default="gpu_sm_occupancy"),
     metric2: str = Query(default="gpu_memory"),
@@ -934,7 +954,7 @@ def metrics_metric_comparison(
         _apply_rgu_base_view(
             select(bx, by, func.count().label("n")),
             _resolve_cluster_ids(sess, clusters),
-            cluster_user,
+            user_email,
             job_states,
             scope_user_id=_scope_or_view_as(sess, req, as_user),
         )
@@ -976,7 +996,7 @@ def metrics_rgu_usage(
     end: date = Query(default=None),
     period: str = Query(default=_DEFAULT_PERIOD),
     clusters: list[str] = Query(default=[]),
-    cluster_user: str | None = Query(default=None),
+    user_email: str | None = Query(default=None),
     job_states: list[str] = Query(default=[]),
     metric: str = Query(default="gpu_sm_occupancy"),
     min_usage: float = Query(default=0.15, ge=0.0, le=1.0),
@@ -995,12 +1015,18 @@ def metrics_rgu_usage(
     ``whole=true`` returns the range as a single bucket instead, and ``period``
     is then ignored (still validated). Not the same as adding the rows up: the
     sums would come out the same, but a job runs through several buckets and is
-    averaged in each, so recombining ``metric_means`` would weigh each job by how
-    long it ran -- and would move with ``period``. Over one bucket each job is
-    averaged once.
+    weighted in each by the slice of it that lands there, so recombining
+    ``metric_means`` would double-count the rest of a job crossing the
+    boundary -- and would move with ``period``. Over one bucket each job is
+    weighted once, by its whole rgu_hours.
 
-    Each row also carries ``metric_means``: the plain per-job mean of every
-    _TREND_METRICS entry over the jobs running in that bucket.
+    Each row also carries ``metric_means``: the endpoint's own ``metric``,
+    mapped to its rgu_hours-weighted mean (hours in the bucket x allocated GPU
+    count x RGU weight) over the jobs running in that bucket with a real
+    (non-NULL/NaN) value for it -- a job without one contributes to neither the
+    sum nor the weight. Its numerator and denominator are exactly ``rgu_used``
+    and ``rgu_allocated - rgu_unmeasured``, so the curve this draws always
+    matches the bars' Used share.
     """
     begin_dt, finish_dt = _date_range(start, end)
     # A period of exactly the range yields a single bucket, so `whole` needs no
@@ -1024,11 +1050,11 @@ def metrics_rgu_usage(
     rgu_hours = col(JobSeriesDB.allocated_rgu_drac) * _overlap_hours(
         JobSeriesDB, buckets.c.bucket_start, buckets.c.bucket_end
     )
-    # `metric` reads off the trend alias whenever it is one of them (the
-    # default): joining jobstatisticdb again on the same (name, job_id) row
-    # would buy nothing.
-    trend = {name: aliased(JobStatisticDB) for name in _TREND_METRICS}
-    m_mean = col(trend.get(metric, JobStatisticDB).mean)
+    # One join, always: `metric` drives both the bars (used/unmeasured/wasted)
+    # and metric_means below -- the dashboard plots exactly one reference
+    # metric at a time, so there is nothing else here to join for.
+    m_alias = aliased(JobStatisticDB)
+    m_mean = col(m_alias.mean)
     # Split used vs unmeasured on whether the metric is a real value (not
     # NULL/NaN); a missing measurement is kept apart from "unused" rather than
     # counted as waste.
@@ -1044,26 +1070,6 @@ def metrics_rgu_usage(
         else_=0.0,
     )
 
-    # Plain per-job mean of a trend metric, plotted over the bars.
-    def _trend_avg(name: str):
-        t_mean = col(trend[name].mean)
-        return func.avg(case((_is_real(t_mean), t_mean))).label(f"{name}_mean")
-
-    # One alias per trend metric: (name, job_id) is unique, so these stay 1:1 and
-    # leave the SUMs untouched.
-    def _join_trends(q):
-        for name in _TREND_METRICS:
-            alias = trend[name]
-            q = q.join(
-                alias,
-                and_(
-                    col(alias.job_id) == col(JobSeriesDB.job_db_id),
-                    col(alias.name) == name,
-                ),
-                isouter=True,
-            )
-        return q
-
     query = _apply_rgu_base_view(
         select(
             buckets.c.bucket_index,
@@ -1071,25 +1077,19 @@ def metrics_rgu_usage(
             func.sum(rgu_used_term).label("rgu_used"),
             func.sum(rgu_unmeasured_term).label("rgu_unmeasured"),
             func.sum(rgu_wasted_term).label("rgu_wasted"),
-            *[_trend_avg(name) for name in _TREND_METRICS],
         ),  # ty:ignore[no-matching-overload]
         cluster_ids,
-        cluster_user,
+        user_email,
         job_states,
         scope_user_id=scope_user_id,
     )
-    if metric not in trend:
-        query = query.join(
-            JobStatisticDB,
-            and_(
-                col(JobStatisticDB.job_id) == col(JobSeriesDB.job_db_id),
-                col(JobStatisticDB.name) == metric,
-            ),
-            isouter=True,
-        )
-    query = _join_trends(query)
+    query = query.join(
+        m_alias,
+        and_(col(m_alias.job_id) == col(JobSeriesDB.job_db_id), col(m_alias.name) == metric),
+        isouter=True,
+    )
     # A job spanning several buckets yields one row per bucket, which is what
-    # splits its RGU.h across them -- and what makes the trend means above read
+    # splits its RGU.h across them -- and what makes metric_means below read
     # as "over the jobs running in this bucket".
     query = (
         query.join(buckets, true())
@@ -1102,18 +1102,14 @@ def metrics_rgu_usage(
     trends = {}
     for row in sess.exec(query):
         key = row.bucket_index
-        sums[key] = (
-            float(row.rgu_allocated or 0.0),
-            float(row.rgu_used or 0.0),
-            float(row.rgu_unmeasured or 0.0),
-            float(row.rgu_wasted or 0.0),
-        )
-        trends[key] = {
-            name: {"mean": _nan_to_none(getattr(row, f"{name}_mean"))}
-            for name in _TREND_METRICS
-        }
+        allocated = float(row.rgu_allocated or 0.0)
+        used = float(row.rgu_used or 0.0)
+        unmeasured = float(row.rgu_unmeasured or 0.0)
+        wasted = float(row.rgu_wasted or 0.0)
+        sums[key] = (allocated, used, unmeasured, wasted)
+        trends[key] = {metric: {"mean": _weighted_mean(used, allocated - unmeasured)}}
 
-    empty_means = {name: {"mean": None} for name in _TREND_METRICS}
+    empty_means = {metric: {"mean": None}}
     period_data = []
     for key, (ps, pe) in enumerate(_iter_buckets(begin_dt, finish_dt, parsed)):
         allocated, used, unmeasured, wasted = sums.get(key, (0.0, 0.0, 0.0, 0.0))
@@ -1140,7 +1136,7 @@ def metrics_rgu_by_cluster(
     end: date = Query(default=None),
     period: str = Query(default=_DEFAULT_PERIOD),
     clusters: list[str] = Query(default=[]),
-    cluster_user: str | None = Query(default=None),
+    user_email: str | None = Query(default=None),
     job_states: list[str] = Query(default=[]),
     sess: Session = Depends(session_dep),
 ):
@@ -1172,7 +1168,7 @@ def metrics_rgu_by_cluster(
             func.sum(rgu_hours).label("rgu"),
         ),
         cluster_ids,
-        cluster_user,
+        user_email,
         job_states,
         scope_user_id=scope_user_id,
     )
@@ -1219,20 +1215,22 @@ def metrics_metric_trend(
     end: date = Query(default=None),
     period: str = Query(default=_DEFAULT_PERIOD),
     clusters: list[str] = Query(default=[]),
-    cluster_user: str | None = Query(default=None),
+    user_email: str | None = Query(default=None),
     job_states: list[str] = Query(default=[]),
     metric: str = Query(default="gpu_sm_occupancy"),
     sess: Session = Depends(session_dep),
 ):
-    """Per-period averages of a metric's per-job ``mean`` and ``max``.
+    """Per-period rgu_hours-weighted average of a metric's per-job ``mean`` and
+    ``max``.
 
-    For each period bucket, averages the per-job statistic values over the jobs
-    *running* in that bucket -- plain per-job average, not duration weighted, so
-    a job spanning several buckets counts once in each. Jobs lacking the
-    statistic are simply absent from the average (inner join) and no GPU/RGU
-    filter is applied, so system metrics also cover CPU-only jobs. Returns a
-    single ``series`` entry (the requested metric) on a period axis; buckets with
-    no data yield null (a curve gap), not 0.
+    For each period bucket, weighs the per-job statistic values by rgu_hours
+    (hours in the bucket x allocated GPU count x RGU weight) over the jobs
+    *running* in that bucket -- same weighting as /rgu_usage's metric_means, so
+    a job spanning several buckets is weighted in each by only the slice that
+    landed there. Jobs lacking the statistic are simply absent from the average
+    (inner join) and no GPU/RGU filter is applied, so system metrics also cover
+    CPU-only jobs. Returns a single ``series`` entry (the requested metric) on a
+    period axis; buckets with no data yield null (a curve gap), not 0.
     """
     if metric not in _METRICS_0_1:
         raise HTTPException(status_code=400, detail=f"Unknown metric: {metric!r}")
@@ -1249,30 +1247,35 @@ def metrics_metric_trend(
     # system_memory -- the one metric CPU jobs also report, but this dashboard
     # does not plot them anywhere else. The DB view would degrade this to a
     # full-table scan (see JobSeriesDB docstring); job_series_select keeps it
-    # narrow.
+    # narrow. allocated_rgu_drac (and the gpurgudb join it pulls in) is the
+    # weight this endpoint didn't need before it was duration-weighted.
     js = job_series_select(
         "job_db_id",
         "start_time",
         "elapsed_time",
         "allocated_gres_gpu",
         "harmonized_gpu_type",
+        "allocated_rgu_drac",
         "cluster_id",
-        "cluster_user",
+        "email",
         "job_state",
         "sarc_user_id",
     ).subquery()
     bucket_table = _bucket_table(js.c, begin_dt, finish_dt, parsed)
+    rgu_hours = col(js.c.allocated_rgu_drac) * _overlap_hours(
+        js.c, bucket_table.c.bucket_start, bucket_table.c.bucket_end
+    )
     m_mean = col(JobStatisticDB.mean)
     m_max = col(JobStatisticDB.max)
-    # NaN-proof averages: a single NaN would contaminate the whole AVG, so each
-    # value is nulled out unless it is real (`x == x` won't do this on Postgres,
-    # where NaN = NaN is TRUE — see _is_real).
-    avg_mean = func.avg(case((_is_real(m_mean), m_mean))).label("avg_mean")
-    avg_max = func.avg(case((_is_real(m_max), m_max))).label("avg_max")
+    mean_num, mean_den = _weighted_mean_cols(m_mean, rgu_hours, "mean")
+    max_num, max_den = _weighted_mean_cols(m_max, rgu_hours, "max")
 
     query = (
         _gpu_only(
-            select(bucket_table.c.bucket_index, avg_mean, avg_max).select_from(js), js.c
+            select(
+                bucket_table.c.bucket_index, mean_num, mean_den, max_num, max_den
+            ).select_from(js),
+            js.c,
         )
         .join(
             JobStatisticDB,
@@ -1287,12 +1290,18 @@ def metrics_metric_trend(
         .order_by(bucket_table.c.bucket_index)
     )
     query = _apply_job_filters(
-        query, js.c, cluster_ids, cluster_user, job_states, scope_user_id
+        query, js.c, cluster_ids, user_email, job_states, scope_user_id
     )
 
     cells = {}
     for r in sess.exec(query):
-        cells[r.bucket_index] = (_nan_to_none(r.avg_mean), _nan_to_none(r.avg_max))
+        mean_v = _weighted_mean(
+            float(_nan_to_none(r.mean_num) or 0.0), float(_nan_to_none(r.mean_den) or 0.0)
+        )
+        max_v = _weighted_mean(
+            float(_nan_to_none(r.max_num) or 0.0), float(_nan_to_none(r.max_den) or 0.0)
+        )
+        cells[r.bucket_index] = (mean_v, max_v)
 
     buckets = list(_iter_buckets(begin_dt, finish_dt, parsed))
     return {
@@ -1317,7 +1326,7 @@ def metrics_rgu_by_user(
     start: date = Query(default=None),
     end: date = Query(default=None),
     clusters: list[str] = Query(default=[]),
-    cluster_user: str | None = Query(default=None),
+    user_email: str | None = Query(default=None),
     job_states: list[str] = Query(default=[]),
     metric: str = Query(default="gpu_sm_occupancy"),
     min_usage: float = Query(default=0.15, ge=0.0, le=1.0),
@@ -1327,7 +1336,7 @@ def metrics_rgu_by_user(
 ):
     """Requested vs used RGU.h aggregated per user (not over time).
 
-    Same pro-rated RGU.h measure as /rgu_usage, summed per cluster_user
+    Same pro-rated RGU.h measure as /rgu_usage, summed per user email
     (requested = SUM(rgu * hours in the window); used = scaled by the mean
     ``metric``; ``rgu_wasted`` = the same per-job shortfall below ``min_usage``,
     so a user's critical waste reads the same here as in the bars). The window
@@ -1355,7 +1364,7 @@ def metrics_rgu_by_user(
         (and_(m_present, m_mean < min_usage), rgu_hours * (min_usage - m_mean)),
         else_=0.0,
     )
-    user_expr = func.coalesce(col(JobSeriesDB.cluster_user), "unknown").label("user")
+    user_expr = func.coalesce(col(JobSeriesDB.email), "unknown").label("user")
     rgu_requested_sum = func.sum(rgu_hours).label("rgu_requested")
 
     query = _apply_rgu_base_view(
@@ -1367,7 +1376,7 @@ def metrics_rgu_by_user(
             func.sum(rgu_wasted_term).label("rgu_wasted"),
         ),  # ty:ignore[no-matching-overload]
         _resolve_cluster_ids(sess, clusters),
-        cluster_user,
+        user_email,
         job_states,
         scope_user_id=_scope_or_view_as(sess, req, as_user),
     )
@@ -1404,7 +1413,7 @@ def metrics_jobs(
     start: date = Query(default=None),
     end: date = Query(default=None),
     clusters: list[str] = Query(default=[]),
-    cluster_user: str | None = Query(default=None),
+    user_email: str | None = Query(default=None),
     job_states: list[str] = Query(default=[]),
     limit: int = Query(default=50, gt=0, le=500),
     offset: int = Query(default=0, ge=0),
@@ -1477,7 +1486,7 @@ def metrics_jobs(
         "job_id": col(JobSeriesDB.job_id),
         "submit_time": col(JobSeriesDB.submit_time),
         "start_time": col(JobSeriesDB.start_time),
-        "user": col(JobSeriesDB.cluster_user),
+        "user": col(JobSeriesDB.email),
         "job_state": col(JobSeriesDB.job_state),
         "elapsed": elapsed_in_window,
         "requested_gpu": col(JobSeriesDB.requested_gres_gpu),
@@ -1539,7 +1548,7 @@ def metrics_jobs(
         count_q = _apply_rgu_base_view(
             select(func.count()),
             cluster_ids,
-            cluster_user,
+            user_email,
             job_states,
             scope_user_id=scope_user_id,
         ).where(*base_filters)
@@ -1551,7 +1560,7 @@ def metrics_jobs(
     page_q = _apply_rgu_base_view(
         select(col(JobSeriesDB.job_db_id).label("jid")),
         cluster_ids,
-        cluster_user,
+        user_email,
         job_states,
         scope_user_id=scope_user_id,
     )
@@ -1571,7 +1580,7 @@ def metrics_jobs(
             col(JobSeriesDB.job_id),
             col(JobSeriesDB.submit_time).label("submit_time"),
             col(JobSeriesDB.start_time).label("start_time"),
-            col(JobSeriesDB.cluster_user),
+            col(JobSeriesDB.email),
             col(JobSeriesDB.job_state),
             col(JobSeriesDB.elapsed_time).label("elapsed_time"),
             elapsed_in_window.label("elapsed_in_window"),
@@ -1590,7 +1599,7 @@ def metrics_jobs(
             col(js["gpu_memory"].max).label("gpu_memory_max"),
         ),
         cluster_ids,
-        cluster_user,
+        user_email,
         job_states,
         scope_user_id=scope_user_id,
     ).join(page, page.c.jid == col(JobSeriesDB.job_db_id))
@@ -1611,7 +1620,7 @@ def metrics_jobs(
                 "job_id": row.job_id,
                 "submit_time": row.submit_time.isoformat() if row.submit_time else None,
                 "start_time": row.start_time.isoformat() if row.start_time else None,
-                "user": row.cluster_user or "",
+                "user": row.email or "",
                 "job_state": row.job_state.value if row.job_state is not None else "",
                 "elapsed": _nan_to_none(row.elapsed_in_window),
                 "elapsed_total": row.elapsed_time or 0,
