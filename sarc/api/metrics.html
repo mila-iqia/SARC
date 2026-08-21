@@ -456,9 +456,9 @@
     </div>
     {% if is_admin %}
     <div class="ctrl" id="user-ctrl">
-      <label for="cluster_user">User</label>
-      <input type="text" id="cluster_user" placeholder="all users"
-             title="Restrict every plot to a single username (exact match). Leave empty for all users. Takes effect on Update."
+      <label for="user_email">User</label>
+      <input type="text" id="user_email" placeholder="user email"
+             title="Restrict every plot to a single user's email (exact match). Leave empty for all users. Takes effect on Update."
              autocomplete="off" data-lpignore="true" data-form-type="other" />
     </div>
     {% endif %}
@@ -575,7 +575,7 @@
           end:         document.getElementById('end').value,
           metric:      selectedMetric(),
           {% if is_admin %}
-          cluster_user: document.getElementById('cluster_user').value,
+          user_email: document.getElementById('user_email').value,
           {% endif %}
           period:      periodValue(),
           clusters:    clSelected(),
@@ -619,7 +619,7 @@
       document.getElementById('end').value   = isoDate(monday);
       {% if is_admin %}
       document.getElementById('metric-select').value = 'gpu_sm_occupancy';
-      document.getElementById('cluster_user').value  = '';
+      document.getElementById('user_email').value  = '';
       {% endif %}
       setPeriod('w');
 
@@ -1014,8 +1014,8 @@
     document.getElementById('end').value   = _saved.end   || isoDate(monday);
     {% if is_admin %}
     if (_saved.metric)    document.getElementById('metric-select').value = _saved.metric;
-    if (_saved.cluster_user !== undefined)
-      document.getElementById('cluster_user').value = _saved.cluster_user;
+    if (_saved.user_email !== undefined)
+      document.getElementById('user_email').value = _saved.user_email;
     {% endif %}
 
     // ── Tile layout ──────────────────────────────────────────────────────────
@@ -2017,7 +2017,7 @@
       function draw() {
         // Rescale the cumulative RGU·h to the unit selected in the toolbar.
         const unit = rguUnit();
-        const selectedUser = document.getElementById('cluster_user').value.trim();
+        const selectedUser = document.getElementById('user_email').value.trim();
         // The critical-waste hover names the efficiency metric picked at last
         // Update, like the RGU-usage bars.
         const metricName = (currentParams && currentParams.metric) || 'gpu_sm_occupancy';
@@ -2049,6 +2049,11 @@
         // Reverse so the highest-value user appears at the TOP of the horizontal bar chart.
         const rows  = topRows.reverse();
         const users = rows.map(r => r.user);
+        // Display-only trim, like the job table's User column: the bars' actual
+        // category values (used for click-to-filter and the selected-user
+        // highlight below) stay the full email; only the axis tick text is
+        // shortened. An email outside @mila.quebec is shown in full.
+        const userLabels = users.map(u => u.replace(/@mila\.quebec$/, ''));
 
         // Same split as the RGU-usage bars: idle is what is left once the
         // per-job shortfall below the minimum has been taken out of unused.
@@ -2098,10 +2103,12 @@
 
         const chartH = Math.max(300, users.length * 24 + 80);
         Plotly.react(plot, traces, pLayout({
-          title: { text: 'Total ' + unit.label + ' by User — efficiency levels (click to filter)', font: { size: 16 } },
+          title: { text: 'Total ' + unit.label + ' by User — efficiency levels (click to filter)',
+                   font: { size: 16 }, y: 1, yanchor: 'top', pad: { t: 2 } },
           barmode: 'stack', height: chartH,
           xaxis: { title: { text: 'Total ' + unit.label } },
-          yaxis: { title: { text: '' }, automargin: true },
+          yaxis: { title: { text: '' }, automargin: true,
+                   tickmode: 'array', tickvals: users, ticktext: userLabels },
           legend: { orientation: 'h', x: 0, xanchor: 'left', y: 1.02, yanchor: 'bottom' },
           margin: { l: 20, r: 20, t: 72, b: 50 },
         }), { responsive: true }).then(gd => {
@@ -2109,8 +2116,8 @@
           gd.on('plotly_click', data => {
             if (!data.points || !data.points.length) return;
             const clicked = data.points[0].y;
-            const current = document.getElementById('cluster_user').value.trim();
-            document.getElementById('cluster_user').value = clicked === current ? '' : clicked;
+            const current = document.getElementById('user_email').value.trim();
+            document.getElementById('user_email').value = clicked === current ? '' : clicked;
             loadCharts();
           });
         });
@@ -2779,7 +2786,7 @@
         period:        periodValue(),
         clusters:      clSelected(),
         {% if is_admin %}
-        cluster_user:  document.getElementById('cluster_user').value.trim(),
+        user_email:  document.getElementById('user_email').value.trim(),
         {% endif %}
         metric:        selectedMetric(),
         focus_start:   focusStart,
@@ -2812,7 +2819,7 @@
     // shared endpoint cache used by the other tiles.
     function jobsURL(p, { offset, limit, sortBy, sortDir }) {
       {% if is_admin %}
-      const base = { start: p.start, end: p.end, ...(p.cluster_user ? { cluster_user: p.cluster_user } : {}) };
+      const base = { start: p.start, end: p.end, ...(p.user_email ? { user_email: p.user_email } : {}) };
       {% else %}
       const base = { start: p.start, end: p.end };
       {% endif %}
@@ -2836,14 +2843,14 @@
       return withClustersAndStates('/dash/metrics/metric_comparison?' + new URLSearchParams(withAsUser({
         start: p.start, end: p.end, metric: p.metric, metric2,
         {% if is_admin %}
-        ...(p.cluster_user ? { cluster_user: p.cluster_user } : {}),
+        ...(p.user_email ? { user_email: p.user_email } : {}),
         {% endif %}
         ...focusParams })), p);
     }
 
     function endpointURLBase(ep, p) {
       {% if is_admin %}
-      const base = withAsUser({ start: p.start, end: p.end, ...(p.cluster_user ? { cluster_user: p.cluster_user } : {}) });
+      const base = withAsUser({ start: p.start, end: p.end, ...(p.user_email ? { user_email: p.user_email } : {}) });
       {% else %}
       const base = withAsUser({ start: p.start, end: p.end });
       {% endif %}
@@ -2864,7 +2871,7 @@
         case 'jobs':      return jobsURL(p, JOBTABLE_DEFAULTS);
         {% if is_admin %}
         case 'user_rgu':  return '/dash/metrics/rgu_by_user?' + new URLSearchParams(withAsUser({ start: p.start, end: p.end, metric: p.metric, min_usage: MIN_USAGE_EXPECTED_PERCENT / 100, ...focusParams }));
-        case 'rgu_by_cluster': return '/dash/metrics/rgu_by_cluster?' + new URLSearchParams(withAsUser({ start: p.start, end: p.end, period: p.period, ...(p.cluster_user ? { cluster_user: p.cluster_user } : {}) }));
+        case 'rgu_by_cluster': return '/dash/metrics/rgu_by_cluster?' + new URLSearchParams(withAsUser({ start: p.start, end: p.end, period: p.period, ...(p.user_email ? { user_email: p.user_email } : {}) }));
         {% else %}
         case 'rgu_by_cluster': return '/dash/metrics/rgu_by_cluster?' + new URLSearchParams(withAsUser({ start: p.start, end: p.end, period: p.period }));
         {% endif %}

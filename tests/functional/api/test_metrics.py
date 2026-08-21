@@ -19,6 +19,7 @@ from sarc.db.cluster import SlurmClusterDB
 from sarc.db.job import JobStatisticDB, SlurmJobDB, SlurmState
 from sarc.db.job_series import JobSeriesDB
 from sarc.db.support import GpuRguDB
+from sarc.db.users import UserDB
 
 # Covers every factory-seeded job (submitted from 2023-02-14, +6h each).
 WINDOW = {"start": "2023-02-01", "end": "2023-03-01"}
@@ -670,6 +671,11 @@ def test_rgu_by_user_wasted_follows_the_job(dash_client, dash_db):
             .order_by(col(SlurmJobDB.id))
         ).first()
         job.cluster_user = "beaubonhomme"
+        # The group-by key is the owning user's email (sarc_user_id), not the
+        # cosmetic cluster_user login name, so reassign both.
+        job.sarc_user_id = sess.exec(
+            select(UserDB.id).where(UserDB.email == _OTHER_USER)
+        ).one()
         sess.add(job)
         stat = sess.exec(
             select(JobStatisticDB).where(
@@ -688,11 +694,11 @@ def test_rgu_by_user_wasted_follows_the_job(dash_client, dash_db):
         return {u["user"]: u for u in data}
 
     rows = by_user()
-    assert rows["beaubonhomme"]["rgu_wasted"] == pytest.approx(
+    assert rows[_OTHER_USER]["rgu_wasted"] == pytest.approx(
         _RGU_HOURS_PER_JOB * (0.15 - low_mean)
     )
     # The other user's jobs all run at 50 %: none of that waste is theirs.
-    assert rows["petitbonhomme"]["rgu_wasted"] == 0.0
+    assert rows[_USER]["rgu_wasted"] == 0.0
     # The shortfall stays within the user's own unused share.
     for row in rows.values():
         assert (
@@ -707,10 +713,10 @@ def test_rgu_by_user_wasted_follows_the_job(dash_client, dash_db):
 
     # min_usage is a request parameter here too: at 60 % every job falls short.
     rows = by_user(min_usage=0.6)
-    assert rows["beaubonhomme"]["rgu_wasted"] == pytest.approx(
+    assert rows[_OTHER_USER]["rgu_wasted"] == pytest.approx(
         _RGU_HOURS_PER_JOB * (0.6 - low_mean)
     )
-    assert rows["petitbonhomme"]["rgu_wasted"] == pytest.approx(
+    assert rows[_USER]["rgu_wasted"] == pytest.approx(
         _RGU_HOURS_PER_JOB * (dash_db.n - 1) * (0.6 - _SM_OCC)
     )
 
@@ -1387,7 +1393,7 @@ def test_unknown_cluster_is_checked_before_an_empty_window_shortcut(
 # Filters matching seeded jobs (raisin / petitbonhomme / a COMPLETED job).
 _FILTERS = {
     "clusters": ["raisin"],
-    "cluster_user": "petitbonhomme",
+    "user_email": _USER,
     "job_states": ["COMPLETED"],
 }
 
@@ -1434,6 +1440,11 @@ def filtered_db(read_write_db):
         job.allocated_gres_gpu = _GRES
         job.cluster_id = clusters[cluster].id
         job.cluster_user = user
+        # The user filter now keys on email (sarc_user_id), not the cosmetic
+        # cluster_user login name, so reassign the owner to match.
+        job.sarc_user_id = sess.exec(
+            select(UserDB.id).where(UserDB.email == f"{user}@mila.quebec")
+        ).one()
         job.job_state = state
         job.submit_time = job.start_time = _utc(2, 10)
         job.end_time = job.start_time + timedelta(seconds=job.elapsed_time)
