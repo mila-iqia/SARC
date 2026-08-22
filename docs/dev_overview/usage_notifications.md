@@ -28,7 +28,7 @@ A few things to keep straight before the details:
 
 | Layer | File | Key entry points |
 |---|---|---|
-| Flagging / data | `sarc/notifications/usage.py` | `get_underusers`, `get_recurring_underusers`, `get_all_users_usage`, `classify_cycle` |
+| Flagging / data | `sarc/notifications/usage.py` | `get_underusers`, `get_recurring_underusers`, `get_all_users_usage`, `classify_cycle`, `_restrictive_action_flags` |
 | Message building | `sarc/notifications/messages.py` | `build_admin_digest`, `build_user_dm`, `build_usage_report`, `build_recurring_table` |
 | Delivery | `sarc/notifications/slack.py` | `SlackClient.dm_user`, `SlackClient.post_channel` |
 | Orchestration | `sarc/cli/usage/notify.py` | `UsageNotifyCommand` |
@@ -105,6 +105,28 @@ For the admin digest, flagged users are enriched with an extra view:
 `get_recurring_underusers` (per-cluster top wasters seen across several recent
 cycles, with a "personalized action" flag for persistent offenders).
 
+## Escalation: personalized → restrictive action (`elevated`)
+
+"Flagged" above is the entry level of a three-rung escalation ladder. Each rung
+is evaluated **cross-cluster** over the RGU/waste window and adds a stricter
+condition to the one below it. The rungs map directly to the markers rendered in
+the recurring-underusers table (`RecurringUserRow.cycle_symbol` in
+`sarc/notifications/usage.py`):
+
+| Rung | Marker | Criterion |
+|---|---|---|
+| **Underuser** | `▲` | Per cycle: `waste_ratio ≥ min_waste_ratio` **and** `wasted ≥ min_waste_rgu_hours` (`_meets_underuser_threshold`). |
+| **Personalized action** (`flagged`) | `⚑▲` | Underuser **and** summed wasted RGU-h over the trailing `recurrence_active_cycles` cycles (default 3) `≥ personalized_action_min_waste_rgu_hours` (default ≈ 16128, i.e. 20× A100-80GB RGU × 7d). Set in `classify_cycle`. |
+| **Restrictive action** (`elevated`) | `!!⚑▲` | `restrictive_action_run_cycles` (default 4) **consecutive** personalized-action cycles. Computed by `_restrictive_action_flags`. |
+
+`_restrictive_action_flags(flags)` is the whole rule for the top rung: for each
+cycle `i` it returns `True` iff `flags[i : i+run]` are all `True` (where `run =
+restrictive_action_run_cycles`), so the escalation flag lands on the **newest**
+cycle of a sustained run of personalized-action peaks. The Slack table derives
+it from `pa_flags` via `RecurringUserRow.restrictive_action_flags`; the store
+refresh derives the identical value from each user's cross-cluster `flagged`
+sequence (see below).
+
 ## PowerBI + the `UserPeriods` store
 
 PowerBI needs the same per-cycle recurrence data Slack gets from
@@ -136,6 +158,36 @@ Confirmed weekly flow: (1) an external scheduler runs `sarc usage
 refresh-store`, (2) it then runs `sarc usage notify --send` (reads the
 just-refreshed store by default), (3) PowerBI reads `UserPeriods`
 independently, on its own schedule.
+
+### Populating the store: `sarc usage refresh-store`
+
+`UsageRefreshStoreCommand._exec` (`sarc/cli/usage/refresh_store.py`) is the
+**write side** of the `ignore_store=False` fast path. One run rebuilds the whole
+recent history:
+
+1. **Anchor and window.** `_week_anchor(end)` snaps to the current/next aligned
+   ISO week (`end` defaults to today, or `--as-of`). It then builds
+   `history_cycles` cycle bounds (default 12), each `usage_cycle_length_weeks`
+   wide, with **position 0 = most recent** — the same ordering used everywhere
+   else in `sarc.notifications.usage`.
+2. **Classify each cycle.** `classify_cycle` runs once per cycle, concurrently
+   (`_run_concurrently`), returning a `CycleUserClusterStat` for every
+   (user, cluster) active in that cycle: `rgu_hours`, `wasted`, `sm_occ_mean`,
+   `isunderuser`, and `flagged` (the personalized-action rung). Unlike the Slack
+   path, it uses an always-true usage filter so **every** active user is stored,
+   not just those over threshold.
+3. **Derive `elevated`.** Each user's `flagged` values across the positions are
+   collected into a per-user boolean sequence, then passed through
+   `_restrictive_action_flags` — the same derivation described in the escalation
+   section above — yielding the per-position `elevated` flag.
+4. **Upsert.** One row per (user, cluster, cycle) is written to `UserPeriods`,
+   keyed by the `(user_id, cluster_id, end_date)` unique constraint
+   (`on_conflict_do_update`, so re-runs overwrite in place). A cluster with no
+   matching row in the `clusters` table is skipped with a warning.
+5. **Prune.** Rows older than the oldest kept cycle (`end_date <
+   oldest_kept_end`) are deleted, then the transaction commits — this is what
+   keeps the store bounded to the last `history_cycles` cycles (the source of the
+   stale-store limitation noted below).
 
 **`ignore_store` dual path.** `get_recurring_underusers(..., ignore_store=False)`
 (the default) reads `UserPeriods` — fast, and what PowerBI itself reads.
