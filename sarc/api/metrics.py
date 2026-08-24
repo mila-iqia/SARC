@@ -1090,7 +1090,10 @@ def metrics_rgu_usage(
     )
     query = query.join(
         m_alias,
-        and_(col(m_alias.job_id) == col(JobSeriesDB.job_db_id), col(m_alias.name) == metric),
+        and_(
+            col(m_alias.job_id) == col(JobSeriesDB.job_db_id),
+            col(m_alias.name) == metric,
+        ),
         isouter=True,
     )
     # A job spanning several buckets yields one row per bucket, which is what
@@ -1279,7 +1282,7 @@ def metrics_metric_trend(
         _gpu_only(
             select(
                 bucket_table.c.bucket_index, mean_num, mean_den, max_num, max_den
-            ).select_from(js),
+            ).select_from(js),  # ty: ignore[no-matching-overload]
             js.c,
         )
         .join(
@@ -1301,7 +1304,8 @@ def metrics_metric_trend(
     cells = {}
     for r in sess.exec(query):
         mean_v = _weighted_mean(
-            float(_nan_to_none(r.mean_num) or 0.0), float(_nan_to_none(r.mean_den) or 0.0)
+            float(_nan_to_none(r.mean_num) or 0.0),
+            float(_nan_to_none(r.mean_den) or 0.0),
         )
         max_v = _weighted_mean(
             float(_nan_to_none(r.max_num) or 0.0), float(_nan_to_none(r.max_den) or 0.0)

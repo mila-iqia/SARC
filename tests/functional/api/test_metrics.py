@@ -1467,11 +1467,7 @@ def test_unknown_cluster_is_checked_before_an_empty_window_shortcut(
 # === Filters ================================================================
 
 # Filters matching seeded jobs (raisin / petitbonhomme / a COMPLETED job).
-_FILTERS = {
-    "clusters": ["raisin"],
-    "user_email": _USER,
-    "job_states": ["COMPLETED"],
-}
+_FILTERS = {"clusters": ["raisin"], "user_email": _USER, "job_states": ["COMPLETED"]}
 
 
 # (cluster, user, state) per enriched job: the 1st matches every filter of
