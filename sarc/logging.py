@@ -1,12 +1,10 @@
 import logging
 import os
-import warnings
 
 from opentelemetry import trace
 from opentelemetry._logs import set_logger_provider
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
-from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
 from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.sdk.resources import Resource
@@ -41,6 +39,15 @@ def getOpenTelemetryLoggingHandler(log_conf: LoggingConfig):
     return LoggingHandler(level=logging.NOTSET, logger_provider=logger_provider)
 
 
+def tracing_enabled() -> bool:
+    log_conf = config.logging
+    return (
+        log_conf is not None
+        and log_conf.OTLP_trace_endpoint is not None
+        and log_conf.service_name is not None
+    )
+
+
 def setup_opentelemetry_tracing(log_conf: LoggingConfig):
     if log_conf.OTLP_trace_endpoint is None or log_conf.service_name is None:
         return
@@ -50,14 +57,6 @@ def setup_opentelemetry_tracing(log_conf: LoggingConfig):
             "service.name": log_conf.service_name,
             "service.instance.id": os.uname().nodename,
         }
-    )
-
-    SQLAlchemyInstrumentor().instrument()
-    # This filters out the warning that otherwise spams the logs
-    warnings.filterwarnings(
-        "ignore",
-        category=UserWarning,
-        message=r".*DB-API extension cursor\.connection used.*",
     )
 
     tracer_provider = TracerProvider(resource=resource)
