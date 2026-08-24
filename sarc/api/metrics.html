@@ -15,6 +15,11 @@
           crossorigin="anonymous"></script>
   <style>
     * { box-sizing: border-box; }
+    /* This page is light-themed only; without this, a dark-mode browser
+       renders native popups (the <select> option lists below) with its own
+       dark chrome while keeping our light hover/text colors, e.g. black text
+       on a dark-blue hover highlight. */
+    :root { color-scheme: light; }
     body { font-family: system-ui, sans-serif; margin: 32px; color: #222; }
     h1, h3 { margin: 0 0 12px; }
     /* Page title line. Flex so the global "?" badge can be pushed to the far
@@ -117,6 +122,10 @@
       padding: 4px 6px; font-size: 13px; border: 1px dashed #aaa;
       border-radius: 4px; background: #fafafa; cursor: pointer; color: #555;
     }
+    /* Overrides the generic button:hover (dark blue) below, which would
+       otherwise win on specificity (element+pseudo-class beats a single
+       class) and leave the grey label text unreadable on a dark background. */
+    .add-select:hover { background: #eee; }
     .add-row-wrap {
       display: flex; align-items: center; gap: 8px; padding: 2px 0;
     }
@@ -363,6 +372,12 @@
     }
     .period-panel .period-custom label { padding: 0; }
     .period-panel .period-custom input[type="number"] { width: 60px; }
+    /* Date-range dropdown (same chrome as the period panel; shares its
+       .period-title/.period-sep/.period-hint/.period-custom rules via the
+       'period-panel' class applied alongside 'range-panel' below). */
+    .range-panel { min-width: 280px; }
+    .range-panel .period-custom input[type="date"] { width: 130px; }
+    .range-panel .period-custom label { white-space: nowrap; }
   </style>
 </head>
 <body>
@@ -392,22 +407,41 @@
   </h3>
   <div class="controls">
     <div class="ctrl">
-      <label for="start">Start</label>
-      <input type="date" id="start"
-             {% if is_admin %}
-             title="Start of the date range (inclusive), in UTC. Unless otherwise stated, every plot displays GPU jobs (those with an allocated GPU and a known RGU) for the time they spent inside this range. Takes effect on Update." />
-             {% else %}
-             title="Start of the date range (inclusive), in UTC. Every plot displays GPU jobs (those with an allocated GPU and a known RGU) for the time they spent inside this range. Takes effect on Update." />
-             {% endif %}
-    </div>
-    <div class="ctrl">
-      <label for="end">End</label>
-      <input type="date" id="end"
-             {% if is_admin %}
-             title="End of the date range (exclusive), in UTC. Unless otherwise stated, every plot displays GPU jobs (those with an allocated GPU and a known RGU) for the time they spent inside this range. Takes effect on Update." />
-             {% else %}
-             title="End of the date range (exclusive), in UTC. Every plot displays GPU jobs (those with an allocated GPU and a known RGU) for the time they spent inside this range. Takes effect on Update." />
-             {% endif %}
+      <label>Date range</label>
+      <div class="js-dropdown">
+        <button type="button" id="range-btn" class="add-select"
+                style="text-align:left;min-width:130px"
+                {% if is_admin %}
+                title="Start (inclusive) / End (exclusive) of the date range, in UTC. Unless otherwise stated, every plot displays GPU jobs (those with an allocated GPU and a known RGU) for the time they spent inside this range. Yesterday/Last week/Last N… are relative: they're recomputed from today's date every time the page loads. Custom range is a fixed pair of dates. Takes effect on Update.">Last 6 weeks ▾</button>
+                {% else %}
+                title="Start (inclusive) / End (exclusive) of the date range, in UTC. Every plot displays GPU jobs (those with an allocated GPU and a known RGU) for the time they spent inside this range. Yesterday/Last week/Last N… are relative: they're recomputed from today's date every time the page loads. Custom range is a fixed pair of dates. Takes effect on Update.">Last 6 weeks ▾</button>
+                {% endif %}
+        <div id="range-panel" class="job-states-panel period-panel range-panel" style="display:none"
+             data-default="{{ default_range }}">
+          <div class="period-title">Relative</div>
+          <label><input type="radio" name="range-mode" value="yesterday"> Yesterday</label>
+          <label><input type="radio" name="range-mode" value="last_week"> Last week</label>
+          <div class="period-custom"
+               title="A rolling window of exactly this length, ending today (recomputed from today's date every time the page loads).">
+            <label><input type="radio" name="range-mode" value="last_n" checked> Last</label>
+            <input type="number" id="range-n" min="1" step="1" value="6">
+            <select id="range-unit">
+              <option value="d">days</option>
+              <option value="w" selected>weeks</option>
+              <option value="m">months</option>
+            </select>
+          </div>
+          <div class="period-sep"></div>
+          <div class="period-title">Custom</div>
+          <label><input type="radio" name="range-mode" value="custom"> Custom range</label>
+          <div class="period-custom">
+            <label for="start">From</label>
+            <input type="date" id="start" title="Start of the date range (inclusive), in UTC." />
+            <label for="end">Until</label>
+            <input type="date" id="end" title="End of the date range (exclusive), in UTC." />
+          </div>
+        </div>
+      </div>
     </div>
     <div class="ctrl">
       <label>Period</label>
@@ -573,6 +607,7 @@
           // Filter bar
           start:       document.getElementById('start').value,
           end:         document.getElementById('end').value,
+          range:       rangeValue(),
           metric:      selectedMetric(),
           {% if is_admin %}
           cluster_user: document.getElementById('cluster_user').value,
@@ -609,14 +644,10 @@
       // The intro flag lives outside STORAGE_KEY, so clear it explicitly.
       try { localStorage.removeItem(INTRO_KEY); } catch { /* ignore */ }
 
-      // Filter bar defaults
-      const today     = new Date();
-      const monday    = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-      monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
-      const winStart  = new Date(monday);
-      winStart.setDate(winStart.getDate() - 42);  // 6 weeks before the last Monday
-      document.getElementById('start').value = isoDate(winStart);
-      document.getElementById('end').value   = isoDate(monday);
+      // Filter bar defaults. setRangeMode is defined below, but by the time a
+      // user can click Reset the whole script has already run once, same as
+      // the setPeriod('w') call a few lines down.
+      setRangeMode(rangePanel.dataset.default);
       {% if is_admin %}
       document.getElementById('metric-select').value = 'gpu_sm_occupancy';
       document.getElementById('cluster_user').value  = '';
@@ -1002,16 +1033,9 @@
       loadCharts();
     });
 
-    const today = new Date();
-    // Defaults: end = Monday of the current week, start = 6 weeks before that
-    // (calendar-aligned with the default 'w' period).
-    const monday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
-    const winStart = new Date(monday);
-    winStart.setDate(winStart.getDate() - 42);  // 6 weeks before the last Monday
-    // Apply saved filter-bar values (fall back to defaults when absent).
-    document.getElementById('start').value = _saved.start || isoDate(winStart);
-    document.getElementById('end').value   = _saved.end   || isoDate(monday);
+    // Start/End: handled by the date-range widget below (see "Restore date
+    // range" in Init) — it seeds any legacy/custom start/end strings and
+    // resolves the range mode, recomputing relative presets from today.
     {% if is_admin %}
     if (_saved.metric)    document.getElementById('metric-select').value = _saved.metric;
     if (_saved.cluster_user !== undefined)
@@ -2770,6 +2794,116 @@
     });
     setPeriod(periodPanel.dataset.default);
 
+    // ── Date-range selector (radio dropdown, mirrors the period widget) ──────
+    // Relative presets (Yesterday / Last week / Last N …) are recomputed from
+    // today's date whenever they're (re)selected — on load and on Reset —
+    // rather than replayed as a frozen string from localStorage, so "Last
+    // week" still means last week tomorrow instead of quietly going stale.
+    // Custom range is the escape hatch for a genuinely fixed pair of dates:
+    // its Start/End are left untouched and saved/restored verbatim.
+    const rangeBtn   = document.getElementById('range-btn');
+    const rangePanel = document.getElementById('range-panel');
+    const rangeN     = document.getElementById('range-n');
+    const rangeUnit  = document.getElementById('range-unit');
+    const startInput = document.getElementById('start');
+    const endInput   = document.getElementById('end');
+    const RANGE_LABELS = { yesterday: 'Yesterday', last_week: 'Last week' };
+    const RANGE_UNIT_LABELS = { d: 'day', w: 'week', m: 'month' };
+
+    function rangeMode() {
+      return rangePanel.querySelector('input[name="range-mode"]:checked').value;
+    }
+    function rangeCustomN() {
+      return Math.max(1, Math.floor(Number(rangeN.value) || 1));
+    }
+    // Writes Start/End for the currently-selected relative preset, anchored
+    // on today; a no-op for Custom range, which keeps whatever is typed in.
+    function applyRangePreset() {
+      const mode = rangeMode();
+      if (mode !== 'custom') {
+        const today = new Date();
+        const start = new Date(today);
+        if (mode === 'yesterday') {
+          start.setDate(start.getDate() - 1);
+        } else if (mode === 'last_week') {
+          start.setDate(start.getDate() - 7);
+        } else {
+          const n = rangeCustomN();
+          // Months approximate to a fixed 30 days, matching the backend's
+          // fixed 30-day month for the Period bucket (see RGU-unit comment
+          // above periodMode()).
+          const days = rangeUnit.value === 'w' ? n * 7 : rangeUnit.value === 'm' ? n * 30 : n;
+          start.setDate(start.getDate() - days);
+        }
+        startInput.value = isoDate(start);
+        endInput.value   = isoDate(today);
+      }
+      updateRangeLabel();
+    }
+    function updateRangeLabel() {
+      const mode = rangeMode();
+      let txt = RANGE_LABELS[mode];
+      if (!txt && mode === 'last_n') {
+        const n = rangeCustomN();
+        txt = 'Last ' + n + ' ' + RANGE_UNIT_LABELS[rangeUnit.value] + (n > 1 ? 's' : '');
+      }
+      if (!txt) {
+        txt = (startInput.value && endInput.value)
+          ? startInput.value + ' – ' + endInput.value
+          : 'Custom range';
+      }
+      rangeBtn.textContent = txt + ' ▾';
+    }
+    // Accepts 'yesterday' | 'last_week' | 'last_<n><d|w|m>' (e.g. 'last_6w')
+    // | 'custom'. Used for both the server-injected default and the saved
+    // state (see "Restore date range" in Init below).
+    function setRangeMode(token) {
+      const m = /^last_(\d+)([dwm])$/.exec(token || '');
+      if (token === 'yesterday' || token === 'last_week' || token === 'custom') {
+        rangePanel.querySelector(`input[value="${token}"]`).checked = true;
+      } else if (m) {
+        rangePanel.querySelector('input[value="last_n"]').checked = true;
+        rangeN.value = m[1];
+        rangeUnit.value = m[2];
+      } else {
+        rangePanel.querySelector('input[value="last_n"]').checked = true;
+      }
+      applyRangePreset();
+    }
+    function rangeValue() {
+      const mode = rangeMode();
+      return mode === 'last_n' ? `last_${rangeCustomN()}${rangeUnit.value}` : mode;
+    }
+    rangeBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      rangePanel.style.display = rangePanel.style.display === 'none' ? 'block' : 'none';
+    });
+    document.addEventListener('click', e => {
+      if (rangePanel.style.display !== 'none' && !rangePanel.contains(e.target) && e.target !== rangeBtn)
+        rangePanel.style.display = 'none';
+    });
+    rangePanel.querySelectorAll('input[name="range-mode"]')
+      .forEach(r => r.addEventListener('change', applyRangePreset));
+    // Touching the custom-count fields implies the "Last N …" mode.
+    [rangeN, rangeUnit].forEach(el => {
+      el.addEventListener('focus', () => {
+        rangePanel.querySelector('input[value="last_n"]').checked = true;
+        applyRangePreset();
+      });
+      el.addEventListener('change', applyRangePreset);
+    });
+    // Clicking into (or typing directly into) From/Until implies Custom range.
+    [startInput, endInput].forEach(el => {
+      el.addEventListener('focus', () => {
+        rangePanel.querySelector('input[value="custom"]').checked = true;
+        applyRangePreset();
+      });
+      el.addEventListener('input', () => {
+        rangePanel.querySelector('input[value="custom"]').checked = true;
+        updateRangeLabel();
+      });
+    });
+
     function captureParams() {
       const start = document.getElementById('start').value;
       const end   = document.getElementById('end').value;
@@ -3007,6 +3141,18 @@
 
     // Restore period (after setPeriod is defined, which is above).
     if (_saved.period) setPeriod(_saved.period);
+
+    // Restore date range (after setRangeMode is defined, which is above).
+    // Seed any saved literal start/end first — the only saved state a
+    // pre-range-widget user (or Custom range) will have — then resolve the
+    // mode: an explicit saved range wins (relative presets recompute fresh
+    // from today right here, which is the whole point); absent that, a saved
+    // literal start/end without a mode implies Custom (preserves a legacy
+    // fixed range as-is instead of silently replacing it with the default);
+    // absent both, fall back to the server-injected default.
+    if (_saved.start) startInput.value = _saved.start;
+    if (_saved.end)   endInput.value   = _saved.end;
+    setRangeMode(_saved.range || ((_saved.start && _saved.end) ? 'custom' : rangePanel.dataset.default));
 
     // Restore focus state.
     if (_saved.focusStart) focusStart = _saved.focusStart;
