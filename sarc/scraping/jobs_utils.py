@@ -287,6 +287,85 @@ def _convert_json_job(
     )
 
 
+def _convert_json_fast(
+    entry: dict, cluster_name: str, scraped_start: datetime, scraped_end: datetime
+) -> dict:
+
+    resources = {}
+    tracked_resources = ["cpu", "mem", "gres_gpu", "gres_gpu_type", "node", "billing"]
+    for prefix in ["requested", "allocated"]:
+        for res in tracked_resources:
+            key = f"{prefix}_{res}"
+            if key not in entry:
+                continue
+            if res == "gres_gpu_type":
+                resources[f"{prefix}_gpu_type"] = entry[key]
+            else:
+                resources[key] = entry[key]
+
+    tracked_flags = [
+        "CLEAR_SCHEDULING",
+        "STARTED_ON_SUBMIT",
+        "STARTED_ON_SCHEDULE",
+        "STARTED_ON_BACKFILL",
+    ]
+    flags = {k: True for k in entry["flags"] if k in tracked_flags}
+
+    extra = {}
+    # Save scraping period in job
+    # We save these dates with timezone UTC
+    # Note: If date is naive (as actually parsed from `acquire jobs`),
+    # then astimezone() assumes date is in local timezone.
+    if scraped_start is not None:
+        extra["latest_scraped_start"] = scraped_start.astimezone(UTC)
+    if scraped_end is not None:
+        extra["latest_scraped_end"] = scraped_end.astimezone(UTC)
+
+    assert cluster_name is not None
+
+    if cluster_name != entry["cluster"]:
+        logger.warning(
+            'Job %s from cluster "%s" has a different cluster name: "%s". Using "%s".',
+            entry["job_id"],
+            cluster_name,
+            entry["cluster"],
+            cluster_name,
+        )
+
+    return dict(
+        cluster_name=cluster_name,
+        job_id=entry["job_id"],
+        array_job_id=entry["array_job_id"] or None,
+        task_id=entry["array_task_id"],
+        name=entry["name"],
+        cluster_user=entry["user"],
+        group=entry["group"],
+        account=entry["account"],
+        job_state=entry["state"][0],
+        exit_code=entry["exitcode_return_code"],
+        signal=entry["exitcode_signal"],
+        time_limit=(tlimit := entry["time_timelimit"]) and tlimit * 60,
+        submit_time=parse_in_timezone(entry["time_submit"]),
+        start_time=parse_in_timezone(entry["time_start"]),
+        end_time=parse_in_timezone(entry["time_end"]),
+        elapsed_time=entry["time_elapsed"],
+        partition=entry["partition"],
+        nodes=(
+            sorted(expand_hostlist(entry["nodes"]))
+            if entry["nodes"] != "None assigned"
+            else []
+        ),
+        constraints=entry["constraints"],
+        priority=entry["priority"],
+        qos=entry["qos"],
+        work_dir=entry["work_dir"],
+        submit_line=entry["submit_line"],
+        **resources,
+        **flags,
+        **extra,
+    )
+
+
 @trace_decorator()
 def parse_raw(
     raw_data: bytes, cluster_name: str, scraped_start: datetime, scraped_end: datetime
@@ -308,15 +387,20 @@ def parse_raw(
     json_str = raw_data_str[raw_data_str.find("{") :]
 
     data = json.loads(json_str)
+    meta = data.get("meta", {})
 
+    fast_flag: bool = meta.get("schema_version", False) == "fastsacct-flat-v1"
     version: dict = (
-        data.get("meta", {}).get("Slurm", None) or data.get("meta", {}).get("slurm", {})
+        meta.get("Slurm", None) or data.get("meta", {}).get("slurm", {})
     ).get("version", None)
 
     for entry in data["jobs"]:
-        yield _convert_json_job(
-            entry, cluster_name, version, scraped_start, scraped_end
-        )
+        if fast_flag:
+            yield _convert_json_fast(entry, cluster_name, scraped_start, scraped_end)
+        else:
+            yield _convert_json_job(
+                entry, cluster_name, version, scraped_start, scraped_end
+            )
 
 
 @trace_decorator()
