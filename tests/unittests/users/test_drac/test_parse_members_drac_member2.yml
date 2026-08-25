@@ -13,6 +13,8 @@
     name: drac_member
   member_type:
     values: []
+  sort_main: 0
+  sort_sub: 0
   supervisors:
     values: []
 - associated_accounts:
@@ -30,5 +32,7 @@
     name: drac_member
   member_type:
     values: []
+  sort_main: 0
+  sort_sub: 0
   supervisors:
     values: []

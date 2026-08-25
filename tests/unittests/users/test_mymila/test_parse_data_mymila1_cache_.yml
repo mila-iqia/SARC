@@ -1,48 +1,48 @@
 - associated_accounts: {}
   display_name: Jane Smith000
   email: john.smith000@mila.quebec
-  known_matches:
-  - mid: john.smith000@mila.quebec
-    name: mila_ldap
+  known_matches: []
   matching_id:
-    mid: '0'
-    name: mymila
+    mid: john.smith000@mila.quebec
+    name: mila_ldap
   member_type:
     values:
     - valid:
         lower: '2023-09-01T00:00:00Z'
         upper: '2025-09-01T00:00:00Z'
       value: professor
+  sort_main: 0
+  sort_sub: 0
   supervisors:
     values: []
 - associated_accounts: {}
   display_name: John Smith001
   email: john.smith001@mila.quebec
-  known_matches:
-  - mid: john.smith001@mila.quebec
-    name: mila_ldap
+  known_matches: []
   matching_id:
-    mid: '1'
-    name: mymila
+    mid: john.smith001@mila.quebec
+    name: mila_ldap
   member_type:
     values:
     - valid:
         lower: '2023-09-01T00:00:00Z'
         upper: '2025-09-01T00:00:00Z'
       value: professor
+  sort_main: 0
+  sort_sub: 1
   supervisors:
     values: []
 - associated_accounts: {}
   display_name: Jane Smith004
   email: john.smith004@mila.quebec
-  known_matches:
-  - mid: john.smith004@mila.quebec
-    name: mila_ldap
+  known_matches: []
   matching_id:
-    mid: '4'
-    name: mymila
+    mid: john.smith004@mila.quebec
+    name: mila_ldap
   member_type:
     values: []
+  sort_main: 0
+  sort_sub: 4
   supervisors:
     values:
     - valid:
@@ -54,31 +54,31 @@
 - associated_accounts: {}
   display_name: John Smith005
   email: john.smith005@mila.quebec
-  known_matches:
-  - mid: john.smith005@mila.quebec
-    name: mila_ldap
+  known_matches: []
   matching_id:
-    mid: '5'
-    name: mymila
+    mid: john.smith005@mila.quebec
+    name: mila_ldap
   member_type:
     values:
     - valid:
         lower: '2023-09-01T00:00:00Z'
         upper: '2025-09-01T00:00:00Z'
       value: intern
+  sort_main: 0
+  sort_sub: 5
   supervisors:
     values: []
 - associated_accounts: {}
   display_name: Jane Smith006
   email: john.smith006@mila.quebec
-  known_matches:
-  - mid: john.smith006@mila.quebec
-    name: mila_ldap
+  known_matches: []
   matching_id:
-    mid: '6'
-    name: mymila
+    mid: john.smith006@mila.quebec
+    name: mila_ldap
   member_type:
     values: []
+  sort_main: 0
+  sort_sub: 6
   supervisors:
     values:
     - valid:
@@ -92,14 +92,14 @@
 - associated_accounts: {}
   display_name: John Smith007
   email: john.smith007@mila.quebec
-  known_matches:
-  - mid: john.smith007@mila.quebec
-    name: mila_ldap
+  known_matches: []
   matching_id:
-    mid: '7'
-    name: mymila
+    mid: john.smith007@mila.quebec
+    name: mila_ldap
   member_type:
     values: []
+  sort_main: 0
+  sort_sub: 7
   supervisors:
     values:
     - valid:
@@ -111,35 +111,35 @@
 - associated_accounts: {}
   display_name: Jane Smith008
   email: john.smith008@mila.quebec
-  known_matches:
-  - mid: john.smith008@mila.quebec
-    name: mila_ldap
+  known_matches: []
   matching_id:
-    mid: '8'
-    name: mymila
+    mid: john.smith008@mila.quebec
+    name: mila_ldap
   member_type:
     values:
     - valid:
         lower: '2023-09-01T00:00:00Z'
         upper: '2025-09-01T00:00:00Z'
       value: master
+  sort_main: 0
+  sort_sub: 8
   supervisors:
     values: []
 - associated_accounts: {}
   display_name: John Smith009
   email: john.smith009@mila.quebec
-  known_matches:
-  - mid: john.smith009@mila.quebec
-    name: mila_ldap
+  known_matches: []
   matching_id:
-    mid: '9'
-    name: mymila
+    mid: john.smith009@mila.quebec
+    name: mila_ldap
   member_type:
     values:
     - valid:
         lower: '2023-09-01T00:00:00Z'
         upper: '2024-09-01T00:00:00Z'
       value: phd
+  sort_main: 0
+  sort_sub: 9
   supervisors:
     values:
     - valid:
