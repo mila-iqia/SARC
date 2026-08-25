@@ -454,6 +454,100 @@ def test_save_job(get_jobs, test_config, sacct_json, remote, file_regression, cl
 
 
 @pytest.mark.parametrize(
+    "test_config", [{"clusters": {"raisin": {"host": "raisin"}}}], indirect=True
+)
+@pytest.mark.usefixtures("jobless_read_write_db", "enabled_cache", "no_pkey")
+def test_save_fast_job(get_jobs, test_config, remote, file_regression, cli_main):
+    # Same job as raisin_base_job.json (job_id=1, user/group bramin, account
+    # raisin), but expressed in the flat fastsacct-flat-v1 schema, to exercise
+    # the fetch -> cache -> parse_cache_entry -> parse_raw -> _convert_json_fast
+    # call path end to end.
+    fast_json = json.dumps(
+        {
+            "meta": {
+                "source": "fastsacct",
+                "schema_version": "fastsacct-flat-v1",
+                "slurm_abi_version": "25.05",
+            },
+            "jobs": [
+                {
+                    "job_id": 1,
+                    "array_job_id": 0,
+                    "array_task_id": None,
+                    "name": "bench",
+                    "user": "bramin",
+                    "group": "bramin",
+                    "account": "raisin",
+                    "state": ["COMPLETED"],
+                    "exitcode_return_code": 0,
+                    "exitcode_signal": None,
+                    "time_elapsed": 3600,
+                    "time_end": 1676372400,
+                    "time_start": 1676368800,
+                    "time_submit": 1676332800,
+                    "time_timelimit": 720,
+                    "nodes": "None assigned",
+                    "partition": "largemem",
+                    "constraints": "",
+                    "priority": 46003,
+                    "qos": "normal",
+                    "work_dir": "/home/drac/b/bramin/scratch",
+                    "submit_line": "",
+                    "requested_cpu": 8,
+                    "requested_mem": 32768,
+                    "requested_node": 1,
+                    "requested_billing": 8,
+                    "flags": ["STARTED_ON_SCHEDULE"],
+                    "cluster": "raisin",
+                }
+            ],
+        }
+    )
+
+    remote.expect(
+        host="raisin",
+        cmd=f"export TZ=UTC && /opt/slurm/bin/sacct -X -S {_dtfmt(2023, 2, 15)} -E {_dtfmt(2023, 2, 16)} --allusers --json --duplicates",
+        out=fast_json.encode("utf-8"),
+    )
+
+    # Import here so that config is setup correctly when CLI is created.
+    import sarc.cli  # noqa: F401
+
+    assert (
+        cli_main(
+            [
+                "fetch",
+                "jobs",
+                "--cluster_names",
+                "raisin",
+                "--intervals",
+                f"{_dtfmt(2023, 2, 15)}-{_dtfmt(2023, 2, 16)}",
+            ]
+        )
+        == 0
+    )
+
+    assert cli_main(["-v", "parse", "jobs", "--since", "2023-02-14T00:00"]) == 0
+
+    jobs = list(get_jobs())
+    assert len(jobs) == 1
+
+    file_regression.check(
+        f"Found {len(jobs)} job(s):\n"
+        + "\n".join(
+            [
+                json.dumps(
+                    job.model_dump(mode="json", exclude={"id": True}),
+                    indent=4,
+                    sort_keys=True,
+                )
+                for job in jobs
+            ]
+        )
+    )
+
+
+@pytest.mark.parametrize(
     "json_jobs",
     [
         [
