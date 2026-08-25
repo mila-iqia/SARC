@@ -143,7 +143,7 @@ class MyMilaScraper(UserScraper[MyMilaConfig]):
         assert headers[-1] == "_MEMBER_NUM_"
         headers[-1] = "MEMBER_NUM"
         assert headers == [h.name for h in Headers]
-        for record in records:
+        for i, record in enumerate(records):
             if (
                 record[Headers.MILA_Email] is None
                 or record[Headers.MEMBER_NUM] in Invalid_MEMBER_NUM
@@ -155,10 +155,10 @@ class MyMilaScraper(UserScraper[MyMilaConfig]):
             um = UserMatch(
                 display_name=f"{first_name} {record[Headers.Last_Name]}",
                 email=record[Headers.MILA_Email].lower(),
-                matching_id=MatchID(name="mymila", mid=str(record[Headers.MEMBER_NUM])),
-                known_matches={
-                    MatchID(name="mila_ldap", mid=record[Headers.MILA_Email].lower())
-                },
+                sort_sub=i,
+                matching_id=MatchID(
+                    name="mila_ldap", mid=record[Headers.MILA_Email].lower()
+                ),
             )
             start_date = (
                 datetime.combine(date.fromisoformat(d), time.min, tzinfo=UTC)

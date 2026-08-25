@@ -124,7 +124,7 @@ class MilaLDAPScraper(UserScraper[MilaLDAPConfig]):
         suspended[0]   -> status  (as string "enabled" or "disabled")
         """
         with config.db.session() as s:
-            for user_raw in json.loads(data.decode()):
+            for i, user_raw in enumerate(json.loads(data.decode())):
                 creds = Credentials()
                 if user_raw["suspended"][0] != "true":
                     creds.insert(user_raw["posixUid"][0], start=cache_time)
@@ -148,6 +148,7 @@ class MilaLDAPScraper(UserScraper[MilaLDAPConfig]):
                     yield UserMatch(
                         display_name=user_raw["displayName"][0],
                         email=user_raw["mail"][0].lower(),
+                        sort_sub=i,
                         matching_id=MatchID(
                             name="mila_ldap", mid=user_raw["mail"][0].lower()
                         ),

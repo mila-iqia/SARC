@@ -39,6 +39,7 @@ class ManualUserScraper(UserScraper[ManualUserConfig]):
         items = deserialize(ManualUserConfig, json.loads(data.decode("utf-8")))
         for name, mids in items.id_pairs.items():
             yield UserMatch(
+                sort_sub=0,
                 matching_id=MatchID(name="manual", mid=name),
                 known_matches=set(MatchID(name=m.name, mid=m.mid) for m in mids),
             )

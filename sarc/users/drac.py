@@ -92,6 +92,7 @@ def parse_csv_line(d: dict, sess: Session, csv_date: date | None):
         yield UserMatch(
             display_name=d["name"],
             email=d["email"],
+            sort_sub=0,
             matching_id=MatchID(name="drac_member", mid=d["ccri"][:-3]),
             associated_accounts={"drac": creds},
         )
