@@ -60,6 +60,9 @@ class MockConfig:
 class MockUserScraper(UserScraper[MockConfig]):
     config_type = MockConfig
 
+    def __init__(self, name="mock_plugin"):
+        self.name = name
+
     def get_user_data(self, config: MockConfig) -> bytes:
         return config.api_url.encode()
 
@@ -71,21 +74,24 @@ class MockUserScraper(UserScraper[MockConfig]):
         user1 = UserMatch(
             display_name="John Doe",
             email="john.doe@example.com",
-            matching_id=MatchID(name="mock_plugin", mid="user1"),
+            sort_sub=0,
+            matching_id=MatchID(name=self.name, mid="user1"),
         )
         users.append(user1)
 
         user2 = UserMatch(
             display_name="Jane Smith",
             email=None,
-            matching_id=MatchID(name="mock_plugin", mid="user2"),
+            sort_sub=0,
+            matching_id=MatchID(name=self.name, mid="user2"),
         )
         users.append(user2)
 
         user3 = UserMatch(
             display_name="Bob Wilson",
             email="bob.wilson@example.com",
-            matching_id=MatchID(name="mock_plugin", mid="user3"),
+            sort_sub=0,
+            matching_id=MatchID(name=self.name, mid="user3"),
             known_matches={
                 MatchID(name="other_plugin", mid="bob_wilson"),
                 MatchID(name="another_plugin", mid="bwilson"),
@@ -115,12 +121,16 @@ class PluginTest(UserScraper[ConfigTest]):
         domain = data.decode("utf-8")
         users.append(
             UserMatch(
-                email=f"john@{domain}", matching_id=MatchID(name="test", mid="john")
+                email=f"john@{domain}",
+                matching_id=MatchID(name="test", mid="john"),
+                sort_sub=0,
             )
         )
         users.append(
             UserMatch(
-                email=f"jane@{domain}", matching_id=MatchID(name="test", mid="jane")
+                email=f"jane@{domain}",
+                matching_id=MatchID(name="test", mid="jane"),
+                sort_sub=0,
             )
         )
         return users
@@ -160,28 +170,18 @@ def test_match_id():
     assert mid1 != "not_a_match_id"
 
 
-def test_user_match_equality():
-    """Test UserMatch equality based on matching_id."""
-    mid1 = MatchID(name="test_plugin", mid="user123")
-    mid2 = MatchID(name="test_plugin", mid="user456")
-
-    user1 = UserMatch(matching_id=mid1, display_name="A")
-    user2 = UserMatch(matching_id=mid1, display_name="B")
-    user3 = UserMatch(matching_id=mid2)
-
-    assert hash(user1) == hash(user2)
-    assert user1 == user2
-    assert user1 != user3
-
-
 def test_update_user_match_fill_missing_data():
     base_user = UserMatch(
-        display_name=None, email=None, matching_id=MatchID(name="plugin1", mid="user1")
+        display_name=None,
+        email=None,
+        sort_sub=0,
+        matching_id=MatchID(name="plugin1", mid="user1"),
     )
 
     update_user = UserMatch(
         display_name="John Doe",
         email="john@example.com",
+        sort_sub=0,
         matching_id=MatchID(name="plugin2", mid="user1"),
     )
 
@@ -195,12 +195,14 @@ def test_update_user_match_preserve_existing_data():
     base_user = UserMatch(
         display_name="John Doe",
         email="john@example.com",
+        sort_sub=0,
         matching_id=MatchID(name="plugin1", mid="user1"),
     )
 
     update_user = UserMatch(
         display_name="Different Name",
         email="different@example.com",
+        sort_sub=0,
         matching_id=MatchID(name="plugin2", mid="user1"),
     )
 
@@ -212,11 +214,13 @@ def test_update_user_match_preserve_existing_data():
 
 def test_update_user_match_merge_known_matches():
     base_user = UserMatch(
+        sort_sub=0,
         matching_id=MatchID(name="plugin1", mid="user1"),
         known_matches={MatchID(name="plugin2", mid="user1")},
     )
 
     update_user = UserMatch(
+        sort_sub=0,
         matching_id=MatchID(name="plugin3", mid="user1"),
         known_matches={MatchID(name="plugin4", mid="user1")},
     )
@@ -232,9 +236,11 @@ def test_update_user_match_merge_known_matches():
 
 
 def test_update_user_match_merge_valid_fields():
-    base_user = UserMatch(matching_id=MatchID(name="plugin1", mid="user1"))
+    base_user = UserMatch(sort_sub=0, matching_id=MatchID(name="plugin1", mid="user1"))
 
-    update_user = UserMatch(matching_id=MatchID(name="plugin2", mid="user1"))
+    update_user = UserMatch(
+        sort_sub=0, matching_id=MatchID(name="plugin2", mid="user1")
+    )
 
     # Add some data to the update user
     update_user.member_type.insert(MemberType.PROFESSOR)
@@ -279,18 +285,13 @@ def test_fetch_and_parse_users_single_plugin(
     assert len(users) == 3
     assert all(isinstance(user, UserMatch) for user in users)
 
-    # Check that the first plugin name was assigned to matching_id.name
-    for user in users:
-        assert user.matching_id.name == "test_scraper"
-
 
 def test_fetch_and_parse_users_multiple_plugins(
     monkeypatch, enabled_cache, read_write_db
 ):
     """Test fetching and parsing users with multiple plugins."""
-    mock_scraper = MockUserScraper()
-    monkeypatch.setitem(_builtin_scrapers, "plugin1", mock_scraper)
-    monkeypatch.setitem(_builtin_scrapers, "plugin2", mock_scraper)
+    monkeypatch.setitem(_builtin_scrapers, "plugin1", MockUserScraper("plugin1"))
+    monkeypatch.setitem(_builtin_scrapers, "plugin2", MockUserScraper("plugin2"))
 
     scrapers = [
         ("plugin1", {"api_url": "https://api1.example.com", "api_key": "secret1"}),
@@ -350,6 +351,7 @@ def test_fetch_and_parse_users_user_matching(
                 user1 = UserMatch(
                     display_name="John Doe",
                     email="john@example.com",
+                    sort_sub=0,
                     matching_id=MatchID(name="plugin1", mid="user1"),
                     known_matches={MatchID(name="plugin2", mid="user1")},
                 )
@@ -358,6 +360,7 @@ def test_fetch_and_parse_users_user_matching(
                 user2 = UserMatch(
                     display_name=None,
                     email="john@example.com",
+                    sort_sub=0,
                     matching_id=MatchID(name="plugin2", mid="user1"),
                 )
                 return [user2]
@@ -393,12 +396,14 @@ def test_fetch_and_parse_users_user_matching(
 def test_update_user_match_merge_credentials_new_domain():
     """Test merging credentials when the update user has a new domain."""
     base_user = UserMatch(
+        sort_sub=0,
         matching_id=MatchID(name="plugin1", mid="user1"),
         associated_accounts={"drac": Credentials()},
     )
     base_user.associated_accounts["drac"].insert("user1_drac")
 
     update_user = UserMatch(
+        sort_sub=0,
         matching_id=MatchID(name="plugin2", mid="user1"),
         associated_accounts={"mila": Credentials()},
     )
@@ -416,12 +421,14 @@ def test_update_user_match_merge_credentials_new_domain():
 def test_update_user_match_merge_credentials_existing_domain():
     """Test merging credentials when both users have the same domain."""
     base_user = UserMatch(
+        sort_sub=0,
         matching_id=MatchID(name="plugin1", mid="user1"),
         associated_accounts={"drac": Credentials()},
     )
     base_user.associated_accounts["drac"].insert("user1_drac")
 
     update_user = UserMatch(
+        sort_sub=0,
         matching_id=MatchID(name="plugin2", mid="user1"),
         associated_accounts={"drac": Credentials()},
     )
@@ -438,14 +445,15 @@ def test_fetch_and_parse_multiple_different_scrapers(
 ):
     """Test fetching and parsing users with multiple different scrapers and verify merging behavior."""
     # Set up both scrapers in the builtin scrapers
-    mock_scraper = MockUserScraper()
     test_plugin = PluginTest()
-    monkeypatch.setitem(_builtin_scrapers, "mock_scraper", mock_scraper)
-    monkeypatch.setitem(_builtin_scrapers, "test_plugin", test_plugin)
+    monkeypatch.setitem(
+        _builtin_scrapers, "mock_scraper", MockUserScraper("mock_scraper")
+    )
+    monkeypatch.setitem(_builtin_scrapers, "test", test_plugin)
 
     scrapers = [
         ("mock_scraper", {"api_url": "https://api.example.com", "api_key": "secret"}),
-        ("test_plugin", "example.com"),
+        ("test", "example.com"),
     ]
 
     # First, fetch the data and store it in cache
@@ -463,7 +471,7 @@ def test_fetch_and_parse_multiple_different_scrapers(
 
     # Check that we have users from both scrapers
     mock_users = [u for u in users if u.matching_id.name == "mock_scraper"]
-    test_users = [u for u in users if u.matching_id.name == "test_plugin"]
+    test_users = [u for u in users if u.matching_id.name == "test"]
 
     assert len(mock_users) == 3
     assert len(test_users) == 2
@@ -480,7 +488,7 @@ def test_fetch_and_parse_multiple_different_scrapers(
 
     # Verify that all users have the correct scraper name in their matching_id
     for user in users:
-        assert user.matching_id.name in ["mock_scraper", "test_plugin"]
+        assert user.matching_id.name in ["mock_scraper", "test"]
 
 
 @pytest.mark.usefixtures("enabled_cache")
@@ -500,6 +508,7 @@ def test_parse_users_supervisor_ordering_before_fix(mock_get_scraper, read_write
             student = UserMatch(
                 display_name="Alice Student",
                 email="alice@example.com",
+                sort_sub=0,
                 matching_id=MatchID(name="bad_order_plugin", mid="student1"),
             )
             student.supervisors.insert(
@@ -511,6 +520,7 @@ def test_parse_users_supervisor_ordering_before_fix(mock_get_scraper, read_write
             supervisor = UserMatch(
                 display_name="Bob Supervisor",
                 email="bob@example.com",
+                sort_sub=0,
                 matching_id=MatchID(name="bad_order_plugin", mid="supervisor1"),
             )
 

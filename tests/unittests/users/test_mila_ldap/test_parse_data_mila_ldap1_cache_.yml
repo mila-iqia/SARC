@@ -13,6 +13,8 @@
     name: mila_ldap
   member_type:
     values: []
+  sort_main: 0
+  sort_sub: 0
   supervisors:
     values: []
 - associated_accounts:
@@ -30,6 +32,8 @@
     name: mila_ldap
   member_type:
     values: []
+  sort_main: 0
+  sort_sub: 1
   supervisors:
     values: []
 - associated_accounts:
@@ -47,6 +51,8 @@
     name: mila_ldap
   member_type:
     values: []
+  sort_main: 0
+  sort_sub: 2
   supervisors:
     values: []
 - associated_accounts:
@@ -64,6 +70,8 @@
     name: mila_ldap
   member_type:
     values: []
+  sort_main: 0
+  sort_sub: 4
   supervisors:
     values: []
 - associated_accounts:
@@ -81,6 +89,8 @@
     name: mila_ldap
   member_type:
     values: []
+  sort_main: 0
+  sort_sub: 5
   supervisors:
     values: []
 - associated_accounts:
@@ -98,6 +108,8 @@
     name: mila_ldap
   member_type:
     values: []
+  sort_main: 0
+  sort_sub: 6
   supervisors:
     values: []
 - associated_accounts:
@@ -115,6 +127,8 @@
     name: mila_ldap
   member_type:
     values: []
+  sort_main: 0
+  sort_sub: 7
   supervisors:
     values: []
 - associated_accounts:
@@ -132,6 +146,8 @@
     name: mila_ldap
   member_type:
     values: []
+  sort_main: 0
+  sort_sub: 8
   supervisors:
     values: []
 - associated_accounts:
@@ -149,5 +165,7 @@
     name: mila_ldap
   member_type:
     values: []
+  sort_main: 0
+  sort_sub: 9
   supervisors:
     values: []

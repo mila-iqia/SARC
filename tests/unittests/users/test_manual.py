@@ -54,6 +54,7 @@ class TestManualUserScraper(UserPluginTester):
                 ),
                 [
                     UserMatch(
+                        sort_sub=0,
                         matching_id=MatchID(name="manual", mid="user1"),
                         known_matches={
                             MatchID(name="drac", mid="cci-001"),
@@ -61,6 +62,7 @@ class TestManualUserScraper(UserPluginTester):
                         },
                     ),
                     UserMatch(
+                        sort_sub=0,
                         matching_id=MatchID(name="manual", mid="user2"),
                         known_matches={MatchID(name="drac", mid="cci-002")},
                     ),

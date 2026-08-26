@@ -46,6 +46,8 @@ class MatchID(BaseModel):
 class UserMatch(BaseModel):
     display_name: str | None = None
     email: str | None = None
+    sort_main: int = 0
+    sort_sub: int
 
     matching_id: MatchID
     # If the plugin gets an id that works with another plugin, it can be stored here.
@@ -66,12 +68,6 @@ class UserMatch(BaseModel):
     @field_serializer("known_matches", when_used="json")
     def _serialize_deterministic(self, value: set[MatchID]):
         return sorted(value, key=lambda m: (m.name, m.mid))
-
-    def __eq__(self, other: object) -> bool:
-        return isinstance(other, UserMatch) and self.matching_id == other.matching_id
-
-    def __hash__(self) -> int:
-        return hash(self.matching_id)
 
 
 # plugins are run in the order they are defined in the config file and the first plugin to define a value wins.
@@ -198,7 +194,7 @@ def parse_ce(ce: CacheEntry) -> Iterable[UserMatch]:
                 continue
             raise ValueError("Invalid user scraper") from e
         for userm in scraper.parse_user_data(item[1], ce.entry_datetime):
-            userm.matching_id.name = item[0]
+            userm.sort_main = scraper_names.index(item[0])
             # First, get all the userm that match with this one.
             prev_userms: list[UserMatch] = [userm]
             prev = user_refs.get(userm.matching_id, None)
@@ -208,10 +204,9 @@ def parse_ce(ce: CacheEntry) -> Iterable[UserMatch]:
                 prev = user_refs.get(mid, None)
                 if prev is not None:
                     prev_userms.append(prev)
-            # Second, filter out duplicates and sort the rest according to plugin rank
+            # Second, sort according to plugin rank
             matching_userms = sorted(
-                set(prev_userms),
-                key=lambda um: scraper_names.index(um.matching_id.name),
+                prev_userms, key=lambda um: (um.sort_main, um.sort_sub)
             )
             # Third, merge everything into the oldest entry
             oldest_userm = matching_userms.pop(0)
