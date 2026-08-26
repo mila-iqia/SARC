@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 from simple_parsing import subparsers
-from sqlmodel import Session
+from sqlmodel import Session, text
 
 from sarc.config import config
 from sarc.patch import declare_patch
@@ -43,4 +43,7 @@ class Parse:
         with config.db.session() as sess:
             patch_db(sess)
             sess.commit()
-        return self.command.execute()
+        res = self.command.execute()
+        with config.db.session() as sess:
+            sess.execute(text("analyze"))  # ty: ignore[deprecated]
+        return res
