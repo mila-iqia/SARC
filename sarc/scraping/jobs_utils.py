@@ -1,3 +1,4 @@
+import io
 import json
 import logging
 import re
@@ -21,6 +22,9 @@ logger = logging.getLogger(__name__)
 
 
 DATE_FORMAT_HOUR = "%Y-%m-%dT%H:%M"
+
+FASTSACCT_FLAT_SCHEMA = "fastsacct-flat-v1"
+FASTSACCT_JSONL_SCHEMA = "fastsacct-jsonl-v1"
 
 
 class JobConversionError(Exception):
@@ -386,10 +390,30 @@ def parse_raw(
     raw_data_str = raw_data.decode("utf-8")
     json_str = raw_data_str[raw_data_str.find("{") :]
 
+    # The first non-empty line decides the format. In the jsonl schema the
+    # first line is the `{"meta": {...}}` header (a complete single-line
+    # JSON value) and the remainder of the stream is one job per line; in
+    # the blob schema the first line is just a partial `{` of a multi-line
+    # document that only parses in full.
+    stream = io.StringIO(json_str)
+    first = next((line for line in stream if line.strip()), None)
+    if first is None:
+        return
+    try:
+        meta = json.loads(first).get("meta", {})
+    except json.JSONDecodeError:
+        meta = {}
+    if meta.get("schema_version") == FASTSACCT_JSONL_SCHEMA:
+        yield from _parse_jsonl_stream(
+            stream, meta, cluster_name, scraped_start, scraped_end
+        )
+        return
+
+    # Single-blob format (unchanged behaviour): re-read the full document.
     data = json.loads(json_str)
     meta = data.get("meta", {})
 
-    fast_flag: bool = meta.get("schema_version", False) == "fastsacct-flat-v1"
+    fast_flag: bool = meta.get("schema_version", False) == FASTSACCT_FLAT_SCHEMA
     version: dict = (
         meta.get("Slurm", None) or data.get("meta", {}).get("slurm", {})
     ).get("version", None)
@@ -401,6 +425,40 @@ def parse_raw(
             yield _convert_json_job(
                 entry, cluster_name, version, scraped_start, scraped_end
             )
+
+
+def _parse_jsonl_stream(
+    stream: io.StringIO,
+    meta: dict,
+    cluster_name: str,
+    scraped_start: datetime,
+    scraped_end: datetime,
+) -> Iterator[dict | None]:
+    """Stream a fastsacct-jsonl-v1 document: one job per line after the header.
+
+    Only the current line is parsed at a time; the job array is never fully
+    materialized. A line that is not valid JSON, or a final count that does
+    not match the header's `job_count`, aborts with JobConversionError so the
+    caller can avoid committing anything to the database.
+    """
+    expected = meta.get("job_count")
+    parsed = 0
+    for line in stream:
+        if not line.strip():
+            continue
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError as e:
+            raise JobConversionError(
+                f"Invalid JSON in fastsacct-jsonl-v1 stream: {e}"
+            ) from e
+        parsed += 1
+        yield _convert_json_fast(entry, cluster_name, scraped_start, scraped_end)
+    if expected is not None and parsed != expected:
+        raise JobConversionError(
+            f"fastsacct-jsonl-v1 stream count mismatch: expected {expected} jobs, "
+            f"parsed {parsed}"
+        )
 
 
 @trace_decorator()
