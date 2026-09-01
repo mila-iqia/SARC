@@ -253,7 +253,12 @@ def parse_cache_entry(
                 clusters_cfg[entry_cluster_name], job, entry_cluster
             )
             job_dict = job.model_dump(exclude={"id"})
-            jobs_to_upsert.append(job_dict)
+            # This seems dumb, but it seems sometimes that slurm can return
+            # exact duplicates of some job entries and it can cause problems on
+            # database insert. Since we only filter out exact duplicates there
+            # is no risk of loosing data.
+            if job_dict not in jobs_to_upsert:
+                jobs_to_upsert.append(job_dict)
             if len(jobs_to_upsert) >= batch_size:
                 bulk_upsert_jobs(sess, jobs_to_upsert)
                 jobs_to_upsert = []
