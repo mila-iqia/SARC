@@ -231,7 +231,7 @@ def _convert_json_job(
         v_before_23 = int(version["major"]) < 23
         v_23_to_23_11 = int(version["major"]) == 23 and int(version["minor"]) < 11
         v_before_23_11 = v_before_23 or v_23_to_23_11
-        if int(version["major"]) > 25:
+        if int(version["major"]) > 26:
             raise JobConversionError(f"Unsupported slurm version: {version}")
 
     return dict(
