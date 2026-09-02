@@ -40,13 +40,33 @@ block
 	ignore["Ignored DRAC Users"]:2
 ```
 
-### Creating a match
+### Creating matches
+
+> [!Note]
+> The `Auto-pair by email` button will automatically match entries with the same @mila.quebec e-mail address.
+> This is a good practice to start with it.
 
 One the left, the `Unmatched DRAC Users` list, with all users with a `drac_member` ID, but with no LDAP account. These are the items we want to match.
 On the right, the `LDAP users without DRAC` list, which are available for matching with DRAC entries.
 
-Select one item on each list, and a pair will be added to the `Pairs` list in the bottom, removing these two entries from the top lists.
+Select one item on each list, and a new entry will be added to the `Pairs` list in the bottom, removing these two entries from the top lists.
 
 ### matching file
 
+Even if it's not mandatory, you can read a previous version of the matching file with the `Load from file...` button.
+You can save the file with the `Download JSON` button.
+
 ### ignore list file
+
+Some rare cases are unsolvable; some DRAC accounts cannot be merged to any existing LDAP account in SARC, for whatever reason (account too old to have been catched by SARC scrapings, for example)
+
+To reduce the overhead, you can add a DRAC account to the ignore list with the `Ignore` button of the entry in the `Unmatched DRAC users` list.
+
+Like the `Pairs` list, you can load/save the ignore list.
+
+> [!Note]
+> The ignore list file is not injected into SARC, it is up to you to keep a copy of it between user matching runs.
+
+# Apply matching file to SARC
+
+[TODO]

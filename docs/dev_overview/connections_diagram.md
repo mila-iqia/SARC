@@ -1,9 +1,7 @@
 <div style="background-color: #838383;">
 
-```{mermaid}
----
-title: Connections diagram
----
+```mermaid
+
 flowchart TB
 	subgraph Mila
 		%% direction BT
