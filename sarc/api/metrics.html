@@ -765,7 +765,10 @@
       const row = { orientation: 'h', x: 0, xanchor: 'left', yanchor: 'bottom' };
       // y is capped: past ~1.12 Plotly autoexpands the top margin beyond 78 and
       // rgu_by_cluster stops lining up. 1.09 spaces the two rows evenly.
-      return { legend: { ...row, y: 1.09 }, legend2: { ...row, y: 1.02 } };
+      // showlegend forces the curve row on: Plotly hides a legend holding a
+      // single trace (same as rgu_by_cluster with one cluster), and a single
+      // efficiency metric is now the usual case (see trendCurves).
+      return { showlegend: true, legend: { ...row, y: 1.09 }, legend2: { ...row, y: 1.02 } };
     }
 
     // The efficiency metric is admin-only; non-admins are pinned to SM occupancy
