@@ -9,18 +9,35 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import ARRAY, Float, literal, literal_column, nulls_last, text, true
-from sqlalchemy.orm import aliased
+from sqlalchemy import (
+    ARRAY,
+    Float,
+    Integer,
+    literal,
+    literal_column,
+    nulls_last,
+    text,
+    true,
+)
 from sqlalchemy.sql.elements import Grouping
 from sqlmodel import Session, and_, case, col, func, select
 
 from sarc.api.v0 import Requestor, requestor
 from sarc.config import config
 from sarc.db.cluster import SlurmClusterDB
-from sarc.db.job import JobStatisticDB
-from sarc.db.job_series import JobSeriesDB, job_series_select
+from sarc.db.job import SlurmJobDB
+from sarc.db.job_series import DASH_STATS, JobSeriesTable
 from sarc.db.users import MatchingID, UserDB
 from sarc.models.job import SlurmState
+
+# The /dash GPU population: the job_series table covers every job, so every
+# panel narrows to the subset with a computable RGU -- exactly the predicate
+# the GPU-partial covering indexes (ix_job_series_end/user/submit) carry, so
+# the planner can prove the index applies.
+DASH_ELIGIBILITY = (
+    col(JobSeriesTable.allocated_gres_gpu) > 0,
+    col(JobSeriesTable.gpu_type_rgu_drac).is_not(None),
+)
 
 
 def _scope(req: Requestor) -> int | Literal["admin"]:
@@ -90,27 +107,18 @@ router = APIRouter(
 )
 
 
-# Postgres defaults to 8. It caps how many relations go into one join list, and
-# the planner reorders only within a list: what does not fit is planned as its own
-# unit first. job_series is 8 relations, so a subquery joined on top makes 9, and
-# at 8 the view gets built for the whole window before that join happens. That is
-# what /metrics/jobs pays: its 50-row page can no longer drive the query.
-# Postgres drops the view's unused joins either way -- they just count towards
-# the limit first. 9 is enough; 12 adds headroom for negligible planning cost.
-# Do not raise it much further: geqo_threshold is 12 too. Past that many relations
-# in one list, Postgres stops trying every join order and uses a genetic algorithm,
-# which can pick a different plan on each run.
-_JOIN_COLLAPSE_LIMIT = 12
+# Postgres defaults to 4MB. The window scans hash-aggregate a few thousand
+# groups at most, but the distribution/heatmap bins sort mid-sized partials,
+# and spilling those to disk cost more than the whole scan did. Local to this
+# request's transaction, so pooled connections never carry it to /v0.
+_WORK_MEM = "32MB"
 
 
 def session_dep() -> Generator[Session]:
     with config.db.session() as sess:
-        # LOCAL so it dies with this request's transaction instead of riding the
-        # pooled connection into the next one (/v0 shares this engine); all /dash
-        # queries run in that transaction, so one statement covers them.
-        sess.connection().execute(
-            text(f"SET LOCAL join_collapse_limit = {_JOIN_COLLAPSE_LIMIT}")
-        )
+        # LOCAL so it dies with this request's transaction instead of riding
+        # the pooled connection into the next one (/v0 shares this engine).
+        sess.connection().execute(text(f"SET LOCAL work_mem = '{_WORK_MEM}'"))
         yield sess
 
 
@@ -401,6 +409,103 @@ def _no_buckets(begin_dt: datetime, finish_dt: datetime) -> bool:
     return begin_dt >= finish_dt
 
 
+def _uniform_plan(
+    begin_dt: datetime, finish_dt: datetime, period: timedelta | str
+) -> tuple[float, float, int] | None:
+    """(anchor_epoch, step_seconds, n) when the buckets are evenly spaced, else None.
+
+    Fixed periods are uniform by construction, and so are the calendar h/d/w
+    (UTC has no DST gaps) -- only calendar months are not, and a single bucket
+    is trivially uniform. The grid is rebuilt from the period itself (not from
+    the clipped bounds, whose first interval is shortened when ``begin`` falls
+    mid-bucket), and every bucket is checked against it. Clipping only ever
+    touches the first and last bucket (the bounds of the requested range), so
+    the window predicate plus a clamp to [0, n-1] keeps the arithmetic
+    expansion identical to the array search of ``_bucket_table``.
+    """
+    bounds = list(_iter_buckets(begin_dt, finish_dt, period))
+    if not bounds:
+        return None
+    if len(bounds) == 1:
+        s, e = bounds[0]
+        return s.timestamp(), max((e - s).total_seconds(), 1e-9), 1
+    if isinstance(period, timedelta):
+        grid = begin_dt
+        step = period.total_seconds()
+    else:
+        grid = _calendar_trunc(begin_dt, period)
+        step = (_calendar_next(grid, period) - grid).total_seconds()
+    if step <= 0:
+        return None
+    for i, (s, e) in enumerate(bounds):
+        if s != max(grid + timedelta(seconds=i * step), begin_dt) or e != min(
+            grid + timedelta(seconds=(i + 1) * step), finish_dt
+        ):
+            return None
+    return grid.timestamp(), step, len(bounds)
+
+
+def _uniform_bucket_table(cols, plan: tuple[float, float, int], lo, hi):
+    """The buckets a job's run touches, as a LATERAL -- evenly spaced case.
+
+    The counterpart of ``_bucket_table`` without the array binary search: with
+    a uniform grid the bucket index of an instant is one floor/ceil, so a run
+    expands to ``generate_series(floor(start), ceil(end) - 1)`` clamped to
+    ``[0, n-1]``. Bucket bounds come back as arithmetic on the grid
+    (clipped to the window at both ends), so ``_overlap_hours`` reads the same
+    three column names either way. Semantics match ``_bucket_table`` exactly:
+    half-open on both ends, a run with no start or no length expands to no
+    bucket, and the clamps are what the window predicate already guarantees.
+    """
+    anchor, step, n = plan
+    start, end = _job_span(cols)
+    k = func.generate_series(
+        func.greatest(func.floor((start - anchor) / step), 0).cast(Integer),
+        func.least(func.ceil((end - anchor) / step) - 1, n - 1).cast(Integer),
+    ).column_valued("k")
+    return (
+        select(
+            k.label("bucket_index"),
+            func.greatest(anchor + k * step, lo).label("bucket_start"),
+            func.least(anchor + (k + 1) * step, hi).label("bucket_end"),
+        )
+        .where(cols.elapsed_time > 0)
+        .lateral("buckets")
+    )
+
+
+def _dash_bucket_table(cols, begin_dt: datetime, finish_dt: datetime, period):
+    """``_bucket_table`` with the uniform-grid fast path picked automatically.
+
+    The array/width_bucket spelling is general but pays two binary searches
+    and array subscripts per job; the arithmetic one is a floor, a ceil and two
+    multiplications. Same rows out either way (see ``_uniform_plan``).
+    """
+    lo, hi = begin_dt.timestamp(), finish_dt.timestamp()
+    plan = _uniform_plan(begin_dt, finish_dt, period)
+    if plan is not None:
+        return _uniform_bucket_table(cols, plan, lo, hi)
+    return _bucket_table(cols, begin_dt, finish_dt, period)
+
+
+def _dash_submitted_bucket(cols, begin_dt: datetime, finish_dt: datetime, period):
+    """``_submitted_bucket`` with the uniform-grid fast path (see above)."""
+    plan = _uniform_plan(begin_dt, finish_dt, period)
+    if plan is None:
+        return _submitted_bucket(cols, begin_dt, finish_dt, period)
+    anchor, step, n = plan
+    idx = func.floor((func.extract("epoch", cols.submit_time) - anchor) / step).cast(
+        Integer
+    )
+    return func.least(func.greatest(idx, 0), n - 1)
+
+
+def _dash_stat_col(metric: str, kind: Literal["mean", "max"] = "mean"):
+    """The pivoted job_series column holding one statistic (see DASH_STATS)."""
+    mean_col, max_col = DASH_STATS[metric]
+    return getattr(JobSeriesTable, mean_col if kind == "mean" else max_col)
+
+
 def _nan_to_none(
     v: float | None, replace_with: float | int | None = None
 ) -> float | None:
@@ -443,70 +548,72 @@ def _resolve_cluster_ids(sess: Session, clusters: list[str]) -> list[int] | None
     return ids
 
 
+def _resolve_user_ids(sess: Session, email: str | None) -> list[int] | None:
+    """User ids carrying this exact email (resolved from users, the source of
+    truth for the copied ``job_series.email``), once up front so the window
+    scans filter on the indexed ``sarc_user_id`` the covering indexes key on.
+    None: no filter. An empty list is a filter that matches no job (unknown
+    email)."""
+    if email is None:
+        return None
+    return list(sess.exec(select(col(UserDB.id)).where(UserDB.email == email)).all())
+
+
 def _apply_job_filters(
     query,
     cols,
     cluster_ids: list[int] | None,
-    user_email: str | None,
+    user_ids: list[int] | None,
     job_states: list[str],
     scope_user_id: int | Literal["admin"],
 ):
-    """Common job filters on ``cols`` — a column namespace: a table/view model
-    class, or the ``.c`` of a job_series_select subquery.
+    """Common job filters on ``cols`` -- job_series columns.
 
     Filters by cluster_ids (resolved upfront, no clusters join needed); empty
-    means no cluster filter. ``scope_user_id`` (a non-admin's UserDB id)
-    restricts to that user's jobs; the sentinel ``"admin"`` applies no scoping.
+    means no cluster filter. ``user_ids`` (from a user_email filter) restricts
+    to those users' jobs. ``scope_user_id`` (a non-admin's UserDB id) restricts
+    to that user's jobs; the sentinel ``"admin"`` applies no scoping.
     """
     if job_states:
         query = query.where(cols.job_state.in_(job_states))
     if cluster_ids:
         query = query.where(cols.cluster_id.in_(cluster_ids))
-    if user_email:
-        query = query.where(cols.email == user_email)
+    if user_ids is not None:
+        query = query.where(col(cols.sarc_user_id).in_(user_ids or [-1]))
     if scope_user_id != "admin":
         query = query.where(cols.sarc_user_id == scope_user_id)
     return query
 
 
-def _gpu_only(query, cols):
-    """Restrict to the jobs the dashboard is about: GPU jobs with a known RGU.
-
-    ``allocated_gres_gpu > 0`` is what the rest of SARC calls a GPU job (see
-    sarc/alerts/usage_alerts/), and it is what "used a GPU" means -- a job that
-    declares a GPU type but allocates none used none. ``harmonized_gpu_type``
-    says its RGU rate is known: it is a foreign key to gpurgudb, whose drac_rgu
-    is NOT NULL, so non-NULL here is exactly `allocated_rgu_drac IS NOT NULL` --
-    the schema guarantees it, not the data. Spelled this way, both columns are
-    slurm_jobs' own, so no endpoint drags in the gpurgudb join merely to filter.
-    """
-    return query.where(
-        cols.allocated_gres_gpu > 0, cols.harmonized_gpu_type.is_not(None)
-    )
-
-
-def _apply_rgu_base_view(
+def _apply_dash_base(
     query,
     cluster_ids: list[int] | None,
-    user_email: str | None,
+    user_ids: list[int] | None,
     job_states: list[str],
     *,
     scope_user_id: int | Literal["admin"],
 ):
-    """Build the shared base of every RGU query, on the job_series view.
+    """The shared base of every /dash query: select from ``job_series`` with the
+    common filters.
 
-    The view already carries the RGU weight (``allocated_rgu_drac`` =
-    coalesce(allocated_gres_gpu, 0) * drac_rgu) and ``cluster_name``, so no
-    gpurgudb/clusters join is needed. Keeps only GPU jobs whose physical RGU is
-    computable, then the common cluster/user/state filters; the caller adds its
-    own time window.
+    The GPU/RGU population the old ``_gpu_only`` predicate carved out is the
+    table's ``DASH_ELIGIBILITY`` subset (and the predicate the GPU-partial
+    covering indexes are keyed on); ``allocated_rgu_drac`` is the per-job RGU
+    rate, trigger-maintained where the view computed it via gpurgudb. The
+    statistics ride in the scan's own columns (``_dash_stat_col``), not in
+    per-job jobstatisticdb joins.
 
-    Takes resolved cluster ids, like ``_apply_job_filters``: the 404 on an
-    unknown name is the caller's to raise, before any early return of its own.
+    Takes resolved cluster ids and user ids, like ``_apply_job_filters``: the
+    404 on an unknown name is the caller's to raise, before any early return of
+    its own.
     """
-    query = _gpu_only(query.select_from(JobSeriesDB), JobSeriesDB)
     return _apply_job_filters(
-        query, JobSeriesDB, cluster_ids, user_email, job_states, scope_user_id
+        query.select_from(JobSeriesTable).where(*DASH_ELIGIBILITY),
+        JobSeriesTable,
+        cluster_ids,
+        user_ids,
+        job_states,
+        scope_user_id,
     )
 
 
@@ -618,44 +725,42 @@ def metrics_job_counts(
     fmt = _label_fmt(parsed)
     scope_user_id = _scope_or_view_as(sess, req, as_user)
     cluster_ids = _resolve_cluster_ids(sess, clusters)
+    user_ids = _resolve_user_ids(sess, user_email)
     if _no_buckets(begin_dt, finish_dt):
         return []
 
-    # The DB view would degrade this to a full-table scan (see JobSeriesDB
-    # docstring); job_series_select keeps it narrow.
-    js = job_series_select(
-        *(("submit_time",) if submitted else ("start_time", "elapsed_time")),
-        "allocated_gres_gpu",
-        "harmonized_gpu_type",
-        "cluster_id",
-        "email",
-        "job_state",
-        "sarc_user_id",
-    ).subquery()
-
     if submitted:
-        bucket_index = _submitted_bucket(js.c, begin_dt, finish_dt, parsed).label(
-            "bucket_index"
-        )
-        query = (
-            select(bucket_index, func.count().label("count"))
-            .select_from(js)
-            .where(js.c.submit_time >= begin_dt, js.c.submit_time < finish_dt)
+        bucket_index = _dash_submitted_bucket(
+            JobSeriesTable, begin_dt, finish_dt, parsed
+        ).label("bucket_index")
+        query = select(bucket_index, func.count().label("count")).where(
+            col(JobSeriesTable.submit_time) >= begin_dt,
+            col(JobSeriesTable.submit_time) < finish_dt,
         )
     else:
-        bucket_table = _bucket_table(js.c, begin_dt, finish_dt, parsed)
+        bucket_table = _dash_bucket_table(JobSeriesTable, begin_dt, finish_dt, parsed)
         bucket_index = bucket_table.c.bucket_index
         query = (
             select(bucket_index, func.count().label("count"))
-            .join_from(js, bucket_table, true())
+            .join_from(JobSeriesTable, bucket_table, true())
             # The window filter, which the bucket LATERAL does not do: it splits
             # the jobs it is handed, it does not choose them.
-            .where(_ran_between(js.c, begin_dt.timestamp(), finish_dt.timestamp()))
+            .where(
+                _ran_between(
+                    JobSeriesTable, begin_dt.timestamp(), finish_dt.timestamp()
+                )
+            )
         )
 
-    query = _gpu_only(query, js.c)
+    # DASH_ELIGIBILITY, like every other /dash query: job_series covers all
+    # jobs, and the counts panels read the same GPU population as the rest.
     query = _apply_job_filters(
-        query, js.c, cluster_ids, user_email, job_states, scope_user_id
+        query.where(*DASH_ELIGIBILITY),
+        JobSeriesTable,
+        cluster_ids,
+        user_ids,
+        job_states,
+        scope_user_id,
     )
     # By output column name, not by the expression again: rendered twice, the
     # submitted-mode expression gets a second set of placeholders for the bucket
@@ -747,47 +852,38 @@ def metrics_job_times_vs_limit(
     This endpoint is selected on submit_time, not on the run: both grids measure
     how well a job guessed its limit, and neither the queue wait nor the whole
     elapsed belongs to a slice of time.
-
-    **NB** This endpoint is the only one not yet optimized, because it would need
-    to add or expand covering indexes. We should later decide if we really need
-    this endpoint/plot (currently seen in admin view only).
     """
     begin_dt, finish_dt = _apply_focus(*_date_range(start, end), focus_start, focus_end)
     cluster_ids = _resolve_cluster_ids(sess, clusters)
+    user_ids = _resolve_user_ids(sess, user_email)
 
-    # Query the view directly: the columns read here (time_limit/start_time/
-    # elapsed_time) are in no index, so this full-scans regardless, and the
-    # planner prunes the view's unused joins on its own -- job_series_select
-    # would compile to the identical plan here (see the NB above).
+    # job_series carries every column these grids read, and ix_job_series_submit
+    # covers them: the window is an index-only range scan, no joins.
     wait_expr = func.extract(
-        "epoch", col(JobSeriesDB.start_time) - col(JobSeriesDB.submit_time)
+        "epoch", col(JobSeriesTable.start_time) - col(JobSeriesTable.submit_time)
     )
     # start_time spelled out: no STRICT slurm_job_end to imply it here.
-    #
-    # _gpu_only's predicate, spelled out: this endpoint builds its filters as a
-    # list rather than on a query.
     base_filters = [
-        col(JobSeriesDB.submit_time) >= begin_dt,
-        col(JobSeriesDB.submit_time) < finish_dt,
-        col(JobSeriesDB.time_limit).is_not(None),
-        col(JobSeriesDB.start_time).is_not(None),
-        col(JobSeriesDB.allocated_gres_gpu) > 0,
-        col(JobSeriesDB.harmonized_gpu_type).is_not(None),
+        *DASH_ELIGIBILITY,
+        col(JobSeriesTable.submit_time) >= begin_dt,
+        col(JobSeriesTable.submit_time) < finish_dt,
+        col(JobSeriesTable.time_limit).is_not(None),
+        col(JobSeriesTable.start_time).is_not(None),
     ]
     if cluster_ids:
-        base_filters.append(col(JobSeriesDB.cluster_id).in_(cluster_ids))
-    if user_email:
-        base_filters.append(col(JobSeriesDB.email) == user_email)
+        base_filters.append(col(JobSeriesTable.cluster_id).in_(cluster_ids))
+    if user_ids is not None:
+        base_filters.append(col(JobSeriesTable.sarc_user_id).in_(user_ids or [-1]))
     if job_states:
-        base_filters.append(col(JobSeriesDB.job_state).in_(job_states))
+        base_filters.append(col(JobSeriesTable.job_state).in_(job_states))
     scope_user_id = _scope_or_view_as(sess, req, as_user)
     if scope_user_id != "admin":
-        base_filters.append(col(JobSeriesDB.sarc_user_id) == scope_user_id)
+        base_filters.append(col(JobSeriesTable.sarc_user_id) == scope_user_id)
 
     max_l, max_e, max_w = sess.exec(
         select(
-            func.max(col(JobSeriesDB.time_limit)).label("max_l"),
-            func.max(col(JobSeriesDB.elapsed_time)).label("max_e"),
+            func.max(col(JobSeriesTable.time_limit)).label("max_l"),
+            func.max(col(JobSeriesTable.elapsed_time)).label("max_e"),
             func.max(wait_expr).label("max_w"),
         ).where(*base_filters)
     ).one()
@@ -799,15 +895,15 @@ def metrics_job_times_vs_limit(
     elapsed_hmap = _build_heatmap_payload(
         sess,
         base_filters,
-        col(JobSeriesDB.time_limit),
-        col(JobSeriesDB.elapsed_time),
+        col(JobSeriesTable.time_limit),
+        col(JobSeriesTable.elapsed_time),
         float(max_l),
         float(max_e),
     )
     wait_hmap = _build_heatmap_payload(
         sess,
         base_filters,
-        col(JobSeriesDB.time_limit),
+        col(JobSeriesTable.time_limit),
         wait_expr,
         float(max_l),
         float(max_w),
@@ -871,39 +967,30 @@ def metrics_metric_distribution(
     """
     begin_dt, finish_dt = _apply_focus(*_date_range(start, end), focus_start, focus_end)
     window = (begin_dt.timestamp(), finish_dt.timestamp())
+    user_ids = _resolve_user_ids(sess, user_email)
 
-    # View-anchored: weight = RGU-seconds inside the window (rate x overlap),
-    # keeping the unit allocated_gpu_cost had. Usage-metric mean via a targeted
-    # jobstatisticdb join, so only that one stat is joined.
-    js1 = aliased(JobStatisticDB)
-    m1 = col(js1.mean)
+    # Weight = RGU-seconds inside the window (rate x overlap), keeping the unit
+    # allocated_gpu_cost had. The usage metric is a pivoted job_series column
+    # (_dash_stat_col) -- the same values the old targeted jobstatisticdb join
+    # returned, without the join.
+    m1 = _dash_stat_col(_USAGE_METRIC_NAME)
     weight = (
-        col(JobSeriesDB.allocated_rgu_drac)
-        * _overlap_hours(JobSeriesDB, *window)
+        col(JobSeriesTable.allocated_rgu_drac)
+        * _overlap_hours(JobSeriesTable, *window)
         * 3600.0
     )
     bin_width = 1.0 / _DENSITY_BINS
 
-    # _apply_rgu_base_view anchors the FROM on the view, keeps only calculable-RGU
-    # jobs and adds the common filters; then attach the stat alias on the job id.
     bin_expr = _density_bin_expr(m1).label("bin")
     q = (
-        _apply_rgu_base_view(
+        _apply_dash_base(
             select(bin_expr, func.sum(weight).label("w")),
             _resolve_cluster_ids(sess, clusters),
-            user_email,
+            user_ids,
             job_states,
             scope_user_id=_scope_or_view_as(sess, req, as_user),
         )
-        .join(
-            js1,
-            and_(
-                col(js1.job_id) == col(JobSeriesDB.job_db_id),
-                col(js1.name) == _USAGE_METRIC_NAME,
-            ),
-            isouter=True,
-        )
-        .where(_ran_between(JobSeriesDB, *window), _valid_metric_filter(m1))
+        .where(_ran_between(JobSeriesTable, *window), _valid_metric_filter(m1))
         .group_by("bin")
         .order_by("bin")
     )
@@ -944,41 +1031,28 @@ def metrics_metric_comparison(
 
     begin_dt, finish_dt = _apply_focus(*_date_range(start, end), focus_start, focus_end)
     window = (begin_dt.timestamp(), finish_dt.timestamp())
+    user_ids = _resolve_user_ids(sess, user_email)
 
-    js1 = aliased(JobStatisticDB)
-    js2 = aliased(JobStatisticDB)
-    m1 = col(js1.mean)
-    m2 = col(js2.mean)
+    # Both metrics are pivoted job_series columns; a job "carries both" exactly
+    # when neither column is NULL (a missing jobstatisticdb row, same as the
+    # old LEFT joins' NULLs).
+    m1 = _dash_stat_col(_USAGE_METRIC_NAME)
+    m2 = _dash_stat_col(metric2)
 
     bx = _density_bin_expr(m1, _PAIRED_BINS).label("bx")
     by = _density_bin_expr(m2, _PAIRED_BINS).label("by")
     # group_by by label, not by expression: pg8000's server-side binding renders
     # the expression with fresh placeholders in GROUP BY (error 42803).
     q = (
-        _apply_rgu_base_view(
+        _apply_dash_base(
             select(bx, by, func.count().label("n")),
             _resolve_cluster_ids(sess, clusters),
-            user_email,
+            user_ids,
             job_states,
             scope_user_id=_scope_or_view_as(sess, req, as_user),
         )
-        .join(
-            js1,
-            and_(
-                col(js1.job_id) == col(JobSeriesDB.job_db_id),
-                col(js1.name) == _USAGE_METRIC_NAME,
-            ),
-            isouter=True,
-        )
-        .join(
-            js2,
-            and_(
-                col(js2.job_id) == col(JobSeriesDB.job_db_id), col(js2.name) == metric2
-            ),
-            isouter=True,
-        )
         .where(
-            _ran_between(JobSeriesDB, *window),
+            _ran_between(JobSeriesTable, *window),
             _valid_metric_filter(m1),
             _valid_metric_filter(m2),
         )
@@ -1043,22 +1117,22 @@ def metrics_rgu_usage(
     fmt = _label_fmt(parsed)
     scope_user_id = _scope_or_view_as(sess, req, as_user)
     cluster_ids = _resolve_cluster_ids(sess, clusters)
+    user_ids = _resolve_user_ids(sess, user_email)
     if _no_buckets(begin_dt, finish_dt):
         return []
 
     # Per bucket: allocated = RGU rate x hours landing inside (_overlap_hours);
-    # used = the same scaled by the usage-metric mean. Our own jobstatisticdb
-    # join rather than the view's *_waste columns: those are whole-job, while
-    # every number here is pro-rated to the bucket.
-    buckets = _bucket_table(JobSeriesDB, begin_dt, finish_dt, parsed)
-    rgu_hours = col(JobSeriesDB.allocated_rgu_drac) * _overlap_hours(
-        JobSeriesDB, buckets.c.bucket_start, buckets.c.bucket_end
+    # used = the same scaled by the usage-metric mean. The view's *_waste columns
+    # were frozen whole-job and pro-rating here is per-bucket -- but the pivoted
+    # job_series column gives the same per-job value, so no stat join is needed.
+    buckets = _dash_bucket_table(JobSeriesTable, begin_dt, finish_dt, parsed)
+    rgu_hours = col(JobSeriesTable.allocated_rgu_drac) * _overlap_hours(
+        JobSeriesTable, buckets.c.bucket_start, buckets.c.bucket_end
     )
-    # One join, always: the usage metric drives both the bars
-    # (used/unmeasured/wasted) and metric_means below, and it is the only
-    # statistic this endpoint reads.
-    m_alias = aliased(JobStatisticDB)
-    m_mean = col(m_alias.mean)
+    # One column, always: the usage metric drives both the bars
+    # (used/unmeasured/wasted) and metric_means below -- the dashboard plots
+    # exactly one reference metric at a time.
+    m_mean = _dash_stat_col(_USAGE_METRIC_NAME)
     # Split used vs unmeasured on whether the metric is a real value (not
     # NULL/NaN); a missing measurement is kept apart from "unused" rather than
     # counted as waste.
@@ -1074,7 +1148,7 @@ def metrics_rgu_usage(
         else_=0.0,
     )
 
-    query = _apply_rgu_base_view(
+    query = _apply_dash_base(
         select(
             buckets.c.bucket_index,
             func.sum(rgu_hours).label("rgu_allocated"),
@@ -1083,24 +1157,19 @@ def metrics_rgu_usage(
             func.sum(rgu_wasted_term).label("rgu_wasted"),
         ),  # ty:ignore[no-matching-overload]
         cluster_ids,
-        user_email,
+        user_ids,
         job_states,
         scope_user_id=scope_user_id,
     )
-    query = query.join(
-        m_alias,
-        and_(
-            col(m_alias.job_id) == col(JobSeriesDB.job_db_id),
-            col(m_alias.name) == _USAGE_METRIC_NAME,
-        ),
-        isouter=True,
-    )
+    # A job spanning several buckets yields one row per bucket, which is what
     # A job spanning several buckets yields one row per bucket, which is what
     # splits its RGU.h across them -- and what makes metric_means below read
     # as "over the jobs running in this bucket".
     query = (
         query.join(buckets, true())
-        .where(_ran_between(JobSeriesDB, begin_dt.timestamp(), finish_dt.timestamp()))
+        .where(
+            _ran_between(JobSeriesTable, begin_dt.timestamp(), finish_dt.timestamp())
+        )
         .group_by(buckets.c.bucket_index)
         .order_by(buckets.c.bucket_index)
     )
@@ -1161,41 +1230,47 @@ def metrics_rgu_by_cluster(
     fmt = _label_fmt(parsed)
     scope_user_id = _scope_or_view_as(sess, req, as_user)
     cluster_ids = _resolve_cluster_ids(sess, clusters)
+    user_ids = _resolve_user_ids(sess, user_email)
     if _no_buckets(begin_dt, finish_dt):
         return {"periods": [], "series": []}
 
-    # The view carries cluster_name and allocated_rgu_drac (the per-job RGU rate,
-    # allocated_gres_gpu * drac_rgu), so no clusters/gpurgudb join is needed.
-    bucket_table = _bucket_table(JobSeriesDB, begin_dt, finish_dt, parsed)
-    rgu_hours = col(JobSeriesDB.allocated_rgu_drac) * _overlap_hours(
-        JobSeriesDB, bucket_table.c.bucket_start, bucket_table.c.bucket_end
+    # job_series carries allocated_rgu_drac (the per-job RGU rate) but not the cluster's
+    # name: group by the indexed cluster_id and map the handful of ids back to
+    # names here (clusters is a tiny table; joining it would widen the scan).
+    bucket_table = _dash_bucket_table(JobSeriesTable, begin_dt, finish_dt, parsed)
+    rgu_hours = col(JobSeriesTable.allocated_rgu_drac) * _overlap_hours(
+        JobSeriesTable, bucket_table.c.bucket_start, bucket_table.c.bucket_end
     )
-    query = _apply_rgu_base_view(
+    query = _apply_dash_base(
         select(
             bucket_table.c.bucket_index,
-            col(JobSeriesDB.cluster_name).label("cluster_name"),
+            col(JobSeriesTable.cluster_id).label("cluster_id"),
             func.sum(rgu_hours).label("rgu"),
         ),
         cluster_ids,
-        user_email,
+        user_ids,
         job_states,
         scope_user_id=scope_user_id,
     )
     query = (
         query.join(bucket_table, true())
-        .where(_ran_between(JobSeriesDB, begin_dt.timestamp(), finish_dt.timestamp()))
-        .group_by(bucket_table.c.bucket_index, "cluster_name")
+        .where(
+            _ran_between(JobSeriesTable, begin_dt.timestamp(), finish_dt.timestamp())
+        )
+        .group_by(bucket_table.c.bucket_index, "cluster_id")
         .order_by(bucket_table.c.bucket_index)
     )
+    names = {c.id: c.name for c in sess.exec(select(SlurmClusterDB)).all()}
 
     sums = {}
     totals = {}
     for r in sess.exec(query):
-        if not r.cluster_name:
+        name = names.get(r.cluster_id)
+        if not name:
             continue
         v = float(r.rgu or 0.0)
-        sums[(r.bucket_index, r.cluster_name)] = v
-        totals[r.cluster_name] = totals.get(r.cluster_name, 0.0) + v
+        sums[(r.bucket_index, name)] = v
+        totals[name] = totals.get(name, 0.0) + v
 
     # Largest total first -> drawn at the bottom of the stack (Plotly stacks the
     # first trace at the base). Ties broken by name for a stable order.
@@ -1244,60 +1319,43 @@ def metrics_metric_trend(
     fmt = _label_fmt(parsed)
     scope_user_id = _scope_or_view_as(sess, req, as_user)
     cluster_ids = _resolve_cluster_ids(sess, clusters)
+    user_ids = _resolve_user_ids(sess, user_email)
     if _no_buckets(begin_dt, finish_dt):
         return {
             "periods": [],
             "series": [{"metric": _USAGE_METRIC_NAME, "mean": [], "max": []}],
         }
 
-    # GPU jobs only, like every other plot (_gpu_only below): the usage metric
-    # is a GPU statistic, and CPU-only jobs are plotted nowhere on this
-    # dashboard. The DB view would degrade this to a full-table scan (see
-    # JobSeriesDB docstring); job_series_select keeps it narrow.
-    # allocated_rgu_drac (and the gpurgudb join it pulls in) is the
-    # weight this endpoint didn't need before it was duration-weighted.
-    js = job_series_select(
-        "job_db_id",
-        "start_time",
-        "elapsed_time",
-        "allocated_gres_gpu",
-        "harmonized_gpu_type",
-        "allocated_rgu_drac",
-        "cluster_id",
-        "email",
-        "job_state",
-        "sarc_user_id",
-    ).subquery()
-    bucket_table = _bucket_table(js.c, begin_dt, finish_dt, parsed)
-    rgu_hours = col(js.c.allocated_rgu_drac) * _overlap_hours(
-        js.c, bucket_table.c.bucket_start, bucket_table.c.bucket_end
+    # GPU jobs only, like every other plot (job_series's whole population),
+    # including for system_memory -- the one metric CPU jobs also report, but
+    # this dashboard does not plot them anywhere else. allocated_rgu_drac is the
+    # duration weight; mean/max are the usage metric's pivoted job_series
+    # columns. (The old INNER JOIN onto jobstatisticdb dropped jobs without the
+    # stat; here their NULL values contribute to neither summand of the weighted
+    # mean -- the same rows out, without the join.)
+    bucket_table = _dash_bucket_table(JobSeriesTable, begin_dt, finish_dt, parsed)
+    rgu_hours = col(JobSeriesTable.allocated_rgu_drac) * _overlap_hours(
+        JobSeriesTable, bucket_table.c.bucket_start, bucket_table.c.bucket_end
     )
-    m_mean = col(JobStatisticDB.mean)
-    m_max = col(JobStatisticDB.max)
+    m_mean = _dash_stat_col(_USAGE_METRIC_NAME)
+    m_max = _dash_stat_col(_USAGE_METRIC_NAME, "max")
     mean_num, mean_den = _weighted_mean_cols(m_mean, rgu_hours, "mean")
     max_num, max_den = _weighted_mean_cols(m_max, rgu_hours, "max")
 
+    query = _apply_dash_base(
+        select(bucket_table.c.bucket_index, mean_num, mean_den, max_num, max_den),  # ty: ignore[no-matching-overload]
+        cluster_ids,
+        user_ids,
+        job_states,
+        scope_user_id=scope_user_id,
+    ).join(bucket_table, true())
     query = (
-        _gpu_only(
-            select(
-                bucket_table.c.bucket_index, mean_num, mean_den, max_num, max_den
-            ).select_from(js),  # ty: ignore[no-matching-overload]
-            js.c,
+        query.where(
+            _ran_between(JobSeriesTable, begin_dt.timestamp(), finish_dt.timestamp())
         )
-        .join(
-            JobStatisticDB,
-            and_(
-                col(JobStatisticDB.job_id) == js.c.job_db_id,
-                col(JobStatisticDB.name) == _USAGE_METRIC_NAME,
-            ),
-        )
-        .join(bucket_table, true())
-        .where(_ran_between(js.c, begin_dt.timestamp(), finish_dt.timestamp()))
+        .group_by(bucket_table.c.bucket_index)
         .group_by(bucket_table.c.bucket_index)
         .order_by(bucket_table.c.bucket_index)
-    )
-    query = _apply_job_filters(
-        query, js.c, cluster_ids, user_email, job_states, scope_user_id
     )
 
     cells = {}
@@ -1353,12 +1411,15 @@ def metrics_rgu_by_user(
     begin_dt, finish_dt = _apply_focus(*_date_range(start, end), focus_start, focus_end)
     window = (begin_dt.timestamp(), finish_dt.timestamp())
 
-    # Aggregate by user: RGU rate x hours spent inside the window. Usage-metric
-    # mean via a targeted jobstatisticdb join — see rgu_usage.
-    rgu_hours = col(JobSeriesDB.allocated_rgu_drac) * _overlap_hours(
-        JobSeriesDB, *window
+    # Aggregate by user: RGU rate x hours spent inside the window. The usage
+    # metric is a pivoted job_series column (see rgu_usage). Grouped by
+    # sarc_user_id -- the indexed column -- and the handful of ids' emails are
+    # looked up after the aggregation: joining users over the whole window to
+    # group by email string cost more than this second tiny query.
+    rgu_hours = col(JobSeriesTable.allocated_rgu_drac) * _overlap_hours(
+        JobSeriesTable, *window
     )
-    m_mean = col(JobStatisticDB.mean)
+    m_mean = _dash_stat_col(_USAGE_METRIC_NAME)
     # Split used vs unmeasured on whether the metric is a real value (not
     # NULL/NaN); a missing measurement is kept apart from "unused".
     m_present = _is_real(m_mean)
@@ -1371,46 +1432,58 @@ def metrics_rgu_by_user(
         (and_(m_present, m_mean < min_usage), rgu_hours * (min_usage - m_mean)),
         else_=0.0,
     )
-    user_expr = func.coalesce(col(JobSeriesDB.email), "unknown").label("user")
     rgu_requested_sum = func.sum(rgu_hours).label("rgu_requested")
 
-    query = _apply_rgu_base_view(
+    query = _apply_dash_base(
         select(
-            user_expr,
+            col(JobSeriesTable.sarc_user_id).label("user_id"),
             rgu_requested_sum,
             func.sum(rgu_used_term).label("rgu_used"),
             func.sum(rgu_unmeasured_term).label("rgu_unmeasured"),
             func.sum(rgu_wasted_term).label("rgu_wasted"),
         ),  # ty:ignore[no-matching-overload]
         _resolve_cluster_ids(sess, clusters),
-        user_email,
+        _resolve_user_ids(sess, user_email),
         job_states,
         scope_user_id=_scope_or_view_as(sess, req, as_user),
     )
     query = (
-        query.join(
-            JobStatisticDB,
-            and_(
-                col(JobStatisticDB.job_id) == col(JobSeriesDB.job_db_id),
-                col(JobStatisticDB.name) == _USAGE_METRIC_NAME,
-            ),
-            isouter=True,
-        )
-        .where(_ran_between(JobSeriesDB, *window))
-        .group_by("user")
-        .order_by(rgu_requested_sum.desc(), user_expr)
+        query.where(_ran_between(JobSeriesTable, *window))
+        .group_by("user_id")
+        .order_by(rgu_requested_sum.desc())
     )
 
-    return [
-        {
-            "user": row.user,
-            "rgu_requested": float(row.rgu_requested or 0.0),
-            "rgu_used": float(row.rgu_used or 0.0),
-            "rgu_unmeasured": float(row.rgu_unmeasured or 0.0),
-            "rgu_wasted": float(row.rgu_wasted or 0.0),
-        }
-        for row in sess.exec(query)
-    ]
+    rows = list(sess.exec(query))
+    emails = dict(
+        sess.exec(
+            select(col(UserDB.id), col(UserDB.email)).where(
+                col(UserDB.id).in_([r.user_id for r in rows] or [-1])
+            )
+        ).all()
+    )
+    # Two users rows can share one email; merge them back like the old
+    # group-by-email did.
+    merged: dict[str, dict] = {}
+    for row in rows:
+        email = emails.get(row.user_id) or "unknown"
+        d = merged.setdefault(
+            email,
+            {
+                "user": email,
+                "rgu_requested": 0.0,
+                "rgu_used": 0.0,
+                "rgu_unmeasured": 0.0,
+                "rgu_wasted": 0.0,
+            },
+        )
+        d["rgu_requested"] += float(row.rgu_requested or 0.0)
+        d["rgu_used"] += float(row.rgu_used or 0.0)
+        d["rgu_unmeasured"] += float(row.rgu_unmeasured or 0.0)
+        d["rgu_wasted"] += float(row.rgu_wasted or 0.0)
+    out = list(merged.values())
+    # Same tie-break the SQL ordering had: descending RGU, then email.
+    out.sort(key=lambda d: (-d["rgu_requested"], d["user"]))
+    return out
 
 
 @router.get("/metrics/jobs")
@@ -1450,86 +1523,63 @@ def metrics_jobs(
     begin_dt, finish_dt = _apply_focus(*_date_range(start, end), focus_start, focus_end)
     window = (begin_dt.timestamp(), finish_dt.timestamp())
 
-    # Limit-first pagination. A `page` subquery ranks, paginates and counts the
-    # full filtered set from the source alone (plus the single stat the sort needs,
-    # if any); the outer query then joins the 3 display stats back onto just that
-    # page of rows. Without this split, the 3 stat joins + count(*) would run over
-    # the whole window (millions of rows) just to return 50. See the perf note in
-    # docs / the /metrics/jobs investigation.
+    # Limit-first pagination. A `page` subquery ranks and paginates the full
+    # filtered set from job_series alone -- every common sort key is in the
+    # covering window index, so the ranking is an index-only scan + top-N
+    # heapsort; the outer query then joins the display columns (nodes, names,
+    # emails) back onto just that page of rows. See the perf note in docs / the
+    # /metrics/jobs investigation.
     # Pro-rated like the plots; the rgu_hours and waste sorts rank on it too.
-    overlap_hours = _overlap_hours(JobSeriesDB, *window)
-    rgu_hours_raw = col(JobSeriesDB.allocated_rgu_drac) * overlap_hours
+    overlap_hours = _overlap_hours(JobSeriesTable, *window)
+    rgu_hours_raw = col(JobSeriesTable.allocated_rgu_drac) * overlap_hours
     # The same slice in seconds, to show beside the whole elapsed_time. Sorting
     # "Elapsed" ranks on this, not on the column: every other number in the row
     # is this slice, so ordering by the whole run would rank by a quantity the
     # table does not otherwise use.
     elapsed_in_window = overlap_hours * 3600.0
 
-    # One aliased jobstatisticdb row per distinct stat name, LEFT-joined on the
-    # job id. Not the view's own gpu_*_mean/max columns: those would join over the
-    # whole window, while the page subquery below joins the stats onto the page only.
-    stat_names = {
-        _USAGE_METRIC_NAME,
-        "gpu_utilization",
-        "gpu_sm_occupancy",
-        "gpu_memory",
-    }
-    js = {name: aliased(JobStatisticDB) for name in sorted(stat_names)}
-    metric_mean_raw = col(js[_USAGE_METRIC_NAME].mean)
-
-    def _join_stat(query, name: str):
-        alias = js[name]
-        return query.join(
-            alias,
-            and_(
-                col(alias.job_id) == col(JobSeriesDB.job_db_id), col(alias.name) == name
-            ),
-            isouter=True,
-        )
+    # The usage metric's mean, a pivoted job_series column -- the same value the
+    # old targeted jobstatisticdb LEFT join returned.
+    metric_mean_raw = _dash_stat_col(_USAGE_METRIC_NAME)
 
     # Sortable columns -> ORDER BY expression. Raw (unlabelled) so they compose
     # with nulls_last/asc/desc cleanly. `nodes` is an array and is not sortable,
-    # so it is intentionally absent. cluster_name/rgu come straight from the view;
-    # the keys in `sort_needs_stat` need their stat alias, so the page joins just
-    # that one; every other key ranks on the view (index-only) alone.
+    # so it is intentionally absent. Everything but "cluster" and "user" ranks
+    # on job_series columns (index-only in the covering scan); those two name
+    # columns live in clusters/users and pull their join into the page query
+    # when sorted on -- they stay sortable, just on the slow path.
     sortable = {
-        "cluster": col(JobSeriesDB.cluster_name),
-        "job_id": col(JobSeriesDB.job_id),
-        "submit_time": col(JobSeriesDB.submit_time),
-        "start_time": col(JobSeriesDB.start_time),
-        "user": col(JobSeriesDB.email),
-        "job_state": col(JobSeriesDB.job_state),
+        "cluster": col(SlurmClusterDB.name),
+        "job_id": col(JobSeriesTable.job_id),
+        "submit_time": col(JobSeriesTable.submit_time),
+        "start_time": col(JobSeriesTable.start_time),
+        "user": col(UserDB.email),
+        "job_state": col(JobSeriesTable.job_state),
         "elapsed": elapsed_in_window,
-        "requested_gpu": col(JobSeriesDB.requested_gres_gpu),
-        "allocated_gpu": col(JobSeriesDB.allocated_gres_gpu),
-        "billing": col(JobSeriesDB.allocated_billing),
-        "gpu_type": func.coalesce(
-            col(JobSeriesDB.harmonized_gpu_type), col(JobSeriesDB.allocated_gpu_type)
-        ),
-        "gpu_type_rgu": col(JobSeriesDB.gpu_type_rgu_drac),
-        "rgu": col(JobSeriesDB.allocated_rgu_drac),
+        "requested_gpu": col(JobSeriesTable.requested_gres_gpu),
+        "allocated_gpu": col(JobSeriesTable.allocated_gres_gpu),
+        "billing": col(JobSeriesTable.allocated_billing),
+        # harmonized_gpu_type is NOT NULL on job_series (its whole population has
+        # one), so this is the coalesce(harmonized, allocated) the view showed.
+        "gpu_type": col(JobSeriesTable.harmonized_gpu_type),
+        "gpu_type_rgu": col(JobSeriesTable.gpu_type_rgu_drac),
+        "rgu": col(JobSeriesTable.allocated_rgu_drac),
         "rgu_hours": rgu_hours_raw,
         "waste": rgu_hours_raw * (1 - metric_mean_raw),
-        "gpu_utilization_mean": col(js["gpu_utilization"].mean),
-        "gpu_sm_occupancy_mean": col(js["gpu_sm_occupancy"].mean),
-        "gpu_memory_max": col(js["gpu_memory"].max),
+        "gpu_utilization_mean": _dash_stat_col("gpu_utilization"),
+        "gpu_sm_occupancy_mean": _dash_stat_col("gpu_sm_occupancy"),
+        "gpu_memory_max": _dash_stat_col("gpu_memory", "max"),
     }
-    sort_needs_stat = {
-        "waste": _USAGE_METRIC_NAME,
-        "gpu_utilization_mean": "gpu_utilization",
-        "gpu_sm_occupancy_mean": "gpu_sm_occupancy",
-        "gpu_memory_max": "gpu_memory",
-    }
+    sort_needs_join = {"cluster": SlurmClusterDB, "user": UserDB}
     sort_expr = sortable.get(sort_by, rgu_hours_raw)
     ordered = sort_expr.asc() if sort_dir == "asc" else sort_expr.desc()
-    # nulls_last only for keys nullable in the result set: the LEFT-joined stats
-    # and the nullable gpu/billing cols. On a NOT NULL indexed key like submit_time
+    # nulls_last only for keys nullable in the result set: the metric stats and
+    # the nullable gpu/billing cols. On a NOT NULL indexed key like submit_time
     # it defeats the index -- DESC NULLS LAST matches neither the btree nor its
     # reverse scan, forcing Seq Scan + Sort. Sorting by id last breaks ties between
     # equal keys, so offset paging never skips or repeats a row.
     nullable_sorts = {
         "requested_gpu",
-        "allocated_gpu",
         "billing",
         "waste",
         "gpu_utilization_mean",
@@ -1538,85 +1588,103 @@ def metrics_jobs(
     }
     if sort_by in nullable_sorts:
         ordered = nulls_last(ordered)
-    order_by = (ordered, col(JobSeriesDB.job_db_id))
+    order_by = (ordered, col(JobSeriesTable.job_db_id))
 
-    # Window only; the gpu_type/RGU validity filter now lives in _apply_rgu_base_view.
-    # "Ran in the window", so the table lists the jobs the plots are drawn from.
-    base_filters = (_ran_between(JobSeriesDB, *window),)
+    # Window only; DASH_ELIGIBILITY rides in via _apply_dash_base. "Ran in
+    # the window", so the table lists the plots' population.
+    base_filters = (_ran_between(JobSeriesTable, *window),)
 
     scope_user_id = _scope_or_view_as(sess, req, as_user)
     cluster_ids = _resolve_cluster_ids(sess, clusters)
+    user_ids = _resolve_user_ids(sess, user_email)
 
     # COUNT: the full filtered total, computed by its own query and only when
     # asked (include_total). The frontend requests it on every page so the count
     # and page numbers stay current as scraping adds jobs. It is deliberately kept
     # OUT of the page query below: a `count(*) OVER ()` there forces the whole
     # filtered set to be materialised AND disables parallelism, so every page would
-    # pay the full-set cost. Isolated like this the count parallelises (and needs
-    # neither the clusters nor the stat join), so paying it per page stays cheap.
+    # pay the full-set cost. Isolated like this the count parallelises, so paying
+    # it per page stays cheap.
     total: int | None = None
     if include_total:
-        count_q = _apply_rgu_base_view(
+        count_q = _apply_dash_base(
             select(func.count()),
             cluster_ids,
-            user_email,
+            user_ids,
             job_states,
             scope_user_id=scope_user_id,
         ).where(*base_filters)
         total = int(sess.exec(count_q).one())
 
-    # PAGE: the page's job ids only. The scan/sort runs here on the view alone
-    # (+ the sort's stat alias when needed). With no window count it parallelises,
-    # and a small offset top-N heapsorts instead of sorting the whole set.
-    page_q = _apply_rgu_base_view(
-        select(col(JobSeriesDB.job_db_id).label("jid")),
+    # PAGE: the page's job ids only. The scan/sort runs here on job_series alone
+    # (+ clusters/users when sorted on their names). With no window count it
+    # parallelises, and a small offset top-N heapsorts instead of sorting the
+    # whole set.
+    page_q = _apply_dash_base(
+        select(col(JobSeriesTable.job_db_id).label("jid")),
         cluster_ids,
-        user_email,
+        user_ids,
         job_states,
         scope_user_id=scope_user_id,
     )
-    # Stat alias only for stat sorts; cluster_name is a view column, so the
-    # cluster sort needs no extra join.
-    if sort_by in sort_needs_stat:
-        page_q = _join_stat(page_q, sort_needs_stat[sort_by])
+    if sort_by in sort_needs_join:
+        page_q = page_q.join(
+            sort_needs_join[sort_by],
+            (
+                col(JobSeriesTable.cluster_id) == col(SlurmClusterDB.id)
+                if sort_by == "cluster"
+                else col(JobSeriesTable.sarc_user_id) == col(UserDB.id)
+            ),
+            isouter=True,
+        )
     page = (
         page_q.where(*base_filters).order_by(*order_by).offset(offset).limit(limit)
     ).subquery()
 
-    # FINAL: display columns + the 3 stats, fetched only for the page's rows
-    # (joined back on the job id). The total comes from the separate count above.
-    query = _apply_rgu_base_view(
+    # FINAL: display columns, fetched only for the page's rows (joined back on
+    # the job id): job_series holds the numbers and stats, slurm_jobs the node
+    # list, clusters/users the names. The total comes from the separate count.
+    query = _apply_dash_base(
         select(  # ty:ignore[no-matching-overload]
-            col(JobSeriesDB.cluster_name).label("cluster_name"),
-            col(JobSeriesDB.job_id),
-            col(JobSeriesDB.submit_time).label("submit_time"),
-            col(JobSeriesDB.start_time).label("start_time"),
-            col(JobSeriesDB.email),
-            col(JobSeriesDB.job_state),
-            col(JobSeriesDB.elapsed_time).label("elapsed_time"),
+            col(SlurmClusterDB.name).label("cluster_name"),
+            col(JobSeriesTable.job_id),
+            col(JobSeriesTable.submit_time).label("submit_time"),
+            col(JobSeriesTable.start_time).label("start_time"),
+            col(UserDB.email),
+            col(JobSeriesTable.job_state),
+            col(JobSeriesTable.elapsed_time).label("elapsed_time"),
             elapsed_in_window.label("elapsed_in_window"),
-            col(JobSeriesDB.nodes),
-            col(JobSeriesDB.requested_gres_gpu),
-            col(JobSeriesDB.allocated_gres_gpu),
-            col(JobSeriesDB.allocated_billing),
-            col(JobSeriesDB.allocated_gpu_type).label("allocated_gpu_type"),
-            col(JobSeriesDB.harmonized_gpu_type),
-            col(JobSeriesDB.gpu_type_rgu_drac).label("gpu_type_rgu_drac"),
-            col(JobSeriesDB.allocated_rgu_drac).label("rgu"),
+            col(SlurmJobDB.nodes),
+            col(JobSeriesTable.requested_gres_gpu),
+            col(JobSeriesTable.allocated_gres_gpu),
+            col(JobSeriesTable.allocated_billing),
+            col(JobSeriesTable.harmonized_gpu_type),
+            col(JobSeriesTable.gpu_type_rgu_drac).label("gpu_type_rgu_drac"),
+            col(JobSeriesTable.allocated_rgu_drac).label("rgu"),
             rgu_hours_raw.label("rgu_hours"),
             metric_mean_raw.label("metric_mean"),
-            col(js["gpu_utilization"].mean).label("gpu_utilization_mean"),
-            col(js["gpu_sm_occupancy"].mean).label("gpu_sm_occupancy_mean"),
-            col(js["gpu_memory"].max).label("gpu_memory_max"),
+            _dash_stat_col("gpu_utilization").label("gpu_utilization_mean"),
+            _dash_stat_col("gpu_sm_occupancy").label("gpu_sm_occupancy_mean"),
+            _dash_stat_col("gpu_memory", "max").label("gpu_memory_max"),
         ),
         cluster_ids,
-        user_email,
+        user_ids,
         job_states,
         scope_user_id=scope_user_id,
-    ).join(page, page.c.jid == col(JobSeriesDB.job_db_id))
-    for name in js:
-        query = _join_stat(query, name)
-    query = query.order_by(*order_by)
+    )
+    # All LEFT: the page drives the row set; a concurrent delete of a job (or
+    # its cluster/user) can only blank a display cell, never drop a row.
+    query = (
+        query.join(page, page.c.jid == col(JobSeriesTable.job_db_id))
+        .join(SlurmJobDB, col(SlurmJobDB.id) == page.c.jid, isouter=True)
+        .join(
+            SlurmClusterDB,
+            col(SlurmClusterDB.id) == col(JobSeriesTable.cluster_id),
+            isouter=True,
+        )
+        .join(UserDB, col(UserDB.id) == col(JobSeriesTable.sarc_user_id), isouter=True)
+        .order_by(*order_by)
+    )
 
     jobs = []
     for row in sess.exec(query):
@@ -1641,7 +1709,7 @@ def metrics_jobs(
                 "billing": row.allocated_billing,
                 # Harmonised name (the one RGU is computed from) when known;
                 # raw Slurm name otherwise.
-                "gpu_type": row.harmonized_gpu_type or row.allocated_gpu_type or "",
+                "gpu_type": row.harmonized_gpu_type or "",
                 "gpu_type_rgu": _nan_to_none(row.gpu_type_rgu_drac),
                 "rgu": round(float(row.rgu), 2),
                 "rgu_hours": round(rh, 2) if rh is not None else None,
