@@ -2284,7 +2284,7 @@
         { key: 'start_time',            label: 'Started',   fmt: fmtDateTime,
           title: 'When the job started running, in UTC. This is what tells you whether the job crossed the range boundary — a job can be submitted long before it starts.' },
         {% if is_admin %}
-        { key: 'user',                  label: 'User', adminOnly: true, title: 'Cluster user name' },
+        { key: 'user',                  label: 'User', adminOnly: true, title: 'User email' },
         {% endif %}
         { key: 'job_state',             label: 'State' },
         // The part inside the range first, since that is what every other number
