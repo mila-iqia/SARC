@@ -123,6 +123,11 @@ _DEFAULT_PERIOD = "w"
 # browser before any API call), so this only seeds the template.
 _DEFAULT_RANGE = "last_6w"
 
+# The one GPU statistic the dashboard reads as "used": it splits Used vs Unused
+# RGU, shades the job table and draws every trend. Frozen rather than a request
+# parameter; sarc/db/job_series.py freezes the same choice in `usage_metric`.
+_USAGE_METRIC_NAME = "gpu_sm_occupancy"
+
 # GPU/system metrics (stored per-job in JobStatisticDB) normalized to [0, 1]
 _METRICS_0_1: set[str] = {
     "gpu_sm_occupancy",
@@ -572,6 +577,7 @@ def metrics_homepage(
             "user_email": req.email,
             "default_period": _DEFAULT_PERIOD,
             "default_range": _DEFAULT_RANGE,
+            "usage_metric": _USAGE_METRIC_NAME,
             "job_states": [s.value for s in SlurmState],
             "storage_key": storage_key,
         },
@@ -851,29 +857,24 @@ def metrics_metric_distribution(
     clusters: list[str] = Query(default=[]),
     user_email: str | None = Query(default=None),
     job_states: list[str] = Query(default=[]),
-    metric: str = Query(default="gpu_sm_occupancy"),
     focus_start: datetime | None = Query(default=None),
     focus_end: datetime | None = Query(default=None),
     sess: Session = Depends(session_dep),
 ):
-    """Duration-weighted distribution of a normalized GPU metric.
+    """Duration-weighted distribution of the usage metric.
 
-    ``metric`` is a [0, 1] GPU/system stat (e.g. gpu_sm_occupancy). Over GPU jobs
-    running in the window, bins each job's mean value into 50 bins weighted by
-    the RGU-seconds it spent *inside* the window, so long/big jobs count more and
-    a job running past the window edge weighs only for the part inside. Returns
-    {primary: {values, weights}}. The paired (metric vs metric2) heatmap is a
-    separate endpoint, /metrics/metric_comparison.
+    Over GPU jobs running in the window, bins each job's mean value into 50 bins
+    weighted by the RGU-seconds it spent *inside* the window, so long/big jobs
+    count more and a job running past the window edge weighs only for the part
+    inside. Returns {primary: {values, weights}}. The paired heatmap against a
+    second metric is a separate endpoint, /metrics/metric_comparison.
     """
-    if metric not in _METRICS_0_1:
-        raise HTTPException(status_code=400, detail=f"Unknown metric: {metric!r}")
-
     begin_dt, finish_dt = _apply_focus(*_date_range(start, end), focus_start, focus_end)
     window = (begin_dt.timestamp(), finish_dt.timestamp())
 
     # View-anchored: weight = RGU-seconds inside the window (rate x overlap),
-    # keeping the unit allocated_gpu_cost had. Metric mean via a targeted
-    # jobstatisticdb join (parametrized), not the view's frozen stat columns.
+    # keeping the unit allocated_gpu_cost had. Usage-metric mean via a targeted
+    # jobstatisticdb join, so only that one stat is joined.
     js1 = aliased(JobStatisticDB)
     m1 = col(js1.mean)
     weight = (
@@ -897,7 +898,8 @@ def metrics_metric_distribution(
         .join(
             js1,
             and_(
-                col(js1.job_id) == col(JobSeriesDB.job_db_id), col(js1.name) == metric
+                col(js1.job_id) == col(JobSeriesDB.job_db_id),
+                col(js1.name) == _USAGE_METRIC_NAME,
             ),
             isouter=True,
         )
@@ -924,22 +926,19 @@ def metrics_metric_comparison(
     clusters: list[str] = Query(default=[]),
     user_email: str | None = Query(default=None),
     job_states: list[str] = Query(default=[]),
-    metric: str = Query(default="gpu_sm_occupancy"),
     metric2: str = Query(default="gpu_memory"),
     focus_start: datetime | None = Query(default=None),
     focus_end: datetime | None = Query(default=None),
     sess: Session = Depends(session_dep),
 ):
-    """100x100 paired heatmap of two normalized GPU metrics.
+    """100x100 paired heatmap of the usage metric against a second one.
 
-    Counts GPU jobs that ran in the window into a 100x100 grid of (metric,
-    metric2) mean values; a job contributes only if it carries both stats. No
+    Counts GPU jobs that ran in the window into a 100x100 grid of (usage metric,
+    ``metric2``) mean values; a job contributes only if it carries both stats. No
     sampling: every job lands in exactly one cell (like the elapsed/wait
     heatmaps), and a count is not pro-rated. Returns {x, y, z} with z[iby][ibx]
     the job count of that cell (Plotly heatmap order).
     """
-    if metric not in _METRICS_0_1:
-        raise HTTPException(status_code=400, detail=f"Unknown metric: {metric!r}")
     if metric2 not in _METRICS_0_1:
         raise HTTPException(status_code=400, detail=f"Unknown metric: {metric2!r}")
 
@@ -966,7 +965,8 @@ def metrics_metric_comparison(
         .join(
             js1,
             and_(
-                col(js1.job_id) == col(JobSeriesDB.job_db_id), col(js1.name) == metric
+                col(js1.job_id) == col(JobSeriesDB.job_db_id),
+                col(js1.name) == _USAGE_METRIC_NAME,
             ),
             isouter=True,
         )
@@ -1003,7 +1003,6 @@ def metrics_rgu_usage(
     clusters: list[str] = Query(default=[]),
     user_email: str | None = Query(default=None),
     job_states: list[str] = Query(default=[]),
-    metric: str = Query(default="gpu_sm_occupancy"),
     min_usage: float = Query(default=0.15, ge=0.0, le=1.0),
     whole: bool = Query(default=False),
     sess: Session = Depends(session_dep),
@@ -1012,10 +1011,10 @@ def metrics_rgu_usage(
 
     Over GPU jobs *running* in each ``period`` bucket, each charged only for the
     time it spent there: ``rgu_allocated`` = SUM(rgu * hours in the bucket);
-    ``rgu_used`` = the same scaled by each job's mean ``metric`` (e.g.
-    gpu_sm_occupancy); ``rgu_wasted`` = the per-job shortfall below ``min_usage``
-    (SUM of rgu_hours * (min_usage - mean) over measured jobs with mean <
-    min_usage). Returns one row per bucket.
+    ``rgu_used`` = the same scaled by each job's mean usage metric;
+    ``rgu_wasted`` = the per-job shortfall below ``min_usage`` (SUM of
+    rgu_hours * (min_usage - mean) over measured jobs with mean < min_usage).
+    Returns one row per bucket.
 
     ``whole=true`` returns the range as a single bucket instead, and ``period``
     is then ignored (still validated). Not the same as adding the rows up: the
@@ -1025,11 +1024,11 @@ def metrics_rgu_usage(
     boundary -- and would move with ``period``. Over one bucket each job is
     weighted once, by its whole rgu_hours.
 
-    Each row also carries ``metric_means``: the endpoint's own ``metric``,
-    mapped to its rgu_hours-weighted mean (hours in the bucket x allocated GPU
-    count x RGU weight) over the jobs running in that bucket with a real
-    (non-NULL/NaN) value for it -- a job without one contributes to neither the
-    sum nor the weight. Its numerator and denominator are exactly ``rgu_used``
+    Each row also carries ``metric_means``: the usage metric, mapped to its
+    rgu_hours-weighted mean (hours in the bucket x allocated GPU count x RGU
+    weight) over the jobs running in that bucket with a real (non-NULL/NaN)
+    value for it -- a job without one contributes to neither the sum nor the
+    weight. Its numerator and denominator are exactly ``rgu_used``
     and ``rgu_allocated - rgu_unmeasured``, so the curve this draws always
     matches the bars' Used share.
     """
@@ -1048,16 +1047,16 @@ def metrics_rgu_usage(
         return []
 
     # Per bucket: allocated = RGU rate x hours landing inside (_overlap_hours);
-    # used = the same scaled by the metric mean. The metric is parametrized over
-    # 7 values but the view's *_waste columns are frozen to gpu_sm_occupancy /
-    # cpu_utilization, hence our own targeted jobstatisticdb join.
+    # used = the same scaled by the usage-metric mean. Our own jobstatisticdb
+    # join rather than the view's *_waste columns: those are whole-job, while
+    # every number here is pro-rated to the bucket.
     buckets = _bucket_table(JobSeriesDB, begin_dt, finish_dt, parsed)
     rgu_hours = col(JobSeriesDB.allocated_rgu_drac) * _overlap_hours(
         JobSeriesDB, buckets.c.bucket_start, buckets.c.bucket_end
     )
-    # One join, always: `metric` drives both the bars (used/unmeasured/wasted)
-    # and metric_means below -- the dashboard plots exactly one reference
-    # metric at a time, so there is nothing else here to join for.
+    # One join, always: the usage metric drives both the bars
+    # (used/unmeasured/wasted) and metric_means below, and it is the only
+    # statistic this endpoint reads.
     m_alias = aliased(JobStatisticDB)
     m_mean = col(m_alias.mean)
     # Split used vs unmeasured on whether the metric is a real value (not
@@ -1092,7 +1091,7 @@ def metrics_rgu_usage(
         m_alias,
         and_(
             col(m_alias.job_id) == col(JobSeriesDB.job_db_id),
-            col(m_alias.name) == metric,
+            col(m_alias.name) == _USAGE_METRIC_NAME,
         ),
         isouter=True,
     )
@@ -1115,9 +1114,11 @@ def metrics_rgu_usage(
         unmeasured = float(row.rgu_unmeasured or 0.0)
         wasted = float(row.rgu_wasted or 0.0)
         sums[key] = (allocated, used, unmeasured, wasted)
-        trends[key] = {metric: {"mean": _weighted_mean(used, allocated - unmeasured)}}
+        trends[key] = {
+            _USAGE_METRIC_NAME: {"mean": _weighted_mean(used, allocated - unmeasured)}
+        }
 
-    empty_means = {metric: {"mean": None}}
+    empty_means = {_USAGE_METRIC_NAME: {"mean": None}}
     period_data = []
     for key, (ps, pe) in enumerate(_iter_buckets(begin_dt, finish_dt, parsed)):
         allocated, used, unmeasured, wasted = sums.get(key, (0.0, 0.0, 0.0, 0.0))
@@ -1225,37 +1226,35 @@ def metrics_metric_trend(
     clusters: list[str] = Query(default=[]),
     user_email: str | None = Query(default=None),
     job_states: list[str] = Query(default=[]),
-    metric: str = Query(default="gpu_sm_occupancy"),
     sess: Session = Depends(session_dep),
 ):
-    """Per-period rgu_hours-weighted average of a metric's per-job ``mean`` and
-    ``max``.
+    """Per-period rgu_hours-weighted average of the usage metric's per-job
+    ``mean`` and ``max``.
 
     For each period bucket, weighs the per-job statistic values by rgu_hours
     (hours in the bucket x allocated GPU count x RGU weight) over the jobs
     *running* in that bucket -- same weighting as /rgu_usage's metric_means, so
     a job spanning several buckets is weighted in each by only the slice that
     landed there. Jobs lacking the statistic are simply absent from the average
-    (inner join) and no GPU/RGU filter is applied, so system metrics also cover
-    CPU-only jobs. Returns a single ``series`` entry (the requested metric) on a
-    period axis; buckets with no data yield null (a curve gap), not 0.
+    (inner join), and only GPU jobs are counted. Returns a single ``series``
+    entry on a period axis; buckets with no data yield null (a curve gap), not 0.
     """
-    if metric not in _METRICS_0_1:
-        raise HTTPException(status_code=400, detail=f"Unknown metric: {metric!r}")
-
     begin_dt, finish_dt = _date_range(start, end)
     parsed = _parse_period(period)
     fmt = _label_fmt(parsed)
     scope_user_id = _scope_or_view_as(sess, req, as_user)
     cluster_ids = _resolve_cluster_ids(sess, clusters)
     if _no_buckets(begin_dt, finish_dt):
-        return {"periods": [], "series": [{"metric": metric, "mean": [], "max": []}]}
+        return {
+            "periods": [],
+            "series": [{"metric": _USAGE_METRIC_NAME, "mean": [], "max": []}],
+        }
 
-    # GPU jobs only, like every other plot (_gpu_only below), including for
-    # system_memory -- the one metric CPU jobs also report, but this dashboard
-    # does not plot them anywhere else. The DB view would degrade this to a
-    # full-table scan (see JobSeriesDB docstring); job_series_select keeps it
-    # narrow. allocated_rgu_drac (and the gpurgudb join it pulls in) is the
+    # GPU jobs only, like every other plot (_gpu_only below): the usage metric
+    # is a GPU statistic, and CPU-only jobs are plotted nowhere on this
+    # dashboard. The DB view would degrade this to a full-table scan (see
+    # JobSeriesDB docstring); job_series_select keeps it narrow.
+    # allocated_rgu_drac (and the gpurgudb join it pulls in) is the
     # weight this endpoint didn't need before it was duration-weighted.
     js = job_series_select(
         "job_db_id",
@@ -1289,7 +1288,7 @@ def metrics_metric_trend(
             JobStatisticDB,
             and_(
                 col(JobStatisticDB.job_id) == js.c.job_db_id,
-                col(JobStatisticDB.name) == metric,
+                col(JobStatisticDB.name) == _USAGE_METRIC_NAME,
             ),
         )
         .join(bucket_table, true())
@@ -1320,7 +1319,7 @@ def metrics_metric_trend(
         ],
         "series": [
             {
-                "metric": metric,
+                "metric": _USAGE_METRIC_NAME,
                 "mean": [cells.get(i, (None, None))[0] for i in range(len(buckets))],
                 "max": [cells.get(i, (None, None))[1] for i in range(len(buckets))],
             }
@@ -1337,7 +1336,6 @@ def metrics_rgu_by_user(
     clusters: list[str] = Query(default=[]),
     user_email: str | None = Query(default=None),
     job_states: list[str] = Query(default=[]),
-    metric: str = Query(default="gpu_sm_occupancy"),
     min_usage: float = Query(default=0.15, ge=0.0, le=1.0),
     focus_start: datetime | None = Query(default=None),
     focus_end: datetime | None = Query(default=None),
@@ -1346,8 +1344,8 @@ def metrics_rgu_by_user(
     """Requested vs used RGU.h aggregated per user (not over time).
 
     Same pro-rated RGU.h measure as /rgu_usage, summed per user email
-    (requested = SUM(rgu * hours in the window); used = scaled by the mean
-    ``metric``; ``rgu_wasted`` = the same per-job shortfall below ``min_usage``,
+    (requested = SUM(rgu * hours in the window); used = scaled by the mean usage
+    metric; ``rgu_wasted`` = the same per-job shortfall below ``min_usage``,
     so a user's critical waste reads the same here as in the bars). The window
     is one bucket here, so the totals match what the per-bucket plots add up to.
     Sorted by descending requested RGU.h.
@@ -1355,8 +1353,8 @@ def metrics_rgu_by_user(
     begin_dt, finish_dt = _apply_focus(*_date_range(start, end), focus_start, focus_end)
     window = (begin_dt.timestamp(), finish_dt.timestamp())
 
-    # Aggregate by user: RGU rate x hours spent inside the window. Metric mean
-    # via a targeted jobstatisticdb join (parametrized) — see rgu_usage.
+    # Aggregate by user: RGU rate x hours spent inside the window. Usage-metric
+    # mean via a targeted jobstatisticdb join — see rgu_usage.
     rgu_hours = col(JobSeriesDB.allocated_rgu_drac) * _overlap_hours(
         JobSeriesDB, *window
     )
@@ -1394,7 +1392,7 @@ def metrics_rgu_by_user(
             JobStatisticDB,
             and_(
                 col(JobStatisticDB.job_id) == col(JobSeriesDB.job_db_id),
-                col(JobStatisticDB.name) == metric,
+                col(JobStatisticDB.name) == _USAGE_METRIC_NAME,
             ),
             isouter=True,
         )
@@ -1429,7 +1427,6 @@ def metrics_jobs(
     include_total: bool = Query(default=True),
     sort_by: str = Query(default="rgu_hours"),
     sort_dir: str = Query(default="desc"),
-    metric: str = Query(default="gpu_sm_occupancy"),
     focus_start: datetime | None = Query(default=None),
     focus_end: datetime | None = Query(default=None),
     sess: Session = Depends(session_dep),
@@ -1471,9 +1468,14 @@ def metrics_jobs(
     # One aliased jobstatisticdb row per distinct stat name, LEFT-joined on the
     # job id. Not the view's own gpu_*_mean/max columns: those would join over the
     # whole window, while the page subquery below joins the stats onto the page only.
-    stat_names = {metric, "gpu_utilization", "gpu_sm_occupancy", "gpu_memory"}
+    stat_names = {
+        _USAGE_METRIC_NAME,
+        "gpu_utilization",
+        "gpu_sm_occupancy",
+        "gpu_memory",
+    }
     js = {name: aliased(JobStatisticDB) for name in sorted(stat_names)}
-    metric_mean_raw = col(js[metric].mean)
+    metric_mean_raw = col(js[_USAGE_METRIC_NAME].mean)
 
     def _join_stat(query, name: str):
         alias = js[name]
@@ -1513,7 +1515,7 @@ def metrics_jobs(
         "gpu_memory_max": col(js["gpu_memory"].max),
     }
     sort_needs_stat = {
-        "waste": metric,
+        "waste": _USAGE_METRIC_NAME,
         "gpu_utilization_mean": "gpu_utilization",
         "gpu_sm_occupancy_mean": "gpu_sm_occupancy",
         "gpu_memory_max": "gpu_memory",
@@ -1644,7 +1646,7 @@ def metrics_jobs(
                 "rgu": round(float(row.rgu), 2),
                 "rgu_hours": round(rh, 2) if rh is not None else None,
                 "waste": waste,
-                # Selected-metric mean (None when unmeasured): drives the
+                # Usage-metric mean (None when unmeasured): drives the
                 # job-table row shading.
                 "metric_mean": mm,
                 "gpu_utilization_mean": _nan_to_none(
