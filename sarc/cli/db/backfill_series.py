@@ -37,18 +37,18 @@ class BackfillSeriesCommand:
         with config.db.session() as sess:
             if self.truncate:
                 logger.info("Truncating job_series")
-                sess.execute(text("TRUNCATE job_series"))
+                sess.exec(text("TRUNCATE job_series"))  # ty: ignore[no-matching-overload]
                 sess.commit()
-            lo, hi = sess.execute(
+            lo, hi = sess.exec(
                 text(
                     "SELECT coalesce(min(id), 0), coalesce(max(id), 0) FROM slurm_jobs"
                 )
-            ).one()
+            ).one()  # ty: ignore[no-matching-overload]
             insert = text(
                 job_series_backfill_sql(where="AND j.id >= :lo AND j.id < :hi")
             )
             while lo <= hi:
-                result = sess.execute(insert, {"lo": lo, "hi": lo + chunk})
+                result = sess.exec(insert, {"lo": lo, "hi": lo + chunk})  # ty: ignore[no-matching-overload]
                 sess.commit()
                 total += result.rowcount
                 logger.info(
@@ -56,6 +56,6 @@ class BackfillSeriesCommand:
                 )
                 lo += chunk
             logger.info("Backfilled %d job_series rows", total)
-            sess.execute(text("ANALYZE job_series"))
+            sess.exec(text("ANALYZE job_series"))  # ty: ignore[no-matching-overload]
             sess.commit()
         return 0
