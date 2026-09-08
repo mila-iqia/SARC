@@ -566,30 +566,22 @@ def test_rgu_usage_wasted_is_per_job(dash_client, dash_db):
     assert sum(r["rgu_wasted"] for r in data) == pytest.approx(expected)
 
 
-@pytest.mark.parametrize(
-    ("metric_param", "expected"),
-    [({}, _SM_OCC), ({"metric": "gpu_utilization"}, 0.4)],
-    ids=["default_sm_occupancy", "gpu_utilization"],
-)
-def test_rgu_usage_metric_means(dash_client, dash_db, metric_param, expected):
-    """``metric_means`` holds exactly one entry, keyed on the endpoint's own
-    ``metric`` (default gpu_sm_occupancy): the rgu_hours-weighted mean over the
-    jobs running in the bucket (equal to the plain average here since dash_db's
-    jobs share the same RGU rate and elapsed time). A bucket holding no job
-    reports null, not a 0 % that would read as measured."""
-    data = dash_client.get(
-        "/dash/metrics/rgu_usage", params={**WINDOW, **metric_param}
-    ).json()
-    name = metric_param.get("metric", "gpu_sm_occupancy")
+def test_rgu_usage_metric_means(dash_client, dash_db):
+    """``metric_means`` holds exactly one entry, keyed on the usage metric: the
+    rgu_hours-weighted mean over the jobs running in the bucket (equal to the
+    plain average here since dash_db's jobs share the same RGU rate and elapsed
+    time). A bucket holding no job reports null, not a 0 % that would read as
+    measured."""
+    data = dash_client.get("/dash/metrics/rgu_usage", params=WINDOW).json()
     for row in data:
-        assert set(row["metric_means"]) == {name}
-    means = [r["metric_means"][name]["mean"] for r in data]
+        assert set(row["metric_means"]) == {"gpu_sm_occupancy"}
+    means = [r["metric_means"]["gpu_sm_occupancy"]["mean"] for r in data]
     assert any(m is not None for m in means), "expected a charged bucket"
     assert any(m is None for m in means), (
         "expected at least one bucket without running jobs"
     )
     for mean in means:
-        assert mean is None or mean == pytest.approx(expected)
+        assert mean is None or mean == pytest.approx(_SM_OCC)
 
 
 def test_rgu_usage_whole_weighs_by_the_whole_jobs_rgu_hours(dash_client, dash_db):
@@ -815,14 +807,14 @@ def test_metric_distribution_with_data(dash_client, dash_db):
 
 
 def test_metric_comparison_with_data(dash_client, dash_db):
-    """All jobs at gpu_utilization 0.4 / gpu_memory 0.6 -> one cell (bx=40, by=60)
-    of the 100x100 grid."""
+    """x is always the usage metric (gpu_sm_occupancy 0.5), y the requested
+    ``metric2`` (gpu_memory 0.6) -> one cell (bx=50, by=60) of the 100x100
+    grid."""
     data = dash_client.get(
-        "/dash/metrics/metric_comparison",
-        params={**WINDOW, "metric": "gpu_utilization", "metric2": "gpu_memory"},
+        "/dash/metrics/metric_comparison", params={**WINDOW, "metric2": "gpu_memory"}
     ).json()
     z = data["z"]
-    assert z[60][40] == dash_db.n
+    assert z[60][50] == dash_db.n
     assert sum(sum(row) for row in z) == dash_db.n
 
 
@@ -1424,18 +1416,34 @@ def test_invalid_period_returns_400_even_when_ignored(dash_client):
 
 
 @pytest.mark.usefixtures("read_only_db")
+def test_unknown_metric2_returns_400(dash_client):
+    """``metric2`` is the only caller-chosen statistic left."""
+    r = dash_client.get(
+        "/dash/metrics/metric_comparison", params={**WINDOW, "metric2": "not_a_metric"}
+    )
+    assert r.status_code == 400
+
+
 @pytest.mark.parametrize(
-    "path,bad_param",
+    "path",
     [
-        ("/dash/metrics/metric_distribution", "metric"),
-        ("/dash/metrics/metric_comparison", "metric"),
-        ("/dash/metrics/metric_comparison", "metric2"),
-        ("/dash/metrics/metric_trend", "metric"),
+        "/dash/metrics/metric_distribution",
+        "/dash/metrics/rgu_usage",
+        "/dash/metrics/metric_trend",
+        "/dash/metrics/rgu_by_user",
+        "/dash/metrics/jobs",
     ],
 )
-def test_unknown_metric_returns_400(dash_client, path, bad_param):
-    r = dash_client.get(path, params={**WINDOW, bad_param: "not_a_metric"})
-    assert r.status_code == 400
+def test_metric_query_param_is_ignored(dash_client, dash_db, path):
+    """The usage metric is frozen server-side. A leftover ``metric=`` in a
+    bookmarked URL is swallowed by FastAPI as an unknown query param, so it must
+    not look like it picked anything: the answer is the one for the usage
+    metric."""
+    frozen = dash_client.get(path, params=WINDOW).json()
+    ignored = dash_client.get(
+        path, params={**WINDOW, "metric": "gpu_utilization"}
+    ).json()
+    assert ignored == frozen
 
 
 @pytest.mark.usefixtures("read_only_db")

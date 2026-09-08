@@ -496,13 +496,7 @@
              autocomplete="off" data-lpignore="true" data-form-type="other" />
     </div>
     {% endif %}
-    {% if is_admin %}
-    <div class="ctrl">
-      <label for="metric-select">Efficiency metric</label>
-      <select id="metric-select" title="Metric taken as the 'useful' fraction: it splits Used vs Unused RGU (RGU usage, RGU by user, job-table Unused columns) and is the value plotted in Metric Trend, Density and the heatmap. Takes effect on Update."></select>
-    </div>
-    {% endif %}
-    <button onclick="loadCharts()" title="Apply the current filters (date range, clusters, {% if is_admin %}user, {% endif %}job states, metric) and reload every plot.">Update</button>
+    <button onclick="loadCharts()" title="Apply the current filters (date range, clusters, {% if is_admin %}user, {% endif %}job states) and reload every plot.">Update</button>
     <button id="reset-btn" onclick="resetState()" title="Clear all saved settings and reset to defaults" style="background:#888;">Reset</button>
     <div id="focus-label" class="no-focus"
          title="Focus is an optional zoom on top of the Start/End range. Click a bar in a period plot to restrict the detail plots ({% if is_admin %}Metric density, Metric comparison, RGU by user, {% endif %}Job table) to that time slice; the period plots only highlight it. Use Clear focus to return to the full range.">
@@ -608,7 +602,6 @@
           start:       document.getElementById('start').value,
           end:         document.getElementById('end').value,
           range:       rangeValue(),
-          metric:      selectedMetric(),
           {% if is_admin %}
           user_email: document.getElementById('user_email').value,
           {% endif %}
@@ -649,7 +642,6 @@
       // the setPeriod('w') call a few lines down.
       setRangeMode(rangePanel.dataset.default);
       {% if is_admin %}
-      document.getElementById('metric-select').value = 'gpu_sm_occupancy';
       document.getElementById('user_email').value  = '';
       {% endif %}
       setPeriod('w');
@@ -666,7 +658,7 @@
       userRguTopN          = 16;
       userRguSortBy        = 'rgu_requested';
       {% endif %}
-      metricScatterMetric2 = 'gpu_utilization';
+      metricScatterMetric2 = DEFAULT_METRIC2;
       rguUsageView         = 'per_period';
       jobTableHiddenCols.clear();
       JOBTABLE_DEFAULTS.limit   = 50;
@@ -694,6 +686,11 @@
       return { autosize: true, margin: { l: 60, r: 20, t: 40, b: 60 }, ...extra };
     }
 
+    // The one statistic the dashboard reads as "used", injected by the backend
+    // so Python and JS cannot drift. Not a user choice: every plot, the job
+    // table shading and the underusage notifications all read this one.
+    const USAGE_METRIC = {{ usage_metric | tojson }};
+
     const METRICS = {
       gpu_sm_occupancy:     'SM occupancy',
       gpu_utilization:      'GPU utilization',
@@ -703,6 +700,12 @@
       gpu_memory:           'GPU memory',
       system_memory:        'System memory',
     };
+
+    const USAGE_METRIC_LABEL = METRICS[USAGE_METRIC] || USAGE_METRIC;
+    // Default second axis of the Metric-comparison tile. Derived, not named:
+    // metricOptions() drops USAGE_METRIC, so a hard-coded default would break
+    // the day it becomes the usage metric.
+    const DEFAULT_METRIC2 = Object.keys(METRICS).find(k => k !== USAGE_METRIC);
 
     // Display units for the cumulative RGU·time quantity. The backend always
     // returns RGU·h; `factor` rescales RGU·h -> the chosen unit (purely a
@@ -723,16 +726,11 @@
       return RGU_UNITS[mode === 'custom' ? periodUnit.value : mode] || RGU_UNITS.h;
     }
 
-    // The metric mean overlaid on the RGU-usage tile, on a right-hand 0-100 %
-    // axis: always the current efficiency-metric selector, matching the
-    // backend (metric_means there is keyed on that same `metric`). One entry,
-    // called fresh on every render so it tracks the selector -- a plain
-    // constant would freeze whatever metric was selected on page load.
+    // The usage-metric mean overlaid on the RGU-usage tile, on a right-hand
+    // 0-100 % axis. One entry, keyed exactly as the backend keys metric_means.
     // Colour stays clear of the bars' palette and of the focus orange, and dark
     // enough to hold up over the light blue segment it crosses.
-    function trendCurves() {
-      return [[selectedMetric(), '#000000']];
-    }
+    const TREND_CURVES = [[USAGE_METRIC, '#000000']];
     // Thick enough to read over the bars, in both views.
     const TREND_LINE = { width: 3 };
 
@@ -766,16 +764,9 @@
       // y is capped: past ~1.12 Plotly autoexpands the top margin beyond 78 and
       // rgu_by_cluster stops lining up. 1.09 spaces the two rows evenly.
       // showlegend forces the curve row on: Plotly hides a legend holding a
-      // single trace (same as rgu_by_cluster with one cluster), and a single
-      // efficiency metric is now the usual case (see trendCurves).
+      // single trace (same as rgu_by_cluster with one cluster), and the usage
+      // metric is a single curve (see TREND_CURVES).
       return { showlegend: true, legend: { ...row, y: 1.09 }, legend2: { ...row, y: 1.02 } };
-    }
-
-    // The efficiency metric is admin-only; non-admins are pinned to SM occupancy
-    // (the select is absent from their DOM). Every reader goes through this.
-    function selectedMetric() {
-      const el = document.getElementById('metric-select');
-      return el ? el.value : 'gpu_sm_occupancy';
     }
 
     // Stable colour per cluster (assigned by sorted index).
@@ -859,10 +850,9 @@
     };
     const JOBTABLE_PAGE_SIZES = [50, 100, 200, 500];
 
-    // Fresh <option> nodes for the metric list, optionally led by a blank
-    // "— none —". Shared by the global efficiency-metric select and the per-tile
-    // secondary-metric picker on the Metric-comparison tile, so each select
-    // owns its own nodes.
+    // Fresh <option> nodes for the secondary-metric picker on the
+    // Metric-comparison tile, optionally led by a blank "— none —". The usage
+    // metric is left out: it is already the tile's fixed first axis.
     function metricOptions(includeNone) {
       const opts = [];
       if (includeNone) {
@@ -871,18 +861,13 @@
         opts.push(o);
       }
       Object.entries(METRICS).forEach(([key, label]) => {
+        if (key === USAGE_METRIC) return;
         const o = document.createElement('option');
         o.value = key; o.textContent = label;
         opts.push(o);
       });
       return opts;
     }
-    // Populate the global efficiency-metric dropdown (admin-only widget).
-    {% if is_admin %}
-    const metSel = document.getElementById('metric-select');
-    metricOptions(false).forEach(o => metSel.appendChild(o));
-    metSel.value = 'gpu_sm_occupancy';
-    {% endif %}
 
     // Tiles to redraw once a window resize settles -- those a live rescale
     // leaves visibly wrong, the known case being a wrapping legend stranded
@@ -1042,7 +1027,6 @@
     // range" in Init) — it seeds any legacy/custom start/end strings and
     // resolves the range mode, recomputing relative presets from today.
     {% if is_admin %}
-    if (_saved.metric)    document.getElementById('metric-select').value = _saved.metric;
     if (_saved.user_email !== undefined)
       document.getElementById('user_email').value = _saved.user_email;
     {% endif %}
@@ -1073,14 +1057,19 @@
     let comparisonCache = {};
     // Secondary metric for the Metric-comparison tile. Module-scoped (not stored on
     // the tile div, which renderLayout() recreates on every Update) so the pick
-    // survives Updates — like the global field it replaces. Defaults to GPU
-    // utilization so a fresh heatmap shows data immediately; '' is the explicit
+    // survives Updates — like the global field it replaces. Defaults to a real
+    // metric so a fresh heatmap shows data immediately; '' is the explicit
     // "— none —" choice (the tile then prompts for one) — hence ?? not ||, so a
     // saved '' doesn't snap back to the default. Two heatmap tiles share this.
     // Restore persisted module-level state (plot-local preferences). _saved
     // itself is loaded near the top of the script (it is read earlier — by
     // JOBTABLE_DEFAULTS and the filter-bar restore).
-    let metricScatterMetric2 = _saved.metricScatterMetric2 ?? 'gpu_utilization';
+    let metricScatterMetric2 = _saved.metricScatterMetric2 ?? DEFAULT_METRIC2;
+    // The usage metric used to be offered here and may sit in a saved state.
+    // metricOptions() no longer emits it, and assigning a value with no matching
+    // <option> is a silent no-op -- the picker would read "— none —" while the
+    // fetch still asked for it.
+    if (metricScatterMetric2 === USAGE_METRIC) metricScatterMetric2 = DEFAULT_METRIC2;
     {% if is_admin %}
     // Top-N users shown by the RGU-by-user tile. Module-scoped like the heatmap's
     // secondary so it survives Updates; applied via the tile's OK button — a pure
@@ -1216,12 +1205,12 @@
         `<em>unused</em>: how the RGU bars are split, how the job-table rows are shaded, and ` +
         `which jobs end up in the underusage notifications.</p>` +
         metricDefinitionsHtml() +
-        `<p>Whichever one is selected is the curve drawn on the <em>RGU allocated vs ` +
-        `efficiency levels</em> chart — weighted the same way as the bars, so it always ` +
-        `matches their Used share.</p>` +
+        `<p>It is the curve drawn on the <em>RGU allocated vs efficiency levels</em> ` +
+        `chart — weighted the same way as the bars, so it always matches their Used ` +
+        `share.</p>` +
         // These cuts were only visible as row shading, documented nowhere; naming
         // them is what makes the job-table colours readable without hovering.
-        `<h4>How the job table highlights a job's SM occupancy:</h4>` +
+        `<h4>How the job table highlights a job's ${USAGE_METRIC_LABEL}:</h4>` +
         `<p><span class="ms-scale ms-crit">below ${CRITICAL_USAGE_PERCENT} %</span> critical waste ` +
         `<span class="ms-scale ms-low">${CRITICAL_USAGE_PERCENT}–${MIN_USAGE_EXPECTED_PERCENT} %</span> under the expected minimum ` +
         `<span class="ms-scale">${MIN_USAGE_EXPECTED_PERCENT}–${GOOD_USAGE_PERCENT} %</span> acceptable ` +
@@ -1237,11 +1226,8 @@
 
     // Panel content for the RGU-usage tile title, defining the efficiency levels
     // with the user-guide link inside (a native title can't hold a clickable link).
-    // Rebuilt on every open so the metric name tracks the last Update — the tile
-    // header outlives chart re-renders.
     function rguUsageHelpHtml() {
-      const metricName = (currentParams && currentParams.metric) || 'gpu_sm_occupancy';
-      const metricPretty = METRICS[metricName] || metricName;
+      const metricPretty = USAGE_METRIC_LABEL;
       const unit = rguUnit();
       return `<h3>How to read this plot</h3>` +
         `<h4>Left axis: allocated ${unit.label}, split by ${metricPretty}</h4>` +
@@ -1588,10 +1574,7 @@
       const rows = d.rgu_usage;
       if (!el) return;
       const unit = rguUnit();
-      // The wasted/unused hovers name the efficiency metric picked at last
-      // Update (non-admins are pinned to SM occupancy).
-      const metricName = (currentParams && currentParams.metric) || 'gpu_sm_occupancy';
-      const metricPretty = METRICS[metricName] || metricName;
+      const metricPretty = USAGE_METRIC_LABEL;
 
       // Box/plot layout (reusing the heatmap's classes); the plot is laid out
       // exactly like rgu_by_cluster next door.
@@ -1631,7 +1614,7 @@
         // it. The anchor point carries the legend, the hover and the right axis
         // (a layout shape alone would leave it without a trace).
         const trendLevels = [], trendRules = [];
-        trendCurves().forEach(([m, color], i) => {
+        TREND_CURVES.forEach(([m, color], i) => {
           const v = whole.metric_means[m] ? whole.metric_means[m].mean : null;
           if (v == null) return;
           trendRules.push({
@@ -1694,7 +1677,7 @@
       // (the bars already carry that feedback); a shaded band on top of the bars'
       // own focus tinting would be unreadable. Null buckets leave a gap, like the
       // Metric trend tile.
-      const trendLines = trendCurves().map(([m, color]) => ({
+      const trendLines = TREND_CURVES.map(([m, color]) => ({
         type: 'scatter', mode: 'lines+markers', yaxis: 'y2',
         name: METRICS[m] + ' mean (right axis)', x: periods, customdata: periodEnds,
         y: rows.map(r => (r.metric_means && r.metric_means[m] ? r.metric_means[m].mean : null)),
@@ -1814,7 +1797,7 @@
       const ml = METRICS[data.series[0].metric] || data.series[0].metric;
       const x    = data.periods.map(p => p.period_start);
       const ends = data.periods.map(p => p.period_end);
-      // Efficiency metric only: a single series, two traces. Dash style encodes
+      // The usage metric only: a single series, two traces. Dash style encodes
       // the statistic (max solid, mean dashed). Null buckets (no job carries
       // the stat) leave a gap.
       const MET_COLORS = ['#1a6fd4'];
@@ -1861,8 +1844,7 @@
     }
 
     function renderDensity(id, d) {
-      const metric = selectedMetric();
-      const ml = METRICS[metric] || metric;
+      const ml = USAGE_METRIC_LABEL;
       if (!d.density.primary.values.length) {
         showNoData(document.getElementById(id));
         return;
@@ -1889,12 +1871,11 @@
     // the job-table pagination, which is navigation state and resets). This tile
     // owns its data flow: renderTile renders it without a shared-cache fetch
     // (the `d` argument is unused), and each pick re-fetches only this tile from
-    // /metric_comparison (global efficiency metric + the picked secondary).
+    // /metric_comparison (the usage metric + the picked secondary).
     function renderMetricComparison(id, d) {
       const el = document.getElementById(id);
       if (!el) return;
-      const metric = selectedMetric();
-      const ml = METRICS[metric] || metric;
+      const ml = USAGE_METRIC_LABEL;
 
       el.innerHTML = '';
       const box = document.createElement('div');
@@ -1903,7 +1884,7 @@
       ctrl.className = 'ms-ctrl';
       const lab = document.createElement('label');
       lab.textContent = 'Compare ' + ml + ' to:';
-      lab.title = 'Second metric to compare against the efficiency metric. The heatmap bins GPU jobs by both values and colours each cell by job count (log scale).';
+      lab.title = 'Second metric to compare against ' + USAGE_METRIC_LABEL + '. The heatmap bins GPU jobs by both values and colours each cell by job count (log scale).';
       const sel = document.createElement('select');
       sel.className = 'ms-metric2 add-select';
       metricOptions(true).forEach(o => sel.appendChild(o));
@@ -1938,9 +1919,9 @@
         try {
           // Cache the paired payload per secondary metric (cleared on Update,
           // like endpointCache). A layout change re-renders every tile, so
-          // without this the heatmap would re-fetch each time; the efficiency
-          // metric and all filters are fixed between Updates, so metric2 alone
-          // keys the result (an in-flight promise is shared too).
+          // without this the heatmap would re-fetch each time; the usage metric
+          // is frozen and all filters are fixed between Updates, so metric2
+          // alone keys the result (an in-flight promise is shared too).
           if (!comparisonCache[m2])
             comparisonCache[m2] = fetch(comparisonURL(currentParams, m2)).then(r => {
               if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -2049,10 +2030,7 @@
         // Rescale the cumulative RGU·h to the unit selected in the toolbar.
         const unit = rguUnit();
         const selectedUser = document.getElementById('user_email').value.trim();
-        // The critical-waste hover names the efficiency metric picked at last
-        // Update, like the RGU-usage bars.
-        const metricName = (currentParams && currentParams.metric) || 'gpu_sm_occupancy';
-        const metricPretty = METRICS[metricName] || metricName;
+        const metricPretty = USAGE_METRIC_LABEL;
 
         // Helper to compute the sort key for a row.
         function sortKey(r) {
@@ -2233,9 +2211,7 @@
         return;
       }
 
-      // The Unused columns depend on the efficiency metric picked at last Update.
-      const metricName = (currentParams && currentParams.metric) || 'selected metric';
-      const metricPretty = METRICS[metricName] || metricName;
+      const metricPretty = USAGE_METRIC_LABEL;
       // RGU·time columns honour the toolbar unit (display rescale of the RGU·h
       // returned by the backend; the server sort uses raw values, so the order
       // is unit-independent). The per-job 'RGU' weight is not time-cumulative.
@@ -2284,7 +2260,7 @@
         { key: 'start_time',            label: 'Started',   fmt: fmtDateTime,
           title: 'When the job started running, in UTC. This is what tells you whether the job crossed the range boundary — a job can be submitted long before it starts.' },
         {% if is_admin %}
-        { key: 'user',                  label: 'User', adminOnly: true, title: 'Cluster user name' },
+        { key: 'user',                  label: 'User', adminOnly: true, title: 'User email' },
         {% endif %}
         { key: 'job_state',             label: 'State' },
         // The part inside the range first, since that is what every other number
@@ -2929,7 +2905,6 @@
         {% if is_admin %}
         user_email:  document.getElementById('user_email').value.trim(),
         {% endif %}
-        metric:        selectedMetric(),
         focus_start:   focusStart,
         focus_end:     focusEnd,
         job_states:    jsSelected(),
@@ -2969,7 +2944,7 @@
         ...(p.focus_end   ? { focus_end:   p.focus_end   } : {}),
       };
       return '/dash/metrics/jobs?' + new URLSearchParams(withAsUser({
-        ...base, metric: p.metric, ...focusParams,
+        ...base, ...focusParams,
         offset, limit, sort_by: sortBy, sort_dir: sortDir }));
     }
 
@@ -2982,7 +2957,7 @@
         ...(p.focus_end   ? { focus_end:   p.focus_end   } : {}),
       };
       return withClustersAndStates('/dash/metrics/metric_comparison?' + new URLSearchParams(withAsUser({
-        start: p.start, end: p.end, metric: p.metric, metric2,
+        start: p.start, end: p.end, metric2,
         {% if is_admin %}
         ...(p.user_email ? { user_email: p.user_email } : {}),
         {% endif %}
@@ -2999,7 +2974,6 @@
         ...(p.focus_start ? { focus_start: p.focus_start } : {}),
         ...(p.focus_end   ? { focus_end:   p.focus_end   } : {}),
       };
-      const densityParams = { ...base, metric: p.metric };
       switch (ep) {
         // submitted=true counts the jobs submitted in each bucket instead of the
         // ones running in it -- a different population, hence a different URL.
@@ -3007,16 +2981,16 @@
         case 'heatmap':   return '/dash/metrics/job_times_vs_limit?' + new URLSearchParams({ ...base, ...focusParams });
         // whole=true asks for the range as one bucket, which is what the
         // whole-range view draws; the server then ignores `period`.
-        case 'rgu_usage': return '/dash/metrics/rgu_usage?' + new URLSearchParams({ ...base, period: p.period, metric: p.metric, min_usage: MIN_USAGE_EXPECTED_PERCENT / 100, ...(rguUsageView === 'whole_range' ? { whole: 'true' } : {}) });
-        case 'density':   return '/dash/metrics/metric_distribution?' + new URLSearchParams({ ...densityParams, ...focusParams });
+        case 'rgu_usage': return '/dash/metrics/rgu_usage?' + new URLSearchParams({ ...base, period: p.period, min_usage: MIN_USAGE_EXPECTED_PERCENT / 100, ...(rguUsageView === 'whole_range' ? { whole: 'true' } : {}) });
+        case 'density':   return '/dash/metrics/metric_distribution?' + new URLSearchParams({ ...base, ...focusParams });
         case 'jobs':      return jobsURL(p, JOBTABLE_DEFAULTS);
         {% if is_admin %}
-        case 'user_rgu':  return '/dash/metrics/rgu_by_user?' + new URLSearchParams(withAsUser({ start: p.start, end: p.end, metric: p.metric, min_usage: MIN_USAGE_EXPECTED_PERCENT / 100, ...focusParams }));
+        case 'user_rgu':  return '/dash/metrics/rgu_by_user?' + new URLSearchParams(withAsUser({ start: p.start, end: p.end, min_usage: MIN_USAGE_EXPECTED_PERCENT / 100, ...focusParams }));
         case 'rgu_by_cluster': return '/dash/metrics/rgu_by_cluster?' + new URLSearchParams(withAsUser({ start: p.start, end: p.end, period: p.period, ...(p.user_email ? { user_email: p.user_email } : {}) }));
         {% else %}
         case 'rgu_by_cluster': return '/dash/metrics/rgu_by_cluster?' + new URLSearchParams(withAsUser({ start: p.start, end: p.end, period: p.period }));
         {% endif %}
-        case 'metric_trend': return '/dash/metrics/metric_trend?' + new URLSearchParams({ ...base, period: p.period, metric: p.metric });
+        case 'metric_trend': return '/dash/metrics/metric_trend?' + new URLSearchParams({ ...base, period: p.period });
       }
       throw new Error('Unknown endpoint: ' + ep);
     }
