@@ -607,3 +607,142 @@ def test_parse_raw_dispatches_to_job_converter_without_fast_schema():
     (job,) = jobs
     assert job["job_id"] == 123
     assert "exitcode_return_code" not in job
+
+
+def test_parse_raw_jsonl_dispatches_to_fast_converter():
+    # The fastsacct-jsonl-v1 schema is a per-line stream: a `{"meta": {...}}`
+    # header line (carrying `job_count`) followed by one job object per line.
+    # parse_raw must route each job to _convert_json_fast, exactly like the
+    # flat blob, and the per-line framing must not break on a nasty job name
+    # (tab, newline, CR, quotes, braces) since json.dumps escapes them all.
+    entries = []
+    for job_id in (1, 2, 3):
+        entries.append(
+            {
+                "job_id": job_id,
+                "array_job_id": 0,
+                "array_task_id": None,
+                "name": f"job_{job_id}",
+                "user": "toto",
+                "group": "toto_group",
+                "account": "toto_account",
+                "state": ["COMPLETED"],
+                "exitcode_return_code": 0,
+                "exitcode_signal": None,
+                "time_elapsed": 0,
+                "time_end": 0,
+                "time_start": 0,
+                "time_submit": 1747064484,
+                "time_timelimit": 0,
+                "nodes": "None assigned",
+                "partition": "partition123",
+                "constraints": "",
+                "priority": 1,
+                "qos": "normal",
+                "work_dir": "/home/toto/my_job_name",
+                "submit_line": "salloc",
+                "flags": [],
+                "cluster": "test",
+            }
+        )
+    entries[-1]["name"] = "nasty\tname\nwith\rctrl"
+    lines = [
+        json.dumps(
+            {
+                "meta": {
+                    "source": "fastsacct",
+                    "schema_version": "fastsacct-jsonl-v1",
+                    "slurm_abi_version": "25.05",
+                    "job_count": len(entries),
+                }
+            }
+        ),
+        *map(json.dumps, entries),
+    ]
+    raw = ("\n".join(lines) + "\n").encode("utf-8")
+
+    scraped_start = datetime(2025, 5, 12, tzinfo=UTC)
+    scraped_end = datetime(2025, 7, 7, tzinfo=UTC)
+
+    jobs = list(parse_raw(raw, "test", scraped_start, scraped_end))
+    assert [j["job_id"] for j in jobs] == [1, 2, 3]
+    for entry, job in zip(entries, jobs):
+        assert job == _convert_json_fast(entry, "test", scraped_start, scraped_end)
+
+
+def test_parse_raw_jsonl_count_mismatch_raises():
+    # The header's job_count must match the number of job lines; a shorter
+    # stream (missing/lost tail) must abort with JobConversionError so nothing
+    # is committed to the database.
+    entry = {
+        "job_id": 1,
+        "array_job_id": 0,
+        "array_task_id": None,
+        "name": "test_job",
+        "user": "toto",
+        "group": "toto_group",
+        "account": "toto_account",
+        "state": ["COMPLETED"],
+        "exitcode_return_code": 0,
+        "exitcode_signal": None,
+        "time_elapsed": 0,
+        "time_end": 0,
+        "time_start": 0,
+        "time_submit": 1747064484,
+        "time_timelimit": 0,
+        "nodes": "None assigned",
+        "partition": "partition123",
+        "constraints": "",
+        "priority": 1,
+        "qos": "normal",
+        "work_dir": "/home/toto/my_job_name",
+        "submit_line": "salloc",
+        "flags": [],
+        "cluster": "test",
+    }
+    lines = [
+        json.dumps(
+            {
+                "meta": {
+                    "source": "fastsacct",
+                    "schema_version": "fastsacct-jsonl-v1",
+                    "slurm_abi_version": "25.05",
+                    "job_count": 2,
+                }
+            }
+        ),
+        json.dumps(entry),
+    ]
+    raw = ("\n".join(lines) + "\n").encode("utf-8")
+
+    scraped_start = datetime(2025, 5, 12, tzinfo=UTC)
+    scraped_end = datetime(2025, 7, 7, tzinfo=UTC)
+
+    with pytest.raises(JobConversionError, match="count mismatch"):
+        list(parse_raw(raw, "test", scraped_start, scraped_end))
+
+
+def test_parse_raw_jsonl_invalid_line_raises():
+    # A job line that is not valid JSON must abort with JobConversionError so
+    # the cache entry is not committed.
+    lines = [
+        json.dumps(
+            {
+                "meta": {
+                    "source": "fastsacct",
+                    "schema_version": "fastsacct-jsonl-v1",
+                    "slurm_abi_version": "25.05",
+                    "job_count": 2,
+                }
+            }
+        ),
+        '{"job_id": 1,',
+        '{"job_id": 2}',
+    ]
+    raw = ("\n".join(lines) + "\n").encode("utf-8")
+
+    scraped_start = datetime(2025, 5, 12, tzinfo=UTC)
+    scraped_end = datetime(2025, 7, 7, tzinfo=UTC)
+
+    with pytest.raises(JobConversionError, match="Invalid JSON"):
+        list(parse_raw(raw, "test", scraped_start, scraped_end))
