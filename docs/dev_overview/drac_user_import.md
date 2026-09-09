@@ -38,5 +38,7 @@ _A cache entry is thus created; in our case: `sarc-cache/users/2026/08/20/18:51:
 
 _in our case, on 2026-08-20, upload the file to [this directory](https://console.cloud.google.com/storage/browser/sarc-cache/users/2026/08/20); adapt the directory as needed._
 
+- the newly created cache entry will be processed during the next `parse users` run (typically, it is processed each hour)
+
 > [!WARNING]
-> The cache file must be generated and uploaded between two automatic fetches on GCP for it to be parsed. If it is older than the last cache file parsed at the time of upload, it will not be taken into account by SARC! The ideal time to do this is between "x"h20 and "x"h45
+> The cache file must be generated and uploaded between two automatic fetches on GCP for it to be parsed. If it is older than the last cache file parsed at the time of upload, it will not be taken into account by SARC! The ideal time to do this is between "x"h20 and "x"h45. You might want to check if the uploaded file is the last on the list in GCP cache bucket.
