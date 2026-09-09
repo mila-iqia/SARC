@@ -15,6 +15,7 @@ from sqlmodel import (
     Session,
     UniqueConstraint,
     col,
+    delete,
     exists,
     or_,
     select,
@@ -539,6 +540,8 @@ def get_users(sess: Session) -> Sequence[UserDB]:
 @trace_decorator()
 def merge_users(sess: Session, db_user1: UserDB, db_user2: UserDB) -> None:
     from .job import SlurmJobDB
+    from .user_periods import UserPeriods
+
     # Merge db_user2 into db_user1
 
     # we prefer attributes from db_user1
@@ -574,6 +577,7 @@ def merge_users(sess: Session, db_user1: UserDB, db_user2: UserDB) -> None:
             .where(col(SlurmJobDB.sarc_user_id) == db_user2.id)
             .values(sarc_user_id=db_user1.id)
         )
+        sess.exec(delete(UserPeriods).where(col(UserPeriods.user_id) == db_user2.id))
         sess.delete(db_user2)
     sess.flush()
 
