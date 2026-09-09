@@ -14,11 +14,35 @@ This task is a manual task, ideally done after every new DRAC user import.
 
 # usermatch interface
 
-temp: SARC_CONFIG=config/cloud/cloudsql_db.yaml uv run python scripts/usermatch/main.py
+First we need a config file to connect to local sql proxy.
 
-2 onglets: "all users" et "match drac"
+This is an example `cloudsql_db.yaml` config file:
+
+```
+sarc:
+  db:
+    host: 127.0.0.1
+    port: 5433
+    user: yoursername@mila.quebec
+    name: sarc-prod
+  patches: patches
+```
+
+You can now launch the user mathcin interface:
+
+```
+%SARC_CONFIG=cloudsql_db.yaml uv run python scripts/usermatch/main.py
+
+Loading users from database…
+Loaded 3210 users.
+Serving at http://127.0.0.1:64761/  (Ctrl-C to stop)
+```
+
+After some time (approx. one minute) a web browser will be launched to the address output, in our case `http://127.0.0.1:64761/`
 
 ## "All Users" page
+
+![](pictures/usermatch_userslist.png)
 
 This page lists all users in SARC db. No particular action is possible in this page, it is only there for search purpose.
 
@@ -29,6 +53,8 @@ The columns are:
 - `MATCH IDS` the different ids for this user, from the different sources (with color code) : `mila_ldap`/`mymila`/`legacy_dump`/`drac_member`
 
 ## "Match DRAC" page
+
+![](pictures/usermatch_matchDRAC.png)
 
 In this one, there are 4 lists.
 
@@ -42,7 +68,7 @@ block
 
 ### Creating matches
 
-> [!Note]
+> [!Tip]
 > The `Auto-pair by email` button will automatically match entries with the same @mila.quebec e-mail address.
 > This is a good practice to start with it.
 
@@ -67,6 +93,16 @@ Like the `Pairs` list, you can load/save the ignore list.
 > [!Note]
 > The ignore list file is not injected into SARC, it is up to you to keep a copy of it between user matching runs.
 
+> [!Tip]
+> Some DRAC profiles may be present in the SARC database, with no LDAP corresponding entry. Usually it is due to an old DRAC user import, with already expired accounts, not present anymore in the LDAP before SARC even started gathering it.
+> You can determine if this is an obsolete account by searching in the [Mila directory](https://mila.quebec/en/directory), and if it is an "alumni" account, then you can put them in the "ignore list" without guilt.
+
 # Apply matching file to SARC
 
-[TODO]
+At this point you get a `usermatch.json` file.
+
+This file must replace previous `sarc-config/patches/id_matches/mapping.json` file, from the **private** repository [sarc-config](https://github.com/mila-iqia/sarc-config/tree/main/patches/id_matches).
+
+Once put in SARC config, matching pairs will be processed durin gthe next `sarc parse users` run (typically, les than one hour later), the users will be merged in SARC db and the jobs will be linked to the merged user.
+
+Just one more commit and you're done with this account matching session.
