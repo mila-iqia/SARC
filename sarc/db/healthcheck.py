@@ -73,7 +73,8 @@ class HealthCheckStateDB(SQLModel, table=True):
         return sess.exec(select(cls).order_by(cls.name)).all()
 
     @classmethod
-    def get_or_create(cls, sess: Session, state: HealthCheckState) -> Self:
+    def from_state(cls, state: HealthCheckState) -> Self:
+        """Build a (transient, unsaved) instance from a HealthCheckState."""
         state_dict = state.model_dump()
         if state_dict["last_result"]:
             state_dict["last_result"].pop("check", None)
@@ -82,6 +83,10 @@ class HealthCheckStateDB(SQLModel, table=True):
         state_dict["check_dict"] = state_dict.pop("check")
         state_dict["last_result_dict"] = state_dict.pop("last_result")
 
-        res = cls.model_validate(state_dict)
+        return cls.model_validate(state_dict)
+
+    @classmethod
+    def get_or_create(cls, sess: Session, state: HealthCheckState) -> Self:
+        res = cls.from_state(state)
         res.id = sess.exec(select(cls.id).where(cls.name == res.name)).one_or_none()
         return sess.merge(res)
