@@ -400,7 +400,7 @@ JOB_SERIES_TRIGGERS: dict[str, tuple[str, str]] = {
     "clusters_job_series": (
         "clusters",
         "AFTER UPDATE OF name ON clusters "
-        "FOR EACH STATEMENT EXECUTE FUNCTION job_series_sync_cluster()",
+        "FOR EACH ROW EXECUTE FUNCTION job_series_sync_cluster()",
     ),
 }
 
