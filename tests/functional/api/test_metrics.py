@@ -17,7 +17,7 @@ from sqlmodel import col, select
 from sarc.config import config
 from sarc.db.cluster import SlurmClusterDB
 from sarc.db.job import JobStatisticDB, SlurmJobDB, SlurmState
-from sarc.db.job_series import JobSeriesDB
+from sarc.db.job_series import JobSeriesTable
 from sarc.db.support import GpuRguDB
 from sarc.db.users import UserDB
 
@@ -487,15 +487,15 @@ def test_job_times_vs_limit_follows_the_submission(dash_client, dash_db):
     assert data["total_jobs"] == 1
 
 
-def _dashboard_jobs() -> list[JobSeriesDB]:
+def _dashboard_jobs() -> list[JobSeriesTable]:
     """The seeded jobs every plot draws from: GPU jobs with a known RGU, read off
-    the view the endpoints read so no test restates the SQL selecting them."""
+    the table the endpoints read so no test restates the SQL selecting them."""
     with config.db.session() as sess:
         return list(
             sess.exec(
-                select(JobSeriesDB).where(
-                    col(JobSeriesDB.allocated_gres_gpu) > 0,
-                    col(JobSeriesDB.harmonized_gpu_type).is_not(None),
+                select(JobSeriesTable).where(
+                    col(JobSeriesTable.allocated_gres_gpu) > 0,
+                    col(JobSeriesTable.harmonized_gpu_type).is_not(None),
                 )
             ).all()
         )
@@ -1539,8 +1539,7 @@ def filtered_db(read_write_db):
 )
 def test_each_filter_drops_the_jobs_it_excludes(dash_client, path, dropped):
     """Each filter of _FILTERS excludes exactly one of the four jobs, on both
-    column namespaces: job_series_select (job_counts) and the view (everything
-    else)."""
+    endpoints (both read the job_series table through the same filters)."""
 
     def counted(**params):
         data = dash_client.get(path, params={**WINDOW, "period": "m", **params}).json()

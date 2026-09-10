@@ -1,18 +1,591 @@
+"""`job_series` -- the jobs read model: one wide materialized row per job.
+
+`slurm_jobs` joined to `users`, `clusters`, `gpurgudb` and (pivoted) to
+`jobstatisticdb`, with the RGU/cost/waste arithmetic precomputed and every
+frequently-read statistic sitting in its own column: the single base that
+/dash aggregates over, /v0/job/series pages out of, and the usage
+notifications scan. Queries read `job_series` (directly, or through the thin
+`job_series_view` wrapper that only adds the two time-ranged user subqueries
+`member_type` and `supervisors`) and never touch the join fan-out themselves.
+
+The table materializes `slurm_jobs` (one row per job, PK = job id, FK
+CASCADE) maintained by triggers, so it is exact rather than a cache with a
+staleness window: the triggers are AFTER ROW in the same transaction as the
+base write, and a reader can only observe it lagging its base tables within
+an in-flight transaction. The trigger set mirrors the old view's definition:
+
+- AFTER INSERT/UPDATE on slurm_jobs (of the mirrored columns) upserts the
+  job's row, re-reading users/clusters/gpurgudb and the whole stat pivot.
+- AFTER INSERT/UPDATE/DELETE on jobstatisticdb patches one pivot column and
+  rederives the four waste columns that consume it.
+- AFTER UPDATE on gpurgudb re-weights every weight-derived column (rare).
+- AFTER UPDATE on users / clusters re-syncs the copied display columns.
+
+`member_type` and `supervisors` resolve validity ranges in `membertypedb` /
+`supervisorsdb` retroactively edited by the user scrapers; materializing
+those would need cascading range updates, so they stay read-time correlated
+subqueries in the wrapper view -- evaluated per row only when selected.
+
+Backfill and repair: `job_series_backfill_sql()` / `sarc db backfill-series`
+(idempotent, `ON CONFLICT DO NOTHING` so it can run concurrently with the
+triggers).
+
+Columns are denormalized to what the window *scans* need (the covering
+indexes' INCLUDE lists); everything else is reached by PK (a 50-row page) or
+by the indexed lookups /v0 filters use. The GPU-only covering indexes are
+partial on `ELIGIBILITY` -- the population every /dash panel reads.
+"""
+
+from sqlalchemy import Index, text
 from sqlalchemy.dialects.postgresql import JSONB, aggregate_order_by
-from sqlalchemy.orm import aliased
-from sqlalchemy.sql import visitors
-from sqlalchemy.sql.elements import ColumnClause
-from sqlalchemy.sql.expression import FromClause, Join, Select
-from sqlmodel import BIGINT, JSON, Field, and_, col, func, select
+from sqlmodel import BIGINT, JSON, Field, col, func, select
 
 from sarc.models.user import MemberType
 from sarc.validators import datetime_utc
 
-from .cluster import SlurmClusterDB
-from .job import JobStatisticDB, SlurmJobDB, SlurmState
+from .job import SlurmJobDB, SlurmState
 from .sqlmodel import SQLModel, datetime_utc_field
-from .support import GpuRguDB
-from .users import MemberTypeDB, SupervisorsDB, SupervisorsHelper, UserDB
+from .users import MemberTypeDB, SupervisorsDB, SupervisorsHelper
+
+# The statistics /dash reads, pivoted one (mean, max) pair per metric. Keep in
+# sync with sarc.api.metrics._METRICS_0_1 (the metrics a request can name) plus
+# the max columns the plots display. Derives the trigger SQL below, so the
+# pivot and the table can never drift apart. `cpu_utilization` is mean-only:
+# not a plottable dash metric, but needed for the cpu_waste columns the view
+# exposes.
+DASH_STATS: dict[str, tuple[str, str]] = {
+    # jobstatisticdb.name -> (mean column, max column)
+    "gpu_sm_occupancy": ("gpu_sm_occupancy_mean", "gpu_sm_occupancy_max"),
+    "gpu_utilization": ("gpu_utilization_mean", "gpu_utilization_max"),
+    "gpu_utilization_fp16": ("gpu_utilization_fp16_mean", "gpu_utilization_fp16_max"),
+    "gpu_utilization_fp32": ("gpu_utilization_fp32_mean", "gpu_utilization_fp32_max"),
+    "gpu_utilization_fp64": ("gpu_utilization_fp64_mean", "gpu_utilization_fp64_max"),
+    "gpu_memory": ("gpu_memory_mean", "gpu_memory_max"),
+    "system_memory": ("system_memory_mean", "system_memory_max"),
+}
+CPU_STAT = "cpu_utilization"
+CPU_MEAN_COLUMN = "cpu_utilization_mean"
+
+# The population every /dash panel reads: a GPU job whose RGU is computable.
+# Exactly the old `_gpu_only` predicate plus the gpurgudb join the old view
+# made with the same effect (a missing weight reads NULL everywhere).
+ELIGIBILITY = "allocated_gres_gpu > 0 AND gpu_type_rgu_drac IS NOT NULL"
+
+# slurm_jobs columns mirrored verbatim. `id` maps to job_db_id; the
+# scraper-internal latest_scraped_* bookkeeping is not part of the view.
+JOB_SERIES_EXCLUDED_JOB_COLS = frozenset(
+    {"id", "latest_scraped_start", "latest_scraped_end"}
+)
+COPIED_JOB_COLUMNS = [
+    c.name
+    for c in SlurmJobDB.__table__.columns  # ty:ignore[unresolved-attribute]
+    if c.name not in JOB_SERIES_EXCLUDED_JOB_COLS
+]
+# Copied from users (all columns but id) and clusters.
+USER_COLUMNS = ["display_name", "email"]
+CLUSTER_NAME_COLUMN = "cluster_name"
+WEIGHT_COLUMNS = ["gpu_type_rgu", "gpu_type_rgu_drac"]
+RGU_COLUMNS = [
+    "requested_rgu",
+    "requested_rgu_drac",
+    "allocated_rgu",
+    "allocated_rgu_drac",
+]
+COST_COLUMNS = [
+    "requested_cpu_cost",
+    "requested_cpu_waste",
+    "allocated_cpu_cost",
+    "allocated_cpu_waste",
+    "cpu_overbilling_cost",
+    "requested_gpu_cost",
+    "requested_gpu_waste",
+    "allocated_gpu_cost",
+    "allocated_gpu_waste",
+    "gpu_overbilling_cost",
+]
+PIVOT_COLUMNS = [*[c for pair in DASH_STATS.values() for c in pair], CPU_MEAN_COLUMN]
+ALL_VALUE_COLUMNS = [
+    *COPIED_JOB_COLUMNS,
+    *USER_COLUMNS,
+    CLUSTER_NAME_COLUMN,
+    *WEIGHT_COLUMNS,
+    *RGU_COLUMNS,
+    *COST_COLUMNS,
+    *PIVOT_COLUMNS,
+]
+
+# The columns the dash window scans read; the GPU-partial covering indexes'
+# INCLUDE. Everything else on the table is reached by PK (a page of rows) or
+# by the plain v0/notification indexes.
+COVERING = [
+    "job_db_id",
+    "start_time",
+    "elapsed_time",
+    "allocated_rgu_drac",
+    "cluster_id",
+    "sarc_user_id",
+    "job_state",
+    "job_id",
+    "submit_time",
+    "harmonized_gpu_type",
+    "requested_gres_gpu",
+    "allocated_billing",
+    *[c for pair in DASH_STATS.values() for c in pair],
+]
+
+
+# SQL-identifier quoting for the generated column lists (slurm_jobs carries a
+# `group` column -- a reserved word, and the uppercase flag columns need their
+# case preserved; everything else is a plain lowercase identifier).
+def _q(name: str) -> str:
+    plain = name.isascii() and name.isidentifier() and name.islower()
+    return name if plain and name not in ("group",) else f'"{name}"'
+
+
+def _stat_pivot_expr(agg: str) -> str:
+    """The pivot's aggregate list: one FILTERed aggregate per pivot column."""
+    return ",\n                ".join(
+        f"{agg}(st.{src}) FILTER (WHERE st.name = '{name}') AS {column}"
+        for name, (mean_col, max_col) in [
+            *DASH_STATS.items(),
+            (CPU_STAT, (CPU_MEAN_COLUMN, None)),
+        ]
+        for src, column in (("mean", mean_col), ("max", max_col))
+        if column is not None
+    )
+
+
+def _pivot_select(job_id_expr: str) -> str:
+    """One row: the pivot for the job named by ``job_id_expr``."""
+    names = ", ".join(f"'{n}'" for n in [*DASH_STATS, CPU_STAT])
+    return (
+        f"select {_stat_pivot_expr('max')} from jobstatisticdb st"
+        f" where st.job_id = {job_id_expr} and st.name in ({names})"
+    )
+
+
+def _derived_exprs(j: str, w: str, s: str) -> dict[str, str]:
+    """The weight/cost/waste columns as SQL expressions over the job (``j``),
+    the gpurgudb row (``w``) and the stat pivot (``s``) -- each a table alias
+    or a plpgsql record prefix. Same expressions the view computed inline.
+    """
+    elapsed = f"{j}elapsed_time"
+    req_cpu = f"{j}requested_cpu"
+    alloc_cpu = f"{j}allocated_cpu"
+    req_gpu = f"{j}requested_gres_gpu"
+    alloc_gpu = f"{j}allocated_gres_gpu"
+    sm = f"{s}gpu_sm_occupancy_mean"
+    cpu = f"{s}{CPU_MEAN_COLUMN}"
+    req_gpu_cost = f"{elapsed} * {req_gpu} * {w}drac_rgu"
+    alloc_gpu_cost = f"{elapsed} * {alloc_gpu} * {w}drac_rgu"
+    return {
+        "gpu_type_rgu": f"{w}rgu",
+        "gpu_type_rgu_drac": f"{w}drac_rgu",
+        # The *_rgu coalesce a missing GPU count to 0 (the weights stay NULL
+        # without a gpurgudb row); the costs/waste keep NULL meaning
+        # "not computable", exactly like the view's raw-count products.
+        "requested_rgu": f"coalesce({req_gpu}, 0) * {w}rgu",
+        "requested_rgu_drac": f"coalesce({req_gpu}, 0) * {w}drac_rgu",
+        "allocated_rgu": f"coalesce({alloc_gpu}, 0) * {w}rgu",
+        "allocated_rgu_drac": f"coalesce({alloc_gpu}, 0) * {w}drac_rgu",
+        "requested_cpu_cost": f"{elapsed} * {req_cpu}",
+        "requested_cpu_waste": f"(1 - {cpu}) * ({elapsed} * {req_cpu})",
+        "allocated_cpu_cost": f"{elapsed} * {alloc_cpu}",
+        "allocated_cpu_waste": f"(1 - {cpu}) * ({elapsed} * {alloc_cpu})",
+        "cpu_overbilling_cost": f"{elapsed} * ({alloc_cpu} - {req_cpu})",
+        "requested_gpu_cost": req_gpu_cost,
+        "requested_gpu_waste": f"(1 - {sm}) * ({req_gpu_cost})",
+        "allocated_gpu_cost": alloc_gpu_cost,
+        "allocated_gpu_waste": f"(1 - {sm}) * ({alloc_gpu_cost})",
+        "gpu_overbilling_cost": (
+            f"{elapsed} * ({alloc_gpu} - {req_gpu}) * {w}drac_rgu"
+        ),
+    }
+
+
+# -- Trigger SQL ------------------------------------------------------------- #
+
+_SYNC_JOB_BODY = ", ".join(f"new.{_q(c)}" for c in COPIED_JOB_COLUMNS)
+_SYNC_JOB_DERIVED = ", ".join(
+    _derived_exprs("new.", "w.", "s.")[c]
+    for c in [*WEIGHT_COLUMNS, *RGU_COLUMNS, *COST_COLUMNS]
+)
+_SYNC_JOB_PIVOTS = ", ".join(f"s.{c}" for c in PIVOT_COLUMNS)
+
+_SYNC_JOB = f"""
+returns trigger
+language plpgsql
+as $$
+begin
+    insert into job_series (job_db_id, {", ".join(_q(c) for c in ALL_VALUE_COLUMNS)})
+    select new.id, {_SYNC_JOB_BODY},
+           u.display_name, u.email,
+           c.name,
+           {_SYNC_JOB_DERIVED},
+           {_SYNC_JOB_PIVOTS}
+      from (select 1) x
+      left join users u on u.id = new.sarc_user_id
+      left join clusters c on c.id = new.cluster_id
+      left join gpurgudb w on w.name = new.harmonized_gpu_type
+      left join lateral ({_pivot_select("new.id")}) s on true
+    on conflict (job_db_id) do update set
+        {", ".join(f"{_q(c)} = excluded.{_q(c)}" for c in ALL_VALUE_COLUMNS)};
+    return new;
+end;
+$$"""
+
+_STAT_SET = ",\n".join(
+    [
+        *[
+            f"    {column} = case when new.name = '{name}' then new.{src}"
+            f"\n                   else job_series.{column} end"
+            for name, (mean_col, max_col) in DASH_STATS.items()
+            for src, column in (("mean", mean_col), ("max", max_col))
+        ],
+        f"    {CPU_MEAN_COLUMN} = case when new.name = '{CPU_STAT}' then new.mean"
+        f"\n                   else job_series.{CPU_MEAN_COLUMN} end",
+    ]
+)
+
+_CLEAR_SET = ",\n".join(
+    [
+        *[
+            f"    {column} = case when old.name = '{name}' then null"
+            f"\n                   else job_series.{column} end"
+            for name, (mean_col, max_col) in DASH_STATS.items()
+            for _src, column in (("mean", mean_col), ("max", max_col))
+        ],
+        f"    {CPU_MEAN_COLUMN} = case when old.name = '{CPU_STAT}' then null"
+        f"\n                   else job_series.{CPU_MEAN_COLUMN} end",
+    ]
+)
+
+# The two stats that feed waste columns: when one of them moves, the four
+# waste products must be re-derived (a separate statement, so it reads the
+# pivot values the pivot UPDATE above just wrote).
+_WASTE_SET = """    requested_cpu_waste = (1 - cpu_utilization_mean) * requested_cpu_cost,
+    allocated_cpu_waste = (1 - cpu_utilization_mean) * allocated_cpu_cost,
+    requested_gpu_waste = (1 - gpu_sm_occupancy_mean) * requested_gpu_cost,
+    allocated_gpu_waste = (1 - gpu_sm_occupancy_mean) * allocated_gpu_cost"""
+
+_STAT_NAMES = ", ".join(f"'{n}'" for n in [*DASH_STATS, CPU_STAT])
+
+_SYNC_STAT = f"""
+returns trigger
+language plpgsql
+as $$
+begin
+    if new.name not in ({_STAT_NAMES}) then
+        return new;
+    end if;
+    update job_series set
+{_STAT_SET}
+    where job_db_id = new.job_id;
+    if new.name in ('{CPU_STAT}', 'gpu_sm_occupancy') then
+        update job_series set
+{_WASTE_SET}
+        where job_db_id = new.job_id;
+    end if;
+    return new;
+end;
+$$"""
+
+_CLEAR_STAT = f"""
+returns trigger
+language plpgsql
+as $$
+begin
+    if old.name not in ({_STAT_NAMES}) then
+        return old;
+    end if;
+    update job_series set
+{_CLEAR_SET}
+    where job_db_id = old.job_id;
+    if old.name in ('{CPU_STAT}', 'gpu_sm_occupancy') then
+        update job_series set
+{_WASTE_SET}
+        where job_db_id = old.job_id;
+    end if;
+    return old;
+end;
+$$"""
+
+_WEIGHT_DERIVED = ",\n".join(
+    f"    {c} = {_derived_exprs('job_series.', 'g.', 'job_series.')[c]}"
+    for c in [*WEIGHT_COLUMNS, *RGU_COLUMNS, *COST_COLUMNS]
+    if c not in ("requested_cpu_waste", "allocated_cpu_waste")
+)
+
+_SYNC_WEIGHTS = f"""
+returns trigger
+language plpgsql
+as $$
+begin
+    update job_series set
+{_WEIGHT_DERIVED}
+      from gpurgudb g
+     where job_series.harmonized_gpu_type = g.name
+       and (job_series.gpu_type_rgu_drac is distinct from g.drac_rgu
+            or job_series.gpu_type_rgu is distinct from g.rgu);
+    return null;
+end;
+$$"""
+
+_SYNC_USER = """
+returns trigger
+language plpgsql
+as $$
+begin
+    if new.display_name is distinct from old.display_name
+       or new.email is distinct from old.email then
+        update job_series
+           set display_name = new.display_name, email = new.email
+         where sarc_user_id = new.id;
+    end if;
+    return new;
+end;
+$$"""
+
+_SYNC_CLUSTER = """
+returns trigger
+language plpgsql
+as $$
+begin
+    if new.name is distinct from old.name then
+        update job_series set cluster_name = new.name where cluster_id = new.id;
+    end if;
+    return null;
+end;
+$$"""
+
+JOB_SERIES_FUNCTIONS: dict[str, str] = {
+    "job_series_sync_job()": _SYNC_JOB,
+    "job_series_sync_stat()": _SYNC_STAT,
+    "job_series_clear_stat()": _CLEAR_STAT,
+    "job_series_sync_weights()": _SYNC_WEIGHTS,
+    "job_series_sync_user()": _SYNC_USER,
+    "job_series_sync_cluster()": _SYNC_CLUSTER,
+}
+
+# name -> (table, definition), for PGTrigger registration in alembic/env.py.
+# slurm_jobs deletions are handled by the FK's ON DELETE CASCADE. The slurm_jobs
+# UPDATE column list = the mirrored columns, so a scrape cycle that only touches
+# the excluded latest_scraped_* bookkeeping costs no materialization work.
+JOB_SERIES_TRIGGERS: dict[str, tuple[str, str]] = {
+    "slurm_jobs_job_series": (
+        "slurm_jobs",
+        f"AFTER INSERT OR UPDATE OF {', '.join(_q(c) for c in COPIED_JOB_COLUMNS)} ON slurm_jobs "
+        "FOR EACH ROW EXECUTE FUNCTION job_series_sync_job()",
+    ),
+    "jobstatisticdb_job_series": (
+        "jobstatisticdb",
+        "AFTER INSERT OR UPDATE OF mean, max ON jobstatisticdb "
+        "FOR EACH ROW EXECUTE FUNCTION job_series_sync_stat()",
+    ),
+    "jobstatisticdb_job_series_del": (
+        "jobstatisticdb",
+        "AFTER DELETE ON jobstatisticdb "
+        "FOR EACH ROW EXECUTE FUNCTION job_series_clear_stat()",
+    ),
+    "gpurgudb_job_series": (
+        "gpurgudb",
+        "AFTER UPDATE OF rgu, drac_rgu ON gpurgudb "
+        "FOR EACH STATEMENT EXECUTE FUNCTION job_series_sync_weights()",
+    ),
+    "users_job_series": (
+        "users",
+        "AFTER UPDATE OF display_name, email ON users "
+        "FOR EACH ROW EXECUTE FUNCTION job_series_sync_user()",
+    ),
+    "clusters_job_series": (
+        "clusters",
+        "AFTER UPDATE OF name ON clusters "
+        "FOR EACH ROW EXECUTE FUNCTION job_series_sync_cluster()",
+    ),
+}
+
+
+def job_series_backfill_sql(where: str = "") -> str:
+    """Idempotent bulk (re)sync of job_series from its base tables.
+
+    `ON CONFLICT DO NOTHING` is the concurrency contract: the triggers may have
+    written a row since this scan's snapshot; the trigger version is at least as
+    fresh, so keep it. To force a rebuild, TRUNCATE job_series first.
+    ``where`` is appended to the outer WHERE (e.g. an id range, for chunked
+    backfills that keep transactions short).
+    """
+    derived = _derived_exprs("j.", "w.", "s.")
+    return f"""
+INSERT INTO job_series (job_db_id, {", ".join(_q(c) for c in ALL_VALUE_COLUMNS)})
+SELECT j.id, {", ".join(f"j.{_q(c)}" for c in COPIED_JOB_COLUMNS)},
+       u.display_name, u.email, c.name,
+       {", ".join(derived[c] for c in [*WEIGHT_COLUMNS, *RGU_COLUMNS, *COST_COLUMNS])},
+       {", ".join(f"s.{c}" for c in PIVOT_COLUMNS)}
+  FROM slurm_jobs j
+  LEFT JOIN users u ON u.id = j.sarc_user_id
+  LEFT JOIN clusters c ON c.id = j.cluster_id
+  LEFT JOIN gpurgudb w ON w.name = j.harmonized_gpu_type
+  LEFT JOIN LATERAL (
+    SELECT {_stat_pivot_expr("max")}
+      FROM jobstatisticdb st
+     WHERE st.job_id = j.id
+  ) s ON true
+ WHERE true
+   {where}
+ON CONFLICT (job_db_id) DO NOTHING
+"""
+
+
+class JobSeriesTable(SQLModel, table=True):
+    """Materialized jobs read model -- see module docstring.
+
+    One row per `slurm_jobs` row (every job, CPU ones included; the /dash GPU
+    population is the `ELIGIBILITY` subset the partial indexes cover). Trigger-
+    maintained; written only by the triggers and `job_series_backfill_sql()`.
+
+    The three GPU-partial covering indexes serve every /dash window scan
+    (window by run end, by user, range by submit_time) as parallel index-only
+    scans; `ix_job_series_end_stats` exists only so ANALYZE collects a
+    histogram for the `slurm_job_end(...)` expression (a partial index's
+    expression stats aren't used to plan a scan of itself -- see the same trick
+    on slurm_jobs). The plain indexes cover /v0's and the notifications'
+    filters (windowed paging by submit/end time, single-job lookups, per-user
+    and per-email filters).
+    """
+
+    __tablename__ = "job_series"
+    __table_args__ = (
+        Index(
+            "ix_job_series_end",
+            text("slurm_job_end(start_time, elapsed_time)"),
+            postgresql_include=COVERING,
+            postgresql_where=text(ELIGIBILITY),
+        ),
+        Index(
+            "ix_job_series_user",
+            "sarc_user_id",
+            text("slurm_job_end(start_time, elapsed_time)"),
+            postgresql_include=[c for c in COVERING if c != "sarc_user_id"],
+            postgresql_where=text(ELIGIBILITY),
+        ),
+        # Submission-window queries: submitted-job counts and the time-limit
+        # heatmaps select on submit_time and read no statistics (time_limit is
+        # the one extra they need).
+        Index(
+            "ix_job_series_submit",
+            "submit_time",
+            postgresql_include=[
+                "job_db_id",
+                "start_time",
+                "elapsed_time",
+                "time_limit",
+                "allocated_rgu_drac",
+                "cluster_id",
+                "sarc_user_id",
+                "job_state",
+            ],
+            postgresql_where=text(ELIGIBILITY),
+        ),
+        # Statistics twin of ix_job_series_end (see docstring): non-partial,
+        # INCLUDE-less, never scanned.
+        Index(
+            "ix_job_series_end_stats", text("slurm_job_end(start_time, elapsed_time)")
+        ),
+        # /v0 and notifications: windowed paging and end-time ranges.
+        Index("ix_job_series_submit_time", "submit_time"),
+        Index("ix_job_series_end_time", "end_time"),
+        # /v0 single-job and per-user filters, notifications' email filter.
+        Index("ix_job_series_job_id", "job_id"),
+        Index("ix_job_series_sarc_user_id", "sarc_user_id"),
+        Index("ix_job_series_email", "email"),
+    )
+
+    job_db_id: int = Field(
+        primary_key=True, foreign_key="slurm_jobs.id", ondelete="CASCADE"
+    )
+    # -- mirrored verbatim from slurm_jobs (see COPIED_JOB_COLUMNS) --
+    cluster_id: int
+    account: str
+    job_id: int
+    array_job_id: int | None = None
+    task_id: int | None = None
+    name: str
+    cluster_user: str
+    group: str
+    job_state: SlurmState
+    exit_code: int | None = None
+    signal: int | None = None
+    partition: str
+    nodes: list[str] = Field(sa_type=JSONB)
+    work_dir: str
+    submit_line: str | None = None
+    constraints: str | None = None
+    priority: int | None = None
+    qos: str | None = None
+    CLEAR_SCHEDULING: bool = False
+    STARTED_ON_SUBMIT: bool = False
+    STARTED_ON_SCHEDULE: bool = False
+    STARTED_ON_BACKFILL: bool = False
+    time_limit: int | None = None
+    submit_time: datetime_utc = datetime_utc_field()
+    start_time: datetime_utc | None = datetime_utc_field(default=None)
+    end_time: datetime_utc | None = datetime_utc_field(default=None)
+    elapsed_time: float
+    requested_cpu: int | None = Field(default=None, sa_type=BIGINT)
+    requested_mem: int | None = Field(default=None, sa_type=BIGINT)
+    requested_node: int | None = Field(default=None, sa_type=BIGINT)
+    requested_billing: int | None = Field(default=None, sa_type=BIGINT)
+    requested_gres_gpu: int | None = Field(default=None, sa_type=BIGINT)
+    requested_gpu_type: str | None = None
+    allocated_cpu: int | None = Field(default=None, sa_type=BIGINT)
+    allocated_mem: int | None = Field(default=None, sa_type=BIGINT)
+    allocated_node: int | None = Field(default=None, sa_type=BIGINT)
+    allocated_billing: int | None = Field(default=None, sa_type=BIGINT)
+    allocated_gres_gpu: int | None = Field(default=None, sa_type=BIGINT)
+    allocated_gpu_type: str | None = None
+    harmonized_gpu_type: str | None = None
+    sarc_user_id: int
+    # -- copied display columns (kept in sync by the users/clusters triggers) --
+    display_name: str
+    email: str
+    cluster_name: str | None = None
+    # -- denormalized weights and derived RGU/cost/waste columns --
+    gpu_type_rgu: float | None = None
+    gpu_type_rgu_drac: float | None = None
+    requested_rgu: float | None = None
+    requested_rgu_drac: float | None = None
+    allocated_rgu: float | None = None
+    allocated_rgu_drac: float | None = None
+    requested_cpu_cost: float | None = None
+    requested_cpu_waste: float | None = None
+    allocated_cpu_cost: float | None = None
+    allocated_cpu_waste: float | None = None
+    cpu_overbilling_cost: float | None = None
+    requested_gpu_cost: float | None = None
+    requested_gpu_waste: float | None = None
+    allocated_gpu_cost: float | None = None
+    allocated_gpu_waste: float | None = None
+    gpu_overbilling_cost: float | None = None
+    # -- jobstatisticdb pivoted, one (mean, max) column pair per metric --
+    gpu_sm_occupancy_mean: float | None = None
+    gpu_sm_occupancy_max: float | None = None
+    gpu_utilization_mean: float | None = None
+    gpu_utilization_max: float | None = None
+    gpu_utilization_fp16_mean: float | None = None
+    gpu_utilization_fp16_max: float | None = None
+    gpu_utilization_fp32_mean: float | None = None
+    gpu_utilization_fp32_max: float | None = None
+    gpu_utilization_fp64_mean: float | None = None
+    gpu_utilization_fp64_max: float | None = None
+    gpu_memory_mean: float | None = None
+    gpu_memory_max: float | None = None
+    system_memory_mean: float | None = None
+    system_memory_max: float | None = None
+    cpu_utilization_mean: float | None = None
+
+
+# -- the wrapper view: the materialized table plus the two time-ranged user
+# subqueries, kept read-time (see module docstring) -------------------------- #
 
 #### supervisors
 supervisors_subq = (
@@ -26,198 +599,51 @@ supervisors_subq = (
     .select_from(SupervisorsDB)
     .join(SupervisorsHelper, col(SupervisorsDB.id) == col(SupervisorsHelper.list_id))
     .where(
-        SupervisorsDB.user_id == SlurmJobDB.sarc_user_id,
-        SupervisorsDB.valid.contains(SlurmJobDB.submit_time),
+        SupervisorsDB.user_id == JobSeriesTable.sarc_user_id,
+        SupervisorsDB.valid.contains(JobSeriesTable.submit_time),
     )
     .scalar_subquery()
 ).label("supervisors")
 
 #### member_type
 # Correlated subquery, not a join: pruned when member_type is not selected (the
-# dashboard never reads it; /v0/job/series caps pages at 100 rows so the per-row
-# GiST lookup on membertypedb stays cheap). A LEFT join would be non-removable
-# (the `valid @> submit_time` range predicate) and cost ~288ms on every wide query.
+# dashboard reads the table directly; /v0/job/series caps pages at 100 rows so
+# the per-row GiST lookup on membertypedb stays cheap).
 member_type_subq = (
     select(MemberTypeDB.member_type)
     .where(
-        MemberTypeDB.user_id == SlurmJobDB.sarc_user_id,
-        MemberTypeDB.valid.contains(SlurmJobDB.submit_time),
+        MemberTypeDB.user_id == JobSeriesTable.sarc_user_id,
+        MemberTypeDB.valid.contains(JobSeriesTable.submit_time),
     )
     .scalar_subquery()
 ).label("member_type")
 
-#### RGU
-# requested_rgu/requested_rgu_drac and allocated_rgu/allocated_rgu_drac are
-# per-job RGU-count metrics (GPU count x RGU weight, not time-integrated):
-# requested_rgu/requested_rgu_drac from the requested GPU count,
-# allocated_rgu/allocated_rgu_drac from the allocated GPU count. Both coalesce a
-# missing GPU count to 0 (non-GPU jobs get RGU 0).
-requested_gres_gpu = func.coalesce(SlurmJobDB.requested_gres_gpu, 0)
-requested_rgu_expr = (requested_gres_gpu * GpuRguDB.rgu).label("requested_rgu")
-requested_rgu_drac_expr = (requested_gres_gpu * GpuRguDB.drac_rgu).label(
-    "requested_rgu_drac"
-)
-
-allocated_gres_gpu = func.coalesce(SlurmJobDB.allocated_gres_gpu, 0)
-allocated_rgu_expr = (allocated_gres_gpu * GpuRguDB.rgu).label("allocated_rgu")
-allocated_rgu_drac_expr = (allocated_gres_gpu * GpuRguDB.drac_rgu).label(
-    "allocated_rgu_drac"
-)
-
-# Cost and waste. CPU costs are in CPU-seconds; GPU cost/waste/overbilling are
-# in RGU-seconds, using the raw (not coalesced) requested/allocated GPU counts —
-# requested_gpu_cost and requested_gpu_waste are count-based cost metrics, not
-# billing cost. requested_gres_gpu for requested_gpu_cost, allocated_gres_gpu
-# for allocated_gpu_cost and gpu_overbilling_cost — all NULL when the job's RGU
-# is not computable, and also NULL (not 0) when the underlying GPU count itself
-# is NULL (unlike requested_rgu/allocated_rgu above, which coalesce to 0). Mean
-# of the per-job "cpu_utilization" statistic (fraction in [0, 1] of the
-# allocated CPU capacity that was actually used); used below to derive CPU
-# waste.
-cpu_jsdb = aliased(JobStatisticDB)
-cpu_utilization = col(cpu_jsdb.mean).label("cpu_utilization")
-requested_cpu_cost = col(SlurmJobDB.elapsed_time) * col(SlurmJobDB.requested_cpu)
-allocated_cpu_cost = col(SlurmJobDB.elapsed_time) * col(SlurmJobDB.allocated_cpu)
-cpu_overbilling_cost = (
-    SlurmJobDB.elapsed_time
-    * (col(SlurmJobDB.allocated_cpu) - col(SlurmJobDB.requested_cpu))
-).label("cpu_overbilling_cost")
-
-sm_occ_jsdb = aliased(JobStatisticDB)
-gpu_sm_occupancy = col(sm_occ_jsdb.mean).label("gpu_sm_occupancy_mean")
-gpu_sm_occupancy_max = col(sm_occ_jsdb.max).label("gpu_sm_occupancy_max")
-
-gpu_util_jsdb = aliased(JobStatisticDB)
-gpu_utilization = col(gpu_util_jsdb.mean).label("gpu_utilization_mean")
-
-gpu_memory_jsdb = aliased(JobStatisticDB)
-gpu_memory_max = col(gpu_memory_jsdb.max).label("gpu_memory_max")
-
-usage_metric = gpu_sm_occupancy.label("usage_metric")
-
-requested_gpu_cost = (
-    col(SlurmJobDB.elapsed_time)
-    * col(SlurmJobDB.requested_gres_gpu)
-    * GpuRguDB.drac_rgu
-)
-allocated_gpu_cost = (
-    col(SlurmJobDB.elapsed_time)
-    * col(SlurmJobDB.allocated_gres_gpu)
-    * GpuRguDB.drac_rgu
-)
-gpu_overbilling_cost = (
-    SlurmJobDB.elapsed_time
-    * (col(SlurmJobDB.allocated_gres_gpu) - col(SlurmJobDB.requested_gres_gpu))
-    * GpuRguDB.drac_rgu
-).label("gpu_overbilling_cost")
-
-JOB_SERIES_EXCLUDED_JOB_COLS = frozenset(
-    {"id", "sarc_user_id", "latest_scraped_start", "latest_scraped_end"}
-)
-
 
 class JobSeriesDB(SQLModel, table=True):
-    """Wide read-model view (slurm_jobs + users, clusters, gpurgudb, per-job stats,
-    and per-row subqueries). Performance gotchas when querying it at /dash window sizes:
+    """`job_series_view`: the `job_series` table plus ``member_type`` and
+    ``supervisors`` (time-ranged user lookups, evaluated per row only when
+    selected) and the ``usage_metric`` alias.
 
-    - slurm_jobs stays index-only only while every column the query needs is in the
-      covering index -- notably the join keys sarc_user_id (users LEFT join,
-      member_type/supervisors subqueries) and cluster_id (clusters LEFT join). Both
-      the users and clusters joins are LEFT so the planner drops them when their
-      columns are unused (FK + NOT NULL make LEFT == INNER, so no row is lost).
-      Even a dropped join pins its key columns to the scan, though; when the target
-      index lacks them, build the query with ``job_series_select()`` below instead.
-    - member_type and supervisors are per-row correlated subqueries:
-      pruned when not selected, but evaluated once per output row otherwise -- cheap
-      only on bounded/paginated selects, not over a wide unbounded window.
-    - ``usage_metric``, the per-stat columns (``gpu_sm_occupancy_mean``/``_max``,
-      ``gpu_utilization_mean``, ``gpu_memory_max``) and the ``*_gpu_waste`` /
-      ``*_cpu_waste`` derived from them read jobstatisticdb through one set-based LEFT
-      join per stat name: index-only (unique covering index on (name, job_id)),
-      parallel, and each join is dropped when its stat is unused. usage_metric, both
-      sm-occupancy columns and ``*_gpu_waste`` all ride on the same join, so they cost
-      the same as any one of them; gpu_utilization_mean and gpu_memory_max each add
-      one. A stat with no recorded row reads NULL, and so does the waste derived from
-      it: a missing measurement, not zero waste.
+    All of the heavy joins (users, clusters, gpurgudb, jobstatisticdb pivots)
+    and the RGU/cost/waste arithmetic live in the table itself, maintained by
+    triggers -- reading this view is a single-relation scan. ``usage_metric``
+    is an alias for ``gpu_sm_occupancy_mean``: whichever statistic SARC treats
+    as "GPU usage", so redefining it stays confined to this module.
     """
 
     __tablename__ = "job_series_view"  # This is filtered out in table creation
-    __sql_view__ = (
-        select(
-            col(SlurmJobDB.id).label("job_db_id"),
-            # sarc_user_id from slurm_jobs (not UserDB.id) so the users join below
-            # can be LEFT and dropped by the planner when display_name/email are
-            # unused. sarc_user_id is NOT NULL + FK to users, so LEFT == INNER here.
-            col(SlurmJobDB.sarc_user_id).label("sarc_user_id"),
-            *[
-                c
-                for c in SlurmJobDB.__table__.columns  # ty:ignore[unresolved-attribute]
-                if c.name not in JOB_SERIES_EXCLUDED_JOB_COLS
-            ],
-            *[c for c in UserDB.__table__.columns if c.name != "id"],  # ty:ignore[unresolved-attribute]
-            col(SlurmClusterDB.name).label("cluster_name"),
-            member_type_subq,
-            supervisors_subq,
-            col(GpuRguDB.rgu).label("gpu_type_rgu"),
-            col(GpuRguDB.drac_rgu).label("gpu_type_rgu_drac"),
-            requested_rgu_expr,
-            requested_rgu_drac_expr,
-            allocated_rgu_expr,
-            allocated_rgu_drac_expr,
-            requested_cpu_cost.label("requested_cpu_cost"),
-            ((1 - cpu_utilization) * requested_cpu_cost).label("requested_cpu_waste"),
-            allocated_cpu_cost.label("allocated_cpu_cost"),
-            ((1 - cpu_utilization) * allocated_cpu_cost).label("allocated_cpu_waste"),
-            cpu_overbilling_cost,
-            requested_gpu_cost.label("requested_gpu_cost"),
-            ((1 - usage_metric) * requested_gpu_cost).label("requested_gpu_waste"),
-            allocated_gpu_cost.label("allocated_gpu_cost"),
-            ((1 - usage_metric) * allocated_gpu_cost).label("allocated_gpu_waste"),
-            gpu_overbilling_cost,
-            usage_metric,
-            gpu_sm_occupancy,
-            gpu_sm_occupancy_max,
-            gpu_utilization,
-            gpu_memory_max,
-        )  # ty:ignore[no-matching-overload]
-        .join(UserDB, SlurmJobDB.sarc_user_id == UserDB.id, isouter=True)
-        # LEFT so the planner drops it when cluster_name is unused (same as the
-        # users join above). cluster_id is NOT NULL + FK to clusters.id (a unique
-        # PK) with ondelete RESTRICT, so no row is ever dropped -- LEFT == INNER.
-        .join(SlurmClusterDB, SlurmJobDB.cluster_id == SlurmClusterDB.id, isouter=True)
-        .join(GpuRguDB, GpuRguDB.name == SlurmJobDB.harmonized_gpu_type, isouter=True)
-        .join(
-            sm_occ_jsdb,
-            and_(
-                sm_occ_jsdb.job_id == SlurmJobDB.id,
-                sm_occ_jsdb.name == "gpu_sm_occupancy",
-            ),
-            isouter=True,
-        )
-        .join(
-            cpu_jsdb,
-            and_(cpu_jsdb.job_id == SlurmJobDB.id, cpu_jsdb.name == "cpu_utilization"),
-            isouter=True,
-        )
-        .join(
-            gpu_util_jsdb,
-            and_(
-                gpu_util_jsdb.job_id == SlurmJobDB.id,
-                gpu_util_jsdb.name == "gpu_utilization",
-            ),
-            isouter=True,
-        )
-        .join(
-            gpu_memory_jsdb,
-            and_(
-                gpu_memory_jsdb.job_id == SlurmJobDB.id,
-                gpu_memory_jsdb.name == "gpu_memory",
-            ),
-            isouter=True,
-        )
-    )
-    job_db_id: int = Field(primary_key=True)
+    __sql_view__ = select(
+        *[
+            col(JobSeriesTable.__table__.c[c.name])  # ty:ignore[unresolved-attribute]
+            for c in JobSeriesTable.__table__.columns  # ty:ignore[unresolved-attribute]
+        ],
+        col(JobSeriesTable.gpu_sm_occupancy_mean).label("usage_metric"),
+        member_type_subq,
+        supervisors_subq,
+    )  # ty: ignore[no-matching-overload]
+
     # job identification
+    job_db_id: int = Field(primary_key=True)
     cluster_id: int
     account: str
     """Slurm accounting account the job was charged to (e.g. "rrg-..."); an
@@ -382,11 +808,10 @@ class JobSeriesDB(SQLModel, table=True):
     requested_gpu_waste: float | None
     """Unused requested RGU-seconds: (1 - usage_metric) x requested_gpu_cost."""
     allocated_gpu_cost: float | None
-    """RGU-seconds the scheduler allocated: elapsed_time x allocated_gres_gpu x
-    DRAC RGU weight."""
+    """RGU-seconds the scheduler allocated: elapsed_time x allocated_gres_gpu x DRAC
+    RGU weight."""
     allocated_gpu_waste: float | None
-    """Unused allocated RGU-seconds: (1 - usage_metric) x
-    allocated_gpu_cost."""
+    """Unused allocated RGU-seconds: (1 - usage_metric) x allocated_gpu_cost."""
     gpu_overbilling_cost: float | None
     """RGU-seconds billed beyond the request: elapsed_time x (allocated_gres_gpu
     - requested_gres_gpu) x DRAC RGU weight."""
@@ -415,45 +840,3 @@ class JobSeriesDB(SQLModel, table=True):
     """The user's member type valid at the job's submit time."""
     supervisors: list[int] | None = Field(sa_type=JSON)
     """Supervisor user ids, ordered, valid at the job's submit time."""
-
-
-def _referenced_relations(expressions) -> set[FromClause]:
-    """Tables/aliases whose columns appear in the expressions (subqueries included)."""
-    return {
-        el.table
-        for expr in expressions
-        for el in visitors.iterate(expr)
-        if isinstance(el, ColumnClause) and el.table is not None
-    }
-
-
-def _prune_joins(node: FromClause, needed: set[FromClause]) -> FromClause:
-    """Rebuild a join tree without the LEFT joins to unreferenced relations."""
-    if not isinstance(node, Join):
-        return node
-    left = _prune_joins(node.left, needed)
-    if node.isouter and node.right not in needed:
-        return left
-    return left.join(node.right, node.onclause, isouter=node.isouter)
-
-
-def job_series_select(*columns: str) -> Select:
-    """SELECT of the given job_series columns, minus the view joins they don't use.
-
-    Querying the DB view keeps the removed joins' key columns marked as needed
-    (Postgres never un-marks them), which alone can disqualify index-only scans.
-    Building the same statement client-side, the planner never sees the unused
-    joins or their keys. Dropping one is safe because every view join is LEFT on
-    a unique key, so it never changes the row set. Use ``.subquery()`` and read
-    every needed column through it.
-    """
-    view = JobSeriesDB.__sql_view__
-    missing = sorted(set(columns) - set(view.selected_columns.keys()))
-    if missing:
-        raise KeyError(f"unknown job_series column(s): {missing}")
-    keep = [view.selected_columns[name] for name in columns]
-    froms = view.get_final_froms()
-    assert len(froms) == 1, "job_series is expected to be a single join tree"
-    return select(*keep).select_from(
-        _prune_joins(froms[0], _referenced_relations(keep))
-    )

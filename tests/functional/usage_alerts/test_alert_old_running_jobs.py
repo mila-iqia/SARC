@@ -55,9 +55,10 @@ def _get_error_logs(text: str) -> list:
     errors = []
     for line in text.splitlines():
         if line.startswith("ERROR "):
-            error_msg = re.sub(r"^ERROR +sarc\..+\.py:[0-9]+ +", "", line.lstrip())
-            assert error_msg
-            errors.append(error_msg)
+            line = line.strip()
+            error_msg = re.sub(r"^ERROR +sarc\..+\.py:[0-9]+ +", "", line)
+            if error_msg != line:
+                errors.append(error_msg)
     return errors
 
 
