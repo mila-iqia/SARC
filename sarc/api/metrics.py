@@ -580,6 +580,7 @@ def metrics_homepage(
             "usage_metric": _USAGE_METRIC_NAME,
             "job_states": [s.value for s in SlurmState],
             "storage_key": storage_key,
+            "ga_measurement_id": config.server.ga_measurement_id,
         },
     )
 

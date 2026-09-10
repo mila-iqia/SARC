@@ -11,6 +11,8 @@ sarc:
   server: # API server config
     auth: # If null, disables authentification for the API
       # easy-oauth config, see https://pypi.org/project/easy-oauth/
+    ga_measurement_id: ga-measurement-id-replace-me # Google Analytics measurement ID
+      # for the Utilization Dashboard (/dash/metrics); omit/null to disable
   cache: "sarc-cache" # The path to the sarc cache for fetching and parsing
   health_monitor:
     parameterizations: { "key": ["val1", "val2"] } # Parameterizations for the checks

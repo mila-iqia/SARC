@@ -199,7 +199,11 @@ def test_usage_report():
         in text
     )
     # Test overview contains dashboard_url with the report window as query params
-    assert "https://dash.example.com?start=2026-01-01&end=2026-02-01" in text
+    assert (
+        "https://dash.example.com?start=2026-01-01&end=2026-02-01"
+        "&utm_source=slack&utm_medium=notification"
+        "&utm_campaign=usage_report&utm_content=dashboard" in text
+    )
 
 
 def test_usage_report_raises_without_notifications_config():
@@ -324,7 +328,11 @@ def test_underusage_report():
         in text
     )
     # Test overview contains dashboard_url with the report window as query params
-    assert "https://dash.example.com?start=2026-01-01&end=2026-02-01" in text
+    assert (
+        "https://dash.example.com?start=2026-01-01&end=2026-02-01"
+        "&utm_source=slack&utm_medium=notification"
+        "&utm_campaign=underusage_report&utm_content=dashboard" in text
+    )
 
 
 def test_dm_raises_without_notifications_config():

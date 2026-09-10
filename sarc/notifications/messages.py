@@ -1,6 +1,7 @@
 from collections import defaultdict
 from collections.abc import Callable
 from datetime import date
+from urllib.parse import urlencode
 
 from sarc.config import ConfigurationError, config
 from sarc.notifications.mrkdwn import to_slack_mrkdwn
@@ -29,8 +30,18 @@ def _date_range(start: date, end: date) -> str:
     return f"{start:%b %d, %Y} – {end:%b %d, %Y}"
 
 
-def _dashboard_url(base_url: str, start: date, end: date) -> str:
-    return f"{base_url}?start={start:%Y-%m-%d}&end={end:%Y-%m-%d}"
+def _dashboard_url(base_url: str, start: date, end: date, *, utm_campaign: str) -> str:
+    query = urlencode(
+        {
+            "start": f"{start:%Y-%m-%d}",
+            "end": f"{end:%Y-%m-%d}",
+            "utm_source": "slack",
+            "utm_medium": "notification",
+            "utm_campaign": utm_campaign,
+            "utm_content": "dashboard",
+        }
+    )
+    return f"{base_url}?{query}"
 
 
 def _tree_prefix(i: int, n: int) -> str:
@@ -97,7 +108,12 @@ def build_user_dm(
             hours_per_unit=ncfg.rgu_unit.hours_per_unit,
             suffix=f"{ncfg.rgu_unit.unit} unused",
         ),
-        dashboard_url=_dashboard_url(ncfg.dashboard_url, window_start, window_end),
+        dashboard_url=_dashboard_url(
+            ncfg.dashboard_url,
+            window_start,
+            window_end,
+            utm_campaign="underusage_report",
+        ),
     ).rstrip()
     return to_slack_mrkdwn(text)
 
@@ -135,7 +151,9 @@ def build_usage_report(
             hours_per_unit=ncfg.rgu_unit.hours_per_unit,
             suffix=f"{ncfg.rgu_unit.unit} unused",
         ),
-        dashboard_url=_dashboard_url(ncfg.dashboard_url, window_start, window_end),
+        dashboard_url=_dashboard_url(
+            ncfg.dashboard_url, window_start, window_end, utm_campaign="usage_report"
+        ),
     ).rstrip()
     return to_slack_mrkdwn(text)
 
