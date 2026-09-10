@@ -769,6 +769,47 @@
       return { showlegend: true, legend: { ...row, y: 1.09 }, legend2: { ...row, y: 1.02 } };
     }
 
+    // Give the legend rows room when they no longer fit the t:78 band. Plotly
+    // wraps a horizontal legend once its items exceed the plot width, and both
+    // rows anchor at the bottom, so on a narrow tile the four-item bar row
+    // grows *up* from y:1.02 and paints over the one-item curve row at y:1.09
+    // — the 'SM occupancy mean' entry disappears under it. No margin setting
+    // fixes this: autoexpand (already on by default) only fits each legend to
+    // the figure's own edge, never against the other legend's height. So after
+    // the draw, measure the rows' real heights (_effHeight, the same value
+    // Plotly positions them with) and, on a collision, restack them bottom-up
+    // and grow the top margin: the plot gets shorter, the legend stays
+    // readable. Runs on every render — the debounced resize redraw included —
+    // so a wider tile unwraps the rows and t returns to its calibrated 78.
+    function fitRguLegends(gd) {
+      const fl = gd._fullLayout;
+      if (!fl || !fl._size) return;
+      const h1 = (fl.legend && fl.legend._effHeight) || 0;
+      const h2 = (fl.legend2 && fl.legend2._effHeight) || 0;
+      if (!h1 && !h2) return;
+      const gs = fl._size;
+      const GAP = 4;
+      // Bottom edge of each row, px above the plot area (paper y, bottom
+      // anchor — the same conversion Plotly itself uses to place them).
+      const b1 = h1 ? (fl.legend.y - 1) * gs.h : 0;
+      const b2 = h2 ? (fl.legend2.y - 1) * gs.h : 0;
+      const titleEl = gd.querySelector('.gtitle');
+      const titleH = titleEl ? titleEl.getBoundingClientRect().height : 24;
+      // Row boxes carry 5px of empty endpad per side, so they may cross by up
+      // to a full pad while the visible rows are still clear.
+      const overlap = (h1 && h2) ? Math.min(b1 + h1, b2 + h2) - Math.max(b1, b2) : -Infinity;
+      const top = Math.max(b1 + h1, b2 + h2);
+      if (overlap <= 11 && top - 3 <= gs.t - titleH) return;
+      const above2 = GAP;
+      const above1 = above2 + (h2 ? h2 + GAP : 0);
+      const t = Math.ceil((h1 ? above1 + h1 : above2 + h2) + GAP + titleH + 2);
+      const h = gs.h + (gs.t - t);
+      const update = { 'margin.t': t };
+      if (h2) update['legend2.y'] = 1 + above2 / h;
+      if (h1) update['legend.y'] = 1 + above1 / h;
+      Plotly.relayout(gd, update);
+    }
+
     // Stable colour per cluster (assigned by sorted index).
     // Palette assigned by stacking order (largest cluster first). Ordered to
     // match the current clusters-by-size; purely positional (not keyed on names),
@@ -1658,7 +1699,7 @@
           annotations: [TREND_YAXIS_TITLE],
           ...rguLegends(),
           margin: { l: 60, r: 60, t: 78, b: 60 },
-        }), { responsive: true });
+        }), { responsive: true }).then(fitRguLegends);
         return;
       }
 
@@ -1713,6 +1754,7 @@
         gd.on('plotly_click', evt => {
           if (evt.points && evt.points.length) clickSetFocus(evt.points[0].x, evt.points[0].customdata);
         });
+        fitRguLegends(gd);
       });
     }
 
