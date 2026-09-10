@@ -203,155 +203,75 @@ sarc:
         active: true
         cluster_name: null
 
-      # prometheus_cpu_stat_* checks correspond to test params in test_prometheus_scraping_stats.py
-      prometheus_cpu_stat_0:
-        $class: "sarc.alerts.usage_alerts.prometheus_stats_occurrences:PrometheusCpuStatCheck"
-        active: true
-      prometheus_cpu_stat_1:
-        $class: "sarc.alerts.usage_alerts.prometheus_stats_occurrences:PrometheusCpuStatCheck"
-        active: true
-        time_interval: null
-      prometheus_cpu_stat_2:
-        $class: "sarc.alerts.usage_alerts.prometheus_stats_occurrences:PrometheusCpuStatCheck"
-        active: true
-        time_interval: null
-        nb_stddev: 0.25
-      prometheus_cpu_stat_3:
-        $class: "sarc.alerts.usage_alerts.prometheus_stats_occurrences:PrometheusCpuStatCheck"
-        active: true
-        time_interval: null
-        nb_stddev: 0.25
-        cluster_names:
-          - raisin
-          - patate
-          - fromage
-          - mila
-          - invisible-cluster
-      prometheus_cpu_stat_4:
-        $class: "sarc.alerts.usage_alerts.prometheus_stats_occurrences:PrometheusCpuStatCheck"
-        active: true
-        time_interval: null
-        nb_stddev: 0.25
-        cluster_names:
-          - raisin
-          - mila
-      prometheus_cpu_stat_5:
-        $class: "sarc.alerts.usage_alerts.prometheus_stats_occurrences:PrometheusCpuStatCheck"
-        active: true
-        time_interval: null
-        nb_stddev: 0.25
-        group_by_node: []
-      prometheus_cpu_stat_6:
-        $class: "sarc.alerts.usage_alerts.prometheus_stats_occurrences:PrometheusCpuStatCheck"
-        active: true
-        time_interval: null
-        nb_stddev: 0.25
-        group_by_node:
-          - raisin
-          - patate
-          - fromage
-          - mila
-      prometheus_cpu_stat_7:
-        $class: "sarc.alerts.usage_alerts.prometheus_stats_occurrences:PrometheusCpuStatCheck"
-        active: true
-        time_interval: null
-        nb_stddev: 0.25
-        group_by_node:
-          - raisin
-          - patate
-          - fromage
-          - mila
-        min_jobs_per_group: 2
-      prometheus_cpu_stat_8:
-        $class: "sarc.alerts.usage_alerts.prometheus_stats_occurrences:PrometheusCpuStatCheck"
-        active: true
-        time_interval: null
-        nb_stddev: 0.25
-        group_by_node:
-          - raisin
-          - patate
-          - fromage
-          - mila
-        min_jobs_per_group:
-          raisin: 3
-      prometheus_cpu_stat_9:
-        $class: "sarc.alerts.usage_alerts.prometheus_stats_occurrences:PrometheusCpuStatCheck"
-        active: true
-        time_interval: null
-        nb_stddev: 0.25
-        group_by_node: true
-        min_jobs_per_group:
-          raisin: 3
+      # prometheus_stats_coverage_* checks correspond to test params in test_prometheus_stats_coverage.py
+      #
+      # Fetch attempts seeded by the test inside the default 1-day window (SEED in the test file):
+      #   raisin  14 attempts, 5 with stats (35.7 %)
+      #   mila     1 attempt,  1 with stats (100 %)
+      #   patate   1 attempt,  1 with stats (100 %)
+      #   fromage  1 attempt,  0 with stats (0 %)
+      # raisin has 5 more attempts, all with stats, 8 days before the window.
+      #
+      # gerudo and hyrule have a prometheus_url too, so the checks that don't name their
+      # clusters expect them -- but the job factory creates no job for them, hence no
+      # attempt either, hence one "no Prometheus fetch attempt" alert each.
 
-      # prometheus_gpu_stat_* checks correspond to test params in test_prometheus_stats_for_gpu_jobs.py
-      prometheus_gpu_stat_default:
-        $class: "sarc.alerts.usage_alerts.prometheus_stats_occurrences:PrometheusGpuStatCheck"
+      # Every cluster checked: raisin (35.7 %) and fromage (0 %) are below 50 %.
+      prometheus_stats_coverage_default:
+        $class: "sarc.alerts.usage_alerts.prometheus_stats_coverage:PrometheusStatsCoverageCheck"
         active: true
-      prometheus_gpu_stat_no_time_interval:
-        $class: "sarc.alerts.usage_alerts.prometheus_stats_occurrences:PrometheusGpuStatCheck"
+
+      # Threshold below raisin's coverage: only fromage is left.
+      prometheus_stats_coverage_coverage_030:
+        $class: "sarc.alerts.usage_alerts.prometheus_stats_coverage:PrometheusStatsCoverageCheck"
         active: true
-        time_interval: null
-      prometheus_gpu_stat_std_025:
-        $class: "sarc.alerts.usage_alerts.prometheus_stats_occurrences:PrometheusGpuStatCheck"
+        min_coverage: 0.3
+
+      # No coverage threshold: only the clusters without any attempt are left.
+      prometheus_stats_coverage_coverage_0:
+        $class: "sarc.alerts.usage_alerts.prometheus_stats_coverage:PrometheusStatsCoverageCheck"
         active: true
-        time_interval: null
-        nb_stddev: 0.25
-      prometheus_gpu_stat_std_025_clusters_extra:
-        $class: "sarc.alerts.usage_alerts.prometheus_stats_occurrences:PrometheusGpuStatCheck"
+        min_coverage: 0.0
+
+      # Restricted to raisin alone, for the tests that need a check that can succeed.
+      prometheus_stats_coverage_raisin:
+        $class: "sarc.alerts.usage_alerts.prometheus_stats_coverage:PrometheusStatsCoverageCheck"
         active: true
-        time_interval: null
-        nb_stddev: 0.25
         cluster_names:
           - raisin
-          - patate
-          - fromage
+
+      # Restricted to some clusters, one of which has no attempt at all.
+      prometheus_stats_coverage_clusters:
+        $class: "sarc.alerts.usage_alerts.prometheus_stats_coverage:PrometheusStatsCoverageCheck"
+        active: true
+        cluster_names:
+          - raisin
           - mila
           - invisible-cluster
-      prometheus_gpu_stat_std_025_clusters_2:
-        $class: "sarc.alerts.usage_alerts.prometheus_stats_occurrences:PrometheusGpuStatCheck"
+
+      # Wide enough window to also include raisin's older attempts, which lift it to 52.6 %.
+      prometheus_stats_coverage_interval_30d:
+        $class: "sarc.alerts.usage_alerts.prometheus_stats_coverage:PrometheusStatsCoverageCheck"
         active: true
-        time_interval: null
-        nb_stddev: 0.25
-        cluster_names:
-          - raisin
-          - mila
-      prometheus_gpu_stat_std_025_group_none:
-        $class: "sarc.alerts.usage_alerts.prometheus_stats_occurrences:PrometheusGpuStatCheck"
+        time_interval: 30d
+
+      # Window too narrow to hold any attempt: every expected cluster is reported.
+      prometheus_stats_coverage_interval_1s:
+        $class: "sarc.alerts.usage_alerts.prometheus_stats_coverage:PrometheusStatsCoverageCheck"
         active: true
-        time_interval: null
-        nb_stddev: 0.25
-        group_by_node: []
-      prometheus_gpu_stat_std_025_group_false:
-        $class: "sarc.alerts.usage_alerts.prometheus_stats_occurrences:PrometheusGpuStatCheck"
+        time_interval: 1s
+
+      # Out-of-range threshold: rejected before any query.
+      prometheus_stats_coverage_invalid_coverage:
+        $class: "sarc.alerts.usage_alerts.prometheus_stats_coverage:PrometheusStatsCoverageCheck"
         active: true
-        time_interval: null
-        nb_stddev: 0.25
-        group_by_node: false
-      prometheus_gpu_stat_std_025_group_full:
-        $class: "sarc.alerts.usage_alerts.prometheus_stats_occurrences:PrometheusGpuStatCheck"
+        min_coverage: 1.5
+
+      # Empty window: rejected before any query.
+      prometheus_stats_coverage_invalid_interval:
+        $class: "sarc.alerts.usage_alerts.prometheus_stats_coverage:PrometheusStatsCoverageCheck"
         active: true
-        time_interval: null
-        nb_stddev: 0.25
-        group_by_node:
-          - raisin
-          - patate
-          - fromage
-          - mila
-      prometheus_gpu_stat_std_025_group_full_min_jobs_2:
-        $class: "sarc.alerts.usage_alerts.prometheus_stats_occurrences:PrometheusGpuStatCheck"
-        active: true
-        time_interval: null
-        nb_stddev: 0.25
-        group_by_node: true
-        min_jobs_per_group: 2
-      prometheus_gpu_stat_std_025_group_full_min_jobs_raisin:
-        $class: "sarc.alerts.usage_alerts.prometheus_stats_occurrences:PrometheusGpuStatCheck"
-        active: true
-        time_interval: null
-        nb_stddev: 0.25
-        group_by_node: true
-        min_jobs_per_group:
-          raisin: 3
+        time_interval: 0s
 
       # same_job_id_* checks correspond to test params in test_alert_same_job_id.py
       same_job_id_default:

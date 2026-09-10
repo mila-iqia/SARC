@@ -1,0 +1,2 @@
+Invalid time_interval (must be > 0) for Prometheus stats coverage: 0:00:00
+[prometheus_stats_coverage_invalid_interval] FAILURE: prometheus_stats_coverage_invalid_interval
