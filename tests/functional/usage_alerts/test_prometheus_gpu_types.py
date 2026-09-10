@@ -1,4 +1,3 @@
-import re
 from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
@@ -41,6 +40,20 @@ TESTING_DATA = {
 }
 
 
+def _sarc_log(caplog) -> str:
+    """caplog.text restricted to sarc records.
+
+    SQLAlchemy logs a pooled-connection rollback failure whenever the garbage
+    collector reaches a connection to an already-dropped test database, and when
+    that happens depends on the order tests ran in.
+    """
+    return "".join(
+        f"{record.getMessage()}\n"
+        for record in caplog.records
+        if record.name.startswith("sarc.")
+    )
+
+
 @pytest.mark.usefixtures("empty_read_write_db", "health_config")
 @pytest.mark.parametrize("params", TESTING_DATA.values(), ids=TESTING_DATA.keys())
 def test_check_prometheus_vs_slurmconfig(
@@ -71,9 +84,7 @@ def test_check_prometheus_vs_slurmconfig(
         )
         == 0
     )
-    file_regression.check(
-        params["message"] + "\n\n" + re.sub(r"ERROR +.+\.py:[0-9]+ +", "", caplog.text)
-    )
+    file_regression.check(params["message"] + "\n\n" + _sarc_log(caplog))
 
 
 @pytest.mark.usefixtures("empty_read_write_db", "health_config")
@@ -106,4 +117,4 @@ def test_check_prometheus_vs_slurmconfig_all(
                 sess.commit()
 
     assert cli_main(["health", "run", "--check", "prometheus_gpu_type_all"]) == 0
-    file_regression.check(re.sub(r"ERROR +.+\.py:[0-9]+ +", "", caplog.text))
+    file_regression.check(_sarc_log(caplog))

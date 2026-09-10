@@ -304,16 +304,6 @@ jobless_read_write_db_config_object = DbConfiguration(
 
 read_write_db_config_object = DbConfiguration("rw").fixture()
 
-read_write_db_with_many_cpu_jobs_config_object = DbConfiguration(
-    "r-jobs",
-    # CPU-only jobs: no GPU, but a real memory allocation (factory default), so
-    # computed statistics include a genuine system_memory entry.
-    job_patch={
-        "allocated": {"billing": 0, "cpu": 0, "gres_gpu": 0, "node": 0},
-        "requested": {"billing": 0, "cpu": 0, "gres_gpu": 0, "node": 0},
-    },
-).fixture()
-
 read_only_db_config_object = DbConfiguration("r", read_only=True).fixture()
 
 
@@ -334,13 +324,6 @@ def jobless_read_write_db(jobless_read_write_db_config_object):
 @pytest.fixture
 def read_write_db(read_write_db_config_object):
     with custom_db_config(read_write_db_config_object):
-        with config.db.session() as session:
-            yield session
-
-
-@pytest.fixture
-def read_write_db_with_many_cpu_jobs(read_write_db_with_many_cpu_jobs_config_object):
-    with custom_db_config(read_write_db_with_many_cpu_jobs_config_object):
         with config.db.session() as session:
             yield session
 
