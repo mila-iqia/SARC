@@ -1,3 +1,4 @@
+import functools
 from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
@@ -5,6 +6,15 @@ import pytest
 
 from sarc.config import config
 from sarc.db.cluster import NodeGPUMappingDB, SlurmClusterDB
+from tests.functional.common import _get_warnings
+
+get_warnings = functools.partial(
+    _get_warnings,
+    modules=[
+        "sarc.alerts.usage_alerts.prometheus_gpu_types:prometheus_gpu_types.py",
+        "sarc.alerts.common:common.py",
+    ],
+)
 
 TESTING_DATA = {
     "00_hyrule": {
@@ -40,18 +50,14 @@ TESTING_DATA = {
 }
 
 
-def _sarc_log(caplog) -> str:
-    """caplog.text restricted to sarc records.
+def _errors(caplog) -> str:
+    """The check's own error messages, one per line.
 
-    SQLAlchemy logs a pooled-connection rollback failure whenever the garbage
-    collector reaches a connection to an already-dropped test database, and when
-    that happens depends on the order tests ran in.
+    Filtering by module drops the pooled-connection rollback failure SQLAlchemy logs
+    whenever the garbage collector reaches a connection to an already-dropped test
+    database, which happens in an order that depends on the tests that ran before.
     """
-    return "".join(
-        f"{record.getMessage()}\n"
-        for record in caplog.records
-        if record.name.startswith("sarc.")
-    )
+    return "".join(f"{message}\n" for message in get_warnings(caplog.text))
 
 
 @pytest.mark.usefixtures("empty_read_write_db", "health_config")
@@ -84,7 +90,7 @@ def test_check_prometheus_vs_slurmconfig(
         )
         == 0
     )
-    file_regression.check(params["message"] + "\n\n" + _sarc_log(caplog))
+    file_regression.check(params["message"] + "\n\n" + _errors(caplog))
 
 
 @pytest.mark.usefixtures("empty_read_write_db", "health_config")
@@ -117,4 +123,4 @@ def test_check_prometheus_vs_slurmconfig_all(
                 sess.commit()
 
     assert cli_main(["health", "run", "--check", "prometheus_gpu_type_all"]) == 0
-    file_regression.check(_sarc_log(caplog))
+    file_regression.check(_errors(caplog))
