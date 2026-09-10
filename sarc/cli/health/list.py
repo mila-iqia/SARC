@@ -1,7 +1,8 @@
 # ruff: noqa: T201
 import logging
-from dataclasses import dataclass
-from dataclasses import fields as dataclass_fields
+from dataclasses import dataclass, fields as dataclass_fields
+
+from serieux.exc import ValidationError
 
 from sarc.alerts.common import CheckResult, HealthCheck
 from sarc.config import config
@@ -20,7 +21,11 @@ class HealthListCommand:
             nb_states = len(states)
             logger.info(f"There are {nb_states} health check states saved in database.")
             for state in states:
-                _pretty_print_state(state)
+                try:
+                    _pretty_print_state(state)
+                except ValidationError as exc:
+                    logger.error(f"Malformed state: {state.name}: {exc}")
+                    print()
         return 0
 
 
