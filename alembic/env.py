@@ -1,5 +1,6 @@
 from alembic_utils.pg_extension import PGExtension
 from alembic_utils.pg_function import PGFunction
+from alembic_utils.pg_trigger import PGTrigger
 from alembic_utils.pg_view import PGView
 from alembic_utils.replaceable_entity import register_entities
 from sqlalchemy.dialects.postgresql.psycopg import PGDialect_psycopg
@@ -21,8 +22,22 @@ slurm_job_end = PGFunction(
     signature=job.SLURM_JOB_END_SIGNATURE,
     definition=job.SLURM_JOB_END_DEFINITION,
 )
+job_series_entities: list[PGFunction | PGTrigger] = [
+    PGFunction(schema="public", signature=signature, definition=definition)
+    for signature, definition in job_series.JOB_SERIES_FUNCTIONS.items()
+]
+job_series_entities += [
+    PGTrigger(
+        schema="public",
+        signature=name,
+        definition=definition,
+        on_entity=f"public.{table}",
+        is_constraint=False,
+    )
+    for name, (table, definition) in job_series.JOB_SERIES_TRIGGERS.items()
+]
 
-register_entities([btree_gist, slurm_job_end, job_series_view])
+register_entities([btree_gist, slurm_job_end, job_series_view, *job_series_entities])
 
 target_metadata = get_meta()
 

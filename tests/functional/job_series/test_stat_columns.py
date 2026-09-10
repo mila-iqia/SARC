@@ -1,10 +1,10 @@
-"""job_series_view's per-stat columns: each must read its own (stat name, aggregate)."""
+"""job_series' per-stat columns: each must read its own (stat name, aggregate)."""
 
 import pytest
 from sqlmodel import Session, col, select
 
 from sarc.db.job import JobStatisticDB, SlurmJobDB
-from sarc.db.job_series import JobSeriesDB
+from sarc.db.job_series import JobSeriesTable
 
 # One mean and one max per stat, all 8 values distinct: a column reading the wrong
 # stat name -- or mean where max is expected -- then reads a wrong value instead of
@@ -29,14 +29,14 @@ def _gpu_job_id(sess: Session) -> int:
     return job.id
 
 
-def _series(sess: Session, job_db_id: int) -> JobSeriesDB:
+def _series(sess: Session, job_db_id: int) -> JobSeriesTable:
     return sess.exec(
-        select(JobSeriesDB).where(col(JobSeriesDB.job_db_id) == job_db_id)
+        select(JobSeriesTable).where(col(JobSeriesTable.job_db_id) == job_db_id)
     ).one()
 
 
 def _stat(job_db_id: int, name: str, mean: float, maximum: float) -> JobStatisticDB:
-    # The view reads mean and max only; the other aggregates stay NULL.
+    # The table's pivot reads mean and max only; the other aggregates stay NULL.
     return JobStatisticDB(
         job_id=job_db_id,
         name=name,
@@ -54,7 +54,6 @@ def test_stat_columns_are_null_without_stats(read_write_db: Session):
     """No scraped stat for the job: every stat column is NULL, and so is every waste."""
     series = _series(read_write_db, _gpu_job_id(read_write_db))
 
-    assert series.usage_metric is None
     assert series.gpu_sm_occupancy_mean is None
     assert series.gpu_sm_occupancy_max is None
     assert series.gpu_utilization_mean is None
@@ -91,9 +90,8 @@ def test_stat_columns_read_their_own_stat(read_write_db: Session):
     assert gpu_req is not None and gpu_alloc is not None
     assert cpu_req is not None and cpu_alloc is not None
 
-    # usage_metric is currently the sm-occupancy mean, and GPU waste follows it --
-    # not gpu_utilization, the other GPU mean the view now exposes.
-    assert series.usage_metric == sm_mean
+    # GPU waste follows the sm-occupancy mean -- not gpu_utilization, the other
+    # GPU mean the table exposes.
     assert series.requested_gpu_waste == pytest.approx((1 - sm_mean) * gpu_req)
     assert series.allocated_gpu_waste == pytest.approx((1 - sm_mean) * gpu_alloc)
     # CPU waste keeps reading cpu_utilization.
