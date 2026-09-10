@@ -1163,7 +1163,6 @@ def metrics_rgu_usage(
         scope_user_id=scope_user_id,
     )
     # A job spanning several buckets yields one row per bucket, which is what
-    # A job spanning several buckets yields one row per bucket, which is what
     # splits its RGU.h across them -- and what makes metric_means below read
     # as "over the jobs running in this bucket".
     query = (
@@ -1354,7 +1353,6 @@ def metrics_metric_trend(
         query.where(
             _ran_between(JobSeriesTable, begin_dt.timestamp(), finish_dt.timestamp())
         )
-        .group_by(bucket_table.c.bucket_index)
         .group_by(bucket_table.c.bucket_index)
         .order_by(bucket_table.c.bucket_index)
     )
@@ -1560,8 +1558,6 @@ def metrics_jobs(
         "requested_gpu": col(JobSeriesTable.requested_gres_gpu),
         "allocated_gpu": col(JobSeriesTable.allocated_gres_gpu),
         "billing": col(JobSeriesTable.allocated_billing),
-        # harmonized_gpu_type is NOT NULL on job_series (its whole population has
-        # one), so this is the coalesce(harmonized, allocated) the view showed.
         "gpu_type": col(JobSeriesTable.harmonized_gpu_type),
         "gpu_type_rgu": col(JobSeriesTable.gpu_type_rgu_drac),
         "rgu": col(JobSeriesTable.allocated_rgu_drac),

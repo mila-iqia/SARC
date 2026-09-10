@@ -48,7 +48,7 @@ class BackfillSeriesCommand:
                 job_series_backfill_sql(where="AND j.id >= :lo AND j.id < :hi")
             )
             while lo <= hi:
-                result = sess.exec(insert, {"lo": lo, "hi": lo + chunk})  # ty: ignore[no-matching-overload]
+                result = sess.exec(insert, params={"lo": lo, "hi": lo + chunk})  # ty: ignore[no-matching-overload]
                 sess.commit()
                 total += result.rowcount
                 logger.info(
