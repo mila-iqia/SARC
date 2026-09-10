@@ -38,6 +38,12 @@ class HealthRunCommand:
         action="store_true",
         help="Run all health checks. Mutually exclusive with --check",
     )
+    dry_run: bool = simple_parsing.field(
+        default=False,
+        alias=["--dry-run"],
+        action="store_true",
+        help="Run checks and log results without persisting state changes to the database",
+    )
 
     def execute(self) -> int:
         if self.config is None:
@@ -74,7 +80,9 @@ class HealthRunCommand:
         with config.db.session() as sess:
             for name in check_names:
                 # Get check state
-                state = _get_state(name=name, hcfg=hcfg, sess=sess)
+                state = _get_state(
+                    name=name, hcfg=hcfg, sess=sess, dry_run=self.dry_run
+                )
                 assert state is not None
                 check = state.check
 
@@ -110,8 +118,9 @@ class HealthRunCommand:
                 # Update DB state
                 state.last_result = result
                 state.last_message = message
-                sess.merge(state)
-                sess.commit()
+                if not self.dry_run:
+                    sess.merge(state)
+                    sess.commit()
 
         logger.info(
             f"Check complete: {checks_run} checks run, {checks_skipped} skipped"
@@ -120,13 +129,13 @@ class HealthRunCommand:
 
 
 def _get_state(
-    name: str, hcfg: HealthMonitorConfig, sess: Session
+    name: str, hcfg: HealthMonitorConfig, sess: Session, dry_run: bool = False
 ) -> HealthCheckStateDB | None:
     """
     Get health check state, or None if not found.
 
     NB: If config check exists, a state will be created in database if not exists,
-    and state check will be set with config check.
+    and state check will be set with config check. Skipped when `dry_run` is True.
     """
     check = hcfg.checks.get(name, None)
     db_state = HealthCheckStateDB.get_state(sess, name)
@@ -134,10 +143,14 @@ def _get_state(
         if db_state:
             # Check parameters from config file have priority
             db_state.check = check
-            sess.merge(db_state)
+            if not dry_run:
+                sess.merge(db_state)
+        elif dry_run:
+            db_state = HealthCheckStateDB.from_state(HealthCheckState(check=check))
         else:
             db_state = HealthCheckStateDB.get_or_create(
                 sess, HealthCheckState(check=check)
             )
-        sess.commit()
+        if not dry_run:
+            sess.commit()
     return db_state

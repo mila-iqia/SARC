@@ -95,6 +95,19 @@ def test_run_all_checks(empty_read_write_db, beans_config, cli_main, caplog):
         assert len(HealthCheckStateDB.get_states(empty_read_write_db)) == 4
 
 
+def test_run_all_checks_dry_run(empty_read_write_db, beans_config, cli_main, caplog):
+    with caplog.at_level(logging.DEBUG):
+        assert not list(HealthCheckStateDB.get_states(empty_read_write_db))
+        assert cli_main(["health", "run", "--all", "--dry-run"]) == 0
+        assert re.search(r"INFO +.+\[many_beans] OK", caplog.text)
+        assert re.search(r"ERROR +.+\[little_beans] FAILURE: little_beans", caplog.text)
+        assert re.search(
+            r"INFO +.+Check complete: 3 checks run, 1 skipped", caplog.text
+        )
+        # Nothing should have been persisted to the database.
+        assert not list(HealthCheckStateDB.get_states(empty_read_write_db))
+
+
 def test_run_check_with_dep(empty_read_write_db, deps_config, cli_main, caplog):
     with caplog.at_level(logging.INFO):
         assert not list(HealthCheckStateDB.get_states(empty_read_write_db))
