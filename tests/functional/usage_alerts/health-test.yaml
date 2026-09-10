@@ -211,6 +211,10 @@ sarc:
       #   patate   1 attempt,  1 with stats (100 %)
       #   fromage  1 attempt,  0 with stats (0 %)
       # raisin has 5 more attempts, all with stats, 8 days before the window.
+      #
+      # gerudo and hyrule have a prometheus_url too, so the checks that don't name their
+      # clusters expect them -- but the job factory creates no job for them, hence no
+      # attempt either, hence one "no Prometheus fetch attempt" alert each.
 
       # Every cluster checked: raisin (35.7 %) and fromage (0 %) are below 50 %.
       prometheus_stats_coverage_default:
@@ -223,11 +227,18 @@ sarc:
         active: true
         min_coverage: 0.3
 
-      # No coverage required: check succeeds.
+      # No coverage threshold: only the clusters without any attempt are left.
       prometheus_stats_coverage_coverage_0:
         $class: "sarc.alerts.usage_alerts.prometheus_stats_coverage:PrometheusStatsCoverageCheck"
         active: true
         min_coverage: 0.0
+
+      # Restricted to raisin alone, for the tests that need a check that can succeed.
+      prometheus_stats_coverage_raisin:
+        $class: "sarc.alerts.usage_alerts.prometheus_stats_coverage:PrometheusStatsCoverageCheck"
+        active: true
+        cluster_names:
+          - raisin
 
       # Restricted to some clusters, one of which has no attempt at all.
       prometheus_stats_coverage_clusters:
@@ -244,7 +255,7 @@ sarc:
         active: true
         time_interval: 30d
 
-      # Window too narrow to hold any attempt: indistinguishable from stopped scraping.
+      # Window too narrow to hold any attempt: every expected cluster is reported.
       prometheus_stats_coverage_interval_1s:
         $class: "sarc.alerts.usage_alerts.prometheus_stats_coverage:PrometheusStatsCoverageCheck"
         active: true

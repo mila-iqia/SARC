@@ -1,2 +1,7 @@
-No Prometheus fetch attempt in [2023-11-21 23:59:59+00:00, 2023-11-22 00:00:00+00:00]: nothing to check, Prometheus scraping may have stopped
+[fromage] no Prometheus fetch attempt in [2023-11-21 23:59:59+00:00, 2023-11-22 00:00:00+00:00]: Prometheus scraping may have stopped
+[gerudo] no Prometheus fetch attempt in [2023-11-21 23:59:59+00:00, 2023-11-22 00:00:00+00:00]: Prometheus scraping may have stopped
+[hyrule] no Prometheus fetch attempt in [2023-11-21 23:59:59+00:00, 2023-11-22 00:00:00+00:00]: Prometheus scraping may have stopped
+[mila] no Prometheus fetch attempt in [2023-11-21 23:59:59+00:00, 2023-11-22 00:00:00+00:00]: Prometheus scraping may have stopped
+[patate] no Prometheus fetch attempt in [2023-11-21 23:59:59+00:00, 2023-11-22 00:00:00+00:00]: Prometheus scraping may have stopped
+[raisin] no Prometheus fetch attempt in [2023-11-21 23:59:59+00:00, 2023-11-22 00:00:00+00:00]: Prometheus scraping may have stopped
 [prometheus_stats_coverage_interval_1s] FAILURE: prometheus_stats_coverage_interval_1s

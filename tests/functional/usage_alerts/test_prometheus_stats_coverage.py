@@ -56,22 +56,25 @@ def _record_attempt(sess, job, fetch_date, *, with_stats):
     )
 
 
+def _jobs_of(sess, cluster_name):
+    """The cluster's jobs, in a stable order."""
+    return sess.exec(
+        sqlmodel.select(SlurmJobDB)
+        .join(
+            SlurmClusterDB,
+            sqlmodel.col(SlurmJobDB.cluster_id) == sqlmodel.col(SlurmClusterDB.id),
+        )
+        .where(SlurmClusterDB.name == cluster_name)
+        .order_by(sqlmodel.col(SlurmJobDB.submit_time), sqlmodel.col(SlurmJobDB.job_id))
+    ).all()
+
+
 def _seed_attempts(sess, parsed_date):
     """Record the fetch attempts described by SEED, and the parsed date they are windowed on."""
     inside = parsed_date - timedelta(hours=12)
     before = parsed_date - timedelta(days=8)
     for cluster_name, (nb_inside, nb_with_stats, nb_before) in SEED.items():
-        jobs = sess.exec(
-            sqlmodel.select(SlurmJobDB)
-            .join(
-                SlurmClusterDB,
-                sqlmodel.col(SlurmJobDB.cluster_id) == sqlmodel.col(SlurmClusterDB.id),
-            )
-            .where(SlurmClusterDB.name == cluster_name)
-            .order_by(
-                sqlmodel.col(SlurmJobDB.submit_time), sqlmodel.col(SlurmJobDB.job_id)
-            )
-        ).all()
+        jobs = _jobs_of(sess, cluster_name)
         assert len(jobs) >= nb_inside + nb_before, cluster_name
         for i, job in enumerate(jobs[: nb_inside + nb_before]):
             recent = i < nb_inside
@@ -141,3 +144,45 @@ def test_stale_window(caplog, cli_main):
     assert (
         "[raisin] insufficient Prometheus stats coverage: 5 of 14 jobs" in caplog.text
     )
+
+
+@time_machine.travel(MOCK_TIME, tick=False)
+@pytest.mark.usefixtures("read_write_db", "health_config")
+def test_last_parsed_run_included(caplog, cli_main):
+    """The run the parsed date itself comes from must be inside the window.
+
+    `fetch_prometheus` stores `datetime.now(UTC)` with its microseconds, while the
+    parsed date is read back from the cache entry filename, truncated to the
+    millisecond: an upper bound of `<= end` would drop the whole run.
+    """
+    fetch_date = MOCK_TIME + timedelta(microseconds=419330)
+    parsed_date = MOCK_TIME + timedelta(microseconds=419000)
+    with config.db.session() as sess:
+        for job in _jobs_of(sess, "raisin")[:4]:
+            _record_attempt(sess, job, fetch_date, with_stats=True)
+        set_parsed_date(sess, "prometheus", parsed_date)
+        sess.commit()
+    caplog.clear()
+    assert (
+        cli_main(["health", "run", "--check", "prometheus_stats_coverage_raisin"]) == 0
+    )
+    assert "[raisin]" not in caplog.text
+    assert "FAILURE" not in caplog.text
+
+
+@time_machine.travel(MOCK_TIME, tick=False)
+@pytest.mark.usefixtures("read_write_db", "health_config")
+def test_default_clusters_are_those_with_a_prometheus_url(caplog, cli_main):
+    """With no cluster_names, the expected set is what `sarc fetch prometheus` scrapes."""
+    with config.db.session() as sess:
+        set_parsed_date(sess, "prometheus", MOCK_TIME)
+        sess.commit()
+    caplog.clear()
+    assert (
+        cli_main(["health", "run", "--check", "prometheus_stats_coverage_default"]) == 0
+    )
+    for cluster_name in ["fromage", "gerudo", "hyrule", "mila", "patate", "raisin"]:
+        assert f"[{cluster_name}] no Prometheus fetch attempt" in caplog.text
+    # No prometheus_url, so no attempt is expected and none is missing.
+    for cluster_name in ["local", "raisin_no_prometheus"]:
+        assert f"[{cluster_name}]" not in caplog.text
