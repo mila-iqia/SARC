@@ -1,0 +1,3 @@
+[raisin] insufficient Prometheus stats coverage: 5 of 14 jobs fetched in [2023-11-21 00:00:00+00:00, 2023-11-22 00:00:00+00:00] got stats (35.7%); minimum required: 50.0%
+[invisible-cluster] no Prometheus fetch attempt in [2023-11-21 00:00:00+00:00, 2023-11-22 00:00:00+00:00]
+[prometheus_stats_coverage_clusters] FAILURE: prometheus_stats_coverage_clusters

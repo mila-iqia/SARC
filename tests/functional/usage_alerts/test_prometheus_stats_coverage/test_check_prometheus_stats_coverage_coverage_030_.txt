@@ -1,0 +1,2 @@
+[fromage] insufficient Prometheus stats coverage: 0 of 1 jobs fetched in [2023-11-21 00:00:00+00:00, 2023-11-22 00:00:00+00:00] got stats (0.0%); minimum required: 30.0%
+[prometheus_stats_coverage_coverage_030] FAILURE: prometheus_stats_coverage_coverage_030

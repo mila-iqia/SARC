@@ -1,0 +1,2 @@
+Invalid min_coverage (must be in [0, 1]) for Prometheus stats coverage: 1.5
+[prometheus_stats_coverage_invalid_coverage] FAILURE: prometheus_stats_coverage_invalid_coverage

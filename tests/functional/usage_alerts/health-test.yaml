@@ -353,6 +353,65 @@ sarc:
         min_jobs_per_group:
           raisin: 3
 
+      # prometheus_stats_coverage_* checks correspond to test params in test_prometheus_stats_coverage.py
+      #
+      # Fetch attempts seeded by the test inside the default 1-day window (SEED in the test file):
+      #   raisin  14 attempts, 5 with stats (35.7 %)
+      #   mila     1 attempt,  1 with stats (100 %)
+      #   patate   1 attempt,  1 with stats (100 %)
+      #   fromage  1 attempt,  0 with stats (0 %)
+      # raisin has 5 more attempts, all with stats, 8 days before the window.
+
+      # Every cluster checked: raisin (35.7 %) and fromage (0 %) are below 50 %.
+      prometheus_stats_coverage_default:
+        $class: "sarc.alerts.usage_alerts.prometheus_stats_coverage:PrometheusStatsCoverageCheck"
+        active: true
+
+      # Threshold below raisin's coverage: only fromage is left.
+      prometheus_stats_coverage_coverage_030:
+        $class: "sarc.alerts.usage_alerts.prometheus_stats_coverage:PrometheusStatsCoverageCheck"
+        active: true
+        min_coverage: 0.3
+
+      # No coverage required: check succeeds.
+      prometheus_stats_coverage_coverage_0:
+        $class: "sarc.alerts.usage_alerts.prometheus_stats_coverage:PrometheusStatsCoverageCheck"
+        active: true
+        min_coverage: 0.0
+
+      # Restricted to some clusters, one of which has no attempt at all.
+      prometheus_stats_coverage_clusters:
+        $class: "sarc.alerts.usage_alerts.prometheus_stats_coverage:PrometheusStatsCoverageCheck"
+        active: true
+        cluster_names:
+          - raisin
+          - mila
+          - invisible-cluster
+
+      # Wide enough window to also include raisin's older attempts, which lift it to 52.6 %.
+      prometheus_stats_coverage_interval_30d:
+        $class: "sarc.alerts.usage_alerts.prometheus_stats_coverage:PrometheusStatsCoverageCheck"
+        active: true
+        time_interval: 30d
+
+      # Window too narrow to hold any attempt: indistinguishable from stopped scraping.
+      prometheus_stats_coverage_interval_1s:
+        $class: "sarc.alerts.usage_alerts.prometheus_stats_coverage:PrometheusStatsCoverageCheck"
+        active: true
+        time_interval: 1s
+
+      # Out-of-range threshold: rejected before any query.
+      prometheus_stats_coverage_invalid_coverage:
+        $class: "sarc.alerts.usage_alerts.prometheus_stats_coverage:PrometheusStatsCoverageCheck"
+        active: true
+        min_coverage: 1.5
+
+      # Empty window: rejected before any query.
+      prometheus_stats_coverage_invalid_interval:
+        $class: "sarc.alerts.usage_alerts.prometheus_stats_coverage:PrometheusStatsCoverageCheck"
+        active: true
+        time_interval: 0s
+
       # same_job_id_* checks correspond to test params in test_alert_same_job_id.py
       same_job_id_default:
         $class: "sarc.alerts.usage_alerts.same_job_id:SameJobIdCheck"
