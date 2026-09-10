@@ -2,9 +2,13 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, Callable, Self
 
+from ovld import recurse
 from pydantic import BaseModel, Field, GetCoreSchemaHandler
 from pydantic.functional_validators import model_validator
 from pydantic_core import CoreSchema, core_schema
+from serieux import Context, deserializer
+from serieux.instructions import strip
+from serieux.priority import HIGH
 
 UTCOFFSET = timedelta(0)
 
@@ -30,14 +34,28 @@ datetime_utc = Annotated[datetime, DatetimeUTCValidator()]
 
 
 def as_utc(value: datetime) -> datetime:
-    """Return `value` in UTC, reading a naive datetime as already UTC.
-
-    Needed wherever a datetime comes from a serieux-deserialized dataclass
-    (config files): serieux ignores the `datetime_utc` Pydantic validator, so
-    a config value like "2026-01-01" arrives naive and any query binding it
-    against a TIMESTAMPTZ column is rejected by `UTCDateTime`.
-    """
+    """Return `value` in UTC, reading a naive datetime as already UTC."""
     return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+
+
+@deserializer(priority=HIGH)
+def _deserialize_datetime_utc(
+    self,  # noqa: ARG001  # serieux requires this exact signature
+    t: type[Annotated[Any, DatetimeUTCValidator]],
+    obj: str,
+    ctx: Context,
+) -> datetime:
+    """Keep `datetime_utc` in UTC when serieux deserializes it, e.g. from a config file.
+
+    Serieux does not run Pydantic validators, so without this a `datetime_utc`
+    config field written as "2026-01-01" stays naive and is rejected by
+    `UTCDateTime` when bound against a TIMESTAMPTZ column.
+
+    Dispatching on `Any` and stripping the annotation before recursing mirrors
+    serieux's own instruction features (e.g. `Secret`). A handler typed on
+    `datetime` instead cycles against `Partial` in gifnoc's pipeline.
+    """
+    return as_utc(recurse(strip(t, DatetimeUTCValidator), obj, ctx))
 
 
 def _max_upper(a: datetime | None, b: datetime | None) -> datetime | None:

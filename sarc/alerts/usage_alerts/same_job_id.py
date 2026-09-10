@@ -9,7 +9,7 @@ import sqlmodel
 from sarc.alerts.common import CheckResult, HealthCheck
 from sarc.db.cluster import SlurmClusterDB
 from sarc.db.job import SlurmJobDB
-from sarc.validators import as_utc, datetime_utc
+from sarc.validators import datetime_utc
 
 logger = logging.getLogger(__name__)
 
@@ -118,11 +118,6 @@ class SameJobIdCheck(HealthCheck):
 
     time_interval: timedelta | None = timedelta(days=7)
     since: datetime_utc | None = None
-
-    def __post_init__(self):
-        super().__post_init__()
-        if self.since is not None:
-            self.since = as_utc(self.since)
 
     def check(self) -> CheckResult:
         if check_same_job_id(time_interval=self.time_interval, since=self.since):

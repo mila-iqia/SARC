@@ -7,7 +7,7 @@ from sqlmodel import col, select
 from tqdm import tqdm
 
 from sarc.alerts.common import CheckResult, HealthCheck
-from sarc.validators import as_utc, datetime_utc
+from sarc.validators import datetime_utc
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +108,9 @@ def check_old_running_jobs(since: datetime_utc | None = None) -> bool:
                 message += f", distributed in {nb_jobs} jobs (cluster name + job ID)"
             message += f", from which {nb_uniques} not re-submitted"
             for latest_state, latest_state_count in nb_latest_state.most_common():
-                message += f", {latest_state_count} with a latest entry {latest_state.name}"
+                message += (
+                    f", {latest_state_count} with a latest entry {latest_state.name}"
+                )
             logger.error(message)
 
     return not jobs_over_limit
@@ -117,11 +119,6 @@ def check_old_running_jobs(since: datetime_utc | None = None) -> bool:
 @dataclass
 class OldRunningJobCheck(HealthCheck):
     since: datetime_utc | None = None
-
-    def __post_init__(self):
-        super().__post_init__()
-        if self.since is not None:
-            self.since = as_utc(self.since)
 
     def check(self) -> CheckResult:
         if check_old_running_jobs(since=self.since):

@@ -1,9 +1,64 @@
-from datetime import UTC, datetime
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from pydantic import ValidationError
+from serieux import Sources, deserialize
 
-from sarc.validators import DateMatchError, DateOverlapError, ValidField
+from sarc.validators import DateMatchError, DateOverlapError, ValidField, datetime_utc
+
+
+class TestDatetimeUtcDeserialization:
+    """`datetime_utc` must land in UTC when serieux reads it, e.g. from a config file."""
+
+    @pytest.mark.parametrize(
+        "written,expected",
+        [
+            # A date-only string, as one naturally writes it in a config file.
+            ("2026-01-01", datetime(2026, 1, 1, tzinfo=UTC)),
+            ("2026-01-01T00:00:00", datetime(2026, 1, 1, tzinfo=UTC)),
+            ("2026-01-01T00:00:00Z", datetime(2026, 1, 1, tzinfo=UTC)),
+            ("2026-01-01T00:00:00+00:00", datetime(2026, 1, 1, tzinfo=UTC)),
+            ("2026-01-01T00:00:00-05:00", datetime(2026, 1, 1, 5, tzinfo=UTC)),
+        ],
+    )
+    def test_deserialize(self, written, expected):
+        value = deserialize(datetime_utc, written)
+        assert value == expected
+        assert value.utcoffset() == timedelta(0)
+
+    def test_deserialize_dataclass_field(self):
+        """The hook must apply through a dataclass field, including `| None`."""
+
+        @dataclass
+        class Holder:
+            since: datetime_utc | None = None
+
+        assert deserialize(Holder, {"since": "2026-01-01"}).since == datetime(
+            2026, 1, 1, tzinfo=UTC
+        )
+        assert deserialize(Holder, {}).since is None
+
+    def test_deserialize_through_layered_sources(self):
+        """Must survive the pipeline gifnoc actually uses to read config files.
+
+        `Sources` wraps the type in `Partial`; a handler dispatching on
+        `Annotated[datetime, ...]` rather than `Annotated[Any, ...]` deserializes
+        fine on its own but raises `CycleError` here.
+        """
+
+        @dataclass
+        class Holder:
+            since: datetime_utc | None = None
+
+        holder = deserialize(
+            Holder, Sources({"since": "2026-06-01"}, {"since": "2026-01-01"})
+        )
+        assert holder.since == datetime(2026, 1, 1, tzinfo=UTC)
+
+    def test_plain_datetime_untouched(self):
+        """A plain `datetime` annotation keeps serieux's default behaviour."""
+        assert deserialize(datetime, "2026-01-01") == datetime(2026, 1, 1)
 
 
 class TestValidField:
